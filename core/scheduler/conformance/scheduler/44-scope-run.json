@@ -61,15 +61,6 @@
 						[
 							"mark",
 							1
-						],
-						[
-							"owner",
-							[
-								[
-									"actor",
-									"notes"
-								]
-							]
 						]
 					],
 					"writer": "c"
@@ -90,15 +81,6 @@
 							[
 								"mark",
 								2
-							],
-							[
-								"owner",
-								[
-									[
-										"actor",
-										"notes"
-									]
-								]
 							]
 						],
 						"writer": "e"
@@ -133,15 +115,6 @@
 						[
 							"mark",
 							4
-						],
-						[
-							"owner",
-							[
-								[
-									"actor",
-									"notes"
-								]
-							]
 						]
 					],
 					"writer": "c"
@@ -162,15 +135,6 @@
 							[
 								"mark",
 								4
-							],
-							[
-								"owner",
-								[
-									[
-										"actor",
-										"notes"
-									]
-								]
 							]
 						],
 						"writer": "e"

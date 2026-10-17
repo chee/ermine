@@ -1,0 +1,152 @@
+{
+	"title": "a write's header in a scope under a scope that has a node: the metadata stops after that scope's pairs, then [node, its id]; the actor and reader still found above it. a scope with no node above it: every level, no node pair",
+	"steps": [
+		{
+			"op": "root",
+			"name": "chee",
+			"info": [
+				[
+					"actor",
+					"chee"
+				],
+				[
+					"reader",
+					"juno"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "scope",
+			"name": "proc",
+			"parent": "chee",
+			"info": [
+				[
+					"why",
+					"process"
+				]
+			],
+			"node": "P",
+			"expect": {}
+		},
+		{
+			"op": "scope",
+			"name": "click",
+			"parent": "proc",
+			"info": [
+				[
+					"event",
+					"click"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "header",
+			"scope": "click",
+			"extra": [
+				[
+					"then",
+					"y"
+				]
+			],
+			"expect": {
+				"actor": "chee",
+				"reader": "juno",
+				"metadata": [
+					[
+						"then",
+						"y"
+					],
+					[
+						"event",
+						"click"
+					],
+					[
+						"why",
+						"process"
+					],
+					[
+						"node",
+						"P"
+					]
+				],
+				"timely": true,
+				"sites": 1
+			}
+		},
+		{
+			"op": "header",
+			"scope": "proc",
+			"expect": {
+				"actor": "chee",
+				"reader": "juno",
+				"metadata": [
+					[
+						"why",
+						"process"
+					],
+					[
+						"node",
+						"P"
+					]
+				],
+				"timely": true,
+				"sites": 1
+			}
+		},
+		{
+			"op": "scope",
+			"name": "inner",
+			"parent": "click",
+			"info": [
+				[
+					"actor",
+					"inner"
+				]
+			],
+			"node": "I",
+			"expect": {}
+		},
+		{
+			"op": "header",
+			"scope": "inner",
+			"expect": {
+				"actor": "inner",
+				"reader": "juno",
+				"metadata": [
+					[
+						"actor",
+						"inner"
+					],
+					[
+						"node",
+						"I"
+					]
+				],
+				"timely": true,
+				"sites": 1
+			}
+		},
+		{
+			"op": "header",
+			"scope": "chee",
+			"expect": {
+				"actor": "chee",
+				"reader": "juno",
+				"metadata": [
+					[
+						"actor",
+						"chee"
+					],
+					[
+						"reader",
+						"juno"
+					]
+				],
+				"timely": true,
+				"sites": 1
+			}
+		}
+	]
+}

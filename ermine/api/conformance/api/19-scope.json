@@ -1,0 +1,306 @@
+{
+	"title": "scope is a link (chee 10-17: \"it has to be a\"): a change's metadata is flat pairs, innermost first, up to the first scope with a node, then [\"node\", its id]. a process's write ends at the process's node (from a method's call too: its plain scope has no node, its caller pair rides along); a memo's own write ends at the memo's node, its run's pairs before it. a memo's or effect's node holds its scope once, as made: ermine.computer.scope, the node of the nearest scope above it with one: the process, or the memo whose run made it",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"w": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": [
+				"w",
+				"p"
+			],
+			"program": [
+				{
+					"do": [
+						"open",
+						"./k",
+						1
+					],
+					"as": "k"
+				},
+				{
+					"do": [
+						"memo",
+						"./a",
+						{},
+						[
+							"read",
+							"$k"
+						]
+					]
+				},
+				{
+					"do": [
+						"memo",
+						"./outer",
+						{},
+						[
+							"all",
+							[
+								"memo",
+								"./inner",
+								{},
+								[
+									"read",
+									"$k"
+								]
+							],
+							[
+								"read",
+								"$k"
+							]
+						]
+					]
+				},
+				{
+					"do": [
+						"effect",
+						"./e",
+						[
+							"read",
+							"$k"
+						],
+						"e"
+					]
+				}
+			],
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"w",
+				"inner"
+			],
+			"expect": {
+				"id": "n5"
+			}
+		},
+		{
+			"op": "metadata",
+			"part": "value",
+			"id": "n1",
+			"expect": {
+				"keys": [
+					"process",
+					"node"
+				],
+				"node": "proc:p"
+			}
+		},
+		{
+			"op": "metadata",
+			"part": "value",
+			"id": "n2",
+			"expect": {
+				"keys": [
+					"run",
+					"mark",
+					"node"
+				],
+				"node": "n2"
+			}
+		},
+		{
+			"op": "metadata",
+			"part": "value",
+			"id": "n5",
+			"expect": {
+				"keys": [
+					"run",
+					"mark",
+					"node"
+				],
+				"node": "n5"
+			}
+		},
+		{
+			"op": "metadata",
+			"part": "value",
+			"id": "n4",
+			"expect": {
+				"keys": [
+					"run",
+					"mark",
+					"node"
+				],
+				"node": "n4"
+			}
+		},
+		{
+			"op": "saved",
+			"part": "attributes",
+			"id": "n2",
+			"path": [
+				"ermine.computer.scope"
+			],
+			"expect": {
+				"value": "proc:p"
+			}
+		},
+		{
+			"op": "saved",
+			"part": "attributes",
+			"id": "n3",
+			"path": [
+				"ermine.computer.scope"
+			],
+			"expect": {
+				"value": "proc:p"
+			}
+		},
+		{
+			"op": "saved",
+			"part": "attributes",
+			"id": "n4",
+			"path": [
+				"ermine.computer.scope"
+			],
+			"expect": {
+				"value": "proc:p"
+			}
+		},
+		{
+			"op": "saved",
+			"part": "attributes",
+			"id": "n5",
+			"path": [
+				"ermine.computer.scope"
+			],
+			"expect": {
+				"value": "n3"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"edit",
+				"$k",
+				[
+					{
+						"path": [],
+						"value": 2
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "id",
+			"path": [
+				"w",
+				"inner"
+			],
+			"expect": {
+				"id": "n5"
+			}
+		},
+		{
+			"op": "saved",
+			"part": "attributes",
+			"id": "n5",
+			"path": [
+				"ermine.computer.scope"
+			],
+			"expect": {
+				"value": "n3"
+			}
+		},
+		{
+			"op": "saved",
+			"part": "value",
+			"id": "n5",
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "metadata",
+			"part": "value",
+			"id": "n5",
+			"expect": {
+				"keys": [
+					"run",
+					"mark",
+					"node"
+				],
+				"node": "n5"
+			}
+		},
+		{
+			"op": "metadata",
+			"part": "value",
+			"id": "n1",
+			"expect": {
+				"keys": [
+					"process",
+					"node"
+				],
+				"node": "proc:p"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"method",
+				"./m",
+				[
+					{
+						"do": [
+							"edit",
+							"$k",
+							[
+								{
+									"path": [],
+									"value": 3
+								}
+							]
+						]
+					}
+				]
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"w",
+						"m"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"send",
+				"./m"
+			],
+			"expect": {}
+		},
+		{
+			"op": "metadata",
+			"part": "value",
+			"id": "n1",
+			"expect": {
+				"keys": [
+					"caller",
+					"process",
+					"node"
+				],
+				"node": "proc:p"
+			}
+		}
+	]
+}

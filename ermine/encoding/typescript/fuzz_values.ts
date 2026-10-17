@@ -1,8 +1,9 @@
 // what the encoding's fuzz tests share (cbor_fuzz_test.ts, commit_fuzz_test.ts, blop_fuzz_test.ts):
 // seeded numbers, values of every kind, value equality, non-canonical rewrites of an encoding and
 // bytes near one. seeded and deterministic: a seed is a run
-// today's rules: every number a float (no integers), -0 kept. when whole numbers become ints, -0
-// goes and bigints are kept: number(), the "integer" and "longer float" rewrites change
+// the rules (cbor.ts): whole numbers are integers (bignums past 64 bits), -0 is 0, other numbers
+// the shortest float; read back a number while safe, a bigint past that. same() compares numbers
+// so; rewrites write an integer as a float, as a bignum, a bignum with a leading zero
 import { decode, Stand, type Value } from "./cbor.ts"
 import { line, toJson } from "../../../conformance/typescript/form.ts"
 
@@ -67,11 +68,34 @@ export const NUMBERS = [
 	NaN,
 	Infinity,
 	-Infinity,
+	-(2 ** 64),
+	2 ** 63,
+	2 ** 100,
+	-(2 ** 100),
+	5n,
+	-5n,
+	2n ** 53n - 1n,
+	2n ** 53n + 1n,
+	-(2n ** 53n) - 1n,
+	2n ** 63n,
+	2n ** 64n - 1n,
+	2n ** 64n,
+	-(2n ** 64n),
+	-(2n ** 64n) - 1n,
+	2n ** 200n + 3n,
 ]
-// a double from 64 random bits, or one a half or a single holds exactly
-export function number(pick: Pick): number {
+// a whole number near an edge: 2^k and its neighbours, either sign, a number or a bigint
+export function whole(pick: Pick): number | bigint {
+	const k = BigInt([7, 8, 15, 16, 31, 32, 52, 53, 54, 63, 64, 65, 100][pick(13)])
+	const n = (pick(2) ? -1n : 1n) * (2n ** k + BigInt(pick(5)) - 2n)
+	return pick(2) ? n : Number(n)
+}
+// a double from 64 random bits, or one a half or a single holds exactly, or a whole number
+export function number(pick: Pick): number | bigint {
 	const v = new DataView(new ArrayBuffer(8))
-	switch (pick(5)) {
+	switch (pick(6)) {
+		case 5:
+			return whole(pick)
 		case 0:
 			return NUMBERS[pick(NUMBERS.length)]
 		case 1:
@@ -242,16 +266,30 @@ export function shuffled(pick: Pick, v: Value): Value {
 	return m
 }
 
-// equal as ENCODING.tex has it: numbers as Object.is, kinds apart, NaN elements equal, maps by content
-export function same(a: unknown, b: unknown): boolean {
-	if (typeof a === "number") return typeof b === "number" && Object.is(a, b)
+// a number as read back: -0 is 0, a whole number past 2^53 - 1 a bigint, a safe bigint a number
+export const canon = (x: number | bigint) =>
+	typeof x === "bigint"
+		? (x >= -(2n ** 53n) + 1n && x <= 2n ** 53n - 1n ? Number(x) : x)
+		: Number.isInteger(x) && !Number.isSafeInteger(x)
+		? BigInt(x)
+		: x === 0
+		? 0
+		: x
+
+// equal as cbor.ts has it: numbers by value (canon, then Object.is), kinds apart, NaN elements
+// equal, maps by content. a typed array's elements as they are (-0 kept)
+export function same(a: unknown, b: unknown, inside = false): boolean {
+	if (inside) return Object.is(a, b)
+	if (typeof a === "number" || typeof a === "bigint") {
+		return (typeof b === "number" || typeof b === "bigint") && Object.is(canon(a), canon(b))
+	}
 	if (a === null || typeof a !== "object") return a === b
 	if (b === null || typeof b !== "object") return false
 	if (ArrayBuffer.isView(a)) {
 		if (!ArrayBuffer.isView(b) || a.constructor !== b.constructor) return false
 		const x = Array.from(a as unknown as ArrayLike<unknown>),
 			y = Array.from(b as unknown as ArrayLike<unknown>)
-		return x.length === y.length && x.every((e, i) => same(e, y[i]))
+		return x.length === y.length && x.every((e, i) => same(e, y[i], true))
 	}
 	if (a instanceof Stand) return b instanceof Stand && same(a.kind, b.kind)
 	if (b instanceof Stand) return false
@@ -340,8 +378,6 @@ export const BAD_UTF8 = [
 export const UNKNOWN_TAGS = [
 	0,
 	1,
-	2,
-	3,
 	21,
 	24,
 	32,
@@ -397,10 +433,6 @@ export function rewrites(pick: Pick, b: Uint8Array): [string, Uint8Array][] {
 			v.setUint8(0, 0xfb), v.setFloat64(1, x)
 			out.push(["a longer float", splice(b, i.at, i.end, new Uint8Array(v.buffer, 0, 9))])
 		}
-		if (Number.isInteger(x) && Math.abs(x) < 2 ** 64 && !Object.is(x, -0)) {
-			const int = x >= 0 ? head(0, BigInt(x)) : head(1, -1n - BigInt(x))
-			out.push(["an integer", splice(b, i.at, i.end, int)])
-		}
 		// a NaN not the one: a payload, a sign, a longer one
 		const nan = any([[0xf9, 0x7e, 0x01], [0xf9, 0xfe, 0x00], [0xf9, 0x7c, 0x01], [
 			0xfa,
@@ -410,6 +442,40 @@ export function rewrites(pick: Pick, b: Uint8Array): [string, Uint8Array][] {
 			0,
 		], [0xfb, 0x7f, 0xf8, 0, 0, 0, 0, 0, 0]])
 		out.push(["another NaN", splice(b, i.at, i.end, nan)])
+	}
+	// an integer as a float (the shortest that holds it), or as a bignum a plain integer holds
+	const ints = all.filter((i) => i.major <= 1)
+	if (ints.length) {
+		const i = any(ints)
+		const m = i.body - i.at === 9
+			? new DataView(b.buffer, b.byteOffset).getBigUint64(i.at + 1)
+			: BigInt(i.arg)
+		const n = i.major === 0 ? m : -1n - m
+		const x = Number(n)
+		if (BigInt(x) === n) {
+			const v = new DataView(new ArrayBuffer(9))
+			const f = Object.is(Math.f16round(x), x) ? 3 : Object.is(Math.fround(x), x) ? 5 : 9
+			if (f === 3) v.setUint8(0, 0xf9), v.setFloat16(1, x)
+			else if (f === 5) v.setUint8(0, 0xfa), v.setFloat32(1, x)
+			else v.setUint8(0, 0xfb), v.setFloat64(1, x)
+			out.push([
+				"a whole number as a float",
+				splice(b, i.at, i.end, new Uint8Array(v.buffer, 0, f)),
+			])
+		}
+		const raw = new Uint8Array(8)
+		new DataView(raw.buffer).setBigUint64(0, m)
+		out.push([
+			"a bignum a plain integer holds",
+			splice(b, i.at, i.end, cat([i.major === 0 ? 0xc2 : 0xc3], head(2, 8), raw)),
+		])
+	}
+	// a bignum with a leading zero
+	const bigs = all.filter((i) => i.major === 6 && (i.arg === 2 || i.arg === 3))
+	if (bigs.length) {
+		const t = any(bigs), raw = t.kids[0]
+		const grown = cat(head(2, raw.end - raw.body + 1), [0], b.subarray(raw.body, raw.end))
+		out.push(["a bignum with a leading zero", splice(b, raw.at, raw.end, grown)])
 	}
 	// a simple value not false, true or null
 	{
@@ -565,6 +631,8 @@ export const JUNK: unknown[] = [
 	-(2 ** 31),
 	2 ** 53 - 1,
 	2 ** 53,
+	2n ** 53n + 1n,
+	-(2n ** 64n) - 1n,
 	NaN,
 	Infinity,
 	"",

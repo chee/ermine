@@ -91,24 +91,6 @@
 						[
 							"trusted",
 							false
-						],
-						[
-							"owner",
-							[
-								[
-									"handler",
-									"click"
-								],
-								[
-									"owner",
-									[
-										[
-											"actor",
-											"notes"
-										]
-									]
-								]
-							]
 						]
 					],
 					"writer": "g"
@@ -137,24 +119,6 @@
 						[
 							"trusted",
 							false
-						],
-						[
-							"owner",
-							[
-								[
-									"handler",
-									"click"
-								],
-								[
-									"owner",
-									[
-										[
-											"actor",
-											"notes"
-										]
-									]
-								]
-							]
 						]
 					]
 				}

@@ -1,5 +1,5 @@
 {
-	"title": "a write's header: the scope open's nested pairs (its own, then [owner, the scope under's]), the write's extra its own innermost level; the actor and reader the nearest (a level's last pair, keyed owner, the way up; an owner before it only a pair; a reader a string), the metadata whole. the time now, one site. nothing open: unscoped",
+	"title": "a write's header: levels innermost first, the write's extra (its own level), the scope open, its parent, ... the root. the actor: the first actor pair over all levels; the reader: the first reader holding a string; an owner pair is only a pair. the metadata: every level's pairs, flat, in order, repeats kept. the time now, one site. nothing open: unscoped",
 	"steps": [
 		{
 			"op": "header",
@@ -92,34 +92,24 @@
 						"games"
 					],
 					[
-						"owner",
-						[
-							[
-								"cause",
-								"x"
-							],
-							[
-								"actor",
-								"notes"
-							],
-							[
-								"owner",
-								[
-									[
-										"actor",
-										"chee"
-									],
-									[
-										"reader",
-										"juno"
-									],
-									[
-										"why",
-										"test"
-									]
-								]
-							]
-						]
+						"cause",
+						"x"
+					],
+					[
+						"actor",
+						"notes"
+					],
+					[
+						"actor",
+						"chee"
+					],
+					[
+						"reader",
+						"juno"
+					],
+					[
+						"why",
+						"test"
 					]
 				],
 				"timely": true,
@@ -142,21 +132,16 @@
 						"notes"
 					],
 					[
-						"owner",
-						[
-							[
-								"actor",
-								"chee"
-							],
-							[
-								"reader",
-								"juno"
-							],
-							[
-								"why",
-								"test"
-							]
-						]
+						"actor",
+						"chee"
+					],
+					[
+						"reader",
+						"juno"
+					],
+					[
+						"why",
+						"test"
 					]
 				],
 				"timely": true,
@@ -199,34 +184,24 @@
 						5
 					],
 					[
-						"owner",
-						[
-							[
-								"cause",
-								"x"
-							],
-							[
-								"actor",
-								"notes"
-							],
-							[
-								"owner",
-								[
-									[
-										"actor",
-										"chee"
-									],
-									[
-										"reader",
-										"juno"
-									],
-									[
-										"why",
-										"test"
-									]
-								]
-							]
-						]
+						"cause",
+						"x"
+					],
+					[
+						"actor",
+						"notes"
+					],
+					[
+						"actor",
+						"chee"
+					],
+					[
+						"reader",
+						"juno"
+					],
+					[
+						"why",
+						"test"
 					]
 				],
 				"timely": true,

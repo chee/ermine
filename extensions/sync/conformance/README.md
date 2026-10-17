@@ -61,6 +61,9 @@ for one suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `f
   hex), stored?}`, `stored` (hex) when it is not its label's
   seal's.
 - a commit in an answer: its label, else its name as hex (transport: its seal's stored id too).
+- a table's change from a commit (a replay, a merge, sync's table): the commit's header, its
+  metadata then `["signer", key]` and `["commit", name]`, both hex (`changeOf`, replay.ts). A new
+  commit never carries those two from its change; its sites' files as the host's roots say.
 - refused, with a code: `{error: code, ...where}`, exact. commit: `not-a-commit` | `cannot-carry`,
   `field`. seal: `shape` | `signature`; a commit's own refusal as commit's. run: RunError's code,
   `column`. snapshot: PackError's code. A history's refusal is an answer: `{added: {refused}}`

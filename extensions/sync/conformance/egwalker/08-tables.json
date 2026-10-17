@@ -93,7 +93,17 @@
 						},
 						"change": {
 							"time": 10,
-							"actor": "a"
+							"actor": "a",
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"212b100b20216d92bb7794933cf04cb927a1557ad5e244c07514190d525f8b58"
+								]
+							]
 						}
 					},
 					"children": {
@@ -103,7 +113,17 @@
 						},
 						"change": {
 							"time": 20,
-							"actor": "b"
+							"actor": "b",
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"66ca2cddbbcfddf3c7c09ff8dd55674f4ad51f0e5557b156273cee8ac2afa79b"
+								]
+							]
 						}
 					}
 				}

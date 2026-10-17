@@ -86,7 +86,17 @@
 						"value": "1a2b",
 						"change": {
 							"time": 0,
-							"actor": null
+							"actor": null,
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"c1199b6c5304121e5b8d357e90b4ea0b85c2947eea1fb229a8e93b812a70d336"
+								]
+							]
 						}
 					}
 				}
@@ -105,7 +115,17 @@
 						"value": "1a2b",
 						"change": {
 							"time": 0,
-							"actor": null
+							"actor": null,
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"c1199b6c5304121e5b8d357e90b4ea0b85c2947eea1fb229a8e93b812a70d336"
+								]
+							]
 						}
 					}
 				}

@@ -60,7 +60,20 @@
 			"op": "change",
 			"host": "b",
 			"id": "x",
-			"expect": { "change": { "time": 7, "actor": null, "metadata": [["ok", 1]] } }
+			"expect": {
+				"change": {
+					"time": 7,
+					"actor": null,
+					"metadata": [
+						["ok", 1],
+						[
+							"signer",
+							"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+						],
+						["commit", "2c9ee95dd6403b55af6b79e24acaa57b3e431dc69318fb033e83bd2865d03580"]
+					]
+				}
+			}
 		}
 	]
 }

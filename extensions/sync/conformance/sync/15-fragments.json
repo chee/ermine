@@ -235,6 +235,16 @@
 									"file": "scenario",
 									"line": 1
 								}
+							],
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"2fc61cb0f4d5934280e049c55deec7d836abf6c68bad4b1f1323b06fba8c9312"
+								]
 							]
 						}
 					}

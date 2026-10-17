@@ -191,7 +191,17 @@
 						"value": 3,
 						"change": {
 							"time": 0,
-							"actor": null
+							"actor": null,
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"71b8e9b4067b4131e6414d51ef780a3575b39e85dc0571509481208d5c40637b"
+								]
+							]
 						}
 					}
 				}

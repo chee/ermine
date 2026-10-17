@@ -240,7 +240,17 @@
 			"expect": {
 				"change": {
 					"time": 1760000000,
-					"actor": null
+					"actor": null,
+					"metadata": [
+						[
+							"signer",
+							"ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+						],
+						[
+							"commit",
+							"3183ec1ecc5d3717744338c2ae6bcdfba8ae61f1b8e4e2d5378b31a6db99c3de"
+						]
+					]
 				}
 			}
 		}

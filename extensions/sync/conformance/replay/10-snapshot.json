@@ -47,14 +47,45 @@
 			"commit": "c",
 			"expect": {
 				"tables": {
-					"value": { "value": { "n": 1, "m": 2 }, "change": { "time": 0, "actor": null } }
+					"value": {
+						"value": { "n": 1, "m": 2 },
+						"change": {
+							"time": 0,
+							"actor": null,
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"3285107bb63c10dfadcd01aa8e4f2672c426bd4874935a7e79cf6c26b1f97b3b"
+								]
+							]
+						}
+					}
 				}
 			}
 		},
 		{
 			"op": "hint",
 			"commit": "b",
-			"tables": { "value": { "value": { "n": 1 }, "change": { "time": 0, "actor": null } } },
+			"tables": {
+				"value": {
+					"value": { "n": 1 },
+					"change": {
+						"time": 0,
+						"actor": null,
+						"metadata": [
+							[
+								"signer",
+								"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+							],
+							["commit", "61b882b3f79ae2591eb7c822dc8671ce9d01bb1fea83de8ec11e29eadaeddbf1"]
+						]
+					}
+				}
+			},
 			"expect": { "kept": true }
 		},
 		{
@@ -62,7 +93,23 @@
 			"commit": "c",
 			"expect": {
 				"tables": {
-					"value": { "value": { "n": 1, "m": 2 }, "change": { "time": 0, "actor": null } }
+					"value": {
+						"value": { "n": 1, "m": 2 },
+						"change": {
+							"time": 0,
+							"actor": null,
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"3285107bb63c10dfadcd01aa8e4f2672c426bd4874935a7e79cf6c26b1f97b3b"
+								]
+							]
+						}
+					}
 				}
 			}
 		},
@@ -75,7 +122,22 @@
 		{
 			"op": "hint",
 			"commit": "a",
-			"tables": { "value": { "value": { "n": 0 }, "change": { "time": 0, "actor": null } } },
+			"tables": {
+				"value": {
+					"value": { "n": 0 },
+					"change": {
+						"time": 0,
+						"actor": null,
+						"metadata": [
+							[
+								"signer",
+								"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+							],
+							["commit", "cbc5d60a62249326bc064df0a9608ac295a12449a40953a98c10973662431eec"]
+						]
+					}
+				}
+			},
 			"expect": { "kept": true }
 		}
 	]

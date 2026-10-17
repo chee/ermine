@@ -27,7 +27,18 @@
 							"external": [
 								{ "file": "notes.ts", "line": 3, "column": 1, "function": "save" }
 							],
-							"metadata": [["cause", { "why": "typing" }], ["tool", "pen"]]
+							"metadata": [
+								["cause", { "why": "typing" }],
+								["tool", "pen"],
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"4ddbc5b381d20a32aa239253f8d943b034857f1c2df22afe5ccbc6f229748fa9"
+								]
+							]
 						}
 					}
 				}

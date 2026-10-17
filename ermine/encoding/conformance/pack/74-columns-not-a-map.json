@@ -1,6 +1,6 @@
 {
 	"title": "columns not a map",
-	"bytes": "a167636f6c756d6e73496bfa69c3f0d3810100",
+	"bytes": "a167636f6c756d6e73456b62640200",
 	"expect": {
 		"code": "not-a-pack"
 	}

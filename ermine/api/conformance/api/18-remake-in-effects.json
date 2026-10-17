@@ -228,11 +228,6 @@
 						"put"
 					],
 					[
-						"value",
-						"n3",
-						"put"
-					],
-					[
 						"attributes",
 						"n3",
 						"put"
@@ -254,7 +249,7 @@
 					],
 					[
 						"value",
-						"n7",
+						"n3",
 						"put"
 					],
 					[
@@ -265,6 +260,11 @@
 					[
 						"attributes",
 						"n8",
+						"put"
+					],
+					[
+						"value",
+						"n7",
 						"put"
 					],
 					[

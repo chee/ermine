@@ -45,7 +45,23 @@
 			"commit": "d",
 			"expect": {
 				"tables": {
-					"value": { "value": { "n": 200, "m": 3 }, "change": { "time": 0, "actor": null } }
+					"value": {
+						"value": { "n": 200, "m": 3 },
+						"change": {
+							"time": 0,
+							"actor": null,
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"25b1e8d6e033f98c6d26e56aca6e8373f563984d470a46c134eb39ab214e540e"
+								]
+							]
+						}
+					}
 				}
 			}
 		}

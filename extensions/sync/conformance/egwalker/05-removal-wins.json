@@ -128,7 +128,17 @@
 						},
 						"change": {
 							"time": 0,
-							"actor": null
+							"actor": null,
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"015eb46a570cbd1966dfabbe10815b32c4613b85fbdb1ea1308384b704d79240"
+								]
+							]
 						}
 					}
 				}

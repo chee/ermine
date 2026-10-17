@@ -117,13 +117,8 @@
 						"pending/1"
 					],
 					[
-						"owner",
-						[
-							[
-								"actor",
-								"test"
-							]
-						]
+						"actor",
+						"test"
 					],
 					[
 						"overlay",

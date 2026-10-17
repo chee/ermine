@@ -8,7 +8,8 @@
 // off by default, each a way a value held changes (unread_scheduler_fuzz_test.ts --set, --async,
 // --run, run as a program, says what it finds): a set that writes the entry (it is given the
 // result before the run's end lets go of it), an async computation (what it read before its
-// await, written while it waits), a run that writes the entry after it read
+// await, written while it waits), a run that writes the entry after it read (its own write, in
+// place: what it returns is taken as it is at its return, so that write shows in it)
 import { assert } from "@std/assert"
 import createEntry, { type Entry } from "@ermine/node/entry"
 import apply, { ApplyError, type Key, type Patch } from "@ermine/op/apply"
@@ -71,10 +72,11 @@ export async function world(seed: number, ways: Ways = {}): Promise<string | und
 		return true
 	}
 	const read = (path: Key[]) => (s.track(keyOf(path)), at(e.value, path))
-	// a run's result as it was made, right after the read: what its set or effect is given must be
-	// that (a run's own write after, or one while it awaits, must not show)
+	// a run's result as it was made, right after the read (again at its return, after its own
+	// writes): what its set or effect is given must be that (one while it awaits must not show)
 	const results = new WeakMap<object, string>()
-	const result = <T>(r: T): T => (container(r) && results.set(r, show(r)), r)
+	let resulted: object[] = []
+	const result = <T>(r: T): T => (container(r) && (results.set(r, show(r)), resulted.push(r)), r)
 	const given = (v: unknown, what: string) => {
 		if (container(v) && results.has(v) && results.get(v) !== show(v)) {
 			broke ??= `${what} not what the run made: ${results.get(v)} → ${show(v)}`
@@ -91,6 +93,7 @@ export async function world(seed: number, ways: Ways = {}): Promise<string | und
 		const path = all[p(all.length)]
 		const how = p(ways.async ? 8 : 7)
 		const f = (): unknown => {
+			resulted = []
 			const v = read(path)
 			let r: unknown
 			switch (how) {
@@ -125,6 +128,7 @@ export async function world(seed: number, ways: Ways = {}): Promise<string | und
 					apply(oracle, ps)
 					write(ps)
 				} catch { /* refused: not written */ }
+				for (const x of resulted) results.set(x, show(x))
 			}
 			return r
 		}

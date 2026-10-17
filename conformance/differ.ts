@@ -11,7 +11,8 @@
 // strings not; a non-zero exit, sanitizer report, non-JSON line or timeout is a finding.
 // a finding: first differing line, signed suite + odd one out + op + first differing field.
 // invariants (per implementation, agreeing or not): undo undoes (apply, invert, update, unread),
-// squish keeps meaning, models for update/unread/table/paths; tracker and scheduler: none yet.
+// squish keeps meaning, models for update/unread/table/paths/tracker/node/scheduler (scheduler:
+// values from scratch, acts, sets, ticks, refusals exact; moments as invariants).
 // each signature: its first stream shrunk, printed with every answer, written to --out as a
 // scenario expecting the majority's answers.
 // deno-lint-ignore-file no-explicit-any
