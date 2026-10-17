@@ -1,0 +1,20 @@
+{
+	"title": "a patch comes back as path, range, value, move, in that order, and nothing else; -0 as a key or position is 0",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [{ "value": "a", "range": [0, 0], "path": ["t"], "x": 1 }],
+			"expect": { "patches": [{ "path": ["t"], "range": [0, 0], "value": "a" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [{ "move": { "path": ["a"] }, "path": ["b"] }],
+			"expect": { "patches": [{ "path": ["b"], "move": { "path": ["a"] } }] }
+		},
+		{
+			"op": "squish",
+			"patches": [{ "path": ["l", -0], "range": [-0, -0], "value": "a" }],
+			"expect": { "patches": [{ "path": ["l", 0], "range": [0, 0], "value": "a" }] }
+		}
+	]
+}

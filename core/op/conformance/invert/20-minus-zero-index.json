@@ -1,0 +1,17 @@
+{
+	"title": "-0 as an index or a position is 0: the undo says 0",
+	"steps": [
+		{
+			"op": "invert",
+			"value": [1, 2],
+			"patches": [{ "path": [-0] }],
+			"expect": { "undo": [{ "path": [], "range": [0, 0], "value": [1] }] }
+		},
+		{
+			"op": "invert",
+			"value": "ab",
+			"patches": [{ "path": [], "range": [-0, 1] }],
+			"expect": { "undo": [{ "path": [], "range": [0, 0], "value": "a" }] }
+		}
+	]
+}

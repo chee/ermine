@@ -1,0 +1,20 @@
+{
+	"title": "a whole put at [] clears what a lone surrogate fouled: typing after it joins again",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "\ud83d" },
+				{ "path": [], "value": {} },
+				{ "path": ["t"], "range": [0, 0], "value": "a" },
+				{ "path": ["t"], "range": [1, 1], "value": "b" }
+			],
+			"expect": {
+				"patches": [
+					{ "path": [], "value": {} },
+					{ "path": ["t"], "range": [0, 0], "value": "ab" }
+				]
+			}
+		}
+	]
+}

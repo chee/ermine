@@ -1,0 +1,22 @@
+{
+	"title": "a fouled place moved, as part of what is above it, is fouled where it lands: typing there never joins",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t", "x"], "range": [0, 0], "value": "\ud83d" },
+				{ "path": ["u"], "move": { "path": ["t"] } },
+				{ "path": ["u", "x"], "range": [0, 0], "value": "a" },
+				{ "path": ["u", "x"], "range": [1, 1], "value": "b" }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t", "x"], "range": [0, 0], "value": "\ud83d" },
+					{ "path": ["u"], "move": { "path": ["t"] } },
+					{ "path": ["u", "x"], "range": [0, 0], "value": "a" },
+					{ "path": ["u", "x"], "range": [1, 1], "value": "b" }
+				]
+			}
+		}
+	]
+}

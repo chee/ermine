@@ -1,0 +1,25 @@
+{
+	"title": "typed arrays typed one after another join, as lists and strings do",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": { "/": { "int16": [1] } } },
+				{ "path": ["t"], "range": [1, 1], "value": { "/": { "int16": [2, 3] } } }
+			],
+			"expect": {
+				"patches": [{ "path": ["t"], "range": [0, 0], "value": { "/": { "int16": [1, 2, 3] } } }]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": { "/": { "float64": [1.5, 2.5] } } },
+				{ "path": ["t"], "range": [1, 2] }
+			],
+			"expect": {
+				"patches": [{ "path": ["t"], "range": [0, 0], "value": { "/": { "float64": [1.5] } } }]
+			}
+		}
+	]
+}

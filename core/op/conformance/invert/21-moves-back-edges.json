@@ -1,0 +1,330 @@
+{
+	"title": "a move's undo, the edges: an empty span taken leaves only the landing's undo; a list's element moved back to its own list's gap from P, what P held put beside first; the same from a map key falls back; a lone high landing before a lone low it replaced falls back",
+	"steps": [
+		{
+			"op": "invert",
+			"value": {
+				"l": [
+					1,
+					2
+				],
+				"k": 5
+			},
+			"patches": [
+				{
+					"path": [
+						"k"
+					],
+					"move": {
+						"path": [
+							"l"
+						],
+						"range": [
+							1,
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"k"
+						],
+						"value": 5
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"l": [
+					1,
+					2
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"w"
+					],
+					"move": {
+						"path": [
+							"l"
+						],
+						"range": [
+							1,
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"w"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"l": [
+					1,
+					2
+				],
+				"k": [
+					"a",
+					"b"
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"k"
+					],
+					"range": [
+						0,
+						1
+					],
+					"move": {
+						"path": [
+							"l"
+						],
+						"range": [
+							1,
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"k"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": [
+							"a"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"l": [
+					[
+						1,
+						2
+					],
+					3
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						0
+					],
+					"move": {
+						"path": [
+							"l",
+							0,
+							0
+						]
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"l"
+						],
+						"range": [
+							1,
+							1
+						],
+						"value": [
+							[
+								2
+							]
+						]
+					},
+					{
+						"path": [
+							"l",
+							0
+						],
+						"range": [
+							0,
+							0
+						],
+						"move": {
+							"path": [
+								"l",
+								0
+							]
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"k": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"k"
+					],
+					"move": {
+						"path": [
+							"k",
+							0
+						]
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"k"
+						],
+						"value": []
+					},
+					{
+						"path": [
+							"k"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": [
+							1
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "x\ud83d",
+				"t": "\ude00b"
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						1
+					],
+					"move": {
+						"path": [
+							"s"
+						],
+						"range": [
+							1,
+							2
+						]
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							1
+						],
+						"value": "\ude00"
+					},
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							1,
+							1
+						],
+						"value": "\ud83d"
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "abc",
+				"k": 5
+			},
+			"patches": [
+				{
+					"path": [
+						"k"
+					],
+					"move": {
+						"path": [
+							"s"
+						],
+						"range": [
+							0,
+							2
+						]
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							0,
+							0
+						],
+						"move": {
+							"path": [
+								"k"
+							],
+							"range": [
+								0,
+								2
+							]
+						}
+					},
+					{
+						"path": [
+							"k"
+						],
+						"value": 5
+					}
+				]
+			}
+		}
+	]
+}
