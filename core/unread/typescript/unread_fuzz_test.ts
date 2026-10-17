@@ -1,5 +1,5 @@
 // unread at random, a few dozen seeds each, on random values (maps, lists, strings, typed arrays,
-// bytes) and patches (random.ts):
+// bytes) and patches (random_harness.ts):
 // - one entry against its twin under node's update: the same values, undos and throws; nothing
 //   read, kept, put or held by an undo ever changes; and two writes with no read between change
 //   the root in place (the first owns it)
@@ -17,7 +17,7 @@ import { createScheduler } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable } from "@ermine/table"
 import { rand } from "../../../conformance/typescript/rand.ts"
-import { at, isMap, made, patch, paths } from "./random.ts"
+import { at, isMap, made, patch, paths } from "./random_harness.ts"
 import { createUnread, keeping } from "./unread.ts"
 
 const h = (): ChangeHeader => ({ time: 1, actor: "test" })

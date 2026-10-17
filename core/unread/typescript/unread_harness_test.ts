@@ -7,7 +7,7 @@ import { ask, command } from "../../../conformance/typescript/ask.ts"
 import { fromJson, line, toJson } from "../../../conformance/typescript/form.ts"
 import { rand } from "../../../conformance/typescript/rand.ts"
 import { createHarness } from "./unread_harness.ts"
-import { at, made, patch, paths } from "./random.ts"
+import { at, made, patch, paths } from "./random_harness.ts"
 
 Deno.test("an unknown op is an error, and the harness goes on", async () => {
 	const answers = await ask(command("unread"), [
