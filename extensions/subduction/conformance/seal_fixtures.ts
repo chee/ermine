@@ -467,7 +467,7 @@ add("40-shape-before-signature", {
 	expect: [{ code: "shape" }, { code: "shape" }],
 })
 
-// -- no uint8 kind: bytes are bytes (the designer, 10-12)
+// -- no uint8 kind: bytes are bytes
 // the seal's own signer: its key after the change's bytes, where the blop's signer is
 const SEALED = hex(sealed(GOOD, KEY_A, SIG)), SIGNER = "667369676e65725820" + hex(KEY_A)
 const OWN = SEALED.lastIndexOf(SIGNER)

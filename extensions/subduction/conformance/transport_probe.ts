@@ -4,7 +4,7 @@
 // on a crosses to b, seen by b's storage's saveCommit (pushed); unlinked (disconnectFromPeer), a
 // commit on a does not cross; relinked and synced, it does, but through saveBatchAll, not
 // saveCommit; an ephemeral message published on a is heard on b, topics subscribed before the
-// link. Found 2026-10-11: all of this works.
+// link. Result: all of this works.
 import * as sd from "npm:@automerge/subduction@0.23.0"
 
 // a pipe end: what one side sends, the other receives, in order

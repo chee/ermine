@@ -27,6 +27,10 @@ function random(seed: number) {
 }
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const OBJECTS: unknown[] = ["value", ["info", "t"]]
+// strings a blop's patches carry: emoji, a skin-toned one (two code points, so a range can split
+// it), NUL. no lone surrogates: a blop holding one has no encoding (ENCODING.tex)
+const STRINGS = ["", "a", "😀", "👍🏽", "a\u0000b", "\u0000", "é👍🏽x"]
+const KEYS = ["x", "😀", "👍🏽", "\u0000", ""]
 type F = { form: unknown; name: string; bytes: Uint8Array; lamport: number; object: number }
 
 function blops(seed: number): { added: F[]; all: F[] } {
@@ -49,10 +53,19 @@ function blops(seed: number): { added: F[]; all: F[] } {
 		let lamport = parents.length ? Math.max(...parents.map((p) => p.lamport)) + 1 : 1
 		if (r() < 0.08) lamport++
 		const x = r()
+		const pick = <T>(xs: T[]) => xs[Math.floor(r() * xs.length)]
 		const patches = x < 0.1
 			? [{ path: ["x"], value: 1 }]
 			: x < 0.4
 			? [{ path: [], value: i }]
+			: x < 0.5
+			? [{ path: [], value: pick(STRINGS) }]
+			: x < 0.58
+			? [{ path: [], range: [0, 1], value: pick(STRINGS) }]
+			: x < 0.66
+			? [{ path: [], value: { [pick(KEYS)]: pick(STRINGS) } }]
+			: x < 0.72
+			? [{ path: [pick(KEYS)], value: pick(STRINGS) }]
 			: []
 		const blop: Record<string, unknown> = {
 			node: r() < 0.05 ? "other" : "n",

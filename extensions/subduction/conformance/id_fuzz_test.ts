@@ -23,7 +23,25 @@ function rand(seed: number) {
 	}
 }
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
-const NAMES = ["unlocked", "keyhive", "", "a", "日本", "é", "x".repeat(30), "y".repeat(300)]
+// emoji, a skin-toned one (two code points), NUL; and lone surrogates, which have no UTF-8 form, so
+// no id: code "name" (08-lone-surrogate.json)
+const NAMES = [
+	"unlocked",
+	"keyhive",
+	"",
+	"a",
+	"日本",
+	"é",
+	"x".repeat(30),
+	"y".repeat(300),
+	"😀",
+	"👍🏽",
+	"a\u0000b",
+	"\u0000",
+	"\uD83D",
+	"\uDE00",
+	"x\uD83D",
+]
 
 // ID.tex read plainly
 function model(lock: string, made: Uint8Array) {
@@ -41,6 +59,11 @@ Deno.test(`fuzz: ${SEEDS} seeds, id then bytes and is`, async () => {
 		const pick = rand(seed)
 		const lock = NAMES[pick(NAMES.length)] + (pick(2) ? String(pick(1000)) : "")
 		const made = Uint8Array.from({ length: 32 }, () => pick(256))
+		if (!lock.isWellFormed()) {
+			requests.push({ op: "id", lock, made: hex(made) })
+			expect.push({ code: "name" })
+			continue
+		}
 		const id = model(lock, made)
 		requests.push({ op: "id", lock, made: hex(made) }, { op: "bytes", id }, { op: "is", id })
 		expect.push({ id }, { bytes: id.slice("ermine://".length) }, { is: true })

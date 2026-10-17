@@ -1,6 +1,5 @@
 {
 	"now": true,
-	"ordered": true,
 	"reads": [
 		{ "op": "entry", "value": { "a": [1, "x"] }, "header": { "time": 1, "actor": "me" } },
 		{ "op": "node", "values": { "v": 1 }, "header": { "time": 1 } }

@@ -1,6 +1,5 @@
 {
 	"again": { "name": "cow: false", "has": "patches", "set": { "cow": false } },
-	"ordered": true,
 	"reads": [
 		{
 			"op": "apply",

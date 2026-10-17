@@ -1,5 +1,4 @@
 {
-	"ordered": true,
 	"reads": [
 		{ "op": "who", "node": "$node" },
 		{ "op": "at", "id": "$id" },
