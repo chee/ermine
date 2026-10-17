@@ -1,0 +1,15 @@
+{
+	"title": "n one-key writes to a map of n entries",
+	"sizes": [10000, 40000, 160000],
+	"bound": "n",
+	"template": [
+		{ "op": "start", "value": { "map": { "for": "i", "to": "n", "key": "key{i}", "value": 0 } } },
+		{
+			"for": "i",
+			"to": "n",
+			"do": [
+				{ "op": "write", "patches": [{ "path": ["key{i}"], "value": 1 }] }
+			]
+		}
+	]
+}

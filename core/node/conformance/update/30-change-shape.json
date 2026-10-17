@@ -1,0 +1,59 @@
+{
+	"title": "the change answers its fields in one order (time, actor, reader, external, metadata, op), a patch as path, range, value, move and nothing else, -0 as an index 0",
+	"steps": [
+		{
+			"op": "start",
+			"value": { "l": [1, 2], "c": 1 },
+			"header": { "actor": "x", "time": 3 },
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": { "value": { "l": [1, 2], "c": 1 }, "change": { "time": 3, "actor": "x" } }
+			}
+		},
+		{
+			"op": "update",
+			"patches": [{ "value": 3, "path": ["c"], "extra": 1 }],
+			"header": { "time": 4 },
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": { "l": [1, 2], "c": 3 },
+					"change": {
+						"time": 4,
+						"op": {
+							"patches": [{ "path": ["c"], "value": 3 }],
+							"undo": [{ "path": ["c"], "value": 1 }]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [{ "path": ["l", -0], "value": 9 }],
+			"header": { "time": 5 },
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": { "l": [9, 2], "c": 3 },
+					"change": {
+						"time": 5,
+						"op": {
+							"patches": [{ "path": ["l", 0], "value": 9 }],
+							"undo": [{ "path": ["l", 0], "value": 1 }]
+						}
+					}
+				}
+			}
+		}
+	]
+}

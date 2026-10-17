@@ -1,0 +1,9 @@
+{
+	"title": "an update without patches, or with patches that are not a list, is an error that changes nothing, and the next line is answered",
+	"steps": [
+		{ "op": "start", "value": { "a": 1 }, "header": { "time": 1 }, "expect": {} },
+		{ "op": "update", "fails": true },
+		{ "op": "update", "patches": {}, "fails": true },
+		{ "op": "entry", "expect": { "entry": { "value": { "a": 1 }, "change": { "time": 1 } } } }
+	]
+}

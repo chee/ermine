@@ -1,0 +1,336 @@
+{
+	"title": "a span moved out of a list lands as a new list holding what the write owned: what was kept (handed too) or given back in an undo never changes after",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"l": [
+					{
+						"x": 0
+					},
+					{
+						"x": 0
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"l",
+						0,
+						"x"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"l",
+							0,
+							"x"
+						],
+						"value": 0
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"w"
+					],
+					"move": {
+						"path": [
+							"l"
+						],
+						"range": [
+							0,
+							2
+						]
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"l"
+						],
+						"range": [
+							0,
+							0
+						],
+						"move": {
+							"path": [
+								"w"
+							],
+							"range": [
+								0,
+								2
+							]
+						}
+					},
+					{
+						"path": [
+							"w"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "keep",
+			"path": [
+				"w"
+			],
+			"handed": true,
+			"hold": "k",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"w",
+						0,
+						"x"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"w",
+							0,
+							"x"
+						],
+						"value": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "held",
+			"name": "k",
+			"expect": {
+				"value": [
+					{
+						"x": 1
+					},
+					{
+						"x": 0
+					}
+				]
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"l": [],
+					"w": [
+						{
+							"x": 2
+						},
+						{
+							"x": 0
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "start",
+			"value": {
+				"l": [
+					{
+						"x": 0
+					}
+				],
+				"p": {}
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"l",
+						0,
+						"x"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"l",
+							0,
+							"x"
+						],
+						"value": 0
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"p",
+						"w"
+					],
+					"move": {
+						"path": [
+							"l"
+						],
+						"range": [
+							0,
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"l"
+						],
+						"range": [
+							0,
+							0
+						],
+						"move": {
+							"path": [
+								"p",
+								"w"
+							],
+							"range": [
+								0,
+								1
+							]
+						}
+					},
+					{
+						"path": [
+							"p",
+							"w"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"p"
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"p"
+						],
+						"value": {
+							"w": [
+								{
+									"x": 1
+								}
+							]
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "unwrite",
+			"hold": "u",
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"p"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"p",
+						"w",
+						0,
+						"x"
+					],
+					"value": 9
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"p",
+							"w",
+							0,
+							"x"
+						],
+						"value": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "held",
+			"name": "u",
+			"expect": {
+				"value": [
+					{
+						"w": [
+							{
+								"x": 1
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"l": [],
+					"p": {
+						"w": [
+							{
+								"x": 9
+							}
+						]
+					}
+				}
+			}
+		}
+	]
+}
