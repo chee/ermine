@@ -17,7 +17,7 @@ harness_src = conformance/c/harness.c core/op/c/value.c core/op/c/json.c
 
 tracker_src = $(harness_src) core/scheduler/c/tracker_harness.c core/scheduler/c/tracker.c
 table_src = $(harness_src) core/table/c/table_harness.c core/table/c/table.c
-node_src = $(harness_src) conformance/c/protocol.c core/node/c/node_harness.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
+node_src = $(harness_src) conformance/c/protocol_harness.c core/node/c/node_harness.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
 pack_src = core/node/c/node.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c ermine/encoding/c/pack.c ermine/encoding/c/pack_harness.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
 cbor_src = ermine/encoding/c/cbor_test.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c
 blop_src = ermine/encoding/c/blop.c ermine/encoding/c/blop_harness.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c $(blake3_src)
@@ -40,20 +40,20 @@ transport_src = extensions/subduction/c/transport.c extensions/subduction/c/tran
 	extensions/subduction/c/subduction/store_memory.c extensions/subduction/c/subduction/platform_posix.c $(subduction_lib)
 fragment_src = extensions/subduction/c/fragment.c extensions/subduction/c/fragment_harness.c ermine/encoding/c/json.c
 squish_src = $(harness_src) core/op/c/squish.c core/op/c/squish_harness.c
-op-apply_src = $(harness_src) conformance/c/protocol.c core/op/c/apply_harness.c core/op/c/apply.c core/op/c/invert.c core/node/c/node.c
-paths_src = $(harness_src) conformance/c/protocol.c core/scheduler/c/paths_harness.c core/scheduler/c/paths.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
-places_src = $(harness_src) filesystem/places/c/places_harness.c conformance/c/protocol.c filesystem/places/c/places.c filesystem/places/c/cache.c ermine/clingy/c/clingy.c core/scheduler/c/selector.c filesystem/places/c/status.c filesystem/places/c/runs.c filesystem/places/c/world.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
+op-apply_src = $(harness_src) conformance/c/protocol_harness.c core/op/c/apply_harness.c core/op/c/apply.c core/op/c/invert.c core/node/c/node.c
+paths_src = $(harness_src) conformance/c/protocol_harness.c core/scheduler/c/paths_harness.c core/scheduler/c/paths.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
+places_src = $(harness_src) filesystem/places/c/places_harness.c conformance/c/protocol_harness.c filesystem/places/c/places.c filesystem/places/c/cache.c ermine/clingy/c/clingy.c core/scheduler/c/selector.c filesystem/places/c/status.c filesystem/places/c/runs.c filesystem/places/c/world_harness.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
 processes_src = $(filter-out filesystem/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes_harness.c ermine/processes/c/processes.c ermine/processes/c/scopes.c
 protect_src = filesystem/protect/c/protect.c filesystem/protect/c/protect_harness.c $(harness_src)
-update_src = $(harness_src) conformance/c/protocol.c core/node/c/update_harness.c core/node/c/update.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
-guard_src = $(harness_src) filesystem/places/c/guard_harness.c filesystem/places/c/guard.c filesystem/protect/c/protect.c conformance/c/protocol.c filesystem/places/c/places.c filesystem/places/c/cache.c ermine/clingy/c/clingy.c core/scheduler/c/selector.c filesystem/places/c/status.c filesystem/places/c/runs.c filesystem/places/c/world.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
+update_src = $(harness_src) conformance/c/protocol_harness.c core/node/c/update_harness.c core/node/c/update.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
+guard_src = $(harness_src) filesystem/places/c/guard_harness.c filesystem/places/c/guard.c filesystem/protect/c/protect.c conformance/c/protocol_harness.c filesystem/places/c/places.c filesystem/places/c/cache.c ermine/clingy/c/clingy.c core/scheduler/c/selector.c filesystem/places/c/status.c filesystem/places/c/runs.c filesystem/places/c/world_harness.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
 scheduler_src = $(harness_src) core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c core/scheduler/c/scheduler_harness.c
 names_src = playground/tools/files/c/names.c playground/tools/files/c/names_harness.c ermine/encoding/c/json.c
 diag_src = playground/tools/files/c/diag.c playground/tools/files/c/diag_harness.c ermine/encoding/c/json.c
 layout_src = playground/tools/files/c/layout.c playground/tools/files/c/layout_harness.c playground/tools/files/c/names.c ermine/encoding/c/json.c
-store_src = playground/tools/files/c/store.c playground/tools/files/c/store_harness.c playground/tools/files/c/disk.c playground/tools/files/c/sys.c playground/tools/files/c/manifest.c playground/tools/files/c/layout.c playground/tools/files/c/names.c playground/tools/files/c/diag.c \
+store_src = playground/tools/files/c/store.c playground/tools/files/c/store_harness.c playground/tools/files/c/disk_harness.c playground/tools/files/c/sys.c playground/tools/files/c/manifest.c playground/tools/files/c/layout.c playground/tools/files/c/names.c playground/tools/files/c/diag.c \
 	playground/tools/files/c/external.c playground/tools/files/c/foundation.c \
-	playground/tools/files/c/saved.c playground/tools/files/c/saved_shown.c playground/tools/files/c/saved_pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src)
+	playground/tools/files/c/saved.c playground/tools/files/c/saved_shown_harness.c playground/tools/files/c/saved_pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src)
 # the files graph (playground/tools/files/c/graph.c): core's table, places and guard under a scheduler, and the policy they ask
 graph_src = filesystem/places/c/places.c filesystem/places/c/guard.c filesystem/protect/c/protect.c core/table/c/table.c core/node/c/node.c core/node/c/update.c \
 	core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/op/c/json.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
@@ -63,7 +63,7 @@ sys_src = playground/tools/files/c/sys.c playground/tools/files/c/foundation.c p
 program_src = playground/tools/files/c/program.c playground/tools/files/c/watch.c playground/tools/files/c/graph.c playground/tools/files/c/program_harness.c $(filter-out playground/tools/files/c/store_harness.c,$(store_src)) \
 	$(graph_src)
 program_libs = $(if $(filter Darwin,$(shell uname -s)),-framework CoreServices -framework CoreFoundation,) -lpthread
-manifest_src = playground/tools/files/c/manifest.c playground/tools/files/c/manifest_harness.c playground/tools/files/c/diag.c playground/tools/files/c/saved.c playground/tools/files/c/saved_shown.c \
+manifest_src = playground/tools/files/c/manifest.c playground/tools/files/c/manifest_harness.c playground/tools/files/c/diag.c playground/tools/files/c/saved.c playground/tools/files/c/saved_shown_harness.c \
 	playground/tools/files/c/saved_pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src)
 
 # BLAKE3 portable only: no SIMD dispatch, no NEON (ermine/encoding/c/blake3 has no such files)
@@ -124,7 +124,7 @@ patch_suite = patch
 patch_tests = $(wildcard extensions/patch-nodes/typescript/patch_harness_test.ts)
 LIBS += patch
 # unread (core/unread): an entry's writes change in place what its own earlier writes copied, until it is read
-unread_src = $(harness_src) conformance/c/protocol.c core/unread/c/unread.c core/unread/c/unread_harness.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
+unread_src = $(harness_src) conformance/c/protocol_harness.c core/unread/c/unread.c core/unread/c/unread_harness.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
 unread = core/unread/c/unread-harness
 unread_flags = -DCONFORMANCE_HOOK
 unread_suite = unread
@@ -180,17 +180,17 @@ clean: clean-native
 clean-native:
 	rm -f $(native_fixtures)
 # the process api (ermine/api): its harness on places, processes, guard, status, presence and patch nodes, on its own world
-api_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c filesystem/places/c/guard.c filesystem/protect/c/protect.c extensions/presence/c/presence.c extensions/presence/c/channel.c extensions/patch-nodes/c/patch.c ermine/api/c/api.c ermine/api/c/api_harness.c ermine/sites/c/sites.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
+api_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c filesystem/places/c/guard.c filesystem/protect/c/protect.c extensions/presence/c/presence.c extensions/presence/c/channel.c extensions/patch-nodes/c/patch.c ermine/api/c/api.c ermine/api/c/api_harness.c ermine/sites/c/sites.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
 api = ermine/api/c/api-harness
 api_suite = api
 api_tests = $(wildcard ermine/api/typescript/api_harness_test.ts)
 LIBS += api
-# sync's pieces for the new commit shape (ermine/encoding commit, extensions/sync): their own loop (lines.c is conformance/c/harness.c
+# sync's pieces for the new commit shape (ermine/encoding commit, extensions/sync): their own loop (lines_harness.c is conformance/c/harness.c
 # reading a symbol as a string no one can carry), against the suites in ermine/encoding/conformance and extensions/sync/conformance.
-# commit_form.c (a commit's forms on the line) and commits.c (the commits a harness makes by label) are the harnesses', never
+# commit_form_harness.c (a commit's forms on the line) and commits_harness.c (the commits a harness makes by label) are the harnesses', never
 # the libraries'
-sync_harness_src = ermine/encoding/c/lines.c core/op/c/value.c core/op/c/json.c ermine/encoding/c/commit_form.c
-sync_commits_src = extensions/sync/c/commits.c
+sync_harness_src = ermine/encoding/c/lines_harness.c core/op/c/value.c core/op/c/json.c ermine/encoding/c/commit_form_harness.c
+sync_commits_src = extensions/sync/c/commits_harness.c
 sync_commit_src = ermine/encoding/c/commit.c ermine/encoding/c/pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src) core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
 sync-commit_src = $(sync_harness_src) ermine/encoding/c/commit_harness.c $(sync_commit_src)
 sync-commit = ermine/encoding/c/commit-harness
@@ -206,7 +206,7 @@ sync-run = extensions/sync/c/run-harness
 sync-run_suite = run
 LIBS += sync-run
 # history, replay and snapshot: one harness, three suites (replay's and snapshot's suite.json name history's)
-sync-history_src = $(sync_harness_src) $(sync_commits_src) conformance/c/protocol.c extensions/sync/c/history_harness.c extensions/sync/c/history.c extensions/sync/c/replay.c extensions/sync/c/snapshot.c extensions/sync/c/egwalker.c $(sync_signed_src)
+sync-history_src = $(sync_harness_src) $(sync_commits_src) conformance/c/protocol_harness.c extensions/sync/c/history_harness.c extensions/sync/c/history.c extensions/sync/c/replay.c extensions/sync/c/snapshot.c extensions/sync/c/egwalker.c $(sync_signed_src)
 sync-history = extensions/sync/c/history-harness
 sync-history_suite = history replay snapshot egwalker
 LIBS += sync-history
@@ -214,14 +214,14 @@ LIBS += sync-history
 # are both linked, the C ones renamed (subduction_rename). Fragments are extensions/subduction's, as in the TypeScript
 sync_transport_src = extensions/sync/c/transport.c extensions/sync/c/ids.c extensions/sync/c/history.c extensions/sync/c/replay.c extensions/sync/c/snapshot.c \
 	extensions/sync/c/run.c extensions/subduction/c/fragment.c extensions/subduction/c/subduction/platform_posix.c $(sync_signed_src)
-sync-transport_src = $(sync_harness_src) $(sync_commits_src) conformance/c/protocol.c extensions/sync/c/transport_harness.c extensions/sync/c/wires.c \
+sync-transport_src = $(sync_harness_src) $(sync_commits_src) conformance/c/protocol_harness.c extensions/sync/c/transport_harness.c extensions/sync/c/wires_harness.c \
 	extensions/subduction/c/subduction/store_memory.c $(sync_transport_src) $(subduction_lib)
 sync-transport = extensions/sync/c/transport-harness
 sync-transport_suite = transport
 sync-transport_flags = $(subduction_rename) -DCONFORMANCE_HOOK
 sync-transport_libs = $(transport_libs)
 LIBS += sync-transport
-sync-sync_src = $(sync_harness_src) $(sync_commits_src) conformance/c/protocol.c extensions/sync/c/sync_harness.c extensions/sync/c/sync.c extensions/sync/c/egwalker.c extensions/sync/c/wires.c \
+sync-sync_src = $(sync_harness_src) $(sync_commits_src) conformance/c/protocol_harness.c extensions/sync/c/sync_harness.c extensions/sync/c/sync.c extensions/sync/c/egwalker.c extensions/sync/c/wires_harness.c \
 	extensions/subduction/c/subduction/store_memory.c core/table/c/table.c core/node/c/update.c $(sync_transport_src) $(subduction_lib)
 sync-sync = extensions/sync/c/sync-harness
 sync-sync_suite = sync
@@ -229,14 +229,14 @@ sync-sync_flags = $(subduction_rename)
 sync-sync_libs = $(transport_libs)
 LIBS += sync-sync
 # the presence channel over a device's ephemeral messages: two devices on a pipe, as channel_test.ts tries it; no suite
-sync-channel-test_src = extensions/sync/c/channel_test.c extensions/sync/c/channel.c extensions/sync/c/wires.c core/op/c/value.c \
+sync-channel-test_src = extensions/sync/c/channel_test.c extensions/sync/c/channel.c extensions/sync/c/wires_harness.c core/op/c/value.c \
 	extensions/subduction/c/subduction/store_memory.c $(sync_transport_src) $(subduction_lib)
 sync-channel-test = extensions/sync/c/channel-test
 sync-channel-test_flags = $(subduction_rename)
 sync-channel-test_libs = $(transport_libs)
 LIBS += sync-channel-test
 # two hosts typing into one text, merging by eg-walker (merge_bench.ts in C): merge-bench [keys] [pure]; no suite
-sync-merge-bench_src = extensions/sync/c/merge_bench.c extensions/sync/c/sync.c extensions/sync/c/egwalker.c extensions/sync/c/wires.c \
+sync-merge-bench_src = extensions/sync/c/merge_bench.c extensions/sync/c/sync.c extensions/sync/c/egwalker.c extensions/sync/c/wires_harness.c \
 	core/op/c/value.c core/op/c/json.c extensions/subduction/c/subduction/store_memory.c core/table/c/table.c core/node/c/update.c \
 	$(sync_transport_src) $(subduction_lib)
 sync-merge-bench = extensions/sync/c/merge-bench
@@ -376,7 +376,7 @@ core/op/c/squish-bench: core/op/c/squish.c core/op/c/squish_bench.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
 core/op/c/apply-bench: core/op/c/apply.c core/op/c/value.c core/op/c/apply_bench.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
-extensions/patch-nodes/c/patch-bench: $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world.c filesystem/places/c/status.c conformance/c/harness.c conformance/c/protocol.c core/op/c/json.c,$(places_src)) extensions/patch-nodes/c/patch.c extensions/patch-nodes/c/patch_bench.c
+extensions/patch-nodes/c/patch-bench: $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c filesystem/places/c/status.c conformance/c/harness.c conformance/c/protocol_harness.c core/op/c/json.c,$(places_src)) extensions/patch-nodes/c/patch.c extensions/patch-nodes/c/patch_bench.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
 core/unread/c/unread-bench: core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/unread/c/unread.c core/unread/c/unread_bench.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
@@ -389,7 +389,7 @@ core/unread/c/unread-bench: core/node/c/node.c core/node/c/update.c core/op/c/va
 # extensions/sync over Subduction (its files store, a WebSocket over OpenSSL)
 OPENSSL ?= $(shell brew --prefix openssl@3 2>/dev/null || echo /usr)
 files_src = $(sort playground/tools/files/c/files.c playground/tools/files/c/host.c playground/tools/files/c/program.c playground/tools/files/c/watch.c playground/tools/files/c/graph.c \
-	$(filter-out playground/tools/files/c/store_harness.c playground/tools/files/c/disk.c,$(store_src)) $(graph_src) \
+	$(filter-out playground/tools/files/c/store_harness.c playground/tools/files/c/disk_harness.c,$(store_src)) $(graph_src) \
 	extensions/sync/c/sync.c extensions/sync/c/egwalker.c $(sync_transport_src) extensions/subduction/c/subduction/store_files.c \
 	extensions/subduction/c/subduction/websocket.c extensions/subduction/c/subduction/transport_openssl.c)
 files_flags = $(subduction_rename) -I$(OPENSSL)/include
