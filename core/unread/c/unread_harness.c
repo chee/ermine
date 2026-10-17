@@ -196,7 +196,11 @@ void hh_answer(const op_value *r, FILE *out) {
 		fputs("{}", out);
 	} else if (strcmp(op, "write") == 0) {
 		const op_value *list = op_get(r, "patches");
-		size_t n = list != NULL && list->type == OP_LIST ? list->count : 0;
+		if (list == NULL || list->type != OP_LIST) {
+			hh_error(out, "write: patches is not a list");
+			return;
+		}
+		size_t n = list->count;
 		op_patch *patches = hh_take((n + 1) * sizeof *patches);
 		for (size_t i = 0; i < n; i++) hh_patch(list->items[i], &patches[i]);
 		write(out, patches, n, hold);

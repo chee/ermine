@@ -135,11 +135,6 @@ void un_read(un_unread *u, const nd_entry *entry) {
 	free(r);
 }
 
-size_t un_owned(const un_unread *u, const nd_entry *entry) {
-	record *r = find(u, entry);
-	return r == NULL ? 0 : r->owned->count;
-}
-
 // containers: what a write can change in place
 static int container(const op_value *v) {
 	return v != NULL && (v->type == OP_LIST || v->type == OP_MAP || v->type == OP_TYPED);
@@ -449,3 +444,8 @@ sc_listener *un_keeping(sc_scheduler *s, un_unread *u,
 	u->wirings = w;
 	return sc_on_run_end(s, run_end, w);
 }
+
+// the harnesses' hooks (unread_conformance_hook.h), only in their builds
+#ifdef CONFORMANCE_HOOK
+#include "unread_conformance_hook.c"
+#endif

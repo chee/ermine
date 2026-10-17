@@ -59,7 +59,4 @@ void un_kept(un_unread *u, const op_value *value, const op_value *const *handed,
 sc_listener *un_keeping(sc_scheduler *s, un_unread *u,
 	const op_value *(*handed)(const void *key, void *ctx), void *ctx);
 
-// how many containers of the entry's value are owned now (for tests)
-size_t un_owned(const un_unread *u, const nd_entry *entry);
-
 #endif
