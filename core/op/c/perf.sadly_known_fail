@@ -1,4 +1,0 @@
-# apply-perf and squish-perf misses of the C harnesses
-apply-perf/01-remove-many-map-keys  quadratic: 154ms, 2288ms at n 6250, 25000; 100000 passes 20s
-apply-perf/02-keystrokes-in-a-long-string  noisy: x4-15 for x4 (99ms, 407ms, 1730ms)
-squish-perf/01-typing-run  quadratic: 679ms, 10452ms at n 12500, 50000; 200000 passes 20s
