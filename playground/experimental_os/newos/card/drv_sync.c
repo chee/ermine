@@ -6,6 +6,26 @@
 //   /dev/sync/want/<name>      a reader's, ephemeral: the documents it wants the histories of, [id]
 //   /dev/sync/history/<hex>    served while any want names it: {doc, count, changes}
 //   /dev/sync/device           {key}: this device's, as a commit's signer says it
+//   /dev/sync/live             {on}: whether this device's presence goes out with its live state (below)
+//   /dev/sync/presence/<hex>/<key>   a peer's live state standing at the shared document hex, by the peer's key:
+//                              {pointer: {x, y}, focus, drag: {id, how, x, y, w, h}, presence: {device, name}, seen}, as
+//                              it sent it; gone when its commit stops standing (sync.h's ttl). Shown only while
+//                              /etc/sync's presence (on unless set off) and the document's choice say so
+//
+// Live state (the `live` part, irq 68): what this device shows and never stores, sent to the peers
+// of each shared document as ephemeral commits of its `live` table (card.h, Live state) when the
+// person chose so, in all three places: /etc/sync's live (off unless set), the device's switch
+// (/dev/pointer/live, /dev/display/live, /dev/sync/live, each {on}, on at boot), and the document's
+// (/dev/sync/shared's value, {<hex>: {live}}: the shell's share and mount with the word live). The
+// part reads them tracked, with /dev/pointer/at, /dev/display/focus, /dev/wm/hand's drag (and the
+// dragged window's place, /dev/display/windows/<id>) and /hw's user, and gives the card the state,
+// {pointer?, focus?, drag?, presence?, seen}, for each document it goes to; the card sends it at
+// most every beat. Nothing read while /etc/sync's live is off or no document's is on, so a pointer
+// move then runs nothing here. The card tells (cardLived) when what stands at a shared document
+// changed, and irq 68's turn writes /dev/sync/presence from it. Receiving is chosen too, mirroring
+// sending: /etc/sync's presence (on unless set off) and the document's ({<hex>: {presence}}, the
+// shell's word nopresence): off, the document is not watched and its presence nodes go, so nothing
+// is read, decoded or drawn for it; on again, built from what stands.
 //
 // A change, one commit (ermine/encoding/c/commit.h): {commit, parents, signer, lamport, time, kind,
 // name?, patches, base?, merge?, actor, reader?, site?, cause?, wallclock?, message?, value?}. A
@@ -32,6 +52,7 @@
 #include "../drv.h"
 #include "net.h"
 #include "card.h"
+#include "../../../../extensions/subduction/c/subduction/platform.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -39,6 +60,7 @@
 #include <string.h>
 
 #define IRQ 65
+#define LIVE_IRQ 68
 #define SMALL 4096 // bytes of JSON: a value kept with each change, at most
 
 /** a served document's history, as far as it is made */
@@ -58,6 +80,14 @@ static struct {
 	ErmMap marks;              // a served document's hex -> (void *)1 when a commit was taken in to it since irq 65
 	bool posted;               // irq 65 posted and not yet taken
 } hist;
+
+static struct {
+	ErmMap watching; // a shared document's hex -> (void *)1: watched for peers' live state
+	ErmMap going;    // a document's hex -> (void *)1: this device's live state was given for it last
+	ErmMap stood;    // a watched document's hex -> (void *)1: what stands there changed since irq 68
+	bool posted;     // irq 68 posted and not yet taken
+	char *last;      // the state last given to the card, printed; NULL: none
+} live;
 
 /** a map's keys freed */
 static void mapFree(ErmMap *m) {
@@ -474,7 +504,198 @@ static ErmErr serverEffect(void *data, const ErmGiven *g, Json **out) {
 	return ermOk();
 }
 
-/** irq 65: each served history a commit was taken in to grown, written only when it did */
+// --- live state
+
+static bool on(const Json *v) {
+	return v && v->type == JSON_BOOLEAN && v->boolean;
+}
+
+/** a device's switch, /dev/<device>/live's on: on unless it says off */
+static bool switched(const ErmGiven *g, const char *device) {
+	Json *v = drvRead(g->api, drvPath("/", "dev", device, "live", NULL));
+	Json *o = jsonGet(v, "on");
+	return !o || on(o);
+}
+
+/** a borrowed value for a map of the turn's: copied shallow, or null */
+static Json *given(Json *v) {
+	return v ? jsonShallow(v) : jsonNull();
+}
+
+/** a document's choice of name (live, presence) in /dev/sync/shared's value; unless: when it says nothing */
+static bool chose(const Json *choices, const char *hex, const char *name, bool unless) {
+	Json *v = jsonGet(jsonGet(choices, hex), name);
+	return v ? on(v) : unless;
+}
+
+/**
+ * read tracked: every shared document whose peers' live state is to be shown (watched), those this
+ * device's goes to (the three choices on), and the state itself, read only when it goes somewhere
+ */
+static ErmErr liveCompute(void *data, const ErmGiven *g, Json **out) {
+	(void)data;
+	Json *shared = drvPath("/", "dev", "sync", "shared", NULL);
+	Json *choices = drvRead(g->api, shared), *etc = drvRead(g->api, drvPath("/", "etc", "sync", NULL));
+	bool global = on(jsonGet(etc, "live"));
+	Json *showing = jsonGet(etc, "presence");
+	bool show = !showing || on(showing);
+	Json *watch = jsonArray(), *docs = jsonArray();
+	// every name in the list, a mounted document not yet come too (its name is its hex): drvNames would leave it out
+	size_t n;
+	const char *const *at = hostPath(drvHost(), &n, "/", "dev", "sync", "shared", NULL);
+	ap_namelist list = { 0 };
+	if (ap_names(g->api, at, n, &list)) list.n = 0;
+	for (size_t i = 0; i < list.n; i++) {
+		const char *hex = hexOf(list.names[i]);
+		if (!hex) continue;
+		if (show && chose(choices, hex, "presence", true)) jsonPush(watch, jsonString(hex));
+		if (global && chose(choices, hex, "live", false)) jsonPush(docs, jsonString(hex));
+	}
+	Json *state = docs->array.count ? jsonObject() : jsonNull();
+	if (docs->array.count) {
+		if (switched(g, "pointer")) {
+			Json *at = drvRead(g->api, drvPath("/", "dev", "pointer", "at", NULL));
+			// a map of the kit's is the turn's: a hold of this object's own taken
+			jsonAdd(state, "pointer", jsonRef(drvMap("x", given(jsonGet(at, "x")), "y", given(jsonGet(at, "y")), NULL)));
+		}
+		if (switched(g, "display")) {
+			jsonAdd(state, "focus", given(drvRead(g->api, drvPath("/", "dev", "display", "focus", NULL))));
+			Json *drag = jsonGet(drvRead(g->api, drvPath("/", "dev", "wm", "hand", NULL)), "drag");
+			const char *id = jsonText(jsonGet(drag, "id"));
+			if (id) {
+				Json *w = drvRead(g->api, drvPath("/", "dev", "display", "windows", id, NULL));
+				jsonAdd(state, "drag", jsonRef(drvMap("id", jsonString(id), "how", given(jsonGet(drag, "how")), "x", given(jsonGet(w, "x")), "y", given(jsonGet(w, "y")),
+				                                      "w", given(jsonGet(w, "w")), "h", given(jsonGet(w, "h")), NULL)));
+			}
+		}
+		if (switched(g, "sync")) {
+			Json *user = jsonGet(drvRead(g->api, drvPath("/", "hw", NULL)), "user");
+			jsonAdd(state, "presence", jsonRef(drvMap("device", jsonString(cardKey(hist.card)), "name", given(user), NULL)));
+		}
+	}
+	*out = drvMap("watch", watch, "docs", docs, "state", state, NULL);
+	return ermOk();
+}
+
+/** the documents watched as the value says, the state given to the card for each it goes to, withdrawn from those it went to before */
+static ErmErr liveEffect(void *data, const ErmGiven *g, Json **out) {
+	(void)data;
+	*out = jsonNull();
+	Json *watch = jsonGet(g->value, "watch"), *docs = jsonGet(g->value, "docs"), *state = jsonGet(g->value, "state");
+	char doc[96];
+	ErmMap now = { 0 };
+	for (int i = 0; jsonIsArray(watch) && i < watch->array.count; i++) {
+		const char *hex = jsonText(watch->array.items[i]);
+		ermMapPut(&now, hex, (void *)1);
+		if (ermMapHas(&live.watching, hex)) continue;
+		snprintf(doc, sizeof doc, "ermine://%s", hex);
+		cardWatch(hist.card, doc, true);
+	}
+	for (int i = 0; i < live.watching.count; i++) {
+		const char *hex = live.watching.entries[i].key;
+		if (ermMapHas(&now, hex)) continue;
+		snprintf(doc, sizeof doc, "ermine://%s", hex);
+		cardWatch(hist.card, doc, false);
+		ermMapPut(&live.stood, hex, (void *)1);
+	}
+	mapFree(&live.watching);
+	live.watching = now;
+	// this device's: the state as given, stamped seen (wall ms), one value for every document; the same
+	// state as last given (a compute run by something else moving) is not given again
+	op_value *v = NULL;
+	char *printed = NULL;
+	if (jsonIsObject(state)) {
+		printed = jsonPrint(state);
+		Json *stamped = jsonShallow(state);
+		jsonAdd(stamped, "seen", jsonInteger((int64_t)erm_host_now()));
+		v = valOf(stamped);
+		jsonFree(stamped);
+	}
+	ErmMap going = { 0 };
+	for (int i = 0; v && jsonIsArray(docs) && i < docs->array.count; i++) {
+		const char *hex = jsonText(docs->array.items[i]);
+		ermMapPut(&going, hex, (void *)1);
+		if (live.last && printed && !strcmp(live.last, printed) && ermMapHas(&live.going, hex)) continue;
+		snprintf(doc, sizeof doc, "ermine://%s", hex);
+		cardLive(hist.card, doc, v);
+	}
+	free(live.last);
+	live.last = printed;
+	for (int i = 0; i < live.going.count; i++) {
+		const char *hex = live.going.entries[i].key;
+		if (ermMapHas(&going, hex)) continue;
+		snprintf(doc, sizeof doc, "ermine://%s", hex);
+		cardLive(hist.card, doc, NULL);
+	}
+	mapFree(&live.going);
+	live.going = going;
+	op_free(v);
+	// a document no longer watched: its presence nodes go (irq 68's turn)
+	if (live.stood.count && !live.posted) {
+		live.posted = true;
+		ermosPost("{\"irq\": 68}");
+	}
+	return ermOk();
+}
+
+/** what stands at a watched document changed (card.c): irq 68 once */
+static void lived(void *context, const char *doc) {
+	(void)context;
+	const char *hex = hexOf(doc);
+	if (!hex) return;
+	ermMapPut(&live.stood, hex, (void *)1);
+	if (live.posted) return;
+	live.posted = true;
+	ermosPost("{\"irq\": 68}");
+}
+
+/** /dev/sync/presence/<hex>: a node a standing peer, written as its state, those standing no more unplaced; none standing: the folder unplaced */
+static void presence(const ErmGiven *g, const char *hex) {
+	Json *at = drvPath("/", "dev", "sync", "presence", NULL), *folder = drvUnder(at, hex, NULL);
+	char doc[96];
+	snprintf(doc, sizeof doc, "ermine://%s", hex);
+	card_stand *stands = NULL;
+	size_t n = ermMapHas(&live.watching, hex) ? cardStanding(hist.card, doc, &stands) : 0;
+	bool there = drvHas(g->api, folder);
+	if (n && !there) {
+		char *id = formatString("sync/presence/%s", hex);
+		drvMake(g->api, at, hex, id, jsonNull());
+		free(id);
+		there = drvHas(g->api, folder);
+	}
+	ErmMap standing = { 0 };
+	for (size_t i = 0; i < n; i++) {
+		ermMapPut(&standing, stands[i].key, (void *)1);
+		Json *value = jsonOfVal(stands[i].value), *node = drvUnder(folder, stands[i].key, NULL);
+		if (!there) jsonFree(value);
+		else if (drvHas(g->api, node)) drvSnap(g->api, node, value);
+		else {
+			char *id = formatString("sync/presence/%s/%s", hex, stands[i].key);
+			drvMake(g->api, folder, stands[i].key, id, value);
+			free(id);
+		}
+		op_free(stands[i].value);
+	}
+	free(stands);
+	if (there) {
+		Json *names = drvNames(g->api, folder);
+		for (int i = 0; jsonIsArray(names) && i < names->array.count; i++) {
+			const char *key = jsonText(names->array.items[i]);
+			if (ermMapHas(&standing, key)) continue;
+			char *id = formatString("sync/presence/%s/%s", hex, key);
+			drvOp(g->api, "unplace", drvMap("address", folder, "name", jsonString(key), "id", jsonString(id), NULL));
+			free(id);
+		}
+		if (!n) {
+			char *id = formatString("sync/presence/%s", hex);
+			drvOp(g->api, "unplace", drvMap("address", at, "name", jsonString(hex), "id", jsonString(id), NULL));
+			free(id);
+		}
+	}
+	mapFree(&standing);
+}
+
+/** irq 65: each served history a commit was taken in to grown, written only when it did; irq 68: /dev/sync/presence written for what changed */
 static ErmErr historyIrq(void *data, const ErmGiven *g, Json **out) {
 	(void)data;
 	*out = jsonNull();
@@ -484,6 +705,9 @@ static ErmErr historyIrq(void *data, const ErmGiven *g, Json **out) {
 		if (ermMapHas(&hist.marks, s->hex) && grow(s)) serve(g, s);
 	}
 	mapFree(&hist.marks);
+	live.posted = false;
+	for (int i = 0; i < live.stood.count; i++) presence(g, live.stood.entries[i].key);
+	mapFree(&live.stood);
 	return ermOk();
 }
 
@@ -497,10 +721,16 @@ ErmErr driverSync(void *data, const ErmGiven *g, Json **out) {
 	drvMake(g->api, dev, "history", "sync/history", jsonNull());
 	// this device's key, as a commit's signer says it: a reader tells this device's changes from another's
 	drvMake(g->api, dev, "device", "sync/device", drvMap("key", jsonString(cardKey(hist.card)), NULL));
+	// live state: this device's presence switch, and the peers' standing live state
+	drvMake(g->api, dev, "live", "sync/live", drvMap("on", jsonBoolean(true), NULL));
+	drvMake(g->api, dev, "presence", "sync/presence", jsonNull());
+	cardLived(hist.card, lived, NULL);
 	Json *here = drvHere(g);
 	drvHandler(g, here, "irq", (ErmFn){ historyIrq, NULL });
 	drvClaim(g, here, IRQ);
+	drvClaim(g, here, LIVE_IRQ);
 	drvChild(g, here, "want", (ErmFn){ wantCompute, NULL }, (ErmFn){ wantEffect, NULL });
 	drvChild(g, here, "server", (ErmFn){ serverCompute, NULL }, (ErmFn){ serverEffect, NULL });
+	drvChild(g, here, "live", (ErmFn){ liveCompute, NULL }, (ErmFn){ liveEffect, NULL });
 	return ermOk();
 }

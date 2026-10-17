@@ -133,6 +133,8 @@ ErmErr driverPointer(void *data, const ErmGiven *g, Json **out) {
 	drvMake(g->api, drvPath("/", "dev", "pointer", NULL), "to", "pointer/to", jsonNull());
 	drvMake(g->api, drvPath("/", "dev", "pointer", NULL), "cursor", "pointer/cursor", jsonNull());
 	drvMake(g->api, drvPath("/", "dev", "pointer", NULL), "plane", "pointer/plane", jsonNull());
+	// {on}: whether the pointer's place goes out with this device's live state (card/drv_sync.c, Live state)
+	drvMake(g->api, drvPath("/", "dev", "pointer", NULL), "live", "pointer/live", drvMap("on", jsonBoolean(true), NULL));
 	drvHandler(g, here, "irq", (ErmFn){ pointerIrq, p });
 	drvClaim(g, here, 35);
 	drvChild(g, here, "cursor", (ErmFn){ cursorCompute, NULL }, (ErmFn){ cursorEffect, p });

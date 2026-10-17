@@ -22,12 +22,21 @@
 // sync updates in place is told through commit; the places are told of each such key after the run
 // (pl_event: every spot of the key said changed, the watches told), never inside sync's callback,
 // where a watch's write would be lost (sync is applying).
+//
+// Live state (card.h, the bottom): a fourth kept table, `live`, ephemeral (sync.h): what the sync
+// driver gives (cardLive) is written to it as an entry of the card's own, at most every LIVE_BEAT
+// ms, in the turn, before sync runs (so it goes out in the same turn); never a place, never a
+// commit stored. A peer's standing live state is read from its standing ephemeral commit (sy_standing,
+// then the commit's patches on nothing: a `live` table has no stored state under it), and a watched
+// document's standing set is fingerprinted each turn, so the driver is told when it changed (a peer
+// came, moved or lapsed after ttl).
 
 #include "card.h"
 
 #include "../../../../extensions/sync/c/ids.h"
 #include "../../../../extensions/subduction/c/subduction/platform.h"
 #include "../../../../extensions/subduction/c/subduction/store.h"
+#include "../../../../core/op/c/apply.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -48,6 +57,21 @@ typedef struct {
 	char **items;
 	size_t count, room;
 } Ids;
+
+// ms between this device's live state going out (and, sync.h's beat, a standing one sent again)
+#define LIVE_BEAT 200
+
+// a document's live state: this device's, as given and as written, and what stands there watched
+typedef struct {
+	char doc[ID_LENGTH + 1];
+	op_value *pending; // the latest given, not yet written (held); NULL: none
+	bool withdraw;     // what is pending is a withdrawal
+	nd_entry *entry;   // this device's live entry in the table, while sync has not replaced it (then freed in drop)
+	uint64_t sent;     // erm_host_now ms when last written; 0: never
+	bool watched;
+	bool told;         // print is of a standing set told
+	uint64_t print;    // a hash of the peers' standing commits last told
+} Live;
 
 struct Card {
 	char *folder; // sd/sync
@@ -73,9 +97,15 @@ struct Card {
 	bool booting;    // what the card holds being taken in: not counted
 	void (*told)(void *context, const char *doc);
 	void *told_context;
+	Live *lives;
+	size_t nlives, lives_room;
+	void (*lived)(void *context, const char *doc);
+	void *lived_context;
 };
 
 static const char *const PARTS[] = {"value", "attributes", "children"};
+// the tables kept: the three, and the live state's, ephemeral
+static const char *const KEPT[] = {"value", "attributes", "children", "live"};
 
 static void look(Card *c, const char *id);
 
@@ -235,9 +265,15 @@ static void committed(void *context, nd_entry *const *changed, size_t n) {
 	c->wrote = true;
 }
 
-/** an entry sync replaced or took out: the places' own (pl_own), let go of with them; a table event told the places */
+/** an entry sync replaced or took out: the places' own (pl_own), let go of with them (a table event told the places); a live entry of the card's, freed */
 static void dropped(void *context, nd_entry *e) {
-	(void)context, (void)e;
+	Card *c = context;
+	for (size_t i = 0; i < c->nlives; i++) {
+		if (c->lives[i].entry != e) continue;
+		c->lives[i].entry = NULL;
+		nd_free_entry(e);
+		return;
+	}
 }
 
 /** a commit taken in from the card or elsewhere: counted, told; what its document's children name followed (look) */
@@ -371,6 +407,12 @@ static void settle(Card *c) {
 
 // --- sync
 
+/** sync.h's ephemeral: a change to a document's `live` table goes out as an ephemeral commit */
+static bool liveTable(void *context, const char *doc, const char *table) {
+	(void)context, (void)doc;
+	return !strcmp(table, "live");
+}
+
 /** sync run until nothing more can go on this turn, what it asks sent; ms until it must run again */
 static int64_t run(Card *c) {
 	int64_t wait = -1;
@@ -426,13 +468,19 @@ void cardWrote(Card *c, const pl_changed *changed, const card_born *born, size_t
 	if (made) count(c, made, 0, 0);
 }
 
+static int64_t liveTurn(Card *c);
+static void lived(Card *c);
+
 int64_t cardTurn(Card *c) {
-	int64_t wait = run(c);
+	// the live state due written first, so it goes out in this turn's run
+	int64_t wait = liveTurn(c), ran = run(c);
+	if (ran >= 0 && (wait < 0 || ran < wait)) wait = ran;
 	tellPlaces(c);
 	settle(c);
 	// what was written, run
 	if (c->wrote) c->wrote = false, sc_pulse(c->s);
 	if (!c->booting) count(c, 0, 0, 0);
+	lived(c);
 	return wait;
 }
 
@@ -440,7 +488,8 @@ bool cardStart(Card *c, pl *places, tb_table *table, sc_scheduler *s, const card
 	c->l = places, c->table = table, c->s = s;
 	if (host) c->host = *host;
 	c->check = getenv("ERMOS_CARD_CHECK") != NULL;
-	sy_options o = {.table = table, .store = &c->store, .zeros = true, .commit = committed, .drop = dropped, .context = c};
+	sy_options o = {.table = table, .store = &c->store, .zeros = true, .tables = KEPT, .tables_length = sizeof KEPT / sizeof *KEPT,
+		.ephemeral = liveTable, .beat = LIVE_BEAT, .commit = committed, .drop = dropped, .context = c};
 	memcpy(o.seed, c->seed, 32);
 	c->sync = sy_create(&o);
 	if (!c->sync) {
@@ -474,6 +523,12 @@ void cardStop(Card *c) {
 void cardFree(Card *c) {
 	if (!c) return;
 	sy_free(c->sync);
+	for (size_t i = 0; i < c->nlives; i++) {
+		Live *l = &c->lives[i];
+		op_free(l->pending);
+		if (l->entry) tb_del_node(c->table, l->entry), nd_free_entry(l->entry);
+	}
+	free(c->lives);
 	for (size_t i = 0; i < c->nkeys; i++) free(c->keys[i].part), free(c->keys[i].id);
 	free(c->keys);
 	for (size_t i = 0; i < c->look.count; i++) free(c->look.items[i]);
@@ -504,4 +559,138 @@ void cardFollow(Card *c, const char *doc) {
 void cardTold(Card *c, void (*told)(void *context, const char *doc), void *context) {
 	c->told = told;
 	c->told_context = context;
+}
+
+// --- live state (card.h)
+
+static Live *liveOf(Card *c, const char *doc, bool make) {
+	for (size_t i = 0; i < c->nlives; i++)
+		if (!strcmp(c->lives[i].doc, doc)) return &c->lives[i];
+	if (!make || !id_is(doc)) return NULL;
+	if (c->nlives == c->lives_room) {
+		c->lives_room = c->lives_room ? c->lives_room * 2 : 8;
+		c->lives = realloc(c->lives, sizeof *c->lives * c->lives_room);
+		if (!c->lives) abort();
+	}
+	Live *l = &c->lives[c->nlives++];
+	*l = (Live){0};
+	snprintf(l->doc, sizeof l->doc, "%s", doc);
+	return l;
+}
+
+void cardLive(Card *c, const char *doc, const op_value *value) {
+	Live *l = liveOf(c, doc, true);
+	if (!l) return;
+	op_free(l->pending);
+	l->pending = value ? op_ref((op_value *)value) : NULL;
+	// a withdrawal of what was never sent: nothing to do
+	l->withdraw = value == NULL && l->sent != 0;
+}
+
+/** this device's live state written to the document's live table, the entry the card's own; sync told, as of any table change */
+static void liveWrite(Card *c, Live *l, uint64_t now) {
+	tb_key part = tb_string("live"), id = tb_string(l->doc);
+	nd_entry *was = tb_get(c->table, part, id);
+	// what was there of the card's own (this document's last, or another's) is freed once out of the
+	// table; sync's own, sync lets go of on its event (notice)
+	Live *owner = NULL;
+	for (size_t i = 0; was && i < c->nlives; i++)
+		if (c->lives[i].entry == was) owner = &c->lives[i];
+	if (l->withdraw) {
+		if (was) tb_del(c->table, part, id);
+	} else {
+		nd_entry *e = nd_make_entry(l->pending, NULL, NULL);
+		if (!e) abort();
+		if (was) tb_sub(c->table, part, id, e);
+		else tb_add(c->table, part, id, e);
+		l->entry = e;
+	}
+	if (owner) {
+		if (owner->entry == was) owner->entry = NULL;
+		nd_free_entry(was);
+	}
+	op_free(l->pending);
+	l->pending = NULL;
+	l->withdraw = false;
+	l->sent = now;
+	sy_table_changed(c->sync, part, id);
+	count(c, 1, 0, 0);
+}
+
+/** the live state due written; ms until the next is due, -1 for none */
+static int64_t liveTurn(Card *c) {
+	if (!c->sync) return -1;
+	int64_t wait = -1;
+	uint64_t now = erm_host_now();
+	for (size_t i = 0; i < c->nlives; i++) {
+		Live *l = &c->lives[i];
+		if (!l->pending && !l->withdraw) continue;
+		uint64_t due = l->sent + LIVE_BEAT;
+		if (now >= due) liveWrite(c, l, now);
+		else if (wait < 0 || (int64_t)(due - now) < wait) wait = (int64_t)(due - now);
+	}
+	return wait;
+}
+
+void cardWatch(Card *c, const char *doc, bool on) {
+	Live *l = liveOf(c, doc, on);
+	if (!l) return;
+	l->watched = on;
+	l->told = false;
+}
+
+void cardLived(Card *c, void (*lived)(void *context, const char *doc), void *context) {
+	c->lived = lived;
+	c->lived_context = context;
+}
+
+/** each watched document whose peers' standing set changed since last told: told */
+static void lived(Card *c) {
+	if (!c->lived || !c->sync) return;
+	const uint8_t *me = tp_key(sy_device(c->sync));
+	for (size_t i = 0; i < c->nlives; i++) {
+		Live *l = &c->lives[i];
+		if (!l->watched) continue;
+		sy_standing_row *rows;
+		size_t n = sy_standing(c->sync, l->doc, &rows);
+		uint64_t h = 1469598103934665603ull; // FNV-1a over the peers' keys and commit names
+		for (size_t k = 0; k < n; k++) {
+			if (!memcmp(rows[k].key, me, SL_KEY)) continue;
+			for (size_t b = 0; b < SL_KEY; b++) h = (h ^ rows[k].key[b]) * 1099511628211ull;
+			for (size_t b = 0; b < 32; b++) h = (h ^ rows[k].tip[b]) * 1099511628211ull;
+		}
+		free(rows);
+		if (l->told && h == l->print) continue;
+		l->told = true;
+		l->print = h;
+		c->lived(c->lived_context, l->doc);
+	}
+}
+
+size_t cardStanding(Card *c, const char *doc, card_stand **out) {
+	*out = NULL;
+	if (!c->sync || !id_is(doc)) return 0;
+	sy_standing_row *rows;
+	size_t n = sy_standing(c->sync, doc, &rows), m = 0;
+	*out = malloc((n + 1) * sizeof **out);
+	if (!*out) abort();
+	const uint8_t *me = tp_key(sy_device(c->sync));
+	const hy_history *h = tp_history(sy_device(c->sync), doc, TP_EPHEMERAL);
+	for (size_t k = 0; k < n; k++) {
+		if (!memcmp(rows[k].key, me, SL_KEY)) continue;
+		const hy_kept *kept = h ? hy_get(h, rows[k].tip) : NULL;
+		cm_commit commit;
+		if (!kept || cm_decode(kept->bytes, kept->length, &commit, NULL) != CM_OK) continue;
+		// a live table has nothing stored under it: the commit's patches on nothing are its value
+		op_value *v = NULL;
+		size_t failed;
+		if (strcmp(commit.table, "live") || op_apply(NULL, commit.patches, commit.patches_length, NULL, &v, &failed) != OP_OK) v = NULL;
+		cm_free(&commit);
+		if (!v) continue;
+		hex(rows[k].key + SL_KEY - 32, 32, (*out)[m].key);
+		(*out)[m].value = v;
+		m++;
+	}
+	free(rows);
+	return m;
 }

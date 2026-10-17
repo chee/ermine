@@ -2589,6 +2589,8 @@ ErmErr driverDisplay(void *data, const ErmGiven *g, Json **out) {
 	}
 	drvMake(g->api, dev, "frames", "display/frames", drvMap("flips", jsonInteger(0), NULL));
 	drvMake(g->api, dev, "again", "display/again", jsonInteger(0));
+	// {on}: whether the focus and a window mid-drag go out with this device's live state (card/drv_sync.c, Live state)
+	drvMake(g->api, dev, "live", "display/live", drvMap("on", jsonBoolean(true), NULL));
 	Json *here = drvHere(g);
 	d->here = jsonRef(here);
 	drvHandler(g, here, "irq", (ErmFn){ displayIrq, d });

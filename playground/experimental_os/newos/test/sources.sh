@@ -28,8 +28,8 @@ nc_sources="$nc/core/op/c/value.c $nc/core/op/c/apply.c $nc/core/op/c/invert.c $
   $nc/extensions/subduction/c/subduction/websocket.c $nc/extensions/subduction/c/subduction/transport_openssl.c \
   $nc/playground/experimental_os/newos/fronts/fronts.c $nc/playground/experimental_os/newos/card/card.c $nc/playground/experimental_os/newos/card/net.c \
   $nc/playground/experimental_os/newos/card/drv_sync.c $nc/playground/experimental_os/newos/card/ed25519_openssl.c"
-# newos/*.c not built: the old card's network and histories (card/ has them)
-nc_skip="net.c drv_sync.c"
+# newos/*.c not built: none
+nc_skip=""
 nc_cflags="$vt_cflags $way_cflags -I$openssl/include -I$nc/extensions/subduction/c/subduction $rename -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512 -DBLAKE3_USE_NEON=0"
 nc_libs="$vt_libs $way_libs $nc/extensions/subduction/c/subduction/lib/libsubduction_c.a $(tr -d '\033' < "$nc/extensions/subduction/c/subduction/lib/link.txt" | sed 's/\[[0-9;]*m//g') -L$openssl/lib -lssl -lcrypto -framework JavaScriptCore -framework CoreText -framework CoreFoundation -lz -lpthread"
 

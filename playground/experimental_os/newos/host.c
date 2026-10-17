@@ -737,6 +737,7 @@ static void makeHw(Host *h) {
 	                   " {\"name\": \"history\", \"irq\": 65, \"note\": \"a history served may have changed (drv_sync.c)\"},"
 	                   " {\"name\": \"vnc\", \"irq\": 66, \"note\": \"the VNC connections' sockets (drv_vnc.c)\"},"
 	                   " {\"name\": \"cc\", \"irq\": 67, \"note\": \"core 0's own: a C program's compile done (loader.c)\"},"
+	                   " {\"name\": \"presence\", \"irq\": 68, \"note\": \"a peer's live state standing at a shared document changed (drv_sync.c)\"},"
 	                   " {\"name\": \"blitter\", \"note\": \"core 0's own: BitBlt, text, and the draw device's ops\"}]");
 	size_t nd, ni;
 	const char *const *devices = hostPath(h, &nd, "hw", "devices", NULL);

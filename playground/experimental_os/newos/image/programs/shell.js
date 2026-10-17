@@ -170,8 +170,11 @@ export default (given) => {
 			dim(
 				'  patch /etc/desktop {"type":"set","path":[],"key":"hint","value":"hi"}   a list of patches is one change',
 			),
-			"  share path              share path, and print its id: a document both machines write, and what it holds",
-			"                          on another machine: mount path id, as mount /n/mac1 id",
+			"  share path [live] [nopresence]   share path, and print its id: a document both machines write, and what it holds",
+			"                          on another machine: mount path id [live] [nopresence], as mount /n/mac1 id",
+			"                          live: this machine's live state (pointer, focus, drags, presence) goes to its peers,",
+			"                          while /etc/sync's live is on (Control Panels, Sync); theirs shows in /dev/sync/presence",
+			"                          while /etc/sync's presence is on; nopresence: not for this document (presence: again)",
 			"  cd path   pwd   start dir program [name]   kill pid   call path [json...]",
 			"  src path   sed path s/old/new/   replace pid|path runs a program's new code (stack>)",
 			"  go <app>|dev|hw|stack   help   clear",
@@ -295,16 +298,41 @@ export default (given) => {
 	// by name is a document, its id from sync, the image's and the root among them, and sharing one
 	// is letting another machine follow it: both write it, and what it holds. An ephemeral node is
 	// never a document; one in a shared document is shown there, live. /dev/sync/shared holds what
-	// this machine shares and mounts, a slot each, by its hex.
+	// this machine shares and mounts, a slot each, by its hex; its value, each one's choices,
+	// {<hex>: {live, presence}}: live, whether this machine's live state (its pointer, focus, a
+	// window mid-drag, its presence) goes to the document's peers, with /etc/sync's live and each
+	// device's switch; presence, whether the peers' shows here, in /dev/sync/presence, with
+	// /etc/sync's presence (card/drv_sync.c, Live state). The words after share or mount choose:
+	// live (not without it), presence (so without it), nolive, nopresence.
 
 	const DOC = /^ermine:\/\/([0-9a-f]{64})$/
-	const shared = (api, id) => {
+	const SHARED = ["/", "dev", "sync", "shared"]
+	/** the choices the words make: a word chooses, "no" before it unchooses, none the default */
+	const choices = (words) => ({
+		live: words.includes("live") && !words.includes("nolive"),
+		presence: !words.includes("nopresence"),
+	})
+	const shared = (api, id, choice) => {
 		const hex = DOC.exec(id)[1]
-		const at = ["/", "dev", "sync", "shared"]
-		if (!api.children(at, hex).some((i) => i.id === id)) api.insert(idAt(api, at), hex, id)
+		if (!api.children(SHARED, hex).some((i) => i.id === id)) {
+			api.insert(idAt(api, SHARED), hex, id)
+		}
+		const all = val(api, SHARED)
+		if (all && typeof all === "object") {
+			api.write(SHARED, [{ path: [hex], value: choice }])
+		} else api.write(SHARED, whole({ [hex]: choice }))
 	}
-	/** share path: made if nothing is there; a document is shared as itself */
-	const share = (api, path) => {
+	const liveSaid = (api, id) => {
+		const c = val(api, SHARED)?.[DOC.exec(id)[1]] ?? {}
+		return (c.live === true
+			? "live state goes with it (pointer, focus, drags, presence: with /etc/sync's live on)"
+			: "live state does not go with it (share or mount it with the word live)") +
+			(c.presence === false
+				? "; peers' live state not shown (the word presence shows it)"
+				: "; peers' live state shown in /dev/sync/presence (nopresence hides it)")
+	}
+	/** share path [live] [nopresence]: made if nothing is there; a document is shared as itself */
+	const share = (api, path, choice) => {
 		const at = names(path)
 		const where = "/" + [...s.root, ...at].join("/")
 		if (!at.length) {
@@ -316,22 +344,22 @@ export default (given) => {
 		const found = api.children(parent, name)[0]
 		if (!found) {
 			const id = put(api, idOf(api, parent), name, null)
-			shared(api, id)
+			shared(api, id, choice)
 			return id + NL +
 				dim(
 					`${where}: made, a document, and shared: both machines write it. There: mount <path> ${id}`,
-				)
+				) + NL + dim(liveSaid(api, id))
 		}
 		if (!DOC.test(found.id)) {
 			throw new Error(
 				`${where} is ${found.id}, ephemeral: not a document, so not shared (it is shown live in a shared document that holds it)`,
 			)
 		}
-		shared(api, found.id)
+		shared(api, found.id, choice)
 		return found.id + NL +
 			dim(
 				`${where}: a document, shared: both machines write it, and what it holds. There: mount <path> ${found.id}`,
-			)
+			) + NL + dim(liveSaid(api, found.id))
 	}
 
 	// leaving: on the console the machine powers off, as a console login's exit ends the session;
@@ -466,16 +494,22 @@ export default (given) => {
 				return dim(`id ${id}`)
 			}
 			case "mount": {
-				// mount path id: the node of that id placed at path
+				// mount path id [live] [presence]: the node of that id placed at path; live: this machine's live
+				// state goes to it; nopresence: its peers' not shown here
 				const [parent, name] = slot(args[0])
-				if (!args[1]) throw new Error("mount path id")
-				const c = api.insert(idOf(api, parent), name, args[1])
+				if (!args[1]) throw new Error("mount path id [live] [nopresence]")
+				// mounted there already: only its choices change
+				const there = api.children(parent, name).some((i) => i.id === args[1])
+				const c = there ? null : api.insert(idOf(api, parent), name, args[1])
+				if (!DOC.test(args[1])) return dim(`t=${c}`)
 				// a document this machine does not have is followed from the server: /dev/sync/shared holds it
 				const arriving = api.children(parent, name).find((i) => i.id === args[1])
-				if (!DOC.test(args[1]) || arriving?.node) return dim(`t=${c}`)
-				shared(api, args[1])
+				shared(api, args[1], choices(args.slice(2)))
+				const said = liveSaid(api, args[1])
+				if (there) return dim(`mounted already; ${said}`)
+				if (arriving?.node) return dim(`t=${c}; ${said}`)
 				return dim(
-					`t=${c}; arriving from the server (cat /dev/sync/link); it reads pending until it comes`,
+					`t=${c}; arriving from the server (cat /dev/sync/link); it reads pending until it comes; ${said}`,
 				)
 			}
 			case "ln": {
@@ -489,7 +523,7 @@ export default (given) => {
 				return dim(`t=${c} id ${id}`)
 			}
 			case "share":
-				return share(api, args[0])
+				return share(api, args[0], choices(args.slice(1)))
 			case "rm": {
 				// rm path: what the path's last name holds, its first member, let go from its slot
 				const [parent, name] = slot(args[0])

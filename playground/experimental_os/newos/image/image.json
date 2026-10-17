@@ -2659,7 +2659,9 @@
 			"name": "sync",
 			"id": "etc-sync",
 			"value": {
-				"server": "wss://galaxy.observer"
+				"server": "wss://galaxy.observer",
+				"live": false,
+				"presence": true
 			}
 		},
 		{
@@ -3469,6 +3471,68 @@
 						],
 						"key": "server",
 						"control": "text"
+					},
+					{
+						"label": "Live state",
+						"control": "head"
+					},
+					{
+						"label": "Send live state",
+						"at": [
+							"/",
+							"etc",
+							"sync"
+						],
+						"key": "live",
+						"control": "check",
+						"default": false
+					},
+					{
+						"label": "Pointer",
+						"at": [
+							"/",
+							"dev",
+							"pointer",
+							"live"
+						],
+						"key": "on",
+						"control": "check",
+						"default": true
+					},
+					{
+						"label": "Focus and drags",
+						"at": [
+							"/",
+							"dev",
+							"display",
+							"live"
+						],
+						"key": "on",
+						"control": "check",
+						"default": true
+					},
+					{
+						"label": "Presence",
+						"at": [
+							"/",
+							"dev",
+							"sync",
+							"live"
+						],
+						"key": "on",
+						"control": "check",
+						"default": true
+					},
+					{
+						"label": "Show peers' live state",
+						"at": [
+							"/",
+							"etc",
+							"sync"
+						],
+						"key": "presence",
+						"control": "check",
+						"default": true
 					},
 					{
 						"label": "Link",
