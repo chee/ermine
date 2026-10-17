@@ -1,0 +1,66 @@
+// libFuzzer target (fuzz.sh cbor): the input bytes decoded as one value with cborDecode. Checked:
+// - cborCheck says the same: taken or not, and on a no the same reason at the same byte;
+// - taken: encoding the value gives the input exactly (decoding takes only the canonical
+//   encoding), and the value read again is equal to it; a short buffer gets the first bytes and
+//   the whole length; hashValue names it as BLAKE3 of the input;
+// - nothing leaks (the leak checker), nothing reads or writes out of bounds (ASan), no undefined
+//   behaviour (UBSan).
+#include "blake3/blake3.h"
+#include "cbor.h"
+#include "hash.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+static void die(const char *why) {
+	fprintf(stderr, "fuzz: %s\n", why);
+	abort();
+}
+
+int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
+	// the input in a buffer of its own size, so a read past it is caught
+	unsigned char *input = malloc(size ? size : 1);
+	memcpy(input, data, size);
+	const char *why = NULL, *whyCheck = NULL;
+	size_t at = 0, atCheck = 0;
+	Json *value = cborDecode(input, size, &why, &at);
+	bool checked = cborCheck(input, size, &whyCheck, &atCheck);
+	if (checked != (value != NULL)) die("cborCheck and cborDecode disagree");
+	if (!value) {
+		if (!why || why != whyCheck || at != atCheck) die("cborCheck gives another reason");
+		if (at > size) die("a reason past the input");
+		free(input);
+		return 0;
+	}
+	size_t length = 0;
+	if (!cborEncode(value, NULL, 0, &length, &why)) die("a value read has no encoding");
+	if (length != size) die("encoded again, another length");
+	unsigned char *out = malloc(length + 1);
+	size_t again = 0;
+	if (!cborEncode(value, out, length, &again, &why) || again != length) die("encoding twice differs");
+	if (memcmp(out, input, size) != 0) die("encoded again, other bytes: not canonical");
+	// a short buffer: its first bytes, the whole length
+	if (length > 1) {
+		size_t half = length / 2, whole = 0;
+		unsigned char *some = malloc(half);
+		if (!cborEncode(value, some, half, &whole, &why) || whole != length) die("a short buffer, another length");
+		if (memcmp(some, input, half) != 0) die("a short buffer, other bytes");
+		free(some);
+	}
+	Json *back = cborDecode(out, length, &why, &at);
+	if (!back) die("its own encoding is refused");
+	if (!jsonEqual(back, value)) die("read again, another value");
+	uint8_t name[32], want[32];
+	if (!hashValue(value, name, &why)) die("no hash");
+	blake3_hasher h;
+	blake3_hasher_init(&h);
+	blake3_hasher_update(&h, input, size);
+	blake3_hasher_finalize(&h, want, 32);
+	if (memcmp(name, want, 32) != 0) die("the hash is not BLAKE3 of the encoding");
+	jsonFree(back);
+	jsonFree(value);
+	free(out);
+	free(input);
+	return 0;
+}

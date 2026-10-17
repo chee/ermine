@@ -1,0 +1,320 @@
+// libFuzzer target (fuzz.sh cbor-model): a value made from the input bytes (numbers from raw bits,
+// strings of every width of code point, lone surrogates as WTF-8, bytes not UTF-8, typed arrays of
+// each kind with any NaN payload, maps with keys twice, stand-ins, deep ones), encoded. Checked:
+// - refused exactly when the model says: a string or key not UTF-8 (a lone surrogate too), a map
+//   holding a key twice, more than CBOR_DEPTH containers one in the next;
+// - taken: decoding gives an equal value, encoding that again the same bytes; the same value with
+//   every map's keys in reverse the same bytes; hashValue BLAKE3 of them;
+// - a number alone: the shortest float that holds it (_Float16, float, double), the one NaN f97e00;
+// - nothing leaks, ASan and UBSan quiet.
+#include "blake3/blake3.h"
+#include "cbor.h"
+#include "hash.h"
+
+#include <float.h>
+#include <math.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+static void die(const char *why) {
+	fprintf(stderr, "fuzz: %s\n", why);
+	abort();
+}
+
+typedef struct {
+	const unsigned char *data;
+	size_t size, at;
+} Bytes;
+
+static unsigned byte(Bytes *b) {
+	return b->at < b->size ? b->data[b->at++] : 0;
+}
+
+static uint64_t bits(Bytes *b, int n) {
+	uint64_t x = 0;
+	for (int i = 0; i < n; i++) x = x << 8 | byte(b);
+	return x;
+}
+
+// pieces of text: one to four bytes, U+0000 as json.h holds it, lone surrogates (WTF-8), a pair
+// as WTF-8 halves (no string: CESU), and bytes that are no UTF-8
+static const char *const pieces[] = {
+	"a", "\xc3\xa9", "\xe4\xb8\xad", "\xf0\x9f\x98\x80", "\xf0\x9f\x91\x8d\xf0\x9f\x8f\xbd", "\xc0\x80",
+	"\xef\xbf\xbf", "\x7f", "\xc2\x80", "\xdf\xbf", "\xe0\xa0\x80", "\xf4\x8f\xbf\xbf",
+	// not UTF-8 from here
+	"\xed\xa0\xbd", "\xed\xb8\x80", "\xed\xa0\x80", "\xed\xb0\x80", "\xed\xa0\xbd\xed\xb8\x80", "\xff",
+	"\xc1\xbf", "\xe0\x80\x80", "\xf4\x90\x80\x80", "\x80", "\xc3",
+};
+#define GOOD_PIECES 12
+#define PIECES (sizeof pieces / sizeof *pieces)
+
+static const char *const keys[] = { "", "a", "b", "0", "10", "01", "__proto__", "/", "\xc0\x80", "a\xc0\x80", "\xef\xbf\xbf" "a", "\xf0\x9f\x98\x80" };
+#define KEYS (sizeof keys / sizeof *keys)
+
+// whether the bytes are UTF-8 (with C0 80 for U+0000): each code point decoded, in its shortest
+// form, no surrogate, none past U+10FFFF
+static bool utf8(const unsigned char *s, size_t n) {
+	for (size_t i = 0; i < n;) {
+		unsigned c = s[i], more = c < 0x80 ? 0 : c >> 5 == 6 ? 1 : c >> 4 == 14 ? 2 : c >> 3 == 30 ? 3 : 9;
+		if (more == 9 || n - i <= more) return false;
+		if (c == 0xc0 && more == 1 && s[i + 1] == 0x80) {
+			i += 2;
+			continue;
+		}
+		uint32_t code = more ? c & (0x3f >> more) : c;
+		for (unsigned k = 1; k <= more; k++) {
+			if ((s[i + k] & 0xc0) != 0x80) return false;
+			code = code << 6 | (s[i + k] & 0x3f);
+		}
+		static const uint32_t least[] = { 0, 0x80, 0x800, 0x10000 };
+		if (code < least[more] || code > 0x10ffff || (code >= 0xd800 && code < 0xe000)) return false;
+		i += more + 1;
+	}
+	return true;
+}
+
+// a text, and whether it is UTF-8
+static char *text(Bytes *b, size_t *length, bool *good) {
+	char buf[256];
+	size_t n = 0;
+	*good = true;
+	unsigned count = byte(b) % 8;
+	if (count == 7) count = 40 + byte(b) % 20; // longer: past 23 and 255 bytes, heads grow
+	for (unsigned i = 0; i < count; i++) {
+		unsigned k = byte(b) % (byte(b) % 4 ? GOOD_PIECES : PIECES);
+		size_t m = strlen(pieces[k]);
+		if (n + m >= sizeof buf) break;
+		memcpy(buf + n, pieces[k], m);
+		n += m;
+	}
+	*good = utf8((const unsigned char *)buf, n);
+	*length = n;
+	return copyStringOfLength(buf, n);
+}
+
+static double number(Bytes *b) {
+	switch (byte(b) % 5) {
+		case 0: {
+			uint64_t x = bits(b, 8);
+			double d;
+			memcpy(&d, &x, 8);
+			return d;
+		}
+		case 1: {
+			uint32_t x = (uint32_t)bits(b, 4);
+			float f;
+			memcpy(&f, &x, 4);
+			return f;
+		}
+		case 2: {
+			uint16_t x = (uint16_t)bits(b, 2);
+			_Float16 h;
+			memcpy(&h, &x, 2);
+			return (double)h;
+		}
+		case 3: {
+			static const double edges[] = { 0, -0.0, 1, -1, 65504, 65505, 65520, 0x1p-24, 0x1p-25, 0x1p-14,
+				0x1p-149, 0x1p-150, 0x1p-1074, 0x1p53, 0x1p53 + 2, 0x1p64, 1e300, FLT_MAX, DBL_MAX, 0.1,
+				INFINITY, -INFINITY, NAN };
+			return edges[byte(b) % (sizeof edges / sizeof *edges)];
+		}
+		default: return (double)(int32_t)bits(b, 4) * ldexp(1, (int)(byte(b) % 80) - 40);
+	}
+}
+
+// what the model says of a value: whether it has an encoding
+typedef struct {
+	bool good;
+} Model;
+
+static int plainCompare(const char *a, size_t al, const char *b, size_t bl);
+
+static Json *make(Bytes *b, int depth, Model *m) {
+	unsigned k = byte(b) % (depth > 6 ? 7 : 10);
+	switch (k) {
+		case 0: return byte(b) % 3 ? jsonBoolean(byte(b) & 1) : jsonNull();
+		case 1:
+		case 2: return jsonNumber(number(b));
+		case 3: {
+			size_t n;
+			bool good;
+			char *s = text(b, &n, &good);
+			if (!good) m->good = false;
+			return jsonStringTaking(s, n);
+		}
+		case 4: {
+			unsigned char d[300];
+			size_t n = byte(b) % 4 == 0 ? 256 + byte(b) % 40 : byte(b) % 30;
+			for (size_t i = 0; i < n; i++) d[i] = (unsigned char)byte(b);
+			return jsonBytes(d, n);
+		}
+		case 5: {
+			JsonKind kind = (JsonKind)(byte(b) % JSON_KINDS);
+			size_t size = jsonKindSize(kind), count = byte(b) % 6;
+			unsigned char d[6 * 8];
+			for (size_t i = 0; i < count * size; i++) d[i] = (unsigned char)byte(b);
+			return jsonTyped(kind, d, count);
+		}
+		case 6: {
+			// a deep one: many containers, one in the next
+			if (byte(b) % 8) return jsonNull();
+			int n = CBOR_DEPTH - 2 + (int)(byte(b) % 5) - depth;
+			Json *v = jsonNull();
+			for (int i = 0; i < n; i++) {
+				Json *c = jsonArray();
+				jsonPush(c, v);
+				v = c;
+			}
+			if (depth + n > CBOR_DEPTH) m->good = false;
+			return v;
+		}
+		case 7: {
+			Json *l = jsonArray();
+			for (unsigned n = byte(b) % 5; n > 0; n--) jsonPush(l, make(b, depth + 1, m));
+			return l;
+		}
+		case 8: {
+			Json *o = jsonObject();
+			unsigned n = byte(b) % 4 == 0 ? 17 + byte(b) % 20 : byte(b) % 6;
+			for (unsigned i = 0; i < n; i++) {
+				size_t length;
+				bool good = true;
+				char *key;
+				if (byte(b) % 2) key = copyString(keys[byte(b) % KEYS]), length = strlen(key);
+				else key = text(b, &length, &good);
+				if (!good) m->good = false;
+				for (int j = 0; j < o->object.count; j++) {
+					JsonMember *x = &o->object.members[j];
+					if (plainCompare(x->key, x->keyLength, key, length) == 0) m->good = false;
+				}
+				jsonAddTaking(o, key, length, make(b, depth + 1, m));
+			}
+			return o;
+		}
+		default: return jsonStand(make(b, depth + 1, m));
+	}
+}
+
+// two keys' plain UTF-8 (C0 80 as 00), equal or not
+static int plainCompare(const char *a, size_t al, const char *b, size_t bl) {
+	size_t i = 0, j = 0;
+	while (i < al && j < bl) {
+		unsigned x = (unsigned char)a[i++], y = (unsigned char)b[j++];
+		if (x == 0xc0 && i < al && (unsigned char)a[i] == 0x80) x = 0, i++;
+		if (y == 0xc0 && j < bl && (unsigned char)b[j] == 0x80) y = 0, j++;
+		if (x != y) return x < y ? -1 : 1;
+	}
+	return (i < al) - (j < bl);
+}
+
+// the same value, every map's members in reverse, shared below
+static Json *reversed(const Json *v) {
+	if (v->type == JSON_ARRAY) {
+		Json *l = jsonArray();
+		for (int i = 0; i < v->array.count; i++) jsonPush(l, reversed(v->array.items[i]));
+		return l;
+	}
+	if (v->type == JSON_OBJECT) {
+		Json *o = jsonObject();
+		for (int i = v->object.count - 1; i >= 0; i--) {
+			const JsonMember *x = &v->object.members[i];
+			jsonAddOfLength(o, x->key, x->keyLength, reversed(x->value));
+		}
+		return o;
+	}
+	if (v->type == JSON_STAND) return jsonStand(reversed(v->stand.kind));
+	return jsonRef((Json *)v);
+}
+
+static unsigned char *encoded(const Json *v, size_t *length, bool *ok) {
+	const char *why;
+	*ok = cborEncode(v, NULL, 0, length, &why);
+	if (!*ok) return NULL;
+	unsigned char *out = malloc(*length + 1);
+	size_t again;
+	if (!cborEncode(v, out, *length, &again, &why) || again != *length) die("encoding twice differs");
+	return out;
+}
+
+// the shortest float that holds x
+static void model(double x, unsigned char *out, size_t *length) {
+	if (isnan(x)) {
+		out[0] = 0xf9, out[1] = 0x7e, out[2] = 0, *length = 3;
+		return;
+	}
+	if (fabs(x) <= 65504 || isinf(x)) {
+		_Float16 h = (_Float16)x;
+		if ((double)h == x && signbit((double)h) == signbit(x)) {
+			uint16_t u;
+			memcpy(&u, &h, 2);
+			out[0] = 0xf9, out[1] = (unsigned char)(u >> 8), out[2] = (unsigned char)u, *length = 3;
+			return;
+		}
+	}
+	if (fabs(x) <= FLT_MAX) {
+		float f = (float)x;
+		if ((double)f == x) {
+			uint32_t u;
+			memcpy(&u, &f, 4);
+			out[0] = 0xfa;
+			for (int i = 0; i < 4; i++) out[1 + i] = (unsigned char)(u >> (24 - 8 * i));
+			*length = 5;
+			return;
+		}
+	}
+	uint64_t u;
+	memcpy(&u, &x, 8);
+	out[0] = 0xfb;
+	for (int i = 0; i < 8; i++) out[1 + i] = (unsigned char)(u >> (56 - 8 * i));
+	*length = 9;
+}
+
+int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
+	Bytes b = { data, size, 0 };
+	// a number alone, against the model
+	{
+		double x = number(&b);
+		Json *n = jsonNumber(x);
+		size_t length, want;
+		bool ok;
+		unsigned char *out = encoded(n, &length, &ok), shortest[9];
+		model(x, shortest, &want);
+		if (!ok || length != want || memcmp(out, shortest, want) != 0) die("a number not in its shortest float");
+		free(out);
+		jsonFree(n);
+	}
+	Model m = { true };
+	Json *v = make(&b, 0, &m);
+	size_t length;
+	bool ok;
+	unsigned char *out = encoded(v, &length, &ok);
+	if (ok != m.good) die(ok ? "taken, and the model says no encoding" : "refused, and the model says it has one");
+	if (ok) {
+		const char *why = NULL;
+		size_t at;
+		Json *back = cborDecode(out, length, &why, &at);
+		if (!back) die("its own encoding is refused");
+		if (!jsonEqual(back, v)) die("read back, another value");
+		size_t again;
+		bool ok2;
+		unsigned char *twice = encoded(back, &again, &ok2);
+		if (!ok2 || again != length || memcmp(twice, out, length) != 0) die("read back and encoded, other bytes");
+		Json *r = reversed(v);
+		unsigned char *other = encoded(r, &again, &ok2);
+		if (!ok2 || again != length || memcmp(other, out, length) != 0) die("keys in another order, other bytes");
+		uint8_t name[32], want[32];
+		if (!hashValue(r, name, &why)) die("no hash");
+		blake3_hasher h;
+		blake3_hasher_init(&h);
+		blake3_hasher_update(&h, out, length);
+		blake3_hasher_finalize(&h, want, 32);
+		if (memcmp(name, want, 32) != 0) die("the hash is not BLAKE3 of the encoding");
+		free(other), free(twice);
+		jsonFree(r), jsonFree(back);
+	}
+	free(out);
+	jsonFree(v);
+	return 0;
+}

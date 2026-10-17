@@ -19,8 +19,31 @@ static inline unsigned fz_byte(fz_bytes *b) { return b->at < b->size ? b->data[b
 
 static const char *const fz_names[] = {"a", "b", "c", "d"};
 
-// code points: one, two, three and four bytes, a lone high and a lone low (as WTF-8)
-static const char *const fz_chars[] = {"a", "\xc3\xa9", "\xe2\x82\xac", "\xf0\x9f\x98\x80", "\xed\xa0\x80", "\xed\xb0\x80"};
+// string parts: one, two, three and four bytes, a pair and a modifier, NUL, lone highs, lone lows
+// (as WTF-8). a high then a low in one string is a pair (four bytes), never two lone ones: edits
+// bring them together
+static const struct {
+	const char *s;
+	size_t n;
+} fz_chars[] = {{"a", 1}, {"\xc3\xa9", 2}, {"\xe4\xb8\xad", 3}, {"\xf0\x9f\x98\x80", 4},
+	{"\xf0\x9f\x91\x8d\xf0\x9f\x8f\xbd", 8}, {"\0", 1}, {"\xed\xa0\xbd", 3}, {"\xed\xa0\x80", 3},
+	{"\xed\xb8\x80", 3}, {"\xed\xb0\x80", 3}};
+enum { FZ_CHARS = sizeof fz_chars / sizeof fz_chars[0], FZ_HIGH = 6, FZ_LOW = 8 };
+
+// a string of up to 5 parts
+static inline op_value *fz_text(fz_bytes *b) {
+	char s[64];
+	size_t len = 0;
+	int high = 0;
+	for (unsigned n = fz_byte(b) % 6; n > 0; n--) {
+		unsigned k = fz_byte(b) % FZ_CHARS;
+		if (high && k >= FZ_LOW) k = 0;
+		high = k >= FZ_HIGH && k < FZ_LOW;
+		memcpy(s + len, fz_chars[k].s, fz_chars[k].n);
+		len += fz_chars[k].n;
+	}
+	return op_str_n(s, len);
+}
 
 static inline op_value *fz_value(fz_bytes *b, int depth) {
 	unsigned c = fz_byte(b), n;
@@ -28,18 +51,7 @@ static inline op_value *fz_value(fz_bytes *b, int depth) {
 	case 0: return op_null();
 	case 1: return op_bool(c >> 4 & 1);
 	case 2: return op_num((double)(c >> 4));
-	case 3: {
-		char s[32];
-		size_t len = 0;
-		int high = 0;
-		for (n = fz_byte(b) % 6; n > 0; n--) {
-			unsigned k = fz_byte(b) % 6;
-			if (high && k == 5) k = 0; // a high then a low is a pair, not two lone ones
-			high = k == 4;
-			len += strlen(strcpy(s + len, fz_chars[k]));
-		}
-		return op_str_n(s, len);
-	}
+	case 3: return fz_text(b);
 	case 4: {
 		unsigned char d[4];
 		n = fz_byte(b) % 4;
@@ -127,6 +139,36 @@ static inline int fz_unshared(const op_value *v) {
 	if (v->refs != 0) return 0;
 	for (size_t i = 0; i < v->count; i++)
 		if (!fz_unshared(v->items[i])) return 0;
+	return 1;
+}
+
+// every string in v is WTF-8 as op holds it: a lone surrogate three bytes (ED A0..BF xx), a high
+// never right before a low (that is a pair: four bytes), no overlong or cut sequence; ascii set
+// only when every byte is (unset when every byte is costs only speed)
+static inline int fz_wtf8(const op_value *v) {
+	if (v == NULL) return 1;
+	if (v->type == OP_STR) {
+		const unsigned char *u = (const unsigned char *)v->str;
+		int all = 1, high = 0;
+		for (size_t i = 0; i < v->bytes;) {
+			unsigned c = u[i], n = c < 0x80 ? 1 : c >= 0xC2 && c < 0xE0 ? 2 : c >= 0xE0 && c < 0xF0 ? 3 : c >= 0xF0 && c < 0xF5 ? 4 : 0;
+			if (n == 0 || i + n > v->bytes) return 0;
+			unsigned long cp = n == 1 ? c : c & (0x7F >> n);
+			for (unsigned j = 1; j < n; j++) {
+				if ((u[i + j] & 0xC0) != 0x80) return 0;
+				cp = cp << 6 | (u[i + j] & 63);
+			}
+			if ((n == 3 && cp < 0x800) || (n == 4 && (cp < 0x10000 || cp > 0x10FFFF))) return 0;
+			if (high && cp >= 0xDC00 && cp < 0xE000) return 0;
+			high = cp >= 0xD800 && cp < 0xDC00;
+			all &= n == 1;
+			i += n;
+		}
+		return !v->ascii || all;
+	}
+	if (v->type == OP_LIST || v->type == OP_MAP || v->type == OP_STAND)
+		for (size_t i = 0; i < v->count; i++)
+			if (!fz_wtf8(v->items[i])) return 0;
 	return 1;
 }
 

@@ -42,7 +42,9 @@ const PATHS: (string | number)[][] = [
 	["m"],
 	["m", "x"],
 ]
-const start = () => ({ a: { x: 1, y: 2 }, b: [{ x: 10 }, { x: 11 }, 12], c: "c" })
+// string parts: ASCII, BMP, pairs, a pair and a modifier, lone halves (a high then a low: a pair), U+0000
+const TEXTS = ["a", "b", "xy", "é", "中", "😀", "👍🏽", "\uD83D", "\uDE00", "\u0000"]
+const start = () => ({ a: { x: 1, y: 2 }, b: [{ x: 10 }, { x: 11 }, 12], c: "a😀\uD83D中" })
 
 function run(seed: number) {
 	const r = random(seed)
@@ -79,7 +81,9 @@ function run(seed: number) {
 	)
 	s.pulse()
 
-	const value = () => pick([0, 1, "s", { x: 3 }, [7, 8]])
+	const text = (most = 3) =>
+		Array.from({ length: Math.floor(r() * (most + 1)) }, () => pick(TEXTS)).join("")
+	const value = () => pick([0, 1, text(), { x: 3 }, [7, 8]])
 	const somewhere = () => pick(PATHS.filter((p) => p.length))
 	function patch(): Patch {
 		const path = somewhere()
@@ -88,9 +92,18 @@ function run(seed: number) {
 		if (k < 0.1) return { path: ["m"], move: { path: ["a"] } }
 		if (k < 0.4) return { path, value: value() }
 		if (k < 0.55) return { path }
-		if (k < 0.75) {
+		if (k < 0.65) {
 			const a = Math.floor(r() * 3), b = a + Math.floor(r() * 2)
 			return { path: ["b"], range: [a, b], value: r() < 0.5 ? [9] : [] }
+		}
+		if (k < 0.75) {
+			// c's code points: set, taken out, or moved within
+			const a = Math.floor(r() * 5), b = a + Math.floor(r() * 3)
+			const j = r()
+			if (j < 0.5) return { path: ["c"], range: [a, b], value: text(2) }
+			if (j < 0.7) return { path: ["c"], range: [a, b] }
+			const g = Math.floor(r() * 4)
+			return { path: ["c"], range: [g, g], move: { path: ["c"], range: [a, b] } }
 		}
 		return { path, move: { path: somewhere() } }
 	}

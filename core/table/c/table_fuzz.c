@@ -12,7 +12,9 @@
 enum { KEYS = 4, NODES = 4, MAX = KEYS * KEYS };
 
 static const char tokens[2];
-static const char *const strings[KEYS] = {"p", "", "q", NULL}; // 3: a symbol
+// as WTF-8: a pair and a modifier, a lone high, the first code point of 0 alone; 3: a symbol. no
+// NUL: a key's string ends at one (tb_string)
+static const char *const strings[KEYS] = {"\xf0\x9f\x91\x8d\xf0\x9f\x8f\xbd", "\xed\xa0\xbd", "\xf0\x9f\x91\x8d", NULL};
 static int nodes[NODES];
 
 typedef struct {
@@ -28,7 +30,7 @@ static void die(const char *why, int step) {
 }
 
 // a key, its string in a buffer of the caller's (scribbled after the call)
-static char buffer[2][8];
+static char buffer[2][16];
 static tb_key key(int k, int which) {
 	if (k == 3) return tb_symbol(&tokens[which]);
 	strcpy(buffer[which], strings[k]);

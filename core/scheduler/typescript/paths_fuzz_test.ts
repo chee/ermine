@@ -8,7 +8,7 @@
 import { assert, assertEquals } from "@std/assert"
 import apply, { ApplyError, type Key, type Patch } from "@ermine/op/apply"
 import { createPaths, marks, type Spot } from "./paths.ts"
-import { isMap, rand, show } from "../../fuzz/gen.ts"
+import { isMap, rand, show } from "../../fuzz/gen_harness.ts"
 
 const SEEDS = 40
 const CASES = 25

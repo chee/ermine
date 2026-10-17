@@ -17,8 +17,11 @@ const SEEDS = 40
 const STEPS = 60
 const COMPUTES = 8
 const IDS = ["R", "A", "B", "C", "D"]
-const NAMES = ["a", "b", "c"]
+// names: ASCII, an astral one, a lone high
+const NAMES = ["a", "😀", "\uD83D"]
 const PATHS: Step[][] = [[], ["t"], ["u"], ["l"], ["l", 0], ["l", 1]]
+// string parts: ASCII, BMP, pairs, a pair and a modifier, lone halves (a high then a low: a pair), U+0000
+const PARTS = ["a", "b", "xy", "é", "中", "😀", "👍🏽", "\uD83D", "\uDE00", "\u0000"]
 
 // xorshift: a seed is a run
 function rand(seed: number) {
@@ -77,10 +80,14 @@ function seeded(seed: number, reach: Reach) {
 		}
 		return v
 	}
+	const text = (most = 4) => Array.from({ length: pick(most + 1) }, () => one(PARTS)).join("")
 	const value = (): unknown =>
-		pick(5)
-			? { t: pick(10), u: "abc".slice(pick(4)), l: [pick(9), pick(9)].slice(pick(3)) }
-			: "plain"
+		pick(5) ? { t: pick(10), u: text(), l: [pick(9), pick(9)].slice(pick(3)) } : text()
+	// a span of u, in code points: mostly in it, now and then past its end
+	const span = (): [number, number] => {
+		const a = pick(6)
+		return [a, a + pick(3)]
+	}
 	s.runWithScope(host, () => {
 		for (const id of IDS) {
 			if (pick(5)) table.add("children", id, createEntry(kids(), h()))
@@ -157,8 +164,18 @@ function seeded(seed: number, reach: Reach) {
 			case 1:
 				return { path: ["t"] }
 			case 2: {
-				const a = pick(3)
-				return { path: ["u"], range: [a, a + pick(2)], value: "x" }
+				const r = span()
+				switch (pick(4)) {
+					case 0:
+						return { path: ["u"], range: r }
+					case 1: {
+						// within u: a span moved to a gap
+						const g = pick(5)
+						return { path: ["u"], range: [g, g], move: { path: ["u"], range: r } }
+					}
+					default:
+						return { path: ["u"], range: r, value: text(2) }
+				}
 			}
 			case 3:
 				return { path: ["l", pick(2)], value: pick(9) }
