@@ -21,6 +21,7 @@
     (error (e)
       (json-text (jmap "error" (let ((s (princ-to-string e))) (if (string= s "") "error" s)))))))
 
+(defvar *in*)
 (defun serve (name)
   (let ((fn (or (gethash name *harnesses*) (progn (format *error-output* "no harness ~a~%" name)
                                                    (sb-ext:exit :code 2)))))
@@ -31,7 +32,6 @@
               do (write-line (answer-line fn line) *standard-output*)
                  (force-output *standard-output*)))))
 
-(defvar *in*)
 (defun read-line-wtf8 (in)
   "one line of stdin, its bytes decoded as UTF-8 that may hold surrogates (WTF-8); nil at the end"
   (let ((bytes (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0)))

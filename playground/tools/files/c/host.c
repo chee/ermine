@@ -600,10 +600,7 @@ static void describe(host *h) {
 		free(list);
 		size_t heads = hy_heads(history, &list);
 		free(list);
-		tp_taking taking = tp_taking_of(t, id, TP_STORED);
-		say("%.17s: %zu commits, %zu heads, %zu waiting, %zu refused; %s", id, all, heads, taking.waiting_count,
-			taking.refused_count, fg_loaded(h->g, id) ? "here" : "not here");
-		tp_taking_free(&taking);
+		say("%.17s: %zu commits, %zu heads; %s", id, all, heads, fg_loaded(h->g, id) ? "here" : "not here");
 	}
 }
 
