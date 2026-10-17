@@ -195,10 +195,9 @@ int api_info(api *a, api_target x, api_node *out);
 int api_edit(api *a, api_target x, const op_patch *patches, size_t n);
 
 typedef struct api_watching api_watching;
-// fn is told each write landing at x, as it lands; stopped by api_unwatch, or its scope's teardown
+// fn is told each write landing at x, as it lands; stopped by its scope's teardown
 int api_watch(api *a, api_target x, void (*fn)(const pl_fact *fact, void *ctx), void *ctx,
 	api_watching **out);
-void api_unwatch(api_watching *w);
 
 int api_place(api *a, const char *at, api_target x);
 int api_unplace(api *a, const char *at);
@@ -218,7 +217,9 @@ typedef struct {
 } api_options;
 // macros: the site noted (setup.sites) is the caller's line
 // each is placed at name, its first argument (NULL: not-a-name); its id a new one. one alive there
-// made in the same run (none: under the same scope): already-there
+// made in the same run (none: under the same scope): already-there. made again there by a later
+// run of the same scope: the one there kept (sc_claim), given f, act, ctx and options, and run
+// again into its node: the reference's rules (typescript/api.ts)
 int api_memo_at(api *a, const char *name, api_compute f, void *ctx, const api_options *options,
 	api_node *out, const char *file, int line, const char *func);
 #define api_memo(...) api_memo_at(__VA_ARGS__, __FILE__, __LINE__, __func__)
@@ -273,8 +274,6 @@ typedef struct {
 int api_layers_of(api *a, api_target x, const op_key *path, size_t n, api_layers *out);
 void api_layers_free(api_layers *layers);
 
-// the process's arguments
-const char *const *api_args(const api *a, size_t *n);
 // one pulse now
 void api_pulse(api *a);
 
