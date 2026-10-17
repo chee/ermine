@@ -1,12 +1,12 @@
 // For the harnesses of places and guard: the world they share, made as a composer makes it. One
 // scheduler, one table, one paths and one places (root "R"); the host's scope; the names of scopes and computations, the moments told, the computes made by watches, and
-// the requests about them (typescript/world.ts documents the protocol). A harness adds its own
+// the requests about them (typescript/world_harness.ts documents the protocol). A harness adds its own
 // requests and programs, and answers its lines with world_line.
 //
 // Every write below is made in a scope: the host's (sc_run_with_scope) for a request, the run's own for a
 // program's. The world's own scope pairs have op_values as values, as places.h says.
-#ifndef PLACES_WORLD_H
-#define PLACES_WORLD_H
+#ifndef PLACES_WORLD_HARNESS_H
+#define PLACES_WORLD_HARNESS_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -119,7 +119,7 @@ int world_edit(const char *part, tb_key id, const op_value *patches, nd_entry **
 // code, *why its name, *failed the patch an edit was about. An error that is not a places code is -1
 int world_write(const op_value *request, const char **why, size_t *failed);
 
-// the programs' plain forms (typescript/world.ts): cat, join, count, add, lt, if, do, quote,
+// the programs' plain forms (typescript/world_harness.ts): cat, join, count, add, lt, if, do, quote,
 // within, header. *handled: whether e is one of them. eval evaluates a sub-program (NULL: it ended
 // early, and so does this). *error: set when this ends early on an error of its own (a string for
 // the caller to free)

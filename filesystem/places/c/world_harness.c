@@ -1,8 +1,8 @@
-// The harnesses' shared world (world.h).
+// The harnesses' shared world (world_harness.h).
 #define _POSIX_C_SOURCE 200809L
-#include "world.h"
+#include "world_harness.h"
 #include "status.h"
-#include "../../../conformance/c/protocol.h"
+#include "../../../conformance/c/protocol_harness.h"
 #include "../../../core/scheduler/c/trace.h"
 
 #include <math.h>

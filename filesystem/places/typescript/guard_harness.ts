@@ -1,6 +1,6 @@
 // The reference guard (filesystem/places/typescript/guard.ts) on the line protocol: one JSON request
 // per line in, one answer per line out, in order (conformance/typescript/harness.ts). State lasts
-// for the process: the world of world.ts,
+// for the process: the world of world_harness.ts,
 // guards by name, the computes made by name. Each program asks its guard, then reads and writes
 // itself, as a process layer will. Another implementation joins by speaking this (HARNESS).
 //
@@ -23,14 +23,14 @@
 // { op: "asks" }                                → { asks }   the asks of any policy since last
 //    asked, then forgotten: { op, target: {part?, id?, field?, path?}, who, from? }
 //
-// programs, the world's plain forms (world.ts, basic), and:
+// programs, the world's plain forms (world_harness.ts, basic), and:
 //   {"get":path} {"get":path,"full":true}   the id there, asked (REFUSED for refused); null for
 //       none; full: [id, name]
 //   {"members":path} {"members":path,"full":true}   the ids of the members there, asked (REFUSED
 //       for a refused one); full: [id, name] of each
 //   {"read":[ts,part,path?]}          the value, asked; null for none
 //   {"edit":[ts,part,patches]}        each patch asked by its path (and a move's), then written;
-//                                     the change, summed up (world.ts, summary)
+//                                     the change, summed up (world_harness.ts, summary)
 //   {"place":[[ts,name],id]}          the slot asked, then the id placed there; null
 //   {"try":e}                         e; refused: "refused"; pending: "pending"; an error: its code
 //   {"given":null}                    in then: the value
@@ -54,7 +54,7 @@ import {
 	summary,
 	table,
 	write,
-} from "./world.ts"
+} from "./world_harness.ts"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { get, members } from "./lib.ts"
 

@@ -1,13 +1,13 @@
 // The C guard (guard.h) on the line protocol of typescript/guard_harness.ts, which documents it,
 // the policies and the programs (conformance/c/harness.h has the loop). The world (the table, the
-// writes, the scheduler) is world.h's. Each program asks its guard, then reads and writes itself,
+// writes, the scheduler) is world_harness.h's. Each program asks its guard, then reads and writes itself,
 // as a process layer will.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "guard.h"
-#include "world.h"
+#include "world_harness.h"
 
 #define PUSH(v, n, cap, x) \
 	do { \

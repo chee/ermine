@@ -1,11 +1,11 @@
 // The C places (places.h) on the line protocol of typescript/places_harness.ts, which documents it and
 // the programs (conformance/c/harness.h has the loop). The world (the table, the writes, the
-// scheduler) is world.h's; programs are data, evaluated here as the reference does.
+// scheduler) is world_harness.h's; programs are data, evaluated here as the reference does.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "world.h"
+#include "world_harness.h"
 #include "status.h"
 #include "runs.h"
 
