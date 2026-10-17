@@ -1,28 +1,19 @@
-// A STAND-IN, NOT THE PROCESS API. The real one is still being designed (core/table/plan.org: a
-// process is a scheduler scope with a path and its own node; start/stop; one place, one path).
-// This is the demos' old host interface (make, Api, start, call, outro, replace, moments), rebuilt
-// small over today's pieces so the demos run: the table (core/table), places, status and header
-// (filesystem/places), the scheduler and its trace (core/scheduler), protect's policies. Nothing
-// here is ermine's; it goes when the process API comes.
+// a stand-in, not the process api: the demos' host interface (make, Api, start, call, outro,
+// replace, moments), small over today's table, places, status, header, scheduler and protect, so
+// the demos run. it goes when the process api comes.
 //
-// what the old graph had that today's pieces have not is dropped here, not invented:
-//   - one id under a name (places' children map). a "list" read gives none or one item; the index
-//     given to insert, remove, pop and move is ignored
-//   - one version per node: no conflicts. a process's status (status.ts's attribute) is shown as a
-//     version in front of its value, as before, so first() and statusOf() still read it
-//   - info is the attributes entry. ephemeral is the host's own mark: what a process made
-//     ephemeral is taken out when it is killed
-//   - no run nodes: what a run read and wrote comes with its `ends` moment
+// what today's pieces lack is dropped, not invented:
+//   - one id under a name: a "list" read gives none or one; insert/remove/pop/move index ignored
+//   - one version per node: a process's status is shown as a version in front of its value
+//   - info: the attributes entry; ephemeral: the host's mark, removed when its process is killed
+//   - no run nodes: a run's reads and writes come with its `ends` moment
 //   - a process found by path takes up a new program at once (no "newer" status)
-//   - a header's actor is the root scope's ("host", or whoever as({actor}) acts for); which
-//     process, run, handler, person made a change is in its metadata (whoOf); the stand-in's change
-//     count is the pair "tick" (tickOf), the header's time is the wall clock's
+//   - header actor: the root scope's ("host", or as({actor})); who made it is in metadata (whoOf);
+//     the change count is the pair "tick" (tickOf); time is the wall clock's
 //
-// a node is an id in the table: "value", "children" (places' map, name to id) and "attributes".
-// an address is names from a place ("/" first: the root, ".." up: path.ts' plan); a string is an
-// id. a process is a scope under the host's, its node placed at its address under its name; its
-// place is that address. a process's api reads tracked in a compute (places' reads, told), and
-// untracked everywhere else (the table, told no one)
+// a node: an id with "value", "children" and "attributes". an address: names from a place ("/"
+// the root, ".." up); a string is an id. a process: a scope under the host's, its node placed at
+// its address under its name. its reads are tracked in a compute, untracked elsewhere.
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
 import type { Node } from "@ermine/node"
 import update from "@ermine/node/update"
@@ -1193,16 +1184,11 @@ export function tickOf(h: ChangeHeader | undefined): number | undefined {
 }
 
 // who made a change: the header's actor, and its pairs (process, name, run, mark, handler,
-// caller, person, trusted, cause, message, tick), the innermost of each: the pairs nest, each
-// level's last pair ["owner", the level above]
+// caller, person, trusted, cause, message, tick), the innermost of each: the metadata is flat,
+// innermost first
 export function whoOf(h: ChangeHeader | undefined): Record<string, unknown> {
 	const out: Record<string, unknown> = { actor: h?.actor }
-	for (let p = h?.metadata as readonly Pair[] | undefined; p !== undefined;) {
-		const last = p.at(-1)
-		const up = last?.[0] === "owner" ? last[1] as readonly Pair[] : undefined
-		for (const [k, v] of up ? p.slice(0, -1) : p) if (!(k in out)) out[k] = v
-		p = up
-	}
+	for (const [k, v] of (h?.metadata ?? []) as readonly Pair[]) if (!(k in out)) out[k] = v
 	return out
 }
 

@@ -64,17 +64,9 @@ function rewrite(p: Patch, way: Way): Patch[] {
 
 const show = (p: Patch) =>
 	`[${p.path.join(".")}]${"value" in p ? " = " + JSON.stringify(p.value) : " taken out"}`
-// the nearest value of a key in a change's metadata, which nests: its own pairs, then ["owner", …]
-function pair(metadata: unknown, key: string): unknown {
-	for (let m = metadata as [string, unknown][] | undefined; m;) {
-		let up: [string, unknown][] | undefined
-		for (const [k, v] of m) {
-			if (k === key) return v
-			if (k === "owner") up = v as [string, unknown][]
-		}
-		m = up
-	}
-}
+// the first value of a key in a change's metadata (flat pairs, innermost first)
+const pair = (metadata: unknown, key: string): unknown =>
+	(metadata as [string, unknown][] | undefined)?.find(([k]) => k === key)?.[1]
 
 // what the host's extend adds (host.ts): f run as another actor, with pairs of its own
 type Host = { as: <T>(pairs: [string, unknown][], f: () => T) => T }

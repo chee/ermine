@@ -4,17 +4,9 @@ import { createWorld } from "@ermine/slaygrounds/world"
 import * as lib from "@ermine/places/lib"
 import { render } from "ermine-h"
 
-// the nearest value of a key in nested pairs, walking the "owner" links outward
-function nearest(pairs: readonly (readonly [string, unknown])[], key: string): unknown {
-	for (let p: any = pairs; p;) {
-		let up
-		for (const [k, v] of p) {
-			if (k === key) return v
-			if (k === "owner") up = v
-		}
-		p = up
-	}
-}
+// the first value of a key in a change's flat pairs, innermost first
+const nearest = (pairs: readonly (readonly [string, unknown])[], key: string): unknown =>
+	pairs.find(([k]) => k === key)?.[1]
 
 const world = createWorld({
 	render,
@@ -25,7 +17,7 @@ const world = createWorld({
 		{ name: "poet", export: "poet" },
 	],
 	// change(x): the last change of x's value, as a program wants it: its patches and who called, by
-	// name. a send's scope says ["caller", <process id>] somewhere up its owners; the host knows
+	// name. a send's scope says ["caller", <process id>] in its pairs; the host knows
 	// which process that is. read in a run, so tracked
 	extend: (api, ctx) => ({
 		change(x: string | { path?: readonly string[] }) {

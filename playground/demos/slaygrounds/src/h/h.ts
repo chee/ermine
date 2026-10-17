@@ -1,30 +1,21 @@
 /// <reference lib="dom" />
-// ermine-h: the playground's own view library (not one of ermine's). jsx, or h(tag, props, ...kids),
+// ermine-h: the playground's own view library (not ermine's). jsx or h(tag, props, ...kids)
 // describes a view; render(into, view, process) makes it real inside an element.
-//   reuse      an element is the nth of its tag under its parent, or its key: a render again (a
-//              reload) finds it there and changes only what differs, moving only what is out of
-//              place (shift's reconcile). nothing is rebuilt
-//   bind       a prop or a child can be bound to a node: bind("n"), bind("/data/n", (v) => …). a
-//              binding is an effect made in the scope open when it is made (the run's, or a
-//              binding's act), so a reload or a binding acting again takes the old one away
-//   lists      each(target, (item) => view): a view for everything placed at a path or a slot, in
-//              order; under(target, (item) => view): one for each member under a node. keyed by
-//              the item unless the view has a key
-//   handler    an event can call a handler node: onClick={handler("on/press")}, or the entry
-//              t.handler gave. the call is the process's own call; who is calling is the host's
-//              to decide (the event being dispatched, not anything h hands it)
-//   targets    a path: "n" is under the process's own node, "/data/n" from the root, a name the
-//              process does not have is from the root (as places' lookup goes up). an entry or an
-//              item: that node. a slot [parent, name]: what is at name under parent
-//   kept       a node made by the program (a canvas, a textarea it drives) can be a child: h puts
-//              it in place and never touches what is inside it. keep it across reloads (t.keep)
-//   says       every element says what it does, as attributes: data-ermine-process on the root,
-//              data-ermine-bind:<prop|text|children>, data-ermine-on:<event>, data-ermine-key,
-//              data-ermine-source (program.ts:line, from jsx's dev runtime), data-ermine-waiting.
-//              a binding to an entry says its path and its id: "/board/lists/cards#<id>"
-//   tells      a bound element whose node changed says "ermine:change"; a handler says
-//              "ermine:call" before and "ermine:called" after; all bubble, the page listens, and
-//              so can a program: onErmineChange={…}
+//   reuse     an element is the nth of its tag under its parent, or its key; a render again
+//             changes and moves only what differs (shift's reconcile)
+//   bind      bind("n"), bind("/data/n", (v) => …): an effect in the scope open when made, so a
+//             reload or the binding acting again takes the old one away
+//   lists     each(target, (item) => view): what is placed at a path or slot, in order;
+//             under(target, (item) => view): a node's members. keyed by item, or the view's key
+//   handler   onClick={handler("on/press")}: the process's own call; who calls is the host's to say
+//   targets   "n" under the process's node, "/data/n" from the root, an unknown name from the root;
+//             an entry or item: that node; [parent, name]: what is at name under parent
+//   kept      a node the program made (a canvas, a textarea) as a child: placed, never touched
+//             inside; t.keep keeps it across reloads
+//   says      data-ermine-process, -bind:<prop|text|children>, -on:<event>, -key, -source
+//             (program.ts:line), -waiting; a bound entry: "/board/lists/cards#<id>"
+//   tells     bubbling events: "ermine:change" on a bound element, "ermine:call" and
+//             "ermine:called" around a handler; onErmineChange={…}
 
 // ---- what h needs of the process it renders for: handed by the host ----
 // a node as a program holds it: the id, and its path (names from the root) and name where they are

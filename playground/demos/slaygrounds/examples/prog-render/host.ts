@@ -3,7 +3,7 @@
 // processes; this file holds only what is this demo's: the two hosts, the mirror, the renderers'
 // nodes
 //
-// DECIDED (10-15): renderers are openers, found by programs' openwith. kept host-side: only the
+// renderers are openers, found by programs' openwith. kept host-side: only the
 // mirror (drawing: one host node per graph node, patching what differs).
 //   a renderer is a node: attributes opens (the UTI of the nodes it draws) and needs (keys), type
 //     javascript, its value the draw function. /renderers holds the general ones (a folder saying
