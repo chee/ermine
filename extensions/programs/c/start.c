@@ -77,7 +77,6 @@ ps *ps_new_at(const ps_setup *setup, const char *file, int line, const char *fun
 const char *ps_id(const ps_process *p) { return pr_id(p->life); }
 sc_scope *ps_scope(const ps_process *p) { return pr_scope(p->life); }
 size_t ps_at(const ps_process *p, const char *const **out) { return pr_at(p->life, out); }
-size_t ps_cwd(const ps_process *p, const char *const **out) { return pr_cwd(p->life, out); }
 
 // what was chosen, read untracked now
 static op_value *place_value(const pg_place *p) {

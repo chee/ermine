@@ -1,28 +1,15 @@
-// Types (typescript/types.ts), in C: UTIs as nodes in the graph. Same rules as types.ts, which the
-// scenarios in extensions/programs/conformance/programs hold both to.
+// types (typescript/types.ts) in C: UTIs as nodes in the graph. same rules as types.ts (typeOf
+// says them), held to by the scenarios in extensions/programs/conformance/programs.
 //
 //   ty_install(&(ty_install_setup){ .places = p, .table = t, .root = tb_string("R"), ... });
 //   ty_folder f;  ty_at(p, from, n, &f);                       // the nearest ermine/types
 //   ty_conformance c = ty_conform(p, &f, "public.c-source");   // { known, all: [itself, ...] }
 //   char *t = ty_type_of(p, id, at, n, NULL);                  // the type of a node at a place
 //
-// A type is a node named by its UTI in the types folder, its value { conformsTo, fileNameExtension,
-// mimeType }, each a list. Conformance: a type, then what its conformsTo names, and theirs, each
-// once, in the order met (a UTI conforms to itself). The folder: ermine/types looked up from where
-// the search is, nearest first (pl_lookup), the nearest only: a type not in it is unknown. Every
-// read through places, so tracked.
-//
-// THE TYPE OF A NODE (ty_type_of; typeOf in types.ts says the rules once): its ermine.type if a
-// string, else the type whose fileNameExtension the name it is placed under ends with, from the nearest
-// ermine/types. The name belongs to the placement, not the node. Extensions compare case-insensitively
-// (ASCII), the longest wins, two types claiming one: the first in the folder's order (names' canonical
-// key order, not the order installed). No extension, or no match: none. Tracked, through places.
-//
-// THE WELL-KNOWN LIST is Markus Felten's (arlac77), from his uti library (npm uti@8.11.3), with
-// thanks, 0BSD (typescript/utis.LICENSE). utis.c is GENERATED from typescript/utis.json and
-// types.ts' EXTRA by utis.ts; never edited by hand.
-//
-// MEMORY. What a read gives is the caller's (ty_folder_free, ty_conformance_free). Out of memory
+// the well-known list: Markus Felten's (arlac77) uti library (npm uti@8.11.3), with thanks, 0BSD
+// (typescript/utis.LICENSE). utis.c is generated from typescript/utis.json and types.ts' EXTRA by
+// utis.ts; never edit it by hand.
+// memory: what a read gives is the caller's (ty_folder_free, ty_conformance_free). out of memory
 // aborts.
 #ifndef TYPES_H
 #define TYPES_H
@@ -49,9 +36,6 @@ extern const size_t ty_extra_count;
 // the types folder's path from a root: the one place it is said
 #define TY_DEPTH 2
 extern const char *const ty_path[TY_DEPTH];
-
-// a type's node's value, { conformsTo, fileNameExtension, mimeType }: new
-op_value *ty_value(const ty_known *t);
 
 // ids made, kept alive for the table (ty_ids_free once the table is gone)
 typedef struct {

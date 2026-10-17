@@ -2,7 +2,7 @@
 
 #include <string.h>
 
-op_value *pg_path_json(char *const *at, size_t n) {
+static op_value *pg_path_json(char *const *at, size_t n) {
 	op_value *a = op_list();
 	for (size_t i = 0; i < n; i++) op_push(a, op_str(at[i]));
 	return a;
@@ -15,13 +15,15 @@ op_value *pg_place_json(const pg_place *p) {
 	return m;
 }
 
-op_value *pg_chain_json(const pg_chain *c) {
+static op_value *pg_step_json(const pg_step *s);
+
+static op_value *pg_chain_json(const pg_chain *c) {
 	op_value *a = op_list();
 	for (size_t i = 0; i < c->n; i++) op_push(a, pg_step_json(&c->steps[i]));
 	return a;
 }
 
-op_value *pg_step_json(const pg_step *s) {
+static op_value *pg_step_json(const pg_step *s) {
 	op_value *m = pg_place_json(&s->place);
 	op_set(m, "by", pg_chain_json(&s->by));
 	return m;

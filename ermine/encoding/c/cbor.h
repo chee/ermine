@@ -1,48 +1,20 @@
-// cbor.h: a value (json.h) in CBOR and back, in one deterministic form.
+// cbor.h: a value (json.h) in CBOR and back, in one deterministic form (RFC 8949 4.2.1, typed
+// arrays as RFC 8746). conformance/encoding/vectors.json holds the bytes for other codecs.
 //
-// ENCODING.tex: values are encoded as CBOR
-// (RFC 8949) in its deterministic form, typed arrays as RFC 8746 has them.
-// These are the details this codec fixes (conformance/encoding/vectors.json holds
-// the same bytes for other codecs to check against):
+// - shortest heads, definite lengths; map keys sorted bytewise by their encodings
+// - numbers: the shortest float that holds them exactly (f9, fa, fb); never an integer. 1 is
+//   f93c00, -0 f98000, the one NaN f97e00
+// - null f6, false f4, true f5; no other simple value
+// - strings: text, plain UTF-8 (json.h's C0 80 is 00); a lone surrogate has no encoding
+// - bytes: byte string
+// - typed arrays: tag over a byte string, little-endian: uint16 69, uint32 70, uint64 71, int8 72,
+//   int16 77, int32 78, int64 79, float32 85, float64 86; no uint8 (tag 64 never written); NaN
+//   elements as 0x7fc00000 / 0x7ff8000000000000
+// - stand-ins (JSON_STAND): tag 0x12345678 (da12345678) over its kind
 //
-// - RFC 8949 4.2.1 core deterministic encoding: every head in its shortest
-//   form, definite lengths only.
-// - A map's keys sorted bytewise lexicographic by their encodings (RFC 8949
-//   4.2.1), so a shorter key first, keys of one length in byte order.
-// - Every number as the shortest float that holds it exactly (RFC 8949 4.2.2
-//   rule 2): a half (0xf9), else a single (0xfa), else a double (0xfb). Never
-//   an integer (major types 0 and 1): 1 is 0xf93c00. -0 is kept (0xf98000).
-//   The one NaN is 0xf97e00.
-// - null 0xf6, false 0xf4, true 0xf5; no other simple value.
-// - A string as a text string (major type 3), in plain UTF-8: U+0000, which
-//   json.h holds as C0 80, is the byte 00. A string holding a lone surrogate
-//   (WTF-8, json.h) is not UTF-8 and has no encoding.
-// - Bytes as a byte string (major type 2).
-// - A typed array as an RFC 8746 tag over a byte string of its elements,
-//   little-endian: uint16 69, uint32 70, uint64 71, int8 72, int16 77,
-//   int32 78, int64 79, float32 85, float64 86; no uint8 kind, bytes are
-//   that: tag 64 never written, an unknown tag when read. A float element
-//   that is NaN is written as the one quiet NaN of its width (float32
-//   0x7fc00000, float64 0x7ff8000000000000), since all NaNs are one NaN.
-// - A stand-in (what a live value is sent as) as tag 0x12345678 (da12345678)
-//   over its kind, any value; json.h holds it as JSON_STAND. C has no live
-//   values: it carries stand-ins as data.
-//
-// Decoding accepts exactly what the encoder writes and nothing else: an
-// integer, a head longer than it need be, an indefinite length, an unknown
-// tag (the stand-in's only in its head da12345678) or simple value, a number in a longer float than holds it, any other
-// NaN, a map whose keys are not text strings in strictly increasing order,
-// text that is not UTF-8, a typed array whose byte string is not a whole
-// number of elements, a NaN element other than the one above, or bytes left
-// over, is rejected.
-//
-// MEMORY: encoding writes into the caller's buffer and allocates only the
-// stack of containers being written (as jsonPrint does); a map's keys are
-// put in order by finding the next one each time, with no scratch. Decoding
-// makes the value with json.h's constructors and keeps its own stack of
-// containers. NOTHING RECURSES. A value nests at most CBOR_DEPTH containers
-// (lists, maps, stand-ins), one inside the next, as cbor.ts's DEPTH: a deeper
-// one has no encoding, and bytes that nest deeper are not one.
+// decoding accepts exactly what the encoder writes; anything else is rejected.
+// memory: encoding writes into the caller's buffer; decoding builds with json.h's constructors.
+// nothing recurses; at most CBOR_DEPTH nested containers (cbor.ts's DEPTH).
 
 #ifndef CBOR_H
 #define CBOR_H

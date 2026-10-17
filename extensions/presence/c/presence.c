@@ -622,10 +622,6 @@ static void heard(void *ctx, const char *from, const unsigned char *bytes, size_
 	op_free(m);
 }
 
-pres_conn *pres_connect(pres_world *w, chn_channel *channel, const char *topic, const char *anchor) {
-	return pres_connect_patches(w, channel, topic, anchor, false);
-}
-
 pres_conn *pres_connect_patches(pres_world *w, chn_channel *channel, const char *topic,
 	const char *anchor, bool patches) {
 	state *s = state_of(w);

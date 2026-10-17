@@ -1,6 +1,5 @@
-// Build (typescript/build.ts), in C: steps cached with verifying traces, and compile, a step. Same
-// rules as build.ts (its header says them once), which the scenarios in
-// extensions/build/conformance/build hold both to.
+// build (typescript/build.ts) in C: steps cached with verifying traces, and compile, a step. same
+// rules as build.ts, held to by the scenarios in extensions/build/conformance/build.
 //
 //   bd *b = bd_new(&(bd_setup){ .places = p, .table = t, .scheduler = s, .cache = "CACHE", .functions = fs });
 //   bd_result r = bd_step(b, name, code, run, data, 0); // in a run: the output, PENDING, refused or failed
@@ -8,28 +7,14 @@
 //   bd_stop(b);                                        // before sc_free: listeners and steps
 //   bd_free(b);                                        // after sc_free, tb_free and pl_free
 //
-// A step: a name and its code, any values; its key hex of hash([name, code]) (encoding's
-// hashValue). The cache folder: cache/<key> the step's node (its value the output kept last, typed),
-// cache/<key>/<n> an entry (its value the output, its attribute ermine.programs.trace the reads, each
-// [part, id, path, hash]). A lookup reads each entry's trace again, newest first, stopping at the
-// first read that differs; a hit gives its output. A miss: run in a computer of its own, one per key,
-// its reads recorded through sc_on_track and named by pl_spot as its output is kept; its status
-// (status.h) on a node of its own while out. A read pl_spot can't name, a value canonical CBOR
-// cannot encode (the name, the code, a read, the output, a function among them): refused
-// uncacheable. never: run called in the reader's run, its result as it is, nothing kept.
-//
-// A compiler is a node whose value is a function from the host (host.h): the registry's hf_compiler.
-// What it is: its attribute ermine.programs.compiler, a plain value; none: its id. A node whose value
-// is no compiler, on a miss: not-a-compiler. A BuildError of the reference is a message starting with
-// its code here (a failed step's status has only the text).
-//
-// bd_step and bd_compile are reads, tracked in a run. In a run, a result of BD_STOP means a read told
-// the run to end now: return at once.
-//
-// MEMORY. A result's value and text are borrowed from the table: good until the node changes; a
-// never step's are the caller's (owned: op_free the value, free the text; its promise, the
-// reader's to return). A step's name and code are held (op_ref) while it is out, and data must
-// live as long. Out of memory aborts.
+// refused uncacheable: a read pl_spot can't name, or a value canonical CBOR can't encode.
+// a compiler's function: the registry's hf_compiler (host.h). a BuildError of the reference is a
+// message starting with its code here (a failed step's status has only the text).
+// bd_step and bd_compile are tracked reads. in a run, BD_STOP: a read ended the run; return now.
+// memory: a result's value and text are borrowed from the table, good until the node changes; a
+// never step's are the caller's (op_free the value, free the text; its promise the reader's to
+// return). a step's name and code are held (op_ref) while it is out; data must live as long. out of
+// memory aborts.
 #ifndef PROGRAMS_BUILD_H
 #define PROGRAMS_BUILD_H
 

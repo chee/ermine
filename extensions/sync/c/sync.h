@@ -1,45 +1,20 @@
-// The Subduction integration for the graph of today (extensions/sync/typescript/sync.ts), in C: every
-// entry change at a kept node goes out as one commit naming its table (commit.h), and what comes in
-// is written to the table (core/table/c/table.h). Kept: an ermine:// id, and only the tables given
-// (value, attributes and children unless told). Same rules as sync.ts, whose header says why:
+// sync.h: sync.ts in C. every entry change at a kept node (an ermine:// id; value, attributes and
+// children unless told) goes out as one commit naming its table (commit.h); what comes in is
+// written to the table (core/table/c/table.h). same rules as sync.ts.
 //
-// the table is the head shown: its entries are that head's node. Coming in, a commit on the head
-// shown is applied to its table's entry by update (core/node/c/update.h), which is its check too;
-// any other (a fork, a merge) is checked on a replay of its parent's node (replay.h), and the table is
-// told only if the head shown changes: then it holds the replay of the new head, whole. Several
-// heads: the first in the agreed order shows; the others are listed in the "conflicts" table at the
-// id ([{head, lamport, actor, tables}], head as hex), with the tables in which they differ. A write
-// extends the head shown; sy_settle makes a merge keeping it.
-//
-// Given a merge rule (merge, one of merges, replay.h): several heads show merged by it, once the
-// commits coming in now are all in, written to the table as a head switch is; no conflicts are listed.
-// A write then is a merge commit: every head it showed its parents, the rule named, its patches
-// against the merge. Nothing merges by itself: only a write, or a settle, makes a merge commit. A merge
-// commit coming in is checked on its rule's merge of its parents (on the table, when that is what it
-// shows); one by a rule not in merges is refused (HY_MERGE). A rule with create keeps a state per node
-// while it is in use (eg-walker's walker). sy_use switches the rule, or merging off, while running.
-//
-// Ephemeral (sync.ts's header says the rules): a change to a table the host says is ephemeral goes
-// out as an ephemeral commit on what a stored write goes on (never on another ephemeral one), its
-// patches taking that stored state to what the device shows; never sealed, never stored. Each stands
-// alone, in place of its device's previous one at its table. The table shows the stored heads and, for
-// each table, the later standing one on top (with a rule, all merged by it); the stored entries under
-// are sync's own, and the "ephemeral" table at the id ({under: {table: value}, on: [{by, name,
-// tables, lamport}]}, by and name as hex, the later last) lists them and what stands while anything
-// does. A device's ephemeral commits stop standing when a stored commit of its follows them, or after
-// ttl ms with nothing heard from it; this device's standing ones are sent again every beat ms, by
-// sy_run on the device's clock. One that stands no more is let go of (tp_forget). Nothing ephemeral
-// outlives the sync.
-//
-// It runs no scheduler and knows no places: the host hands it its writes (sy_wrote, after places'
-// commit, with the change headers they carry) and its table's events (sy_table_changed), and is told
-// through the commit callback what came in on the head shown, as its patches (places.commit).
-//
-// Memory, which TypeScript's collector does: an entry sync makes is sync's, freed when it leaves the
-// table (by sync, or by the host: sync sees the table's event) or at sy_free. What an entry's change
-// refers to when sync wrote it (a commit decoded, a header) sync keeps until it writes that entry's
-// change again or the entry leaves the table. An entry of the host's that sync takes out of the table
-// or replaces is given back through drop. Out of memory aborts. One thread at a time
+// the table shows one head. a commit on it: applied by update (core/node/c/update.h); any other:
+// checked on a replay of its parent (replay.h), the table told only if the head shown changes.
+// several heads: the first in agreed order shows, the rest in the "conflicts" table
+// ([{head, lamport, actor, tables}]). a merge rule (replay.h): heads show merged; a write is then a
+// merge commit; a merge by a rule not in merges is refused (HY_MERGE). sy_use switches the rule.
+// ephemeral tables: an ephemeral commit on the stored state, never sealed or stored, one standing
+// per device per table, shown on top; listed in the "ephemeral" table. stops standing at a later
+// stored commit of that device or after ttl ms; resent every beat ms by sy_run.
+// runs no scheduler, knows no places: the host calls sy_wrote and sy_table_changed; incoming
+// changes on the head shown arrive through the commit callback.
+// memory: an entry sync makes is sync's, freed when it leaves the table or at sy_free; what its
+// change refers to is kept until rewritten or gone; a host entry sync removes or replaces is given
+// back through drop. out of memory aborts. one thread at a time.
 #ifndef SY_SYNC_H
 #define SY_SYNC_H
 
@@ -67,9 +42,11 @@ typedef bool (*sy_ephemeral_fn)(void *context, const char *doc, const char *tabl
 typedef struct {
 	tb_table *table;
 	// the device's (transport.h): its key and signer, where Subduction keeps what it saves, its clock
-	// (NULL: erm_host_now)
+	// (NULL: erm_host_now), and lazy: what the store holds is taken in as each document is followed, so
+	// the table holds the followed documents and no other
 	uint8_t seed[32];
 	const ErmStore *store;
+	bool lazy;
 	tp_clock_fn now;
 	void *clock;
 	// NULL: erm_host_random
@@ -132,6 +109,13 @@ typedef struct {
 	uint8_t tip[32];
 } sy_standing_row;
 size_t sy_standing(sy_sync *s, const char *id, sy_standing_row **out);
+
+// an ephemeral write is the start; this is the stop: this device's standing ephemeral commit at (id,
+// table) ends now. Forgotten here (the stored shows again, no beat carries it), and a stop sent
+// (tp_stop), on which every peer drops it at once rather than after ttl. Sent whether or not one stands
+// (a receiver with nothing standing from this device at the table ignores it). Not an id, or not a
+// kept table: nothing
+void sy_stop(sy_sync *s, const char *id, const char *table);
 
 // sends the beats due and drops the devices quiet past ttl, runs the device (tp_run), then works out
 // the conflicts of what came in: the ms until it must run again (a beat or a ttl due too), as tp_run

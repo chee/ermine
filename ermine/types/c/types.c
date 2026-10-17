@@ -55,7 +55,8 @@ static op_value *strings_value(const char *const *list) {
 	return a;
 }
 
-op_value *ty_value(const ty_known *t) {
+// a type's node's value, { conformsTo, fileNameExtension, mimeType }: new
+static op_value *ty_value(const ty_known *t) {
 	op_value *m = op_map();
 	op_set(m, "conformsTo", strings_value(t->conforms));
 	op_set(m, "fileNameExtension", strings_value(t->extensions));

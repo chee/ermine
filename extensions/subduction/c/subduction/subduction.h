@@ -1,27 +1,13 @@
-// subduction.h: Subduction for a C host (newcore/sync/TRANSPORT.tex), the
-// C ABI of libsubduction_c.a (src/, Rust, no_std with alloc). NOTES.md.
+// subduction.h: the C ABI of libsubduction_c.a (src/, Rust, no_std with alloc). NOTES.md.
 //
-// Sans-IO: the library does no I/O, starts no thread and reads no clock.
-// The host opens each connection (a WebSocket to the server), hands in each
-// binary message that arrives (erm_sd_received) and sends each one the
-// library asks it to (a SEND event), and passes the time to erm_sd_run,
-// which runs the library's tasks (Subduction's own, its timeouts, and the
-// calls below) until none can go on. Every call but the first four returns
-// at once with a call number; what it answers comes later as an event
-// naming that number, beside what Subduction does by itself (a peer's
-// heads, an ephemeral message heard) and what to send or close. After a
-// call or a message in, and when the time erm_sd_run gave has passed, the
-// host calls erm_sd_run, then takes the events with erm_sd_poll and frees
-// each with erm_sd_free_event. Only plain bytes cross: ids, digests, topics
-// and keys are 32 bytes; a call copies what it is given, and is refused
-// (call number 0) when given NULL for a list or bytes with a nonzero count.
-// One thread at a time, never two calls at once.
-//
-// What Subduction holds is kept in the store the host gives (store.h). The
-// host defines platform.h's erm_host_random, erm_host_malloc,
-// erm_host_realloc, erm_host_free and erm_host_abort, which the library
-// calls for randomness, memory and a panic; beside them it links only C's
-// memcpy, memmove, memset and memcmp.
+// sans-IO: no I/O, threads or clock. the host opens connections, hands in each binary message
+// (erm_sd_received), sends what SEND events ask, and calls erm_sd_run with the time after a call,
+// a message in, or when the time it gave has passed; then takes events (erm_sd_poll) and frees each
+// (erm_sd_free_event). calls but the first four return a call number at once; the answer is a
+// later event naming it. ids, digests, topics, keys: 32 bytes. calls copy their input; NULL for a
+// list or bytes with a nonzero count: refused (call number 0). one thread, one call at a time.
+// storage: the host's store (store.h). the host defines platform.h's erm_host_random, _malloc,
+// _realloc, _free, _abort; otherwise only memcpy, memmove, memset, memcmp are linked.
 
 #ifndef ERM_SUBDUCTION_H
 #define ERM_SUBDUCTION_H

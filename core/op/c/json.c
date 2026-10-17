@@ -64,7 +64,11 @@ static size_t put8(char *out, unsigned c) {
 }
 // a string literal, after its opening quote: malloc'd, its length in *length; NULL when bad
 static char *literal(reader *r, size_t *length) {
-	char *out = grab(strlen(r->p) + 1);
+	// room for the literal as written, up to its closing quote (an escape never grows): not the
+	// rest of the line, which made reading a line quadratic in its length
+	const char *end = r->p;
+	while (*end && *end != '"') end += *end == '\\' && end[1] ? 2 : 1;
+	char *out = grab((size_t)(end - r->p) + 1);
 	size_t n = 0;
 	while (*r->p != '"') {
 		unsigned char c = (unsigned char)*r->p;

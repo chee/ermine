@@ -1,35 +1,22 @@
-// Commits over Subduction (extensions/sync/typescript/transport.ts), in C: a device. Two histories
-// per document (history.h): stored and ephemeral, the ephemeral one holding every stored commit too.
-// This device's own commits are taken into them at once, unchecked; then, in the order made, a stored
-// one is sealed (seal.h), stored as a loose commit and sent, an ephemeral one published unsealed; one
-// waiting on a parent goes once the parent lets it in. What arrives (the network, or what the store
-// held) is checked here (the seal, its stored id, its parents), then by the histories and the
-// integration's check, and told. Fragments carry {run, snapshot?} (run.h, snapshot.h), built when a
-// commit can head one (a leading zero byte): one from elsewhere is checked as transport.ts checks it,
-// each member's seal as it is read, its head, boundary and checkpoints; its snapshot is a hint, kept
-// once a replay to its head gives the same tables. A stored fragment lets go of the loose commits it
-// covers: those the fragment the store holds for that head carries and reaches from it. A followed
-// document still empty is asked for again, 0.25 s doubling to 16 s. Ephemeral
-// messages on hashed topics (tp_send, tp_listen), sent as parts over 65 536 bytes. Same rules as
-// transport.ts, whose header comments say why; only the lock "unlocked" is built (close and open
-// give back what they are given), so nothing waits on a lock and nothing is refused "lock".
+// transport.h: transport.ts in C, a device over Subduction. two histories per document (history.h):
+// stored and ephemeral (holding every stored commit too). own commits taken in unchecked, then in
+// order a stored one sealed (seal.h), stored and sent, an ephemeral one published unsealed. what
+// arrives is checked (seal, stored id, parents), then by the histories and the integration's check.
+// fragments carry {run, snapshot?} (run.h, snapshot.h); a snapshot is a hint, kept once a replay
+// agrees. a stored fragment lets go of the loose commits it covers. an empty followed document is
+// asked again, 0.25 s doubling to 16 s. ephemeral messages on hashed topics (tp_send, tp_listen),
+// in parts over 65 536 bytes. only lock "unlocked" is built.
 //
-// Sans-IO, as Subduction for C is (extensions/subduction/c/subduction/subduction.h): the host opens
-// each connection and gives its messages in (tp_received), sends each one asked of it (tp_next) and
-// calls tp_run, which runs Subduction and everything here until nothing more can go on, and says when
-// it must run again. One thread at a time. Time is the options' clock. A document is an ermine:// id
-// (64 lowercase hex digits); its tree and ephemeral topic are its 32 bytes.
+// sans-IO (subduction.h): the host gives messages in (tp_received), sends what tp_next gives, and
+// calls tp_run, which says when to run again. one thread at a time; time is the options' clock. a
+// document: an ermine:// id (64 hex digits); its tree and topic are its 32 bytes. the store
+// (store.h) holds only what the device admits; a new device takes in everything stored on its
+// first tp_run (lazy: per tree when followed, tp_options).
 //
-// Subduction keeps what it holds in the host's store (store.h); the device wraps it: it stores only
-// what it admits (a loose commit that unseals under its stored id; a fragment that is checked), and
-// takes in each commit and fragment saved to it. A new device takes in everything the store holds on its first
-// tp_run, before anything else: every fragment, then every loose commit, of each tree, as saves are.
-//
-// On a server (extensions/subduction/c/subduction/transport.h: websocket.c over transport_openssl.c):
-// ermTransportOpen(url), tp_service(url) for the name it answers to, tp_connect(t, name); then, in the
-// host's loop, each message ermTransportReceive gives to tp_received, each TP_SEND tp_next gives to
-// ermTransportSend (TP_CLOSE: ermTransportClose), a closed socket to tp_closed, and the socket's fd
-// waited on for the ms tp_run gave. Callbacks (check, snapshot, arrived, heard) never call tp_run.
+// on a server (subduction/transport.h): ermTransportOpen(url), tp_service(url), tp_connect(t, name);
+// in the loop: ermTransportReceive -> tp_received, TP_SEND -> ermTransportSend, TP_CLOSE ->
+// ermTransportClose, closed socket -> tp_closed, wait on the fd for tp_run's ms. callbacks (check,
+// snapshot, arrived, heard) never call tp_run.
 #ifndef TP_TRANSPORT_H
 #define TP_TRANSPORT_H
 
@@ -108,9 +95,16 @@ typedef struct {
 	// borrowed: it must outlive the device
 	const rp_merges *merges;
 	tp_limits limits;
+	// what the store holds is taken in as each document is followed, not at the first tp_run: the
+	// first run takes in the trees of the documents followed before it, a later tp_follow reads its
+	// document's tree from the store (fragments, then loose commits, as the first run would) before the
+	// document is fetched from any peer. So the histories hold the followed documents and no other; a
+	// stored document never followed enters no history
+	bool lazy;
 } tp_options;
 
-// a device; it takes in what the store holds on its first tp_run. NULL when Subduction says no
+// a device; it takes in what the store holds on its first tp_run (lazy: only what is followed). NULL
+// when Subduction says no
 tp_device *tp_create(const tp_options *options);
 // lets go of everything, the store's contents aside (what is not stored yet is lost: run to tp_idle
 // first)
@@ -185,6 +179,18 @@ void tp_arrived(tp_device *t, tp_arrived_fn fn, void *context);
 // What keeps another device's ephemeral commits standing. Any number of listeners
 typedef void (*tp_hearing_fn)(void *context, const char *doc, const uint8_t from[SL_KEY], const uint8_t name[32]);
 void tp_hearing(tp_device *t, tp_hearing_fn fn, void *context);
+// this device's standing ephemeral commit at the document's table ends: a stop message on the
+// document's ephemeral topic, the CBOR map {stop: table}, queued behind the takes before it. It names
+// no commit: a receiver drops whatever stands for its sender at that table. It travels as the
+// ephemeral commits do, signed by Subduction with the sender's key (what hear checks a commit's signer
+// against), so no other device can send one for this device. Forgets nothing here: the integration
+// forgets what stood
+void tp_stop(tp_device *t, const char *doc, const char *table);
+// told each stop heard on a followed document: the document, the sender's key (a multikey), the
+// table (good for the call). One for nothing standing from that sender is the integration's to
+// ignore. Any number of listeners
+typedef void (*tp_stopped_fn)(void *context, const char *doc, const uint8_t from[SL_KEY], const char *table);
+void tp_stopped(tp_device *t, tp_stopped_fn fn, void *context);
 // an ephemeral commit of this device's (in the ephemeral history, not a stored one) published again,
 // queued as a take is; false: no such commit
 bool tp_again(tp_device *t, const char *doc, const uint8_t name[32]);

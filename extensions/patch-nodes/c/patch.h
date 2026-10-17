@@ -1,6 +1,5 @@
-// Patch nodes (typescript/patch.ts), in C: a node that lives in one place and changes another. Same
-// rules as patch.ts, which the suite in extensions/patch-nodes/conformance/patch/ holds both to.
-// Read patch.ts first: what a patch node is, what stale and set aside mean, what land does.
+// patch nodes (typescript/patch.ts) in C: same rules as patch.ts (read it first: stale, set aside,
+// land, telling), held to by extensions/patch-nodes/conformance/patch/.
 //
 //   pn *o = pn_new();
 //   tb_table *table = tb_make(pn_event, o);              // the table: writes go here, never to the view
@@ -10,19 +9,15 @@
 //   pl_connect(p, &(pl_setup){tb_string("R"), view, ...});
 //   nd_update(entry, ...); pn_commit(o, &changed);       // a write: to the table, said here
 //
-// C places reads the one table it is connected to (tb_get), so the overlay of patch.ts is a second
-// table here, the view: for every key of the table, its entry, or, where patch nodes are over
-// it, the entry made from it and them. It is kept made as the table's events and pn_commit come.
-// A reader is told as patch.ts tells it (read its "telling" paragraph): a table event says the whole
-// key (an event of places' own, through pn_view_event); a patch node added, changed or taken out,
-// or a write to the table's entry under patch nodes, makes the entry again at once, quietly, and
-// says places' commit one change of the key whose op is what differs at the patch nodes' spots.
-//
-// MEMORY. An entry made is the overlay's, let go of when it is made again or at pn_free; never
-// change it. A told entry (what was last said to places of a key, and the patches and values its
-// change refers to) is the overlay's too: good until that key's next change. A made entry's change refers to the table entry's (its actor, its metadata): the
-// table's entry keeps them alive until it is written again, and every write is said (pn_commit)
-// before they are let go. Patch nodes are read, never changed. Out of memory aborts.
+// C places reads the one table it is connected to (tb_get), so patch.ts' overlay is a second table
+// here, the view: every key's entry, or where patch nodes are over it, the entry made from it and
+// them; kept made as the table's events and pn_commit come.
+// telling: as patch.ts'; a table event goes to places as its own, through pn_view_event.
+// memory: a made entry is the overlay's, let go when made again or at pn_free; never change it. a
+// told entry (and the patches and values its change refers to) is good until that key's next
+// change. a made entry's change refers to the table entry's actor and metadata: kept alive until
+// it is written again, and every write is said (pn_commit) first. patch nodes are read, never
+// changed. out of memory aborts.
 #ifndef PATCH_H
 #define PATCH_H
 
@@ -61,10 +56,6 @@ void pn_event(void *ctx, tb_key part, tb_key id);
 // after a write to the table's entries: places' commit, then a patch node changed has its target
 // told, and an entry changed under patch nodes told at the patch nodes' spots
 void pn_commit(pn *o, const pl_changed *changed);
-
-// the layers of the entry under (part, id), front first, *n of them; none there: none. Untold
-// (pn_entries tells)
-const pn_item *pn_layers(pn *o, tb_key part, tb_key id, size_t *n);
 
 typedef struct {
 	size_t n;

@@ -1,4 +1,4 @@
-// The keyed index and createSelector (selector.h), in C.
+// The keyed index (selector.h), in C.
 #include "selector.h"
 
 #include <stdint.h>
@@ -53,7 +53,6 @@ struct sx_index {
 	sc_listener *on_mark, *on_end;
 	// key -> bucket
 	pm held;
-	size_t told;
 	size_t refs;
 	sx_index *next;
 	// a marked may mark again: that telling takes a scratch of its own
@@ -101,8 +100,6 @@ void sx_drop(sx_index *x, const void *key, const sx_holder *h) {
 	}
 }
 
-size_t sx_deliveries(const sx_index *x) { return x->told; }
-
 static void heard_mark(const void *const *keys, size_t nkeys, sc_run *run, sc_computer *const *due,
 	size_t ndue, uint64_t tick, void *data) {
 	(void)due, (void)ndue;
@@ -141,7 +138,6 @@ static void heard_mark(const void *const *keys, size_t nkeys, sc_run *run, sc_co
 			}
 			z->list[m++] = z->pairs[j].key;
 		}
-		x->told++;
 		if (z->pairs[i].h->marked != NULL) {
 			z->pairs[i].h->marked(z->pairs[i].h->data, z->list, m, run, tick);
 		}
@@ -197,118 +193,5 @@ void sx_index_put(sx_index *x) {
 	}
 	pm_clear(&x->held);
 	scratch_free(&x->z);
-	free(x);
-}
-
-// the selector -------------------------------------------------------------------------------
-
-// the one key object of a selected value
-typedef struct {
-	const void *value;
-	sx_selector *x;
-} kobj;
-
-struct sx_selector {
-	sc_scheduler *s;
-	sx_index *index;
-	void *(*source)(void *data);
-	void *data;
-	bool (*equal)(const void *key, const void *value, void *data);
-	// value -> kobj
-	pm keys;
-	const void *value;
-	bool has;
-	sx_holder me;
-};
-
-static bool selects(const sx_selector *x, const void *key, const void *value) {
-	return x->equal != NULL ? x->equal(key, value, x->data) : key == value;
-}
-
-static sc_out run_source(void *previous, void *data) {
-	(void)previous;
-	sx_selector *x = data;
-	return (sc_out){.kind = SC_VALUE, .value = x->source(x->data)};
-}
-
-static char *moved(void *value, void *data) {
-	sx_selector *x = data;
-	const void *was = x->value;
-	bool had = x->has;
-	x->value = value;
-	x->has = true;
-	const void *few[8];
-	const void **marked = x->keys.count + 2 <= sizeof few / sizeof *few ? few
-		: xalloc((x->keys.count + 2) * sizeof *marked);
-	size_t n = 0;
-	if (x->equal == NULL) {
-		kobj *a = had ? pm_get(&x->keys, was) : NULL;
-		kobj *b = pm_get(&x->keys, value);
-		if (a != NULL) marked[n++] = a;
-		if (b != NULL && b != a) marked[n++] = b;
-	} else {
-		for (size_t i = 0; i < x->keys.cap; i++) {
-			if (!x->keys.keys[i]) continue;
-			bool before = had && x->equal(x->keys.keys[i], was, x->data);
-			if (before != x->equal(x->keys.keys[i], value, x->data)) marked[n++] = x->keys.vals[i];
-		}
-	}
-	if (n > 0) sc_mark(x->s, marked, n, sc_get_run(x->s));
-	if (marked != few) free(marked);
-	return NULL;
-}
-
-static void ended(void *data, const void *key) {
-	sx_selector *x = data;
-	const kobj *o = key;
-	if (pm_get(&x->keys, o->value) != o) return;
-	pm_delete(&x->keys, o->value);
-	sx_drop(x->index, o, &x->me);
-	free((void *)o);
-}
-
-sx_selector *sx_selector_new(sc_scheduler *s, void *(*source)(void *data), void *data,
-	bool (*equal)(const void *key, const void *value, void *data)) {
-	sx_selector *x = xalloc(sizeof *x);
-	x->s = s;
-	x->source = source;
-	x->data = data;
-	x->equal = equal;
-	x->me = (sx_holder){.ended = ended, .data = x};
-	x->index = sx_index_get(s);
-	sc_def def = {.f = run_source, .set = moved, .data = x};
-	if (sc_create_computer(s, def) == NULL) {
-		sx_index_put(x->index);
-		free(x);
-		return NULL;
-	}
-	return x;
-}
-
-bool sx_selected(sx_selector *x, const void *key) {
-	if (sc_get_run(x->s) != NULL) {
-		kobj *o = pm_get(&x->keys, key);
-		if (o == NULL) {
-			o = xalloc(sizeof *o);
-			o->value = key;
-			o->x = x;
-			pm_set(&x->keys, key, o);
-			sx_hold(x->index, o, &x->me);
-		}
-		sc_track(x->s, o);
-	}
-	return x->has && selects(x, key, x->value);
-}
-
-void sx_selector_free(sx_selector *x) {
-	if (x == NULL) return;
-	for (size_t i = 0; i < x->keys.cap; i++) {
-		if (!x->keys.keys[i]) continue;
-		kobj *o = x->keys.vals[i];
-		sx_drop(x->index, o, &x->me);
-		free(o);
-	}
-	pm_clear(&x->keys);
-	sx_index_put(x->index);
 	free(x);
 }

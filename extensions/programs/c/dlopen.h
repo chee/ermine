@@ -3,7 +3,7 @@
 // (its header says them once), which conformance/native holds both to.
 //
 //   dlr *d = dlr_new(&(dlr_setup){.dir = NULL});   // temp files in $TMPDIR (none: /tmp)
-//   dlr_add(functions, "dlopen", d);               // a runner with a load (host.h)
+//   hf_add_loader(functions, "dlopen", dlr_run, dlr_load, d);   // a runner with a load (host.h)
 //   ...                                            // its node's value: hf_value("dlopen")
 //   dlr_free(d);                                   // after the last process holding a library stops
 //
@@ -30,9 +30,7 @@ typedef struct {
 
 dlr *dlr_new(const dlr_setup *setup);
 void dlr_free(dlr *d);
-// the runner and its load in the registry, by name
-void dlr_add(hf *fs, const char *name, dlr *d);
-// its pieces, for a host wrapping them: data is the dlr
+// the runner and its load, for a host's registry: data is the dlr
 hf_run dlr_run(const op_value *code, void *api, void *data);
 hf_loaded dlr_load(const op_value *code, void *data);
 

@@ -56,8 +56,6 @@ void dlr_free(dlr *d) {
 	free(d);
 }
 
-void dlr_add(hf *fs, const char *name, dlr *d) { hf_add_loader(fs, name, dlr_run, dlr_load, d); }
-
 static void note(dlr *d, const char *what, const char *detail) {
 	if (d->note != NULL) d->note(what, detail, d->ctx);
 	else fprintf(stderr, "dlopen: %s: %s\n", what, detail);

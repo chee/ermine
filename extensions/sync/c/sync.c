@@ -1873,6 +1873,28 @@ static void hearing(void *context, const char *doc, const uint8_t from[SL_KEY], 
 	if (p != NULL) p->at = ms_of(s);
 }
 
+// a device's standing commit at the table stops standing: let go of; false: none stood
+static bool unstand(sy_sync *s, node_t *nd, peer_t *p, const char *table) {
+	stand_t *st = stand_of(p, table);
+	if (st == NULL) return false;
+	tp_forget(s->device, nd->id, st->kept->name);
+	slot_clear(&st->entry);
+	size_t i = (size_t)(st - p->stands);
+	memmove(&p->stands[i], &p->stands[i + 1], (p->stands_count - i - 1) * sizeof *p->stands);
+	p->stands_count--;
+	return true;
+}
+
+// a peer's stop: what stands for it at the table stops standing now; nothing standing, nothing
+static void stopping(void *context, const char *doc, const uint8_t from[SL_KEY], const char *table) {
+	sy_sync *s = context;
+	uint8_t bytes[32];
+	if (!tp_doc(doc, bytes) || memcmp(from, tp_key(s->device), SL_KEY) == 0) return;
+	node_t *nd = im_get(&s->nodes, bytes);
+	peer_t *p = nd != NULL ? peer_of(nd, from) : NULL;
+	if (p != NULL && unstand(s, nd, p, table)) show(s, nd, false);
+}
+
 // ---- the integration
 
 static int by_name_row(const void *a, const void *b) {
@@ -1915,7 +1937,7 @@ sy_sync *sy_create(const sy_options *o) {
 	if (s->pure_list == NULL) abort();
 	s->pure_merges = pure(s, s->pure_list);
 	tp_options d = {.store = o->store, .now = o->now, .clock = o->clock, .check = check, .snapshot = snapshot_of, .context = s,
-		.merges = &s->pure_merges};
+		.merges = &s->pure_merges, .lazy = o->lazy};
 	memcpy(d.seed, o->seed, 32);
 	s->device = tp_create(&d);
 	if (s->device == NULL) {
@@ -1924,6 +1946,7 @@ sy_sync *sy_create(const sy_options *o) {
 	}
 	tp_arrived(s->device, arrived, s);
 	tp_hearing(s->device, hearing, s);
+	tp_stopped(s->device, stopping, s);
 	return s;
 }
 
@@ -2139,6 +2162,16 @@ size_t sy_standing(sy_sync *s, const char *id, sy_standing_row **out) {
 	}
 	qsort(*out, n, sizeof **out, by_name_row);
 	return n;
+}
+
+void sy_stop(sy_sync *s, const char *id, const char *table) {
+	uint8_t bytes[32];
+	if (!tp_doc(id, bytes) || !kept_table(s, table)) return;
+	sy_follow(s, id);
+	node_t *nd = im_get(&s->nodes, bytes);
+	peer_t *mine = nd != NULL ? peer_of(nd, tp_key(s->device)) : NULL;
+	if (mine != NULL && unstand(s, nd, mine, table)) show(s, nd, false);
+	tp_stop(s->device, id, table);
 }
 
 int64_t sy_run(sy_sync *s) {

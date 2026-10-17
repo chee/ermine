@@ -1,53 +1,18 @@
-// json.h: a value (ENCODING.tex), value equality, and the code point helpers
-// every other file uses; its parser and printer are json_text.h. Nothing here
-// knows about graphs.
+// json.h: a value (ENCODING.tex), value equality, and code point helpers; parser and printer are
+// json_text.h. nothing here knows about graphs.
 //
-// VALUES BEYOND JSON. A value is also bytes, a typed array or a stand-in (what
-// a live value is sent as, over its kind, any value), each held as the machine
-// holds it: bytes and typed arrays in a buffer of their own, never as strings
-// or lists of numbers; no uint8 kind, bytes are that (ENCODING.tex). A number
-// is any binary64, NaN, the infinities and -0 included. The parser reads plain JSON;
-// jsonDecode turns the "/" forms (ENCODING.tex, JSON form) in a value read from a line into these
-// kinds, and the printer writes every value in its JSON form (ENCODING.tex,
-// in JSON): -0 as -0, NaN and the infinities, bytes, typed arrays and stand-ins
-// under "/", and a map whose only key is "/" escaped as {"/": {"map":
-// ...}}. Bytes are base64, standard alphabet, no padding; a typed array is
-// its elements' bytes, each little-endian, in base64, a NaN element the one
-// NaN of its kind (0x7fc00000, 0x7ff8000000000000).
-//
-// VALUES ARE IMMUTABLE AND HELD. A Json has holders: whoever made it holds
-// it; jsonRef adds a holder, jsonFree lets one hold go, and the last frees it
-// and lets go of what it holds. A tree never jsonRef'd is freed whole by one
-// jsonFree, as scratch always was. The rule:
-//   - a function given a value borrows it: it may read it for the call, and
-//     keeps it past the call only by taking a hold of its own (jsonRef);
-//   - a container holds its items: jsonPush, jsonAdd, jsonSet and jsonStand
-//     take the caller's hold of the item; to put in an item you only borrow,
-//     jsonRef it first;
-//   - whoever holds a value lets go of it once (jsonFree) when done.
-// A value with more than one holder is shared: no one changes it. To change a
-// value, build a new one (jsonShallow the containers you change, then change
-// the copies before anyone else sees them).
-//
-// NO RECURSION: parsing, printing, freeing and equality keep their own
-// stacks on the heap, so a value may nest as deep as memory allows.
-//
-// ABSENT is a NULL `Json *`. A present null is a JSON_NULL value.
-//
-// STRINGS are UTF-8 internally, NUL-terminated, `stringLength` bytes long.
-// U+0000 is held as the two bytes C0 80 (as Java's modified UTF-8 does), so
-// no string or key holds a NUL byte and every string is also C text: an id
-// or a name with U+0000 in it is an id like any other. The parser makes C0 80
-// from \u0000 and the printer writes it back as \u0000; it counts as one code
-// point and sorts first.
-// A lone surrogate escape (\ud800) is accepted, as JSON.parse does, and held
-// as its 3-byte WTF-8 form (ED A0..BF xx); it counts as one code point and is
-// printed back as \udxxx. A string holding one is no string (ENCODING.tex):
-// jsonDecode rejects a value holding one, and an id or a name holding one is
-// wrong-field (the harness's lines), so none reaches the graph.
-//
-// CODE POINT ORDER of two strings is utf8Compare, or textCompare for C text.
-// It is byte order except for U+0000's C0 80; never order ids with strcmp.
+// values: JSON plus bytes, typed arrays (each in its own buffer; no uint8 kind) and stand-ins; any
+// binary64 (NaN, infinities, -0). jsonDecode turns "/" forms into these; the printer writes them
+// back (base64, no padding; typed arrays little-endian; one NaN per width).
+// holders: a value is immutable once shared. whoever made it holds it; jsonRef adds a hold,
+// jsonFree drops one (the last frees). a function borrows what it is given; jsonPush, jsonAdd,
+// jsonSet, jsonStand take the caller's hold. to change, jsonShallow and change the copy.
+// nothing recurses: parse, print, free and equality keep heap stacks.
+// absent: a NULL `Json *`; a present null is JSON_NULL.
+// strings: UTF-8, NUL-terminated, `stringLength` bytes. U+0000 is held as C0 80 (one code point,
+// sorts first). a lone surrogate is held as WTF-8 and printed back as \udxxx; jsonDecode rejects
+// it, so none reaches the graph.
+// order: utf8Compare or textCompare, never strcmp.
 
 #ifndef JSON_H
 #define JSON_H
