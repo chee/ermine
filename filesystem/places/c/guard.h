@@ -11,7 +11,7 @@
 // ANSWERS. GD_OK; GD_REFUSED (a no: gd_refusal says what and why); GD_PENDING (a policy waits for
 // what it could not read); GD_FAILED (a read the policy told came back SC_STOP: the
 // run must end, as pl_status says, and nothing the guard gave is to be used). A list keeps a
-// refused member in its place: its id is gd_refused.
+// refused member in its place: its id is the one gd_is_refused says.
 //
 // MEMORY. A guard keeps its policy, its places and its table as given, and a copy of the path it is
 // placed at, for as long as it lives. Names and paths given are borrowed for the call. Out of
@@ -32,8 +32,7 @@ typedef struct {
 	const char *reason;
 } gd_refusal;
 
-// what a refused member's id is, in a list: a stand-in, refused if asked
-tb_key gd_refused(void);
+// whether an id is what a refused member's is, in a list: a stand-in, refused if asked
 int gd_is_refused(tb_key id);
 
 // what is asked about: an id, and the path it was asked by when there was one (path NULL: none;
@@ -75,7 +74,7 @@ gd_answer gd_read(gd *g, const gd_target *targets, size_t n, gd_refusal *why);
 gd_answer gd_write(gd *g, const char *op, const gd_target *targets, size_t n, gd_refusal *why);
 
 // the members of a list, each asked to be read (at: the path they are under, NULL: none): a
-// refused one in its place, its name kept and its id gd_refused. Any pending: GD_PENDING. *out is
+// refused one in its place, its name kept and its id one gd_is_refused says. Any pending: GD_PENDING. *out is
 // the caller's, pl_members_free; the names are the list's
 gd_answer gd_members(gd *g, const pl_members *list, const char *const *at, size_t nat,
 	pl_members *out);

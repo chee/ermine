@@ -15,7 +15,7 @@ static void *xalloc(size_t n) {
 }
 
 static const char refused_token;
-tb_key gd_refused(void) { return tb_symbol(&refused_token); }
+static tb_key gd_refused(void) { return tb_symbol(&refused_token); }
 int gd_is_refused(tb_key id) { return id.symbol == &refused_token; }
 
 gd_target gd_target_of(gd_thing thing, const char *part, const op_value *field) {

@@ -103,7 +103,6 @@ typedef struct {
 	size_t n, cap;
 	int none;
 } pl_namelist;
-void pl_namelist_add(pl_namelist *list, const char *name);
 void pl_namelist_free(pl_namelist *list);
 
 // what answers one step. from: what it is called, the from of each answer it gives (a string that
@@ -232,14 +231,6 @@ typedef struct {
 	const ch_header *change;
 	const nd_entry *entry;
 } pl_fact;
-typedef struct {
-	size_t n;
-	pl_fact *items;
-} pl_facts;
-// what a write landed: a fact for each entry with a latest op, at every key it is under (tb_who).
-// The caller's, pl_facts_free; the patches and change are the entries'
-pl_facts pl_each_entry_change(pl *p, const pl_changed *changed);
-void pl_facts_free(pl_facts *facts);
 
 // after a write: the spots its patches mark, said changed in one call, by the run open; then each
 // watch told what landed at its node. A watch that writes commits in turn, in the same run

@@ -1,7 +1,7 @@
 // The reference places (filesystem/places/typescript/places.ts) on the line protocol: one JSON
 // request per line in, one answer per line out, in order. State lasts for the process: the world of
-// world.ts, the computes made by name. Another implementation joins by speaking this (HARNESS). The
-// world's requests (the table, the writes, the scheduler) are in world.ts; these are places' own,
+// world_harness.ts, the computes made by name. Another implementation joins by speaking this (HARNESS). The
+// world's requests (the table, the writes, the scheduler) are in world_harness.ts; these are places' own,
 // with the programs. a path is a list of names from the root "R".
 //
 // reads, outside any run (told to no one):
@@ -11,13 +11,13 @@
 // { op: "list", at }                        → { names }
 // { op: "lookup", names, from, all? }       → { path? } | { paths }
 // { op: "at", value, path }                 → { value? }   places' at
-// the path cache (world.ts: cache), outside any run, so an entry made goes at once unless a run
+// the path cache (world_harness.ts: cache), outside any run, so an entry made goes at once unless a run
 // tracks it:
 // { op: "cached", path }                    → { id? }   the cache's get
 // { op: "cachedList", at }                  → { names }   the cache's list
 // { op: "watch", name, scope, f }           → {}   a compute made with scope open, running the
 //    program f each run, its results (compared as JSON) kept (world: state)
-// watching a path (world.ts):
+// watching a path (world_harness.ts):
 // { op: "watchPath", name, path, part?, at? } → {}   places' watchPath, what it is told kept
 // { op: "watched", name }                   → { facts }   told since last asked, in order:
 //    { part, id, patches, actor? }
@@ -45,7 +45,7 @@
 //    and its names since last asked; its level not counted
 //
 // a program e: a number, string, boolean or null is itself; a list, its members evaluated; a map
-// is one of, or one of the world's plain forms (world.ts, basic):
+// is one of, or one of the world's plain forms (world_harness.ts, basic):
 //   {"read":[part,id,path?]}          the value, or null (the path's steps evaluated)
 //   {"change":[part,id]}              the patches of its latest edit, or null
 //   {"get":path}                      the id there, or null
@@ -83,7 +83,7 @@ import {
 	table,
 	where,
 	write,
-} from "./world.ts"
+} from "./world_harness.ts"
 import { status } from "./status.ts"
 import { createRuns, latest, type Run } from "./runs.ts"
 import { revive } from "../../../conformance/typescript/form.ts"

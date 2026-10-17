@@ -549,12 +549,19 @@ void pl_event(void *ctx, tb_key part, tb_key id) {
 	tell_watches(l, &fact, 1);
 }
 
-void pl_facts_free(pl_facts *facts) {
+// what a write landed: a fact for each entry with a latest op, at every key it is under (tb_who).
+// The caller's, pl_facts_free; the patches and change are the entries'
+typedef struct {
+	size_t n;
+	pl_fact *items;
+} pl_facts;
+
+static void pl_facts_free(pl_facts *facts) {
 	free(facts->items);
 	*facts = (pl_facts){0};
 }
 
-pl_facts pl_each_entry_change(pl *l, const pl_changed *changed) {
+static pl_facts pl_each_entry_change(pl *l, const pl_changed *changed) {
 	pl_facts out = {0};
 	size_t capacity = 0;
 	for (size_t i = 0; i < changed->n; i++) {
@@ -935,7 +942,7 @@ static int step(pl *l, tb_key id, const char *name, tb_key *out) {
 	return child_of(tb_get(l->s->table, tb_string(children_part), id), name, out);
 }
 
-void pl_namelist_add(pl_namelist *list, const char *name) {
+static void pl_namelist_add(pl_namelist *list, const char *name) {
 	if (list->n == list->cap) {
 		list->cap = list->cap ? list->cap * 2 : 8;
 		list->items = realloc(list->items, list->cap * sizeof *list->items);
