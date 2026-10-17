@@ -1,2 +1,0 @@
-# squish-perf misses of the TypeScript squish
-squish-perf/01-typing-run  borderline: x11 for x4 once, x4-5 mostly (13ms, 49ms, 278ms); noisy at the top size
