@@ -84,6 +84,7 @@ function world(o: { may?: Policy; presence?: boolean; overlay?: boolean; sites?:
 		overlay,
 		sites,
 		notice: (made) => void noticed.push(made),
+		scopes,
 	})
 	put("children", "W", { lib: "LIB" })
 	put("children", "LIB", {})

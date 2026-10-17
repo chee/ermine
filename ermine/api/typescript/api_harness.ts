@@ -10,9 +10,11 @@
 //    presence: on the host's scope, clock 0; overlay: places over a patch overlay; uuid: uuidv7 ids
 // { op: "kids", id, value }                → {}   children entry replaced
 // { op: "put", part, id, value }           → {}   entry replaced
-// { op: "saved", part, id }                → { value? }
-// { op: "change", part, id }               → { actor?, process?, caller? }   latest change's, first
-//    of each key however nested; the header's own actor if it has one
+// { op: "saved", part, id, path? }        → { value? }   at path (none: the whole value)
+// { op: "change", part, id }               → { actor?, process?, caller? }   latest change's, the
+//    first of each key in its metadata; the header's own actor if it has one
+// { op: "metadata", part, id }             → { keys, node? }   latest change's metadata: each pair's
+//    key in order, and the "node" pair's value
 // { op: "id", path }                       → { id? }   from "R"
 // { op: "uuids", paths }                   → { v7, ordered }   each a uuidv7, each after the last
 // { op: "now", t }                         → {}   presence clock, ms
@@ -149,6 +151,7 @@ function make(o: Request = {}): Made {
 		overlay,
 		schedule: (f) => void later.push(f),
 		id: o.uuid ? undefined : () => `n${++n}`,
+		scopes,
 	})
 	return {
 		s,
@@ -298,23 +301,27 @@ function answer(r: Request): Record<string, unknown> {
 			)
 			return {}
 		case "saved": {
-			const v = world().table.get(r.part as Key, r.id)?.value
+			let v: unknown = world().table.get(r.part as Key, r.id)?.value
+			for (const k of (r.path ?? []) as string[]) {
+				v = v !== null && typeof v === "object" ? (v as Record<string, unknown>)[k] : undefined
+			}
 			return v === undefined ? {} : { value: v }
+		}
+		case "metadata": {
+			const c = world().table.get(r.part as Key, r.id)?.change
+			const pairs = (c?.metadata ?? []) as [string, unknown][]
+			const node = pairs.find(([k]) => k === "node")
+			return node
+				? { keys: pairs.map(([k]) => k), node: node[1] }
+				: { keys: pairs.map(([k]) => k) }
 		}
 		case "change": {
 			const c = world().table.get(r.part as Key, r.id)?.change
 			if (c === undefined) return {}
 			const found = new Map<string, unknown>()
-			const walk = (pairs: unknown) => {
-				if (!Array.isArray(pairs)) return
-				for (const pair of pairs) {
-					if (!Array.isArray(pair)) continue
-					const [k, v] = pair
-					if (k === "owner") walk(v)
-					else if (!found.has(k)) found.set(k, v)
-				}
+			for (const [k, v] of (c.metadata ?? []) as [string, unknown][]) {
+				if (!found.has(k)) found.set(k, v)
 			}
-			walk(c.metadata)
 			const actor = c.actor ?? found.get("actor")
 			const out: Record<string, unknown> = {}
 			if (actor !== undefined) out.actor = actor

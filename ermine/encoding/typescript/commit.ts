@@ -82,7 +82,7 @@ const isFields = (x: unknown): x is Fields => {
 }
 // an integer from 0 to 2^53 - 1
 const whole = (n: unknown): n is number =>
-	Number.isSafeInteger(n) && !Object.is(n, -0) && (n as number) >= 0
+	Number.isSafeInteger(n) && (n as number) >= 0
 // a list's index, a site's line or column: an integer from 0 to 2^31 - 1, what any C long holds
 const small = (n: unknown): n is number => whole(n) && n < 2 ** 31
 const isKey = (k: unknown) => typeof k === "string" || small(k)

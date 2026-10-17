@@ -1,10 +1,4 @@
-// the process api: what createProcessAPI gives a program. chee 10-15: "the host has this power, to
-// let the user create processes with a different api, it's just once you're in the graph this is
-// all you have". the words are hers (10-15), from what 43 demos kept needing
-// (playground/ermine-slaygrounds/N.E.E.D.MD): open ("like upsert", and with no value "open-only"),
-// read, edit, watch ("interface of edit, watch, read"), info ("gives a handle to the attributes"),
-// list ("lists children"), memo ("yes to memo"), effect, method and send ("yes to method+send"),
-// teardown, ref, remove, place, unplace, move, start, stop, openwith, box, args, pulse
+// the process api: what createProcessAPI gives a program; inside the graph, all a program has.
 //
 //   const apis = createProcessAPIs({ scheduler, table, commit, boxes, programs: () => programs })
 //   const programs = createPrograms({ ..., createProcessAPI: apis.createProcessAPI })
@@ -18,110 +12,62 @@
 //     return "the process's value"
 //   }
 //
-// paths: a string, split as path.ts' parse, or names already. mine, open (chee: "maybe crew means
-// inside me and ./crew is folder and ../crew is above. it's one or the other"):
-//   crew      inside the process's own node (never saved: gone at its stop)
-//   ./crew    its working folder (programs' cwd: by default the folder it is in)
-//   ../crew   above that
-//   /crew     the box's "/"
+// paths (path.ts' parse): crew inside the process's node (gone at stop), ./crew its cwd, ../crew
+// above, /crew the box's "/". a node: {path} (walked at each use) or {id}; part "value" or
+// "attributes".
+// pulses: every write and promise settling asks for one in a microtask; pulse() runs one now.
+// a read after a write sees it at once; a memo gives its last result until the pulse.
+// writes: under the open scope (none: the process's own; stopped: throws); patches or a recipe.
 //
-// a node is {path}, walked again at each use (tracked in a run), or {id} for one with no place; part: the table read and written, "value", or "attributes" from info
-//
-// pulses: none by hand ("still provide pulse but also batch automatically"). every write here, and
-// every promise settling (the scheduler's onSettle), asks for one pulse in a microtask, as Solid
-// 2.0 does (setup.schedule: how it is asked for); pulse() runs one now. a node read after a write sees it at once (it is in the table); a
-// memo gives its last result until the pulse (chee: "whatever is fastest and most reasonable")
-//
-// writes: each with a scope open, its header from it (header.ts). attributes with nothing there
-// are {} to a recipe and to patches (mine). nothing open (a timer, a promise,
-// a listener): the process's own scope is opened, so a write needs no method to go through (mine);
-// a stopped process's scope is gone, and its writes throw. committed to the host's commit (every
-// box told). the patches given, or a recipe handed to produce on the value now, read untracked:
-// "edit is its own function, that when it receives a function calls out to produce in the
-// background"
-//
-//   open(p, value?)      the node at p. a value: made if nothing is there, folders on the way (the
-//                        value given is the first only: an edit of it in the code changes nothing
-//                        there, mine, open). no value: open only, nothing made
-//   create(folder, v)    a new node in folder, named by its own id
-//   read(x, path?)       its value at path, tracked; nothing: undefined. a memo pending with no
-//                        value yet: throws PENDING, so the reader is pending too
-//   entries(x)           every item at x: [{ value, from, id, refused? }] (reads are lists); none: []
+//   open(p, value?)      the node at p; a value: made (with folders) if missing, else unchanged
+//   create(folder, v)    a new node in folder, named by its id
+//   read(x, path?)       value at path, tracked; none: undefined; a pending memo throws PENDING
+//   entries(x)           every item: [{ value, from, id, refused? }]; none: []
 //   list(x)              the names under x, tracked
-//   info(x)              x's attributes, as a node read, edited and watched as any other
-//   edit(x, change)      patches, or a recipe: one change on the value (none there: made)
-//   watch(x, fn)         fn at each write landing at x (places' watchPath), with its patches, its
-//                        change and the value; gives back the stop (its scope's teardown stops it)
-//   place(p, x)          x's node at a second name. unplace(p): the name taken out, the node stays
-//   move(from, to)       places' move. remove(x): unplaced, and its entries deleted (mine: not
-//                        what is under it, which nothing reaches any more)
-//   memo(name, f, options?)   a compute (the scheduler's), its result written to a node of its own
-//                        (runs are writes), its status and its latest run (what it read and wrote:
-//                        runs.ts) on it; placed at the name (a string or path, the first argument).
-//                        its id a new one (setup.id), flat and opaque: the name only places it (chee:
-//                        "i guess b an owner scope"; the owner is in the scope info). one at a name
-//                        made in the same run and alive: a second throws already-there ("making two
-//                        with the same name in the same run shall be illegal"; the same for effect
-//                        and early). the run: the scheduler's run open; none, the scope it is made
-//                        in (a setup, and what is called from outside after it, are one, mine).
-//                        made again at the name by a later run of the same owner (chee 10-17: "a
-//                        parent rerun does not destroy its children"): the one there is kept (the
-//                        scheduler's claim): the same computation, id and node, its name placed
-//                        still; it gets the new f (and act, equal) and runs again, into that node.
-//                        its old f's teardowns run once that run is done and the round's runs are
-//                        (the scheduler's: "like solidjs2.0"). a name the owner's run did not make
-//                        this time goes once that run is done (its computer at the run's end, its
-//                        node's entries and its name once the round's runs are: the owner's cleanup
-//                        asking after it); a run that fails keeps them all (chee: "keep them until
-//                        the parent is actually destroyed"). a claim is no making: notice is not
-//                        told, and an early one is not run at once (mine)
-//   effect(name, f, act, o?)   an effect: f tracked, act(value, before) after the round; f's value written
-//                        to its node at each act; its status and latest run on it too
-//   early(name, f, act, o?)    an early effect (the scheduler's): its first run and act at once, where
-//                        early is called; after, its act is in the round's early queue, before the
-//                        other effects'. its node, status and run record as effect's
-//   method(p, fn)        fn as the value of the node at p, called by send in a scope under the one
-//                        open when it was made
-//   send(p, ...args)     the method at p called, with [["caller", this process's id]] and the host's
-//                        pairs (setup.pairs) after; its return given back
-//   teardown(fn)         fn(why) as the scope open goes: "ended" (the process stopped), "replaced"
-//                        (a computer running again, or a host's stop(p, "replaced"))
-//   ref(p, make)         the node at p, make() its value if nothing is there: a live value kept
-//                        while the node is (inside the process: till its stop)
-//   start(program, at, { box?, args?, cwd?, onwhynot? })   a process: program a name (satisfy's
-//                        first way, from this process's cwd; another box: from its "/"), or a way;
-//                        at a path here, or from the box's "/" (boxes' inside); cwd likewise. no
-//                        way: refused no-way, the whynots given. stopped when this one stops (10-06)
+//   info(x)              x's attributes, as a node
+//   edit(x, change)      patches or a recipe; one change (made if missing)
+//   watch(x, fn)         fn at each write at x, with patches, change and value; returns the stop
+//   place(p, x)          x's node at a second name. unplace(p): the name out, the node stays
+//   move(from, to)       places' move. remove(x): unplaced and its entries deleted
+//   memo(name, f, o?)    a compute; result, status and latest run written to its own node at name;
+//                        its scope once, as made (SCOPE: the node of the nearest scope above it
+//                        with one; none: not written).
+//                        made again by the owner's next run: same id and node, new f. a name not
+//                        made again goes after the run (kept if the run fails). a second at a name
+//                        in one run: already-there
+//   effect(name, f, act, o?)   f tracked, act(value, before) after the round; node as memo's
+//   early(name, f, act, o?)    an effect run and acted at once; later acts before other effects'
+//   method(p, fn)        fn as the node's value, called by send in a scope under the open one
+//   send(p, ...args)     the method at p, as [["caller", id], ...setup.pairs]; its return
+//   teardown(fn)         fn(why) as the open scope goes: "ended" | "replaced"
+//   ref(p, make)         the node at p, make() if missing: a live value kept while the node is
+//   start(program, at, { box?, args?, cwd?, onwhynot? })   program: a name or a way;
+//                        stopped with this one; no way: refused no-way
 //   stop(p)              a process this one started
-//   openwith(x, { onwhynot }?)   programs' openwith from this process's place: every way to open
-//                        x, nearest first (a generator), each candidate not taken told to onwhynot
-//   box(at)              a box: the folder at (made if missing, a regular folder, saved), viewed
-//                        from its own "/" (ermine/boxes); place and unplace in it: regular placements
+//   openwith(x, { onwhynot }?)   every way to open x, nearest first (a generator)
+//   box(at)              a box: the folder at, seen from its own "/" (ermine/boxes)
 //   args, pulse, PENDING, REFUSED
 //
-// protect (setup.may, a protect Policy; none: everything allowed, nothing asked): each process
-// has a guard (places' guard.ts) from where it is. a read asks "read" (refused: guard's Refusal
-// thrown; pending: PENDING); entries keeps a refused item in its place, its id REFUSED and no value;
-// list asks to read the folder's children. a write asks, with the scope open (so who is the
-// caller's): edit "edit" on the part; open, create, place, unplace, move "place" on the slot (the
-// parent's children at the name); remove "remove" on the node; send "execute" on the method's node;
-// present and absent "edit" on the presence part; land "edit" on the target. mine, open: the ops'
-// names; memo's and effect's own writes are not asked
+// protect (setup.may; none: all allowed): reads ask "read" (refused: Refusal thrown; entries keeps
+// the item with id REFUSED); writes ask with the open scope: edit "edit"; open, create, place,
+// unplace, move "place" on the slot; remove "remove"; send "execute"; present, absent, land "edit".
+// memo's and effect's own writes are not asked. open: the ops' names.
 //
-// presence (setup.presence: the host's presence world, playground/presence; none: these throw):
-//   presence(x)          the live rows at x: [{ who, value, until }], tracked
-//   present(x, v, { ttl?, who? })   my row at x: who setup.who, else this process's id (mine);
-//                        ttl 10s (mine). the heartbeat and the sweeper are the host's
-//   absent(x, { who? })  my row taken out
+// presence (setup.presence; none: these throw):
+//   presence(x)          live rows at x: [{ who, value, until }], tracked
+//   present(x, v, { ttl?, who? })   my row at x; who: setup.who or the process id; ttl 10s
+//   absent(x, { who? })  my row out
 //
-// patch nodes (playground/patch-nodes; reading through them is the host's: its places over an
-// overlay, setup.overlay):
-//   patch(at, over, change)   a patch node at at, over over's part: patches, or a recipe on what
-//                        the table has (not the overlay's), made against its change's time
-//   land(p)              its patches put on its target for real, its "patch" entry gone
-//   layers(x, path?)     every layer at x, front first: [{ value, from, stale?, error? }] (no
-//                        overlay: the table's own alone)
+// patch nodes (setup.overlay):
+//   patch(at, over, change)   a patch node at at over over's part, against the table's value
+//   land(p)              its patches put on its target, its "patch" entry gone
+//   layers(x, path?)     every layer, front first: [{ value, from, stale?, error? }]
 //
+// scope nodes (setup.scopes; none: no scope has a node): a write's metadata stops at the first scope
+// with a node, then ["node", its id] (places' header.ts). a process's scope has its node; each memo
+// and effect has its own, attached as it is made.
+//
+// open: remove leaves what is under the node; memo claims skip notice and early's first run.
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import apply, { type Key as Step, type Patch } from "@ermine/op/apply"
@@ -138,7 +84,7 @@ import {
 } from "@ermine/places"
 import { get, gets, list as listAt } from "@ermine/places/lib"
 import { parse, plan } from "@ermine/places/path"
-import { createChangeHeader } from "@ermine/places/header"
+import { createChangeHeader, type NodeOf } from "@ermine/places/header"
 import {
 	createGuard,
 	REFUSED,
@@ -165,6 +111,7 @@ import { createStatus, STATUS } from "@ermine/places/status"
 import { createRuns } from "@ermine/places/runs"
 import { openwith as openwithIn, satisfy, type Way, type Whynot } from "@ermine/programs"
 import type { Context, Process, Programs, Runner } from "@ermine/programs/start"
+import type { ScopeNodes } from "@ermine/processes/scopes"
 import {
 	type Computer,
 	type Equal,
@@ -206,7 +153,14 @@ export type Setup = {
 	// ours holding this file, start.ts and the scheduler's, as they are made in runWithScope): a
 	// memo's site is the program's line. none: the scheduler's, no sites
 	sites?: Pick<Sited, "createScope" | "createComputer" | "createEffect">
+	// scope nodes (@ermine/processes/scopes), the processes' too: each memo's and effect's node
+	// attached, every header's metadata stopping at the first scope with one. none: no scope has one
+	scopes?: Pick<ScopeNodes, "attach" | "nodeOf" | "nearest">
 }
+
+// the attribute a memo's or effect's node holds its scope in: the node id of the nearest scope
+// above it with one, written once as the node is made (beside status.ts' and runs.ts')
+export const SCOPE = "ermine.computer.scope"
 
 // what notice is told: the computer (none for a method), its node, and the process's id
 export type Noticed = {
@@ -355,9 +309,16 @@ const isNode = (x: Target): x is Node => typeof x === "object" && !Array.isArray
 export function createProcessAPIs(setup: Setup): ProcessAPIs {
 	const { scheduler: s, table, commit } = setup
 	const sited = setup.sites ?? s
-	const statuses = createStatus({ places: { commit }, table, scheduler: s })
+	const scopes = setup.scopes
+	const scopeNode: NodeOf | undefined = scopes?.nodeOf
+	const statuses = createStatus({ places: { commit }, table, scheduler: s, nodeOf: scopeNode })
 	const { describe, watchAll } = setup.host.places
-	const runs = createRuns({ places: { commit, describe, watchAll }, table, scheduler: s })
+	const runs = createRuns({
+		places: { commit, describe, watchAll },
+		table,
+		scheduler: s,
+		nodeOf: scopeNode,
+	})
 	// a method's function: the scope open when it was made
 	const methods = new WeakMap<object, Scope>()
 	// why a process is stopping, said by stop before its scope goes
@@ -381,7 +342,7 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 	const newId = setup.id ?? uuidv7
 	s.onSettle(later)
 
-	const header = () => createChangeHeader(s)
+	const header = () => createChangeHeader(s, [], scopeNode)
 
 	// what a part holds when nothing is there: attributes are a map, so {}; a value, nothing
 	const empty = (part: Key) => part === "attributes" ? {} : undefined
@@ -423,7 +384,14 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 
 		// protect: asked only when the host gave a policy
 		const guarded = setup.may !== undefined
-		const guard = createGuard({ places, scheduler: s, table, may: setup.may, from: at })
+		const guard = createGuard({
+			places,
+			scheduler: s,
+			table,
+			may: setup.may,
+			from: at,
+			nodeOf: scopeNode,
+		})
 		const thing = (id: Id, path?: Path): Thing => path === undefined ? { id } : { id, path }
 		const ask = (op: string, ...targets: Parameters<typeof guard.write>[1][]) => {
 			if (guarded) guard.write(op, ...targets)
@@ -654,9 +622,8 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 		const named = new Map<string, Set<Made>>()
 		const keyOf = (path: Path) => JSON.stringify(path)
 
-		// the one made at path under own: claimed, given new code (chee 10-17: a parent rerun does
-		// not destroy its children; "making two with the same name in the same run shall be
-		// illegal"). as own's run starts, what its earlier runs made is old (the scheduler's): one
+		// the one made at path under own: claimed, given new code (a parent's rerun does
+		// not destroy its children; two of a name in one run are refused). as own's run starts, what its earlier runs made is old (the scheduler's): one
 		// old is claimed; one not old was made in this run (or own has had no run since):
 		// already-there. none: a
 		// new one is to be made
@@ -692,13 +659,22 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			})
 		}
 
-		// a computer's node: a new id, placed at path; told to named, its node and name gone with it
+		// a computer's node: a new id, placed at path, its scope written (own's node, or the nearest
+		// above with one; none: not written); told to named, its node and name gone with it
 		function computerNode(own: Scope, path: Path, code: Code): Made {
 			const id = newId()
+			const above = scopes?.nearest(own)
 			within(() => {
 				const parent = get(places, path.slice(0, -1))
 				if (parent === undefined) throw new PlacesError("nothing-there", path.join("/"))
 				placeUnder(parent, path[path.length - 1], id)
+				if (above !== undefined) {
+					table.add(
+						"attributes",
+						id,
+						createEntry<Record<string, unknown>>({ [SCOPE]: above }, header()),
+					)
+				}
 			})
 			const m: Made = { own, id, code }
 			const at = keyOf(path)
@@ -733,6 +709,7 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 				() => sited.createComputer<T>((previous) => m.code.f(previous) as T, set, same(m)),
 			)
 			m.c = c
+			scopes?.attach(c, id)
 			statuses.give(c, id)
 			runs.give(c, id)
 			setup.notice?.({ kind: "memo", computer: c, node: n, id, process: process.id })
@@ -761,7 +738,7 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 		// an effect, early or not. an early one runs, and acts, inside createEffect: before its
 		// computer is given back, so its first run gives the status and the run record its node, from
 		// inside it (runs.ts: a run given while it ran). made again: claimed, its first run after
-		// the claim in the round's runs, its act in its queue (mine: a claim is not a making)
+		// the claim in the round's runs, its act in its queue (open: a claim is not a making)
 		function effectOf<T>(
 			early: boolean,
 			name: string | Path,
@@ -781,6 +758,7 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 				if (!given) {
 					given = true
 					const c = s.getRun()!.computer
+					scopes?.attach(c, id)
 					statuses.give(c, id)
 					runs.give(c, id)
 				}
@@ -800,6 +778,7 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 						: sited.createEffect<T>((previous) => m.code.f(previous) as T, then, same(m)),
 			)
 			m.c = c
+			scopes?.attach(c, id)
 			statuses.give(c, id)
 			runs.give(c, id)
 			setup.notice?.({ kind: "effect", computer: c, node: n, id, process: process.id })

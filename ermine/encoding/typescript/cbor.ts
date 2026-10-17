@@ -1,32 +1,26 @@
-// The canonical encoding of values (ENCODING.tex): RFC 8949's core
-// deterministic encoding, with typed arrays as RFC 8746 has them.
-//
-// - every number is the shortest float that holds it exactly, so 1 is a half
-//   float and never an integer; -0 is kept; NaN is the one NaN, f9 7e 00
-// - bytes are major type 2, strings major type 3, lists 4, maps 5
-// - a map's keys are strings, sorted bytewise by their encodings
-// - a typed array is its tag over a byte string of its elements, little-endian:
-//   uint16 69, uint32 70, uint64 71, int8 72, int16 77, int32 78, int64 79,
-//   float32 85, float64 86; a NaN element is written as the quiet NaN with no
-//   payload (7fc00000, 7ff8000000000000); no uint8 kind: bytes are that, tag 64
-//   never written
-// - a stand-in, what a live value is sent as: tag 0x12345678 (head da12345678)
-//   over its kind, any value; a live value itself has no encoding
-// - a symbol has no encoding, anywhere: in a value, or as a map's key. Getting
-//   rid of them first is the caller's
-// - a value nests at most DEPTH containers (lists, maps, stand-ins), one inside
-//   the next: a deeper one has no encoding, and its bytes are not one
-//
-// Bytes are a Uint8Array, any view, given and given back; decoded, a fresh
-// one. A typed array is its own class. Decoding accepts exactly what encoding
-// gives. A stand-in is the class Stand, holding its kind; a function, a Map,
-// an ArrayBuffer (for now), any other class's object is live.
+// the canonical encoding of values: RFC 8949 core deterministic, typed arrays as RFC 8746. this
+// header is the rule (vectors.json in ermine/encoding/conformance/cbor holds its bytes).
+// - whole numbers: integers, major type 0 or 1 in the shortest head; past 64 bits a bignum, tag 2
+//   or 3 over its bytes, big-endian, no leading zero. -0 is 0. a number or a bigint: the same bytes
+// - other numbers: the shortest float that holds them exactly; the one NaN f97e00; the infinities
+//   f97c00, f9fc00
+// - read back: a number while |n| <= 2^53 - 1, a bigint past that (5n is read back as 5)
+// - bytes major type 2, strings 3, lists 4, maps 5; map keys strings, sorted bytewise by encoding
+// - typed arrays: tag over little-endian bytes (uint16 69 … float64 86); NaN elements quiet, no
+//   payload; -0 elements kept; no uint8 kind (tag 64 never written)
+// - stand-ins: tag 0x12345678 over the kind; live values and symbols have no encoding
+// - at most DEPTH nested containers
+// bytes: any Uint8Array view in, a fresh one out. a stand-in is the class Stand; a function, Map,
+// ArrayBuffer (for now) or other class object is live. decoding accepts exactly what encoding
+// gives: never a float holding a whole number, an integer in a longer head, or a bignum a plain
+// integer holds.
 
 /** A value as this codec holds it. */
 export type Value =
 	| null
 	| boolean
 	| number
+	| bigint
 	| string
 	| Uint8Array
 	| Typed
@@ -45,7 +39,7 @@ export type Typed =
 	| Float32Array
 	| Float64Array
 
-/** What a live value is sent as (ENCODING.tex): tag 0x12345678 over its `kind`, any value. */
+/** What a live value is sent as: tag 0x12345678 over its `kind`, any value. */
 export class Stand {
 	constructor(readonly kind: Value) {}
 }
@@ -150,7 +144,40 @@ function half(x: number): number | undefined {
 	return (sig & ((1 << shift) - 1)) === 0 ? sign | (sig >>> shift) : undefined
 }
 
+const TWO64 = 2 ** 64, EXACT = 2n ** 53n
+
+/** A bigint's magnitude as bytes, big-endian, no leading zero. */
+function magnitude(m: bigint): Uint8Array {
+	let h = m.toString(16)
+	if (h.length & 1) h = "0" + h
+	const b = new Uint8Array(h.length / 2)
+	for (let i = 0; i < b.length; i++) b[i] = parseInt(h.slice(2 * i, 2 * i + 2), 16)
+	return b
+}
+
+/** A whole number past what a double's head math holds exactly, as a bigint. */
+function integer(out: Out, x: bigint) {
+	const negative = x < 0n, m = negative ? -1n - x : x
+	if (m < 0x10000000000000000n) {
+		out.room(9)
+		out.buf[out.n] = (negative ? 0x20 : 0) | 27
+		out.view.setBigUint64(out.n + 1, m)
+		out.n += 9
+		return
+	}
+	const b = magnitude(m)
+	out.byte(negative ? 0xc3 : 0xc2)
+	out.head(2, b.length)
+	out.bytes(b)
+}
+
 function number(out: Out, x: number) {
+	if (Number.isInteger(x)) {
+		// -0 is 0; a negative's argument -1 - x is exact up to 2^53, a bigint's past it
+		if (x >= 0 && x < TWO64) return out.head(0, x === 0 ? 0 : x)
+		if (x < 0 && x >= -(2 ** 53)) return out.head(1, -1 - x)
+		return integer(out, BigInt(x))
+	}
 	out.room(9)
 	const n = out.n
 	if (x !== x) {
@@ -273,6 +300,9 @@ const tooDeep = `nested deeper than ${DEPTH}`
 function value(out: Out, x: unknown, open: Set<object>, depth: number) {
 	if (typeof x === "number") return number(out, x)
 	if (typeof x === "string") return text(out, x)
+	if (typeof x === "bigint") {
+		return x >= -EXACT && x <= EXACT ? number(out, Number(x)) : integer(out, x)
+	}
 	if (x === null) return out.byte(0xf6)
 	if (x === false) return out.byte(0xf4)
 	if (x === true) return out.byte(0xf5)
@@ -347,6 +377,7 @@ export function encode(x: Value): Uint8Array {
 
 // decoding -------------------------------------------------------------------
 
+const SAFE = 2n ** 53n - 1n
 const wrong = (why: string) => new CborError(`not an encoding of a value: ${why}`)
 
 function halfValue(h: number): number {
@@ -438,8 +469,20 @@ function read(input: In, depth: number): Value {
 	const major = ib >> 5, info = ib & 0x1f
 	switch (major) {
 		case 0:
-		case 1:
-			throw wrong("an integer; numbers are floats")
+		case 1: {
+			// a number while it is safe, a bigint past that
+			if (info < 27) {
+				const n = input.arg(info)
+				return major === 0 ? n : -1 - n
+			}
+			if (info > 27) throw wrong(info === 31 ? "an indefinite length" : "a reserved head")
+			input.need(8)
+			const m = input.view.getBigUint64(input.at)
+			input.at += 8
+			if (m < 0x100000000n) throw wrong("a head is longer than it needs to be")
+			const n = major === 0 ? m : -1n - m
+			return n >= -SAFE && n <= SAFE ? Number(n) : n
+		}
 		case 2:
 			return input.take(input.arg(info)).slice()
 		case 3:
@@ -487,6 +530,18 @@ function read(input: In, depth: number): Value {
 		}
 		case 6: {
 			const tag = input.arg(info)
+			if (tag === 2 || tag === 3) {
+				input.need(1)
+				const bb = input.b[input.at++]
+				if (bb >> 5 !== 2) throw wrong("a bignum's tag over something not bytes")
+				const raw = input.take(input.arg(bb & 0x1f))
+				if (raw.length <= 8) throw wrong("a bignum a plain integer holds")
+				if (raw[0] === 0) throw wrong("a bignum with a leading zero")
+				let h = ""
+				for (let i = 0; i < raw.length; i++) h += raw[i].toString(16).padStart(2, "0")
+				const m = BigInt("0x" + h)
+				return tag === 2 ? m : -1n - m
+			}
 			if (tag === STAND) {
 				if (depth >= DEPTH) throw wrong(tooDeep)
 				return new Stand(read(input, depth + 1))
@@ -552,6 +607,7 @@ function read(input: In, depth: number): Value {
 			} else if (x !== x || half(x) !== undefined || (ib === 0xfb && Math.fround(x) === x)) {
 				throw wrong("a number not in its shortest float")
 			}
+			if (Number.isInteger(x)) throw wrong("a whole number written as a float")
 			return x
 		}
 	}
