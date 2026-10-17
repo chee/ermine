@@ -72,4 +72,23 @@ void cardFollow(Card *c, const char *doc);
 /** told the id of each document a commit is taken in to, made here or come; one listener, the last given */
 void cardTold(Card *c, void (*told)(void *context, const char *doc), void *context);
 
+// --- live state (ERMINEOS.md, Live state): what a device shows and never stores (its pointer, its
+// focus, a window mid-drag, its presence), sent as ephemeral commits of the document's `live` table
+// (sync.h's header: never sealed, never stored; standing until a stored commit of this device's
+// follows them or ttl ms of silence; sent again every beat ms)
+
+/** this device's live state at a document: written to the document's `live` table and sent at most every beat
+ * (LIVE_BEAT ms), held until then (op_ref'd). NULL: withdrawn, a `live` of nothing sent in its place */
+void cardLive(Card *c, const char *doc, const op_value *value);
+/** the live state standing at the document watched: cardLived's listener told when it changes (a peer's came, changed or lapsed) */
+void cardWatch(Card *c, const char *doc, bool on);
+void cardLived(Card *c, void (*lived)(void *context, const char *doc), void *context);
+/** a peer's live state standing at a document: its key (64 hex digits) and its `live` value, held */
+typedef struct {
+	char key[65];
+	op_value *value;
+} card_stand;
+/** every peer's live state standing at the document (never this device's own), by key; *out malloc'd, each value held (op_free them) */
+size_t cardStanding(Card *c, const char *doc, card_stand **out);
+
 #endif
