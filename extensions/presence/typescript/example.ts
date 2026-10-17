@@ -1,5 +1,5 @@
 // two devices in one process: cursors move, one leaves. run:
-//   deno run --allow-all playground/presence/typescript/example.ts
+//   deno run --allow-all extensions/presence/typescript/example.ts
 import { createPair } from "./channel.ts"
 import { clear, connect, readPresence, renew, setPresence, sweep } from "./presence.ts"
 import { device } from "./world.ts"

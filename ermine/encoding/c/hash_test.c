@@ -8,6 +8,7 @@
 
 #include "hash.h"
 #include "json.h"
+#include "json_text.h"
 
 int main(int argc, char **argv) {
 	char path[4096];

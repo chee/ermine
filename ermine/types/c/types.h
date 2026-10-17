@@ -1,5 +1,5 @@
 // Types (typescript/types.ts), in C: UTIs as nodes in the graph. Same rules as types.ts, which the
-// scenarios in playground/programs/conformance/programs hold both to.
+// scenarios in extensions/programs/conformance/programs hold both to.
 //
 //   ty_install(&(ty_install_setup){ .places = p, .table = t, .root = tb_string("R"), ... });
 //   ty_folder f;  ty_at(p, from, n, &f);                       // the nearest ermine/types

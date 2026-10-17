@@ -9,6 +9,7 @@
 
 #include "cbor.h"
 #include "json.h"
+#include "json_text.h"
 
 #include <math.h>
 #include <stdio.h>

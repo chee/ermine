@@ -39,16 +39,21 @@ export type World = {
 	save?: boolean
 }
 
-type Event = { who: string; row: Row | undefined }
+// row: my row after the write (none: gone). patches: the edit that made it, relative to the row's value
+type Event = { who: string; row: Row | undefined; patches?: Patch[] }
 type State = {
 	anchors: Set<Id>
 	mine: Map<Id, Set<string>>
 	heard: Map<Id, Set<(e: Event) => void>>
+	// the last n taken from each sender, by anchor (connect, patches)
+	last: Map<Id, Map<string, number>>
 }
 const states = new WeakMap<object, State>()
 function state(w: World): State {
 	let s = states.get(w)
-	if (s === undefined) states.set(w, s = { anchors: new Set(), mine: new Map(), heard: new Map() })
+	if (s === undefined) {
+		states.set(w, s = { anchors: new Set(), mine: new Map(), heard: new Map(), last: new Map() })
+	}
 	return s
 }
 const now = (w: World) => (w.now ?? Date.now)()
@@ -95,6 +100,45 @@ export function renew(w: World, anchor: Id, who: string, ttl: number): boolean {
 	const row = w.table.get(PART, anchor)?.value?.[who]
 	if (row === undefined) return false
 	setPresence(w, anchor, who, row.value, ttl)
+	return true
+}
+
+// patches applied to the value of the row `who` has at the anchor, with until, as one write. the
+// paths are relative to the row's value. an invalid patch throws (apply's) and changes nothing
+function edit(w: World, anchor: Id, who: string, patches: Patch[], until: number) {
+	const there = w.table.get(PART, anchor)!
+	const ps: Patch[] = patches.map((p) => ({
+		...p,
+		path: [who, "value", ...p.path],
+		...(p.move === undefined
+			? {}
+			: { move: { ...p.move, path: [who, "value", ...p.move.path] } }),
+	}))
+	ps.push({ path: [who, "until"], value: until })
+	as(w, () => {
+		update(there, ps, createChangeHeader(w.scheduler))
+		w.places.commit([there])
+	})
+}
+
+// my row's value changed by patches (the op Patch shape, paths relative to the value), as one
+// write, until = now + ttl. no such row: false, like renew. an invalid patch throws and changes
+// nothing. told to a connected channel as the patches (connect's patches: true) or the whole row
+export function editPresence(
+	w: World,
+	anchor: Id,
+	who: string,
+	patches: Patch[],
+	ttl: number,
+): boolean {
+	const row = w.table.get(PART, anchor)?.value?.[who]
+	if (row === undefined) return false
+	edit(w, anchor, who, patches, now(w) + ttl)
+	const s = state(w)
+	let m = s.mine.get(anchor)
+	if (m === undefined) s.mine.set(anchor, m = new Set())
+	m.add(who)
+	tell(w, anchor, { who, row: w.table.get(PART, anchor)!.value![who], patches })
 	return true
 }
 
@@ -159,25 +203,47 @@ export function startSweeper(w: World, ms = 1000): () => void {
 //   for (const [part, id] of triples) if (keep(world, part)) pack(part, id)
 export const keep = (w: Pick<World, "save">, part: string) => part !== PART || w.save === true
 
-type Message = { who?: string; ttl?: number; value?: unknown; gone?: true }
+type Message = {
+	who?: string
+	ttl?: number
+	value?: unknown
+	gone?: true
+	patches?: Patch[]
+	n?: number
+}
 const enc = new TextEncoder(), dec = new TextDecoder()
 
 // the rows at an anchor, over the channel on topic (default: the anchor). what is sent: my rows,
 // whole, as they are written, with the time left (not a time: devices' clocks differ). what is
 // received lands under the sender's name, from outside, and is never sent back. none of it is
 // saved. gives back stop, and announce: send all my rows now (to someone new; or as the heartbeat)
+//   patches: true (default false): an edit (editPresence) goes as { ttl, patches, n }, not the whole
+//   row, and every row sent carries n, a count up by one each send of a who on this connection.
+//   a receiver takes a whole row always, a patch message only when its n follows the last it took
+//   from that sender and the row is there: else it is dropped, and the row stays as it was until the
+//   next whole row (a set, a renew, an announce). a message without n is taken as it comes
 export function connect(
 	w: World,
 	channel: Channel,
-	opts: { topic: Id; anchor?: Id },
+	opts: { topic: Id; anchor?: Id; patches?: boolean },
 ): { stop: () => void; announce: () => void } {
 	const anchor = opts.anchor ?? opts.topic
 	const topic = String(opts.topic)
 	const s = state(w)
+	const counts = new Map<string, number>()
 	const send = (e: Event) => {
-		const m: Message = e.row === undefined
-			? { gone: true }
-			: { ttl: e.row.until - now(w), value: e.row.value }
+		let m: Message
+		if (e.row === undefined) m = { gone: true }
+		else {
+			m = { ttl: e.row.until - now(w) }
+			if (opts.patches) {
+				const n = (counts.get(e.who) ?? 0) + 1
+				counts.set(e.who, n)
+				if (e.patches) m.patches = e.patches
+				else m.value = e.row.value
+				m.n = n
+			} else m.value = e.row.value
+		}
 		channel.send(topic, enc.encode(JSON.stringify(m)))
 	}
 	let set = s.heard.get(anchor)
@@ -185,8 +251,20 @@ export function connect(
 	set.add(send)
 	const off = channel.on(topic, (from, bytes) => {
 		const m = JSON.parse(dec.decode(bytes)) as Message
-		if (m.gone) take(w, anchor, [from])
-		else put(w, anchor, from, { value: m.value, until: now(w) + (m.ttl ?? 0) })
+		if (m.gone) return void take(w, anchor, [from])
+		const until = now(w) + (m.ttl ?? 0)
+		let last = s.last.get(anchor)
+		if (last === undefined) s.last.set(anchor, last = new Map())
+		if (m.patches !== undefined) {
+			if (typeof m.n === "number" && m.n !== (last.get(from) ?? NaN) + 1) return
+			if (w.table.get(PART, anchor)?.value?.[from] === undefined) return
+			try {
+				edit(w, anchor, from, m.patches, until)
+			} catch {
+				return
+			}
+		} else put(w, anchor, from, { value: m.value, until })
+		if (typeof m.n === "number") last.set(from, m.n)
 	})
 	return {
 		stop: () => (off(), set.delete(send)),

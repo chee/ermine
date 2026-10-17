@@ -6,6 +6,7 @@
 
 #include "cbor.h"
 
+#include <limits.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,7 +14,6 @@
 
 #include "deflate.c"
 
-_Static_assert(sizeof(long) == sizeof(int64_t), "a long holds a time");
 _Static_assert((int)JSON_FLOAT64 == (int)OP_FLOAT64 && (int)JSON_INT8 == (int)OP_INT8 &&
 		(int)JSON_UINT32 == (int)OP_UINT32,
 	"typed arrays' kinds are in one order");
@@ -534,9 +534,9 @@ static int ermine_id(const char *id, uint8_t *bytes) {
 }
 
 static size_t text_hash(const char *s) {
-	size_t h = 1469598103934665603u;
+	uint64_t h = 1469598103934665603u;
 	for (; *s; s++) h = (h ^ (unsigned char)*s) * 1099511628211u;
-	return h;
+	return (size_t)h;
 }
 
 // each stretch of equal items as [it, how many]: the list of them, written to out
@@ -728,12 +728,20 @@ void pk_free(pk_read *r) {
 }
 
 // a whole number, as pack.ts has it: a safe integer (to 2^53 - 1 either side), never -0
-static int whole(const Json *j, long *out) {
+static int whole64(const Json *j, int64_t *out) {
 	if (j == NULL || j->type != JSON_NUMBER) return 0;
 	double d = j->number;
 	if (!(d >= -9007199254740991.0 && d <= 9007199254740991.0) || d != floor(d) || (d == 0 && signbit(d)))
 		return 0;
-	*out = (long)d;
+	*out = (int64_t)d;
+	return 1;
+}
+
+// one a long holds too: every one where a long is 64 bits
+static int whole(const Json *j, long *out) {
+	int64_t n;
+	if (!whole64(j, &n) || n < LONG_MIN || n > LONG_MAX) return 0;
+	*out = (long)n;
 	return 1;
 }
 
@@ -817,7 +825,7 @@ static int read_site(arena *a, const Json *x, ch_site *s) {
 }
 
 // a change's fields, each one NULL when not there
-static int read_fields(arena *a, long time, const Json *actor, const Json *reader, const Json *external,
+static int read_fields(arena *a, int64_t time, const Json *actor, const Json *reader, const Json *external,
 	const Json *metadata, const Json *op, ch_header *h) {
 	h->has_time = 1;
 	h->time = time;
@@ -858,8 +866,8 @@ static int read_fields(arena *a, long time, const Json *actor, const Json *reade
 
 static int read_header(arena *a, const Json *x, ch_header *h) {
 	if (!only(a, x, KEYS("time"), KEYS("time", "actor", "reader", "external", "metadata", "op"))) return 0;
-	long time;
-	if (!whole(jsonGet(x, "time"), &time)) return 0;
+	int64_t time;
+	if (!whole64(jsonGet(x, "time"), &time)) return 0;
 	return read_fields(a, time, jsonGet(x, "actor"), jsonGet(x, "reader"), jsonGet(x, "external"),
 		jsonGet(x, "metadata"), jsonGet(x, "op"), h);
 }
@@ -938,9 +946,6 @@ bad:
 
 // --- the columns
 
-__extension__ typedef unsigned __int128 big;
-__extension__ typedef __int128 sbig;
-
 static void *scratch(pile *l, size_t n) {
 	void *p = xrealloc(NULL, n ? n : 1);
 	add(l, p);
@@ -958,20 +963,22 @@ static int items_of(const Json *c, const char *name, Json *const **items, size_t
 }
 
 // a column of whole numbers, 7 bits a byte, the low first, the high bit on all but a number's last
-// byte; none when it is left out; 0: it is not bytes, or a number never ends
-static int numbers_of(const Json *c, const char *name, pile *tmp, big **out, size_t *n) {
+// byte; none when it is left out; 0: it is not bytes, a number never ends, or is 2^64 or more (no
+// column has one)
+static int numbers_of(const Json *c, const char *name, pile *tmp, uint64_t **out, size_t *n) {
 	const Json *v = jsonGet(c, name);
 	*out = NULL, *n = 0;
 	if (v == NULL) return 1;
 	if (v->type != JSON_BYTES) return 0;
-	big *xs = scratch(tmp, (v->bytes.length + 1) * sizeof *xs);
+	uint64_t *xs = scratch(tmp, (v->bytes.length + 1) * sizeof *xs);
 	size_t count = 0;
 	for (size_t at = 0; at < v->bytes.length;) {
-		big x = 0;
+		uint64_t x = 0;
 		for (unsigned shift = 0;; shift += 7) {
 			if (at >= v->bytes.length || shift > 63) return 0;
 			unsigned char byte = v->bytes.data[at++];
-			x |= (big)(byte & 127) << shift;
+			if (shift == 63 && (byte & 127) > 1) return 0;
+			x |= (uint64_t)(byte & 127) << shift;
 			if (byte < 128) break;
 		}
 		xs[count++] = x;
@@ -1027,7 +1034,7 @@ static int read_columns(arena *a, const Json *x, size_t limit, pk_entry **entrie
 	{
 		Json *const *id_items, *const *op, *const *values;
 		size_t ni, nop, nv;
-		big *which, *named, *has, *times;
+		uint64_t *which, *named, *has, *times;
 		size_t nwhich, nnamed, m, ntimes;
 		const Json **parts, **actor, **reader, **external, **metadata;
 		size_t k, na, nr, ne, nm;
@@ -1064,11 +1071,14 @@ static int read_columns(arena *a, const Json *x, size_t limit, pk_entry **entrie
 		// the nodes
 		nd_entry **made = grab(a, (m + 1) * sizeof *made);
 		size_t ia = 0, ir = 0, ie = 0, im = 0, io = 0, iv = 0;
-		sbig time = 0;
+		int64_t time = 0;
 		for (size_t i = 0; i < m; i++) {
 			if (has[i] > 127) goto end;
 			unsigned bits = (unsigned)has[i];
-			time += times[i] % 2 == 0 ? (sbig)(times[i] / 2) : -(sbig)((times[i] + 1) / 2);
+			// zigzag: how far, then which way; one farther than twice the safe integers lands outside them
+			uint64_t far = times[i] / 2 + times[i] % 2;
+			if (far > 2 * 9007199254740991ull) goto end;
+			time += times[i] % 2 == 0 ? (int64_t)far : -(int64_t)far;
 			if (time > 9007199254740991 || time < -9007199254740991) goto end;
 			const Json *fa = NULL, *fr = NULL, *fe = NULL, *fm = NULL, *fo = NULL, *fv = NULL;
 			if (bits & HAS_ACTOR) {
@@ -1096,7 +1106,7 @@ static int read_columns(arena *a, const Json *x, size_t limit, pk_entry **entrie
 				fv = values[iv++];
 			}
 			ch_header h = {0};
-			if (!read_fields(a, (long)time, fa, fr, fe, fm, fo, &h)) goto end;
+			if (!read_fields(a, time, fa, fr, fe, fm, fo, &h)) goto end;
 			made[i] = make_node(a, &h, fv, (bits & HAS_COW) != 0);
 		}
 		if (ia != na || ir != nr || ie != ne || im != nm || io != nop || iv != nv) goto end;

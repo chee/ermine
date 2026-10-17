@@ -1,10 +1,10 @@
 #!/bin/sh
 # a session with the files tool (files.c) on a real folder: init, put text/diag/bytes at nested paths, ls, the folder on disk,
 # mv, rm, an edit by hand, diff, mend. A temp folder and a temp home, so your own Trash and store list are never touched.
-# Exits non-zero at the first thing that is not as expected.   sh playground/files/c/test/cli.sh   (builds the tool first)
+# Exits non-zero at the first thing that is not as expected.   sh playground/tools/files/c/test/cli.sh   (builds the tool first)
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
-(cd "$here/../../../.." && make -s playground/files/c/files)
+(cd "$here/../../../../.." && make -s playground/tools/files/c/files)
 files="$here/../files"
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/files-cli.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT

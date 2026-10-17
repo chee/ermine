@@ -6,6 +6,7 @@ import { type Device, device } from "./world.ts"
 import {
 	clear,
 	connect,
+	editPresence,
 	keep,
 	type Live,
 	PART,
@@ -162,4 +163,62 @@ Deno.test("presence is kept out of a save unless the side says so", () => {
 	assertEquals(keep(a, PART), false)
 	assertEquals(keep(a, "children"), true)
 	assertEquals(keep({ save: true }, PART), true)
+})
+
+Deno.test("an edit with patches on: patches cross, the row is the sender's, one write a side", () => {
+	const clock = { t: 0 }
+	const a = device("a", clock), b = device("b", clock)
+	const pair = createPair("a", "b")
+	connect(a, pair.a, { topic: ANCHOR, patches: true })
+	connect(b, pair.b, { topic: ANCHOR, patches: true })
+	setPresence(a, ANCHOR, "x", { pts: [[0, 0]] }, 5000)
+	const seen = watch(b)
+	clock.t = 1000
+	assert(editPresence(a, ANCHOR, "x", [{ path: ["pts"], range: [1, 1], value: [[1, 1]] }], 5000))
+	b.scheduler.pulse()
+	assertEquals(readRow(b, ANCHOR, "a"), {
+		who: "a",
+		value: { pts: [[0, 0], [1, 1]] },
+		until: 6000,
+	})
+	assertEquals(readRow(a, ANCHOR, "x")!.value, { pts: [[0, 0], [1, 1]] })
+	assertEquals(seen.length, 2)
+	assert(!editPresence(a, ANCHOR, "nobody", [], 5000))
+	// the message is the patch, numbered
+	assertEquals(JSON.parse(new TextDecoder().decode(pair.sent.at(-1)!.bytes)), {
+		ttl: 5000,
+		patches: [{ path: ["pts"], range: [1, 1], value: [[1, 1]] }],
+		n: 2,
+	})
+})
+
+Deno.test("a missed patch message is dropped; the next whole row heals", () => {
+	const clock = { t: 0 }
+	const a = device("a", clock), b = device("b", clock)
+	const pair = createPair("a", "b")
+	const ca = connect(a, pair.a, { topic: ANCHOR, patches: true })
+	const stopB = connect(b, pair.b, { topic: ANCHOR, patches: true }).stop
+	setPresence(a, ANCHOR, "x", [1], 5000)
+	stopB()
+	editPresence(a, ANCHOR, "x", [{ path: [], range: [1, 1], value: [2] }], 5000)
+	connect(b, pair.b, { topic: ANCHOR, patches: true })
+	editPresence(a, ANCHOR, "x", [{ path: [], range: [2, 2], value: [3] }], 5000)
+	assertEquals(readRow(b, ANCHOR, "a")!.value, [1])
+	ca.announce()
+	assertEquals(readRow(b, ANCHOR, "a")!.value, [1, 2, 3])
+})
+
+Deno.test("an invalid edit throws and changes nothing", () => {
+	const { a, pair } = two()
+	setPresence(a, ANCHOR, "x", { n: 1 }, 5000)
+	const sent = pair.sent.length
+	let threw = false
+	try {
+		editPresence(a, ANCHOR, "x", [{ path: ["no", "where"], value: 1 }], 5000)
+	} catch {
+		threw = true
+	}
+	assert(threw)
+	assertEquals(readRow(a, ANCHOR, "x")!.value, { n: 1 })
+	assertEquals(pair.sent.length, sent)
 })

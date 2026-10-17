@@ -14,7 +14,7 @@
 #ifndef PROGRAM_H
 #define PROGRAM_H
 
-#include "../../../ermine/encoding/c/json.h"
+#include "../../../../ermine/encoding/c/json.h"
 #include "graph.h"
 #include "store.h"
 

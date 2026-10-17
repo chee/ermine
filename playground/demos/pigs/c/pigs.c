@@ -18,6 +18,7 @@
 #include "walk.h"
 
 #include "../../../../ermine/encoding/c/json.h"
+#include "../../../../ermine/encoding/c/json_text.h"
 
 #include <fcntl.h>
 #include <math.h>

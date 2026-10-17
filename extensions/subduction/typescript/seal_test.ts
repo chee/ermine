@@ -1,11 +1,21 @@
-import { assertEquals, assertRejects, assertThrows } from "@std/assert"
+import { assertEquals, assertRejects } from "@std/assert"
 import { ed25519 } from "npm:@noble/curves@1.9.7/ed25519"
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import { type Blop, encode, name } from "@ermine/encoding/blop"
 import * as cbor from "@ermine/encoding/cbor"
-import { good, seal, SealError, type Signer, stored, unseal } from "./seal.ts"
+import {
+	fast,
+	good,
+	seal,
+	SealError,
+	shaped,
+	type Signer,
+	stored,
+	unseal,
+	use,
+	verify,
+} from "./seal.ts"
 
-const code = (f: () => unknown) => (assertThrows(f, SealError) as SealError).code
 const rejected = async (f: () => Promise<unknown>) =>
 	((await assertRejects(f, SealError)) as SealError).code
 const unhex = (s: string) => Uint8Array.from(s.match(/../g)!, (b) => parseInt(b, 16))
@@ -42,7 +52,7 @@ Deno.test("seal: RFC 8032 test 1 is good", () => {
 Deno.test("seal: round trip", async () => {
 	const b = blop(alice.key)
 	const s = await seal(b, alice)
-	const u = unseal(s)
+	const u = await unseal(s)
 	assertEquals(u.blop.node, "n1")
 	assertEquals(u.name, name(b))
 	assertEquals(u.stored, blake3(s))
@@ -70,14 +80,16 @@ Deno.test("seal: the blop's signer is the seal's", async () => {
 Deno.test("seal: shape", async () => {
 	assertEquals(await rejected(() => seal(new Uint8Array([0xf6]), alice)), "shape")
 	const raw = cbor.decode(await seal(blop(alice.key), alice)) as { [k: string]: cbor.Value }
-	assertEquals(code(() => unseal(new Uint8Array([0xff]))), "shape")
-	assertEquals(code(() => unseal(cbor.encode({ ...raw, more: 1 }))), "shape")
+	assertEquals(await rejected(() => unseal(new Uint8Array([0xff]))), "shape")
+	assertEquals(await rejected(() => unseal(cbor.encode({ ...raw, more: 1 }))), "shape")
 	const { signer: _, ...two } = raw
-	assertEquals(code(() => unseal(cbor.encode(two))), "shape")
+	assertEquals(await rejected(() => unseal(cbor.encode(two))), "shape")
 	// a typed array of the key's 32 bytes is not bytes
 	const key = raw.signer as Uint8Array
 	assertEquals(
-		code(() => unseal(cbor.encode({ ...raw, signer: new Uint16Array(key.slice().buffer) }))),
+		await rejected(() =>
+			unseal(cbor.encode({ ...raw, signer: new Uint16Array(key.slice().buffer) }))
+		),
 		"shape",
 	)
 	// tag 64 over the key's bytes: no encoding of a value (no uint8 kind)
@@ -91,14 +103,14 @@ Deno.test("seal: shape", async () => {
 		0x40,
 		...sealed.subarray(at + 7),
 	])
-	assertEquals(code(() => unseal(tagged)), "shape")
+	assertEquals(await rejected(() => unseal(tagged)), "shape")
 	assertEquals(
-		code(() => unseal(cbor.encode({ ...raw, signature: new Uint8Array(63) }))),
+		await rejected(() => unseal(cbor.encode({ ...raw, signature: new Uint8Array(63) }))),
 		"shape",
 	)
 	// shape before signature: a bad blop with a bad signature
 	assertEquals(
-		code(() =>
+		await rejected(() =>
 			unseal(cbor.encode({ ...raw, change: new Uint8Array(1), signature: new Uint8Array(64) }))
 		),
 		"shape",
@@ -108,10 +120,10 @@ Deno.test("seal: shape", async () => {
 Deno.test("seal: a changed field, a signature not good", async () => {
 	const raw = cbor.decode(await seal(blop(alice.key), alice)) as { [k: string]: Uint8Array }
 	const other = blop(alice.key, { lamport: 2 })
-	assertEquals(code(() => unseal(cbor.encode({ ...raw, change: other }))), "signature")
+	assertEquals(await rejected(() => unseal(cbor.encode({ ...raw, change: other }))), "signature")
 	const sig = raw.signature.slice()
 	sig[0] ^= 1
-	assertEquals(code(() => unseal(cbor.encode({ ...raw, signature: sig }))), "signature")
+	assertEquals(await rejected(() => unseal(cbor.encode({ ...raw, signature: sig }))), "signature")
 	// the blop's signer is bob, the seal's alice
 	const bobs = blop(bob.key)
 	const forged = cbor.encode({
@@ -119,7 +131,7 @@ Deno.test("seal: a changed field, a signature not good", async () => {
 		signer: raw.signer,
 		signature: raw.signature,
 	})
-	assertEquals(code(() => unseal(forged)), "signature")
+	assertEquals(await rejected(() => unseal(forged)), "signature")
 })
 
 const le = (n: bigint) => {
@@ -175,4 +187,59 @@ Deno.test("strict: no cofactor", () => {
 	const sig = new Uint8Array([...Rb, ...le(S)])
 	assertEquals(ed25519.verify(sig, m, alice.key), true)
 	assertEquals(good(sig, alice.key, m), false)
+})
+
+// the fast check decides as good() does: the byte checks, then WebCrypto where the probe passes
+Deno.test("fast: the 8 small-order points are refused by the byte checks", () => {
+	const T = ed25519.Point.fromBytes(
+		Uint8Array.from(
+			"c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a".match(/../g)!,
+			(x) => parseInt(x, 16),
+		),
+	)
+	const sig = ed25519.sign(new Uint8Array([1]), new Uint8Array(32).fill(1))
+	for (let k = 0n; k < 8n; k++) {
+		const point = k === 0n ? ed25519.Point.ZERO : T.multiplyUnsafe(k)
+		assertEquals(point.isSmallOrder(), true)
+		assertEquals(shaped(sig, point.toBytes()), false)
+	}
+	assertEquals(shaped(sig, alice.key), true)
+})
+
+Deno.test("fast: verify answers as good() does, with WebCrypto and with noble", async () => {
+	const m = new Uint8Array([1, 2, 3]), secret = new Uint8Array(32).fill(1)
+	const sig = ed25519.sign(m, secret)
+	const identity = le(1n), zero = new Uint8Array(32)
+	const negzero = le(1n)
+	negzero[31] |= 0x80
+	const cases: [Uint8Array, Uint8Array][] = [
+		[sig, alice.key],
+		[sig, bob.key],
+		[new Uint8Array([...sig.subarray(0, 32), ...le(little(sig.subarray(32)) + L)]), alice.key],
+		[new Uint8Array([...identity, ...zero]), identity],
+		[new Uint8Array([...identity, ...zero]), alice.key],
+		[sig, le((1n << 255n) - 19n)],
+		[sig, negzero],
+	]
+	for (let i = 0; i < 20; i++) {
+		const bad = sig.slice()
+		bad[i * 3] ^= 1 << (i % 8)
+		cases.push([bad, alice.key])
+	}
+	for (const choice of ["auto", "noble"] as const) {
+		use(choice)
+		for (const [s, k] of cases) assertEquals(await verify(s, k, m), good(s, k, m))
+	}
+	use("auto")
+	// Deno's WebCrypto has Ed25519 and passes the probe
+	assertEquals(await fast(), true)
+})
+
+Deno.test("fast: WebCrypto alone takes the identity key, verify does not", async () => {
+	const m = new Uint8Array([9]), identity = le(1n)
+	const r = le(5n), R = ed25519.Point.BASE.multiply(5n).toBytes()
+	const sig = new Uint8Array([...R, ...r])
+	const k = await crypto.subtle.importKey("raw", identity, { name: "Ed25519" }, false, ["verify"])
+	assertEquals(await crypto.subtle.verify("Ed25519", k, sig, m), true)
+	assertEquals(await verify(sig, identity, m), false)
 })

@@ -132,15 +132,18 @@ export function createMemFS() {
 		return bytes.byteLength
 	}
 
-	// every method reports through a node-style callback; go waits on it
+	// every method reports through a node-style callback; go waits on it. later, as node does: a
+	// callback made right away runs go inside this call, so the js stack grows by a go turn per
+	// call and never unwinds (safari's worker stack runs out while tsgo starts)
 	function call(callback: Callback, fn: () => unknown) {
-		let value
+		let value: unknown
+		let error: Error | null = null
 		try {
 			value = fn()
-		} catch (error) {
-			return callback(error as Error)
+		} catch (e) {
+			error = e as Error
 		}
-		callback(null, value)
+		queueMicrotask(() => callback(error, value))
 	}
 
 	const fs = {
@@ -202,7 +205,7 @@ export function createMemFS() {
 					waiting = undefined
 					callback(null, readStdin(buffer, offset, length))
 				}
-				return attempt()
+				return queueMicrotask(attempt)
 			}
 			call(callback, () => {
 				const handle = fds.get(fd)

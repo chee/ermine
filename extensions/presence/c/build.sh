@@ -3,6 +3,6 @@
 # undefined-behaviour sanitizers
 set -e
 cd "$(dirname "$0")/../../.."
-bin="playground/presence/c/presence-harness"
+bin="extensions/presence/c/presence-harness"
 [ "$CHECK" = 1 ] && bin="$bin-check"
 make -s $bin

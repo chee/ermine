@@ -1,7 +1,7 @@
 // one change to one object of a node, with its patches, as one item in the canonical encoding
 // (ENCODING.tex), and back (BLOP.tex). the shape only: no hashing but its name, no signing, no
 // parents looked up
-import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
+import { blake3 } from "@ermine/blake3"
 import * as cbor from "./cbor.ts"
 import type { FileLocation } from "@ermine/util/stacktrace"
 

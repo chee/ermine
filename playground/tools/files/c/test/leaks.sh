@@ -3,17 +3,17 @@
 # nothing; then a short sync session, a new document and a host joining it through a local Subduction server (as sync.sh
 # finds one; skipped without), a few edits each way, then C-c: each host must leak nothing at its end. Skipped where leaks
 # is not there. Temp folders and homes. MallocStackLogging gives the stacks of what leaked, printed on a failure.
-#   sh playground/files/c/test/leaks.sh   (builds the tool first; FILES=path tries another build)
+#   sh playground/tools/files/c/test/leaks.sh   (builds the tool first; FILES=path tries another build)
 set -e
 if ! command -v leaks >/dev/null 2>&1; then
 	echo "skipped: no leaks (macOS only)"
 	exit 0
 fi
 here=$(cd "$(dirname "$0")" && pwd)
-newcore=$(cd "$here/../../../.." && pwd)
+newcore=$(cd "$here/../../../../.." && pwd)
 if [ -z "$FILES" ]; then
-	(cd "$newcore" && make -s playground/files/c/files)
-	FILES="$newcore/playground/files/c/files"
+	(cd "$newcore" && make -s playground/tools/files/c/files)
+	FILES="$newcore/playground/tools/files/c/files"
 fi
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/files-leaks.XXXXXX")
 tmp=$(cd "$tmp" && pwd -P)

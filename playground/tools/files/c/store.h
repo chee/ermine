@@ -12,7 +12,7 @@
 #ifndef STORE_H
 #define STORE_H
 
-#include "../../../ermine/encoding/c/json.h"
+#include "../../../../ermine/encoding/c/json.h"
 #include "saved_pack.h"
 #include "saved.h"
 #include "external.h"

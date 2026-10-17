@@ -2,7 +2,8 @@
 // slots and paths are sorted by code point, as there).
 #include "layout.h"
 
-#include "../../../ermine/encoding/c/json.h"
+#include "../../../../ermine/encoding/c/json.h"
+#include "../../../../ermine/encoding/c/json_text.h"
 #include "names.h"
 
 #include <stdlib.h>

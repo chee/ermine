@@ -27,9 +27,9 @@ FLAGS = $(BLAKE3FLAGS) $(rename) -I$(OPENSSL)/include
 # memory store and a WebSocket over OpenSSL; JSON for presence's messages
 graph = core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c
 sync = extensions/sync/c/sync.c extensions/sync/c/transport.c extensions/sync/c/ids.c extensions/sync/c/history.c \
-	extensions/sync/c/replay.c extensions/sync/c/snapshot.c extensions/sync/c/run.c extensions/sync/c/commits.c \
+	extensions/sync/c/replay.c extensions/sync/c/snapshot.c extensions/sync/c/run.c \
 	extensions/sync/c/seal.c extensions/sync/c/ed25519/ed25519.c extensions/sync/c/ed25519/sha2.c extensions/subduction/c/fragment.c \
-	ermine/encoding/c/commit.c ermine/encoding/c/commit_form.c ermine/encoding/c/pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c \
+	ermine/encoding/c/commit.c ermine/encoding/c/pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c ermine/encoding/c/json_text.c \
 	ermine/encoding/c/blake3/blake3.c ermine/encoding/c/blake3/blake3_dispatch.c ermine/encoding/c/blake3/blake3_portable.c \
 	extensions/subduction/c/subduction/platform_posix.c extensions/subduction/c/subduction/store_memory.c \
 	extensions/subduction/c/subduction/websocket.c extensions/subduction/c/subduction/transport_openssl.c

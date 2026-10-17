@@ -55,7 +55,16 @@ typedef struct {
 	strs whos;
 } mine_of;
 
+// a count by name: the n last sent to a channel for a who, or the last taken from a sender
+typedef struct {
+	char *who;
+	int64_t n;
+} counted;
+
 struct pres_conn {
+	int patches;
+	counted *sent;
+	size_t nsent, capsent;
 	pres_world *w;
 	chn_channel *channel;
 	char *topic;
@@ -70,6 +79,13 @@ typedef struct {
 	size_t nmine, capmine;
 	pres_conn **conns;
 	size_t nconns, capconns;
+	// the last n taken from each sender, by anchor
+	struct taken {
+		char *anchor;
+		char *from;
+		int64_t n;
+	} *taken;
+	size_t ntaken, captaken;
 } state;
 
 static state *state_of(pres_world *w) {
@@ -235,16 +251,164 @@ static size_t take(pres_world *w, const char *anchor, const char *const *whos, s
 	return gone;
 }
 
+// edit --------------------------------------------------------------------------------------------
+
+// what an edit's patches refer to: kept by the node till its next update
+typedef struct {
+	op_value *list;
+	op_value *until;
+	op_patch *patches;
+	op_key **keys;
+	size_t n, nkeys;
+	char *who;
+} edit_block;
+
+static void edit_block_free(void *b) {
+	edit_block *k = b;
+	for (size_t i = 0; i < k->nkeys; i++) free(k->keys[i]);
+	free(k->keys);
+	free(k->patches);
+	free(k->who);
+	op_free(k->list);
+	op_free(k->until);
+	free(k);
+}
+
+static int whole_num(const op_value *x, long *out) {
+	if (x->type != OP_NUM || x->num != (double)(long)x->num || x->num < -1e15 || x->num > 1e15) return 0;
+	*out = (long)x->num;
+	return 1;
+}
+
+// a target of a wire patch, its path put under [who, "value"]. 0: malformed
+static int target_of(edit_block *b, const op_value *m, const char *who, op_target *t) {
+	const op_value *path = m != NULL && m->type == OP_MAP ? op_get(m, "path") : NULL;
+	if (path == NULL || path->type != OP_LIST) return 0;
+	op_key *ks = xalloc((path->count + 2) * sizeof *ks);
+	b->keys[b->nkeys++] = ks;
+	ks[0] = (op_key){.type = OP_STR_KEY, .s = who};
+	ks[1] = (op_key){.type = OP_STR_KEY, .s = "value"};
+	for (size_t i = 0; i < path->count; i++) {
+		const op_value *x = path->items[i];
+		if (x->type == OP_STR) ks[i + 2] = (op_key){.type = OP_STR_KEY, .s = x->str};
+		else if (x->type == OP_NUM && whole_num(x, &ks[i + 2].n)) ks[i + 2].type = OP_NUM_KEY;
+		else return 0;
+	}
+	*t = (op_target){.path = ks, .length = path->count + 2};
+	const op_value *r = op_get(m, "range");
+	if (r != NULL) {
+		if (r->type != OP_LIST || r->count != 2 || !whole_num(r->items[0], &t->from) ||
+			!whole_num(r->items[1], &t->to)) return 0;
+		t->has_range = 1;
+	}
+	return 1;
+}
+
+typedef struct {
+	pres_world *w;
+	nd_entry *there;
+	const op_value *list;
+	const char *who;
+	int64_t until;
+	int code;
+} editing;
+
+static void edit_in(void *data) {
+	editing *e = data;
+	pres_world *w = e->w;
+	size_t count = e->list->count;
+	edit_block *b = xalloc(sizeof *b);
+	b->list = op_ref((op_value *)e->list);
+	b->until = op_num((double)e->until);
+	b->who = xdup(e->who);
+	b->n = count + 1;
+	b->patches = xalloc(b->n * sizeof *b->patches);
+	b->keys = xalloc((2 * count + 1) * sizeof *b->keys);
+	for (size_t i = 0; i < count; i++) {
+		const op_value *m = e->list->items[i];
+		op_patch *p = &b->patches[i];
+		if (!target_of(b, m, b->who, &p->place)) {
+			e->code = OP_NOT_A_PATCH;
+			edit_block_free(b);
+			return;
+		}
+		p->value = op_get(m, "value");
+		p->has_value = p->value != NULL;
+		const op_value *mv = op_get(m, "move");
+		if (mv != NULL) {
+			p->has_move = 1;
+			if (!target_of(b, mv, b->who, &p->move)) {
+				e->code = OP_NOT_A_PATCH;
+				edit_block_free(b);
+				return;
+			}
+		}
+	}
+	op_key *uk = xalloc(2 * sizeof *uk);
+	b->keys[b->nkeys++] = uk;
+	uk[0] = (op_key){.type = OP_STR_KEY, .s = b->who};
+	uk[1] = (op_key){.type = OP_STR_KEY, .s = "until"};
+	b->patches[count] = (op_patch){.place = {.path = uk, .length = 2}, .has_value = 1, .value = b->until};
+	ch_header h;
+	pl_made *made;
+	header_now(w, &h, &made);
+	size_t failed;
+	e->code = nd_update(e->there, b->patches, b->n, h, &failed);
+	if (e->code != OP_OK) {
+		edit_block_free(b);
+		pl_made_free(made);
+		return;
+	}
+	pl_hold(w->places, e->there, b, edit_block_free);
+	pl_changed changed = {1, {e->there}};
+	hold_header(w, &changed, made);
+	pl_made_free(made);
+	pl_commit(w->places, &changed);
+}
+
+// patches (a list, wire shape: path, range?, value?, move?, paths relative to the row's value) applied
+// to the value of the row who has at the anchor, with until, as one write. false: no such row, or a
+// patch that is invalid (nothing changes)
+static bool edit(pres_world *w, const char *anchor, const char *who, const op_value *list, int64_t until) {
+	nd_entry *there = tb_get(w->table, tb_string(PRES_PART), tb_string(anchor));
+	if (there == NULL || there->value == NULL || there->value->type != OP_MAP) return false;
+	if (op_get(there->value, who) == NULL) return false;
+	if (list == NULL || list->type != OP_LIST) return false;
+	editing e = {w, there, list, who, until, OP_OK};
+	as(w, edit_in, &e);
+	return e.code == OP_OK;
+}
+
 // tell ----------------------------------------------------------------------------------------------
 
-// what a connection tells: my row (a map of value and until), or none: it is gone
-static void send(pres_conn *c, const op_value *row) {
+static counted *count_of(counted **list, size_t *n, size_t *cap, const char *who) {
+	for (size_t i = 0; i < *n; i++) {
+		if (strcmp((*list)[i].who, who) == 0) return &(*list)[i];
+	}
+	if (*n == *cap) {
+		*cap = *cap ? *cap * 2 : 4;
+		*list = realloc(*list, *cap * sizeof **list);
+		if (*list == NULL) abort();
+	}
+	(*list)[*n] = (counted){xdup(who), 0};
+	return &(*list)[(*n)++];
+}
+
+// what a connection tells: my row (a map of value and until), or none: it is gone. patches: the
+// edit that made the row, sent instead of the row when the connection sends patches. a connection
+// that sends patches numbers what it sends, by who
+static void send(pres_conn *c, const char *who, const op_value *row, const op_value *patches) {
 	op_value *m = op_map();
 	if (row == NULL) op_set(m, "gone", op_bool(1));
 	else {
 		op_set(m, "ttl", op_num((double)(until_of(row) - now_of(c->w))));
 		const op_value *v = op_get(row, "value");
-		op_set(m, "value", v != NULL ? op_ref((op_value *)v) : op_null());
+		if (c->patches && patches != NULL) op_set(m, "patches", op_ref((op_value *)patches));
+		else op_set(m, "value", v != NULL ? op_ref((op_value *)v) : op_null());
+		if (c->patches) {
+			counted *k = count_of(&c->sent, &c->nsent, &c->capsent, who);
+			op_set(m, "n", op_num((double)++k->n));
+		}
 	}
 	char *text = op_json_text(m);
 	op_free(m);
@@ -252,12 +416,13 @@ static void send(pres_conn *c, const op_value *row) {
 	free(text);
 }
 
-static void tell(pres_world *w, const char *anchor, const op_value *row) {
+static void tell(pres_world *w, const char *anchor, const char *who, const op_value *row,
+	const op_value *patches) {
 	state *s = state_of(w);
 	size_t n = s->nconns;
 	for (size_t i = 0; i < n; i++) {
 		pres_conn *c = s->conns[i];
-		if (c->active && strcmp(c->anchor, anchor) == 0) send(c, row);
+		if (c->active && strcmp(c->anchor, anchor) == 0) send(c, who, row, patches);
 	}
 }
 
@@ -267,8 +432,16 @@ void pres_set(pres_world *w, const char *anchor, const char *who, const op_value
 	op_value *row = row_of(value, now_of(w) + ttl);
 	put(w, anchor, who, row);
 	strs_add(mine_at(state_of(w), anchor, 1), who);
-	tell(w, anchor, row);
+	tell(w, anchor, who, row, NULL);
 	op_free(row);
+}
+
+bool pres_edit(pres_world *w, const char *anchor, const char *who, const op_value *patches, int64_t ttl) {
+	if (!edit(w, anchor, who, patches, now_of(w) + ttl)) return false;
+	strs_add(mine_at(state_of(w), anchor, 1), who);
+	const nd_entry *there = tb_get(w->table, tb_string(PRES_PART), tb_string(anchor));
+	tell(w, anchor, who, op_get(there->value, who), patches);
+	return true;
 }
 
 bool pres_renew(pres_world *w, const char *anchor, const char *who, int64_t ttl) {
@@ -289,7 +462,7 @@ void pres_clear(pres_world *w, const char *anchor, const char *who) {
 	int was_mine = mine != NULL && strs_del(mine, who);
 	const char *gone[1];
 	if (take(w, anchor, &who, 1, gone) == 0) return;
-	if (was_mine) tell(w, anchor, NULL);
+	if (was_mine) tell(w, anchor, who, NULL, NULL);
 }
 
 static pres_live live_of(const char *who, const op_value *row) {
@@ -392,18 +565,56 @@ static void heard(void *ctx, const char *from, const unsigned char *bytes, size_
 		if (gone != NULL && gone->type == OP_BOOL && gone->bool_) {
 			const char *gone_who[1];
 			take(w, c->anchor, &from, 1, gone_who);
+			op_free(m);
+			return;
+		}
+		const op_value *ttl = op_get(m, "ttl"), *n = op_get(m, "n"), *patches = op_get(m, "patches");
+		int64_t left = ttl != NULL && ttl->type == OP_NUM ? (int64_t)ttl->num : 0;
+		int has_n = n != NULL && n->type == OP_NUM;
+		state *s = state_of(w);
+		struct taken *last = NULL;
+		for (size_t i = 0; i < s->ntaken; i++) {
+			if (strcmp(s->taken[i].anchor, c->anchor) == 0 && strcmp(s->taken[i].from, from) == 0) {
+				last = &s->taken[i];
+			}
+		}
+		if (patches != NULL) {
+			// only the next patch message, and only onto the row that is there
+			if (has_n && (last == NULL || (int64_t)n->num != last->n + 1)) {
+				op_free(m);
+				return;
+			}
+			if (!edit(w, c->anchor, from, patches, now_of(w) + left)) {
+				op_free(m);
+				return;
+			}
 		} else {
-			const op_value *ttl = op_get(m, "ttl");
-			int64_t left = ttl != NULL && ttl->type == OP_NUM ? (int64_t)ttl->num : 0;
 			op_value *row = row_of(op_get(m, "value"), now_of(w) + left);
 			put(w, c->anchor, from, row);
 			op_free(row);
+		}
+		if (has_n) {
+			if (last == NULL) {
+				if (s->ntaken == s->captaken) {
+					s->captaken = s->captaken ? s->captaken * 2 : 4;
+					s->taken = realloc(s->taken, s->captaken * sizeof *s->taken);
+					if (s->taken == NULL) abort();
+				}
+				last = &s->taken[s->ntaken++];
+				*last = (struct taken){xdup(c->anchor), xdup(from), 0};
+			}
+			last->n = (int64_t)n->num;
 		}
 	}
 	op_free(m);
 }
 
 pres_conn *pres_connect(pres_world *w, chn_channel *channel, const char *topic, const char *anchor) {
+	return pres_connect_patches(w, channel, topic, anchor, false);
+}
+
+pres_conn *pres_connect_patches(pres_world *w, chn_channel *channel, const char *topic,
+	const char *anchor, bool patches) {
 	state *s = state_of(w);
 	pres_conn *c = xalloc(sizeof *c);
 	c->w = w;
@@ -411,6 +622,7 @@ pres_conn *pres_connect(pres_world *w, chn_channel *channel, const char *topic, 
 	c->topic = xdup(topic);
 	c->anchor = xdup(anchor != NULL ? anchor : topic);
 	c->active = 1;
+	c->patches = patches;
 	if (s->nconns == s->capconns) {
 		s->capconns = s->capconns ? s->capconns * 2 : 4;
 		s->conns = realloc(s->conns, s->capconns * sizeof *s->conns);
@@ -440,7 +652,7 @@ void pres_announce(pres_conn *c) {
 		const op_value *row = there != NULL && there->value != NULL && there->value->type == OP_MAP
 			? op_get(there->value, whos[i])
 			: NULL;
-		if (row != NULL) send(c, row);
+		if (row != NULL) send(c, whos[i], row, NULL);
 		free(whos[i]);
 	}
 	free(whos);
@@ -481,9 +693,16 @@ void pres_free(pres_world *w) {
 	for (size_t i = 0; i < s->nconns; i++) {
 		free(s->conns[i]->topic);
 		free(s->conns[i]->anchor);
+		for (size_t k = 0; k < s->conns[i]->nsent; k++) free(s->conns[i]->sent[k].who);
+		free(s->conns[i]->sent);
 		free(s->conns[i]);
 	}
 	free(s->conns);
+	for (size_t i = 0; i < s->ntaken; i++) {
+		free(s->taken[i].anchor);
+		free(s->taken[i].from);
+	}
+	free(s->taken);
 	free(s);
 	w->state = NULL;
 }

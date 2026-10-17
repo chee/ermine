@@ -2,8 +2,8 @@
 
 #include "manifest.h"
 
-#include "../../../ermine/encoding/c/blake3/blake3.h"
-#include "../../../ermine/encoding/c/cbor.h"
+#include "../../../../ermine/encoding/c/blake3/blake3.h"
+#include "../../../../ermine/encoding/c/cbor.h"
 #include "diag.h"
 
 #include <dirent.h>

@@ -13,11 +13,12 @@
 
 #include "store.h"
 
-#include "../../../ermine/encoding/c/cbor.h"
+#include "../../../../ermine/encoding/c/cbor.h"
 #include "external.h"
 #include "foundation.h"
 #include "names.h"
 #include "sys.h"
+#include "../../../../ermine/encoding/c/json_text.h"
 
 #include <dirent.h>
 #include <errno.h>

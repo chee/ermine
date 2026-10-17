@@ -44,8 +44,8 @@
 #include "../../../core/table/c/table.h"
 #include "../../../filesystem/places/c/places.h"
 #include "../../../filesystem/protect/c/protect.h"
-#include "../../../playground/patch-nodes/c/patch.h"
-#include "../../../playground/presence/c/presence.h"
+#include "../../../extensions/patch-nodes/c/patch.h"
+#include "../../../extensions/presence/c/presence.h"
 #include "../../sites/c/sites.h"
 
 typedef enum {
