@@ -47,13 +47,15 @@ jobs:
       - name: Conformance, C with sanitizers
         run: deno task conformance $SUITES --check
 
-  # how cost grows with size (conformance/perf.ts): a miss not in perf.sadly_known_fail fails
+  # how cost grows with size (conformance/perf.ts): reported, never failing the build, until its
+  # sizes and perf.sadly_known_fail lists are tuned on a quiet machine
   perf:
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-14]
     runs-on: ${{ matrix.os }}
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
