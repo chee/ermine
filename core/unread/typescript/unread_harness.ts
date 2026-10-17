@@ -26,6 +26,10 @@
 //    computation's result, at its run's end (a scheduler wired by keeping, a computation returning
 //    it, a pulse): true or "compute" a compute's, given to set; "fails" a compute's whose set
 //    throws; "effect" an effect's. hold: a name for what was kept
+//    unobservable here: no answer tells handed or scheduler from neither. each lets go of what
+//    kept alone does (every kind of run keeps its result): an implementation may ignore both
+//    and pass. what was kept (handed too), held, or given back in an undo never changes after,
+//    even where a span moved out of a list landed as a new list holding owned elements
 // { op: "held", name }             → { value? }   what was held under name, as it is now; a name
 //    never held: {}
 // { op: "value" }                  → { value? }   the entry's value now; not a read

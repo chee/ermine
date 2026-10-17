@@ -4,9 +4,9 @@
 //   source, id   a string, or {"symbol": name}: one symbol per name, never equal to a string.
 //                strings equal by content, any string ("", NUL, lone surrogates). a key: (source, id)
 //   path         a list of keys: whole numbers 0 <= n < 1e15 (list indices; -0 is 0, written back
-//                as given: send 0) and strings (map keys, any string); 1 and "1" differ
+//                as 0) and strings (map keys, any string); 1 and "1" differ; anything else an error
 //   patch        op's, as apply takes it: {path, range?: [a, b], value?, move?: {path, range?}};
-//                trusted: what a malformed one marks is not stated
+//                one malformed (not a map, a path not a path) is an error
 //   keys         true: a keys read; anything else, a plain read
 //
 // the rule (marks; mark is it per spot). a patch's places: a move's take {path: move.path, range:
@@ -51,9 +51,10 @@
 //                                                 prefix of its spots' paths, once)
 //   anything wrong                           {"error": why}; why is not compared. no op, an unknown
 //                                                 op, a source or id neither string nor symbol, spot
-//                                                 with no path, a path null, mark at a kept key with
-//                                                 no list of patches, marks with no patch or paths.
-//                                                 what is kept after one is not stated
+//                                                 with no path or a bad one, mark with no list of
+//                                                 patches (kept key or not) or a malformed patch, marks
+//                                                 with no patch or paths or a bad path. nothing is kept
+//                                                 by one
 import { createPaths, type Key, marks, type Patch, type Spot } from "./paths.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
 

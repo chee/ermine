@@ -8,6 +8,7 @@
 #include "seal.h"
 #include "ed25519/ed25519.h"
 #include "../../../ermine/encoding/c/blop.h"
+#include "../../../ermine/encoding/c/json_text.h"
 
 #include <stdio.h>
 #include <stdlib.h>

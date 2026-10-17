@@ -8,12 +8,11 @@
 //    header as given (never an op)
 //    entry: no value key when none; change: the header's fields as given, and the time now (whole
 //    seconds since 1970) when it gave none; in the header's order: time, actor, reader, external,
-//    metadata, op, then any other
+//    metadata, op. any other field dropped. a time of -0 is 0
 //    the header's fields: time a whole number (0 and negatives kept); actor any JSON, null too;
 //    reader a string; external a list of sites { file, line, column?, function? }, answered in
 //    that order, column and function only when given; metadata a list of [string, value] pairs,
-//    in order, repeats kept. plain JSON, not the JSON form: give no form there. no other fields
-//    (C keeps only these)
+//    in order, repeats kept. plain JSON, not the JSON form: give no form there
 //    the value given back as it was read: a map's keys in their order, -0 kept, NUL and lone
 //    surrogates kept in strings and keys; a typed array's elements as its kind holds them
 //    (float32 rounded, an integer kind's -0 is 0, 64-bit as plain decimal: "-0" is "0", "007"
@@ -23,7 +22,8 @@
 //    value as above (JSON has no undefined: a table left out is not given); one header for every
 //    table, and with no time the same time now for all. values: a map, always given
 // Errors, as { error: "text" } (the text is no part of the protocol), the harness going on:
-//    an op not understood or not given (ops are case-sensitive); a value whose JSON form stands
+//    an op not understood or not given (ops are case-sensitive); a node with no values map; a
+//    metadata entry that is not a [string, value] pair; a value whose JSON form stands
 //    for none (form.ts fromJson's refusals: bad base64 or padding, an element out of its kind's
 //    range, an unknown kind, a "/" map that is no form), at any depth, in any table: nothing made
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"

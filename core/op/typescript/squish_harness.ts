@@ -9,7 +9,8 @@
 // an op not named here, or none: { error: text }, the text not compared. each line is its own
 // squisher: nothing lasts between lines
 //
-// a patch: { path, range?, value?, move? }, its fields in that order, in and out
+// a patch: { path, range?, value?, move? }, its fields in that order, in and out; any other field
+//   dropped. -0 as a key or a position is 0
 //   path: keys, a string or a whole number; 1 and "1" are other keys. a NUL is a key's like any
 //   range: [from, to], whole numbers (2^32 and past too); a string's count code points, a list's
 //     elements. no value and no move: a removal
@@ -22,15 +23,18 @@
 //       its range grown by what the later takes
 //     - after a removal [a, b): a removal over a (c <= a <= d) is [c, b + d - a]; an insert at a
 //       is a replace [a, b] with its value
-//   values join only kind with kind: string with string, list with list. bytes, numbers, maps,
-//     null never join; typed arrays: not pinned
+//   values join only kind with kind: string with string, list with list, a typed array with one
+//     of its kind. bytes, numbers, maps, null never join; nor does a removal with an insert of
+//     anything else
 //   kills: a later patch with no range and no move drops earlier ones at or under its path, last
 //     first, until one is not; never a move; never a removal of a list element (a number last)
 //     by a patch at the same path (the elements after it moved up)
 //   [] with no range and no move clears all before it
 //   a lone surrogate anywhere in a patch's value (map values, list elements; not map keys) fouls
-//     its path; a move from at or under a fouled path fouls its own path. a patch at or under
-//     a fouled path is never joined. a patch with a lone surrogate is never joined either
+//     its path; a move from at or under a fouled path fouls its own path, and a fouled path under
+//     what it takes is fouled under where it lands. a patch at or under a fouled path is never
+//     joined. a patch with a lone surrogate is never joined either. [] with no range and no move
+//     clears the fouling too
 // columns: { paths, path, shape, from, size, value, move }
 //   paths: each distinct path once, in the order first met
 //   path, shape, from, size: runs, [x, count, x, count, ...]; encode gives counts of 1 and more,
@@ -39,7 +43,7 @@
 //   from: per ranged patch, its from less the last ranged patch's from (the first's less 0); a
 //     patch with no range leaves it be. size: per ranged patch, to - from
 //   value, move: each patch's that has one, in order, as given (not runs)
-// columns that do not cover their shape, and patches or columns that are not lists: not pinned
+// columns that do not cover their shape, and patches or columns missing or not lists: an error
 import { type Columns, decode, encode, squish } from "@ermine/op/squish"
 import type { Patch } from "@ermine/op/apply"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"

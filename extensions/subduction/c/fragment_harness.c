@@ -6,6 +6,7 @@
 // commits: [{id, parents}]; known: [{head, members, boundary, checkpoints}]
 #include "fragment.h"
 #include "../../../ermine/encoding/c/json.h"
+#include "../../../ermine/encoding/c/json_text.h"
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -6,6 +6,7 @@
 // A symbol is a part or an id {"symbol": name}: a tb_key token, the name's address. One in a value
 // or as a reader has no form in C: the node cannot be built, cannot-carry.
 #include "json.h"
+#include "json_text.h"
 #include "pack.h"
 
 #include <math.h>

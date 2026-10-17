@@ -10,6 +10,7 @@
 // A blop added is kept for the histories, so its request is not freed.
 #include "apply.h"
 #include "../../../ermine/encoding/c/blop.h"
+#include "../../../ermine/encoding/c/json_text.h"
 #ifdef COMMIT
 #include "commit.h"
 #endif

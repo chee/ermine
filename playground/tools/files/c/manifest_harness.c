@@ -1,4 +1,4 @@
-// The C manifest on the line protocol (playground/files/typescript/manifest_harness.ts, whose header
+// The C manifest on the line protocol (playground/tools/files/typescript/manifest_harness.ts, whose header
 // has it): one JSON request per line in, one answer per line out. An open given no dir is on
 // <temp>/.ermine, <temp> a folder of the harness's own made at the first such open and removed at
 // the end. Values are in their JSON form
@@ -9,8 +9,9 @@
 #define _GNU_SOURCE
 #endif
 
-#include "../../../ermine/encoding/c/cbor.h"
-#include "../../../ermine/encoding/c/json.h"
+#include "../../../../ermine/encoding/c/cbor.h"
+#include "../../../../ermine/encoding/c/json.h"
+#include "../../../../ermine/encoding/c/json_text.h"
 #include "saved_shown.h"
 #include "manifest.h"
 

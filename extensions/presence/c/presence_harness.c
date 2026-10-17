@@ -269,6 +269,15 @@ static op_value *answer(const op_value *r) {
 		op_set(o, "sent", list);
 		return o;
 	}
+	if (strcmp(op, "sizes") == 0) {
+		size_t n;
+		const chn_sent *sent = chn_pair_sent(pair, &n);
+		op_value *list = op_list();
+		for (size_t i = 0; i < n; i++) op_push(list, op_num((double)sent[i].n));
+		op_value *o = op_map();
+		op_set(o, "sizes", list);
+		return o;
+	}
 	if (strcmp(op, "stop") == 0 || strcmp(op, "announce") == 0) {
 		pres_conn *c = conn_named(hh_str(r, "name"));
 		if (c == NULL) return error("no such connection");
@@ -320,7 +329,9 @@ static op_value *answer(const op_value *r) {
 	if (strcmp(op, "connect") == 0) {
 		const char *name = hh_str(r, "name"), *topic = hh_str(r, "topic");
 		if (name == NULL || topic == NULL) return error("no name or topic");
-		pres_conn *c = pres_connect(&d->world, d->channel, topic, anchor);
+		const op_value *patches = op_get(r, "patches");
+		pres_conn *c = pres_connect_patches(&d->world, d->channel, topic, anchor,
+			patches != NULL && patches->type == OP_BOOL && patches->bool_);
 		PUSH(conns, nconns, capconns, ((named_conn){xdup(name), c}));
 		return op_map();
 	}
@@ -397,6 +408,12 @@ static op_value *answer(const op_value *r) {
 		if (who == NULL) return error("no who");
 		pres_set(&d->world, anchor, who, value != NULL ? value : NULL, ttl);
 		return op_map();
+	}
+	if (strcmp(op, "edit") == 0) {
+		if (who == NULL) return error("no who");
+		op_value *o = op_map();
+		op_set(o, "ok", op_bool(pres_edit(&d->world, anchor, who, op_get(r, "patches"), ttl)));
+		return o;
 	}
 	if (strcmp(op, "renew") == 0) {
 		if (who == NULL) return error("no who");

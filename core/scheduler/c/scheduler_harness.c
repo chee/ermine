@@ -158,6 +158,16 @@ static void untrack(const void *key, void *data) {
 	PUSH(forgotten, nforgotten, capforgotten, op_str(key));
 }
 
+// the keys that gained their first tracker since last asked
+static op_value **started;
+static size_t nstarted, capstarted;
+
+static void first_track(const void *key, sc_run *run, void *data) {
+	(void)run;
+	(void)data;
+	PUSH(started, nstarted, capstarted, op_str(key));
+}
+
 // the tick of the latest mark (each mark and each new computer takes the next)
 static uint64_t latest_tick;
 static sc_trace trace;
@@ -613,6 +623,8 @@ static val evaluate(const op_value *e, const ctx *c) {
 typedef struct prog {
 	const op_value *f;
 	const op_value *act;
+	// a compute's set: e evaluated after its result is kept, given it as value
+	const op_value *set;
 	const char *to;
 	sc_computer *self;
 } prog;
@@ -636,10 +648,13 @@ static sc_out program_f(void *previous, void *data) {
 
 static char *program_set(void *value, void *data) {
 	prog *p = data;
-	if (p->to == NULL) return NULL;
-	keep(p->to, value);
-	sc_mark(sch, (const void *[]){p->to}, 1, sc_latest(p->self));
-	return NULL;
+	if (p->to != NULL) {
+		keep(p->to, value);
+		sc_mark(sch, (const void *[]){p->to}, 1, sc_latest(p->self));
+	}
+	if (p->set == NULL) return NULL;
+	ctx c = {NULL, p->self, value, NULL};
+	return error_of(evaluate(p->set, &c));
 }
 
 static char *program_effect(void *value, void *previous, void *data) {
@@ -747,6 +762,7 @@ static op_value *make_computer(const op_value *r, bool effect) {
 	PUSH(progs, nprogs, capprogs, p);
 	p->f = op_get(r, "f");
 	p->act = op_get(r, "act");
+	p->set = op_get(r, "set");
 	const char *to = text(op_get(r, "to"));
 	p->to = to ? entry_of(to)->key : NULL;
 	const char *eq = text(op_get(r, "equal"));
@@ -931,6 +947,14 @@ static op_value *answer(const op_value *r) {
 		op_set(out, "keys", list);
 		return out;
 	}
+	if (strcmp(op, "started") == 0) {
+		op_value *list = op_list();
+		for (size_t i = 0; i < nstarted; i++) op_push(list, started[i]);
+		nstarted = 0;
+		op_value *out = op_map();
+		op_set(out, "keys", list);
+		return out;
+	}
 	if (strcmp(op, "tick") == 0) return answer_tick(latest_tick);
 	return answer_error(formatString("unknown op %s", op));
 }
@@ -940,6 +964,7 @@ void hh_answer(const op_value *r, FILE *out) {
 		sch = sc_new((sc_options){.drop = drop});
 		sc_trace_start(sch, &trace, told_moment, NULL);
 		sc_on_tracking_end(sch, untrack, NULL);
+		sc_on_tracking_start(sch, first_track, NULL);
 		sc_on_mark(sch, marked, NULL);
 	}
 	PUSH(lines, nlines, caplines, hh_retain());
@@ -962,6 +987,8 @@ void hh_finish(void) {
 	for (size_t i = 0; i < nlogged; i++) op_free(logged[i]);
 	for (size_t i = 0; i < nforgotten; i++) op_free(forgotten[i]);
 	free(forgotten);
+	for (size_t i = 0; i < nstarted; i++) op_free(started[i]);
+	free(started);
 	for (size_t i = 0; i < nstore; i++) {
 		op_free(store[i]->value);
 		free(store[i]->key);

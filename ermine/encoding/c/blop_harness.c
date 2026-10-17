@@ -6,6 +6,7 @@
 //   {op: "name", bytes}   -> {name}
 #include "blop.h"
 #include "json.h"
+#include "json_text.h"
 
 #include <stdio.h>
 #include <stdlib.h>
