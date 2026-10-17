@@ -39,7 +39,7 @@ static char *cache;
 
 // the native fixtures' folder (the Makefile's: this file's fixtures/, from the repo's root)
 #ifndef PG_FIXTURES
-#define PG_FIXTURES "playground/programs/c/fixtures/"
+#define PG_FIXTURES "extensions/programs/c/fixtures/"
 #endif
 
 typedef struct {

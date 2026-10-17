@@ -5,6 +5,7 @@
 //   {op: "is", id}: {is}
 #include "id.h"
 #include "../../../ermine/encoding/c/json.h"
+#include "../../../ermine/encoding/c/json_text.h"
 
 #include <stdio.h>
 #include <stdlib.h>

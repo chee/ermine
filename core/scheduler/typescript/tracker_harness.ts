@@ -11,7 +11,8 @@
 // not seen before is a node with no links. fields a request does not use are not read.
 // answers: exactly these fields, nothing else. a write answers {}.
 // errors: { error: text }, the text free (not compared); the request changes nothing and the
-// next line goes on. begin in a run, add in a run ("use track"), an op not listed (case counts).
+// next line goes on. begin in a run, add in a run ("use track"), an op not listed (case counts),
+// a request missing from, to or of.
 // a link: one edge from → to. a reader may hold two links to one spot; reads and readers list
 // every link, so a duplicate shows twice. readers: one name per link.
 // a run: begin(from) ... end(from), one per node at a time; runs of different nodes nest or
@@ -32,8 +33,7 @@
 //   back to the link before. in a run the run goes on. untrack(from): all of from's, the cursor
 //   back to none, so a run's later tracks start from the front.
 // readers keep the order made: a link dropped leaves the others' order; a new link goes last.
-// not in the suite: track outside a run; a request missing from, to or of, or one with a name
-// that is not a string (the C harness stops on some of these).
+// not in the suite: track outside a run; a name that is not a string.
 import { createTracker, type Node } from "./tracker.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
 

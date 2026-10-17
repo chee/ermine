@@ -7,6 +7,7 @@
 #include "../../../ermine/encoding/c/cbor.h"
 #include "../../../ermine/encoding/c/commit_form.h"
 #include "../../../ermine/encoding/c/pack.h"
+#include "../../../ermine/encoding/c/json_text.h"
 
 #include <stdlib.h>
 #include <string.h>

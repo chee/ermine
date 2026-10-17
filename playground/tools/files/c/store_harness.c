@@ -1,4 +1,4 @@
-// The C store on the line protocol (playground/files/typescript/store_harness.ts, whose header has it): one JSON request per
+// The C store on the line protocol (playground/tools/files/typescript/store_harness.ts, whose header has it): one JSON request per
 // line in, one answer per line out, in order. One store at a time, made by open. The harness keeps a temp folder of its own
 // (disk.h): it makes the edits a scenario asks for and looks at the folder and the Trash itself, never through the store, and
 // shows every answer as the TypeScript harness does (the temp folder "@", each store's uuid "uuid", "uuid2", ...). Nodes are
@@ -8,8 +8,9 @@
 #define _GNU_SOURCE
 #endif
 
-#include "../../../ermine/encoding/c/cbor.h"
-#include "../../../ermine/encoding/c/json.h"
+#include "../../../../ermine/encoding/c/cbor.h"
+#include "../../../../ermine/encoding/c/json.h"
+#include "../../../../ermine/encoding/c/json_text.h"
 #include "disk.h"
 #include "saved_shown.h"
 #include "external.h"

@@ -1,4 +1,4 @@
-// The C files program on the line protocol (playground/files/typescript/program_harness.ts, whose header has it): one JSON
+// The C files program on the line protocol (playground/tools/files/typescript/program_harness.ts, whose header has it): one JSON
 // request per line in, one answer per line out, in order. A host's view of the program: a store, a graph, the program
 // started as the host starts it, and a watcher whose passes the scenario runs itself (no disk events, no timing), on a temp
 // folder of the run's own (disk.h): the harness makes the edits and the snapshots itself. Ids are minted "i1", "i2", ...
@@ -9,7 +9,8 @@
 #define _GNU_SOURCE
 #endif
 
-#include "../../../ermine/encoding/c/json.h"
+#include "../../../../ermine/encoding/c/json.h"
+#include "../../../../ermine/encoding/c/json_text.h"
 #include "disk.h"
 #include "graph.h"
 #include "names.h"

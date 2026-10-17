@@ -1,8 +1,9 @@
-// The C layout on the line protocol (playground/files/typescript/layout_harness.ts): one JSON request per line in, one
+// The C layout on the line protocol (playground/tools/files/typescript/layout_harness.ts): one JSON request per line in, one
 // answer per line out, in order. Every request stands alone; the shapes are in the reference harness's header.
 #include "layout.h"
 
-#include "../../../ermine/encoding/c/json.h"
+#include "../../../../ermine/encoding/c/json.h"
+#include "../../../../ermine/encoding/c/json_text.h"
 #include "names.h"
 
 #include <stdio.h>

@@ -15,8 +15,32 @@
 //    the undo of the patches on value (invert.ts); value, patches, cow as apply's. With
 //    cow: false the undo is the one apply builds changing the value in place: the same undo
 //    → { undo }                    the undo's patches, in the order to apply them, a value in
-//                                  them in the JSON form. none: []
+//                                  them in the JSON form, an index or position of -0 as 0.
+//                                  none: []
 //    → { error: { code, patch } }  an ApplyError: its code and the patch's index; as apply's
+//
+// A move's undo: moved back, else fallen back. decided by the patch's shape and these checks,
+// never by trying it. fallen back: the landing's undo (a put's or a span's), then what was taken
+// put back (its removal's undo). back: the gap the take left: a span's [c, c], a list element's
+// list [i, i], else the take's path. raised: an index of P through back's list, at or past the
+// gap, plus what was put back there
+//    landing unranged at P (old: what it replaced, if anything), the first that fits:
+//      P []: fallen back
+//      a span taken (n positions): fallen back if a lone surrogate met another at its edges, or
+//      the take's path is P or under it. else { back, move: { path: P, range: [0, n] } } (none
+//      when n is 0), then old put at P raised by n, or P raised removed
+//      P a list's index k: old put after it first ({ P's list, range: [k + 1, k + 1], value:
+//      [old] }), then { back, move: { path: P } }. fallen back if back's path is under P (P
+//      itself is fine)
+//      P a map key: { back, move: { path: P } }, then old put at P raised by 1 (the key goes
+//      last; nothing there before: the move alone). fallen back if back's path is P or under it
+//    landing in a span [a, b) at P (what moved now its [a, a + size]; t what the span held):
+//      t put after what landed ({ path: P, range: [a + size, a + size], value: t }, none when
+//      t is empty), then { back, move: [...P, a] for one element into a list, else P's
+//      [a, a + size] } (none when an empty span was taken). fallen back if back lies inside what
+//      that move takes, a list's element landed in a string or typed array, a lone surrogate met
+//      another at the take's edges or the landing's, or what moved ends in a lone high and t
+//      begins with a lone low
 //
 // A patch: { path, range?, value?, move? }; fields beyond these, here or in move, not read
 //    path: a list of keys. a string: a map's key (any string: "", "__proto__", NUL, a lone

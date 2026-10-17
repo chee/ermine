@@ -1,4 +1,4 @@
-// The C names on the line protocol (playground/files/typescript/names_harness.ts): one JSON request per line in, one answer
+// The C names on the line protocol (playground/tools/files/typescript/names_harness.ts): one JSON request per line in, one answer
 // per line out. Bytes are lowercase hex; a missing answer is null.
 //   {op: "extension", name} -> {result: ext | null}     {op: "fits", ext, form}              -> {result: bool}
 //   {op: "sniff", head}     -> {result}                 {op: "suffix", form, head?}          -> {result}
@@ -12,7 +12,8 @@
 //   {op: "bycodepoint", a, b} -> {result: -1 | 0 | 1}
 #include "names.h"
 
-#include "../../../ermine/encoding/c/json.h"
+#include "../../../../ermine/encoding/c/json.h"
+#include "../../../../ermine/encoding/c/json_text.h"
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -7,10 +7,11 @@
 // time
 // { op: "now", t }                           → {}   the clock, in ms (starts at 0)
 // the devices (dev: "a" | "b"; "a" is the pair's first channel, "b" its second)
-// { op: "connect", dev, name, topic, anchor? } → {}   presence's connect, the connection kept by name
+// { op: "connect", dev, name, topic, anchor?, patches? } → {}   presence's connect, the connection kept by name
 // { op: "stop", name }                       → {}
 // { op: "announce", name }                   → {}
 // { op: "set", dev, anchor, who, value, ttl }  → {}   setPresence
+// { op: "edit", dev, anchor, who, patches, ttl } → { ok }   editPresence
 // { op: "renew", dev, anchor, who, ttl }     → { ok }
 // { op: "clear", dev, anchor, who }          → {}
 // { op: "sweep", dev, at? }                  → { swept: [{ anchor, who }] }   at: ms, default now
@@ -22,6 +23,8 @@
 // { op: "table", dev, anchor }               → { value? }   the entry's value as the table has it
 // { op: "sent" }                             → { sent: [{ from, topic, message }] }   every message
 //    the channels carried, in order, its bytes decoded as JSON
+// { op: "sizes" }                            → { sizes: [n] }   the bytes of each message the channels carried
+//    (the JSON text, compact, keys in the order ttl, then value or patches, then n)
 // computes, made with the device's scope open, rerun as the reads they track change
 // { op: "watch", dev, name, f }              → {}   f: { presence: anchor } | { row: [anchor, who] }
 //    (a row gone: null); the run counted, the result (compared as JSON) kept
@@ -42,6 +45,7 @@ import { type Device, device } from "./world.ts"
 import {
 	clear,
 	connect,
+	editPresence,
 	ensure,
 	keep,
 	PART,
@@ -79,7 +83,11 @@ function answer(r: Request): Json {
 		case "connect":
 			connections.set(
 				r.name,
-				connect(dev(r), channels[r.dev as "a" | "b"], { topic: r.topic, anchor: r.anchor }),
+				connect(dev(r), channels[r.dev as "a" | "b"], {
+					topic: r.topic,
+					anchor: r.anchor,
+					patches: r.patches,
+				}),
 			)
 			return {}
 		case "stop":
@@ -91,6 +99,10 @@ function answer(r: Request): Json {
 		case "set":
 			setPresence(dev(r), r.anchor, r.who, r.value, r.ttl)
 			return {}
+		case "edit":
+			return { ok: editPresence(dev(r), r.anchor, r.who, r.patches, r.ttl) }
+		case "sizes":
+			return { sizes: pair.sent.map((m) => m.bytes.length) }
 		case "renew":
 			return { ok: renew(dev(r), r.anchor, r.who, r.ttl) }
 		case "clear":

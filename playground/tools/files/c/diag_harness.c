@@ -1,9 +1,10 @@
-// The C diag on the line protocol (playground/files/typescript/diag_harness.ts): one JSON request per
+// The C diag on the line protocol (playground/tools/files/typescript/diag_harness.ts): one JSON request per
 // line in, one answer per line out. A value is shown in its JSON form (ENCODING.tex: "/" for
 // bytes and typed arrays); text is a JSON string.
 //   {op: "write", value} -> {text} | {code}
 //   {op: "read", text}   -> {value} | {code, at, line, column}
 #include "diag.h"
+#include "../../../../ermine/encoding/c/json_text.h"
 
 #include <stdio.h>
 #include <stdlib.h>
