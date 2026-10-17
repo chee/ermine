@@ -26,7 +26,8 @@
 // that does not grow), taken off each size's time. so it must be good at n = 0.
 //
 // measuring: each size is run in a fresh harness process, up to RUNS times (not again past
-// AGAIN_MS: a slow run is not noisy), the least time taken, the baseline's off (not under FLOOR_MS).
+// AGAIN_MS: a slow run is not noisy), the least CPU time taken (user + system, by /usr/bin/time -p:
+// a busy machine does not count), the baseline's off (not under FLOOR_MS).
 // each step to the next size is judged on its own: the growth of the time is allowed SLACK times
 // the growth the bound has for those sizes (n 4n: linear x4, so x10 allowed; log: log 4n / log n;
 // n log n: both). a step whose larger size nets under QUICK_MS is not judged (all noise).
@@ -137,16 +138,28 @@ function lines(template: unknown[], n: number): { text: string; fails: boolean[]
 
 class Broken extends Error {}
 
+// the time of a run is its CPU time (user and system, as `time -p` reports): a busy machine slows
+// the clock, not the work. without /usr/bin/time, the clock's
+const timer = (() => {
+	try {
+		return Deno.statSync("/usr/bin/time").isFile
+	} catch {
+		return false
+	}
+})()
+
 async function once(cmd: string[], input: Uint8Array, fails: boolean[]): Promise<number> {
 	const started = performance.now()
 	let child
+	const run = timer ? ["/usr/bin/time", "-p", ...cmd] : cmd
 	try {
-		child = new Deno.Command(cmd[0], {
-			args: cmd.slice(1),
+		child = new Deno.Command(run[0], {
+			args: run.slice(1),
 			stdin: "piped",
 			stdout: "piped",
 			stderr: "piped",
-			signal: AbortSignal.timeout(CAP_MS),
+			// a backstop only: the cap is on the work
+			signal: AbortSignal.timeout(CAP_MS * 6),
 		}).spawn()
 	} catch (e) {
 		throw new Broken(`cannot run ${cmd[0]}: ${e}`)
@@ -162,13 +175,20 @@ async function once(cmd: string[], input: Uint8Array, fails: boolean[]): Promise
 	try {
 		out = await done
 	} catch {
-		throw new Broken(`past ${CAP_MS / 1000}s`)
+		throw new Broken(`past ${CAP_MS * 6 / 1000}s of the clock`)
 	}
-	const ms = performance.now() - started
-	if (ms >= CAP_MS * 0.98) throw new Broken(`past ${CAP_MS / 1000}s`)
+	let ms = performance.now() - started
+	let err = new TextDecoder().decode(out.stderr)
+	if (timer) {
+		const m = err.match(/\nreal [\d.]+\nuser ([\d.]+)\nsys ([\d.]+)\n?$/)
+		if (m) {
+			ms = (Number(m[1]) + Number(m[2])) * 1000
+			err = err.slice(0, m.index)
+		}
+	}
+	if (ms >= CAP_MS) throw new Broken(`past ${CAP_MS / 1000}s`)
 	if (out.code !== 0) {
-		const err = new TextDecoder().decode(out.stderr).trim().slice(0, 300)
-		throw new Broken(`exited ${out.code}${err ? `: ${err}` : ""}`)
+		throw new Broken(`exited ${out.code}${err.trim() ? `: ${err.trim().slice(0, 300)}` : ""}`)
 	}
 	const answers = new TextDecoder().decode(out.stdout).split("\n").filter((l) => l !== "")
 	if (answers.length !== fails.length) {
