@@ -1,0 +1,207 @@
+{
+	"title": "a tracking-end listener that throws as what an effect's last act made goes, before its act: finish, then rethrow. the act goes ahead, its error none (a cleanup's is the act's, a listener's is not), then the error comes out of the pulse, left there: what the act made runs at the next",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1,
+				"k": 0
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "effect",
+			"name": "e",
+			"scope": "o",
+			"f": {
+				"read": "x"
+			},
+			"act": {
+				"do": [
+					{
+						"log": {
+							"given": "value"
+						}
+					},
+					{
+						"compute": [
+							"d",
+							{
+								"read": "k"
+							}
+						]
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "e",
+						"tick": 2
+					},
+					{
+						"starts": "e",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"due": "d",
+						"tick": 3,
+						"writer": "e"
+					},
+					{
+						"acts": "e",
+						"run": 1
+					},
+					{
+						"starts": "d",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "d",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					1
+				]
+			}
+		},
+		{
+			"op": "listener",
+			"on": "forgotten",
+			"at": "k",
+			"throw": "stop threw",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 2
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {
+				"error": "stop threw"
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "e",
+						"tick": 4
+					},
+					{
+						"starts": "e",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"due": "d",
+						"tick": 5,
+						"writer": "e"
+					},
+					{
+						"acts": "e",
+						"run": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					2
+				]
+			}
+		},
+		{
+			"op": "forgotten",
+			"expect": {
+				"keys": [
+					"k"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"starts": "d",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "d",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "started",
+			"expect": {
+				"keys": [
+					"x",
+					"k",
+					"k"
+				]
+			}
+		}
+	]
+}

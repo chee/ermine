@@ -1,0 +1,143 @@
+{
+	"title": "a request or form making something under a scope that is not there, at a name taken: the scope is checked first (no scope), then the name (name taken)",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": 1,
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "nope",
+			"f": 1,
+			"expect": {
+				"error": "no scope nope"
+			}
+		},
+		{
+			"op": "effect",
+			"name": "c",
+			"scope": "nope",
+			"f": 1,
+			"act": null,
+			"expect": {
+				"error": "no scope nope"
+			}
+		},
+		{
+			"op": "scope",
+			"name": "c",
+			"parent": "nope",
+			"info": [
+				[
+					"a",
+					1
+				]
+			],
+			"expect": {
+				"error": "no scope nope"
+			}
+		},
+		{
+			"op": "run",
+			"scope": "o",
+			"do": {
+				"scope": [
+					"c",
+					[
+						[
+							"a",
+							1
+						]
+					],
+					"nope"
+				]
+			},
+			"expect": {
+				"error": "no scope nope"
+			}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": 1,
+			"expect": {
+				"error": "name taken: c"
+			}
+		},
+		{
+			"op": "scope",
+			"name": "c",
+			"parent": "o",
+			"info": [
+				[
+					"a",
+					1
+				]
+			],
+			"expect": {
+				"error": "name taken: c"
+			}
+		},
+		{
+			"op": "run",
+			"scope": "o",
+			"do": {
+				"scope": [
+					"c",
+					[
+						[
+							"a",
+							1
+						]
+					],
+					"o"
+				]
+			},
+			"expect": {
+				"error": "name taken: c"
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 1
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		}
+	]
+}

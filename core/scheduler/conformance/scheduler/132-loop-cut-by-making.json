@@ -1,0 +1,129 @@
+{
+	"title": "a flagged run that makes a computation (not one made before: a new one) cuts the loop there, as a dropped loop mark does: its result equal, it ends looping, not done; the one made runs",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"if": [
+					{
+						"eq": [
+							{
+								"read": "c"
+							},
+							null
+						]
+					},
+					1,
+					{
+						"do": [
+							{
+								"compute": [
+									"m",
+									{
+										"read": "c"
+									}
+								]
+							},
+							{
+								"read": "c"
+							}
+						]
+					}
+				]
+			},
+			"to": "c",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 1
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"due": "c",
+						"tick": 2,
+						"writer": "c"
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"due": "m",
+						"tick": 3,
+						"writer": "c"
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "looping",
+						"equal": true,
+						"through": [
+							"c"
+						]
+					},
+					{
+						"starts": "m",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "m",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "c",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		}
+	]
+}

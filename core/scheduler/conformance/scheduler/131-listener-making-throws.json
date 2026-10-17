@@ -1,0 +1,225 @@
+{
+	"title": "a mark listener that throws as a computation is made: a making gives back the computation, so cannot throw too (mine): it is made and named, and the error comes out of a pulse, the one going on or else the next, once that pulse is done. made by a request, in run(), and in a run: the run that made it is done, not failed",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "listener",
+			"on": "mark",
+			"throw": "mark threw",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"read": "x"
+			},
+			"to": "c",
+			"expect": {}
+		},
+		{
+			"op": "tick",
+			"expect": {
+				"tick": 2
+			}
+		},
+		{
+			"op": "get",
+			"key": "c",
+			"expect": {
+				"value": null
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {
+				"error": "mark threw"
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 2
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "c",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "listener",
+			"on": "mark",
+			"throw": "mark threw in run",
+			"expect": {}
+		},
+		{
+			"op": "run",
+			"scope": "o",
+			"do": {
+				"compute": [
+					"m",
+					{
+						"read": "x"
+					},
+					"m"
+				]
+			},
+			"expect": {
+				"value": null
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {
+				"error": "mark threw in run"
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "m",
+						"tick": 4
+					},
+					{
+						"starts": "m",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "m",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "m",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "p",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"compute": [
+							"q",
+							{
+								"read": "x"
+							}
+						]
+					},
+					0
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "listener",
+			"on": "mark",
+			"throw": "mark threw in pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {
+				"error": "mark threw in pulse"
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "p",
+						"tick": 6
+					},
+					{
+						"starts": "p",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"due": "q",
+						"tick": 7,
+						"writer": "p"
+					},
+					{
+						"ends": "p",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "q",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "q",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		}
+	]
+}
