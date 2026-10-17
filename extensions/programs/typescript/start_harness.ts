@@ -1,81 +1,43 @@
-// start and stop (start.ts) on the line protocol: one JSON request per line in, one answer per line
-// out, in order. its own world, lasting for the process: a scheduler, a table, paths, the host's
-// places (root "R", asked [processes(R), children]: the outermost box), scope nodes; the table's
-// events and every write told to the host's places (a box's places is a view of them). the host
-// writes with its scope open, its info [["actor","test"]]. boxes and processes by name: a folder a
-// box made (a fresh id) is answered as "box:<name>", a process's node as "proc:<name>", wherever
-// they are in an answer. a PlacesError answers { error: code }. conformance/start's suite and
-// conformance/load's (its suite.json naming this harness): load's, with the runners' loads and the
-// loads and said requests, are the TypeScript's only (C has no live values to load)
+// start_harness: start and stop (start.ts) on the line protocol, one JSON request per line in, one
+// answer per line out. one world for the process: scheduler, table, paths, the host's places (root
+// "R"), scope nodes. the host writes with its scope open, info [["actor","test"]]. a box's folder
+// answers as "box:<name>", a process's node as "proc:<name>". a PlacesError: { error: code }.
+// suites: conformance/start, conformance/load (TypeScript only), conformance/native (both).
 //
-// the compilers, by name, each counting its calls (build_harness' own):
-//   upper  a string uppercased            wrap  { wasm: input }
-//   slow   the input, once settled         boom  throws Error("boom")
-// the runner: records the code, the args and the api's keys it was given, and gives a stop that
-// records itself. the program it runs, given each arg: a computer of its own, made through the api,
-// looking the arg up from the process's folder each run (lib's lookup, nearest first) and keeping
-// what it finds
-// createProcessAPI: { places: the box's, process: { id, at, args, cwd }, watch(name, seen) } (watch:
-// that computer, looking the name up from the process's cwd, nearest first up to its root)
+// compilers, each counting calls: upper (uppercase), wrap ({ wasm: input }), slow (input, once
+// settled), boom (throws Error("boom")). the runner records code, args and api keys; its program
+// looks each arg up from the process's folder every run. createProcessAPI gives { places,
+// process: { id, at, args, cwd }, watch(name, seen) }.
 //
-// the world:
-// { op: "kids", id, value }                 → {}   the children entry there, replaced (a table event)
-// { op: "attrs", id, value }                → {}   the attributes entry there, replaced
-// { op: "value", id, value }                → {}   the value entry there, replaced (its JSON form:
-//    {"/": {"bytes": b64}} bytes)
-// { op: "compiler", id, compiler }          → {}   the value entry there: the compiler named
-// { op: "runner", id, load? }               → {}   the value entry there: the runner, a function of
-//    its own. load, a load on it, each counting its calls: "js" imports the code as a module (a
-//    data: URL), its exports given; "wasm" instantiates it, its exports given, a compile(n) with a
-//    memory taken as a compiler (a string or bytes written at 0, n bytes read back, as given)
-// { op: "create", name, folder?, at? }      → {}   createBox: at the folder id, or at the address at
-//    from R (made if missing)
-// { op: "box", box, path, node }            → {}
-// { op: "unbox", box, path }                → {}
-// processes:
-// { op: "programs", cache }                 → {}   createBuilds (its cache folder the id cache), then
-//    createPrograms, with the host's scope open
-// { op: "start", name, box?, program, from?, chain?, at, args?, cwd? } → { id, at }, or a refusal
-//    satisfy(program, from) in the box (none: the host's places), then start with its chain
-//    numbered chain (none: 0). at and cwd: addresses (names, or a string); from: names, none: the
-//    cwd (none: the folder at is in)
-// { op: "start", name, box?, file, from?, way?, at, args?, cwd? } → the same: openwith(file,
-//    from)'s way numbered way (none: 0). satisfy's or openwith's own whynot (nothing yielded):
-//    answered as { refused: its why, ...the rest }
-// { op: "stop", name }                      → {}
-// { op: "pulse" }                           → {}
-// { op: "settle", fail? }                   → {}   every slow call waiting resolved (fail: rejected
-//    with Error(fail)), the promises left to land, then a pulse; again while a process is pending
-//    (a load lands in a few turns), up to 200 times
-// { op: "process", name }                   → { parts, status, args, cwd, pin }   the process's
-//    node: its parts' names; its status: "pending", { failed: message }, { refused: code } (a
-//    BuildError), null (none); args, cwd and pin as written (null: none)
-// { op: "here", box?, path }                → { id }   what the box's places (none: the host's) has
-//    at the path (lib's get); null: nothing
-// { op: "runs" }                            → { runs: [{ process, code, args, keys }], stops }
-//    each runner call in order; each stop called, by process
-// { op: "found", name }                     → { runs, found }   the process's program: its
-//    computers' runs, and what each arg's last run found (null: nothing)
-// { op: "sites", name }                    → { sites }   the process's scope's chain of sites
-//    (ermine/sites, start.ts and processes' in its ours): each file's name, no folder and no
-//    extension
-// { op: "calls" }                           → { upper, wrap, slow, boom }
-// { op: "loads" }                           → { js, wasm }   the runners' loads' calls
-// { op: "said" }                            → { said }   what loaded code said, in order: say(x), a
-//    global of this realm (the loaded code's too)
-// { op: "cache" }                           → { size }   the names in the cache folder
-// native (conformance/native, both languages; its suite.json gives this harness --allow-write,
-// --allow-ffi and --allow-run=/usr/bin/codesign):
-// { op: "fixture", id, name }               → {}   the value entry there: the bytes of the native
-//    fixture name (c/fixtures/<name>.so, the root Makefile's: reverse, runner, unsigned)
-// { op: "dlopen", id }                      → {}   the value entry there: the dlopen runner
-//    (dlopen.ts), made as first asked for: its files in a folder of the harness's own, its loads
-//    (a by's, or a library run as a program) and their compiles counted, its signings noted; the
-//    api it hands native code a struct { ctx, write(ctx, bytes, n) }, write keeping the bytes as
-//    text, by process
-// { op: "native" }                          → { loads, compiles, files, signed, wrote }   its
-//    loads, their compiles, the files in its folder now, the files it signed, and what native
-//    code wrote ([{ process, text }], in order)
+// { op: "kids" | "attrs" | "value", id, value }  -> {}   that entry replaced (value: JSON form)
+// { op: "compiler", id, compiler }               -> {}   value: the named compiler
+// { op: "runner", id, load? }                    -> {}   value: the runner; load "js" | "wasm"
+// { op: "create", name, folder?, at? }           -> {}   createBox at folder, or at address from R
+// { op: "box", box, path, node }                 -> {}
+// { op: "unbox", box, path }                     -> {}
+// { op: "programs", cache }                      -> {}   createBuilds then createPrograms
+// { op: "start", name, box?, program, from?, chain?, at, args?, cwd? } -> { id, at } | refusal
+// { op: "start", name, box?, file, from?, way?, at, args?, cwd? }      -> the same, via openwith
+//    nothing yielded: { refused: why, ...rest }
+// { op: "stop", name }                           -> {}
+// { op: "pulse" }                                -> {}
+// { op: "settle", fail? }                        -> {}   slow calls resolved (or rejected), pulse;
+//    again while a process is pending, up to 200 times
+// { op: "process", name }  -> { parts, status, args, cwd, pin }  status: "pending" | { failed } |
+//    { refused } | null
+// { op: "here", box?, path }                     -> { id } | null
+// { op: "runs" }                                 -> { runs: [{ process, code, args, keys }],
+//    stops }
+// { op: "found", name }                          -> { runs, found }
+// { op: "sites", name }                          -> { sites }  file names, no folder or extension
+// { op: "calls" }                                -> { upper, wrap, slow, boom }
+// { op: "loads" }                                -> { js, wasm }
+// { op: "said" }                                 -> { said }  say(x) calls from loaded code
+// { op: "cache" }                                -> { size }
+// { op: "fixture", id, name }    -> {}  value: bytes of c/fixtures/<name>.so (native)
+// { op: "dlopen", id }           -> {}  value: the dlopen runner (dlopen.ts); native gets
+//    { ctx, write(ctx, bytes, n) }
+// { op: "native" }               -> { loads, compiles, files, signed, wrote }
 import createEntry, { type Entry } from "@ermine/node/entry"
 import { createScheduler, PENDING } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"

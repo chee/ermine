@@ -1,56 +1,35 @@
-// devices (transport.ts) on the line protocol (conformance/typescript/harness.ts): commits over
-// Subduction, with no table, joined by in-memory pipes. state lasts for the process. another
-// implementation joins by speaking this (HARNESS). conventions, and a commit by label:
-// extensions/sync/conformance/README.md
+// transport_harness: devices (transport.ts) on the line protocol (harness.ts), commits over
+// Subduction with no table, joined by in-memory pipes. conventions:
+// extensions/sync/conformance/README.md. a device here checks nothing and gives each fragment it
+// builds a snapshot (replay.ts). a commit is signed by its seed (default the device's). doc: an
+// ermine:// id, default ermine://2a…2a00…00
 //
-// a device here checks nothing (every commit applies) and gives every fragment it builds a snapshot:
-// the tables at its head (replay.ts), packed. a commit a request makes is signed by its seed,
-// default the device's, and sealed for each document it is used in. doc: an ermine:// id, default
-// ermine://2a…2a00…00 (16 bytes each)
-//
-// { op: "device", name, seed, storage?, limits? }  → { key }    storage: a label; a device made with
-//                                                        it takes in what that storage holds;
-//                                                        limits: the device's (transport.ts Limits)
-// { op: "close", device }                 → {}         closed, its pipes cut
-// { op: "connect", a, b }                 → {}         a pipe, the handshake done (a starts)
+// { op: "device", name, seed, storage?, limits?, lazy?, follow? } → { key }  storage: a label,
+//    taken in; limits: transport.ts Limits; follow: docs followed before the first run
+// { op: "close", device }                 → {}         closed, pipes cut
+// { op: "connect", a, b }                 → {}         pipe + handshake (a starts)
 // { op: "disconnect", a, b }              → {}
 // { op: "follow", device, doc? }          → {}
-// { op: "make", name, ...fields }         → {}         a commit made, labelled and sealed
-// { op: "take", device, doc?, layer?, name, ...fields } → { added }   the device's own take (made
-//                                                        first when fields are given); layer
-//                                                        stored (default) or ephemeral
-// { op: "put", device, doc?, commit, head?, parents?, blob? } → {}   addCommit as given: blob the
-//                                                        commit's seal (or hex), head its stored
-//                                                        id, parents its parents' stored ids,
-//                                                        unless given (labels: their stored ids)
+// { op: "make", name, ...fields }         → {}         made, labelled, sealed
+// { op: "take", device, doc?, layer?, name, ...fields } → { added }  the device's take (made
+//    first when fields given); layer stored (default) | ephemeral
+// { op: "put", device, doc?, commit, head?, parents?, blob? } → {}  addCommit as given; defaults
+//    from the commit's seal and stored ids
 // { op: "fragment", device, doc?, head, members?, boundary?, checkpoints?, tables?, form?, blob?,
-//   tamper? } → {}                                       addFragment as given: blob {run: the
-//                                                        members' seals packed, in order;
-//                                                        snapshot?: the tables packed}; form
-//                                                        "members": {members: [seal…], snapshot?}
-//                                                        (as first written), "list": [seal…];
-//                                                        blob: a value (its JSON form) instead.
-//                                                        checkpoints: default, each member but the
-//                                                        head whose stored id has a leading zero
-//                                                        byte. tamper: members whose seals go with
-//                                                        their signature's last byte flipped
+//   tamper? } → {}  addFragment as given: blob {run, snapshot?}; form "members" | "list"; blob: a
+//    JSON value instead; checkpoints default: members with a leading zero byte; tamper: seals'
+//    last signature byte flipped
 // { op: "quiet" }                         → {}         every device idle, nothing crossing
-// { op: "heads", device, doc?, layer? }   → { heads }   the layer's history's, in the agreed order
-// { op: "refused", device, doc?, layer? } → { refused } the history's [{ name, refused }]
-// { op: "taking", device, doc?, layer? }  → { waiting, refused }   what the transport holds back
-//                                                        or refused before the histories
-// { op: "arrived", device }               → { arrived }  [[doc, layer, commit, heard]] announced
-//                                                        since last asked, in order
-// { op: "stored", device, doc? }          → { stored }   the loose commits Subduction holds,
-//                                                        sorted by stored id
-// { op: "fragments", device, doc? }       → { fragments }  [{ head, members, boundary }], each list
-//                                                        and the fragments sorted by stored id
-// { op: "blob", device, doc?, head }      → { members, snapshot?, hash }   the stored fragment's
-//                                                        blob: its run's commits in order, its
-//                                                        snapshot's tables, BLAKE3 of its bytes
-// { op: "snapshot", device, doc?, commit } → { tables } | {}   the tables a fragment headed there
-//                                                        carried
-// a commit in an answer: its label (for its name and its seal's stored id alike), else hex
+// { op: "heads", device, doc?, layer? }   → { heads }  agreed order
+// { op: "refused", device, doc?, layer? } → { refused } [{ name, refused }]
+// { op: "taking", device, doc?, layer? }  → { waiting, refused }  held back before the histories
+// { op: "arrived", device }               → { arrived }  [[doc, layer, commit, heard]]
+//    since last asked, in order
+// { op: "stored", device, doc? }          → { stored }   sorted by stored id
+// { op: "fragments", device, doc? }       → { fragments }  [{ head, members, boundary }], sorted
+// { op: "blob", device, doc?, head }      → { members, snapshot?, hash }  hash: BLAKE3 of bytes
+// { op: "snapshot", device, doc?, commit } → { tables } | {}
+// commit in an answer: its label (name and stored id alike), else hex
 import * as sd from "npm:@automerge/subduction@0.23.0"
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import * as cbor from "@ermine/encoding/cbor"
@@ -148,11 +127,14 @@ async function answer(r: Request): Promise<Answer> {
 			const device: Device = createDevice({
 				signer,
 				limits: r.limits,
+				lazy: r.lazy === true,
 				storage: storage as unknown as sd.SedimentreeStorage,
 				snapshotOf: (d, head) => snapshot(replay(device.history(d), head.name) ?? {}),
 			})
 			device.arrived((a) => arrived.push(a))
+			const follows = ((r.follow ?? []) as string[]).map((x) => device.follow(x))
 			await device.ready()
+			await Promise.all(follows)
 			devices.set(r.name, {
 				name: r.name,
 				seed: r.seed,

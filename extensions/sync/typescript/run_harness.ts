@@ -1,29 +1,18 @@
-// a run of sealed commits (run.ts) on the line protocol (conformance/typescript/harness.ts). state
-// lasts for the process: the commits made by label, each sealed by its seed's signer, and the runs
-// packed by label. another implementation joins by speaking this (HARNESS). conventions, and a
-// commit by label: extensions/sync/conformance/README.md
+// run_harness: run.ts on the line protocol (harness.ts). one process: commits by label, each sealed
+// by its seed's signer; runs packed by label. conventions: extensions/sync/conformance/README.md
 //
-// { op: "make", name, ...fields }          → {}             a commit made, labelled and sealed (for
-//                                                            the default document, 2a × 16 then
-//                                                            00 × 16)
-// { op: "sealed", commit }                 → { sealed }     its sealed bytes, hex
-// { op: "pack", commits, name? }           → { run }        commits: labels, or sealed bytes as hex,
-//                                                            or { vouched: label, stored? }: the
-//                                                            commit without its seal, its stored id
-//                                                            (hex; default its seal's); name: the
-//                                                            run kept under that label
-// { op: "unpack", run, set?, drop? }       → { sealed }     run: a label, or hex. set: columns put
-//                                                            in (each a value in its JSON form),
-//                                                            drop: columns taken out, the run
-//                                                            encoded canonically again first.
-//                                                            sealed: each commit signed in it, a
-//                                                            label, or hex when made by none; one
-//                                                            vouched for by the next, { vouched:
-//                                                            label (or its name, hex), stored? }
-//                                                            (stored when not its seal's: hex)
-// { op: "unpack", value }                  → { sealed }     the value encoded canonically first
-// { op: "columns", run }                   → { columns }    the run as a value, in its JSON form
-// refused: { error: code, column? }, RunError's
+// { op: "make", name, ...fields }      → {}            made, labelled, sealed (default document:
+//                                                      2a × 16 then 00 × 16)
+// { op: "sealed", commit }             → { sealed }    hex
+// { op: "pack", commits, name? }       → { run }       commits: labels, hex sealed bytes, or
+//                                                      { vouched: label, stored? }; name: kept so
+// { op: "unpack", run, set?, drop? }   → { sealed }    run: label or hex; set/drop: columns
+//                                                      changed, then canonically encoded. sealed:
+//                                                      labels (hex if unmade), vouched ones as
+//                                                      { vouched: label | hex, stored? }
+// { op: "unpack", value }              → { sealed }    value canonically encoded first
+// { op: "columns", run }               → { columns }   JSON form
+// refused: { error: code, column? } (RunError)
 import * as cbor from "@ermine/encoding/cbor"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"

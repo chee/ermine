@@ -1,69 +1,55 @@
-// The reference places (filesystem/places/typescript/places.ts) on the line protocol: one JSON
-// request per line in, one answer per line out, in order. State lasts for the process: the world of
-// world_harness.ts, the computes made by name. Another implementation joins by speaking this (HARNESS). The
-// world's requests (the table, the writes, the scheduler) are in world_harness.ts; these are places' own,
-// with the programs. a path is a list of names from the root "R".
+// places harness: the reference places (places.ts) on the line protocol, one JSON request per line
+// in, one answer per line out. state lasts for the process: the world (world_harness.ts: table,
+// writes, scheduler) and computes by name. a path: names from the root "R".
 //
 // reads, outside any run (told to no one):
 // { op: "read", part, id, path? }           → { value? }
-// { op: "change", part, id }                → { patches? }   the patches of its latest edit
-// { op: "get", path }                       → { id? }   the id there; none: no id
+// { op: "change", part, id }                → { patches? }   of its latest edit
+// { op: "get", path }                       → { id? }
 // { op: "list", at }                        → { names }
 // { op: "lookup", names, from, all? }       → { path? } | { paths }
 // { op: "at", value, path }                 → { value? }   places' at
-// the path cache (world_harness.ts: cache), outside any run, so an entry made goes at once unless a run
-// tracks it:
-// { op: "cached", path }                    → { id? }   the cache's get
-// { op: "cachedList", at }                  → { names }   the cache's list
-// { op: "watch", name, scope, f }           → {}   a compute made with scope open, running the
-//    program f each run, its results (compared as JSON) kept (world: state)
-// watching a path (world_harness.ts):
-// { op: "watchPath", name, path, part?, at? } → {}   places' watchPath, what it is told kept
-// { op: "watched", name }                   → { facts }   told since last asked, in order:
+// path cache (world_harness.ts: cache), outside any run; an entry made goes unless a run tracks it:
+// { op: "cached", path }                    → { id? }
+// { op: "cachedList", at }                  → { names }
+// { op: "watch", name, scope, f }           → {}   a compute running program f (world: state)
+// { op: "watchPath", name, path, part?, at? } → {}   places' watchPath
+// { op: "watched", name }                   → { facts }   since last asked:
 //    { part, id, patches, actor? }
-// { op: "unwatch", name }                   → {}   stopped
-// spots:
-// { op: "reads", name }                     → { reads }   the reads of the latest ended run of the
-//    compute named, in order, each as places' spot named it as the run ended: { part, id, path }
-//    (path null: the change spot), null: not one of places' spots; no run ended: []
+// { op: "unwatch", name }                   → {}
+// { op: "reads", name }                     → { reads }   the latest ended run's, as spots then:
+//    { part, id, path } (path null: change spot), null not a spot; no run ended: []
 // { op: "spot", key }                       → { spot? }   places' spot of a string key
 // runs (runs.ts):
-// { op: "runs" }                            → {}   the runs listener, made once (a second: nothing)
-// { op: "giveRun", name, id }               → {}   the compute named is given the node its run is
-//    written on
-// { op: "runOf", id }                       → { run }   the node's latest run, read outside any run:
-//    null, or { n, end, error?, timed, reads, writes }: error, its message; timed, started and
-//    ended both there, started first; a read { part, id, path, keys?, actor } (actor: of the change
-//    seen, null for none), or null for a key places can't name; a write { part, id, actor }
-// { op: "mark", keys }                      → {}   the keys named (as track's) marked, from outside
+// { op: "runs" }                            → {}   the runs listener, made once
+// { op: "giveRun", name, id }               → {}   the compute's runs written on node id
+// { op: "runOf", id }                       → { run }   outside a run: null |
+//    { n, end, error?, timed, reads, writes }; timed: started then ended; read: { part, id, path,
+//    keys?, actor } | null; write: { part, id, actor }
+// { op: "mark", keys }                      → {}   keys (as track's) marked from outside
 // pruning (places.ts):
-// { op: "rows" }                            → {}   from now on the reads through the filesystem below
-//    (get, list, lookup; the programs get, values, names, level, lookup) go through a view of "R"
-//    given [rows, children]: rows, a trie on the value entry "rows" (a leaf an id, a level a map with
-//    names; nothing on the path: none), a stand-in for ermine/processes'
-// { op: "asked" }                           → { steps, names }   how many times rows was asked a step
-//    and its names since last asked; its level not counted
+// { op: "rows" }                            → {}   from now on reads go through a view of "R" given
+//    [rows, children]; rows: a trie on value entry "rows" (leaf an id, level a map of names)
+// { op: "asked" }                           → { steps, names }   rows' asks since last asked
 //
-// a program e: a number, string, boolean or null is itself; a list, its members evaluated; a map
-// is one of, or one of the world's plain forms (world_harness.ts, basic):
-//   {"read":[part,id,path?]}          the value, or null (the path's steps evaluated)
-//   {"change":[part,id]}              the patches of its latest edit, or null
-//   {"get":path}                      the id there, or null
-//   {"values":path}                   the value part of the id there, or null
-//   {"names":path}                    the names there
-//   {"cached":path}                   the cache's get: the id there, or null
-//   {"cachedNames":path}              the cache's list: the names there
-//   {"cachedEntries":path}            the cache's entries: each { id, from }
-//   {"cachedMembers":path}            the cache's members: each { name, id, from? }
-//   {"level":path}                    the ids of the members there
-//   {"lookup":[names,from]}           the path of the nearest, or null; "all": true, every path
-//   {"status":id}                     the id's status as statusOf tells it ("pending", { error }, or
-//                                     null), the read told (so a reader of it reruns)
-//   {"wait":null}                     the scheduler's PENDING: the run is pending
-//   {"track":name}                    a key of its own, one per name, tracked; null
-//   {"throw":message}                 an error thrown by the run
-//   {"write":request}                 the write request, made with the run's scope open (by the
-//                                     run); null. {"eval":e} anywhere in it is e evaluated
+// program e: a number, string, boolean or null is itself; a list, its members evaluated; a map,
+// a world plain form or one of:
+//   {"read":[part,id,path?]}    the value or null (path steps evaluated)
+//   {"change":[part,id]}        its latest edit's patches or null
+//   {"get":path}                the id there or null
+//   {"values":path}             the value part of the id there or null
+//   {"names":path}              the names there
+//   {"cached":path}             cache get: id or null
+//   {"cachedNames":path}        cache list
+//   {"cachedEntries":path}      cache entries: each { id, from }
+//   {"cachedMembers":path}      cache members: each { name, id, from? }
+//   {"level":path}              the member ids there
+//   {"lookup":[names,from]}     the nearest path or null; "all": true, every path
+//   {"status":id}               statusOf: "pending" | { error } | null, tracked
+//   {"wait":null}               the scheduler's PENDING
+//   {"track":name}              a key of its own per name, tracked; null
+//   {"throw":message}           throws
+//   {"write":request}           the request, made with the run's scope open; null. {"eval":e}: e
 import type { Key as Step } from "@ermine/op/apply"
 import { type Computer, PENDING } from "@ermine/scheduler"
 import type { Key } from "@ermine/table"

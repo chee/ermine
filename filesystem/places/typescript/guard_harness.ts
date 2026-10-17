@@ -1,39 +1,29 @@
-// The reference guard (filesystem/places/typescript/guard.ts) on the line protocol: one JSON request
-// per line in, one answer per line out, in order (conformance/typescript/harness.ts). State lasts
-// for the process: the world of world_harness.ts,
-// guards by name, the computes made by name. Each program asks its guard, then reads and writes
-// itself, as a process layer will. Another implementation joins by speaking this (HARNESS).
+// guard harness: the reference guard (guard.ts) on the line protocol, one JSON request per line
+// in, one answer per line out (conformance/typescript/harness.ts). state lasts for the process:
+// the world (world_harness.ts), guards and computes by name.
 //
-// a policy is data: "yes", "pending", {no: reason}, {grants: [part, id]}, {all: [policy]},
-// {any: [policy]}, {only: [op], policy}, {access: [part, id]} (the value there: not there,
-// pending; "allow", yes; else no "closed"), {denyid: id} (no "denied id" for that target id),
-// {whois: [actor, reader]} (yes for that actor and reader of who, else no "whois"). every ask of a
-// guard's policy is recorded, whole, for asks
-// a start (ts): an id, a thing by id alone; or {"at": path}, the thing at that path, asked through the
-// guard (refused: its id REFUSED)
-// from: where the asker is: a path
+// policy: "yes" | "pending" | {no: reason} | {grants: [part, id]} | {all: [policy]}
+//   | {any: [policy]} | {only: [op], policy} | {denyid: id} (no "denied id" for that target id)
+//   | {access: [part, id]}  the value there: none pending, "allow" yes, else no "closed"
+//   | {whois: [actor, reader]}  yes for that actor and reader, else no "whois"
+// ts (a start): an id, or {"at": path} asked through the guard (refused: REFUSED). from: a path
 //
-// { op: "guard", name, may?, from? }           → {}
-// { op: "eval", guard, scope?, e }              → { value } of the program e, with scope open
-//    (none: nothing open). refused: { error: "refused", reason, op }; pending: { error: "pending" };
-//    another error: { error: its code }
-// { op: "watch", name, scope, guard, f, then?, effect? } → {}   a compute made with scope open,
-//    running f each run, its results (compared as JSON) kept (world: state). then: a program run
-//    in its set, {"given":null} the value. "effect": true: an effect, then its act
-// { op: "asks" }                                → { asks }   the asks of any policy since last
-//    asked, then forgotten: { op, target: {part?, id?, field?, path?}, who, from? }
+// { op: "guard", name, may?, from? }   → {}
+// { op: "eval", guard, scope?, e }      → { value } | { error: "refused", reason, op }
+//                                         | { error: "pending" } | { error: code }
+// { op: "watch", name, scope, guard, f, then?, effect? } → {}   a compute running f each run
+//    (world: state); then: run in its set, {"given":null} the value; effect: true, an effect + act
+// { op: "asks" }                        → { asks }   every policy ask since last asked, whole:
+//                                         { op, target: {part?, id?, field?, path?}, who, from? }
 //
-// programs, the world's plain forms (world_harness.ts, basic), and:
-//   {"get":path} {"get":path,"full":true}   the id there, asked (REFUSED for refused); null for
-//       none; full: [id, name]
-//   {"members":path} {"members":path,"full":true}   the ids of the members there, asked (REFUSED
-//       for a refused one); full: [id, name] of each
-//   {"read":[ts,part,path?]}          the value, asked; null for none
-//   {"edit":[ts,part,patches]}        each patch asked by its path (and a move's), then written;
-//                                     the change, summed up (world_harness.ts, summary)
-//   {"place":[[ts,name],id]}          the slot asked, then the id placed there; null
-//   {"try":e}                         e; refused: "refused"; pending: "pending"; an error: its code
-//   {"given":null}                    in then: the value
+// programs: the world's plain forms (world_harness.ts), and
+//   {"get":path,"full"?:true}       the id there, asked; null none; full: [id, name]
+//   {"members":path,"full"?:true}   member ids there, asked (REFUSED if refused); full: [id, name]
+//   {"read":[ts,part,path?]}        the value, asked; null none
+//   {"edit":[ts,part,patches]}      each patch asked by its path (and a move's), written; summed up
+//   {"place":[[ts,name],id]}        the slot asked, then id placed; null
+//   {"try":e}                       e; refused: "refused"; pending: "pending"; error: its code
+//   {"given":null}                  in then: the value
 import { PENDING } from "@ermine/scheduler"
 import { all, any, grants, no, only, pending, type Policy, yes } from "@ermine/protect"
 import type { Member, Path } from "./places.ts"

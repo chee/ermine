@@ -1,48 +1,42 @@
 // programs (programs.ts, @ermine/types) on the line protocol: one JSON request per line in, one
-// answer per line out, in order. its own world, lasting for the process: a scheduler, a table, paths and
-// the host's places (root "R", children alone), the table's events and every write told to it (a
-// box's places, ermine/boxes, is a view of it). boxes by name; a folder a box made (a fresh id) is
-// answered as "box:<name>", wherever it is in an answer. ids are strings, a path a list of names.
-// the host writes with its scope open, its info [["actor","test"]]. a PlacesError answers
-// { error: code }
+// answer per line out, in order. one world per process: a scheduler, table, paths and the host's
+// places (root "R", children alone), told the table's events and every write (a box's places is a
+// view of it). boxes by name; a folder a box made is answered as "box:<name>" anywhere. ids are
+// strings, a path a list of names. the host writes with its scope open, info [["actor","test"]].
+// a PlacesError answers { error: code }
 //
 // the world:
 // { op: "root", name }                      → {}   a scope with no parent
-// { op: "kids", id, value }                 → {}   the children entry there, replaced (a table event)
-// { op: "attrs", id, value }                → {}   the attributes entry there, replaced (a table
-//    event): { "ermine.type": "public.c-source" }
-// { op: "value", id, value }                → {}   the value entry there, replaced (a table event)
-// { op: "host", id }                        → {}   the value entry there: a live function (a host
-//    runner), never saved
-// { op: "upsert", part, id, path, value }   → {}   value put at path in the entry (places' upsert):
-//    a patch, telling only the reads it touches
-// { op: "types", list? }                    → {}   installTypes at R: the list given ([{ name,
-//    conformsTo?, fileNameExtension?, mimeType? }]; none: the excerpt and EXTRA), a new node's id
+// { op: "kids", id, value }                 → {}   the children entry, replaced (a table event)
+// { op: "attrs", id, value }                → {}   the attributes entry, replaced (a table event)
+// { op: "value", id, value }                → {}   the value entry, replaced (a table event)
+// { op: "host", id }                        → {}   the value entry: a live host runner, never saved
+// { op: "upsert", part, id, path, value }   → {}   places' upsert at path: a patch, telling only
+//    the reads it touches
+// { op: "types", list? }                    → {}   installTypes at R, the list given ([{ name,
+//    conformsTo?, fileNameExtension?, mimeType? }]; none: the excerpt and EXTRA); a new node's id
 //    its path joined by "/" ("ermine/types/public.text")
-// { op: "create", name, folder?, at? }      → {}   createBox: at the folder id, or at the address at
-//    from R (made if missing)
+// { op: "create", name, folder?, at? }      → {}   createBox at the folder id, or at the address
+//    at from R (made if missing)
 // { op: "box", box, path, node }            → {}   box (it commits itself)
 // { op: "unbox", box, path }                → {}
 // programs:
 // { op: "program", box?, program, from }    → satisfy's answer   in the box named (none: the
 //    host's places), outside any run: program a path string, from a path
-// { op: "open", box?, file, from }          → openwith's answer   the same, file an id, or
-//    { id, at }: a place, typed by its name when it has no ermine.type
-// { op: "type", box?, node }                → { type }   types' typeOf of node, { id, at }: its
-//    ermine.type, else its name's extension's, from the nearest ermine/types; null: none
-// { op: "type", box?, folder }              → { types }   each member of the folder (a path from the
-//    box's root), by name, its typeOf at that place: { "a.c": "public.c-source", "b": null }
+// { op: "open", box?, file, from }          → openwith's answer   the same; file an id or { id,
+//    at } (typed by its name when it has no ermine.type)
+// { op: "type", box?, node }                → { type }   typeOf of node ({ id, at }); null: none
+// { op: "type", box?, folder }              → { types }   each member of the folder (a path from
+//    the box's root) by name: its typeOf there, { "a.c": "public.c-source", "b": null }
 // { op: "watch", name, scope, box?, program? | file? | node? | folder?, from? } → {}   a compute
-//    made with scope open, calling satisfy (program), openwith (file) or typeOf (node, folder, as
-//    the type op) each run, its results compared as JSON
-// the answers: the generator taken whole, every whynot gathered in why, in order. satisfy's:
-// { program, chains, why } (program: the ways' one), or, nothing yielded, the search's own whynot
-// as a refusal: { refused: "nothing-there", path, at (its from) }, { refused: "no-type", program },
-// { refused: "no-chain", program, why }. openwith's: { ways, why }, or { refused: "no-type", id }
+//    in scope calling satisfy, openwith or typeOf each run, as those ops; results compared as JSON
+// answers: the generator taken whole, every whynot in why, in order. satisfy's: { program,
+// chains, why }, or the search's own whynot as a refusal: { refused: "nothing-there", path, at
+// (its from) }, { refused: "no-type", program }, { refused: "no-chain", program, why }.
+// openwith's: { ways, why }, or { refused: "no-type", id }
 // { op: "pulse" }                           → {}
-// { op: "state", name, only? }             → { runs, value }   how many times it ran; its last
-//    result given to set (null: none), as the program and open ops answer; only: its fields
-//    named, the rest left out (a refusal whole)
+// { op: "state", name, only? }              → { runs, value }   run count; last result (null:
+//    none), as program and open answer; only: just the fields named (a refusal whole)
 import createEntry, { type Entry } from "@ermine/node/entry"
 import { type Computer, createScheduler, type Scope } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"

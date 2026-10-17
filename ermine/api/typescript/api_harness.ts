@@ -1,63 +1,47 @@
 // the process api (api.ts) on the line protocol: one JSON request per line in, one answer per line
-// out, in order. its own world, lasting for the process: a scheduler, a table, paths, scope nodes
-// and places at the root "R" (asked [processes("R"), children]), the host's scope [["actor","test"]].
-// after every request, what the api asked to run later (its pulse) is run: so a write's readers
-// have run by the next request. new ids are "n1", "n2", … in the order made; a process's id is
-// "proc:<name>". a value is plain JSON; a node is { path, part } or { id, part }
+// out, in order. one world per run: a scheduler, a table, places at the root "R", host scope
+// [["actor","test"]]. after every request the api's pulse runs, so readers have run by the next.
+// new ids "n1", "n2", … in order; a process's id "proc:<name>".
+// node: { path, part } | { id, part }.
+// processes are started by the harness (start, openwith, box need C not there yet).
 //
-// processes here are started by the harness, not by programs (start, openwith and box need
-// programs' and boxes' C, not there yet: the TypeScript tests have them): a scope under the
-// programs' own, its node, its row, the api made, and its program run as setup, untracked
-//
-// the world (first, or none: a plain one):
-// { op: "world", deny?, presence?, overlay?, who?, uuid? } → {}   deny: [{ op, path }]: a policy
-//    saying no to an ask with that op whose target's path (names joined by "/") is path; presence:
-//    a presence world on the host's scope, its clock 0 (now moves it); overlay: places over a patch
-//    overlay; who: setup.who; uuid: no setup.id, new ids the api's own (uuidv7)
-// { op: "kids", id, value }                → {}   the children entry there, replaced (a table event)
-// { op: "put", part, id, value }           → {}   an entry there, replaced
-// { op: "saved", part, id }                → { value? }   as the table has it
-// { op: "change", part, id }               → { actor?, process?, caller? }   its latest change's:
-//    the first of each key in its pairs, however the header nests them (an "owner" pair holding
-//    the pairs of the scope above), the actor the header's own when it has one
-// { op: "id", path }                       → { id? }   lib's get, from "R"
-// { op: "uuids", paths }                   → { v7, ordered }   the id at each path (lib's get): each
-//    a uuidv7 (lowercase, 8-4-4-4-12, version 7, variant 10); each after the one before (as text)
-// { op: "now", t }                         → {}   the presence clock, ms
+// world (first, or a plain one):
+// { op: "world", deny?, presence?, overlay?, who?, uuid? } → {}   deny: [{ op, path }] refused;
+//    presence: on the host's scope, clock 0; overlay: places over a patch overlay; uuid: uuidv7 ids
+// { op: "kids", id, value }                → {}   children entry replaced
+// { op: "put", part, id, value }           → {}   entry replaced
+// { op: "saved", part, id }                → { value? }
+// { op: "change", part, id }               → { actor?, process?, caller? }   latest change's, first
+//    of each key however nested; the header's own actor if it has one
+// { op: "id", path }                       → { id? }   from "R"
+// { op: "uuids", paths }                   → { v7, ordered }   each a uuidv7, each after the last
+// { op: "now", t }                         → {}   presence clock, ms
 // processes:
-// { op: "start", name, at, cwd?, args?, program } → { id }   program: steps, run as its setup
-// { op: "stop", name, why? }               → {}   the api's stop (programs' stop: the row out, the
-//    scope torn down), its teardowns told why (none: "ended")
-// { op: "do", process, call, as? }         → { value }   an api function called from outside (no
-//    scope open), as the program would: call [fn, ...args]; as: the result named in that
-//    process's names (a program's steps name theirs the same way)
-// { op: "log", name }                      → { values }   what effects, teardowns and watches put
-// { op: "events" }                         → { events }   the table events since last asked, then
-//    forgotten: [part, id, "put" | "gone"] each, in order ("gone": nothing there after it; an id
-//    not a string: null)
+// { op: "start", name, at, cwd?, args?, program } → { id }   program run as setup
+// { op: "stop", name, why? }               → {}   teardowns told why (none: "ended")
+// { op: "do", process, call, as? }         → { value }   call [fn, ...args] from outside;
+//    as: name the result
+// { op: "log", name }                      → { values }
+// { op: "events" }                         → { events }   [part, id, "put" | "gone"] since last
+//    asked, then forgotten; a non-string id: null
 // { op: "pulse" }                          → {}
 //
-// a program is a list of steps, each { do: [fn, ...args], as? }. "$x" anywhere in an arg is the
-// name x (a step's result, or a method's arguments $0, $1, …); anything else is as it is. fn is an api
-// function, or one of these, each made with what the api gives:
-//   ["memo", name, options, expr]  memo(name, () => expr), options as memo's ({ equal? } with no
-//                                  equal: a JSON compare is "json"). in a memo's or effect's
-//                                  expr, made again by each of its runs: the one there kept, with
-//                                  this expr (api.ts: the same id and node; a run that fails, or
-//                                  does not make it, as api.ts says); the same for effect, early
+// program: steps { do: [fn, ...args], as? }; "$x" in an arg is name x (results, method args $0…).
+// fn: an api function, or:
+//   ["memo", name, options, expr]  memo(name, () => expr); no equal: "json"
 //   ["effect", name, expr, log]    effect(name, () => expr, (v) => log v)
 //   ["early", name, expr, log]     early(name, () => expr, (v) => log v)
-//   ["log", log, expr]             expr's value put in log, and given back (in a memo: a run counted)
-//   ["count", name, log]           how many values name's log holds now, put in log
-//   ["method", path, steps, expr?] method(path, (...args) => steps run, $0… the args; expr given back)
+//   ["log", log, expr]             expr's value logged and given back
+//   ["count", name, log]           how many values name's log holds, logged
+//   ["method", path, steps, expr?] method(path, (...args) => steps; expr given back)
 //   ["teardown", log]              teardown((why) => log why)
 //   ["watch", target, log]         watch(target, (w) => log w.patches)
 //   ["ref", path, value]           ref(path, () => value)
-//   ["if", test, then, else?]      then's value when test's is true, else else's (none: undefined)
+//   ["if", test, then, else?]      then's or else's value (none: undefined)
 //   ["throw", text]                throws an error of message text
-// an expr is a call [fn, ...args], or ["all", expr, …] (a list of each), or "$x"
-// errors: a PlacesError { error: code }; a Refusal { error: "refused" }; a SendError
-// { error: "not-a-method" }; PENDING { error: "pending" }; else { error: text }
+// expr: [fn, ...args], ["all", expr, …], or "$x"
+// errors: PlacesError { error: code }, Refusal "refused", SendError "not-a-method", PENDING
+// "pending", else { error: text }
 import createEntry from "@ermine/node/entry"
 import { createScheduler, PENDING, type Scope } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"

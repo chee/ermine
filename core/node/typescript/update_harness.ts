@@ -6,7 +6,7 @@
 //    header its change (not given, or with no time: the time now added, whole seconds since 1970,
 //    as node's entry); cow: false: an entry whose value update changes in place (createEntry's
 //    cow option; any other cow, an ordinary entry). Everything it answers is the same as without
-//    it, a refused update included: the entry as it was, its keys in their order.
+//    it, a refused update included: the entry as it was.
 //    The values the patches put become the entry's value and change with it, so this harness gives
 //    such an entry copies of them and answers the patches as the request had them
 //    before any start: an entry with no value and a change of only the time now
@@ -23,10 +23,9 @@
 //    (the patches as given, undo their inverse: in the order to apply, applied to the value
 //    after it gives the value before). an update's undo given as an update takes the value back;
 //    the undo of that makes it again
-//    the change's fields in the order time, actor, reader, external, metadata, op; a patch's as
-//    path, range, value, move, any other field dropped; -0 as an index is 0
-//    a map's keys in order: a key put over keeps its place; a key new, put back or moved within
-//    its map goes last
+//    the change's fields: time, actor, reader, external, metadata, op; a patch's: path, range,
+//    value, move, any other field dropped; -0 as an index is 0
+//    a map's key order is not part of its value (op's apply.ts): answers are compared by content
 //
 // Values are in the JSON form (conformance/typescript/form.ts: revive reads it, toJson writes it),
 // typed arrays and bytes too. the header's are plain JSON (node_harness.ts).

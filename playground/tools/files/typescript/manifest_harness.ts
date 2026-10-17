@@ -1,37 +1,35 @@
-// manifest (manifest.ts) on the line protocol (conformance/typescript/harness.ts). Values in their
-// JSON form (conformance/typescript/form.ts); bytes and hashes lowercase hex; a node as the pack
-// harness shows it ({id, value, info, children, header},
-// in a list {"symbol": name} a symbol). Records and frames are lists of [key, bytes], bytes null
-// for a key that goes; answers list them sorted by the key's UTF-8.
-// Errors: {code: "store"} for a StoreError, {code: "form"} for a FormError, {code: "wrong-form"}
-// for render given a value not in that form.
-//   values
+// manifest (manifest.ts) on the line protocol (conformance/typescript/harness.ts)
+// values in JSON form (form.ts); bytes and hashes lowercase hex; a node as the pack harness shows
+// it ({id, value, info, children, header}; {"symbol": name} in a list a symbol). records and
+// frames: lists of [key, bytes], bytes null for a key that goes; answers sort them by key's UTF-8
+// errors: {code: "store"} StoreError, {code: "form"} FormError, {code: "wrong-form"} render given a
+// value not in that form; anything else thrown {error: message} (no scenario expects it)
+//
+// values
 //   {op: "form", value}                 -> {form}
 //   {op: "render", value, form}         -> {bytes}
 //   {op: "parse", bytes, form}          -> {value}
 //   {op: "hash", value}                 -> {hash}
 //   {op: "digest", bytes}               -> {hash}
 //   {op: "null"}                        -> {hash}: NULL
-//   node records
+// node records
 //   {op: "kept", value}                 -> {kept: [hash, form]}: keptOf
-//   {op: "save", node, without?, live?} -> {record, values: [[hash, value]], shape}, values
-//     sorted by hash; without: the ids save's skip says yes to; live: paths into node (["value", 2,
-//     "content"], ["info", 0, 1, 0, "change"], ["header", "actor"]) whose value is made live,
-//     one with no encoding
+//   {op: "save", node, without?, live?} -> {record, values: [[hash, value]] by hash, shape}
+//     without: ids save skips; live: paths into node made live, with no encoding (["value", 2,
+//     "content"], ["info", 0, 1, 0, "change"], ["header", "actor"])
 //   {op: "kepts", record}               -> {kepts: [[hash, form]]}
 //   {op: "restore", record, values}     -> {node}; values [[hash, value]]
 //   {op: "shape", record, heads}        -> {shape}; heads [[hash, bytes]]
-//     a shape: {kept, head?, sides: [[hash, form, head?]], info: [[name, hash, form]],
+//     shape: {kept, head?, sides: [[hash, form, head?]], info: [[name, hash, form]],
 //     directory: [[name, [ids]]]}
-//   records
-//   {op: "encode", codec, record}       -> {bytes}; codec meta | shown | plan | state, the
-//     record as the TS type, hashes hex, a layout's entries a map {name: stem | [stems]}
-//   {op: "decode", codec, bytes}        -> {record}, the same
+// records
+//   {op: "encode", codec, record}       -> {bytes}  codec: meta | shown | plan | state; the TS
+//     type, hashes hex, a layout's entries {name: stem | [stems]}
+//   {op: "decode", codec, bytes}        -> {record}
 //   {op: "named", records}              -> {hashes}, sorted
-//   the folder: one manifest at a time, made by open; paths in answers are from dir, "." itself
-//   {op: "open", dir?, slack?}          -> {}: manifest(dir), touching nothing. No dir: <temp>/.ermine,
-//     which does not exist yet, <temp> a folder of the harness's own, the same for every open of
-//     the run and removed when the requests end
+// the folder: one manifest at a time, made by open; answer paths from dir ("." itself)
+//   {op: "open", dir?, slack?}          -> {}  manifest(dir), touching nothing. no dir:
+//     <temp>/.ermine, not made yet; <temp> the run's own, removed when the requests end
 //   {op: "make"} | {op: "exists"}       -> {} | {exists}
 //   {op: "read"}                        -> {records}
 //   {op: "append", frame}               -> {synced: [paths]}, each path sync was given, in order
@@ -39,11 +37,9 @@
 //   {op: "fold", records}               -> {synced}
 //   {op: "put", value, hash?}           -> {kept, synced}
 //   {op: "get", hash, form}             -> {value}
-//   {op: "write", path, bytes, append?} -> {}: raw bytes at a path from dir, its folders made
-//   {op: "files"}                       -> {folders: [paths], files: [[path, bytes]]}, all
-//     under dir, sorted
-// Anything else thrown answers {error: message}, which no scenario expects.
-// Another implementation joins by speaking this (HARNESS).
+//   {op: "write", path, bytes, append?} -> {}  raw bytes at a path from dir, folders made
+//   {op: "files"}                       -> {folders: [paths], files: [[path, bytes]]}, all under
+//     dir, sorted
 import createNode, {
 	type ChangeHeader as Header,
 	type List,

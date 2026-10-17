@@ -15,7 +15,9 @@
 // pulse past ENDLESS moments is left as the reference's is: every moment after throws (sc_throw),
 // and what is thrown out leaves the pulse (sc_escaped): it answers {"error":"endless"}. what the
 // scheduler throws out of a call (sc_escaped) is that request's error, or, in a program, thrown
-// there, as the reference's throw is
+// there, as the reference's throw is; but a making's (sc_create_computer, sc_create_effect) and a
+// settling's (sc_resolve, sc_reject) are carried: the answer of the pulse going on, else the next,
+// before its own, as the reference's scheduler holds them (it cannot throw them)
 #define _POSIX_C_SOURCE 200809L
 #include <math.h>
 #include <stdarg.h>
@@ -150,11 +152,19 @@ static smap names;
 // the latest named so
 static sc_scope *scope_named(const char *name) { return sget(&names, name); }
 
-// an error when the name is taken (by one not torn down: else taken over): asked before anything
-// is made, so a refused one makes nothing
+// an error when the name is taken (by one not torn down and not old: else taken over): asked
+// before anything is made, so a refused one makes nothing
+// the names of the computers being made: taken till named (what an early one's run makes under
+// the same name is refused, so a name is never held twice: the reference's)
+static const char **naming;
+static size_t nnaming, capnaming;
+
 static char *taken(const char *name) {
-	sc_scope *was = scope_named(name ? name : "");
-	return was && sc_scope_alive(was) ? formatString("name taken: %s", name ? name : "") : NULL;
+	const char *n = name ? name : "";
+	for (size_t i = 0; i < nnaming; i++)
+		if (strcmp(naming[i], n) == 0) return formatString("name taken: %s", n);
+	sc_scope *was = scope_named(n);
+	return was && sc_scope_alive(was) && !sc_scope_old(was) ? formatString("name taken: %s", n) : NULL;
 }
 // names the scope
 static char *name_it(sc_scope *o, const char *name) {
@@ -185,7 +195,16 @@ static bool pulsing;
 
 // a listener armed to throw, once: which, at what (a computation's name, or a key), its message
 static char *armed_on, *armed_at, *armed_error;
-static const char *const listeners[] = {"mark", "starts", "ends", "acts", "forgotten", "started"};
+static const char *const listeners[] = {"mark", "starts", "ends", "acts", "forgotten", "started", "settles"};
+
+// what a listener threw in a making or a settling (sc_escaped after it): kept, the first, to be
+// the answer of the pulse going on, else the next, as the reference's scheduler holds it
+static char *carried;
+static void carry(char *e) {
+	if (e == NULL) return;
+	if (carried == NULL) carried = e;
+	else free(e);
+}
 
 static void disarm(void) {
 	free(armed_on);
@@ -244,6 +263,11 @@ static void first_track(const void *key, sc_run *run, void *data) {
 	(void)data;
 	PUSH(started, nstarted, capstarted, op_str(key));
 	fire("started", key);
+}
+
+static void settled(void *data) {
+	(void)data;
+	fire("settles", NULL);
 }
 
 // the tick of the latest mark (each mark and each new computer takes the next)
@@ -487,6 +511,9 @@ static closure *closure_of(const op_value *e, const ctx *c) {
 	k->e = e;
 	k->c = *c;
 	k->c.run = NULL;
+	// held: a value given to the run or act may be let go before the cleanup runs
+	if (k->c.value) op_ref((op_value *)k->c.value);
+	if (k->c.previous) op_ref((op_value *)k->c.previous);
 	PUSH(closures, nclosures, capclosures, k);
 	return k;
 }
@@ -703,7 +730,7 @@ static val evaluate(const op_value *e, const ctx *c) {
 		if (bad) return thrown(bad);
 		return ok(op_null());
 	}
-	if (strcmp(form, "effect") == 0) return made_in(form, a0, a1, a2, arg);
+	if (strcmp(form, "effect") == 0 || strcmp(form, "compute") == 0) return made_in(form, a0, a1, a2, arg);
 	if (strcmp(form, "quote") == 0) return ok(op_ref((op_value *)arg));
 	return thrown(formatString("unknown form %s", form));
 }
@@ -797,6 +824,7 @@ static op_value *moment_json(const moment *x, bool reads) {
 	case SC_T_STARTS:
 		op_set(o, "starts", name_json(m->c));
 		op_set(o, "run", integer(m->run));
+		op_set(o, "rank", integer(m->rank));
 		break;
 	case SC_T_ACTS:
 		op_set(o, "acts", name_json(m->c));
@@ -867,39 +895,70 @@ static op_value *make_computer(const op_value *r, bool effect) {
 	if (effect) def.effect = program_effect;
 	else def.set = program_set;
 	struct making m = {def, effect, NULL};
+	const char *name = text(op_get(r, "name"));
+	PUSH(naming, nnaming, capnaming, name ? name : "");
 	const char *why = sc_run_with_scope(o, in_making, &m);
+	nnaming--;
 	if (why) return answer_error(copyString(why));
 	sc_computer *c = m.c;
 	if (c == NULL) return answer_error(copyString(SC_DISPOSED));
 	p->self = c;
-	bad = name_it(c, text(op_get(r, "name")));
+	bad = name_it(c, name);
 	if (bad) return answer_error(bad);
-	char *out = sc_escaped(sch);
-	return out ? answer_error(out) : op_map();
+	carry(sc_escaped(sch));
+	return op_map();
 }
 
-// {"effect":[c,f,act,early?]}: an effect under the scope open. c taken by one torn down: taken over
+// the computation named, old under the scope open: its program, else NULL
+static prog *old_here(const char *name) {
+	sc_scope *o = scope_named(name);
+	if (o == NULL || !sc_scope_old(o) || sc_scope_parent(o) != sc_get_current_scope(sch)) return NULL;
+	for (size_t i = 0; i < nprogs; i++)
+		if (progs[i]->self == o) return progs[i];
+	return NULL;
+}
+
+// {"effect":[c,f,act,early?]}: an effect under the scope open; {"compute":[c,f,to?]}: a compute,
+// its results kept at to. c old under the scope open: claimed, given the new code. c taken by one
+// torn down or old elsewhere: taken over
 static val made_in(const char *form, const op_value *a0, const op_value *a1, const op_value *a2,
 	const op_value *arg) {
 	const char *name = text(a0);
 	if (name == NULL) return thrown(formatString("a %s with no name", form));
+	bool effect = strcmp(form, "effect") == 0;
+	prog *old = old_here(name);
+	if (old != NULL) {
+		old->f = a1;
+		old->act = effect ? a2 : NULL;
+		sc_claim(old->self);
+		char *out = sc_escaped(sch);
+		return out ? thrown(out) : ok(op_null());
+	}
 	char *was = taken(name);
 	if (was) return thrown(was);
 	prog *p = allocate(sizeof *p);
 	PUSH(progs, nprogs, capprogs, p);
 	p->f = a1;
-	p->act = a2;
-	const op_value *early = is(arg, OP_LIST) && arg->count > 3 ? arg->items[3] : NULL;
-	sc_def def = {.f = program_f, .equal = object_is, .data = p, .effect = program_effect};
-	def.early = is(early, OP_BOOL) && early->bool_;
+	sc_def def = {.f = program_f, .equal = object_is, .data = p};
+	if (effect) {
+		p->act = a2;
+		def.effect = program_effect;
+		const op_value *early = is(arg, OP_LIST) && arg->count > 3 ? arg->items[3] : NULL;
+		def.early = is(early, OP_BOOL) && early->bool_;
+	} else {
+		const char *to = text(a2);
+		p->to = to ? entry_of(to)->key : NULL;
+		def.set = program_set;
+	}
 	// an early one runs and acts before it is given back: itself, the scope open then (self_of)
-	sc_computer *c = sc_create_effect(sch, def);
+	PUSH(naming, nnaming, capnaming, name);
+	sc_computer *c = effect ? sc_create_effect(sch, def) : sc_create_computer(sch, def);
+	nnaming--;
 	if (c == NULL) return thrown(unmade(NULL));
 	p->self = c;
 	char *bad = name_it(c, name);
 	if (bad) return thrown(bad);
-	char *out = sc_escaped(sch);
-	if (out) return thrown(out);
+	carry(sc_escaped(sch));
 	return ok(op_null());
 }
 
@@ -921,6 +980,7 @@ static op_value *settle(const op_value *r, bool resolve) {
 		const op_value *value = op_get(r, "value");
 		sc_resolve(w->p, value ? op_ref((op_value *)value) : op_null());
 	}
+	carry(sc_escaped(sch));
 	wait_free(w);
 	return op_map();
 }
@@ -999,6 +1059,12 @@ static op_value *answer(const op_value *r) {
 		sc_pulse(sch);
 		pulsing = false;
 		char *out = sc_escaped(sch);
+		// what was carried for it first, then its own
+		if (carried) {
+			free(out);
+			out = carried;
+			carried = NULL;
+		}
 		return out ? answer_error(out) : op_map();
 	}
 	if (strcmp(op, "listener") == 0) {
@@ -1071,6 +1137,7 @@ void hh_answer(const op_value *r, FILE *out) {
 		sc_trace_start(sch, &trace, told_moment, NULL);
 		sc_on_tracking_end(sch, untrack, NULL);
 		sc_on_tracking_start(sch, first_track, NULL);
+		sc_on_settle(sch, settled, NULL);
 		sc_on_mark(sch, marked, NULL);
 	}
 	PUSH(lines, nlines, caplines, hh_retain());
@@ -1081,6 +1148,8 @@ void hh_answer(const op_value *r, FILE *out) {
 
 void hh_finish(void) {
 	disarm();
+	free(carried);
+	free(naming);
 	sfree(&names);
 	sfree(&entries);
 	if (sch == NULL) return;
@@ -1104,7 +1173,11 @@ void hh_finish(void) {
 		free(store[i]);
 	}
 	for (size_t i = 0; i < nprogs; i++) free(progs[i]);
-	for (size_t i = 0; i < nclosures; i++) free(closures[i]);
+	for (size_t i = 0; i < nclosures; i++) {
+		if (closures[i]->c.value) op_free((op_value *)closures[i]->c.value);
+		if (closures[i]->c.previous) op_free((op_value *)closures[i]->c.previous);
+		free(closures[i]);
+	}
 	for (size_t i = 0; i < ninfos; i++) free(infos[i]);
 	free(infos);
 	for (size_t i = 0; i < nlines; i++) hh_release(lines[i]);

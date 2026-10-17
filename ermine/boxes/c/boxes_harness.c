@@ -1,14 +1,14 @@
 // The C boxes (boxes.h) on the line protocol of typescript/boxes_harness.ts, which documents it and
 // the programs (conformance/c/harness.h has the loop). Its world is places' (the scheduler, the table,
 // the host's places at root "R", children alone, the host's scope, the watches:
-// filesystem/places/c/world.h), made by world_line at the first line: the table's hook tells the
+// filesystem/places/c/world_harness.h), made by world_line at the first line: the table's hook tells the
 // host's places alone, and a box's places, a view of them, shares their spots. An address given as a
 // string is split here as path.ts' parse splits it.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../../filesystem/places/c/world.h"
+#include "../../../filesystem/places/c/world_harness.h"
 #include "boxes.h"
 
 #define PUSH(v, n, cap, x) \

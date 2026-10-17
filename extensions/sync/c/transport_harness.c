@@ -268,6 +268,8 @@ static void device(const op_value *r, FILE *out) {
 	}
 	tp_options o = {.store = d->store, .now = wr_clock, .snapshot = snapshot_of, .context = d};
 	memcpy(o.seed, d->seed, 32);
+	const op_value *lazy = op_get(r, "lazy");
+	o.lazy = lazy != NULL && lazy->type == OP_BOOL && lazy->bool_;
 	const op_value *limits = op_get(r, "limits");
 	if (limits != NULL && limits->type == OP_MAP) {
 		const char *names[] = {"pending", "refused", "waiting", "joins", "parts"};
@@ -280,6 +282,10 @@ static void device(const op_value *r, FILE *out) {
 	d->t = tp_create(&o);
 	if (d->t == NULL) hh_fail("Subduction would not make a node");
 	tp_arrived(d->t, arrived, d);
+	// follow: documents followed before its first run
+	const op_value *follow = op_get(r, "follow");
+	for (size_t i = 0; follow != NULL && follow->type == OP_LIST && i < follow->count; i++)
+		if (follow->items[i]->type == OP_STR) tp_follow(d->t, follow->items[i]->str);
 	devices = realloc(devices, (device_count + 1) * sizeof *devices);
 	if (devices == NULL) abort();
 	devices[device_count++] = d;

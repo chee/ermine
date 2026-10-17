@@ -1,12 +1,12 @@
 // programs (programs.h, types.h) on the line protocol of typescript/programs_harness.ts, which documents
-// it (conformance/c/harness.h has the loop). Its world is places' (world.h), made here before the first
+// it (conformance/c/harness.h has the loop). Its world is places' (world_harness.h), made here before the first
 // line: the table's hook tells the host's places alone, and every write is said written to them (a
 // box's places is a view of them). An address given as a string is split as path.ts' parse splits it.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../../filesystem/places/c/world.h"
+#include "../../../filesystem/places/c/world_harness.h"
 #include "../../../ermine/boxes/c/boxes.h"
 #include "../../build/c/host.h"
 #include "../../build/c/mem.h"

@@ -8,7 +8,7 @@
 
 #include "paths.h"
 #include "../../../conformance/c/harness.h"
-#include "../../../conformance/c/protocol.h"
+#include "../../../conformance/c/protocol_harness.h"
 
 static pt_paths *paths;
 

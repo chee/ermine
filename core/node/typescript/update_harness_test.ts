@@ -23,7 +23,8 @@ type Request = Record<string, any>
 // deno-lint-ignore no-explicit-any
 type Answer = Record<string, any>
 
-// keys in order, so maps compare by content
+// keys sorted, so maps compare by content (a map's key order is not part of its value: op's
+// apply.ts)
 const canon = (v: unknown): unknown =>
 	Array.isArray(v)
 		? v.map(canon)
@@ -96,7 +97,9 @@ const SEEDS = 40
 const STEPS = 30
 
 const KEYS = ["a", "b", "c"]
-const content = () => ({ l: [1, 2, 3], s: "ab", m: { a: 1 } })
+// s: lone halves apart, a pair and a modifier, NUL; edits bring halves together and split pairs
+const content = () => ({ l: [1, 2, 3], s: "a\uD83D中👍🏽\u0000\uDE00b", m: { a: 1 } })
+const PIECES = ["x", "é", "😀", "👍🏽", "\uD83D", "\uDE00", "\uD800\uDC00", "\u0000"]
 const start = { op: "start", value: content(), header: { time: 0, actor: "host" } }
 
 // a patch against content v; some are not valid
@@ -110,9 +113,9 @@ function patch(pick: (n: number) => number, v: Record<string, unknown>): Patch {
 		case 1:
 			return { path: ["l"], range: [i, j] }
 		case 2:
-			return { path: ["s"], range: [c, c], value: pick(2) ? "x" : "😀" }
+			return { path: ["s"], range: [c, c], value: PIECES[pick(PIECES.length)] }
 		case 3:
-			return { path: ["s"], range: [c, d], value: pick(2) ? "é" : "" }
+			return { path: ["s"], range: [c, d], value: pick(3) ? PIECES[pick(PIECES.length)] : "" }
 		case 4:
 			return { path: ["m", KEYS[pick(3)]], value: pick(2) ? pick(9) : { n: [pick(9)] } }
 		case 5:
@@ -179,12 +182,16 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} patches, as the reference`, async ()
 		const { asked, check } = around(steps)
 		const mine: Answer[] = await ask(command("update"), asked)
 		if (Deno.env.get("HARNESS")) {
-			assertEquals(line(mine), line(await ask(reference("update"), asked)), `seed ${seed}`)
+			assertEquals(
+				line(canon(mine)),
+				line(canon(await ask(reference("update"), asked))),
+				`seed ${seed}`,
+			)
 		}
 		check(mine)
 		// the same with the value changed in place
 		const placed: Answer[] = await ask(command("update"), around(inPlace(steps)).asked)
-		assertEquals(line(placed), line(mine), `seed ${seed}: in place`)
+		assertEquals(line(canon(placed)), line(canon(mine)), `seed ${seed}: in place`)
 		// the one change ends where the patches one by one did
 		assertEquals(
 			canon(mine[mine.length - 1].entry.value),

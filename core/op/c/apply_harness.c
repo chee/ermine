@@ -18,7 +18,7 @@
 
 #include "apply.h"
 #include "invert.h"
-#include "../../../conformance/c/protocol.h"
+#include "../../../conformance/c/protocol_harness.h"
 
 // a copy of v with every map's keys sorted: the same for the same content
 static int by_key(const void *a, const void *b) {

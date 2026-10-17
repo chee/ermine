@@ -1,60 +1,38 @@
-// the store (store.ts) on the line protocol (conformance/typescript/harness.ts). One store object at
-// a time, made by open, on a temp folder of the run's own (disk_harness.ts): the harness makes the edits a
-// scenario asks for and looks at the folder and the Trash itself, as disk_harness.ts has it, never through
-// the store. Nodes in pack's JSON form: {id, value, info, children, header?}, every content, change
-// and because a value in its JSON form (conformance/typescript/form.ts). Hashes are 64 lowercase
-// hex digits; bytes lowercase hex. Every answer is shown as disk_harness.ts shows it: the temp folder "@",
-// each store's uuid "uuid", "uuid2", ... in the order met; a request's uuid label is the uuid.
+// the store (store.ts) on the line protocol (conformance/typescript/harness.ts): one store at a
+// time, made by open, on a temp folder (disk_harness.ts) the harness edits and looks at itself
+// nodes in pack's JSON form {id, value, info, children, header?}, values in JSON form (form.ts);
+// hashes 64 lowercase hex, bytes hex. answers: the temp folder "@", store uuids "uuid", "uuid2",
+// ... by order met (a request's uuid label is the uuid)
+//
 //   {op: "open", folder?, mirror?, files?, pass?, slack?}
-//                         -> {}  a new store object on folder (a "@" path; none: @Store), its
-//                            Trash @Trash (sys.ts's fake: an entry moved in under its name, or
-//                            "stem 2.ext", "stem 3.ext", ...), the real Trash never asked;
-//                            nothing read yet. Every later request is to it, and an edit's plain
-//                            path is from its folder. Its home is @Home, whose .ermine/external
-//                            holds outside manifests and the list of stores, so the person's own
-//                            is never touched; @Outside the one place whose folders keep their
-//                            manifests outside, on home's volume. The platform's Foundation is
-//                            not asked: no folder is in iCloud, there are no bookmarks (a store is
-//                            found again by its path, if the folder there carries its uuid),
-//                            nothing is coordinated. mirror: a folder that is not a store
-//                            (FILES.tex, A folder that is not a store), its root the given graph's
-//   {op: "read"}          -> {restored: null} for a new store | {restored: {root, time, nodes,
-//                            others, missing}}
-//   {op: "read", root, time, nodes, ephemeral?}
-//                         -> {}  for a mirror: read(saving), the graph the host has now, as write
-//                            takes it (no records)
-//   {op: "stores"}        -> {stores: [{uuid, path}]}  stores(): every store home's list has, by
-//                            path
-//   {op: "find", uuid}    -> {path: path | null}  find(uuid): where the store is now
+//        -> {}  a new store on folder (an "@" path; default @Store), nothing read. Trash: @Trash
+//           (fake: clashes become "stem 2.ext", ...). home: @Home (.ermine/external: outside
+//           manifests, the list of stores). @Outside: folders whose manifests live outside, on
+//           home's volume. no iCloud, no bookmarks (found again by path + uuid), no coordination.
+//           mirror: a folder that is not a store, its root the given graph's
+//   {op: "read"}  -> {restored: null} new | {restored: {root, time, nodes, others, missing}}
+//   {op: "read", root, time, nodes, ephemeral?}  -> {}  a mirror's read(saving), no records
+//   {op: "stores"}  -> {stores: [{uuid, path}]}  by path
+//   {op: "find", uuid}  -> {path: path | null}
 //   {op: "write", root, time, nodes, ephemeral?, records?}
-//                         -> {}  write({root, get, time, ephemeral, records}): get gives the
-//                            node of nodes with that id, or none; ephemeral the ids that are;
-//                            records {key: hex | null}
-//   {op: "graph"}         -> {root, nodes: [{id, kept, head?, sides, info, directory}]}  graph(),
-//                            nodes by id in code point order; kept [hash, form]; head hex; sides
-//                            [[hash, form, head?]]; info [[name, hash, form]]; directory [[name,
-//                            [ids]]]
-//   {op: "others"}        -> {others: {key: hex}}  others(), keys in code point order
+//        -> {}  get: the node of nodes with that id; ephemeral: those ids; records {key: hex|null}
+//   {op: "graph"}
+//        -> {root, nodes: [{id, kept, head?, sides, info, directory}]}  by id (code points); kept
+//           [hash, form]; head hex; sides [[hash, form, head?]]; info [[name, hash, form]];
+//           directory [[name, [ids]]]
+//   {op: "others"}  -> {others: {key: hex}}  keys in code point order
 //   {op: "differences", touched?}
-//                         -> {differences: [{path, was?, now?}]}  differences(touched), by path
-//                            in code point order; was a Laid as types.ts has it; now an Entry less
-//                            its ino, its value in JSON form, its why (a FormError's text) as true
+//        -> {differences: [{path, was?, now?}]}  by path (code points); was a Laid (types.ts); now
+//           an Entry less its ino, value in JSON form, why (a FormError's text) as true
 //   {op: "mend", paths?}  -> {}
-//   {op: "trash", path, why}
-//                         -> {}
-//   {op: "lock", run}     -> run's answer, run (differences, mend, trash, graph, others) inside
-//                            lock()
-//   {op: "listed"}        -> {listed: [{path, why}]}  what options.list was told since the last
-//                            listed, in order; why as a code (WHY below), or as given to a trash
-//                            request
-//   {op: "edit", edit, ...}
-//                         -> {}  the edit made on the disk (disk_harness.ts)
-//   {op: "observe", attrs?, folder?, at?}
-//                         -> {folder, trash, listed, at?}  disk_harness.ts's snapshot, listed as the
-//                            listed request answers
-//   a StoreError          -> {error: "store"}
-//   anything else thrown  -> {error: "other", message}
-// Another implementation joins by speaking this (HARNESS).
+//   {op: "trash", path, why}  -> {}
+//   {op: "lock", run}  -> run's answer; run (differences, mend, trash, graph, others) inside lock()
+//   {op: "listed"}  -> {listed: [{path, why}]}  told to options.list since last; why a code (WHY)
+//        or as given to trash
+//   {op: "edit", edit, ...}  -> {}  disk_harness.ts's edit
+//   {op: "observe", attrs?, folder?, at?}  -> {folder, trash, listed, at?}  disk_harness.ts's
+//        snapshot
+//   a StoreError  -> {error: "store"}   anything else  -> {error: "other", message}
 import createNode, {
 	type ChangeHeader as Header,
 	type List,
