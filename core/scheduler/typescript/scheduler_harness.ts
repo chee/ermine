@@ -41,6 +41,7 @@
 //   {"op":"log"}            what programs logged since last asked, then forgotten → {"log":[..]}
 //   {"op":"moments"}        the moments since last asked, then forgotten     → {"moments":[..]}
 //   {"op":"moments","reads":true}   the same, an ends moment with its reads
+//   {"op":"moments","returns":true}   the same, with each returns moment (left out otherwise)
 //   {"op":"forgotten"}  the keys the scheduler stopped tracking (its forget) since last asked
 //                                                                             → {"keys":[k...]}
 //   {"op":"started"}  the keys that gained their first tracker since last asked (onTrackingStart),
@@ -50,8 +51,9 @@
 //   {"op":"current"}   what is open, as the form current shows it              → {"value":v}
 //   {"op":"listener","on":l,"throw":s,"at"?:x}                                       → {}
 //        the harness's own listener l throws an error of message s the next time it is told (of
-//        x, when given), once: "mark" (onMark; x one of its keys), "starts", "ends", "acts" (a
-//        run's start, its end, an act; x the computation), "forgotten", "started" (onTrackingEnd,
+//        x, when given), once: "mark" (onMark; x one of its keys), "starts", "returns", "ends",
+//        "acts" (a run's start, its body's return (onRunReturn), its end, an act; x the
+//        computation), "forgotten", "started" (onTrackingEnd,
 //        onTrackingStart; x the key), "settles" (onSettle; no x). armed again: the last one. else
 //        "unknown listener l"
 //
@@ -77,6 +79,9 @@
 //   {"acts":c,"run":n,"early"?:true,"error"?:s}
 //   {"ends":c,"run":n,"ended":"done"|"pending"|"failed"|"stopped"|"looping","equal"?:b,
 //    "error"?:s,"waits"?:c,"through"?:[c..],"reads"?:[k..]}   reads: when asked for
+//   {"returns":c,"run":n}   when asked for: the run's body returned a value (an awaited one: it
+//    landed), before anything is done with it: before its set's marks, before its end; once per
+//    run at most (none for a throw, PENDING, a stop). not counted toward ENDLESS
 // moments come as told: due when made due, starts and ends around a run (a run's own marks and
 // makings between them), acts after. due: made due by a mark (writer: the computation the change
 // named, its run; none, from outside) or by being made (writer: the computation whose run, set,
@@ -153,10 +158,9 @@
 // a cleanup's writer open: on a computation, it (its latest run: after a run, that run);
 //   on a plain scope, the teardown's: by a computation's teardown or clean, that computation; by a
 //   dispose, the writer open there (the host's: none)
-// info: a scope's pairs, those given then ["owner", the info of the one it is under] (a root:
-//   none), made once with it. a computation's, before its first run [["mark",t],["owner",..]], t
-//   the tick it was made at; from each run's start [["run",n],["mark",t],["owner",..]], t the tick
-//   that made that run due. current: scope, the name (none: null); pairs, its info; writer, the
+// info: a scope's pairs, those given, nothing appended, made once with it. a computation's,
+//   before its first run [["mark",t]], t the tick it was made at; from each run's start
+//   [["run",n],["mark",t]], t the tick that made that run due. current: scope, the name (none: null); pairs, its info; writer, the
 //   computation of the run open (in a run, its own; in a set, act or a computation's cleanup, it,
 //   once it has run; in run(), the one open around it)
 // an error: a scheduler error's code ("disposed", "unscoped", "empty"), "pending" for a
@@ -231,7 +235,9 @@ type Request = { op: string; [k: string]: Json }
 const store = new Map<string, Json>()
 let logged: Json[] = []
 // as told; named when asked (a new computer is due before it has a name)
-let moments: Told[] = []
+// a run's body returned (onRunReturn): not trace's, shown when asked
+type Returns = { returns: Computer; run: number }
+let moments: (Told | Returns)[] = []
 let forgotten: unknown[] = []
 let started: unknown[] = []
 const named = new Map<string, Scope>()
@@ -248,7 +254,8 @@ const errorOf = (e: unknown): string =>
 		: String(e)
 const nameOf = (c: Computer) => names.get(c)!
 
-function moment(m: Told, reads: boolean): Json {
+function moment(m: Told | Returns, reads: boolean): Json {
+	if ("returns" in m) return { returns: nameOf(m.returns), run: m.run }
 	if ("due" in m) {
 		return m.by ? { due: nameOf(m.due), tick: m.tick, writer: nameOf(m.by) } : {
 			due: nameOf(m.due),
@@ -277,7 +284,7 @@ let told = 0
 let pulsing = false
 // a listener armed to throw, once: which, at what (a computation's name, or a key), its message
 let armed: { on: string; at?: string; error: string } | undefined
-const LISTENERS = ["mark", "starts", "ends", "acts", "forgotten", "started", "settles"]
+const LISTENERS = ["mark", "starts", "returns", "ends", "acts", "forgotten", "started", "settles"]
 function fire(on: string, at: () => string[]) {
 	if (armed?.on !== on || (armed.at !== undefined && !at().includes(armed.at))) return
 	const e = armed.error
@@ -291,6 +298,10 @@ trace(s, (m) => {
 	if ("starts" in m) fire("starts", () => [nameOf(m.starts)])
 	else if ("ends" in m) fire("ends", () => [nameOf(m.ends)])
 	else if ("acts" in m) fire("acts", () => [nameOf(m.acts)])
+})
+s.onRunReturn((c, n) => {
+	moments.push({ returns: c, run: n })
+	fire("returns", () => [nameOf(c)])
 })
 s.onTrackingEnd((key) => {
 	forgotten.push(key)
@@ -648,7 +659,8 @@ async function run(r: Request): Promise<Json> {
 			return { log: out }
 		}
 		case "moments": {
-			const out = moments.map((m) => moment(m, r.reads === true))
+			const out = moments.filter((m) => r.returns === true || !("returns" in m))
+				.map((m) => moment(m, r.reads === true))
 			moments = []
 			return { moments: out }
 		}

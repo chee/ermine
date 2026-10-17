@@ -1,7 +1,5 @@
-// order: what runs next. the due, each at the tick it became due; a due one runs once every due
-// one above it ran (what it is after, and what that is after.., a cycle it is in aside); of those,
-// the earliest due, then the oldest (made first). the ranks are how order finds what is above:
-// made whole once (rank.ts), then mended where an edge changed, only ever rising.
+// order: what runs next. the due, each at the tick it became due; and the ranks: made whole once
+// (rank.ts), then mended where an edge changed, only ever rising.
 //
 // a computation is after: the writers of the keys its last run read (values), and the one it
 // waits after (after). the scheduler says when those change (sees, waits), and when one is made
@@ -13,21 +11,12 @@
 // rank.ts's, never less: still after everything it is after. a cycle (a component of more than
 // one) is rank.ts's alone, ranked over the part of the graph from the change on (local): when a
 // mend reaches one of its members, a member goes, or a mend comes back round to where it began
-// (a cycle made now). so one above another is ranked lower, unless they are one cycle, which
-// shares a rank.
-//
-// above: a due one with a lower rank, reached walking up from it (what it is after, and on);
-// nothing ranked under the lowest due rank has anything due above it, so the walk stops there.
-// one found above is held: set aside on what was found, with the way down from it; when that one
-// is no longer due, the first due one along the way holds it again, else it is looked at anew. an
-// edge gone, or a cycle joined, lets every held one be looked at anew
+// (a cycle made now)
 import rank from "./rank.ts"
 
 // what order keeps on a computation. values: the writers its last run read, no repeats.
 // due: the tick it became due at; 0, not due. rank: its rank, good while ranked is the making
-// now. afters: what is after it, each with how many edges. stamp: for telling two lists apart.
-// counted: the rank it is counted at while due. walked, via: a walk up's own (the walk it was reached in, and from what below). held: what
-// holds it, and the way down from there; holding: those it holds
+// now. afters: what is after it, each with how many edges. stamp: for telling two lists apart
 export type Ordered<P> = {
 	n: number
 	values: P[]
@@ -38,16 +27,7 @@ export type Ordered<P> = {
 	ranked: number
 	afters: Map<P, number> | undefined
 	stamp: number
-	counted: number
-	walked: number
-	via: P | undefined
-	held: Hold<P> | undefined
-	holding: Hold<P>[] | undefined
 }
-
-// a due one held: on the way down from it (way[at]), while it is due at mark and nothing has let
-// the held go since (loose)
-export type Hold<P> = { p: P; way: P[]; at: number; mark: number; loose: number }
 
 export function createOrder<P extends Ordered<P>>(
 	all: () => Iterable<P>,
@@ -64,10 +44,6 @@ export function createOrder<P extends Ordered<P>>(
 	let stamps = 0
 	const edge = (p: P, q: P | undefined) => q !== undefined && q !== p && q.state === "alive"
 	const rankOf = (p: P) => p.ranked === making ? p.rank : 0
-	// bumped when an edge goes, or the ranks are made again (a cycle may have joined): every held
-	// one is looked at anew at the next pick
-	let loose = 0
-	let looked = 0
 
 	// p is after q by one more edge, or one less
 	function link(p: P, q: P) {
@@ -93,7 +69,6 @@ export function createOrder<P extends Ordered<P>>(
 		const r = rank([...all()].filter((p) => p.state === "alive"), edges)
 		making = ++made
 		ranked = r.size
-		loose++
 		members.clear()
 		for (const [p, k] of r) {
 			p.rank = k
@@ -102,53 +77,16 @@ export function createOrder<P extends Ordered<P>>(
 		for (const [p, k] of r) {
 			for (const q of edges(p)) if (r.get(q) === k) members.add(p).add(q)
 		}
-		recount()
+		remake()
 	}
-	// the due counted by rank (at, each one's counted), and the ranks with some, lowest first (a
-	// heap, a rank there twice, or none due at it, stale): the lowest rank due
-	let at: number[] = []
-	const lows: number[] = []
-	function count(p: P, r: number) {
-		p.counted = r
-		at[r] = (at[r] ?? 0) + 1
-		if (at[r] !== 1) return
-		let i = lows.length
-		lows.push(r)
-		while (i > 0) {
-			const up = (i - 1) >> 1
-			if (lows[up] <= r) break
-			lows[i] = lows[up]
-			i = up
-		}
-		lows[i] = r
-	}
-	function lowest(): number {
-		while (lows.length && !(at[lows[0]] > 0)) {
-			const r = lows.pop()!
-			if (!lows.length) break
-			let i = 0
-			for (;;) {
-				let c = 2 * i + 1
-				if (c >= lows.length) break
-				if (c + 1 < lows.length && lows[c + 1] < lows[c]) c++
-				if (lows[c] >= r) break
-				lows[i] = lows[c]
-				i = c
-			}
-			lows[i] = r
-		}
-		return lows.length ? lows[0] : 0
-	}
-	// counted again, from the due
-	function recount() {
-		at = []
-		lows.length = 0
-		for (const p of all()) if (p.due !== 0) count(p, rankOf(p))
-	}
-	// a due one's rank changed
-	function moved(p: P, r: number) {
-		at[p.counted]--
-		count(p, r)
+	// the heap made again from the due
+	function remake() {
+		heapLength =
+			heapP.length =
+			heapRank.length =
+			heapMark.length =
+				0
+		for (const p of all()) if (p.due !== 0) push(p, rankOf(p), p.due)
 	}
 
 	// ranked again from start and everything after it (the region): rank.ts over the region's own
@@ -170,13 +108,12 @@ export function createOrder<P extends Ordered<P>>(
 			return k
 		}
 		const r = rank(region, inner, floor)
-		loose++
 		for (const [p, k] of r) {
 			members.delete(p)
 			if (p.ranked !== making) ranked++
 			p.rank = k
 			p.ranked = making
-			if (p.due !== 0) moved(p, k)
+			if (p.due !== 0) push(p, k, p.due)
 		}
 		for (const [p, k] of r) for (const q of inner(p)) if (r.get(q) === k) members.add(p).add(q)
 	}
@@ -201,7 +138,7 @@ export function createOrder<P extends Ordered<P>>(
 			if (k <= rankOf(x)) continue
 			x.rank = k
 			x.ranked = making
-			if (x.due !== 0) moved(x, k)
+			if (x.due !== 0) push(x, k, x.due)
 			if (x.afters) {
 				for (const y of x.afters.keys()) {
 					if (begun.has(y)) return local(begun)
@@ -211,116 +148,62 @@ export function createOrder<P extends Ordered<P>>(
 		}
 	}
 
-	// the due again, by mark, then the order made, to pick from: two lists side by side. an entry
-	// whose computation is no longer due at its mark, or is held, is stale
-	const dueP: P[] = []
-	const dueMark: number[] = []
-	let dueLength = 0
-	const before = (m: number, n: number, m2: number, n2: number) => m !== m2 ? m < m2 : n < n2
-	function enter(p: P, mark: number) {
-		let i = dueLength++
+	// the due as a heap, by rank, then mark, then the order made: three lists side by side. an
+	// entry whose computation is no longer due at its mark, or not at its rank, is stale
+	const heapP: P[] = []
+	const heapRank: number[] = []
+	const heapMark: number[] = []
+	let heapLength = 0
+	// (r, m, n) before (r2, m2, n2): by rank, then mark, then the order made
+	const lt = (r: number, m: number, n: number, r2: number, m2: number, n2: number) =>
+		r !== r2 ? r < r2 : m !== m2 ? m < m2 : n < n2
+	function put(i: number, p: P, rank: number, mark: number) {
+		heapP[i] = p
+		heapRank[i] = rank
+		heapMark[i] = mark
+	}
+	function move(to: number, from: number) {
+		put(to, heapP[from], heapRank[from], heapMark[from])
+	}
+	function push(p: P, rank: number, mark: number) {
+		let i = heapLength++
 		while (i > 0) {
 			const up = (i - 1) >> 1
-			if (!before(mark, p.n, dueMark[up], dueP[up].n)) break
-			dueP[i] = dueP[up]
-			dueMark[i] = dueMark[up]
+			if (!lt(rank, mark, p.n, heapRank[up], heapMark[up], heapP[up].n)) break
+			move(i, up)
 			i = up
 		}
-		dueP[i] = p
-		dueMark[i] = mark
+		put(i, p, rank, mark)
 	}
-	function leave() {
-		const last = --dueLength
-		const p = dueP[last], mark = dueMark[last]
-		dueP[last] = undefined as unknown as P
+	// the top out
+	function pop() {
+		const last = --heapLength
+		const p = heapP[last], rank = heapRank[last], mark = heapMark[last]
+		heapP[last] = undefined as unknown as P
 		if (last === 0) return
 		let i = 0
 		for (;;) {
 			let c = 2 * i + 1
 			if (c >= last) break
-			if (c + 1 < last && before(dueMark[c + 1], dueP[c + 1].n, dueMark[c], dueP[c].n)) c++
-			if (!before(dueMark[c], dueP[c].n, mark, p.n)) break
-			dueP[i] = dueP[c]
-			dueMark[i] = dueMark[c]
+			if (
+				c + 1 < last &&
+				lt(
+					heapRank[c + 1],
+					heapMark[c + 1],
+					heapP[c + 1].n,
+					heapRank[c],
+					heapMark[c],
+					heapP[c].n,
+				)
+			) c++
+			if (!lt(heapRank[c], heapMark[c], heapP[c].n, rank, mark, p.n)) break
+			move(i, c)
 			i = c
 		}
-		dueP[i] = p
-		dueMark[i] = mark
-	}
-	function reenter() {
-		dueLength = dueP.length = dueMark.length = 0
-		for (const p of all()) if (p.due !== 0 && p.held === undefined) enter(p, p.due)
+		put(i, p, rank, mark)
 	}
 
-	// holds: every one made since the held were last let go; those let go when what held them is
-	// no longer due
-	const holds: Hold<P>[] = []
-	const freed: Hold<P>[] = []
-	function hold(h: Hold<P>) {
-		h.p.held = h
-		;(h.way[h.at].holding ??= []).push(h)
-	}
-	// p is due no longer: what it held is looked at again
-	function free(p: P) {
-		const hs = p.holding
-		if (hs === undefined) return
-		p.holding = undefined
-		for (const h of hs) freed.push(h)
-	}
-	const live = (h: Hold<P>) => h.p.held === h && h.p.due === h.mark && h.loose === loose
-	function release(p: P) {
-		p.held = undefined
-		enter(p, p.due)
-	}
-	// a held one whose holder is due no longer: the next due one down the way holds it, else it is
-	// picked from again
-	function again(h: Hold<P>) {
-		if (!live(h)) return
-		const k = rankOf(h.p)
-		for (let i = h.at; i < h.way.length; i++) {
-			const y = h.way[i]
-			if (y.state !== "alive" || y.due === 0 || rankOf(y) >= k) continue
-			h.at = i
-			hold(h)
-			return
-		}
-		release(h.p)
-	}
-
-	// the walk up from p for a due one above it (ranked under it), seen no lower than floor: the
-	// way down from it to p (p not in it), or none
-	let walks = 0
-	const reached: P[] = []
-	function above(p: P, floor: number): P[] | undefined {
-		const w = ++walks
-		const k = rankOf(p)
-		p.walked = w
-		reached.length = 0
-		reached.push(p)
-		for (let i = 0; i < reached.length; i++) {
-			const x = reached[i]
-			const n = x.values.length
-			for (let j = 0; j <= n; j++) {
-				const q = j < n ? x.values[j] : x.after
-				if (q === undefined || !edge(x, q) || q.walked === w) continue
-				q.walked = w
-				q.via = x
-				const r = rankOf(q)
-				if (r < floor) continue
-				if (q.due !== 0 && r < k) {
-					const way = [q]
-					for (let y = x; y !== p; y = y.via!) way.push(y)
-					reached.length = 0
-					return way
-				}
-				reached.push(q)
-			}
-		}
-		reached.length = 0
-		return undefined
-	}
-
-	// the entries next sets aside, waiting after a due one: computations, and marks
+	// the entries next sets aside, waiting after a due one: computations, and rank, mark pairs
 	const waiting: P[] = []
 	const waitingAt: number[] = []
 
@@ -330,72 +213,45 @@ export function createOrder<P extends Ordered<P>>(
 		has: (p: P) => p.due !== 0,
 		set: (p: P, mark: number) => {
 			if (p.due === 0) dues++
-			else if (making !== 0) at[p.counted]--
 			p.due = mark
-			p.held = undefined
-			enter(p, mark)
-			if (making !== 0) count(p, rankOf(p))
+			if (making !== 0) push(p, rankOf(p), mark)
 		},
 		delete: (p: P) => {
 			if (p.due === 0) return
 			dues--
 			p.due = 0
-			if (making !== 0) at[p.counted]--
-			p.held = undefined
-			free(p)
 		},
 		size: () => dues,
 
 		rank: (p: P) => (ranks(), rankOf(p)),
 
-		// the due computation to run: not waiting after a due one, nothing due above it; of those
-		// the earliest made due, then the oldest
+		// the due computation to run: not waiting after a due one; lowest rank, then earliest made
+		// due, then the order made
 		next(): { p: P; rank: number } {
 			ranks()
-			// stale entries past four times the due: made again
-			if (dueLength > 4 * dues + 64) reenter()
-			// an edge gone or a cycle joined since: every held one is picked from again
-			if (looked !== loose) {
-				looked = loose
-				freed.length = 0
-				for (const h of holds) if (h.p.held === h) release(h.p)
-				holds.length = 0
-			} else if (holds.length > 4 * dues + 64) {
-				let k = 0
-				for (const h of holds) if (live(h)) holds[k++] = h
-				holds.length = k
-			}
-			for (let i = 0; i < freed.length; i++) again(freed[i])
-			freed.length = 0
-			// no due one is above what is ranked under the lowest rank due
-			const floor = lowest()
+			// stale entries past four times the due: the heap is made again
+			if (heapLength > 4 * dues + 64) remake()
 			let best: P | undefined
-			while (dueLength) {
-				const p = dueP[0], mark = dueMark[0]
-				leave()
-				if (p.due !== mark || p.held !== undefined) continue
+			let bestRank = 0
+			while (heapLength) {
+				const p = heapP[0], rank = heapRank[0], mark = heapMark[0]
+				pop()
+				if (p.due !== mark || rankOf(p) !== rank) continue
 				if (p.after && p.after.due !== 0) {
 					waiting.push(p)
-					waitingAt.push(mark)
+					waitingAt.push(rank, mark)
 					continue
 				}
-				if (rankOf(p) > floor) {
-					const way = above(p, floor)
-					if (way) {
-						const h: Hold<P> = { p, way, at: 0, mark, loose }
-						holds.push(h)
-						hold(h)
-						continue
-					}
-				}
 				best = p
+				bestRank = rank
 				break
 			}
-			for (let i = 0; i < waiting.length; i++) enter(waiting[i], waitingAt[i])
+			for (let i = 0; i < waiting.length; i++) {
+				push(waiting[i], waitingAt[2 * i], waitingAt[2 * i + 1])
+			}
 			waiting.length = 0
 			waitingAt.length = 0
-			if (best === undefined) throw new Error("order: nothing to run")
-			return { p: best, rank: rankOf(best) }
+			return { p: best!, rank: bestRank }
 		},
 
 		started(p: P) {
@@ -421,10 +277,7 @@ export function createOrder<P extends Ordered<P>>(
 			for (const q of old) {
 				if (q.stamp === gone) continue
 				unlink(p, q)
-				if (edge(p, q)) {
-					changed = true
-					loose++
-				}
+				if (edge(p, q)) changed = true
 			}
 			const kept = ++stamps
 			for (const q of old) q.stamp = kept
@@ -442,10 +295,7 @@ export function createOrder<P extends Ordered<P>>(
 			let changed = false
 			if (p.after) {
 				unlink(p, p.after)
-				if (edge(p, p.after)) {
-					changed = true
-					loose++
-				}
+				if (edge(p, p.after)) changed = true
 			}
 			p.after = q
 			if (q) {
@@ -458,14 +308,8 @@ export function createOrder<P extends Ordered<P>>(
 		// p goes: not due, out of the ranks, after nothing; what was after it keeps its rank. a
 		// cycle's member: what was after it ranked again (local)
 		gone(p: P) {
-			if (p.due !== 0) {
-				dues--
-				if (making !== 0) at[p.counted]--
-			}
+			if (p.due !== 0) dues--
 			p.due = 0
-			p.held = undefined
-			free(p)
-			loose++
 			for (const q of p.values) unlink(p, q)
 			p.values = []
 			if (p.after) unlink(p, p.after)

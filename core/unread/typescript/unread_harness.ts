@@ -35,9 +35,11 @@
 //    and pass. what was kept (handed too), held, or given back in an undo never changes after,
 //    even where a span moved out of a list landed as a new list holding owned elements.
 //    writes (with scheduler): patches written to the entry (unread's update; refused: nothing
-//    written) by a compute's set, before it returns or throws; by: "run": by the computation
-//    itself (an effect's too), after it took what it returns. what was kept never changes
-//    after, those writes too
+//    written) by a compute's set, before it returns or throws: what was kept never changes after,
+//    those writes too. by: "run": by the computation itself (an effect's too), in its body after
+//    it took what it returns: its own writes, in place where owned, so what is kept is what it
+//    holds once they landed (what is at path, changed in place, shows them; one copied does not);
+//    it never changes after the run returned
 // { op: "held", name }             → { value? }   what was held under name, as it is now; a name
 //    never held: {}
 // { op: "value" }                  → { value? }   the entry's value now; not a read

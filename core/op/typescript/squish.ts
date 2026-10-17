@@ -130,6 +130,17 @@ function merge(t: Tail, prev: Patch, next: Patch): Patch | null {
 	return null
 }
 
+// prev and next might merge, by their ranges alone: cheaper than a merge that fails. t: prev's
+// tail; its length not counted yet, the UTF-16 length is as long or longer
+function could(t: Tail, prev: Patch, next: Patch): boolean {
+	if (!ranged(prev) || !ranged(next)) return false
+	const a = prev.range[0], [c, d] = next.range
+	if (!("value" in prev)) return "value" in next ? c === a && d === a : c <= a && a <= d
+	if (t.n >= 0) return (a <= c && d <= a + t.n) || (c === a + t.n && d > c)
+	const v = prev.value
+	return (typeof v === "string" || isList(v) || typed(v)) && a <= c && c <= a + v.length
+}
+
 // a lone surrogate anywhere in v
 function lone(v: unknown): boolean {
 	if (typeof v === "string") return !v.isWellFormed()
@@ -147,7 +158,8 @@ export type Squish = {
 }
 
 // typing at one place becomes one insert; a backspace after it, a shorter one;
-// a put makes earlier patches under it dead; moves are never merged
+// a put makes earlier patches under it dead; moves are never merged. merges reach back: a last
+// patch just merged is merged into the one before it, and that into the one before, while they do
 export default function createSquish(): Squish {
 	const buf: Patch[] = []
 	// counting code points, a lone surrogate makes positions depend on what is around it, which
@@ -160,6 +172,10 @@ export default function createSquish(): Squish {
 	const fouled: (readonly Key[])[] = []
 	const isFouled = (path: readonly Key[]) => fouled.some((f) => under(path, f))
 	let tail = fresh()
+	// one per patch before the last: the tail it had, retired. its length stays counted; never
+	// changed in place again
+	const kept: Tail[] = []
+	const retire = (t: Tail): Tail => ({ n: t.n, simple: t.simple, own: false, back: null })
 	// the tail is given out: never changed in place again, a typed array cut to its length
 	function seen() {
 		const last = buf[buf.length - 1]
@@ -171,9 +187,11 @@ export default function createSquish(): Squish {
 	return {
 		push(patch) {
 			if (patch.path.length === 0 && patch.range === undefined && patch.move === undefined) {
-				buf.length = 0
+				buf.length = 0, kept.length = 0
 			} else {
-				while (buf.length && dies(buf[buf.length - 1], patch)) buf.pop(), tail = fresh()
+				while (buf.length && dies(buf[buf.length - 1], patch)) {
+					buf.pop(), tail = kept.pop() ?? fresh()
+				}
 			}
 			let m = null
 			if (lone(patch.value) || (patch.move && isFouled(patch.move.path))) {
@@ -181,8 +199,20 @@ export default function createSquish(): Squish {
 			} else if (buf.length && !isFouled(patch.path)) {
 				m = merge(tail, buf[buf.length - 1], patch)
 			}
-			if (m) buf[buf.length - 1] = m
-			else buf.push(patch), tail = fresh()
+			if (!m) {
+				if (buf.length) kept.push(retire(tail))
+				buf.push(patch), tail = fresh()
+				return
+			}
+			let last: Patch = buf[buf.length - 1] = m
+			// reaching back: at the path just merged, so never fouled
+			while (kept.length) {
+				const t = kept[kept.length - 1], prev = buf[buf.length - 2]
+				const back = could(t, prev, last) ? merge(t, prev, last) : null
+				if (!back) break
+				kept.pop(), buf.pop()
+				buf[buf.length - 1] = last = back, tail = t
+			}
 		},
 		patches: () => (seen(), buf.slice()),
 		[Symbol.iterator]: () => (seen(), buf.values()),

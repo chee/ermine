@@ -3,7 +3,12 @@
 // invalid: it throws, and nothing changes. asked for, the undo of the patches too (invert.ts says
 // what it is), built as each lands: one walk. with cow: false nothing is copied: the containers
 // given change in place (a string, or a typed array that changes length, is put new in its
-// parent), and a throw undoes what was done, by the undo built on the way
+// parent), and a throw undoes what was done, by the undo built on the way: then each container
+// put new in another's place (owned's copies, a typed array grown or shrunk) is the one it
+// replaced again, as it was, so a refused call changes nothing, which is where too
+//
+// a map's key order is not part of its value: a map is its keys and what is at each. nothing owes
+// an order (a key put may come back anywhere among the others); maps are compared by content
 import { count, type Hint, joins, near, walk } from "@ermine/util/walk-string"
 
 export type Key = string | number
@@ -22,8 +27,9 @@ export type Options = {
 	cow?: boolean
 	// with cow false: which containers may change where they are. a list, map or typed array about
 	// to change is given to owned first, which gives back the one to change: the same, or a copy it
-	// made, which goes in its place (the root's too: then it is the value returned). none: every
-	// container changes where it is
+	// made, which goes in its place (the root's too: then it is the value returned). so is the list
+	// a span move takes out of a list, landing whole (not in a span): it holds what the span held.
+	// none: every container changes where it is
 	owned?: (container: object) => object
 }
 
@@ -83,12 +89,19 @@ function shape(p: Patch): boolean {
 // (untake), whether the take joined lone surrogates (taking) or was out of a list (listed)
 type Took = { m: unknown; back: Target; untake: Patch | null; taking: boolean; listed: boolean }
 
-// one edit's content, changed patch by patch; undo: the undo is wanted
+// in place: each container put new in another's place and the one it replaced (pairs: now, was,
+// now, was…), and the containers that may hold one now (under), for a refused call to put back.
+// none once owned copied the root given: nothing of it changed
+type Back = { pairs: object[]; under: object[] }
+
+// one edit's content, changed patch by patch; undo: the undo is wanted. back: in place, where what
+// it puts new in a container's place is noted (none: made at the first)
 function createWork(
 	root: unknown,
 	undo: boolean,
 	cow: boolean,
 	owned?: (container: object) => object,
+	back?: Back,
 ) {
 	// made here: may change in place, until the undo holds it. few, scanned; past 16, a WeakSet
 	let own: object[] | WeakSet<object> | undefined
@@ -106,16 +119,41 @@ function createWork(
 			: own !== undefined && (Array.isArray(own) ? own.includes(v) : own.has(v))
 			? v
 			: mine((isList(v) ? v.slice() : { ...v }) as T)
-	const work = { root }
+	// top: owned copied the root given (then nothing of it changes, nor needs putting back)
+	const work = {
+		root,
+		back,
+		top: undefined as object | undefined,
+		clones: undefined as unknown[] | undefined,
+	}
+
+	// in place: c put new where was was, at path's first n keys: noted, with the containers above
+	// it. copied: by owned, was as it was (the root given: top)
+	function note(c: object, was: object, path: readonly Key[], n: number, copied = false) {
+		if (cow || c === was || work.top !== undefined) return
+		if (copied && n === 0 && was === root) return void (work.top = c)
+		const { pairs, under } = work.back ??= { pairs: [], under: [] }
+		pairs.push(c, was)
+		let v = work.root as Record<Key, unknown>
+		for (let i = 0; i < n; i++) {
+			under.push(v)
+			v = v[path[i]] as Record<Key, unknown>
+		}
+	}
 
 	// the container holding path's last key, made own along the way; [] has none
 	function parent(path: readonly Key[]): Record<Key, unknown> {
-		let v = work.root = copyIn(work.root)
+		const top = work.root
+		let v = work.root = copyIn(top)
+		note(v, top as object, path, 0, true)
 		for (let i = 0; i < path.length - 1; i++) {
 			const at = v as Record<Key, unknown>
 			const next = at[enter(at, path[i])]
 			const c = copyIn(next)
-			if (c !== next) at[path[i]] = c
+			if (c !== next) {
+				at[path[i]] = c
+				note(c, next as object, path, i + 1, true)
+			}
 			v = c
 		}
 		return v as Record<Key, unknown>
@@ -187,6 +225,7 @@ function createWork(
 			size = w ? (w as unknown[]).length : 0
 			joined = false
 			set(path, l)
+			note(l, v, path, path.length, true)
 			end = a + size
 		} else {
 			const t = v as Typed
@@ -199,7 +238,7 @@ function createWork(
 			// in place only when the length stays
 			if (!cow && len === t.length) {
 				const o = copy(t)
-				if (o !== t) set(path, o)
+				if (o !== t) set(path, o), note(o, t, path, path.length, true)
 				if (w) o.set(w as Typed, a)
 			} else {
 				const n = new (t.constructor as new (n: number) => Typed)(len)
@@ -207,6 +246,7 @@ function createWork(
 				if (w) n.set(w as Typed, a)
 				n.set(t.subarray(b), a + size)
 				set(path, n)
+				note(n, t, path, path.length)
 			}
 			end = a + size
 		}
@@ -314,7 +354,8 @@ function createWork(
 		try {
 			if (!p.range) {
 				const listy = un !== undefined && P.length > 0 && isList(get(P, P.length - 1))
-				const old = set(P, m)
+				// a span out of a list lands whole: owned's to keep
+				const old = set(P, owned && from.range && isList(m) ? owned(m) : m)
 				if (took) un!.unland(p, from, took, old, listy)
 				return
 			}
@@ -329,8 +370,13 @@ function createWork(
 		}
 	}
 	// in place, what the undo holds of what moved is a copy: the tree goes on changing
-	const held = (u: Patch | null): Patch | null =>
-		cow || u === null || !("value" in u) ? u : { ...u, value: clone(u.value) }
+	// (a refused call takes back with what moved itself: clones, copy then it)
+	function held(u: Patch | null): Patch | null {
+		if (cow || u === null || !("value" in u)) return u
+		const c = clone(u.value)
+		if (c !== u.value) (work.clones ??= []).push(c, u.value)
+		return { ...u, value: c }
+	}
 
 	// the undo's part, made only when wanted
 	const un = undo ? undoer() : undefined
@@ -421,6 +467,44 @@ function createWork(
 	return { work, step, undone: un?.undone }
 }
 
+// in place, a refused call taken back: what is at v's place once each container put new in
+// another's place is the one it replaced again (a typed array given what it holds now: it may
+// have changed in place before it was replaced). only the containers that may hold one are walked
+function putBack(v: unknown, back: { was: Map<object, object>; under: Set<object> }): unknown {
+	if (v === null || typeof v !== "object") return v
+	let o: object = v, w: object | undefined
+	while ((w = back.was.get(o)) !== undefined) o = w
+	if (o !== v) {
+		if (!typed(o)) return o
+		if (o.length !== (v as Typed).length) return v
+		o.set(v as Typed)
+		return o
+	}
+	if (!back.under.has(v) || typed(v)) return v
+	if (isList(v)) {
+		for (let i = 0; i < v.length; i++) {
+			const r = putBack(v[i], back)
+			if (r !== v[i]) v[i] = r
+		}
+		return v
+	}
+	const m = v as Record<string, unknown>
+	for (const k of Object.keys(m)) {
+		const r = putBack(m[k], back)
+		if (r === m[k]) continue
+		// "__proto__" is a key: an engine with the setter would set the prototype
+		if (k === "__proto__") {
+			Object.defineProperty(m, k, {
+				value: r,
+				writable: true,
+				enumerable: true,
+				configurable: true,
+			})
+		} else m[k] = r
+	}
+	return v
+}
+
 // lists, maps and typed arrays copied all the way down; the rest (strings, numbers, bytes) as is
 function clone(v: unknown): unknown {
 	if (isList(v)) return v.map(clone)
@@ -507,8 +591,21 @@ export default function apply(
 		if (!cow) {
 			const back: Patch[] = []
 			unroll(undone!, marks, back)
-			const again = createWork(work.root, false, false)
-			for (const p of back) again.step(p)
+			// what the taking back changes may come to hold what was put new: walked after
+			const b = work.back
+			const again = createWork(work.root, false, false, b && ((c) => (b.under.push(c), c)), b)
+			const clones = new Map<unknown, unknown>()
+			for (let i = 0, cs = work.clones ?? []; i < cs.length; i += 2) clones.set(cs[i], cs[i + 1])
+			for (const p of back) {
+				again.step(
+					"value" in p && clones.has(p.value) ? { ...p, value: clones.get(p.value) } : p,
+				)
+			}
+			if (b && work.top === undefined) {
+				const was = new Map<object, object>()
+				for (let i = 0; i < b.pairs.length; i += 2) was.set(b.pairs[i], b.pairs[i + 1])
+				putBack(again.work.root, { was, under: new Set(b.under) })
+			}
 		}
 		throw e
 	}

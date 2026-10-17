@@ -1,5 +1,6 @@
 // op's value (value.h), in C.
 #include "value.h"
+#include "whole.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -62,8 +63,54 @@ op_value *op_bool(int b) {
 }
 op_value *op_num(double n) {
 	op_value *v = make(OP_NUM);
-	v->num = n;
+	v->num = n == 0 ? 0 : n; // -0 is 0
 	return v;
+}
+op_value *op_whole(int negative, const unsigned char *m, size_t n) {
+	while (n && !*m) m++, n--;
+	if (whole_exact(m, n)) return op_num(whole_near(negative, m, n));
+	op_value *v = make(OP_NUM);
+	v->num = whole_near(negative, m, n);
+	v->big = xrealloc(NULL, n);
+	memcpy(v->big, m, n);
+	v->bigLength = n;
+	v->bigNegative = negative != 0;
+	return v;
+}
+op_value *op_uint(uint64_t n) {
+	unsigned char m[8];
+	return op_whole(0, m, whole_of_u64(n, m));
+}
+op_value *op_int(int64_t n) {
+	unsigned char m[8];
+	uint64_t u = n < 0 ? (uint64_t)0 - (uint64_t)n : (uint64_t)n;
+	return op_whole(n < 0, m, whole_of_u64(u, m));
+}
+int op_as_double(const op_value *v, double *out) {
+	if (v == NULL || v->type != OP_NUM) return 0;
+	*out = v->num;
+	return 1;
+}
+int op_as_int64(const op_value *v, int64_t *out) {
+	if (v == NULL || v->type != OP_NUM) return 0;
+	uint64_t u;
+	if (v->big) {
+		if (!whole_u64(v->big, v->bigLength, &u)) return 0;
+		if (v->bigNegative ? u > (uint64_t)INT64_MAX + 1 : u > (uint64_t)INT64_MAX) return 0;
+		*out = v->bigNegative ? (int64_t)(0 - u) : (int64_t)u;
+		return 1;
+	}
+	double d = v->num;
+	if (!(d >= -9223372036854775808.0 && d < 9223372036854775808.0) || d != floor(d)) return 0;
+	*out = (int64_t)d;
+	return 1;
+}
+int op_same_num(const op_value *a, const op_value *b) {
+	if (a->big || b->big) {
+		return a->big && b->big && a->bigNegative == b->bigNegative && a->bigLength == b->bigLength &&
+		       memcmp(a->big, b->big, a->bigLength) == 0;
+	}
+	return a->num == b->num || (a->num != a->num && b->num != b->num);
 }
 op_value *op_str_n(const char *s, size_t n) {
 	op_value *v = make(OP_STR);
@@ -301,6 +348,7 @@ void op_free(op_value *v) {
 			free(v->index);
 			free(v->gaps);
 		} else if (v->type == OP_STR || v->type == OP_BYTES || v->type == OP_TYPED) free(v->str);
+		else if (v->type == OP_NUM) free(v->big);
 		free(v);
 	}
 	free(stack);

@@ -3,17 +3,16 @@
 // compute whose value is acted on after the round's last run. a setup runs once, untracked. the
 // scopes tree holds them: tearing a scope down takes everything under it.
 //
-// a scope is two things, one tree: an owner (what is made in it is put under it) and the info of
-// the changes made in it: pairs, in order, opaque, as keys are, then "owner" and the info of the
-// scope it is under (a root: none). so the info nests, innermost first. a write's pairs: the info
-// of the scope open (sc_get_info). sc_create_scope makes one under a parent, else under the one
-// open; sc_create_root_scope one with no parent. no pairs given: it fails (empty). a scope is
-// open only while sc_run_with_scope or the scheduler runs code in it: a computer's runs, sets and
-// acts open it, written by itself. its info is its latest run's, set as the run starts: "run", its
-// number, "mark", the tick of the mark that made it due, then "owner"; before its first run, the
-// mark alone. a scope's info is made once, with it: under a computer, it is that run's (a plain
-// scope is never claimed: it goes once a later run is done; what an act made, before the next
-// act). a teardown opens its scope, and what is under a scope goes with it open: a teardown on a
+// a scope is two things: an owner (what is made in it is put under it; the tree is
+// sc_scope_parent) and the info of the changes made in it: the pairs given, in order, opaque, as
+// keys are, nothing appended. a write's pairs: the info of the scope open (sc_get_info).
+// sc_create_scope makes one under a parent, else under the one open; sc_create_root_scope one with
+// no parent. no pairs given: it fails (empty). a scope is open only while sc_run_with_scope or the
+// scheduler runs code in it: a computer's runs, sets and acts open it, written by itself. its info
+// is its latest run's, set as the run starts: "run", its number, "mark", the tick of the mark that
+// made it due; before its first run, the mark alone. a scope's info is made once, with it; under a
+// computer, it belongs to that run (a plain scope is never claimed: it goes once a later run is
+// done; what an act made, before the next act). a teardown opens its scope, and what is under a scope goes with it open: a teardown on a
 // plain scope under a computer, run by the computer's teardown, its run's end or its act, is
 // written by it. nothing open: making a scope or a computer fails (unscoped).
 //
@@ -110,9 +109,8 @@ typedef struct {
 	const void *value;
 } sc_pair;
 
-// a scope's info: n pairs, in order. the last of a scope under another is "owner", its value a
-// const sc_info *, the owner's. a computer's others: "run" and "mark", each value a const
-// uint64_t * (the run's number; the tick of the mark that made it due)
+// a scope's info: n pairs, in order, those given. a computer's: "run" and "mark", each value a
+// const uint64_t * (the run's number; the tick of the mark that made it due)
 typedef struct {
 	const sc_pair *pairs;
 	size_t n;
@@ -198,6 +196,13 @@ typedef void (*sc_mark_fn)(const void *const *keys, size_t nkeys, sc_run *run, s
 sc_listener *sc_on_mark(sc_scheduler *s, sc_mark_fn f, void *data);
 typedef void (*sc_run_start_fn)(sc_computer *c, unsigned n, int rank, void *data);
 sc_listener *sc_on_run_start(sc_scheduler *s, sc_run_start_fn f, void *data);
+// a run's body returned a value (an awaited one: its promise landed with it), told before anything
+// is done with it (compared, given to set, queued to act; value: still the scheduler's): once per
+// run at most, for computes and effects. not told for a failure, SC_PENDING, a stopped run, or one
+// torn down in its body. a write made in the run before this is the run's own; one after, its
+// set's (un_keeping tells them apart this way). Mirrors TS' onRunReturn
+typedef void (*sc_run_return_fn)(sc_computer *c, unsigned n, const void *value, void *data);
+sc_listener *sc_on_run_return(sc_scheduler *s, sc_run_return_fn f, void *data);
 // reads: every key the run tracked, in order, a key tracked again tracked again (the tracker keeps
 // it once). kept only while someone listens here
 typedef void (*sc_run_end_fn)(sc_computer *c, unsigned n, sc_ended ended, const void *const *reads,
@@ -228,8 +233,7 @@ bool sc_scope_old(const sc_scope *o);
 // an early effect
 bool sc_scope_early(const sc_scope *o);
 sc_scope *sc_scope_parent(const sc_scope *o);
-// its info. a computer's: its latest run's, good until its next run (if no scope was made under
-// that run)
+// its info. a computer's: its latest run's, good until its next run
 const sc_info *sc_scope_info(const sc_scope *o);
 
 // the scope open (NULL: none)

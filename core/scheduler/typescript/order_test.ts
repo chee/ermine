@@ -1,10 +1,10 @@
-// order on its own, against the rule said plainly: of the due, one not waiting after a due one and
-// with no due one above it (reached up its edges, a cycle it is in aside) runs; of those, the
-// earliest due, then the oldest. random graphs, picks, stops, reads that change, marks and
-// computations gone, the rule asked again at every pick. a few dozen seeds (fuzz runs small)
+// order on its own, against the rule said plainly: of the due, not one waiting after a due one;
+// of those, the lowest rank, then the earliest due, then the oldest. and the ranks: each one past
+// what it is after, a cycle sharing one. random graphs, picks, stops, reads that change, marks
+// and computations gone, both asked again at every pick. a few dozen seeds (fuzz runs small)
 import { assert, assertEquals } from "@std/assert"
 import { createOrder, type Ordered } from "./order.ts"
-import { rand } from "../../fuzz/gen.ts"
+import { rand } from "../../fuzz/gen_harness.ts"
 
 interface P extends Ordered<P> {}
 
@@ -19,11 +19,6 @@ function make(n: number): P {
 		ranked: 0,
 		afters: undefined,
 		stamp: 0,
-		counted: 0,
-		walked: 0,
-		via: undefined,
-		held: undefined,
-		holding: undefined,
 	}
 }
 
@@ -44,15 +39,27 @@ function reaches(p: P, q: P): boolean {
 	return false
 }
 
-// the rule
-function pick(all: P[]): P {
-	const due = all.filter((p) => p.state === "alive" && p.due !== 0)
-	const ready = due.filter((p) =>
-		!(p.after && p.after.due !== 0) &&
-		!due.some((q) => q !== p && reaches(p, q) && !reaches(q, p))
+// the rule, by the ranks order has
+function pick(all: P[], rank: (p: P) => number): P {
+	const ready = all.filter((p) =>
+		p.state === "alive" && p.due !== 0 && !(p.after && p.after.due !== 0)
 	)
-	ready.sort((a, b) => a.due - b.due || a.n - b.n)
+	ready.sort((a, b) => rank(a) - rank(b) || a.due - b.due || a.n - b.n)
 	return ready[0]
+}
+
+// each after what it is after: ranked past it, or the same rank on a cycle with it
+function ranked(all: P[], rank: (p: P) => number) {
+	for (const p of all) {
+		if (p.state !== "alive") continue
+		for (const q of edges(p)) {
+			if (rank(q) < rank(p)) continue
+			assert(
+				rank(q) === rank(p) && reaches(q, p),
+				`${p.n} ranked ${rank(p)}, after ${q.n} at ${rank(q)}`,
+			)
+		}
+	}
 }
 
 for (let seed = 1; seed <= 40; seed++) {
@@ -88,9 +95,12 @@ for (let seed = 1; seed <= 40; seed++) {
 				mark()
 				continue
 			}
-			const want = pick(all)
-			const got = order.next().p
+			const rank = (p: P) => order.rank(p)
+			ranked(all, rank)
+			const want = pick(all, rank)
+			const { p: got, rank: k } = order.next()
 			assertEquals(got.n, want.n, `step ${step}`)
+			assertEquals(k, rank(got), `step ${step}`)
 			const p = got
 			const at = p.due
 			order.delete(p)

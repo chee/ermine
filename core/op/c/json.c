@@ -1,5 +1,6 @@
 // op's value in JSON (json.h), in C.
 #include "json.h"
+#include "whole.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -132,12 +133,23 @@ static op_value *number(reader *r) {
 		if (!(*q >= '0' && *q <= '9')) goto bad;
 		while (*q >= '0' && *q <= '9') q++;
 	}
-	char *text = grab((size_t)(q - s) + 1);
-	memcpy(text, s, (size_t)(q - s));
-	text[q - s] = 0;
+	r->p = q;
+	// digits alone: a whole number, exactly
+	size_t length = (size_t)(q - s);
+	int negative = *s == '-';
+	if (length - (size_t)negative > 15 && !memchr(s, '.', length) && !memchr(s, 'e', length) &&
+	    !memchr(s, 'E', length)) {
+		size_t n;
+		unsigned char *m = whole_parse(s + negative, length - (size_t)negative, &n);
+		op_value *v = op_whole(negative, m, n);
+		free(m);
+		return v;
+	}
+	char *text = grab(length + 1);
+	memcpy(text, s, length);
+	text[length] = 0;
 	double d = strtod(text, NULL);
 	free(text);
-	r->p = q;
 	return op_num(d);
 bad:
 	r->why = "bad json";
@@ -199,6 +211,7 @@ static op_value *plain(reader *r, int depth) {
 // the "/" forms, from the top: v is let go of, what it stands for returned; NULL (all let go of)
 // when a form is malformed
 static op_value *revive(reader *r, op_value *v);
+static op_value *bigint_of(const op_value *body);
 
 static int is_form(const op_value *v) {
 	return v->type == OP_MAP && v->count == 1 && strcmp(v->keys[0], "/") == 0;
@@ -307,6 +320,7 @@ static op_value *revive(reader *r, op_value *v) {
 		if ((made = revive(r, made)) == NULL) return NULL;
 		return op_stand(made);
 	} else if (strcmp(tag, "bytes") == 0) made = bytes_of(body);
+	else if (strcmp(tag, "bigint") == 0) made = bigint_of(body);
 	else if (strcmp(tag, "number") == 0) made = is_word(body, &word) ? op_num(word) : NULL;
 	else {
 		for (size_t k = 0; made == NULL && k < sizeof kinds / sizeof *kinds; k++)
@@ -315,6 +329,28 @@ static op_value *revive(reader *r, op_value *v) {
 	if (made == NULL) r->why = "bad form";
 	op_free(v);
 	return made;
+}
+
+// a whole number past 2^53 - 1 either way, in decimal, no leading zero: the one spelling of the
+// "bigint" form (a safe one is plain digits); NULL otherwise
+static op_value *bigint_of(const op_value *body) {
+	if (body == NULL || body->type != OP_STR) return NULL;
+	const char *s = body->str;
+	int negative = *s == '-';
+	const char *d = s + negative;
+	size_t n = strlen(d);
+	if (n == 0 || (n > 1 && d[0] == '0')) return NULL;
+	for (size_t i = 0; i < n; i++)
+		if (d[i] < '0' || d[i] > '9') return NULL;
+	size_t bytes;
+	unsigned char *m = whole_parse(d, n, &bytes);
+	op_value *v = op_whole(negative, m, bytes);
+	free(m);
+	if (v->big == NULL && fabs(v->num) <= 9007199254740991.0) {
+		op_free(v);
+		return NULL;
+	}
+	return v;
 }
 
 op_value *op_json_read(const char *text, const char **why) {
@@ -408,7 +444,18 @@ void op_json_write(FILE *out, const op_value *v) {
 	switch (v->type) {
 	case OP_NULL: fputs("null", out); break;
 	case OP_BOOL: fputs(v->bool_ ? "true" : "false", out); break;
-	case OP_NUM: put_number(out, v->num, "{\"/\":{\"number\":\"", "\"}}"); break;
+	case OP_NUM:
+		// a whole number past 2^53 - 1: its digits, in the bigint form
+		if (v->big != NULL || (isfinite(v->num) && v->num == floor(v->num) && fabs(v->num) > 9007199254740991.0)) {
+			unsigned char m[128];
+			const unsigned char *at = v->big != NULL ? v->big : m;
+			size_t n = v->big != NULL ? v->bigLength : whole_of_double(v->num, m);
+			char *digits = grab(3 * n + 3);
+			whole_decimal(v->big != NULL ? v->bigNegative : v->num < 0, at, n, digits);
+			fprintf(out, "{\"/\":{\"bigint\":\"%s\"}}", digits);
+			free(digits);
+		} else put_number(out, v->num, "{\"/\":{\"number\":\"", "\"}}");
+		break;
 	case OP_STR: op_json_string(out, v->str); break;
 	case OP_LIST:
 		putc('[', out);

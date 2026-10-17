@@ -4,13 +4,17 @@
 #define OP_VALUE_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 // content: null, bool, number, string (UTF-8; positions count code points), list, map (keys in
-// the order given), bytes, typed array (encoding/ENCODING.tex). An absent value is a NULL pointer.
+// the order given), bytes, typed array (the encoding: ermine/encoding/typescript/cbor.ts's header).
+// An absent value is a NULL pointer. a number: any double but -0 (it is 0: whole numbers are
+// integers), and every whole number, of any size: one no double holds exactly (past 2^53) is `big`
+// (whole.h) beside the double nearest it, in num.
 // bytes are a leaf; a typed array is a sequence of its elements (its length: how many); a stand-in
 // (what a live value is sent as) is a leaf holding its kind, any value, as its one item
 typedef enum { OP_NULL, OP_BOOL, OP_NUM, OP_STR, OP_LIST, OP_MAP, OP_BYTES, OP_TYPED, OP_STAND } op_type;
-// a typed array's kind, in ENCODING.tex's order; no uint8: bytes are that
+// a typed array's kind, in cbor.ts's order; no uint8: bytes are that
 typedef enum {
 	OP_INT8, OP_INT16, OP_UINT16, OP_INT32, OP_UINT32, OP_INT64, OP_UINT64, OP_FLOAT32, OP_FLOAT64,
 } op_elements;
@@ -28,7 +32,14 @@ struct op_value {
 	// when it is exactly bytes + 1 (what the constructors make)
 	size_t capacity;
 	union {
-		double num;
+		// a number's: the number (a big one's, the double nearest it); a whole number no double
+		// holds exactly: its magnitude, big-endian, no leading zero, and its sign (NULL otherwise)
+		struct {
+			double num;
+			unsigned char *big;
+			size_t bigLength;
+			int bigNegative;
+		};
 		// a list's or a map's: items (a map's values), keys (a map's only)
 		struct {
 			op_value **items;
@@ -57,7 +68,19 @@ struct op_value {
 
 op_value *op_null(void);
 op_value *op_bool(int b);
+// a number: -0 is 0
 op_value *op_num(double n);
+op_value *op_int(int64_t n);
+op_value *op_uint(uint64_t n);
+// a whole number from its sign and magnitude, big-endian (leading zeros allowed): a plain num when
+// a double holds it exactly. copies the bytes
+op_value *op_whole(int negative, const unsigned char *magnitude, size_t length);
+// a number as a double (a big one: the double nearest it); 0 when not a number
+int op_as_double(const op_value *v, double *out);
+// a whole number from INT64_MIN to INT64_MAX; 0 for anything else (a fraction, past them)
+int op_as_int64(const op_value *v, int64_t *out);
+// two numbers the same: by value, NaN the same as NaN, big ones by their bytes
+int op_same_num(const op_value *a, const op_value *b);
 op_value *op_str(const char *s);
 // copies n bytes of s
 op_value *op_str_n(const char *s, size_t n);
