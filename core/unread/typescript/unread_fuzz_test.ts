@@ -71,7 +71,9 @@ Deno.test("unread: as node's update, nothing held ever changes, and in place whe
 			if (below && owned !== undefined) {
 				assertStrictEquals(e.value, owned, `${where}: unread, so in place`)
 			}
-			owned = below ? e.value : undefined
+			// a write owns the root when it copied it, or it was owned: one that changed nothing (a
+			// move onto itself) leaves a read root unowned
+			owned = below && (e.value !== root || owned === root) ? e.value : undefined
 		}
 		for (let step = 0; step < 80; step++) {
 			const where = `seed ${seed}, step ${step}`

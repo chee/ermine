@@ -1,0 +1,23 @@
+{
+	"title": "what a run read, then wrote the entry it came from, then returned, never changes: in the run or after",
+	"steps": [
+		{ "op": "start", "value": { "a": { "x": 1 } }, "expect": {} },
+		{
+			"op": "write",
+			"patches": [{ "path": ["a", "x"], "value": 2 }],
+			"expect": { "undo": [{ "path": ["a", "x"], "value": 1 }] }
+		},
+		{
+			"op": "keep",
+			"path": ["a"],
+			"scheduler": "compute",
+			"handed": true,
+			"writes": [{ "path": ["a", "x"], "value": 3 }],
+			"by": "run",
+			"hold": "k",
+			"expect": {}
+		},
+		{ "op": "held", "name": "k", "expect": { "value": { "x": 2 } } },
+		{ "op": "value", "expect": { "value": { "a": { "x": 3 } } } }
+	]
+}

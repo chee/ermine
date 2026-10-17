@@ -1,0 +1,43 @@
+{
+	"title": "an owned container a patch puts (what the entry held, taken without a read) is let go first: a write after changes neither it nor where it was",
+	"steps": [
+		{ "op": "start", "value": { "a": { "k": 1 } }, "expect": {} },
+		{
+			"op": "write",
+			"patches": [{ "path": ["a", "k"], "value": 2 }],
+			"expect": { "undo": [{ "path": ["a", "k"], "value": 1 }] }
+		},
+		{ "op": "mark", "name": "a", "path": ["a"], "expect": {} },
+		{
+			"op": "write",
+			"patches": [{ "path": ["b"] }],
+			"marked": ["a"],
+			"hold": "told",
+			"expect": { "undo": [{ "path": ["b"] }] }
+		},
+		{
+			"op": "write",
+			"patches": [{ "path": ["b", "k"], "value": 3 }],
+			"expect": { "undo": [{ "path": ["b", "k"], "value": 2 }] }
+		},
+		{ "op": "held", "name": "told", "expect": { "value": [{ "k": 2 }] } },
+		{ "op": "value", "expect": { "value": { "a": { "k": 2 }, "b": { "k": 3 } } } },
+		{ "op": "same", "name": "a", "path": ["a"], "expect": { "same": true } },
+		{ "op": "start", "value": { "a": { "k": 1 } }, "expect": {} },
+		{
+			"op": "write",
+			"patches": [{ "path": ["a", "k"], "value": 2 }],
+			"expect": { "undo": [{ "path": ["a", "k"], "value": 1 }] }
+		},
+		{ "op": "mark", "name": "a", "path": ["a"], "expect": {} },
+		{
+			"op": "write",
+			"patches": [{ "path": ["b"] }, { "path": ["b", "k"], "value": 3 }],
+			"marked": ["a"],
+			"hold": "told",
+			"expect": { "undo": [{ "path": ["b", "k"], "value": 2 }, { "path": ["b"] }] }
+		},
+		{ "op": "held", "name": "told", "expect": { "value": [{ "k": 2 }, 3] } },
+		{ "op": "value", "expect": { "value": { "a": { "k": 2 }, "b": { "k": 3 } } } }
+	]
+}

@@ -1,5 +1,5 @@
 {
-	"title": "a refused write on a value already copied keeps its keys' order: what it took out is put back where it was",
+	"title": "a refused write on a value already copied changes nothing: what it took out is put back",
 	"steps": [
 		{ "op": "start", "value": { "a": 1, "b": 2 }, "expect": {} },
 		{

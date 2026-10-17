@@ -4,7 +4,7 @@
 import { assert, assertEquals } from "@std/assert"
 import type { Patch } from "@ermine/op/apply"
 import { ask, command } from "../../../conformance/typescript/ask.ts"
-import { fromJson, line, toJson } from "../../../conformance/typescript/form.ts"
+import { line, revive, toJson } from "../../../conformance/typescript/form.ts"
 import { rand } from "../../../conformance/typescript/rand.ts"
 import { createHarness } from "./unread_harness.ts"
 import { at, made, patch, paths } from "./random_harness.ts"
@@ -27,6 +27,11 @@ Deno.test("an unknown op is an error, and the harness goes on", async () => {
 // compute, effect, or failing set), marks and sames, helds, unwrites. a few dozen seeds
 const SEEDS = 30, STEPS = 50
 const form = (ps: Patch[]) => ps.map((x) => "value" in x ? { ...x, value: toJson(x.value) } : x)
+// an answer by content: a map's key order is not part of its value (op's apply.ts)
+const sorted = (v: unknown) =>
+	v !== null && typeof v === "object" && !Array.isArray(v)
+		? Object.fromEntries(Object.keys(v).sort().map((k) => [k, (v as Record<string, unknown>)[k]]))
+		: v
 
 Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} steps, as unread.ts`, async () => {
 	const requests: Record<string, unknown>[] = [], expected: unknown[] = [], where: string[] = []
@@ -41,7 +46,7 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} steps, as unread.ts`, async () => {
 			where.push(`seed ${seed}, step ${step}`)
 			return a
 		}
-		const now = () => fromJson(reference({ op: "value" }).value)
+		const now = () => revive(reference({ op: "value" }).value)
 		// what each hold held, as it was then: a held answer must say it still
 		let marks: string[] = [], holds = new Map<string, unknown>()
 		// the latest write's undo (unwrite writes it)
@@ -118,6 +123,6 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} steps, as unread.ts`, async () => {
 	const answers = await ask(command("unread"), requests as never)
 	assertEquals(answers.length, requests.length, "one answer per request")
 	answers.forEach((a, i) =>
-		assertEquals(line(a), line(expected[i]), `${where[i]}: ${line(requests[i])}`)
+		assertEquals(line(a, sorted), line(expected[i], sorted), `${where[i]}: ${line(requests[i])}`)
 	)
 })
