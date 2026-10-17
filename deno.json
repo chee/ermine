@@ -30,6 +30,7 @@
 	"tasks": {
 		"test": "deno test --allow-run --allow-read --allow-env && deno task conformance",
 		"conformance": "deno test --quiet --allow-run --allow-read --allow-env conformance/run.ts --",
+		"perf": "deno run --quiet --allow-run --allow-read --allow-env conformance/perf.ts",
 		"check": "deno check .",
 		"bench": "deno bench"
 	},
