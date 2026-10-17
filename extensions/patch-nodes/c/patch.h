@@ -1,5 +1,5 @@
 // Patch nodes (typescript/patch.ts), in C: a node that lives in one place and changes another. Same
-// rules as patch.ts, which the suite in playground/patch-nodes/conformance/patch/ holds both to.
+// rules as patch.ts, which the suite in extensions/patch-nodes/conformance/patch/ holds both to.
 // Read patch.ts first: what a patch node is, what stale and set aside mean, what land does.
 //
 //   pn *o = pn_new();
