@@ -1,36 +1,22 @@
-// the process api (typescript/api.ts), in C: what a program is given. prefix api_. the TypeScript
-// head comment is the spec; this is its C idiom, and the suite in ermine/api/conformance/api/ holds
-// both to it.
+// the process api (typescript/api.ts) in C: what a program is given. prefix api_. api.ts's header
+// is the spec; ermine/api/conformance/api/ holds both to it.
 //
 //   api_apis *x = api_apis_new(&setup);            // once, by the host
-//   api *a = api_new(x, &context);                 // one a process, made by whoever starts it
+//   api *a = api_new(x, &context);                 // one per process
 //   api_node notes;
 //   api_open(a, "./notes", value, &notes);
 //   api_read(a, api_of(&notes), NULL, 0, &v);
-//   api_node_free(&notes);
-//   api_free(a);
-//   api_apis_free(x);
+//   api_node_free(&notes); api_free(a); api_apis_free(x);
 //
-// errors: no exceptions in C, so every function that can fail returns a code, 0 for none:
-// nothing-there, already-there, not-a-name (places'), refused (the policy's no), pending (a memo read
-// that has no value yet: the reader is pending too, so a compute returns SC_PENDING), not-a-method,
-// stop (a read told the scheduler its run must end now: return at once, what is returned is
-// dropped), failed (anything else: api_why says what). api_why is good until the next call.
-//
-// paths: strings, as the TypeScript says (path.ts' parse). a node (api_node) is a path, or an id,
-// and a part; a target (api_target) is a path string, or a node.
-//
-// memory: a value given is held (op_ref) when it is kept and the caller's otherwise; a value given
-// back is borrowed from the table and good until the node changes, but for those in api_items and
-// api_layers, which hold their own. a node is the caller's, api_node_free. the scheduler's
-// options.drop must be api_drop: a memo's or effect's result is an op_value the scheduler lets go
-// of with it. patches (op_patch) are borrowed for the call and copied.
-//
-// the api keeps what it made (computers, methods, watches) until api_apis_free: tear every process's
-// scope down first, then free the apis, then the scheduler.
-//
-// left out, not being in the suite: start, stop (of a process started by this one), openwith, box,
-// and async (promise) memos.
+// errors: returned codes, 0 none: nothing-there, already-there, not-a-name, refused, pending (a
+// compute returns SC_PENDING), not-a-method, stop (return at once, result dropped), failed
+// (api_why says why, good until the next call).
+// api_node: a path or id, and a part. api_target: a path string or a node.
+// memory: values given are held (op_ref) if kept, else the caller's; values given back are
+// borrowed until the node changes (api_items, api_layers hold their own). api_node: the caller's,
+// api_node_free. options.drop must be api_drop. patches borrowed for the call and copied.
+// teardown: every process's scope, then api_apis_free, then the scheduler.
+// not yet (not in the suite): start, stop, openwith, box, async memos.
 #ifndef API_H
 #define API_H
 

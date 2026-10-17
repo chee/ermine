@@ -1,32 +1,21 @@
-// Boxes (typescript/boxes.ts), in C: a "/" of a process's own, a plain folder. Same rules as boxes.ts,
-// which the suite in ermine/boxes/conformance/boxes/ holds both to.
+// boxes (typescript/boxes.ts) in C: a "/" of a process's own, a plain folder. same rules as
+// boxes.ts; ermine/boxes/conformance/boxes/ holds both to them.
 //
 //   bx_host host = {world_places, table};          // the host's places and table
 //   bx *b;
 //   bx_create(&host, steps, n, NULL, header, block, &b);  // the folder found or made
 //   bx_box(b, path, n, node, header, block, &changed);    // a regular placement in it
 //   pl_get(bx_places(b), path, n, &id);                    // places' reads, unchanged
-//   ...
 //   bx_free(b);                                            // before or after the host's places
 //
-// A box is its folder's id (root) and a view of the host's places rooted there (pl_view), asked
-// [processes(root), children]: the folder's saved names, and the processes started at root
-// (pr_add(.., root, ..)) seen at their path in it. Nothing more, so any places rooted at the graph's
-// root and asked the same stands in for one. No path from its root reaches above it; pl_lookup stops
-// there; an address's ".." at its "/" stays there (bx_inside). What is in it is what is in the folder,
-// ordinary children; one set of spots with the host's places, so a write committed to either tells
-// the readers of both, and the table's one hook (pl_event on the host's) tells both.
-//
-// Writes go by saved children only: the folders on the way found, each missing one made (a fresh
-// uuid placed as a regular child; the first in a folder with no children entry: an entry made, owned
-// by the places, and a table event), then said written by the host's commit. Refused, nothing
-// changed: PL_NOT_A_NAME (a name that is not one), PL_ALREADY_THERE (a name holding something that is
-// no id). Paths are steps (a name, ".", ".." or "/"), read through bx_inside.
-//
-// MEMORY. A write's header is given with its block (pl_header's): every entry written holds the block
-// once more (pl_hold_also on a changed entry, pl_hold on an entry made); the caller keeps its own
-// hold. A box keeps its root (copied) and its view; the host is copied and must outlive it. Out of
-// memory aborts.
+// a box: its folder's id (root) and a pl_view of the host's places rooted there. nothing above its
+// root is reachable; ".." at its "/" stays there (bx_inside). writes through either places tell
+// readers of both.
+// writes: missing folders on the way made, committed by the host. refused, nothing changed:
+// PL_NOT_A_NAME, PL_ALREADY_THERE (a name holding no id). paths: steps (name, ".", "..", "/").
+// memory: every entry written holds the header's block once more (pl_hold_also / pl_hold); the
+// caller keeps its own hold. a box copies its root and host; the host's places must outlive it.
+// out of memory aborts.
 #ifndef BOXES_H
 #define BOXES_H
 

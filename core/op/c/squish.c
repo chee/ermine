@@ -1,6 +1,6 @@
 // Squishing patches, and patches as columns, in C. The rules: squish.ts; this follows it step for
-// step. Joined values are the squisher's own; a tail's own buffer grows in place, so typing one
-// character at a time is amortised linear.
+// step, merges reaching back included. Joined values are the squisher's own, a buffer per patch
+// that grows in place, so typing one character at a time is amortised linear.
 #include "squish.h"
 
 #include <stdlib.h>
@@ -74,6 +74,7 @@ static int under(const sq_key *p, size_t pn, const sq_key *q, size_t qn) {
 	return qn <= pn && same(p, qn, q, qn);
 }
 
+// a patch's own buffer: its value's data, made here; no one else points into it
 typedef struct {
 	void *p;
 	size_t cap;
@@ -81,11 +82,9 @@ typedef struct {
 
 struct sq {
 	sq_patch *buf;
-	size_t n, cap;
+	// one per patch: its own buffer, or none (p NULL)
 	own *own;
-	size_t nown, capown;
-	// the tail's value is the last own buffer, and nothing else points into it
-	int tail_owns;
+	size_t n, cap;
 	// where a lone surrogate was put: nothing at or under is merged again
 	struct {
 		const sq_key *keys;
@@ -106,30 +105,23 @@ static int is_fouled(const sq *s, const sq_key *path, size_t depth) {
 	return 0;
 }
 
-static void *take(sq *s, size_t cap) {
-	s->own = grow(s->own, &s->capown, s->nown + 1, sizeof *s->own);
-	void *p = malloc(cap ? cap : 1);
-	if (!p) abort();
-	s->own[s->nown++] = (own){p, cap};
-	return p;
-}
-// the tail is going: its own buffer with it
+// the last patch is going: its own buffer with it
 static void drop_tail(sq *s) {
-	if (s->tail_owns) free(s->own[--s->nown].p);
-	s->tail_owns = 0;
 	s->n--;
+	free(s->own[s->n].p);
+	s->own[s->n] = (own){NULL, 0};
 }
 
-// v's [x, y) (positions) replaced by w's data; w NULL: removed. 0: the kinds differ
-static int splice(sq *s, sq_patch *prev, size_t x, size_t y, const sq_value *w) {
-	sq_value *v = &prev->value;
+// patch i's value's [x, y) (positions) replaced by w's data; w NULL: removed. 0: the kinds differ
+static int splice(sq *s, size_t i, size_t x, size_t y, const sq_value *w) {
+	sq_value *v = &s->buf[i].value;
 	if (w && w->kind != v->kind) return 0;
 	size_t bx = offset(v, x), by = offset(v, y), wsize = w ? w->size : 0;
 	size_t n = v->n - (y - x) + (w ? w->n : 0);
-	// the tail's own buffer: in place
-	if (s->tail_owns && s->own[s->nown - 1].p == v->data) {
-		size_t size = bx + wsize + (v->size - by);
-		own *o = &s->own[s->nown - 1];
+	size_t size = bx + wsize + (v->size - by);
+	own *o = &s->own[i];
+	// its own buffer: in place
+	if (o->p) {
 		if (size > o->cap) {
 			size_t c = o->cap * 2 > size ? o->cap * 2 : size;
 			o->p = realloc(o->p, c);
@@ -142,27 +134,20 @@ static int splice(sq *s, sq_patch *prev, size_t x, size_t y, const sq_value *w) 
 		v->data = p, v->size = size, v->n = n;
 		return 1;
 	}
-	size_t size = bx + wsize + (v->size - by);
-	unsigned char *p = take(s, size * 2);
-	size_t k = bx;
+	size_t cap = size * 2 ? size * 2 : 1;
+	unsigned char *p = malloc(cap);
+	if (!p) abort();
 	memcpy(p, v->data, bx);
-	if (wsize) memcpy(p + k, w->data, wsize), k += wsize;
-	memcpy(p + k, (const unsigned char *)v->data + by, v->size - by);
-	k += v->size - by;
-	// the old buffer, if the tail's own, is no one else's
-	if (s->tail_owns && s->own[s->nown - 2].p == v->data) {
-		free(s->own[s->nown - 2].p);
-		s->own[s->nown - 2] = s->own[s->nown - 1];
-		s->nown--;
-	}
-	v->data = p, v->size = k, v->n = n;
-	s->tail_owns = 1;
+	if (wsize) memcpy(p + bx, w->data, wsize);
+	memcpy(p + bx + wsize, (const unsigned char *)v->data + by, v->size - by);
+	*o = (own){p, cap};
+	v->data = p, v->size = size, v->n = n;
 	return 1;
 }
 
-// the tail made to do what it and next do; 0: it cannot
-static int merge(sq *s, const sq_patch *next) {
-	sq_patch *prev = &s->buf[s->n - 1];
+// patch i made to do what it and next do; 0: it cannot
+static int merge(sq *s, size_t i, const sq_patch *next) {
+	sq_patch *prev = &s->buf[i];
 	if (!prev->has_range || !next->has_range || prev->move || next->move) return 0;
 	if (!same(prev->path, prev->depth, next->path, next->depth)) return 0;
 	int64_t a = prev->from, b = prev->to, c = next->from, d = next->to;
@@ -170,9 +155,9 @@ static int merge(sq *s, const sq_patch *next) {
 	if (prev->has_value) {
 		if (prev->value.kind == SQ_ANY) return 0;
 		int64_t n = (int64_t)prev->value.n;
-		if (a <= c && d <= a + n) return splice(s, prev, (size_t)(c - a), (size_t)(d - a), w);
+		if (a <= c && d <= a + n) return splice(s, i, (size_t)(c - a), (size_t)(d - a), w);
 		if (c == a + n && d > c) {
-			if (w && !splice(s, prev, (size_t)n, (size_t)n, w)) return 0;
+			if (w && !splice(s, i, (size_t)n, (size_t)n, w)) return 0;
 			prev->to = b + (d - c);
 			return 1;
 		}
@@ -193,11 +178,32 @@ static int merge(sq *s, const sq_patch *next) {
 	return 0;
 }
 
+// prev and next might merge, by their ranges alone: cheaper than a merge that fails
+static int could(const sq_patch *prev, const sq_patch *next) {
+	if (!prev->has_range || !next->has_range) return 0;
+	int64_t a = prev->from, c = next->from, d = next->to;
+	if (!prev->has_value) return next->has_value ? c == a && d == a : c <= a && a <= d;
+	int64_t n = (int64_t)prev->value.n;
+	return prev->value.kind != SQ_ANY && ((a <= c && d <= a + n) || (c == a + n && d > c));
+}
+
+// merges reach back: the last patch, just merged, merged into the one before it, while they do.
+// at the path just merged, so never fouled
+static void back(sq *s) {
+	while (s->n > 1 && could(&s->buf[s->n - 2], &s->buf[s->n - 1])) {
+		if (!merge(s, s->n - 2, &s->buf[s->n - 1])) return;
+		// the last's own buffer: the one before's now, if its value is it (an insert after a removal)
+		own *last = &s->own[s->n - 1];
+		if (last->p && s->buf[s->n - 2].value.data == last->p) s->own[s->n - 2] = *last;
+		else free(last->p);
+		*last = (own){NULL, 0};
+		s->n--;
+	}
+}
+
 // the patches taken back, the lone surrogates seen still kept
 static void reset(sq *s) {
-	while (s->nown) free(s->own[--s->nown].p);
-	s->n = 0;
-	s->tail_owns = 0;
+	while (s->n) drop_tail(s);
 }
 
 void sq_push(sq *s, const sq_patch *p) {
@@ -218,12 +224,19 @@ void sq_push(sq *s, const sq_patch *p) {
 	if ((p->has_value && p->value.lone) || (p->move && is_fouled(s, p->move_path, p->move_depth))) {
 		s->fouled = grow(s->fouled, &s->capfouled, s->nfouled + 1, sizeof *s->fouled);
 		s->fouled[s->nfouled].keys = p->path, s->fouled[s->nfouled++].depth = p->depth;
-	} else if (s->n && !is_fouled(s, p->path, p->depth) && merge(s, p)) {
+	} else if (s->n && !is_fouled(s, p->path, p->depth) && merge(s, s->n - 1, p)) {
+		back(s);
 		return;
 	}
-	s->buf = grow(s->buf, &s->cap, s->n + 1, sizeof *s->buf);
-	s->buf[s->n++] = *p;
-	s->tail_owns = 0;
+	if (s->n == s->cap) {
+		size_t cap = s->cap;
+		s->buf = grow(s->buf, &cap, s->n + 1, sizeof *s->buf);
+		s->own = realloc(s->own, cap * sizeof *s->own);
+		if (!s->own) abort();
+		s->cap = cap;
+	}
+	s->buf[s->n] = *p;
+	s->own[s->n++] = (own){NULL, 0};
 }
 
 const sq_patch *sq_patches(const sq *s, size_t *n) {

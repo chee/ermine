@@ -1222,11 +1222,10 @@ static int make_computer(api *a, int memo, int early, const char *name, api_comp
 	names path = {0};
 	int code = resolve(a, name, &path);
 	if (code) return names_free(&path), code;
-	// made at path under own before: claimed, given the new code (chee 10-17: a parent rerun does
+	// made at path under own before: claimed, given the new code (a parent's rerun does
 	// not destroy its children). as own's run starts, what its earlier runs made is old (the
 	// scheduler's): one not old was made in this run, or own has had no run since: already-there
-	// ("making two with
-	// the same name in the same run shall be illegal")
+	// (two of a name in one run are refused)
 	computer *old = made_at(a, own, &path);
 	if (old != NULL) {
 		if (!sc_claim(old->c)) {

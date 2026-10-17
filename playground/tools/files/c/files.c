@@ -1,31 +1,29 @@
-// files: a command-line tool over the C store (store.h): a shared document laid out in a folder and kept in step both ways
-// (host.h, synced by extensions/sync), or a store on a real folder tried from a terminal, with no sync and no TypeScript.
+// files: a command-line tool over the C store (store.h): a shared document laid out in a folder,
+// kept in step both ways (host.h, extensions/sync), or a store on a real folder, no sync
 //
 //   files new <folder> [--server wss://…] [--home DIR]
-//                                             a new document laid out in the folder; prints its ermine:// id
+//                                   a new document laid out in the folder; prints its ermine:// id
 //   files ermine://… <folder> [--server wss://…] [--home DIR] [--named]
-//                                             the document laid out in the folder, kept in step both ways, till C-c;
-//                                             --named: every node an ermine:// id inside a value names laid out too
+//                                   laid out, kept in step till C-c; --named: every node an
+//                                   ermine:// id in a value names laid out too
+// device: home/.ermine/device (--home, or HOME). server: wss://galaxy.observer unless --server
+// ("" for none)
 //
-// Those two run until SIGINT; the device is home/.ermine/device (home: --home, or HOME); the server
-// is wss://galaxy.observer unless --server gives another ("" for none). The rest are one-shot: each opens the store, reads
-// it, does its one thing, writes if it changed the graph, and exits; the time of a write is the last time + 1. Changes are
-// made by actor "files", each of the node it changes.
+// one-shot: open, read, do it, write if the graph changed (time: last + 1, actor "files"):
+//   files init <folder>             a new store (folder empty or missing); prints the root's id
+//   files put <folder> <path> [value]
+//                                   path: slots from the root joined by /; missing nodes made with
+//                                   no value. value: text | --file F (text if UTF-8, else bytes)
+//                                   | --diag 'TEXT'
+//   files rm <folder> <path>        out of its slot (stays in the store)
+//   files mv <folder> <from> <to>   from one slot to another
+//   files ls <folder>               a tree from the root (alias: tree)
+//   files diff <folder>             where the folder differs from the layout
+//   files mend <folder> [path...]   laid out again (default every one that differs), what is there
+//                                   to the Trash
 //
-//   files init <folder>                       a new store in the folder (empty, or not there yet); prints the root's id
-//   files put <folder> <path> [value]         the node at the slot path (slots from the root, joined by /) gets the value;
-//                                             nodes missing on the way are made with no value. value: text, or
-//                                             --file F (F's bytes: text if they are UTF-8, else bytes), or --diag 'TEXT'
-//   files rm <folder> <path>                  takes the node out of its slot (the node stays in the store)
-//   files mv <folder> <from> <to>             moves a node from one slot to another
-//   files ls <folder>                         the graph from the root as a tree (alias: tree)
-//   files diff <folder>                       where the folder differs from the layout: edits made in Finder, say
-//   files mend <folder> [path...]             lays those paths (every one that differs) out again as the graph has them,
-//                                             sending what is there to the Trash
-//
-// Entries the store leaves out or sends to the Trash are told on stderr as "path: why". Errors: one line on stderr, exit 1;
-// a command used wrong: the usage text, exit 2. FILES_HOME names a home folder to use in place of yours (its Trash, its list
-// of stores): to try the tool without touching your own.
+// left out or trashed: "path: why" on stderr. errors: one line on stderr, exit 1; usage: exit 2
+// FILES_HOME: a home to use in place of yours (its Trash, its list of stores)
 #include "../../../../ermine/encoding/c/json.h"
 #include "saved.h"
 #include "diag.h"

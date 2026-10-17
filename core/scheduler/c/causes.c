@@ -14,6 +14,9 @@ struct causes {
 	// causes let go, linked through small[0]
 	cs_cause *spare;
 	size_t nspare;
+	// causes not let go yet; freed: cs_free came first, so this goes with the last of them
+	size_t live;
+	int freed;
 };
 
 causes *cs_new(void) {
@@ -28,9 +31,11 @@ void cs_free(causes *c) {
 		c->spare = x->small[0];
 		free(x);
 	}
+	c->nspare = 0;
 	pm_clear(&c->ran);
 	pm_clear(&c->holding);
-	free(c);
+	if (c->live == 0) free(c);
+	else c->freed = 1;
 }
 
 cs_cause *cs_ref(cs_cause *c) {
@@ -61,7 +66,11 @@ void cs_release(cs_cause *c) {
 			}
 			if (c->parents != c->small) free(c->parents);
 			causes *home = c->home;
-			if (home->nspare < SPARE_MAX) {
+			home->live--;
+			if (home->freed) {
+				free(c);
+				if (home->live == 0) free(home);
+			} else if (home->nspare < SPARE_MAX) {
 				c->small[0] = home->spare;
 				home->spare = c;
 				home->nspare++;
@@ -86,6 +95,7 @@ cs_cause *cs_run(causes *c, cs_item *t, cs_cause *const *given, size_t count) {
 		if (x == NULL) abort();
 	}
 	*x = (cs_cause){.of = t, .refs = 1, .count = count, .home = c};
+	c->live++;
 	x->parents = x->small;
 	if (count > 2) {
 		x->parents = malloc(count * sizeof *x->parents);

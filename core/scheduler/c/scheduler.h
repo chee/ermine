@@ -11,15 +11,15 @@
 // open only while sc_run_with_scope or the scheduler runs code in it: a computer's runs, sets and
 // acts open it, written by itself. its info is its latest run's, set as the run starts: "run", its
 // number, "mark", the tick of the mark that made it due, then "owner"; before its first run, the
-// mark alone. a scope's info is made once, with it: under a computer, it is that run's, as what a
-// run made goes before the next (what an act made, before the next act). a teardown opens its
-// scope, and what is under a scope goes with it open: a teardown on a plain scope under a
-// computer, run by the computer's clean or teardown, is written by it. nothing open: making a
-// scope or a computer fails (unscoped).
+// mark alone. a scope's info is made once, with it: under a computer, it is that run's (a plain
+// scope is never claimed: it goes once a later run is done; what an act made, before the next
+// act). a teardown opens its scope, and what is under a scope goes with it open: a teardown on a
+// plain scope under a computer, run by the computer's teardown, its run's end or its act, is
+// written by it. nothing open: making a scope or a computer fails (unscoped).
 //
 // early effects: the reference's rules (typescript/scheduler.ts), the same here: sc_def's early
 // ("acts at once and is in an earlier queue so it goes compute, early, effect"): made, it is due,
-// runs and acts in sc_create_effect; after, a round is three queues: the runs in order, the early
+// runs and acts in sc_create_effect; after, a round is three queues: the runs by rank, the early
 // acts, the other acts, each owners first (an act waits while one above it is due in the same
 // queue).
 //
@@ -55,12 +55,21 @@
 // finishes (every listener told; the run, act, mark or teardown all done), then it comes out:
 // the first, the rest let go. sc_teardown returns it; sc_pulse, sc_mark, sc_track,
 // sc_create_computer, sc_create_effect, sc_resolve and the like leave it for sc_escaped. a pulse
-// is left there: what is still due, or to act, waits for the next.
+// is left there: what is still due, or to act, waits for the next. a teardown's: what a listener
+// threw (under it too), else a cleanup's. before an act, what its last act made goes: a cleanup's
+// error is the act's (told with it), a listener's comes out once the act is done. (the reference
+// cannot throw from a making or a settling: it holds those for a pulse; a harness carries
+// sc_escaped there to agree)
 //
-// cleanups, like Solid: before a run, what is under the computer goes (a compute's all, an
-// effect's what was made since its last act), and its own cleanups are set aside; they run once
-// the run is done (its result set, before its end is told), newest first, and the first that
-// fails ends the rest, its error thrown out. a computer torn down takes those set aside with it.
+// a rerun keeps what it makes again: the reference's rules (typescript/scheduler.ts), the same
+// here. as a run starts, what the computer's earlier runs made is old (a compute's all; an
+// effect's, not what its act made), still alive while the run goes, and its own cleanups are set
+// aside; sc_claim, in the run, takes an old child back and makes it due. the run done: what is
+// still old goes at its end, before its end
+// is told; the cleanups set aside run once the round's runs are done (before its acts), newest
+// first, and the first that fails ends the rest of that computer's, its error thrown out. a run
+// ending any other way keeps both. a computer torn down takes what is old and set aside with
+// it. before each act, what its last act made goes, and the cleanups made in it run.
 //
 // memory: values a run gives (its result, a promise's value) are the scheduler's until it lets
 // go of them with options.drop (replaced as last, equal, failed, torn down, or at sc_free).
@@ -200,9 +209,6 @@ sc_listener *sc_on_effect(sc_scheduler *s, sc_effect_fn f, void *data);
 // a promise settled: its result waits for the next pulse
 typedef void (*sc_settle_fn)(void *data);
 sc_listener *sc_on_settle(sc_scheduler *s, sc_settle_fn f, void *data);
-// a pulse ended: nothing due, every act done. a pulse called here is a new one
-typedef void (*sc_after_pulse_fn)(void *data);
-sc_listener *sc_on_after_pulse(sc_scheduler *s, sc_after_pulse_fn f, void *data);
 // a key nobody tracks any more: at once when its last tracker's run did not track it again or it
 // was torn down (a sweep now and then catches any other)
 typedef void (*sc_tracking_end_fn)(const void *key, void *data);
@@ -217,6 +223,8 @@ sc_scope *sc_create_scope(sc_scheduler *s, const sc_pair *info, size_t n, sc_sco
 void sc_scope_set(sc_scope *o, void *user);
 void *sc_scope_user(const sc_scope *o);
 bool sc_scope_alive(const sc_scope *o);
+// made by an earlier run of its computer, not made again (claimed) by the run going on yet, nor gone
+bool sc_scope_old(const sc_scope *o);
 // an early effect
 bool sc_scope_early(const sc_scope *o);
 sc_scope *sc_scope_parent(const sc_scope *o);
@@ -237,6 +245,11 @@ char *sc_register_teardown(sc_scheduler *s, sc_scope *o, char *(*f)(void *data),
 // children first, newest first, then o's teardowns, newest first. every teardown runs; the first
 // error is returned (a listener's thrown while it went first: sc_throw)
 char *sc_teardown(sc_scope *o);
+// a computer its owner's earlier run made (old), made again by the run going on: kept, back under
+// the owner, the newest, and due (a tick, told to the mark listeners as a new computer is, by the
+// run open). false: not old (made or
+// claimed in this run already, or no run of its owner since), gone, or a plain scope
+bool sc_claim(sc_computer *c);
 
 // f once, untracked, with o open, the run open the same: a setup, a host's write, a call.
 // SC_DISPOSED (and f not called) when o is gone, else 0
@@ -264,8 +277,7 @@ sc_run *sc_latest(sc_scope *o);
 // acts, after the round's runs. the tick it took
 uint64_t sc_mark(sc_scheduler *s, const void *const *keys, size_t count, sc_run *run);
 
-// rounds until nothing is due: the settled promises land, the due run in order (order.h), the
-// effects act.
+// rounds until nothing is due: the settled promises land, the due run by rank, the effects act.
 // a pulse in a pulse does nothing. what is thrown out leaves it (sc_escaped)
 void sc_pulse(sc_scheduler *s);
 

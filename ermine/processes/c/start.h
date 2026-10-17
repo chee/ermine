@@ -1,7 +1,6 @@
-// Start (typescript/start.ts), in C: a process's life, at a path in a box or plain places (the root
-// is the outermost box), and its stop. Same rules as start.ts (its header says them once). What runs
-// in a process is its starter's: this knows no programs, chains, loaders, builds or types. A box here
-// is its places (bx_places): places rooted at its folder; any places stands in for one.
+// start (typescript/start.ts) in C: a process's life at a path in a box or plain places, and its
+// stop. same rules as start.ts. knows no programs or loaders; a box here is its places
+// (bx_places).
 //
 //   pr *s = pr_new(&setup);                                   // with a scope open
 //   pr_refusal no;
@@ -10,22 +9,13 @@
 //   pr_stop(s, p);
 //   pr_halt(s);  /* before sc_free */  ...  pr_free(s);     // after tb_free and pl_free
 //
-// pr_start: refused, nothing made: "taken" (a process at the path, above it or under it), or another
-// code's name (a name that is not one). Else a scope ([["process", at]] under the owner) and its node
-// (sn_give: proc:<uuid>), the row (pr_add, through setup.commit), the node's attributes
-// (ermine.process.args when given, ermine.process.cwd, ermine.process.pin when given, the status
-// pending), then options.body with the scope open. pr_stop: options.stop with the scope open, the
-// row out, the scope torn down; twice: nothing. The scope torn down another way: the same, its
-// computers gone first.
-//
-// WRITES. Each with the process's scope open: the attributes entry (a table event), the row (committed
-// through setup.commit: the host's places, whose views a box's places are), status.h's through the
-// places given.
-//
-// MEMORY. A process is the life's until pr_free; one stopped (or refused) stays a stopped one. pr_free
-// calls the stop of a process never stopped (no scope open: the scheduler is gone). at, args, cwd
-// and the root are copied; the pin is the attributes'; the places it runs in outlive it. Out of
-// memory aborts.
+// pr_start refused, nothing made: "taken" (a process at, above or under the path) or a name code.
+// else: a scope [["process", at]], its node proc:<uuid>, the row, attributes (ermine.process.args,
+// .cwd, .pin, status pending), then options.body. pr_stop: options.stop, row out, scope torn down;
+// twice: nothing.
+// writes: all with the process's scope open.
+// memory: a process lives until pr_free (which stops one never stopped). at, args, cwd, root are
+// copied; the pin is the attributes'; the places must outlive it. out of memory aborts.
 #ifndef PROCESSES_START_H
 #define PROCESSES_START_H
 

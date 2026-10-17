@@ -1,70 +1,34 @@
-// Places (typescript/places.ts), in C: the filesystem, and the connections between the table, the
-// tracked paths and the scheduler, set up once by whoever makes them. It makes none of them and
-// wraps none of their calls. Same rules as places.ts, which the suite in
-// filesystem/places/conformance/places/ holds both to.
+// places.h: places.ts in C. the filesystem, and the connections between the table, the tracked
+// paths and the scheduler; makes none of them, wraps none of their calls. suite:
+// filesystem/places/conformance/places/.
 //
 //   pl *p = pl_new();                                  // only itself: it is the ctx of the hooks
 //   tb_table *table = tb_make(pl_event, p);
 //   sc_scheduler *s = sc_new((sc_options){..});
 //   sc_on_tracking_end(s, pl_forget, p);
 //   pl_connect(p, &(pl_setup){tb_string("R"), table, paths, s});
-//   ...
 //   pl_place(p, children, name, id, header, &changed); // a write
 //   pl_commit(p, &changed);                            // said written
 //
-// The filesystem: a children entry's value maps each name to one id; a name is any string but "",
-// ".", ".." and "/". A path is names from the root, each looked up as it is. A read is told to the
-// scheduler as a spot (paths.h), so a run reading tracks it; a read outside a run counts for
-// nothing. A walk reads each name in the children of the id before it. A write says changed the
-// spots its patches mark, at every key the entry is under; a table event, the spots of its key.
-// Both by the run open (sc_get_run), none: from outside. The status of the reads told
-// (SC_STOP: the run must end now) is given by pl_status.
-//
-// Paths keys a spot by two parts, (source, id); the table by two, (part, id), and places knows no
-// source. A table's part goes into one pair per part, made once and kept: the same address always,
-// so the same key by identity, and it is the source paths is given. A part is a name, any string;
-// "children" is the part the filesystem reads. A spot nobody reads any more is let go: the
-// scheduler's untrack listener calls pl_forget with each key it stops tracking. A spot read outside a run is
-// tracked by none, so never let go.
-//
-// CONTRIBUTORS (contributors.org). What answers one step of a walk: children is one (pl_children); a places
-// can be given others, asked in order at each step: the first answer is where the walk goes (pl_get),
-// all of them are what is there (pl_gets), and a folder's names are every contributor's, each name
-// once (pl_list, pl_members). None given: children alone, and the walk, list and members read just as
-// they always have. A contributor reads only through the reads of the places it is handed (pl_read,
-// pl_keys, pl_track). A cache (cache.h) works answers out outside any run: pl_record puts the reads a
-// call makes into a set in place of the scheduler (and the spots it made, into fresh), and pl_keep
-// keeps a spot past pl_forget while the cache reads it. A cached answer reflects a write once it is
-// committed, so commit right after update.
-//
-// PRUNING. A contributor's step may answer PL_NONE: nothing at here + name, nor anywhere under it.
-// The walk then asks it nothing more under there (the here's gone), so a trie with nothing on a path
-// is asked once per walk, not once a step. Its names may say none the same way (pl_namelist's none:
-// pl_members_at walks each name on without it). The read that said none is the one tracked:
-// something coming under there marks it, and the walk runs again.
-//
-// A VIEW (pl_view) is the same places from another root, with contributors of its own: everything
-// above is shared with the places it was made from, so a box (ermine/boxes), a view rooted at its
-// folder, needs nothing passed on to it.
-//
-// pl_spot names a key told to the scheduler: one of this places' spots, held, is where it reads, so
-// a run's reads (the scheduler's run end) can be named as places in the graph. Anything else,
-// or a spot let go, is none.
-//
-// WHO. The pairs of a write are the info of the scope open (sc_get_info), as is; with extra pairs,
-// the extra then "owner" and that info, the write as its own innermost level. Info nests: a scope
-// under another ends with "owner", the owner's info. Values are op_values (value.h), the host's
-// own, except the scheduler's: "run" and "mark" are numbers it keeps as uint64_t, and are given
-// on as op_value numbers, at any depth. The actor is the nearest "actor" pair walking outward from
-// the innermost level, the reader the nearest "reader" the same way (a string; another is
-// passed). The metadata is the write's pairs whole, nested, actor and reader left in place: always
-// there. A write with no scope open has no who: unscoped.
-//
-// MEMORY. A header made (pl_header) refers to a block, a pl_made: the metadata, the site, a hold
-// on each value. The node it is written to refers to the block until its next update: pl_hold keeps
-// it till then. The writes below hold their patches the same way, so a write's node holds its
-// patches until its next update, and pl_hold_also adds the header's block to them. A value a read
-// gives is borrowed from the table; a name in a list too. Out of memory aborts.
+// filesystem: a children entry maps names to ids; a name is any string but "", ".", "..", "/".
+// a read is told to the scheduler as a spot (paths.h); outside a run it counts for nothing. a write
+// marks the spots its patches touch; a table event, its key's. reads told (SC_STOP): pl_status.
+// a spot: (source, id); each table part gets one pair, made once, the same address always. spots
+// unread are let go by pl_forget; one read outside a run is never let go.
+// contributors (contributors.org): children (pl_children) plus any given, asked in order per step:
+// first answer is pl_get, all are pl_gets, names merged once each (pl_list, pl_members). a
+// contributor reads only through pl_read, pl_keys, pl_track. caches: pl_record, pl_keep (cache.h);
+// commit right after update.
+// pruning: PL_NONE at a step means nothing there or under it; the walk asks no more there, and that
+// read is the one tracked.
+// pl_view: the same places from another root with its own contributors, everything else shared.
+// pl_spot: names a held spot as a place; anything else none.
+// who: a write's pairs are the open scope's info (sc_get_info); extra pairs nest with "owner".
+// values are op_values, except "run" and "mark" (uint64_t, given as numbers). actor and reader:
+// the nearest such pair outward. metadata: the pairs whole. no scope open: unscoped.
+// memory: a header (pl_header) refers to a pl_made block; its node holds it until its next update
+// (pl_hold, pl_hold_also). read values and listed names are borrowed from the table. out of memory
+// aborts.
 #ifndef PLACES_H
 #define PLACES_H
 

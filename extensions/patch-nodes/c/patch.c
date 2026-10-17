@@ -712,7 +712,9 @@ void pn_commit(pn *o, const pl_changed *changed) {
 	}
 }
 
-const pn_item *pn_layers(pn *o, tb_key part, tb_key id, size_t *n) {
+// the layers of the entry under (part, id), front first, *n of them; none there: none. Untold
+// (pn_entries tells)
+static const pn_item *pn_layers(pn *o, tb_key part, tb_key id, size_t *n) {
 	long at = find_made(o, part.string, id.string);
 	if (at >= 0) return *n = o->mades[at]->nitems, o->mades[at]->items;
 	nd_entry *base = tb_get(o->table, part, id);

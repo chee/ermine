@@ -124,8 +124,6 @@ pg_opened *pg_open_with_at(pl *places, const char *file, const char *const *at, 
 void pg_opened_free(pg_opened *o);
 
 // copies, for a caller keeping a piece of an answer
-void pg_place_copy(pg_place *to, const pg_place *from);
-void pg_place_free(pg_place *p);
 void pg_chain_copy(pg_chain *to, const pg_chain *from);
 void pg_chain_free(pg_chain *c);
 

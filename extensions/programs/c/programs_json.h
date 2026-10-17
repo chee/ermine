@@ -7,10 +7,7 @@
 #include "programs.h"
 
 op_value *pg_place_json(const pg_place *p);
-op_value *pg_step_json(const pg_step *s);
-op_value *pg_chain_json(const pg_chain *c);
 op_value *pg_found_json(const pg_found *f);
 op_value *pg_opened_json(const pg_opened *o);
-op_value *pg_path_json(char *const *at, size_t n);
 
 #endif

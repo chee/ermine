@@ -18,12 +18,12 @@ static void strs_free(char **v, size_t n) {
 	free(v);
 }
 
-void pg_place_copy(pg_place *to, const pg_place *from) {
+static void pg_place_copy(pg_place *to, const pg_place *from) {
 	to->id = pg_dup(from->id);
 	to->at = strs_copy(from->at, from->n);
 	to->n = from->n;
 }
-void pg_place_free(pg_place *p) {
+static void pg_place_free(pg_place *p) {
 	free(p->id);
 	strs_free(p->at, p->n);
 	*p = (pg_place){0};

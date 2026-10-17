@@ -254,6 +254,8 @@ struct doc {
 	uint8_t (*forgets)[32];
 	size_t forgets_count, forgets_room;
 	bool followed, follow_later;
+	// lazy: its tree taken in from the store (or queued to be)
+	bool loaded;
 	// asked for again at due, the ask'th time
 	bool asking;
 	size_t ask;
@@ -275,7 +277,10 @@ typedef enum {
 	J_GATHER,   // a part of an ephemeral payload
 	J_COMPACT,  // the loose commits a fragment covers let go of
 	J_BUILD,    // the fragments not built yet
-	J_SUBSCRIBE // a channel's topic subscribed
+	J_SUBSCRIBE, // a channel's topic subscribed
+	J_LOAD_DOC, // lazy: a followed document's tree, taken in from the store
+	J_FOLLOW,   // lazy: the document followed (subscribed, fetched) once its tree is in
+	J_STOP      // a stop heard: its table in bytes
 } job_kind;
 
 struct job {
@@ -310,11 +315,13 @@ struct job {
 	job *next;
 };
 
-// one of this device's own takes, going out: sealed and stored, or published
+// one of this device's own takes, going out: sealed and stored, or published; or a stop (tp_stop):
+// the table, no kept
 struct item {
 	doc *d;
 	tp_layer layer;
 	const hy_kept *kept;
+	char *stop;
 	// 0: not started; 1: waiting on its call; 2: waiting on its build; 3: done
 	int state;
 	uint8_t stored[32];
@@ -423,6 +430,11 @@ struct tp_device {
 		void *context;
 	} *hearers;
 	size_t hearer_count, hearer_room;
+	struct {
+		tp_stopped_fn fn;
+		void *context;
+	} *stoppers;
+	size_t stopper_count, stopper_room;
 	// arrivals the histories' taken listeners told, told on after the add that let them in; own takes
 	// that waited, let in, sent after them
 	told_t *told;
@@ -458,6 +470,9 @@ struct tp_device {
 
 	size_t fetching, putting;
 	bool loaded;
+	// lazy, and the trees the store held at the start, each taken in when its document is followed
+	bool lazy;
+	im_map trees;
 	// tp_stored's call, and its answer
 	uint64_t want;
 	bool answered;
@@ -1334,6 +1349,19 @@ static part_kind part_of(const uint8_t *payload, size_t length, size_t most, par
 	return A_PART;
 }
 
+// a payload that is a stop (tp_stop): a map of exactly stop, a string: the table, malloc'd. NULL:
+// not one
+static char *stop_of(const uint8_t *payload, size_t length) {
+	Json *x = cborDecode(payload, length, NULL, NULL);
+	if (x == NULL) return NULL;
+	const Json *stop = jsonGet(x, "stop");
+	char *table = NULL;
+	if (x->type == JSON_OBJECT && x->object.count == 1 && stop != NULL && stop->type == JSON_STRING)
+		table = copyString(jsonText(stop));
+	jsonFree(x);
+	return table;
+}
+
 static void join_free(join_t *j) {
 	for (size_t i = 0; i < j->got_count; i++) free(j->got[i].bytes);
 	free(j->got);
@@ -1677,32 +1705,43 @@ static void collect(void *context, const uint8_t id[32]) {
 	memcpy(c->ids[c->count++], id, 32);
 }
 
-// starting: what the store holds, taken in before anything else: each tree's fragments, then its
-// loose commits, then its fragments built. Read from the store itself, so nothing is saved again
+// a tree the store holds, taken in: its fragments, then its loose commits, then its fragments built,
+// queued next. Read from the store itself, so nothing is saved again
+static void load_doc(tp_device *t, doc *d) {
+	d->loaded = true;
+	for (int k = 0; k < 2; k++) {
+		int kind = k == 0 ? ERM_STORE_FRAGMENT : ERM_STORE_COMMIT;
+		collected_t ids = {0};
+		t->inner.list(t->inner.self, kind, d->bytes, collect, &ids);
+		for (size_t n = 0; n < ids.count; n++) {
+			uint8_t *bytes = NULL;
+			size_t length = 0;
+			if (t->inner.get(t->inner.self, kind, d->bytes, ids.ids[n], &bytes, &length) != 1) continue;
+			job *j = job_new(J_TAKE, d);
+			j->record = kind;
+			memcpy(j->tree, d->bytes, 32);
+			j->bytes = copy(bytes ? bytes : none, length);
+			j->length = length;
+			erm_host_free(bytes);
+			next(t, j);
+		}
+		free(ids.ids);
+	}
+	next(t, build_job(d, NULL, 0));
+}
+
+// starting: what the store holds, taken in before anything else, each tree; lazy: only listed, and
+// the trees of the documents followed before this taken in
 static void load(tp_device *t) {
 	collected_t trees = {0};
 	t->inner.list(t->inner.self, ERM_STORE_TREE, NULL, collect, &trees);
 	for (size_t i = 0; i < trees.count; i++) {
-		doc *d = document(t, trees.ids[i]);
-		for (int k = 0; k < 2; k++) {
-			int kind = k == 0 ? ERM_STORE_FRAGMENT : ERM_STORE_COMMIT;
-			collected_t ids = {0};
-			t->inner.list(t->inner.self, kind, trees.ids[i], collect, &ids);
-			for (size_t n = 0; n < ids.count; n++) {
-				uint8_t *bytes = NULL;
-				size_t length = 0;
-				if (t->inner.get(t->inner.self, kind, trees.ids[i], ids.ids[n], &bytes, &length) != 1) continue;
-				job *j = job_new(J_TAKE, d);
-				j->record = kind;
-				memcpy(j->tree, trees.ids[i], 32);
-				j->bytes = copy(bytes ? bytes : none, length);
-				j->length = length;
-				erm_host_free(bytes);
-				next(t, j);
-			}
-			free(ids.ids);
+		if (!t->lazy) load_doc(t, document(t, trees.ids[i]));
+		else {
+			im_set(&t->trees, trees.ids[i], SET);
+			doc *d = im_get(&t->docs, trees.ids[i]);
+			if (d != NULL && d->follow_later) load_doc(t, d);
 		}
-		next(t, build_job(d, NULL, 0));
 	}
 	free(trees.ids);
 	next(t, job_new(J_LOADED, NULL));
@@ -1748,6 +1787,19 @@ static step_t step(tp_device *t, job *j) {
 		return STEP_DONE;
 	}
 	case J_COMPACT: compact(t, j->d, j->head); return STEP_DONE;
+	case J_LOAD_DOC:
+		// its takes and build next, then the follow, so the store is read before any peer is asked
+		load_doc(t, j->d);
+		next(t, job_new(J_FOLLOW, j->d));
+		return STEP_DONE;
+	case J_FOLLOW: follow_now(t, j->d); return STEP_DONE;
+	case J_STOP: {
+		uint8_t who[SL_KEY];
+		peer_key(j->from, who);
+		for (size_t i = 0; i < t->stopper_count; i++)
+			t->stoppers[i].fn(t->stoppers[i].context, j->d->id, who, (const char *)j->bytes);
+		return STEP_DONE;
+	}
 	case J_SUBSCRIBE: {
 		if (j->started) return STEP_DONE;
 		j->started = true;
@@ -1865,7 +1917,21 @@ static bool outgoing(tp_device *t) {
 			// what is sealed and stored is handed over behind what the store held
 			if (!t->loaded) break;
 			moved = true;
-			if (it->layer == TP_STORED) store(t, it);
+			if (it->stop != NULL) {
+				// a stop: {stop: table} published on the document's topic
+				Json *m = jsonObject();
+				jsonAdd(m, "stop", jsonString(it->stop));
+				size_t size = 0;
+				cborEncode(m, NULL, 0, &size, NULL);
+				uint8_t *bytes = malloc(size + 1);
+				if (bytes == NULL) abort();
+				cborEncode(m, bytes, size, &size, NULL);
+				jsonFree(m);
+				uint64_t c = publish(t, it->d->bytes, bytes, size, false);
+				free(bytes);
+				if (c == 0) it->state = 3;
+				else call(t, c, C_PUBLISH, it), it->state = 1;
+			} else if (it->layer == TP_STORED) store(t, it);
 			else {
 				// an ephemeral commit of this device's: closed (unlocked), published, as parts when over
 				uint64_t c = publish(t, it->d->bytes, it->kept->bytes, it->kept->length, false);
@@ -1876,6 +1942,7 @@ static bool outgoing(tp_device *t) {
 		}
 		t->items = it->next;
 		if (t->items == NULL) t->items_last = NULL;
+		free(it->stop);
 		free(it);
 		moved = true;
 	}
@@ -2056,7 +2123,13 @@ static void heard(tp_device *t, const uint8_t topic[32], const uint8_t from[32],
 			memcpy(j->topic, topic, 32);
 		}
 	} else if (d != NULL && d->followed) {
-		if (kind == NOT_A_PART) {
+		char *table = kind == NOT_A_PART ? stop_of(payload, length) : NULL;
+		if (table != NULL) {
+			// a stop: told in its turn, after the ephemeral commits heard before it
+			j = job_new(J_STOP, d);
+			j->bytes = (uint8_t *)table;
+			j->length = strlen(table);
+		} else if (kind == NOT_A_PART) {
 			j = job_new(J_HEAR, d);
 			j->bytes = copy(payload, length);
 			j->length = length;
@@ -2189,6 +2262,7 @@ tp_device *tp_create(const tp_options *o) {
 	tp_limits l = o->limits;
 	t->limits = (tp_limits){l.pending ? l.pending : 65536, l.refused ? l.refused : 4096, l.waiting ? l.waiting : 1024,
 		l.joins ? l.joins : 64, l.parts ? l.parts : 1024};
+	t->lazy = o->lazy;
 	t->sd = erm_sd_new(o->seed, now_of(t), &t->store);
 	if (t->sd == NULL) {
 		free(t->service);
@@ -2208,9 +2282,11 @@ void tp_free(tp_device *t) {
 		d = n;
 	}
 	im_free(&t->docs);
+	im_free(&t->trees);
 	free(t->followed);
 	free(t->listeners);
 	free(t->hearers);
+	free(t->stoppers);
 	free(t->told);
 	free(t->released);
 	free(t->judging);
@@ -2222,6 +2298,7 @@ void tp_free(tp_device *t) {
 	for (item *it = t->items; it;) {
 		item *n = it->next;
 		if (it->build != NULL) job_free(it->build);
+		free(it->stop);
 		free(it);
 		it = n;
 	}
@@ -2377,7 +2454,11 @@ bool tp_follow(tp_device *t, const char *id) {
 	doc *d = named(t, id);
 	if (d == NULL) return false;
 	if (!t->loaded) d->follow_later = true;
-	else follow_now(t, d);
+	else if (t->lazy && !d->loaded && im_has(&t->trees, d->bytes)) {
+		// its tree read from the store first, the follow behind it (J_LOAD_DOC)
+		d->loaded = true;
+		later(t, job_new(J_LOAD_DOC, d));
+	} else follow_now(t, d);
 	return true;
 }
 
@@ -2416,6 +2497,25 @@ void tp_hearing(tp_device *t, tp_hearing_fn fn, void *context) {
 	ROOM(t->hearers, t->hearer_count, t->hearer_room);
 	t->hearers[t->hearer_count].fn = fn;
 	t->hearers[t->hearer_count++].context = context;
+}
+
+void tp_stop(tp_device *t, const char *id, const char *table) {
+	doc *d = named(t, id);
+	if (d == NULL || table == NULL) return;
+	item *it = calloc(1, sizeof *it);
+	if (it == NULL) abort();
+	it->d = d;
+	it->layer = TP_EPHEMERAL;
+	it->stop = copyString(table);
+	if (t->items_last) t->items_last->next = it;
+	else t->items = it;
+	t->items_last = it;
+}
+
+void tp_stopped(tp_device *t, tp_stopped_fn fn, void *context) {
+	ROOM(t->stoppers, t->stopper_count, t->stopper_room);
+	t->stoppers[t->stopper_count].fn = fn;
+	t->stoppers[t->stopper_count++].context = context;
 }
 
 bool tp_again(tp_device *t, const char *id, const uint8_t name[32]) {

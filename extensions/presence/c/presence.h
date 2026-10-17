@@ -13,7 +13,7 @@
 // world's clock: given, so a host or a test says what time it is.
 //
 //   pres_world w = {.table = t, .places = p, .scheduler = s, .scope = scope};
-//   pres_connect(&w, channel, "topic", NULL);
+//   pres_connect_patches(&w, channel, "topic", NULL, false);
 //   pres_set(&w, "topic", "juno", value, 2000);
 //   ...
 //   pres_free(&w);
@@ -106,13 +106,11 @@ bool pres_keep(const pres_world *w, const char *part);
 // written, with the time left (not a time: devices' clocks differ). what is received lands under the
 // sender's name, from outside, and is never sent back. none of it is saved
 typedef struct pres_conn pres_conn;
-// anchor NULL: the topic. the connection is the world's until pres_free
-pres_conn *pres_connect(pres_world *w, chn_channel *channel, const char *topic, const char *anchor);
-// as pres_connect, and patches: an edit (pres_edit) is sent as { ttl, patches, n }, not the whole row,
+// anchor NULL: the topic. the connection is the world's until pres_free. patches: an edit (pres_edit) is sent as { ttl, patches, n }, not the whole row,
 // and every row sent carries n, a count up by one each send of a who on this connection. a receiver
 // takes a whole row always, a patch message only when its n follows the last taken from that sender
 // and the row is there: else it is dropped and the row stays as it was until the next whole row. a
-// message without n is taken as it comes. patches false is pres_connect: nothing numbered
+// message without n is taken as it comes. patches false: nothing numbered
 pres_conn *pres_connect_patches(pres_world *w, chn_channel *channel, const char *topic,
 	const char *anchor, bool patches);
 // no more is heard or told on it

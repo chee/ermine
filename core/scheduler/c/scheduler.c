@@ -87,6 +87,9 @@ struct sc_scope {
 	unsigned nteardowns, capteardowns;
 	unsigned char state;
 	unsigned char kind;
+	// old: made by an earlier run of its computer, not made again by the run going on yet (claim),
+	// alive till that run is done. deed: made in its effect's act, gone before the next act
+	bool old, deed;
 	// computers only, from here
 	od_item od;
 	cs_item cs;
@@ -100,19 +103,28 @@ struct sc_scope {
 	void *last;
 	// its latest run, held: what writer names for it (sc_latest)
 	sc_run *ran;
-	// an effect's: at its last act, the scopes made up to then and its teardowns' count. what was
-	// made under it since goes before each run
-	uint64_t acted_n;
-	size_t acted_teardowns;
+	// what its earlier runs made, old while a newer run goes: newest first, through older (claim,
+	// dropUnclaimedChildren)
+	sc_scope *before;
+	// an effect's: the cleanups made in its last act, and whether one is going on
+	teardown_fn *deeds;
+	unsigned ndeeds, capdeeds;
+	bool doing;
 	// the keys it is the writer of
 	pm wrote;
 	sc_scope **loop;
 	size_t nloop;
 	bool looping;
 	act *acting;
-	// its cleanups set aside before its run, till the run is done (lay)
+	// its cleanups set aside before its run, till a run is done; then queued, till the round's
+	// runs are (runQueuedCleanups)
 	teardown_fn *aside;
 	unsigned naside, capaside;
+	teardown_fn *queuedCleanups;
+	unsigned nqueuedCleanups, capqueuedCleanups;
+	// the loop of a run known to loop that queued them: their loop marks are cut, as its own are
+	sc_scope **cuts;
+	size_t ncuts;
 };
 
 // pulse: the pulse its cause is of (cause_of). cut: a loop mark it made was dropped
@@ -166,7 +178,7 @@ typedef struct queue {
 	size_t n, head, cap, live;
 } queue;
 
-typedef enum { ON_TRACK, ON_MARK, ON_START, ON_END, ON_EFFECT, ON_SETTLE, ON_AFTER, ON_UNTRACK, ON_FIRST, ON_KINDS } listening;
+typedef enum { ON_TRACK, ON_MARK, ON_START, ON_END, ON_EFFECT, ON_SETTLE, ON_UNTRACK, ON_FIRST, ON_KINDS } listening;
 
 struct sc_listener {
 	sc_scheduler *s;
@@ -178,7 +190,6 @@ struct sc_listener {
 		sc_run_end_fn end;
 		sc_effect_fn effect;
 		sc_settle_fn settle;
-		sc_after_pulse_fn after;
 		sc_tracking_end_fn untrack;
 	} f;
 	void *data;
@@ -203,6 +214,9 @@ struct sc_scheduler {
 	// settled promises, for the next pulse
 	landed *landed;
 	size_t nlanded, headlanded, caplanded;
+	// the computers with cleanups queued, for once the round's runs are done (runQueuedCleanups)
+	sc_scope **queued;
+	size_t nqueued, capqueued;
 	uint64_t made;
 	uint64_t tick;
 	// pulses ended: the one going on, or next
@@ -300,9 +314,6 @@ sc_listener *sc_on_effect(sc_scheduler *s, sc_effect_fn f, void *data) {
 }
 sc_listener *sc_on_settle(sc_scheduler *s, sc_settle_fn f, void *data) {
 	return listen(s, ON_SETTLE, (sc_listener){.f.settle = f, .data = data});
-}
-sc_listener *sc_on_after_pulse(sc_scheduler *s, sc_after_pulse_fn f, void *data) {
-	return listen(s, ON_AFTER, (sc_listener){.f.after = f, .data = data});
 }
 sc_listener *sc_on_tracking_start(sc_scheduler *s, sc_track_fn f, void *data) {
 	return listen(s, ON_FIRST, (sc_listener){.f.track = f, .data = data});
@@ -433,6 +444,8 @@ static sc_scope *make_scope(sc_scheduler *s, kind_t kind, sc_scope *parent, cons
 	}
 	o->kind = kind;
 	o->state = ALIVE;
+	// made under an effect whose act is going on: the act's
+	o->deed = parent && parent->kind == EFFECT && parent->doing;
 	if (kind != PLAIN) {
 		o->od.owner = o;
 		o->od.n = o->n;
@@ -470,6 +483,7 @@ sc_scope *sc_create_scope(sc_scheduler *s, const sc_pair *info, size_t n, sc_sco
 void sc_scope_set(sc_scope *o, void *user) { o->user = user; }
 void *sc_scope_user(const sc_scope *o) { return o->user; }
 bool sc_scope_alive(const sc_scope *o) { return o->state == ALIVE; }
+bool sc_scope_old(const sc_scope *o) { return o->old; }
 bool sc_scope_early(const sc_scope *o) { return o->kind == EFFECT && o->def.early; }
 sc_scope *sc_scope_parent(const sc_scope *o) { return o->parent; }
 const sc_info *sc_scope_info(const sc_scope *o) { return o->info ? &o->info->pub : NULL; }
@@ -507,13 +521,13 @@ static char *call_teardown(sc_scope *o, teardown_fn k) {
 	return e;
 }
 
+// on o (an effect's in its act: the act's)
 char *sc_register_teardown(sc_scheduler *s, sc_scope *o, char *(*f)(void *), void *data) {
 	(void)s;
-	if (o->state == ALIVE) {
-		VEC_PUSH(o->teardowns, o->nteardowns, o->capteardowns, ((teardown_fn){f, data}));
-		return NULL;
-	}
-	return call_teardown(o, (teardown_fn){f, data});
+	if (o->state != ALIVE) return call_teardown(o, (teardown_fn){f, data});
+	if (o->kind == EFFECT && o->doing) VEC_PUSH(o->deeds, o->ndeeds, o->capdeeds, ((teardown_fn){f, data}));
+	else VEC_PUSH(o->teardowns, o->nteardowns, o->capteardowns, ((teardown_fn){f, data}));
+	return NULL;
 }
 
 // its act out of its queue, given back: a hole where it was
@@ -526,27 +540,49 @@ static act *unqueue(sc_scheduler *s, sc_scope *c) {
 	return a;
 }
 
-// o out from under its scope, if it is there
+// o out from under its scope, or off its before list, if it is there
 static void unlink_scope(sc_scope *o) {
 	sc_scope *p = o->parent;
 	if (o->newer) o->newer->older = o->older;
 	else if (p && p->newest == o) p->newest = o->older;
+	else if (p && p->kind != PLAIN && p->before == o) p->before = o->older;
 	if (o->older) o->older->newer = o->newer;
 	o->older = o->newer = NULL;
+	o->old = false;
 }
 
-// what is under o made after the after-th, newest first (n of them), taken out from under it
-// together; NULL: none
-static sc_scope **cut(sc_scope *o, uint64_t after, size_t *n) {
+// the list from x on, through older, newest first (n of them), each let go of the list; NULL: none
+static sc_scope **list_of(sc_scope *x, size_t *n) {
 	*n = 0;
-	for (sc_scope *x = o->newest; x != NULL && x->n > after; x = x->older) (*n)++;
+	for (sc_scope *y = x; y != NULL; y = y->older) (*n)++;
 	if (*n == 0) return NULL;
 	sc_scope **kids = xalloc(*n * sizeof *kids);
-	sc_scope *x = o->newest;
 	for (size_t i = 0; i < *n; i++, x = x->older) kids[i] = x;
-	o->newest = x;
-	if (x) x->newer = NULL;
-	kids[*n - 1]->older = NULL;
+	for (size_t i = 0; i < *n; i++) {
+		kids[i]->older = kids[i]->newer = NULL;
+		kids[i]->old = false;
+	}
+	return kids;
+}
+
+// what is under o, newest first, then what is old on it, newest first (n of them): taken out
+// together; NULL: none
+static sc_scope **cut(sc_scope *o, size_t *n) {
+	size_t nk, ni = 0;
+	sc_scope **kids = list_of(o->newest, &nk);
+	o->newest = NULL;
+	sc_scope **old = NULL;
+	if (o->kind != PLAIN) {
+		old = list_of(o->before, &ni);
+		o->before = NULL;
+	}
+	*n = nk + ni;
+	if (ni == 0) return kids;
+	if (nk == 0) return old;
+	kids = realloc(kids, *n * sizeof *kids);
+	if (kids == NULL) abort();
+	memcpy(kids + nk, old, ni * sizeof *old);
+	free(old);
 	return kids;
 }
 
@@ -577,7 +613,7 @@ static void drop_computation(sc_scheduler *s, sc_scope *c) {
 	pm_clear(&c->cs.kept);
 }
 
-static char *teardown(sc_scope *o);
+static char *dispose(sc_scope *o);
 
 // the first error is kept, the rest freed
 static void first_error(char **failed, char *e) {
@@ -586,60 +622,35 @@ static void first_error(char **failed, char *e) {
 	else free(e);
 }
 
-// what is under o, newest first, then its teardowns, newest first; o stays. the first error.
-// after, from: only the scopes made after the after-th, and the teardowns from the from-th on.
-// what is under o goes with o open, as its teardowns do: under a computer, written by it
-static char *clean(sc_scope *o, uint64_t after, size_t from) {
+// kids (n of them), newest first, then fs (nfs), newest first, every one with o open (under a
+// computer, written by it): the first cleanup error. what a listener throws in a kid's teardown is
+// held (the bracket around), never a cleanup's error
+static char *down(sc_scope *o, sc_scope **kids, size_t n, const teardown_fn *fs, size_t nfs) {
 	char *failed = NULL;
-	size_t nkids;
-	sc_scope **kids = cut(o, after, &nkids);
-	opened was = opens(o);
-	for (size_t i = 0; i < nkids; i++) first_error(&failed, teardown(kids[i]));
-	reopen(o->s, was);
-	free(kids);
-	size_t nfs = o->nteardowns > from ? o->nteardowns - from : 0;
-	teardown_fn *fs = NULL;
-	if (nfs > 0) {
-		fs = xalloc(nfs * sizeof *fs);
-		memcpy(fs, o->teardowns + from, nfs * sizeof *fs);
+	if (n > 0) {
+		opened was = opens(o);
+		for (size_t i = 0; i < n; i++) first_error(&failed, dispose(kids[i]));
+		reopen(o->s, was);
 	}
-	if (o->nteardowns > from) o->nteardowns = from;
 	for (size_t i = nfs; i > 0; i--) first_error(&failed, call_teardown(o, fs[i - 1]));
-	free(fs);
 	return failed;
 }
 
+// n of fs on the end of all, at k
+static void put_fns(teardown_fn *all, size_t *k, const teardown_fn *fs, size_t n) {
+	if (n == 0) return;
+	memcpy(all + *k, fs, n * sizeof *fs);
+	*k += n;
+}
+
+// children first, newest first, then o's teardowns, newest first. every teardown runs; the first
+// error: what a listener threw (held), else a cleanup's
 static char *teardown(sc_scope *o) {
 	if (o->state != ALIVE) return NULL;
 	sc_scheduler *s = o->s;
 	char *outer = s->thrown;
 	s->thrown = NULL;
-	o->state = DISPOSING;
-	if (o->kind != PLAIN) {
-		o->od.alive = false;
-		drop_computation(s, o);
-		// set aside before its run: older than the rest
-		if (o->naside > 0) {
-			teardown_fn *all = xalloc((o->naside + o->nteardowns) * sizeof *all);
-			memcpy(all, o->aside, o->naside * sizeof *all);
-			if (o->nteardowns) memcpy(all + o->naside, o->teardowns, o->nteardowns * sizeof *all);
-			free(o->teardowns);
-			o->teardowns = all;
-			o->nteardowns = o->capteardowns = o->naside + o->nteardowns;
-			free(o->aside);
-			o->aside = NULL;
-			o->naside = o->capaside = 0;
-		}
-	}
-	char *failed = clean(o, 0, 0);
-	o->state = GONE;
-	// gone: by it names no run
-	if (o->kind != PLAIN && o->ran) {
-		ran_release(o->ran);
-		o->ran = NULL;
-	}
-	unlink_scope(o);
-	// what drop's listeners threw came first
+	char *failed = dispose(o);
 	char *t = unbracket(s, outer);
 	if (t) {
 		free(failed);
@@ -648,42 +659,160 @@ static char *teardown(sc_scope *o) {
 	return failed;
 }
 
-// before a run ("like Solid"): what is under c goes, newest first (what one throws held), and its
-// cleanups are set aside, to run once the run is done (lay). after, from: as clean's
-static void shed(sc_scope *c, uint64_t after, size_t from) {
-	sc_scheduler *s = c->s;
-	size_t nkids;
-	sc_scope **kids = cut(c, after, &nkids);
-	if (nkids > 0) {
-		opened was = opens(c);
-		for (size_t i = 0; i < nkids; i++) hold(s, teardown(kids[i]));
-		reopen(s, was);
-		free(kids);
+// o gone, as teardown, in the bracket open: what a listener throws is held there; the first
+// cleanup error given back
+static char *dispose(sc_scope *o) {
+	if (o->state != ALIVE) return NULL;
+	sc_scheduler *s = o->s;
+	o->state = DISPOSING;
+	teardown_fn *fs = o->teardowns;
+	size_t nfs = o->nteardowns;
+	o->teardowns = NULL;
+	o->nteardowns = o->capteardowns = 0;
+	if (o->kind != PLAIN) {
+		o->od.alive = false;
+		drop_computation(s, o);
+		// queued and set aside before its runs, then its act's: older than the rest
+		size_t more = (size_t)o->nqueuedCleanups + o->naside + o->ndeeds;
+		if (more > 0) {
+			teardown_fn *all = xalloc((more + nfs) * sizeof *all);
+			size_t k = 0;
+			put_fns(all, &k, o->queuedCleanups, o->nqueuedCleanups);
+			put_fns(all, &k, o->aside, o->naside);
+			put_fns(all, &k, o->deeds, o->ndeeds);
+			put_fns(all, &k, fs, nfs);
+			free(fs);
+			fs = all;
+			nfs = k;
+			free(o->queuedCleanups);
+			free(o->aside);
+			free(o->deeds);
+			o->queuedCleanups = o->aside = o->deeds = NULL;
+			o->nqueuedCleanups = o->capqueuedCleanups = o->naside = o->capaside = o->ndeeds = o->capdeeds = 0;
+		}
+		free(o->cuts);
+		o->cuts = NULL;
+		o->ncuts = 0;
 	}
-	for (size_t i = from; i < c->nteardowns; i++) VEC_PUSH(c->aside, c->naside, c->capaside, c->teardowns[i]);
-	if (c->nteardowns > from) c->nteardowns = (unsigned)from;
+	size_t nkids;
+	sc_scope **kids = cut(o, &nkids);
+	char *failed = down(o, kids, nkids, fs, nfs);
+	free(kids);
+	free(fs);
+	o->state = GONE;
+	// gone: by it names no run
+	if (o->kind != PLAIN && o->ran) {
+		ran_release(o->ran);
+		o->ran = NULL;
+	}
+	unlink_scope(o);
+	return failed;
 }
 
-// the cleanups set aside before r, once r is done (its value landed), newest first, as teardowns
-// run; no catch: one that throws ends the rest, its error held
-static void lay(sc_scheduler *s, sc_scope *c, sc_run *r) {
-	teardown_fn *fs = c->aside;
-	size_t n = c->naside;
-	c->aside = NULL;
-	c->naside = c->capaside = 0;
-	sc_run *was = s->reading, *wasRunning = s->running;
-	s->reading = NULL;
-	s->running = r;
-	for (size_t i = n; i > 0; i--) {
-		char *e = call_teardown(c, fs[i - 1]);
-		if (e) {
-			hold(s, e);
-			break;
+// as a run starts: what its runs made is old (an effect's act's stays), on the before list ahead
+// of what is old there already; its cleanups are set aside
+static void liftChildren(sc_scope *c) {
+	sc_scope *head = NULL, *tail = NULL;
+	for (sc_scope *x = c->newest; x != NULL;) {
+		sc_scope *next = x->older;
+		if (!x->deed) {
+			unlink_scope(x);
+			x->old = true;
+			if (tail) {
+				tail->older = x;
+				x->newer = tail;
+			} else {
+				head = x;
+			}
+			tail = x;
+		}
+		x = next;
+	}
+	if (tail) {
+		tail->older = c->before;
+		if (c->before) c->before->newer = tail;
+		c->before = head;
+	}
+	for (size_t i = 0; i < c->nteardowns; i++) VEC_PUSH(c->aside, c->naside, c->capaside, c->teardowns[i]);
+	c->nteardowns = 0;
+}
+
+// r done: what is still old on c goes, newest first (the first error held); its cleanups set
+// aside are queued, to run once the round's runs are done (runQueuedCleanups)
+static void dropUnclaimedChildren(sc_scheduler *s, sc_scope *c, sc_run *r) {
+	if (c->before) {
+		size_t n;
+		sc_scope **kids = list_of(c->before, &n);
+		c->before = NULL;
+		sc_run *was = s->reading, *wasRunning = s->running;
+		s->reading = NULL;
+		s->running = r;
+		hold(s, down(c, kids, n, NULL, 0));
+		s->reading = was;
+		s->running = wasRunning;
+		free(kids);
+	}
+	if (c->naside > 0 && c->state == ALIVE) {
+		if (c->nqueuedCleanups == 0) VEC_PUSH(s->queued, s->nqueued, s->capqueued, c);
+		for (size_t i = 0; i < c->naside; i++) VEC_PUSH(c->queuedCleanups, c->nqueuedCleanups, c->capqueuedCleanups, c->aside[i]);
+		free(c->aside);
+		c->aside = NULL;
+		c->naside = c->capaside = 0;
+		if (r->nloop > 0) {
+			free(c->cuts);
+			c->cuts = xalloc(r->nloop * sizeof *c->cuts);
+			memcpy(c->cuts, r->loop, r->nloop * sizeof *c->cuts);
+			c->ncuts = r->nloop;
 		}
 	}
+}
+
+// the cleanups queued, once the round's runs are done: each computer's newest first, as teardowns
+// run; no catch: one that fails ends the rest of that computer's, its error held. a bracket
+static char *runQueuedCleanups(sc_scheduler *s) {
+	if (s->nqueued == 0) return NULL;
+	char *outer = s->thrown;
+	s->thrown = NULL;
+	sc_run *was = s->reading, *wasRunning = s->running;
+	for (size_t i = 0; i < s->nqueued; i++) {
+		sc_scope *c = s->queued[i];
+		teardown_fn *fs = c->queuedCleanups;
+		size_t n = c->nqueuedCleanups;
+		sc_scope **cuts = c->cuts;
+		size_t ncuts = c->ncuts;
+		c->queuedCleanups = NULL;
+		c->nqueuedCleanups = c->capqueuedCleanups = 0;
+		c->cuts = NULL;
+		c->ncuts = 0;
+		if (n > 0 && c->state == ALIVE) {
+			// held: a cleanup may tear c down
+			sc_run *r = ran_ref(c->ran);
+			sc_scope **flag = r->loop;
+			size_t nflag = r->nloop;
+			if (ncuts > 0) {
+				r->loop = cuts;
+				r->nloop = ncuts;
+			}
+			s->reading = NULL;
+			s->running = r;
+			for (size_t j = n; j > 0; j--) {
+				char *e = call_teardown(c, fs[j - 1]);
+				if (e) {
+					hold(s, e);
+					break;
+				}
+			}
+			r->loop = flag;
+			r->nloop = nflag;
+			ran_release(r);
+		}
+		free(fs);
+		free(cuts);
+	}
+	s->nqueued = 0;
 	s->reading = was;
 	s->running = wasRunning;
-	free(fs);
+	return unbracket(s, outer);
 }
 
 char *sc_teardown(sc_scope *o) { return teardown(o); }
@@ -846,13 +975,13 @@ sc_track_status sc_track(sc_scheduler *s, const void *key) {
 static void finish(sc_scheduler *s, sc_run *r, sc_ended ended, int equal, char *error,
 	sc_scope *waits, sc_scope *const *through, size_t nthrough) {
 	sc_scope *c = r->c;
-	if (c->naside > 0 && c->ran == r && c->state == ALIVE) lay(s, c, r);
-	// flagged, and cut a loop (in its cleanups too): a failure ends looping, and so does a result
-	// equal to the last
+	// flagged, and cut a loop: a failure ends looping, and so does a result equal to the last
 	if (r->nloop > 0 && r->cut && (ended == SC_FAIL || (ended == SC_DONE && equal == 1))) {
 		finish(s, r, SC_LOOPING, equal, error, waits, r->loop, r->nloop);
 		return;
 	}
+	// done, its latest: what it did not make again goes, its old cleanups are queued
+	if (ended == SC_DONE && c->ran == r && c->state == ALIVE) dropUnclaimedChildren(s, c, r);
 	if (c->state == ALIVE) {
 		// not done: what it was given is kept again, beside what was kept since it began. then the
 		// run holds it no longer, so a later end (an awaited run landing) keeps nothing again
@@ -1054,15 +1183,14 @@ static void begin(sc_scheduler *s, sc_scope *c, int rank) {
 	EACH(s, ON_START, start, c, n, rank);
 	sc_run *was = s->reading, *wasRunning = s->running;
 	s->running = r;
-	// what is under it goes first: all of a compute's; of an effect's, what was made since its
-	// last act. its cleanups wait till the run is done (lay). torn down by a teardown: nothing more
-	if (c->kind == COMPUTE) shed(c, 0, 0);
-	else shed(c, c->acted_n, c->acted_teardowns);
+	// what its runs made is old, its cleanups set aside, till a run is done (dropUnclaimedChildren). torn down
+	// by a listener: nothing more
 	if (c->state != ALIVE) {
 		s->running = wasRunning;
 		ran_release(r);
 		return;
 	}
+	liftChildren(c);
 	// its info, from here: this run's number, and the tick of the mark that made it due
 	// in place when nothing holds the last, else a new one: what was made under it keeps saying it
 	info_block *ib = c->info;
@@ -1122,9 +1250,10 @@ static void begin(sc_scheduler *s, sc_scope *c, int rank) {
 
 // acts
 
-// what is under the effect goes, then it acts, with the value it acted on last. due again (an
-// earlier act this round changed what it read): its value is old, so it does not act; its next
-// run does. torn down by a teardown: nothing more
+// what the effect's last act made goes, and the cleanups made in it run (a cleanup's error is the
+// act's; a listener's is held, out once the act is done); then it acts, with the value it acted
+// on last. due again (an earlier act this round changed what it read): its value is
+// old, so it does not act; its next run does. torn down by a teardown: nothing more
 static void do_act(sc_scheduler *s, act *a) {
 	sc_scope *c = a->r->c;
 	c->acting = NULL;
@@ -1134,7 +1263,25 @@ static void do_act(sc_scheduler *s, act *a) {
 	if (acts) {
 		s->reading = NULL;
 		s->running = a->r;
-		failed = clean(c, 0, 0);
+		size_t n = 0;
+		for (sc_scope *x = c->newest; x != NULL; x = x->older) n += x->deed;
+		sc_scope **deeds = n ? xalloc(n * sizeof *deeds) : NULL;
+		size_t k = 0;
+		for (sc_scope *x = c->newest; x != NULL;) {
+			sc_scope *next = x->older;
+			if (x->deed) {
+				unlink_scope(x);
+				deeds[k++] = x;
+			}
+			x = next;
+		}
+		teardown_fn *fs = c->deeds;
+		size_t nfs = c->ndeeds;
+		c->deeds = NULL;
+		c->ndeeds = c->capdeeds = 0;
+		failed = down(c, deeds, n, fs, nfs);
+		free(deeds);
+		free(fs);
 		acts = c->state == ALIVE;
 	}
 	if (!acts) {
@@ -1150,7 +1297,9 @@ static void do_act(sc_scheduler *s, act *a) {
 	sc_run *waswriter = s->open_writer;
 	s->open = c;
 	s->open_writer = c->ran;
+	c->doing = true;
 	char *error = c->def.effect(a->value, c->has_last ? c->last : NULL, c->def.data);
+	c->doing = false;
 	s->reading = was;
 	s->running = wasRunning;
 	s->open = wasopen;
@@ -1159,8 +1308,6 @@ static void do_act(sc_scheduler *s, act *a) {
 	if (c->has_last) drop_value(s, c->last);
 	c->last = a->value;
 	c->has_last = true;
-	c->acted_n = s->made;
-	c->acted_teardowns = c->nteardowns;
 	EACH(s, ON_EFFECT, effect, c, a->r->n, failed);
 	free(failed);
 	ran_release(a->r);
@@ -1224,6 +1371,7 @@ void sc_pulse(sc_scheduler *s) {
 			od_item *p = od_next(s->order, &rank);
 			failed = first(s, of_od(p), rank);
 		}
+		if (!failed) failed = runQueuedCleanups(s);
 		while (!failed && s->earlies.live > 0) failed = take(s, &s->earlies);
 		if (failed) break;
 		s->earlies.head = s->earlies.n = 0;
@@ -1231,19 +1379,44 @@ void sc_pulse(sc_scheduler *s) {
 		if (failed) break;
 		s->acts.head = s->acts.n = 0;
 	}
+	// left early: the cleanups queued run all the same, what they throw after the first
+	char *late = runQueuedCleanups(s);
+	if (failed) free(late);
+	else failed = late;
 	s->pulsing = false;
 	cs_end(s->causes);
 	s->pulses++;
 	sweep(s);
-	if (failed == NULL)
-		for (size_t i = 0; i < s->nlisteners[ON_AFTER]; i++)
-			s->listeners[ON_AFTER][i]->f.after(s->listeners[ON_AFTER][i]->data);
 	char *t = unbracket(s, outer);
 	if (failed) {
 		free(t);
 		t = failed;
 	}
 	escape(s, t);
+}
+
+// an old child of the run open's computer, claimed: back under it, the newest, and due (a tick,
+// told as a mark with no keys, by the run open). not old: false
+bool sc_claim(sc_computer *c) {
+	if (c->kind == PLAIN || !c->old || c->state != ALIVE) return false;
+	sc_scheduler *s = c->s;
+	unlink_scope(c);
+	sc_scope *p = c->parent;
+	c->older = p->newest;
+	if (c->older) c->older->newer = c;
+	p->newest = c;
+	// as a computer made: in a run known to loop, the loop is cut there
+	if (s->running && s->running->nloop > 0) s->running->cut = true;
+	uint64_t t = ++s->tick;
+	dues now = {0};
+	bool told = s->nlisteners[ON_MARK] > 0;
+	bool now_due = due(s, c, t, s->running);
+	char *outer = s->thrown;
+	s->thrown = NULL;
+	if (now_due && told) VEC_PUSH(now.v, now.n, now.cap, c);
+	if (told) told_mark(s, NULL, 0, s->running, &now, t);
+	escape(s, unbracket(s, outer));
+	return true;
 }
 
 // computations
@@ -1255,7 +1428,6 @@ static sc_computer *make(sc_scheduler *s, kind_t kind, sc_def def) {
 	if (kind != EFFECT) def.early = false;
 	sc_scope *c = make_scope(s, kind, o, NULL, 0);
 	c->def = def;
-	c->acted_n = c->n;
 	c->node = tg_node_new(c);
 	if (c->node == NULL) abort();
 	s->nlive++;
@@ -1367,8 +1539,10 @@ void sc_free(sc_scheduler *s) {
 				free(o->spare);
 			}
 			pm_clear(&o->od.rev);
-			od_item_free(&o->od);
 			free(o->aside);
+			free(o->queuedCleanups);
+			free(o->deeds);
+			free(o->cuts);
 			free(o->loop);
 			if (o->ran) ran_release(o->ran);
 			if (o->has_last) drop_value(s, o->last);
@@ -1389,6 +1563,7 @@ void sc_free(sc_scheduler *s) {
 	free(s->acts.v);
 	free(s->earlies.v);
 	free(s->landed);
+	free(s->queued);
 	free(s->thrown);
 	free(s->escaped);
 	free(s);
