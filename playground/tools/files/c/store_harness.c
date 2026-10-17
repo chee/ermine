@@ -1,6 +1,6 @@
 // The C store on the line protocol (playground/tools/files/typescript/store_harness.ts, whose header has it): one JSON request per
 // line in, one answer per line out, in order. One store at a time, made by open. The harness keeps a temp folder of its own
-// (disk.h): it makes the edits a scenario asks for and looks at the folder and the Trash itself, never through the store, and
+// (disk_harness.h): it makes the edits a scenario asks for and looks at the folder and the Trash itself, never through the store, and
 // shows every answer as the TypeScript harness does (the temp folder "@", each store's uuid "uuid", "uuid2", ...). Nodes are
 // in pack's JSON form, each content, change and because a value in its JSON form (ENCODING.tex: "/" for bytes and typed
 // arrays); hashes are hex and bytes hex.
@@ -11,8 +11,8 @@
 #include "../../../../ermine/encoding/c/cbor.h"
 #include "../../../../ermine/encoding/c/json.h"
 #include "../../../../ermine/encoding/c/json_text.h"
-#include "disk.h"
-#include "saved_shown.h"
+#include "disk_harness.h"
+#include "saved_shown_harness.h"
 #include "external.h"
 #include "foundation.h"
 #include "names.h"
@@ -67,7 +67,7 @@ static void say(const char *s) {
 	fputc('\n', out);
 }
 
-// a string in JSON, as saved_shown.c's text writes it
+// a string in JSON, as saved_shown_harness.c's text writes it
 static void quote(const char *s) {
 	fputc('"', out);
 	for (; *s; s++) {

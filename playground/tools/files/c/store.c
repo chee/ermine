@@ -2892,11 +2892,6 @@ st_code st_differences(st_store *s, const char *const *touched, size_t count, co
 	return code(s, r);
 }
 
-const st_difference *st_missed(const st_store *s, size_t *length) {
-	*length = s->missed_length;
-	return s->missed;
-}
-
 st_code st_mend(st_store *s, const char *const *paths, size_t count) {
 	return code(s, mend(s, paths, count, paths != NULL));
 }

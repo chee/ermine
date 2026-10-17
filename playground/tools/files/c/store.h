@@ -151,8 +151,6 @@ size_t st_others(st_store *store, const mf_record **records);
 
 // compares the folders touched (NULL: every folder) and the root's file with the layout; takes no lock
 st_code st_differences(st_store *store, const char *const *touched, size_t count, const st_difference **out, size_t *length);
-// what loading found: edits made while nothing watched
-const st_difference *st_missed(const st_store *store, size_t *length);
 // lays paths out again as the graph has them (NULL: every path that differs), sending what is there to the Trash
 st_code st_mend(st_store *store, const char *const *paths, size_t count);
 // sends an entry (a path from the store's folder) to the Trash and lists it, with why

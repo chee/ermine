@@ -44,12 +44,6 @@ typedef struct {
 	bool copy;  // the folder is a copy: its own manifest, if inside, is not its own
 } ex_located;
 
-// a random UUID, version 4: 36 characters and NUL
-void ex_uuid(char out[37]);
-// where outside manifests and the list of stores are (malloc'd)
-char *ex_outside(const char *home);
-// whether a service that syncs files watches the folder, so its manifest is outside
-bool ex_synced(const char *folder, const ex_where *where);
 // the stores a host has
 int ex_stores(const ex_where *where, ex_stored **out, size_t *count);
 void ex_stores_free(ex_stored *list, size_t count);
@@ -60,6 +54,5 @@ char *ex_find(const char *uuid, const ex_where *where);
 int ex_note(const char *uuid, const char *folder, const ex_where *where);
 // finds a store's manifest, moving it when its folder came into a synced place or left one, as the store's folder says
 int ex_locate(const char *folder, const ex_where *where, ex_located *out);
-void ex_located_free(ex_located *located);
 
 #endif

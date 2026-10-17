@@ -1,8 +1,8 @@
 // The C files program on the line protocol (playground/tools/files/typescript/program_harness.ts, whose header has it): one JSON
 // request per line in, one answer per line out, in order. A host's view of the program: a store, a graph, the program
 // started as the host starts it, and a watcher whose passes the scenario runs itself (no disk events, no timing), on a temp
-// folder of the run's own (disk.h): the harness makes the edits and the snapshots itself. Ids are minted "i1", "i2", ...
-// through the whole process, and every answer shows them as disk.h does: "id1" for the first met, ...
+// folder of the run's own (disk_harness.h): the harness makes the edits and the snapshots itself. Ids are minted "i1", "i2", ...
+// through the whole process, and every answer shows them as disk_harness.h does: "id1" for the first met, ...
 //
 // Memory: each request and its answer are freed once answered; a request that fails part way may leave what it made.
 #ifdef __linux__
@@ -11,7 +11,7 @@
 
 #include "../../../../ermine/encoding/c/json.h"
 #include "../../../../ermine/encoding/c/json_text.h"
-#include "disk.h"
+#include "disk_harness.h"
 #include "graph.h"
 #include "names.h"
 #include "program.h"
@@ -460,7 +460,7 @@ int main(void) {
 			a = jsonObject();
 			jsonAdd(a, "error", jsonString(fault));
 		}
-		// shown as disk.h shows it, on a copy: the answer may share the graph's own values
+		// shown as disk_harness.h shows it, on a copy: the answer may share the graph's own values
 		char *text = jsonPrint(a);
 		Json *shown = jsonParse(text, strlen(text), &why);
 		free(text);

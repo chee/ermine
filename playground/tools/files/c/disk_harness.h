@@ -1,7 +1,7 @@
-// The disk of the store's and the program's harnesses (store_harness.c, program_harness.c), in C: disk.ts's. A temp folder of
+// The disk of the store's and the program's harnesses (store_harness.c, program_harness.c), in C: disk_harness.ts's. A temp folder of
 // the run's own, the edits made on it between requests, and what it shows when looked at. A harness makes the edits and the
 // snapshots itself, the same for every implementation, as a person's Finder would: never through the store. Nothing here is
-// the store's or the program's rule. disk.ts has the edits and what a snapshot shows; this is the same, in the same order.
+// the store's or the program's rule. disk_harness.ts has the edits and what a snapshot shows; this is the same, in the same order.
 //
 // The temp folder (under $TMPDIR, else /tmp) holds Store (the store's folder), Trash (the fake Trash, made by the store or an
 // edit), Home (a test home, there from the start), Outside (made by an edit when needed) and scratch (where a write is made
@@ -13,8 +13,8 @@
 // [A-Za-z0-9_-]). The order met is the order the snapshots and deep take their strings in.
 //
 // Memory: a Json given is borrowed unless it says it is taken; a Json returned is the caller's (jsonFree it).
-#ifndef DISK_H
-#define DISK_H
+#ifndef DISK_HARNESS_H
+#define DISK_HARNESS_H
 
 #include "../../../../ermine/encoding/c/json.h"
 
@@ -38,12 +38,8 @@ void disk_free(Disk *d);
 
 // a path of a scenario: "@x" is x in the temp folder, "" is folder, the rest from folder; fresh
 char *disk_path(const Disk *d, const char *p, const char *folder);
-// the label of what was met (owned by d)
-const char *disk_label(Disk *d, const char *raw);
 // a label's raw text, for a request; what is not a label as it is (owned by d, or p itself)
 const char *disk_raw(const Disk *d, const char *label);
-// a string, the temp folder as "@" and each label's kind as its label, in order met, left to right; fresh
-char *disk_text(Disk *d, const char *s);
 // every string in a Json value as text, in place (object keys are not touched); v is fresh, not shared
 void disk_deep(Disk *d, Json *v);
 

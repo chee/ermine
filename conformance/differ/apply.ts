@@ -1,4 +1,4 @@
-// apply's streams: a start value and a batch of patches (core/fuzz/gen.ts), asked as one call,
+// apply's streams: a start value and a batch of patches (core/fuzz/gen_harness.ts), asked as one call,
 // then each patch alone on what the ones before it left, then each refused patch put in where it
 // fell; some again with cow: false. every line stands alone (nothing lasts between lines).
 // wild: patches of no patch's shape, odd numbers as indices, requests missing their patches
@@ -10,7 +10,7 @@
 // index counted in the half it fell in)
 // deno-lint-ignore-file no-explicit-any
 import apply, { type Patch } from "@ermine/op/apply"
-import { batch, start } from "../../core/fuzz/gen.ts"
+import { batch, start } from "../../core/fuzz/gen_harness.ts"
 import {
 	type Answer,
 	content,

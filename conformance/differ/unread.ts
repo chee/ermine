@@ -1,4 +1,4 @@
-// unread's streams: an entry started on a random value (core/unread/typescript/random.ts), then
+// unread's streams: an entry started on a random value (core/unread/typescript/random_harness.ts), then
 // writes of a few patches (some refused), unwrites, reads, keeps (wrapped, handed, through a
 // scheduler), marks and sames, held and value asked between; names held now and then.
 // the invariants, each implementation on its own: the value (asked by value or read) is the start
@@ -10,7 +10,7 @@
 // wild: patches of no patch's shape, values that are no JSON form, an unwrite with nothing
 // written, odd paths for mark and keep
 import apply, { ApplyError, type Patch } from "@ermine/op/apply"
-import { isMap, made, patch, paths } from "../../core/unread/typescript/random.ts"
+import { isMap, made, patch, paths } from "../../core/unread/typescript/random_harness.ts"
 import { wildPatches } from "./apply.ts"
 import {
 	type Answer,

@@ -1,16 +1,16 @@
 // the files program (program.ts) on the line protocol (conformance/typescript/harness.ts). A host's
 // view of the program: a store, the graph of today (graph.ts) holding what the store read, the
 // program started as the host starts it, and a watcher whose passes the scenario runs itself (no
-// disk events, no timing). It works on a temp folder of the run's own (disk.ts): the store at
+// disk events, no timing). It works on a temp folder of the run's own (disk_harness.ts): the store at
 // @Store, its Trash @Trash (a fake), a test home @Home, so the real Trash and home are never used;
 // the harness makes the edits a scenario asks for and looks at the folder and the Trash itself, as
-// disk.ts has it. Values are in their JSON form (conformance/typescript/form.ts). Another
+// disk_harness.ts has it. Values are in their JSON form (conformance/typescript/form.ts). Another
 // implementation joins by speaking this (HARNESS): a C harness on the C graph and the C store.
 //
 // A node is named by a path: a list of slot names from the root, each a string (the slot's first
 // item) or [name, index] (its item at index, from 0). [] is the root. Ids: the harness mints every
 // id, "i1", "i2", ... in the order they are asked for, through the whole process (a second open
-// does not start again), and every answer shows them as disk.ts does: "id1" for the first met,
+// does not start again), and every answer shows them as disk_harness.ts does: "id1" for the first met,
 // "id2" for the next, ...; the temp folder in a path is "@".
 //
 //   {op: "open", refuse?, aliases?}
@@ -45,8 +45,8 @@
 //   {op: "listed"}   -> {listed: [{path, why}]}  what the program wrote to its listed node since
 //                       the last asked, in order; why as a code (WHY below)
 //   {op: "edit", edit, ...}
-//                    -> {}  the edit made on the disk (disk.ts)
-//   {op: "observe"}  -> {folder, trash, listed}  disk.ts's snapshot, listed as the listed request
+//                    -> {}  the edit made on the disk (disk_harness.ts)
+//   {op: "observe"}  -> {folder, trash, listed}  disk_harness.ts's snapshot, listed as the listed request
 //                       answers
 //   a failure        -> {error: message}
 import { createGraph, type Graph } from "./graph.ts"
@@ -57,7 +57,7 @@ import { fake, type Sys, system } from "./sys.ts"
 import type { Foundation } from "./foundation.ts"
 import { byCodePoint } from "./names.ts"
 import { type Watcher, watcher } from "./watch.ts"
-import { Disk, IDS, programSnapshot } from "./disk.ts"
+import { Disk, IDS, programSnapshot } from "./disk_harness.ts"
 import { no, type Policy, yes } from "@ermine/protect"
 import { fromJson, toJson } from "../../../conformance/typescript/form.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"

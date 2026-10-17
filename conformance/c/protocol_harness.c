@@ -1,5 +1,5 @@
-// patches, change headers, entries and nodes on the line protocol (protocol.h)
-#include "protocol.h"
+// patches, change headers, entries and nodes on the line protocol (protocol_harness.h)
+#include "protocol_harness.h"
 
 #include <limits.h>
 #include <math.h>

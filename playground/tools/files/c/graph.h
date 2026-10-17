@@ -46,7 +46,6 @@ typedef struct {
 
 fg *fg_new(const fg_options *options);
 void fg_free(fg *g);
-sc_scheduler *fg_scheduler(const fg *g);
 // the table the graph's entries are in (a host's sync writes to it too)
 tb_table *fg_table(const fg *g);
 // entries changed in place by someone else (a host's sync): said written, as a write here is (places' commit)
@@ -54,8 +53,6 @@ void fg_landed(fg *g, nd_entry *const *changed, size_t count);
 
 // the api for changes by an actor (NULL: none); the graph frees it
 fg_api *fg_actor(fg *g, const char *actor);
-// the same with a cause in every change it makes: {file, from?}; the cause is held
-fg_api *fg_as(fg_api *api, const char *file, const char *from);
 fg *fg_of(const fg_api *api);
 
 // reads, told to no one
