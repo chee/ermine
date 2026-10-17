@@ -6,6 +6,7 @@
 // the standard alphabet, unpadded. -0 is written -0. For tests only, never encoded (symbols aren't
 // saved): {"/": {"symbol": name}}, Symbol.for(name)
 import { Stand } from "@ermine/encoding/cbor"
+import { ordered } from "./json.ts"
 
 const KINDS: { [kind: string]: { new (b: ArrayBuffer): ArrayBufferView } } = {
 	int8: Int8Array,
@@ -50,7 +51,8 @@ export function toJson(x: unknown): unknown {
 	if (keys.length === 1 && keys[0] === "/") {
 		return slash({ map: slash(toJson((x as { "/": unknown })["/"])) })
 	}
-	return Object.fromEntries(keys.map((k) => [k, toJson((x as Record<string, unknown>)[k])]))
+	// in its order, a key that reads as an index too (json.ts)
+	return ordered(keys.map((k) => [k, toJson((x as Record<string, unknown>)[k])]))
 }
 
 // a JSON form that stands for no value: what json.c's jsonDecode refuses

@@ -1,54 +1,22 @@
-// differential fuzzing: random request streams sent to every implementation of a suite, the answers
-// diffed line by line. no implementation is the reference: the odd one out is named by majority.
+// differential fuzzing: random request streams sent to every implementation of a suite, answers
+// diffed line by line; no reference, the odd one out is named by majority.
 //   deno task differ [suite...] [--seeds N] [--impl a,b,c] [--out dir] [--wild] [--budget N]
 //                    [--timeout s]
-// no suite: every one with a generator here (conformance/differ/<suite>.ts). --seeds: seeds per
-// suite (default 30: fuzz runs stay small), each making one or more streams. --impl: the
-// implementations to ask (default: all in the registry). --out: where minimal streams are written
-// as scenarios (default: a new temp dir, printed). --wild: malformed and edge input too (many
-// known differences live there). --budget: harness runs per shrink (default 200). --timeout: per
-// harness run, in seconds (default 30).
+// defaults: every suite with a generator (differ/<suite>.ts), 30 seeds, all impls, a temp --out,
+// 200 harness runs per shrink, 30 s per run. --wild: malformed and edge input too.
 //
-// implementations: conformance/implementations.json (IMPLEMENTATIONS, a path: another, such as a
-// scratch build's), { name: { suite: command } }, a command split
-// at spaces as HARNESS is (conformance/typescript/ask.ts), run from the repo root. one whose binary
-// (or, for deno, its .ts) is missing is skipped, and said so. to add one (lisp, say), add
-//   "lisp": { "apply": "playground/lisp/bin/apply-harness", "invert": "...apply's...", ... }
-// a suite it does not speak is left out of its map. a name with a dash votes with the one before
-// it (c-check is c's sanitizer build): a majority counts families, so c and c-check agreeing are
-// one voice, and either alone is an odd one out.
-//
-// comparing (as conformance/run.ts's ordered suites do): each answer line parsed as JSON, a map's
-// keys in order, -0 not 0. an error is compared by being one: two errors that are strings are the
-// same unless both are codes (no spaces: "no-key", "disposed") and differ; an error that is a map
-// (apply's { code, patch }) is compared whole. a time within the run's seconds is the same time
-// (suites with now). a harness exiting other than 0, a sanitizer's report, a line not JSON, or a
-// timeout is a finding of its own.
-//
-// a stream's finding: its first line where the implementations disagree, signed suite + the odd
-// one out (or "no majority") + the request's op + the first differing field and how it differs
-// (-0, key order, keys, length, type, value, error or not, error code). invariants: a generator
-// may check each implementation's answers alone, asking it more, signed suite + the
-// implementations that broke it + its kind. these are properties each implementation must have
-// on its own, agreeing or not (one implementation is enough to run them):
-//   apply, invert  the undo undoes and its undo redoes; a batch split in two calls is the batch
-//   squish         same meaning; never more patches; one at a time is all at once
-//   update         a model: refused as its apply refuses, nothing changed; the change the header
-//                  and the patches given; the undo undoes; the stored ops replay to the value
-//   unread         a model: refused as its apply refuses; nothing-written as nothing landed; the
-//                  undo undoes; the landed writes replay to the value; held stays held
-//   table          a model of the table: every answer
-//   paths          a change under a read marks it; event and kept as a model of the spots,
-//                  kids in the order made
-//   tracker        none yet
-//   scheduler      none yet: its protocol is being changed one signature prints
-// once, with how many streams had it: its first stream shrunk (delta debugging over the lines,
-// then each line's values made smaller, while the same signature still shows), printed with
-// every implementation's answers, and written to --out as a scenario: the requests, each with the
-// answer the majority gave as its expect (fails for a string error; none where there is no
-// majority).
+// implementations.json (or IMPLEMENTATIONS): { name: { suite: command } }.
+// a missing binary is skipped and said. a dashed name votes with its family (c-check with c).
+// compared as run.ts compares (maps by content, -0 not 0); string error codes compared, other
+// strings not; a non-zero exit, sanitizer report, non-JSON line or timeout is a finding.
+// a finding: first differing line, signed suite + odd one out + op + first differing field.
+// invariants (per implementation, agreeing or not): undo undoes (apply, invert, update, unread),
+// squish keeps meaning, models for update/unread/table/paths; tracker and scheduler: none yet.
+// each signature: its first stream shrunk, printed with every answer, written to --out as a
+// scenario expecting the majority's answers.
 // deno-lint-ignore-file no-explicit-any
 import { line } from "./typescript/form.ts"
+import { ordered, read } from "./typescript/json.ts"
 import { suites } from "./typescript/ask.ts"
 import { type Answer, differs, type Generator, type Request } from "./differ/kit.ts"
 
@@ -135,7 +103,7 @@ async function run(cmd: string[], requests: Request[]): Promise<Ran> {
 	const answers = new TextDecoder().decode(stdout).split("\n").filter((l) => l.trim() !== "")
 		.map((l) => {
 			try {
-				return JSON.parse(l)
+				return read(l) as any
 			} catch {
 				return { "(not JSON)": l }
 			}
@@ -272,19 +240,8 @@ async function findings(
 
 // --- shrinking
 
-// a map made again from its entries ("__proto__" a key like any)
-function rebuild(entries: [string, unknown][]) {
-	const o: Record<string, unknown> = {}
-	for (const [k, v] of entries) {
-		Object.defineProperty(o, k, {
-			value: v,
-			enumerable: true,
-			writable: true,
-			configurable: true,
-		})
-	}
-	return o
-}
+// a map made again from its entries, in their order ("__proto__" a key like any, "2" where it was)
+const rebuild = (entries: [string, unknown][]) => ordered(entries)
 // x made a little smaller, every way: an element or key dropped, a string or number cut
 function* smaller(x: unknown, depth = 0): IterableIterator<unknown> {
 	if (Array.isArray(x)) {

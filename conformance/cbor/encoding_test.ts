@@ -1,12 +1,12 @@
 // The old suite's value tests (conformance/scenarios/graph/values-*.json and
-// decided-numbers-negative-zero.json, brought in 10-11 as old.json; the steps that are the graph's,
+// decided-numbers-negative-zero.json, as old.json; the steps that are the graph's,
 // not the encoding's, left out): each a value in its JSON form
 // and what it reads back as, or refused. Run through a pack harness: the value is one node's,
 // encoded and decoded. PACK_HARNESS: the C harness (default: the reference). Both are run.
 // The old suite wrote a typed array as its bytes in base64; ENCODING.tex now writes its elements
-// as a list (the designer, 10-11), so those vectors fail by design. And the old graph held a live
+// as a list, so those vectors fail by design. And the old graph held a live
 // stand-in as a whole value, in memory, never encoded; pack encodes, and a live value has none.
-// No uint8 kind now (the designer, 10-12): old.json's and lists.json's uint8 vectors are made
+// No uint8 kind: old.json's and lists.json's uint8 vectors are made
 // int8 (one of old.json's, two forms in one map, uint16), or refused
 import { assertEquals } from "@std/assert"
 import { line } from "../pack/form.ts"

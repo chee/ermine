@@ -1,4 +1,4 @@
-// set aside 2026-10-13: the old scheduler's suite, of processes; its scenarios in ../core/scheduler/conformance. for ermine.ts
+// set aside: the old scheduler's suite, of processes; its scenarios in ../core/scheduler/conformance. for ermine.ts
 // Runs the scenarios against a harness. SCHEDULER_HARNESS: the command for another
 // implementation (default: the reference). SCHEDULER_SKIP: scenario files it does not speak yet,
 // by commas. The protocol: harness.ts; programs as data: steps.ts; what is seen: normal.ts.

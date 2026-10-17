@@ -1,10 +1,9 @@
-// programs as data, for the scheduler's conformance: a program is a map of parts, each a list of
-// steps, told apart by its keys: {setup} a setup, {compute} a compute, {compute, effect} an
-// effect. Any implementation runs them the same way; this one gives scheduler.ts their code.
+// programs as data, for the scheduler's conformance: a map of parts, each a list of steps:
+// {setup}, {compute}, or {compute, effect}. this one gives scheduler.ts their code.
 //
-// a step is a map whose "do" says what it is; its fields are expressions, evaluated before it
-// runs. "var" (where given) names where its answer goes. each part, handler call and cleanup has
-// its own variables; a cleanup or a $steps function starts with a copy of its maker's.
+// a step: a map whose "do" says what it is; fields are expressions, evaluated first; "var" names
+// where its answer goes. each part, handler call and cleanup has its own variables; a cleanup or
+// $steps function starts with a copy of its maker's.
 //
 //   {"do":"let","var":v,"value":e}
 //   {"do":"return","value":e?}                    ends the part with e (none: null)
@@ -15,15 +14,14 @@
 //   {"do":"cleanup","steps":[..]}                 onCleanup; told killed as {"$given":"killed"}
 //   {"do":"start","address":e,"program":e,...}    name, id; var: the pid
 //   {"do":"call","address":e,"args":e?}           var: the handler's answer
-//   {"do":op,...,"peep":b?}                       op: an interface's (normal.ts), as the harness's
+//   {"do":op,...,"peep":b?}                       op: an interface's (normal.ts)
 //
-// an expression: any JSON, a list or map evaluated member by member, except a map of one key
-// starting with "$":
+// expression: any JSON, evaluated member by member, except a one-key map starting with "$":
 //   {"$var":v}          a variable; none: null
-//   {"$given":f}        a field the part was given: value, previous, args, self, name, killed
+//   {"$given":f}        value, previous, args, self, name, killed
 //   {"$get":[e,k...]}   down e by keys; missing: null
 //   {"$add":[a,b]}  {"$eq":[a,b]}  {"$not":e}  {"$len":e}
-//   {"$steps":[..]}     a function (live): a handler; called with what a handler call is given
+//   {"$steps":[..]}     a handler function
 //   {"$quote":x}        x as it is
 import type { Code } from "@ermine/scheduler"
 import { PENDING } from "@ermine/scheduler"
