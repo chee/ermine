@@ -1,50 +1,31 @@
-// icons.ts (newos, from deno/icons.ts): a node drawn as an icon, as My Computer and the desk show them,
-// and where each sits in its folder: the tool every program is given
-// (tools.ts, icons), as views is.
+// icons.ts: a node drawn as an icon, and where each sits in its folder (My Computer, the desk)
 //
-//   const I = icons.make(blit, {u, colours})   colours: paper, line, lemon, cherry, dim, desk; read at each
-//                                              call, so the program changes them in place
-//   I.entry(api, at, name, items)              a directory's name as an icon shows it: {at, name, ids, e, kids,
-//                                              value, commit, kind}
-//   I.kind(e)  I.describe(e)                   folder trash text picture app program data pending refused; in words
-//   I.icon(f, e, x, y, on, clear?)             I.size() points square: the theme's icons ({style: "vector"}, catclock's
-//                                              folders and pages, folder and trash tints its own or by area; else
-//                                              System 7's pixels, two points a pixel); on, chosen; clear, drawn over
-//                                              clear pixels (the desk's)
-//   I.size()                                   an icon's side in points, as the theme's icons are
-//   I.art(f, v, x, y, scale, clip?)  I.pattern(v, scale)  I.framed(f, v, x, y, w, h)   pictures
-//   I.open(api, path, e)                       opened by kind: a folder or a picture in a My Computer window, an
-//                                              application run, /etc/keys in Keys, anything else in the editor;
-//                                              a word to say, or null
-//   I.move(api, e, to, toname)  I.free(api, at, n)   a node to another name; a name not yet used
-//   I.rename(api, e, toname)                   a node to a new name in its folder, where the old name was
-//   I.link(api, e, to, toname)                 the node placed there as well, by its id: one node in two places,
-//                                              as the shell's ln
-//   I.holds(api, at, id)                       the name the folder at holds that node at, or null
-//   I.into(api, e, at, link?)                  into the folder at (a path), at a name not used there: moved, or
-//                                              (option-cmd) linked; its name there. Never the Trash, nor into
-//                                              itself; moved where it is, it stays; a folder holding it already,
-//                                              linked, nothing, moved, the name it came from goes
-//   I.land(api, items, at, link?)              a drop's items (Item: {at, name, id}) into the folder at; each with
-//                                              to, its name there, and already, or error
+//   const I = icons.make(blit, {u, colours})   colours: paper line lemon cherry dim desk, read
+//                                              at each call
+//   I.entry(api, at, name, items)              {at, name, ids, e, kids, value, commit, kind}
+//   I.kind(e)  I.describe(e)                   folder trash text picture app program data
+//                                              pending refused; in words
+//   I.icon(f, e, x, y, on, clear?)  I.size()   the theme's icons, else System 7's pixels
+//   I.art  I.pattern  I.framed                 pictures
+//   I.open(api, path, e)                       opened by kind; a word to say, or null
+//   I.move(api, e, to, toname)                 a node to another name
+//   I.rename(api, e, toname)                   a new name in its folder, where the old name was
+//   I.link(api, e, to, toname)                 placed there too, by id (as ln)
+//   I.free(api, at, n)                         a name not yet used
+//   I.holds(api, at, id)                       the name a folder holds an id at, or null
+//   I.into(api, e, at, link?)                  moved, or (option-cmd) linked, into a folder; its
+//                                              name there. never the Trash, nor into itself
+//   I.land(api, items, at, link?)              a drop's items ({at, name, id}); each {to,
+//                                              already | error}
+//   icons.dropped(api, x, y)                   the front window there, or the desk: {layer, drop},
+//                                              drop its on/drop ([{items, x, y, linked}]) or null
 //
-// A drag let go over another window (icons.dropped): the window there takes it, as the Finder's do: its owner's
-// on/drop, called with [{items, x, y, linked}] (x, y on the screen, each item's grip where the hand held its icon),
-// puts them into the folder under the hand, or its own, where they were let go. My Computer's windows and the
-// desk take drops.
+// layout: /apps/computer/layout/<folder id> = {icons: {<id>: [x, y]}, window?: {x, y, w, h}},
+// in points; keyed by ids, so renames and moves keep it
 //
-//   icons.dropped(api, x, y)                   the front window there, or the desk: {layer, drop}, drop its on/drop
-//                                              or null
-//
-// Where icons sit, the layout: /apps/computer/layout/<the folder's id> (layout.at), a document,
-// {icons: {<a node's id>: [x, y]}, window?: {x, y, w, h}}, in points: a folder arranged by hand, and the
-// window it was last closed in. Keyed by ids, so a rename or a move keeps it; My Computer's and the
-// desk's alike.
-//
-//   icons.folder(api, path)                    the folder's id, or null
-//   icons.layout.at(id)                        its layout's address
-//   icons.keyed(entries)                       each one's key there, e.key: its id (a second at one id, id#name)
-//   icons.spots(ids, saved, slot, cell)        each one's spot: saved, else the first slot no other is on
+//   icons.folder(api, path)  icons.layout.at(id)   a folder's id; its layout's address
+//   icons.keyed(entries)                       e.key: its id (a second at one id: id#name)
+//   icons.spots(ids, saved, slot, cell)        saved, else the first free slot
 //   icons.clean(spots, slot, cell)             each to the nearest free slot, top first
 //   icons.nearest(spots, from, dx, dy)         the one an arrow goes to
 

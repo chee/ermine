@@ -1,36 +1,16 @@
-// drv_vram.c
-// drv_vram.c: /drivers/vram, video memory a program draws into directly: a
-// plane of w × h pixels, 0x00RRGGBB as a layer's, that the compositor shows
-// without the pixels going through the graph.
+// drv_vram.c: /drivers/vram, video memory a program draws into directly: a w × h plane of
+// 0x00RRGGBB the compositor shows without the pixels going through the graph.
 //
-//   /dev/vram/planes/<name>   {w, h}: placed (ephemeral) by the program that wants one;
-//                             the driver makes its plane and says it there, {w, h, id,
-//                             stride, shm}, shm the POSIX shared memory's name (host.h's
-//                             HostPlaneSaid); the plane goes when the node does
-//   /dev/vram/driver/on/put   (id, x, y, w, h, pixels): pixels copied in, rows of w, for
-//                             a program with no way to the memory (deno's runner)
+//   /dev/vram/planes/<name>   {w, h}, placed (ephemeral) by the program; the driver adds {id,
+//                             stride, shm} (host.h's HostPlaneSaid); the plane goes with the node
+//   /dev/vram/driver/on/put   (id, x, y, w, h, pixels): copied in, rows of w (for deno's runner)
 //
-// A call answers nothing (SCHEDULER.tex), so the plane is said in the node:
-// a program reads it there once the driver has run.
-//
-// A program shows its plane in a layer of its own: {..., plane: {source:
-// "vram", id, serial, dirty?: {x, y, w, h}}}. Each time it has drawn, it
-// writes serial one more, and dirty, the rectangle it drew (none: all of
-// it); the compositor (drv_display.c) copies that rectangle out of the plane
-// in its next compose, on the OS's thread, and draws and flips only it.
-//
-// Who may write when: the program, any time, as into a frame buffer. A
-// program in the OS (JavaScriptCore's) runs on the compositor's thread, so
-// its pixels are never read half drawn; an exec program, a Mac process of
-// its own, drawing while a compose copies may tear that frame, and its next
-// serial copies the rectangle again. One wanting no tearing keeps two
-// planes and points its layer at the one it finished.
-//
-// Who reads it finds it by its node: the compositor and the JavaScript
-// runner read /dev/vram/planes for the plane with the layer's id and map
-// what it says (host.h's hostPlaneSaid, hostPlaneMap); an exec program maps
-// the shm name itself (libermine's ermPlane). The name is unlinked once the
-// node goes, each mapping lasting until its holder lets go.
+// a call answers nothing: read the plane from the node once the driver has run.
+// to show it, a layer's plane {source: "vram", id, serial, dirty?: {x, y, w, h}}: serial one more
+// each draw, dirty the rectangle drawn (none: all); the compositor copies only that next compose.
+// writes any time: a JSC program shares the compositor's thread (no tearing); an exec program may
+// tear a frame (two planes avoid it). readers map the shm by the node (hostPlaneMap, libermine's
+// ermPlane); the name is unlinked when the node goes, each mapping lasting till let go.
 
 #include "drivers.h"
 #include "drv.h"

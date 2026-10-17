@@ -1,39 +1,21 @@
-// drv_sock.c: /drivers/sock, the shell on a Unix socket. While ermineOS
-// runs, a person reaches its shell from any Mac terminal: each connection is
-// a line, as /dev/uart0 and a terminal window's are, and a shell runs on it
-// as the console's does (programs/shell, data {line}), as the person.
+// drv_sock.c: /drivers/sock, the shell on a Unix socket: while ermineOS runs, any Mac terminal
+// reaches it. each connection is a line with a shell on it (programs/shell), as the person.
 //
-//   ~/.ermine/shell.sock     the socket ($ERMINE_SOCK instead, if set): the folder 0700, the socket
-//                            0600. A crashed run's is replaced; one another ermineOS listens on is
-//                            left to it, and this one listens nowhere. Unlinked at power off
-//   /dev/sock/socket         {path}: where it listens; null when it does not
-//   /dev/sock/<n>            a connection, ephemeral: {shell}, its shell's pid
-//     rx                     bytes from the socket, the last 4096; stats.rx counts them all
-//     tx                     bytes to send: a writer appends, this driver sends them and empties it
-//     stats                  {rx, tx}: bytes in all, each way
-//     vt                     {cols, rows}: the far terminal's size, as it says it (below); null until it does.
-//                            The shell's pty reads it, as it reads a terminal window's vt
-//     shell                  its shell: programs/shell, data {line: ["dev", "sock", <n>]}
+//   ~/.ermine/shell.sock   ($ERMINE_SOCK if set) folder 0700, socket 0600; unlinked at power off;
+//                          a crashed run's is replaced, a live one's left to it (none here then)
+//   /dev/sock/socket       {path}, or null when not listening
+//   /dev/sock/<n>          a connection, ephemeral: {shell}: its shell's pid
+//     rx                   bytes in, last 4096; stats.rx counts all
+//     tx                   bytes to send: a writer appends, the driver sends and empties it
+//     stats                {rx, tx}: totals
+//     vt                   {cols, rows} as the far terminal says (CSI 8 ; rows ; cols t, sent by
+//                          bin/ermine-shell at start and on SIGWINCH), null till then; also the
+//                          size of each pty session whose to lists this line
+//     shell                programs/shell, data {line: ["dev", "sock", <n>]}
 //
-// Who connects is the person: the socket is the Mac user's, 0600 in a 0700
-// folder, so whoever can open it is already that user, and its shell acts
-// as the person, as the console's does.
-//
-// A connection closing kills its shell and its node; its shell ending (exit,
-// ctrl-d) closes it; its node unplaced does both. The socket's input ending
-// (shut, as bin/ermine-shell does at its own input's end) is a ctrl-d, so a
-// script's last line, run, is the end.
-//
-// The size: CSI 8 ; rows ; cols t, as a terminal reports its own (xterm's
-// window ops, the answer to CSI 18 t), taken out of what comes and written
-// to vt, and to the size of each session whose to lists the line
-// (drivers/pty), as term writes it. bin/ermine-shell sends it at the start
-// and with each SIGWINCH.
-//
-// The thread: polls the listening socket and every connection; something
-// there (or a send that waited) posts {"irq": 64} and waits for the host's
-// turn to take it. The turn (on/irq): connections taken and each given its
-// shell, each read dry into rx, what waited sent, the closed let go.
+// whoever can open the socket is already the Mac user, so the shell acts as the person.
+// a connection closing kills its shell and node; the shell ending closes it; unplacing does both;
+// input shut is a ctrl-d. thread: polls, posts {"irq": 64}; the turn accepts, reads, sends, closes.
 
 #define _DARWIN_C_SOURCE
 

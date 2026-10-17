@@ -1,59 +1,27 @@
-// drv_web.c: /drivers/web, the web engine (irq 49), as image/drivers/web.js
-// was in the TypeScript OS. A program asks for a page by placing an
-// ephemeral node of its own in /dev/web/views, {"url"} or {"html"}, with
-// "state" (what the engine said of it, below) to bring it back where it
-// was; writing another url there goes there, {"go": "back" | "forward" |
-// "reload" | "stop" | "load" (its url, fresh, even the one it had) | a
-// number (that far along its list, below), "n"} goes, and {"focus": true | false, "fn"} gives the
-// page the keyboard or takes it back. What the engine says comes back in
-// /dev/web/pages/<the same name>: title, url, loading, progress, back,
-// forward, focused, error, the last message the page posted with
-// window.ermine.post(...), "open", the last page it would open beside it
-// ({url, behind, n}: a link to a new window, window.open, cmd-click or a
-// middle click; the program that placed the view opens it, or not: the
-// browser as a tab), "cursor", the pointer's shape the page wants where the
-// pointer last was (CSS's name: "default", "pointer", "text", ...), "state",
-// its history and where it is scrolled, opaque, the engine's own (said a
-// second after it settles), "list", its back and forward list, {urls, at}:
-// each item's URL and the current one's index (the engine's, said when it
-// changed); and in /dev/web/pages/<name>/frame, {plane, n, w, h, dirty?},
-// its newest pixels, in its plane. When a view's node goes, with the program
-// that placed it, the page closes.
+// drv_web.c: /drivers/web, the web engine (irq 49), as image/drivers/web.js was in the TS OS
 //
-// A page is drawn off screen, by the engine, in the metal's process; its
-// pixels are a plane of this driver's, as a Mac window's are (drv_mac.c): a
-// file, $TMPDIR/ermine-<pid>.web.<k>, two halves of maxw × maxh u32, rows of
-// maxw. The metal writes a whole frame into the half not shown, only when
-// it differs from the last, says frame (with dirty, what differs), and
-// writes nothing more until webtook; /dev/web/planes/<name> says the plane,
-// {id, w, h, stride, file, offset}, the half the latest frame is in (host.h's
-// HostPlaneSaid). A layer shows a page with "web": {"id", "x", "y",
-// "w", "h"}: the compositor (drv_display.c) draws the page's plane there,
-// over the layer's ops, and tells the metal its size (webshow), so a page
-// no layer shows draws nothing.
+//   /dev/web/views/<name>        a program's ephemeral node: {url} or {html}, state? to restore;
+//                                another url goes there; {go: back|forward|reload|stop|load|<n>, n}
+//                                (<n>: that far along list); {focus: true|false, fn}: the keyboard
+//   /dev/web/pages/<name>        title, url, loading, progress, back, forward, focused, error, post
+//                                (window.ermine.post), open {url, behind, n}, cursor (CSS name),
+//                                state (opaque, the engine's), list {urls, at}
+//   /dev/web/pages/<name>/frame  {plane, n, w, h, dirty?}, its newest pixels
+//   /dev/web/pages/<name>/dom    {count, cut}; under it elements nested as the DOM, <tag>-<k>,
+//                                ids web/<name>/<n>, {tag, x, y, w, h, role?, label?, text?, href?,
+//                                value?, type?, checked?, placeholder?, cut?, more?}
+//   /dev/web/planes/<name>       {id, w, h, stride, file, offset}: the half the latest frame is in
+//   /dev/web/do/<name>           ephemeral: {at, n, act: click|focus|set|type|scroll, value?}
+//                                -> {done: n, error: null | "bad" | "gone"}
+//   /dev/web/driver/on/input     (name, events): irq 34/35 records, x y in the page's pixels
 //
-// Input: the layer's owner hands what wmii gives it on,
-// /dev/web/driver/on/input (name, events), irq 34 and 35 records with x
-// and y in the page's pixels; the metal gives them to the page as the
-// Mac's events (webinput).
-//
-// The page's document, as nodes: /dev/web/pages/<name>/dom, {count, cut},
-// and under it its elements, nested as the DOM nests them, each named
-// <tag>-<k> (k the first free among its siblings of that tag, kept while it
-// lives), ids web/<name>/<n>, valued {tag, x, y, w, h} and, when it has
-// them, role, label, text, href, value, type, checked, placeholder, cut and
-// more (cut: "deep", "rows", "budget"; more: the children not sent). A
-// script the metal puts in each page walks it, at most 24 deep, 200
-// children an element, 2000 in all, text cut at 200, and again at most four
-// times a second while it changes (a MutationObserver), sending only what
-// changed; a new document starts it again (reset). Acting: a program places
-// /dev/web/do/<name> (ephemeral, its own), {at, n, act, value?}, at an
-// element's address or id, act "click", "focus", "set" (value: a field's
-// value, as typed, input and change sent), "type" (value: text typed at its
-// caret) or "scroll" (into view); a new n is a new act, answered in the
-// same node, {done: n, error: null | "bad" | "gone"}.
-//
-// The metal's commands: web, webshow, webtook, webinput, webdo, webpost, webclose.
+// a view's node gone (with its program): the page closes. a layer shows a page with "web": {id, x,
+// y, w, h}; a page no layer shows draws nothing.
+// pixels: drawn off screen in the metal's process into $TMPDIR/ermine-<pid>.web.<k>, two halves of
+// maxw × maxh u32; a frame is written only when it differs, then nothing until webtook.
+// dom: at most 24 deep, 200 children, 2000 in all, text cut at 200; resent at most 4×/s while it
+// changes, only what changed; a new document resets.
+// metal commands: web, webshow, webtook, webinput, webdo, webpost, webclose
 
 #include "drivers.h"
 #include "../../../ermine/encoding/c/json_text.h"

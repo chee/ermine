@@ -1,6 +1,7 @@
 // card.c: the card (card.h), on extensions/sync. Sync holds the table: what the card's store held
-// is written to it at boot (every document on the card, whole: sync takes in all the store holds
-// on its first run), and what comes over the network after; a change the host makes to a kept
+// is written to it as it is followed (sync.h's lazy: the root at boot, then each document the root
+// reaches; a document on the card nothing reaches stays in the store until something places its id:
+// only reachable exists), and what comes over the network after; a change the host makes to a kept
 // table goes out as one commit. What this file adds is the OS's: the card's folder, the root,
 // which documents are followed (the root, what drivers bring, and every document the children
 // entry of a followed one names: kept up entry by entry, "following" below), the places told of
@@ -26,7 +27,8 @@
 // Live state (card.h, the bottom): a fourth kept table, `live`, ephemeral (sync.h): what the sync
 // driver gives (cardLive) is written to it as an entry of the card's own, at most every LIVE_BEAT
 // ms, in the turn, before sync runs (so it goes out in the same turn); never a place, never a
-// commit stored. A peer's standing live state is read from its standing ephemeral commit (sy_standing,
+// commit stored. Withdrawn (cardLive with nothing), it is the stop (sy_stop): the standing commit
+// ends here and at every peer at once, and no beat carries it after. A peer's standing live state is read from its standing ephemeral commit (sy_standing,
 // then the commit's patches on nothing: a `live` table has no stored state under it), and a watched
 // document's standing set is fingerprinted each turn, so the driver is told when it changed (a peer
 // came, moved or lapsed after ttl).
@@ -318,7 +320,7 @@ static void push(Ids *s, const char *id) {
 /** the document's children entry looked at this turn (after the run: never while sync is applying) */
 static void look(Card *c, const char *id) {
 	uint8_t bytes[32];
-	if (c->booting || !tp_doc(id, bytes) || im_has(&c->looking, bytes)) return;
+	if (!tp_doc(id, bytes) || im_has(&c->looking, bytes)) return;
 	im_set(&c->looking, bytes, (void *)1);
 	push(&c->look, id);
 }
@@ -383,10 +385,11 @@ static void checked(Card *c) {
 	c->looked = 0;
 }
 
-/** each document to be looked at: what its children entry names followed, the newly followed looked at in turn */
-static void settle(Card *c) {
+/** each document to be looked at: what its children entry names followed, the newly followed looked at in turn; true: something newly followed (its tree comes from the store or the server in the next run) */
+static bool settle(Card *c) {
 	uint8_t bytes[32];
 	bool any = c->look.count > 0;
+	size_t before = c->followed.count;
 	while (c->look.count) {
 		char *id = c->look.items[--c->look.count];
 		tp_doc(id, bytes);
@@ -403,6 +406,7 @@ static void settle(Card *c) {
 		free(id);
 	}
 	if (any && c->check) checked(c);
+	return c->followed.count > before;
 }
 
 // --- sync
@@ -476,7 +480,13 @@ int64_t cardTurn(Card *c) {
 	int64_t wait = liveTurn(c), ran = run(c);
 	if (ran >= 0 && (wait < 0 || ran < wait)) wait = ran;
 	tellPlaces(c);
-	settle(c);
+	// a document newly followed reads its tree from the store (lazy) in a run: run again for what it
+	// brings, whose children may name more
+	for (int round = 0; settle(c) && round < 16; round++) {
+		ran = run(c);
+		if (ran >= 0 && (wait < 0 || ran < wait)) wait = ran;
+		tellPlaces(c);
+	}
 	// what was written, run
 	if (c->wrote) c->wrote = false, sc_pulse(c->s);
 	if (!c->booting) count(c, 0, 0, 0);
@@ -488,7 +498,9 @@ bool cardStart(Card *c, pl *places, tb_table *table, sc_scheduler *s, const card
 	c->l = places, c->table = table, c->s = s;
 	if (host) c->host = *host;
 	c->check = getenv("ERMOS_CARD_CHECK") != NULL;
-	sy_options o = {.table = table, .store = &c->store, .zeros = true, .tables = KEPT, .tables_length = sizeof KEPT / sizeof *KEPT,
+	// lazy: only what is followed comes off the card (only reachable exists): the root, and what it
+	// reaches, document by document
+	sy_options o = {.table = table, .store = &c->store, .zeros = true, .lazy = true, .tables = KEPT, .tables_length = sizeof KEPT / sizeof *KEPT,
 		.ephemeral = liveTable, .beat = LIVE_BEAT, .commit = committed, .drop = dropped, .context = c};
 	memcpy(o.seed, c->seed, 32);
 	c->sync = sy_create(&o);
@@ -498,16 +510,22 @@ bool cardStart(Card *c, pl *places, tb_table *table, sc_scheduler *s, const card
 	}
 	hex(tp_key(sy_device(c->sync)) + SL_KEY - 32, 32, c->hex); // the Ed25519 key, after the multikey's 0xed 0x01
 	tp_arrived(sy_device(c->sync), arrived, c);
-	// what the card holds, taken in before anything else: sync writes every document on it to the table
+	// the root, followed before the first run, is taken in by it: sync writes it to the table
 	c->booting = true;
+	sy_follow(c->sync, c->root);
 	for (int round = 0; round < 10000; round++) {
 		run(c);
 		if (tp_ready(sy_device(c->sync)) && sy_idle(c->sync)) break;
 	}
 	tellPlaces(c);
-	c->booting = false;
+	// then what the root reaches, level by level: each document followed reads its tree from the
+	// store, and what its children entry names is followed in turn, until nothing new comes
 	follow(c, c->root);
-	settle(c);
+	for (int round = 0; settle(c) && round < 10000; round++) {
+		run(c);
+		tellPlaces(c);
+	}
+	c->booting = false;
 	if (c->wrote) c->wrote = false, sc_pulse(c->s);
 	size_t n = 0;
 	tb_at(table, tb_string(c->root), &n);
@@ -587,16 +605,18 @@ void cardLive(Card *c, const char *doc, const op_value *value) {
 	l->withdraw = value == NULL && l->sent != 0;
 }
 
-/** this device's live state written to the document's live table, the entry the card's own; sync told, as of any table change */
+/** this device's live state written to the document's live table, the entry the card's own; sync told, as of any table change.
+ * A withdrawal is the stop (sy_stop): the entry out of the table, what stood ended here and at every peer at once; no commit */
 static void liveWrite(Card *c, Live *l, uint64_t now) {
 	tb_key part = tb_string("live"), id = tb_string(l->doc);
 	nd_entry *was = tb_get(c->table, part, id);
+	bool stop = l->withdraw;
 	// what was there of the card's own (this document's last, or another's) is freed once out of the
 	// table; sync's own, sync lets go of on its event (notice)
 	Live *owner = NULL;
 	for (size_t i = 0; was && i < c->nlives; i++)
 		if (c->lives[i].entry == was) owner = &c->lives[i];
-	if (l->withdraw) {
+	if (stop) {
 		if (was) tb_del(c->table, part, id);
 	} else {
 		nd_entry *e = nd_make_entry(l->pending, NULL, NULL);
@@ -613,6 +633,10 @@ static void liveWrite(Card *c, Live *l, uint64_t now) {
 	l->pending = NULL;
 	l->withdraw = false;
 	l->sent = now;
+	if (stop) {
+		sy_stop(c->sync, l->doc, "live");
+		return;
+	}
 	sy_table_changed(c->sync, part, id);
 	count(c, 1, 0, 0);
 }
@@ -665,6 +689,26 @@ static void lived(Card *c) {
 		l->print = h;
 		c->lived(c->lived_context, l->doc);
 	}
+}
+
+long cardChanges(Card *c, const char *doc, const char *table, bool (*f)(void *context, const ch_header *change), void *context) {
+	if (!c->sync || !id_is(doc)) return -1;
+	const hy_history *h = tp_history(sy_device(c->sync), doc, TP_STORED);
+	if (!h) return -1;
+	const hy_kept **all;
+	size_t n = hy_all(h, &all);
+	long given = 0;
+	bool on = true;
+	for (size_t k = 0; k < n && on; k++) {
+		if (strcmp(all[k]->table, table)) continue;
+		cm_commit commit;
+		if (cm_decode(all[k]->bytes, all[k]->length, &commit, NULL) != CM_OK) continue;
+		given++;
+		on = f(context, &commit.change);
+		cm_free(&commit);
+	}
+	free(all);
+	return given;
 }
 
 size_t cardStanding(Card *c, const char *doc, card_stand **out) {

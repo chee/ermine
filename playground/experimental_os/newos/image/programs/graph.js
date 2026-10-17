@@ -1,33 +1,18 @@
-// /programs/graph: the graph browser, as Smalltalk's system browser is for
-// classes. Columns go down the tree, one directory a column, each name with
-// its value in a line (what it is and how much, a document's dot or an
-// ephemeral's ring, when it was set); under them the selected node: its
-// value drawn as what it is (the views library's, as the inspector's), and
-// beside it the change that made it, who, and why, the
-// route the read took and every id in its slot. All of it is read in
-// parts, each column and the node one of its own, so it is live: a change
-// anywhere it looks shows at once, reading again and drawing again only the
-// part it touched. Where it
-// is browsing is a node of its own, "at", {path, key}, which any program can
-// read, or write to send it somewhere; key a way into the node's value.
+// /programs/graph: the graph browser, as Smalltalk's system browser. columns down the tree, each
+// name with its value in a line (kind, size, document dot or ephemeral ring, when set); below, the
+// selected node drawn by the views library, with its change, who, why, the read's route and every
+// id in its slot. read in parts (each column, the node), so live, redrawing only what changed.
+// where it is: "at", {path, key}; write it to send it somewhere (key: a way into the value).
 //
-// Keys: the arrows move (into a value's keys, once there are no names
-// below), Enter edits a string, a number or a null in place, turns a
-// boolean over, follows an address, asks a handler's args (JSON, a second
-// Enter calls it, the answer in the footer), or opens the node; e opens it in the
-// editor, a picture in Paint; f follows an address; j shows the value as
-// JSON; x shows whole numbers in hex. Click a name to go there, a key or an
-// address in the value to go into it; the wheel scrolls the value.
+// keys: arrows move (into the value's keys past the last names); Enter edits a string, number or
+// null, flips a boolean, follows an address, asks a handler's args (JSON, Enter again calls it), or
+// opens; e editor (a picture: Paint); f follow; j JSON; x hex; h history. click a name, key or
+// address to go there; the wheel scrolls the value.
+// view state (scroll, JSON, hex, an edit, footer): <its node>/view, ephemeral. its own node and
+// browsers' and inspectors' layers are not read (they change each draw).
 //
-// What it is looking at besides the graph: the value's scroll, JSON or
-// not, hex, a value being edited, the footer's word: <its node>/view,
-// ephemeral, read as it changes: a field another writes is taken on. Its own node, and a browser's or an inspector's layer, are not
-// read: they change each time one draws, so it would never stop drawing.
-//
-// What core does not tell a read yet: whether a node is ephemeral (a dot or a ring is drawn
-// only when an item says), and a change's actor or site (a change says its time, its node and
-// the process that made it). The history (h) is sync's (newos/drv_sync.c): a document's; an
-// ephemeral node has none, and it says so.
+// not yet from core: whether a node is ephemeral, a change's actor or site. history (h) is sync's
+// (drv_sync.c): a document's; an ephemeral node has none.
 import { data, effect, handler, idAt, isStatus, make, put, val, whole } from "ermine:kit"
 import { after, here } from "ermine:os"
 import { blitter, font } from "ermine:draw"

@@ -9,24 +9,24 @@
 // log says it too), then this ends and the node with it. A window to show is
 // the driver's to wait for. From a shell: wm run mac launch TextEdit.
 import { data, drop, effect, idAt, make, val } from "ermine:kit"
-import { here } from "ermine:os"
+import { end } from "ermine:os"
 
 export default (given) => {
-	const { api, self, name } = given
+	const { api, self } = given
 	const [verb, ...rest] = data(given)?.args ?? []
 	const show = rest[0] === "-s"
 	const app = (show ? rest.slice(1) : rest).join(" ")
 	const NAME = `launch-${String(self).replace(/[^A-Za-z0-9]/g, "")}`
 	const DO = ["/", "dev", "mac", "do", NAME]
-	let ask
+	let ask = null
 	// the ask let go (its name would stay a name in /dev/mac/do), then this
-	const end = (api, why) => {
+	const over = (api, why) => {
 		if (why) console.log("mac:", why)
 		if (ask) drop(api, DO.slice(0, -1), NAME, ask)
-		drop(api, here(self).slice(0, -1), name, self)
+		end(given)
 	}
 	if (verb !== "launch" || !app || !idAt(api, ["/", "dev", "mac"])) {
-		return end(api, verb === "launch" && app ? "no /dev/mac" : "mac launch [-s] <app>")
+		return over(api, verb === "launch" && app ? "no /dev/mac" : "mac launch [-s] <app>")
 	}
 	ask = make(api, DO.slice(0, -1), NAME, {
 		n: 1,
@@ -35,6 +35,6 @@ export default (given) => {
 		...(show ? { show: true } : {}),
 	}, { ephemeral: true })
 	effect(given, "answer", ({ api }) => val(api, DO) ?? null, ({ value: d, api }) => {
-		if (d?.done !== undefined) end(api, d.error)
+		if (d?.done !== undefined) over(api, d.error)
 	})
 }

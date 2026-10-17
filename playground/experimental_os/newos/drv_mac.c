@@ -1,38 +1,30 @@
-// drv_mac.c: /drivers/mac, the Mac's other apps (irq 51): every running
-// app's accessibility tree, the whole system's, mirrored as one ephemeral
-// tree under /dev/mac, and a Mac window shown as an ermine window. The
-// metal walks and watches (mac/metal/Mac.swift, Ax.swift, Capture.swift);
-// this driver turns its records into nodes and nodes into its commands.
+// drv_mac.c: /drivers/mac (irq 51): every running Mac app's accessibility tree, mirrored as one
+// ephemeral tree under /dev/mac, and Mac windows shown as ermine windows. the metal walks and
+// watches (Mac.swift, Ax.swift, Capture.swift); this turns its records into nodes and nodes into
+// its commands.
 //
-//   /etc/mac                  a document: {on, depth, app, total, rows, text, hz, skip}; the `mac` command
+//   /etc/mac                  a document: {on, depth, app, total, rows, text, hz, skip}; `mac`
 //   /dev/mac/status           {ax, capture, on, apps, elements, cut}
 //   /dev/mac/focus            {app, element}: addresses, or null
-//   /dev/mac/apps/<pid>       an app: {name, bundle, path, policy, active, hidden, state, electron, elements, cut, order?}
+//   /dev/mac/apps/<pid>       {name, bundle, path, policy, active, hidden, state, electron,
+//                             elements, cut, order?}
 //   /dev/mac/apps/<pid>/<role>-<k>/...   its elements, nested as AX nests them, ids mac/<n>
-//   /dev/mac/do/<name>        a program's {at, n, act, to?, key?, id?}; {sent: n} when sent, the answer {done: n, error, value?} after;
-//                             or {n, act: "launch", app, show?}: the app started, value its pid; show, its first window shown (shown: its id)
-//   /dev/mac/open/<name>      a program's {at, depth?}: the cuts under at lifted while it is here; {n: its id, error} written into it
+//   /dev/mac/do/<name>        a program's {at, n, act, to?, key?, id?}; {sent: n}, then
+//                             {done: n, error, value?}; or {n, act: "launch", app, show?}: value
+//                             its pid; show: its first window shown (shown: its id)
+//   /dev/mac/open/<name>      a program's {at, depth?}: cuts under at lifted while it is here;
+//                             {n: its id, error} written into it
 //   /dev/mac/views/<name>     a program's {window, fps?, input?}: that Mac window shown
-//   /dev/mac/windows/<name>   the shown window's owner {window, app, state, input}: on/key, on/pointer, on/hover
+//   /dev/mac/windows/<name>   the shown window's owner {window, app, state, input}: on/key,
+//                             on/pointer, on/hover
 //   /dev/display/layers/mac-<name>  {x, y, w, h, z, title, owner, drags, plane}
+//   /dev/mac/planes/<name>    {id, w, h, stride, file, offset} (host.h's HostPlaneSaid)
 //
-// Only this driver writes the elements, so a read's from always says the
-// Mac. It keeps a table, n -> (pid, parent, name, role, frame, has
-// AXPress, title), from which it builds addresses, and back to which it
-// resolves a do's at, an open's, a view's window and a click. An at may
-// also be an element's id, mac/<n>: an address names whatever is there
-// now, an id only that element, and a dropped one nothing.
-//
-// Each tree record is answered with mactook {items}: the metal sends no
-// more than a few hundred items ahead of what this has applied, so its
-// walk goes at the pace the graph takes it.
-//
-// A view's pixels are a plane of the driver's: a file, $TMPDIR/ermine-<pid>.mac.<k>,
-// two halves of maxw × maxh u32, rows of maxw, as the frame buffer's. The
-// metal writes a whole frame into the half not shown, says frame, and
-// writes nothing more until took; /dev/mac/planes/<name> says the plane,
-// {id, w, h, stride, file, offset}, the half the latest frame is in (host.h's
-// HostPlaneSaid).
+// only this driver writes the elements. an at: an address (whatever is there now) or an id
+// mac/<n> (that element only; dropped: nothing). tree records are answered with mactook {items},
+// so the metal stays at most a few hundred items ahead. a view's plane: the file
+// $TMPDIR/ermine-<pid>.mac.<k>, two halves of maxw × maxh u32; the metal writes the hidden half,
+// says frame, and writes nothing more until took.
 
 #include "drivers.h"
 #include "../../../ermine/encoding/c/json_text.h"

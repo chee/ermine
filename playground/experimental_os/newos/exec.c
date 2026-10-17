@@ -1,44 +1,25 @@
-// exec.c: the exec runner. A program of type
-// party.chee.ermine.exec, its value {argv: [...]}, is an
-// executable run as a Mac process of its own (posix_spawn), the OS at the
-// other end of a socket on its fd 3 (ERMINE_FD), speaking the ABI below:
-// libermine (lib/libermine.h) for C. argv[0] with no "/" is one of
-// ermineOS's own programs, built beside the OS: programs/<name> in the OS
-// binary's folder (headless.sh), else build/newos/programs/<name> there
-// (build.sh's, beside playground/experimental_os/mac/ermineOS), else
-// ../Resources/programs/<name> (an app's, app.sh's).
+// exec.c: the exec runner. a program of type party.chee.ermine.exec, value {argv: [...]}, runs as a
+// Mac process (posix_spawn), talking to the OS on fd 3 (ERMINE_FD) in the ABI below (libermine,
+// lib/libermine.h, for C).
 //
-// Its process's setup starts it, places on/io inside the process's node,
-// and gives the process's value, {path, argv, mac}: mac its Mac pid. A
-// thread of its own, the pump, moves its bytes and never the OS's thread: in,
-// what the program sends (frames on fd 3, lines on its stdout and stderr),
-// held for the host's turn, which it wakes on EXEC_IRQ; out, the answers and
-// events queued for it. The host's turn calls on/io, as the machine, and the
-// handler answers each frame through its own api: as the machine, then the
-// process (a handler acts as its caller, then the process that placed it). The
-// program's environment says who it is: ERMINE_PID, the process's id, and
-// ERMINE_NODE, its node's path.
+// argv[0] without "/": programs/<name> beside the OS binary, else build/newos/programs/<name>, else
+// ../Resources/programs/<name>.
+// process value: {path, argv, mac} (mac: its Mac pid). env: ERMINE_PID, ERMINE_NODE. its node stays
+// at its path while it runs, so on/io stays where it was put.
+// a pump thread moves the bytes; the host's turn (woken on EXEC_IRQ) calls on/io, which answers
+// each frame as the machine, then the process.
+// backpressure: past FRAMES frames held or FULL bytes untaken its socket is not read; never ended
+// for it. an event past MOST bytes waiting: refused ("busy").
 //
-// A program that does not read: what it asks waits. Past FRAMES frames held,
-// or FULL bytes it has not taken, its socket is not read until it takes them;
-// it is never ended for it, and the OS never waits on it. An event for it
-// past MOST bytes waiting is refused ("busy").
-//
-// Its node is at its path for as long as it runs (a process's row): it is
-// never renamed or moved, so on/io is where it was put.
-//
-// The ABI (frames: abi.h). From the program, each answered in order:
+// ABI (frames: abi.h), answered in order:
 //   {seq, op, fields: {...}} → {seq, ok: v} or {seq, error: {code, message, name?}}
-// op is core's process api, what a JavaScript program's part is given
-// (PROGRAMS.md), fields named: each is a word of the one dispatch (words.h),
-// its fields that word's arguments by name, its answer as Json. An address is
-// a list of names, read from the process's place ("/" first: from the root);
-// cause, in any op's fields, is api.as({cause}):
+// op: a word of the one dispatch (words.h), fields its arguments by name. an address is a list of
+// names from the process's place ("/" first: from the root). cause, in any op: api.as({cause}).
 //   look, lookup, lookups, content {address}      → items
 //   children {address, name?}                     → names; with name, that list's items
 //   info {address, name}                          → items
 //   node {id}                                     → {id, value, info, children}, or null
-//   write {address, patches, index?, slot?}       → time; patches core's {path, range?, value?, move?}
+//   write {address, patches, index?, slot?}       → time; patches: {path, range?, value?, move?}
 //   set {address, name, patches, index?, slot?}   → time
 //   insert {id, name, child, index?, slot?}       → time
 //   remove {id, name, index, slot?}               → time
@@ -48,32 +29,19 @@
 //   create {value?, id?, ephemeral?}              → id
 //   start {address, program, name?, data?}        → pid; program a path, a list of names
 //   call {address, args?}                         → null: a call from a part is queued
-//   handler {name, fn}                            → <process>/on/<name>'s address: a handler
-//                                                   whose calls come to the program as events
-//   here {}                                       → the process's node, ["/", ...] (ermine:os here)
-//   kill {pid}                                    → null: that process killed (ermine:os kill)
-// An item is core's: {id, route, node?: {id}, ephemeral?, up?, refused?,
-// versions?: [{content, change: {time, node?, actor?, reader?, site?,
-// cause?}, because?}]}, a status's version because {layer: "scheduler",
-// place: "status"}. A live value comes as a stand-in of kind "live".
-// From the OS, never answered: {event: fn, args}, a handler the program
-// placed called with args (a list). The program acts on it when it reads it,
-// as its process; the call answers null at once. "io" is the OS's own.
-// An answer it cannot be sent (larger than ABI_MOST, or no encoding) comes as
-// {seq, error} instead.
+//   handler {name, fn}                            → <process>/on/<name>'s address; its calls come
+//                                                   as events
+//   here {}                                       → the process's node, ["/", ...]
+//   kill {pid}                                    → null
+// item: {id, route, node?: {id}, ephemeral?, up?, refused?, versions?: [{content, change: {time,
+// node?, actor?, reader?, site?, cause?}, because?}]}; a live value: a stand-in of kind "live".
+// from the OS, never answered: {event: fn, args}: a handler it placed, called. "io" is the OS's
+// own. an answer too large (ABI_MOST) or unencodable: {seq, error}.
 //
-// What the program prints on its stdout and stderr is said in the OS's log,
-// "exec <pid>: line", and kept in <process>/log, its last 50 lines, a list
-// (ephemeral, the process's).
-//
-// Ending. The program exiting ends its process (hostKill); an exit not 0,
-// or a signal, fails on/io's last run, said in the log as any failed run. A
-// frame that is not one ends it, said in the log.
-// Its process ending (a kill, a window closed) sends the program's process
-// group SIGTERM, shuts its socket, and SIGKILL TERM ms later to what is still
-// there. What it started ends with it: the program exiting sends its group
-// SIGTERM, then SIGKILL TERM ms later to what stays. Power off waits QUIT ms,
-// not TERM. A thread of each program's reaps it: no zombie.
+// stdout/stderr: the OS log ("exec <pid>: line") and <process>/log, its last 50 lines (ephemeral).
+// ending: the program exiting ends its process; exit not 0 or a signal fails on/io's last run; a
+// malformed frame ends it. either way its process group gets SIGTERM, then SIGKILL TERM ms later
+// (QUIT ms at power off). a reaper thread per program: no zombies.
 
 #define _DARWIN_C_SOURCE
 

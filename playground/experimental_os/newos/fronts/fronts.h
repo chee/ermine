@@ -1,16 +1,11 @@
-// fronts.h: ephemeral members in front of a name (FRONTS.md), a places contributor, in newOS until ermine/
-// has one. Places (filesystem/places) maps a name to one id; newOS's programs hold more at a name: an
-// ephemeral node in front of the document there (kit's front: a window dragged, an edit not yet written),
-// an ephemeral node alone at a name (a layer, a handler), so a reader there sees the ephemeral one first
-// and the saved one again once it goes.
+// fronts.h: ephemeral members in front of a name (FRONTS.md), a places contributor. a reader at a
+// name sees the ephemeral node first, the saved one again once it goes.
 //
 //   (front, P).value = { client: ["@drag"], layers: ["@win7", "@win9"] }
 //
-// a part on the parent's id (by the id, as children goes, so a walk from an id finds them too): each name a
-// list of ids, the first answering first. Asked before children (the contributors' order), a front shadows
-// what children has at the name while it is there; the rest of the list, and what children has, are the
-// name's other members (fr_members). Its names are the names with fronts: a name held only by an ephemeral
-// is listed.
+// a part on the parent's id: each name a list of ids, the first answering first. asked before
+// children, it shadows children's entry at the name; the rest are the name's other members
+// (fr_members). a name held only by an ephemeral is listed.
 //
 //   fr_fronts fronts;
 //   fr_init(&fronts, FR_PART);
@@ -19,14 +14,10 @@
 //   fr_add(p, table, FR_PART, parent, "client", tb_string("@drag"), 0, header, &changed, &made);
 //   pl_commit(p, &changed);
 //
-// the fronts are never saved: whoever saves leaves the part out (they are what is running now, on this
-// device, as processes' rows). Nothing here takes a front out when what made it ends: who does is open.
-//
-// writes: plain functions on the table, as processes' are, each giving the entries it changed for
-// pl_commit: one patch at the name, so a front coming or going marks that name and nothing beside. The
-// first front under a parent makes the part's entry (a table event tells readers): *changed nothing,
-// *made the entry (the places' own), for the caller to hold the header's block on. Refused: a pl_code,
-// nothing changed.
+// never saved: whoever saves leaves the part out. writes give the changed entries for pl_commit,
+// one patch at the name. the first front under a parent makes the part's entry: *made, for the
+// caller to hold the header's block on. refused: a pl_code, nothing changed.
+// open: who takes a front out when what made it ends.
 #ifndef NEWOS_FRONTS_H
 #define NEWOS_FRONTS_H
 

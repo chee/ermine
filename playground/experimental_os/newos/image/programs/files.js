@@ -1,33 +1,19 @@
-// /programs/files: the whole graph as a file browser, catclock's Files (playground/catclock/web/files.ts) on
-// ermineOS. On the left the places (the root, what is at the top), what runs, and what changed last; in the
-// middle the nodes as icons, as a list (folders open in place), as columns (one a level, walked by clicking) or
-// as a map (the whole graph as a tree); on the right the one picked: its value, its last change (when, who,
-// where) and its attributes. Drawn from what the graph holds: every node is read, so a change shows here as it
-// lands, the changed item lit up in lemon for a moment. A double click goes into a node with names under it, or
-// opens it: a picture in Paint, the rest in the editor (as the graph browser's e).
+// /programs/files: the whole graph as a file browser (catclock's Files on ermineOS). left: places,
+// what runs, what changed last; middle: icons, list, columns or map; right: the one picked, its
+// value, last change and attributes. live: a change lights its item in lemon. double click goes in,
+// or opens: a picture in Paint, the rest in the editor.
 //
-// Read in parts, as the graph browser reads: the root and the folders at the top are one part's, and every node
-// two down (three under /dev, /apps and /proc; a process there alone, each node in it apart) is a region, walked
-// whole by one of 96 parts, by its path's hash; so a change reads again only the part its region is in, a few
-// nodes, not the whole graph. What changes as windows draw or move is listed but not read (each window's layer and
-// text, the compositor's frames, again and its driver's state, a font's pages, video memory, where the pointer and
-// each window are): read, this window would draw again each time it drew, and at each move of a hand. Nor is its
-// own node read, nor what a graph browser, an inspector or another of these keeps inside its process.
+// read in parts: the root and top folders one, then each region two down (three under /dev, /apps,
+// /proc) in one of 96 parts by its path's hash. listed, not read: what ticks each second or changes
+// as windows draw or move, its own node, other browsers' process state; picked, read once.
+// drawn in keyed segments; a paint rewrites only the changed ones, as splices.
+// what runs: each process and each computed node (change site "compute") with its status
+// (ermine.computer.status): pending, timed from first seen here, or an error.
+// not yet: what a pending run waits on.
 //
-// Drawn in segments, as the graph browser draws: a row, a tile, a cell or a box each, its key what it is drawn
-// from; a paint draws again only the segments whose keys changed, and writes only their ops, as splices.
-//
-// What runs, as far as a program can see it: each process (a row of ermine/processes: an item from
-// "process") and each computed node (a node whose value its own compute writes: its change's site is
-// "compute", by itself), with its status, which the scheduler keeps on its node (ermine.computer.status):
-// pending while a run waits on a promise, an error when one failed. A program is not told the scheduler's
-// runs, so what a pending run read is not known here: a pending node is marked itself, an hourglass, and its
-// wait is timed from when this window first saw it pending.
-//
-// Which view it shows is kept at view beside it (/apps/files/view), a document, as catclock keeps it in the
-// browser, once it has stayed a moment. Keys: the arrows move, Enter goes in or opens, Backspace (or cmd-up) goes up, cmd-[ and cmd-] back
-// and forward, cmd-1 to cmd-4 the views, e the editor, Escape lets the one picked go. The wheel scrolls what is
-// under it.
+// view: /apps/files/view, a document, kept once it has stayed a moment.
+// keys: arrows move, Enter in or open, Backspace or cmd-up up, cmd-[ cmd-] back/forward, cmd-1…4
+// views, e editor, Escape unpicks. the wheel scrolls.
 import { effect, handler, idAt, isStatus, make, snap, val } from "ermine:kit"
 import { after, here } from "ermine:os"
 import { blitter, font } from "ermine:draw"
@@ -125,25 +111,41 @@ export default (given) => {
 
 	// ---- reading: every node, in parts
 
-	// what is not read, only listed: this window's own node; what changes as windows draw; a font's pages and the
-	// font ROM (large, and they change as any program asks for a page); what a browser keeps inside its process.
-	// A pattern holds a path that starts with it, * any name
+	// what is not read, only listed: this window's own node; what ticks each second; what changes as windows draw; a
+	// font's pages and the font ROM (large, and they change as any program asks for a page); what a browser keeps
+	// inside its process. A pattern holds a path that starts with it, * any name
 	const own = (path) => under(path, me.slice(1))
 	const QUIET = [
+		// each second: the clock; the bar's clock (status's, in its node and on the window manager's right bar); the
+		// window manager's bar, drawn with it; each irq line's counts, while it fires (vsync's, each frame); the serial
+		// line's bytes and counts, with each byte on the console; sync's link, with each change it carries
+		["dev", "clock", "*"],
+		["apps", "status", "*", "clock"],
+		["dev", "wm", "rbar", "7clock"],
+		["dev", "wm", "*", "bar"],
+		["hw", "irq", "*"],
+		["dev", "uart0", "stats"],
+		["dev", "uart0", "tx"],
+		["dev", "uart0", "rx"],
+		["dev", "sync", "link"],
+		// what a driver keeps inside its process
+		["dev", "*", "driver", "*"],
 		["dev", "display", "layers", "*"],
 		["dev", "display", "text", "*"],
 		["dev", "display", "frames"],
 		["dev", "display", "again"],
-		["dev", "display", "driver", "*"],
-		["dev", "mac", "driver", "views"],
 		["dev", "font", "*", "pages", "*"],
 		["hw", "font"],
 		["dev", "vram", "planes", "*"],
 		// what moves as a hand moves or drags a window: where the pointer is, where each window is, the window manager's
-		// record of each (a drag writes it, in front, each move)
+		// record of each (a drag writes it, in front, each move), what the hand is doing, and its events (each click
+		// and key), as the window manager and wmiirc keep them
 		["dev", "pointer", "at"],
 		["dev", "display", "windows", "*"],
 		["dev", "wm", "client", "*"],
+		["dev", "wm", "hand"],
+		["dev", "wm", "event"],
+		["apps", "wmiirc", "*", "events"],
 		["apps", "graph", "*", "*"],
 		["apps", "inspect", "*", "*"],
 		["apps", "files", "*", "*"],
@@ -182,7 +184,8 @@ export default (given) => {
 		return `o{${ks.map((k) => `${k}:${sigOf(v[k], depth + 1)}`).join(",")}}`
 	}
 	// a node as it is read: its first member (reads are lists: the rest only counted), its value and the change that
-	// set it, its status; a quiet one only looked at, its value not read
+	// set it, its status; a quiet one only asked for an attribute it has not (info: its id, and no value carried over,
+	// as a look carries the value too)
 	const read = (rd, path) => {
 		const it = {
 			path,
@@ -205,7 +208,7 @@ export default (given) => {
 		}
 		let list
 		try {
-			list = it.quiet ? rd.look(["/", ...path]) : rd.content(["/", ...path])
+			list = it.quiet ? rd.info(["/", ...path], "quiet") : rd.content(["/", ...path])
 		} catch (e) {
 			it.refused = why(e)
 			return it
@@ -217,6 +220,7 @@ export default (given) => {
 		it.ephemeral = first.ephemeral === true
 		it.arriving = !first.node
 		it.process = first.from === "process"
+		if (it.quiet) return it
 		const v = first.versions?.find((x) => !isStatus(x)),
 			st = first.versions?.find((x) => isStatus(x))?.content
 		if (v) {
@@ -361,7 +365,8 @@ export default (given) => {
 	const ready = () => parts.every((p, k) => p && (k === N || p.used !== null))
 
 	// ---- what the graph holds, as one: each node by key; each id's keys (a node placed twice is two)
-	let items = new Map(), looks = 0
+	const items = new Map()
+	let looks = 0
 	// what changed since the last look: lit up for a moment (when, ms); seen, in order, for "changed lately"; each
 	// pending node since when this window first saw it so
 	const lit = new Map(), seen = new Map(), since = new Map()
@@ -515,9 +520,14 @@ export default (given) => {
 		const d = new Date(secs(t) * 1000)
 		return `${d.getHours()}:${two(d.getMinutes())}:${two(d.getSeconds())}`
 	}
+	// a time, as of the draw (T, below); and when the words would change: "just now" at ten seconds, "N s ago" the
+	// next second, "N min ago" the next minute, a clock's never. The soonest of a draw's says when to draw again
+	let due = Infinity
 	const ago = (t) => {
 		if (!t) return "—"
-		const x = Date.now() / 1000 - secs(t)
+		const x = T / 1000 - secs(t)
+		const next = x < 10 ? 10 - x : x < 60 ? 1 - (x % 1) : x < 3600 ? 60 - (x % 60) : Infinity
+		due = Math.min(due, T + next * 1000)
 		return x < 10
 			? "just now"
 			: x < 60
@@ -1291,6 +1301,7 @@ export default (given) => {
 	const pages = (role) => items.get(`dev/font/${role}/pages`)?.names.join(",") ?? ""
 	const draw = (g) => {
 		T = Date.now()
+		due = Infinity
 		const look = JSON.stringify([
 			W,
 			H,
@@ -2744,7 +2755,8 @@ export default (given) => {
 	}
 
 	// ---- painting: what changed of the draw list written: at once for a key or a click, else (the graph changed, a
-	// blink's next step, a wait's tick, the times it says, "12 s ago", every so often) GAP ms after the last at least.
+	// blink's next step, a wait's tick, the times it says, "12 s ago", when they would change, every so often at most)
+	// GAP ms after the last at least.
 	// A paint owed is a timer (a handler node, made and let go): one owed within slack ms of when another is wanted
 	// is that one, not cancelled and made again
 	const GAP = 250
@@ -2837,9 +2849,11 @@ export default (given) => {
 		held = { w: W, h: H, title, access }
 		if (patches.length) api.write(LAYER, patches)
 		menus(api)
-		// again at the blink's next step while something is lit or waits; else for the times it says, now and then
+		// again at the blink's next step while something is lit or waits; else when the times it says would change, now
+		// and then at most; none said, or all an hour old: not until something changes
 		for (const [k, t] of lit) if (T - t >= BLINK) lit.delete(k)
-		later(g, lit.size || since.size ? STEP : 15000)
+		if (lit.size || since.size) later(g, STEP)
+		else if (due < Infinity) later(g, Math.max(15000, due - T))
 	}
 	// its menus, in the menu bar while its window has the focus (/programs/wmii): an item with a key is that chord,
 	// pressed (on/key, below); one with call calls on/menu

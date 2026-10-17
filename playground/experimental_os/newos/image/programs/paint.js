@@ -1,54 +1,23 @@
-// /programs/paint: a picture editor, MacPaint's FatBits with what a pixel
-// artist reaches for (Aseprite's keys), for any picture node: {kind:
-// "picture", colors: {letter: 0xRRGGBB}, rows: [...], tile?, hot?,
-// layers?}, a letter not in colors clear (computer.js says what a picture
-// is). It is given the node's address as data, {path}, as the editor is; My
-// Computer opens a picture in it. The window is the picture's name.
+// /programs/paint: a picture editor, MacPaint's FatBits with Aseprite's keys. given {path} as data,
+// as the editor is. a picture: {kind: "picture", colors: {letter: 0xRRGGBB}, rows: [...], tile?,
+// hot?, layers?} (computer.js). top: tool options, grid, mirror, zoom; left: tools, the colours
+// in front and behind; right: the picture at size, colours, layers, history; bottom: status.
 //
-// Across the top, what the tool in hand does (its size, its shape, filled or
-// not) and, at the right, the grid, mirroring and the zoom. On the left the
-// tools, two by two as MacPaint's are, and under them the colour in front
-// and the one behind. On the right the picture at its size (a point a
-// pixel), its colours, its layers and what was done to it. Along the bottom
-// where the pointer is, and what happened. The rest is the picture, fat.
+// tools: p pencil (pixel-perfect), b brush, e eraser ([ ] size, square or round), g fill (4-way or
+// every pixel of a colour), l line, u rectangle, o ellipse (shift square, option from the middle),
+// i dropper, m marquee, q lasso, h hand (or space), t hot spot (a cursor's). shift-click: a line
+// from the last point; option-click picks a colour; the right button paints the back colour; x
+// swaps, d black and clear. a selection drags (option copies), arrows nudge it, painting stays
+// inside it.
 //
-// Tools: p pencil (one pixel, pixel-perfect: an L's corner is taken back), b
-// brush and e eraser (sizes, [ and ], square or round), g fill (four-way, or
-// every pixel of that colour), l line, u rectangle, o ellipse (shift square,
-// option from the middle), i dropper, m marquee, q lasso, h hand (or hold
-// space), t the hot spot (a cursor's: /etc/cursors/*). Shift-click draws a
-// line from the last point; option-click takes a colour; the right button
-// paints in the colour behind. x swaps the two, d makes them black and
-// clear. A selection is moved by dragging inside it (option, a copy), the
-// arrows nudge it; painting stays inside it. Every menu item says its key.
-//
-// Layers are the picture's: each its own rows, in the picture's colours,
-// the one on top showing where it is not clear. Saved, rows is them all
-// flattened, which every other reader reads, and layers is kept beside it
-// (a proposal, the owner's to decide); a picture with one layer is saved as
-// it always was.
-//
-// cmd-s writes the node back, every field it had kept, as you, through
-// protect, so a rule may refuse it, and says so. /apps/cursor follows
-// /etc/cursors/*, so a cursor saved is the cursor at once. If the node
-// changes while you paint, this says so; untouched, it follows the change.
-//
-// What is not saved is a draft, a document in drafts beside this process,
-// named by the path, its names between colons (/apps/paint/drafts/
-// home:Pictures:Cherries), as the editor's: the layers as painted, the
-// change it was made from, what undo and redo have; written as each stroke
-// ends, so a crash, a boot or a close loses none of it. Saved, the draft
-// goes. The tool, the colours in hand, the zoom, the selection, a dialog,
-// what the footer says are the node view, inside this process's, read as it
-// changes: a field another writes is taken on.
-//
-// The picture, fat, is drawn in video memory (/dev/vram), a plane as big as
-// the window that its layer shows under its ops, which leave its room
-// undrawn, and the picture at its size and where the pointer is with it: a
-// stroke, a pan or the pointer passing draws only what changed into the
-// plane and says that rectangle drawn, so none costs a draw list or a
-// compose of the window. The rest are ops, written when what they show
-// changes, with the plane as a whole (no dirty).
+// layers: saved flattened into rows (what other readers read), layers kept beside it (open); one
+// layer saves as before. cmd-s writes as you through protect, saying if refused; a saved cursor is
+// live at once (/apps/cursor follows /etc/cursors/*). the node changed while painting: it says so;
+// untouched, it follows.
+// drafts: /apps/paint/drafts/<the path's names joined by ":">: layers, base change, undo and redo,
+// written each stroke; saved, the draft goes. view state: <its node>/view.
+// the fat picture is drawn into a /dev/vram plane under the layer's ops; a stroke, a pan or the
+// pointer draws only the changed rectangle. the rest are ops, written when they change.
 import {
 	data,
 	drop,

@@ -1,30 +1,18 @@
-// /programs/desk: the desk's icons, as the Mac's desktop shows ~/Desktop: each node in /home/desktop an
-// icon on the desk, live (placed, renamed or let go, at once), and the Trash, /home/Trash, at the bottom
-// right. Drawn as My Computer draws them (icons, the tool): pictures small, applications their own icon,
-// folders as folders, the rest by kind; opened as My Computer opens them (a folder or a picture in a My
-// Computer window of its own).
+// /programs/desk: the desk's icons, as the Mac shows ~/Desktop: each node in /home/desktop, live,
+// and the Trash (/home/Trash) bottom right; drawn and opened as My Computer does.
+// layer /dev/display/layers/desk: the screen, z -950 (over the root, under the windows and the
+// ermine's -900), clear where clear; owned, drags: true. wmii still tells the policy a RootClick
+// and sends it keys while no window has focus.
 //
-// Its layer, /dev/display/layers/desk: the screen, over the desk (root) and under the windows (z -950,
-// under the ermine's -900), its clear pixels clear; owned, so the window manager sends it the clicks on
-// the desk, and drags: true, every move and the up after them. wmii tells the policy a click on it as a
-// RootClick still, and sends it the keys while no window has the focus.
+// click selects, shift-click toggles, a drag on the empty desk a rectangle; double-click, Return or
+// cmd-o opens. a drag moves the selection, no snapping; onto a folder, the Trash or a My Computer
+// window, into it (on/drop, icons.dropped). option-cmd links instead; cmd-l makes "<name> link".
+// Clean Up (world menu, on/menu clean) puts each on the grid. arrows select the nearest, typing by
+// name, cmd-Backspace Trash, Escape none.
 //
-// Click selects (the name inverted), shift-click adds or takes one away, a drag on the empty desk a
-// rectangle. Double-click, Return or cmd-o opens. A drag moves the icons selected, where they are let
-// go, no snapping, kept whole between the bars; onto a folder's icon, into that folder; onto the Trash,
-// into it; onto a My Computer window, into its folder, or the folder under the hand there (the window
-// takes them, its on/drop, icons.dropped). A My Computer window's icon dropped here comes the same way,
-// on/drop: into the folder under the hand, or /home/desktop, where it was let go. Option-cmd held, a
-// link there instead (the same node placed again, by its id, as the shell's ln); cmd-l makes one beside
-// it, "<name> link". A folder that holds the node already: moved, the name it came from goes; linked,
-// nothing. Clean Up (the world menu, on/menu clean) puts each on the nearest place of the grid. Arrows
-// select the nearest that way, typing selects by name, cmd-Backspace the Trash, Escape none.
-//
-// Where they are: the folder's layout (icons.layout.at(its id), /apps/computer/layout/<id>), its desk,
-// {<a node's id>: [x, y]}, points from the screen's top left; My Computer keeps its window's in its icons.
-// None there: a column from the top right, down, then the next to its left. A drag is the slot trick
-// (front): the layout in front while it moves, written once when it is let go. A new node, in a folder
-// arranged, gets the first free place, written. The selection: <its node>/view, {chosen: [ids]}.
+// positions: /apps/computer/layout/<id> (icons.layout.at), {<node id>: [x, y]} from the screen's
+// top left; none: a column from the top right. a drag fronts the layout, written once on drop; a
+// new node gets the first free place. selection: <its node>/view, {chosen: [ids]}.
 import { effect, front, handler, idAt, make, val, whole } from "ermine:kit"
 import { here } from "ermine:os"
 import { blitter, font } from "ermine:draw"

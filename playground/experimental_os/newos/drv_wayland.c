@@ -1,31 +1,18 @@
-// drv_wayland.c: /drivers/wayland (../wayland/NOTES.md). A Wayland
-// compositor (way.c) on a real Unix socket, so any Mac process built against libwayland-client is a client: weston's clients,
-// waypipe-darwin carrying Linux clients. Each toplevel is a window as
-// wmii knows one: a layer in /dev/display/layers, its owner a node of the
-// driver's, /dev/wayland/windows/<id>, whose on/key and on/pointer wmii
-// calls; a popup is a layer with no title, over its parent.
+// drv_wayland.c: /drivers/wayland (../wayland/NOTES.md). a Wayland compositor (way.c) on a real
+// Unix socket, so any Mac process built against libwayland-client is a client (weston's clients,
+// waypipe-darwin carrying Linux ones). each toplevel is a window as wmii knows one; a popup is an
+// untitled layer over its parent.
 //
-//   /dev/wayland/socket     {display, runtime}: WAYLAND_DISPLAY and XDG_RUNTIME_DIR for a client
-//   /dev/wayland/windows/<id>  {title, app_id}, the owner of window <id>'s layer: on/key,
-//                           on/pointer, on/hover (moves with no button down); unplaced
-//                           (wmii's close): the client is asked to close
+//   /dev/wayland/socket               {display, runtime}: WAYLAND_DISPLAY, XDG_RUNTIME_DIR
+//   /dev/wayland/windows/<id>         {title, app_id}: the layer's owner, on/key, on/pointer,
+//                                     on/hover; unplaced (wmii's close): the client asked to close
 //   /dev/display/layers/wayland-<id>  {x, y, w, h, z, title, owner, drags, plane}
+//   /dev/wayland/planes/<id>          {id, w, h, stride, shm}: the window's pixels
 //
-// A layer's pixels are not in the graph: plane {source: "wayland", id,
-// serial} names the window's plane, /dev/wayland/planes/<id> {id, w, h,
-// stride, shm}: POSIX shared memory of the window's geometry, which the
-// compositor (drv_display.c's render) finds by that node and copies from
-// (host.h's hostPlane); serial is the window's commits, so each new image
-// is a change to the layer. The image is way.c's copy of the client's
-// buffer, made at commit, after which the buffer was released: a client
-// never waits on the compositor, and never sees release before its pixels
-// are copied. Each commit this driver copies the geometry into the plane,
-// on the OS's thread, in its turn.
-//
-// The thread: polls the compositor's fd; something there posts {"irq": 62}
-// and waits for the host's turn to take it, then at least 1/60 s, which
-// paces every client's frames. The turn (on/irq): way_dispatch, each
-// window's layer brought up to date, then frame callbacks done.
+// plane {source: "wayland", id, serial}, serial counting commits. way.c copies the client's buffer
+// at commit, then releases it (a client never waits); this copies it into the plane on its turn.
+// thread: polls the fd, posts {"irq": 62}, waits for the turn, then at least 1/60 s (paces every
+// client's frames). the turn: way_dispatch, layers brought up to date, frame callbacks done.
 
 #include "drivers.h"
 #include "drv.h"

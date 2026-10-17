@@ -1,44 +1,24 @@
-// /programs/computer: My Computer, a Finder for the graph. It opens at
-// /home, the person's own folder, and shows a node's names as icons: a
-// folder is a node that holds others, or nothing yet; a file is a node with
-// a value (a note is a string, a picture is {kind: "picture"}); any node may
-// be both, and opens as a folder. The arrow goes up, the path bar at the
-// bottom goes to any folder above, as far as /, the whole graph. Where it is
-// is a node of its own, at/<its name> beside it (/apps/computer/at/<name>), a
-// document: {path}. Write it to send it somewhere. Its name is kept across a
-// boot (the window manager's launch), so the window comes back at the folder
-// it showed. What is selected, the scroll, a dialog, a picture shown and the
-// footer's word are the node view, inside this process's, read as it
-// changes: a field another writes is taken on. The title is the folder's
-// name, or the picture's; My Computer at /.
+// /programs/computer: My Computer, a Finder for the graph. opens at /home; shows a node's names as
+// icons. folder: a node holding others, or nothing yet; file: a node with a value; both: opens as a
+// folder. the arrow and the path bar go up, as far as /.
+// where it is: /apps/computer/at/<name>, {path}, kept across a boot; write it to send it somewhere.
+// selection, scroll, dialog, picture shown, footer: <its node>/view.
 //
-// A picture is pixel art, as the desk's rabbit is: {kind: "picture", colors:
-// {letter: 0xRRGGBB}, rows: ["..kk..", ...], tile?}, a letter not in colors
-// clear; a tile repeats. "Set as Desktop" writes its path to
-// /etc/desktop/picture, which wmii draws on the desk. "Paint" opens it in
-// /programs/paint, which paints it pixel by pixel; "New Picture" makes one there.
-// "New C Program" makes a program in C, its info ermine.program.provisions
-// {needs: ["c"]}, from the template /lib/c/hello.c, and opens it in the
-// editor's C mode (CLOADER.md, What a person does).
+// picture: {kind: "picture", colors: {letter: 0xRRGGBB}, rows: ["..kk..", ...], tile?}, a letter
+// not in colors clear. "Set as Desktop" writes /etc/desktop/picture; "Paint" and "New Picture" use
+// /programs/paint; "New C Program" makes one from /lib/c/hello.c (info ermine.program.provisions
+// {needs: ["c"]}) and opens it in the editor's C mode.
+// double-click: a folder goes in, a picture shows, an app ({kind: "app", run, icon}) runs, the rest
+// opens in /programs/edit. "Connect…" mounts an id (ermine://… or bare hex). Trash: /home/Trash; in
+// the Trash, lets go.
+// drag: moves where dropped; onto a folder, the Trash, another My Computer window or the desk
+// (/home/desktop), into it, through its on/drop (icons.dropped). option-cmd links instead; cmd-l
+// makes "<name> link" beside it. a dialog open or a picture shown takes no drops. into a folder
+// already holding it: a move drops the old name, a link does nothing.
 //
-// Double-click opens: a folder goes in, a picture shows, an application
-// ({kind: "app", run, icon}, /Applications's) runs, anything else opens in the
-// editor (/programs/edit), which saves with cmd-s. "Connect…" mounts
-// a node by its id, ermine://… or the bare hex, as the shell's mount does.
-// Trash moves a node into /home/Trash; in the Trash it lets it go.
-//
-// A drag moves an icon where it is let go, kept in sight; onto a folder's icon or the Trash, into it; onto
-// another My Computer window, into its folder (or the folder under the hand there); onto the desk, into
-// /home/desktop (or the desk's folder under the hand). The window or the desk there takes it: its on/drop
-// (icons.dropped), as this one's takes theirs; a window with a dialog open, or a picture shown, takes
-// none. Option-cmd held, a link there instead; cmd-l makes one beside it, "<name> link". A folder that
-// holds the node already (a link of it): moved, the name it came from goes; linked, nothing.
-//
-// Keys: arrows select, a letter selects the first name it starts; cmd-o or
-// cmd-down opens, cmd-up goes up, Enter renames, cmd-n a new note, cmd-shift-n
-// a new folder, cmd-Backspace the Trash, cmd-k connects, cmd-e edits the
-// selected node's value even when it is a folder, cmd-p paints the selected
-// picture, or the one shown. The wheel scrolls.
+// keys: arrows select, a letter the first name it starts; cmd-o or cmd-down open, cmd-up up, Enter
+// renames, cmd-n new note, cmd-shift-n new folder, cmd-Backspace Trash, cmd-k connect, cmd-e edit
+// the value, cmd-p paint. the wheel scrolls.
 import { drop, effect, front, handler, idAt, make, snap, val, whole } from "ermine:kit"
 import { after, here } from "ermine:os"
 import { blitter, font } from "ermine:draw"

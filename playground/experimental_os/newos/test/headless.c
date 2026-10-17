@@ -1,28 +1,18 @@
-// headless.c: ermineOS with no window, as the old OS's
-// headless metal was: a device tree for no Mac in particular, frame
-// buffers in memory, a font ROM and a font chip of boxes, vsync answered at
-// once, the serial line on stdin and stdout. A line starting "!" is a hand
-// on the machine:
+// headless.c: ermineOS with no window: a device tree for no Mac in particular, frame buffers in
+// memory, a font ROM and a font chip of boxes, vsync answered at once, the serial line on stdin and
+// stdout. a line starting "!" is a hand on the machine:
 //
 //   !key Enter [mods...]   !type text   !click x y   !move x y   !drag x0 y0 x1 y1   !post {record}
 //   !compose text   !commit text   !shot file.ppm   !wait ms   !stats label
-//   !page id rrggbb [x y w h]   a web page's next frame: that rectangle (all of it) painted, with dirty
-//   !nav id url   !replace id url   a web page going there itself (a link, pushState), or its URL replaced (a redirect)
+//   !page id rrggbb [x y w h]   a web page's next frame: that rect (default all) painted, dirty
+//   !nav id url   !replace id url   a web page going there itself, or its URL replaced
 //
-// !stats says what the OS commanded since the last, and the CPU it took: each op's count, bytes
-// and the pixels it had the metal copy; then counts again.
-//
-// Layers mode, as the Mac's: the mode record says layers: true, and the
-// compositor sends each layer as a tile (layers); this keeps each tile's
-// pixels, place, depth and shadow, and !shot stacks them, shadows drawn as
-// a Gaussian blur of their box. HEADLESS_LAYERS=0: the frame buffer, flipped,
-// as before; HEADLESS_SHADOWS=0: tiles stacked without their shadows, to
-// compare with it pixel for pixel. HEADLESS_CURSOR logs each layers command,
-// [layers], with flips.
-//
-// The Mac menu bar's menus command is logged, [menus] n, each menu's title and items (the world
-// menu first, titled ermine), with their chords, (on) when checked, a submenu's items in { };
-// a choice there is !post {"irq": 33, "event": "menu", "n": n, "menu": m, "item": i, "sub"?: [j]}.
+// !stats: each op's count, bytes and pixels copied, and the CPU, since the last
+// layers mode: each tile's pixels, place, depth and shadow kept; !shot stacks them, shadows as a
+// Gaussian blur. HEADLESS_LAYERS=0: the frame buffer, flipped; HEADLESS_SHADOWS=0: no shadows;
+// HEADLESS_CURSOR: each layers command logged, [layers], with flips
+// menus: logged as [menus] n (titles, items, chords, (on), submenus in { }); a choice is
+//   !post {"irq": 33, "event": "menu", "n": n, "menu": m, "item": i, "sub"?: [j]}
 //
 //   headless [--w W] [--h H] [--unit U] [--sd DIR] [--image DIR] [--runner FILE] [--fresh]
 

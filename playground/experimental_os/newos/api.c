@@ -510,8 +510,10 @@ static const ap_error *items_at(ap_api *a, const char *const *address, size_t n,
 	return NULL;
 }
 
+// what is at an address: items without their values (no versions read or tracked), so a look is told
+// of placements, not of every change of what is placed; content reads the values too
 const ap_error *ap_look(ap_api *a, const char *const *address, size_t n, ap_items *out) {
-	return items_at(a, address, n, 1, out);
+	return items_at(a, address, n, 0, out);
 }
 
 const ap_error *ap_content(ap_api *a, const char *const *address, size_t n, ap_items *out) {

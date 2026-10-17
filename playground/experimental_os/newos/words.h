@@ -1,37 +1,33 @@
-// words.h: the API's words (api.h), each by name, from values to a value: the one dispatch. A
-// program's part says a word with its arguments (look, lookup, lookups, content, children, info,
-// node, write, set, insert, remove, pop, rename, move, create; start, call, onCleanup) and gets an
-// answer or an error. Every runner calls this and translates only its own transport to and from
-// op_values: the JavaScript runner (jsc.c) its JSValues, the exec ABI (exec.c) its CBOR frames, the
-// dlopen runner (dylib.c) its table of values, the drivers' kit (drv.c) its Json. Items (what a
-// read gives) and patches (what a write takes) are made from and into values here, once.
+// words.h: the API's words by name, values in, a value out: the one dispatch. every runner (jsc.c,
+// exec.c, dylib.c, drv.c) translates only its own transport to and from op_values; items and
+// patches are made from and into values here. arguments positional (js/runner.ts, apiOf), absent
+// NULL; wdFields gives their names (exec.c's fields)
 //
-// The arguments are positional, as the runner's api takes them (js/runner.ts, apiOf), an absent
-// one NULL; wdFields gives their names, as the exec ABI's fields name them (exec.c's header):
-//
-//   look, lookup, lookups, content  address                         → items
-//   children                        address, name?                  → names; with name, that list's items
-//   info                            address, name                   → items
-//   node                            id                              → {id, value, info, children}, or none
-//   write                           address, patches, index?        → time
-//   set                             address, name, patches, index?  → time
-//   insert                          id, name, child, index?         → time
-//   remove, pop                     id, name, index                 → time
-//   rename                          id, name, to                    → time
+//   look, lookup, lookups, content  address                        → items
+//   children                        address, name?                 → names; with name, its items
+//   info                            address, name                  → items
+//   node                            id                             → {id, value, info, children}
+//                                                                    or none
+//   write                           address, patches, index?       → time
+//   set                             address, name, patches, index? → time
+//   insert                          id, name, child, index?        → time
+//   remove, pop                     id, name, index                → time
+//   rename                          id, name, to                   → time
 //   move                            id, name, index, to, toname, toindex? → time
-//   create                          value?, id?, ephemeral?         → id
+//   create                          value?, id?, ephemeral?        → id
 //   start                           address, program?, code?, name?, deep?, data? → pid
-//   call                            address, args?                  → its answer, or none
-//   onCleanup                       fn                              → none
+//   call                            address, args?                 → its answer, or none
+//   onCleanup                       fn                             → none
 //
-// An address is a list of names ("/" first: from the root; else from the part's place); an index a
-// number, or a list whose first is one ([from, to]: its from); a program a path, a list of names; code
-// a live function (a setup run once, as a compute whose value is its own) or a map {compute, effect?}
-// of live functions; fn a live function; ephemeral and deep anything, by truth. An item is core's:
-// {id, from, route: [{name}], node?: {id}, ephemeral?, versions?: [{content, change: {time, actor?,
-// reader?, site?, cause?}, because?}]}, a status's version because {layer: "scheduler", place:
-// "status"}. A patch is core's {path, range?, value?, move?}, or the old core's {type: "snapshot",
-// value}, {type: "set", path, key, value?}, {type: "splice", path, range, value}.
+// address: a list of names, "/" first from the root, else from the part's place
+// index: a number, or [from, to] (its from)   program: a path, a list of names
+// code: a live function (a setup run once) or {compute, effect?} of live functions
+// fn: a live function   ephemeral, deep: anything, by truth
+// item: {id, from, route: [{name}], node?: {id}, ephemeral?, versions?: [{content, change: {time,
+//   actor?, reader?, site?, cause?}, because?}]}
+//   a status's because: {layer: "scheduler", place: "status"}
+// patch: {path, range?, value?, move?}, or old {type: "snapshot", value}, {type: "set", path, key,
+//   value?}, {type: "splice", path, range, value}
 #ifndef ERMOS_WORDS_H
 #define ERMOS_WORDS_H
 

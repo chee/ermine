@@ -1,55 +1,32 @@
-// drv_vnc.c: /drivers/vnc, an RFB (VNC) client: another machine's screen in
-// an ermine window, its keyboard and pointer from ermine's. The other side
-// keeps its own screen, cursor and focus, so input reaches every app there
-// (a second Mac login over Screen Sharing, a Linux machine or a VM).
+// drv_vnc.c: /drivers/vnc, an RFB (VNC) client: another machine's screen in an ermine window, with
+// ermine's keyboard and pointer; the other side keeps its own screen, cursor and focus.
 //
 //   /dev/vnc/views/<name>     a program's (ephemeral): {host, port, user?, layer, x, y, w, h,
-//                             view: "fit" | "actual", sx, sy, hide?, n, keys?, ground?, remember?}; a new n
-//                             connects again; the node gone, the connection closes
-//   /dev/vnc/sessions/<name>  the driver's: {state, error, host, port, version, security,
-//                             desktop, w, h, encoding, frames, bytes, scale, x, y, mac, keys}
-//   /dev/vnc/sessions/<name>/cursor   the other side's cursor, a picture, while it sends one
-//   /dev/vnc/driver/on/password   (name, password, user?): held in this driver's memory for the
-//                             view's life, never in the graph
-//   /dev/vnc/driver/on/input  (name, events): irq 34 and 35 records, x and y in the layer's
-//                             pixels; {event: "release"}, {event: "chord", keys}, {event: "clip", text}
+//                             view: "fit" | "actual", sx, sy, hide?, n, keys?, ground?, remember?};
+//                             a new n connects again; the node gone, the connection closes
+//   /dev/vnc/sessions/<name>  {state, error, host, port, version, security, desktop, w, h,
+//                             encoding, frames, bytes, scale, x, y, mac, keys}
+//   /dev/vnc/sessions/<name>/cursor   the other side's cursor picture, while it sends one
+//   /dev/vnc/planes/<name>    {id, w, h, stride, shm} (host.h's HostPlaneSaid)
+//   /dev/vnc/driver/on/password   (name, password, user?): in driver memory for the view's life,
+//                             never in the graph
+//   /dev/vnc/driver/on/input  (name, events): irq 34 and 35 records, x and y in layer pixels;
+//                             {event: "release"}, {event: "chord", keys}, {event: "clip", text}
 //
-// state: connecting, securing, password (waiting for on/password), live, closed (the other
-// side ended it), failed (error says why).
-//
-// remember: true, a password wanted is asked of the Mac's keychain first (the
-// metal's keychain command, its answer an irq 66 record {event: "keychain",
-// account, password}), and one typed is kept there once the connection is
-// live; false, taken out once live. The account: user@host:port, or host:port.
-//
-// Pixels: the other side's screen, as its updates finish, is copied into a
-// plane of the view's size (fit: scaled, area-averaged; actual: 1:1 from sx,
-// sy), POSIX shared memory said in /dev/vnc/planes/<name> {id, w, h, stride,
-// shm} (host.h's HostPlaneSaid), and the driver writes the view's layer's
-// plane, {source: "vnc", id, serial, x, y, w, h, dirty?}: only the
-// rectangle an update changed is scaled again and copied by the compositor,
-// and a frame costs the program nothing. Over the plane the layer's ops are
-// played, as Paint's are; the program leaves the plane's rectangle undrawn.
-//
-// The thread, one a connection: connects, speaks RFB 3.3, 3.7 or 3.8 (3.889,
-// Apple's, as 3.8), secures with None, VNC authentication (DES) or Apple
-// Remote Desktop's (type 30: Diffie-Hellman, MD5, AES-128), and decodes
-// Raw, CopyRect, RRE, Hextile, Zlib and ZRLE into a screen of its own, and
-// the Cursor, DesktopSize, ExtendedDesktopSize and LastRect pseudo-encodings.
-// An update done, its rectangles are copied into the screen the host reads,
-// irq 66 is posted, and the next incremental update is asked for once the
-// host has taken it: one a turn, at most.
-//
-// Keys go as X keysyms: a key's text when it typed one with no command,
-// control or option held (so the layout is the person's), else the key's
-// place on a US keyboard. cmd and option are keys' `cmd` and `alt`, keysym
-// names: on a Mac server (RFB 3.889, or type 30 offered) Alt_L and Meta_L,
-// as OSXvnc's server takes them (Alt as Command, Meta as Option); else
-// Super_L and Alt_L. Neither is checked against Apple's server here.
-//
-// The clipboard: the other side's (ServerCutText, Latin-1) is written to
-// /dev/clip/text, from "vnc", which the clip driver gives the Mac; a clip
-// event sends text (ClientCutText, Latin-1, a character it has not a ?).
+// state: connecting | securing | password (waits for on/password) | live | closed | failed (error)
+// remember: true, the Mac keychain is asked first (irq 66 {event: "keychain", account, password})
+// and a typed one kept once live; false, taken out once live. account: user@host:port or host:port.
+// pixels: updates scaled (fit: area-averaged; actual: 1:1 from sx, sy) into the plane; the layer's
+// plane {source: "vnc", id, serial, x, y, w, h, dirty?}; its ops play over it, the program leaves
+// the plane's rectangle undrawn.
+// thread, one a connection: RFB 3.3, 3.7, 3.8 (3.889 as 3.8); None, VNC auth (DES), Apple Remote
+// Desktop (type 30); Raw, CopyRect, RRE, Hextile, Zlib, ZRLE + Cursor, DesktopSize,
+// ExtendedDesktopSize, LastRect. one update a turn: copied, irq 66, the next asked once taken.
+// keys: X keysyms; the key's text with no cmd, control or option held, else its US place. cmd and
+// option: Alt_L and Meta_L on a Mac server (3.889 or type 30), else Super_L and Alt_L; unchecked
+// against Apple's server.
+// clipboard: ServerCutText (Latin-1) → /dev/clip/text from "vnc"; a clip event → ClientCutText
+// (? for what Latin-1 lacks).
 
 #define OPENSSL_SUPPRESS_DEPRECATED // DES_ecb_encrypt: VNC authentication's DES, which OpenSSL 3's EVP keeps in its legacy provider
 

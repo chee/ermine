@@ -5,11 +5,11 @@
 //   select left|right|up|down   while tiled, the column or the window that way; floating, up is
 //                               prev and down next, so one binding serves both
 //   select <id>                 that one, back from minimized if it was
-import { data, drop, val } from "ermine:kit"
-import { here } from "ermine:os"
+import { data, val } from "ermine:kit"
+import { end } from "ermine:os"
 
 export default (given) => {
-	const { api, call, self, name } = given
+	const { api, call } = given
 	const [to] = data(given)?.args ?? []
 	const WM = ["/", "dev", "wm"]
 	const ctl = val(api, [...WM, "ctl"])
@@ -28,5 +28,5 @@ export default (given) => {
 	if (line && said !== "ok") {
 		console.log("select:", said ?? "select next|prev|left|right|up|down|<id>")
 	}
-	drop(api, here(self).slice(0, -1), name, self)
+	end(given)
 }

@@ -1,90 +1,30 @@
-// drv_display.c
-// drv_display.c: the compositor (irq 33), as image/drivers/display.js was.
-// It holds the two frame buffers the metal shows, and composes what is
-// placed in /dev/display/layers into the back one: each layer an ephemeral
-// node of the program that placed it, {x, y, w, h, z, draw, title?, owner?,
-// over?, collapsed?, hidden?}, draw the draw device's ops (blit.h), played
-// into a form of its own when they, the fonts or the selection change; or
-// pixels, a uint32 array; or plane, pixels a driver keeps (hostPlane), of
-// which dirty says what changed with this serial, so that alone is copied and
-// drawn again (drv_vram.c). Where each text run went is written to
-// /dev/display/text/<layer>; /dev/display/selection, {layer, ranges, text},
-// is drawn under its text on a highlighter. A layer with a title gets its
-// chrome, a frame and title bar, as /etc/theme's window says (System 7's by
-// default), its own chrome over that; one with none and a shape, {radius,
-// shadow?}, is rounded and casts a soft shadow as a window does (a dock, a
-// menu, a balloon). Only what changed is
-// drawn again, each buffer keeping what changed since it was last drawn
-// into; the next vsync flips it, saying what changed since the last flip,
-// so the metal copies only that. One frame a refresh: a change that comes
-// while a frame waits for its vsync is composed after the flip.
+// drv_display.c: the compositor (irq 33). Holds the two frame buffers the metal shows and composes
+// /dev/display/layers into the back one; only what changed is drawn and flipped, one frame a vsync.
 //
-// The driver is parts, each a child (drvChild) reading only what it needs:
-//   layers    what each layer is and where (no ops, no pixels), and each as
-//             a window: the one summary the others read, made again when a
-//             layer comes, goes or changes
-//   fonts     each /dev/font role's metrics and the pages that have come,
-//             made again when one does
-//   compose   the frame: reads layers, fonts, the mode, the focus, the
-//             theme, the selection; its effect draws and tells the metal
-//   windows   /dev/display/windows/<name>, with a titled one's chrome parts
-//   pages     web pages' sizes, told the metal (webshow)
-//   focus     windows mode: the Mac's key window follows the focus
-//   want, corner, keys, menus   as below
-// So a clock drawing runs compose alone, a window moved runs compose and
-// windows, and a page of a font arriving plays again only the layers that
-// lacked it. Font faces and their pages are kept across composes, by the
-// fonts summary; what a layer or a chrome drew with is recorded (Uses), so
-// it is played again only when a font it used changed or a page it lacked
-// came. What a frame is made from is compared as values the graph keeps
-// (val.h: an unchanged value is the same Json), never printed.
+//   /dev/display/layers/<name>   ephemeral, the placing program's: {x, y, w, h, z, draw, title?,
+//                                owner?, over?, collapsed?, hidden?, shape?, web?}; draw: blit.h
+//                                ops, or pixels (a u32 array), or plane (a driver's: drv_vram.c)
+//   /dev/display/text/<layer>    where each text run went
+//   /dev/display/selection       {layer, ranges, text}: highlighted under its text
+//   /dev/display/windows/<name>  every layer, hidden too, without what it draws: {x, y, w, h, z,
+//                                title, owner, collapsed, hidden, drags, want, chrome}; written on
+//                                change only, so drawing costs the window manager nothing
+//   /dev/display/want            {"windows": true | false}: asks the metal for that mode; cleared
+//   /dev/display/focus           the Mac's key window follows it, and moves it
+//   /dev/display/close           {layer, n}: a window's close button, for the window manager
+//   /dev/display/menus           {n, menus}: shown in the Mac's menu bar after the metal's own
+//   /dev/display/chosen          a pick there: {n, for, menu, item, sub?}
 //
-// /dev/display/windows/<name>: each layer, hidden ones too, as
-// {x, y, w, h, z, title, owner, collapsed, hidden, drags, want, chrome}, what it
-// is and where, without what it draws, and on the monitor a titled one's parts,
-// where its chrome's frame, bar, boxes and grip are; written only when that changes. So the
-// window manager follows windows as they come, go and move, a window
-// that draws, as a clock does a dozen times a second, costs it nothing, and
-// one moved costs the programs reading only their own nothing.
-//
-// A layer's "web", {id, x, y, w, h}, is where a page from the web driver
-// (drv_web.c) shows: its plane, the page's newest frame (/dev/web/pages'
-// frame), drawn there over the layer's ops as any plane is, only its dirty
-// rectangle when it says one; so a page is composed as any layer is, in
-// every mode. The metal is told each page's size as it shows (webshow, w 0
-// for none), so a page draws only while a layer shows it.
-//
-// In windows mode (mode.windows) each layer with a title is a Mac window of
-// its own (a surface, ../mac/METAL.md), and untitled ones (the desktop, the
-// bar) are not shown. Each frame, what changed in a window since it was
-// last presented, the rectangle its pixels differ in, is packed beside the
-// others into the back buffer and presented at the next vsync, so a caret
-// blinking presents a caret and a window moved presents nothing. The Mac's
-// window server places them: when the person moves one, or makes one key,
-// the metal says so, and this writes the layer's x and y, or
-// /dev/display/focus, as the hardware's change; the focus written elsewhere
-// makes that window key. Their close buttons write /dev/display/close,
-// {layer, n}, for the window manager. {"windows": true} written to
-// /dev/display/want asks the metal for windows mode ({"windows": false}, for
-// the monitor); this takes the wish and clears it.
-//
-// In layers mode (mode.layers, when the metal says it can) each layer is a
-// GPU layer of the metal's, its chrome and content in one form (a tile),
-// which the metal stacks by z and casts a soft shadow under, as /etc/theme's
-// shadow says. Where each is, its depth and its shadow are told when they
-// change, with no pixels, so a window dragged or raised is a command and no
-// drawing; what changed in a tile since it was last painted is packed into
-// the back buffer and painted at the next vsync, in the same command.
-//
-// The Mac's menu bar: /dev/display/menus, what it should show after the
-// metal's own menus, {n, menus} (the world menu, then the focused window's
-// menus, as the window manager writes them), is sent to the metal as it
-// changes (menus). An item chosen there (irq 33, event menu) is written to
-// /dev/display/chosen, {n, for, menu, item, sub?}: for, the
-// menus' n it was chosen from; sub, its place in each submenu down from item; the window manager does what a click on it in
-// its own menu bar does.
-//
-// Not yet here, as display.js has it: the host's console under everything.
+// a titled layer gets /etc/theme's chrome (System 7's by default); an untitled one with shape
+// {radius, shadow?} is rounded and shadowed. web {id, x, y, w, h}: a page's plane (drv_web.c)
+// drawn over its ops; the metal is told its size (webshow, w 0 none) so it draws only while shown.
+// parts (drvChild), each reading only what it needs: layers (the summary the rest read), fonts,
+// compose (draws, tells the metal), windows, pages, focus, want, corner, keys, menus. values are
+// compared as the graph's Json (val.h), never printed; a layer replays only when a font it used
+// changed or a page it lacked came.
+// modes: monitor; windows (each titled layer a Mac window, only its changed rectangle presented);
+// layers (each a metal GPU layer: moves and raises sent with no pixels).
+// not yet (display.js had it): the host's console under everything.
 
 #include "drivers.h"
 #include "../../../ermine/encoding/c/json_text.h"

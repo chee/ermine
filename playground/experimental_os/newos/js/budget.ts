@@ -1,22 +1,15 @@
-// budget.ts: a loop budget patched into a program's code (runner.ts, load): each run of a part
-// (a setup, a compute, an effect, a handler, a timer) may take BUDGET steps, a step being one turn
-// of a loop (for, for-of, for-in, while, do) or one entry of a function (a function, a method, an
-// arrow); past it the program is thrown an ordinary Error named "budget", which it may catch, and
-// which otherwise fails the run as any thrown run does. So a `while (true) {}` ends, and the OS
-// goes on; and only that part is stopped: a part that called it (through call, a handler) sees the
-// Error as any other, which a CPU watchdog of JavaScriptCore's could not give (its termination is
-// uncatchable and persists to the outermost part).
+// budget.ts: a loop budget patched into a program's code (runner.ts, load). each run of a part may
+// take BUDGET steps (a loop turn or a function entry); past it the program is thrown an Error named
+// "budget": catchable, else it fails the run. only that part stops (JavaScriptCore's watchdog is
+// uncatchable).
 //
-// The rewrite (budget(source)) keeps every line where it was, so a frame's line still names the
-// source's: it only inserts, on the same line, `__b();` after the `{` opening a loop's or a function's
-// body, `(__b(), ` … `)` round an arrow's expression body, `__b(), ` into the condition of a while or
-// a for whose body has no braces, and `{__b(); ` … `}` round the braceless body of a for-of or for-in.
-// a braceless do's while gets the step as a while does. It goes by tokens, not a parse: strings,
-// template literals (and what their ${} hold), regular expressions and comments are passed whole; a
-// braceless body or an arrow's expression ends at `;`, at a closing bracket, at a `,` or a
-// ternary's `:` (an arrow's), or at a line's end when neither line goes on with the other (an
-// operator ending the one or starting the next, `.`, `(`: as ASI reads it). Blocks of if, else,
-// switch, try, catch and finally are not steps.
+// budget(source) keeps every line where it was, inserting on the same line only:
+//   `__b();` after a loop's or a function's `{`; `(__b(), ` … `)` round an arrow's expression body;
+//   `__b(), ` into a braceless while's or for's condition (a braceless do's while too);
+//   `{__b(); ` … `}` round a braceless for-of or for-in body.
+// by tokens, not a parse: strings, templates, regexes and comments pass whole. a braceless body or
+// an arrow's expression ends at `;`, a closing bracket, `,`, an arrow's ternary `:`, or a line end
+// where ASI would end it. blocks of if, else, switch, try, catch and finally are not steps.
 
 /**
  * Steps a run may take. The largest run of the image's programs seen in a boot, a shell session,
