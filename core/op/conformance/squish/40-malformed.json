@@ -1,0 +1,25 @@
+{
+	"title": "a request without its patches, or columns that don't cover their shapes, is an error, and the next line is answered",
+	"steps": [
+		{ "op": "squish", "fails": true },
+		{ "op": "squish", "patches": { "path": ["t"] }, "fails": true },
+		{
+			"op": "decode",
+			"columns": {
+				"paths": [],
+				"path": [],
+				"shape": [0, 1],
+				"from": [],
+				"size": [],
+				"value": [],
+				"move": []
+			},
+			"fails": true
+		},
+		{
+			"op": "squish",
+			"patches": [{ "path": ["t"], "range": [0, 0], "value": "a" }],
+			"expect": { "patches": [{ "path": ["t"], "range": [0, 0], "value": "a" }] }
+		}
+	]
+}

@@ -1,0 +1,18 @@
+{
+	"title": "20 keystroke calls, each appending to a non-ASCII string of n characters (n: the cost of finding the end by code points, once per call)",
+	"sizes": [25000, 100000, 400000],
+	"bound": "n",
+	"template": [
+		{
+			"for": "i",
+			"to": 20,
+			"do": [
+				{
+					"op": "apply",
+					"value": { "t": { "repeat": ["é😀", "n/2"] } },
+					"patches": [{ "path": ["t"], "range": [{ "=": "n" }, { "=": "n" }], "value": "x" }]
+				}
+			]
+		}
+	]
+}

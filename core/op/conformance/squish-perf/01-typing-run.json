@@ -1,0 +1,17 @@
+{
+	"title": "a typing run: n single-character inserts at the caret, squished",
+	"sizes": [25000, 100000, 400000],
+	"bound": "n",
+	"template": [
+		{
+			"op": "squish",
+			"patches": [{
+				"for": "i",
+				"to": "n",
+				"do": [
+					{ "path": ["t"], "range": [{ "=": "i" }, { "=": "i" }], "value": "x" }
+				]
+			}]
+		}
+	]
+}

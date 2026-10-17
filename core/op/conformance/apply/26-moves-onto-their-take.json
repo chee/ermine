@@ -1,0 +1,523 @@
+{
+	"title": "a move's target is read after its take: at the take's own path is what slid in, or nothing (no-key, before the span); above it, what the take left. a span taken of a string or typed array, empty too, into a list's span: wrong-kind; one taken whole goes in as one element",
+	"steps": [
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					[
+						"b"
+					]
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						0
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"l",
+							0
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"l": [
+						[
+							"a",
+							"b"
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": [
+				[
+					1
+				],
+				[
+					2
+				]
+			],
+			"patches": [
+				{
+					"path": [
+						0
+					],
+					"range": [
+						1,
+						1
+					],
+					"move": {
+						"path": [
+							0
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": [
+					[
+						2,
+						[
+							1
+						]
+					]
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": [
+				[
+					1
+				],
+				[
+					2
+				]
+			],
+			"patches": [
+				{
+					"path": [
+						1
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1,
+					2,
+					3,
+					4,
+					5,
+					6
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						5,
+						6
+					],
+					"move": {
+						"path": [
+							"l"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1,
+					2,
+					3,
+					4,
+					5,
+					6
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						7,
+						6
+					],
+					"move": {
+						"path": [
+							"l"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "abcdef"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"move": {
+						"path": [
+							"s"
+						],
+						"range": [
+							1,
+							3
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"s": "bc"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": [
+				1,
+				2,
+				3
+			],
+			"patches": [
+				{
+					"path": [],
+					"move": {
+						"path": [],
+						"range": [
+							0,
+							2
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": [
+					1,
+					2
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1,
+					2
+				],
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						1,
+						1
+					],
+					"move": {
+						"path": [
+							"s"
+						],
+						"range": [
+							0,
+							2
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1,
+					2
+				],
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						1,
+						1
+					],
+					"move": {
+						"path": [
+							"s"
+						],
+						"range": [
+							0,
+							0
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1,
+					2
+				],
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						1,
+						1
+					],
+					"move": {
+						"path": [
+							"s"
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"l": [
+						1,
+						"abc",
+						2
+					]
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": [
+				"ab",
+				1
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"move": {
+						"path": [
+							0
+						],
+						"range": [
+							0,
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": [
+				"ab",
+				"c"
+			],
+			"patches": [
+				{
+					"path": [
+						0
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [],
+						"range": [
+							1,
+							2
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": [
+				"ab",
+				"c"
+			],
+			"patches": [
+				{
+					"path": [
+						0
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": [
+					"cab"
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				],
+				"t": {
+					"/": {
+						"int8": [
+							5,
+							6
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						1,
+						1
+					],
+					"move": {
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				],
+				"t": {
+					"/": {
+						"int8": [
+							5,
+							6
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						1,
+						1
+					],
+					"move": {
+						"path": [
+							"t"
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"l": [
+						1,
+						{
+							"/": {
+								"int8": [
+									5,
+									6
+								]
+							}
+						}
+					]
+				}
+			}
+		}
+	]
+}

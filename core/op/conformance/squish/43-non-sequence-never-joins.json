@@ -1,0 +1,18 @@
+{
+	"title": "a removal then an insert of something that is not a sequence stay apart: never one ranged put of it",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [2, 5] },
+				{ "path": ["t"], "range": [2, 2], "value": 5 }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [2, 5] },
+					{ "path": ["t"], "range": [2, 2], "value": 5 }
+				]
+			}
+		}
+	]
+}

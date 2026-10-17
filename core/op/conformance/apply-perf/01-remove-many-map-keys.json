@@ -1,0 +1,12 @@
+{
+	"title": "one call removes n keys from a map of n keys",
+	"sizes": [25000, 100000, 400000],
+	"bound": "n log n",
+	"template": [
+		{
+			"op": "apply",
+			"value": { "map": { "for": "i", "to": "n", "key": "key{i}", "value": { "=": "i" } } },
+			"patches": [{ "for": "i", "to": "n", "do": [{ "path": ["key{i}"] }] }]
+		}
+	]
+}
