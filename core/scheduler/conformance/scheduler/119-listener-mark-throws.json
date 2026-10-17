@@ -1,0 +1,114 @@
+{
+  "title": "a mark listener that throws: the mark is done (its tick taken, its readers due), then the error is the write's answer; the pulse runs them",
+  "steps": [
+    {
+      "op": "root",
+      "name": "o",
+      "info": [
+        [
+          "actor",
+          "test"
+        ]
+      ],
+      "expect": {}
+    },
+    {
+      "op": "write",
+      "values": {
+        "x": 1
+      },
+      "expect": {
+        "tick": 1
+      }
+    },
+    {
+      "op": "compute",
+      "name": "c",
+      "scope": "o",
+      "f": {
+        "read": "x"
+      },
+      "to": "c",
+      "expect": {}
+    },
+    {
+      "op": "pulse",
+      "expect": {}
+    },
+    {
+      "op": "moments",
+      "expect": {
+        "moments": [
+          {
+            "due": "c",
+            "tick": 2
+          },
+          {
+            "starts": "c",
+            "run": 1
+          },
+          {
+            "ends": "c",
+            "run": 1,
+            "ended": "done",
+            "equal": false
+          }
+        ]
+      }
+    },
+    {
+      "op": "listener",
+      "on": "mark",
+      "at": "x",
+      "throw": "mark threw",
+      "expect": {}
+    },
+    {
+      "op": "write",
+      "values": {
+        "x": 2
+      },
+      "expect": {
+        "error": "mark threw"
+      }
+    },
+    {
+      "op": "tick",
+      "expect": {
+        "tick": 4
+      }
+    },
+    {
+      "op": "pulse",
+      "expect": {}
+    },
+    {
+      "op": "moments",
+      "expect": {
+        "moments": [
+          {
+            "due": "c",
+            "tick": 4
+          },
+          {
+            "starts": "c",
+            "run": 2
+          },
+          {
+            "ends": "c",
+            "run": 2,
+            "ended": "done",
+            "equal": false
+          }
+        ]
+      }
+    },
+    {
+      "op": "get",
+      "key": "c",
+      "expect": {
+        "value": 2
+      }
+    }
+  ]
+}

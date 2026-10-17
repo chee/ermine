@@ -58,14 +58,14 @@
 			"op": "name",
 			"commit": "a",
 			"expect": {
-				"name": "e48bf0b370d2c41eb0f4022dc79670df4c937045f75ebb0a5804165dd21a3f31"
+				"name": "0aaa5bbeed41c89441b6a63bea761349c1759c9cb148c485f6b632d1d5a3db06"
 			}
 		},
 		{
 			"op": "name",
 			"commit": "b",
 			"expect": {
-				"name": "406ed4b8f35ec9a544bbc1ae53dc18b9865f41ae414bf08d6fa135a869f9f907"
+				"name": "86ec5baa33fdda7540ad68de21eef9770045a08da03615fa857267c84756e9fc"
 			}
 		},
 		{
@@ -216,14 +216,14 @@
 			"op": "name",
 			"commit": "a3",
 			"expect": {
-				"name": "fef78d1cb8a262ccc15acc56c709138c43a0f2a6111b0bb878d7450a057492ed"
+				"name": "af97c06f24a5ce47d7e5f3d3c8fdce0e05592854be95fd12aae02d97f2af9252"
 			}
 		},
 		{
 			"op": "name",
 			"commit": "b3",
 			"expect": {
-				"name": "caf91111d865d2a8793825e678fd901e133b09662dfc38e6bb32ad6dc511bb04"
+				"name": "c701f98b928dc09c4eab74df299322b3ea109737ed7823d0447044a20f4d13dc"
 			}
 		},
 		{

@@ -25,12 +25,12 @@
 		{
 			"op": "name",
 			"commit": "b",
-			"expect": { "name": "f778085658474ae4b6bd3add8aa896a419975fea2b0b4d07cc591154f0dc207b" }
+			"expect": { "name": "61b882b3f79ae2591eb7c822dc8671ce9d01bb1fea83de8ec11e29eadaeddbf1" }
 		},
 		{
 			"op": "name",
 			"commit": "c",
-			"expect": { "name": "bd54647fbbe6f5c2a39efa77f91577400cffa927db5be606bc2fe12d88d64ffe" }
+			"expect": { "name": "09f43a95d7bb886707e2a908877c4be38696f16e8e57d9255fecd5ec83cd4b78" }
 		},
 		{ "op": "heads", "expect": { "heads": ["b", "c"] } },
 		{

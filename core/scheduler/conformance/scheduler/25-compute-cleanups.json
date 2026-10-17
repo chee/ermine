@@ -1,5 +1,5 @@
 {
-	"title": "a compute is an owner: its cleanups run before its next run, and when it goes",
+	"title": "a compute is an owner: its cleanups run once its next run is done (its value landed), and when it goes",
 	"steps": [
 		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
 		{
@@ -17,7 +17,7 @@
 		{ "op": "log", "expect": { "log": [["run", 1]] } },
 		{ "op": "write", "values": { "a": 2 }, "expect": { "tick": 4 } },
 		{ "op": "pulse", "expect": {} },
-		{ "op": "log", "expect": { "log": ["undo", ["run", 2]] } },
+		{ "op": "log", "expect": { "log": [["run", 2], "undo"] } },
 		{ "op": "dispose", "scope": "c", "expect": {} },
 		{ "op": "log", "expect": { "log": ["undo"] } }
 	]

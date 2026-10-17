@@ -1,5 +1,5 @@
 {
-	"title": "a computation disposed by a cleanup run before its run or act: its f, or its act, is not called (proof D1, D2)",
+	"title": "a computation disposed by a cleanup: a compute's cleanups wait till its next run is done, so that run goes ahead and its value lands, then the cleanup disposes it; an effect's run before its act, so it does not act (proof D2)",
 	"steps": [
 		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
 		{
@@ -38,8 +38,10 @@
 		{ "op": "log", "expect": { "log": [["c", 1], ["d", 1], ["e", 1]] } },
 		{ "op": "write", "values": { "k": 2 }, "expect": { "tick": 7 } },
 		{ "op": "pulse", "expect": {} },
-		{ "op": "log", "expect": { "log": [] } },
-		{ "op": "write", "values": { "k": 3 }, "expect": { "tick": 8 } },
+		{ "op": "log", "expect": { "log": [["c", 2], ["d", 2]] } },
+		{ "op": "get", "key": "c", "expect": { "value": ["c", 2] } },
+		{ "op": "get", "key": "d", "expect": { "value": ["d", 2] } },
+		{ "op": "write", "values": { "k": 3 }, "expect": { "tick": 10 } },
 		{ "op": "pulse", "expect": {} },
 		{ "op": "log", "expect": { "log": [] } }
 	]

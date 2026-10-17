@@ -1,0 +1,116 @@
+{
+  "title": "a tracking-start listener that throws: the read is tracked all the same, then the error comes out of it into the run, which fails with it; a change of the key runs it again",
+  "steps": [
+    {
+      "op": "root",
+      "name": "o",
+      "info": [
+        [
+          "actor",
+          "test"
+        ]
+      ],
+      "expect": {}
+    },
+    {
+      "op": "write",
+      "values": {
+        "x": 1
+      },
+      "expect": {
+        "tick": 1
+      }
+    },
+    {
+      "op": "listener",
+      "on": "started",
+      "at": "x",
+      "throw": "start threw",
+      "expect": {}
+    },
+    {
+      "op": "compute",
+      "name": "c",
+      "scope": "o",
+      "f": {
+        "read": "x"
+      },
+      "to": "c",
+      "expect": {}
+    },
+    {
+      "op": "pulse",
+      "expect": {}
+    },
+    {
+      "op": "moments",
+      "expect": {
+        "moments": [
+          {
+            "due": "c",
+            "tick": 2
+          },
+          {
+            "starts": "c",
+            "run": 1
+          },
+          {
+            "ends": "c",
+            "run": 1,
+            "ended": "failed",
+            "error": "start threw"
+          }
+        ]
+      }
+    },
+    {
+      "op": "started",
+      "expect": {
+        "keys": [
+          "x"
+        ]
+      }
+    },
+    {
+      "op": "write",
+      "values": {
+        "x": 2
+      },
+      "expect": {
+        "tick": 3
+      }
+    },
+    {
+      "op": "pulse",
+      "expect": {}
+    },
+    {
+      "op": "moments",
+      "expect": {
+        "moments": [
+          {
+            "due": "c",
+            "tick": 3
+          },
+          {
+            "starts": "c",
+            "run": 2
+          },
+          {
+            "ends": "c",
+            "run": 2,
+            "ended": "done",
+            "equal": false
+          }
+        ]
+      }
+    },
+    {
+      "op": "get",
+      "key": "c",
+      "expect": {
+        "value": 2
+      }
+    }
+  ]
+}

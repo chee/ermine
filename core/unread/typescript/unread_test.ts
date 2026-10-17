@@ -10,6 +10,7 @@ import { createScheduler } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable } from "@ermine/table"
 import { createUnread, keeping, reading } from "./unread.ts"
+import { unread_conformance_hook_owned } from "./unread_conformance_hook.ts"
 
 const h = (time = 1): ChangeHeader => ({ time, actor: "test" })
 type Doc = Record<string, unknown>
@@ -110,14 +111,14 @@ Deno.test("unread: through reading, a get is a read; a get of ids is not", () =>
 	const e = createEntry<unknown>({ a: 1 }, h())
 	table.add("value", "N", e as never)
 	u.update(e, [{ path: ["a"], value: 2 }], h())
-	assert(u.owned(e) !== undefined)
+	assert(unread_conformance_hook_owned(u, e) !== undefined)
 	t.get("value", e as never)
-	assert(u.owned(e) !== undefined)
+	assert(unread_conformance_hook_owned(u, e) !== undefined)
 	t.get("value", "N")
-	assertEquals(u.owned(e), undefined)
+	assertEquals(unread_conformance_hook_owned(u, e), undefined)
 	u.update(e, [{ path: ["a"], value: 3 }], h())
 	t.get("N")
-	assertEquals(u.owned(e), undefined)
+	assertEquals(unread_conformance_hook_owned(u, e), undefined)
 })
 
 Deno.test("unread: keeping: what a computation keeps past its run is held; what it read and dropped is not", () => {

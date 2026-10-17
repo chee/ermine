@@ -1,0 +1,301 @@
+{
+  "title": "a set that throws, then the result before it again (1, 2 whose set throws, 1): the last is forgotten when a set throws, so 1 is not equal to it and is given to set; then 1 again is equal, and stops there",
+  "steps": [
+    {
+      "op": "root",
+      "name": "o",
+      "info": [
+        [
+          "actor",
+          "test"
+        ]
+      ],
+      "expect": {}
+    },
+    {
+      "op": "write",
+      "values": {
+        "x": 1,
+        "boom": false
+      },
+      "expect": {
+        "tick": 1
+      }
+    },
+    {
+      "op": "compute",
+      "name": "c",
+      "scope": "o",
+      "f": {
+        "read": "x"
+      },
+      "to": "c",
+      "set": {
+        "do": [
+          {
+            "log": [
+              "set",
+              {
+                "given": "value"
+              }
+            ]
+          },
+          {
+            "if": [
+              {
+                "read": "boom"
+              },
+              {
+                "throw": "set threw"
+              },
+              null
+            ]
+          }
+        ]
+      },
+      "expect": {}
+    },
+    {
+      "op": "compute",
+      "name": "r",
+      "scope": "o",
+      "f": {
+        "sum": [
+          {
+            "read": "c"
+          },
+          100
+        ]
+      },
+      "to": "r",
+      "expect": {}
+    },
+    {
+      "op": "pulse",
+      "expect": {}
+    },
+    {
+      "op": "log",
+      "expect": {
+        "log": [
+          [
+            "set",
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "op": "write",
+      "values": {
+        "x": 2,
+        "boom": true
+      },
+      "expect": {
+        "tick": 6
+      }
+    },
+    {
+      "op": "pulse",
+      "expect": {}
+    },
+    {
+      "op": "log",
+      "expect": {
+        "log": [
+          [
+            "set",
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "op": "get",
+      "key": "c",
+      "expect": {
+        "value": 2
+      }
+    },
+    {
+      "op": "moments",
+      "expect": {
+        "moments": [
+          {
+            "due": "c",
+            "tick": 2
+          },
+          {
+            "due": "r",
+            "tick": 3
+          },
+          {
+            "starts": "c",
+            "run": 1
+          },
+          {
+            "ends": "c",
+            "run": 1,
+            "ended": "done",
+            "equal": false
+          },
+          {
+            "starts": "r",
+            "run": 1
+          },
+          {
+            "ends": "r",
+            "run": 1,
+            "ended": "done",
+            "equal": false
+          },
+          {
+            "due": "c",
+            "tick": 6
+          },
+          {
+            "starts": "c",
+            "run": 2
+          },
+          {
+            "due": "r",
+            "tick": 7,
+            "writer": "c"
+          },
+          {
+            "ends": "c",
+            "run": 2,
+            "ended": "failed",
+            "equal": false,
+            "error": "set threw"
+          },
+          {
+            "starts": "r",
+            "run": 2
+          },
+          {
+            "ends": "r",
+            "run": 2,
+            "ended": "done",
+            "equal": false
+          }
+        ]
+      }
+    },
+    {
+      "op": "write",
+      "values": {
+        "x": 1,
+        "boom": false
+      },
+      "expect": {
+        "tick": 9
+      }
+    },
+    {
+      "op": "pulse",
+      "expect": {}
+    },
+    {
+      "op": "moments",
+      "expect": {
+        "moments": [
+          {
+            "due": "c",
+            "tick": 9
+          },
+          {
+            "starts": "c",
+            "run": 3
+          },
+          {
+            "due": "r",
+            "tick": 10,
+            "writer": "c"
+          },
+          {
+            "ends": "c",
+            "run": 3,
+            "ended": "done",
+            "equal": false
+          },
+          {
+            "starts": "r",
+            "run": 3
+          },
+          {
+            "ends": "r",
+            "run": 3,
+            "ended": "done",
+            "equal": false
+          }
+        ]
+      }
+    },
+    {
+      "op": "log",
+      "expect": {
+        "log": [
+          [
+            "set",
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "op": "get",
+      "key": "c",
+      "expect": {
+        "value": 1
+      }
+    },
+    {
+      "op": "get",
+      "key": "r",
+      "expect": {
+        "value": 101
+      }
+    },
+    {
+      "op": "changed",
+      "keys": [
+        "x"
+      ],
+      "expect": {
+        "tick": 12
+      }
+    },
+    {
+      "op": "pulse",
+      "expect": {}
+    },
+    {
+      "op": "moments",
+      "expect": {
+        "moments": [
+          {
+            "due": "c",
+            "tick": 12
+          },
+          {
+            "starts": "c",
+            "run": 4
+          },
+          {
+            "ends": "c",
+            "run": 4,
+            "ended": "done",
+            "equal": true
+          }
+        ]
+      }
+    },
+    {
+      "op": "log",
+      "expect": {
+        "log": []
+      }
+    }
+  ]
+}

@@ -7,7 +7,8 @@
 //    unread; what was held and marked let go. the value is the caller's, owned by no one: the
 //    first write copies it. the entry's change has no op yet
 // { op: "write", patches, hold? }  → { undo }   unread's update, its op's undo (as node's update
-//    gives it: each patch's undo, the last patch's first). patches: [] is a write ({ undo: [] }).
+//    gives it: each patch's undo, the last patch's first). patches: [] is a write ({ undo: [] }); patches not a list
+//    (or missing): { error: string }, nothing changes.
 //    an ApplyError answers { error: code, patch: index }: code one of "not-a-patch", "no-key",
 //    "wrong-kind", "range", "into-itself" (op's apply), index the first patch that failed,
 //    counted from 0 in the whole write. a refused write changes nothing: the patches before it
@@ -74,7 +75,9 @@ export function createHarness(): (r: Request) => Record<string, unknown> {
 		if (hold !== undefined) {
 			held.set(
 				hold,
-				patches.filter((p) => "value" in p).map((p) => p.value),
+				patches.filter((p) => p !== null && typeof p === "object" && "value" in p).map((p) =>
+					p.value
+				),
 			)
 		}
 		try {
@@ -94,6 +97,7 @@ export function createHarness(): (r: Request) => Record<string, unknown> {
 				held = new Map(), marked = new Map()
 				return {}
 			case "write":
+				if (!Array.isArray(r.patches)) throw new Error("write: patches is not a list")
 				return write(revive(r.patches) as Patch[], r.hold)
 			case "unwrite": {
 				const undo = entry.change.op?.undo

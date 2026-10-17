@@ -29,6 +29,7 @@ import type { ChangeHeader, Entry } from "@ermine/node/entry"
 import apply, { ApplyError, type Key, type Patch, type Target } from "@ermine/op/apply"
 import type { Scheduler } from "@ermine/scheduler"
 import type { Id, Table } from "@ermine/table"
+import { keep } from "./unread_conformance_hook.ts"
 
 export type Unread = {
 	// node's update (op's patches, the change with its op), in place where this owns
@@ -39,9 +40,6 @@ export type Unread = {
 	// all under it. walked (lists, maps, typed arrays): one made by a run may hold what a read
 	// gave. handed: what the run was given; at one, what is owned under it is let go, no deeper
 	kept: (value: unknown, handed?: ReadonlySet<unknown>) => void
-	// the entry's owner token now (for tests): what its writes copied since it was last read
-	// is owned while it maps to it; none: undefined
-	owned: (entry: Entry<unknown>) => object | undefined
 }
 
 const isMap = (v: unknown): v is Record<string, unknown> => {
@@ -183,12 +181,13 @@ export function createUnread(): Unread {
 		}
 	}
 
-	return {
+	const unread: Unread = {
 		update,
 		read: (entry) => void owns.delete(entry),
 		kept: (value, handed) => kept(value, handed),
-		owned: (entry) => owns.get(entry),
 	}
+	keep(unread, (entry) => owns.get(entry))
+	return unread
 }
 
 // a scheduler's run ends wired to unread: what a computation keeps past its run is held (kept).

@@ -76,14 +76,14 @@
 			"op": "name",
 			"commit": "a",
 			"expect": {
-				"name": "e4a8998c1a6c9d865f308dc3909e096f1b5fae50ea863b2697fc20357c402515"
+				"name": "1df0ff65c6b69ea1961625e5dc12c4eda7638a703c9e9d384d9a0dc1d6632982"
 			}
 		},
 		{
 			"op": "name",
 			"commit": "b",
 			"expect": {
-				"name": "a07956470b7c872d04d5898805ea126f693f37ed9e8b24e2650d30e6be2e99e2"
+				"name": "d115a97ac84855e3e57b9a15b6f8a6a69e15c6ed6a09b325b46321e4bb29a375"
 			}
 		},
 		{
