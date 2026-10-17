@@ -1,0 +1,77 @@
+{
+	"title": "an effect or compute form whose name is not a string (null, a number) is refused: nothing made, nothing runs",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "run",
+			"scope": "o",
+			"do": {
+				"effect": [
+					null,
+					1,
+					{
+						"log": "acted"
+					}
+				]
+			},
+			"expect": {
+				"error": "a effect with no name"
+			}
+		},
+		{
+			"op": "run",
+			"scope": "o",
+			"do": {
+				"effect": [
+					5,
+					1,
+					{
+						"log": "acted"
+					}
+				]
+			},
+			"expect": {
+				"error": "a effect with no name"
+			}
+		},
+		{
+			"op": "run",
+			"scope": "o",
+			"do": {
+				"compute": [
+					null,
+					1
+				]
+			},
+			"expect": {
+				"error": "a compute with no name"
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": []
+			}
+		}
+	]
+}

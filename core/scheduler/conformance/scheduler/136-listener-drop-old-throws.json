@@ -1,0 +1,196 @@
+{
+	"title": "what a run did not make again goes at its end, newest first: every one goes though a cleanup of one throws (b) and a tracking-end listener throws as another goes (a: k forgotten); the run is done, then the error comes out of the pulse: the listener's, though the cleanup threw first (a teardown's: a listener's, else a cleanup's)",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1,
+				"k": 0
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "p",
+			"scope": "o",
+			"f": {
+				"if": [
+					{
+						"eq": [
+							{
+								"read": "x"
+							},
+							1
+						]
+					},
+					{
+						"do": [
+							{
+								"compute": [
+									"a",
+									{
+										"read": "k"
+									}
+								]
+							},
+							{
+								"scope": [
+									"b",
+									[
+										[
+											"why",
+											"b"
+										]
+									]
+								]
+							},
+							{
+								"cleanup": [
+									"b",
+									{
+										"do": [
+											{
+												"log": "b undone"
+											},
+											{
+												"throw": "cleanup threw"
+											}
+										]
+									}
+								]
+							},
+							1
+						]
+					},
+					2
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "p",
+						"tick": 2
+					},
+					{
+						"starts": "p",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"due": "a",
+						"tick": 3,
+						"writer": "p"
+					},
+					{
+						"ends": "p",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "a",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "listener",
+			"on": "forgotten",
+			"at": "k",
+			"throw": "stop threw",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 2
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {
+				"error": "stop threw"
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "p",
+						"tick": 4
+					},
+					{
+						"starts": "p",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "p",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "forgotten",
+			"expect": {
+				"keys": [
+					"k"
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					"b undone"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		}
+	]
+}

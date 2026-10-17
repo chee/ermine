@@ -1,0 +1,27 @@
+{
+	"title": "refused after a typed array changed where it is and then grew: nothing of the call kept (in place: the array given as it was)",
+	"steps": [
+		{
+			"op": "apply",
+			"value": { "/": { "int16": [1, 2, 3] } },
+			"patches": [
+				{ "path": [], "range": [1, 2], "value": { "/": { "int16": [9] } } },
+				{ "path": [], "range": [0, 0], "value": { "/": { "int16": [7] } } },
+				{ "path": ["x"], "value": 1 }
+			],
+			"expect": { "error": { "code": "wrong-kind", "patch": 2 } }
+		},
+		{
+			"op": "apply",
+			"value": { "t": { "/": { "int16": [1, 2, 3] } }, "u": { "/": { "bytes": "AQI" } } },
+			"patches": [
+				{ "path": ["t"], "range": [0, 1], "value": { "/": { "int16": [4] } } },
+				{ "path": ["t"], "range": [3, 3], "value": { "/": { "int16": [5, 6] } } },
+				{ "path": ["t"], "range": [0, 2] },
+				{ "path": ["t"], "range": [0, 1], "value": { "/": { "int16": [8] } } },
+				{ "path": ["u"], "range": [0, 1] }
+			],
+			"expect": { "error": { "code": "wrong-kind", "patch": 4 } }
+		}
+	]
+}

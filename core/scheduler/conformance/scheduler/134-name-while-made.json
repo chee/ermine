@@ -1,0 +1,159 @@
+{
+	"title": "a name is never held twice: a computation's name is taken from the start of its making (mine), so what an early effect's first run makes at the same name, a scope or a computation, is refused (name taken), failing that run, which then does not act",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "effect",
+			"name": "e",
+			"scope": "o",
+			"early": true,
+			"f": {
+				"do": [
+					{
+						"scope": [
+							"e",
+							[
+								[
+									"a",
+									1
+								]
+							]
+						]
+					},
+					1
+				]
+			},
+			"act": {
+				"log": [
+					"e",
+					{
+						"given": "value"
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "e",
+						"tick": 1
+					},
+					{
+						"starts": "e",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 1,
+						"ended": "failed",
+						"error": "name taken: e"
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": []
+			}
+		},
+		{
+			"op": "scope",
+			"name": "e",
+			"parent": "o",
+			"info": [
+				[
+					"a",
+					1
+				]
+			],
+			"expect": {
+				"error": "name taken: e"
+			}
+		},
+		{
+			"op": "run",
+			"scope": "o",
+			"do": {
+				"effect": [
+					"f",
+					{
+						"do": [
+							{
+								"compute": [
+									"f",
+									2
+								]
+							},
+							2
+						]
+					},
+					{
+						"log": [
+							"f",
+							{
+								"given": "value"
+							}
+						]
+					},
+					true
+				]
+			},
+			"expect": {
+				"value": null
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "f",
+						"tick": 2
+					},
+					{
+						"starts": "f",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "f",
+						"run": 1,
+						"ended": "failed",
+						"error": "name taken: f"
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": []
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		}
+	]
+}

@@ -1,0 +1,26 @@
+{
+	"title": "a key that reads as a number (\"2\", \"0\", \"01\", \"1\", \"-1\", \"4294967294\", \"4294967295\") is a map's key like any: put, it is there as written, apart from the others",
+	"steps": [
+		{
+			"op": "apply",
+			"value": { "b": 1 },
+			"patches": [{ "path": ["2"], "value": 2 }, { "path": ["a"], "value": 3 }],
+			"expect": { "value": { "b": 1, "2": 2, "a": 3 } }
+		},
+		{
+			"op": "apply",
+			"value": {},
+			"patches": [
+				{ "path": ["4294967295"], "value": 1 },
+				{ "path": ["4294967294"], "value": 2 },
+				{ "path": ["01"], "value": 3 },
+				{ "path": ["1"], "value": 4 },
+				{ "path": ["-1"], "value": 5 },
+				{ "path": ["0"], "value": 6 }
+			],
+			"expect": {
+				"value": { "4294967295": 1, "4294967294": 2, "01": 3, "1": 4, "-1": 5, "0": 6 }
+			}
+		}
+	]
+}

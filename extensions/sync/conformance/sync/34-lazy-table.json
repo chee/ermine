@@ -1,0 +1,96 @@
+{
+	"title": "lazy: a host made again over its storage holds in its table only the documents it follows; one followed after the first run comes from the storage into the table then; one never followed never does",
+	"steps": [
+		{
+			"op": "host",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"lazy": true,
+			"expect": { "key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }
+		},
+		{
+			"op": "mint",
+			"host": "a",
+			"as": "x",
+			"expect": {
+				"id": "ermine://b40fde52c568d2f3864d68739e98b72b9f144f5566afcbb238fd354ecdc7c755"
+			}
+		},
+		{
+			"op": "mint",
+			"host": "a",
+			"as": "y",
+			"expect": {
+				"id": "ermine://9b88febf6d4322956444b084a735e05da8aa437e2ceff806b8cb3a6db5d12bfb"
+			}
+		},
+		{
+			"op": "mint",
+			"host": "a",
+			"as": "z",
+			"expect": {
+				"id": "ermine://aea16162111eec23d64c6ccbed9aa903f1ac6552f1168757adf61d4b2fc6100b"
+			}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [{ "path": [], "value": "kept x" }],
+			"name": "w1",
+			"expect": { "commits": 1 }
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "y",
+			"patches": [{ "path": [], "value": "kept y" }],
+			"name": "w2",
+			"expect": { "commits": 1 }
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "z",
+			"patches": [{ "path": [], "value": "kept z" }],
+			"name": "w3",
+			"expect": { "commits": 1 }
+		},
+		{ "op": "quiet", "expect": {} },
+		{ "op": "stored", "host": "a", "id": "x", "expect": { "stored": 1 } },
+		{ "op": "stored", "host": "a", "id": "y", "expect": { "stored": 1 } },
+		{ "op": "stored", "host": "a", "id": "z", "expect": { "stored": 1 } },
+		{ "op": "restart", "host": "a", "expect": {} },
+		{ "op": "quiet", "expect": {} },
+		{ "op": "read", "host": "a", "id": "x", "expect": {} },
+		{ "op": "read", "host": "a", "id": "y", "expect": {} },
+		{ "op": "read", "host": "a", "id": "z", "expect": {} },
+		{ "op": "commits", "host": "a", "id": "x", "expect": { "commits": 0 } },
+		{ "op": "follow", "host": "a", "id": "x", "expect": {} },
+		{ "op": "quiet", "expect": {} },
+		{ "op": "read", "host": "a", "id": "x", "expect": { "value": "kept x" } },
+		{ "op": "heads", "host": "a", "id": "x", "expect": { "heads": ["w1"] } },
+		{ "op": "commits", "host": "a", "id": "x", "expect": { "commits": 1 } },
+		{ "op": "read", "host": "a", "id": "y", "expect": {} },
+		{ "op": "commits", "host": "a", "id": "y", "expect": { "commits": 0 } },
+		{ "op": "stored", "host": "a", "id": "y", "expect": { "stored": 1 } },
+		{ "op": "follow", "host": "a", "id": "y", "expect": {} },
+		{ "op": "quiet", "expect": {} },
+		{ "op": "read", "host": "a", "id": "y", "expect": { "value": "kept y" } },
+		{ "op": "heads", "host": "a", "id": "y", "expect": { "heads": ["w2"] } },
+		{ "op": "read", "host": "a", "id": "z", "expect": {} },
+		{ "op": "commits", "host": "a", "id": "z", "expect": { "commits": 0 } },
+		{ "op": "stored", "host": "a", "id": "z", "expect": { "stored": 1 } },
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [{ "path": [], "value": "again" }],
+			"name": "w4",
+			"expect": { "commits": 1 }
+		},
+		{ "op": "quiet", "expect": {} },
+		{ "op": "heads", "host": "a", "id": "x", "expect": { "heads": ["w4"] } },
+		{ "op": "stored", "host": "a", "id": "x", "expect": { "stored": 2 } }
+	]
+}

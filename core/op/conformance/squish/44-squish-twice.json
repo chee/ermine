@@ -1,0 +1,57 @@
+{
+	"title": "merges reach back: a backspace run that starts past what was typed joins it when it meets it, so squishing the squished patches changes nothing",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "ab" },
+				{ "path": ["t"], "range": [3, 4] },
+				{ "path": ["t"], "range": [2, 3] }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [0, 2], "value": "ab" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [{ "path": ["t"], "range": [0, 2], "value": "ab" }],
+			"expect": { "patches": [{ "path": ["t"], "range": [0, 2], "value": "ab" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "ab" },
+				{ "path": ["t"], "range": [4, 4], "value": "cd" },
+				{ "path": ["t"], "range": [7, 8] },
+				{ "path": ["t"], "range": [6, 7] }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [0, 0], "value": "ab" },
+					{ "path": ["t"], "range": [4, 6], "value": "cd" }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "ab" },
+				{ "path": ["t"], "range": [4, 6], "value": "cd" }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [0, 0], "value": "ab" },
+					{ "path": ["t"], "range": [4, 6], "value": "cd" }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["l"], "range": [1, 1], "value": [1, 2] },
+				{ "path": ["l"], "range": [4, 5] },
+				{ "path": ["l"], "range": [3, 4] },
+				{ "path": ["l"], "range": [2, 3] }
+			],
+			"expect": { "patches": [{ "path": ["l"], "range": [1, 3], "value": [1] }] }
+		}
+	]
+}
