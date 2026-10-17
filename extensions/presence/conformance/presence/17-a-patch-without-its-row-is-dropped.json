@@ -1,0 +1,93 @@
+{
+	"title": "a patch with no row there to take it is dropped: it makes no row",
+	"steps": [
+		{
+			"op": "now",
+			"t": 0
+		},
+		{
+			"op": "connect",
+			"dev": "a",
+			"name": "ca",
+			"topic": "work",
+			"patches": true
+		},
+		{
+			"op": "set",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x",
+			"value": {
+				"pts": []
+			},
+			"ttl": 5000
+		},
+		{
+			"op": "connect",
+			"dev": "b",
+			"name": "cb",
+			"topic": "work",
+			"patches": true
+		},
+		{
+			"op": "edit",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x",
+			"patches": [
+				{
+					"path": [
+						"pts"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						[
+							0,
+							0
+						]
+					]
+				}
+			],
+			"ttl": 5000,
+			"expect": {
+				"ok": true
+			}
+		},
+		{
+			"op": "presence",
+			"dev": "b",
+			"anchor": "work",
+			"expect": {
+				"rows": []
+			}
+		},
+		{
+			"op": "announce",
+			"name": "ca"
+		},
+		{
+			"op": "presence",
+			"dev": "b",
+			"anchor": "work",
+			"expect": {
+				"rows": [
+					{
+						"who": "a",
+						"value": {
+							"pts": [
+								[
+									0,
+									0
+								]
+							]
+						},
+						"until": 5000
+					}
+				]
+			}
+		}
+	]
+}

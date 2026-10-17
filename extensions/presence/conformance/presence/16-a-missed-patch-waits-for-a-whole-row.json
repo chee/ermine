@@ -1,0 +1,250 @@
+{
+	"title": "a patch message that follows a missed one is dropped: the row stays as it was until a whole row heals it",
+	"steps": [
+		{
+			"op": "now",
+			"t": 0
+		},
+		{
+			"op": "connect",
+			"dev": "a",
+			"name": "ca",
+			"topic": "work",
+			"patches": true
+		},
+		{
+			"op": "connect",
+			"dev": "b",
+			"name": "cb",
+			"topic": "work",
+			"patches": true
+		},
+		{
+			"op": "set",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x",
+			"value": {
+				"pts": [
+					[
+						0,
+						0
+					]
+				]
+			},
+			"ttl": 5000
+		},
+		{
+			"op": "stop",
+			"name": "cb"
+		},
+		{
+			"op": "edit",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x",
+			"patches": [
+				{
+					"path": [
+						"pts"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": [
+						[
+							1,
+							1
+						]
+					]
+				}
+			],
+			"ttl": 5000,
+			"expect": {
+				"ok": true
+			}
+		},
+		{
+			"op": "connect",
+			"dev": "b",
+			"name": "cb2",
+			"topic": "work",
+			"patches": true
+		},
+		{
+			"op": "edit",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x",
+			"patches": [
+				{
+					"path": [
+						"pts"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": [
+						[
+							2,
+							2
+						]
+					]
+				}
+			],
+			"ttl": 5000,
+			"expect": {
+				"ok": true
+			}
+		},
+		{
+			"op": "presence",
+			"dev": "a",
+			"anchor": "work",
+			"expect": {
+				"rows": [
+					{
+						"who": "x",
+						"value": {
+							"pts": [
+								[
+									0,
+									0
+								],
+								[
+									1,
+									1
+								],
+								[
+									2,
+									2
+								]
+							]
+						},
+						"until": 5000
+					}
+				]
+			}
+		},
+		{
+			"op": "presence",
+			"dev": "b",
+			"anchor": "work",
+			"expect": {
+				"rows": [
+					{
+						"who": "a",
+						"value": {
+							"pts": [
+								[
+									0,
+									0
+								]
+							]
+						},
+						"until": 5000
+					}
+				]
+			}
+		},
+		{
+			"op": "now",
+			"t": 1000
+		},
+		{
+			"op": "announce",
+			"name": "ca"
+		},
+		{
+			"op": "presence",
+			"dev": "b",
+			"anchor": "work",
+			"expect": {
+				"rows": [
+					{
+						"who": "a",
+						"value": {
+							"pts": [
+								[
+									0,
+									0
+								],
+								[
+									1,
+									1
+								],
+								[
+									2,
+									2
+								]
+							]
+						},
+						"until": 5000
+					}
+				]
+			}
+		},
+		{
+			"op": "edit",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x",
+			"patches": [
+				{
+					"path": [
+						"pts"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": [
+						[
+							3,
+							3
+						]
+					]
+				}
+			],
+			"ttl": 5000,
+			"expect": {
+				"ok": true
+			}
+		},
+		{
+			"op": "presence",
+			"dev": "b",
+			"anchor": "work",
+			"expect": {
+				"rows": [
+					{
+						"who": "a",
+						"value": {
+							"pts": [
+								[
+									0,
+									0
+								],
+								[
+									1,
+									1
+								],
+								[
+									2,
+									2
+								],
+								[
+									3,
+									3
+								]
+							]
+						},
+						"until": 6000
+					}
+				]
+			}
+		}
+	]
+}
