@@ -1,8 +1,8 @@
 // What the C harnesses of commit, seal, run and history share (conventions: extensions/sync/
 // conformance/README.md): bytes as lowercase hex, a commit in JSON and back, a commit's refusal.
 // Written for the shared loop (conformance/c/harness.h): memory taken is the line's
-#ifndef CF_COMMIT_FORM_H
-#define CF_COMMIT_FORM_H
+#ifndef CF_COMMIT_FORM_HARNESS_H
+#define CF_COMMIT_FORM_HARNESS_H
 
 #include "commit.h"
 #include "../../../conformance/c/harness.h"
@@ -24,8 +24,6 @@ Json *cf_commit(const op_value *form, const char **bad);
 typedef void (*cf_name)(void *context, FILE *out, const uint8_t name[32]);
 // the commit's JSON form
 void cf_put_commit(FILE *out, const cm_commit *commit, cf_name name, void *context);
-// the patches, as {path, range?, value?, move?} each
-void cf_put_patches(FILE *out, const op_patch *patches, size_t length);
 // { "error": code, "field": field }, no field when NULL
 void cf_put_refusal(FILE *out, cm_code code, const char *field);
 

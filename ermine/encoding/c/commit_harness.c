@@ -1,6 +1,6 @@
 // The C commit on the line protocol (conformance/c/harness.h): requests and answers as
 // ermine/encoding/typescript/commit_harness.ts has them. Nothing lasts between lines
-#include "commit_form.h"
+#include "commit_form_harness.h"
 
 #include "cbor.h"
 #include "pack.h"

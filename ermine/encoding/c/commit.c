@@ -71,7 +71,8 @@ int cm_key_split(const uint8_t *b, size_t length, uint64_t *code, const uint8_t 
 	if (key_length != NULL) *key_length = length - i - 1;
 	return 1;
 }
-int cm_multikey(const uint8_t *b, size_t length) { return cm_key_split(b, length, NULL, NULL, NULL); }
+// whether the bytes are a multikey
+static int cm_multikey(const uint8_t *b, size_t length) { return cm_key_split(b, length, NULL, NULL, NULL); }
 size_t cm_key_join(uint64_t code, const uint8_t *key, size_t key_length, uint8_t *out) {
 	size_t n = 0;
 	for (; code >= 0x80; code >>= 7) out[n++] = (uint8_t)(code & 0x7f) | 0x80;
@@ -325,7 +326,8 @@ static void read_target(arena *a, const Json *x, op_target *t) {
 	}
 }
 
-cm_code cm_of_json(const Json *c, cm_commit *out, char **field) {
+// a checked commit in its Json form (what cm_check holds to be a commit), made into a cm_commit
+static cm_code cm_of_json(const Json *c, cm_commit *out, char **field) {
 	*out = (cm_commit){0};
 	cm_code code = cm_check(c, field);
 	if (code != CM_OK) return code;
