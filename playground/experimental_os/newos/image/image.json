@@ -347,6 +347,19 @@
 			"at": [
 				"drivers"
 			],
+			"name": "hotplug",
+			"id": "drv-hotplug",
+			"info": {
+				"ermine.type": "party.chee.ermine.driver"
+			},
+			"value": {
+				"name": "hotplug"
+			}
+		},
+		{
+			"at": [
+				"drivers"
+			],
 			"name": "stack",
 			"id": "drv-stack",
 			"info": {
@@ -822,6 +835,14 @@
 			],
 			"name": "vram",
 			"id": "dev-vram",
+			"value": null
+		},
+		{
+			"at": [
+				"dev"
+			],
+			"name": "hotplug",
+			"id": "dev-hotplug",
 			"value": null
 		},
 		{
@@ -4699,6 +4720,17 @@
 			"program": [
 				"drivers",
 				"vnc"
+			]
+		},
+		{
+			"start": [
+				"dev",
+				"hotplug"
+			],
+			"name": "driver",
+			"program": [
+				"drivers",
+				"hotplug"
 			]
 		},
 		{

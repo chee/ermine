@@ -97,9 +97,11 @@ Json *drvPath(const char *first, ...);
 Json *drvUnder(const Json *address, const char *first, ...);
 /**
  * An operation through a part's interface, in the old core's request shape:
- * "write" {address, patches}, "place" {address, name, id?, value?, ephemeral?},
- * "unplace" {address, name, id?}, "start" {address, name, program: {compute,
- * effect?} of live functions}, "call" {address, args?}. Its answer, or NULL,
+ * "place" {address, name, id?, value?, ephemeral?} and "unplace" {address,
+ * name, id?} are the kit's own; any other is a word of the API's (words.h),
+ * its fields the word's arguments by name: "write" {address, patches} (the
+ * old core's patch shapes too), "call" {address, args?}, "start" {address,
+ * program (a path, or "programs/x"), name?, data?}. Its answer, or NULL,
  * the error said in the log.
  */
 Json *drvOp(const ErmPartApi *api, const char *op, Json *fields);

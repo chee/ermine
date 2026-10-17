@@ -95,14 +95,40 @@ static void table_put(table *t, entry *e) {
 }
 
 // a commit, or a seal alone, whose parents' seals are not all here yet (or never will be)
-typedef struct {
+typedef struct pending {
 	uint8_t id[32];
 	bool commit; // a loose commit: its parents are compared; given are its
 	uint8_t (*given)[32];
 	size_t given_count;
 	entry *e;
 	bool stuck; // a parent refused here
+	bool dead; // no longer held: taken in, refused, or replaced
+	size_t slot; // its place in the layer's waiting array
+	uint64_t seq; // arrival order: the order it is looked at in
+	uint64_t mark; // the round it was last picked in
+	size_t refs; // the waiting array, each parent list it is in, the fresh list, a round's picks
 } pending;
+
+// a map from 32 bytes to a pointer; a key stays once put
+typedef struct {
+	uint8_t key[32];
+	void *val;
+	bool used;
+} mapslot;
+
+typedef struct {
+	mapslot *slots;
+	size_t size, count;
+} bytemap;
+
+// what the layer knows of a name: the pending seals with it as a parent, and whether seals of it are
+// refused or stuck here (a child of it is stuck)
+typedef struct {
+	struct pending **list;
+	size_t count, room;
+	size_t stuck; // pending seals of this name that are stuck
+	bool refused;
+} bucket;
 
 // one layer of a document: its histories, the seals taken in to them, and what is held back
 typedef struct {
@@ -110,12 +136,17 @@ typedef struct {
 	table names, stored;
 	entry **taken; // in the order taken in
 	size_t taken_count, taken_room;
-	pending *waiting;
+	pending **waiting;
 	size_t waiting_count, waiting_room;
+	bytemap by_id; // pending seals by id
+	bytemap by_name; // buckets by name
+	pending **fresh; // pending seals new since the last settle
+	size_t fresh_count, fresh_room;
+	uint8_t (*moved)[32]; // names taken in, refused, stuck or no longer stuck since the last settle
+	size_t moved_count, moved_room;
+	uint64_t seq, round;
 	transport_refused *refused;
 	size_t refused_count, refused_room;
-	uint8_t (*gone)[32]; // the names of seals refused here
-	size_t gone_count, gone_room;
 	bool ephemeral;
 } layer;
 
@@ -165,6 +196,9 @@ typedef struct {
 struct transport {
 	ErmSd *sd;
 	ErmStore inner, store;
+	bool lazy; // the store only listed at the start
+	uint8_t (*unloaded)[32]; // lazy: the listed trees not taken in yet
+	size_t unloaded_count;
 	doc *docs;
 	job *jobs;
 	size_t job_count, job_room, job_next;
@@ -214,21 +248,100 @@ static void layer_start(doc *d, layer *L, bool ephemeral) {
 	L->ephemeral = ephemeral;
 }
 
+static void unref(pending *p);
+
 static void layer_free(layer *L) {
 	history_free(L->histories);
 	free(L->names.slots);
 	free(L->stored.slots);
 	free(L->taken);
-	for (size_t i = 0; i < L->waiting_count; i++) free(L->waiting[i].given);
+	for (size_t i = 0; i < L->by_name.size; i++) {
+		if (!L->by_name.slots[i].used) continue;
+		bucket *b = L->by_name.slots[i].val;
+		for (size_t k = 0; k < b->count; k++) unref(b->list[k]);
+		free(b->list);
+		free(b);
+	}
+	free(L->by_name.slots);
+	free(L->by_id.slots);
+	for (size_t i = 0; i < L->fresh_count; i++) unref(L->fresh[i]);
+	free(L->fresh);
+	free(L->moved);
+	for (size_t i = 0; i < L->waiting_count; i++) unref(L->waiting[i]);
 	free(L->waiting);
 	free(L->refused);
-	free(L->gone);
 }
 
+static void unref(pending *p) {
+	if (--p->refs > 0) return;
+	free(p->given);
+	free(p);
+}
+
+static mapslot *map_find(const bytemap *m, const uint8_t key[32]) {
+	if (m->size == 0) return NULL;
+	size_t h;
+	memcpy(&h, key, sizeof h);
+	for (size_t i = h & (m->size - 1); m->slots[i].used; i = (i + 1) & (m->size - 1))
+		if (memcmp(m->slots[i].key, key, 32) == 0) return &m->slots[i];
+	return NULL;
+}
+
+// the slot of a key, made when new
+static mapslot *map_at(bytemap *m, const uint8_t key[32]) {
+	mapslot *found = map_find(m, key);
+	if (found) return found;
+	if ((m->count + 1) * 2 > m->size) {
+		bytemap old = *m;
+		m->size = old.size ? old.size * 2 : 64;
+		m->slots = calloc(m->size, sizeof *m->slots);
+		if (m->slots == NULL) abort();
+		for (size_t i = 0; i < old.size; i++) {
+			if (!old.slots[i].used) continue;
+			size_t h;
+			memcpy(&h, old.slots[i].key, sizeof h);
+			size_t at = h & (m->size - 1);
+			while (m->slots[at].used) at = (at + 1) & (m->size - 1);
+			m->slots[at] = old.slots[i];
+		}
+		free(old.slots);
+	}
+	size_t h;
+	memcpy(&h, key, sizeof h);
+	size_t at = h & (m->size - 1);
+	while (m->slots[at].used) at = (at + 1) & (m->size - 1);
+	memcpy(m->slots[at].key, key, 32);
+	m->slots[at].used = true;
+	m->slots[at].val = NULL;
+	m->count++;
+	return &m->slots[at];
+}
+
+static bucket *bucket_find(const layer *L, const uint8_t name[32]) {
+	mapslot *s = map_find(&L->by_name, name);
+	return s ? s->val : NULL;
+}
+
+static bucket *bucket_at(layer *L, const uint8_t name[32]) {
+	mapslot *s = map_at(&L->by_name, name);
+	if (!s->val) {
+		s->val = calloc(1, sizeof(bucket));
+		if (s->val == NULL) abort();
+	}
+	return s->val;
+}
+
+// a name moved: the seals waiting on it are looked at again (only seals held now care)
+static void moved(layer *L, const uint8_t name[32]) {
+	if (L->waiting_count == 0) return;
+	L->moved = more(L->moved, L->moved_count, &L->moved_room, 32);
+	memcpy(L->moved[L->moved_count++], name, 32);
+}
+
+// refused here, or the name of a stuck seal
 static bool is_gone(const layer *L, const uint8_t name[32]) {
-	for (size_t i = 0; i < L->gone_count; i++)
-		if (memcmp(L->gone[i], name, 32) == 0) return true;
-	return false;
+	const bucket *b = bucket_find(L, name);
+	return b && (b->refused || b->stuck > 0);
 }
 
 // refused: listed by id, a refusal of the same id replaced; name, when its seal had one, is kept so a
@@ -243,9 +356,9 @@ static void refuse(layer *L, const uint8_t id[32], bool fragment, transport_refu
 	memcpy(L->refused[i].id, id, 32);
 	L->refused[i].fragment = fragment;
 	L->refused[i].code = code;
-	if (name && !is_gone(L, name)) {
-		L->gone = more(L->gone, L->gone_count, &L->gone_room, 32);
-		memcpy(L->gone[L->gone_count++], name, 32);
+	if (name) {
+		bucket_at(L, name)->refused = true;
+		moved(L, name);
 	}
 }
 
@@ -282,6 +395,7 @@ static Json *decoded(const entry *e) {
 // true if the histories took it in, not passed over
 static bool admit(layer *L, entry *e) {
 	table_put(&L->names, e);
+	moved(L, e->name);
 	table_put(&L->stored, e);
 	L->taken = more(L->taken, L->taken_count, &L->taken_room, sizeof *L->taken);
 	L->taken[L->taken_count++] = e;
@@ -500,31 +614,88 @@ static int attempt(doc *d, layer *L, pending *p) {
 	return TAKEN;
 }
 
-// every seal held back is tried again, until none is taken in or refused
+// a pending seal no longer held
+static void kill(layer *L, pending *p) {
+	if (p->stuck) {
+		bucket_at(L, p->e->name)->stuck--;
+		moved(L, p->e->name);
+		p->stuck = false;
+	}
+	p->dead = true;
+	L->waiting[p->slot] = L->waiting[--L->waiting_count];
+	L->waiting[p->slot]->slot = p->slot;
+	mapslot *s = map_find(&L->by_id, p->id);
+	if (s && s->val == p) s->val = NULL;
+	unref(p);
+}
+
+static int by_seq(const void *x, const void *y) {
+	uint64_t a = (*(pending *const *)x)->seq, b = (*(pending *const *)y)->seq;
+	return a < b ? -1 : a > b;
+}
+
+// the seals held back that something moved for, or new ones, are tried again, round after round,
+// until none is left
 static void settle(doc *d, layer *L) {
-	bool progress = true;
-	while (progress) {
-		progress = false;
-		for (size_t i = 0; i < L->waiting_count;) {
-			pending *p = &L->waiting[i];
-			int result = attempt(d, L, p);
-			if (result == TAKEN || result == REFUSED) {
-				free(p->given);
-				jsonFree(p->e->blop), p->e->blop = NULL;
-				memmove(p, p + 1, (L->waiting_count - i - 1) * sizeof *p);
-				L->waiting_count--;
-				progress = true;
-			} else {
-				p->stuck = result == STUCK;
-				// a stuck seal makes its children stuck
-				if (p->stuck && !is_gone(L, p->e->name)) {
-					L->gone = more(L->gone, L->gone_count, &L->gone_room, 32);
-					memcpy(L->gone[L->gone_count++], p->e->name, 32);
-					progress = true;
-				}
-				i++;
+	while (L->fresh_count || L->moved_count) {
+		pending **fresh = L->fresh;
+		size_t fresh_count = L->fresh_count;
+		uint8_t(*names)[32] = L->moved;
+		size_t name_count = L->moved_count;
+		L->fresh = NULL, L->fresh_count = L->fresh_room = 0;
+		L->moved = NULL, L->moved_count = L->moved_room = 0;
+		uint64_t stamp = ++L->round;
+		pending **picks = NULL;
+		size_t pick_count = 0, pick_room = 0;
+		for (size_t i = 0; i < fresh_count; i++) {
+			pending *p = fresh[i];
+			if (!p->dead && p->mark != stamp) {
+				p->mark = stamp, p->refs++;
+				picks = more(picks, pick_count, &pick_room, sizeof *picks);
+				picks[pick_count++] = p;
 			}
+			unref(p);
 		}
+		free(fresh);
+		for (size_t i = 0; i < name_count; i++) {
+			bucket *b = bucket_find(L, names[i]);
+			if (!b) continue;
+			size_t kept = 0;
+			for (size_t k = 0; k < b->count; k++) {
+				pending *p = b->list[k];
+				if (p->dead) {
+					unref(p);
+					continue;
+				}
+				b->list[kept++] = p;
+				if (p->mark != stamp) {
+					p->mark = stamp, p->refs++;
+					picks = more(picks, pick_count, &pick_room, sizeof *picks);
+					picks[pick_count++] = p;
+				}
+			}
+			b->count = kept;
+		}
+		free(names);
+		qsort(picks, pick_count, sizeof *picks, by_seq);
+		for (size_t i = 0; i < pick_count; i++) {
+			pending *p = picks[i];
+			if (!p->dead) {
+				int result = attempt(d, L, p);
+				if (result == TAKEN || result == REFUSED) {
+					jsonFree(p->e->blop), p->e->blop = NULL;
+					kill(L, p);
+				} else if ((result == STUCK) != p->stuck) {
+					p->stuck = result == STUCK;
+					bucket *b = bucket_at(L, p->e->name);
+					if (p->stuck) b->stuck++;
+					else b->stuck--;
+					moved(L, p->e->name);
+				}
+			}
+			unref(p);
+		}
+		free(picks);
 	}
 }
 
@@ -586,24 +757,37 @@ static void take(doc *d, layer *L, bool commit, const uint8_t head[32], const ui
 
 // the seal's parents not yet looked at: held back, then settled
 static void hold(doc *d, layer *L, bool commit, const uint8_t id[32], const uint8_t (*given)[32], size_t given_count, entry *e) {
-	size_t i = 0;
-	while (i < L->waiting_count && memcmp(L->waiting[i].id, id, 32) != 0) i++;
-	if (i == L->waiting_count) {
-		L->waiting = more(L->waiting, L->waiting_count, &L->waiting_room, sizeof *L->waiting);
-		L->waiting_count++;
-	} else {
-		free(L->waiting[i].given);
-		entry *old = L->waiting[i].e;
-		if (old != e) jsonFree(old->blop), old->blop = NULL;
-	}
-	pending *p = &L->waiting[i];
+	mapslot *at = map_at(&L->by_id, id);
+	pending *old = at->val;
+	pending *p = calloc(1, sizeof *p);
+	if (p == NULL) abort();
+	p->refs = 1;
+	if (old) {
+		p->seq = old->seq;
+		if (old->e != e) jsonFree(old->e->blop), old->e->blop = NULL;
+		kill(L, old);
+	} else p->seq = L->seq++;
 	memcpy(p->id, id, 32);
 	p->commit = commit;
 	p->given = grab(given_count * 32);
 	if (given_count) memcpy(p->given, given, given_count * 32);
 	p->given_count = given_count;
 	p->e = e;
-	p->stuck = false;
+	at = map_at(&L->by_id, id);
+	at->val = p;
+	L->waiting = more(L->waiting, L->waiting_count, &L->waiting_room, sizeof *L->waiting);
+	p->slot = L->waiting_count;
+	L->waiting[L->waiting_count++] = p;
+	const Json *parents = jsonGet(e->blop, "parents");
+	for (int i = 0; i < parents->array.count; i++) {
+		bucket *b = bucket_at(L, parents->array.items[i]->bytes.data);
+		b->list = more(b->list, b->count, &b->room, sizeof *b->list);
+		b->list[b->count++] = p;
+		p->refs++;
+	}
+	L->fresh = more(L->fresh, L->fresh_count, &L->fresh_room, sizeof *L->fresh);
+	L->fresh[L->fresh_count++] = p;
+	p->refs++;
 	settle(d, L);
 }
 
@@ -988,37 +1172,58 @@ static void collect(void *context, const uint8_t id[32]) {
 
 // every fragment and then every loose commit of every tree in the store, as saves; no order is
 // needed: a commit whose parent is not yet in waits, as ever
+// the stored contents of one tree (its fragments, then its loose commits) queued as jobs
+static void queue_tree(transport *t, const uint8_t tree[32]) {
+	for (int k = 0; k < 2; k++) {
+		int kind = k == 0 ? ERM_STORE_FRAGMENT : ERM_STORE_COMMIT;
+		idlist ids = {0};
+		if (t->inner.list(t->inner.self, kind, tree, collect, &ids) == 0) {
+			for (size_t n = 0; n < ids.count; n++) {
+				uint8_t *bytes = NULL;
+				size_t length = 0;
+				if (t->inner.get(t->inner.self, kind, tree, ids.ids[n], &bytes, &length) != 1) continue;
+				t->jobs = more(t->jobs, t->job_count, &t->job_room, sizeof *t->jobs);
+				job *j = &t->jobs[t->job_count++];
+				j->kind = kind;
+				memcpy(j->tree, tree, 32);
+				memcpy(j->id, ids.ids[n], 32);
+				j->bytes = grab(length ? length : 1);
+				if (length) memcpy(j->bytes, bytes, length);
+				j->length = length;
+				erm_host_free(bytes);
+			}
+		}
+		free(ids.ids);
+	}
+}
+
+// at the start: every stored tree taken in; lazy, only listed (taken in when followed)
 static void load(transport *t) {
 	idlist trees = {0};
 	if (t->inner.list(t->inner.self, ERM_STORE_TREE, NULL, collect, &trees) != 0) {
 		free(trees.ids);
 		return;
 	}
-	for (size_t i = 0; i < trees.count; i++) {
-		for (int k = 0; k < 2; k++) {
-			int kind = k == 0 ? ERM_STORE_FRAGMENT : ERM_STORE_COMMIT;
-			idlist ids = {0};
-			if (t->inner.list(t->inner.self, kind, trees.ids[i], collect, &ids) == 0) {
-				for (size_t n = 0; n < ids.count; n++) {
-					uint8_t *bytes = NULL;
-					size_t length = 0;
-					if (t->inner.get(t->inner.self, kind, trees.ids[i], ids.ids[n], &bytes, &length) != 1) continue;
-					t->jobs = more(t->jobs, t->job_count, &t->job_room, sizeof *t->jobs);
-					job *j = &t->jobs[t->job_count++];
-					j->kind = kind;
-					memcpy(j->tree, trees.ids[i], 32);
-					memcpy(j->id, ids.ids[n], 32);
-					j->bytes = grab(length ? length : 1);
-					if (length) memcpy(j->bytes, bytes, length);
-					j->length = length;
-					erm_host_free(bytes);
-				}
-			}
-			free(ids.ids);
-		}
+	if (t->lazy) {
+		t->unloaded = trees.ids;
+		t->unloaded_count = trees.count;
+		return;
 	}
+	for (size_t i = 0; i < trees.count; i++) queue_tree(t, trees.ids[i]);
 	free(trees.ids);
 	work(t);
+}
+
+// lazy: the tree taken in if it is listed and not yet
+static void load_tree(transport *t, const uint8_t tree[32]) {
+	for (size_t i = 0; i < t->unloaded_count; i++) {
+		if (memcmp(t->unloaded[i], tree, 32) != 0) continue;
+		memmove(t->unloaded + i, t->unloaded + i + 1, (t->unloaded_count - i - 1) * 32);
+		t->unloaded_count--;
+		queue_tree(t, tree);
+		work(t);
+		return;
+	}
 }
 
 // -- events
@@ -1100,8 +1305,13 @@ transport *transport_create(const uint8_t seed[32], const ErmStore *store) {
 }
 
 transport *transport_create_told(const uint8_t seed[32], const ErmStore *store, void (*listener)(void *context, const transport_arrival *arrival), void *context) {
+	return transport_create_lazy(seed, store, false, listener, context);
+}
+
+transport *transport_create_lazy(const uint8_t seed[32], const ErmStore *store, bool lazy, void (*listener)(void *context, const transport_arrival *arrival), void *context) {
 	transport *t = calloc(1, sizeof *t);
 	if (t == NULL) abort();
+	t->lazy = lazy;
 	t->inner = *store;
 	t->store = (ErmStore){t, saved, store_get, store_list, store_remove};
 	ermEd25519Public(seed, t->key);
@@ -1127,6 +1337,7 @@ void transport_free(transport *t) {
 	for (size_t i = t->out_next; i < t->out_count; i++) free(t->out[i].bytes);
 	free(t->out);
 	free(t->found);
+	free(t->unloaded);
 	free(t->fetches);
 	for (size_t i = t->arrival_next; i < t->arrival_count; i++) jsonFree(t->arrivals[i].blop);
 	free(t->arrivals);
@@ -1206,6 +1417,7 @@ void transport_expire(transport *t) {
 transport_code transport_follow(transport *t, const char *id) {
 	doc *d = doc_named(t, id);
 	if (d == NULL) return TRANSPORT_DOC;
+	if (t->lazy) load_tree(t, d->tree);
 	d->followed = true;
 	erm_sd_subscribe(t->sd, d->tree);
 	fetch(t, d->tree, false);
@@ -1340,7 +1552,7 @@ transport_taking transport_taking_of(transport *t, const char *id, transport_lay
 	out.waiting = grab(L->waiting_count * sizeof *out.waiting);
 	out.stuck = grab(L->waiting_count * sizeof *out.stuck);
 	for (size_t i = 0; i < L->waiting_count; i++) {
-		pending *p = &L->waiting[i];
+		pending *p = L->waiting[i];
 		const Json *parents = jsonGet(p->e->blop, "parents");
 		if (p->stuck) {
 			transport_waiting *w = &out.stuck[out.stuck_count++];

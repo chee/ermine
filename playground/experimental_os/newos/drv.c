@@ -12,6 +12,7 @@
 // part of a read, one the driver keeps) is jsonRef'd or jsonShallow'd first.
 
 #include "drv.h"
+#include "words.h"
 #include "../../../ermine/encoding/c/json_text.h"
 
 #include <stdarg.h>
@@ -341,74 +342,21 @@ Json *drvNames(const ErmPartApi *api, Json *address) {
 
 // --- writes
 
-/**
- * a patch from the old core's shapes ({type: "snapshot", value}, {type: "set", path, key, value},
- * {type: "splice", path, range, value}) or core's ({path, range?, value?})
- */
-static bool patchOf(const Json *p, op_patch *out) {
-	const char *type = jsonText(jsonGet(p, "type"));
-	bool snapshot = type && !strcmp(type, "snapshot"), set = type && !strcmp(type, "set");
-	if (type && !snapshot && !set && strcmp(type, "splice")) return false;
-	Json *path = snapshot ? NULL : jsonGet(p, "path");
-	size_t given = jsonIsArray(path) ? (size_t)path->array.count : 0, n = given + (set ? 1 : 0);
-	op_key *keys = n ? hostTemp(host, n * sizeof *keys) : NULL;
-	for (size_t i = 0; i < given; i++) {
-		Json *k = path->array.items[i];
-		int64_t whole;
-		if (jsonIsWhole(k, &whole)) keys[i] = (op_key){ .type = OP_NUM_KEY, .n = (long)whole };
-		else keys[i] = (op_key){ .type = OP_STR_KEY, .s = jsonText(k) ? hostTempDup(host, jsonText(k)) : "" };
-	}
-	if (set) keys[n - 1] = (op_key){ .type = OP_STR_KEY, .s = hostTempDup(host, jsonText(jsonGet(p, "key")) ? jsonText(jsonGet(p, "key")) : "") };
-	Json *value = jsonGet(p, "value"), *range = jsonGet(p, "range");
-	*out = (op_patch){ .place = { .path = keys, .length = n }, .has_value = value != NULL, .value = value ? valOf(value) : NULL };
-	int64_t from, to;
-	if (!snapshot && jsonIsArray(range) && range->array.count == 2 && jsonIsWhole(range->array.items[0], &from) && jsonIsWhole(range->array.items[1], &to))
-		out->place.has_range = 1, out->place.from = (long)from, out->place.to = (long)to;
-	return true;
-}
-
-static const ap_error *write(const ErmPartApi *api, Json *address, Json *patches) {
-	size_t n, np = jsonIsArray(patches) ? (size_t)patches->array.count : 0;
+/** the value whole (key NULL), or one key of the map there, written: one patch, through the API */
+static void write(const ErmPartApi *api, Json *address, const char *key, Json *value) {
+	size_t n;
 	const char *const *a = names(address, &n);
-	op_patch *ps = calloc(np ? np : 1, sizeof *ps);
-	for (size_t i = 0; i < np; i++)
-		if (!patchOf(patches->array.items[i], &ps[i])) {
-			free(ps);
-			return ap_error_new(hostOs(host), "wrong-field", "a patch of a kind the kit does not know");
-		}
-	const ap_error *e = ap_write((ap_api *)api, a, n, ps, np, NULL, NULL);
-	for (size_t i = 0; i < np; i++) op_free((op_value *)ps[i].value);
-	free(ps);
-	return e;
-}
-
-/** one patch, the kit's own, holding the value given (the turn's: a hold of its own) */
-static Json *patch(const char *type, const char *key, Json *value) {
-	Json *p = jsonObject();
-	jsonAdd(p, "type", jsonString(type));
-	if (key) {
-		jsonAdd(p, "path", jsonArray());
-		jsonAdd(p, "key", jsonString(key));
-	}
-	jsonAdd(p, "value", given(turn(value)));
-	Json *patches = jsonArray();
-	jsonPush(patches, p);
-	return patches;
-}
-
-void drvSnap(const ErmPartApi *api, Json *address, Json *value) {
-	Json *patches = patch("snapshot", NULL, value);
-	const ap_error *e = write(api, address, patches);
-	jsonFree(patches);
+	op_value *v = valOf(turn(value));
+	op_key k = { .type = OP_STR_KEY, .s = key };
+	op_patch p = { .place = { .path = &k, .length = key ? 1 : 0 }, .has_value = 1, .value = v };
+	const ap_error *e = ap_write((ap_api *)api, a, n, &p, 1, NULL, NULL);
+	op_free(v);
 	if (e) said("write", address, e);
 }
 
-void drvSet(const ErmPartApi *api, Json *address, const char *key, Json *value) {
-	Json *patches = patch("set", key, value);
-	const ap_error *e = write(api, address, patches);
-	jsonFree(patches);
-	if (e) said("write", address, e);
-}
+void drvSnap(const ErmPartApi *api, Json *address, Json *value) { write(api, address, NULL, value); }
+
+void drvSet(const ErmPartApi *api, Json *address, const char *key, Json *value) { write(api, address, key, value); }
 
 static const ap_error *place(const ErmPartApi *api, Json *at, const char *name, const char *id, const op_value *value, bool ephemeral) {
 	const char *parent = idAt(api, at);
@@ -462,25 +410,30 @@ Json *drvOp(const ErmPartApi *api, const char *op, Json *fields) {
 	const char *name = jsonText(jsonGet(fields, "name")), *id = jsonText(jsonGet(fields, "id"));
 	const ap_error *e = NULL;
 	Json *ok = turn(jsonNull());
-	if (!strcmp(op, "write")) {
-		e = write(api, address, jsonGet(fields, "patches"));
-	} else if (!strcmp(op, "place")) {
+	const char *const *words = wdFields(op);
+	if (!strcmp(op, "place")) {
 		Json *eph = jsonGet(fields, "ephemeral");
 		op_value *v = valOf(jsonGet(fields, "value"));
 		e = place(api, address, name ? name : "", id && *id ? id : NULL, v, eph && eph->type == JSON_BOOLEAN && eph->boolean);
 		op_free(v);
 	} else if (!strcmp(op, "unplace")) {
 		e = unplace(api, address, name ? name : "", id);
-	} else if (!strcmp(op, "call")) {
-		ap_given *g = now();
-		size_t n;
-		const char *const *a = names(address, &n);
-		Json *args = jsonGet(fields, "args");
-		op_value *av = args ? valOf(args) : NULL, *out = NULL;
-		if (!g) e = ap_error_new(hostOs(host), "stopped", "call outside a part");
-		else e = ap_call(g, a, n, av, &out);
-		op_free(av);
+	} else if (words) {
+		// a word of the API's (write, call, start): its fields as values, in the dispatch's order (words.h)
+		op_value *args[8] = { 0 }, *out = NULL;
+		size_t n = 0;
+		for (; words[n] && n < 8; n++) {
+			Json *v = jsonGet(fields, words[n]);
+			// a start's program as text, "programs/x": its path
+			if (v && jsonIsString(v) && !strcmp(words[n], "program")) {
+				args[n] = op_list();
+				for (char *p = strtok(hostTempDup(host, jsonText(v)), "/"); p; p = strtok(NULL, "/")) op_push(args[n], op_str(p));
+			} else args[n] = v ? valOf(v) : NULL;
+		}
+		e = wdDo(now(), (ap_api *)api, op, (const op_value *const *)args, n, &out);
+		for (size_t i = 0; i < n; i++) op_free(args[i]);
 		if (!e && out) ok = turn(jsonOfVal(out));
+		op_free(out);
 	} else {
 		e = ap_error_new(hostOs(host), "unsupported", op);
 	}

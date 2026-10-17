@@ -1,5 +1,5 @@
-// a folder of n children placed on one host, fetched by another: how long until the second has
-// them all. deno run -A typescript/fetch_bench.ts [n]
+// a folder of n children placed on one host, then fetched by another: how long each takes.
+// deno run -A typescript/fetch_bench.ts [n]
 import { ed25519 } from "npm:@noble/curves@1.9.7/ed25519"
 import type { Transport } from "npm:@automerge/subduction@0.23.0"
 import * as sd from "npm:@automerge/subduction@0.23.0"
@@ -94,11 +94,13 @@ async function connect(a: Host, b: Host) {
 const n = Number(Deno.args[0] ?? 900)
 const a = host(1), b = host(2)
 const folder = a.sync.mint()
+const written = performance.now()
 a.write("children", folder, [{ path: [], value: {} } as Patch])
 for (let i = 0; i < n; i++) {
 	a.write("children", folder, [{ path: [`e${i}`], value: `id${i}` } as Patch])
 }
 await quiet(a)
+console.log(`${n} children written in ${(performance.now() - written).toFixed(0)}ms`)
 await b.sync.follow(folder)
 const start = performance.now()
 await connect(a, b)

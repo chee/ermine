@@ -82,7 +82,8 @@ export function createWorld(device: Device, o: Options): World {
 	const show: Versions = (node, object, list, from) => {
 		const part: Key = object === "value" ? "value" : names[object[0]]
 		const name = object === "value" ? undefined : object[1]
-		const content = list[0]?.content
+		// the side changes in place with the next blop: the table holds a copy
+		const content = structuredClone(list[0]?.content)
 		const header: ChangeHeader = list[0]?.change ?? { time: 0, actor: from.actor }
 		const entry = table.get(part, node)
 		const held = entry?.value as Record<string, unknown> | undefined

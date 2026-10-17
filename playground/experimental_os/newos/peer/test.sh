@@ -16,7 +16,7 @@ cc -std=c11 -Wall -Wextra -O1 -g $CFLAGS $rename -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SS
 	-Iextensions/subduction/c/subduction -o "$out/peer_test" "$here/peer_test.c" "$here/peer.c" \
 	extensions/subduction/c/transport.c extensions/subduction/c/id.c extensions/subduction/c/seal.c extensions/subduction/c/history.c \
 	extensions/subduction/c/apply.c extensions/subduction/c/commit.c extensions/subduction/c/fragment.c extensions/subduction/c/wiring.c \
-	ermine/encoding/c/blop.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c \
+	ermine/encoding/c/blop.c ermine/encoding/c/json.c ermine/encoding/c/json_text.c ermine/encoding/c/cbor.c \
 	ermine/encoding/c/blake3/blake3.c ermine/encoding/c/blake3/blake3_dispatch.c ermine/encoding/c/blake3/blake3_portable.c \
 	extensions/subduction/c/ed25519/ed25519.c extensions/subduction/c/ed25519/sha2.c \
 	filesystem/places/c/places.c filesystem/places/c/cache.c filesystem/places/c/status.c core/scheduler/c/selector.c \

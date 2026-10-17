@@ -150,6 +150,13 @@ export async function start(o: Options) {
 	const signer = await createSigner(o.seed)
 	const me = hexOf(signer.key)
 	const storage = await Storage.open(o.backend)
+	// saves resolve before they are kept (live/storage.ts): flushed every few seconds, so a write
+	// that failed is told, and on the way out, which a browser may not wait for
+	const flushed = () => storage.flush().catch((e) => log(`storage: ${e}`))
+	const flushing = setInterval(flushed, 2000)
+	const away = () => void flushed()
+	globalThis.addEventListener?.("pagehide", away)
+	globalThis.addEventListener?.("beforeunload", away)
 
 	// ---- the host: table, places, scheduler, and sync beside them
 
@@ -433,6 +440,9 @@ export async function start(o: Options) {
 		async close() {
 			stop = true
 			clearInterval(timer)
+			clearInterval(flushing)
+			globalThis.removeEventListener?.("pagehide", away)
+			globalThis.removeEventListener?.("beforeunload", away)
 			stopSweeper()
 			link.stop()
 			await sync.idle().catch(() => {})

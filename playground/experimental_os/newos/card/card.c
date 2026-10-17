@@ -2,8 +2,9 @@
 // is written to it at boot (every document on the card, whole: sync takes in all the store holds
 // on its first run), and what comes over the network after; a change the host makes to a kept
 // table goes out as one commit. What this file adds is the OS's: the card's folder, the root,
-// which documents are followed (the root, every document a children entry reached from it names,
-// and what drivers bring), the places told of what sync wrote, and the counts /dev/sync/link shows.
+// which documents are followed (the root, what drivers bring, and every document the children
+// entry of a followed one names: kept up entry by entry, "following" below), the places told of
+// what sync wrote, and the counts /dev/sync/link shows.
 //
 // The card's folder, sync/ inside the folder the metal gives (~/.ermine/disk): a new name, so a
 // card of the old layout beside it (device/, subduction/, seen) is never read:
@@ -42,6 +43,12 @@ typedef struct {
 	char *part, *id;
 } Key;
 
+// a stack of ids
+typedef struct {
+	char **items;
+	size_t count, room;
+} Ids;
+
 struct Card {
 	char *folder; // sd/sync
 	uint8_t seed[32];
@@ -57,7 +64,11 @@ struct Card {
 	im_map brought;  // the documents drivers bring (cardFollow): reached as the root is
 	Key *keys;       // the keys sync changed in place this run, the places to be told
 	size_t nkeys, keys_room;
-	bool reach;      // a children entry changed or came: what lists name, followed again
+	Ids look;        // the documents whose children entry is looked at this turn: changed, come, or newly followed
+	im_map looking;  // what look holds, by bytes
+	im_map shadow;   // ERMOS_CARD_CHECK: what the full walk would have followed by now
+	size_t looked;   // children entries looked at since the last check
+	bool check;      // ERMOS_CARD_CHECK set: each pass checked against the full walk
 	bool wrote;      // the table written by sync since the last pulse
 	bool booting;    // what the card holds being taken in: not counted
 	void (*told)(void *context, const char *doc);
@@ -65,6 +76,8 @@ struct Card {
 };
 
 static const char *const PARTS[] = {"value", "attributes", "children"};
+
+static void look(Card *c, const char *id);
 
 bool id_is(const char *text) {
 	uint8_t bytes[32];
@@ -216,7 +229,7 @@ static void committed(void *context, nd_entry *const *changed, size_t n) {
 		for (size_t j = 0; j < k; j++) {
 			if (!w[j].part.string || !w[j].id.string) continue;
 			keyChanged(c, w[j].part.string, w[j].id.string);
-			if (!strcmp(w[j].part.string, "children")) c->reach = true;
+			if (!strcmp(w[j].part.string, "children")) look(c, w[j].id.string);
 		}
 	}
 	c->wrote = true;
@@ -227,12 +240,12 @@ static void dropped(void *context, nd_entry *e) {
 	(void)context, (void)e;
 }
 
-/** a commit taken in from the card or elsewhere: counted, told; what its document's lists name followed (reach) */
+/** a commit taken in from the card or elsewhere: counted, told; what its document's children name followed (look) */
 static void arrived(void *context, const tp_arrival *a) {
 	Card *c = context;
 	if (!c->booting) count(c, 0, a->layer == TP_STORED && !a->heard, a->heard);
 	if (a->layer != TP_STORED) return;
-	c->reach = true;
+	look(c, a->doc);
 	c->wrote = true;
 	if (c->told) c->told(c->told_context, a->doc);
 }
@@ -247,21 +260,15 @@ static void tellPlaces(Card *c) {
 }
 
 // --- following
-
-static bool follow(Card *c, const char *id) {
-	uint8_t bytes[32];
-	if (!tp_doc(id, bytes)) return false;
-	if (im_has(&c->followed, bytes)) return true;
-	im_set(&c->followed, bytes, (void *)1);
-	if (!sy_follow(c->sync, id)) say(c, "card: %s is not a document", id);
-	return true;
-}
-
-// a stack of ids
-typedef struct {
-	char **items;
-	size_t count, room;
-} Ids;
+//
+// Followed: the root, what drivers bring (cardFollow), and every document the children entry of a
+// followed document names. Kept up entry by entry: a children entry that changes or comes (look),
+// and a document newly followed, is looked at in the turn (settle), that entry alone: each id it
+// names not followed yet is followed, and looked at in turn, so what it reaches is followed too,
+// once, as it loads. The same set as a walk of the whole graph from the root on each change (walk,
+// kept for the check) after any sequence, but that a followed document's children stay followed
+// after nothing reaches it any more (following never ends: sync has no unfollow). ERMOS_CARD_CHECK
+// in the environment: each pass compared with the full walk, and a line said.
 
 static void push(Ids *s, const char *id) {
 	if (s->count == s->room) {
@@ -272,40 +279,94 @@ static void push(Ids *s, const char *id) {
 	s->items[s->count++] = strdup(id);
 }
 
-/**
- * every document a children entry reached from the root, or from one a driver brings, names:
- * followed, so it is synced with the server (what the card holds of it is in the table already)
- */
-static void reach(Card *c) {
-	im_map seen = {0};
+/** the document's children entry looked at this turn (after the run: never while sync is applying) */
+static void look(Card *c, const char *id) {
+	uint8_t bytes[32];
+	if (c->booting || !tp_doc(id, bytes) || im_has(&c->looking, bytes)) return;
+	im_set(&c->looking, bytes, (void *)1);
+	push(&c->look, id);
+}
+
+/** followed, and looked at when newly so; false: not a document */
+static bool follow(Card *c, const char *id) {
+	uint8_t bytes[32];
+	if (!tp_doc(id, bytes)) return false;
+	if (im_has(&c->followed, bytes)) return true;
+	im_set(&c->followed, bytes, (void *)1);
+	if (!sy_follow(c->sync, id)) say(c, "card: %s is not a document", id);
+	look(c, id);
+	return true;
+}
+
+/** the full walk: every document a children entry reached from the root, or from one a driver brings, names, into seen (fresh); how many entries it read */
+static size_t walk(Card *c, im_map *seen) {
 	Ids todo = {0};
 	uint8_t bytes[32];
+	size_t read = 0;
 	tp_doc(c->root, bytes);
-	im_set(&seen, bytes, (void *)1);
+	im_set(seen, bytes, (void *)1);
 	push(&todo, c->root);
 	for (size_t i = 0; i < c->brought.slots; i++) {
-		if (!c->brought.used[i] || im_has(&seen, c->brought.keys[i])) continue;
-		im_set(&seen, c->brought.keys[i], (void *)1);
+		if (!c->brought.used[i] || im_has(seen, c->brought.keys[i])) continue;
 		char id[ID_LENGTH + 1];
 		memcpy(id, "ermine://", 9);
 		hex(c->brought.keys[i], 32, id + 9);
+		im_set(seen, c->brought.keys[i], (void *)1);
 		push(&todo, id);
 	}
 	while (todo.count) {
 		char *id = todo.items[--todo.count];
-		follow(c, id);
 		const nd_entry *children = tb_get(c->table, tb_string("children"), tb_string(id));
+		read++;
 		free(id);
 		const op_value *names = children ? children->value : NULL;
 		for (size_t i = 0; names && names->type == OP_MAP && i < names->count; i++) {
 			const op_value *v = names->items[i];
-			if (v->type != OP_STR || !tp_doc(v->str, bytes) || im_has(&seen, bytes)) continue;
-			im_set(&seen, bytes, (void *)1);
+			if (v->type != OP_STR || !tp_doc(v->str, bytes) || im_has(seen, bytes)) continue;
+			im_set(seen, bytes, (void *)1);
 			push(&todo, v->str);
 		}
 	}
-	im_free(&seen);
 	free(todo.items);
+	return read;
+}
+
+/** ERMOS_CARD_CHECK: what the full walk on each change would have followed by now (the walks so far, shadow) against what is followed; the entries each read */
+static void checked(Card *c) {
+	im_map seen = {0};
+	size_t read = walk(c, &seen);
+	for (size_t i = 0; i < seen.slots; i++)
+		if (seen.used[i]) im_set(&c->shadow, seen.keys[i], (void *)1);
+	im_free(&seen);
+	size_t missing = 0, extra = 0;
+	for (size_t i = 0; i < c->shadow.slots; i++)
+		if (c->shadow.used[i] && !im_has(&c->followed, c->shadow.keys[i])) missing++;
+	for (size_t i = 0; i < c->followed.slots; i++)
+		if (c->followed.used[i] && !im_has(&c->shadow, c->followed.keys[i])) extra++;
+	say(c, "card: check: looked at %zu entries (the full walk %zu); followed %zu, the walks %zu: %zu missing, %zu extra", c->looked, read, c->followed.count, c->shadow.count, missing, extra);
+	c->looked = 0;
+}
+
+/** each document to be looked at: what its children entry names followed, the newly followed looked at in turn */
+static void settle(Card *c) {
+	uint8_t bytes[32];
+	bool any = c->look.count > 0;
+	while (c->look.count) {
+		char *id = c->look.items[--c->look.count];
+		tp_doc(id, bytes);
+		im_del(&c->looking, bytes);
+		if (im_has(&c->followed, bytes)) {
+			const nd_entry *children = tb_get(c->table, tb_string("children"), tb_string(id));
+			c->looked++;
+			const op_value *names = children ? children->value : NULL;
+			for (size_t i = 0; names && names->type == OP_MAP && i < names->count; i++) {
+				const op_value *v = names->items[i];
+				if (v->type == OP_STR) follow(c, v->str);
+			}
+		}
+		free(id);
+	}
+	if (any && c->check) checked(c);
 }
 
 // --- sync
@@ -342,7 +403,7 @@ void cardWrote(Card *c, const pl_changed *changed, const card_born *born, size_t
 		if (!born[i].entry || !born[i].entry->value || !isPart(born[i].part) || !id_is(born[i].id)) continue;
 		sy_table_changed(c->sync, tb_string(born[i].part), tb_string(born[i].id));
 		made++;
-		if (!strcmp(born[i].part, "children")) c->reach = true;
+		if (!strcmp(born[i].part, "children")) look(c, born[i].id);
 		if (c->told) c->told(c->told_context, born[i].id);
 	}
 	for (size_t i = 0; changed && i < changed->n; i++) {
@@ -357,7 +418,7 @@ void cardWrote(Card *c, const pl_changed *changed, const card_born *born, size_t
 			if (!isPart(w[j].part.string) || !id_is(w[j].id.string)) continue;
 			kept = true;
 			made++;
-			if (!strcmp(w[j].part.string, "children")) c->reach = true;
+			if (!strcmp(w[j].part.string, "children")) look(c, w[j].id.string);
 			if (c->told) c->told(c->told_context, w[j].id.string);
 		}
 		if (kept) sy_wrote(c->sync, &e, 1);
@@ -368,10 +429,7 @@ void cardWrote(Card *c, const pl_changed *changed, const card_born *born, size_t
 int64_t cardTurn(Card *c) {
 	int64_t wait = run(c);
 	tellPlaces(c);
-	if (c->reach) {
-		c->reach = false;
-		reach(c);
-	}
+	settle(c);
 	// what was written, run
 	if (c->wrote) c->wrote = false, sc_pulse(c->s);
 	if (!c->booting) count(c, 0, 0, 0);
@@ -381,6 +439,7 @@ int64_t cardTurn(Card *c) {
 bool cardStart(Card *c, pl *places, tb_table *table, sc_scheduler *s, const card_host *host) {
 	c->l = places, c->table = table, c->s = s;
 	if (host) c->host = *host;
+	c->check = getenv("ERMOS_CARD_CHECK") != NULL;
 	sy_options o = {.table = table, .store = &c->store, .zeros = true, .commit = committed, .drop = dropped, .context = c};
 	memcpy(o.seed, c->seed, 32);
 	c->sync = sy_create(&o);
@@ -398,9 +457,8 @@ bool cardStart(Card *c, pl *places, tb_table *table, sc_scheduler *s, const card
 	}
 	tellPlaces(c);
 	c->booting = false;
-	c->reach = false;
 	follow(c, c->root);
-	reach(c);
+	settle(c);
 	if (c->wrote) c->wrote = false, sc_pulse(c->s);
 	size_t n = 0;
 	tb_at(table, tb_string(c->root), &n);
@@ -418,7 +476,9 @@ void cardFree(Card *c) {
 	sy_free(c->sync);
 	for (size_t i = 0; i < c->nkeys; i++) free(c->keys[i].part), free(c->keys[i].id);
 	free(c->keys);
-	im_free(&c->followed), im_free(&c->brought);
+	for (size_t i = 0; i < c->look.count; i++) free(c->look.items[i]);
+	free(c->look.items);
+	im_free(&c->followed), im_free(&c->brought), im_free(&c->looking), im_free(&c->shadow);
 	free(c->folder), free(c);
 }
 
@@ -438,7 +498,7 @@ void cardFollow(Card *c, const char *doc) {
 	uint8_t bytes[32];
 	if (!c->sync || !tp_doc(doc, bytes) || im_has(&c->brought, bytes)) return;
 	im_set(&c->brought, bytes, (void *)1);
-	c->reach = true;
+	follow(c, doc);
 }
 
 void cardTold(Card *c, void (*told)(void *context, const char *doc), void *context) {

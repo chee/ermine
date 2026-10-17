@@ -1,6 +1,7 @@
 // drv_basic.c: the small drivers, as image/drivers/*.js were: kbd, pointer,
-// power, clip and uart; and stack, the scheduler's replace. Each claims its irq lines, keeps its device's nodes
-// in its ".", /dev/<device>, and hands records on or makes commands.
+// power, clip, uart and hotplug (cpu, usb, net, volumes); and stack, the scheduler's replace. Each
+// claims its irq lines, keeps its device's nodes in its ".", /dev/<device>, and hands records on or
+// makes commands.
 
 #include "drivers.h"
 #include "drv.h"
@@ -299,6 +300,100 @@ ErmErr driverUart(void *data, const ErmGiven *g, Json **out) {
 	drvHandler(g, here, "irq", (ErmFn){ uartIrq, NULL });
 	drvClaim(g, here, 36);
 	drvChild(g, here, "send", (ErmFn){ sendCompute, NULL }, (ErmFn){ sendEffect, data });
+	return ermOk();
+}
+
+// --- hotplug (irqs 43 cpu, 44 usb, 45 net, 48 volumes; mac/METAL.md): what the metal says of the
+// machine, as nodes. /dev/cpu {load, memory}, as the metal posts it (once a second); /dev/usb/<id>, a
+// device present, the attach record's fields, gone at detach; /dev/net {status, up, interfaces,
+// expensive, constrained} and /dev/net/<interface> {name, type}, those gone taken out;
+// /dev/volumes/<name> {path, name}, a volume mounted, gone at unmount
+
+/** the record's fields, but its line and time */
+static Json *fields(const Json *r) {
+	Json *m = jsonObject();
+	for (int i = 0; jsonIsObject(r) && i < r->object.count; i++) {
+		const char *k = r->object.members[i].key;
+		if (strcmp(k, "irq") && strcmp(k, "at")) jsonAdd(m, k, jsonShallow(r->object.members[i].value));
+	}
+	return m;
+}
+
+/** parent/name holding value: written, or placed (ephemeral, its id kind/name) */
+static void present(const ErmPartApi *api, Json *parent, const char *kind, const char *name, Json *value) {
+	Json *at = drvUnder(parent, name, NULL);
+	if (drvHas(api, at)) drvSnap(api, at, value);
+	else {
+		char *id = formatString("%s/%s", kind, name);
+		drvPlace(api, parent, name, id, value);
+		free(id);
+	}
+}
+
+/** parent/name unplaced, if it is there */
+static void absent(const ErmPartApi *api, Json *parent, const char *name) {
+	if (drvHas(api, drvUnder(parent, name, NULL))) drvOp(api, "unplace", drvMap("address", parent, "name", jsonString(name), NULL));
+}
+
+static ErmErr hotplugIrq(void *data, const ErmGiven *g, Json **out) {
+	(void)data;
+	*out = NULL;
+	Json *recs = first(g);
+	for (int i = 0; recs && i < recs->array.count; i++) {
+		Json *r = recs->array.items[i];
+		int64_t irq = whole(jsonGet(r, "irq"), 0);
+		const char *e = event(r);
+		if (irq == 43) drvSnap(g->api, drvPath("/", "dev", "cpu", NULL), fields(r));
+		else if (irq == 44) {
+			const char *id = jsonText(jsonGet(r, "id"));
+			if (!id || !*id) continue;
+			Json *usb = drvPath("/", "dev", "usb", NULL);
+			if (!strcmp(e, "attach")) present(g->api, usb, "usb", id, fields(r));
+			else if (!strcmp(e, "detach")) absent(g->api, usb, id);
+		} else if (irq == 45) {
+			Json *net = drvPath("/", "dev", "net", NULL), *v = fields(r), *list = jsonGet(r, "interfaces");
+			const char *status = jsonText(jsonGet(r, "status"));
+			jsonAdd(v, "up", jsonBoolean(status && !strcmp(status, "satisfied")));
+			Json *had = drvNames(g->api, net);
+			drvSnap(g->api, net, v);
+			for (int k = 0; jsonIsArray(list) && k < list->array.count; k++) {
+				const char *name = jsonText(jsonGet(list->array.items[k], "name"));
+				if (name && *name) present(g->api, net, "net", name, jsonShallow(list->array.items[k]));
+			}
+			for (int k = 0; k < had->array.count; k++) {
+				const char *name = jsonText(had->array.items[k]);
+				bool still = false;
+				for (int j = 0; jsonIsArray(list) && j < list->array.count && !still; j++) {
+					const char *n = jsonText(jsonGet(list->array.items[j], "name"));
+					still = n && !strcmp(n, name);
+				}
+				if (!still) absent(g->api, net, name);
+			}
+		} else if (irq == 48) {
+			const char *name = jsonText(jsonGet(r, "name")), *path = jsonText(jsonGet(r, "path"));
+			if (!name || !*name) name = path && strrchr(path, '/') ? strrchr(path, '/') + 1 : path;
+			if (!name || !*name) continue;
+			Json *volumes = drvPath("/", "dev", "volumes", NULL);
+			if (!strcmp(e, "mount")) present(g->api, volumes, "volumes", name, fields(r));
+			else if (!strcmp(e, "unmount")) absent(g->api, volumes, name);
+		}
+	}
+	return ermOk();
+}
+
+ErmErr driverHotplug(void *data, const ErmGiven *g, Json **out) {
+	(void)data;
+	*out = jsonNull();
+	Json *here = drvHere(g), *dev = drvPath("/", "dev", NULL);
+	drvMake(g->api, dev, "cpu", "dev/cpu", drvMap("load", jsonArray(), "memory", jsonNull(), NULL));
+	drvMake(g->api, dev, "usb", "dev/usb", jsonNull());
+	drvMake(g->api, dev, "net", "dev/net", drvMap("status", jsonNull(), "up", jsonBoolean(false), "interfaces", jsonArray(), NULL));
+	drvMake(g->api, dev, "volumes", "dev/volumes", jsonNull());
+	drvHandler(g, here, "irq", (ErmFn){ hotplugIrq, NULL });
+	drvClaim(g, here, 43);
+	drvClaim(g, here, 44);
+	drvClaim(g, here, 45);
+	drvClaim(g, here, 48);
 	return ermOk();
 }
 

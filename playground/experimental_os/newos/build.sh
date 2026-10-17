@@ -6,6 +6,7 @@
 # programs exec runs (programs/) go to ../mac/build/newos/programs. ../mac/app.sh bundles it all.
 #
 #   sh playground/experimental_os/newos/build.sh       # says each step; -q only what it built and what went wrong
+#   rm -rf playground/experimental_os/mac/build/newos   # to build everything again (else only what changed is compiled)
 #   playground/experimental_os/mac/ermineOS            # from a terminal, which is then the serial line
 #   playground/experimental_os/mac/ermineOS -- --fresh # a fresh card: the image makes it again
 #
@@ -31,50 +32,77 @@ say "the runner: js/runner.js"
 nc_runner
 
 mkdir -p "$build"
-rm -f "$build"/*.o
+NC_CC=clang
+cflags="-std=c11 -Wall -Wextra -O2 -target $target -isysroot $sdk $nc_cflags"
 set -- # the objects to link
-compile() {
-	say "  cc $(echo "$1" | sed "s|^$root/||")"
-	# shellcheck disable=SC2086
-	clang -std=c11 -Wall -Wextra -O2 -target "$target" -isysroot "$sdk" $nc_cflags -c "$1" -o "$2"
-}
-say "compiling today's core, filesystem, ermine and extensions, and newos's own libraries"
+say "compiling what changed of today's core, filesystem, ermine, extensions, newos's libraries and newos"
 for src in $nc_sources; do
-	obj="$build/nc_$(basename "$(dirname "$(dirname "$src")")")_$(basename "$src" .c).o"
-	compile "$src" "$obj"
+	obj="$build/$(nc_object "$src")"
+	# shellcheck disable=SC2086
+	nc_compile "$src" "$obj" $cflags
 	set -- "$@" "$obj"
 done
-say "compiling newos"
 for src in "$here"/*.c; do
 	case " $nc_skip " in *" $(basename "$src") "*) continue ;; esac
 	obj="$build/os_$(basename "$src" .c).o"
-	compile "$src" "$obj"
+	# shellcheck disable=SC2086
+	nc_compile "$src" "$obj" $cflags
 	set -- "$@" "$obj"
 done
 
 # the programs exec runs (programs/), each with libermine (lib/), into $build/programs: by default
 # build/newos/programs beside $mac/ermineOS, where exec.c finds them
-say "compiling the programs exec runs: catclock, with libermine"
 mkdir -p "$build/programs" "$build/lib"
+libflags="-std=c11 -Wall -Wextra -O2 -target $target -isysroot $sdk"
+libobjs=""
 for src in "$here/lib/libermine.c" "$here/abi.c" "$root/ermine/encoding/c/json.c" "$root/ermine/encoding/c/json_text.c" "$root/ermine/encoding/c/cbor.c"; do
-	clang -std=c11 -Wall -Wextra -O2 -target "$target" -isysroot "$sdk" -c "$src" -o "$build/lib/$(basename "$src" .c).o"
+	obj="$build/lib/$(basename "$src" .c).o"
+	# shellcheck disable=SC2086
+	nc_compile "$src" "$obj" $libflags
+	libobjs="$libobjs $obj"
 done
-rm -f "$build/lib/libermine.a"
-ar rcs "$build/lib/libermine.a" "$build/lib/libermine.o" "$build/lib/abi.o" "$build/lib/json.o" "$build/lib/json_text.o" "$build/lib/cbor.o"
-clang -std=c11 -Wall -Wextra -O2 -target "$target" -isysroot "$sdk" -o "$build/programs/catclock" "$here/programs/catclock/catclock.c" "$here/blit.c" "$build/lib/libermine.a" -lm
-echo "built $build/programs/catclock"
+# shellcheck disable=SC2086
+if nc_stale "$build/lib/libermine.a" $libobjs; then
+	rm -f "$build/lib/libermine.a"
+	# shellcheck disable=SC2086
+	ar rcs "$build/lib/libermine.a" $libobjs
+fi
+if nc_stale "$build/programs/catclock" "$here/programs/catclock/catclock.c" "$here/blit.c" "$here/blit.h" "$here/lib/libermine.h" "$build/lib/libermine.a"; then
+	say "  the programs exec runs: catclock, with libermine"
+	# shellcheck disable=SC2086
+	clang $libflags -o "$build/programs/catclock" "$here/programs/catclock/catclock.c" "$here/blit.c" "$build/lib/libermine.a" -lm
+	echo "built $build/programs/catclock"
+fi
 
-say "compiling the metal ($(ls "$mac"/metal/*.swift | wc -l | tr -d ' ') files) and linking $# objects"
+# the metal, as one object (whole module), compiled again only when a Swift file or the bridging header is newer
+metal="$build/metal.o"
+# shellcheck disable=SC2046
+if nc_stale "$metal" "$mac"/metal/*.swift "$here/os.h" $(grep -o '#include "[^"]*"' "$here/os.h" | sed 's/#include "//;s/"$//' | sed "s|^|$here/|"); then
+	say "compiling the metal ($(ls "$mac"/metal/*.swift | wc -l | tr -d ' ') files)"
+	swiftc -O -swift-version 5 -whole-module-optimization -emit-object \
+		-sdk "$sdk" \
+		-target "$target" \
+		-import-objc-header "$here/os.h" \
+		-o "$metal" \
+		"$mac"/metal/*.swift 2> "$build/metal.err" || { cat "$build/metal.err" >&2; exit 1; }
+	nc_built=$((nc_built + 1))
+fi
+
+if ! nc_stale "$out" "$metal" "$@"; then
+	say "nothing changed: $out is up to date"
+	[ -n "${APP:-}" ] || ln -sf ermineOS "$mac/ermine-mac"
+	exit 0
+fi
+say "linking $out ($nc_built compiled)"
 # shellcheck disable=SC2086
 swiftc -O -swift-version 5 \
 	-sdk "$sdk" \
 	-target "$target" \
-	-import-objc-header "$here/os.h" \
 	-framework AppKit -framework QuartzCore -framework CoreText -framework IOKit \
 	-framework Network -framework AVFoundation -framework CoreAudio -framework WebKit \
 	-framework ScreenCaptureKit -framework CoreMedia -framework CoreVideo \
 	-o "$out" \
-	"$mac"/metal/*.swift "$@" $nc_libs 2> "$build/link.err" || { cat "$build/link.err" >&2; exit 1; }
+	"$metal" "$@" $nc_libs 2> "$build/link.err" || { cat "$build/link.err" >&2; exit 1; }
 # quiet: not the linker's word that a library was built for a newer macOS than the target (harmless)
 if [ -n "${QUIET:-}" ]; then
 	grep -v -e "was built for newer 'macOS' version" -e "but linking with dylib .* which was built for newer version" "$build/link.err" >&2 || true

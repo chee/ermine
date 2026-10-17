@@ -26,7 +26,7 @@ void hostOff(Host *host);
 /** the graph newOS's API is over (api.h) */
 ap_os *hostOs(Host *host);
 /** the card */
-Peer *hostPeer(Host *host);
+Card *hostCard(Host *host);
 /** the connection to /etc/sync's server (net.c) */
 struct Net *hostNet(Host *h);
 /** the config the OS was started with: the frame buffers, the planes, the folders */
@@ -73,15 +73,28 @@ const ap_error *hostSnap(ap_api *api, const char *const *address, size_t n, cons
 /** a process's own node as an address, ["/", ...its place, its name]; NULL if not known */
 Json *hostHere(Host *host, const char *pid);
 
-/** a plane: pixels a driver keeps in its own memory, w × h, rows stride pixels apart */
+/** a plane: pixels in shared memory, w × h, rows stride pixels apart */
 typedef struct HostPlane {
 	const uint32_t *bits;
 	int w, h, stride;
 } HostPlane;
-typedef bool (*HostPlaneFn)(void *data, int64_t id, HostPlane *out);
-/** a source of planes, by name: fn gives plane id, false when there is none; on the OS's thread only */
-void hostPlanes(Host *host, const char *source, HostPlaneFn fn, void *data);
-/** plane id of that source: false when there is none */
+/**
+ * what a plane's node says. A source's planes are the nodes under /dev/<source>/planes, each
+ * valued {id, w, h, stride?, shm | file, offset?}: shm the POSIX shared memory's name, or file a
+ * file's path, the pixels offset bytes into it. A reader finds a plane there, by its id, and maps it.
+ */
+typedef struct HostPlaneSaid {
+	char name[256];
+	bool file;
+	size_t offset;
+	int w, h, stride;
+} HostPlaneSaid;
+/** the plane with that id among /dev/<source>/planes, as its node says it; false when none says it */
+bool hostPlaneSaid(Host *host, const char *source, int64_t id, HostPlaneSaid *out);
+/** its memory mapped, read and write, the whole object (*bytes its size); NULL when it cannot be */
+void *hostPlaneMap(const HostPlaneSaid *plane, size_t *bytes);
+void hostPlaneUnmap(void *mapping, size_t bytes);
+/** the compositor's: plane id of that source, read from its node, kept mapped while the node says the same memory; false when there is none. On the OS's thread only */
 bool hostPlane(Host *host, const char *source, int64_t id, HostPlane *out);
 
 #endif

@@ -1,7 +1,7 @@
 // Blops over Subduction (TRANSPORT.tex): stored ones, sealed, as loose commits and fragments, ephemeral
 // ones, never sealed, as its ephemeral messages; and what a device checks of what arrives before its
 // histories see it.
-// Reference for the conformance in conformance/transport. Only the lock "unlocked" is built
+// Reference for the conformance in extensions/subduction/conformance/subduction-transport. Only the lock "unlocked" is built
 import * as sd from "npm:@automerge/subduction@0.23.0"
 import { blake3 } from "@ermine/blake3"
 import * as cbor from "@ermine/encoding/cbor"
@@ -59,7 +59,8 @@ export type Arrival = {
 // fragment, then every loose commit, as a save is taken in; a commit whose parents come later waits,
 // as ever). Everything that touches the network (connect, connectDiscover, follow) waits for that;
 // add, put and the other work queue behind it. ready() resolves when it is done; it throws what
-// the storage threw.
+// the storage threw. lazy: the storage's documents are only listed at the start; each is taken in
+// (fragments, then loose commits, as above) when follow names it, before follow fetches it.
 export type Device = {
 	ready(): Promise<void>
 	// resolves once connected; the documents followed are fetched after (idle waits for that)
@@ -161,6 +162,13 @@ type Document = {
 	heard: Map<string, Code>
 	// how many taken-in seals have a depth, so a build with none is skipped
 	deep: number
+	// settle's index: a blop name to the pending seals with it among their parents; pending seals
+	// new or changed since settle last ran, and names taken in, refused or stuck since; how many
+	// stuck pending seals have each name
+	waiters: Map<string, Set<string>>
+	dirty: Set<string>
+	moved: Set<string>
+	stuck: Map<string, number>
 }
 
 export function createDevice(
@@ -172,6 +180,9 @@ export function createDevice(
 		join?: number
 		// where Subduction keeps what it saves (taken in on save as ever); default: in memory
 		storage?: sd.SedimentreeStorage
+		// what the storage holds is taken in a document at a time, when follow names it, not all
+		// at the start: a stored document nobody follows never comes in
+		lazy?: boolean
 	},
 ): Device {
 	const lock = options.lock ?? unlocked
@@ -224,6 +235,10 @@ export function createDevice(
 			locked: new Map(),
 			heard: new Map(),
 			deep: 0,
+			waiters: new Map(),
+			dirty: new Set(),
+			moved: new Set(),
+			stuck: new Map(),
 		}
 		documents.set(key, d)
 		return d
@@ -262,6 +277,7 @@ export function createDevice(
 		const n = hex(u.name), s = hex(u.stored)
 		d.names.set(n, [...d.names.get(n) ?? [], s])
 		d.bad.delete(n)
+		d.moved.add(n)
 		d.refused.delete(s)
 		d.seen.set(s, { name: n, blop: u.blop, sealed, parents: u.blop.parents.map(hex), ids })
 		if (depth(u.stored) > 0) d.deep++
@@ -272,27 +288,64 @@ export function createDevice(
 	}
 
 	function refuse(d: Document, key: string, code: Code, name?: string) {
-		d.pending.delete(key)
+		unpend(d, key)
 		d.refused.set(key, code)
-		if (name !== undefined) d.bad.add(name)
+		if (name !== undefined) d.bad.add(name), d.moved.add(name)
 	}
 
-	// step 5 and on, for each pending seal, until none moves: stuck while a parent is refused or
-	// stuck, waiting while a parent's seal is not here; else a commit's parents each one of its
-	// blop's parents' stored ids, and each of them one of the commit's (refused, parents), or
-	// handed to the histories
+	// a seal held back: in the index under each of its parents, looked at by the next settle
+	function pend(d: Document, key: string, p: Pending) {
+		unpend(d, key)
+		d.pending.set(key, p)
+		for (const x of p.parents) {
+			let w = d.waiters.get(x)
+			if (!w) d.waiters.set(x, w = new Set())
+			w.add(key)
+		}
+		d.dirty.add(key)
+	}
+
+	function unpend(d: Document, key: string) {
+		const p = d.pending.get(key)
+		if (!p) return
+		for (const x of p.parents) {
+			const w = d.waiters.get(x)
+			w?.delete(key)
+			if (w?.size === 0) d.waiters.delete(x)
+		}
+		if (p.stuck) stick(d, hex(p.unsealed.name), -1)
+		d.pending.delete(key)
+	}
+
+	function stick(d: Document, name: string, by: 1 | -1) {
+		const n = (d.stuck.get(name) ?? 0) + by
+		if (n) d.stuck.set(name, n)
+		else d.stuck.delete(name)
+		d.moved.add(name)
+	}
+
+	// step 5 and on, for the pending seals that may move, until none does: stuck while a parent is
+	// refused or stuck, waiting while a parent's seal is not here; else a commit's parents each one
+	// of its blop's parents' stored ids, and each of them one of the commit's (refused, parents),
+	// or handed to the histories. What may move: a seal new since, or one with a parent taken in,
+	// refused, or stuck or no longer stuck since; each round in key order
 	function settle(d: Document) {
-		for (let moved = true; moved;) {
-			moved = false
-			const gone = new Set(d.bad)
-			for (const p of d.pending.values()) if (p.stuck) gone.add(hex(p.unsealed.name))
-			for (const [head, p] of [...d.pending].sort(([a], [b]) => by(a, b))) {
+		const gone = (x: string) => d.bad.has(x) || d.stuck.has(x)
+		for (;;) {
+			const keys = new Set(d.dirty)
+			d.dirty.clear()
+			for (const n of d.moved) for (const k of d.waiters.get(n) ?? []) keys.add(k)
+			d.moved.clear()
+			if (keys.size === 0) return
+			for (const head of [...keys].sort(by)) {
+				const p = d.pending.get(head)
+				if (!p) continue
 				const missing = p.parents.filter((x) => !d.names.has(x))
-				const stuck = missing.filter((x) => gone.has(x))
-				const before = p.stuck?.join()
+				const stuck = missing.filter(gone)
+				const was = p.stuck !== undefined
 				p.stuck = stuck.length ? stuck : undefined
 				p.waiting = stuck.length || !missing.length ? undefined : missing
-				if (p.stuck?.join() !== before) moved = true
+				if (was !== (p.stuck !== undefined)) stick(d, hex(p.unsealed.name), was ? -1 : 1)
 				if (missing.length) continue
 				const of = p.parents.map((x) => d.names.get(x)!)
 				const match = !p.commit ||
@@ -300,10 +353,9 @@ export function createDevice(
 						of.every((ids) => p.given.some((g) => ids.includes(g))))
 				if (!match) refuse(d, head, "parents", hex(p.unsealed.name))
 				else {
-					d.pending.delete(head)
+					unpend(d, head)
 					hand(d, p.unsealed, p.sealed, p.commit ? p.given : of.flat())
 				}
-				moved = true
 			}
 		}
 	}
@@ -333,7 +385,7 @@ export function createDevice(
 		if (hex(u.stored) !== h) return refuse(d, h, "stored", n), settle(d)
 		if (u.blop.node !== d.id) return refuse(d, h, "document", n), settle(d)
 		d.refused.delete(h)
-		d.pending.set(h, {
+		pend(d, h, {
 			commit: true,
 			unsealed: u,
 			sealed: opened,
@@ -357,7 +409,7 @@ export function createDevice(
 		}
 		if (u.blop.node !== d.id) return refuse(d, s, "document", hex(u.name))
 		d.refused.delete(s)
-		d.pending.set(s, {
+		pend(d, s, {
 			commit: false,
 			unsealed: u,
 			sealed,
@@ -670,29 +722,35 @@ export function createDevice(
 
 	// starting: what the storage holds, taken in before any connection (TRANSPORT.tex, A device).
 	// Read from the storage itself, not through the wrapper, so nothing is saved again. Ephemeral
-	// blops are never stored, so none come back
+	// blops are never stored, so none come back. lazy: only the trees listed, each taken in when
+	// followed
+	const unloaded = new Map<string, sd.SedimentreeId>()
+	async function load(tree: sd.SedimentreeId) {
+		const d = document(tree.toBytes())
+		for (const f of await memory.loadAllFragments(tree)) {
+			const signed = f.signed
+			await fragment(
+				d,
+				signed.payload.head.toBytes(),
+				signed.payload.boundary.map((b: sd.CommitId) => b.toBytes()),
+				f.blob,
+			)
+		}
+		for (const c of await memory.loadAllCommits(tree)) {
+			const signed = c.signed
+			await commit(
+				d,
+				signed.payload.commitId.toBytes(),
+				signed.payload.parents.map((p: sd.CommitId) => p.toBytes()),
+				c.blob,
+			)
+		}
+		await building(d)
+	}
 	const loaded = run(async () => {
 		for (const tree of await memory.loadAllSedimentreeIds()) {
-			const d = document(tree.toBytes())
-			for (const f of await memory.loadAllFragments(tree)) {
-				const signed = f.signed
-				await fragment(
-					d,
-					signed.payload.head.toBytes(),
-					signed.payload.boundary.map((b: sd.CommitId) => b.toBytes()),
-					f.blob,
-				)
-			}
-			for (const c of await memory.loadAllCommits(tree)) {
-				const signed = c.signed
-				await commit(
-					d,
-					signed.payload.commitId.toBytes(),
-					signed.payload.parents.map((p: sd.CommitId) => p.toBytes()),
-					c.blob,
-				)
-			}
-			await building(d)
+			if (options.lazy) unloaded.set(hex(tree.toBytes()), tree)
+			else await load(tree)
 		}
 	})
 	loaded.catch(() => {})
@@ -752,6 +810,11 @@ export function createDevice(
 		async follow(doc) {
 			await loaded
 			const d = named(doc)
+			const tree = unloaded.get(hex(d.bytes))
+			if (tree) {
+				unloaded.delete(hex(d.bytes))
+				await run(() => load(tree))
+			}
 			followed.add(hex(d.bytes))
 			await sub.subscribeEphemeral([d.topic])
 			await fetched(d)

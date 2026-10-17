@@ -30,9 +30,10 @@
 // The ABI (frames: abi.h). From the program, each answered in order:
 //   {seq, op, fields: {...}} → {seq, ok: v} or {seq, error: {code, message, name?}}
 // op is core's process api, what a JavaScript program's part is given
-// (PROGRAMS.md), fields named. An address is a list of names, read from the
-// process's place ("/" first: from the root); cause, in any op's fields, is
-// api.as({cause}):
+// (PROGRAMS.md), fields named: each is a word of the one dispatch (words.h),
+// its fields that word's arguments by name, its answer as Json. An address is
+// a list of names, read from the process's place ("/" first: from the root);
+// cause, in any op's fields, is api.as({cause}):
 //   look, lookup, lookups, content {address}      → items
 //   children {address, name?}                     → names; with name, that list's items
 //   info {address, name}                          → items
@@ -80,6 +81,7 @@
 
 #include "abi.h"
 #include "drv.h"
+#include "words.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -576,108 +578,10 @@ static void writeLog(Exec *x, ap_given *g) {
 	op_free(list);
 }
 
-// --- the items reads give, as Json
-
-static Json *changeJson(const ap_change *c) {
-	Json *o = jsonObject();
-	jsonAdd(o, "time", jsonInteger(c->time));
-	if (c->actor) jsonAdd(o, "actor", jsonOfVal(c->actor));
-	if (c->reader) jsonAdd(o, "reader", jsonString(c->reader));
-	if (c->site) jsonAdd(o, "site", jsonOfVal(c->site));
-	if (c->cause) jsonAdd(o, "cause", jsonOfVal(c->cause));
-	return o;
-}
-
-/** items, as core's (places.ts Item) */
-static Json *itemsJson(const ap_items *items) {
-	Json *a = jsonArray();
-	for (size_t i = 0; i < items->n; i++) {
-		const ap_item *it = &items->items[i];
-		Json *o = jsonObject(), *route = jsonArray();
-		jsonAdd(o, "id", jsonString(it->id));
-		for (size_t r = 0; r < it->nroute; r++) jsonPush(route, jsonRef(drvMap("name", jsonString(it->route[r]), NULL)));
-		jsonAdd(o, "route", route);
-		if (it->node) {
-			jsonAdd(o, "node", jsonRef(drvMap("id", jsonString(it->id), NULL)));
-			jsonAdd(o, "ephemeral", jsonBoolean(it->ephemeral));
-		}
-		if (it->node && it->has_versions) {
-			Json *vs = jsonArray();
-			for (size_t k = 0; k < it->nversions; k++) {
-				const ap_version *v = &it->versions[k];
-				Json *ver = jsonObject();
-				jsonAdd(ver, "content", v->content ? jsonOfVal(v->content) : jsonNull());
-				jsonAdd(ver, "change", changeJson(&v->change));
-				if (v->status) jsonAdd(ver, "because", jsonRef(drvMap("layer", jsonString("scheduler"), "place", jsonString("status"), NULL)));
-				jsonPush(vs, ver);
-			}
-			jsonAdd(o, "versions", vs);
-		}
-		jsonPush(a, o);
-	}
-	return a;
-}
-
-// --- the fields a frame gives
-
-/** an address: a list of names; for this turn (hostTemp). NULL if it is not one */
-static const char *const *addressOf(Host *h, const Json *a, size_t *n) {
-	return hostPathOf(h, a, n);
-}
-
 /** a string field, for this turn; NULL if it is not one */
 static const char *textOf(Host *h, const Json *f, const char *key) {
 	const char *t = jsonText(jsonGet(f, key));
 	return t ? hostTempDup(h, t) : NULL;
-}
-
-/** an index: a number, or [from, to] (its from) */
-static bool indexOf(const Json *v, long *out) {
-	int64_t a;
-	if (jsonIsWhole(v, &a)) {
-		*out = (long)a;
-		return true;
-	}
-	if (jsonIsArray(v) && v->array.count == 2 && jsonIsWhole(v->array.items[0], &a)) {
-		*out = (long)a;
-		return true;
-	}
-	return false;
-}
-
-static op_target placeOf(Host *h, const Json *p) {
-	op_target place = { 0 };
-	const Json *path = jsonGet(p, "path"), *range = jsonGet(p, "range");
-	size_t n = jsonIsArray(path) ? (size_t)path->array.count : 0;
-	op_key *keys = hostTemp(h, sizeof *keys * (n ? n : 1));
-	for (size_t i = 0; i < n; i++) {
-		const Json *k = path->array.items[i];
-		int64_t whole;
-		if (jsonIsWhole(k, &whole)) keys[i] = (op_key){ .type = OP_NUM_KEY, .n = (long)whole };
-		else keys[i] = (op_key){ .type = OP_STR_KEY, .s = jsonText(k) ? hostTempDup(h, jsonText(k)) : "" };
-	}
-	place.path = keys, place.length = n;
-	int64_t from, to;
-	if (jsonIsArray(range) && range->array.count == 2 && jsonIsWhole(range->array.items[0], &from) && jsonIsWhole(range->array.items[1], &to))
-		place.has_range = 1, place.from = (long)from, place.to = (long)to;
-	return place;
-}
-
-/** patches, core's ({path, range?, value?, move?}); their values let go of with letGo */
-static op_patch *patchesOf(Host *h, const Json *list, size_t *n) {
-	*n = jsonIsArray(list) ? (size_t)list->array.count : 0;
-	op_patch *ps = hostTemp(h, sizeof *ps * (*n ? *n : 1));
-	for (size_t i = 0; i < *n; i++) {
-		const Json *p = list->array.items[i], *value = jsonGet(p, "value"), *move = jsonGet(p, "move");
-		ps[i] = (op_patch){ .place = placeOf(h, p) };
-		if (value) ps[i].has_value = 1, ps[i].value = valOf(value);
-		if (move) ps[i].has_move = 1, ps[i].move = placeOf(h, move);
-	}
-	return ps;
-}
-
-static void letGo(op_patch *ps, size_t n) {
-	for (size_t i = 0; i < n; i++) op_free((op_value *)ps[i].value);
 }
 
 // --- a handler the program placed: its calls go to the program, as events
@@ -725,96 +629,22 @@ static Json *perform(Exec *x, ap_given *g, const char *op, const Json *f, const 
 	const Json *cause = jsonGet(f, "cause");
 	op_value *by = cause ? valOf(cause) : NULL;
 	if (by) api = ap_as(api, by);
-	size_t n = 0, np = 0;
-	const char *const *address = NULL;
-	ap_items items = { 0 };
-	int64_t time = 0;
-	long index = 0;
 	Json *answer = NULL;
+	const char *const *fields = op ? wdFields(op) : NULL;
 	if (!op) *wrong = "a frame says its op";
-	else if (!strcmp(op, "look") || !strcmp(op, "lookup") || !strcmp(op, "lookups") || !strcmp(op, "content")) {
-		if (!(address = addressOf(h, jsonGet(f, "address"), &n))) *wrong = "an address is a list of names";
-		else if (!(*e = !strcmp(op, "look") ? ap_look(api, address, n, &items)
-		              : !strcmp(op, "lookup") ? ap_lookup(api, address, n, &items)
-		              : !strcmp(op, "lookups") ? ap_lookups(api, address, n, &items)
-		              : ap_content(api, address, n, &items)))
-			answer = itemsJson(&items);
-	} else if (!strcmp(op, "children") || !strcmp(op, "info")) {
-		const char *list = textOf(h, f, "name");
-		if (!(address = addressOf(h, jsonGet(f, "address"), &n))) *wrong = "an address is a list of names";
-		else if (!list && !strcmp(op, "children")) {
-			ap_namelist names = { 0 };
-			if (!(*e = ap_names(api, address, n, &names))) {
-				answer = jsonArray();
-				for (size_t i = 0; i < names.n; i++) jsonPush(answer, jsonString(names.names[i]));
-			}
-		} else if (!list) *wrong = "info takes a name";
-		else if (!(*e = !strcmp(op, "children") ? ap_children(api, address, n, list, &items) : ap_info(api, address, n, list, &items)))
-			answer = itemsJson(&items);
-	} else if (!strcmp(op, "node")) {
-		const char *id = textOf(h, f, "id");
-		op_value *node = NULL;
-		if (!id) *wrong = "node takes an id";
-		else if (!(*e = ap_node(api, id, &node))) answer = node ? jsonOfVal(node) : jsonNull();
-	} else if (!strcmp(op, "write") || !strcmp(op, "set")) {
-		bool set = !strcmp(op, "set");
-		const char *list = set ? textOf(h, f, "name") : NULL;
-		bool hasIndex = indexOf(jsonGet(f, "index"), &index);
-		if (!(address = addressOf(h, jsonGet(f, "address"), &n))) *wrong = "an address is a list of names";
-		else if (set && !list) *wrong = "set takes a name";
-		else if (!jsonIsArray(jsonGet(f, "patches"))) *wrong = "patches are a list";
-		else {
-			op_patch *ps = patchesOf(h, jsonGet(f, "patches"), &np);
-			*e = set ? ap_set(api, address, n, list, ps, np, hasIndex ? &index : NULL, &time)
-			         : ap_write(api, address, n, ps, np, hasIndex ? &index : NULL, &time);
-			letGo(ps, np);
-			if (!*e) answer = jsonInteger(time);
+	else if (fields) {
+		// a word of the API's: its fields as values, in the order the dispatch takes them (words.h)
+		op_value *args[8] = { 0 }, *out = NULL;
+		size_t n = 0;
+		for (; fields[n] && n < 8; n++) {
+			const Json *v = jsonGet(f, fields[n]);
+			// the ABI's slot: remove's index by another name
+			if (!v && !strcmp(fields[n], "index") && (!strcmp(op, "remove") || !strcmp(op, "pop"))) v = jsonGet(f, "slot");
+			args[n] = v ? valOf(v) : NULL;
 		}
-	} else if (!strcmp(op, "insert")) {
-		const char *id = textOf(h, f, "id"), *list = textOf(h, f, "name"), *child = textOf(h, f, "child");
-		bool hasIndex = indexOf(jsonGet(f, "index"), &index);
-		if (!id || !list || !child) *wrong = "insert takes an id, a name and a child";
-		else if (!(*e = ap_insert(api, id, list, child, hasIndex ? &index : NULL, &time))) answer = jsonInteger(time);
-	} else if (!strcmp(op, "remove") || !strcmp(op, "pop")) {
-		const char *id = textOf(h, f, "id"), *list = textOf(h, f, "name");
-		if (!id || !list || !(indexOf(jsonGet(f, "index"), &index) || indexOf(jsonGet(f, "slot"), &index))) *wrong = "remove takes an id, a name and an index";
-		else if (!(*e = ap_remove(api, id, list, index, &time))) answer = jsonInteger(time);
-	} else if (!strcmp(op, "rename")) {
-		const char *id = textOf(h, f, "id"), *list = textOf(h, f, "name"), *to = textOf(h, f, "to");
-		if (!id || !list || !to) *wrong = "rename takes an id, a name and to";
-		else if (!(*e = ap_rename(api, id, list, to, &time))) answer = jsonInteger(time);
-	} else if (!strcmp(op, "move")) {
-		const char *id = textOf(h, f, "id"), *list = textOf(h, f, "name"), *to = textOf(h, f, "to"), *toname = textOf(h, f, "toname");
-		long into = 0;
-		bool hasIndex = indexOf(jsonGet(f, "index"), &index), hasTo = indexOf(jsonGet(f, "toindex"), &into);
-		if (!id || !list || !hasIndex || !to || !toname) *wrong = "move takes an id, a name, an index, to and toname";
-		else if (!(*e = ap_move(api, id, list, index, to, toname, hasTo ? &into : NULL, &time))) answer = jsonInteger(time);
-	} else if (!strcmp(op, "create")) {
-		const Json *v = jsonGet(f, "value"), *eph = jsonGet(f, "ephemeral");
-		op_value *value = v ? valOf(v) : NULL;
-		const char *made = NULL;
-		*e = ap_create(api, value, textOf(h, f, "id"), eph && eph->type == JSON_BOOLEAN && eph->boolean, &made);
-		op_free(value);
-		if (!*e) answer = jsonString(made);
-	} else if (!strcmp(op, "start")) {
-		ap_startop o = { 0 };
-		if (!(o.address = addressOf(h, jsonGet(f, "address"), &o.naddress))) *wrong = "start takes an address, a list of names";
-		else if (!(o.program = addressOf(h, jsonGet(f, "program"), &o.nprogram))) *wrong = "an exec program starts a program by its path, a list of names";
-		else {
-			o.name = textOf(h, f, "name");
-			const Json *data = jsonGet(f, "data");
-			op_value *value = data ? valOf(data) : NULL;
-			o.data = value;
-			const char *pid = NULL;
-			if (!(*e = ap_start(g, &o, &pid))) answer = jsonString(pid);
-			op_free(value);
-		}
-	} else if (!strcmp(op, "call")) {
-		const Json *a = jsonGet(f, "args");
-		op_value *args = a ? valOf(a) : NULL, *reply = NULL;
-		if (!(address = addressOf(h, jsonGet(f, "address"), &n))) *wrong = "call takes an address";
-		else if (!(*e = ap_call(g, address, n, args, &reply))) answer = reply ? jsonOfVal(reply) : jsonNull();
-		op_free(args);
+		if (!(*e = wdDo(g, api, op, (const op_value *const *)args, n, &out))) answer = out ? jsonOfVal(out) : jsonNull();
+		for (size_t i = 0; i < n; i++) op_free(args[i]);
+		op_free(out);
 	} else if (!strcmp(op, "handler")) {
 		const char *name = textOf(h, f, "name");
 		int64_t fn;

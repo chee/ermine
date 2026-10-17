@@ -4496,6 +4496,366 @@
     };
   }
 
+  // playground/experimental_os/newos/js/budget.ts
+  var BUDGET = 5e6;
+  var STEP = "__b";
+  var puncts = [
+    ">>>=",
+    "...",
+    "===",
+    "!==",
+    "**=",
+    "<<=",
+    ">>=",
+    ">>>",
+    "&&=",
+    "||=",
+    "??=",
+    "=>",
+    "==",
+    "!=",
+    "<=",
+    ">=",
+    "&&",
+    "||",
+    "??",
+    "?.",
+    "++",
+    "--",
+    "+=",
+    "-=",
+    "*=",
+    "/=",
+    "%=",
+    "&=",
+    "|=",
+    "^=",
+    "<<",
+    ">>",
+    "**",
+    "{",
+    "}",
+    "(",
+    ")",
+    "[",
+    "]",
+    ";",
+    ",",
+    "<",
+    ">",
+    "+",
+    "-",
+    "*",
+    "/",
+    "%",
+    "&",
+    "|",
+    "^",
+    "!",
+    "~",
+    "?",
+    ":",
+    "=",
+    ".",
+    "@",
+    "#"
+  ];
+  var regexAfter = /* @__PURE__ */ new Set([
+    "return",
+    "typeof",
+    "instanceof",
+    "in",
+    "of",
+    "new",
+    "delete",
+    "void",
+    "throw",
+    "case",
+    "do",
+    "else",
+    "yield",
+    "await"
+  ]);
+  var continues = /* @__PURE__ */ new Set([
+    ".",
+    "?.",
+    "?",
+    ":",
+    "=>",
+    "(",
+    "[",
+    "+",
+    "-",
+    "*",
+    "/",
+    "%",
+    "**",
+    "&&",
+    "||",
+    "??",
+    "&",
+    "|",
+    "^",
+    "<",
+    ">",
+    "<=",
+    ">=",
+    "==",
+    "!=",
+    "===",
+    "!==",
+    "<<",
+    ">>",
+    ">>>",
+    "=",
+    "+=",
+    "-=",
+    "*=",
+    "/=",
+    "%=",
+    "**=",
+    "&=",
+    "|=",
+    "^=",
+    "<<=",
+    ">>=",
+    ">>>=",
+    "&&=",
+    "||=",
+    "??=",
+    ",",
+    "in",
+    "of",
+    "instanceof"
+  ]);
+  var identStart = /[\p{ID_Start}$_\\]/u;
+  var identPart = /[\p{ID_Continue}$‌‍\\]/u;
+  function tokens(s) {
+    const out = [];
+    const n = s.length;
+    let i = 0, nl = false;
+    const tmpl = [];
+    let braces = 0;
+    const push = (kind, at, end) => {
+      out.push({
+        kind,
+        text: s.slice(at, end),
+        at,
+        end,
+        nl
+      });
+      nl = false;
+    };
+    const regexAllowed = () => {
+      const p = out[out.length - 1];
+      if (!p) return true;
+      if (p.kind === "ident") return regexAfter.has(p.text);
+      if (p.kind === "punct") return p.text !== ")" && p.text !== "]";
+      return p.kind === "thead" || p.kind === "tmid";
+    };
+    const template = (at, opening) => {
+      let k = i;
+      for (; ; ) {
+        if (k >= n) throw new Error("budget: an unterminated template literal");
+        const c = s[k];
+        if (c === "\\") k += 2;
+        else if (c === "`") {
+          i = k + 1;
+          push(opening ? "tmpl" : "ttail", at, i);
+          return;
+        } else if (c === "$" && s[k + 1] === "{") {
+          i = k + 2;
+          push(opening ? "thead" : "tmid", at, i);
+          tmpl.push(braces);
+          return;
+        } else k++;
+      }
+    };
+    while (i < n) {
+      const c = s[i];
+      if (c === "\n") nl = true, i++;
+      else if (c === " " || c === "	" || c === "\r" || c === "\f" || c === "\v" || c === "\xA0" || c === "\uFEFF") i++;
+      else if (c === "/" && s[i + 1] === "/") {
+        while (i < n && s[i] !== "\n") i++;
+      } else if (c === "/" && s[i + 1] === "*") {
+        const e = s.indexOf("*/", i + 2);
+        if (e < 0) throw new Error("budget: an unterminated comment");
+        if (s.slice(i, e).includes("\n")) nl = true;
+        i = e + 2;
+      } else if (c === "'" || c === '"') {
+        const at = i++;
+        while (i < n && s[i] !== c) {
+          if (s[i] === "\\") i++;
+          if (s[i] === "\n") throw new Error("budget: an unterminated string");
+          i++;
+        }
+        i++;
+        push("str", at, i);
+      } else if (c === "`") {
+        const at = i++;
+        template(at, true);
+      } else if (c === "}" && tmpl.length && tmpl[tmpl.length - 1] === braces) {
+        tmpl.pop();
+        const at = i++;
+        template(at, false);
+      } else if (c === "/" && regexAllowed()) {
+        const at = i++;
+        let cls = false;
+        for (; i < n; i++) {
+          const d = s[i];
+          if (d === "\\") i++;
+          else if (d === "\n") throw new Error("budget: an unterminated regular expression");
+          else if (cls) cls = d !== "]";
+          else if (d === "[") cls = true;
+          else if (d === "/") break;
+        }
+        i++;
+        while (i < n && identPart.test(s[i])) i++;
+        push("regex", at, i);
+      } else if (c >= "0" && c <= "9" || c === "." && s[i + 1] >= "0" && s[i + 1] <= "9") {
+        const at = i++;
+        while (i < n && (identPart.test(s[i]) || s[i] === "." || (s[i] === "+" || s[i] === "-") && (s[i - 1] === "e" || s[i - 1] === "E") && !/^0[xob]/i.test(s.slice(at, i)))) i++;
+        push("num", at, i);
+      } else if (identStart.test(c)) {
+        const at = i++;
+        while (i < n && identPart.test(s[i])) i++;
+        push("ident", at, i);
+      } else {
+        const p = puncts.find((x) => s.startsWith(x, i));
+        if (!p) throw new Error(`budget: a character that is no token, ${JSON.stringify(c)} at ${i}`);
+        if (p === "{") braces++;
+        else if (p === "}") braces--;
+        const at = i;
+        i += p.length;
+        push("punct", at, i);
+      }
+    }
+    return out;
+  }
+  function budget(source) {
+    const t = tokens(source);
+    const ins = [];
+    const is = (k, text) => k < t.length && t[k].kind === "punct" && t[k].text === text;
+    const word = (k, text) => k < t.length && t[k].kind === "ident" && t[k].text === text && !(k > 0 && is(k - 1, ".") && !t[k - 1].nl);
+    const opens = (k) => is(k, "(") || is(k, "[") || is(k, "{") || t[k].kind === "thead";
+    const closes = (k) => is(k, ")") || is(k, "]") || is(k, "}") || t[k].kind === "ttail";
+    const past = (k) => {
+      let depth = 0;
+      for (; k < t.length; k++) {
+        if (opens(k)) depth++;
+        else if (closes(k) && --depth === 0) return k + 1;
+      }
+      return k;
+    };
+    const endOf = (k, comma) => {
+      let depth = 0, asks = 0;
+      for (let j = k; j < t.length; j++) {
+        if (j > k && t[j].nl && depth === 0 && !goesOn(t[j]) && !wants(t[j - 1])) return j;
+        if (opens(j)) depth++;
+        else if (closes(j)) {
+          if (depth === 0) return j;
+          depth--;
+        } else if (depth === 0 && t[j].kind === "punct") {
+          if (t[j].text === ";" || comma && t[j].text === ",") return j;
+          if (t[j].text === "?") asks++;
+          else if (t[j].text === ":" && asks-- === 0) return j;
+        }
+      }
+      return t.length;
+    };
+    const goesOn = (x) => (x.kind === "punct" || x.kind === "ident") && continues.has(x.text);
+    const wants = (x) => x.kind === "punct" && x.text !== ")" && x.text !== "]" && x.text !== "}" && x.text !== "++" && x.text !== "--" || x.kind === "ident" && (continues.has(x.text) || x.text === "typeof" || x.text === "new" || x.text === "await" || x.text === "void" || x.text === "delete") || x.kind === "thead" || x.kind === "tmid";
+    const after2 = (k) => t[k].end;
+    const before = (k) => k < t.length ? t[k].at : source.length;
+    const close = (k) => k > 0 ? t[k - 1].end : 0;
+    const step2 = `${STEP}();`;
+    for (let k = 0; k < t.length; k++) {
+      const tk = t[k];
+      if (tk.kind === "punct" && tk.text === "{" && k > 0 && !tk.nl) {
+        const p = t[k - 1];
+        if (p.kind === "punct" && p.text === "=>") ins.push({
+          at: after2(k),
+          text: step2,
+          from: tk.at
+        });
+        else if (p.kind === "ident" && p.text === "do") ins.push({
+          at: after2(k),
+          text: step2,
+          from: tk.at
+        });
+        else if (p.kind === "punct" && p.text === ")") {
+          let depth = 0, j = k - 1;
+          for (; j >= 0; j--) {
+            if (closes(j)) depth++;
+            else if (opens(j) && --depth === 0) break;
+          }
+          const h = j > 0 ? t[j - 1] : null;
+          const head2 = h && h.kind === "ident" ? h.text : null;
+          if (head2 !== "if" && head2 !== "switch" && head2 !== "catch" && head2 !== "with") ins.push({
+            at: after2(k),
+            text: step2,
+            from: tk.at
+          });
+        }
+      } else if (tk.kind === "punct" && tk.text === "=>" && !is(k + 1, "{")) {
+        const e = endOf(k + 1, true);
+        ins.push({
+          at: after2(k),
+          text: ` (${STEP}(),`,
+          from: tk.at
+        });
+        ins.push({
+          at: close(e),
+          text: ")",
+          from: tk.at
+        });
+      } else if ((word(k, "for") || word(k, "while")) && (is(k + 1, "(") || word(k + 1, "await") && is(k + 2, "("))) {
+        if (word(k, "while") && k > 0 && is(k - 1, "}")) continue;
+        const open = is(k + 1, "(") ? k + 1 : k + 2;
+        const body = past(open);
+        if (is(body, "{")) continue;
+        if (word(k, "while")) ins.push({
+          at: after2(open),
+          text: `${STEP}(), `,
+          from: tk.at
+        });
+        else {
+          let semi = -1, depth = 0;
+          for (let j = open + 1; j < body - 1 && semi < 0; j++) {
+            if (opens(j)) depth++;
+            else if (closes(j)) depth--;
+            else if (depth === 0 && is(j, ";")) semi = j;
+          }
+          if (semi >= 0) ins.push({
+            at: after2(semi),
+            text: is(semi + 1, ";") ? ` ${STEP}()` : ` ${STEP}(),`,
+            from: tk.at
+          });
+          else {
+            const e = endOf(body, false);
+            ins.push({
+              at: before(body),
+              text: `{${STEP}(); `,
+              from: tk.at
+            });
+            ins.push({
+              at: close(e),
+              text: "}",
+              from: tk.at
+            });
+          }
+        }
+      }
+    }
+    ins.sort((a, b) => a.at - b.at || b.from - a.from);
+    let out = "", last = 0;
+    for (const x of ins) {
+      out += source.slice(last, x.at) + x.text;
+      last = x.at;
+    }
+    return out + source.slice(last);
+  }
+
   // playground/experimental_os/newos/js/runner.ts
   var g = globalThis;
   var opOn = g.__ermineOp;
@@ -4542,15 +4902,25 @@
     const named = (names2) => names2.replace(/\s+as\s+/g, ": ");
     return source.replace(/import\s*\{([^}]*)\}\s*from\s*["']ermine:([\w-]+)["'];?/g, (_, n, l) => `const {${named(n)}} = __library("${l}");`).replace(/import\s+\*\s+as\s+(\w+)\s+from\s*["']ermine:([\w-]+)["'];?/g, (_, n, l) => `const ${n} = __library("${l}");`).replace(/import\s+(\w+)\s+from\s*["']ermine:([\w-]+)["'];?/g, (_, n, l) => `const ${n} = __library("${l}").default;`).replace(/\bexport\s+default\s+/, "__default = ").replace(/\bexport\s+(?=(async\s+)?(function|const|let|class)\b)/g, "");
   }
+  var steps = BUDGET;
+  function step() {
+    if (--steps < 0) {
+      steps = 0;
+      const e = new Error(`the run took more than ${BUDGET} steps (loop turns and functions entered), and was stopped`);
+      e.name = "budget";
+      throw e;
+    }
+  }
   function load(source, url) {
-    const wrapped = `(function (__library) { let __default;
-${script(source)}
+    const wrapped = `(function (__library, ${STEP}) { let __default;
+${budget(script(source))}
 ;return __default })`;
     const f = evaluate(wrapped, url);
+    steps = BUDGET;
     return f((name) => {
       if (!(name in libraries)) throw new Error(`no library ermine:${name}`);
       return libraries[name];
-    });
+    }, step);
   }
   function apiOf(h, cause) {
     const op = cause === void 0 ? opOn : (h2, name, ...a) => opOn(h2, `@${name}`, cause, ...a);
@@ -4605,10 +4975,13 @@ ${script(source)}
       if ("args" in info) given.args = info.args;
     }
     parts.push(given);
+    const left = steps;
+    steps = BUDGET;
     try {
       return f(given);
     } finally {
       parts.pop();
+      steps = left;
     }
   }
   var show = (args) => args.map((a) => {

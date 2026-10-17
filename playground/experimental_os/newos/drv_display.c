@@ -19,6 +19,26 @@
 // so the metal copies only that. One frame a refresh: a change that comes
 // while a frame waits for its vsync is composed after the flip.
 //
+// The driver is parts, each a child (drvChild) reading only what it needs:
+//   layers    what each layer is and where (no ops, no pixels), and each as
+//             a window: the one summary the others read, made again when a
+//             layer comes, goes or changes
+//   fonts     each /dev/font role's metrics and the pages that have come,
+//             made again when one does
+//   compose   the frame: reads layers, fonts, the mode, the focus, the
+//             theme, the selection; its effect draws and tells the metal
+//   windows   /dev/display/windows/<name>, with a titled one's chrome parts
+//   pages     web pages' sizes, told the metal (webshow)
+//   focus     windows mode: the Mac's key window follows the focus
+//   want, corner, keys, menus   as below
+// So a clock drawing runs compose alone, a window moved runs compose and
+// windows, and a page of a font arriving plays again only the layers that
+// lacked it. Font faces and their pages are kept across composes, by the
+// fonts summary; what a layer or a chrome drew with is recorded (Uses), so
+// it is played again only when a font it used changed or a page it lacked
+// came. What a frame is made from is compared as values the graph keeps
+// (val.h: an unchanged value is the same Json), never printed.
+//
 // /dev/display/windows/<name>: each layer, hidden ones too, as
 // {x, y, w, h, z, title, owner, collapsed, hidden, drags, want, chrome}, what it
 // is and where, without what it draws, and on the monitor a titled one's parts,
@@ -80,97 +100,28 @@ typedef struct Page {
 	int n;
 	BlitPage page;
 	Json *value; // the page's value, held: the alpha and info are its
+	bool seen;
 } Page;
 
 typedef struct Face {
 	char *role;
 	BlitFont font;
+	Json *value; // /dev/font/<role> as last synced, held: its metrics compared by value, as the font driver writes it again with each page
+	int gen;     // bumped when its metrics change, or it goes
+	bool gone;   // its role is no more: text in it is drawn in the ROM's cells, as with no face
+	bool keep;   // the sync's mark
 	ERM_LIST(Page) pages;
-	ERM_LIST(int) wanted;
+	ERM_LIST(int) wanted; // pages asked for, until one of its pages comes
 	struct Display *d;
 } Face;
 
-typedef struct Drawn {
-	char *name;
-	BlitRect rect;
-	char *key;      // what it is and where, without when its value last changed (t) or its plane
-	char *t;        // when its value last changed
-	int64_t serial; // its plane's serial, -1 for none
-	bool part;      // this frame: only its plane's dirty rectangle, part, changed
-	BlitRect at;    // part, in the layer
-} Drawn;
-
-typedef struct Rendered {
-	char *name;
-	char *key;
-	char *rest; // its key but for its ops: the same, and its ops a splice of the last, only where they changed is played again
-	BlitForm form;
-	char *runs;
-	bool seen;
-	int64_t n;  // how many times it was played: one not played since it was presented is not compared
-	const Json *draw, *pixels; // what it was played from: a value is never changed (json.h), so the same pointer is the same ops; draw held (spliced reads it)
-	BlitRect delta; // where its last render changed it (none: nothing); fresh, all of it
-	bool fresh;
-} Rendered;
-
-/** windows mode: a titled layer's Mac window, as it was last told and shown */
-typedef struct Surface {
-	char *name;
-	char *geo;        // x, y, w, h and title, as the last surface command said
-	int w, h;
-	uint32_t *shown;  // its pixels as last presented, w × h, to present only what differs
-	int64_t n;        // its form's Rendered n when last compared
-	bool seen;
-} Surface;
-
-/** layers mode: a layer as the metal composites it, its chrome and content in one form */
-typedef struct Tile {
-	char *name;
-	char *geo;      // where, its depth and its shadow, as the last layers command said
-	char *key;      // what its form was made from: its content's Rendered n, its chrome's look
-	char *rest;     // its key but for its content's n, which was n: only its content changed, where its Rendered delta says
-	int64_t n;
-	BlitForm form;  // its pixels as last painted
-	char *t;        // when its layer's value last changed, and its plane's serial: a plane's next image is only its dirty rectangle
-	int64_t serial;
-	bool seen;
-} Tile;
-
-/** what is to be drawn again: rectangles, which may overlap; past 16, one around them all */
-typedef struct Damage {
-	BlitRect r[16];
-	int n;
-} Damage;
-
-typedef struct Display {
-	Host *host;
-	Blitter *blit;
-	int maxw, maxh;
-	int front;
-	bool waiting;
-	int waitBuffer, waitW, waitH;
-	ERM_LIST(Drawn) drawn;
-	char *whole;
-	Damage damage[2];
-	bool changed;      // what changed since the last flip, for the metal to copy only that
-	BlitRect change;
-	bool held;         // a compose that came while a frame waited for its vsync: done after the flip
-	int64_t again;     // /dev/display/again, written to compose what was held
-	ERM_LIST(Rendered) rendered;
-	ERM_LIST(Face *) faces;
-	const ErmPartApi *api; // the part running: what fonts' pages are read through
-	Json *selection;
-	uint32_t mark;
-	ErmMap windows;  // a layer's name -> /dev/display/windows/<name> as last written
-	ErmMap placed;   // a web page's id -> its size as the metal was last told it shows (webshow)
-	ERM_LIST(Surface) surfaces; // windows mode: the Mac windows
-	Json *presents;  // windows mode: the pieces packed into the buffer waiting, presented at its vsync
-	char *macKey;    // the surface the Mac says is key
-	char *asked;     // the surface last asked to be key
-	bool layered;    // layers mode (mode.layers): each layer a tile the metal composites
-	ERM_LIST(Tile) tiles;
-	Json *stack;     // layers mode: the layers command waiting for its vsync
-} Display;
+/** what something drew with: a face's metrics (n -1, as of gen), or page n of it, page its value then (held; NULL: it was missing) */
+typedef struct Use {
+	Face *face;
+	int n, gen;
+	Json *page;
+} Use;
+typedef ERM_LIST(Use) Uses;
 
 typedef struct Theme {
 	uint32_t paper, ink, ink2, line, chrome, select;
@@ -183,169 +134,6 @@ typedef struct Shade {
 	double opacity, radius, x, y;
 	int corner[4]; // top left, top right, bottom right, bottom left
 } Shade;
-
-static int64_t whole(const Json *v, int64_t otherwise) {
-	int64_t n;
-	return jsonIsWhole(v, &n) ? n : otherwise;
-}
-
-static uint32_t colour(const Json *theme, const char *key, uint32_t otherwise) {
-	Json *v = jsonGet(theme, key);
-	return jsonIsNumber(v) ? (uint32_t)v->number : otherwise;
-}
-
-static double number(const Json *o, const char *key, double otherwise) {
-	Json *v = jsonGet(o, key);
-	return jsonIsNumber(v) ? v->number : otherwise;
-}
-
-/** the theme's shadow, {color, opacity, radius, x, y} in points, at the screen's unit */
-static Shade shadeOf(const Json *theme, int u) {
-	Json *s = jsonGet(theme, "shadow");
-	if (!jsonIsObject(s)) return (Shade){ 0 };
-	Shade sh = { true, colour(s, "color", 0), number(s, "opacity", 0.3), number(s, "radius", 0) * u, number(s, "x", 0) * u, number(s, "y", 0) * u, { 0 } };
-	sh.on = sh.opacity > 0;
-	return sh;
-}
-
-// --- fonts, from /dev/font, read through the part running
-
-static const BlitPage *pageOf(void *data, int n) {
-	Face *f = data;
-	for (int i = 0; i < f->pages.count; i++) if (f->pages.items[i].n == n) return &f->pages.items[i].page;
-	Display *d = f->d;
-	if (!d->api) return NULL;
-	char p[16];
-	snprintf(p, sizeof p, "%d", n);
-	Json *v = drvRead(d->api, drvPath("/", "dev", "font", f->role, "pages", p, NULL));
-	Json *alpha = jsonGet(v, "alpha"), *info = jsonGet(v, "info");
-	if (!v || !alpha || alpha->type != JSON_BYTES || !info || info->type != JSON_TYPED || info->typed.kind != JSON_FLOAT64 || info->typed.count < 1024) {
-		// a page not here: asked for once; it draws again when it comes
-		for (int i = 0; i < f->wanted.count; i++) if (f->wanted.items[i] == n) return NULL;
-		ERM_PUSH(f->wanted, n);
-		Json *args = jsonArray();
-		jsonPush(args, jsonString(f->role));
-		jsonPush(args, jsonInteger(n));
-		drvOp(d->api, "call", drvMap("address", drvPath("/", "dev", "font", "driver", "on", "want", NULL), "args", args, NULL));
-		return NULL;
-	}
-	Page page = { n, { (int)whole(jsonGet(v, "w"), 0), alpha->bytes.data, alpha->bytes.length, info->typed.data }, jsonRef(v) };
-	ERM_PUSH(f->pages, page);
-	return &f->pages.items[f->pages.count - 1].page;
-}
-
-static const BlitFont *fontOf(void *data, const char *role) {
-	Display *d = data;
-	if (!role) return NULL;
-	for (int i = 0; i < d->faces.count; i++) if (!strcmp(d->faces.items[i]->role, role)) return &d->faces.items[i]->font;
-	if (!d->api) return NULL;
-	Json *v = drvRead(d->api, drvPath("/", "dev", "font", role, NULL));
-	if (!jsonIsNumber(jsonGet(v, "h")) || !jsonIsNumber(jsonGet(v, "ascent"))) return NULL;
-	Face *f = calloc(1, sizeof *f);
-	f->role = copyString(role);
-	f->d = d;
-	f->font = (BlitFont){ (int)jsonGet(v, "h")->number, jsonGet(v, "ascent")->number, f->role, pageOf, f };
-	ERM_PUSH(d->faces, f);
-	return &f->font;
-}
-
-/** the fonts as they now are, a key that changes when one does or a page of one comes; read tracked, in compose's compute */
-static char *fontsKey(const ErmPartApi *api) {
-	Json *roles = drvNames(api, drvPath("/", "dev", "font", NULL));
-	char *key = copyString("");
-	for (int i = 0; roles && i < roles->array.count; i++) {
-		const char *role = jsonText(roles->array.items[i]);
-		Json *v = drvRead(api, drvPath("/", "dev", "font", role, NULL));
-		if (!jsonIsNumber(jsonGet(v, "h"))) continue;
-		Json *pages = drvNames(api, drvPath("/", "dev", "font", role, "pages", NULL));
-		char *list = jsonPrint(pages), *vs = jsonPrint(v);
-		char *next = formatString("%s %s %s %s;", key, role, vs, list);
-		free(key);
-		free(list);
-		free(vs);
-		key = next;
-	}
-	return key;
-}
-
-// --- the compose compute: everything a frame is made of, read tracked
-
-static ErmErr composeCompute(void *data, const ErmGiven *g, Json **out) {
-	(void)data;
-	const ErmPartApi *api = g->api;
-	Json *layers = jsonArray(), *windows = jsonObject();
-	Json *names = drvNames(api, drvPath("/", "dev", "display", "layers", NULL));
-	for (int i = 0; names && i < names->array.count; i++) {
-		const char *name = jsonText(names->array.items[i]);
-		Json *item = drvItem(api, drvPath("/", "dev", "display", "layers", name, NULL));
-		Json *l = jsonGet(item, "value");
-		// what the layer is and where, for /dev/display/windows
-		if (jsonIsObject(l)) {
-			Json *window = jsonObject();
-			const char *fields[] = { "x", "y", "w", "h", "z", "title", "owner", "collapsed", "hidden", "drags", "want", "chrome" };
-			for (size_t k = 0; k < sizeof fields / sizeof *fields; k++)
-				if (jsonGet(l, fields[k])) jsonAdd(window, fields[k], jsonShallow(jsonGet(l, fields[k])));
-			jsonAdd(windows, name, window);
-		}
-		Json *hidden = jsonGet(l, "hidden");
-		if (!jsonIsObject(l) || whole(jsonGet(l, "w"), 0) <= 0 || whole(jsonGet(l, "h"), 0) <= 0 || (hidden && hidden->type == JSON_BOOLEAN && hidden->boolean)) continue;
-		Json *t = jsonGet(jsonGet(item, "change"), "time");
-		// a page's newest frame: its plane, at the layer's web, over its ops; a new frame a change of the layer's value
-		Json *web = jsonGet(l, "web"), *frame = NULL;
-		if (jsonIsObject(web) && jsonText(jsonGet(web, "id")))
-			frame = drvRead(api, drvPath("/", "dev", "web", "pages", jsonText(jsonGet(web, "id")), "frame", NULL));
-		Json *page = NULL, *when = t ? jsonShallow(t) : jsonInteger(0);
-		if (jsonIsObject(frame) && !jsonIsObject(jsonGet(l, "plane"))) {
-			page = drvMap("source", jsonString("web"), "id", jsonShallow(jsonGet(frame, "plane")), "serial", jsonShallow(jsonGet(frame, "n")), "x",
-			              jsonInteger(whole(jsonGet(web, "x"), 0)), "y", jsonInteger(whole(jsonGet(web, "y"), 0)), "w", jsonInteger(whole(jsonGet(web, "w"), 0)), "h",
-			              jsonInteger(whole(jsonGet(web, "h"), 0)), "over", jsonBoolean(true), NULL);
-			if (jsonIsObject(jsonGet(frame, "dirty"))) jsonAdd(page, "dirty", jsonShallow(jsonGet(frame, "dirty")));
-			Json *both = jsonArray();
-			jsonPush(both, when);
-			jsonPush(both, jsonShallow(jsonGet(frame, "n")));
-			when = both;
-		}
-		Json *s = drvMap("name", jsonString(name), "t", when, NULL);
-		const char *keys[] = { "x", "y", "w", "h", "z", "title", "collapsed", "over", "chrome", "shape", "star" };
-		for (size_t k = 0; k < sizeof keys / sizeof *keys; k++)
-			if (jsonGet(l, keys[k])) jsonAdd(s, keys[k], jsonShallow(jsonGet(l, keys[k])));
-		jsonAdd(s, "draw", jsonBoolean(jsonGet(l, "draw") != NULL));
-		if (jsonIsObject(jsonGet(l, "plane"))) jsonAdd(s, "plane", jsonShallow(jsonGet(l, "plane")));
-		else if (page) jsonAdd(s, "plane", jsonRef(page));
-		if (jsonIsObject(web) && jsonText(jsonGet(web, "id"))) jsonAdd(s, "web", jsonShallow(web));
-		jsonPush(layers, jsonRef(s));
-	}
-	char *fonts = fontsKey(api);
-	Json *mode = drvRead(api, drvPath("/", "dev", "display", "mode", NULL));
-	Json *focus = drvRead(api, drvPath("/", "dev", "display", "focus", NULL));
-	Json *theme = drvRead(api, drvPath("/", "etc", "theme", NULL));
-	Json *selection = drvRead(api, drvPath("/", "dev", "display", "selection", NULL));
-	(void)drvRead(api, drvPath("/", "dev", "display", "again", NULL)); // read, so a held compose runs after the flip
-	*out = drvMap("layers", layers, "windows", windows, "mode", mode ? mode : jsonNull(), "focus", focus ? focus : jsonNull(), "theme", theme ? theme : jsonNull(),
-	              "fonts", jsonString(fonts), "selection", selection ? selection : jsonNull(), NULL);
-	free(fonts);
-	return ermOk();
-}
-
-// --- drawing
-
-static BlitRect meet(BlitRect a, BlitRect b) {
-	int x0 = a.x > b.x ? a.x : b.x, y0 = a.y > b.y ? a.y : b.y;
-	int x1 = a.x + a.w < b.x + b.w ? a.x + a.w : b.x + b.w, y1 = a.y + a.h < b.y + b.h ? a.y + a.h : b.y + b.h;
-	return (BlitRect){ x0, y0, x1 > x0 ? x1 - x0 : 0, y1 > y0 ? y1 - y0 : 0 };
-}
-
-static BlitRect unite(BlitRect a, BlitRect b) {
-	int x0 = a.x < b.x ? a.x : b.x, y0 = a.y < b.y ? a.y : b.y;
-	int x1 = a.x + a.w > b.x + b.w ? a.x + a.w : b.x + b.w, y1 = a.y + a.h > b.y + b.h ? a.y + a.h : b.y + b.h;
-	return (BlitRect){ x0, y0, x1 - x0, y1 - y0 };
-}
-
-static bool meets(BlitRect a, BlitRect b) {
-	return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-}
-
-// --- a window's chrome, as data: /etc/theme's window, a layer's chrome over it
 
 /** a window's chrome as it is drawn: /etc/theme's window, the layer's own chrome over it, and when it is not focused their inactive over both; in frame buffer pixels */
 typedef struct Chrome {
@@ -374,6 +162,472 @@ typedef struct Chrome {
 	int unit;               // pixels a point
 	Shade shadow;
 } Chrome;
+
+/** a chrome kept with what it was made from: the theme, the layer's chrome and star, whether focused, the unit, and the faces as they were */
+typedef struct ChromeCache {
+	bool valid;
+	Json *theme, *mine; // held
+	bool star, on;
+	int u, faces;
+	Chrome c;
+} ChromeCache;
+
+typedef struct Drawn {
+	char *name;
+	BlitRect rect;
+	Json *l;        // the layer as it was drawn (held): compared but for t and its plane's image
+	bool on;        // focused
+	Json *sel;      // the selection's ranges on it (held), or NULL
+	const op_value *content; // its value as last drawn (held), and its t (a page's frame too)
+	Json *t;
+	int64_t serial; // its plane's serial, -1 for none
+	bool part;      // this frame: only its plane's dirty rectangle, part, changed
+	BlitRect at;    // part, in the layer
+	Uses chromeUses;
+	ChromeCache cc;
+} Drawn;
+
+typedef struct Rendered {
+	char *name;
+	BlitForm form;
+	Json *runs; // where its text went, as last written (held)
+	bool seen;
+	int64_t n;  // how many times it was played: one not played since it was presented is not compared
+	// the layer's value as it was when played (held): a node's value is never changed in place (api.c's are
+	// copy-on-write), so the same object is the same value, and so are its draw and pixels; a change's time
+	// is whole seconds, no mark of one. Json.h's are the same while kept (val.h): drawn with for the splice
+	const op_value *content, *drawV, *pixelsV;
+	Json *draw, *pixels; // what it was played from (held)
+	Json *plane;         // its plane as it was played (held), or NULL
+	Json *sel;           // the selection's ranges on it (held), or NULL
+	bool over;
+	int w, h;
+	Uses uses;      // the faces and pages it drew with
+	BlitRect delta; // where its last render changed it (none: nothing); fresh, all of it
+	bool fresh;
+} Rendered;
+
+/** windows mode: a titled layer's Mac window, as it was last told and shown */
+typedef struct Surface {
+	char *name;
+	bool told;          // as the last surface command said: where, how big and its title
+	int tx, ty, tw, th;
+	char *title;
+	int w, h;
+	uint32_t *shown;  // its pixels as last presented, w × h, to present only what differs
+	int64_t n;        // its form's Rendered n when last compared
+	bool seen, fresh; // fresh: made this compose
+} Surface;
+
+/** where a tile is, its depth and its shadow, as the last layers command said */
+typedef struct Geo {
+	int x, y, w, h;
+	double z;
+	bool shaded;
+	uint32_t color;
+	double opacity, radius, sx, sy;
+	int rad[4], drop;
+} Geo;
+
+/** layers mode: a layer as the metal composites it, its chrome and content in one form */
+typedef struct Tile {
+	char *name;
+	bool told;
+	Geo geo;
+	// what its form was made from: its content's Rendered n, and its chrome's look (the rest)
+	bool made;
+	int64_t n;
+	int bw, bh;
+	bool titled, on, collapsed;
+	char *title;
+	Json *mine, *shape, *theme; // held
+	int u;
+	Uses chromeUses;
+	BlitForm form;  // its pixels as last painted
+	const op_value *content; // its layer's value as last composed (held), with its t (a page's frame too) and its plane's serial: a plane's next image is only its dirty rectangle
+	Json *t;
+	int64_t serial;
+	ChromeCache cc;
+	bool seen;
+} Tile;
+
+/** the windows part: a layer's /dev/display/windows/<name> as last written, and its chrome's parts */
+typedef struct Win {
+	Json *written, *parts; // held
+	ChromeCache cc;
+	int pw, ph;
+	bool pcollapsed;
+} Win;
+
+/** what is to be drawn again: rectangles, which may overlap; past 16, one around them all */
+typedef struct Damage {
+	BlitRect r[16];
+	int n;
+} Damage;
+
+typedef struct Display {
+	Host *host;
+	Blitter *blit;
+	int maxw, maxh;
+	int front;
+	bool waiting;
+	int waitBuffer, waitW, waitH;
+	ERM_LIST(Drawn) drawn;
+	bool wholeMade;    // the full frame as last drawn whole: its size, unit and theme
+	int wholeW, wholeH, wholeU;
+	Json *wholeTheme;  // held
+	Damage damage[2];
+	bool changed;      // what changed since the last flip, for the metal to copy only that
+	BlitRect change;
+	bool held;         // a compose that came while a frame waited for its vsync: done after the flip
+	int64_t again;     // /dev/display/again, written to compose what was held
+	ERM_LIST(Rendered) rendered;
+	ERM_LIST(Face *) faces;
+	int facesGen;      // bumped when any face's metrics change
+	Json *fonts;       // the fonts summary the faces were synced from (held)
+	Uses *tally;       // where fontOf and pageOf record what is drawn with, while something is
+	const ErmPartApi *api; // the part running, to ask the font driver for a page
+	Json *here;        // the driver's own node, held
+	Json *selection;
+	uint32_t mark;
+	ErmMap windows;  // a layer's name -> Win, as /dev/display/windows/<name> was last written (NULL: gone)
+	Json *winOut;    // the windows part's value as last acted on (held): given again when nothing changed
+	ErmMap placed;   // a web page's id -> its size, {w, h}, as the metal was last told it shows (webshow)
+	Json *pagesOut;  // the pages part's value as last acted on (held)
+	ERM_LIST(Surface) surfaces; // windows mode: the Mac windows
+	Json *presents;  // windows mode: the pieces packed into the buffer waiting, presented at its vsync
+	char *macKey;    // the surface the Mac says is key
+	char *asked;     // the surface last asked to be key
+	bool layered;    // layers mode (mode.layers): each layer a tile the metal composites
+	ERM_LIST(Tile) tiles;
+	Json *stack;     // layers mode: the layers command waiting for its vsync
+} Display;
+
+static int64_t whole(const Json *v, int64_t otherwise) {
+	int64_t n;
+	return jsonIsWhole(v, &n) ? n : otherwise;
+}
+
+static uint32_t colour(const Json *theme, const char *key, uint32_t otherwise) {
+	Json *v = jsonGet(theme, key);
+	return jsonIsNumber(v) ? (uint32_t)v->number : otherwise;
+}
+
+static double number(const Json *o, const char *key, double otherwise) {
+	Json *v = jsonGet(o, key);
+	return jsonIsNumber(v) ? v->number : otherwise;
+}
+
+static bool truthy(const Json *v) {
+	return v && v->type == JSON_BOOLEAN && v->boolean;
+}
+
+/** the same value: the same Json (an unchanged value the graph keeps, val.h), or equal */
+static bool same(const Json *a, const Json *b) {
+	return a == b || jsonEqual(a, b);
+}
+
+/** *at holds v: the hold moved to v when it is another Json (an equal one too, so the next compare is the pointer's) */
+static void hold(Json **at, const Json *v) {
+	if (*at == v) return;
+	jsonFree(*at);
+	*at = jsonRef((Json *)v);
+}
+
+static bool sameText(const char *a, const char *b) {
+	return a == b || (a && b && !strcmp(a, b));
+}
+
+/** the theme's shadow, {color, opacity, radius, x, y} in points, at the screen's unit */
+static Shade shadeOf(const Json *theme, int u) {
+	Json *s = jsonGet(theme, "shadow");
+	if (!jsonIsObject(s)) return (Shade){ 0 };
+	Shade sh = { true, colour(s, "color", 0), number(s, "opacity", 0.3), number(s, "radius", 0) * u, number(s, "x", 0) * u, number(s, "y", 0) * u, { 0 } };
+	sh.on = sh.opacity > 0;
+	return sh;
+}
+
+// --- fonts: the faces, kept, as the fonts part's summary says they are
+
+/** fontOf and pageOf record what is drawn with, while something is; no face (a role with none): the faces as they were, d->facesGen */
+static void tally(Display *d, Face *f, int n, Json *page) {
+	Uses *u = d->tally;
+	if (!u) return;
+	int gen = f ? f->gen : d->facesGen;
+	for (int i = 0; i < u->count; i++)
+		if (u->items[i].face == f && u->items[i].n == n) {
+			u->items[i].gen = gen;
+			hold(&u->items[i].page, page);
+			return;
+		}
+	ERM_PUSH(*u, ((Use){ f, n, gen, jsonRef(page) }));
+}
+
+static void usesReset(Uses *u) {
+	for (int i = 0; i < u->count; i++) jsonFree(u->items[i].page);
+	u->count = 0;
+}
+
+static void usesFree(Uses *u) {
+	usesReset(u);
+	free(u->items);
+	u->items = NULL;
+	u->capacity = 0;
+}
+
+static Page *pageIn(Face *f, int n) {
+	for (int i = 0; i < f->pages.count; i++) if (f->pages.items[i].n == n) return &f->pages.items[i];
+	return NULL;
+}
+
+/** whether what was drawn with these is not as it was: a face's metrics changed or it went, a page of it is another, one it lacked has come, or a role it lacked may have a face now */
+static bool usesStale(const Display *d, const Uses *u) {
+	for (int i = 0; i < u->count; i++) {
+		const Use *x = &u->items[i];
+		if (!x->face) {
+			if (x->gen != d->facesGen) return true;
+			continue;
+		}
+		if (x->face->gone || x->face->gen != x->gen) return true;
+		if (x->n < 0) continue;
+		Page *p = pageIn(x->face, x->n);
+		if ((p ? p->value : NULL) != x->page) return true;
+	}
+	return false;
+}
+
+static Face *faceOf(Display *d, const char *role) {
+	for (int i = 0; i < d->faces.count; i++) if (!strcmp(d->faces.items[i]->role, role)) return d->faces.items[i];
+	return NULL;
+}
+
+static const BlitPage *pageOf(void *data, int n) {
+	Face *f = data;
+	Display *d = f->d;
+	Page *p = pageIn(f, n);
+	if (p) {
+		tally(d, f, n, p->value);
+		return &p->page;
+	}
+	tally(d, f, n, NULL);
+	// a page not here: asked for once, until a page of this face comes; what lacked it draws again when it does
+	for (int i = 0; i < f->wanted.count; i++) if (f->wanted.items[i] == n) return NULL;
+	if (!d->api) return NULL;
+	ERM_PUSH(f->wanted, n);
+	Json *args = jsonArray();
+	jsonPush(args, jsonString(f->role));
+	jsonPush(args, jsonInteger(n));
+	drvOp(d->api, "call", drvMap("address", drvPath("/", "dev", "font", "driver", "on", "want", NULL), "args", args, NULL));
+	return NULL;
+}
+
+static const BlitFont *fontOf(void *data, const char *role) {
+	Display *d = data;
+	if (!role) return NULL;
+	Face *f = faceOf(d, role);
+	if (!f || f->gone) {
+		tally(d, NULL, -1, NULL);
+		return NULL;
+	}
+	tally(d, f, -1, NULL);
+	return &f->font;
+}
+
+/** a page's value as the font driver writes it: w, info (1024 float64s), alpha (bytes) */
+static bool pageValid(const Json *v) {
+	const Json *alpha = jsonGet(v, "alpha"), *info = jsonGet(v, "info");
+	return jsonIsObject(v) && alpha && alpha->type == JSON_BYTES && info && info->type == JSON_TYPED && info->typed.kind == JSON_FLOAT64 && info->typed.count >= 1024;
+}
+
+static void pagesDrop(Face *f) {
+	for (int k = 0; k < f->pages.count; k++) jsonFree(f->pages.items[k].value);
+	f->pages.count = 0;
+	f->wanted.count = 0;
+}
+
+/**
+ * the faces as the fonts summary says: {role: {font, pages: {n: page}}}, the fonts part's value.
+ * A face's metrics are compared by value (the font driver writes the role again with each page);
+ * its pages by their values, each the same Json while unchanged: one the same is kept, another
+ * made in its place, one gone dropped. A role gone: its face gone (what used it draws again)
+ */
+static void facesSync(Display *d, Json *fonts) {
+	if (fonts == d->fonts) return;
+	hold(&d->fonts, fonts);
+	for (int i = 0; i < d->faces.count; i++) d->faces.items[i]->keep = false;
+	for (int i = 0; jsonIsObject(fonts) && i < fonts->object.count; i++) {
+		const char *role = fonts->object.members[i].key;
+		Json *e = fonts->object.members[i].value, *fv = jsonGet(e, "font"), *pages = jsonGet(e, "pages");
+		if (!jsonIsNumber(jsonGet(fv, "h")) || !jsonIsNumber(jsonGet(fv, "ascent"))) continue;
+		Face *f = faceOf(d, role);
+		if (!f) {
+			f = calloc(1, sizeof *f);
+			f->role = copyString(role);
+			f->d = d;
+			f->gone = true;
+			ERM_PUSH(d->faces, f);
+		}
+		f->keep = true;
+		if (f->gone || !f->value || !same(f->value, fv)) {
+			f->font = (BlitFont){ (int)jsonGet(fv, "h")->number, jsonGet(fv, "ascent")->number, f->role, pageOf, f };
+			f->gen++;
+			d->facesGen++;
+			f->gone = false;
+			hold(&f->value, fv);
+		}
+		bool changed = false;
+		for (int k = 0; k < f->pages.count; k++) f->pages.items[k].seen = false;
+		for (int k = 0; jsonIsObject(pages) && k < pages->object.count; k++) {
+			int n = atoi(pages->object.members[k].key);
+			Json *pv = pages->object.members[k].value;
+			Page *p = pageIn(f, n);
+			// the same page: the same Json, or (its kept Json let go and made again, val.h) an equal one: kept as it is, its alpha pointed into
+			if (p && same(p->value, pv)) {
+				p->seen = true;
+				continue;
+			}
+			if (!pageValid(pv)) continue;
+			Page page = { n, { (int)whole(jsonGet(pv, "w"), 0), jsonGet(pv, "alpha")->bytes.data, jsonGet(pv, "alpha")->bytes.length, jsonGet(pv, "info")->typed.data }, jsonRef(pv), true };
+			if (p) {
+				jsonFree(p->value);
+				*p = page;
+			} else ERM_PUSH(f->pages, page);
+			changed = true;
+		}
+		int kept = 0;
+		for (int k = 0; k < f->pages.count; k++) {
+			if (f->pages.items[k].seen) f->pages.items[kept++] = f->pages.items[k];
+			else {
+				jsonFree(f->pages.items[k].value);
+				changed = true;
+			}
+		}
+		f->pages.count = kept;
+		// a page came (or went): what is still missing is asked for again
+		if (changed) f->wanted.count = 0;
+	}
+	for (int i = 0; i < d->faces.count; i++) {
+		Face *f = d->faces.items[i];
+		if (f->keep || f->gone) continue;
+		f->gone = true;
+		f->gen++;
+		d->facesGen++;
+		pagesDrop(f);
+	}
+}
+
+/** the fonts part: each /dev/font role's value and the pages of it that have come, {role: {font, pages: {n: page}}}; read tracked */
+static ErmErr fontsCompute(void *data, const ErmGiven *g, Json **out) {
+	(void)data;
+	const ErmPartApi *api = g->api;
+	Json *roles = drvNames(api, drvPath("/", "dev", "font", NULL));
+	Json *o = jsonObject();
+	for (int i = 0; roles && i < roles->array.count; i++) {
+		const char *role = jsonText(roles->array.items[i]);
+		Json *v = drvRead(api, drvPath("/", "dev", "font", role, NULL));
+		if (!jsonIsNumber(jsonGet(v, "h"))) continue;
+		Json *names = drvNames(api, drvPath("/", "dev", "font", role, "pages", NULL)), *pm = jsonObject();
+		for (int k = 0; names && k < names->array.count; k++) {
+			const char *p = jsonText(names->array.items[k]);
+			Json *pv = drvRead(api, drvPath("/", "dev", "font", role, "pages", p, NULL));
+			if (pageValid(pv)) jsonAdd(pm, p, jsonRef(pv));
+		}
+		Json *e = jsonObject();
+		jsonAdd(e, "font", jsonRef(v));
+		jsonAdd(e, "pages", pm);
+		jsonAdd(o, role, e);
+	}
+	*out = o;
+	return ermOk();
+}
+
+// --- the layers part: what each layer is and where, and each as a window; read tracked
+
+static ErmErr layersCompute(void *data, const ErmGiven *g, Json **out) {
+	(void)data;
+	const ErmPartApi *api = g->api;
+	Json *layers = jsonArray(), *windows = jsonObject();
+	Json *names = drvNames(api, drvPath("/", "dev", "display", "layers", NULL));
+	for (int i = 0; names && i < names->array.count; i++) {
+		const char *name = jsonText(names->array.items[i]);
+		Json *item = drvItem(api, drvPath("/", "dev", "display", "layers", name, NULL));
+		Json *l = jsonGet(item, "value");
+		// what the layer is and where, for /dev/display/windows
+		if (jsonIsObject(l)) {
+			Json *window = jsonObject();
+			const char *fields[] = { "x", "y", "w", "h", "z", "title", "owner", "collapsed", "hidden", "drags", "want", "chrome" };
+			for (size_t k = 0; k < sizeof fields / sizeof *fields; k++)
+				if (jsonGet(l, fields[k])) jsonAdd(window, fields[k], jsonRef(jsonGet(l, fields[k])));
+			jsonAdd(windows, name, window);
+		}
+		if (!jsonIsObject(l) || whole(jsonGet(l, "w"), 0) <= 0 || whole(jsonGet(l, "h"), 0) <= 0 || truthy(jsonGet(l, "hidden"))) continue;
+		Json *t = jsonGet(jsonGet(item, "change"), "time");
+		// a page's newest frame: its plane, at the layer's web, over its ops; a new frame a change of the layer's value
+		Json *web = jsonGet(l, "web"), *frame = NULL;
+		if (jsonIsObject(web) && jsonText(jsonGet(web, "id")))
+			frame = drvRead(api, drvPath("/", "dev", "web", "pages", jsonText(jsonGet(web, "id")), "frame", NULL));
+		Json *page = NULL, *when = t ? jsonRef(t) : jsonInteger(0);
+		if (jsonIsObject(frame) && !jsonIsObject(jsonGet(l, "plane"))) {
+			page = drvMap("source", jsonString("web"), "id", jsonShallow(jsonGet(frame, "plane")), "serial", jsonShallow(jsonGet(frame, "n")), "x",
+			              jsonInteger(whole(jsonGet(web, "x"), 0)), "y", jsonInteger(whole(jsonGet(web, "y"), 0)), "w", jsonInteger(whole(jsonGet(web, "w"), 0)), "h",
+			              jsonInteger(whole(jsonGet(web, "h"), 0)), "over", jsonBoolean(true), NULL);
+			if (jsonIsObject(jsonGet(frame, "dirty"))) jsonAdd(page, "dirty", jsonRef(jsonGet(frame, "dirty")));
+			Json *both = jsonArray();
+			jsonPush(both, when);
+			jsonPush(both, jsonShallow(jsonGet(frame, "n")));
+			when = both;
+		}
+		Json *s = drvMap("name", jsonString(name), "t", when, NULL);
+		const char *keys[] = { "x", "y", "w", "h", "z", "title", "collapsed", "over", "chrome", "shape", "star" };
+		for (size_t k = 0; k < sizeof keys / sizeof *keys; k++)
+			if (jsonGet(l, keys[k])) jsonAdd(s, keys[k], jsonRef(jsonGet(l, keys[k])));
+		jsonAdd(s, "draw", jsonBoolean(jsonGet(l, "draw") != NULL));
+		if (jsonIsObject(jsonGet(l, "plane"))) jsonAdd(s, "plane", jsonRef(jsonGet(l, "plane")));
+		else if (page) jsonAdd(s, "plane", jsonRef(page));
+		if (jsonIsObject(web) && jsonText(jsonGet(web, "id"))) jsonAdd(s, "web", jsonRef(web));
+		jsonPush(layers, jsonRef(s));
+	}
+	*out = drvMap("layers", layers, "windows", windows, NULL);
+	return ermOk();
+}
+
+// --- the compose compute: what a frame is made of, read tracked: the layers and fonts summaries, the mode, focus, theme and selection
+
+static ErmErr composeCompute(void *data, const ErmGiven *g, Json **out) {
+	Display *d = data;
+	const ErmPartApi *api = g->api;
+	Json *L = drvRead(api, drvUnder(d->here, "layers", NULL));
+	Json *F = drvRead(api, drvUnder(d->here, "fonts", NULL));
+	Json *layers = jsonGet(L, "layers");
+	Json *mode = drvRead(api, drvPath("/", "dev", "display", "mode", NULL));
+	Json *focus = drvRead(api, drvPath("/", "dev", "display", "focus", NULL));
+	Json *theme = drvRead(api, drvPath("/", "etc", "theme", NULL));
+	Json *selection = drvRead(api, drvPath("/", "dev", "display", "selection", NULL));
+	(void)drvRead(api, drvPath("/", "dev", "display", "again", NULL)); // read, so a held compose runs after the flip
+	*out = drvMap("layers", jsonIsArray(layers) ? jsonRef(layers) : jsonArray(), "fonts", F ? F : jsonNull(), "mode", mode ? mode : jsonNull(), "focus",
+	              focus ? focus : jsonNull(), "theme", theme ? theme : jsonNull(), "selection", selection ? selection : jsonNull(), NULL);
+	return ermOk();
+}
+
+// --- drawing
+
+static BlitRect meet(BlitRect a, BlitRect b) {
+	int x0 = a.x > b.x ? a.x : b.x, y0 = a.y > b.y ? a.y : b.y;
+	int x1 = a.x + a.w < b.x + b.w ? a.x + a.w : b.x + b.w, y1 = a.y + a.h < b.y + b.h ? a.y + a.h : b.y + b.h;
+	return (BlitRect){ x0, y0, x1 > x0 ? x1 - x0 : 0, y1 > y0 ? y1 - y0 : 0 };
+}
+
+static BlitRect unite(BlitRect a, BlitRect b) {
+	int x0 = a.x < b.x ? a.x : b.x, y0 = a.y < b.y ? a.y : b.y;
+	int x1 = a.x + a.w > b.x + b.w ? a.x + a.w : b.x + b.w, y1 = a.y + a.h > b.y + b.h ? a.y + a.h : b.y + b.h;
+	return (BlitRect){ x0, y0, x1 - x0, y1 - y0 };
+}
+
+static bool meets(BlitRect a, BlitRect b) {
+	return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+// --- a window's chrome, as data: /etc/theme's window, a layer's chrome over it
 
 /** where a chrome's fields are found, the first that has one: the inactive looks (the layer's, then the theme's) when it is not focused, the layer's chrome, the theme's window */
 typedef struct Looks {
@@ -429,7 +683,7 @@ static void sideOf(const Looks *k, const char *side, const char *otherwise, char
 static Chrome chromeOf(Display *d, const Json *theme, const Theme *T, const Json *l, bool on, int u) {
 	const Json *mine = jsonGet(l, "chrome"), *all = jsonGet(theme, "window");
 	// a star (a layer saying star: true, as the cat clock): /etc/theme's star over its window, where it has one
-	const Json *starred = jsonGet(l, "star"), *star = starred && starred->type == JSON_BOOLEAN && starred->boolean ? jsonGet(theme, "star") : NULL;
+	const Json *star = truthy(jsonGet(l, "star")) ? jsonGet(theme, "star") : NULL;
 	Looks k = { { 0 }, 0 };
 	if (!on && jsonIsObject(jsonGet(mine, "inactive"))) k.at[k.n++] = jsonGet(mine, "inactive");
 	if (!on && jsonIsObject(jsonGet(star, "inactive"))) k.at[k.n++] = jsonGet(star, "inactive");
@@ -531,6 +785,30 @@ static Chrome chromeOf(Display *d, const Json *theme, const Theme *T, const Json
 	return c;
 }
 
+/** a layer's chrome, kept with what it was made from and made again only when that changed; *fresh (when given) whether it was */
+static const Chrome *chromeAt(Display *d, ChromeCache *cc, const Json *theme, const Theme *T, const Json *l, bool on, int u, bool *fresh) {
+	const Json *mine = jsonGet(l, "chrome");
+	bool star = truthy(jsonGet(l, "star"));
+	if (cc->valid && cc->star == star && cc->on == on && cc->u == u && cc->faces == d->facesGen && same(cc->theme, theme) && same(cc->mine, mine)) {
+		hold(&cc->theme, theme);
+		hold(&cc->mine, mine);
+		if (fresh) *fresh = false;
+		return &cc->c;
+	}
+	cc->c = chromeOf(d, theme, T, l, on, u);
+	hold(&cc->theme, theme);
+	hold(&cc->mine, mine);
+	cc->star = star, cc->on = on, cc->u = u, cc->faces = d->facesGen, cc->valid = true;
+	if (fresh) *fresh = true;
+	return &cc->c;
+}
+
+static void chromeCacheFree(ChromeCache *cc) {
+	jsonFree(cc->theme);
+	jsonFree(cc->mine);
+	*cc = (ChromeCache){ 0 };
+}
+
 /**
  * an untitled layer's shape, {radius, shadow?} in points: its corners rounded and, with shadow true (the theme's)
  * or one of its own ({color, opacity, radius, x, y}), a soft shadow under it, as a window's: a dock, a menu, a
@@ -547,7 +825,7 @@ static bool shapeOf(const Json *l, const Json *theme, int u, Chrome *c) {
 		c->radius[i] = jsonIsNumber(ri) && ri->number > 0 ? (int)(ri->number * u) : 0;
 	}
 	const Json *sh = jsonGet(s, "shadow");
-	if (sh && sh->type == JSON_BOOLEAN && sh->boolean) c->shadow = shadeOf(theme, u);
+	if (truthy(sh)) c->shadow = shadeOf(theme, u);
 	else if (jsonIsObject(sh)) c->shadow = shadeOf(s, u);
 	return true;
 }
@@ -656,12 +934,10 @@ static void mark(BlitForm *fb, const BlitRect *clip, char kind, double cx, doubl
 /** a window's chrome, as /etc/theme's window says (System 7's by default): a frame, its hard shadow, the title bar, pinstriped while focused, its title on a plate, its boxes */
 static void chrome(Display *d, BlitForm *fb, const BlitRect *clip, const Chrome *c, const Json *l) {
 	int x = (int)whole(jsonGet(l, "x"), 0), y = (int)whole(jsonGet(l, "y"), 0), w = (int)whole(jsonGet(l, "w"), 0), lh = (int)whole(jsonGet(l, "h"), 0);
-	Json *col = jsonGet(l, "collapsed");
-	bool collapsed = col && col->type == JSON_BOOLEAN && col->boolean;
+	bool collapsed = truthy(jsonGet(l, "collapsed"));
 	const char *title = jsonText(jsonGet(l, "title"));
 	int B = c->border, D = c->drop, R = c->rule, tb = c->tb, h = (collapsed ? 0 : lh) + tb + 2 * B;
-	Json *over = jsonGet(l, "over");
-	if (over && over->type == JSON_BOOLEAN && over->boolean) {
+	if (truthy(jsonGet(l, "over"))) {
 		// what it draws has holes: the frame's line under them
 		if (D) blitFill(fb, x - B + D, y - tb - B + D, w + 2 * B, h, c->shade, clip); // the hard shadow, down and right
 		blitFill(fb, x - B, y - tb - B, w + 2 * B, h, c->line, clip);                 // the frame
@@ -768,6 +1044,15 @@ static void chrome(Display *d, BlitForm *fb, const BlitRect *clip, const Chrome 
 		soften(d, fb, &bar, tx, ty, tw, title ? title : "", c, c->unit);
 	}
 	blitText(d->blit, fb, tx, ty, title ? title : "", c->ink, NULL, &at, c->font);
+}
+
+/** the chrome drawn, with what it drew with recorded in uses (the title's face and pages), from nothing */
+static void chromeTallied(Display *d, BlitForm *fb, const BlitRect *clip, const Chrome *c, const Json *l, Uses *uses) {
+	usesReset(uses);
+	d->tally = uses;
+	tally(d, c->font ? c->font->data : NULL, -1, NULL);
+	chrome(d, fb, clip, c, l);
+	d->tally = NULL;
 }
 
 static Json *rectJson(int x, int y, int w, int h) {
@@ -901,22 +1186,19 @@ static bool spliced(Display *d, const Json *was, const Json *now, int w, int h, 
 	return true;
 }
 
-/** where a layer's text went, written to /dev/display/text/<name> when it changed */
-static void said(Display *d, const ErmPartApi *api, Rendered *r, const char *name, Json *runs) {
-	(void)d;
-	char *text = jsonPrint(runs);
-	if (r->runs && !strcmp(r->runs, text)) {
-		free(text);
+/** where a layer's text went, written to /dev/display/text/<name> when it changed; runs is taken */
+static void said(const ErmPartApi *api, Rendered *r, const char *name, Json *runs) {
+	if (r->runs && jsonEqual(r->runs, runs)) {
 		jsonFree(runs);
 		return;
 	}
-	free(r->runs);
-	r->runs = text;
+	jsonFree(r->runs);
+	r->runs = runs;
 	Json *at = drvPath("/", "dev", "display", "text", name, NULL);
-	if (drvHas(api, at)) drvSnap(api, at, runs);
+	if (drvHas(api, at)) drvSnap(api, at, jsonRef(runs));
 	else {
 		char *id = formatString("display/text/%s", name);
-		drvMake(api, drvPath("/", "dev", "display", "text", NULL), name, id, runs);
+		drvMake(api, drvPath("/", "dev", "display", "text", NULL), name, id, jsonRef(runs));
 		free(id);
 	}
 }
@@ -930,30 +1212,78 @@ static void planeCopy(BlitForm *dst, int x, int y, const BlitForm *src, int sx, 
 		for (int i = x0; i < x1; i++) dst->bits[j * dst->stride + i] &= 0x00ffffff;
 }
 
-/** a layer's pixels: its ops played into a form of its own, kept until they, the fonts or the selection change; part, when not NULL, the only rectangle of its plane that changed since it was last played, all that is copied */
-static BlitForm *render(Display *d, const ErmPartApi *api, const Json *l, const char *look, const BlitRect *part) {
+/** *at holds v, an op_value: the hold moved to v when it is another */
+static void keepValue(const op_value **at, const op_value *v) {
+	if (*at == v) return;
+	op_free((op_value *)*at);
+	*at = v ? op_ref((op_value *)v) : NULL;
+}
+
+/** a layer's value as the graph holds it, the object itself (drvItem's, without its Json): NULL for none */
+static const op_value *contentOf(Display *d, const ErmPartApi *api, const char *name) {
+	size_t n = 0;
+	const char *const *a = hostPathOf(d->host, drvPath("/", "dev", "display", "layers", name, NULL), &n);
+	ap_items items = { 0 };
+	if (!a || ap_content((ap_api *)api, a, n, &items)) return NULL;
+	for (size_t i = 0; i < items.n; i++) {
+		const ap_item *it = &items.items[i];
+		if (!it->node || !it->has_versions) continue;
+		for (size_t k = 0; k < it->nversions; k++)
+			if (!it->versions[k].status) return it->versions[k].content;
+		return NULL;
+	}
+	return NULL;
+}
+
+static Rendered *renderedOf(Display *d, const char *name) {
+	for (int i = 0; i < d->rendered.count; i++) if (!strcmp(d->rendered.items[i].name, name)) return &d->rendered.items[i];
+	return NULL;
+}
+
+/** the selection's ranges on a layer, or NULL */
+static Json *selectionOn(Display *d, const char *name) {
+	const char *on = jsonText(jsonGet(d->selection, "layer"));
+	return on && !strcmp(on, name) ? jsonGet(d->selection, "ranges") : NULL;
+}
+
+/** a plane as a layer's summary says it, compared without its image: its source and id */
+static bool samePlace(const Json *a, const Json *b) {
+	return same(jsonGet(a, "source"), jsonGet(b, "source")) && same(jsonGet(a, "id"), jsonGet(b, "id"));
+}
+
+/**
+ * a layer's pixels: its ops played into a form of its own, kept until they, the fonts it drew with or the
+ * selection change. content is the layer's value as the graph holds it (contentOf): the same object as
+ * when it was played, with the same plane, selection and fonts, nothing more is looked at: the form as it
+ * is. Else its draw and pixels are compared with what was played: the same objects are the same values,
+ * so a layer moved or raised is not played again. part, when not NULL, is the only rectangle of its plane
+ * that changed since it was last played, all that is copied
+ */
+static BlitForm *render(Display *d, const ErmPartApi *api, const Json *l, const op_value *content, const BlitRect *part) {
 	const char *name = jsonText(jsonGet(l, "name"));
 	int w = (int)whole(jsonGet(l, "w"), 0), h = (int)whole(jsonGet(l, "h"), 0);
-	Json *v = drvRead(api, drvPath("/", "dev", "display", "layers", name, NULL));
-	Rendered *r = NULL;
-	for (int i = 0; i < d->rendered.count && !r; i++) if (!strcmp(d->rendered.items[i].name, name)) r = &d->rendered.items[i];
+	Rendered *r = renderedOf(d, name);
 	if (r) r->seen = true;
-	if (!v) return r ? &r->form : NULL;
-	// what it draws, apart from where it is: the same ops and pixels are the same values, so a layer moved or raised is not played again
-	const Json *ops0 = jsonGet(v, "draw"), *pixels0 = jsonGet(v, "pixels"), *ov = jsonGet(v, "over");
-	char *pt = jsonGet(l, "plane") ? jsonPrint(jsonGet(l, "plane")) : copyString("");
-	char *rest = formatString("%p %s %d %d %d %s", (const void *)pixels0, pt, ov && ov->type == JSON_BOOLEAN && ov->boolean, w, h, look);
-	char *key = formatString("%p %s", (const void *)ops0, rest);
-	free(pt);
-	if (r && !strcmp(r->key, key)) {
-		free(key);
-		free(rest);
+	if (!content) return r ? &r->form : NULL;
+	Json *sel = selectionOn(d, name), *plane = jsonGet(l, "plane");
+	bool over = truthy(jsonGet(l, "over"));
+	// what it draws, apart from where it is: the same ops and pixels are the same values
+	bool rest = r && same(r->plane, plane) && r->over == over && r->w == w && r->h == h && same(r->sel, sel) && !usesStale(d, &r->uses);
+	if (rest && r->content == content) {
 		r->delta = (BlitRect){ 0 }, r->fresh = false;
 		return &r->form;
 	}
+	const op_value *drawV = content->type == OP_MAP ? op_get(content, "draw") : NULL, *pixelsV = content->type == OP_MAP ? op_get(content, "pixels") : NULL;
+	rest = rest && r->pixelsV == pixelsV;
+	if (rest && r->drawV == drawV) {
+		keepValue(&r->content, content);
+		r->delta = (BlitRect){ 0 }, r->fresh = false;
+		return &r->form;
+	}
+	Json *v = jsonOfValKept(content); // a hold of this call's
+	Json *ops0 = jsonGet(v, "draw"), *pixels0 = jsonGet(v, "pixels");
 	// only a rectangle of its plane changed: that alone copied into the form it has. A plane is at its
 	// x, y in the layer (a page's, at its web), at most w × h, under the ops, or over them (a page's)
-	Json *plane = jsonGet(l, "plane"), *po = jsonGet(plane, "over");
 	HostPlane hp;
 	bool planed = jsonIsObject(plane) && hostPlane(d->host, jsonText(jsonGet(plane, "source")), whole(jsonGet(plane, "id"), -1), &hp) && hp.bits;
 	int px = planed ? (int)whole(jsonGet(plane, "x"), 0) : 0, py = planed ? (int)whole(jsonGet(plane, "y"), 0) : 0;
@@ -964,75 +1294,73 @@ static BlitForm *render(Display *d, const ErmPartApi *api, const Json *l, const 
 		if (pw > w - px) pw = w - px;
 		if (ph > h - py) ph = h - py;
 	}
-	bool above = po && po->type == JSON_BOOLEAN && po->boolean;
-	if (r && part && planed && r->form.w == w && r->form.h == h && r->draw == ops0 && r->pixels == pixels0) {
+	bool above = truthy(jsonGet(plane, "over"));
+	if (r && part && planed && r->form.w == w && r->form.h == h && r->drawV == drawV && r->pixelsV == pixelsV && r->over == over && same(r->sel, sel) && !usesStale(d, &r->uses)) {
 		BlitRect c = meet(*part, (BlitRect){ 0, 0, pw, ph });
 		BlitForm src = { hp.w, hp.h, hp.stride, (uint32_t *)hp.bits, NULL };
 		planeCopy(&r->form, px + c.x, py + c.y, &src, c.x, c.y, c.w, c.h);
 		c.x += px, c.y += py;
-		free(r->key);
-		r->key = key;
-		free(r->rest);
-		r->rest = rest;
+		keepValue(&r->content, content);
+		hold(&r->plane, plane);
 		r->n++;
 		r->delta = c, r->fresh = false;
+		jsonFree(v);
 		return &r->form;
 	}
 	// its ops a splice of the last, all else the same: only where the ops between drew played again, into the form it has
-	const char *sl = jsonText(jsonGet(d->selection, "layer"));
 	BlitRect damage;
-	if (r && r->rest && !strcmp(r->rest, rest) && !pixels0 && !planed && r->form.bits && r->form.w == w && r->form.h == h && !(sl && !strcmp(sl, name)) &&
-	    jsonIsArray(ops0) && jsonIsArray(r->draw) && spliced(d, r->draw, ops0, w, h, &damage)) {
+	if (rest && !pixels0 && !planed && r->form.bits && !sel && jsonIsArray(ops0) && jsonIsArray(r->draw) && spliced(d, r->draw, ops0, w, h, &damage)) {
 		if (damage.w && damage.h) {
-			blitFill(&r->form, damage.x, damage.y, damage.w, damage.h, ov && ov->type == JSON_BOOLEAN && ov->boolean ? BLIT_TRANSPARENT : 0, NULL);
-			said(d, api, r, name, blitPlayIn(d->blit, &r->form, ops0, fontOf, d, NULL, d->mark, &damage));
+			blitFill(&r->form, damage.x, damage.y, damage.w, damage.h, over ? BLIT_TRANSPARENT : 0, NULL);
+			d->tally = &r->uses;
+			Json *runs = blitPlayIn(d->blit, &r->form, ops0, fontOf, d, NULL, d->mark, &damage);
+			d->tally = NULL;
+			said(api, r, name, runs);
 		}
-		free(r->key);
-		r->key = key;
-		free(r->rest);
-		r->rest = rest;
+		keepValue(&r->content, content);
+		keepValue(&r->drawV, drawV);
+		hold(&r->draw, ops0);
 		r->n++;
-		jsonFree((Json *)r->draw);
-		r->draw = jsonRef((Json *)ops0);
 		r->delta = damage, r->fresh = false;
+		jsonFree(v);
 		return &r->form;
 	}
 	// played again, it is compared with what it was: where they differ is all that changed
 	BlitForm old = { 0 };
 	if (!r) {
-		ERM_PUSH(d->rendered, ((Rendered){ .name = copyString(name), .key = NULL, .seen = true }));
+		ERM_PUSH(d->rendered, ((Rendered){ .name = copyString(name), .seen = true }));
 		r = &d->rendered.items[d->rendered.count - 1];
-	} else {
-		old = r->form;
-		free(r->key);
-		free(r->rest);
-	}
-	r->key = key;
-	r->rest = rest;
+	} else old = r->form;
 	r->n++;
-	jsonFree((Json *)r->draw);
-	r->draw = jsonRef((Json *)ops0), r->pixels = pixels0;
-	Json *over = jsonGet(l, "over");
-	r->form = blitForm(w, h, over && over->type == JSON_BOOLEAN && over->boolean ? BLIT_TRANSPARENT : 0);
-	Json *pixels = jsonGet(v, "pixels");
-	if (pixels && pixels->type == JSON_TYPED && (pixels->typed.kind == JSON_UINT32 || pixels->typed.kind == JSON_INT32) && pixels->typed.count >= (size_t)(w * h)) {
-		BlitForm src = { w, h, w, pixels->typed.data, NULL };
+	keepValue(&r->content, content);
+	keepValue(&r->drawV, drawV);
+	keepValue(&r->pixelsV, pixelsV);
+	hold(&r->draw, ops0);
+	hold(&r->pixels, pixels0);
+	hold(&r->plane, plane);
+	hold(&r->sel, sel);
+	r->over = over, r->w = w, r->h = h;
+	r->form = blitForm(w, h, over ? BLIT_TRANSPARENT : 0);
+	if (pixels0 && pixels0->type == JSON_TYPED && (pixels0->typed.kind == JSON_UINT32 || pixels0->typed.kind == JSON_INT32) && pixels0->typed.count >= (size_t)(w * h)) {
+		BlitForm src = { w, h, w, pixels0->typed.data, NULL };
 		blitBlit(&r->form, 0, 0, &src, 0, 0, w, h, BLIT_COPY, NULL);
 	}
 	// a plane: pixels in a driver's memory (hostPlane), copied here, so the driver may change them once this returns
 	BlitForm src = planed ? (BlitForm){ hp.w, hp.h, hp.stride, (uint32_t *)hp.bits, NULL } : (BlitForm){ 0 };
 	if (planed && !above && pw > 0 && ph > 0) planeCopy(&r->form, px, py, &src, 0, 0, pw, ph);
-	Json *ops = jsonGet(v, "draw");
-	if (jsonIsArray(ops)) {
-		const char *on = jsonText(jsonGet(d->selection, "layer"));
-		const Json *marks = on && !strcmp(on, name) ? jsonGet(d->selection, "ranges") : NULL;
+	usesReset(&r->uses);
+	if (jsonIsArray(ops0)) {
 		// where its text went, for whoever reads, selects or speaks it
-		said(d, api, r, name, blitPlay(d->blit, &r->form, ops, fontOf, d, marks, d->mark));
+		d->tally = &r->uses;
+		Json *runs = blitPlay(d->blit, &r->form, ops0, fontOf, d, sel, d->mark);
+		d->tally = NULL;
+		said(api, r, name, runs);
 	}
 	if (planed && above && pw > 0 && ph > 0) planeCopy(&r->form, px, py, &src, 0, 0, pw, ph);
 	r->fresh = !old.bits || old.w != w || old.h != h;
 	if (!r->fresh && !differs(old.bits, &r->form, w, h, &r->delta)) r->delta = (BlitRect){ 0 };
 	free(old.bits);
+	jsonFree(v);
 	return &r->form;
 }
 
@@ -1050,39 +1378,19 @@ static void mapFree(ErmMap *m) {
 	*m = (ErmMap){ 0 };
 }
 
-/**
- * web pages: each one's size, as a layer shows it, told the metal when it
- * changes (webshow), so it draws at that size; w 0 for one no layer shows
- * (hidden, collapsed, in another view, gone), which draws nothing
- */
-static void shows(Display *d, Json *layers) {
-	ErmMap seen = { 0 };
-	for (int i = 0; jsonIsArray(layers) && i < layers->array.count; i++) {
-		Json *l = layers->array.items[i], *web = jsonGet(l, "web"), *col = jsonGet(l, "collapsed");
-		const char *id = jsonText(jsonGet(web, "id"));
-		if (!id || (col && col->type == JSON_BOOLEAN && col->boolean)) continue;
-		int w = (int)whole(jsonGet(web, "w"), 0), h = (int)whole(jsonGet(web, "h"), 0);
-		if (w <= 0 || h <= 0) continue;
-		ermMapPut(&seen, id, (void *)1);
-		char *key = formatString("%d %d", w, h), *was = ermMapGet(&d->placed, id);
-		if (was && !strcmp(was, key)) {
-			free(key);
-			continue;
-		}
-		hostCommand(d->host, drvMap("op", jsonString("webshow"), "id", jsonString(id), "w", jsonInteger(w), "h", jsonInteger(h), NULL));
-		free(was);
-		ermMapPut(&d->placed, id, key);
-	}
-	for (int i = 0; i < d->placed.count; i++) {
-		const char *id = d->placed.entries[i].key;
-		if (!d->placed.entries[i].value || ermMapHas(&seen, id)) continue;
-		hostCommand(d->host, drvMap("op", jsonString("webshow"), "id", jsonString(id), "w", jsonInteger(0), "h", jsonInteger(0), NULL));
-		free(d->placed.entries[i].value);
-		ermMapPut(&d->placed, id, NULL);
-	}
-	mapFree(&seen);
+static void renderedFree(Rendered *r) {
+	free(r->form.bits);
+	free(r->name);
+	jsonFree(r->runs);
+	op_free((op_value *)r->content);
+	op_free((op_value *)r->drawV);
+	op_free((op_value *)r->pixelsV);
+	jsonFree(r->draw);
+	jsonFree(r->pixels);
+	jsonFree(r->plane);
+	jsonFree(r->sel);
+	usesFree(&r->uses);
 }
-
 
 /** layers gone, or in windows mode untitled, out of sight: their forms, and their runs */
 static void forget(Display *d, const ErmPartApi *api, Json *layers, bool windows) {
@@ -1101,12 +1409,7 @@ static void forget(Display *d, const ErmPartApi *api, Json *layers, bool windows
 		if (drvHas(api, drvPath("/", "dev", "display", "text", r->name, NULL)))
 			drvOp(api, "unplace", drvMap("address", drvPath("/", "dev", "display", "text", NULL), "name", jsonString(r->name), "id", jsonString(id), NULL));
 		free(id);
-		free(r->form.bits);
-		free(r->name);
-		free(r->key);
-		free(r->rest);
-		free(r->runs);
-		jsonFree((Json *)r->draw);
+		renderedFree(r);
 	}
 	d->rendered.count = k;
 }
@@ -1137,11 +1440,6 @@ static Surface *surfaceOf(Display *d, const char *name) {
 	return NULL;
 }
 
-/** what a surface command says of a layer: where, how big and its title, as the metal is told it */
-static char *geoOf(Display *d, int x, int y, int w, int h, const char *title) {
-	return formatString("%d %d %d %d %s", x, y, w < d->maxw ? w : d->maxw, h < d->maxh ? h : d->maxh, title);
-}
-
 static void surfaceCommand(Display *d, const char *name, int x, int y, int w, int h, const char *title, bool key) {
 	Json *c = drvMap("op", jsonString("surface"), "id", jsonString(name), "x", jsonInteger(x), "y", jsonInteger(y), "w", jsonInteger(w < d->maxw ? w : d->maxw),
 	                 "h", jsonInteger(h < d->maxh ? h : d->maxh), "title", jsonString(title), NULL);
@@ -1149,9 +1447,27 @@ static void surfaceCommand(Display *d, const char *name, int x, int y, int w, in
 	hostCommand(d->host, c);
 }
 
+/** a surface told where it is, how big and its title, when that is not as it was last told */
+static void surfaceTell(Display *d, Surface *s, int x, int y, int w, int h, const char *title) {
+	w = w < d->maxw ? w : d->maxw, h = h < d->maxh ? h : d->maxh;
+	if (s->told && s->tx == x && s->ty == y && s->tw == w && s->th == h && sameText(s->title, title)) return;
+	surfaceCommand(d, s->name, x, y, w, h, title, false);
+	s->told = true, s->tx = x, s->ty = y, s->tw = w, s->th = h;
+	free(s->title);
+	s->title = copyString(title);
+}
+
+/** the Mac's key window follows the focus: the surface told so, unless the Mac says it is key or it was asked already */
+static void keyFollows(Display *d, Surface *s) {
+	if (!s || !s->told || (d->macKey && !strcmp(d->macKey, s->name)) || (d->asked && !strcmp(d->asked, s->name))) return;
+	surfaceCommand(d, s->name, s->tx, s->ty, s->tw, s->th, s->title ? s->title : "", true);
+	free(d->asked);
+	d->asked = copyString(s->name);
+}
+
 static void surfaceFree(Surface *s) {
 	free(s->name);
-	free(s->geo);
+	free(s->title);
 	free(s->shown);
 }
 
@@ -1176,12 +1492,12 @@ static void unsurfaceAll(Display *d) {
  * presented, packed side by side into the back buffer, to present at the
  * next vsync; surfaces whose layer went, closed
  */
-static void windowsCompose(Display *d, const ErmPartApi *api, Json *layers, const char *focus, const char *fonts) {
+static void windowsCompose(Display *d, const ErmPartApi *api, Json *layers, const char *focus) {
 	int n = layers ? layers->array.count : 0;
 	Json **sorted = malloc(sizeof *sorted * (size_t)(n ? n : 1));
 	for (int i = 0; i < n; i++) sorted[i] = layers->array.items[i];
 	qsort(sorted, (size_t)n, sizeof *sorted, cmpZ);
-	for (int i = 0; i < d->surfaces.count; i++) d->surfaces.items[i].seen = false;
+	for (int i = 0; i < d->surfaces.count; i++) d->surfaces.items[i].seen = d->surfaces.items[i].fresh = false;
 	int back = 1 - d->front;
 	BlitForm fb = { d->maxw, d->maxh, d->maxw, hostConfig(d->host)->buffers[back], NULL };
 	Json *presents = jsonArray();
@@ -1194,22 +1510,12 @@ static void windowsCompose(Display *d, const ErmPartApi *api, Json *layers, cons
 		int x = (int)whole(jsonGet(l, "x"), 0), y = (int)whole(jsonGet(l, "y"), 0), w = (int)whole(jsonGet(l, "w"), 0), h = (int)whole(jsonGet(l, "h"), 0);
 		Surface *s = surfaceOf(d, name);
 		if (!s) {
-			ERM_PUSH(d->surfaces, ((Surface){ .name = copyString(name) }));
+			ERM_PUSH(d->surfaces, ((Surface){ .name = copyString(name), .fresh = true }));
 			s = &d->surfaces.items[d->surfaces.count - 1];
 		}
 		s->seen = true;
-		char *geo = geoOf(d, x, y, w, h, title);
-		if (!s->geo || strcmp(s->geo, geo)) {
-			surfaceCommand(d, name, x, y, w, h, title, false);
-			free(s->geo);
-			s->geo = geo;
-		} else free(geo);
-		const char *on = jsonText(jsonGet(d->selection, "layer"));
-		char *sel = on && !strcmp(on, name) ? jsonPrint(jsonGet(d->selection, "ranges")) : copyString("");
-		char *look = formatString("%s %s", fonts ? fonts : "", sel);
-		free(sel);
-		BlitForm *form = render(d, api, l, look, NULL);
-		free(look);
+		surfaceTell(d, s, x, y, w, h, title);
+		BlitForm *form = render(d, api, l, contentOf(d, api, name), NULL);
 		if (!form) continue;
 		w = form->w < d->maxw ? form->w : d->maxw;
 		h = form->h < d->maxh ? form->h : d->maxh;
@@ -1219,8 +1525,7 @@ static void windowsCompose(Display *d, const ErmPartApi *api, Json *layers, cons
 			s->w = w, s->h = h;
 		}
 		// a form not played again is as it was presented, but for pieces that found no room
-		Rendered *made = NULL;
-		for (int k = 0; k < d->rendered.count && !made; k++) if (!strcmp(d->rendered.items[k].name, name)) made = &d->rendered.items[k];
+		Rendered *made = renderedOf(d, name);
 		if (s->shown && made->n == s->n) continue;
 		BlitRect r = { 0, 0, w, h };
 		if (s->shown && !differs(s->shown, form, w, h, &r)) {
@@ -1265,18 +1570,9 @@ static void windowsCompose(Display *d, const ErmPartApi *api, Json *layers, cons
 		surfaceFree(s);
 	}
 	d->surfaces.count = k;
-	// the focus moved here (a new window, a key of the window manager's): the Mac's key window follows
+	// a window new this frame with the focus: the Mac's key window follows (the focus part does the rest)
 	Surface *f = focus ? surfaceOf(d, focus) : NULL;
-	if (f && (!d->macKey || strcmp(d->macKey, focus)) && (!d->asked || strcmp(d->asked, focus))) {
-		for (int i = 0; i < n; i++) {
-			Json *l = layers->array.items[i];
-			if (strcmp(jsonText(jsonGet(l, "name")), focus)) continue;
-			surfaceCommand(d, focus, (int)whole(jsonGet(l, "x"), 0), (int)whole(jsonGet(l, "y"), 0), (int)whole(jsonGet(l, "w"), 0), (int)whole(jsonGet(l, "h"), 0),
-			               jsonText(jsonGet(l, "title")), true);
-		}
-		free(d->asked);
-		d->asked = copyString(focus);
-	}
+	if (f && f->fresh) keyFollows(d, f);
 	if (!presents->array.count) {
 		jsonFree(presents);
 		return;
@@ -1408,10 +1704,14 @@ static Tile *tileOf(Display *d, const char *name) {
 
 static void tileFree(Tile *t) {
 	free(t->name);
-	free(t->geo);
-	free(t->key);
-	free(t->rest);
-	free(t->t);
+	free(t->title);
+	jsonFree(t->mine);
+	jsonFree(t->shape);
+	jsonFree(t->theme);
+	jsonFree(t->t);
+	op_free((op_value *)t->content);
+	usesFree(&t->chromeUses);
+	chromeCacheFree(&t->cc);
 	free(t->form.bits);
 }
 
@@ -1448,6 +1748,19 @@ static void lentFree(Json *m) {
 	free(m);
 }
 
+/** a plane's next image, with dirty, when its serial is the next after the last: only that rectangle, at, changed */
+static bool nextImage(const Json *plane, int64_t last, int64_t serial, BlitRect *at) {
+	const Json *pd = jsonGet(plane, "dirty");
+	int64_t dx = whole(jsonGet(pd, "x"), -1), dy = whole(jsonGet(pd, "y"), -1), dw = whole(jsonGet(pd, "w"), -1), dh = whole(jsonGet(pd, "h"), -1);
+	*at = (BlitRect){ (int)dx, (int)dy, (int)dw, (int)dh };
+	return serial >= 0 && serial == last + 1 && dx >= 0 && dy >= 0 && dw >= 0 && dh >= 0;
+}
+
+static bool sameGeo(const Geo *a, const Geo *b) {
+	return a->x == b->x && a->y == b->y && a->w == b->w && a->h == b->h && a->z == b->z && a->shaded == b->shaded && a->color == b->color && a->opacity == b->opacity &&
+	       a->radius == b->radius && a->sx == b->sx && a->sy == b->sy && !memcmp(a->rad, b->rad, sizeof a->rad) && a->drop == b->drop;
+}
+
 /**
  * a frame in layers mode: each layer a tile, its chrome and content in one
  * form; where it is, its depth and its shadow told when they change, with no
@@ -1456,7 +1769,7 @@ static void lentFree(Json *m) {
  * command. So a window dragged is told where, a caret blinking paints a
  * caret, and tiles whose layer went are dropped
  */
-static void layersCompose(Display *d, const ErmPartApi *api, Json *layers, const char *focus, const char *fonts, const char *look, const Json *theme, const Theme *T, int u) {
+static void layersCompose(Display *d, const ErmPartApi *api, Json *layers, const char *focus, const Json *theme, const Theme *T, int u) {
 	int n = layers ? layers->array.count : 0;
 	Json **sorted = malloc(sizeof *sorted * (size_t)(n ? n : 1));
 	for (int i = 0; i < n; i++) sorted[i] = layers->array.items[i];
@@ -1468,61 +1781,49 @@ static void layersCompose(Display *d, const ErmPartApi *api, Json *layers, const
 	int sx = 0, sy = 0, rowH = 0;
 	for (int i = 0; i < n; i++) {
 		Json *l = sorted[i];
-		const char *name = jsonText(jsonGet(l, "name"));
+		const char *name = jsonText(jsonGet(l, "name")), *title = jsonText(jsonGet(l, "title"));
 		int x = (int)whole(jsonGet(l, "x"), 0), y = (int)whole(jsonGet(l, "y"), 0), w = (int)whole(jsonGet(l, "w"), 0), h = (int)whole(jsonGet(l, "h"), 0);
 		double z = jsonIsNumber(jsonGet(l, "z")) ? jsonGet(l, "z")->number : 0;
-		Json *col = jsonGet(l, "collapsed"), *over = jsonGet(l, "over");
-		bool collapsed = col && col->type == JSON_BOOLEAN && col->boolean, titled = jsonIsString(jsonGet(l, "title")), on = focus && !strcmp(focus, name);
-		// the tile: a window's frame, title bar and hard shadow (System 7's, a point down and right), around its content, as its chrome says
-		Chrome ch = { 0 };
-		bool shaped = false;
-		if (titled) ch = chromeOf(d, theme, T, l, on, u);
-		else shaped = shapeOf(l, theme, u, &ch);
-		BlitRect frame = titled ? frameOf(&ch, x, y, w, h, collapsed) : (BlitRect){ x, y, w, h };
-		int rad[4] = { 0 };
-		bool curved = (titled || shaped) && radii(&ch, frame, rad);
-		BlitRect box = { frame.x, frame.y, frame.w + ch.drop, frame.h + ch.drop }, inner = { 0, 0, frame.w, frame.h };
-		if (box.w > d->maxw) box.w = d->maxw;
-		if (box.h > d->maxh) box.h = d->maxh;
+		bool collapsed = truthy(jsonGet(l, "collapsed")), over = truthy(jsonGet(l, "over")), titled = jsonIsString(jsonGet(l, "title")), on = focus && !strcmp(focus, name);
 		Tile *t = tileOf(d, name);
 		if (!t) {
 			ERM_PUSH(d->tiles, ((Tile){ .name = copyString(name), .serial = -1 }));
 			t = &d->tiles.items[d->tiles.count - 1];
 		}
 		t->seen = true;
+		// the tile: a window's frame, title bar and hard shadow (System 7's, a point down and right), around its content, as its chrome says
+		Chrome shape = { 0 };
+		const Chrome *ch = &shape;
+		bool shaped = false;
+		if (titled) ch = chromeAt(d, &t->cc, theme, T, l, on, u, NULL);
+		else shaped = shapeOf(l, theme, u, &shape);
+		BlitRect frame = titled ? frameOf(ch, x, y, w, h, collapsed) : (BlitRect){ x, y, w, h };
+		int rad[4] = { 0 };
+		bool curved = (titled || shaped) && radii(ch, frame, rad);
+		BlitRect box = { frame.x, frame.y, frame.w + ch->drop, frame.h + ch->drop }, inner = { 0, 0, frame.w, frame.h };
+		if (box.w > d->maxw) box.w = d->maxw;
+		if (box.h > d->maxh) box.h = d->maxh;
 		// a plane's next image, with dirty: only that rectangle copied into its content
-		char *when = jsonPrint(jsonGet(l, "t"));
-		Json *plane = jsonGet(l, "plane"), *pd = jsonGet(plane, "dirty");
+		Json *when = jsonGet(l, "t"), *plane = jsonGet(l, "plane");
+		const op_value *content = contentOf(d, api, name);
 		int64_t serial = whole(jsonGet(plane, "serial"), -1);
-		int64_t dx = whole(jsonGet(pd, "x"), -1), dy = whole(jsonGet(pd, "y"), -1), dw = whole(jsonGet(pd, "w"), -1), dh = whole(jsonGet(pd, "h"), -1);
-		bool part = t->t && strcmp(t->t, when) && serial >= 0 && serial == t->serial + 1 && dx >= 0 && dy >= 0 && dw >= 0 && dh >= 0;
-		BlitRect at = { (int)dx, (int)dy, (int)dw, (int)dh };
-		free(t->t);
-		t->t = when;
+		BlitRect at;
+		bool part = t->content && (t->content != content || !same(t->t, when)) && nextImage(plane, t->serial, serial, &at);
+		keepValue(&t->content, content);
+		hold(&t->t, when);
 		t->serial = serial;
-		const char *sl = jsonText(jsonGet(d->selection, "layer"));
-		char *sel = sl && !strcmp(sl, name) ? jsonPrint(jsonGet(d->selection, "ranges")) : copyString("");
-		char *drawn = formatString("%s %s", fonts ? fonts : "", sel);
-		free(sel);
-		BlitForm *form = render(d, api, l, drawn, part ? &at : NULL);
-		free(drawn);
+		BlitForm *form = render(d, api, l, content, part ? &at : NULL);
 		if (!form) continue;
-		Rendered *made = NULL;
-		for (int k = 0; k < d->rendered.count && !made; k++) if (!strcmp(d->rendered.items[k].name, name)) made = &d->rendered.items[k];
-		char *title = jsonPrint(jsonGet(l, "title")), *own = jsonPrint(jsonGet(l, "chrome")), *shape = jsonPrint(jsonGet(l, "shape"));
-		char *rest = formatString("%d %d %d %d %d %s %s %s %s", box.w, box.h, titled, on, collapsed, title, own ? own : "", shape ? shape : "", look);
-		free(shape);
-		char *key = formatString("%lld %s", (long long)made->n, rest);
-		free(title);
-		free(own);
+		Rendered *made = renderedOf(d, name);
 		// its form made again when what it holds or its chrome changed: painted where it differs from the last
-		bool paint = false, waits = false;
+		const Json *mine = jsonGet(l, "chrome"), *sh = jsonGet(l, "shape");
+		bool rest = t->made && t->bw == box.w && t->bh == box.h && t->titled == titled && t->on == on && t->collapsed == collapsed && sameText(t->title, title) && t->u == u &&
+		            same(t->mine, mine) && same(t->shape, sh) && same(t->theme, theme) && !usesStale(d, &t->chromeUses);
+		bool paint = false, waits = false, keep = rest && t->n == made->n;
 		BlitRect r = { 0, 0, box.w, box.h };
-		bool opaque = !(over && over->type == JSON_BOOLEAN && over->boolean);
-		if (t->key && strcmp(t->key, key) && t->rest && !strcmp(t->rest, rest) && made->n == t->n + 1 && !made->fresh && opaque && !collapsed && t->form.bits &&
-		    t->form.w == box.w && t->form.h == box.h) {
+		if (!keep && rest && made->n == t->n + 1 && !made->fresh && !over && !collapsed && t->form.bits && t->form.w == box.w && t->form.h == box.h) {
 			// only what it holds changed, once, where its render says: that alone copied into the tile it has, and painted
-			int cx = titled ? ch.border : 0, cy = titled ? ch.tb + ch.border : 0;
+			int cx = titled ? ch->border : 0, cy = titled ? ch->tb + ch->border : 0;
 			BlitRect c = made->delta;
 			r = meet((BlitRect){ cx + c.x, cy + c.y, c.w, c.h }, meet((BlitRect){ cx, cy, form->w, form->h }, (BlitRect){ 0, 0, box.w, box.h }));
 			paint = r.w > 0 && r.h > 0;
@@ -1531,31 +1832,25 @@ static void layersCompose(Display *d, const ErmPartApi *api, Json *layers, const
 				// no room this frame: painted in the next, the tile as it was
 				d->held = true;
 				paint = false;
-				free(key);
-				free(rest);
 			} else {
 				if (paint) {
 					blitBlit(&t->form, r.x, r.y, form, r.x - cx, r.y - cy, r.w, r.h, BLIT_COPY, NULL);
-					if (curved) corners(&t->form, &r, inner, rad, &ch, NULL);
+					if (curved) corners(&t->form, &r, inner, rad, ch, NULL);
 					blitBlit(&fb, sx, sy, &t->form, r.x, r.y, r.w, r.h, BLIT_COPY, NULL);
 				}
-				free(t->key);
-				t->key = key;
-				free(t->rest);
-				t->rest = rest;
 				t->n = made->n;
 			}
-		} else if (!t->key || strcmp(t->key, key)) {
+		} else if (!keep) {
 			BlitForm next = blitForm(box.w, box.h, BLIT_TRANSPARENT);
 			BlitRect clip = { 0, 0, box.w, box.h };
-			int cx = titled ? ch.border : 0, cy = titled ? ch.tb + ch.border : 0;
+			int cx = titled ? ch->border : 0, cy = titled ? ch->tb + ch->border : 0;
 			if (titled) {
 				Json *lent = lentAt(l, cx, cy);
-				chrome(d, &next, &clip, &ch, lent);
+				chromeTallied(d, &next, &clip, ch, lent, &t->chromeUses);
 				lentFree(lent);
-			}
-			if (!collapsed) blitBlit(&next, cx, cy, form, 0, 0, form->w, form->h, over && over->type == JSON_BOOLEAN && over->boolean ? BLIT_OVER : BLIT_COPY, &clip);
-			if (curved) corners(&next, &clip, inner, rad, &ch, NULL);
+			} else usesReset(&t->chromeUses);
+			if (!collapsed) blitBlit(&next, cx, cy, form, 0, 0, form->w, form->h, over ? BLIT_OVER : BLIT_COPY, &clip);
+			if (curved) corners(&next, &clip, inner, rad, ch, NULL);
 			paint = !t->form.bits || t->form.w != box.w || t->form.h != box.h || differs(t->form.bits, &next, box.w, box.h, &r);
 			if (paint && sx + r.w > d->maxw) sx = 0, sy += rowH, rowH = 0;
 			if (paint && sy + r.h > d->maxh) {
@@ -1564,32 +1859,25 @@ static void layersCompose(Display *d, const ErmPartApi *api, Json *layers, const
 				paint = false;
 				waits = t->form.w != box.w || t->form.h != box.h;
 				free(next.bits);
-				free(key);
-				free(rest);
+				t->made = false;
 			} else {
 				if (paint) blitBlit(&fb, sx, sy, &next, r.x, r.y, r.w, r.h, BLIT_COPY, NULL);
 				free(t->form.bits);
 				t->form = next;
-				free(t->key);
-				t->key = key;
-				free(t->rest);
-				t->rest = rest;
-				t->n = made->n;
+				t->made = true, t->n = made->n, t->bw = box.w, t->bh = box.h, t->titled = titled, t->on = on, t->collapsed = collapsed, t->u = u;
+				free(t->title);
+				t->title = title ? copyString(title) : NULL;
+				hold(&t->mine, mine);
+				hold(&t->shape, sh);
+				hold(&t->theme, theme);
 			}
-		} else {
-			free(key);
-			free(rest);
 		}
-		Shade S = ch.shadow;
+		Shade S = ch->shadow;
 		memcpy(S.corner, rad, sizeof rad);
-		char *geo = formatString("%d %d %d %d %g %d %u %g %g %g %g %d %d %d %d %d", box.x, box.y, box.w, box.h, z, (titled || shaped) && S.on, S.color, S.opacity, S.radius, S.x, S.y, rad[0], rad[1],
-		                         rad[2], rad[3], ch.drop);
+		Geo geo = { box.x, box.y, box.w, box.h, z, (titled || shaped) && S.on, S.color, S.opacity, S.radius, S.x, S.y, { rad[0], rad[1], rad[2], rad[3] }, ch->drop };
 		// resized, it is told so with its new pixels, never before them
-		bool moved = !waits && (!t->geo || strcmp(t->geo, geo));
-		if (!moved && !paint) {
-			free(geo);
-			continue;
-		}
+		bool moved = !waits && (!t->told || !sameGeo(&t->geo, &geo));
+		if (!moved && !paint) continue;
 		Json *item = drvMap("id", jsonString(name), NULL);
 		if (moved) {
 			jsonAdd(item, "x", jsonInteger(box.x));
@@ -1599,18 +1887,18 @@ static void layersCompose(Display *d, const ErmPartApi *api, Json *layers, const
 			jsonAdd(item, "z", jsonNumber(z));
 			// a window's soft shadow, cast by its frame (the tile less the hard shadow), as /etc/theme's shadow says, in points
 			if ((titled || shaped) && S.on) {
-				Json *sh = drvMap("color", jsonInteger(S.color), "opacity", jsonNumber(S.opacity), "radius", jsonNumber(S.radius), "x", jsonNumber(S.x), "y", jsonNumber(S.y), "box",
-				                  drvMap("x", jsonInteger(0), "y", jsonInteger(0), "w", jsonInteger(box.w - ch.drop), "h", jsonInteger(box.h - ch.drop), NULL), NULL);
-				if (curved) jsonAdd(sh, "corners", cornersJson(rad));
-				jsonAdd(item, "shadow", jsonRef(sh));
+				Json *shj = drvMap("color", jsonInteger(S.color), "opacity", jsonNumber(S.opacity), "radius", jsonNumber(S.radius), "x", jsonNumber(S.x), "y", jsonNumber(S.y), "box",
+				                   drvMap("x", jsonInteger(0), "y", jsonInteger(0), "w", jsonInteger(box.w - ch->drop), "h", jsonInteger(box.h - ch->drop), NULL), NULL);
+				if (curved) jsonAdd(shj, "corners", cornersJson(rad));
+				jsonAdd(item, "shadow", jsonRef(shj));
 			} else jsonAdd(item, "shadow", jsonNull());
 			// its rounded corners: only its frame, rounded, and that again drop down and right, is shown
 			if (curved)
-				jsonAdd(item, "shape", jsonRef(drvMap("box", drvMap("x", jsonInteger(0), "y", jsonInteger(0), "w", jsonInteger(box.w - ch.drop), "h", jsonInteger(box.h - ch.drop), NULL), "corners",
-				                                      cornersJson(rad), "drop", jsonInteger(ch.drop), NULL)));
-			free(t->geo);
+				jsonAdd(item, "shape", jsonRef(drvMap("box", drvMap("x", jsonInteger(0), "y", jsonInteger(0), "w", jsonInteger(box.w - ch->drop), "h", jsonInteger(box.h - ch->drop), NULL), "corners",
+				                                      cornersJson(rad), "drop", jsonInteger(ch->drop), NULL)));
+			t->told = true;
 			t->geo = geo;
-		} else free(geo);
+		}
 		if (paint) {
 			jsonAdd(item, "paint", jsonRef(drvMap("sx", jsonInteger(sx), "sy", jsonInteger(sy), "x", jsonInteger(r.x), "y", jsonInteger(r.y), "w", jsonInteger(r.w), "h", jsonInteger(r.h), NULL)));
 			sx += r.w;
@@ -1642,195 +1930,107 @@ static void layersCompose(Display *d, const ErmPartApi *api, Json *layers, const
 	hostCommand(d->host, drvMap("op", jsonString("vsync"), "on", jsonBoolean(true), NULL));
 }
 
-static ErmErr composeEffect(void *data, const ErmGiven *g, Json **out) {
-	Display *d = data;
-	*out = jsonNull();
-	const Json *v = g->value;
-	Json *mode = jsonGet(v, "mode");
-	if (!jsonIsObject(mode)) return ermOk();
-	d->api = g->api;
-	// what draws: the fonts and the selection as they are now
-	for (int i = 0; i < d->faces.count; i++) {
-		Face *f = d->faces.items[i];
-		for (int k = 0; k < f->pages.count; k++) jsonFree(f->pages.items[k].value);
-		free(f->pages.items), free(f->wanted.items), free(f->role), free(f);
-	}
-	d->faces.count = 0;
-	jsonFree(d->selection);
-	d->selection = jsonRef(jsonGet(v, "selection"));
-	Json *themeJ = jsonGet(v, "theme");
-	Theme T = { colour(themeJ, "paper", 0xfdf8ea), colour(themeJ, "ink", 0x2a2228), colour(themeJ, "ink2", 0x6b5a66),
-	            colour(themeJ, "line", 0x1c1a17), colour(themeJ, "chrome", 0xece5d4), colour(themeJ, "select", 0xffff88) };
-	d->mark = T.select;
-	int u = (int)whole(jsonGet(mode, "unit"), 1);
-	if (u < 1) u = 1;
-	int W = (int)whole(jsonGet(mode, "w"), d->maxw), H = (int)whole(jsonGet(mode, "h"), d->maxh);
-	if (W > d->maxw) W = d->maxw;
-	if (H > d->maxh) H = d->maxh;
-	BlitRect screen = { 0, 0, W, H };
-	const char *focus = jsonText(jsonGet(v, "focus"));
-	const char *fonts = jsonText(jsonGet(v, "fonts"));
-	Json *layers = jsonGet(v, "layers");
-	int n = layers ? layers->array.count : 0;
-	Json *wm = jsonGet(mode, "windows"), *lm = jsonGet(mode, "layers");
-	bool windowsMode = wm && wm->type == JSON_BOOLEAN && wm->boolean;
-	d->layered = !windowsMode && lm && lm->type == JSON_BOOLEAN && lm->boolean;
-	shows(d, layers);
-	// each window, /dev/display/windows/<name>, as it is, when it changed; on the monitor each titled one with where its chrome's parts are, for clicks
-	Json *all = jsonGet(v, "windows");
-	ErmMap seen = { 0 };
-	for (int i = 0; jsonIsObject(all) && i < all->object.count; i++) {
-		const char *name = all->object.members[i].key;
-		Json *wl = all->object.members[i].value, *col = jsonGet(wl, "collapsed"), *m = wl;
-		bool titled = !windowsMode && jsonIsString(jsonGet(wl, "title"));
-		// written as it is (a hold of this turn's) or, titled, a copy with its chrome's parts
-		if (!titled) m = jsonRef(wl);
-		else {
-			Chrome ch = chromeOf(d, themeJ, &T, wl, true, u);
-			m = jsonShallow(wl);
-			jsonAdd(m, "parts", jsonRef(partsOf(&ch, (int)whole(jsonGet(wl, "w"), 0), (int)whole(jsonGet(wl, "h"), 0), col && col->type == JSON_BOOLEAN && col->boolean)));
-		}
-		ermMapPut(&seen, name, (void *)1);
-		char *text = jsonPrint(m), *was = ermMapGet(&d->windows, name);
-		if (was && !strcmp(was, text)) {
-			// unchanged: the copy made here is scratch, its values the compute's
-			free(text);
-			jsonFree(m);
-			continue;
-		}
-		Json *at = drvPath("/", "dev", "display", "windows", name, NULL);
-		if (drvHas(g->api, at)) drvSnap(g->api, at, m);
-		else {
-			char *id = formatString("display/windows/%s", name);
-			drvMake(g->api, drvPath("/", "dev", "display", "windows", NULL), name, id, m);
-			free(id);
-		}
-		free(was);
-		ermMapPut(&d->windows, name, text);
-	}
-	// layers gone: their windows
-	for (int i = 0; i < d->windows.count; i++) {
-		const char *name = d->windows.entries[i].key;
-		if (!d->windows.entries[i].value || ermMapHas(&seen, name)) continue;
-		char *id = formatString("display/windows/%s", name);
-		drvOp(g->api, "unplace", drvMap("address", drvPath("/", "dev", "display", "windows", NULL), "name", jsonString(name), "id", jsonString(id), NULL));
-		free(id);
-		free(d->windows.entries[i].value);
-		ermMapPut(&d->windows, name, NULL);
-	}
-	mapFree(&seen);
-	// one frame a refresh: while one waits for its vsync, this is held, and composed once it is flipped
-	if (d->waiting) {
-		d->held = true;
-		d->api = NULL;
-		return ermOk();
-	}
-	if (windowsMode) {
-		windowsCompose(d, g->api, layers, focus, fonts);
-		forget(d, g->api, layers, true);
-		// the monitor, when it comes back, is drawn whole: the buffers held windows meanwhile
-		free(d->whole);
-		d->whole = NULL;
-		d->api = NULL;
-		return ermOk();
-	}
-	if (d->layered) {
-		char *themeText = jsonPrint(themeJ);
-		char *look = formatString("%d %s %s", u, themeText, fonts ? fonts : "");
-		free(themeText);
-		layersCompose(d, g->api, layers, focus, fonts, look, themeJ, &T, u);
-		free(look);
-		forget(d, g->api, layers, false);
-		// the frame buffer, should the metal stop stacking, is drawn whole: the buffers held pieces of tiles meanwhile
-		free(d->whole);
-		d->whole = NULL;
-		d->api = NULL;
-		return ermOk();
-	}
+// --- the full-frame path: the frame buffer, drawn again only where something changed
 
+/** a layer as the summary gives it, the same but for when its value changed and its plane's image */
+static bool sameLayer(const Json *a, const Json *b) {
+	if (!jsonIsObject(a) || !jsonIsObject(b)) return false;
+	int na = 0, nb = 0;
+	for (int k = 0; k < a->object.count; k++) {
+		const char *key = a->object.members[k].key;
+		if (!strcmp(key, "t") || !strcmp(key, "plane")) continue;
+		na++;
+		const Json *bv = jsonGet(b, key);
+		if (!bv || !jsonEqual(bv, a->object.members[k].value)) return false;
+	}
+	for (int k = 0; k < b->object.count; k++)
+		if (strcmp(b->object.members[k].key, "t") && strcmp(b->object.members[k].key, "plane")) nb++;
+	return na == nb && samePlace(jsonGet(a, "plane"), jsonGet(b, "plane"));
+}
+
+static void drawnFree(Drawn *dr) {
+	free(dr->name);
+	jsonFree(dr->l);
+	jsonFree(dr->sel);
+	jsonFree(dr->t);
+	op_free((op_value *)dr->content);
+	usesFree(&dr->chromeUses);
+	chromeCacheFree(&dr->cc);
+}
+
+static Drawn *drawnOf(Display *d, const char *name) {
+	for (int k = 0; k < d->drawn.count; k++) if (d->drawn.items[k].name && !strcmp(d->drawn.items[k].name, name)) return &d->drawn.items[k];
+	return NULL;
+}
+
+static void frameCompose(Display *d, const ErmPartApi *api, Json *layers, const char *focus, const Json *theme, const Theme *T, int u, int W, int H) {
+	int n = layers ? layers->array.count : 0;
+	BlitRect screen = { 0, 0, W, H };
 	// what changed since the last frame: only that is drawn again
 	Damage dirty = { 0 };
-	char *themeText = jsonPrint(themeJ);
-	char *wholeKey = formatString("%d %d %d %s %s", W, H, u, themeText, fonts ? fonts : "");
-	free(themeText);
-	if (!d->whole || strcmp(d->whole, wholeKey)) damageAdd(&dirty, screen);
-	free(d->whole);
-	d->whole = wholeKey;
+	if (!d->wholeMade || d->wholeW != W || d->wholeH != H || d->wholeU != u || !same(d->wholeTheme, theme)) damageAdd(&dirty, screen);
+	d->wholeMade = true, d->wholeW = W, d->wholeH = H, d->wholeU = u;
+	hold(&d->wholeTheme, theme);
 	ERM_LIST(Drawn) now = { 0 };
 	for (int i = 0; i < n; i++) {
 		Json *l = layers->array.items[i];
 		const char *name = jsonText(jsonGet(l, "name"));
 		int x = (int)whole(jsonGet(l, "x"), 0), y = (int)whole(jsonGet(l, "y"), 0), w = (int)whole(jsonGet(l, "w"), 0), h = (int)whole(jsonGet(l, "h"), 0);
-		Json *col = jsonGet(l, "collapsed");
-		bool collapsed = col && col->type == JSON_BOOLEAN && col->boolean;
-		bool titled = jsonIsString(jsonGet(l, "title"));
-		Chrome ch = titled ? chromeOf(d, themeJ, &T, l, focus && !strcmp(focus, name), u) : (Chrome){ 0 };
-		BlitRect frame = titled ? frameOf(&ch, x, y, w, h, collapsed) : (BlitRect){ x, y, w, h };
-		BlitRect rect = { frame.x, frame.y, frame.w + ch.drop, frame.h + ch.drop };
+		bool collapsed = truthy(jsonGet(l, "collapsed")), titled = jsonIsString(jsonGet(l, "title")), on = focus && !strcmp(focus, name);
+		Json *sel = selectionOn(d, name), *t = jsonGet(l, "t"), *plane = jsonGet(l, "plane");
+		// carried on from the last frame, or new
+		Drawn *was = drawnOf(d, name);
+		Drawn dn = { 0 };
+		if (was) {
+			dn = *was;
+			was->name = NULL; // moved
+		} else dn.name = copyString(name);
+		const Chrome *ch = titled ? chromeAt(d, &dn.cc, theme, T, l, on, u, NULL) : NULL;
+		BlitRect frame = titled ? frameOf(ch, x, y, w, h, collapsed) : (BlitRect){ x, y, w, h };
+		BlitRect rect = { frame.x, frame.y, frame.w + (ch ? ch->drop : 0), frame.h + (ch ? ch->drop : 0) };
 		// a titled one's soft shadow is its too
-		if (titled && ch.shadow.on) rect = unite(rect, shadowRect(frame, &ch.shadow));
-		// what it is and where, apart from when its value changed and its plane's serial
-		char *lj = copyString(""), *t = jsonPrint(jsonGet(l, "t"));
-		for (int k = 0; k < l->object.count; k++) {
-			const char *mk = l->object.members[k].key;
-			if (!strcmp(mk, "t") || !strcmp(mk, "plane")) continue;
-			char *mv = jsonPrint(l->object.members[k].value), *next = formatString("%s %s=%s", lj, mk, mv);
-			free(mv);
-			free(lj);
-			lj = next;
-		}
-		Json *plane = jsonGet(l, "plane");
-		char *ps = jsonPrint(jsonGet(plane, "source")), *pi = jsonPrint(jsonGet(plane, "id")), *pj = formatString("%s %s", ps ? ps : "", pi ? pi : "");
-		free(ps);
-		free(pi);
-		const char *on = jsonText(jsonGet(d->selection, "layer"));
-		char *sel = on && !strcmp(on, name) ? jsonPrint(jsonGet(d->selection, "ranges")) : copyString("");
-		char *key = formatString("%s %s %d %s %s", lj, pj, focus && !strcmp(focus, name), sel, fonts ? fonts : "");
-		free(lj);
-		free(pj);
-		free(sel);
-		Drawn dn = { copyString(name), rect, key, t, whole(jsonGet(plane, "serial"), -1), false, { 0 } };
-		Drawn *was = NULL;
-		for (int k = 0; k < d->drawn.count && !was; k++) if (!strcmp(d->drawn.items[k].name, name)) was = &d->drawn.items[k];
-		if (!was || strcmp(was->key, key)) {
+		if (titled && ch->shadow.on) rect = unite(rect, shadowRect(frame, &ch->shadow));
+		// what it is and where, apart from when its value changed and its plane's image: the same, only what it draws can have changed
+		bool kept = was && sameLayer(dn.l, l) && dn.on == on && same(dn.sel, sel) && !usesStale(d, &dn.chromeUses);
+		const op_value *content = contentOf(d, api, name);
+		int64_t serial = whole(jsonGet(plane, "serial"), -1);
+		BlitRect at = { 0 };
+		bool changed = !dn.content || dn.content != content || !same(dn.t, t);
+		bool next = kept && dn.content && changed && nextImage(plane, dn.serial, serial, &at);
+		Rendered *made = renderedOf(d, name);
+		if (!kept) {
 			// moved, only where it was and is no more beside where it is
 			damageAdd(&dirty, rect);
 			if (was) damageLess(&dirty, was->rect, rect);
-		} else if (strcmp(was->t, t)) {
+			usesReset(&dn.chromeUses);
+		} else if (changed || (made && usesStale(d, &made->uses))) {
 			// its value changed: a plane's next image, with dirty, is only that rectangle; anything else all of it.
-			// A layer with ops too (Paint's) has them played over its plane: one changing them writes no dirty
-			Json *pd = jsonGet(plane, "dirty");
-			int64_t dx = whole(jsonGet(pd, "x"), -1), dy = whole(jsonGet(pd, "y"), -1), dw = whole(jsonGet(pd, "w"), -1), dh = whole(jsonGet(pd, "h"), -1);
+			// A layer with ops too (Paint's) has them played over its plane: one changing them writes no dirty.
+			// Or a font it drew with changed: played again, where it differs
 			BlitRect r = collapsed ? (BlitRect){ 0 } : (BlitRect){ x, y, w, h };
-			if (dn.serial >= 0 && dn.serial == was->serial + 1 && dx >= 0 && dy >= 0 && dw >= 0 && dh >= 0) {
-				dn.part = true;
-				dn.at = (BlitRect){ (int)dx, (int)dy, (int)dw, (int)dh };
+			if (next) {
 				// in the layer, at the plane's place
 				int px = (int)whole(jsonGet(plane, "x"), 0), py = (int)whole(jsonGet(plane, "y"), 0);
-				r = meet((BlitRect){ x + px + (int)dx, y + py + (int)dy, (int)dw, (int)dh }, (BlitRect){ x, y, w, h });
+				r = meet((BlitRect){ x + px + at.x, y + py + at.y, at.w, at.h }, (BlitRect){ x, y, w, h });
 			} else if (!collapsed) {
 				// what it draws changed (its chrome is in its key): played now, where it differs from what it was is all
-				const char *sl = jsonText(jsonGet(d->selection, "layer"));
-				char *ranges = sl && !strcmp(sl, name) ? jsonPrint(jsonGet(d->selection, "ranges")) : copyString("");
-				char *drawn = formatString("%s %s", fonts ? fonts : "", ranges);
-				free(ranges);
-				(void)render(d, g->api, l, drawn, NULL);
-				free(drawn);
-				Rendered *made = NULL;
-				for (int k = 0; k < d->rendered.count && !made; k++) if (!strcmp(d->rendered.items[k].name, name)) made = &d->rendered.items[k];
+				(void)render(d, api, l, content, NULL);
+				made = renderedOf(d, name);
 				if (made && !made->fresh) r = meet((BlitRect){ x + made->delta.x, y + made->delta.y, made->delta.w, made->delta.h }, (BlitRect){ x, y, w, h });
 			}
 			damageAdd(&dirty, r);
 		}
+		dn.rect = rect, dn.on = on, dn.serial = serial, dn.part = next, dn.at = at;
+		keepValue(&dn.content, content);
+		hold(&dn.l, l);
+		hold(&dn.sel, sel);
+		hold(&dn.t, t);
 		ERM_PUSH(now, dn);
 	}
 	for (int k = 0; k < d->drawn.count; k++) {
-		bool still = false;
-		for (int i = 0; i < now.count && !still; i++) still = !strcmp(now.items[i].name, d->drawn.items[k].name);
-		if (!still) damageAdd(&dirty, d->drawn.items[k].rect);
-		free(d->drawn.items[k].name);
-		free(d->drawn.items[k].key);
-		free(d->drawn.items[k].t);
+		if (!d->drawn.items[k].name) continue;
+		damageAdd(&dirty, d->drawn.items[k].rect);
+		drawnFree(&d->drawn.items[k]);
 	}
 	free(d->drawn.items);
 	d->drawn.items = now.items, d->drawn.count = now.count, d->drawn.capacity = now.capacity;
@@ -1840,24 +2040,21 @@ static ErmErr composeEffect(void *data, const ErmGiven *g, Json **out) {
 		d->change = d->changed ? unite(d->change, dirty.r[i]) : dirty.r[i], d->changed = true;
 	}
 	int back = 1 - d->front;
-	if (!d->damage[back].n) {
-		d->api = NULL;
-		return ermOk();
-	}
+	if (!d->damage[back].n) return;
 	Damage todo = d->damage[back];
 	d->damage[back].n = 0;
 	BlitForm fb = { d->maxw, d->maxh, d->maxw, hostConfig(d->host)->buffers[back], NULL };
 	Json **sorted = malloc(sizeof *sorted * (size_t)(n ? n : 1));
 	for (int i = 0; i < n; i++) sorted[i] = layers->array.items[i];
 	qsort(sorted, (size_t)n, sizeof *sorted, cmpZ);
-	for (int t = 0; t < todo.n; t++) {
-		BlitRect clip = meet(todo.r[t], screen);
+	for (int tt = 0; tt < todo.n; tt++) {
+		BlitRect clip = meet(todo.r[tt], screen);
 		if (clip.w <= 0 || clip.h <= 0) continue;
 		// what is under a layer that covers all of it is not drawn: from the topmost such, up
 		int from = -1;
 		for (int i = n - 1; i >= 0 && from < 0; i--) {
-			Json *l = sorted[i], *over = jsonGet(l, "over"), *col = jsonGet(l, "collapsed");
-			if (over && over->type == JSON_BOOLEAN && over->boolean) continue;
+			Json *l = sorted[i];
+			if (truthy(jsonGet(l, "over"))) continue;
 			int x = (int)whole(jsonGet(l, "x"), 0), y = (int)whole(jsonGet(l, "y"), 0), w = (int)whole(jsonGet(l, "w"), 0), h = (int)whole(jsonGet(l, "h"), 0);
 			const char *name = jsonText(jsonGet(l, "name"));
 			if (!jsonIsString(jsonGet(l, "title"))) {
@@ -1865,11 +2062,13 @@ static ErmErr composeEffect(void *data, const ErmGiven *g, Json **out) {
 				if (!jsonIsObject(jsonGet(l, "shape")) && inside(clip, (BlitRect){ x, y, w, h })) from = i;
 				continue;
 			}
-			Chrome ch = chromeOf(d, themeJ, &T, l, focus && !strcmp(focus, name), u);
-			BlitRect solid = frameOf(&ch, x, y, w, h, col && col->type == JSON_BOOLEAN && col->boolean);
+			Drawn *dr = drawnOf(d, name);
+			if (!dr) continue;
+			const Chrome *ch = chromeAt(d, &dr->cc, theme, T, l, dr->on, u, NULL);
+			BlitRect solid = frameOf(ch, x, y, w, h, truthy(jsonGet(l, "collapsed")));
 			int rad[4], top, bottom;
 			// rounded, its corners cover nothing
-			if (radii(&ch, solid, rad)) {
+			if (radii(ch, solid, rad)) {
 				top = rad[0] > rad[1] ? rad[0] : rad[1], bottom = rad[2] > rad[3] ? rad[2] : rad[3];
 				int side = (rad[0] > rad[3] ? rad[0] : rad[3]) > (rad[1] > rad[2] ? rad[1] : rad[2]) ? (rad[0] > rad[3] ? rad[0] : rad[3]) : (rad[1] > rad[2] ? rad[1] : rad[2]);
 				if (inside(clip, (BlitRect){ solid.x, solid.y + top, solid.w, solid.h - top - bottom }) || inside(clip, (BlitRect){ solid.x + side, solid.y, solid.w - 2 * side, solid.h }))
@@ -1883,62 +2082,274 @@ static ErmErr composeEffect(void *data, const ErmGiven *g, Json **out) {
 		for (int i = from; i < n; i++) {
 			Json *l = sorted[i];
 			const char *name = jsonText(jsonGet(l, "name"));
-			Drawn *dr = NULL;
-			for (int k = 0; k < d->drawn.count && !dr; k++) if (!strcmp(d->drawn.items[k].name, name)) dr = &d->drawn.items[k];
+			Drawn *dr = drawnOf(d, name);
 			if (!dr || !meets(dr->rect, clip)) continue;
-			char *sel = NULL;
-			const char *on = jsonText(jsonGet(d->selection, "layer"));
-			sel = on && !strcmp(on, name) ? jsonPrint(jsonGet(d->selection, "ranges")) : copyString("");
-			char *look = formatString("%s %s", fonts ? fonts : "", sel);
-			free(sel);
-			BlitForm *form = render(d, g->api, l, look, dr->part ? &dr->at : NULL);
-			free(look);
+			BlitForm *form = render(d, api, l, dr->content, dr->part ? &dr->at : NULL);
 			if (!form) continue;
-			Json *col = jsonGet(l, "collapsed"), *ov = jsonGet(l, "over");
-			bool collapsed = col && col->type == JSON_BOOLEAN && col->boolean;
+			bool collapsed = truthy(jsonGet(l, "collapsed")), over = truthy(jsonGet(l, "over"));
 			int x = (int)whole(jsonGet(l, "x"), 0), y = (int)whole(jsonGet(l, "y"), 0);
 			int rad[4] = { 0 };
 			bool curved = false;
-			Chrome ch = { 0 };
+			Chrome shape = { 0 };
+			const Chrome *ch = &shape;
 			BlitRect frame = { 0 };
 			Under back = { 0 };
 			if (jsonIsString(jsonGet(l, "title"))) {
-				ch = chromeOf(d, themeJ, &T, l, focus && !strcmp(focus, name), u);
-				frame = frameOf(&ch, x, y, (int)whole(jsonGet(l, "w"), 0), (int)whole(jsonGet(l, "h"), 0), collapsed);
-				curved = radii(&ch, frame, rad);
-				if (ch.shadow.on) {
-					memcpy(ch.shadow.corner, rad, sizeof rad);
-					shadow(&fb, &clip, frame, &ch.shadow, ov && ov->type == JSON_BOOLEAN && ov->boolean);
+				ch = chromeAt(d, &dr->cc, theme, T, l, dr->on, u, NULL);
+				frame = frameOf(ch, x, y, (int)whole(jsonGet(l, "w"), 0), (int)whole(jsonGet(l, "h"), 0), collapsed);
+				curved = radii(ch, frame, rad);
+				if (ch->shadow.on) {
+					Shade S = ch->shadow;
+					memcpy(S.corner, rad, sizeof rad);
+					shadow(&fb, &clip, frame, &S, over);
 				}
 				// rounded: what is about its corners now, shadow and all, to put back outside them
-				if (curved) back = underOf(&fb, (BlitRect){ frame.x, frame.y, frame.w + ch.drop, frame.h + ch.drop }, rad, ch.drop);
-				chrome(d, &fb, &clip, &ch, l);
-			} else if (shapeOf(l, themeJ, u, &ch)) {
+				if (curved) back = underOf(&fb, (BlitRect){ frame.x, frame.y, frame.w + ch->drop, frame.h + ch->drop }, rad, ch->drop);
+				chromeTallied(d, &fb, &clip, ch, l, &dr->chromeUses);
+			} else if (shapeOf(l, theme, u, &shape)) {
 				// shaped: its shadow, and its corners rounded, as a window's
 				frame = (BlitRect){ x, y, (int)whole(jsonGet(l, "w"), 0), (int)whole(jsonGet(l, "h"), 0) };
-				curved = radii(&ch, frame, rad);
-				if (ch.shadow.on) {
-					memcpy(ch.shadow.corner, rad, sizeof rad);
-					shadow(&fb, &clip, frame, &ch.shadow, ov && ov->type == JSON_BOOLEAN && ov->boolean);
+				curved = radii(ch, frame, rad);
+				if (ch->shadow.on) {
+					memcpy(shape.shadow.corner, rad, sizeof rad);
+					shadow(&fb, &clip, frame, &shape.shadow, over);
 				}
 				if (curved) back = underOf(&fb, frame, rad, 0);
 			}
-			Json *over = jsonGet(l, "over");
-			if (!collapsed) blitBlit(&fb, x, y, form, 0, 0, form->w, form->h, over && over->type == JSON_BOOLEAN && over->boolean ? BLIT_OVER : BLIT_COPY, &clip);
+			if (!collapsed) blitBlit(&fb, x, y, form, 0, 0, form->w, form->h, over ? BLIT_OVER : BLIT_COPY, &clip);
 			if (curved) {
-				corners(&fb, &clip, frame, rad, &ch, &back);
+				corners(&fb, &clip, frame, rad, ch, &back);
 				free(back.bits);
 			}
 		}
 	}
 	free(sorted);
-	forget(d, g->api, layers, false);
 	d->waiting = true;
 	d->waitBuffer = back;
 	d->waitW = W;
 	d->waitH = H;
 	hostCommand(d->host, drvMap("op", jsonString("vsync"), "on", jsonBoolean(true), NULL));
+}
+
+static ErmErr composeEffect(void *data, const ErmGiven *g, Json **out) {
+	Display *d = data;
+	*out = jsonNull();
+	const Json *v = g->value;
+	Json *mode = jsonGet(v, "mode");
+	if (!jsonIsObject(mode)) return ermOk();
+	d->api = g->api;
+	// what draws: the fonts and the selection as they are now
+	facesSync(d, jsonGet(v, "fonts"));
+	hold(&d->selection, jsonGet(v, "selection"));
+	Json *theme = jsonGet(v, "theme");
+	Theme T = { colour(theme, "paper", 0xfdf8ea), colour(theme, "ink", 0x2a2228), colour(theme, "ink2", 0x6b5a66),
+	            colour(theme, "line", 0x1c1a17), colour(theme, "chrome", 0xece5d4), colour(theme, "select", 0xffff88) };
+	d->mark = T.select;
+	int u = (int)whole(jsonGet(mode, "unit"), 1);
+	if (u < 1) u = 1;
+	int W = (int)whole(jsonGet(mode, "w"), d->maxw), H = (int)whole(jsonGet(mode, "h"), d->maxh);
+	if (W > d->maxw) W = d->maxw;
+	if (H > d->maxh) H = d->maxh;
+	const char *focus = jsonText(jsonGet(v, "focus"));
+	Json *layers = jsonGet(v, "layers");
+	bool windowsMode = truthy(jsonGet(mode, "windows"));
+	d->layered = !windowsMode && truthy(jsonGet(mode, "layers"));
+	// one frame a refresh: while one waits for its vsync, this is held, and composed once it is flipped
+	if (d->waiting) {
+		d->held = true;
+		d->api = NULL;
+		return ermOk();
+	}
+	if (windowsMode) {
+		windowsCompose(d, g->api, layers, focus);
+		forget(d, g->api, layers, true);
+		// the monitor, when it comes back, is drawn whole: the buffers held windows meanwhile
+		d->wholeMade = false;
+	} else if (d->layered) {
+		layersCompose(d, g->api, layers, focus, theme, &T, u);
+		forget(d, g->api, layers, false);
+		// the frame buffer, should the metal stop stacking, is drawn whole: the buffers held pieces of tiles meanwhile
+		d->wholeMade = false;
+	} else {
+		frameCompose(d, g->api, layers, focus, theme, &T, u, W, H);
+		forget(d, g->api, layers, false);
+	}
 	d->api = NULL;
+	return ermOk();
+}
+
+// --- the windows part: /dev/display/windows/<name>, each layer as it is, with a titled one's chrome parts on the monitor
+
+static ErmErr windowsCompute(void *data, const ErmGiven *g, Json **out) {
+	Display *d = data;
+	const ErmPartApi *api = g->api;
+	Json *L = drvRead(api, drvUnder(d->here, "layers", NULL));
+	Json *F = drvRead(api, drvUnder(d->here, "fonts", NULL));
+	Json *theme = drvRead(api, drvPath("/", "etc", "theme", NULL));
+	Json *mode = drvRead(api, drvPath("/", "dev", "display", "mode", NULL));
+	Json *W = jsonGet(L, "windows");
+	int64_t u = whole(jsonGet(mode, "unit"), 1);
+	bool wm = truthy(jsonGet(mode, "windows"));
+	// nothing it writes from changed: its value as before, so its effect does not act
+	Json *o = d->winOut;
+	if (o && same(jsonGet(o, "windows"), W) && jsonGet(o, "theme") == theme && jsonGet(o, "fonts") == F && whole(jsonGet(o, "unit"), 1) == u && truthy(jsonGet(o, "mode")) == wm) {
+		*out = jsonRef(o);
+		return ermOk();
+	}
+	*out = drvMap("windows", jsonIsObject(W) ? jsonRef(W) : jsonObject(), "theme", theme ? theme : jsonNull(), "fonts", F ? F : jsonNull(), "unit", jsonInteger(u), "mode",
+	              jsonBoolean(wm), NULL);
+	return ermOk();
+}
+
+static void winFree(Win *w) {
+	jsonFree(w->written);
+	jsonFree(w->parts);
+	chromeCacheFree(&w->cc);
+	free(w);
+}
+
+static ErmErr windowsEffect(void *data, const ErmGiven *g, Json **out) {
+	Display *d = data;
+	*out = jsonNull();
+	Json *v = g->value;
+	hold(&d->winOut, v);
+	d->api = g->api;
+	facesSync(d, jsonGet(v, "fonts"));
+	Json *theme = jsonGet(v, "theme"), *all = jsonGet(v, "windows");
+	Theme T = { colour(theme, "paper", 0xfdf8ea), colour(theme, "ink", 0x2a2228), colour(theme, "ink2", 0x6b5a66),
+	            colour(theme, "line", 0x1c1a17), colour(theme, "chrome", 0xece5d4), colour(theme, "select", 0xffff88) };
+	int u = (int)whole(jsonGet(v, "unit"), 1);
+	if (u < 1) u = 1;
+	bool windowsMode = truthy(jsonGet(v, "mode"));
+	// each window, as it is, when it changed; on the monitor each titled one with where its chrome's parts are, for clicks
+	ErmMap seen = { 0 };
+	for (int i = 0; jsonIsObject(all) && i < all->object.count; i++) {
+		const char *name = all->object.members[i].key;
+		Json *wl = all->object.members[i].value, *m = wl;
+		bool titled = !windowsMode && jsonIsString(jsonGet(wl, "title"));
+		Win *w = ermMapGet(&d->windows, name);
+		if (!w) {
+			w = calloc(1, sizeof *w);
+			ermMapPut(&d->windows, name, w);
+		}
+		ermMapPut(&seen, name, (void *)1);
+		// written as it is or, titled, a copy with its chrome's parts, kept with what they were made from
+		if (!titled) m = jsonRef(wl);
+		else {
+			bool fresh;
+			const Chrome *ch = chromeAt(d, &w->cc, theme, &T, wl, true, u, &fresh);
+			int ww = (int)whole(jsonGet(wl, "w"), 0), hh = (int)whole(jsonGet(wl, "h"), 0);
+			bool collapsed = truthy(jsonGet(wl, "collapsed"));
+			if (!w->parts || fresh || w->pw != ww || w->ph != hh || w->pcollapsed != collapsed) {
+				jsonFree(w->parts);
+				w->parts = jsonRef(partsOf(ch, ww, hh, collapsed));
+				w->pw = ww, w->ph = hh, w->pcollapsed = collapsed;
+			}
+			m = jsonShallow(wl);
+			jsonAdd(m, "parts", jsonRef(w->parts));
+		}
+		if (w->written && jsonEqual(w->written, m)) {
+			jsonFree(m);
+			continue;
+		}
+		hold(&w->written, m);
+		Json *at = drvPath("/", "dev", "display", "windows", name, NULL);
+		if (drvHas(g->api, at)) drvSnap(g->api, at, m);
+		else {
+			char *id = formatString("display/windows/%s", name);
+			drvMake(g->api, drvPath("/", "dev", "display", "windows", NULL), name, id, m);
+			free(id);
+		}
+	}
+	// layers gone: their windows
+	for (int i = 0; i < d->windows.count; i++) {
+		const char *name = d->windows.entries[i].key;
+		if (!d->windows.entries[i].value || ermMapHas(&seen, name)) continue;
+		char *id = formatString("display/windows/%s", name);
+		drvOp(g->api, "unplace", drvMap("address", drvPath("/", "dev", "display", "windows", NULL), "name", jsonString(name), "id", jsonString(id), NULL));
+		free(id);
+		winFree(d->windows.entries[i].value);
+		ermMapPut(&d->windows, name, NULL);
+	}
+	mapFree(&seen);
+	d->api = NULL;
+	return ermOk();
+}
+
+// --- the pages part: web pages' sizes, each as a layer shows it, told the metal when they change (webshow)
+
+static ErmErr pagesCompute(void *data, const ErmGiven *g, Json **out) {
+	Display *d = data;
+	const ErmPartApi *api = g->api;
+	Json *L = drvRead(api, drvUnder(d->here, "layers", NULL)), *layers = jsonGet(L, "layers");
+	Json *mode = drvRead(api, drvPath("/", "dev", "display", "mode", NULL));
+	Json *pages = jsonObject();
+	for (int i = 0; jsonIsArray(layers) && i < layers->array.count; i++) {
+		Json *l = layers->array.items[i], *web = jsonGet(l, "web");
+		const char *id = jsonText(jsonGet(web, "id"));
+		if (!id || truthy(jsonGet(l, "collapsed"))) continue;
+		int w = (int)whole(jsonGet(web, "w"), 0), h = (int)whole(jsonGet(web, "h"), 0);
+		if (w <= 0 || h <= 0) continue;
+		Json *size = jsonObject();
+		jsonAdd(size, "w", jsonInteger(w));
+		jsonAdd(size, "h", jsonInteger(h));
+		jsonAdd(pages, id, size);
+	}
+	// the mode too: told again in either mode, and at another size (displayIrq forgets what was told then)
+	Json *m = drvMap("pages", pages, "windows", jsonBoolean(truthy(jsonGet(mode, "windows"))), "layers", jsonBoolean(truthy(jsonGet(mode, "layers"))), "w",
+	                 jsonInteger(whole(jsonGet(mode, "w"), 0)), "h", jsonInteger(whole(jsonGet(mode, "h"), 0)), NULL);
+	if (d->pagesOut && jsonEqual(d->pagesOut, m)) {
+		*out = jsonRef(d->pagesOut);
+		return ermOk();
+	}
+	*out = m;
+	return ermOk();
+}
+
+/**
+ * web pages: each one's size, as a layer shows it, told the metal when it
+ * changes (webshow), so it draws at that size; w 0 for one no layer shows
+ * (hidden, collapsed, in another view, gone), which draws nothing
+ */
+static ErmErr pagesEffect(void *data, const ErmGiven *g, Json **out) {
+	Display *d = data;
+	*out = jsonNull();
+	hold(&d->pagesOut, g->value);
+	Json *pages = jsonGet(g->value, "pages");
+	for (int i = 0; jsonIsObject(pages) && i < pages->object.count; i++) {
+		const char *id = pages->object.members[i].key;
+		Json *size = pages->object.members[i].value, *was = ermMapGet(&d->placed, id);
+		if (was && jsonEqual(was, size)) continue;
+		hostCommand(d->host, drvMap("op", jsonString("webshow"), "id", jsonString(id), "w", jsonInteger(whole(jsonGet(size, "w"), 0)), "h", jsonInteger(whole(jsonGet(size, "h"), 0)), NULL));
+		jsonFree(was);
+		ermMapPut(&d->placed, id, jsonRef(size));
+	}
+	for (int i = 0; i < d->placed.count; i++) {
+		const char *id = d->placed.entries[i].key;
+		if (!d->placed.entries[i].value || jsonGet(pages, id)) continue;
+		hostCommand(d->host, drvMap("op", jsonString("webshow"), "id", jsonString(id), "w", jsonInteger(0), "h", jsonInteger(0), NULL));
+		jsonFree(d->placed.entries[i].value);
+		ermMapPut(&d->placed, id, NULL);
+	}
+	return ermOk();
+}
+
+// --- the focus part: windows mode, the Mac's key window follows /dev/display/focus
+
+static ErmErr focusCompute(void *data, const ErmGiven *g, Json **out) {
+	(void)data;
+	Json *focus = drvRead(g->api, drvPath("/", "dev", "display", "focus", NULL));
+	Json *mode = drvRead(g->api, drvPath("/", "dev", "display", "mode", NULL));
+	*out = drvMap("focus", focus ? focus : jsonNull(), "windows", jsonBoolean(truthy(jsonGet(mode, "windows"))), NULL);
+	return ermOk();
+}
+
+static ErmErr focusEffect(void *data, const ErmGiven *g, Json **out) {
+	Display *d = data;
+	*out = jsonNull();
+	const char *focus = jsonText(jsonGet(g->value, "focus"));
+	if (!truthy(jsonGet(g->value, "windows")) || !focus) return ermOk();
+	keyFollows(d, surfaceOf(d, focus));
 	return ermOk();
 }
 
@@ -1953,20 +2364,19 @@ static ErmErr displayIrq(void *data, const ErmGiven *g, Json **out) {
 		const char *e = jsonText(jsonGet(r, "event"));
 		if (!e) continue;
 		if (!strcmp(e, "mode")) {
-			Json *windows = jsonGet(r, "windows"), *layers = jsonGet(r, "layers");
-			bool on = windows && windows->type == JSON_BOOLEAN && windows->boolean;
-			bool stacked = !on && layers && layers->type == JSON_BOOLEAN && layers->boolean;
+			bool on = truthy(jsonGet(r, "windows"));
+			bool stacked = !on && truthy(jsonGet(r, "layers"));
 			// back on the monitor, the metal has closed every surface; off it, or not stacking, it has emptied its stack; web pages' sizes are told again, in either.
 			// Only when that changed: a mode that says only something else (takeover, the screen's name) leaves all as it is
 			Json *was = drvRead(g->api, drvPath("/", "dev", "display", "mode", NULL));
 			Json *ww = jsonGet(was, "windows"), *wl = jsonGet(was, "layers");
-			bool same = jsonIsObject(was) && ww && ww->type == JSON_BOOLEAN && ww->boolean == on && wl && wl->type == JSON_BOOLEAN && wl->boolean == stacked &&
-			            whole(jsonGet(was, "w"), -1) == whole(jsonGet(r, "w"), -2) && whole(jsonGet(was, "h"), -1) == whole(jsonGet(r, "h"), -2);
-			if (!same) {
+			bool same_ = jsonIsObject(was) && ww && ww->type == JSON_BOOLEAN && ww->boolean == on && wl && wl->type == JSON_BOOLEAN && wl->boolean == stacked &&
+			             whole(jsonGet(was, "w"), -1) == whole(jsonGet(r, "w"), -2) && whole(jsonGet(was, "h"), -1) == whole(jsonGet(r, "h"), -2);
+			if (!same_) {
 				if (!on) unsurfaceAll(d);
 				if (!stacked) unlayerAll(d);
 				for (int k = 0; k < d->placed.count; k++) {
-					free(d->placed.entries[k].value);
+					jsonFree(d->placed.entries[k].value);
 					d->placed.entries[k].value = NULL;
 				}
 			}
@@ -1975,7 +2385,7 @@ static ErmErr displayIrq(void *data, const ErmGiven *g, Json **out) {
 			               "unit", jsonGet(r, "unit") ? jsonShallow(jsonGet(r, "unit")) : jsonInteger(1), "screen", jsonGet(r, "screen") ? jsonShallow(jsonGet(r, "screen")) : jsonNull(),
 			               "fullscreen", jsonGet(r, "fullscreen") ? jsonShallow(jsonGet(r, "fullscreen")) : jsonBoolean(false),
 			               "windows", jsonBoolean(on), "layers", jsonBoolean(stacked), "focused", jsonBoolean(true),
-			               "takeover", jsonBoolean(jsonGet(r, "takeover") && jsonGet(r, "takeover")->type == JSON_BOOLEAN && jsonGet(r, "takeover")->boolean),
+			               "takeover", jsonBoolean(truthy(jsonGet(r, "takeover"))),
 			               "keys", jsonIsString(jsonGet(r, "keys")) ? jsonShallow(jsonGet(r, "keys")) : jsonString("off"), NULL));
 		} else if (!strcmp(e, "moved")) {
 			// the person moved a Mac window: its layer is where the Mac says, as the hardware's change
@@ -1985,10 +2395,7 @@ static ErmErr displayIrq(void *data, const ErmGiven *g, Json **out) {
 			if (!jsonIsObject(l)) continue;
 			int64_t x = whole(jsonGet(r, "x"), 0), y = whole(jsonGet(r, "y"), 0);
 			Surface *s = surfaceOf(d, id);
-			if (s && jsonIsString(jsonGet(l, "title"))) {
-				free(s->geo);
-				s->geo = geoOf(d, (int)x, (int)y, (int)whole(jsonGet(l, "w"), 0), (int)whole(jsonGet(l, "h"), 0), jsonText(jsonGet(l, "title")));
-			}
+			if (s && s->told) s->tx = (int)x, s->ty = (int)y;
 			Json *patches = jsonArray();
 			jsonPush(patches, jsonRef(drvMap("type", jsonString("set"), "path", jsonArray(), "key", jsonString("x"), "value", jsonInteger(x), NULL)));
 			jsonPush(patches, jsonRef(drvMap("type", jsonString("set"), "path", jsonArray(), "key", jsonString("y"), "value", jsonInteger(y), NULL)));
@@ -2183,9 +2590,16 @@ ErmErr driverDisplay(void *data, const ErmGiven *g, Json **out) {
 	drvMake(g->api, dev, "frames", "display/frames", drvMap("flips", jsonInteger(0), NULL));
 	drvMake(g->api, dev, "again", "display/again", jsonInteger(0));
 	Json *here = drvHere(g);
+	d->here = jsonRef(here);
 	drvHandler(g, here, "irq", (ErmFn){ displayIrq, d });
 	drvClaim(g, here, 33);
+	// the summaries first, so what reads them finds them
+	drvChild(g, here, "fonts", (ErmFn){ fontsCompute, d }, (ErmFn){ 0 });
+	drvChild(g, here, "layers", (ErmFn){ layersCompute, d }, (ErmFn){ 0 });
 	drvChild(g, here, "compose", (ErmFn){ composeCompute, d }, (ErmFn){ composeEffect, d });
+	drvChild(g, here, "windows", (ErmFn){ windowsCompute, d }, (ErmFn){ windowsEffect, d });
+	drvChild(g, here, "pages", (ErmFn){ pagesCompute, d }, (ErmFn){ pagesEffect, d });
+	drvChild(g, here, "focus", (ErmFn){ focusCompute, d }, (ErmFn){ focusEffect, d });
 	drvChild(g, here, "want", (ErmFn){ wantCompute, d }, (ErmFn){ wantEffect, d });
 	drvChild(g, here, "corner", (ErmFn){ cornerCompute, d }, (ErmFn){ cornerEffect, d });
 	drvChild(g, here, "keys", (ErmFn){ keysCompute, d }, (ErmFn){ keysEffect, d });

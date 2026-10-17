@@ -26,8 +26,11 @@ export type Version = {
 	because: Because
 }
 
-// sides kept: heads' only, by their blop (APPLY.tex); a side never changes
+// sides kept: heads' only, by their blop (APPLY.tex). a side handed out holds until the next blop
+// is taken in: the only head's side changes in place then (copy what you keep)
 const kept = new WeakMap<Histories, Map<Blop, unknown>>()
+// sides that share nothing, with no other side and no blop: changed in place, they stay so
+const owned = new WeakSet<object>()
 const sides = (histories: Histories) => {
 	if (!kept.has(histories)) kept.set(histories, new Map())
 	return kept.get(histories)!
@@ -35,11 +38,35 @@ const sides = (histories: Histories) => {
 
 const base = (blop: Blop) => blop.base ?? blop.parents[0]
 
-// the side after the blop's patches on before; ApplyError when they do not apply
-function after(blop: Blop, before: unknown): unknown {
+// the side after the blop's patches on before; ApplyError when they do not apply (before as it
+// was). mine: before is owned, and changed in place, the patches copied in so it shares nothing
+function after(blop: Blop, before: unknown, mine = false): unknown {
 	const entry = createEntry(before, { time: 0, actor: blop.actor })
-	update(entry, blop.patches as never, { time: 0, actor: blop.actor })
-	return entry.value
+	if (mine) entry.cow = false
+	const patches = mine ? copy(blop.patches) : blop.patches
+	update(entry, patches as never, { time: 0, actor: blop.actor })
+	const out = entry.value
+	if (mine && typeof out === "object" && out !== null) owned.add(out)
+	return out
+}
+
+// what a change in place could reach made anew: maps, lists and typed arrays; anything else (a
+// stand-in, any other instance) is never changed in place, so kept as it is
+function copy<T>(x: T): T {
+	if (Array.isArray(x)) return x.map(copy) as T
+	if (ArrayBuffer.isView(x)) return (x as unknown as Uint8Array).slice() as T
+	if (x === null || typeof x !== "object") return x
+	const proto = Object.getPrototypeOf(x)
+	if (proto !== Object.prototype && proto !== null) return x
+	const out: Record<string, unknown> = proto === null ? Object.create(null) : {}
+	for (const k of Object.keys(x)) out[k] = copy((x as Record<string, unknown>)[k])
+	return out as T
+}
+
+// the one head of the blop's object is its base, its side kept: no other side shares that side
+function only(histories: Histories, blop: Blop, base: Uint8Array): boolean {
+	const heads = histories.heads(blop.object)
+	return heads.length === 1 && hex(heads[0].name) === hex(base)
 }
 
 // a blop's side, or undefined: not taken in, or emptied. a stand-in in it stays as it is (APPLY.tex)
@@ -66,17 +93,26 @@ export function side(histories: Histories, name: Uint8Array): unknown {
 }
 
 // whether the blop's patches apply to its base's side. They do: it is taken in next (HISTORY.tex,
-// step 7 the last), a head, so its side is kept and its parents' let go
+// step 7 the last), a head, so its side is kept and its parents' let go. The base the only head,
+// its side kept: changed in place (once copied whole, so it is owned), not copied a step at a time
 export function check(histories: Histories, blop: Blop): boolean {
 	const n = base(blop)
+	const k = sides(histories)
+	const b = n === undefined ? undefined : histories.get(n)
 	let made
 	try {
-		made = after(blop, n === undefined ? undefined : side(histories, n))
+		if (b !== undefined && k.has(b) && only(histories, blop, n!)) {
+			let before = k.get(b)
+			if (typeof before === "object" && before !== null && !owned.has(before)) {
+				before = copy(before)
+				owned.add(before as object)
+			}
+			made = after(blop, before, true)
+		} else made = after(blop, n === undefined ? undefined : side(histories, n))
 	} catch (e) {
 		if (e instanceof ApplyError) return false
 		throw e
 	}
-	const k = sides(histories)
 	for (const p of blop.parents) {
 		const b = histories.get(p)
 		if (b !== undefined) k.delete(b)

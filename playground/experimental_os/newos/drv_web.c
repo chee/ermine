@@ -25,8 +25,9 @@
 // file, $TMPDIR/ermine-<pid>.web.<k>, two halves of maxw × maxh u32, rows of
 // maxw. The metal writes a whole frame into the half not shown, only when
 // it differs from the last, says frame (with dirty, what differs), and
-// writes nothing more until webtook; hostPlanes' source "web" gives the half
-// the latest frame named. A layer shows a page with "web": {"id", "x", "y",
+// writes nothing more until webtook; /dev/web/planes/<name> says the plane,
+// {id, w, h, stride, file, offset}, the half the latest frame is in (host.h's
+// HostPlaneSaid). A layer shows a page with "web": {"id", "x", "y",
 // "w", "h"}: the compositor (drv_display.c) draws the page's plane there,
 // over the layer's ops, and tells the metal its size (webshow), so a page
 // no layer shows draws nothing.
@@ -83,6 +84,7 @@ typedef struct View {
 	ERM_LIST(Elem) elems; // its document's elements, by n
 	bool seen;
 	bool framed, rooted;  // its page's frame and dom nodes made, so a record never reads to know
+	bool planed;          // its plane's node made
 } View;
 
 /** an act sent: its do node's name and n */
@@ -120,17 +122,17 @@ static bool same(const char *a, const char *b) {
 	return (!a && !b) || (a && b && !strcmp(a, b));
 }
 
-/** hostPlane's: view k's plane, the half its latest frame is in */
-static bool planeAt(void *data, int64_t id, HostPlane *out) {
-	Web *w = data;
-	for (int i = 0; i < w->views.count; i++) {
-		View *v = w->views.items[i];
-		if (v->k != id) continue;
-		if (!v->bits || v->w <= 0 || v->h <= 0) return false;
-		*out = (HostPlane){ v->bits + (size_t)v->half * (size_t)w->maxw * (size_t)w->maxh, v->w < w->maxw ? v->w : w->maxw, v->h < w->maxh ? v->h : w->maxh, w->maxw };
-		return true;
+/** the plane as its node says it, /dev/web/planes/<name> {id, w, h, stride, file, offset}: the half the latest frame is in */
+static void planeSaid(Web *w, const ErmPartApi *api, View *v) {
+	Json *m = drvMap("id", jsonInteger(v->k), "w", jsonInteger(v->w < w->maxw ? v->w : w->maxw), "h", jsonInteger(v->h < w->maxh ? v->h : w->maxh), "stride", jsonInteger(w->maxw),
+	                 "file", jsonString(v->path), "offset", jsonInteger((int64_t)v->half * w->maxw * w->maxh * 4), NULL);
+	if (v->planed) drvSnap(api, at("planes", v->name), m);
+	else {
+		char *id = formatString("web/plane/%s", v->name);
+		drvMake(api, drvPath("/", "dev", "web", "planes", NULL), v->name, id, m);
+		free(id);
+		v->planed = true;
 	}
-	return false;
 }
 
 /** the plane file, mapped shared: two halves of maxw × maxh; the metal maps it too, and unlinks it */
@@ -377,6 +379,7 @@ static ErmErr viewsEffect(void *data, const ErmGiven *g, Json **out) {
 		} else if (fresh) {
 			view->framed = drvHas(g->api, drvUnder(at("pages", name), "frame", NULL));
 			view->rooted = drvHas(g->api, domAt(view));
+			view->planed = drvHas(g->api, at("planes", name));
 		}
 		bool asked = fresh;
 		if (!fresh && (!same(url, view->url) || !same(html, view->html))) {
@@ -414,6 +417,11 @@ static ErmErr viewsEffect(void *data, const ErmGiven *g, Json **out) {
 		if (drvHas(g->api, at("pages", view->name))) {
 			char *id = formatString("web/page/%s", view->name);
 			drvOp(g->api, "unplace", drvMap("address", drvPath("/", "dev", "web", "pages", NULL), "name", jsonString(view->name), "id", jsonString(id), NULL));
+			free(id);
+		}
+		if (drvHas(g->api, at("planes", view->name))) {
+			char *id = formatString("web/plane/%s", view->name);
+			drvOp(g->api, "unplace", drvMap("address", drvPath("/", "dev", "web", "planes", NULL), "name", jsonString(view->name), "id", jsonString(id), NULL));
 			free(id);
 		}
 		viewFree(view);
@@ -536,6 +544,7 @@ static ErmErr webIrq(void *data, const ErmGiven *g, Json **out) {
 			v->half = whole(jsonGet(r, "half"), 0) ? 1 : 0;
 			v->w = (int)whole(jsonGet(r, "w"), 0);
 			v->h = (int)whole(jsonGet(r, "h"), 0);
+			if (v->bits && v->w > 0 && v->h > 0) planeSaid(w, g->api, v);
 			Json *f = drvMap("plane", jsonInteger(v->k), "n", jsonInteger(n), "w", jsonInteger(v->w), "h", jsonInteger(v->h), NULL);
 			if (jsonIsObject(jsonGet(r, "dirty"))) jsonAdd(f, "dirty", jsonShallow(jsonGet(r, "dirty")));
 			// a node of its own, so a frame wakes the compositor only, never what reads the page
@@ -572,12 +581,12 @@ ErmErr driverWeb(void *data, const ErmGiven *g, Json **out) {
 	drvMake(g->api, dev, "views", "web/views", jsonNull());
 	drvMake(g->api, dev, "pages", "web/pages", jsonNull());
 	drvMake(g->api, dev, "do", "web/do", jsonNull());
+	drvMake(g->api, dev, "planes", "web/planes", jsonNull());
 	Json *here = drvHere(g);
 	drvHandler(g, here, "irq", (ErmFn){ webIrq, w });
 	drvHandler(g, here, "input", (ErmFn){ onInput, w });
 	drvClaim(g, here, 49);
 	drvChild(g, here, "views", (ErmFn){ viewsCompute, w }, (ErmFn){ viewsEffect, w });
 	drvChild(g, here, "do", (ErmFn){ doCompute, w }, (ErmFn){ doEffect, w });
-	hostPlanes(w->host, "web", planeAt, w);
 	return ermOk();
 }

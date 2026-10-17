@@ -38,19 +38,18 @@
 // writes N again, over both, once (two machines sharing one name at once leave N two versions; a view shows
 // the first).
 //
-// What a view or a share reads is brought into memory (peerBring): N, W, and what W's lists name (S, Z, K,
-// each typer's T), loaded once the card holds them, followed from the server till then.
+// What a view or a share reads is followed (cardFollow): N, W, and what W's lists name (S, Z, K,
+// each typer's T), so they come from the server when the card does not hold them.
 
 #include "drivers.h"
 #include "../../../ermine/encoding/c/json_text.h"
 #include "drv.h"
-#include "peer/peer.h"
+#include "card/card.h"
 
 // an address that is a node, by its id (api.h's AP_ID)
 #define ID(id) (const char *const[]){ AP_ID, (id) }, 2
 
 #include "../../../ermine/encoding/c/blake3/blake3.h"
-#include "../../../extensions/subduction/c/id.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -93,7 +92,7 @@ typedef struct Share {
 
 static struct {
 	Host *host;
-	Peer *peer;
+	Card *card;
 	ERM_LIST(View *) views;
 	ERM_LIST(Share *) shares;
 	int count; // shares made without a name
@@ -236,13 +235,6 @@ static View *viewNamed(const char *name) {
 	return NULL;
 }
 
-/** whether a view other than v asks for, or sees, the node of id */
-static bool seen(const View *v, const char *id) {
-	for (int i = 0; i < L.views.count; i++)
-		if (L.views.items[i] != v && (!strcmp(L.views.items[i]->id, id) || !strcmp(L.views.items[i]->asked, id))) return true;
-	return false;
-}
-
 /**
  * each view's name and channel, the id it names, the window's (a name's node followed to it), and
  * what is here of that window, read tracked (by id: run again when one is loaded, and as it changes):
@@ -282,8 +274,6 @@ static ErmErr viewsCompute(void *data, const ErmGiven *g, Json **out) {
 
 static void unview(const ErmGiven *g, View *v) {
 	unplace(g->api, idAt(g->api, drvPath("/", "dev", "link", "windows", NULL)), v->name, v->window);
-	if (!seen(v, v->id)) peerBring(L.peer, v->id, false);
-	if (!seen(v, v->asked)) peerBring(L.peer, v->asked, false);
 	free(v->name), free(v->channel), free(v->asked), free(v->id), free(v->window), free(v->screen), free(v->keys), free(v->shown), free(v->typer);
 	for (int i = 0; i < v->ntyped; i++) free(v->typed[i]);
 	free(v);
@@ -333,8 +323,8 @@ static ErmErr viewsEffect(void *data, const ErmGiven *g, Json **out) {
 				continue;
 			}
 			ERM_PUSH(L.views, v);
-			peerBring(L.peer, asked, true);
-			peerBring(L.peer, id, true);
+			cardFollow(L.card, asked);
+			cardFollow(L.card, id);
 		}
 		// what it is now: here and running, here and ended, or on its way
 		Json *value = drvMap("channel", jsonString(id), NULL);
@@ -429,8 +419,6 @@ static Share *shareNamed(const char *name) {
 
 static void unshare(const ErmGiven *g, Share *s) {
 	unplace(g->api, idAt(g->api, drvPath("/", "dev", "link", "shares", NULL)), s->name, s->at);
-	peerBring(L.peer, s->w, false);
-	if (s->n) peerBring(L.peer, s->n, false);
 	for (int r = 0; r < s->rows; r++) free(s->lines[r]), free(s->styles[r]);
 	free(s->lines), free(s->styles), free(s->cursor), free(s->title);
 	for (int i = 0; i < s->fed.count; i++) free((void *)s->fed.entries[i].key);
@@ -445,7 +433,7 @@ static void unshare(const ErmGiven *g, Share *s) {
 
 /** W written: its program, its device, and how it ended (NULL: running) */
 static void windowSays(ap_api *api, Share *s, Json *exited) {
-	Json *w = drvMap("window", jsonInteger(1), "program", jsonRef(s->program), "by", jsonString(peerKey(L.peer)), NULL);
+	Json *w = drvMap("window", jsonInteger(1), "program", jsonRef(s->program), "by", jsonString(cardKey(L.card)), NULL);
 	if (exited) jsonAdd(w, "exited", exited);
 	hostFailed(L.host, wholeId(api, s->w, w), "link: writing a window");
 }
@@ -453,7 +441,7 @@ static void windowSays(ap_api *api, Share *s, Json *exited) {
 /** the name's node pointed at W, over all the versions it has (versions: how many; a name shared before, elsewhere, has two once that one's history comes) */
 static void pointed(ap_api *api, Share *s, long versions) {
 	Json *patches = jsonArray();
-	jsonPush(patches, jsonRef(drvMap("path", jsonArray(), "value", drvMap("name", jsonString(s->name), "window", jsonString(s->w), "by", jsonString(peerKey(L.peer)), NULL), NULL)));
+	jsonPush(patches, jsonRef(drvMap("path", jsonArray(), "value", drvMap("name", jsonString(s->name), "window", jsonString(s->w), "by", jsonString(cardKey(L.card)), NULL), NULL)));
 	if (versions <= 1) {
 		hostFailed(L.host, writeId(api, s->n, patches), "link: pointing a name");
 		jsonFree(patches);
@@ -522,8 +510,8 @@ static ErmErr onShare(void *data, const ErmGiven *g, Json **out) {
 	hostFailed(L.host, ap_insert(g->api, s->at, "window", s->w, NULL, &time), "link: placing a window");
 	if (s->n) hostFailed(L.host, ap_insert(g->api, s->at, "name", s->n, NULL, &time), "link: placing a name");
 	ERM_PUSH(L.shares, s);
-	peerBring(L.peer, s->w, true);
-	if (s->n) peerBring(L.peer, s->n, true);
+	cardFollow(L.card, s->w);
+	if (s->n) cardFollow(L.card, s->n);
 	// the session, made inside the share's node once this returns (a call from a part waits till then)
 	Json *ask = drvMap("argv", jsonRef(program), "rows", jsonInteger(rows), "cols", jsonInteger(cols), "at", at("shares", name), NULL), *args = jsonArray();
 	jsonPush(args, jsonRef(ask));
@@ -727,8 +715,8 @@ static ErmErr sharesEffect(void *data, const ErmGiven *g, Json **out) {
 ErmErr driverLink(void *data, const ErmGiven *g, Json **out) {
 	*out = jsonNull();
 	L.host = data;
-	L.peer = hostPeer(L.host);
-	snprintf(L.typer, sizeof L.typer, "t%.8s", peerKey(L.peer));
+	L.card = hostCard(L.host);
+	snprintf(L.typer, sizeof L.typer, "t%.8s", cardKey(L.card));
 	Json *here = drvHere(g), *dev = drvPath("/", "dev", "link", NULL);
 	drvMake(g->api, dev, "views", "link/views", jsonNull());
 	drvMake(g->api, dev, "windows", "link/windows", jsonNull());

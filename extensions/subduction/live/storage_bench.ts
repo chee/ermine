@@ -58,7 +58,9 @@ async function keep(behind: boolean) {
 	await storage.flush()
 	const ms = performance.now() - start
 	console.log(
-		`${behind ? "behind " : "default"}  ${n} changes  ${writes} writes  ${ms.toFixed(0)}ms  ` +
+		`${behind ? "behind (default)" : "behind: false  "}  ${n} changes  ${writes} writes  ${
+			ms.toFixed(0)
+		}ms  ` +
 			`${(writes / n).toFixed(2)} writes/change`,
 	)
 }

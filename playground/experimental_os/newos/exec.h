@@ -7,7 +7,7 @@
 
 #include "host.h"
 
-#include "../../../ermine/programs/c/host.h"
+#include "../../../extensions/build/c/host.h"
 
 /** the exec programs' irq line: a program's frames or lines came, or it exited */
 #define EXEC_IRQ 60

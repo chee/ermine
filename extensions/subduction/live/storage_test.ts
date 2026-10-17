@@ -40,7 +40,7 @@ function slow(fail = false) {
 
 Deno.test("storage: writes made while the backend writes go to it as one batch, after", async () => {
 	const b = slow()
-	const s = await Storage.open(b.backend)
+	const s = await Storage.open(b.backend, { behind: false })
 	const first = s.saveCommit(tree, id(1), signed, new Uint8Array([1]))
 	await new Promise((r) => setTimeout(r, 0))
 	assertEquals(b.batches.length, 1)
@@ -56,7 +56,7 @@ Deno.test("storage: writes made while the backend writes go to it as one batch, 
 
 Deno.test("storage: a save resolves only once its batch is kept", async () => {
 	const b = slow()
-	const s = await Storage.open(b.backend)
+	const s = await Storage.open(b.backend, { behind: false })
 	let done = false
 	const p = s.saveCommit(tree, id(1), signed, new Uint8Array([1])).then(() => done = true)
 	await new Promise((r) => setTimeout(r, 10))
@@ -68,7 +68,7 @@ Deno.test("storage: a save resolves only once its batch is kept", async () => {
 
 Deno.test("storage: a sedimentree id already here is not written again", async () => {
 	const b = slow()
-	const s = await Storage.open(b.backend)
+	const s = await Storage.open(b.backend, { behind: false })
 	const saves = [
 		s.saveSedimentreeId(tree),
 		s.saveSedimentreeId(tree),
@@ -91,7 +91,7 @@ Deno.test("storage: a sedimentree id already here is not written again", async (
 
 Deno.test("storage: deleting every commit takes one write, and lists stay right", async () => {
 	const b = slow()
-	const s = await Storage.open(b.backend)
+	const s = await Storage.open(b.backend, { behind: false })
 	const saves = [1, 2, 3].map((n) => s.saveCommit(tree, id(n), signed, new Uint8Array([n])))
 	await b.release()
 	await Promise.all(saves)
@@ -101,13 +101,13 @@ Deno.test("storage: deleting every commit takes one write, and lists stay right"
 	await gone
 	assertEquals(b.batches.length, before + 1)
 	assertEquals(await s.listCommitIds(tree), [])
-	const reopened = await Storage.open(b.backend)
+	const reopened = await Storage.open(b.backend, { behind: false })
 	assertEquals(await reopened.listCommitIds(tree), [])
 })
 
-Deno.test("storage: behind: saves resolve at once; flush resolves once kept", async () => {
+Deno.test("storage: behind (the default): saves resolve at once; flush resolves once kept", async () => {
 	const b = slow()
-	const s = await Storage.open(b.backend, { behind: true })
+	const s = await Storage.open(b.backend)
 	await s.saveCommit(tree, id(1), signed, new Uint8Array([1]))
 	await s.saveCommit(tree, id(2), signed, new Uint8Array([2]))
 	assertEquals(b.kept.size, 0)
@@ -133,7 +133,7 @@ Deno.test("storage: behind: what a write threw, flush throws", async () => {
 
 Deno.test("storage: without behind, what a write threw, the save throws", async () => {
 	const b = slow(true)
-	const s = await Storage.open(b.backend)
+	const s = await Storage.open(b.backend, { behind: false })
 	const p = s.saveCommit(tree, id(1), signed, new Uint8Array([1])).catch((e) => e)
 	await b.release()
 	assertEquals((await p).message, "full")

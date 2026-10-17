@@ -1136,7 +1136,8 @@ int main(int argc, char **argv) {
 	    " \"fb\": {\"path\": \"(memory)\", \"maxw\": %d, \"maxh\": %d, \"buffers\": 2, \"offset\": 0, \"format\": \"xrgb8888\", \"scale\": %g, \"unit\": %d},"
 	    " \"font\": %s,"
 	    " \"devices\": [{\"name\": \"display\", \"irq\": 33}, {\"name\": \"keyboard\", \"irq\": 34}, {\"name\": \"pointer\", \"irq\": 35}, {\"name\": \"uart0\", \"irq\": 36},"
-	    " {\"name\": \"power\", \"irq\": 40}, {\"name\": \"thermal\", \"irq\": 41}, {\"name\": \"usb\", \"irq\": 44}, {\"name\": \"clipboard\", \"irq\": 46},"
+	    " {\"name\": \"power\", \"irq\": 40}, {\"name\": \"thermal\", \"irq\": 41}, {\"name\": \"cpu\", \"irq\": 43}, {\"name\": \"usb\", \"irq\": 44},"
+	    " {\"name\": \"net\", \"irq\": 45}, {\"name\": \"clipboard\", \"irq\": 46}, {\"name\": \"volumes\", \"irq\": 48},"
 	    " {\"name\": \"font\", \"irq\": 50, \"families\": [\"blocks\"]}, {\"name\": \"web\", \"irq\": 49, \"engine\": \"none\"},"
 	    " {\"name\": \"mac\", \"irq\": 51, \"ax\": false, \"capture\": false}, {\"name\": \"speech\"}]}",
 	    getenv("USER") ? getenv("USER") : "person", W, H, W, H, 1.0 / U, U, font);
@@ -1209,6 +1210,7 @@ int main(int argc, char **argv) {
 				if (!stacking) unlayerAll();
 				pthread_mutex_unlock(&lock);
 			}
+			jsonFree(r);
 			post("%s", rest);
 		} else if (!strcmp(word, "move")) {
 			int x = 0, y = 0;

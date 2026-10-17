@@ -1,5 +1,5 @@
 # sources.sh: what newos's builds take of today's tree (core, filesystem,
-# ermine, extensions) and newos's own libraries (fronts/, peer/), sourced by
+# ermine, extensions) and newos's own libraries (fronts/, card/), sourced by
 # build.sh, boot.sh and headless.sh once they have set $root (the repository)
 # and $mac (playground/experimental_os/mac). Gives $nc_sources, $nc_skip (the
 # newos/*.c not built), $nc_cflags and $nc_libs.
@@ -17,18 +17,19 @@ nc_sources="$nc/core/op/c/value.c $nc/core/op/c/apply.c $nc/core/op/c/invert.c $
   $nc/core/scheduler/c/causes.c $nc/core/scheduler/c/ptrmap.c $nc/core/scheduler/c/tracker.c $nc/core/scheduler/c/paths.c \
   $nc/core/scheduler/c/selector.c $nc/filesystem/places/c/places.c $nc/filesystem/places/c/cache.c $nc/filesystem/places/c/status.c $nc/filesystem/places/c/runs.c \
   $nc/ermine/processes/c/processes.c $nc/ermine/processes/c/scopes.c $nc/ermine/boxes/c/boxes.c \
-  $nc/ermine/programs/c/host.c $nc/ermine/programs/c/build.c $nc/ermine/clingy/c/clingy.c $nc/ermine/types/c/types.c $nc/ermine/types/c/utis.c \
+  $nc/extensions/build/c/host.c $nc/extensions/build/c/build.c $nc/ermine/clingy/c/clingy.c $nc/ermine/types/c/types.c $nc/ermine/types/c/utis.c \
   $nc/ermine/processes/c/start.c $nc/ermine/sites/c/sites.c \
   $nc/extensions/programs/c/programs.c $nc/extensions/programs/c/programs_json.c $nc/extensions/programs/c/start.c $nc/extensions/programs/c/dlopen.c \
-  $nc/ermine/encoding/c/json.c $nc/ermine/encoding/c/json_text.c $nc/ermine/encoding/c/cbor.c $nc/ermine/encoding/c/blop.c $nc/ermine/encoding/c/pack.c $nc/ermine/encoding/c/hash.c \
-  $nc/extensions/subduction/c/wiring.c $nc/extensions/subduction/c/transport.c $nc/extensions/subduction/c/id.c $nc/extensions/subduction/c/seal.c $nc/extensions/subduction/c/history.c $nc/extensions/subduction/c/apply.c \
-  $nc/extensions/subduction/c/commit.c $nc/extensions/subduction/c/fragment.c \
-  $nc/ermine/encoding/c/blake3/blake3.c $nc/ermine/encoding/c/blake3/blake3_dispatch.c $nc/ermine/encoding/c/blake3/blake3_portable.c $nc/extensions/subduction/c/ed25519/ed25519.c $nc/extensions/subduction/c/ed25519/sha2.c \
+  $nc/ermine/encoding/c/json.c $nc/ermine/encoding/c/json_text.c $nc/ermine/encoding/c/cbor.c $nc/ermine/encoding/c/commit.c $nc/ermine/encoding/c/pack.c $nc/ermine/encoding/c/hash.c \
+  $nc/extensions/sync/c/sync.c $nc/extensions/sync/c/transport.c $nc/extensions/sync/c/ids.c $nc/extensions/sync/c/seal.c $nc/extensions/sync/c/history.c $nc/extensions/sync/c/replay.c \
+  $nc/extensions/sync/c/snapshot.c $nc/extensions/sync/c/run.c $nc/extensions/subduction/c/fragment.c \
+  $nc/ermine/encoding/c/blake3/blake3.c $nc/ermine/encoding/c/blake3/blake3_dispatch.c $nc/ermine/encoding/c/blake3/blake3_portable.c $nc/extensions/sync/c/ed25519/sha2.c \
   $nc/extensions/subduction/c/subduction/store_files.c $nc/extensions/subduction/c/subduction/platform_posix.c \
   $nc/extensions/subduction/c/subduction/websocket.c $nc/extensions/subduction/c/subduction/transport_openssl.c \
-  $nc/playground/experimental_os/newos/fronts/fronts.c $nc/playground/experimental_os/newos/peer/peer.c"
-# newos/*.c not built: none
-nc_skip=""
+  $nc/playground/experimental_os/newos/fronts/fronts.c $nc/playground/experimental_os/newos/card/card.c $nc/playground/experimental_os/newos/card/net.c \
+  $nc/playground/experimental_os/newos/card/drv_sync.c $nc/playground/experimental_os/newos/card/ed25519_openssl.c"
+# newos/*.c not built: the old card's network and histories (card/ has them)
+nc_skip="net.c drv_sync.c"
 nc_cflags="$vt_cflags $way_cflags -I$openssl/include -I$nc/extensions/subduction/c/subduction $rename -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512 -DBLAKE3_USE_NEON=0"
 nc_libs="$vt_libs $way_libs $nc/extensions/subduction/c/subduction/lib/libsubduction_c.a $(tr -d '\033' < "$nc/extensions/subduction/c/subduction/lib/link.txt" | sed 's/\[[0-9;]*m//g') -L$openssl/lib -lssl -lcrypto -framework JavaScriptCore -framework CoreText -framework CoreFoundation -lz -lpthread"
 
@@ -46,4 +47,46 @@ nc_runner() {
 			break
 		fi
 	done
+}
+
+# --- compiling only what changed
+# nc_object src: the object's name for a source, by its grandparent folder and name, so core/op/c/value.c
+# is nc_op_value.o and newos/card/card.c nc_newos_card.o (no two sources share one)
+nc_object() {
+	echo "nc_$(basename "$(dirname "$(dirname "$1")")")_$(basename "$1" .c).o"
+}
+# nc_compile src obj flags...: compiles src to obj with the C compiler $NC_CC (cc) and the flags, unless
+# obj is newer than src and every header the last compile read (obj.d, from -MMD) and the flags are the
+# same as last time (obj.flags). Counts what it built in $nc_built
+nc_built=0
+nc_compile() {
+	src="$1"
+	obj="$2"
+	shift 2
+	flags="$*"
+	if [ -f "$obj" ] && [ -f "$obj.d" ] && [ -f "$obj.flags" ] && [ "$(cat "$obj.flags")" = "$flags" ]; then
+		fresh=1
+		# shellcheck disable=SC2046
+		for f in $(sed -e 's/^[^:]*: *//' -e 's/ *\\$//' "$obj.d"); do
+			if [ ! -f "$f" ] || [ "$f" -nt "$obj" ]; then
+				fresh=""
+				break
+			fi
+		done
+		[ -n "$fresh" ] && return 0
+	fi
+	[ -n "${QUIET:-}" ] || echo "  cc $(echo "$src" | sed "s|^$root/||")" >&2
+	rm -f "$obj.flags"
+	# shellcheck disable=SC2086
+	"${NC_CC:-cc}" $flags -MMD -MF "$obj.d" -c "$src" -o "$obj" || return 1
+	printf '%s' "$flags" > "$obj.flags"
+	nc_built=$((nc_built + 1))
+}
+# nc_stale target deps...: true when target is missing or any dep is newer
+nc_stale() {
+	t="$1"
+	shift
+	[ -f "$t" ] || return 0
+	for f in "$@"; do [ "$f" -nt "$t" ] && return 0; done
+	return 1
 }

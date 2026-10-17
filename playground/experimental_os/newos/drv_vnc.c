@@ -24,7 +24,8 @@
 //
 // Pixels: the other side's screen, as its updates finish, is copied into a
 // plane of the view's size (fit: scaled, area-averaged; actual: 1:1 from sx,
-// sy), hostPlanes' source "vnc", and the driver writes the view's layer's
+// sy), POSIX shared memory said in /dev/vnc/planes/<name> {id, w, h, stride,
+// shm} (host.h's HostPlaneSaid), and the driver writes the view's layer's
 // plane, {source: "vnc", id, serial, x, y, w, h, dirty?}: only the
 // rectangle an update changed is scaled again and copied by the compositor,
 // and a frame costs the program nothing. Over the plane the layer's ops are
@@ -70,6 +71,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <zlib.h>
@@ -137,6 +139,7 @@ typedef struct Screen {
 	// the host's own
 	int64_t id, serial; // the plane's
 	uint32_t *view;
+	char shm[32];       // the plane's shared memory
 	int vw, vh, ow, oh; // the plane; and the picture of the screen in it, at ox, oy, ow × oh
 	int ox, oy, sx, sy;
 	double scale;
@@ -175,7 +178,7 @@ typedef struct Vnc {
 	int ks;
 } Vnc;
 
-static Vnc *the; // for hostPlane's
+static Vnc *the; // for vncStop
 
 static void push(Vnc *v, Screen *s) {
 	if (v->screens.count == v->screens.capacity) {
@@ -999,17 +1002,41 @@ static Json *layerAt(const char *name) {
 	return drvPath("/", "dev", "display", "layers", name, NULL);
 }
 
-/** plane id's pixels, the view of a screen */
-static bool planeAt(void *data, int64_t id, HostPlane *out) {
-	Vnc *v = data;
-	for (int i = 0; i < v->screens.count; i++) {
-		Screen *s = v->screens.items[i];
-		if (s->id == id && s->view) {
-			*out = (HostPlane){ s->view, s->vw, s->vh, s->vw };
-			return true;
-		}
+/** the plane's memory let go, and its name */
+static void viewFree(Screen *s) {
+	if (!s->view) return;
+	munmap(s->view, (size_t)s->vw * (size_t)s->vh * 4);
+	shm_unlink(s->shm);
+	s->view = NULL;
+}
+
+/** the plane's memory: POSIX shared memory of vw × vh pixels, zeroed; the old let go. NULL when there is none */
+static void viewMake(Screen *s, int vw, int vh) {
+	viewFree(s);
+	snprintf(s->shm, sizeof s->shm, "/ermvnc.%d.%lld", (int)getpid(), (long long)s->id);
+	shm_unlink(s->shm);
+	size_t bytes = (size_t)vw * (size_t)vh * 4;
+	int fd = shm_open(s->shm, O_RDWR | O_CREAT | O_EXCL, 0600);
+	void *bits = MAP_FAILED;
+	if (fd >= 0 && !ftruncate(fd, (off_t)bytes)) bits = mmap(NULL, bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	if (fd >= 0) close(fd);
+	if (bits == MAP_FAILED) {
+		if (fd >= 0) shm_unlink(s->shm);
+		return;
 	}
-	return false;
+	s->view = bits;
+}
+
+/** the plane as its node says it, /dev/vnc/planes/<name> {id, w, h, stride, shm} */
+static void planeSaid(const ErmGiven *g, Screen *s) {
+	Json *planes = drvPath("/", "dev", "vnc", "planes", NULL);
+	Json *said = drvMap("id", jsonInteger(s->id), "w", jsonInteger(s->vw), "h", jsonInteger(s->vh), "stride", jsonInteger(s->vw), "shm", jsonString(s->shm), NULL);
+	if (drvHas(g->api, drvUnder(planes, s->name, NULL))) drvSnap(g->api, drvUnder(planes, s->name, NULL), said);
+	else {
+		char *id = formatString("vnc/plane/%s.%d", s->name, s->k);
+		drvMake(g->api, planes, s->name, id, said);
+		free(id);
+	}
 }
 
 /** where the screen's picture is in the view: its scale, place and size */
@@ -1423,6 +1450,11 @@ static void stop(const ErmGiven *g, Screen *s) {
 			drvOp(g->api, "unplace", drvMap("address", drvPath("/", "dev", "vnc", "sessions", NULL), "name", jsonString(s->name), "id", jsonString(id), NULL));
 			free(id);
 		}
+		if (drvHas(g->api, drvPath("/", "dev", "vnc", "planes", s->name, NULL))) {
+			char *id = formatString("vnc/plane/%s.%d", s->name, s->k);
+			drvOp(g->api, "unplace", drvMap("address", drvPath("/", "dev", "vnc", "planes", NULL), "name", jsonString(s->name), "id", jsonString(id), NULL));
+			free(id);
+		}
 	}
 	if (s->zrleOn) inflateEnd(&s->zrle);
 	if (s->zlibOn) inflateEnd(&s->zlib);
@@ -1433,7 +1465,7 @@ static void stop(const ErmGiven *g, Screen *s) {
 	free(s->layer);
 	free(s->front);
 	free(s->back);
-	free(s->view);
+	viewFree(s);
 	free(s->buf);
 	free(s->cbits);
 	free(s->cmask);
@@ -1550,9 +1582,9 @@ static ErmErr viewsEffect(void *data, const ErmGiven *g, Json **out) {
 		s->layer = layer ? copyString(layer) : NULL;
 		pthread_mutex_lock(&s->lock);
 		if (vw != s->vw || vh != s->vh) {
-			free(s->view);
-			s->view = calloc((size_t)vw * (size_t)vh, 4);
+			viewMake(s, vw, vh);
 			s->vw = vw, s->vh = vh;
+			if (s->view) planeSaid(g, s);
 			if (layer) s->shown = false;
 		}
 		s->fit = fit, s->ground = ground, s->x = x, s->y = y, s->sx = sx, s->sy = sy, s->hide = hidden;
@@ -1870,13 +1902,13 @@ ErmErr driverVnc(void *data, const ErmGiven *g, Json **out) {
 	Json *dev = drvPath("/", "dev", "vnc", NULL);
 	drvMake(g->api, dev, "views", "vnc/views", jsonNull());
 	drvMake(g->api, dev, "sessions", "vnc/sessions", jsonNull());
+	drvMake(g->api, dev, "planes", "vnc/planes", jsonNull());
 	Json *here = drvHere(g);
 	drvHandler(g, here, "irq", (ErmFn){ vncIrq, v });
 	drvHandler(g, here, "input", (ErmFn){ onInput, v });
 	drvHandler(g, here, "password", (ErmFn){ onPassword, v });
 	drvClaim(g, here, IRQ);
 	drvChild(g, here, "views", (ErmFn){ viewsCompute, NULL }, (ErmFn){ viewsEffect, v });
-	hostPlanes(v->host, "vnc", planeAt, v);
 	return ermOk();
 }
 
