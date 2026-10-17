@@ -134,11 +134,19 @@ invertMove root (Patch path range _ _) mpath mrange
           emptyTake = mrange /= Nothing && n == 0
           landedInSeq = range /= Nothing && not intoList
           cannot =
-            (range == Nothing && isPrefix path mpath)
+            (range == Nothing && landingFalls)
               || landMerged
               || takeMerged
               || emptyTake
               || (mrange == Nothing && isIndex mpath && landedInSeq)
+          -- an unranged landing: the move back would put into what it takes from when the landing's
+          -- path lies in where the take's undo goes (a list's gap above the element: its list)
+          listy = not (null path) && isList (at (init path) s1)
+          bp = if mrange == Nothing && not (null mpath) && isList (at (init mpath) s1) then init mpath else mpath
+          landingFalls
+            | mrange /= Nothing = isPrefix path mpath
+            | listy || not (exists path s1) = length path < length bp && isPrefix path bp
+            | otherwise = isPrefix path bp
           back = moveBack taken target s1 n intoList
           s2 = either (const Nothing) id (applyOne (Just s1) (Patch path range (Just inserted) Nothing))
           backWorks = case applyAll s2 back of

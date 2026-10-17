@@ -1,4 +1,4 @@
-;;; scheduler.lisp — computations over the host's keys, run in pulses: ranks, stops, loops cut by
+;;; scheduler.lisp — computations over the host's keys, run in pulses: order, stops, loops cut by
 ;;; their causes, async landings, scopes that own what is made in them. The harness plays the host.
 (in-package :ermine)
 

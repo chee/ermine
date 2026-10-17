@@ -1,8 +1,0 @@
-# perf misses of the Haskell harnesses (naive algorithms); run with --known playground/haskell/perf.sadly_known_fail
-apply-perf/01-remove-many-map-keys  past 20s at n 25000 (997ms at 6250): quadratic
-squish-perf/01-typing-run  past 20s at n 12500 (smallest size): quadratic or worse
-unread-perf/01-one-key-writes  past 20s at n 10000 (smallest size)
-scheduler-perf/01-effect-fan  past 20s at n 600 (11.7s at 150)
-scheduler-perf/02-siblings-oldest-first  past 20s at n 2000 (smallest size)
-scheduler-perf/03-owner-remakes-due-children  past 20s at n 60 (smallest size)
-scheduler-perf/04-deep-chain-after-cycle  past 20s at n 2000 (smallest size)
