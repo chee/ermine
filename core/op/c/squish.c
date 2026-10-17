@@ -272,7 +272,7 @@ static uint64_t hash(const sq_key *k, size_t depth) {
 			MIX(0);
 		} else {
 			MIX('n');
-			unsigned long n = (unsigned long)k[i].n;
+			uint64_t n = (uint64_t)(int64_t)k[i].n;
 			for (int j = 0; j < 8; j++) MIX(n >> (8 * j));
 		}
 	}

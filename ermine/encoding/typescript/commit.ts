@@ -21,6 +21,8 @@ export type Commit = {
 	metadata?: [string, unknown][]
 	// whole seconds since 1970, as the change header has it
 	time: number
+	// the device's key, a multikey: the unsigned varint of its multicodec code, then the raw key
+	// (Ed25519: 0xed 0x01, then 32 bytes). its did:key is "did:key:z" and its base58btc
 	signer: Uint8Array
 	// a count, the signer's own: two commits otherwise the same are told apart. counted up one a
 	// commit, so a run of them packs to almost nothing (run.ts)
@@ -83,6 +85,34 @@ const whole = (n: unknown): n is number =>
 	Number.isSafeInteger(n) && !Object.is(n, -0) && (n as number) >= 0
 const isKey = (k: unknown) => typeof k === "string" || whole(k)
 const isRange = (r: unknown) => Array.isArray(r) && r.length === 2 && r.every(whole)
+// a multikey is a varint code (shortest form, 1 to 7 bytes) then a key of 1 byte or more, MULTIKEY_MAX
+// bytes in all. only its code says what a key is; whether it is one is for whoever verifies
+const MULTIKEY_MAX = 1024
+const multikey = (b: unknown): b is Uint8Array => {
+	if (!(b instanceof Uint8Array) || b.length > MULTIKEY_MAX) return false
+	let i = 0
+	while (i < b.length && i < 7 && b[i] & 0x80) i++
+	if (i >= b.length || i >= 7 || i > 0 && b[i] === 0) return false
+	return i + 1 < b.length
+}
+// a key's code and the raw key, from a multikey; none for one that is not
+export function splitKey(b: Uint8Array): { code: number; key: Uint8Array } | undefined {
+	if (!multikey(b)) return undefined
+	let code = 0, i = 0
+	for (; b[i] & 0x80; i++) code += (b[i] & 0x7f) * 2 ** (7 * i)
+	code += b[i] * 2 ** (7 * i)
+	return { code, key: b.subarray(i + 1) }
+}
+// a multikey, from the code and the raw key
+export function joinKey(code: number, key: Uint8Array): Uint8Array {
+	const head: number[] = []
+	for (; code >= 0x80; code = Math.floor(code / 0x80)) head.push(code % 0x80 | 0x80)
+	head.push(code)
+	const out = new Uint8Array(head.length + key.length)
+	out.set(head)
+	out.set(key, head.length)
+	return out
+}
 const sized = (b: unknown, n: number): b is Uint8Array => b instanceof Uint8Array && b.length === n
 
 export function compare(a: Uint8Array, b: Uint8Array): number {
@@ -118,7 +148,7 @@ const RULES: { [k in typeof FIELDS[number]]: (v: unknown, c: Fields) => boolean 
 		Array.isArray(v) &&
 		v.every((e) => Array.isArray(e) && e.length === 2 && typeof e[0] === "string"),
 	time: whole,
-	signer: (v) => sized(v, 32),
+	signer: multikey,
 	nonce: whole,
 	parents: (v) => {
 		if (!Array.isArray(v) || !v.every((p) => sized(p, 32))) return false

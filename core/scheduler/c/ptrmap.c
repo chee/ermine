@@ -2,6 +2,12 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
+
+// most maps hold one to three keys: the smallest table is four slots
+#define MIN_CAP 4
+// a reset map bigger than this is freed: one that was once huge does not keep its memory
+#define KEEP_CAP 1024
 
 static size_t hash(const void *p, size_t cap) {
 	uint64_t x = (uint64_t)(uintptr_t)p >> 3;
@@ -29,10 +35,11 @@ bool pm_has(const pm *m, const void *key) {
 
 static void grow(pm *m) {
 	pm old = *m;
-	m->cap = old.cap ? old.cap * 2 : 8;
-	m->keys = calloc(m->cap, sizeof *m->keys);
-	m->vals = calloc(m->cap, sizeof *m->vals);
-	if (m->keys == NULL || m->vals == NULL) abort();
+	m->cap = old.cap ? old.cap * 2 : MIN_CAP;
+	// one block: the keys, then the values
+	m->keys = calloc(2 * m->cap, sizeof *m->keys);
+	if (m->keys == NULL) abort();
+	m->vals = (void **)(m->keys + m->cap);
 	for (size_t i = 0; i < old.cap; i++) {
 		if (old.keys[i] == NULL) continue;
 		size_t j = slot(m, old.keys[i]);
@@ -40,7 +47,6 @@ static void grow(pm *m) {
 		m->vals[j] = old.vals[i];
 	}
 	free(old.keys);
-	free(old.vals);
 }
 
 bool pm_set(pm *m, const void *key, void *val) {
@@ -79,6 +85,15 @@ bool pm_delete(pm *m, const void *key) {
 
 void pm_clear(pm *m) {
 	free(m->keys);
-	free(m->vals);
 	*m = (pm){0};
+}
+
+void pm_reset(pm *m) {
+	if (m->cap > KEEP_CAP) {
+		pm_clear(m);
+		return;
+	}
+	if (m->count == 0) return;
+	memset(m->keys, 0, 2 * m->cap * sizeof *m->keys);
+	m->count = 0;
 }

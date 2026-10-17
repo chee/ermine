@@ -237,11 +237,9 @@ const refused = (st: Step) => st.fails === true || (st.expect !== undefined && "
 // an answer as compared to itself: keys in order or not, unordered fields as sets
 function settled(a: Record<string, unknown> | undefined, o: Options) {
 	if (a === undefined) return "no answer"
-	const sets = Object.fromEntries(
-		Object.entries(a).map((
-			[k, v],
-		) => [k, o.unordered?.includes(k) && Array.isArray(v) ? v.map(show).sort() : v]),
-	)
+	const set = (k: string, v: unknown) =>
+		o.unordered?.includes(k) && Array.isArray(v) ? v.map(show).sort() : v
+	const sets = Object.fromEntries(Object.entries(a).map(([k, v]) => [k, set(k, v)]))
 	return line(sets, o.ordered ? (v) => v : sortKeys)
 }
 

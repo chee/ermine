@@ -37,9 +37,14 @@
 typedef enum { OP_NUM_KEY, OP_STR_KEY, OP_SPAN } op_key_type;
 typedef struct {
 	op_key_type type;
-	long n; // a number key
-	const char *s; // a string key
-	long a, b; // a span
+	// one is live, by the type
+	union {
+		long n; // a number key
+		const char *s; // a string key
+		struct {
+			long a, b; // a span
+		};
+	};
 } op_key;
 
 // what a patch aims at: keys, and maybe a range of the sequence there

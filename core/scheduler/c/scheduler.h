@@ -19,7 +19,7 @@
 //
 // early effects: the reference's rules (typescript/scheduler.ts), the same here: sc_def's early
 // ("acts at once and is in an earlier queue so it goes compute, early, effect"): made, it is due,
-// runs and acts in sc_create_effect; after, a round is three queues: the runs by rank, the early
+// runs and acts in sc_create_effect; after, a round is three queues: the runs in order, the early
 // acts, the other acts, each owners first (an act waits while one above it is due in the same
 // queue).
 //
@@ -252,7 +252,8 @@ sc_run *sc_latest(sc_scope *o);
 // acts, after the round's runs. the tick it took
 uint64_t sc_mark(sc_scheduler *s, const void *const *keys, size_t count, sc_run *run);
 
-// rounds until nothing is due: the settled promises land, the due run by rank, the effects act.
+// rounds until nothing is due: the settled promises land, the due run in order (order.h), the
+// effects act.
 // a pulse in a pulse does nothing
 void sc_pulse(sc_scheduler *s);
 

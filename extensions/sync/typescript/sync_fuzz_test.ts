@@ -3,7 +3,7 @@
 // would be; hosts with the same history are in the same place.
 //
 // hosts (2-4) on one node, each a table, places and sync over its own device, with no pipes: a
-// commit crosses only when the fuzz hands its seal to a device (Hooks.put, as a peer's commit is
+// commit crosses only when the fuzz hands its seal to a device (transport_conformance_hook_put, as a peer's commit is
 // stored), so delivery is the fuzz's: any order, late, twice, one host cut off a while. ephemeral
 // commits stay home (only Subduction carries them): a drag shows on its own host until the drop.
 // told: places.watchAll, every fact (a table event's whole value, a write's patches) on the node.
@@ -27,7 +27,11 @@ import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Key, type Table } from "@ermine/table"
 import { createSigner, seal, type Signer, stored } from "./seal.ts"
 import { createSync, type Ephemeral, type Sync } from "./sync.ts"
-import type { Device, Hooks } from "./transport.ts"
+import type { Device } from "./transport.ts"
+import {
+	transport_conformance_hook_put,
+	transport_conformance_hook_taking,
+} from "./transport_conformance_hook.ts"
 import { egwalker } from "./egwalker.ts"
 import { type Merges, plain, replay, type Tables } from "./replay.ts"
 import { hex } from "./hex.ts"
@@ -261,7 +265,7 @@ type Host = {
 	name: string
 	table: Table
 	sync: Sync
-	device: Device & Hooks
+	device: Device
 	// what the readers were told, applied in order, by table
 	model: Map<string, unknown>
 	told: number
@@ -319,7 +323,7 @@ async function makeHost(n: number, rule: Rule, seed: number, signer: Signer): Pr
 		sync.wrote([e])
 	}
 	h.sync = sync
-	h.device = sync.device as Device & Hooks
+	h.device = sync.device
 	h.close = () => sync.close()
 	await sync.follow(DOC)
 	return h
@@ -486,7 +490,7 @@ async function run(
 		const commit = decode(c.bytes)
 		const parents: Uint8Array[] = []
 		for (const p of commit.parents) parents.push((await sealOf(hex(p))).id!)
-		await to.device.put(DOC, c.id!, parents, c.sealed!)
+		await transport_conformance_hook_put(to.device, DOC, c.id!, parents, c.sealed!)
 	}
 	const open = (to: number, name: string) =>
 		cut === undefined || (to !== cut && sent.get(name)!.from !== cut)
@@ -573,7 +577,7 @@ async function run(
 									`${labelOf(w.name)} ${w.refused}`
 								),
 							)
-						}, transport ${show(f.device.taking(DOC))}`,
+						}, transport ${show(transport_conformance_hook_taking(f.device, DOC))}`,
 					at,
 				)
 			}
@@ -736,7 +740,9 @@ async function run(
 					JSON.stringify(hist.waiting().map((w) => labelOf(w.name)))
 				}, refused ${
 					JSON.stringify(hist.refused().map((w) => `${labelOf(w.name)}:${w.refused}`))
-				}, transport ${JSON.stringify(h.device.taking(DOC).refused.length)}`
+				}, transport ${
+					JSON.stringify(transport_conformance_hook_taking(h.device, DOC).refused.length)
+				}`
 			})
 			return {
 				failure: kind("c", `not every host took every commit: ${why.join("; ")}`, end),

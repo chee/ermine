@@ -40,28 +40,67 @@ export function keyed(s: Pick<Scheduler, "onMark" | "onTrackingEnd">): Keyed {
 	if (index !== undefined) return index
 	const held = new Map<unknown, Set<Holder>>()
 	let told = 0
+	// what one mark's telling uses, kept between marks: the holders it names, each with its keys.
+	// the few are found by a scan, the many by idx. a marked that marks again is told in scratch of
+	// its own
+	const hs: Holder[] = []
+	const ls: unknown[][] = []
+	const idx = new Map<Holder, number>()
+	let busy = false
 	s.onMark((keys, run, due, tick) => {
 		if (held.size === 0) return
-		let by: Map<Holder, unknown[]> | undefined
+		const own = busy
+		const H = own ? [] : hs, L = own ? [] : ls, I = own ? new Map<Holder, number>() : idx
+		let n = 0
 		for (const k of keys) {
 			const set = held.get(k)
 			if (set === undefined) continue
-			by ??= new Map()
 			for (const h of set) {
-				const list = by.get(h)
-				if (list === undefined) by.set(h, [k])
-				else list.push(k)
+				let at = -1
+				if (n <= 8) {
+					for (let i = 0; i < n; i++) {
+						if (H[i] === h) {
+							at = i
+							break
+						}
+					}
+				} else {
+					at = I.get(h) ?? -1
+				}
+				if (at >= 0) {
+					L[at].push(k)
+					continue
+				}
+				H[n] = h
+				L[n] = [k]
+				if (n === 8) { for (let i = 0; i <= 8; i++) I.set(H[i], i) }
+				else if (n > 8) I.set(h, n)
+				n++
 			}
 		}
-		if (by === undefined) return
-		for (const [h, list] of by) {
-			told++
-			h.marked?.(list, run, due, tick)
+		if (n === 0) return
+		if (!own) busy = true
+		try {
+			for (let i = 0; i < n; i++) {
+				told++
+				H[i].marked?.(L[i], run, due, tick)
+			}
+		} finally {
+			if (!own) {
+				busy = false
+				H.length = 0
+				L.length = 0
+				if (n > 8) I.clear()
+			}
 		}
 	})
 	s.onTrackingEnd((key) => {
 		const set = held.get(key)
 		if (set === undefined) return
+		if (set.size === 1) {
+			set.values().next().value!.ended?.(key)
+			return
+		}
 		for (const h of [...set]) h.ended?.(key)
 	})
 	index = {

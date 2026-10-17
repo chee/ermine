@@ -1,12 +1,27 @@
 // paths' streams: for a few keys, a random value's paths (and some made up) spotted, plain or keys
-// reads, the change spot, then a batch of patches apply takes marked; the rule asked of each
-// patch (marks); events, releases and kept between (paths_harness_test.ts's values and patches,
-// copied). sources and ids strings and symbols.
+// reads, the change spot, the key's event now and then, then a batch of patches apply takes
+// marked; the rule asked of each patch (marks); events, releases and kept between
+// (paths_harness_test.ts's values and patches, copied). sources and ids strings and symbols.
 // wild: -0 and 1e15 as indices, a path not a list, keys of the wrong kind, malformed patches, a
 // mark with no patches
+// deno-lint-ignore-file no-explicit-any
+// the properties, each implementation on its own: a change under a read marks it (marks: a place
+// at or under a plain read's path, the read's path or one key more unranged for a keys read; mark:
+// every spot at or above a place, the change spot first); event and kept are a model's of the
+// spots kept (model, below): event the change spot, then each step's spot, its keys spot, then
+// its kids, in the order the kid steps were made (a step let go and made again last)
 import apply from "@ermine/op/apply"
 import type { Key, Patch } from "@ermine/op/apply"
-import { type Generator, picker, type Request } from "./kit.ts"
+import {
+	type Answer,
+	differs,
+	firsts,
+	type Generator,
+	picker,
+	type Request,
+	show,
+	type Violation,
+} from "./kit.ts"
 
 type Rand = ReturnType<typeof picker>
 const NAMES = ["a", "b", "c", "d"]
@@ -122,6 +137,7 @@ const generator: Generator = {
 				out.push({ op: "spot", source, id, path, ...(r.pick(3) === 0 ? { keys: true } : {}) })
 			}
 			if (r.pick(4)) out.push({ op: "change", source, id })
+			if (r.pick(2)) out.push({ op: "event", source, id })
 			if (r.pick(3) === 0) out.push({ op: "kept" })
 			out.push({ op: "mark", source, id, patches: batch.map(sent) })
 			for (const p of batch) {
@@ -158,5 +174,186 @@ const generator: Generator = {
 		}
 		return [out]
 	},
+	invariant(stream, answers) {
+		const out: Violation[] = []
+		const no = (kind: string, at: number, why: string) => out.push({ kind, at, why })
+		const m = model()
+		let stopped = false
+		stream.forEach((r, i) => {
+			const a = answers[i]
+			if (!a || a.error !== undefined) return
+			if (r.op === "marks" && Array.isArray(r.paths) && Array.isArray(a.marks)) {
+				const ps = places(r.patch)
+				r.paths.forEach((p: unknown, j: number) => {
+					if (!Array.isArray(p) || a.marks[j] === true) return
+					const hit = ps.find((q) =>
+						r.keys === true
+							? same(q.path, p) || (q.path.length === p.length + 1 && !q.ranged &&
+								under(p, q.path))
+							: under(p, q.path)
+					)
+					if (hit) {
+						no(
+							"a change under a read does not mark it",
+							i,
+							`${show(r.patch)} at ${show(hit.path)}, ${
+								r.keys === true ? "keys " : ""
+							}read ${show(p)}: false`,
+						)
+					}
+				})
+			}
+			if (stopped) return
+			const want = m(r)
+			if (want === undefined) return
+			if (r.op === "mark") {
+				const spots = a.spots as unknown[]
+				const has = new Set(spots.map(show))
+				const need = want.spots.filter((s: unknown) => !has.has(show(s)))
+				const extra = spots.filter((s) => !want.kept.has(show(s)))
+				if (spots.length !== has.size) no("mark gives a spot twice", i, show(spots))
+				if (want.change && spots[0] !== "change") {
+					no("mark gives the change spot not first", i, show(spots))
+				}
+				if (need.length || extra.length) {
+					no(
+						"a change under a spot does not mark it",
+						i,
+						`${show(spots)}: missing ${show(need)}, not kept ${show(extra)}`,
+					)
+				}
+			} else if (differs(a, want)) {
+				no(`${r.op} unlike the model`, i, `${show(a)}, model ${show(want)}`)
+				stopped = true
+			}
+		})
+		return Promise.resolve(firsts(out))
+	},
 }
 export default generator
+
+// a path's keys compared: -0 is 0, 1 and "1" differ
+const step = (k: unknown) => show(Object.is(k, -0) ? 0 : k)
+const same = (a: unknown[], b: unknown[]) =>
+	a.length === b.length && a.every((k, i) => step(k) === step(b[i]))
+// a is b or above it
+const under = (a: unknown[], b: unknown[]) =>
+	a.length <= b.length && a.every((k, i) => step(k) === step(b[i]))
+// a patch's places: a move's take and landing, else its own
+function places(p: any): { path: unknown[]; ranged: boolean }[] {
+	if (p === null || typeof p !== "object" || !Array.isArray(p.path)) return []
+	const own = { path: p.path, ranged: Array.isArray(p.range) }
+	const m = p.move
+	if (m !== null && typeof m === "object" && Array.isArray(m.path)) {
+		return [{ path: m.path, ranged: Array.isArray(m.range) }, own]
+	}
+	return [own]
+}
+
+// the spots kept, per key a trie of steps: a step kept while a spot is at or under it, its kids
+// in the order made. given an answered request (no error), what the model says of it: the answer
+// for event and kept; for mark, what it must give; undefined: not compared
+function model(): (r: Request) => any {
+	type Step = { path: unknown[]; spot: boolean; keys: boolean; kids: Map<string, Step> }
+	type Root = { change: boolean; top: Step }
+	const roots = new Map<string, Root>()
+	const name = (r: Request) => show([r.source, r.id])
+	const fresh = (path: unknown[]): Step => ({ path, spot: false, keys: false, kids: new Map() })
+	const empty = (s: Step) => !s.spot && !s.keys && s.kids.size === 0
+	function walk(root: Root, path: unknown[], make: boolean): Step[] | undefined {
+		const line = [root.top]
+		for (const [i, k] of path.entries()) {
+			const up = line[line.length - 1]
+			let s = up.kids.get(step(k))
+			if (!s) {
+				if (!make) return
+				up.kids.set(
+					step(k),
+					s = fresh(path.slice(0, i + 1).map((k) => Object.is(k, -0) ? 0 : k)),
+				)
+			}
+			line.push(s)
+		}
+		return line
+	}
+	function wholly(s: Step, out: unknown[]) {
+		if (s.spot) out.push(s.path)
+		if (s.keys) out.push({ keys: s.path })
+		for (const k of s.kids.values()) wholly(k, out)
+		return out
+	}
+	const spots = (root?: Root) =>
+		root ? [...(root.change ? ["change"] : []), ...wholly(root.top, [])] : []
+	const tidy = (r: Request) => {
+		const root = roots.get(name(r))
+		if (root && !root.change && empty(root.top)) roots.delete(name(r))
+	}
+	return (r) => {
+		const root = () => {
+			if (!roots.has(name(r))) roots.set(name(r), { change: false, top: fresh([]) })
+			return roots.get(name(r))!
+		}
+		switch (r.op) {
+			case "spot": {
+				if (!Array.isArray(r.path)) return
+				const s = walk(root(), r.path, true)!.at(-1)!
+				if (r.keys === true) s.keys = true
+				else s.spot = true
+				return
+			}
+			case "change":
+				root().change = true
+				return
+			case "release": {
+				const at = roots.get(name(r))
+				if (!at) return
+				if (r.path === undefined) at.change = false
+				else if (Array.isArray(r.path)) {
+					const line = walk(at, r.path, false)
+					if (line) {
+						const s = line.at(-1)!
+						if (r.keys === true) s.keys = false
+						else s.spot = false
+						for (let i = line.length - 1; i > 0 && empty(line[i]); i--) {
+							line[i - 1].kids.delete(step(r.path[i - 1]))
+						}
+					}
+				}
+				tidy(r)
+				return
+			}
+			case "event":
+				return { spots: spots(roots.get(name(r))) }
+			case "mark": {
+				const at = roots.get(name(r))
+				const kept = new Set(spots(at).map(show))
+				const want: unknown[] = at?.change ? ["change"] : []
+				for (const p of Array.isArray(r.patches) ? r.patches : []) {
+					for (const q of places(p)) {
+						// the place's step and those above it, as far as they are kept
+						let s: Step | undefined = at?.top
+						for (const k of [...q.path, null]) {
+							if (!s) break
+							if (s.spot && !want.some((w) => show(w) === show(s!.path))) want.push(s.path)
+							s = k === null ? undefined : s.kids.get(step(k))
+						}
+					}
+				}
+				return { spots: want, kept, change: at?.change === true }
+			}
+			case "kept": {
+				let spotsN = 0, steps = 0
+				const count = (s: Step) => {
+					steps++
+					spotsN += (s.spot ? 1 : 0) + (s.keys ? 1 : 0)
+					for (const k of s.kids.values()) count(k)
+				}
+				for (const at of roots.values()) {
+					if (at.change) spotsN++
+					count(at.top)
+				}
+				return { keys: roots.size, spots: spotsN, steps }
+			}
+		}
+	}
+}

@@ -2,6 +2,7 @@
 // the step under it. A step keeps its kids in a list, and its number kids also in an array by key.
 #include "paths.h"
 
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,16 +26,26 @@ static char *copy(const char *s) {
 
 // hashing
 
+// MurmurHash3's finalizer: its 64-bit one where a size_t is 64 bits, its 32-bit one where it is 32
 static size_t mix(size_t x) {
+#if SIZE_MAX > 0xffffffffu
 	x ^= x >> 33;
 	x *= 0xff51afd7ed558ccdULL;
 	x ^= x >> 33;
+#else
+	x ^= x >> 16;
+	x *= 0x85ebca6bu;
+	x ^= x >> 13;
+	x *= 0xc2b2ae35u;
+	x ^= x >> 16;
+#endif
 	return x;
 }
+// 64-bit FNV-1a, cut to a size_t at the end
 static size_t text(const char *s) {
-	size_t h = 1469598103934665603ULL;
+	uint64_t h = 1469598103934665603ULL;
 	for (; *s; s++) h = (h ^ (unsigned char)*s) * 1099511628211ULL;
-	return h;
+	return (size_t)h;
 }
 static size_t hash_key(pt_key k) { return k.symbol ? mix((uintptr_t)k.symbol) : text(k.string); }
 static int same_key(pt_key a, pt_key b) {

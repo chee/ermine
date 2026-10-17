@@ -6,50 +6,132 @@
 			"name": "a",
 			"time": 1760000000,
 			"nonce": 1,
-			"patches": [{ "path": [], "value": { "body": "" } }]
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"body": ""
+					}
+				}
+			]
 		},
 		{
 			"op": "make",
 			"name": "b",
 			"time": 1760000000,
 			"nonce": 2,
-			"parents": ["a"],
-			"patches": [{ "path": ["body"], "range": [0, 0], "value": "h" }]
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"body"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "h"
+				}
+			]
 		},
 		{
 			"op": "make",
 			"name": "c",
 			"time": 1760000000,
 			"nonce": 3,
-			"parents": ["b"],
-			"patches": [{ "path": ["body"], "range": [1, 1], "value": "i" }]
+			"parents": [
+				"b"
+			],
+			"patches": [
+				{
+					"path": [
+						"body"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "i"
+				}
+			]
 		},
-		{ "op": "pack", "commits": ["a", "b", "c"], "name": "r" },
 		{
-			"op": "unpack",
-			"run": "r",
-			"set": { "table": [["", 3]] },
-			"expect": { "error": "commit" }
+			"op": "pack",
+			"commits": [
+				"a",
+				"b",
+				"c"
+			],
+			"name": "r"
 		},
 		{
 			"op": "unpack",
 			"run": "r",
 			"set": {
-				"signer": [[{ "/": { "bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ" } }, 3]]
+				"table": [
+					[
+						"",
+						3
+					]
+				]
 			},
-			"expect": { "error": "commit" }
+			"expect": {
+				"error": "commit"
+			}
 		},
 		{
 			"op": "unpack",
 			"run": "r",
-			"set": { "metadata": [[[["a"]], 3]] },
-			"expect": { "error": "commit" }
+			"set": {
+				"signer": [
+					[
+						{
+							"/": {
+								"bytes": "gA"
+							}
+						},
+						3
+					]
+				]
+			},
+			"expect": {
+				"error": "commit"
+			}
 		},
 		{
 			"op": "unpack",
 			"run": "r",
-			"set": { "lamport": { "/": { "bytes": "AAIC" } } },
-			"expect": { "error": "commit" }
+			"set": {
+				"metadata": [
+					[
+						[
+							[
+								"a"
+							]
+						],
+						3
+					]
+				]
+			},
+			"expect": {
+				"error": "commit"
+			}
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": {
+				"lamport": {
+					"/": {
+						"bytes": "AAIC"
+					}
+				}
+			},
+			"expect": {
+				"error": "commit"
+			}
 		}
 	]
 }

@@ -69,3 +69,4 @@ playground/term/memory-test
 extensions/sync/c/merge-bench-check
 playground/experimental_os/mac-archive/ermineOS
 playground/experimental_os/mac-archive/ermineOS-newos
+.tmp*

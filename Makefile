@@ -38,10 +38,6 @@ transport_src = extensions/subduction/c/transport.c extensions/subduction/c/tran
 	ermine/encoding/c/blop.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c $(blake3_src) extensions/subduction/c/ed25519/ed25519.c extensions/subduction/c/ed25519/sha2.c \
 	core/op/c/value.c core/op/c/apply.c core/node/c/update.c core/node/c/node.c \
 	extensions/subduction/c/subduction/store_memory.c extensions/subduction/c/subduction/platform_posix.c $(subduction_lib)
-# the wiring: the transport's (the graph it was wired to is the host's: the harness has none)
-wiring_flags = $(transport_flags)
-wiring_libs = $(transport_libs)
-wiring_src = extensions/subduction/c/wiring.c extensions/subduction/c/wiring_harness.c $(filter-out extensions/subduction/c/transport_harness.c,$(transport_src))
 fragment_src = extensions/subduction/c/fragment.c extensions/subduction/c/fragment_harness.c ermine/encoding/c/json.c
 squish_src = $(harness_src) core/op/c/squish.c core/op/c/squish_harness.c
 op-apply_src = $(harness_src) conformance/c/protocol.c core/op/c/apply_harness.c core/op/c/apply.c core/op/c/invert.c core/node/c/node.c
@@ -85,7 +81,6 @@ id = extensions/subduction/c/id-harness
 seal = extensions/subduction/c/seal-harness
 fragment = extensions/subduction/c/fragment-harness
 transport = extensions/subduction/c/transport-harness
-wiring = extensions/subduction/c/wiring-harness
 history = extensions/subduction/c/history-harness
 apply = extensions/subduction/c/apply-harness
 commit = extensions/subduction/c/commit-harness
@@ -106,12 +101,12 @@ store = playground/tools/files/c/store-harness
 program = playground/tools/files/c/program-harness
 sys = playground/tools/files/c/sys-harness
 
-# presence (playground/presence): its harness on places, the table and the scheduler (the C harness has no BroadcastChannel)
-presence_src = $(harness_src) extensions/presence/c/presence_harness.c extensions/presence/c/presence.c extensions/presence/c/channel.c filesystem/places/c/places.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
+# presence (extensions/presence): its harness on places, the table and the scheduler (the C harness has no BroadcastChannel)
+presence_src = $(harness_src) extensions/presence/c/presence_harness.c extensions/presence/c/presence.c extensions/presence/c/channel.c filesystem/places/c/places.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
 presence = extensions/presence/c/presence-harness
 presence_suite = presence
 presence_tests = $(wildcard extensions/presence/typescript/presence_harness_test.ts)
-LIBS = tracker table node pack cbor blop id seal fragment history apply commit transport wiring squish op-apply paths places processes protect update guard scheduler names diag layout manifest store program sys
+LIBS = tracker table node pack cbor blop id seal fragment history apply commit transport squish op-apply paths places processes protect update guard scheduler names diag layout manifest store program sys
 LIBS += presence
 # hash (ermine/encoding): a value's name, BLAKE3 of its canonical CBOR, against conformance/hash/vectors.json
 hash_src = ermine/encoding/c/hash_test.c ermine/encoding/c/hash.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src)
@@ -131,6 +126,7 @@ LIBS += patch
 # unread (core/unread): an entry's writes change in place what its own earlier writes copied, until it is read
 unread_src = $(harness_src) conformance/c/protocol.c core/unread/c/unread.c core/unread/c/unread_harness.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
 unread = core/unread/c/unread-harness
+unread_flags = -DCONFORMANCE_HOOK
 unread_suite = unread
 unread_tests = $(wildcard core/unread/typescript/unread_harness_test.ts)
 LIBS += unread
@@ -153,17 +149,17 @@ clingy-test_src = core/scheduler/c/scheduler.c core/scheduler/c/order.c core/sch
 clingy-test = ermine/clingy/c/clingy-test
 LIBS += clingy-test
 # programs (playground/programs): satisfy and open (programs) and start, over ermine/types, ermine/processes' start and
-# ermine/programs' build and host functions; build (ermine/programs) on its own. on the places harness's world with boxes
-programs_base = $(filter-out filesystem/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/boxes/c/boxes.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c ermine/encoding/c/hash.c $(blake3_src) ermine/programs/c/host.c
+# extensions/build's build and host functions; build (extensions/build) on its own. on the places harness's world with boxes
+programs_base = $(filter-out filesystem/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/boxes/c/boxes.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c ermine/encoding/c/hash.c $(blake3_src) extensions/build/c/host.c
 programs_lib = ermine/types/c/types.c ermine/types/c/utis.c extensions/programs/c/programs.c extensions/programs/c/programs_json.c
 programs_src = $(programs_base) $(programs_lib) extensions/programs/c/programs_harness.c
 programs = extensions/programs/c/programs-harness
 programs_suite = programs
 programs_tests = $(wildcard extensions/programs/typescript/programs_harness_test.ts)
-programs-build_src = $(programs_base) ermine/programs/c/build.c ermine/programs/c/build_harness.c
-programs-build = ermine/programs/c/build-harness
+programs-build_src = $(programs_base) extensions/build/c/build.c extensions/build/c/build_harness.c
+programs-build = extensions/build/c/build-harness
 programs-build_suite = build
-programs-start_src = $(programs_base) $(programs_lib) ermine/programs/c/build.c ermine/processes/c/start.c extensions/programs/c/start.c extensions/programs/c/start_harness.c ermine/processes/c/scopes.c ermine/sites/c/sites.c extensions/programs/c/dlopen.c
+programs-start_src = $(programs_base) $(programs_lib) extensions/build/c/build.c ermine/processes/c/start.c extensions/programs/c/start.c extensions/programs/c/start_harness.c ermine/processes/c/scopes.c ermine/sites/c/sites.c extensions/programs/c/dlopen.c
 programs-start = extensions/programs/c/start-harness
 programs-start_suite = start
 programs-start_flags = -DPG_FIXTURES='"$(CURDIR)/extensions/programs/c/fixtures/"'
@@ -184,7 +180,7 @@ clean: clean-native
 clean-native:
 	rm -f $(native_fixtures)
 # the process api (ermine/api): its harness on places, processes, guard, status, presence and patch nodes, on its own world
-api_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c filesystem/places/c/guard.c filesystem/protect/c/protect.c extensions/presence/c/presence.c extensions/presence/c/channel.c extensions/patch-nodes/c/patch.c ermine/api/c/api.c ermine/api/c/api_harness.c ermine/sites/c/sites.c
+api_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c filesystem/places/c/guard.c filesystem/protect/c/protect.c extensions/presence/c/presence.c extensions/presence/c/channel.c extensions/patch-nodes/c/patch.c ermine/api/c/api.c ermine/api/c/api_harness.c ermine/sites/c/sites.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
 api = ermine/api/c/api-harness
 api_suite = api
 api_tests = $(wildcard ermine/api/typescript/api_harness_test.ts)
@@ -222,7 +218,7 @@ sync-transport_src = $(sync_harness_src) $(sync_commits_src) conformance/c/proto
 	extensions/subduction/c/subduction/store_memory.c $(sync_transport_src) $(subduction_lib)
 sync-transport = extensions/sync/c/transport-harness
 sync-transport_suite = transport
-sync-transport_flags = $(subduction_rename)
+sync-transport_flags = $(subduction_rename) -DCONFORMANCE_HOOK
 sync-transport_libs = $(transport_libs)
 LIBS += sync-transport
 sync-sync_src = $(sync_harness_src) $(sync_commits_src) conformance/c/protocol.c extensions/sync/c/sync_harness.c extensions/sync/c/sync.c extensions/sync/c/egwalker.c extensions/sync/c/wires.c \
@@ -247,8 +243,8 @@ sync-merge-bench = extensions/sync/c/merge-bench
 sync-merge-bench_flags = $(subduction_rename)
 sync-merge-bench_libs = $(transport_libs)
 LIBS += sync-merge-bench
-# JSON text (ermine/encoding/c/json_text.c): only what reads or writes it, the harnesses and the files store; wiring
-# has it through transport, program through store
+# JSON text (ermine/encoding/c/json_text.c): only what reads or writes it, the harnesses and the files store; program
+# has it through store
 json_text_src = ermine/encoding/c/json_text.c
 $(foreach l,blop cbor hash pack id seal history apply commit fragment transport sync-run names diag layout manifest store,$(eval $(l)_src += $(json_text_src)))
 HARNESSES = $(foreach l,$(LIBS),$($(l)))
@@ -303,14 +299,19 @@ guard_tests = $(wildcard filesystem/places/typescript/guard_harness_test.ts)
 # the rest: env var, then the folders of their scenarios (conformance/<lib>/)
 pack_test = PACK_HARNESS conformance/pack/ conformance/cbor/
 blop_test = BLOP_HARNESS conformance/blop/
-id_test = ID_HARNESS conformance/id/
-seal_test = SEAL_HARNESS conformance/seal/
-fragment_test = FRAGMENT_HARNESS conformance/fragment/
-history_test = HISTORY_HARNESS conformance/history/
-apply_test = APPLY_HARNESS conformance/apply/
-commit_test = COMMIT_HARNESS conformance/commit/
-transport_test = TRANSPORT_HARNESS conformance/transport/
-wiring_test = WIRING_HARNESS conformance/wiring/
+# extensions/subduction's suites (extensions/subduction/conformance/subduction-<suite>/, the names of extensions/sync's and core/op's
+# are theirs): the C commit has no live values, so subduction-commit-live is only the TypeScript harness's (not here: HARNESS would send it to C)
+id_suite = subduction-id
+seal_suite = subduction-seal
+fragment_suite = subduction-fragment
+history_suite = subduction-history
+apply_suite = subduction-apply
+commit_suite = subduction-commit
+transport_suite = subduction-transport
+# their fuzzes, against the same harness (HARNESS): the id's, the history's order fuzz and the fragment's against Subduction's own code
+id_tests = extensions/subduction/conformance/id_fuzz_test.ts
+history_tests = extensions/subduction/conformance/history_fuzz_test.ts
+fragment_tests = extensions/subduction/conformance/fragment_fuzz_test.ts
 # the files program's suites (playground/tools/files/conformance); the manifest's, the store's and the program's harnesses
 # work in temp folders of their own, the store's and the program's on real folders with extended attributes (macOS)
 names_suite = names
@@ -319,7 +320,6 @@ layout_suite = layout
 manifest_suite = manifest
 store_suite = store
 program_suite = program
-skips = COMMIT_SKIP=30-live-stand-in.json,31-live-actor-cause.json
 
 # per library: test-c-<lib> against its harness, test-check-<lib> against its harness-check,
 # test-leaks-<lib> its harness under leaks
