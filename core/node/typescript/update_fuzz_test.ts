@@ -7,7 +7,7 @@ import { assert, assertEquals, assertStrictEquals, assertThrows } from "@std/ass
 import apply, { ApplyError, type Patch } from "@ermine/op/apply"
 import createEntry, { type ChangeHeader, type Entry } from "./entry.ts"
 import update from "./update.ts"
-import { differ, patch, rand, show, snap, start } from "../../fuzz/gen.ts"
+import { differ, patch, rand, show, snap, start } from "../../fuzz/gen_harness.ts"
 
 const SEEDS = 40
 const STEPS = 30
@@ -76,7 +76,7 @@ Deno.test(`update fuzz: ${SEEDS} seeds × ${STEPS} updates, every change kept wa
 			else assertEquals(op!.patches, ps, at)
 			// the value the patches make, the one before as it was
 			const want = apply(before, ps)
-			assertEquals(differ(n.value, want, true), "", `${at}: ${show(ps)}`)
+			assertEquals(differ(n.value, want), "", `${at}: ${show(ps)}`)
 			assertEquals("value" in n, want !== undefined, at)
 			assertEquals(differ(before, beforeWas, true), "", `${at}: the value before changed`)
 			assertEquals(
@@ -126,7 +126,7 @@ Deno.test(`update fuzz: ${SEEDS} seeds, one update of many patches, as one updat
 			undos.push(each.change.op!.undo as Patch[])
 		}
 		const at = `seed ${seed}: ${show(first)}\n${show(ps)}`
-		assertEquals(differ(all.value, each.value, true), "", at)
+		assertEquals(differ(all.value, each.value), "", at)
 		assertEquals("value" in all, "value" in each, at)
 		// the one change's undo and the many, last first, take it to the same place
 		let back = each.value

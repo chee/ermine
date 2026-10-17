@@ -7,6 +7,8 @@
 // - the same rounds on a twin entry made in place, with copies of the patches' values: the same
 //   codes and indexes, a refused round leaving its value as it was (by content), a done one the
 //   same value and the same undo;
+// - every string in the value (and the undo's) is WTF-8 as op holds it: a lone high never right
+//   before a lone low (fz_wtf8);
 // - at the end, nd_free_entry lets go of everything: no patch's value is held past the caller (and the
 //   leak checker sees nothing left).
 #include "update.h"
@@ -98,6 +100,7 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 		} else {
 			const ch_header *n = &entry->change;
 			if (!same(entry->value, expect)) die("the value is not op_apply's", round);
+			if (!fz_wtf8(entry->value)) die("a string not WTF-8", round);
 			if (n->time != h.time || n->actor != h.actor || n->reader != h.reader || n->external != h.external ||
 				n->external_length != h.external_length || n->metadata != h.metadata ||
 				n->metadata_length != h.metadata_length) die("the change is not the header given", round);
@@ -108,6 +111,7 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 			if (op_apply(entry->value, n->undo, n->undo_length, NULL, &back, NULL) != OP_OK)
 				die("the undo is refused", round);
 			if (!same(back, was)) die("the undo does not give the value back", round);
+			if (!fz_wtf8(back)) die("undone, a string not WTF-8", round);
 			op_free(back);
 			// what the change referred to before is the caller's again
 			if (landed) fz_patches_free(&ps[now]);
@@ -125,6 +129,7 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 			free_copies(mine);
 		} else {
 			if (!same(twin->value, entry->value)) die("the twin: another value", round);
+			if (!fz_wtf8(twin->value)) die("the twin: a string not WTF-8", round);
 			if (!same_undo(twin->change.undo, twin->change.undo_length, entry->change.undo, entry->change.undo_length))
 				die("the twin: another undo", round);
 			if (clanded) free_copies(&cs[cnow]);

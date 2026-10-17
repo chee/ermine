@@ -9,8 +9,8 @@
 // told: places.watchAll, every fact (a table event's whole value, a write's patches) on the node.
 //
 // checked after every step, on every host:
-// (a) the patches told, applied in order from nothing, are each table's value (exactly: key order,
-//     -0)
+// (a) the patches told, applied in order from nothing, are each table's value (exactly: -0; maps
+//     by content)
 // (b) the history computed fresh (replay of the first head; with a rule and several heads, its
 //     merge) is each kept table's value, or under a drag, what the "ephemeral" table says is under
 // (c) hosts with the same stored history and no drag show the same tables and conflicts
@@ -40,6 +40,14 @@ const DOC = "ermine://" + "ab".repeat(32)
 const DOC_BYTES = new Uint8Array(32).fill(0xab)
 const TIME = 1_760_000_000
 const KEPT = ["value", "attributes", "children"] as const
+// a new kind of table: with comments on, h1 keeps it too and the other hosts are older ones that
+// don't know it (they keep the commits, but not the table)
+declare module "@ermine/table" {
+	interface Tables {
+		comments: Record<string, unknown>
+	}
+}
+const NEW: readonly Key[] = [...KEPT, "comments"]
 const MERGES: Merges = { "eg-walker": egwalker }
 type Rule = "eg-walker" | undefined
 
@@ -58,11 +66,10 @@ function rng(seed: number) {
 type R = ReturnType<typeof rng>
 const pick = <T>(r: R, xs: readonly T[]): T => xs[r(xs.length)]
 
-// ---- values exactly: key order, -0, typed arrays
+// ---- values exactly: -0, typed arrays; maps by content (a map's key order is not part of its
+// value: op's apply.ts; what crosses a commit, canonical CBOR, has its keys in canonical order)
 
-// ordered false: a map's keys compared as a set (what crosses a commit, canonical CBOR, has its
-// keys in canonical order)
-function exact(a: unknown, b: unknown, ordered = true, at = "$"): string | undefined {
+function exact(a: unknown, b: unknown, at = "$"): string | undefined {
 	if (Object.is(a, b)) return
 	if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) {
 		return `${at}: ${show(a)} ≠ ${show(b)}`
@@ -79,18 +86,16 @@ function exact(a: unknown, b: unknown, ordered = true, at = "$"): string | undef
 		const y = b as unknown[]
 		if (a.length !== y.length) return `${at}: ${show(a)} ≠ ${show(b)}`
 		for (let i = 0; i < a.length; i++) {
-			const d = exact(a[i], y[i], ordered, `${at}[${i}]`)
+			const d = exact(a[i], y[i], `${at}[${i}]`)
 			if (d) return d
 		}
 		return
 	}
 	const ka = Object.keys(a), kb = Object.keys(b)
-	const same = ordered
-		? ka.join("\0") === kb.join("\0")
-		: ka.length === kb.length && ka.every((k) => Object.hasOwn(b, k))
+	const same = ka.length === kb.length && ka.every((k) => Object.hasOwn(b, k))
 	if (!same) return `${at}: keys ${show(ka)} ≠ ${show(kb)}`
 	for (const k of ka) {
-		const d = exact((a as never)[k], (b as never)[k], ordered, `${at}.${k}`)
+		const d = exact((a as never)[k], (b as never)[k], `${at}.${k}`)
 		if (d) return d
 	}
 }
@@ -130,23 +135,47 @@ const CHARS = ["a", "b", "c", "d", "é", "😀"]
 const LEAVES = [0, 1, -0, 2.5, "x", "", true, false, null, "😀"]
 const KEYS = ["a", "b", "c", "d"]
 
-const text = (r: R) => Array.from({ length: r(5) }, () => pick(r, CHARS)).join("")
-function gen(r: R, depth = 0): unknown {
+// the strings a run draws text, leaves and map keys from. plain: the batches above and the
+// findings, as they were found. wide: also a skin-toned emoji (two code points, so a range can
+// split it) and NUL. lone: also lone surrogates, a high and a low, which a ranged edit can bring
+// together into a pair
+type Strings = {
+	name: string
+	chars: readonly string[]
+	leaves: readonly unknown[]
+	keys: readonly string[]
+}
+const PLAIN: Strings = { name: "plain", chars: CHARS, leaves: LEAVES, keys: KEYS }
+const WIDE: Strings = {
+	name: "wide",
+	chars: [...CHARS, "👍🏽", "\u0000"],
+	leaves: [...LEAVES, "👍🏽", "a\u0000b", "\u0000"],
+	keys: [...KEYS, "😀", "👍🏽", "\u0000", ""],
+}
+const LONE: Strings = {
+	name: "lone",
+	chars: [...WIDE.chars, "\uD83D", "\uDE00"],
+	leaves: [...WIDE.leaves, "\uD83D", "\uDE00", "x\uD83D"],
+	keys: [...WIDE.keys, "\uD83D", "\uDE00"],
+}
+
+const text = (r: R, s: Strings) => Array.from({ length: r(5) }, () => pick(r, s.chars)).join("")
+function gen(r: R, depth = 0, s: Strings = PLAIN): unknown {
 	switch (r(depth >= 2 ? 3 : 7)) {
 		case 0:
 		case 1:
-			return pick(r, LEAVES)
+			return pick(r, s.leaves)
 		case 2:
-			return text(r)
+			return text(r, s)
 		case 3:
 		case 4:
-			return Array.from({ length: r(4) }, () => gen(r, depth + 1))
+			return Array.from({ length: r(4) }, () => gen(r, depth + 1, s))
 		case 5:
 			return Int32Array.from({ length: r(4) }, () => r(9) - 4)
 		default: {
 			const out: Record<string, unknown> = {}
-			const keys = [...KEYS].sort(() => r(2) - 0.5).slice(0, r(4))
-			for (const k of keys) out[k] = gen(r, depth + 1)
+			const keys = [...s.keys].sort(() => r(2) - 0.5).slice(0, r(4))
+			for (const k of keys) out[k] = gen(r, depth + 1, s)
 			return out
 		}
 	}
@@ -172,14 +201,14 @@ const span = (r: R, n: number): [number, number] => {
 
 // one patch on v, for a table: value anything; attributes a map of small values; children a map
 // of names to ermine ids
-function patchOn(r: R, v: unknown, part: Key): Patch {
+function patchOn(r: R, v: unknown, part: Key, s: Strings = PLAIN): Patch {
 	const child = () => "ermine://" + pick(r, ["01", "02", "03"]).repeat(32)
-	const small = () => pick(r, LEAVES)
+	const small = () => pick(r, s.leaves)
 	if (part !== "value") {
 		const make = part === "children" ? child : small
 		if (!isMap(v) || r(12) === 0) {
 			const out: Record<string, unknown> = {}
-			for (const k of [...KEYS].sort(() => r(2) - 0.5).slice(0, r(4))) out[k] = make()
+			for (const k of [...s.keys].sort(() => r(2) - 0.5).slice(0, r(4))) out[k] = make()
 			return { path: [], value: out }
 		}
 		const have = Object.keys(v)
@@ -188,21 +217,21 @@ function patchOn(r: R, v: unknown, part: Key): Patch {
 				if (have.length) return { path: [pick(r, have)] }
 				break
 			case 1:
-				if (have.length) return { path: [pick(r, KEYS)], move: { path: [pick(r, have)] } }
+				if (have.length) return { path: [pick(r, s.keys)], move: { path: [pick(r, have)] } }
 		}
-		return { path: [pick(r, KEYS)], value: make() }
+		return { path: [pick(r, s.keys)], value: make() }
 	}
-	if (v === undefined || r(20) === 0) return { path: [], value: gen(r) }
+	if (v === undefined || r(20) === 0) return { path: [], value: gen(r, 0, s) }
 	const all = spots(v)
 	const { path, v: at } = pick(r, all)
 	if (typeof at === "string" || ArrayBuffer.isView(at) || Array.isArray(at)) {
 		const n = lengthOf(at), range = span(r, n)
 		const fill = () =>
 			typeof at === "string"
-				? text(r)
+				? text(r, s)
 				: ArrayBuffer.isView(at)
 				? Int32Array.from({ length: r(3) }, () => r(9) - 4)
-				: Array.from({ length: r(3) }, () => gen(r, 2))
+				: Array.from({ length: r(3) }, () => gen(r, 2, s))
 		switch (r(6)) {
 			case 0:
 				return { path, range }
@@ -210,7 +239,7 @@ function patchOn(r: R, v: unknown, part: Key): Patch {
 				if (Array.isArray(at) && n > 0) return { path: [...path, r(n)] }
 				break
 			case 2:
-				if (Array.isArray(at) && n > 0) return { path: [...path, r(n)], value: gen(r, 2) }
+				if (Array.isArray(at) && n > 0) return { path: [...path, r(n)], value: gen(r, 2, s) }
 				break
 			case 3: {
 				// a range moved within the same sequence
@@ -231,23 +260,29 @@ function patchOn(r: R, v: unknown, part: Key): Patch {
 				if (!have.length) break
 				const maps = all.filter((s) => isMap(s.v))
 				const to = pick(r, maps).path
-				return { path: [...to, pick(r, KEYS)], move: { path: [...path, pick(r, have)] } }
+				return { path: [...to, pick(r, s.keys)], move: { path: [...path, pick(r, have)] } }
 			}
 		}
-		return { path: [...path, pick(r, KEYS)], value: gen(r, path.length + 1) }
+		return { path: [...path, pick(r, s.keys)], value: gen(r, path.length + 1, s) }
 	}
-	return { path, value: gen(r, path.length) }
+	return { path, value: gen(r, path.length, s) }
 }
 
 // one or two patches that apply to v; none found: undefined
-function patchesOn(r: R, v: unknown, part: Key, two = true): Patch[] | undefined {
+function patchesOn(
+	r: R,
+	v: unknown,
+	part: Key,
+	two = true,
+	s: Strings = PLAIN,
+): Patch[] | undefined {
 	for (let tries = 0; tries < 12; tries++) {
 		const out: Patch[] = []
 		let now = v
 		const n = r(4) === 0 && two ? 2 : 1
 		try {
 			for (let i = 0; i < n; i++) {
-				const p = patchOn(r, now, part)
+				const p = patchOn(r, now, part, s)
 				now = apply(now, [structuredClone(p)])
 				out.push(p)
 			}
@@ -273,11 +308,21 @@ type Host = {
 	// a told patch that did not apply to what was told before
 	broken?: string
 	held: boolean
+	// the tables it keeps, and its storage (a host is made again on it)
+	kept: readonly Key[]
+	storage: sd.MemoryStorage
 	write(part: Key, patches: Patch[]): void
 	close(): Promise<void>
 }
 
-async function makeHost(n: number, rule: Rule, seed: number, signer: Signer): Promise<Host> {
+async function makeHost(
+	n: number,
+	rule: Rule,
+	seed: number,
+	signer: Signer,
+	kept: readonly Key[] = KEPT,
+	storage = new sd.MemoryStorage(),
+): Promise<Host> {
 	const r = rng(seed * 7919 + n + 1)
 	const scheduler = createScheduler()
 	const table = createTable((part, id) => {
@@ -285,11 +330,21 @@ async function makeHost(n: number, rule: Rule, seed: number, signer: Signer): Pr
 		sync.tableChanged(part, id)
 	})
 	const places = createPlaces({ root: "R", table, paths: createPaths(), scheduler })
-	const h = { n, name: `h${n}`, table, model: new Map(), held: false, told: 0 } as unknown as Host
+	const h = {
+		n,
+		name: `h${n}`,
+		table,
+		model: new Map(),
+		held: false,
+		told: 0,
+		kept,
+		storage,
+	} as unknown as Host
 	const sync = createSync({
 		table,
 		signer,
-		storage: new sd.MemoryStorage() as unknown as sd.SedimentreeStorage,
+		storage: storage as unknown as sd.SedimentreeStorage,
+		tables: kept,
 		random: (k) => Uint8Array.from({ length: k }, () => r(256)),
 		commit: (changed) => places.commit(changed),
 		ephemeral: (_doc, part) => h.held && part === "value",
@@ -338,12 +393,12 @@ const settled = async (hs: Host[]) => {
 }
 
 // what the fuzz checks exactly; a check left out is a bug found already, which has a test of its
-// own (below). order: a map's key order across hosts and fresh; conflicts: the conflicts table's
-// "tables" (in which tables each head differs) across hosts
+// own (below). conflicts: the conflicts table's "tables" (in which tables each head differs)
+// across hosts
 // alias: writes of two patches to attributes and children (entries places keeps cow: false)
-type Strict = { order: boolean; conflicts: boolean; alias: boolean }
-const STRICT: Strict = { order: true, conflicts: true, alias: true }
-const LOOSE: Strict = { order: false, conflicts: false, alias: false }
+type Strict = { conflicts: boolean; alias: boolean }
+const STRICT: Strict = { conflicts: true, alias: true }
+const LOOSE: Strict = { conflicts: false, alias: false }
 
 // what a host's table shows at p; the conflicts but their tables, unless strict
 function shown(h: Host, p: Key, strict: Strict): unknown {
@@ -398,14 +453,20 @@ type Failure = { check: string; at: number; message: string }
 type Stats = Record<string, number>
 type Outcome = { failure?: Failure; log: string[]; stats: Stats }
 
-function script(seed: number, length: number): { hosts: number; rule: Rule; steps: Step[] } {
+const PARTS: readonly Key[] = ["value", "value", "value", "value", "attributes", "children"]
+const WITH_COMMENTS: readonly Key[] = [...PARTS, "comments", "comments", "comments", "comments"]
+function script(
+	seed: number,
+	length: number,
+	parts = PARTS,
+): { hosts: number; rule: Rule; steps: Step[] } {
 	const r = rng(seed)
 	const hosts = 2 + r(3)
 	const rule: Rule = seed % 2 === 0 ? "eg-walker" : undefined
 	const steps: Step[] = []
 	for (let i = 0; i < length; i++) {
 		const h = r(hosts), x = r(100)
-		const part: Key = pick(r, ["value", "value", "value", "value", "attributes", "children"])
+		const part: Key = pick(r, parts)
 		steps.push(
 			x < 36
 				? { k: "edit", h, part, r: r.next() }
@@ -437,6 +498,8 @@ async function run(
 	rule: Rule,
 	steps: readonly Step[],
 	strict: Strict,
+	strings: Strings = PLAIN,
+	comments = false,
 ): Promise<Outcome> {
 	const log: string[] = []
 	const stats: Stats = { heads: 0, conflicted: 0, told: 0 }
@@ -448,7 +511,11 @@ async function run(
 	const bySigner = new Map(signers.map((s) => [hex(s.key), s]))
 	const hosts: Host[] = []
 	const extra: Host[] = []
-	for (let n = 0; n < hostCount; n++) hosts.push(await makeHost(n, rule, seed, signers[n]))
+	for (let n = 0; n < hostCount; n++) {
+		hosts.push(await makeHost(n, rule, seed, signers[n], comments && n === 1 ? NEW : KEPT))
+	}
+	// the tables both keep
+	const both = (a: Host, b: Host) => a.kept.filter((p) => b.kept.includes(p))
 
 	// the network: every commit any host made, by name; each host's inbox (names not yet handed to
 	// it) and what it was handed
@@ -499,7 +566,7 @@ async function run(
 	const kind = (check: string, message: string, at: number): Failure => ({ check, at, message })
 
 	function describe(h: Host): string {
-		const t = KEPT.map((p) => `${p}=${show(h.table.get(p, DOC)?.value)}`).join(" ")
+		const t = h.kept.map((p) => `${p}=${show(h.table.get(p, DOC)?.value)}`).join(" ")
 		return `${h.name}: ${t}`
 	}
 
@@ -516,8 +583,8 @@ async function run(
 			}
 			const f = fresh(h, rule)
 			const over = overlaid(h)
-			for (const p of KEPT) {
-				const d = exact(f[p]?.value, storedAt(h, p), strict.order)
+			for (const p of h.kept) {
+				const d = exact(f[p]?.value, storedAt(h, p))
 				if (d) {
 					return kind(
 						"b",
@@ -535,12 +602,8 @@ async function run(
 		}
 		for (const g of groups.values()) {
 			for (const h of g.slice(1)) {
-				for (const p of [...KEPT, "conflicts"] as Key[]) {
-					const d = exact(
-						shown(g[0], p, strict),
-						shown(h, p, strict),
-						strict.order,
-					)
+				for (const p of [...both(g[0], h), "conflicts"] as Key[]) {
+					const d = exact(shown(g[0], p, strict), shown(h, p, strict))
 					if (d) {
 						return kind(
 							"c",
@@ -553,23 +616,25 @@ async function run(
 		}
 	}
 
-	// a fresh host fed what h has, in the order given: where h is
-	async function freshHost(h: Host, names: string[], at: number): Promise<Failure | undefined> {
-		const f = await makeHost(
-			90 + extra.length,
-			rule,
-			seed,
-			await createSigner(new Uint8Array(32).fill(99)),
-		)
-		extra.push(f)
-		for (const n of names) await hand(f, n)
-		await settled([f])
-		for (const p of KEPT) {
-			const d = exact(f.table.get(p, DOC)?.value, storedAt(h, p), strict.order)
+	// what a host that keeps p should show for h: what h shows, or for a table h doesn't keep, its
+	// history replayed
+	const want = (h: Host, p: Key) =>
+		h.kept.includes(p) ? storedAt(h, p) : fresh(h, rule)[p as string]?.value
+	// does f, a host made fresh, show what h does: each table f keeps (all, with comments on)
+	function agrees(
+		f: Host,
+		h: Host,
+		wants: Map<Key, unknown>,
+		check: string,
+		how: string,
+		at: number,
+	): Failure | undefined {
+		for (const p of f.kept) {
+			const d = exact(f.table.get(p, DOC)?.value, wants.get(p))
 			if (d) {
 				return kind(
-					"b-host",
-					`a fresh host fed ${h.name}'s ${names.length} commits: ${p} ${d} (fresh ≠ ${h.name}); ` +
+					check,
+					`${how}: ${p} ${d} (fresh ≠ ${h.name}); ` +
 						`it took ${f.device.history(DOC).all().length}, waiting ${
 							show(f.device.history(DOC).waiting().map((w) => labelOf(w.name)))
 						}, refused ${
@@ -584,18 +649,77 @@ async function run(
 			}
 		}
 	}
+	const wantsOf = (h: Host) =>
+		new Map((comments ? NEW : KEPT).map((p) => [p, want(h, p)] as const))
 
+	// a fresh host fed what h has, in the order given: where h is
+	async function freshHost(h: Host, names: string[], at: number): Promise<Failure | undefined> {
+		const f = await makeHost(
+			90 + extra.length,
+			rule,
+			seed,
+			await createSigner(new Uint8Array(32).fill(99)),
+			comments ? NEW : KEPT,
+		)
+		extra.push(f)
+		for (const n of names) await hand(f, n)
+		await settled([f])
+		return agrees(
+			f,
+			h,
+			wantsOf(h),
+			"b-host",
+			`a fresh host fed ${h.name}'s ${names.length} commits`,
+			at,
+		)
+	}
+
+	// with comments on, the end: each older host closed and a new kind of host (keeping comments)
+	// made on its storage, so it takes in what the older host stored, fragments and their
+	// snapshots included: where the older host was, and the comments its history says
+	async function fromStorage(at: number): Promise<Failure | undefined> {
+		for (const h of hosts) {
+			if (h.kept.includes("comments")) continue
+			const wants = wantsOf(h), fragments = h.device.fragments(DOC).length
+			await h.close()
+			const f = await makeHost(
+				80 + h.n,
+				rule,
+				seed,
+				await createSigner(new Uint8Array(32).fill(98)),
+				NEW,
+				h.storage,
+			)
+			extra.push(f)
+			await settled([f])
+			const failed = agrees(
+				f,
+				h,
+				wants,
+				"b-storage",
+				`a host keeping comments made on ${h.name}'s storage (${fragments} fragments)`,
+				at,
+			)
+			if (failed) return failed
+		}
+	}
+
+	// the write a step is making, logged if it throws
+	let doing: string | undefined
 	async function step(s: Step, at: number): Promise<string | undefined> {
 		const h = "h" in s ? hosts[s.h] : undefined
 		switch (s.k) {
 			case "edit": {
+				// an older host has no comments to write
+				if (!h!.kept.includes(s.part)) return
 				const v = h!.table.get(s.part, DOC)?.value
-				const ps = patchesOn(rng(s.r), v, s.part, strict.alias || s.part === "value")
+				const ps = patchesOn(rng(s.r), v, s.part, strict.alias || s.part === "value", strings)
 				if (!ps) return
-				h!.write(s.part, ps)
-				return `${h!.name} writes ${s.part}${h!.held ? " (dragging)" : ""} ${
+				doing = `${h!.name} writes ${s.part}${h!.held ? " (dragging)" : ""} ${
 					ps.map(showPatch).join(" ")
 				}`
+				h!.write(s.part, ps)
+				return doing
 			}
 			case "deliver": {
 				const can = inbox[h!.n].filter((n) => open(h!.n, n))
@@ -631,11 +755,12 @@ async function run(
 				return `${h!.name} removes ${s.part}`
 			case "drag": {
 				const v = h!.table.get("value", DOC)?.value
-				const ps = patchesOn(rng(s.r), v, "value")
+				const ps = patchesOn(rng(s.r), v, "value", true, strings)
 				if (!ps) return
 				h!.held = true
+				doing = `${h!.name} drags value ${ps.map(showPatch).join(" ")}`
 				h!.write("value", ps)
-				return `${h!.name} drags value ${ps.map(showPatch).join(" ")}`
+				return doing
 			}
 			case "drop": {
 				if (!h!.held) return
@@ -655,9 +780,10 @@ async function run(
 	function drop(h: Host, r: number) {
 		h.held = false
 		const v = h.table.get("value", DOC)?.value
-		const ps = patchesOn(rng(r), v, "value") ?? [{ path: [], value: "dropped" }]
+		const ps = patchesOn(rng(r), v, "value", true, strings) ?? [{ path: [], value: "dropped" }]
+		doing = `${h.name} drops: value ${ps.map(showPatch).join(" ")}`
 		h.write("value", ps)
-		return `${h.name} drops: value ${ps.map(showPatch).join(" ")}`
+		return doing
 	}
 
 	try {
@@ -681,10 +807,12 @@ async function run(
 		}
 		for (let i = 0; i < steps.length; i++) {
 			let said: string | undefined
+			doing = undefined
 			try {
 				said = await step(steps[i], i)
 				await settled(hosts)
 			} catch (e) {
+				if (said === undefined && doing !== undefined) log.push(`${i}: ${doing}, which threw`)
 				if (e && typeof e === "object" && "check" in e) {
 					return { failure: e as Failure, log, stats }
 				}
@@ -752,8 +880,8 @@ async function run(
 			}
 		}
 		for (const h of hosts.slice(1)) {
-			for (const p of [...KEPT, "conflicts"] as Key[]) {
-				const d = exact(shown(hosts[0], p, strict), shown(h, p, strict), strict.order)
+			for (const p of [...both(hosts[0], h), "conflicts"] as Key[]) {
+				const d = exact(shown(hosts[0], p, strict), shown(h, p, strict))
 				if (d) {
 					return {
 						failure: kind("c", `h0 and ${h.name} differ at ${p}: ${d}`, end),
@@ -764,7 +892,8 @@ async function run(
 			}
 		}
 		const names = [...sent.keys()].sort(() => rng(seed).next() % 2 - 0.5)
-		const failed = await freshHost(hosts[0], names, end)
+		const failed = await freshHost(hosts[0], names, end) ??
+			(comments ? await fromStorage(end) : undefined)
 		if (failed) return { failure: failed, log, stats }
 		stats.told = hosts.reduce((a, h) => a + h.told, 0)
 		return { log, stats }
@@ -783,9 +912,11 @@ async function shrink(
 	steps: Step[],
 	check: string,
 	strict: Strict,
+	strings: Strings,
+	comments: boolean,
 ): Promise<{ steps: Step[]; outcome: Outcome }> {
 	let best = steps
-	let outcome = await run(seed, hosts, rule, best, strict)
+	let outcome = await run(seed, hosts, rule, best, strict, strings, comments)
 	// steps after the failing one never ran
 	if (outcome.failure && outcome.failure.at < best.length) {
 		best = best.slice(0, outcome.failure.at + 1)
@@ -793,26 +924,43 @@ async function shrink(
 	for (let size = Math.max(1, best.length >> 1); size >= 1; size = size >> 1) {
 		for (let i = 0; i < best.length;) {
 			const trial = [...best.slice(0, i), ...best.slice(i + size)]
-			const o = await run(seed, hosts, rule, trial, strict)
+			const o = await run(seed, hosts, rule, trial, strict, strings, comments)
 			if (o.failure?.check === check) {
 				best = o.failure.at < trial.length ? trial.slice(0, o.failure.at + 1) : trial
 				outcome = o
 			} else i += size
 		}
 	}
-	return { steps: best, outcome: await run(seed, hosts, rule, best, strict) }
+	return { steps: best, outcome: await run(seed, hosts, rule, best, strict, strings, comments) }
 }
 
 const LENGTH = 60
 
-async function fuzz(seed: number, strict: Strict = LOOSE, length = LENGTH) {
-	const { hosts, rule, steps } = script(seed, length)
-	const o = await run(seed, hosts, rule, steps, strict)
+async function fuzz(
+	seed: number,
+	strict: Strict = LOOSE,
+	length = LENGTH,
+	strings = PLAIN,
+	comments = false,
+) {
+	const { hosts, rule, steps } = script(seed, length, comments ? WITH_COMMENTS : PARTS)
+	const o = await run(seed, hosts, rule, steps, strict, strings, comments)
 	if (!o.failure) return
-	const { steps: small, outcome } = await shrink(seed, hosts, rule, steps, o.failure.check, strict)
+	const { steps: small, outcome } = await shrink(
+		seed,
+		hosts,
+		rule,
+		steps,
+		o.failure.check,
+		strict,
+		strings,
+		comments,
+	)
 	const f = outcome.failure ?? o.failure
 	const text = [
-		`seed ${seed}, ${hosts} hosts, merge ${rule ?? "none"}: check (${f.check}) broke`,
+		`seed ${seed}, ${hosts} hosts, merge ${rule ?? "none"}, ${strings.name} strings${
+			comments ? ", h1 keeps comments" : ""
+		}: check (${f.check}) broke`,
 		`  ${f.message}`,
 		`shrunk to ${small.length} of ${steps.length} steps: ${JSON.stringify(small)}`,
 		...outcome.log.map((l) => "  " + l),
@@ -839,6 +987,26 @@ Deno.test({
 	},
 })
 
+// fewer seeds: each of these has the batches above under it
+const FEW = Array.from({ length: 8 }, (_, i) => i + 1)
+
+Deno.test({
+	name: "sync fuzz: emoji, a skin tone and NUL in text, leaves and map keys (both rules)",
+	...opts,
+	async fn() {
+		for (const s of FEW) await fuzz(s, LOOSE, LENGTH, WIDE)
+	},
+})
+
+Deno.test({
+	name:
+		"sync fuzz: a new kind of table (comments) on h1, older hosts, and new hosts on their storage",
+	...opts,
+	async fn() {
+		for (const s of FEW) await fuzz(s, LOOSE, LENGTH, PLAIN, true)
+	},
+})
+
 // ---- findings: each the shrunk run of a seed that broke a check, kept as it broke. ignored until
 // the bug is fixed; then they pass, and the check they name goes back into the batches above
 
@@ -849,24 +1017,16 @@ async function again(
 	rule: Rule,
 	steps: Step[],
 	strict: Strict,
+	strings: Strings = PLAIN,
+	comments = false,
 ): Promise<void> {
-	const o = await run(seed, hosts, rule, steps, strict)
+	const o = await run(seed, hosts, rule, steps, strict, strings, comments)
 	if (!o.failure) return
 	throw new Error(
 		[`check (${o.failure.check}) at step ${o.failure.at}: ${o.failure.message}`, ...o.log]
 			.join("\n"),
 	)
 }
-
-// BUG: a map's key order does not cross a commit. commits are canonical CBOR, so every other host,
-// and a replay, has the keys in canonical order, while the writer keeps them as written: (b) and
-// (c) break on the root itself ({t,l,m} written, {l,m,t} everywhere else)
-Deno.test({
-	name: "sync fuzz FINDING: key order is lost across a commit (seed 1)",
-	ignore: true,
-	...opts,
-	fn: () => again(1, 3, undefined, [], { ...LOOSE, order: true }),
-})
 
 // BUG: the conflicts table goes stale on a write. a host's own write while it has several heads
 // (no rule) extends the head shown but does not work its conflicts out again (send calls later()
@@ -940,4 +1100,17 @@ Deno.test({
 			{ k: "drop", h: 2, r: 500226752 },
 			{ k: "drag", h: 2, r: 426248192 },
 		], LOOSE),
+})
+
+// BUG or open (ENCODING.tex: a string with a lone surrogate has no encoding): a write whose patch
+// carries a lone surrogate. the table has it and readers were told, then sync.wrote's commit encode
+// throws cannot-carry (patches) out into the host's write: no commit, the other hosts never hear of
+// it, and the host's value is no longer its history's. every seed of the lone pool breaks on its
+// first such write (23 of 24)
+Deno.test({
+	name: "sync fuzz FINDING: a write holding a lone surrogate throws out of sync.wrote (seed 3)",
+	ignore: true,
+	...opts,
+	fn: () =>
+		again(3, 3, undefined, [{ k: "edit", h: 0, part: "value", r: 496663173 }], LOOSE, LONE),
 })

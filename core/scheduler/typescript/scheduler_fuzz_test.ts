@@ -16,7 +16,7 @@ import { assert, assertEquals } from "@std/assert"
 import { type Computer, createScheduler, type Run, type Scope } from "./scheduler.ts"
 import { type Told, trace } from "./trace.ts"
 import type { Link, Node } from "./tracker.ts"
-import { rand } from "../../fuzz/gen.ts"
+import { rand } from "../../fuzz/gen_harness.ts"
 
 // how many are under o
 const under = (o: Scope) => {
@@ -27,7 +27,12 @@ const under = (o: Scope) => {
 
 const SEEDS = 40
 const STEPS = 15
-const HOST = ["h0", "h1", "h2", "h3", "h4"]
+// keys: lone halves, apart and (the next) as the pair they make, NUL, a pair and a modifier
+const HOST = ["h0", "\uD83D", "\uDE00", "😀", "h\u0000", "👍🏽"]
+// what text gives: ASCII, BMP, pairs, lone halves, NUL; two halves joined are the pair before
+const TEXTS = ["", "a", "é", "中", "😀", "👍🏽", "\uD83D", "\uDE00", "\u0000", "\uD83D\uDE00"]
+// a name's end, as keys
+const ENDS = ["", "é", "\uD83D", "\uDE00", "\u0000"]
 
 type R = ReturnType<typeof rand>
 type Expr =
@@ -37,26 +42,39 @@ type Expr =
 	| { mod: [Expr, number] }
 	| { if: [Expr, Expr, Expr] }
 	| { fail: [Expr, number] }
+	| { text: [Expr, Expr] }
+	| { len: Expr }
 
 class Fail extends Error {}
 
-// over keys whose values come from look; numbers only, nothing there is 0
-function evaluate(e: Expr, look: (key: string) => unknown): number {
-	const num = (v: unknown) => typeof v === "number" ? v : 0
-	if ("read" in e) return num(look(e.read))
-	if ("lit" in e) return e.lit
-	if ("sum" in e) return e.sum.reduce((n, x) => n + evaluate(x, look), 0)
-	if ("mod" in e) return evaluate(e.mod[0], look) % e.mod[1]
-	if ("if" in e) {
-		return evaluate(e.if[0], look) % 2 === 0 ? evaluate(e.if[1], look) : evaluate(e.if[2], look)
+type Value = number | string
+// a string as a number: its length in code points
+const num = (v: unknown) => typeof v === "number" ? v : typeof v === "string" ? [...v].length : 0
+// over keys whose values come from look; nothing there is 0
+function evaluate(e: Expr, look: (key: string) => unknown): Value {
+	const n = (x: Expr) => num(evaluate(x, look))
+	if ("read" in e) {
+		const v = look(e.read)
+		return typeof v === "string" ? v : num(v)
 	}
+	if ("lit" in e) return e.lit
+	if ("sum" in e) return e.sum.reduce((a: number, x) => a + n(x), 0)
+	if ("mod" in e) return n(e.mod[0]) % e.mod[1]
+	if ("if" in e) return n(e.if[0]) % 2 === 0 ? evaluate(e.if[1], look) : evaluate(e.if[2], look)
+	if ("text" in e) return TEXTS[n(e.text[0]) % TEXTS.length] + TEXTS[n(e.text[1]) % TEXTS.length]
+	if ("len" in e) return n(e.len)
 	const v = evaluate(e.fail[0], look)
-	if (v === e.fail[1]) throw new Fail(`fails at ${v}`)
+	if (num(v) === e.fail[1]) throw new Fail(`fails at ${v}`)
 	return v
 }
 
 function expr(r: R, keys: string[], depth: number): Expr {
-	const k = r.pick(depth > 0 ? 12 : 3)
+	const k = r.pick(depth > 0 ? 15 : 3)
+	if (k >= 13) {
+		return k === 13
+			? { text: [expr(r, keys, depth - 1), expr(r, keys, depth - 1)] }
+			: { len: expr(r, keys, depth - 1) }
+	}
 	if (k < 2) return { read: r.one(keys) }
 	if (k < 3) return r.pick(3) ? { read: r.one(keys) } : { lit: r.pick(4) }
 	if (k < 6) return { sum: Array.from({ length: 2 + r.pick(2) }, () => expr(r, keys, depth - 1)) }
@@ -76,7 +94,7 @@ type Made = {
 	// its runs: the one going on or last, and the one before
 	run?: { tick: number; reads: Set<string>; ended?: string }
 	// an effect's: the value acted on last
-	acted?: { value: number }
+	acted?: { value: Value }
 }
 
 // the readers' list of a key node, both ways; each link's from holds it once in its reads
@@ -125,7 +143,7 @@ function seeded(seed: number, reach: Reach) {
 	// the tick of the latest mark
 	let tick = 0
 	s.onMark((_keys, _run, _due, t) => void (tick = t))
-	const store = new Map<string, number>()
+	const store = new Map<string, Value>()
 	// the tick each key was last said changed at
 	const changedAt = new Map<string, number>()
 	const changed = (keys: string[], by?: Computer) => {
@@ -142,14 +160,14 @@ function seeded(seed: number, reach: Reach) {
 
 	// what every compute and effect should come to: from scratch over the host's values; a
 	// disposed compute's value stays; one that fails keeps the value it had
-	let expected = new Map<string, number | undefined>()
+	let expected = new Map<string, Value | undefined>()
 	function model() {
-		const out = new Map<string, number | undefined>()
+		const out = new Map<string, Value | undefined>()
 		const look = (key: string): unknown => {
 			const m = made.find((x) => x.name === key)
 			if (m === undefined || !alive(m)) return store.get(key)
 			if (!out.has(key)) {
-				let v: number | undefined
+				let v: Value | undefined
 				try {
 					v = evaluate(m.e, look)
 				} catch (e) {
@@ -187,7 +205,7 @@ function seeded(seed: number, reach: Reach) {
 
 	let pulses = 0
 	function make(kind: "compute" | "effect") {
-		const name = `${kind[0]}${made.length}`
+		const name = `${kind[0]}${made.length}${r.one(ENDS)}`
 		// over the host's keys and the computes made before it
 		const keys = [...HOST, ...made.filter((m) => m.kind === "compute").map((m) => m.name)]
 		const e = expr(r, keys, 2 + r.pick(2))
@@ -201,7 +219,7 @@ function seeded(seed: number, reach: Reach) {
 			})
 		if (kind === "compute") {
 			m.c = s.runWithScope(o, () =>
-				s.createComputer(f, (v: number) => {
+				s.createComputer(f, (v: Value) => {
 					if (store.has(name) && Object.is(store.get(name), v)) {
 						problems.push(`${name}: set the value it had, ${v}`)
 					}
@@ -212,7 +230,7 @@ function seeded(seed: number, reach: Reach) {
 			m.c = s.runWithScope(
 				o,
 				() =>
-					s.createEffect(f, (v: number, previous: number | undefined) => {
+					s.createEffect(f, (v: Value, previous: Value | undefined) => {
 						const at = `pulse ${pulses}: ${name} acts on ${v}`
 						if (previous !== m.acted?.value) {
 							problems.push(`${at}: previous ${previous}, not ${m.acted?.value}`)
@@ -330,7 +348,7 @@ function seeded(seed: number, reach: Reach) {
 		if (k < 7) {
 			// the host writes a few keys, said changed in one call or one each
 			const keys = [...new Set(Array.from({ length: 1 + r.pick(3) }, () => r.one(HOST)))]
-			for (const key of keys) store.set(key, r.pick(6))
+			for (const key of keys) store.set(key, r.pick(4) ? r.pick(6) : r.one(TEXTS) + r.one(TEXTS))
 			if (r.pick(2)) changed(keys)
 			else for (const key of keys) changed([key])
 			pulse(`wrote ${keys}`)
@@ -374,7 +392,7 @@ Deno.test(`scheduler fuzz: ${SEEDS} seeds × ${STEPS} steps, against a model, th
 const LOOP_SEEDS = 40
 const LOOP_STEPS = 15
 const BOUND = 5000
-const KEYS = ["k0", "k1", "k2", "k3", "k4", "k5"]
+const KEYS = ["k0", "\uD83D", "\uDE00", "😀", "k\u0000", "中"]
 
 type Loops = { looping: number; stops: number; landed: number; made: number; runs: number }
 

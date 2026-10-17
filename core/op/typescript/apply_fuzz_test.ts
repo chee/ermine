@@ -5,7 +5,7 @@
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
 import apply, { ApplyError, type Patch } from "./apply.ts"
 import invert from "./invert.ts"
-import { batch, differ, rand, show, snap, start } from "../../fuzz/gen.ts"
+import { batch, differ, rand, show, snap, start } from "../../fuzz/gen_harness.ts"
 
 const SEEDS = 40
 
@@ -26,7 +26,7 @@ Deno.test(`apply fuzz: ${SEEDS} seeds, the undo option: after what was there, ba
 		assertStrictEquals(undo[0], mine, at)
 		assertEquals(mine, { path: ["mine"], value: { held: 1 } }, at)
 		const u = undo.slice(1)
-		assertEquals(show(u), show(invert(from, good)), `${at}: as invert's`)
+		assertEquals(differ(u, invert(from, good)), "", `${at}: as invert's`)
 		assertEquals(differ(from, was, true), "", `${at}: the value given changed`)
 		good.forEach((p, i) =>
 			assertEquals(differ(p.value, values[i], true), "", `${at}: patch ${i}`)
@@ -87,7 +87,7 @@ Deno.test(`apply fuzz: ${SEEDS} seeds, one call as one call each; each call's un
 			v = apply(v, [p], { undo })
 			undos.push(undo)
 		}
-		assertEquals(differ(v, end, true), "", `${at}: one call each`)
+		assertEquals(differ(v, end), "", `${at}: one call each`)
 		// the undos, last call's first, take the end back to each value before
 		let back = v
 		for (let i = good.length - 1; i >= 0; i--) {
@@ -112,7 +112,7 @@ Deno.test(`apply fuzz: ${SEEDS} seeds, a batch split anywhere: the two calls end
 			const u1: Patch[] = [], u2: Patch[] = []
 			apply(from, good.slice(0, k), { undo: u1 })
 			const two = apply(mid, good.slice(k), { undo: u2 })
-			assertEquals(differ(two, end, true), "", at)
+			assertEquals(differ(two, end), "", at)
 			// the second call's undo, then the first's
 			assert(differ(apply(apply(two, u2), u1), norm(from)) === "", at)
 		}
@@ -131,11 +131,11 @@ Deno.test(`apply fuzz: ${SEEDS} seeds, cow: false gives the same value and undo;
 		const want = apply(from, good, { undo: cow })
 		const { v, ps } = given()
 		const got = apply(v, ps, { undo: place, cow: false })
-		assertEquals(differ(got, want, true), "", `${at}: the value`)
-		assertEquals(differ(place, cow, true), "", `${at}: the undo`)
+		assertEquals(differ(got, want), "", `${at}: the value`)
+		assertEquals(differ(place, cow), "", `${at}: the undo`)
 		// no undo asked for
 		const again = given()
-		assertEquals(differ(apply(again.v, again.ps, { cow: false }), want, true), "", at)
+		assertEquals(differ(apply(again.v, again.ps, { cow: false }), want), "", at)
 		if (v !== null && typeof v === "object" && !ArrayBuffer.isView(v)) {
 			if (!good.some((p) => p.path.length === 0 || p.move?.path.length === 0)) {
 				assertStrictEquals(got, v, `${at}: the value given`)
