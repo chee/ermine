@@ -21,7 +21,7 @@
 // bytes) and the api, its stop then the library let go as the process stops. fails as load does,
 // or Error "no run in the library", or "run failed: <n>"
 //
-// mine, open: a string as UTF-8 and every output as bytes; the library's run as the runner's own
+// open: a string as UTF-8 and every output as bytes; the library's run as the runner's own
 import type { Handle, Loaded } from "./start.ts"
 
 export type Options = {

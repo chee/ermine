@@ -1,6 +1,6 @@
 // processes at paths: the rows of a root's running processes, a trie on the root's process part,
-// and the contributor that walks it. chee: "a process isn't in /work, it's at /work/clock"; "a
-// process exists in one place and has 1 path"
+// and the contributor that walks it. a process is not in /work, it is at /work/clock: one place,
+// one path
 //
 //   (process, R).value = { work: { clock: "proc:7f3a" }, dev: { clock: "proc:44d0" } }
 //

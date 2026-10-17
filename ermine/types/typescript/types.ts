@@ -1,41 +1,26 @@
-// utis.json, the well-known UTIs, is Markus Felten's (arlac77) list from his uti library (npm
-// uti@8.11.3) as JSON, with thanks; its licence (0BSD) is utis.LICENSE. EXTRA adds what it lacks
-//
-// types: UTIs as nodes in the graph. chee 10-15: "this is what i was trying to get at with UTI
-// because then there'd be a type, and the loader could say it knows how to take that type and
-// output the correct thing"; "the nice thing with UTI is conformance"; types are nodes: "for now we
-// can have the host install a /types or something in the root". the folder's name is not decided
-// ("/ermine.types or /ermine/types maybe"): TYPES says it, once
+// types: UTIs as nodes in the graph. a type is what a loader says it takes and gives; UTIs bring
+// conformance. the host installs the types folder (TYPES) in the root for now
 //
 //   installTypes(table, "R", header)        // R/ermine/types/public.text, ... (entries to commit)
 //   const types = typesAt(places, ["clocks"])                 // the nearest ermine/types
 //   conformance(places, types, "public.c-source")
 //   // { known: true, all: ["public.c-source", "public.source-code", "public.plain-text", ...] }
-//
-// the type of a node: typeOf(places, { id, at }), `at` the path it was reached by
 //   typeOf(places, { id: CAT, at: ["clocks", "catclock.c"] })           // "public.c-source"
-// its ermine.type attribute if it has one (a string); else the type whose fileNameExtension the
-// name it is placed under ends with, from the nearest ermine/types (the folder of the placement,
-// looked up as typesAt does); no extension, or no match: undefined. THE NAME BELONGS TO THE
-// PLACEMENT, NOT THE NODE: one node at notes/a.c and notes/a.txt has two types by name; an explicit
-// ermine.type is the same everywhere
-//   extensions compare case-insensitively, ASCII ("A.C" is a.c's type); an extension is the name's end
-//   from a ".", with a name before it (".c" alone is a name, no extension); the longest wins
-//   (".tar.gz" before ".gz", if both are claimed)
-//   two types claiming one extension: the first in the folder's order, which is places' member
-//   order (canonical key order of the names: shorter first, then bytewise), NOT the order the list
-//   was installed in, which the folder does not keep (mine, open: keeping it would take a field)
-// every read through places, so tracked: a computer reruns when a type is installed or its
-// fileNameExtension written, the attribute written, or the placement renamed (the name); a
-// type's mimeType written does not. the extensions are read only for a node with no ermine.type
 //
-// a type: a node named by its UTI in the types folder, its value { conformsTo, fileNameExtension,
-// mimeType }, each a list. conformance: a type, then what its conformsTo names, and theirs, each
-// once (a UTI conforms to itself). the folder: TYPES looked up from where the search is, nearest
-// first (lib's lookup), so a box carries its own (one boxed at ermine/types, or a folder of its own
-// there). the nearest folder only: a type not in it is unknown, never looked for farther up (mine,
-// open). every read through places, so tracked: a type installed, or its conformsTo written, reruns
-// a reader; its mimeType written does not
+// a type: a node named by its UTI in TYPES, its value { conformsTo, fileNameExtension, mimeType },
+// each a list. conformance: itself, then what its conformsTo names, and theirs, each once
+// the folder: TYPES looked up nearest first (lib's lookup), so a box carries its own. the nearest
+// only: a type not in it is unknown
+// typeOf(places, { id, at }): its ermine.type if a string, else by the extension of the name it is
+// placed under at `at` (the name belongs to the placement, not the node); else undefined
+//   extensions: ASCII case-insensitive; a name's end from a "." with a name before it (".c" alone:
+//   none); the longest wins; two types claiming one: the first in places' member order
+// every read through places, so tracked; a mimeType written reruns nothing
+// open: the folder's name (/ermine.types or /ermine/types); looking farther up than the nearest
+// folder; keeping the install order
+//
+// utis.json: the well-known UTIs, Markus Felten's (arlac77) uti library (npm uti@8.11.3), with
+// thanks; 0BSD (utis.LICENSE). EXTRA adds what it lacks
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import { asId, type Id, level, type Path, type Places } from "@ermine/places"

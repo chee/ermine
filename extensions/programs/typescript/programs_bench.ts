@@ -1,54 +1,18 @@
 // deno run extensions/programs/typescript/programs_bench.ts [name…]   (deno bench runs it too)
 // satisfy and openwith over a real table, paths, scheduler and places (root R, children alone, no
-// box), the well-known types installed at R/ermine/types; every loader a host function in one
-// folder W (R/work), the program or file there too, the search from ["work"]. each shape timed
-// outside any run, and inside a computer: one tracking a tick and then searching, rerun by the tick
-// marked and a pulse (what that costs alone: the "tick" row). medians of up to 21 rounds, CPU µs per
-// call (the process's user and system time: other work on the machine counts little; ms, s where
-// marked). reads: the places' reads one call tells the scheduler, then how many distinct keys.
-// names given: only the shapes whose name holds one of them
-//   depth n:   a chain of n compilers (t0 → t1 → … → tn, types unknown to ermine/types) then a
-//              runner: the first way only
-//   breadth k: k loaders each taking and giving JavaScript, and a runner: the first way, then all of
-//              them, counted. nearest, then shortest: the first way is the runner alone, though its
-//              name is last in key order (depth first, before 10-15, it was all k loaders, then the
-//              runner). all ways stop once one call passes ~2 s
-//   crowded m: depth 1, and m plain files on "/": the way's level answers, so "/" is never read
-//   openwith m: m openers (each JavaScript, run by the one host runner) opening public.text, the
-//              file public.c-source (c-source → source-code → plain-text → text): the first, all
+// box), the well-known types at R/ermine/types; every loader a host function in W (R/work), the
+// program or file there too, the search from ["work"]. each shape timed outside any run and inside
+// a computer rerun by a tick and a pulse (the tick alone: "tick"). medians of up to 21 rounds, CPU
+// µs per call. reads: places reads told the scheduler / distinct keys. names given: only the shapes
+// whose name holds one
+//   depth n:    n compilers (t0 → … → tn, types unknown) then a runner: the first way only
+//   breadth k:  k loaders taking and giving JavaScript, and a runner: the first way, then all,
+//               counted (stopped once one call passes ~2 s)
+//   crowded m:  depth 1, and m plain files on "/" (never read)
+//   openwith m: m openers of public.text, the file public.c-source: the first, all
 //
-// 2026-10-15, nearest, then shortest; one run (Apple A18 Pro, deno 2.9.7, load average ~60-200 from
-// other work). first, all: CPU µs per call (ms, s where marked); out: outside any run, in: in a
-// computer
-//
-//   shape         first out   first in      reads    all out     all in       ways  reads all
-//   tick                  -        0.7
-//   depth 1            17.8       18.2      30/24
-//   depth 4            50.3       31.5      48/42
-//   depth 16           83.2       94.7    120/114
-//   depth 64          460.7      469.3    408/402
-//   depth 256        4.81ms     4.68ms  1560/1554
-//   crowded 100        14.3       16.1      30/24
-//   breadth 2          12.9       14.1      27/24       15.0       19.2          5      32/29
-//   breadth 4          14.4       18.0      37/34       72.6       43.6         65      42/39
-//   breadth 6          18.2       23.5      47/44     1.78ms     1.66ms       1957      52/49
-//   breadth 8          23.2       21.3      57/54   105.88ms   106.82ms     109601      62/59
-//   breadth 10         27.3       26.3      67/64     11.2 s    stopped    9864101      72/69
-//   openwith 1         15.4       18.6      36/33       17.8       21.2          1      45/42
-//   openwith 10        24.3       31.2      54/51       44.5       63.7         10      99/87
-//   openwith 100      131.5      143.6    234/231      417.7      437.3        100    639/537
-//
-// what they say, against the depth-first order before (the same day, CPU µs, out, first way, both in
-// one process: old → new): depth 1 20.7 → 21.0, 4 38.1 → 33.8, 16 79.1 → 83.1, 64 556 → 387, 256
-// 5.25ms → 3.36ms; reads one more (29 → 30: the program's own type's conformance, looked at in round
-// 1). depth's first way still grows ~n² (each round walks the chain so far again), but steps through
-// what was taken, where the old search scanned every candidate again at each step. breadth's first
-// way is now the runner alone, at ~2 µs a loader looked at (k 10: 27.6 → 22.9), its reads the same;
-// all ways are every order of every subset of the loaders, ~e·k! of them, ~1 µs each now (k 8: 239 →
-// 93 ms), so all-ways still passes 2 s between k 8 and 10. crowded: "/" never read, its 100 files
-// cost nothing (shortest first alone, reading every level to rule out a 1-step way up there: 123 µs,
-// 235 reads). a level is read whole: openwith's first way reads every opener's loaders and takes in
-// the file's folder. tracking adds little: in and out are within the noise
+// 2026-10-15 (A18 Pro, deno 2.9.7, busy machine), first way, µs: depth 1 18, 16 83, 256 4810;
+// breadth 10 27 (all: 11.2 s, ~e·k! ways); crowded 100 14; openwith 100 132. in and out alike
 import createEntry from "@ermine/node/entry"
 import { createScheduler } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"

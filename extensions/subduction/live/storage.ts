@@ -1,40 +1,17 @@
-// A device's Subduction storage that outlives the device (SYNC.tex, Starting
-// again): Subduction's storage interface (SedimentreeStorage), over a
-// backend that keeps records by key, read whole when opened and written
-// through, so what Subduction reads comes from memory and what it saves is
-// kept before its save resolves. @automerge/subduction 0.23.0 ships only
-// MemoryStorage; the IndexedDB storage of its tree (sedimentree_wasm,
-// feature idb) is not in the npm build.
-//
-// A backend for Deno is deno/files.ts, one file per record; for the
-// browser, indexeddb.ts. The backends of experimental_layers/keep/typescript
-// have the same shape and serve as well.
-//
-// The records, each key a word, then "-" and hex:
+// storage: a device's Subduction storage (SedimentreeStorage) that outlives the device, over a
+// backend keeping records by key: read whole when opened, written through. @automerge/subduction
+// 0.23.0 ships only MemoryStorage. backends: deno/files.ts, indexeddb.ts (and
+// experimental_layers/keep's).
 //
 //   tree-<tree>                 a sedimentree's id, empty
-//   commit-<tree>-<commit id>   a loose commit: the CBOR map {signed, blob},
-//                               its signed envelope as Subduction encodes it,
-//                               and its blob
+//   commit-<tree>-<commit id>   CBOR map {signed, blob}: the signed envelope and its blob
 //   fragment-<tree>-<head>      a fragment, the same way
 //
-// Other keys are left to the host (deno/host.ts keeps its root's there).
-//
-// connect.ts gives this to a device's Subduction node; on start, what it
-// holds that the device does not is given to the device, which stores it
-// and takes it in, as on new heads.
-//
-// Writes are kept in order. What is written while the backend is writing
-// goes to it as one batch, after. Behind (the default): a save resolves at
-// once, and flush() is where what was saved is known kept (it throws what a
-// write threw). behind: false: a save resolves once its batch is kept.
-//
-// For hosts: a crash or a closed tab loses what was saved since the last
-// write landed (never a hole: writes land in order). So flush sometimes: when
-// things are quiet (a poll that flushes while saves are waiting and nothing
-// is busy), and on the way out (beforeunload, pagehide or
-// visibilitychange: hidden in a browser; unload or a signal elsewhere),
-// knowing a browser may not wait for it.
+// other keys are the host's. on start, what storage holds that the device lacks is given to it.
+// writes land in order; those made mid-write go as one batch after. behind (default): a save
+// resolves at once, flush() resolves once kept (throws what a write threw). behind: false: a save
+// resolves once kept. a crash loses saves since the last landed write, so hosts flush when quiet
+// and on the way out (pagehide, visibilitychange hidden, a signal).
 
 // deno-lint-ignore no-import-prefix
 import * as wasm from "npm:@automerge/subduction@0.23.0"

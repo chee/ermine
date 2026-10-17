@@ -1,30 +1,15 @@
-// sites: where in the code a scope, computer or effect was made, recorded once when it was, so an
-// inspector can show a memo made at program.ts:12 inside the process started at host.ts:40. each
-// scope's own site is where its create call was; the chain is its own then each parent's.
+// sites: where in the code a scope, computer or effect was made, so an inspector can show a memo
+// made at program.ts:12 inside a process started at host.ts:40
 //
 //   const sited = createSites(scheduler, { ours })
 //   sited.createComputer(f, set)   // same signatures as the scheduler's createRootScope,
 //   sited.siteOf(computer)         // createScope, createComputer, createEffect; the site is the
-//   sited.sitesOf(computer)        // first frame outside sites.ts and outside ours (libraries,
-//                                  // the api): the code that asked
+//   sited.sitesOf(computer)        // first frame outside sites.ts and ours (libraries, the api)
 //
-// a WeakMap keyed by scope: a scope is never kept alive by its site. one made without the wrapper
-// has no site of its own (siteOf: undefined) but its parents' show in sitesOf.
-//
-// cost, at the create (deno bench ermine/sites, Apple A18 Pro, Deno 2.9, 2026-10-15; the bare
-// create is 0.3-1.4 µs of it):
-//   scope, held unread (used)         5.6-6.7 µs
-//   scope, parsed at once (capture)   55-67 µs
-//   computer, held unread (used)      11-12 µs
-//   siteOf asked on a held scope      +~40 µs, once, and only for the scopes someone asks about
-// the stack is captured at the create (Error.captureStackTrace into a holder) and parsed when
-// siteOf/sitesOf is asked: V8 keeps the frames structured and formats the string only when .stack
-// is read, so the create pays for the capture alone, ten times less than parsing at once. what
-// it keeps until the scope goes (the WeakMap's value): the holder's captured frames, until the
-// site is asked for, then the parsed site alone
-//
-// core candidate: the scheduler could keep the site on the scope itself, so a computer made
-// without this wrapper has one too, and no WeakMap is needed
+// sitesOf: its own site, then each parent's. kept in a WeakMap by scope, so a site never keeps a
+// scope alive; made without the wrapper: no site of its own (siteOf: undefined)
+// the stack is captured at create and parsed only when asked: create 5.6-12 µs, siteOf +~40 µs once
+// core candidate: the scheduler keeping the site on the scope (no wrapper, no WeakMap)
 import {
 	type Computer,
 	type Equal,

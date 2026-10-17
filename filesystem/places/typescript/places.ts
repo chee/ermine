@@ -1,60 +1,21 @@
-// places: what makes the filesystem real. it walks names from a root through the children table,
-// reads values, and connects all of it to tracked paths and the scheduler, set up once by whoever
-// makes them. it makes none of them; writes are plain functions on a children entry, and their
-// changes are said written here.
+// places: the filesystem made real. walks names from a root through the children table, reads
+// values, and ties them to tracked paths and the scheduler. it makes none of them; writes are plain
+// functions on a children entry, said written here with commit.
 //
 //   createTable((part, id) => places.onTableChange(part, id))
 //   scheduler.onTrackingEnd((key) => places.release(key))
-//   const places = createPlaces({ root, table, paths, scheduler })
+//   const places = createPlaces({ root, table, paths, scheduler, contributors: [other, children] })
 //   places.commit(place(table.get("children", id)!, name, entry, createChangeHeader(scheduler)))
+//   const inside = places.view(folder, [processes(folder), children])   // nothing above folder
 //
-// a children entry's value maps each name to one id; a name is any string but "", ".", ".." and
-// "/". a path is names from the root, each looked up as it is (path.ts turns steps with dots into
-// these). get, lookup, list and members are built on walk and keys, in lib.ts; a write's header,
-// from the scope open, in header.ts
-//
-// a view (view(root, contributors)): the same places from another root, with contributors of its
-// own: one set of spots, holds and watches, one commit and one table hook with the places it came
-// from, so whoever writes tells it nothing more. a box (ermine/boxes) is one, rooted at its folder:
-// no path from its root reaches above it
-//
-//   const inside = places.view(folder, [processes(folder), children])
-//
-// a read is told to the scheduler as a spot (paths'), so a run reading tracks it; after an await
-// it counts for nothing. a walk reads each name in the children of the id before it. a write says
-// changed the spots its patches mark, at every key the entry is under; a table event the spots of
-// its key. both by the run open (the scheduler's getRun()), none: from outside
-//
-// paths keys a spot by two parts: the part goes into one object per part, made once and kept: the
-// same always, so the key is the same by identity, and the id is the second. a spot nobody reads
-// any more is let go: the scheduler's onTrackingEnd calls places' release with each key it stops tracking. a spot
-// read outside a run is tracked by none, so never let go
-//
-// describe(key) names a key told to the scheduler: one of this places' spots, held, is where it reads,
-// so a run's reads (the scheduler's ends moment) can be named as places in the graph. anything
-// else, or a spot let go: undefined
-//
-// watchAll(fn): fn told every fact as it lands, anywhere (a commit's, a table event's), after the
-// marks and before the watches at paths: what a run wrote, for runs.ts
-//
-// contributors (contributors.org): what answers one step of a walk. children is one; a places can
-// be given others, asked in order at each step: the first answer is where the walk goes (get), all
-// of them are what is there (lib.ts' gets), and a folder's names are every contributor's, each
-// name once (list, members). none given: children alone, and the walk, list and members read just
-// as they always have. a contributor reads only through the reads it is handed
-//
-//   createPlaces({ root, table, paths, scheduler, contributors: [another, children] })
-//
-// pruning: a contributor's step may answer none: nothing at here + name, nor anywhere under it.
-// the walk then asks it nothing more under there (its here's gone), so a trie with nothing on a
-// path is asked once per walk, not once a step. its names may say none the same way (members walks
-// each name on without it). the read that said none is the one tracked: something coming under
-// there marks it, and the walk runs again
-//
-// a cache (cache.ts) works answers out outside any run: record(f, into) puts the reads f makes into
-// a set in place of the scheduler (and the spots it made, to fresh), and hold keeps a spot past
-// release while the cache reads it. a cached answer reflects a write once it is committed, so commit
-// right after update
+// a name: any string but "", ".", ".." and "/". a read is told to the scheduler as a spot; after an
+// await it counts for nothing; outside a run it is never let go. a write marks the spots its
+// patches touch, by the run open. contributors (default: children alone) are asked in order each
+// step: the first answer is where get goes, names are all of theirs. pruning: one may answer none
+// for a whole subtree, and is not asked again under there (that read is tracked, so something
+// arriving reruns the walk). describe(key): a held spot as a place, else undefined.
+// watchAll(fn): every fact as it lands (runs.ts). a cache (cache.ts) records reads outside runs:
+// commit right after update.
 import type { ChangeHeader, Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import type { Key as Step, Patch } from "@ermine/op/apply"

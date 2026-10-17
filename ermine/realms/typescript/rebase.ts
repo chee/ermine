@@ -1,29 +1,18 @@
-// rebase: a realm's patches, worked out on the value it saw, moved past the page's that landed since
-// (OT with one authority: the page's order is the order, so a patch is only ever moved past the
-// page's, never the page's past a realm's in another order). chee 10-15: "translate the patch based
-// on the current heads on the main thread side"; "we could do OT at a worker point because we know
-// we're connected, can agree that one tab is the authority"
+// rebase: a realm's patches, made on the value it saw, moved past the page's that landed since. OT
+// with one authority: ours are moved past the page's, never the page's past ours
 //
-//   rebase(theirs, ours)   ours (the realm's, made on the value before theirs) as they land after
-//                          theirs (the page's, landed first): positions moved, what theirs took out
-//                          gone
+//   rebase(theirs, ours)   ours as landing after theirs: positions moved, what theirs took out gone
 //
-// what moves, by a page patch at path L:
-//   a span [a, b) of L (a string, a list, a typed array) replaced by n: positions after it move by
-//     n − (b − a). an element under it (a path through L at index i) moves with it; one inside the
-//     span is gone. a span of ours over L: the part before stays, the part after moves, what theirs
-//     replaced is not taken again, what theirs put in is kept (ours split in two around it); ours
-//     inside theirs is put after what theirs put in
-//   a put at L (a key set, a value replaced): nothing moves; taken out, anything of ours under L is
-//     gone. ours at L itself lands after, and is what is there (the later write)
-//   a move: its take, then its landing; an element of ours in what moved goes with it
-// an insert at the same spot as theirs goes after theirs. ours as a sequence: each of ours moved
-// past theirs, then theirs past it, for the next (the transform both ways, one order)
+// by a page patch at path L:
+//   a span [a, b) replaced by n: positions after it move by n − (b − a); elements inside it are
+//     gone. ours over it: split around what theirs put in; ours inside it: after what theirs put in
+//   a put at L: nothing moves; taken out, anything of ours under L is gone; ours at L lands after
+//   a move: its take, then its landing; ours in what moved goes with it
+// same-spot inserts: ours after theirs. ours as a sequence: each moved past theirs, then theirs
+// past it for the next
 //
-// mine, open: a string's positions counted in code points, a lone surrogate met by another (apply's
-// joins) not counted; ours put inside what theirs replaced whole (a put at a path above ours) is
-// left as it is, landing on what is there or refused as apply refuses it; a move of ours that
-// splits or loses its source or its landing is dropped
+// open: lone surrogates not counted in code points; ours inside what theirs replaced whole left as
+// is; a move of ours that splits or loses its source or landing is dropped
 import type { Key, Patch, Span, Target } from "@ermine/op/apply"
 
 type Path = readonly Key[]

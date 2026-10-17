@@ -1,36 +1,23 @@
-// A store (FILES.tex): a folder holding one graph, as a host saves it. The
-// manifest is exact; the folder around it shows the graph and takes edits.
+// a store: a folder holding one graph, as a host saves it. the manifest is exact; the folder
+// around it shows the graph and takes edits
 //
-// write({root, get, time}) saves the graph as the host has it: every node
-// reachable from root, by any version of any list, as pack.ts walks it, less
-// what is ephemeral. Each node's record is made again and compared with the
-// one kept; the batch is those that differ, and meta. A node no longer
-// reached keeps its record, as the graph keeps it, and is no longer shown.
-// The batch is three steps (FILES.tex, Writing): kept, a frame holding it,
-// the changed layout records and the plan; laid out; done, a frame holding
-// store, the layout records without was, and plan as null. write rejects if
-// the batch was not kept, or if what laid it out was not the file system's,
-// as a crash; what cannot be laid out is listed through options.list and
-// recorded in left.
-//
-// read loads (FILES.tex, Loading): the frames, each value from its kept
-// file, the last batch's plan carried out again if it was not done, tmp/
-// cleared of what no plan names, records that do not fit the graph dropped
-// and laid out again. It gives the nodes back, new objects, for the host to
-// introduce, and keeps the differences it then finds in missed. A host with
-// no files program has them laid out again, each edit to the Trash.
-//
-// Shown: a node's first value version is its file; each later one a side
-// beside it, its stem with one more .FINAL each; its info's first versions
-// are its file's and folder's extended attributes party.chee.ermine.info.<name>,
-// where they fit. A child name's first list is the slot.
-//
-// Laying out and loading again judge each step the same way: a file by the
-// hash of its value read in its form, a link by its target, a folder by its
-// file id, or one a step makes by its id or slot attribute. Whatever comes
-// out of a swap or a rename away is looked at: the store's is removed with
-// tmp/, a person's edit to a file is put back, anything else goes to the
-// Trash. Nothing that is not the store's own is ever left in tmp/.
+// write({root, get, time}): every node reachable from root (any version of any list, as pack.ts
+//   walks it), less ephemeral; the batch is the records that differ, and meta, in three steps:
+//   kept (a frame: it, the changed layout records, the plan); laid out; done (a frame: store, the
+//   layout records less was, plan null). rejects if not kept, or if the layout failed not by the
+//   file system, as a crash. what cannot be laid out: told to options.list, recorded in left.
+//   a node no longer reached keeps its record, unshown
+// read(): the frames; each value from its kept file; an unfinished plan carried out again; tmp/
+//   cleared of what no plan names; records that do not fit dropped and laid out again. gives new
+//   node objects for the host to introduce; differences found then kept in missed (with no files
+//   program, laid out again, each edit to the Trash)
+// shown: a node's first value version is its file, later ones sides (its stem, one more .FINAL
+//   each); info's first versions are xattrs party.chee.ermine.info.<name> where they fit; a child
+//   name's first list is the slot
+// steps judged the same laying out and loading: a file by its value's hash in its form, a link by
+//   target, a folder by file id (or a step's id or slot attribute). what a swap or rename leaves:
+//   the store's removed with tmp/, a person's edit to a file put back, else the Trash. tmp/ never
+//   keeps what is not the store's
 
 import { decode, encode } from "@ermine/encoding/cbor"
 import type { Node as Saved } from "./saved.ts"

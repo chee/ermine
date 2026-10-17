@@ -1,7 +1,6 @@
 // clingy: keys of the caller's, each known tracked or not, the caller told when its last tracker
-// goes. chee 10-16, of clingy computers: "take it out of core, make it a library that can be used
-// in the two places it was duplicated" (the path cache, filesystem/places cache.ts; build steps,
-// ermine/programs build.ts). built on the scheduler's onTrackingStart and onTrackingEnd only
+// goes. a library for the two places that need it (the path cache, filesystem/places cache.ts;
+// build steps, ermine/programs build.ts). built on the scheduler's onTrackingStart and onTrackingEnd only
 //
 //   const clingy = createClingy(scheduler, (key) => settle(key))
 //   clingy.add(key)       // a key made now: no run tracks it yet

@@ -1,30 +1,18 @@
-// The layout (FILES.tex, The layout): from the graph as the store's records
-// give it, where each node is shown, under what names, and the plan that
-// takes the folder from the old layout to the new. Pure but for the probe,
-// which says what names are taken on disk, and ino, which gives a folder's
-// file id.
+// layout: from the graph as the store's records give it, where each node is shown, under what
+// names, and the plan from the old layout to the new. pure but for probe (names taken on disk) and
+// ino (a folder's file id)
 //
-// Homes are settled from the root down: a node keeps its home while that
-// slot holds it and its holder kept its own; then each node without one
-// takes the first slot that holds it, breadth first over homes, a holder's
-// slots in code point order, a union's ids in slot order. A node no shown
-// node holds is away. New stems in one folder are found in code point order
-// of their slots' names, clear of what the probe gives and of .ermine in the
-// store's folder.
-//
-// A slot's stem is kept while the slot keeps its shape: one id, or a union.
-// A pending id that arrives, a slot that becomes or stops being a union, and
-// a slot with an entry in left get a new one. A node's file keeps its name
-// while its home's stem and its form do; a new form changes the extension.
-//
-// The plan's entries are known by what they are, not where: a node's file
-// or folder, a union's folder, a link in a slot. Each step is numbered from
-// 1. First, deepest first, each entry that goes is renamed into
-// .ermine/tmp/<time>.<number>, and so is each entry that moves out of a
-// folder that goes. Then, shallowest first in the new layout, each entry is
-// made, renamed into place, or written again; an entry in the way that moves
-// too waits in .ermine/tmp/ first. A file whose form changes is removed and
-// made again, as is a link whose name changes.
+// homes: kept while the slot holds it and its holder kept its own; else the first slot holding it,
+//   breadth first over homes, slots in code point order, union ids in slot order. held by no
+//   shown node: away
+// stems: new ones in code point order of slot names, clear of the probe and the store's .ermine;
+//   kept while a slot keeps its shape (one id, or a union); new for a pending id that arrives, a
+//   change of shape, or a slot in left
+// files: keep their name while the home's stem and the form do; a new form, a new extension
+// plan: entries known by what they are, not where; steps numbered from 1. first, deepest first,
+//   each leaving entry (and each moving out of a leaving folder) renamed into
+//   .ermine/tmp/<time>.<number>; then, shallowest first, each made, renamed in, or written again
+//   (one in the way that moves waits in tmp/). a form change or a renamed link: removed, made again
 
 import * as manifest from "./manifest.ts"
 import * as names from "./names.ts"

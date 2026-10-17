@@ -1,40 +1,20 @@
-// a cache per path (contributors.org; chee, per path: "we can just cache instead"): get, gets,
-// list and members as lib.ts gives them, each worked out once for a path and kept while someone
-// reads it. places without one is places as it always was: nothing here is made or told
+// cache: a cache per path (contributors.org). get, gets, list and members as lib.ts gives them,
+// worked out once per path and kept while read. places without one is unchanged.
 //
 //   const cache = createPathCache({ places, scheduler })
 //   cache.get(["work", "clock"])   // in a run: the run tracks one key for the path, nothing else
 //
-// an entry: one question (at: every answer at a path; list; members) about one path, its answer,
-// the keys its readers track and every key it read working it out
-//   - worked out when first asked, there and then, places' reads recorded into the entry (places'
-//     record) and told to no one, so the reader's run tracks only the entry's key. an entry at a
-//     path reads its folder's entry, one step at a time, so a path's walk is shared by every path
-//     under it. pruning (places.ts): at has a third key, the contributors gone under the path, read
-//     by the entries under it, so a contributor that said none at a folder is not asked under it, and
-//     what is under it is worked out again when that changes (and only it: get's key is the first)
-//   - a key it read marked (the scheduler's onMark, inside the write): worked out again, there and
-//     then, so a read right after a write is fresh. its key is marked, by the writer's run, only
-//     when its answer changed (the equal cut); at has three keys, the first answer (get), all of
-//     them (gets) and the gone under it (above), so a change to what is shadowed reruns no get
-//   - kept while a run tracks one of its keys or another entry reads one (@ermine/clingy, and a
-//     count of the entries reading each key); then it goes, and what it read with it. one read
-//     outside any run (a host's, an effect's act, runWithScope) keeps nothing: the entry is worked
-//     out, answered, and goes
-//   - places' spots it reads are held (places' hold), so a run that stops reading a spot an entry
-//     reads lets nothing go; the cache lets a spot go once no entry reads it and no run tracks it
-//   - it lets go only what it took itself: a spot it made (places' record, fresh) is its own, one
-//     that was a places' spot already (a run tracked it before the cache was made) is not, and
-//     is never let go by it. once the runs tracking it end, while an entry reads it, it is the cache's to let go
-//   - a cached answer reflects a write once it is committed: commit right after update (between
-//     an update and its commit a cached answer is the old one; places' own reads are new)
+// an entry: one question (at, list, members) about one path, its answer, its keys, what it read.
+// worked out when first asked (places' record), a path's entry reading its folder's. a read key
+// marked (onMark): worked out again at once; its own key marked only when the answer changed
+// (equal cut). at has three keys: first answer (get), all (gets), contributors gone under it. kept
+// while a run tracks it or another entry reads it (@ermine/clingy); a read outside any run keeps
+// nothing. spots it reads are held; it lets go only spots it made, or inherited once no run tracks
+// them. commit right after update: until then a cached answer is the old one.
 //
-// open:
-//   - every cache hears every first track and untrack of its scheduler (one shared cache per
-//     places is not decided). a mark it hears only for the keys it holds: one listener per
-//     scheduler (keyed, core/scheduler selector.ts) tells each cache the marks of its own keys
-//   - a reader whose path a write marks runs once before a due writer of a spot under the path, and
-//     again after (the key's writer is whoever marked it last)
+// open: every cache hears every first track and untrack of its scheduler (marks: only its own
+// keys, selector.ts keyed). a reader whose path a write marks runs once before a due writer of a
+// spot under it, and again after.
 import { createClingy } from "@ermine/clingy"
 import type { Run, Scheduler } from "@ermine/scheduler"
 import { type Holder, keyed } from "@ermine/scheduler/selector"
