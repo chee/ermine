@@ -32,13 +32,19 @@
 //    scope open), as the program would: call [fn, ...args]; as: the result named in that
 //    process's names (a program's steps name theirs the same way)
 // { op: "log", name }                      → { values }   what effects, teardowns and watches put
+// { op: "events" }                         → { events }   the table events since last asked, then
+//    forgotten: [part, id, "put" | "gone"] each, in order ("gone": nothing there after it; an id
+//    not a string: null)
 // { op: "pulse" }                          → {}
 //
 // a program is a list of steps, each { do: [fn, ...args], as? }. "$x" anywhere in an arg is the
 // name x (a step's result, or a method's arguments $0, $1, …); anything else is as it is. fn is an api
 // function, or one of these, each made with what the api gives:
 //   ["memo", name, options, expr]  memo(name, () => expr), options as memo's ({ equal? } with no
-//                                  equal: a JSON compare is "json")
+//                                  equal: a JSON compare is "json"). in a memo's or effect's
+//                                  expr, made again by each of its runs: the one there kept, with
+//                                  this expr (api.ts: the same id and node; a run that fails, or
+//                                  does not make it, as api.ts says); the same for effect, early
 //   ["effect", name, expr, log]    effect(name, () => expr, (v) => log v)
 //   ["early", name, expr, log]     early(name, () => expr, (v) => log v)
 //   ["log", log, expr]             expr's value put in log, and given back (in a memo: a run counted)
@@ -47,6 +53,8 @@
 //   ["teardown", log]              teardown((why) => log why)
 //   ["watch", target, log]         watch(target, (w) => log w.patches)
 //   ["ref", path, value]           ref(path, () => value)
+//   ["if", test, then, else?]      then's value when test's is true, else else's (none: undefined)
+//   ["throw", text]                throws an error of message text
 // an expr is a call [fn, ...args], or ["all", expr, …] (a list of each), or "$x"
 // errors: a PlacesError { error: code }; a Refusal { error: "refused" }; a SendError
 // { error: "not-a-method" }; PENDING { error: "pending" }; else { error: text }
@@ -82,15 +90,18 @@ type Made = {
 	running: Map<string, Running>
 	logs: Map<string, unknown[]>
 	later: (() => void)[]
+	events: unknown[][]
 }
 
 let w: Made | undefined
 
 function make(o: Request = {}): Made {
 	const s = createScheduler()
-	const table: Table = createTable((part, id) =>
+	const events: unknown[][] = []
+	const table: Table = createTable((part, id) => {
+		events.push([part, typeof id === "string" ? id : null, table.get(part, id) ? "put" : "gone"])
 		overlay ? overlay.onTableChange(part as Key, id) : places.onTableChange(part as Key, id)
-	)
+	})
 	const overlay: Overlay | undefined = o.overlay ? createOverlay(table, () => places) : undefined
 	const places: Places = createPlaces({
 		root: "R",
@@ -167,6 +178,7 @@ function make(o: Request = {}): Made {
 		running,
 		logs: new Map(),
 		later,
+		events,
 	}
 }
 
@@ -195,6 +207,11 @@ function expr(api: API, env: Env, e: unknown): unknown {
 	if (typeof e === "string") return arg(env, e)
 	const [fn, ...args] = e as [string, ...unknown[]]
 	if (fn === "all") return args.map((x) => expr(api, env, x))
+	if (fn === "if") {
+		if (expr(api, env, args[0]) === true) return expr(api, env, args[1])
+		return args.length > 2 ? expr(api, env, args[2]) : undefined
+	}
+	if (fn === "throw") throw new Error(args[0] as string)
 	return call(api, env, [fn, ...args])
 }
 
@@ -356,6 +373,8 @@ function answer(r: Request): Record<string, unknown> {
 		}
 		case "log":
 			return { values: world().logs.get(r.name) ?? [] }
+		case "events":
+			return { events: world().events.splice(0) }
 		case "pulse":
 			world().s.pulse()
 			return {}

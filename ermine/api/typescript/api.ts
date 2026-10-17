@@ -63,7 +63,18 @@
 //                        made in the same run and alive: a second throws already-there ("making two
 //                        with the same name in the same run shall be illegal"; the same for effect
 //                        and early). the run: the scheduler's run open; none, the scope it is made
-//                        in (a setup, and what is called from outside after it, are one, mine)
+//                        in (a setup, and what is called from outside after it, are one, mine).
+//                        made again at the name by a later run of the same owner (chee 10-17: "a
+//                        parent rerun does not destroy its children"): the one there is kept (the
+//                        scheduler's claim): the same computation, id and node, its name placed
+//                        still; it gets the new f (and act, equal) and runs again, into that node.
+//                        its old f's teardowns run once that run is done and the round's runs are
+//                        (the scheduler's: "like solidjs2.0"). a name the owner's run did not make
+//                        this time goes once that run is done (its computer at the run's end, its
+//                        node's entries and its name once the round's runs are: the owner's cleanup
+//                        asking after it); a run that fails keeps them all (chee: "keep them until
+//                        the parent is actually destroyed"). a claim is no making: notice is not
+//                        told, and an early one is not run at once (mine)
 //   effect(name, f, act, o?)   an effect: f tracked, act(value, before) after the round; f's value written
 //                        to its node at each act; its status and latest run on it too
 //   early(name, f, act, o?)    an early effect (the scheduler's): its first run and act at once, where
@@ -632,47 +643,72 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			later()
 		}
 
-		// the computers alive at each path: each one's owner, and the run it was made in (the run
-		// open's computer and number; none: the owner)
-		const named = new Map<string, Set<{ own: Scope; by: object; n?: number }>>()
+		// a memo's or effect's code, in place: a run of its owner making it again gives it new code
+		type Code = {
+			f: (previous: any) => unknown
+			act?: (value: any, before: any) => void
+			equal?: Equal<any>
+		}
+		// what is made at each path (its names), by owner: the computer, its node's id, its code
+		type Made = { own: Scope; c?: Computer; id: Id; code: Code }
+		const named = new Map<string, Set<Made>>()
+		const keyOf = (path: Path) => JSON.stringify(path)
 
-		// a computer's node: a new id, placed at name, its entries gone with own. one alive there,
-		// made in this run under own: already-there
-		function computerNode(own: Scope, name: string | Path): [Node, Id] {
-			const path = resolve(name)
-			const at = path.join("/")
-			const r = s.getRun()
-			const by = r?.computer ?? own
-			const there = named.get(at) ?? new Set()
-			for (const o of there) {
-				if (o.own === own && o.by === by && o.n === r?.n) {
-					throw new PlacesError("already-there", at)
-				}
+		// the one made at path under own: claimed, given new code (chee 10-17: a parent rerun does
+		// not destroy its children; "making two with the same name in the same run shall be
+		// illegal"). as own's run starts, what its earlier runs made is old (the scheduler's): one
+		// old is claimed; one not old was made in this run (or own has had no run since):
+		// already-there. none: a
+		// new one is to be made
+		function again(own: Scope, path: Path, code: Code): Made | undefined {
+			for (const m of named.get(keyOf(path)) ?? []) {
+				if (m.own !== own || m.c === undefined || m.c.state !== "alive") continue
+				if (!s.claim(m.c)) throw new PlacesError("already-there", path.join("/"))
+				m.code = code
+				gone(m, path)
+				later()
+				return m
 			}
-			const id = newId()
-			within(() => {
-				const parent = get(places, path.slice(0, -1))
-				if (parent === undefined) throw new PlacesError("nothing-there", at)
-				placeUnder(parent, path[path.length - 1], id)
-			})
-			const made = { own, by, n: r?.n }
-			named.set(at, there.add(made))
-			s.registerTeardown(own, () => {
-				memos.delete(id)
-				there.delete(made)
-				if (there.size === 0 && named.get(at) === there) named.delete(at)
+		}
+
+		// m's node and name go once its computer has: asked again in each run of its owner that
+		// makes it (a cleanup of that run: run once the next run is done, it finds the computer
+		// claimed, alive, and leaves it), and as the owner goes (what is under it first)
+		function gone(m: Made, path: Path) {
+			s.registerTeardown(m.own, () => {
+				if (m.c?.state === "alive") return
+				const there = named.get(keyOf(path))
+				if (there?.delete(m) && there.size === 0) named.delete(keyOf(path))
+				memos.delete(m.id)
 				try {
 					const [children, last] = slot(path)
-					if ((children.value as Record<string, unknown>)?.[last] === id) {
+					if ((children.value as Record<string, unknown>)?.[last] === m.id) {
 						commit(unplaceIn(children, last, header()))
 					}
 				} catch (e) {
 					if (!(e instanceof PlacesError)) throw e
 				}
-				for (const [part] of table.get(id)) table.del(part as Key, id)
+				for (const [part] of table.get(m.id)) table.del(part as Key, m.id)
 			})
-			return [{ path, part: "value" }, id]
 		}
+
+		// a computer's node: a new id, placed at path; told to named, its node and name gone with it
+		function computerNode(own: Scope, path: Path, code: Code): Made {
+			const id = newId()
+			within(() => {
+				const parent = get(places, path.slice(0, -1))
+				if (parent === undefined) throw new PlacesError("nothing-there", path.join("/"))
+				placeUnder(parent, path[path.length - 1], id)
+			})
+			const m: Made = { own, id, code }
+			const at = keyOf(path)
+			named.set(at, (named.get(at) ?? new Set()).add(m))
+			gone(m, path)
+			return m
+		}
+
+		const same = (m: Made) => (a: unknown, b: unknown) =>
+			m.code.equal ? m.code.equal(a, b) : Object.is(a, b)
 
 		function memo<T>(
 			name: string | Path,
@@ -680,14 +716,23 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			options: { equal?: Equal<T> } = {},
 		): Node {
 			const own = owner()
-			const [n, id] = computerNode(own, name)
+			const path = resolve(name)
+			const n: Node = { path, part: "value" }
+			const code: Code = { f, equal: options.equal }
+			if (again(own, path, code)) return n
+			const m = computerNode(own, path, code)
+			const id = m.id
 			memos.add(id)
 			const set = (v: T) => {
 				if (v !== undefined || table.get("value", id) !== undefined) {
 					write("value", id, whole(v))
 				}
 			}
-			const c = s.runWithScope(own, () => sited.createComputer<T>(f, set, options.equal))
+			const c = s.runWithScope(
+				own,
+				() => sited.createComputer<T>((previous) => m.code.f(previous) as T, set, same(m)),
+			)
+			m.c = c
 			statuses.give(c, id)
 			runs.give(c, id)
 			setup.notice?.({ kind: "memo", computer: c, node: n, id, process: process.id })
@@ -715,7 +760,8 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 
 		// an effect, early or not. an early one runs, and acts, inside createEffect: before its
 		// computer is given back, so its first run gives the status and the run record its node, from
-		// inside it (runs.ts: a run given while it ran)
+		// inside it (runs.ts: a run given while it ran). made again: claimed, its first run after
+		// the claim in the round's runs, its act in its queue (mine: a claim is not a making)
 		function effectOf<T>(
 			early: boolean,
 			name: string | Path,
@@ -724,7 +770,12 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			options: { equal?: Equal<T> },
 		): Node {
 			const own = owner()
-			const [n, id] = computerNode(own, name)
+			const path = resolve(name)
+			const n: Node = { path, part: "value" }
+			const code: Code = { f, act, equal: options.equal }
+			if (again(own, path, code)) return n
+			const m = computerNode(own, path, code)
+			const id = m.id
 			let given = false
 			const run = (previous: T | undefined) => {
 				if (!given) {
@@ -733,21 +784,22 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 					statuses.give(c, id)
 					runs.give(c, id)
 				}
-				return f(previous)
+				return m.code.f(previous) as T
 			}
 			const then = (v: T, before: T | undefined) => {
 				if (v !== undefined || table.get("value", id) !== undefined) {
 					write("value", id, whole(v))
 				}
-				act(v, before)
+				m.code.act!(v, before)
 			}
 			const c = s.runWithScope(
 				own,
 				() =>
 					early
-						? sited.createEffect<T>(run, then, options.equal, { early })
-						: sited.createEffect<T>(f, then, options.equal),
+						? sited.createEffect<T>(run, then, same(m), { early })
+						: sited.createEffect<T>((previous) => m.code.f(previous) as T, then, same(m)),
 			)
+			m.c = c
 			statuses.give(c, id)
 			runs.give(c, id)
 			setup.notice?.({ kind: "effect", computer: c, node: n, id, process: process.id })

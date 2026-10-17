@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../../conformance/c/protocol.h"
+#include "../../../conformance/c/protocol_harness.h"
 #include "../../../ermine/processes/c/processes.h"
 #include "../../../ermine/processes/c/scopes.h"
 #include "api.h"
@@ -148,6 +148,8 @@ typedef struct {
 	// values a closure refers to (a memo's expression, a method's steps): let go with the world
 	op_value **held;
 	size_t nheld, capheld;
+	// the table events since last asked: [part, id, "put" | "gone"] each
+	op_value *events;
 } world;
 
 static world *w;
@@ -239,17 +241,30 @@ static void stop_hook(void *ctx, const api_process *p) {
 	free(sc_teardown(p->scope));
 }
 
+// a table event, kept for "events", then told to the overlay or places
+static void table_event(void *ctx, tb_key part, tb_key id) {
+	world *m = ctx;
+	op_value *e = op_list();
+	op_push(e, part.symbol ? op_null() : op_str(part.string));
+	op_push(e, id.symbol ? op_null() : op_str(id.string));
+	op_push(e, op_str(tb_get(m->table, part, id) ? "put" : "gone"));
+	op_push(m->events, e);
+	if (m->overlay) pn_event(m->overlay, part, id);
+	else pl_event(m->places, part, id);
+}
+
 static world *make(const op_value *o) {
 	world *m = xalloc(sizeof *m);
+	m->events = op_list();
 	m->s = sc_new((sc_options){.drop = api_drop});
 	m->places = pl_new();
 	const op_value *overlay = o ? op_get(o, "overlay") : NULL;
 	if (overlay && overlay->type == OP_BOOL && overlay->bool_) {
 		m->overlay = pn_new();
-		m->table = tb_make(pn_event, m->overlay);
+		m->table = tb_make(table_event, m);
 		m->view = tb_make(pn_view_event, m->overlay);
 	} else {
-		m->table = tb_make(pl_event, m->places);
+		m->table = tb_make(table_event, m);
 		m->view = m->table;
 	}
 	m->paths = pt_new();
@@ -339,6 +354,7 @@ static void finish(world *m) {
 	free(m->closures);
 	for (size_t i = 0; i < m->nheld; i++) op_free(m->held[i]);
 	free(m->held);
+	op_free(m->events);
 	free(m->queue);
 	op_free((op_value *)m->host_info.value);
 	op_free((op_value *)m->above_info.value);
@@ -487,6 +503,17 @@ static res expr(api *a, env *e, const op_value *x) {
 			op_push(l, r.v ? r.v : op_null());
 		}
 		return ok(l);
+	}
+	if (strcmp(x->items[0]->str, "if") == 0 && x->count >= 3) {
+		res t = expr(a, e, x->items[1]);
+		if (t.code) return t;
+		bool yes = t.v && t.v->type == OP_BOOL && t.v->bool_;
+		op_free(t.v);
+		if (yes) return expr(a, e, x->items[2]);
+		return x->count > 3 ? expr(a, e, x->items[3]) : ok(NULL);
+	}
+	if (strcmp(x->items[0]->str, "throw") == 0 && x->count >= 2 && x->items[1]->type == OP_STR) {
+		return broke(x->items[1]->str);
 	}
 	return call(a, e, x);
 }
@@ -1036,6 +1063,12 @@ static op_value *answer(const op_value *r) {
 			if (strcmp(m->logs[i].name, hh_str(r, "name")) == 0) values = op_ref(m->logs[i].values);
 		}
 		op_set(o, "values", values ? values : op_list());
+		return o;
+	}
+	if (strcmp(op, "events") == 0) {
+		op_value *o = op_map();
+		op_set(o, "events", m->events);
+		m->events = op_list();
 		return o;
 	}
 	if (strcmp(op, "pulse") == 0) {

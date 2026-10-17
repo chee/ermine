@@ -879,7 +879,7 @@ static void watch_told(const pl_fact *fact, void *ctx) {
 	struct api_watching *w = ctx;
 	w->fn(fact, w->ctx);
 }
-void api_unwatch(api_watching *w) {
+static void api_unwatch(api_watching *w) {
 	if (w->stopped) return;
 	w->stopped = 1;
 	pl_stop(w->w);
@@ -1066,17 +1066,19 @@ typedef struct computer {
 	char *id;
 	names path;
 	int memo, early;
-	// the scope it was made in, and the run (its computer and number; none: NULL, 0)
+	// the scope it was made in
 	sc_scope *own;
-	sc_computer *by;
-	unsigned n;
 	// its status and run record given to its node (an early one's first run is before it is made)
 	int given;
+	// its code, in place: a run of its owner making it again gives it new code
 	api_compute f;
 	api_act act;
 	void *ctx;
 	api_options o;
 	sc_computer *c;
+	// the cleanups on own asking after it (one per run that made it); its node gone once
+	unsigned holds;
+	int gone;
 } computer;
 
 static sc_out computer_f(void *previous, void *data) {
@@ -1121,9 +1123,8 @@ static char *computer_act(void *value, void *previous, void *data) {
 	return NULL;
 }
 
-// a computer's node gone with its scope: unplaced from its name, its entries deleted
-static char *computer_cleanup(void *data) {
-	computer *c = data;
+// a computer's node gone: unplaced from its name (if it is still there), its entries deleted
+static void computer_drop(computer *c) {
 	api *a = c->a;
 	if (c->memo) {
 		for (size_t i = 0; i < c->x->nmemos; i++) {
@@ -1147,10 +1148,32 @@ static char *computer_cleanup(void *data) {
 		if (v && v->type == OP_STR && strcmp(v->str, c->id) == 0) unplace_in(a, children, name);
 	}
 	del_all(a, c->id);
-	free(c->id);
-	names_free(&c->path);
-	free(c);
+}
+
+// a computer's node gone once its computer has. asked again in each run of its owner that makes
+// it (a cleanup of that run, run once the next run is done: it finds the computer claimed, alive,
+// and leaves it), and as the owner goes (what is under it first). the last one asking frees it
+static char *computer_cleanup(void *data) {
+	computer *c = data;
+	if (c->c != NULL && sc_scope_alive(c->c)) {
+		c->holds--;
+		return NULL;
+	}
+	if (!c->gone) {
+		c->gone = 1;
+		computer_drop(c);
+	}
+	if (--c->holds == 0) {
+		free(c->id);
+		names_free(&c->path);
+		free(c);
+	}
 	return NULL;
+}
+// one more cleanup on its owner asking after it
+static void computer_hold(computer *c) {
+	c->holds++;
+	free(sc_register_teardown(c->x->s.scheduler, c->own, computer_cleanup, c));
 }
 
 typedef struct {
@@ -1172,17 +1195,22 @@ static int place_computer(api *a, void *data) {
 	return code;
 }
 
-// one alive at c's path, made in the same run under the same scope ("making two with the same
-// name in the same run shall be illegal")
-static int taken(api *a, const computer *c) {
+// the one made at path under own, alive; NULL: none
+static computer *made_at(api *a, sc_scope *own, const names *path) {
 	for (size_t i = 0; i < a->nmade; i++) {
-		const computer *o = a->made[i];
-		if (o->own != c->own || o->by != c->by || o->n != c->n || o->path.n != c->path.n) continue;
+		computer *o = a->made[i];
+		if (o->own != own || o->c == NULL || !sc_scope_alive(o->c) || o->path.n != path->n) continue;
 		size_t k = 0;
-		while (k < c->path.n && strcmp(o->path.v[k], c->path.v[k]) == 0) k++;
-		if (k == c->path.n) return 1;
+		while (k < path->n && strcmp(o->path.v[k], path->v[k]) == 0) k++;
+		if (k == path->n) return o;
 	}
-	return 0;
+	return NULL;
+}
+
+static api_node node_at(const names *path) {
+	names copy = {0};
+	for (size_t i = 0; i < path->n; i++) names_push(&copy, path->v[i]);
+	return node_of(&copy, API_VALUE);
 }
 
 static int make_computer(api *a, int memo, int early, const char *name, api_compute f, api_act act,
@@ -1191,16 +1219,36 @@ static int make_computer(api *a, int memo, int early, const char *name, api_comp
 	sc_scope *own = owner(a);
 	if (!sc_scope_alive(own)) return fail(a, API_FAILED, SC_DISPOSED);
 	if (name == NULL) return fail(a, API_NOT_A_NAME, "a memo or effect with no name");
+	names path = {0};
+	int code = resolve(a, name, &path);
+	if (code) return names_free(&path), code;
+	// made at path under own before: claimed, given the new code (chee 10-17: a parent rerun does
+	// not destroy its children). as own's run starts, what its earlier runs made is old (the
+	// scheduler's): one not old was made in this run, or own has had no run since: already-there
+	// ("making two with
+	// the same name in the same run shall be illegal")
+	computer *old = made_at(a, own, &path);
+	if (old != NULL) {
+		if (!sc_claim(old->c)) {
+			names_free(&path);
+			return fail(a, API_ALREADY_THERE, name);
+		}
+		old->f = f, old->act = act, old->ctx = ctx;
+		old->o = options ? *options : (api_options){0};
+		computer_hold(old);
+		*out = node_at(&path);
+		names_free(&path);
+		later(x);
+		return 0;
+	}
 	computer *c = xalloc(sizeof *c);
 	c->a = a, c->x = x, c->memo = memo, c->early = early, c->own = own;
 	c->f = f, c->act = act, c->ctx = ctx;
-	sc_run *r = sc_get_run(x->s.scheduler);
-	if (r) c->by = sc_run_computer(r), c->n = sc_run_n(r);
+	c->path = path;
 	if (options) c->o = *options;
-	int code = resolve(a, name, &c->path);
-	if (!code && taken(a, c)) code = fail(a, API_ALREADY_THERE, name);
 	// its id a new one, flat and opaque: the name only places it
-	if (!code) c->id = new_id(x), code = within(a, place_computer, c);
+	c->id = new_id(x);
+	code = within(a, place_computer, c);
 	if (code) {
 		free(c->id), names_free(&c->path), free(c);
 		return code;
@@ -1213,16 +1261,15 @@ static int make_computer(api *a, int memo, int early, const char *name, api_comp
 	else m.def.effect = computer_act;
 	const char *bad = sc_run_with_scope(own, create_in, &m);
 	if (bad || c->c == NULL) {
+		c->holds = 1;
 		computer_cleanup(c);
 		return fail(a, API_FAILED, bad ? bad : SC_UNSCOPED);
 	}
 	if (x->s.sites != NULL) st_note(x->s.sites, c->c, file, line, func);
 	cst_give(x->statuses, c->c, tb_string(c->id));
 	crn_give(x->runs, c->c, tb_string(c->id));
-	names copy = {0};
-	for (size_t i = 0; i < c->path.n; i++) names_push(&copy, c->path.v[i]);
-	*out = node_of(&copy, API_VALUE);
-	free(sc_register_teardown(x->s.scheduler, own, computer_cleanup, c));
+	*out = node_at(&c->path);
+	computer_hold(c);
 	later(x);
 	return 0;
 }
@@ -1634,8 +1681,4 @@ int api_layers_of(api *a, api_target x, const op_key *path, size_t n, api_layers
 	return code;
 }
 
-const char *const *api_args(const api *a, size_t *n) {
-	*n = a->process.nargs;
-	return a->process.args;
-}
 void api_pulse(api *a) { sc_pulse(a->x->s.scheduler); }
