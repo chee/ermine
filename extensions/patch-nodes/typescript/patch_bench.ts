@@ -1,4 +1,4 @@
-// deno run playground/patch-nodes/typescript/patch_bench.ts [name…]
+// deno run extensions/patch-nodes/typescript/patch_bench.ts [name…]
 // what the overlay costs, on a real table, paths, places and scheduler: µs per call, medians of up
 // to 21 rounds. N is a clock face of 50 fields and a theme; each patch node over it sets
 // theme.accent. "bare": no overlay, places reads the table itself. a write's header is made once

@@ -3,7 +3,7 @@
 // each patch node over it sets theme.accent. "bare": no overlay, places reads the table itself. A
 // write's header is made once (a site's capture is not what this measures). names given: only the
 // rows whose name holds one.
-//   make playground/patch-nodes/c/patch-bench && playground/patch-nodes/c/patch-bench [name...]
+//   make extensions/patch-nodes/c/patch-bench && extensions/patch-nodes/c/patch-bench [name...]
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
