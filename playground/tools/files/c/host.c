@@ -9,10 +9,10 @@
 
 #include "host.h"
 
-#include "../../../extensions/subduction/c/subduction/platform.h"
-#include "../../../extensions/subduction/c/subduction/store.h"
-#include "../../../extensions/subduction/c/subduction/transport.h"
-#include "../../../extensions/sync/c/sync.h"
+#include "../../../../extensions/subduction/c/subduction/platform.h"
+#include "../../../../extensions/subduction/c/subduction/store.h"
+#include "../../../../extensions/subduction/c/subduction/transport.h"
+#include "../../../../extensions/sync/c/sync.h"
 #include "graph.h"
 #include "program.h"
 #include "store.h"

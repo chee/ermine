@@ -3,7 +3,7 @@
 // histories see it.
 // Reference for the conformance in conformance/transport. Only the lock "unlocked" is built
 import * as sd from "npm:@automerge/subduction@0.23.0"
-import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
+import { blake3 } from "@ermine/blake3"
 import * as cbor from "@ermine/encoding/cbor"
 import { type Blop, BlopError, decode, name as blopName } from "@ermine/encoding/blop"
 import { check } from "./apply.ts"
@@ -62,8 +62,10 @@ export type Arrival = {
 // the storage threw.
 export type Device = {
 	ready(): Promise<void>
+	// resolves once connected; the documents followed are fetched after (idle waits for that)
 	connect(transport: sd.Transport, initiator: boolean): Promise<void>
-	// a server by its WebSocket url, by discovery (the service name its url's host, unless given)
+	// a server by its WebSocket url, by discovery (the service name its url's host, unless given);
+	// resolves once connected, as connect
 	connectDiscover(url: string, service?: string): Promise<void>
 	disconnect(key: Uint8Array): Promise<void>
 	follow(doc: string): Promise<void>
@@ -106,7 +108,8 @@ export type Device = {
 	changed(): Promise<void>
 	// an ephemeral payload's parts not joined yet are dropped now, as the setting would in time
 	expire(): void
-	// resolves when no taking in or building is left; throws what one of them threw
+	// resolves when no fetching after a connection, taking in or building is left; throws what one
+	// of them threw
 	idle(): Promise<void>
 	close(): Promise<void>
 }
@@ -320,7 +323,7 @@ export function createDevice(
 		}
 		let u: Unsealed
 		try {
-			u = unseal(opened)
+			u = await unseal(opened)
 		} catch (e) {
 			if (!(e instanceof SealError)) throw e
 			refuse(d, h, e.code)
@@ -340,13 +343,13 @@ export function createDevice(
 		settle(d)
 	}
 
-	// a seal taken in as a fragment's member: from unseal on, no commit around it
-	function member(d: Document, sealed: Uint8Array) {
-		const s = hex(stored(sealed))
+	// a seal taken in as a fragment's member, its stored id: from unseal on, no commit around it
+	async function member(d: Document, sealed: Uint8Array, id: Uint8Array) {
+		const s = hex(id)
 		if (d.seen.has(s)) return
 		let u: Unsealed
 		try {
-			u = unseal(sealed)
+			u = await unseal(sealed, id)
 		} catch (e) {
 			if (!(e instanceof SealError)) throw e
 			d.refused.set(s, e.code)
@@ -396,26 +399,23 @@ export function createDevice(
 			return
 		}
 		const members = list(opened)
+		// each member hashed once, here
+		const ids = (members ?? []).map(stored)
 		if (here) {
-			d.fragments.set(h, {
-				head,
-				members: (members ?? []).map(stored),
-				boundary,
-				checkpoints: [],
-			})
+			d.fragments.set(h, { head, members: ids, boundary, checkpoints: [] })
 			return
 		}
 		if (members === undefined) {
 			d.broken.set(h, "shape")
 			return
 		}
-		if (!members.some((m) => hex(stored(m)) === h)) {
+		if (!ids.some((id) => hex(id) === h)) {
 			d.broken.set(h, "stored")
 			return
 		}
 		d.broken.delete(h)
-		for (const m of members) member(d, m)
-		d.fragments.set(h, { head, members: members.map(stored), boundary, checkpoints: [] })
+		for (let i = 0; i < members.length; i++) await member(d, members[i], ids[i])
+		d.fragments.set(h, { head, members: ids, boundary, checkpoints: [] })
 		settle(d)
 	}
 
@@ -713,6 +713,19 @@ export function createDevice(
 		await sub.syncWithAllPeers(d.tree, true)
 	}
 
+	// after a connection: the documents followed then, fetched all at once; idle waits for it. One
+	// followed later fetches itself, the new peer among every peer
+	const fetching = new Set<Promise<void>>()
+	function fetchFollowed() {
+		const p: Promise<void> = Promise.all(
+			[...followed].map((doc) => fetched(documents.get(doc)!)),
+		).then(
+			() => void fetching.delete(p),
+			(e) => void (fetching.delete(p), trouble.push(e)),
+		)
+		fetching.add(p)
+	}
+
 	const device: Device = {
 		ready: () => loaded,
 		async connect(transport, initiator) {
@@ -721,7 +734,7 @@ export function createDevice(
 				? await sub.connectTransport(transport, service)
 				: await sub.acceptTransport(transport, service)
 			peers.set(hex(peer.toBytes()), peer)
-			for (const doc of followed) await fetched(documents.get(doc)!)
+			fetchFollowed()
 		},
 		async connectDiscover(url, service) {
 			await loaded
@@ -729,7 +742,7 @@ export function createDevice(
 				? await sub.connectDiscover(new URL(url))
 				: await sub.connectDiscover(new URL(url), service)
 			peers.set(hex(peer.toBytes()), peer)
-			for (const doc of followed) await fetched(documents.get(doc)!)
+			fetchFollowed()
 		},
 		async disconnect(key) {
 			const peer = peers.get(hex(key)) ?? new sd.PeerId(key)
@@ -753,7 +766,7 @@ export function createDevice(
 		},
 		arrived: (listener) => void listeners.push(listener),
 		async add(sealed, made) {
-			const u = made ? { ...made, signer: made.blop.signer } : unseal(sealed)
+			const u = made ? { ...made, signer: made.blop.signer } : await unseal(sealed)
 			const d = named(u.blop.node)
 			const blob = await lock.close(d.bytes, u.name, u.blop.parents, sealed)
 			let parents: Uint8Array[] = []
@@ -864,7 +877,10 @@ export function createDevice(
 		},
 		expire: () => expire(true),
 		async idle() {
-			while (busy > 0) await tail
+			while (busy > 0 || fetching.size) {
+				await Promise.all(fetching)
+				await tail
+			}
 			if (trouble.length) throw trouble.shift()
 		},
 		async close() {

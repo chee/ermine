@@ -42,10 +42,19 @@ const char *tb_code_name(int code) {
 
 // hashing
 
+// MurmurHash3's finalizer: its 64-bit one where a size_t is 64 bits, its 32-bit one where it is 32
 static size_t mix(size_t h) {
+#if SIZE_MAX > 0xffffffffu
 	h ^= h >> 33;
 	h *= 0xff51afd7ed558ccdULL;
 	h ^= h >> 33;
+#else
+	h ^= h >> 16;
+	h *= 0x85ebca6bu;
+	h ^= h >> 13;
+	h *= 0xc2b2ae35u;
+	h ^= h >> 16;
+#endif
 	return h;
 }
 static size_t hash_key(tb_key k) {

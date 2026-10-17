@@ -26,7 +26,7 @@
 // Entries the store leaves out or sends to the Trash are told on stderr as "path: why". Errors: one line on stderr, exit 1;
 // a command used wrong: the usage text, exit 2. FILES_HOME names a home folder to use in place of yours (its Trash, its list
 // of stores): to try the tool without touching your own.
-#include "../../../ermine/encoding/c/json.h"
+#include "../../../../ermine/encoding/c/json.h"
 #include "saved.h"
 #include "diag.h"
 #include "host.h"

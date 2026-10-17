@@ -11,7 +11,7 @@
 #ifndef DIAG_H
 #define DIAG_H
 
-#include "../../../ermine/encoding/c/json.h"
+#include "../../../../ermine/encoding/c/json.h"
 
 #include <stddef.h>
 

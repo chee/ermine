@@ -23,6 +23,11 @@
 // connect.ts gives this to a device's Subduction node; on start, what it
 // holds that the device does not is given to the device, which stores it
 // and takes it in, as on new heads.
+//
+// Writes are kept in order. What is written while the backend is writing
+// goes to it as one batch, after. A save resolves once its batch is kept;
+// with behind, at once, and flush() is where they are known kept (it throws
+// what a write threw).
 
 // deno-lint-ignore no-import-prefix
 import * as wasm from "npm:@automerge/subduction@0.23.0"
@@ -71,33 +76,66 @@ function unpack(bytes: Uint8Array): { signed: Uint8Array; blob: Uint8Array } {
 export class Storage {
 	#backend: Backend
 	#records: Map<string, Uint8Array>
+	// the records' keys by their prefix: up to and with the last "-"
+	#prefixes = new Map<string, Set<string>>()
+	#behind: boolean
+	// the last batch begun: once it is kept, every earlier one is
 	#writing: Promise<void> = Promise.resolve()
+	// the batch not begun yet, which writes join
+	#next: Map<string, Uint8Array | null> | undefined
+	// what writes threw, with behind, for flush
+	#failed: unknown[] = []
 
-	private constructor(backend: Backend, records: Map<string, Uint8Array>) {
+	private constructor(
+		backend: Backend,
+		records: Map<string, Uint8Array>,
+		behind: boolean,
+	) {
 		this.#backend = backend
 		this.#records = records
+		this.#behind = behind
+		for (const k of records.keys()) this.#prefixed(k).add(k)
 	}
 
-	/** Reads what the backend keeps. */
-	static async open(backend: Backend): Promise<Storage> {
-		return new Storage(backend, await backend.read())
+	/** Reads what the backend keeps. behind: saves resolve before they are kept. */
+	static async open(backend: Backend, options: { behind?: boolean } = {}): Promise<Storage> {
+		return new Storage(backend, await backend.read(), options.behind ?? false)
 	}
 
-	/** Resolves once every write begun is kept. */
-	async flush() {
+	/** Resolves once every write begun is kept; with behind, throws what one threw. */
+	async flush(): Promise<void> {
 		await this.#writing.catch(() => {})
+		if (this.#failed.length) throw this.#failed.shift()
+	}
+
+	#prefixed(k: string): Set<string> {
+		const prefix = k.slice(0, k.lastIndexOf("-") + 1)
+		let keys = this.#prefixes.get(prefix)
+		if (!keys) this.#prefixes.set(prefix, keys = new Set())
+		return keys
 	}
 
 	/** Sets and deletes records here at once, and in the backend after every earlier write. */
 	#write(batch: Map<string, Uint8Array | null>): Promise<void> {
-		for (const [k, v] of batch) v === null ? this.#records.delete(k) : this.#records.set(k, v)
-		const written = this.#writing.catch(() => {}).then(() => this.#backend.write(batch))
-		this.#writing = written
-		return written
+		for (const [k, v] of batch) {
+			if (v === null) this.#records.delete(k), this.#prefixed(k).delete(k)
+			else this.#records.set(k, v), this.#prefixed(k).add(k)
+		}
+		if (!this.#next) {
+			const next = this.#next = new Map()
+			this.#writing = this.#writing.catch(() => {}).then(() => {
+				this.#next = undefined
+				if (next.size) return this.#backend.write(next)
+			})
+			if (this.#behind) this.#writing.catch((e) => void this.#failed.push(e))
+		}
+		for (const [k, v] of batch) this.#next.set(k, v)
+		return this.#behind ? Promise.resolve() : this.#writing
 	}
 
+	// prefix: a word and "-", and a tree and "-" or not
 	#keys(prefix: string): string[] {
-		return [...this.#records.keys()].filter((k) => k.startsWith(prefix))
+		return [...this.#prefixes.get(prefix) ?? []]
 	}
 
 	#deleteAll(prefix: string): Promise<void> {
@@ -106,8 +144,10 @@ export class Storage {
 
 	// ---------------------------------------------------------------- sedimentree ids
 
+	// one already here is not written again: its write is an earlier one
 	saveSedimentreeId(tree: Id): Promise<void> {
-		return this.#write(new Map([[TREE + hexOf(tree.toBytes()), new Uint8Array(0)]]))
+		const k = TREE + hexOf(tree.toBytes())
+		return this.#write(new Map(this.#records.has(k) ? [] : [[k, new Uint8Array(0)]]))
 	}
 
 	deleteSedimentreeId(tree: Id): Promise<void> {
@@ -220,7 +260,7 @@ export class Storage {
 				pack(f.signedFragment, f.blob),
 			)
 		}
-		batch.set(TREE + t, new Uint8Array(0))
+		if (!this.#records.has(TREE + t)) batch.set(TREE + t, new Uint8Array(0))
 		await this.#write(batch)
 		return commits.length + fragments.length
 	}

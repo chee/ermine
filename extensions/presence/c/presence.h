@@ -1,5 +1,5 @@
 // Presence (typescript/presence.ts), in C: who is here, and where their cursor is, anchored on a
-// node. Same rules as presence.ts, which the suite in playground/presence/conformance/presence/
+// node. Same rules as presence.ts, which the suite in extensions/presence/conformance/presence/
 // holds both to. Rows live in the part "presence" at the anchor's id: { [who]: { value, until } },
 // one row a device or person, each written as a patch (so tracked, watched, drawn).
 //   - until: now + ttl, renewed by the row's owner (a heartbeat). readers see rows with until > now
@@ -63,6 +63,12 @@ void pres_lives_free(pres_lives *rows);
 // my row at the anchor: made or replaced, until = now + ttl (ms). told to a connected channel. The
 // value is held (op_ref) by the row, the strings are copied
 void pres_set(pres_world *w, const char *anchor, const char *who, const op_value *value, int64_t ttl);
+// my row's value changed by patches, as one write, until = now + ttl. patches: an op list of patches in
+// the wire shape ({path, range?, value?, move?}, JSON's), the paths relative to the row's value; held
+// by the write, so the caller may let go of its own hold. no such row, or an invalid patch (nothing
+// changes): false (the reference throws on an invalid patch). told to a connected channel as the
+// patches (pres_connect_patches) or the whole row
+bool pres_edit(pres_world *w, const char *anchor, const char *who, const op_value *patches, int64_t ttl);
 // the heartbeat: until = now + ttl, the value as it was. no such row: false
 bool pres_renew(pres_world *w, const char *anchor, const char *who, int64_t ttl);
 // my row taken out, and told, so the others do not wait for its until
@@ -102,6 +108,13 @@ bool pres_keep(const pres_world *w, const char *part);
 typedef struct pres_conn pres_conn;
 // anchor NULL: the topic. the connection is the world's until pres_free
 pres_conn *pres_connect(pres_world *w, chn_channel *channel, const char *topic, const char *anchor);
+// as pres_connect, and patches: an edit (pres_edit) is sent as { ttl, patches, n }, not the whole row,
+// and every row sent carries n, a count up by one each send of a who on this connection. a receiver
+// takes a whole row always, a patch message only when its n follows the last taken from that sender
+// and the row is there: else it is dropped and the row stays as it was until the next whole row. a
+// message without n is taken as it comes. patches false is pres_connect: nothing numbered
+pres_conn *pres_connect_patches(pres_world *w, chn_channel *channel, const char *topic,
+	const char *anchor, bool patches);
 // no more is heard or told on it
 void pres_stop(pres_conn *c);
 // send all my rows now (to someone new; or as the heartbeat)

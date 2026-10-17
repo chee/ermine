@@ -3,7 +3,7 @@
 // no hashing but its name, no signing, no parents looked up. replaces blop: the table is named (no
 // object per name), there is no node id (a commit is kept in its node's sedimentree), and the
 // change header goes as the graph has it (time, actor, reader, external, metadata; never op)
-import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
+import { blake3 } from "@ermine/blake3"
 import * as cbor from "./cbor.ts"
 import type { FileLocation } from "@ermine/util/stacktrace"
 

@@ -164,3 +164,38 @@ Deno.test({
 		await a.device.close()
 	},
 })
+
+Deno.test({
+	name: "transport: connect resolves once connected; idle waits for the followed to be fetched",
+	...opts,
+	async fn() {
+		const a = party(1), b = party(2)
+		await a.device.follow(DOC)
+		const r = await root(a, 1)
+		await a.device.add(r.sealed)
+		await a.device.idle()
+		await b.device.follow(DOC)
+		const [x, y] = pipe()
+		await Promise.all([a.device.connect(x, true), b.device.connect(y, false)])
+		await b.device.idle()
+		assertEquals(b.device.histories(DOC).heads("value").map((h) => hex(h.name)), [hex(r.name)])
+		await a.device.close(), await b.device.close()
+	},
+})
+
+Deno.test({
+	name: "transport: a document followed after connecting fetches itself",
+	...opts,
+	async fn() {
+		const a = party(1), b = party(2)
+		await a.device.follow(DOC)
+		const r = await root(a, 1)
+		await a.device.add(r.sealed)
+		const [x, y] = pipe()
+		await Promise.all([a.device.connect(x, true), b.device.connect(y, false)])
+		await b.device.follow(DOC)
+		await b.device.idle()
+		assertEquals(b.device.histories(DOC).heads("value").map((h) => hex(h.name)), [hex(r.name)])
+		await a.device.close(), await b.device.close()
+	},
+})

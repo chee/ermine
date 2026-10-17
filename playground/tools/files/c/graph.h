@@ -16,13 +16,13 @@
 #ifndef FILES_GRAPH_H
 #define FILES_GRAPH_H
 
-#include "../../../core/op/c/apply.h"
-#include "../../../core/op/c/value.h"
-#include "../../../core/node/c/node.h"
-#include "../../../core/scheduler/c/scheduler.h"
-#include "../../../core/table/c/table.h"
-#include "../../../ermine/encoding/c/json.h"
-#include "../../../filesystem/protect/c/protect.h"
+#include "../../../../core/op/c/apply.h"
+#include "../../../../core/op/c/value.h"
+#include "../../../../core/node/c/node.h"
+#include "../../../../core/scheduler/c/scheduler.h"
+#include "../../../../core/table/c/table.h"
+#include "../../../../ermine/encoding/c/json.h"
+#include "../../../../filesystem/protect/c/protect.h"
 #include "saved.h"
 
 #include <stdbool.h>

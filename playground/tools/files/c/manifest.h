@@ -15,7 +15,7 @@
 #ifndef MANIFEST_H
 #define MANIFEST_H
 
-#include "../../../ermine/encoding/c/json.h"
+#include "../../../../ermine/encoding/c/json.h"
 #include "saved_pack.h"
 #include "saved.h"
 

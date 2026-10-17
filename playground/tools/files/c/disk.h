@@ -16,7 +16,7 @@
 #ifndef DISK_H
 #define DISK_H
 
-#include "../../../ermine/encoding/c/json.h"
+#include "../../../../ermine/encoding/c/json.h"
 
 #include <stddef.h>
 

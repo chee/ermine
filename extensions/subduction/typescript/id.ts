@@ -1,6 +1,6 @@
 // a shared node's id, which binds its lock (ID.tex): the BLAKE3 hash of "ermine/v0/id", the
 // lock's name as a CBOR text string, and the 32 bytes its make gave; written ermine:// and hex
-import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
+import { blake3 } from "@ermine/blake3"
 import * as cbor from "@ermine/encoding/cbor"
 
 export type Code = "name" | "size" | "not-an-id"

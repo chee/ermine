@@ -1,7 +1,7 @@
 // external.c: where a store's manifest is. See external.h; the rules are external.ts's.
 #include "external.h"
 
-#include "../../../ermine/encoding/c/cbor.h"
+#include "../../../../ermine/encoding/c/cbor.h"
 #include "sys.h"
 
 #include <dirent.h>

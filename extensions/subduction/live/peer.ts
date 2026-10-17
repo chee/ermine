@@ -17,7 +17,7 @@
 //   {cmd:"ephemeral", doc, value}  value sent on the topic: ephemeral, kept nowhere, in parts if big
 //   {cmd:"status"}                 {commits, fragments, taking}
 //   {cmd:"quit"}
-import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
+import { blake3 } from "@ermine/blake3"
 import createEntry from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import type { Patch } from "@ermine/op/apply"
@@ -92,7 +92,9 @@ if (online) await device.connectDiscover(server, service)
 // what was heard on each topic viewed
 const heard = new Map<string, unknown[]>()
 const summary = (c: unknown): unknown =>
-	typeof c === "string" && c.length > 100 ? `len:${c.length}:${hexOf(blake3(c)).slice(0, 8)}` : c
+	typeof c === "string" && c.length > 100
+		? `len:${c.length}:${hexOf(blake3(new TextEncoder().encode(c))).slice(0, 8)}`
+		: c
 // every head of the node's value: the one shown, then the others from its conflicts table
 const read = (doc: string) => {
 	if (heard.has(doc)) return heard.get(doc)

@@ -1,6 +1,6 @@
-// json.h: a value (ENCODING.tex), its parser and printer, value equality, and
-// the code point helpers every other file uses. Nothing here knows about
-// graphs.
+// json.h: a value (ENCODING.tex), value equality, and the code point helpers
+// every other file uses; its parser and printer are json_text.h. Nothing here
+// knows about graphs.
 //
 // VALUES BEYOND JSON. A value is also bytes, a typed array or a stand-in (what
 // a live value is sent as, over its kind, any value), each held as the machine
@@ -178,36 +178,6 @@ bool jsonIsWhole(const Json *value, int64_t *out);
 bool jsonEqual(const Json *a, const Json *b);
 /** whether two numbers are the same as Object.is has it */
 bool jsonSameNumber(double a, double b);
-
-// text -------------------------------------------------------------------------
-
-/**
- * Parses exactly one JSON value from the bytes (whitespace around it is
- * allowed; a CR is whitespace). A repeated key keeps the last value, as
- * JSON.parse does. On failure returns NULL and puts a reason in *why (a
- * fresh C string).
- */
-Json *jsonParse(const char *text, size_t length, char **why);
-/**
- * ENCODING.tex, JSON form: turns the "/" forms in a value read from a line
- * into the values they stand for, in place (the value must be fresh, not yet
- * shared): bytes, typed arrays, numbers JSON cannot write, a map whose only
- * key is "/", and a stand-in (its kind decoded in turn). False when a form
- * is malformed or a string or a key holds a lone surrogate: wrong-field.
- * *value stays the same value, now what its form stands for.
- */
-bool jsonDecode(Json **value);
-
-/** the value in its JSON form (ENCODING.tex, JSON form), as JSON.stringify writes the rest: one line, a fresh C string */
-char *jsonPrint(const Json *value);
-
-/**
- * A number as the fewest digits, from 15, that read back as the same double,
- * in %g's layout ("0.1", "100", "1e+21", "1e-07"), which JSON's grammar takes:
- * all JSON asks of a number. -0 as 0; NaN and infinities are
- * "null". `out` holds at least 32 bytes.
- */
-void jsonNumberText(double number, char out[32]);
 
 // code points ------------------------------------------------------------------
 // Strings are counted and sliced by code point (as patches count them).
