@@ -1,0 +1,501 @@
+{
+	"title": "order among the due: lowest rank first, then the earliest due, then the order made; a mark makes a key's readers due in the order they began reading it, one that stopped reading it and read it again last",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1,
+				"y": 1,
+				"flag": true
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "a",
+			"scope": "o",
+			"f": {
+				"if": [
+					{
+						"read": "flag"
+					},
+					{
+						"read": "x"
+					},
+					0
+				]
+			},
+			"to": "a",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "b",
+			"scope": "o",
+			"f": {
+				"read": "x"
+			},
+			"to": "b",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"read": "y"
+			},
+			"to": "c",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "d",
+			"scope": "o",
+			"f": {
+				"sum": [
+					{
+						"read": "a"
+					},
+					{
+						"read": "b"
+					}
+				]
+			},
+			"to": "d",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "a",
+						"tick": 2
+					},
+					{
+						"due": "b",
+						"tick": 3
+					},
+					{
+						"due": "c",
+						"tick": 4
+					},
+					{
+						"due": "d",
+						"tick": 5
+					},
+					{
+						"starts": "a",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "b",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "b",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "d",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "d",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"y": 2
+			},
+			"expect": {
+				"tick": 10
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 2
+			},
+			"expect": {
+				"tick": 11
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 10
+					},
+					{
+						"due": "a",
+						"tick": 11
+					},
+					{
+						"due": "b",
+						"tick": 11
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "a",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"due": "d",
+						"tick": 13,
+						"writer": "a"
+					},
+					{
+						"ends": "a",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "b",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "b",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "d",
+						"run": 2,
+						"rank": 1
+					},
+					{
+						"ends": "d",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 3
+			},
+			"expect": {
+				"tick": 16
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"y": 3
+			},
+			"expect": {
+				"tick": 17
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "a",
+						"tick": 16
+					},
+					{
+						"due": "b",
+						"tick": 16
+					},
+					{
+						"due": "c",
+						"tick": 17
+					},
+					{
+						"starts": "a",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"due": "d",
+						"tick": 18,
+						"writer": "a"
+					},
+					{
+						"ends": "a",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "b",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"ends": "b",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "d",
+						"run": 3,
+						"rank": 1
+					},
+					{
+						"ends": "d",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"flag": false
+			},
+			"expect": {
+				"tick": 22
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"flag": true
+			},
+			"expect": {
+				"tick": 25
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "a",
+						"tick": 22
+					},
+					{
+						"starts": "a",
+						"run": 4,
+						"rank": 0
+					},
+					{
+						"due": "d",
+						"tick": 23,
+						"writer": "a"
+					},
+					{
+						"ends": "a",
+						"run": 4,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "d",
+						"run": 4,
+						"rank": 1
+					},
+					{
+						"ends": "d",
+						"run": 4,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"due": "a",
+						"tick": 25
+					},
+					{
+						"starts": "a",
+						"run": 5,
+						"rank": 0
+					},
+					{
+						"due": "d",
+						"tick": 26,
+						"writer": "a"
+					},
+					{
+						"ends": "a",
+						"run": 5,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "d",
+						"run": 5,
+						"rank": 1
+					},
+					{
+						"ends": "d",
+						"run": 5,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "changed",
+			"keys": [
+				"y",
+				"x"
+			],
+			"expect": {
+				"tick": 28
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 28
+					},
+					{
+						"due": "b",
+						"tick": 28
+					},
+					{
+						"due": "a",
+						"tick": 28
+					},
+					{
+						"starts": "a",
+						"run": 6,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 6,
+						"ended": "done",
+						"equal": true
+					},
+					{
+						"starts": "b",
+						"run": 4,
+						"rank": 0
+					},
+					{
+						"ends": "b",
+						"run": 4,
+						"ended": "done",
+						"equal": true
+					},
+					{
+						"starts": "c",
+						"run": 4,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 4,
+						"ended": "done",
+						"equal": true
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "d",
+			"expect": {
+				"value": 6
+			}
+		}
+	]
+}

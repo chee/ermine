@@ -1,0 +1,230 @@
+{
+	"title": "what an effect's run makes goes before its next run, though it did not act (equal runs pile nothing up), and before its act; what its act makes stays until its next act, through runs in between",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "effect",
+			"name": "e",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"scope": [
+							"r",
+							[
+								[
+									"why",
+									"run"
+								]
+							]
+						]
+					},
+					{
+						"cleanup": [
+							"r",
+							{
+								"log": "r goes"
+							}
+						]
+					},
+					{
+						"mod": [
+							{
+								"read": "x"
+							},
+							2
+						]
+					}
+				]
+			},
+			"act": {
+				"do": [
+					{
+						"log": [
+							"e",
+							{
+								"given": "value"
+							}
+						]
+					},
+					{
+						"scope": [
+							"t",
+							[
+								[
+									"why",
+									"act"
+								]
+							]
+						]
+					},
+					{
+						"cleanup": [
+							"t",
+							{
+								"log": "t goes"
+							}
+						]
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					"r goes",
+					[
+						"e",
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 3
+			},
+			"expect": {
+				"tick": 3
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "e",
+						"tick": 2
+					},
+					{
+						"starts": "e",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "e",
+						"run": 1
+					},
+					{
+						"due": "e",
+						"tick": 3
+					},
+					{
+						"starts": "e",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 2,
+						"ended": "done",
+						"equal": true
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": []
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 5
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					"r goes"
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 6
+			},
+			"expect": {
+				"tick": 5
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					"r goes",
+					"r goes",
+					"t goes",
+					[
+						"e",
+						0
+					]
+				]
+			}
+		},
+		{
+			"op": "dispose",
+			"scope": "e",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					"t goes"
+				]
+			}
+		}
+	]
+}

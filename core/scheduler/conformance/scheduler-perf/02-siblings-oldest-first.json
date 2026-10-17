@@ -1,0 +1,44 @@
+{
+	"title": "n sibling computations under one scope (made and run 1000 at a time), torn down oldest first",
+	"sizes": [2000, 8000, 32000],
+	"bound": "n",
+	"template": [
+		{ "op": "root", "name": "o", "info": [["actor", "t"]] },
+		{
+			"for": "j",
+			"to": "n/1000",
+			"do": [
+				{
+					"for": "i",
+					"from": "j*1000",
+					"to": "(j+1)*1000",
+					"do": [
+						{
+							"op": "compute",
+							"name": "c{i}",
+							"scope": "o",
+							"f": { "read": "k{i}" },
+							"to": "r{i}"
+						}
+					]
+				},
+				{ "op": "pulse" }
+			]
+		},
+		{
+			"for": "j",
+			"to": "n/1000",
+			"do": [
+				{
+					"for": "i",
+					"from": "j*1000",
+					"to": "(j+1)*1000",
+					"do": [
+						{ "op": "dispose", "scope": "c{i}" }
+					]
+				},
+				{ "op": "pulse" }
+			]
+		}
+	]
+}

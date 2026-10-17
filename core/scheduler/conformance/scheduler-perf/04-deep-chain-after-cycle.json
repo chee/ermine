@@ -1,0 +1,50 @@
+{
+	"title": "a chain n long (made and run 1000 at a time) after a 2-cycle, then a cycle member torn down",
+	"sizes": [2000, 8000, 32000],
+	"bound": "n",
+	"template": [
+		{ "op": "root", "name": "o", "info": [["actor", "t"]] },
+		{ "op": "write", "values": { "x0": 0 } },
+		{
+			"op": "compute",
+			"name": "x",
+			"scope": "o",
+			"f": { "mod": [{ "sum": [{ "read": "ky" }, 1] }, 3] },
+			"to": "kx"
+		},
+		{
+			"op": "compute",
+			"name": "y",
+			"scope": "o",
+			"f": { "mod": [{ "sum": [{ "read": "kx" }, 1] }, 3] },
+			"to": "ky"
+		},
+		{ "op": "pulse" },
+		{
+			"for": "j",
+			"to": "n/1000",
+			"do": [
+				{
+					"for": "i",
+					"from": "j*1000",
+					"to": "(j+1)*1000",
+					"do": [
+						{
+							"op": "compute",
+							"name": "c{i}",
+							"scope": "o",
+							"f": { "sum": [{ "read": "k{i-1}" }, { "mod": [{ "read": "kx" }, 1] }, 1] },
+							"to": "k{i}"
+						}
+					]
+				},
+				{ "op": "pulse" }
+			]
+		},
+		{ "op": "get", "key": "k{n-1}" },
+		{ "op": "dispose", "scope": "x" },
+		{ "op": "write", "values": { "ky": 0 } },
+		{ "op": "pulse" },
+		{ "op": "get", "key": "k{n-1}" }
+	]
+}

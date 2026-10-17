@@ -1,0 +1,340 @@
+{
+	"title": "the harness alone: tick 0, nothing open, every list empty, a key never kept null; a change of no keys still takes a tick; an unknown op or form, or a scope or promise not there, answers an error, and the harness goes on",
+	"steps": [
+		{
+			"op": "tick",
+			"expect": {
+				"tick": 0
+			}
+		},
+		{
+			"op": "current",
+			"expect": {
+				"value": null
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": []
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		},
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": []
+			}
+		},
+		{
+			"op": "forgotten",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "get",
+			"key": "x",
+			"expect": {
+				"value": null
+			}
+		},
+		{
+			"op": "write",
+			"values": {},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "changed",
+			"keys": [],
+			"expect": {
+				"tick": 2
+			}
+		},
+		{
+			"op": "tick",
+			"expect": {
+				"tick": 2
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		},
+		{
+			"op": "nope",
+			"expect": {
+				"error": "unknown op nope"
+			}
+		},
+		{
+			"op": "tick",
+			"expect": {
+				"tick": 2
+			}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "run",
+			"scope": "o",
+			"do": {
+				"nope": 1
+			},
+			"expect": {
+				"error": "unknown form nope"
+			}
+		},
+		{
+			"op": "run",
+			"scope": "o",
+			"do": {},
+			"expect": {
+				"error": "unknown form undefined"
+			}
+		},
+		{
+			"op": "run",
+			"scope": "o",
+			"do": [
+				1,
+				"a",
+				null,
+				true,
+				{
+					"quote": {
+						"read": "x"
+					}
+				},
+				{
+					"sum": []
+				},
+				{
+					"sum": [
+						null,
+						2,
+						3
+					]
+				},
+				{
+					"mod": [
+						7,
+						3
+					]
+				},
+				{
+					"mod": [
+						null,
+						3
+					]
+				},
+				{
+					"eq": [
+						[
+							1,
+							{
+								"quote": {
+									"a": 2
+								}
+							}
+						],
+						[
+							1,
+							{
+								"quote": {
+									"a": 2
+								}
+							}
+						]
+					]
+				},
+				{
+					"eq": [
+						1,
+						"1"
+					]
+				},
+				{
+					"if": [
+						1,
+						"then",
+						"else"
+					]
+				},
+				{
+					"if": [
+						true,
+						"then",
+						"else"
+					]
+				},
+				{
+					"do": []
+				},
+				{
+					"do": [
+						1,
+						2
+					]
+				},
+				{
+					"log": "logged"
+				}
+			],
+			"expect": {
+				"value": [
+					1,
+					"a",
+					null,
+					true,
+					{
+						"read": "x"
+					},
+					0,
+					5,
+					1,
+					0,
+					true,
+					false,
+					"else",
+					"then",
+					null,
+					2,
+					"logged"
+				]
+			}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "zz",
+			"f": 1,
+			"expect": {
+				"error": "no scope zz"
+			}
+		},
+		{
+			"op": "effect",
+			"name": "e",
+			"scope": "zz",
+			"f": 1,
+			"act": null,
+			"expect": {
+				"error": "no scope zz"
+			}
+		},
+		{
+			"op": "scope",
+			"name": "s",
+			"parent": "zz",
+			"info": [
+				[
+					"why",
+					"s"
+				]
+			],
+			"expect": {
+				"error": "no scope zz"
+			}
+		},
+		{
+			"op": "run",
+			"scope": "zz",
+			"do": 1,
+			"expect": {
+				"error": "no scope zz"
+			}
+		},
+		{
+			"op": "cleanup",
+			"scope": "zz",
+			"do": 1,
+			"expect": {
+				"error": "no scope zz"
+			}
+		},
+		{
+			"op": "dispose",
+			"scope": "zz",
+			"expect": {
+				"error": "no scope zz"
+			}
+		},
+		{
+			"op": "resolve",
+			"promise": "q",
+			"value": 1,
+			"expect": {
+				"error": "no promise q"
+			}
+		},
+		{
+			"op": "reject",
+			"promise": "q",
+			"error": "no",
+			"expect": {
+				"error": "no promise q"
+			}
+		},
+		{
+			"op": "run",
+			"scope": "o",
+			"do": {
+				"in": [
+					"zz",
+					1
+				]
+			},
+			"expect": {
+				"error": "no scope zz"
+			}
+		},
+		{
+			"op": "run",
+			"scope": "o",
+			"do": {
+				"dispose": "zz"
+			},
+			"expect": {
+				"error": "no scope zz"
+			}
+		},
+		{
+			"op": "tick",
+			"expect": {
+				"tick": 2
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					"logged"
+				]
+			}
+		}
+	]
+}

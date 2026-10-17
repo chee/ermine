@@ -1,0 +1,302 @@
+{
+	"title": "pending through reads: a compute that throws PENDING while what it reads is not there is pending, and so is every compute above it; when the value comes they all land, and the effect over them acts once",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "a",
+			"scope": "o",
+			"f": {
+				"wait": [
+					"p",
+					{
+						"quote": 5
+					}
+				]
+			},
+			"to": "a",
+			"declared": true,
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "b",
+			"scope": "o",
+			"f": {
+				"if": [
+					{
+						"eq": [
+							{
+								"read": "a"
+							},
+							null
+						]
+					},
+					{
+						"throw": {
+							"pending": null
+						}
+					},
+					{
+						"sum": [
+							{
+								"read": "a"
+							},
+							1
+						]
+					}
+				]
+			},
+			"to": "b",
+			"declared": true,
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"if": [
+					{
+						"eq": [
+							{
+								"read": "b"
+							},
+							null
+						]
+					},
+					{
+						"pending": null
+					},
+					{
+						"sum": [
+							{
+								"read": "b"
+							},
+							1
+						]
+					}
+				]
+			},
+			"to": "c",
+			"expect": {}
+		},
+		{
+			"op": "effect",
+			"name": "e",
+			"scope": "o",
+			"f": {
+				"if": [
+					{
+						"eq": [
+							{
+								"read": "c"
+							},
+							null
+						]
+					},
+					{
+						"throw": {
+							"pending": null
+						}
+					},
+					{
+						"read": "c"
+					}
+				]
+			},
+			"act": {
+				"log": [
+					"e",
+					{
+						"given": "value"
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "a",
+						"tick": 1
+					},
+					{
+						"due": "b",
+						"tick": 2
+					},
+					{
+						"due": "c",
+						"tick": 3
+					},
+					{
+						"due": "e",
+						"tick": 4
+					},
+					{
+						"starts": "a",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"starts": "b",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "b",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"starts": "e",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 1,
+						"ended": "pending"
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": []
+			}
+		},
+		{
+			"op": "resolve",
+			"promise": "p",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "b",
+						"tick": 5,
+						"writer": "a"
+					},
+					{
+						"ends": "a",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "b",
+						"run": 2,
+						"rank": 1
+					},
+					{
+						"due": "c",
+						"tick": 6,
+						"writer": "b"
+					},
+					{
+						"ends": "b",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 2
+					},
+					{
+						"due": "e",
+						"tick": 7,
+						"writer": "c"
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "e",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "e",
+						"run": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "b",
+			"expect": {
+				"value": 6
+			}
+		},
+		{
+			"op": "get",
+			"key": "c",
+			"expect": {
+				"value": 7
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"e",
+						7
+					]
+				]
+			}
+		}
+	]
+}

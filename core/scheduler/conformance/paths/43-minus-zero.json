@@ -1,0 +1,7 @@
+{
+	"title": "-0 as an index is 0, and written back as 0",
+	"steps": [
+		{ "op": "spot", "source": "v", "id": "z", "path": [-0], "expect": {} },
+		{ "op": "event", "source": "v", "id": "z", "expect": { "spots": [[0]] } }
+	]
+}

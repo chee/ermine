@@ -1,0 +1,167 @@
+{
+	"title": "a computation disposed while its promise is out: the settling lands nowhere, nothing is set, and the promise is settled once only",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "a",
+			"scope": "o",
+			"f": {
+				"wait": [
+					"p",
+					{
+						"sum": [
+							{
+								"read": "x"
+							},
+							10
+						]
+					}
+				]
+			},
+			"to": "a",
+			"expect": {}
+		},
+		{
+			"op": "effect",
+			"name": "e",
+			"scope": "o",
+			"f": {
+				"wait": [
+					"q",
+					{
+						"read": "x"
+					}
+				]
+			},
+			"act": {
+				"log": [
+					"e",
+					{
+						"given": "value"
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "a",
+						"tick": 2
+					},
+					{
+						"due": "e",
+						"tick": 3
+					},
+					{
+						"starts": "a",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"starts": "e",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 1,
+						"ended": "pending"
+					}
+				]
+			}
+		},
+		{
+			"op": "dispose",
+			"scope": "a",
+			"expect": {}
+		},
+		{
+			"op": "dispose",
+			"scope": "e",
+			"expect": {}
+		},
+		{
+			"op": "resolve",
+			"promise": "p",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "resolve",
+			"promise": "q",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		},
+		{
+			"op": "get",
+			"key": "a",
+			"expect": {
+				"value": null
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": []
+			}
+		},
+		{
+			"op": "resolve",
+			"promise": "p",
+			"value": null,
+			"expect": {
+				"error": "no promise p"
+			}
+		},
+		{
+			"op": "reject",
+			"promise": "q",
+			"error": "late",
+			"expect": {
+				"error": "no promise q"
+			}
+		}
+	]
+}

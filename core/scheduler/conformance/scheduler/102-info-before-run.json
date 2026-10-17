@@ -1,0 +1,193 @@
+{
+	"title": "a computation's info before its first run is the tick that made it due alone, and a run() of it from outside names no writer; a scope made under it then says that tick, and goes before its first run",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"read": "x"
+			},
+			"to": "c",
+			"expect": {}
+		},
+		{
+			"op": "run",
+			"scope": "c",
+			"do": {
+				"current": null
+			},
+			"expect": {
+				"value": {
+					"scope": "c",
+					"pairs": [
+						[
+							"mark",
+							1
+						],
+						[
+							"owner",
+							[
+								[
+									"actor",
+									"test"
+								]
+							]
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "run",
+			"scope": "c",
+			"do": {
+				"scope": [
+					"s",
+					[
+						[
+							"why",
+							"before"
+						]
+					]
+				]
+			},
+			"expect": {
+				"value": null
+			}
+		},
+		{
+			"op": "run",
+			"scope": "s",
+			"do": {
+				"current": null
+			},
+			"expect": {
+				"value": {
+					"scope": "s",
+					"pairs": [
+						[
+							"why",
+							"before"
+						],
+						[
+							"owner",
+							[
+								[
+									"mark",
+									1
+								],
+								[
+									"owner",
+									[
+										[
+											"actor",
+											"test"
+										]
+									]
+								]
+							]
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "run",
+			"scope": "c",
+			"do": {
+				"current": null
+			},
+			"expect": {
+				"value": {
+					"scope": "c",
+					"pairs": [
+						[
+							"run",
+							1
+						],
+						[
+							"mark",
+							1
+						],
+						[
+							"owner",
+							[
+								[
+									"actor",
+									"test"
+								]
+							]
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "run",
+			"scope": "s",
+			"do": 1,
+			"expect": {
+				"error": "disposed"
+			}
+		},
+		{
+			"op": "run",
+			"scope": "c",
+			"do": {
+				"in": [
+					"o",
+					{
+						"current": null
+					}
+				]
+			},
+			"expect": {
+				"value": {
+					"scope": "o",
+					"pairs": [
+						[
+							"actor",
+							"test"
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "run",
+			"scope": "o",
+			"do": {
+				"run": {
+					"current": null
+				}
+			},
+			"expect": {
+				"value": {
+					"scope": "o",
+					"pairs": [
+						[
+							"actor",
+							"test"
+						]
+					]
+				}
+			}
+		}
+	]
+}

@@ -1,0 +1,509 @@
+{
+	"title": "what a run throws is its error, told at its end: a scheduler error by its code (empty, disposed), a harness error by its message (a name taken, a scope not there, an unknown form), a thrown string as itself; a failed run sets nothing, and runs again when what it read changes; made under a disposed scope, every request is refused: disposed",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "scope",
+			"name": "gone",
+			"parent": "o",
+			"info": [
+				[
+					"why",
+					"gone"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "dispose",
+			"scope": "gone",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "a",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": "x"
+					},
+					{
+						"scope": [
+							"s",
+							[]
+						]
+					}
+				]
+			},
+			"to": "a",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "b",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": "x"
+					},
+					{
+						"scope": [
+							"s",
+							[
+								[
+									"why",
+									"b"
+								]
+							],
+							"gone"
+						]
+					}
+				]
+			},
+			"to": "b",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": "x"
+					},
+					{
+						"scope": [
+							"o",
+							[
+								[
+									"why",
+									"c"
+								]
+							]
+						]
+					}
+				]
+			},
+			"to": "c",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "d",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": "x"
+					},
+					{
+						"in": [
+							"nowhere",
+							1
+						]
+					}
+				]
+			},
+			"to": "d",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "f",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": "x"
+					},
+					{
+						"nope": 1
+					}
+				]
+			},
+			"to": "f",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "g",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": "x"
+					},
+					{
+						"in": [
+							"gone",
+							1
+						]
+					}
+				]
+			},
+			"to": "g",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "h",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": "x"
+					},
+					{
+						"throw": {
+							"if": [
+								true,
+								"h threw",
+								null
+							]
+						}
+					}
+				]
+			},
+			"to": "h",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "a",
+						"tick": 2
+					},
+					{
+						"due": "b",
+						"tick": 3
+					},
+					{
+						"due": "c",
+						"tick": 4
+					},
+					{
+						"due": "d",
+						"tick": 5
+					},
+					{
+						"due": "f",
+						"tick": 6
+					},
+					{
+						"due": "g",
+						"tick": 7
+					},
+					{
+						"due": "h",
+						"tick": 8
+					},
+					{
+						"starts": "a",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 1,
+						"ended": "failed",
+						"error": "empty"
+					},
+					{
+						"starts": "b",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "b",
+						"run": 1,
+						"ended": "failed",
+						"error": "disposed"
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "failed",
+						"error": "name taken: o"
+					},
+					{
+						"starts": "d",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "d",
+						"run": 1,
+						"ended": "failed",
+						"error": "no scope nowhere"
+					},
+					{
+						"starts": "f",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "f",
+						"run": 1,
+						"ended": "failed",
+						"error": "unknown form nope"
+					},
+					{
+						"starts": "g",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "g",
+						"run": 1,
+						"ended": "failed",
+						"error": "disposed"
+					},
+					{
+						"starts": "h",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "h",
+						"run": 1,
+						"ended": "failed",
+						"error": "h threw"
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 2
+			},
+			"expect": {
+				"tick": 9
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "a",
+						"tick": 9
+					},
+					{
+						"due": "b",
+						"tick": 9
+					},
+					{
+						"due": "c",
+						"tick": 9
+					},
+					{
+						"due": "d",
+						"tick": 9
+					},
+					{
+						"due": "f",
+						"tick": 9
+					},
+					{
+						"due": "g",
+						"tick": 9
+					},
+					{
+						"due": "h",
+						"tick": 9
+					},
+					{
+						"starts": "a",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 2,
+						"ended": "failed",
+						"error": "empty"
+					},
+					{
+						"starts": "b",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "b",
+						"run": 2,
+						"ended": "failed",
+						"error": "disposed"
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "failed",
+						"error": "name taken: o"
+					},
+					{
+						"starts": "d",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "d",
+						"run": 2,
+						"ended": "failed",
+						"error": "no scope nowhere"
+					},
+					{
+						"starts": "f",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "f",
+						"run": 2,
+						"ended": "failed",
+						"error": "unknown form nope"
+					},
+					{
+						"starts": "g",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "g",
+						"run": 2,
+						"ended": "failed",
+						"error": "disposed"
+					},
+					{
+						"starts": "h",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "h",
+						"run": 2,
+						"ended": "failed",
+						"error": "h threw"
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "a",
+			"expect": {
+				"value": null
+			}
+		},
+		{
+			"op": "run",
+			"scope": "o",
+			"do": {
+				"scope": [
+					"t",
+					[
+						[
+							"why",
+							"t"
+						]
+					],
+					"gone"
+				]
+			},
+			"expect": {
+				"error": "disposed"
+			}
+		},
+		{
+			"op": "cleanup",
+			"scope": "gone",
+			"do": 1,
+			"expect": {
+				"error": "disposed"
+			}
+		},
+		{
+			"op": "compute",
+			"name": "z",
+			"scope": "gone",
+			"f": 1,
+			"expect": {
+				"error": "disposed"
+			}
+		},
+		{
+			"op": "effect",
+			"name": "z",
+			"scope": "gone",
+			"f": 1,
+			"act": null,
+			"expect": {
+				"error": "disposed"
+			}
+		},
+		{
+			"op": "scope",
+			"name": "z",
+			"parent": "gone",
+			"info": [
+				[
+					"why",
+					"z"
+				]
+			],
+			"expect": {
+				"error": "disposed"
+			}
+		},
+		{
+			"op": "run",
+			"scope": "gone",
+			"do": 1,
+			"expect": {
+				"error": "disposed"
+			}
+		}
+	]
+}

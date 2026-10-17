@@ -1,0 +1,363 @@
+{
+	"title": "a change named by a computation: one not run yet names nobody, from outside; a compute that ran becomes the key's writer, and a reader of the key waits for it while it is due; an effect is named, but is no key's writer, so nothing waits for it",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1,
+				"k": 1,
+				"j": 1,
+				"y": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "r",
+			"scope": "o",
+			"f": {
+				"read": "k"
+			},
+			"to": "r",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "r2",
+			"scope": "o",
+			"f": {
+				"read": "j"
+			},
+			"to": "r2",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "r",
+						"tick": 2
+					},
+					{
+						"due": "r2",
+						"tick": 3
+					},
+					{
+						"starts": "r",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "r",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "r2",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "r2",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "compute",
+			"name": "w",
+			"scope": "o",
+			"f": {
+				"read": "x"
+			},
+			"to": "w",
+			"expect": {}
+		},
+		{
+			"op": "effect",
+			"name": "e",
+			"scope": "o",
+			"f": {
+				"read": "y"
+			},
+			"act": null,
+			"expect": {}
+		},
+		{
+			"op": "run",
+			"scope": "o",
+			"do": {
+				"write": [
+					"k",
+					2,
+					"w"
+				]
+			},
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "w",
+						"tick": 6
+					},
+					{
+						"due": "e",
+						"tick": 7
+					},
+					{
+						"due": "r",
+						"tick": 8
+					}
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"starts": "w",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "w",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "e",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "r",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "r",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "e",
+						"run": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "run",
+			"scope": "o",
+			"do": {
+				"write": [
+					"k",
+					3,
+					"w"
+				]
+			},
+			"expect": {
+				"value": 3
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 2
+			},
+			"expect": {
+				"tick": 12
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "r",
+						"tick": 11,
+						"writer": "w"
+					},
+					{
+						"due": "w",
+						"tick": 12
+					}
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"starts": "r",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"ends": "r",
+						"run": 3,
+						"ended": "stopped",
+						"waits": "w"
+					},
+					{
+						"starts": "w",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "w",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "r",
+						"run": 4,
+						"rank": 1
+					},
+					{
+						"ends": "r",
+						"run": 4,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "r",
+			"expect": {
+				"value": 3
+			}
+		},
+		{
+			"op": "run",
+			"scope": "o",
+			"do": {
+				"write": [
+					"j",
+					4,
+					"e"
+				]
+			},
+			"expect": {
+				"value": 4
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"y": 2
+			},
+			"expect": {
+				"tick": 16
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "r2",
+						"tick": 15,
+						"writer": "e"
+					},
+					{
+						"due": "e",
+						"tick": 16
+					}
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"starts": "r2",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "r2",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "e",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "e",
+						"run": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "r2",
+			"expect": {
+				"value": 4
+			}
+		}
+	]
+}

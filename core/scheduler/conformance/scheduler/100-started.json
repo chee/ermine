@@ -1,0 +1,175 @@
+{
+	"title": "started: told each key as it gains its first tracker, in the order first read, not again for a second reader, and again once it was forgotten and is read again",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 1,
+				"b": 1,
+				"flag": true
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "started",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"if": [
+					{
+						"read": "flag"
+					},
+					{
+						"read": "b"
+					},
+					{
+						"read": "a"
+					}
+				]
+			},
+			"to": "c",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "d",
+			"scope": "o",
+			"f": {
+				"read": "flag"
+			},
+			"to": "d",
+			"expect": {}
+		},
+		{
+			"op": "run",
+			"scope": "o",
+			"do": {
+				"read": "a"
+			},
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "started",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "started",
+			"expect": {
+				"keys": [
+					"flag",
+					"b"
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"flag": false
+			},
+			"expect": {
+				"tick": 6
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "forgotten",
+			"expect": {
+				"keys": [
+					"b"
+				]
+			}
+		},
+		{
+			"op": "started",
+			"expect": {
+				"keys": [
+					"a"
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"flag": true
+			},
+			"expect": {
+				"tick": 8
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "forgotten",
+			"expect": {
+				"keys": [
+					"a"
+				]
+			}
+		},
+		{
+			"op": "started",
+			"expect": {
+				"keys": [
+					"b"
+				]
+			}
+		},
+		{
+			"op": "dispose",
+			"scope": "c",
+			"expect": {}
+		},
+		{
+			"op": "dispose",
+			"scope": "d",
+			"expect": {}
+		},
+		{
+			"op": "forgotten",
+			"expect": {
+				"keys": [
+					"b",
+					"flag"
+				]
+			}
+		},
+		{
+			"op": "started",
+			"expect": {
+				"keys": []
+			}
+		}
+	]
+}

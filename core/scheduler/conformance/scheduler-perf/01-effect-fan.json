@@ -1,0 +1,24 @@
+{
+	"title": "an effect fan: n effects read one key, which changes, then a pulse (100 rounds: a pulse may tell no more than 10000 moments, so n stays small and the rounds make the time)",
+	"sizes": [150, 600, 2400],
+	"bound": "n",
+	"template": [
+		{ "op": "root", "name": "o", "info": [["actor", "t"]] },
+		{
+			"for": "i",
+			"to": "n",
+			"do": [
+				{ "op": "effect", "name": "e{i}", "scope": "o", "f": { "read": "k" }, "act": null }
+			]
+		},
+		{ "op": "pulse" },
+		{
+			"for": "r",
+			"to": 100,
+			"do": [
+				{ "op": "write", "values": { "k": { "=": "r+1" } } },
+				{ "op": "pulse" }
+			]
+		}
+	]
+}

@@ -1,0 +1,340 @@
+{
+	"title": "a run starts only for a reason, and a pulse leaves nothing due: a change to a key nobody tracks, or tracked only by one gone, or read only untracked, runs nothing; after a loop ends, another pulse runs nothing",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"k0": 1,
+				"k1": 1,
+				"u": 1,
+				"g": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "a",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"write": [
+							"k1",
+							{
+								"mod": [
+									{
+										"sum": [
+											{
+												"read": "k0"
+											},
+											1
+										]
+									},
+									5
+								]
+							}
+						]
+					},
+					{
+						"read": "k0"
+					}
+				]
+			},
+			"to": "a",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "b",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"write": [
+							"k0",
+							{
+								"mod": [
+									{
+										"sum": [
+											{
+												"read": "k1"
+											},
+											1
+										]
+									},
+									5
+								]
+							}
+						]
+					},
+					{
+						"read": "k1"
+					}
+				]
+			},
+			"to": "b",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"sum": [
+					{
+						"run": {
+							"read": "u"
+						}
+					},
+					{
+						"read": "g"
+					}
+				]
+			},
+			"to": "c",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "a",
+						"tick": 2
+					},
+					{
+						"due": "b",
+						"tick": 3
+					},
+					{
+						"due": "c",
+						"tick": 4
+					},
+					{
+						"starts": "a",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "b",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"due": "a",
+						"tick": 7,
+						"writer": "b"
+					},
+					{
+						"ends": "b",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "a",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"due": "b",
+						"tick": 10,
+						"writer": "a"
+					},
+					{
+						"ends": "a",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "b",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "b",
+						"run": 2,
+						"ended": "looping",
+						"equal": false,
+						"through": [
+							"a",
+							"b"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"k0": 3
+			},
+			"expect": {
+				"tick": 13
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "a",
+						"tick": 13
+					},
+					{
+						"starts": "a",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"due": "b",
+						"tick": 14,
+						"writer": "a"
+					},
+					{
+						"ends": "a",
+						"run": 3,
+						"ended": "done",
+						"equal": true
+					},
+					{
+						"starts": "b",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"due": "a",
+						"tick": 15,
+						"writer": "b"
+					},
+					{
+						"ends": "b",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "a",
+						"run": 4,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 4,
+						"ended": "looping",
+						"equal": false,
+						"through": [
+							"a",
+							"b"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		},
+		{
+			"op": "changed",
+			"keys": [
+				"nobody",
+				"u"
+			],
+			"expect": {
+				"tick": 18
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		},
+		{
+			"op": "dispose",
+			"scope": "c",
+			"expect": {}
+		},
+		{
+			"op": "changed",
+			"keys": [
+				"g"
+			],
+			"expect": {
+				"tick": 19
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		},
+		{
+			"op": "forgotten",
+			"expect": {
+				"keys": [
+					"g"
+				]
+			}
+		}
+	]
+}
