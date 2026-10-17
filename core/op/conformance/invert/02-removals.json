@@ -1,5 +1,5 @@
 {
-	"title": "removals: a key put back (last in its map), an element put back in its gap, the whole put back; a missing key's undo is nothing",
+	"title": "removals: a key put back, an element put back in its gap, the whole put back; a missing key's undo is nothing",
 	"steps": [
 		{
 			"op": "invert",

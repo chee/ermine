@@ -5,7 +5,10 @@
 // the reference harness answered when the scenarios were written (a golden run). So they pin
 // that every implementation, and every later version of one, ends where that run ended: same heads,
 // same waiting, refused and stuck, same fragments.
-//   deno run -A extensions/subduction/conformance/transport_fuzz.ts [seeds = 24]
+// Each commit's value is drawn from its own stream (so the history's shape is the seed's either way):
+// a number, or text and map keys with emoji, a skin-toned emoji (two code points) and NUL (lone
+// surrogates have no encoding, so no blop holds one).
+//   deno run -A extensions/subduction/conformance/transport_fuzz.ts [seeds = 24] [folder]
 import { ed25519 } from "npm:@noble/curves@1.9.7/ed25519"
 import { encode, name } from "@ermine/encoding/blop"
 import * as cbor from "@ermine/encoding/cbor"
@@ -13,7 +16,7 @@ import { seal, stored } from "@ermine/subduction/seal"
 import { id } from "@ermine/subduction/id"
 
 const here = new URL(".", import.meta.url).pathname
-const out = `${here}subduction-transport/`
+const out = Deno.args[1] ? `${Deno.args[1].replace(/\/$/, "")}/` : `${here}subduction-transport/`
 const harness = [
 	"deno",
 	"run",
@@ -48,8 +51,24 @@ function random(seed: number) {
 type Blop = { parents: Blop[]; lamport: number; name: string; sealed: Uint8Array; stored: string }
 let nonces = 0
 
+const STRINGS = ["", "a", "😀", "👍🏽", "a\u0000b", "\u0000", "é👍🏽x"]
+const KEYS = ["x", "😀", "👍🏽", "\u0000", ""]
+// a commit's value: its nonce (as the scenarios first were), a string, or a map of strings
+function valueOf(r: () => number, n: number): unknown {
+	const pick = <T>(xs: T[]) => xs[Math.floor(r() * xs.length)]
+	const roll = r()
+	if (roll < 0.4) return n
+	if (roll < 0.7) return pick(STRINGS) + pick(STRINGS)
+	return Object.fromEntries([pick(KEYS), pick(KEYS)].map((k) => [k, pick(STRINGS)]))
+}
+
 // deep: the stored id starts with a zero byte (a fragment's head), or must not
-async function mk(by: Dev, parents: Blop[], deep: boolean): Promise<Blop> {
+async function mk(
+	by: Dev,
+	parents: Blop[],
+	deep: boolean,
+	value: (n: number) => unknown,
+): Promise<Blop> {
 	const lamport = 1 + Math.max(0, ...parents.map((p) => p.lamport))
 	for (;;) {
 		const nonce = new Uint8Array(8)
@@ -63,7 +82,7 @@ async function mk(by: Dev, parents: Blop[], deep: boolean): Promise<Blop> {
 			parents: parents.map((p) => unhex(p.name)).sort((x, y) => hex(x) < hex(y) ? -1 : 1),
 			...(parents.length >= 2 ? { base: unhex(parents[0].name) } : {}),
 			lamport,
-			patches: [{ path: [], value: nonces }] as never,
+			patches: [{ path: [], value: value(nonces) }] as never,
 		})
 		const sealed = await seal(bytes, {
 			key: by.key,
@@ -77,6 +96,8 @@ async function mk(by: Dev, parents: Blop[], deep: boolean): Promise<Blop> {
 
 async function scenario(seed: number) {
 	const r = random(seed)
+	const values = random(seed ^ 0x5157)
+	const value = (n: number) => valueOf(values, n)
 	const pick = <T>(xs: T[]) => xs[Math.floor(r() * xs.length)]
 	const shuffle = <T>(xs: T[]) => {
 		for (let i = xs.length - 1; i > 0; i--) {
@@ -97,7 +118,7 @@ async function scenario(seed: number) {
 			else if (roll < 0.35) parents = [pick(blops)]
 			else parents = [pick([...heads])]
 		}
-		const b = await mk(r() < 0.3 ? B : A, parents, r() < 0.12)
+		const b = await mk(r() < 0.3 ? B : A, parents, r() < 0.12, value)
 		for (const p of parents) heads.delete(p)
 		heads.add(b)
 		blops.push(b)

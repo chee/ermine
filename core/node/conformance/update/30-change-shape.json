@@ -1,5 +1,5 @@
 {
-	"title": "the change answers its fields in one order (time, actor, reader, external, metadata, op), a patch as path, range, value, move and nothing else, -0 as an index 0",
+	"title": "the change answers a patch with its path, range, value and move, nothing else; -0 as an index is 0",
 	"steps": [
 		{
 			"op": "start",

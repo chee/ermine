@@ -5,7 +5,7 @@
 // for a connection the node did not open. So each side opens one and the pipe crosses them.
 // Then a commit added on a, both syncing the tree: does b hold it? Then the same offline: b's
 // connection closed (erm_sd_closed both sides), a commit on a; a new pair of connections.
-// Found 2026-10-11: both handshakes finish (two initiators, crossed); the commit crosses, seen
+// Result: both handshakes finish (two initiators, crossed); the commit crosses, seen
 // by b's store's put; offline it does not; relinked and synced, it does; an ephemeral message
 // is heard (ERM_SD_HEARD). Built against lib/ (smoke's link line).
 #include "subduction.h"

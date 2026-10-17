@@ -1,5 +1,5 @@
 // what the fuzz tests share: seeded numbers, random values and patches on them, and a comparison
-// that keeps lone surrogates, typed arrays and key order. seeded and deterministic: a seed is a
+// that keeps lone surrogates and typed arrays (key order when asked). seeded and deterministic: a seed is a
 // run. a few dozen seeds per property (fuzz runs small)
 import apply, { ApplyError, type Key, type Patch } from "@ermine/op/apply"
 
@@ -201,7 +201,8 @@ export function batch(pick: Pick, from: unknown, most = 24) {
 }
 
 // where a and b differ ("": nowhere). lists, strings and typed arrays element for element; maps
-// by content, and in key order when order
+// by content (a map's key order is not part of its value: apply.ts). order: in key order too, for
+// telling a value changed in place after it was handed out
 export function differ(a: unknown, b: unknown, order = false, at = "$"): string {
 	if (typeof a === "string" || typeof b === "string") return a === b ? "" : `${at}: string`
 	if (Array.isArray(a) || Array.isArray(b)) {

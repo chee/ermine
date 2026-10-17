@@ -1,5 +1,5 @@
 {
-	"title": "values at their edges, given back whole: -0, the words, the largest and smallest numbers, NUL and lone surrogates, empty and full typed arrays, stand-ins, a map's key order",
+	"title": "values at their edges, given back whole: -0, the words, the largest and smallest numbers, NUL and lone surrogates, empty and full typed arrays, stand-ins, a map with \"__proto__\" a key",
 	"steps": [
 		{
 			"op": "entry",

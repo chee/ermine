@@ -1,5 +1,5 @@
 {
-	"title": "a patch comes back as path, range, value, move, in that order, and nothing else; -0 as a key or position is 0",
+	"title": "a patch comes back with its path, range, value and move, nothing else; -0 as a key or position is 0",
 	"steps": [
 		{
 			"op": "squish",

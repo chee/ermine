@@ -1,5 +1,5 @@
 {
-	"title": "the way back and forth: the undo applied to the value after gives the value given (a key put back last); the undo's own undo, applied to that, gives the value after",
+	"title": "the way back and forth: the undo applied to the value after gives the value given; the undo's own undo, applied to that, gives the value after",
 	"steps": [
 		{"op":"invert","value":{"a":1,"b":2,"c":3},"patches":[{"path":["a"]}]},
 		{"op":"apply","value":{"b":2,"c":3},"patches":[{"path":["a"],"value":1}],"expect":{"value":{"b":2,"c":3,"a":1}}},
