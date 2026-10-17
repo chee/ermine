@@ -28,7 +28,7 @@ static char *format(const char *f, const char *a, const char *b) {
 	return r;
 }
 
-void ex_uuid(char out[37]) {
+static void ex_uuid(char out[37]) {
 	uint8_t b[16];
 	FILE *f = fopen("/dev/urandom", "rb");
 	if (!f || fread(b, 1, sizeof b, f) != sizeof b) abort();
@@ -38,7 +38,7 @@ void ex_uuid(char out[37]) {
 		b[10], b[11], b[12], b[13], b[14], b[15]);
 }
 
-char *ex_outside(const char *home) {
+static char *ex_outside(const char *home) {
 	return format("%s/.ermine/external", home, NULL);
 }
 
@@ -82,7 +82,7 @@ static bool isdir(const char *path) {
 	return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
 }
 
-bool ex_synced(const char *folder, const ex_where *w) {
+static bool ex_synced(const char *folder, const ex_where *w) {
 	const char *home = home_of(w);
 	if (!home) return false;
 	char *at = nearest(folder), *root = real_(home);
@@ -453,7 +453,7 @@ static int move_folder(const char *from, const char *to) {
 	return 0;
 }
 
-void ex_located_free(ex_located *l) {
+static void ex_located_free(ex_located *l) {
 	free(l->dir), free(l->uuid);
 	*l = (ex_located){0};
 }

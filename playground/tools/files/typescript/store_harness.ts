@@ -1,9 +1,9 @@
 // the store (store.ts) on the line protocol (conformance/typescript/harness.ts). One store object at
-// a time, made by open, on a temp folder of the run's own (disk.ts): the harness makes the edits a
-// scenario asks for and looks at the folder and the Trash itself, as disk.ts has it, never through
+// a time, made by open, on a temp folder of the run's own (disk_harness.ts): the harness makes the edits a
+// scenario asks for and looks at the folder and the Trash itself, as disk_harness.ts has it, never through
 // the store. Nodes in pack's JSON form: {id, value, info, children, header?}, every content, change
 // and because a value in its JSON form (conformance/typescript/form.ts). Hashes are 64 lowercase
-// hex digits; bytes lowercase hex. Every answer is shown as disk.ts shows it: the temp folder "@",
+// hex digits; bytes lowercase hex. Every answer is shown as disk_harness.ts shows it: the temp folder "@",
 // each store's uuid "uuid", "uuid2", ... in the order met; a request's uuid label is the uuid.
 //   {op: "open", folder?, mirror?, files?, pass?, slack?}
 //                         -> {}  a new store object on folder (a "@" path; none: @Store), its
@@ -48,9 +48,9 @@
 //                            listed, in order; why as a code (WHY below), or as given to a trash
 //                            request
 //   {op: "edit", edit, ...}
-//                         -> {}  the edit made on the disk (disk.ts)
+//                         -> {}  the edit made on the disk (disk_harness.ts)
 //   {op: "observe", attrs?, folder?, at?}
-//                         -> {folder, trash, listed, at?}  disk.ts's snapshot, listed as the
+//                         -> {folder, trash, listed, at?}  disk_harness.ts's snapshot, listed as the
 //                            listed request answers
 //   a StoreError          -> {error: "store"}
 //   anything else thrown  -> {error: "other", message}
@@ -67,7 +67,7 @@ import type { Foundation } from "./foundation.ts"
 import { find, type Mirror, mirror, stores } from "./store.ts"
 import { byCodePoint } from "./names.ts"
 import { StoreError } from "./types.ts"
-import { Disk, storeSnapshot, UUIDS } from "./disk.ts"
+import { Disk, storeSnapshot, UUIDS } from "./disk_harness.ts"
 import { fromJson, toJson } from "../../../conformance/typescript/form.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
 

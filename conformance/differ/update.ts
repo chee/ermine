@@ -1,5 +1,5 @@
 // update's streams: an entry started (cow: false now and then) on a random value
-// (core/fuzz/gen.ts), then updates of a few patches each (some refused: they change nothing), an
+// (core/fuzz/gen_harness.ts), then updates of a few patches each (some refused: they change nothing), an
 // entry asked after each; a put of a fresh list, map or string then spliced into in the same
 // update, now and then. headers given or not ({ time: 1, actor: "me" }), {} too.
 // the invariant, each implementation on its own: the entry's value is the start value with every
@@ -11,7 +11,7 @@
 // values that are no JSON form
 // deno-lint-ignore-file no-explicit-any
 import apply, { ApplyError, type Patch } from "@ermine/op/apply"
-import { patch, start } from "../../core/fuzz/gen.ts"
+import { patch, start } from "../../core/fuzz/gen_harness.ts"
 import { wildPatches } from "./apply.ts"
 import {
 	type Answer,

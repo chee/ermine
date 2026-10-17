@@ -47,27 +47,13 @@ typedef struct {
 	size_t length;
 	const char **missing;
 	size_t missing_length;
-	void *own; // unpack's: what it allocated, the nodes too
+	void *own; // decode's: what it allocated, the nodes too
 } sp_graph;
 
-// the root and every node reachable from it, by any version of any list; nodes and ids are the
-// get's. root not loaded: SP_NOTHING_THERE
-sp_code sp_walk(const char *root, sp_get get, void *context, sp_graph *out);
-// the walk as one CBOR item, appended to out. A symbol in a list, or a value the codec cannot
-// encode: SP_CANNOT_CARRY, *id the node's (id may be NULL)
-sp_code sp_pack(const char *root, sp_get get, void *context, const sp_codec *codec,
-	sp_bytes *out, const char **id);
-// new nodes, by sd_make, headers as written. Only the canonical encoding is read (ENCODING.tex:
-// shortest heads, definite lengths, floats not integers, keys in order); anything else, or a shape
-// that is not a graph: SP_NOT_A_GRAPH
-sp_code sp_unpack(const uint8_t *bytes, size_t length, const sp_codec *codec, sp_graph *out);
-// one node alone, as a graph's nodes are written, appended to out. A symbol in a list, or a value
-// the codec cannot encode: SP_CANNOT_CARRY
-sp_code sp_encode(const sd_node *node, const sp_codec *codec, sp_bytes *out);
-// the node back, as encode wrote it: out->nodes[0] (length 1, root its id), a new node, headers
+// the node back, as a graph's nodes are written: out->nodes[0] (length 1, root its id), a new node, headers
 // as written. Anything else, or a shape that is not a node: SP_NOT_A_NODE. sp_free it
 sp_code sp_decode(const uint8_t *bytes, size_t length, const sp_codec *codec, sp_graph *out);
-// what walk, unpack or decode allocated
+// what decode allocated
 void sp_free(sp_graph *g);
 
 #endif

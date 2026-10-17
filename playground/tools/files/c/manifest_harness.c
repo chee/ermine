@@ -12,7 +12,7 @@
 #include "../../../../ermine/encoding/c/cbor.h"
 #include "../../../../ermine/encoding/c/json.h"
 #include "../../../../ermine/encoding/c/json_text.h"
-#include "saved_shown.h"
+#include "saved_shown_harness.h"
 #include "manifest.h"
 
 #include <dirent.h>

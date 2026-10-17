@@ -1,9 +1,9 @@
-// The disk of the harnesses (disk.h), disk.ts's twin.
+// The disk of the harnesses (disk_harness.h), disk_harness.ts's twin.
 #ifdef __linux__
 #define _GNU_SOURCE
 #endif
 
-#include "disk.h"
+#include "disk_harness.h"
 #include "names.h"
 #include "sys.h"
 #include "../../../../ermine/encoding/c/cbor.h"
@@ -65,7 +65,7 @@ void disk_free(Disk *d) {
 	free(d);
 }
 
-const char *disk_label(Disk *d, const char *raw) {
+static const char *disk_label(Disk *d, const char *raw) {
 	for (size_t i = 0; i < d->count; i++)
 		if (strcmp(d->raws[i], raw) == 0) return d->labels[i];
 	if (d->count == d->capacity) {
@@ -155,7 +155,7 @@ static size_t match(const Disk *d, const char *s, size_t i) {
 	return j - i;
 }
 
-char *disk_text(Disk *d, const char *s) {
+static char *disk_text(Disk *d, const char *s) {
 	char *with = formatString("%s/", d->dir);
 	char *one = replace_all(s, with, "@");
 	free(with);

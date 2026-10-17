@@ -1,7 +1,7 @@
 // Shown nodes on the line protocol (newcore/conformance/node/harness.ts), for the C harnesses:
 // reading JSON as spans of the line, and writing it. Content, change, because, actor and cause are
 // kept as their JSON text and written back as is; in a list, {"symbol": name} is a symbol.
-#include "saved_shown.h"
+#include "saved_shown_harness.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -289,34 +289,6 @@ void header(const sd_header *h) {
 	if (h->has_wallclock) printf("%s\"wallclock\":%lld", comma, (long long)h->wallclock), comma = ",";
 	if (h->message) printf("%s\"message\":", comma), text(h->message);
 	putchar('}');
-}
-
-sd_header parse_header(const char *p) {
-	sd_header h = {0};
-	const char *time = field(p, "time"), *actor = field(p, "actor"), *reader = field(p, "reader"),
-		   *at = field(p, "site"), *cause = field(p, "cause"), *wallclock = field(p, "wallclock"),
-		   *message = field(p, "message");
-	if (time) h.has_time = 1, h.time = strtoll(time, NULL, 10);
-	if (actor) h.actor = raw(actor);
-	if (reader) h.reader = string(reader);
-	if (at) h.has_site = 1, h.site = site(at);
-	if (cause) h.cause = raw(cause);
-	if (wallclock) h.has_wallclock = 1, h.wallclock = strtoll(wallclock, NULL, 10);
-	if (message) h.message = string(message);
-	return h;
-}
-
-sd_node *parse_node(const char *p) {
-	sd_contents c = {0};
-	const char *value = field(p, "value"), *info = field(p, "info"), *children = field(p, "children"),
-		   *given = field(p, "header");
-	if (value) c.value = object(value, 0);
-	if (info) c.info_length = named(info, 0, &c.info);
-	if (children) c.children_length = named(children, 1, &c.children);
-	sd_header h = given ? parse_header(given) : (sd_header){0};
-	sd_node *n = sd_make(string(field(p, "id")), &c, &h, NULL);
-	if (n == NULL) fail("out of memory");
-	return n;
 }
 
 void show_node(const sd_node *n) {

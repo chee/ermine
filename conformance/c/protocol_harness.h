@@ -1,8 +1,8 @@
-// patches, change headers, entries and nodes on the line protocol (protocol.c): what a request holds of
+// patches, change headers, entries and nodes on the line protocol (protocol_harness.c): what a request holds of
 // them, read into op's C types, and written back. for the harnesses of op and node, and what is
 // built on them
-#ifndef PROTOCOL_H
-#define PROTOCOL_H
+#ifndef PROTOCOL_HARNESS_H
+#define PROTOCOL_HARNESS_H
 
 #include <stdio.h>
 

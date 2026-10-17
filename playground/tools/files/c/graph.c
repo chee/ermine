@@ -201,10 +201,6 @@ void fg_free(fg *g) {
 	free(g);
 }
 
-sc_scheduler *fg_scheduler(const fg *g) {
-	return g->s;
-}
-
 tb_table *fg_table(const fg *g) {
 	return g->table;
 }
@@ -255,24 +251,6 @@ static fg_api *api_new(fg *g, const char *actor, const char *file, const char *f
 
 fg_api *fg_actor(fg *g, const char *actor) {
 	return api_new(g, actor, NULL, NULL, NULL);
-}
-
-fg_api *fg_as(fg_api *api, const char *file, const char *from) {
-	fg *g = api->g;
-	fg_api *a = keep(&g->apis, alloc(sizeof *a));
-	a->g = g;
-	if (api->actor) a->actor = op_ref(api->actor);
-	if (a->actor) a->info[a->ninfo++] = (sc_pair){"actor", a->actor};
-	if (api->program) a->program = op_ref(api->program), a->info[a->ninfo++] = (sc_pair){"program", a->program};
-	a->file = copy(file);
-	if (from) a->from = copy(from);
-	op_value *c = op_map();
-	op_set(c, "file", op_str(file));
-	if (from) op_set(c, "from", op_str(from));
-	a->cause = c;
-	a->info[a->ninfo++] = (sc_pair){"cause", a->cause};
-	a->scope = sc_create_root_scope(g->s, a->info, a->ninfo);
-	return a;
 }
 
 static nd_entry *entry_at(const fg *g, const char *part, const char *id) {

@@ -1,6 +1,6 @@
 // Shown nodes on the line protocol, for the C harnesses (shown.c)
-#ifndef SAVED_SHOWN_H
-#define SAVED_SHOWN_H
+#ifndef SAVED_SHOWN_HARNESS_H
+#define SAVED_SHOWN_HARNESS_H
 
 #include "saved.h"
 
@@ -26,9 +26,6 @@ size_t items(const char *p, const char ***out);
 sd_object object(const char *p, int lists);
 size_t named(const char *p, int lists, const sd_entry **out);
 sd_site site(const char *p);
-sd_header parse_header(const char *p);
-// a shown node, made by sd_make; sd_free it
-sd_node *parse_node(const char *p);
 
 // writing JSON
 void text(const char *s);
