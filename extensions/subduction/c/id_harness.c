@@ -1,4 +1,4 @@
-// The C id on the line protocol (newcore/conformance/id/harness.ts): one JSON request per line in,
+// The C id on the line protocol (extensions/subduction/typescript/id_harness.ts): one JSON request per line in,
 // one answer per line out. Bytes are lowercase hex.
 //   {op: "id", lock, made}: {id} or {code}
 //   {op: "bytes", id}: {bytes} or {code}

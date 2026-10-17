@@ -5,8 +5,8 @@
 //
 //   /dev/vram/planes/<name>   {w, h}: placed (ephemeral) by the program that wants one;
 //                             the driver makes its plane and says it there, {w, h, id,
-//                             stride, shm}, shm the POSIX shared memory's name; the
-//                             plane goes when the node does
+//                             stride, shm}, shm the POSIX shared memory's name (host.h's
+//                             HostPlaneSaid); the plane goes when the node does
 //   /dev/vram/driver/on/put   (id, x, y, w, h, pixels): pixels copied in, rows of w, for
 //                             a program with no way to the memory (deno's runner)
 //
@@ -26,10 +26,11 @@
 // serial copies the rectangle again. One wanting no tearing keeps two
 // planes and points its layer at the one it finished.
 //
-// An exec program maps the memory itself by its shm name (libermine's
-// ermPlane); the name is unlinked once the node goes, its mapping lasting
-// until it lets go. A runner in the OS holds the memory itself (vramHold),
-// which lasts until the node has gone and the last holder has dropped it.
+// Who reads it finds it by its node: the compositor and the JavaScript
+// runner read /dev/vram/planes for the plane with the layer's id and map
+// what it says (host.h's hostPlaneSaid, hostPlaneMap); an exec program maps
+// the shm name itself (libermine's ermPlane). The name is unlinked once the
+// node goes, each mapping lasting until its holder lets go.
 
 #include "drivers.h"
 #include "drv.h"
@@ -50,14 +51,12 @@ typedef struct Plane {
 	uint32_t *bits;
 	int w, h;
 	size_t bytes;
-	int refs;      // the driver's while its node is here, and each vramHold's
 } Plane;
 
 static ERM_LIST(Plane *) planes; // on the OS's thread only
 static int64_t ids;
 
 static void drop(Plane *p) {
-	if (__atomic_sub_fetch(&p->refs, 1, __ATOMIC_ACQ_REL)) return;
 	munmap(p->bits, p->bytes);
 	free(p->name);
 	free(p);
@@ -66,28 +65,6 @@ static void drop(Plane *p) {
 static Plane *planeOf(int64_t id) {
 	for (int i = 0; i < planes.count; i++) if (planes.items[i]->id == id) return planes.items[i];
 	return NULL;
-}
-
-/** hostPlane's: plane id's pixels */
-static bool planeAt(void *data, int64_t id, HostPlane *out) {
-	(void)data;
-	Plane *p = planeOf(id);
-	if (!p) return false;
-	*out = (HostPlane){ p->bits, p->w, p->h, p->w };
-	return true;
-}
-
-uint32_t *vramHold(int64_t id, size_t *bytes, void **ref) {
-	Plane *p = planeOf(id);
-	if (!p) return NULL;
-	__atomic_add_fetch(&p->refs, 1, __ATOMIC_ACQ_REL);
-	*bytes = p->bytes;
-	*ref = p;
-	return p->bits;
-}
-
-void vramDrop(void *ref) {
-	drop(ref);
 }
 
 /** a plane for /dev/vram/planes/<name>, w × h; NULL when there is no shared memory */
@@ -110,7 +87,6 @@ static Plane *make(Host *host, const char *name, int w, int h) {
 	}
 	p->bits = bits; // zeroed: black
 	p->name = copyString(name);
-	p->refs = 1;
 	ERM_PUSH(planes, p);
 	return p;
 }
@@ -199,7 +175,6 @@ ErmErr driverVram(void *data, const ErmGiven *g, Json **out) {
 	Json *here = drvHere(g);
 	drvHandler(g, here, "put", (ErmFn){ onPut, host });
 	drvChild(g, here, "planes", (ErmFn){ planesCompute, NULL }, (ErmFn){ planesEffect, host });
-	hostPlanes(host, "vram", planeAt, NULL);
 	return ermOk();
 }
 

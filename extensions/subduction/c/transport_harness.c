@@ -1,13 +1,13 @@
-// The C transport on the line protocol (newcore/conformance/transport/harness.ts has it): one JSON
+// The C transport on the line protocol (extensions/subduction/typescript/transport_harness.ts has it): one JSON
 // request per line in, one answer per line out. Several devices in one process, linked by in-memory
 // pipes: what one device is asked to send (transport_next) the other is handed (transport_received).
 // Values in their JSON form; names, stored ids, keys, seeds, nonces and blobs as lowercase hex.
-//   {op: "reset"}, {op: "device", name, seed, store?}, {op: "drop", device}, {op: "follow", device, doc}, {op: "link", a, b},
+//   {op: "reset"}, {op: "device", name, seed, store?, lazy?}, {op: "drop", device}, {op: "follow", device, doc}, {op: "link", a, b},
 //   {op: "unlink", a, b}, {op: "commit", device, doc, object, patches, actor, nonce, at?, layer?},
 //   {op: "put", device, doc, head, parents, blob},
 //   {op: "putfragment", device, doc, head, boundary, checkpoints, blob}, {op: "pump"},
-//   {op: "state", device, doc, object?, layer?}, {op: "fragments", device, doc},
-//   {op: "stored", device, doc}, {op: "publish", device, doc, payload}, {op: "expire"}
+//   {op: "state", device, doc, object?, layer?}, {op: "fragments", device, doc} (answered {fragments: [...]}),
+//   {op: "stored", device, doc} (answered {stored: [...]}), {op: "publish", device, doc, payload}, {op: "expire"}
 // A request holding values the histories keep is not freed.
 #include "transport.h"
 
@@ -344,7 +344,8 @@ int main(void) {
 					stores[store_count++] = (kept){copyString(label), store};
 				}
 			}
-			x->t = transport_create(x->seed, store);
+			const Json *lazy = jsonGet(request, "lazy");
+			x->t = transport_create_lazy(x->seed, store, lazy != NULL && lazy->type == JSON_BOOLEAN && lazy->boolean, NULL, NULL);
 			fputs("{\"key\":\"", stdout);
 			hex(x->key, 32);
 			puts("\"}");
@@ -451,7 +452,7 @@ int main(void) {
 		} else if (strcmp(op, "fragments") == 0) {
 			size_t n;
 			const fragment *fs = transport_fragments(d->t, doc, &n);
-			putchar('[');
+			fputs("{\"fragments\":[", stdout);
 			for (size_t i = 0; i < n; i++) {
 				if (i) putchar(',');
 				fputs("{\"head\":\"", stdout);
@@ -462,13 +463,14 @@ int main(void) {
 				names(fs[i].boundary.ids, fs[i].boundary.count);
 				putchar('}');
 			}
-			puts("]");
+			puts("]}");
 		} else if (strcmp(op, "stored") == 0) {
 			uint8_t(*ids)[32];
 			size_t n = transport_stored(d->t, doc, &ids);
 			qsort(ids, n, 32, by_id);
+			fputs("{\"stored\":", stdout);
 			names(ids, n);
-			putchar('\n');
+			puts("}");
 			free(ids);
 		} else {
 			printf("{\"error\":\"unknown op %s\"}\n", op);

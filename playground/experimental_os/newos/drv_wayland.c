@@ -12,13 +12,15 @@
 //   /dev/display/layers/wayland-<id>  {x, y, w, h, z, title, owner, drags, plane}
 //
 // A layer's pixels are not in the graph: plane {source: "wayland", id,
-// serial} names the window's image, which the compositor (drv_display.c's
-// render) copies from this driver's memory through hostPlane; serial is
-// the window's commits, so each new image is a change to the layer.
-// The image is way.c's copy of the client's buffer, made at commit, after
-// which the buffer was released: a client never waits on the compositor,
-// and never sees release before its pixels are copied. The image changes
-// only in way_dispatch, on the OS's thread, as render reads it.
+// serial} names the window's plane, /dev/wayland/planes/<id> {id, w, h,
+// stride, shm}: POSIX shared memory of the window's geometry, which the
+// compositor (drv_display.c's render) finds by that node and copies from
+// (host.h's hostPlane); serial is the window's commits, so each new image
+// is a change to the layer. The image is way.c's copy of the client's
+// buffer, made at commit, after which the buffer was released: a client
+// never waits on the compositor, and never sees release before its pixels
+// are copied. Each commit this driver copies the geometry into the plane,
+// on the OS's thread, in its turn.
 //
 // The thread: polls the compositor's fd; something there posts {"irq": 62}
 // and waits for the host's turn to take it, then at least 1/60 s, which
@@ -29,11 +31,13 @@
 #include "drv.h"
 #include "way.h"
 
+#include <fcntl.h>
 #include <poll.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
@@ -46,6 +50,10 @@ typedef struct Win {
 	bool placed, gone, retitled;
 	uint32_t shown; // the commits the layer has
 	int lw, lh;     // the layer's size as last written
+	char shm[32];   // the plane: shared memory of the geometry, bw × bh
+	uint32_t *bits;
+	size_t bytes;
+	int bw, bh;
 } Win;
 
 typedef struct Wayland {
@@ -114,14 +122,62 @@ static Json *planeOf(const Win *win) {
 	return drvMap("source", jsonString("wayland"), "id", jsonInteger(win->id), "serial", jsonInteger(win->w->commits), NULL);
 }
 
-/** hostPlane's: window id's image, where its geometry is; its rows the image's */
-static bool planeAt(void *data, int64_t id, HostPlane *out) {
-	Win *win = winOf(data, (uint32_t)id);
-	if (!win || !win->w || !win->w->pixels) return false;
+static Json *planesAt(void) {
+	return drvPath("/", "dev", "wayland", "planes", NULL);
+}
+
+/** the plane let go: its memory unmapped and its name unlinked; its node unplaced, given an api */
+static void planeGone(const ErmPartApi *api, Win *win) {
+	if (win->bits) {
+		munmap(win->bits, win->bytes);
+		shm_unlink(win->shm);
+		win->bits = NULL;
+	}
+	char n[16];
+	snprintf(n, sizeof n, "%u", win->id);
+	if (api && drvHas(api, drvUnder(planesAt(), n, NULL))) {
+		char *id = formatString("wayland/plane/%u", win->id);
+		drvOp(api, "unplace", drvMap("address", planesAt(), "name", jsonString(n), "id", jsonString(id), NULL));
+		free(id);
+	}
+}
+
+/**
+ * the window's image, where its geometry is, copied into its plane: shared memory made (again) at
+ * the geometry's size and said in /dev/wayland/planes/<id>, {id, w, h, stride, shm}
+ */
+static void image(Wayland *wl, const ErmGiven *g, Win *win) {
+	struct way_window *w = win->w;
+	if (!w || !w->pixels) return;
 	int x0, y0, cw, ch;
-	cropOf(win->w, &x0, &y0, &cw, &ch);
-	*out = (HostPlane){ win->w->pixels + (size_t)y0 * win->w->w + x0, cw, ch, win->w->w };
-	return true;
+	cropOf(w, &x0, &y0, &cw, &ch);
+	if (cw <= 0 || ch <= 0) return;
+	if (!win->bits || cw != win->bw || ch != win->bh) {
+		planeGone(NULL, win);
+		snprintf(win->shm, sizeof win->shm, "/ermwl.%d.%u", (int)getpid(), win->id);
+		shm_unlink(win->shm);
+		win->bytes = (size_t)cw * (size_t)ch * 4;
+		int fd = shm_open(win->shm, O_RDWR | O_CREAT | O_EXCL, 0600);
+		void *bits = MAP_FAILED;
+		if (fd >= 0 && !ftruncate(fd, (off_t)win->bytes)) bits = mmap(NULL, win->bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+		if (fd >= 0) close(fd);
+		if (bits == MAP_FAILED) {
+			hostSay(wl->host, "wayland: no shared memory for window %u (%d × %d)", win->id, cw, ch);
+			if (fd >= 0) shm_unlink(win->shm);
+			return;
+		}
+		win->bits = bits, win->bw = cw, win->bh = ch;
+		char n[16];
+		snprintf(n, sizeof n, "%u", win->id);
+		Json *said = drvMap("id", jsonInteger(win->id), "w", jsonInteger(cw), "h", jsonInteger(ch), "stride", jsonInteger(cw), "shm", jsonString(win->shm), NULL);
+		if (drvHas(g->api, drvUnder(planesAt(), n, NULL))) drvSnap(g->api, drvUnder(planesAt(), n, NULL), said);
+		else {
+			char *id = formatString("wayland/plane/%u", win->id);
+			drvMake(g->api, planesAt(), n, id, said);
+			free(id);
+		}
+	}
+	for (int y = 0; y < ch; y++) memcpy(win->bits + (size_t)y * (size_t)cw, w->pixels + (size_t)(y0 + y) * (size_t)w->w + x0, (size_t)cw * 4);
 }
 
 static ErmErr onKey(void *data, const ErmGiven *g, Json **out);
@@ -153,6 +209,7 @@ static void place(Wayland *wl, const ErmGiven *g, Win *win) {
 	handlerAt(wl, g, node, win->id, "hover", onHover);
 	int x0, y0, lw, lh;
 	cropOf(w, &x0, &y0, &lw, &lh);
+	image(wl, g, win);
 	Json *plane = planeOf(win), *layer;
 	Win *parent = w->parent ? w->parent->user : NULL;
 	if (w->popup && parent && parent->w) {
@@ -192,6 +249,7 @@ static void unplace(const ErmGiven *g, Win *win) {
 		drvOp(g->api, "unplace", drvMap("address", drvPath("/", "dev", "wayland", "windows", NULL), "name", jsonString(n), "id", jsonString(id), NULL));
 	free(id);
 	free(name);
+	planeGone(g->api, win);
 }
 
 static void update(Wayland *wl, const ErmGiven *g, Win *win) {
@@ -202,6 +260,7 @@ static void update(Wayland *wl, const ErmGiven *g, Win *win) {
 	if (w->commits != win->shown) {
 		int x0, y0, lw, lh;
 		cropOf(w, &x0, &y0, &lw, &lh);
+		image(wl, g, win);
 		drvSet(g->api, at, "plane", planeOf(win));
 		if (lw != win->lw || lh != win->lh) {
 			drvSet(g->api, at, "w", jsonInteger(lw));
@@ -234,6 +293,7 @@ static ErmErr wlIrq(void *data, const ErmGiven *g, Json **out) {
 		Win *win = wl->wins.items[i];
 		if (win->gone) {
 			if (win->placed) unplace(g, win);
+			else planeGone(g->api, win);
 			free(win);
 			continue;
 		}
@@ -444,6 +504,7 @@ ErmErr driverWayland(void *data, const ErmGiven *g, Json **out) {
 	Json *dev = drvPath("/", "dev", "wayland", NULL);
 	drvMake(g->api, dev, "socket", "wayland/socket", drvMap("display", jsonString(way_socket(wl->way)), "runtime", jsonString(runtime), NULL));
 	drvMake(g->api, dev, "windows", "wayland/windows", jsonNull());
+	drvMake(g->api, dev, "planes", "wayland/planes", jsonNull());
 	Json *here = drvHere(g);
 	drvHandler(g, here, "irq", (ErmFn){ wlIrq, wl });
 	drvClaim(g, here, IRQ);
@@ -452,7 +513,6 @@ ErmErr driverWayland(void *data, const ErmGiven *g, Json **out) {
 	pthread_mutex_init(&wl->lock, NULL);
 	pthread_cond_init(&wl->taken, NULL);
 	pthread_create(&wl->watcher, NULL, watch, wl);
-	hostPlanes(wl->host, "wayland", planeAt, wl);
 	hostSay(wl->host, "wayland: WAYLAND_DISPLAY=%s XDG_RUNTIME_DIR=%s", way_socket(wl->way), runtime);
 	return ermOk();
 }

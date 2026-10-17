@@ -1,4 +1,4 @@
-// The C seal on the line protocol (newcore/conformance/seal/harness.ts): one JSON request per line
+// The C seal on the line protocol (extensions/subduction/typescript/seal_harness.ts): one JSON request per line
 // in, one answer per line out. Bytes are lowercase hex.
 //   {op: "seal", blop, seed}: the host's signer made from the 32-byte Ed25519 seed; {bytes} or {code}
 //   {op: "unseal", bytes}: {blop, name, stored, signer} or {code}; blop the blop's bytes, the

@@ -30,8 +30,9 @@
 // A view's pixels are a plane of the driver's: a file, $TMPDIR/ermine-<pid>.mac.<k>,
 // two halves of maxw × maxh u32, rows of maxw, as the frame buffer's. The
 // metal writes a whole frame into the half not shown, says frame, and
-// writes nothing more until took; hostPlanes' source "mac" gives the half
-// the latest frame named.
+// writes nothing more until took; /dev/mac/planes/<name> says the plane,
+// {id, w, h, stride, file, offset}, the half the latest frame is in (host.h's
+// HostPlaneSaid).
 
 #include "drivers.h"
 #include "../../../ermine/encoding/c/json_text.h"
@@ -115,6 +116,7 @@ typedef struct View {
 	char *input, *state;
 	Json *want; // the last sent
 	bool made, placed, closed, capturing, seen;
+	bool planed;        // its plane's node made
 	bool down, dragged; // input "press": a button down, moved since
 	double dx, dy;
 } View;
@@ -446,13 +448,17 @@ static void uncapture(Mac *m, View *v) {
 	v->capturing = false;
 }
 
-/** hostPlane's: view k's plane, the half its latest frame is in */
-static bool planeAt(void *data, int64_t id, HostPlane *out) {
-	Mac *m = data;
-	View *v = viewK(m, (int)id);
-	if (!v || !v->bits || v->w <= 0 || v->h <= 0) return false;
-	*out = (HostPlane){ v->bits + (size_t)v->half * (size_t)m->maxw * (size_t)m->maxh, v->w < m->maxw ? v->w : m->maxw, v->h < m->maxh ? v->h : m->maxh, m->maxw };
-	return true;
+/** the plane as its node says it, /dev/mac/planes/<name> {id, w, h, stride, file, offset}: the half the latest frame is in */
+static void planeSaid(Mac *m, const ErmPartApi *api, View *v) {
+	Json *p = drvMap("id", jsonInteger(v->k), "w", jsonInteger(v->w < m->maxw ? v->w : m->maxw), "h", jsonInteger(v->h < m->maxh ? v->h : m->maxh), "stride", jsonInteger(m->maxw),
+	                 "file", jsonString(v->path), "offset", jsonInteger((int64_t)v->half * m->maxw * m->maxh * 4), NULL);
+	if (v->planed) drvSnap(api, dev("planes", v->name), p);
+	else {
+		char *id = formatString("mac/plane/%d", v->k);
+		drvMake(api, drvPath("/", "dev", "mac", "planes", NULL), v->name, id, p);
+		free(id);
+		v->planed = true;
+	}
 }
 
 static ErmErr onKey(void *data, const ErmGiven *g, Json **out);
@@ -532,6 +538,11 @@ static void stop(Mac *m, const ErmGiven *g, View *v) {
 	if (drvHas(g->api, ownerAt(v))) {
 		char *id = formatString("mac/window/%d", v->k);
 		unplaceAt(g->api, ownerAt(v), id);
+		free(id);
+	}
+	if (drvHas(g->api, dev("planes", v->name))) {
+		char *id = formatString("mac/plane/%d", v->k);
+		unplaceAt(g->api, dev("planes", v->name), id);
 		free(id);
 	}
 	if (v->bits) munmap(v->bits, v->bytes);
@@ -628,6 +639,8 @@ static void frame(Mac *m, const ErmGiven *g, View *v, const Json *r) {
 	if (!v->closed && strcmp(v->state, "gone") && v->bits && w > 0 && h > 0) {
 		v->half = half == 1 ? 1 : 0;
 		v->serial = n;
+		v->w = (int)w, v->h = (int)h;
+		planeSaid(m, g->api, v);
 		Json *plane = drvMap("source", jsonString("mac"), "id", jsonInteger(v->k), "serial", jsonInteger(n), NULL);
 		if (jsonIsObject(jsonGet(r, "dirty"))) jsonAdd(plane, "dirty", jsonShallow(jsonGet(r, "dirty")));
 		Elem *e = elemOf(m, v->window);
@@ -1228,6 +1241,7 @@ ErmErr driverMac(void *data, const ErmGiven *g, Json **out) {
 	drvMake(g->api, at, "open", "mac/open", jsonNull());
 	drvMake(g->api, at, "views", "mac/views", jsonNull());
 	drvMake(g->api, at, "windows", "mac/windows", jsonNull());
+	drvMake(g->api, at, "planes", "mac/planes", jsonNull());
 	Json *here = drvHere(g);
 	drvHandler(g, here, "irq", (ErmFn){ macIrq, m });
 	drvClaim(g, here, IRQ);
@@ -1235,6 +1249,5 @@ ErmErr driverMac(void *data, const ErmGiven *g, Json **out) {
 	drvChild(g, here, "do", (ErmFn){ doCompute, m }, (ErmFn){ doEffect, m });
 	drvChild(g, here, "open", (ErmFn){ openCompute, m }, (ErmFn){ openEffect, m });
 	drvChild(g, here, "views", (ErmFn){ viewsCompute, m }, (ErmFn){ viewsEffect, m });
-	hostPlanes(m->host, "mac", planeAt, m);
 	return ermOk();
 }

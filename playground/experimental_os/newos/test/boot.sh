@@ -8,11 +8,22 @@ mac="$root/playground/experimental_os/mac"
 out="$mac/build/test"
 mkdir -p "$out"
 . "$here/sources.sh"
-os=""
+mkdir -p "$out/obj"
+cflags="-std=c11 -Wall -Wextra -O1 -g ${SANITIZE:-} $nc_cflags"
+objs=""
+for src in "$here/boot.c" $nc_sources; do
+	obj="$out/obj/$(nc_object "$src")"
+	# shellcheck disable=SC2086
+	nc_compile "$src" "$obj" $cflags
+	objs="$objs $obj"
+done
 for src in "$here"/../*.c; do
 	case " $nc_skip " in *" $(basename "$src") "*) continue ;; esac
-	os="$os $src"
+	obj="$out/obj/os_$(basename "$src" .c).o"
+	# shellcheck disable=SC2086
+	nc_compile "$src" "$obj" $cflags
+	objs="$objs $obj"
 done
 # shellcheck disable=SC2086
-cc -std=c11 -Wall -Wextra -O1 -g ${SANITIZE:-} $nc_cflags -o "$out/newos-boot" "$here/boot.c" $os $nc_sources $nc_libs
-echo "built $out/newos-boot"
+cc -O1 -g ${SANITIZE:-} -o "$out/newos-boot" $objs $nc_libs
+echo "built $out/newos-boot ($nc_built compiled)"

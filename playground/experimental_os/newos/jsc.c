@@ -9,15 +9,17 @@
 // Each part the API runs is a call into the runner's run(f, info), which
 // builds the part's map and calls f. Meanwhile the part's operations come back
 // here through __ermineOp(handle, op, ...), handle naming the part's interface
-// while the part runs (a map works until its part returns). Values cross as
-// JavaScript values made from op_value here, and back: bytes a Uint8Array, a
-// typed array its class, a stand-in the runner's Stand, a function a live value
-// (ap_live) that calls it, and a live value of the program's own back as its
-// function.
+// while the part runs (a map works until its part returns): each is a word of
+// the API's, done by the one dispatch (words.h) once its arguments are values.
+// Values cross as JavaScript values made from op_value here, and back: bytes a
+// Uint8Array, a typed array its class, a stand-in the runner's Stand, a
+// function a live value (ap_live) that calls it, and a live value of the
+// program's own back as its function.
 
 #include "jsc.h"
 
 #include "drivers.h"
+#include "words.h"
 
 #include <JavaScriptCore/JavaScriptCore.h>
 
@@ -326,148 +328,13 @@ static op_value *fromJs(JSValueRef v, int depth, const char **why) {
 	return m;
 }
 
-// --- what reads give: items, as core's (places.ts Item, Read)
+// --- __ermineOp(handle, op, ...): a word of the API's through the interface of a part running
 
-static JSValueRef changeJs(const ap_change *c) {
-	JSObjectRef o = JSObjectMake(js.ctx, NULL, NULL);
-	put(o, "time", JSValueMakeNumber(js.ctx, (double)c->time));
-	if (c->actor) put(o, "actor", toJs(c->actor));
-	if (c->reader) put(o, "reader", jsStr(c->reader));
-	if (c->site) put(o, "site", toJs(c->site));
-	if (c->cause) put(o, "cause", toJs(c->cause));
-	return o;
+/** an argument as a value: none (or undefined) NULL; one that is no value leaves *why, once */
+static op_value *argOf(JSValueRef v, const char **why) {
+	if (!v || *why || JSValueIsUndefined(js.ctx, v)) return NULL;
+	return fromJs(v, 0, why);
 }
-
-static JSValueRef itemsJs(const ap_items *items) {
-	JSContextRef ctx = js.ctx;
-	JSObjectRef a = JSObjectMakeArray(ctx, 0, NULL, NULL);
-	for (size_t i = 0; i < items->n; i++) {
-		const ap_item *it = &items->items[i];
-		JSObjectRef o = JSObjectMake(ctx, NULL, NULL);
-		put(o, "id", jsStr(it->id));
-		JSObjectRef route = JSObjectMakeArray(ctx, 0, NULL, NULL);
-		for (size_t r = 0; r < it->nroute; r++) {
-			JSObjectRef step = JSObjectMake(ctx, NULL, NULL);
-			put(step, "name", jsStr(it->route[r]));
-			JSObjectSetPropertyAtIndex(ctx, route, (unsigned)r, step, NULL);
-		}
-		put(o, "route", route);
-		if (it->from) put(o, "from", jsStr(it->from));
-		if (it->node) {
-			JSObjectRef node = JSObjectMake(ctx, NULL, NULL);
-			put(node, "id", jsStr(it->id));
-			put(o, "node", node);
-			put(o, "ephemeral", JSValueMakeBoolean(ctx, it->ephemeral));
-		}
-		if (it->node && it->has_versions) {
-			JSObjectRef vs = JSObjectMakeArray(ctx, 0, NULL, NULL);
-			for (size_t k = 0; k < it->nversions; k++) {
-				const ap_version *v = &it->versions[k];
-				JSObjectRef ver = JSObjectMake(ctx, NULL, NULL);
-				put(ver, "content", toJs(v->content));
-				put(ver, "change", changeJs(&v->change));
-				if (v->status) {
-					JSObjectRef b = JSObjectMake(ctx, NULL, NULL);
-					put(b, "layer", jsStr("scheduler"));
-					put(b, "place", jsStr("status"));
-					put(ver, "because", b);
-				}
-				JSObjectSetPropertyAtIndex(ctx, vs, (unsigned)k, ver, NULL);
-			}
-			put(o, "versions", vs);
-		}
-		JSObjectSetPropertyAtIndex(ctx, a, (unsigned)i, o, NULL);
-	}
-	return a;
-}
-
-// --- arguments
-
-/** an address: a list of strings, for this turn (hostTemp); NULL if it is not one */
-static const char *const *addressOf(JSValueRef v, size_t *n) {
-	if (!v || !JSValueIsArray(js.ctx, v)) return NULL;
-	size_t len = (size_t)JSValueToNumber(js.ctx, get(v, "length"), NULL);
-	const char **out = hostTemp(js.host, sizeof *out * (len + 1));
-	for (size_t i = 0; i < len; i++) {
-		char *t = textOf(JSObjectGetPropertyAtIndex(js.ctx, (JSObjectRef)v, (unsigned)i, NULL));
-		if (!t) return NULL;
-		out[i] = hostTempDup(js.host, t);
-		free(t);
-	}
-	out[len] = NULL;
-	*n = len;
-	return out;
-}
-
-/** a string argument, for this turn; NULL if absent */
-static const char *strArg(JSValueRef v) {
-	char *t = textOf(v);
-	if (!t) return NULL;
-	const char *out = hostTempDup(js.host, t);
-	free(t);
-	return out;
-}
-
-/** an index: a number, or [from, to] (its from); false when none */
-static bool indexOf(JSValueRef v, long *out) {
-	if (!v || JSValueIsNull(js.ctx, v) || JSValueIsUndefined(js.ctx, v)) return false;
-	if (JSValueIsNumber(js.ctx, v)) {
-		*out = (long)JSValueToNumber(js.ctx, v, NULL);
-		return true;
-	}
-	if (JSValueIsArray(js.ctx, v)) {
-		*out = (long)JSValueToNumber(js.ctx, get(v, "0"), NULL);
-		return true;
-	}
-	return false;
-}
-
-static op_key *keysOf(JSValueRef path, size_t *n) {
-	*n = path && JSValueIsArray(js.ctx, path) ? (size_t)JSValueToNumber(js.ctx, get(path, "length"), NULL) : 0;
-	op_key *keys = hostTemp(js.host, sizeof *keys * (*n ? *n : 1));
-	for (size_t i = 0; i < *n; i++) {
-		JSValueRef k = JSObjectGetPropertyAtIndex(js.ctx, (JSObjectRef)path, (unsigned)i, NULL);
-		if (JSValueIsNumber(js.ctx, k)) keys[i] = (op_key){ .type = OP_NUM_KEY, .n = (long)JSValueToNumber(js.ctx, k, NULL) };
-		else keys[i] = (op_key){ .type = OP_STR_KEY, .s = strArg(k) ? strArg(k) : "" };
-	}
-	return keys;
-}
-
-static op_target placeOf(JSValueRef p) {
-	op_target place = { 0 };
-	place.path = keysOf(get(p, "path"), &place.length);
-	JSValueRef range = get(p, "range");
-	if (range && JSValueIsArray(js.ctx, range)) {
-		place.has_range = 1;
-		place.from = (long)JSValueToNumber(js.ctx, get(range, "0"), NULL);
-		place.to = (long)JSValueToNumber(js.ctx, get(range, "1"), NULL);
-	}
-	return place;
-}
-
-/** patches: core's ({path, range?, value?, move?}); their values let go of with freePatches */
-static op_patch *patchesOf(JSValueRef v, size_t *n, const char **why) {
-	*n = v && JSValueIsArray(js.ctx, v) ? (size_t)JSValueToNumber(js.ctx, get(v, "length"), NULL) : 0;
-	op_patch *ps = hostTemp(js.host, sizeof *ps * (*n ? *n : 1));
-	for (size_t i = 0; i < *n; i++) {
-		JSValueRef p = JSObjectGetPropertyAtIndex(js.ctx, (JSObjectRef)v, (unsigned)i, NULL);
-		ps[i].place = placeOf(p);
-		JSValueRef value = get(p, "value");
-		if (value) {
-			ps[i].has_value = 1;
-			if (!(ps[i].value = fromJs(value, 0, why))) return NULL;
-		}
-		JSValueRef move = get(p, "move");
-		if (move) ps[i].has_move = 1, ps[i].move = placeOf(move);
-	}
-	return ps;
-}
-
-static void freePatches(op_patch *ps, size_t n) {
-	for (size_t i = 0; ps && i < n; i++) op_free((op_value *)ps[i].value);
-}
-
-// --- __ermineOp(handle, op, ...): an operation through the interface of a part running
 
 static JSValueRef op(JSContextRef ctx, JSObjectRef function, JSObjectRef self, size_t argc, const JSValueRef argv[], JSValueRef *exception) {
 	(void)function, (void)self;
@@ -493,129 +360,32 @@ static JSValueRef op(JSContextRef ctx, JSObjectRef function, JSObjectRef self, s
 		if (cause) api = ap_as(api, cause);
 		first = 3;
 	}
-	JSValueRef a1 = argc > first ? argv[first] : NULL, a2 = argc > first + 1 ? argv[first + 1] : NULL, a3 = argc > first + 2 ? argv[first + 2] : NULL;
-	JSValueRef a4 = argc > first + 3 ? argv[first + 3] : NULL, a5 = argc > first + 4 ? argv[first + 4] : NULL, a6 = argc > first + 5 ? argv[first + 5] : NULL;
-	(void)a5;
-	const ap_error *e = NULL;
-	JSValueRef out = JSValueMakeUndefined(ctx);
+	// the word's arguments as values, in the order words.h takes them: the runner's are positional
+	// (runner.ts, apiOf) but create's options and start's one map, unpacked here
+	op_value *args[6] = { 0 };
 	size_t n = 0;
-	const char *const *address = NULL;
-	ap_items items = { 0 };
-	int64_t time = 0;
-	long index = 0;
-	if (!strcmp(name, "look") || !strcmp(name, "lookup") || !strcmp(name, "lookups") || !strcmp(name, "content")) {
-		if (!(address = addressOf(a1, &n))) why = "an address is a list of names";
-		else {
-			e = !strcmp(name, "look") ? ap_look(api, address, n, &items)
-			  : !strcmp(name, "lookup") ? ap_lookup(api, address, n, &items)
-			  : !strcmp(name, "lookups") ? ap_lookups(api, address, n, &items)
-			  : ap_content(api, address, n, &items);
-			if (!e) out = itemsJs(&items);
-		}
-	} else if (!strcmp(name, "children") || !strcmp(name, "info")) {
-		const char *list = strArg(a2);
-		if (!(address = addressOf(a1, &n))) why = "an address is a list of names";
-		else if (!list && !strcmp(name, "children")) {
-			ap_namelist names = { 0 };
-			e = ap_names(api, address, n, &names);
-			if (!e) {
-				JSObjectRef arr = JSObjectMakeArray(ctx, 0, NULL, NULL);
-				for (size_t i = 0; i < names.n; i++) JSObjectSetPropertyAtIndex(ctx, arr, (unsigned)i, jsStr(names.names[i]), NULL);
-				out = arr;
-			}
-		} else if (!list) why = "info takes a name";
-		else {
-			e = !strcmp(name, "children") ? ap_children(api, address, n, list, &items) : ap_info(api, address, n, list, &items);
-			if (!e) out = itemsJs(&items);
-		}
-	} else if (!strcmp(name, "write") || !strcmp(name, "set")) {
-		bool set = !strcmp(name, "set");
-		const char *list = set ? strArg(a2) : NULL;
-		JSValueRef ps = set ? a3 : a2, ix = set ? a4 : a3;
-		size_t np = 0;
-		op_patch *patches = (address = addressOf(a1, &n)) ? patchesOf(ps, &np, &why) : NULL;
-		if (!address) why = "an address is a list of names";
-		else if (patches) {
-			bool hasIndex = ix && JSValueIsNumber(ctx, ix);
-			if (hasIndex) index = (long)JSValueToNumber(ctx, ix, NULL);
-			e = set ? ap_set(api, address, n, list ? list : "", patches, np, hasIndex ? &index : NULL, &time)
-			        : ap_write(api, address, n, patches, np, hasIndex ? &index : NULL, &time);
-			if (!e) out = JSValueMakeNumber(ctx, (double)time);
-		}
-		freePatches(patches, np);
-	} else if (!strcmp(name, "insert")) {
-		const char *id = strArg(a1), *list = strArg(a2), *child = strArg(a3);
-		bool hasIndex = indexOf(a4, &index);
-		if (!id || !list || !child) why = "insert takes an id, a name and a child";
-		else if (!(e = ap_insert(api, id, list, child, hasIndex ? &index : NULL, &time))) out = JSValueMakeNumber(ctx, (double)time);
-	} else if (!strcmp(name, "remove") || !strcmp(name, "pop")) {
-		const char *id = strArg(a1), *list = strArg(a2);
-		if (!id || !list || !indexOf(a3, &index)) why = "remove takes an id, a name and an index";
-		else if (!(e = ap_remove(api, id, list, index, &time))) out = JSValueMakeNumber(ctx, (double)time);
-	} else if (!strcmp(name, "rename")) {
-		const char *id = strArg(a1), *list = strArg(a2), *to = strArg(a3);
-		if (!id || !list || !to) why = "rename takes an id, a name and a name";
-		else if (!(e = ap_rename(api, id, list, to, &time))) out = JSValueMakeNumber(ctx, (double)time);
-	} else if (!strcmp(name, "move")) {
-		const char *id = strArg(a1), *list = strArg(a2), *toid = strArg(a4), *toname = strArg(a5);
-		long at = a3 && JSValueIsNumber(ctx, a3) ? (long)JSValueToNumber(ctx, a3, NULL) : 0, to = 0;
-		bool hasTo = a6 && JSValueIsNumber(ctx, a6);
-		if (hasTo) to = (long)JSValueToNumber(ctx, a6, NULL);
-		if (!id || !list || !toid || !toname) why = "move takes an id, a name, an index, an id and a name";
-		else if (!(e = ap_move(api, id, list, at, toid, toname, hasTo ? &to : NULL, &time))) out = JSValueMakeNumber(ctx, (double)time);
-	} else if (!strcmp(name, "node")) {
-		const char *id = strArg(a1);
-		op_value *node = NULL;
-		if (!id) why = "node takes an id";
-		else if (!(e = ap_node(api, id, &node))) out = node ? toJs(node) : JSValueMakeNull(ctx);
-	} else if (!strcmp(name, "create")) {
-		op_value *value = a1 && !JSValueIsUndefined(ctx, a1) ? fromJs(a1, 0, &why) : NULL;
-		const char *id = strArg(get(a2, "id")), *made = NULL;
-		JSValueRef eph = get(a2, "ephemeral");
-		if (!why && !(e = ap_create(api, value, id, eph && JSValueToBoolean(ctx, eph), &made))) out = jsStr(made);
-		op_free(value);
+	JSValueRef a1 = argc > first ? argv[first] : NULL, a2 = argc > first + 1 ? argv[first + 1] : NULL;
+	if (!strcmp(name, "create")) {
+		args[0] = argOf(a1, &why), args[1] = argOf(get(a2, "id"), &why), args[2] = argOf(get(a2, "ephemeral"), &why);
+		n = 3;
 	} else if (!strcmp(name, "start")) {
-		ap_startop s = { 0 };
-		JSValueRef program = get(a1, "program"), code = get(a1, "code");
-		if (!(s.address = addressOf(get(a1, "address"), &s.naddress))) why = "start takes an address";
-		else if (program) {
-			if (!(s.program = addressOf(program, &s.nprogram))) why = "a program is a path";
-		} else if (code && JSValueIsObject(ctx, code) && JSObjectIsFunction(ctx, (JSObjectRef)code)) {
-			// a setup as code: run once, as a compute whose value is its own
-			s.compute = &jsFn((JSObjectRef)code)->base;
-		} else if (code && get(code, "compute")) {
-			JSValueRef c = get(code, "compute"), f = get(code, "effect");
-			if (JSValueIsObject(ctx, c)) s.compute = &jsFn((JSObjectRef)c)->base;
-			if (f && JSValueIsObject(ctx, f)) s.effect = &jsFn((JSObjectRef)f)->base;
-		} else why = "start takes a program (a path) or code (a function, or {compute, effect})";
-		s.name = strArg(get(a1, "name"));
-		JSValueRef deep = get(a1, "deep"), data = get(a1, "data");
-		s.deep = deep && JSValueToBoolean(ctx, deep);
-		op_value *given = data ? fromJs(data, 0, &why) : NULL;
-		s.data = given;
-		const char *pid = NULL;
-		if (!why && !(e = ap_start(g, &s, &pid))) out = jsStr(pid);
-		op_free(given);
-	} else if (!strcmp(name, "call")) {
-		op_value *args = a2 && !JSValueIsUndefined(ctx, a2) ? fromJs(a2, 0, &why) : NULL, *answer = NULL;
-		if (!(address = addressOf(a1, &n))) why = "call takes an address";
-		else if (!why && !(e = ap_call(g, address, n, args, &answer))) out = toJs(answer);
-		op_free(args);
-	} else if (!strcmp(name, "onCleanup")) {
-		if (!a1 || !JSValueIsObject(ctx, a1) || !JSObjectIsFunction(ctx, (JSObjectRef)a1)) why = "onCleanup takes a function";
-		else e = ap_cleanup(g, &jsFn((JSObjectRef)a1)->base);
+		for (const char *const *f = wdFields(name); f[n]; n++) args[n] = argOf(get(a1, f[n]), &why);
 	} else {
-		why = "no such operation";
+		for (; n < 6 && first + n < argc; n++) args[n] = argOf(argv[first + n], &why);
 	}
+	op_value *out = NULL;
+	const ap_error *e = why ? ap_error_new(hostOs(js.host), "wrong-field", why) : wdDo(g, api, name, (const op_value *const *)args, n, &out);
+	for (size_t i = 0; i < 6; i++) op_free(args[i]);
 	free(name);
 	op_free(cause);
-	if (why) return throwing(exception, "wrong-field", why);
 	if (e) {
 		JSValueRef r = throwing(exception, e->code ? e->code : "thrown", e->message ? e->message : e->code);
 		if (e->name) put((JSObjectRef)*exception, "name", jsStr(e->name));
 		return r;
 	}
-	return out;
+	JSValueRef r = out ? toJs(out) : JSValueMakeNull(ctx);
+	op_free(out);
+	return r;
 }
 
 /** __ermineHere(pid): the process's own node as an address from the root, as the host knows it; null if it does not */
@@ -645,11 +415,17 @@ static JSValueRef killOf(JSContextRef ctx, JSObjectRef function, JSObjectRef sel
 static JSValueRef afterOf(JSContextRef ctx, JSObjectRef function, JSObjectRef self, size_t argc, const JSValueRef argv[], JSValueRef *exception) {
 	(void)function, (void)self;
 	double ms = argc && JSValueIsNumber(ctx, argv[0]) ? JSValueToNumber(ctx, argv[0], NULL) : 0;
-	size_t n;
-	const char *const *address = argc > 1 ? addressOf(argv[1], &n) : NULL;
-	if (!address) return throwing(exception, "wrong-field", "after takes ms and an address");
+	const char *why = NULL;
+	size_t n = 0;
+	op_value *names = argc > 1 ? fromJs(argv[1], 0, &why) : NULL;
+	const char *const *address = wdNames(hostOs(js.host), names, &n);
+	if (!address) {
+		op_free(names);
+		return throwing(exception, "wrong-field", "after takes ms and an address");
+	}
 	Json *to = jsonArray();
 	for (size_t i = 0; i < n; i++) jsonPush(to, jsonString(address[i]));
+	op_free(names);
 	hostAfter(js.host, hostNow(js.host) + (int64_t)(ms < 0 ? 0 : ms * 1000), to);
 	return JSValueMakeUndefined(ctx);
 }
@@ -674,22 +450,36 @@ static JSValueRef evalOf(JSContextRef ctx, JSObjectRef function, JSObjectRef sel
 	return v ? v : JSValueMakeUndefined(ctx);
 }
 
+/** a vram plane's memory mapped for a Uint32Array: let go when the array is collected */
+typedef struct PlaneMap {
+	void *mapping;
+	size_t bytes;
+} PlaneMap;
+
 static void dropPlane(void *bytes, void *ref) {
 	(void)bytes;
-	vramDrop(ref);
+	PlaneMap *m = ref;
+	hostPlaneUnmap(m->mapping, m->bytes);
+	free(m);
 }
 
-/** __ermineVram(id): plane id's memory as a Uint32Array, held while the array lives; null when there is none */
+/** __ermineVram(id): vram plane id's memory as a Uint32Array of its w × h, as its node says it
+ * (/dev/vram/planes, hostPlaneSaid), mapped while the array lives; null when no node says it */
 static JSValueRef vramOf(JSContextRef ctx, JSObjectRef function, JSObjectRef self, size_t argc, const JSValueRef argv[], JSValueRef *exception) {
 	(void)function, (void)self;
 	int64_t id = argc && JSValueIsNumber(ctx, argv[0]) ? (int64_t)JSValueToNumber(ctx, argv[0], NULL) : -1;
-	size_t bytes = 0;
-	void *ref = NULL;
-	uint32_t *bits = vramHold(id, &bytes, &ref);
-	if (!bits) return JSValueMakeNull(ctx);
-	JSObjectRef a = JSObjectMakeTypedArrayWithBytesNoCopy(ctx, kJSTypedArrayTypeUint32Array, bits, bytes, dropPlane, ref, exception);
+	HostPlaneSaid said;
+	if (!hostPlaneSaid(js.host, "vram", id, &said)) return JSValueMakeNull(ctx);
+	PlaneMap *m = calloc(1, sizeof *m);
+	m->mapping = hostPlaneMap(&said, &m->bytes);
+	size_t need = said.offset + (size_t)said.stride * (size_t)said.h * 4;
+	if (!m->mapping || need > m->bytes) {
+		dropPlane(NULL, m);
+		return JSValueMakeNull(ctx);
+	}
+	JSObjectRef a = JSObjectMakeTypedArrayWithBytesNoCopy(ctx, kJSTypedArrayTypeUint32Array, (char *)m->mapping + said.offset, (size_t)said.stride * (size_t)said.h * 4, dropPlane, m, exception);
 	if (!a) {
-		vramDrop(ref);
+		dropPlane(NULL, m);
 		return JSValueMakeNull(ctx);
 	}
 	return a;

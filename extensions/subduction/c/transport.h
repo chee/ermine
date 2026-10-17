@@ -151,6 +151,10 @@ void transport_arrived(transport *t, void (*listener)(void *context, const trans
 // transport_create, with a listener (as transport_arrived's) given before the store is taken in: it is told
 // what the store held too, from the first transport_run, as TypeScript's device tells it on starting
 transport *transport_create_told(const uint8_t seed[32], const ErmStore *store, void (*listener)(void *context, const transport_arrival *arrival), void *context);
+// transport_create_told with lazy: true, the store is only listed at the start; a stored document is taken in
+// (its fragments, then its loose commits) when transport_follow names it, before it is fetched. One nobody
+// follows never comes in. lazy false: as transport_create_told
+transport *transport_create_lazy(const uint8_t seed[32], const ErmStore *store, bool lazy, void (*listener)(void *context, const transport_arrival *arrival), void *context);
 // an ephemeral one, the blop's bytes, not sealed: taken in to the ephemeral layer (refused there as a
 // receiver would refuse it, but still published), then published: over 65 536 bytes, as parts of at most
 // 60 000 (each the map {whole, part, parts, bytes}), which a receiver joins

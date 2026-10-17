@@ -1,4 +1,4 @@
-// The C fragment on the line protocol (newcore/conformance/fragment/harness.ts): one JSON request
+// The C fragment on the line protocol (extensions/subduction/typescript/fragment_harness.ts): one JSON request
 // per line in, one answer per line out. Ids are 32 bytes in lowercase hex.
 //   {op: "build", commits, heads, known}: {fragments: [{head, members, boundary, checkpoints}]},
 //     sorted by head, each list sorted

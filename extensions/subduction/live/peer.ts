@@ -50,6 +50,18 @@ if (seed.length !== 32 || (given !== undefined && !/^ermine:\/\/[0-9a-f]{64}$/.t
 const signer = await createSigner(seed)
 const key = signer.key
 const storage = await Storage.open(files(dir ?? await Deno.makeTempDir({ prefix: "ermine-live-" })))
+// saves resolve before they are kept (storage.ts): flushed every few seconds, so a write that
+// failed is told, and before going on a signal
+setInterval(() => storage.flush().catch((e) => console.error(`storage: ${e}`)), 2000)
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+	try {
+		Deno.addSignalListener(signal, () => {
+			storage.flush().catch(() => {}).finally(() => Deno.exit(0))
+		})
+	} catch {
+		// a platform without the signal
+	}
+}
 const scheduler = createScheduler()
 const table = createTable((part, id) => {
 	places.onTableChange(part, id)

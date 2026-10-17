@@ -19,6 +19,7 @@
 // stopped in (dylibTurn), once the process's cleanups have run.
 
 #include "dylib.h"
+#include "words.h"
 #include "../../../ermine/encoding/c/json_text.h"
 
 #include "image/lib/c/ermine_host.h"
@@ -159,9 +160,6 @@ static op_value *textOf(const char *s, size_t n) {
 static const char *str(const op_value *v) { return v && v->type == OP_STR ? v->str : NULL; }
 static double num(const op_value *v) { return v && v->type == OP_NUM ? v->num : v && v->type == OP_BOOL ? v->bool_ : 0; }
 static const op_value *arg(const op_value *a, size_t i) { return a && a->type == OP_LIST && i < a->count ? a->items[i] : NULL; }
-static int truthy(const op_value *v) {
-	return v && (v->type == OP_BOOL ? v->bool_ : v->type == OP_NUM ? v->num != 0 : v->type == OP_STR ? v->bytes > 0 : v->type != OP_NULL);
-}
 
 // --- the part running, and its table
 
@@ -424,86 +422,6 @@ static void tSay(void *ctx, const char *s, int n) {
 
 // --- the table: the graph and the process (ermine.h's words)
 
-static op_value *changeVal(const ap_change *c) {
-	op_value *o = op_map();
-	op_set(o, "time", op_num((double)c->time));
-	if (c->actor) op_set(o, "actor", twin(c->actor));
-	if (c->reader) op_set(o, "reader", op_str(c->reader));
-	if (c->site) op_set(o, "site", twin(c->site));
-	if (c->cause) op_set(o, "cause", twin(c->cause));
-	return o;
-}
-
-/** items, as core's (places.ts Item), as exec.c gives them */
-static op_value *itemsVal(const ap_items *items) {
-	op_value *a = op_list();
-	for (size_t i = 0; i < items->n; i++) {
-		const ap_item *it = &items->items[i];
-		op_value *o = op_map(), *route = op_list();
-		op_set(o, "id", op_str(it->id));
-		for (size_t r = 0; r < it->nroute; r++) {
-			op_value *step = op_map();
-			op_set(step, "name", op_str(it->route[r]));
-			op_push(route, step);
-		}
-		op_set(o, "route", route);
-		if (it->node) {
-			op_value *node = op_map();
-			op_set(node, "id", op_str(it->id));
-			op_set(o, "node", node);
-			op_set(o, "ephemeral", op_bool(it->ephemeral));
-		}
-		if (it->node && it->has_versions) {
-			op_value *vs = op_list();
-			for (size_t k = 0; k < it->nversions; k++) {
-				const ap_version *v = &it->versions[k];
-				op_value *ver = op_map();
-				op_set(ver, "content", twin(v->content));
-				op_set(ver, "change", changeVal(&v->change));
-				if (v->status) {
-					op_value *because = op_map();
-					op_set(because, "layer", op_str("scheduler"));
-					op_set(because, "place", op_str("status"));
-					op_set(ver, "because", because);
-				}
-				op_push(vs, ver);
-			}
-			op_set(o, "versions", vs);
-		}
-		op_push(a, o);
-	}
-	return a;
-}
-
-/** a place in a value ({path, range?}), its keys for this turn */
-static op_target targetOf(const op_value *p) {
-	op_target t = { 0 };
-	const op_value *path = p && p->type == OP_MAP ? op_get(p, "path") : NULL, *range = p && p->type == OP_MAP ? op_get(p, "range") : NULL;
-	size_t n = path && path->type == OP_LIST ? path->count : 0;
-	op_key *keys = ap_temp(hostOs(D.host), sizeof *keys * (n ? n : 1));
-	for (size_t i = 0; i < n; i++) {
-		const op_value *k = path->items[i];
-		keys[i] = k->type == OP_NUM ? (op_key){ .type = OP_NUM_KEY, .n = (long)k->num } : (op_key){ .type = OP_STR_KEY, .s = k->type == OP_STR ? k->str : "" };
-	}
-	t.path = keys, t.length = n;
-	if (range && range->type == OP_LIST && range->count == 2 && range->items[0]->type == OP_NUM && range->items[1]->type == OP_NUM)
-		t.has_range = 1, t.from = (long)range->items[0]->num, t.to = (long)range->items[1]->num;
-	return t;
-}
-
-/** core's patches ({path, range?, value?, move?}), their values borrowed from list */
-static op_patch *patchesOf(const op_value *list, size_t *n) {
-	*n = list && list->type == OP_LIST ? list->count : 0;
-	op_patch *ps = ap_temp(hostOs(D.host), sizeof *ps * (*n ? *n : 1));
-	for (size_t i = 0; i < *n; i++) {
-		const op_value *p = list->items[i], *value = p->type == OP_MAP ? op_get(p, "value") : NULL, *move = p->type == OP_MAP ? op_get(p, "move") : NULL;
-		ps[i] = (op_patch){ .place = targetOf(p) };
-		if (value) ps[i].has_value = 1, ps[i].value = value;
-		if (move) ps[i].has_move = 1, ps[i].move = targetOf(move);
-	}
-	return ps;
-}
-
 /** an address as names from the root: as wasm.ts' absolute, from the process's folder */
 static const char *const *absolute(Instance *in, ap_given *g, const char *const *names, size_t n, size_t *out) {
 	ap_os *os = hostOs(in->host);
@@ -554,15 +472,21 @@ static const char *place(Instance *in, ap_api *api, ap_given *g, const char *lis
 	return on;
 }
 
+/** the names as a value, a list of strings, the address a word of the API's takes; n < 0: none */
+static op_value *addressVal(const char *const *names, int n) {
+	op_value *l = op_list();
+	for (int i = 0; i < n; i++) op_push(l, op_str(names[i]));
+	return l;
+}
+
 /** er__op: core's words, and the process's own (ermine.h). *own: the answer is the part's (else the turn's: a read,
- * a node, a call's answer, which api.c keeps till the turn ends) */
+ * which api.c keeps till the turn ends). A word of the API's goes to the one dispatch (words.h) */
 static op_value *perform(Instance *in, Frame *f, const char *word, const char *const *names, int n, const op_value *a, int *own) {
 	ap_given *g = f->g;
 	ap_os *os = hostOs(in->host);
 	ap_api *api = f->cause ? ap_as(g->api, f->cause) : g->api;
 	size_t k = n > 0 ? (size_t)n : 0;
 	int64_t time = 0;
-	ap_items items = { 0 };
 	const ap_error *e = NULL;
 	op_value *out = NULL;
 	*own = 1;
@@ -610,15 +534,6 @@ static op_value *perform(Instance *in, Frame *f, const char *word, const char *c
 		op_free(v);
 		if (e) fail(in, e);
 		out = op_num((double)time);
-	} else if (!strcmp(word, "patch")) {
-		ADDRESS;
-		size_t np;
-		op_value *list = twin(arg(a, 0));
-		op_patch *ps = patchesOf(list, &np);
-		e = ap_write(api, names, k, ps, np, NULL, &time);
-		op_free(list);
-		if (e) fail(in, e);
-		out = op_num((double)time);
 	} else if (!strcmp(word, "set")) {
 		ADDRESS;
 		TEXT(name, 0, "set takes a name");
@@ -628,63 +543,26 @@ static op_value *perform(Instance *in, Frame *f, const char *word, const char *c
 		op_free(v);
 		if (e) fail(in, e);
 		out = op_num((double)time);
-	} else if (!strcmp(word, "look") || !strcmp(word, "lookup") || !strcmp(word, "lookups") || !strcmp(word, "content")) {
-		ADDRESS;
-		DONE(!strcmp(word, "look") ? ap_look(api, names, k, &items) : !strcmp(word, "lookup") ? ap_lookup(api, names, k, &items)
-		     : !strcmp(word, "lookups") ? ap_lookups(api, names, k, &items) : ap_content(api, names, k, &items));
-		out = itemsVal(&items);
-	} else if (!strcmp(word, "info")) {
-		ADDRESS;
-		TEXT(name, 0, "info takes a name");
-		DONE(ap_info(api, names, k, name, &items));
-		out = itemsVal(&items);
-	} else if (!strcmp(word, "children")) {
-		ADDRESS;
-		const char *name = str(arg(a, 0));
-		if (name) {
-			DONE(ap_children(api, names, k, name, &items));
-			out = itemsVal(&items);
-		} else {
-			ap_namelist list = { 0 };
-			DONE(ap_names(api, names, k, &list));
-			out = op_list();
-			for (size_t i = 0; i < list.n; i++) op_push(out, op_str(list.names[i]));
+	} else if (wdFields(!strcmp(word, "patch") ? "write" : word)) {
+		// the API's word, its arguments as the dispatch takes them: the address first where the word takes one,
+		// then the program's, in its order; create's and start's with none where ermine.h gives none
+		const char *api_word = !strcmp(word, "patch") ? "write" : word;
+		const char *const *fields = wdFields(api_word);
+		bool addressed = !strcmp(fields[0], "address");
+		const op_value *args[8] = { 0 };
+		op_value *address = NULL;
+		size_t m = 0;
+		if (addressed) {
+			ADDRESS;
+			args[m++] = address = addressVal(names, n);
 		}
-	} else if (!strcmp(word, "create")) {
-		op_value *v = twin(arg(a, 0));
-		const char *made = NULL;
-		e = ap_create(api, v, NULL, truthy(arg(a, 1)), &made);
-		op_free(v);
+		if (!strcmp(word, "create")) args[m++] = arg(a, 0), args[m++] = NULL, args[m++] = arg(a, 1);
+		else if (!strcmp(word, "start")) args[m++] = arg(a, 0), args[m++] = NULL, args[m++] = arg(a, 1);
+		else
+			for (size_t i = 0; m < 8 && fields[m]; i++) args[m++] = arg(a, i);
+		e = wdDo(g, api, api_word, args, m, &out);
+		op_free(address);
 		if (e) fail(in, e);
-		out = op_str(made);
-	} else if (!strcmp(word, "insert")) {
-		TEXT(id, 0, "insert takes an id, a name and a child");
-		TEXT(name, 1, "insert takes an id, a name and a child");
-		TEXT(child, 2, "insert takes an id, a name and a child");
-		DONE(ap_insert(api, id, name, child, NULL, &time));
-		out = op_num((double)time);
-	} else if (!strcmp(word, "remove") || !strcmp(word, "pop")) {
-		TEXT(id, 0, "remove takes an id, a name and an index");
-		TEXT(name, 1, "remove takes an id, a name and an index");
-		DONE(ap_remove(api, id, name, (long)num(arg(a, 2)), &time));
-		out = op_num((double)time);
-	} else if (!strcmp(word, "rename")) {
-		TEXT(id, 0, "rename takes an id, a name and to");
-		TEXT(name, 1, "rename takes an id, a name and to");
-		TEXT(to, 2, "rename takes an id, a name and to");
-		DONE(ap_rename(api, id, name, to, &time));
-		out = op_num((double)time);
-	} else if (!strcmp(word, "move")) {
-		TEXT(id, 0, "move takes an id, a name, an index, to and toname");
-		TEXT(name, 1, "move takes an id, a name, an index, to and toname");
-		TEXT(to, 3, "move takes an id, a name, an index, to and toname");
-		TEXT(toname, 4, "move takes an id, a name, an index, to and toname");
-		DONE(ap_move(api, id, name, (long)num(arg(a, 2)), to, toname, NULL, &time));
-		out = op_num((double)time);
-	} else if (!strcmp(word, "node")) {
-		TEXT(id, 0, "node takes an id");
-		DONE(ap_node(api, id, &out));
-		*own = out == NULL;
 	} else if (!strcmp(word, "as")) {
 		op_free(f->cause);
 		const op_value *c = arg(a, 0);
@@ -715,24 +593,6 @@ static op_value *perform(Instance *in, Frame *f, const char *word, const char *c
 		hostAfter(in->host, hostNow(in->host) + (int64_t)(ms < 0 ? 0 : ms * 1000), to);
 	} else if (!strcmp(word, "cleanup")) {
 		DONE(ap_cleanup(g, &fnOf(in, arg(a, 0), "cleanup")->base));
-	} else if (!strcmp(word, "start")) {
-		ADDRESS;
-		const op_value *program = arg(a, 0);
-		if (!program || program->type != OP_LIST || !program->count) wrong(in, "wrong-field", "start takes a program's path, a list of names");
-		const char **path = ap_temp(os, sizeof *path * program->count);
-		for (size_t i = 0; i < program->count; i++)
-			if (!(path[i] = str(program->items[i]))) wrong(in, "wrong-field", "a program's path is names");
-		ap_startop o = { .address = names, .naddress = k, .name = str(arg(a, 1)), .program = path, .nprogram = program->count };
-		const char *pid = NULL;
-		DONE(ap_start(g, &o, &pid));
-		out = op_str(pid);
-	} else if (!strcmp(word, "call")) {
-		ADDRESS;
-		op_value *args = twin(arg(a, 0));
-		e = ap_call(g, names, k, args, &out);
-		op_free(args);
-		if (e) fail(in, e);
-		*own = out == NULL;
 	} else if (!strcmp(word, "end")) {
 		hostKill(in->host, g->self);
 	} else {

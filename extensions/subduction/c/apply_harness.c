@@ -1,10 +1,10 @@
-// The C apply on the line protocol (conformance/apply/session.ts): one JSON request per
+// The C apply on the line protocol (extensions/subduction/typescript/session.ts): one JSON request per
 // line in, one answer per line out. A blop is in its JSON form (ENCODING.tex: "/" for bytes);
 // names are lowercase hex.
 //   {op: "create", node}            -> {}; the histories of the node, apply.h's check
-//   {op: "add", blop, name}         -> "taken" | "passed" | {waiting: [names]} | {stuck: [names]} | {refused: code}
+//   {op: "add", blop, name}         -> {added}: "taken" | "passed" | {waiting: [names]} | {stuck: [names]} | {refused: code}
 //   {op: "side", name}              -> {side} | {none: true}
-//   {op: "versions", object, times} -> [{content, change, because}]; times: name to the caller's time
+//   {op: "versions", object, times} -> {versions: [{content, change, because}]}; times: name to the caller's time
 // With COMMIT defined (commit_harness.c), also:
 //   {op: "commit", change, at, roots, random} -> {blop} | {code}
 // A blop added is kept for the histories, so its request is not freed.
@@ -181,8 +181,9 @@ int main(void) {
 			}
 			if (slot == NULL || !jsonDecode(slot)) fputs("bad blop\n", stderr), exit(1);
 			history_row r = history_add(current, *slot, name);
+			fputs("{\"added\":", stdout);
 			row(&r);
-			putchar('\n');
+			puts("}");
 			history_row_free(&r);
 			free_request = false;
 		} else if (strcmp(op, "side") == 0 && text && unhex(text, name, 32)) {
@@ -196,12 +197,12 @@ int main(void) {
 		} else if (strcmp(op, "versions") == 0) {
 			apply_version *vs;
 			size_t n = apply_versions(current, jsonGet(request, "object"), time_of, jsonGet(request, "times"), &vs);
-			putchar('[');
+			fputs("{\"versions\":[", stdout);
 			for (size_t i = 0; i < n; i++) {
 				if (i) putchar(',');
 				print_version(&vs[i]);
 			}
-			puts("]");
+			puts("]}");
 			free(vs);
 #ifdef COMMIT
 		} else if (strcmp(op, "commit") == 0) {

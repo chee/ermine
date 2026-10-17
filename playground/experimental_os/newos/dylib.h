@@ -9,7 +9,7 @@
 
 #include "host.h"
 
-#include "../../../ermine/programs/c/host.h"
+#include "../../../extensions/build/c/host.h"
 
 /** the type of a library for this machine, as the loaders say it */
 #define DYLIB_TYPE "com.apple.mach-o-dylib"

@@ -4,7 +4,7 @@
 // as; and a part's start, call, onCleanup), so the programs run as they were written.
 //
 // Under it: the table, places asked [processes, fronts, children] (ermine/processes' rows, fronts/,
-// the children), the scheduler, scope nodes, statuses (status.h) and the card (peer/). Processes are
+// the children), the scheduler, scope nodes, statuses (status.h) and the card (card/). Processes are
 // ermine/programs' (start.h): the host makes one per program started, and this is what its
 // create_api hands over. What 10-12 had and today's ermine has not, newOS keeps here, each a pick,
 // changeable (PORT.md):
@@ -27,7 +27,7 @@
 #include "../../../ermine/sites/c/sites.h"
 #include "../../../filesystem/places/c/status.h"
 #include "fronts/fronts.h"
-#include "peer/peer.h"
+#include "card/card.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -120,7 +120,7 @@ struct ap_given {
 
 // what the host is to the API: the card, the root, the log, and starting and stopping a program
 typedef struct {
-	Peer *peer;
+	Card *card;
 	const char *root;
 	void (*say)(void *ctx, const char *line);
 	// a program (path from the root) started at at (names from the root), its data in a node "data"

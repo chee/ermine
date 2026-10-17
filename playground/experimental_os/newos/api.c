@@ -2,7 +2,6 @@
 
 #include "api.h"
 
-#include "../../../extensions/subduction/c/id.h"
 
 #include <math.h>
 #include <stdarg.h>
@@ -248,12 +247,7 @@ void ap_commit(void *ctx, const pl_changed *changed) {
 	ap_os *os = ctx;
 	if (!changed || !changed->n) return;
 	pl_commit(os->places, changed);
-	if (os->setup.peer) peerWrote(os->setup.peer, changed);
-}
-
-// an entry made and put in the table: the card told, if it is a document's
-static void added(ap_os *os, const char *part, const char *id) {
-	if (os->setup.peer) peerAdded(os->setup.peer, tb_string(part), tb_string(id));
+	if (os->setup.card) cardWrote(os->setup.card, changed, NULL, 0);
 }
 
 // --- interfaces
@@ -799,8 +793,11 @@ static void writing_body(void *data) {
 	for (size_t i = 0; i < w->changed.n; i++) pl_hold_also(os->places, w->changed.entries[i], pl_made_ref(w->made), pl_made_free);
 	for (size_t i = 0; i < w->nborn; i++) pl_hold_also(os->places, w->born[i].entry, pl_made_ref(w->made), pl_made_free);
 	pl_made_free(w->made);
-	ap_commit(os, &w->changed);
-	for (size_t i = 0; i < w->nborn; i++) added(os, w->born[i].part, w->born[i].id);
+	pl_commit(os->places, &w->changed);
+	// the card: each kept table changed one commit; an entry born in the write its value whole
+	card_born born[4];
+	for (size_t i = 0; i < w->nborn; i++) born[i] = (card_born){w->born[i].entry, w->born[i].part, w->born[i].id};
+	if (os->setup.card) cardWrote(os->setup.card, &w->changed, born, w->nborn);
 }
 
 static const ap_error *write_with(ap_api *a, const char *op, void (*f)(void *w), void *ctx, int64_t *time) {
@@ -1219,10 +1216,10 @@ static void creating(void *data) {
 	ap_os *os = w->a->os;
 	const char *id = c->id;
 	if (!id) {
-		if (c->ephemeral || !os->setup.peer) id = ap_pid(os);
+		if (c->ephemeral || !os->setup.card) id = ap_pid(os);
 		else {
 			char fresh[ID_LENGTH + 1];
-			peerFresh(os->setup.peer, fresh);
+			cardFresh(os->setup.card, fresh);
 			id = keepdup(os, fresh);
 		}
 	} else id = keepdup(os, id);

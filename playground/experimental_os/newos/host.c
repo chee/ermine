@@ -1,5 +1,5 @@
 // host.c: ermineOS's host on today's core (host.h; PORT.md). Core 0's own
-// work: the graph (api.h), the card (peer/), the image, /hw from the device
+// work: the graph (api.h), the card (card/), the image, /hw from the device
 // tree, the types and runners programs are found by (ermine/programs), what
 // boots, the drain, which hands each turn's records to the driver that
 // claimed their line, the clock, and the commands to the metal.
@@ -19,30 +19,57 @@
 #include "jsc.h"
 #include "dylib.h"
 #include "loader.h"
-#include "net.h"
+#include "card/net.h"
 
 #include "../../../extensions/programs/c/start.h"
 #include "../../../ermine/types/c/types.h"
 
+#include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <time.h>
+#include <unistd.h>
 
-/** a line waiting for its driver: its records, oldest first */
+/** how many records a line keeps while no driver has it: past that the oldest go */
+#define KEEPS 64
+
+/** a line: its arrivals counted; while no driver has it, its newest KEEPS records, oldest first */
 typedef struct Held {
 	int irq;
 	Json **records;
 	int count, room;
+	int64_t arrived, dropped; // records come, and dropped unclaimed
+	bool dirty;               // the counts not yet written to /hw/irq/<n> (tick)
 } Held;
 
-/** a source of planes (hostPlanes) */
-typedef struct PlaneSource {
-	char *name;
-	HostPlaneFn fn;
-	void *data;
-} PlaneSource;
+/** a plane the compositor asked for (hostPlane): mapped while its node says the same memory */
+typedef struct Mapped {
+	char *source;
+	int64_t id;
+	char *node; // its node's name in /dev/<source>/planes, read first next time
+	HostPlaneSaid said;
+	void *mapping;
+	size_t bytes;
+	int64_t asked; // hostNow when last asked for: let go once not asked for a while
+} Mapped;
+
+/**
+ * a process's work, counted as it runs: the CPU of its runs (its setup, its computes, the
+ * handlers the host calls: an irq's, a timer's), how many, how many failed, and its writes;
+ * written to its node's info "work" at most once a second, when it changed (tick)
+ */
+typedef struct Work {
+	char *pid;
+	sc_scope *scope; // NULL once torn down: the entry goes at the next tick
+	int64_t cpu;     // µs
+	int64_t runs, failed, writes;
+	int64_t written; // hostNow at the last write
+	bool dirty;
+} Work;
 
 /** a process started: its id, and start's */
 typedef struct Proc {
@@ -54,8 +81,8 @@ struct Host {
 	ErmosConfig config;
 	Json *dt;
 	ap_os *os;
-	Peer *peer;
-	Net *net;    // the connection to /etc/sync's server (net.c)
+	Card *card;
+	Net *net;    // the connection to /etc/sync's server (card/net.c)
 	hf *functions;
 	bd *builds;
 	ps *programs;
@@ -71,8 +98,14 @@ struct Host {
 	bool running;
 	Held *held;
 	int nheld;
-	PlaneSource *planes;
-	int nplanes;
+	Mapped *mapped;
+	int nmapped;
+	Work **work;
+	int nwork;
+	// a run's start (monotonic), innermost last, for the run listeners
+	int64_t runAt[16];
+	int runDepth;
+	ap_api *peep; // the host's reads told to no one: what the compositor opens, what the host counts
 	// processes to stop (hostKill), once the part asking has returned
 	char **kills;
 	int nkills;
@@ -162,7 +195,7 @@ void *hostTemp(Host *h, size_t n) { return ap_temp(h->os, n); }
 char *hostTempDup(Host *h, const char *text) { return ap_dup(h->os, text); }
 
 ap_os *hostOs(Host *h) { return h->os; }
-Peer *hostPeer(Host *h) { return h->peer; }
+Card *hostCard(Host *h) { return h->card; }
 
 struct Net *hostNet(Host *h) {
 	return h->net;
@@ -244,15 +277,10 @@ static void said(void *ctx, const char *line) {
 	hostSay(ctx, "%s", line);
 }
 
-// the card's network (peer_host): net.c's, once it is open
-static void netSend(void *ctx, const transport_out *out) {
+// the card's network (card_host): net.c's, once it is open
+static void netSend(void *ctx, const tp_out *out) {
 	Host *h = ctx;
 	if (h->net) netOut(h->net, out);
-}
-
-static bool netUp(void *ctx) {
-	Host *h = ctx;
-	return h->net && netJoined(h->net);
 }
 
 static void netCounts(void *ctx, size_t followed, int made, int stored, int heard) {
@@ -266,20 +294,214 @@ bool hostFailed(Host *h, const ap_error *e, const char *doing) {
 	return true;
 }
 
-void hostPlanes(Host *h, const char *source, HostPlaneFn fn, void *data) {
-	for (int i = 0; i < h->nplanes; i++)
-		if (!strcmp(h->planes[i].name, source)) {
-			h->planes[i].fn = fn, h->planes[i].data = data;
-			return;
+// --- planes: found by their nodes, /dev/<source>/planes/<name> {id, w, h, stride?, shm | file, offset?}
+
+/** what the node at /dev/<source>/planes/<name> says, if a plane with that id */
+static bool planeNode(Host *h, const char *source, const char *name, int64_t id, HostPlaneSaid *out) {
+	size_t n;
+	const op_value *v = ap_read(h->peep, hostPath(h, &n, "dev", source, "planes", name, NULL), n);
+	const op_value *vid = v && v->type == OP_MAP ? op_get(v, "id") : NULL;
+	if (!vid || vid->type != OP_NUM || (int64_t)vid->num != id) return false;
+	const op_value *shm = op_get(v, "shm"), *file = op_get(v, "file"), *w = op_get(v, "w"), *hh = op_get(v, "h"), *stride = op_get(v, "stride"), *offset = op_get(v, "offset");
+	const op_value *said = shm && shm->type == OP_STR ? shm : file && file->type == OP_STR ? file : NULL;
+	if (!said || !w || w->type != OP_NUM || !hh || hh->type != OP_NUM || w->num < 1 || hh->num < 1 || strlen(said->str) >= sizeof out->name) return false;
+	snprintf(out->name, sizeof out->name, "%s", said->str);
+	out->file = said == file;
+	out->w = (int)w->num, out->h = (int)hh->num;
+	out->stride = stride && stride->type == OP_NUM && stride->num >= w->num ? (int)stride->num : out->w;
+	out->offset = offset && offset->type == OP_NUM && offset->num > 0 ? (size_t)offset->num : 0;
+	return true;
+}
+
+/** the same, the node found among the source's planes; *node its name (the turn's) */
+static bool planeFound(Host *h, const char *source, int64_t id, HostPlaneSaid *out, const char **node) {
+	if (!source) return false;
+	size_t n;
+	ap_namelist names = { 0 };
+	if (ap_names(h->peep, hostPath(h, &n, "dev", source, "planes", NULL), n, &names)) return false;
+	for (size_t i = 0; i < names.n; i++)
+		if (planeNode(h, source, names.names[i], id, out)) {
+			if (node) *node = names.names[i];
+			return true;
 		}
-	h->planes = realloc(h->planes, sizeof *h->planes * (size_t)(h->nplanes + 1));
-	h->planes[h->nplanes++] = (PlaneSource){ strdup(source), fn, data };
+	return false;
+}
+
+bool hostPlaneSaid(Host *h, const char *source, int64_t id, HostPlaneSaid *out) {
+	return planeFound(h, source, id, out, NULL);
+}
+
+void *hostPlaneMap(const HostPlaneSaid *p, size_t *bytes) {
+	int fd = p->file ? open(p->name, O_RDWR) : shm_open(p->name, O_RDWR, 0);
+	if (fd < 0) return NULL;
+	struct stat st;
+	void *mapping = MAP_FAILED;
+	if (!fstat(fd, &st) && st.st_size > 0) mapping = mmap(NULL, (size_t)st.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	close(fd);
+	if (mapping == MAP_FAILED) return NULL;
+	*bytes = (size_t)st.st_size;
+	return mapping;
+}
+
+void hostPlaneUnmap(void *mapping, size_t bytes) {
+	if (mapping) munmap(mapping, bytes);
+}
+
+static void unmapped(Host *h, int i) {
+	hostPlaneUnmap(h->mapped[i].mapping, h->mapped[i].bytes);
+	free(h->mapped[i].source);
+	free(h->mapped[i].node);
+	h->mapped[i] = h->mapped[--h->nmapped];
 }
 
 bool hostPlane(Host *h, const char *source, int64_t id, HostPlane *out) {
-	for (int i = 0; source && i < h->nplanes; i++)
-		if (!strcmp(h->planes[i].name, source)) return h->planes[i].fn(h->planes[i].data, id, out);
-	return false;
+	int at = -1;
+	for (int i = 0; source && i < h->nmapped && at < 0; i++)
+		if (h->mapped[i].id == id && !strcmp(h->mapped[i].source, source)) at = i;
+	// its node, by the name it had last time; else found among the source's planes
+	HostPlaneSaid said;
+	const char *node = NULL;
+	if (!(at >= 0 && planeNode(h, source, h->mapped[at].node, id, &said)) && !planeFound(h, source, id, &said, &node)) {
+		if (at >= 0) unmapped(h, at);
+		return false;
+	}
+	if (at >= 0 && (strcmp(h->mapped[at].said.name, said.name) || h->mapped[at].said.file != said.file)) {
+		unmapped(h, at);
+		at = -1;
+	}
+	if (at < 0) {
+		size_t bytes = 0;
+		void *mapping = hostPlaneMap(&said, &bytes);
+		if (!mapping) return false;
+		h->mapped = realloc(h->mapped, sizeof *h->mapped * (size_t)(h->nmapped + 1));
+		at = h->nmapped++;
+		h->mapped[at] = (Mapped){ .source = strdup(source), .id = id, .mapping = mapping, .bytes = bytes };
+	}
+	Mapped *m = &h->mapped[at];
+	if (node && (!m->node || strcmp(m->node, node))) {
+		free(m->node);
+		m->node = strdup(node);
+	}
+	m->said = said;
+	m->asked = hostNow(h);
+	// never past the memory: what the node says must fit what was mapped
+	if (said.offset + (size_t)said.stride * (size_t)said.h * 4 > m->bytes) return false;
+	*out = (HostPlane){ (const uint32_t *)((const char *)m->mapping + said.offset), said.w, said.h, said.stride };
+	return true;
+}
+
+/** the planes not asked for in a while let go: a plane whose node went, or whose layer did */
+static void planesSweep(Host *h) {
+	int64_t now = hostNow(h);
+	for (int i = 0; i < h->nmapped;)
+		if (now - h->mapped[i].asked > 2000000) unmapped(h, i);
+		else i++;
+}
+
+// --- work: what each process's runs cost, counted where the host sees them run
+
+static Work *workOfPid(Host *h, const char *pid) {
+	for (int i = 0; pid && i < h->nwork; i++)
+		if (!strcmp(h->work[i]->pid, pid)) return h->work[i];
+	return NULL;
+}
+
+/** the process a scope is in: the scope itself, or one above it (a computed node's is under its process's) */
+static Work *workOfScope(Host *h, const sc_scope *o) {
+	for (; o; o = sc_scope_parent(o))
+		for (int i = 0; i < h->nwork; i++)
+			if (h->work[i]->scope == o) return h->work[i];
+	return NULL;
+}
+
+static void worked(Work *w, int64_t cpu, bool failed) {
+	w->cpu += cpu;
+	w->runs++;
+	if (failed) w->failed++;
+	w->dirty = true;
+}
+
+/** the scope's teardown: the process is gone; its entry goes at the next tick */
+static char *workGone(void *data) {
+	Work *w = data;
+	w->scope = NULL;
+	return NULL;
+}
+
+static void runStarted(sc_computer *c, unsigned n, int rank, void *data) {
+	(void)c, (void)n, (void)rank;
+	Host *h = data;
+	if (h->runDepth < 16) h->runAt[h->runDepth] = monotonic();
+	h->runDepth++;
+}
+
+static void runEnded(sc_computer *c, unsigned n, sc_ended ended, const void *const *reads, size_t nreads, const sc_more *more, void *data) {
+	(void)n, (void)reads, (void)nreads, (void)more;
+	Host *h = data;
+	if (h->runDepth > 0) h->runDepth--;
+	Work *w = workOfScope(h, c);
+	if (w && h->runDepth < 16) worked(w, monotonic() - h->runAt[h->runDepth], ended == SC_FAIL);
+}
+
+/** a write (a mark of keys) by whatever scope is open: the process's */
+static void marked(const void *const *keys, size_t nkeys, sc_run *run, sc_computer *const *due, size_t ndue, uint64_t tick, void *data) {
+	(void)keys, (void)run, (void)due, (void)ndue, (void)tick;
+	Host *h = data;
+	if (!nkeys) return;
+	Work *w = workOfScope(h, sc_get_current_scope(ap_scheduler(h->os)));
+	if (w) w->writes++, w->dirty = true;
+}
+
+/** a handler the host called, at ./on/<name> of a process's node: charged to that process */
+static void charge(Host *h, const char *const *address, size_t n, int64_t cpu, bool failed) {
+	if (n < 3) return;
+	const ap_item *it = ap_first(h->peep, address, n - 2);
+	Work *w = it ? workOfPid(h, it->id) : NULL;
+	if (w) worked(w, cpu, failed);
+}
+
+/** a runner's run (the setup) timed, and charged to the process whose api it was given */
+typedef struct {
+	Host *h;
+	hf_runner run;
+} Running;
+
+static hf_run running(const op_value *code, void *api, void *data) {
+	Running *r = data;
+	int64_t at = monotonic();
+	hf_run out = r->run(code, api, r->h);
+	ap_api *a = api;
+	Work *w = a ? workOfPid(r->h, a->self) : NULL;
+	if (w) worked(w, monotonic() - at, out.error != NULL);
+	return out;
+}
+
+/** each process's work written to its node, once a second at most, when it changed; the gone let go */
+static void workFlush(Host *h) {
+	int64_t now = hostNow(h);
+	int k = 0;
+	for (int i = 0; i < h->nwork; i++) {
+		Work *w = h->work[i];
+		if (!w->scope) {
+			free(w->pid);
+			free(w);
+			continue;
+		}
+		h->work[k++] = w;
+		if (!w->dirty || now - w->written < 1000000) continue;
+		w->dirty = false;
+		w->written = now;
+		op_value *v = op_map();
+		op_set(v, "cpu", op_num((double)w->cpu));
+		op_set(v, "runs", op_num((double)w->runs));
+		op_set(v, "failed", op_num((double)w->failed));
+		op_set(v, "writes", op_num((double)w->writes));
+		const char *address[] = { AP_ID, w->pid, NULL };
+		op_patch p = valWhole(v);
+		hostFailed(h, ap_set(ap_host(h->os), address, 2, "work", &p, 1, NULL, NULL), "work");
+		op_free(v);
+	}
+	h->nwork = k;
 }
 
 // --- addresses and the small reads and writes every host writes (AFFORDANCES.md)
@@ -387,6 +609,14 @@ static void *createApi(const ps_context *ctx, void *data) {
 	Host *h = data;
 	ap_goes_with(h->os, ctx->scope, ctx->process.id);
 	ap_api *api = ap_process(h->os, ctx->scope, ctx->process.id, ctx->process.at, ctx->process.nat);
+	if (!workOfPid(h, ctx->process.id)) {
+		Work *w = calloc(1, sizeof *w);
+		w->pid = strdup(ctx->process.id);
+		w->scope = ctx->scope;
+		h->work = realloc(h->work, sizeof *h->work * (size_t)(h->nwork + 1));
+		h->work[h->nwork++] = w;
+		free(sc_register_teardown(ap_scheduler(h->os), ctx->scope, workGone, w));
+	}
 	// started inside another process's node: where it was asked to be, in front (startProgram)
 	for (int i = 0; i < h->nnested; i++)
 		if (!strcmp(h->nested[i].id, ctx->process.id)) ap_here_is(h->os, ctx->process.id, h->nested[i].at, h->nested[i].n), api->place = h->nested[i].at, api->nplace = h->nested[i].n - 1, api->name = h->nested[i].at[h->nested[i].n - 1];
@@ -525,10 +755,15 @@ static void makeHw(Host *h) {
 			char line[32], lid[64];
 			snprintf(line, sizeof line, "%lld", (long long)irq);
 			snprintf(lid, sizeof lid, "hw.irq.%s", line);
+			// count: records come; keeps: how many wait while no driver has the line, the oldest
+			// dropped past it (dropped counts them); waiting: how many wait now
 			op_value *v = op_map();
 			op_set(v, "device", op_str(name));
 			op_set(v, "owner", op_null());
 			op_set(v, "count", op_num(0));
+			op_set(v, "keeps", op_num(KEEPS));
+			op_set(v, "dropped", op_num(0));
+			op_set(v, "waiting", op_num(0));
 			own(h, irqs, ni, line, lid, v);
 			op_free(v);
 		}
@@ -605,9 +840,11 @@ static void makeLoaders(Host *h) {
 	op_push(dylibs, op_str(DYLIB_TYPE));
 	attribute(h, runner, nr, PG_TAKES, dylibs);
 	op_free(dlopen), op_free(dylibs);
+	static Running running_[sizeof RUNNERS / sizeof *RUNNERS];
 	for (size_t i = 0; i < sizeof RUNNERS / sizeof *RUNNERS; i++) {
 		const Runner *r = &RUNNERS[i];
-		hf_add_runner(h->functions, r->name, r->run, h);
+		running_[i] = (Running){ h, r->run };
+		hf_add_runner(h->functions, r->name, running, &running_[i]);
 		char id[64];
 		snprintf(id, sizeof id, "os.loader.%s", r->name);
 		op_value *fn = hf_value(r->name);
@@ -782,29 +1019,33 @@ Host *hostBoot(const ErmosConfig *config) {
 	}
 	// the card: the device, and what Subduction holds, from which the graph is made again
 	const char *sd = h->config.sd ? h->config.sd : "/tmp/ermineOS-card", *wrong = NULL;
-	h->peer = peerOpen(sd, h->config.fresh, &wrong);
-	if (!h->peer) {
+	h->card = cardOpen(sd, h->config.fresh, &wrong);
+	if (!h->card) {
 		hostSay(h, "the card (%s) could not be used: %s", sd, wrong);
 		return NULL;
 	}
-	h->os = ap_new(&(ap_setup){ .peer = h->peer, .root = peerRoot(h->peer), .say = said, .start = startProgram, .ctx = h });
+	h->os = ap_new(&(ap_setup){ .card = h->card, .root = cardRoot(h->card), .say = said, .start = startProgram, .ctx = h });
+	h->peep = ap_peep(ap_host(h->os));
+	sc_on_run_start(ap_scheduler(h->os), runStarted, h);
+	sc_on_run_end(ap_scheduler(h->os), runEnded, h);
+	sc_on_mark(ap_scheduler(h->os), marked, h);
 	drvUse(h);
-	bool held = peerStart(h->peer, ap_places(h->os), ap_table(h->os), ap_scheduler(h->os),
-		&(peer_host){ .say = said, .send = netSend, .joined = netUp, .count = netCounts, .context = h });
-	h->net = netOpen(h, peerTransport(h->peer), peerKey(h->peer));
+	bool held = cardStart(h->card, ap_places(h->os), ap_table(h->os), ap_scheduler(h->os),
+		&(card_host){ .say = said, .send = netSend, .count = netCounts, .context = h });
+	h->net = netOpen(h, cardDevice(h->card), cardKey(h->card));
 	h->running = true;
 	// ermine/programs: the host's functions, the build cache, start
 	h->functions = hf_new();
 	sc_run_with_scope(ap_machine(h->os), programsUp, h);
 	Json *img = image(h);
-	hostSay(h, held ? "the card (%s) holds a graph: %s" : "the card (%s) is empty: %s", sd, peerRoot(h->peer));
+	hostSay(h, held ? "the card (%s) holds a graph: %s" : "the card (%s) is empty: %s", sd, cardRoot(h->card));
 	if (img) makeImage(h, img);
 	makeHw(h);
 	makeLoaders(h);
 	if (!h->config.bare && img) boot(h, img);
 	ap_pulse(h->os);
 	reap(h);
-	peerTurn(h->peer);
+	cardTurn(h->card);
 	ap_sweep(h->os);
 	hostCommand(h, parse("{\"op\": \"ready\"}"));
 	return h;
@@ -822,7 +1063,19 @@ static const op_value *ownerOf(Host *h, int irq) {
 	return owner && owner->type == OP_LIST ? owner : NULL;
 }
 
+/** the line's entry, made at its first record */
+static Held *lineOf(Host *h, int irq) {
+	for (int i = 0; i < h->nheld; i++) if (h->held[i].irq == irq) return &h->held[i];
+	h->held = realloc(h->held, sizeof *h->held * (size_t)(h->nheld + 1));
+	Held *held = &h->held[h->nheld++];
+	*held = (Held){ .irq = irq };
+	return held;
+}
+
 static void deliver(Host *h, int irq, Json *records) {
+	Held *line = lineOf(h, irq);
+	line->arrived += records->array.count;
+	line->dirty = true;
 	// the network's line (net.c): what came is read at the card's turn, each turn; a compile done
 	// (loader.c): taken at the turn's end, each turn
 	if (irq == 61 || irq == LOADER_IRQ) {
@@ -837,24 +1090,21 @@ static void deliver(Host *h, int irq, Json *records) {
 	}
 	const op_value *owner = ownerOf(h, irq);
 	if (!owner) {
-		// no driver has the line yet: it waits, as a level-triggered interrupt does
-		Held *held = NULL;
-		for (int i = 0; i < h->nheld && !held; i++) if (h->held[i].irq == irq) held = &h->held[i];
-		if (!held) {
-			h->held = realloc(h->held, sizeof *h->held * (size_t)(h->nheld + 1));
-			held = &h->held[h->nheld++];
-			*held = (Held){ .irq = irq };
-		}
-		int i = 0;
-		for (; i < records->array.count && held->count < 64; i++) {
-			if (held->count == held->room) {
-				held->room = held->room ? held->room * 2 : 8;
-				held->records = realloc(held->records, sizeof *held->records * (size_t)held->room);
+		// no driver has the line yet: its newest KEEPS wait, as a level-triggered interrupt does; the oldest go
+		for (int i = 0; i < records->array.count; i++) {
+			if (line->count == KEEPS) {
+				jsonFree(line->records[0]);
+				memmove(line->records, line->records + 1, sizeof *line->records * (size_t)(line->count - 1));
+				line->count--;
+				line->dropped++;
 			}
-			held->records[held->count++] = records->array.items[i];
+			if (line->count == line->room) {
+				line->room = line->room ? line->room * 2 : 8;
+				line->records = realloc(line->records, sizeof *line->records * (size_t)line->room);
+			}
+			line->records[line->count++] = records->array.items[i];
 		}
-		// the records taken are the line's now; the list, and any past the 64 kept, go
-		for (; i < records->array.count; i++) jsonFree(records->array.items[i]);
+		// the records taken are the line's now; the list goes
 		records->array.count = 0;
 		jsonFree(records);
 		return;
@@ -868,7 +1118,10 @@ static void deliver(Host *h, int irq, Json *records) {
 	op_value *out = NULL;
 	char doing[64];
 	snprintf(doing, sizeof doing, "irq %d", irq);
-	hostFailed(h, ap_call_host(h->os, address, n, args, &out), doing);
+	int64_t at = monotonic();
+	const ap_error *e = ap_call_host(h->os, address, n, args, &out);
+	charge(h, address, n, monotonic() - at, e != NULL);
+	hostFailed(h, e, doing);
 	op_free(args);
 	jsonFree(records);
 }
@@ -890,16 +1143,41 @@ static void timers(Host *h) {
 		// a timer cancelled, or its process stopped: its handler is gone, and so is the timer
 		if (address && hostLook(ap_host(h->os), address, n)) {
 			op_value *out = NULL;
-			hostFailed(h, ap_call_host(h->os, address, n, NULL, &out), "timer");
+			int64_t at = monotonic();
+			const ap_error *e = ap_call_host(h->os, address, n, NULL, &out);
+			charge(h, address, n, monotonic() - at, e != NULL);
+			hostFailed(h, e, "timer");
 		}
 		jsonFree(to);
 	}
 }
 
-/** writes /dev/clock/second and wall each second, and minute as it turns */
+/** each line's counts written to /hw/irq/<n> where they changed */
+static void linesFlush(Host *h) {
+	for (int i = 0; i < h->nheld; i++) {
+		Held *line = &h->held[i];
+		if (!line->dirty) continue;
+		line->dirty = false;
+		char n[32];
+		snprintf(n, sizeof n, "%d", line->irq);
+		size_t len;
+		const char *const *address = hostPath(h, &len, "hw", "irq", n, NULL);
+		if (!hostLook(ap_host(h->os), address, len)) continue;
+		op_value *count = op_num((double)line->arrived), *dropped = op_num((double)line->dropped), *waiting = op_num((double)line->count);
+		op_patch patches[3] = { valKey("count", count), valKey("dropped", dropped), valKey("waiting", waiting) };
+		hostFailed(h, ap_write(ap_host(h->os), address, len, patches, 3, NULL, NULL), "irq counts");
+		for (int k = 0; k < 3; k++) free((void *)patches[k].place.path[0].s), free((void *)patches[k].place.path);
+		op_free(count), op_free(dropped), op_free(waiting);
+	}
+}
+
+/** writes /dev/clock/second and wall each second, and minute as it turns; and what the host counts, once a second */
 static void tick(Host *h) {
 	time_t now = time(NULL);
 	if ((int64_t)now == h->second) return;
+	linesFlush(h);
+	workFlush(h);
+	planesSweep(h);
 	bool minute = h->second / 60 != (int64_t)now / 60;
 	h->second = (int64_t)now;
 	struct tm tm = *localtime(&now);
@@ -934,6 +1212,7 @@ void hostTurn(Host *h, const char *const *records, int count) {
 		Json *list = jsonArray();
 		for (int k = 0; k < held->count; k++) jsonPush(list, held->records[k]);
 		held->count = 0;
+		held->arrived -= list->array.count; // counted when they came
 		deliver(h, held->irq, list);
 		ap_pulse(h->os);
 	}
@@ -971,7 +1250,7 @@ void hostTurn(Host *h, const char *const *records, int count) {
 	dylibTurn(h);
 	// the network, around the card's turn: what came taken in, then what the transport asks sent
 	netIn(h->net);
-	int64_t sync = peerTurn(h->peer);
+	int64_t sync = cardTurn(h->card);
 	netTurn(h->net);
 	int64_t net = netWait(h->net);
 	if (net >= 0 && (sync < 0 || net < sync)) sync = net;
@@ -1020,10 +1299,9 @@ void hostOff(Host *h) {
 	free(list);
 	execStop(h);
 	dylibStop(h);
-	vramStop();
-	sockStop();
-	vncStop();
-	peerStop(h->peer);
+	driversStop();
+	while (h->nmapped) unmapped(h, 0);
+	cardStop(h->card);
 	netStop(h->net);
 	hostSay(h, "off: the card holds every change to a document");
 }

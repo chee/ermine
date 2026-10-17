@@ -25,9 +25,16 @@
 // and takes it in, as on new heads.
 //
 // Writes are kept in order. What is written while the backend is writing
-// goes to it as one batch, after. A save resolves once its batch is kept;
-// with behind, at once, and flush() is where they are known kept (it throws
-// what a write threw).
+// goes to it as one batch, after. Behind (the default): a save resolves at
+// once, and flush() is where what was saved is known kept (it throws what a
+// write threw). behind: false: a save resolves once its batch is kept.
+//
+// For hosts: a crash or a closed tab loses what was saved since the last
+// write landed (never a hole: writes land in order). So flush sometimes: when
+// things are quiet (a poll that flushes while saves are waiting and nothing
+// is busy), and on the way out (beforeunload, pagehide or
+// visibilitychange: hidden in a browser; unload or a signal elsewhere),
+// knowing a browser may not wait for it.
 
 // deno-lint-ignore no-import-prefix
 import * as wasm from "npm:@automerge/subduction@0.23.0"
@@ -97,9 +104,9 @@ export class Storage {
 		for (const k of records.keys()) this.#prefixed(k).add(k)
 	}
 
-	/** Reads what the backend keeps. behind: saves resolve before they are kept. */
+	/** Reads what the backend keeps. behind (default true): saves resolve before they are kept. */
 	static async open(backend: Backend, options: { behind?: boolean } = {}): Promise<Storage> {
-		return new Storage(backend, await backend.read(), options.behind ?? false)
+		return new Storage(backend, await backend.read(), options.behind ?? true)
 	}
 
 	/** Resolves once every write begun is kept; with behind, throws what one threw. */

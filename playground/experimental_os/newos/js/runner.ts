@@ -28,6 +28,7 @@ import * as icons from "./icons.ts"
 import * as readline from "./readline.ts"
 import * as program from "./program.ts"
 import { TextDecoder, TextEncoder } from "./text.ts"
+import { BUDGET, budget, STEP } from "./budget.ts"
 
 type Op = (handle: number, op: string, ...args: unknown[]) => unknown
 type Native = typeof globalThis & {
@@ -107,14 +108,29 @@ function script(source: string): string {
 		.replace(/\bexport\s+(?=(async\s+)?(function|const|let|class)\b)/g, "")
 }
 
-/** a program's setup: its module evaluated once, with its URL so its frames say where */
+// --- the loop budget (budget.ts): steps left to the run going on; each run of a part starts with BUDGET
+
+let steps = BUDGET
+
+/** a step of the program's: one loop turn, one function entered; past the budget the program is thrown "budget" */
+function step(): void {
+	if (--steps < 0) {
+		steps = 0
+		const e = new Error(`the run took more than ${BUDGET} steps (loop turns and functions entered), and was stopped`)
+		e.name = "budget"
+		throw e
+	}
+}
+
+/** a program's setup: its module evaluated once, with its URL so its frames say where, the budget's steps in its code */
 function load(source: string, url: string): unknown {
-	const wrapped = `(function (__library) { let __default;\n${script(source)}\n;return __default })`
-	const f = evaluate(wrapped, url) as (lib: (name: string) => unknown) => unknown
+	const wrapped = `(function (__library, ${STEP}) { let __default;\n${budget(script(source))}\n;return __default })`
+	const f = evaluate(wrapped, url) as (lib: (name: string) => unknown, step: () => void) => unknown
+	steps = BUDGET
 	return f((name) => {
 		if (!(name in libraries)) throw new Error(`no library ermine:${name}`)
 		return libraries[name]
-	})
+	}, step)
 }
 
 // --- what a part is given
@@ -202,10 +218,14 @@ function run(f: (given: unknown) => unknown, info: Info): unknown {
 		if ("args" in info) given.args = info.args
 	}
 	parts.push(given)
+	// a run of its own: its own budget; a part it was called from (a handler) takes its own back after
+	const left = steps
+	steps = BUDGET
 	try {
 		return f(given)
 	} finally {
 		parts.pop()
+		steps = left
 	}
 }
 

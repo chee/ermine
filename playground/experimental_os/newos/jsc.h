@@ -6,7 +6,7 @@
 
 #include "host.h"
 
-#include "../../../ermine/programs/c/host.h"
+#include "../../../extensions/build/c/host.h"
 
 /** the JavaScript runner (ermine/programs' hf_runner): code a program's source, its default export the setup, run with the process's api (api.h's ap_api); data the host */
 hf_run jscRun(const op_value *code, void *api, void *data);
