@@ -55,6 +55,7 @@
 // The metal's commands: web, webshow, webtook, webinput, webdo, webpost, webclose.
 
 #include "drivers.h"
+#include "../../../ermine/encoding/c/json_text.h"
 #include "drv.h"
 
 #include <fcntl.h>

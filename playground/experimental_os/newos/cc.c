@@ -18,6 +18,7 @@
 #define _DARWIN_C_SOURCE
 
 #include "cc.h"
+#include "../../../ermine/encoding/c/json_text.h"
 
 #include "../../../ermine/encoding/c/blake3/blake3.h"
 #include "../../../ermine/encoding/c/cbor.h"

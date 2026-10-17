@@ -823,7 +823,7 @@ static Json *perform(Exec *x, ap_given *g, const char *op, const Json *f, const 
 		else if (!strcmp(name, "io")) *wrong = "on/io is the OS's own: the program's frames come through it";
 		else {
 			ExecFn *ef = calloc(1, sizeof *ef);
-			*ef = (ExecFn){ { event }, x, fn };
+			*ef = (ExecFn){ { event, NULL }, x, fn };
 			if (!(*e = place(x, g, name, &ef->base, &made))) {
 				answer = jsonShallow(x->here);
 				jsonPush(answer, jsonString("on"));
@@ -1175,8 +1175,8 @@ static const ap_error *setup(ap_fn *self, ap_given *g, op_value **out, int *pend
 	x->fd = pair[0], x->out = output[0], x->wake[0] = wake[0], x->wake[1] = wake[1], x->stop[0] = stop[0], x->stop[1] = stop[1];
 	pthread_mutex_init(&x->lock, NULL);
 	pthread_cond_init(&x->cond, NULL);
-	x->io = (ExecFn){ { io }, x, 0 };
-	x->cleanup = (ExecFn){ { cleanup }, x, 0 };
+	x->io = (ExecFn){ { io, NULL }, x, 0 };
+	x->cleanup = (ExecFn){ { cleanup, NULL }, x, 0 };
 	ERM_PUSH(programs, x);
 	hostSay(h, "exec: %s is pid %d, as %s", path, (int)child, x->pid);
 

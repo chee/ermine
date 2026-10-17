@@ -11,6 +11,7 @@
 // ephemeral, made again each boot.
 
 #include "host.h"
+#include "../../../ermine/encoding/c/json_text.h"
 
 #include "drivers.h"
 #include "drv.h"
@@ -162,6 +163,10 @@ char *hostTempDup(Host *h, const char *text) { return ap_dup(h->os, text); }
 
 ap_os *hostOs(Host *h) { return h->os; }
 Peer *hostPeer(Host *h) { return h->peer; }
+
+struct Net *hostNet(Host *h) {
+	return h->net;
+}
 const ErmosConfig *hostConfig(Host *h) { return &h->config; }
 Json *hostTree(Host *h) { return h->dt; }
 int64_t hostNow(Host *h) { return monotonic() - h->started; }
@@ -820,10 +825,14 @@ static const op_value *ownerOf(Host *h, int irq) {
 static void deliver(Host *h, int irq, Json *records) {
 	// the network's line (net.c): what came is read at the card's turn, each turn; a compile done
 	// (loader.c): taken at the turn's end, each turn
-	if (irq == 61 || irq == LOADER_IRQ) return;
+	if (irq == 61 || irq == LOADER_IRQ) {
+		jsonFree(records);
+		return;
+	}
 	// the exec programs' line (exec.c): a program's frames or lines came, or it exited
 	if (irq == EXEC_IRQ) {
 		execRecords(h, records);
+		jsonFree(records);
 		return;
 	}
 	const op_value *owner = ownerOf(h, irq);
@@ -836,13 +845,18 @@ static void deliver(Host *h, int irq, Json *records) {
 			held = &h->held[h->nheld++];
 			*held = (Held){ .irq = irq };
 		}
-		for (int i = 0; i < records->array.count && held->count < 64; i++) {
+		int i = 0;
+		for (; i < records->array.count && held->count < 64; i++) {
 			if (held->count == held->room) {
 				held->room = held->room ? held->room * 2 : 8;
 				held->records = realloc(held->records, sizeof *held->records * (size_t)held->room);
 			}
 			held->records[held->count++] = records->array.items[i];
 		}
+		// the records taken are the line's now; the list, and any past the 64 kept, go
+		for (; i < records->array.count; i++) jsonFree(records->array.items[i]);
+		records->array.count = 0;
+		jsonFree(records);
 		return;
 	}
 	size_t n = owner->count;
@@ -856,6 +870,7 @@ static void deliver(Host *h, int irq, Json *records) {
 	snprintf(doing, sizeof doing, "irq %d", irq);
 	hostFailed(h, ap_call_host(h->os, address, n, args, &out), doing);
 	op_free(args);
+	jsonFree(records);
 }
 
 /** the timers that are due, each its handler called; the next asked for as a wake */

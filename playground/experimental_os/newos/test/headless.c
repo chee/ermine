@@ -31,6 +31,7 @@
 #include "../os.h"
 
 #include "../../../../ermine/encoding/c/json.h"
+#include "../../../../ermine/encoding/c/json_text.h"
 #include "../drv.h"
 
 #include <fcntl.h>
@@ -658,10 +659,19 @@ static void menuItems(const Json *items) {
 }
 
 /** what the OS commands the hardware */
+static void commanded(Json *c, const char *json);
+
+/** what the OS commands the hardware: parsed, done, let go */
 static void command(void *data, const char *json) {
 	(void)data;
 	char *why = NULL;
 	Json *c = jsonParse(json, strlen(json), &why);
+	commanded(c, json);
+	jsonFree(c);
+	free(why);
+}
+
+static void commanded(Json *c, const char *json) {
 	const char *op = jsonText(jsonGet(c, "op"));
 	if (op && !strcmp(op, "layers")) {
 		if (getenv("HEADLESS_LAYERSLOG")) fprintf(stderr, "[metal] %.400s\n", json);

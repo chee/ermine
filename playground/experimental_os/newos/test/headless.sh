@@ -28,10 +28,10 @@ cc -std=c11 -Wall -Wextra -O1 -g ${SANITIZE:-} $nc_cflags -o "$out/newos-headles
 echo "built $out/newos-headless"
 # the programs exec runs (../programs), each with libermine (../lib), into $out/programs, where exec.c finds them
 mkdir -p "$out/programs" "$out/lib"
-for f in "$here/../lib/libermine.c" "$here/../abi.c" "$nc/ermine/encoding/c/json.c" "$nc/ermine/encoding/c/cbor.c"; do
+for f in "$here/../lib/libermine.c" "$here/../abi.c" "$nc/ermine/encoding/c/json.c" "$nc/ermine/encoding/c/json_text.c" "$nc/ermine/encoding/c/cbor.c"; do
 	cc -std=c11 -Wall -Wextra -O2 -g ${SANITIZE:-} -c "$f" -o "$out/lib/$(basename "$f" .c).o"
 done
 rm -f "$out/lib/libermine.a"
-ar rcs "$out/lib/libermine.a" "$out/lib/libermine.o" "$out/lib/abi.o" "$out/lib/json.o" "$out/lib/cbor.o"
+ar rcs "$out/lib/libermine.a" "$out/lib/libermine.o" "$out/lib/abi.o" "$out/lib/json.o" "$out/lib/json_text.o" "$out/lib/cbor.o"
 cc -std=c11 -Wall -Wextra -O2 -g ${SANITIZE:-} -o "$out/programs/catclock" "$here/../programs/catclock/catclock.c" "$here/../blit.c" "$out/lib/libermine.a" -lm
 echo "built $out/programs/catclock"

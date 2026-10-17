@@ -19,6 +19,7 @@
 // them, a set bit black (catclock inverts them for GREY1, where 1 is white).
 
 #include "../../lib/libermine.h"
+#include "../../../../../ermine/encoding/c/json_text.h"
 #include "../../blit.h"
 
 #include <math.h>

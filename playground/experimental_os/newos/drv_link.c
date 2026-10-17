@@ -42,6 +42,7 @@
 // each typer's T), loaded once the card holds them, followed from the server till then.
 
 #include "drivers.h"
+#include "../../../ermine/encoding/c/json_text.h"
 #include "drv.h"
 #include "peer/peer.h"
 

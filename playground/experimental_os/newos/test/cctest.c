@@ -2,6 +2,7 @@
 // the keys, the module, its exports, the steps and the diagnostics out.
 
 #include "../cc.h"
+#include "../../../../ermine/encoding/c/json_text.h"
 
 #include <stdio.h>
 #include <stdlib.h>

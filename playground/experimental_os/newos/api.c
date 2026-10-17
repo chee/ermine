@@ -1031,6 +1031,9 @@ const ap_error *ap_insert(ap_api *a, const char *id, const char *name, const cha
 	return write_with(a, "insert", inserting, &m, time);
 }
 
+static void lives_out(ap_os *os, const char *id);
+static bool fronted(ap_os *os, const char *id);
+
 static void removing(void *data) {
 	Writing *w = data;
 	Membering *m = w->ctx;
@@ -1361,10 +1364,7 @@ static const ap_error *call(ap_os *os, ap_api *from, const char *const *address,
 	else if (sc_run_with_scope(scope, calling, &c)) return ap_error_new(os, "stopped", "stopped: its process has ended");
 	if (c.e) return c.e;
 	*out = c.out;
-	if (c.out) {
-		op_value **slot = ap_temp(os, sizeof *slot);
-		*slot = c.out;
-	}
+	if (c.out) hold_for_turn(os, c.out); // the turn's: let go at the sweep
 	return NULL;
 }
 

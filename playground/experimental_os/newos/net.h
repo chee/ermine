@@ -11,10 +11,13 @@
 
 typedef struct Net Net;
 
-/** the network of a transport, not yet connected: the first turn reads /etc/sync */
+/** the network of a transport, not yet connected: /etc/sync read once; netTarget when it changes */
 Net *netOpen(Host *host, transport *t, const char *key);
-/** a turn's start, before the transport runs: /etc/sync read, a connection opened taken, what came handed to the transport */
+/** a turn's start, before the transport runs: a connection opened taken, what came handed to the transport */
 void netIn(Net *n);
+/** /etc/sync read again (its server and service): a server named anew is connected to at once. The sync driver's
+ * server part calls this when /etc/sync changes, its read tracked, so no turn reads it for nothing */
+void netTarget(Net *n);
 /** a turn's end, after it ran: a handshake done or given up, a connection begun again; /dev/sync/link written when it changed */
 void netTurn(Net *n);
 /** what the transport asks of the host: sent on the connection, or the connection closed */

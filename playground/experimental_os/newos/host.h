@@ -27,6 +27,8 @@ void hostOff(Host *host);
 ap_os *hostOs(Host *host);
 /** the card */
 Peer *hostPeer(Host *host);
+/** the connection to /etc/sync's server (net.c) */
+struct Net *hostNet(Host *h);
 /** the config the OS was started with: the frame buffers, the planes, the folders */
 const ErmosConfig *hostConfig(Host *host);
 /** the device tree */

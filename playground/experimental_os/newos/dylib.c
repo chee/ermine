@@ -19,6 +19,7 @@
 // stopped in (dylibTurn), once the process's cleanups have run.
 
 #include "dylib.h"
+#include "../../../ermine/encoding/c/json_text.h"
 
 #include "image/lib/c/ermine_host.h"
 

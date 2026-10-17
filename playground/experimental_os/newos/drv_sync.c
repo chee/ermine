@@ -30,7 +30,9 @@
 // earlier than its) makes the history again from the start.
 
 #include "drivers.h"
+#include "../../../ermine/encoding/c/json_text.h"
 #include "drv.h"
+#include "net.h"
 #include "peer/peer.h"
 
 #include "../../../extensions/subduction/c/apply.h"
@@ -414,6 +416,24 @@ static ErmErr wantEffect(void *data, const ErmGiven *g, Json **out) {
 	return ermOk();
 }
 
+/** /etc/sync, read tracked: the server and service named, so the effect runs only when they change */
+static ErmErr serverCompute(void *data, const ErmGiven *g, Json **out) {
+	(void)data;
+	Json *v = drvRead(g->api, drvPath("/", "etc", "sync", NULL));
+	Json *server = jsonGet(v, "server"), *service = jsonGet(v, "service");
+	*out = drvMap("server", server ? jsonShallow(server) : jsonNull(), "service", service ? jsonShallow(service) : jsonNull(), NULL);
+	return ermOk();
+}
+
+/** the network told /etc/sync changed: it reads the server again and connects anew */
+static ErmErr serverEffect(void *data, const ErmGiven *g, Json **out) {
+	(void)data, (void)g;
+	*out = jsonNull();
+	Net *n = hostNet(drvHost());
+	if (n) netTarget(n);
+	return ermOk();
+}
+
 /** irq 65: each served history a change was taken in to grown, written only when it did */
 static ErmErr historyIrq(void *data, const ErmGiven *g, Json **out) {
 	(void)data;
@@ -441,5 +461,6 @@ ErmErr driverSync(void *data, const ErmGiven *g, Json **out) {
 	drvHandler(g, here, "irq", (ErmFn){ historyIrq, NULL });
 	drvClaim(g, here, IRQ);
 	drvChild(g, here, "want", (ErmFn){ wantCompute, NULL }, (ErmFn){ wantEffect, NULL });
+	drvChild(g, here, "server", (ErmFn){ serverCompute, NULL }, (ErmFn){ serverEffect, NULL });
 	return ermOk();
 }
