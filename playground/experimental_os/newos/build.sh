@@ -56,11 +56,11 @@ done
 # build/newos/programs beside $mac/ermineOS, where exec.c finds them
 say "compiling the programs exec runs: catclock, with libermine"
 mkdir -p "$build/programs" "$build/lib"
-for src in "$here/lib/libermine.c" "$here/abi.c" "$root/ermine/encoding/c/json.c" "$root/ermine/encoding/c/cbor.c"; do
+for src in "$here/lib/libermine.c" "$here/abi.c" "$root/ermine/encoding/c/json.c" "$root/ermine/encoding/c/json_text.c" "$root/ermine/encoding/c/cbor.c"; do
 	clang -std=c11 -Wall -Wextra -O2 -target "$target" -isysroot "$sdk" -c "$src" -o "$build/lib/$(basename "$src" .c).o"
 done
 rm -f "$build/lib/libermine.a"
-ar rcs "$build/lib/libermine.a" "$build/lib/libermine.o" "$build/lib/abi.o" "$build/lib/json.o" "$build/lib/cbor.o"
+ar rcs "$build/lib/libermine.a" "$build/lib/libermine.o" "$build/lib/abi.o" "$build/lib/json.o" "$build/lib/json_text.o" "$build/lib/cbor.o"
 clang -std=c11 -Wall -Wextra -O2 -target "$target" -isysroot "$sdk" -o "$build/programs/catclock" "$here/programs/catclock/catclock.c" "$here/blit.c" "$build/lib/libermine.a" -lm
 echo "built $build/programs/catclock"
 

@@ -34,6 +34,7 @@
 // the latest frame named.
 
 #include "drivers.h"
+#include "../../../ermine/encoding/c/json_text.h"
 #include "drv.h"
 
 #include <fcntl.h>

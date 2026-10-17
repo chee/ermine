@@ -67,6 +67,7 @@
 // Not yet here, as display.js has it: the host's console under everything.
 
 #include "drivers.h"
+#include "../../../ermine/encoding/c/json_text.h"
 #include "drv.h"
 #include "blit.h"
 
@@ -78,6 +79,7 @@
 typedef struct Page {
 	int n;
 	BlitPage page;
+	Json *value; // the page's value, held: the alpha and info are its
 } Page;
 
 typedef struct Face {
@@ -106,7 +108,7 @@ typedef struct Rendered {
 	char *runs;
 	bool seen;
 	int64_t n;  // how many times it was played: one not played since it was presented is not compared
-	const Json *draw, *pixels; // what it was played from: a value is never changed (json.h), so the same pointer is the same ops
+	const Json *draw, *pixels; // what it was played from: a value is never changed (json.h), so the same pointer is the same ops; draw held (spliced reads it)
 	BlitRect delta; // where its last render changed it (none: nothing); fresh, all of it
 	bool fresh;
 } Rendered;
@@ -227,7 +229,7 @@ static const BlitPage *pageOf(void *data, int n) {
 		drvOp(d->api, "call", drvMap("address", drvPath("/", "dev", "font", "driver", "on", "want", NULL), "args", args, NULL));
 		return NULL;
 	}
-	Page page = { n, { (int)whole(jsonGet(v, "w"), 0), alpha->bytes.data, alpha->bytes.length, info->typed.data } };
+	Page page = { n, { (int)whole(jsonGet(v, "w"), 0), alpha->bytes.data, alpha->bytes.length, info->typed.data }, jsonRef(v) };
 	ERM_PUSH(f->pages, page);
 	return &f->pages.items[f->pages.count - 1].page;
 }
@@ -990,7 +992,8 @@ static BlitForm *render(Display *d, const ErmPartApi *api, const Json *l, const 
 		free(r->rest);
 		r->rest = rest;
 		r->n++;
-		r->draw = ops0;
+		jsonFree((Json *)r->draw);
+		r->draw = jsonRef((Json *)ops0);
 		r->delta = damage, r->fresh = false;
 		return &r->form;
 	}
@@ -1007,7 +1010,8 @@ static BlitForm *render(Display *d, const ErmPartApi *api, const Json *l, const 
 	r->key = key;
 	r->rest = rest;
 	r->n++;
-	r->draw = ops0, r->pixels = pixels0;
+	jsonFree((Json *)r->draw);
+	r->draw = jsonRef((Json *)ops0), r->pixels = pixels0;
 	Json *over = jsonGet(l, "over");
 	r->form = blitForm(w, h, over && over->type == JSON_BOOLEAN && over->boolean ? BLIT_TRANSPARENT : 0);
 	Json *pixels = jsonGet(v, "pixels");
@@ -1102,6 +1106,7 @@ static void forget(Display *d, const ErmPartApi *api, Json *layers, bool windows
 		free(r->key);
 		free(r->rest);
 		free(r->runs);
+		jsonFree((Json *)r->draw);
 	}
 	d->rendered.count = k;
 }
@@ -1601,13 +1606,13 @@ static void layersCompose(Display *d, const ErmPartApi *api, Json *layers, const
 			} else jsonAdd(item, "shadow", jsonNull());
 			// its rounded corners: only its frame, rounded, and that again drop down and right, is shown
 			if (curved)
-				jsonAdd(item, "shape", drvMap("box", drvMap("x", jsonInteger(0), "y", jsonInteger(0), "w", jsonInteger(box.w - ch.drop), "h", jsonInteger(box.h - ch.drop), NULL), "corners",
-				                              cornersJson(rad), "drop", jsonInteger(ch.drop), NULL));
+				jsonAdd(item, "shape", jsonRef(drvMap("box", drvMap("x", jsonInteger(0), "y", jsonInteger(0), "w", jsonInteger(box.w - ch.drop), "h", jsonInteger(box.h - ch.drop), NULL), "corners",
+				                                      cornersJson(rad), "drop", jsonInteger(ch.drop), NULL)));
 			free(t->geo);
 			t->geo = geo;
 		} else free(geo);
 		if (paint) {
-			jsonAdd(item, "paint", drvMap("sx", jsonInteger(sx), "sy", jsonInteger(sy), "x", jsonInteger(r.x), "y", jsonInteger(r.y), "w", jsonInteger(r.w), "h", jsonInteger(r.h), NULL));
+			jsonAdd(item, "paint", jsonRef(drvMap("sx", jsonInteger(sx), "sy", jsonInteger(sy), "x", jsonInteger(r.x), "y", jsonInteger(r.y), "w", jsonInteger(r.w), "h", jsonInteger(r.h), NULL)));
 			sx += r.w;
 			if (r.h > rowH) rowH = r.h;
 		}
@@ -1645,7 +1650,11 @@ static ErmErr composeEffect(void *data, const ErmGiven *g, Json **out) {
 	if (!jsonIsObject(mode)) return ermOk();
 	d->api = g->api;
 	// what draws: the fonts and the selection as they are now
-	for (int i = 0; i < d->faces.count; i++) d->faces.items[i]->pages.count = 0, d->faces.items[i]->wanted.count = 0;
+	for (int i = 0; i < d->faces.count; i++) {
+		Face *f = d->faces.items[i];
+		for (int k = 0; k < f->pages.count; k++) jsonFree(f->pages.items[k].value);
+		free(f->pages.items), free(f->wanted.items), free(f->role), free(f);
+	}
 	d->faces.count = 0;
 	jsonFree(d->selection);
 	d->selection = jsonRef(jsonGet(v, "selection"));
@@ -1672,9 +1681,11 @@ static ErmErr composeEffect(void *data, const ErmGiven *g, Json **out) {
 	ErmMap seen = { 0 };
 	for (int i = 0; jsonIsObject(all) && i < all->object.count; i++) {
 		const char *name = all->object.members[i].key;
-		Json *wl = all->object.members[i].value, *col = jsonGet(wl, "collapsed"), *m = jsonRef(wl);
+		Json *wl = all->object.members[i].value, *col = jsonGet(wl, "collapsed"), *m = wl;
 		bool titled = !windowsMode && jsonIsString(jsonGet(wl, "title"));
-		if (titled) {
+		// written as it is (a hold of this turn's) or, titled, a copy with its chrome's parts
+		if (!titled) m = jsonRef(wl);
+		else {
 			Chrome ch = chromeOf(d, themeJ, &T, wl, true, u);
 			m = jsonShallow(wl);
 			jsonAdd(m, "parts", jsonRef(partsOf(&ch, (int)whole(jsonGet(wl, "w"), 0), (int)whole(jsonGet(wl, "h"), 0), col && col->type == JSON_BOOLEAN && col->boolean)));
@@ -1979,8 +1990,8 @@ static ErmErr displayIrq(void *data, const ErmGiven *g, Json **out) {
 				s->geo = geoOf(d, (int)x, (int)y, (int)whole(jsonGet(l, "w"), 0), (int)whole(jsonGet(l, "h"), 0), jsonText(jsonGet(l, "title")));
 			}
 			Json *patches = jsonArray();
-			jsonPush(patches, drvMap("type", jsonString("set"), "path", jsonArray(), "key", jsonString("x"), "value", jsonInteger(x), NULL));
-			jsonPush(patches, drvMap("type", jsonString("set"), "path", jsonArray(), "key", jsonString("y"), "value", jsonInteger(y), NULL));
+			jsonPush(patches, jsonRef(drvMap("type", jsonString("set"), "path", jsonArray(), "key", jsonString("x"), "value", jsonInteger(x), NULL)));
+			jsonPush(patches, jsonRef(drvMap("type", jsonString("set"), "path", jsonArray(), "key", jsonString("y"), "value", jsonInteger(y), NULL)));
 			drvOp(g->api, "write", drvMap("address", at, "patches", patches, NULL));
 		} else if (!strcmp(e, "close")) {
 			// a Mac window's close button: for the window manager, which closes it or not
@@ -2154,7 +2165,7 @@ ErmErr driverDisplay(void *data, const ErmGiven *g, Json **out) {
 		unit = jsonIsNumber(scale) && scale->number > 0 ? (int64_t)(1 / scale->number + 0.5) : 1;
 	}
 	// the font ROM, for text in cells
-	Json *rom = drvRead(g->api, drvPath("/", "hw", "font", NULL));
+	Json *rom = jsonRef(drvRead(g->api, drvPath("/", "hw", "font", NULL))); // held for good: r points into it
 	Json *alpha = jsonGet(rom, "alpha");
 	static BlitRom r;
 	r = (BlitRom){ (int)whole(jsonGet(rom, "w"), 8), (int)whole(jsonGet(rom, "h"), 16), jsonText(jsonGet(rom, "chars")) ? jsonText(jsonGet(rom, "chars")) : " ",

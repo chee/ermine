@@ -68,6 +68,7 @@
 #define _DARWIN_C_SOURCE
 
 #include "drivers.h"
+#include "../../../ermine/encoding/c/json_text.h"
 #include "drv.h"
 
 #include <errno.h>

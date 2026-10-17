@@ -3,6 +3,7 @@
 // instead and says what it reads (never fresh: the card's files are kept, but use a copy: taking a
 // store in may write to it). sh test.sh builds and runs it.
 #include "peer.h"
+#include "../../../../ermine/encoding/c/json_text.h"
 
 #include <stdio.h>
 #include <stdlib.h>

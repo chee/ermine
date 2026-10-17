@@ -12,6 +12,7 @@
 // part of a read, one the driver keeps) is jsonRef'd or jsonShallow'd first.
 
 #include "drv.h"
+#include "../../../ermine/encoding/c/json_text.h"
 
 #include <stdarg.h>
 #include <stdio.h>

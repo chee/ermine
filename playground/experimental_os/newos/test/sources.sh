@@ -20,7 +20,7 @@ nc_sources="$nc/core/op/c/value.c $nc/core/op/c/apply.c $nc/core/op/c/invert.c $
   $nc/ermine/programs/c/host.c $nc/ermine/programs/c/build.c $nc/ermine/clingy/c/clingy.c $nc/ermine/types/c/types.c $nc/ermine/types/c/utis.c \
   $nc/ermine/processes/c/start.c $nc/ermine/sites/c/sites.c \
   $nc/extensions/programs/c/programs.c $nc/extensions/programs/c/programs_json.c $nc/extensions/programs/c/start.c $nc/extensions/programs/c/dlopen.c \
-  $nc/ermine/encoding/c/json.c $nc/ermine/encoding/c/cbor.c $nc/ermine/encoding/c/blop.c $nc/ermine/encoding/c/pack.c $nc/ermine/encoding/c/hash.c \
+  $nc/ermine/encoding/c/json.c $nc/ermine/encoding/c/json_text.c $nc/ermine/encoding/c/cbor.c $nc/ermine/encoding/c/blop.c $nc/ermine/encoding/c/pack.c $nc/ermine/encoding/c/hash.c \
   $nc/extensions/subduction/c/wiring.c $nc/extensions/subduction/c/transport.c $nc/extensions/subduction/c/id.c $nc/extensions/subduction/c/seal.c $nc/extensions/subduction/c/history.c $nc/extensions/subduction/c/apply.c \
   $nc/extensions/subduction/c/commit.c $nc/extensions/subduction/c/fragment.c \
   $nc/ermine/encoding/c/blake3/blake3.c $nc/ermine/encoding/c/blake3/blake3_dispatch.c $nc/ermine/encoding/c/blake3/blake3_portable.c $nc/extensions/subduction/c/ed25519/ed25519.c $nc/extensions/subduction/c/ed25519/sha2.c \

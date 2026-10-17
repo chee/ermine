@@ -627,6 +627,7 @@ static JSValueRef hereOf(JSContextRef ctx, JSObjectRef function, JSObjectRef sel
 	if (!here) return JSValueMakeNull(ctx);
 	JSObjectRef a = JSObjectMakeArray(ctx, 0, NULL, NULL);
 	for (int i = 0; i < here->array.count; i++) JSObjectSetPropertyAtIndex(ctx, a, (unsigned)i, jsStr(jsonText(here->array.items[i])), NULL);
+	jsonFree(here);
 	return a;
 }
 

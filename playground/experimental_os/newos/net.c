@@ -243,7 +243,7 @@ static void receive(Net *n) {
 }
 
 /** /etc/sync's server and service: a server named anew is connected to at once */
-static void target(Net *n) {
+void netTarget(Net *n) {
 	size_t count;
 	const op_value *v = hostRead(ap_host(hostOs(n->host)), hostPath(n->host, &count, "etc", "sync", NULL), count);
 	const op_value *server = v && v->type == OP_MAP ? op_get(v, "server") : NULL, *service = v && v->type == OP_MAP ? op_get(v, "service") : NULL;
@@ -341,11 +341,11 @@ Net *netOpen(Host *host, transport *t, const char *key) {
 	n->key = key;
 	n->backoff = SECOND;
 	n->stage = "off";
+	netTarget(n);
 	return n;
 }
 
 void netIn(Net *n) {
-	target(n);
 	if (n->line && !n->ws) take(n);
 	receive(n);
 }

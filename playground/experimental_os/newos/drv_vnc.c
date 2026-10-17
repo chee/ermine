@@ -53,6 +53,7 @@
 #define OPENSSL_SUPPRESS_DEPRECATED // DES_ecb_encrypt: VNC authentication's DES, which OpenSSL 3's EVP keeps in its legacy provider
 
 #include "drivers.h"
+#include "../../../ermine/encoding/c/json_text.h"
 #include "drv.h"
 
 #include <errno.h>
@@ -1472,7 +1473,7 @@ static ErmErr viewsCompute(void *data, const ErmGiven *g, Json **out) {
 	for (int i = 0; names && i < names->array.count; i++) {
 		const char *name = jsonText(names->array.items[i]);
 		Json *value = drvRead(g->api, drvPath("/", "dev", "vnc", "views", name, NULL));
-		if (jsonIsObject(value)) jsonPush(*out, drvMap("name", jsonString(name), "value", jsonShallow(value), NULL));
+		if (jsonIsObject(value)) jsonPush(*out, jsonRef(drvMap("name", jsonString(name), "value", jsonShallow(value), NULL)));
 	}
 	return ermOk();
 }

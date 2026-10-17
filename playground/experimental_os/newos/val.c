@@ -1,6 +1,7 @@
 // val.c: op_value and Json, each into the other (val.h).
 
 #include "val.h"
+#include "../../../ermine/encoding/c/json_text.h"
 
 #include <stdint.h>
 #include <stdlib.h>
