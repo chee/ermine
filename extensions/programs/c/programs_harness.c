@@ -8,8 +8,8 @@
 
 #include "../../../filesystem/places/c/world.h"
 #include "../../../ermine/boxes/c/boxes.h"
-#include "../../../ermine/programs/c/host.h"
-#include "../../../ermine/programs/c/mem.h"
+#include "../../build/c/host.h"
+#include "../../build/c/mem.h"
 #include "programs.h"
 #include "programs_json.h"
 #include "../../../ermine/types/c/types.h"

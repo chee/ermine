@@ -3,8 +3,8 @@
 
 #include <string.h>
 
-#include "../../../ermine/programs/c/host.h"
-#include "../../../ermine/programs/c/mem.h"
+#include "../../build/c/host.h"
+#include "../../build/c/mem.h"
 
 // copies and frees -----------------------------------------------------------------------------
 
