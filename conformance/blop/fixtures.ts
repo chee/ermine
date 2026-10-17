@@ -522,7 +522,7 @@ bad(
 	"message",
 )
 
-// ---- no uint8 kind: bytes are bytes (the designer, 10-12)
+// ---- no uint8 kind: bytes are bytes
 decodes(
 	"decode-signer-tag-64",
 	"signer as tag 64 over its 32 bytes: no encoding of a value",

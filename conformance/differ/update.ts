@@ -8,10 +8,10 @@
 // below), each implementation on its own: refused as its apply refuses, changing nothing; the
 // change the header and patches given; the undo undoes.
 // wild: patches of no patch's shape, odd numbers, updates with no patches or patches not a list,
-// values that are no JSON form
+// values that are no JSON form. half the seeds have the keys made tricky (kit.ts)
 // deno-lint-ignore-file no-explicit-any
 import apply, { ApplyError, type Patch } from "@ermine/op/apply"
-import { patch, start } from "../../core/fuzz/gen_harness.ts"
+import { KEYS, patch, start } from "../../core/fuzz/gen_harness.ts"
 import { wildPatches } from "./apply.ts"
 import {
 	type Answer,
@@ -21,9 +21,11 @@ import {
 	formPatches,
 	type Generator,
 	picker,
+	rename,
 	type Request,
 	show,
 	toJson,
+	tricky,
 	type Violation,
 } from "./kit.ts"
 
@@ -40,7 +42,11 @@ function fresh(pick: (n: number) => number, v: unknown): Patch[] {
 		if (pick(2)) ps.push({ path: where, range: [0, 0], value: [[pick(9)]] })
 		if (pick(2)) ps.push({ path: [...where, 0], value: pick(9) })
 	} else if (kind === 1) {
-		ps.push({ path: where, range: [0, 0], value: "ab" })
+		// a lone high, then a lone low after it: one pair from the second splice on
+		ps.push({ path: where, range: [0, 0], value: pick(2) ? "ab" : "\uD83D" })
+		if (pick(2)) {
+			ps.push({ path: where, range: [1, 1], value: pick(2) ? "\uDE00" : "\uDE00👍🏽\u0000" })
+		}
 	} else {
 		ps.push({ path: [...where, "k"], value: [pick(9)] })
 		if (pick(2)) ps.push({ path: [...where, "k"], range: [0, 0], value: [pick(9)] })
@@ -84,7 +90,9 @@ function streams(seed: number, o: { wild: boolean }): Request[][] {
 			if (!(e instanceof ApplyError)) throw e
 		}
 	}
-	return [out]
+	// half the seeds: the keys made tricky (kit.ts)
+	const names = tricky(seed, [...KEYS, "k"])
+	return [out.map((r) => rename(r, names))]
 }
 
 // the start value with every stored op replayed, by the implementation's own apply, is the

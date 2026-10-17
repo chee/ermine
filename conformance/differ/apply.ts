@@ -1,16 +1,17 @@
 // apply's streams: a start value and a batch of patches (core/fuzz/gen_harness.ts), asked as one call,
 // then each patch alone on what the ones before it left, then each refused patch put in where it
-// fell; some again with cow: false. every line stands alone (nothing lasts between lines).
+// fell; some again with cow: false. every line stands alone (nothing lasts between lines). half
+// the seeds have the generator's keys made tricky (kit.ts: "2", "01", "__proto__", "", NUL, ...).
 // wild: patches of no patch's shape, odd numbers as indices, requests missing their patches
 // the properties, each implementation on its own, of every apply or invert asked with a list of
 // patches that its apply takes or refuses with a code: the undo undoes (applied to the value after,
 // the value given back, maps by content) and the undo of the undo redoes (applied to the value
 // given, the value after); invert refuses as apply does; the batch split in two calls at every
-// place gives what it gives in one (the same value, keys in order; refused: the same code, its
+// place gives what it gives in one (the same value; refused: the same code, its
 // index counted in the half it fell in)
 // deno-lint-ignore-file no-explicit-any
 import apply, { type Patch } from "@ermine/op/apply"
-import { batch, start } from "../../core/fuzz/gen_harness.ts"
+import { batch, KEYS, start } from "../../core/fuzz/gen_harness.ts"
 import {
 	type Answer,
 	content,
@@ -19,9 +20,11 @@ import {
 	formPatches,
 	type Generator,
 	picker,
+	rename,
 	type Request,
 	show,
 	toJson,
+	tricky,
 	type Violation,
 } from "./kit.ts"
 
@@ -87,7 +90,9 @@ export function streams(op: "apply" | "invert"): Generator["streams"] {
 			out.push({ op, value: { "/": { number: "NaN" } }, patches: [] })
 			out.push({ op, value: -0, patches: [] }, { op, value: { a: -0, b: [-0] }, patches: [] })
 		}
-		return [out]
+		// half the seeds: the keys made tricky ("2", "01", "__proto__", ...: kit.ts)
+		const names = tricky(seed, KEYS)
+		return [out.map((r) => rename(r, names))]
 	}
 }
 
@@ -137,7 +142,7 @@ export async function invariant(
 		const w = whole[j], u = undo[j]
 		if (!w || (w.error !== undefined && !coded(w))) return
 		if (w.error !== undefined || u?.error !== undefined) {
-			if (show(u?.error) !== show(w.error)) {
+			if (differs(u?.error, w.error)) {
 				no("invert refuses unlike apply", c.at, `apply ${show(w)}, invert ${show(u)}`)
 			}
 		} else if (!Array.isArray(u?.undo)) no("not an undo", c.at, show(u))
@@ -149,7 +154,7 @@ export async function invariant(
 			const at = k + 1
 			if (!f) return
 			if (coded(f)) {
-				if (!coded(w) || show(f.error) !== show(w.error)) {
+				if (!coded(w) || differs(f.error, w.error)) {
 					no("split differs", c.at, `at ${at}: first part ${show(f)}, whole ${show(w)}`)
 				}
 			} else if (f.error !== undefined) {

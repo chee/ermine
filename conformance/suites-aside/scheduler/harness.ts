@@ -1,30 +1,22 @@
-// The reference scheduler on the line protocol: one JSON request per line in, one answer per line
-// out, in order. Another implementation joins by speaking this (SCHEDULER_HARNESS).
+// the reference scheduler on the line protocol: one JSON request per line in, one answer per line
+// out, in order. another implementation joins by speaking this (SCHEDULER_HARNESS).
 //
-//   {"op":"new","rules"?:[rule...],"site"?:site}
-//                                         a new scheduler, root "root", clock at 0. rules: a node
-//                                         "rules" is made (intro), placed in the root, then given
-//                                         them, and protect reads them (protect.ts rules). site:
-//                                         options.site gives it (none: the reference reads the
-//                                         call stack, C gives none)                         → {}
-//   {"op":op,...}                         a host operation (normal.ts), as the host     → {"ok":a}
-//   {"op":"start","address":a,"program":p,"name"?,"id"?}                           → {"ok":pid}
-//   {"op":"call","address":a,"args"?,"actor"?,"person"?,"trusted"?}            → {"ok":answer}
-//   {"op":"replace","address":a}                                                  → {"ok":null}
-//   {"op":"outro","id":id}                                                        → {"ok":null}
-//   {"op":"batch","ops":[request...]}     each made inside one batch            → {"ok":[answer]}
-//   {"op":"moments"}                      the moments since the last asked, then forgotten
-//   {"op":"log"}                          what programs logged since the last asked
-//   {"op":"node","id":id}                 {"value":[version],"info":{n:[version]},
-//                                          "children":{n:[version]},"ephemeral":b}; null: not loaded
-//   {"op":"header","id":id}               its value's first version's change: {"time":t,
-//                                          "cause"?:c,"site"?:site}; null: none
-//   {"op":"clock"}                        the last time given
+//   {"op":"new","rules"?,"site"?} -> {}  root "root", clock 0; rules: a "rules" node in the root
+//   {"op":op,...} -> {"ok":a}  a host operation (normal.ts)
+//   {"op":"start","address","program","name"?,"id"?} -> {"ok":pid}
+//   {"op":"call","address","args"?,"actor"?,"person"?,"trusted"?} -> {"ok":answer}
+//   {"op":"replace","address"} / {"op":"outro","id"} -> {"ok":null}
+//   {"op":"batch","ops":[request...]} -> {"ok":[answer]}  all in one batch
+//   {"op":"moments"}  moments since last asked, then forgotten
+//   {"op":"log"}  what programs logged since last asked
+//   {"op":"node","id"}  {value:[version], info:{n:[version]}, children:{n:[version]}, ephemeral}
+//                       or null: not loaded
+//   {"op":"header","id"}  its value's first change: {time, cause?, site?} or null
+//   {"op":"clock"}  the last time given
 //
-// a program: as steps.ts; a path (a list): found by the host's code, which reads the path from
-// the process's place, its first item's first version a program; none there: pending.
-// a moment: as SCHEDULER.tex's, a read's without its items, an error as its code.
-// an error: {"error": code} (normal.ts); the harness goes on.
+// program: as steps.ts, or a path (list) read from the process's place; none there: pending.
+// moment: as SCHEDULER.tex's, reads without items, errors as codes.
+// error: {"error": code} (normal.ts); the harness goes on.
 import createNode from "@ermine/node"
 import { rules } from "@ermine/protect"
 import {

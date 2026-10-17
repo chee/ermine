@@ -8,7 +8,7 @@
 // values as answered, the value read). and a model (model, below): refused as its apply refuses,
 // nothing-written as nothing landed, the undo undoes.
 // wild: patches of no patch's shape, values that are no JSON form, an unwrite with nothing
-// written, odd paths for mark and keep
+// written, odd paths for mark and keep. half the seeds have the keys made tricky (kit.ts)
 import apply, { ApplyError, type Patch } from "@ermine/op/apply"
 import { isMap, made, patch, paths } from "../../core/unread/typescript/random_harness.ts"
 import { wildPatches } from "./apply.ts"
@@ -20,9 +20,11 @@ import {
 	formPatches,
 	type Generator,
 	picker,
+	rename,
 	type Request,
 	show,
 	toJson,
+	tricky,
 	type Violation,
 } from "./kit.ts"
 
@@ -85,7 +87,9 @@ function streams(seed: number, o: { wild: boolean }): Request[][] {
 		}
 	}
 	out.push({ op: "value" })
-	return [out]
+	// half the seeds: the keys made tricky (kit.ts)
+	const names = tricky(seed, ["a", "b", "c", "d", "zz"])
+	return [out.map((r) => rename(r, names))]
 }
 
 // the value is the start with every landed write replayed; what was held stays what it was

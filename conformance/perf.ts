@@ -1,47 +1,25 @@
-// performance conformance: how an implementation's cost GROWS with size, not how fast it is.
+// performance conformance: how an implementation's cost grows with size, not how fast it is.
 //   deno task perf [suite...] [--c] [--known <file>]
-// no suite: every suite that has a perf folder. the TypeScript harness is the suite's own; --c is
-// the C binary <package>/c/<suite>-harness; HARNESS, a command, is any other (one suite), with
-// --known the file of its known misses. --check and --leaks: refused (a sanitizer build is far too
-// slow to time).
+// no suite: every one with a perf folder. --c: <package>/c/<suite>-harness; HARNESS: any other
+// command. --check, --leaks: refused.
 //
-// a scenario (<package>/conformance/<suite>-perf/NN-name.json) is
-//   { title, sizes: [n1, n2, n3], bound, template }
-// bound: how the cost may grow with n: "1", "log", "n" or "n log n". template: the requests to send
-// at size n, the same lines a conformance scenario has (the suite's harness answers them), written
-// as a template. a step with fails: true is answered with an error; any other with none.
-// answers are not compared.
-//
-// the template language (JSON, expanded for each n; nothing else is read into it):
-//   steps and lists: a list may hold { "for": v, "from": a, "to": b, "do": [..] } (v from a up to
-//     but not b, a and b expressions, from 0 if none); it is replaced by its `do`, once for each v.
-//     any list at all, a patch list, a map's value, an expression of the program under test
-//   { "map": { "for": v, "from"?: a, "to": b, "key": s, "value": x } }   a map of each v's key and
-//     value (a key a string with substitutions)
-//   { "repeat": [s, count] }   the string s count times (count an expression)
-//   { "=": "e" }   the number e is
-//   substitution: in any string, {e} is the number e, in text ("k{i}", "k{i-1}", "k{n-1}")
-//   e: a whole number, n, a loop variable, + - * / % and parentheses (a quotient must come out whole) ("n-1", "(i+1)*2")
-// a size 0 template is the baseline: what a run costs besides n (process start-up and the little
-// that does not grow), taken off each size's time. so it must be good at n = 0.
-//
-// measuring: each size is run in a fresh harness process, up to RUNS times (not again past
-// AGAIN_MS: a slow run is not noisy), the least CPU time taken (user + system, by /usr/bin/time -p:
-// a busy machine does not count), the baseline's off (not under FLOOR_MS).
-// each step to the next size is judged on its own: the growth of the time is allowed SLACK times
-// the growth the bound has for those sizes (n 4n: linear x4, so x10 allowed; log: log 4n / log n;
-// n log n: both). a step whose larger size nets under QUICK_MS is not judged (all noise).
-// results:
-//   ok      the growth is within what is allowed
-//   slow    a step grew more: "x15.8 for x4, wanted <= x10"
-//   broken  a crash, a non-zero exit, an error answer where none is asked, a missing or extra
-//           answer, or a run past CAP_MS
-// known misses: <package>/typescript/perf.sadly_known_fail, <package>/c/perf.sadly_known_fail, or
-// --known <file> (HARNESS). a line is `<suite>-perf/<NN-name> reason`, # starts a comment. a miss
-// listed there is "sadly known" and does not fail; a listed one that passes is reported (take it
-// off the list) and does not fail; a miss not listed fails the run.
+// scenario <package>/conformance/<suite>-perf/NN-name.json: { title, sizes, bound, template }
+//   bound: "1" | "log" | "n" | "n log n"
+//   template: conformance steps, expanded for each n; answers not compared
+//   { "for": v, "from": a, "to": b, "do": [..] }   in a list: `do` once per v in [a, b)
+//   { "map": { "for", "from"?, "to", "key", "value" } }   a map, one entry per v
+//   { "repeat": [s, count] }   s count times
+//   { "=": "e" }   the number e;  "{e}" in a string: e as text
+//   e: whole numbers, n, loop vars, + - * / % ( ) (a quotient must be whole)
+// size 0 is the baseline (start-up), subtracted; the template must work at n = 0.
+// each size: fresh process, least CPU time of RUNS. each step may grow SLACK times the bound's
+// growth; steps netting under QUICK_MS are not judged.
+//   ok | slow ("x15.8 for x4, wanted <= x10") | broken (crash, bad exit, bad answers, past CAP_MS)
+// known misses: <package>/{typescript,c}/perf.sadly_known_fail or --known, `<suite>-perf/<NN-name>
+// reason`; listed misses don't fail, listed passes are reported, unlisted misses fail.
 import { command, type Suite, suites } from "./typescript/ask.ts"
 import { line } from "./typescript/form.ts"
+import { ordered, read } from "./typescript/json.ts"
 
 const SLACK = 3
 const RUNS = 3
@@ -96,12 +74,13 @@ function expand(x: unknown, v: Vars): unknown {
 			}
 			if (keys[0] === "map") {
 				const m = a as Record<string, unknown>
-				const out: Record<string, unknown> = {}
-				loop(m, v, (w) => out[text(m.key as string, w)] = expand(m.value, w))
-				return out
+				const out: [string, unknown][] = []
+				loop(m, v, (w) => out.push([text(m.key as string, w), expand(m.value, w)]))
+				return ordered(out)
 			}
 		}
-		return Object.fromEntries(keys.map((k) => [k, expand(x[k], v)]))
+		// keys in the template's order (json.ts)
+		return ordered(keys.map((k) => [k, expand(x[k], v)]))
 	}
 	return x
 }
@@ -339,7 +318,7 @@ for (const s of chosen as Suite[]) {
 		.sort()
 	for (const file of files) {
 		const id = `${s.name}-perf/${file.replace(/\.json$/, "")}`
-		const sc = JSON.parse(Deno.readTextFileSync(dir + file)) as Scenario
+		const sc = read(Deno.readTextFileSync(dir + file)) as Scenario
 		const r = await measure(cmd, sc)
 		const why = list.get(id)
 		let verdict: string

@@ -3,6 +3,7 @@
 // than the TypeScript one, such as a C binary
 // deno-lint-ignore-file no-explicit-any
 import { line } from "./form.ts"
+import { read } from "./json.ts"
 import type { Answer, Request } from "./harness.ts"
 
 const root = new URL("../../", import.meta.url).pathname
@@ -26,8 +27,6 @@ export type Options = {
 	loose?: boolean
 	// fields compared as sets
 	unordered?: string[]
-	// a map's keys compared in order too
-	ordered?: boolean
 	// "now" in an expect: a whole number of seconds since 1970, as of the run
 	now?: boolean
 	// invert's answers are checked as undoing, not compared to expect (conformance/run.ts)
@@ -152,5 +151,6 @@ export async function ask(cmd: string[], requests: (Request | string)[]): Promis
 	}
 	if (err) await Deno.stderr.write(stderr)
 	const lines = new TextDecoder().decode(stdout).trim().split("\n").filter((l) => l !== "")
-	return lines.map((l) => JSON.parse(l))
+	// every key in its order (json.ts)
+	return lines.map((l) => read(l) as Answer)
 }

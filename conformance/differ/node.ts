@@ -1,12 +1,34 @@
 // node's streams: entries and nodes of random values (plain JSON, typed arrays, bytes, odd keys
-// and strings) with random headers, their fields in the header's own order. each line stands
-// alone; a header with no time is answered the time now (compared within the run's seconds).
+// and strings, the tricky keys of kit.ts) with random headers, their fields in the header's own
+// order. each line stands alone; a header with no time is answered the time now (compared within
+// the run's seconds).
 // wild: a header's fields out of order, a time of -0, -0 in an integer typed array, 64-bit
 // elements as "007" and "-0", metadata that is no pair, a node with no values
-import { type Generator, picker, type Request, toJson } from "./kit.ts"
+import { ordered } from "../typescript/json.ts"
+import { type Generator, picker, type Request, toJson, TRICKY } from "./kit.ts"
 
 const NAMES = ["a", "b", "c", "d"]
-const STRINGS = ["", "a", "é", 'a"b\\c', "line\nbreak", "\u0001", "🦊", "__proto__", "x\u0000y"]
+// strings: escapes, BMP, pairs, a pair and a modifier, lone halves, a high then a low, NUL
+const STRINGS = [
+	"",
+	"a",
+	"é",
+	'a"b\\c',
+	"line\nbreak",
+	"\u0001",
+	"🦊",
+	"__proto__",
+	"x\u0000y",
+	"中",
+	"👍🏽",
+	"\uD83D",
+	"\uDE00",
+	"a\uD800",
+	"\uDC00b",
+	"\uD83D\uDE00",
+]
+// keys: those and the tricky ones ("2", "01", "constructor", ...: kit.ts), in the order made
+const KEYS = [...STRINGS, ...TRICKY]
 
 // forms: typed arrays and bytes too (a value's; a header is plain JSON)
 function json(pick: (n: number) => number, depth = 0, forms = true): unknown {
@@ -24,16 +46,9 @@ function json(pick: (n: number) => number, depth = 0, forms = true): unknown {
 			new Uint8Array([pick(255), pick(255)]),
 		][pick(4)]
 	}
-	const o: Record<string, unknown> = {}
-	for (let i = pick(3); i > 0; i--) {
-		Object.defineProperty(o, STRINGS[pick(STRINGS.length)], {
-			value: json(pick, depth + 1, forms),
-			enumerable: true,
-			writable: true,
-			configurable: true,
-		})
-	}
-	return o
+	const o: [string, unknown][] = []
+	for (let i = pick(3); i > 0; i--) o.push([KEYS[pick(KEYS.length)], json(pick, depth + 1, forms)])
+	return ordered(o)
 }
 
 function header(pick: (n: number) => number): Record<string, unknown> {
@@ -90,16 +105,11 @@ const generator: Generator = {
 			if (r.op === "entry") {
 				if (pick(4)) r.value = toJson(json(pick))
 			} else {
-				const values: Record<string, unknown> = {}
+				const values: [string, unknown][] = []
 				for (let i = pick(4); i > 0; i--) {
-					Object.defineProperty(values, STRINGS[pick(STRINGS.length)], {
-						value: toJson(json(pick)),
-						enumerable: true,
-						writable: true,
-						configurable: true,
-					})
+					values.push([KEYS[pick(KEYS.length)], toJson(json(pick))])
 				}
-				r.values = values
+				r.values = ordered(values)
 			}
 			if (pick(4)) r.header = header(pick)
 			out.push(r)

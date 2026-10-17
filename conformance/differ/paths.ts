@@ -3,7 +3,7 @@
 // marked; the rule asked of each patch (marks); events, releases and kept between
 // (paths_harness_test.ts's values and patches, copied). sources and ids strings and symbols.
 // wild: -0 and 1e15 as indices, a path not a list, keys of the wrong kind, malformed patches, a
-// mark with no patches
+// mark with no patches. half the seeds have the keys made tricky (kit.ts)
 // deno-lint-ignore-file no-explicit-any
 // the properties, each implementation on its own: a change under a read marks it (marks: a place
 // at or under a plain read's path, the read's path or one key more unranged for a keys read; mark:
@@ -17,8 +17,10 @@ import {
 	firsts,
 	type Generator,
 	picker,
+	rename,
 	type Request,
 	show,
+	tricky,
 	type Violation,
 } from "./kit.ts"
 
@@ -171,7 +173,9 @@ const generator: Generator = {
 				)
 			}
 		}
-		return [out]
+		// half the seeds: the keys made tricky (kit.ts)
+		const names = tricky(seed, NAMES)
+		return [out.map((r) => rename(r, names))]
 	},
 	invariant(stream, answers) {
 		const out: Violation[] = []

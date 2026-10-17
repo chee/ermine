@@ -1,47 +1,31 @@
 // every suite's scenarios against a harness, on one rule.
 //   deno task conformance [suite...] [--c | --check | --leaks]
-// no suite: all of them. the TypeScript harness is <package>/typescript/<suite>_harness.ts; --c is
-// the C binary <package>/c/<suite>-harness, --check its sanitizer build, --leaks the binary under
-// leaks (conformance/leaks.sh); HARNESS, a command, is any other (one suite).
+// no suite: all. default <package>/typescript/<suite>_harness.ts; --c <package>/c/<suite>-harness,
+// --check its sanitizer build, --leaks under leaks (conformance/leaks.sh); HARNESS: any other.
 //
-// a harness: a command, HARNESS split at spaces (no quoting: conformance/typescript/ask.ts), run
-// once per scenario. one JSON request per line on stdin, one answer per line on stdout, in order;
-// stdin closes after the last; it exits 0. a non-zero exit, or a sanitizer's report on stderr
-// ("runtime error:", "Sanitizer"), fails the scenario, even after every answer; other stderr is
-// passed on. its JSON reader must keep: a map's key order, lone surrogates (\udxxx) and NUL in
-// strings and keys, -0 (written -0, both ways), whole numbers up to 2^53 exactly, the rest as
-// doubles (0.5, 1e300). a value's "/" forms (bytes, typed arrays, NaN and the infinities, a map
-// whose one key is "/", stand-ins, symbols): conformance/typescript/form.ts. answers are read with
-// JSON.parse: keys that read as array indices ("0") lose their order
+// a harness: one run per scenario, one JSON request per line in, one answer per line out, exit 0.
+// a non-zero exit or sanitizer report ("runtime error:", "Sanitizer") fails the scenario.
+// its JSON must keep lone surrogates, NUL, -0, integers to 2^53, doubles; "/" forms: form.ts.
+// key order is kept on the way out, ignored when comparing (maps by content).
 //
-// a scenario (<package>/conformance/<suite>/NN-name.json) is { title, steps }, a step a request
-// and what it says of the answer. each scenario is one run of the harness, the steps its lines.
-//   expect: the answer's fields, deep-equal; the answer has no others
-//   fails: true: the answer is an error ({ error }); without it, no answer is, but one expect asks for
-//   skip: fields of the answer left out of the comparing
-// no expect: the answer is not compared. <suite>/suite.json, if there, is the suite's one other say:
-//   loose: the answer may have fields beyond expect's (protect: its reads)
-//   unordered: fields compared as sets
-//   ordered: a map's keys compared in order too (a key put back goes last: apply)
-//   now: "now" in an expect is a whole number of seconds since 1970 as of the run (node)
-//   again: the scenarios run once more with a request that has the field given more fields
-//   undoes: the suite asks { op: "invert", value?, patches }. an answer without error in its expect is
-//     not compared to expect: it must be { undo }, and only undo it (asked of this harness, in the
-//     run's own again fields): apply(apply(value, patches), undo) is value, and apply(value,
-//     undo of that undo) is apply(value, patches) again; maps by content (a key put back goes last),
-//     nothing there by nothing there. an error is pinned as ever (expect, or fails)
-//   reads: requests that change nothing, asked just before and just after every step that fails
-//     (fails, or an error in its expect), in the same run: the answers must be the same (keys in
-//     order when ordered, as sets the unordered fields): a refused request changes nothing. a
-//     top-level field "$name" in one stands for each value the field name has in the scenario's
-//     requests (by content, first met first; several such: every combination); none, the read is
-//     not asked. sent as given (not the run's again fields), never compared to anything else
-//   harness: the adapter and binary of another suite are this one's (invert speaks apply's)
-//   typescript: only the TypeScript harness runs it; --c, --check and --leaks skip it (load)
-//   allow: deno flags the TypeScript harness is run with beyond --allow-read (native: --allow-ffi)
+// scenario <package>/conformance/<suite>/NN-name.json: { title, steps }
+//   expect: answer fields, deep-equal; no others   fails: true: answer is { error }
+//   skip: fields not compared                      no expect: not compared
+// <suite>/suite.json:
+//   loose       answers may have fields beyond expect
+//   unordered   fields compared as sets
+//   now         "now" in expect: seconds since 1970 as of the run
+//   again       run once more with these fields added to every request
+//   undoes      { op: "invert" } answers must be { undo } and undo, checked by applying both ways
+//   reads       requests asked before and after each failing step; answers must match. "$name"
+//               stands for each value name takes in the scenario
+//   harness     another suite's harness (invert speaks apply's)
+//   typescript  TypeScript harness only
+//   allow       extra deno flags for the TypeScript harness (native: --allow-ffi)
 import { assert, assertEquals } from "@std/assert"
 import { ask, command, type Options, type Suite, suites } from "./typescript/ask.ts"
 import { line } from "./typescript/form.ts"
+import { read } from "./typescript/json.ts"
 
 type Step = Record<string, any> & {
 	expect?: Record<string, unknown>
@@ -70,6 +54,11 @@ const isMap = (x: unknown): x is Record<string, unknown> =>
 	x !== null && typeof x === "object" && !Array.isArray(x)
 // -0 shown as -0: JSON says 0
 const show = (x: unknown) => line(x)
+// a map's keys sorted, at every depth (line's also): maps by content
+const sortKeys = (v: unknown) =>
+	isMap(v) ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, v[k]])) : v
+// a set's element as compared: by content
+const member = (x: unknown) => line(x, sortKeys)
 
 // whether the answer says what is expected; the first thing it does not, or undefined
 function differs(
@@ -97,9 +86,6 @@ function differs(
 		if (!isMap(got)) return `${show(got)}, not ${show(want)}`
 		const keys = Object.keys(want)
 		if (Object.keys(got).length !== keys.length) return `${show(got)}, not ${show(want)}`
-		if (o.ordered && Object.keys(got).some((k, i) => k !== keys[i])) {
-			return `keys ${show(Object.keys(got))}, not ${show(keys)}`
-		}
 		for (const k of keys) {
 			if (!Object.hasOwn(got, k)) return `${show(got)}, not ${show(want)}`
 			const d = differs(want[k], got[k], o, window)
@@ -132,8 +118,8 @@ function check(
 	for (const k of keys) {
 		let want = step.expect[k], have = got[k]
 		if (o.unordered?.includes(k) && Array.isArray(want) && Array.isArray(have)) {
-			want = want.map(show).sort()
-			have = have.map(show).sort()
+			want = want.map(member).sort()
+			have = have.map(member).sort()
 		}
 		const d = differs(want, have, o, window)
 		if (d) return `${k}: ${d}`
@@ -147,8 +133,6 @@ const undoing = (o: Options, st: Step) =>
 
 // the answers of the undoing steps, walked back with the harness (one ask for each stage): why not
 // for each step, or undefined. the run's changes are in every request (cow: false too)
-const sortKeys = (v: unknown) =>
-	isMap(v) ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, v[k]])) : v
 // nothing there is no value; maps by content
 const same = (a?: Record<string, any>, b?: Record<string, any>) =>
 	line(a && "value" in a ? a.value : undefined, sortKeys) ===
@@ -234,13 +218,13 @@ function reads(o: Options, requests: Record<string, unknown>[]): Record<string, 
 }
 // a step a refused request: the reads are asked around it
 const refused = (st: Step) => st.fails === true || (st.expect !== undefined && "error" in st.expect)
-// an answer as compared to itself: keys in order or not, unordered fields as sets
+// an answer as compared to itself: maps by content, unordered fields as sets
 function settled(a: Record<string, unknown> | undefined, o: Options) {
 	if (a === undefined) return "no answer"
 	const set = (k: string, v: unknown) =>
-		o.unordered?.includes(k) && Array.isArray(v) ? v.map(show).sort() : v
+		o.unordered?.includes(k) && Array.isArray(v) ? v.map(member).sort() : v
 	const sets = Object.fromEntries(Object.entries(a).map(([k, v]) => [k, set(k, v)]))
-	return line(sets, o.ordered ? (v) => v : sortKeys)
+	return line(sets, sortKeys)
 }
 
 for (const s of chosen) {
@@ -260,7 +244,7 @@ for (const s of chosen) {
 		})
 	}
 	for (const file of files) {
-		const { title, steps } = JSON.parse(Deno.readTextFileSync(s.fixtures + file)) as {
+		const { title, steps } = read(Deno.readTextFileSync(s.fixtures + file)) as {
 			title: string
 			steps: Step[]
 		}
