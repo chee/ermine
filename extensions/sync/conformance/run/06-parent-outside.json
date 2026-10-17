@@ -1,28 +1,51 @@
 {
 	"title": "a parent not in the run is written as its name",
 	"steps": [
-		{ "op": "make", "name": "a", "nonce": 1, "patches": [{ "path": [], "value": 1 }] },
+		{
+			"op": "make",
+			"name": "a",
+			"nonce": 1,
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			]
+		},
 		{
 			"op": "make",
 			"name": "b",
 			"nonce": 2,
-			"parents": ["a"],
-			"patches": [{ "path": [], "value": 2 }]
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			]
 		},
 		{
 			"op": "make",
 			"name": "c",
 			"nonce": 3,
-			"parents": ["b", "abababababababababababababababababababababababababababababababab"],
+			"parents": [
+				"b",
+				"abababababababababababababababababababababababababababababababab"
+			],
 			"base": "abababababababababababababababababababababababababababababababab",
 			"patches": []
 		},
 		{
 			"op": "pack",
-			"commits": ["b", "c"],
+			"commits": [
+				"b",
+				"c"
+			],
 			"name": "r",
 			"expect": {
-				"run": "af616ef9400064626173658282f6f93c00825820ababababababababababababababababababababababababababababababababf93c006474696d65420000656163746f728182f6f94000656e6f6e6365420402657461626c6581826576616c7565f94000667265616465728182f6f94000667369676e657281825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf9400067686561646572738182483401ed01ed01135ff94000676c616d706f727442040267706172656e7473828158208adb840ce0d33f4b0cc3a7ac5afa0e377dc407288b621b77197851dca2c584da82f900005820abababababababababababababababababababababababababababababababab67706174636865738281a26470617468806576616c7565f94000806865787465726e616c8182f6f94000686d657461646174618182f6f940006a7369676e6174757265738258401be061aac4cae1f3f862ea01423f45cfa3652872a582540f77ce5de27093ee9b1675af6bd9e7de3291efeb9659507300bfcf2d99b691a1514d3314b657186a095840b60cf5e030aef214c5f051e5965031099f696ee98a16188ba5df4c6fdc0667de36d398a6d9727bed2f617ae18d5f0da38f70741c56bdcc32bfecccf0d1c6cb0f"
+				"run": "b0616ef94000636964738064626173658282f6f93c00825820ababababababababababababababababababababababababababababababababf93c006474696d65420000656163746f728182f6f94000656e6f6e6365420402657461626c6581826576616c7565f94000667265616465728182f6f94000667369676e657281825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf9400067686561646572738182483401ed01ed01135ff94000676c616d706f727442040267706172656e7473828158208adb840ce0d33f4b0cc3a7ac5afa0e377dc407288b621b77197851dca2c584da82f900005820abababababababababababababababababababababababababababababababab67706174636865738281a26470617468806576616c7565f94000806865787465726e616c8182f6f94000686d657461646174618182f6f940006a7369676e61747572657382584095ca91e6132c06051856727fa21305897468db222cd42c3b353864410db0e34b9feea8596be471f3d5b8f480b1e57b143cd3d56218c5f517e1088f16aea694085840e5e9606cf54c4e8ac7c5ac70609192e2941d073b7db7cf9dac1494269c19060d4fb603be1cf94d0766fe9f3d507eec9f80d7c85ac01b1e3a40eddd861e043504"
 			}
 		},
 		{
@@ -31,42 +54,136 @@
 			"expect": {
 				"columns": {
 					"n": 2,
+					"ids": [],
 					"base": [
-						[null, 1],
-						[{ "/": { "bytes": "q6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq6s" } }, 1]
+						[
+							null,
+							1
+						],
+						[
+							{
+								"/": {
+									"bytes": "q6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq6s"
+								}
+							},
+							1
+						]
 					],
-					"time": { "/": { "bytes": "AAA" } },
-					"actor": [[null, 2]],
-					"nonce": { "/": { "bytes": "BAI" } },
-					"table": [["value", 2]],
-					"reader": [[null, 2]],
+					"time": {
+						"/": {
+							"bytes": "AAA"
+						}
+					},
+					"actor": [
+						[
+							null,
+							2
+						]
+					],
+					"nonce": {
+						"/": {
+							"bytes": "BAI"
+						}
+					},
+					"table": [
+						[
+							"value",
+							2
+						]
+					],
+					"reader": [
+						[
+							null,
+							2
+						]
+					],
 					"signer": [
-						[{ "/": { "bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA" } }, 2]
+						[
+							{
+								"/": {
+									"bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA"
+								}
+							},
+							2
+						]
 					],
-					"headers": [[{ "/": { "bytes": "NAHtAe0BE18" } }, 2]],
-					"lamport": { "/": { "bytes": "BAI" } },
+					"headers": [
+						[
+							{
+								"/": {
+									"bytes": "NAHtAe0BE18"
+								}
+							},
+							2
+						]
+					],
+					"lamport": {
+						"/": {
+							"bytes": "BAI"
+						}
+					},
 					"parents": [
-						[{ "/": { "bytes": "ituEDODTP0sMw6esWvoON33EByiLYht3GXhR3KLFhNo" } }],
-						[0, { "/": { "bytes": "q6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq6s" } }]
+						[
+							{
+								"/": {
+									"bytes": "ituEDODTP0sMw6esWvoON33EByiLYht3GXhR3KLFhNo"
+								}
+							}
+						],
+						[
+							0,
+							{
+								"/": {
+									"bytes": "q6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq6s"
+								}
+							}
+						]
 					],
-					"patches": [[{ "path": [], "value": 2 }], []],
-					"external": [[null, 2]],
-					"metadata": [[null, 2]],
+					"patches": [
+						[
+							{
+								"path": [],
+								"value": 2
+							}
+						],
+						[]
+					],
+					"external": [
+						[
+							null,
+							2
+						]
+					],
+					"metadata": [
+						[
+							null,
+							2
+						]
+					],
 					"signatures": [
 						{
 							"/": {
-								"bytes": "G+BhqsTK4fP4YuoBQj9Fz6NlKHKlglQPd85d4nCT7psWda9r2efeMpHv65ZZUHMAv88tmbaRoVFNMxS2VxhqCQ"
+								"bytes": "lcqR5hMsBgUYVnJ/ohMFiXRo2yIs1Cw7NThkQQ2w40uf7qhZa+Rx89W49ICx5XsUPNPVYhjF9RfhCI8WrqaUCA"
 							}
 						},
 						{
 							"/": {
-								"bytes": "tgz14DCu8hTF8FHlllAxCZ9pbumKFhiLpd9Mb9wGZ94205im2XJ77S9heuGNXw2jj3B0HFa9zDK/7Mzw0cbLDw"
+								"bytes": "5elgbPVMTorHxaxwYJGS4pQdBzt9t8+drBSUJpwZBg1PtgO+HPlNB2b+nz1QfuyfgNfIWsAbHjpA7d2GHgQ1BA"
 							}
 						}
 					]
 				}
 			}
 		},
-		{ "op": "unpack", "run": "r", "expect": { "sealed": ["b", "c"] } }
+		{
+			"op": "unpack",
+			"run": "r",
+			"expect": {
+				"sealed": [
+					"b",
+					"c"
+				]
+			}
+		}
 	]
 }

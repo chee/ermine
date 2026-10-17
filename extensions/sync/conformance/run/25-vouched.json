@@ -1,0 +1,314 @@
+{
+	"title": "a commit the next one in the run goes on alone, signed by the same signer, is vouched for by its signature: its own is left out and its stored id said in ids, one for each such commit, each 32 bytes, taken as said; one vouched for that the next does not go on alone by its signer is no run, nor is a last one vouched for",
+	"steps": [
+		{
+			"op": "make",
+			"name": "a",
+			"time": 1760000000,
+			"nonce": 1,
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"body": ""
+					}
+				}
+			]
+		},
+		{
+			"op": "make",
+			"name": "b",
+			"time": 1760000000,
+			"nonce": 2,
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"body"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "h"
+				}
+			]
+		},
+		{
+			"op": "make",
+			"name": "c",
+			"time": 1760000000,
+			"nonce": 3,
+			"parents": [
+				"b"
+			],
+			"patches": [
+				{
+					"path": [
+						"body"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "i"
+				}
+			]
+		},
+		{
+			"op": "make",
+			"name": "x",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"time": 1760000000,
+			"nonce": 9,
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"body"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				}
+			]
+		},
+		{
+			"op": "pack",
+			"commits": [
+				"a",
+				"b",
+				"c"
+			],
+			"name": "r",
+			"expect": {
+				"run": "b0616ef9420063696473825820e688cb8b40d09eea4c8c0b898f5fb6f5bc1deb57cdd0385ccd6f6df1c0a349915820c0638ca16496407e9d9ddbeeebd7ff6255034f94447da502402e23227274180564626173658182f6f942006474696d654780e0bb8e0d0000656163746f728182f6f94200656e6f6e636543020202657461626c6581826576616c7565f94200667265616465728182f6f94200667369676e657281825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf9420067686561646572738282f6f9400082483401ed01ed01135ff93c00676c616d706f72744302020267706172656e74738380f6f667706174636865738381a26470617468806576616c7565a164626f64796081a364706174688164626f64796572616e676582f90000f900006576616c7565616861696865787465726e616c8182f6f94200686d657461646174618182f6f942006a7369676e61747572657381584087ccdcac69636a8da1fdbaf9043d1517cbb2c99585da549ac22ed2cad6300323f3061df0621f66745c369e188c87dd61c2abc42d38e5e658b4414c4520d9630d"
+			}
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"expect": {
+				"sealed": [
+					{
+						"vouched": "a"
+					},
+					{
+						"vouched": "b"
+					},
+					"c"
+				]
+			}
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": {
+				"ids": []
+			},
+			"expect": {
+				"error": "ids"
+			}
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": {
+				"ids": [
+					{
+						"/": {
+							"bytes": "5ojLi0DQnupMjAuJj1+29bwd61fN0DhczW9t8cCjSZE"
+						}
+					},
+					{
+						"/": {
+							"bytes": "wGOMoWSWQH6dndvu69f/YlUDT5REfaUCQC4jInJ0GAU"
+						}
+					},
+					{
+						"/": {
+							"bytes": "5ojLi0DQnupMjAuJj1+29bwd61fN0DhczW9t8cCjSZE"
+						}
+					}
+				]
+			},
+			"expect": {
+				"error": "ids"
+			}
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": {
+				"ids": [
+					{
+						"/": {
+							"bytes": "5ojLi0DQnupMjAuJj1+29bwd61fN0DhczW9t8cCjSZE"
+						}
+					},
+					{
+						"/": {
+							"bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+						}
+					}
+				]
+			},
+			"expect": {
+				"error": "ids"
+			}
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": {
+				"ids": {
+					"/": {
+						"bytes": "5ojLi0DQnupMjAuJj1+29bwd61fN0DhczW9t8cCjSZE"
+					}
+				}
+			},
+			"expect": {
+				"error": "ids"
+			}
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": {
+				"ids": [
+					{
+						"/": {
+							"bytes": "5ojLi0DQnupMjAuJj1+29bwd61fN0DhczW9t8cCjSZE"
+						}
+					},
+					{
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					}
+				]
+			},
+			"expect": {
+				"sealed": [
+					{
+						"vouched": "a"
+					},
+					{
+						"vouched": "b",
+						"stored": "0707070707070707070707070707070707070707070707070707070707070707"
+					},
+					"c"
+				]
+			}
+		},
+		{
+			"op": "pack",
+			"commits": [
+				"a",
+				"x"
+			],
+			"name": "rx"
+		},
+		{
+			"op": "unpack",
+			"run": "rx",
+			"expect": {
+				"sealed": [
+					"a",
+					"x"
+				]
+			}
+		},
+		{
+			"op": "unpack",
+			"run": "rx",
+			"set": {
+				"headers": [
+					[
+						null,
+						1
+					],
+					[
+						{
+							"/": {
+								"bytes": "NAHtAe0BE18"
+							}
+						},
+						1
+					]
+				],
+				"ids": [
+					{
+						"/": {
+							"bytes": "5ojLi0DQnupMjAuJj1+29bwd61fN0DhczW9t8cCjSZE"
+						}
+					}
+				],
+				"signatures": [
+					{
+						"/": {
+							"bytes": "3SpMoNetT5BrSaybrRCkEc0T175hIbsMYYto6I0Wuc8Qsed2mQT4Bu/Zg+zzJ2K49GEEYipbpxXoSR/28JDzAw"
+						}
+					}
+				]
+			},
+			"expect": {
+				"error": "vouched"
+			}
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": {
+				"headers": [
+					[
+						null,
+						3
+					]
+				],
+				"ids": [
+					{
+						"/": {
+							"bytes": "5ojLi0DQnupMjAuJj1+29bwd61fN0DhczW9t8cCjSZE"
+						}
+					},
+					{
+						"/": {
+							"bytes": "wGOMoWSWQH6dndvu69f/YlUDT5REfaUCQC4jInJ0GAU"
+						}
+					},
+					{
+						"/": {
+							"bytes": "5ojLi0DQnupMjAuJj1+29bwd61fN0DhczW9t8cCjSZE"
+						}
+					}
+				],
+				"signatures": []
+			},
+			"expect": {
+				"error": "vouched"
+			}
+		},
+		{
+			"op": "pack",
+			"commits": [
+				{
+					"vouched": "a"
+				},
+				{
+					"vouched": "b"
+				},
+				"c"
+			],
+			"expect": {
+				"run": "b0616ef9420063696473825820e688cb8b40d09eea4c8c0b898f5fb6f5bc1deb57cdd0385ccd6f6df1c0a349915820c0638ca16496407e9d9ddbeeebd7ff6255034f94447da502402e23227274180564626173658182f6f942006474696d654780e0bb8e0d0000656163746f728182f6f94200656e6f6e636543020202657461626c6581826576616c7565f94200667265616465728182f6f94200667369676e657281825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf9420067686561646572738282f6f9400082483401ed01ed01135ff93c00676c616d706f72744302020267706172656e74738380f6f667706174636865738381a26470617468806576616c7565a164626f64796081a364706174688164626f64796572616e676582f90000f900006576616c7565616861696865787465726e616c8182f6f94200686d657461646174618182f6f942006a7369676e61747572657381584087ccdcac69636a8da1fdbaf9043d1517cbb2c99585da549ac22ed2cad6300323f3061df0621f66745c369e188c87dd61c2abc42d38e5e658b4414c4520d9630d"
+			}
+		}
+	]
+}

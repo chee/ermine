@@ -89,7 +89,7 @@
 			],
 			"name": "r",
 			"expect": {
-				"run": "b0616ef9450064626173658182f6f945006474696d65450000000000656163746f728182f6f94500656d657267658382f6f94200826965672d77616c6b6572f93c0082f6f93c00656e6f6e6365450202010402657461626c6581826576616c7565f94500667265616465728182f6f94500667369676e657283825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf94000825822ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394f93c00825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf9400067686561646572738182483401ed01ed01135ff94500676c616d706f727445020200020267706172656e74738580f681f9000082f93c00f94000f667706174636865738581a26470617468806576616c756562616281a36470617468806572616e676582f93c00f93c006576616c75656131613281a36470617468806572616e676582f90000f900006576616c7565613e806865787465726e616c8182f6f94500686d657461646174618182f6f945006a7369676e61747572657385584003a7c6fbaa3ff3cf8462552cd7faee0d200b06e16ff3dc842435ec4081c0987587ca010534188780e2dd75baaf64c9a3f609e2a0e55d9fbe29fafaf376218d0b58401a2412bdea205c248ebfa47302c3a198f795deced408399c3e556250e3ad169494d2ce3b78805353208267433a57bd4a4a35d937f88198abafe9029866e90d0a5840c1eb574189e4673d2e749658eae6f9ec3c60a8b5a0110099536d532d5f051cc6814e026777bf4a1c38f6cc31d9870a97a1c537a36e67545a70d25313e876d3065840047d6e63e48937676903f377f7df1c3281735a86ac188f8c2479fde4fdff0fdb3c3e129166f9a002a9bb53c72d013e011ce4fbaaed089e82f5723711c0d6070c5840508bda0e708be4fea4e5e9465add296c225cf11dff73ed06cac45258be2f753e535a60444571d9ab1ac74606ab8fd7db6f2668e24c331abfb3b90bd8a4c05003"
+				"run": "b1616ef9450063696473825820fa959c8ab98191e5d99f4f99a2cd9d13266c3f72744dd3ba08f9d5e4144748495820566d397cffe4f6da29439390f0f3d3abe8c9a0c7dc87262745a65f0d8ae044e364626173658182f6f945006474696d65450000000000656163746f728182f6f94500656d657267658382f6f94200826965672d77616c6b6572f93c0082f6f93c00656e6f6e6365450202010402657461626c6581826576616c7565f94500667265616465728182f6f94500667369676e657283825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf94000825822ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394f93c00825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf9400067686561646572738482f6f93c0082483401ed01ed01135ff9400082f6f93c0082483401ed01ed01135ff93c00676c616d706f727445020200020267706172656e74738580f681f9000082f93c00f94000f667706174636865738581a26470617468806576616c756562616281a36470617468806572616e676582f93c00f93c006576616c75656131613281a36470617468806572616e676582f90000f900006576616c7565613e806865787465726e616c8182f6f94500686d657461646174618182f6f945006a7369676e617475726573835840401377139689f9d6b4ca3c4f20683e1cd214e6a722918a667eb261e428a29eb852c97594cc6d18b811cf758aaadc138e1bb01b1f4db15b3521a6257f49d156075840599b00f507628665bd221480b2f62f8c010c774537fac83846a53ad3a3fab49894843a8f1a69a41728b8bf2876b372ed01f587c2ffc7b86aec7585d11aca6a0d5840cb82f1cb79d4a30a904aa3960fd08ca3d2297cee6cead21c72ef87a3cebd631ef5fd782b952b65780f983df349dd5ae91af469cf4b0871dc52a8cbc87610c307"
 			}
 		},
 		{
@@ -98,54 +98,191 @@
 			"expect": {
 				"columns": {
 					"n": 5,
-					"base": [[null, 5]],
-					"time": { "/": { "bytes": "AAAAAAA" } },
-					"actor": [[null, 5]],
-					"merge": [[null, 3], ["eg-walker", 1], [null, 1]],
-					"nonce": { "/": { "bytes": "AgIBBAI" } },
-					"table": [["value", 5]],
-					"reader": [[null, 5]],
-					"signer": [
-						[{ "/": { "bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA" } }, 2],
-						[{ "/": { "bytes": "7QGBOXcOqH0XX1ajVGbDTH7My42KkbTuN6Jd9g9bj8mzlA" } }, 1],
-						[{ "/": { "bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA" } }, 2]
+					"ids": [
+						{
+							"/": {
+								"bytes": "+pWcirmBkeXZn0+Zos2dEyZsP3J0TdO6CPnV5BRHSEk"
+							}
+						},
+						{
+							"/": {
+								"bytes": "Vm05fP/k9topQ5OQ8PPTq+jJoMfchyYnRaZfDYrgROM"
+							}
+						}
 					],
-					"headers": [[{ "/": { "bytes": "NAHtAe0BE18" } }, 5]],
-					"lamport": { "/": { "bytes": "AgIAAgI" } },
-					"parents": [[], null, [0], [1, 2], null],
+					"base": [
+						[
+							null,
+							5
+						]
+					],
+					"time": {
+						"/": {
+							"bytes": "AAAAAAA"
+						}
+					},
+					"actor": [
+						[
+							null,
+							5
+						]
+					],
+					"merge": [
+						[
+							null,
+							3
+						],
+						[
+							"eg-walker",
+							1
+						],
+						[
+							null,
+							1
+						]
+					],
+					"nonce": {
+						"/": {
+							"bytes": "AgIBBAI"
+						}
+					},
+					"table": [
+						[
+							"value",
+							5
+						]
+					],
+					"reader": [
+						[
+							null,
+							5
+						]
+					],
+					"signer": [
+						[
+							{
+								"/": {
+									"bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA"
+								}
+							},
+							2
+						],
+						[
+							{
+								"/": {
+									"bytes": "7QGBOXcOqH0XX1ajVGbDTH7My42KkbTuN6Jd9g9bj8mzlA"
+								}
+							},
+							1
+						],
+						[
+							{
+								"/": {
+									"bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA"
+								}
+							},
+							2
+						]
+					],
+					"headers": [
+						[
+							null,
+							1
+						],
+						[
+							{
+								"/": {
+									"bytes": "NAHtAe0BE18"
+								}
+							},
+							2
+						],
+						[
+							null,
+							1
+						],
+						[
+							{
+								"/": {
+									"bytes": "NAHtAe0BE18"
+								}
+							},
+							1
+						]
+					],
+					"lamport": {
+						"/": {
+							"bytes": "AgIAAgI"
+						}
+					},
+					"parents": [
+						[],
+						null,
+						[
+							0
+						],
+						[
+							1,
+							2
+						],
+						null
+					],
 					"patches": [
-						[{ "path": [], "value": "ab" }],
-						[{ "path": [], "range": [1, 1], "value": "1" }],
+						[
+							{
+								"path": [],
+								"value": "ab"
+							}
+						],
+						[
+							{
+								"path": [],
+								"range": [
+									1,
+									1
+								],
+								"value": "1"
+							}
+						],
 						"2",
-						[{ "path": [], "range": [0, 0], "value": ">" }],
+						[
+							{
+								"path": [],
+								"range": [
+									0,
+									0
+								],
+								"value": ">"
+							}
+						],
 						[]
 					],
-					"external": [[null, 5]],
-					"metadata": [[null, 5]],
+					"external": [
+						[
+							null,
+							5
+						]
+					],
+					"metadata": [
+						[
+							null,
+							5
+						]
+					],
 					"signatures": [
 						{
 							"/": {
-								"bytes": "A6fG+6o/88+EYlUs1/ruDSALBuFv89yEJDXsQIHAmHWHygEFNBiHgOLddbqvZMmj9gnioOVdn74p+vrzdiGNCw"
+								"bytes": "QBN3E5aJ+da0yjxPIGg+HNIU5qcikYpmfrJh5CiinrhSyXWUzG0YuBHPdYqq3BOOG7AbH02xWzUhpiV/SdFWBw"
 							}
 						},
 						{
 							"/": {
-								"bytes": "GiQSveogXCSOv6RzAsOhmPeV3s7UCDmcPlViUOOtFpSU0s47eIBTUyCCZ0M6V71KSjXZN/iBmKuv6QKYZukNCg"
+								"bytes": "WZsA9QdihmW9IhSAsvYvjAEMd0U3+sg4RqU606P6tJiUhDqPGmmkFyi4vyh2s3LtAfWHwv/HuGrsdYXRGspqDQ"
 							}
 						},
 						{
 							"/": {
-								"bytes": "wetXQYnkZz0udJZY6ub57DxgqLWgEQCZU21TLV8FHMaBTgJnd79KHDj2zDHZhwqXocU3o25nVFpw0lMT6HbTBg"
-							}
-						},
-						{
-							"/": {
-								"bytes": "BH1uY+SJN2dpA/N3998cMoFzWoasGI+MJHn95P3/D9s8PhKRZvmgAqm7U8ctAT4BHOT7qu0InoL1cjcRwNYHDA"
-							}
-						},
-						{
-							"/": {
-								"bytes": "UIvaDnCL5P6k5elGWt0pbCJc8R3/c+0GysRSWL4vdT5TWmBERXHZqxrHRgarj9fbbyZo4kwzGr+zuQvYpMBQAw"
+								"bytes": "y4Lxy3nUowqQSqOWD9CMo9IpfO5s6tIccu+Ho869Yx71/XgrlStleA+YPfNJ3VrpGvRpz0sIcdxSqMvIdhDDBw"
 							}
 						}
 					]
@@ -157,10 +294,14 @@
 			"run": "r",
 			"expect": {
 				"sealed": [
-					"a",
+					{
+						"vouched": "a"
+					},
 					"b",
 					"c",
-					"m",
+					{
+						"vouched": "m"
+					},
 					"n"
 				]
 			}

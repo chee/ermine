@@ -6,38 +6,89 @@
 			"name": "a",
 			"time": 1760000000,
 			"nonce": 1,
-			"patches": [{ "path": [], "value": { "body": "" } }]
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"body": ""
+					}
+				}
+			]
 		},
 		{
 			"op": "make",
 			"name": "b",
 			"time": 1760000000,
 			"nonce": 2,
-			"parents": ["a"],
-			"patches": [{ "path": ["body"], "range": [0, 0], "value": "h" }]
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"body"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "h"
+				}
+			]
 		},
 		{
 			"op": "make",
 			"name": "c",
 			"time": 1760000000,
 			"nonce": 3,
-			"parents": ["b"],
-			"patches": [{ "path": ["body"], "range": [1, 1], "value": "i" }]
+			"parents": [
+				"b"
+			],
+			"patches": [
+				{
+					"path": [
+						"body"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "i"
+				}
+			]
 		},
 		{
 			"op": "make",
 			"name": "d",
 			"time": 1760000001,
 			"nonce": 4,
-			"parents": ["c"],
-			"patches": [{ "path": ["body"], "range": [2, 2], "value": "!" }]
+			"parents": [
+				"c"
+			],
+			"patches": [
+				{
+					"path": [
+						"body"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "!"
+				}
+			]
 		},
 		{
 			"op": "pack",
-			"commits": ["a", "b", "c", "d"],
+			"commits": [
+				"a",
+				"b",
+				"c",
+				"d"
+			],
 			"name": "r",
 			"expect": {
-				"run": "af616ef9440064626173658182f6f944006474696d654880e0bb8e0d000002656163746f728182f6f94400656e6f6e63654402020202657461626c6581826576616c7565f94400667265616465728182f6f94400667369676e657281825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf9440067686561646572738182483401ed01ed01135ff94400676c616d706f7274440202020267706172656e74738480f6f6f667706174636865738481a26470617468806576616c7565a164626f64796081a364706174688164626f64796572616e676582f90000f900006576616c75656168616961216865787465726e616c8182f6f94400686d657461646174618182f6f944006a7369676e617475726573845840d31bf643b86013947843b7763d943a260ef679d1acd2ec79aa84363678c8f3964cab0d81a75a636493338863a7f966b8408a7b3fa4fd5faf5bb96b893b75cc065840d42bc93c8a596bb67277eb50d2dec3080eb8f7d8e213ee2d215a6f760674a7c6c6d5d5a1796bd51ddfde8eefeb217ac021d98ff0cb11ba84d53097323a12a80d58406a64a3a8eb4be7decdd358098474c3a53d86f63074590c231441953e8551abb449a580e87eb732edde8fdb7d03f35674441b99b6d2fb18abb9c3978bce2c3e065840f6c230cf0f4f30c2dddaf3fc1d16ce2f088bbe94186b4355b16d13fc459a63333938eb9c11fb02fa549f7400dc983bef0b47b77b9d1e9904e3ffc3c7141c730f"
+				"run": "b0616ef9440063696473835820e688cb8b40d09eea4c8c0b898f5fb6f5bc1deb57cdd0385ccd6f6df1c0a349915820c0638ca16496407e9d9ddbeeebd7ff6255034f94447da502402e2322727418055820583726d173733e4f6c4b2bb0f50ccba3ff7e706cba154011cd2812af45d58e8d64626173658182f6f944006474696d654880e0bb8e0d000002656163746f728182f6f94400656e6f6e63654402020202657461626c6581826576616c7565f94400667265616465728182f6f94400667369676e657281825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf9440067686561646572738282f6f9420082483401ed01ed01135ff93c00676c616d706f7274440202020267706172656e74738480f6f6f667706174636865738481a26470617468806576616c7565a164626f64796081a364706174688164626f64796572616e676582f90000f900006576616c75656168616961216865787465726e616c8182f6f94400686d657461646174618182f6f944006a7369676e61747572657381584060a3224bb73827279be3270e44a2654ce3beda0c8d0ca6be0c86e4dd3d1575321d2cb51c6e1a06ff1ff63edb64b4077745332decd6884550ba82048ea053720a"
 			}
 		},
 		{
@@ -46,51 +97,155 @@
 			"expect": {
 				"columns": {
 					"n": 4,
-					"base": [[null, 4]],
-					"time": { "/": { "bytes": "gOC7jg0AAAI" } },
-					"actor": [[null, 4]],
-					"nonce": { "/": { "bytes": "AgICAg" } },
-					"table": [["value", 4]],
-					"reader": [[null, 4]],
-					"signer": [
-						[{ "/": { "bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA" } }, 4]
+					"ids": [
+						{
+							"/": {
+								"bytes": "5ojLi0DQnupMjAuJj1+29bwd61fN0DhczW9t8cCjSZE"
+							}
+						},
+						{
+							"/": {
+								"bytes": "wGOMoWSWQH6dndvu69f/YlUDT5REfaUCQC4jInJ0GAU"
+							}
+						},
+						{
+							"/": {
+								"bytes": "WDcm0XNzPk9sSyuw9QzLo/9+cGy6FUARzSgSr0XVjo0"
+							}
+						}
 					],
-					"headers": [[{ "/": { "bytes": "NAHtAe0BE18" } }, 4]],
-					"lamport": { "/": { "bytes": "AgICAg" } },
-					"parents": [[], null, null, null],
+					"base": [
+						[
+							null,
+							4
+						]
+					],
+					"time": {
+						"/": {
+							"bytes": "gOC7jg0AAAI"
+						}
+					},
+					"actor": [
+						[
+							null,
+							4
+						]
+					],
+					"nonce": {
+						"/": {
+							"bytes": "AgICAg"
+						}
+					},
+					"table": [
+						[
+							"value",
+							4
+						]
+					],
+					"reader": [
+						[
+							null,
+							4
+						]
+					],
+					"signer": [
+						[
+							{
+								"/": {
+									"bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA"
+								}
+							},
+							4
+						]
+					],
+					"headers": [
+						[
+							null,
+							3
+						],
+						[
+							{
+								"/": {
+									"bytes": "NAHtAe0BE18"
+								}
+							},
+							1
+						]
+					],
+					"lamport": {
+						"/": {
+							"bytes": "AgICAg"
+						}
+					},
+					"parents": [
+						[],
+						null,
+						null,
+						null
+					],
 					"patches": [
-						[{ "path": [], "value": { "body": "" } }],
-						[{ "path": ["body"], "range": [0, 0], "value": "h" }],
+						[
+							{
+								"path": [],
+								"value": {
+									"body": ""
+								}
+							}
+						],
+						[
+							{
+								"path": [
+									"body"
+								],
+								"range": [
+									0,
+									0
+								],
+								"value": "h"
+							}
+						],
 						"i",
 						"!"
 					],
-					"external": [[null, 4]],
-					"metadata": [[null, 4]],
+					"external": [
+						[
+							null,
+							4
+						]
+					],
+					"metadata": [
+						[
+							null,
+							4
+						]
+					],
 					"signatures": [
 						{
 							"/": {
-								"bytes": "0xv2Q7hgE5R4Q7d2PZQ6Jg72edGs0ux5qoQ2NnjI85ZMqw2Bp1pjZJMziGOn+Wa4QIp7P6T9X69buWuJO3XMBg"
-							}
-						},
-						{
-							"/": {
-								"bytes": "1CvJPIpZa7Zyd+tQ0t7DCA6499jiE+4tIVpvdgZ0p8bG1dWheWvVHd/eju/rIXrAIdmP8MsRuoTVMJcyOhKoDQ"
-							}
-						},
-						{
-							"/": {
-								"bytes": "amSjqOtL597N01gJhHTDpT2G9jB0WQwjFEGVPoVRq7RJpYDofrcy7d6P230D81Z0RBuZttL7GKu5w5eLziw+Bg"
-							}
-						},
-						{
-							"/": {
-								"bytes": "9sIwzw9PMMLd2vP8HRbOLwiLvpQYa0NVsW0T/EWaYzM5OOucEfsC+lSfdADcmDvvC0e3e50emQTj/8PHFBxzDw"
+								"bytes": "YKMiS7c4Jyeb4ycORKJlTOO+2gyNDKa+DIbk3T0VdTIdLLUcbhoG/x/2PttktAd3RTMt7NaIRVC6ggSOoFNyCg"
 							}
 						}
 					]
 				}
 			}
 		},
-		{ "op": "unpack", "run": "r", "expect": { "sealed": ["a", "b", "c", "d"] } }
+		{
+			"op": "unpack",
+			"run": "r",
+			"expect": {
+				"sealed": [
+					{
+						"vouched": "a"
+					},
+					{
+						"vouched": "b"
+					},
+					{
+						"vouched": "c"
+					},
+					"d"
+				]
+			}
+		}
 	]
 }

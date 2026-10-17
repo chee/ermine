@@ -1,5 +1,5 @@
 {
-	"title": "signatures a list of n byte strings, the bytes after each one's header",
+	"title": "signatures: a list of byte strings, one for each commit with a header (the bytes after it), in order",
 	"steps": [
 		{
 			"op": "make",
@@ -70,7 +70,7 @@
 			"op": "unpack",
 			"run": "r",
 			"set": {
-				"n": 2
+				"signatures": []
 			},
 			"expect": {
 				"error": "signatures"
@@ -80,7 +80,18 @@
 			"op": "unpack",
 			"run": "r",
 			"set": {
-				"n": 4
+				"signatures": [
+					{
+						"/": {
+							"bytes": "h8zcrGljao2h/br5BD0VF8uyyZWF2lSawi7SytYwAyPzBh3wYh9mdFw2nhiMh91hwqvELTjl5li0QUxFINljDQ"
+						}
+					},
+					{
+						"/": {
+							"bytes": "h8zcrGljao2h/br5BD0VF8uyyZWF2lSawi7SytYwAyPzBh3wYh9mdFw2nhiMh91hwqvELTjl5li0QUxFINljDQ"
+						}
+					}
+				]
 			},
 			"expect": {
 				"error": "signatures"

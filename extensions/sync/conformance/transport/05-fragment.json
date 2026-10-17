@@ -35,7 +35,7 @@
 			"op": "take",
 			"device": "a",
 			"name": "c2",
-			"nonce": 444,
+			"nonce": 1528,
 			"parents": [
 				"c1"
 			],
@@ -55,7 +55,7 @@
 			"op": "take",
 			"device": "a",
 			"name": "c3",
-			"nonce": 445,
+			"nonce": 1529,
 			"parents": [
 				"c2"
 			],
@@ -120,7 +120,7 @@
 						}
 					}
 				},
-				"hash": "c07a05bfe427e022a9f54f5c4bde5bb707ea072d495b0b2baeacd1faced92bb2"
+				"hash": "a11ca5160d1344ea6673a356b706880dd199066df4297a371d74bebe95eade7d"
 			}
 		},
 		{

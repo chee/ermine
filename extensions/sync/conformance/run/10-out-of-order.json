@@ -1,21 +1,52 @@
 {
 	"title": "a commit before its parent in the run names its parent by name, never by a place after its own",
 	"steps": [
-		{ "op": "make", "name": "a", "nonce": 1, "patches": [{ "path": [], "value": 1 }] },
+		{
+			"op": "make",
+			"name": "a",
+			"nonce": 1,
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			]
+		},
 		{
 			"op": "make",
 			"name": "b",
 			"nonce": 2,
-			"parents": ["a"],
-			"patches": [{ "path": [], "value": 2 }]
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			]
 		},
-		{ "op": "make", "name": "c", "nonce": 3, "parents": ["a", "b"], "base": "b", "patches": [] },
+		{
+			"op": "make",
+			"name": "c",
+			"nonce": 3,
+			"parents": [
+				"a",
+				"b"
+			],
+			"base": "b",
+			"patches": []
+		},
 		{
 			"op": "pack",
-			"commits": ["c", "b", "a"],
+			"commits": [
+				"c",
+				"b",
+				"a"
+			],
 			"name": "r",
 			"expect": {
-				"run": "af616ef94200646261736582825820502a6ab931459bf31ef2d62794b44b6be545515a9f237f333d19b9471f02eaaff93c0082f6f940006474696d6543000000656163746f728182f6f94200656e6f6e636543060101657461626c6581826576616c7565f94200667265616465728182f6f94200667369676e657281825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf9420067686561646572738182483401ed01ed01135ff94200676c616d706f72744306010167706172656e747383825820502a6ab931459bf31ef2d62794b44b6be545515a9f237f333d19b9471f02eaaf58208adb840ce0d33f4b0cc3a7ac5afa0e377dc407288b621b77197851dca2c584da8158208adb840ce0d33f4b0cc3a7ac5afa0e377dc407288b621b77197851dca2c584da806770617463686573838081a26470617468806576616c7565f9400081a26470617468806576616c7565f93c006865787465726e616c8182f6f94200686d657461646174618182f6f942006a7369676e617475726573835840dd2c3f95bbc4065ca30671e9708116dddcfaf09fbc9eb65d18f1b6294924d9d8e58ede054ccb8523c190c6abca42d0c43639c3848f4e4fa6fa618d7718c46d0458401be061aac4cae1f3f862ea01423f45cfa3652872a582540f77ce5de27093ee9b1675af6bd9e7de3291efeb9659507300bfcf2d99b691a1514d3314b657186a095840910a58ecc2cdc2086c32b4a2f88d136b6c7421b7d594b08791fd0ca1875f64a5e62b0933336e4089a7072e8ab1c7206f86be2c74366418d3f74a3bc1c9e0f002"
+				"run": "b0616ef942006369647380646261736582825820502a6ab931459bf31ef2d62794b44b6be545515a9f237f333d19b9471f02eaaff93c0082f6f940006474696d6543000000656163746f728182f6f94200656e6f6e636543060101657461626c6581826576616c7565f94200667265616465728182f6f94200667369676e657281825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf9420067686561646572738182483401ed01ed01135ff94200676c616d706f72744306010167706172656e747383825820502a6ab931459bf31ef2d62794b44b6be545515a9f237f333d19b9471f02eaaf58208adb840ce0d33f4b0cc3a7ac5afa0e377dc407288b621b77197851dca2c584da8158208adb840ce0d33f4b0cc3a7ac5afa0e377dc407288b621b77197851dca2c584da806770617463686573838081a26470617468806576616c7565f9400081a26470617468806576616c7565f93c006865787465726e616c8182f6f94200686d657461646174618182f6f942006a7369676e617475726573835840cbac8edc7addaa090d7739df9d4bdba15eb11b0638ecd5e90a15e2ded6d7b0d5c85517a3d1a3fd8f0ae2474bb0f41b14c23ee8bcd65d6fa8c325ed3d63dbab0e584095ca91e6132c06051856727fa21305897468db222cd42c3b353864410db0e34b9feea8596be471f3d5b8f480b1e57b143cd3d56218c5f517e1088f16aea694085840110a338c4c80a3d401159b788a990a45d69dc336c1fda7df0652c9ef50a04b444c8562f3fedd94be3c647b24e65f8bfee4b87857854e9e1b32e5be71b170e90b"
 			}
 		},
 		{
@@ -24,60 +55,174 @@
 			"expect": {
 				"columns": {
 					"n": 3,
+					"ids": [],
 					"base": [
-						[{ "/": { "bytes": "UCpquTFFm/Me8tYnlLRLa+VFUVqfI38zPRm5Rx8C6q8" } }, 1],
-						[null, 2]
+						[
+							{
+								"/": {
+									"bytes": "UCpquTFFm/Me8tYnlLRLa+VFUVqfI38zPRm5Rx8C6q8"
+								}
+							},
+							1
+						],
+						[
+							null,
+							2
+						]
 					],
-					"time": { "/": { "bytes": "AAAA" } },
-					"actor": [[null, 3]],
-					"nonce": { "/": { "bytes": "BgEB" } },
-					"table": [["value", 3]],
-					"reader": [[null, 3]],
+					"time": {
+						"/": {
+							"bytes": "AAAA"
+						}
+					},
+					"actor": [
+						[
+							null,
+							3
+						]
+					],
+					"nonce": {
+						"/": {
+							"bytes": "BgEB"
+						}
+					},
+					"table": [
+						[
+							"value",
+							3
+						]
+					],
+					"reader": [
+						[
+							null,
+							3
+						]
+					],
 					"signer": [
-						[{ "/": { "bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA" } }, 3]
+						[
+							{
+								"/": {
+									"bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA"
+								}
+							},
+							3
+						]
 					],
-					"headers": [[{ "/": { "bytes": "NAHtAe0BE18" } }, 3]],
-					"lamport": { "/": { "bytes": "BgEB" } },
+					"headers": [
+						[
+							{
+								"/": {
+									"bytes": "NAHtAe0BE18"
+								}
+							},
+							3
+						]
+					],
+					"lamport": {
+						"/": {
+							"bytes": "BgEB"
+						}
+					},
 					"parents": [
 						[
-							{ "/": { "bytes": "UCpquTFFm/Me8tYnlLRLa+VFUVqfI38zPRm5Rx8C6q8" } },
-							{ "/": { "bytes": "ituEDODTP0sMw6esWvoON33EByiLYht3GXhR3KLFhNo" } }
+							{
+								"/": {
+									"bytes": "UCpquTFFm/Me8tYnlLRLa+VFUVqfI38zPRm5Rx8C6q8"
+								}
+							},
+							{
+								"/": {
+									"bytes": "ituEDODTP0sMw6esWvoON33EByiLYht3GXhR3KLFhNo"
+								}
+							}
 						],
-						[{ "/": { "bytes": "ituEDODTP0sMw6esWvoON33EByiLYht3GXhR3KLFhNo" } }],
+						[
+							{
+								"/": {
+									"bytes": "ituEDODTP0sMw6esWvoON33EByiLYht3GXhR3KLFhNo"
+								}
+							}
+						],
 						[]
 					],
-					"patches": [[], [{ "path": [], "value": 2 }], [{ "path": [], "value": 1 }]],
-					"external": [[null, 3]],
-					"metadata": [[null, 3]],
+					"patches": [
+						[],
+						[
+							{
+								"path": [],
+								"value": 2
+							}
+						],
+						[
+							{
+								"path": [],
+								"value": 1
+							}
+						]
+					],
+					"external": [
+						[
+							null,
+							3
+						]
+					],
+					"metadata": [
+						[
+							null,
+							3
+						]
+					],
 					"signatures": [
 						{
 							"/": {
-								"bytes": "3Sw/lbvEBlyjBnHpcIEW3dz68J+8nrZdGPG2KUkk2djljt4FTMuFI8GQxqvKQtDENjnDhI9OT6b6YY13GMRtBA"
+								"bytes": "y6yO3HrdqgkNdznfnUvboV6xGwY47NXpChXi3tbXsNXIVRej0aP9jwriR0uw9BsUwj7ovNZdb6jDJe09Y9urDg"
 							}
 						},
 						{
 							"/": {
-								"bytes": "G+BhqsTK4fP4YuoBQj9Fz6NlKHKlglQPd85d4nCT7psWda9r2efeMpHv65ZZUHMAv88tmbaRoVFNMxS2VxhqCQ"
+								"bytes": "lcqR5hMsBgUYVnJ/ohMFiXRo2yIs1Cw7NThkQQ2w40uf7qhZa+Rx89W49ICx5XsUPNPVYhjF9RfhCI8WrqaUCA"
 							}
 						},
 						{
 							"/": {
-								"bytes": "kQpY7MLNwghsMrSi+I0Ta2x0IbfVlLCHkf0MoYdfZKXmKwkzM25AiacHLoqxxyBvhr4sdDZkGNP3SjvByeDwAg"
+								"bytes": "EQozjEyAo9QBFZt4ipkKRdadwzbB/affBlLJ71CgS0RMhWLz/t2UvjxkeyTmX4v+5Lh4V4VOnhsy5b5xsXDpCw"
 							}
 						}
 					]
 				}
 			}
 		},
-		{ "op": "unpack", "run": "r", "expect": { "sealed": ["c", "b", "a"] } },
 		{
-			"op": "pack",
-			"commits": ["a", "a"],
-			"name": "twice",
+			"op": "unpack",
+			"run": "r",
 			"expect": {
-				"run": "af616ef9400064626173658182f6f940006474696d65420000656163746f728182f6f94000656e6f6e6365420200657461626c6581826576616c7565f94000667265616465728182f6f94000667369676e657281825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf9400067686561646572738182483401ed01ed01135ff94000676c616d706f727442020067706172656e747382808067706174636865738281a26470617468806576616c7565f93c0081a26470617468806576616c7565f93c006865787465726e616c8182f6f94000686d657461646174618182f6f940006a7369676e617475726573825840910a58ecc2cdc2086c32b4a2f88d136b6c7421b7d594b08791fd0ca1875f64a5e62b0933336e4089a7072e8ab1c7206f86be2c74366418d3f74a3bc1c9e0f0025840910a58ecc2cdc2086c32b4a2f88d136b6c7421b7d594b08791fd0ca1875f64a5e62b0933336e4089a7072e8ab1c7206f86be2c74366418d3f74a3bc1c9e0f002"
+				"sealed": [
+					"c",
+					"b",
+					"a"
+				]
 			}
 		},
-		{ "op": "unpack", "run": "twice", "expect": { "sealed": ["a", "a"] } }
+		{
+			"op": "pack",
+			"commits": [
+				"a",
+				"a"
+			],
+			"name": "twice",
+			"expect": {
+				"run": "b0616ef94000636964738064626173658182f6f940006474696d65420000656163746f728182f6f94000656e6f6e6365420200657461626c6581826576616c7565f94000667265616465728182f6f94000667369676e657281825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf9400067686561646572738182483401ed01ed01135ff94000676c616d706f727442020067706172656e747382808067706174636865738281a26470617468806576616c7565f93c0081a26470617468806576616c7565f93c006865787465726e616c8182f6f94000686d657461646174618182f6f940006a7369676e617475726573825840110a338c4c80a3d401159b788a990a45d69dc336c1fda7df0652c9ef50a04b444c8562f3fedd94be3c647b24e65f8bfee4b87857854e9e1b32e5be71b170e90b5840110a338c4c80a3d401159b788a990a45d69dc336c1fda7df0652c9ef50a04b444c8562f3fedd94be3c647b24e65f8bfee4b87857854e9e1b32e5be71b170e90b"
+			}
+		},
+		{
+			"op": "unpack",
+			"run": "twice",
+			"expect": {
+				"sealed": [
+					"a",
+					"a"
+				]
+			}
+		}
 	]
 }

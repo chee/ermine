@@ -1486,7 +1486,8 @@
 							"bytes": "AQ"
 						}
 					}
-				]
+				],
+				"ids": []
 			},
 			"expect": {
 				"error": "size"
