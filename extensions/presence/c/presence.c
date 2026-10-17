@@ -7,7 +7,8 @@
 #include <string.h>
 #include <time.h>
 
-#include "../../../core/op/c/json.h"
+#include "../../../ermine/encoding/c/cbor.h"
+#include "../../../ermine/encoding/c/pack.h"
 
 static void *xalloc(size_t n) {
 	void *p = calloc(1, n ? n : 1);
@@ -410,10 +411,15 @@ static void send(pres_conn *c, const char *who, const op_value *row, const op_va
 			op_set(m, "n", op_num((double)++k->n));
 		}
 	}
-	char *text = op_json_text(m);
+	Json *j = pk_to_json(m);
 	op_free(m);
-	c->channel->send(c->channel, c->topic, (const unsigned char *)text, strlen(text));
-	free(text);
+	size_t length = 0;
+	if (j == NULL || !cborEncode(j, NULL, 0, &length, NULL)) abort();
+	unsigned char *bytes = xalloc(length);
+	cborEncode(j, bytes, length, &length, NULL);
+	jsonFree(j);
+	c->channel->send(c->channel, c->topic, bytes, length);
+	free(bytes);
 }
 
 static void tell(pres_world *w, const char *anchor, const char *who, const op_value *row,
@@ -555,11 +561,10 @@ bool pres_keep(const pres_world *w, const char *part) {
 static void heard(void *ctx, const char *from, const unsigned char *bytes, size_t n) {
 	pres_conn *c = ctx;
 	pres_world *w = c->w;
-	char *text = xalloc(n + 1);
-	memcpy(text, bytes, n);
-	op_value *m = op_json_read(text, NULL);
-	free(text);
-	if (m == NULL) return;
+	Json *j = cborDecode(bytes, n, NULL, NULL);
+	if (j == NULL) return;
+	op_value *m = pk_of_json(j);
+	jsonFree(j);
 	if (m->type == OP_MAP) {
 		const op_value *gone = op_get(m, "gone");
 		if (gone != NULL && gone->type == OP_BOOL && gone->bool_) {

@@ -8,6 +8,8 @@
 
 #include "../../../conformance/c/harness.h"
 #include "presence.h"
+#include "../../../ermine/encoding/c/cbor.h"
+#include "../../../ermine/encoding/c/pack.h"
 
 #define PUSH(v, n, cap, x) \
 	do { \
@@ -258,15 +260,28 @@ static op_value *answer(const op_value *r) {
 			op_value *m = op_map();
 			op_set(m, "from", op_str(sent[i].from));
 			op_set(m, "topic", op_str(sent[i].topic));
-			char *text = xalloc(sent[i].n + 1);
-			memcpy(text, sent[i].bytes, sent[i].n);
-			op_value *message = op_json_read(text, NULL);
-			free(text);
+			Json *j = cborDecode(sent[i].bytes, sent[i].n, NULL, NULL);
+			op_value *message = j != NULL ? pk_of_json(j) : NULL;
+			jsonFree(j);
 			op_set(m, "message", message != NULL ? message : op_null());
 			op_push(list, m);
 		}
 		op_value *o = op_map();
 		op_set(o, "sent", list);
+		return o;
+	}
+	if (strcmp(op, "bytes") == 0) {
+		size_t n;
+		const chn_sent *sent = chn_pair_sent(pair, &n);
+		op_value *list = op_list();
+		for (size_t i = 0; i < n; i++) {
+			char *hex = xalloc(sent[i].n * 2 + 1);
+			for (size_t k = 0; k < sent[i].n; k++) sprintf(hex + k * 2, "%02x", sent[i].bytes[k]);
+			op_push(list, op_str(hex));
+			free(hex);
+		}
+		op_value *o = op_map();
+		op_set(o, "bytes", list);
 		return o;
 	}
 	if (strcmp(op, "sizes") == 0) {

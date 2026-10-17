@@ -195,41 +195,4 @@ void tp_unlisten(tp_device *t, tp_listener *l);
 // the parts of an ephemeral payload not joined yet dropped now, as the clock would in time
 void tp_expire(tp_device *t);
 
-// --- for tests and conformance
-
-// addCommit as given: nothing checked or taken in first (taken in as a save is)
-bool tp_put(tp_device *t, const char *doc, const uint8_t head[32], const uint8_t (*parents)[32], size_t count,
-	const uint8_t *blob, size_t length);
-// addFragment as given, likewise
-bool tp_put_fragment(tp_device *t, const char *doc, const uint8_t head[32], const uint8_t (*boundary)[32],
-	size_t count, const uint8_t (*checkpoints)[32], size_t checks, const uint8_t *blob, size_t length);
-// how many tp_put and tp_put_fragment calls Subduction has not answered
-size_t tp_putting(const tp_device *t);
-
-// what the transport holds back or refused before the histories. waiting: a loose commit (by its
-// head), or a fragment's member (by its seal's stored id), and the names of its parents not here.
-// refused, by id: a commit (code), a fragment refused whole (fragment, code), or one stuck on a parent
-// refused or stuck here (stuck, the names of those parents). Each list sorted by id. The ephemeral
-// layer: no waiting, the refused ephemeral commits by name
-typedef struct {
-	uint8_t commit[32];
-	uint8_t (*names)[32];
-	size_t count;
-} tp_waiting;
-typedef struct {
-	uint8_t id[32];
-	bool fragment, stuck;
-	tp_code code;
-	uint8_t (*names)[32];
-	size_t count;
-} tp_refused;
-typedef struct {
-	tp_waiting *waiting;
-	size_t waiting_count;
-	tp_refused *refused;
-	size_t refused_count;
-} tp_taking;
-tp_taking tp_taking_of(tp_device *t, const char *doc, tp_layer layer);
-void tp_taking_free(tp_taking *taking);
-
 #endif

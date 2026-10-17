@@ -57,7 +57,12 @@ import { replay, type Tables } from "./replay.ts"
 import { pack, unpack } from "./run.ts"
 import { createSigner, stored as storedOf } from "./seal.ts"
 import { snapshot, tablesOf } from "./snapshot.ts"
-import { type Arrival, createDevice, type Device, type Hooks } from "./transport.ts"
+import { type Arrival, createDevice, type Device } from "./transport.ts"
+import {
+	transport_conformance_hook_put,
+	transport_conformance_hook_putFragment,
+	transport_conformance_hook_taking,
+} from "./transport_conformance_hook.ts"
 
 const DOC = "ermine://" + "2a".repeat(16) + "00".repeat(16)
 
@@ -67,7 +72,7 @@ type Held = {
 	name: string
 	seed: string
 	key: Uint8Array
-	device: Device & Hooks
+	device: Device
 	storage: sd.MemoryStorage
 	arrived: Arrival[]
 }
@@ -129,7 +134,7 @@ async function answer(r: Request): Promise<Answer> {
 			}
 			const signer = await createSigner(unhex(r.seed))
 			const arrived: Arrival[] = []
-			const device: Device & Hooks = createDevice({
+			const device: Device = createDevice({
 				signer,
 				storage: storage as unknown as sd.SedimentreeStorage,
 				snapshotOf: (d, head) => snapshot(replay(device.history(d), head.name) ?? {}),
@@ -190,7 +195,7 @@ async function answer(r: Request): Promise<Answer> {
 			const parents: Uint8Array[] = r.parents !== undefined
 				? r.parents.map(storedId)
 				: (m?.commit.parents ?? []).map((p) => storedId(label(p)))
-			await d.device.put(doc, head, parents, blob)
+			await transport_conformance_hook_put(d.device, doc, head, parents, blob)
 			return {}
 		}
 		case "fragment": {
@@ -206,7 +211,8 @@ async function answer(r: Request): Promise<Answer> {
 				if (r.tables !== undefined) o.snapshot = snapshot(revive(r.tables) as Tables)
 				blob = cbor.encode(o)
 			}
-			await d.device.putFragment(
+			await transport_conformance_hook_putFragment(
+				d.device,
 				doc,
 				storedId(r.head),
 				(r.boundary ?? []).map(storedId),
@@ -232,7 +238,7 @@ async function answer(r: Request): Promise<Answer> {
 				})),
 			}
 		case "taking": {
-			const t = of(r.device).device.taking(doc, r.layer ?? "stored")
+			const t = transport_conformance_hook_taking(of(r.device).device, doc, r.layer ?? "stored")
 			return {
 				waiting: t.waiting.map((w) => ({
 					commit: label(w.commit),

@@ -1,0 +1,11 @@
+{
+	"title": "a message crosses as canonical CBOR: these bytes, in both languages",
+	"steps": [
+		{ "op": "now", "t": 1000 },
+		{ "op": "connect", "dev": "a", "name": "ca", "topic": "work" },
+		{ "op": "connect", "dev": "b", "name": "cb", "topic": "work" },
+		{ "op": "set", "dev": "a", "anchor": "work", "who": "juno", "value": { "cursor": [12, 40] }, "ttl": 5000 },
+		{ "op": "clear", "dev": "a", "anchor": "work", "who": "juno" },
+		{ "op": "bytes", "expect": { "bytes": ["a26374746cf96ce26576616c7565a166637572736f7282f94a00f95100", "a164676f6e65f5"] } }
+	]
+}

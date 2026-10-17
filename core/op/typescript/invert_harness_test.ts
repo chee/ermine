@@ -1,12 +1,13 @@
-// what invert's suite does besides its scenarios (conformance/run.ts), asked of the harness named
-// by HARNESS (default: the TypeScript one, apply_harness.ts, which speaks both suites: { op:
-// "invert", value?, patches, cow? }).
+// what invert's suite does besides its scenarios (conformance/run.ts: they pin only that an undo
+// undoes), asked of the harness named by HARNESS (default: the TypeScript one, apply_harness.ts,
+// which speaks both suites: { op: "invert", value?, patches, cow? }).
 //
 // Every undo answered is also walked back with apply.ts: apply(apply(value, patches), undo) is
 // value; lists, strings and typed arrays element for element, maps by content (a key put back
 // goes last). That is done for the scenarios' answers too, at the start of the one test. The
-// fuzzer makes values and patches and asks the harness: its answers must be what calling
-// invert.ts gives.
+// fuzzer makes values and patches and asks the harness: its answers walk back, and with the
+// TypeScript harness (no HARNESS) are what calling invert.ts gives, exactly. Another harness's
+// undos may differ: for them the walking back, here and in the suite, is all that is asked.
 import { assert, assertEquals } from "@std/assert"
 import apply, { ApplyError, type Key, type Patch } from "@ermine/op/apply"
 import invert from "@ermine/op/invert"
@@ -248,13 +249,19 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${PATCHES} patches, as invert.ts; each undo w
 	const answers = (await ask(harness, requests)) as Answer[]
 	assertEquals(answers.length, requests.length, "one answer per request")
 	answers.forEach((a, i) => {
-		assertEquals(line(a), line(expected[i]), `${where[i]}: ${line(requests[i])}`)
+		// exactly invert.ts's answer only of the TypeScript harness; an error is always the same
+		if (!Deno.env.get("HARNESS") || a.error || expected[i].error) {
+			assertEquals(line(a), line(expected[i]), `${where[i]}: ${line(requests[i])}`)
+		}
 		if (a.undo) walksBack(requests[i], a.undo, where[i])
 	})
 	// the same in place
 	const inPlace = await ask(harness, requests.map((r) => ({ ...r, cow: false })))
-	inPlace.forEach((a, i) =>
-		assertEquals(line(a), line(expected[i]), `${where[i]} (cow: false): ${line(requests[i])}`)
-	)
+	inPlace.forEach((a, i) => {
+		if (!Deno.env.get("HARNESS") || a.error || expected[i].error) {
+			assertEquals(line(a), line(expected[i]), `${where[i]} (cow: false): ${line(requests[i])}`)
+		}
+		if (a.undo) walksBack(requests[i], a.undo as unknown[], `${where[i]} (cow: false)`)
+	})
 	assert(answers.some((a) => a.undo?.some((p: Patch) => p.move)), "some undo moves back")
 })

@@ -705,7 +705,6 @@ static op_value *moment_json(const moment *x, bool reads) {
 	case SC_T_STARTS:
 		op_set(o, "starts", name_json(m->c));
 		op_set(o, "run", integer(m->run));
-		op_set(o, "rank", integer(m->rank));
 		break;
 	case SC_T_ACTS:
 		op_set(o, "acts", name_json(m->c));

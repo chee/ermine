@@ -22,9 +22,10 @@
 // { op: "row", dev, anchor, who }            → { row? }   readRow: { who, value, until }
 // { op: "table", dev, anchor }               → { value? }   the entry's value as the table has it
 // { op: "sent" }                             → { sent: [{ from, topic, message }] }   every message
-//    the channels carried, in order, its bytes decoded as JSON
+//    the channels carried, in order, its bytes decoded as CBOR
 // { op: "sizes" }                            → { sizes: [n] }   the bytes of each message the channels carried
-//    (the JSON text, compact, keys in the order ttl, then value or patches, then n)
+//    (canonical CBOR)
+// { op: "bytes" }                             → { bytes: [hex] }   the bytes of each message the channels carried, as hex
 // computes, made with the device's scope open, rerun as the reads they track change
 // { op: "watch", dev, name, f }              → {}   f: { presence: anchor } | { row: [anchor, who] }
 //    (a row gone: null); the run counted, the result (compared as JSON) kept
@@ -37,6 +38,7 @@
 // saving
 // { op: "save", dev, save }                  → {}   whether the device keeps presence in a save
 // { op: "keep", dev?, part, save? }          → { keep }   keep: the device's, or { save } given
+import { decode } from "@ermine/encoding/cbor"
 import createEntry from "@ermine/node/entry"
 import { place } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
@@ -66,7 +68,6 @@ const channels = { a: pair.a, b: pair.b }
 const connections = new Map<string, { stop: () => void; announce: () => void }>()
 const watched = new Map<string, { runs: number; value: Json }>()
 const told = new Map<string, { patches: number }>()
-const dec = new TextDecoder()
 
 const dev = (r: Request): Device => {
 	const d = devices[r.dev]
@@ -101,6 +102,12 @@ function answer(r: Request): Json {
 			return {}
 		case "edit":
 			return { ok: editPresence(dev(r), r.anchor, r.who, r.patches, r.ttl) }
+		case "bytes":
+			return {
+				bytes: pair.sent.map((m) =>
+					Array.from(m.bytes, (b) => b.toString(16).padStart(2, "0")).join("")
+				),
+			}
 		case "sizes":
 			return { sizes: pair.sent.map((m) => m.bytes.length) }
 		case "renew":
@@ -131,7 +138,7 @@ function answer(r: Request): Json {
 				sent: pair.sent.map((m) => ({
 					from: m.from,
 					topic: m.topic,
-					message: JSON.parse(dec.decode(m.bytes)),
+					message: decode(m.bytes),
 				})),
 			}
 		case "watch": {
