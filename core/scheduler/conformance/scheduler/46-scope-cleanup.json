@@ -89,15 +89,6 @@
 							[
 								"mark",
 								3
-							],
-							[
-								"owner",
-								[
-									[
-										"actor",
-										"notes"
-									]
-								]
 							]
 						],
 						"writer": "c"
@@ -120,15 +111,6 @@
 							[
 								"why",
 								"plain"
-							],
-							[
-								"owner",
-								[
-									[
-										"actor",
-										"notes"
-									]
-								]
 							]
 						]
 					}

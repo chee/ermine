@@ -15,7 +15,27 @@
 		{
 			"op": "replay",
 			"commit": "b",
-			"expect": { "tables": { "value": { "value": 2, "change": { "time": 0, "actor": null } } } }
+			"expect": {
+				"tables": {
+					"value": {
+						"value": 2,
+						"change": {
+							"time": 0,
+							"actor": null,
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"a5630d7b236c7f1c8e15a0374de5f3352dbf8a72985e3921a387aa62144c0082"
+								]
+							]
+						}
+					}
+				}
+			}
 		},
 		{
 			"op": "add",

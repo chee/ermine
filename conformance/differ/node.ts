@@ -4,8 +4,25 @@
 // the run's seconds).
 // wild: a header's fields out of order, a time of -0, -0 in an integer typed array, 64-bit
 // elements as "007" and "-0", metadata that is no pair, a node with no values
+// the model, each implementation on its own (invariant, below): every answer predicted from
+// node_harness.ts's rules: the value as its JSON form reads back (form.ts: typed arrays as their
+// kind holds them), the header's own fields only, a time of -0 as 0, none: a whole number of
+// these seconds, the same for every table of a node; a refusal for a metadata entry that is no
+// pair, a node with no values, a form that stands for none, an op not known
 import { ordered } from "../typescript/json.ts"
-import { type Generator, picker, type Request, toJson, TRICKY } from "./kit.ts"
+import { revive } from "../typescript/form.ts"
+import {
+	type Answer,
+	differs,
+	firsts,
+	type Generator,
+	picker,
+	type Request,
+	show,
+	toJson,
+	TRICKY,
+	type Violation,
+} from "./kit.ts"
 
 const NAMES = ["a", "b", "c", "d"]
 // strings: escapes, BMP, pairs, a pair and a modifier, lone halves, a high then a low, NUL
@@ -117,4 +134,69 @@ const generator: Generator = {
 		return [out]
 	},
 }
+generator.invariant = invariant
 export default generator
+
+// what a request should answer: undefined, a refusal; time, the "now" a header with no time is
+// given (one for the whole node)
+const FIELDS = ["time", "actor", "reader", "external", "metadata", "op"]
+class Refused {}
+function expected(r: Request, time: number): Answer | undefined {
+	const entry = (value: unknown, h: unknown) => {
+		const header = (h ?? {}) as Record<string, unknown>
+		const change: Record<string, unknown> = {}
+		for (const k of FIELDS) if (Object.hasOwn(header, k)) change[k] = header[k]
+		change.time = change.time === undefined ? time : Object.is(change.time, -0) ? 0 : change.time
+		const m = change.metadata
+		if (m !== undefined && Array.isArray(m)) {
+			for (const p of m) {
+				if (!Array.isArray(p) || p.length !== 2 || typeof p[0] !== "string") throw new Refused()
+			}
+		}
+		let v: unknown
+		try {
+			v = value === undefined ? undefined : toJson(revive(value))
+		} catch {
+			throw new Refused()
+		}
+		return v === undefined ? { change } : { value: v, change }
+	}
+	try {
+		if (r.op === "entry") return { entry: entry(r.value, r.header) }
+		if (r.op !== "node" || r.values === null || typeof r.values !== "object") return
+		if (Array.isArray(r.values)) return
+		const node: [string, unknown][] = []
+		for (const k of Object.keys(r.values)) node.push([k, entry(r.values[k], r.header)])
+		return { node: ordered(node) }
+	} catch (e) {
+		if (e instanceof Refused) return
+		throw e
+	}
+}
+
+function invariant(stream: Request[], answers: (Answer | undefined)[]): Promise<Violation[]> {
+	const out: Violation[] = []
+	// the seconds the run can have been in (the harness ran just now)
+	const end = Math.floor(Date.now() / 1000) + 1, start = end - 120
+	stream.forEach((r, at) => {
+		const a = answers[at]
+		if (a === undefined) return
+		// the time now as answered, when it is one: a node's tables share it
+		const times = [a.entry, ...Object.values(a.node ?? {})].map((e) => e?.change?.time)
+		const now = times.find((t) => Number.isInteger(t) && t >= start && t <= end) ?? start - 1
+		const want = expected(r, now)
+		if (want === undefined) {
+			if (typeof a.error !== "string") {
+				out.push({ kind: "refused", at, why: `${show(r)}: ${show(a)}, not refused` })
+			}
+		} else if (differs(a, want)) {
+			const field = typeof a.error === "string" ? "refused" : differs(a, want)!.path
+			out.push({
+				kind: `${r.op} ${field.replace(/\[\d+\]/g, "[]")}`,
+				at,
+				why: `${show(r)}: ${show(a)}, not ${show(want)}`,
+			})
+		}
+	})
+	return Promise.resolve(firsts(out))
+}

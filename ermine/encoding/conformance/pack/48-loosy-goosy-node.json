@@ -1,6 +1,6 @@
 {
 	"title": "loosyGoosy, one node alone: a key it does not know passed over",
-	"bytes": "a3656578747261f56576616c756581f93c00666368616e6765a26474696d65f93c00656c61746572f93c00",
+	"bytes": "a3656578747261f56576616c75658101666368616e6765a26474696d6501656c6174657201",
 	"node": true,
 	"reading": {
 		"loosyGoosy": true

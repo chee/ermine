@@ -75,7 +75,25 @@
 				"b"
 			],
 			"expect": {
-				"tables": { "value": { "value": "helloxyAB", "change": { "time": 0, "actor": null } } }
+				"tables": {
+					"value": {
+						"value": "helloxyAB",
+						"change": {
+							"time": 0,
+							"actor": null,
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"86ec5baa33fdda7540ad68de21eef9770045a08da03615fa857267c84756e9fc"
+								]
+							]
+						}
+					}
+				}
 			}
 		},
 		{
@@ -226,7 +244,23 @@
 			],
 			"expect": {
 				"tables": {
-					"value": { "value": "789123hello", "change": { "time": 2, "actor": null } }
+					"value": {
+						"value": "789123hello",
+						"change": {
+							"time": 2,
+							"actor": null,
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"c701f98b928dc09c4eab74df299322b3ea109737ed7823d0447044a20f4d13dc"
+								]
+							]
+						}
+					}
 				}
 			}
 		},
@@ -238,7 +272,23 @@
 			],
 			"expect": {
 				"tables": {
-					"value": { "value": "789123hello", "change": { "time": 2, "actor": null } }
+					"value": {
+						"value": "789123hello",
+						"change": {
+							"time": 2,
+							"actor": null,
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"c701f98b928dc09c4eab74df299322b3ea109737ed7823d0447044a20f4d13dc"
+								]
+							]
+						}
+					}
 				}
 			}
 		}

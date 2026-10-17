@@ -1,5 +1,5 @@
 {
-	"title": "one tree: a scope is made under the one given, else the one open (none: unscoped, before anything else); no pairs: empty; what is open shows its info, then its owner's under \"owner\", nested to the root; disposing a root takes what is under it",
+	"title": "one tree: a scope is made under the one given, else the one open (none: unscoped, before anything else); no pairs: empty; what is open shows its info, the pairs given, nothing appended; disposing a root takes what is under it",
 	"steps": [
 		{ "op": "scope", "name": "x", "expect": { "error": "unscoped" } },
 		{ "op": "current", "expect": { "value": null } },
@@ -20,7 +20,7 @@
 			"expect": {
 				"value": {
 					"scope": "b",
-					"pairs": [["app", "notes"], ["actor", "notes"], ["owner", [["actor", "chee"]]]]
+					"pairs": [["app", "notes"], ["actor", "notes"]]
 				}
 			}
 		},
@@ -33,10 +33,7 @@
 			"expect": {
 				"value": {
 					"scope": "k",
-					"pairs": [
-						["why", "save"],
-						["owner", [["app", "notes"], ["actor", "notes"], ["owner", [["actor", "chee"]]]]]
-					]
+					"pairs": [["why", "save"]]
 				}
 			}
 		},

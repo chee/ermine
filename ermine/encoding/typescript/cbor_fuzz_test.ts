@@ -3,11 +3,13 @@
 // tricky keys, deep and big ones) and bytes near an encoding. checked:
 // - round trip: decode(encode(v)) is v (maps by content), encode again the same bytes; a copy with
 //   its keys in another order the same bytes and hash
-// - numbers: the shortest float, against a model on Math.f16round and Math.fround
+// - numbers: whole ones the integer (a bignum past 64 bits), against a model on bigints; the rest
+//   the shortest float, against a model on Math.f16round and Math.fround
 // - refused: each non-canonical rewrite of an encoding (a longer head, an indefinite length, a
-//   longer float, an integer, keys out of order or twice, a key not text, bad UTF-8, an unknown
-//   tag or simple value, a NaN with a payload, part of a typed array element, bytes after, a
-//   prefix); bytes cut, grown and flipped are refused or are an encoding exactly
+//   longer float, an integer as a float or as a bignum a plain integer holds, a bignum with a
+//   leading zero, keys out of order or twice, a key not text, bad UTF-8, an unknown tag or simple
+//   value, a NaN with a payload, part of a typed array element, bytes after, a prefix); bytes cut,
+//   grown and flipped are refused or are an encoding exactly
 // - across: the harness (HARNESS, the C one; default the TypeScript, against itself) answers
 //   each request as cbor_harness.ts does: same bytes and hash, same refusals, same values back
 // a few dozen seeds (fuzz runs small; SEEDS for more). today's rules: see fuzz_values.ts
@@ -18,6 +20,7 @@ import { hash } from "./hash.ts"
 import { answer } from "./cbor_harness.ts"
 import { line, toJson } from "../../../conformance/typescript/form.ts"
 import {
+	canon,
 	cat,
 	hex,
 	KEYS,
@@ -36,14 +39,39 @@ import {
 	value,
 } from "./fuzz_values.ts"
 import { ask, command } from "../../../conformance/typescript/ask.ts"
+import { read } from "../../../conformance/typescript/json.ts"
 
 const SEEDS = Number(Deno.env.get("SEEDS") ?? 40)
 const subject = command("cbor")
 
 // the model ---------------------------------------------------------------------
 
-// the shortest float that holds x, as RFC 8949 4.2.2 has it: f16, f32, f64; the one NaN f97e00
-function model(x: number): string {
+// a whole number: major type 0 or 1 in the fewest bytes, a bignum past 64 bits (RFC 8949 3.4.3)
+function integer(n: bigint): string {
+	const negative = n < 0n, m = negative ? -1n - n : n
+	const major = negative ? 0x20 : 0
+	const be = (k: number) => m.toString(16).padStart(2 * k, "0")
+	if (m < 24n) return (major | Number(m)).toString(16).padStart(2, "0")
+	if (m < 0x100n) return (major | 24).toString(16) + be(1)
+	if (m < 0x10000n) return (major | 25).toString(16) + be(2)
+	if (m < 0x100000000n) return (major | 26).toString(16) + be(4)
+	if (m < 0x10000000000000000n) return (major | 27).toString(16) + be(8)
+	let h = m.toString(16)
+	if (h.length % 2) h = "0" + h
+	const k = h.length / 2
+	const len = k < 24
+		? (0x40 | k).toString(16)
+		: k < 0x100
+		? "58" + k.toString(16).padStart(2, "0")
+		: "59" + k.toString(16).padStart(4, "0")
+	return (negative ? "c3" : "c2") + len + h
+}
+
+// whole: the integer; else the shortest float that holds x, as RFC 8949 4.2.2 has it: f16, f32,
+// f64; the one NaN f97e00
+function model(x: number | bigint): string {
+	if (typeof x === "bigint") return integer(x)
+	if (Number.isInteger(x)) return integer(BigInt(x))
 	if (x !== x) return "f97e00"
 	const v = new DataView(new ArrayBuffer(9))
 	if (Object.is(Math.f16round(x), x)) {
@@ -77,14 +105,19 @@ Deno.test(`cbor fuzz: ${SEEDS} seeds, round trip, one encoding, one hash`, () =>
 	}
 })
 
-Deno.test(`cbor fuzz: ${SEEDS * 50} numbers, the shortest float, against the model`, () => {
+Deno.test(`cbor fuzz: ${SEEDS * 50} numbers, the integer or the shortest float, against the model`, () => {
 	for (let seed = 1; seed <= SEEDS; seed++) {
 		const { pick } = rand(seed + 1000)
 		for (let n = 0; n < 50; n++) {
 			const x = n < NUMBERS.length && seed === 1 ? NUMBERS[n] : number(pick)
 			assertEquals(hex(encode(x)), model(x), `${x}`)
-			assert(
-				Object.is(decode(encode(x)), x) || (x !== x && Number.isNaN(decode(encode(x)))),
+			const back = decode(encode(x))
+			assert(Object.is(back, canon(x)) || (x !== x && Number.isNaN(back)), `${x}`)
+			// a number while safe, a bigint past that
+			const big = typeof back === "bigint"
+			assertEquals(
+				big,
+				Number.isInteger(Number(x)) && !Number.isSafeInteger(Number(canon(x))),
 				`${x}`,
 			)
 		}
@@ -151,7 +184,6 @@ Deno.test("cbor fuzz: what is not a value has no encoding", () => {
 		undefined,
 		() => 1,
 		Symbol("s"),
-		1n,
 		new Map(),
 		new Set(),
 		new Date(0),
@@ -170,7 +202,7 @@ Deno.test("cbor fuzz: what is not a value has no encoding", () => {
 		sparse,
 		cyclic,
 		new Stand(undefined as never),
-		{ a: [1, { b: 2n }] },
+		{ a: [1, { b: undefined }] },
 	]
 	for (const x of NOT) {
 		assertThrows(() => encode(x as Value), CborError, undefined, String(x))
@@ -218,7 +250,8 @@ async function across(requests: Record<string, unknown>[]) {
 	const got = await ask(subject, requests)
 	const wrong: string[] = [], counts: Record<string, number> = {}
 	requests.forEach((r, i) => {
-		const want = answer(r as never)
+		// as read from a line, as the harness's answer is (whole numbers exactly: json.ts)
+		const want = read(line(answer(read(line(r)) as never))) as Record<string, unknown>
 		const kind = `${r.op} ${want.error ?? "taken"}`
 		counts[kind] = (counts[kind] ?? 0) + 1
 		if (stable(got[i]) !== stable(want)) {

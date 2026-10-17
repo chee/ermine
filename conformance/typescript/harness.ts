@@ -3,6 +3,7 @@
 // a request to its answer; what lasts between lines is the adapter's. a line that is not JSON, or
 // an adapter that throws, is answered { error: "text" } and the loop goes on
 import { line } from "./form.ts"
+import { parse } from "./json.ts"
 
 // deno-lint-ignore no-explicit-any
 export type Request = Record<string, any>
@@ -13,7 +14,7 @@ export async function serve(answer: (request: Request) => Answer | Promise<Answe
 	const encoder = new TextEncoder()
 	const one = async (text: string): Promise<string> => {
 		try {
-			return line(await answer(JSON.parse(text)))
+			return line(await answer(parse(text) as Request))
 		} catch (e) {
 			return JSON.stringify({ error: String(e) })
 		}

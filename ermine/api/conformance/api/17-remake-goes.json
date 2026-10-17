@@ -160,11 +160,6 @@
 						"put"
 					],
 					[
-						"value",
-						"n4",
-						"put"
-					],
-					[
 						"attributes",
 						"n4",
 						"put"
@@ -175,12 +170,17 @@
 						"put"
 					],
 					[
-						"value",
+						"attributes",
 						"n6",
 						"put"
 					],
 					[
-						"attributes",
+						"value",
+						"n4",
+						"put"
+					],
+					[
+						"value",
 						"n6",
 						"put"
 					],
@@ -387,12 +387,12 @@
 			"expect": {
 				"events": [
 					[
-						"value",
+						"attributes",
 						"n6",
 						"gone"
 					],
 					[
-						"attributes",
+						"value",
 						"n6",
 						"gone"
 					]

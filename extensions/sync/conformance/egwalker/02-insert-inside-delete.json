@@ -73,7 +73,17 @@
 						},
 						"change": {
 							"time": 0,
-							"actor": null
+							"actor": null,
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"5ed91fe7775fa9d9a4e6a5a011dd8b491d8cbbf57988c6ac934aee40834f8778"
+								]
+							]
 						}
 					}
 				}
@@ -116,7 +126,17 @@
 						},
 						"change": {
 							"time": 0,
-							"actor": null
+							"actor": null,
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"f8d04473f164d14381e395a372c67041af746db5ea287dc4b29a957b6644a6a2"
+								]
+							]
 						}
 					}
 				}

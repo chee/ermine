@@ -1,6 +1,7 @@
 // JSON read as the harness protocol has it (conformance/run.ts), for the side that asks: a map's
 // keys in the order they came, every key; lone surrogates (\udxxx) and NUL in strings and keys;
-// -0; whole numbers up to 2^53 exactly, the rest as doubles. JSON.parse keeps all of that but key
+// -0; whole numbers exactly: digits alone (no fraction, no exponent) past 2^53 - 1 are a bigint,
+// the rest doubles. JSON.parse keeps all of that but whole numbers past 2^53 and key
 // order: a JS object lists array-index keys ("0", "2", "4294967294"; not "01", "-1", "4294967295")
 // first, ascending, then the rest as they came.
 //
@@ -55,13 +56,25 @@ export function ordered(
 	})
 }
 
+// digits alone past 2^53 - 1: a bigint, exactly (JSON.parse would round them)
+const long = /[0-9]{16}/
+const exact = (_: string, v: unknown, context?: { source?: string }) =>
+	typeof v === "number" && Number.isInteger(v) && !Number.isSafeInteger(v) &&
+		context?.source !== undefined && /^-?[0-9]+$/.test(context.source)
+		? BigInt(context.source)
+		: v
+// JSON.parse, whole numbers exact
+export function parse(text: string): unknown {
+	return long.test(text) ? JSON.parse(text, exact as never) : JSON.parse(text)
+}
+
 // a line that may have a key JS would list out of order: a string token that begins with a digit,
 // or its escape. the rest are read by JSON.parse, which keeps them as they are
 const risky = /"(?:[0-9]|\\u003[0-9])/
 
 // the JSON value of text; a SyntaxError if it is none
 export function read(text: string): unknown {
-	if (!risky.test(text)) return JSON.parse(text)
+	if (!risky.test(text)) return parse(text)
 	let i = 0
 	const fail = (): never => {
 		throw new SyntaxError(`not JSON at ${i}: ${text.slice(i, i + 20)}`)
@@ -125,7 +138,10 @@ export function read(text: string): unknown {
 		const m = number.exec(text)
 		if (!m) fail()
 		i += m![0].length
-		return Number(m![0])
+		const n = Number(m![0])
+		return Number.isInteger(n) && !Number.isSafeInteger(n) && /^-?[0-9]+$/.test(m![0])
+			? BigInt(m![0])
+			: n
 	}
 	const out = value()
 	space()

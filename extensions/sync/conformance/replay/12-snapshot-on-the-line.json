@@ -42,7 +42,25 @@
 			"op": "replay",
 			"commit": "m",
 			"expect": {
-				"tables": { "value": { "value": { "n": 1 }, "change": { "time": 0, "actor": null } } }
+				"tables": {
+					"value": {
+						"value": { "n": 1 },
+						"change": {
+							"time": 0,
+							"actor": null,
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"119c39de16929adba9b143a8c3ad8b2679dd00fc3f739d6cddd189b6bac3b5d9"
+								]
+							]
+						}
+					}
+				}
 			}
 		},
 		{
@@ -58,7 +76,23 @@
 			"commit": "m",
 			"expect": {
 				"tables": {
-					"value": { "value": { "from": "b" }, "change": { "time": 0, "actor": null } }
+					"value": {
+						"value": { "from": "b" },
+						"change": {
+							"time": 0,
+							"actor": null,
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"119c39de16929adba9b143a8c3ad8b2679dd00fc3f739d6cddd189b6bac3b5d9"
+								]
+							]
+						}
+					}
 				}
 			}
 		}

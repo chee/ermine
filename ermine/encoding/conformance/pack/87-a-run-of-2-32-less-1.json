@@ -1,0 +1,7 @@
+{
+	"title": "a run of 2^32 - 1 parts and no keys: not-a-pack, without making them",
+	"bytes": "a167636f6c756d6e73505b985a90585452dcd8949828f51f0800",
+	"expect": {
+		"code": "not-a-pack"
+	}
+}

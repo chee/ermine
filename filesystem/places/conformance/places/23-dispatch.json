@@ -1,5 +1,5 @@
 {
-	"title": "a click dispatched in a run, its scope made under the run's: its write is by the run, its header the process's actor, the click's pairs then the run's info nested under it",
+	"title": "a click dispatched in a run, its scope made under the run's: its write is by the run, its header the process's actor, the click's pairs then the run's info then the process's, flat",
 	"steps": [
 		{
 			"op": "kids",
@@ -164,26 +164,16 @@
 							"click"
 						],
 						[
-							"owner",
-							[
-								[
-									"run",
-									1
-								],
-								[
-									"mark",
-									2
-								],
-								[
-									"owner",
-									[
-										[
-											"actor",
-											"notes"
-										]
-									]
-								]
-							]
+							"run",
+							1
+						],
+						[
+							"mark",
+							2
+						],
+						[
+							"actor",
+							"notes"
 						]
 					],
 					"timely": true,

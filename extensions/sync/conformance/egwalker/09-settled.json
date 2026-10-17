@@ -99,7 +99,17 @@
 						"value": "Ca1b",
 						"change": {
 							"time": 0,
-							"actor": null
+							"actor": null,
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"ce84e20bcce956632f22479fed95a93a31cc9b2f1406fdc7d10647aa66b3786d"
+								]
+							]
 						}
 					}
 				}
@@ -153,7 +163,17 @@
 						"value": "Da1b2",
 						"change": {
 							"time": 0,
-							"actor": null
+							"actor": null,
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"dd8188682c06b8d4014aeefa768028bb7057c9f0e6aa9b8f8120243474c52c38"
+								]
+							]
 						}
 					}
 				}

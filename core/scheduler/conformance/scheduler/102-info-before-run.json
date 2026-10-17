@@ -1,5 +1,5 @@
 {
-	"title": "a computation's info before its first run is the tick that made it due alone, and a run() of it from outside names no writer; a scope made under it then says that tick, and goes before its first run",
+	"title": "a computation's info before its first run is the tick that made it due alone, and a run() of it from outside names no writer; a scope made under it then has its own pairs alone, and goes before its first run",
 	"steps": [
 		{
 			"op": "root",
@@ -35,15 +35,6 @@
 						[
 							"mark",
 							1
-						],
-						[
-							"owner",
-							[
-								[
-									"actor",
-									"test"
-								]
-							]
 						]
 					]
 				}
@@ -80,24 +71,6 @@
 						[
 							"why",
 							"before"
-						],
-						[
-							"owner",
-							[
-								[
-									"mark",
-									1
-								],
-								[
-									"owner",
-									[
-										[
-											"actor",
-											"test"
-										]
-									]
-								]
-							]
 						]
 					]
 				}
@@ -124,15 +97,6 @@
 						[
 							"mark",
 							1
-						],
-						[
-							"owner",
-							[
-								[
-									"actor",
-									"test"
-								]
-							]
 						]
 					]
 				}

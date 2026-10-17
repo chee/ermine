@@ -2,7 +2,7 @@
 //   deno run --allow-read --allow-write conformance/blop/fixtures.ts
 // Expected bytes: a blop is a canonical CBOR map, so cbor.encode of the right object is the
 // oracle; names are BLAKE3 of those bytes. blop.ts is never imported. Byte fields are
-// Uint8Arrays, bytes as everywhere (ENCODING.tex); a refused blop is given in JSON form
+// Uint8Arrays, bytes as everywhere (cbor.ts); a refused blop is given in JSON form
 // (../pack/form.ts) like the rest.
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import { encode } from "@ermine/encoding/cbor"
@@ -186,7 +186,7 @@ ok(
 		}],
 	}),
 )
-ok("lamport-one", "lamport 1 is written f93c00", min({ lamport: 1 }))
+ok("lamport-one", "lamport 1 is written 01, an integer", min({ lamport: 1 }))
 ok("lamport-large", "lamport a large safe integer", min({ lamport: 2 ** 53 - 1 }))
 
 // ---- refused when encoding
@@ -458,11 +458,15 @@ decodes("decode-trailing", "a canonical blop followed by a byte", unhex(goodHex 
 decodes("decode-empty", "no bytes", new Uint8Array())
 decodes("decode-list", "a list, not a map", encode([]))
 decodes("decode-string", "a string, not a map", encode("blop"))
-decodes("decode-lamport-int", "lamport as the CBOR integer 01, not f93c00", swap("f93c00", "01"))
+decodes(
+	"decode-lamport-half",
+	"lamport 1 as the half float f93c00, not the integer 01",
+	swap("676c616d706f727401", "676c616d706f7274f93c00"),
+)
 decodes(
 	"decode-float-long",
-	"lamport 1 as a float64, not the shortest form",
-	swap("f93c00", "fb3ff0000000000000"),
+	"lamport 1 as a float64: a whole number is an integer",
+	swap("676c616d706f727401", "676c616d706f7274fb3ff0000000000000"),
 )
 decodes("decode-keys-order", "keys out of canonical order", join(swapped))
 // valid CBOR maps that are not blops: the field comes from the table

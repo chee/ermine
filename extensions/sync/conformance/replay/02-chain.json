@@ -36,7 +36,23 @@
 			"commit": "a",
 			"expect": {
 				"tables": {
-					"value": { "value": { "n": 0, "list": [] }, "change": { "time": 0, "actor": null } }
+					"value": {
+						"value": { "n": 0, "list": [] },
+						"change": {
+							"time": 0,
+							"actor": null,
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"e30fe8468675858f01740682b01dbccfe52ae25a5353f388ea69eb728faa6973"
+								]
+							]
+						}
+					}
 				}
 			}
 		},
@@ -45,7 +61,23 @@
 			"commit": "b",
 			"expect": {
 				"tables": {
-					"value": { "value": { "n": 1, "list": [] }, "change": { "time": 1, "actor": null } }
+					"value": {
+						"value": { "n": 1, "list": [] },
+						"change": {
+							"time": 1,
+							"actor": null,
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"9dbe0013ae2e38605137d7eb59fe3a01fba71941229e4e68107e41d187ef357e"
+								]
+							]
+						}
+					}
 				}
 			}
 		},
@@ -56,7 +88,20 @@
 				"tables": {
 					"value": {
 						"value": { "n": 1, "list": [1, 2] },
-						"change": { "time": 2, "actor": null }
+						"change": {
+							"time": 2,
+							"actor": null,
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"910e7d94a4aabecf955a6aff4d503c39521533958272136216e3c641b37a86c3"
+								]
+							]
+						}
 					}
 				}
 			}
@@ -66,7 +111,23 @@
 			"commit": "d",
 			"expect": {
 				"tables": {
-					"value": { "value": { "n": 1, "list": [2] }, "change": { "time": 3, "actor": null } }
+					"value": {
+						"value": { "n": 1, "list": [2] },
+						"change": {
+							"time": 3,
+							"actor": null,
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"aebecd675a00bbd77a524b20e92eced2f12745d29ed82e703a8c9ed77e7156c3"
+								]
+							]
+						}
+					}
 				}
 			}
 		}

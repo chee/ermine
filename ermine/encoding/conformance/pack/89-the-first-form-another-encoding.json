@@ -1,0 +1,7 @@
+{
+	"title": "KNOWN PROBLEM, not fixed on purpose (on purpose today per pack.ts; open): the first form {keys, nodes} is a second byte form for one content; one form per content says refused (chee 10-17)",
+	"bytes": "a2646b65797381836576616c7565616100656e6f64657381a26576616c7565626869666368616e6765a26474696d6501656163746f726178",
+	"expect": {
+		"code": "not-a-pack"
+	}
+}

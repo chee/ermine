@@ -1,0 +1,148 @@
+{
+	"title": "a run's return (onRunReturn): told once per run, after its body, before anything is done with the value: before its set's mark (d due, writer c) and its end, an equal result too; an effect's too; none for a run that throws or is pending; an awaited one when it lands, before that end. moments shows them only when asked",
+	"steps": [
+		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
+		{ "op": "write", "values": { "x": 1 }, "expect": { "tick": 1 } },
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": { "do": [{ "log": "body" }, { "read": "x" }] },
+			"to": "c",
+			"set": { "log": ["set", { "given": "value" }] },
+			"expect": {}
+		},
+		{
+			"op": "effect",
+			"name": "e",
+			"scope": "o",
+			"f": { "read": "c" },
+			"act": { "log": ["act", { "given": "value" }] },
+			"expect": {}
+		},
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "moments",
+			"returns": true,
+			"expect": {
+				"moments": [
+					{ "due": "c", "tick": 2 },
+					{ "due": "e", "tick": 3 },
+					{ "starts": "c", "run": 1, "rank": 0 },
+					{ "returns": "c", "run": 1 },
+					{ "ends": "c", "run": 1, "ended": "done", "equal": false },
+					{ "starts": "e", "run": 1, "rank": 0 },
+					{ "returns": "e", "run": 1 },
+					{ "ends": "e", "run": 1, "ended": "done", "equal": false },
+					{ "acts": "e", "run": 1 }
+				]
+			}
+		},
+		{ "op": "log", "expect": { "log": ["body", ["set", 1], ["act", 1]] } },
+		{ "op": "write", "values": { "x": 2 }, "expect": { "tick": 5 } },
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "moments",
+			"returns": true,
+			"expect": {
+				"moments": [
+					{ "due": "c", "tick": 5 },
+					{ "starts": "c", "run": 2, "rank": 0 },
+					{ "returns": "c", "run": 2 },
+					{ "due": "e", "tick": 6, "writer": "c" },
+					{ "ends": "c", "run": 2, "ended": "done", "equal": false },
+					{ "starts": "e", "run": 2, "rank": 1 },
+					{ "returns": "e", "run": 2 },
+					{ "ends": "e", "run": 2, "ended": "done", "equal": false },
+					{ "acts": "e", "run": 2 }
+				]
+			}
+		},
+		{ "op": "log", "expect": { "log": ["body", ["set", 2], ["act", 2]] } },
+		{ "op": "write", "values": { "x": 3 }, "expect": { "tick": 7 } },
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "due": "c", "tick": 7 },
+					{ "starts": "c", "run": 3, "rank": 0 },
+					{ "due": "e", "tick": 8, "writer": "c" },
+					{ "ends": "c", "run": 3, "ended": "done", "equal": false },
+					{ "starts": "e", "run": 3, "rank": 1 },
+					{ "ends": "e", "run": 3, "ended": "done", "equal": false },
+					{ "acts": "e", "run": 3 }
+				]
+			}
+		},
+		{ "op": "write", "values": { "x": 3 }, "expect": { "tick": 9 } },
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "moments",
+			"returns": true,
+			"expect": {
+				"moments": [
+					{ "due": "c", "tick": 9 },
+					{ "starts": "c", "run": 4, "rank": 0 },
+					{ "returns": "c", "run": 4 },
+					{ "ends": "c", "run": 4, "ended": "done", "equal": true }
+				]
+			}
+		},
+		{
+			"op": "compute",
+			"name": "q",
+			"scope": "o",
+			"f": { "throw": "q threw" },
+			"to": "q",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "p",
+			"scope": "o",
+			"f": { "pending": null },
+			"to": "p",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "w",
+			"scope": "o",
+			"f": { "wait": ["v"] },
+			"to": "w",
+			"expect": {}
+		},
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "moments",
+			"returns": true,
+			"expect": {
+				"moments": [
+					{ "due": "q", "tick": 10 },
+					{ "due": "p", "tick": 11 },
+					{ "due": "w", "tick": 12 },
+					{ "starts": "q", "run": 1, "rank": 0 },
+					{ "ends": "q", "run": 1, "ended": "failed", "error": "q threw" },
+					{ "starts": "p", "run": 1, "rank": 0 },
+					{ "ends": "p", "run": 1, "ended": "pending" },
+					{ "starts": "w", "run": 1, "rank": 0 },
+					{ "ends": "w", "run": 1, "ended": "pending" }
+				]
+			}
+		},
+		{ "op": "resolve", "promise": "v", "value": 5, "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "moments",
+			"returns": true,
+			"expect": {
+				"moments": [
+					{ "returns": "w", "run": 1 },
+					{ "ends": "w", "run": 1, "ended": "done", "equal": false }
+				]
+			}
+		},
+		{ "op": "get", "key": "w", "expect": { "value": 5 } }
+	]
+}

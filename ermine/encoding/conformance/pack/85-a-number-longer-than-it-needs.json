@@ -1,0 +1,7 @@
+{
+	"title": "a number in which written 80 00 for 00: not what pack writes",
+	"bytes": "a167636f6c756d6e7358445b9e9c9158eca4a0909c9952dc94989898945292999beac4c4909a979f925aecc4c0905a90585452dcd8945a9698539aca945a9e91999ce1dcc0c0980616286e62640200",
+	"expect": {
+		"code": "not-a-pack"
+	}
+}

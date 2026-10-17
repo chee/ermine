@@ -1,5 +1,5 @@
 {
-	"title": "what a run makes with no name (a plain scope: nothing to claim it by) stays, alive, through the next run; a run that fails keeps it, so its own and the one before stay; the next run that is done lets both go at its end, newest first (each owner's info says which run made it), with its run open; disposed, the latest goes",
+	"title": "what a run makes with no name (a plain scope: nothing to claim it by) stays, alive, through the next run; a run that fails keeps it, so its own and the one before stay; the next run that is done lets both go at its end, newest first (each one's info says which run made it), with its run open; disposed, the latest goes",
 	"steps": [
 		{
 			"op": "root",
@@ -29,21 +29,91 @@
 			"f": {
 				"do": [
 					{
-						"within": [
-							[
-								[
-									"why",
-									"run"
-								]
-							],
+						"if": [
 							{
-								"cleanup": [
-									null,
+								"eq": [
 									{
-										"log": [
-											"s goes",
+										"read": "p"
+									},
+									1
+								]
+							},
+							{
+								"within": [
+									[
+										[
+											"why",
+											"run 1"
+										]
+									],
+									{
+										"cleanup": [
+											null,
 											{
-												"current": null
+												"log": [
+													"s goes",
+													{
+														"current": null
+													}
+												]
+											}
+										]
+									}
+								]
+							},
+							{
+								"if": [
+									{
+										"eq": [
+											{
+												"read": "p"
+											},
+											2
+										]
+									},
+									{
+										"within": [
+											[
+												[
+													"why",
+													"run 2"
+												]
+											],
+											{
+												"cleanup": [
+													null,
+													{
+														"log": [
+															"s goes",
+															{
+																"current": null
+															}
+														]
+													}
+												]
+											}
+										]
+									},
+									{
+										"within": [
+											[
+												[
+													"why",
+													"run 3"
+												]
+											],
+											{
+												"cleanup": [
+													null,
+													{
+														"log": [
+															"s goes",
+															{
+																"current": null
+															}
+														]
+													}
+												]
 											}
 										]
 									}
@@ -121,29 +191,7 @@
 							"pairs": [
 								[
 									"why",
-									"run"
-								],
-								[
-									"owner",
-									[
-										[
-											"run",
-											2
-										],
-										[
-											"mark",
-											4
-										],
-										[
-											"owner",
-											[
-												[
-													"actor",
-													"test"
-												]
-											]
-										]
-									]
+									"run 2"
 								]
 							],
 							"writer": "P"
@@ -156,29 +204,7 @@
 							"pairs": [
 								[
 									"why",
-									"run"
-								],
-								[
-									"owner",
-									[
-										[
-											"run",
-											1
-										],
-										[
-											"mark",
-											2
-										],
-										[
-											"owner",
-											[
-												[
-													"actor",
-													"test"
-												]
-											]
-										]
-									]
+									"run 1"
 								]
 							],
 							"writer": "P"
@@ -203,29 +229,7 @@
 							"pairs": [
 								[
 									"why",
-									"run"
-								],
-								[
-									"owner",
-									[
-										[
-											"run",
-											3
-										],
-										[
-											"mark",
-											5
-										],
-										[
-											"owner",
-											[
-												[
-													"actor",
-													"test"
-												]
-											]
-										]
-									]
+									"run 3"
 								]
 							],
 							"writer": "P"

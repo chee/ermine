@@ -1,0 +1,242 @@
+{
+	"title": "a grant with a field not known, or of the wrong kind, makes the whole rules node answer no; a well-formed list still works",
+	"steps": [
+		{
+			"op": "load",
+			"part": "value",
+			"id": "rules",
+			"value": [
+				{
+					"actr": "bob",
+					"op": "edit"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "edit",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no",
+				"reason": "bad grant 0: actr"
+			},
+			"who": {
+				"actor": "bob"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "edit",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no",
+				"reason": "bad grant 0: actr"
+			},
+			"who": {
+				"actor": "alice"
+			}
+		},
+		{
+			"op": "load",
+			"part": "value",
+			"id": "rules",
+			"value": [
+				{
+					"actor": "bob",
+					"op": "read"
+				},
+				{
+					"actor": "bob",
+					"dny": true
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no",
+				"reason": "bad grant 1: dny"
+			},
+			"who": {
+				"actor": "bob"
+			}
+		},
+		{
+			"op": "load",
+			"part": "value",
+			"id": "rules",
+			"value": [
+				{
+					"op": "edit",
+					"deny": "true"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "edit",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no",
+				"reason": "bad grant 0: deny"
+			},
+			"who": {
+				"actor": "bob"
+			}
+		},
+		{
+			"op": "load",
+			"part": "value",
+			"id": "rules",
+			"value": [
+				{
+					"actor": "bob"
+				},
+				{
+					"actor": "bob",
+					"deny": true,
+					"path": "home"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no",
+				"reason": "bad grant 1: path"
+			},
+			"who": {
+				"actor": "bob"
+			}
+		},
+		{
+			"op": "load",
+			"part": "value",
+			"id": "rules",
+			"value": [
+				{
+					"actor": "bob",
+					"op": "read"
+				},
+				{
+					"actor": "bob",
+					"op": "edit",
+					"deny": true
+				},
+				{
+					"actor": "bob",
+					"op": "edit",
+					"deny": false
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "yes"
+			},
+			"who": {
+				"actor": "bob"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "edit",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no",
+				"reason": "denied"
+			},
+			"who": {
+				"actor": "bob"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no",
+				"reason": "no grant"
+			},
+			"who": {
+				"actor": "alice"
+			}
+		}
+	]
+}

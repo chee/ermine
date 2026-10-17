@@ -1,5 +1,5 @@
 {
-	"title": "a scope's info is made with it: one made in an act says the run acted on, past a later run that did not act (its result equal, what the act made stays)",
+	"title": "a scope made in an act stays past a later run that did not act (its result equal); its info is its own pairs, the effect's the latest run's",
 	"steps": [
 		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
 		{
@@ -20,7 +20,7 @@
 			"expect": {
 				"value": {
 					"scope": "e",
-					"pairs": [["run", 2], ["mark", 2], ["owner", [["actor", "test"]]]]
+					"pairs": [["run", 2], ["mark", 2]]
 				}
 			}
 		},
@@ -31,10 +31,7 @@
 			"expect": {
 				"value": {
 					"scope": "k",
-					"pairs": [
-						["why", "listen"],
-						["owner", [["run", 1], ["mark", 1], ["owner", [["actor", "test"]]]]]
-					]
+					"pairs": [["why", "listen"]]
 				}
 			}
 		}

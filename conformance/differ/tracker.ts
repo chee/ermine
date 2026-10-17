@@ -3,7 +3,20 @@
 // the from and the readers of the to asked after every step.
 // wild: begin in a run, add in a run, odd names (NUL, lone surrogates, "__proto__", ""), requests
 // missing from, to or of
-import { type Generator, picker, type Request } from "./kit.ts"
+// the model, each implementation on its own (invariant, below): tracker_harness.ts's rules read
+// plainly, with lists and indices: every answer predicted exactly (reads and readers in order,
+// duplicates too; {} for a write; a refusal for begin or add in a run, a field missing, an op
+// not known, the error's text free). a track outside a run is no rule: not followed from there
+import {
+	type Answer,
+	differs,
+	firsts,
+	type Generator,
+	picker,
+	type Request,
+	show,
+	type Violation,
+} from "./kit.ts"
 
 const READERS = ["p", "q", "r", "s"]
 const TARGETS = ["a", "b", "c", "d", "e", "p", "q"]
@@ -61,4 +74,81 @@ const generator: Generator = {
 		return [out]
 	},
 }
+generator.invariant = invariant
 export default generator
+
+// a link: from reads to; gen, the run that made or confirmed it
+type Link = { from: string; to: string; gen: number }
+
+function invariant(stream: Request[], answers: (Answer | undefined)[]): Promise<Violation[]> {
+	const out: Violation[] = []
+	const reads = new Map<string, Link[]>()
+	const readers = new Map<string, Link[]>()
+	// each open run: its cursor (the links before it are this run's, so far) and its gen
+	const runs = new Map<string, { at: number; gen: number }>()
+	let gen = 0
+	const of = <T>(m: Map<string, T[]>, k: string) => m.get(k) ?? (m.set(k, []), m.get(k)!)
+	const link = (from: string, to: string, gen: number) => {
+		const l = { from, to, gen }
+		of(readers, to).push(l)
+		return l
+	}
+	const drop = (l: Link) => {
+		const rs = of(readers, l.to)
+		rs.splice(rs.indexOf(l), 1)
+	}
+	const name = (x: unknown) => typeof x === "string"
+	for (let at = 0; at < stream.length; at++) {
+		const r = stream[at], a = answers[at]
+		if (a === undefined) break
+		// what it should answer: {} for a write; undefined: a refusal
+		let want: Answer | undefined = {}
+		const run = name(r.from) ? runs.get(r.from) : undefined
+		if ((r.op === "begin" || r.op === "end") && name(r.from)) {
+			if (r.op === "begin" && run) want = undefined
+			else if (r.op === "begin") runs.set(r.from, { at: 0, gen: ++gen })
+			else if (run) {
+				runs.delete(r.from)
+				for (const l of of(reads, r.from).splice(run.at)) drop(l)
+			}
+		} else if (r.op === "track" && name(r.from) && name(r.to)) {
+			if (!run) break
+			const ls = of(reads, r.from)
+			const last = of(readers, r.to).at(-1)
+			if (ls[run.at - 1]?.to === r.to) { /* under the cursor */ }
+			else if (ls[run.at]?.to === r.to) ls[run.at++].gen = run.gen
+			else if (last?.from !== r.from || last.gen !== run.gen) {
+				ls.splice(run.at++, 0, link(r.from, r.to, run.gen))
+			}
+		} else if (r.op === "add" && name(r.from) && name(r.to)) {
+			const ls = of(reads, r.from)
+			if (run) want = undefined
+			else if (!ls.some((l) => l.to === r.to)) ls.push(link(r.from, r.to, 0))
+		} else if (r.op === "untrack" && name(r.from) && (r.to === undefined || name(r.to))) {
+			const ls = of(reads, r.from)
+			for (let i = ls.length - 1; i >= 0; i--) {
+				if (r.to !== undefined && ls[i].to !== r.to) continue
+				drop(ls[i])
+				ls.splice(i, 1)
+				if (run && i < run.at) run.at--
+			}
+		} else if (r.op === "reads" && name(r.of)) {
+			want = { names: of(reads, r.of).map((l) => l.to) }
+		} else if (r.op === "readers" && name(r.of)) {
+			want = { names: of(readers, r.of).map((l) => l.from) }
+		} else if (["begin", "end", "track", "add", "untrack", "reads", "readers"].includes(r.op)) {
+			// a field missing; one of no string is no rule
+			const fields = [r.from, r.to, r.of].filter((x) => x !== undefined)
+			if (!fields.every(name)) break
+			want = undefined
+		} else want = undefined
+		const refused = typeof a.error === "string"
+		if (want === undefined) {
+			if (!refused) out.push({ kind: "refused", at, why: `${show(r)}: ${show(a)}, not refused` })
+		} else if (refused || differs(a, want)) {
+			const kind = refused ? "refused" : r.op === "reads" || r.op === "readers" ? r.op : "write"
+			out.push({ kind, at, why: `${show(r)}: ${show(a)}, not ${show(want)}` })
+		}
+	}
+	return Promise.resolve(firsts(out))
+}

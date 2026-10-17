@@ -96,7 +96,20 @@
 				"tables": {
 					"value": {
 						"value": { "n": 3, "x": "from a", "y": "from b", "keep": "k", "title": "hi" },
-						"change": { "time": 0, "actor": null }
+						"change": {
+							"time": 0,
+							"actor": null,
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"d115a97ac84855e3e57b9a15b6f8a6a69e15c6ed6a09b325b46321e4bb29a375"
+								]
+							]
+						}
 					}
 				}
 			}
@@ -137,7 +150,17 @@
 						},
 						"change": {
 							"time": 0,
-							"actor": null
+							"actor": null,
+							"metadata": [
+								[
+									"signer",
+									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+								],
+								[
+									"commit",
+									"1b3b8a88333451d321dd78aee71ac6513cd7b82c63f552d003f820b29629c37b"
+								]
+							]
 						}
 					}
 				}

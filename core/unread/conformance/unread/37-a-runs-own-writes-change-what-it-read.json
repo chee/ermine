@@ -1,0 +1,51 @@
+{
+	"title": "a run's own writes, in its body before it returns, change in place what it read (no copy); once it returned, what it kept never changes: a later write copies",
+	"steps": [
+		{ "op": "start", "value": { "a": { "x": 1 } }, "expect": {} },
+		{
+			"op": "write",
+			"patches": [{ "path": ["a", "x"], "value": 2 }],
+			"expect": { "undo": [{ "path": ["a", "x"], "value": 1 }] }
+		},
+		{ "op": "mark", "name": "a", "path": ["a"], "expect": {} },
+		{
+			"op": "keep",
+			"path": ["a"],
+			"scheduler": "compute",
+			"handed": true,
+			"writes": [{ "path": ["a", "x"], "value": 3 }],
+			"by": "run",
+			"hold": "k",
+			"expect": {}
+		},
+		{ "op": "held", "name": "k", "expect": { "value": { "x": 3 } } },
+		{ "op": "same", "name": "a", "path": ["a"], "expect": { "same": true } },
+		{ "op": "value", "expect": { "value": { "a": { "x": 3 } } } },
+		{
+			"op": "write",
+			"patches": [{ "path": ["a", "x"], "value": 4 }],
+			"expect": { "undo": [{ "path": ["a", "x"], "value": 3 }] }
+		},
+		{ "op": "held", "name": "k", "expect": { "value": { "x": 3 } } },
+		{ "op": "same", "name": "a", "path": ["a"], "expect": { "same": false } },
+		{ "op": "mark", "name": "b", "path": ["a"], "expect": {} },
+		{
+			"op": "keep",
+			"path": ["a"],
+			"scheduler": "effect",
+			"writes": [{ "path": ["a", "x"], "value": 5 }],
+			"by": "run",
+			"hold": "j",
+			"expect": {}
+		},
+		{ "op": "held", "name": "j", "expect": { "value": { "x": 5 } } },
+		{ "op": "same", "name": "b", "path": ["a"], "expect": { "same": true } },
+		{
+			"op": "write",
+			"patches": [{ "path": ["a", "x"], "value": 6 }],
+			"expect": { "undo": [{ "path": ["a", "x"], "value": 5 }] }
+		},
+		{ "op": "held", "name": "j", "expect": { "value": { "x": 5 } } },
+		{ "op": "value", "expect": { "value": { "a": { "x": 6 } } } }
+	]
+}

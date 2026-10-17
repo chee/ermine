@@ -1,10 +1,13 @@
-// values in their JSON form (ENCODING.tex), as the C codec (core/op/c/json.c) writes them: JSON for
-// what JSON holds; {"/": {"bytes": b64}} for bytes, a Uint8Array (no uint8 kind),
-// {"/": {"number": "NaN" | "Infinity" | "-Infinity"}},
-// {"/": {kind: [elements]}} for a typed array, 64-bit elements as decimal strings, a float's NaN
-// and infinities as the words; {"/": {"live": kind}} for a stand-in; {"/": {"map": {"/": x}}} for a map whose one key is "/". Base64:
-// the standard alphabet, unpadded. -0 is written -0. For tests only, never encoded (symbols aren't
-// saved): {"/": {"symbol": name}}, Symbol.for(name)
+// values in their JSON form, as the C codec (core/op/c/json.c) writes them: JSON for what JSON
+// holds; {"/": {"bytes": b64}} for bytes, a Uint8Array (no uint8 kind),
+// {"/": {"number": "NaN" | "Infinity" | "-Infinity"}}, {"/": {"bigint": "-123…"}} for a whole
+// number past 2^53 - 1 either way (decimal, no leading zero; never a safe one: plain digits are
+// that), {"/": {kind: [elements]}} for a typed array, 64-bit elements as decimal strings, a float's
+// NaN and infinities as the words; {"/": {"live": kind}} for a stand-in; {"/": {"map": {"/": x}}}
+// for a map whose one key is "/". Base64: the standard alphabet, unpadded. a number's -0 is 0,
+// written and read (whole numbers are integers, cbor.ts); a float typed array's -0 element stays
+// -0. a safe bigint is its number. For tests only, never encoded (symbols aren't saved):
+// {"/": {"symbol": name}}, Symbol.for(name)
 import { Stand } from "@ermine/encoding/cbor"
 import { ordered } from "./json.ts"
 
@@ -23,8 +26,11 @@ const NAMES = new Map(Object.entries(KINDS).map(([k, c]) => [c as unknown, k]))
 
 const b64 = (b: Uint8Array) => btoa(String.fromCharCode(...b)).replace(/=+$/, "")
 const slash = (x: unknown) => ({ "/": x })
-const isWord = (e: unknown): e is { "/": { number: string } } =>
-	typeof e === "object" && e !== null && "/" in e
+
+const SAFE = 2n ** 53n - 1n
+// a number as a value: -0 is 0; a bigint JS holds exactly is its number
+const scalar = (x: unknown) =>
+	typeof x === "bigint" ? (x >= -SAFE && x <= SAFE ? Number(x) : x) : Object.is(x, -0) ? 0 : x
 
 export function toJson(x: unknown): unknown {
 	if (typeof x === "symbol") return slash({ symbol: Symbol.keyFor(x) ?? x.description ?? "" })
@@ -32,18 +38,28 @@ export function toJson(x: unknown): unknown {
 		if (Number.isNaN(x)) return slash({ number: "NaN" })
 		if (x === Infinity) return slash({ number: "Infinity" })
 		if (x === -Infinity) return slash({ number: "-Infinity" })
-		return x
+		if (Number.isInteger(x) && !Number.isSafeInteger(x)) {
+			return slash({ bigint: String(BigInt(x)) })
+		}
+		return x === 0 ? 0 : x
+	}
+	if (typeof x === "bigint") {
+		return x >= -SAFE && x <= SAFE ? Number(x) : slash({ bigint: String(x) })
 	}
 	if (x === null || typeof x !== "object") return x
 	if (x instanceof Uint8Array) return slash({ bytes: b64(x) })
 	if (ArrayBuffer.isView(x)) {
+		// elements as they are: a float's -0 kept, whole floats plain
 		const elements = Array.from(
 			x as unknown as ArrayLike<number | bigint>,
-			(e) => typeof e === "bigint" ? String(e) : toJson(e) as unknown,
+			(e) =>
+				typeof e === "bigint"
+					? String(e)
+					: e !== e || e === Infinity || e === -Infinity
+					? (toJson(e) as { "/": { number: string } })["/"].number
+					: e,
 		)
-		return slash({
-			[NAMES.get(x.constructor)!]: elements.map((e) => isWord(e) ? e["/"].number : e),
-		})
+		return slash({ [NAMES.get(x.constructor)!]: elements })
 	}
 	if (x instanceof Stand) return slash({ live: toJson(x.kind) })
 	if (Array.isArray(x)) return x.map(toJson)
@@ -102,6 +118,8 @@ function typedOf(kind: string, list: unknown): ArrayBufferView {
 		}
 		if (kind === "float32" || kind === "float64") {
 			if (typeof e === "number") return e
+			// a whole one past 2^53, read exactly (json.ts): the double its digits name
+			if (typeof e === "bigint") return Number(e)
 			if (typeof e === "string" && e in WORDS) return WORDS[e]
 			return no("typed")
 		}
@@ -112,6 +130,13 @@ function typedOf(kind: string, list: unknown): ArrayBufferView {
 	return T.from(elements)
 }
 
+// a whole number past 2^53 - 1 either way, in decimal: the one spelling (a safe one is plain)
+function bigintOf(x: unknown): bigint {
+	if (typeof x !== "string" || !/^-?(?:0|[1-9][0-9]*)$/.test(x)) return no("bigint")
+	const n = BigInt(x)
+	return n >= -SAFE && n <= SAFE ? no("bigint") : n
+}
+
 const isSlashMap = (x: unknown): x is { "/": unknown } =>
 	x !== null && typeof x === "object" && !Array.isArray(x) && Object.keys(x).length === 1 &&
 	Object.hasOwn(x, "/")
@@ -119,7 +144,7 @@ const isSlashMap = (x: unknown): x is { "/": unknown } =>
 // a value from its JSON form; a form that stands for none throws FormError
 export function fromJson(x: unknown): unknown {
 	if (typeof x === "string") return x.isWellFormed() ? x : no("a lone surrogate")
-	if (x === null || typeof x !== "object") return x
+	if (x === null || typeof x !== "object") return scalar(x)
 	if (Array.isArray(x)) return x.map(fromJson)
 	if (isSlashMap(x)) {
 		const form = x["/"]
@@ -134,6 +159,7 @@ export function fromJson(x: unknown): unknown {
 		if (tag === "number") {
 			return typeof body === "string" && body in WORDS ? WORDS[body] : no("number")
 		}
+		if (tag === "bigint") return bigintOf(body)
 		return typedOf(tag, body)
 	}
 	const out: Record<string, unknown> = {}
@@ -149,10 +175,14 @@ export function fromJson(x: unknown): unknown {
 	return out
 }
 
-// JSON.stringify, but -0 written -0
+// JSON.stringify, but -0 written -0 (a float typed array's element, in its form) and a bigint in
+// its form
 const MINUS = "\u0000-0\u0000"
 export function line(x: unknown, also: (v: unknown) => unknown = (v) => v): string {
-	return (JSON.stringify(x, (_, v) => Object.is(v, -0) ? MINUS : also(v)) ?? "undefined")
+	return (JSON.stringify(
+		x,
+		(_, v) => Object.is(v, -0) ? MINUS : typeof v === "bigint" ? toJson(v) : also(v),
+	) ?? "undefined")
 		.replaceAll(
 			JSON.stringify(MINUS),
 			"-0",
@@ -165,7 +195,7 @@ const isMap = (x: unknown): x is Record<string, unknown> =>
 	x !== null && typeof x === "object" && !Array.isArray(x)
 export function revive(x: unknown): unknown {
 	if (Array.isArray(x)) return x.map(revive)
-	if (!isMap(x)) return x
+	if (!isMap(x)) return scalar(x)
 	if (isSlashMap(x)) {
 		const form = x["/"]
 		if (isMap(form) && Object.keys(form).length === 1) {

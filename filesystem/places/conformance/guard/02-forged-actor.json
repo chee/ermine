@@ -1,5 +1,5 @@
 {
-	"title": "a write is asked as the nearest actor: a scope under one with no actor of its own is the one's, refused; one naming another is that other",
+	"title": "a write is asked as the first actor up the scopes: a scope under one with no actor of its own is the one's, refused; one naming another is that other",
 	"steps": [
 		{
 			"op": "value",
@@ -160,13 +160,8 @@
 							"chee"
 						],
 						[
-							"owner",
-							[
-								[
-									"actor",
-									"juno"
-								]
-							]
+							"actor",
+							"juno"
 						]
 					],
 					"timely": true,

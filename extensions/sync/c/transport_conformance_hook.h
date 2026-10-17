@@ -20,29 +20,10 @@ bool tp_conformance_hook_put_fragment(tp_device *t, const char *doc, const uint8
 // how many puts Subduction has not answered
 size_t tp_conformance_hook_putting(const tp_device *t);
 
-// what the transport holds back or refused before the histories. waiting: a loose commit (by its
-// head), or a fragment's member (by its seal's stored id), and the names of its parents not here.
-// refused, by id: a commit (code), a fragment refused whole (fragment, code), or one stuck on a parent
-// refused or stuck here (stuck, the names of those parents). Each list sorted by id. The ephemeral
-// layer: no waiting, the refused ephemeral commits by name
-typedef struct {
-	uint8_t commit[32];
-	uint8_t (*names)[32];
-	size_t count;
-} tp_conformance_hook_waiting;
-typedef struct {
-	uint8_t id[32];
-	bool fragment, stuck;
-	tp_code code;
-	uint8_t (*names)[32];
-	size_t count;
-} tp_conformance_hook_refused;
-typedef struct {
-	tp_conformance_hook_waiting *waiting;
-	size_t waiting_count;
-	tp_conformance_hook_refused *refused;
-	size_t refused_count;
-} tp_conformance_hook_taking;
+// what the transport holds back or refused before the histories: tp_taking_of's (transport.h)
+typedef tp_waiting_row tp_conformance_hook_waiting;
+typedef tp_refused_row tp_conformance_hook_refused;
+typedef tp_taking tp_conformance_hook_taking;
 tp_conformance_hook_taking tp_conformance_hook_taking_of(tp_device *t, const char *doc, tp_layer layer);
 void tp_conformance_hook_taking_free(tp_conformance_hook_taking *taking);
 
