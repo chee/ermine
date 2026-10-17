@@ -1,12 +1,12 @@
 import { assertEquals, assertThrows } from "@std/assert"
-import { type Commit, CommitError, decode, encode, name } from "./commit.ts"
+import { type Commit, CommitError, decode, encode, joinKey, name, splitKey } from "./commit.ts"
 
 const bytes = (n: number, b = 1) => new Uint8Array(n).fill(b)
 const commit = (more: Partial<Commit> = {}): Commit => ({
 	table: "children",
 	actor: "chee",
 	time: 1_760_000_000,
-	signer: bytes(32),
+	signer: joinKey(0xed, bytes(32)),
 	nonce: 7,
 	parents: [bytes(32, 2)],
 	lamport: 2,
@@ -39,6 +39,35 @@ Deno.test("commit: round trip, optional fields left out, the name its bytes' has
 	)
 })
 
+Deno.test("commit: a signer is a multikey: any well formed one is carried, its code and key told apart", () => {
+	// ed25519-pub (0xed 0x01), secp256k1-pub (0xe7 0x01), p256-pub (a two byte code), one byte, the longest
+	for (
+		const [code, size] of [[0xed, 32], [0xe7, 33], [0x1200, 33], [0x12, 8], [0x3fffffff, 1019]]
+	) {
+		const signer = joinKey(code, bytes(size, 9))
+		assertEquals(splitKey(signer), { code, key: bytes(size, 9) })
+		const c = commit({ signer })
+		assertEquals(decode(encode(c)), c)
+	}
+	assertEquals(joinKey(0xed, bytes(32)).slice(0, 2), Uint8Array.of(0xed, 0x01))
+	// none: no key, an unfinished code, a code not in its shortest form, too long a code
+	for (
+		const b of [[], [0xed], [0xed, 0x01], [0x80, 0x00, 1], [
+			0x80,
+			0x80,
+			0x80,
+			0x80,
+			0x80,
+			0x80,
+			0x80,
+			1,
+			1,
+		]]
+	) {
+		assertEquals(splitKey(Uint8Array.from(b)), undefined)
+	}
+})
+
 Deno.test("commit: a move, a range, several parents with base", () => {
 	const p = [bytes(32, 2), bytes(32, 3)]
 	const c = commit({
@@ -65,7 +94,12 @@ Deno.test("commit: refused, naming the first field that says no", () => {
 	}
 	no(commit({ table: "" }), "table")
 	no(commit({ time: -1 }), "time")
-	no(commit({ signer: bytes(31) }), "signer")
+	// a signer is a multikey: a shortest-form varint code, then a key
+	no(commit({ signer: bytes(0) }), "signer")
+	no(commit({ signer: Uint8Array.of(0xed, 0x01) }), "signer")
+	no(commit({ signer: Uint8Array.of(0xed) }), "signer")
+	no(commit({ signer: Uint8Array.of(0x80, 0x00, 0x01) }), "signer")
+	no(commit({ signer: new Uint8Array(1025).fill(1) }), "signer")
 	no(commit({ parents: [bytes(32, 3), bytes(32, 2)] }), "parents")
 	// several parents need a base, one of them
 	no(commit({ parents: [bytes(32, 2), bytes(32, 3)] }), "base")

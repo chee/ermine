@@ -37,6 +37,16 @@
 // old: its next run's does), as with any act. an early act that throws: told (onEffect), the round
 // goes on, as any act.
 //
+// cleanups, like Solid: before a run, what is under the computer goes (a compute's all, an
+// effect's what was made since its last act), and its own cleanups are set aside; they run once
+// the run is done (its result set, before its end is told), newest first, with no catch: the
+// first that throws ends the rest. a computer that goes takes those set aside with it.
+//
+// thrown out ("finish, then rethrow"): what a listener throws, or a cleanup run after a run, is
+// held while what was going on finishes (every listener told; the run, act, mark, read or
+// teardown all done), then it is thrown: the first. a pulse is left there; what is still due, or
+// to act, waits for the next.
+//
 // it holds no values but each computation's last result:
 // a compute's goes to its set, whose writer says mark(keys, run), and what tracked those keys is
 // due. keys are opaque, compared by identity.
@@ -81,13 +91,17 @@ export type Run = { readonly computer: Computer; readonly n: number }
 
 export type Pair = readonly [key: string, value: unknown]
 
-// a scope: the scopes and computers under it, and its teardowns, in the order made; its info: the
-// pairs given, then ["owner", its owner's info] (never change it). a computer's: its latest run's
+// a scope: the scopes and computers under it, in the order made (a list: newest, the newest under
+// it; older and newer, the one made before and after it under the same scope), and its teardowns;
+// its info: the pairs given, then ["owner", its owner's info] (never change it). a computer's: its
+// latest run's
 export type Scope = {
 	readonly n: number
 	readonly parent: Scope | undefined
 	info: readonly Pair[]
-	children: Scope[]
+	newest: Scope | undefined
+	older: Scope | undefined
+	newer: Scope | undefined
 	teardowns: (() => unknown)[]
 	state: "alive" | "disposing" | "gone"
 }
@@ -184,7 +198,10 @@ type Ran = {
 	loop?: Computer[]
 	cut?: boolean
 }
-type Act = { r: Ran; value: unknown }
+// an act, at its place in its queue (at)
+type Act = { r: Ran; value: unknown; at: number }
+// acts in the order queued, from head; one taken out leaves a hole (live: how many are not holes)
+type Queue = { items: (Act | undefined)[]; head: number; live: number }
 type Out = { value: unknown } | { error: unknown }
 
 // listeners, each told in the order added; adding gives back the remove
@@ -251,8 +268,8 @@ export function createScheduler(): Scheduler {
 	const causes = createCauses<Computer>()
 	// the effects to act, in the order their runs ended, the early ones apart; settled promises,
 	// for the next pulse
-	const acts: Act[] = []
-	const earlies: Act[] = []
+	const acts: Queue = { items: [], head: 0, live: 0 }
+	const earlies: Queue = { items: [], head: 0, live: 0 }
 	const landed: { r: Ran; out: Out }[] = []
 
 	let made = 0
@@ -308,12 +325,44 @@ export function createScheduler(): Scheduler {
 			n: ++made,
 			parent: up,
 			info: pairs,
-			children: [],
+			newest: undefined,
+			older: undefined,
+			newer: undefined,
 			teardowns: [],
 			state: "alive",
 		}
-		up?.children.push(o)
+		if (up) link(up, o)
 		return o
+	}
+
+	// o under up, the newest
+	function link(up: Scope, o: Scope) {
+		const l = up.newest
+		o.older = l
+		if (l) l.newer = o
+		up.newest = o
+	}
+	// o out from under its scope, if it is there
+	function unlink(o: Scope) {
+		const p = o.parent
+		if (o.newer) o.newer.older = o.older
+		else if (p?.newest === o) p.newest = o.older
+		if (o.older) o.older.newer = o.newer
+		o.older = o.newer = undefined
+	}
+	// what is under o made after the after-th, newest first, taken out from under it together
+	function cut(o: Scope, after: number): Scope[] {
+		let x = o.newest
+		if (x === undefined || x.n <= after) return none
+		const kids: Scope[] = []
+		while (x !== undefined && x.n > after) {
+			kids.push(x)
+			x = x.older
+		}
+		o.newest = x
+		if (x) x.newer = undefined
+		kids[kids.length - 1].older = undefined
+		return kids
 	}
 
 	// a new scope under up, else under the one open; gone: disposed
@@ -356,14 +405,11 @@ export function createScheduler(): Scheduler {
 		from = 0,
 	): { error: unknown } | undefined {
 		let failed: { error: unknown } | undefined
-		let k = o.children.length
-		while (k > 0 && o.children[k - 1].n > after) k--
-		const kids = o.children.slice(k)
-		o.children.length = k
+		const kids = cut(o, after)
 		enter(opens(o), () => {
-			for (let i = kids.length - 1; i >= 0; i--) {
+			for (const kid of kids) {
 				try {
-					teardown(kids[i])
+					teardown(kid)
 				} catch (e) {
 					failed ??= { error: e }
 				}
@@ -384,15 +430,12 @@ export function createScheduler(): Scheduler {
 	// before a run ("like Solid"): what is under c goes, newest first (what one threw held), and
 	// its cleanups are set aside, to run once the run is done (lay). after, from: as clean's
 	function shed(c: Computer, after = 0, from = 0) {
-		let k = c.children.length
-		while (k > 0 && c.children[k - 1].n > after) k--
-		if (k < c.children.length) {
-			const kids = c.children.slice(k)
-			c.children.length = k
+		const kids = cut(c, after)
+		if (kids.length) {
 			enter(opens(c), () => {
-				for (let i = kids.length - 1; i >= 0; i--) {
+				for (const kid of kids) {
 					try {
-						teardown(kids[i])
+						teardown(kid)
 					} catch (e) {
 						hold(e)
 					}
@@ -445,11 +488,7 @@ export function createScheduler(): Scheduler {
 		o.state = "gone"
 		// gone: as the run of a change it names none
 		if ("kind" in o) (o as Computer).ran = undefined
-		const p = o.parent
-		if (p) {
-			const i = p.children.lastIndexOf(o)
-			if (i >= 0) p.children.splice(i, 1)
-		}
+		unlink(o)
 		thrown ??= failed
 		rethrow(outer)
 	}
@@ -518,7 +557,9 @@ export function createScheduler(): Scheduler {
 			n: ++made,
 			parent: o,
 			info: nothing,
-			children: [],
+			newest: undefined,
+			older: undefined,
+			newer: undefined,
 			teardowns: [],
 			state: "alive",
 			kind,
@@ -547,7 +588,7 @@ export function createScheduler(): Scheduler {
 		} as unknown as Computer & { node: Node<unknown> }
 		c.acted = [c.n, 0]
 		c.node = tracker.node(c)
-		o.children.push(c)
+		link(o, c)
 		live.add(c)
 		// the key its results land at, given: its writer from the start, not learned
 		if (key !== undefined) write(c, key)
@@ -832,7 +873,9 @@ export function createScheduler(): Scheduler {
 		if (c.kind === "effect") {
 			if (!equal) {
 				const q = c.early ? earlies : acts
-				q.push(c.acting = { r, value: v })
+				const a: Act = c.acting = { r, value: v, at: q.items.length }
+				q.items.push(a)
+				q.live++
 				return finish(r, "done", { equal, kept: v })
 			}
 			return finish(r, "done", { equal })
@@ -931,37 +974,49 @@ export function createScheduler(): Scheduler {
 
 	// acts
 
+	// a out of its queue: a hole where it was
+	function unqueue(q: Queue, a: Act) {
+		q.items[a.at] = undefined
+		q.live--
+	}
+
 	function unact(c: Computer) {
-		const q = c.early ? earlies : acts
-		q.splice(q.indexOf(c.acting!), 1)
+		unqueue(c.early ? earlies : acts, c.acting!)
 		c.acting = undefined
 	}
 
 	// the next act of q, owners first: the nearest computer above it with an act in q acts before
 	// it (and its owner before that); what that tears down does not act. a bracket: what a
 	// listener threw comes out after
-	function take(q: Act[]) {
+	function take(q: Queue) {
 		const outer = thrown
 		thrown = undefined
 		try {
-			const a = q.shift()!
+			while (q.items[q.head] === undefined) q.head++
+			const a = q.items[q.head]!
+			unqueue(q, a)
 			a.r.c.acting = undefined
-			if (q.length) owners(a.r.c, q)
+			if (q.live) owners(a.r.c, q)
 			act(a)
 		} finally {
 			rethrow(outer)
 		}
 	}
-	function owners(c: Computer, q: Act[]) {
+	function owners(c: Computer, q: Queue) {
 		for (let o = c.parent; o !== undefined; o = o.parent) {
 			const x = "kind" in o ? (o as Computer).acting : undefined
 			if (x === undefined || (o as Computer).early !== c.early) continue
-			q.splice(q.indexOf(x), 1)
+			unqueue(q, x)
 			x.r.c.acting = undefined
 			owners(x.r.c, q)
 			act(x)
 			return
 		}
+	}
+	// a queue all taken: made new
+	function clear(q: Queue) {
+		q.items.length = 0
+		q.head = 0
 	}
 
 	// what is under the effect goes, then it acts, with the value it acted on last. due again (an
@@ -1017,13 +1072,15 @@ export function createScheduler(): Scheduler {
 					const { r, out } = landed.shift()!
 					land(r, out)
 				}
-				if (!order.size() && !earlies.length && !acts.length) break
+				if (!order.size() && !earlies.live && !acts.live) break
 				while (order.size()) {
 					const { p, rank } = order.next()
 					first(p, rank)
 				}
-				while (earlies.length) take(earlies)
-				while (acts.length) take(acts)
+				while (earlies.live) take(earlies)
+				clear(earlies)
+				while (acts.live) take(acts)
+				clear(acts)
 			}
 		} catch (e) {
 			failed = { error: e }

@@ -9,6 +9,7 @@
 // change the header and patches given; the undo undoes.
 // wild: patches of no patch's shape, odd numbers, updates with no patches or patches not a list,
 // values that are no JSON form
+// deno-lint-ignore-file no-explicit-any
 import apply, { ApplyError, type Patch } from "@ermine/op/apply"
 import { patch, start } from "../../core/fuzz/gen.ts"
 import { wildPatches } from "./apply.ts"

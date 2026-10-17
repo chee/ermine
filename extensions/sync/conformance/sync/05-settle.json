@@ -5,13 +5,13 @@
 			"op": "host",
 			"name": "a",
 			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
-			"expect": { "key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }
+			"expect": { "key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }
 		},
 		{
 			"op": "host",
 			"name": "b",
 			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
-			"expect": { "key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394" }
+			"expect": { "key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394" }
 		},
 		{
 			"op": "mint",
@@ -64,8 +64,8 @@
 		{ "op": "heads", "host": "b", "id": "x", "expect": { "heads": ["m"] } },
 		{ "op": "conflicts", "host": "a", "id": "x", "expect": { "conflicts": [] } },
 		{ "op": "conflicts", "host": "b", "id": "x", "expect": { "conflicts": [] } },
-		{ "op": "read", "host": "a", "id": "x", "expect": { "value": { "n": 1 } } },
-		{ "op": "read", "host": "b", "id": "x", "expect": { "value": { "n": 1 } } },
+		{ "op": "read", "host": "a", "id": "x", "expect": { "value": { "n": 2 } } },
+		{ "op": "read", "host": "b", "id": "x", "expect": { "value": { "n": 2 } } },
 		{
 			"op": "change",
 			"host": "a",
@@ -88,10 +88,10 @@
 					"table": "value",
 					"actor": "b",
 					"time": 1760000100,
-					"signer": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+					"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
 					"nonce": 4207839827,
-					"parents": ["wb", "wa"],
-					"base": "wa",
+					"parents": ["wa", "wb"],
+					"base": "wb",
 					"lamport": 3,
 					"patches": []
 				}

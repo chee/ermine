@@ -36,7 +36,10 @@
 //   ref          a place not a whole number below the commit's own
 //   insert       a string with no insert before it to go on from
 //   commit       what the columns say for one is not a commit (commit.ts)
-// then, in order, each commit: its parents, its patches, its base, the commit
+//   size         the sealed commits come to more than MOST bytes for this run's
+// then, in order, each commit: its parents, its patches, its base, the commit, the size so far.
+// each gives them one at a time, as they are made, so a reader can check each (its signature)
+// before the next is made, and stop
 import * as cbor from "@ermine/encoding/cbor"
 import { type Commit, decode, encode, name as nameOf, type Patch } from "@ermine/encoding/commit"
 import { hex } from "./hex.ts"
@@ -53,6 +56,7 @@ export type Code =
 	| "ref"
 	| "insert"
 	| "commit"
+	| "size"
 
 export class RunError extends Error {
 	constructor(readonly code: Code, readonly column?: string) {
@@ -248,6 +252,15 @@ export function pack(sealed: readonly Uint8Array[]): Uint8Array {
 
 // the run's sealed commits back, each its exact bytes. RunError: not a run
 export function unpack(bytes: Uint8Array): Uint8Array[] {
+	return [...each(bytes)]
+}
+
+// how many bytes of sealed commits a run of this many bytes may give: a run saves about four
+// fifths of typing, and a value the same on every commit is written once, so 64 times, and a MiB
+export const most = (length: number) => 64 * length + 2 ** 20
+
+// the run's sealed commits, one at a time, in order. RunError: not a run, as far as it is read
+export function* each(bytes: Uint8Array): Generator<Uint8Array, void, undefined> {
 	let x: unknown
 	try {
 		x = cbor.decode(bytes)
@@ -284,7 +297,9 @@ export function unpack(bytes: Uint8Array): Uint8Array[] {
 		lamport = undeltas(o.lamport, count, "lamport")
 	if (!Array.isArray(o.parents) || o.parents.length !== count) throw new RunError("parents")
 	if (!Array.isArray(o.patches) || o.patches.length !== count) throw new RunError("patches")
-	const names: Uint8Array[] = [], commits: Commit[] = [], out: Uint8Array[] = []
+	const names: Uint8Array[] = [], commits: Commit[] = []
+	const room = most(bytes.length)
+	let size = 0
 	const deref = (r: unknown, i: number): Uint8Array => {
 		if (r instanceof Uint8Array) return r
 		if (!Number.isSafeInteger(r) || (r as number) < 0 || (r as number) >= i) {
@@ -333,7 +348,9 @@ export function unpack(bytes: Uint8Array): Uint8Array[] {
 		const signature = new Uint8Array(header.length + tail.length)
 		signature.set(header)
 		signature.set(tail, header.length)
-		out.push(cbor.encode({ commit: b, signature }))
+		const sealed = cbor.encode({ commit: b, signature })
+		size += sealed.length
+		if (size > room) throw new RunError("size")
+		yield sealed
 	}
-	return out
 }

@@ -125,10 +125,10 @@ rp_code sy_get(sy_sync *s, const char *id, const uint8_t name[32], rp_tables *ou
 // such rule, nothing changed
 bool sy_use(sy_sync *s, const char *merge);
 
-// each ephemeral commit standing at the id (this device's too): its signer's key and its name, by key,
+// each ephemeral commit standing at the id (this device's too): its signer's key (a multikey) and its name, by key,
 // then name; *out malloc'd (free it)
 typedef struct {
-	uint8_t key[32];
+	uint8_t key[SL_KEY];
 	uint8_t tip[32];
 } sy_standing_row;
 size_t sy_standing(sy_sync *s, const char *id, sy_standing_row **out);

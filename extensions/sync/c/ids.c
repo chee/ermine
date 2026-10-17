@@ -1,15 +1,13 @@
 // Maps keyed by 32-byte ids (ids.h)
 #include "ids.h"
+#include "keyed.h"
 
 #include <stdlib.h>
 #include <string.h>
 
+// keyed: what others send chooses ids, and so their first bytes
 static size_t hash_of(const uint8_t key[32]) {
-	uint64_t a, b;
-	memcpy(&a, key, 8);
-	memcpy(&b, key + 8, 8);
-	uint64_t h = a ^ (b * 0x9e3779b97f4a7c15ull);
-	return (size_t)(h ^ h >> 31);
+	return ky_hash(key);
 }
 
 static size_t find(const im_map *m, const uint8_t key[32], bool *found) {

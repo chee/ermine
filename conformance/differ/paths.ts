@@ -13,7 +13,6 @@
 import apply from "@ermine/op/apply"
 import type { Key, Patch } from "@ermine/op/apply"
 import {
-	type Answer,
 	differs,
 	firsts,
 	type Generator,

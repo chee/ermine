@@ -482,7 +482,7 @@ static void host(const op_value *r, FILE *out) {
 	hosts[host_count++] = h;
 	settle(h);
 	fputs("{\"key\":", out);
-	cf_put_hex(out, tp_key(sy_device(h->sync)), 32);
+	cf_put_hex(out, tp_key(sy_device(h->sync)), SL_KEY);
 	fputc('}', out);
 }
 
@@ -784,7 +784,7 @@ static void standing(const op_value *r, FILE *out) {
 	for (size_t i = 0; i < n; i++) {
 		if (i) fputc(',', out);
 		fputc('[', out);
-		cf_put_hex(out, rows[i].key, 32);
+		cf_put_hex(out, rows[i].key, SL_KEY);
 		fputc(',', out);
 		put_label(out, rows[i].tip);
 		fputc(']', out);

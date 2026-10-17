@@ -17,7 +17,7 @@ static void expect(int ok, const char *what) {
 }
 
 typedef struct {
-	char from[4][65];
+	char from[4][2 * SL_KEY + 1];
 	uint8_t *bytes[4];
 	size_t lengths[4];
 	size_t count;
@@ -26,7 +26,7 @@ typedef struct {
 static void heard(void *context, const char *from, const unsigned char *bytes, size_t n) {
 	heard_t *h = context;
 	if (h->count < 4) {
-		snprintf(h->from[h->count], 65, "%s", from);
+		snprintf(h->from[h->count], sizeof h->from[0], "%s", from);
 		h->bytes[h->count] = malloc(n + 1);
 		if (h->bytes[h->count] == NULL) abort();
 		memcpy(h->bytes[h->count], bytes, n);
@@ -66,8 +66,8 @@ int main(void) {
 	expect(wr_up(a, b), "the devices connect");
 	sc_channel *ca = sc_create(a), *cb = sc_create(b);
 	chn_channel *x = sc_channel_of(ca), *y = sc_channel_of(cb);
-	char key[65];
-	for (int i = 0; i < 32; i++) snprintf(key + 2 * i, 3, "%02x", tp_key(a)[i]);
+	char key[2 * SL_KEY + 1];
+	for (int i = 0; i < SL_KEY; i++) snprintf(key + 2 * i, 3, "%02x", tp_key(a)[i]);
 	expect(strcmp(x->name, key) == 0, "a channel's name is its device's key as hex");
 
 	// bytes on a topic reach the other device's listeners, from the sender's key; another topic gets

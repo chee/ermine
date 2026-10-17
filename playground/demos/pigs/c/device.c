@@ -48,7 +48,7 @@ typedef struct {
 
 struct dv {
 	uint8_t seed[32];
-	char key[65];
+	char key[DV_KEY];
 	tb_table *table;
 	sy_sync *sync;
 	op_value *actor;
@@ -165,7 +165,7 @@ dv *dv_new(const char *server, const char *service, bool zeros, const char *acto
 		return NULL;
 	}
 	const uint8_t *key = tp_key(sy_device(d->sync));
-	for (int i = 0; i < 32; i++) snprintf(d->key + 2 * i, 3, "%02x", key[i]);
+	for (int i = 0; i < SL_KEY; i++) snprintf(d->key + 2 * i, 3, "%02x", key[i]);
 	d->actor = op_str(actor);
 	if (server) {
 		d->server = copyString(server);

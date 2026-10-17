@@ -265,12 +265,34 @@ s.onTrackingStart((key) => {
 	started.push(key)
 	fire("started", () => [key as string])
 })
-// the tick of the latest mark (each mark and each new computer takes the next)
+// the tick of the latest mark (each mark and each new computer takes the next); the newest
+// computer, by its mark (no keys, itself due)
 let tick = 0
-s.onMark((keys, _run, _due, t) => {
+let fresh: Computer | undefined
+s.onMark((keys, _run, due, t) => {
 	tick = t
+	if (keys.length === 0 && due.length === 1) fresh = due[0]
 	fire("mark", () => keys as string[])
 })
+
+// a computer made by f and named n, though what it did at once threw out (its mark's listener, an
+// early run or act): named all the same, then the error is the request's. given: told it
+function making(n: string, f: () => Computer, given: (c: Computer) => void): Computer {
+	fresh = undefined
+	let c: Computer
+	try {
+		c = f()
+	} catch (e) {
+		if (fresh !== undefined && !names.has(fresh)) {
+			given(fresh)
+			name(fresh, n)
+		}
+		throw e
+	}
+	given(c)
+	name(c, n)
+	return c
+}
 
 // a name taken (by one not torn down: else taken over) is refused before anything is made
 function vacant(n: string) {
@@ -416,14 +438,14 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 			vacant(a[0] as string)
 			let made: Computer | undefined
 			const self = () => made ?? s.getCurrentScope()!
-			made = s.createEffect(
-				(previous) =>
-					evaluate(f, { run: s.getRun(), self: self(), previous: previous as Json }),
-				(value, previous) => void evaluate(act, { self: self(), value, previous }),
-				undefined,
-				a[3] === true ? { early: true } : undefined,
-			)
-			name(made, a[0] as string)
+			making(a[0] as string, () =>
+				s.createEffect(
+					(previous) =>
+						evaluate(f, { run: s.getRun(), self: self(), previous: previous as Json }),
+					(value, previous) => void evaluate(act, { self: self(), value, previous }),
+					undefined,
+					a[3] === true ? { early: true } : undefined,
+				), (c) => made = c)
 			return null
 		}
 		case "quote":
@@ -460,20 +482,21 @@ async function run(r: Request): Promise<Json> {
 		case "compute": {
 			vacant(r.name as string)
 			const to = r.to as string | undefined
-			const c: Computer = s.runWithScope(scope(r.scope), () =>
-				s.createComputer(
-					program(r, () => c),
-					(v) => {
-						if (to !== undefined) {
-							keep(to, v)
-							s.mark([to], c)
-						}
-						if (r.set !== undefined) evaluate(r.set, { self: c, value: v })
-					},
-					r.equal === "json" ? json : undefined,
-					r.declared === true ? to : undefined,
-				))
-			name(c, r.name as string)
+			let c: Computer
+			making(r.name as string, () =>
+				s.runWithScope(scope(r.scope), () =>
+					s.createComputer(
+						program(r, () => c),
+						(v) => {
+							if (to !== undefined) {
+								keep(to, v)
+								s.mark([to], c)
+							}
+							if (r.set !== undefined) evaluate(r.set, { self: c, value: v })
+						},
+						r.equal === "json" ? json : undefined,
+						r.declared === true ? to : undefined,
+					)), (x) => c = x)
 			return {}
 		}
 		case "effect": {
@@ -481,14 +504,14 @@ async function run(r: Request): Promise<Json> {
 			// an early one runs and acts before it is given back: itself, the scope open then
 			let made: Computer | undefined
 			const self = () => made ?? s.getCurrentScope()!
-			const c: Computer = made = s.runWithScope(scope(r.scope), () =>
-				s.createEffect(
-					program(r, self),
-					(value, previous) => void evaluate(r.act, { self: self(), value, previous }),
-					r.equal === "json" ? json : undefined,
-					r.early === true ? { early: true } : undefined,
-				))
-			name(c, r.name as string)
+			making(r.name as string, () =>
+				s.runWithScope(scope(r.scope), () =>
+					s.createEffect(
+						program(r, self),
+						(value, previous) => void evaluate(r.act, { self: self(), value, previous }),
+						r.equal === "json" ? json : undefined,
+						r.early === true ? { early: true } : undefined,
+					)), (c) => made = c)
 			return {}
 		}
 		case "cleanup": {

@@ -3,7 +3,8 @@
 // them. State lasts for the process: one history, the commits made by label, the snapshots kept. The
 // history's check is the integration's: a commit is taken in when its patches apply to its table at
 // its base (replay), kept snapshots used; a merge commit's, to its rule's merge of its parents. The
-// rules known: "eg-walker" (egwalker.h); a merge by any other is refused "merge". eg-walker's merges
+// rules known: "eg-walker" (egwalker.h); a merge by any other is refused "merge"; a commit held (hold)
+// it cannot judge yet, and it waits on the check. eg-walker's merges
 // are made twice: by the pure rule, and by a keeping walker kept for the process, which must give the
 // same, byte for byte
 #include "commits.h"
@@ -28,6 +29,9 @@ typedef struct {
 } snap;
 static snap *kept;
 static size_t kept_length;
+// the names the check cannot judge yet (hold)
+static uint8_t (*held)[32];
+static size_t held_length;
 static const rp_merge rules[] = {{&eg_rule, NULL}};
 static const rp_merges merges = {rules, 1};
 static void *walked;
@@ -121,6 +125,8 @@ static void merged(const uint8_t (*names)[32], size_t n, const char *rule, rp_ta
 // whether the commit's patches apply to its table at its base, or its rule's merge of its parents
 static hy_refusal check(void *context, const hy_kept *k, const cm_commit *commit) {
 	(void)context;
+	for (size_t i = 0; i < held_length; i++)
+		if (memcmp(held[i], k->name, 32) == 0) return HY_WAIT;
 	if (commit->merge != NULL && rp_merge_find(&merges, commit->merge) == NULL) return HY_MERGE;
 	rp_tables tables;
 	if (commit->merge != NULL) merged(commit->parents, commit->parents_length, commit->merge, &tables);
@@ -143,6 +149,7 @@ void hh_finish(void) {
 	eg_rule.free(walked);
 	hy_free(history);
 	cs_destroy(commits);
+	free(held);
 }
 
 static void put_failure(FILE *out, const cs_failure *why) {
@@ -250,6 +257,29 @@ static bool named(const op_value *r, FILE *out, uint8_t name[32]) {
 	if (cs_resolve(commits, op_get(r, "commit"), name, &error)) return true;
 	hh_error(out, "%s", error);
 	return false;
+}
+
+// { op: "hold", commits }: the check answers HY_WAIT for these, until the next hold
+static void hold(const op_value *r, FILE *out) {
+	const op_value *list = op_get(r, "commits");
+	if (list == NULL || list->type != OP_LIST) {
+		hh_error(out, "hold: commits a list");
+		return;
+	}
+	uint8_t(*names)[32] = malloc((list->count + 1) * 32);
+	if (names == NULL) abort();
+	for (size_t i = 0; i < list->count; i++) {
+		const char *error = NULL;
+		if (!cs_resolve(commits, list->items[i], names[i], &error)) {
+			free(names);
+			hh_error(out, "%s", error);
+			return;
+		}
+	}
+	free(held);
+	held = names;
+	held_length = list->count;
+	fputs("{}", out);
 }
 
 // a request's tables, {table: {value, change}}, as tables: the line's memory is what they refer to
@@ -466,6 +496,8 @@ void hh_answer(const op_value *r, FILE *out) {
 	if (op == NULL) hh_unknown(out, r);
 	else if (strcmp(op, "make") == 0) make(r, out);
 	else if (strcmp(op, "add") == 0) add(r, out);
+	else if (strcmp(op, "hold") == 0) hold(r, out);
+	else if (strcmp(op, "again") == 0) hy_again(history), fputs("{}", out);
 	else if (strcmp(op, "heads") == 0) {
 		const hy_kept **list;
 		size_t n = hy_heads(history, &list);

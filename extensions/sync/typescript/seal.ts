@@ -7,6 +7,7 @@
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import * as cbor from "@ermine/encoding/cbor"
 import { type Commit, decode, joinKey, name as nameOf, splitKey } from "@ermine/encoding/commit"
+import { strict } from "./ed25519.ts"
 
 // key: the device's multikey; header: the varsig header its signatures begin with; sign: the raw
 // signature of the message, without the header
@@ -106,21 +107,42 @@ export async function createSigner(seed?: Uint8Array): Promise<Signer> {
 	}
 }
 
-// the raw signature good for this raw key and message
+// the keys imported, and the signatures found good, the oldest let go of past CACHED: a seal is
+// checked again as it is stored, taken in, and handed on, and one signer signs most of what comes
+const CACHED = 4096
+const keys = new Map<string, Promise<CryptoKey>>()
+const checked = new Set<string>()
+const cache = <T>(m: Map<string, T> | Set<string>, k: string) => {
+	if (m.size >= CACHED) m.delete(m.keys().next().value!)
+	return k
+}
+
+// the raw signature good for this raw key and message, checked strictly (ed25519.ts)
 export async function good(
 	signature: Uint8Array,
 	key: Uint8Array,
 	m: Uint8Array,
 ): Promise<boolean> {
+	if (!strict(signature, key)) return false
+	const seen = hex(blake3(Uint8Array.from([...key, ...signature, ...m])))
+	if (checked.has(seen)) return true
 	try {
-		const k = await crypto.subtle.importKey("raw", key.slice(), { name: "Ed25519" }, false, [
-			"verify",
-		])
-		return await crypto.subtle.verify("Ed25519", k, signature.slice(), m.slice())
+		const kh = hex(key)
+		let k = keys.get(kh)
+		if (k === undefined) {
+			k = crypto.subtle.importKey("raw", key.slice(), { name: "Ed25519" }, false, ["verify"])
+			keys.set(cache(keys, kh), k)
+			k.catch(() => keys.delete(kh))
+		}
+		const ok = await crypto.subtle.verify("Ed25519", await k, signature.slice(), m.slice())
+		if (ok) checked.add(cache(checked, seen))
+		return ok
 	} catch {
 		return false
 	}
 }
+
+const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 
 // the built in: Ed25519 only
 export const verifiers: readonly Verifier[] = [
@@ -177,7 +199,9 @@ export async function unseal(
 	const v = [...verifiers, ...more].find((v) => startsWith(signature, v.header))
 	if (v === undefined) throw new SealError("signature", "no verifier for this signature header")
 	const key = splitKey(commit.signer)!
-	if (key.code !== v.code) throw new SealError("signature", "the header and the signer's key differ")
+	if (key.code !== v.code) {
+		throw new SealError("signature", "the header and the signer's key differ")
+	}
 	if (signature.length !== v.header.length + v.size) throw new SealError("shape")
 	if (!(await v.verify(signature.subarray(v.header.length), key.key, message(name)))) {
 		throw new SealError("signature")

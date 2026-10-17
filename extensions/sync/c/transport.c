@@ -391,6 +391,11 @@ static uint64_t now_of(const tp_device *t) {
 	return t->now ? t->now(t->clock) : erm_host_now();
 }
 
+// a peer's key (Subduction's, Ed25519) as the multikey the commits carry it as
+static void peer_key(const uint8_t from[32], uint8_t key[SL_KEY]) {
+	cm_key_join(0xed, from, 32, key);
+}
+
 static void hex_of(const uint8_t *bytes, size_t n, char *out) {
 	for (size_t i = 0; i < n; i++) snprintf(out + 2 * i, 3, "%02x", bytes[i]);
 }
@@ -754,7 +759,7 @@ static void take_commit(doc *d, const uint8_t head[32], const uint8_t (*parents)
 	size_t length) {
 	if (im_has(&d->seen, head)) return;
 	sl_unsealed u;
-	sl_code code = sl_unseal(blob, length, &u);
+	sl_code code = sl_unseal(blob, length, &u, NULL);
 	if (code != SL_OK) {
 		refuse(d, head, code_of(code), NULL);
 		return;
@@ -790,7 +795,7 @@ static void member(doc *d, const uint8_t *sealed, size_t length) {
 	sl_stored(sealed, length, s);
 	if (im_has(&d->seen, s)) return;
 	sl_unsealed u;
-	sl_code code = sl_unseal(sealed, length, &u);
+	sl_code code = sl_unseal(sealed, length, &u, NULL);
 	if (code != SL_OK) {
 		im_set(&d->refused, s, CODE(code_of(code)));
 		return;
@@ -957,7 +962,9 @@ static void hear(doc *d, const uint8_t *blob, size_t length, const uint8_t from[
 		im_set(&d->heard, name, CODE(TP_SHAPE));
 		return;
 	}
-	bool same = memcmp(c.signer, from, 32) == 0;
+	uint8_t who[SL_KEY];
+	peer_key(from, who);
+	bool same = c.signer_length == SL_KEY && memcmp(c.signer, who, SL_KEY) == 0;
 	cm_free(&c);
 	if (!same) {
 		im_set(&d->heard, name, CODE(TP_SIGNATURE));
@@ -966,7 +973,7 @@ static void hear(doc *d, const uint8_t *blob, size_t length, const uint8_t from[
 	im_del(&d->heard, name);
 	admit(d, TP_EPHEMERAL, blob, length, name, true);
 	tell(d->t);
-	for (size_t i = 0; i < d->t->hearer_count; i++) d->t->hearers[i].fn(d->t->hearers[i].context, d->id, from, name);
+	for (size_t i = 0; i < d->t->hearer_count; i++) d->t->hearers[i].fn(d->t->hearers[i].context, d->id, who, name);
 }
 
 // ---- parts of an ephemeral payload over Subduction's limit
@@ -1131,8 +1138,10 @@ static channel_t *channel(tp_device *t, const char *name, uint8_t id[32]) {
 }
 
 static void tell_channel(channel_t *c, const uint8_t from[32], const uint8_t *bytes, size_t length) {
-	char who[65];
-	hex_of(from, 32, who);
+	char who[2 * SL_KEY + 1];
+	uint8_t key[SL_KEY];
+	peer_key(from, key);
+	hex_of(key, SL_KEY, who);
 	for (tp_listener *l = c->first; l; l = l->next)
 		if (!l->gone) l->fn(l->context, who, bytes, length);
 }
@@ -1937,18 +1946,20 @@ void tp_closed(tp_device *t, uint64_t conn) {
 	forget_conn(t, conn);
 }
 
-bool tp_connected(const tp_device *t, uint64_t conn, uint8_t key[32]) {
+bool tp_connected(const tp_device *t, uint64_t conn, uint8_t key[SL_KEY]) {
 	for (size_t i = 0; i < t->conn_count; i++) {
 		if (t->conns[i].id != conn || !t->conns[i].up) continue;
-		if (key != NULL) memcpy(key, t->conns[i].key, 32);
+		if (key != NULL) peer_key(t->conns[i].key, key);
 		return true;
 	}
 	return false;
 }
 
-void tp_disconnect(tp_device *t, const uint8_t key[32]) {
+void tp_disconnect(tp_device *t, const uint8_t key[SL_KEY]) {
+	// the peer by its Ed25519 key: the multikey's
+	if (key[0] != 0xed || key[1] != 0x01) return;
 	for (size_t i = 0; i < t->conn_count;) {
-		if (!t->conns[i].up || memcmp(t->conns[i].key, key, 32) != 0) {
+		if (!t->conns[i].up || memcmp(t->conns[i].key, key + 2, 32) != 0) {
 			i++;
 			continue;
 		}

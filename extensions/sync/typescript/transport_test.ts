@@ -4,7 +4,7 @@ import * as sd from "npm:@automerge/subduction@0.23.0"
 import * as cbor from "@ermine/encoding/cbor"
 import { type Commit, compare, encode, name as nameOf } from "@ermine/encoding/commit"
 import type { Kept } from "./history.ts"
-import type { Tables } from "./replay.ts"
+import { replay, type Tables } from "./replay.ts"
 import { createSigner, seal, type Signer, stored } from "./seal.ts"
 import {
 	type Arrival,
@@ -139,14 +139,16 @@ Deno.test({
 			[DOC, "ephemeral", hex(c.name), false],
 		])
 		assertEquals((await b.device.stored(DOC)).map(hex), [hex(c.stored)])
-		// not a seal: refused shape, by its head
+		// not a seal: refused shape, by its head, and never stored, so never sent
 		const head = new Uint8Array(32).fill(0x11)
 		await transport_conformance_hook_put(a.device, DOC, head, [], new Uint8Array([1, 2, 3]))
 		await quiet(a, b)
-		assertEquals(transport_conformance_hook_taking(b.device, DOC).refused, [{
+		assertEquals(transport_conformance_hook_taking(a.device, DOC).refused, [{
 			commit: hex(head),
 			refused: "shape",
 		}])
+		assertEquals((await a.device.stored(DOC)).map(hex), [hex(c.stored)])
+		assertEquals(transport_conformance_hook_taking(b.device, DOC).refused, [])
 		await a.device.close(), await b.device.close()
 	},
 })
@@ -293,18 +295,18 @@ Deno.test({
 
 Deno.test({
 	name:
-		"transport: a fragment built here carries snapshotOf's tables; a device on that storage, and a late joiner, get them back",
+		"transport: a fragment built here carries snapshotOf's tables; a device on that storage, and a late joiner, check them once (a replay) and keep them",
 	...opts,
 	async fn() {
 		const storage = new sd.MemoryStorage() as unknown as sd.SedimentreeStorage
 		const asked: Kept[] = []
+		let device: Party["device"] | undefined
 		const snapshotOf = (_doc: string, head: Kept): Uint8Array => {
 			asked.push(head)
-			return snapshot({
-				value: { value: { at: hex(head.name) }, change: { time: 7, actor: "a" } },
-			})
+			return snapshot(replay(device!.history(DOC), head.name)!)
 		}
 		const a = await party(1, { storage, snapshotOf })
+		device = a.device
 		await a.device.follow(DOC)
 		const [c1, c2, c3] = await (line ??= deepLine(a.signer))
 		for (const c of [c1, c2, c3]) a.device.take(DOC, c.bytes, "stored")
@@ -313,9 +315,9 @@ Deno.test({
 		// asked once, with the history's own kept commit
 		assertEquals(asked.length, 1)
 		assert(asked[0] === a.device.history(DOC).get(c2.name))
-		const want = { at: hex(c2.name) }
+		const want = 2
 		assertEquals(a.device.snapshot(DOC, c2.name)?.value.value, want)
-		assertEquals(a.device.snapshot(DOC, c2.name)?.value.change.actor, "a")
+		assertEquals(a.device.snapshot(DOC, c2.name)?.value.change.actor, "t")
 		// new objects each time
 		assert(a.device.snapshot(DOC, c2.name)!.value !== a.device.snapshot(DOC, c2.name)!.value)
 		assertEquals(a.device.snapshot(DOC, c3.name), undefined)

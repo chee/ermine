@@ -10,7 +10,7 @@
 			],
 			"merge": "eg-walker",
 			"expect": {
-				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
 			}
 		},
 		{
@@ -22,7 +22,7 @@
 			],
 			"merge": "eg-walker",
 			"expect": {
-				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+				"key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
 			}
 		},
 		{
@@ -31,7 +31,7 @@
 			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
 			"merge": "eg-walker",
 			"expect": {
-				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+				"key": "ed01ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
 			}
 		},
 		{
@@ -223,11 +223,11 @@
 			"expect": {
 				"standing": [
 					[
-						"8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+						"ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
 						"eb"
 					],
 					[
-						"8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
 						"ea"
 					]
 				]
@@ -248,12 +248,7 @@
 			"host": "c",
 			"id": "x",
 			"layer": "ephemeral",
-			"expect": {
-				"heads": [
-					"eb",
-					"ea"
-				]
-			}
+			"expect": { "heads": ["ea", "eb"] }
 		},
 		{
 			"op": "ephemeral",
@@ -323,7 +318,7 @@
 			"expect": {
 				"standing": [
 					[
-						"8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+						"ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
 						"eb"
 					]
 				]

@@ -10,10 +10,17 @@
 
 // a patch place; anything malformed is one no patch can be: a negative key (not-a-patch)
 static const op_key bad_key = {.type = OP_NUM_KEY, .n = -1};
-static int whole(const op_value *x, long *out) {
+static int whole(const op_value *x, int64_t *out) {
 	if (x->type != OP_NUM || !isfinite(x->num) || x->num != floor(x->num) || x->num < -1e15) return 0;
-	// past what a long holds: the largest, which no list or string reaches
-	*out = x->num > 1e15 ? LONG_MAX : (long)x->num;
+	// past 1e15: the largest, which no list or string reaches
+	*out = x->num > 1e15 ? INT64_MAX : (int64_t)x->num;
+	return 1;
+}
+// a key's number: past what a long holds, the largest (or the smallest)
+static int index_of(const op_value *x, long *out) {
+	int64_t n;
+	if (!whole(x, &n)) return 0;
+	*out = n > LONG_MAX ? LONG_MAX : n < LONG_MIN ? LONG_MIN : (long)n;
 	return 1;
 }
 static void place_of(const op_value *m, op_target *p) {
@@ -25,7 +32,7 @@ static void place_of(const op_value *m, op_target *p) {
 		const op_value *x = path->items[i];
 		ks[i] = (op_key){0};
 		if (x->type == OP_STR) ks[i] = (op_key){.type = OP_STR_KEY, .s = x->str};
-		else if (x->type == OP_NUM && whole(x, &ks[i].n)) ks[i].type = OP_NUM_KEY;
+		else if (x->type == OP_NUM && index_of(x, &ks[i].n)) ks[i].type = OP_NUM_KEY;
 		else goto bad;
 	}
 	p->path = ks;
@@ -58,7 +65,11 @@ void hh_patch(const op_value *m, op_patch *out) {
 
 // --- headers ---
 
-static long whole_of(const op_value *x) { return x && x->type == OP_NUM ? (long)x->num : 0; }
+// past what a long holds: the nearest it does
+static long whole_of(const op_value *x) {
+	if (x == NULL || x->type != OP_NUM) return 0;
+	return x->num >= (double)LONG_MAX ? LONG_MAX : x->num <= (double)LONG_MIN ? LONG_MIN : (long)x->num;
+}
 static ch_site site_of(const op_value *p) {
 	const op_value *column = op_get(p, "column"), *function = op_get(p, "function");
 	const char *file = hh_str(p, "file");
@@ -117,7 +128,7 @@ static void put_target(FILE *out, const op_target *t) {
 		else fprintf(out, "%ld", t->path[i].n);
 	}
 	putc(']', out);
-	if (t->has_range) fprintf(out, ",\"range\":[%ld,%ld]", t->from, t->to);
+	if (t->has_range) fprintf(out, ",\"range\":[%lld,%lld]", (long long)t->from, (long long)t->to);
 }
 
 void hh_put_patch(FILE *out, const op_patch *p) {

@@ -4722,7 +4722,9 @@
         push("ident", at, i);
       } else {
         const p = puncts.find((x) => s.startsWith(x, i));
-        if (!p) throw new Error(`budget: a character that is no token, ${JSON.stringify(c)} at ${i}`);
+        if (!p) {
+          throw new Error(`budget: a character that is no token, ${JSON.stringify(c)} at ${i}`);
+        }
         if (p === "{") braces++;
         else if (p === "}") braces--;
         const at = i;
@@ -4773,17 +4775,19 @@
       const tk = t[k];
       if (tk.kind === "punct" && tk.text === "{" && k > 0 && !tk.nl) {
         const p = t[k - 1];
-        if (p.kind === "punct" && p.text === "=>") ins.push({
-          at: after2(k),
-          text: step2,
-          from: tk.at
-        });
-        else if (p.kind === "ident" && p.text === "do") ins.push({
-          at: after2(k),
-          text: step2,
-          from: tk.at
-        });
-        else if (p.kind === "punct" && p.text === ")") {
+        if (p.kind === "punct" && p.text === "=>") {
+          ins.push({
+            at: after2(k),
+            text: step2,
+            from: tk.at
+          });
+        } else if (p.kind === "ident" && p.text === "do") {
+          ins.push({
+            at: after2(k),
+            text: step2,
+            from: tk.at
+          });
+        } else if (p.kind === "punct" && p.text === ")") {
           let depth = 0, j = k - 1;
           for (; j >= 0; j--) {
             if (closes(j)) depth++;
@@ -4791,11 +4795,13 @@
           }
           const h = j > 0 ? t[j - 1] : null;
           const head2 = h && h.kind === "ident" ? h.text : null;
-          if (head2 !== "if" && head2 !== "switch" && head2 !== "catch" && head2 !== "with") ins.push({
-            at: after2(k),
-            text: step2,
-            from: tk.at
-          });
+          if (head2 !== "if" && head2 !== "switch" && head2 !== "catch" && head2 !== "with") {
+            ins.push({
+              at: after2(k),
+              text: step2,
+              from: tk.at
+            });
+          }
         }
       } else if (tk.kind === "punct" && tk.text === "=>" && !is(k + 1, "{")) {
         const e = endOf(k + 1, true);
@@ -4826,12 +4832,13 @@
             else if (closes(j)) depth--;
             else if (depth === 0 && is(j, ";")) semi = j;
           }
-          if (semi >= 0) ins.push({
-            at: after2(semi),
-            text: is(semi + 1, ";") ? ` ${STEP}()` : ` ${STEP}(),`,
-            from: tk.at
-          });
-          else {
+          if (semi >= 0) {
+            ins.push({
+              at: after2(semi),
+              text: is(semi + 1, ";") ? ` ${STEP}()` : ` ${STEP}(),`,
+              from: tk.at
+            });
+          } else {
             const e = endOf(body, false);
             ins.push({
               at: before(body),

@@ -120,7 +120,7 @@ typedef struct {
 // a device's standing ephemeral commits at a node: its key, its stands (one a table, in the order
 // their tables first stood), when it was last heard from (this device's: last sent), ms
 typedef struct {
-	uint8_t who[32];
+	uint8_t who[SL_KEY];
 	stand_t *stands;
 	size_t stands_count;
 	uint64_t at;
@@ -299,21 +299,21 @@ static void peer_free(peer_t *p) {
 	free(p->stands);
 }
 
-static peer_t *peer_of(node_t *nd, const uint8_t who[32]) {
+static peer_t *peer_of(node_t *nd, const uint8_t who[SL_KEY]) {
 	for (size_t i = 0; i < nd->peers_count; i++)
-		if (memcmp(nd->peers[i].who, who, 32) == 0) return &nd->peers[i];
+		if (memcmp(nd->peers[i].who, who, SL_KEY) == 0) return &nd->peers[i];
 	return NULL;
 }
 
 // a device standing at the node, made when there is none
-static peer_t *peer_make(node_t *nd, const uint8_t who[32], uint64_t at) {
+static peer_t *peer_make(node_t *nd, const uint8_t who[SL_KEY], uint64_t at) {
 	peer_t *p = peer_of(nd, who);
 	if (p != NULL) return p;
 	nd->peers = realloc(nd->peers, (nd->peers_count + 1) * sizeof *nd->peers);
 	if (nd->peers == NULL) abort();
 	p = &nd->peers[nd->peers_count++];
 	*p = (peer_t){0};
-	memcpy(p->who, who, 32);
+	memcpy(p->who, who, SL_KEY);
 	p->at = at;
 	return p;
 }
@@ -353,6 +353,9 @@ static void stand_put(peer_t *p, const hy_kept *kept, int64_t base, slot_t *entr
 
 static void hex_name(const uint8_t name[32], char out[65]) {
 	for (int b = 0; b < 32; b++) snprintf(out + 2 * b, 3, "%02x", name[b]);
+}
+static void hex_key(const uint8_t key[SL_KEY], char out[2 * SL_KEY + 1]) {
+	for (int b = 0; b < SL_KEY; b++) snprintf(out + 2 * b, 3, "%02x", key[b]);
 }
 
 // ---- merging's state
@@ -1187,7 +1190,7 @@ static const hy_kept *send(sy_sync *s, const char *id, const char *part, const o
 	cm_commit c = {0};
 	c.table = (char *)part;
 	c.change = carried.h;
-	memcpy(c.signer, tp_key(s->device), 32);
+	memcpy(c.signer, tp_key(s->device), SL_KEY), c.signer_length = SL_KEY;
 	c.nonce = s->nonce++;
 	c.parents = (const uint8_t(*)[32])parents;
 	c.parents_length = on_count;
@@ -1344,7 +1347,7 @@ static op_value *start_of(sy_sync *s, node_t *nd, const hy_kept *kept, const cm_
 // is kept for its arrival
 static hy_refusal fleeting(sy_sync *s, const char *doc, const hy_kept *kept, const cm_commit *commit) {
 	// signed with this device's key elsewhere: never stands here
-	if (memcmp(commit->signer, tp_key(s->device), 32) == 0) return 0;
+	if (commit->signer_length == SL_KEY && memcmp(commit->signer, tp_key(s->device), SL_KEY) == 0) return 0;
 	op_value *from = start_of(s, node_of(s, doc), kept, commit), *after;
 	size_t failed;
 	bool ok = op_apply(from, commit->patches, commit->patches_length, NULL, &after, &failed) == OP_OK;
@@ -1371,8 +1374,9 @@ static void heard(sy_sync *s, const char *doc, const hy_kept *kept) {
 		tp_forget(s->device, doc, kept->name);
 		return;
 	}
-	uint8_t who[32];
-	memcpy(who, own.signer, 32);
+	// a commit taken in by the device was verified Ed25519
+	uint8_t who[SL_KEY];
+	memcpy(who, own.signer, SL_KEY);
 	cm_free(&own);
 	node_t *nd = node_of(s, doc);
 	hy_history *eph = tp_history(s->device, doc, TP_EPHEMERAL);
@@ -1381,7 +1385,7 @@ static void heard(sy_sync *s, const char *doc, const hy_kept *kept) {
 		const hy_kept *q = hy_get(eph, kept->parents[i]);
 		if (q != NULL && q->lamport > base) base = q->lamport;
 	}
-	uintptr_t latest = (uintptr_t)im_get(&nd->latest, who);
+	uintptr_t latest = (uintptr_t)im_get(&nd->latest, who + 2);
 	if (!kept_table(s, kept->table) || (latest > 0 && (int64_t)latest - 1 > base)) {
 		slot_clear(made), free(made);
 		tp_forget(s->device, doc, kept->name);
@@ -1407,8 +1411,9 @@ static void ended(sy_sync *s, const char *doc, const hy_kept *kept) {
 	cm_commit c;
 	if (cm_decode(kept->bytes, kept->length, &c, NULL) != CM_OK) return;
 	node_t *nd = node_of(s, doc);
-	uintptr_t was = (uintptr_t)im_get(&nd->latest, c.signer);
-	if (was == 0 || (int64_t)was - 1 < kept->lamport) im_set(&nd->latest, c.signer, (void *)(uintptr_t)(kept->lamport + 1));
+	// by the raw key: a device's key is Ed25519 (0xed 0x01 and 32 bytes), as the device checked
+	uintptr_t was = (uintptr_t)im_get(&nd->latest, c.signer + 2);
+	if (was == 0 || (int64_t)was - 1 < kept->lamport) im_set(&nd->latest, c.signer + 2, (void *)(uintptr_t)(kept->lamport + 1));
 	peer_t *p = peer_of(nd, c.signer);
 	cm_free(&c);
 	bool gone = false;
@@ -1508,8 +1513,8 @@ static void listed(sy_sync *s, node_t *nd) {
 		if (overlaid(nd, i) && nd->under[i].value != NULL) op_set(under, s->tables[i], copied(nd->under[i].value));
 	op_value *list = op_list();
 	for (size_t i = 0; i < n; i++) {
-		char by[65], name[65];
-		hex_name(on[i].by, by);
+		char by[2 * SL_KEY + 1], name[65];
+		hex_key(on[i].by, by);
 		hex_name(on[i].kept->name, name);
 		op_value *tables = op_list();
 		op_push(tables, op_str(on[i].kept->table));
@@ -1664,8 +1669,9 @@ static void landed(sy_sync *s, node_t *nd, const char *part, bool all, op_value 
 }
 
 // a change to an ephemeral table here: one ephemeral commit on what a stored write goes on, in place of
-// this device's standing one at the table (sync.ts's fleet says how its patches are made). Lamport
-// above every standing one there, so the newest write is the later
+// this device's standing one at the table (sync.ts's fleet says how its patches are made). Its lamport
+// derived from its parents, as every commit's: one standing beside it on the same stored heads is later
+// or not by name
 static cm_code fleet(sy_sync *s, const char *id, const char *part, const op_patch *patches, size_t count,
 	const ch_header *change) {
 	sy_follow(s, id);
@@ -1731,15 +1737,11 @@ static cm_code fleet(sy_sync *s, const char *id, const char *part, const op_patc
 	const uint8_t **sorted = malloc((on_count + 1) * sizeof *sorted);
 	uint8_t(*parents)[32] = malloc(on_count * 32 + 1);
 	if (sorted == NULL || parents == NULL) abort();
-	int64_t top = 0, base = 0;
+	int64_t base = 0;
 	for (size_t i = 0; i < on_count; i++) {
 		sorted[i] = on[i]->name;
 		if (on[i]->lamport > base) base = on[i]->lamport;
 	}
-	top = base;
-	for (size_t p = 0; p < nd->peers_count; p++)
-		for (size_t j = 0; j < nd->peers[p].stands_count; j++)
-			if (nd->peers[p].stands[j].kept->lamport > top) top = nd->peers[p].stands[j].kept->lamport;
 	qsort(sorted, on_count, sizeof *sorted, by_name);
 	for (size_t i = 0; i < on_count; i++) memcpy(parents[i], sorted[i], 32);
 	carried_t carried;
@@ -1747,12 +1749,12 @@ static cm_code fleet(sy_sync *s, const char *id, const char *part, const op_patc
 	cm_commit c = {0};
 	c.table = (char *)part;
 	c.change = carried.h;
-	memcpy(c.signer, me, 32);
+	memcpy(c.signer, me, SL_KEY), c.signer_length = SL_KEY;
 	c.nonce = s->nonce++;
 	c.parents = (const uint8_t(*)[32])parents;
 	c.parents_length = on_count;
 	if (merge != NULL) c.merge = (char *)merge;
-	c.lamport = 1 + top;
+	c.lamport = 1 + base;
 	c.patches = (op_patch *)patches;
 	c.patches_length = count;
 	uint8_t *bytes;
@@ -1813,7 +1815,7 @@ static int64_t wait_of(sy_sync *s, uint64_t now) {
 		node_t *nd = s->list[i];
 		for (size_t p = 0; p < nd->peers_count; p++) {
 			const peer_t *pr = &nd->peers[p];
-			uint64_t due = pr->at + (memcmp(pr->who, me, 32) == 0 ? s->beat : s->ttl);
+			uint64_t due = pr->at + (memcmp(pr->who, me, SL_KEY) == 0 ? s->beat : s->ttl);
 			int64_t w = due > now ? (int64_t)(due - now) : 0;
 			if (next < 0 || w < next) next = w;
 		}
@@ -1829,7 +1831,7 @@ static void tick(sy_sync *s, uint64_t now) {
 		bool dropped = false;
 		for (size_t p = 0; p < nd->peers_count;) {
 			peer_t *pr = &nd->peers[p];
-			if (memcmp(pr->who, me, 32) == 0) {
+			if (memcmp(pr->who, me, SL_KEY) == 0) {
 				if (now >= pr->at + s->beat) {
 					for (size_t j = 0; j < pr->stands_count; j++) tp_again(s->device, nd->id, pr->stands[j].kept->name);
 					pr->at = now;
@@ -1847,11 +1849,11 @@ static void tick(sy_sync *s, uint64_t now) {
 }
 
 // an ephemeral commit heard: its sender still there
-static void hearing(void *context, const char *doc, const uint8_t from[32], const uint8_t name[32]) {
+static void hearing(void *context, const char *doc, const uint8_t from[SL_KEY], const uint8_t name[32]) {
 	(void)name;
 	sy_sync *s = context;
 	uint8_t bytes[32];
-	if (!tp_doc(doc, bytes) || memcmp(from, tp_key(s->device), 32) == 0) return;
+	if (!tp_doc(doc, bytes) || memcmp(from, tp_key(s->device), SL_KEY) == 0) return;
 	node_t *nd = im_get(&s->nodes, bytes);
 	peer_t *p = nd != NULL ? peer_of(nd, from) : NULL;
 	if (p != NULL) p->at = ms_of(s);
@@ -1861,7 +1863,7 @@ static void hearing(void *context, const char *doc, const uint8_t from[32], cons
 
 static int by_name_row(const void *a, const void *b) {
 	const sy_standing_row *x = a, *y = b;
-	int k = memcmp(x->key, y->key, 32);
+	int k = memcmp(x->key, y->key, SL_KEY);
 	return k != 0 ? k : memcmp(x->tip, y->tip, 32);
 }
 
@@ -2112,7 +2114,7 @@ size_t sy_standing(sy_sync *s, const char *id, sy_standing_row **out) {
 	n = 0;
 	for (size_t i = 0; nd != NULL && i < nd->peers_count; i++) {
 		for (size_t j = 0; j < nd->peers[i].stands_count; j++, n++) {
-			memcpy((*out)[n].key, nd->peers[i].who, 32);
+			memcpy((*out)[n].key, nd->peers[i].who, SL_KEY);
 			memcpy((*out)[n].tip, nd->peers[i].stands[j].kept->name, 32);
 		}
 	}

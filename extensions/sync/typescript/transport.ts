@@ -5,14 +5,14 @@
 // node's whose sedimentree it came on. adapted from extensions/subduction/typescript/transport.ts,
 // which carries blops. only the lock "unlocked" is built
 import * as sd from "npm:@automerge/subduction@0.23.0"
-import { pack as packRun, RunError, unpack as unpackRun } from "./run.ts"
+import { each as eachRun, pack as packRun, RunError } from "./run.ts"
 import { hex, unhex } from "./hex.ts"
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import * as cbor from "@ermine/encoding/cbor"
 import { type Commit, CommitError, decode, name as nameOf, splitKey } from "@ermine/encoding/commit"
-import { build, depth, type Fragment } from "@ermine/subduction/fragment"
-import { type Added, createHistory, type History, type Kept, type Refusal } from "./history.ts"
-import type { Tables } from "./replay.ts"
+import { build, depth, type Fragment, FragmentError, walk } from "@ermine/subduction/fragment"
+import { type Added, createHistory, type History, type Judged, type Kept } from "./history.ts"
+import { matches, type Merges, type Tables } from "./replay.ts"
 import {
 	ED25519,
 	ed25519Key,
@@ -36,13 +36,14 @@ export type Arrival = { doc: string; layer: Layer; kept: Kept; heard: boolean }
 
 // the integration's: whether a commit whose parents are all taken in applies to its parent's node.
 // called for commits from elsewhere only, never for this device's own takes. it may apply them as
-// it looks. false: refused "patches"; a refusal: refused so ("merge": a rule not known here)
+// it looks. false: refused "patches"; a refusal: refused so ("merge": a rule not known here);
+// "wait": not judged yet, judged again on changed(). a throw is a wait, and idle() throws it
 export type Check = (
 	doc: string,
 	kept: Kept,
 	commit: Commit,
 	layer: Layer,
-) => boolean | Refusal
+) => Judged
 
 // what a lock's open gives: the bytes close was given; not yet; or never
 export type Opened = Uint8Array | { wait: true } | { refused: string }
@@ -62,8 +63,9 @@ export type Lock = {
 export const unlocked: Lock = { close: (_d, _n, _p, bytes) => bytes, open: (_d, bytes) => bytes }
 
 // why the transport refused a seal, a fragment or an ephemeral message before a history saw it.
-// what a history refuses (lamport, patches, a parent) is the history's: history(doc).refused()
-export type Code = "lock" | "shape" | "signature" | "stored" | "parents"
+// what a history refuses (lamport, patches, a parent) is the history's: history(doc).refused().
+// boundary: a fragment's members, boundary or checkpoints not what its head's walk makes them
+export type Code = "lock" | "shape" | "signature" | "stored" | "parents" | "boundary"
 
 // starting: createDevice returns at once, and begins taking in everything the storage holds (every
 // fragment, then every loose commit, as a save is taken in; a commit whose parents come later waits,
@@ -113,7 +115,7 @@ export type Device = {
 	listen(topic: string, fn: (from: string, bytes: Uint8Array) => void): () => void
 	stored(doc: string): Promise<Uint8Array[]>
 	fragments(doc: string): Fragment[]
-	// the lock's changed(): what waited on it is tried again
+	// the lock's or the check's changed(): what waited on the lock, or on the check, is tried again
 	changed(): Promise<void>
 	// an ephemeral payload's parts not joined yet are dropped now, as the setting would in time
 	expire(): void
@@ -127,6 +129,26 @@ export type Device = {
 export const LIMIT = 65536
 export const PART = 60000
 
+// what a device holds for others at most, each letting go of its oldest past it (heard again, it
+// comes in again). pending: a document's seals waiting on a parent's seal, and its stored commits
+// waiting on a parent; refused: its refusals noted (each kind), and its snapshot hints; waiting: its
+// ephemeral commits waiting on a parent; joins: the ephemeral payloads being joined; parts: the parts
+// one may have (so one is at most PART × parts bytes)
+export type Limits = {
+	pending: number
+	refused: number
+	waiting: number
+	joins: number
+	parts: number
+}
+export const LIMITS: Limits = {
+	pending: 65536,
+	refused: 4096,
+	waiting: 1024,
+	joins: 64,
+	parts: 1024,
+}
+
 const by = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0
 const commitId = (b: Uint8Array) => new sd.CommitId(b)
 const ID = /^ermine:\/\/[0-9a-f]{64}$/
@@ -136,6 +158,16 @@ function bytesOf(doc: string): Uint8Array {
 	if (typeof doc !== "string" || !ID.test(doc)) throw new TypeError(`not a document id: ${doc}`)
 	return unhex(doc.slice("ermine://".length))
 }
+
+// noted in a map (or a set), the oldest let go of past most
+function note<K, V>(most: number, m: Map<K, V> | Set<K>, key: K, value?: V) {
+	if (!m.has(key) && m.size >= most) m.delete(m.keys().next().value!)
+	if (m instanceof Map) m.set(key, value!)
+	else m.add(key)
+}
+
+const same = (a: Uint8Array, b: Uint8Array) =>
+	a.length === b.length && a.every((x, i) => x === b[i])
 
 // a seal's commit, as far as the transport reads it: its name, bytes, stored id, lamport, parents
 type Sealed = {
@@ -150,6 +182,17 @@ type Sealed = {
 // ids of the seals it was taken in over (the commit's parents; or, for a seal alone, every seal of
 // each)
 type Seen = { name: string; lamport: number; parents: string[]; sealed: Uint8Array; ids: string[] }
+
+// a fragment as Subduction's storage is given it: checkpoints as their first 12 bytes
+type Saved = {
+	head: sd.CommitId
+	boundary: sd.CommitId[]
+	checkpoints: Uint8Array[]
+	blob: Uint8Array
+}
+
+// a fragment's member: its sealed bytes, and its commit as the transport reads it
+type Member = { sealed: Uint8Array; it: Sealed }
 
 // a loose commit, or a seal alone (a fragment's member), not yet handed to the histories: its parents
 // not all here, or one refused. given: the commit's parents' stored ids, sorted
@@ -177,8 +220,11 @@ type Document = {
 	names: Map<string, string[]>
 	seen: Map<string, Seen>
 	fragments: Map<string, Fragment>
-	// the snapshots fragments carried, packed, by their head's name
+	// the snapshots fragments carried, packed, by their head's name, each checked (hint)
 	snapshots: Map<string, Uint8Array>
+	// the snapshots not checked yet, by their head's name; the heads checked
+	hints: Map<string, Uint8Array>
+	judged: Set<string>
 	// by the commit's head, or the seal's stored id
 	pending: Map<string, Pending>
 	refused: Map<string, Code>
@@ -211,12 +257,17 @@ export function createDevice(
 		// the integration's: the tables at a fragment's head, packed (snapshot.ts), for its snapshot;
 		// undefined: none for this one (the integration decides when one is worth it)
 		snapshotOf?: (doc: string, head: Kept) => Uint8Array | undefined
+		// the merge rules a snapshot from elsewhere is checked with (a replay to its head); default none
+		merges?: Merges
+		// default LIMITS
+		limits?: Partial<Limits>
 	},
 ): Device {
 	const lock = options.lock ?? unlocked
 	const service = options.service ?? "ermine"
 	const join = options.join ?? 30000
 	const check: Check = options.check ?? (() => true)
+	const limits: Limits = { ...LIMITS, ...options.limits }
 	const documents = new Map<string, Document>()
 	const followed = new Set<string>()
 	const peers = new Map<string, sd.PeerId>()
@@ -271,7 +322,10 @@ export function createDevice(
 			const { d, layer, kept } = r
 			outgoing(() => layer === "stored" ? store(d, kept) : publish(d, kept))
 		}
+		for (let j; (j = judging.shift()) !== undefined;) judge(j.d, j.name)
 	}
+	// heads with a snapshot hint, taken in by an add: checked by tell, after it
+	const judging: { d: Document; name: string }[] = []
 	// own takes that waited, let in by an add: sent by tell, after what let them in
 	const released: { d: Document; layer: Layer; kept: Kept }[] = []
 
@@ -298,11 +352,15 @@ export function createDevice(
 					return check(id, kept, commit, layer)
 				} catch (e) {
 					trouble.push(e)
-					return false
+					return "wait"
 				}
+			}, {
+				most: layer === "ephemeral" ? limits.waiting : limits.pending,
+				dropped: (n) => (from.delete(n), own[layer].delete(n)),
 			})
 			history.taken((kept) => {
 				const n = hex(kept.name), heard = from.get(n)
+				if (layer === "stored" && d!.hints.has(n)) judging.push({ d: d!, name: n })
 				if (heard === undefined) {
 					if (own[layer].delete(n)) released.push({ d: d!, layer, kept })
 					return
@@ -324,6 +382,8 @@ export function createDevice(
 			seen: new Map(),
 			fragments: new Map(),
 			snapshots: new Map(),
+			hints: new Map(),
+			judged: new Set(),
 			pending: new Map(),
 			refused: new Map(),
 			broken: new Map(),
@@ -366,8 +426,8 @@ export function createDevice(
 
 	function refuse(d: Document, key: string, code: Code, name?: string) {
 		d.pending.delete(key)
-		d.refused.set(key, code)
-		if (name !== undefined) d.bad.add(name)
+		note(limits.refused, d.refused, key, code)
+		if (name !== undefined) note(limits.refused, d.bad, name)
 	}
 
 	// for each pending seal, until none moves: stuck while a parent is refused or stuck, waiting while
@@ -407,17 +467,17 @@ export function createDevice(
 		return { name: u.name, bytes: u.bytes, stored: u.stored, lamport, parents }
 	}
 
-	// the steps of a loose commit, in order: the lock, the seal, its stored id, then pending
-	async function commit(d: Document, head: Uint8Array, parents: Uint8Array[], blob: Uint8Array) {
-		const h = hex(head)
-		if (d.seen.has(h)) return
-		d.locked.delete(h)
+	// a loose commit's first steps, the lock, the seal, its stored id: what the lock opened and its
+	// commit; "wait": the lock cannot open it yet; undefined: refused, noted
+	async function opening(
+		d: Document,
+		h: string,
+		blob: Uint8Array,
+	): Promise<{ open: Uint8Array; it: Sealed } | "wait" | undefined> {
 		const open = await lock.open(d.bytes, blob)
 		if (!(open instanceof Uint8Array)) {
-			if ("wait" in open) {
-				d.refused.delete(h)
-				d.locked.set(h, { commit: true, again: () => commit(d, head, parents, blob) })
-			} else refuse(d, h, "lock"), settle(d)
+			if ("wait" in open) return "wait"
+			refuse(d, h, "lock"), settle(d)
 			return
 		}
 		let it: Sealed
@@ -428,65 +488,104 @@ export function createDevice(
 			refuse(d, h, e.code)
 			return
 		}
-		if (hex(it.stored) !== h) return refuse(d, h, "stored", hex(it.name)), settle(d)
+		if (hex(it.stored) !== h) return void (refuse(d, h, "stored", hex(it.name)), settle(d))
+		return { open, it }
+	}
+
+	// the steps of a loose commit, in order: the lock, the seal, its stored id, then pending
+	async function commit(d: Document, head: Uint8Array, parents: Uint8Array[], blob: Uint8Array) {
+		const h = hex(head)
+		if (d.seen.has(h)) return
+		d.locked.delete(h)
+		const got = await opening(d, h, blob)
+		if (got === undefined) return
+		if (got === "wait") {
+			d.refused.delete(h)
+			d.locked.set(h, { commit: true, again: () => commit(d, head, parents, blob) })
+			return
+		}
 		d.refused.delete(h)
-		d.pending.set(h, {
+		pend(d, h, {
 			commit: true,
-			it,
-			sealed: open,
-			parents: it.parents.map(hex),
+			it: got.it,
+			sealed: got.open,
+			parents: got.it.parents.map(hex),
 			given: parents.map(hex).sort(by),
 		})
 		settle(d)
 	}
 
-	// a seal taken in as a fragment's member: from unseal on, no commit around it
-	async function member(d: Document, sealed: Uint8Array) {
-		const s = hex(stored(sealed))
-		if (d.seen.has(s)) return
-		let it: Sealed
-		try {
-			it = await opened(sealed)
-		} catch (e) {
-			if (!(e instanceof SealError)) throw e
-			d.refused.set(s, e.code)
-			return
+	// what Subduction may store of a loose commit (its admission): one that opens to a seal under
+	// its stored id, or waits on the lock. what is refused is noted, as taking it in notes it
+	async function allows(d: Document, head: Uint8Array, blob: Uint8Array): Promise<boolean> {
+		const h = hex(head)
+		return d.seen.has(h) || await opening(d, h, blob) !== undefined
+	}
+
+	// pending, the oldest let go of past limits.pending (heard again, it comes in again)
+	function pend(d: Document, key: string, p: Pending) {
+		if (!d.pending.has(key) && d.pending.size >= limits.pending) {
+			d.pending.delete(d.pending.keys().next().value!)
 		}
+		d.pending.set(key, p)
+	}
+
+	// a seal taken in as a fragment's member, unsealed: no commit around it
+	function member(d: Document, m: Member) {
+		const s = hex(m.it.stored)
+		if (d.seen.has(s)) return
 		d.refused.delete(s)
-		d.pending.set(s, { commit: false, it, sealed, parents: it.parents.map(hex), given: [] })
+		pend(d, s, {
+			commit: false,
+			it: m.it,
+			sealed: m.sealed,
+			parents: m.it.parents.map(hex),
+			given: [],
+		})
 	}
 
 	// a fragment's blob opened: {run: its members as columns (run.ts), snapshot?: packed tables}, or
-	// {members: [sealed…], snapshot?} as it was first written. the snapshot dropped when it does not
-	// read back; undefined: not that shape
-	function contents(
+	// {members: [sealed…], snapshot?} as it was first written. each member unsealed as it is read,
+	// in order: the first that is not good ends it, and the fragment is refused whole with its code
+	// (a run that is not one, or comes to too much: shape). the snapshot dropped when it does not
+	// read back
+	async function contents(
 		open: Uint8Array,
-	): { members: Uint8Array[]; snapshot?: Uint8Array } | undefined {
+	): Promise<{ members: Member[]; snapshot?: Uint8Array } | Code> {
 		let x: unknown
 		try {
 			x = cbor.decode(open)
 		} catch (e) {
-			if (e instanceof cbor.CborError) return
+			if (e instanceof cbor.CborError) return "shape"
 			throw e
 		}
-		if (x === null || typeof x !== "object" || Array.isArray(x) || ArrayBuffer.isView(x)) return
+		if (x === null || typeof x !== "object" || Array.isArray(x) || ArrayBuffer.isView(x)) {
+			return "shape"
+		}
 		const o = x as Record<string, unknown>
 		const keys = Object.keys(o).sort().join()
-		let members: unknown
+		let seals: Iterable<unknown>
 		if (keys === "run" || keys === "run,snapshot") {
-			if (!(o.run instanceof Uint8Array)) return
-			try {
-				members = unpackRun(o.run)
-			} catch (e) {
-				if (e instanceof RunError) return
-				throw e
+			if (!(o.run instanceof Uint8Array)) return "shape"
+			seals = eachRun(o.run)
+		} else if (keys === "members" || keys === "members,snapshot") {
+			if (!Array.isArray(o.members)) return "shape"
+			seals = o.members
+		} else return "shape"
+		const members: Member[] = []
+		try {
+			for (const sealed of seals) {
+				if (!(sealed instanceof Uint8Array)) return "shape"
+				members.push({ sealed, it: await opened(sealed) })
 			}
-		} else if (keys === "members" || keys === "members,snapshot") members = o.members
-		else return
+		} catch (e) {
+			if (e instanceof RunError) return "shape"
+			if (e instanceof SealError) return e.code
+			throw e
+		}
 		const snapshot = o.snapshot
-		if (!Array.isArray(members) || !members.every((m) => m instanceof Uint8Array)) return
 		if (snapshot === undefined) return { members }
-		if (!(snapshot instanceof Uint8Array)) return
+		if (!(snapshot instanceof Uint8Array)) return "shape"
 		try {
 			tablesOf(snapshot)
 		} catch {
@@ -495,22 +594,147 @@ export function createDevice(
 		return { members, snapshot }
 	}
 
-	// a snapshot kept by its head's name; the first one kept stays
-	function keep(d: Document, name: string, snapshot: Uint8Array | undefined) {
-		if (snapshot !== undefined && !d.snapshots.has(name)) d.snapshots.set(name, snapshot)
+	// a fragment's contents, checked against what Subduction says of it: its head one of its members;
+	// its head of depth 1 or more, every other member of less depth, and reached from the head along
+	// parents among the members; its boundary of the head's depth or more and none of its members; its
+	// checkpoints (their first 12 bytes; given as Subduction keeps them, or none said) each member but
+	// the head with a depth. a head here whose walk can be made here: its members and boundary that
+	// walk's. a code: refused
+	async function checked(
+		d: Document,
+		head: Uint8Array,
+		boundary: Uint8Array[],
+		checkpoints: Uint8Array[] | undefined,
+		open: Uint8Array,
+	): Promise<{ members: Member[]; snapshot?: Uint8Array } | Code> {
+		const got = await contents(open)
+		if (typeof got === "string") return got
+		const h = hex(head), top = depth(head)
+		if (!got.members.some((m) => hex(m.it.stored) === h)) return "stored"
+		const ids = new Set(got.members.map((m) => hex(m.it.stored)))
+		if (top === 0 || reach(head, got.members).size !== ids.size) return "boundary"
+		for (const m of got.members) {
+			if (hex(m.it.stored) !== h && depth(m.it.stored) >= top) return "boundary"
+		}
+		for (const b of boundary) if (depth(b) < top || ids.has(hex(b))) return "boundary"
+		if (checkpoints !== undefined) {
+			const want = new Set<string>()
+			for (const id of ids) if (id !== h && depth(unhex(id)) > 0) want.add(id.slice(0, 24))
+			const given = new Set(checkpoints.map((c) => hex(c.subarray(0, 12))))
+			if (want.size !== given.size || [...want].some((c) => !given.has(c))) return "boundary"
+		}
+		if (d.seen.has(h)) {
+			let w: Fragment | undefined
+			try {
+				w = walk(head, lookupOf(d), (x) => d.fragments.get(hex(x)))
+			} catch (e) {
+				if (!(e instanceof FragmentError)) throw e
+			}
+			const set = (xs: Uint8Array[]) => [...new Set(xs.map(hex))].sort(by).join()
+			if (
+				w && (set(w.members) !== [...ids].sort(by).join() || set(w.boundary) !== set(boundary))
+			) {
+				return "boundary"
+			}
+		}
+		return got
 	}
 
-	// a fragment taken in: its members as seals alone, its snapshot kept. one whose head is here
-	// already is only noted, and its snapshot kept if none is
+	// a commit's parents, by stored id, as fragments are walked
+	const lookupOf = (d: Document) => (id: Uint8Array) => d.seen.get(hex(id))?.ids.map(unhex)
+
+	// the stored ids of the members reached from the head, along each one's parents (by name) among
+	// the members
+	function reach(head: Uint8Array, members: Member[]): Set<string> {
+		const byName = new Map<string, Member[]>()
+		for (const m of members) {
+			const n = hex(m.it.name)
+			byName.set(n, [...byName.get(n) ?? [], m])
+		}
+		const reached = new Set<string>(), todo = members.filter((m) => same(m.it.stored, head))
+		for (let m; (m = todo.pop()) !== undefined;) {
+			const s = hex(m.it.stored)
+			if (reached.has(s)) continue
+			reached.add(s)
+			for (const p of m.it.parents) todo.push(...byName.get(hex(p)) ?? [])
+		}
+		return reached
+	}
+
+	// what Subduction may store of a fragment (its admission): one that opens and is checked, or
+	// waits on the lock. one whose head is not here yet is noted refused whole
+	async function allowsFragment(
+		d: Document,
+		head: Uint8Array,
+		boundary: Uint8Array[],
+		checkpoints: Uint8Array[] | undefined,
+		blob: Uint8Array,
+	): Promise<boolean> {
+		const h = hex(head)
+		const open = await lock.open(d.bytes, blob)
+		if (!(open instanceof Uint8Array)) {
+			if ("wait" in open) return true
+			if (!d.seen.has(h)) broke(d, h, "lock")
+			return false
+		}
+		const got = await checked(d, head, boundary, checkpoints, open)
+		if (typeof got !== "string") return true
+		if (!d.seen.has(h)) broke(d, h, got)
+		return false
+	}
+
+	// a fragment refused whole, by head
+	function broke(d: Document, h: string, code: Code) {
+		note(limits.refused, d.broken, h, code)
+	}
+
+	// a snapshot a fragment carried is a hint, checked once: once its head is taken in, the tables
+	// are replayed to it, and it is kept only if they are the same; one that is not is let go of, and
+	// so is any after it for that head. own: made here, kept as it is. once there is auth: snapshots
+	// signed by the fragment's builder (Subduction's issuer), kept if the builder may edit
+	function hint(d: Document, name: string, bytes: Uint8Array, own = false) {
+		if (d.judged.has(name)) return
+		if (own) {
+			d.judged.add(name)
+			d.snapshots.set(name, bytes)
+			return
+		}
+		if (d.hints.has(name)) return
+		note(limits.refused, d.hints, name, bytes)
+		judge(d, name)
+	}
+
+	// a hint checked, when its head is taken in (replay.ts's matches)
+	function judge(d: Document, name: string) {
+		const bytes = d.hints.get(name), n = unhex(name)
+		if (bytes === undefined || d.histories.stored.get(n) === undefined) return
+		d.hints.delete(name)
+		d.judged.add(name)
+		const history = d.histories.stored
+		if (matches(history, n, bytes, (x) => snapshotOf(d, x), options.merges)) {
+			d.snapshots.set(name, bytes)
+		}
+	}
+
+	// the tables at a commit, from a snapshot kept here
+	function snapshotOf(d: Document, name: Uint8Array): Tables | undefined {
+		if (d.snapshots.size === 0) return undefined
+		const bytes = d.snapshots.get(hex(name))
+		return bytes === undefined ? undefined : tablesOf(bytes)
+	}
+
+	// a fragment taken in: its members (each checked) as seals alone, its snapshot a hint. one whose
+	// head is here already has its members checked too, and is only noted
 	async function fragment(
 		d: Document,
 		head: Uint8Array,
 		boundary: Uint8Array[],
+		checkpoints: Uint8Array[] | undefined,
 		blob: Uint8Array,
 	) {
 		const h = hex(head)
 		const here = d.seen.get(h)
-		if (here && d.fragments.has(h) && d.snapshots.has(here.name)) return
+		if (here && d.fragments.has(h) && d.judged.has(here.name)) return
 		d.locked.delete("f" + h)
 		const open = await lock.open(d.bytes, blob)
 		if (!(open instanceof Uint8Array)) {
@@ -519,37 +743,26 @@ export function createDevice(
 					d.fragments.set(h, { head, members: [], boundary, checkpoints: [] })
 				}
 			} else if ("wait" in open) {
-				d.locked.set("f" + h, { commit: false, again: () => fragment(d, head, boundary, blob) })
-			} else d.broken.set(h, "lock")
-			return
-		}
-		const got = contents(open)
-		if (here) {
-			if (!d.fragments.has(h)) {
-				d.fragments.set(h, {
-					head,
-					members: (got?.members ?? []).map(stored),
-					boundary,
-					checkpoints: [],
+				d.locked.set("f" + h, {
+					commit: false,
+					again: () => fragment(d, head, boundary, checkpoints, blob),
 				})
-			}
-			keep(d, here.name, got?.snapshot)
+			} else broke(d, h, "lock")
 			return
 		}
-		if (got === undefined) {
-			d.broken.set(h, "shape")
-			return
-		}
-		if (!got.members.some((m) => hex(stored(m)) === h)) {
-			d.broken.set(h, "stored")
+		const got = await checked(d, head, boundary, checkpoints, open)
+		if (typeof got === "string") {
+			if (!here) broke(d, h, got)
 			return
 		}
 		d.broken.delete(h)
-		for (const m of got.members) await member(d, m)
-		d.fragments.set(h, { head, members: got.members.map(stored), boundary, checkpoints: [] })
-		// by the name in its head's seal, read now; a head refused keeps none
-		const top = d.pending.get(h)?.it.name
-		if (top) keep(d, hex(top), got.snapshot)
+		for (const m of got.members) member(d, m)
+		if (!d.fragments.has(h)) {
+			const members = got.members.map((m) => m.it.stored)
+			d.fragments.set(h, { head, members, boundary, checkpoints: [] })
+		}
+		const top = got.members.find((m) => hex(m.it.stored) === h)!.it.name
+		if (got.snapshot !== undefined) hint(d, hex(top), got.snapshot)
 		settle(d)
 	}
 
@@ -559,7 +772,7 @@ export function createDevice(
 	async function hear(d: Document, blob: Uint8Array, from: Uint8Array) {
 		const open = await lock.open(d.bytes, blob)
 		if (!(open instanceof Uint8Array)) {
-			if (!("wait" in open)) d.heard.set(hex(nameOf(blob)), "lock")
+			if (!("wait" in open)) note(limits.refused, d.heard, hex(nameOf(blob)), "lock")
 			return
 		}
 		const name = nameOf(open), key = hex(name)
@@ -568,11 +781,11 @@ export function createDevice(
 			c = decode(open)
 		} catch (e) {
 			if (!(e instanceof CommitError)) throw e
-			d.heard.set(key, "shape")
+			note(limits.refused, d.heard, key, "shape")
 			return
 		}
 		if (hex(c.signer) !== hex(ed25519Key(from))) {
-			d.heard.set(key, "signature")
+			note(limits.refused, d.heard, key, "signature")
 			return
 		}
 		d.heard.delete(key)
@@ -626,7 +839,8 @@ export function createDevice(
 			!(whole instanceof Uint8Array) || whole.length !== 32 ||
 			!(bytes instanceof Uint8Array) ||
 			bytes.length > PART || typeof part !== "number" || typeof parts !== "number" ||
-			!Number.isInteger(part) || !Number.isInteger(parts) || part < 0 || part >= parts
+			!Number.isInteger(part) || !Number.isInteger(parts) || part < 0 || part >= parts ||
+			parts > limits.parts
 		) return null
 		return { whole, part, parts, bytes }
 	}
@@ -644,6 +858,7 @@ export function createDevice(
 		const k = where + " " + hex(from) + " " + hex(p.whole)
 		let j = joining.get(k)
 		if (!j) {
+			if (joining.size >= limits.joins) joining.delete(joining.keys().next().value!)
 			joining.set(
 				k,
 				j = { from, whole: p.whole, parts: p.parts, got: new Map(), at: Date.now() },
@@ -669,7 +884,7 @@ export function createDevice(
 	// integration gives them
 	async function building(d: Document, from?: Uint8Array[]) {
 		if (d.deep === 0) return
-		const lookup = (id: Uint8Array) => d.seen.get(hex(id))?.ids.map(unhex)
+		const lookup = lookupOf(d)
 		let heads = from
 		if (heads === undefined) {
 			const covered = new Set<string>()
@@ -689,7 +904,7 @@ export function createDevice(
 			const snapshot = kept && options.snapshotOf?.(d.id, kept)
 			if (snapshot) {
 				blob.snapshot = snapshot
-				keep(d, top, snapshot)
+				hint(d, top, snapshot, true)
 			}
 			const bytes = cbor.encode(blob as cbor.Value)
 			const names = f.boundary.map((b) => unhex(d.seen.get(hex(b))!.name))
@@ -702,21 +917,31 @@ export function createDevice(
 				f.checkpoints.map(commitId),
 				closed,
 			)
-			await compact(d, f.members)
+			await compact(d, f.head)
 		}
 	}
 
 	// a fragment stored: the loose commits it stands for let go from storage (sedimentree's minimal
-	// form, on disk too): the run holds them, about 70 bytes each against about 270
-	async function compact(d: Document, members: Uint8Array[]) {
-		for (const m of members) await memory.deleteCommit(d.tree, commitId(m))
+	// form, on disk too): the run holds them, about 70 bytes each against about 270. only the members
+	// of the fragment the storage holds for that head (Subduction keeps one a head), checked, and
+	// reached from its head: whatever is let go of comes back from it
+	async function compact(d: Document, head: Uint8Array) {
+		const f = await memory.loadFragment(d.tree, commitId(head))
+		if (!f) return
+		const open = await lock.open(d.bytes, f.blob)
+		if (!(open instanceof Uint8Array)) return
+		const got = await contents(open)
+		if (typeof got === "string") return
+		for (const id of reach(head, got.members)) {
+			await memory.deleteCommit(d.tree, commitId(unhex(id)))
+		}
 	}
 
 	// what Subduction's storage is asked to save, taken in; then fragments built
 	async function save(
 		tree: sd.SedimentreeId,
 		commits: { id: sd.CommitId; parents: sd.CommitId[]; blob: Uint8Array }[],
-		fragments: { head: sd.CommitId; boundary: sd.CommitId[]; blob: Uint8Array }[],
+		fragments: Saved[],
 	) {
 		const d = document(tree.toBytes())
 		const deep = d.deep
@@ -724,9 +949,9 @@ export function createDevice(
 			await commit(d, c.id.toBytes(), c.parents.map((p) => p.toBytes()), c.blob)
 		}
 		for (const f of fragments) {
-			await fragment(d, f.head.toBytes(), f.boundary.map((b) => b.toBytes()), f.blob)
-			const got = d.fragments.get(hex(f.head.toBytes()))
-			if (got?.members.length) later(() => compact(d, got.members))
+			const head = f.head.toBytes()
+			await fragment(d, head, f.boundary.map((b) => b.toBytes()), f.checkpoints, f.blob)
+			if (d.fragments.get(hex(head))?.members.length) later(() => compact(d, head))
 		}
 		// only a commit taken in that can head a fragment (a leading zero byte), or a fragment, makes
 		// one to build: walking every commit after each would make n commits cost n²
@@ -776,6 +1001,12 @@ export function createDevice(
 	// ---- Subduction
 
 	const memory = options.storage ?? new sd.MemoryStorage()
+	// a fragment's checkpoints, as their first 12 bytes
+	const checkpointsOf = (f: sd.Fragment) =>
+		(f.checkpoints as unknown as { toBytes(): Uint8Array }[]).map((c) => c.toBytes())
+
+	// Subduction's storage, wrapped: it stores only what ermine admits (allows, allowsFragment),
+	// and what it stores is then taken in. one not admitted is refused (a throw), noted as refused
 	const storage = new Proxy(memory as sd.MemoryStorage, {
 		get(target, key) {
 			const f = (target as unknown as Record<string | symbol, unknown>)[key]
@@ -788,6 +1019,9 @@ export function createDevice(
 					blob: Uint8Array,
 				) => {
 					const parents = signed.payload.parents
+					if (!(await allows(document(tree.toBytes()), id.toBytes(), blob))) {
+						throw new Error("not admitted: refused by ermine")
+					}
 					await target.saveCommit(tree, id, signed, blob)
 					later(() => save(tree, [{ id, parents, blob }], []))
 				}
@@ -799,9 +1033,13 @@ export function createDevice(
 					signed: sd.SignedFragment,
 					blob: Uint8Array,
 				) => {
-					const boundary = signed.payload.boundary
+					const { boundary } = signed.payload, checkpoints = checkpointsOf(signed.payload)
+					const d = document(tree.toBytes()), b = boundary.map((x) => x.toBytes())
+					if (!(await allowsFragment(d, head.toBytes(), b, checkpoints, blob))) {
+						throw new Error("not admitted: refused by ermine")
+					}
 					await target.saveFragment(tree, head, signed, blob)
-					later(() => save(tree, [], [{ head, boundary, blob }]))
+					later(() => save(tree, [], [{ head, boundary, checkpoints, blob }]))
 				}
 			}
 			if (key === "saveBatchAll") {
@@ -818,17 +1056,32 @@ export function createDevice(
 						blob: Uint8Array
 					}[],
 				) => {
-					const cs = commits.map((c) => ({
+					const d = document(tree.toBytes())
+					const okCommits = [], okFragments = []
+					for (const c of commits) {
+						if (await allows(d, c.commitId.toBytes(), c.blob)) okCommits.push(c)
+					}
+					for (const f of fragments) {
+						const p = f.signedFragment.payload
+						const b = p.boundary.map((x) => x.toBytes())
+						if (
+							await allowsFragment(d, f.fragmentHead.toBytes(), b, checkpointsOf(p), f.blob)
+						) {
+							okFragments.push(f)
+						}
+					}
+					const cs = okCommits.map((c) => ({
 						id: c.commitId,
 						parents: c.signedCommit.payload.parents,
 						blob: c.blob,
 					}))
-					const fs = fragments.map((f) => ({
+					const fs = okFragments.map((f) => ({
 						head: f.fragmentHead,
 						boundary: f.signedFragment.payload.boundary,
+						checkpoints: checkpointsOf(f.signedFragment.payload),
 						blob: f.blob,
 					}))
-					const n = await target.saveBatchAll(tree, commits as never, fragments as never)
+					const n = await target.saveBatchAll(tree, okCommits as never, okFragments as never)
 					later(() => save(tree, cs, fs))
 					return n
 				}
@@ -877,6 +1130,7 @@ export function createDevice(
 					d,
 					signed.payload.head.toBytes(),
 					signed.payload.boundary.map((b: sd.CommitId) => b.toBytes()),
+					checkpointsOf(signed.payload),
 					f.blob,
 				)
 			}
@@ -946,6 +1200,16 @@ export function createDevice(
 			fetched(d).catch((e) => trouble.push(e)).finally(() => asking(d, i + 1))
 		}, backoff[Math.min(i, backoff.length - 1)])
 		timers.add(t)
+	}
+
+	// what a put gave, or nothing when the storage did not admit it (noted refused as it was)
+	async function admitted<T>(p: Promise<T>): Promise<T | undefined> {
+		try {
+			return await p
+		} catch (e) {
+			if (String(e).includes("not admitted")) return undefined
+			throw e
+		}
 	}
 
 	const device: Device = {
@@ -1025,12 +1289,7 @@ export function createDevice(
 			d.heard.delete(n)
 			return true
 		},
-		snapshot(doc, name) {
-			const d = named(doc)
-			if (d.snapshots.size === 0) return undefined
-			const bytes = d.snapshots.get(hex(name))
-			return bytes === undefined ? undefined : tablesOf(bytes)
-		},
+		snapshot: (doc, name) => snapshotOf(named(doc), name),
 		async send(topic, bytes) {
 			const t = channelTopic(topic).topic
 			// a server relays a publish only from a subscriber of its topic
@@ -1059,6 +1318,11 @@ export function createDevice(
 		async changed() {
 			for (const d of documents.values()) {
 				for (const [, l] of [...d.locked]) await run(() => l.again())
+				await run(() => {
+					for (const layer of ["stored", "ephemeral"] as const) d.histories[layer].again()
+					tell()
+					return Promise.resolve()
+				})
 				await run(() => building(d))
 			}
 		},
@@ -1078,18 +1342,20 @@ export function createDevice(
 	hooks(device, {
 		async put(doc, head, parents, blob) {
 			const d = named(doc)
-			const r = await sub.addCommit(d.tree, commitId(head), parents.map(commitId), blob)
+			const r = await admitted(
+				sub.addCommit(d.tree, commitId(head), parents.map(commitId), blob),
+			)
 			if (r) await run(() => building(d))
 		},
 		async putFragment(doc, head, boundary, checkpoints, blob) {
 			const d = named(doc)
-			await sub.addFragment(
+			await admitted(sub.addFragment(
 				d.tree,
 				commitId(head),
 				boundary.map(commitId),
 				checkpoints.map(commitId),
 				blob,
-			)
+			))
 			await run(() => building(d))
 		},
 		taking(doc, layer) {

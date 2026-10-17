@@ -150,6 +150,7 @@
   (let ((target (if (and (null keys) (eq (box-root box) +none+)) +none+ (walk box keys))))
     (destructuring-bind (a b) range
       (when (> a b) (refuse "range"))
+      (when (eq target +none+) (refuse "no-key"))
       (unless (seq-p target) (refuse "wrong-kind"))
       (when (> b (seq-length target)) (refuse "range"))
       target)))

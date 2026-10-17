@@ -81,7 +81,7 @@ static void put_target(FILE *out, const op_target *t) {
 		else fprintf(out, "%ld", t->path[i].n);
 	}
 	fputc(']', out);
-	if (t->has_range) fprintf(out, ",\"range\":[%ld,%ld]", t->from, t->to);
+	if (t->has_range) fprintf(out, ",\"range\":[%lld,%lld]", (long long)t->from, (long long)t->to);
 }
 
 void cf_put_patches(FILE *out, const op_patch *ps, size_t length) {
@@ -138,7 +138,7 @@ void cf_put_commit(FILE *out, const cm_commit *c, cf_name name, void *context) {
 		fputc(']', out);
 	}
 	fprintf(out, ",\"time\":%lld,\"signer\":", (long long)h->time);
-	cf_put_hex(out, c->signer, 32);
+	cf_put_hex(out, c->signer, c->signer_length);
 	fprintf(out, ",\"nonce\":%lld,\"parents\":[", (long long)c->nonce);
 	for (size_t i = 0; i < c->parents_length; i++) {
 		if (i) fputc(',', out);

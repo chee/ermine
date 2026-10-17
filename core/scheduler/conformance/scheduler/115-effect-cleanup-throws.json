@@ -1,251 +1,251 @@
 {
-  "title": "an effect's cleanups made in a run it does not act on (equal) wait for its next run: set aside, run once that run is done, newest first, and the one that throws ends the rest (kept is not run); the error comes out of the pulse before the acts, so the act waits for the next pulse, its cleanups (made in the run acted on) before it",
-  "steps": [
-    {
-      "op": "root",
-      "name": "o",
-      "info": [
-        [
-          "actor",
-          "test"
-        ]
-      ],
-      "expect": {}
-    },
-    {
-      "op": "write",
-      "values": {
-        "x": 1
-      },
-      "expect": {
-        "tick": 1
-      }
-    },
-    {
-      "op": "effect",
-      "name": "e",
-      "scope": "o",
-      "f": {
-        "do": [
-          {
-            "cleanup": [
-              "e",
-              {
-                "log": [
-                  "kept",
-                  {
-                    "read": "x"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "if": [
-              {
-                "eq": [
-                  {
-                    "read": "x"
-                  },
-                  3
-                ]
-              },
-              {
-                "cleanup": [
-                  "e",
-                  {
-                    "do": [
-                      {
-                        "log": [
-                          "undo",
-                          {
-                            "read": "x"
-                          }
-                        ]
-                      },
-                      {
-                        "throw": "undo threw"
-                      }
-                    ]
-                  }
-                ]
-              },
-              null
-            ]
-          },
-          {
-            "mod": [
-              {
-                "read": "x"
-              },
-              2
-            ]
-          }
-        ]
-      },
-      "act": {
-        "log": [
-          "act",
-          {
-            "given": "value"
-          }
-        ]
-      },
-      "expect": {}
-    },
-    {
-      "op": "pulse",
-      "expect": {}
-    },
-    {
-      "op": "log",
-      "expect": {
-        "log": [
-          [
-            "kept",
-            1
-          ],
-          [
-            "act",
-            1
-          ]
-        ]
-      }
-    },
-    {
-      "op": "moments",
-      "expect": {
-        "moments": [
-          {
-            "due": "e",
-            "tick": 2
-          },
-          {
-            "starts": "e",
-            "run": 1
-          },
-          {
-            "ends": "e",
-            "run": 1,
-            "ended": "done",
-            "equal": false
-          },
-          {
-            "acts": "e",
-            "run": 1
-          }
-        ]
-      }
-    },
-    {
-      "op": "write",
-      "values": {
-        "x": 3
-      },
-      "expect": {
-        "tick": 3
-      }
-    },
-    {
-      "op": "pulse",
-      "expect": {}
-    },
-    {
-      "op": "log",
-      "expect": {
-        "log": []
-      }
-    },
-    {
-      "op": "write",
-      "values": {
-        "x": 4
-      },
-      "expect": {
-        "tick": 4
-      }
-    },
-    {
-      "op": "pulse",
-      "expect": {
-        "error": "undo threw"
-      }
-    },
-    {
-      "op": "log",
-      "expect": {
-        "log": [
-          [
-            "undo",
-            4
-          ]
-        ]
-      }
-    },
-    {
-      "op": "moments",
-      "expect": {
-        "moments": [
-          {
-            "due": "e",
-            "tick": 3
-          },
-          {
-            "starts": "e",
-            "run": 2
-          },
-          {
-            "ends": "e",
-            "run": 2,
-            "ended": "done",
-            "equal": true
-          },
-          {
-            "due": "e",
-            "tick": 4
-          },
-          {
-            "starts": "e",
-            "run": 3
-          },
-          {
-            "ends": "e",
-            "run": 3,
-            "ended": "done",
-            "equal": false
-          }
-        ]
-      }
-    },
-    {
-      "op": "pulse",
-      "expect": {}
-    },
-    {
-      "op": "log",
-      "expect": {
-        "log": [
-          [
-            "kept",
-            4
-          ],
-          [
-            "act",
-            0
-          ]
-        ]
-      }
-    },
-    {
-      "op": "moments",
-      "expect": {
-        "moments": [
-          {
-            "acts": "e",
-            "run": 3
-          }
-        ]
-      }
-    }
-  ]
+	"title": "an effect's cleanups made in a run it does not act on (equal) wait for its next run: set aside, run once that run is done, newest first, and the one that throws ends the rest (kept is not run); the error comes out of the pulse before the acts, so the act waits for the next pulse, its cleanups (made in the run acted on) before it",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "effect",
+			"name": "e",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"cleanup": [
+							"e",
+							{
+								"log": [
+									"kept",
+									{
+										"read": "x"
+									}
+								]
+							}
+						]
+					},
+					{
+						"if": [
+							{
+								"eq": [
+									{
+										"read": "x"
+									},
+									3
+								]
+							},
+							{
+								"cleanup": [
+									"e",
+									{
+										"do": [
+											{
+												"log": [
+													"undo",
+													{
+														"read": "x"
+													}
+												]
+											},
+											{
+												"throw": "undo threw"
+											}
+										]
+									}
+								]
+							},
+							null
+						]
+					},
+					{
+						"mod": [
+							{
+								"read": "x"
+							},
+							2
+						]
+					}
+				]
+			},
+			"act": {
+				"log": [
+					"act",
+					{
+						"given": "value"
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"kept",
+						1
+					],
+					[
+						"act",
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "e",
+						"tick": 2
+					},
+					{
+						"starts": "e",
+						"run": 1
+					},
+					{
+						"ends": "e",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "e",
+						"run": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 3
+			},
+			"expect": {
+				"tick": 3
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": []
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 4
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {
+				"error": "undo threw"
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"undo",
+						4
+					]
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "e",
+						"tick": 3
+					},
+					{
+						"starts": "e",
+						"run": 2
+					},
+					{
+						"ends": "e",
+						"run": 2,
+						"ended": "done",
+						"equal": true
+					},
+					{
+						"due": "e",
+						"tick": 4
+					},
+					{
+						"starts": "e",
+						"run": 3
+					},
+					{
+						"ends": "e",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"kept",
+						4
+					],
+					[
+						"act",
+						0
+					]
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"acts": "e",
+						"run": 3
+					}
+				]
+			}
+		}
+	]
 }

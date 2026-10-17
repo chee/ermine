@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "presence.h"
 
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -275,9 +276,16 @@ static void edit_block_free(void *b) {
 	free(k);
 }
 
-static int whole_num(const op_value *x, long *out) {
-	if (x->type != OP_NUM || x->num != (double)(long)x->num || x->num < -1e15 || x->num > 1e15) return 0;
-	*out = (long)x->num;
+static int whole_num(const op_value *x, int64_t *out) {
+	if (x->type != OP_NUM || !(x->num >= -1e15 && x->num <= 1e15) || x->num != (double)(int64_t)x->num) return 0;
+	*out = (int64_t)x->num;
+	return 1;
+}
+// a key's number: one a long holds
+static int index_num(const op_value *x, long *out) {
+	int64_t n;
+	if (!whole_num(x, &n) || n < LONG_MIN || n > LONG_MAX) return 0;
+	*out = (long)n;
 	return 1;
 }
 
@@ -292,7 +300,7 @@ static int target_of(edit_block *b, const op_value *m, const char *who, op_targe
 	for (size_t i = 0; i < path->count; i++) {
 		const op_value *x = path->items[i];
 		if (x->type == OP_STR) ks[i + 2] = (op_key){.type = OP_STR_KEY, .s = x->str};
-		else if (x->type == OP_NUM && whole_num(x, &ks[i + 2].n)) ks[i + 2].type = OP_NUM_KEY;
+		else if (x->type == OP_NUM && index_num(x, &ks[i + 2].n)) ks[i + 2].type = OP_NUM_KEY;
 		else return 0;
 	}
 	*t = (op_target){.path = ks, .length = path->count + 2};

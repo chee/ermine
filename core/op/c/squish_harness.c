@@ -1,6 +1,7 @@
 // The C squish library on the line protocol of core/op/typescript/squish_harness.ts. List
 // elements, moves and other values are the request's own op_values, which squish never reads.
 #define _POSIX_C_SOURCE 200809L
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -69,7 +70,7 @@ static void put_patches(FILE *out, const sq_patch *ps, size_t n) {
 		if (i) putc(',', out);
 		fputs("{\"path\":", out);
 		put_path(out, q->path, q->depth);
-		if (q->has_range) fprintf(out, ",\"range\":[%ld,%ld]", q->from, q->to);
+		if (q->has_range) fprintf(out, ",\"range\":[%lld,%lld]", (long long)q->from, (long long)q->to);
 		if (q->has_value) fputs(",\"value\":", out), put_value(out, &q->value);
 		if (q->move) fputs(",\"move\":", out), op_json_write(out, q->move);
 		putc('}', out);
@@ -79,13 +80,21 @@ static void put_patches(FILE *out, const sq_patch *ps, size_t n) {
 
 static void put_runs(FILE *out, const char *name, const sq_runs *r) {
 	fprintf(out, ",\"%s\":[", name);
-	for (size_t i = 0; i < r->n; i++) fprintf(out, i ? ",%ld" : "%ld", r->v[i]);
+	for (size_t i = 0; i < r->n; i++) fprintf(out, i ? ",%lld" : "%lld", (long long)r->v[i]);
 	putc(']', out);
 }
 
 // in
 
-static long num(const op_value *v) { return v && v->type == OP_NUM ? (long)v->num : 0; }
+static int64_t num(const op_value *v) {
+	if (!v || v->type != OP_NUM) return 0;
+	return v->num >= 9e18 ? INT64_MAX : v->num <= -9e18 ? INT64_MIN : (int64_t)v->num;
+}
+// a key's number: past what a long holds, the nearest it does
+static long index_of(const op_value *v) {
+	int64_t n = num(v);
+	return n > LONG_MAX ? LONG_MAX : n < LONG_MIN ? LONG_MIN : (long)n;
+}
 
 static sq_path path_of(const op_value *a) {
 	sq_path out = {NULL, 0};
@@ -94,7 +103,7 @@ static sq_path path_of(const op_value *a) {
 	for (size_t i = 0; i < a->count; i++) {
 		k[i] = (sq_key){0};
 		if (a->items[i]->type == OP_STR) k[i].s = a->items[i]->str;
-		else k[i].n = num(a->items[i]);
+		else k[i].n = index_of(a->items[i]);
 	}
 	return (sq_path){k, a->count};
 }

@@ -1,13 +1,17 @@
 -- | op's invert: the undo of patches on a value, in the order to apply it (last patch's first).
-module Invert (invertPatches, invertOne) where
+module Invert (invertPatches, invertGroups, invertOne) where
 
 import Apply
 import Form
 
 invertPatches :: Maybe V -> [V] -> Either (Code, Int) [Patch]
-invertPatches root ps = go root [] (zip [0 ..] ps)
+invertPatches root ps = concat <$> invertGroups root ps
+
+-- | each patch's own undo, the last patch's first
+invertGroups :: Maybe V -> [V] -> Either (Code, Int) [[Patch]]
+invertGroups root ps = go root [] (zip [0 ..] ps)
   where
-    go _ acc [] = Right (concat acc)
+    go _ acc [] = Right acc
     go r acc ((i, pv) : rest) = case parsePatch pv of
       Nothing -> Left ("not-a-patch", i)
       Just p -> case applyOne r p of

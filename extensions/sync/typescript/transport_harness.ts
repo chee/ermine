@@ -7,8 +7,9 @@
 // the tables at its head (replay.ts), packed. a commit a request makes is signed by its seed,
 // default the device's. doc: an ermine:// id, default ermine://2a…2a00…00 (16 bytes each)
 //
-// { op: "device", name, seed, storage? }  → { key }    storage: a label; a device made with it
-//                                                        takes in what that storage holds
+// { op: "device", name, seed, storage?, limits? }  → { key }    storage: a label; a device made with
+//                                                        it takes in what that storage holds;
+//                                                        limits: the device's (transport.ts Limits)
 // { op: "close", device }                 → {}         closed, its pipes cut
 // { op: "connect", a, b }                 → {}         a pipe, the handshake done (a starts)
 // { op: "disconnect", a, b }              → {}
@@ -21,13 +22,17 @@
 //                                                        commit's seal (or hex), head its stored
 //                                                        id, parents its parents' stored ids,
 //                                                        unless given (labels: their stored ids)
-// { op: "fragment", device, doc?, head, members?, boundary?, tables?, form?, blob? } → {}
-//                                                        addFragment as given: blob {run: the
+// { op: "fragment", device, doc?, head, members?, boundary?, checkpoints?, tables?, form?, blob?,
+//   tamper? } → {}                                       addFragment as given: blob {run: the
 //                                                        members' seals packed, in order;
 //                                                        snapshot?: the tables packed}; form
 //                                                        "members": {members: [seal…], snapshot?}
 //                                                        (as first written), "list": [seal…];
-//                                                        blob: a value (its JSON form) instead
+//                                                        blob: a value (its JSON form) instead.
+//                                                        checkpoints: default, each member but the
+//                                                        head whose stored id has a leading zero
+//                                                        byte. tamper: members whose seals go with
+//                                                        their signature's last byte flipped
 // { op: "quiet" }                         → {}         every device idle, nothing crossing
 // { op: "heads", device, doc?, layer? }   → { heads }   the layer's history's, in the agreed order
 // { op: "refused", device, doc?, layer? } → { refused } the history's [{ name, refused }]
@@ -136,6 +141,7 @@ async function answer(r: Request): Promise<Answer> {
 			const arrived: Arrival[] = []
 			const device: Device = createDevice({
 				signer,
+				limits: r.limits,
 				storage: storage as unknown as sd.SedimentreeStorage,
 				snapshotOf: (d, head) => snapshot(replay(device.history(d), head.name) ?? {}),
 			})
@@ -201,7 +207,15 @@ async function answer(r: Request): Promise<Answer> {
 		case "fragment": {
 			const d = of(r.device)
 			let blob: Uint8Array
-			const seals = (r.members ?? []).map(sealOf)
+			const tamper = new Set<string>(r.tamper ?? [])
+			const seals = (r.members ?? []).map((m: string) => {
+				const s = sealOf(m)
+				if (!tamper.has(m)) return s
+				const o = cbor.decode(s) as { commit: Uint8Array; signature: Uint8Array }
+				const signature = o.signature.slice()
+				signature[signature.length - 1] ^= 1
+				return cbor.encode({ commit: o.commit, signature })
+			})
 			if (r.blob !== undefined) blob = cbor.encode(revive(r.blob) as cbor.Value)
 			else if (r.form === "list") blob = cbor.encode(seals)
 			else {
@@ -211,12 +225,18 @@ async function answer(r: Request): Promise<Answer> {
 				if (r.tables !== undefined) o.snapshot = snapshot(revive(r.tables) as Tables)
 				blob = cbor.encode(o)
 			}
+			const head = storedId(r.head)
+			const checkpoints = r.checkpoints !== undefined
+				? r.checkpoints.map(storedId)
+				: (r.members ?? []).map(storedId).filter((id: Uint8Array) =>
+					id[0] === 0 && hex(id) !== hex(head)
+				)
 			await transport_conformance_hook_putFragment(
 				d.device,
 				doc,
-				storedId(r.head),
+				head,
 				(r.boundary ?? []).map(storedId),
-				[],
+				checkpoints,
 				blob,
 			)
 			return {}

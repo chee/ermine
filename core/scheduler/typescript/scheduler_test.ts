@@ -13,6 +13,13 @@ import {
 } from "./scheduler.ts"
 import { type Told, trace } from "./trace.ts"
 
+// what is under o, oldest first
+const under = (o: Scope) => {
+	const out: Scope[] = []
+	for (let x = o.newest; x; x = x.older) out.unshift(x)
+	return out
+}
+
 // what is open, as the three getters give it; nothing: undefined
 type Now = { scope: Scope; pairs: readonly Pair[]; run: Run | undefined } | undefined
 const now = (s: ReturnType<typeof createScheduler>): Now => {
@@ -231,7 +238,7 @@ Deno.test("what is made under a compute goes before its next run", () => {
 	// one inner effect at a time: the first went with its compute's second run
 	assertEquals(made, 2)
 	assertEquals(inner, [[1, "x"], [2, "x"], [2, "y"]])
-	assertEquals(c.children.length, 1)
+	assertEquals(under(c).length, 1)
 })
 
 Deno.test("read: tracked in a run's synchronous part; outside a run, and in run(), nothing", () => {
@@ -496,7 +503,7 @@ Deno.test("what an effect's runs make goes before its next run: equal results pi
 		write("k", i)
 		s.pulse()
 	}
-	assertEquals(e.children.length, 1)
+	assertEquals(under(e).length, 1)
 })
 
 Deno.test("what an act makes stays until the next act, though the effect runs again in between", () => {
@@ -512,10 +519,10 @@ Deno.test("what an act makes stays until the next act, though the effect runs ag
 	s.pulse()
 	write("k", 3)
 	s.pulse()
-	assertEquals([undone, e.children.length], [[], 1])
+	assertEquals([undone, under(e).length], [[], 1])
 	write("k", 2)
 	s.pulse()
-	assertEquals([undone, e.children.length], [[1], 1])
+	assertEquals([undone, under(e).length], [[1], 1])
 })
 
 Deno.test("a set that writes and then throws: its next result is given to set, equal or not", () => {
@@ -676,7 +683,7 @@ Deno.test("scope: a scope with no pairs is empty: a root, a scope", () => {
 	assertThrows(() => s.createScope([], o), SchedulerError, "no pairs")
 	s.runWithScope(o, () => assertThrows(() => s.createScope([]), SchedulerError, "no pairs"))
 	// nothing made under o
-	assertEquals(o.children, [])
+	assertEquals(under(o), [])
 })
 
 // pairs as an object, each owner's too: a trace

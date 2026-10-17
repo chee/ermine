@@ -5,7 +5,7 @@
 // against the same bytes: each value encodes to exactly its bytes, and the
 // bytes decode to a value equal to it; {"cbor", "refused"}: bytes no value
 // encodes as; {"form", "refused"}: a JSON form that is no value. Then round trips, rejected inputs,
-// values with no encoding, a short buffer and a deep value.
+// values with no encoding, a short buffer, and values as deep as CBOR_DEPTH and deeper.
 
 #include "cbor.h"
 #include "json.h"
@@ -369,26 +369,43 @@ static void keys(void) {
 	jsonFree(value);
 }
 
-static void deep(void) {
-	// a million lists, one in another, and a map in the middle: nothing recurses
-	int depth = 1000000;
+// n containers, one in another, a map among them halfway
+static Json *nest(int n) {
 	Json *root = jsonArray(), *at = root;
-	for (int i = 0; i < depth; i++) {
-		Json *inner;
-		if (i == depth / 2) {
-			inner = jsonObject();
-			Json *list = jsonArray();
-			jsonAdd(inner, "k", list);
-			jsonPush(at, inner);
-			at = list;
-		} else {
-			inner = jsonArray();
-			jsonPush(at, inner);
-			at = inner;
-		}
+	for (int i = 1; i < n; i++) {
+		Json *inner = i == n / 2 ? jsonObject() : jsonArray();
+		if (at->type == JSON_OBJECT) jsonAdd(at, "k", inner);
+		else jsonPush(at, inner);
+		at = inner;
 	}
-	roundTrip("a million deep", root);
-	jsonFree(root);
+	return root;
+}
+
+// n lists, one in another, as bytes: 81 n - 1 times, then 80
+static void expectNestedRejected(const char *what, size_t n) {
+	unsigned char *bytes = allocate(n);
+	memset(bytes, 0x81, n - 1);
+	bytes[n - 1] = 0x80;
+	const char *why = NULL;
+	Json *value = cborDecode(bytes, n, &why, NULL);
+	expectTrue(what, value == NULL && why != NULL && strstr(why, "nested deeper than") != NULL);
+	jsonFree(value);
+	free(bytes);
+}
+
+static void deep(void) {
+	// CBOR_DEPTH containers, one in another: the deepest a value goes, nothing recursing
+	Json *most = nest(CBOR_DEPTH);
+	roundTrip("CBOR_DEPTH deep", most);
+	jsonFree(most);
+	// one more, or a million: no encoding, and their bytes are not one
+	Json *over = nest(CBOR_DEPTH + 1), *million = nest(1000000);
+	expectNoEncoding("CBOR_DEPTH + 1 deep", over);
+	expectNoEncoding("a million deep", million);
+	jsonFree(over);
+	jsonFree(million);
+	expectNestedRejected("CBOR_DEPTH + 1 deep, as bytes", CBOR_DEPTH + 1);
+	expectNestedRejected("a million deep, as bytes", 1000000);
 }
 
 int main(int argc, char **argv) {

@@ -13,8 +13,8 @@ typedef enum {
 	RN_OK,
 	RN_NOT_A_RUN,   // not CBOR, not a map, or a key that is no column (that column named)
 	RN_COUNT,       // n not a whole number
-	RN_SIGNATURES,  // not bytes, or not 64 bytes for each commit
-	RN_RUNS,        // a column of runs (table, actor, reader, external, metadata, signer, base, merge): column named
+	RN_SIGNATURES,  // not a list of n byte strings
+	RN_RUNS,        // a column of runs (table, actor, reader, external, metadata, signer, base, merge, headers): column named
 	RN_DIFFERENCES, // a column of differences (time, nonce, lamport): column named
 	RN_PARENTS,
 	RN_PATCHES,

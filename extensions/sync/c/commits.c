@@ -127,7 +127,7 @@ const cs_made *cs_make(cs_commits *c, const op_value *r, cs_failure *why) {
 	x = (v = op_get(r, "actor")) ? pk_to_json(v) : jsonNull();
 	jsonAdd(j, "actor", x);
 	jsonAdd(j, "time", (v = given(r, "time")) ? pk_to_json(v) : jsonNumber(0));
-	jsonAdd(j, "signer", jsonBytes(signer->signer.key, 32));
+	jsonAdd(j, "signer", jsonBytes(signer->signer.key, signer->signer.key_length));
 	jsonAdd(j, "nonce", (v = given(r, "nonce")) ? pk_to_json(v) : jsonNumber(0));
 	Json *ps = jsonArray();
 	for (size_t i = 0; i < np; i++) jsonPush(ps, jsonBytes(sorted[i], 32));

@@ -5,8 +5,10 @@
 // what changes.
 //
 // taking a commit in: its bytes decoded (a commit's shape, commit.ts), its parents all here and
-// taken (else it waits), its lamport above theirs, and check (the integration's: do its patches
-// apply to its parent's node) says yes. a commit taken in releases what waited on it, in order
+// taken (else it waits), its lamport 1 + the highest of theirs (1 for a root: a lamport is derived,
+// never chosen), and check (the integration's: do its patches apply to its parent's node) says yes.
+// a commit taken in releases what waited on it, in order. one the check cannot judge yet waits on
+// nothing named until again() asks once more; a throw in the check is such a wait, and thrown
 //
 // beside it, for merge rules: what a commit's tables follow from (follows), and the commits since a
 // set of heads' common ancestor, in causal order (since)
@@ -16,11 +18,16 @@ import { hex } from "./hex.ts"
 // merge: a merge commit by a rule this device doesn't know
 export type Refusal = "shape" | "lamport" | "patches" | "parent" | "merge"
 
+// waiting: on the parents named; on none, on the check (it could not judge the commit yet)
 export type Added =
 	| "taken"
 	| "passed"
 	| { waiting: string[] }
 	| { refused: Refusal }
+
+// what the check says of a commit: true, it applies; false, refused "patches"; a refusal, refused
+// so; "wait", it cannot be judged yet (authority not here yet, say): the commit waits on the check
+export type Judged = boolean | Refusal | "wait"
 
 // what a commit is kept as: its bytes, and what ordering and replay read without decoding again
 export type Kept = {
@@ -45,7 +52,11 @@ export type History = {
 	get(name: Uint8Array): Kept | undefined
 	// told each commit taken in, in the order taken, released ones too
 	taken(f: (kept: Kept) => void): () => void
+	// in the order they came to wait; waiting on the check: waiting []
 	waiting(): { name: string; waiting: string[] }[]
+	// the commits waiting on the check judged again, in the order they came to wait; the first
+	// throw of the check thrown after
+	again(): void
 	refused(): { name: string; refused: Refusal }[]
 	// every commit taken in, in the order taken
 	all(): Kept[]
@@ -55,24 +66,51 @@ export type History = {
 }
 
 // check: given a commit whose parents are all taken, whether its patches apply to its parent's
-// node (the integration's, which may apply them as it looks); false is refused "patches", a refusal
-// is refused so
+// node (the integration's, which may apply them as it looks), as Judged says. a throw is a wait on
+// the check, and thrown from the add (or again) once what it let in is settled. most: how many
+// commits it holds waiting on a parent, and how many refusals, at most: past it the oldest is let
+// go of, as if never told (told again, it is judged again), and dropped is told the one waiting
 export function createHistory(
-	check: (kept: Kept, commit: Commit) => boolean | Refusal = () => true,
+	check: (kept: Kept, commit: Commit) => Judged = () => true,
+	limits: { most?: number; dropped?: (name: string) => void } = {},
 ): History {
+	const most = limits.most ?? Infinity
 	const taken = new Map<string, Kept>()
 	const order: Kept[] = []
 	const heads = new Set<string>()
 	// how many taken commits go on each one, where any do
 	const children = new Map<string, number>()
-	// a commit not taken in yet: its own, and the names it waits on
+	// a commit not taken in yet: its own, and the names it waits on; none: it waits on the check
 	const waits = new Map<string, { kept: Kept; commit: Commit; on: Set<string> }>()
+	// a throw of the check, thrown once the add or again that met it is done
+	let thrown: { error: unknown } | undefined
 	const waiters = new Map<string, Set<string>>()
 	const refusals = new Map<string, Refusal>()
 	const listeners = new Set<(kept: Kept) => void>()
 
-	function refuse(n: string, why: Refusal) {
+	// refused, the oldest refusal let go of past most
+	function note(n: string, why: Refusal) {
+		if (refusals.size >= most) refusals.delete(refusals.keys().next().value!)
 		refusals.set(n, why)
+	}
+
+	// the oldest commit waiting on a parent let go of, as if never told
+	function letGo() {
+		for (const [n, w] of waits) {
+			if (w.on.size === 0) continue
+			waits.delete(n)
+			for (const p of w.on) {
+				const s = waiters.get(p)!
+				s.delete(n)
+				if (s.size === 0) waiters.delete(p)
+			}
+			limits.dropped?.(n)
+			return
+		}
+	}
+
+	function refuse(n: string, why: Refusal) {
+		note(n, why)
 		// what waits on a refused commit never comes in
 		for (const w of waiters.get(n) ?? []) {
 			const x = waits.get(w)
@@ -87,11 +125,21 @@ export function createHistory(
 	function settle(kept: Kept, commit: Commit): Added {
 		const n = hex(kept.name)
 		const top = Math.max(0, ...kept.parents.map((p) => taken.get(hex(p))!.lamport))
-		if (kept.lamport <= top) {
+		if (kept.lamport !== top + 1) {
 			refuse(n, "lamport")
 			return { refused: "lamport" }
 		}
-		const ok = check(kept, commit)
+		let ok: Judged
+		try {
+			ok = check(kept, commit)
+		} catch (error) {
+			thrown ??= { error }
+			ok = "wait"
+		}
+		if (ok === "wait") {
+			waits.set(n, { kept, commit, on: new Set() })
+			return { waiting: [] }
+		}
 		if (ok !== true) {
 			const why = ok === false ? "patches" : ok
 			refuse(n, why)
@@ -110,13 +158,22 @@ export function createHistory(
 			const x = waits.get(w)
 			if (x === undefined) continue
 			x.on.delete(n)
+			// in its place while it is judged: one that waits on the check keeps it
 			if (x.on.size === 0) {
-				waits.delete(w)
-				settle(x.kept, x.commit)
+				const r = settle(x.kept, x.commit)
+				if (typeof r !== "object" || !("waiting" in r)) waits.delete(w)
 			}
 		}
 		waiters.delete(n)
 		return "taken"
+	}
+
+	// what an add or again met thrown, once it is done
+	function rethrow<T>(x: T): T {
+		const t = thrown
+		thrown = undefined
+		if (t !== undefined) throw t.error
+		return x
 	}
 
 	return {
@@ -131,7 +188,7 @@ export function createHistory(
 				try {
 					commit = decode(bytes)
 				} catch {
-					refusals.set(n, "shape")
+					note(n, "shape")
 					return { refused: "shape" }
 				}
 			}
@@ -152,6 +209,7 @@ export function createHistory(
 			}
 			const missing = commit.parents.map(hex).filter((p) => !taken.has(p))
 			if (missing.length) {
+				if (waits.size >= most) letGo()
 				waits.set(n, { kept, commit, on: new Set(missing) })
 				for (const p of missing) {
 					let s = waiters.get(p)
@@ -160,7 +218,7 @@ export function createHistory(
 				}
 				return { waiting: missing }
 			}
-			return settle(kept, commit)
+			return rethrow(settle(kept, commit))
 		},
 		heads: () => [...heads].map((n) => taken.get(n)!).sort(agreed),
 		get: (name) => taken.get(hex(name)),
@@ -169,6 +227,14 @@ export function createHistory(
 			return () => void listeners.delete(f)
 		},
 		waiting: () => [...waits].map(([name, w]) => ({ name, waiting: [...w.on] })),
+		again() {
+			for (const [n, w] of [...waits]) {
+				if (w.on.size > 0 || waits.get(n) !== w) continue
+				const r = settle(w.kept, w.commit)
+				if (typeof r !== "object" || !("waiting" in r)) waits.delete(n)
+			}
+			rethrow(undefined)
+		},
 		refused: () => [...refusals].map(([name, refused]) => ({ name, refused })),
 		all: () => order.slice(),
 		forget(name) {

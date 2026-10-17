@@ -285,6 +285,7 @@ export function createSync(options: Options): Sync {
 		lock: options.lock,
 		check,
 		snapshotOf,
+		merges: options.merges,
 	})
 	device.arrived((a) => {
 		const only = a.layer === "ephemeral" && device.history(a.doc).get(a.kept.name) === undefined
@@ -687,6 +688,8 @@ export function createSync(options: Options): Sync {
 	// the later of two ephemeral commits: higher lamport, then the greater name
 	const after = (a: Kept, b: Kept) =>
 		a.lamport !== b.lamport ? a.lamport > b.lamport : compare(a.name, b.name) > 0
+	// the later of two ephemeral commits of one device: its count says (a lamport is its parents')
+	const newer = (a: Kept, b: Kept) => decode(a.bytes).nonce > decode(b.bytes).nonce
 
 	// whether to is from or one of its ancestors
 	function reaches(doc: string, from: Kept, to: Kept): boolean {
@@ -751,7 +754,8 @@ export function createSync(options: Options): Sync {
 	}
 
 	// an ephemeral commit from elsewhere, taken in: it stands for its device's table in place of the
-	// one before, unless that one is the later, or a stored commit of its device follows it already
+	// one before, unless that one is the later (by its device's count), or a stored commit of its
+	// device follows it already
 	function heard(doc: string, kept: Kept) {
 		const n = hex(kept.name), made = fresh.get(n)
 		fresh.delete(n)
@@ -767,7 +771,7 @@ export function createSync(options: Options): Sync {
 		if (p === undefined) o.peers.set(who, p = { stands: new Map(), at: clock() })
 		p.at = clock()
 		const was = p.stands.get(kept.table)
-		if (was !== undefined && !after(kept, was.kept)) return gone()
+		if (was !== undefined && !newer(kept, was.kept)) return gone()
 		p.stands.set(kept.table, { kept, base, entry: made.entry })
 		if (was !== undefined) device.forget(doc, was.kept.name)
 		show(doc)
@@ -807,7 +811,8 @@ export function createSync(options: Options): Sync {
 	// device shows: as made, when the table showed the stored; else tried on what the device showed
 	// (its standing one, or the stored), the whole value if they don't apply; and over a standing one
 	// of this device's, the whole value it makes (with a rule: that one's patches, then these).
-	// lamport above every standing one there, so the newest write is the later
+	// its lamport is derived from its parents, as every commit's: one standing beside it on the same
+	// stored heads is later or not by name
 	function fleet(
 		id: string,
 		part: Key,
@@ -837,15 +842,13 @@ export function createSync(options: Options): Sync {
 				: [value === undefined ? { path: [] } : { path: [], value }]
 		}
 		const base = Math.max(0, ...parents.map((k) => k.lamport))
-		let top = base
-		for (const s of standsOf(o)) top = Math.max(top, s.kept.lamport)
 		const commit: Commit = {
 			table: t,
 			...carried(change),
 			signer: signer.key,
 			nonce: nonce++,
 			parents: parents.map((k) => k.name).sort(compare),
-			lamport: 1 + top,
+			lamport: 1 + base,
 			patches: patches as Commit["patches"],
 		}
 		if (on !== undefined) commit.merge = rule

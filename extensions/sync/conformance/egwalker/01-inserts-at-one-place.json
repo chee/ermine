@@ -75,15 +75,7 @@
 				"b"
 			],
 			"expect": {
-				"tables": {
-					"value": {
-						"value": "helloABxy",
-						"change": {
-							"time": 0,
-							"actor": null
-						}
-					}
-				}
+				"tables": { "value": { "value": "helloxyAB", "change": { "time": 0, "actor": null } } }
 			}
 		},
 		{
@@ -234,13 +226,7 @@
 			],
 			"expect": {
 				"tables": {
-					"value": {
-						"value": "123789hello",
-						"change": {
-							"time": 1,
-							"actor": null
-						}
-					}
+					"value": { "value": "789123hello", "change": { "time": 2, "actor": null } }
 				}
 			}
 		},
@@ -252,13 +238,7 @@
 			],
 			"expect": {
 				"tables": {
-					"value": {
-						"value": "123789hello",
-						"change": {
-							"time": 1,
-							"actor": null
-						}
-					}
+					"value": { "value": "789123hello", "change": { "time": 2, "actor": null } }
 				}
 			}
 		}

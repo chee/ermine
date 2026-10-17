@@ -252,6 +252,8 @@ op_value *pk_of_json(const Json *root) {
 
 // whether a whole number is one pack writes: a safe integer, as whole reads it
 static int safe(long long v) { return v >= -9007199254740991LL && v <= 9007199254740991LL; }
+// a path's number, a site's line or column: one a 32-bit long holds, as narrow reads it
+static int small(long long v) { return v >= -2147483648LL && v <= 2147483647LL; }
 
 // path and range of a target, added to its object; 0 when a key is no key
 static int target(Json *to, const op_target *t) {
@@ -259,7 +261,7 @@ static int target(Json *to, const op_target *t) {
 	jsonAdd(to, "path", path);
 	for (size_t i = 0; i < t->length; i++) {
 		const op_key *k = &t->path[i];
-		if (k->type == OP_NUM_KEY && safe(k->n)) jsonPush(path, jsonNumber((double)k->n));
+		if (k->type == OP_NUM_KEY && small(k->n)) jsonPush(path, jsonNumber((double)k->n));
 		else if (k->type == OP_STR_KEY && k->s != NULL) jsonPush(path, jsonString(k->s));
 		else return 0;
 	}
@@ -323,7 +325,7 @@ static Json *json_node(const nd_entry *n, const pk_options *o) {
 		jsonAdd(change, "external", sites);
 		for (size_t i = 0; i < h->external_length; i++) {
 			const ch_site *s = &h->external[i];
-			if (s->file == NULL || !safe(s->line) || (s->has_column && !safe(s->column))) goto bad;
+			if (s->file == NULL || !small(s->line) || (s->has_column && !small(s->column))) goto bad;
 			Json *site = jsonObject();
 			jsonPush(sites, site);
 			jsonAdd(site, "file", jsonString(s->file));
@@ -745,6 +747,15 @@ static int whole(const Json *j, long *out) {
 	return 1;
 }
 
+// a path's number, a site's line or column: a whole number from -2^31 to 2^31 - 1, what any long
+// holds, on any machine
+static int narrow(const Json *j, long *out) {
+	int64_t n;
+	if (!whole64(j, &n) || n < -2147483648LL || n > 2147483647LL) return 0;
+	*out = (long)n;
+	return 1;
+}
+
 static int array(const Json *j) { return j != NULL && j->type == JSON_ARRAY; }
 static int string(const Json *j) { return j != NULL && j->type == JSON_STRING; }
 
@@ -772,7 +783,7 @@ static int read_target(arena *a, const Json *x, op_target *t, const char *const 
 		const Json *k = path->array.items[i];
 		long m;
 		if (string(k)) ks[i] = (op_key){.type = OP_STR_KEY, .s = dup(a, k->string, k->stringLength)};
-		else if (whole(k, &m)) ks[i] = (op_key){.type = OP_NUM_KEY, .n = m};
+		else if (narrow(k, &m)) ks[i] = (op_key){.type = OP_NUM_KEY, .n = m};
 		else return 0;
 	}
 	t->path = ks;
@@ -780,7 +791,7 @@ static int read_target(arena *a, const Json *x, op_target *t, const char *const 
 	const Json *range = jsonGet(x, "range");
 	if (range != NULL) {
 		if (!array(range) || range->array.count != 2) return 0;
-		if (!whole(range->array.items[0], &t->from) || !whole(range->array.items[1], &t->to)) return 0;
+		if (!whole64(range->array.items[0], &t->from) || !whole64(range->array.items[1], &t->to)) return 0;
 		t->has_range = 1;
 	}
 	return 1;
@@ -811,10 +822,10 @@ static int read_patches(arena *a, const Json *given, const op_patch **out, size_
 static int read_site(arena *a, const Json *x, ch_site *s) {
 	if (!only(a, x, KEYS("file", "line"), KEYS("file", "line", "column", "function"))) return 0;
 	const Json *file = jsonGet(x, "file"), *column = jsonGet(x, "column"), *function = jsonGet(x, "function");
-	if (!string(file) || !whole(jsonGet(x, "line"), &s->line)) return 0;
+	if (!string(file) || !narrow(jsonGet(x, "line"), &s->line)) return 0;
 	s->file = dup(a, file->string, file->stringLength);
 	if (column != NULL) {
-		if (!whole(column, &s->column)) return 0;
+		if (!narrow(column, &s->column)) return 0;
 		s->has_column = 1;
 	}
 	if (function != NULL) {

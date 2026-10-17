@@ -20,6 +20,8 @@ typedef struct dv dv;
 
 // an id: "ermine://" and 64 hex digits, and the NUL
 enum { DV_ID = 9 + 64 + 1 };
+// a device's key as hex: its multikey (seal.h), and the 0
+enum { DV_KEY = 2 * SL_KEY + 1 };
 
 // server: ws:// or wss://, or NULL for none; service: what it answers to (NULL or "": its host).
 // zeros: ids minted with their last 16 bytes zero (galaxy.observer stores no other). actor: the name
@@ -28,7 +30,7 @@ dv *dv_new(const char *server, const char *service, bool zeros, const char *acto
 // lets go of everything: dv_flush first, or what is not sent yet is lost
 void dv_free(dv *d);
 sy_sync *dv_sync(dv *d);
-// this device's key, as 64 hex digits (what presence names its rows by)
+// this device's key, a multikey as 68 hex digits (what presence names its rows by)
 const char *dv_key(dv *d);
 bool dv_online(dv *d);
 // counts every change to the table: a reader reads again when it moves

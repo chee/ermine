@@ -218,8 +218,8 @@ moveOne (Patch path range _ _) root mpath mrange
       case left of
         Nothing -> case (path, range) of
           ([], Nothing) -> Right (Just taken)
-          -- the whole taken, then a span of it as the landing: nothing there is no sequence
-          _ -> Left "wrong-kind"
+          -- the whole taken, then a span of it as the landing: nothing is left there
+          _ -> Left "no-key"
         Just rest -> case range of
           Nothing -> Just <$> putAt path taken rest
           Just s -> Just <$> modifyAt path (land s taken) rest

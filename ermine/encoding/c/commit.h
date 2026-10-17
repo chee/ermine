@@ -31,13 +31,25 @@ const char *cm_code_name(cm_code code);
 // what is no map. cannot-carry names the first field holding what has no encoding (a string that is
 // not UTF-8, a symbol), none if none is found alone
 
+// a signer is a multikey: the unsigned varint of the key type's multicodec code (shortest form, 1 to 7
+// bytes), then the raw key (1 byte or more), CM_SIGNER_MAX bytes in all. Ed25519: 0xed 0x01, then 32
+// bytes. Only a verifier needs to know what a type is (cm_key_split says the code, and where the key is)
+#define CM_SIGNER_MAX 1024
+// whether the bytes are a multikey
+int cm_multikey(const uint8_t *bytes, size_t length);
+// a multikey's code and raw key (a pointer into it); 0 when the bytes are none
+int cm_key_split(const uint8_t *bytes, size_t length, uint64_t *code, const uint8_t **key, size_t *key_length);
+// a multikey from the code and the raw key, into out (CM_SIGNER_MAX bytes at most): how long it is
+size_t cm_key_join(uint64_t code, const uint8_t *key, size_t key_length, uint8_t *out);
+
 // a decoded commit. Everything it refers to is its own (cm_free), shared with nothing
 typedef struct {
 	char *table;
 	// time, actor (an op_value *, null when null), reader, external, metadata: a header is there as
 	// the graph has it. external and metadata are NULL when absent (not an empty list)
 	ch_header change;
-	uint8_t signer[32];
+	uint8_t signer[CM_SIGNER_MAX];
+	size_t signer_length;
 	int64_t nonce;
 	// ascending by name
 	const uint8_t (*parents)[32];

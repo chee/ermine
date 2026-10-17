@@ -34,19 +34,135 @@ type Kind = "ident" | "num" | "str" | "regex" | "punct" | "thead" | "tmid" | "tt
 type Token = { kind: Kind; text: string; at: number; end: number; nl: boolean }
 
 const puncts = [
-	">>>=", "...", "===", "!==", "**=", "<<=", ">>=", ">>>", "&&=", "||=", "??=",
-	"=>", "==", "!=", "<=", ">=", "&&", "||", "??", "?.", "++", "--", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<", ">>", "**",
-	"{", "}", "(", ")", "[", "]", ";", ",", "<", ">", "+", "-", "*", "/", "%", "&", "|", "^", "!", "~", "?", ":", "=", ".", "@", "#",
+	">>>=",
+	"...",
+	"===",
+	"!==",
+	"**=",
+	"<<=",
+	">>=",
+	">>>",
+	"&&=",
+	"||=",
+	"??=",
+	"=>",
+	"==",
+	"!=",
+	"<=",
+	">=",
+	"&&",
+	"||",
+	"??",
+	"?.",
+	"++",
+	"--",
+	"+=",
+	"-=",
+	"*=",
+	"/=",
+	"%=",
+	"&=",
+	"|=",
+	"^=",
+	"<<",
+	">>",
+	"**",
+	"{",
+	"}",
+	"(",
+	")",
+	"[",
+	"]",
+	";",
+	",",
+	"<",
+	">",
+	"+",
+	"-",
+	"*",
+	"/",
+	"%",
+	"&",
+	"|",
+	"^",
+	"!",
+	"~",
+	"?",
+	":",
+	"=",
+	".",
+	"@",
+	"#",
 ]
 // after these a `/` starts a regular expression, not a division
 const regexAfter = new Set([
-	"return", "typeof", "instanceof", "in", "of", "new", "delete", "void", "throw", "case", "do", "else", "yield", "await",
+	"return",
+	"typeof",
+	"instanceof",
+	"in",
+	"of",
+	"new",
+	"delete",
+	"void",
+	"throw",
+	"case",
+	"do",
+	"else",
+	"yield",
+	"await",
 ])
 // a line that starts with one of these goes on with the expression before it (no semicolon is read)
 const continues = new Set([
-	".", "?.", "?", ":", "=>", "(", "[", "+", "-", "*", "/", "%", "**", "&&", "||", "??", "&", "|", "^", "<", ">", "<=", ">=",
-	"==", "!=", "===", "!==", "<<", ">>", ">>>", "=", "+=", "-=", "*=", "/=", "%=", "**=", "&=", "|=", "^=", "<<=", ">>=", ">>>=",
-	"&&=", "||=", "??=", ",", "in", "of", "instanceof",
+	".",
+	"?.",
+	"?",
+	":",
+	"=>",
+	"(",
+	"[",
+	"+",
+	"-",
+	"*",
+	"/",
+	"%",
+	"**",
+	"&&",
+	"||",
+	"??",
+	"&",
+	"|",
+	"^",
+	"<",
+	">",
+	"<=",
+	">=",
+	"==",
+	"!=",
+	"===",
+	"!==",
+	"<<",
+	">>",
+	">>>",
+	"=",
+	"+=",
+	"-=",
+	"*=",
+	"/=",
+	"%=",
+	"**=",
+	"&=",
+	"|=",
+	"^=",
+	"<<=",
+	">>=",
+	">>>=",
+	"&&=",
+	"||=",
+	"??=",
+	",",
+	"in",
+	"of",
+	"instanceof",
 ])
 const identStart = /[\p{ID_Start}$_\\]/u
 const identPart = /[\p{ID_Continue}$‌‍\\]/u
@@ -92,7 +208,9 @@ function tokens(s: string): Token[] {
 	while (i < n) {
 		const c = s[i]
 		if (c === "\n") nl = true, i++
-		else if (c === " " || c === "\t" || c === "\r" || c === "\f" || c === "\v" || c === " " || c === "﻿") i++
+		else if (
+			c === " " || c === "\t" || c === "\r" || c === "\f" || c === "\v" || c === " " || c === "﻿"
+		) i++
 		else if (c === "/" && s[i + 1] === "/") {
 			while (i < n && s[i] !== "\n") i++
 		} else if (c === "/" && s[i + 1] === "*") {
@@ -132,7 +250,12 @@ function tokens(s: string): Token[] {
 			push("regex", at, i)
 		} else if (c >= "0" && c <= "9" || (c === "." && s[i + 1] >= "0" && s[i + 1] <= "9")) {
 			const at = i++
-			while (i < n && (identPart.test(s[i]) || s[i] === "." || ((s[i] === "+" || s[i] === "-") && (s[i - 1] === "e" || s[i - 1] === "E") && !/^0[xob]/i.test(s.slice(at, i))))) i++
+			while (
+				i < n &&
+				(identPart.test(s[i]) || s[i] === "." ||
+					((s[i] === "+" || s[i] === "-") && (s[i - 1] === "e" || s[i - 1] === "E") &&
+						!/^0[xob]/i.test(s.slice(at, i))))
+			) i++
 			push("num", at, i)
 		} else if (identStart.test(c)) {
 			const at = i++
@@ -140,7 +263,9 @@ function tokens(s: string): Token[] {
 			push("ident", at, i)
 		} else {
 			const p = puncts.find((x) => s.startsWith(x, i))
-			if (!p) throw new Error(`budget: a character that is no token, ${JSON.stringify(c)} at ${i}`)
+			if (!p) {
+				throw new Error(`budget: a character that is no token, ${JSON.stringify(c)} at ${i}`)
+			}
 			if (p === "{") braces++
 			else if (p === "}") braces--
 			const at = i
@@ -157,8 +282,11 @@ type Insert = { at: number; text: string; from: number }
 export function budget(source: string): string {
 	const t = tokens(source)
 	const ins: Insert[] = []
-	const is = (k: number, text: string) => k < t.length && t[k].kind === "punct" && t[k].text === text
-	const word = (k: number, text: string) => k < t.length && t[k].kind === "ident" && t[k].text === text && !(k > 0 && is(k - 1, ".") && !t[k - 1].nl)
+	const is = (k: number, text: string) =>
+		k < t.length && t[k].kind === "punct" && t[k].text === text
+	const word = (k: number, text: string) =>
+		k < t.length && t[k].kind === "ident" && t[k].text === text &&
+		!(k > 0 && is(k - 1, ".") && !t[k - 1].nl)
 	const opens = (k: number) => is(k, "(") || is(k, "[") || is(k, "{") || t[k].kind === "thead"
 	const closes = (k: number) => is(k, ")") || is(k, "]") || is(k, "}") || t[k].kind === "ttail"
 	/** the token after the bracket matching the opener at k */
@@ -193,8 +321,12 @@ export function budget(source: string): string {
 	/** the token goes on with the expression before it, though on a new line */
 	const goesOn = (x: Token) => (x.kind === "punct" || x.kind === "ident") && continues.has(x.text)
 	/** the token wants an operand after it, so the expression goes on past a new line */
-	const wants = (x: Token) => (x.kind === "punct" && x.text !== ")" && x.text !== "]" && x.text !== "}" && x.text !== "++" && x.text !== "--") ||
-		(x.kind === "ident" && (continues.has(x.text) || x.text === "typeof" || x.text === "new" || x.text === "await" || x.text === "void" || x.text === "delete")) ||
+	const wants = (x: Token) =>
+		(x.kind === "punct" && x.text !== ")" && x.text !== "]" && x.text !== "}" &&
+			x.text !== "++" && x.text !== "--") ||
+		(x.kind === "ident" &&
+			(continues.has(x.text) || x.text === "typeof" || x.text === "new" || x.text === "await" ||
+				x.text === "void" || x.text === "delete")) ||
 		x.kind === "thead" || x.kind === "tmid"
 	const after = (k: number) => t[k].end
 	const before = (k: number) => (k < t.length ? t[k].at : source.length)
@@ -205,9 +337,11 @@ export function budget(source: string): string {
 		const tk = t[k]
 		if (tk.kind === "punct" && tk.text === "{" && k > 0 && !tk.nl) {
 			const p = t[k - 1]
-			if (p.kind === "punct" && p.text === "=>") ins.push({ at: after(k), text: step, from: tk.at })
-			else if (p.kind === "ident" && p.text === "do") ins.push({ at: after(k), text: step, from: tk.at })
-			else if (p.kind === "punct" && p.text === ")") {
+			if (p.kind === "punct" && p.text === "=>") {
+				ins.push({ at: after(k), text: step, from: tk.at })
+			} else if (p.kind === "ident" && p.text === "do") {
+				ins.push({ at: after(k), text: step, from: tk.at })
+			} else if (p.kind === "punct" && p.text === ")") {
 				// the head before the matching (: a keyword's block, a loop's, or a function's
 				let depth = 0, j = k - 1
 				for (; j >= 0; j--) {
@@ -216,14 +350,19 @@ export function budget(source: string): string {
 				}
 				const h = j > 0 ? t[j - 1] : null
 				const head = h && h.kind === "ident" ? h.text : null
-				if (head !== "if" && head !== "switch" && head !== "catch" && head !== "with") ins.push({ at: after(k), text: step, from: tk.at })
+				if (head !== "if" && head !== "switch" && head !== "catch" && head !== "with") {
+					ins.push({ at: after(k), text: step, from: tk.at })
+				}
 			}
 		} else if (tk.kind === "punct" && tk.text === "=>" && !is(k + 1, "{")) {
 			// an arrow's expression body: (__b(), body)
 			const e = endOf(k + 1, true)
 			ins.push({ at: after(k), text: ` (${STEP}(),`, from: tk.at })
 			ins.push({ at: close(e), text: ")", from: tk.at })
-		} else if ((word(k, "for") || word(k, "while")) && (is(k + 1, "(") || (word(k + 1, "await") && is(k + 2, "(")))) {
+		} else if (
+			(word(k, "for") || word(k, "while")) &&
+			(is(k + 1, "(") || (word(k + 1, "await") && is(k + 2, "(")))
+		) {
 			if (word(k, "while") && k > 0 && is(k - 1, "}")) continue // a do's while after its braced body, which has the step
 			const open = is(k + 1, "(") ? k + 1 : k + 2
 			const body = past(open)
@@ -237,8 +376,13 @@ export function budget(source: string): string {
 					else if (closes(j)) depth--
 					else if (depth === 0 && is(j, ";")) semi = j
 				}
-				if (semi >= 0) ins.push({ at: after(semi), text: is(semi + 1, ";") ? ` ${STEP}()` : ` ${STEP}(),`, from: tk.at })
-				else {
+				if (semi >= 0) {
+					ins.push({
+						at: after(semi),
+						text: is(semi + 1, ";") ? ` ${STEP}()` : ` ${STEP}(),`,
+						from: tk.at,
+					})
+				} else {
 					const e = endOf(body, false)
 					ins.push({ at: before(body), text: `{${STEP}(); `, from: tk.at })
 					ins.push({ at: close(e), text: "}", from: tk.at })

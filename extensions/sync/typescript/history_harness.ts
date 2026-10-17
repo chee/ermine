@@ -6,13 +6,19 @@
 //
 // the history's check is the integration's: a commit is taken in when its patches apply to its
 // table at its base (replay), kept snapshots used; a merge commit's, to its rule's merge of its
-// parents. the rules known: "eg-walker" (egwalker.ts); a merge by any other is refused "merge"
+// parents. the rules known: "eg-walker" (egwalker.ts); a merge by any other is refused "merge". a
+// commit held (hold) the check cannot judge yet: it waits on the check, waiting []
 //
 // { op: "make", name, ...fields }       → {}                a commit made and labelled, not added
 // { op: "add", name, ...fields }        → { added }         made (when no fields: the one made
 //                                                             under the label), then added
 // { op: "add", bytes }                  → { added }         bytes (hex) added as they are
 //     added: "taken" | "passed" | { waiting: [commit…] } | { refused: code }
+// { op: "hold", commits }              → {}                the check cannot judge these yet: it
+//                                                             answers "wait" for each, until held
+//                                                             no more (the next hold's list)
+// { op: "again" }                       → {}                the commits waiting on the check judged
+//                                                             again (history.again)
 // { op: "heads" }                       → { heads }         in the agreed order
 // { op: "all" }                         → { all }           every commit taken in, in the order taken
 // { op: "waiting" }                     → { waiting }       [{ name, waiting: [commit…] }], in the
@@ -31,7 +37,10 @@
 //                                                            (by "eg-walker"), which a merge and
 //                                                            since start from
 // { op: "keep", commit, tables }        → {}                a snapshot of these tables at it, which
-//                                                            replay starts from
+//                                                            replay starts from (as one made here)
+// { op: "hint", commit, tables }        → { kept }          a snapshot of these tables at it from
+//                                                            elsewhere: kept (as keep) only when a
+//                                                            replay to it gives the same (matches)
 // { op: "snapshot", tables }            → { snapshot }      the tables packed, hex
 // { op: "tables", snapshot } | { op: "tables", value }      → { tables }   read back; value: its
 //                                                            JSON form encoded canonically first
@@ -47,7 +56,7 @@ import { hex, refusal, unhex } from "../../../ermine/encoding/typescript/commit_
 import { createCommits, tablesJson } from "./harnesses.ts"
 import { egwalker } from "./egwalker.ts"
 import { type Added, createHistory, since } from "./history.ts"
-import { type Merges, plain, replay, type Tables } from "./replay.ts"
+import { matches, type Merges, plain, replay, type Tables } from "./replay.ts"
 import { snapshot, tablesOf } from "./snapshot.ts"
 
 const commits = createCommits()
@@ -83,7 +92,10 @@ const merged = (heads: Uint8Array[], rule: string) => {
 	}
 	return out
 }
+// what the check cannot judge yet, by name
+let held = new Set<string>()
 const history = createHistory((k, commit) => {
+	if (held.has(hex(k.name))) return "wait"
 	if (commit.merge !== undefined && merges[commit.merge] === undefined) return "merge"
 	const tables = commit.merge !== undefined
 		? merged(commit.parents, commit.merge)
@@ -114,6 +126,12 @@ async function answer(r: Request): Promise<Answer> {
 				const m = await commits.make(r)
 				return { added: added(history.add(m.bytes)) }
 			}
+			case "hold":
+				held = new Set((r.commits as string[]).map((c) => hex(commits.name(c))))
+				return {}
+			case "again":
+				history.again()
+				return {}
 			case "heads":
 				return { heads: history.heads().map((k) => commits.label(k.name)) }
 			case "all":
@@ -163,6 +181,12 @@ async function answer(r: Request): Promise<Answer> {
 					kept.set(keyOf(r.commits.map(commits.name)), snapshot(tablesFrom(r.tables)))
 				} else kept.set(hex(commits.name(r.commit)), snapshot(tablesFrom(r.tables)))
 				return {}
+			case "hint": {
+				const name = commits.name(r.commit), bytes = snapshot(tablesFrom(r.tables))
+				const ok = matches(history, name, bytes, snapshots, merges)
+				if (ok) kept.set(hex(name), bytes)
+				return { kept: ok }
+			}
 			case "snapshot":
 				return { snapshot: hex(snapshot(tablesFrom(r.tables))) }
 			case "tables": {

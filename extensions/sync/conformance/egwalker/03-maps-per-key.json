@@ -95,17 +95,8 @@
 			"expect": {
 				"tables": {
 					"value": {
-						"value": {
-							"n": 2,
-							"x": "from a",
-							"y": "from b",
-							"keep": "k",
-							"title": "hi"
-						},
-						"change": {
-							"time": 0,
-							"actor": null
-						}
+						"value": { "n": 3, "x": "from a", "y": "from b", "keep": "k", "title": "hi" },
+						"change": { "time": 0, "actor": null }
 					}
 				}
 			}

@@ -10,9 +10,9 @@
 // value?, cow?}, cow only ever false, as the node has it (changed in place, not copied on write). a
 // change: {time, actor?, reader?, external?, metadata?, op?}; external: sites {file, line, column?,
 // function?}; metadata: [name, value] lists; op: {patches, undo}, each patch {path, range?,
-// value?, move?}, move {path, range?}. time, a site's line and column, a path's numbers and a
-// range's ends are whole: safe integers, never -0. a field not there is left out, never written as
-// nothing.
+// value?, move?}, move {path, range?}. time and a range's ends are whole: safe integers, never -0;
+// a site's line and column and a path's numbers are whole from -2^31 to 2^31 - 1, what any C long
+// holds. a field not there is left out, never written as nothing.
 //
 // written: {columns: bytes}, the bytes deflate.ts's deflate (the same bytes on any device) of a map
 // of columns, each left out when empty:
@@ -116,8 +116,11 @@ const isFields = (x: unknown): x is Fields =>
 // a whole number C holds too: a safe integer, never -0
 const whole = (x: unknown) => Number.isSafeInteger(x) && !Object.is(x, -0)
 
+// a path's number, a site's line or column: whole, and one any C long holds
+const small = (x: unknown) => whole(x) && (x as number) >= -(2 ** 31) && (x as number) < 2 ** 31
+
 const isSpan = (x: unknown) => Array.isArray(x) && x.length === 2 && x.every(whole)
-const isPath = (x: unknown) => Array.isArray(x) && x.every((e) => typeof e === "string" || whole(e))
+const isPath = (x: unknown) => Array.isArray(x) && x.every((e) => typeof e === "string" || small(e))
 const isEntry = (x: unknown) => Array.isArray(x) && x.length === 2 && typeof x[0] === "string"
 
 // how a map is read: every key of need there, and, unless loose, none but those of may
@@ -158,10 +161,10 @@ class Reader {
 		if (!isFields(x) || !this.only(x, ["file", "line"], ["file", "line", "column", "function"])) {
 			return
 		}
-		if (typeof x.file !== "string" || !whole(x.line)) return
+		if (typeof x.file !== "string" || !small(x.line)) return
 		const s: FileLocation = { file: x.file, line: x.line as number }
 		if ("column" in x) {
-			if (!whole(x.column)) return
+			if (!small(x.column)) return
 			s.column = x.column as number
 		}
 		if ("function" in x) {

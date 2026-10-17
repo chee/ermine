@@ -177,15 +177,7 @@
 				"q",
 				"b"
 			],
-			"expect": {
-				"from": [],
-				"commits": [
-					"q",
-					"r",
-					"x",
-					"b"
-				]
-			}
+			"expect": { "from": [], "commits": ["r", "q", "x", "b"] }
 		},
 		{
 			"op": "merge",

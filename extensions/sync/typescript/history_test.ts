@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "@std/assert"
+import { assert, assertEquals, assertThrows } from "@std/assert"
 import { type Commit, compare, encode, name } from "@ermine/encoding/commit"
 import { createHistory } from "./history.ts"
 import { replay } from "./replay.ts"
@@ -119,4 +119,41 @@ Deno.test("history: a head forgotten is gone as if never told of; its parent a h
 	// told again, it comes in again
 	assertEquals(h.add(b.bytes), "taken")
 	assertEquals(h.heads().map((k) => hex(k.name)), [hex(b.name)])
+})
+
+Deno.test("history: a throw in the check is no refusal: the commit waits on the check, the add throws once it is settled, and again judges it", () => {
+	let broken = true
+	const h = createHistory(() => {
+		if (broken) throw new Error("the check broke")
+		return true
+	})
+	const a = make("value", [], 1, [{ path: [], value: 0 }])
+	const b = make("value", [a.name], 2, [{ path: [], value: 1 }])
+	assertEquals(h.add(b.bytes), { waiting: [hex(a.name)] })
+	assertThrows(() => h.add(a.bytes), Error, "the check broke")
+	assertEquals(h.refused(), [])
+	assertEquals(h.waiting(), [{ name: hex(b.name), waiting: [hex(a.name)] }, {
+		name: hex(a.name),
+		waiting: [],
+	}])
+	assertEquals(h.add(a.bytes), "passed")
+	broken = false
+	h.again()
+	assertEquals(h.waiting(), [])
+	assertEquals(h.heads().map((k) => hex(k.name)), [hex(b.name)])
+})
+
+Deno.test("history: past most, the oldest commit waiting on a parent is let go of and told, and the oldest refusal forgotten", () => {
+	const dropped: string[] = []
+	const h = createHistory(() => true, { most: 2, dropped: (n) => dropped.push(n) })
+	const missing = new Uint8Array(32).fill(7)
+	const w = [1, 2, 3].map((i) => make("value", [missing], 2, [{ path: [], value: i }]))
+	for (const x of w) assertEquals(h.add(x.bytes), { waiting: [hex(missing)] })
+	assertEquals(dropped, [hex(w[0].name)])
+	assertEquals(h.waiting().map((x) => x.name), [hex(w[1].name), hex(w[2].name)])
+	// told again, it is judged again
+	assertEquals(h.add(w[0].bytes), { waiting: [hex(missing)] })
+	const bad = [5, 6, 7].map((i) => make("value", [], i, []))
+	for (const x of bad) assertEquals(h.add(x.bytes), { refused: "lamport" })
+	assertEquals(h.refused().map((x) => x.name), [hex(bad[1].name), hex(bad[2].name)])
 })

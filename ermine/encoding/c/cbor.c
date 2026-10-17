@@ -307,12 +307,20 @@ bool cborEncode(const Json *value, unsigned char *out, size_t capacity, size_t *
 				break;
 			case JSON_TYPED: putTyped(&o, value); break;
 			case JSON_STAND:
+				if (depth >= CBOR_DEPTH) {
+					fault = "a value nested deeper than " CBOR_DEPTH_TEXT;
+					break;
+				}
 				putHead(&o, 6, STAND);
 				stack = growArray(stack, depth, &room, sizeof *stack);
 				stack[depth++] = (Writing){ value, 0, -1, NULL };
 				break;
 			case JSON_ARRAY:
 			case JSON_OBJECT: {
+				if (depth >= CBOR_DEPTH) {
+					fault = "a value nested deeper than " CBOR_DEPTH_TEXT;
+					break;
+				}
 				bool list = value->type == JSON_ARRAY;
 				putHead(&o, list ? 4 : 5, (uint64_t)(list ? value->array.count : value->object.count));
 				stack = growArray(stack, depth, &room, sizeof *stack);
@@ -593,9 +601,16 @@ static Json *decode(const unsigned char *data, size_t length, const char **why, 
 			continue;
 		}
 		int64_t count;
+		size_t start = in.at;
 		Json *item = getItem(&in, &count);
 		if (!item) {
 			ok = false;
+			break;
+		}
+		// a container inside CBOR_DEPTH others
+		if (depth >= CBOR_DEPTH && (item->type == JSON_ARRAY || item->type == JSON_OBJECT || item->type == JSON_STAND)) {
+			if (build) jsonFree(item);
+			ok = fail(&in, start, "nested deeper than " CBOR_DEPTH_TEXT);
 			break;
 		}
 		if (!top) {

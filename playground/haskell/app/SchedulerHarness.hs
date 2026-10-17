@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 -- The scheduler on the line protocol (the scheduler suite). The harness plays the host: it keeps
 -- a value at each key; a compute's result is set at its key (to) and said changed by it.
 --
@@ -87,15 +88,17 @@ data Comp = Comp
   , cF :: J
   , cMade :: Int
   , cRuns :: Int
-  , cRank :: Int
   , cDue :: Maybe (Int, [Int]) -- the tick that made it due, the cause chain
   , cWaits :: Maybe Int
   , cPrev :: Maybe SV -- a compute's last given to set; an effect's last acted on
   , cLatest :: Maybe Int -- its latest run
   , cInfoRun :: Int
   , cMark :: Int
-  , cAfter :: [Int]
+  , cVals :: [Int] -- the writers of the keys its last run read, as they were when it ended
+  , cAfterW :: Maybe Int
   , cDone :: Int -- runs told their end
+  , cFlag :: Bool
+  , cAside :: [(Ctx, J)] -- its cleanups set aside before a run, oldest first
   }
 
 data Child = CScope Int | CCleanup Ctx J
@@ -118,6 +121,7 @@ data Run = Run
   , rCut :: Maybe [Int]
   , rReads :: [String]
   , rEnded :: Bool -- told its end (a pending run is still open)
+  , rFlag :: Bool -- its computation's latest mark, when it began, was on a loop through it
   }
 
 data Named = NoOne | ByRun Int | ByComp Int
@@ -162,6 +166,8 @@ data W = W
   , wPulses :: Int
   , wEarlyQ :: [(Int, Int, SV)]
   , wActQ :: [(Int, Int, SV)]
+  , wThrown :: Maybe String -- the first error a listener or a cleanup after a run threw, held
+  , wArmed :: Maybe (String, Maybe String, String) -- a listener armed to throw, once
   }
 
 type S = IORef W
@@ -171,6 +177,36 @@ fresh s = do
   w <- readIORef s
   writeIORef s w {wNext = wNext w + 1}
   pure (wNext w)
+
+-- | the first error held while what was going on finishes
+hold :: S -> String -> IO ()
+hold s m = modifyIORef' s (\w -> w {wThrown = maybe (Just m) Just (wThrown w)})
+
+-- | a braced: what is held inside comes out after it is all done; what was held around it is
+-- held again
+braced :: S -> IO a -> IO a
+braced s act = do
+  outer <- wThrown <$> readIORef s
+  modifyIORef' s (\w -> w {wThrown = Nothing})
+  r <- try act
+  t <- wThrown <$> readIORef s
+  modifyIORef' s (\w -> w {wThrown = outer})
+  case t of
+    Just m -> throwIO (Err m)
+    Nothing -> either (\e -> throwIO (e :: Thrown)) pure r
+
+-- | the armed listener l, told of one of ats: it throws, once
+fireL :: S -> String -> [String] -> IO (Maybe String)
+fireL s on ats = do
+  w <- readIORef s
+  case wArmed w of
+    Just (o, at, err) | o == on, maybe True (`elem` ats) at -> do
+      writeIORef s w {wArmed = Nothing}
+      pure (Just err)
+    _ -> pure Nothing
+
+holdL :: S -> String -> [String] -> IO ()
+holdL s on ats = fireL s on ats >>= maybe (pure ()) (hold s)
 
 fromJ :: S -> J -> IO SV
 fromJ s j = case j of
@@ -286,7 +322,7 @@ markBy s keys named register = do
         then pure ([], Nothing)
         else do
           let chainR = if isJust (rPulse run) && rPulse run == wPulse w0 then rChain run else []
-              flagged = c `elem` rChain run && not (rEnded run)
+              flagged = rFlag run && not (rEnded run)
           pure (chainR ++ [c], if flagged then Just r else Nothing)
   writerName <- maybe (pure Nothing) (fmap Just . nameOf s) wc
   forM_ keys $ \k -> do
@@ -296,16 +332,18 @@ markBy s keys named register = do
       when ok $ do
         yc <- comp s y
         case cDue yc of
-          Just (dt, ch) -> modComp s y (\c -> c {cDue = Just (dt, ch ++ filter (`notElem` ch) chain)})
+          Just (dt, ch) -> modComp s y (\c -> c {cDue = Just (dt, ch ++ filter (`notElem` ch) chain), cFlag = y `elem` chain})
           Nothing -> case cutter of
             Just r | y `elem` chain -> do
               let members = drop (fromMaybe 0 (elemIndex y chain)) chain
               through <- byMade s members
               modifyIORef' s (\ww -> ww {wRuns = M.adjust (\rr -> rr {rCut = Just (fromMaybe through (rCut rr))}) r (wRuns ww)})
             _ -> do
-              modComp s y (\c -> c {cDue = Just (t, chain)})
+              modComp s y (\c -> c {cDue = Just (t, chain), cFlag = y `elem` chain})
               n <- nameOf s y
               moment s (obj ([("due", JStr n), ("tick", JNum (fromIntegral t))] ++ maybe [] (\x -> [("writer", JStr x)]) writerName))
+  failed <- fireL s "mark" keys
+  maybe (pure ()) (throwIO . Err) failed
 
 byMade :: S -> [Int] -> IO [Int]
 byMade s xs = do
@@ -314,7 +352,7 @@ byMade s xs = do
 
 -- tracking ---------------------------------------------------------------------------------
 
-trackRead :: S -> Int -> String -> IO ()
+trackRead :: S -> Int -> String -> IO (Maybe String)
 trackRead s r k = do
   w <- readIORef s
   let run = wRuns w M.! r
@@ -322,6 +360,7 @@ trackRead s r k = do
       tr = T.track (compNode (rComp run)) (keyNode k) (wTracker w)
       after = length (T.readers (keyNode k) tr)
   writeIORef s w {wTracker = tr, wRuns = M.insert r run {rReads = rReads run ++ [k]} (wRuns w), wStarted = if before == 0 && after > 0 then wStarted w ++ [k] else wStarted w}
+  if before == 0 && after > 0 then fireL s "started" [k] else pure Nothing
 
 -- | keys no longer read after a change to the tracker are forgotten
 retrack :: S -> Int -> (T.Tracker -> T.Tracker) -> IO ()
@@ -331,58 +370,38 @@ retrack s c f = do
       tr = f (wTracker w)
       gone = [k | k <- keys, null (T.readers (keyNode k) tr)]
   writeIORef s w {wTracker = tr, wForgot = wForgot w ++ gone}
+  forM_ gone $ \k -> holdL s "forgotten" [k]
 
 -- ranks ------------------------------------------------------------------------------------
 
+-- | what a run's end teaches: the keys it read, and the one it waits after (a stop)
 learn :: S -> Int -> Int -> Maybe Int -> IO ()
 learn s c r waits = do
   w <- readIORef s
   let run = wRuns w M.! r
-      ws = nub (mapMaybe (`M.lookup` wWriter w) (nub (rReads run)))
-  ls <- filterM (live s) (filter (/= c) (ws ++ maybe [] pure waits))
-  modComp s c (\cc -> cc {cAfter = nub ls})
-  mend s c
+  modComp s c (\cc -> cc {cVals = nub (mapMaybe (`M.lookup` wWriter w) (rReads run)), cAfterW = waits})
 
--- | ranks after c's edges changed: c's own rank only rises; a cycle shares one rank, one past
--- what it is after; what is after them follows
-mend :: S -> Int -> IO ()
-mend s c = do
-  w <- readIORef s
-  let comps = M.fromList [(i, cc) | (i, sc) <- M.toList (wScopes w), not (sGone sc), Just cc <- [sComp sc]]
-      after i = filter (`M.member` comps) (maybe [] cAfter (M.lookup i comps))
-      reach start = go S.empty [start]
-        where
-          go seen [] = seen
-          go seen (x : xs)
-            | S.member x seen = go seen xs
-            | otherwise = go (S.insert x seen) (after x ++ xs)
-      dependents i = [j | j <- M.keys comps, i `elem` after j]
-      sccOf i = [j | j <- S.toList (reach i), S.member i (reach j)]
-      rankOf m i = maybe 0 cRank (M.lookup i m)
-      base m members =
-        let outs = [a | x <- members, a <- after x, a `notElem` members]
-         in if null outs then 0 else 1 + maximum (map (rankOf m) outs)
-      setRank m i r = M.adjust (\cc -> cc {cRank = r}) i m
-      comp0 = sccOf c
-      (m1, lowered)
-        | length comp0 > 1 =
-            let b = base comps comp0
-             in (foldl (\m i -> setRank m i b) comps comp0, any (\i -> rankOf comps i > b) comp0)
-        | otherwise = (setRank comps c (max (rankOf comps c) (base comps [c])), False)
-      -- what is after the changed, again and again until nothing moves
-      settle m n done
-        | n > (200 :: Int) = m
-        | otherwise =
-            let downs = nub [d | x <- done, d <- dependents x, d `notElem` comp0]
-                step (mm, changed) d =
-                  let members = let sc = sccOf d in if length sc > 1 then sc else [d]
-                      b = base mm members
-                      new = if lowered then b else max (rankOf mm d) b
-                   in if new /= rankOf mm d then (foldl (\m' i -> setRank m' i new) mm members, changed ++ members) else (mm, changed)
-                (m', ch) = foldl step (m, []) downs
-             in if null ch then m' else settle m' (n + 1) ch
-      final = settle m1 0 comp0
-  forM_ (M.toList final) $ \(i, cc) -> modComp s i (\x -> x {cRank = cRank cc})
+-- | what a computation is after: the writers of the keys its last run read (then), and the one it
+-- waits after; the ones gone or itself left out
+afterOf :: W -> Int -> [Int]
+afterOf w c = case M.lookup c (wScopes w) >>= sComp of
+  Nothing -> []
+  Just cc ->
+    nub
+      [ x
+      | x <- cVals cc ++ maybe [] pure (cAfterW cc)
+      , x /= c
+      , maybe False (not . sGone) (M.lookup x (wScopes w))
+      ]
+
+-- | every computation after c, through the ones not due too
+reachAfter :: W -> Int -> S.Set Int
+reachAfter w start = go S.empty (afterOf w start)
+  where
+    go seen [] = seen
+    go seen (x : xs)
+      | S.member x seen = go seen xs
+      | otherwise = go (S.insert x seen) (afterOf w x ++ xs)
 
 -- scopes -----------------------------------------------------------------------------------
 
@@ -418,32 +437,73 @@ runCleanup s i made e = do
     Left (StopOn _) -> Nothing
     Right _ -> Nothing
 
--- | dispose a scope: what is under it first, newest first, then its cleanups, newest first; the
--- first error after them all
-dispose :: S -> Int -> IO (Maybe String)
+-- | dispose a scope: what is under it first, newest first, then its cleanups (those set aside
+-- first, oldest), newest first; every one runs, and the first error is thrown after them all
+-- (what a listener threw in it comes first)
+dispose :: S -> Int -> IO ()
 dispose s i = do
   sc <- scope s i
-  if sGone sc
-    then pure Nothing
-    else do
-      putScope s i sc {sGone = True}
-      when (isJust (sComp sc)) $ do
-        modComp s i (\c -> c {cDue = Nothing, cWaits = Nothing})
+  unless (sGone sc) $ braced s $ do
+    putScope s i sc {sGone = True}
+    aside <- case sComp sc of
+      Just c -> do
+        modComp s i (\x -> x {cDue = Nothing, cWaits = Nothing, cAside = []})
         modifyIORef' s (\w -> w {wEarlyQ = filter (\(x, _, _) -> x /= i) (wEarlyQ w), wActQ = filter (\(x, _, _) -> x /= i) (wActQ w)})
         retrack s i (T.untrackAll (compNode i))
         modifyIORef' s (\w -> w {wWriter = M.filter (/= i) (wWriter w)})
-      errs <- dropKids s i (const True)
-      pure (msum errs)
+        pure (cAside c)
+      Nothing -> pure []
+    errs <- dropKids s i aside (const True)
+    forM_ (msum errs) (hold s)
 
-dropKids :: S -> Int -> (Phase -> Bool) -> IO [Maybe String]
-dropKids s i which = do
+-- | what is under i of these phases goes: scopes, newest first, then cleanups (aside, older,
+-- first), newest first. the errors, in order
+dropKids :: S -> Int -> [(Ctx, J)] -> (Phase -> Bool) -> IO [Maybe String]
+dropKids s i aside which = do
   sc <- scope s i
   let mine = [k | (ph, k) <- sKids sc, which ph]
       kept = [(ph, k) | (ph, k) <- sKids sc, not (which ph)]
   putScope s i sc {sKids = kept}
-  e1 <- forM (reverse [x | CScope x <- mine]) (dispose s)
-  e2 <- forM (reverse [(c, e) | CCleanup c e <- mine]) (\(c, e) -> runCleanup s i c e)
+  e1 <- forM (reverse [x | CScope x <- mine]) (\x -> either (\(e :: Thrown) -> Just (errText e)) (const Nothing) <$> try (dispose s x))
+  e2 <- forM (reverse (aside ++ [(c, e) | CCleanup c e <- mine])) (\(c, e) -> runCleanup s i c e)
   pure (e1 ++ e2)
+
+errText :: Thrown -> String
+errText (Err m) = m
+errText Pend = "pending"
+errText (StopOn _) = "stopped"
+
+-- | before a run: what is under c of these phases goes (what one threw held), its own cleanups
+-- are set aside, to run once the run is done
+shed :: S -> Int -> IO ()
+shed s c = do
+  cc <- comp s c
+  sc <- scope s c
+  let which = if isEffect cc then (== PRun) else const True
+      mine = [(ctx, e) | (ph, CCleanup ctx e) <- sKids sc, which ph]
+      kids = [(ph, k) | (ph, k@(CScope _)) <- sKids sc, which ph]
+      rest = [(ph, k) | (ph, k) <- sKids sc, not (which ph)]
+  putScope s c sc {sKids = rest}
+  modComp s c (\x -> x {cAside = cAside x ++ mine})
+  e1 <- forM (reverse [x | (_, CScope x) <- kids]) (\x -> either (\(e :: Thrown) -> Just (errText e)) (const Nothing) <$> try (dispose s x))
+  forM_ (msum e1) (hold s)
+
+-- | the cleanups set aside before r, once r is done, newest first: no catch, the first that
+-- throws ends the rest, its error held
+lay :: S -> Int -> Int -> IO ()
+lay s c r = do
+  cc <- comp s c
+  g <- not <$> live s c
+  unless (null (cAside cc) || g || cLatest cc /= Just r) $ do
+    let fs = cAside cc
+    modComp s c (\x -> x {cAside = []})
+    let go [] = pure ()
+        go ((ctx, e) : rest) = do
+          m <- runCleanup s c ctx e
+          case m of
+            Just err -> hold s err
+            Nothing -> go rest
+    go (reverse fs)
 
 -- | make a scope or computation's scope under parent
 makeScope :: S -> Ctx -> Maybe String -> Int -> [(String, SV)] -> Maybe Comp -> IO Int
@@ -479,26 +539,33 @@ infoSV v = case v of
 
 -- | a computation made: due at once, at its tick; an early effect runs and acts at once
 makeComp :: S -> Ctx -> String -> Int -> Kind -> J -> Bool -> IO ()
-makeComp s ctx name parent kind f declared = do
+makeComp s ctx name parent kind f declared = braced s $ do
   w0 <- readIORef s
   let made = wNext w0
   modifyIORef' s (\w -> w {wTick = wTick w + 1})
   t <- wTick <$> readIORef s
-  let c = Comp kind f made 0 0 (Just (t, [])) Nothing Nothing Nothing 0 t [] 0
+  let c = Comp kind f made 0 (Just (t, [])) Nothing Nothing Nothing 0 t [] Nothing 0 False []
   i <- makeScope s ctx (Just name) parent [] (Just c)
   creator <- maybe (pure Nothing) (fmap Just . nameOf s) (xShow ctx)
   moment s (obj ([("due", JStr name), ("tick", JNum (fromIntegral t))] ++ maybe [] (\x -> [("writer", JStr x)]) creator))
   case kind of
     Compute (Just k) _ _ | declared -> modifyIORef' s (\w -> w {wWriter = M.insert k i (wWriter w)})
     _ -> pure ()
+  holdL s "mark" []
   case kind of
     Effect _ True _ -> do
-      runOnce s i
+      let held act' = do
+            r <- try act'
+            case r of
+              Left (Err m) -> hold s m
+              Left e -> throwIO e
+              Right () -> pure ()
+      held (runOnce s i)
       w <- readIORef s
       case [e | e@(x, _, _) <- wEarlyQ w, x == i] of
         (e : _) -> do
           modifyIORef' s (\ww -> ww {wEarlyQ = filter (\(x, _, _) -> x /= i) (wEarlyQ ww)})
-          act s True e
+          held (act s True e)
         [] -> pure ()
     _ -> pure ()
 
@@ -506,6 +573,7 @@ makeComp s ctx name parent kind f declared = do
 
 endMoment :: S -> Int -> Int -> String -> [(String, J)] -> IO ()
 endMoment s c r how extra = do
+  lay s c r
   when (how /= "pending") $ do
     modifyIORef' s (\w -> w {wRuns = M.adjust (\rr -> rr {rEnded = True}) r (wRuns w)})
     modComp s c (\x -> x {cDone = cDone x + 1})
@@ -514,6 +582,7 @@ endMoment s c r how extra = do
   let reads = maybe [] rReads (M.lookup r (wRuns w))
       no = maybe 0 rNo (M.lookup r (wRuns w))
   moment s (obj ([("ends", JStr n), ("run", JNum (fromIntegral no)), ("ended", JStr how)] ++ extra ++ [("reads", JArr (map JStr reads))]))
+  holdL s "ends" [n]
 
 throughOf :: S -> Int -> Int -> IO [Int]
 throughOf s c r = do
@@ -524,25 +593,27 @@ throughOf s c r = do
 namesJ :: S -> [Int] -> IO J
 namesJ s xs = JArr . map JStr <$> mapM (nameOf s) xs
 
--- | one run of a due computation
+-- | one run of a due computation, a braced of its own: what a listener or a cleanup after it
+-- threw comes out once it is done
 runOnce :: S -> Int -> IO ()
-runOnce s c = do
+runOnce s c = braced s $ do
   cc <- comp s c
   let (dueT, chain) = fromMaybe (cMark cc, []) (cDue cc)
   r <- fresh s
   w0 <- readIORef s
   let no = cRuns cc + 1
-  modifyIORef' s (\w -> w {wRuns = M.insert r (Run c no chain (wPulse w0) Nothing [] False) (wRuns w)})
+  modifyIORef' s (\w -> w {wRuns = M.insert r (Run c no chain (wPulse w0) Nothing [] False (cFlag cc)) (wRuns w)})
   modComp s c (\x -> x {cDue = Nothing, cWaits = Nothing, cRuns = no, cLatest = Just r})
   n <- nameOf s c
-  moment s (obj [("starts", JStr n), ("run", JNum (fromIntegral no)), ("rank", JNum (fromIntegral (cRank cc)))])
-  -- what the last run made goes first
-  terr <- msum <$> dropKids s c (== PRun)
+  moment s (obj [("starts", JStr n), ("run", JNum (fromIntegral no))])
+  holdL s "starts" [n]
+  -- what the last run made goes first, its cleanups set aside
+  shed s c
   stillHere <- live s c
-  when stillHere $ runBody s c r no dueT chain terr
+  when stillHere $ runBody s c r no dueT chain
 
-runBody :: S -> Int -> Int -> Int -> Int -> [Int] -> Maybe String -> IO ()
-runBody s c r no dueT chain terr = do
+runBody :: S -> Int -> Int -> Int -> Int -> [Int] -> IO ()
+runBody s c r no dueT chain = do
   cc <- comp s c
   modComp s c (\x -> x {cInfoRun = no, cMark = dueT})
   modifyIORef' s (\w -> w {wTracker = T.begin (compNode c) (wTracker w)})
@@ -569,9 +640,7 @@ runBody s c r no dueT chain terr = do
               modifyIORef' s (\w -> w {wPromise = M.adjust (\pr -> pr {pRun = Just r}) p (wPromise w)})
               pending s c r
             Right SPend -> pending s c r
-            Right v -> case terr of
-              Just e -> failed s c r e
-              Nothing -> finish s c r v
+            Right v -> finish s c r v
 
 dropQueued :: S -> Int -> IO ()
 dropQueued s c = modifyIORef' s (\w -> w {wEarlyQ = filter (\(x, _, _) -> x /= c) (wEarlyQ w), wActQ = filter (\(x, _, _) -> x /= c) (wActQ w)})
@@ -605,7 +674,7 @@ finish s c r v = do
   let json = case cKind cc of Compute _ j _ -> j; Effect _ _ j -> j
       eq a b = if json then jsonEq a b else objectIs a b
       equal = maybe False (`eq` v) (cPrev cc)
-      flagged = c `elem` rChain run
+      flagged = rFlag run
   case rCut run of
     Just th -> do
       tj <- namesJ s th
@@ -622,15 +691,14 @@ finish s c r v = do
           dropQueued s c
       | otherwise -> case cKind cc of
           Compute to _ setE -> do
-            forM_ to $ \k -> do
-              modifyIORef' s (\w -> w {wStore = M.insert k v (wStore w)})
-              markBy s [k] (ByRun r) True
-            res <- case setE of
-              Nothing -> pure Nothing
-              Just e -> do
-                let ctx = Ctx (Just c) (Just c) (ByComp c) (ByComp c) Nothing (Just v) (Just v) PRun (Just c)
-                out <- try (eval s ctx e)
-                pure $ case out of
+            let setting = do
+                  forM_ to $ \k -> do
+                    modifyIORef' s (\w -> w {wStore = M.insert k v (wStore w)})
+                    markBy s [k] (ByRun r) True
+                  forM_ setE $ \e ->
+                    eval s (Ctx (Just c) (Just c) (ByComp c) (ByComp c) Nothing (Just v) (Just v) PRun (Just c)) e
+            out <- try setting
+            let res = case out of
                   Left (Err m) -> Just m
                   Left Pend -> Just "pending"
                   _ -> Nothing
@@ -647,16 +715,16 @@ finish s c r v = do
             modifyIORef' s $ \w ->
               if early then w {wEarlyQ = wEarlyQ w ++ [(c, r, v)]} else w {wActQ = wActQ w ++ [(c, r, v)]}
 
--- | an effect acts on a run's value
+-- | an effect acts on a run's value: what is under it goes, then it acts. a braced: what a
+-- listener threw comes out after
 act :: S -> Bool -> (Int, Int, SV) -> IO ()
-act s early (c, r, v) = do
-  _ <- dropKids s c (== PRun)
-  _ <- dropKids s c (== PAct)
+act s early (c, r, v) = braced s $ do
+  errs <- dropKids s c [] (const True)
   here <- live s c
-  when here $ act' s early (c, r, v)
+  when here $ act' s early (c, r, v) (msum errs)
 
-act' :: S -> Bool -> (Int, Int, SV) -> IO ()
-act' s early (c, r, v) = do
+act' :: S -> Bool -> (Int, Int, SV) -> Maybe String -> IO ()
+act' s early (c, r, v) cleaned = do
   cc <- comp s c
   let ctx = Ctx (Just c) (Just c) (ByComp c) (ByComp c) Nothing (Just v) (cPrev cc) PAct (Just c)
   case cKind cc of
@@ -666,16 +734,18 @@ act' s early (c, r, v) = do
       when ok $ modComp s c (\x -> x {cPrev = Just v})
       n <- nameOf s c
       no <- maybe 0 rNo . M.lookup r . wRuns <$> readIORef s
-      let err = case out of
-            Left (Err m) -> [("error", JStr m)]
-            Left Pend -> [("error", JStr "pending")]
-            _ -> []
+      let thrown = case out of
+            Left (Err m) -> Just m
+            Left Pend -> Just "pending"
+            _ -> Nothing
+          err = [("error", JStr m) | Just m <- [maybe thrown Just cleaned]]
       moment s (obj ([("acts", JStr n), ("run", JNum (fromIntegral no))] ++ [("early", JBool True) | early] ++ err))
+      holdL s "acts" [n]
     _ -> pure ()
 
 -- | land a settled promise: only on its computation's latest run, not gone, not due again
 land :: S -> (Int, Outcome) -> IO ()
-land s (p, o) = do
+land s (p, o) = braced s $ do
   w <- readIORef s
   case M.lookup p (wPromise w) >>= pRun of
     Nothing -> pure ()
@@ -692,15 +762,22 @@ land s (p, o) = do
 
 -- pulses -----------------------------------------------------------------------------------
 
--- | does a wait (transitively) on b?
+-- | does a wait after b: the one it waits after, that one's, and on
 waitsOn :: W -> Int -> Int -> Bool
 waitsOn w a b = go S.empty a
   where
     go seen x
       | S.member x seen = False
-      | otherwise = case M.lookup x (wScopes w) >>= sComp >>= cWaits of
+      | otherwise = case M.lookup x (wScopes w) >>= sComp >>= cAfterW of
           Just y -> y == b || go (S.insert x seen) y
           Nothing -> False
+
+-- | no due computation is above i: what it is after, and what that is after, through the ones not
+-- due, but for one on a cycle with it
+noneAbove :: W -> Int -> Bool
+noneAbove w i = not (any above (S.toList (reachAfter w i)))
+  where
+    above d = d /= i && maybe False isDue (M.lookup d (M.mapMaybe sComp (wScopes w))) && not (S.member i (reachAfter w d))
 
 runnable :: W -> [(Int, Comp)]
 runnable w =
@@ -717,16 +794,22 @@ runnable w =
 pulse :: S -> IO (Maybe String)
 pulse s = do
   modifyIORef' s (\w -> w {wPulses = wPulses w + 1, wPulse = Just (wPulses w + 1), wCount = 0})
-  settled <- wSettled <$> readIORef s
-  modifyIORef' s (\w -> w {wSettled = []})
-  mapM_ (land s) settled
-  r <- try rounds
+  r <- try (landing >> rounds)
   modifyIORef' s (\w -> w {wPulse = Nothing})
   pure $ case r of
     Left (Err m) -> Just m
     Left _ -> Nothing
     Right () -> Nothing
   where
+    -- the settled land first, one at a time: one that threw leaves the rest for the next pulse
+    landing = do
+      settled <- wSettled <$> readIORef s
+      case settled of
+        [] -> pure ()
+        (x : rest) -> do
+          modifyIORef' s (\w -> w {wSettled = rest})
+          land s x
+          landing
     endless = do
       n <- wCount <$> readIORef s
       when (n > 10000) (throwIO (Err "endless"))
@@ -738,7 +821,7 @@ pulse s = do
     runAll = do
       endless
       w <- readIORef s
-      case sortOn (\(_, c) -> (cRank c, maybe 0 fst (cDue c), cMade c)) (runnable w) of
+      case sortOn (\(_, c) -> (maybe 0 fst (cDue c), cMade c)) (filter (noneAbove w . fst) (runnable w)) of
         [] -> pure ()
         ((i, _) : _) -> runOnce s i >> runAll
     acts = do
@@ -748,12 +831,21 @@ pulse s = do
       modifyIORef' s (\ww -> ww {wEarlyQ = [], wActQ = []})
       early' <- ownersFirst early
       rest' <- ownersFirst rest
-      forM_ ((map ((,) True) early') ++ map ((,) False) rest') $ \(e, q@(c, r, _)) -> do
-        endless
-        ok <- live s c
-        when ok $ do
-          cc <- comp s c
-          when (not (isDue cc) && cLatest cc == Just r) (act s e q)
+      let go [] = pure ()
+          go ((e, q@(c, r, _)) : more) = do
+            endless
+            res <- try $ do
+              ok <- live s c
+              when ok $ do
+                cc <- comp s c
+                when (not (isDue cc) && cLatest cc == Just r) (act s e q)
+            case res of
+              Right () -> go more
+              Left (ex :: Thrown) -> do
+                -- what is not taken yet waits in its queue for the next pulse
+                modifyIORef' s (\ww -> ww {wEarlyQ = [y | (True, y) <- more] ++ wEarlyQ ww, wActQ = [y | (False, y) <- more] ++ wActQ ww})
+                throwIO ex
+      go (map ((,) True) early' ++ map ((,) False) rest')
     -- an owner's act before what it made
     ownersFirst q = do
       owners <- forM q $ \(c, _, _) -> ancestors c
@@ -804,7 +896,7 @@ evalForm s ctx form arg = case form of
     case xTrack ctx of
       Nothing -> pure v
       Just r -> do
-        trackRead s r k
+        failedStart <- trackRead s r k
         let me = rComp (wRuns w M.! r)
         case M.lookup k (wWriter w) of
           Just wr | wr /= me -> do
@@ -812,8 +904,9 @@ evalForm s ctx form arg = case form of
             when okW $ do
               wc <- comp s wr
               w' <- readIORef s
-              when ((isDue wc || isJust (cWaits wc)) && not (waitsOn w' wr me)) (throwIO (StopOn wr))
+              when (isDue wc && not (waitsOn w' wr me) && me `notElem` maybe [] snd (cDue wc)) (throwIO (StopOn wr))
           _ -> pure ()
+        maybe (pure ()) (throwIO . Err) failedStart
         pure v
   "sum" -> do
     vs <- mapM (eval s ctx) (args arg)
@@ -862,10 +955,7 @@ evalForm s ctx form arg = case form of
         _ -> throwIO (Err "write: by")
       v <- eval s ctx ej
       modifyIORef' s (\w -> w {wStore = M.insert k v (wStore w)})
-      let own = case (named, xTrack ctx) of
-            (ByRun r, Just t) -> r == t
-            _ -> False
-      markBy s [k] named (not own)
+      markBy s [k] named True
       pure v
     _ -> throwIO (Err "write: key and value")
   "throw" -> do
@@ -954,8 +1044,8 @@ evalForm s ctx form arg = case form of
   "dispose" -> do
     n <- eval s ctx arg >>= keyOf
     i <- lookupScope s n
-    r <- dispose s i
-    maybe (pure SNull) (throwIO . Err) r
+    dispose s i
+    pure SNull
   "quote" -> fromJ s arg
   other -> throwIO (Err ("unknown form " ++ other))
   where
@@ -984,7 +1074,7 @@ current s ctx = case xOpen ctx of
 
 main :: IO ()
 main = do
-  s <- newIORef (W M.empty M.empty M.empty M.empty M.empty T.empty 0 1 [] 0 [] [] [] M.empty M.empty [] Nothing 0 [] [])
+  s <- newIORef (W M.empty M.empty M.empty M.empty M.empty T.empty 0 1 [] 0 [] [] [] M.empty M.empty [] Nothing 0 [] [] Nothing Nothing)
   serveIO () (\_ j -> (\a -> (a, ())) <$> answer s j)
 
 answer :: S -> J -> IO J
@@ -1043,8 +1133,8 @@ request s req = case getStr "op" req of
     pure (obj [])
   Just "dispose" -> do
     i <- need req "scope" >>= lookupScope s
-    r <- dispose s i
-    maybe (pure (obj [])) (throwIO . Err) r
+    dispose s i
+    pure (obj [])
   Just "run" -> do
     i <- need req "scope" >>= usable s
     isC <- isComp s i
@@ -1073,6 +1163,12 @@ request s req = case getStr "op" req of
       t <- wTick <$> readIORef s
       pure (obj [("tick", JNum (fromIntegral t))])
     _ -> throwIO (Err "keys: not a list")
+  Just "listener" -> do
+    l <- need req "on"
+    unless (l `elem` ["mark", "starts", "ends", "acts", "forgotten", "started"]) (throwIO (Err ("unknown listener " ++ l)))
+    e <- need req "throw"
+    modifyIORef' s (\w -> w {wArmed = Just (l, getStr "at" req, e)})
+    pure (obj [])
   Just "pulse" -> do
     r <- pulse s
     pure (maybe (obj []) (\m -> obj [("error", JStr m)]) r)

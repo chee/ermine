@@ -14,6 +14,7 @@ import Form
 import Invert
 import Json
 import Line
+import Data.Maybe (isNothing)
 
 -- what `same` compares: a container by identity, anything else by content
 data Token = Ident Int | Leaf V
@@ -106,6 +107,22 @@ cut st v = case v of
       | i /= 0 && (S.member i (owned st) || M.lookup i (records st) == shallow x) = i
       | otherwise = 0
 
+-- | op with cow: false (unread's) gives a move's undo a deep copy of what was taken, when the undo
+-- does not move it back: the last patch of the group, its value with no identity
+copyTake :: V -> [Patch] -> [Patch]
+copyTake pv grp = case (parsePatch pv, grp) of
+  (Just (Patch _ _ _ (Just _)), _ : _)
+    | all (isNothing . pMove) grp
+    , Patch a b (Just v) c <- last grp ->
+        init grp ++ [Patch a b (Just (bare v)) c]
+  _ -> grp
+
+bare :: V -> V
+bare v = case v of
+  VListI _ xs -> VListI 0 (map bare xs)
+  VMapI _ kvs -> VMapI 0 [(k, bare x) | (k, x) <- kvs]
+  _ -> v
+
 idsIn :: V -> S.Set Int
 idsIn v = case v of
   VList xs -> self (S.unions (map idsIn xs))
@@ -169,7 +186,8 @@ write req ps0 st0 =
    in case run (root st2) st2 0 ps of
         Left (c, i) -> (obj [("error", JStr c), ("patch", JNum (fromIntegral i))], st2)
         Right (r', st3) -> do
-          let undo = either (const []) (map (cut st2 . patchV)) (invertPatches (root st2) ps)
+          let undo = either (const []) (map (cut st2 . patchV) . concat . zipWith copyTake (reverse ps)) groups
+              groups = invertGroups (root st2) ps
               live = maybe S.empty idsIn r'
               st4 = st3 {root = r', owned = S.intersection (owned st3) live, lastUndo = Just undo}
           (obj [("undo", JArr (map toForm undo))], st4)

@@ -6,7 +6,7 @@
 			"name": "a",
 			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
 			"expect": {
-				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
 			}
 		},
 		{
@@ -14,7 +14,7 @@
 			"name": "b",
 			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
 			"expect": {
-				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+				"key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
 			}
 		},
 		{
@@ -180,7 +180,7 @@
 			"expect": {
 				"standing": [
 					[
-						"8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
 						"e1"
 					]
 				]
@@ -193,7 +193,7 @@
 			"expect": {
 				"standing": [
 					[
-						"8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
 						"e1"
 					]
 				]
@@ -213,7 +213,7 @@
 					},
 					"on": [
 						{
-							"by": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+							"by": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
 							"name": "e1",
 							"tables": [
 								"value"
@@ -238,7 +238,7 @@
 					},
 					"on": [
 						{
-							"by": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+							"by": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
 							"name": "e1",
 							"tables": [
 								"value"
@@ -321,7 +321,7 @@
 			"expect": {
 				"standing": [
 					[
-						"8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
 						"e2"
 					]
 				]
@@ -344,12 +344,12 @@
 						}
 					],
 					"time": 1760000000,
-					"signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
 					"nonce": 3338457403,
 					"parents": [
 						"w0"
 					],
-					"lamport": 3,
+					"lamport": 2,
 					"patches": [
 						{
 							"path": [],
@@ -376,12 +376,12 @@
 					},
 					"on": [
 						{
-							"by": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+							"by": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
 							"name": "e2",
 							"tables": [
 								"value"
 							],
-							"lamport": 3
+							"lamport": 2
 						}
 					]
 				}

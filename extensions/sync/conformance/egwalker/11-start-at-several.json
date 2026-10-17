@@ -105,17 +105,7 @@
 				"m1",
 				"m2"
 			],
-			"expect": {
-				"from": [
-					"r"
-				],
-				"commits": [
-					"a",
-					"b",
-					"m2",
-					"m1"
-				]
-			}
+			"expect": { "from": ["r"], "commits": ["b", "a", "m2", "m1"] }
 		},
 		{
 			"op": "merge",
@@ -158,16 +148,7 @@
 				"m1",
 				"m2"
 			],
-			"expect": {
-				"from": [
-					"b",
-					"a"
-				],
-				"commits": [
-					"m2",
-					"m1"
-				]
-			}
+			"expect": { "from": ["a", "b"], "commits": ["m2", "m1"] }
 		},
 		{
 			"op": "merge",
@@ -214,18 +195,7 @@
 				"m2",
 				"c"
 			],
-			"expect": {
-				"from": [
-					"r"
-				],
-				"commits": [
-					"a",
-					"b",
-					"c",
-					"m2",
-					"m1"
-				]
-			}
+			"expect": { "from": ["r"], "commits": ["b", "a", "m2", "m1", "c"] }
 		},
 		{
 			"op": "merge",
@@ -235,15 +205,7 @@
 				"c"
 			],
 			"expect": {
-				"tables": {
-					"value": {
-						"value": "<Ca1b2>",
-						"change": {
-							"time": 0,
-							"actor": null
-						}
-					}
-				}
+				"tables": { "value": { "value": "C<a1b2>", "change": { "time": 0, "actor": null } } }
 			}
 		}
 	]

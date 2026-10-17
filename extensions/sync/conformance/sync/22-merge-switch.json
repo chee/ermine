@@ -9,7 +9,7 @@
 				"eg-walker"
 			],
 			"expect": {
-				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
 			}
 		},
 		{
@@ -20,7 +20,7 @@
 				"eg-walker"
 			],
 			"expect": {
-				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+				"key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
 			}
 		},
 		{
@@ -270,9 +270,7 @@
 			"op": "read",
 			"host": "a",
 			"id": "x",
-			"expect": {
-				"value": "21>a note!"
-			}
+			"expect": { "value": "12>a note!" }
 		},
 		{
 			"op": "conflicts",
@@ -291,9 +289,7 @@
 			"op": "read",
 			"host": "a",
 			"id": "x",
-			"expect": {
-				"value": "2>a note!"
-			}
+			"expect": { "value": "1>a note!" }
 		},
 		{
 			"op": "conflicts",
@@ -301,14 +297,7 @@
 			"id": "x",
 			"expect": {
 				"conflicts": [
-					{
-						"head": "ta2",
-						"lamport": 5,
-						"actor": "a",
-						"tables": {
-							"value": "1>a note!"
-						}
-					}
+					{ "head": "tb2", "lamport": 5, "actor": "b", "tables": { "value": "2>a note!" } }
 				]
 			}
 		},
@@ -327,9 +316,7 @@
 			"op": "read",
 			"host": "a",
 			"id": "x",
-			"expect": {
-				"value": "21>a note!"
-			}
+			"expect": { "value": "12>a note!" }
 		},
 		{
 			"op": "restart",
@@ -344,9 +331,7 @@
 			"op": "read",
 			"host": "a",
 			"id": "x",
-			"expect": {
-				"value": "21>a note!"
-			}
+			"expect": { "value": "12>a note!" }
 		},
 		{
 			"op": "conflicts",

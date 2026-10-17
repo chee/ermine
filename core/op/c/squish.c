@@ -165,11 +165,11 @@ static int merge(sq *s, const sq_patch *next) {
 	sq_patch *prev = &s->buf[s->n - 1];
 	if (!prev->has_range || !next->has_range || prev->move || next->move) return 0;
 	if (!same(prev->path, prev->depth, next->path, next->depth)) return 0;
-	long a = prev->from, b = prev->to, c = next->from, d = next->to;
+	int64_t a = prev->from, b = prev->to, c = next->from, d = next->to;
 	const sq_value *w = next->has_value ? &next->value : NULL;
 	if (prev->has_value) {
 		if (prev->value.kind == SQ_ANY) return 0;
-		long n = (long)prev->value.n;
+		int64_t n = (int64_t)prev->value.n;
 		if (a <= c && d <= a + n) return splice(s, prev, (size_t)(c - a), (size_t)(d - a), w);
 		if (c == a + n && d > c) {
 			if (w && !splice(s, prev, (size_t)n, (size_t)n, w)) return 0;
@@ -252,12 +252,12 @@ typedef struct {
 	size_t cap;
 } runs;
 
-static void run(runs *r, long x) {
+static void run(runs *r, int64_t x) {
 	if (r->r.n && r->r.v[r->r.n - 2] == x) {
 		r->r.v[r->r.n - 1]++;
 		return;
 	}
-	r->r.v = grow(r->r.v, &r->cap, r->r.n + 2, sizeof(long));
+	r->r.v = grow(r->r.v, &r->cap, r->r.n + 2, sizeof *r->r.v);
 	r->r.v[r->r.n++] = x;
 	r->r.v[r->r.n++] = 1;
 }
@@ -294,7 +294,7 @@ sq_columns sq_encode(const sq_patch *ps, size_t n) {
 		c.move = malloc(n * sizeof *c.move);
 		if (!c.paths || !c.value || !c.move) abort();
 	}
-	long last = 0;
+	int64_t last = 0;
 	for (size_t i = 0; i < n; i++) {
 		const sq_patch *p = &ps[i];
 		size_t at = (size_t)hash(p->path, p->depth) & mask;
@@ -335,11 +335,11 @@ void sq_columns_free(sq_columns *c) {
 typedef struct {
 	const sq_runs *r;
 	size_t i;
-	long left;
+	int64_t left;
 } cursor;
 
 // 0: the runs are used up
-static int next(cursor *k, long *out) {
+static int next(cursor *k, int64_t *out) {
 	while (k->left <= 0) {
 		if (k->i + 1 >= k->r->n) return 0;
 		k->left = k->r->v[k->i + 1];
@@ -364,14 +364,14 @@ sq_patch *sq_decode(const sq_columns *c, size_t *n) {
 	if (!out) abort();
 	cursor path = {&c->path, 0, 0}, shape = {&c->shape, 0, 0}, from = {&c->from, 0, 0},
 	       size = {&c->size, 0, 0};
-	long last = 0, s, x;
+	int64_t last = 0, s, x;
 	size_t v = 0, m = 0;
 	for (size_t i = 0; i < *n; i++) {
 		sq_patch *p = &out[i];
 		if (!next(&shape, &s) || !next(&path, &x) || x < 0 || (size_t)x >= c->npaths) goto bad;
 		p->path = c->paths[x].keys, p->depth = c->paths[x].depth;
 		if (s & 1) {
-			long f, z;
+			int64_t f, z;
 			if (!next(&from, &f) || !next(&size, &z)) goto bad;
 			last += f;
 			p->has_range = 1, p->from = last, p->to = last + z;

@@ -1,5 +1,5 @@
 // Maps keyed by 32-byte ids (names, stored ids, documents, topics), for the transport and sync, in
-// C: open addressing on the id's own bytes (ids are hashes), deletion by shifting back. A value is a
+// C: open addressing on a keyed hash of the id (keyed.h), deletion by shifting back. A value is a
 // pointer; a set keeps (void *)1, a code (void *)(uintptr_t)code. No order: what must be walked in
 // the order it came is kept beside, in a list. Out of memory aborts
 #ifndef IM_IDS_H

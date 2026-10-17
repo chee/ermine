@@ -75,9 +75,21 @@ op_value *op_stand(op_value *kind);
 size_t op_size(op_elements kind);
 // a typed array's elements
 size_t op_length(const op_value *typed);
+// a map's keys are names: strings never changed, each shared by every map that has it and freed
+// with the last (a count of holders before its bytes). read one as any string; make one with
+// op_name, share it with op_name_ref, let go of it with op_name_free. a map copied by hand shares
+// its keys: op_name_ref each, never a strdup; a map freed by hand lets go of each with op_name_free
+char *op_name(const char *s);
+char *op_name_ref(char *name);
+void op_name_free(char *name);
 // takes v; a map's key set twice keeps its first place (the value there before let go of)
 void op_push(op_value *list, op_value *v);
 void op_set(op_value *map, const char *key, op_value *v);
+// op_set with a name for the key (another map's keys[i]): shared, not copied
+void op_set_name(op_value *map, char *name, op_value *v);
+// a new map of from's keys (shared) and items (the same pointers: no reference taken, that is the
+// caller's), in from's order, with from's lookup table; room for exactly them
+op_value *op_map_copy(const op_value *from);
 // NULL when absent. A map of many keys builds its lookup table on the first call, so this writes
 // to the map: not safe on one map from two threads, whatever the const
 op_value *op_get(const op_value *map, const char *key);

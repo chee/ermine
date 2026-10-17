@@ -6,7 +6,7 @@
 			"name": "a",
 			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
 			"expect": {
-				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
 			}
 		},
 		{
@@ -35,7 +35,7 @@
 			"op": "take",
 			"device": "a",
 			"name": "c2",
-			"nonce": 137,
+			"nonce": 444,
 			"parents": [
 				"c1"
 			],
@@ -55,7 +55,7 @@
 			"op": "take",
 			"device": "a",
 			"name": "c3",
-			"nonce": 138,
+			"nonce": 445,
 			"parents": [
 				"c2"
 			],
@@ -120,7 +120,7 @@
 						}
 					}
 				},
-				"hash": "1c58d96d8cbd289025af7382fc736c8b786a9bc447b587d884308add0f686e8f"
+				"hash": "c07a05bfe427e022a9f54f5c4bde5bb707ea072d495b0b2baeacd1faced92bb2"
 			}
 		},
 		{

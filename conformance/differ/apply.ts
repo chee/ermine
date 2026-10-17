@@ -8,6 +8,7 @@
 // given, the value after); invert refuses as apply does; the batch split in two calls at every
 // place gives what it gives in one (the same value, keys in order; refused: the same code, its
 // index counted in the half it fell in)
+// deno-lint-ignore-file no-explicit-any
 import apply, { type Patch } from "@ermine/op/apply"
 import { batch, start } from "../../core/fuzz/gen.ts"
 import {
