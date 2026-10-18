@@ -8,7 +8,7 @@
 		},
 		{
 			"op": "make",
-			"name": "c1",
+			"name": "3c81eca1edf05bc26ee424773c8655af51149d24afe943f4644cbc9dd171d8d6",
 			"nonce": 1,
 			"patches": [
 				{
@@ -24,7 +24,7 @@
 			"op": "put",
 			"device": "a",
 			"doc": "ermine://2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f00000000000000000000000000000000",
-			"commit": "c1",
+			"commit": "3c81eca1edf05bc26ee424773c8655af51149d24afe943f4644cbc9dd171d8d6",
 			"blob": "a266636f6d6d69745878a86474696d6500656163746f72f6656e6f6e636501657461626c656576616c7565667369676e65725822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c676c616d706f72740167706172656e747380677061746368657381a26470617468806576616c7565a1616e01697369676e617475726558483401ed01ed01135f2c378103b35f63b32169662b6cd4ae2cea1773c54b2f24805eb2c753f004a8e70e481f3dd005733de0690cd9c9384c97c2609d9b7b2bb56506a3759e86259305",
 			"head": "3c81eca1edf05bc26ee424773c8655af51149d24afe943f4644cbc9dd171d8d6",
 			"expect": {}
@@ -41,7 +41,7 @@
 				"waiting": [],
 				"refused": [
 					{
-						"commit": "c1",
+						"commit": "3c81eca1edf05bc26ee424773c8655af51149d24afe943f4644cbc9dd171d8d6",
 						"refused": "signature"
 					}
 				]
@@ -67,7 +67,7 @@
 			"op": "put",
 			"device": "a",
 			"doc": "ermine://2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f00000000000000000000000000000000",
-			"commit": "c1",
+			"commit": "3c81eca1edf05bc26ee424773c8655af51149d24afe943f4644cbc9dd171d8d6",
 			"expect": {}
 		},
 		{
@@ -80,14 +80,14 @@
 			"doc": "ermine://2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f00000000000000000000000000000000",
 			"expect": {
 				"heads": [
-					"c1"
+					"3c81eca1edf05bc26ee424773c8655af51149d24afe943f4644cbc9dd171d8d6"
 				]
 			}
 		},
 		{
 			"op": "put",
 			"device": "a",
-			"commit": "c1",
+			"commit": "3c81eca1edf05bc26ee424773c8655af51149d24afe943f4644cbc9dd171d8d6",
 			"expect": {}
 		},
 		{
@@ -99,7 +99,7 @@
 			"device": "a",
 			"expect": {
 				"heads": [
-					"c1"
+					"3c81eca1edf05bc26ee424773c8655af51149d24afe943f4644cbc9dd171d8d6"
 				]
 			}
 		}

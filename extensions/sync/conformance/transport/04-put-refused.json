@@ -17,7 +17,7 @@
 		{
 			"op": "make",
 			"name": "c2",
-			"nonce": 137,
+			"nonce": 188,
 			"parents": ["c1"],
 			"patches": [{ "path": ["n"], "value": 2 }],
 			"expect": {}
@@ -41,14 +41,14 @@
 			"op": "put",
 			"device": "a",
 			"blob": "010203",
-			"head": "1111111111111111111111111111111111111111111111111111111111111111",
+			"head": "c2",
 			"expect": {}
 		},
 		{
 			"op": "put",
 			"device": "a",
 			"commit": "x",
-			"head": "2222222222222222222222222222222222222222222222222222222222222222",
+			"head": "c2",
 			"expect": {}
 		},
 		{ "op": "put", "device": "a", "commit": "c1", "expect": {} },
@@ -63,12 +63,12 @@
 				"refused": [
 					{ "commit": "c2", "refused": "parents" },
 					{
-						"commit": "1111111111111111111111111111111111111111111111111111111111111111",
-						"refused": "shape"
+						"commit": "c2",
+						"refused": "parents"
 					},
 					{
-						"commit": "2222222222222222222222222222222222222222222222222222222222222222",
-						"refused": "stored"
+						"commit": "c2",
+						"refused": "parents"
 					},
 					{ "commit": "c3", "stuck": ["c2"] }
 				]
@@ -84,12 +84,12 @@
 				"waiting": [],
 				"refused": [
 					{
-						"commit": "1111111111111111111111111111111111111111111111111111111111111111",
-						"refused": "shape"
+						"commit": "c2",
+						"refused": "parents"
 					},
 					{
-						"commit": "2222222222222222222222222222222222222222222222222222222222222222",
-						"refused": "stored"
+						"commit": "c2",
+						"refused": "parents"
 					}
 				]
 			}

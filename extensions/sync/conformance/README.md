@@ -38,8 +38,9 @@ for one suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `f
   names, for a key of its type (`seal.ts`); a header or key type with none, or a key not the
   header's type: refused `signature`. Ed25519 checked strictly, the same everywhere (`ed25519.ts`,
   `ed25519.h`): S below the group order, the key and R canonical and not of small order (seal/10).
-- what a seal signs: `"ermine/v0/commit"`, the document's 32 bytes, then the commit's name: a seal
-  is good in its own document only. A seal in a request or an answer is for the request's document:
+- what a seal signs: `"ermine/v0/commit"`, the document's 32 bytes, the signature's varsig header,
+  then the commit's name: a seal is good in its own document only, and a header put on another
+  signature is no longer good (the varsig spec recommends the header be signed over). A seal in a request or an answer is for the request's document:
   `doc`, default `ermine://2a…2a00…00` (16 bytes each; the seal and run harnesses take its 32 bytes,
   hex, and seal for it when given none). The transport harness seals a label for each document it is
   used in.

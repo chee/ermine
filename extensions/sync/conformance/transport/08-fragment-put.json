@@ -26,7 +26,7 @@
 		{
 			"op": "make",
 			"name": "c2",
-			"nonce": 137,
+			"nonce": 188,
 			"parents": [
 				"c1"
 			],
@@ -62,7 +62,7 @@
 			"op": "make",
 			"name": "c2e",
 			"doc": "ermine://2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e00000000000000000000000000000000",
-			"nonce": 89,
+			"nonce": 399,
 			"parents": [
 				"c1"
 			],
