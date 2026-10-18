@@ -156,9 +156,8 @@ export function commit(
 	// the oldest site is the one that goes (a header holds a list of them, oldest first)
 	const site = change.header.external?.[0]
 	if (site !== undefined) blop.site = share(site, roots)
-	// cause, wallclock and message are metadata entries of those names (the first of each)
-	const meta = (key: string) => change.header.metadata?.find(([k]) => k === key)?.[1]
-	const cause = meta("cause"), wallclock = meta("wallclock"), message = meta("message")
+	// cause, wallclock and message are the metadata's keys of those names
+	const { cause, wallclock, message } = change.header.metadata ?? {}
 	if (cause !== undefined) blop.cause = standIns(cause, kind)
 	if (typeof wallclock === "number") blop.wallclock = wallclock
 	if (typeof message === "string") blop.message = message

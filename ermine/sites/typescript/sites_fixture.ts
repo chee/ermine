@@ -6,4 +6,4 @@ export function make(sited: Sited, parent: Scope): Scope {
 	return sited.createScope(INFO, parent)
 }
 
-export const INFO: [string, unknown][] = [["owner", "test"]]
+export const INFO = { owner: "test" }

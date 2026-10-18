@@ -5,6 +5,7 @@
 	"exports": {
 		".": "./typescript/processes.ts",
 		"./scopes": "./typescript/scopes.ts",
-		"./start": "./typescript/start.ts"
+		"./start": "./typescript/start.ts",
+		"./runs": "./typescript/runs.ts"
 	}
 }

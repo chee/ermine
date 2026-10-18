@@ -22,7 +22,7 @@ const places: Places = createPlaces({
 	scheduler: s,
 })
 
-const host = s.createRootScope([["actor", "host"]])
+const host = s.createRootScope({ actor: "host" })
 const header = (actor: string, time: number) => {
 	const h = s.runWithScope(host, () => createChangeHeader(s))
 	return { ...h, actor, time }
@@ -37,7 +37,7 @@ put("value", "N", { theme: { accent: "lemon", font: "chicago" } }, "chee")
 
 // the reader: the clock face, drawn from /work/clock
 let runs = 0, accent: unknown, font: unknown, layers: Item[] = []
-s.runWithScope(s.createRootScope([["actor", "face"]]), () =>
+s.runWithScope(s.createRootScope({ actor: "face" }), () =>
 	s.createComputer(() => {
 		runs++
 		const id = get(places, ["work", "clock"])!

@@ -1,44 +1,27 @@
-// the merge rule "eg-walker" (extensions/subduction/plan.org, Merging): a node's heads merged by
-// replaying the commits since their common ancestor into a throwaway CRDT, each commit's patches
-// read in the version it was made on, as eg-walker does. pure and deterministic: the same history
-// and heads give the same tables on every device. a commit is the same in TS and C, so is this.
-//
-// the rules, exactly:
-// 1. the start (history.ts, since): the latest commit, or set of commits, every commit since follows
-//    from (all of it), whose tables get gives (one commit's had without merging, or several merged
-//    by this rule, as a device remembers them); else nothing (empty tables). which start is taken
-//    does not change the merge. the commits since it are replayed in causal order: lower lamport
-//    first, equal lamport the lesser name first. a commit's place in that order is its rank; the
-//    start's content has rank -1
-// 2. ids: every map write, list element, string code point and typed array element made gets an id
-//    (rank, n), n counting up from 0 for what its commit (or the start) makes, in the order made.
-//    a value put in is taken apart as it is read: a map's keys in the order they are given, a
-//    list's elements and a string's code points first to last, depth first. a later id: the higher
-//    rank, then the higher n
-// 3. versions: a commit's version is the commits it follows from (history.ts, follows: a merge's
-//    parents, a based commit's base, a commit's one parent), and theirs, back to the start, and the
-//    commit itself as its patches land. the merge is the version of every commit since
-// 4. what a version holds: each table a slot; a slot, a map key or a list element holds the write
-//    with the latest id in the version (a removal writes nothing there: absent). a sequence (string,
-//    list, typed array) holds its elements made in the version and not removed by a commit in it,
-//    in the sequence's order (5)
-// 5. a sequence's order (RGA): each element made after the one left of where it went in, in its
-//    version (its origin; none at the start). an element is put after its origin, past every
-//    element there with a later id; so an element's followers come right after it, the later first
-// 6. a patch is read in its commit's version, as apply reads it (core/op apply.ts): a put at a
-//    path writes the slot, map key or list element there; a removal writes absent at a map key or
-//    the slot, or removes a list element; a splice removes the elements in its range and puts the
-//    new ones after the element before it; a move is a removal at its from, then a put of a copy of
-//    what was there (new ids) at its path. positions count code points, as patches do
-// 7. what follows: concurrent puts at one place, the later id wins (so the later commit, by lamport
-//    then name). a put or removal of a value wins over concurrent edits inside it: they were made
-//    on what it replaced. concurrent inserts at one place: the later commit's first (5), each
-//    commit's run kept whole. text inserted inside a range removed concurrently stays. concurrent
-//    edits to a moved value are lost: they land on the place it left
-// 8. a commit whose patches do not apply to its version here (a merge by another rule may differ)
-//    is left out whole
-// 9. each table's change: the change of the latest commit since the start that names it, else the
-//    start's. a map's keys come out in canonical order (shorter first, then bytewise)
+// egwalker: the merge rule "eg-walker". a node's heads merged by replaying the commits since their
+// common ancestor into a throwaway CRDT, each commit's patches read in the version it was made on.
+// pure and deterministic; the same in TS and C. the rules:
+// 1. start (history.ts, since): what every commit since follows from, its tables from get; else
+//    empty. replay in causal order: lower lamport, then lesser name. rank: place in that order;
+//    the start's content rank -1
+// 2. ids: each map write, list element, code point, typed array element gets (rank, n), n counting
+//    from 0 per commit in the order made (maps by given key order, sequences first to last, depth
+//    first). later: higher rank, then higher n
+// 3. a commit's version: the commits it follows (history.ts, follows) and theirs back to the start,
+//    and itself as its patches land. the merge: the version of every commit since
+// 4. in a version: a slot, map key or list element holds its latest-id write (removal: absent); a
+//    sequence holds elements made and not removed in it, in order (5)
+// 5. sequence order (RGA): an element goes after its origin (the element left of it), past every
+//    element there with a later id
+// 6. patches read as apply.ts reads them: put writes; removal writes absent or removes an element;
+//    splice removes its range and inserts after the element before; move = removal + put of a copy
+//    (new ids). positions in code points
+// 7. so: concurrent puts, later id wins. a put or removal over a value beats concurrent edits
+//    inside it. concurrent inserts: later commit's first, each run whole. text inserted in a
+//    concurrently removed range stays. edits to a moved value are lost
+// 8. a commit whose patches do not apply to its version is left out whole
+// 9. each table's change: the latest commit since the start naming it, else the start's. map keys
+//    out in canonical order (shorter first, then bytewise)
 import { type Commit, decode } from "@ermine/encoding/commit"
 import type { ChangeHeader } from "@ermine/node/entry"
 import { hex } from "./hex.ts"
@@ -308,7 +291,7 @@ export const egwalker: Merge = (history, heads, get) => {
 		}
 		try {
 			land(root, c.patches)
-			changes.set(c.table, changeOf(c))
+			changes.set(c.table, changeOf(c, k.name))
 		} catch (e) {
 			if (!(e instanceof Fail)) throw e
 			for (let j = undo.length - 1; j >= 0; j--) undo[j]()

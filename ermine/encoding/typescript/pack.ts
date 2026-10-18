@@ -4,7 +4,8 @@
 //
 // keys sorted by encoding, none twice; a node under several keys is one node again when read.
 // node: {change, value?, cow?} (cow only false). change: {time, actor?, reader?, external?,
-// metadata?, op?}; external: sites {file, line, column?, function?}; op: {patches, undo}.
+// metadata?, op?}; external: sites {file, line, column?, function?}; metadata: a map (read from
+// the old form too, a list of [key, value] pairs: of a key repeated, the first); op: {patches, undo}.
 // whole numbers: time, range ends (safe); line, column, path numbers (int32); written as integers.
 // absent fields are left out.
 //
@@ -110,6 +111,21 @@ const small = (x: unknown) => whole(x) && (x as number) >= -(2 ** 31) && (x as n
 const isSpan = (x: unknown) => Array.isArray(x) && x.length === 2 && x.every(whole)
 const isPath = (x: unknown) => Array.isArray(x) && x.every((e) => typeof e === "string" || small(e))
 const isEntry = (x: unknown) => Array.isArray(x) && x.length === 2 && typeof x[0] === "string"
+// metadata in the old form, a list of [key, value] pairs, as an object: of a key repeated, the first
+function pairs(list: [string, unknown][]): Fields {
+	const out: Fields = {}
+	for (const [k, v] of list) {
+		if (!Object.hasOwn(out, k)) {
+			Object.defineProperty(out, k, {
+				value: v,
+				enumerable: true,
+				writable: true,
+				configurable: true,
+			})
+		}
+	}
+	return out
+}
 
 // how a map is read: every key of need there, and, unless loose, none but those of may
 class Reader {
@@ -190,8 +206,11 @@ class Reader {
 			h.external = sites
 		}
 		if ("metadata" in x) {
-			if (!Array.isArray(x.metadata) || !x.metadata.every(isEntry)) return
-			h.metadata = x.metadata as unknown as [string, unknown][]
+			// a map; the old form, a list of pairs, read as one
+			if (isFields(x.metadata)) h.metadata = x.metadata
+			else if (Array.isArray(x.metadata) && x.metadata.every(isEntry)) {
+				h.metadata = pairs(x.metadata as [string, unknown][])
+			} else return
 		}
 		if ("op" in x) {
 			const op = x.op

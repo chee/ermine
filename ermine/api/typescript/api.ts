@@ -38,7 +38,7 @@
 //   effect(name, f, act, o?)   f tracked, act(value, before) after the round; node as memo's
 //   early(name, f, act, o?)    an effect run and acted at once; later acts before other effects'
 //   method(p, fn)        fn as the node's value, called by send in a scope under the open one
-//   send(p, ...args)     the method at p, as [["caller", id], ...setup.pairs]; its return
+//   send(p, ...args)     the method at p, in a scope { ...setup.info(), caller: id }; its return
 //   teardown(fn)         fn(why) as the open scope goes: "ended" | "replaced"
 //   ref(p, make)         the node at p, make() if missing: a live value kept while the node is
 //   start(program, at, { box?, args?, cwd?, onwhynot? })   program: a name or a way;
@@ -63,9 +63,9 @@
 //   land(p)              its patches put on its target, its "patch" entry gone
 //   layers(x, path?)     every layer, front first: [{ value, from, stale?, error? }]
 //
-// scope nodes (setup.scopes; none: no scope has a node): a write's metadata stops at the first scope
-// with a node, then ["node", its id] (places' header.ts). a process's scope has its node; each memo
-// and effect has its own, attached as it is made.
+// scope nodes: a write's metadata stops after the first scope whose own info holds the NODE key
+// (places' header.ts). a process's scope holds its node's; each memo and effect is made with
+// { [NODE]: its node's id }.
 //
 // open: remove leaves what is under the node; memo claims skip notice and early's first run.
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
@@ -84,7 +84,7 @@ import {
 } from "@ermine/places"
 import { get, gets, list as listAt } from "@ermine/places/lib"
 import { parse, plan } from "@ermine/places/path"
-import { createChangeHeader, type NodeOf } from "@ermine/places/header"
+import { createChangeHeader, NODE } from "@ermine/places/header"
 import {
 	createGuard,
 	REFUSED,
@@ -108,14 +108,13 @@ import {
 	type PatchNode,
 } from "@ermine/patch-nodes"
 import { createStatus, STATUS } from "@ermine/places/status"
-import { createRuns } from "@ermine/places/runs"
+import { createRuns, type Runs } from "@ermine/processes/runs"
 import { openwith as openwithIn, satisfy, type Way, type Whynot } from "@ermine/programs"
 import type { Context, Process, Programs, Runner } from "@ermine/programs/start"
-import type { ScopeNodes } from "@ermine/processes/scopes"
 import {
 	type Computer,
 	type Equal,
-	type Pair,
+	type Info,
 	PENDING,
 	type Scheduler,
 	type Scope,
@@ -132,8 +131,9 @@ export type Setup = {
 	host: Host
 	// made after this (createPrograms takes createProcessAPI): asked when used
 	programs: () => Programs
-	// pairs a send adds after the caller's: the host's (trusted, read from the native event)
-	pairs?: () => Iterable<Pair>
+	// what a send's scope holds beside the caller (the caller over it): the host's ("trusted-event", read
+	// from the native event)
+	info?: () => Info
 	// the policy every process's reads and writes are asked of, from where it is; none: all allowed
 	may?: Policy
 	// the host's presence world (playground/presence); none: present, absent and presence throw
@@ -153,14 +153,17 @@ export type Setup = {
 	// ours holding this file, start.ts and the scheduler's, as they are made in runWithScope): a
 	// memo's site is the program's line. none: the scheduler's, no sites
 	sites?: Pick<Sited, "createScope" | "createComputer" | "createEffect">
-	// scope nodes (@ermine/processes/scopes), the processes' too: each memo's and effect's node
-	// attached, every header's metadata stopping at the first scope with one. none: no scope has one
-	scopes?: Pick<ScopeNodes, "attach" | "nodeOf" | "nearest">
 }
 
-// the attribute a memo's or effect's node holds its scope in: the node id of the nearest scope
-// above it with one, written once as the node is made (beside status.ts' and runs.ts')
+// the attribute a memo's or effect's node holds its scope in: the NODE key's id of the nearest
+// scope above it with one, written once as the node is made (beside status.ts')
 export const SCOPE = "ermine.computer.scope"
+
+// the NODE key's id of o or the nearest scope above it with one; none: undefined
+function nodeAbove(o: Scope | undefined): Id | undefined {
+	for (; o !== undefined; o = o.parent) if (NODE in o.info) return o.info[NODE] as Id
+	return undefined
+}
 
 // what notice is told: the computer (none for a method), its node, and the process's id
 export type Noticed = {
@@ -280,6 +283,8 @@ export type ProcessAPIs = {
 	runner: (show?: (value: unknown, api: API) => unknown) => Runner
 	// a process stopped, its teardowns told why
 	stop: (p: Process, why?: Why) => void
+	// a memo's, effect's or early's latest run, by its node's id (runs.ts)
+	runs: Runs["read"]
 }
 
 // a uuidv7 (rfc 9562): 48 bits of ms, then a 12-bit count within the ms (started random), then
@@ -309,16 +314,9 @@ const isNode = (x: Target): x is Node => typeof x === "object" && !Array.isArray
 export function createProcessAPIs(setup: Setup): ProcessAPIs {
 	const { scheduler: s, table, commit } = setup
 	const sited = setup.sites ?? s
-	const scopes = setup.scopes
-	const scopeNode: NodeOf | undefined = scopes?.nodeOf
-	const statuses = createStatus({ places: { commit }, table, scheduler: s, nodeOf: scopeNode })
+	const statuses = createStatus({ places: { commit }, table, scheduler: s })
 	const { describe, watchAll } = setup.host.places
-	const runs = createRuns({
-		places: { commit, describe, watchAll },
-		table,
-		scheduler: s,
-		nodeOf: scopeNode,
-	})
+	const runs = createRuns({ places: { describe, watchAll }, table, scheduler: s })
 	// a method's function: the scope open when it was made
 	const methods = new WeakMap<object, Scope>()
 	// why a process is stopping, said by stop before its scope goes
@@ -342,7 +340,7 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 	const newId = setup.id ?? uuidv7
 	s.onSettle(later)
 
-	const header = () => createChangeHeader(s, [], scopeNode)
+	const header = () => createChangeHeader(s)
 
 	// what a part holds when nothing is there: attributes are a map, so {}; a value, nothing
 	const empty = (part: Key) => part === "attributes" ? {} : undefined
@@ -390,7 +388,6 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			table,
 			may: setup.may,
 			from: at,
-			nodeOf: scopeNode,
 		})
 		const thing = (id: Id, path?: Path): Thing => path === undefined ? { id } : { id, path }
 		const ask = (op: string, ...targets: Parameters<typeof guard.write>[1][]) => {
@@ -607,6 +604,7 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 					if (v !== undefined && v[name] === id) commit(unplaceIn(children, name, header()))
 				}
 				for (const [part] of table.get(id)) table.del(part as Key, id)
+				runs.drop(id)
 			})
 			later()
 		}
@@ -656,14 +654,15 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 					if (!(e instanceof PlacesError)) throw e
 				}
 				for (const [part] of table.get(m.id)) table.del(part as Key, m.id)
+				runs.drop(m.id)
 			})
 		}
 
-		// a computer's node: a new id, placed at path, its scope written (own's node, or the nearest
-		// above with one; none: not written); told to named, its node and name gone with it
+		// a computer's node: a new id, placed at path, its scope written (own's NODE key, or the
+		// nearest above with one; none: not written); told to named, its node and name gone with it
 		function computerNode(own: Scope, path: Path, code: Code): Made {
 			const id = newId()
-			const above = scopes?.nearest(own)
+			const above = nodeAbove(own)
 			within(() => {
 				const parent = get(places, path.slice(0, -1))
 				if (parent === undefined) throw new PlacesError("nothing-there", path.join("/"))
@@ -706,10 +705,16 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			}
 			const c = s.runWithScope(
 				own,
-				() => sited.createComputer<T>((previous) => m.code.f(previous) as T, set, same(m)),
+				() =>
+					sited.createComputer<T>(
+						(previous) => m.code.f(previous) as T,
+						set,
+						same(m),
+						undefined,
+						{ [NODE]: id },
+					),
 			)
 			m.c = c
-			scopes?.attach(c, id)
 			statuses.give(c, id)
 			runs.give(c, id)
 			setup.notice?.({ kind: "memo", computer: c, node: n, id, process: process.id })
@@ -758,7 +763,6 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 				if (!given) {
 					given = true
 					const c = s.getRun()!.computer
-					scopes?.attach(c, id)
 					statuses.give(c, id)
 					runs.give(c, id)
 				}
@@ -774,11 +778,16 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 				own,
 				() =>
 					early
-						? sited.createEffect<T>(run, then, same(m), { early })
-						: sited.createEffect<T>((previous) => m.code.f(previous) as T, then, same(m)),
+						? sited.createEffect<T>(run, then, same(m), { early }, { [NODE]: id })
+						: sited.createEffect<T>(
+							(previous) => m.code.f(previous) as T,
+							then,
+							same(m),
+							undefined,
+							{ [NODE]: id },
+						),
 			)
 			m.c = c
-			scopes?.attach(c, id)
 			statuses.give(c, id)
 			runs.give(c, id)
 			setup.notice?.({ kind: "effect", computer: c, node: n, id, process: process.id })
@@ -810,7 +819,7 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 				throw new SendError("not-a-method", n.path?.join("/") ?? String(n.id))
 			}
 			const call = sited.createScope(
-				[["caller", process.id], ...(setup.pairs?.() ?? [])],
+				{ ...setup.info?.(), caller: process.id },
 				methods.get(fn) ?? scope,
 			)
 			try {
@@ -1026,5 +1035,5 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 		return { stop: () => {} }
 	}
 
-	return { createProcessAPI, run: runner(), runner, stop }
+	return { createProcessAPI, run: runner(), runner, stop, runs: runs.read }
 }

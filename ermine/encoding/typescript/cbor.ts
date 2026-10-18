@@ -279,11 +279,6 @@ function key(k: string): Uint8Array {
 	return b
 }
 
-/** How a map's keys are ordered: by their encodings, bytewise (so shorter first, then by UTF-8). */
-export function keyOrder(a: string, b: string): number {
-	return compare(key(a), key(b))
-}
-
 function compare(a: Uint8Array, b: Uint8Array): number {
 	const n = Math.min(a.length, b.length)
 	for (let i = 0; i < n; i++) if (a[i] !== b[i]) return a[i] - b[i]

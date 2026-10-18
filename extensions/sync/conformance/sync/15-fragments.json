@@ -46,10 +46,10 @@
 				"body"
 			],
 			"at": 0,
-			"text": "xxxxxxxxxxxxxxxxxxxxxx",
-			"name": "t22",
+			"text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+			"name": "t86",
 			"expect": {
-				"commits": 22
+				"commits": 86
 			}
 		},
 		{
@@ -69,7 +69,7 @@
 			"host": "a",
 			"id": "x",
 			"expect": {
-				"stored": 23
+				"stored": 87
 			}
 		},
 		{
@@ -79,9 +79,9 @@
 			"path": [
 				"body"
 			],
-			"at": 22,
+			"at": 86,
 			"text": "x",
-			"name": "t23",
+			"name": "t87",
 			"expect": {
 				"commits": 1
 			}
@@ -111,7 +111,7 @@
 			"host": "a",
 			"id": "x",
 			"expect": {
-				"commits": 24
+				"commits": 88
 			}
 		},
 		{
@@ -121,9 +121,9 @@
 			"path": [
 				"body"
 			],
-			"at": 23,
+			"at": 87,
 			"text": "yz",
-			"name": "t25",
+			"name": "t89",
 			"expect": {
 				"commits": 2
 			}
@@ -178,7 +178,7 @@
 			"id": "x",
 			"expect": {
 				"value": {
-					"body": "xxxxxxxxxxxxxxxxxxxxxxxyz"
+					"body": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxyz"
 				}
 			}
 		},
@@ -188,7 +188,7 @@
 			"id": "x",
 			"expect": {
 				"heads": [
-					"t25"
+					"t89"
 				]
 			}
 		},
@@ -197,7 +197,7 @@
 			"host": "c",
 			"id": "x",
 			"expect": {
-				"commits": 26
+				"commits": 90
 			}
 		},
 		{
@@ -220,12 +220,12 @@
 			"op": "get",
 			"host": "c",
 			"id": "x",
-			"commit": "t22",
+			"commit": "t86",
 			"expect": {
 				"tables": {
 					"value": {
 						"value": {
-							"body": "xxxxxxxxxxxxxxxxxxxxxx"
+							"body": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 						},
 						"change": {
 							"time": 1760000000,
@@ -238,7 +238,7 @@
 							],
 							"metadata": {
 								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-								"commit": "d9ce599b5c57fbea17d0ab3dd25d62a8700c5f3330dad31c45d67b01433508fc"
+								"commit": "76c497891643649121d1ba9903fb3853d428e3129112d53cb4589a7e45c4c3d6"
 							}
 						}
 					}
@@ -266,7 +266,7 @@
 			"id": "x",
 			"expect": {
 				"value": {
-					"body": "xxxxxxxxxxxxxxxxxxxxxxxyz"
+					"body": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxyz"
 				}
 			}
 		},
@@ -276,7 +276,7 @@
 			"id": "x",
 			"expect": {
 				"heads": [
-					"t25"
+					"t89"
 				]
 			}
 		},
@@ -285,7 +285,7 @@
 			"host": "a",
 			"id": "x",
 			"expect": {
-				"commits": 26
+				"commits": 90
 			}
 		},
 		{

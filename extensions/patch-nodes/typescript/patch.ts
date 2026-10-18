@@ -12,7 +12,7 @@
 // table's entry. some: an entry made here, the table's value with each patch node's patches applied
 // in the order they came, in one apply (one whose patches throw: set aside). kept, and made again
 // when the table's entry or a patch node changes. its change is the table's without its op, with
-// ["overlay", the patch nodes applied] after its metadata. a write not said here is not seen
+// overlay: the patch nodes applied, set in a copy of its metadata. a write not said here is not seen
 // telling: a patch node added, changed or taken out, or a write under patch nodes, tells places'
 // commit one change of the key whose patches put, whole, what differs at the patch nodes' spots
 // (and the write's): a reader of anything else is not told. a table event, or a key nobody read
@@ -279,13 +279,12 @@ export function createOverlay(
 		return out
 	}
 
-	// the change of a made entry: the table's, its op left out, the patch nodes applied said after
-	// its metadata; nothing under it: time 0, no actor
+	// the change of a made entry: the table's, its op left out, the patch nodes applied set as
+	// overlay in a copy of its metadata; nothing under it: time 0, no actor
 	function header(base: Entry<unknown> | undefined, applied: Id[]): ChangeHeader {
-		const pair: [string, unknown] = ["overlay", applied]
-		if (base === undefined) return { time: 0, actor: undefined, metadata: [pair] }
+		if (base === undefined) return { time: 0, actor: undefined, metadata: { overlay: applied } }
 		const { op: _, ...change } = base.change
-		return { ...change, metadata: [...change.metadata ?? [], pair] }
+		return { ...change, metadata: { ...change.metadata, overlay: applied } }
 	}
 
 	// the table's entry under (part, id), each patch node in ps applied over it in order: all their

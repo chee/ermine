@@ -23,7 +23,7 @@ import {
 	PlacesError,
 	unplace,
 } from "@ermine/places"
-import { getWho, type NodeOf } from "@ermine/places/header"
+import { createChangeBase } from "@ermine/places/header"
 import { parse } from "@ermine/places/path"
 import { processes } from "@ermine/processes"
 import { type Scheduler, SchedulerError } from "@ermine/scheduler"
@@ -37,8 +37,6 @@ export type Host = {
 	scheduler: Pick<Scheduler, "getCurrentScope">
 	// where its writes are said written; none: places.commit
 	commit?: (changed: readonly Entry<unknown>[]) => void
-	// the node a scope has (places' header.ts); none: no scope has one
-	nodeOf?: NodeOf
 }
 
 export type Box = {
@@ -194,7 +192,7 @@ function said(host: Host, changed: readonly Entry<unknown>[]) {
 // is the caller's of a wrapper like this one
 const ours = new Set([import.meta.url])
 function headerOf(host: Host, entry: unknown): ChangeHeader {
-	const who = getWho(host.scheduler, [], host.nodeOf)
+	const who = createChangeBase(host.scheduler)
 	if (who === undefined) throw new SchedulerError("unscoped", "a write with no scope open")
 	const h: ChangeHeader = { ...who, time: Math.floor(Date.now() / 1000) }
 	const site = capture(ours, entry)

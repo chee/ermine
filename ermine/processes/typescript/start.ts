@@ -1,8 +1,6 @@
-// start: a process's life, at a path in a box or plain places (the root is the outermost box), and
-// its stop. chee 10-15: "the process is a scheduler scope with a path. this is good"; "a process
-// isn't in /work, it's at /work/clock"; "a process exists in one place and has 1 path"; "i think
-// process and the process api are ermine/ but programs actually arent". what runs in a process is
-// its starter's: this knows no programs, chains, loaders, builds or types
+// start: a process's life and its stop, at a path in a box or plain places. a process is a
+// scheduler scope with one path (/work/clock). what runs in it is its starter's: this knows no
+// programs, chains, loaders, builds or types
 //
 //   const processes = createProcesses({ scheduler, table, places, scopes })
 //   const p = processes.start(b, "/clock", { args, cwd, pin }, (inside) => {
@@ -12,45 +10,25 @@
 //   // { id: "proc:<uuid>", at: ["clock"], cwd: [], scope }, or { refused: "taken", at: ["clock"] }
 //   processes.stop(p)
 //
-// start(where, at, { args, cwd, pin }, body): where a box ({ root, places }: ermine/boxes) or places
-// (its root the box's, {root: places.root, places}); at a path from that root, names or a string
-// (boxes' inside: "." here, ".." back one, at the root staying there); cwd the same, from the same
-// root, the process's working folder (none: the folder at is in; pathsOf). refused, nothing made:
-//   taken: a process at the path, above it or under it (addProcess's already-there)
-// else:
-//   1. a scope, createScope([["process", at]]) under the owner, and its node (scope nodes' give:
-//      proc:<uuid>). made through setup.sites when given (ermine/sites), the host's, with this file
-//      in its ours (and the files of whoever starts through this: their ours)
-//   2. the row: addProcess at the root's trie at the path, committed to the places given (a box's
-//      places shares its commit with the host's: places' view)
-//   3. on the node's attributes: ermine.process.args (given), ermine.process.cwd, ermine.process.pin
-//      (given: what was chosen, to show and replay), and status.ts' status, PENDING (mine, open: a
-//      process is pending until a computer given to it lands)
-//   4. body, with the process's scope open, so what it makes is the scope's and goes at stop. it is
-//      given the process, its box and args, and give(computer, { run }): the computer's status on
-//      the process's node (status.ts), and with run its latest run too (runs.ts: what it read and
-//      wrote), when the places given name reads (describe, watchAll). a function body gives back:
-//      called at the stop
-//
-// stop(p): what body gave back (with the scope open), the row taken out, then the scope torn down:
-// its computers go, and its node's entries (scope nodes'). the scope torn down another way (a scope
-// above it): the same, but its computers go first. stopped twice: nothing. every step runs; the
-// first error is thrown after
-//
-// writes, each with the process's scope open (its info [["process", at]] after the host's), its
-// site the call into start or stop (outside this file and setup.ours): the attributes entry made (a
-// table event), the row (committed to the places it runs in); status.ts' to the places given at
-// setup (the host's)
-//
-// open (chee): pid("clock") from chee's start(lookup("clock"), ["work", pid("clock")]) is not built:
-// at is a plain path. mine, open: args as strings; cwd from the root as at is, written always (its
-// default too), never checked to be there
+// start(where, at, opts, body): where a box ({ root, places }) or places. at, cwd: paths from its
+// root, names or a string ("." here, ".." back one); cwd default: at's folder. refused "taken",
+// nothing made: a process at, above or under the path. else, in order:
+//   1. its node's id (proc:<uuid>), then a scope { process: at, [NODE]: id } (given the node,
+//      scopes.ts), made through setup.sites when given
+//   2. the row: addProcess at the path, committed to the places given
+//   3. node attributes ermine.process.args, .cwd, .pin, and status PENDING
+//   4. body, scope open, given give(computer, { run }): the computer's status (with run: its
+//      latest run) on the node. a function returned: called at stop
+// stop(p): body's return (scope open), the row out, the scope torn down (from above: computers go
+// first). twice: nothing. every step runs; the first error is thrown after
+// writes: each with the process's scope open, its site the call into start or stop
+// open: pid("clock") not built (at is a plain path); args as strings; cwd always written, never
+// checked to be there
 import createEntry, { type ChangeHeader } from "@ermine/node/entry"
 import { type Address, type Box, inside } from "@ermine/boxes"
 import { type Id, type Path, type Places, PlacesError } from "@ermine/places"
-import { getWho } from "@ermine/places/header"
+import { createChangeBase, NODE } from "@ermine/places/header"
 import { createStatus, STATUS } from "@ermine/places/status"
-import { createRuns } from "@ermine/places/runs"
 import {
 	type Computer,
 	PENDING,
@@ -62,6 +40,7 @@ import type { Sited } from "@ermine/sites"
 import type { Table } from "@ermine/table"
 import { capture } from "@ermine/util/stacktrace"
 import { addProcess, removeProcess } from "./processes.ts"
+import { createRuns, type Runs } from "./runs.ts"
 import type { ScopeNodes } from "./scopes.ts"
 
 // the attributes written on a process's node
@@ -104,7 +83,7 @@ export type Setup = {
 	// where status.ts' writes are committed: the host's (a box's places shares its commit). with
 	// describe and watchAll, give's run is written too (runs.ts)
 	places: Pick<Places, "commit"> & Partial<Pick<Places, "describe" | "watchAll">>
-	// scope nodes (scopes.ts)
+	// scope nodes (scopes.ts): each process's scope given its node (its entries go with the scope)
 	scopes: Pick<ScopeNodes, "give">
 	// where the processes' scopes are made, noting each one's site (ermine/sites; its ours holds
 	// this file); none: the scheduler's, no sites
@@ -119,6 +98,8 @@ export type Setup = {
 export type Processes = {
 	start: (where: Box | Places, at: Address, options?: Options, body?: Body) => Process | Refused
 	stop: (p: Process) => void
+	// a process's latest run by its node's id (runs.ts); none without describe and watchAll
+	runs?: Runs["read"]
 }
 
 // a process's path and its working folder, from what start is given
@@ -139,11 +120,11 @@ export function createProcesses(setup: Setup): Processes {
 	const { scheduler: s, table, places, scopes } = setup
 	const createScope = setup.sites?.createScope ?? s.createScope
 	const ours = new Set([import.meta.url, ...(setup.ours ?? [])])
-	const owner = setup.owner ?? createScope([["processes", "start"]])
+	const owner = setup.owner ?? createScope({ processes: "start" })
 	const statuses = createStatus({ places, table, scheduler: s })
 	const { describe, watchAll } = places
 	const runs = describe && watchAll
-		? createRuns({ places: { commit: places.commit, describe, watchAll }, table, scheduler: s })
+		? createRuns({ places: { describe, watchAll }, table, scheduler: s })
 		: undefined
 	s.registerTeardown(owner, () => {
 		statuses.stop()
@@ -154,7 +135,7 @@ export function createProcesses(setup: Setup): Processes {
 	// the header of a write made now, its site the call into entry (start or stop), as boxes' is
 	// core candidate (places' header.ts): createChangeHeader taking the function called
 	function headerOf(entry?: unknown): ChangeHeader {
-		const who = getWho(s)
+		const who = createChangeBase(s)
 		if (who === undefined) throw new SchedulerError("unscoped", "a write with no scope open")
 		const h: ChangeHeader = { ...who, time: Math.floor(Date.now() / 1000) }
 		const site = capture(ours, entry)
@@ -174,8 +155,9 @@ export function createProcesses(setup: Setup): Processes {
 	): Process | Refused {
 		const box: Box = "places" in where ? where : { root: where.root, places: where }
 		const { at, cwd } = pathsOf(address, options.cwd)
-		const scope = createScope([["process", at]], owner)
-		const id = scopes.give(scope, `proc:${crypto.randomUUID()}`)
+		const id: Id = `proc:${crypto.randomUUID()}`
+		const scope = createScope({ process: at, [NODE]: id }, owner)
+		scopes.give(scope, id)
 		try {
 			s.runWithScope(
 				scope,
@@ -252,8 +234,9 @@ export function createProcesses(setup: Setup): Processes {
 			end(p, stop)
 		} finally {
 			s.teardown(p.scope)
+			runs?.drop(p.id)
 		}
 	}
 
-	return { start, stop }
+	return { start, stop, runs: runs?.read }
 }

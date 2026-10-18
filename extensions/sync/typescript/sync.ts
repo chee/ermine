@@ -1,47 +1,35 @@
-// the Subduction integration for the graph of today (extensions/subduction/plan.org, Rewrite for
-// the new shape, 8). every entry change at a kept node goes out as one commit naming its table;
-// what comes in is written to the table. kept: an ermine:// id, and only the tables given (value,
-// attributes and children unless told).
+// sync: the Subduction integration for the graph. every entry change at a kept node (an ermine://
+// id; value, attributes and children unless told) goes out as one commit naming its table; what
+// comes in is written to the table. commits are kept as bytes, decoded fresh: nothing shared, no
+// copies, a change costs its patches.
 //
-// the table is the head shown: its entries are that head's node, and nothing is kept beside them.
-// a commit is encoded from the change at once and kept as its bytes (the history's); what comes in
-// is decoded from bytes, new objects. so nothing is shared, and nothing is copied: a change costs its
-// patches, whatever the size of what it changes.
-//
-// coming in, a commit on the head shown is applied to its table's entry by update, which is its
-// check too: patches that don't apply change nothing, and the commit is refused. any other commit
-// (a fork, a merge) is checked on a replay of its parent's node (replay.ts), and the table is told
-// only if the head shown changes: then it holds the replay of the new head, whole.
-//
-// several heads: the first in the agreed order shows; the others are listed in the "conflicts"
-// table at the id, with the tables in which they differ. a write extends the head shown, so the
-// others stay until settled: settle(id) makes a merge keeping the head shown.
-//
-// given a merge rule (merge, one of merges): several heads show merged by it, once the commits
-// coming in now are all in, written to the table as a head switch is; no conflicts are listed. a
-// write then is a merge commit: every head it showed its parents, the rule named, its patches
-// against the merge (what the table shows). nothing merges by itself: only a write, or settle,
-// makes a merge commit. a merge commit coming in is checked on its rule's merge of its parents
-// (on the table, when that is what it shows); one by a rule not in merges is refused ("merge").
-// use(rule) switches the rule, or merging off, while running
-//
-// ephemeral (plan.org, Ephemeral): a change to a table the host says is ephemeral goes out as an
-// ephemeral commit, on what a stored write would be on (never on another ephemeral one), its patches
-// taking that stored state to what the device shows; never sealed, never stored. each stands alone:
-// it replaces its device's previous one at the node's table, and one heard late shows at once. what
-// shows: the stored heads, and on top, for each table, the later standing one (lamport, then name;
-// with a rule, the stored heads and every standing one merged by it). the table holds what shows;
-// the stored tables under an overlaid one are sync's own (under), and the "ephemeral" table at the
-// id lists them and what stands while anything does. a device's ephemeral commits stop standing when
-// a stored commit of its follows them (its lamport above what they went on), or when nothing is
-// heard from it for ttl ms; while one of this device's stands it is sent again every beat ms. one
-// that stands no more is let go of (device.forget): the ephemeral history is the stored and what
-// stands. nothing ephemeral outlives the sync
+// the table shows one head, nothing kept beside it. a commit on it: applied by update, its check
+// too (patches that don't apply: refused). any other (fork, merge): checked on a replay of its
+// parent (replay.ts); the table told only if the head shown changes, then given the new head whole.
+// several heads: the first in agreed order shows, the rest in the "conflicts" table with the
+// tables they differ in; settle(id) makes a merge keeping the head shown. what is wrong with a
+// node's sync right now (commits waiting or refused, writes no commit could carry) is in the
+// "status" table at its id, none when nothing is.
+// a merge rule (merge, one of merges): heads show merged; a write is then a merge commit (every
+// shown head its parents, the rule named). nothing merges by itself. a merge by a rule not in
+// merges is refused ("merge"). use(rule) switches the rule or merging off.
+// ephemeral tables: an ephemeral commit on the stored state, never sealed or stored, replacing its
+// device's previous one at the table. shown on top: the later standing one (lamport, then name),
+// or all merged by the rule; the stored state under is sync's own, listed in the "ephemeral"
+// table. stops standing at a later stored commit of that device, after ttl ms unheard, or on stop
+// (Sync.stop); resent every beat ms; then let go (device.forget). nothing ephemeral outlives sync.
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import apply, { type Patch } from "@ermine/op/apply"
 import * as cbor from "@ermine/encoding/cbor"
-import { type Commit, compare, decode, encode, name as nameOf } from "@ermine/encoding/commit"
+import {
+	type Commit,
+	CommitError,
+	compare,
+	decode,
+	encode,
+	name as nameOf,
+} from "@ermine/encoding/commit"
 import type { Id, Key, Table } from "@ermine/table"
 import type * as sd from "npm:@automerge/subduction@0.23.0"
 import { hex } from "./hex.ts"
@@ -67,19 +55,37 @@ export type Ephemeral = {
 	on: { by: string; name: string; tables: string[]; lamport: number }[]
 }
 
+// what is wrong with a kept node's sync right now. waiting: commits from elsewhere not taken in
+// yet, each on the parents named (their names), or on authority (the lock, or a check that could
+// not judge it yet). refused: commits refused here (parent: one of its parents was), or a fragment
+// refused whole, with the code (transport.ts's Code, history.ts's Refusal). a commit is its name, or
+// the stored id the transport knows it by before it is opened; all hex. unsent: this device's writes
+// no commit could carry, each with why (commit.ts's code and field), kept while sync runs. each list
+// its first LIST (100), count how many in all
+export type Status = {
+	waiting: ({ commit: string; parents: string[] } | { commit: string; authority: true })[]
+	refused: ({ commit: string; code: string } | { fragment: string; code: string })[]
+	unsent: { table: string; error: string; field?: string }[]
+	count: { waiting: number; refused: number; unsent: number }
+}
+
 declare module "@ermine/table" {
 	interface Tables {
 		conflicts: Conflict[]
 		ephemeral: Ephemeral
+		status: Status
 	}
 }
 
 export type Options = {
 	table: Table
 	signer: Signer
-	// the device's (transport.ts): where Subduction keeps what it saves, the lock
+	// the device's (transport.ts): where Subduction keeps what it saves, the lock, and lazy: what the
+	// storage holds is taken in as each document is followed, so the table holds the followed
+	// documents and no other
 	storage?: sd.SedimentreeStorage
 	lock?: Lock
+	lazy?: boolean
 	// default: crypto.getRandomValues
 	random?: (n: number) => Uint8Array
 	// until Keyhive: ids minted with their last 16 bytes zero, which a Subduction server with no
@@ -106,6 +112,10 @@ export type Options = {
 	beat?: number
 	// ms with nothing heard from a device before its ephemeral commits stop standing; default 4000
 	ttl?: number
+	// where the sites (external) a commit carries are told from: a site whose file starts with a root
+	// is the rest after it (the first root it starts with), any other its last part (after the last
+	// "/"); line, column and function as they are. default none: every file its last part
+	roots?: readonly string[]
 }
 
 export type Sync = {
@@ -133,12 +143,19 @@ export type Sync = {
 	// each ephemeral commit standing at the id (this device's too): its signer's key (hex) and its
 	// name, by key, then name
 	standing(id: string): [string, Uint8Array][]
+	// an ephemeral write is the start; this is the stop: this device's standing ephemeral commit at
+	// (id, table) ends now. forgotten here (the stored shows again, no beat carries it), and a stop
+	// sent (device.stop), on which every peer drops it at once rather than after ttl. sent whether
+	// or not one stands (a receiver with nothing standing from this device at the table ignores it)
+	stop(id: string, table: Key): void
 	// the timers stopped, the device closed
 	close(): Promise<void>
 }
 
 const random32 = (n: number) => crypto.getRandomValues(new Uint8Array(n))
 const ID = /^ermine:\/\/[0-9a-f]{64}$/
+// the most of each list in a node's status
+const LIST = 100
 
 // the same value, by structure (conflicts only: comparing two versions of a table)
 export function same(a: unknown, b: unknown): boolean {
@@ -162,9 +179,27 @@ export function same(a: unknown, b: unknown): boolean {
 		ka.every((k) => Object.hasOwn(b, k) && same((a as never)[k], (b as never)[k]))
 }
 
-// what of a change header a commit can carry: metadata pairs that encode
+// the metadata keys changeOf adds over a commit's own: who signed it and the commit
+const SIGNED = ["signer", "commit"]
+// whether a change is a commit's, as changeOf gives it: both keys there, each a string
+const signed = (change: ChangeHeader | undefined) => {
+	const m = change?.metadata
+	return m !== undefined && SIGNED.every((k) => Object.hasOwn(m, k) && typeof m[k] === "string")
+}
+
+// a site's file as a commit tells it: the rest after the first root it starts with, else its last
+// part
+const site = (file: string, roots: readonly string[]) => {
+	for (const r of roots) if (file.startsWith(r)) return file.slice(r.length)
+	return file.slice(file.lastIndexOf("/") + 1)
+}
+
+// what of a change header a commit can carry: metadata keys whose values encode. for a new commit
+// (roots given): never a signer or commit key (a replayed change's: not this device's to claim), each
+// site's file as the roots say. else a copy, sync's own, of what a commit carried
 function carried(
 	change: ChangeHeader | undefined,
+	roots?: readonly string[],
 ): Pick<Commit, "time" | "actor" | "reader" | "external" | "metadata"> {
 	const out: Pick<Commit, "time" | "actor" | "reader" | "external" | "metadata"> = {
 		time: change?.time ?? Math.floor(Date.now() / 1000),
@@ -180,14 +215,21 @@ function carried(
 	}
 	if (!ok(out.actor)) out.actor = null
 	if (change?.reader !== undefined) out.reader = change.reader
-	if (change?.external?.length) out.external = change.external.map((s) => ({ ...s }))
-	const metadata = change?.metadata?.filter(([k, v]) => typeof k === "string" && ok(v))
-	if (metadata?.length) out.metadata = metadata
+	if (change?.external?.length) {
+		out.external = change.external.map((s) =>
+			roots === undefined ? { ...s } : { ...s, file: site(s.file, roots) }
+		)
+	}
+	const metadata = Object.entries(change?.metadata ?? {}).filter(([k, v]) =>
+		ok(v) && (roots === undefined || !SIGNED.includes(k))
+	)
+	if (metadata.length) out.metadata = Object.fromEntries(metadata)
 	return out
 }
 
 export function createSync(options: Options): Sync {
 	const { table, signer } = options
+	const roots = options.roots ?? []
 	const random = options.random ?? random32
 	// this device's count of commits, from a random start: two devices with one key don't count alike
 	let nonce = new DataView(random(4).buffer).getUint32(0)
@@ -244,6 +286,13 @@ export function createSync(options: Options): Sync {
 	const last = new Map<string, { at: number; size: number }>()
 	// writing what came in: the table's events are sync's own, and go out as nothing
 	let applying = false
+	// the last commit this device sent at each node's table, its name (hex): what a write here
+	// replays as (fromTable)
+	const sent = new Map<string, Map<string, string>>()
+	// each node's writes no commit could carry: the first LIST, and how many
+	const unsent = new Map<string, { rows: Status["unsent"]; count: number }>()
+	// nodes whose status is to be worked out again: once a batch
+	const unwell = new Set<string>()
 
 	// ---- ephemeral state
 	const me = hex(signer.key)
@@ -283,6 +332,7 @@ export function createSync(options: Options): Sync {
 		signer,
 		storage: options.storage,
 		lock: options.lock,
+		lazy: options.lazy,
 		check,
 		snapshotOf,
 		merges: options.merges,
@@ -298,9 +348,25 @@ export function createSync(options: Options): Sync {
 			applying = false
 		}
 	})
+	// what the device holds back or refused may have changed
+	device.moved((doc) => recheck(doc))
 	device.heard((doc, from) => {
 		const p = overlays.get(doc)?.peers.get(from)
 		if (p !== undefined && from !== me) p.at = clock()
+	})
+	// a peer's stop: what stands for it at the table stops standing now; nothing standing, nothing
+	device.stopped((doc, from, table) => {
+		if (from === me) return
+		const p = overlays.get(doc)?.peers.get(from), s = p?.stands.get(table)
+		if (p === undefined || s === undefined) return
+		applying = true
+		try {
+			p.stands.delete(table)
+			device.forget(doc, s.kept.name)
+			show(doc)
+		} finally {
+			applying = false
+		}
 	})
 
 	function grew(doc: string, name: Uint8Array, bytes: number) {
@@ -323,10 +389,20 @@ export function createSync(options: Options): Sync {
 		for (const part of tables) {
 			const e = storedEntry(doc, part)
 			if (e !== undefined && e.value !== undefined) {
-				out[part as string] = { value: e.value, change: carried(e.change) as ChangeHeader }
+				out[part as string] = { value: e.value, change: asCommit(doc, part, e.change) }
 			}
 		}
 		return out
+	}
+	// a change as a replay of its commit has it: one from a commit (changeOf's), as it is; one
+	// written here, as its commit carried it, then who signed it and the commit (the last sent at
+	// the table)
+	function asCommit(doc: string, part: Key, change: ChangeHeader): ChangeHeader {
+		if (signed(change)) return carried(change) as ChangeHeader
+		const c = carried(change, roots) as ChangeHeader
+		const name = sent.get(doc)?.get(part as string)
+		if (name !== undefined) c.metadata = { ...c.metadata, signer: me, commit: name }
+		return c
 	}
 
 	// with a rule that can keep its work between merges (Merge's keeping: egwalker's, walker.ts),
@@ -404,7 +480,7 @@ export function createSync(options: Options): Sync {
 					cow: false,
 				})
 				if (value === undefined) delete node[commit.table]
-				else node[commit.table] = { value, change: changeOf(commit) }
+				else node[commit.table] = { value, change: changeOf(commit, kept.name) }
 			} catch {
 				return false
 			}
@@ -424,7 +500,7 @@ export function createSync(options: Options): Sync {
 		try {
 			const value = apply(node[commit.table]?.value, commit.patches as Patch[], { cow: false })
 			if (value === undefined) delete node[commit.table]
-			else node[commit.table] = { value, change: changeOf(commit) }
+			else node[commit.table] = { value, change: changeOf(commit, kept.name) }
 		} catch {
 			return false
 		}
@@ -436,7 +512,7 @@ export function createSync(options: Options): Sync {
 	// a commit on the head shown, applied to its table's entry: update is its check
 	function step(doc: string, kept: Kept, commit: Commit): boolean {
 		const part = commit.table as Key
-		const change = changeOf(commit)
+		const change = changeOf(commit, kept.name)
 		// overlaid: the stored entry is sync's own, under it
 		const o = overlays.get(doc)
 		if (o?.over.has(commit.table)) {
@@ -459,10 +535,16 @@ export function createSync(options: Options): Sync {
 			if (entry === undefined) {
 				const value = apply(undefined, commit.patches as Patch[])
 				if (value !== undefined) table.add(part, doc, createEntry(value as never, change))
-			} else {
+			} else if (options.commit !== undefined) {
 				update(entry, commit.patches as never, change)
 				if (entry.value === undefined) table.del(part, doc)
-				else options.commit?.([entry])
+				else options.commit([entry])
+			} else {
+				// no host's "a write landed": the table's event, a new entry in its place, whole
+				const next = createEntry(entry.value, entry.change)
+				update(next, commit.patches as never, change)
+				if (next.value === undefined) table.del(part, doc)
+				else table.sub(part, doc, next)
 			}
 		} catch {
 			return false
@@ -535,12 +617,18 @@ export function createSync(options: Options): Sync {
 
 	// the conflicts worked out again, once the commits coming in now are all in
 	function later(doc: string) {
-		if (dirty.size === 0) queueMicrotask(flush)
+		if (dirty.size === 0 && unwell.size === 0) queueMicrotask(flush)
 		dirty.add(doc)
 	}
+	// the status alone worked out again, once the commits coming in now are all in
+	function recheck(doc: string) {
+		if (dirty.size === 0 && unwell.size === 0) queueMicrotask(flush)
+		unwell.add(doc)
+	}
 	function flush() {
-		const docs = [...dirty]
+		const docs = [...dirty], checks = new Set([...docs, ...unwell])
 		dirty.clear()
+		unwell.clear()
 		const was = applying
 		applying = true
 		try {
@@ -549,9 +637,57 @@ export function createSync(options: Options): Sync {
 				conflicts(doc)
 				listed(doc)
 			}
+			for (const doc of checks) status(doc)
 		} finally {
 			applying = was
 		}
+	}
+
+	// the "status" table at the id: what the device holds back or refused there (the stored
+	// layer's), what its history waits on or refused, and the writes not sent. none when nothing
+	function status(doc: string) {
+		const t = device.taking(doc), history = device.history(doc)
+		const on = (commit: string, parents: string[]): Status["waiting"][number] =>
+			parents.length ? { commit, parents } : { commit, authority: true }
+		const waiting = [
+			...t.waiting.map((w) => on(w.commit, w.waiting)),
+			...history.waiting().map((w) => on(w.name, w.waiting)),
+		]
+		const refused: Status["refused"] = [
+			...t.refused.map((r) =>
+				"fragment" in r
+					? { fragment: r.fragment, code: r.refused }
+					: { commit: r.commit, code: "stuck" in r ? "parent" : r.refused }
+			),
+			...history.refused().map((r) => ({ commit: r.name, code: r.refused })),
+		]
+		const mine = unsent.get(doc)
+		const have = table.get("status", doc)
+		if (!waiting.length && !refused.length && mine === undefined) {
+			if (have !== undefined) table.del("status", doc)
+			return
+		}
+		const value: Status = {
+			waiting: waiting.slice(0, LIST),
+			refused: refused.slice(0, LIST),
+			unsent: mine?.rows ?? [],
+			count: { waiting: waiting.length, refused: refused.length, unsent: mine?.count ?? 0 },
+		}
+		if (have !== undefined && same(have.value, value)) return
+		const entry = createEntry(value, { time: Math.floor(Date.now() / 1000), actor: null })
+		if (have) table.sub("status", doc, entry)
+		else table.add("status", doc, entry)
+	}
+
+	// a write at (id, table) no commit could carry: noted in the status
+	function failed(id: string, part: Key, e: CommitError) {
+		let m = unsent.get(id)
+		if (m === undefined) unsent.set(id, m = { rows: [], count: 0 })
+		m.count++
+		if (m.rows.length < LIST) {
+			m.rows.push({ table: part as string, error: e.code, ...e.field && { field: e.field } })
+		}
+		recheck(id)
 	}
 
 	// with a rule, none: what shows is every head
@@ -611,19 +747,31 @@ export function createSync(options: Options): Sync {
 		}
 		const commit: Commit = {
 			table: part as string,
-			...carried(change),
+			...carried(change, roots),
 			signer: signer.key,
-			nonce: nonce++,
+			nonce,
 			parents: heads.map((k) => k.name).sort(compare),
 			lamport: 1 + Math.max(0, ...heads.map((k) => k.lamport)),
 			patches: patches as Commit["patches"],
 		}
 		if (on !== undefined) commit.merge = rule
 		else if (heads.length > 1) commit.base = head!.name
-		const bytes = encode(commit), name = nameOf(bytes)
+		// what no commit can carry (a value with no encoding) is not sent, and the rest goes on: noted
+		let bytes: Uint8Array
+		try {
+			bytes = encode(commit)
+		} catch (e) {
+			if (!(e instanceof CommitError)) throw e
+			return void failed(id, part, e)
+		}
+		nonce++
+		const name = nameOf(bytes)
 		grew(id, name, bytes.length)
 		const added = device.take(id, bytes, "stored", { commit, name })
 		if (added === "taken") {
+			let at = sent.get(id)
+			if (at === undefined) sent.set(id, at = new Map())
+			at.set(part as string, hex(name))
 			shown.set(id, history.get(name)!)
 			merged.delete(id)
 			if (heads.length > 1) {
@@ -632,9 +780,9 @@ export function createSync(options: Options): Sync {
 				if (rule !== undefined) remember(id)
 				later(id)
 			}
-			if (o !== undefined) landed(id, part, all, stored, commit)
+			if (o !== undefined) landed(id, part, all, stored, commit, name)
 		}
-		return added === "taken" ? commit : undefined
+		return added === "taken" ? { commit, name } : undefined
 	}
 
 	const whole = (e: Entry<unknown> | undefined): Patch =>
@@ -642,11 +790,18 @@ export function createSync(options: Options): Sync {
 
 	// a stored commit of this device's at an overlaid node: what the table shows of its table is
 	// stored now, and this device's ephemeral commits there are followed
-	function landed(id: string, part: Key, all: boolean, stored: unknown, commit: Commit) {
+	function landed(
+		id: string,
+		part: Key,
+		all: boolean,
+		stored: unknown,
+		commit: Commit,
+		name: Uint8Array,
+	) {
 		const o = overlays.get(id)!, t = part as string
 		if (!all && o.over.has(t)) {
 			if (stored === undefined) delete o.under[t]
-			else o.under[t] = copied({ value: stored, change: changeOf(commit) })
+			else o.under[t] = copied({ value: stored, change: changeOf(commit, name) })
 			// shown again, whatever it showed
 			o.over.set(t, "")
 		}
@@ -748,7 +903,7 @@ export function createSync(options: Options): Sync {
 		}
 		const entry = value === undefined
 			? undefined
-			: { value, change: changeOf(commit) } as Entry<unknown>
+			: { value, change: changeOf(commit, kept.name) } as Entry<unknown>
 		fresh.set(hex(kept.name), { entry })
 		return true
 	}
@@ -844,15 +999,23 @@ export function createSync(options: Options): Sync {
 		const base = Math.max(0, ...parents.map((k) => k.lamport))
 		const commit: Commit = {
 			table: t,
-			...carried(change),
+			...carried(change, roots),
 			signer: signer.key,
-			nonce: nonce++,
+			nonce,
 			parents: parents.map((k) => k.name).sort(compare),
 			lamport: 1 + base,
 			patches: patches as Commit["patches"],
 		}
 		if (on !== undefined) commit.merge = rule
-		const bytes = encode(commit), name = nameOf(bytes)
+		let bytes: Uint8Array
+		try {
+			bytes = encode(commit)
+		} catch (e) {
+			if (!(e instanceof CommitError)) throw e
+			return void failed(id, part, e)
+		}
+		nonce++
+		const name = nameOf(bytes)
 		if (device.take(id, bytes, "ephemeral", { commit, name }) !== "taken") return
 		const kept = device.history(id, "ephemeral").get(name)!
 		// the stored under it, as it was before this write
@@ -865,7 +1028,7 @@ export function createSync(options: Options): Sync {
 		if (mine === undefined) o.peers.set(me, mine = { stands: new Map(), at: 0 })
 		const entry = value === undefined
 			? undefined
-			: copied({ value, change: changeOf(commit) } as Entry<unknown>)
+			: copied({ value, change: changeOf(commit, name) } as Entry<unknown>)
 		mine.stands.set(t, { kept, base, entry })
 		if (was !== undefined) device.forget(id, was.kept.name)
 		mine.at = clock()
@@ -1061,22 +1224,31 @@ export function createSync(options: Options): Sync {
 		},
 		settle(id, change) {
 			if (device.history(id).heads().length < 2) return
-			const commit = send(id, "value", [], change, true)
+			const made = send(id, "value", [], change, true)
 			// a merge is a write to its table like any other: the entry shown carries its change, as
 			// a replay of the merge (and so every other device) has it
 			const o = overlays.get(id)
-			if (commit && o?.over.has("value")) {
+			if (made && o?.over.has("value")) {
 				const e = o.under.value
-				if (e !== undefined) o.under.value = { value: e.value, change: changeOf(commit) }
+				if (e !== undefined) {
+					o.under.value = { value: e.value, change: changeOf(made.commit, made.name) }
+				}
 				return
 			}
-			const entry = commit && tables.includes("value") ? table.get("value", id) : undefined
+			const entry = made && tables.includes("value") ? table.get("value", id) : undefined
 			if (entry === undefined) return
 			const was = applying
 			applying = true
 			try {
-				update(entry, [], changeOf(commit!))
-				options.commit?.([entry])
+				if (options.commit !== undefined) {
+					update(entry, [], changeOf(made!.commit, made!.name))
+					options.commit([entry])
+				} else {
+					// no host's "a write landed": the table's event, a new entry in its place
+					const next = createEntry(entry.value, entry.change)
+					update(next, [], changeOf(made!.commit, made!.name))
+					table.sub("value", id, next)
+				}
 			} finally {
 				applying = was
 			}
@@ -1116,13 +1288,26 @@ export function createSync(options: Options): Sync {
 		},
 		idle: async () => {
 			await device.idle()
-			if (dirty.size) flush()
+			if (dirty.size || unwell.size) flush()
 		},
 		tick,
 		standing: (id) =>
 			[...overlays.get(id)?.peers ?? []].flatMap(([who, p]) =>
 				[...p.stands.values()].map((s): [string, Uint8Array] => [who, s.kept.name])
 			).sort(([a, x], [b, y]) => a < b ? -1 : a > b ? 1 : compare(x, y)),
+		stop(id, part) {
+			if (!kept(part, id)) return
+			follow(id).catch(() => {})
+			const t = part as string
+			const mine = overlays.get(id)?.peers.get(me), s = mine?.stands.get(t)
+			if (mine !== undefined && s !== undefined) {
+				mine.stands.delete(t)
+				device.forget(id, s.kept.name)
+				show(id)
+				arm()
+			}
+			device.stop(id, t)
+		},
 		async close() {
 			clearTimeout(timer)
 			timer = undefined

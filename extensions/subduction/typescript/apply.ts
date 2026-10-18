@@ -1,7 +1,7 @@
 // what an object holds after a blop, worked out from its history (APPLY.tex)
 // sides: the patches applied, as mutate applies them to a first version, to the base's side
 import type { Blop } from "@ermine/encoding/blop"
-import createEntry, { type ChangeHeader } from "@ermine/node/entry"
+import createEntry, { type ChangeHeader, type Metadata } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import { ApplyError } from "@ermine/op/apply"
 import type { Histories } from "./history.ts"
@@ -138,11 +138,11 @@ export function versions(
 		const header: ChangeHeader = { time: time(name), actor: blop.actor }
 		if (blop.reader !== undefined) header.reader = blop.reader
 		if (blop.site !== undefined) header.external = [blop.site]
-		const metadata: [string, unknown][] = []
-		if (blop.cause !== undefined) metadata.push(["cause", blop.cause])
-		if (blop.wallclock !== undefined) metadata.push(["wallclock", blop.wallclock])
-		if (blop.message !== undefined) metadata.push(["message", blop.message])
-		if (metadata.length) header.metadata = metadata
+		const metadata: Metadata = {}
+		if (blop.cause !== undefined) metadata.cause = blop.cause
+		if (blop.wallclock !== undefined) metadata.wallclock = blop.wallclock
+		if (blop.message !== undefined) metadata.message = blop.message
+		if (Object.keys(metadata).length) header.metadata = metadata
 		const version: Version = {
 			change: header,
 			because: {

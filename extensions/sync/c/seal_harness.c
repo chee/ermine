@@ -53,6 +53,17 @@ static void key(const op_value *r, FILE *out) {
 static void seal(const op_value *r, FILE *out) {
 	sl_seeded s;
 	if (!seed_of(r, out, &s)) return;
+	// header: another varsig header to sign under
+	const char *header = hh_str(r, "header");
+	if (header != NULL) {
+		uint8_t *h;
+		size_t n;
+		if (!cf_unhex(header, &h, &n)) {
+			hh_error(out, "not hex");
+			return;
+		}
+		s.signer.header = h, s.signer.header_length = n;
+	}
 	const op_value *form = op_get(r, "commit");
 	uint8_t *commit = NULL;
 	size_t length = 0;
@@ -102,6 +113,13 @@ static void seal(const op_value *r, FILE *out) {
 	}
 }
 
+// also: more varsig headers, each checked as Ed25519 (strictly)
+static bool also_verify(void *context, const uint8_t *signature, const uint8_t *key, size_t key_length,
+	const uint8_t *message, size_t length) {
+	(void)context;
+	return key_length == 32 && ermEd25519Verify(key, message, length, signature);
+}
+
 static void unseal(const op_value *r, FILE *out) {
 	const op_value *value = op_get(r, "value");
 	const char *hex = hh_str(r, "sealed");
@@ -118,8 +136,20 @@ static void unseal(const op_value *r, FILE *out) {
 	}
 	uint8_t doc[32];
 	if (!doc_of(r, out, doc)) return;
+	sl_verifier more[16];
+	sl_verifiers extra = {more, 0};
+	const op_value *also = op_get(r, "also");
+	for (size_t i = 0; also != NULL && also->type == OP_LIST && i < also->count && i < 16; i++) {
+		uint8_t *h;
+		size_t n;
+		if (also->items[i]->type != OP_STR || !cf_unhex(also->items[i]->str, &h, &n)) {
+			hh_error(out, "not hex");
+			return;
+		}
+		more[extra.count++] = (sl_verifier){h, n, 0xed, 64, also_verify, NULL};
+	}
 	sl_unsealed u;
-	sl_code code = sl_unseal(bytes, length, doc, &u, NULL);
+	sl_code code = sl_unseal(bytes, length, doc, &u, &extra);
 	if (code != SL_OK) {
 		refuse(out, code);
 		return;

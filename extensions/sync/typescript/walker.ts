@@ -1,29 +1,16 @@
-// eg-walker (egwalker.ts) kept between merges, for one node: the replay's state stays (every write,
-// element and removal made, with its id; which commits are in, each one's version), and a merge
-// asked for later applies only the commits it does not have yet, then reads the heads' version.
-// the same tables as egwalker gives, by its rules (egwalker.ts's header); what differs is only how:
-//
-// - ids: (commit, n), commits compared by (lamport, name), the order rule 1 ranks them in, so a
-//   commit coming in below ones applied already needs no renumbering. the start's: below all
-// - a commit applied: its version (rule 3) a bitset over the commits applied here, its own
-//   follows' and theirs; its patches read in it (rules 4 to 8), as egwalker reads them. a commit's
-//   version holds only commits before it in causal order, so the order commits are applied in
-//   (any causal order) changes nothing: RGA puts an element by ids alone (rule 5), a slot holds
-//   the latest write it sees, removals and failures (rule 8) are the version's
-// - a merge of heads: the commits since the start the heads follow from and not applied yet
-//   (walked back from them, along follows), applied in causal order; then every slot and sequence
-//   read in the heads' version, each table's change the latest commit in it naming it (rule 9).
-//   heads older than what is applied read the same: the commits beside them are not in the version
-// - the start: since's (history.ts) when built, one commit or none: a start at several commits
-//   would not hold once a commit comes on one of them. rule 1: any start gives the same merge
-//
-// built again (since, from the heads asked): when asked for the history's own heads and a commit
-// there does not follow from the start (a fork from before it), or more than LIMIT commits came
-// since it was built; when given another history. heads it can't give that are not the history's (a merge
-// commit's parents, from before the start): egwalker itself, the state kept. collapsing to one head
-// is not a reason to drop it: a commit concurrent with that head may still come (two devices typing
-// at once each collapse at every keystroke, and the other's keystrokes come in beside it). what
-// sync drops: every walker, when its rule is switched; all of it on a reload
+// walker: eg-walker (egwalker.ts) kept between merges for one node. the replay's state stays, and
+// a later merge applies only the commits it lacks, then reads the heads' version. same tables as
+// egwalker, by its rules; only how differs:
+// - ids: (commit, n), commits by (lamport, name), so a commit arriving below applied ones needs no
+//   renumbering. the start's: below all
+// - a commit's version: a bitset over commits applied here; any causal apply order gives the same
+// - a merge: commits since the start the heads follow and not yet applied, in causal order; then
+//   read in the heads' version (rule 9 for changes)
+// - the start: since's (history.ts), one commit or none
+// rebuilt when asked for the history's heads and one does not follow from the start, after more
+// than LIMIT commits since built, or for another history. heads before the start it can't give:
+// egwalker itself. one head is no reason to drop it (concurrent commits may still come). sync drops
+// every walker on a rule switch, and all on reload.
 import { type Commit, decode } from "@ermine/encoding/commit"
 import type { ChangeHeader } from "@ermine/node/entry"
 import { hex } from "./hex.ts"
@@ -402,7 +389,7 @@ function walker(history: History, from: Kept | undefined, start: Tables) {
 			const s = span.get(table)
 			const change = s === undefined
 				? startChanges.get(table)!
-				: changeOf(decode(commits[s[1]].bytes))
+				: changeOf(decode(commits[s[1]].bytes), commits[s[1]].name)
 			out[table] = { value: show(v), change }
 		}
 		sees = () => true

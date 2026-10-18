@@ -51,7 +51,7 @@ import type { Id, Path, Places } from "@ermine/places"
 import { level } from "@ermine/places"
 import { get, lookup, members } from "@ermine/places/lib"
 import { parse, plan as resolve } from "@ermine/places/path"
-import { keyOrder } from "@ermine/encoding/cbor"
+import { keyorder } from "@ermine/util/keyorder"
 import {
 	ATTRIBUTE,
 	conformance,
@@ -228,7 +228,7 @@ function takes(s: Search, id: Id): string[] {
 // walked again from "/")
 function into(s: Search, at: Path) {
 	const here = members(s.places, at).filter((m) => m.id !== level)
-	here.sort((a, b) => keyOrder(a.name, b.name))
+	here.sort((a, b) => keyorder(a.name, b.name))
 	for (const m of here) {
 		if (s.met.has(m.id)) continue
 		s.met.add(m.id)

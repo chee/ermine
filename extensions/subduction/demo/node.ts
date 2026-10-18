@@ -183,7 +183,7 @@ export async function start(o: Options) {
 		commit: (changed) => (places.commit(changed), soon()),
 	})
 	const device = sync.device
-	const host = scheduler.createRootScope([["actor", me.slice(0, 8)]])
+	const host = scheduler.createRootScope({ actor: me.slice(0, 8) })
 
 	// patches to the entry under (part, id), made whole first if none: told to places, then to sync
 	function write(part: Key, id: Id, patches: Patch[]) {

@@ -1,16 +1,6 @@
-// start: a process from a way (one satisfy or openwith yields), in a box or plain places (the root
-// is the outermost box), at a path in it; and its stop. the process's life (its scope, node, row,
-// args, cwd, pin, status and stop) is @ermine/processes/start's; this runs the way in it. chee
-// 10-15: "the process is a scheduler scope with a path. this is good"; "you'd pick a folder, make a
-// box from it, mount anything you want the process to see in there (including something that can
-// run its program), start the process with the box". decided: createProcessAPI ("when we're
-// creating the process/program table we also take a function for making the api"); the pin, a
-// record written at start; a path taken: "Refuse a running one". lean: "maybe processes should just
-// never be able to do that" (getCurrentScope): a program gets what createProcessAPI gives, nothing
-// else; "`ermine.process.args = ["hehe.txt"]` and put it in a box with hehe.txt that's neat and on
-// the graph"; "we're not always inside a box"; "it also would be useful with box to be able to start
-// the process at a different cwd than the root. so we are boxing /work and starting the process in
-// /work/docs/mouse"
+// start: a process from a way (one satisfy or openwith yields), in a box or plain places, at a path
+// in it; and its stop. the process's life (scope, node, args, cwd, pin, status, stop) is
+// @ermine/processes/start's; this runs the way in it.
 //
 //   const programs = createPrograms({ scheduler, table, places, builds, scopes, createProcessAPI })
 //   const [way] = satisfy(b.places, "catclock.c", ["clocks"])   // the first; none: undefined
@@ -18,66 +8,20 @@
 //   // { id: "proc:<uuid>", at: ["clock"], cwd: [], scope }, or { refused: "taken", at: ["clock"] }
 //   programs.stop(p)
 //
-// start(where, way, at, { args, cwd }): where, at and cwd as processes' start takes them. refused,
-// nothing made:
-//   no-runner: an empty chain (satisfy's for a program that is itself a live function the host
-//     holds): what starting one means is open
-//   taken: processes' start's
-// else processes' start, its owner the programs' own scope, [["programs", "start"]], made through
-// setup.sites when given (ermine/sites, its ours holding this file and processes' start.ts: the
-// programs' own site is where createPrograms was called, a process's where start was), given:
-//   the pin: what was chosen, to show and replay: the program's id, place and hash (hex of
-//     @ermine/encoding's hash of its value), each step's id, place and its ermine.programs.compiler
-//     identity (none: hex of the hash of its attributes), a loaded step's (by not empty) also the
-//     hash of its value and its by, pinned so; the root and the cwd
-//   then, in the process's scope:
-//   1. an effect builds: the chain's compilers folded over the program's value, read once at start
-//      (an edit after start changes nothing that runs), each through builds.compile (a loaded one:
-//      below). its status is the process node's (processes' give, with its run): PENDING while a
-//      step is, the Error when one failed, gone once built
-//   2. built, it acts once: the chain's runner (a host runner: its node's value a live function,
-//      Runner; a loaded one: its live form's run), called with the code and an api, the process's
-//      scope open, so what the program makes is the scope's and goes at stop. the api:
-//      createProcessAPI({ box, places, process: { id, at, args, cwd }, scheduler, table, scope }),
-//      and nothing else. then the effect goes: a process's build is one-shot (the pin). a runner
-//      that throws, or gives a promise: its outcome a computer of its own in the scope, whose
-//      status is the node's too (PENDING till it lands; the Error). a runner's node holding no
-//      function then: a StartError not-a-runner, there
+// refused, nothing made: no-runner (an empty chain), taken (the path has a running process).
+// pin: the program's and each step's id, place and hash, the root and cwd; written at start.
+// build: the chain's compilers folded over the program's value, read once at start; status
+// PENDING while building, the Error on failure. then the runner is called once with the code and
+// createProcessAPI({ box, places, process: { id, at, args, cwd }, scheduler, table, scope }), the
+// process's scope open. a runner that throws or gives a promise: that outcome is the status.
+// loaded steps (by not empty): run through their by's runner's load(code) to a live form (compile
+// or run), each loaded once per key (id, value hash, by), held while a process using it runs.
+// failures: StartError not-a-runner, not-a-loader, not-a-compiler.
+// stop(p): the runner's stop, then held loads let go ([Symbol.dispose] if any). outputs stay
+// cached
 //
-// loading: a step whose by is not empty (wasm clang, run by the wasm runner) is loaded, its by run
-// in load mode: its value (read at start, as the program's) folded through its by's compilers, then
-// handed to its by's runner's load(code), giving back its live form (a module's exports; a promise
-// of them). a runner has two entry points: run(code, api) → { stop }, and load(code) → exports (a
-// host runner: a property of its function; a JavaScript runner's imports the module, a wasm
-// runner's instantiates it). the live form, as the step is used:
-//   a compiler: its compile(input) → output (or a promise), through builds.step under its
-//     identity, cached as a host compiler is: ermine.programs.compiler; none: { id, hash } (hex of
-//     its value's hash, as read at start), so an edit to its value is a miss (a host compiler's
-//     none: its id, a live function having no hash)
-//   a runner: its run(code, api), and maybe load: so a loaded loader runs and loads, and loaders stack
-// as the effect builds, in the chain's order, each step loaded when first needed (a stack: from the
-// host up). failures are the process's status: a load that throws or rejects (an import throwing,
-// an instantiate failing), its Error; a runner with no load, a StartError not-a-loader; a live form
-// with no compile or run, not-a-compiler or not-a-runner. builds with no step: a loaded compiler is
-// an Error
-//
-// the loaded, the programs' own, by key: the step's id, the hash of its value (no encoding: the
-// value itself), and its by's keys (a host step's: its function), so a node loaded by another runner,
-// or under an edited one, is another. each loads once, in a computer of its own under the
-// programs' scope, made after the run asking (as build.ts' steps); the processes asking hold it.
-// mine, open: kept while a process holding it runs, gone at the last one's stop (its computer torn
-// down, and its live form's [Symbol.dispose] called, if it has one: dlopen.ts' closes its library);
-// a failure is kept by no one but the processes that asked (the next start loads again). an edit to
-// a loader's value: the next start loads it again, a running process keeping its own
-//
-// stop(p): processes' stop, which calls, first: the runner's stop (a promise landing after stop:
-// stopped as it lands), then the loads it holds let go. built outputs stay in the cache
-//
-// open (chee): a new build reaches a running process only by stop and start; whether a process
-// shows that newer code exists (catclock's live editing) is not built. mine, open: the pin's box as
-// its root's id (a folder: what is in it is not in the pin); a compiler's identity changing before
-// its build lands is followed, the pin keeping the first. a loaded compiler's value with no
-// encoding: its identity its id, as a host one's
+// open: a new build reaches a running process only by stop and start; showing that newer code
+// exists; the pin's box as its root's id; a compiler's identity changing mid-build
 import { CborError, type Value } from "@ermine/encoding/cbor"
 import { hash } from "@ermine/encoding/hash"
 import type { Address, Box } from "@ermine/boxes"
@@ -87,6 +31,7 @@ import {
 	type Inside,
 	pathsOf,
 	type Process,
+	type Processes,
 	type Refused as Taken,
 } from "@ermine/processes/start"
 import type { ScopeNodes } from "@ermine/processes/scopes"
@@ -177,6 +122,8 @@ export type Programs = {
 		options?: { args?: readonly string[]; cwd?: Address },
 	) => Process | Refused
 	stop: (p: Process) => void
+	// a process's latest run by its node's id (the processes')
+	runs: Processes["runs"]
 }
 
 // as the build lands: a runner's node holding no function, or a live form with no run; a runner
@@ -254,9 +201,9 @@ export function createPrograms(setup: Setup): Programs {
 	const { scheduler: s, table, places, builds, scopes, createProcessAPI } = setup
 	const createScope = setup.sites?.createScope ?? s.createScope
 	// the processes' owner, under the scope open; torn down, every process goes, and status with it
-	const owner = createScope([["programs", "start"]])
+	const owner = createScope({ programs: "start" })
 	// the loads' computers
-	const loading = s.createScope([["programs", "loads"]], owner)
+	const loading = s.createScope({ programs: "loads" }, owner)
 	const processes = createProcesses({
 		scheduler: s,
 		table,
@@ -531,5 +478,5 @@ export function createPrograms(setup: Setup): Programs {
 
 	const stop = (process: Process) => processes.stop(process)
 
-	return { start, stop }
+	return { start, stop, runs: processes.runs }
 }
