@@ -399,7 +399,9 @@ if (import.meta.main) {
 		const start = Date.now()
 		let n = 0, ok = 0
 		try {
-			await pool(todo, PARALLEL, (s) => cell(m, s), (c) => {
+			await pool(todo, m.slots ?? PARALLEL, (s) => cell(m, s), (c) => {
+				// a call that never reached the model (the server went away) is not a result: leave it for the next run
+				if (c.calls.some((x) => x.error && !x.tokens)) return console.log(`  lost: ${keyOf(c)}: ${c.calls.find((x) => x.error)?.error}`)
 				n++
 				if (c.first.pass) ok++
 				Deno.writeTextFileSync(file, JSON.stringify(c) + "\n", {

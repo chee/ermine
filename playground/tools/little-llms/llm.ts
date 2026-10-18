@@ -9,12 +9,14 @@ export type Model = {
 	mb: number
 	tier: "tiny" | "small" | "medium"
 	think?: boolean
+	// llama.cpp crashes on LFM2.5 with more than one sequence at a time
+	slots?: number
 }
 
 // in browser terms: tiny loads anywhere, small wants WebGPU or a patient wllama, medium is WebGPU only
 export const models: Model[] = [
 	{ name: "gemma3-270m", file: "gemma3-270m.gguf", mb: 253, tier: "tiny" },
-	{ name: "lfm2.5-350m", file: "lfm2.5-350m.gguf", mb: 229, tier: "tiny" },
+	{ name: "lfm2.5-350m", file: "lfm2.5-350m.gguf", mb: 229, tier: "tiny", slots: 1 },
 	{ name: "smollm2-360m", file: "smollm2-360m.gguf", mb: 386, tier: "tiny" },
 	{ name: "granite4-350m", file: "granite4-350m.gguf", mb: 237, tier: "tiny" },
 	{
@@ -30,7 +32,7 @@ export const models: Model[] = [
 		tier: "tiny",
 		think: true,
 	},
-	{ name: "lfm2.5-1.2b", file: "lfm2.5-1.2b.gguf", mb: 731, tier: "small" },
+	{ name: "lfm2.5-1.2b", file: "lfm2.5-1.2b.gguf", mb: 731, tier: "small", slots: 1 },
 	{ name: "llama3.2-1b", file: "llama3.2-1b.gguf", mb: 808, tier: "small" },
 	{ name: "gemma3-1b", file: "gemma3-1b.gguf", mb: 806, tier: "small" },
 	{ name: "granite4-1b", file: "granite4-1b.gguf", mb: 1024, tier: "small" },
@@ -80,9 +82,9 @@ export async function startServer(model: Model, dir: string, server: string) {
 			"-m",
 			`${dir}/${model.file}`,
 			"-c",
-			String(4096 * PARALLEL),
+			String(4096 * (model.slots ?? PARALLEL)),
 			"-np",
-			String(PARALLEL),
+			String(model.slots ?? PARALLEL),
 			"-t",
 			"4",
 			"--port",
