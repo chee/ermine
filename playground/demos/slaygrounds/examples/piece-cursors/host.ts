@@ -40,7 +40,7 @@ function device(actor: string) {
 	const table = createTable((part, id) => places.onTableChange(part, id))
 	const places = createPlaces({ root: "root", table, paths: createPaths(), scheduler })
 	scheduler.onTrackingEnd((key) => places.release(key))
-	const scope = scheduler.createRootScope([["actor", actor]])
+	const scope = scheduler.createRootScope({ actor: actor })
 	scheduler.runWithScope(scope, () => {
 		table.add("value", "root", createEntry(undefined, createChangeHeader(scheduler)))
 		table.add("children", "root", createEntry({ pad: "pad" }, createChangeHeader(scheduler)))
@@ -82,7 +82,7 @@ const phone = {
 		far.scheduler.pulse()
 	},
 	effect<T>(read: () => T, act: (v: T) => void, teardown: (f: () => void) => void) {
-		const scope = far.scheduler.createScope([["role", "phone effect"]], far.scope)
+		const scope = far.scheduler.createScope({ role: "phone effect" }, far.scope)
 		teardown(() => far.scheduler.teardown(scope))
 		far.scheduler.runWithScope(scope, () => far.scheduler.createEffect(read, act))
 		far.scheduler.pulse()

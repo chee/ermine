@@ -7,7 +7,7 @@ import { bind, handler, under } from "ermine-h"
 // and the snail are processes of their own, and each signs from its own timer a while later.
 // every signature is a node under ./names. the front grows a flower for each, the inside shows
 // its words: two views of the same nodes. who signed is not written in the signature: the card
-// reads it off the change that wrote it (who(change): its "caller" and "trusted"), so a friend can't
+// reads it off the change that wrote it (who(change): its "caller" and "trusted-event"), so a friend can't
 // pretend to be you. edit this file while the snail is crawling: the card keeps every name, and
 // the snail keeps crawling
 
@@ -45,7 +45,7 @@ const ink = (w?: Who) =>
 		? "#999"
 		: w.caller in FRIENDS
 		? FRIENDS[w.caller as Friend].ink
-		: w.trusted
+		: w["trusted-event"]
 		? "#ff2284"
 		: "#888"
 const label = (w?: Who) =>
@@ -53,7 +53,7 @@ const label = (w?: Who) =>
 		? "…"
 		: w.caller in FRIENDS
 		? `${FRIENDS[w.caller as Friend].face} ${w.caller} · from a timer`
-		: w.trusted
+		: w["trusted-event"]
 		? "you ✋"
 		: "a script 🤖 (no person did this)"
 

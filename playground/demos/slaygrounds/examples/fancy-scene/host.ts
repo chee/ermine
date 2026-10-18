@@ -5,18 +5,12 @@
 //               transform (p: where, r: turned in degrees, s: size; each relative to its parent),
 //               colour and shape (cube, sphere, line, none). every other name under it is a child
 //   /spin       its target is a mount, placed here; "spin this" places another object there
-//
-// extend: inspect(address) picks a node in the page's graph tab (the page around the frame is the
-// shell's, not the world's)
 import { createWorld } from "@ermine/slaygrounds/world"
 import { render } from "ermine-h"
 
 const world = createWorld({
 	render,
 	processes: [{ name: "view", export: "view" }, { name: "spinner", export: "spin" }],
-	extend: () => ({
-		inspect: (address: string[]) => (window.parent as any).__pick?.(address),
-	}),
 })
 
 world.seed((host) => {

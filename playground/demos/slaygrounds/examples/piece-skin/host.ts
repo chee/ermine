@@ -1,29 +1,11 @@
 // skin's host: the world (@ermine/slaygrounds/world) with patch nodes (overlay: true: the places
-// read through them), a shared card and my tweak seeded, one process, skin. extend adds two tools
-// the api has no word for: the latest change of a node (its time is what a patch node is made
-// against; its actor, who edited last), and as, f run as another actor (a friend's edit)
+// read through them), a shared card and my tweak seeded, one process, skin. the program uses the
+// world's change (the card's time is what a patch node is made against; its actor, who edited
+// last) and as (a friend's edit)
 import { createWorld } from "@ermine/slaygrounds/world"
 import { render } from "ermine-h"
 
-const world = createWorld({
-	render,
-	processes: [{ name: "skin" }],
-	overlay: true,
-	extend: (api, { places, scheduler: s, scope }) => ({
-		change(x: string) {
-			const id = api.entries(x)[0]?.id
-			return id === undefined ? undefined : places.readChange("value", id)
-		},
-		as<T>(actor: string, f: () => T): T {
-			const own = s.createScope([["actor", actor]], s.getCurrentScope() ?? scope)
-			try {
-				return s.runWithScope(own, f)
-			} finally {
-				s.teardown(own)
-			}
-		},
-	}),
-})
+const world = createWorld({ render, processes: [{ name: "skin" }], overlay: true })
 world.seed((host) => {
 	// a card everyone shares, at /shared/card
 	const card = host.open("/shared/card", {

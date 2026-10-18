@@ -33,7 +33,7 @@ export function createWorld() {
 	places = createPlaces({ root: "root", table, paths, scheduler: s })
 	// a write landed: told to the places (a box's are a view of them: told too)
 	const commit = (changed: readonly Entry<unknown>[]) => places.commit(changed)
-	const host = s.createRootScope([["actor", "catclock demo"], ["trusted", true]])
+	const host = s.createRootScope({ actor: "catclock demo", "trusted-event": true })
 	const header = () => createChangeHeader(s)
 	// writes inside writes: one pulse, once the outermost is done (several files changed as one)
 	let depth = 0

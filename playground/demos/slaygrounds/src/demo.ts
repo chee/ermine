@@ -20,7 +20,7 @@ const s = createScheduler()
 s.onTrackingEnd((key) => places.release(key))
 trace(s, (m) => (moments.push(m), record(m))) // moments: added for the inspector
 const places = createPlaces({ root: "root", table, paths, scheduler: s })
-const host = s.createRootScope([["actor", "chee@laptop"], ["trusted", true]])
+const host = s.createRootScope({ actor: "chee@laptop", "trusted-event": true })
 
 const parts = new Map() // computation → { entry, at, scope, pending? }
 const moments = [] // added for the inspector: every scheduler moment
@@ -45,7 +45,7 @@ s.runWithScope(host, () => {
 // ---- a process, started at a place ----
 function start(at, setup, may) {
 	const self = s.runWithScope(host, () => node(at))
-	const scope = s.createScope([["process", self.id]], host)
+	const scope = s.createScope({ process: self.id }, host)
 	const t = tools(self, createGuard({ places, scheduler: s, table, may, from: self.path }))
 	s.runWithScope(scope, () => {
 		// unplace is kill (a move also leaves this slot: this can't tell the two apart)
@@ -85,7 +85,7 @@ function tools(self, guard) {
 		// computes and effects: nodes inside, each its own scope under the process's
 		part(kind, name, f, act?) {
 			const entry = t.make([self, name])
-			const own = s.createScope([["part", name]])
+			const own = s.createScope({ part: name })
 			s.runWithScope(own, () => {
 				const c = kind === "compute"
 					? s.createComputer(f, (v) => t.put(entry, v))
@@ -110,7 +110,7 @@ function call(address, args, caller, trusted) {
 	const path = plan(address) ?? []
 	const found = { id: s.runWithScope(host, () => lib.get(places, path)), path }
 	const { scope, guard } = defined.get(found.id)
-	const own = s.createScope([["caller", caller], ["trusted", trusted]], scope)
+	const own = s.createScope({ caller, "trusted-event": trusted }, scope)
 	try {
 		return s.runWithScope(own, () => {
 			guard.write("execute", target(found, "value"))

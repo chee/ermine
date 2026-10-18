@@ -10,7 +10,7 @@
 // writes until its flush (a microtask), so every signal one pulse sets is seen in one flush, never
 // half a pulse. early: set in the round's early queue, before ermine's other effects act. what
 // crosses back (write, act) pulses at once, so Solid's next flush has what ermine made of it too
-import { createMemo, createSignal, onCleanup } from "@solidjs/signals"
+import { createMemo, createRoot, createSignal, getOwner, onCleanup } from "@solidjs/signals"
 import { PENDING } from "@ermine/scheduler"
 
 // deno-lint-ignore no-explicit-any
@@ -235,39 +235,52 @@ export function tree(world: World, limit = 800) {
 }
 
 // what each part's latest run read: computation -> its node (the host's parts map) and the nodes
-// its read keys are on (places.describe). a key places made names { part, id, path }
+// its read keys are on, from the runs table (the process api's runs: each record's reads, named
+// { part, id, path } by places). the parts map is not tracked, so the reading is made again
+// when it has grown
 export type Where = { part: string; id: unknown; path: unknown }
 export type Reads = Map<Any, { entry: Any; reads: Where[] }>
 
 // the scheduler's moments as signals, with no timer: the host's moments.push is wrapped. tick goes
-// up after each batch of moments; reads is what the "a run ended" moments said was read, the
-// latest run of each computation. spots are asked as the moments land, while they are held
+// up after each batch of moments; reads is the latest run's reads of each part, read from the
+// runs table (other computers' records: this reader is not one of the parts)
 export function moments(world: World) {
 	const [tick, setTick] = createSignal(0)
-	const [reads, setReads] = createSignal<Reads>(new Map(), { equals: false })
+	const [feeding, setFeeding] = createSignal<(() => Reads | undefined) | undefined>(undefined)
 	const list: Any[] = world.moments
 	const push = list.push
-	const latest: Reads = new Map()
-	let queued = false, done = list.length
+	let queued = false
 	let tickTimer = 0
+	let known = -1
+	let stop: (() => void) | undefined
+	const owner = getOwner()
+	const remake = () => {
+		stop?.()
+		stop = createRoot((dispose) => {
+			setFeeding(() =>
+				feed(world, (): Reads => {
+					const out: Reads = new Map()
+					for (const [comp, part] of world.parts as Map<Any, Any>) {
+						const read = world.apis.runs(part.entry.id, "reads") as Any[] | undefined
+						if (!read) continue
+						const seen = new Set<string>()
+						const reads: Where[] = []
+						for (const w of read) {
+							if (!("part" in w)) continue
+							const id = `${String(w.id)}:${w.part}`
+							if (!seen.has(id)) (seen.add(id), reads.push(w))
+						}
+						out.set(comp, { entry: part.entry, reads })
+					}
+					return out
+				}, { frame: true })
+			)
+			return dispose
+		}, owner ?? undefined)
+	}
 	const take = () => {
 		queued = false
-		for (; done < list.length; done++) {
-			const m = list[done]
-			if (!m.ends || !Array.isArray(m.reads)) continue
-			const part = world.parts.get(m.ends)
-			if (!part) continue
-			const seen = new Set<string>()
-			const out: Where[] = []
-			for (const key of m.reads) {
-				const w = world.places.describe(key)
-				if (!w) continue
-				const id = `${String(w.id)}:${w.part}`
-				if (!seen.has(id)) (seen.add(id), out.push(w))
-			}
-			latest.set(m.ends, { entry: part.entry, reads: out })
-		}
-		setReads(new Map(latest))
+		if (world.parts.size !== known) (known = world.parts.size, remake())
 		// the tick (what the scheduler column shows) at most twice a second: a clock writing
 		// forty times a second is not forty updates of a list
 		if (!tickTimer) tickTimer = setTimeout(() => ((tickTimer = 0), setTick((x) => x + 1)), 500)
@@ -278,8 +291,8 @@ export function moments(world: World) {
 		return r
 	}
 	queueMicrotask(take)
-	onCleanup(() => (clearTimeout(tickTimer), void (list.push = push)))
-	return { tick, reads }
+	onCleanup(() => (clearTimeout(tickTimer), stop?.(), void (list.push = push)))
+	return { tick, reads: () => feeding()?.() }
 }
 
 // a change from outside: patches written to a node as an ordinary change, in a scope under the
@@ -293,7 +306,7 @@ export function write(
 	via = "inspector",
 ) {
 	const { s, places, table, host } = world
-	const scope = s.createScope([["via", via], ["trusted", true]], host)
+	const scope = s.createScope({ via, "trusted-event": true }, host)
 	try {
 		s.runWithScope(scope, () => {
 			const n = table.get(where.part, where.id)
@@ -322,7 +335,7 @@ export type Writes = {
 // back the entries it changed
 export function act(world: World, fn: (w: Writes, header: Any) => Any[], via = "inspector") {
 	const { s, places, host, table } = world
-	const scope = s.createScope([["via", via], ["trusted", true]], host)
+	const scope = s.createScope({ via, "trusted-event": true }, host)
 	try {
 		s.runWithScope(scope, () => {
 			const w: Writes = { ...world.writes, entry: (id) => table.get("children", id) }

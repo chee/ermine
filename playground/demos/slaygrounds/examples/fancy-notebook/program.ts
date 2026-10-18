@@ -304,8 +304,9 @@ export default function program(api: API & Extra) {
 	function begin(id: string) {
 		const c = read(at(id)) as { kind: string; name: string; start?: unknown }
 		if (COMPUTED.has(c.kind)) {
-			const made = scoped(() =>
-				memo(`/values/${c.name}`, () => evaluate(id, c.kind), { equal: sameBytes })
+			const made = scoped(
+				() => memo(`/values/${c.name}`, () => evaluate(id, c.kind), { equal: sameBytes }),
+				{ cell: true },
 			)
 			live.set(id, made.stop)
 		} else open(`/values/${c.name}`, c.start)

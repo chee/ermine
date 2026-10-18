@@ -1,9 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
 	<!-- an ermine in its winter coat, standing up to look, black tip on its tail -->
-	<g stroke="#241a14" stroke-width="1.1" stroke-linejoin="round" stroke-linecap="round" fill="#fffcf4">
+	<g stroke="#241a14" stroke-width="1.1" stroke-linejoin="round" stroke-linecap="round"
+		fill="#fffcf4">
 		<path d="M18.5 27.6c3.4.2 6.2-1.6 7.1-5" fill="none" stroke-width="3.8" />
 		<path d="M18.5 27.6c3.4.2 6.2-1.6 7.1-5" fill="none" stroke="#fffcf4" stroke-width="1.6" />
-		<ellipse cx="25.9" cy="20.9" rx="1.7" ry="2.5" transform="rotate(14 25.9 20.9)" fill="#241a14" stroke="#fffcf4" stroke-width="0.7" />
+		<ellipse cx="25.9" cy="20.9" rx="1.7" ry="2.5" transform="rotate(14 25.9 20.9)" fill="#241a14"
+			stroke="#fffcf4" stroke-width="0.7" />
 		<path d="M12.7 13.4C10.8 17.4 10.5 23.6 11.7 28h8.6c1.2-4.4.9-10.6-1-14.6z" />
 		<ellipse cx="13.3" cy="28.2" rx="2.1" ry="1.1" />
 		<ellipse cx="18.7" cy="28.2" rx="2.1" ry="1.1" />

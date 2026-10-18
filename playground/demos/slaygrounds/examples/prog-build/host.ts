@@ -27,7 +27,6 @@ import * as lib from "@ermine/places/lib"
 import { status as statusOf } from "@ermine/places/status"
 import { ATTRIBUTES as A, satisfy } from "@ermine/programs"
 import { COMPILER, createBuilds } from "@ermine/build"
-import { installTypes } from "@ermine/types"
 import type { Places } from "@ermine/places"
 import type { Process } from "@ermine/programs/start"
 import { PENDING } from "@ermine/scheduler"
@@ -68,6 +67,7 @@ export type Tools = API & Extra
 const world = createWorld({
 	render,
 	processes: [{ name: "shell", export: "shell" }],
+	types: true,
 	extend: (): Extra => ({
 		plan: (path) => planOf(path).view,
 		programs,
@@ -531,7 +531,7 @@ function track(name: string, path: string, o: Partial<Entry> = {}) {
 	h.open(`/value/${name}`, null)
 	h.edit("/state/names", (d: string[]) => void d.push(name))
 	// the build, in a scope of its own so stopping the program takes it away
-	const scope = w.s.createScope([["supervisor", name]], w.host)
+	const scope = w.s.createScope({ supervisor: name }, w.host)
 	e.scope = scope
 	w.s.runWithScope(scope, () => {
 		h.effect(`build-${name}`, () => build(e), (b) => act(e, b as Build), {
@@ -686,10 +686,9 @@ function mountFiles(files: Record<string, Record<string, unknown>>) {
 	)
 }
 
-// ---- the world's own folders: the types, the page's loaders, the keys, the cache ----
+// ---- the world's own folders: the page's loaders, the keys, the cache (the types are the world's)
 let builds!: ReturnType<typeof createBuilds>
 world.seed((host) => {
-	w.places.commit(installTypes(w.table, "root", w.header()))
 	builds = createBuilds({
 		scheduler: w.s,
 		table: w.table,

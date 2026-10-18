@@ -1,25 +1,10 @@
 // friends-card's host: the world (@ermine/slaygrounds/world), four processes from one module (the
-// card: default; the frog, the hedgehog and the snail: friend, each in a folder of its own), and
-// two extras, who and change: who wrote a thing, which the api does not say
-import type { ChangeHeader as Header } from "@ermine/node/entry"
-import { getWho } from "@ermine/places/header"
+// card: default; the frog, the hedgehog and the snail: friend, each in a folder of its own). who
+// wrote a thing: the world's who and change
 import { createWorld } from "@ermine/slaygrounds/world"
 import { render } from "ermine-h"
 
-// who a call or a change is: the nearest caller and trusted, from the
-// innermost scope. caller is a process's id: said by name
-export type Who = { caller: string; trusted: boolean }
-export type Tools = {
-	// who is calling, in the call now
-	// who(change): who wrote that change
-	who: (change?: Header) => Who
-	// a node's latest change (tracked: a write to the node reruns what read it)
-	change: (x: string) => Header | undefined
-}
-
-const named = new Map<string, string>()
-const nearest = (pairs: readonly (readonly [string, unknown])[] | undefined, key: string) =>
-	pairs?.find(([k]) => k === key)?.[1]
+export type { Tools, Who } from "@ermine/slaygrounds/world"
 
 const world = createWorld({
 	render,
@@ -29,23 +14,6 @@ const world = createWorld({
 		{ name: "hedgehog", export: "friend", cwd: ["friends", "hedgehog"], args: ["hedgehog"] },
 		{ name: "snail", export: "friend", cwd: ["friends", "snail"], args: ["snail"] },
 	],
-	extend: (api, ctx): Tools => {
-		named.set(ctx.process.id, ctx.process.at.join("/"))
-		const say = (pairs: Parameters<typeof nearest>[0]): Who => {
-			const caller = nearest(pairs, "caller")
-			return {
-				caller: named.get(String(caller)) ?? String(caller),
-				trusted: nearest(pairs, "trusted") === true,
-			}
-		}
-		return {
-			who: (change) => say(change ? change.metadata : getWho(ctx.scheduler)?.metadata),
-			change(x) {
-				const id = api.entries(x)[0]?.id
-				return id === undefined ? undefined : ctx.places.readChange("value", id)
-			},
-		}
-	},
 })
 
 export const reload = world.reload

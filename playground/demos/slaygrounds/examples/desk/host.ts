@@ -1,21 +1,18 @@
 // desk's host: the world (@ermine/slaygrounds/world), one process, ui, running the program's desk
-// export, and what the desk needs that the api does not say (extend, below): a walk up from a
-// place, the first way to run a program by name from there, and a node's latest change. a drawing
+// export, and what the desk needs that the api does not say (extend, below): the first way to run
+// a program by name from a place, and a node's latest change with the run behind it (a walk up from
+// a place is the world's up). a drawing
 // process per place a thing sits is started by the desk itself (start); its program is a renderer
 // node holding source text, run by the runner seeded here
-import { createWorld } from "@ermine/slaygrounds/world"
-import type { API, Node } from "@ermine/api"
-import { get, lookup } from "@ermine/places/lib"
+import { createWorld, type Tools } from "@ermine/slaygrounds/world"
+import type { Node } from "@ermine/api"
+import { get } from "@ermine/places/lib"
 import { satisfy, type Way } from "@ermine/programs"
 import { render } from "ermine-h"
 
 const RENDERER = "party.chee.ermine.renderer"
 
-export type Extra = {
-	// the nearest place walking up from `from` (names from the root; none: this process's place),
-	// where the address is: its node, tracked as any read in a run. places' lookup, as the shell
-	// finds a command
-	up: (address: string[], from?: string[]) => Node | undefined
+export type Extra = Tools & {
 	// the first way to run the program named, found from `from` (names from the root), tracked:
 	// start takes it. start's own name is found from the starter's working folder, so a program that
 	// is found from somewhere else (a thing's place) is found here first
@@ -34,11 +31,7 @@ const world = createWorld({
 	render,
 	processes: [{ name: "ui", export: "desk" }],
 	actor: "desk@browser",
-	extend: (_api: API, ctx): Extra => ({
-		up(address, from) {
-			const at = lookup(ctx.places, address, from ?? [...ctx.process.at])
-			return at && { path: at, part: "value" }
-		},
+	extend: (_api, ctx): Omit<Extra, keyof Tools> => ({
 		way(name, from) {
 			for (const w of satisfy(ctx.places, name, from)) return w
 		},

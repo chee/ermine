@@ -1,16 +1,15 @@
 // fancy-desktop's host: the world (@ermine/slaygrounds/world), one process, the shell, running
 // program.ts's shell export, the things a person keeps (seeded below), and what the desktop needs
 // that the api does not say (extend, at the end): what opens a thing, found from where it was
-// reached, and a walk up from a place. the apps are nodes in /apps, written here from program.ts's
+// reached (a walk up from a place is the world's up). the apps are nodes in /apps, written here from program.ts's
 // apps each reload (a live function, typed javascript, the types it opens and the keys it wants in
 // its attributes); the shell starts a window process for each window it keeps (/windows) and finds
 // what opens a thing with openwith, so what runs an app is /apps/run, the world's own runner
-import { createWorld } from "@ermine/slaygrounds/world"
-import type { API, Node } from "@ermine/api"
-import { get, lookup } from "@ermine/places/lib"
+import { createWorld, type Tools } from "@ermine/slaygrounds/world"
+import type { API } from "@ermine/api"
+import { get } from "@ermine/places/lib"
 import { plan as steps } from "@ermine/places/path"
 import { ATTRIBUTES, openwith, type Way, type Why } from "@ermine/programs"
-import { installTypes } from "@ermine/types"
 import { render } from "ermine-h"
 
 const JS = "com.netscape.javascript-source"
@@ -109,10 +108,7 @@ export type Opening =
 		from: string[]
 		found: { refused: string } | { ways: Way[]; why: Why[] }
 	}
-export type Extra = {
-	// the nearest place walking up from `from` (names from the root) where the address is: its
-	// node and id (places' lookup; tracked in a run)
-	up: (address: string[], from: string[]) => (Node & { id: string }) | undefined
+export type Extra = Tools & {
 	// what opens the thing at the address (names from the root): openwith from the folder it was
 	// reached in, up to the root: every way, nearest first, and each candidate not taken with why.
 	// the api's openwith goes from this process's own working folder; a thing is opened from where
@@ -124,12 +120,9 @@ const world = createWorld({
 	render,
 	processes: [{ name: "shell", export: "shell" }],
 	actor: "chee@laptop",
-	extend: (_api: API, ctx): Extra => ({
-		up(address, from) {
-			const at = lookup(ctx.places, address, from)
-			const id = at && get(ctx.places, at)
-			return typeof id === "string" ? { path: at, part: "value", id } : undefined
-		},
+	// the types, as nodes at /ermine/types: the well-known list, then this desktop's own
+	types: OWN,
+	extend: (_api, ctx): Omit<Extra, keyof Tools> => ({
 		opening(address) {
 			const names = steps(address)
 			const id = names && get(ctx.places, names)
@@ -153,18 +146,14 @@ const world = createWorld({
 	}),
 })
 
-// ---- seed: the types, then the folders a person keeps things in. a thing says its type in its
-// attributes, whole; a folder is a node with no value ----
+// ---- seed: the folders a person keeps things in. a thing says its type in its attributes,
+// whole; a folder is a node with no value ----
 const typed = (host: API, path: string, value: unknown, uti: string, more: object = {}) => {
 	const n = host.open(path, value)
 	host.edit(host.info(n), [{ path: [], value: { [ATTRIBUTES.type]: uti, ...more } }])
 	return n
 }
 world.seed((host) => {
-	const { table, places, header } = world.world
-	// the types, as nodes at /ermine/types: the well-known list, then this desktop's own
-	places.commit(installTypes(table, "root", header()))
-	places.commit(installTypes(table, "root", header(), OWN))
 	// /apps holds loaders: its children are looked at in its place (the apps are written there on
 	// load), and the world's runner is among them, so what runs an app is found beside it
 	typed(host, "/apps", null, FOLDER, { [ATTRIBUTES.loaders]: true })

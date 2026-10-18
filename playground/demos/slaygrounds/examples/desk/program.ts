@@ -1023,10 +1023,10 @@ export function desk(api: API & Extra) {
 					written by {chipOf(String(c.actor))}
 					{c.reader !== undefined ? ` for ${c.reader}` : ""}
 				</div>,
-				c.metadata?.length > 0 && (
+				Object.keys(c.metadata ?? {}).length > 0 && (
 					<div>
 						{dim("scope: ")}
-						{c.metadata.map(([k, v]: [string, unknown]) =>
+						{Object.entries(c.metadata).map(([k, v]: [string, unknown]) =>
 							chipOf(`${k} ${typeof v === "string" ? v.slice(0, 8) : short(v, 16)}`)
 						)}
 					</div>

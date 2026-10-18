@@ -5,7 +5,7 @@ import { bind, handler } from "ermine-h"
 // trust: a vault that opens only for a person. the world decides trusted by itself, from the
 // event the window is dispatching right now (read through the native getter it kept before this
 // program ran); nothing a program hands it counts. each row below is an attempt: press its button.
-// what the row says it got is not this program's guess: it is the "trusted" pair on the change
+// what the row says it got is not this program's guess: it is the "trusted-event" key on the change
 // the vault's handler wrote (vault/tries/<row>), the same pair the inspector and explain show
 
 const css = `
@@ -175,10 +175,10 @@ const rows: Row[] = [
 	},
 ]
 
-// the host's two tools (host.ts): who is the caller and trusted of the call, change a node's latest
-// change
+// the world's two tools: who is the caller and trusted of the call (or of a change), change a
+// node's latest change
 type Tools = API & {
-	who: (pairs?: unknown) => { caller: unknown; trusted: boolean }
+	who: (change?: unknown) => { caller: unknown; "trusted-event": boolean }
 	change: (x: unknown) => { metadata?: [string, unknown][] } | undefined
 }
 
@@ -193,12 +193,12 @@ export default function program(
 	const add = (x: unknown) => edit(x as never, (c: number) => c + 1)
 
 	// every attempt ends here. what it writes (vault/tries/<id>) carries the send's pairs: the
-	// rows read "trusted" off that change. the door opens only for a person
+	// rows read "trusted-event" off that change. the door opens only for a person
 	let shut: ReturnType<typeof setTimeout> | undefined
 	method("on/knock", (id: string = "inspector") => {
 		add(open(`tries/${id}`, 0))
 		if (id === "chain") send("on/relay")
-		if (!who().trusted) return void add(bounced)
+		if (!who()["trusted-event"]) return void add(bounced)
 		edit(door, () => "open")
 		add(opened)
 		clearTimeout(shut)
@@ -212,14 +212,14 @@ export default function program(
 	)
 	teardown(() => clearTimeout(shut))
 
-	// what each row got: the trusted and caller pairs of its node's latest change
+	// what each row got: the trusted-event and caller keys of its node's latest change
 	memo("verdicts", () => {
 		const out: Record<string, { trusted: boolean; caller: unknown; times: unknown }> = {}
 		for (const id of [...rows.map((r) => r.id), "chain-relay"]) {
 			const node = open(`tries/${id}`)
 			const times = read(node)
 			if (times === undefined) continue
-			const { caller, trusted } = who(change(node)?.metadata)
+			const { caller, "trusted-event": trusted } = who(change(node))
 			out[id] = { trusted, caller, times }
 		}
 		return out
