@@ -123,15 +123,15 @@ export function createExplain(opts: {
 		}
 	}
 
-	// one changed node: who wrote it (its header's pairs) and what (its patches)
+	// one changed node: who wrote it (its header's metadata) and what (its patches)
 	function record(w: Any, node: Any) {
 		const [[part, id] = []] = w.table.who(node) ?? []
 		// a computation's status node (computer:<n>) is written by the computation itself: not a
 		// write of anyone's to tell
 		if (typeof id === "string" && id.startsWith("computer:")) return
 		const c = node.change ?? {}
-		const pairs: [string, unknown][] = c.metadata ?? []
-		const get = (k: string) => pairs.findLast(([x]) => x === k)?.[1]
+		const metadata: Record<string, unknown> = c.metadata ?? {}
+		const get = (k: string) => metadata[k]
 		const h = open()
 		// who started it: a call's caller, an outside writer (via), the host; a part running on its
 		// own (a promise landing) needs no one: the line starts with it
@@ -141,7 +141,7 @@ export function createExplain(opts: {
 				? { text: `🔍 the ${via ?? "inspector"}` }
 				: caller !== undefined
 				? {
-					text: get("trusted") === true
+					text: get("trusted-event") === true
 						? `🫵 ${caller}, for a person`
 						: `⏰ ${caller}'s own code`,
 					title: "a call no event of yours made: a timer, or another process",

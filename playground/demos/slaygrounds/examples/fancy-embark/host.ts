@@ -12,8 +12,6 @@ import { render } from "ermine-h"
 //                  browser being online again) takes it out. peek never waits or throws: it says
 //                  { result } | { waiting } | { error } (menus, previews)
 //   retry          the failure nodes taken out, so whoever read them asks again
-//   scoped         a scope of its own under the process, to make memos and effects in that can be
-//                  stopped one at a time (the api has none: a memo lives as long as its owner)
 //   ended          told how each memo ended a run, what it read named (nodes, and /cache keys)
 // the request is the host's: a browser can not set User-Agent, so each fetch says where it is from
 // with its referrer (Nominatim asks for one naming the application)
@@ -86,18 +84,10 @@ const seedFile: Record<string, Entry> = await fetch(
 const world = createWorld({
 	render,
 	processes: [{ name: "embark" }],
-	extend: (api, ctx) => ({
+	extend: (api) => ({
 		lookup,
 		peek,
 		retry,
-		// the made thing and its stop, both: what f makes (memos, effects) is owned by a scope of its
-		// own under the process, which goes with the process too
-		scoped<T>(f: () => T): { made: T; stop: () => void } {
-			const s = ermine.s
-			const own = s.createScope([["part", "embark"]], ctx.scope)
-			const made = s.runWithScope(own, f)
-			return { made, stop: () => s.teardown(own) }
-		},
 		// fn told each time a memo of this process ends a run: { name, of, run, ended, error, ms,
 		// values, keys }. name and of are the last two names of the memo's place (result/<id>); values
 		// the ids of the nodes it read, keys the /cache keys ("geocode/<hash>")

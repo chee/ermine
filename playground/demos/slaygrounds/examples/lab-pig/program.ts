@@ -446,9 +446,6 @@ export default function program(t: Tools) {
 		label.style.top = `${-0.9 * h - LIFT - 16}px`
 		Object.assign(dots.style, { top: `${-0.9 * h - 12}px`, left: `${w * 0.18}px` })
 		lift.addEventListener("pointerdown", (e) => grab(pig, e))
-		lift.addEventListener("pointermove", (e) => holding?.pig === pig && carry(e))
-		lift.addEventListener("pointerup", (e) => holding?.pig === pig && drop(e))
-		lift.addEventListener("pointercancel", (e) => holding?.pig === pig && drop(e))
 		pigs.set(id, pig)
 		return pig
 	}
@@ -502,7 +499,16 @@ export default function program(t: Tools) {
 		} catch { /* a pointer that is not down (a made-up event) */ }
 		const p = where(e)
 		holding = { pig, off: { x: pig.g.x - p.x, y: pig.g.y - p.y } }
+		// the window hears the drag, not the pig: it rises off its shadow, and a capture can be lost
+		window.addEventListener("pointermove", follow)
+		window.addEventListener("pointerup", follow)
+		window.addEventListener("pointercancel", follow)
 		carry(e)
+	}
+	function follow(e: PointerEvent) {
+		if (!holding) return
+		if (e.type === "pointermove" && e.buttons !== 0) return carry(e)
+		drop(e)
 	}
 	function carry(e: PointerEvent) {
 		const p = where(e), h = holding!
@@ -515,6 +521,9 @@ export default function program(t: Tools) {
 		t.wave(h.pig.id, { ...h.pig.g, held: true, by: t.name, colour: t.colour, who: t.me })
 	}
 	function drop(e: PointerEvent) {
+		window.removeEventListener("pointermove", follow)
+		window.removeEventListener("pointerup", follow)
+		window.removeEventListener("pointercancel", follow)
 		carry(e)
 		const pig = holding!.pig, binned = overBin(e)
 		holding = undefined

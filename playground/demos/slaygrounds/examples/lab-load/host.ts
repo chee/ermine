@@ -57,8 +57,8 @@ world.seed((host) => {
 		say(
 			`${file.name} → /loaded/${name}: ${file.size} bytes, ${ids.size} ids, ${nodes.size} nodes` +
 				(here ? `, ${here} already here (kept as they were)` : ""),
-		) // the graph tab, at what was placed
-		;(parent as unknown as { __pick?: (at: string[]) => void }).__pick?.(["loaded", name])
+		)
+		host.inspect(["loaded", name]) // the graph tab, at what was placed
 	})
 })
 

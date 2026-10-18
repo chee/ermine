@@ -267,7 +267,7 @@ type Stp = {
 }
 type History = { steps: Stp[]; at: number; count: number }
 type Names = string[]
-type Who = { caller: string; trusted: boolean }
+type Who = { caller: string; "trusted-event": boolean }
 
 // the board is saved under ./board, its live elements under ./ui; the process is "trello" (a name
 // of its own: a process shadows what is saved at its path). a folder is a node whose value is the
@@ -454,7 +454,7 @@ export default function program(api: API & { who: () => Who }) {
 			about: s.about ?? [],
 			undid: s.undid,
 			caller: by.caller,
-			trusted: by.trusted,
+			trusted: by["trusted-event"],
 			time: Date.now(),
 			writes: s.writes,
 		}

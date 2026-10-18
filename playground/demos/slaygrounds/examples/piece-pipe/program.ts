@@ -69,7 +69,7 @@ const pair = (metadata: unknown, key: string): unknown =>
 	(metadata as [string, unknown][] | undefined)?.find(([k]) => k === key)?.[1]
 
 // what the host's extend adds (host.ts): f run as another actor, with pairs of its own
-type Host = { as: <T>(pairs: [string, unknown][], f: () => T) => T }
+type Host = { as: <T>(info: Record<string, unknown>, f: () => T) => T }
 
 export default function program({ open, read, edit, watch, entries, method, as }: API & Host) {
 	const v1 = open("./v1", { name: "ermine", temp_c: 20, cute: true })
@@ -87,7 +87,7 @@ export default function program({ open, read, edit, watch, entries, method, as }
 			}
 			const before = fact.patches as Patch[]
 			const after = before.flatMap((p) => rewrite(p, way))
-			if (after.length) as([["actor", "lens"], ["lens", way]], () => edit(to, after))
+			if (after.length) as({ actor: "lens", lens: way }, () => edit(to, after))
 			const side = pair(fact.change?.metadata, "side")
 			const n = (read(count) as number) + 1
 			edit(count, () => n)
@@ -113,18 +113,18 @@ export default function program({ open, read, edit, watch, entries, method, as }
 	method(
 		"on/v1",
 		(field: string, value: unknown) =>
-			as([["side", "v1 window"]], () => edit(v1, [{ path: [field], value }])),
+			as({ side: "v1 window" }, () => edit(v1, [{ path: [field], value }])),
 	)
 	method(
 		"on/v2",
 		(field: string, value: unknown) =>
-			as([["side", "v2 window"]], () => edit(v2, [{ path: [field], value }])),
+			as({ side: "v2 window" }, () => edit(v2, [{ path: [field], value }])),
 	)
 	method(
 		"on/reset",
 		() =>
 			as(
-				[["side", "v1 window"]],
+				{ side: "v1 window" },
 				() => edit(v1, [{ path: [], value: { name: "ermine", temp_c: 20, cute: true } }]),
 			),
 	)

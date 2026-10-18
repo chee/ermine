@@ -4,33 +4,25 @@
 // export of program.ts is written there on a reload (the world writes only the exports its
 // processes run)
 import { type API } from "@ermine/api"
-import { getWho } from "@ermine/places/header"
-import * as lib from "@ermine/places/lib"
 import { ATTRIBUTES, satisfy } from "@ermine/programs"
-import { installTypes } from "@ermine/types"
 import { createWorld } from "@ermine/slaygrounds/world"
 import { render } from "ermine-h"
 
-const JS = "com.netscape.javascript-source"
 const TEXT = "public.plain-text"
 const JSON_TYPE = "public.json"
 const PROGRAMS = ["ticker", "lamp", "bunny", "mirror"]
 
-// the pairs of a header (already flat): caller and trusted are in there somewhere
-export const flat = (pairs: readonly (readonly [string, unknown])[] = []) =>
-	pairs.map(([k, v]): [string, unknown] => [k, v])
-
 const world = createWorld({
 	render,
 	processes: [{ name: "shell", at: ["shell"], cwd: ["var", "shell"] }],
-	// the shell's own tools, what the old Tools had that the api has not:
+	// the types: what a node says it is is matched against what a loader takes
+	types: true,
+	// the shell's own tools, what the api and the world have not (stat, whoami and inspect are the
+	// world's change, who and inspect):
 	//   attrs(x, says?)  a node's attributes by ATTRIBUTES' words ({ type, takes, … }), read (tracked);
 	//                    with says, each one written first (ls, which and echo show types)
 	//   which(name, from)  what a name finds from a place: satisfy, taken whole: { program, chains,
 	//                    why }, or { refused, … } (a command, and what runs it)
-	//   change(x)        the last change of x's value: time, actor, pairs (flat), site; tracked (stat)
-	//   who()            who a write made now is: actor and the pairs, flat (whoami)
-	//   inspect(address) pick a node in the page's graph tab
 	extend: (api: API, ctx) => ({
 		attrs(x: any, says?: Partial<Record<keyof typeof ATTRIBUTES, unknown>>) {
 			const info = api.info(x)
@@ -60,23 +52,10 @@ const world = createWorld({
 			if (own !== null) return { refused: own.why, program: { id: own.id, at: own.at }, why }
 			return { program: ways[0].program, chains: ways.map((w) => w.chain), why }
 		},
-		change(x: { path?: readonly string[] }) {
-			const id = x.path && lib.get(ctx.places, x.path)
-			const c = id === undefined ? undefined : ctx.places.readChange("value", id)
-			return c &&
-				{ time: c.time, actor: c.actor, metadata: flat(c.metadata), external: c.external }
-		},
-		who() {
-			const w = getWho(ctx.scheduler)
-			return w && { actor: w.actor, metadata: flat(w.metadata) }
-		},
-		inspect: (address: string[]) => (parent as any).__pick?.(address),
 	}),
 })
 
-// the types (what a node says it is is matched against what a loader takes), a little filesystem
-const { s, host, table, header } = world.world
-s.runWithScope(host, () => world.world.places.commit(installTypes(table, "root", header())))
+// a little filesystem
 world.seed((h) => {
 	const text = (path: string, v: string) => {
 		h.open(path, v)
@@ -89,18 +68,9 @@ world.seed((h) => {
 	text("/etc/motd", "🐰 the ermine shell. type help, or ls")
 })
 
-// a reload: the programs' exports are nodes in /code (typed javascript, as the world makes its own),
-// then the world starts the shell again on its code
+// a reload: the programs' exports are nodes in /code (the world's code), then the world starts
+// the shell again on its code
 export function reload(mod: Record<string, unknown>) {
-	world.seed((h) => {
-		for (const name of PROGRAMS) {
-			const code = mod[name]
-			if (typeof code !== "function") continue
-			const node = h.open(["code", name])
-			if (h.read(node) === undefined) h.open(["code", name], code)
-			else h.edit(node, [{ path: [], value: code }])
-			h.edit(h.info(node), [{ path: [ATTRIBUTES.type], value: JS }])
-		}
-	})
+	for (const name of PROGRAMS) if (typeof mod[name] === "function") world.code(name, mod[name])
 	world.reload(mod)
 }

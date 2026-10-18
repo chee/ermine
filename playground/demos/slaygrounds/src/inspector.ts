@@ -330,10 +330,11 @@ export function createInspector(
 				// the host decides trusted from the event being dispatched in its own window: none here
 				if (own) r = w.call(names(), list, "inspector")
 				else {
-					const scope = w.s.createScope([["via", "inspector"], ["caller", "inspector"], [
-						"trusted",
-						true,
-					]], w.host)
+					const scope = w.s.createScope({
+						via: "inspector",
+						caller: "inspector",
+						"trusted-event": true,
+					}, w.host)
 					try {
 						r = w.s.runWithScope(scope, () => fnOf()(...list))
 					} finally {
@@ -649,7 +650,9 @@ export function createInspector(
 				const r = rows.appendChild(h("div", "field"))
 				r.append(h("span", "k", k), h("span", "v", v))
 			}
-			const by = (kids.metadata ?? []).filter(([k]: Any) => k === "caller" || k === "travel")
+			const by = Object.entries(kids.metadata ?? {}).filter(([k]) =>
+				k === "caller" || k === "travel"
+			)
 			if (by.length) f(by.map(([k]: Any) => k).join(", "), by.map(([, v]: Any) => v).join(", "))
 			const where = (t: Any) => t.path.join("/") + (t.range ? `[${t.range.join(",")}]` : "")
 			for (const p of kids.op.patches as Any[]) {
@@ -665,7 +668,7 @@ export function createInspector(
 			}
 			return [...out, rows]
 		})
-		// the change: who, when, the pairs of every scope it was made in; then the patches
+		// the change: who, when, its metadata (the scopes it was made in, merged); then the patches
 		const changeBox = into.appendChild(h("div"))
 		cell(changeBox, () => at()?.change, (c: Any) => {
 			const out: Node[] = [h("h3", "", "change")]
@@ -675,7 +678,7 @@ export function createInspector(
 				["who", c.actor],
 				...(c.reader !== undefined ? [["reader", c.reader] as [string, unknown]] : []),
 				["time", new Date(c.time * 1000).toLocaleTimeString()],
-				...(c.metadata ?? []),
+				...Object.entries(c.metadata ?? {}),
 				[
 					"site",
 					site.length

@@ -72,15 +72,24 @@ button.on { background: #2269ff; color: #fff }
 .edits .p { color: #0009 }
 `
 
-// what a process is given besides the api: the host's change(x), the last change of x's value as
-// its patches and who called, by name
+// what a process is given besides the api: the world's change(x), x's latest change (its header),
+// and who(change), who wrote it (caller: a process's name)
 type Duet = API & {
-	change: (x: unknown) => { patches: any[]; caller?: string } | undefined
+	change: (x: unknown) => { op?: { patches: readonly any[] } } | undefined
+	who: (change: unknown) => { caller: string }
+}
+// the last change of x's value as this program wants it: its patches and who called, by name
+const lastOf = (change: Duet["change"], who: Duet["who"]) => (x: unknown) => {
+	const c = change(x)
+	return c && { patches: [...(c.op?.patches ?? [])], caller: who(c).caller }
 }
 
 // the text's owner: the one node (./text, saved, so a reload keeps the poem), and the one way to
 // change it
-export default function duet({ open, read, edit, method, memo, effect, teardown, change }: Duet) {
+export default function duet(
+	{ open, read, edit, method, memo, effect, teardown, change: latest, who }: Duet,
+) {
+	const change = lastOf(latest, who)
 	const style = document.head.appendChild(document.createElement("style"))
 	style.textContent = LOOK
 	const font = document.head.appendChild(Object.assign(document.createElement("link"), {
@@ -100,7 +109,7 @@ export default function duet({ open, read, edit, method, memo, effect, teardown,
 	const edits = el("div", "edits")
 	effect("log", () => change(text), (c, before) => {
 		if (before === undefined || !c?.patches.length) return
-		const who = c.caller ?? "?"
+		const who = c.caller || "?"
 		const row = el("div")
 		const w = WHO[who] ?? { colour: "#000", icon: "·" }
 		row.innerHTML = `<b style="color:${w.colour}">${w.icon} ${who}</b> <span class="p"></span>`
@@ -139,8 +148,9 @@ export default function duet({ open, read, edit, method, memo, effect, teardown,
 
 // a person: a pane on the text, a caret of their own
 export function person(
-	{ open, read: get, edit, method, memo, effect, args, change }: Duet,
+	{ open, read: get, edit, method, memo, effect, args, change: latest, who }: Duet,
 ) {
+	const change = lastOf(latest, who)
 	const name = args[0]
 	const me = WHO[name]
 	// a selection is an anchor (where it started) and a head (where the caret is): its direction
@@ -291,7 +301,10 @@ export function person(
 }
 
 // the poet: types its poem a letter at a time, at its caret, while it is on
-export function poet({ open, read, edit, method, send, effect, teardown, change }: Duet) {
+export function poet(
+	{ open, read, edit, method, send, effect, teardown, change: latest, who }: Duet,
+) {
+	const change = lastOf(latest, who)
 	// the flag and the caret are saved (./writing: the person's view reads it as /writing); the
 	// poem's place is inside, and starts again at a reload
 	const writing = open("./writing", false)

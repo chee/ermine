@@ -1,9 +1,10 @@
 /// <reference lib="dom" />
 // a computer's or a process's own story, for the detail column: its status
-// (ermine.computer.status), its latest run (ermine.computer.run: places' runs.ts), what that run
+// (ermine.computer.status), its latest run (the runs table: the process api's runs), what that run
 // read (each with the write it saw) and wrote, where it was made (the world's sites: ermine/sites)
-// and, for a process, its args, cwd and pin (ermine.process.*). live: the attributes are read
-// through places, tracked by ermine (feed), so each run's record redraws this
+// and, for a process, its args, cwd and pin (ermine.process.*). live: the status and the rest are attributes
+// read through places, the record through the process api's runs, tracked by ermine (feed), so
+// each run's record redraws this
 import { createRenderEffect } from "@solidjs/signals"
 import { h, patch } from "./values.ts"
 import { feed } from "./solid-ermine.ts"
@@ -12,7 +13,6 @@ import { type Link, sheet, value as shown } from "./sheet.ts"
 // deno-lint-ignore no-explicit-any
 type Any = any
 
-const RUN = "ermine.computer.run"
 const STATUS = "ermine.computer.status"
 const ARGS = "ermine.process.args"
 const CWD = "ermine.process.cwd"
@@ -89,16 +89,16 @@ function chain(sites: Any, scope: Any): [string, Any][] {
 	for (let s = scope; s !== undefined; s = s.parent) {
 		const site = sites.siteOf(s)
 		if (!site) continue
-		const first = s.info?.[0]?.[0]
+		const info = s.info ?? {}
 		const what = s.kind === "compute"
 			? "memo"
 			: s.kind === "effect"
 			? "effect"
-			: first === "process"
+			: "process" in info
 			? "process"
-			: first === "caller"
+			: "caller" in info
 			? "send"
-			: first ?? "scope"
+			: Object.keys(info)[0] ?? "scope"
 		out.push([what, site])
 	}
 	return out
@@ -109,7 +109,7 @@ export function runSection(w: Any, into: HTMLElement, id: unknown, hooks: Hooks)
 	const box = into.appendChild(h("div", "runs"))
 	const at = (k: string) => w.places.readValue("attributes", id, [k])
 	const read = feed(w, () => ({
-		run: at(RUN),
+		run: w.apis?.runs(id),
 		status: at(STATUS),
 		args: at(ARGS),
 		cwd: at(CWD),

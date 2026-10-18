@@ -116,14 +116,14 @@ const BLURBS = {
 
 // what the host's extend adds to the api (host.ts says what each is for)
 type Item = { at: string[]; id: unknown; node: { path?: readonly string[]; part: string } }
-type Pairs = [string, unknown][]
+type Metadata = Record<string, unknown>
 type Host = API & {
 	attrs: (x: unknown, says?: Record<string, unknown>) => Record<string, any>
 	which: (name: string, from: string[]) => any
 	change: (
 		x: unknown,
-	) => { time: number; actor: string; metadata: Pairs; external?: any[] } | undefined
-	who: () => { actor: string; metadata: Pairs } | undefined
+	) => { time: number; actor: string; metadata: Metadata; external?: any[] } | undefined
+	who: () => { actor: string; metadata: Metadata } | undefined
 	inspect: (address: string[]) => void
 }
 
@@ -370,7 +370,7 @@ export default function shell(
 			const c = change(item.node)
 			if (!c) return
 			say("out", `  changed  ${new Date(c.time * 1000).toLocaleTimeString()} by ${c.actor}`)
-			for (const [k, v] of c.metadata) {
+			for (const [k, v] of Object.entries(c.metadata ?? {})) {
 				say("out", `  ${k.padEnd(9)}${typeof v === "string" ? v : preview(v)}`)
 			}
 			const site = c.external?.[0]
@@ -429,7 +429,7 @@ export default function shell(
 		whoami(args, say) {
 			const w = who()
 			say("out", `${w?.actor}`)
-			for (const [k, v] of w?.metadata ?? []) {
+			for (const [k, v] of Object.entries(w?.metadata ?? {})) {
 				say("out", `  ${k.padEnd(9)}${typeof v === "string" ? v : preview(v)}`)
 			}
 		},
@@ -583,11 +583,14 @@ export default function shell(
 	// ---- the view: jsx bound to the shell's nodes (cwd, lines, the windows); the input's typing
 	// (history, completion) is the shell's own, and enter calls run
 	// the windows: one per process started that is still placed
-	memo("windows", () =>
-		(read(procs) as any[]).filter((p) => !p.ended && resolve(p.at)).map((p) => ({
-			name: p.name,
-			path: show(p.at),
-		})))
+	memo(
+		"windows",
+		() =>
+			(read(procs) as any[]).filter((p) => !p.ended && resolve(p.at)).map((p) => ({
+				name: p.name,
+				path: show(p.at),
+			})),
+	)
 	const win = (w: { name: string; path: string }) => (
 		<div class="win" key={w.path}>
 			<div class="bar">

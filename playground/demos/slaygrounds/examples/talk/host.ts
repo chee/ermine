@@ -1,20 +1,12 @@
 // talk's host: the world (@ermine/slaygrounds/world), twelve processes from one module (each runs
 // the export of its own name, saving what it keeps in /state/<name>), the page those processes' cards
-// sit in, and one extra, who: who is calling, which the api does not say.
+// sit in. who is calling: the world's who.
 // the worker is no process of the module's: boss starts it. so the host writes its program node
-// (/code/worker) as reload does for the others
-import { getWho } from "@ermine/places/header"
+// (/code/worker, the world's code) as reload does for the others
 import { createWorld } from "@ermine/slaygrounds/world"
 import { render as h } from "ermine-h"
 
-// who is calling: the nearest caller and trusted, from the innermost
-// scope open (the way the header's actor goes). caller is a process's id: said by its name
-export type Who = { caller: string; trusted: boolean }
-export type Tools = { who: () => Who }
-
-const named = new Map<string, string>()
-type Pairs = readonly (readonly [string, unknown])[] | undefined
-const nearest = (pairs: Pairs, key: string) => pairs?.find(([k]) => k === key)?.[1]
+export type { Tools, Who } from "@ermine/slaygrounds/world"
 
 // section 0..4: the five ways to talk, and which process sits in which
 const SECTIONS: [number, ...string[]][] = [
@@ -69,7 +61,6 @@ const render = (into: Element, view: unknown, process: unknown) => {
 	return h(into, view as never, process as never)
 }
 
-const JS = "com.netscape.javascript-source"
 const world = createWorld({
 	render,
 	processes: SECTIONS.flatMap(([, ...names]) => names).map((name) => ({
@@ -78,27 +69,10 @@ const world = createWorld({
 		cwd: ["state", name],
 		args: [name],
 	})),
-	extend: (_api, ctx): Tools => {
-		named.set(ctx.process.id, ctx.process.at.join("/"))
-		return {
-			who() {
-				const pairs = getWho(ctx.scheduler)?.metadata
-				const caller = nearest(pairs, "caller")
-				return {
-					caller: named.get(String(caller)) ?? String(caller),
-					trusted: nearest(pairs, "trusted") === true,
-				}
-			},
-		}
-	},
 })
 
 export function reload(mod: Record<string, any>) {
 	page(mod.sections)
-	world.seed((host) => {
-		const node = host.open("/code/worker", mod.worker)
-		host.edit(node, [{ path: [], value: mod.worker }])
-		host.edit(host.info(node), [{ path: [], value: { "ermine.type": JS } }])
-	})
+	world.code("worker", mod.worker)
 	world.reload(mod)
 }

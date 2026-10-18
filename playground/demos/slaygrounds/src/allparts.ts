@@ -57,7 +57,7 @@ function changeOf(c: Any, link: Link): HTMLElement {
 		["who", c.actor],
 		...(c.reader !== undefined ? [["reader", c.reader] as [string, unknown]] : []),
 		["when", c.time === undefined ? undefined : new Date(c.time * 1000).toLocaleTimeString()],
-		...(c.metadata ?? []),
+		...Object.entries(c.metadata ?? {}),
 		[
 			"site",
 			site.length

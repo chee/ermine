@@ -150,7 +150,7 @@ type Host = {
 	lookup: (api: string, url: string) => unknown
 	peek: (api: string, url: string) => any
 	retry: (api?: string) => void
-	scoped: <T>(f: () => T) => { made: T; stop: () => void }
+	scoped: <T>(f: () => T) => { value: T; stop: () => void }
 	ended: (fn: (run: Run) => void) => void
 }
 
@@ -871,7 +871,7 @@ export default function program(api: API & Host) {
 		(want) => {
 			for (const id of want.formulas) {
 				if (live.formulas.has(id)) continue
-				const { made, stop } = scoped(() =>
+				const { value: made, stop } = scoped(() =>
 					memo(["result", id], () => attempt(() => runFormula(id)), { equal: same })
 				)
 				owners.set(nodeId(made), { kind: "result", of: id })
@@ -882,7 +882,7 @@ export default function program(api: API & Host) {
 			}
 			for (const id of want.places) {
 				if (live.places.has(id)) continue
-				const { made, stop } = scoped(() =>
+				const { value: made, stop } = scoped(() =>
 					memo(["geo", id], () => attempt(() => runGeo(id)), { equal: same })
 				)
 				owners.set(nodeId(made), { kind: "geo", of: id })
@@ -896,8 +896,10 @@ export default function program(api: API & Host) {
 				const was = live.views.get(view)
 				if (was?.kind === kind) continue
 				if (was) dropView(view)
-				const { made, stop } = scoped(() => {
-					const data = memo(["data", view], () => attempt(() => viewData(kind, item)), { equal: same })
+				const { value: made, stop } = scoped(() => {
+					const data = memo(["data", view], () => attempt(() => viewData(kind, item)), {
+						equal: same,
+					})
 					// a drawing: what it reads is stashed, and the value it keeps is a count (a map's
 					// data is not worth writing again for each hover)
 					let stash: unknown, count = 0

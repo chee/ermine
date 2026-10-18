@@ -17,7 +17,7 @@ world.seed((h) => {
 })
 
 // the clock's own writes are the clock's actor's
-const ticker = s.createRootScope([["actor", "/dev/clock"]])
+const ticker = s.createRootScope({ actor: "/dev/clock" })
 const reading = new Set<unknown>()
 let timer: ReturnType<typeof setInterval> | undefined
 let ticks = 0

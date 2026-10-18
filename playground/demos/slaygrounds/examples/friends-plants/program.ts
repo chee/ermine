@@ -124,7 +124,7 @@ export default function sill(
 			const by = who(change(`./plants/${name}/poured`))
 			out[name] = when === null ? null : {
 				day: when,
-				by: by.caller === "sill" ? (by.trusted ? "you" : "a script") : by.caller,
+				by: by.caller === "sill" ? (by["trusted-event"] ? "you" : "a script") : by.caller,
 			}
 		}
 		return out

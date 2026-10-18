@@ -1,5 +1,5 @@
-// the world an example runs in: what every host copied by hand, once, on the process api
-// (ermine/api). an example's host.ts makes one, seeds it, and says which processes run:
+// the world an example runs in, on the process api (ermine/api). an example's host.ts makes one,
+// seeds it, and says which processes run:
 //
 //   import { createWorld } from "@ermine/slaygrounds/world"
 //   import { render } from "ermine-h"
@@ -7,31 +7,37 @@
 //   world.seed((host) => host.open("/data/n", 21))
 //   export const reload = world.reload
 //
-// a program is a module: each process runs one of its exports (default: "default"), given the
-// process api and nothing else (createProcessAPI's return; extend may add a host's own tools). its
-// return, a view (ermine-h's) or an element, is made real in the process's box, with its scope open
+// a program is a module; each process runs one export (default "default"), given the process api
+// and the world's tools (below; extend may add a host's own); its return, a view or an element, is
+// made real in the process's box. code: /code/<export>, run by the runner at /code/run. a process runs at /<name>
+// with cwd the root: "./x" is /x, saved across reloads; a bare "x" is inside the process, gone at
+// stop. a name under "./" must not be a process's name (a running process shadows it).
+// reload: code written again, each process stopped ("replaced") and started on the new code.
+// globalThis.ermine (the inspector): table, places, s, host, header, writes, parts, statusIds,
+// pending, moments (last 4000), call, defined, binds, apis, programs, processes, sites
 //
-// a program's code is a node: /code/<export>, a live function, typed javascript, run by a host
-// runner at /code/run (apis.runner). a process runs at /<name> (spec.at), its working folder the
-// root (spec.cwd): "./x" is /x, saved, there across reloads; a bare "x" is inside the process,
-// gone at its stop. a name a program uses under "./" must not be a process's name (a running
-// process shadows what is saved at its path)
-//
-// a reload (program.ts edited): each export's node written again, each process stopped (its
-// teardowns told "replaced") and started again on the new code. what it made under "./" is there
-// still; what it made inside itself is not
-//
-// for the page (globalThis.ermine, the inspector): table, places, s, host, header, writes, parts
-// (a computer → its node), statusIds, pending, moments (the last 4000 of the scheduler's), call,
-// defined (a method's node id → its process), binds (ermine-h's effects → what each binds), apis,
-// programs, processes, sites (ermine/sites: siteOf and sitesOf of a computer or a process's scope)
-import createEntry from "@ermine/node/entry"
+// the world's tools, on every process's api and the host's: what hosts each wrote by hand, the api
+// having no word for it:
+//   who()                who the call open now is: caller (a process's name where the world made
+//                        it, else its id; none: ""), "trusted-event", actor, metadata (an object).
+//                        who(change): who wrote that change (a header); none: nobody
+//   change(x)            x's latest change (its header), tracked: a write to x reruns what read it
+//   as(actor, f)         f run under a scope of its own: actor a string, or an info ({ side: "v1" }),
+//                        so what f writes says who made it
+//   scoped(f, info?)     f run in a scope of its own under the process's: { value, stop }. what f
+//                        makes (memos, effects) goes at stop, or with the process
+//   up(address, from?, { stop?, walk? }?)   the nearest place walking up from `from` (names from
+//                        the root; none: the process's place) where address is: its node, id and the
+//                        place it was found in (parent), tracked. stop: the depth it ends at (1
+//                        leaves the root out); walk: the ids of the places visited pushed to it
+//   inspect(address)     that node picked in the page's graph tab
+import createEntry, { type ChangeHeader, type Metadata } from "@ermine/node/entry"
 import { children, createPlaces, move, place, type Places, rename, unplace } from "@ermine/places"
-import { createChangeHeader } from "@ermine/places/header"
+import { createChangeHeader, getWho } from "@ermine/places/header"
 import * as lib from "@ermine/places/lib"
 import { plan } from "@ermine/places/path"
 import { isPending } from "@ermine/places/status"
-import { type Computer, createScheduler, type Pair } from "@ermine/scheduler"
+import { type Computer, createScheduler, type Info, type Scope } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { trace } from "@ermine/scheduler/trace"
 import { createTable, type Id, type Key } from "@ermine/table"
@@ -40,7 +46,8 @@ import { createScopeNodes } from "@ermine/processes/scopes"
 import { createBuilds } from "@ermine/build"
 import { satisfy } from "@ermine/programs"
 import { type Context, createPrograms, type Process } from "@ermine/programs/start"
-import { type API, createProcessAPIs, type Noticed } from "@ermine/api"
+import { type API, createProcessAPIs, type Node, type Noticed } from "@ermine/api"
+import { installTypes, type Known } from "@ermine/types"
 import type { Policy } from "@ermine/protect"
 import { startSweeper, type World as PresenceWorld } from "@ermine/presence"
 import { createSites } from "@ermine/sites"
@@ -74,7 +81,7 @@ export type Options = {
 	actor?: string
 	// a host's own tools, added to what a process is given (its power: "the host has this power, to
 	// let the user create processes with a different api")
-	extend?: (api: API, ctx: Context) => Record<string, unknown>
+	extend?: (api: API & Tools, ctx: Context) => Record<string, unknown>
 	// protect: the policy every process is asked of (none: everything allowed)
 	may?: Policy
 	// presence (playground/presence): a presence world on the host's scope, swept each second, its
@@ -82,6 +89,24 @@ export type Options = {
 	presence?: { who?: string; sweep?: number }
 	// patch nodes (playground/patch-nodes): places over an overlay, so a patch node is read through
 	overlay?: boolean
+	// the types (@ermine/types) at /ermine/types, before any seed: true, the well-known list; a list,
+	// those too, after it
+	types?: true | readonly Known[]
+}
+
+export type Who = { caller: string; "trusted-event": boolean; actor: unknown; metadata: Metadata }
+// the world's tools (the head of this file says each)
+export type Tools = {
+	who: (...change: [] | [ChangeHeader | undefined]) => Who
+	change: (x: Parameters<API["entries"]>[0]) => ChangeHeader | undefined
+	as: <T>(actor: string | Info, f: () => T) => T
+	scoped: <T>(f: () => T, info?: Info) => { value: T; stop: () => void }
+	up: (
+		address: readonly string[],
+		from?: readonly string[],
+		options?: { stop?: number; walk?: string[] },
+	) => (Node & { path: string[]; id: string; parent: string }) | undefined
+	inspect: (address: readonly string[]) => void
 }
 
 // an h item: an id, and its path where known
@@ -105,7 +130,12 @@ export function createWorld(o: Options) {
 		}
 	}
 	const sites = createSites(s, {
-		ours: ["@ermine/api", "@ermine/scheduler", "@ermine/programs/start", "@ermine/processes/start"]
+		ours: [
+			"@ermine/api",
+			"@ermine/scheduler",
+			"@ermine/programs/start",
+			"@ermine/processes/start",
+		]
 			.map(url),
 	})
 	const table = createTable((part, id) =>
@@ -126,8 +156,8 @@ export function createWorld(o: Options) {
 		moments.push(m)
 		if (moments.length > 4000) moments.splice(0, 1000)
 	})
-	const host = s.createRootScope([["actor", o.actor ?? "chee@laptop"], ["trusted", true]])
-	const above = s.createScope([["role", "programs"]], host)
+	const host = s.createRootScope({ actor: o.actor ?? "chee@laptop", "trusted-event": true })
+	const above = s.createScope({ role: "programs" }, host)
 	const scopes = createScopeNodes({ scheduler: s, table })
 	const commit = (changed: Parameters<Places["commit"]>[0]) =>
 		overlay ? overlay.commit(changed) : places.commit(changed)
@@ -156,6 +186,10 @@ export function createWorld(o: Options) {
 	s.runWithScope(host, () => {
 		table.add("value", "root", createEntry<unknown>(undefined, createChangeHeader(s)))
 		table.add("children", "root", createEntry<Record<string, unknown>>({}, createChangeHeader(s)))
+		if (o.types) commit(installTypes(table, "root", createChangeHeader(s)))
+		if (Array.isArray(o.types)) {
+			commit(installTypes(table, "root", createChangeHeader(s), o.types))
+		}
 	})
 
 	const ctxs = new WeakMap<object, Context>()
@@ -167,7 +201,7 @@ export function createWorld(o: Options) {
 		commit,
 		host: { places, table, scheduler: s, commit },
 		programs: () => programs,
-		pairs: (): Pair[] => [["trusted", trusted()]],
+		info: () => ({ "trusted-event": trusted() }),
 		notice,
 		may: o.may,
 		presence,
@@ -236,11 +270,80 @@ export function createWorld(o: Options) {
 		}
 	}
 
-	// what a process is given: the api, and the host's own tools
+	// ---- the world's tools ----
+	// a process's id → its name (where it runs), for who's caller
+	const named = new Map<unknown, string>()
+	// the nearest scope's key: the open scope's and every parent's info, innermost first
+	const nearest = (o: Scope | undefined, key: string) => {
+		for (; o !== undefined; o = o.parent) if (key in o.info) return o.info[key]
+		return undefined
+	}
+	function tools(api: API, ctx: Context): Tools {
+		const { scheduler: s, places } = ctx
+		if (ctx.process.at.length) named.set(ctx.process.id, ctx.process.at.join("/"))
+		// caller and trusted-event: given, or found; metadata as the change has it
+		const say = (actor: unknown, metadata: Metadata, caller: unknown, trust: unknown): Who => ({
+			caller: caller === undefined ? "" : named.get(caller) ?? String(caller),
+			"trusted-event": trust === true,
+			actor,
+			metadata,
+		})
+		return {
+			who(...change) {
+				if (change.length) {
+					const m = change[0]?.metadata ?? {}
+					return say(change[0]?.actor, m, m.caller, m["trusted-event"])
+				}
+				// walking the open scope and every parent: a write's metadata stops at a memo's
+				// node, so a caller above the memo is found only by walking on
+				const o = s.getCurrentScope()
+				const w = getWho(s)
+				return say(
+					w?.actor,
+					w?.metadata ?? {},
+					nearest(o, "caller"),
+					nearest(o, "trusted-event"),
+				)
+			},
+			change(x) {
+				const id = api.entries(x)[0]?.id
+				return id === undefined || id === api.REFUSED
+					? undefined
+					: places.readChange("value", id)
+			},
+			as(actor, f) {
+				const info = typeof actor === "string" ? { actor } : actor
+				const scope = s.createScope(info, s.getCurrentScope() ?? ctx.scope)
+				try {
+					return s.runWithScope(scope, f)
+				} finally {
+					s.teardown(scope)
+				}
+			},
+			scoped(f, info = { scoped: true }) {
+				const scope = s.createScope(info, ctx.scope)
+				return { value: s.runWithScope(scope, f), stop: () => s.teardown(scope) }
+			},
+			up(address, from = ctx.process.at, { stop = 0, walk } = {}) {
+				for (let k = from.length; k >= stop; k--) {
+					const here = k === 0 ? places.root : lib.get(places, from.slice(0, k))
+					if (typeof here !== "string") continue
+					walk?.push(here)
+					const path = [...from.slice(0, k), ...address]
+					const id = lib.get(places, path)
+					if (typeof id === "string") return { path, part: "value", id, parent: here }
+				}
+			},
+			inspect: (address) => page.parent?.__pick?.([...address]),
+		}
+	}
+
+	// what a process is given: the api, the world's tools, and the host's own
 	// (the extras put on the api itself: the runner knows a process by its api)
 	function createProcessAPI(ctx: Context) {
-		const api = apis.createProcessAPI(ctx)
+		const api = Object.assign(apis.createProcessAPI(ctx), {} as Tools)
 		ctxs.set(api, ctx)
+		Object.assign(api, tools(api, ctx))
 		if (o.extend) Object.assign(api, o.extend(api, ctx))
 		return api
 	}
@@ -258,14 +361,16 @@ export function createWorld(o: Options) {
 	}
 
 	// ---- programs: a runner for javascript at /code/run, each export a node in /code ----
-	const hostAPI = apis.createProcessAPI({
+	const hostCtx: Context = {
 		box: { root: "root", places },
 		places,
 		process: { id: "host", at: [], args: [], cwd: [] },
 		scheduler: s,
 		table,
 		scope: host,
-	})
+	}
+	const hostAPI = Object.assign(apis.createProcessAPI(hostCtx), {} as Tools)
+	Object.assign(hostAPI, tools(hostAPI, hostCtx))
 	programs = s.runWithScope(above, () => {
 		// describe and watchAll: each process's latest run on its node too (runs.ts)
 		const writes = {
@@ -304,21 +409,23 @@ export function createWorld(o: Options) {
 	const specs = o.processes ?? [{ name: "demo" }]
 	const running = new Map<string, Process>()
 
+	// a program's code at /code/<name>: a live function, typed javascript, for start to find (reload
+	// writes the exports its processes run; a host, any other a process starts itself)
+	function code(name: string, fn: unknown) {
+		s.runWithScope(host, () => {
+			const node = hostAPI.open(["code", name])
+			if (hostAPI.read(node) === undefined) hostAPI.open(["code", name], fn)
+			else hostAPI.edit(node, [{ path: [], value: fn }])
+			hostAPI.edit(hostAPI.info(node), [{ path: [], value: { "ermine.type": JS } }])
+		})
+	}
+
 	// the program's exports written as nodes, each process stopped and started again on them
 	function reload(mod: Record<string, unknown>) {
 		for (const spec of specs) {
 			const name = spec.export ?? "default"
-			const code = mod[name]
-			if (typeof code !== "function") {
-				console.error(`program.ts has no export ${name} for ${spec.name}`)
-				continue
-			}
-			s.runWithScope(host, () => {
-				const node = hostAPI.open(["code", name])
-				if (hostAPI.read(node) === undefined) hostAPI.open(["code", name], code)
-				else hostAPI.edit(node, [{ path: [], value: code }])
-				hostAPI.edit(hostAPI.info(node), [{ path: [], value: { "ermine.type": JS } }])
-			})
+			if (typeof mod[name] === "function") code(name, mod[name])
+			else console.error(`program.ts has no export ${name} for ${spec.name}`)
 		}
 		for (const spec of specs) {
 			const was = running.get(spec.name)
@@ -344,7 +451,7 @@ export function createWorld(o: Options) {
 	}
 
 	// host writes before any program runs: the host's own api, at the root
-	function seed(f: (host: API) => void) {
+	function seed(f: (host: API & Tools) => void) {
 		s.runWithScope(host, () => f(hostAPI))
 		s.pulse()
 	}
@@ -354,7 +461,7 @@ export function createWorld(o: Options) {
 		places,
 		s,
 		host,
-		header: (extra?: Iterable<Pair>) => createChangeHeader(s, extra),
+		header: (extra?: Info) => createChangeHeader(s, extra),
 		writes: { place, unplace, move, rename },
 		parts,
 		statusIds,
@@ -378,5 +485,5 @@ export function createWorld(o: Options) {
 	}
 	;(globalThis as Record<string, unknown>).ermine = world
 
-	return { reload, seed, world, hostAPI }
+	return { reload, seed, code, world, hostAPI }
 }

@@ -176,7 +176,7 @@ export function clerk({ open, edit, method, who }: API & Tools) {
 	const last = open("./last", "nobody has asked")
 	method("on/times", (a: number, b: number) => {
 		// who() reads the call's scope: who called, and did a person do it
-		const { caller, trusted } = who()
+		const { caller, "trusted-event": trusted } = who()
 		edit(last, () => `${caller} asked ${a} × ${b}, trusted ${trusted}`)
 		if (!trusted) return "i only answer people"
 		edit(answered, (k: number) => k + 1)
