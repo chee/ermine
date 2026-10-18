@@ -1,14 +1,14 @@
-// The C dens (dens.h) on the line protocol of typescript/dens_harness.ts, which documents it
-// (conformance/c/harness.h has the loop). Two devices, "mac" and "card", each a table, paths,
-// places (root "R" unless root said; contributors [processes(root), away(root), children]),
+// The C dens (dens.h) and away (away.h) on the line protocol of typescript/dens_harness.ts, which
+// documents it (conformance/c/harness.h has the loop). Two devices, "mac" and "card", each a table,
+// paths, places (root "R" unless root said; contributors [processes(root), away(root), children]),
 // scheduler, scope nodes, hf registry and host scope { actor: <dev> } of its own, made at their
-// first line as presence_harness.c makes its two; one clock, which only the "now" request moves.
-// Names are one map, filled as answers come back: a den's node "den:<den id>", a process
-// "proc:<its name>", a derived id its owner's name and the rest. The runners: record (its run and
-// its stop recorded; hf_run.stop_reason given the reason) and boom (hf_run.error "boom"). The
-// policy "grants": a pr_call recording each ask, then protect's grants on (value, rules).
-// Not here yet: the other dens (connect, announce, beat, disconnect, sweep, remote, answer,
-// forge), which are away.h's.
+// first line as presence_harness.c makes its two; one clock, which only the "now" request moves;
+// one channel pair (chn_pair_new) named "mac" and "card", made at the first connect. Names are one
+// map, filled as answers come back: a den's node "den:<den id>", a process "proc:<its name>", a
+// derived id its owner's name and the rest; a remote start's process named from its answer, at the
+// remote line or the first answer line after it. The runners: record (its run and its stop
+// recorded; hf_run.stop_reason given the reason) and boom (hf_run.error "boom"). The policy
+// "grants": a pr_call recording each ask, then protect's grants on (value, rules).
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,6 +17,7 @@
 #include "../../../filesystem/places/c/status.h"
 #include "../../boxes/c/boxes.h"
 #include "../../processes/c/processes.h"
+#include "away.h"
 #include "dens.h"
 
 #define PUSH(v, n, cap, x) \
@@ -90,10 +91,21 @@ typedef struct {
 	pr_policy *grants, *policy;
 	op_value **asks;
 	size_t nasks, capasks;
+	// its link; every link made on it
+	dn_link *link;
+	dn_link **links;
+	size_t nlinks, caplinks;
 } device;
 
 static device devices[2] = {{.name = "mac"}, {.name = "card"}};
 static int64_t clock_ms;
+// the channel pair, made at the first connect: mac's a, card's b
+static chn_pair *pair;
+
+static int64_t read_clock(void *ctx) {
+	(void)ctx;
+	return clock_ms;
+}
 
 static void drop(void *value, void *data) {
 	(void)data;
@@ -142,8 +154,8 @@ static char *mapped(const char *v, const char *(*of)(const char *)) {
 static char *show(const char *v) { return mapped(v, shown_of); }
 static char *take(const char *v) { return mapped(v, known_of); }
 
-// a value with every string mapped (map keys as they are): new
-static op_value *walked(const op_value *v, char *(*f)(const char *)) {
+// a value with every string mapped (map keys too when keys): new
+static op_value *walked_keys(const op_value *v, char *(*f)(const char *), int keys) {
 	if (v == NULL) return op_null();
 	if (v->type == OP_STR) {
 		char *s = f(v->str);
@@ -153,16 +165,26 @@ static op_value *walked(const op_value *v, char *(*f)(const char *)) {
 	}
 	if (v->type == OP_LIST) {
 		op_value *a = op_list();
-		for (size_t i = 0; i < v->count; i++) op_push(a, walked(v->items[i], f));
+		for (size_t i = 0; i < v->count; i++) op_push(a, walked_keys(v->items[i], f, keys));
 		return a;
 	}
 	if (v->type == OP_MAP) {
 		op_value *m = op_map();
-		for (size_t i = 0; i < v->count; i++) op_set_name(m, v->keys[i], walked(v->items[i], f));
+		for (size_t i = 0; i < v->count; i++) {
+			op_value *x = walked_keys(v->items[i], f, keys);
+			if (!keys) {
+				op_set_name(m, v->keys[i], x);
+				continue;
+			}
+			char *k = f(v->keys[i]);
+			op_set(m, k, x);
+			free(k);
+		}
 		return m;
 	}
 	return op_ref((op_value *)v);
 }
+static op_value *walked(const op_value *v, char *(*f)(const char *)) { return walked_keys(v, f, 0); }
 // an answer: ids by name
 static op_value *plain(const op_value *v) { return walked(v, show); }
 static op_value *plain_take(op_value *v) {
@@ -170,8 +192,9 @@ static op_value *plain_take(op_value *v) {
 	op_free(v);
 	return o;
 }
-// a request's value: names taken back
+// a request's value: names taken back; back_all: in keys too (a row's nodes are by id)
 static op_value *back(const op_value *v) { return walked(v, take); }
+static op_value *back_all(const op_value *v) { return walked_keys(v, take, 1); }
 static op_value *back_or_null(const op_value *v) { return v != NULL ? back(v) : NULL; }
 
 // what the runners did, every device's, in order --------------------------------------------------------
@@ -284,7 +307,7 @@ static void make(device *d) {
 	d->table = tb_make(pl_event, d->places);
 	d->paths = pt_new();
 	pr_processes_init(&d->rows, tb_string(d->root));
-	pr_trie_init(&d->away, "away", tb_string(d->root), "away");
+	dn_away_init(&d->away, tb_string(d->root));
 	d->walk[0] = &d->rows.contributor;
 	d->walk[1] = &d->away.contributor;
 	d->walk[2] = &pl_children;
@@ -714,6 +737,171 @@ static void closing(void *data) {
 	j->out = op_map();
 }
 
+// other dens --------------------------------------------------------------------------------------
+
+static chn_channel *channel_of(device *d) {
+	if (pair == NULL) pair = chn_pair_new("mac", "card");
+	return d == &devices[0] ? chn_pair_a(pair) : chn_pair_b(pair);
+}
+
+// the names remote starts are to give their processes, by device and n, until their answer lands
+typedef struct {
+	device *d;
+	unsigned n;
+	char *name;
+} to_name;
+static to_name *to_names;
+static size_t nto_names, capto_names;
+
+// a remote start's process named from its answer, once it has one
+static void named(device *d, unsigned n) {
+	for (size_t i = 0; i < nto_names; i++) {
+		if (to_names[i].d != d || to_names[i].n != n) continue;
+		const char *id = text(get(dn_answer(d->link, n), "id"));
+		if (id == NULL) return;
+		char *as = concat("proc:", to_names[i].name);
+		name(id, as);
+		free(as);
+		free(to_names[i].name);
+		to_names[i] = to_names[--nto_names];
+		return;
+	}
+}
+
+// a link, on the device's channel
+static void connecting(void *data) {
+	job *j = data;
+	device *d = j->d;
+	const op_value *r = j->r;
+	const op_value *publish = get(r, "publish"), *processes = get(r, "processes"), *ttl = get(r, "ttl");
+	steps under = steps_of(get(r, "under"));
+	char *topic = text(get(r, "topic")) != NULL ? take(text(get(r, "topic"))) : NULL;
+	dn_link_setup o = {.topic = topic, .under = (const char *const *)under.v, .nunder = under.n,
+		.publish = publish != NULL && publish->type == OP_BOOL
+			? (publish->bool_ ? DN_PUBLISH_YES : DN_PUBLISH_NO)
+			: DN_PUBLISH_DEFAULT,
+		.hide_processes = processes != NULL && processes->type == OP_BOOL && !processes->bool_,
+		.ttl = ttl != NULL && ttl->type == OP_NUM ? (int64_t)ttl->num : 10000, .now = read_clock};
+	dn_link *l = dn_connect(d->den, channel_of(d), &o);
+	free(topic);
+	steps_free(&under);
+	if (l == NULL) {
+		j->out = error("a den's channel is named its id");
+		return;
+	}
+	PUSH(d->links, d->nlinks, d->caplinks, l);
+	d->link = l;
+	j->out = op_map();
+}
+
+// an ask to another den: { n }. a program at an address: carried, with its code when code is true
+static void remote(void *data) {
+	job *j = data;
+	device *d = j->d;
+	const op_value *r = j->r;
+	const char *which = text(get(r, "ask"));
+	int starting = which != NULL && strcmp(which, "start") == 0;
+	op_value *a = op_map();
+	if (starting) {
+		op_set(a, "op", op_str("start"));
+		const op_value *pv = get(r, "program"), *code = get(r, "code");
+		op_value *program;
+		if (pv != NULL && (pv->type == OP_STR || pv->type == OP_LIST)) {
+			steps at = steps_of(pv);
+			program = dn_carry(d->link, STEPS(at), code != NULL && code->type == OP_BOOL && code->bool_);
+			steps_free(&at);
+			if (program == NULL) {
+				op_free(a);
+				j->out = error(pl_code_name(PL_NOTHING_THERE));
+				return;
+			}
+		} else program = program_value(pv);
+		static const char *const keys[4] = {"runner", "at", "args", "cwd"};
+		for (size_t i = 0; i < 4; i++) {
+			const op_value *x = get(r, keys[i]);
+			if (x != NULL) op_set(a, keys[i], op_ref((op_value *)x));
+		}
+		op_set(a, "program", program);
+	} else if (which != NULL && strcmp(which, "stop") == 0) {
+		op_set(a, "op", op_str("stop"));
+		char *id = process_at(get(r, "process"));
+		op_set(a, "process", op_str(id));
+		free(id);
+		if (get(r, "reason") != NULL) op_set(a, "reason", back(get(r, "reason")));
+	} else {
+		op_free(a);
+		j->out = error("no such ask");
+		return;
+	}
+	const char *to = text(get(r, "to"));
+	unsigned n = dn_remote(d->link, to != NULL ? to : "", a);
+	op_free(a);
+	if (n == 0) {
+		j->out = error("the link is stopped");
+		return;
+	}
+	const char *as = text(get(r, "name"));
+	if (starting && as != NULL) PUSH(to_names, nto_names, capto_names, ((to_name){d, n, xdup(as)}));
+	named(d, n);
+	j->out = with("n", op_num((double)n));
+}
+
+// the request's value set as the device's row at its link's anchor, its den bypassed
+static op_value *forge(device *d, const op_value *r) {
+	pres_world *w = dn_link_world(d->link);
+	if (!sc_scope_alive(w->scope)) return error(SC_DISPOSED);
+	const op_value *ttl = get(r, "ttl");
+	op_value *v = back_all(get(r, "value"));
+	pres_set(w, dn_link_anchor(d->link), channel_of(d)->name, v,
+		ttl != NULL && ttl->type == OP_NUM ? (int64_t)ttl->num : 10000);
+	op_free(v);
+	return op_map();
+}
+
+static op_value *swept_json(pres_swept *swept) {
+	op_value *list = op_list();
+	for (size_t i = 0; i < swept->n; i++) {
+		op_value *m = op_map();
+		op_set(m, "anchor", op_str(swept->items[i].anchor));
+		op_set(m, "who", op_str(swept->items[i].who));
+		op_push(list, m);
+	}
+	pres_swept_free(swept);
+	return with("swept", plain_take(list));
+}
+
+// the away ops; NULL: none of them
+static op_value *away_answer(device *d, const char *op, job *j, const char *actor) {
+	if (strcmp(op, "connect") == 0) {
+		if (d->den == NULL) return error("no den");
+		hosted(d, connecting, j, NULL);
+		return j->out;
+	}
+	if (strcmp(op, "announce") != 0 && strcmp(op, "beat") != 0 && strcmp(op, "disconnect") != 0 &&
+		strcmp(op, "sweep") != 0 && strcmp(op, "remote") != 0 && strcmp(op, "answer") != 0 &&
+		strcmp(op, "forge") != 0)
+		return NULL;
+	if (d->link == NULL) return error("no link");
+	if (strcmp(op, "announce") == 0) dn_announce(d->link);
+	else if (strcmp(op, "beat") == 0) dn_beat(d->link);
+	else if (strcmp(op, "disconnect") == 0) dn_disconnect(d->link);
+	else if (strcmp(op, "sweep") == 0) {
+		pres_swept swept = dn_sweep(d->link);
+		return swept_json(&swept);
+	} else if (strcmp(op, "remote") == 0) {
+		hosted(d, remote, j, actor);
+		return j->out;
+	} else if (strcmp(op, "answer") == 0) {
+		unsigned n = 0;
+		const op_value *v = get(j->r, "n");
+		if (v != NULL && v->type == OP_NUM && v->num >= 1) n = (unsigned)v->num;
+		named(d, n);
+		const op_value *got = dn_answer(d->link, n);
+		return with("answer", got != NULL ? plain(got) : op_null());
+	} else return forge(d, j->r);
+	return op_map();
+}
+
 // reads, untracked --------------------------------------------------------------------------------------
 
 typedef struct {
@@ -901,6 +1089,8 @@ static op_value *answer(const op_value *r) {
 		d->nasks = 0;
 		return with("asks", plain_take(list));
 	}
+	op_value *other = away_answer(d, op, &j, actor);
+	if (other != NULL) return other;
 	// the rest are the den's
 	if (strcmp(op, "offer") != 0 && strcmp(op, "withdraw") != 0 && strcmp(op, "start") != 0 &&
 		strcmp(op, "stop") != 0 && strcmp(op, "ask") != 0 && strcmp(op, "send") != 0 &&
@@ -950,6 +1140,7 @@ void hh_finish(void) {
 			tb_free(d->table);
 			pt_free(d->paths);
 			pl_free(d->places);
+			for (size_t i = 0; i < d->nlinks; i++) dn_link_free(d->links[i]);
 			for (size_t i = 0; i < d->ndens; i++) dn_free(d->dens[i]);
 			for (size_t i = 0; i < d->nboxes; i++) bx_free(d->boxes[i].box), free(d->boxes[i].name);
 			sn_free(d->scopes);
@@ -959,6 +1150,7 @@ void hh_finish(void) {
 			op_free((op_value *)d->info.value);
 			for (size_t i = 0; i < d->nasks; i++) op_free(d->asks[i]);
 		}
+		free(d->links);
 		free(d->dens);
 		free(d->boxes);
 		free(d->asks);
@@ -972,4 +1164,7 @@ void hh_finish(void) {
 	free(stops);
 	for (size_t i = 0; i < nhandles; i++) free(handles[i]->process), free(handles[i]);
 	free(handles);
+	for (size_t i = 0; i < nto_names; i++) free(to_names[i].name);
+	free(to_names);
+	chn_pair_free(pair);
 }
