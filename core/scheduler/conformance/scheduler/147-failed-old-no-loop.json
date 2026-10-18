@@ -1,5 +1,5 @@
 {
-	"title": "c's failing run writes z, which w reads to write y; y is kept from c's run before, not read by this one: w's write makes c due again as a retry, not a loop (no looping end); ranks come from what was read",
+	"title": "c's failing run writes z, which w reads to write y; y is old, read by c's run before, not by this one: w's write makes c due again as a retry, not a loop (no looping end); ranks come from what was read",
 	"steps": [
 		{
 			"op": "root",

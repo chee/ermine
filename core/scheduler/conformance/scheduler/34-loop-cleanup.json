@@ -1,5 +1,5 @@
 {
-	"title": "a cleanup that changes what its computation reads: a loop through it, that ends; a compute's (its cleanup runs once its next run is done and the round's runs are, so the value set is the one read before the cleanup wrote; the loop's run after it ends looping and keeps its own cleanups set aside) and an effect's (proof C5)",
+	"title": "a cleanup that changes what its computation reads: a loop through it, that ends; a compute's (its cleanup runs once its next run is done and the round's runs are, so the value set is the one read before the cleanup wrote; the loop's run after it ends looping and keeps its own cleanups set aside) and an effect's: the cleanup of its last act runs just before its next act and writes what it reads, so it does not act on the old value (5): it runs again and acts on the new (2) (proof C5; 151)",
 	"steps": [
 		{ "op": "root", "name": "o", "info": { "actor": "test" }, "expect": {} },
 		{
@@ -39,7 +39,7 @@
 		{ "op": "log", "expect": { "log": [["act", 1]] } },
 		{ "op": "write", "values": { "m": 5 }, "expect": { "tick": 8 } },
 		{ "op": "pulse", "expect": {} },
-		{ "op": "log", "expect": { "log": [["act", 5]] } },
+		{ "op": "log", "expect": { "log": [["act", 2]] } },
 		{ "op": "get", "key": "m", "expect": { "value": 2 } }
 	]
 }

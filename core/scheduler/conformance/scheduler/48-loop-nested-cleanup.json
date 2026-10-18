@@ -1,5 +1,5 @@
 {
-	"title": "a cleanup on a plain scope made in a run or an act, changing what its computation reads, written by the writer open: the loop ends, as one on the computation does (34). the run's scope stays, alive, through the next run and goes once that run is done; the act's, before the next act",
+	"title": "a cleanup on a plain scope made in a run or an act, changing what its computation reads, written by the writer open: the loop ends, as one on the computation does (34). the run's scope stays, alive, through the next run and goes once that run is done; the act's, before the next act, whose write makes the effect run again and act on the new value (34)",
 	"steps": [
 		{ "op": "root", "name": "o", "info": { "actor": "test" }, "expect": {} },
 		{
@@ -51,7 +51,7 @@
 		{ "op": "log", "expect": { "log": [["act", 1]] } },
 		{ "op": "write", "values": { "m": 5 }, "expect": { "tick": 8 } },
 		{ "op": "pulse", "expect": {} },
-		{ "op": "log", "expect": { "log": [["act", 5]] } },
+		{ "op": "log", "expect": { "log": [["act", 2]] } },
 		{ "op": "get", "key": "m", "expect": { "value": 2 } }
 	]
 }

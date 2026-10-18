@@ -47,8 +47,8 @@ export const plants: Plant[] = [
 	{
 		name: "scheduler: an effect acts although due again (stale act)",
 		file: sched,
-		find: 'if (c.state !== "alive" || order.has(c)) return\n\t\tconst was = reading',
-		replace: 'if (c.state !== "alive") return\n\t\tconst was = reading',
+		find: "if (order.has(c)) {\n\t\t\tc.cleaned = true",
+		replace: "if (false) {\n\t\t\tc.cleaned = true",
 		catcher: fuzzSched,
 	},
 	{

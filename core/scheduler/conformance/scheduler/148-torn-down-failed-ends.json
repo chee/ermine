@@ -1,5 +1,5 @@
 {
-	"title": "a computation torn down while its last run failed: every key it kept is forgotten, the ones it read and the ones it kept from the run before",
+	"title": "a computation torn down while its last run failed: every key it held is forgotten, the ones it read and the old ones from the run before",
 	"steps": [
 		{
 			"op": "root",
