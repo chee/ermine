@@ -7,7 +7,7 @@ harness's header lists its requests and answers.
 | --------- | ---------------------------------------- | ------------------------------------------------- |
 | commit    | `ermine/encoding/conformance/commit/`    | `ermine/encoding/typescript/commit_harness.ts`    |
 | seal      | `extensions/together/conformance/seal/`      | `extensions/together/typescript/seal_harness.ts`      |
-| run       | `extensions/together/conformance/run/`       | `extensions/together/typescript/run_harness.ts`       |
+| run       | `extensions/together/conformance/run/`       | `extensions/together/typescript/packer_harness.ts`       |
 | history   | `extensions/together/conformance/history/`   | `extensions/together/typescript/history_harness.ts`   |
 | replay    | `extensions/together/conformance/replay/`    | history's (`suite.json`)                          |
 | snapshot  | `extensions/together/conformance/snapshot/`  | history's (`suite.json`)                          |
@@ -74,7 +74,7 @@ for one suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `f
   (`changeOf`, replay.ts). A new commit never carries those two from its change; its sites' files as
   the host's roots say.
 - refused, with a code: `{error: code, ...where}`, exact. commit: `not-a-commit` | `cannot-carry`,
-  `field`. seal: `shape` | `signature`; a commit's own refusal as commit's. run: RunError's code,
+  `field`. seal: `shape` | `signature`; a commit's own refusal as commit's. run: PackError's code,
   `column`. snapshot: PackError's code. A history's refusal is an answer: `{added: {refused}}`
   (`shape` | `lamport` | `patches` | `parent` | `merge`: a merge by a rule the harness doesn't
   know); one the check cannot judge yet waits on it: `{added: {waiting: []}}` (history's `hold` and
