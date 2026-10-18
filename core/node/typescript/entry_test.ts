@@ -16,7 +16,7 @@ Deno.test("createEntry: the change given is the entry's, not copied", () => {
 
 Deno.test("createEntry: no time given, the time now, in a new change", () => {
 	const before = now()
-	const h = { actor: "me", metadata: [["why", "a test"]] as [string, unknown][] }
+	const h = { actor: "me", metadata: { why: "a test" } }
 	const n = createEntry(1, h as never)
 	const after = now()
 	assert(n.change.time >= before && n.change.time <= after, String(n.change.time))
@@ -31,7 +31,7 @@ Deno.test("createEntry: a time given is kept, 0 included", () => {
 
 Deno.test("createEntry: external and metadata kept as given", () => {
 	const external = [{ file: "file:///old.ts", line: 3 }]
-	const metadata: [string, unknown][] = [["a", 1], ["a", 2]]
+	const metadata = { a: 1, b: 2 }
 	const n = createEntry(undefined, { time: 1, actor: "me", external, metadata })
 	assertStrictEquals(n.change.external, external)
 	assertStrictEquals(n.change.metadata, metadata)
