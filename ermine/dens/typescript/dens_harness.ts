@@ -40,13 +40,15 @@
 // { op: "list", dev?, path, box? }                   -> { names }
 // { op: "node", dev?, id }                           -> { parts, attributes, status, children, live }
 //    parts sorted; attributes without the status (null: no entry); status "pending" | { failed }
-//    | null; children (null: no entry); live: its value is a function
+//    | null (PENDING, an Error, none; any other value: { raw: it }); children (null: no entry);
+//    live: its value is a function
 // { op: "runs" }                                     -> { runs, stops }   every device's, in order
 // { op: "asked", dev? }                              -> { asks }   since the last asked
 // other dens
 // { op: "connect", dev?, topic?, under?, publish?, processes?, ttl? } -> {}   connect, the host's
 //    scope open, the device's channel; ttl none: 10000; now: the clock
-// { op: "announce" | "beat" | "disconnect", dev? }    -> {}   disconnect: the link's stop
+// { op: "announce" | "beat" | "disconnect", dev? }    -> {}   disconnect: the link's stop, and the
+//    link gone (C: dn_link_free at once, the den running)
 // { op: "sweep", dev? }                              -> { swept: [{ anchor, who }] }
 // { op: "remote", dev?, to, ask: "start", name, runner, program, code?, at, args?, cwd?, actor? }
 //    -> { n }   program: an address on dev (carry, with code when code is true) or { id, ... }
@@ -54,6 +56,8 @@
 // { op: "answer", dev?, n }                          -> { answer }   null: none yet
 // { op: "forge", dev?, value, ttl? }                 -> {}   setPresence of value (names taken back,
 //    keys too) as the device's channel name at its link's anchor, its den bypassed; ttl none: 10000
+// { op: "say", dev?, to, message }                   -> {}   message (names taken back) as CBOR on
+//    the device's channel at "<its link's anchor>/ask/<to>", its link bypassed
 // a remote start's process is named from its answer, as start's is
 import createEntry from "@ermine/node/entry"
 import { createScheduler, PENDING, type Scheduler, type Scope } from "@ermine/scheduler"
@@ -67,6 +71,7 @@ import { type Address, type Box, createBox } from "@ermine/boxes"
 import { processes } from "@ermine/processes"
 import { createScopeNodes, type ScopeNodes } from "@ermine/processes/scopes"
 import { type Ask, grants, type Policy } from "@ermine/protect"
+import { encode, type Value } from "@ermine/encoding/cbor"
 import { setPresence } from "@ermine/presence"
 import { type Channel, createPair } from "@ermine/presence/channel"
 import { fromJson, toJson } from "../../../conformance/typescript/form.ts"
@@ -178,11 +183,12 @@ function backAll(x: unknown): unknown {
 	return walk(fromJson(x))
 }
 
-// an answer as JSON: ids by name, bytes in their JSON form
+// an answer as JSON: ids by name, bytes and numbers in their JSON form
 function plain(x: unknown): Json {
 	return JSON.parse(
 		JSON.stringify(x ?? null, (_, v) => {
 			if (v instanceof Uint8Array) return toJson(v)
+			if (typeof v === "number" || typeof v === "bigint") return toJson(v)
 			if (typeof v === "string") return show(v)
 			return v
 		}),
@@ -211,7 +217,7 @@ function status(v: unknown): Json {
 	if (v === undefined) return null
 	if (v === PENDING) return "pending"
 	if (v instanceof Error) return { failed: v.message }
-	return plain(v)
+	return { raw: plain(v) }
 }
 
 // what the runners did, every device's, in order
@@ -512,9 +518,12 @@ function answer(r: Request): Json {
 		case "beat":
 			linkOf(dev(r)).beat()
 			return {}
-		case "disconnect":
-			linkOf(dev(r)).stop()
+		case "disconnect": {
+			const d = dev(r)
+			linkOf(d).stop()
+			d.link = undefined
 			return {}
+		}
 		case "sweep":
 			return { swept: plain(linkOf(dev(r)).sweep()) }
 		case "remote": {
@@ -554,6 +563,11 @@ function answer(r: Request): Json {
 			const d = dev(r)
 			const link = linkOf(d)
 			setPresence(link.world, link.anchor, channelOf(d).name, backAll(r.value), r.ttl ?? 10000)
+			return {}
+		}
+		case "say": {
+			const d = dev(r)
+			channelOf(d).send(`${String(linkOf(d).anchor)}/ask/${r.to}`, encode(back(r.message) as Value))
 			return {}
 		}
 	}

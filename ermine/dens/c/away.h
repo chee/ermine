@@ -12,11 +12,14 @@
 // den's id): its dn_nodes (hide_processes: none), set whole as they change (an effect) and at each
 // beat, lapsing at until (a host's sweep), cleared at its stop. each other row, while it lives,
 // mirrored here: the away trie gets the den's node id at under + /system/dens/<who> and each
-// process's id at under + its at (a leaf there already, or not a name: passed over); each node
-// named is written as given (attributes, children; never a value; status "pending" | { failed }
-// as status.h's pending | an error), unless the id has entries here that this link did not write
-// for that who (nor is its leaf put in); an entry only when it changed (pr_same). a row gone
-// (cleared, swept): its leaves and entries out.
+// process's id at under + its at (a leaf there already, not a name, or in a local process's way:
+// at or under its leaf, or on a level of the process trie: passed over); each node named that is
+// the row's own (its den's id, a process's, or one under them: "<id>/...") is written as given
+// (attributes; children, each name to an id it may write; never a value; status "pending" |
+// { failed } as status.h's pending | an error). no row writes an id that is this den's (its node,
+// a process it runs, or under them), nor one with entries here that this link did not write for
+// that who (nor is its leaf put in); an entry only when it changed (pr_same). a row gone (cleared,
+// swept): its leaves and entries out.
 // asks: CBOR on "<anchor>/ask/<to>": { n, op, ..., who: { actor, reader? } }; the asked den: who
 // + device (the sender's name), dn_ask with the link's scope open; the answer on
 // "<anchor>/answer/<from>": { n, answer } (refused a places code: { error: code }). an answer kept
@@ -26,8 +29,8 @@
 // effects, its writes (rows, mirrors, asks answered). topic NULL: the places' root. publish
 // default: whether topic is the root. ttl 0: 10 s. its stop: its row cleared (when it published,
 // its scope alive), mirrors out, listeners off, its scope torn down; twice: nothing. the den's
-// close stops it; its scope torn down from above: the same, its row left to lapse (presence writes
-// need its scope).
+// close stops it (a scope [["dens", "link"]] under the den's owner, torn down at its stop); its
+// scope torn down from above: the same, its row left to lapse (presence writes need its scope).
 // the scheduler's values are op_values (its drop op_free's them), as dens.c's are.
 // memory: what a link keeps is its own until dn_link_free (strings copied, values held), its
 // world's presence too (pres_free there). a value with no encoding (a function hf holds, a
@@ -87,8 +90,7 @@ pres_world *dn_link_world(dn_link *l);
 const char *dn_link_anchor(const dn_link *l);
 // its row cleared, mirrors out, listeners off (idempotent; also at the den's close)
 void dn_disconnect(dn_link *l);
-// stopped, and the den closed or the scheduler freed (the den's scope holds its stop till then);
-// before dn_free
+// after dn_disconnect (or the den's close, or its scope torn down from above), before dn_free
 void dn_link_free(dn_link *l);
 
 #endif

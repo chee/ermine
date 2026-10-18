@@ -1,0 +1,193 @@
+{
+	"title": "a status crosses as it is: card's process on a runner that throws (boom) failed there, and mac's mirror of its node holds that failure ({ failed: boom }, an error on mac as on card, not the form it travelled in); boom ran nothing",
+	"steps": [
+		{
+			"op": "kids",
+			"dev": "card",
+			"id": "R",
+			"value": {
+				"apps": "APPS"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"dev": "card",
+			"id": "APPS",
+			"value": {
+				"clock.js": "CLOCK"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"dev": "card",
+			"id": "CLOCK",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"dev": "card",
+			"id": "CLOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "den",
+			"dev": "mac",
+			"expect": {
+				"id": "den:mac"
+			}
+		},
+		{
+			"op": "den",
+			"dev": "card",
+			"expect": {
+				"id": "den:card"
+			}
+		},
+		{
+			"op": "offer",
+			"dev": "card",
+			"kind": "runners",
+			"name": "boom",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source"
+			},
+			"live": "boom",
+			"expect": {
+				"id": "den:card/runners/boom",
+				"at": [
+					"system",
+					"dens",
+					"card",
+					"runners",
+					"boom"
+				]
+			}
+		},
+		{
+			"op": "connect",
+			"dev": "mac",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"dev": "card",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"dev": "card",
+			"name": "b",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"boom"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"b"
+			],
+			"expect": {
+				"id": "proc:b",
+				"at": [
+					"work",
+					"b"
+				]
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"dev": "card",
+			"id": "proc:b",
+			"skip": [
+				"parts",
+				"attributes",
+				"children",
+				"live"
+			],
+			"expect": {
+				"status": {
+					"failed": "boom"
+				}
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"work",
+				"b"
+			],
+			"expect": {
+				"id": "proc:b"
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"id": "proc:b",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.type": "ermine.process",
+					"ermine.process.runner": {
+						"id": "den:card/runners/boom",
+						"at": [
+							"system",
+							"den",
+							"runners",
+							"boom"
+						]
+					},
+					"ermine.process.program": {
+						"id": "CLOCK",
+						"at": [
+							"apps",
+							"clock.js"
+						],
+						"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+					},
+					"ermine.process.den": {
+						"id": "den:card",
+						"at": [
+							"system",
+							"dens",
+							"card"
+						]
+					},
+					"ermine.process.cwd": [
+						"work"
+					]
+				},
+				"status": {
+					"failed": "boom"
+				},
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [],
+				"stops": []
+			}
+		}
+	]
+}

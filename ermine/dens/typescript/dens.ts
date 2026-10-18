@@ -25,7 +25,9 @@
 // <owner id>/<kind> (made at the first offer of that kind, upserted into the owner's children:
 // by, a process of this den's; none: the den), its attributes as given and ermine.type
 // ermine.runner | ermine.compiler | ermine.surface over them, its value live (none: no value).
-// a name taken: refused taken; not a name: PlacesError not-a-name; closed: refused stopped.
+// a name taken (offered, or entries at its id already): refused taken, nothing made; not a name:
+// PlacesError not-a-name; by no running process of this den's: PlacesError nothing-there; closed:
+// refused stopped.
 // withdraw: its users stopped (newest first, "withdrawn"), its name out, its node gone. an owner's
 // stop withdraws its offers first, its users stopped "runner-stopped"
 // start(runner, program, at, { args, cwd, box, pin }): runner from the den's root; program an
@@ -52,7 +54,10 @@
 // its offers stopped ("runner-stopped"), its handle's stop(reason), the row out, the node gone.
 // twice, or not this den's: nothing. p the den's own: close(reason). the reason is not written
 // ask(a): another den's: as start or stop, its who given (device: the transport's). no policy:
-// refused no "no policy". stop: of a process this den started; else not-there
+// refused no "no policy". stop: of a process this den started; else not-there. a start's fields
+// (an ask's, on/start's body's) as given, untyped: runner and at no address: []; program neither
+// an address nor a map: { id: "" } (an id that is no string: ""); a step that is no string, args
+// given that are no list of strings, a cwd given that is no address: PlacesError not-a-name
 // close(reason = "den-stopped"): every process stopped, newest first, each handle given reason;
 // the den's rows last. after it: start, ask, offer refused stopped
 // nodes({ processes }): what others see, tracked; status as "pending" | { failed: message }, an
@@ -281,6 +286,9 @@ const bad = (name: unknown) =>
 
 const isAddress = (x: unknown): x is Address => typeof x === "string" || Array.isArray(x)
 
+const isNames = (x: unknown): x is string[] =>
+	Array.isArray(x) && x.every((s) => typeof s === "string")
+
 // whether a value has an encoding (what travels)
 function encodes(v: unknown): boolean {
 	try {
@@ -425,12 +433,36 @@ export function createDen(setup: Setup): Den {
 	// on/start: start's answer, the body's runner, program and at
 	function onStart(body: unknown): unknown {
 		const b = isMap(body) ? body : {}
-		const options: Options = {}
-		if (b.args !== undefined) options.args = b.args as string[]
-		if (b.cwd !== undefined) options.cwd = b.cwd as Address
+		const { runner, program, at, options } = shaped(b)
 		if (b.pin !== undefined) options.pin = b.pin
-		const r = start(b.runner as Address, b.program as Address | Program, b.at as Address, options)
+		const r = start(runner, program, at, options)
 		return "refused" in r ? r : { id: r.id, at: r.at }
+	}
+
+	// a start's fields as an untyped caller gives them (another den's ask, on/start's body): runner
+	// and at no address: []; program neither an address nor a map: { id: "" }; a step that is no
+	// string, args given that are no list of strings, a cwd given that is no address: not-a-name
+	function shaped(b: Record<string, unknown>) {
+		const steps = (x: unknown): Address | undefined => {
+			if (typeof x === "string") return x
+			if (!Array.isArray(x)) return undefined
+			if (isNames(x)) return x
+			throw new PlacesError("not-a-name", String(x.find((s) => typeof s !== "string")))
+		}
+		const options: Options = {}
+		if (b.args !== undefined) {
+			if (!isNames(b.args)) throw new PlacesError("not-a-name", "args")
+			options.args = b.args
+		}
+		if (b.cwd !== undefined) {
+			const cwd = steps(b.cwd)
+			if (cwd === undefined) throw new PlacesError("not-a-name", "cwd")
+			options.cwd = cwd
+		}
+		const program: Address | Program = isMap(b.program)
+			? b.program as Program
+			: steps(b.program) ?? { id: "" }
+		return { runner: steps(b.runner) ?? [], program, at: steps(b.at) ?? [], options }
 	}
 
 	// on/stop: stop's answer, the body's process and reason
@@ -493,7 +525,7 @@ export function createDen(setup: Setup): Den {
 		const o = ownerOf(by)
 		const id: Id = `${String(o.id)}/${kind}/${name}`
 		const at = [...o.at, kind, name]
-		if (offers.has(id)) return { refused: "taken", at }
+		if (offers.has(id) || table.get(id).length > 0) return { refused: "taken", at }
 		let folder = o.folders.get(kind)
 		if (folder === undefined) {
 			const fid: Id = `${String(o.id)}/${kind}`
@@ -613,16 +645,16 @@ export function createDen(setup: Setup): Den {
 			digest = hashOf(code)
 			;({ [ATTRIBUTE]: type, [PROGRAM_API]: api } = attributesOf(id))
 		} else if (carried) {
-			id = program.id
+			id = typeof program.id === "string" ? program.id : ""
 			code = program.code
 			digest = hashOf(code)
 			if (program.hash !== undefined && program.hash !== digest) {
 				return { refused: "not-there", program: id }
 			}
 			type = program.type
-			api = program.api
+			api = typeof program.api === "string" ? program.api : undefined
 		} else {
-			id = program.id
+			id = typeof program.id === "string" ? program.id : ""
 			const entry = table.get("value", id)
 			if (entry === undefined) return { refused: "not-there", program: id }
 			code = entry.value
@@ -729,7 +761,16 @@ export function createDen(setup: Setup): Den {
 		}
 		const o = out
 		if ("value" in o && !isPromise(o.value)) return hold(p, o.value)
-		if ("value" in o) (o.value as PromiseLike<unknown>).then((h) => hold(p, h), () => {})
+		// a handle landing late: what its stop throws, the process gone, has nobody to tell
+		if ("value" in o) {
+			;(o.value as PromiseLike<unknown>).then((h) => {
+				try {
+					hold(p, h)
+				} catch {
+					// dropped
+				}
+			}, () => {})
+		}
 		const c = s.runWithScope(p.scope, () =>
 			s.createComputer(() => {
 				if ("error" in o) throw o.error
@@ -815,10 +856,8 @@ export function createDen(setup: Setup): Den {
 	function askedBy(a: Ask): Asked {
 		if (closed) return STOPPED
 		if (a.op === "start") {
-			const options: Options = {}
-			if (a.args !== undefined) options.args = a.args
-			if (a.cwd !== undefined) options.cwd = a.cwd
-			const r = begin(a.who, true, a.runner, a.program, a.at, options)
+			const { runner, program, at, options } = shaped(a as unknown as Record<string, unknown>)
+			const r = begin(a.who, true, runner, program, at, options)
 			return "refused" in r ? r : { id: r.id, at: r.at }
 		}
 		if (a.op === "stop") {

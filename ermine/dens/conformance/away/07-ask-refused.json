@@ -1,5 +1,5 @@
 {
-	"title": "refusals over the link, in start's order, before any policy: by id and a hash mac's CLOCK does not have (mac's is other): not-there; an id mac has nothing at: not-there; no runner at the path on mac: not-a-runner; carried code in a form mac's runner does not take: wrong-form; nothing asked, nothing made. a runner mirrored from another den is no runner here (no value): not-a-runner. a den with no policy refuses every ask from another den (no policy) and still starts its own",
+	"title": "refusals over the link, in start's order, before any policy: by id and a hash mac's CLOCK does not have (mac's is other): not-there; an id mac has nothing at: not-there; no runner at the path on mac: not-a-runner; carried code in a form mac's runner does not take: wrong-form; args that are no list of strings, a cwd no address, a step no string: { error: not-a-name }; nothing asked, nothing made. a runner mirrored from another den is no runner here (no value): not-a-runner. a den with no policy refuses every ask from another den (no policy) and still starts its own",
 	"steps": [
 		{
 			"op": "kids",
@@ -332,6 +332,116 @@
 						"takes": "com.netscape.javascript-source",
 						"api": "ermine.api"
 					}
+				}
+			}
+		},
+		{
+			"op": "remote",
+			"dev": "card",
+			"to": "mac",
+			"ask": "start",
+			"name": "a",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"code": true,
+			"at": [
+				"work",
+				"a"
+			],
+			"args": [
+				"x",
+				1
+			],
+			"expect": {
+				"n": 5
+			}
+		},
+		{
+			"op": "answer",
+			"dev": "card",
+			"n": 5,
+			"expect": {
+				"answer": {
+					"error": "not-a-name"
+				}
+			}
+		},
+		{
+			"op": "remote",
+			"dev": "card",
+			"to": "mac",
+			"ask": "start",
+			"name": "a",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"code": true,
+			"at": [
+				"work",
+				"a"
+			],
+			"cwd": 7,
+			"expect": {
+				"n": 6
+			}
+		},
+		{
+			"op": "answer",
+			"dev": "card",
+			"n": 6,
+			"expect": {
+				"answer": {
+					"error": "not-a-name"
+				}
+			}
+		},
+		{
+			"op": "remote",
+			"dev": "card",
+			"to": "mac",
+			"ask": "start",
+			"name": "a",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"code": true,
+			"at": [
+				"work",
+				3
+			],
+			"expect": {
+				"n": 7
+			}
+		},
+		{
+			"op": "answer",
+			"dev": "card",
+			"n": 7,
+			"expect": {
+				"answer": {
+					"error": "not-a-name"
 				}
 			}
 		},

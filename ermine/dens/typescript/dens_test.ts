@@ -1,8 +1,10 @@
-// what the conformance suites cannot say (dens.ts, away.ts): runners giving promises, a process
-// offering from inside its run, ermine/api's runner and createProcessAPI on a den, what nodes()
-// shows, the owner torn down from above, and the type-level fits; and of a link: what connect
-// needs, answer(n) tracked over a channel that delivers later, carry, what a link drops or answers
-// with an error, and its scope torn down from above. one world: a scheduler, table and places
+// what the conformance suites cannot say (dens.ts, away.ts): runners giving promises (a late
+// handle's stop throwing too), an offer at an id another wrote, a process offering from inside its
+// run, ermine/api's runner and createProcessAPI on a den, what nodes() shows, the owner torn down
+// from above, and the type-level fits; and of a link: what connect needs, answer(n) tracked over a
+// channel that delivers later, carry, what a link drops or answers with an error, what a stopped
+// link leaves on the den (nothing), a mirrored failure as an Error, and its scope torn down from
+// above. one world: a scheduler, table and places
 // (root R, asked processes' rows, the away trie and children), the host's scope { actor: "host" },
 // a program /apps/clock.js ("hi", javascript source), a den "mac" with no policy (a link's two
 // devices: dens "mac" and "card", each saying yes to all, on an in-memory pair)
@@ -164,6 +166,40 @@ Deno.test("stopped before the promise lands: the handle's stop called once as it
 	assertEquals(r.stops, ["SIGTERM"])
 	await w.settle()
 	assertEquals(r.stops, ["SIGTERM"])
+})
+
+Deno.test("stopped before the promise lands, its handle's stop throwing: nothing uncaught (the process gone, nobody to tell)", async () => {
+	const w = world()
+	let land!: () => void
+	const stops: unknown[] = []
+	const runner: Runner = () =>
+		new Promise<Handle>((resolve) => {
+			land = () =>
+				resolve({
+					stop: (reason?: unknown) => {
+						stops.push(reason)
+						throw new Error("engine gone")
+					},
+				})
+		})
+	w.offer("javascript", runner)
+	const p = w.start(RUNNER, ["work", "clock"])
+	w.s.pulse()
+	w.hosted(() => w.den.stop(p, "bye"))
+	land()
+	await w.settle()
+	assertEquals([stops, w.table.get(p.id)], [["bye"], []])
+})
+
+Deno.test("an offer at an id with entries already (another's): refused taken, nothing made, the entries left as they are", () => {
+	const w = world()
+	const id = `${String(w.den.node)}/runners/lisp`
+	w.put("attributes", id, { "ermine.type": "x" })
+	const got = w.hosted(() => w.den.offer("runners", "lisp", { [TAKES]: JS }, () => {}))
+	assertEquals(got, { refused: "taken", at: ["system", "dens", "mac", "runners", "lisp"] })
+	assertEquals(w.den.offers(), [])
+	assertEquals(w.table.get("attributes", id)?.value, { "ermine.type": "x" })
+	assertEquals(w.table.get("children", `${String(w.den.node)}/runners`), undefined)
 })
 
 Deno.test("a process offering from inside its run: its runner under its node, started on; its stop stops its users first, runner-stopped", () => {
@@ -415,6 +451,11 @@ Deno.test("what a link is sent that is no ask is dropped; an ask its den throws 
 	channels.mac.send(`${anchorOf("R")}/ask/card`, new Uint8Array([0xff]))
 	channels.mac.send(`${anchorOf("R")}/ask/card`, encode({ n: 9, op: "dance" }))
 	channels.mac.send(`${anchorOf("R")}/ask/card`, encode({ op: "stop", process: "x" }))
+	// a start whose program has no id: no ask (its answer could not say which program)
+	channels.mac.send(
+		`${anchorOf("R")}/ask/card`,
+		encode({ n: 7, op: "start", runner: RUNNER, program: {}, at: ["work", "x"] }),
+	)
 	assertEquals(sent, [])
 	const n = mac.hosted(() =>
 		toCard.ask("card", {
@@ -426,6 +467,33 @@ Deno.test("what a link is sent that is no ask is dropped; an ask its den throws 
 	)
 	assertEquals(toCard.answer(n), { error: "not-a-name" })
 	assertEquals([sent.length, card.den.processes()], [1, []])
+})
+
+Deno.test("a link stopped by hand leaves nothing on the den's owner; the den's close still stops a live one", () => {
+	const { mac, channels } = two()
+	const before = mac.den.scope.teardowns.length
+	for (let i = 0; i < 3; i++) mac.hosted(() => connect(mac.den, channels.mac)).stop()
+	assertEquals(mac.den.scope.teardowns.length, before)
+	const link = mac.hosted(() => connect(mac.den, channels.mac))
+	mac.hosted(() => mac.den.close())
+	assertThrows(() => link.ask("card", { op: "stop", process: "x" }), Error, "stopped")
+	// connected to a den closed already: stopped at once
+	const late = mac.hosted(() => connect(mac.den, channels.mac))
+	assertThrows(() => late.ask("card", { op: "stop", process: "x" }), Error, "stopped")
+})
+
+Deno.test("a mirrored node's status as this side holds it: a failure an Error, its message the other's", () => {
+	const { mac, card, channels } = two()
+	card.offer("boom", () => {
+		throw new Error("boom")
+	})
+	mac.hosted(() => connect(mac.den, channels.mac))
+	card.hosted(() => connect(card.den, channels.card))
+	const p = card.start(["system", "den", "runners", "boom"], ["work", "b"])
+	for (let i = 0; i < 3; i++) card.s.pulse(), mac.s.pulse()
+	const st = mac.table.get("attributes", p.id)?.value?.[STATUS]
+	assertInstanceOf(st, Error)
+	assertEquals(st.message, "boom")
 })
 
 Deno.test("a link's scope torn down from above: the link stopped, its mirrors out, its listeners off; its row left on the other device to lapse", () => {
