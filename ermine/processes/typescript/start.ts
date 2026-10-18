@@ -16,7 +16,8 @@
 //   1. its node's id (proc:<uuid>), then a scope { process: at, [NODE]: id } (given the node,
 //      scopes.ts), made through setup.sites when given
 //   2. the row: addProcess at the path, committed to the places given
-//   3. node attributes ermine.process.args, .cwd, .pin, and status PENDING
+//   3. node attributes: options.attributes, then ermine.process.args, .cwd, .pin, and status
+//      PENDING (processes' own win)
 //   4. body, scope open, given give(computer, { run }): the computer's status (with run: its
 //      latest run) on the node. a function returned: called at stop
 // stop(p): body's return (scope open), the row out, the scope torn down (from above: computers go
@@ -70,6 +71,8 @@ export type Options = {
 	cwd?: Address
 	// written as ermine.process.pin; none: not written
 	pin?: unknown
+	// written first, in the node's one attributes entry: a name processes' own write too is theirs
+	attributes?: Readonly<Record<string, unknown>>
 }
 
 // body's: what to do at the stop
@@ -173,7 +176,7 @@ export function createProcesses(setup: Setup): Processes {
 		const process: Process = { id, at, cwd, scope }
 		states.set(process, p)
 		s.registerTeardown(scope, () => end(p))
-		const attrs: Record<string, unknown> = {}
+		const attrs: Record<string, unknown> = { ...options.attributes }
 		if (options.args !== undefined) attrs[ARGS] = options.args
 		attrs[CWD] = cwd
 		if (options.pin !== undefined) attrs[PIN] = options.pin

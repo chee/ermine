@@ -119,7 +119,7 @@ static void close_(void) {
 	fp_free(at->program);
 	fw_free(at->watcher);
 	fg_free(at->g);
-	if (at->may) pr_free(at->may);
+	if (at->may) pr_policy_free(at->may);
 	st_close(at->store);
 	free(at->root), free(at->folder), free(at->trash), free(at->home);
 	for (size_t i = 0; i < at->refuse_length; i++) free(at->refuse[i]);

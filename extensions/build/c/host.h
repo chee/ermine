@@ -21,6 +21,10 @@
 //
 //   hf_add_loader(fs, "dlopen", run, load, ctx);   // a runner that loads: dlopen.h's
 //
+// A run's stop may be given a reason (dens.ts' Handle.stop(reason)): hf_run.stop_reason, which a
+// starter that gives reasons calls in place of the handle's stop. One that gives none (programs'
+// start.c) calls handle.stop, so a runner setting it sets both.
+//
 // MEMORY. The registry copies the names; it is let go of with hf_free (no node's value refers to it).
 #ifndef PROGRAMS_HOST_H
 #define PROGRAMS_HOST_H
@@ -70,6 +74,11 @@ typedef struct {
 	hf_handle handle;
 	// a malloc'd message: the runner failed (no handle)
 	char *error;
+	// a stop with a reason (dens' stop and its cascades): when set, a starter that gives reasons
+	// calls this with handle.ctx in place of handle.stop, once; reason borrowed for the call, NULL:
+	// none. handle.stop must still be set: a starter that gives none (programs' start.c) calls it.
+	// NULL: every stop is handle.stop
+	void (*stop_reason)(void *ctx, const op_value *reason);
 } hf_run;
 
 // a runner's function: the code (borrowed), the api createProcessAPI gave, the data given at hf_add_runner

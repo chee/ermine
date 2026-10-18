@@ -100,7 +100,8 @@ crn *crn_new(const crn_setup *setup);
 void crn_give(crn *r, sc_computer *c, tb_key id);
 // the policy asked before a read, as reading the node {id}: 0 allows, anything else is the answer
 // given back by crn_read (for guard.h's gd_read: its gd_answer, *op and *reason what refused,
-// borrowed from the policy). Not guard.h itself: that pulls in protect, whose names start start.h's
+// borrowed from the policy). Not guard.h itself, so runs.c links no protect (protect's names no
+// longer clash with start.h's: its free is pr_policy_free)
 typedef int (*crn_ask)(void *ctx, tb_key id, const char **op, const char **reason);
 // crn_read's answer when the run must end: a track said stop
 #define CRN_STOP (-1)

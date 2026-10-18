@@ -11,13 +11,13 @@
 // (names from a start, when asked by path) and route (the id reached at each step, route[0] the
 // start; nroute is npath + 1 when given).
 //
-// A POLICY is a tree made with the pr_ constructors below and freed whole by pr_free: all, any and
-// only take the policies given. A policy reads through a pr_read: the asker's own read, so what
-// it reads is the asker's to track. A read of what is not there is NULL: a policy that needs it
-// answers pending.
+// A POLICY is a tree made with the pr_ constructors below and freed whole by pr_policy_free: all,
+// any and only take the policies given. A policy reads through a pr_read: the asker's own read, so
+// what it reads is the asker's to track. A read of what is not there is NULL: a policy that needs
+// it answers pending.
 //
-// ANSWERS are borrowed from the policy (its strings and its need): good until pr_free. Out of
-// memory aborts.
+// ANSWERS are borrowed from the policy (its strings and its need): good until pr_policy_free. Out
+// of memory aborts.
 #ifndef PROTECT_H
 #define PROTECT_H
 
@@ -95,7 +95,7 @@ pr_policy *pr_any(pr_policy *const *policies, size_t n);
 pr_policy *pr_only(const char *const *ops, size_t n, pr_policy *policy);
 // grants: the one data-driven policy (protect.ts): the value of the node at where, a list of maps
 pr_policy *pr_grants(pr_where where);
-void pr_free(pr_policy *policy);
+void pr_policy_free(pr_policy *policy);
 
 // values equal: scalars, lists in order, maps by keys
 int pr_same(const op_value *a, const op_value *b);

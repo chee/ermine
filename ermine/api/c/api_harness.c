@@ -338,7 +338,7 @@ static void finish(world *m) {
 	if (m->view != m->table) tb_free(m->view);
 	pt_free(m->paths);
 	pl_free(m->places);
-	if (m->policy) pr_free(m->policy);
+	if (m->policy) pr_policy_free(m->policy);
 	for (size_t i = 0; i < m->ndenied; i++) free(m->denied[i].op), free(m->denied[i].path);
 	free(m->denied);
 	for (size_t i = 0; i < m->nlogs; i++) free(m->logs[i].name), op_free(m->logs[i].values);

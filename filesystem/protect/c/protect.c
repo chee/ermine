@@ -74,9 +74,9 @@ pr_policy *pr_grants(pr_where where) {
 static void free_key(tb_key k) {
 	if (k.symbol == NULL) free((char *)k.string);
 }
-void pr_free(pr_policy *p) {
+void pr_policy_free(pr_policy *p) {
 	if (p == NULL) return;
-	for (size_t i = 0; i < p->nkids; i++) pr_free(p->kids[i]);
+	for (size_t i = 0; i < p->nkids; i++) pr_policy_free(p->kids[i]);
 	if (p->kind == K_ONLY) {
 		for (size_t i = 0; i < p->nops; i++) free(p->ops[i]);
 	}

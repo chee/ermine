@@ -542,7 +542,7 @@ void hh_finish(void) {
 		free(guards[i].name);
 	}
 	world_finish();
-	for (size_t i = 0; i < npolicies; i++) pr_free(policies[i]);
+	for (size_t i = 0; i < npolicies; i++) pr_policy_free(policies[i]);
 	for (size_t i = 0; i < nkept; i++) free(kept[i]);
 	for (size_t i = 0; i < nprograms; i++) free(programs[i]);
 	op_free(asked);

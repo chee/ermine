@@ -196,7 +196,7 @@ void hh_finish(void) {
 	ph_finish();
 	crn_free(runs);
 	runs = NULL;
-	if (policy != NULL) pr_free(policy);
+	if (policy != NULL) pr_policy_free(policy);
 	guard = NULL;
 	policy = NULL;
 	for (size_t i = 0; i < ndenied; i++) free(denied[i]);

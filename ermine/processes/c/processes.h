@@ -16,6 +16,11 @@
 // writes: return changed entries for pl_commit. refused, nothing changed: PL_NOT_A_NAME,
 // PL_NOTHING_THERE, PL_ALREADY_THERE. memory: entries hold patches (pl_hold); the caller holds the
 // header's block also (pl_hold_also) on each changed entry and *made.
+//
+// any other rows kept the same way (processes.ts' trie, addLeaf, removeLeaf): a trie of ids on a
+// part of their own, by the same rules: pr_trie_init, pr_add_in, pr_remove_in. pr_processes_init,
+// pr_add and pr_remove are these on PR_PART, from "process". pr_trie_init's part and from: kept,
+// not copied
 #ifndef PROCESSES_H
 #define PROCESSES_H
 
@@ -27,6 +32,8 @@
 typedef struct {
 	pl_contributor contributor;
 	tb_key root;
+	// the part the trie is on (pr_processes_init: PR_PART)
+	const char *part;
 } pr_processes;
 // the processes running under root, by path: the leaf at here's path + the name. a walk from an id
 // alone, its path not known: nothing. names: every name directly under here's path, a leaf or a
@@ -36,6 +43,9 @@ typedef struct {
 // that said so is of all under that path, so a start anywhere under it marks the walk and one
 // elsewhere does not. No names under here's path: none too. A walk from an id alone: none at once
 void pr_processes_init(pr_processes *p, tb_key root);
+// the walk of a trie of ids by path on root's part, as pr_processes_init's on PR_PART. from: what
+// its answers say (the contributor's from)
+void pr_trie_init(pr_processes *p, const char *part, tb_key root, const char *from);
 
 // id running at path under root: its leaf put in, the levels on the way made. refused: no name, or a
 // name that is not one (PL_NOT_A_NAME); a process at the path, above it or under it
@@ -45,10 +55,16 @@ void pr_processes_init(pr_processes *p, tb_key root);
 // else *made NULL. The entry is changed in place, as places' children are. made may be NULL. 0, or the code
 int pr_add(pl *l, tb_table *table, tb_key root, const char *const *path, size_t n, tb_key id,
 	ch_header header, pl_changed *changed, nd_entry **made);
+// pr_add on any part: id at path in root's trie there, by the same rules
+int pr_add_in(pl *l, tb_table *table, const char *part, tb_key root, const char *const *path,
+	size_t n, tb_key id, ch_header header, pl_changed *changed, nd_entry **made);
 
 // the process at path under root taken out, and with it every level left empty: one patch, at the
 // highest of them. none there: PL_NOTHING_THERE
 int pr_remove(pl *l, tb_table *table, tb_key root, const char *const *path, size_t n,
 	ch_header header, pl_changed *changed);
+// pr_remove on any part: the leaf at path in root's trie there, by the same rules
+int pr_remove_in(pl *l, tb_table *table, const char *part, tb_key root, const char *const *path,
+	size_t n, ch_header header, pl_changed *changed);
 
 #endif

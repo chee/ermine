@@ -10,12 +10,13 @@
 //   pr_halt(s);  /* before sc_free */  ...  pr_free(s);     // after tb_free and pl_free
 //
 // pr_start refused, nothing made: "taken" (a process at, above or under the path) or a name code.
-// else: its node's id proc:<uuid>, a scope [["process", at], [PL_NODE, id]] (sn_give), the row, attributes (ermine.process.args,
-// .cwd, .pin, status pending), then options.body. pr_stop: options.stop, row out, scope torn down;
-// twice: nothing.
+// else: its node's id proc:<uuid>, a scope [["process", at], [PL_NODE, id]] (sn_give), the row,
+// attributes (options.attributes, then ermine.process.args, .cwd, .pin, status pending: processes'
+// own win), then options.body. pr_stop: options.stop, row out, scope torn down; twice: nothing.
 // writes: all with the process's scope open.
 // memory: a process lives until pr_free (which stops one never stopped). at, args, cwd, root are
-// copied; the pin is the attributes'; the places must outlive it. out of memory aborts.
+// copied; the pin and options.attributes' values are the attributes' (op_ref); the places must
+// outlive it. out of memory aborts.
 #ifndef PROCESSES_START_H
 #define PROCESSES_START_H
 
@@ -53,7 +54,8 @@ typedef struct {
 // a start's own: args (has_args 0: none written); cwd, steps from the root as at's (has_cwd 0: the
 // folder at is in); pin, written as ermine.process.pin (NULL: none; borrowed). body, called once
 // its node and row are there, and stop, called at its stop, each with the scope open and data
-// (NULL: nothing)
+// (NULL: nothing). attributes: a map (NULL: none; borrowed), its pairs written first, in the same
+// entry: a name processes' own write too is theirs
 typedef struct {
 	const char *const *args;
 	size_t nargs;
@@ -65,6 +67,7 @@ typedef struct {
 	void (*body)(pr_process *p, void *data);
 	void (*stop)(pr_process *p, void *data);
 	void *data;
+	const op_value *attributes;
 } pr_options;
 
 typedef struct {

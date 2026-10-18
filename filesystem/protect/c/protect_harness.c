@@ -165,7 +165,7 @@ static void ask(const op_value *r, FILE *out) {
 		op_free(log_[i].path);
 	}
 	fputs("]}", out);
-	pr_free(policy);
+	pr_policy_free(policy);
 }
 
 void hh_answer(const op_value *r, FILE *out) {

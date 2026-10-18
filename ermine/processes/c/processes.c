@@ -31,7 +31,7 @@ static int step(void *ctx, const pl_here *here, const char *name, pl *l, tb_key 
 	const pr_processes *p = ctx;
 	if (!here->has_path) return PL_NONE;
 	op_key *keys = keys_of(here->path, here->length, name);
-	const op_value *v = pl_read(l, tb_string(PR_PART), p->root, keys, here->length + 1);
+	const op_value *v = pl_read(l, tb_string(p->part), p->root, keys, here->length + 1);
 	free(keys);
 	if (v != NULL && v->type == OP_STR) {
 		*out = tb_string(v->str);
@@ -49,7 +49,7 @@ static void names(void *ctx, const pl_here *here, pl *l, pl_namelist *out) {
 	}
 	op_key *keys = keys_of(here->path, here->length, NULL);
 	size_t had = out->n;
-	pl_keys(l, tb_string(PR_PART), p->root, keys, here->length, 0, out);
+	pl_keys(l, tb_string(p->part), p->root, keys, here->length, 0, out);
 	free(keys);
 	if (out->n == had) out->none = 1;
 }
@@ -59,15 +59,18 @@ static int level(void *ctx, const pl_here *here, const char *name, pl *l) {
 	const pr_processes *p = ctx;
 	if (!here->has_path) return 0;
 	op_key *keys = keys_of(here->path, here->length, name);
-	const op_value *v = pl_read(l, tb_string(PR_PART), p->root, keys, here->length + 1);
+	const op_value *v = pl_read(l, tb_string(p->part), p->root, keys, here->length + 1);
 	free(keys);
 	return is_map(v);
 }
 
-void pr_processes_init(pr_processes *p, tb_key root) {
+void pr_trie_init(pr_processes *p, const char *part, tb_key root, const char *from) {
 	p->root = root;
-	p->contributor = (pl_contributor){"process", step, names, level, p};
+	p->part = part;
+	p->contributor = (pl_contributor){from, step, names, level, p};
 }
+
+void pr_processes_init(pr_processes *p, tb_key root) { pr_trie_init(p, PR_PART, root, "process"); }
 
 // writes --------------------------------------------------------------------------------------
 
@@ -75,13 +78,18 @@ static int bad(const char *name) { return !pl_is_name(name); }
 
 int pr_add(pl *l, tb_table *table, tb_key root, const char *const *path, size_t n, tb_key id,
 	ch_header header, pl_changed *changed, nd_entry **made) {
+	return pr_add_in(l, table, PR_PART, root, path, n, id, header, changed, made);
+}
+
+int pr_add_in(pl *l, tb_table *table, const char *part, tb_key root, const char *const *path,
+	size_t n, tb_key id, ch_header header, pl_changed *changed, nd_entry **made) {
 	*changed = (pl_changed){0};
 	if (made != NULL) *made = NULL;
 	if (n == 0) return PL_NOT_A_NAME;
 	for (size_t i = 0; i < n; i++) {
 		if (bad(path[i])) return PL_NOT_A_NAME;
 	}
-	nd_entry *there = tb_get(table, tb_string(PR_PART), root);
+	nd_entry *there = tb_get(table, tb_string(part), root);
 	op_value *leaf = op_str(id.string);
 	if (there == NULL) {
 		op_value *trie = leaf;
@@ -93,7 +101,7 @@ int pr_add(pl *l, tb_table *table, tb_key root, const char *const *path, size_t 
 		nd_entry *node = nd_make_entry(trie, &header, &(nd_entry_options){.in_place = 1});
 		op_free(trie);
 		pl_own(l, node);
-		tb_add(table, tb_string(PR_PART), root, node);
+		tb_add(table, tb_string(part), root, node);
 		if (made != NULL) *made = node;
 		return 0;
 	}
@@ -109,7 +117,7 @@ int pr_add(pl *l, tb_table *table, tb_key root, const char *const *path, size_t 
 		op_free(leaf);
 		return PL_ALREADY_THERE;
 	}
-	pl_upsert(l, tb_string(PR_PART), root, path, n, leaf, header, changed, NULL);
+	pl_upsert(l, tb_string(part), root, path, n, leaf, header, changed, NULL);
 	op_free(leaf);
 	return 0;
 }
@@ -132,8 +140,13 @@ static void block_free(void *b) {
 
 int pr_remove(pl *l, tb_table *table, tb_key root, const char *const *path, size_t n,
 	ch_header header, pl_changed *changed) {
+	return pr_remove_in(l, table, PR_PART, root, path, n, header, changed);
+}
+
+int pr_remove_in(pl *l, tb_table *table, const char *part, tb_key root, const char *const *path,
+	size_t n, ch_header header, pl_changed *changed) {
 	*changed = (pl_changed){0};
-	nd_entry *entry = tb_get(table, tb_string(PR_PART), root);
+	nd_entry *entry = tb_get(table, tb_string(part), root);
 	const op_value **levels = xalloc((n + 1) * sizeof *levels);
 	const op_value *v = entry != NULL ? entry->value : NULL;
 	for (size_t i = 0; i < n; i++) {
