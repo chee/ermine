@@ -1,5 +1,5 @@
 // The C run on the line protocol (conformance/c/harness.h): requests and answers as
-// extensions/sync/typescript/run_harness.ts has them. State lasts for the process: the commits made by
+// extensions/together/typescript/run_harness.ts has them. State lasts for the process: the commits made by
 // label, each sealed by its seed's signer, and the runs packed by label
 #include "run.h"
 

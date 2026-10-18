@@ -225,7 +225,7 @@ static bool after(const state *s, eid a, eid b) {
 	if (b.c == START) return true;
 	const hy_kept *x = s->commits[a.c], *y = s->commits[b.c];
 	if (x->lamport != y->lamport) return x->lamport > y->lamport;
-	return memcmp(x->name, y->name, 32) > 0;
+	return memcmp(x->name, y->name, CM_NAME) > 0;
 }
 
 static eid next_id(state *s) { return (eid){s->me, s->count++}; }
@@ -709,7 +709,7 @@ static void apply(state *s, const hy_kept *k) {
 	}
 	size_t words = (i >> 5) + 1;
 	uint32_t *version = ar_zero(&s->ar, words * sizeof *version);
-	const uint8_t(*up)[32];
+	const uint8_t(*up)[CM_NAME];
 	size_t un = hy_follows(k, &up);
 	for (size_t p = 0; p < un; p++) {
 		size_t j;
@@ -766,7 +766,7 @@ static state *walker(const hy_history *h, const hy_kept *first, rp_tables *start
 static int causal(const void *x, const void *y) {
 	const hy_kept *a = *(const hy_kept *const *)x, *b = *(const hy_kept *const *)y;
 	if (a->lamport != b->lamport) return a->lamport < b->lamport ? -1 : 1;
-	return memcmp(a->name, b->name, 32);
+	return memcmp(a->name, b->name, CM_NAME);
 }
 
 // the commits heads follow from, since the start, not applied yet, in causal order; NULL: one of them
@@ -783,7 +783,7 @@ static const hy_kept **missing(const state *s, const hy_kept *const *heads, size
 		const hy_kept *k = stack[--ns];
 		size_t j;
 		if (index_of(s, k, &j) || k == s->first || index_of(&seen, k, &j)) continue;
-		const uint8_t(*up)[32];
+		const uint8_t(*up)[CM_NAME];
 		size_t un = hy_follows(k, &up);
 		// below the start or beside it: its lamport no higher, or a root
 		if (s->first != NULL && (k->lamport <= s->first->lamport || un == 0)) {

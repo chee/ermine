@@ -157,6 +157,8 @@ int api_open(api *a, const char *at, const op_value *value, api_node *out);
 int api_create(api *a, const char *folder, const op_value *value, api_node *out);
 // its value at path, tracked; *out NULL: nothing there
 int api_read(api *a, api_target x, const op_key *path, size_t n, const op_value **out);
+// api_read, untracked (a write there reruns nothing); a pending memo: *out NULL, 0
+int api_peep(api *a, api_target x, const op_key *path, size_t n, const op_value **out);
 
 typedef struct {
 	op_value *value;

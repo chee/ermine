@@ -72,6 +72,11 @@
 // ending any other way keeps both. a computer torn down takes what is old and set aside with
 // it. before each act, what its last act made goes, and the cleanups made in it run.
 //
+// what a run read stays tracked till a run is done: the reference's rules
+// (typescript/scheduler.ts), the same here. links a run does not read again are old. a run done
+// (its latest; an awaited one as it lands done) lets the old ones go; one ending any other way
+// holds them too (a mark of one is a retry, no loop), no repeats.
+//
 // memory: values a run gives (its result, a promise's value) are the scheduler's until it lets
 // go of them with options.drop (replaced as last, equal, failed, torn down, or at sc_free).
 // set and act are lent them for the call. scopes and computers are the scheduler's until
@@ -216,8 +221,8 @@ sc_listener *sc_on_effect(sc_scheduler *s, sc_effect_fn f, void *data);
 // a promise settled: its result waits for the next pulse
 typedef void (*sc_settle_fn)(void *data);
 sc_listener *sc_on_settle(sc_scheduler *s, sc_settle_fn f, void *data);
-// a key nobody tracks any more: at once when its last tracker's run did not track it again or it
-// was torn down (a sweep now and then catches any other)
+// a key nobody tracks any more: at once when its last tracker's run that ended done did not track
+// it again, or it was torn down (a sweep now and then catches any other)
 typedef void (*sc_tracking_end_fn)(const void *key, void *data);
 sc_listener *sc_on_tracking_end(sc_scheduler *s, sc_tracking_end_fn f, void *data);
 void sc_remove_listener(sc_listener *l);
@@ -256,6 +261,13 @@ char *sc_teardown(sc_scope *o);
 // run open). false: not old (made or
 // claimed in this run already, or no run of its owner since), gone, or a plain scope
 bool sc_claim(sc_computer *c);
+// sc_claim, and c takes def whole (its key not read) and that kind (effect: an effect, else a
+// compute; a compute made again as an effect, or the reverse). a new kind: its last result is let
+// go (its next is set or acted on, equal or not); become an effect, it is the writer of nothing;
+// become a compute, what its last act made is old at its next run, and the cleanups made in that
+// act are set aside with its own then. an act queued is dropped. false as sc_claim, and nothing
+// taken
+bool sc_claim_as(sc_computer *c, bool effect, sc_def def);
 
 // f once, untracked, with o open, the run open the same: a setup, a host's write, a call.
 // SC_DISPOSED (and f not called) when o is gone, else 0

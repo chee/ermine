@@ -282,6 +282,9 @@ void pl_set_free(pl_set *set);
 // no one: what a cache works out outside any run. inside another record, apart from it. fresh (or
 // NULL): the spots f read that were not this places' before, so nothing else tracks or keeps them
 void pl_record(pl *p, void (*f)(void *ctx), void *ctx, pl_set *reads, pl_set *fresh);
+// f(ctx), with every read it makes untracked: no spot made, nothing told or recorded (a contributor's
+// pl_track too), the values only. nothing a write there marks reruns it
+void pl_peep(pl *p, void (*f)(void *ctx), void *ctx);
 // a key of a contributor's own: told to the scheduler (the status as of any read), or while recording,
 // put into the set
 void pl_track(pl *p, const void *key);

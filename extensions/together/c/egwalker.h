@@ -1,4 +1,4 @@
-// The merge rule "eg-walker" (extensions/sync/typescript/egwalker.ts, its header the exact rules), in
+// The merge rule "eg-walker" (extensions/together/typescript/egwalker.ts, its header the exact rules), in
 // C, as its keeping walker (walker.ts): the replay's state kept between merges for one node's history
 // (every write, element and removal made, with its id; which commits are in, each one's version), and
 // a merge asked for later applies only the commits it does not have yet, then reads the heads'

@@ -719,6 +719,13 @@ static res call(api *a, env *e, const op_value *c) {
 		code = api_read(a, t[0], keys, n, &v);
 		free(keys);
 		r = code ? bad(a, code) : ok(v ? op_ref((op_value *)v) : NULL);
+	} else if (strcmp(fn, "peep") == 0) {
+		size_t n;
+		op_key *keys = keys_of(nraw > 1 ? args[1] : NULL, &n);
+		const op_value *v;
+		code = api_peep(a, t[0], keys, n, &v);
+		free(keys);
+		r = code ? bad(a, code) : ok(v ? op_ref((op_value *)v) : NULL);
 	} else if (strcmp(fn, "entries") == 0) {
 		api_items items;
 		code = api_entries(a, t[0], &items);

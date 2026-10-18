@@ -1,5 +1,5 @@
 // A presence channel (extensions/presence/c/channel.h) over a device's ephemeral messages
-// (extensions/sync/typescript/channel.ts), in C: the connection the device already has. Its name is
+// (extensions/together/typescript/channel.ts), in C: the connection the device already has. Its name is
 // the device's key as lowercase hex, which is how a receiver names the sender's rows. Ephemeral: a
 // send no peer hears is lost, as any would be
 #ifndef SC_CHANNEL_H

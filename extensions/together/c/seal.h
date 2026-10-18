@@ -1,4 +1,4 @@
-// A commit signed by the device that made it, and the id it is stored under (extensions/sync/
+// A commit signed by the device that made it, and the id it is stored under (extensions/together/
 // typescript/seal.ts), in C. The sealed commit is the canonical map {commit, signature}: the
 // commit's bytes, and a signature: a varsig header, then the raw signature (Ed25519: 8 bytes of header,
 // then 64); the signer's key, a multikey, is in the commit. What is signed is "ermine/v0/commit", the
@@ -74,7 +74,7 @@ void sl_seeded_init(sl_seeded *s, const uint8_t seed[32]);
 // a name and no commit, the caller vouches that its signer is this one (a device sealing its own)
 typedef struct {
 	const cm_commit *commit;
-	uint8_t name[32];
+	uint8_t name[CM_NAME];
 } sl_made;
 
 // how many bytes of a signature are its varsig header (0x34 0x01, an algorithm of those varsig
@@ -95,7 +95,7 @@ typedef struct {
 	cm_commit commit;
 	uint8_t *bytes;
 	size_t length;
-	uint8_t name[32], stored[32];
+	uint8_t name[CM_NAME], stored[32];
 	// on SL_SIGNATURE: why, a static string
 	const char *reason;
 } sl_unsealed;

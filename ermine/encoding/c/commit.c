@@ -21,11 +21,17 @@ const char *cm_code_name(cm_code code) {
 	return "";
 }
 
-void cm_name(const uint8_t *bytes, size_t length, uint8_t name[32]) {
+void cm_digest(const uint8_t *bytes, size_t length, uint8_t out[32]) {
 	blake3_hasher h;
 	blake3_hasher_init(&h);
 	blake3_hasher_update(&h, bytes, length);
-	blake3_hasher_finalize(&h, name, 32);
+	blake3_hasher_finalize(&h, out, 32);
+}
+
+void cm_name(const uint8_t *bytes, size_t length, uint8_t name[CM_NAME]) {
+	uint8_t digest[32];
+	cm_digest(bytes, length, digest);
+	cm_name_join(CM_BLAKE3, digest, 32, name);
 }
 
 int cm_compare(const uint8_t *a, size_t a_length, const uint8_t *b, size_t b_length) {
@@ -58,7 +64,6 @@ static bool is_key(const Json *k) { return jsonIsString(k) || small(k); }
 static bool is_range(const Json *r) {
 	return is_array(r) && r->array.count == 2 && whole(r->array.items[0]) && whole(r->array.items[1]);
 }
-static bool sized(const Json *b, size_t n) { return b != NULL && b->type == JSON_BYTES && b->bytes.length == n; }
 
 int cm_key_split(const uint8_t *b, size_t length, uint64_t *code, const uint8_t **key, size_t *key_length) {
 	size_t i = 0;
@@ -79,6 +84,43 @@ size_t cm_key_join(uint64_t code, const uint8_t *key, size_t key_length, uint8_t
 	out[n++] = (uint8_t)code;
 	memcpy(out + n, key, key_length);
 	return n + key_length;
+}
+
+// a varint in its shortest form, 1 to 7 bytes, at b: 0 when it is not one
+static size_t varint(const uint8_t *b, size_t length, uint64_t *n) {
+	*n = 0;
+	for (size_t k = 0; k < 7 && k < length; k++) {
+		*n |= (uint64_t)(b[k] & 0x7f) << (7 * k);
+		if (!(b[k] & 0x80)) return k > 0 && b[k] == 0 ? 0 : k + 1;
+	}
+	return 0;
+}
+// the hashes known: BLAKE3, and the length of its digest
+static int hash_known(uint64_t code, size_t *digest_length) {
+	if (code != CM_BLAKE3) return 0;
+	*digest_length = 32;
+	return 1;
+}
+int cm_name_split(const uint8_t *b, size_t length, uint64_t *code, const uint8_t **digest, size_t *digest_length) {
+	uint64_t c = 0, n = 0;
+	size_t known, at = varint(b, length, &c), k = at ? varint(b + at, length - at, &n) : 0;
+	if (at == 0 || k == 0 || !hash_known(c, &known) || n != known || length != at + k + known) return 0;
+	if (code != NULL) *code = c;
+	if (digest != NULL) *digest = b + at + k;
+	if (digest_length != NULL) *digest_length = known;
+	return 1;
+}
+size_t cm_name_join(uint64_t code, const uint8_t *digest, size_t digest_length, uint8_t *out) {
+	size_t n = 0;
+	for (; code >= 0x80; code >>= 7) out[n++] = (uint8_t)(code & 0x7f) | 0x80;
+	out[n++] = (uint8_t)code;
+	out[n++] = (uint8_t)digest_length;
+	memcpy(out + n, digest, digest_length);
+	return n + digest_length;
+}
+// whether the bytes are a name
+static bool is_name(const Json *b) {
+	return b != NULL && b->type == JSON_BYTES && cm_name_split(b->bytes.data, b->bytes.length, NULL, NULL, NULL);
 }
 
 static bool only(const Json *x, const char *const *keys) {
@@ -128,17 +170,17 @@ static bool rule(int k, const Json *v, const Json *c) {
 	case PARENTS:
 		if (!is_array(v)) return false;
 		for (int i = 0; i < v->array.count; i++) {
-			if (!sized(v->array.items[i], 32)) return false;
-			if (i > 0 && memcmp(v->array.items[i - 1]->bytes.data, v->array.items[i]->bytes.data, 32) >= 0)
+			if (!is_name(v->array.items[i])) return false;
+			if (i > 0 && memcmp(v->array.items[i - 1]->bytes.data, v->array.items[i]->bytes.data, CM_NAME) >= 0)
 				return false;
 		}
 		return true;
 	case BASE: {
 		const Json *parents = jsonGet(c, "parents");
-		if (!sized(v, 32) || !is_array(parents) || parents->array.count < 2) return false;
+		if (!is_name(v) || !is_array(parents) || parents->array.count < 2) return false;
 		for (int i = 0; i < parents->array.count; i++) {
 			const Json *p = parents->array.items[i];
-			if (p->type == JSON_BYTES && p->bytes.length == 32 && memcmp(p->bytes.data, v->bytes.data, 32) == 0)
+			if (p->type == JSON_BYTES && p->bytes.length == CM_NAME && memcmp(p->bytes.data, v->bytes.data, CM_NAME) == 0)
 				return true;
 		}
 		return false;
@@ -192,7 +234,8 @@ static void name_field(char **field, const char *name, size_t length) {
 	if (field != NULL) *field = copyStringOfLength(name, length);
 }
 
-cm_code cm_check(const Json *c, char **field) {
+// strict: a key no commit has is refused (encode); decode leaves it out, a later device's
+static cm_code check(const Json *c, char **field, bool strict) {
 	if (field != NULL) *field = NULL;
 	if (!is_fields(c)) return CM_NOT_A_COMMIT;
 	// of several keys not listed, the first in canonical order
@@ -203,7 +246,7 @@ cm_code cm_check(const Json *c, char **field) {
 		while (k < FIELDS && strcmp(NAMES[k], m->key) != 0) k++;
 		if (k == FIELDS && (stray == NULL || canonical(m, stray) < 0)) stray = m;
 	}
-	if (stray != NULL) {
+	if (strict && stray != NULL) {
 		name_field(field, stray->key, stray->keyLength);
 		return CM_NOT_A_COMMIT;
 	}
@@ -221,6 +264,14 @@ cm_code cm_check(const Json *c, char **field) {
 		}
 	}
 	return CM_OK;
+}
+
+cm_code cm_check(const Json *c, char **field) {
+	return check(c, field, true);
+}
+
+cm_code cm_check_decoded(const Json *c, char **field) {
+	return check(c, field, false);
 }
 
 // --- the bytes ---
@@ -325,7 +376,7 @@ static void read_target(arena *a, const Json *x, op_target *t) {
 // a checked commit in its Json form (what cm_check holds to be a commit), made into a cm_commit
 static cm_code cm_of_json(const Json *c, cm_commit *out, char **field) {
 	*out = (cm_commit){0};
-	cm_code code = cm_check(c, field);
+	cm_code code = check(c, field, false);
 	if (code != CM_OK) return code;
 	arena *a = allocate(sizeof *a);
 	out->own = a;
@@ -366,11 +417,11 @@ static cm_code cm_of_json(const Json *c, cm_commit *out, char **field) {
 	out->signer_length = signer->bytes.length;
 	out->nonce = (int64_t)jsonGet(c, "nonce")->number;
 	const Json *parents = jsonGet(c, "parents"), *base = jsonGet(c, "base"), *patches = jsonGet(c, "patches");
-	uint8_t(*ps)[32] = grab(a, (size_t)parents->array.count * 32);
-	for (int i = 0; i < parents->array.count; i++) memcpy(ps[i], parents->array.items[i]->bytes.data, 32);
-	out->parents = (const uint8_t(*)[32])ps;
+	uint8_t(*ps)[CM_NAME] = grab(a, (size_t)parents->array.count * CM_NAME);
+	for (int i = 0; i < parents->array.count; i++) memcpy(ps[i], parents->array.items[i]->bytes.data, CM_NAME);
+	out->parents = (const uint8_t(*)[CM_NAME])ps;
 	out->parents_length = (size_t)parents->array.count;
-	if (base != NULL) out->has_base = 1, memcpy(out->base, base->bytes.data, 32);
+	if (base != NULL) out->has_base = 1, memcpy(out->base, base->bytes.data, CM_NAME);
 	const Json *merge = jsonGet(c, "merge");
 	if (merge != NULL) out->merge = dup(a, merge);
 	out->lamport = (int64_t)jsonGet(c, "lamport")->number;
@@ -468,8 +519,8 @@ Json *cm_to_json(const cm_commit *c) {
 	jsonAdd(j, "nonce", jsonNumber((double)c->nonce));
 	Json *parents = jsonArray();
 	jsonAdd(j, "parents", parents);
-	for (size_t i = 0; i < c->parents_length; i++) jsonPush(parents, jsonBytes(c->parents[i], 32));
-	if (c->has_base) jsonAdd(j, "base", jsonBytes(c->base, 32));
+	for (size_t i = 0; i < c->parents_length; i++) jsonPush(parents, jsonBytes(c->parents[i], CM_NAME));
+	if (c->has_base) jsonAdd(j, "base", jsonBytes(c->base, CM_NAME));
 	if (c->merge != NULL) jsonAdd(j, "merge", jsonString(c->merge));
 	jsonAdd(j, "lamport", jsonNumber((double)c->lamport));
 	Json *patches = jsonArray();

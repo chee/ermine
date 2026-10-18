@@ -562,8 +562,11 @@ static val evaluate(const op_value *e, const ctx *c) {
 			EVAL(v, arg->items[i]);
 			double x = num(v.j);
 			release(v);
+			// numbers only: null is 0, anything else an error; mod by 0 an error
+			if (isnan(x)) return thrown(copyString("not a number"));
 			if (sum) n += x;
 			else if (i == 0) first = x;
+			else if (x == 0) return thrown(copyString("mod by 0"));
 			else n = fmod(first, x);
 		}
 		return ok(op_num(n));
@@ -611,9 +614,7 @@ static val evaluate(const op_value *e, const ctx *c) {
 			release(v);
 			return thrown(copyString("write to a non-string"));
 		}
-		keep(k, v.j);
-		const void *key = entry_of(k)->key;
-		free(k);
+		// the writer first: one not there writes nothing
 		const char *said = text(a2);
 		sc_run *writer = NULL;
 		if (a2 == NULL) writer = writer_of(c);
@@ -623,10 +624,14 @@ static val evaluate(const op_value *e, const ctx *c) {
 			sc_scope *o = scope_named(said);
 			if (o == NULL) {
 				release(v);
+				free(k);
 				return thrown(formatString("no scope %s", said));
 			}
 			writer = sc_latest(o);
 		}
+		keep(k, v.j);
+		const void *key = entry_of(k)->key;
+		free(k);
 		sc_mark(sch, &key, 1, writer);
 		char *out = sc_escaped(sch);
 		if (out) {
@@ -746,6 +751,8 @@ typedef struct prog {
 	const op_value *set;
 	const char *to;
 	sc_computer *self;
+	// made as an effect, or claimed as one
+	bool effect;
 } prog;
 static prog **progs;
 static size_t nprogs, capprogs;
@@ -892,6 +899,7 @@ static op_value *make_computer(const op_value *r, bool effect) {
 	p->f = op_get(r, "f");
 	p->act = op_get(r, "act");
 	p->set = op_get(r, "set");
+	p->effect = effect;
 	const char *to = text(op_get(r, "to"));
 	p->to = to ? entry_of(to)->key : NULL;
 	const char *eq = text(op_get(r, "equal"));
@@ -941,7 +949,24 @@ static val made_in(const char *form, const op_value *a0, const op_value *a1, con
 	if (old != NULL) {
 		old->f = a1;
 		old->act = effect ? a2 : NULL;
-		sc_claim(old->self);
+		if (old->effect == effect) {
+			sc_claim(old->self);
+		} else {
+			// made again as the other kind: it takes that kind too
+			sc_def def = {.f = program_f, .equal = object_is, .data = old};
+			if (effect) {
+				def.effect = program_effect;
+				const op_value *early = is(arg, OP_LIST) && arg->count > 3 ? arg->items[3] : NULL;
+				def.early = is(early, OP_BOOL) && early->bool_;
+			} else {
+				const char *to = text(a2);
+				old->to = to ? entry_of(to)->key : NULL;
+				old->set = NULL;
+				def.set = program_set;
+			}
+			old->effect = effect;
+			sc_claim_as(old->self, effect, def);
+		}
 		char *out = sc_escaped(sch);
 		return out ? thrown(out) : ok(op_null());
 	}
@@ -950,6 +975,7 @@ static val made_in(const char *form, const op_value *a0, const op_value *a1, con
 	prog *p = allocate(sizeof *p);
 	PUSH(progs, nprogs, capprogs, p);
 	p->f = a1;
+	p->effect = effect;
 	sc_def def = {.f = program_f, .equal = object_is, .data = p};
 	if (effect) {
 		p->act = a2;
@@ -1034,6 +1060,11 @@ static op_value *answer(const op_value *r) {
 		if (why) return answer_error(copyString(why));
 		if (in.v.k == V_THROW) return answer_error(in.v.err);
 		if (in.v.k == V_PENDS) return answer_error(copyString("pending"));
+		// PENDING or a promise: no value
+		if (in.v.k == V_PENDING || in.v.k == V_PROMISE) {
+			release(in.v);
+			return op_map();
+		}
 		op_value *out = op_map();
 		op_set(out, "value", in.v.j ? in.v.j : op_null());
 		return out;

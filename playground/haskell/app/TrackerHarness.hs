@@ -13,6 +13,9 @@ step :: Tracker -> J -> (J, Tracker)
 step t req = case getStr "op" req of
   Just "begin" -> let f = name "from" in if inRun f t then failWith "begin in a run: end it first" else done (begin f t)
   Just "end" -> let f = name "from" in length f `seq` done (end f t)
+  Just "leave" -> let f = name "from" in length f `seq` done (leave f t)
+  Just "trim" -> let f = name "from" in length f `seq` done (trim f t)
+  Just "dedupe" -> let f = name "from" in length f `seq` done (dedupe f t)
   Just "track" -> let f = name "from"; to = name "to" in length f `seq` length to `seq` done (track f to t)
   Just "add" -> let f = name "from"; to = name "to" in length f `seq` length to `seq` if inRun f t then failWith "add in a run: use track" else done (add f to t)
   Just "untrack" -> case getField "to" req of

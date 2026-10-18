@@ -24,6 +24,9 @@ typedef struct rec rec;
 struct rec {
 	state state;
 	hy_refusal refusal;
+	// refused for a parent: the parent refused, its name
+	bool has_cause;
+	uint8_t cause[CM_NAME];
 	hy_kept kept;
 	// how many taken commits go on this one
 	size_t children;
@@ -67,7 +70,7 @@ struct hy_history {
 	size_t listeners_length;
 	// hy_limit's; how many recs wait (on parents or on the check)
 	size_t most, waiting;
-	void (*dropped)(void *context, const uint8_t name[32]);
+	void (*dropped)(void *context, const uint8_t name[CM_NAME]);
 	void *dropped_context;
 };
 
@@ -83,7 +86,7 @@ hy_history *hy_create(hy_check check, void *context) {
 	return h;
 }
 
-void hy_limit(hy_history *h, size_t most, void (*dropped)(void *context, const uint8_t name[32]), void *context) {
+void hy_limit(hy_history *h, size_t most, void (*dropped)(void *context, const uint8_t name[CM_NAME]), void *context) {
 	h->most = most;
 	h->dropped = dropped;
 	h->dropped_context = context;
@@ -108,19 +111,19 @@ void hy_free(hy_history *h) {
 	free(h);
 }
 
-static size_t hash_of(const uint8_t name[32]) {
-	return ky_hash(name);
+static size_t hash_of(const uint8_t name[CM_NAME]) {
+	return ky_hash(name, CM_NAME);
 }
 
-static rec *find(const hy_history *h, const uint8_t name[32]) {
+static rec *find(const hy_history *h, const uint8_t name[CM_NAME]) {
 	size_t mask = h->slots - 1;
 	for (size_t s = hash_of(name) & mask; h->table[s] != NULL; s = (s + 1) & mask)
-		if (memcmp(h->table[s]->kept.name, name, 32) == 0) return h->table[s];
+		if (memcmp(h->table[s]->kept.name, name, CM_NAME) == 0) return h->table[s];
 	return NULL;
 }
 
 // the rec of a name, made when there is none
-static rec *get(hy_history *h, const uint8_t name[32]) {
+static rec *get(hy_history *h, const uint8_t name[CM_NAME]) {
 	rec *r = find(h, name);
 	if (r != NULL) return r;
 	if (2 * (h->count + 1) > h->slots) {
@@ -137,7 +140,7 @@ static rec *get(hy_history *h, const uint8_t name[32]) {
 		free(old);
 	}
 	r = allocate(sizeof *r);
-	memcpy(r->kept.name, name, 32);
+	memcpy(r->kept.name, name, CM_NAME);
 	size_t s = hash_of(name) & (h->slots - 1);
 	while (h->table[s] != NULL) s = (s + 1) & (h->slots - 1);
 	h->table[s] = r;
@@ -194,17 +197,17 @@ static void let_go(hy_history *h, const rec *keep) {
 		}
 		if (p->state == S_NONE && p->waiters_length == 0 && p != keep) unhash(h, p);
 	}
-	uint8_t name[32];
-	memcpy(name, r->kept.name, 32);
+	uint8_t name[CM_NAME];
+	memcpy(name, r->kept.name, CM_NAME);
 	become(h, r, S_NONE);
 	r->on_length = 0;
 	if (r->waiters_length == 0) unhash(h, r);
 	else {
 		free(r->kept.bytes), free(r->kept.table), free((void *)r->kept.merge), free((void *)r->kept.parents);
-		uint8_t keep[32];
-		memcpy(keep, r->kept.name, 32);
+		uint8_t keep[CM_NAME];
+		memcpy(keep, r->kept.name, CM_NAME);
 		r->kept = (hy_kept){0};
-		memcpy(r->kept.name, keep, 32);
+		memcpy(r->kept.name, keep, CM_NAME);
 	}
 	if (h->dropped != NULL) h->dropped(h->dropped_context, name);
 }
@@ -237,9 +240,11 @@ static void become(hy_history *h, rec *r, state s) {
 
 // --- refusing ---
 
-static void mark(hy_history *h, rec *r, hy_refusal why) {
+static void mark(hy_history *h, rec *r, hy_refusal why, const uint8_t *cause) {
 	become(h, r, S_REFUSED);
 	r->refusal = why;
+	r->has_cause = cause != NULL;
+	if (cause != NULL) memcpy(r->cause, cause, CM_NAME);
 	push(&h->refusals, r);
 }
 
@@ -262,9 +267,9 @@ static void frame_push(frames *s, rec *r) {
 }
 
 // refused, and what waits on it never comes in: each in turn, and what waits on that, depth first
-static void refuse(hy_history *h, rec *first, hy_refusal why) {
+static void refuse(hy_history *h, rec *first, hy_refusal why, const uint8_t *cause) {
 	frames s = {0};
-	mark(h, first, why);
+	mark(h, first, why, cause);
 	frame_push(&s, first);
 	while (s.n > 0) {
 		frame *f = &s.p[s.n - 1];
@@ -276,7 +281,7 @@ static void refuse(hy_history *h, rec *first, hy_refusal why) {
 		rec *w = f->r->waiters[f->at++];
 		if (w->state != S_WAITING) continue;
 		w->on_length = 0;
-		mark(h, w, HY_PARENT);
+		mark(h, w, HY_PARENT, f->r->kept.name);
 		frame_push(&s, w);
 	}
 	free(s.p);
@@ -284,7 +289,7 @@ static void refuse(hy_history *h, rec *first, hy_refusal why) {
 
 // --- taking in ---
 
-static bool is_taken(const hy_history *h, const uint8_t name[32]) {
+static bool is_taken(const hy_history *h, const uint8_t name[CM_NAME]) {
 	rec *r = find(h, name);
 	return r != NULL && r->state == S_TAKEN;
 }
@@ -303,10 +308,10 @@ static bool take(hy_history *h, rec *r, const cm_commit *commit) {
 		int64_t l = find(h, r->kept.parents[i])->kept.lamport;
 		if (l > top) top = l;
 	}
-	if (r->kept.lamport != top + 1) return refuse(h, r, HY_LAMPORT), false;
+	if (r->kept.lamport != top + 1) return refuse(h, r, HY_LAMPORT, NULL), false;
 	hy_refusal why = h->check != NULL ? h->check(h->context, &r->kept, commit) : 0;
 	if (why == HY_WAIT) return hold(h, r), false;
-	if (why != 0) return refuse(h, r, why), false;
+	if (why != 0) return refuse(h, r, why, NULL), false;
 	become(h, r, S_TAKEN);
 	push(&h->taken, r);
 	for (size_t i = 0; i < r->kept.parents_length; i++) {
@@ -350,7 +355,7 @@ static void release(hy_history *h, rec *first) {
 		if (w->on_length > 0) continue;
 		cm_commit c;
 		if (cm_decode(w->kept.bytes, w->kept.length, &c, NULL) != CM_OK) {
-			mark(h, w, HY_SHAPE);
+			mark(h, w, HY_SHAPE, NULL);
 			continue;
 		}
 		bool ok = take(h, w, &c);
@@ -363,8 +368,8 @@ static void release(hy_history *h, rec *first) {
 
 hy_added hy_add(hy_history *h, const uint8_t *bytes, size_t length, const hy_made *made) {
 	hy_added a = {0};
-	uint8_t name[32];
-	if (made != NULL) memcpy(name, made->name, 32);
+	uint8_t name[CM_NAME];
+	if (made != NULL) memcpy(name, made->name, CM_NAME);
 	else cm_name(bytes, length, name);
 	rec *r = get(h, name);
 	if (r->state == S_TAKEN || r->state == S_WAITING) return a.kind = HY_PASSED, a;
@@ -374,7 +379,7 @@ hy_added hy_add(hy_history *h, const uint8_t *bytes, size_t length, const hy_mad
 	if (made != NULL) c = made->commit;
 	else {
 		if (cm_decode(bytes, length, &own, NULL) != CM_OK) {
-			mark(h, r, HY_SHAPE);
+			mark(h, r, HY_SHAPE, NULL);
 			trim(h);
 			return a.kind = HY_REFUSED, a.refusal = HY_SHAPE, a;
 		}
@@ -383,7 +388,7 @@ hy_added hy_add(hy_history *h, const uint8_t *bytes, size_t length, const hy_mad
 	for (size_t i = 0; i < c->parents_length; i++) {
 		rec *p = find(h, c->parents[i]);
 		if (p != NULL && p->state == S_REFUSED) {
-			refuse(h, r, HY_PARENT);
+			refuse(h, r, HY_PARENT, p->kept.name);
 			cm_free(&own);
 			trim(h);
 			return a.kind = HY_REFUSED, a.refusal = HY_PARENT, a;
@@ -394,13 +399,13 @@ hy_added hy_add(hy_history *h, const uint8_t *bytes, size_t length, const hy_mad
 	memcpy(k->bytes, bytes, length);
 	k->length = length;
 	k->table = copyString(c->table);
-	uint8_t(*parents)[32] = allocate(c->parents_length * 32 + 1);
-	if (c->parents_length) memcpy(parents, c->parents, c->parents_length * 32);
-	k->parents = (const uint8_t(*)[32])parents;
+	uint8_t(*parents)[CM_NAME] = allocate(c->parents_length * CM_NAME + 1);
+	if (c->parents_length) memcpy(parents, c->parents, c->parents_length * CM_NAME);
+	k->parents = (const uint8_t(*)[CM_NAME])parents;
 	k->parents_length = c->parents_length;
 	if (c->merge != NULL) k->merge = copyString(c->merge);
-	else if (c->has_base) k->has_base = 1, memcpy(k->base, c->base, 32);
-	else if (c->parents_length > 0) k->has_base = 1, memcpy(k->base, c->parents[0], 32);
+	else if (c->has_base) k->has_base = 1, memcpy(k->base, c->base, CM_NAME);
+	else if (c->parents_length > 0) k->has_base = 1, memcpy(k->base, c->parents[0], CM_NAME);
 	k->lamport = c->lamport;
 	size_t missing = 0;
 	for (size_t i = 0; i < c->parents_length; i++) missing += !is_taken(h, c->parents[i]);
@@ -417,11 +422,11 @@ hy_added hy_add(hy_history *h, const uint8_t *bytes, size_t length, const hy_mad
 		become(h, r, S_WAITING);
 		push(&h->waits, r);
 		a.kind = HY_WAITING;
-		a.waiting = allocate(missing * 32);
+		a.waiting = allocate(missing * CM_NAME);
 		a.waiting_length = missing;
 		for (size_t i = 0; i < missing; i++) {
 			rec *m = r->on[i];
-			memcpy(a.waiting[i], m->kept.name, 32);
+			memcpy(a.waiting[i], m->kept.name, CM_NAME);
 			if (m->waiters_length == m->waiters_capacity) {
 				m->waiters_capacity = m->waiters_capacity ? m->waiters_capacity * 2 : 4;
 				m->waiters = realloc(m->waiters, m->waiters_capacity * sizeof *m->waiters);
@@ -454,7 +459,7 @@ void hy_again(hy_history *h) {
 		if (r->state != S_WAITING || r->on_length != 0) continue;
 		cm_commit c;
 		if (cm_decode(r->kept.bytes, r->kept.length, &c, NULL) != CM_OK) {
-			mark(h, r, HY_SHAPE);
+			mark(h, r, HY_SHAPE, NULL);
 			continue;
 		}
 		bool ok = take(h, r, &c);
@@ -474,7 +479,7 @@ void hy_added_free(hy_added *a) {
 
 int hy_agreed(const hy_kept *a, const hy_kept *b) {
 	if (a->lamport != b->lamport) return a->lamport > b->lamport ? -1 : 1;
-	return cm_compare(b->name, 32, a->name, 32);
+	return cm_compare(b->name, CM_NAME, a->name, CM_NAME);
 }
 
 static int agreed(const void *x, const void *y) {
@@ -496,7 +501,7 @@ size_t hy_heads(const hy_history *h, const hy_kept ***out) {
 
 size_t hy_all(const hy_history *h, const hy_kept ***out) { return kept_of(&h->taken, out); }
 
-bool hy_forget(hy_history *h, const uint8_t name[32]) {
+bool hy_forget(hy_history *h, const uint8_t name[CM_NAME]) {
 	rec *r = find(h, name);
 	if (r == NULL || r->state != S_TAKEN || r->children > 0) return false;
 	unlist(&h->heads, r);
@@ -510,7 +515,7 @@ bool hy_forget(hy_history *h, const uint8_t name[32]) {
 	return true;
 }
 
-const hy_kept *hy_get(const hy_history *h, const uint8_t name[32]) {
+const hy_kept *hy_get(const hy_history *h, const uint8_t name[CM_NAME]) {
 	rec *r = find(h, name);
 	return r != NULL && r->state == S_TAKEN ? &r->kept : NULL;
 }
@@ -527,10 +532,10 @@ size_t hy_waiting(const hy_history *h, hy_waiting_row **out) {
 	for (size_t i = 0; i < h->waits.n; i++) {
 		const rec *r = h->waits.p[i];
 		if (r->state != S_WAITING) continue;
-		memcpy(rows[n].name, r->kept.name, 32);
-		rows[n].waiting = allocate(r->on_length * 32 + 1);
+		memcpy(rows[n].name, r->kept.name, CM_NAME);
+		rows[n].waiting = allocate(r->on_length * CM_NAME + 1);
 		rows[n].waiting_length = r->on_length;
-		for (size_t k = 0; k < r->on_length; k++) memcpy(rows[n].waiting[k], r->on[k]->kept.name, 32);
+		for (size_t k = 0; k < r->on_length; k++) memcpy(rows[n].waiting[k], r->on[k]->kept.name, CM_NAME);
 		n++;
 	}
 	*out = rows;
@@ -545,8 +550,10 @@ void hy_waiting_free(hy_waiting_row *rows, size_t count) {
 size_t hy_refused(const hy_history *h, hy_refused_row **out) {
 	hy_refused_row *rows = allocate((h->refusals.n + 1) * sizeof *rows);
 	for (size_t i = 0; i < h->refusals.n; i++) {
-		memcpy(rows[i].name, h->refusals.p[i]->kept.name, 32);
+		memcpy(rows[i].name, h->refusals.p[i]->kept.name, CM_NAME);
 		rows[i].refusal = h->refusals.p[i]->refusal;
+		rows[i].has_on = h->refusals.p[i]->has_cause;
+		if (rows[i].has_on) memcpy(rows[i].on, h->refusals.p[i]->cause, CM_NAME);
 	}
 	*out = rows;
 	return h->refusals.n;
@@ -556,9 +563,9 @@ uint64_t hy_serial(const hy_history *h) { return h->serial; }
 
 // --- since ---
 
-size_t hy_follows(const hy_kept *k, const uint8_t (**out)[32]) {
+size_t hy_follows(const hy_kept *k, const uint8_t (**out)[CM_NAME]) {
 	if (k->merge != NULL) return *out = k->parents, k->parents_length;
-	*out = (const uint8_t(*)[32])k->base;
+	*out = (const uint8_t(*)[CM_NAME])k->base;
 	return k->has_base ? 1 : 0;
 }
 
@@ -634,7 +641,7 @@ static bool under(const hy_history *h, const hy_kept *const *walked, size_t wn, 
 	bool ok = true;
 	for (size_t i = wn; i-- > 0;) {
 		uint64_t *got = reach + i * words;
-		const uint8_t(*up)[32];
+		const uint8_t(*up)[CM_NAME];
 		size_t n = hy_follows(walked[i], &up);
 		for (size_t p = 0; p < n; p++) {
 			const hy_kept *k = hy_get(h, up[p]);
@@ -692,7 +699,7 @@ void hy_since(const hy_history *h, const hy_kept *const *heads, size_t n, hy_kno
 		pset_set(&in, k, 1);
 		pset_set(&seen, k, 0);
 		kpush(&walked, k);
-		const uint8_t(*up)[32];
+		const uint8_t(*up)[CM_NAME];
 		size_t un = hy_follows(k, &up);
 		if (un == 0) root = true;
 		for (size_t p = 0; p < un; p++) {

@@ -33,13 +33,18 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 	uint8_t *out = NULL;
 	size_t length = 0;
 	if (cm_encode(&c, &out, &length, &field) != CM_OK) die("a commit read is refused when written");
-	if (length != size || memcmp(out, input, size) != 0) die("written again, other bytes");
+	// a key no commit has is left out when read: written again, other bytes, then
+	Json *in = cborDecode(input, size, NULL, NULL);
+	Json *back = cborDecode(out, length, NULL, NULL);
+	bool same = in && back && in->object.count == back->object.count;
+	jsonFree(in), jsonFree(back);
+	if (same && (length != size || memcmp(out, input, size) != 0)) die("written again, other bytes");
 	free(out);
 	Json *j = cm_to_json(&c);
 	if (j) {
 		if (cm_check(j, &field) != CM_OK) die("its Json form is refused by cm_check");
 		if (cm_encode_json(j, &out, &length, &field) != CM_OK) die("its Json form is refused when written");
-		if (length != size || memcmp(out, input, size) != 0) die("its Json form written, other bytes");
+		if (same && (length != size || memcmp(out, input, size) != 0)) die("its Json form written, other bytes");
 		free(out);
 		jsonFree(j);
 	}

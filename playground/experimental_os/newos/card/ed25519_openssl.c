@@ -1,4 +1,4 @@
-// ed25519_openssl.c: extensions/sync's Ed25519 (ed25519.h) with its signing and its curve arithmetic
+// ed25519_openssl.c: extensions/together's Ed25519 (ed25519.h) with its signing and its curve arithmetic
 // by libcrypto, which the OS links for the WebSocket's TLS anyway. The portable ed25519.c is small
 // and slow on purpose (about 3 ms a signature at -O1, as much a verify): a fresh card seals some 500
 // commits at boot, and an old one unseals and verifies every commit it holds, which was most of the
@@ -16,7 +16,7 @@
 #define ermEd25519Public ermEd25519PublicPortable
 #define ermEd25519Sign ermEd25519SignPortable
 #define ermEd25519Verify ermEd25519VerifyPortable
-#include "../../../../extensions/sync/c/ed25519/ed25519.c"
+#include "../../../../extensions/together/c/ed25519/ed25519.c"
 #undef ermEd25519Public
 #undef ermEd25519Sign
 #undef ermEd25519Verify

@@ -100,6 +100,9 @@ struct sc_scope {
 	sc_scope **loop;
 	size_t nloop;
 	bool looping;
+	// its cleanups going just before an act, and whether the last act skipped for one of their writes
+	// (a second time running is a loop, a first is not)
+	bool cleaning, cleaned;
 	act *acting;
 	// its cleanups set aside before its run, till a run is done; then queued, till the round's
 	// runs are (runQueuedCleanups)
@@ -400,12 +403,13 @@ static const void **keys_from(tg_link *l, size_t *n) {
 	return keys;
 }
 
-// a run's end: the tracker drops the links after its cursor, what the run did not track again;
-// the keys nobody tracks now are untracked
-static void end_run(sc_scheduler *s, tg_node *f) {
+// a run done, its latest: the tracker drops the links after its cursor, what the run did not
+// track again; the keys nobody tracks now are untracked
+static void trim_run(sc_scheduler *s, tg_node *f) {
 	size_t n;
 	const void **stale = keys_from(f->cursor != NULL ? f->cursor->next : f->reads, &n);
-	tg_end(f);
+	if (n == 0) return;
+	tg_trim(f);
 	for (size_t i = 0; i < n; i++) unread(s, stale[i]);
 	free(stale);
 }
@@ -828,8 +832,10 @@ static cs_cause *cause_of(sc_scheduler *s, sc_run *r) {
 	return r->cause;
 }
 
-// c due, by the run that made the change: true when it was not already
-static bool due(sc_scheduler *s, sc_scope *c, uint64_t t, sc_run *writer) {
+// c due, by the run that made the change: true when it was not already. old: by an old link (one
+// its latest run did not read, that run not done): a retry, its cause held, but no loop through c
+// (it does not flag it, nor cut the run known to loop that made it)
+static bool due(sc_scheduler *s, sc_scope *c, uint64_t t, sc_run *writer, bool old) {
 	if (c->state != ALIVE) return false;
 	// a run since run again: no loop through its changes
 	cs_cause *cause = writer && writer == writer->c->ran ? cause_of(s, writer) : NULL;
@@ -842,18 +848,28 @@ static bool due(sc_scheduler *s, sc_scope *c, uint64_t t, sc_run *writer) {
 		for (size_t i = 0; i < n; i++) loop[i] = of_cs(items[i]);
 		free(items);
 	}
+	// its own cleanups before an act write what it reads: one rerun, no loop (a second in a row is)
+	if (loop && writer && writer->c == c && c->cleaning && !c->cleaned) {
+		free(loop);
+		loop = NULL;
+	}
 	// a loop mark from a run known to loop: the loop is cut there, and the run ends looping
 	if (loop && writer->nloop > 0) {
-		writer->cut = true;
+		if (!old) writer->cut = true;
 		free(loop);
 		return false;
 	}
-	free(c->loop);
-	c->loop = loop;
-	c->nloop = loop ? n : 0;
+	bool on = loop != NULL;
+	if (!old) {
+		free(c->loop);
+		c->loop = loop;
+		c->nloop = loop ? n : 0;
+	} else {
+		free(loop);
+	}
 	// a looping computer is due again only by a change from outside the loop
 	if (c->looping) {
-		if (loop) return false;
+		if (on) return false;
 		c->looping = false;
 	}
 	if (od_has(s->order, &c->od)) return false;
@@ -893,9 +909,13 @@ uint64_t sc_mark(sc_scheduler *s, const void *const *keys, size_t count, sc_run 
 		if (w) write(s, w, key);
 		tg_node *node = pm_get(&s->nodes, key);
 		if (node == NULL) continue;
+		// an old link (its reader's latest run did not read it, that run over): a retry; its own
+		// set, act or cleanup going on: not reached (done, it lets it go)
 		for (tg_link *l = node->first; l != NULL; l = l->after) {
 			sc_scope *c = l->from->owner;
-			if (due(s, c, t, writer) && told) VEC_PUSH(now.v, now.n, now.cap, c);
+			bool old = tg_old(l);
+			if (old && s->running != NULL && s->running->c == c) continue;
+			if (due(s, c, t, writer, old) && told) VEC_PUSH(now.v, now.n, now.cap, c);
 		}
 	}
 	if (told) told_mark(s, keys, count, writer, &now, t);
@@ -965,8 +985,17 @@ static void finish(sc_scheduler *s, sc_run *r, sc_ended ended, int equal, char *
 		finish(s, r, SC_LOOPING, equal, error, waits, r->loop, r->nloop);
 		return;
 	}
-	// done, its latest: what it did not make again goes, its old cleanups are queued
-	if (ended == SC_DONE && c->ran == r && c->state == ALIVE) dropUnclaimedChildren(s, c, r);
+	// done, its latest: the old links go (untracked), what it did not make again goes, its old
+	// cleanups are queued. ended any other way, its latest: what it read and the old links all
+	// stay, no repeats
+	if (c->ran == r && c->state == ALIVE) {
+		if (ended == SC_DONE) {
+			trim_run(s, c->node);
+			dropUnclaimedChildren(s, c, r);
+		} else {
+			tg_dedupe(c->node);
+		}
+	}
 	if (c->state == ALIVE) {
 		// not done: what it was given is kept again, beside what was kept since it began. then the
 		// run holds it no longer, so a later end (an awaited run landing) keeps nothing again
@@ -1201,7 +1230,8 @@ static void begin(sc_scheduler *s, sc_scope *c, int rank) {
 	s->running = wasRunning;
 	s->open = wasopen;
 	s->open_writer = waswriter;
-	end_run(s, c->node);
+	// what it did not reach stays, old, till it ends: trimmed if done (finish), else held
+	tg_leave(c->node);
 	if (c->state != ALIVE) {
 		discard(s, out);
 	} else if (r->stopped) {
@@ -1233,8 +1263,8 @@ static void begin(sc_scheduler *s, sc_scope *c, int rank) {
 
 // what the effect's last act made goes, and the cleanups made in it run (a cleanup's error is the
 // act's; a listener's is held, out once the act is done); then it acts, with the value it acted
-// on last. due again (an earlier act this round changed what it read): its value is
-// old, so it does not act; its next run does. torn down by a teardown: nothing more
+// on last. due again (an earlier act this round, or a cleanup just now, changed what it read): its
+// value is old, so it does not act; its next run does. torn down by a teardown: nothing more
 static void do_act(sc_scheduler *s, act *a) {
 	sc_scope *c = a->r->c;
 	c->acting = NULL;
@@ -1260,10 +1290,19 @@ static void do_act(sc_scheduler *s, act *a) {
 		size_t nfs = c->ndeeds;
 		c->deeds = NULL;
 		c->ndeeds = c->capdeeds = 0;
+		c->cleaning = true;
 		failed = down(c, deeds, n, fs, nfs);
+		c->cleaning = false;
 		free(deeds);
 		free(fs);
 		acts = c->state == ALIVE;
+		// a cleanup wrote what it reads: due again, it does not act on the old value, its run does
+		if (acts && od_has(s->order, &c->od)) {
+			acts = false;
+			c->cleaned = true;
+			hold(s, failed);
+			failed = NULL;
+		}
 	}
 	if (!acts) {
 		s->reading = was;
@@ -1278,6 +1317,7 @@ static void do_act(sc_scheduler *s, act *a) {
 	sc_run *waswriter = s->open_writer;
 	s->open = c;
 	s->open_writer = c->ran;
+	c->cleaned = false;
 	c->doing = true;
 	char *error = c->def.effect(a->value, c->has_last ? c->last : NULL, c->def.data);
 	c->doing = false;
@@ -1376,6 +1416,42 @@ void sc_pulse(sc_scheduler *s) {
 	escape(s, t);
 }
 
+// c takes def, and the kind (chee 10-18: "Swap kind too"). an act queued is dropped (its next run
+// is due). a new kind: its last result is let go, so its next is set or acted on, equal or not; a
+// compute become an effect is the writer of nothing; an effect become a compute: what its last
+// act made is its runs' (old at its next run), and the cleanups made in that act are its own, set
+// aside as its next run starts, as a replaced function's are
+static void become(sc_scheduler *s, sc_scope *c, kind_t kind, sc_def def) {
+	if (c->acting) unact(s, c);
+	if (kind != EFFECT) def.early = false;
+	kind_t was = c->kind;
+	c->kind = kind;
+	c->def = def;
+	if (was == kind) return;
+	if (c->has_last) drop_value(s, c->last);
+	c->last = NULL;
+	c->has_last = false;
+	if (kind == EFFECT) {
+		for (size_t i = 0; i < c->wrote.cap; i++) {
+			const void *k = c->wrote.keys[i];
+			if (k != NULL && pm_get(&s->writers, k) == c) pm_delete(&s->writers, k);
+		}
+		pm_clear(&c->wrote);
+		return;
+	}
+	for (sc_scope *x = c->newest; x != NULL; x = x->older) x->deed = false;
+	for (unsigned i = 0; i < c->ndeeds; i++) VEC_PUSH(c->teardowns, c->nteardowns, c->capteardowns, c->deeds[i]);
+	free(c->deeds);
+	c->deeds = NULL;
+	c->ndeeds = c->capdeeds = 0;
+}
+
+bool sc_claim_as(sc_computer *c, bool effect, sc_def def) {
+	if (c->kind == PLAIN || !c->old || c->state != ALIVE) return false;
+	become(c->s, c, effect ? EFFECT : COMPUTE, def);
+	return sc_claim(c);
+}
+
 // an old child of the run open's computer, claimed: back under it, the newest, and due (a tick,
 // told as a mark with no keys, by the run open). not old: false
 bool sc_claim(sc_computer *c) {
@@ -1391,7 +1467,7 @@ bool sc_claim(sc_computer *c) {
 	uint64_t t = ++s->tick;
 	dues now = {0};
 	bool told = s->nlisteners[ON_MARK] > 0;
-	bool now_due = due(s, c, t, s->running);
+	bool now_due = due(s, c, t, s->running, false);
 	char *outer = s->thrown;
 	s->thrown = NULL;
 	if (now_due && told) VEC_PUSH(now.v, now.n, now.cap, c);
@@ -1430,7 +1506,7 @@ static sc_computer *make(sc_scheduler *s, kind_t kind, sc_def def, const sc_pair
 	c->info->pub.n = n + 1;
 	dues now = {0};
 	bool told = s->nlisteners[ON_MARK] > 0;
-	bool now_due = due(s, c, t, s->running);
+	bool now_due = due(s, c, t, s->running, false);
 	char *outer = s->thrown;
 	s->thrown = NULL;
 	if (now_due && told) VEC_PUSH(now.v, now.n, now.cap, c);

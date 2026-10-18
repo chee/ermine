@@ -7,7 +7,7 @@
 
 #include "../host.h"
 
-#include "../../../../extensions/sync/c/transport.h"
+#include "../../../../extensions/together/c/transport.h"
 
 typedef struct Net Net;
 

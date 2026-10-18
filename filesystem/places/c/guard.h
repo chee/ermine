@@ -73,6 +73,12 @@ void gd_free(gd *g);
 gd_answer gd_read(gd *g, const gd_target *targets, size_t n, gd_refusal *why);
 gd_answer gd_write(gd *g, const char *op, const gd_target *targets, size_t n, gd_refusal *why);
 
+// a move by path, refused (GD_REFUSED, *why op "move", reason "into-itself") when to is strictly
+// under from: the node would be cut off, its own descendant its parent. The same place is no move.
+// Needs no guard, no policy: structural
+gd_answer gd_move(const char *const *from, size_t nfrom, const char *const *to, size_t nto,
+	gd_refusal *why);
+
 // the members of a list, each asked to be read (at: the path they are under, NULL: none): a
 // refused one in its place, its name kept and its id one gd_is_refused says. Any pending: GD_PENDING. *out is
 // the caller's, pl_members_free; the names are the list's

@@ -139,6 +139,15 @@ gd_answer gd_write(gd *g, const char *op, const gd_target *targets, size_t n, gd
 	return demand(g, 0, op, targets, n, why);
 }
 
+gd_answer gd_move(const char *const *from, size_t nfrom, const char *const *to, size_t nto,
+	gd_refusal *why) {
+	if (nto <= nfrom) return GD_OK;
+	for (size_t i = 0; i < nfrom; i++)
+		if (strcmp(from[i], to[i]) != 0) return GD_OK;
+	if (why != NULL) *why = (gd_refusal){"move", "into-itself"};
+	return GD_REFUSED;
+}
+
 gd_answer gd_members(gd *g, const pl_members *list, const char *const *at, size_t nat,
 	pl_members *out) {
 	*out = (pl_members){0};

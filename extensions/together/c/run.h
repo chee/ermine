@@ -1,4 +1,4 @@
-// A run of sealed commits as columns: what a fragment carries (extensions/sync/typescript/run.ts),
+// A run of sealed commits as columns: what a fragment carries (extensions/together/typescript/run.ts),
 // in C. One signature for a run of typing: a commit the next goes on alone, by the same signer, is
 // vouched for by that one's signature, its own left out and its stored id in ids. Unpack gives back
 // each commit's exact bytes, its stored id, and each signed one's sealed bytes; deterministic (the
@@ -7,6 +7,8 @@
 // are worked out exactly up to 2^53 - 1; text positions count code points.
 #ifndef RN_RUN_H
 #define RN_RUN_H
+
+#include "../../../ermine/encoding/c/commit.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -52,7 +54,7 @@ rn_code rn_pack(const rn_item *sealed, size_t count, uint8_t **out, size_t *leng
 typedef struct {
 	const uint8_t *commit;
 	size_t commit_length;
-	uint8_t name[32], stored[32];
+	uint8_t name[CM_NAME], stored[32];
 	const uint8_t *sealed;
 	size_t sealed_length;
 } rn_member;

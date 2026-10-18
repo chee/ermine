@@ -32,8 +32,8 @@
 #include <unistd.h>
 
 // ---- what program.ts says
-static const char *FIRST = "ermine://f849ff1304dc7e0cba4d758258a6a907" "00000000000000000000000000000000";
-static char ROOM[DV_ID] = "ermine://1a42463ee0b3694e305ac7dd448832e0" "00000000000000000000000000000000";
+static const char *FIRST = "ermine://d3b583537595c9a6de0110781d4566d1" "00000000000000000000000000000000";
+static char ROOM[DV_ID] = "ermine://bf04115f9b284145026eab6801219d6e" "00000000000000000000000000000000";
 // web px: a pig's width at size 1 (its height 100/130 of it); a held pig's lift; how near the bottom
 // right the bin comes out (and the top right, the corner of shame); the bin, from the bottom right
 enum { W = 110, LIFT = 26, NEAR = 240 };

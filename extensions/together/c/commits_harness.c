@@ -45,26 +45,26 @@ const cs_made *cs_get(const cs_commits *c, const char *label) {
 	return NULL;
 }
 
-const cs_made *cs_find(const cs_commits *c, const uint8_t name[32]) {
+const cs_made *cs_find(const cs_commits *c, const uint8_t name[CM_NAME]) {
 	for (size_t i = 0; i < c->length; i++)
-		if (memcmp(c->made[i]->name, name, 32) == 0) return c->made[i];
+		if (memcmp(c->made[i]->name, name, CM_NAME) == 0) return c->made[i];
 	return NULL;
 }
 
-bool cs_resolve(const cs_commits *c, const op_value *x, uint8_t name[32], const char **error) {
+bool cs_resolve(const cs_commits *c, const op_value *x, uint8_t name[CM_NAME], const char **error) {
 	if (x == NULL || x->type != OP_STR) return *error = "not a label or a name", false;
 	const cs_made *m = cs_get(c, x->str);
-	if (m != NULL) return memcpy(name, m->name, 32), true;
+	if (m != NULL) return memcpy(name, m->name, CM_NAME), true;
 	uint8_t *b;
 	size_t n;
-	if (strlen(x->str) == 64 && cf_unhex(x->str, &b, &n)) return memcpy(name, b, 32), true;
+	if (strlen(x->str) == 2 * CM_NAME && cf_unhex(x->str, &b, &n)) return memcpy(name, b, CM_NAME), true;
 	return *error = "no such commit", false;
 }
 
-void cs_put_name(const cs_commits *c, FILE *out, const uint8_t name[32]) {
+void cs_put_name(const cs_commits *c, FILE *out, const uint8_t name[CM_NAME]) {
 	const cs_made *m = cs_find(c, name);
 	if (m != NULL) op_json_string(out, m->label);
-	else cf_put_hex(out, name, 32);
+	else cf_put_hex(out, name, CM_NAME);
 }
 
 static sl_seeded *signer_of(cs_commits *c, const uint8_t seed[32]) {
@@ -78,7 +78,7 @@ static sl_seeded *signer_of(cs_commits *c, const uint8_t seed[32]) {
 }
 
 static int by_name(const void *a, const void *b) {
-	return cm_compare(*(const uint8_t *const *)a, 32, *(const uint8_t *const *)b, 32);
+	return cm_compare(*(const uint8_t *const *)a, CM_NAME, *(const uint8_t *const *)b, CM_NAME);
 }
 
 // a field a request gives: absent and null are both not given (?? in the TypeScript)
@@ -112,7 +112,7 @@ const cs_made *cs_make(cs_commits *c, const op_value *r, cs_failure *why) {
 	const op_value *given_parents = given(r, "parents");
 	if (given_parents != NULL && given_parents->type != OP_LIST) return *error = "parents", NULL;
 	size_t np = given_parents ? given_parents->count : 0;
-	uint8_t(*parents)[32] = hh_take((np + 1) * 32);
+	uint8_t(*parents)[CM_NAME] = hh_take((np + 1) * CM_NAME);
 	const uint8_t **sorted = hh_take((np + 1) * sizeof *sorted);
 	int64_t top = 0;
 	for (size_t i = 0; i < np; i++) {
@@ -132,7 +132,7 @@ const cs_made *cs_make(cs_commits *c, const op_value *r, cs_failure *why) {
 	jsonAdd(j, "signer", jsonBytes(signer->signer.key, signer->signer.key_length));
 	jsonAdd(j, "nonce", (v = given(r, "nonce")) ? pk_to_json(v) : jsonNumber(0));
 	Json *ps = jsonArray();
-	for (size_t i = 0; i < np; i++) jsonPush(ps, jsonBytes(sorted[i], 32));
+	for (size_t i = 0; i < np; i++) jsonPush(ps, jsonBytes(sorted[i], CM_NAME));
 	jsonAdd(j, "parents", ps);
 	jsonAdd(j, "lamport", (v = given(r, "lamport")) ? pk_to_json(v) : jsonNumber((double)(1 + top)));
 	jsonAdd(j, "patches", (v = given(r, "patches")) ? pk_to_json(v) : jsonArray());
@@ -140,9 +140,9 @@ const cs_made *cs_make(cs_commits *c, const op_value *r, cs_failure *why) {
 	for (size_t i = 0; i < 3; i++)
 		if ((v = op_get(r, optional[i])) != NULL) jsonAdd(j, optional[i], pk_to_json(v));
 	if ((v = op_get(r, "base")) != NULL) {
-		uint8_t base[32];
+		uint8_t base[CM_NAME];
 		if (!cs_resolve(c, v, base, error)) return jsonFree(j), NULL;
-		jsonAdd(j, "base", jsonBytes(base, 32));
+		jsonAdd(j, "base", jsonBytes(base, CM_NAME));
 	}
 	if ((v = op_get(r, "merge")) != NULL) jsonAdd(j, "merge", pk_to_json(v));
 	uint8_t *bytes;
@@ -176,6 +176,6 @@ const uint8_t cs_doc[32] = {0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a
 
 void cs_sealed(const cs_made *m, const uint8_t doc[32], uint8_t **out, size_t *length) {
 	sl_made made = {.commit = NULL};
-	memcpy(made.name, m->name, 32);
+	memcpy(made.name, m->name, CM_NAME);
 	if (sl_seal(m->bytes, m->length, &m->signer->signer, doc, &made, out, length, NULL, NULL) != SL_OK) abort();
 }

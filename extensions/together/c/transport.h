@@ -7,6 +7,10 @@
 // asked again, 0.25 s doubling to 16 s. ephemeral messages on hashed topics (tp_send, tp_listen),
 // in parts over 65 536 bytes. only lock "unlocked" is built.
 //
+// the device is two parts: the mailroom (mailroom.h: histories, taking in, own takes) and the Subduction stack
+// (subduction.h: the network, the store, fragments, topics). transport.c composes them; every name here
+// is theirs under the tp_ prefix.
+//
 // sans-IO (subduction.h): the host gives messages in (tp_received), sends what tp_next gives, and
 // calls tp_run, which says when to run again. one thread at a time; time is the options' clock. a
 // document: an ermine:// id (64 hex digits); its tree and topic are its 32 bytes. the store
@@ -21,8 +25,10 @@
 #define TP_TRANSPORT_H
 
 #include "history.h"
+#include "mailroom.h"
 #include "replay.h"
 #include "seal.h"
+#include "../stacks/subduction/c/subduction.h"
 #include "../../subduction/c/fragment.h"
 #include "../../subduction/c/subduction/subduction.h"
 
@@ -32,14 +38,23 @@
 
 typedef struct tp_device tp_device;
 
-typedef enum { TP_STORED, TP_EPHEMERAL } tp_layer;
+typedef mr_layer tp_layer;
+enum { TP_STORED = MR_STORED, TP_EPHEMERAL = MR_EPHEMERAL };
 // "stored", "ephemeral"
 const char *tp_layer_name(tp_layer layer);
 
 // why the transport refused a seal, a fragment or an ephemeral commit before a history saw it (what a
 // history refuses is the history's: hy_refused). TP_BOUNDARY: a fragment's members, boundary or
 // checkpoints not what its head's walk makes them
-typedef enum { TP_LOCK = 1, TP_SHAPE, TP_SIGNATURE, TP_STORED_ID, TP_PARENTS, TP_BOUNDARY } tp_code;
+typedef mr_code tp_code;
+enum {
+	TP_LOCK = MR_LOCK,
+	TP_SHAPE = MR_SHAPE,
+	TP_SIGNATURE = MR_SIGNATURE,
+	TP_STORED_ID = MR_STORED_ID,
+	TP_PARENTS = MR_PARENTS,
+	TP_BOUNDARY = MR_BOUNDARY
+};
 // "lock", "shape", "signature", "stored", "parents", "boundary"
 const char *tp_code_name(tp_code code);
 
@@ -54,26 +69,19 @@ typedef struct {
 
 // a commit taken into a history from elsewhere (the network or the store), after it is taken in;
 // heard: from a peer's ephemeral message. This device's own takes are not told. Good for the call
-typedef struct {
-	const char *doc;
-	tp_layer layer;
-	const hy_kept *kept;
-	bool heard;
-} tp_arrival;
-typedef void (*tp_arrived_fn)(void *context, const tp_arrival *arrival);
+typedef mr_arrival tp_arrival;
+typedef mr_arrived_fn tp_arrived_fn;
 
 // the integration's: whether a commit from elsewhere, its parents all taken in, applies to its
 // parent's node. Never asked of this device's own takes. It may apply it as it looks. 0: yes; else
 // the refusal (HY_PATCHES: it does not apply; HY_MERGE: a merge by a rule not known here); HY_WAIT:
 // it cannot judge it yet, and asks again on tp_changed
-typedef hy_refusal (*tp_check_fn)(void *context, const char *doc, const hy_kept *kept, const cm_commit *commit,
-	tp_layer layer);
+typedef mr_check_fn tp_check_fn;
 // the integration's: the tables at a fragment's head, packed (snapshot.h), malloc'd into *out; false:
 // none for this one (the integration decides when one is worth it)
-typedef bool (*tp_snapshot_fn)(void *context, const char *doc, const hy_kept *head, uint8_t **out,
-	size_t *length);
+typedef sb_snapshot_fn tp_snapshot_fn;
 // the clock: ms since 1970
-typedef uint64_t (*tp_clock_fn)(void *context);
+typedef sb_clock_fn tp_clock_fn;
 
 typedef struct {
 	// Subduction's peer key and the seals' signer: the device's Ed25519 key (its multikey for the seals)
@@ -142,13 +150,10 @@ void tp_disconnect(tp_device *t, const uint8_t key[SL_KEY]);
 void tp_service(const char *url, char *out, size_t size);
 
 // what the host is asked to do
-typedef enum { TP_SEND, TP_CLOSE } tp_out_kind;
-typedef struct {
-	tp_out_kind kind;
-	uint64_t conn;
-	uint8_t *bytes; // SEND's, the host's: tp_out_free
-	size_t length;
-} tp_out;
+typedef sb_out_kind tp_out_kind;
+enum { TP_SEND = SB_SEND, TP_CLOSE = SB_CLOSE };
+// SEND's bytes are the host's: tp_out_free
+typedef sb_out tp_out;
 // the next thing asked of the host, true; or false when none waits
 bool tp_next(tp_device *t, tp_out *out);
 void tp_out_free(tp_out *out);
@@ -176,38 +181,24 @@ void tp_arrived(tp_device *t, tp_arrived_fn fn, void *context);
 // told a document each time what is held back or refused there may have changed (tp_taking_of):
 // after what came for it is taken in or refused, a commit of this device's is handed over, or
 // tp_changed judged it again. Any number of listeners
-typedef void (*tp_moved_fn)(void *context, const char *doc);
+typedef mr_moved_fn tp_moved_fn;
 void tp_moved(tp_device *t, tp_moved_fn fn, void *context);
 // what is held back or refused at a document before its histories. waiting: a loose commit (by its
 // head), or a fragment's member (by its seal's stored id), and the names of its parents not here.
 // refused, by id: a commit (code), a fragment refused whole (fragment, code), or one stuck on a parent
 // refused or stuck here (stuck, the names of those parents). Each list sorted by id. The ephemeral
 // layer: no waiting, the refused ephemeral commits by name. tp_taking_free it
-typedef struct {
-	uint8_t commit[32];
-	uint8_t (*names)[32];
-	size_t count;
-} tp_waiting_row;
-typedef struct {
-	uint8_t id[32];
-	bool fragment, stuck;
-	tp_code code;
-	uint8_t (*names)[32];
-	size_t count;
-} tp_refused_row;
-typedef struct {
-	tp_waiting_row *waiting;
-	size_t waiting_count;
-	tp_refused_row *refused;
-	size_t refused_count;
-} tp_taking;
+typedef mr_waiting_row tp_waiting_row;
+// id: a stored id (32 bytes), or an ephemeral commit's name (CM_NAME): id_length
+typedef mr_refused_row tp_refused_row;
+typedef mr_taking tp_taking;
 tp_taking tp_taking_of(tp_device *t, const char *doc, tp_layer layer);
 void tp_taking_free(tp_taking *taking);
 // told each ephemeral commit heard on a followed document whose signer is the sender, new or heard
 // before (sent again), after any arrival it made: the document, the sender's key (a multikey), the
 // commit's name.
 // What keeps another device's ephemeral commits standing. Any number of listeners
-typedef void (*tp_hearing_fn)(void *context, const char *doc, const uint8_t from[SL_KEY], const uint8_t name[32]);
+typedef mr_hearing_fn tp_hearing_fn;
 void tp_hearing(tp_device *t, tp_hearing_fn fn, void *context);
 // this device's standing ephemeral commit at the document's table ends: a stop message on the
 // document's ephemeral topic, the CBOR map {stop: table}, queued behind the takes before it. It names
@@ -219,18 +210,18 @@ void tp_stop(tp_device *t, const char *doc, const char *table);
 // told each stop heard on a followed document: the document, the sender's key (a multikey), the
 // table (good for the call). One for nothing standing from that sender is the integration's to
 // ignore. Any number of listeners
-typedef void (*tp_stopped_fn)(void *context, const char *doc, const uint8_t from[SL_KEY], const char *table);
+typedef mr_stopped_fn tp_stopped_fn;
 void tp_stopped(tp_device *t, tp_stopped_fn fn, void *context);
 // an ephemeral commit of this device's (in the ephemeral history, not a stored one) published again,
 // queued as a take is; false: no such commit
-bool tp_again(tp_device *t, const char *doc, const uint8_t name[32]);
+bool tp_again(tp_device *t, const char *doc, const uint8_t name[CM_NAME]);
 // an ephemeral commit (not a stored one) let go of: out of the ephemeral history and whatever was kept
 // for it, as if never heard; heard again, it comes in again. Done once nothing queued here holds it
 // (at the end of a tp_run): its kept is freed then. false: none such
-bool tp_forget(tp_device *t, const char *doc, const uint8_t name[32]);
+bool tp_forget(tp_device *t, const char *doc, const uint8_t name[CM_NAME]);
 // the tables at a commit, when a fragment headed by it carried a snapshot: new ones put in *out
 // (rp_init'd), true
-bool tp_snapshot(tp_device *t, const char *doc, const uint8_t name[32], rp_tables *out);
+bool tp_snapshot(tp_device *t, const char *doc, const uint8_t name[CM_NAME], rp_tables *out);
 // the loose commits Subduction holds of the document, by stored id, malloc'd into *out (free it);
 // runs the device until Subduction answers
 size_t tp_stored(tp_device *t, const char *doc, uint8_t (**out)[32]);
@@ -244,8 +235,8 @@ size_t tp_fragments(tp_device *t, const char *doc, const fragment ***out);
 // like a part): sent as parts, joined at the other end
 void tp_send(tp_device *t, const char *topic, const uint8_t *bytes, size_t length);
 // told each message on the topic: the sender's key (a multikey) as lowercase hex, the bytes (good for the call)
-typedef void (*tp_heard_fn)(void *context, const char *from, const uint8_t *bytes, size_t length);
-typedef struct tp_listener tp_listener;
+typedef sb_heard_fn tp_heard_fn;
+typedef sb_listener tp_listener;
 // subscribes as needed; the listener, for tp_unlisten
 tp_listener *tp_listen(tp_device *t, const char *topic, tp_heard_fn fn, void *context);
 void tp_unlisten(tp_device *t, tp_listener *l);

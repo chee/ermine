@@ -1,4 +1,4 @@
-// card.c: the card (card.h), on extensions/sync. Sync holds the table: what the card's store held
+// card.c: the card (card.h), on extensions/together. Sync holds the table: what the card's store held
 // is written to it as it is followed (sync.h's lazy: the root at boot, then each document the root
 // reaches; a document on the card nothing reaches stays in the store until something places its id:
 // only reachable exists), and what comes over the network after; a change the host makes to a kept
@@ -35,7 +35,7 @@
 
 #include "card.h"
 
-#include "../../../../extensions/sync/c/ids.h"
+#include "../../../../extensions/together/c/ids.h"
 #include "../../../../extensions/subduction/c/subduction/platform.h"
 #include "../../../../extensions/subduction/c/subduction/store.h"
 #include "../../../../core/op/c/apply.h"
@@ -345,11 +345,11 @@ static size_t walk(Card *c, im_map *seen) {
 	im_set(seen, bytes, (void *)1);
 	push(&todo, c->root);
 	for (size_t i = 0; i < c->brought.slots; i++) {
-		if (!c->brought.used[i] || im_has(seen, c->brought.keys[i])) continue;
+		if (!c->brought.used[i] || im_has(seen, im_key(&c->brought, i))) continue;
 		char id[ID_LENGTH + 1];
 		memcpy(id, "ermine://", 9);
-		hex(c->brought.keys[i], 32, id + 9);
-		im_set(seen, c->brought.keys[i], (void *)1);
+		hex(im_key(&c->brought, i), 32, id + 9);
+		im_set(seen, im_key(&c->brought, i), (void *)1);
 		push(&todo, id);
 	}
 	while (todo.count) {
@@ -374,13 +374,13 @@ static void checked(Card *c) {
 	im_map seen = {0};
 	size_t read = walk(c, &seen);
 	for (size_t i = 0; i < seen.slots; i++)
-		if (seen.used[i]) im_set(&c->shadow, seen.keys[i], (void *)1);
+		if (seen.used[i]) im_set(&c->shadow, im_key(&seen, i), (void *)1);
 	im_free(&seen);
 	size_t missing = 0, extra = 0;
 	for (size_t i = 0; i < c->shadow.slots; i++)
-		if (c->shadow.used[i] && !im_has(&c->followed, c->shadow.keys[i])) missing++;
+		if (c->shadow.used[i] && !im_has(&c->followed, im_key(&c->shadow, i))) missing++;
 	for (size_t i = 0; i < c->followed.slots; i++)
-		if (c->followed.used[i] && !im_has(&c->shadow, c->followed.keys[i])) extra++;
+		if (c->followed.used[i] && !im_has(&c->shadow, im_key(&c->followed, i))) extra++;
 	say(c, "card: check: looked at %zu entries (the full walk %zu); followed %zu, the walks %zu: %zu missing, %zu extra", c->looked, read, c->followed.count, c->shadow.count, missing, extra);
 	c->looked = 0;
 }

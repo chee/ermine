@@ -1,5 +1,5 @@
 // The C seal on the line protocol (conformance/c/harness.h): requests and answers as
-// extensions/sync/typescript/seal_harness.ts has them. Nothing lasts between lines
+// extensions/together/typescript/seal_harness.ts has them. Nothing lasts between lines
 #include "seal.h"
 #include "ed25519/ed25519.h"
 
@@ -159,7 +159,7 @@ static void unseal(const op_value *r, FILE *out) {
 	fputs(",\"bytes\":", out);
 	cf_put_hex(out, u.bytes, u.length);
 	fputs(",\"name\":", out);
-	cf_put_hex(out, u.name, 32);
+	cf_put_hex(out, u.name, CM_NAME);
 	fputs(",\"stored\":", out);
 	cf_put_hex(out, u.stored, 32);
 	fputc('}', out);

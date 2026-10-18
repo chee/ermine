@@ -1,4 +1,4 @@
-// A node's tables at a commit (extensions/sync/typescript/replay.ts), in C: back along the bases
+// A node's tables at a commit (extensions/together/typescript/replay.ts), in C: back along the bases
 // to the newest snapshot (or the root), then forward, each commit decoded from its bytes and
 // applied to its table in place (op's apply, core/op/c/apply.h). Everything built here is new:
 // decoded from bytes, shared with nothing, so applying in place costs the patches, not the tables.
@@ -52,7 +52,7 @@ void rp_adopt(rp_tables *t, pk_read *read);
 
 // a snapshot kept at a commit, if there is one: fills *out (empty, rp_init'd) with new tables
 // and says so, or leaves it alone and says not
-typedef bool (*rp_snapshots)(void *context, const uint8_t name[32], rp_tables *out);
+typedef bool (*rp_snapshots)(void *context, const uint8_t name[CM_NAME], rp_tables *out);
 
 // the tables at several commits merged by a rule, or at one, when they are had without merging:
 // fills *out (empty, rp_init'd) with new tables and says so, or leaves it alone and says not
@@ -84,29 +84,29 @@ const rp_merge *rp_merge_find(const rp_merges *merges, const char *name);
 // the tables at name: RP_NOT_TAKEN when the history has not that commit; RP_UNMERGED when a merge
 // commit on the way is by a rule not in merges (NULL: none). A rule is given what is had without
 // merging (rp_plain), so a merge never waits on another. snapshots may be NULL
-rp_code rp_replay(const hy_history *h, const uint8_t name[32], rp_snapshots snapshots, void *context,
+rp_code rp_replay(const hy_history *h, const uint8_t name[CM_NAME], rp_snapshots snapshots, void *context,
 	const rp_merges *merges, rp_tables *out);
 // whether a snapshot of the tables at name (packed, snapshot.h) from elsewhere is right: the tables
 // replayed to it (from the snapshots given, each checked so itself) are the same (sn_alike). No
 // snapshot is signed, so one is a hint, kept only when it matches (transport.c). false: not taken in,
 // a merge on the way by a rule not given, or bytes that are no snapshot
-bool rp_matches(const hy_history *h, const uint8_t name[32], const uint8_t *bytes, size_t length,
+bool rp_matches(const hy_history *h, const uint8_t name[CM_NAME], const uint8_t *bytes, size_t length,
 	rp_snapshots snapshots, void *context, const rp_merges *merges);
 
 // the tables at name when had without merging: a snapshot, or a walk back to one or the root that
 // meets no merge commit; else RP_UNMERGED
-rp_code rp_plain(const hy_history *h, const uint8_t name[32], rp_snapshots snapshots, void *context,
+rp_code rp_plain(const hy_history *h, const uint8_t name[CM_NAME], rp_snapshots snapshots, void *context,
 	rp_tables *out);
 
 // one commit applied to the tables in place; takes it (*commit is left empty) on RP_OK. RP_PATCHES:
 // the patches do not apply; nothing changed, the commit still the caller's. name: the commit's, its
 // change signed (rp_signed); NULL: the commit's header as it is
-rp_code rp_apply(rp_tables *t, cm_commit *commit, const uint8_t name[32]);
+rp_code rp_apply(rp_tables *t, cm_commit *commit, const uint8_t name[CM_NAME]);
 // a commit's change as the graph has it (changeOf in replay.ts, given the commit's name): its header,
 // then ["signer", its key (a multikey)] and ["commit", name] after its metadata, both lowercase hex.
 // What it adds is the tables' own; the rest is borrowed from change
 const ch_header *rp_signed(rp_tables *t, const ch_header *change, const uint8_t *signer, size_t signer_length,
-	const uint8_t name[32]);
+	const uint8_t name[CM_NAME]);
 // whether the commit's patches would apply to its table: nothing is changed, here or in the commit
 bool rp_check(const rp_tables *t, const cm_commit *commit);
 

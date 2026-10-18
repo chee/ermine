@@ -1,4 +1,4 @@
-// One node's history (extensions/sync/typescript/history.ts), in C: its commits as their bytes, each
+// One node's history (extensions/together/typescript/history.ts), in C: its commits as their bytes, each
 // taken in once its parents are, its heads in the agreed order, what waits on a parent and what is
 // refused. No values: what a head holds is worked out from the bytes when asked (replay.h), so
 // nothing here is ever shared with what changes.
@@ -27,15 +27,15 @@ const char *hy_refusal_name(hy_refusal refusal);
 // what a commit is kept as: its bytes, and what ordering and replay read without decoding again.
 // Owned by the history, good as long as it is (a commit is never let go of)
 typedef struct {
-	uint8_t name[32];
+	uint8_t name[CM_NAME];
 	uint8_t *bytes;
 	size_t length;
 	char *table;
-	const uint8_t (*parents)[32];
+	const uint8_t (*parents)[CM_NAME];
 	size_t parents_length;
 	// the one its patches are over: the base, else the first parent; none for a root or a merge
 	int has_base;
-	uint8_t base[32];
+	uint8_t base[CM_NAME];
 	// a merge commit's rule (its patches are over the merge of its parents); NULL: none
 	const char *merge;
 	int64_t lamport;
@@ -48,7 +48,7 @@ typedef enum { HY_TAKEN, HY_PASSED, HY_WAITING, HY_REFUSED } hy_kind;
 typedef struct {
 	hy_kind kind;
 	hy_refusal refusal;
-	uint8_t (*waiting)[32];
+	uint8_t (*waiting)[CM_NAME];
 	size_t waiting_length;
 } hy_added;
 void hy_added_free(hy_added *a);
@@ -65,7 +65,7 @@ hy_history *hy_create(hy_check check, void *context);
 // how many commits it holds waiting (on a parent or the check), and refusals, at most (default no
 // end): past it, the oldest waiting on a parent is let go of, as if never told (told again, it is
 // judged again), and dropped is told its name (may be NULL); the oldest refusal is forgotten
-void hy_limit(hy_history *h, size_t most, void (*dropped)(void *context, const uint8_t name[32]), void *context);
+void hy_limit(hy_history *h, size_t most, void (*dropped)(void *context, const uint8_t name[CM_NAME]), void *context);
 void hy_free(hy_history *h);
 
 // the commit's bytes (copied): taken in, waiting, refused or passed. made: its commit and name,
@@ -73,7 +73,7 @@ void hy_free(hy_history *h);
 // borrowed for the call
 typedef struct {
 	const cm_commit *commit;
-	uint8_t name[32];
+	uint8_t name[CM_NAME];
 } hy_made;
 hy_added hy_add(hy_history *h, const uint8_t *bytes, size_t length, const hy_made *made);
 
@@ -81,12 +81,12 @@ hy_added hy_add(hy_history *h, const uint8_t *bytes, size_t length, const hy_mad
 // it; the kept are the history's
 size_t hy_heads(const hy_history *h, const hy_kept ***out);
 // a commit taken in, or NULL
-const hy_kept *hy_get(const hy_history *h, const uint8_t name[32]);
+const hy_kept *hy_get(const hy_history *h, const uint8_t name[CM_NAME]);
 // every commit taken in, in the order taken: *out malloc'd, free it
 size_t hy_all(const hy_history *h, const hy_kept ***out);
 // a head taken in let go of, as if never told of it (its kept freed): its parents heads again where
 // nothing else goes on them. false: not taken, or something goes on it
-bool hy_forget(hy_history *h, const uint8_t name[32]);
+bool hy_forget(hy_history *h, const uint8_t name[CM_NAME]);
 
 // told each commit taken in, in the order taken, released ones too
 typedef void (*hy_taken)(void *context, const hy_kept *kept);
@@ -98,13 +98,16 @@ void hy_again(hy_history *h);
 
 // a commit waiting, and the parents it waits on (none: on the check); refused, and why
 typedef struct {
-	uint8_t name[32];
-	uint8_t (*waiting)[32];
+	uint8_t name[CM_NAME];
+	uint8_t (*waiting)[CM_NAME];
 	size_t waiting_length;
 } hy_waiting_row;
 typedef struct {
-	uint8_t name[32];
+	uint8_t name[CM_NAME];
 	hy_refusal refusal;
+	// refused for a parent (HY_PARENT): the parent refused
+	bool has_on;
+	uint8_t on[CM_NAME];
 } hy_refused_row;
 // in the order they came / were refused: *out malloc'd, free it (hy_waiting_free for the first)
 size_t hy_waiting(const hy_history *h, hy_waiting_row **out);
@@ -119,7 +122,7 @@ int hy_agreed(const hy_kept *a, const hy_kept *b);
 
 // what a commit's tables follow from: a merge's parents, else its base (a commit with a base keeps
 // what that one held, whatever its other parents did), else nothing (a root). Points into the kept
-size_t hy_follows(const hy_kept *k, const uint8_t (**out)[32]);
+size_t hy_follows(const hy_kept *k, const uint8_t (**out)[CM_NAME]);
 
 // whether the tables at from (one commit's, or several merged) can be had
 typedef bool (*hy_known)(void *context, const hy_kept *const *from, size_t n);

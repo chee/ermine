@@ -1,5 +1,5 @@
 // net.c: the network (net.h), as the old OS's peer.c made it (c/peer.c, The connection), on
-// sync's device (extensions/sync/c/transport.h): a WebSocket to /etc/sync's server
+// sync's device (extensions/together/c/transport.h): a WebSocket to /etc/sync's server
 // (subduction/websocket.c, over transport_openssl.c), the device's handshake on it, then every
 // document the card follows synced over it, from both sides (transport.h's header): card.c follows
 // each document made here, each one a list reached from the root names, and what drivers bring.

@@ -27,7 +27,7 @@ const char *cm_code_name(cm_code code);
 // the field a refusal names, if it names one: free(*field) when set. Every function that takes a
 // char **field sets *field (NULL when no field is named) unless field is NULL
 // not-a-commit names the first thing that says no: a key no commit has (of several, the first in
-// canonical order), else the first field in the table's order that is missing or wrong; none for
+// canonical order; only cm_encode and cm_check refuse one, cm_decode leaves it out), else the first field in the table's order that is missing or wrong; none for
 // what is no map. cannot-carry names the first field holding what has no encoding (a string that is
 // not UTF-8, a symbol), none if none is found alone
 
@@ -39,6 +39,17 @@ const char *cm_code_name(cm_code code);
 int cm_key_split(const uint8_t *bytes, size_t length, uint64_t *code, const uint8_t **key, size_t *key_length);
 // a multikey from the code and the raw key, into out (CM_SIGNER_MAX bytes at most): how long it is
 size_t cm_key_join(uint64_t code, const uint8_t *key, size_t key_length, uint8_t *out);
+
+// a name is a multihash: the unsigned varint of the hash's multicodec code, the varint of its digest's
+// length, then the digest (each varint in its shortest form). The hashes known: BLAKE3, code 0x1e,
+// 32 bytes of digest; a name of any other code, or of a length that is not its code's, is no name.
+// CM_NAME: the bytes of a BLAKE3 name, 0x1e 0x20, then the digest
+#define CM_NAME 34
+#define CM_BLAKE3 0x1e
+// a name's code and digest (a pointer into it); 0 when the bytes are no name
+int cm_name_split(const uint8_t *bytes, size_t length, uint64_t *code, const uint8_t **digest, size_t *digest_length);
+// a name from the code and the digest, into out (CM_NAME bytes at most): how long it is
+size_t cm_name_join(uint64_t code, const uint8_t *digest, size_t digest_length, uint8_t *out);
 
 // a decoded commit. Everything it refers to is its own (cm_free), shared with nothing
 typedef struct {
@@ -53,10 +64,10 @@ typedef struct {
 	size_t signer_length;
 	int64_t nonce;
 	// ascending by name
-	const uint8_t (*parents)[32];
+	const uint8_t (*parents)[CM_NAME];
 	size_t parents_length;
 	int has_base;
-	uint8_t base[32];
+	uint8_t base[CM_NAME];
 	// with several parents and no base: a merge rule's name; NULL when absent
 	char *merge;
 	int64_t lamport;
@@ -75,16 +86,23 @@ cm_code cm_encode(const cm_commit *commit, uint8_t **out, size_t *length, char *
 cm_code cm_encode_json(const Json *commit, uint8_t **out, size_t *length, char **field);
 // the rules alone, on a commit in its Json form: CM_OK or CM_NOT_A_COMMIT (*field)
 cm_code cm_check(const Json *commit, char **field);
+// the same as cm_decode holds a commit to: a key no commit has is left alone
+cm_code cm_check_decoded(const Json *commit, char **field);
 
-// the commit back from its bytes; only the canonical encoding. CM_NOT_A_COMMIT: bytes that are no
-// canonical item, no map, or a field the rules say no to (*field). cm_free it
+// the commit back from its bytes; only the canonical encoding. A top-level key no commit has is a
+// later device's: left out, the commit taken. Its signature and name are over the bytes, so keep
+// them as they came: cm_encode of a decoded commit does not have the key. CM_NOT_A_COMMIT: bytes
+// that are no canonical item, no map, or a field the rules say no to (*field). cm_free it
 cm_code cm_decode(const uint8_t *bytes, size_t length, cm_commit *out, char **field);
 // the commit as its Json form: a fresh value; NULL when a value in it has no Json form
 Json *cm_to_json(const cm_commit *commit);
 void cm_free(cm_commit *commit);
 
-// the commit's name on every device: the BLAKE3 hash of its bytes
-void cm_name(const uint8_t *bytes, size_t length, uint8_t name[32]);
+// the BLAKE3 hash of the bytes, 32 bytes: raw, what hashes anything but a commit's name (a stored id, a
+// topic, a payload)
+void cm_digest(const uint8_t *bytes, size_t length, uint8_t out[32]);
+// the commit's name on every device: the BLAKE3 hash of its bytes, as a multihash (CM_NAME bytes)
+void cm_name(const uint8_t *bytes, size_t length, uint8_t name[CM_NAME]);
 // bytewise, a shorter one first when it is a prefix: negative, 0, positive
 int cm_compare(const uint8_t *a, size_t a_length, const uint8_t *b, size_t b_length);
 
