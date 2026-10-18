@@ -9,7 +9,7 @@ export type Model = {
 	mb: number
 	tier: "tiny" | "small" | "medium"
 	think?: boolean
-	// llama.cpp crashes on LFM2.5 with more than one sequence at a time
+	// llama.cpp crashes on LFM2.5, and garbles Qwen3.5, with more than one sequence at a time
 	slots?: number
 }
 
@@ -31,6 +31,7 @@ export const models: Model[] = [
 		mb: 533,
 		tier: "tiny",
 		think: true,
+		slots: 1,
 	},
 	{ name: "lfm2.5-1.2b", file: "lfm2.5-1.2b.gguf", mb: 731, tier: "small", slots: 1 },
 	{ name: "llama3.2-1b", file: "llama3.2-1b.gguf", mb: 808, tier: "small" },
@@ -49,6 +50,7 @@ export const models: Model[] = [
 		mb: 1280,
 		tier: "small",
 		think: true,
+		slots: 1,
 	},
 	{
 		name: "qwen2.5-coder-3b",
@@ -62,6 +64,7 @@ export const models: Model[] = [
 		mb: 2740,
 		tier: "medium",
 		think: true,
+		slots: 1,
 	},
 	{
 		name: "gemma4-e2b",
@@ -69,6 +72,7 @@ export const models: Model[] = [
 		mb: 3106,
 		tier: "medium",
 		think: true,
+		slots: 1,
 	},
 ]
 
