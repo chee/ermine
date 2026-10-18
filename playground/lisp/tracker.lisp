@@ -43,12 +43,32 @@
     (when (tnode-running n) (fail "begin in a run: end it first"))
     (setf (tnode-running n) t (tnode-cursor n) nil (tnode-run n) (incf *runs*))))
 
-(defun end-run (from)
+(defun tail-of (n)
+  "the links after n's cursor: all of them with no cursor"
+  (if (tnode-cursor n) (cdr (member (tnode-cursor n) (tnode-reads n))) (tnode-reads n)))
+
+(defun trim-run (from)
+  "the links after the cursor dropped"
   (let ((n (tnode from)))
-    (when (tnode-running n)
-      (let ((tail (if (tnode-cursor n) (cdr (member (tnode-cursor n) (tnode-reads n))) (tnode-reads n))))
-        (dolist (l (copy-list tail)) (drop-link l)))
-      (setf (tnode-running n) nil (tnode-cursor n) nil))))
+    (dolist (l (copy-list (tail-of n))) (drop-link l))))
+
+(defun leave-run (from)
+  "the run over, every link kept; the cursor stays on the last it confirmed"
+  (setf (tnode-running (tnode from)) nil))
+
+(defun end-run (from)
+  "leave, then trim: outside a run, after end, nothing (the cursor is the last link)"
+  (leave-run from)
+  (trim-run from))
+
+(defun dedupe-run (from)
+  "of the links after the cursor, one to a spot a link before it goes to is dropped"
+  (let* ((n (tnode from)) (tail (tail-of n))
+         (seen (ldiff (tnode-reads n) tail)) (tos (mapcar #'link-to seen)))
+    (dolist (l (copy-list tail))
+      (if (member (link-to l) tos :test #'equal)
+          (drop-link l)
+          (push (link-to l) tos)))))
 
 (defun untrack (from &optional (to nil to-p))
   (let ((n (tnode from)))
@@ -69,8 +89,10 @@
 (defun add (from to)
   (let ((n (tnode from)))
     (unless (some (lambda (l) (equal (link-to l) to)) (tnode-reads n))
+      ;; right after the cursor (after end: the end), the cursor on it
       (let ((l (make-link :from from :to to :run -1)))
-        (setf (tnode-reads n) (append (tnode-reads n) (list l)))
+        (insert-after-cursor n l)
+        (setf (tnode-cursor n) l)
         (let ((spot (tnode to))) (setf (tnode-readers spot) (append (tnode-readers spot) (list l))))))))
 
 (defun name-field (req name)
@@ -85,6 +107,9 @@
        (begin-run (name-field req "from"))
        (jmap))
       ((string= op "end") (end-run (name-field req "from")) (jmap))
+      ((string= op "leave") (leave-run (name-field req "from")) (jmap))
+      ((string= op "trim") (trim-run (name-field req "from")) (jmap))
+      ((string= op "dedupe") (dedupe-run (name-field req "from")) (jmap))
       ((string= op "track") (track (name-field req "from") (name-field req "to")) (jmap))
       ((string= op "add")
        (let ((from (name-field req "from")) (to (name-field req "to")))
