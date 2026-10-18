@@ -15,7 +15,7 @@
 #include "../../../core/node/c/update.h"
 #include "../../../filesystem/places/c/guard.h"
 #include "../../../filesystem/places/c/status.h"
-#include "../../../filesystem/places/c/runs.h"
+#include "../../processes/c/runs.h"
 
 #define PUSH(v, n, cap, x) \
 	do { \
@@ -77,7 +77,7 @@ typedef struct {
 struct api_apis {
 	api_setup s;
 	cst *statuses;
-	// each memo's and effect's latest run, on its node (runs.h)
+	// each memo's and effect's latest run, on the runs' own table by its node's id (runs.h)
 	crn *runs;
 	sc_listener *settle;
 	int queued;
@@ -638,7 +638,7 @@ static int slot(api *a, char *const *path, size_t n, nd_entry **children, const 
 	return 0;
 }
 
-// every entry of an id taken out of the table
+// every entry of an id taken out of the table, and its run record out
 static void del_all(api *a, const char *id) {
 	size_t n;
 	const tb_entry *at = tb_at(a->x->s.table, tb_string(id), &n);
@@ -646,6 +646,7 @@ static void del_all(api *a, const char *id) {
 	for (size_t i = 0; i < n; i++) parts[i] = xdup(at[i].part.string);
 	for (size_t i = 0; i < n; i++) tb_del(a->x->s.table, tb_string(parts[i]), tb_string(id)), free(parts[i]);
 	free(parts);
+	crn_drop(a->x->runs, tb_string(id));
 }
 
 // open, create ---------------------------------------------------------------------------------
@@ -1070,6 +1071,8 @@ typedef struct computer {
 	sc_scope *own;
 	// its status and run record given to its node (an early one's first run is before it is made)
 	int given;
+	// its id as its PL_NODE pair's value, alive as long as it
+	op_value *id_value;
 	// its code, in place: a run of its owner making it again gives it new code
 	api_compute f;
 	api_act act;
@@ -1086,7 +1089,6 @@ static sc_out computer_f(void *previous, void *data) {
 	if (c->early && !c->given) {
 		c->given = 1;
 		sc_computer *self = sc_run_computer(sc_get_run(c->x->s.scheduler));
-		if (c->x->s.scopes) sn_attach(c->x->s.scopes, self, c->id);
 		cst_give(c->x->statuses, self, tb_string(c->id));
 		crn_give(c->x->runs, self, tb_string(c->id));
 	}
@@ -1165,6 +1167,7 @@ static char *computer_cleanup(void *data) {
 		computer_drop(c);
 	}
 	if (--c->holds == 0) {
+		op_free(c->id_value);
 		free(c->id);
 		names_free(&c->path);
 		free(c);
@@ -1184,14 +1187,27 @@ typedef struct {
 } creating;
 static void create_in(void *data) {
 	creating *m = data;
-	m->c->c = m->effect ? sc_create_effect(m->c->x->s.scheduler, m->def)
-	                    : sc_create_computer(m->c->x->s.scheduler, m->def);
+	sc_pair info = {PL_NODE, m->c->id_value};
+	m->c->c = m->effect ? sc_create_effect(m->c->x->s.scheduler, m->def, &info, 1)
+	                    : sc_create_computer(m->c->x->s.scheduler, m->def, &info, 1);
 }
-// a computer's node placed at its path, its scope written (own's node, or the nearest above with
-// one; none: not written)
+// the PL_NODE key's id of o or the nearest scope above it with one; none: NULL
+static const char *node_above(const sc_scope *o) {
+	for (; o != NULL; o = sc_scope_parent(o)) {
+		const sc_info *info = sc_scope_info(o);
+		for (size_t i = 0; info != NULL && i < info->n; i++) {
+			if (strcmp(info->pairs[i].key, PL_NODE) != 0) continue;
+			const op_value *v = info->pairs[i].value;
+			return v != NULL && v->type == OP_STR ? v->str : NULL;
+		}
+	}
+	return NULL;
+}
+// a computer's node placed at its path, its scope written (own's PL_NODE key, or the nearest
+// above with one; none: not written)
 static int place_computer(api *a, void *data) {
 	computer *c = data;
-	const char *above = a->x->s.scopes ? sn_nearest(a->x->s.scopes, c->own) : NULL;
+	const char *above = node_above(c->own);
 	char *parent = c->path.n ? id_at(a, c->path.v, c->path.n - 1) : NULL;
 	if (parent == NULL) return free(parent), fail(a, API_NOTHING_THERE, c->path.n ? c->path.v[0] : "");
 	int code = place_under(a, parent, c->path.v[c->path.n - 1], c->id, NULL, 0);
@@ -1256,9 +1272,10 @@ static int make_computer(api *a, int memo, int early, const char *name, api_comp
 	if (options) c->o = *options;
 	// its id a new one, flat and opaque: the name only places it
 	c->id = new_id(x);
+	c->id_value = op_str(c->id);
 	code = within(a, place_computer, c);
 	if (code) {
-		free(c->id), names_free(&c->path), free(c);
+		op_free(c->id_value), free(c->id), names_free(&c->path), free(c);
 		return code;
 	}
 	PUSH(a->made, a->nmade, a->capmade, c);
@@ -1274,7 +1291,6 @@ static int make_computer(api *a, int memo, int early, const char *name, api_comp
 		return fail(a, API_FAILED, bad ? bad : SC_UNSCOPED);
 	}
 	if (x->s.sites != NULL) st_note(x->s.sites, c->c, file, line, func);
-	if (x->s.scopes != NULL) sn_attach(x->s.scopes, c->c, c->id);
 	cst_give(x->statuses, c->c, tb_string(c->id));
 	crn_give(x->runs, c->c, tb_string(c->id));
 	*out = node_at(&c->path);
@@ -1388,12 +1404,15 @@ int api_send_at(api *a, api_target x, const op_value *const *args, size_t nargs,
 	}
 	sending s = {.id = id, .n = f.n, .rec = ap->methods[index], .args = args, .nargs = nargs};
 	size_t nhost = 0;
-	const sc_pair *host = ap->s.pairs ? ap->s.pairs(ap->s.pairs_ctx, &nhost) : NULL;
+	const sc_pair *host = ap->s.info ? ap->s.info(ap->s.info_ctx, &nhost) : NULL;
 	sc_pair *pairs = xalloc((1 + nhost) * sizeof *pairs);
 	op_value *caller = op_str(a->process.id);
-	pairs[0] = (sc_pair){"caller", caller};
-	for (size_t i = 0; i < nhost; i++) pairs[1 + i] = host[i];
-	sc_scope *call = sc_create_scope(ap->s.scheduler, pairs, 1 + nhost, s.rec.scope);
+	// the caller over the host's: keys unique
+	size_t npairs = 0;
+	pairs[npairs++] = (sc_pair){"caller", caller};
+	for (size_t i = 0; i < nhost; i++)
+		if (strcmp(host[i].key, "caller") != 0) pairs[npairs++] = host[i];
+	sc_scope *call = sc_create_scope(ap->s.scheduler, pairs, npairs, s.rec.scope);
 	if (call != NULL && ap->s.sites != NULL) st_note(ap->s.sites, call, file, line, func);
 	if (call == NULL) code = fail(a, API_FAILED, SC_DISPOSED);
 	else {

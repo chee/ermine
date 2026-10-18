@@ -175,12 +175,25 @@ static void drop(void *value, void *data) {
 	op_free(value);
 }
 
-// a run that failed, said in the log: whose (the nearest scope node), and where it was made
+// the id in the PL_NODE pair of o or the nearest scope above it with one; none: NULL
+static const char *node_above(const sc_scope *o) {
+	for (; o != NULL; o = sc_scope_parent(o)) {
+		const sc_info *info = sc_scope_info(o);
+		for (size_t i = 0; info != NULL && i < info->n; i++) {
+			if (strcmp(info->pairs[i].key, PL_NODE) != 0) continue;
+			const op_value *v = info->pairs[i].value;
+			return v != NULL && v->type == OP_STR ? v->str : NULL;
+		}
+	}
+	return NULL;
+}
+
+// a run that failed, said in the log: whose (the nearest scope's PL_NODE pair), and where it was made
 static void ended(sc_computer *c, unsigned n, sc_ended how, const void *const *reads, size_t nreads, const sc_more *more, void *data) {
 	(void)n, (void)reads, (void)nreads;
 	ap_os *os = data;
 	if (how != SC_FAIL && how != SC_LOOPING) return;
-	const char *node = sn_nearest(os->scopes, c);
+	const char *node = node_above(c);
 	size_t k;
 	const char *const *at = node ? ap_here(os, node, &k) : NULL;
 	char where[512] = "";
@@ -188,12 +201,6 @@ static void ended(sc_computer *c, unsigned n, sc_ended how, const void *const *r
 	const st_site *site = st_site_of(os->sites, c);
 	say(os, "run of %s %s failed%s%s:%d: %s", node ? node : "?", where, site ? " (made at " : "", site ? site->file : "", site ? site->line : 0,
 		how == SC_LOOPING ? "looping" : more && more->error ? more->error : "thrown");
-}
-
-// places' node_of: the scope's node (a process's, a computed node's), so a header's metadata stops there
-static const char *scope_node(void *data, const sc_scope *o) {
-	ap_os *os = data;
-	return os->scopes ? sn_node_of(os->scopes, o) : NULL;
 }
 
 ap_os *ap_new(const ap_setup *setup) {
@@ -209,7 +216,7 @@ ap_os *ap_new(const ap_setup *setup) {
 	fr_init(&os->fronts, FR_PART);
 	os->order[0] = &os->rows.contributor, os->order[1] = &os->fronts.contributor, os->order[2] = &pl_children;
 	pl_connect(os->places, &(pl_setup){.root = root, .table = os->table, .paths = os->paths, .scheduler = os->s,
-		.contributors = os->order, .ncontributors = 3, .node_of = scope_node, .node_data = os});
+		.contributors = os->order, .ncontributors = 3});
 	os->scopes = sn_new(os->s, os->table);
 	sc_on_run_end(os->s, ended, os);
 	os->status = cst_new(&(cst_setup){os->places, os->table, os->s});
@@ -1528,10 +1535,10 @@ static void computer(void *data) {
 	sc_def def = {.f = computing, .equal = c->deep ? same_deep : same_is, .data = c};
 	if (c->effect) {
 		def.effect = acting;
-		st_create_effect(c->os->sites, def);
+		st_create_effect(c->os->sites, def, NULL, 0);
 	} else {
 		def.set = setting;
-		st_create_computer(c->os->sites, def);
+		st_create_computer(c->os->sites, def, NULL, 0);
 	}
 }
 
@@ -1568,15 +1575,15 @@ const ap_error *ap_start(ap_given *g, const ap_startop *op, const char **id) {
 	at[k] = keepdup(os, name);
 	op_value *path = op_list();
 	for (size_t i = 0; i <= k; i++) op_push(path, op_str(at[i]));
-	sc_pair *info = keep(os, sizeof *info);
-	*info = (sc_pair){"process", path};
-	sc_scope *scope = st_create_scope(os->sites, info, 1, NULL);
+	// its scope [["process", at], [PL_NODE, the computed node]] (it goes as an ephemeral node does), so
+	// its writes' metadata stops there. its scope written once, as made, as ermine/api's API_SCOPE: the
+	// PL_NODE pair of the nearest scope above it with one (none: not written)
+	sc_pair *info = keep(os, 2 * sizeof *info);
+	info[0] = (sc_pair){"process", path};
+	info[1] = (sc_pair){PL_NODE, op_str(made)};
+	sc_scope *scope = st_create_scope(os->sites, info, 2, NULL);
 	if (!scope) return ap_error_new(os, "stopped", "no part running to start under");
-	// its scope's node: the computed node (attached: it goes as an ephemeral node does), so its writes'
-	// metadata stops there. its scope written once, as made, as ermine/api's API_SCOPE: the node of the
-	// nearest scope above it with one (none: not written)
-	sn_attach(os->scopes, scope, made);
-	const char *above = sn_nearest(os->scopes, sc_scope_parent(scope));
+	const char *above = node_above(sc_scope_parent(scope));
 	if (above) {
 		op_value *v = op_str(above);
 		op_patch p = {.has_value = 1, .value = v};

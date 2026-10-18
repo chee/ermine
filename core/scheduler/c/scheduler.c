@@ -35,12 +35,14 @@ typedef struct act {
 	size_t at;
 } act;
 
-// a scope's info: the pairs given, nothing appended; the tree is parent. made once, with it. a
-// computer's: run and mark are the numbers its values point at, in place for its next run
+// a scope's info: the pairs given, nothing added; the tree is parent. made once, with it. a
+// computer's: one block, its own pairs (given, the first of pairs), then run and mark, the numbers
+// their values point at, set in place as each run starts
 typedef struct info_block info_block;
 struct info_block {
 	sc_info pub;
 	uint64_t run, mark;
+	size_t given;
 	sc_pair pairs[];
 };
 
@@ -1180,14 +1182,14 @@ static void begin(sc_scheduler *s, sc_scope *c, int rank) {
 		return;
 	}
 	liftChildren(c);
-	// its info, from here: this run's number, and the tick of the mark that made it due
-	// in place
+	// its info, from here: its own pairs, this run's number, and the tick of the mark that made it
+	// due, in place
 	info_block *ib = c->info;
 	ib->run = n;
 	ib->mark = mark;
-	ib->pairs[0] = (sc_pair){"run", &ib->run};
-	ib->pairs[1] = (sc_pair){"mark", &ib->mark};
-	ib->pub.n = 2;
+	ib->pairs[ib->given] = (sc_pair){"run", &ib->run};
+	ib->pairs[ib->given + 1] = (sc_pair){"mark", &ib->mark};
+	ib->pub.n = ib->given + 2;
 	sc_scope *wasopen = s->open;
 	sc_run *waswriter = s->open_writer;
 	s->reading = r;
@@ -1401,7 +1403,7 @@ bool sc_claim(sc_computer *c) {
 // computations
 
 // under the scope open
-static sc_computer *make(sc_scheduler *s, kind_t kind, sc_def def) {
+static sc_computer *make(sc_scheduler *s, kind_t kind, sc_def def, const sc_pair *info, size_t n) {
 	sc_scope *o = s->open;
 	if (o == NULL || o->state != ALIVE) return NULL;
 	if (kind != EFFECT) def.early = false;
@@ -1418,11 +1420,14 @@ static sc_computer *make(sc_scheduler *s, kind_t kind, sc_def def) {
 	// cuts it
 	if (s->running && s->running->nloop > 0) s->running->cut = true;
 	uint64_t t = ++s->tick;
-	// its info till its first run: the tick that made it due, its making
-	c->info = block_new(2);
+	// its info till its first run: its own pairs (copied), the tick that made it due, its making
+	if (info == NULL) n = 0;
+	c->info = block_new(n + 2);
+	for (size_t i = 0; i < n; i++) c->info->pairs[i] = info[i];
+	c->info->given = n;
 	c->info->mark = t;
-	c->info->pairs[0] = (sc_pair){"mark", &c->info->mark};
-	c->info->pub.n = 1;
+	c->info->pairs[n] = (sc_pair){"mark", &c->info->mark};
+	c->info->pub.n = n + 1;
 	dues now = {0};
 	bool told = s->nlisteners[ON_MARK] > 0;
 	bool now_due = due(s, c, t, s->running);
@@ -1440,8 +1445,12 @@ static sc_computer *make(sc_scheduler *s, kind_t kind, sc_def def) {
 	return c;
 }
 
-sc_computer *sc_create_computer(sc_scheduler *s, sc_def def) { return make(s, COMPUTE, def); }
-sc_computer *sc_create_effect(sc_scheduler *s, sc_def def) { return make(s, EFFECT, def); }
+sc_computer *sc_create_computer(sc_scheduler *s, sc_def def, const sc_pair *info, size_t n) {
+	return make(s, COMPUTE, def, info, n);
+}
+sc_computer *sc_create_effect(sc_scheduler *s, sc_def def, const sc_pair *info, size_t n) {
+	return make(s, EFFECT, def, info, n);
+}
 
 // promises
 

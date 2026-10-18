@@ -10,6 +10,7 @@ module Json
   , str
   , field
   , isWhole
+  , jint
   ) where
 
 import Data.Char (chr, ord, isDigit, isHexDigit, digitToInt)
@@ -19,7 +20,8 @@ import Numeric (showHex)
 data J
   = JNull
   | JBool Bool
-  | JNum Double
+  | JInt Integer -- a number token of digits alone: exact, any size
+  | JNum Double -- a token with fraction or exponent (or "-0"): the nearest double
   | JStr String
   | JArr [J]
   | JObj [(String, J)]
@@ -34,6 +36,12 @@ field _ _ = Nothing
 
 isWhole :: Double -> Bool
 isWhole d = not (isNaN d || isInfinite d) && d == fromInteger (round d)
+
+-- | a whole number as an integer (JInt, or a whole double), else nothing
+jint :: J -> Maybe Integer
+jint (JInt n) = Just n
+jint (JNum d) | isWhole d = Just (round d)
+jint _ = Nothing
 
 -- | Join each lone high surrogate followed by a lone low one into one code point.
 norm :: String -> String
@@ -137,6 +145,8 @@ number s =
            in (sg ++ ds, r2)
         _ -> ("", s3)
    in if null int then Left "bad number"
+        else if null frac && null ex && not (neg && all (== '0') int) && length int >= 1
+          then Right (JInt ((if neg then negate else id) (read int)), s4)
         else
           let mant = read (int ++ frac) :: Integer
               e = (if null ex then 0 else read ex :: Integer) - fromIntegral (length frac)
@@ -154,6 +164,7 @@ number s =
 render :: J -> String
 render JNull = "null"
 render (JBool b) = if b then "true" else "false"
+render (JInt n) = show n
 render (JNum d) = renderNum d
 render (JStr s) = renderStr s
 render (JArr xs) = "[" ++ intercalate "," (map render xs) ++ "]"

@@ -10,7 +10,8 @@
 // refused uncacheable: a read pl_spot can't name, or a value canonical CBOR can't encode.
 // a compiler's function: the registry's hf_compiler (host.h). a BuildError of the reference is a
 // message starting with its code here (a failed step's status has only the text).
-// bd_step and bd_compile are tracked reads. in a run, BD_STOP: a read ended the run; return now.
+// a step's computer is made with [[PL_NODE, its status node (step:<uuid>)]]: its writes' metadata
+// stops there. bd_step and bd_compile are tracked reads. in a run, BD_STOP: a read ended the run; return now.
 // memory: a result's value and text are borrowed from the table, good until the node changes; a
 // never step's are the caller's (op_free the value, free the text; its promise the reader's to
 // return). a step's name and code are held (op_ref) while it is out; data must live as long. out of

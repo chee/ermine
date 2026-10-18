@@ -255,7 +255,7 @@ typedef struct {
 static void make_reader(void *data) {
 	making *m = data;
 	sc_create_computer(m->w->s, (sc_def){.f = reader_f, .set = reader_set, .equal = reader_equal,
-		.data = m->x});
+		.data = m->x}, NULL, 0);
 }
 static reader *watch_accent(world *w) {
 	reader *x = calloc(1, sizeof *x);

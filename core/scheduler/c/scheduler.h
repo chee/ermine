@@ -4,13 +4,15 @@
 // scopes tree holds them: tearing a scope down takes everything under it.
 //
 // a scope is two things: an owner (what is made in it is put under it; the tree is
-// sc_scope_parent) and the info of the changes made in it: the pairs given, in order, opaque, as
-// keys are, nothing appended. a write's pairs: the info of the scope open (sc_get_info).
-// sc_create_scope makes one under a parent, else under the one open; sc_create_root_scope one with
-// no parent. no pairs given: it fails (empty). a scope is open only while sc_run_with_scope or the
-// scheduler runs code in it: a computer's runs, sets and acts open it, written by itself. its info
-// is its latest run's, set as the run starts: "run", its number, "mark", the tick of the mark that
-// made it due; before its first run, the mark alone. a scope's info is made once, with it; under a
+// sc_scope_parent) and the info of the changes made in it: an object as key/value pairs, keys
+// unique (the caller's to keep: never checked), their order no meaning, opaque, nothing added. a
+// write's info: the info of the scope open (sc_get_info). sc_create_scope makes one under a
+// parent, else under the one open; sc_create_root_scope one with no parent. no pairs given: it
+// fails (empty). a scope is open only while sc_run_with_scope or the scheduler runs code in it: a
+// computer's runs, sets and acts open it, written by itself. its info: one block, made as it is
+// made: its own pairs (given, copied once; none: none) and "mark", the tick of the mark that made
+// it due; as each run starts, "run", its number, and "mark" set in that block, never a new one. a
+// scope is made once; under a
 // computer, it belongs to that run (a plain scope is never claimed: it goes once a later run is
 // done; what an act made, before the next act). a teardown opens its scope, and what is under a scope goes with it open: a teardown on a
 // plain scope under a computer, run by the computer's teardown, its run's end or its act, is
@@ -75,9 +77,8 @@
 // set and act are lent them for the call. scopes and computers are the scheduler's until
 // sc_free, torn down or not (a host may keep a torn-down scope's pointer). a scope's info is
 // the scheduler's: the pairs given are copied, but each key and value is borrowed, the caller
-// keeps them alive as long as the scope. a plain scope's info lasts to sc_free; a computer's
-// until its next run, unless a scope made under that run: it then lasts to sc_free, as that
-// scope's owner. free promises first.
+// keeps them alive as long as the scope. an info lasts to sc_free; a computer's changes in place
+// as each run starts. free promises first.
 // single threaded.
 #ifndef SCHEDULER_H
 #define SCHEDULER_H
@@ -109,8 +110,9 @@ typedef struct {
 	const void *value;
 } sc_pair;
 
-// a scope's info: n pairs, in order, those given. a computer's: "run" and "mark", each value a
-// const uint64_t * (the run's number; the tick of the mark that made it due)
+// a scope's info: n pairs, keys unique, those given. a computer's: its own pairs, then "run" (from
+// its first run) and "mark", each value a const uint64_t * (the run's number; the tick of the
+// mark that made it due), set in place
 typedef struct {
 	const sc_pair *pairs;
 	size_t n;
@@ -233,15 +235,15 @@ bool sc_scope_old(const sc_scope *o);
 // an early effect
 bool sc_scope_early(const sc_scope *o);
 sc_scope *sc_scope_parent(const sc_scope *o);
-// its info. a computer's: its latest run's, good until its next run
+// its info, live. a computer's: changed in place as each run starts
 const sc_info *sc_scope_info(const sc_scope *o);
 
 // the scope open (NULL: none)
 sc_scope *sc_get_current_scope(const sc_scheduler *s);
 // the run open (NULL: from outside)
 sc_run *sc_get_run(const sc_scheduler *s);
-// the pairs of a write made now: the info of the scope open (NULL: none), as is: not copied,
-// good while the scope is, and a computer's until its next run
+// the info of a write made now: the info of the scope open (NULL: none), live, not copied: read it
+// now, do not keep it (a computer's changes as its runs start)
 const sc_info *sc_get_info(const sc_scheduler *s);
 
 // on scope o; it gone already, f runs now (its error, if it ran)
@@ -259,10 +261,11 @@ bool sc_claim(sc_computer *c);
 // SC_DISPOSED (and f not called) when o is gone, else 0
 const char *sc_run_with_scope(sc_scope *o, void (*f)(void *data), void *data);
 
-// tracked, under the scope open; first runs at the next pulse (early: now). NULL: none open, or
-// it is gone
-sc_computer *sc_create_computer(sc_scheduler *s, sc_def def);
-sc_computer *sc_create_effect(sc_scheduler *s, sc_def def);
+// tracked, under the scope open; first runs at the next pulse (early: now). info: its own n pairs
+// (keys unique, none "run" or "mark"), before its run's, copied (not their keys or values: kept alive as long as it); NULL: n 0. NULL:
+// none open, or it is gone
+sc_computer *sc_create_computer(sc_scheduler *s, sc_def def, const sc_pair *info, size_t n);
+sc_computer *sc_create_effect(sc_scheduler *s, sc_def def, const sc_pair *info, size_t n);
 
 // the running computer tracked this key; outside a run, or in sc_run_with_scope, nothing
 sc_track_status sc_track(sc_scheduler *s, const void *key);

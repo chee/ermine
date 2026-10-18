@@ -7,7 +7,7 @@
 #include "../../../core/scheduler/c/ptrmap.h"
 #include "../../../ermine/encoding/c/cbor.h"
 #include "../../../ermine/encoding/c/hash.h"
-#include "../../../ermine/clingy/c/clingy.h"
+#include "../../../filesystem/clingy/c/clingy.h"
 #include "../../../ermine/encoding/c/pack.h"
 #include "mem.h"
 
@@ -20,8 +20,9 @@ typedef struct bd_task task;
 struct bd_task {
 	bd *owner;
 	char key[65];
-	// the step's status node
+	// the step's status node, and its id as the PL_NODE pair's value its computer is made with
 	char *node;
+	op_value *node_value;
 	op_value *name, *code;
 	// a step's run; a compile's: its compiler's id (its function looked up as it runs)
 	bd_run run;
@@ -375,7 +376,10 @@ static sc_out step_f(void *previous, void *data) {
 
 static void make_step(void *data) {
 	task *t = data;
-	t->c = sc_create_computer(t->owner->scheduler, (sc_def){.f = step_f, .set = step_set, .data = t});
+	// its own pair: a write's metadata stops at the step's node
+	sc_pair info = {PL_NODE, t->node_value};
+	t->c = sc_create_computer(t->owner->scheduler, (sc_def){.f = step_f, .set = step_set, .data = t},
+		&info, 1);
 }
 
 // a step's computer, under the steps' scope. wanted in a run, made as the run ends, not in it: made
@@ -574,6 +578,7 @@ static bd_result ask(bd *b, const op_value *name, const op_value *code, bd_run r
 		t->node = pg_alloc(strlen(u) + 6);
 		strcpy(t->node, "step:");
 		strcat(t->node, u);
+		t->node_value = op_str(t->node);
 		free(u);
 		t->name = op_ref((op_value *)name);
 		t->code = op_ref((op_value *)code);
@@ -651,6 +656,7 @@ void bd_free(bd *b) {
 	for (size_t i = 0; i < b->nmade; i++) {
 		task *t = b->made[i];
 		free(t->node);
+		op_free(t->node_value);
 		free(t->compiler);
 		free(t->type);
 		free(t->keys);

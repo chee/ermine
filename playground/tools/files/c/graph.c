@@ -615,14 +615,10 @@ static Json *change_json(const ch_header *h) {
 	if (h->actor) jsonAdd(j, "actor", fg_json_of(h->actor));
 	if (h->reader) jsonAdd(j, "reader", jsonString(h->reader));
 	if (h->metadata_length) {
-		Json *l = jsonArray();
-		for (size_t i = 0; i < h->metadata_length; i++) {
-			Json *p = jsonArray();
-			jsonPush(p, jsonString(h->metadata[i].key));
-			jsonPush(p, fg_json_of(h->metadata[i].value));
-			jsonPush(l, p);
-		}
-		jsonAdd(j, "metadata", l);
+		Json *m = jsonObject();
+		for (size_t i = 0; i < h->metadata_length; i++)
+			jsonAdd(m, h->metadata[i].key, fg_json_of(h->metadata[i].value));
+		jsonAdd(j, "metadata", m);
 	}
 	return j;
 }
@@ -708,12 +704,22 @@ static const ch_header *header_in(fg *g, const Json *change, int64_t time) {
 	const Json *reader = object ? jsonGet(change, "reader") : NULL;
 	if (reader && reader->type == JSON_STRING) h->reader = p->reader = copy(reader->string);
 	const Json *meta = object ? jsonGet(change, "metadata") : NULL;
-	if (meta && meta->type == JSON_ARRAY && meta->array.count) {
+	// an object; old data a list of pairs: a key once, its first
+	if (meta && meta->type == JSON_OBJECT && meta->object.count) {
+		p->meta = alloc((size_t)meta->object.count * sizeof *p->meta);
+		for (int i = 0; i < meta->object.count; i++) {
+			const JsonMember *k = &meta->object.members[i];
+			p->meta[p->metas++] = (ch_entry){copy(k->key), fg_value_of(k->value)};
+		}
+		h->metadata = p->meta, h->metadata_length = p->metas;
+	} else if (meta && meta->type == JSON_ARRAY && meta->array.count) {
 		p->meta = alloc((size_t)meta->array.count * sizeof *p->meta);
 		for (int i = 0; i < meta->array.count; i++) {
 			const Json *pair = meta->array.items[i];
 			if (pair->type != JSON_ARRAY || pair->array.count != 2 || pair->array.items[0]->type != JSON_STRING) continue;
-			p->meta[p->metas++] = (ch_entry){copy(pair->array.items[0]->string), fg_value_of(pair->array.items[1])};
+			bool seen = false;
+			for (size_t j = 0; j < p->metas && !seen; j++) seen = strcmp(p->meta[j].key, pair->array.items[0]->string) == 0;
+			if (!seen) p->meta[p->metas++] = (ch_entry){copy(pair->array.items[0]->string), fg_value_of(pair->array.items[1])};
 		}
 		h->metadata = p->meta, h->metadata_length = p->metas;
 	}

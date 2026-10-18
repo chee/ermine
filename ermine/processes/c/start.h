@@ -10,7 +10,7 @@
 //   pr_halt(s);  /* before sc_free */  ...  pr_free(s);     // after tb_free and pl_free
 //
 // pr_start refused, nothing made: "taken" (a process at, above or under the path) or a name code.
-// else: a scope [["process", at]], its node proc:<uuid>, the row, attributes (ermine.process.args,
+// else: its node's id proc:<uuid>, a scope [["process", at], [PL_NODE, id]] (sn_give), the row, attributes (ermine.process.args,
 // .cwd, .pin, status pending), then options.body. pr_stop: options.stop, row out, scope torn down;
 // twice: nothing.
 // writes: all with the process's scope open.
@@ -43,7 +43,7 @@ typedef struct {
 	void *commit_ctx;
 	// where the scopes made here are noted (ermine/sites); NULL: not noted
 	st_sites *sites;
-	// 1: pr_give's run, a computer's latest run, on the process's node too (runs.h)
+	// 1: pr_give's run, a computer's latest run, on the runs' table (runs.h) by the process's id
 	int runs;
 	// the scope the processes' are made under (torn down: every process goes); NULL: one of its own,
 	// made under the scope open, its info [["processes", "start"]], noted where pr_new was called

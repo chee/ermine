@@ -46,10 +46,10 @@ sc_scope *st_note(st_sites *t, sc_scope *scope, const char *file, int line, cons
 	st_note((t), sc_create_root_scope(st_scheduler(t), (info), (n)), __FILE__, __LINE__, __func__)
 #define st_create_scope(t, info, n, parent) \
 	st_note((t), sc_create_scope(st_scheduler(t), (info), (n), (parent)), __FILE__, __LINE__, __func__)
-#define st_create_computer(t, def) \
-	st_note((t), sc_create_computer(st_scheduler(t), (def)), __FILE__, __LINE__, __func__)
-#define st_create_effect(t, def) \
-	st_note((t), sc_create_effect(st_scheduler(t), (def)), __FILE__, __LINE__, __func__)
+#define st_create_computer(t, def, info, n) \
+	st_note((t), sc_create_computer(st_scheduler(t), (def), (info), (n)), __FILE__, __LINE__, __func__)
+#define st_create_effect(t, def, info, n) \
+	st_note((t), sc_create_effect(st_scheduler(t), (def), (info), (n)), __FILE__, __LINE__, __func__)
 
 // its own site; NULL: none (made without the macros, or torn down)
 const st_site *st_site_of(const st_sites *t, const sc_scope *scope);

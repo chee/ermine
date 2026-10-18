@@ -151,11 +151,10 @@ at :: [V] -> Maybe V -> Maybe V
 at [] v = v
 at (k : ks) (Just (VMap kvs)) | VStr s <- k = at ks (lookup s kvs)
 at (k : ks) (Just (VList xs))
-  | VNum d <- k
-  , d >= 0
-  , d == fromInteger (round d)
-  , round d < (fromIntegral (length xs) :: Integer) =
-      at ks (Just (xs !! fromInteger (round d)))
+  | VInt n <- k
+  , n >= 0
+  , n < (fromIntegral (length xs) :: Integer) =
+      at ks (Just (xs !! fromInteger n))
 at _ _ = Nothing
 
 pathOf :: J -> [V]
@@ -172,7 +171,7 @@ token v = if idOf v /= 0 then Ident (idOf v) else Leaf v
 sameToken :: Maybe Token -> Maybe Token -> Bool
 sameToken Nothing Nothing = True
 sameToken (Just (Ident a)) (Just (Ident b)) = a == b
-sameToken (Just (Leaf (VNum a))) (Just (Leaf (VNum b))) = a == b -- as ===: -0 is 0, NaN is not NaN
+sameToken (Just (Leaf (VDbl a))) (Just (Leaf (VDbl b))) = a == b -- as ===: NaN is not NaN
 sameToken (Just (Leaf a)) (Just (Leaf b)) = a == b
 sameToken _ _ = False
 
@@ -201,7 +200,7 @@ write req ps0 st0 =
           let (r1, st') = maybe (Nothing, st) (\x -> let (y, s') = settle st x in (Just y, s')) r0
            in run r1 st' (k + 1 :: Int) rest
    in case run (root st2) st2 0 ps of
-        Left (c, i) -> (obj [("error", JStr c), ("patch", JNum (fromIntegral i))], st2)
+        Left (c, i) -> (obj [("error", JStr c), ("patch", JInt (fromIntegral i))], st2)
         Right (r', st3) -> do
           let undo = either (const []) (map (cut st2 . patchV) . concat . zipWith copyTake (reverse ps)) groups
               groups = invertGroups (root st2) ps

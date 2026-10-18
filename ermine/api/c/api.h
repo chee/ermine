@@ -32,7 +32,6 @@
 #include "../../../filesystem/protect/c/protect.h"
 #include "../../../extensions/patch-nodes/c/patch.h"
 #include "../../../extensions/presence/c/presence.h"
-#include "../../processes/c/scopes.h"
 #include "../../sites/c/sites.h"
 
 typedef enum {
@@ -76,9 +75,10 @@ typedef struct {
 	// the host's stop of a process: its row out, its scope torn down (programs' stop)
 	void (*stop)(void *ctx, const api_process *p);
 	void *stop_ctx;
-	// pairs a send adds after the caller's: the host's (trusted). NULL: none
-	const sc_pair *(*pairs)(void *ctx, size_t *n);
-	void *pairs_ctx;
+	// what a send's scope holds beside the caller (the caller over it), keys unique: the host's
+	// ("trusted-event"). NULL: none
+	const sc_pair *(*info)(void *ctx, size_t *n);
+	void *info_ctx;
 	// the policy every process's reads and writes are asked of, from where it is; NULL: all allowed
 	const pr_policy *may;
 	// the host's presence world; NULL: present, absent and presence fail
@@ -96,14 +96,11 @@ typedef struct {
 	// where memos, effects and send's scopes are noted (ermine/sites); NULL: not noted. a memo's site
 	// is the line that called api_memo (a macro), the program's
 	st_sites *sites;
-	// scope nodes (ermine/processes' scopes.h), the processes' too: each memo's and effect's node
-	// attached, its scope written. NULL: none. a header's metadata stops at the first scope with a
-	// node by places' own node_of (pl_setup): the host gives it sn_node_of on these
-	sn *scopes;
 } api_setup;
 
-// the attribute a memo's or effect's node holds its scope in: the node id of the nearest scope
-// above it with one, written once as the node is made (beside status.h's and runs.h's)
+// the attribute a memo's or effect's node holds its scope in: the PL_NODE key's id of the nearest
+// scope above it with one, written once as the node is made (beside status.h's and runs.h's). a
+// memo or effect is made with {PL_NODE: its node's id}, so a header's metadata stops at it
 #define API_SCOPE "ermine.computer.scope"
 
 typedef struct api_apis api_apis;
@@ -232,7 +229,7 @@ typedef int (*api_method_fn)(api *a, const op_value *const *args, size_t nargs, 
 	void *ctx);
 int api_method(api *a, const char *at, api_method_fn fn, void *ctx, api_node *out);
 // the method at x called, in a scope under the one open when it was made, with the caller's id and
-// the host's pairs. *out its return (the caller's). a macro: the call scope's site is the caller's
+// the host's info. *out its return (the caller's). a macro: the call scope's site is the caller's
 int api_send_at(api *a, api_target x, const op_value *const *args, size_t nargs, op_value **out,
 	const char *file, int line, const char *func);
 #define api_send(...) api_send_at(__VA_ARGS__, __FILE__, __LINE__, __func__)

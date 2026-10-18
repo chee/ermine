@@ -150,7 +150,10 @@ static op_value *number(reader *r) {
 	text[length] = 0;
 	double d = strtod(text, NULL);
 	free(text);
-	return op_num(d);
+	op_value *v = op_num(d);
+	// -0 read as written: a float typed array's element keeps it; a number is 0 (written 0)
+	v->num = d;
+	return v;
 bad:
 	r->why = "bad json";
 	return NULL;
@@ -393,7 +396,11 @@ static void put_number(FILE *out, double d, const char *before, const char *afte
 	if (isnan(d) || isinf(d)) {
 		fprintf(out, "%s%s%s", before, isnan(d) ? "NaN" : d > 0 ? "Infinity" : "-Infinity", after);
 	} else if (d == 0) fputs(signbit(d) ? "-0" : "0", out);
-	else if (d == floor(d) && fabs(d) < 1e21) fprintf(out, "%.0f", d);
+	else if (d == floor(d) && fabs(d) < 1e21) {
+		char digits[32];
+		whole_js_digits(d, digits); // as JSON.stringify writes it
+		fputs(digits, out);
+	}
 	else {
 		char buf[40];
 		for (int p = 1; p <= 17; p++) {
@@ -454,7 +461,7 @@ void op_json_write(FILE *out, const op_value *v) {
 			whole_decimal(v->big != NULL ? v->bigNegative : v->num < 0, at, n, digits);
 			fprintf(out, "{\"/\":{\"bigint\":\"%s\"}}", digits);
 			free(digits);
-		} else put_number(out, v->num, "{\"/\":{\"number\":\"", "\"}}");
+		} else put_number(out, v->num == 0 ? 0 : v->num, "{\"/\":{\"number\":\"", "\"}}"); // -0 is 0
 		break;
 	case OP_STR: op_json_string(out, v->str); break;
 	case OP_LIST:

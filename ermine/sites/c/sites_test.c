@@ -30,11 +30,11 @@ static int line_of_computer;
 static void in_scope(void *data) {
 	(void)data;
 	line_of_computer = __LINE__ + 1;
-	made = st_create_computer(sites, ((sc_def){.f = one, .set = set}));
+	made = st_create_computer(sites, ((sc_def){.f = one, .set = set}), NULL, 0);
 }
 static void bare(void *data) {
 	(void)data;
-	made = sc_create_computer(st_scheduler(sites), (sc_def){.f = one, .set = set});
+	made = sc_create_computer(st_scheduler(sites), (sc_def){.f = one, .set = set}, NULL, 0);
 }
 static int torn;
 static char *count_teardown(void *data) {

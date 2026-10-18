@@ -377,7 +377,10 @@ static Json *parseNumber(Parser *parser) {
 		fail(parser, "a number no binary64 holds");
 		return NULL;
 	}
-	return jsonNumber(number);
+	Json *value = jsonNumber(number);
+	// -0 read as written: a float typed array's element keeps it; a number is 0 (written 0, encoded 00)
+	value->number = number;
+	return value;
 }
 
 static int hexValue(unsigned char c) {
@@ -630,6 +633,11 @@ void jsonNumberText(double number, char out[32]) {
 		strcpy(out, "0"); // -0 too
 		return;
 	}
+	// whole and below 1e21: its digits, as JSON.stringify writes them
+	if (number == floor(number) && fabs(number) < 1e21) {
+		whole_js_digits(number, out);
+		return;
+	}
 	// the fewest digits from 15 that read back as the same double; %.17g always does
 	for (int precision = 15; precision <= 17; precision++) {
 		snprintf(out, 32, "%.*g", precision, number);
@@ -756,7 +764,8 @@ static void putScalar(Bytes *bytes, const Json *value) {
 				free(digits);
 				break;
 			}
-			putNumber(bytes, value->number, "{\"/\":{\"number\":\"", "\"}}");
+			// -0 is 0
+			putNumber(bytes, value->number == 0 ? 0 : value->number, "{\"/\":{\"number\":\"", "\"}}");
 			break;
 		}
 		case JSON_STRING:

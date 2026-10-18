@@ -77,15 +77,23 @@ static op_value *hex_value(const uint8_t *bytes, size_t n) {
 	return v;
 }
 
-// a commit's change with who signed it and the commit after its metadata, ["signer", key] and
-// ["commit", name] in hex (changeOf in replay.ts, given the commit's name): sync's own
+static bool signer_or_commit(const char *k) {
+	return k != NULL && (strcmp(k, "signer") == 0 || strcmp(k, "commit") == 0);
+}
+
+// a commit's change with who signed it and the commit in its metadata, signer (key) and commit
+// (name) in hex, over any of those keys it carried (changeOf in replay.ts, given the commit's name):
+// sync's own
 static header_t *signed_header(const ch_header *change, const uint8_t *signer, size_t signer_length,
 	const uint8_t name[32]) {
 	header_t *c = header_copy(change);
-	size_t n = c->h.metadata_length;
-	ch_entry *es = calloc(n + 3, sizeof *es);
+	size_t m = c->h.metadata_length, n = 0;
+	ch_entry *es = calloc(m + 3, sizeof *es);
 	if (es == NULL) abort();
-	for (size_t i = 0; i < n; i++) es[i] = c->metadata[i];
+	for (size_t i = 0; i < m; i++) {
+		if (!signer_or_commit(c->metadata[i].key)) es[n++] = c->metadata[i];
+		else free((char *)c->metadata[i].key), op_free((op_value *)c->metadata[i].value);
+	}
 	free(c->metadata);
 	es[n] = (ch_entry){copyString("signer"), hex_value(signer, signer_length)};
 	es[n + 1] = (ch_entry){copyString("commit"), hex_value(name, 32)};
@@ -94,12 +102,19 @@ static header_t *signed_header(const ch_header *change, const uint8_t *signer, s
 	return c;
 }
 
-// whether a change is a commit's, as changeOf gives it: its last metadata pairs who signed it and the
-// commit
+// whether a change is a commit's, as changeOf gives it: its metadata has who signed it and the
+// commit, each a string
 static bool is_signed(const ch_header *c) {
 	size_t n = c != NULL && c->metadata != NULL ? c->metadata_length : 0;
-	return n >= 2 && c->metadata[n - 2].key != NULL && strcmp(c->metadata[n - 2].key, "signer") == 0 &&
-		c->metadata[n - 1].key != NULL && strcmp(c->metadata[n - 1].key, "commit") == 0;
+	bool signer = false, commit = false;
+	for (size_t i = 0; i < n; i++) {
+		const char *k = c->metadata[i].key;
+		const op_value *v = c->metadata[i].value;
+		if (k == NULL || v == NULL || v->type != OP_STR) continue;
+		if (strcmp(k, "signer") == 0) signer = true;
+		else if (strcmp(k, "commit") == 0) commit = true;
+	}
+	return signer && commit;
 }
 
 // what sync stamps itself: the time, and no actor

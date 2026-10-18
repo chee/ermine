@@ -1,7 +1,7 @@
-// cbor_test.c: checks cbor.c (ENCODING.tex). c/build.sh builds it as cbor-test.
+// cbor_test.c: checks cbor.c (cbor.h). c/build.sh builds it as cbor-test.
 //
 // The fixed vectors are newcore/encoding/conformance/cbor/vectors.json, a list of
-// {"value": <its JSON form, ENCODING.tex>, "cbor": "<hex>"}, so every codec checks
+// {"value": <its JSON form, json_text.h>, "cbor": "<hex>"}, so every codec checks
 // against the same bytes: each value encodes to exactly its bytes, and the
 // bytes decode to a value equal to it; {"cbor", "refused"}: bytes no value
 // encodes as; {"form", "refused"}: a JSON form that is no value. Then round trips, rejected inputs,
@@ -128,11 +128,14 @@ static void vectors(const char *path) {
 			continue;
 		}
 		char *name = jsonPrint(value);
-		if (!value || !hex || !jsonDecode(&value)) {
+		Json *back = jsonGet(vector, "back");
+		if (!value || !hex || !jsonDecode(&value) || (back && !jsonDecode(&back))) {
 			printf("FAIL vector %d (%s) is malformed\n", i, name);
 			failures++;
 		} else {
 			expectBoth(name, value, hex);
+			// what it reads back as, when the vector says
+			if (back) expectBoth(name, back, hex);
 		}
 		free(name);
 	}
@@ -204,14 +207,30 @@ static uint64_t random64(void) {
 	return state;
 }
 
+/** the bytes of a whole number as cbor.h has it: the shortest head, a bignum past 64 bits */
+static bool isInteger(const unsigned char *out, size_t length) {
+	unsigned major = out[0] >> 5, info = out[0] & 31;
+	if (major <= 1) return info < 24 ? length == 1 : length == 1 + (1u << (info - 24));
+	return out[0] == 0xc2 || out[0] == 0xc3;
+}
+
 static void numbers(void) {
-	// every half decodes and encodes back to itself; NaN only as 7e00
+	// every half decodes and encodes back to itself, but whole ones (integers) and NaNs not 7e00
 	for (unsigned h = 0; h < 0x10000; h++) {
 		unsigned char bytes[3] = { 0xf9, (unsigned char)(h >> 8), (unsigned char)h };
 		bool nan = (h & 0x7c00) == 0x7c00 && (h & 0x3ff);
+		bool inf = (h & 0x7fff) == 0x7c00;
+		int e = (h >> 10) & 31;
+		// whole: zero, or a normal half with no fraction bits below its point
+		bool whole = (h & 0x7fff) == 0 || (!nan && !inf && e >= 15 && (e >= 25 || !((h & 0x3ff) & ((1u << (25 - e)) - 1))));
 		Json *value = cborDecode(bytes, 3, NULL, NULL);
 		if (nan && h != 0x7e00) {
 			expectTrue("a half NaN other than 7e00 is rejected", !value);
+			continue;
+		}
+		if (whole) {
+			expectTrue("a whole half is rejected: whole numbers are integers", !value);
+			jsonFree(value);
 			continue;
 		}
 		size_t length;
@@ -221,7 +240,7 @@ static void numbers(void) {
 		expectTrue("a half encodes to itself", cborEncode(value, out, sizeof out, &length, NULL) && length == 3 && memcmp(out, bytes, 3) == 0);
 		jsonFree(value);
 	}
-	// singles and doubles: each comes back, in the width the value needs
+	// singles and doubles: each comes back, in the width the value needs; a whole one an integer
 	for (int i = 0; i < 200000; i++) {
 		uint64_t bits = random64();
 		uint32_t word = (uint32_t)bits;
@@ -232,16 +251,67 @@ static void numbers(void) {
 		double each[] = { f, d, ldexp((double)(bits >> 40), -(int)(bits & 63)), (double)(int64_t)(bits >> 20) - (double)(1 << 22) };
 		for (int k = 0; k < 4; k++) {
 			Json *value = jsonNumber(each[k]);
-			unsigned char out[16];
+			unsigned char out[160];
 			size_t length;
 			cborEncode(value, out, sizeof out, &length, NULL);
-			bool wide = !isnan(each[k]) && !isinf(each[k]) && (fabs(each[k]) > 3.4028234663852886e+38 || (double)(float)each[k] != each[k]);
+			bool whole = isfinite(each[k]) && floor(each[k]) == each[k];
+			bool wide = !whole && !isnan(each[k]) && !isinf(each[k]) && (fabs(each[k]) > 3.4028234663852886e+38 || (double)(float)each[k] != each[k]);
+			if (whole) expectTrue("a whole number is an integer", isInteger(out, length));
 			expectTrue("a number not a single holds is a double", !wide || length == 9);
-			if (k == 0 && !isnan(f)) expectTrue("a single is at most 5 bytes", length <= 5);
+			if (k == 0 && !isnan(f) && !whole) expectTrue("a single is at most 5 bytes", length <= 5);
 			roundTrip("a number", value);
 			jsonFree(value);
 		}
 	}
+	// whole numbers at the edges: the integer, the same from int64, uint64 and bytes, back as made
+	struct {
+		bool negative;
+		const char *magnitude; // hex
+		const char *cbor;
+	} edges[] = {
+		{ false, "", "00" },
+		{ false, "17", "17" },
+		{ false, "18", "1818" },
+		{ true, "18", "37" },
+		{ true, "19", "3818" },
+		{ false, "ffffffff", "1affffffff" },
+		{ false, "0100000000", "1b0000000100000000" },
+		{ false, "1fffffffffffff", "1b001fffffffffffff" },
+		{ false, "20000000000001", "1b0020000000000001" },
+		{ true, "20000000000001", "3b0020000000000000" },
+		{ false, "ffffffffffffffff", "1bffffffffffffffff" },
+		{ true, "010000000000000000", "3bffffffffffffffff" },
+		{ false, "010000000000000000", "c249010000000000000000" },
+		{ true, "010000000000000001", "c349010000000000000000" },
+		{ false, "10000000000000000000000000", "c24d10000000000000000000000000" },
+	};
+	for (size_t i = 0; i < sizeof edges / sizeof *edges; i++) {
+		size_t n;
+		unsigned char *m = bytesOfHex(edges[i].magnitude, &n);
+		Json *value = jsonWhole(edges[i].negative, m, n);
+		expectBoth(edges[i].cbor, value, edges[i].cbor);
+		int64_t i64;
+		if (jsonInt64(value, &i64)) {
+			Json *again = jsonInteger(i64);
+			expectTrue("int64 the same", jsonEqual(again, value));
+			jsonFree(again);
+		}
+		jsonFree(value);
+		free(m);
+	}
+	Json *max = jsonUnsigned(UINT64_MAX), *min = jsonInteger(INT64_MIN), *five = jsonInteger(5);
+	expectBoth("2^64 - 1", max, "1bffffffffffffffff");
+	expectBoth("-2^63", min, "3b7fffffffffffffff");
+	int64_t got;
+	expectTrue("as int64: 2^64 - 1 is past it", !jsonInt64(max, &got));
+	expectTrue("as int64: -2^63", jsonInt64(min, &got) && got == INT64_MIN);
+	expectTrue("as int64: 5", jsonInt64(five, &got) && got == 5);
+	Json *half = jsonNumber(1.5), *minus = jsonNumber(-0.0);
+	expectTrue("as int64: 1.5 is a fraction", !jsonInt64(half, &got));
+	expectBoth("-0 is 0", minus, "00");
+	double near;
+	expectTrue("as double: 2^64 - 1 is 2^64", jsonDouble(max, &near) && near == 18446744073709551616.0);
+	jsonFree(max), jsonFree(min), jsonFree(five), jsonFree(half), jsonFree(minus);
 	// a NaN with a payload is the one NaN
 	double payload;
 	uint64_t bits = UINT64_C(0xfff8000000000123);
@@ -261,13 +331,27 @@ static void numbers(void) {
 
 static void rejected(void) {
 	expectRejected("", "nothing");
-	expectRejected("01", "an integer");
-	expectRejected("20", "a negative integer");
+	expectRejected("1817", "23 in a longer head");
+	expectRejected("3817", "-24 in a longer head");
+	expectRejected("1b00000000ffffffff", "an eight-byte head a four-byte one holds");
+	expectRejected("1f", "an indefinite integer");
+	expectRejected("1a0001", "an integer that ends early");
+	expectRejected("f90000", "0 as a half");
+	expectRejected("f98000", "-0 as a half");
+	expectRejected("f93c00", "1 as a half");
+	expectRejected("fa5a000000", "2^53 as a single");
+	expectRejected("fb7e37e43c8800759c", "1e300 as a double");
+	expectRejected("c2480100000000000000", "a bignum a plain integer holds");
+	expectRejected("c240", "a bignum of nothing");
+	expectRejected("c34a00010000000000000000", "a bignum with a leading zero");
+	expectRejected("c26a61616161616161616161", "a bignum over text");
+	expectRejected("c249010000000000", "a bignum that ends early");
 	expectRejected("fa3f800000", "1 as a single");
 	expectRejected("fb3ff0000000000000", "1 as a double");
 	expectRejected("fb3ff8000000000000", "1.5 as a double");
-	expectRejected("fa47c35000" "00", "bytes after the value");
+	expectRejected("1a000186a0" "00", "bytes after the value");
 	expectRejected("fb40f86a0000000000", "100000 as a double");
+	expectRejected("fa47c35000", "100000 as a single");
 	expectRejected("f97e01", "a NaN with a payload");
 	expectRejected("f9fe00", "a negative NaN");
 	expectRejected("fa7fc00000", "NaN as a single");
@@ -362,7 +446,7 @@ static void keys(void) {
 	// U+0000 in a key is the byte 00, and sorts first among keys of its length
 	char *why = NULL;
 	Json *value = jsonParse("{\"b\": 1, \"\\u0000\": 2, \"a\\u0000\": 3}", strlen("{\"b\": 1, \"\\u0000\": 2, \"a\\u0000\": 3}"), &why);
-	expectBoth("U+0000 in keys", value, "a36100f940006162f93c00626100f94200");
+	expectBoth("U+0000 in keys", value, "a361000261620162610003");
 	jsonFree(value);
 	value = jsonParse("[\"a\\u0000b\"]", strlen("[\"a\\u0000b\"]"), &why);
 	expectBoth("U+0000 in text", value, "8163610062");

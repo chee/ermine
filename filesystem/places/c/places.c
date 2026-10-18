@@ -1,5 +1,6 @@
 // Places (places.h), in C.
 #include "places.h"
+#include "../../../core/scheduler/c/ptrmap.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -68,20 +69,17 @@ typedef struct {
 	tb_table *table;
 	pt_paths *paths;
 	sc_scheduler *scheduler;
-	// the node a scope has (pl_setup's); NULL: none has one
-	const char *(*node_of)(void *data, const sc_scope *o);
-	void *node_data;
 	// the pairs by (the one part, the part), and in a list
 	tb_table *pairs;
 	pair *all;
-	// the spots this places made, by (the one part, the spot). forget finds its own in it
-	tb_table *mine;
+	// the spots this places made, by the spot. forget finds its own in it
+	pm mine;
 	// a typed array's element read by pl_read: the one number, remade by each
 	op_value scratch;
 	// the first answer that was not SC_OK to the reads told
 	sc_track_status status;
 	// what writes asked to be kept, by node, and in a list
-	tb_table *holds;
+	pm holds;
 	hold *held;
 	// the watches, in the order made; the ones stopped while being told, till the telling ends
 	pl_watch *watches, *watches_end, *dead;
@@ -102,18 +100,20 @@ typedef struct {
 	tb_table *kept;
 	// the places and views over it not let go
 	size_t refs;
-	// the header blocks alive, by (made_tag, their metadata), and in a list: pl_change_value finds a
+	// the header blocks alive, by their metadata, and in a list: pl_change_value finds a
 	// header's block by its metadata, which is the block's own while it lives
-	tb_table *made_by;
+	pm made_by;
 	struct pl_made *mades;
 } shared;
 
-static const char made_tag;
+
+// the one part the keeps are under
+static const char spots;
 
 struct pl_made {
 	size_t refs;
 	ch_site site;
-	// the metadata, flat, and the actor and reader (holds; NULL: none): the header refers into them
+	// the metadata, a map, and the actor and reader (holds; NULL: none): the header refers into them
 	op_value *pairs, *actor, *reader;
 	ch_entry *entries;
 	// the header as a value, made the first time pl_change_value asks (NULL: not yet)
@@ -134,8 +134,6 @@ struct pl {
 
 // the part of the key every spot of this places is under in `mine`
 static const char *children_part = "children";
-static const char spots;
-static tb_key spot_part(void) { return tb_symbol(&spots); }
 
 static pt_key paths_key(tb_key k) { return (pt_key){.string = k.string, .symbol = k.symbol}; }
 
@@ -162,12 +160,9 @@ pl *pl_new(void) {
 	l->s = xalloc(sizeof *l->s);
 	l->s->refs = 1;
 	l->s->pairs = tb_new();
-	l->s->mine = tb_new();
-	l->s->holds = tb_new();
 	l->s->by_id = tb_new();
 	l->s->on_route = tb_new();
 	l->s->kept = tb_new();
-	l->s->made_by = tb_new();
 	return l;
 }
 
@@ -185,8 +180,6 @@ void pl_connect(pl *l, const pl_setup *setup) {
 	l->s->table = setup->table;
 	l->s->paths = setup->paths;
 	l->s->scheduler = setup->scheduler;
-	l->s->node_of = setup->node_of;
-	l->s->node_data = setup->node_data;
 	ask(l, setup->contributors, setup->ncontributors);
 }
 
@@ -238,14 +231,14 @@ void pl_free(pl *l) {
 	free_dead(l);
 	for (size_t i = 0; i < s->nowned; i++) nd_free_entry(s->owned[i]);
 	free(s->owned);
-	tb_free(s->holds);
+	pm_clear(&s->holds);
 	// blocks still held elsewhere outlive the places: they forget it
 	for (struct pl_made *m = s->mades; m != NULL; m = m->next) m->s = NULL;
-	tb_free(s->made_by);
+	pm_clear(&s->made_by);
 	tb_free(s->kept);
 	tb_free(s->by_id);
 	tb_free(s->on_route);
-	tb_free(s->mine);
+	pm_clear(&s->mine);
 	tb_free(s->pairs);
 	while (s->all != NULL) {
 		pair *p = s->all;
@@ -257,7 +250,6 @@ void pl_free(pl *l) {
 	free(l);
 }
 
-static const char holding;
 
 // lets go of the holds of a node, from the first
 static void unhold_chain(pl *l, hold *h) {
@@ -270,8 +262,7 @@ static void unhold_chain(pl *l, hold *h) {
 
 static void hold_node(pl *l, const nd_entry *node, void *block, void (*release)(void *block),
 	int also) {
-	tb_key part = tb_symbol(&holding), where = tb_symbol(node);
-	hold *old = tb_get(l->s->holds, part, where);
+	hold *old = pm_get(&l->s->holds, node);
 	hold *h = xalloc(sizeof *h);
 	h->block = block;
 	h->release = release;
@@ -280,7 +271,7 @@ static void hold_node(pl *l, const nd_entry *node, void *block, void (*release)(
 	l->s->held = h;
 	if (also) h->chain = old;
 	else unhold_chain(l, old);
-	tb_sub(l->s->holds, part, where, h);
+	pm_set(&l->s->holds, node, h);
 }
 
 void pl_hold(pl *l, const nd_entry *node, void *block, void (*release)(void *block)) {
@@ -300,8 +291,8 @@ sc_track_status pl_status(pl *l) {
 
 // a spot of this places's, told to the scheduler (a read outside a run counts for nothing)
 static void tell(pl *l, pt_spot *s) {
-	int known = tb_get(l->s->mine, spot_part(), tb_symbol(s)) != NULL;
-	if (!known) tb_add(l->s->mine, spot_part(), tb_symbol(s), s);
+	int known = pm_get(&l->s->mine, s) != NULL;
+	if (!known) pm_set(&l->s->mine, s, s);
 	if (l->s->into != NULL) {
 		pl_set_add(l->s->into, s);
 		if (!known && l->s->made != NULL) pl_set_add(l->s->made, s);
@@ -312,7 +303,7 @@ static void tell(pl *l, pt_spot *s) {
 }
 
 int pl_spot(const pl *l, const void *key, pl_where *out) {
-	const pt_spot *s = key != NULL ? tb_get(l->s->mine, spot_part(), tb_symbol(key)) : NULL;
+	const pt_spot *s = key != NULL ? pm_get(&l->s->mine, key) : NULL;
 	if (s == NULL) return 0;
 	const pl_pair *p = s->source.symbol;
 	tb_key id = {.string = s->id.string, .symbol = s->id.symbol};
@@ -322,9 +313,9 @@ int pl_spot(const pl *l, const void *key, pl_where *out) {
 
 void pl_forget(const void *key, void *ctx) {
 	pl *l = ctx;
-	pt_spot *s = tb_get(l->s->mine, spot_part(), tb_symbol(key));
+	pt_spot *s = pm_get(&l->s->mine, key);
 	if (s == NULL || tb_get(l->s->kept, tb_symbol(&spots), tb_symbol(key)) != NULL) return;
-	tb_del(l->s->mine, spot_part(), tb_symbol(key));
+	pm_delete(&l->s->mine, key);
 	pt_release(l->s->paths, s);
 }
 
@@ -458,7 +449,7 @@ void pl_track(pl *l, const void *key) {
 }
 
 size_t pl_keep(pl *l, const void *key, int n) {
-	if (tb_get(l->s->mine, spot_part(), tb_symbol(key)) == NULL) return 0;
+	if (pm_get(&l->s->mine, key) == NULL) return 0;
 	tb_key part = tb_symbol(&spots), where = tb_symbol(key);
 	intptr_t now = (intptr_t)tb_get(l->s->kept, part, where) + n;
 	if (now > 0) tb_sub(l->s->kept, part, where, (void *)now);
@@ -1245,8 +1236,8 @@ pl_nameds pl_names(pl *l, const pl_here *here) {
 		pl_namelist_free(&names);
 	}
 	tb_free(seen);
-	// several contributors: in the order canonical CBOR gives a map's keys (ermine/encoding, cbor.ts
-	// keyOrder): by the encoding of each, bytewise, so the shorter first, then by UTF-8
+	// several contributors: in keyorder (core/util keyorder.ts): shorter in UTF-8 bytes first, then
+	// bytewise, the order canonical CBOR gives a map's keys
 	if (l->nasked > 1) qsort(out.items, out.n, sizeof *out.items, key_order);
 	return out;
 }
@@ -1618,22 +1609,18 @@ static int scheduler_own(const sc_pair *p) {
 	return strcmp(p->key, "run") == 0 || strcmp(p->key, "mark") == 0;
 }
 
-// who a write is, as levels are seen: the metadata so far, the actor and reader found (holds; NULL: none
-// yet), and whether the metadata still takes pairs (not past the first scope with a node)
+// who a write is, as levels are seen: the metadata so far (a map), the actor and reader found
+// (holds; NULL: none yet), and whether the metadata still takes keys (not past the first scope
+// holding PL_NODE)
 typedef struct {
 	op_value *metadata, *actor, *reader;
 	bool shown;
 } seeing;
 
-static void push_pair(op_value *list, const char *key, op_value *value) {
-	op_value *entry = op_list();
-	op_push(entry, op_str(key));
-	op_push(entry, value);
-	op_push(list, entry);
-}
-
-// one level's pairs, in order. a scope's (scoped): its run and mark as numbers
-static void see(seeing *w, const sc_pair *pairs, size_t n, bool scoped) {
+// one level's pairs. a scope's (scoped): its run and mark as numbers. a key already in the
+// metadata is an inner level's: it stays. whether they hold PL_NODE
+static bool see(seeing *w, const sc_pair *pairs, size_t n, bool scoped) {
+	bool node = false;
 	for (size_t i = 0; i < n; i++) {
 		const sc_pair *p = &pairs[i];
 		op_value *v = scoped && scheduler_own(p) ? op_num((double)*(const uint64_t *)p->value)
@@ -1641,24 +1628,24 @@ static void see(seeing *w, const sc_pair *pairs, size_t n, bool scoped) {
 		if (w->actor == NULL && strcmp(p->key, "actor") == 0) w->actor = op_ref(v);
 		if (w->reader == NULL && strcmp(p->key, "reader") == 0 && v->type == OP_STR)
 			w->reader = op_ref(v);
-		if (w->shown) push_pair(w->metadata, p->key, v);
+		if (strcmp(p->key, PL_NODE) == 0) node = true;
+		if (w->shown && op_get(w->metadata, p->key) == NULL) op_set(w->metadata, p->key, v);
 		else op_free(v);
 	}
+	return node;
 }
 
-// levels, innermost first: extra, the scope open, its parents to the root. metadata flat, up to
-// and with the first scope with a node, then ["node", its id]. 0: no scope open, nothing made
+// levels, innermost first: extra, the scope open, its parents to the root. metadata: one map, inner
+// keys over outer, up to and with the first scope whose own pairs hold PL_NODE. 0: no scope open,
+// nothing made
 static bool who_of(pl *l, const sc_pair *extra, size_t n, seeing *w) {
 	sc_scope *o = sc_get_current_scope(l->s->scheduler);
 	if (o == NULL) return false;
-	*w = (seeing){.metadata = op_list(), .shown = true};
+	*w = (seeing){.metadata = op_map(), .shown = true};
 	see(w, extra, n, false);
 	for (; o != NULL; o = sc_scope_parent(o)) {
 		const sc_info *info = sc_scope_info(o);
-		if (info != NULL) see(w, info->pairs, info->n, true);
-		if (!w->shown || l->s->node_of == NULL) continue;
-		const char *id = l->s->node_of(l->s->node_data, o);
-		if (id != NULL) push_pair(w->metadata, "node", op_str(id)), w->shown = false;
+		if (info != NULL && see(w, info->pairs, info->n, true)) w->shown = false;
 	}
 	return true;
 }
@@ -1684,8 +1671,7 @@ char *pl_header(pl *l, const sc_pair *extra, size_t n, const ch_site *site, ch_h
 	m->pairs = pairs, m->actor = w.actor, m->reader = w.reader;
 	m->entries = xalloc((pairs->count ? pairs->count : 1) * sizeof *m->entries);
 	ch_header h = {.has_time = 1, .time = (int64_t)time(NULL)};
-	for (size_t i = 0; i < pairs->count; i++)
-		m->entries[i] = (ch_entry){pairs->items[i]->items[0]->str, pairs->items[i]->items[1]};
+	for (size_t i = 0; i < pairs->count; i++) m->entries[i] = (ch_entry){pairs->keys[i], pairs->items[i]};
 	h.actor = w.actor;
 	if (w.reader != NULL) h.reader = w.reader->str;
 	h.metadata = m->entries, h.metadata_length = pairs->count;
@@ -1697,7 +1683,7 @@ char *pl_header(pl *l, const sc_pair *extra, size_t n, const ch_site *site, ch_h
 	m->next = l->s->mades;
 	if (m->next != NULL) m->next->before = m;
 	l->s->mades = m;
-	tb_add(l->s->made_by, tb_symbol(&made_tag), tb_symbol(m->entries), m);
+	pm_set(&l->s->made_by, m->entries, m);
 	*out = h;
 	*made = m;
 	return NULL;
@@ -1712,7 +1698,7 @@ void pl_made_free(void *block) {
 	pl_made *m = block;
 	if (m == NULL || --m->refs > 0) return;
 	if (m->s != NULL) {
-		tb_del(m->s->made_by, tb_symbol(&made_tag), tb_symbol(m->entries));
+		pm_delete(&m->s->made_by, m->entries);
 		if (m->before != NULL) m->before->next = m->next;
 		else m->s->mades = m->next;
 		if (m->next != NULL) m->next->before = m->before;
@@ -1722,7 +1708,7 @@ void pl_made_free(void *block) {
 	free(m->entries), free(m);
 }
 
-// a header's pieces as a map: time, actor, reader, external, metadata (the block's own list)
+// a header's pieces as a map: time, actor, reader, external, metadata (the block's own map)
 static op_value *change_of(const ch_header *h, pl_made *m) {
 	op_value *c = op_map();
 	if (h->has_time) op_set(c, "time", op_num((double)h->time));
@@ -1747,7 +1733,7 @@ static op_value *change_of(const ch_header *h, pl_made *m) {
 
 const op_value *pl_change_value(pl *l, const ch_header *h) {
 	if (h == NULL || h->metadata == NULL) return NULL;
-	pl_made *m = tb_get(l->s->made_by, tb_symbol(&made_tag), tb_symbol(h->metadata));
+	pl_made *m = pm_get(&l->s->made_by, h->metadata);
 	// another block's metadata, or a header whose pieces were changed after: not this one
 	if (m == NULL || h->metadata_length != m->pairs->count || h->actor != m->actor) return NULL;
 	if (m->change == NULL) m->change = change_of(h, m);

@@ -74,7 +74,7 @@ typedef struct {
 	// where the scopes made here are noted (ermine/sites); NULL: not noted. the programs' own scope's
 	// site is where ps_new was called, a process's where ps_start was
 	st_sites *sites;
-	// 1: each build's latest run on the process's node too (runs.h), as start.ts does when the
+	// 1: each build's latest run on the runs' table (runs.h) by the process's id, as start.ts does when the
 	// places given name reads
 	int runs;
 } ps_setup;

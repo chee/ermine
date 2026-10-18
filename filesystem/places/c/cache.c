@@ -2,7 +2,7 @@
 #include "cache.h"
 
 #include "../../../core/scheduler/c/selector.h"
-#include "../../../ermine/clingy/c/clingy.h"
+#include "../../clingy/c/clingy.h"
 
 #include <stdint.h>
 #include <stdio.h>

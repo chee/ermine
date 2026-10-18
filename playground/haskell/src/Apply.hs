@@ -33,7 +33,7 @@ data Patch = Patch
 
 keyV :: Key -> V
 keyV (KS s) = VStr s
-keyV (KN n) = VNum (fromInteger n)
+keyV (KN n) = VInt n
 
 -- | a patch back as a value: fields in the order path, range, value, move
 patchV :: Patch -> V
@@ -44,11 +44,10 @@ patchV (Patch p r v m) =
       ++ maybe [] (\x -> [("value", x)]) v
       ++ maybe [] (\(mp, mr) -> [("move", VMap ([("path", VList (map keyV mp))] ++ maybe [] (\s -> [("range", spanV s)]) mr))]) m
   where
-    spanV (a, b) = VList [VNum (fromInteger a), VNum (fromInteger b)]
+    spanV (a, b) = VList [VInt a, VInt b]
 
 whole :: V -> Maybe Integer
-whole (VNum d)
-  | not (isNaN d || isInfinite d) && d >= 0 && d == fromInteger (round d) = Just (round d)
+whole (VInt n) | n >= 0 = Just n
 whole _ = Nothing
 
 parsePath :: V -> Maybe [Key]

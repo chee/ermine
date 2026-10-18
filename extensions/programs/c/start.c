@@ -429,7 +429,7 @@ static void make_outcome(void *data) {
 	running *r = data;
 	ps *s = r->p->owner;
 	r->outcome = sc_create_computer(s->s.scheduler,
-		(sc_def){.f = fail_f, .set = no_set, .data = (void *)r->error});
+		(sc_def){.f = fail_f, .set = no_set, .data = (void *)r->error}, NULL, 0);
 }
 
 // the runner called, the process's scope open: a host's function, or a loaded one's run. a handle:
@@ -482,7 +482,7 @@ static void make_build(pr_process *life, void *data) {
 	ps_process *p = data;
 	ps *s = p->owner;
 	p->life = life;
-	p->build = sc_create_effect(s->s.scheduler, (sc_def){.f = build_f, .effect = act, .data = p});
+	p->build = sc_create_effect(s->s.scheduler, (sc_def){.f = build_f, .effect = act, .data = p}, NULL, 0);
 	pr_give(s->life, life, p->build, 1);
 }
 

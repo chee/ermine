@@ -34,7 +34,7 @@ step e@(Entry value ch) req = case getStr "op" req of
             Just (JObj kvs) -> filter ((/= "op") . fst) kvs
             _ -> [("time", JNum 1), ("actor", JStr "me")]
       case applyPatches value ps of
-        Left (c, i) -> pure (obj [("error", obj [("code", JStr c), ("patch", JNum (fromIntegral i))])], e)
+        Left (c, i) -> pure (obj [("error", obj [("code", JStr c), ("patch", JInt (fromIntegral i))])], e)
         Right v' -> do
           let undo = either (const []) id (invertPatches value ps)
               given = [maybe (failWith "not a patch") (toForm . patchV) (parsePatch p) | p <- ps]

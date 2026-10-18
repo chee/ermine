@@ -1,10 +1,13 @@
 -- | Values in their JSON form (conformance/typescript/form.ts): plain JSON, plus bytes, typed
 -- arrays, the number words, stand-ins, the "/" map and test-only symbols.
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Form
-  ( V (VNull, VBool, VNum, VStr, VList, VMap, VBytes, VTyped, VLive, VSym, VListI, VMapI)
+  ( V (VNull, VBool, VNum, VInt, VDbl, VStr, VList, VMap, VBytes, VTyped, VLive, VSym, VListI, VMapI)
   , idOf
+  , intJ
+  , normJ
   , Kind
   , TE (..)
   , fromForm
@@ -35,7 +38,8 @@ instance Eq TE where
 data V
   = VNull
   | VBool Bool
-  | VNum Double
+  | VInt Integer -- a whole number, exact, any size (never -0)
+  | VDbl Double -- only a non-whole double: fraction, NaN, Infinity, -Infinity
   | VStr String
   | VListI !Int [V] -- a list and its identity (0: none yet); only unread reads identities
   | VMapI !Int [(String, V)]
@@ -44,6 +48,20 @@ data V
   | VLive V
   | VSym String
   deriving (Show)
+
+-- | a number as a double: building normalises (a whole double is an integer, -0 is 0); matching
+-- sees any number as a double
+pattern VNum :: Double -> V
+pattern VNum d <- (numD -> Just d)
+  where
+    VNum d
+      | isWhole d = VInt (round d)
+      | otherwise = VDbl d
+
+numD :: V -> Maybe Double
+numD (VInt n) = Just (fromInteger n)
+numD (VDbl d) = Just d
+numD _ = Nothing
 
 pattern VList :: [V] -> V
 pattern VList xs <- VListI _ xs
@@ -55,18 +73,19 @@ pattern VMap kvs <- VMapI _ kvs
   where
     VMap kvs = VMapI 0 kvs
 
-{-# COMPLETE VNull, VBool, VNum, VStr, VList, VMap, VBytes, VTyped, VLive, VSym #-}
+{-# COMPLETE VNull, VBool, VInt, VDbl, VStr, VList, VMap, VBytes, VTyped, VLive, VSym #-}
 
 idOf :: V -> Int
 idOf (VListI i _) = i
 idOf (VMapI i _) = i
 idOf _ = 0
 
--- | equal as content (numbers as Object.is would have them: -0 and 0 differ, NaN is NaN)
+-- | equal as content (numbers by value: integers exactly, NaN is NaN; no -0 exists)
 instance Eq V where
   VNull == VNull = True
   VBool a == VBool b = a == b
-  VNum a == VNum b = (isNaN a && isNaN b) || (a == b && isNegativeZero a == isNegativeZero b)
+  VInt a == VInt b = a == b
+  VDbl a == VDbl b = (isNaN a && isNaN b) || a == b
   VStr a == VStr b = a == b
   VList a == VList b = a == b
   VMap a == VMap b = a == b
@@ -97,6 +116,7 @@ vlen _ = 0
 fromForm :: J -> Either String V
 fromForm JNull = Right VNull
 fromForm (JBool b) = Right (VBool b)
+fromForm (JInt n) = Right (VInt n)
 fromForm (JNum d) = Right (VNum d)
 fromForm (JStr s) = Right (VStr s)
 fromForm (JArr xs) = VList <$> mapM fromForm xs
@@ -111,6 +131,9 @@ slashForm (JObj [(tag, body)]) = case tag of
   "live" -> VLive <$> fromForm body
   "symbol" -> case body of JStr s -> Right (VSym s); _ -> Left "symbol"
   "bytes" -> case body of JStr s -> VBytes <$> unb64 s; _ -> Left "bytes"
+  "bigint" -> case body of
+    JStr s | Just n <- bigint s -> Right (VInt n)
+    _ -> Left "bigint"
   "number" -> case body of
     JStr "NaN" -> Right (VNum (0 / 0))
     JStr "Infinity" -> Right (VNum (1 / 0))
@@ -130,6 +153,7 @@ element k e
   | k == "float32" = TF . f32 <$> fl
   | k == "float64" = TF <$> fl
   | otherwise = case e of
+      JInt n -> inRange n
       JNum d | isWhole d -> inRange (round d)
       _ -> Left "typed"
   where
@@ -137,12 +161,37 @@ element k e
       ('-' : ds) -> not (null ds) && all isDigit ds
       ds -> not (null ds) && all isDigit ds
     fl = case e of
+      JInt n -> Right (fromRational (toRational n))
       JNum d -> Right d
       JStr "NaN" -> Right (0 / 0)
       JStr "Infinity" -> Right (1 / 0)
       JStr "-Infinity" -> Right (-1 / 0)
       _ -> Left "typed"
     inRange n = let (lo, hi) = range k in if n < lo || n > hi then Left "typed" else Right (TI n)
+
+-- | decimal digits, optional '-', no leading zero, past 2^53 - 1 in magnitude
+bigint :: String -> Maybe Integer
+bigint s = case s of
+  ('-' : ds) -> ok ds >>= \n -> Just (negate n)
+  ds -> ok ds
+  where
+    ok ds@(c : _) | all isDigit ds && c /= '0' = let n = read ds :: Integer in if n > 9007199254740991 then Just n else Nothing
+    ok _ = Nothing
+
+-- | a whole number's JSON: digits, or the bigint form past 2^53 - 1
+intJ :: Integer -> J
+intJ n
+  | abs n <= 9007199254740991 = JInt n
+  | otherwise = slash (JObj [("bigint", JStr (show n))])
+
+-- | a JSON form with its numbers as a value holds them: whole as integers (big ones in the
+-- bigint form), -0 as 0; float typed arrays' elements stay as they are
+normJ :: J -> J
+normJ (JNum d) | isWhole d = intJ (round d)
+normJ (JArr xs) = JArr (map normJ xs)
+normJ j@(JObj [("/", JObj [(k, _)])]) | k == "float32" || k == "float64" = j
+normJ (JObj kvs) = JObj [(k, normJ v) | (k, v) <- kvs]
+normJ j = j
 
 f32 :: Double -> Double
 f32 = float2Double . double2Float
@@ -203,7 +252,8 @@ num d
 toForm :: V -> J
 toForm VNull = JNull
 toForm (VBool b) = JBool b
-toForm (VNum d) = num d
+toForm (VInt n) = intJ n
+toForm (VDbl d) = num d
 toForm (VStr s) = JStr s
 toForm (VList xs) = JArr (map toForm xs)
 toForm (VMap [("/", v)]) = slash (JObj [("map", slash (toForm v))])
@@ -213,7 +263,7 @@ toForm (VTyped k es) = slash (JObj [(k, JArr (map el es))])
   where
     el (TI n)
       | k == "int64" || k == "uint64" = JStr (show n)
-      | otherwise = JNum (fromInteger n)
+      | otherwise = JInt n
     el (TF d)
       | isNaN d = JStr "NaN"
       | isInfinite d = JStr (if d > 0 then "Infinity" else "-Infinity")

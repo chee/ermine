@@ -25,9 +25,9 @@
 // pl_spot: names a held spot as a place; anything else none.
 // who: levels, innermost first: extra (if any), the scope open, its parents (sc_scope_parent) to
 // the root. values are op_values, except a scope's "run" and "mark" (uint64_t, given as numbers).
-// actor: the first "actor" over all levels; reader: the first string "reader". metadata: flat
-// pairs, repeats kept, up to the first scope with a node (pl_setup's node_of), then ["node", id];
-// none: every level. no scope open: unscoped.
+// actor: the first "actor" over all levels; reader: the first string "reader". metadata: the
+// levels merged into one map, inner keys over outer, up to and with the first scope whose own pairs
+// hold PL_NODE; none: every level. no scope open: unscoped.
 // memory: a header (pl_header) refers to a pl_made block; its node holds it until its next update
 // (pl_hold, pl_hold_also). read values and listed names are borrowed from the table. out of memory
 // aborts.
@@ -90,6 +90,10 @@ typedef struct {
 } pl_contributor;
 // a step's answer: nothing at here + name, nor anywhere under it (see PRUNING)
 #define PL_NONE 2
+
+// the key of the pair naming a scope's node (its value: the id, an op_value string): a write's
+// metadata stops at the first scope holding one. the one spelling: use this, never the string
+#define PL_NODE "node"
 // the id a walk is at on a level: not an id of any entry, so never given as an answer (pl_get: nothing
 // there)
 tb_key pl_level(void);
@@ -107,10 +111,6 @@ typedef struct {
 	// none: children alone
 	const pl_contributor *const *contributors;
 	size_t ncontributors;
-	// the id of the node a scope has (a string that outlives the header's making), NULL: none. a
-	// header's metadata stops at the first scope with one. NULL node_of: no scope has one
-	const char *(*node_of)(void *data, const sc_scope *o);
-	void *node_data;
 } pl_setup;
 // once: before anything is read or written
 void pl_connect(pl *p, const pl_setup *setup);
@@ -376,7 +376,7 @@ pl_members pl_list(pl *p, const char *const *path, size_t n);
 // who ------------------------------------------------------------------------------------------
 
 // who the scope open says a write is, extra (n pairs) its innermost level: a map of actor and
-// reader where there are some, and metadata (a flat list of [key, value]; see who above). New, the
+// reader where there are some, and metadata (a map; see who above). New, the
 // caller's to op_free. NULL: no scope open
 op_value *pl_who(pl *l, const sc_pair *extra, size_t n);
 

@@ -1,13 +1,14 @@
 // Scope nodes (typescript/scopes.ts), in C: each scope's node, an id of its own beside the scheduler's
 // scope, never saved (nothing saved reaches it). a process's value, its status and its pin are written
 // there. at the scope's teardown its node's entries go, as table events, so whoever read them is told.
-// a memo's or effect's node is attached (ermine/api): a computer's teardowns run after each of its
-// runs, so its node's entries are the api's to take out. Same rules as scopes.ts, which the suite in
-// ermine/processes/conformance/processes/ holds both to.
+// which node a scope has, for a write's metadata: its own PL_NODE pair (places.h), given as it is
+// made; this is only the teardown. a memo's or effect's node is the api's: a computer's teardowns
+// run after each of its runs, so its node's entries are the api's to take out. Same rules as
+// scopes.ts, which the suite in ermine/processes/conformance/processes/ holds both to.
 //
 // the scheduler knows no table, so the map is kept here, beside it.
-// core candidate: a scope could carry its node's id itself (as a computer could), and the
-// scheduler's teardown take its entries, instead of a map and a teardown registered from outside
+// core candidate: the scheduler's teardown could take a PL_NODE pair's entries, instead of a map and
+// a teardown registered from outside
 #ifndef SCOPES_H
 #define SCOPES_H
 
@@ -24,13 +25,5 @@ void sn_free(sn *s);
 // the scope's node id, made the first time (id, or "scope:<random hex>" when NULL); the same after,
 // whatever id is. A scope already gone: NULL. Registers the teardown that takes the node's entries. Good until the scope's teardown
 const char *sn_give(sn *s, sc_scope *scope, const char *id);
-// the scope's node id, id (copied), the same after: nothing registered, its entries the caller's. Good
-// until sn_free
-const char *sn_attach(sn *s, sc_scope *scope, const char *id);
-// the scope's own node; none: NULL
-const char *sn_node_of(const sn *s, const sc_scope *scope);
-// the node of the scope, or of the nearest scope above it that has one: whose a computer's run is,
-// inside a process. none, or scope NULL: NULL
-const char *sn_nearest(const sn *s, const sc_scope *scope);
 
 #endif

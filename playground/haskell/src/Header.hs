@@ -4,6 +4,7 @@ module Header (change, nowSeconds) where
 
 import Data.List (sortOn)
 import Data.Time.Clock.POSIX (getPOSIXTime)
+import Form (normJ)
 import Json
 
 order :: [String]
@@ -12,9 +13,9 @@ order = ["time", "actor", "reader", "external", "metadata", "op"]
 -- | the header's own fields in the change's order (no others); a site's as file, line, column,
 -- function; a time of -0 is 0; a metadata entry not a [string, value] pair is refused
 change :: [(String, J)] -> J
-change kvs = JObj (map (site . zero) (sortOn (rank . fst) (filter ((`elem` order) . fst) kvs)))
+change kvs = JObj (map (site . zero) (sortOn (rank . fst) (filter ((`elem` order) . fst) [(k, normJ v) | (k, v) <- kvs])))
   where
-    zero ("time", JNum t) | t == 0 = ("time", JNum 0)
+    zero ("time", JNum t) | t == 0 = ("time", JInt 0)
     zero ("metadata", JArr es) | not (all pair es) = error "metadata: an entry is not a [string, value] pair"
     zero kv = kv
     pair (JArr [JStr _, _]) = True

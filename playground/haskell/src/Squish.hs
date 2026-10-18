@@ -19,14 +19,14 @@ readP j = P j pth rng (field "value" j) (field "move" j)
   where
     pth = case field "path" j of Just (JArr ks) -> ks; _ -> []
     rng = case field "range" j of
-      Just (JArr [JNum a, JNum b]) -> Just (round a, round b)
+      Just (JArr [ja, jb]) | Just a <- jint ja, Just b <- jint jb -> Just (a, b)
       _ -> Nothing
 
 build :: [J] -> Maybe (Integer, Integer) -> Maybe J -> J
 build pth rng v =
   JObj $
     [("path", JArr pth)]
-      ++ maybe [] (\(a, b) -> [("range", JArr [JNum (fromInteger a), JNum (fromInteger b)])]) rng
+      ++ maybe [] (\(a, b) -> [("range", JArr [JInt a, JInt b])]) rng
       ++ maybe [] (\x -> [("value", x)]) v
 
 -- | a lone surrogate anywhere in a value (strings, list elements, map values; not map keys)
@@ -47,11 +47,11 @@ canon :: P -> J
 canon p =
   JObj $
     [("path", JArr (map zero (path p)))]
-      ++ maybe [] (\(a, b) -> [("range", JArr [JNum (fromInteger a), JNum (fromInteger b)])]) (range p)
+      ++ maybe [] (\(a, b) -> [("range", JArr [JInt a, JInt b])]) (range p)
       ++ maybe [] (\x -> [("value", x)]) (value p)
       ++ maybe [] (\x -> [("move", x)]) (move p)
   where
-    zero (JNum d) | d == 0 = JNum 0
+    zero (JNum d) | d == 0 = JInt 0
     zero k = k
 
 -- kept patches (last first), fouled paths
@@ -99,6 +99,7 @@ kill p (e : rest)
     isListRemoval q =
       range q == Nothing && value q == Nothing && case reverse (path q) of
         (JNum _ : _) -> True
+        (JInt _ : _) -> True
         _ -> False
 kill _ kept = kept
 
@@ -168,10 +169,10 @@ join e l
 
 runs :: [Integer] -> [J]
 runs [] = []
-runs (x : xs) = let (same, rest) = span (== x) xs in JNum (fromInteger x) : JNum (fromIntegral (1 + length same)) : runs rest
+runs (x : xs) = let (same, rest) = span (== x) xs in JInt x : JInt (fromIntegral (1 + length same)) : runs rest
 
 unruns :: [J] -> [Integer]
-unruns (JNum x : JNum n : rest) = replicate (round n) (round x) ++ unruns rest
+unruns (jx : jn : rest) | Just x <- jint jx, Just n <- jint jn = replicate (fromInteger n) x ++ unruns rest
 unruns _ = []
 
 encode :: [J] -> J
@@ -214,7 +215,7 @@ decode cols = go (unruns (col "path")) (unruns (col "shape")) (unruns (col "from
       pth <- case drop (fromInteger i) paths of
         (JArr p : _) | i >= 0 -> Right p
         _ -> Left "no such path"
-      let patch = JObj ([("path", JArr pth)] ++ maybe [] (\(a, b) -> [("range", JArr [JNum (fromInteger a), JNum (fromInteger b)])]) rng ++ maybe [] (\x -> [("value", x)]) v ++ maybe [] (\x -> [("move", x)]) m)
+      let patch = JObj ([("path", JArr pth)] ++ maybe [] (\(a, b) -> [("range", JArr [JInt a, JInt b])]) rng ++ maybe [] (\x -> [("value", x)]) v ++ maybe [] (\x -> [("move", x)]) m)
       (patch :) <$> go is ss fs' zs' vs' ms' last'
     go _ _ _ _ _ _ _ = Left "path and shape cover different patches"
     takeIf False xs = Right (Nothing, xs)

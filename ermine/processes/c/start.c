@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../../filesystem/places/c/runs.h"
+#include "runs.h"
 #include "../../../filesystem/places/c/status.h"
 #include "processes.h"
 
@@ -47,7 +47,9 @@ struct pr_process {
 	op_value *at_value;
 	char **cwd;
 	size_t ncwd;
-	sc_pair info;
+	// its scope's: ["process", at], [PL_NODE, id]
+	sc_pair info[2];
+	op_value *id_value;
 	sc_scope *scope;
 	// the places it runs in, and their root (copied)
 	pl *places;
@@ -65,7 +67,7 @@ struct pr {
 	sc_pair owner_info;
 	int owned;
 	cst *statuses;
-	// setup.runs: give's runs (runs.h); else NULL
+	// setup.runs: give's runs, on the runs' table (runs.h); else NULL
 	crn *runs;
 	pr_process **all;
 	size_t n, cap;
@@ -275,10 +277,12 @@ pr_process *pr_start_at(pr *s, pl *where, const char *const *steps, size_t nstep
 	p->nargs = o->nargs;
 	p->args = xalloc((o->nargs + 1) * sizeof *p->args);
 	for (size_t i = 0; i < o->nargs; i++) p->args[i] = xdup(o->args[i]);
-	p->info = (sc_pair){"process", p->at_value};
-	p->scope = sc_create_scope(s->s.scheduler, &p->info, 1, s->owner);
-	if (s->s.sites != NULL) st_note(s->s.sites, p->scope, file, line, func);
 	p->id = proc_id();
+	p->id_value = op_str(p->id);
+	p->info[0] = (sc_pair){"process", p->at_value};
+	p->info[1] = (sc_pair){PL_NODE, p->id_value};
+	p->scope = sc_create_scope(s->s.scheduler, p->info, 2, s->owner);
+	if (s->s.sites != NULL) st_note(s->s.sites, p->scope, file, line, func);
 	sn_give(s->s.scopes, p->scope, p->id);
 	if (s->n == s->cap) {
 		s->cap = s->cap ? s->cap * 2 : 8;
@@ -307,9 +311,9 @@ pr_process *pr_start_at(pr *s, pl *where, const char *const *steps, size_t nstep
 }
 
 void pr_stop(pr *s, pr_process *p) {
-	(void)s;
 	end(p);
 	free(sc_teardown(p->scope));
+	if (s->runs != NULL) crn_drop(s->runs, tb_string(p->id));
 }
 
 void pr_halt(pr *s) {
@@ -338,6 +342,7 @@ void pr_free(pr *s) {
 		pr_names_free(p->args, p->nargs);
 		free(p->root);
 		op_free(p->at_value);
+		op_free(p->id_value);
 		free(p);
 	}
 	free(s->all);

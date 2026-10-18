@@ -493,7 +493,8 @@ static made *make(pn *o, const char *part, const char *id, const char *const *ps
 	if (base != NULL) m->items[m->nitems++] = (pn_item){base->value, PN_TABLE, 0, NULL};
 	m->pair = list;
 	m->spots = at.v, m->nspots = at.n;
-	// the change: the table's, its op left out, ["overlay", the patch nodes applied] after its metadata
+	// the change: the table's, its op left out, its metadata with overlay: the patch nodes applied
+	// (in place of one there: keys unique)
 	ch_header h = {0};
 	size_t nmeta = 0;
 	if (base == NULL) {
@@ -504,10 +505,12 @@ static made *make(pn *o, const char *part, const char *id, const char *const *ps
 		nmeta = h.metadata_length;
 	}
 	m->meta = alloc((nmeta + 1) * sizeof *m->meta);
-	for (size_t i = 0; i < nmeta; i++) m->meta[i] = h.metadata[i];
-	m->meta[nmeta] = (ch_entry){"overlay", m->pair};
+	size_t kept = 0;
+	for (size_t i = 0; i < nmeta; i++)
+		if (strcmp(h.metadata[i].key, "overlay") != 0) m->meta[kept++] = h.metadata[i];
+	m->meta[kept] = (ch_entry){"overlay", m->pair};
 	h.metadata = m->meta;
-	h.metadata_length = nmeta + 1;
+	h.metadata_length = kept + 1;
 	m->entry = nd_make_entry((op_value *)value, &h, NULL);
 	return m;
 }

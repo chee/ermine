@@ -23,4 +23,4 @@ answer req = case getStr "op" req of
             patches = either failWith id (mapM fromForm ps)
          in root `seq` patches `seq` f root patches
       _ -> failWith "patches: not a list"
-    refused (c, i) = obj [("error", obj [("code", JStr c), ("patch", JNum (fromIntegral i))])]
+    refused (c, i) = obj [("error", obj [("code", JStr c), ("patch", JInt (fromIntegral i))])]

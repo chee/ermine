@@ -7,6 +7,7 @@
 
 #include <math.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -151,6 +152,31 @@ static inline size_t whole_of_u64(uint64_t u, unsigned char out[8]) {
 		if (n || b) out[n++] = b;
 	}
 	return n;
+}
+
+/** a whole double below 1e21 as JSON.stringify writes it: its shortest round-trip digits, then
+ * zeros to its point (2^60 is 1152921504606847000, not 1152921504606846976). NUL after; its length */
+static inline size_t whole_js_digits(double d, char out[32]) {
+	char e[40];
+	for (int p = 0; p <= 17; p++) {
+		snprintf(e, sizeof e, "%.*e", p, d);
+		if (strtod(e, NULL) == d) break;
+	}
+	// e: [-]D[.DDD]e[+-]XX
+	size_t o = 0;
+	const char *c = e;
+	if (*c == '-') out[o++] = *c++;
+	char digits[24];
+	size_t n = 0;
+	for (; *c && *c != 'e'; c++)
+		if (*c != '.') digits[n++] = *c;
+	int exponent = atoi(c + 1);
+	// digits[0] is at 10^exponent: n digits, then exponent + 1 - n zeros
+	for (size_t i = 0; i < n && (int)i <= exponent; i++) out[o++] = digits[i];
+	for (int z = exponent + 1 - (int)n; z > 0; z--) out[o++] = '0';
+	if (exponent < 0) out[o++] = '0';
+	out[o] = 0;
+	return o;
 }
 
 #endif
