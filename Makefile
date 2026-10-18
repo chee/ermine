@@ -199,68 +199,68 @@ runs_flags = -DPH_LIB
 runs_suite = runs
 runs_tests = $(wildcard ermine/processes/typescript/runs_harness_test.ts)
 LIBS += runs
-# sync's pieces for the new commit shape (ermine/encoding commit, extensions/sync): their own loop (lines_harness.c is conformance/c/harness.c
-# reading a symbol as a string no one can carry), against the suites in ermine/encoding/conformance and extensions/sync/conformance.
+# sync's pieces for the new commit shape (ermine/encoding commit, extensions/together): their own loop (lines_harness.c is conformance/c/harness.c
+# reading a symbol as a string no one can carry), against the suites in ermine/encoding/conformance and extensions/together/conformance.
 # commit_form_harness.c (a commit's forms on the line) and commits_harness.c (the commits a harness makes by label) are the harnesses', never
 # the libraries'
-sync_harness_src = ermine/encoding/c/lines_harness.c core/op/c/value.c core/op/c/json.c ermine/encoding/c/commit_form_harness.c
-sync_commits_src = extensions/sync/c/commits_harness.c
-sync_commit_src = ermine/encoding/c/commit.c ermine/encoding/c/pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src) core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
-sync-commit_src = $(sync_harness_src) ermine/encoding/c/commit_harness.c $(sync_commit_src)
-sync-commit = ermine/encoding/c/commit-harness
-sync-commit_suite = commit
-LIBS += sync-commit
-sync-seal_src = $(sync_harness_src) extensions/sync/c/seal_harness.c extensions/sync/c/seal.c extensions/sync/c/ed25519/ed25519.c extensions/sync/c/ed25519/sha2.c $(sync_commit_src)
-sync-seal = extensions/sync/c/seal-harness
-sync-seal_suite = seal
-LIBS += sync-seal
-sync_signed_src = extensions/sync/c/seal.c extensions/sync/c/ed25519/ed25519.c extensions/sync/c/ed25519/sha2.c $(sync_commit_src)
-sync-run_src = $(sync_harness_src) $(sync_commits_src) extensions/sync/c/run_harness.c extensions/sync/c/run.c $(sync_signed_src)
-sync-run = extensions/sync/c/run-harness
-sync-run_suite = run
-LIBS += sync-run
+together_harness_src = ermine/encoding/c/lines_harness.c core/op/c/value.c core/op/c/json.c ermine/encoding/c/commit_form_harness.c
+together_commits_src = extensions/together/c/commits_harness.c
+together_commit_src = ermine/encoding/c/commit.c ermine/encoding/c/pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src) core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
+together-commit_src = $(together_harness_src) ermine/encoding/c/commit_harness.c $(together_commit_src)
+together-commit = ermine/encoding/c/commit-harness
+together-commit_suite = commit
+LIBS += together-commit
+together-seal_src = $(together_harness_src) extensions/together/c/seal_harness.c extensions/together/c/seal.c extensions/together/c/ed25519/ed25519.c extensions/together/c/ed25519/sha2.c $(together_commit_src)
+together-seal = extensions/together/c/seal-harness
+together-seal_suite = seal
+LIBS += together-seal
+together_signed_src = extensions/together/c/seal.c extensions/together/c/ed25519/ed25519.c extensions/together/c/ed25519/sha2.c $(together_commit_src)
+together-packer_src = $(together_harness_src) $(together_commits_src) extensions/together/c/packer_harness.c extensions/together/c/packer.c $(together_signed_src)
+together-packer = extensions/together/c/packer-harness
+together-packer_suite = packer
+LIBS += together-packer
 # history, replay and snapshot: one harness, three suites (replay's and snapshot's suite.json name history's)
-sync-history_src = $(sync_harness_src) $(sync_commits_src) conformance/c/protocol_harness.c extensions/sync/c/history_harness.c extensions/sync/c/history.c extensions/sync/c/replay.c extensions/sync/c/snapshot.c extensions/sync/c/egwalker.c $(sync_signed_src)
-sync-history = extensions/sync/c/history-harness
-sync-history_suite = history replay snapshot egwalker
-LIBS += sync-history
+together-history_src = $(together_harness_src) $(together_commits_src) conformance/c/protocol_harness.c extensions/together/c/history_harness.c extensions/together/c/history.c extensions/together/c/replay.c extensions/together/c/snapshot.c extensions/together/c/egwalker.c $(together_signed_src)
+together-history = extensions/together/c/history-harness
+together-history_suite = history replay snapshot egwalker
+LIBS += together-history
 # the transport (devices over Subduction for C) and the integration with the table: Subduction's BLAKE3 and ermine/encoding's
 # are both linked, the C ones renamed (subduction_rename). Fragments are extensions/subduction's, as in the TypeScript
-sync_transport_src = extensions/sync/c/transport.c extensions/sync/c/ids.c extensions/sync/c/history.c extensions/sync/c/replay.c extensions/sync/c/snapshot.c \
-	extensions/sync/c/run.c extensions/subduction/c/fragment.c extensions/subduction/c/subduction/platform_posix.c $(sync_signed_src)
-sync-transport_src = $(sync_harness_src) $(sync_commits_src) conformance/c/protocol_harness.c extensions/sync/c/transport_harness.c extensions/sync/c/wires_harness.c \
-	extensions/subduction/c/subduction/store_memory.c $(sync_transport_src) $(subduction_lib)
-sync-transport = extensions/sync/c/transport-harness
-sync-transport_suite = transport
-sync-transport_flags = $(subduction_rename) -DCONFORMANCE_HOOK
-sync-transport_libs = $(transport_libs)
-LIBS += sync-transport
-sync-sync_src = $(sync_harness_src) $(sync_commits_src) conformance/c/protocol_harness.c extensions/sync/c/sync_harness.c extensions/sync/c/sync.c extensions/sync/c/egwalker.c extensions/sync/c/wires_harness.c \
-	extensions/subduction/c/subduction/store_memory.c core/table/c/table.c core/node/c/update.c $(sync_transport_src) $(subduction_lib)
-sync-sync = extensions/sync/c/sync-harness
-sync-sync_suite = sync
-sync-sync_flags = $(subduction_rename)
-sync-sync_libs = $(transport_libs)
-LIBS += sync-sync
+together_transport_src = extensions/together/c/transport.c extensions/together/c/mailroom.c extensions/together/stacks/subduction/c/subduction.c extensions/together/c/ids.c extensions/together/c/history.c extensions/together/c/replay.c extensions/together/c/snapshot.c \
+	extensions/together/c/packer.c extensions/subduction/c/fragment.c extensions/subduction/c/subduction/platform_posix.c $(together_signed_src)
+together-transport_src = $(together_harness_src) $(together_commits_src) conformance/c/protocol_harness.c extensions/together/c/transport_harness.c extensions/together/c/wires_harness.c \
+	extensions/subduction/c/subduction/store_memory.c $(together_transport_src) $(subduction_lib)
+together-transport = extensions/together/c/transport-harness
+together-transport_suite = transport
+together-transport_flags = $(subduction_rename) -DCONFORMANCE_HOOK
+together-transport_libs = $(transport_libs)
+LIBS += together-transport
+together-sync_src = $(together_harness_src) $(together_commits_src) conformance/c/protocol_harness.c extensions/together/c/sync_harness.c extensions/together/c/sync.c extensions/together/c/egwalker.c extensions/together/c/wires_harness.c \
+	extensions/subduction/c/subduction/store_memory.c core/table/c/table.c core/node/c/update.c $(together_transport_src) $(subduction_lib)
+together-sync = extensions/together/c/sync-harness
+together-sync_suite = sync
+together-sync_flags = $(subduction_rename)
+together-sync_libs = $(transport_libs)
+LIBS += together-sync
 # the presence channel over a device's ephemeral messages: two devices on a pipe, as channel_test.ts tries it; no suite
-sync-channel-test_src = extensions/sync/c/channel_test.c extensions/sync/c/channel.c extensions/sync/c/wires_harness.c core/op/c/value.c \
-	extensions/subduction/c/subduction/store_memory.c $(sync_transport_src) $(subduction_lib)
-sync-channel-test = extensions/sync/c/channel-test
-sync-channel-test_flags = $(subduction_rename)
-sync-channel-test_libs = $(transport_libs)
-LIBS += sync-channel-test
+together-channel-test_src = extensions/together/c/channel_test.c extensions/together/c/channel.c extensions/together/c/wires_harness.c core/op/c/value.c \
+	extensions/subduction/c/subduction/store_memory.c $(together_transport_src) $(subduction_lib)
+together-channel-test = extensions/together/c/channel-test
+together-channel-test_flags = $(subduction_rename)
+together-channel-test_libs = $(transport_libs)
+LIBS += together-channel-test
 # two hosts typing into one text, merging by eg-walker (merge_bench.ts in C): merge-bench [keys] [pure]; no suite
-sync-merge-bench_src = extensions/sync/c/merge_bench.c extensions/sync/c/sync.c extensions/sync/c/egwalker.c extensions/sync/c/wires_harness.c \
+together-merge-bench_src = extensions/together/c/merge_bench.c extensions/together/c/sync.c extensions/together/c/egwalker.c extensions/together/c/wires_harness.c \
 	core/op/c/value.c core/op/c/json.c extensions/subduction/c/subduction/store_memory.c core/table/c/table.c core/node/c/update.c \
-	$(sync_transport_src) $(subduction_lib)
-sync-merge-bench = extensions/sync/c/merge-bench
-sync-merge-bench_flags = $(subduction_rename)
-sync-merge-bench_libs = $(transport_libs)
-LIBS += sync-merge-bench
+	$(together_transport_src) $(subduction_lib)
+together-merge-bench = extensions/together/c/merge-bench
+together-merge-bench_flags = $(subduction_rename)
+together-merge-bench_libs = $(transport_libs)
+LIBS += together-merge-bench
 # JSON text (ermine/encoding/c/json_text.c): only what reads or writes it, the harnesses and the files store; program
 # has it through store
 json_text_src = ermine/encoding/c/json_text.c
-$(foreach l,blop cbor hash pack id seal history apply commit fragment transport sync-run names diag layout manifest store,$(eval $(l)_src += $(json_text_src)))
+$(foreach l,blop cbor hash pack id seal history apply commit fragment transport together-packer names diag layout manifest store,$(eval $(l)_src += $(json_text_src)))
 HARNESSES = $(foreach l,$(LIBS),$($(l)))
 CHECKS = $(addsuffix -check,$(HARNESSES))
 
@@ -276,7 +276,7 @@ endef
 $(foreach l,$(LIBS),$(eval $(call harness,$(l))))
 
 # headers: any change rebuilds what includes them
-$(HARNESSES) $(CHECKS): $(wildcard */*/c/*.h conformance/c/*.h)
+$(HARNESSES) $(CHECKS): $(wildcard */*/c/*.h */*/stacks/*/c/*.h conformance/c/*.h)
 
 # a suite on the one runner (conformance/run.ts): its scenarios (<package>/conformance/<suite>/), and
 # the package's tests of its harness (<package>/typescript/<suite>_harness_test.ts), both asked of
@@ -313,7 +313,7 @@ guard_tests = $(wildcard filesystem/places/typescript/guard_harness_test.ts)
 # the rest: env var, then the folders of their scenarios (conformance/<lib>/)
 pack_test = PACK_HARNESS conformance/pack/ conformance/cbor/
 blop_test = BLOP_HARNESS conformance/blop/
-# extensions/subduction's suites (extensions/subduction/conformance/subduction-<suite>/, the names of extensions/sync's and core/op's
+# extensions/subduction's suites (extensions/subduction/conformance/subduction-<suite>/, the names of extensions/together's and core/op's
 # are theirs): the C commit has no live values, so subduction-commit-live is only the TypeScript harness's (not here: HARNESS would send it to C)
 id_suite = subduction-id
 seal_suite = subduction-seal
@@ -400,17 +400,17 @@ core/unread/c/unread-bench: core/node/c/node.c core/node/c/update.c core/op/c/va
 # host.c is a stub that says so. No suite, not part of all; playground/tools/files/c/test/cli.sh tries it. playground/tools/files/c/files-check:
 # the same with the sanitizers
 # the files tool, and its host (host.c): the store, the files program and its watcher on the files graph, synced by
-# extensions/sync over Subduction (its files store, a WebSocket over OpenSSL)
+# extensions/together over Subduction (its files store, a WebSocket over OpenSSL)
 OPENSSL ?= $(shell brew --prefix openssl@3 2>/dev/null || echo /usr)
 files_src = $(sort playground/tools/files/c/files.c playground/tools/files/c/host.c playground/tools/files/c/program.c playground/tools/files/c/watch.c playground/tools/files/c/graph.c \
 	$(filter-out playground/tools/files/c/store_harness.c playground/tools/files/c/disk_harness.c,$(store_src)) $(graph_src) \
-	extensions/sync/c/sync.c extensions/sync/c/egwalker.c $(sync_transport_src) extensions/subduction/c/subduction/store_files.c \
+	extensions/together/c/sync.c extensions/together/c/egwalker.c $(together_transport_src) extensions/subduction/c/subduction/store_files.c \
 	extensions/subduction/c/subduction/websocket.c extensions/subduction/c/subduction/transport_openssl.c)
 files_flags = $(subduction_rename) -I$(OPENSSL)/include
 files_libs = $(transport_libs) $(program_libs) -L$(OPENSSL)/lib -lssl -lcrypto
-playground/tools/files/c/files: $(files_src) $(wildcard */*/c/*.h)
+playground/tools/files/c/files: $(files_src) $(wildcard */*/c/*.h */*/stacks/*/c/*.h)
 	$(CC) $(CFLAGS) $(BLAKE3FLAGS) $(files_flags) -o $@ $(filter %.c,$^) $(files_libs) -lm
-playground/tools/files/c/files-check: $(files_src) $(wildcard */*/c/*.h)
+playground/tools/files/c/files-check: $(files_src) $(wildcard */*/c/*.h */*/stacks/*/c/*.h)
 	$(CC) $(CHECKFLAGS) $(BLAKE3FLAGS) $(files_flags) -o $@ $(filter %.c,$^) $(files_libs) -lm
 
 clean:
