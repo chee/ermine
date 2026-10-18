@@ -32,9 +32,6 @@ const canon = (v: unknown): unknown =>
 		? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon((v as Answer)[k])]))
 		: v
 
-// the starts of entries that change their value in place
-const inPlace = (steps: Request[]) => steps.map((s) => s.op === "start" ? { ...s, cow: false } : s)
-
 // an entry request before and after every update, and what they must say:
 // asked: the requests to send; check: the answers to them (the scenario's own at its indexes)
 function around(
@@ -68,7 +65,7 @@ function around(
 	return { asked, at, check }
 }
 
-// every scenario, as it is and with every entry changing its value in place
+// every scenario
 Deno.test("around every update: the undo takes the value back, a failed one changes nothing", async () => {
 	const dir = suite("update").fixtures
 	for (
@@ -77,12 +74,10 @@ Deno.test("around every update: the undo takes the value back, a failed one chan
 	) {
 		const { steps } = JSON.parse(Deno.readTextFileSync(dir + f)) as { steps: Request[] }
 		const requests = steps.map(({ expect: _, fails: __, skip: ___, ...r }) => r)
-		for (const cow of [true, false]) {
-			const { asked, check } = around(cow ? requests : inPlace(requests))
-			const answers = await ask(command("update"), asked)
-			assertEquals(answers.length, asked.length, `${f}: one answer per request`)
-			check(answers)
-		}
+		const { asked, check } = around(requests)
+		const answers = await ask(command("update"), asked)
+		assertEquals(answers.length, asked.length, `${f}: one answer per request`)
+		check(answers)
 	}
 })
 
@@ -189,9 +184,6 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} patches, as the reference`, async ()
 			)
 		}
 		check(mine)
-		// the same with the value changed in place
-		const placed: Answer[] = await ask(command("update"), around(inPlace(steps)).asked)
-		assertEquals(line(canon(placed)), line(canon(mine)), `seed ${seed}: in place`)
 		// the one change ends where the patches one by one did
 		assertEquals(
 			canon(mine[mine.length - 1].entry.value),

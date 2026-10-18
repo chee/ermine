@@ -64,7 +64,7 @@ typedef struct {
 static int making(void *ctx, ch_header h, pl_changed *changed, nd_entry **made) {
 	Making *m = ctx;
 	op_value *kids = op_map();
-	nd_entry *e = nd_make_entry(kids, &h, &(nd_entry_options){.in_place = 1});
+	nd_entry *e = nd_make_entry(kids, &h);
 	op_free(kids);
 	pl_own(p, e);
 	tb_add(table, tb_string("children"), tb_string(m->id), e);

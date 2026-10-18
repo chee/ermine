@@ -383,7 +383,7 @@ static const char *patch_entry(fg *g, const char *part, const char *id, const op
 	size_t failed = 0;
 	int code;
 	if (!e) {
-		e = nd_make_entry(NULL, &h, NULL);
+		e = nd_make_entry(NULL, &h);
 		code = nd_update(e, b->patches, n, h, &failed);
 		if (code != OP_OK) {
 			nd_free_entry(e);
@@ -460,13 +460,13 @@ static void do_create(void *data) {
 	if (c->flag) keep(&g->ephemerals, copy(id));
 	// the entries' change refers to the header's block: one hold each
 	if (c->value) {
-		nd_entry *e = nd_make_entry(c->value, &h, NULL);
+		nd_entry *e = nd_make_entry(c->value, &h);
 		keep(&g->made, e);
 		pl_hold(g->places, e, pl_made_ref(made), pl_made_free);
 		tb_add(g->table, tb_string("value"), tb_string(id), e);
 	}
 	op_value *none = op_map();
-	nd_entry *k = nd_make_entry(none, &h, NULL);
+	nd_entry *k = nd_make_entry(none, &h);
 	op_free(none);
 	keep(&g->made, k);
 	pl_hold(g->places, k, pl_made_ref(made), pl_made_free);
@@ -741,7 +741,7 @@ static void do_intro(void *data) {
 		const sd_version *v = &n->value.versions[0];
 		const ch_header *h = header_in(g, v->change, time);
 		op_value *content = fg_value_of(v->content);
-		nd_entry *e = nd_make_entry(content, h, NULL);
+		nd_entry *e = nd_make_entry(content, h);
 		op_free(content);
 		keep(&g->made, e);
 		tb_sub(g->table, tb_string("value"), tb_string(n->id), e);
@@ -755,7 +755,7 @@ static void do_intro(void *data) {
 		if (!ichange) ichange = o->versions[0].change;
 	}
 	if (info->count) {
-		nd_entry *e = nd_make_entry(info, header_in(g, ichange, time), NULL);
+		nd_entry *e = nd_make_entry(info, header_in(g, ichange, time));
 		keep(&g->made, e);
 		tb_sub(g->table, tb_string("attributes"), tb_string(n->id), e);
 	}
@@ -780,7 +780,7 @@ static void do_intro(void *data) {
 		op_set(slots, n->children[i].name, v);
 		if (!schange && o->length) schange = o->versions[0].change;
 	}
-	nd_entry *k = nd_make_entry(slots, header_in(g, schange, time), NULL);
+	nd_entry *k = nd_make_entry(slots, header_in(g, schange, time));
 	op_free(slots);
 	keep(&g->made, k);
 	tb_sub(g->table, tb_string("children"), tb_string(n->id), k);

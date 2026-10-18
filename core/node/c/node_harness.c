@@ -37,7 +37,7 @@ static void node(const op_value *request, FILE *out) {
 	for (size_t i = 0; i < n; i++) given[i] = (nd_value){values->keys[i], values->items[i]};
 	const op_value *header = op_get(request, "header");
 	ch_header h = header ? hh_header(header) : (ch_header){0};
-	nd_node *made = nd_make_node(given, n, &h, NULL);
+	nd_node *made = nd_make_node(given, n, &h);
 	if (made == NULL) hh_fail("out of memory");
 	fputs("{\"node\":", out);
 	hh_put_node(out, made);

@@ -48,11 +48,6 @@ Deno.test("createNode: no tables, an empty node; any name is a table, __proto__ 
 	assertEquals(Object.getPrototypeOf(node), Object.prototype)
 })
 
-Deno.test("createNode: the options for every table", () => {
-	const node = createNode({ value: [1], children: {} }, { time: 0, actor: "me" }, { cow: false })
-	assertEquals([node.value.cow, node.children.cow], [false, false])
-})
-
 Deno.test("createNode: a node made another way is just as good", () => {
 	const node: Node<{ value: number }> = { value: createEntry(1, { time: 0, actor: "me" }) }
 	assertEquals(node.value.value, 1)

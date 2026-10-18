@@ -1,16 +1,26 @@
 // deno run --allow-run core/unread/typescript/unread_places_bench.ts [names…]
 // places' folders, written one patch at a time, three ways: node's update copying ("copy"), in
-// place (cow: false, as places keeps children today: a reader's map changes under it), unread.
+// place (op's apply with cow: false: a reader's map changes under it), unread.
 // writes: a place over a name there, an unplace then a place back, a rename there and back. reads
 // (unread's read): none (a burst), before every write, every 10 writes. µs per write after the
 // first (fastest of 15 rounds); the first write (the caller's map: copied, fastest round); the
 // slowest write after the first in any round (a copy after a read, and the collector's pauses)
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
-import type { Patch } from "@ermine/op/apply"
+import apply, { type Patch } from "@ermine/op/apply"
 import { createUnread } from "./unread.ts"
 
 const h: ChangeHeader = { time: 1, actor: "bench" }
+
+// in place, as op's apply does with cow: false: the value changed where it is, the change made
+// as node's update makes it
+function inPlace(e: Entry<unknown>, ps: Patch[], change: ChangeHeader) {
+	const undo: Patch[] = []
+	const after = apply(e.value, ps, { undo, cow: false })
+	if (after === undefined) delete e.value
+	else e.value = after
+	e.change = { ...change, op: { patches: ps, undo } }
+}
 const only = Deno.args
 
 const folder = (n: number) =>
@@ -40,9 +50,10 @@ function measure(way: Way, n: number, write: (i: number) => Patch[], every: numb
 	let best = Infinity, first = Infinity, worst = 0
 	for (let r = 0; r < 15; r++) {
 		const u = createUnread()
-		const e = createEntry<unknown>(folder(n), h, way === "in place" ? { cow: false } : {})
+		const e = createEntry<unknown>(folder(n), h)
 		const one = (i: number) => {
-			if (way !== "unread") return update(e, write(i), h)
+			if (way === "copy") return update(e, write(i), h)
+			if (way === "in place") return inPlace(e, write(i), h)
 			if (every && i % every === 0) u.read(e as Entry<unknown>)
 			u.update(e as Entry<unknown>, write(i), h)
 		}
