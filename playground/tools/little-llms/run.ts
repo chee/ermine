@@ -52,7 +52,7 @@ const canvas = viewTasks.filter((t) => t.kind == "canvas").map((t) => t.id)
 
 export function specs(m: Model): Spec[] {
 	const out: Spec[] = []
-	const medium = m.tier == "medium"
+	const medium = m.tier == "medium" || !!m.reduced
 	const add = (
 		exp: string,
 		task: string,

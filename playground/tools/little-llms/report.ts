@@ -34,7 +34,8 @@ const rate = (
 const pct = (r: Rate) => (r.n ? Math.round((100 * r.ok) / r.n) : NaN)
 const show = (r: Rate) => (r.n ? `${r.ok}/${r.n}` : "–")
 const showPct = (r: Rate) => (r.n ? `${pct(r)}%` : "–")
-const where = (o: Partial<Cell>) => cells.filter((c) => Object.entries(o).every(([k, v]) => (c as Record<string, unknown>)[k] == v))
+const where = (o: Record<string, unknown>) =>
+	cells.filter((c) => Object.entries(o).every(([k, v]) => (c as Record<string, unknown>)[k] == v))
 const seenOnly = (c: Cell) => !c.first.pass && passedAll(c.first.seen) && !passedAll(c.first.hidden)
 const passedAll = (o?: { checks?: { ok: boolean; required?: boolean }[] }) => !!o?.checks && o.checks.every((c) => c.ok || !c.required)
 const fixedSelf = (c: Cell) => c.first.pass || !!c.repaired?.pass
@@ -165,7 +166,7 @@ summary.ui = order.map((m) => ({
 }))
 table(
 	"UI kits",
-	"Out of 6 UI tasks × the prompts each model ran (3 for tiny/small: min, example, scaffold; 1 for medium: example). dom = vanilla JS, html = DOM-0 inline handlers, jsx = Preact hooks, reactive = mutable `state` + `view()` string, re-rendered after each event, ermine = open/read/edit/method.",
+	"Out of 6 UI tasks × the prompts each model ran (3: min, example, scaffold; or 1, example, for the medium models and qwen3.5-2b). dom = vanilla JS, html = DOM-0 inline handlers, jsx = Preact hooks, reactive = mutable `state` + `view()` string, re-rendered after each event, ermine = open/read/edit/method.",
 	["model", ...uiKits],
 	order.map((
 		m,
@@ -175,10 +176,13 @@ table(
 	]),
 )
 const prompts = ["min", "example", "scaffold"]
-const full = order.filter((m) => tier(m) != "medium")
+const full = order.filter((m) => {
+	const x = models.find((y) => y.name == m)!
+	return x.tier != "medium" && !x.reduced
+})
 table(
 	"Prompt style by kit",
-	"UI tasks, tiny and small models (they ran all three prompt styles).",
+	"UI tasks, the models that ran all three prompt styles.",
 	["kit", ...prompts],
 	uiKits.map((
 		k,

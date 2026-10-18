@@ -11,6 +11,8 @@ export type Model = {
 	think?: boolean
 	// llama.cpp crashes on LFM2.5, and garbles Qwen3.5, with more than one sequence at a time
 	slots?: number
+	// only the example-prompted grid: one slot makes the full one too slow on CPU
+	reduced?: boolean
 }
 
 // in browser terms: tiny loads anywhere, small wants WebGPU or a patient wllama, medium is WebGPU only
@@ -51,6 +53,7 @@ export const models: Model[] = [
 		tier: "small",
 		think: true,
 		slots: 1,
+		reduced: true,
 	},
 	{
 		name: "qwen2.5-coder-3b",
