@@ -18,7 +18,7 @@ nc_sources="$nc/core/op/c/value.c $nc/core/op/c/apply.c $nc/core/op/c/invert.c $
   $nc/core/scheduler/c/selector.c $nc/filesystem/places/c/places.c $nc/filesystem/places/c/cache.c $nc/filesystem/places/c/status.c $nc/ermine/processes/c/runs.c \
   $nc/ermine/processes/c/processes.c $nc/ermine/processes/c/scopes.c $nc/ermine/boxes/c/boxes.c \
   $nc/extensions/build/c/host.c $nc/extensions/build/c/build.c $nc/filesystem/clingy/c/clingy.c $nc/ermine/types/c/types.c $nc/ermine/types/c/utis.c \
-  $nc/ermine/processes/c/start.c $nc/ermine/sites/c/sites.c \
+  $nc/ermine/processes/c/start.c $nc/ermine/sites/c/sites.c $nc/filesystem/protect/c/protect.c $nc/ermine/dens/c/dens.c \
   $nc/extensions/programs/c/programs.c $nc/extensions/programs/c/programs_json.c $nc/extensions/programs/c/start.c $nc/extensions/programs/c/dlopen.c \
   $nc/ermine/encoding/c/json.c $nc/ermine/encoding/c/json_text.c $nc/ermine/encoding/c/cbor.c $nc/ermine/encoding/c/commit.c $nc/ermine/encoding/c/pack.c $nc/ermine/encoding/c/hash.c \
   $nc/extensions/together/c/sync.c $nc/extensions/together/c/transport.c $nc/extensions/together/c/mailroom.c $nc/extensions/together/stacks/subduction/c/subduction.c $nc/extensions/together/c/ids.c $nc/extensions/together/c/seal.c $nc/extensions/together/c/history.c $nc/extensions/together/c/replay.c \

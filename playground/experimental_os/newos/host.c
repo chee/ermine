@@ -9,6 +9,21 @@
 // path and runs it, and what it is given is newOS's API (create_api). What
 // the host keeps for itself (/hw, /loaders, /ermine/types, the clock) is
 // ephemeral, made again each boot.
+//
+// newOS is a den too (ermine/dens' dens.h), made at boot after /loaders, at
+// /system/dens/<id> and /system/den (makeDen). Its id: the device tree's host
+// as a name, then a uuid kept on the card beside sync/ (<sd>/den, made at the
+// first boot; a fresh card empties sync/, not it: the machine is the same).
+// It offers what /loaders holds, the same live functions: the runners
+// (javascript, driver, exec, wasm, dlopen: each its form, the api its
+// program is given, where it runs), the compilers clang and clang-native,
+// and the display (the frame buffer) as a surface. A boot entry
+// { start, runner, program } starts its program by the den (dn_start: the
+// runner a path from the root, /system/den/runners/<name>; the program's
+// ermine.type its form), as the image's drivers do; { start, program } is
+// satisfy's, as before, and so is every start a program asks for. What the
+// den started stops by dn_stop (hostKill, hostRestart); nothing stops at
+// power off, as before.
 
 #include "host.h"
 #include "../../../ermine/encoding/c/json_text.h"
@@ -22,6 +37,8 @@
 #include "card/net.h"
 
 #include "../../../extensions/programs/c/start.h"
+#include "../../../extensions/subduction/c/subduction/platform.h"
+#include "../../../ermine/dens/c/dens.h"
 #include "../../../ermine/types/c/types.h"
 
 #include <fcntl.h>
@@ -36,6 +53,9 @@
 
 /** how many records a line keeps while no driver has it: past that the oldest go */
 #define KEEPS 64
+
+/** the target clang-native builds for (cc.c's), in its identity */
+#define NATIVE_TARGET "arm64-apple-macos11"
 
 /** a line: its arrivals counted; while no driver has it, its newest KEEPS records, oldest first */
 typedef struct Held {
@@ -86,6 +106,7 @@ struct Host {
 	hf *functions;
 	bd *builds;
 	ps *programs;
+	dn *den; // newOS as a den (ermine/dens): its runners, compilers and surfaces offered (makeDen); NULL: none
 	ty_ids types;
 	Proc *procs;
 	int nprocs, procs_room;
@@ -132,20 +153,24 @@ static const ty_known TYPES[] = {
 	{DYLIB_TYPE, (const char *const[]){"public.data", "public.executable", NULL}, (const char *const[]){".dylib", NULL}, NULL},
 };
 
-// the runners (ermine/programs' host runners): a name, what it takes, its function
+// the runners (ermine/programs' host runners, and the den's): a name, what it takes, the api its program is
+// given and where it runs (the den's ermine.runner.api and .where), its function
 typedef struct {
-	const char *name, *takes;
+	const char *name, *takes, *api, *where;
 	hf_runner run;
 } Runner;
 static const Runner RUNNERS[] = {
-	{"javascript", "com.netscape.javascript-source", jscRun},
-	{"driver", "party.chee.ermine.driver", driverRun},
-	{"exec", "party.chee.ermine.exec", execRun},
-	{"wasm", "org.webassembly.wasm", loaderRun},
+	{"javascript", "com.netscape.javascript-source", "ermine.js", "thread", jscRun},
+	{"driver", "party.chee.ermine.driver", "ermine.native", "den", driverRun},
+	{"exec", "party.chee.ermine.exec", "ermine.wire", "os-process", execRun},
+	{"wasm", "org.webassembly.wasm", "ermine.js", "thread", loaderRun},
 };
 
 static const ap_error *startProgram(void *ctx, const char *const *at, size_t nat, const char *const *program, size_t nprogram,
 	const op_value *data, const char **id);
+static const ap_error *startByDen(Host *h, const char *const *at, size_t nat, const char *const *runner, size_t nrunner,
+	const char *const *program, size_t nprogram, const op_value *data, const char **id);
+static void denStop(Host *h, dn_process *p);
 
 // --- small things
 
@@ -227,16 +252,17 @@ static bool under(const char *const *path, size_t n, const char *const *at, size
 /**
  * a process stopped (its runner's stop, its row, its scope), the processes started under its path first: one
  * started under another's runs at /proc/<pid>, in front where it was asked (startProgram), and that place goes
- * with the process it is in, so it goes too, as a part's children end with it
+ * with the process it is in, so it goes too, as a part's children end with it. One the den started: dn_stop
  */
 static void stop(Host *h, const char *pid) {
 	Proc *proc = NULL;
 	for (int i = 0; i < h->nprocs && !proc; i++)
 		if (!strcmp(h->procs[i].id, pid)) proc = &h->procs[i];
-	if (!proc) return;
+	dn_process *by = !proc && h->den ? dn_find(h->den, pid) : NULL;
+	if (!proc && !by) return;
 	// its path, and the one it was asked for when it is nested itself
 	const char *const *at;
-	size_t nat = ps_at(proc->p, &at);
+	size_t nat = proc ? ps_at(proc->p, &at) : dn_process_at(by, &at);
 	const char *const *asked = NULL;
 	size_t nasked = 0;
 	for (int i = 0; i < h->nnested; i++)
@@ -262,7 +288,8 @@ static void stop(Host *h, const char *pid) {
 			h->nested[i] = h->nested[--h->nnested];
 			break;
 		}
-	ps_stop(h->programs, proc->p);
+	if (proc) ps_stop(h->programs, proc->p);
+	else denStop(h, by);
 }
 
 /** the stops asked for */
@@ -274,11 +301,44 @@ static void reap(Host *h) {
 	}
 }
 
+/** a list of names in a value (an attribute's), as an address for this turn (hostTemp); NULL if it is not one */
+static const char *const *namesOf(Host *h, const op_value *v, size_t *n) {
+	if (!v || v->type != OP_LIST) return NULL;
+	const char **names = hostTemp(h, sizeof *names * (v->count + 1));
+	for (size_t i = 0; i < v->count; i++) {
+		if (v->items[i]->type != OP_STR) return NULL;
+		names[i] = hostTempDup(h, v->items[i]->str);
+	}
+	names[v->count] = NULL;
+	*n = v->count;
+	return names;
+}
+
+/** a process the den started, stopped and started again by the den: its runner and program as its node says them */
+static const ap_error *restartByDen(Host *h, dn_process *p) {
+	const nd_entry *e = tb_get(ap_table(h->os), tb_string("attributes"), tb_string(dn_process_id(p)));
+	const op_value *runner = e && e->value && e->value->type == OP_MAP ? op_get(e->value, DN_RUNNER) : NULL;
+	const op_value *program = e && e->value && e->value->type == OP_MAP ? op_get(e->value, DN_PROGRAM) : NULL;
+	size_t nr = 0, np = 0;
+	const char *const *by = runner && runner->type == OP_MAP ? namesOf(h, op_get(runner, "at"), &nr) : NULL;
+	const char *const *path = program && program->type == OP_MAP ? namesOf(h, op_get(program, "at"), &np) : NULL;
+	if (!by || !path) return ap_error_new(h->os, "not-a-process", "its node says no runner or no program");
+	const char *const *where;
+	size_t nwhere = dn_process_at(p, &where);
+	const char **copy = hostTemp(h, sizeof *copy * (nwhere + 1));
+	for (size_t i = 0; i < nwhere; i++) copy[i] = hostTempDup(h, where[i]);
+	denStop(h, p);
+	const char *id = NULL;
+	return startByDen(h, copy, nwhere, by, nr, path, np, NULL, &id);
+}
+
 const ap_error *hostRestart(Host *h, const char *const *address, size_t n) {
 	const ap_item *it = ap_first(ap_host(h->os), address, n);
 	Proc *proc = NULL;
 	for (int i = 0; it && i < h->nprocs && !proc; i++)
 		if (!strcmp(h->procs[i].id, it->id)) proc = &h->procs[i];
+	dn_process *by = !proc && it && h->den ? dn_find(h->den, it->id) : NULL;
+	if (by) return restartByDen(h, by);
 	if (!proc) return ap_error_new(h->os, "not-a-process", "no process there");
 	// its program and path, from its pin, before it goes
 	const nd_entry *e = tb_get(ap_table(h->os), tb_string("attributes"), tb_string(proc->id));
@@ -650,23 +710,39 @@ static void attribute(Host *h, const char *const *address, size_t n, const char 
 
 // --- processes: ermine/programs' start, found by satisfy
 
+/** newOS's API for a process's scope and path, its work counted from its first run */
+static ap_api *processApi(Host *h, sc_scope *scope, const char *pid, const char *const *at, size_t nat) {
+	ap_goes_with(h->os, scope, pid);
+	ap_api *api = ap_process(h->os, scope, pid, at, nat);
+	if (!workOfPid(h, pid)) {
+		Work *w = calloc(1, sizeof *w);
+		w->pid = strdup(pid);
+		w->scope = scope;
+		h->work = realloc(h->work, sizeof *h->work * (size_t)(h->nwork + 1));
+		h->work[h->nwork++] = w;
+		free(sc_register_teardown(ap_scheduler(h->os), scope, workGone, w));
+	}
+	return api;
+}
+
 /** what the program is given: newOS's API, for the process's scope and path (start.h's create_api) */
 static void *createApi(const ps_context *ctx, void *data) {
 	Host *h = data;
-	ap_goes_with(h->os, ctx->scope, ctx->process.id);
-	ap_api *api = ap_process(h->os, ctx->scope, ctx->process.id, ctx->process.at, ctx->process.nat);
-	if (!workOfPid(h, ctx->process.id)) {
-		Work *w = calloc(1, sizeof *w);
-		w->pid = strdup(ctx->process.id);
-		w->scope = ctx->scope;
-		h->work = realloc(h->work, sizeof *h->work * (size_t)(h->nwork + 1));
-		h->work[h->nwork++] = w;
-		free(sc_register_teardown(ap_scheduler(h->os), ctx->scope, workGone, w));
-	}
+	ap_api *api = processApi(h, ctx->scope, ctx->process.id, ctx->process.at, ctx->process.nat);
 	// started inside another process's node: where it was asked to be, in front (startProgram)
 	for (int i = 0; i < h->nnested; i++)
 		if (!strcmp(h->nested[i].id, ctx->process.id)) ap_here_is(h->os, ctx->process.id, h->nested[i].at, h->nested[i].n), api->place = h->nested[i].at, api->nplace = h->nested[i].n - 1, api->name = h->nested[i].at[h->nested[i].n - 1];
 	return api;
+}
+
+/** a process's data in a node "data" inside it, before its runner runs (at the next pulse); NULL: none */
+static void dataIn(Host *h, const char *id, const op_value *data) {
+	if (!data) return;
+	ap_api *api = ap_host(h->os);
+	const char *made = NULL;
+	const ap_error *e = ap_create(api, data, NULL, 1, &made);
+	if (!e) e = ap_insert(api, id, "data", made, NULL, NULL);
+	hostFailed(h, e, "start: its data");
 }
 
 /** a program (a path from the root) started at at, its data in a node "data" inside it */
@@ -733,15 +809,79 @@ static const ap_error *startProgram(void *ctx, const char *const *at, size_t nat
 		h->nnested++;
 		hostFailed(h, ap_insert(ap_host(h->os), above.string ? hostTempDup(h, above.string) : "", at[nat - 1], *id, NULL, NULL), "start: in front where it was asked to be");
 	}
-	// its data, inside it, before its runner runs (at the next pulse)
-	if (data) {
-		ap_api *api = ap_host(h->os);
-		const char *made = NULL;
-		const ap_error *e = ap_create(api, data, NULL, 1, &made);
-		if (!e) e = ap_insert(api, *id, "data", made, NULL, NULL);
-		hostFailed(h, e, "start: its data");
-	}
+	dataIn(h, *id, data);
 	return NULL;
+}
+
+// --- processes the den starts: dens' start, by a runner it offers (makeDen)
+
+/** what the program is given: newOS's API, as createApi gives it (dens.h's create_api) */
+static void *denApi(const dn_context *ctx, void *data) {
+	return processApi(data, ctx->scope, ctx->process.id, ctx->process.at, ctx->process.nat);
+}
+
+/** a start by the den, with the machine's scope open */
+typedef struct {
+	Host *h;
+	const char *const *at, *const *runner, *const *program;
+	size_t nat, nrunner, nprogram;
+	dn_process *p;
+	dn_refusal no;
+} DenStart;
+
+static void denStarting(void *data) {
+	DenStart *s = data;
+	// its pin, {program: {at}, runner: {at}}: what jsc.c's frames read (the program's url), and lookup
+	op_value *pin = op_map(), *program = op_map(), *runner = op_map(), *pat = op_list(), *rat = op_list();
+	for (size_t i = 0; i < s->nprogram; i++) op_push(pat, op_str(s->program[i]));
+	for (size_t i = 0; i < s->nrunner; i++) op_push(rat, op_str(s->runner[i]));
+	op_set(program, "at", pat);
+	op_set(runner, "at", rat);
+	op_set(pin, "program", program);
+	op_set(pin, "runner", runner);
+	s->p = dn_start(s->h->den, s->runner, s->nrunner, &(dn_program){ .at = s->program, .nat = s->nprogram, .has_at = 1 }, s->at,
+		s->nat, &(dn_options){ .pin = pin }, &s->no);
+	op_free(pin);
+}
+
+/**
+ * a program (a path from the root) started at at by the den, on the runner at runner (a path from the root,
+ * /system/den/runners/<name>): no satisfy, no chain; the program's ermine.type is the runner's form. Its data
+ * in a node "data" inside it, as startProgram's
+ */
+static const ap_error *startByDen(Host *h, const char *const *at, size_t nat, const char *const *runner, size_t nrunner,
+	const char *const *program, size_t nprogram, const op_value *data, const char **id) {
+	if (!h->den) return ap_error_new(h->os, "refused", "no den");
+	DenStart s = { h, at, runner, program, nat, nrunner, nprogram, NULL, { 0 } };
+	sc_run_with_scope(ap_machine(h->os), denStarting, &s);
+	if (!s.p) {
+		op_value *why = dn_refusal_value(&s.no);
+		char *text = valPrint(why);
+		const ap_error *e = ap_error_new(h->os, s.no.refused && !strcmp(s.no.refused, "taken") ? "already-there" : "refused", text);
+		free(text);
+		op_free(why);
+		return e;
+	}
+	*id = hostTempDup(h, dn_process_id(s.p));
+	dataIn(h, *id, data);
+	return NULL;
+}
+
+typedef struct {
+	Host *h;
+	dn_process *p;
+} DenStop;
+
+static void denStopping(void *data) {
+	DenStop *s = data;
+	dn_refusal no;
+	if (dn_stop(s->h->den, s->p, NULL, &no)) hostSay(s->h, "stop %s: refused (%s)", dn_process_id(s->p), no.refused);
+}
+
+/** a process the den started, stopped (dn_stop: asked, its handle's stop, its row, its scope), the machine's scope open */
+static void denStop(Host *h, dn_process *p) {
+	DenStop s = { h, p };
+	sc_run_with_scope(ap_machine(h->os), denStopping, &s);
 }
 
 // --- /hw, from the device tree: the host's own, ids its own
@@ -831,6 +971,17 @@ static void installing(void *data) {
 		.list = TYPES, .n = sizeof TYPES / sizeof *TYPES, .commit = ap_commit, .commit_ctx = h->os, .ids = &h->types });
 }
 
+/** a compiler's identity (build.h's ermine.programs.compiler), by which the cache keeps its builds apart: clang, the flags, and the target (NULL: wasm's); new */
+static op_value *compilerIdentity(const char *target) {
+	op_value *identity = op_map(), *flags = op_list();
+	op_push(flags, op_str("-O2"));
+	op_push(flags, op_str("-Wall"));
+	op_set(identity, "compiler", op_str("clang"));
+	if (target) op_set(identity, "target", op_str(target));
+	op_set(identity, "flags", flags);
+	return identity;
+}
+
 /** /ermine/types (ty_install), and /loaders: a folder of runners (ermine.programs.loaders), each a live function of the host's taking a type */
 static void makeLoaders(Host *h) {
 	Installing in = { h, 0 };
@@ -850,12 +1001,8 @@ static void makeLoaders(Host *h) {
 	op_free(clang);
 	size_t nc;
 	const char *const *compiler = hostPath(h, &nc, "loaders", "clang", NULL);
-	op_value *takes = op_list(), *gives = op_str("org.webassembly.wasm"), *identity = op_map(), *flags = op_list();
+	op_value *takes = op_list(), *gives = op_str("org.webassembly.wasm"), *identity = compilerIdentity(NULL);
 	op_push(takes, op_str("public.c-source"));
-	op_push(flags, op_str("-O2"));
-	op_push(flags, op_str("-Wall"));
-	op_set(identity, "compiler", op_str("clang"));
-	op_set(identity, "flags", flags);
 	attribute(h, compiler, nc, PG_TAKES, takes);
 	attribute(h, compiler, nc, PG_GIVES, gives);
 	attribute(h, compiler, nc, BD_COMPILER, identity);
@@ -868,13 +1015,8 @@ static void makeLoaders(Host *h) {
 	own(h, at, n, "clang-native", "os.loader.clang-native", native);
 	op_free(native);
 	compiler = hostPath(h, &nc, "loaders", "clang-native", NULL);
-	takes = op_list(), gives = op_str(DYLIB_TYPE), identity = op_map(), flags = op_list();
+	takes = op_list(), gives = op_str(DYLIB_TYPE), identity = compilerIdentity(NATIVE_TARGET);
 	op_push(takes, op_str("public.c-source"));
-	op_push(flags, op_str("-O2"));
-	op_push(flags, op_str("-Wall"));
-	op_set(identity, "compiler", op_str("clang"));
-	op_set(identity, "target", op_str("arm64-apple-macos11"));
-	op_set(identity, "flags", flags);
 	attribute(h, compiler, nc, PG_TAKES, takes);
 	attribute(h, compiler, nc, PG_GIVES, gives);
 	attribute(h, compiler, nc, BD_COMPILER, identity);
@@ -904,6 +1046,135 @@ static void makeLoaders(Host *h) {
 		attribute(h, runner, nr, PG_TAKES, takes);
 		op_free(takes);
 	}
+}
+
+// --- the den: newOS as ermine/dens has it, offering what /loaders holds
+
+/** dlopen's (dylib.h), not in RUNNERS: its function is a loader's too (dylibAdd) */
+static const Runner DLOPEN = {"dlopen", DYLIB_TYPE, "ermine.native", "thread", NULL};
+
+/** the den's id: the device tree's host as a name (lower case letters and digits, the rest one "-"), then a
+ * uuid kept on the card beside sync/ (sd/den), made at the first boot; fresh */
+static char *denId(Host *h, const char *sd) {
+	char path[1024], uuid[37] = "";
+	snprintf(path, sizeof path, "%s/den", sd);
+	char *kept = slurp(path);
+	size_t n = kept ? strcspn(kept, "\r\n ") : 0;
+	bool ok = n == 36;
+	for (size_t i = 0; ok && i < n; i++)
+		ok = i == 8 || i == 13 || i == 18 || i == 23 ? kept[i] == '-' : !!strchr("0123456789abcdef", kept[i]);
+	if (ok) memcpy(uuid, kept, 36);
+	else {
+		// a version 4 uuid, from the card's random bytes (erm_host_random)
+		uint8_t b[16];
+		erm_host_random(b, sizeof b);
+		b[6] = (uint8_t)(b[6] & 0x0f) | 0x40, b[8] = (uint8_t)(b[8] & 0x3f) | 0x80;
+		for (int i = 0, at = 0; i < 16; i++) at += sprintf(uuid + at, i == 4 || i == 6 || i == 8 || i == 10 ? "-%02x" : "%02x", b[i]);
+		FILE *f = fopen(path, "w");
+		if (!f || fprintf(f, "%s\n", uuid) < 0) hostSay(h, "the den's id could not be kept at %s: a new one each boot", path);
+		if (f) fclose(f);
+		if (kept) hostSay(h, "%s is not a uuid: a new one", path);
+	}
+	free(kept);
+	const char *host = jsonText(jsonGet(h->dt, "host"));
+	char name[64] = "";
+	size_t len = 0;
+	for (const char *c = host ? host : ""; *c && len < sizeof name - 2; c++) {
+		char l = *c >= 'A' && *c <= 'Z' ? (char)(*c - 'A' + 'a') : *c;
+		if ((l >= 'a' && l <= 'z') || (l >= '0' && l <= '9')) name[len++] = l;
+		else if (len && name[len - 1] != '-') name[len++] = '-';
+	}
+	while (len && name[len - 1] == '-') len--;
+	name[len] = 0;
+	const char *base = len ? name : "ermineos";
+	char *id = malloc(strlen(base) + 1 + 36 + 1);
+	sprintf(id, "%s-%s", base, uuid);
+	return id;
+}
+
+/** an offer of the den's, its attributes taken (op_free'd); refused: said */
+static void offer(Host *h, dn_kind kind, const char *name, op_value *attributes, const op_value *live) {
+	dn_refusal no;
+	if (!dn_offer(h->den, NULL, kind, name, attributes, live, &no)) hostSay(h, "den: %s not offered: %s", name, no.refused);
+	op_free(attributes);
+}
+
+/** a runner's attributes: its form, the api its program is given, where it runs */
+static op_value *runnerAttributes(const Runner *r) {
+	op_value *v = op_map();
+	op_set(v, DN_TAKES, op_str(r->takes));
+	op_set(v, DN_API, op_str(r->api));
+	op_set(v, DN_WHERE, op_str(r->where));
+	return v;
+}
+
+/** a compiler's attributes: what it takes, what it gives, its identity (the cache's, as /loaders says it) */
+static op_value *compilerAttributes(const char *gives, const char *target) {
+	op_value *v = op_map();
+	op_set(v, DN_COMPILER_TAKES, op_str("public.c-source"));
+	op_set(v, DN_GIVES, op_str(gives));
+	op_set(v, BD_COMPILER, compilerIdentity(target));
+	return v;
+}
+
+typedef struct {
+	Host *h;
+	const char *sd;
+} Denning;
+
+static void denning(void *data) {
+	Denning *in = data;
+	Host *h = in->h;
+	char *id = denId(h, in->sd);
+	// what the machine is: /hw's, from the device tree (ermine.den.device; not matched on: its runners are)
+	op_value *device = op_map();
+	static const char *const SAYS[] = { "model", "cpu", "cores", "memory", "os" };
+	for (size_t i = 0; i < sizeof SAYS / sizeof *SAYS; i++)
+		if (jsonGet(h->dt, SAYS[i])) op_set(device, SAYS[i], valOf(jsonGet(h->dt, SAYS[i])));
+	const char *why = NULL;
+	h->den = dn_new(&(dn_setup){ .scheduler = ap_scheduler(h->os), .table = ap_table(h->os), .places = ap_places(h->os), .scopes = ap_scopes(h->os),
+		.functions = h->functions, .id = id, .name = jsonText(jsonGet(h->dt, "host")), .device = device, .create_api = denApi, .data = h,
+		.commit = ap_commit, .commit_ctx = h->os, .sites = ap_sites(h->os) }, &why);
+	op_free(device);
+	if (!h->den) {
+		hostSay(h, "no den (%s): %s", id, why ? why : "refused");
+		free(id);
+		return;
+	}
+	hostSay(h, "den %s at /system/dens/%s", dn_node(h->den), id);
+	free(id);
+	// the runners: the same live functions /loaders holds
+	for (size_t i = 0; i < sizeof RUNNERS / sizeof *RUNNERS; i++) {
+		op_value *fn = hf_value(RUNNERS[i].name);
+		offer(h, DN_RUNNERS, RUNNERS[i].name, runnerAttributes(&RUNNERS[i]), fn);
+		op_free(fn);
+	}
+	op_value *dlopen = hf_value(DLOPEN.name);
+	offer(h, DN_RUNNERS, DLOPEN.name, runnerAttributes(&DLOPEN), dlopen);
+	op_free(dlopen);
+	// the compilers: C to wasm, and C to a library for this machine
+	op_value *clang = hf_value("clang"), *native = hf_value("clang-native");
+	offer(h, DN_COMPILERS, "clang", compilerAttributes("org.webassembly.wasm", NULL), clang);
+	offer(h, DN_COMPILERS, "clang-native", compilerAttributes(DYLIB_TYPE, NATIVE_TARGET), native);
+	op_free(clang), op_free(native);
+	// the surfaces: the frame buffer the display driver draws on, its size the device tree's; no live part
+	// (what draws on it is the display driver, at /dev/display)
+	Json *fb = jsonGet(h->dt, "fb");
+	int64_t w = 0, hh = 0;
+	if (jsonIsWhole(jsonGet(fb, "w"), &w) && jsonIsWhole(jsonGet(fb, "h"), &hh)) {
+		op_value *display = op_map(), *size = op_list();
+		op_push(size, op_num((double)w));
+		op_push(size, op_num((double)hh));
+		op_set(display, DN_KIND, op_str("pixels"));
+		op_set(display, DN_SIZE, size);
+		offer(h, DN_SURFACES, "display", display, NULL);
+	}
+}
+
+/** newOS as a den (dens.h), after /loaders: its node, its runners, compilers and surfaces; sd the card's folder */
+static void makeDen(Host *h, const char *sd) {
+	Denning in = { h, sd };
+	sc_run_with_scope(ap_machine(h->os), denning, &in);
 }
 
 // --- the image: loaded at every boot (image/image.json): a first boot loads it whole; a later boot loads
@@ -1113,15 +1384,20 @@ static void loadImage(Host *h, Json *img) {
 	free(m.names);
 }
 
-/** what boots: each entry started at its path (start, then its name or a fresh one), its data inside it */
+/**
+ * what boots: each entry started at its path (start, then its name or a fresh one), its data inside it. An
+ * entry with a runner (a path from the root, /system/den/runners/<name>) is started by the den, on that runner
+ * (startByDen); one without, by satisfy's way (startProgram)
+ */
 static void boot(Host *h, Json *img) {
 	Json *list = jsonGet(img, "boot");
 	for (int i = 0; list && i < list->array.count; i++) {
 		Json *e = list->array.items[i];
-		size_t na, np;
+		size_t na, np, nr = 0;
 		const char *const *address = hostPathOf(h, jsonGet(e, "start"), &na);
 		const char *const *program = hostPathOf(h, jsonGet(e, "program"), &np);
-		if (!address || !program) continue;
+		const char *const *runner = jsonGet(e, "runner") ? hostPathOf(h, jsonGet(e, "runner"), &nr) : NULL;
+		if (!address || !program || (jsonGet(e, "runner") && !runner)) continue;
 		const char *name = jsonText(jsonGet(e, "name"));
 		const char **at = hostTemp(h, sizeof *at * (na + 2));
 		for (size_t k = 0; k < na; k++) at[k] = address[k];
@@ -1131,7 +1407,8 @@ static void boot(Host *h, Json *img) {
 		snprintf(doing, sizeof doing, "boot: %s %s", where, what);
 		op_value *data = jsonGet(e, "data") ? valOf(jsonGet(e, "data")) : NULL;
 		const char *pid = NULL;
-		if (!hostFailed(h, startProgram(h, at, na + 1, program, np, data, &pid), doing)) hostSay(h, "start %s  %s  %s", pid, where, what);
+		const ap_error *no = runner ? startByDen(h, at, na + 1, runner, nr, program, np, data, &pid) : startProgram(h, at, na + 1, program, np, data, &pid);
+		if (!hostFailed(h, no, doing)) hostSay(h, "start %s  %s  %s%s%s", pid, where, what, runner ? "  by " : "", runner ? pathText(h, runner, nr) : "");
 		op_free(data);
 		free(where);
 		free(what);
@@ -1186,6 +1463,7 @@ Host *hostBoot(const ErmosConfig *config) {
 	if (img) loadImage(h, img);
 	makeHw(h);
 	makeLoaders(h);
+	makeDen(h, sd);
 	if (!h->config.bare && img) boot(h, img);
 	ap_pulse(h->os);
 	reap(h);
