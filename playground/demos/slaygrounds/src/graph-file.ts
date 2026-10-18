@@ -110,7 +110,6 @@ export function save(table: Pick<Table, "get">, root: Id = "root"): Saved {
 		}
 		c = { change }
 		if (n.value !== undefined) c.value = part === "children" ? children(n.value) : carry(n.value)
-		if (n.cow === false) c.cow = false
 		copies.set(n, c)
 		return c
 	}

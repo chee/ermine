@@ -42,11 +42,11 @@ fragment_src = extensions/subduction/c/fragment.c extensions/subduction/c/fragme
 squish_src = $(harness_src) core/op/c/squish.c core/op/c/squish_harness.c
 op-apply_src = $(harness_src) conformance/c/protocol_harness.c core/op/c/apply_harness.c core/op/c/apply.c core/op/c/invert.c core/node/c/node.c
 paths_src = $(harness_src) conformance/c/protocol_harness.c core/scheduler/c/paths_harness.c core/scheduler/c/paths.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
-places_src = $(harness_src) filesystem/places/c/places_harness.c conformance/c/protocol_harness.c filesystem/places/c/places.c filesystem/places/c/cache.c filesystem/clingy/c/clingy.c core/scheduler/c/selector.c filesystem/places/c/status.c filesystem/places/c/world_harness.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
+places_src = $(harness_src) filesystem/places/c/places_harness.c conformance/c/protocol_harness.c filesystem/places/c/places.c core/unread/c/unread.c filesystem/places/c/cache.c filesystem/clingy/c/clingy.c core/scheduler/c/selector.c filesystem/places/c/status.c filesystem/places/c/world_harness.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
 processes_src = $(filter-out filesystem/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes_harness.c ermine/processes/c/processes.c ermine/processes/c/scopes.c
 protect_src = filesystem/protect/c/protect.c filesystem/protect/c/protect_harness.c $(harness_src)
 update_src = $(harness_src) conformance/c/protocol_harness.c core/node/c/update_harness.c core/node/c/update.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
-guard_src = $(harness_src) filesystem/places/c/guard_harness.c filesystem/places/c/guard.c filesystem/protect/c/protect.c conformance/c/protocol_harness.c filesystem/places/c/places.c filesystem/places/c/cache.c filesystem/clingy/c/clingy.c core/scheduler/c/selector.c filesystem/places/c/status.c filesystem/places/c/world_harness.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
+guard_src = $(harness_src) filesystem/places/c/guard_harness.c filesystem/places/c/guard.c filesystem/protect/c/protect.c conformance/c/protocol_harness.c filesystem/places/c/places.c core/unread/c/unread.c filesystem/places/c/cache.c filesystem/clingy/c/clingy.c core/scheduler/c/selector.c filesystem/places/c/status.c filesystem/places/c/world_harness.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
 scheduler_src = $(harness_src) core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c core/scheduler/c/scheduler_harness.c
 names_src = playground/tools/files/c/names.c playground/tools/files/c/names_harness.c ermine/encoding/c/json.c
 diag_src = playground/tools/files/c/diag.c playground/tools/files/c/diag_harness.c ermine/encoding/c/json.c
@@ -55,7 +55,7 @@ store_src = playground/tools/files/c/store.c playground/tools/files/c/store_harn
 	playground/tools/files/c/external.c playground/tools/files/c/foundation.c \
 	playground/tools/files/c/saved.c playground/tools/files/c/saved_shown_harness.c playground/tools/files/c/saved_pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src)
 # the files graph (playground/tools/files/c/graph.c): core's table, places and guard under a scheduler, and the policy they ask
-graph_src = filesystem/places/c/places.c filesystem/places/c/guard.c filesystem/protect/c/protect.c core/table/c/table.c core/node/c/node.c core/node/c/update.c \
+graph_src = filesystem/places/c/places.c core/unread/c/unread.c filesystem/places/c/guard.c filesystem/protect/c/protect.c core/table/c/table.c core/node/c/node.c core/node/c/update.c \
 	core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/op/c/json.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
 # the files program: its watcher and harness, on the C store and the C scheduler (and the graph under it)
 # sys.c's Trash against homes of its own, no suite
@@ -102,7 +102,7 @@ program = playground/tools/files/c/program-harness
 sys = playground/tools/files/c/sys-harness
 
 # presence (extensions/presence): its harness on places, the table and the scheduler (the C harness has no BroadcastChannel)
-presence_src = $(harness_src) extensions/presence/c/presence_harness.c extensions/presence/c/presence.c extensions/presence/c/channel.c filesystem/places/c/places.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
+presence_src = $(harness_src) extensions/presence/c/presence_harness.c extensions/presence/c/presence.c extensions/presence/c/channel.c filesystem/places/c/places.c core/unread/c/unread.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
 presence = extensions/presence/c/presence-harness
 presence_suite = presence
 presence_tests = $(wildcard extensions/presence/typescript/presence_harness_test.ts)
@@ -219,10 +219,12 @@ together-packer_src = $(together_harness_src) $(together_commits_src) extensions
 together-packer = extensions/together/c/packer-harness
 together-packer_suite = packer
 LIBS += together-packer
-# history, replay and snapshot: one harness, three suites (replay's and snapshot's suite.json name history's)
-together-history_src = $(together_harness_src) $(together_commits_src) conformance/c/protocol_harness.c extensions/together/c/history_harness.c extensions/together/c/history.c extensions/together/c/replay.c extensions/together/c/snapshot.c extensions/together/c/egwalker.c $(together_signed_src)
+# history, replay and snapshot: one harness, three suites (replay's and snapshot's suite.json name history's). The merge
+# rules it knows: rules_harness.c's (a rule for testing); playground/egwalker links its own (egwalker-history)
+together_history_src = $(together_harness_src) $(together_commits_src) conformance/c/protocol_harness.c extensions/together/c/history_harness.c extensions/together/c/history.c extensions/together/c/replay.c extensions/together/c/snapshot.c $(together_signed_src)
+together-history_src = $(together_history_src) extensions/together/c/rules_harness.c
 together-history = extensions/together/c/history-harness
-together-history_suite = history replay snapshot egwalker
+together-history_suite = history replay snapshot
 LIBS += together-history
 # the transport (devices over Subduction for C) and the integration with the table: Subduction's BLAKE3 and ermine/encoding's
 # are both linked, the C ones renamed (subduction_rename). Fragments are extensions/subduction's, as in the TypeScript
@@ -235,8 +237,9 @@ together-transport_suite = transport
 together-transport_flags = $(subduction_rename) -DCONFORMANCE_HOOK
 together-transport_libs = $(transport_libs)
 LIBS += together-transport
-together-sync_src = $(together_harness_src) $(together_commits_src) conformance/c/protocol_harness.c extensions/together/c/sync_harness.c extensions/together/c/sync.c extensions/together/c/egwalker.c extensions/together/c/wires_harness.c \
+together_sync_src = $(together_harness_src) $(together_commits_src) conformance/c/protocol_harness.c extensions/together/c/sync_harness.c extensions/together/c/sync.c extensions/together/c/wires_harness.c \
 	extensions/subduction/c/subduction/store_memory.c core/table/c/table.c core/node/c/update.c $(together_transport_src) $(subduction_lib)
+together-sync_src = $(together_sync_src) extensions/together/c/rules_harness.c
 together-sync = extensions/together/c/sync-harness
 together-sync_suite = sync
 together-sync_flags = $(subduction_rename)
@@ -249,14 +252,26 @@ together-channel-test = extensions/together/c/channel-test
 together-channel-test_flags = $(subduction_rename)
 together-channel-test_libs = $(transport_libs)
 LIBS += together-channel-test
+# playground/egwalker: the merge rule eg-walker, on together's history and sync harnesses with its own rules_harness.c
+# (eg-walker) in place of together's; their suites egwalker and egwalker-sync (playground/egwalker/README.md)
+egwalker-history_src = $(together_history_src) playground/egwalker/c/egwalker.c playground/egwalker/c/rules_harness.c
+egwalker-history = playground/egwalker/c/history-harness
+egwalker-history_suite = egwalker
+LIBS += egwalker-history
+egwalker-sync_src = $(together_sync_src) playground/egwalker/c/egwalker.c playground/egwalker/c/rules_harness.c
+egwalker-sync = playground/egwalker/c/sync-harness
+egwalker-sync_suite = egwalker-sync
+egwalker-sync_flags = $(subduction_rename)
+egwalker-sync_libs = $(transport_libs)
+LIBS += egwalker-sync
 # two hosts typing into one text, merging by eg-walker (merge_bench.ts in C): merge-bench [keys] [pure]; no suite
-together-merge-bench_src = extensions/together/c/merge_bench.c extensions/together/c/sync.c extensions/together/c/egwalker.c extensions/together/c/wires_harness.c \
+egwalker-merge-bench_src = playground/egwalker/c/merge_bench.c extensions/together/c/sync.c playground/egwalker/c/egwalker.c extensions/together/c/wires_harness.c \
 	core/op/c/value.c core/op/c/json.c extensions/subduction/c/subduction/store_memory.c core/table/c/table.c core/node/c/update.c \
 	$(together_transport_src) $(subduction_lib)
-together-merge-bench = extensions/together/c/merge-bench
-together-merge-bench_flags = $(subduction_rename)
-together-merge-bench_libs = $(transport_libs)
-LIBS += together-merge-bench
+egwalker-merge-bench = playground/egwalker/c/merge-bench
+egwalker-merge-bench_flags = $(subduction_rename)
+egwalker-merge-bench_libs = $(transport_libs)
+LIBS += egwalker-merge-bench
 # JSON text (ermine/encoding/c/json_text.c): only what reads or writes it, the harnesses and the files store; program
 # has it through store
 json_text_src = ermine/encoding/c/json_text.c
@@ -404,7 +419,7 @@ core/unread/c/unread-bench: core/node/c/node.c core/node/c/update.c core/op/c/va
 OPENSSL ?= $(shell brew --prefix openssl@3 2>/dev/null || echo /usr)
 files_src = $(sort playground/tools/files/c/files.c playground/tools/files/c/host.c playground/tools/files/c/program.c playground/tools/files/c/watch.c playground/tools/files/c/graph.c \
 	$(filter-out playground/tools/files/c/store_harness.c playground/tools/files/c/disk_harness.c,$(store_src)) $(graph_src) \
-	extensions/together/c/sync.c extensions/together/c/egwalker.c $(together_transport_src) extensions/subduction/c/subduction/store_files.c \
+	extensions/together/c/sync.c $(together_transport_src) extensions/subduction/c/subduction/store_files.c \
 	extensions/subduction/c/subduction/websocket.c extensions/subduction/c/subduction/transport_openssl.c)
 files_flags = $(subduction_rename) -I$(OPENSSL)/include
 files_libs = $(transport_libs) $(program_libs) -L$(OPENSSL)/lib -lssl -lcrypto

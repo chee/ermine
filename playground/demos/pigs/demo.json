@@ -1,0 +1,13 @@
+{
+	"title": "pigs",
+	"order": 3,
+	"tags": ["terminal", "C", "sync"],
+	"picture": "pictures/pigs.png",
+	"alt": "pigs on a field, drawn in a terminal",
+	"href": "slaygrounds/#lab-pig",
+	"pages": [],
+	"buttons": [
+		{ "label": "the pigs on the web", "href": "slaygrounds/#lab-pig", "go": true },
+		{ "label": "source", "href": "https://github.com/chee/ermine/tree/main/playground/demos/pigs" }
+	]
+}

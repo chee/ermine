@@ -14,17 +14,25 @@
 #include <string.h>
 #include <sys/time.h>
 
-// one write's patch: the whole value put (path empty), and the site its change refers to
+// one write's patch: the whole value put (path empty) or one key of it set, and the site its
+// change refers to
 typedef struct {
 	op_patch patch;
-	op_key none[1];
+	op_key path[1];
+	char key[DV_ID];
 	ch_site site;
 } put_t;
 
-static put_t *put_new(op_value *value) {
+static put_t *put_new(const char *key, op_value *value) {
 	put_t *p = calloc(1, sizeof *p);
 	if (!p) abort();
-	p->patch = (op_patch){.place = {.path = p->none, .length = 0}, .has_value = 1, .value = value};
+	size_t length = 0;
+	if (key) {
+		snprintf(p->key, sizeof p->key, "%s", key);
+		p->path[0] = (op_key){.type = OP_STR_KEY, .s = p->key};
+		length = 1;
+	}
+	p->patch = (op_patch){.place = {.path = p->path, .length = length}, .has_value = 1, .value = value};
 	return p;
 }
 
@@ -220,17 +228,20 @@ void dv_follow(dv *d, const char *id) {
 	sy_follow(d->sync, id);
 }
 
-static int write(dv *d, const char *id, op_value *value, const ch_site *site) {
+static int write(dv *d, const char *id, const char *key, op_value *value, const ch_site *site) {
 	dv_follow(d, id);
-	put_t *p = put_new(value);
+	put_t *p = put_new(key, value);
 	p->site = *site;
 	ch_header header = {.has_time = 1, .time = (int64_t)dv_now(), .actor = d->actor, .external = &p->site,
 		.external_length = 1};
 	tb_key pk = tb_string("value"), ik = tb_string(id);
 	nd_entry *e = tb_get(d->table, pk, ik);
 	if (!e) {
-		// none there: one made holding the value (its event tells sync)
-		e = nd_make_entry(value, &header, NULL);
+		// none there: one made holding the value, or a map of the one key (its event tells sync)
+		op_value *whole = value;
+		if (key) whole = op_map(), op_set(whole, key, op_ref(value));
+		e = nd_make_entry(whole, &header);
+		if (key) op_free(whole);
 		if (!e) abort();
 		hold_t *stale = hold_of(d, e);
 		if (stale) unhold(d, stale);
@@ -254,11 +265,13 @@ static int write(dv *d, const char *id, op_value *value, const ch_site *site) {
 	return 0;
 }
 
-int dv_store(dv *d, const char *id, op_value *value) { return write(d, id, value, CH_HERE); }
+int dv_store(dv *d, const char *id, op_value *value) { return write(d, id, NULL, value, CH_HERE); }
+
+int dv_set(dv *d, const char *id, const char *key, op_value *value) { return write(d, id, key, value, CH_HERE); }
 
 int dv_wave(dv *d, const char *id, op_value *value) {
 	d->waving = id;
-	int code = write(d, id, value, CH_HERE);
+	int code = write(d, id, NULL, value, CH_HERE);
 	d->waving = NULL;
 	return code;
 }

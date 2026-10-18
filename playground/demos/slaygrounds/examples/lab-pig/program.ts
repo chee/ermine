@@ -539,7 +539,7 @@ export default function program(t: Tools) {
 			t.store(pig.id, { ...rest, ...pig.g, binned: true })
 			gulp()
 			setTimeout(() => {
-				t.store(t.room, { ...room, [pig.id]: false })
+				t.set(t.room, pig.id, false)
 				t.unplace(placeOf(pig.id))
 			}, 420)
 		} else if (inShame(pig.g)) t.store(pig.id, { ...rest, shame: true })
@@ -674,7 +674,7 @@ export default function program(t: Tools) {
 			at: Date.now(),
 			seed: Math.floor(r() * 2 ** 32),
 		})
-		t.store(t.room, { ...room, [id]: true })
+		t.set(t.room, id, true)
 	}
 	// the list's other versions: a pig added in one is put back, a pig binned in one stays binned;
 	// then they are settled. a while first, at random, so two devices rarely both mend at once

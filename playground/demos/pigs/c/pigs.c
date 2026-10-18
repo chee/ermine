@@ -17,6 +17,7 @@
 #include "screen.h"
 #include "walk.h"
 
+#include "../../../../ermine/encoding/c/cbor.h"
 #include "../../../../ermine/encoding/c/json.h"
 #include "../../../../ermine/encoding/c/json_text.h"
 
@@ -551,17 +552,25 @@ static void presence_send(bool gone) {
 	else
 		snprintf(buf, sizeof buf, "{\"ttl\":%d,\"value\":{\"name\":\"%s\",\"colour\":\"%s\",\"look\":\"%s\"}}", TTL, w.name, w.colour_text,
 			hack_look ? "nethack" : "pixels");
-	dv_send(w.d, ROOM, (const uint8_t *)buf, strlen(buf));
+	// presence.ts's messages are CBOR: the text made a value, then its encoding
+	char *why = NULL;
+	Json *m = jsonParse(buf, strlen(buf), &why);
+	free(why);
+	unsigned char bytes[512];
+	size_t n = 0;
+	if (m && cborEncode(m, bytes, sizeof bytes, &n, NULL) && n <= sizeof bytes) dv_send(w.d, ROOM, bytes, n);
+	else say("presence: no encoding for %s", buf);
+	jsonFree(m);
 	w.beat = mono(), w.pointer_due = false;
 }
 
 static void heard(void *context, const char *from, const uint8_t *bytes, size_t n) {
 	(void)context;
-	say("heard %.16s %.*s", from ? from : "?", (int)(n > 200 ? 200 : n), (const char *)bytes);
-	char *why = NULL;
-	Json *m = jsonParse((const char *)bytes, n, &why);
-	free(why);
-	if (!m || !jsonIsObject(m) || !from || strlen(from) > 64) {
+	Json *m = cborDecode(bytes, n, NULL, NULL);
+	char *text = m ? jsonPrint(m) : NULL;
+	say("heard %.16s %s", from ? from : "?", text ? text : "(not CBOR)");
+	free(text);
+	if (!m || !jsonIsObject(m) || !from || strlen(from) >= DV_KEY) {
 		jsonFree(m);
 		return;
 	}
@@ -690,7 +699,7 @@ static void add_pig(void) {
 	op_set(v, "at", op_num(ms_now()));
 	op_set(v, "seed", op_num(floor(pig_draw(&r) * 4294967296.0)));
 	dv_store(w.d, id, v);
-	dv_store(w.d, ROOM, room_with(id, true));
+	dv_set(w.d, ROOM, id, op_bool(1));
 	snprintf(w.selected, DV_ID, "%s", id);
 	say("add %s", id);
 	tell("You hear a pig grunt.");
@@ -1389,7 +1398,7 @@ int main(int argc, char **argv) {
 		mend();
 		count_conflicts();
 		if (w.bin_later[0] && now >= w.bin_later_at) {
-			dv_store(w.d, ROOM, room_with(w.bin_later, false));
+			dv_set(w.d, ROOM, w.bin_later, op_bool(0));
 			say("binned %s", w.bin_later);
 			w.bin_later[0] = 0;
 		}

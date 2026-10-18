@@ -7,7 +7,7 @@
 //   placing by hand        place(path, id), unplace(path): a node shown at a path under the root,
 //                          local folders made on the way; the graph's places, never synced
 //   a new kept id          make(): zeros-tailed when the server needs it (galaxy, until Keyhive)
-//   a stored write         store(id, value): one commit
+//   a stored write         store(id, value): one commit; set(id, key, value): one key
 //   an ephemeral write     wave(id, value): sync's ephemeral option, for that one write; the last
 //                          per id sent once a frame
 //   presence over the wire pointer(at): my row at the room; /pointers
@@ -179,6 +179,12 @@ const tools = {
 		waves.delete(id)
 		follow(id)
 		world.write("value", id, put(value))
+	},
+	// one key of the node's value set, a stored commit: only that key changes (two devices setting
+	// different keys don't clobber each other)
+	set(id: string, key: string, value: unknown) {
+		follow(id)
+		world.write("value", id, [{ path: [key], value }])
 	},
 	// the node's value, an ephemeral commit: everyone sees it on top of what is stored, nothing
 	// stores it, and it stops standing at this device's next store there (or when it goes quiet)
