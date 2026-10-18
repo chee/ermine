@@ -4,14 +4,14 @@
 // { op: "make", name, ...fields }      → {}            made, labelled, sealed (default document:
 //                                                      2a × 16 then 00 × 16)
 // { op: "sealed", commit }             → { sealed }    hex
-// { op: "pack", commits, name? }       → { run }       commits: labels, hex sealed bytes, or
+// { op: "pack", commits, name? }       → { pack }     commits: labels, hex sealed bytes, or
 //                                                      { vouched: label, stored? }; name: kept so
-// { op: "unpack", run, set?, drop? }   → { sealed }    run: label or hex; set/drop: columns
+// { op: "unpack", pack, set?, drop? } → { sealed }    pack: label or hex; set/drop: columns
 //                                                      changed, then canonically encoded. sealed:
 //                                                      labels (hex if unmade), vouched ones as
 //                                                      { vouched: label | hex, stored? }
 // { op: "unpack", value }              → { sealed }    value canonically encoded first
-// { op: "columns", run }               → { columns }   JSON form
+// { op: "columns", pack }             → { columns }   JSON form
 // refused: { error: code, column? } (PackError)
 import * as cbor from "@ermine/encoding/cbor"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"
@@ -26,7 +26,7 @@ const commits = createCommits()
 // sealed bytes by label, and labels by sealed bytes
 const seals = new Map<string, Uint8Array>()
 const sealedLabels = new Map<string, string>()
-const runs = new Map<string, Uint8Array>()
+const packs = new Map<string, Uint8Array>()
 
 function sealedOf(x: unknown): Uint8Array {
 	if (typeof x !== "string") throw new Error(`not a commit: ${x}`)
@@ -35,11 +35,11 @@ function sealedOf(x: unknown): Uint8Array {
 	if (commits.get(x)) throw new Error(`${x} is not sealed`)
 	return unhex(x)
 }
-const runOf = (x: unknown) => typeof x === "string" && runs.get(x) || unhex(x as string)
+const packOf = (x: unknown) => typeof x === "string" && packs.get(x) || unhex(x as string)
 
 function edited(r: Request): Uint8Array {
 	if (r.value !== undefined) return cbor.encode(revive(r.value) as cbor.Value)
-	const bytes = runOf(r.run)
+	const bytes = packOf(r.pack)
 	if (r.set === undefined && r.drop === undefined) return bytes
 	const o = { ...(cbor.decode(bytes) as Record<string, cbor.Value>) }
 	for (const [k, v] of Object.entries(r.set ?? {})) o[k] = revive(v) as cbor.Value
@@ -70,9 +70,9 @@ async function answer(r: Request): Promise<Answer> {
 						members.push({ commit: m.bytes, stored: id })
 					}
 				}
-				const run = pack(members)
-				if (typeof r.name === "string") runs.set(r.name, run)
-				return { run: hex(run) }
+				const packed = pack(members)
+				if (typeof r.name === "string") packs.set(r.name, packed)
+				return { pack: hex(packed) }
 			}
 			case "unpack":
 				return {
@@ -87,7 +87,7 @@ async function answer(r: Request): Promise<Answer> {
 					}),
 				}
 			case "columns":
-				return { columns: toJson(cbor.decode(runOf(r.run))) }
+				return { columns: toJson(cbor.decode(packOf(r.pack))) }
 		}
 	} catch (e) {
 		if (e instanceof PackError) {
