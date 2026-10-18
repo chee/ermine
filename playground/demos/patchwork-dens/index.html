@@ -1,0 +1,61 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="description"
+	content="patchwork's tool contract on an ermine den: each view a process at a path, nested views child processes, providers a box">
+<title>patchwork on dens</title>
+<style>
+body {
+	margin: 0;
+	font: 14px/1.4 system-ui, sans-serif;
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	grid-template-rows: auto 1fr;
+	height: 100vh;
+}
+header {
+	grid-column: 1 / 3;
+	padding: 8px 12px;
+	border-bottom: 1px solid #000;
+}
+main,
+aside {
+	overflow: auto;
+	padding: 8px 12px;
+	min-width: 0;
+}
+aside {
+	border-left: 1px solid #000;
+}
+h2 {
+	font-size: 13px;
+	margin: 4px 0;
+}
+section {
+	border: 1px solid #ccc;
+	margin: 6px 0;
+	padding: 4px 8px;
+}
+button[aria-pressed="true"] {
+	background: #ffd6e0;
+}
+pre {
+	margin: 0;
+	white-space: pre-wrap;
+	font: 12px/1.4 ui-monospace, monospace;
+}
+#tree {
+	margin-top: 12px;
+	color: #444;
+}
+</style>
+<header>
+	patchwork's tool contract on an ermine den. left: the stack tool on a folder, each doc in a view
+	of its own. right: the selected doc (click a name), and the processes running.
+</header>
+<main id="root"></main>
+<aside>
+	<div id="main"></div>
+	<pre id="tree"></pre>
+</aside>
+<script type="module" src="./main.ts"></script>
