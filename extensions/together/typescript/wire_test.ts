@@ -1,5 +1,5 @@
 // the wire between the TypeScript and the C: bytes one makes, the other verifies and applies, both
-// ways. seals (for a document), runs (one signature for a run of typing) and snapshots made here are
+// ways. seals (for a document), packs (one signature for a run of typing) and snapshots made here are
 // unsealed, unpacked and taken into a history by the C harnesses, and replayed to the same tables;
 // what the C harnesses make is unsealed, unpacked, taken in and replayed here, and is the same bytes.
 // needs the C harnesses built (make extensions/together/c/seal-harness extensions/together/c/packer-harness
@@ -16,7 +16,7 @@ import { snapshot } from "./snapshot.ts"
 
 const c = new URL("../c/", import.meta.url).pathname
 const harness = (name: string) => c + name + "-harness"
-const built = ["seal", "run", "history"].every((n) => {
+const built = ["seal", "packer", "history"].every((n) => {
 	try {
 		return Deno.statSync(harness(n)).isFile
 	} catch {
@@ -81,11 +81,11 @@ Deno.test({
 			const u = unsealed[i] as { bytes: string; name: string; stored: string }
 			assertEquals([u.bytes, u.name, u.stored], [hex(m.bytes), hex(m.name), hex(stored(sealed))])
 		}
-		// a run: a and b vouched for by the next, c and x signed
-		const run = pack(ms.map(({ sealed }) => sealed))
-		const back = unpack(run)
+		// a pack: a and b vouched for by the next, c and x signed
+		const packed = pack(ms.map(({ sealed }) => sealed))
+		const back = unpack(packed)
 		assertEquals(back.map((u) => u.sealed === undefined), [true, true, false, false])
-		const [answer] = await ask([harness("run")], [{ op: "unpack", run: hex(run) }])
+		const [answer] = await ask([harness("packer")], [{ op: "unpack", pack: hex(packed) }])
 		assertEquals(
 			answer,
 			{
@@ -96,7 +96,7 @@ Deno.test({
 				),
 			},
 		)
-		// each signed seal the run gives back unseals in the C too
+		// each signed seal the pack gives back unseals in the C too
 		const again = await ask(
 			[harness("seal")],
 			back.filter((u) => u.sealed).map((u) => ({ op: "unseal", sealed: hex(u.sealed!) })),
@@ -141,14 +141,14 @@ Deno.test({
 			const u = await unseal(bytes, DOC)
 			assertEquals(hex(u.name), hex(ms[i].m.name))
 		}
-		// a run packed by the C
-		const answers = await ask([harness("run")], [
+		// a pack packed by the C
+		const answers = await ask([harness("packer")], [
 			...requests.map((r) => ({ op: "make", ...r })),
 			{ op: "pack", commits: requests.map((r) => r.name) },
 		])
-		const run = unhex((answers[answers.length - 1] as { run: string }).run)
-		assertEquals(hex(run), hex(pack(ms.map(({ sealed }) => sealed))))
-		const back = unpack(run)
+		const packed = unhex((answers[answers.length - 1] as { pack: string }).pack)
+		assertEquals(hex(packed), hex(pack(ms.map(({ sealed }) => sealed))))
+		const back = unpack(packed)
 		const h = createHistory()
 		for (const u of back) {
 			if (u.sealed !== undefined) {
@@ -162,6 +162,6 @@ Deno.test({
 			{ op: "replay", commit: hex(ms[2].m.name) },
 		]).then((a) => a.slice(-1))
 		assertEquals(t, { tables: tablesJson(replay(h, ms[2].m.name)!) })
-		assert(cbor.decode(run) !== undefined)
+		assert(cbor.decode(packed) !== undefined)
 	},
 })

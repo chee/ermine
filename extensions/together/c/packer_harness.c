@@ -24,7 +24,7 @@ typedef struct {
 
 static cs_commits *commits;
 // sealed commits by the label they were made under, and packs by the label they were packed under
-static pile seals, runs;
+static pile seals, packs;
 
 void hh_start(void) { commits = cs_create(); }
 
@@ -54,9 +54,9 @@ static const kept *find(const pile *l, const char *label) {
 
 void hh_finish(void) {
 	for (size_t i = 0; i < seals.n; i++) free(seals.p[i].label), free(seals.p[i].bytes);
-	for (size_t i = 0; i < runs.n; i++) free(runs.p[i].label), free(runs.p[i].bytes);
+	for (size_t i = 0; i < packs.n; i++) free(packs.p[i].label), free(packs.p[i].bytes);
 	free(seals.p);
-	free(runs.p);
+	free(packs.p);
 	cs_destroy(commits);
 }
 
@@ -70,9 +70,9 @@ static bool sealed_of(const op_value *x, uint8_t **bytes, size_t *length, FILE *
 }
 
 // a pack from a label or hex
-static bool run_of(const op_value *x, uint8_t **bytes, size_t *length, FILE *out) {
+static bool pack_of(const op_value *x, uint8_t **bytes, size_t *length, FILE *out) {
 	if (x == NULL || x->type != OP_STR) return hh_error(out, "not a pack"), false;
-	const kept *k = find(&runs, x->str);
+	const kept *k = find(&packs, x->str);
 	if (k != NULL) return *bytes = k->bytes, *length = k->length, true;
 	if (!cf_unhex(x->str, bytes, length)) return hh_error(out, "not hex"), false;
 	return true;
@@ -146,19 +146,19 @@ static void pack(const op_value *r, FILE *out) {
 		if (!sealed_of(x, &b, &n, out)) return;
 		items[i] = (pk_item){b, n, NULL};
 	}
-	uint8_t *run;
+	uint8_t *packed;
 	size_t length;
-	pk_code code = pk_pack(items, list->count, &run, &length);
+	pk_code code = pk_pack(items, list->count, &packed, &length);
 	if (code != PK_OK) {
 		hh_error(out, "not sealed commits");
 		return;
 	}
-	fputs("{\"run\":", out);
-	cf_put_hex(out, run, length);
+	fputs("{\"pack\":", out);
+	cf_put_hex(out, packed, length);
 	fputc('}', out);
 	const char *name = hh_str(r, "name");
-	if (name != NULL) keep(&runs, name, run, length);
-	else free(run);
+	if (name != NULL) keep(&packs, name, packed, length);
+	else free(packed);
 }
 
 // the pack to unpack, with its columns set and dropped: its bytes (the line's)
@@ -168,7 +168,7 @@ static bool edited(const op_value *r, uint8_t **bytes, size_t *length, FILE *out
 		if (!cf_value_bytes(value, bytes, length)) return hh_error(out, "no encoding"), false;
 		return true;
 	}
-	if (!run_of(op_get(r, "run"), bytes, length, out)) return false;
+	if (!pack_of(op_get(r, "pack"), bytes, length, out)) return false;
 	if (set == NULL && drop == NULL) return true;
 	Json *o = cborDecode(*bytes, *length, NULL, NULL);
 	if (o == NULL || o->type != JSON_OBJECT) return jsonFree(o), hh_error(out, "not a pack"), false;
@@ -231,7 +231,7 @@ static void unpack(const op_value *r, FILE *out) {
 static void columns(const op_value *r, FILE *out) {
 	uint8_t *bytes;
 	size_t length;
-	if (!run_of(op_get(r, "run"), &bytes, &length, out)) return;
+	if (!pack_of(op_get(r, "pack"), &bytes, &length, out)) return;
 	Json *x = cborDecode(bytes, length, NULL, NULL);
 	if (x == NULL) {
 		hh_error(out, "not CBOR");

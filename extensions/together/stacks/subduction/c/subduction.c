@@ -370,9 +370,9 @@ static bool allows(mr_doc *d, const uint8_t head[32], const uint8_t *blob, size_
 	return true;
 }
 
-// a fragment's blob opened: {run: its members as columns (packer.h), snapshot?: packed tables}, or
+// a fragment's blob opened: {run: its members as a pack (packer.h), snapshot?: packed tables}, or
 // {members: [sealed...], snapshot?} as it was first written. Each member unsealed as it is read, in
-// order: the first that is not good ends it, and the fragment is refused whole with its code (a run
+// order: the first that is not good ends it, and the fragment is refused whole with its code (a pack
 // that is not one, or comes to too much: shape). The snapshot dropped when it does not read back
 typedef struct {
 	mr_member_t *members;
@@ -458,13 +458,14 @@ static mr_code contents(const uint8_t doc[32], const uint8_t *open, size_t lengt
 	reading_t g = {out, doc, NULL, 0, 0};
 	Json *x = cborDecode(open, length, NULL, NULL);
 	if (x == NULL || x->type != JSON_OBJECT || x->object.count < 1 || x->object.count > 2) return jsonFree(x), MR_SHAPE;
-	const Json *run = jsonGet(x, "run"), *members = jsonGet(x, "members"), *snapshot = jsonGet(x, "snapshot");
-	if ((run == NULL) == (members == NULL) || (size_t)x->object.count != 1 + (snapshot != NULL)) return jsonFree(x), MR_SHAPE;
+	// "run": the blob's key, kept as stored
+	const Json *packed = jsonGet(x, "run"), *members = jsonGet(x, "members"), *snapshot = jsonGet(x, "snapshot");
+	if ((packed == NULL) == (members == NULL) || (size_t)x->object.count != 1 + (snapshot != NULL)) return jsonFree(x), MR_SHAPE;
 	mr_code code = 0;
-	if (run != NULL) {
-		if (run->type != JSON_BYTES) code = MR_SHAPE;
+	if (packed != NULL) {
+		if (packed->type != JSON_BYTES) code = MR_SHAPE;
 		else {
-			pk_code c = pk_each(run->bytes.data, run->bytes.length, read_member, &g, NULL);
+			pk_code c = pk_each(packed->bytes.data, packed->bytes.length, read_member, &g, NULL);
 			if (c == PK_STOPPED) code = out->code;
 			else if (c != PK_OK) code = MR_SHAPE;
 		}
@@ -930,14 +931,15 @@ static uint64_t build_add(sb_stack *t, mr_doc *d, const fragment *f) {
 	for (size_t i = 0; i < f->members.count; i++)
 		items[i] = ms[i]->sealed != NULL ? (pk_item){ms[i]->sealed, ms[i]->sealed_length, NULL}
 						  : (pk_item){ms[i]->bytes, ms[i]->length, ms[i]->stored};
-	uint8_t *run = NULL;
-	size_t run_length = 0;
-	pk_pack(items, f->members.count, &run, &run_length);
+	uint8_t *packed = NULL;
+	size_t packed_length = 0;
+	pk_pack(items, f->members.count, &packed, &packed_length);
 	free(ms);
 	free(items);
 	Json *blob = jsonObject();
-	jsonAdd(blob, "run", jsonBytes(run, run_length));
-	free(run);
+	// "run": the blob's key, kept as stored
+	jsonAdd(blob, "run", jsonBytes(packed, packed_length));
+	free(packed);
 	const mr_seen_t *top = im_get(&d->seen, f->head);
 	const hy_kept *kept = hy_get(d->histories[MR_STORED], top->name);
 	uint8_t *snapshot = NULL;

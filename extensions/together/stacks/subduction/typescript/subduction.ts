@@ -8,7 +8,7 @@
 // built. the mailroom (mailroom.ts) holds the histories and what is taken in; this hands it what arrives
 // (pend, settle, member, hint, hear, stopped) and is its Stack (send, stop, handed, taking)
 import * as sd from "npm:@automerge/subduction@0.23.0"
-import { each as eachRun, pack as packRun, PackError, type Unpacked } from "../../../typescript/packer.ts"
+import { each as unpacking, pack as packing, PackError, type Unpacked } from "../../../typescript/packer.ts"
 import { hex, unhex } from "../../../typescript/hex.ts"
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import * as cbor from "@ermine/encoding/cbor"
@@ -217,10 +217,10 @@ export function createSubduction(
 		return d.seen.has(h) || await opening(d, h, blob) !== undefined
 	}
 
-	// a fragment's blob opened: {run: its members as columns (packer.ts), snapshot?: packed tables}, or
+	// a fragment's blob opened: {run: its members as a pack (packer.ts), snapshot?: packed tables}, or
 	// {members: [sealed…], snapshot?} as it was first written. each member unsealed as it is read,
 	// in order: the first that is not good ends it, and the fragment is refused whole with its code
-	// (a run that is not one, or comes to too much: shape). one a run's next vouches for is taken once
+	// (a pack that is not one, or comes to too much: shape). one a pack's next vouches for is taken once
 	// that one's signature is good. the snapshot dropped when it does not read back
 	async function contents(
 		d: Doc,
@@ -239,9 +239,10 @@ export function createSubduction(
 		const o = x as Record<string, unknown>
 		const keys = Object.keys(o).sort().join()
 		let items: Iterable<unknown>
+		// "run": the blob's key, kept as stored
 		if (keys === "run" || keys === "run,snapshot") {
 			if (!(o.run instanceof Uint8Array)) return "shape"
-			items = eachRun(o.run)
+			items = unpacking(o.run)
 		} else if (keys === "members" || keys === "members,snapshot") {
 			if (!Array.isArray(o.members)) return "shape"
 			items = o.members
@@ -542,8 +543,9 @@ export function createSubduction(
 			const ms = f.members.map((m) => ({ id: m, ...d.seen.get(hex(m))! }))
 			ms.sort((a, b) => a.lamport - b.lamport || by(a.name, b.name))
 			const top = d.seen.get(hex(f.head))!.name
+			// "run": the blob's key, kept as stored
 			const blob: { run: Uint8Array; snapshot?: Uint8Array } = {
-				run: packRun(ms.map((m) => m.sealed ?? { commit: m.bytes, stored: m.id })),
+				run: packing(ms.map((m) => m.sealed ?? { commit: m.bytes, stored: m.id })),
 			}
 			const kept = d.histories.stored.get(unhex(top))
 			const snapshot = kept && options.snapshotOf?.(d.id, kept)
@@ -567,7 +569,7 @@ export function createSubduction(
 	}
 
 	// a fragment stored: the loose commits it stands for let go from storage (sedimentree's minimal
-	// form, on disk too): the run holds them, about 40 bytes each against about 280. only the members
+	// form, on disk too): the pack holds them, about 40 bytes each against about 280. only the members
 	// of the fragment the storage holds for that head (Subduction keeps one a head), checked, and
 	// reached from its head: whatever is let go of comes back from it
 	async function compact(d: Doc, head: Uint8Array) {
