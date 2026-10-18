@@ -14,8 +14,8 @@ const m = await import(`file://${file}`)
 await Deno.remove(file)
 
 const ids = [
-	"ermine://f849ff1304dc7e0cba4d758258a6a907" + "0".repeat(32),
-	"ermine://1a42463ee0b3694e305ac7dd448832e0" + "0".repeat(32),
+	"ermine://d3b583537595c9a6de0110781d4566d1" + "0".repeat(32),
+	"ermine://bf04115f9b284145026eab6801219d6e" + "0".repeat(32),
 	"ermine://0123456789abcdef0123456789abcdef" + "0".repeat(32),
 ]
 const cases: string[] = []

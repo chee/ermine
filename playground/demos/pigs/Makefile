@@ -1,5 +1,5 @@
 # playground/demos/pigs: ermine-pigs, lab-pig's pigs in a terminal (c/pigs.c says how to use it), on the table
-# and sync (extensions/sync/c), as playground/term builds its programs. Quiet by default: V=1 shows each
+# and sync (extensions/together/c), as playground/term builds its programs. Quiet by default: V=1 shows each
 # command.
 #   make            ermine-pigs (its looks: pixels, and --look nethack, c/hack.c) and walk-test
 #   make test       walk-test against program.ts's own walking (deno), the formula the web page runs
@@ -26,9 +26,9 @@ FLAGS = $(BLAKE3FLAGS) $(rename) -I$(OPENSSL)/include
 # the table, entries and op; sync, the transport and what they stand on; Subduction's host side, its
 # memory store and a WebSocket over OpenSSL; JSON for presence's messages
 graph = core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c
-sync = extensions/sync/c/sync.c extensions/sync/c/transport.c extensions/sync/c/ids.c extensions/sync/c/history.c \
-	extensions/sync/c/replay.c extensions/sync/c/snapshot.c extensions/sync/c/run.c \
-	extensions/sync/c/seal.c extensions/sync/c/ed25519/ed25519.c extensions/sync/c/ed25519/sha2.c extensions/subduction/c/fragment.c \
+sync = extensions/together/c/sync.c extensions/together/c/transport.c extensions/together/c/mailroom.c extensions/together/stacks/subduction/c/subduction.c extensions/together/c/ids.c extensions/together/c/history.c \
+	extensions/together/c/replay.c extensions/together/c/snapshot.c extensions/together/c/packer.c \
+	extensions/together/c/seal.c extensions/together/c/ed25519/ed25519.c extensions/together/c/ed25519/sha2.c extensions/subduction/c/fragment.c \
 	ermine/encoding/c/commit.c ermine/encoding/c/pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c ermine/encoding/c/json_text.c \
 	ermine/encoding/c/blake3/blake3.c ermine/encoding/c/blake3/blake3_dispatch.c ermine/encoding/c/blake3/blake3_portable.c \
 	extensions/subduction/c/subduction/platform_posix.c extensions/subduction/c/subduction/store_memory.c \
@@ -36,7 +36,7 @@ sync = extensions/sync/c/sync.c extensions/sync/c/transport.c extensions/sync/c/
 under = $(graph) $(sync)
 objects = $(addprefix lib/o/,$(subst /,_,$(under:.c=.o)))
 objects-check = $(addprefix lib/check/,$(subst /,_,$(under:.c=.o)))
-headers = $(wildcard c/*.h) $(wildcard $(R)/core/*/c/*.h $(R)/extensions/sync/c/*.h $(R)/ermine/encoding/c/*.h $(R)/extensions/subduction/c/*.h $(R)/extensions/subduction/c/subduction/*.h)
+headers = $(wildcard c/*.h) $(wildcard $(R)/core/*/c/*.h $(R)/extensions/together/c/*.h $(R)/extensions/together/stacks/subduction/c/*.h $(R)/ermine/encoding/c/*.h $(R)/extensions/subduction/c/*.h $(R)/extensions/subduction/c/subduction/*.h)
 pigs = c/pigs.c c/device.c c/screen.c c/walk.c
 # hack.c, the NetHack look, is part of pigs.c (included by it)
 looks = c/hack.c

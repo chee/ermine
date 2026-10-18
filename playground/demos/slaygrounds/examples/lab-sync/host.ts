@@ -5,13 +5,13 @@
 // row too.
 //
 // merging is off at first: a note with several versions shows the first, and settle keeps it.
-// switched on, this device merges them by eg-walker (@ermine/sync/egwalker): two windows typing in
+// switched on, this device merges them by eg-walker (@ermine/together/egwalker): two windows typing in
 // one note see one text. it knows the rule either way, so it takes in what a merging device wrote
 //
 // what this device has, as nodes (local, never synced):
 //   /me      who this device is, the server, its own note's commits and fragments
 //   /peers   the notes on show: one a live row, this device's first
-import { egwalker } from "@ermine/sync/egwalker"
+import { egwalker } from "@ermine/together/egwalker"
 import { createSyncWorld, type Patch } from "@ermine/slaygrounds/sync-world"
 import { render } from "ermine-h"
 
