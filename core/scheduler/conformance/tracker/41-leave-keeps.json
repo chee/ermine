@@ -1,0 +1,120 @@
+{
+	"title": "leave ends a run keeping every link: the ones it did not reach stay after the ones it read, still among their spots' readers, till trim drops them",
+	"steps": [
+		{
+			"op": "begin",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "track",
+			"from": "r",
+			"to": "a",
+			"expect": {}
+		},
+		{
+			"op": "track",
+			"from": "r",
+			"to": "b",
+			"expect": {}
+		},
+		{
+			"op": "track",
+			"from": "r",
+			"to": "c",
+			"expect": {}
+		},
+		{
+			"op": "end",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "begin",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "track",
+			"from": "r",
+			"to": "a",
+			"expect": {}
+		},
+		{
+			"op": "leave",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "reads",
+			"of": "r",
+			"expect": {
+				"names": [
+					"a",
+					"b",
+					"c"
+				]
+			}
+		},
+		{
+			"op": "readers",
+			"of": "b",
+			"expect": {
+				"names": [
+					"r"
+				]
+			}
+		},
+		{
+			"op": "readers",
+			"of": "c",
+			"expect": {
+				"names": [
+					"r"
+				]
+			}
+		},
+		{
+			"op": "trim",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "reads",
+			"of": "r",
+			"expect": {
+				"names": [
+					"a"
+				]
+			}
+		},
+		{
+			"op": "readers",
+			"of": "b",
+			"expect": {
+				"names": []
+			}
+		},
+		{
+			"op": "readers",
+			"of": "c",
+			"expect": {
+				"names": []
+			}
+		},
+		{
+			"op": "trim",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "reads",
+			"of": "r",
+			"expect": {
+				"names": [
+					"a"
+				]
+			}
+		}
+	]
+}

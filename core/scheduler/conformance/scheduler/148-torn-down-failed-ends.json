@@ -1,0 +1,160 @@
+{
+	"title": "a computation torn down while its last run failed: every key it kept is forgotten, the ones it read and the ones it kept from the run before",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "scope",
+			"name": "s",
+			"parent": "o",
+			"info": {
+				"place": [
+					"s"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 0,
+				"y": 0
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "s",
+			"f": {
+				"do": [
+					{
+						"read": "x"
+					},
+					{
+						"if": [
+							{
+								"eq": [
+									{
+										"read": "x"
+									},
+									1
+								]
+							},
+							{
+								"throw": "no"
+							},
+							null
+						]
+					},
+					{
+						"read": "y"
+					}
+				]
+			},
+			"to": "k",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 2
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"due": "c",
+						"tick": 4
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "failed",
+						"error": "no"
+					}
+				]
+			}
+		},
+		{
+			"op": "forgotten",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "dispose",
+			"scope": "s",
+			"expect": {}
+		},
+		{
+			"op": "forgotten",
+			"expect": {
+				"keys": [
+					"x",
+					"y"
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"y": 1
+			},
+			"expect": {
+				"tick": 5
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		}
+	]
+}

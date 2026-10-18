@@ -1,0 +1,332 @@
+{
+	"title": "c's failing run writes z, which w reads to write y; y is kept from c's run before, not read by this one: w's write makes c due again as a retry, not a loop (no looping end); ranks come from what was read",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 0,
+				"y": 0,
+				"z": 0
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": "x"
+					},
+					{
+						"write": [
+							"z",
+							{
+								"read": "x"
+							}
+						]
+					},
+					{
+						"if": [
+							{
+								"eq": [
+									{
+										"read": "x"
+									},
+									1
+								]
+							},
+							{
+								"throw": "no"
+							},
+							null
+						]
+					},
+					{
+						"read": "y"
+					}
+				]
+			},
+			"to": "k",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 2
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "compute",
+			"name": "w",
+			"scope": "o",
+			"f": {
+				"sum": [
+					{
+						"read": "z"
+					},
+					1
+				]
+			},
+			"to": "y",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "w",
+						"tick": 5
+					},
+					{
+						"starts": "w",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"due": "c",
+						"tick": 6,
+						"writer": "w"
+					},
+					{
+						"ends": "w",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"due": "w",
+						"tick": 7,
+						"writer": "c"
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "w",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "w",
+						"run": 2,
+						"ended": "done",
+						"equal": true
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1
+			},
+			"expect": {
+				"tick": 9
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 9
+					},
+					{
+						"starts": "c",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"due": "w",
+						"tick": 10,
+						"writer": "c"
+					},
+					{
+						"ends": "c",
+						"run": 3,
+						"ended": "failed",
+						"error": "no"
+					},
+					{
+						"starts": "w",
+						"run": 3,
+						"rank": 1
+					},
+					{
+						"due": "c",
+						"tick": 11,
+						"writer": "w"
+					},
+					{
+						"ends": "w",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 4,
+						"rank": 0
+					},
+					{
+						"due": "w",
+						"tick": 12,
+						"writer": "c"
+					},
+					{
+						"ends": "c",
+						"run": 4,
+						"ended": "failed",
+						"error": "no"
+					},
+					{
+						"starts": "w",
+						"run": 4,
+						"rank": 1
+					},
+					{
+						"ends": "w",
+						"run": 4,
+						"ended": "done",
+						"equal": true
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "y",
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 2
+			},
+			"expect": {
+				"tick": 13
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 13
+					},
+					{
+						"starts": "c",
+						"run": 5,
+						"rank": 0
+					},
+					{
+						"due": "w",
+						"tick": 14,
+						"writer": "c"
+					},
+					{
+						"ends": "c",
+						"run": 5,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "w",
+						"run": 5,
+						"rank": 0
+					},
+					{
+						"due": "c",
+						"tick": 16,
+						"writer": "w"
+					},
+					{
+						"ends": "w",
+						"run": 5,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 6,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 6,
+						"ended": "looping",
+						"equal": false,
+						"through": [
+							"c",
+							"w"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "k",
+			"expect": {
+				"value": 2
+			}
+		}
+	]
+}

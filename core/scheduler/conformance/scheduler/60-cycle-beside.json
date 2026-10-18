@@ -4,7 +4,9 @@
 		{
 			"op": "root",
 			"name": "o",
-			"info": { "actor": "test" },
+			"info": {
+				"actor": "test"
+			},
 			"expect": {}
 		},
 		{
@@ -309,15 +311,15 @@
 						"tick": 15
 					},
 					{
+						"due": "a",
+						"tick": 15
+					},
+					{
 						"due": "b",
 						"tick": 15
 					},
 					{
 						"due": "d0",
-						"tick": 15
-					},
-					{
-						"due": "a",
 						"tick": 15
 					},
 					{
@@ -412,15 +414,15 @@
 			"expect": {
 				"moments": [
 					{
+						"due": "a",
+						"tick": 20
+					},
+					{
 						"due": "b",
 						"tick": 20
 					},
 					{
 						"due": "d0",
-						"tick": 20
-					},
-					{
-						"due": "a",
 						"tick": 20
 					},
 					{

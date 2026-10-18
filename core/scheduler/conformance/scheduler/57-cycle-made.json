@@ -4,7 +4,9 @@
 		{
 			"op": "root",
 			"name": "o",
-			"info": { "actor": "test" },
+			"info": {
+				"actor": "test"
+			},
 			"expect": {}
 		},
 		{
@@ -449,15 +451,15 @@
 						"equal": true
 					},
 					{
+						"due": "c1",
+						"tick": 22
+					},
+					{
 						"due": "c2",
 						"tick": 22
 					},
 					{
 						"due": "d",
-						"tick": 22
-					},
-					{
-						"due": "c1",
 						"tick": 22
 					},
 					{

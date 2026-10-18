@@ -1,0 +1,108 @@
+{
+	"title": "add after a run left goes right after the cursor, the cursor on it: trim keeps it and drops the links the run did not reach",
+	"steps": [
+		{
+			"op": "begin",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "track",
+			"from": "r",
+			"to": "a",
+			"expect": {}
+		},
+		{
+			"op": "track",
+			"from": "r",
+			"to": "b",
+			"expect": {}
+		},
+		{
+			"op": "end",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "begin",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "track",
+			"from": "r",
+			"to": "a",
+			"expect": {}
+		},
+		{
+			"op": "leave",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"from": "r",
+			"to": "c",
+			"expect": {}
+		},
+		{
+			"op": "reads",
+			"of": "r",
+			"expect": {
+				"names": [
+					"a",
+					"c",
+					"b"
+				]
+			}
+		},
+		{
+			"op": "add",
+			"from": "r",
+			"to": "b",
+			"expect": {}
+		},
+		{
+			"op": "reads",
+			"of": "r",
+			"expect": {
+				"names": [
+					"a",
+					"c",
+					"b"
+				]
+			}
+		},
+		{
+			"op": "trim",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "reads",
+			"of": "r",
+			"expect": {
+				"names": [
+					"a",
+					"c"
+				]
+			}
+		},
+		{
+			"op": "readers",
+			"of": "b",
+			"expect": {
+				"names": []
+			}
+		},
+		{
+			"op": "readers",
+			"of": "c",
+			"expect": {
+				"names": [
+					"r"
+				]
+			}
+		}
+	]
+}
