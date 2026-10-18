@@ -12,14 +12,16 @@ export type Link<O> = {
 
 // links may repeat: a reader can have two links to one spot (see track)
 // owner: the caller's thing, never read here
-// cursor: the last link this run confirmed; outside a run, the last link
-// gen: the tick this node's run began at; 0 outside a run
+// cursor: the last link this run confirmed; outside a run, the last link (after leave: the last
+// its run confirmed, the ones it did not reach after it, old, till trim)
+// gen: the tick its latest run began at; 0 before any. open: in a run
 // first, last: the readers' list
 export type Node<O> = {
 	owner: O
 	reads: Link<O> | null
 	cursor: Link<O> | null
 	gen: number
+	open: boolean
 	first: Link<O> | null
 	last: Link<O> | null
 }
@@ -29,6 +31,10 @@ export function createTracker<O>(): {
 	begin: (f: Node<O>) => void
 	track: (f: Node<O>, t: Node<O>) => void
 	end: (f: Node<O>) => void
+	leave: (f: Node<O>) => void
+	old: (l: Link<O>) => boolean
+	trim: (f: Node<O>) => void
+	dedupe: (f: Node<O>) => void
 	add: (f: Node<O>, t: Node<O>) => void
 	untrack: (f: Node<O>, t?: Node<O>) => void
 	reads: (f: Node<O>) => readonly Node<O>[]
@@ -47,6 +53,7 @@ export function createTracker<O>(): {
 			reads: null,
 			cursor: null,
 			gen: 0,
+			open: false,
 			first: null,
 			last: null,
 		}
@@ -60,7 +67,15 @@ export function createTracker<O>(): {
 		else l.to.last = l.before
 	}
 	function link(from: N, to: N, prev: L | null, next: L | null) {
-		const l: L = { from, to, prev, next, before: to.last, after: null, gen: from.gen }
+		const l: L = {
+			from,
+			to,
+			prev,
+			next,
+			before: to.last,
+			after: null,
+			gen: from.open ? from.gen : 0,
+		}
 		if (prev !== null) prev.next = l
 		else from.reads = l
 		if (next !== null) next.prev = l
@@ -80,7 +95,8 @@ export function createTracker<O>(): {
 
 	// not in a run already: end it first
 	function begin(f: N) {
-		if (f.gen !== 0) throw new Error("begin in a run: end it first")
+		if (f.open) throw new Error("begin in a run: end it first")
+		f.open = true
 		f.gen = ++tick
 		f.cursor = null
 	}
@@ -102,9 +118,26 @@ export function createTracker<O>(): {
 		f.cursor = link(f, t, cursor, next)
 	}
 
-	// whatever this run did not read again is dropped; without a run, nothing
+	// whatever this run did not read again is dropped; without a run, nothing: leave, then trim
 	function end(f: N) {
-		f.gen = 0
+		f.open = false
+		trim(f)
+	}
+
+	// the run ends, no link dropped: the ones it did not reach stay after the cursor, old, for trim
+	// or dedupe (or the next run) to find
+	function leave(f: N) {
+		f.open = false
+	}
+
+	// a link from an earlier run that the latest run did not read: old (its run over). the next
+	// run reading it takes it back; trim lets the old ones go when a run is done
+	function old(l: L): boolean {
+		return !l.from.open && l.gen !== l.from.gen
+	}
+
+	// outside a run: the links after the cursor (all, with no cursor) are dropped
+	function trim(f: N) {
 		const cursor = f.cursor
 		let stale: L | null
 		if (cursor !== null) {
@@ -121,11 +154,28 @@ export function createTracker<O>(): {
 		}
 	}
 
-	// outside a run: at the end, or left where it is. in a run it would mean track
+	// outside a run: the links after the cursor stay, but one to a spot linked before it, or after
+	// it already, is dropped: a run left (leave) with its reads in a new order piles up no repeats
+	function dedupe(f: N) {
+		const cursor = f.cursor
+		let l = cursor !== null ? cursor.next : f.reads
+		if (l === null) return
+		const seen = new Set<N>()
+		for (let x = f.reads; x !== l; x = x!.next) seen.add(x!.to)
+		while (l !== null) {
+			const next: L | null = l.next
+			if (seen.has(l.to)) unlink(l)
+			else seen.add(l.to)
+			l = next
+		}
+	}
+
+	// outside a run: at the cursor (the end, after end), the cursor on it; or left where it is. in
+	// a run it would mean track
 	function add(f: N, t: N) {
-		if (f.gen !== 0) throw new Error("add in a run: use track")
+		if (f.open) throw new Error("add in a run: use track")
 		for (let l = f.reads; l !== null; l = l.next) if (l.to === t) return
-		f.cursor = link(f, t, f.cursor, null)
+		f.cursor = link(f, t, f.cursor, f.cursor !== null ? f.cursor.next : f.reads)
 	}
 
 	// untrack(from): all of from's. untrack(from, to): every link of from's to that one.
@@ -156,5 +206,5 @@ export function createTracker<O>(): {
 		return out
 	}
 
-	return { node, begin, track, end, add, untrack, reads, readers }
+	return { node, begin, track, end, leave, old, trim, dedupe, add, untrack, reads, readers }
 }
