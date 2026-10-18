@@ -14,7 +14,7 @@ import { bind } from "ermine-h"
 // it. add a pig in both at once: two versions of the list, mended to hold both pigs
 //
 // ---- the format (what another viewer, in C or anything, reads and writes the same way) ----
-// ids: ermine://<64 hex>. the room: the host's (ermine://1a42463ee0b3694e305ac7dd448832e0 and 32
+// ids: ermine://<64 hex>. the room: the host's (ermine://bf04115f9b284145026eab6801219d6e and 32
 // zeros, or ?room=). the first pig: FIRST below. a kept node's value table only.
 //
 // the room's value: {[pig id]: true | false}. true: the pig is in the room; false: it was binned
@@ -80,7 +80,7 @@ import { bind } from "ermine-h"
 //   as min(1, g |(du/ds)| / 0.7). look, from random(hash(id)): size 0.86 + 0.24 draw; tint from
 //   random(hash(id) ^ 0x9E3779B9): hue 333 + 20 draw, lightness 81 + 6 draw (%)
 
-const FIRST = "ermine://f849ff1304dc7e0cba4d758258a6a907" + "0".repeat(32)
+const FIRST = "ermine://d3b583537595c9a6de0110781d4566d1" + "0".repeat(32)
 const W = 110 // a pig's width in px at size 1; its height is 100/130 of it
 const LIFT = 26 // px a held pig is lifted above its shadow
 // the corner of shame, in field units (its feet): x from 0.78 to 1, y from 0 to 0.45

@@ -4,7 +4,7 @@
 // state each draw: who waits on whom, in columns by rank; the keys each computer tracks and
 // writes; who made whom.
 //
-// the world: a graph placed at /graph, shared by sync (@ermine/sync over Subduction): two inputs
+// the world: a graph placed at /graph, shared by sync (@ermine/together over Subduction): two inputs
 // there; here, a chain of computes over them (sum → double → label), an effect drawing the label,
 // and readers of a added and killed with the buttons. the processes are this page's own (their
 // nodes have no ermine:// id, so sync keeps none of them): two pages on one graph each run their
@@ -20,8 +20,8 @@
 // file's nodes put in under new ids, so it is a new graph, opened
 import { unpack } from "@ermine/encoding/pack"
 import type { Entry } from "@ermine/node/entry"
-import { createSigner } from "@ermine/sync/seal"
-import { createSync, type Sync } from "@ermine/sync/sync"
+import { createSigner } from "@ermine/together/seal"
+import { createSync, type Sync } from "@ermine/together/sync"
 import { save } from "../slaygrounds/src/graph-file.ts"
 import {
 	type ComputeGiven,

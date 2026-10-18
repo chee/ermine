@@ -21,7 +21,7 @@
 //               the value of each version not shown (undefined where only other tables differ)
 // and whatever the program places (place), under its own names
 import { place, unplace } from "@ermine/places"
-import type { Conflict } from "@ermine/sync/sync"
+import type { Conflict } from "@ermine/together/sync"
 import createEntry from "@ermine/node/entry"
 import { createSyncWorld, put } from "@ermine/slaygrounds/sync-world"
 import { render } from "ermine-h"
@@ -32,7 +32,7 @@ type At = { x: number; y: number }
 let waving: string | undefined
 const world = await createSyncWorld({
 	render,
-	room: "ermine://1a42463ee0b3694e305ac7dd448832e0" + "0".repeat(32),
+	room: "ermine://bf04115f9b284145026eab6801219d6e" + "0".repeat(32),
 	ephemeral: (doc, part) => doc === waving && part === "value",
 })
 const { s, host, table, places, header, me, name, colour, room } = world

@@ -138,7 +138,7 @@ const nearest = (s: Seen, x: number, y: number) => {
 
 // the page's pig that is the terminal's id: the nearest to where the terminal has it, and only when
 // clearly it (the first pig, in every room, never taken by mistake): waits for the pigs to part
-const FIRST = "ermine://f849ff1304dc7e0cba4d758258a6a907" + "0".repeat(32)
+const FIRST = "ermine://d3b583537595c9a6de0110781d4566d1" + "0".repeat(32)
 const pagePig = (id: string) =>
 	until(async () => {
 		const [t, s] = await Promise.all([tstate(), web()])
