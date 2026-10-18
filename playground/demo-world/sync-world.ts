@@ -1,5 +1,5 @@
 // the world a sync example runs in: this page is one device, a whole ermine (a table, places, a
-// scheduler) with sync beside it (@ermine/sync over Subduction), joined to wss://galaxy.observer.
+// scheduler) with sync beside it (@ermine/together over Subduction), joined to wss://galaxy.observer.
 // an example's host.ts makes one, adds what is its own, and hands the program its tools:
 //
 //   import { createSyncWorld } from "@ermine/slaygrounds/sync-world"
@@ -42,9 +42,9 @@ import { createScheduler, type Scope } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { trace } from "@ermine/scheduler/trace"
 import { createTable, type Key } from "@ermine/table"
-import { createChannel } from "@ermine/sync/channel"
-import { createSigner } from "@ermine/sync/seal"
-import { createSync, type Options as SyncOptions } from "@ermine/sync/sync"
+import { createChannel } from "@ermine/together/channel"
+import { createSigner } from "@ermine/together/seal"
+import { createSync, type Options as SyncOptions } from "@ermine/together/sync"
 
 // the page's, reached loosely: the world names no DOM types (the editor's type checker has no dom lib)
 // deno-lint-ignore no-explicit-any
