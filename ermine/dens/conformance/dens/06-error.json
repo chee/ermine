@@ -1,0 +1,171 @@
+{
+	"title": "a runner that throws: the process starts (pending), its runner called at the first pulse, the Error its status; it stays at its path until stopped. no handle: its stop calls nothing, the row and the node go",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"apps": "APPS"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "APPS",
+			"value": {
+				"clock.js": "CLOCK"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "CLOCK",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CLOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "den",
+			"expect": {
+				"id": "den:mac"
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "boom",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source"
+			},
+			"live": "boom",
+			"expect": {
+				"id": "den:mac/runners/boom",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"runners",
+					"boom"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"boom"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"work",
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"skip": [
+				"parts",
+				"attributes",
+				"children",
+				"live"
+			],
+			"id": "proc:a",
+			"expect": {
+				"status": "pending"
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"skip": [
+				"parts",
+				"attributes",
+				"children",
+				"live"
+			],
+			"id": "proc:a",
+			"expect": {
+				"status": {
+					"failed": "boom"
+				}
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"id": "proc:a"
+			}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [],
+				"stops": []
+			}
+		},
+		{
+			"op": "stop",
+			"name": "a",
+			"expect": {}
+		},
+		{
+			"op": "here",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "node",
+			"id": "proc:a",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [],
+				"stops": []
+			}
+		}
+	]
+}

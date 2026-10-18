@@ -1,0 +1,213 @@
+{
+	"title": "a start in a box: the runner from the den's root, the program and the path from the box's (W): the process at clock in the box, not at the den's root; its cwd the box's \"/\", its program by its path in the box. a program above the box's folder: not-there (the box sees nothing above W)",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"apps": "WA"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "WA",
+			"value": {
+				"clock.js": "CLOCK"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "CLOCK",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CLOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"name": "web",
+			"folder": "W",
+			"expect": {}
+		},
+		{
+			"op": "den",
+			"expect": {
+				"id": "den:mac"
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api"
+			},
+			"live": "record",
+			"expect": {
+				"id": "den:mac/runners/javascript",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"clock"
+			],
+			"box": "web",
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "here",
+			"box": "web",
+			"path": [
+				"clock"
+			],
+			"expect": {
+				"id": "proc:a"
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"clock"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "node",
+			"id": "proc:a",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.type": "ermine.process",
+					"ermine.process.runner": {
+						"id": "den:mac/runners/javascript",
+						"at": [
+							"system",
+							"den",
+							"runners",
+							"javascript"
+						]
+					},
+					"ermine.process.program": {
+						"id": "CLOCK",
+						"at": [
+							"apps",
+							"clock.js"
+						],
+						"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+					},
+					"ermine.process.den": {
+						"id": "den:mac",
+						"at": [
+							"system",
+							"dens",
+							"mac"
+						]
+					},
+					"ermine.process.cwd": []
+				},
+				"status": "pending",
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"dev": "mac",
+						"process": "proc:a",
+						"code": "hi",
+						"args": [],
+						"keys": [
+							"den",
+							"places",
+							"process"
+						]
+					}
+				],
+				"stops": []
+			}
+		},
+		{
+			"op": "start",
+			"name": "b",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"at": [
+				"clock2"
+			],
+			"box": "web",
+			"expect": {
+				"refused": "not-there",
+				"program": [
+					"system",
+					"den",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "here",
+			"box": "web",
+			"path": [
+				"clock2"
+			],
+			"expect": {
+				"id": null
+			}
+		}
+	]
+}

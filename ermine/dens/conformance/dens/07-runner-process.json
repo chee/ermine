@@ -1,0 +1,647 @@
+{
+	"title": "a process offering a runner: at its own node (work/lisp/runners/lisp, its children { runners }), started on like the den's; a process on it pinned to it. stopping the offering process stops its users first, newest first, \"runner-stopped\", then its own handle with the reason given; its offer's node goes with it. withdrawn while the offering process runs: its users stopped \"withdrawn\", the offering process still running, its runner gone",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"apps": "APPS"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "APPS",
+			"value": {
+				"lisp.js": "LISP",
+				"hello.lisp": "HELLO"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "LISP",
+			"value": "lisp",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "LISP",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "HELLO",
+			"value": "(hello)",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "HELLO",
+			"value": {
+				"ermine.type": "ermine.lisp-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "den",
+			"expect": {
+				"id": "den:mac"
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api"
+			},
+			"live": "record",
+			"expect": {
+				"id": "den:mac/runners/javascript",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "lisp",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"lisp.js"
+			],
+			"at": [
+				"work",
+				"lisp"
+			],
+			"expect": {
+				"id": "proc:lisp",
+				"at": [
+					"work",
+					"lisp"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "lisp",
+			"attrs": {
+				"ermine.runner.takes": "ermine.lisp-source"
+			},
+			"live": "record",
+			"by": "lisp",
+			"expect": {
+				"id": "proc:lisp/runners/lisp",
+				"at": [
+					"work",
+					"lisp",
+					"runners",
+					"lisp"
+				]
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"work",
+				"lisp",
+				"runners",
+				"lisp"
+			],
+			"expect": {
+				"id": "proc:lisp/runners/lisp"
+			}
+		},
+		{
+			"op": "node",
+			"skip": [
+				"parts",
+				"attributes",
+				"status",
+				"live"
+			],
+			"id": "proc:lisp",
+			"expect": {
+				"children": {
+					"runners": "proc:lisp/runners"
+				}
+			}
+		},
+		{
+			"op": "node",
+			"id": "proc:lisp/runners/lisp",
+			"expect": {
+				"parts": [
+					"attributes",
+					"value"
+				],
+				"attributes": {
+					"ermine.runner.takes": "ermine.lisp-source",
+					"ermine.type": "ermine.runner"
+				},
+				"status": null,
+				"children": null,
+				"live": true
+			}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"runner": [
+				"work",
+				"lisp",
+				"runners",
+				"lisp"
+			],
+			"program": [
+				"apps",
+				"hello.lisp"
+			],
+			"at": [
+				"work",
+				"hello"
+			],
+			"expect": {
+				"id": "proc:q",
+				"at": [
+					"work",
+					"hello"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "q2",
+			"runner": [
+				"work",
+				"lisp",
+				"runners",
+				"lisp"
+			],
+			"program": [
+				"apps",
+				"hello.lisp"
+			],
+			"at": [
+				"work",
+				"hello2"
+			],
+			"expect": {
+				"id": "proc:q2",
+				"at": [
+					"work",
+					"hello2"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"id": "proc:q",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.type": "ermine.process",
+					"ermine.process.runner": {
+						"id": "proc:lisp/runners/lisp",
+						"at": [
+							"work",
+							"lisp",
+							"runners",
+							"lisp"
+						]
+					},
+					"ermine.process.program": {
+						"id": "HELLO",
+						"at": [
+							"apps",
+							"hello.lisp"
+						],
+						"hash": "ad6063499692cd937802b9b4e121336304722351982e7709e806e628d78d78c2"
+					},
+					"ermine.process.den": {
+						"id": "den:mac",
+						"at": [
+							"system",
+							"dens",
+							"mac"
+						]
+					},
+					"ermine.process.cwd": [
+						"work"
+					]
+				},
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"dev": "mac",
+						"process": "proc:lisp",
+						"code": "lisp",
+						"args": [],
+						"keys": [
+							"den",
+							"places",
+							"process"
+						]
+					},
+					{
+						"dev": "mac",
+						"process": "proc:q",
+						"code": "(hello)",
+						"args": [],
+						"keys": [
+							"den",
+							"places",
+							"process"
+						]
+					},
+					{
+						"dev": "mac",
+						"process": "proc:q2",
+						"code": "(hello)",
+						"args": [],
+						"keys": [
+							"den",
+							"places",
+							"process"
+						]
+					}
+				],
+				"stops": []
+			}
+		},
+		{
+			"op": "stop",
+			"name": "lisp",
+			"reason": "done",
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"dev": "mac",
+						"process": "proc:lisp",
+						"code": "lisp",
+						"args": [],
+						"keys": [
+							"den",
+							"places",
+							"process"
+						]
+					},
+					{
+						"dev": "mac",
+						"process": "proc:q",
+						"code": "(hello)",
+						"args": [],
+						"keys": [
+							"den",
+							"places",
+							"process"
+						]
+					},
+					{
+						"dev": "mac",
+						"process": "proc:q2",
+						"code": "(hello)",
+						"args": [],
+						"keys": [
+							"den",
+							"places",
+							"process"
+						]
+					}
+				],
+				"stops": [
+					{
+						"dev": "mac",
+						"process": "proc:q2",
+						"reason": "runner-stopped"
+					},
+					{
+						"dev": "mac",
+						"process": "proc:q",
+						"reason": "runner-stopped"
+					},
+					{
+						"dev": "mac",
+						"process": "proc:lisp",
+						"reason": "done"
+					}
+				]
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"work",
+				"hello"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"work",
+				"hello2"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"work",
+				"lisp",
+				"runners",
+				"lisp"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "node",
+			"id": "proc:lisp/runners/lisp",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"id": "proc:lisp",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "start",
+			"name": "lisp2",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"lisp.js"
+			],
+			"at": [
+				"work",
+				"lisp"
+			],
+			"expect": {
+				"id": "proc:lisp2",
+				"at": [
+					"work",
+					"lisp"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "lisp",
+			"attrs": {
+				"ermine.runner.takes": "ermine.lisp-source"
+			},
+			"live": "record",
+			"by": "lisp2",
+			"expect": {
+				"id": "proc:lisp2/runners/lisp",
+				"at": [
+					"work",
+					"lisp",
+					"runners",
+					"lisp"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "r",
+			"runner": [
+				"work",
+				"lisp",
+				"runners",
+				"lisp"
+			],
+			"program": [
+				"apps",
+				"hello.lisp"
+			],
+			"at": [
+				"work",
+				"r"
+			],
+			"expect": {
+				"id": "proc:r",
+				"at": [
+					"work",
+					"r"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "withdraw",
+			"id": "proc:lisp2/runners/lisp",
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"dev": "mac",
+						"process": "proc:lisp",
+						"code": "lisp",
+						"args": [],
+						"keys": [
+							"den",
+							"places",
+							"process"
+						]
+					},
+					{
+						"dev": "mac",
+						"process": "proc:q",
+						"code": "(hello)",
+						"args": [],
+						"keys": [
+							"den",
+							"places",
+							"process"
+						]
+					},
+					{
+						"dev": "mac",
+						"process": "proc:q2",
+						"code": "(hello)",
+						"args": [],
+						"keys": [
+							"den",
+							"places",
+							"process"
+						]
+					},
+					{
+						"dev": "mac",
+						"process": "proc:lisp2",
+						"code": "lisp",
+						"args": [],
+						"keys": [
+							"den",
+							"places",
+							"process"
+						]
+					},
+					{
+						"dev": "mac",
+						"process": "proc:r",
+						"code": "(hello)",
+						"args": [],
+						"keys": [
+							"den",
+							"places",
+							"process"
+						]
+					}
+				],
+				"stops": [
+					{
+						"dev": "mac",
+						"process": "proc:q2",
+						"reason": "runner-stopped"
+					},
+					{
+						"dev": "mac",
+						"process": "proc:q",
+						"reason": "runner-stopped"
+					},
+					{
+						"dev": "mac",
+						"process": "proc:lisp",
+						"reason": "done"
+					},
+					{
+						"dev": "mac",
+						"process": "proc:r",
+						"reason": "withdrawn"
+					}
+				]
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"work",
+				"lisp"
+			],
+			"expect": {
+				"id": "proc:lisp2"
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"work",
+				"r"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "node",
+			"id": "proc:lisp2/runners/lisp",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "start",
+			"name": "s",
+			"runner": [
+				"work",
+				"lisp",
+				"runners",
+				"lisp"
+			],
+			"program": [
+				"apps",
+				"hello.lisp"
+			],
+			"at": [
+				"work",
+				"s"
+			],
+			"expect": {
+				"refused": "not-a-runner",
+				"runner": [
+					"work",
+					"lisp",
+					"runners",
+					"lisp"
+				]
+			}
+		}
+	]
+}
