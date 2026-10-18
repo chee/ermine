@@ -30,7 +30,7 @@ export type Commit = {
 	// a count, the signer's own: two commits otherwise the same are told apart. counted up one a
 	// commit, so a run of them packs to almost nothing (run.ts)
 	nonce: number
-	// the node's heads it was made on, by name, ascending
+	// the node's heads it was made on, by name (a multihash, below), ascending
 	parents: Uint8Array[]
 	// with several parents: the one its patches are over (a merge says what it keeps in them)
 	base?: Uint8Array
@@ -117,7 +117,37 @@ export function joinKey(code: number, key: Uint8Array): Uint8Array {
 	out.set(key, head.length)
 	return out
 }
-const sized = (b: unknown, n: number): b is Uint8Array => b instanceof Uint8Array && b.length === n
+
+// a name is a multihash: the varint of the hash's multicodec code, the varint of its digest's length,
+// then the digest. the hashes known: code to digest length (BLAKE3 0x1e, 32 bytes); a name of any
+// other code, or whose length is not its code's, is no name. each varint in its shortest form
+const HASHES: ReadonlyMap<number, number> = new Map([[0x1e, 32]])
+const BLAKE3 = 0x1e
+// a name's code and digest, from a name; none for one that is not
+export function splitName(b: unknown): { code: number; digest: Uint8Array } | undefined {
+	if (!(b instanceof Uint8Array)) return undefined
+	const read = (at: number): [number, number] | undefined => {
+		let n = 0, i = at
+		while (i < b.length && i - at < 7 && b[i] & 0x80) n += (b[i++] & 0x7f) * 2 ** (7 * (i - 1 - at))
+		if (i >= b.length || i - at >= 7 || i > at && b[i] === 0) return undefined
+		return [n + b[i] * 2 ** (7 * (i - at)), i + 1]
+	}
+	const code = read(0)
+	if (code === undefined || !HASHES.has(code[0])) return undefined
+	const length = read(code[1])
+	if (length === undefined || length[0] !== HASHES.get(code[0])) return undefined
+	return b.length === length[1] + length[0]
+		? { code: code[0], digest: b.subarray(length[1]) }
+		: undefined
+}
+// a name, from the hash's code and the digest
+export function joinName(code: number, digest: Uint8Array): Uint8Array {
+	const out = new Uint8Array(2 + digest.length)
+	out[0] = code, out[1] = digest.length
+	out.set(digest, 2)
+	return out
+}
+const isName = (b: unknown): b is Uint8Array => splitName(b) !== undefined
 
 export function compare(a: Uint8Array, b: Uint8Array): number {
 	for (let i = 0; i < Math.min(a.length, b.length); i++) if (a[i] !== b[i]) return a[i] - b[i]
@@ -153,12 +183,12 @@ const RULES: { [k in typeof FIELDS[number]]: (v: unknown, c: Fields) => boolean 
 	signer: multikey,
 	nonce: whole,
 	parents: (v) => {
-		if (!Array.isArray(v) || !v.every((p) => sized(p, 32))) return false
+		if (!Array.isArray(v) || !v.every(isName)) return false
 		for (let i = 1; i < v.length; i++) if (compare(v[i - 1], v[i]) >= 0) return false
 		return true
 	},
 	base: (v, c) =>
-		sized(v, 32) && Array.isArray(c.parents) && c.parents.length >= 2 &&
+		isName(v) && Array.isArray(c.parents) && c.parents.length >= 2 &&
 		c.parents.some((p) => p instanceof Uint8Array && compare(p, v) === 0),
 	// a rule's name, with several parents and no base
 	merge: (v, c) =>
@@ -245,7 +275,7 @@ export function decode(b: Uint8Array): Commit {
 	return x as Commit
 }
 
-// the commit's name on every device: the BLAKE3 hash of its bytes
+// the commit's name on every device: the BLAKE3 hash of its bytes, as a multihash (34 bytes)
 export function name(b: Uint8Array): Uint8Array {
-	return blake3(b)
+	return joinName(BLAKE3, blake3(b))
 }
