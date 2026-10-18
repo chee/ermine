@@ -1,7 +1,7 @@
 // sync over the graph of today: two hosts, each a table, places, a scheduler, a device and sync,
 // joined by a pipe. one commit per entry change, the node one object, conflicts in a table, a
 // reload from storage, and what is not kept staying home
-import { assert, assertEquals } from "@std/assert"
+import { assert, assertEquals, assertStrictEquals } from "@std/assert"
 import { ed25519 } from "npm:@noble/curves@1.9.7/ed25519"
 import type { Transport } from "npm:@automerge/subduction@0.23.0"
 import * as sd from "npm:@automerge/subduction@0.23.0"
@@ -240,12 +240,15 @@ Deno.test({
 		a.write("children", id, [{ path: [], value: names }])
 		await quiet(a, b)
 		const entry = b.table.get("children", id)!
+		// the first write copies the map it was given; the next changes that copy in place
+		// (children go through places' unread), by the one patch
+		a.write("children", id, [{ path: ["n7b"], move: { path: ["n8"] } }])
+		await quiet(a, b)
 		const before = entry.value
 		a.write("children", id, [{ path: ["renamed"], move: { path: ["n7"] } }])
 		await quiet(a, b)
-		// the same entry, its value changed in place (places keeps children so), by the one patch
 		assertEquals(b.table.get("children", id), entry)
-		assertEquals(entry.value, before)
+		assertStrictEquals(entry.value, before)
 		const now = entry.value as Record<string, string>
 		assertEquals(now.renamed, seven)
 		assertEquals(now.n7, undefined)

@@ -5,10 +5,10 @@
 // over the table's entry, give; every reader holds what a read now gives (nobody whose value
 // changed was left untold); the layers end where the value does. a few dozen seeds
 import { assertEquals } from "@std/assert"
-import createEntry from "@ermine/node/entry"
+import createEntry, { type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import apply, { type Patch } from "@ermine/op/apply"
-import { at, createPlaces, type Places } from "@ermine/places"
+import { at, createPlaces, type Places, unread } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
 import { createScheduler } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
@@ -61,8 +61,15 @@ function run(seed: number) {
 	})
 	const host = s.createRootScope({ actor: "host" })
 	const header = () => s.runWithScope(host, () => createChangeHeader(s))
-	const put = (part: Key, id: Id, v: unknown) =>
-		table.sub(part, id, createEntry(v, header()) as never)
+	// entries written in place, through places' unread, as children are
+	const placed = new WeakSet<object>()
+	const put = (part: Key, id: Id, v: unknown) => {
+		const e = createEntry(v, header())
+		if (r() < 0.3) placed.add(e)
+		table.sub(part, id, e as never)
+	}
+	const write = (e: Entry<unknown>, ps: Patch[]) =>
+		(placed.has(e) ? unread.update : update)(e, ps, header())
 
 	for (const part of PARTS) put(part, "N", start())
 	const readers = PARTS.flatMap((part) =>
@@ -133,20 +140,18 @@ function run(seed: number) {
 		if (k < 0.2 || live.length === 0) {
 			const p = `P${next++}`
 			live.push(p)
-			// some changing in place, as a host may keep them
-			const cow = r() < 0.3 ? { cow: false as const } : {}
-			table.sub("patch", p, createEntry(node(part), header(), cow) as never)
+			put("patch", p, node(part))
 		} else if (k < 0.35) {
 			const p = pick(live)
 			const e = table.get("patch", p)!
-			update(e, [{ path: ["patches"], value: patches() }], header())
+			write(e, [{ path: ["patches"], value: patches() }])
 			overlay.commit([e])
 		} else if (k < 0.4) {
 			// moved to the other part
 			const p = pick(live)
 			const e = table.get("patch", p)!
 			const other = e.value!.part === "value" ? "attributes" : "value"
-			update(e, [{ path: ["part"], value: other }], header())
+			write(e, [{ path: ["part"], value: other }])
 			overlay.commit([e])
 		} else if (k < 0.45) {
 			// a patch node's entry replaced whole
@@ -170,7 +175,7 @@ function run(seed: number) {
 			} catch {
 				continue
 			}
-			update(n, ps, header())
+			write(n, ps)
 			overlay.commit([n])
 		}
 		s.pulse()

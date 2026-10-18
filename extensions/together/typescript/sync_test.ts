@@ -17,7 +17,7 @@ import { decode } from "@ermine/encoding/commit"
 import { hex } from "./hex.ts"
 import { createSigner } from "./seal.ts"
 import { createSync } from "./sync.ts"
-import { egwalker } from "./egwalker.ts"
+import { serial } from "./rules_harness.ts"
 
 function pipe(): [Transport, Transport] {
 	type End = Transport & { other?: End; queue: Uint8Array[]; waiting: ((b: Uint8Array) => void)[] }
@@ -66,7 +66,7 @@ async function host(
 		zeros,
 		storage: storage as unknown as sd.SedimentreeStorage,
 		commit: (changed) => places.commit(changed),
-		...(merging ? { merges: { "eg-walker": egwalker }, merge: "eg-walker" } : {}),
+		...(merging ? { merges: { serial }, merge: "serial" } : {}),
 		...extra,
 	})
 	const device = sync.device
@@ -295,7 +295,7 @@ Deno.test({
 })
 
 Deno.test({
-	name: "sync: merging by eg-walker, two hosts typing into one text at once end with one text",
+	name: "sync: merging by a rule, two hosts typing into one text at once end with one text",
 	...opts,
 	async fn() {
 		const a = await host(1, undefined, false, true), b = await host(2, undefined, false, true)

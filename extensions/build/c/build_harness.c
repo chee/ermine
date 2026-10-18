@@ -163,7 +163,7 @@ static void enter(void *data) {
 		free(bad);
 		return;
 	}
-	nd_entry *node = nd_make_entry((op_value *)e->value, &h, NULL);
+	nd_entry *node = nd_make_entry((op_value *)e->value, &h);
 	pl_hold(world_places, node, made, pl_made_free);
 	world_keep_node(node);
 	tb_sub(world_table, tb_string(e->part), e->id, node);

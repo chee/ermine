@@ -5,6 +5,7 @@
 //   - an entry: one patch at the path. levels missing on the way are made by putting the nested
 //     remainder at the first missing level (a level that is no map is put over)
 //   - the same value already there (deeply equal): nothing is written
+// write: what changes the entry (default node's update; places' unread.update to change it in place)
 // a path is names (strings); the levels it makes are maps
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
@@ -63,6 +64,7 @@ export function upsert(
 	path: readonly string[],
 	value: unknown,
 	header: ChangeHeader,
+	write: typeof update = update,
 ): Entry<unknown>[] {
 	const there = table.get(part, id) as Entry<unknown> | undefined
 	if (there === undefined) {
@@ -71,7 +73,7 @@ export function upsert(
 	}
 	const ps = patches(there.value, path, value)
 	if (ps.length === 0) return []
-	update(there, ps, header)
+	write(there, ps, header)
 	return [there]
 }
 

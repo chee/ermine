@@ -27,7 +27,7 @@
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import apply, { ApplyError, type Key as Step, type Patch } from "@ermine/op/apply"
-import { at, type Places } from "@ermine/places"
+import { at, type Places, unread } from "@ermine/places"
 import type { Id, Key, Table } from "@ermine/table"
 
 declare module "@ermine/table" {
@@ -246,28 +246,11 @@ export function createOverlay(
 	const keys = new WeakMap<Entry<unknown>, [Key, Id]>()
 	// the change being said to places' commit now, and its key
 	let telling: { entry: Entry<unknown>; key: [Key, Id] } | undefined
-	// an entry made changing in place (cow: false), copied on write while what is made shares with
-	// it → how many made entries do
-	const held = new Map<Entry<unknown>, number>()
-
 	// a made entry shares what no patch touched with its base, and holds its patch nodes' values:
-	// those copied on write while it is kept, so what readers had never changes under them
+	// read, for places' unread (an entry written through it), so its next write copies and what
+	// readers had never changes under them
 	function hold(m: Made) {
-		for (const e of [m.base, ...m.nodes]) {
-			if (e === undefined) continue
-			const n = held.get(e)
-			if (n !== undefined) held.set(e, n + 1)
-			else if (e.cow === false) delete e.cow, held.set(e, 1)
-		}
-	}
-	// and changing in place again once none is kept
-	function release(m: Made) {
-		for (const e of [m.base, ...m.nodes]) {
-			const n = e === undefined ? undefined : held.get(e)
-			if (n === undefined) continue
-			if (n > 1) held.set(e!, n - 1)
-			else held.delete(e!), e!.cow = false
-		}
+		for (const e of [m.base, ...m.nodes]) if (e !== undefined) unread.read(e)
 	}
 
 	const tell = (part: Key, id: Id) => places().onTableChange(part, id)
@@ -334,7 +317,6 @@ export function createOverlay(
 		if (parts === undefined) made.set(id, parts = new Map())
 		parts.set(part, n)
 		hold(n)
-		if (m !== undefined) release(m)
 		return n
 	}
 
@@ -343,7 +325,6 @@ export function createOverlay(
 		const parts = made.get(id)
 		const m = parts?.get(part)
 		if (m === undefined) return
-		release(m)
 		parts!.delete(part)
 		if (parts!.size === 0) made.delete(id)
 	}

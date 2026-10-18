@@ -121,8 +121,8 @@ export const plants: Plant[] = [
 	{
 		name: "update: copy on write turned off (values held change in place)",
 		file: `core/node/${T}/update.ts`,
-		find: "cow: entry.cow !== false",
-		replace: "cow: false",
+		find: "{ undo }",
+		replace: "{ undo, cow: false }",
 		catcher: fuzzUpdate,
 	},
 	{

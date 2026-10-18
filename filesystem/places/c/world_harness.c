@@ -406,7 +406,7 @@ int world_edit(const char *part, tb_key id, const op_value *patches, nd_entry **
 	nd_entry *node = tb_get(world_table, tb_string(part), id);
 	int code;
 	if (node == NULL) {
-		node = nd_make_entry(NULL, &h, NULL);
+		node = nd_make_entry(NULL, &h);
 		code = nd_update(node, list, count, h, failed);
 		if (code != OP_OK) nd_free_entry(node);
 		else {
@@ -643,7 +643,7 @@ static nd_entry *made_node(const op_value *value, op_value **out) {
 	pl_made *made;
 	const char *why;
 	if (header_now(&h, &made, &why)) return *out = world_error(why), NULL;
-	nd_entry *node = nd_make_entry((op_value *)value, &h, NULL);
+	nd_entry *node = nd_make_entry((op_value *)value, &h);
 	pl_hold(world_places, node, made, pl_made_free);
 	world_keep_node(node);
 	return node;

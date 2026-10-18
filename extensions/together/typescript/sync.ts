@@ -93,7 +93,7 @@ export type Options = {
 	zeros?: boolean
 	// the tables kept; default value, attributes and children
 	tables?: readonly Key[]
-	// the merge rules this device knows, by name (egwalker.ts): a merge commit by one is checked and
+	// the merge rules this device knows, by name: a merge commit by one is checked and
 	// taken, by any other refused. default none
 	merges?: Merges
 	// the rule every kept node here merges by, one of merges. none: the first head shows, writes
@@ -405,7 +405,7 @@ export function createSync(options: Options): Sync {
 		return c
 	}
 
-	// with a rule that can keep its work between merges (Merge's keeping: egwalker's, walker.ts),
+	// with a rule that can keep its work between merges (Merge's keeping),
 	// each node's rules: that one its own, kept while the rule is in use
 	const keeping = new Map<string, Merges>()
 	function rulesOf(doc: string): Merges {

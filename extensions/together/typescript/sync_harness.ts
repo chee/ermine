@@ -64,12 +64,12 @@ import { hex, jsonOf, unhex } from "../../../ermine/encoding/typescript/commit_h
 import { pipe, quiet, tablesJson } from "./harnesses.ts"
 import { createSigner } from "./seal.ts"
 import { type Conflict, createSync, type Ephemeral, type Status, type Sync } from "./sync.ts"
-import { egwalker } from "./egwalker.ts"
 import type { Merges } from "./replay.ts"
+import { rules } from "./rules_harness.ts"
 import type { Kept } from "./history.ts"
 
-// every rule a host may be given
-const RULES: Merges = { "eg-walker": egwalker }
+// every rule a host may be given: run's (rules_harness.ts's alone)
+let known: Merges = {}
 
 export const TIME = 1_760_000_000
 const ID = /^ermine:\/\/[0-9a-f]{64}$/
@@ -132,8 +132,8 @@ async function make(name: string, options: Options, storage: sd.MemoryStorage): 
 		tables: options.tables,
 		merges: Object.fromEntries(
 			(options.merges ?? []).map((n) => {
-				if (!RULES[n]) throw new Error(`no rule ${n}`)
-				return [n, RULES[n]]
+				if (!known[n]) throw new Error(`no rule ${n}`)
+				return [n, known[n]]
 			}),
 		),
 		merge: options.merge,
@@ -444,10 +444,14 @@ async function answer(r: Request): Promise<Answer> {
 	throw new Error(`unknown op ${r.op}`)
 }
 
-if (import.meta.main) {
+// the harness, its hosts given these rules
+export async function run(given: Merges) {
+	known = given
 	// Subduction's logging (a connection closed, …) is not an answer
 	console.warn = () => {}
 	await serve(answer)
 	for (const h of hosts.values()) await shut(h).catch(() => {})
 	Deno.exit(0)
 }
+
+if (import.meta.main) await run(rules)

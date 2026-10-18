@@ -17,7 +17,7 @@
 // watchAll(fn): every fact as it lands (ermine/processes' runs.ts). a cache (cache.ts) records reads outside runs:
 // commit right after update.
 import type { ChangeHeader, Entry } from "@ermine/node/entry"
-import update from "@ermine/node/update"
+import { createUnread } from "@ermine/unread"
 import type { Key as Step, Patch } from "@ermine/op/apply"
 import type { Scheduler } from "@ermine/scheduler"
 import { keyorder } from "@ermine/util/keyorder"
@@ -293,19 +293,8 @@ export function createPlaces(setup: Setup): Places {
 		if (spots.length) scheduler.mark(spots, scheduler.getRun())
 	}
 
-	// children and attributes change in place, not on a copy: a place into a folder of n names costs
-	// one step, not n (a copy each place made 30k names in one folder take 106 s). set as an entry
-	// comes into the table, before anything reads it. a reader is told by its spots: a computer
-	// returning a whole map gets the same object back, so its equal check stops there
-	function inPlace(part: Key, id: Id) {
-		if (part !== "children" && part !== "attributes") return
-		const entry = table.get(part, id)
-		if (entry !== undefined) entry.cow = false
-	}
-
 	// the table's hook: a table event, every spot of its key; the watches told the value whole
 	function onTableChange(part: Key, id: Id) {
-		inPlace(part, id)
 		say(paths.event(first(part), id))
 		if (watches.size === 0 && alls.length === 0) return
 		const entry = table.get(part, id)
@@ -713,7 +702,13 @@ export type Places = {
 	hold: (key: unknown, n: number) => number
 }
 
-// writing: a parent's children entry, given as it is, changed by update. each gives back the
+// the one unread every children entry is written through: a place into a folder of n names costs
+// one step, not n (a copy each place: 10k names in one folder 12.6 s, in place 8 ms). it lets go
+// only of what it is told is held: a host wires keeping(scheduler, unread, handed) (core/unread);
+// unwired, a folder held past a run changes under its holder. one handed on: unread.read(entry)
+export const unread = createUnread()
+
+// writing: a parent's children entry, given as it is, changed by unread's update. each gives back the
 // entries it changed, in order, for commit: their change has the patches that landed. refused: it
 // throws, and nothing changes
 
@@ -728,7 +723,7 @@ const base = (children: Entry<unknown>): Patch[] =>
 	isMap(children.value) ? [] : [{ path: [], value: {} }]
 
 function write(children: Entry<unknown>, patches: Patch[], header: ChangeHeader) {
-	update(children, patches, header)
+	unread.update(children, patches, header)
 	return [children]
 }
 
