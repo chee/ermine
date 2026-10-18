@@ -17,6 +17,7 @@
 		"./ermine/types",
 		"./ermine/api",
 		"./playground/realms",
+		"./playground/tenfold",
 		"./ermine/sites",
 		"./filesystem/clingy",
 		"./extensions/subduction",

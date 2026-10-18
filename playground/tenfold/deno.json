@@ -1,0 +1,13 @@
+{
+	"name": "@ermine/tenfold",
+	"version": "0.0.0",
+	"license": "AGPL-3.0-or-later",
+	"exports": {
+		".": "./typescript/tenfold.ts",
+		"./engine": "./typescript/engine.ts",
+		"./letter": "./typescript/letter.ts",
+		"./budget": "./typescript/budget.ts",
+		"./surfaces": "./typescript/surfaces.ts",
+		"./canvas": "./typescript/canvas.ts"
+	}
+}
