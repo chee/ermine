@@ -34,7 +34,7 @@ const FIELDS = [
 	"patches",
 ] as const
 export const SEED = "01".repeat(32)
-const NAME = /^[0-9a-f]{64}$/
+const NAME = /^[0-9a-f]{68}$/
 
 export function createCommits() {
 	const byLabel = new Map<string, Made>()
@@ -46,7 +46,7 @@ export function createCommits() {
 		if (!s) signers.set(seed, s = createSigner(unhex(seed)))
 		return s
 	}
-	// a label made here, else a name as 64 hex digits
+	// a label made here, else a name as 68 hex digits
 	function resolve(x: unknown): Uint8Array {
 		if (typeof x !== "string") throw new Error(`not a label or a name: ${x}`)
 		const m = byLabel.get(x)
@@ -97,7 +97,7 @@ export function createCommits() {
 		make,
 		gives,
 		get: (label: string) => byLabel.get(label),
-		// a label or a name (64 hex digits), to its name
+		// a label or a name (68 hex digits), to its name
 		name: resolve,
 		// a name, to its label (or its hex)
 		label: (name: Uint8Array | string) => {

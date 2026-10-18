@@ -174,7 +174,7 @@ const label = (n: Uint8Array | string) => {
 }
 const nameOf = (x: unknown) => {
 	const n = names.get(x as string) ?? x
-	if (typeof n !== "string" || !/^[0-9a-f]{64}$/.test(n)) throw new Error(`no commit ${x}`)
+	if (typeof n !== "string" || !/^[0-9a-f]{68}$/.test(n)) throw new Error(`no commit ${x}`)
 	return unhex(n)
 }
 
