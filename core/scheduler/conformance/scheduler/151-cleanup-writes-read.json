@@ -1,0 +1,26 @@
+{
+	"title": "an effect's cleanup, run just before its next act, writes a key it reads: it does not act on the old value; its run goes again and it acts on the new",
+	"steps": [
+		{ "op": "root", "name": "o", "info": { "actor": "test" }, "expect": {} },
+		{
+			"op": "effect",
+			"name": "e",
+			"scope": "o",
+			"f": { "read": "k" },
+			"act": {
+				"do": [
+					{ "log": ["act", { "given": "value" }] },
+					{ "cleanup": ["e", { "write": ["k", 100] }] }
+				]
+			},
+			"expect": {}
+		},
+		{ "op": "write", "values": { "k": 1 }, "expect": { "tick": 2 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["act", 1]] } },
+		{ "op": "write", "values": { "k": 2 }, "expect": { "tick": 3 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["act", 100]] } },
+		{ "op": "get", "key": "k", "expect": { "value": 100 } }
+	]
+}

@@ -1,5 +1,5 @@
 {
-	"title": "runs left again and again, reading in turn in a new order: each makes a new link in front, and dedupe drops the kept one it repeats, so the links stay one per spot",
+	"title": "runs left again and again, reading in turn in a new order: each makes a new link in front, and dedupe drops the old one it repeats, so the links stay one per spot",
 	"steps": [
 		{
 			"op": "begin",
