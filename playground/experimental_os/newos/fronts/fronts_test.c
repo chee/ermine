@@ -166,7 +166,7 @@ static char *kept(void *value, void *data) {
 
 static void watch(void *data) {
 	(void)data;
-	sc_create_computer(s, (sc_def){.f = reading, .set = kept});
+	sc_create_computer(s, (sc_def){.f = reading, .set = kept}, NULL, 0);
 }
 
 static void drop(void *value, void *data) {

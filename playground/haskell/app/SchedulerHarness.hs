@@ -16,6 +16,7 @@ import Data.List (elemIndex, nub, sortOn)
 import qualified Data.Map.Strict as M
 import Data.Maybe (fromMaybe, isJust, mapMaybe)
 import qualified Data.Set as S
+import Form (fromForm, intJ, V (VInt))
 import Json
 import Line (getField, getStr, obj, serveIO)
 import qualified Tracker as T
@@ -27,7 +28,8 @@ import qualified Tracker as T
 data SV
   = SNull
   | SBool Bool
-  | SNum Double
+  | SInt Integer
+  | SNum Double -- only a non-whole double
   | SStr String
   | SArr Int [SV]
   | SObj Int [(String, SV)]
@@ -39,9 +41,17 @@ data Thrown = Err String | Pend | StopOn Int deriving (Show)
 
 instance Exception Thrown
 
+-- | a double as a value holds it: whole is an integer, -0 is 0
+sNum :: Double -> SV
+sNum d
+  | isNaN d || isInfinite d = SNum d
+  | d == fromInteger (round d) = SInt (round d)
+  | otherwise = SNum d
+
 toJ :: SV -> J
 toJ SNull = JNull
 toJ (SBool b) = JBool b
+toJ (SInt n) = intJ n
 toJ (SNum d)
   | isNaN d || isInfinite d = JNull
   | otherwise = JNum d
@@ -64,7 +74,8 @@ jsonEq :: SV -> SV -> Bool
 jsonEq a b = jsonText a == jsonText b
 
 objectIs :: SV -> SV -> Bool
-objectIs (SNum a) (SNum b) = (isNaN a && isNaN b) || (a == b && isNegativeZero a == isNegativeZero b)
+objectIs (SInt a) (SInt b) = a == b
+objectIs (SNum a) (SNum b) = (isNaN a && isNaN b) || a == b
 objectIs SNull SNull = True
 objectIs (SBool a) (SBool b) = a == b
 objectIs (SStr a) (SStr b) = a == b
@@ -227,11 +238,23 @@ fireL s on ats = do
 holdL :: S -> String -> [String] -> IO ()
 holdL s on ats = fireL s on ats >>= maybe (pure ()) (hold s)
 
+-- | a host-written value read as a value: a bigint form is its integer, whole numbers integers
+-- (-0 is 0); other forms stay as they are
+hostJ :: J -> J
+hostJ j@(JObj [("/", _)]) = case fromForm j of
+  Right (VInt n) -> JInt n
+  _ -> j
+hostJ (JNum d) | isWhole d = JInt (round d)
+hostJ (JArr xs) = JArr (map hostJ xs)
+hostJ (JObj kvs) = JObj [(k, hostJ v) | (k, v) <- kvs]
+hostJ j = j
+
 fromJ :: S -> J -> IO SV
 fromJ s j = case j of
   JNull -> pure SNull
   JBool b -> pure (SBool b)
-  JNum d -> pure (SNum d)
+  JInt n -> pure (SInt n)
+  JNum d -> pure (sNum d)
   JStr x -> pure (SStr x)
   JArr xs -> SArr <$> fresh s <*> mapM (fromJ s) xs
   JObj kvs -> SObj <$> fresh s <*> mapM (\(k, v) -> (,) k <$> fromJ s v) kvs
@@ -285,7 +308,7 @@ pairsOf s i = do
   let owner = maybe [] (\o -> [("owner", pairsSV o)]) (sOwner sc)
   case sComp sc of
     Nothing -> pure (sInfo sc ++ owner)
-    Just c -> pure ([("run", SNum (fromIntegral (cInfoRun c))) | cInfoRun c > 0] ++ [("mark", SNum (fromIntegral (cMark c)))] ++ owner)
+    Just c -> pure ([("run", SInt (fromIntegral (cInfoRun c))) | cInfoRun c > 0] ++ [("mark", SInt (fromIntegral (cMark c)))] ++ owner)
 
 pairsSV :: [(String, SV)] -> SV
 pairsSV ps = SArr 0 [SArr 0 [SStr k, v] | (k, v) <- ps]
@@ -366,7 +389,7 @@ dueOne s y t chain cutter writerName = do
         _ -> do
           modComp s y (\c -> c {cDue = Just (t, chain), cFlag = y `elem` chain})
           n <- nameOf s y
-          moment s (obj ([("due", JStr n), ("tick", JNum (fromIntegral t))] ++ maybe [] (\x -> [("writer", JStr x)]) writerName))
+          moment s (obj ([("due", JStr n), ("tick", JInt (fromIntegral t))] ++ maybe [] (\x -> [("writer", JStr x)]) writerName))
 
 -- | an old child of the scope open, claimed: back under it, the newest, and due (a tick, told as
 -- a mark with no keys, by the run open)
@@ -795,7 +818,7 @@ makeComp s ctx name parent kind f declared = escaping s $ do
   i <- makeScope s ctx (Just name) parent [] (Just c)
   modifyIORef' s (ordStarted i)
   creator <- maybe (pure Nothing) (fmap Just . nameOf s) (xShow ctx)
-  moment s (obj ([("due", JStr name), ("tick", JNum (fromIntegral t))] ++ maybe [] (\x -> [("writer", JStr x)]) creator))
+  moment s (obj ([("due", JStr name), ("tick", JInt (fromIntegral t))] ++ maybe [] (\x -> [("writer", JStr x)]) creator))
   case kind of
     Compute (Just k) _ _ | declared -> modifyIORef' s (\w -> w {wWriter = M.insert k i (wWriter w)})
     _ -> pure ()
@@ -834,7 +857,7 @@ endMoment s c r how extra = do
   w <- readIORef s
   let reads = maybe [] rReads (M.lookup r (wRuns w))
       no = maybe 0 rNo (M.lookup r (wRuns w))
-  moment s (obj ([("ends", JStr n), ("run", JNum (fromIntegral no)), ("ended", JStr how)] ++ extra ++ [("reads", JArr (map JStr reads))]))
+  moment s (obj ([("ends", JStr n), ("run", JInt (fromIntegral no)), ("ended", JStr how)] ++ extra ++ [("reads", JArr (map JStr reads))]))
   holdL s "ends" [n]
 
 throughOf :: S -> Int -> Int -> IO [Int]
@@ -859,7 +882,7 @@ runOnce s c rank = braced s $ do
   modComp s c (\x -> x {cDue = Nothing, cRuns = no, cLatest = Just r})
   modifyIORef' s (ordWaits c Nothing)
   n <- nameOf s c
-  moment s (obj [("starts", JStr n), ("run", JNum (fromIntegral no)), ("rank", JNum (fromIntegral rank))])
+  moment s (obj [("starts", JStr n), ("run", JInt (fromIntegral no)), ("rank", JInt (fromIntegral rank))])
   holdL s "starts" [n]
   -- what the last run made goes first, its cleanups set aside
   liftChildren s c
@@ -924,7 +947,7 @@ finish :: S -> Int -> Int -> SV -> IO ()
 finish s c r v = do
   n <- nameOf s c
   no <- rNo . (M.! r) . wRuns <$> readIORef s
-  modifyIORef' s (\w -> w {wMoments = obj [("returns", JStr n), ("run", JNum (fromIntegral no))] : wMoments w})
+  modifyIORef' s (\w -> w {wMoments = obj [("returns", JStr n), ("run", JInt (fromIntegral no))] : wMoments w})
   holdL s "returns" [n]
   -- torn down by a listener: nothing more
   stillHere <- live s c
@@ -1002,7 +1025,7 @@ act' s early (c, r, v) cleaned = do
             Left Pend -> Just "pending"
             _ -> Nothing
           err = [("error", JStr m) | Just m <- [maybe thrown Just cleaned]]
-      moment s (obj ([("acts", JStr n), ("run", JNum (fromIntegral no))] ++ [("early", JBool True) | early] ++ err))
+      moment s (obj ([("acts", JStr n), ("run", JInt (fromIntegral no))] ++ [("early", JBool True) | early] ++ err))
       holdL s "acts" [n]
     _ -> pure ()
 
@@ -1138,6 +1161,7 @@ pulse s = do
 
 num :: SV -> IO Double
 num SNull = pure 0
+num (SInt n) = pure (fromInteger n)
 num (SNum d) = pure d
 num _ = throwIO (Err "not a number")
 
@@ -1145,7 +1169,8 @@ eval :: S -> Ctx -> J -> IO SV
 eval s ctx j = case j of
   JNull -> pure SNull
   JBool b -> pure (SBool b)
-  JNum d -> pure (SNum d)
+  JInt n -> pure (SInt n)
+  JNum d -> pure (sNum d)
   JStr x -> pure (SStr x)
   JArr xs -> do
     vs <- mapM (eval s ctx) xs
@@ -1183,13 +1208,13 @@ evalForm s ctx form arg = case form of
   "sum" -> do
     vs <- mapM (eval s ctx) (args arg)
     ns <- mapM num vs
-    pure (SNum (sum ns))
+    pure (sNum (sum ns))
   "mod" -> case args arg of
     [a, b] -> do
       x <- eval s ctx a >>= num
       y <- eval s ctx b >>= num
       when (y == 0) (throwIO (Err "mod by 0"))
-      pure (SNum (x - y * fromInteger (truncate (x / y))))
+      pure (sNum (x - y * fromInteger (truncate (x / y))))
     _ -> throwIO (Err "mod: two")
   "eq" -> case args arg of
     [a, b] -> do
@@ -1450,11 +1475,11 @@ request s req = case getStr "op" req of
   Just "write" -> case getField "values" req of
     Just (JObj kvs) -> do
       forM_ kvs $ \(k, v) -> do
-        sv <- fromJ s v
+        sv <- fromJ s (hostJ v)
         modifyIORef' s (\w -> w {wStore = M.insert k sv (wStore w)})
       mark s (map fst kvs) NoOne
       t <- wTick <$> readIORef s
-      pure (obj [("tick", JNum (fromIntegral t))])
+      pure (obj [("tick", JInt (fromIntegral t))])
     _ -> throwIO (Err "values: not a map")
   Just "changed" -> case getField "keys" req of
     Just (JArr ks) -> do
@@ -1463,7 +1488,7 @@ request s req = case getStr "op" req of
         _ -> throwIO (Err "a key is not a string")
       mark s keys NoOne
       t <- wTick <$> readIORef s
-      pure (obj [("tick", JNum (fromIntegral t))])
+      pure (obj [("tick", JInt (fromIntegral t))])
     _ -> throwIO (Err "keys: not a list")
   Just "listener" -> do
     l <- need req "on"
@@ -1504,7 +1529,7 @@ request s req = case getStr "op" req of
     pure (obj [("keys", JArr (map JStr (wStarted w)))])
   Just "tick" -> do
     t <- wTick <$> readIORef s
-    pure (obj [("tick", JNum (fromIntegral t))])
+    pure (obj [("tick", JInt (fromIntegral t))])
   Just "current" -> do
     v <- current s outside
     pure (obj [("value", toJ v)])

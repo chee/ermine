@@ -2,7 +2,9 @@
 // canonical CBOR item, {columns: <deflate of a map of columns>} (deflate.h; pack.ts's header lists
 // the columns), and read back, that or the first form {keys: [[part, id, n], ...], nodes: [node,
 // ...]}. Which nodes is the caller's; nothing is loaded or placed here. A node: {change, value?}; a
-// change: {time, actor?, reader?, external?, metadata?, op?}. Same bytes as pack.ts.
+// change: {time, actor?, reader?, external?, metadata?, op?}; metadata a map, the header's entries
+// (keys unique: the caller's to keep), read from the old form too, a list of [key, value] pairs (of
+// a key repeated, the first). Same bytes as pack.ts.
 //
 // pack.c includes deflate.c, so whatever links pack.c has deflate too.
 //

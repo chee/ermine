@@ -283,7 +283,7 @@ static void chain_build(void *data) {
 	for (int i = 0; i < CHAIN; i++) {
 		c->nodes[i] = (node_){c->s, NULL, i == 0 ? &c->head : &c->nodes[i - 1]};
 		sc_create_computer(c->s, (sc_def){.f = chain_f, .set = chain_set, .key = &c->nodes[i],
-			.data = &c->nodes[i]});
+			.data = &c->nodes[i]}, NULL, 0);
 	}
 }
 static void chain_row(void) {

@@ -44,7 +44,10 @@ size_t cm_key_join(uint64_t code, const uint8_t *key, size_t key_length, uint8_t
 typedef struct {
 	char *table;
 	// time, actor (an op_value *, null when null), reader, external, metadata: a header is there as
-	// the graph has it. external and metadata are NULL when absent (not an empty list)
+	// the graph has it. external and metadata are NULL when absent (not an empty list). metadata:
+	// a map's entries, keys unique, in canonical order; read from the old form too, a list of [key,
+	// value] pairs (of a key repeated, the first). cm_encode writes a map, its keys unique (the
+	// caller's to keep)
 	ch_header change;
 	uint8_t signer[CM_SIGNER_MAX];
 	size_t signer_length;
@@ -64,7 +67,8 @@ typedef struct {
 
 // the commit's bytes, malloc'd into *out (free it). CM_NOT_A_COMMIT (a field wrong, or a parents or
 // base that cannot be) or CM_CANNOT_CARRY (a value with no encoding): *field. The commit is as a
-// cm_commit holds it: cm_encode of a decoded one gives its bytes
+// cm_commit holds it: cm_encode of a decoded one gives its bytes (one with metadata in the old form:
+// the bytes of the map)
 cm_code cm_encode(const cm_commit *commit, uint8_t **out, size_t *length, char **field);
 // the same from a commit in its Json form: a map of the fields commit.ts names, byte fields JSON_BYTES.
 // Anything but a map: CM_NOT_A_COMMIT, no field. Borrowed, not changed

@@ -207,21 +207,19 @@ static Json *header_json(const ch_header *h) {
 		}
 		jsonAdd(header, "external", list);
 	}
-	// the entries a blop carries: cause, wallclock, message. Any other is left out
-	Json *meta = jsonArray();
+	// the keys a blop carries: cause, wallclock, message. Any other is left out
+	Json *meta = jsonObject();
 	for (size_t i = 0; i < h->metadata_length; i++) {
 		const ch_entry *e = &h->metadata[i];
-		Json *pair = jsonArray(), *value;
+		Json *value;
 		if (e->value == NULL) continue;
 		if (strcmp(e->key, "cause") == 0) value = jsonRef((Json *)e->value);
 		else if (strcmp(e->key, "wallclock") == 0) value = jsonInteger(*(const int64_t *)e->value);
 		else if (strcmp(e->key, "message") == 0) value = jsonString(e->value);
 		else continue;
-		jsonPush(pair, jsonString(e->key));
-		jsonPush(pair, value);
-		jsonPush(meta, pair);
+		jsonAdd(meta, e->key, value);
 	}
-	if (meta->array.count) jsonAdd(header, "metadata", meta);
+	if (meta->object.count) jsonAdd(header, "metadata", meta);
 	else jsonFree(meta);
 	return header;
 }

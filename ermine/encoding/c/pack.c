@@ -335,17 +335,15 @@ static Json *json_node(const nd_entry *n, const pk_options *o) {
 		}
 	}
 	if (h->metadata != NULL) {
-		Json *entries = jsonArray();
-		jsonAdd(change, "metadata", entries);
+		// a map: the entries' keys unique (ch_header's), the caller's to keep
+		Json *map = jsonObject();
+		jsonAdd(change, "metadata", map);
 		for (size_t i = 0; i < h->metadata_length; i++) {
 			const ch_entry *e = &h->metadata[i];
 			if (e->key == NULL || e->value == NULL) goto bad;
 			Json *v = pk_to_json(e->value);
 			if (v == NULL) goto bad;
-			Json *entry = jsonArray();
-			jsonPush(entries, entry);
-			jsonPush(entry, jsonString(e->key));
-			jsonPush(entry, v);
+			jsonAdd(map, e->key, v);
 		}
 	}
 	if (h->has_op && !(o != NULL && o->no_op)) {
@@ -854,17 +852,34 @@ static int read_fields(arena *a, int64_t time, const Json *actor, const Json *re
 		h->external = ss;
 		h->external_length = (size_t)external->array.count;
 	}
-	if (metadata != NULL) {
+	if (metadata != NULL && metadata->type == JSON_OBJECT) {
+		// a map: its keys unique, the entries' too
+		ch_entry *es = grab(a, ((size_t)metadata->object.count + 1) * sizeof *es);
+		for (int i = 0; i < metadata->object.count; i++) {
+			const JsonMember *m = &metadata->object.members[i];
+			es[i].key = dup(a, m->key, m->keyLength);
+			es[i].value = hold(a, pk_of_json(m->value));
+		}
+		h->metadata = es;
+		h->metadata_length = (size_t)metadata->object.count;
+	} else if (metadata != NULL) {
+		// the old form, a list of [key, value] pairs: of a key repeated, the first
 		if (!array(metadata)) return 0;
 		ch_entry *es = grab(a, ((size_t)metadata->array.count + 1) * sizeof *es);
+		size_t n = 0;
 		for (int i = 0; i < metadata->array.count; i++) {
 			const Json *e = metadata->array.items[i];
 			if (!array(e) || e->array.count != 2 || !string(e->array.items[0])) return 0;
-			es[i].key = dup(a, e->array.items[0]->string, e->array.items[0]->stringLength);
-			es[i].value = hold(a, pk_of_json(e->array.items[1]));
+			const Json *k = e->array.items[0];
+			size_t j = 0;
+			while (j < n && !(strlen(es[j].key) == k->stringLength && memcmp(es[j].key, k->string, k->stringLength) == 0))
+				j++;
+			if (j < n) continue;
+			es[n].key = dup(a, k->string, k->stringLength);
+			es[n++].value = hold(a, pk_of_json(e->array.items[1]));
 		}
 		h->metadata = es;
-		h->metadata_length = (size_t)metadata->array.count;
+		h->metadata_length = n;
 	}
 	if (op != NULL) {
 		if (!only(a, op, KEYS("patches", "undo"), KEYS("patches", "undo"))) return 0;

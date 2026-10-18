@@ -57,15 +57,10 @@ static bool same(part a, part b) {
 	return a.length == b.length && memcmp(a.start, b.start, a.length) == 0;
 }
 
-// the value of the first metadata entry of that name, NULL when the header has none
+// the value of the metadata's key of that name, NULL when the header has none
 static const Json *meta(const Json *header, const char *key) {
-	const Json *list = jsonGet(header, "metadata");
-	for (int i = 0; list && list->type == JSON_ARRAY && i < list->array.count; i++) {
-		const Json *pair = list->array.items[i];
-		if (pair->type == JSON_ARRAY && pair->array.count == 2 && pair->array.items[0]->type == JSON_STRING &&
-				strcmp(pair->array.items[0]->string, key) == 0) return pair->array.items[1];
-	}
-	return NULL;
+	const Json *map = jsonGet(header, "metadata");
+	return map && map->type == JSON_OBJECT ? jsonGet(map, key) : NULL;
 }
 
 // the site shareable: a local path relative to the nearest root, else its last part; others kept.
@@ -165,7 +160,7 @@ Json *commit_make(histories *c, const Json *change, commit_at at, const char *co
 	jsonAdd(blop, "node", jsonRef(jsonGet(change, "node")));
 	jsonAdd(blop, "object", jsonRef((Json *)object));
 	// the oldest site goes (a header holds a list of them, oldest first); cause, wallclock and message are
-	// metadata entries of those names, the first of each
+	// the metadata's keys of those names
 	const Json *actor = jsonGet(header, "actor"), *reader = jsonGet(header, "reader"),
 		*external = jsonGet(header, "external"),
 		*site = external && external->type == JSON_ARRAY && external->array.count ? external->array.items[0] : NULL,

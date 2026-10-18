@@ -120,13 +120,8 @@ static bool rule(int k, const Json *v, const Json *c) {
 		for (int i = 0; i < v->array.count; i++)
 			if (!site(v->array.items[i])) return false;
 		return true;
-	case METADATA:
-		if (!is_array(v)) return false;
-		for (int i = 0; i < v->array.count; i++) {
-			const Json *e = v->array.items[i];
-			if (!is_array(e) || e->array.count != 2 || !jsonIsString(e->array.items[0])) return false;
-		}
-		return true;
+	// a map, any keys
+	case METADATA: return is_fields(v);
 	case TIME:
 	case NONCE: return whole(v);
 	case SIGNER: return v != NULL && v->type == JSON_BYTES && cm_multikey(v->bytes.data, v->bytes.length);
@@ -286,11 +281,12 @@ static void *grab(arena *a, size_t n) {
 	add(&a->blocks, p);
 	return p;
 }
-static char *dup(arena *a, const Json *s) {
-	char *p = grab(a, s->stringLength + 1);
-	memcpy(p, s->string, s->stringLength);
+static char *dup_of_length(arena *a, const char *s, size_t n) {
+	char *p = grab(a, n + 1);
+	memcpy(p, s, n);
 	return p;
 }
+static char *dup(arena *a, const Json *s) { return dup_of_length(a, s->string, s->stringLength); }
 static op_value *hold(arena *a, const Json *j) {
 	op_value *v = pk_of_json(j);
 	add(&a->values, v);
@@ -355,14 +351,15 @@ static cm_code cm_of_json(const Json *c, cm_commit *out, char **field) {
 		h->external_length = (size_t)external->array.count;
 	}
 	if (metadata != NULL) {
-		ch_entry *es = grab(a, ((size_t)metadata->array.count + 1) * sizeof *es);
-		for (int i = 0; i < metadata->array.count; i++) {
-			const Json *e = metadata->array.items[i];
-			es[i].key = dup(a, e->array.items[0]);
-			es[i].value = hold(a, e->array.items[1]);
+		// a map's keys are unique: the entries' too
+		ch_entry *es = grab(a, ((size_t)metadata->object.count + 1) * sizeof *es);
+		for (int i = 0; i < metadata->object.count; i++) {
+			const JsonMember *m = &metadata->object.members[i];
+			es[i].key = dup_of_length(a, m->key, m->keyLength);
+			es[i].value = hold(a, m->value);
 		}
 		h->metadata = es;
-		h->metadata_length = (size_t)metadata->array.count;
+		h->metadata_length = (size_t)metadata->object.count;
 	}
 	const Json *signer = jsonGet(c, "signer");
 	memcpy(out->signer, signer->bytes.data, signer->bytes.length);
@@ -389,11 +386,31 @@ static cm_code cm_of_json(const Json *c, cm_commit *out, char **field) {
 	return CM_OK;
 }
 
+// metadata in the old form, a list of [key, value] pairs, as a map: of a key repeated, the first.
+// NULL: not that form
+static Json *pairs(const Json *list) {
+	for (int i = 0; i < list->array.count; i++) {
+		const Json *e = list->array.items[i];
+		if (!is_array(e) || e->array.count != 2 || !jsonIsString(e->array.items[0])) return NULL;
+	}
+	Json *map = jsonObject();
+	for (int i = 0; i < list->array.count; i++) {
+		const Json *k = list->array.items[i]->array.items[0];
+		if (jsonGetOfLength(map, k->string, k->stringLength) == NULL)
+			jsonAddOfLength(map, k->string, k->stringLength, jsonRef(list->array.items[i]->array.items[1]));
+	}
+	return map;
+}
+
 cm_code cm_decode(const uint8_t *bytes, size_t length, cm_commit *out, char **field) {
 	*out = (cm_commit){0};
 	if (field != NULL) *field = NULL;
 	Json *x = cborDecode(bytes, length, NULL, NULL);
 	if (x == NULL) return CM_NOT_A_COMMIT;
+	// metadata in the old form, a list of [key, value] pairs: read as a map
+	const Json *old = is_fields(x) ? jsonGet(x, "metadata") : NULL;
+	Json *map = is_array(old) ? pairs(old) : NULL;
+	if (map != NULL) jsonSet(x, "metadata", strlen("metadata"), map);
 	cm_code code = cm_of_json(x, out, field);
 	jsonFree(x);
 	return code;
@@ -437,15 +454,13 @@ Json *cm_to_json(const cm_commit *c) {
 		}
 	}
 	if (h->metadata != NULL) {
-		Json *entries = jsonArray();
-		jsonAdd(j, "metadata", entries);
+		// a map: the entries' keys unique (ch_header's), the caller's to keep
+		Json *map = jsonObject();
+		jsonAdd(j, "metadata", map);
 		for (size_t i = 0; i < h->metadata_length; i++) {
 			Json *v = h->metadata[i].value ? pk_to_json(h->metadata[i].value) : jsonNull();
 			if (v == NULL) goto bad;
-			Json *e = jsonArray();
-			jsonPush(entries, e);
-			jsonPush(e, jsonString(h->metadata[i].key));
-			jsonPush(e, v);
+			jsonAdd(map, h->metadata[i].key, v);
 		}
 	}
 	jsonAdd(j, "time", jsonNumber((double)h->time));

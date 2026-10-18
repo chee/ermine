@@ -92,27 +92,3 @@ const char *sn_give(sn *s, sc_scope *scope, const char *id) {
 	sc_register_teardown(s->scheduler, scope, teardown, g);
 	return g->id;
 }
-
-const char *sn_attach(sn *s, sc_scope *scope, const char *id) {
-	given *had = pm_get(&s->ids, scope);
-	if (had != NULL) return had->id;
-	given *g = xalloc(sizeof *g);
-	g->owner = s;
-	g->scope = scope;
-	g->id = xdup(id);
-	pm_set(&s->ids, scope, g);
-	return g->id;
-}
-
-const char *sn_node_of(const sn *s, const sc_scope *scope) {
-	const given *g = pm_get(&s->ids, scope);
-	return g != NULL ? g->id : NULL;
-}
-
-const char *sn_nearest(const sn *s, const sc_scope *scope) {
-	for (const sc_scope *o = scope; o != NULL; o = sc_scope_parent(o)) {
-		const char *id = sn_node_of(s, o);
-		if (id != NULL) return id;
-	}
-	return NULL;
-}

@@ -29,8 +29,8 @@ typedef struct {
 // what a change says: has_time, and NULL for the rest = not given
 // time: wall-clock, as the caller gives it. actor: the caller's, never read here
 // external: where in code, oldest first; NULL: none (an empty array, not NULL, is none yet)
-// metadata: entries anyone adds to, in order, repeats allowed; NULL: none. key and value are the
-// caller's, value opaque, never read here
+// metadata: an object as entries, keys unique (the caller's to keep: never checked here), their
+// order no meaning; NULL: none. key and value are the caller's, value opaque, never read here
 // op: the latest edit, set only by update (update.h), never by a caller: has_op, its patches as
 // given and undo, their inverse (op's invert); either may be empty, and then NULL
 // everything is borrowed: the caller keeps reader, external, metadata, actor and the op's

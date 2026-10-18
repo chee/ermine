@@ -45,7 +45,7 @@ static char *set(void *value, void *data) {
 }
 static void making(void *data) {
 	reader *r = data;
-	r->c = sc_create_computer(s, (sc_def){.f = run, .set = set, .data = r});
+	r->c = sc_create_computer(s, (sc_def){.f = run, .set = set, .data = r}, NULL, 0);
 }
 static void start(reader *r, const void *key) {
 	*r = (reader){key, true, NULL};

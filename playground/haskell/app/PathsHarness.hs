@@ -43,7 +43,7 @@ step ps req = case getStr "op" req of
       _ -> failWith "patches: not a list"
     force :: Key -> [PKey] -> r -> r
     force k p r = length (show k) `seq` length (show p) `seq` r
-    num = JNum . fromIntegral
+    num = JInt . fromIntegral
     spotsAnswer ss = obj [("spots", JArr (map spotJ ss))]
 
 spotJ :: Spot -> J
@@ -55,14 +55,14 @@ pathJ :: [PKey] -> J
 pathJ = JArr . map k
   where
     k (PS s) = JStr s
-    k (PN n) = JNum (fromInteger n)
+    k (PN n) = JInt n
 
 -- | a path: strings and whole numbers 0 <= n < 1e15 (-0 is 0); anything else an error
 needPath :: Maybe J -> [PKey]
 needPath (Just (JArr ks)) = let p = map k ks in length (show p) `seq` p
   where
     k (JStr s) = PS s
-    k (JNum d) | d >= 0 && d < 1e15 && d == fromInteger (round d) = PN (round d)
+    k j | Just n <- jint j, n >= 0, n < 10 ^ (15 :: Int) = PN n
     k _ = failWith "bad path"
 needPath _ = failWith "bad path"
 
@@ -71,13 +71,13 @@ patchPlaces :: J -> [Place]
 patchPlaces pj@(JObj _) =
   let path = needPath (field "path" pj)
       range = case field "range" pj of
-        Just (JArr [JNum a, JNum b]) -> Just (round a, round b)
+        Just (JArr [ja, jb]) | Just a <- jint ja, Just b <- jint jb -> Just (a, b)
         _ -> Nothing
    in case field "move" pj of
         Just m ->
           let mpath = needPath (field "path" m)
               mrange = case field "range" m of
-                Just (JArr [JNum a, JNum b]) -> Just (round a, round b)
+                Just (JArr [ja, jb]) | Just a <- jint ja, Just b <- jint jb -> Just (a, b)
                 _ -> Nothing
               n = maybe 1 (\(a, b) -> b - a) mrange
            in [Place mpath mrange False (Just 0), Place path range True (Just n)]

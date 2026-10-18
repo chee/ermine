@@ -119,15 +119,20 @@ const ch_header *rp_signed(rp_tables *t, const ch_header *change, const uint8_t 
 	owned *o = t->own;
 	ch_header *c = block(o, sizeof *c);
 	*c = *change;
+	// keys unique: signer and commit over any the commit carried
 	ch_entry *es = block(o, (change->metadata_length + 2) * sizeof *es);
-	for (size_t i = 0; i < change->metadata_length; i++) es[i] = change->metadata[i];
+	size_t n = 0;
+	for (size_t i = 0; i < change->metadata_length; i++) {
+		const char *k = change->metadata[i].key;
+		if (k == NULL || (strcmp(k, "signer") != 0 && strcmp(k, "commit") != 0)) es[n++] = change->metadata[i];
+	}
 	op_value *key = hex_value(signer, signer_length), *named = hex_value(name, 32);
-	es[change->metadata_length] = (ch_entry){"signer", held(o, key)};
-	es[change->metadata_length + 1] = (ch_entry){"commit", held(o, named)};
+	es[n] = (ch_entry){"signer", held(o, key)};
+	es[n + 1] = (ch_entry){"commit", held(o, named)};
 	op_free(key);
 	op_free(named);
 	c->metadata = es;
-	c->metadata_length = change->metadata_length + 2;
+	c->metadata_length = n + 2;
 	return c;
 }
 
