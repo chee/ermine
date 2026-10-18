@@ -27,49 +27,49 @@
 		{ "op": "pack", "commits": ["a", "b", "c"], "name": "r" },
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "parents": [[], [1], null] },
 			"expect": { "error": "ref" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "parents": [[], [-1], null] },
 			"expect": { "error": "ref" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "parents": [[], [0.5], null] },
 			"expect": { "error": "ref" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "parents": [[], ["a"], null] },
 			"expect": { "error": "ref" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "parents": [[], [null], null] },
 			"expect": { "error": "ref" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "base": [[null, 2], [2, 1]] },
 			"expect": { "error": "ref" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "parents": [[], [{ "/": { "bytes": "AQID" } }], null] },
 			"expect": { "error": "commit" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "base": [[null, 2], [1, 1]] },
 			"expect": { "error": "commit" }
 		}

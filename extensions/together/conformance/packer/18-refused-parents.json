@@ -27,23 +27,23 @@
 		{ "op": "pack", "commits": ["a", "b", "c"], "name": "r" },
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "parents": [[], null] },
 			"expect": { "error": "parents" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "parents": [null, null, null] },
 			"expect": { "error": "parents" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "parents": [[], 5, null] },
 			"expect": { "error": "parents" }
 		},
-		{ "op": "unpack", "run": "r", "set": { "parents": "a" }, "expect": { "error": "parents" } },
-		{ "op": "unpack", "run": "r", "drop": ["parents"], "expect": { "error": "parents" } }
+		{ "op": "unpack", "pack": "r", "set": { "parents": "a" }, "expect": { "error": "parents" } },
+		{ "op": "unpack", "pack": "r", "drop": ["parents"], "expect": { "error": "parents" } }
 	]
 }

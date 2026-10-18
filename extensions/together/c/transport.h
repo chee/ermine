@@ -2,7 +2,7 @@
 // stored and ephemeral (holding every stored commit too). own commits taken in unchecked, then in
 // order a stored one sealed (seal.h), stored and sent, an ephemeral one published unsealed. what
 // arrives is checked (seal, stored id, parents), then by the histories and the integration's check.
-// fragments carry {run, snapshot?} (run.h, snapshot.h); a snapshot is a hint, kept once a replay
+// fragments carry {run, snapshot?} (packer.h, snapshot.h); a snapshot is a hint, kept once a replay
 // agrees. a stored fragment lets go of the loose commits it covers. an empty followed document is
 // asked again, 0.25 s doubling to 16 s. ephemeral messages on hashed topics (tp_send, tp_listen),
 // in parts over 65 536 bytes. only lock "unlocked" is built.

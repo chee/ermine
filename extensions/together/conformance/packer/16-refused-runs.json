@@ -27,61 +27,61 @@
 		{ "op": "pack", "commits": ["a", "b", "c"], "name": "r" },
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "table": "value" },
 			"expect": { "error": "runs", "column": "table" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "table": [["value", 3, 0]] },
 			"expect": { "error": "runs", "column": "table" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "table": [["value", 0], ["value", 3]] },
 			"expect": { "error": "runs", "column": "table" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "actor": [[null, 1.5], [null, 1.5]] },
 			"expect": { "error": "runs", "column": "actor" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "reader": [[null, 2]] },
 			"expect": { "error": "runs", "column": "reader" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "external": [[null, 4]] },
 			"expect": { "error": "runs", "column": "external" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "metadata": [[null, 9007199254740991]] },
 			"expect": { "error": "runs", "column": "metadata" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"drop": ["signer"],
 			"expect": { "error": "runs", "column": "signer" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "base": [null] },
 			"expect": { "error": "runs", "column": "base" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "table": [["", 1]], "actor": [] },
 			"expect": { "error": "runs", "column": "table" }
 		}

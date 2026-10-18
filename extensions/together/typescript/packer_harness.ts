@@ -1,5 +1,5 @@
-// run_harness: run.ts on the line protocol (harness.ts). one process: commits by label, each sealed
-// by its seed's signer; runs packed by label. conventions: extensions/together/conformance/README.md
+// packer_harness: packer.ts on the line protocol (harness.ts). one process: commits by label, each sealed
+// by its seed's signer; packs packed by label. conventions: extensions/together/conformance/README.md
 //
 // { op: "make", name, ...fields }      → {}            made, labelled, sealed (default document:
 //                                                      2a × 16 then 00 × 16)
@@ -12,13 +12,13 @@
 //                                                      { vouched: label | hex, stored? }
 // { op: "unpack", value }              → { sealed }    value canonically encoded first
 // { op: "columns", run }               → { columns }   JSON form
-// refused: { error: code, column? } (RunError)
+// refused: { error: code, column? } (PackError)
 import * as cbor from "@ermine/encoding/cbor"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { hex, unhex } from "../../../ermine/encoding/typescript/commit_harness.ts"
 import { createCommits } from "./harnesses.ts"
-import { type Member, pack, RunError, unpack } from "./run.ts"
+import { type Member, pack, PackError, unpack } from "./packer.ts"
 import { stored } from "./seal.ts"
 import { docOf } from "./seal_harness.ts"
 
@@ -90,7 +90,7 @@ async function answer(r: Request): Promise<Answer> {
 				return { columns: toJson(cbor.decode(runOf(r.run))) }
 		}
 	} catch (e) {
-		if (e instanceof RunError) {
+		if (e instanceof PackError) {
 			return e.column === undefined ? { error: e.code } : { error: e.code, column: e.column }
 		}
 		throw e

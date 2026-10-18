@@ -68,7 +68,7 @@
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": {
 				"table": [
 					[
@@ -95,7 +95,7 @@
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": {
 				"parents": [
 					[],
@@ -121,7 +121,7 @@
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": {
 				"patches": [
 					[
@@ -172,7 +172,7 @@
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": {
 				"nonce": {
 					"/": {

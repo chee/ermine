@@ -25,13 +25,13 @@
 			"patches": [{ "path": ["body"], "range": [1, 1], "value": "i" }]
 		},
 		{ "op": "pack", "commits": ["a", "b", "c"], "name": "r" },
-		{ "op": "unpack", "run": "r", "set": { "n": -1 }, "expect": { "error": "count" } },
-		{ "op": "unpack", "run": "r", "set": { "n": 1.5 }, "expect": { "error": "count" } },
-		{ "op": "unpack", "run": "r", "set": { "n": "3" }, "expect": { "error": "count" } },
-		{ "op": "unpack", "run": "r", "drop": ["n"], "expect": { "error": "count" } },
+		{ "op": "unpack", "pack": "r", "set": { "n": -1 }, "expect": { "error": "count" } },
+		{ "op": "unpack", "pack": "r", "set": { "n": 1.5 }, "expect": { "error": "count" } },
+		{ "op": "unpack", "pack": "r", "set": { "n": "3" }, "expect": { "error": "count" } },
+		{ "op": "unpack", "pack": "r", "drop": ["n"], "expect": { "error": "count" } },
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "n": 9007199254740992 },
 			"expect": { "error": "count" }
 		}

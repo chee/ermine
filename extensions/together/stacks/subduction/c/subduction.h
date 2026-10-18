@@ -2,7 +2,7 @@
 // has them. What it carries: stored commits, sealed, as loose commits and fragments, each fragment
 // with a snapshot of the tables at its head; ephemeral ones, never sealed, as its ephemeral messages.
 // It reads the store (store.h), a clock and the network; every commit it takes in goes to the mailroom, and
-// it sends what the mailroom queues. A fragment carries {run, snapshot?} (run.h, snapshot.h); a stored
+// it sends what the mailroom queues. A fragment carries {run, snapshot?} (packer.h, snapshot.h); a stored
 // fragment lets go of the loose commits it covers. An empty followed document is asked again, 0.25 s
 // doubling to 16 s. Ephemeral messages on hashed topics (sb_send, sb_listen), in parts over 65 536
 // bytes. Only lock "unlocked" is built.

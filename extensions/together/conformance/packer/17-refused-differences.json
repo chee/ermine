@@ -27,55 +27,55 @@
 		{ "op": "pack", "commits": ["a", "b", "c"], "name": "r" },
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "time": [1760000000, 1760000000, 1760000000] },
 			"expect": { "error": "differences", "column": "time" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "time": { "/": { "bytes": "gOC7jg0A" } } },
 			"expect": { "error": "differences", "column": "time" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "time": { "/": { "bytes": "gOC7jg0AAAA" } } },
 			"expect": { "error": "differences", "column": "time" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "time": { "/": { "bytes": "gOC7jg0AgA" } } },
 			"expect": { "error": "differences", "column": "time" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "nonce": { "/": { "bytes": "gICAgICAgIAAAgI" } } },
 			"expect": { "error": "differences", "column": "nonce" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "nonce": { "/": { "bytes": "/////////38CAg" } } },
 			"expect": { "error": "differences", "column": "nonce" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "lamport": { "/": { "bytes": "/v///////x8CAg" } } },
 			"expect": { "error": "differences", "column": "lamport" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"drop": ["lamport"],
 			"expect": { "error": "differences", "column": "lamport" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "time": { "/": { "bytes": "AQAA" } } },
 			"expect": { "error": "commit" }
 		}

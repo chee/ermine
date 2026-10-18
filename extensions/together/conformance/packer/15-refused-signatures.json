@@ -68,7 +68,7 @@
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": {
 				"signatures": []
 			},
@@ -78,7 +78,7 @@
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": {
 				"signatures": [
 					{
@@ -99,7 +99,7 @@
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": {
 				"signatures": {
 					"/": {
@@ -113,7 +113,7 @@
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": {
 				"signatures": [
 					{
@@ -135,7 +135,7 @@
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": {
 				"signatures": [
 					{
@@ -156,7 +156,7 @@
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": {
 				"signatures": [
 					{
@@ -187,7 +187,7 @@
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"drop": [
 				"signatures"
 			],

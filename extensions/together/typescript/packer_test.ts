@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertThrows } from "@std/assert"
 import * as cbor from "@ermine/encoding/cbor"
 import { type Commit, compare, encode, joinName, name } from "@ermine/encoding/commit"
-import { pack, RunError, unpack, type Unpacked } from "./run.ts"
+import { pack, PackError, unpack, type Unpacked } from "./packer.ts"
 import { createSigner, seal, stored } from "./seal.ts"
 
 const DOC = new Uint8Array(32).fill(0x2a)
@@ -11,7 +11,7 @@ const signers = [
 	await createSigner(new Uint8Array(32).fill(2)),
 ]
 
-// a run: typing on one node, then a fork by another signer, a merge, a move, a set, a removal,
+// a pack: typing on one node, then a fork by another signer, a merge, a move, a set, a removal,
 // optional fields here and there. each commit sealed
 async function made() {
 	const out: Uint8Array[] = []
@@ -75,7 +75,7 @@ async function made() {
 		lamport: 44,
 		patches: [{ path: [], value: { k: [1, 2] } }],
 	})
-	// a parent not in the run: by its name
+	// a parent not in the pack: by its name
 	await add({
 		table: "value",
 		actor: "chee",
@@ -102,7 +102,7 @@ function same(back: Unpacked[], sealed: Uint8Array[]) {
 	})
 }
 
-Deno.test("run: packs to columns and back to each commit's exact bytes, signed ones' seals too", async () => {
+Deno.test("packer: packs to columns and back to each commit's exact bytes, signed ones' seals too", async () => {
 	const sealed = await made()
 	const packed = pack(sealed)
 	const back = unpack(packed)
@@ -114,7 +114,7 @@ Deno.test("run: packs to columns and back to each commit's exact bytes, signed o
 	assert(packed.length < whole / 2.5, `${packed.length} against ${whole}`)
 })
 
-Deno.test("run: typing is one signature: each commit but the last vouched for by the next", async () => {
+Deno.test("packer: typing is one signature: each commit but the last vouched for by the next", async () => {
 	const s = signers[0]
 	const sealed: Uint8Array[] = []
 	let parent: Uint8Array | undefined
@@ -140,15 +140,15 @@ Deno.test("run: typing is one signature: each commit but the last vouched for by
 	assertEquals(back.filter((u) => u.sealed !== undefined).length, 1)
 })
 
-Deno.test("run: what isn't a run is refused", () => {
-	assertThrows(() => unpack(new Uint8Array([1])), RunError)
-	assertThrows(() => unpack(cbor.encode({ n: 1 })), RunError)
+Deno.test("packer: what isn't a pack is refused", () => {
+	assertThrows(() => unpack(new Uint8Array([1])), PackError)
+	assertThrows(() => unpack(cbor.encode({ n: 1 })), PackError)
 	assertEquals(unpack(pack([])), [])
 	// one that must be signed, given without its seal
 	assertThrows(() => pack([{ commit: new Uint8Array(1), stored: new Uint8Array(32) }]))
 })
 
-Deno.test("run: differences exact to 2^53 - 1 either way; a commit before its parent names it", async () => {
+Deno.test("packer: differences exact to 2^53 - 1 either way; a commit before its parent names it", async () => {
 	const s = signers[0]
 	const sealed: Uint8Array[] = []
 	const names: Uint8Array[] = []
@@ -175,10 +175,10 @@ Deno.test("run: differences exact to 2^53 - 1 either way; a commit before its pa
 	same(unpack(pack(backwards)), backwards)
 })
 
-Deno.test("run: refused with a code, and the column", () => {
+Deno.test("packer: refused with a code, and the column", () => {
 	const e = assertThrows(() => unpack(cbor.encode({ ...cbor.decode(pack([])) as object, x: 1 })))
-	assert(e instanceof RunError)
-	assertEquals([e.code, e.column], ["not-a-run", "x"])
+	assert(e instanceof PackError)
+	assertEquals([e.code, e.column], ["not-a-pack", "x"])
 	// a run's count past n is refused before it is spread
 	const big = assertThrows(() =>
 		unpack(
@@ -191,6 +191,6 @@ Deno.test("run: refused with a code, and the column", () => {
 			}),
 		)
 	)
-	assert(big instanceof RunError)
+	assert(big instanceof PackError)
 	assertEquals([big.code, big.column], ["runs", "table"])
 })

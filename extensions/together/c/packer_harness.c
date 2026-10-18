@@ -1,7 +1,7 @@
-// The C run on the line protocol (conformance/c/harness.h): requests and answers as
-// extensions/together/typescript/run_harness.ts has them. State lasts for the process: the commits made by
-// label, each sealed by its seed's signer, and the runs packed by label
-#include "run.h"
+// The C packer on the line protocol (conformance/c/harness.h): requests and answers as
+// extensions/together/typescript/packer_harness.ts has them. State lasts for the process: the commits made by
+// label, each sealed by its seed's signer, and the packs packed by label
+#include "packer.h"
 
 #include "commits_harness.h"
 #include "../../../ermine/encoding/c/cbor.h"
@@ -23,7 +23,7 @@ typedef struct {
 } pile;
 
 static cs_commits *commits;
-// sealed commits by the label they were made under, and runs by the label they were packed under
+// sealed commits by the label they were made under, and packs by the label they were packed under
 static pile seals, runs;
 
 void hh_start(void) { commits = cs_create(); }
@@ -69,17 +69,17 @@ static bool sealed_of(const op_value *x, uint8_t **bytes, size_t *length, FILE *
 	return true;
 }
 
-// a run from a label or hex
+// a pack from a label or hex
 static bool run_of(const op_value *x, uint8_t **bytes, size_t *length, FILE *out) {
-	if (x == NULL || x->type != OP_STR) return hh_error(out, "not a run"), false;
+	if (x == NULL || x->type != OP_STR) return hh_error(out, "not a pack"), false;
 	const kept *k = find(&runs, x->str);
 	if (k != NULL) return *bytes = k->bytes, *length = k->length, true;
 	if (!cf_unhex(x->str, bytes, length)) return hh_error(out, "not hex"), false;
 	return true;
 }
 
-static void put_refusal(FILE *out, rn_code code, const char *column) {
-	fprintf(out, "{\"error\":\"%s\"", rn_code_name(code));
+static void put_refusal(FILE *out, pk_code code, const char *column) {
+	fprintf(out, "{\"error\":\"%s\"", pk_code_name(code));
 	if (column != NULL) fputs(",\"column\":", out), op_json_string(out, column);
 	fputc('}', out);
 }
@@ -116,7 +116,7 @@ static void pack(const op_value *r, FILE *out) {
 		hh_error(out, "commits");
 		return;
 	}
-	rn_item *items = hh_take((list->count + 1) * sizeof *items);
+	pk_item *items = hh_take((list->count + 1) * sizeof *items);
 	for (size_t i = 0; i < list->count; i++) {
 		uint8_t *b;
 		size_t n;
@@ -140,16 +140,16 @@ static void pack(const op_value *r, FILE *out) {
 				}
 				memcpy(stored, h, 32);
 			}
-			items[i] = (rn_item){m->bytes, m->length, stored};
+			items[i] = (pk_item){m->bytes, m->length, stored};
 			continue;
 		}
 		if (!sealed_of(x, &b, &n, out)) return;
-		items[i] = (rn_item){b, n, NULL};
+		items[i] = (pk_item){b, n, NULL};
 	}
 	uint8_t *run;
 	size_t length;
-	rn_code code = rn_pack(items, list->count, &run, &length);
-	if (code != RN_OK) {
+	pk_code code = pk_pack(items, list->count, &run, &length);
+	if (code != PK_OK) {
 		hh_error(out, "not sealed commits");
 		return;
 	}
@@ -161,7 +161,7 @@ static void pack(const op_value *r, FILE *out) {
 	else free(run);
 }
 
-// the run to unpack, with its columns set and dropped: its bytes (the line's)
+// the pack to unpack, with its columns set and dropped: its bytes (the line's)
 static bool edited(const op_value *r, uint8_t **bytes, size_t *length, FILE *out) {
 	const op_value *value = op_get(r, "value"), *set = op_get(r, "set"), *drop = op_get(r, "drop");
 	if (value != NULL) {
@@ -171,7 +171,7 @@ static bool edited(const op_value *r, uint8_t **bytes, size_t *length, FILE *out
 	if (!run_of(op_get(r, "run"), bytes, length, out)) return false;
 	if (set == NULL && drop == NULL) return true;
 	Json *o = cborDecode(*bytes, *length, NULL, NULL);
-	if (o == NULL || o->type != JSON_OBJECT) return jsonFree(o), hh_error(out, "not a run"), false;
+	if (o == NULL || o->type != JSON_OBJECT) return jsonFree(o), hh_error(out, "not a pack"), false;
 	for (size_t i = 0; set != NULL && set->type == OP_MAP && i < set->count; i++) {
 		Json *v = pk_to_json(set->items[i]);
 		jsonSet(o, set->keys[i], strlen(set->keys[i]), v);
@@ -192,10 +192,10 @@ static void unpack(const op_value *r, FILE *out) {
 	uint8_t *bytes;
 	size_t length;
 	if (!edited(r, &bytes, &length, out)) return;
-	rn_unpacked u;
+	pk_unpacked u;
 	char *column;
-	rn_code code = rn_unpack(bytes, length, &u, &column);
-	if (code != RN_OK) {
+	pk_code code = pk_unpack(bytes, length, &u, &column);
+	if (code != PK_OK) {
 		put_refusal(out, code, column);
 		free(column);
 		return;
@@ -203,7 +203,7 @@ static void unpack(const op_value *r, FILE *out) {
 	fputs("{\"sealed\":[", out);
 	for (size_t i = 0; i < u.count; i++) {
 		if (i) fputc(',', out);
-		const rn_member *m = &u.members[i];
+		const pk_member *m = &u.members[i];
 		if (m->sealed != NULL) {
 			const char *label = NULL;
 			for (size_t k = 0; k < seals.n && label == NULL; k++)
@@ -225,7 +225,7 @@ static void unpack(const op_value *r, FILE *out) {
 		fputc('}', out);
 	}
 	fputs("]}", out);
-	rn_free(&u);
+	pk_free(&u);
 }
 
 static void columns(const op_value *r, FILE *out) {

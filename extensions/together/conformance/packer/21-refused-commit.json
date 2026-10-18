@@ -68,7 +68,7 @@
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": {
 				"table": [
 					[
@@ -83,7 +83,7 @@
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": {
 				"signer": [
 					[
@@ -102,7 +102,7 @@
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": {
 				"metadata": [
 					[
@@ -121,7 +121,7 @@
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": {
 				"lamport": {
 					"/": {

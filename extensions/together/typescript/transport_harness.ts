@@ -40,7 +40,7 @@ import { hex, unhex } from "../../../ermine/encoding/typescript/commit_harness.t
 import { createCommits, type Made, pipe, quiet, tablesJson } from "./harnesses.ts"
 import type { Added } from "./history.ts"
 import { replay, type Tables } from "./replay.ts"
-import { pack, unpack } from "./run.ts"
+import { pack, unpack } from "./packer.ts"
 import { createSigner, stored as storedOf } from "./seal.ts"
 import { snapshot, tablesOf } from "./snapshot.ts"
 import { type Arrival, createDevice, type Device } from "./transport.ts"
