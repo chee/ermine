@@ -612,7 +612,7 @@
 (defun js-mod (a b)
   (let ((a (num-or-null a)) (b (num-or-null b)))
     (when (zerop b) (oops "mod by 0"))
-    (norm-number (if (and (integerp a) (integerp b)) (rem a b) (rem (coerce a 'double-float) (coerce b 'double-float))))))
+    (norm-number (rem (coerce a 'double-float) (coerce b 'double-float)))))
 
 (defun read-host-key (k)
   (unless (stringp k) (oops "bad key"))
@@ -669,7 +669,7 @@
          ((string= tag "quote") body)
          ((string= tag "read") (read-host-key (evaluate body)))
          ((string= tag "sum")
-          (norm-number (reduce #'+ (mapcar (lambda (x) (num-or-null (evaluate x))) (args body)) :initial-value 0)))
+          (norm-number (reduce #'+ (mapcar (lambda (x) (coerce (num-or-null (evaluate x)) 'double-float)) (args body)) :initial-value 0d0)))
          ((string= tag "mod") (destructuring-bind (a b) (mapcar #'evaluate (args body)) (js-mod a b)))
          ((string= tag "eq") (destructuring-bind (a b) (mapcar #'evaluate (args body))
                                (if (json-equal a b) :true :false)))
@@ -881,7 +881,13 @@
     (error (e) (setf (owner-last c) +none+) e)))
 
 (defun result (r value)
-  "a result: equal to the last, it stops there. a compute's goes to set; an effect's waits for the acts"
+  "a result: told first (a returns moment, not counted toward endless). equal to the last, it stops
+   there. a compute's goes to set; an effect's waits for the acts"
+  (let ((c (crun-comp r)))
+    (push (jmap "returns" (owner-name c) "run" (crun-n r)) *moments*)
+    (holding (fire "returns" (list (owner-name c))))
+    ;; torn down by a listener: nothing more
+    (unless (alive-p c) (return-from result nil)))
   (let* ((c (crun-comp r)) (equal (equal-field c value)))
     (setf (gethash r *results*) value)
     (cond
@@ -1084,7 +1090,7 @@
            (jmap))
           ((string= op "listener")
            (let ((on (jget req "on")))
-             (unless (member on '("mark" "starts" "ends" "acts" "forgotten" "started" "settles") :test #'equal)
+             (unless (member on '("mark" "starts" "returns" "ends" "acts" "forgotten" "started" "settles") :test #'equal)
                (oops "unknown listener ~a" on))
              (setf *armed* (list on (and (jhas req "at") (jget req "at")) (jget req "throw")))
              (jmap)))
@@ -1097,7 +1103,7 @@
           ((string= op "write")
            (let ((values (jget req "values")) (keys '()))
              (dolist (e (jmap-entries values))
-               (setf (gethash (car e) *values*) (cdr e))
+               (setf (gethash (car e) *values*) (revive (cdr e)))
                (push (car e) keys))
              (jmap "tick" (change (nreverse keys) nil))))
           ((string= op "changed")
@@ -1112,7 +1118,9 @@
              (jmap "value" (if there v :null))))
           ((string= op "log") (prog1 (jmap "log" (mklist (reverse *log*))) (setf *log* '())))
           ((string= op "moments")
-           (let ((reads (eq (jget req "reads") :true)) (ms (reverse *moments*)))
+           (let ((reads (eq (jget req "reads") :true))
+                 (ms (remove-if (lambda (m) (and (jhas m "returns") (not (eq (jget req "returns") :true))))
+                                (reverse *moments*))))
              (setf *moments* '())
              (jmap "moments" (mklist (mapcar (lambda (m)
                                                (if (and (jhas m "ends") (not reads))

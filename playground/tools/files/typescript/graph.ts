@@ -19,7 +19,7 @@ import { createGuard, type Setup as GuardSetup, slot as slotTarget } from "@ermi
 import { createChangeHeader } from "@ermine/places/header"
 import { createPlaces, type Places } from "@ermine/places"
 import type { Policy } from "@ermine/protect"
-import { createScheduler, type Pair, type Scheduler, type Scope } from "@ermine/scheduler"
+import { createScheduler, type Info, type Scheduler, type Scope } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Key, type Table } from "@ermine/table"
 import createNode, { type Node as Saved, type Side } from "./saved.ts"
@@ -122,7 +122,7 @@ export function createGraph(
 		if (kids(id) === undefined) table.add("children", id, createEntry({}, header))
 	}
 
-	function make(info: readonly Pair[]): Api {
+	function make(info: Info): Api {
 		const scope: Scope = scheduler.createRootScope(info)
 		const within = <T>(f: (header: () => ChangeHeader) => T): T =>
 			scheduler.runWithScope(scope, () => f(() => createChangeHeader(scheduler)))
@@ -212,7 +212,7 @@ export function createGraph(
 				})
 			},
 			as(extra) {
-				return make([...info, ...Object.entries(extra)])
+				return make({ ...info, ...extra })
 			},
 		}
 		return api
@@ -224,7 +224,7 @@ export function createGraph(
 		table,
 		places,
 		// a scope says something (the scheduler refuses one with no pairs): with no actor, whose it is
-		api: (actor) => make(actor === undefined ? [["program", "files"]] : [["actor", actor]]),
+		api: (actor) => make(actor === undefined ? { program: "files" } : { actor }),
 		ephemeral: (id) => ephemerals.has(id),
 		get(id) {
 			const parts = table.get(id)

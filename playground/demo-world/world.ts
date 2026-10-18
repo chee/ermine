@@ -33,7 +33,7 @@
 //   inspect(address)     that node picked in the page's graph tab
 import createEntry, { type ChangeHeader, type Metadata } from "@ermine/node/entry"
 import { children, createPlaces, move, place, type Places, rename, unplace } from "@ermine/places"
-import { createChangeHeader, getWho } from "@ermine/places/header"
+import { createChangeBase, createChangeHeader } from "@ermine/places/header"
 import * as lib from "@ermine/places/lib"
 import { plan } from "@ermine/places/path"
 import { isPending } from "@ermine/places/status"
@@ -297,7 +297,7 @@ export function createWorld(o: Options) {
 				// walking the open scope and every parent: a write's metadata stops at a memo's
 				// node, so a caller above the memo is found only by walking on
 				const o = s.getCurrentScope()
-				const w = getWho(s)
+				const w = createChangeBase(s)
 				return say(
 					w?.actor,
 					w?.metadata ?? {},

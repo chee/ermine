@@ -83,7 +83,7 @@ export function files(
 	if (watched.has(store)) {
 		throw new Error(`the store ${store.folder} is already watched`)
 	}
-	const scope = scheduler.createRootScope([["program", "files"]])
+	const scope = scheduler.createRootScope({ program: "files" })
 	const listed = graph.api().create([], { ephemeral: true })
 	let stopped = false
 	const program: Files = {

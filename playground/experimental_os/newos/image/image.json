@@ -1162,15 +1162,6 @@
 		{
 			"at": [
 				"apps",
-				"shell"
-			],
-			"name": "history",
-			"id": "shell-history",
-			"value": []
-		},
-		{
-			"at": [
-				"apps",
 				"workspace"
 			],
 			"name": "text",
