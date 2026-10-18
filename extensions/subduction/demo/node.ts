@@ -1,6 +1,6 @@
 // a device of the notes demo, no DOM: runs in a browser tab and in deno (check.ts). everything here
 // is the host's side, composed as sync_test.ts composes one: a table, places and a scheduler, with
-// sync (@ermine/sync) beside places, and a view that is a compute and an effect. the table's
+// sync (@ermine/together) beside places, and a view that is a compute and an effect. the table's
 // listener tells places and then sync; each write is told to places, then to sync.
 //
 // the picture: subduction is a networked filesystem; the graph in memory is this device's open view
@@ -37,10 +37,10 @@ import {
 	setPresence,
 	startSweeper,
 } from "@ermine/presence"
-import { createChannel } from "@ermine/sync/channel"
-import type { History } from "@ermine/sync/history"
-import { type Conflict, createSync } from "@ermine/sync/sync"
-import { createSigner } from "@ermine/sync/seal"
+import { createChannel } from "@ermine/together/channel"
+import type { History } from "@ermine/together/history"
+import { type Conflict, createSync } from "@ermine/together/sync"
+import { createSigner } from "@ermine/together/seal"
 import { hexOf, unhex } from "../live/blob.ts"
 import { type Backend, Storage } from "../live/storage.ts"
 // deno-lint-ignore no-explicit-any

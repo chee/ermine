@@ -412,7 +412,7 @@ static mr_member_t *push_member(contents_t *c) {
 
 // one member read: a seal unsealed and kept, with the ones it vouches for before it; one vouched for,
 // held until then. The first that is not good ends the reading
-static bool read_member(void *context, const pk_member *r) {
+static bool read_member(void *context, const pkr_member *r) {
 	reading_t *g = context;
 	contents_t *c = g->c;
 	if (r->sealed == NULL) {
@@ -448,7 +448,7 @@ static bool read_member(void *context, const pk_member *r) {
 
 // a {members} list's one seal read
 static bool read_seal(reading_t *g, const uint8_t *sealed, size_t length) {
-	pk_member r = {.sealed = sealed, .sealed_length = length};
+	pkr_member r = {.sealed = sealed, .sealed_length = length};
 	return read_member(g, &r);
 }
 
@@ -465,9 +465,9 @@ static mr_code contents(const uint8_t doc[32], const uint8_t *open, size_t lengt
 	if (packed != NULL) {
 		if (packed->type != JSON_BYTES) code = MR_SHAPE;
 		else {
-			pk_code c = pk_each(packed->bytes.data, packed->bytes.length, read_member, &g, NULL);
-			if (c == PK_STOPPED) code = out->code;
-			else if (c != PK_OK) code = MR_SHAPE;
+			pkr_code c = pkr_each(packed->bytes.data, packed->bytes.length, read_member, &g, NULL);
+			if (c == PKR_STOPPED) code = out->code;
+			else if (c != PKR_OK) code = MR_SHAPE;
 		}
 	} else if (members->type != JSON_ARRAY) code = MR_SHAPE;
 	else {
@@ -924,16 +924,16 @@ static bool build_start(mr_doc *d, job *j) {
 // its head, packed, when the integration gives them; added
 static uint64_t build_add(sb_stack *t, mr_doc *d, const fragment *f) {
 	const mr_seen_t **ms = malloc((f->members.count + 1) * sizeof *ms);
-	pk_item *items = malloc((f->members.count + 1) * sizeof *items);
+	pkr_item *items = malloc((f->members.count + 1) * sizeof *items);
 	if (ms == NULL || items == NULL) abort();
 	for (size_t i = 0; i < f->members.count; i++) ms[i] = im_get(&d->seen, f->members.ids[i]);
 	qsort(ms, f->members.count, sizeof *ms, by_lamport);
 	for (size_t i = 0; i < f->members.count; i++)
-		items[i] = ms[i]->sealed != NULL ? (pk_item){ms[i]->sealed, ms[i]->sealed_length, NULL}
-						  : (pk_item){ms[i]->bytes, ms[i]->length, ms[i]->stored};
+		items[i] = ms[i]->sealed != NULL ? (pkr_item){ms[i]->sealed, ms[i]->sealed_length, NULL}
+						  : (pkr_item){ms[i]->bytes, ms[i]->length, ms[i]->stored};
 	uint8_t *packed = NULL;
 	size_t packed_length = 0;
-	pk_pack(items, f->members.count, &packed, &packed_length);
+	pkr_pack(items, f->members.count, &packed, &packed_length);
 	free(ms);
 	free(items);
 	Json *blob = jsonObject();
