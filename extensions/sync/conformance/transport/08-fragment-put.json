@@ -26,7 +26,7 @@
 		{
 			"op": "make",
 			"name": "c2",
-			"nonce": 188,
+			"nonce": 619,
 			"parents": [
 				"c1"
 			],
@@ -44,7 +44,7 @@
 			"op": "make",
 			"name": "c2d",
 			"doc": "ermine://2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d00000000000000000000000000000000",
-			"nonce": 299,
+			"nonce": 218,
 			"parents": [
 				"c1"
 			],
@@ -62,7 +62,7 @@
 			"op": "make",
 			"name": "c2e",
 			"doc": "ermine://2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e00000000000000000000000000000000",
-			"nonce": 399,
+			"nonce": 265,
 			"parents": [
 				"c1"
 			],
@@ -134,7 +134,7 @@
 						"actor": null,
 						"metadata": {
 							"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-							"commit": "1d59481282d82298b80ed3134b1de32c1494deca6fc985d36772d4c48c6eac3c"
+							"commit": "1e2036f151425697def02cf5aa48d36c693bde0da2e29b193abb2bccbf59b0d6553e"
 						}
 					}
 				}
@@ -170,7 +170,7 @@
 						"actor": null,
 						"metadata": {
 							"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-							"commit": "53777328781aeb70a587f75f203ac619cee76098f5ce45e099f63cfda067653c"
+							"commit": "1e208178c4b8962dc9580f45acd853434d467910a0ffb78b4a771f92db9983619a18"
 						}
 					}
 				}
@@ -197,7 +197,7 @@
 							"actor": null,
 							"metadata": {
 								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-								"commit": "53777328781aeb70a587f75f203ac619cee76098f5ce45e099f63cfda067653c"
+								"commit": "1e208178c4b8962dc9580f45acd853434d467910a0ffb78b4a771f92db9983619a18"
 							}
 						}
 					}

@@ -33,7 +33,7 @@
 			"op": "take",
 			"device": "a",
 			"name": "c2",
-			"nonce": 188,
+			"nonce": 619,
 			"parents": [
 				"c1"
 			],
