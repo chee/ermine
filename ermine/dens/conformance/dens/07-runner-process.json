@@ -1,5 +1,5 @@
 {
-	"title": "a process offering a runner: at its own node (work/lisp/runners/lisp, its children { runners }), started on like the den's; a process on it pinned to it. stopping the offering process stops its users first, newest first, \"runner-stopped\", then its own handle with the reason given; its offer's node goes with it. withdrawn while the offering process runs: its users stopped \"withdrawn\", the offering process still running, its runner gone",
+	"title": "a process offering a runner: at its own node (work/lisp/runners/lisp, its children { runners }), started on like the den's; a process started on it names it as its runner (ermine.process.runner: the offer's id and path). stopping the offering process stops its users first, newest first, \"runner-stopped\", then its own handle with the reason given; its offer's node goes with it. withdrawn while the offering process runs: its users stopped \"withdrawn\", the offering process still running, its runner gone",
 	"steps": [
 		{
 			"op": "kids",

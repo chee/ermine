@@ -3,11 +3,14 @@
 // nodes() (processes: false, none), set whole as they change (a tracked effect) and at each beat,
 // lapsing at until (a host's sweep), cleared at stop. each other row, while it lives, mirrored
 // here: the away trie (a part of its own, processes.ts' trie) gets the den's node id at
-// under + /system/dens/<who> and each process's id at under + its at (a leaf there already, or
-// not a name: passed over); each node named is written as given (attributes, children; never a
-// value; status "pending" | { failed } as PENDING | an Error), unless the id has entries here
-// that this link did not write for that who (nor is its leaf put in). a row gone (cleared, swept):
-// its leaves and entries out
+// under + /system/dens/<who> and each process's id at under + its at (a leaf there already, not
+// a name, or in a local process's way: at or under its leaf, or on a level of the process trie:
+// passed over); each node named that is the row's own (its den's id, a process's, or one under
+// them: "<id>/...") is written as given (attributes; children, each name to an id it may write;
+// never a value; status "pending" | { failed } as PENDING | an Error). no row writes an id that is
+// this den's (its node, a process it runs, or under them), nor one with entries here that this
+// link did not write for that who (nor is its leaf put in). a row gone (cleared, swept): its
+// leaves and entries out
 // asks: CBOR on "<anchor>/ask/<to>": { n, op, who: { actor, reader? }, ... }; the asked den: who +
 // device (the sender's name), den.ask; the answer on "<anchor>/answer/<from>": { n, answer }
 // (den.ask threw: { error: its code, or its message }). answer(n) is tracked: undefined until it
@@ -34,7 +37,7 @@ import { type Contributor, type Id, type Path, PlacesError } from "@ermine/place
 import { get } from "@ermine/places/lib"
 import { createChangeBase, createChangeHeader } from "@ermine/places/header"
 import { STATUS } from "@ermine/places/status"
-import { addLeaf, removeLeaf, trie } from "@ermine/processes"
+import { addLeaf, PROCESS, removeLeaf, trie } from "@ermine/processes"
 import {
 	clear,
 	connect as listen,
@@ -45,7 +48,7 @@ import {
 	type World,
 } from "@ermine/presence"
 import type { Channel } from "@ermine/presence/channel"
-import { PENDING } from "@ermine/scheduler"
+import { PENDING, type Scope } from "@ermine/scheduler"
 import type { Key } from "@ermine/table"
 import {
 	type Ask,
@@ -109,6 +112,15 @@ const isMap = (v: unknown): v is Record<string, unknown> =>
 
 const isAddress = (x: unknown): x is Address => typeof x === "string" || Array.isArray(x)
 
+// whether id is one of ids, or under one (a step at a "/")
+function among(id: string, ids: ReadonlySet<string>): boolean {
+	if (ids.has(id)) return true
+	for (let i = id.indexOf("/"); i !== -1; i = id.indexOf("/", i + 1)) {
+		if (ids.has(id.slice(0, i))) return true
+	}
+	return false
+}
+
 // a value's encoding; none: undefined
 function bytesOf(v: unknown): Uint8Array | undefined {
 	try {
@@ -166,7 +178,10 @@ function askOf(m: Record<string, unknown>, who: Record<string, unknown>): Ask | 
 		}
 		if (m.args !== undefined) a.args = m.args
 		if (m.cwd !== undefined) a.cwd = m.cwd
-		return isAddress(m.runner) && isMap(m.program) && isAddress(m.at) ? a as Ask : undefined
+		return isAddress(m.runner) && isMap(m.program) && typeof m.program.id === "string" &&
+				isAddress(m.at)
+			? a as Ask
+			: undefined
 	}
 	if (m.op === "stop") {
 		if (typeof m.process !== "string") return undefined
@@ -204,9 +219,31 @@ export function connect(den: Den, channel: Channel, options: Options = {}): Link
 		if (changed.length) places.commit(changed)
 	}
 
-	// whether who may write id here: it wrote it, or nothing is there and no other who wrote it
+	// the den's own ids (its node, its processes'): no row writes them, or under them
+	let mine: ReadonlySet<string> = new Set()
+	const own = () => new Set([den.node, ...den.processes().map((p) => p.id)].map(String))
+	// whether who may write id here: not the den's own; it wrote it, or nothing is there and no
+	// other who wrote it
 	const writable = (who: string, id: Id) =>
-		owners.get(id) === who || (!owners.has(id) && table.get(id).length === 0)
+		!among(String(id), mine) &&
+		(owners.get(id) === who || (!owners.has(id) && table.get(id).length === 0))
+
+	// whether a leaf at path is in a local process's way: at or under its leaf, or on a level of
+	// the process trie (addLeaf's rule, on the process part)
+	function shadowed(path: Path): boolean {
+		let v: unknown = table.get(PROCESS, places.root)?.value
+		for (let i = 0; i < path.length && isMap(v); i++) {
+			v = Object.hasOwn(v, path[i]) ? v[path[i]] : undefined
+			if (typeof v === "string") return true
+		}
+		return isMap(v) && Object.keys(v).length > 0
+	}
+
+	// a mirrored node's children: each name to an id (a string) who may write
+	const kids = (who: string, v: Record<string, unknown>) =>
+		Object.fromEntries(
+			Object.entries(v).filter(([, x]) => typeof x === "string" && writable(who, x)),
+		)
 
 	// one part of a mirrored node as wanted (none: taken out), written only when it changed
 	function write(id: Id, part: Part, v: Record<string, unknown> | undefined) {
@@ -255,16 +292,26 @@ export function connect(den: Den, channel: Channel, options: Options = {}): Link
 		if (m === undefined) mirrors.set(who, m = { leaves: new Map(), ids: new Set() })
 		const row = isMap(value) ? value : {}
 		const nodes = isMap(row.nodes) ? row.nodes : {}
+		mine = own()
+		// the row's own ids: its den's and its processes' (each one who may write)
+		const bases = new Set<string>()
+		const base = (id: unknown) => {
+			if (typeof id === "string" && writable(who, id)) bases.add(id)
+		}
+		base(row.den)
+		if (Array.isArray(row.processes)) {
+			for (const p of row.processes) if (isMap(p)) base(p.id)
+		}
 		const wanted = new Map<Id, Record<string, unknown>>()
 		for (const [id, seen] of Object.entries(nodes)) {
-			if (isMap(seen) && writable(who, id)) wanted.set(id, seen)
+			if (isMap(seen) && among(id, bases) && writable(who, id)) wanted.set(id, seen)
 		}
 		const leaves = new Map<string, { path: Path; id: Id }>()
 		const leaf = (at: unknown, id: unknown) => {
 			if (!Array.isArray(at) || !at.every((x) => typeof x === "string")) return
-			if (typeof id !== "string" || !writable(who, id)) return
+			if (typeof id !== "string" || !bases.has(id)) return
 			const path = [...under, ...at]
-			leaves.set(JSON.stringify(path), { path, id })
+			if (!shadowed(path)) leaves.set(JSON.stringify(path), { path, id })
 		}
 		leaf([...DENS, who], row.den)
 		if (Array.isArray(row.processes)) {
@@ -284,7 +331,7 @@ export function connect(den: Den, channel: Channel, options: Options = {}): Link
 			owners.set(id, who)
 			m.ids.add(id)
 			write(id, "attributes", isMap(seen.attributes) ? seen.attributes : undefined)
-			write(id, "children", isMap(seen.children) ? seen.children : undefined)
+			write(id, "children", isMap(seen.children) ? kids(who, seen.children) : undefined)
 		}
 		for (const [k, l] of leaves) {
 			if (m.leaves.has(k)) continue
@@ -421,13 +468,19 @@ export function connect(den: Den, channel: Channel, options: Options = {}): Link
 		step(heard.stop)
 		step(offAsk)
 		step(offAnswer)
+		if (tie !== undefined) step(() => s.teardown(tie))
 		step(() => s.teardown(scope))
 		if (failed) throw failed.error
 	}
 
 	heard.announce()
 	s.registerTeardown(scope, stop)
-	s.registerTeardown(den.scope, stop)
+	// the den's close stops it: a scope of the link's under the den's owner, torn down at its stop
+	// (so a link stopped leaves nothing on the owner). the den closed: stopped now
+	const tie: Scope | undefined = den.scope.state === "alive"
+		? s.createScope({ dens: "link" }, den.scope)
+		: undefined
+	s.registerTeardown(tie ?? den.scope, stop)
 	return {
 		anchor,
 		world,

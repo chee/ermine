@@ -184,7 +184,7 @@ static char **copy_names(const char *const *names, size_t n) {
 	return copy;
 }
 
-// names, and one more: a path into what an owner holds
+// names, then two more (a kind and a name): a path into what an owner holds
 static char **names_and(const char *const *names, size_t n, const char *a, const char *b, size_t *out) {
 	char **copy = xalloc((n + 3) * sizeof *copy);
 	for (size_t i = 0; i < n; i++) copy[i] = xdup(names[i]);
@@ -194,7 +194,7 @@ static char **names_and(const char *const *names, size_t n, const char *a, const
 	return copy;
 }
 
-static op_value *names_value(char *const *names, size_t n) {
+static op_value *names_value(const char *const *names, size_t n) {
 	op_value *list = op_list();
 	for (size_t i = 0; i < n; i++) op_push(list, op_str(names[i]));
 	return list;
@@ -771,7 +771,9 @@ const char *dn_offer(dn *d, dn_process *by, dn_kind kind, const char *name,
 	char **at = names_and((const char *const *)o->at, o->nat, kinds[kind], name, &nat);
 	char *fid = joined(o->id, kinds[kind]);
 	char *id = joined(fid, name);
-	if (live_offer(d, id) != NULL) {
+	size_t there = 0;
+	tb_at(d->s.table, tb_string(id), &there);
+	if (live_offer(d, id) != NULL || there > 0) {
 		free(fid);
 		free(id);
 		refused->refused = "taken";
@@ -995,16 +997,16 @@ static dn_process *begin(dn *d, const op_value *who, int remote, const char *con
 	op_set(attrs, DN_ATTRIBUTE, op_str(DN_TYPE_PROCESS));
 	op_value *rv = op_map();
 	op_set(rv, "id", op_str(f.rid));
-	op_set(rv, "at", names_value(f.rpath, f.nr));
+	op_set(rv, "at", names_value((const char *const *)f.rpath, f.nr));
 	op_set(attrs, DN_RUNNER, rv);
 	op_value *pv = op_map();
 	op_set(pv, "id", op_str(f.pid));
-	if (f.ppath != NULL) op_set(pv, "at", names_value(f.ppath, f.npp));
+	if (f.ppath != NULL) op_set(pv, "at", names_value((const char *const *)f.ppath, f.npp));
 	if (f.hashed) op_set(pv, "hash", op_str(f.hex));
 	op_set(attrs, DN_PROGRAM, pv);
 	op_value *dv = op_map();
 	op_set(dv, "id", op_str(d->self->id));
-	op_set(dv, "at", names_value(d->self->at, d->self->nat));
+	op_set(dv, "at", names_value((const char *const *)d->self->at, d->self->nat));
 	op_set(attrs, DN_DEN, dv);
 	dn_process *p = xalloc(sizeof *p);
 	p->den = d;
@@ -1092,13 +1094,34 @@ static op_value *with_refused(const char *refused) {
 static op_value *id_at(const dn_process *p) {
 	op_value *m = op_map();
 	op_set(m, "id", op_str(p->id));
-	op_set(m, "at", names_value(p->at, p->nat));
+	op_set(m, "at", names_value((const char *const *)p->at, p->nat));
 	return m;
 }
 
+// an address of strings: a string, or a list of strings
+static int is_path(const op_value *a) {
+	if (is_str(a)) return 1;
+	if (a == NULL || a->type != OP_LIST) return 0;
+	for (size_t i = 0; i < a->count; i++) {
+		if (!is_str(a->items[i])) return 0;
+	}
+	return 1;
+}
+
+// steps as given: none, no address, or an address of strings (a list with a step that is no
+// string: not)
+static int steps_fit(const op_value *a) { return a == NULL || a->type != OP_LIST || is_path(a); }
+
 // a start as a map gives it: runner, program (an address, or { id, hash?, type?, api?, code? }), at,
-// args?, cwd?, and pin? (local only)
+// args?, cwd?, and pin? (local only). runner and at no address: none; program neither: { id: "" };
+// a step that is no string, args given that are no list of strings, a cwd given that is no address:
+// refused not-a-name
 static op_value *start_from(dn *d, const op_value *who, int remote, const op_value *b) {
+	const op_value *given_args = get(b, "args"), *given_cwd = get(b, "cwd");
+	if (!steps_fit(get(b, "runner")) || !steps_fit(get(b, "at")) || !steps_fit(get(b, "program")) ||
+		(given_cwd != NULL && !is_path(given_cwd)) ||
+		(given_args != NULL && (given_args->type != OP_LIST || !is_path(given_args))))
+		return with_refused(pl_code_name(PL_NOT_A_NAME));
 	steps runner = steps_of(get(b, "runner")), at = steps_of(get(b, "at"));
 	steps cwd = steps_of(get(b, "cwd")), args = steps_of(get(b, "args")), program = {0};
 	dn_program prog = {0};
@@ -1162,19 +1185,13 @@ op_value *dn_on(dn *d, const char *op, const op_value *body) {
 	return out;
 }
 
-static op_value *path_value(const char *const *names, size_t n) {
-	op_value *list = op_list();
-	for (size_t i = 0; i < n; i++) op_push(list, op_str(names[i]));
-	return list;
-}
-
 op_value *dn_refusal_value(const dn_refusal *r) {
 	op_value *m = with_refused(r->refused);
 	const char *k = r->refused;
-	if (strcmp(k, "not-a-runner") == 0) op_set(m, "runner", path_value(r->runner, r->nrunner));
+	if (strcmp(k, "not-a-runner") == 0) op_set(m, "runner", names_value(r->runner, r->nrunner));
 	else if (strcmp(k, "not-there") == 0) {
 		if (r->process != NULL) op_set(m, "process", op_str(r->process));
-		else if (r->program_has_at) op_set(m, "program", path_value(r->program_at, r->nprogram_at));
+		else if (r->program_has_at) op_set(m, "program", names_value(r->program_at, r->nprogram_at));
 		else op_set(m, "program", op_str(r->program != NULL ? r->program : ""));
 	} else if (strcmp(k, "wrong-form") == 0) {
 		op_value *program = op_map(), *runner = op_map();
@@ -1192,7 +1209,7 @@ op_value *dn_refusal_value(const dn_refusal *r) {
 			op_set(a, "reason", op_str(r->answer.reason != NULL ? r->answer.reason : ""));
 		} else op_set(a, "answer", op_str("pending"));
 		op_set(m, "answer", a);
-	} else if (strcmp(k, "taken") == 0) op_set(m, "at", path_value(r->at, r->nat));
+	} else if (strcmp(k, "taken") == 0) op_set(m, "at", names_value(r->at, r->nat));
 	return m;
 }
 

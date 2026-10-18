@@ -20,7 +20,8 @@
 // dn_offer: a node <owner id>/<kind>/<name> in the folder <owner id>/<kind> (made at the first offer
 // of that kind, upserted into the owner's children; kept, empty, after its last offer goes), its
 // attributes as given and ermine.type ermine.runner | ermine.compiler | ermine.surface over them,
-// its value live. dn_withdraw: its users stopped (newest first, "withdrawn"), its name out, its node
+// its value live; a name taken (offered, or entries at its id already): refused taken, nothing
+// made. dn_withdraw: its users stopped (newest first, "withdrawn"), its name out, its node
 // gone. an owner's stop withdraws its offers first, newest first, their users stopped
 // "runner-stopped", then its own handle.
 // dn_start refused, nothing made, the first that holds: stopped; not-a-runner (nothing at runner,
@@ -36,8 +37,12 @@
 // dn_close. a process torn down from above (the owner going): the den's reason ("den-stopped", or
 // dn_close's); its own scope torn down directly: none.
 // dn_ask: another den's start or stop, its who given (device: the transport's); no policy: refused
-// no "no policy". dn_close: every process stopped, newest first, each handle given the reason; the
-// den's rows last. after it: start, ask, offer refused stopped.
+// no "no policy". a start's fields (dn_ask's, dn_on's body's) as given: runner and at no address:
+// none; program neither an address nor a map: { id: "" } (an id that is no string: ""; a type or
+// api that is no string: none; a hash given that is no string: none's); a step that is no string,
+// args given that are no list of strings, a cwd given that is no address: refused not-a-name.
+// dn_close: every process stopped, newest first, each handle given the reason; the den's rows
+// last. after it: start, ask, offer refused stopped.
 // unplace or move never stops a process: its row is in the process part, not in children.
 // writes: with the owner's scope open (the den, its offers) or the process's. policy reads: the
 // table, untracked.

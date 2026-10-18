@@ -1,5 +1,5 @@
 {
-	"title": "start refused, nothing made, the first that holds, in order: not-a-runner (nothing at the runner's path; a compiler there; a node whose type is no runner), not-there (no program node; a node with no value), wrong-form (a type not the runner's takes; no type; an api the runner does not give), not-a-runner (a runner with no live function), none asking the policy; then no-permission (start refused; start granted, the read refused; the rules gone: pending), each after the asks it made; then taken, processes' (at, under or above a process, the den's rows too)",
+	"title": "start refused, nothing made, the first that holds, in order: not-a-runner (nothing at the runner's path; a compiler there; a node whose type is no runner), not-there (no program node; a node with no value), wrong-form (a type not the runner's takes; no type; an api the runner does not give), not-a-runner (a runner with no live function: only once the program passed, so a far runner with a program in another form is wrong-form, with no program not-there), none asking the policy; then no-permission (start refused; start granted, the read refused; the rules gone: pending), each after the asks it made; then taken, processes' (at, under or above a process, the den's rows too), only once the policy said yes: a start at a taken path the policy refuses is no-permission",
 	"steps": [
 		{
 			"op": "kids",
@@ -389,6 +389,59 @@
 			}
 		},
 		{
+			"op": "start",
+			"name": "x",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"far"
+			],
+			"program": [
+				"apps",
+				"main.c"
+			],
+			"at": [
+				"work",
+				"x"
+			],
+			"expect": {
+				"refused": "wrong-form",
+				"program": {
+					"type": "public.c-source"
+				},
+				"runner": {
+					"takes": "com.netscape.javascript-source",
+					"api": "ermine.api"
+				}
+			}
+		},
+		{
+			"op": "start",
+			"name": "x",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"far"
+			],
+			"program": [
+				"apps",
+				"missing.js"
+			],
+			"at": [
+				"work",
+				"x"
+			],
+			"expect": {
+				"refused": "not-there",
+				"program": [
+					"apps",
+					"missing.js"
+				]
+			}
+		},
+		{
 			"op": "asked",
 			"expect": {
 				"asks": []
@@ -627,6 +680,73 @@
 					"clock"
 				]
 			}
+		},
+		{
+			"op": "asked"
+		},
+		{
+			"op": "value",
+			"id": "rules",
+			"value": [
+				{
+					"op": "read"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "b",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"refused": "no-permission",
+				"op": "start",
+				"answer": {
+					"answer": "no",
+					"reason": "no grant"
+				}
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"asks": [
+					{
+						"op": "start",
+						"who": {
+							"actor": "mac"
+						},
+						"id": "den:mac/runners/javascript",
+						"path": [
+							"system",
+							"den",
+							"runners",
+							"javascript"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "value",
+			"id": "rules",
+			"value": [
+				{}
+			],
+			"expect": {}
 		},
 		{
 			"op": "start",

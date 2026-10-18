@@ -1,5 +1,5 @@
 {
-	"title": "a start asked over the link (card asks mac): mac's den asks its own policy with who as card sent it (the actor of the scope open there) and device card, the name of the channel it came on; refused as guest, started as chee, the answer back on card's answer topic as n's. by id and hash (code false): mac reads its own CLOCK, the read asked by id (no path), the process's program { id, hash }; carrying the code (TOCK, which mac lacks): run as sent, its hash pinned, no read asked. the processes run on mac at the pulse and show on card at their paths",
+	"title": "a start asked over the link (card asks mac): mac's den asks its own policy with who as card sent it (the actor of the scope open there) and device card, the name of the channel it came on; refused as guest, started as chee, the answer back on card's answer topic as n's. by id and hash (code false): mac reads its own CLOCK, the read asked by id (no path), the process's program { id, hash }; carrying the code (TOCK, which mac lacks): run as sent, its hash pinned, no read asked. the processes run on mac at the pulse and show on card at their paths. the device in who is the channel's name, whatever the asker says (an ask sent by hand claiming device mac is asked as card's)",
 	"steps": [
 		{
 			"op": "kids",
@@ -211,6 +211,72 @@
 						]
 					}
 				]
+			}
+		},
+		{
+			"op": "say",
+			"dev": "card",
+			"to": "mac",
+			"message": {
+				"n": 99,
+				"op": "start",
+				"who": {
+					"actor": "guest",
+					"device": "mac"
+				},
+				"runner": [
+					"system",
+					"den",
+					"runners",
+					"javascript"
+				],
+				"program": {
+					"id": "CLOCK",
+					"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+				},
+				"at": [
+					"work",
+					"spoof"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"dev": "mac",
+			"expect": {}
+		},
+		{
+			"op": "asked",
+			"dev": "mac",
+			"expect": {
+				"asks": [
+					{
+						"op": "start",
+						"who": {
+							"actor": "guest",
+							"device": "card"
+						},
+						"id": "den:mac/runners/javascript",
+						"path": [
+							"system",
+							"den",
+							"runners",
+							"javascript"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"work",
+				"spoof"
+			],
+			"expect": {
+				"id": null
 			}
 		},
 		{

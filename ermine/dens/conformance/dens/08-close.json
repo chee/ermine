@@ -1,5 +1,5 @@
 {
-	"title": "close: every process stopped newest first, each handle given the reason (a user of a process's runner first, as it is newer), then the den's own rows: /system/dens/mac and /system/den gone, /system empty, its nodes' entries gone. after it: start and offer refused stopped; close again is nothing",
+	"title": "close: every process stopped newest first, each handle given the reason (a user of a process's runner first, as it is newer), then the den's own rows: /system/dens/mac and /system/den gone, /system empty, its nodes' entries gone. after it: start, offer and another den's ask (a stop too) refused stopped; close again is nothing",
 	"steps": [
 		{
 			"op": "kids",
@@ -376,6 +376,44 @@
 				"ermine.runner.takes": "com.netscape.javascript-source",
 				"ermine.runner.api": "ermine.api"
 			},
+			"expect": {
+				"refused": "stopped"
+			}
+		},
+		{
+			"op": "ask",
+			"ask": "stop",
+			"who": {
+				"actor": "mac",
+				"device": "card"
+			},
+			"process": "a",
+			"expect": {
+				"refused": "stopped"
+			}
+		},
+		{
+			"op": "ask",
+			"ask": "start",
+			"name": "z",
+			"who": {
+				"actor": "mac",
+				"device": "card"
+			},
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"z"
+			],
 			"expect": {
 				"refused": "stopped"
 			}

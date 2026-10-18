@@ -1,5 +1,5 @@
 {
-	"title": "another den's ask (den.ask, no transport): as start or stop, the policy asked with the who given (device too), not the scope open. a program by id and hash: read (asked, no path) from the den's own table; a hash not its value's, or no value: not-there. carried code: run as it is, its own hash pinned, no read asked; a hash given that is not its own: not-there; no type: wrong-form. a stop of a process this den runs, refused or done with its reason; of none: not-there. a den with no policy refuses another den's ask (no policy), its own local start still allowed",
+	"title": "another den's ask (den.ask, no transport): as start or stop, the policy asked with the who given (device too), not the scope open. a program by id and hash: read (asked, no path) from the den's own table; a hash not its value's, or no value: not-there. carried code: run as it is, its own hash pinned, no read asked; a hash given that is not its own: not-there; no type: wrong-form. a stop of a process this den runs, refused or done with its reason; of none: not-there. a den with no policy refuses another den's ask (no policy), its own local start still allowed. a start's fields as given: a step that is no name, args no list of strings, a cwd no address: not-a-name, nothing asked (a name processes refuses: not-a-name, after the policy); carried code naming an api that is no string names none; a cwd asked for is the process's",
 	"steps": [
 		{
 			"op": "kids",
@@ -467,6 +467,253 @@
 			"op": "asked",
 			"expect": {
 				"asks": []
+			}
+		},
+		{
+			"op": "ask",
+			"ask": "start",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": {
+				"id": "CLOCK",
+				"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+			},
+			"name": "r4",
+			"who": {
+				"actor": "chee",
+				"device": "card"
+			},
+			"at": [
+				"work",
+				"r4"
+			],
+			"args": "abc",
+			"expect": {
+				"error": "not-a-name"
+			}
+		},
+		{
+			"op": "ask",
+			"ask": "start",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": {
+				"id": "CLOCK",
+				"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+			},
+			"name": "r4",
+			"who": {
+				"actor": "chee",
+				"device": "card"
+			},
+			"at": [
+				"work",
+				"r4"
+			],
+			"cwd": 5,
+			"expect": {
+				"error": "not-a-name"
+			}
+		},
+		{
+			"op": "ask",
+			"ask": "start",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": {
+				"id": "CLOCK",
+				"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+			},
+			"name": "r4",
+			"who": {
+				"actor": "chee",
+				"device": "card"
+			},
+			"at": [
+				"work",
+				3
+			],
+			"expect": {
+				"error": "not-a-name"
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"asks": []
+			}
+		},
+		{
+			"op": "ask",
+			"ask": "start",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": {
+				"id": "CLOCK",
+				"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+			},
+			"name": "r4",
+			"who": {
+				"actor": "chee",
+				"device": "card"
+			},
+			"at": [
+				"work",
+				".."
+			],
+			"expect": {
+				"error": "not-a-name"
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"asks": [
+					{
+						"op": "start",
+						"who": {
+							"actor": "chee",
+							"device": "card"
+						},
+						"id": "den:mac/runners/javascript",
+						"path": [
+							"system",
+							"den",
+							"runners",
+							"javascript"
+						]
+					},
+					{
+						"op": "read",
+						"who": {
+							"actor": "chee",
+							"device": "card"
+						},
+						"part": "value",
+						"id": "CLOCK"
+					}
+				]
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"work",
+				"r4"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "ask",
+			"ask": "start",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": {
+				"id": "X",
+				"type": "com.netscape.javascript-source",
+				"api": 5,
+				"code": "yo"
+			},
+			"name": "r5",
+			"who": {
+				"actor": "chee",
+				"device": "card"
+			},
+			"at": [
+				"work",
+				"r5"
+			],
+			"cwd": [
+				"apps"
+			],
+			"expect": {
+				"id": "proc:r5",
+				"at": [
+					"work",
+					"r5"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "proc:r5",
+			"skip": [
+				"parts",
+				"status",
+				"children",
+				"live"
+			],
+			"expect": {
+				"attributes": {
+					"ermine.type": "ermine.process",
+					"ermine.process.runner": {
+						"id": "den:mac/runners/javascript",
+						"at": [
+							"system",
+							"den",
+							"runners",
+							"javascript"
+						]
+					},
+					"ermine.process.program": {
+						"id": "X",
+						"hash": "6b7f2a1ed55001d3cb780ccb97a65e8f222ca506a024660c03fdc41df5785ff1"
+					},
+					"ermine.process.den": {
+						"id": "den:mac",
+						"at": [
+							"system",
+							"dens",
+							"mac"
+						]
+					},
+					"ermine.process.cwd": [
+						"apps"
+					]
+				}
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"asks": [
+					{
+						"op": "start",
+						"who": {
+							"actor": "chee",
+							"device": "card"
+						},
+						"id": "den:mac/runners/javascript",
+						"path": [
+							"system",
+							"den",
+							"runners",
+							"javascript"
+						]
+					}
+				]
 			}
 		},
 		{

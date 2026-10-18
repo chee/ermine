@@ -8,7 +8,8 @@
 // derived id its owner's name and the rest; a remote start's process named from its answer, at the
 // remote line or the first answer line after it. The runners: record (its run and its stop
 // recorded; hf_run.stop_reason given the reason) and boom (hf_run.error "boom"). The policy
-// "grants": a pr_call recording each ask, then protect's grants on (value, rules).
+// "grants": a pr_call recording each ask, then protect's grants on (value, rules). disconnect frees
+// the link at once (dn_disconnect, then dn_link_free, its den running).
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +17,8 @@
 #include "../../../conformance/c/harness.h"
 #include "../../../filesystem/places/c/status.h"
 #include "../../boxes/c/boxes.h"
+#include "../../encoding/c/cbor.h"
+#include "../../encoding/c/pack.h"
 #include "../../processes/c/processes.h"
 #include "away.h"
 #include "dens.h"
@@ -426,9 +429,17 @@ static char *process_at(const op_value *v) {
 	return id != NULL ? xdup(id) : take(n);
 }
 
-// what a start gave: its id named, shown as { id, at }; or the refusal
+// what a start gave: its id named, shown as { id, at }; or the refusal (a places code: an error,
+// as refusal's)
 static op_value *started(op_value *got, const char *as) {
 	if (got == NULL) return error("no answer");
+	const char *no = text(get(got, "refused"));
+	if (no != NULL && (strcmp(no, "not-a-name") == 0 || strcmp(no, "nothing-there") == 0 ||
+		strcmp(no, "already-there") == 0)) {
+		op_value *e = error(no);
+		op_free(got);
+		return e;
+	}
 	if (get(got, "refused") != NULL) return plain_take(got);
 	const char *id = text(get(got, "id"));
 	if (id != NULL && as != NULL) {
@@ -626,6 +637,8 @@ static void start(void *data) {
 		id = take(given != NULL ? given : "");
 		program.id = id;
 		program.hash = text(get(pv, "hash"));
+		// a hash that is no string: none's, as an ask's
+		if (program.hash == NULL && get(pv, "hash") != NULL) program.hash = "";
 		program.type = text(get(pv, "type"));
 		program.api = text(get(pv, "api"));
 		program.code = get(pv, "code");
@@ -858,6 +871,45 @@ static op_value *forge(device *d, const op_value *r) {
 	return op_map();
 }
 
+// the request's message (names taken back) as CBOR on the device's channel at
+// "<its link's anchor>/ask/<to>", its link bypassed
+static op_value *say(device *d, const op_value *r) {
+	const char *to = text(get(r, "to"));
+	op_value *m = back(get(r, "message"));
+	Json *j = pk_to_json(m);
+	op_free(m);
+	size_t length = 0;
+	const char *why = NULL;
+	if (to == NULL || j == NULL || !cborEncode(j, NULL, 0, &length, &why)) {
+		if (j != NULL) jsonFree(j);
+		return error("no message");
+	}
+	unsigned char *bytes = xalloc(length);
+	cborEncode(j, bytes, length, &length, &why);
+	jsonFree(j);
+	char *topic = concat(dn_link_anchor(d->link), "/ask/");
+	char *at = concat(topic, to);
+	chn_channel *ch = channel_of(d);
+	ch->send(ch, at, bytes, length);
+	free(at);
+	free(topic);
+	free(bytes);
+	return op_map();
+}
+
+// the link stopped, and freed at once (dn_link_free after dn_disconnect, the den running): gone
+static void disconnect(device *d) {
+	dn_link *l = d->link;
+	dn_disconnect(l);
+	for (size_t i = 0; i < d->nlinks; i++) {
+		if (d->links[i] != l) continue;
+		d->links[i] = d->links[--d->nlinks];
+		break;
+	}
+	dn_link_free(l);
+	d->link = NULL;
+}
+
 static op_value *swept_json(pres_swept *swept) {
 	op_value *list = op_list();
 	for (size_t i = 0; i < swept->n; i++) {
@@ -879,12 +931,12 @@ static op_value *away_answer(device *d, const char *op, job *j, const char *acto
 	}
 	if (strcmp(op, "announce") != 0 && strcmp(op, "beat") != 0 && strcmp(op, "disconnect") != 0 &&
 		strcmp(op, "sweep") != 0 && strcmp(op, "remote") != 0 && strcmp(op, "answer") != 0 &&
-		strcmp(op, "forge") != 0)
+		strcmp(op, "forge") != 0 && strcmp(op, "say") != 0)
 		return NULL;
 	if (d->link == NULL) return error("no link");
 	if (strcmp(op, "announce") == 0) dn_announce(d->link);
 	else if (strcmp(op, "beat") == 0) dn_beat(d->link);
-	else if (strcmp(op, "disconnect") == 0) dn_disconnect(d->link);
+	else if (strcmp(op, "disconnect") == 0) disconnect(d);
 	else if (strcmp(op, "sweep") == 0) {
 		pres_swept swept = dn_sweep(d->link);
 		return swept_json(&swept);
@@ -898,7 +950,8 @@ static op_value *away_answer(device *d, const char *op, job *j, const char *acto
 		named(d, n);
 		const op_value *got = dn_answer(d->link, n);
 		return with("answer", got != NULL ? plain(got) : op_null());
-	} else return forge(d, j->r);
+	} else if (strcmp(op, "say") == 0) return say(d, j->r);
+	else return forge(d, j->r);
 	return op_map();
 }
 
@@ -953,12 +1006,12 @@ static const char *method_at(device *d, const op_value *path) {
 
 static int by_name(const void *a, const void *b) { return strcmp(*(char *const *)a, *(char *const *)b); }
 
-// a status as answers show it: "pending" | { failed } | null
+// a status as answers show it: "pending" | { failed } | null; any other value: { raw: it }
 static op_value *status_json(const op_value *v) {
 	if (v == NULL) return op_null();
 	if (cst_is_pending(v)) return op_str("pending");
 	if (cst_error(v) != NULL) return with("failed", op_str(cst_error(v)));
-	return plain(v);
+	return with("raw", plain(v));
 }
 
 static op_value *node_json(device *d, const op_value *r) {

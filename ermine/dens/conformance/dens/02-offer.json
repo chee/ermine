@@ -1,5 +1,5 @@
 {
-	"title": "what a den offers is a node under its own: runners, compilers and surfaces each in a folder of that kind (made at its first offer, named in the den's children), an offer at <den>/<kind>/<name> with the attributes given and ermine.type ermine.runner, ermine.compiler or ermine.surface over them, its value the live function given (none: no value). /system/den reaches them too. a name offered twice is refused taken, one that is not a name is not-a-name. withdrawn: its name out of the folder (kept, empty), its node's entries gone; offered again, the same id",
+	"title": "what a den offers is a node under its own: runners, compilers and surfaces each in a folder of that kind (made at its first offer, named in the den's children), an offer at <den>/<kind>/<name> with the attributes given and ermine.type ermine.runner, ermine.compiler or ermine.surface over them, its value the live function given (none: no value). /system/den reaches them too. a name offered twice is refused taken (so is one whose id has entries already, another's, which are left as they are), one that is not a name is not-a-name. withdrawn: its name out of the folder (kept, empty), its node's entries gone; offered again, the same id",
 	"steps": [
 		{
 			"op": "den",
@@ -238,6 +238,61 @@
 			},
 			"expect": {
 				"error": "not-a-name"
+			}
+		},
+		{
+			"op": "attrs",
+			"id": "den:mac/runners/lisp",
+			"value": {
+				"ermine.type": "x"
+			},
+			"expect": {}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "lisp",
+			"attrs": {
+				"ermine.runner.takes": "x-lisp"
+			},
+			"live": "record",
+			"expect": {
+				"refused": "taken",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"runners",
+					"lisp"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "den:mac/runners/lisp",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.type": "x"
+				},
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "list",
+			"path": [
+				"system",
+				"den",
+				"runners"
+			],
+			"expect": {
+				"names": [
+					"javascript"
+				]
 			}
 		},
 		{

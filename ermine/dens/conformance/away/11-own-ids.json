@@ -1,0 +1,647 @@
+{
+	"title": "a row writes only its own ids (its den's, its processes', and those under them), never the den's: card's row forged to name ids mac's den would make (its compilers folder, an offer in it, a runner not offered yet), one under a process mac runs, an id under none of card's (F), and processes whose ids are mac's (a folder not made yet, its own clock): none written, no leaf put in, while card's own den's ids are. mac then offers cc and lisp as its own, and card's row naming none of them takes none out. a row's leaves are never in a local process's way: on a level of mac's process trie (/system: /system/palette still the saved one) or under a process's leaf (/system/den/runners, /work/clock/hand) they are passed over; a saved path is shadowed as ever (/home), but no child of a node the row wrote names a local id (/home/notes is nothing, not mac's CLOCK)",
+	"steps": [
+		{
+			"op": "kids",
+			"dev": "mac",
+			"id": "R",
+			"value": {
+				"apps": "APPS",
+				"system": "SYS",
+				"home": "HOME"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"dev": "mac",
+			"id": "APPS",
+			"value": {
+				"clock.js": "CLOCK"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"dev": "mac",
+			"id": "CLOCK",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"dev": "mac",
+			"id": "CLOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"dev": "mac",
+			"id": "SYS",
+			"value": {
+				"palette": "PAL"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"dev": "mac",
+			"id": "HOME",
+			"value": {
+				"notes": "NOTES"
+			},
+			"expect": {}
+		},
+		{
+			"op": "den",
+			"dev": "mac",
+			"expect": {
+				"id": "den:mac"
+			}
+		},
+		{
+			"op": "offer",
+			"dev": "mac",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api"
+			},
+			"live": "record",
+			"expect": {
+				"id": "den:mac/runners/javascript",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"dev": "mac",
+			"name": "clock",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"id": "proc:clock",
+				"at": [
+					"work",
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "den",
+			"dev": "card",
+			"expect": {
+				"id": "den:card"
+			}
+		},
+		{
+			"op": "connect",
+			"dev": "mac",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"dev": "card",
+			"expect": {}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "forge",
+			"dev": "card",
+			"value": {
+				"den": "den:card",
+				"nodes": {
+					"den:mac/compilers": {
+						"children": {
+							"evil": "X"
+						}
+					},
+					"den:mac/compilers/cc": {
+						"attributes": {
+							"ermine.type": "ermine.compiler",
+							"ermine.compiler.takes": "a"
+						}
+					},
+					"den:mac/runners/lisp": {
+						"attributes": {
+							"ermine.type": "x"
+						}
+					},
+					"proc:clock/runners": {
+						"children": {
+							"evil": "X"
+						}
+					},
+					"F": {
+						"attributes": {
+							"ermine.type": "x"
+						}
+					},
+					"den:card": {
+						"attributes": {
+							"ermine.type": "ermine.den"
+						}
+					},
+					"den:card/x": {
+						"attributes": {
+							"ermine.type": "ermine.runner"
+						}
+					}
+				},
+				"processes": [
+					{
+						"id": "den:mac/surfaces",
+						"at": [
+							"zzz"
+						]
+					},
+					{
+						"id": "proc:clock",
+						"at": [
+							"yyy"
+						]
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"dev": "mac",
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"id": "den:mac/compilers",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"id": "den:mac/compilers/cc",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"id": "den:mac/runners/lisp",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"id": "proc:clock/runners",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"id": "F",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"zzz"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"yyy"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"id": "den:card/x",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.type": "ermine.runner"
+				},
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"system",
+				"dens",
+				"card"
+			],
+			"expect": {
+				"id": "den:card"
+			}
+		},
+		{
+			"op": "offer",
+			"dev": "mac",
+			"kind": "compilers",
+			"name": "cc",
+			"attrs": {
+				"ermine.compiler.takes": "c",
+				"ermine.compiler.gives": "o"
+			},
+			"expect": {
+				"id": "den:mac/compilers/cc",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"compilers",
+					"cc"
+				]
+			}
+		},
+		{
+			"op": "list",
+			"dev": "mac",
+			"path": [
+				"system",
+				"den",
+				"compilers"
+			],
+			"expect": {
+				"names": [
+					"cc"
+				]
+			}
+		},
+		{
+			"op": "offer",
+			"dev": "mac",
+			"kind": "runners",
+			"name": "lisp",
+			"attrs": {
+				"ermine.runner.takes": "x-lisp"
+			},
+			"live": "record",
+			"expect": {
+				"id": "den:mac/runners/lisp",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"runners",
+					"lisp"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"id": "den:mac/runners/lisp",
+			"expect": {
+				"parts": [
+					"attributes",
+					"value"
+				],
+				"attributes": {
+					"ermine.runner.takes": "x-lisp",
+					"ermine.type": "ermine.runner"
+				},
+				"status": null,
+				"children": null,
+				"live": true
+			}
+		},
+		{
+			"op": "forge",
+			"dev": "card",
+			"value": {
+				"den": "den:card",
+				"nodes": {
+					"Q3": {
+						"children": {
+							"notes": "CLOCK",
+							"mine": "Q3/mine"
+						}
+					}
+				},
+				"processes": [
+					{
+						"id": "Q",
+						"at": [
+							"system"
+						]
+					},
+					{
+						"id": "Q2",
+						"at": [
+							"system",
+							"den",
+							"runners"
+						]
+					},
+					{
+						"id": "Q3",
+						"at": [
+							"home"
+						]
+					},
+					{
+						"id": "Q4",
+						"at": [
+							"work",
+							"clock",
+							"hand"
+						]
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"dev": "mac",
+			"expect": {}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"system",
+				"palette"
+			],
+			"expect": {
+				"id": "PAL"
+			}
+		},
+		{
+			"op": "list",
+			"dev": "mac",
+			"path": [
+				"system"
+			],
+			"expect": {
+				"names": [
+					"den",
+					"dens",
+					"palette"
+				]
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"system",
+				"den",
+				"runners"
+			],
+			"expect": {
+				"id": "den:mac/runners"
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"expect": {
+				"id": "den:mac/runners/javascript"
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"work",
+				"clock",
+				"hand"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"home"
+			],
+			"expect": {
+				"id": "Q3"
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"home",
+				"notes"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"id": "Q3",
+			"expect": {
+				"parts": [
+					"children"
+				],
+				"attributes": null,
+				"status": null,
+				"children": {
+					"mine": "Q3/mine"
+				},
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"id": "den:card/x",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "start",
+			"dev": "mac",
+			"name": "b",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"b"
+			],
+			"expect": {
+				"id": "proc:b",
+				"at": [
+					"work",
+					"b"
+				]
+			}
+		},
+		{
+			"op": "forge",
+			"dev": "card",
+			"value": {
+				"den": "den:card",
+				"nodes": {}
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"dev": "mac",
+			"expect": {}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"system",
+				"den",
+				"compilers",
+				"cc"
+			],
+			"expect": {
+				"id": "den:mac/compilers/cc"
+			}
+		},
+		{
+			"op": "list",
+			"dev": "mac",
+			"path": [
+				"system",
+				"den",
+				"compilers"
+			],
+			"expect": {
+				"names": [
+					"cc"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"id": "den:mac/compilers/cc",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.compiler.takes": "c",
+					"ermine.compiler.gives": "o",
+					"ermine.type": "ermine.compiler"
+				},
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"home"
+			],
+			"expect": {
+				"id": "HOME"
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"home",
+				"notes"
+			],
+			"expect": {
+				"id": "NOTES"
+			}
+		}
+	]
+}
