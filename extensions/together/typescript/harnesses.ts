@@ -1,4 +1,4 @@
-// what the sync harnesses share (extensions/sync/conformance/README.md): the commits a harness
+// what the sync harnesses share (extensions/together/conformance/README.md): the commits a harness
 // makes from a request, each under a label, its fields from the request or their defaults, its
 // parents and base by label; tables as JSON; in-memory pipes
 import type { Transport } from "npm:@automerge/subduction@0.23.0"

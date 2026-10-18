@@ -246,7 +246,7 @@ Deno.test({
 		assertEquals(names(h.heads()), [hex(c1.name)])
 		assertEquals(h.get(c2.name), undefined)
 		assertEquals(h.refused().sort((x, y) => x.refused < y.refused ? -1 : 1), [
-			{ name: hex(c3.name), refused: "parent" },
+			{ name: hex(c3.name), refused: "parent", on: hex(c2.name) },
 			{ name: hex(c2.name), refused: "patches" },
 		])
 		assertEquals(calls, [

@@ -2,8 +2,8 @@
 // ways. seals (for a document), runs (one signature for a run of typing) and snapshots made here are
 // unsealed, unpacked and taken into a history by the C harnesses, and replayed to the same tables;
 // what the C harnesses make is unsealed, unpacked, taken in and replayed here, and is the same bytes.
-// needs the C harnesses built (make extensions/sync/c/seal-harness extensions/sync/c/run-harness
-// extensions/sync/c/history-harness); without them it is ignored
+// needs the C harnesses built (make extensions/together/c/seal-harness extensions/together/c/run-harness
+// extensions/together/c/history-harness); without them it is ignored
 import { assert, assertEquals } from "@std/assert"
 import * as cbor from "@ermine/encoding/cbor"
 import { ask } from "../../../conformance/typescript/ask.ts"

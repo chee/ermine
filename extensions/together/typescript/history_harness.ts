@@ -1,6 +1,6 @@
 // history_harness: history.ts, replay.ts and snapshot.ts on the line protocol (harness.ts), for
 // the history, replay and snapshot suites. one history per process; commits by label (conventions:
-// extensions/sync/conformance/README.md). the check: patches apply at the base (replay), a merge
+// extensions/together/conformance/README.md). the check: patches apply at the base (replay), a merge
 // to its rule's merge; rules known: "eg-walker", others refused "merge". a held commit waits [].
 //
 // { op: "make", name, ...fields }   → {}            made and labelled, not added

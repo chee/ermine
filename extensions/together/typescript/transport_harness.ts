@@ -1,6 +1,6 @@
 // transport_harness: devices (transport.ts) on the line protocol (harness.ts), commits over
 // Subduction with no table, joined by in-memory pipes. conventions:
-// extensions/sync/conformance/README.md. a device here checks nothing and gives each fragment it
+// extensions/together/conformance/README.md. a device here checks nothing and gives each fragment it
 // builds a snapshot (replay.ts). a commit is signed by its seed (default the device's). doc: an
 // ermine:// id, default ermine://2a…2a00…00
 //
@@ -35,6 +35,7 @@ import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import * as cbor from "@ermine/encoding/cbor"
 import { revive } from "../../../conformance/typescript/form.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
+import { splitName } from "@ermine/encoding/commit"
 import { hex, unhex } from "../../../ermine/encoding/typescript/commit_harness.ts"
 import { createCommits, type Made, pipe, quiet, tablesJson } from "./harnesses.ts"
 import type { Added } from "./history.ts"
@@ -188,7 +189,13 @@ async function answer(r: Request): Promise<Answer> {
 			const head = r.head !== undefined ? await storedId(r.head, doc) : storedOf(blob)
 			const parents: Uint8Array[] = r.parents !== undefined
 				? await storedIds(r.parents, doc)
-				: await storedIds((m?.commit.parents ?? []).map((p) => label(p)), doc)
+				// a name not made here: its digest, raw, as Subduction has it
+				: await storedIds(
+					(m?.commit.parents ?? []).map((p) =>
+						labels.has(hex(p)) ? label(p) : hex(splitName(p)!.digest)
+					),
+					doc,
+				)
 			await transport_conformance_hook_put(d.device, doc, head, parents, blob)
 			return {}
 		}
