@@ -25,6 +25,7 @@
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import type { Patch } from "@ermine/op/apply"
+import { unread } from "@ermine/places"
 import type { Id, Key, Table } from "@ermine/table"
 import { versions as versionsOf } from "./apply.ts"
 import type { At } from "./commit.ts"
@@ -161,7 +162,9 @@ export function createSync(options: Options): Sync {
 		const changed: Entry<unknown>[] = []
 		for (const [part, patches] of by) {
 			const entry = table.get(part, doc)!
-			update(entry, structuredClone(patches) as never, change)
+			// children as places writes them, through its unread
+			const write = part === "children" ? unread.update : update
+			write(entry, structuredClone(patches) as never, change)
 			changed.push(entry)
 		}
 		options.commit(changed)
@@ -273,14 +276,16 @@ export function createSync(options: Options): Sync {
 				for (const [part, id] of table.who(entry)) {
 					if (!kept(part, id)) continue
 					const patches = op.patches.map((p) => under(part, p))
-					send(id, entry.cow === false ? structuredClone(patches) : patches, entry.change)
+					send(id, patches, entry.change)
 				}
 			}
 		},
 		tableChanged(part, id) {
 			if (applying || !kept(part, id)) return
 			const entry = table.get(part, id)
-			const value = entry?.cow === false ? structuredClone(entry.value) : entry?.value
+			// held past now: a write through places' unread copies, not changes, what is sent
+			if (entry !== undefined) unread.read(entry)
+			const value = entry?.value
 			const patch: Patch = value === undefined
 				? { path: [part] }
 				: { path: [part], value } as Patch

@@ -13,11 +13,10 @@ harness's header lists its requests and answers.
 | snapshot  | `extensions/together/conformance/snapshot/`  | history's (`suite.json`)                              |
 | transport | `extensions/together/conformance/transport/` | `extensions/together/typescript/transport_harness.ts` |
 | sync      | `extensions/together/conformance/sync/`      | `extensions/together/typescript/sync_harness.ts`      |
-| egwalker  | `extensions/together/conformance/egwalker/`  | history's (`suite.json`)                              |
 
-Run: `deno task conformance commit seal packer history replay snapshot transport sync egwalker`.
-Another implementation: `--c` (the binary `<package>/c/<suite>-harness`), or `HARNESS="<command>"`
-for one suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `fails`, `skip`).
+Run: `deno task conformance commit seal packer history replay snapshot transport sync`. Another
+implementation: `--c` (the binary `<package>/c/<suite>-harness`), or `HARNESS="<command>"` for one
+suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `fails`, `skip`).
 
 ## Conventions
 
@@ -103,11 +102,12 @@ for one suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `f
   move it a few ms a round too, so the ephemeral scenarios keep hundreds of ms from every boundary.
 - pipes: in memory, in order; cut, a waiting receive fails.
 
-## Merge rules (egwalker, sync)
+## Merge rules (history, sync)
 
-- the rules a harness knows: `"eg-walker"` (`extensions/together/typescript/egwalker.ts`, its header
-  the exact rules). The egwalker suite pins merged tables for small histories (history's `merge` and
-  `since` ops), so another implementation matches exactly.
+- the rules a harness knows: `"serial"` (`typescript/rules_harness.ts`, `c/rules_harness.c`, its
+  header the rule), a rule for testing merging only; history's `merge` op defaults to it. A harness
+  built with other rules: `history_harness.ts`'s and `sync_harness.ts`'s `run`, the C's
+  `rules_harness.h` (`playground/egwalker`: the rule eg-walker and its suites).
 - a sync host is given `merge` (the rule it merges by) and `merges` (the rules it knows, default
   `[merge]`): none, it is as without merging.
 

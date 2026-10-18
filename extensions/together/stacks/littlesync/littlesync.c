@@ -17,15 +17,21 @@
 
 // ---- what a device holds
 
-// a commit that makes the value now: its seal, and who has it
+// a commit that makes the value now: its seal, and who has it. Which links have it: a bitmask over link
+// slots (LS_LINKS, 4 at most), not a set of names per link. A commit is the one thing that knows it, there
+// is nothing to bound or search, and a link's slot is cleared in one pass when it opens or says hello
+// again. The same slots keep when each link was last sent it, so a resend on one link is not held back
+// by a send on another.
 typedef struct {
 	uint8_t name[CM_NAME];
 	uint8_t *sealed;
 	size_t length;
 	int64_t lamport;
 	uint32_t refs; // stamps that name it
-	bool own, acked;
-	int64_t sent; // ms of the last send, for resends
+	bool own;
+	bool named; // a commit taken in names it as a parent: no head
+	uint8_t acked;          // bit i: the peer on link slot i has it
+	int64_t sent[LS_LINKS]; // ms of the last send on each link slot, for resends
 } commit;
 
 // the last write at a path: the path as its keys each followed by a 0
@@ -39,6 +45,7 @@ typedef struct {
 
 #define HELDS 8
 #define RING 8
+#define NAMED 8
 #define OUT_MAX 16384
 #define CHUNK 3000
 #define DEPTH 16
@@ -54,6 +61,10 @@ struct ls_node {
 	size_t n_commits, c_commits;
 	uint8_t ring[RING][CM_NAME]; // names seen and let go of
 	unsigned ring_at, ring_n;
+	// parents named by commits taken in that were not held then (the first 8 bytes): one that comes
+	// later is no head
+	uint8_t named[NAMED][8];
+	unsigned named_at, named_n;
 	int64_t lamport;
 	ls_held helds[HELDS];
 	uint8_t *hold; // the unsealed commit being beaten
@@ -65,6 +76,22 @@ struct ls_node {
 	int64_t saved;
 };
 
+// one byte stream to one peer: what is said on it, and what is known of the peer on it
+struct ls_link {
+	ls_dev *dev;
+	unsigned slot;
+	uint8_t *out;
+	size_t out_used, out_cap;
+	uint8_t rx[LS_FRAME_MAX];
+	size_t rx_n;
+	bool rx_over;
+	bool up;
+	int64_t heard, hello_sent, heads_sent;
+	uint8_t peer[LS_KEY_LEN];
+	bool has_peer;
+	ls_traffic traffic;
+};
+
 struct ls_dev {
 	ls_options o;
 	uint8_t seed[32];
@@ -73,18 +100,10 @@ struct ls_dev {
 	uint32_t nonce;
 	ls_node **nodes;
 	size_t n_nodes;
-	uint8_t *out;
-	size_t out_used, out_cap;
-	uint8_t rx[LS_FRAME_MAX];
-	size_t rx_n;
-	bool rx_over;
+	struct ls_link *links[LS_LINKS];
 	// public keys decoded once
 	ermEd25519Key keys[4];
 	unsigned keys_next;
-	bool up;
-	int64_t heard, hello_sent, heads_sent;
-	uint8_t peer[LS_KEY_LEN];
-	bool has_peer;
 	ls_stats stats;
 	const char *reason;
 };
@@ -200,19 +219,26 @@ static int open_seal(ls_dev *d, const uint8_t *sealed, size_t length, const uint
 
 // ---- the wire out
 
-static void send_message(ls_dev *d, Json *m) {
+static void send_message(struct ls_link *l, Json *m) {
 	size_t n;
 	uint8_t *b = encode(m, &n);
 	jsonFree(m);
 	if (b == NULL) return;
-	if (d->out_used + n * 2 + 16 > OUT_MAX) {
-		d->stats.dropped_out++;
+	if (l->out_used + n * 2 + 16 > OUT_MAX) {
+		l->traffic.dropped_out++;
 		free(b);
 		return;
 	}
-	ls_frame(b, n, &d->out, &d->out_used, &d->out_cap);
-	d->stats.frames_out++;
+	ls_frame(b, n, &l->out, &l->out_used, &l->out_cap);
+	l->traffic.frames_out++;
 	free(b);
+}
+
+// the links that are up, but not `except` (NULL: all): what is sent to every peer but the one it came from
+static bool others_up(const ls_dev *d, const struct ls_link *except) {
+	for (unsigned i = 0; i < LS_LINKS; i++)
+		if (d->links[i] != NULL && d->links[i] != except && d->links[i]->up) return true;
+	return false;
 }
 
 static Json *message(const char *t) {
@@ -221,17 +247,18 @@ static Json *message(const char *t) {
 	return m;
 }
 
-static void send_hello(ls_dev *d, bool re) {
+static void send_hello(struct ls_link *l, bool re) {
+	ls_dev *d = l->dev;
 	Json *m = message("hello");
 	jsonAdd(m, "key", jsonBytes(d->key, LS_KEY_LEN));
 	jsonAdd(m, "stack", jsonString(LS_STACK));
 	if (re) jsonAdd(m, "re", jsonBoolean(true));
-	d->hello_sent = d->now;
+	l->hello_sent = d->now;
 	say(d, "tx hello%s", re ? " re" : "");
-	send_message(d, m);
+	send_message(l, m);
 }
 
-static void send_heads(ls_node *n, bool re) {
+static void send_heads(ls_node *n, struct ls_link *l, bool re) {
 	ls_dev *d = n->dev;
 	Json *m = message("heads"), *list = jsonArray();
 	jsonAdd(m, "node", jsonBytes(n->doc, 32));
@@ -256,22 +283,22 @@ static void send_heads(ls_node *n, bool re) {
 	jsonAdd(m, "heads", list);
 	if (re) jsonAdd(m, "re", jsonBoolean(true));
 	say(d, "tx heads %.8s %zu%s", short_id(n), put, re ? " re" : "");
-	send_message(d, m);
+	send_message(l, m);
 }
 
-static void send_names(ls_node *n, const char *t, const uint8_t (*names)[CM_NAME], size_t count) {
+static void send_names(ls_node *n, struct ls_link *l, const char *t, const uint8_t (*names)[CM_NAME], size_t count) {
 	for (size_t at = 0; at < count; at += LS_MAX_HEADS) {
 		Json *m = message(t), *list = jsonArray();
 		jsonAdd(m, "node", jsonBytes(n->doc, 32));
 		for (size_t i = at; i < count && i < at + LS_MAX_HEADS; i++) jsonPush(list, jsonBytes(names[i], CM_NAME));
 		jsonAdd(m, "names", list);
 		say(n->dev, "tx %s %.8s %zu", t, short_id(n), count - at < LS_MAX_HEADS ? count - at : (size_t)LS_MAX_HEADS);
-		send_message(n->dev, m);
+		send_message(l, m);
 	}
 }
 
 // the seals of the commits, in messages of about CHUNK bytes
-static void send_commits(ls_node *n, commit *const *list, size_t count) {
+static void send_commits(ls_node *n, struct ls_link *l, commit *const *list, size_t count) {
 	size_t at = 0;
 	while (at < count) {
 		Json *m = message("commits"), *seals = jsonArray();
@@ -280,12 +307,12 @@ static void send_commits(ls_node *n, commit *const *list, size_t count) {
 		while (at < count && (k == 0 || size + list[at]->length <= CHUNK)) {
 			jsonPush(seals, jsonBytes(list[at]->sealed, list[at]->length));
 			size += list[at]->length + 4;
-			list[at]->sent = n->dev->now;
+			list[at]->sent[l->slot] = n->dev->now;
 			at++, k++;
 		}
 		jsonAdd(m, "sealed", seals);
 		say(n->dev, "tx commits %.8s %zu", short_id(n), k);
-		send_message(n->dev, m);
+		send_message(l, m);
 	}
 }
 
@@ -504,7 +531,8 @@ static const char *refusal(const cm_commit *c) {
 	return NULL;
 }
 
-// a held value of the device: its entry, made if there is none (the oldest empty one goes when full)
+// a held value of the device: its entry, made if there is none. When full: the oldest empty one
+// goes, else the one held longest unrenewed; never this device's own (NULL when nothing can go)
 static ls_held *held_of(ls_node *n, const uint8_t *signer, size_t length, bool make) {
 	ls_held *free_ = NULL;
 	for (int i = 0; i < HELDS; i++) {
@@ -518,7 +546,13 @@ static ls_held *held_of(ls_node *n, const uint8_t *signer, size_t length, bool m
 			ls_held *h = &n->helds[i];
 			if (h->value == NULL && !h->own && (free_ == NULL || h->last < free_->last)) free_ = h;
 		}
-		if (free_ == NULL) free_ = &n->helds[0];
+		bool empty = free_ != NULL;
+		for (int i = 0; !empty && i < HELDS; i++) {
+			ls_held *h = &n->helds[i];
+			bool mine = h->own || memcmp(h->signer, n->dev->key, LS_KEY_LEN) == 0;
+			if (!mine && (free_ == NULL || h->expires < free_->expires)) free_ = h;
+		}
+		if (free_ == NULL) return NULL;
 		op_free(free_->value);
 	}
 	memset(free_, 0, sizeof *free_);
@@ -531,12 +565,55 @@ static ls_held *held_of(ls_node *n, const uint8_t *signer, size_t length, bool m
 static void held_landed(ls_node *n, const uint8_t *signer, size_t length, int64_t lamport) {
 	if (length > LS_KEY_LEN) return;
 	ls_held *h = held_of(n, signer, length, true);
+	if (h == NULL) return;
 	if (lamport > h->last) h->last = lamport;
 	if (h->value != NULL) {
 		op_free(h->value);
 		h->value = NULL;
 		n->version++;
 	}
+}
+
+// the commit's parents are no heads: marked when held, else remembered for when they come
+static void name_parents(ls_node *n, const cm_commit *c) {
+	for (size_t i = 0; i < c->parents_length; i++) {
+		commit *p = commit_find(n, c->parents[i]);
+		if (p != NULL) p->named = true;
+		else {
+			memcpy(n->named[n->named_at], c->parents[i], 8);
+			n->named_at = (n->named_at + 1) % NAMED;
+			if (n->named_n < NAMED) n->named_n++;
+		}
+	}
+}
+static bool named_before(const ls_node *n, const uint8_t name[CM_NAME]) {
+	for (unsigned i = 0; i < n->named_n; i++)
+		if (memcmp(n->named[i], name, 8) == 0) return true;
+	return false;
+}
+
+// the parents of many commits taken at once (a load, a commits message), in any order: kept in a list
+// till all are in, then marked (more than NAMED out of order would be missed)
+typedef struct {
+	uint8_t (*names)[CM_NAME];
+	size_t n, cap;
+} parents_seen;
+static void parents_add(parents_seen *ps, const cm_commit *c) {
+	for (size_t i = 0; i < c->parents_length; i++) {
+		if (ps->n == ps->cap) {
+			ps->cap = ps->cap ? ps->cap * 2 : 8;
+			ps->names = realloc(ps->names, ps->cap * CM_NAME);
+			if (ps->names == NULL) abort();
+		}
+		memcpy(ps->names[ps->n++], c->parents[i], CM_NAME);
+	}
+}
+static void parents_mark(ls_node *n, parents_seen *ps) {
+	for (size_t i = 0; i < ps->n; i++) {
+		commit *p = commit_find(n, ps->names[i]);
+		if (p != NULL) p->named = true;
+	}
+	free(ps->names);
 }
 
 // a commit made or received (its patches decoded, sealed bytes the seal's): applied when any patch
@@ -547,7 +624,7 @@ static commit *take_commit(ls_node *n, const uint8_t name[CM_NAME], const uint8_
 	memcpy(k->name, name, CM_NAME);
 	k->lamport = c->lamport;
 	k->own = own;
-	k->sent = INT64_MIN / 2;
+	for (unsigned i = 0; i < LS_LINKS; i++) k->sent[i] = INT64_MIN / 2;
 	k->refs = 1; // while it is being applied
 	bool any = false;
 	for (size_t i = 0; i < c->patches_length; i++) {
@@ -564,7 +641,7 @@ static commit *take_commit(ls_node *n, const uint8_t name[CM_NAME], const uint8_
 		if (apply_patch(n, path, bytes, p->place.length, p->value, p->has_value, c->lamport, k)) any = true;
 		free(path);
 	}
-	if (c->lamport > n->lamport) n->lamport = c->lamport;
+	name_parents(n, c);
 	if (any) {
 		n->version++;
 		n->dirty = true;
@@ -574,6 +651,11 @@ static commit *take_commit(ls_node *n, const uint8_t name[CM_NAME], const uint8_
 		free(k);
 		return NULL;
 	}
+	// the highest commit taken holds a stamp for good (nothing beats it): the highest seen is a held
+	// one, and a head, so a write's lamport is 1 + its parents' highest (one with no patches, held by
+	// nothing, does not count)
+	if (c->lamport > n->lamport) n->lamport = c->lamport;
+	k->named = named_before(n, name);
 	k->sealed = allocate(length);
 	memcpy(k->sealed, sealed, length);
 	k->length = length;
@@ -590,17 +672,23 @@ static commit *take_commit(ls_node *n, const uint8_t name[CM_NAME], const uint8_
 
 static void blob_name(const ls_node *n, char *out) { snprintf(out, 16 + LS_ID_LEN, "node:%s", n->id); }
 
-static void save_node(ls_node *n) {
-	ls_dev *d = n->dev;
-	n->dirty = false;
-	n->saved = d->now;
+// what the store keeps for a node: {lamport, commits: [seal]}, malloc'd
+static uint8_t *node_blob(const ls_node *n, size_t *len) {
 	Json *m = jsonObject(), *list = jsonArray();
 	jsonAdd(m, "lamport", jsonNumber((double)n->lamport));
 	for (size_t i = 0; i < n->n_commits; i++) jsonPush(list, jsonBytes(n->commits[i]->sealed, n->commits[i]->length));
 	jsonAdd(m, "commits", list);
-	size_t len;
-	uint8_t *b = encode(m, &len);
+	uint8_t *b = encode(m, len);
 	jsonFree(m);
+	return b;
+}
+
+static void save_node(ls_node *n) {
+	ls_dev *d = n->dev;
+	n->dirty = false;
+	n->saved = d->now;
+	size_t len;
+	uint8_t *b = node_blob(n, &len);
 	char name[16 + LS_ID_LEN];
 	blob_name(n, name);
 	if (b != NULL) d->o.store.save(d->o.store.context, name, b, len);
@@ -616,7 +704,8 @@ static void load_node(ls_node *n) {
 	if (!d->o.store.load(d->o.store.context, name, &b, &len)) return;
 	Json *m = cborDecode(b, len, NULL, NULL);
 	free(b);
-	const Json *list = m != NULL ? jsonGet(m, "commits") : NULL, *lamport = m != NULL ? jsonGet(m, "lamport") : NULL;
+	const Json *list = m != NULL ? jsonGet(m, "commits") : NULL;
+	parents_seen ps = {0};
 	if (list != NULL && list->type == JSON_ARRAY)
 		for (int i = 0; i < list->array.count; i++) {
 			const Json *s = list->array.items[i];
@@ -624,13 +713,13 @@ static void load_node(ls_node *n) {
 			// our own store: not checked again
 			if (s->type != JSON_BYTES || open_seal(d, s->bytes.data, s->bytes.length, n->doc, false, &o) != 2) continue;
 			if (!seen(n, o.name) && refusal(&o.c) == NULL) {
-				commit *k = take_commit(n, o.name, s->bytes.data, s->bytes.length, &o.c, memcmp(o.c.signer, d->key, LS_KEY_LEN) == 0);
-				(void)k;
+				take_commit(n, o.name, s->bytes.data, s->bytes.length, &o.c, memcmp(o.c.signer, d->key, LS_KEY_LEN) == 0);
+				parents_add(&ps, &o.c);
 			}
 			cm_free(&o.c);
 		}
-	int64_t l;
-	if (lamport != NULL && jsonIsWhole(lamport, &l) && l > n->lamport) n->lamport = l;
+	parents_mark(n, &ps);
+	// the saved "lamport" is not read back: the commits held say it (take_commit)
 	jsonFree(m);
 	n->dirty = false;
 }
@@ -664,7 +753,8 @@ ls_node *ls_follow(ls_dev *d, const char *id) {
 	d->nodes = realloc(d->nodes, (d->n_nodes + 1) * sizeof *d->nodes);
 	if (d->nodes == NULL) abort();
 	d->nodes[d->n_nodes++] = n;
-	if (d->up) send_heads(n, false);
+	for (unsigned i = 0; i < LS_LINKS; i++)
+		if (d->links[i] != NULL && d->links[i]->up) send_heads(n, d->links[i], false);
 	return n;
 }
 
@@ -673,6 +763,43 @@ const op_value *ls_value(const ls_node *n) { return n->value; }
 uint32_t ls_version(const ls_node *n) { return n->version; }
 size_t ls_commits(const ls_node *n) { return n->n_commits; }
 int64_t ls_lamport(const ls_node *n) { return n->lamport; }
+
+// the bytes a value takes encoded (0: none)
+static size_t encoded(const Json *j) {
+	size_t k = 0;
+	if (j == NULL || !cborEncode(j, NULL, 0, &k, NULL)) return 0;
+	return k;
+}
+
+ls_cost ls_cost_of(const ls_node *n) {
+	ls_cost c = {0};
+	size_t len;
+	free(node_blob(n, &len));
+	c.stored = len;
+	c.commits = n->n_commits;
+	const commit *top = NULL;
+	for (size_t i = 0; i < n->n_commits; i++) {
+		c.seals += n->commits[i]->length;
+		if (top == NULL || stamp_cmp(n->commits[i]->lamport, n->commits[i]->name, top->lamport, top->name) > 0) top = n->commits[i];
+	}
+	if (top == NULL) return c;
+	c.newest.length = top->length;
+	Json *x = cborDecode(top->sealed, top->length, NULL, NULL);
+	const Json *b = x != NULL ? jsonGet(x, "commit") : NULL;
+	Json *j = b != NULL && b->type == JSON_BYTES ? cborDecode(b->bytes.data, b->bytes.length, NULL, NULL) : NULL;
+	if (j != NULL) {
+		c.newest.signature = encoded(jsonGet(x, "signature"));
+		c.newest.signer = encoded(jsonGet(j, "signer"));
+		const Json *parents = jsonGet(j, "parents");
+		c.newest.parents = parents != NULL && parents->type == JSON_ARRAY ? (size_t)parents->array.count : 0;
+		c.newest.parents_bytes = encoded(parents);
+		c.newest.patches = encoded(jsonGet(j, "patches"));
+		c.newest.rest = c.newest.length - c.newest.signature - c.newest.signer - c.newest.parents_bytes - c.newest.patches;
+	}
+	jsonFree(j);
+	jsonFree(x);
+	return c;
+}
 
 static void node_free(ls_node *n) {
 	op_free(n->value);
@@ -687,17 +814,24 @@ static void node_free(ls_node *n) {
 
 // ---- writing
 
+// a write's parents: the held commits no commit taken in names (the heads, as far as this device can
+// tell), the highest lamports first when there are more than LS_MAX_PARENTS; the highest held always
+// (a write's lamport is 1 + its). In name order
 static void heads_parents(const ls_node *n, const uint8_t (**out)[CM_NAME], size_t *count) {
-	// up to LS_MAX_PARENTS of the highest lamports, in name order
 	const commit **all = allocate((n->n_commits + 1) * sizeof *all);
-	memcpy(all, n->commits, n->n_commits * sizeof *all);
-	for (size_t i = 1; i < n->n_commits; i++) {
-		const commit *c = all[i];
-		size_t k = i;
-		for (; k > 0 && all[k - 1]->lamport < c->lamport; k--) all[k] = all[k - 1];
+	const commit *top = NULL;
+	for (size_t i = 0; i < n->n_commits; i++)
+		if (top == NULL || stamp_cmp(n->commits[i]->lamport, n->commits[i]->name, top->lamport, top->name) > 0) top = n->commits[i];
+	size_t m = 0;
+	if (top != NULL) all[m++] = top;
+	for (size_t i = 0; i < n->n_commits; i++) {
+		const commit *c = n->commits[i];
+		if (c->named || c == top) continue;
+		size_t k = m++;
+		for (; k > 1 && stamp_cmp(all[k - 1]->lamport, all[k - 1]->name, c->lamport, c->name) < 0; k--) all[k] = all[k - 1];
 		all[k] = c;
 	}
-	size_t m = n->n_commits < LS_MAX_PARENTS ? n->n_commits : LS_MAX_PARENTS;
+	if (m > LS_MAX_PARENTS) m = LS_MAX_PARENTS;
 	for (size_t i = 1; i < m; i++) {
 		const commit *c = all[i];
 		size_t k = i;
@@ -780,6 +914,8 @@ ls_code ls_write(ls_node *n, const ls_patch *patches, size_t count) {
 	if (sealed == NULL || cm_decode(bytes, length, &c, NULL) != CM_OK) return free(bytes), free(sealed), LS_BAD;
 	free(bytes);
 	if (refusal(&c) != NULL) return free(sealed), cm_free(&c), LS_BAD;
+	// a seal that can't go in one message would be sent, dropped by the peer and sent again forever
+	if (slength > CHUNK) return free(sealed), cm_free(&c), LS_BAD;
 	// a write is this device's next stored commit: what it held goes
 	drop_hold(n);
 	held_landed(n, d->key, LS_KEY_LEN, c.lamport);
@@ -787,7 +923,9 @@ ls_code ls_write(ls_node *n, const ls_patch *patches, size_t count) {
 	cm_free(&c);
 	free(sealed);
 	n->version++;
-	if (k != NULL && d->up) send_commits(n, &k, 1);
+	if (k != NULL)
+		for (unsigned i = 0; i < LS_LINKS; i++)
+			if (d->links[i] != NULL && d->links[i]->up) send_commits(n, d->links[i], &k, 1);
 	return LS_OK;
 }
 
@@ -804,16 +942,25 @@ ls_code ls_del(ls_node *n, const char *key) { return ls_set(n, key, NULL); }
 
 // ---- held values
 
-static void send_hold(ls_node *n) {
+// an unsealed commit to every link that is up but `except`: the device's own hold goes to all, one taken in
+// from a link goes on to the others
+static void send_ephemeral(ls_node *n, const struct ls_link *except, const uint8_t *bytes, size_t length) {
 	ls_dev *d = n->dev;
-	n->hold_sent = d->now;
+	for (unsigned i = 0; i < LS_LINKS; i++) {
+		struct ls_link *l = d->links[i];
+		if (l == NULL || l == except || !l->up) continue;
+		Json *m = message("ephemeral");
+		jsonAdd(m, "node", jsonBytes(n->doc, 32));
+		jsonAdd(m, "commit", jsonBytes(bytes, length));
+		say(d, "tx ephemeral %.8s", short_id(n));
+		send_message(l, m);
+	}
+}
+
+static void send_hold(ls_node *n) {
+	n->hold_sent = n->dev->now;
 	n->hold_dirty = false;
-	if (!d->up || n->hold == NULL) return;
-	Json *m = message("ephemeral");
-	jsonAdd(m, "node", jsonBytes(n->doc, 32));
-	jsonAdd(m, "commit", jsonBytes(n->hold, n->hold_length));
-	say(d, "tx ephemeral %.8s", short_id(n));
-	send_message(d, m);
+	if (n->hold != NULL) send_ephemeral(n, NULL, n->hold, n->hold_length);
 }
 
 ls_code ls_hold(ls_node *n, const op_value *value) {
@@ -865,26 +1012,35 @@ static const Json *field(const Json *m, const char *key, JsonType type) {
 }
 static bool is_name(const Json *b) { return b != NULL && b->type == JSON_BYTES && b->bytes.length == CM_NAME; }
 
-static void to_peer_up(ls_dev *d) {
-	d->up = true;
-	d->heard = d->now;
+static void to_peer_up(struct ls_link *l) {
+	l->up = true;
+	l->heard = l->dev->now;
 }
 
-static void on_hello(ls_dev *d, const Json *m) {
+// a link slot's marks cleared: no commit has been sent on it or acked by it
+static void forget_slot(ls_dev *d, unsigned slot) {
+	for (size_t i = 0; i < d->n_nodes; i++)
+		for (size_t k = 0; k < d->nodes[i]->n_commits; k++) {
+			d->nodes[i]->commits[k]->acked &= (uint8_t)~(1u << slot);
+			d->nodes[i]->commits[k]->sent[slot] = INT64_MIN / 2;
+		}
+}
+
+static void on_hello(struct ls_link *l, const Json *m) {
+	ls_dev *d = l->dev;
 	const Json *key = field(m, "key", JSON_BYTES), *stack = field(m, "stack", JSON_STRING);
 	if (key == NULL || key->bytes.length != LS_KEY_LEN || stack == NULL || strncmp(stack->string, "littlesync/", 11) != 0) return;
-	memcpy(d->peer, key->bytes.data, LS_KEY_LEN);
-	d->has_peer = true;
+	memcpy(l->peer, key->bytes.data, LS_KEY_LEN);
+	l->has_peer = true;
 	const Json *re = jsonGet(m, "re");
-	bool is_re = re != NULL && re->type == JSON_BOOLEAN && re->boolean, was = d->up;
+	bool is_re = re != NULL && re->type == JSON_BOOLEAN && re->boolean, was = l->up;
 	say(d, "rx hello%s", is_re ? " re" : "");
-	to_peer_up(d);
+	to_peer_up(l);
 	if (is_re && was) return;
 	// a peer that has begun again knows nothing of ours
-	for (size_t i = 0; i < d->n_nodes; i++)
-		for (size_t k = 0; k < d->nodes[i]->n_commits; k++) d->nodes[i]->commits[k]->acked = false;
-	send_hello(d, !is_re);
-	for (size_t i = 0; i < d->n_nodes; i++) send_heads(d->nodes[i], false);
+	forget_slot(d, l->slot);
+	send_hello(l, !is_re);
+	for (size_t i = 0; i < d->n_nodes; i++) send_heads(d->nodes[i], l, false);
 }
 
 static bool in_list(const Json *list, const uint8_t name[CM_NAME]) {
@@ -893,7 +1049,8 @@ static bool in_list(const Json *list, const uint8_t name[CM_NAME]) {
 	return false;
 }
 
-static void on_heads(ls_dev *d, const Json *m) {
+static void on_heads(struct ls_link *l, const Json *m) {
+	ls_dev *d = l->dev;
 	ls_node *n = by_doc(d, jsonGet(m, "node"));
 	const Json *heads = field(m, "heads", JSON_ARRAY), *re = jsonGet(m, "re");
 	if (n == NULL || heads == NULL) return;
@@ -904,21 +1061,22 @@ static void on_heads(ls_dev *d, const Json *m) {
 		const Json *h = heads->array.items[i];
 		if (!is_name(h)) continue;
 		commit *c = commit_find(n, h->bytes.data);
-		if (c != NULL) c->acked = true;
+		if (c != NULL) c->acked |= (uint8_t)(1u << l->slot);
 		else if (!seen(n, h->bytes.data)) memcpy(lack[lacking++], h->bytes.data, CM_NAME);
 	}
-	if (lacking) send_names(n, "want", (const uint8_t(*)[CM_NAME])lack, lacking);
+	if (lacking) send_names(n, l, "want", (const uint8_t(*)[CM_NAME])lack, lacking);
 	free(lack);
 	if (re != NULL && re->type == JSON_BOOLEAN && re->boolean) return;
 	// the sender lacks some of ours: ours, once
 	for (size_t i = 0; i < n->n_commits; i++)
 		if (!in_list(heads, n->commits[i]->name)) {
-			send_heads(n, true);
+			send_heads(n, l, true);
 			return;
 		}
 }
 
-static void on_want(ls_dev *d, const Json *m) {
+static void on_want(struct ls_link *l, const Json *m) {
+	ls_dev *d = l->dev;
 	ls_node *n = by_doc(d, jsonGet(m, "node"));
 	const Json *names = field(m, "names", JSON_ARRAY);
 	if (n == NULL || names == NULL) return;
@@ -930,26 +1088,32 @@ static void on_want(ls_dev *d, const Json *m) {
 			commit *c = commit_find(n, names->array.items[i]->bytes.data);
 			if (c != NULL) list[k++] = c;
 		}
-	if (k) send_commits(n, list, k);
+	if (k) send_commits(n, l, list, k);
 	free(list);
 }
 
-static void on_commits(ls_dev *d, const Json *m) {
+static void on_commits(struct ls_link *l, const Json *m) {
+	ls_dev *d = l->dev;
 	ls_node *n = by_doc(d, jsonGet(m, "node"));
 	const Json *sealed = field(m, "sealed", JSON_ARRAY);
 	if (n == NULL || sealed == NULL) return;
 	say(d, "rx commits %.8s %d", short_id(n), sealed->array.count);
 	uint8_t(*took)[CM_NAME] = allocate((size_t)sealed->array.count * CM_NAME + CM_NAME);
 	size_t k = 0;
+	bool news = false;
+	uint8_t bit = (uint8_t)(1u << l->slot);
+	parents_seen ps = {0};
 	for (int i = 0; i < sealed->array.count; i++) {
 		const Json *s = sealed->array.items[i];
 		uint8_t name[CM_NAME];
 		if (s->type != JSON_BYTES || !peek_name(s->bytes.data, s->bytes.length, name)) {
-			d->stats.junk++;
+			l->traffic.junk++;
 			continue;
 		}
 		d->stats.commits_in++;
 		if (seen(n, name)) {
+			commit *c = commit_find(n, name);
+			if (c != NULL) c->acked |= bit;
 			memcpy(took[k++], name, CM_NAME);
 			continue;
 		}
@@ -970,16 +1134,24 @@ static void on_commits(ls_dev *d, const Json *m) {
 		} else {
 			held_landed(n, o.c.signer, o.c.signer_length, o.c.lamport);
 			commit *c = take_commit(n, name, s->bytes.data, s->bytes.length, &o.c, false);
+			parents_add(&ps, &o.c);
 			d->stats.applied++;
-			if (c != NULL) c->acked = true;
+			if (c != NULL) c->acked |= bit;
+			news = true;
 		}
 		cm_free(&o.c);
 	}
-	if (k) send_names(n, "ack", (const uint8_t(*)[CM_NAME])took, k);
+	parents_mark(n, &ps);
+	if (k) send_names(n, l, "ack", (const uint8_t(*)[CM_NAME])took, k);
 	free(took);
+	// a relay: the other peers are told what the node is now, and want what they lack (never this link)
+	if (news)
+		for (unsigned i = 0; i < LS_LINKS; i++)
+			if (d->links[i] != NULL && d->links[i] != l && d->links[i]->up) send_heads(n, d->links[i], false);
 }
 
-static void on_ack(ls_dev *d, const Json *m) {
+static void on_ack(struct ls_link *l, const Json *m) {
+	ls_dev *d = l->dev;
 	ls_node *n = by_doc(d, jsonGet(m, "node"));
 	const Json *names = field(m, "names", JSON_ARRAY);
 	if (n == NULL || names == NULL) return;
@@ -987,11 +1159,12 @@ static void on_ack(ls_dev *d, const Json *m) {
 	for (int i = 0; i < names->array.count; i++)
 		if (is_name(names->array.items[i])) {
 			commit *c = commit_find(n, names->array.items[i]->bytes.data);
-			if (c != NULL) c->acked = true;
+			if (c != NULL) c->acked |= (uint8_t)(1u << l->slot);
 		}
 }
 
-static void on_ephemeral(ls_dev *d, const Json *m) {
+static void on_ephemeral(struct ls_link *l, const Json *m) {
+	ls_dev *d = l->dev;
 	ls_node *n = by_doc(d, jsonGet(m, "node"));
 	const Json *b = field(m, "commit", JSON_BYTES);
 	if (n == NULL || b == NULL) return;
@@ -1000,74 +1173,76 @@ static void on_ephemeral(ls_dev *d, const Json *m) {
 	if (c.patches_length == 1 && c.patches[0].place.length == 0 && c.patches[0].has_value &&
 		c.patches[0].value != NULL && c.signer_length == LS_KEY_LEN && memcmp(c.signer, d->key, LS_KEY_LEN) != 0) {
 		ls_held *h = held_of(n, c.signer, c.signer_length, true);
-		if (c.lamport > h->last) {
+		if (h != NULL && c.lamport > h->last) {
 			op_value *v = copy(c.patches[0].value, 0);
 			if (v != NULL) {
 				op_free(h->value);
 				h->value = v;
 				h->expires = d->now + LS_HELD_MS;
 				n->version++;
+				// still unsealed, on to the other peers (a ring of links would carry it round for ever)
+				if (others_up(d, l)) send_ephemeral(n, l, b->bytes.data, b->bytes.length);
 			}
 		}
 	}
 	cm_free(&c);
 }
 
-static void on_message(ls_dev *d, const uint8_t *bytes, size_t length) {
+static void on_message(struct ls_link *l, const uint8_t *bytes, size_t length) {
 	Json *m = cborDecode(bytes, length, NULL, NULL);
 	const Json *t = m != NULL && m->type == JSON_OBJECT ? field(m, "t", JSON_STRING) : NULL;
 	if (t == NULL) {
-		d->stats.junk++;
+		l->traffic.junk++;
 		jsonFree(m);
 		return;
 	}
-	d->stats.frames_in++;
+	l->traffic.frames_in++;
 	bool hello = strcmp(t->string, "hello") == 0;
-	if (!d->up && !hello) {
+	if (!l->up && !hello) {
 		// a peer that thinks we are up: it is told we are here, and says hello back
-		to_peer_up(d);
-		send_hello(d, false);
+		to_peer_up(l);
+		send_hello(l, false);
 	}
-	d->heard = d->now;
-	if (hello) on_hello(d, m);
-	else if (strcmp(t->string, "heads") == 0) on_heads(d, m);
-	else if (strcmp(t->string, "want") == 0) on_want(d, m);
-	else if (strcmp(t->string, "commits") == 0) on_commits(d, m);
-	else if (strcmp(t->string, "ack") == 0) on_ack(d, m);
-	else if (strcmp(t->string, "ephemeral") == 0) on_ephemeral(d, m);
+	l->heard = l->dev->now;
+	if (hello) on_hello(l, m);
+	else if (strcmp(t->string, "heads") == 0) on_heads(l, m);
+	else if (strcmp(t->string, "want") == 0) on_want(l, m);
+	else if (strcmp(t->string, "commits") == 0) on_commits(l, m);
+	else if (strcmp(t->string, "ack") == 0) on_ack(l, m);
+	else if (strcmp(t->string, "ephemeral") == 0) on_ephemeral(l, m);
 	jsonFree(m);
 }
 
-void ls_feed(ls_dev *d, const uint8_t *bytes, size_t length) {
+void ls_feed(struct ls_link *l, const uint8_t *bytes, size_t length) {
 	for (size_t i = 0; i < length; i++) {
 		uint8_t b = bytes[i];
 		if (b != 0) {
-			if (d->rx_n < LS_FRAME_MAX) d->rx[d->rx_n++] = b;
-			else d->rx_over = true;
+			if (l->rx_n < LS_FRAME_MAX) l->rx[l->rx_n++] = b;
+			else l->rx_over = true;
 			continue;
 		}
 		// a zero ends what came before it (a frame, or text that was no frame) and begins the next
-		if (d->rx_n > 0) {
+		if (l->rx_n > 0) {
 			const uint8_t *message;
 			size_t n;
-			if (!d->rx_over && ls_unframe(d->rx, d->rx_n, &message, &n)) on_message(d, message, n);
-			else d->stats.junk++;
+			if (!l->rx_over && ls_unframe(l->rx, l->rx_n, &message, &n)) on_message(l, message, n);
+			else l->traffic.junk++;
 		}
-		d->rx_n = 0;
-		d->rx_over = false;
+		l->rx_n = 0;
+		l->rx_over = false;
 	}
 }
 
-size_t ls_next(ls_dev *d, const uint8_t **out) {
-	size_t n = d->out_used;
-	d->out_used = 0;
+size_t ls_next(struct ls_link *l, const uint8_t **out) {
+	size_t n = l->out_used;
+	l->out_used = 0;
 	// room taken up by a big burst is given back
-	if (n == 0 && d->out_cap > 4096) {
-		free(d->out);
-		d->out = NULL;
-		d->out_cap = 0;
+	if (n == 0 && l->out_cap > 4096) {
+		free(l->out);
+		l->out = NULL;
+		l->out_cap = 0;
 	}
-	*out = d->out;
+	*out = l->out;
 	return n;
 }
 
@@ -1075,15 +1250,21 @@ size_t ls_next(ls_dev *d, const uint8_t **out) {
 
 void ls_tick(ls_dev *d, int64_t now) {
 	d->now = now;
-	if (d->up && now - d->heard > 8000) {
-		d->up = false;
-		say(d, "peer silent");
+	bool beat[LS_LINKS] = {false}, any = false;
+	for (unsigned i = 0; i < LS_LINKS; i++) {
+		struct ls_link *l = d->links[i];
+		if (l == NULL) continue;
+		if (l->up && now - l->heard > 8000) {
+			l->up = false;
+			say(d, "peer silent");
+		}
+		if (!l->up) {
+			if (now - l->hello_sent >= 2000) send_hello(l, false);
+		} else if (now - l->hello_sent >= 4000) send_hello(l, true);
+		beat[i] = l->up && now - l->heads_sent >= 10000;
+		if (beat[i]) l->heads_sent = now;
+		any |= l->up;
 	}
-	if (!d->up) {
-		if (now - d->hello_sent >= 2000) send_hello(d, false);
-	} else if (now - d->hello_sent >= 4000) send_hello(d, true);
-	bool beat = d->up && now - d->heads_sent >= 10000;
-	if (beat) d->heads_sent = now;
 	for (size_t i = 0; i < d->n_nodes; i++) {
 		ls_node *n = d->nodes[i];
 		for (int k = 0; k < HELDS; k++) {
@@ -1094,26 +1275,50 @@ void ls_tick(ls_dev *d, int64_t now) {
 				n->version++;
 			}
 		}
-		if (n->hold != NULL && d->up && (now - n->hold_sent >= LS_BEAT_MS || (n->hold_dirty && now - n->hold_sent >= 50)))
+		if (n->hold != NULL && any && (now - n->hold_sent >= LS_BEAT_MS || (n->hold_dirty && now - n->hold_sent >= 50)))
 			send_hold(n);
-		if (d->up) {
-			// own commits the peer has not said it has
+		for (unsigned s = 0; s < LS_LINKS; s++) {
+			struct ls_link *l = d->links[s];
+			if (l == NULL || !l->up) continue;
+			// own commits this peer has not said it has
 			commit **list = NULL;
 			size_t k = 0;
 			for (size_t c = 0; c < n->n_commits; c++) {
 				commit *x = n->commits[c];
-				if (x->own && !x->acked && now - x->sent >= 1000) {
+				if (x->own && !(x->acked & (1u << s)) && now - x->sent[s] >= 1000) {
 					list = realloc(list, (k + 1) * sizeof *list);
 					if (list == NULL) abort();
 					list[k++] = x;
 				}
 			}
-			if (k) send_commits(n, list, k);
+			if (k) send_commits(n, l, list, k);
 			free(list);
-			if (beat) send_heads(n, false);
+			if (beat[s]) send_heads(n, l, false);
 		}
 		if (n->dirty && now - n->saved >= (d->o.save_ms ? d->o.save_ms : 2000)) save_node(n);
 	}
+}
+
+// ---- links
+
+struct ls_link *ls_link(ls_dev *d) {
+	unsigned slot = 0;
+	while (slot < LS_LINKS && d->links[slot] != NULL) slot++;
+	if (slot == LS_LINKS) return NULL;
+	struct ls_link *l = allocate(sizeof *l);
+	l->dev = d;
+	l->slot = slot;
+	l->hello_sent = INT64_MIN / 2;
+	forget_slot(d, slot);
+	d->links[slot] = l;
+	return l;
+}
+
+void ls_unlink(struct ls_link *l) {
+	if (l == NULL) return;
+	l->dev->links[l->slot] = NULL;
+	free(l->out);
+	free(l);
 }
 
 // ---- the device
@@ -1141,7 +1346,6 @@ ls_dev *ls_open(const ls_options *o) {
 	uint8_t r[4];
 	o->random(o->random_context, r, 4);
 	d->nonce = (uint32_t)r[0] | (uint32_t)r[1] << 8 | (uint32_t)r[2] << 16 | (uint32_t)r[3] << 24;
-	d->hello_sent = INT64_MIN / 2;
 	return d;
 }
 
@@ -1152,12 +1356,13 @@ void ls_close(ls_dev *d) {
 		node_free(d->nodes[i]);
 	}
 	free(d->nodes);
-	free(d->out);
+	for (unsigned i = 0; i < LS_LINKS; i++) ls_unlink(d->links[i]);
 	free(d);
 }
 
 const uint8_t *ls_key(const ls_dev *d) { return d->key; }
-const uint8_t *ls_peer(const ls_dev *d) { return d->has_peer ? d->peer : NULL; }
-int ls_up(const ls_dev *d) { return d->up; }
+const uint8_t *ls_peer(const struct ls_link *l) { return l->has_peer ? l->peer : NULL; }
+int ls_up(const struct ls_link *l) { return l->up; }
+const ls_traffic *ls_traffic_of(const struct ls_link *l) { return &l->traffic; }
 const ls_stats *ls_stats_of(const ls_dev *d) { return &d->stats; }
 const char *ls_reason(const ls_dev *d) { return d->reason != NULL ? d->reason : ""; }

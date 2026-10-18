@@ -1,6 +1,7 @@
 // Places (places.h), in C.
 #include "places.h"
 #include "../../../core/scheduler/c/ptrmap.h"
+#include "../../../core/unread/c/unread.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -89,6 +90,8 @@ typedef struct {
 	// the watches by the id they are at, and by each id on their route: buckets, by (a tag, the id)
 	tb_table *by_id, *on_route;
 	size_t seqs, epochs;
+	// the one unread children's writes go through (pl_unread)
+	un_unread *unread;
 	// the entries pl_upsert made: the places', let go of at pl_free
 	nd_entry **owned;
 	size_t nowned, capowned;
@@ -165,6 +168,8 @@ pl *pl_new(void) {
 	l->s->by_id = tb_new();
 	l->s->on_route = tb_new();
 	l->s->kept = tb_new();
+	l->s->unread = un_new();
+	if (l->s->unread == NULL) abort();
 	return l;
 }
 
@@ -195,6 +200,8 @@ pl *pl_view(pl *l, tb_key root, const pl_contributor *const *contributors, size_
 }
 
 tb_key pl_root(const pl *l) { return l->root; }
+
+un_unread *pl_unread(pl *l) { return l->s->unread; }
 
 const pl_contributor *const *pl_contributors(const pl *l, size_t *n) {
 	*n = l->given ? l->nasked : 0;
@@ -233,6 +240,7 @@ void pl_free(pl *l) {
 	free_dead(l);
 	for (size_t i = 0; i < s->nowned; i++) nd_free_entry(s->owned[i]);
 	free(s->owned);
+	un_free(s->unread);
 	pm_clear(&s->holds);
 	// blocks still held elsewhere outlive the places: they forget it
 	for (struct pl_made *m = s->mades; m != NULL; m = m->next) m->s = NULL;
@@ -1364,7 +1372,7 @@ static void block_free(void *b) {
 // the patches of a block, applied to the entry and held by it
 static void write(pl *l, nd_entry *entry, block *b, ch_header header, pl_changed *changed) {
 	size_t failed;
-	int code = nd_update(entry, b->patches, b->n, header, &failed);
+	int code = un_update(l->s->unread, entry, b->patches, b->n, header, &failed);
 	if (code != OP_OK) {
 		fprintf(stderr, "places: write: %s\n", op_code_name(code));
 		abort();
@@ -1532,9 +1540,11 @@ static const op_value *value_at(const op_value *v, const char *const *names, siz
 }
 
 // the one patch of an upsert applied to the entry and held by it
-static void write_one(pl *l, nd_entry *entry, ublock *b, ch_header header, pl_changed *changed) {
+static void write_one(pl *l, nd_entry *entry, ublock *b, ch_header header, pl_changed *changed,
+	int through_unread) {
 	size_t failed;
-	int code = nd_update(entry, &b->patch, 1, header, &failed);
+	int code = through_unread ? un_update(l->s->unread, entry, &b->patch, 1, header, &failed)
+					  : nd_update(entry, &b->patch, 1, header, &failed);
 	if (code != OP_OK) {
 		fprintf(stderr, "places: upsert: %s\n", op_code_name(code));
 		abort();
@@ -1552,14 +1562,14 @@ void pl_own(pl *l, nd_entry *node) {
 	l->s->owned[l->s->nowned++] = node;
 }
 
-int pl_upsert(pl *l, tb_key part, tb_key id, const char *const *path, size_t n,
-	const op_value *value, ch_header header, pl_changed *changed, nd_entry **made) {
+static int upsert(pl *l, tb_key part, tb_key id, const char *const *path, size_t n,
+	const op_value *value, ch_header header, pl_changed *changed, nd_entry **made, int through_unread) {
 	*changed = (pl_changed){0};
 	if (made != NULL) *made = NULL;
 	nd_entry *there = tb_get(l->s->table, part, id);
 	if (there == NULL) {
 		op_value *nested = nest(path, n, value);
-		nd_entry *node = nd_make_entry(nested, &header, NULL);
+		nd_entry *node = nd_make_entry(nested, &header);
 		op_free(nested);
 		pl_own(l, node);
 		if (made != NULL) *made = node;
@@ -1593,8 +1603,18 @@ int pl_upsert(pl *l, tb_key part, tb_key id, const char *const *path, size_t n,
 	}
 	b->value = nest(path + at, n - at, value);
 	b->patch = (op_patch){.place = {.path = b->keys, .length = at}, .has_value = 1, .value = b->value};
-	write_one(l, there, b, header, changed);
+	write_one(l, there, b, header, changed, through_unread);
 	return 0;
+}
+
+int pl_upsert(pl *l, tb_key part, tb_key id, const char *const *path, size_t n,
+	const op_value *value, ch_header header, pl_changed *changed, nd_entry **made) {
+	return upsert(l, part, id, path, n, value, header, changed, made, 0);
+}
+
+int pl_upsert_unread(pl *l, tb_key part, tb_key id, const char *const *path, size_t n,
+	const op_value *value, ch_header header, pl_changed *changed, nd_entry **made) {
+	return upsert(l, part, id, path, n, value, header, changed, made, 1);
 }
 
 const op_value *pl_get_or_set(pl *l, tb_key part, tb_key id, const char *const *path, size_t n,

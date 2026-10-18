@@ -676,7 +676,7 @@ static void ensure_in(void *data) {
 	pl_made *made;
 	header_now(w, &h, &made);
 	op_value *empty = op_map();
-	nd_entry *node = nd_make_entry(empty, &h, NULL);
+	nd_entry *node = nd_make_entry(empty, &h);
 	op_free(empty);
 	pl_hold(w->places, node, made, pl_made_free);
 	pl_own(w->places, node);

@@ -13,6 +13,7 @@
 // filesystem: a children entry maps names to ids; a name is any string but "", ".", "..", "/".
 // a read is told to the scheduler as a spot (paths.h); outside a run it counts for nothing. a write
 // marks the spots its patches touch; a table event, its key's. reads told (SC_STOP): pl_status.
+// children are written through one unread (pl_unread): a burst of writes to a folder costs one copy.
 // a spot: (source, id); each table part gets one pair, made once, the same address always. spots
 // unread are let go by pl_forget; one read outside a run is never let go.
 // contributors (contributors.org): children (pl_children) plus any given, asked in order per step:
@@ -42,6 +43,7 @@
 #include "../../../core/table/c/table.h"
 #include "../../../core/node/c/node.h"
 #include "../../../core/node/c/update.h"
+#include "../../../core/unread/c/unread.h"
 
 typedef struct pl pl;
 // only the places, so that it can be the ctx of the hooks below
@@ -49,6 +51,10 @@ pl *pl_new(void);
 // its watches stopped, and it let go; with the last of a places and its views (pl_view), the holds,
 // the pairs and what is open; none of what it was connected to
 void pl_free(pl *p);
+// the one unread (core/unread) children writes go through (pl_place and the rest), shared by its views, let
+// go of with the last of them. It lets go only of what it is told is held: a host wires un_keeping to the
+// scheduler, and un_read on an entry it hands on. Unwired, a folder held past a run changes under its holder
+un_unread *pl_unread(pl *p);
 
 // where a walk has got to: the id it is at, its path (the names from the root to it), and gone: the
 // contributors that said none at it or above, never asked under it: a bit each, by its place in the
@@ -178,6 +184,10 @@ int pl_move(pl *p, nd_entry *from, const char *name, nd_entry *into, const char 
 // written. The value is borrowed and held (op_ref) by the entry; the strings are copied; made may
 // be NULL. id and part must outlive the table's entry for them, as the table needs. 0
 int pl_upsert(pl *p, tb_key part, tb_key id, const char *const *path, size_t n,
+	const op_value *value, ch_header header, pl_changed *changed, nd_entry **made);
+// pl_upsert, the write (on an entry there) through pl_unread's un_update: for an entry the caller
+// means changed in place until read, as ermine/processes' trie
+int pl_upsert_unread(pl *p, tb_key part, tb_key id, const char *const *path, size_t n,
 	const op_value *value, ch_header header, pl_changed *changed, nd_entry **made);
 // the value at the path, else make() (a new value: the caller's, which this lets go of) put there as
 // pl_upsert does, with changed and made as there. Gives the value now at the path, borrowed from

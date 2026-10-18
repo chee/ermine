@@ -82,8 +82,7 @@ const isFields = (x: unknown): x is Fields => {
 	return p === Object.prototype || p === null
 }
 // an integer from 0 to 2^53 - 1
-const whole = (n: unknown): n is number =>
-	Number.isSafeInteger(n) && (n as number) >= 0
+const whole = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) >= 0
 const isKey = (k: unknown) => typeof k === "string" || whole(k) && (k as number) >= 0
 const isRange = (r: unknown) =>
 	Array.isArray(r) && r.length === 2 && r.every((n) => whole(n) && n >= 0)

@@ -7,8 +7,8 @@
 // options: {op?: false}, pack.ts's Options; reading: {loosyGoosy?: true}, its Reading
 // answers: {bytes}; {entries, nodes}, the nodes numbered in the order the entries first name them;
 // {node}; or {code, part?, id?} for a PackError
-// A part or an id: a string, or {"symbol": name}, Symbol.for(name). A node: {value?, change,
-// cow?: false}, change {time, actor?, reader?, external?, metadata?, op?}, the value, actor,
+// A part or an id: a string, or {"symbol": name}, Symbol.for(name). A node: {value?, change},
+// change {time, actor?, reader?, external?, metadata?, op?}, the value, actor,
 // reader, metadata (a map) and each patch's value in their JSON form (form.ts)
 import createEntry, { type ChangeHeader, type Entry as NodeEntry } from "@ermine/node/entry"
 import {
@@ -25,7 +25,7 @@ import {
 import { FormError, fromJson, line, toJson } from "./form.ts"
 
 type Fields = Record<string, unknown>
-export type Shown = { value?: unknown; change: Fields; cow?: false }
+export type Shown = { value?: unknown; change: Fields }
 type Request = {
 	op: string
 	entries?: [unknown, unknown, number][]
@@ -62,13 +62,11 @@ const node = (s: Shown): NodeEntry<unknown> =>
 	createEntry(
 		"value" in s ? fromJson(s.value) : undefined,
 		header(s.change, fromJson) as ChangeHeader,
-		s.cow === false ? { cow: false } : {},
 	)
 
 function show(n: NodeEntry<unknown>): Shown {
 	const out: Shown = { change: header(n.change as unknown as Fields, toJson) }
 	if ("value" in n) out.value = toJson(n.value)
-	if (n.cow === false) out.cow = false
 	return out
 }
 

@@ -1,9 +1,8 @@
 // what an object holds after a blop, worked out from its history (APPLY.tex)
 // sides: the patches applied, as mutate applies them to a first version, to the base's side
 import type { Blop } from "@ermine/encoding/blop"
-import createEntry, { type ChangeHeader, type Metadata } from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import { ApplyError } from "@ermine/op/apply"
+import type { ChangeHeader, Metadata } from "@ermine/node/entry"
+import apply, { ApplyError } from "@ermine/op/apply"
 import type { Histories } from "./history.ts"
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
@@ -41,11 +40,8 @@ const base = (blop: Blop) => blop.base ?? blop.parents[0]
 // the side after the blop's patches on before; ApplyError when they do not apply (before as it
 // was). mine: before is owned, and changed in place, the patches copied in so it shares nothing
 function after(blop: Blop, before: unknown, mine = false): unknown {
-	const entry = createEntry(before, { time: 0, actor: blop.actor })
-	if (mine) entry.cow = false
 	const patches = mine ? copy(blop.patches) : blop.patches
-	update(entry, patches as never, { time: 0, actor: blop.actor })
-	const out = entry.value
+	const out = apply(before, patches as never, { cow: !mine })
 	if (mine && typeof out === "object" && out !== null) owned.add(out)
 	return out
 }

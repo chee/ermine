@@ -182,7 +182,7 @@ static nd_entry *made_node(const op_value *r, const op_value *value, op_value **
 	pl_made *made;
 	const char *why;
 	if (header_now(r, &h, &made, &why)) return *out = world_error(why), NULL;
-	nd_entry *node = nd_make_entry((op_value *)value, &h, NULL);
+	nd_entry *node = nd_make_entry((op_value *)value, &h);
 	pl_hold(world_places, node, made, pl_made_free);
 	world_keep_node(node);
 	return node;
@@ -208,7 +208,7 @@ static void edit(const op_value *r, op_value **out) {
 	size_t failed = 0;
 	int code;
 	if (node == NULL) {
-		node = nd_make_entry(NULL, &h, NULL);
+		node = nd_make_entry(NULL, &h);
 		code = nd_update(node, list, count, h, &failed);
 		if (code != OP_OK) nd_free_entry(node);
 		else {

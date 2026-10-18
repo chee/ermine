@@ -108,7 +108,7 @@ ch_header hh_header(const op_value *p) {
 nd_entry *hh_entry(const op_value *p) {
 	const op_value *given = op_get(p, "header");
 	ch_header h = given ? hh_header(given) : (ch_header){0};
-	nd_entry *e = nd_make_entry((op_value *)op_get(p, "value"), &h, NULL);
+	nd_entry *e = nd_make_entry((op_value *)op_get(p, "value"), &h);
 	if (e == NULL) hh_fail("out of memory");
 	return e;
 }
