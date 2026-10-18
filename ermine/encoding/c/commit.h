@@ -5,7 +5,7 @@
 // A commit is a cm_commit: the change header as the graph has it (node.h's ch_header, never an op),
 // and the rest. The rules are written once, on a value in its Json form (json.h): cm_check. A
 // commit that is encoded is checked there, one that is decoded is checked there, and so is a
-// run's column, made into a commit (run.h). Out of memory aborts, as elsewhere. Nothing recurses
+// pack's column, made into a commit (packer.h). Out of memory aborts, as elsewhere. Nothing recurses
 // on a value's depth.
 #ifndef CM_COMMIT_H
 #define CM_COMMIT_H
