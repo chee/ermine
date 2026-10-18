@@ -1650,7 +1650,7 @@ static bool who_of(pl *l, const sc_pair *extra, size_t n, seeing *w) {
 	return true;
 }
 
-op_value *pl_who(pl *l, const sc_pair *extra, size_t n) {
+op_value *pl_change_base(pl *l, const sc_pair *extra, size_t n) {
 	seeing w;
 	if (!who_of(l, extra, n, &w)) return NULL;
 	op_value *who = op_map();

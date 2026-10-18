@@ -105,7 +105,7 @@ static gd_answer asked(gd *g, int told, const char *op, const gd_target *t, cons
 	if (g->may == NULL) return GD_OK;
 	pr_target target = {.part = t->part, .field = t->field, .id = t->thing.id};
 	target.path = t->thing.path, target.npath = t->thing.npath;
-	op_value *who = pl_who(g->places, NULL, 0);
+	op_value *who = pl_change_base(g->places, NULL, 0);
 	pr_ask ask = {.who = who, .op = op, .target = target};
 	if (g->from_given) ask.from.path = g->from, ask.from.npath = g->nfrom;
 	pr_answer a = pr_ask_of(g->may, &ask, told ? told_reader : quiet_reader, g);
