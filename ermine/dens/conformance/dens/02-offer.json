@@ -1,0 +1,348 @@
+{
+	"title": "what a den offers is a node under its own: runners, compilers and surfaces each in a folder of that kind (made at its first offer, named in the den's children), an offer at <den>/<kind>/<name> with the attributes given and ermine.type ermine.runner, ermine.compiler or ermine.surface over them, its value the live function given (none: no value). /system/den reaches them too. a name offered twice is refused taken, one that is not a name is not-a-name. withdrawn: its name out of the folder (kept, empty), its node's entries gone; offered again, the same id",
+	"steps": [
+		{
+			"op": "den",
+			"expect": {
+				"id": "den:mac"
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api",
+				"ermine.runner.where": "thread"
+			},
+			"live": "record",
+			"expect": {
+				"id": "den:mac/runners/javascript",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"expect": {
+				"id": "den:mac/runners/javascript"
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"system",
+				"dens",
+				"mac",
+				"runners",
+				"javascript"
+			],
+			"expect": {
+				"id": "den:mac/runners/javascript"
+			}
+		},
+		{
+			"op": "node",
+			"id": "den:mac/runners/javascript",
+			"expect": {
+				"parts": [
+					"attributes",
+					"value"
+				],
+				"attributes": {
+					"ermine.runner.takes": "com.netscape.javascript-source",
+					"ermine.runner.api": "ermine.api",
+					"ermine.runner.where": "thread",
+					"ermine.type": "ermine.runner"
+				},
+				"status": null,
+				"children": null,
+				"live": true
+			}
+		},
+		{
+			"op": "node",
+			"id": "den:mac/runners",
+			"expect": {
+				"parts": [
+					"children"
+				],
+				"attributes": null,
+				"status": null,
+				"children": {
+					"javascript": "den:mac/runners/javascript"
+				},
+				"live": false
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "compilers",
+			"name": "clang",
+			"attrs": {
+				"ermine.compiler.takes": "public.c-source",
+				"ermine.compiler.gives": "org.webassembly.wasm",
+				"ermine.programs.compiler": {
+					"name": "clang",
+					"version": "1"
+				}
+			},
+			"expect": {
+				"id": "den:mac/compilers/clang",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"compilers",
+					"clang"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "den:mac/compilers/clang",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.compiler.takes": "public.c-source",
+					"ermine.compiler.gives": "org.webassembly.wasm",
+					"ermine.programs.compiler": {
+						"name": "clang",
+						"version": "1"
+					},
+					"ermine.type": "ermine.compiler"
+				},
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "surfaces",
+			"name": "display",
+			"attrs": {
+				"ermine.surface.kind": "pixels",
+				"ermine.surface.size": [
+					320,
+					240
+				]
+			},
+			"expect": {
+				"id": "den:mac/surfaces/display",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"surfaces",
+					"display"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "den:mac/surfaces/display",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.surface.kind": "pixels",
+					"ermine.surface.size": [
+						320,
+						240
+					],
+					"ermine.type": "ermine.surface"
+				},
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "list",
+			"path": [
+				"system",
+				"den"
+			],
+			"expect": {
+				"names": [
+					"compilers",
+					"on",
+					"runners",
+					"surfaces"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"skip": [
+				"parts",
+				"attributes",
+				"status",
+				"live"
+			],
+			"id": "den:mac",
+			"expect": {
+				"children": {
+					"on": "den:mac/on",
+					"runners": "den:mac/runners",
+					"compilers": "den:mac/compilers",
+					"surfaces": "den:mac/surfaces"
+				}
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api",
+				"ermine.runner.where": "thread"
+			},
+			"live": "record",
+			"expect": {
+				"refused": "taken",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api",
+				"ermine.runner.where": "thread"
+			},
+			"expect": {
+				"error": "not-a-name"
+			}
+		},
+		{
+			"op": "withdraw",
+			"id": "den:mac/runners/javascript",
+			"expect": {}
+		},
+		{
+			"op": "here",
+			"path": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "list",
+			"path": [
+				"system",
+				"den",
+				"runners"
+			],
+			"expect": {
+				"names": []
+			}
+		},
+		{
+			"op": "node",
+			"id": "den:mac/runners/javascript",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"id": "den:mac/runners",
+			"expect": {
+				"parts": [
+					"children"
+				],
+				"attributes": null,
+				"status": null,
+				"children": {},
+				"live": false
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api",
+				"ermine.runner.where": "thread"
+			},
+			"live": "record",
+			"expect": {
+				"id": "den:mac/runners/javascript",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "den:mac/runners/javascript",
+			"expect": {
+				"parts": [
+					"attributes",
+					"value"
+				],
+				"attributes": {
+					"ermine.runner.takes": "com.netscape.javascript-source",
+					"ermine.runner.api": "ermine.api",
+					"ermine.runner.where": "thread",
+					"ermine.type": "ermine.runner"
+				},
+				"status": null,
+				"children": null,
+				"live": true
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"expect": {
+				"id": "den:mac/runners/javascript"
+			}
+		}
+	]
+}

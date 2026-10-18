@@ -11,6 +11,7 @@
 		"./filesystem/protect",
 		"./ermine/encoding",
 		"./ermine/processes",
+		"./ermine/dens",
 		"./ermine/boxes",
 		"./extensions/build",
 		"./ermine/types",

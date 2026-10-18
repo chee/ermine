@@ -1,0 +1,261 @@
+{
+	"title": "the den's methods, as any caller would send: on/start's value given { runner, program, at } gives start's answer (a process, or the refusal), on/stop's given { process, reason } gives stop's ({} once stopped, the handle given the reason); the policy asked as for start and stop, who the scope open",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"apps": "APPS"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "APPS",
+			"value": {
+				"clock.js": "CLOCK",
+				"main.c": "CSRC"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "CLOCK",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CLOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "CSRC",
+			"value": "int",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CSRC",
+			"value": {
+				"ermine.type": "public.c-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "rules",
+			"value": [
+				{}
+			],
+			"expect": {}
+		},
+		{
+			"op": "den",
+			"policy": "grants",
+			"expect": {
+				"id": "den:mac"
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api"
+			},
+			"live": "record",
+			"expect": {
+				"id": "den:mac/runners/javascript",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "send",
+			"path": [
+				"system",
+				"den",
+				"on",
+				"start"
+			],
+			"body": {
+				"runner": [
+					"system",
+					"den",
+					"runners",
+					"javascript"
+				],
+				"program": [
+					"apps",
+					"clock.js"
+				],
+				"at": [
+					"work",
+					"clock"
+				],
+				"name": "clock"
+			},
+			"expect": {
+				"id": "proc:clock",
+				"at": [
+					"work",
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"id": "proc:clock"
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "send",
+			"path": [
+				"system",
+				"dens",
+				"mac",
+				"on",
+				"stop"
+			],
+			"body": {
+				"process": "clock",
+				"reason": "SIGTERM"
+			},
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"dev": "mac",
+						"process": "proc:clock",
+						"code": "hi",
+						"args": [],
+						"keys": [
+							"den",
+							"places",
+							"process"
+						]
+					}
+				],
+				"stops": [
+					{
+						"dev": "mac",
+						"process": "proc:clock",
+						"reason": "SIGTERM"
+					}
+				]
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "send",
+			"path": [
+				"system",
+				"den",
+				"on",
+				"start"
+			],
+			"body": {
+				"runner": [
+					"system",
+					"den",
+					"runners",
+					"javascript"
+				],
+				"program": [
+					"apps",
+					"main.c"
+				],
+				"at": [
+					"work",
+					"c"
+				],
+				"name": "c"
+			},
+			"expect": {
+				"refused": "wrong-form",
+				"program": {
+					"type": "public.c-source"
+				},
+				"runner": {
+					"takes": "com.netscape.javascript-source",
+					"api": "ermine.api"
+				}
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"asks": [
+					{
+						"op": "start",
+						"who": {
+							"actor": "mac"
+						},
+						"id": "den:mac/runners/javascript",
+						"path": [
+							"system",
+							"den",
+							"runners",
+							"javascript"
+						]
+					},
+					{
+						"op": "read",
+						"who": {
+							"actor": "mac"
+						},
+						"part": "value",
+						"id": "CLOCK",
+						"path": [
+							"apps",
+							"clock.js"
+						]
+					},
+					{
+						"op": "stop",
+						"who": {
+							"actor": "mac"
+						},
+						"id": "proc:clock",
+						"path": [
+							"work",
+							"clock"
+						]
+					}
+				]
+			}
+		}
+	]
+}

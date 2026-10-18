@@ -1,0 +1,452 @@
+{
+	"title": "stop with a reason: the handle's stop given it, the row out (the saved clock at work/clock seen again: the process shadowed it), the node's entries gone; stopped twice, nothing more. a stop the policy refuses: still running, the ask { stop, the process's id and path } recorded; a stop with no reason: the handle's stop given none. who is the scope open: a start under another actor is refused by a grant for mac",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"apps": "APPS",
+				"work": "WORK"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "APPS",
+			"value": {
+				"clock.js": "CLOCK"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "WORK",
+			"value": {
+				"clock": "SAVED"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "CLOCK",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CLOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "rules",
+			"value": [
+				{}
+			],
+			"expect": {}
+		},
+		{
+			"op": "den",
+			"policy": "grants",
+			"expect": {
+				"id": "den:mac"
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api"
+			},
+			"live": "record",
+			"expect": {
+				"id": "den:mac/runners/javascript",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"id": "SAVED"
+			}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"work",
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"id": "proc:a"
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "stop",
+			"name": "a",
+			"reason": "bye",
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"dev": "mac",
+						"process": "proc:a",
+						"code": "hi",
+						"args": [],
+						"keys": [
+							"den",
+							"places",
+							"process"
+						]
+					}
+				],
+				"stops": [
+					{
+						"dev": "mac",
+						"process": "proc:a",
+						"reason": "bye"
+					}
+				]
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"id": "SAVED"
+			}
+		},
+		{
+			"op": "node",
+			"id": "proc:a",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "stop",
+			"name": "a",
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"dev": "mac",
+						"process": "proc:a",
+						"code": "hi",
+						"args": [],
+						"keys": [
+							"den",
+							"places",
+							"process"
+						]
+					}
+				],
+				"stops": [
+					{
+						"dev": "mac",
+						"process": "proc:a",
+						"reason": "bye"
+					}
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "b",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"id": "proc:b",
+				"at": [
+					"work",
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "rules",
+			"value": [
+				{
+					"op": "start"
+				},
+				{
+					"op": "read"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "asked"
+		},
+		{
+			"op": "stop",
+			"name": "b",
+			"expect": {
+				"refused": "no-permission",
+				"op": "stop",
+				"answer": {
+					"answer": "no",
+					"reason": "no grant"
+				}
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"id": "proc:b"
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"asks": [
+					{
+						"op": "stop",
+						"who": {
+							"actor": "mac"
+						},
+						"id": "proc:b",
+						"path": [
+							"work",
+							"clock"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "value",
+			"id": "rules",
+			"value": [
+				{}
+			],
+			"expect": {}
+		},
+		{
+			"op": "stop",
+			"name": "b",
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"dev": "mac",
+						"process": "proc:a",
+						"code": "hi",
+						"args": [],
+						"keys": [
+							"den",
+							"places",
+							"process"
+						]
+					},
+					{
+						"dev": "mac",
+						"process": "proc:b",
+						"code": "hi",
+						"args": [],
+						"keys": [
+							"den",
+							"places",
+							"process"
+						]
+					}
+				],
+				"stops": [
+					{
+						"dev": "mac",
+						"process": "proc:a",
+						"reason": "bye"
+					},
+					{
+						"dev": "mac",
+						"process": "proc:b",
+						"reason": null
+					}
+				]
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"id": "SAVED"
+			}
+		},
+		{
+			"op": "value",
+			"id": "rules",
+			"value": [
+				{
+					"actor": "mac"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "c",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"c"
+			],
+			"actor": "fox",
+			"expect": {
+				"refused": "no-permission",
+				"op": "start",
+				"answer": {
+					"answer": "no",
+					"reason": "no grant"
+				}
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"asks": [
+					{
+						"op": "stop",
+						"who": {
+							"actor": "mac"
+						},
+						"id": "proc:b",
+						"path": [
+							"work",
+							"clock"
+						]
+					},
+					{
+						"op": "start",
+						"who": {
+							"actor": "fox"
+						},
+						"id": "den:mac/runners/javascript",
+						"path": [
+							"system",
+							"den",
+							"runners",
+							"javascript"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "c",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"c"
+			],
+			"expect": {
+				"id": "proc:c",
+				"at": [
+					"work",
+					"c"
+				]
+			}
+		}
+	]
+}
