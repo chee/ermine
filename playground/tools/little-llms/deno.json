@@ -1,0 +1,20 @@
+{
+	"nodeModulesDir": "auto",
+	"fmt": {
+		"lineWidth": 140,
+		"semiColons": false,
+		"useTabs": true
+	},
+	"tasks": {
+		"bench": "deno run -A run.ts",
+		"report": "deno run -A report.ts"
+	},
+	"imports": {
+		"@std/assert": "jsr:@std/assert@^1",
+		"jsdom": "npm:jsdom@26.1.0",
+		"sql.js": "npm:sql.js@1.13.0",
+		"preact": "npm:preact@10.26.9",
+		"sucrase": "npm:sucrase@3.35.0",
+		"morphdom": "npm:morphdom@2.7.5"
+	}
+}
