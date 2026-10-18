@@ -78,8 +78,8 @@ static bool pack_of(const op_value *x, uint8_t **bytes, size_t *length, FILE *ou
 	return true;
 }
 
-static void put_refusal(FILE *out, pk_code code, const char *column) {
-	fprintf(out, "{\"error\":\"%s\"", pk_code_name(code));
+static void put_refusal(FILE *out, pkr_code code, const char *column) {
+	fprintf(out, "{\"error\":\"%s\"", pkr_code_name(code));
 	if (column != NULL) fputs(",\"column\":", out), op_json_string(out, column);
 	fputc('}', out);
 }
@@ -116,7 +116,7 @@ static void pack(const op_value *r, FILE *out) {
 		hh_error(out, "commits");
 		return;
 	}
-	pk_item *items = hh_take((list->count + 1) * sizeof *items);
+	pkr_item *items = hh_take((list->count + 1) * sizeof *items);
 	for (size_t i = 0; i < list->count; i++) {
 		uint8_t *b;
 		size_t n;
@@ -140,16 +140,16 @@ static void pack(const op_value *r, FILE *out) {
 				}
 				memcpy(stored, h, 32);
 			}
-			items[i] = (pk_item){m->bytes, m->length, stored};
+			items[i] = (pkr_item){m->bytes, m->length, stored};
 			continue;
 		}
 		if (!sealed_of(x, &b, &n, out)) return;
-		items[i] = (pk_item){b, n, NULL};
+		items[i] = (pkr_item){b, n, NULL};
 	}
 	uint8_t *packed;
 	size_t length;
-	pk_code code = pk_pack(items, list->count, &packed, &length);
-	if (code != PK_OK) {
+	pkr_code code = pkr_pack(items, list->count, &packed, &length);
+	if (code != PKR_OK) {
 		hh_error(out, "not sealed commits");
 		return;
 	}
@@ -192,10 +192,10 @@ static void unpack(const op_value *r, FILE *out) {
 	uint8_t *bytes;
 	size_t length;
 	if (!edited(r, &bytes, &length, out)) return;
-	pk_unpacked u;
+	pkr_unpacked u;
 	char *column;
-	pk_code code = pk_unpack(bytes, length, &u, &column);
-	if (code != PK_OK) {
+	pkr_code code = pkr_unpack(bytes, length, &u, &column);
+	if (code != PKR_OK) {
 		put_refusal(out, code, column);
 		free(column);
 		return;
@@ -203,7 +203,7 @@ static void unpack(const op_value *r, FILE *out) {
 	fputs("{\"sealed\":[", out);
 	for (size_t i = 0; i < u.count; i++) {
 		if (i) fputc(',', out);
-		const pk_member *m = &u.members[i];
+		const pkr_member *m = &u.members[i];
 		if (m->sealed != NULL) {
 			const char *label = NULL;
 			for (size_t k = 0; k < seals.n && label == NULL; k++)
@@ -225,7 +225,7 @@ static void unpack(const op_value *r, FILE *out) {
 		fputc('}', out);
 	}
 	fputs("]}", out);
-	pk_free(&u);
+	pkr_free(&u);
 }
 
 static void columns(const op_value *r, FILE *out) {

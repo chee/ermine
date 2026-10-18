@@ -12,6 +12,7 @@ import { createTable, type Id, type Key, TableError } from "@ermine/table"
 import { at, createPlaces, move, type Path, place, PlacesError, rename, unplace } from "./places.ts"
 import { get, list } from "./lib.ts"
 import { createChangeHeader } from "./header.ts"
+import { type Address, plan } from "./path.ts"
 
 const SEEDS = 40
 const STEPS = 60
@@ -276,4 +277,39 @@ Deno.test("link fuzz: every compute is the graph read from scratch after each pu
 	assert(reach.landed > SEEDS * STEPS / 3, `landed ${reach.landed}`)
 	assert(reach.events > SEEDS, `events ${reach.events}`)
 	assert(reach.runs > SEEDS * COMPUTES * 2, `runs ${reach.runs}`)
+})
+
+// plan against a model: the names a walk of steps leaves, as a plain stack: "." changes nothing, a
+// name goes on, ".." takes back the last name (one name left: the root, none: above it), "/"
+// starts again. the root is not above itself, so ".." after one name is [], and one more is
+// refused (undefined), whatever came before
+Deno.test("path: plan is the stack walk, .. at one name is the root, at the root undefined, at random", () => {
+	let refused = 0, rooted = 0
+	for (let seed = 1; seed <= SEEDS; seed++) {
+		const { pick, one } = rand(seed)
+		for (let i = 0; i < 100; i++) {
+			const steps: Address = Array.from(
+				{ length: pick(8) },
+				() => one([...NAMES, ".", "..", "..", "/"]),
+			)
+			let want: string[] | undefined = []
+			for (const step of steps) {
+				if (want === undefined) break
+				if (step === ".") continue
+				if (step === "/") want = []
+				else if (step === "..") want = want.length === 0 ? undefined : want.slice(0, -1)
+				else want = [...want, step]
+			}
+			const at = `seed ${seed}: ${JSON.stringify(steps)}`
+			assertEquals(plan(steps), want, at)
+			if (want === undefined) refused++
+			// one name then ..: the root
+			const name = one(NAMES), root = plan(["/", name, ".."])
+			assertEquals(root, [], `${at}: /, name, ..`)
+			rooted++
+			// and one more ..: refused
+			assertEquals(plan([name, "..", ".."]), undefined, `${at}: name, .., ..`)
+		}
+	}
+	assert(refused > 100 && rooted > 1000, `reaches: ${refused}, ${rooted}`)
 })

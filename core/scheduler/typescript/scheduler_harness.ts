@@ -113,6 +113,14 @@
 //   stopped, waits w), unless w waits after the reader (its after, that one's after.., reaches it)
 //   or a chain kept on w came out of a run of the reader this pulse. the read is tracked. stopped:
 //   due again at the tick that made the run due, waiting after w while w is due
+// old reads (chee 10-18: "_any_ throw is pending"): a key a run does not read again is old. a
+//   run that ends done (its computation's latest; a promise's as it lands done) stops tracking the
+//   old keys, before its end is told (forgotten). one that ends any other way (failed, pending,
+//   stopped, looping) tracks every key it read and every old one still: a mark of any makes it
+//   due, none is forgotten, and none is started again when read again (its place among a key's
+//   readers stays). a mark of an old key is a retry: the chain is held, but it is no loop through
+//   it (it flags nothing, cuts nothing), and a change made by its own set, act or cleanup does not
+//   reach it. only the keys it read count toward its rank
 // chain (causes.ts): a run's, its computation, then the chains given it: those of every mark on
 //   it since its last run that ended done (one on it while due or looping joins too; a cut one
 //   too); a run that ends any other way gives them back. a change carries the chain of the run it
@@ -179,7 +187,7 @@
 // a map of one key is one of:
 //   {"read":k}          the key read (tracked in a run), its value (the one kept, no copy); none: null
 //   {"sum":[e..]}       added, numbers only; null is 0; none: 0; anything else an error
-//   {"mod":[a,b]}       a mod b; null is 0; b 0 an error
+//   {"mod":[a,b]}       a mod b, numbers only; null is 0; b 0 an error; anything else an error
 //   {"eq":[a,b]}        equal by JSON           {"if":[test,then,else]}   test true, then, else else
 //   {"given":"value"}  {"given":"previous"}   in an act: its value, and the one acted on before;
 //                       {"given":"previous"} in a run: the computation's last result (a compute's
@@ -213,13 +221,22 @@
 //                       as the effect request's; early true: early. null. c old under the scope
 //                       open (made by an earlier run of it): claimed, its f and act these (early
 //                       or not as it was made; a claim is no making: it runs in the round, mine).
+//                       c a compute (made again as the other kind): it becomes this effect (chee
+//                       10-18: "Swap kind too"), early as this form says; the same computation,
+//                       its last result forgotten (its next acted on, equal or not), the writer of
+//                       nothing; a compute's own cleanups are set aside at its next run as ever.
 //                       c taken by one gone, or old elsewhere: taken over
 //   {"compute":[c,f,to?]}  a compute c made under the scope open, f its code, its results kept at
 //                       to and marked as the compute request's; null. claimed and taken over as
-//                       the effect form's
+//                       the effect form's; c an effect: it becomes this compute, its last result
+//                       forgotten (its next given to set, equal or not), an act queued dropped,
+//                       what its last act made old at its next run, the cleanups made in that act
+//                       set aside with its own then (run once that run is done, as a replaced
+//                       function's)
 //   {"dispose":s}       s disposed; null
 //   {"quote":x}         x as it is
 import {
+	type As,
 	type Computer,
 	createScheduler,
 	type Info,
@@ -350,14 +367,20 @@ function vacant(n: string) {
 // each computation's code, in place: a claim gives it new code
 const codes = new Map<Computer, { f: Json; act?: Json }>()
 
-// the computation n, old under the scope open, claimed and given new code: true. else false
-function claimed(n: string, code: { f: Json; act?: Json }): boolean {
+// the computation n, old under the scope open, claimed and given new code: true. else false. made
+// again as the other kind (as: what it becomes, given the computer): it takes that kind too
+function claimed(
+	n: string,
+	code: { f: Json; act?: Json },
+	kind: "compute" | "effect",
+	as: (c: Computer) => As,
+): boolean {
 	const o = named.get(n)
 	if (o === undefined || !("kind" in o) || !o.old) return false
 	if (o.parent !== s.getCurrentScope()) return false
 	const c = o as Computer
 	codes.set(c, code)
-	return s.claim(c)
+	return s.claim(c, c.kind === kind ? undefined : as(c))
 }
 function name(o: Scope, n: string) {
 	named.set(n, o)
@@ -398,7 +421,12 @@ function keep(key: string, v: Json) {
 // values
 type Ctx = { run?: Run; self?: Scope; value?: Json; previous?: Json }
 
-const num = (v: Json) => (v === null || v === undefined ? 0 : v as number)
+// a number for sum and mod: null is 0; anything else not a number an error
+function num(v: unknown): number {
+	if (v === null || v === undefined) return 0
+	if (typeof v !== "number") throw new Error("not a number")
+	return v
+}
 
 // who a change in this code is by: the run, else the computer
 const runOf = (ctx: Ctx): Run | Computer | undefined =>
@@ -417,8 +445,12 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 		}
 		case "sum":
 			return a.reduce((n: number, x) => n + num(evaluate(x, ctx)), 0)
-		case "mod":
-			return num(evaluate(a[0], ctx)) % num(evaluate(a[1], ctx))
+		case "mod": {
+			const x = num(evaluate(a[0], ctx))
+			const y = num(evaluate(a[1], ctx))
+			if (y === 0) throw new Error("mod by 0")
+			return x % y
+		}
 		case "eq":
 			return JSON.stringify(evaluate(a[0], ctx)) === JSON.stringify(evaluate(a[1], ctx))
 		case "if":
@@ -438,17 +470,16 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 		case "write": {
 			const k = evaluate(a[0], ctx) as string
 			const v = evaluate(a[1], ctx)
+			// the writer first: one not there writes nothing
+			const by = a.length < 3
+				? runOf(ctx)
+				: a[2] === "open"
+				? s.getRun()
+				: a[2] === null
+				? undefined
+				: computation(a[2])
 			keep(k, v)
-			s.mark(
-				[k],
-				a.length < 3
-					? runOf(ctx)
-					: a[2] === "open"
-					? s.getRun()
-					: a[2] === null
-					? undefined
-					: computation(a[2]),
-			)
+			s.mark([k], by)
 			return v
 		}
 		case "throw": {
@@ -501,7 +532,15 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 		case "effect": {
 			if (typeof a[0] !== "string") throw new Error("a effect with no name")
 			const code = { f: a[1], act: a[2] }
-			if (claimed(a[0] as string, code)) return null
+			const as = (c: Computer): As => ({
+				kind: "effect",
+				f: (previous) =>
+					evaluate(codes.get(c)!.f, { run: s.getRun(), self: c, previous: previous as Json }),
+				effect: (value, previous) =>
+					void evaluate(codes.get(c)!.act, { self: c, value, previous }),
+				early: a[3] === true,
+			})
+			if (claimed(a[0] as string, code, "effect", as)) return null
 			vacant(a[0] as string)
 			let made: Computer | undefined
 			const self = () => made ?? s.getCurrentScope()!
@@ -523,7 +562,17 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 			const [n, f, to] = a as [string, Json, string | undefined]
 			if (typeof n !== "string") throw new Error("a compute with no name")
 			const code = { f }
-			if (claimed(n, code)) return null
+			const as = (c: Computer): As => ({
+				kind: "compute",
+				f: (previous) =>
+					evaluate(codes.get(c)!.f, { run: s.getRun(), self: c, previous: previous as Json }),
+				set: (v) => {
+					if (to === undefined) return
+					keep(to, v)
+					s.mark([to], c)
+				},
+			})
+			if (claimed(n, code, "compute", as)) return null
 			vacant(n)
 			let c: Computer
 			making(n, () =>
@@ -624,7 +673,10 @@ async function run(r: Request): Promise<Json> {
 			return {}
 		case "run": {
 			const o = scope(r.scope)
-			return { value: s.runWithScope(o, () => evaluate(r.do, { self: o })) ?? null }
+			const v = s.runWithScope(o, () => evaluate(r.do, { self: o }))
+			// PENDING or a promise: no value
+			if (v === PENDING || v instanceof Promise) return {}
+			return { value: v ?? null }
 		}
 		case "current":
 			return { value: current() }
@@ -635,8 +687,11 @@ async function run(r: Request): Promise<Json> {
 			for (const [k, v] of Object.entries(values)) keep(k, revive(v) as Json)
 			return { tick: s.mark(Object.keys(values)) }
 		}
-		case "changed":
-			return { tick: s.mark(r.keys as string[]) }
+		case "changed": {
+			const keys = r.keys as Json[]
+			if (!keys.every((k) => typeof k === "string")) throw new Error("a key not a string")
+			return { tick: s.mark(keys) }
+		}
 		case "pulse":
 			told = 0
 			pulsing = true

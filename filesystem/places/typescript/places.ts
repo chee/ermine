@@ -217,6 +217,8 @@ export function createPlaces(setup: Setup): Places {
 	// where reads go while record runs, and the spots it made (none held before); none: the scheduler
 	let into: Set<unknown> | undefined
 	let made: Set<unknown> | undefined
+	// while peep runs: reads tell no one and make no spot (nothing would rerun from them)
+	let peeping = 0
 	function tell(s: Spot<unknown>) {
 		const known = s.owner === mine
 		s.owner = mine
@@ -239,6 +241,16 @@ export function createPlaces(setup: Setup): Places {
 		} finally {
 			into = was
 			made = wasMade
+		}
+	}
+
+	// f, with every read it makes untracked: no spot made, nothing told, the value only (a peep)
+	function peep<T>(f: () => T): T {
+		peeping++
+		try {
+			return f()
+		} finally {
+			peeping--
 		}
 	}
 
@@ -480,21 +492,21 @@ export function createPlaces(setup: Setup): Places {
 	// what is at path in the value of the entry under (part, id), the read told. path: kept by
 	// paths, never change it
 	function readValue(part: Key, id: Id, path: readonly Step[] = []): unknown {
-		tell(paths.spot(first(part), id, path))
+		if (!peeping) tell(paths.spot(first(part), id, path))
 		return at(table.get(part, id)?.value, path)
 	}
 
 	// the change of the entry under (part, id), the read told at its change spot: any write to the
 	// entry reruns it. none there: undefined
 	function readChange(part: Key, id: Id): ChangeHeader | undefined {
-		tell(paths.change(first(part), id))
+		if (!peeping) tell(paths.change(first(part), id))
 		return table.get(part, id)?.change
 	}
 
 	// which names there are in the value of the entry under (part, id), at path: the read told as a
 	// read of names, not of what is under them. no map there: none
 	function readKeys(part: Key, id: Id, path: readonly Step[] = [], ids = false): string[] {
-		tell(paths.spot(first(part), id, path, true))
+		if (!peeping) tell(paths.spot(first(part), id, path, true))
 		const v = at(table.get(part, id)?.value, path)
 		if (!isMap(v)) return []
 		return ids ? Object.keys(v).filter((k) => isId(v[k])) : Object.keys(v)
@@ -504,7 +516,8 @@ export function createPlaces(setup: Setup): Places {
 	const reads: Reads = {
 		read: readValue,
 		keys: readKeys,
-		track: (key) => into === undefined ? scheduler.track(key) : void into.add(key),
+		track: (key) =>
+			peeping ? undefined : into === undefined ? scheduler.track(key) : void into.add(key),
 	}
 
 	// a places from root, asked by its own contributors (none: children alone), sharing all of the above
@@ -555,7 +568,7 @@ export function createPlaces(setup: Setup): Places {
 			if (given === undefined) {
 				let at = typeof from === "object" ? from.id : from
 				for (const name of path) {
-					tell(paths.spot(first("children"), at, [name]))
+					if (!peeping) tell(paths.spot(first("children"), at, [name]))
 					const id = child(table.get("children", at), name)
 					if (id === undefined) return undefined
 					yield { name, id }
@@ -650,6 +663,7 @@ export function createPlaces(setup: Setup): Places {
 			answers,
 			names,
 			record,
+			peep,
 			hold,
 		}
 	}
@@ -694,6 +708,8 @@ export type Places = {
 
 	// for a cache: f's reads put into reads, told to no one; a hold on a spot taken or given back
 	record: <T>(f: () => T, reads: Set<unknown>, fresh?: Set<unknown>) => T
+	// f with its reads untracked: no spot, nothing told, the values only
+	peep: <T>(f: () => T) => T
 	hold: (key: unknown, n: number) => number
 }
 

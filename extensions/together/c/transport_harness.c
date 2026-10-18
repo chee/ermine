@@ -512,17 +512,18 @@ static void fragment_op(const op_value *r, FILE *out) {
 			if (form != NULL && strcmp(form, "members") == 0) jsonAdd(o, "members", list);
 			else {
 				jsonFree(list);
-				pk_item *items = hh_take((count + 1) * sizeof *items);
-				for (size_t i = 0; i < count; i++) items[i] = (pk_item){ms[i]->bytes, ms[i]->length, NULL};
-				uint8_t *run;
+				pkr_item *items = hh_take((count + 1) * sizeof *items);
+				for (size_t i = 0; i < count; i++) items[i] = (pkr_item){ms[i]->bytes, ms[i]->length, NULL};
+				uint8_t *packed;
 				size_t n;
-				if (pk_pack(items, count, &run, &n) != PK_OK) {
+				if (pkr_pack(items, count, &packed, &n) != PKR_OK) {
 					jsonFree(o);
 					hh_error(out, "not sealed commits");
 					return;
 				}
-				jsonAdd(o, "run", jsonBytes(run, n));
-				free(run);
+				// "run": the blob's key, kept as stored
+				jsonAdd(o, "run", jsonBytes(packed, n));
+				free(packed);
 			}
 			if (op_get(r, "tables") != NULL) {
 				uint8_t *snapshot;
@@ -728,7 +729,7 @@ static void found(void *context, const uint8_t id[32]) {
 	memcpy(f->ids[f->count++], id, 32);
 }
 
-// the stored fragment's blob, read from the device's store: its run's commits in order, its
+// the stored fragment's blob, read from the device's store: its pack's commits in order, its
 // snapshot's tables, BLAKE3 of its bytes
 static void blob(const op_value *r, FILE *out) {
 	device_t *d;
@@ -759,10 +760,11 @@ static void blob(const op_value *r, FILE *out) {
 		return;
 	}
 	Json *x = cborDecode(bytes, length, NULL, NULL);
-	const Json *run = jsonGet(x, "run"), *snapshot = jsonGet(x, "snapshot");
-	pk_unpacked u = {0};
-	if (run == NULL || run->type != JSON_BYTES || pk_unpack(run->bytes.data, run->bytes.length, &u, NULL) != PK_OK) {
-		hh_error(out, "not a run");
+	// "run": the blob's key, kept as stored
+	const Json *packed = jsonGet(x, "run"), *snapshot = jsonGet(x, "snapshot");
+	pkr_unpacked u = {0};
+	if (packed == NULL || packed->type != JSON_BYTES || pkr_unpack(packed->bytes.data, packed->bytes.length, &u, NULL) != PKR_OK) {
+		hh_error(out, "not a pack");
 		jsonFree(x);
 		erm_host_free(bytes);
 		return;
@@ -773,7 +775,7 @@ static void blob(const op_value *r, FILE *out) {
 		put_label(out, u.members[i].stored, 32);
 	}
 	fputc(']', out);
-	pk_free(&u);
+	pkr_free(&u);
 	if (snapshot != NULL && snapshot->type == JSON_BYTES) {
 		rp_tables t;
 		rp_init(&t);

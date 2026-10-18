@@ -1,5 +1,5 @@
 {
-	"title": "a merge by a rule: its name in the merge column, there only when a commit in the run has one; the column dropped, or a name on commits with fewer than two parents, says no commit",
+	"title": "a merge by a rule: its name in the merge column, there only when a commit in the pack has one; the column dropped, or a name on commits with fewer than two parents, says no commit",
 	"steps": [
 		{
 			"op": "make",

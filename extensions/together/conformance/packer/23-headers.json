@@ -1,5 +1,5 @@
 {
-	"title": "headers: runs of each signature's varsig header, null for a commit vouched for by the next; a signature with no header this reads is whole in signatures, its header empty; the same commits come back either way, and a run with every commit signed takes them all",
+	"title": "headers: runs of each signature's varsig header, null for a commit vouched for by the next; a signature with no header this reads is whole in signatures, its header empty; the same commits come back either way, and a pack with every commit signed takes them all",
 	"steps": [
 		{
 			"op": "make",

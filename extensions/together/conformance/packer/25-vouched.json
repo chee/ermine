@@ -1,5 +1,5 @@
 {
-	"title": "a commit the next one in the run goes on alone, signed by the same signer, is vouched for by its signature: its own is left out and its stored id said in ids, one for each such commit, each 32 bytes, taken as said; one vouched for that the next does not go on alone by its signer is no run, nor is a last one vouched for",
+	"title": "a commit the next one in the pack goes on alone, signed by the same signer, is vouched for by its signature: its own is left out and its stored id said in ids, one for each such commit, each 32 bytes, taken as said; one vouched for that the next does not go on alone by its signer is no run, nor is a last one vouched for",
 	"steps": [
 		{
 			"op": "make",
