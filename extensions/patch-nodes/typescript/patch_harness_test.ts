@@ -64,7 +64,7 @@ function sequence(seed: number): Request[] {
 	const patches = () => Array.from({ length: 1 + pick(2) }, patch)
 	let time = 100
 	const out: Request[] = [
-		{ op: "root", name: "o", info: [["actor", "o"]] },
+		{ op: "root", name: "o", info: { actor: "o" } },
 		{ op: "value", id: "N", value: value(), time },
 	]
 	for (let i = 0; i < WATCHES; i++) {

@@ -106,7 +106,7 @@ function world(actor: string, clock = { t: 1000 }): World {
 	const table = createTable((part, id) => places.onTableChange(part as Key, id))
 	const places = createPlaces({ root: "R", table, paths, scheduler })
 	scheduler.onTrackingEnd((k) => places.release(k))
-	const scope = scheduler.createRootScope([["actor", actor]])
+	const scope = scheduler.createRootScope({ actor })
 	return { table, places, scheduler, scope, now: () => clock.t }
 }
 

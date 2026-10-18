@@ -170,14 +170,14 @@ function world(way: "copy" | "in place" | "unread") {
 		paths: createPaths(),
 		scheduler: s,
 	})
-	const host = s.createRootScope([["actor", "host"]])
+	const host = s.createRootScope({ actor: "host" })
 	const header = s.runWithScope(host, () => createChangeHeader(s))
 	table.sub("children", "F", createEntry(folder(1000)(), header) as never)
 	const e = table.get("children", "F")! as Entry<unknown>
 	// places keeps children in place: copy's world undoes that
 	if (way === "copy") delete e.cow
 	s.runWithScope(
-		s.createRootScope([["actor", "r"]]),
+		s.createRootScope({ actor: "r" }),
 		() => s.createComputer(() => places.readValue("children", "F", ["name0"]), () => {}),
 	)
 	s.pulse()
@@ -208,7 +208,7 @@ row("places: a name in a folder of 1000 + pulse, a reader of name0", {
 			if (listen === "listener") s.onRunEnd(() => {})
 			if (listen === "keeping") keeping(s, u)
 			const store = new Map<unknown, unknown>()
-			const o = s.createRootScope([["actor", "bench"]])
+			const o = s.createRootScope({ actor: "bench" })
 			let prev: unknown = "head"
 			store.set(prev, { n: 0 })
 			for (let i = 0; i < 100; i++) {

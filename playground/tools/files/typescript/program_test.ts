@@ -635,10 +635,7 @@ Deno.test("each change carries the path that made it as its cause, and a move's 
 		const h = await example(dir)
 		await h.pass([""])
 		const cause = (v?: { change: unknown }) =>
-			((v?.change as { metadata?: [string, unknown][] }).metadata ?? []).find(([k]) =>
-				k === "cause"
-			)
-				?.[1]
+			(v?.change as { metadata?: Record<string, unknown> }).metadata?.cause
 		h.put("apps/clock.txt", "12:30")
 		await h.pass(["apps"])
 		assertEquals(cause(h.graph.get(h.c)!.value[0]), { file: "apps/clock.txt" })

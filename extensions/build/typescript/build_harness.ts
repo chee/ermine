@@ -1,6 +1,6 @@
 // build (build.ts) on the line protocol: one JSON request per line in, one answer per line out, in
 // order. one world per process: a scheduler, table, paths and the host's places (root "R", children
-// alone), told the table's events. the host writes with its scope open, info [["actor","test"]];
+// alone), told the table's events. the host writes with its scope open, info {"actor":"test"};
 // builds are made with it open too
 //
 // the compilers, by name, each counting its calls:

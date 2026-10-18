@@ -5,8 +5,8 @@ import { createSelector, keyed } from "./selector.ts"
 
 function setup() {
 	const s = createScheduler()
-	const root = s.createRootScope([["actor", "test"]])
-	const host = s.createRootScope([["actor", "host"]])
+	const root = s.createRootScope({ actor: "test" })
+	const host = s.createRootScope({ actor: "host" })
 	const store = { current: "a" }
 	const cur = {}
 	const source = () => (s.track(cur), store.current)
@@ -61,7 +61,7 @@ Deno.test("selector: a key is dropped when its readers go, and a read outside a 
 
 Deno.test("selector: a given equal asks every key held", () => {
 	const s = createScheduler()
-	const root = s.createRootScope([["actor", "test"]])
+	const root = s.createRootScope({ actor: "test" })
 	const cur = {}
 	let current = 5
 	const evens = s.runWithScope(

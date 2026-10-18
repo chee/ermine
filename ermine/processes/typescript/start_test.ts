@@ -1,5 +1,5 @@
 // a process's life (start.ts) on a real scheduler, table and paths: places rooted at R, asked the
-// processes' rows and children; the host's scope [["actor", "host"]], the processes' owner under it
+// processes' rows and children; the host's scope { actor: "host" }, the processes' owner under it
 import { assert, assertEquals, assertStrictEquals } from "@std/assert"
 import type { Entry } from "@ermine/node/entry"
 import { createScheduler, PENDING, type Scope } from "@ermine/scheduler"
@@ -24,7 +24,7 @@ function world() {
 	})
 	s.onTrackingEnd((key) => places.release(key))
 	const scopes = createScopeNodes({ scheduler: s, table })
-	const host = s.createRootScope([["actor", "host"]])
+	const host = s.createRootScope({ actor: "host" })
 	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 	const commit = (changed: readonly Entry<unknown>[]) => places.commit(changed)
 	const life = hosted(() => createProcesses({ scheduler: s, table, places: { commit }, scopes }))

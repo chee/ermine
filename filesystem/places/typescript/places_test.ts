@@ -11,7 +11,7 @@ import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/table"
 import { at, createPlaces, move, place, rename, unplace } from "./places.ts"
 import { get, list, lookup, members } from "./lib.ts"
-import { createChangeHeader, getWho } from "./header.ts"
+import { createChangeBase, createChangeHeader } from "./header.ts"
 
 function world() {
 	const moments: Told[] = []
@@ -25,8 +25,8 @@ function world() {
 	// a children entry, to write in
 	const kid = (id: Id) => table.get("children", id)!
 	// the host's scope, and a program's
-	const host = s.createRootScope([["actor", "host"]])
-	const notes = s.createRootScope([["actor", "notes"]])
+	const host = s.createRootScope({ actor: "host" })
+	const notes = s.createRootScope({ actor: "notes" })
 	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 	// a value write: the patches to the entry there, reported; none there: one made with them, added
 	function edit(part: Key, id: Id, patches: Patch[]) {
@@ -449,15 +449,16 @@ Deno.test("places: members at a path rerun on a new name there; the level above 
 
 // the header: what the scope open says
 
-Deno.test("places: a header is the nested pairs of the scope open, the write's own innermost; the nearest actor and reader; the time now, its site", () => {
+Deno.test("places: a header's metadata is the write's extra, the scope open and its parents merged, inner keys over outer, in one new object; the first actor and reader; the time now, its site", () => {
 	const { s, l } = world()
-	const chee = s.createRootScope([["actor", "chee"], ["reader", "juno"], ["why", "test"]])
-	const save = s.createScope([["cause", "x"], ["why", "again"]], chee)
-	const h = s.runWithScope(save, () => createChangeHeader(s, [["then", "y"]]))
+	const chee = s.createRootScope({ actor: "chee", reader: "juno", why: "test" })
+	const save = s.createScope({ cause: "x", why: "again" }, chee)
+	const h = s.runWithScope(save, () => createChangeHeader(s, { then: "y" }))
 	assertEquals([h.actor, h.reader], ["chee", "juno"])
-	const up: [string, unknown][] = [["actor", "chee"], ["reader", "juno"], ["why", "test"]]
-	const mid: [string, unknown][] = [["cause", "x"], ["why", "again"], ["owner", up]]
-	assertEquals(h.metadata, [["then", "y"], ["owner", mid]])
+	const mid = { actor: "chee", reader: "juno", why: "again", cause: "x" }
+	assertEquals(h.metadata, { then: "y", ...mid })
+	// a new object, no scope's own
+	assert(h.metadata !== save.info && h.metadata !== chee.info)
 	assertEquals(Number.isInteger(h.time), true)
 	assertEquals(Math.abs(h.time - Date.now() / 1000) < 5, true)
 	// the site is this file, not places.ts
@@ -466,8 +467,8 @@ Deno.test("places: a header is the nested pairs of the scope open, the write's o
 	// the extra was for that write alone
 	assertEquals(s.runWithScope(save, () => createChangeHeader(s)).metadata, mid)
 	// a nearer actor or reader wins
-	const near = s.createScope([["reader", "sam"]], save)
-	const n = s.runWithScope(near, () => createChangeHeader(s, [["actor", "notes"]]))
+	const near = s.createScope({ reader: "sam" }, save)
+	const n = s.runWithScope(near, () => createChangeHeader(s, { actor: "notes" }))
 	assertEquals([n.actor, n.reader], ["notes", "sam"])
 })
 
@@ -475,16 +476,16 @@ Deno.test("places: a write's actor is the nearest: a scope or extra naming one w
 	const { s, l, notes } = world()
 	const forged = s.runWithScope(
 		notes,
-		() => s.runWithScope(s.createScope([["actor", "chee"]]), () => createChangeHeader(s)),
+		() => s.runWithScope(s.createScope({ actor: "chee" }), () => createChangeHeader(s)),
 	)
 	assertEquals(forged.actor, "chee")
-	assertEquals(forged.metadata, [["actor", "chee"], ["owner", [["actor", "notes"]]]])
+	assertEquals(forged.metadata, { actor: "chee" })
 	assertEquals(
-		s.runWithScope(notes, () => createChangeHeader(s, [["actor", "chee"]])).actor,
+		s.runWithScope(notes, () => createChangeHeader(s, { actor: "chee" })).actor,
 		"chee",
 	)
 	// no actor named under it: the one above
-	const quiet = s.runWithScope(notes, () => s.createScope([["why", "save"]]))
+	const quiet = s.runWithScope(notes, () => s.createScope({ why: "save" }))
 	assertEquals(s.runWithScope(quiet, () => createChangeHeader(s)).actor, "notes")
 })
 
@@ -494,7 +495,7 @@ Deno.test("places: nothing open: a write is unscoped and nothing changes; a read
 	value("A", "one")
 	const w = watch(() => 0)
 	s.pulse()
-	assertEquals(getWho(s), undefined)
+	assertEquals(createChangeBase(s), undefined)
 	const e = assertThrows(() => place(kid("R"), "x", "X", createChangeHeader(s)))
 	assertEquals((e as SchedulerError).code, "unscoped")
 	assertEquals(table.get("children", "R")?.value, {})
@@ -517,7 +518,7 @@ Deno.test("places: after an await in a run nothing is open: a write throws unsco
 			runs++
 			seen.push(l.readValue("value", "A"))
 			await settle()
-			seen.push(getWho(s))
+			seen.push(createChangeBase(s))
 			try {
 				edit("value", "B", [{ path: [], value: 1 }])
 			} catch (e) {
@@ -548,7 +549,7 @@ Deno.test("places: a click dispatched in a run is the process's: its scope is un
 			const v = l.readValue("value", "clicked")
 			// dispatchEvent, sync: the click's scope, made under the one open
 			if (v === undefined) {
-				s.runWithScope(s.createScope([["event", "click"]]), () => {
+				s.runWithScope(s.createScope({ event: "click" }), () => {
 					made = edit("value", "clicked", [{ path: [], value: true }]).change
 				})
 			}
@@ -556,11 +557,7 @@ Deno.test("places: a click dispatched in a run is the process's: its scope is un
 		}, () => {}))
 	s.pulse()
 	assertEquals(made?.actor, "notes")
-	assertEquals(made?.metadata, [["event", "click"], ["owner", [
-		["run", 1],
-		["mark", 1],
-		["owner", [["actor", "notes"]]],
-	]]])
+	assertEquals(made?.metadata, { event: "click", run: 1, mark: 1, actor: "notes" })
 	assert(moments.some((m) => "due" in m && m.due === c && m.by === c))
 })
 
@@ -629,7 +626,7 @@ Deno.test("places: a watch that writes lands in the writer's run: a pipe's reade
 	kids("R", { a: "A", b: "B" })
 	value("A", 1)
 	value("B", 2)
-	const pipe = s.createScope([["pipe", "a→b"]], notes)
+	const pipe = s.createScope({ pipe: "a→b" }, notes)
 	l.watchPath(
 		["a"],
 		(f) =>
@@ -654,7 +651,7 @@ Deno.test("places: a watch that writes lands in the writer's run: a pipe's reade
 	assertEquals(seen, [2, 10])
 	assert(moments.some((m) => "due" in m && m.by === w))
 	// the pipe's write carries its scope's info
-	assertEquals(l.readChange("value", "B")?.metadata?.some(([k]) => k === "pipe"), true)
+	assertEquals("pipe" in (l.readChange("value", "B")?.metadata ?? {}), true)
 })
 
 Deno.test("places: many watches, many commits: each is told only its own node's facts, and no path is walked to tell them", () => {

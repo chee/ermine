@@ -22,8 +22,8 @@ function world(contributors?: Contributor[], cached = true) {
 	const places = createPlaces({ root: "R", table, paths, scheduler: s, contributors })
 	s.onTrackingEnd((key) => places.release(key))
 	const cache = cached ? createPathCache({ places, scheduler: s }) : undefined!
-	const host = s.createRootScope([["actor", "host"]])
-	const notes = s.createRootScope([["actor", "notes"]])
+	const host = s.createRootScope({ actor: "host" })
+	const notes = s.createRootScope({ actor: "notes" })
 	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 	const kid = (id: Id) => table.get("children", id)!
 	const kids = (id: Id, v: Record<string, unknown>) =>

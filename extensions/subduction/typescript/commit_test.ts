@@ -97,7 +97,7 @@ Deno.test("commit: live values in patches, actor and cause are stand-ins over th
 	const kind = (x: unknown) => x instanceof Canvas ? x.url : typeof x
 	const c = change({
 		patches: [{ path: [], value: { c: canvas, f: () => 1, list: [live, new Map()], n: 1 } }],
-		header: { time: 5, actor: canvas, metadata: [["cause", { by: live }]] },
+		header: { time: 5, actor: canvas, metadata: { cause: { by: live } } },
 	})
 	const b = commit(histories, c, 0, [], random, kind)
 	assertEquals(b.patches, [{

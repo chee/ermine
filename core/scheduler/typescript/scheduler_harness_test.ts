@@ -89,7 +89,7 @@ function generate(seed: number) {
 		send(
 			parent === undefined
 				? { op: "root", name: os[i], info: { actor: os[i] } }
-				: { op: "scope", name: os[i], parent, info: [[text(), os[i]]] },
+				: { op: "scope", name: os[i], parent, info: { [text()]: os[i] } },
 		)
 	}
 	const values: Record<string, number | string> = {}

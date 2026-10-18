@@ -35,8 +35,8 @@ function world(cached = true) {
 	})
 	s.onTrackingEnd((key) => places.release(key))
 	const cache = cached ? createPathCache({ places, scheduler: s }) : undefined!
-	const host = s.createRootScope([["actor", "host"]])
-	const notes = s.createRootScope([["actor", "notes"]])
+	const host = s.createRootScope({ actor: "host" })
+	const notes = s.createRootScope({ actor: "notes" })
 	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 	const header = () => createChangeHeader(s)
 	const kids = (id: Id, v: Record<string, unknown>) =>

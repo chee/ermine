@@ -11,7 +11,7 @@ type Key = { name: string }
 function world(with_: "none" | "boundaries" | "a boundary of each" = "a boundary of each") {
 	const s = createScheduler()
 	const store = new Map<Key, unknown>()
-	const root = s.createRootScope([["actor", "bench"]])
+	const root = s.createRootScope({ actor: "bench" })
 	const key = (name: string): Key => ({ name })
 	const read = <T>(k: Key) => (s.track(k), store.get(k) as T)
 	const write = (k: Key, v: unknown) => (store.set(k, v), s.mark([k]))
@@ -206,7 +206,7 @@ for (const d of [1, 100, 1000]) {
 		const src = w.key("src")
 		w.write(src, 0)
 		let at: Scope = w.root
-		for (let i = 0; i < d; i++) at = w.s.createScope([["why", "bench"]], at)
+		for (let i = 0; i < d; i++) at = w.s.createScope({ why: "bench" }, at)
 		w.compute(src, at)
 		w.s.pulse()
 		let i = 0

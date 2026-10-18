@@ -20,8 +20,8 @@ function world(commit?: Host["commit"]) {
 	const places = createPlaces({ root: "R", table, paths, scheduler: s })
 	s.onTrackingEnd((key) => places.release(key))
 	const host: Host = { places, table, scheduler: s, commit }
-	const scope = s.createRootScope([["actor", "host"]])
-	const notes = s.createRootScope([["actor", "notes"]])
+	const scope = s.createRootScope({ actor: "host" })
+	const notes = s.createRootScope({ actor: "notes" })
 	const hosted = <T>(f: () => T) => s.runWithScope(scope, f)
 	const header = () => createChangeHeader(s)
 	const kids = (id: Id, v: Record<string, unknown>) =>

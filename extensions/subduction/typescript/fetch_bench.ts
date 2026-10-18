@@ -58,7 +58,7 @@ function host(n: number, storage = new sd.MemoryStorage(), zeros = false) {
 		zeros,
 		commit: (changed) => places.commit(changed),
 	})
-	const scope = scheduler.createRootScope([["actor", `host${n}`]])
+	const scope = scheduler.createRootScope({ actor: `host${n}` })
 	// patches to the entry under (part, id), made whole first if none
 	const write = (part: Key, id: Id, patches: Patch[]) =>
 		scheduler.runWithScope(scope, () => {

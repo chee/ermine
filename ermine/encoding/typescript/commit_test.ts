@@ -1,5 +1,6 @@
 import { assertEquals, assertThrows } from "@std/assert"
 import { type Commit, CommitError, decode, encode, joinKey, name, splitKey } from "./commit.ts"
+import * as cbor from "./cbor.ts"
 
 const bytes = (n: number, b = 1) => new Uint8Array(n).fill(b)
 const commit = (more: Partial<Commit> = {}): Commit => ({
@@ -18,7 +19,7 @@ Deno.test("commit: round trip, optional fields left out, the name its bytes' has
 	const c = commit({
 		reader: "r",
 		external: [{ file: "a.ts", line: 3, column: 1 }],
-		metadata: [["cause", { why: 1 }]],
+		metadata: { cause: { why: 1 } },
 	})
 	const b = encode({ ...c, reader: c.reader, base: undefined })
 	const back = decode(b)
@@ -31,7 +32,7 @@ Deno.test("commit: round trip, optional fields left out, the name its bytes' has
 				commit({
 					reader: "r",
 					external: [{ file: "a.ts", line: 3, column: 1 }],
-					metadata: [["cause", { why: 1 }]],
+					metadata: { cause: { why: 1 } },
 				}),
 			),
 		),
@@ -113,8 +114,22 @@ Deno.test("commit: refused, naming the first field that says no", () => {
 	no(commit({ parents: [bytes(32, 2), bytes(32, 3)], merge: "" }), "merge")
 	no(commit({ lamport: 0 }), "lamport")
 	no(commit({ patches: [{ path: ["a"], value: 1, move: { path: ["b"] } }] }), "patches")
-	no(commit({ metadata: [["a"]] as never }), "metadata")
+	no(commit({ metadata: [["a", 1]] as never }), "metadata")
+	no(commit({ metadata: "a" as never }), "metadata")
 	no({ ...commit(), node: "x" }, "node")
 	const e = assertThrows(() => decode(new Uint8Array([0xff])), CommitError)
 	assertEquals(e.code, "not-a-commit")
+})
+
+Deno.test("commit: metadata in the old form, [key, value] pairs, is read as an object, of a key repeated the first; never written", () => {
+	const { metadata: _, ...rest } = commit()
+	const old = cbor.encode({ ...rest, metadata: [["why", "x"], ["a", 1], ["why", "y"]] } as never)
+	const back = decode(old)
+	assertEquals(back.metadata, { why: "x", a: 1 })
+	// written again: a map
+	const again = encode(back)
+	assertEquals((cbor.decode(again) as { metadata: unknown }).metadata, { a: 1, why: "x" })
+	// a pair not a pair: not a commit
+	const bad = cbor.encode({ ...rest, metadata: [["a", 1, 2]] } as never)
+	assertEquals(assertThrows(() => decode(bad), CommitError).field, "metadata")
 })

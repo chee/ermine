@@ -9,7 +9,7 @@ import produce from "@ermine/op/produce"
 import { createPlaces, type Places } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
 import { get } from "@ermine/places/lib"
-import { createScheduler } from "@ermine/scheduler"
+import { createScheduler, type Info } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Id, type Key, type Table } from "@ermine/table"
 import {
@@ -35,10 +35,10 @@ function world(table0?: (event: (part: Key, id: Id) => void) => Table) {
 		paths: createPaths(),
 		scheduler: s,
 	})
-	const host = s.createRootScope([["actor", "host"]])
-	const reader = s.createRootScope([["actor", "reader"]])
+	const host = s.createRootScope({ actor: "host" })
+	const reader = s.createRootScope({ actor: "reader" })
 	// a write's header from outside, by the host: the time now, or the one given
-	function header(time?: number, extra?: [string, unknown][]) {
+	function header(time?: number, extra?: Info) {
 		const h = s.runWithScope(host, () => createChangeHeader(s, extra))
 		if (time !== undefined) h.time = time
 		return h
@@ -50,7 +50,7 @@ function world(table0?: (event: (part: Key, id: Id) => void) => Table) {
 	const value = (id: Id, v: unknown, time?: number) => put("value", id, v, time)
 	const patch = (p: Id, node: PatchNode, time?: number) => put("patch", p, node, time)
 	// patches to the entry there, said through the overlay's commit
-	function edit(part: Key, id: Id, patches: Patch[], time?: number, extra?: [string, unknown][]) {
+	function edit(part: Key, id: Id, patches: Patch[], time?: number, extra?: Info) {
 		const entry = table.get(part, id)!
 		update(entry, patches, header(time, extra))
 		overlay.commit([entry])
@@ -170,15 +170,14 @@ Deno.test("patch nodes: an optimistic write shows until the base catches up, the
 	w.s.pulse()
 	assertEquals(title.value, "final")
 	// the owner's change lands, answering it: the patch node, made against 100, is stale now
-	w.edit("value", "N", [{ path: ["title"], value: "final" }], 160, [["answers", "pending/1"]])
+	w.edit("value", "N", [{ path: ["title"], value: "final" }], 160, { answers: "pending/1" })
 	w.s.pulse()
 	assertEquals(w.layers("N", ["title"]), [
 		{ value: "final", from: "pending/1", stale: true },
 		{ value: "final", from: TABLE },
 	])
 	// the editor sees the answer on N's change, and drops its patch node
-	const answers = w.table.get("value", "N")!.change.metadata ?? []
-	assert(answers.some(([k, v]) => k === "answers" && v === "pending/1"))
+	assertEquals(w.table.get("value", "N")!.change.metadata?.answers, "pending/1")
 	w.table.del("patch", "pending/1")
 	w.s.pulse()
 	assertEquals(title.value, "final")
@@ -276,7 +275,7 @@ Deno.test("patch nodes: entries gives every layer at a path, front first, with f
 	assertEquals(w.places.readValue("value", "N", ["title"]), "two")
 	// the made entry says its patch nodes, after the table's change
 	const change = w.places.readChange("value", "N")!
-	assertEquals(change.metadata?.at(-1), ["overlay", ["P1", "P2"]])
+	assertEquals(change.metadata?.overlay, ["P1", "P2"])
 	assertEquals(change.time, time(w, "N"))
 	assertEquals(change.op, undefined)
 	// nothing there: none
@@ -301,7 +300,7 @@ Deno.test("patch nodes: stale is applied and said; patches that no longer apply 
 	assertEquals(p, { value: { title: "mine" }, from: "P", stale: true })
 	assertEquals(base, { value: { title: "t" }, from: TABLE })
 	// the made change says only what applied
-	assertEquals(w.places.readChange("value", "N")!.metadata?.at(-1), ["overlay", ["P"]])
+	assertEquals(w.places.readChange("value", "N")!.metadata?.overlay, ["P"])
 	// made again against the version now: no longer stale
 	w.edit("patch", "P", [{ path: ["at"], value: 200 }])
 	assertEquals(w.layers("N")[1], { value: { title: "mine" }, from: "P" })

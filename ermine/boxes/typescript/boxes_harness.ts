@@ -1,7 +1,7 @@
 // boxes (boxes.ts) on the line protocol: one JSON request per line in, one answer per line out, in
 // order. one world per run: a scheduler, a table, the host's places (root "R"). boxes by name. a
 // folder a write made is answered as "new:<name>". path: a list of names; address: a string or a
-// list of steps. the host writes with scope [["actor","test"]]. PlacesError: { error: code }
+// list of steps. the host writes with scope {"actor":"test"}. PlacesError: { error: code }
 //
 // world:
 // { op: "root", name }                     → {}   a scope with no parent

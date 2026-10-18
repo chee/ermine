@@ -15,7 +15,7 @@ import { createTable, type Id, type Key } from "@ermine/table"
 import { createPlaces } from "@ermine/places"
 import { get } from "@ermine/places/lib"
 import { createChangeHeader } from "@ermine/places/header"
-import { type Read, RUN, type Run } from "@ermine/places/runs"
+import type { Read } from "@ermine/processes/runs"
 import { box, createBox } from "@ermine/boxes"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import { createBuilds } from "@ermine/build"
@@ -41,8 +41,8 @@ function world(o: { may?: Policy; presence?: boolean; overlay?: boolean; sites?:
 	const places = createPlaces({ root: "R", table: overlay ?? table, paths, scheduler: s })
 	s.onTrackingEnd((key) => places.release(key))
 	const scopes = createScopeNodes({ scheduler: s, table })
-	const host = s.createRootScope([["actor", "host"]])
-	const above = s.createScope([["role", "programs"]], host)
+	const host = s.createRootScope({ actor: "host" })
+	const above = s.createScope({ role: "programs" }, host)
 	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 	const header = () => createChangeHeader(s)
 	const commit = (changed: readonly Entry<unknown>[]) =>
@@ -84,7 +84,6 @@ function world(o: { may?: Policy; presence?: boolean; overlay?: boolean; sites?:
 		overlay,
 		sites,
 		notice: (made) => void noticed.push(made),
-		scopes,
 	})
 	put("children", "W", { lib: "LIB" })
 	put("children", "LIB", {})
@@ -163,7 +162,7 @@ Deno.test("open makes once; edit takes a recipe or patches; a write from outside
 	assertEquals(api.read("./notes"), "whole")
 })
 
-Deno.test("a memo's node holds its latest run: what it read, with the change it saw, and wrote; an effect's, its act's writes", async () => {
+Deno.test("a memo's latest run (runs, by its node's id): what it read, with the change it saw, and wrote; an effect's, its act's writes", async () => {
 	const w = world()
 	w.program("runs.js", (a) => {
 		const notes = a.open("./notes", { a: 1 })
@@ -174,7 +173,7 @@ Deno.test("a memo's node holds its latest run: what it read, with the change it 
 	w.start("runs.js", ["runs"])
 	await tick()
 	const [memo, effect] = w.noticed
-	const run = w.table.get("attributes", memo.id)?.value?.[RUN] as Run
+	const run = w.apis.runs(memo.id)!
 	assertEquals([run.n, run.end], [1, "done"])
 	const notes = w.inW("notes")
 	const named = run.reads.filter((r): r is Exclude<Read, { key: unknown }> => !("key" in r))
@@ -183,7 +182,7 @@ Deno.test("a memo's node holds its latest run: what it read, with the change it 
 	assertStrictEquals(read.change, w.table.get("value", notes)!.change)
 	// its result, written to its own node by its set
 	assertEquals(run.writes.map((x) => [x.part, x.id]), [["value", memo.id]])
-	const acted = w.table.get("attributes", effect.id)?.value?.[RUN] as Run
+	const acted = w.apis.runs(effect.id)!
 	const out = w.inW("out")
 	assertEquals(acted.writes.map((x) => [x.part, x.id]), [["value", effect.id], ["value", out]])
 })
@@ -245,7 +244,7 @@ Deno.test("method and send: the method's return given back, the caller on the ch
 	assertEquals(caller.send("./greeter/on/greet", "frog"), "hi frog")
 	assertEquals(caller.read("./last"), "frog")
 	const change = w.table.get("value", w.inW("last"))!.change
-	assert(change.metadata?.some(([k, v]) => k === "caller" && v === c.id))
+	assertEquals(change.metadata?.caller, c.id)
 	assertInstanceOf(assertThrows(() => caller.send("./last")), SendError)
 })
 
@@ -469,9 +468,9 @@ Deno.test("early: its first act happened by the time early returns, and a later 
 	api.edit("./n", [{ path: [], value: 2 }])
 	await tick()
 	assertEquals(seen.slice(2), [["early", 2], ["effect", 2]])
-	// its node has its status and run record, as an effect's
+	// its node has its status, and it a run record, as an effect's
 	const [, early] = w.noticed
-	const run = w.table.get("attributes", early.id)?.value?.[RUN] as Run
+	const run = w.apis.runs(early.id)!
 	assertEquals(run.end, "done")
 	assertEquals(w.table.get("value", early.id)?.value, 2)
 })

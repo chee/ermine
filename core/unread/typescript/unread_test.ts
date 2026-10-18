@@ -127,7 +127,7 @@ Deno.test("unread: keeping: what a computation keeps past its run is held; what 
 	keeping(s, u)
 	const e = createEntry<unknown>({ a: { x: 0 }, b: { y: 0 } }, h())
 	u.update(e, [{ path: ["a", "x"], value: 1 }, { path: ["b", "y"], value: 1 }], h())
-	const o = s.createRootScope([["actor", "r"]])
+	const o = s.createRootScope({ actor: "r" })
 	let held: unknown
 	// keeps a; reads b and keeps only a number
 	s.runWithScope(o, () => s.createComputer(() => (s.track("e"), doc(e).a), (v) => void (held = v)))
@@ -178,7 +178,7 @@ Deno.test("unread: keeping through places stops at what a run was handed; a run 
 		const where = places.describe(key)
 		return where?.path ? read(table.get(where.part, where.id)?.value, where.path) : undefined
 	})
-	const host = s.createRootScope([["actor", "host"]])
+	const host = s.createRootScope({ actor: "host" })
 	const header = () => s.runWithScope(host, () => createChangeHeader(s))
 	table.sub("value", "N", createEntry({ folder: { a: "A" }, n: 0 }, header()) as never)
 	const e = table.get("value", "N")!
@@ -187,7 +187,7 @@ Deno.test("unread: keeping through places stops at what a run was handed; a run 
 	const folder = doc(e).folder
 	// a count: holds nothing, so the folder goes on changing in place
 	let count: unknown
-	s.runWithScope(s.createRootScope([["actor", "r"]]), () =>
+	s.runWithScope(s.createRootScope({ actor: "r" }), () =>
 		s.createComputer(
 			() => ({ count: Object.keys(places.readValue("value", "N", ["folder"]) as Doc).length }),
 			(v) => void (count = v),
@@ -201,7 +201,7 @@ Deno.test("unread: keeping through places stops at what a run was handed; a run 
 	// the folder itself, kept: the next write copies it
 	let held: unknown
 	s.runWithScope(
-		s.createRootScope([["actor", "r"]]),
+		s.createRootScope({ actor: "r" }),
 		() =>
 			s.createComputer(() => places.readValue("value", "N", ["folder"]), (v) => void (held = v)),
 	)
@@ -223,12 +223,12 @@ Deno.test("unread: through places, a reader's value never changes under it, and 
 		paths: createPaths(),
 		scheduler: s,
 	})
-	const host = s.createRootScope([["actor", "host"]])
+	const host = s.createRootScope({ actor: "host" })
 	const header = () => s.runWithScope(host, () => createChangeHeader(s))
 	table.sub("children", "F", createEntry({ a: "A" }, header()) as never)
 	const held: unknown[] = []
 	s.runWithScope(
-		s.createRootScope([["actor", "r"]]),
+		s.createRootScope({ actor: "r" }),
 		() => s.createComputer(() => places.readValue("children", "F"), (v) => void held.push(v)),
 	)
 	s.pulse()

@@ -54,7 +54,7 @@ async function made() {
 		actor: { name: "juno" },
 		reader: "r",
 		external: [{ file: "a.ts", line: 2 }],
-		metadata: [["cause", 1]],
+		metadata: { cause: 1 },
 		parents: [names[10]],
 		lamport: 12,
 		patches: [{ path: ["new"], move: { path: ["old"] } }],

@@ -13,6 +13,8 @@ import { createChangeHeader } from "@ermine/places/header"
 import { createScheduler } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/table"
+import { decode } from "@ermine/encoding/commit"
+import { hex } from "./hex.ts"
 import { createSigner } from "./seal.ts"
 import { createSync } from "./sync.ts"
 import { egwalker } from "./egwalker.ts"
@@ -68,7 +70,7 @@ async function host(
 		...extra,
 	})
 	const device = sync.device
-	const scope = scheduler.createRootScope([["actor", `host${n}`]])
+	const scope = scheduler.createRootScope({ actor: `host${n}` })
 	// patches to the entry under (part, id), made whole first if none
 	const write = (part: Key, id: Id, patches: Patch[]) =>
 		scheduler.runWithScope(scope, () => {
@@ -281,7 +283,12 @@ Deno.test({
 		await quiet(a, b)
 		const { op: _, ...mine } = a.table.get("value", id)!.change
 		const { op: __, ...theirs } = b.table.get("value", id)!.change
-		assertEquals(mine, { time: 1_760_000_100, actor: "settler" })
+		const settled = a.device.history(id).heads()[0]
+		assertEquals(mine, {
+			time: 1_760_000_100,
+			actor: "settler",
+			metadata: { signer: hex(decode(settled.bytes).signer), commit: hex(settled.name) },
+		})
 		assertEquals(theirs, mine)
 		await a.device.close(), await b.device.close()
 	},
