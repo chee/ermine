@@ -110,8 +110,8 @@
 					"r"
 				],
 				"commits": [
-					"a",
 					"b",
+					"a",
 					"m2",
 					"m1"
 				]
@@ -132,7 +132,7 @@
 							"actor": null,
 							"metadata": {
 								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-								"commit": "5d33019ac5396693912a568ccc752e82ed188e2a263189f1fe21813a3e552ab6"
+								"commit": "1e2056f09c12f6df457e67bcb72facd63364b5433fd7be7d4cec6aaf9579fded21ef"
 							}
 						}
 					}
@@ -164,8 +164,8 @@
 			],
 			"expect": {
 				"from": [
-					"b",
-					"a"
+					"a",
+					"b"
 				],
 				"commits": [
 					"m2",
@@ -188,7 +188,7 @@
 							"actor": null,
 							"metadata": {
 								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-								"commit": "5d33019ac5396693912a568ccc752e82ed188e2a263189f1fe21813a3e552ab6"
+								"commit": "1e2056f09c12f6df457e67bcb72facd63364b5433fd7be7d4cec6aaf9579fded21ef"
 							}
 						}
 					}
@@ -227,8 +227,8 @@
 					"r"
 				],
 				"commits": [
-					"a",
 					"b",
+					"a",
 					"m2",
 					"m1",
 					"c"
@@ -251,7 +251,7 @@
 							"actor": null,
 							"metadata": {
 								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-								"commit": "6db19bba18470c17c7e957ef98c2bc965a2eb262f9eeb71b6291e61498c4e023"
+								"commit": "1e20678bfc64a483f837081f8c1c957699245fa391db40c224639709ae929aaf2b71"
 							}
 						}
 					}

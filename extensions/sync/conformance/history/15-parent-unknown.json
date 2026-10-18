@@ -9,7 +9,7 @@
 			"patches": [{ "path": [], "value": { "n": 0 } }],
 			"expect": {
 				"added": {
-					"waiting": ["abababababababababababababababababababababababababababababababab"]
+					"waiting": ["1e20abababababababababababababababababababababababababababababababab"]
 				}
 			}
 		},
@@ -19,7 +19,9 @@
 				"waiting": [
 					{
 						"name": "a",
-						"waiting": ["abababababababababababababababababababababababababababababababab"]
+						"waiting": [
+							"1e20abababababababababababababababababababababababababababababababab"
+						]
 					}
 				]
 			}
