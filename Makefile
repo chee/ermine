@@ -42,11 +42,11 @@ fragment_src = extensions/subduction/c/fragment.c extensions/subduction/c/fragme
 squish_src = $(harness_src) core/op/c/squish.c core/op/c/squish_harness.c
 op-apply_src = $(harness_src) conformance/c/protocol_harness.c core/op/c/apply_harness.c core/op/c/apply.c core/op/c/invert.c core/node/c/node.c
 paths_src = $(harness_src) conformance/c/protocol_harness.c core/scheduler/c/paths_harness.c core/scheduler/c/paths.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
-places_src = $(harness_src) filesystem/places/c/places_harness.c conformance/c/protocol_harness.c filesystem/places/c/places.c filesystem/places/c/cache.c ermine/clingy/c/clingy.c core/scheduler/c/selector.c filesystem/places/c/status.c filesystem/places/c/runs.c filesystem/places/c/world_harness.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
+places_src = $(harness_src) filesystem/places/c/places_harness.c conformance/c/protocol_harness.c filesystem/places/c/places.c filesystem/places/c/cache.c filesystem/clingy/c/clingy.c core/scheduler/c/selector.c filesystem/places/c/status.c filesystem/places/c/world_harness.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
 processes_src = $(filter-out filesystem/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes_harness.c ermine/processes/c/processes.c ermine/processes/c/scopes.c
 protect_src = filesystem/protect/c/protect.c filesystem/protect/c/protect_harness.c $(harness_src)
 update_src = $(harness_src) conformance/c/protocol_harness.c core/node/c/update_harness.c core/node/c/update.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
-guard_src = $(harness_src) filesystem/places/c/guard_harness.c filesystem/places/c/guard.c filesystem/protect/c/protect.c conformance/c/protocol_harness.c filesystem/places/c/places.c filesystem/places/c/cache.c ermine/clingy/c/clingy.c core/scheduler/c/selector.c filesystem/places/c/status.c filesystem/places/c/runs.c filesystem/places/c/world_harness.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
+guard_src = $(harness_src) filesystem/places/c/guard_harness.c filesystem/places/c/guard.c filesystem/protect/c/protect.c conformance/c/protocol_harness.c filesystem/places/c/places.c filesystem/places/c/cache.c filesystem/clingy/c/clingy.c core/scheduler/c/selector.c filesystem/places/c/status.c filesystem/places/c/world_harness.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
 scheduler_src = $(harness_src) core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c core/scheduler/c/scheduler_harness.c
 names_src = playground/tools/files/c/names.c playground/tools/files/c/names_harness.c ermine/encoding/c/json.c
 diag_src = playground/tools/files/c/diag.c playground/tools/files/c/diag_harness.c ermine/encoding/c/json.c
@@ -151,9 +151,9 @@ sites_tests = $(wildcard ermine/sites/typescript/sites_harness_test.ts)
 sites-test_src = core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c ermine/sites/c/sites.c ermine/sites/c/sites_test.c
 sites-test = ermine/sites/c/sites-test
 LIBS += sites sites-test
-# clingy (ermine/clingy): keys known tracked or not, told when their last tracker goes; no suite
-clingy-test_src = core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c ermine/clingy/c/clingy.c ermine/clingy/c/clingy_test.c
-clingy-test = ermine/clingy/c/clingy-test
+# clingy (filesystem/clingy): keys known tracked or not, told when their last tracker goes; no suite
+clingy-test_src = core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c filesystem/clingy/c/clingy.c filesystem/clingy/c/clingy_test.c
+clingy-test = filesystem/clingy/c/clingy-test
 LIBS += clingy-test
 # programs (playground/programs): satisfy and open (programs) and start, over ermine/types, ermine/processes' start and
 # extensions/build's build and host functions; build (extensions/build) on its own. on the places harness's world with boxes
@@ -166,7 +166,7 @@ programs_tests = $(wildcard extensions/programs/typescript/programs_harness_test
 programs-build_src = $(programs_base) extensions/build/c/build.c extensions/build/c/build_harness.c
 programs-build = extensions/build/c/build-harness
 programs-build_suite = build
-programs-start_src = $(programs_base) $(programs_lib) extensions/build/c/build.c ermine/processes/c/start.c extensions/programs/c/start.c extensions/programs/c/start_harness.c ermine/processes/c/scopes.c ermine/sites/c/sites.c extensions/programs/c/dlopen.c
+programs-start_src = $(programs_base) $(programs_lib) extensions/build/c/build.c ermine/processes/c/start.c ermine/processes/c/runs.c extensions/programs/c/start.c extensions/programs/c/start_harness.c ermine/processes/c/scopes.c ermine/sites/c/sites.c extensions/programs/c/dlopen.c
 programs-start = extensions/programs/c/start-harness
 programs-start_suite = start
 programs-start_flags = -DPG_FIXTURES='"$(CURDIR)/extensions/programs/c/fixtures/"'
@@ -187,11 +187,18 @@ clean: clean-native
 clean-native:
 	rm -f $(native_fixtures)
 # the process api (ermine/api): its harness on places, processes, guard, status, presence and patch nodes, on its own world
-api_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c filesystem/places/c/guard.c filesystem/protect/c/protect.c extensions/presence/c/presence.c extensions/presence/c/channel.c extensions/patch-nodes/c/patch.c ermine/api/c/api.c ermine/api/c/api_harness.c ermine/sites/c/sites.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
+api_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/runs.c filesystem/places/c/guard.c filesystem/protect/c/protect.c extensions/presence/c/presence.c extensions/presence/c/channel.c extensions/patch-nodes/c/patch.c ermine/api/c/api.c ermine/api/c/api_harness.c ermine/sites/c/sites.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
 api = ermine/api/c/api-harness
 api_suite = api
 api_tests = $(wildcard ermine/api/typescript/api_harness_test.ts)
 LIBS += api
+# runs (ermine/processes): each computer's latest run, on a table of its own; places' harness's world, programs and requests, and the runs'
+runs_src = $(places_src) filesystem/places/c/guard.c filesystem/protect/c/protect.c ermine/processes/c/runs.c ermine/processes/c/runs_harness.c
+runs = ermine/processes/c/runs-harness
+runs_flags = -DPH_LIB
+runs_suite = runs
+runs_tests = $(wildcard ermine/processes/typescript/runs_harness_test.ts)
+LIBS += runs
 # sync's pieces for the new commit shape (ermine/encoding commit, extensions/sync): their own loop (lines_harness.c is conformance/c/harness.c
 # reading a symbol as a string no one can carry), against the suites in ermine/encoding/conformance and extensions/sync/conformance.
 # commit_form_harness.c (a commit's forms on the line) and commits_harness.c (the commits a harness makes by label) are the harnesses', never
