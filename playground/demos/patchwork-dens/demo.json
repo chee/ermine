@@ -1,0 +1,6 @@
+{
+	"title": "patchwork on dens",
+	"order": 6,
+	"tags": ["browser", "javascript", "processes"],
+	"alt": "patchwork's tool contract on a den: each view a process, its box what it can reach"
+}

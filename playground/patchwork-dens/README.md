@@ -63,7 +63,8 @@ scratch, and nothing is copied from patchwork-system or patchwork-pkg-base.
 deno test --allow-read playground/patchwork-dens
 ```
 
-the test (`typescript/patchwork_test.ts`) runs the den over a fake DOM (`fake_dom.ts`)..
+the test (`typescript/patchwork_test.ts`) runs the den over a fake DOM (`fake_dom.ts`). a page is at
+`playground/demos/patchwork-dens` (`deno task demo`, then `/patchwork-dens/`).
 
 ## shimmed, and real
 
