@@ -26,6 +26,7 @@
 		"./extensions/patch-nodes",
 		"./playground/demo-world",
 		"./playground/demos",
+		"./playground/patchwork-dens",
 		"./playground/libraries/pack-indexeddb"
 	],
 	"tasks": {

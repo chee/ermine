@@ -1,0 +1,12 @@
+{
+	"name": "@ermine/patchwork-dens",
+	"version": "0.0.0",
+	"license": "AGPL-3.0-or-later",
+	"exports": {
+		".": "./typescript/runner.ts",
+		"./handle": "./typescript/handle.ts",
+		"./lookup": "./typescript/lookup.ts",
+		"./boot": "./typescript/boot.ts",
+		"./examples": "./typescript/examples.ts"
+	}
+}
