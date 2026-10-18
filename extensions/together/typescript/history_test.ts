@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertThrows } from "@std/assert"
-import { type Commit, compare, encode, name } from "@ermine/encoding/commit"
+import { type Commit, compare, encode, joinName, name } from "@ermine/encoding/commit"
 import { createHistory } from "./history.ts"
 import { replay } from "./replay.ts"
 import { snapshot, tablesOf } from "./snapshot.ts"
@@ -146,7 +146,7 @@ Deno.test("history: a throw in the check is no refusal: the commit waits on the 
 Deno.test("history: past most, the oldest commit waiting on a parent is let go of and told, and the oldest refusal forgotten", () => {
 	const dropped: string[] = []
 	const h = createHistory(() => true, { most: 2, dropped: (n) => dropped.push(n) })
-	const missing = new Uint8Array(32).fill(7)
+	const missing = joinName(0x1e, new Uint8Array(32).fill(7))
 	const w = [1, 2, 3].map((i) => make("value", [missing], 2, [{ path: [], value: i }]))
 	for (const x of w) assertEquals(h.add(x.bytes), { waiting: [hex(missing)] })
 	assertEquals(dropped, [hex(w[0].name)])

@@ -57,7 +57,7 @@ export type History = {
 	// the commits waiting on the check judged again, in the order they came to wait; the first
 	// throw of the check thrown after
 	again(): void
-	refused(): { name: string; refused: Refusal }[]
+	refused(): { name: string; refused: Refusal; on?: string }[]
 	// every commit taken in, in the order taken
 	all(): Kept[]
 	// a head taken in let go of, as if never told of it: its parents heads again where nothing else
@@ -86,11 +86,17 @@ export function createHistory(
 	let thrown: { error: unknown } | undefined
 	const waiters = new Map<string, Set<string>>()
 	const refusals = new Map<string, Refusal>()
+	// a commit refused for a parent: the parent refused, its name
+	const causes = new Map<string, string>()
 	const listeners = new Set<(kept: Kept) => void>()
 
 	// refused, the oldest refusal let go of past most
 	function note(n: string, why: Refusal) {
-		if (refusals.size >= most) refusals.delete(refusals.keys().next().value!)
+		if (refusals.size >= most) {
+			const old = refusals.keys().next().value!
+			refusals.delete(old)
+			causes.delete(old)
+		}
 		refusals.set(n, why)
 	}
 
@@ -109,14 +115,15 @@ export function createHistory(
 		}
 	}
 
-	function refuse(n: string, why: Refusal) {
+	function refuse(n: string, why: Refusal, cause?: string) {
 		note(n, why)
+		if (cause !== undefined) causes.set(n, cause)
 		// what waits on a refused commit never comes in
 		for (const w of waiters.get(n) ?? []) {
 			const x = waits.get(w)
 			if (x === undefined) continue
 			waits.delete(w)
-			refuse(w, "parent")
+			refuse(w, "parent", n)
 		}
 		waiters.delete(n)
 	}
@@ -203,7 +210,7 @@ export function createHistory(
 			}
 			for (const p of commit.parents) {
 				if (refusals.has(hex(p))) {
-					refuse(n, "parent")
+					refuse(n, "parent", hex(p))
 					return { refused: "parent" }
 				}
 			}
@@ -235,7 +242,12 @@ export function createHistory(
 			}
 			rethrow(undefined)
 		},
-		refused: () => [...refusals].map(([name, refused]) => ({ name, refused })),
+		refused: () =>
+			[...refusals].map(([name, refused]) => ({
+				name,
+				refused,
+				...causes.has(name) && { on: causes.get(name)! },
+			})),
 		all: () => order.slice(),
 		forget(name) {
 			const n = hex(name), kept = taken.get(n)

@@ -9,12 +9,18 @@
 //   parents: null when exactly the commit before's name; else refs
 //   base: a ref, null when none
 //   merge: runs of the rule's name, null when none; only when a commit is a merge by a rule
+//   bytes: per commit, null or its exact bytes; only when a commit's bytes are not what its columns
+//     encode to (a field a later device made, the commit's decode leaves out). the columns are still
+//     written; unpack checks they say the same commit as the bytes
 //   patches: a string when one insert continuing the commit before's text; else the patches
 //   headers: runs of each signature's varsig header (seal.ts); empty: none read; null: vouched
 //   signatures: each signed one's bytes after its header, in order
 //   ids: each vouched one's stored id, in order
 // ref: a place earlier in the run, else a name. unpack takes any spelling that says the commits;
 // only pack's is canonical.
+// changing: each commit is named and signed alone; a run only carries them. a commit field this pack
+// doesn't know goes whole in bytes (it packs badly until the columns learn it); a new column is an
+// unknown key to an older unpack, so it waits until every device reads it.
 //
 // refused (RunError code, column), the first that fails:
 //   not-a-run    not CBOR, not a map, or an unknown key
@@ -72,6 +78,7 @@ const COLUMNS: ReadonlySet<string> = new Set([
 	"parents",
 	"base",
 	"merge",
+	"bytes",
 	"patches",
 	"headers",
 	"signatures",
@@ -210,6 +217,7 @@ const same = (a: Uint8Array, b: Uint8Array) =>
 // that must be signed given without a seal
 export function pack(members: readonly Member[]): Uint8Array {
 	const commits: Commit[] = [],
+		raw: (Uint8Array | null)[] = [],
 		names: string[] = [],
 		seals: (Uint8Array | undefined)[] = [],
 		ids: Uint8Array[] = []
@@ -223,7 +231,10 @@ export function pack(members: readonly Member[]): Uint8Array {
 			bytes = m.commit, id = m.stored
 			seals.push(undefined)
 		}
-		commits.push(decode(bytes))
+		const c = decode(bytes)
+		commits.push(c)
+		// bytes that are not what the columns say: kept as they are
+		raw.push(same(encode(c), bytes) ? null : bytes)
 		names.push(hex(nameOf(bytes)))
 		ids.push(id)
 	}
@@ -287,6 +298,7 @@ export function pack(members: readonly Member[]): Uint8Array {
 	if (commits.some((c) => c.merge !== undefined)) {
 		columns.merge = runs(commits.map((c) => c.merge ?? null))
 	}
+	if (raw.some((b) => b !== null)) columns.bytes = raw
 	return cbor.encode(columns as cbor.Value)
 }
 
@@ -331,6 +343,12 @@ export function* each(bytes: Uint8Array): Generator<Unpacked, void, undefined> {
 	const signer = unruns(o.signer, count, "signer"), base = unruns(o.base, count, "base")
 	const merge = "merge" in o ? unruns(o.merge, count, "merge") : undefined
 	const headers = unruns(o.headers, count, "headers")
+	const exact = o.bytes
+	if (
+		exact !== undefined &&
+		(!Array.isArray(exact) || exact.length !== count ||
+			!exact.every((b) => b === null || b instanceof Uint8Array))
+	) throw new RunError("runs", "bytes")
 	if (!headers.every((h) => h instanceof Uint8Array || h === null)) {
 		throw new RunError("runs", "headers")
 	}
@@ -386,7 +404,14 @@ export function* each(bytes: Uint8Array): Generator<Unpacked, void, undefined> {
 		let b: Uint8Array
 		try {
 			b = encode(c)
-		} catch {
+			const given = exact?.[i] as Uint8Array | null | undefined
+			if (given) {
+				// the commit as the bytes have it, the columns' and no other
+				if (!same(encode(decode(given)), b)) throw new RunError("commit")
+				b = given
+			}
+		} catch (e) {
+			if (e instanceof RunError) throw e
 			throw new RunError("commit")
 		}
 		const name = nameOf(b)

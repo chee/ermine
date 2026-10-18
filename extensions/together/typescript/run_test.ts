@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertThrows } from "@std/assert"
 import * as cbor from "@ermine/encoding/cbor"
-import { type Commit, compare, encode, name } from "@ermine/encoding/commit"
+import { type Commit, compare, encode, joinName, name } from "@ermine/encoding/commit"
 import { pack, RunError, unpack, type Unpacked } from "./run.ts"
 import { createSigner, seal, stored } from "./seal.ts"
 
@@ -79,7 +79,7 @@ async function made() {
 	await add({
 		table: "value",
 		actor: "chee",
-		parents: [new Uint8Array(32).fill(9)],
+		parents: [joinName(0x1e, new Uint8Array(32).fill(9))],
 		lamport: 2,
 		patches: [{ path: [] }],
 	})

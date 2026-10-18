@@ -289,8 +289,8 @@ export function createSync(options: Options): Sync {
 	// the last commit this device sent at each node's table, its name (hex): what a write here
 	// replays as (fromTable)
 	const sent = new Map<string, Map<string, string>>()
-	// each node's writes no commit could carry: the first LIST, and how many
-	const unsent = new Map<string, { rows: Status["unsent"]; count: number }>()
+	// each node's writes no commit could carry, all of them (the status lists the first LIST)
+	const unsent = new Map<string, Status["unsent"]>()
 	// nodes whose status is to be worked out again: once a batch
 	const unwell = new Set<string>()
 
@@ -653,40 +653,72 @@ export function createSync(options: Options): Sync {
 			...t.waiting.map((w) => on(w.commit, w.waiting)),
 			...history.waiting().map((w) => on(w.name, w.waiting)),
 		]
-		const refused: Status["refused"] = [
-			...t.refused.map((r) =>
-				"fragment" in r
-					? { fragment: r.fragment, code: r.refused }
-					: { commit: r.commit, code: "stuck" in r ? "parent" : r.refused }
-			),
-			...history.refused().map((r) => ({ commit: r.name, code: r.refused })),
-		]
-		const mine = unsent.get(doc)
+		const refused: Status["refused"] = []
+		// a commit stuck behind a refused parent waits on that parent: a later change (the rule
+		// becoming known) could let both in
+		for (const r of t.refused) {
+			if ("fragment" in r) refused.push({ fragment: r.fragment, code: r.refused })
+			else if ("stuck" in r) waiting.push(on(r.commit, r.stuck))
+			else refused.push({ commit: r.commit, code: r.refused })
+		}
+		for (const r of history.refused()) {
+			if (r.on !== undefined) waiting.push(on(r.name, [r.on]))
+			else refused.push({ commit: r.name, code: r.refused })
+		}
+		const mine = unsent.get(doc) ?? []
 		const have = table.get("status", doc)
-		if (!waiting.length && !refused.length && mine === undefined) {
+		if (!waiting.length && !refused.length && !mine.length) {
 			if (have !== undefined) table.del("status", doc)
 			return
 		}
 		const value: Status = {
 			waiting: waiting.slice(0, LIST),
 			refused: refused.slice(0, LIST),
-			unsent: mine?.rows ?? [],
-			count: { waiting: waiting.length, refused: refused.length, unsent: mine?.count ?? 0 },
+			unsent: mine.slice(0, LIST),
+			count: { waiting: waiting.length, refused: refused.length, unsent: mine.length },
 		}
-		if (have !== undefined && same(have.value, value)) return
-		const entry = createEntry(value, { time: Math.floor(Date.now() / 1000), actor: null })
-		if (have) table.sub("status", doc, entry)
-		else table.add("status", doc, entry)
+		const change = { time: Math.floor(Date.now() / 1000), actor: null }
+		if (have?.value === undefined) {
+			const entry = createEntry(value, change)
+			if (have) table.sub("status", doc, entry)
+			else table.add("status", doc, entry)
+			return
+		}
+		// each list and count that changed is a patch of its own, so a read of one is not rerun
+		// by a change to another
+		const was = have.value
+		const patches: Patch[] = []
+		for (const k of ["waiting", "refused", "unsent"] as const) {
+			if (!same(was[k], value[k])) patches.push({ path: [k], value: value[k] })
+		}
+		for (const k of ["waiting", "refused", "unsent"] as const) {
+			if (was.count?.[k] !== value.count[k]) {
+				patches.push({ path: ["count", k], value: value.count[k] })
+			}
+		}
+		if (!patches.length) return
+		const next = createEntry(was, have.change)
+		update(next, patches, change)
+		table.sub("status", doc, next)
+	}
+
+	// the writes no commit could carry at (id, table) are no longer so: what a send there carried
+	// is what other devices have of it again
+	function sentAt(id: string, part: Key) {
+		const rows = unsent.get(id)
+		if (rows === undefined) return
+		const left = rows.filter((r) => r.table !== part)
+		if (left.length === rows.length) return
+		if (left.length) unsent.set(id, left)
+		else unsent.delete(id)
+		recheck(id)
 	}
 
 	// a write at (id, table) no commit could carry: noted in the status
 	function failed(id: string, part: Key, e: CommitError) {
 		let m = unsent.get(id)
-		if (m === undefined) unsent.set(id, m = { rows: [], count: 0 })
-		m.count++
-		if (m.rows.length < LIST) {
-			m.rows.push({ table: part as string, error: e.code, ...e.field && { field: e.field } })
-		}
+		if (m === undefined) unsent.set(id, m = [])
+		m.push({ table: part as string, error: e.code, ...e.field && { field: e.field } })
 		recheck(id)
 	}
 
@@ -769,6 +801,7 @@ export function createSync(options: Options): Sync {
 		grew(id, name, bytes.length)
 		const added = device.take(id, bytes, "stored", { commit, name })
 		if (added === "taken") {
+			sentAt(id, part)
 			let at = sent.get(id)
 			if (at === undefined) sent.set(id, at = new Map())
 			at.set(part as string, hex(name))
@@ -1017,6 +1050,7 @@ export function createSync(options: Options): Sync {
 		nonce++
 		const name = nameOf(bytes)
 		if (device.take(id, bytes, "ephemeral", { commit, name }) !== "taken") return
+		sentAt(id, part)
 		const kept = device.history(id, "ephemeral").get(name)!
 		// the stored under it, as it was before this write
 		if (!o.over.has(t)) {

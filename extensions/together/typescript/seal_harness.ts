@@ -1,6 +1,6 @@
 // the seal (seal.ts) on the line protocol (conformance/typescript/harness.ts). nothing lasts between
 // lines. another implementation joins by speaking this (HARNESS). conventions:
-// extensions/sync/conformance/README.md
+// extensions/together/conformance/README.md
 //
 // { op: "key", seed }               → { key }       the Ed25519 key of a 32-byte seed, as a
 //                                                    multikey (0xed 0x01, then the 32 bytes)

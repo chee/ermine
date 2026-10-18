@@ -1,5 +1,5 @@
 // run_harness: run.ts on the line protocol (harness.ts). one process: commits by label, each sealed
-// by its seed's signer; runs packed by label. conventions: extensions/sync/conformance/README.md
+// by its seed's signer; runs packed by label. conventions: extensions/together/conformance/README.md
 //
 // { op: "make", name, ...fields }      → {}            made, labelled, sealed (default document:
 //                                                      2a × 16 then 00 × 16)

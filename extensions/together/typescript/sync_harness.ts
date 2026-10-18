@@ -1,6 +1,6 @@
 // sync_harness: whole hosts (sync.ts) on the line protocol (harness.ts), each a table, places, a
 // scheduler and sync over its own device and storage (as sync_test.ts), joined by in-memory pipes.
-// conventions: extensions/sync/conformance/README.md
+// conventions: extensions/together/conformance/README.md
 //
 // deterministic: a host's random is BLAKE3("<host>/<k>"), k counting its calls across restarts; a
 // write's change is the request's, else { time: 1760000000, actor: <host>, external: [{ file:

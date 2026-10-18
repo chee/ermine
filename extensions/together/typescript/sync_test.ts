@@ -11,7 +11,7 @@ import type { Patch } from "@ermine/op/apply"
 import { createPlaces } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
 import { createScheduler } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
+import { createPaths, marks } from "@ermine/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/table"
 import { decode } from "@ermine/encoding/commit"
 import { hex } from "./hex.ts"
@@ -410,5 +410,35 @@ Deno.test({
 		const first = Math.min(times[0], times[1])
 		assert(times[3] < 4 * first + 250, `500 writes each: ${times.map(Math.round)} ms`)
 		await a.sync.close(), await b.sync.close()
+	},
+})
+
+Deno.test({
+	name: "sync: the status is written as a patch per list and count that changed",
+	...opts,
+	async fn() {
+		const a = await host(1)
+		const id = a.sync.mint()
+		a.write("value", id, [{ path: [], value: { n: 1 } }])
+		await quiet(a)
+		// no value has an encoding for a symbol: the write is not sent, and noted
+		a.write("value", id, [{ path: ["n"], value: Symbol("s") }])
+		await quiet(a)
+		const first = a.table.get("status", id)!
+		assertEquals(first.value?.count, { waiting: 0, refused: 0, unsent: 1 })
+		a.write("attributes", id, [{ path: [], value: { k: 1 } }])
+		a.write("attributes", id, [{ path: ["k"], value: Symbol("t") }])
+		await quiet(a)
+		const next = a.table.get("status", id)!
+		assert(next !== first)
+		assertEquals(next.value?.count, { waiting: 0, refused: 0, unsent: 2 })
+		// only unsent and its count changed: a reader of refused or waiting is not marked
+		const patches = next.change.op!.patches
+		assertEquals(patches.map((p) => p.path), [["unsent"], ["count", "unsent"]])
+		for (const path of [["waiting"], ["refused"], ["count", "waiting"], ["count", "refused"]]) {
+			assert(!patches.some((p) => marks(p, path)), `marks ${path}`)
+		}
+		assert(patches.some((p) => marks(p, ["unsent"])))
+		await a.sync.close()
 	},
 })
