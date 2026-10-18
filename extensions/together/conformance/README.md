@@ -17,7 +17,7 @@ harness's header lists its requests and answers.
 
 Run: `deno task conformance commit seal run history replay snapshot transport sync egwalker`.
 Another implementation: `--c` (the binary `<package>/c/<suite>-harness`), or `HARNESS="<command>"`
-for one suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `fails`, `skip`).
+for one suite. Format: `conformance/packer.ts` (a scenario, its steps, `expect`, `fails`, `skip`).
 
 ## Conventions
 
@@ -62,7 +62,7 @@ for one suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `f
   68 hex digits; parents sorted by name. A lamport is derived: a history refuses any other than 1 +
   the highest of its parents' (`lamport`). A commit that heads a fragment (a stored id with a
   leading zero byte, in its document) is made so by its nonce, found for that document.
-- a run (`run.ts`): a commit the next one in it goes on alone, by the same signer, is vouched for by
+- a run (`packer.ts`): a commit the next one in it goes on alone, by the same signer, is vouched for by
   that one's signature: its own is left out, its header `null`, its stored id in `ids`. Unpacked, a
   signed one is its seal (a label, else hex); one vouched for is
   `{vouched: label (or its name,

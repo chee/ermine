@@ -1,4 +1,5 @@
-// run: a run of sealed commits as columns, what a fragment carries. a commit the next in the run
+// packer: a pack of sealed commits as columns: it packs consecutive sealed commits for any stack to carry
+// (a Subduction fragment is one use). a commit the next in the pack
 // goes on alone, by the same signer, is vouched for by that one's signature: its own is left out,
 // its stored id goes in ids. unpack gives back each commit's exact bytes, stored id and sealed
 // bytes. deterministic: the same commits give the same bytes on any device.
@@ -16,14 +17,14 @@
 //   headers: runs of each signature's varsig header (seal.ts); empty: none read; null: vouched
 //   signatures: each signed one's bytes after its header, in order
 //   ids: each vouched one's stored id, in order
-// ref: a place earlier in the run, else a name. unpack takes any spelling that says the commits;
+// ref: a place earlier in the pack, else a name. unpack takes any spelling that says the commits;
 // only pack's is canonical.
-// changing: each commit is named and signed alone; a run only carries them. a commit field this pack
+// changing: each commit is named and signed alone; a pack only carries them. a commit field this pack
 // doesn't know goes whole in bytes (it packs badly until the columns learn it); a new column is an
 // unknown key to an older unpack, so it waits until every device reads it.
 //
-// refused (RunError code, column), the first that fails:
-//   not-a-run    not CBOR, not a map, or an unknown key
+// refused (PackError code, column), the first that fails:
+//   not-a-pack    not CBOR, not a map, or an unknown key
 //   count        n not a whole number
 //   signatures   not a list of byte strings, one per commit with a header
 //   runs         a runs column not [value, how many ≥ 1] summing to n; headers not bytes
@@ -35,7 +36,7 @@
 //   ids          not a list of 32-byte strings, one per commit with no header
 //   commit       not a commit (commit.ts)
 //   vouched      a headerless commit the next does not go on alone, by its signer
-//   size         over the most bytes for this run
+//   size         over the most bytes for this pack
 // order: the first five, then per commit: parents, patches, base, commit, vouched, size. commits
 // are given one at a time, so a reader can check each signature and stop.
 import * as cbor from "@ermine/encoding/cbor"
@@ -44,7 +45,7 @@ import { hex } from "./hex.ts"
 import { headerLength, stored } from "./seal.ts"
 
 export type Code =
-	| "not-a-run"
+	| "not-a-pack"
 	| "count"
 	| "signatures"
 	| "runs"
@@ -58,7 +59,7 @@ export type Code =
 	| "vouched"
 	| "size"
 
-export class RunError extends Error {
+export class PackError extends Error {
 	constructor(readonly code: Code, readonly column?: string) {
 		super(column === undefined ? code : `${code} (${column})`)
 	}
@@ -108,7 +109,7 @@ function runs(values: unknown[]): [unknown, number][] {
 	return out
 }
 function unruns(r: unknown, n: number, column: string): unknown[] {
-	if (!Array.isArray(r)) throw new RunError("runs", column)
+	if (!Array.isArray(r)) throw new PackError("runs", column)
 	const out: unknown[] = []
 	for (const pair of r) {
 		// counted before it is spread: a run's count is no bigger than n
@@ -116,11 +117,11 @@ function unruns(r: unknown, n: number, column: string): unknown[] {
 			!Array.isArray(pair) || pair.length !== 2 || !Number.isSafeInteger(pair[1]) ||
 			pair[1] < 1 || out.length + pair[1] > n
 		) {
-			throw new RunError("runs", column)
+			throw new PackError("runs", column)
 		}
 		for (let i = 0; i < pair[1]; i++) out.push(pair[0])
 	}
-	if (out.length !== n) throw new RunError("runs", column)
+	if (out.length !== n) throw new PackError("runs", column)
 	return out
 }
 
@@ -151,14 +152,14 @@ function deltas(xs: number[]): Uint8Array {
 	return Uint8Array.from(out)
 }
 function undeltas(b: unknown, n: number, column: string): number[] {
-	if (!(b instanceof Uint8Array)) throw new RunError("differences", column)
+	if (!(b instanceof Uint8Array)) throw new PackError("differences", column)
 	const out: number[] = []
 	let at = 0
 	for (let i = 0; i < n; i++) {
 		// seven bytes as a float, exactly (49 bits); an eighth, whole
 		let z = 0, scale = 1, big: bigint | undefined
 		for (let k = 0;; k++) {
-			if (at >= b.length || k >= 8) throw new RunError("differences", column)
+			if (at >= b.length || k >= 8) throw new PackError("differences", column)
 			const byte = b[at++]
 			if (k < 7) z += (byte % 128) * scale
 			else big = BigInt(z) + BigInt(byte % 128) * 2n ** 49n
@@ -169,14 +170,14 @@ function undeltas(b: unknown, n: number, column: string): number[] {
 		if (big === undefined) d = z % 2 === 0 ? z / 2 : -(z + 1) / 2
 		else {
 			const w = big % 2n === 0n ? big / 2n : -(big + 1n) / 2n
-			if (w > 2n ** 53n || w < -(2n ** 53n)) throw new RunError("differences", column)
+			if (w > 2n ** 53n || w < -(2n ** 53n)) throw new PackError("differences", column)
 			d = Number(w)
 		}
 		const x = i === 0 ? d : out[i - 1] + d
-		if (!Number.isSafeInteger(x)) throw new RunError("differences", column)
+		if (!Number.isSafeInteger(x)) throw new PackError("differences", column)
 		out.push(x)
 	}
-	if (at !== b.length) throw new RunError("differences", column)
+	if (at !== b.length) throw new PackError("differences", column)
 	return out
 }
 
@@ -196,12 +197,12 @@ function after(before: Commit | undefined): Patch | undefined {
 	return { path: [...last.path], range: [at, at] }
 }
 
-// what a run is made of: a sealed commit, or a commit vouched for by the next one in the run (held
+// what a pack is made of: a sealed commit, or a commit vouched for by the next one in the pack (held
 // without a seal of its own), its bytes and its stored id
 export type Member = Uint8Array | { commit: Uint8Array; stored: Uint8Array }
 
 // what unpack gives for each commit: its bytes, name and stored id; sealed: its sealed bytes, when it
-// is signed in the run (none: vouched for by the next)
+// is signed in the pack (none: vouched for by the next)
 export type Unpacked = {
 	commit: Uint8Array
 	name: Uint8Array
@@ -212,7 +213,7 @@ export type Unpacked = {
 const same = (a: Uint8Array, b: Uint8Array) =>
 	a.length === b.length && a.every((x, i) => x === b[i])
 
-// the commits, in the run's order, as columns: one vouched for by the next is written without its
+// the commits, in the pack's order, as columns: one vouched for by the next is written without its
 // signature (a member given without a seal must be). an Error: a member that is neither, or one
 // that must be signed given without a seal
 export function pack(members: readonly Member[]): Uint8Array {
@@ -302,38 +303,38 @@ export function pack(members: readonly Member[]): Uint8Array {
 	return cbor.encode(columns as cbor.Value)
 }
 
-// the run's commits back, each its exact bytes, and its seal's when it is signed. RunError: not a run
+// the pack's commits back, each its exact bytes, and its seal's when it is signed. PackError: not a pack
 export function unpack(bytes: Uint8Array): Unpacked[] {
 	return [...each(bytes)]
 }
 
-// how many bytes of commits a run of this many bytes may give: a run saves about four fifths of
+// how many bytes of commits a pack of this many bytes may give: a pack saves about four fifths of
 // typing, and a value the same on every commit is written once, so 64 times, and a MiB
 export const most = (length: number) => 64 * length + 2 ** 20
 
-// the run's commits, one at a time, in order. RunError: not a run, as far as it is read
+// the pack's commits, one at a time, in order. PackError: not a pack, as far as it is read
 export function* each(bytes: Uint8Array): Generator<Unpacked, void, undefined> {
 	let x: unknown
 	try {
 		x = cbor.decode(bytes)
 	} catch {
-		throw new RunError("not-a-run")
+		throw new PackError("not-a-pack")
 	}
 	if (x === null || typeof x !== "object" || Array.isArray(x) || ArrayBuffer.isView(x)) {
-		throw new RunError("not-a-run")
+		throw new PackError("not-a-pack")
 	}
 	const o = x as Record<string, unknown>
 	const stray = Object.keys(o).filter((k) => !COLUMNS.has(k)).sort(canonical)
-	if (stray.length) throw new RunError("not-a-run", stray[0])
+	if (stray.length) throw new PackError("not-a-pack", stray[0])
 	const n = o.n
-	if (!Number.isSafeInteger(n) || (n as number) < 0) throw new RunError("count")
+	if (!Number.isSafeInteger(n) || (n as number) < 0) throw new PackError("count")
 	const count = n as number
 	const signatures = o.signatures, ids = o.ids
 	if (!Array.isArray(signatures) || !signatures.every((x) => x instanceof Uint8Array)) {
-		throw new RunError("signatures")
+		throw new PackError("signatures")
 	}
 	if (!Array.isArray(ids) || !ids.every((x) => x instanceof Uint8Array && x.length === 32)) {
-		throw new RunError("ids")
+		throw new PackError("ids")
 	}
 	const table = unruns(o.table, count, "table"),
 		actor = unruns(o.actor, count, "actor"),
@@ -348,18 +349,18 @@ export function* each(bytes: Uint8Array): Generator<Unpacked, void, undefined> {
 		exact !== undefined &&
 		(!Array.isArray(exact) || exact.length !== count ||
 			!exact.every((b) => b === null || b instanceof Uint8Array))
-	) throw new RunError("runs", "bytes")
+	) throw new PackError("runs", "bytes")
 	if (!headers.every((h) => h instanceof Uint8Array || h === null)) {
-		throw new RunError("runs", "headers")
+		throw new PackError("runs", "headers")
 	}
 	const signed = headers.filter((h) => h !== null).length
-	if (signatures.length !== signed) throw new RunError("signatures")
-	if (ids.length !== count - signed) throw new RunError("ids")
+	if (signatures.length !== signed) throw new PackError("signatures")
+	if (ids.length !== count - signed) throw new PackError("ids")
 	const time = undeltas(o.time, count, "time"),
 		nonce = undeltas(o.nonce, count, "nonce"),
 		lamport = undeltas(o.lamport, count, "lamport")
-	if (!Array.isArray(o.parents) || o.parents.length !== count) throw new RunError("parents")
-	if (!Array.isArray(o.patches) || o.patches.length !== count) throw new RunError("patches")
+	if (!Array.isArray(o.parents) || o.parents.length !== count) throw new PackError("parents")
+	if (!Array.isArray(o.patches) || o.patches.length !== count) throw new PackError("patches")
 	const names: Uint8Array[] = [], commits: Commit[] = []
 	const room = most(bytes.length)
 	let size = 0, sig = 0, id = 0
@@ -368,7 +369,7 @@ export function* each(bytes: Uint8Array): Generator<Unpacked, void, undefined> {
 	const deref = (r: unknown, i: number): Uint8Array => {
 		if (r instanceof Uint8Array) return r
 		if (!Number.isSafeInteger(r) || (r as number) < 0 || (r as number) >= i) {
-			throw new RunError("ref")
+			throw new PackError("ref")
 		}
 		return names[r as number]
 	}
@@ -377,15 +378,15 @@ export function* each(bytes: Uint8Array): Generator<Unpacked, void, undefined> {
 		let parents: Uint8Array[]
 		if (ps === null && i > 0) parents = [names[i - 1]]
 		else if (Array.isArray(ps)) parents = ps.map((r) => deref(r, i))
-		else throw new RunError("parents")
+		else throw new PackError("parents")
 		let patches: Patch[]
 		const p = o.patches[i]
 		if (typeof p === "string") {
 			const want = after(commits[i - 1])
-			if (want === undefined) throw new RunError("insert")
+			if (want === undefined) throw new PackError("insert")
 			patches = [{ ...want, value: p }]
 		} else if (Array.isArray(p)) patches = p as Patch[]
-		else throw new RunError("patches")
+		else throw new PackError("patches")
 		const c: Commit = {
 			table: table[i] as string,
 			actor: actor[i],
@@ -407,12 +408,12 @@ export function* each(bytes: Uint8Array): Generator<Unpacked, void, undefined> {
 			const given = exact?.[i] as Uint8Array | null | undefined
 			if (given) {
 				// the commit as the bytes have it, the columns' and no other
-				if (!same(encode(decode(given)), b)) throw new RunError("commit")
+				if (!same(encode(decode(given)), b)) throw new PackError("commit")
 				b = given
 			}
 		} catch (e) {
-			if (e instanceof RunError) throw e
-			throw new RunError("commit")
+			if (e instanceof PackError) throw e
+			throw new PackError("commit")
 		}
 		const name = nameOf(b)
 		if (held !== undefined) {
@@ -420,7 +421,7 @@ export function* each(bytes: Uint8Array): Generator<Unpacked, void, undefined> {
 			if (
 				parents.length !== 1 || !same(parents[0], held.name) ||
 				!same(c.signer, before.signer)
-			) throw new RunError("vouched")
+			) throw new PackError("vouched")
 			yield held
 			held = undefined
 		}
@@ -439,10 +440,10 @@ export function* each(bytes: Uint8Array): Generator<Unpacked, void, undefined> {
 			size += sealed.length
 			out = { commit: b, name, stored: stored(sealed), sealed }
 		}
-		if (size > room) throw new RunError("size")
+		if (size > room) throw new PackError("size")
 		if (header === null) held = out
 		else yield out
 	}
 	// the last one vouched for by none
-	if (held !== undefined) throw new RunError("vouched")
+	if (held !== undefined) throw new PackError("vouched")
 }

@@ -8,7 +8,7 @@
 // built. the mailroom (mailroom.ts) holds the histories and what is taken in; this hands it what arrives
 // (pend, settle, member, hint, hear, stopped) and is its Stack (send, stop, handed, taking)
 import * as sd from "npm:@automerge/subduction@0.23.0"
-import { each as eachRun, pack as packRun, RunError, type Unpacked } from "../../../typescript/run.ts"
+import { each as eachRun, pack as packRun, PackError, type Unpacked } from "../../../typescript/packer.ts"
 import { hex, unhex } from "../../../typescript/hex.ts"
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import * as cbor from "@ermine/encoding/cbor"
@@ -217,7 +217,7 @@ export function createSubduction(
 		return d.seen.has(h) || await opening(d, h, blob) !== undefined
 	}
 
-	// a fragment's blob opened: {run: its members as columns (run.ts), snapshot?: packed tables}, or
+	// a fragment's blob opened: {run: its members as columns (packer.ts), snapshot?: packed tables}, or
 	// {members: [sealed…], snapshot?} as it was first written. each member unsealed as it is read,
 	// in order: the first that is not good ends it, and the fragment is refused whole with its code
 	// (a run that is not one, or comes to too much: shape). one a run's next vouches for is taken once
@@ -263,7 +263,7 @@ export function createSubduction(
 				}
 			}
 		} catch (e) {
-			if (e instanceof RunError) return "shape"
+			if (e instanceof PackError) return "shape"
 			if (e instanceof SealError) return e.code
 			throw e
 		}

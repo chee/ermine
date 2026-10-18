@@ -7,7 +7,7 @@
 		"./egwalker": "./typescript/egwalker.ts",
 		"./history": "./typescript/history.ts",
 		"./replay": "./typescript/replay.ts",
-		"./run": "./typescript/run.ts",
+		"./packer": "./typescript/packer.ts",
 		"./seal": "./typescript/seal.ts",
 		"./snapshot": "./typescript/snapshot.ts",
 		"./sync": "./typescript/sync.ts",

@@ -25,25 +25,25 @@
 			"patches": [{ "path": ["body"], "range": [1, 1], "value": "i" }]
 		},
 		{ "op": "pack", "commits": ["a", "b", "c"], "name": "r" },
-		{ "op": "unpack", "run": "ff", "expect": { "error": "not-a-pack" } },
+		{ "op": "unpack", "pack": "ff", "expect": { "error": "not-a-pack" } },
 		{ "op": "unpack", "value": [], "expect": { "error": "not-a-pack" } },
 		{ "op": "unpack", "value": "run", "expect": { "error": "not-a-pack" } },
 		{ "op": "unpack", "value": { "/": { "bytes": "AQID" } }, "expect": { "error": "not-a-pack" } },
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "extra": 1 },
 			"expect": { "error": "not-a-pack", "column": "extra" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "aaa": 1, "zz": 1 },
 			"expect": { "error": "not-a-pack", "column": "zz" }
 		},
 		{
 			"op": "unpack",
-			"run": "r",
+			"pack": "r",
 			"set": { "x": 1, "n": -1 },
 			"expect": { "error": "not-a-pack", "column": "x" }
 		}

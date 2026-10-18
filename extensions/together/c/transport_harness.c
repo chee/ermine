@@ -9,7 +9,7 @@
 // devices run on the harness's clock (wires_harness.h), which quiet moves 2 ms a round
 #include "commits_harness.h"
 #include "ids.h"
-#include "run.h"
+#include "packer.h"
 #include "snapshot.h"
 #include "transport.h"
 #include "transport_conformance_hook.h"
@@ -512,11 +512,11 @@ static void fragment_op(const op_value *r, FILE *out) {
 			if (form != NULL && strcmp(form, "members") == 0) jsonAdd(o, "members", list);
 			else {
 				jsonFree(list);
-				rn_item *items = hh_take((count + 1) * sizeof *items);
-				for (size_t i = 0; i < count; i++) items[i] = (rn_item){ms[i]->bytes, ms[i]->length, NULL};
+				pk_item *items = hh_take((count + 1) * sizeof *items);
+				for (size_t i = 0; i < count; i++) items[i] = (pk_item){ms[i]->bytes, ms[i]->length, NULL};
 				uint8_t *run;
 				size_t n;
-				if (rn_pack(items, count, &run, &n) != RN_OK) {
+				if (pk_pack(items, count, &run, &n) != PK_OK) {
 					jsonFree(o);
 					hh_error(out, "not sealed commits");
 					return;
@@ -760,8 +760,8 @@ static void blob(const op_value *r, FILE *out) {
 	}
 	Json *x = cborDecode(bytes, length, NULL, NULL);
 	const Json *run = jsonGet(x, "run"), *snapshot = jsonGet(x, "snapshot");
-	rn_unpacked u = {0};
-	if (run == NULL || run->type != JSON_BYTES || rn_unpack(run->bytes.data, run->bytes.length, &u, NULL) != RN_OK) {
+	pk_unpacked u = {0};
+	if (run == NULL || run->type != JSON_BYTES || pk_unpack(run->bytes.data, run->bytes.length, &u, NULL) != PK_OK) {
 		hh_error(out, "not a run");
 		jsonFree(x);
 		erm_host_free(bytes);
@@ -773,7 +773,7 @@ static void blob(const op_value *r, FILE *out) {
 		put_label(out, u.members[i].stored, 32);
 	}
 	fputc(']', out);
-	rn_free(&u);
+	pk_free(&u);
 	if (snapshot != NULL && snapshot->type == JSON_BYTES) {
 		rp_tables t;
 		rp_init(&t);
