@@ -96,6 +96,8 @@ typedef struct {
 	pl_set *into;
 	// the spots it made (none of this places' before); none: not asked
 	pl_set *made;
+	// while pl_peep runs: reads make no spot and tell no one
+	int peeping;
 	// the keeps on spots, by (the one part, the spot): a count
 	tb_table *kept;
 	// the places and views over it not let go
@@ -439,7 +441,14 @@ void pl_record(pl *l, void (*f)(void *ctx), void *ctx, pl_set *reads, pl_set *fr
 	l->s->made = was_made;
 }
 
+void pl_peep(pl *l, void (*f)(void *ctx), void *ctx) {
+	l->s->peeping++;
+	f(ctx);
+	l->s->peeping--;
+}
+
 void pl_track(pl *l, const void *key) {
+	if (l->s->peeping) return;
 	if (l->s->into != NULL) {
 		pl_set_add(l->s->into, key);
 		return;
@@ -505,13 +514,13 @@ const op_value *pl_at(const op_value *v, const op_key *path, size_t n, op_value 
 }
 
 const op_value *pl_read(pl *l, tb_key part, tb_key id, const op_key *path, size_t n) {
-	tell(l, pt_spot_of(l->s->paths, pair_key(l, part), paths_key(id), path, n, 0));
+	if (!l->s->peeping) tell(l, pt_spot_of(l->s->paths, pair_key(l, part), paths_key(id), path, n, 0));
 	const nd_entry *node = tb_get(l->s->table, part, id);
 	return node != NULL ? pl_at(node->value, path, n, &l->s->scratch) : NULL;
 }
 
 const ch_header *pl_change(pl *l, tb_key part, tb_key id) {
-	tell(l, pt_change_of(l->s->paths, pair_key(l, part), paths_key(id)));
+	if (!l->s->peeping) tell(l, pt_change_of(l->s->paths, pair_key(l, part), paths_key(id)));
 	const nd_entry *node = tb_get(l->s->table, part, id);
 	return node != NULL ? &node->change : NULL;
 }
@@ -957,7 +966,7 @@ static int child_of(const nd_entry *children, const char *name, tb_key *out) {
 // the id under name in the children of id, the read told
 static int step(pl *l, tb_key id, const char *name, tb_key *out) {
 	op_key key = {.type = OP_STR_KEY, .s = name};
-	tell(l, pt_spot_of(l->s->paths, pair_key(l, tb_string(children_part)), paths_key(id), &key, 1, 0));
+	if (!l->s->peeping) tell(l, pt_spot_of(l->s->paths, pair_key(l, tb_string(children_part)), paths_key(id), &key, 1, 0));
 	return child_of(tb_get(l->s->table, tb_string(children_part), id), name, out);
 }
 
@@ -977,7 +986,7 @@ void pl_namelist_free(pl_namelist *list) {
 
 void pl_keys(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, int ids,
 	pl_namelist *out) {
-	tell(l, pt_spot_of(l->s->paths, pair_key(l, part), paths_key(id), path, n, 1));
+	if (!l->s->peeping) tell(l, pt_spot_of(l->s->paths, pair_key(l, part), paths_key(id), path, n, 1));
 	const nd_entry *node = tb_get(l->s->table, part, id);
 	const op_value *v = node != NULL ? pl_at(node->value, path, n, &l->s->scratch) : NULL;
 	if (!is_map(v)) return;
@@ -1282,7 +1291,7 @@ pl_members pl_members_at(pl *l, const char *const *path, size_t n) {
 		pl_nameds_free(&names);
 		return out;
 	}
-	tell(l, pt_spot_of(l->s->paths, pair_key(l, tb_string(children_part)), paths_key(id), NULL, 0, 0));
+	if (!l->s->peeping) tell(l, pt_spot_of(l->s->paths, pair_key(l, tb_string(children_part)), paths_key(id), NULL, 0, 0));
 	return members_of(tb_get(l->s->table, tb_string(children_part), id));
 }
 
@@ -1304,7 +1313,7 @@ pl_members pl_list(pl *l, const char *const *path, size_t n) {
 		pl_nameds_free(&names);
 		return out;
 	}
-	tell(l, pt_spot_of(l->s->paths, pair_key(l, tb_string(children_part)), paths_key(id), NULL, 0, 1));
+	if (!l->s->peeping) tell(l, pt_spot_of(l->s->paths, pair_key(l, tb_string(children_part)), paths_key(id), NULL, 0, 1));
 	const nd_entry *children = tb_get(l->s->table, tb_string(children_part), id);
 	const op_value *v = children != NULL ? children->value : NULL;
 	if (!is_map(v)) return out;
@@ -1665,6 +1674,31 @@ char *pl_header(pl *l, const sc_pair *extra, size_t n, const ch_site *site, ch_h
 	pl_made **made) {
 	seeing w;
 	if (!who_of(l, extra, n, &w)) return xdup(SC_UNSCOPED);
+	// no site: a recent block saying the same (same keys in order, the same values, actor and
+	// reader) again, not a new one
+	int tries = 0;
+	for (pl_made *last = l->s->mades; site == NULL && last != NULL && tries < 16;
+		last = last->next, tries++) {
+		if (last->site.file != NULL || last->actor != w.actor || last->reader != w.reader ||
+			last->pairs->count != w.metadata->count)
+			continue;
+		size_t i = 0;
+		for (; i < w.metadata->count; i++) {
+			const op_value *x = last->pairs->items[i], *y = w.metadata->items[i];
+			if (strcmp(last->pairs->keys[i], w.metadata->keys[i]) != 0) break;
+			if (x != y && !(x->type == OP_NUM && y->type == OP_NUM && x->num == y->num)) break;
+		}
+		if (i < w.metadata->count) continue;
+		op_free(w.metadata), op_free(w.actor), op_free(w.reader);
+		ch_header h = {.has_time = 1, .time = (int64_t)time(NULL)};
+		h.actor = last->actor;
+		if (last->reader != NULL) h.reader = last->reader->str;
+		h.metadata = last->entries, h.metadata_length = last->pairs->count;
+		last->refs++;
+		*out = h;
+		*made = last;
+		return NULL;
+	}
 	op_value *pairs = w.metadata;
 	pl_made *m = xalloc(sizeof *m);
 	m->refs = 1;

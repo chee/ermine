@@ -1,5 +1,5 @@
 // Devices (transport.h) on the line protocol (conformance/c/harness.h): commits over Subduction, with
-// no table, joined by in-memory pipes (wires_harness.h), as extensions/sync/typescript/transport_harness.ts
+// no table, joined by in-memory pipes (wires_harness.h), as extensions/together/typescript/transport_harness.ts
 // has them; its header lists the requests and answers. State lasts for the process.
 //
 // A device here checks nothing (every commit applies) and gives every fragment it builds a snapshot:
@@ -29,7 +29,7 @@ static const char DOC[] = "ermine://2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a000000000000
 typedef struct {
 	char *doc;
 	tp_layer layer;
-	uint8_t name[32];
+	uint8_t name[CM_NAME];
 	bool heard;
 } arrival_t;
 
@@ -77,13 +77,14 @@ static seal_t *seals;
 static size_t seal_count, seal_room;
 // the document of the request being answered: what a label is sealed for
 static uint8_t here[32];
-// a name or a stored id to its label (the first given)
-static im_map labels;
+// a name, or a stored id, to its label (the first given)
+static im_map labels = {.width = CM_NAME}, stored_labels;
 
-static void put_label(FILE *out, const uint8_t id[32]) {
-	const char *label = im_get(&labels, id);
+// id: a name (CM_NAME bytes) or a stored id (32)
+static void put_label(FILE *out, const uint8_t *id, size_t length) {
+	const char *label = im_get(length == CM_NAME ? &labels : &stored_labels, id);
 	if (label != NULL) op_json_string(out, label);
-	else cf_put_hex(out, id, 32);
+	else cf_put_hex(out, id, length);
 }
 
 static const seal_t *sealed(const cs_made *m);
@@ -112,7 +113,7 @@ static const seal_t *sealed(const cs_made *m) {
 	uint8_t stored[32];
 	sl_stored(n->bytes, n->length, stored);
 	if (!im_has(&labels, m->name)) im_set(&labels, m->name, n->label);
-	if (!im_has(&labels, stored)) im_set(&labels, stored, n->label);
+	if (!im_has(&stored_labels, stored)) im_set(&stored_labels, stored, n->label);
 	return n;
 }
 
@@ -217,7 +218,7 @@ static void arrived(void *context, const tp_arrival *a) {
 	arrival_t *x = &d->arrived[d->arrived_count++];
 	x->doc = copyString(a->doc);
 	x->layer = a->layer;
-	memcpy(x->name, a->kept->name, 32);
+	memcpy(x->name, a->kept->name, CM_NAME);
 	x->heard = a->heard;
 }
 
@@ -377,7 +378,7 @@ static void take(const op_value *r, FILE *out) {
 		fputs("{\"waiting\":[", out);
 		for (size_t i = 0; i < a.waiting_length; i++) {
 			if (i) fputc(',', out);
-			put_label(out, a.waiting[i]);
+			put_label(out, a.waiting[i], CM_NAME);
 		}
 		fputs("]}", out);
 		break;
@@ -434,7 +435,8 @@ static void put(const op_value *r, FILE *out) {
 			const char *l = im_get(&labels, c.parents[i]);
 			const seal_t *s = seal_of(l);
 			if (s != NULL) sl_stored(s->bytes, s->length, parents[i]);
-			else memcpy(parents[i], c.parents[i], 32);
+			// a name not made here: its digest, raw, as Subduction has it
+			else memcpy(parents[i], c.parents[i] + 2, 32);
 		}
 		cm_free(&c);
 	}
@@ -582,7 +584,7 @@ static void heads(const op_value *r, FILE *out) {
 	fputs("{\"heads\":[", out);
 	for (size_t i = 0; i < n; i++) {
 		if (i) fputc(',', out);
-		put_label(out, list[i]->name);
+		put_label(out, list[i]->name, CM_NAME);
 	}
 	fputs("]}", out);
 	free(list);
@@ -598,18 +600,19 @@ static void refused(const op_value *r, FILE *out) {
 	for (size_t i = 0; i < n; i++) {
 		if (i) fputc(',', out);
 		fputs("{\"name\":", out);
-		put_label(out, rows[i].name);
+		put_label(out, rows[i].name, CM_NAME);
 		fprintf(out, ",\"refused\":\"%s\"}", hy_refusal_name(rows[i].refusal));
 	}
 	fputs("]}", out);
 	free(rows);
 }
 
-static void put_labels(FILE *out, const uint8_t (*ids)[32], size_t n) {
+// n ids of width bytes each (names or stored ids)
+static void put_labels(FILE *out, const uint8_t *ids, size_t n, size_t width) {
 	fputc('[', out);
 	for (size_t i = 0; i < n; i++) {
 		if (i) fputc(',', out);
-		put_label(out, ids[i]);
+		put_label(out, ids + i * width, width);
 	}
 	fputc(']', out);
 }
@@ -622,9 +625,9 @@ static void taking(const op_value *r, FILE *out) {
 	for (size_t i = 0; i < t.waiting_count; i++) {
 		if (i) fputc(',', out);
 		fputs("{\"commit\":", out);
-		put_label(out, t.waiting[i].commit);
+		put_label(out, t.waiting[i].commit, 32);
 		fputs(",\"waiting\":", out);
-		put_labels(out, (const uint8_t(*)[32])t.waiting[i].names, t.waiting[i].count);
+		put_labels(out, (const uint8_t *)t.waiting[i].names, t.waiting[i].count, CM_NAME);
 		fputc('}', out);
 	}
 	fputs("],\"refused\":[", out);
@@ -632,10 +635,10 @@ static void taking(const op_value *r, FILE *out) {
 		const tp_conformance_hook_refused *x = &t.refused[i];
 		if (i) fputc(',', out);
 		fprintf(out, "{\"%s\":", x->fragment ? "fragment" : "commit");
-		put_label(out, x->id);
+		put_label(out, x->id, x->id_length);
 		if (x->stuck) {
 			fputs(",\"stuck\":", out);
-			put_labels(out, (const uint8_t(*)[32])x->names, x->count);
+			put_labels(out, (const uint8_t *)x->names, x->count, CM_NAME);
 		} else fprintf(out, ",\"refused\":\"%s\"", tp_code_name(x->code));
 		fputc('}', out);
 	}
@@ -653,7 +656,7 @@ static void arrivals(const op_value *r, FILE *out) {
 		fputc('[', out);
 		op_json_string(out, a->doc);
 		fprintf(out, ",\"%s\",", tp_layer_name(a->layer));
-		put_label(out, a->name);
+		put_label(out, a->name, CM_NAME);
 		fprintf(out, ",%s]", a->heard ? "true" : "false");
 		free(a->doc);
 	}
@@ -672,7 +675,7 @@ static void stored(const op_value *r, FILE *out) {
 	size_t n = tp_stored(d->t, doc_of(r), &ids);
 	qsort(ids, n, 32, by_id);
 	fputs("{\"stored\":", out);
-	put_labels(out, (const uint8_t(*)[32])ids, n);
+	put_labels(out, (const uint8_t *)ids, n, 32);
 	fputc('}', out);
 	free(ids);
 }
@@ -691,11 +694,11 @@ static void fragments(const op_value *r, FILE *out) {
 	for (size_t i = 0; i < n; i++) {
 		if (i) fputc(',', out);
 		fputs("{\"head\":", out);
-		put_label(out, fs[i]->head);
+		put_label(out, fs[i]->head, 32);
 		fputs(",\"members\":", out);
-		put_labels(out, (const uint8_t(*)[32])fs[i]->members.ids, fs[i]->members.count);
+		put_labels(out, (const uint8_t *)fs[i]->members.ids, fs[i]->members.count, 32);
 		fputs(",\"boundary\":", out);
-		put_labels(out, (const uint8_t(*)[32])fs[i]->boundary.ids, fs[i]->boundary.count);
+		put_labels(out, (const uint8_t *)fs[i]->boundary.ids, fs[i]->boundary.count, 32);
 		fputc('}', out);
 	}
 	fputs("]}", out);
@@ -767,7 +770,7 @@ static void blob(const op_value *r, FILE *out) {
 	fputs("{\"members\":[", out);
 	for (size_t i = 0; i < u.count; i++) {
 		if (i) fputc(',', out);
-		put_label(out, u.members[i].stored);
+		put_label(out, u.members[i].stored, 32);
 	}
 	fputc(']', out);
 	rn_free(&u);
@@ -781,7 +784,7 @@ static void blob(const op_value *r, FILE *out) {
 		rp_free(&t);
 	}
 	uint8_t hash[32];
-	cm_name(bytes, length, hash);
+	cm_digest(bytes, length, hash);
 	fputs(",\"hash\":", out);
 	cf_put_hex(out, hash, 32);
 	fputc('}', out);
@@ -792,7 +795,7 @@ static void blob(const op_value *r, FILE *out) {
 static void snapshot(const op_value *r, FILE *out) {
 	device_t *d;
 	if (history_of(r, out, &d) == NULL) return;
-	uint8_t name[32];
+	uint8_t name[CM_NAME];
 	const char *error = NULL;
 	if (!cs_resolve(commits, op_get(r, "commit"), name, &error)) {
 		hh_error(out, "%s", error);

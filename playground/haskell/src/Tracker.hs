@@ -5,6 +5,9 @@ module Tracker
   , empty
   , begin
   , end
+  , leave
+  , trim
+  , dedupe
   , track
   , add
   , untrack
@@ -31,10 +34,11 @@ data Tracker = Tracker
   , readersOf :: M.Map Name [LinkId] -- a spot's links, in the order made
   , runs :: M.Map Name Run
   , nextId :: Int
+  , left :: M.Map Name (Maybe LinkId) -- a run left: its cursor (Nothing: before the first), till trim
   }
 
 empty :: Tracker
-empty = Tracker M.empty M.empty M.empty M.empty 1
+empty = Tracker M.empty M.empty M.empty M.empty 1 M.empty
 
 get :: Name -> M.Map Name [a] -> [a]
 get = M.findWithDefault []
@@ -43,18 +47,42 @@ inRun :: Name -> Tracker -> Bool
 inRun n t = M.member n (runs t)
 
 begin :: Name -> Tracker -> Tracker
-begin n t = t {runs = M.insert n (Run Nothing (nextId t)) (runs t), nextId = nextId t + 1}
+begin n t = t {runs = M.insert n (Run Nothing (nextId t)) (runs t), nextId = nextId t + 1, left = M.delete n (left t)}
 
--- | the links after the cursor dropped; the run over. outside a run: nothing
-end :: Name -> Tracker -> Tracker
-end n t = case M.lookup n (runs t) of
+-- | the links after the cursor
+after :: Maybe LinkId -> [LinkId] -> [LinkId]
+after Nothing ls = ls
+after (Just c) ls = drop 1 (dropWhile (/= c) ls)
+
+-- | the run over, every link kept; the cursor stays on the last it confirmed. outside a run: nothing
+leave :: Name -> Tracker -> Tracker
+leave n t = case M.lookup n (runs t) of
   Nothing -> t
-  Just r ->
+  Just r -> t {runs = M.delete n (runs t), left = M.insert n (cursor r) (left t)}
+
+-- | outside a run: the links after the cursor dropped (after end, the cursor is the last link)
+trim :: Name -> Tracker -> Tracker
+trim n t = case M.lookup n (left t) of
+  Nothing -> t
+  Just c -> (dropLinks (after c (get n (readsOf t))) t) {left = M.delete n (left t)}
+
+-- | leave, then trim
+end :: Name -> Tracker -> Tracker
+end n = trim n . leave n
+
+-- | outside a run: of the links after the cursor, one to a spot a link before it goes to is dropped
+dedupe :: Name -> Tracker -> Tracker
+dedupe n t = case M.lookup n (left t) of
+  Nothing -> t
+  Just c ->
     let ls = get n (readsOf t)
-        dropped = case cursor r of
-          Nothing -> ls
-          Just c -> drop 1 (dropWhile (/= c) ls)
-     in (dropLinks dropped t) {runs = M.delete n (runs t)}
+        tl = after c ls
+        before = take (length ls - length tl) ls
+        go _ [] = []
+        go seen (i : is)
+          | toOf t i `elem` seen = i : go seen is
+          | otherwise = go (toOf t i : seen) is
+     in dropLinks (go (map (toOf t) before) tl) t
 
 dropLinks :: [LinkId] -> Tracker -> Tracker
 dropLinks ids t = foldl one t ids
@@ -107,10 +135,13 @@ track from to t =
           | Just l <- lastReader, lFrom l == from, lEpoch l == epoch run -> t
           | otherwise -> let (i, t') = newLink from to (cursor run) (epoch run) t in setCursor i t'
 
--- | outside a run: appended, unless from already reads to
+-- | outside a run: right after the cursor (after end: the end), the cursor on it, unless from
+-- already reads to
 add :: Name -> Name -> Tracker -> Tracker
 add from to t
   | any ((== to) . toOf t) ls = t
+  | Just c <- M.lookup from (left t) =
+      let (i, t') = newLink from to c 0 t in t' {left = M.insert from (Just i) (left t')}
   | otherwise = snd (newLink from to (if null ls then Nothing else Just (last ls)) 0 t)
   where
     ls = get from (readsOf t)
@@ -120,19 +151,21 @@ untrack from to t =
   let ls = get from (readsOf t)
       gone = filter ((== to) . toOf t) ls
       t' = dropLinks gone t
+      back c = case filter (`notElem` gone) (reverse (takeWhile (/= c) ls)) of (b : _) -> Just b; [] -> Nothing
+      t'' = case M.lookup from (left t) of
+        Just (Just c) | c `elem` gone -> t' {left = M.insert from (back c) (left t')}
+        _ -> t'
    in case M.lookup from (runs t) of
         Just r
           | Just c <- cursor r
           , c `elem` gone ->
-              let before = reverse (takeWhile (/= c) ls)
-                  back = case filter (`notElem` gone) before of (b : _) -> Just b; [] -> Nothing
-               in t' {runs = M.insert from r {cursor = back} (runs t')}
-        _ -> t'
+              t'' {runs = M.insert from r {cursor = back c} (runs t'')}
+        _ -> t''
 
 untrackAll :: Name -> Tracker -> Tracker
 untrackAll from t =
   let t' = dropLinks (get from (readsOf t)) t
-   in t' {runs = M.adjust (\r -> r {cursor = Nothing}) from (runs t')}
+   in t' {runs = M.adjust (\r -> r {cursor = Nothing}) from (runs t'), left = M.delete from (left t')}
 
 reads :: Name -> Tracker -> [Name]
 reads n t = map (toOf t) (get n (readsOf t))

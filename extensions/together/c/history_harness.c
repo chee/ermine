@@ -1,5 +1,5 @@
 // A node's history, replay and snapshots on the line protocol (conformance/c/harness.h): the
-// history, replay, snapshot and egwalker suites, as extensions/sync/typescript/history_harness.ts has
+// history, replay, snapshot and egwalker suites, as extensions/together/typescript/history_harness.ts has
 // them. State lasts for the process: one history, the commits made by label, the snapshots kept. The
 // history's check is the integration's: a commit is taken in when its patches apply to its table at
 // its base (replay), kept snapshots used; a merge commit's, to its rule's merge of its parents. The
@@ -30,7 +30,7 @@ typedef struct {
 static snap *kept;
 static size_t kept_length;
 // the names the check cannot judge yet (hold)
-static uint8_t (*held)[32];
+static uint8_t (*held)[CM_NAME];
 static size_t held_length;
 static const rp_merge rules[] = {{&eg_rule, NULL}};
 static const rp_merges merges = {rules, 1};
@@ -39,13 +39,13 @@ static void *walked;
 static int by_hex(const void *a, const void *b) { return strcmp(*(char *const *)a, *(char *const *)b); }
 
 // the key of several names: hex, sorted, spaced; malloc'd
-static char *key_of(const uint8_t (*names)[32], size_t n) {
-	char **each = malloc((n + 1) * sizeof *each), *out = malloc(n * 65 + 1);
+static char *key_of(const uint8_t (*names)[CM_NAME], size_t n) {
+	char **each = malloc((n + 1) * sizeof *each), *out = malloc(n * (2 * CM_NAME + 1) + 1);
 	if (each == NULL || out == NULL) abort();
 	for (size_t i = 0; i < n; i++) {
-		each[i] = malloc(65);
+		each[i] = malloc(2 * CM_NAME + 1);
 		if (each[i] == NULL) abort();
-		for (int b = 0; b < 32; b++) snprintf(each[i] + 2 * b, 3, "%02x", names[i][b]);
+		for (int b = 0; b < CM_NAME; b++) snprintf(each[i] + 2 * b, 3, "%02x", names[i][b]);
 	}
 	qsort(each, n, sizeof *each, by_hex);
 	out[0] = 0;
@@ -64,9 +64,9 @@ static const snap *find(const char *key) {
 	return NULL;
 }
 
-static bool snapshots(void *context, const uint8_t name[32], rp_tables *out) {
+static bool snapshots(void *context, const uint8_t name[CM_NAME], rp_tables *out) {
 	(void)context;
-	char *key = key_of((const uint8_t(*)[32])name, 1);
+	char *key = key_of((const uint8_t(*)[CM_NAME])name, 1);
 	const snap *s = find(key);
 	free(key);
 	return s != NULL && sn_tables(s->bytes, s->length, out) == PK_OK;
@@ -74,10 +74,10 @@ static bool snapshots(void *context, const uint8_t name[32], rp_tables *out) {
 
 // several commits' merge, when kept
 static bool several(const hy_kept *const *from, size_t n, rp_tables *out) {
-	uint8_t(*names)[32] = malloc(n * 32 + 1);
+	uint8_t(*names)[CM_NAME] = malloc(n * CM_NAME + 1);
 	if (names == NULL) abort();
-	for (size_t i = 0; i < n; i++) memcpy(names[i], from[i]->name, 32);
-	char *key = key_of((const uint8_t(*)[32])names, n);
+	for (size_t i = 0; i < n; i++) memcpy(names[i], from[i]->name, CM_NAME);
+	char *key = key_of((const uint8_t(*)[CM_NAME])names, n);
 	free(names);
 	const snap *s = find(key);
 	free(key);
@@ -98,7 +98,7 @@ static bool get(void *context, const hy_kept *const *from, size_t n, rp_tables *
 }
 
 // heads (taken) merged by the rule (known) into out, new tables
-static void merged(const uint8_t (*names)[32], size_t n, const char *rule, rp_tables *out) {
+static void merged(const uint8_t (*names)[CM_NAME], size_t n, const char *rule, rp_tables *out) {
 	const hy_kept **heads = malloc((n + 1) * sizeof *heads);
 	if (heads == NULL) abort();
 	for (size_t i = 0; i < n; i++) heads[i] = hy_get(history, names[i]);
@@ -126,7 +126,7 @@ static void merged(const uint8_t (*names)[32], size_t n, const char *rule, rp_ta
 static hy_refusal check(void *context, const hy_kept *k, const cm_commit *commit) {
 	(void)context;
 	for (size_t i = 0; i < held_length; i++)
-		if (memcmp(held[i], k->name, 32) == 0) return HY_WAIT;
+		if (memcmp(held[i], k->name, CM_NAME) == 0) return HY_WAIT;
 	if (commit->merge != NULL && rp_merge_find(&merges, commit->merge) == NULL) return HY_MERGE;
 	rp_tables tables;
 	if (commit->merge != NULL) merged(commit->parents, commit->parents_length, commit->merge, &tables);
@@ -252,7 +252,7 @@ static void refused(FILE *out) {
 }
 
 // a commit named in a request: its name; the answer is written when there is none
-static bool named(const op_value *r, FILE *out, uint8_t name[32]) {
+static bool named(const op_value *r, FILE *out, uint8_t name[CM_NAME]) {
 	const char *error = NULL;
 	if (cs_resolve(commits, op_get(r, "commit"), name, &error)) return true;
 	hh_error(out, "%s", error);
@@ -266,7 +266,7 @@ static void hold(const op_value *r, FILE *out) {
 		hh_error(out, "hold: commits a list");
 		return;
 	}
-	uint8_t(*names)[32] = malloc((list->count + 1) * 32);
+	uint8_t(*names)[CM_NAME] = malloc((list->count + 1) * CM_NAME);
 	if (names == NULL) abort();
 	for (size_t i = 0; i < list->count; i++) {
 		const char *error = NULL;
@@ -306,7 +306,7 @@ static void put_tables(FILE *out, const rp_tables *t) {
 }
 
 static void replay(const op_value *r, FILE *out) {
-	uint8_t name[32];
+	uint8_t name[CM_NAME];
 	if (!named(r, out, name)) return;
 	rp_tables t;
 	rp_code code = rp_replay(history, name, snapshots, NULL, &merges, &t);
@@ -331,12 +331,12 @@ static bool packed(const op_value *r, FILE *out, uint8_t **bytes, size_t *length
 
 // a list of commits named in a request (labels or hex): malloc'd names; the answer is written when
 // one is not
-static bool names_of(const op_value *list, FILE *out, uint8_t (**names)[32], size_t *n) {
+static bool names_of(const op_value *list, FILE *out, uint8_t (**names)[CM_NAME], size_t *n) {
 	if (list == NULL || list->type != OP_LIST) {
 		hh_error(out, "not a list of commits");
 		return false;
 	}
-	*names = malloc(list->count * 32 + 1);
+	*names = malloc(list->count * CM_NAME + 1);
 	if (*names == NULL) abort();
 	*n = list->count;
 	for (size_t i = 0; i < list->count; i++) {
@@ -351,12 +351,12 @@ static bool names_of(const op_value *list, FILE *out, uint8_t (**names)[32], siz
 }
 
 static void keep(const op_value *r, FILE *out) {
-	uint8_t *bytes, (*names)[32];
+	uint8_t *bytes, (*names)[CM_NAME];
 	size_t length, n;
 	if (op_get(r, "commits") != NULL) {
 		if (!names_of(op_get(r, "commits"), out, &names, &n)) return;
 	} else {
-		names = malloc(32);
+		names = malloc(CM_NAME);
 		if (names == NULL) abort();
 		n = 1;
 		if (!named(r, out, names[0])) {
@@ -364,7 +364,7 @@ static void keep(const op_value *r, FILE *out) {
 			return;
 		}
 	}
-	char *key = key_of((const uint8_t(*)[32])names, n);
+	char *key = key_of((const uint8_t(*)[CM_NAME])names, n);
 	free(names);
 	if (!packed(r, out, &bytes, &length)) {
 		free(key);
@@ -390,13 +390,13 @@ static void keep(const op_value *r, FILE *out) {
 
 // { op: "hint", commit, tables }: a snapshot from elsewhere, kept (as keep) only when it matches
 static void hint(const op_value *r, FILE *out) {
-	uint8_t name[32], *bytes;
+	uint8_t name[CM_NAME], *bytes;
 	size_t length;
 	if (!named(r, out, name) || !packed(r, out, &bytes, &length)) return;
 	bool ok = rp_matches(history, name, bytes, length, snapshots, NULL, &merges);
 	if (!ok) free(bytes);
 	else {
-		char *key = key_of((const uint8_t(*)[32])name, 1);
+		char *key = key_of((const uint8_t(*)[CM_NAME])name, 1);
 		snap *s = (snap *)find(key);
 		if (s != NULL) free(s->bytes), free(key), s->bytes = bytes, s->length = length;
 		else {
@@ -410,7 +410,7 @@ static void hint(const op_value *r, FILE *out) {
 
 // heads (taken) merged by the rule, default eg-walker
 static void merge(const op_value *r, FILE *out) {
-	uint8_t(*names)[32];
+	uint8_t(*names)[CM_NAME];
 	size_t n;
 	if (!names_of(op_get(r, "heads"), out, &names, &n)) return;
 	for (size_t i = 0; i < n; i++) {
@@ -428,7 +428,7 @@ static void merge(const op_value *r, FILE *out) {
 		return;
 	}
 	rp_tables t;
-	merged((const uint8_t(*)[32])names, n, rule, &t);
+	merged((const uint8_t(*)[CM_NAME])names, n, rule, &t);
 	put_tables(out, &t);
 	rp_free(&t);
 	free(names);
@@ -450,7 +450,7 @@ static bool known(void *context, const hy_kept *const *from, size_t n) {
 }
 
 static void since(const op_value *r, FILE *out) {
-	uint8_t(*names)[32];
+	uint8_t(*names)[CM_NAME];
 	size_t n;
 	if (!names_of(op_get(r, "heads"), out, &names, &n)) return;
 	const hy_kept **heads = malloc((n + 1) * sizeof *heads);
@@ -529,10 +529,10 @@ void hh_answer(const op_value *r, FILE *out) {
 	} else if (strcmp(op, "waiting") == 0) waiting(out);
 	else if (strcmp(op, "refused") == 0) refused(out);
 	else if (strcmp(op, "name") == 0) {
-		uint8_t name[32];
+		uint8_t name[CM_NAME];
 		if (named(r, out, name)) {
 			fputs("{\"name\":", out);
-			cf_put_hex(out, name, 32);
+			cf_put_hex(out, name, CM_NAME);
 			fputc('}', out);
 		}
 	} else if (strcmp(op, "replay") == 0) replay(r, out);

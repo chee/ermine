@@ -20,13 +20,13 @@ const char *sl_code_name(sl_code code) {
 // what is signed: "ermine/v0/commit", the document's 32 bytes, the signature's header, then the
 // commit's name (a header tells its own length, as a name does). MESSAGE: the most the built in
 // verifier takes, its header 8 bytes
-#define MESSAGE 88
-static size_t message(const uint8_t doc[32], const uint8_t *header, size_t header_length, const uint8_t name[32], uint8_t *m) {
+#define MESSAGE 90
+static size_t message(const uint8_t doc[32], const uint8_t *header, size_t header_length, const uint8_t name[CM_NAME], uint8_t *m) {
 	memcpy(m, "ermine/v0/commit", 16);
 	memcpy(m + 16, doc, 32);
 	memcpy(m + 48, header, header_length);
-	memcpy(m + 48 + header_length, name, 32);
-	return 48 + header_length + 32;
+	memcpy(m + 48 + header_length, name, CM_NAME);
+	return 48 + header_length + CM_NAME;
 }
 
 // Ed25519: the multicodec code of ed25519-pub (0xed, varint 0xed 0x01), and the varsig (v1, the
@@ -55,7 +55,7 @@ static bool ed25519_verify(void *context, const uint8_t *signature, const uint8_
 	if (key_length != 32 || length > MESSAGE) return false;
 	uint8_t all[32 + 64 + MESSAGE], hash[32];
 	memcpy(all, key, 32), memcpy(all + 32, signature, 64), memcpy(all + 96, m, length);
-	cm_name(all, 96 + length, hash);
+	cm_digest(all, 96 + length, hash);
 	size_t slot;
 	memcpy(&slot, hash, sizeof slot);
 	slot %= CACHED;
@@ -112,7 +112,7 @@ void sl_seeded_init(sl_seeded *s, const uint8_t seed[32]) {
 }
 
 void sl_stored(const uint8_t *sealed, size_t length, uint8_t stored[32]) {
-	cm_name(sealed, length, stored);
+	cm_digest(sealed, length, stored);
 }
 
 sl_code sl_seal(const uint8_t *commit, size_t length, const sl_signer *signer, const uint8_t doc[32],
@@ -120,10 +120,10 @@ sl_code sl_seal(const uint8_t *commit, size_t length, const sl_signer *signer, c
 	*out = NULL;
 	if (why != NULL) *why = CM_OK;
 	if (field != NULL) *field = NULL;
-	uint8_t name[32];
+	uint8_t name[CM_NAME];
 	cm_commit decoded = {0};
 	const cm_commit *c = NULL;
-	if (made != NULL) c = made->commit, memcpy(name, made->name, 32);
+	if (made != NULL) c = made->commit, memcpy(name, made->name, CM_NAME);
 	else {
 		cm_code code = cm_decode(commit, length, &decoded, field);
 		if (code != CM_OK) {
@@ -137,7 +137,7 @@ sl_code sl_seal(const uint8_t *commit, size_t length, const sl_signer *signer, c
 		(c->signer_length == signer->key_length && memcmp(c->signer, signer->key, signer->key_length) == 0);
 	cm_free(&decoded);
 	if (!same) return SL_SIGNATURE;
-	uint8_t *m = allocate(80 + signer->header_length), *signature = allocate(signer->header_length + SL_RAW_MAX);
+	uint8_t *m = allocate(48 + CM_NAME + signer->header_length), *signature = allocate(signer->header_length + SL_RAW_MAX);
 	size_t m_length = message(doc, signer->header, signer->header_length, name, m);
 	size_t raw = signer->sign(signer->context, m, m_length, signature + signer->header_length);
 	free(m);
@@ -168,7 +168,7 @@ sl_code sl_unseal(const uint8_t *sealed, size_t length, const uint8_t doc[32], s
 	}
 	cm_commit c;
 	if (cm_decode(commit->bytes.data, commit->bytes.length, &c, NULL) != CM_OK) return jsonFree(x), SL_SHAPE;
-	uint8_t name[32];
+	uint8_t name[CM_NAME];
 	cm_name(commit->bytes.data, commit->bytes.length, name);
 	// the built in, then more: the first whose header the signature begins with
 	const sl_verifier *v = NULL;
@@ -189,7 +189,7 @@ sl_code sl_unseal(const uint8_t *sealed, size_t length, const uint8_t doc[32], s
 		jsonFree(x);
 		return SL_SHAPE;
 	} else {
-		uint8_t *m = allocate(80 + v->header_length);
+		uint8_t *m = allocate(48 + CM_NAME + v->header_length);
 		size_t m_length = message(doc, v->header, v->header_length, name, m);
 		if (!v->verify(v->context, signature->bytes.data + v->header_length, key, key_length, m, m_length)) reason = "";
 		free(m);
@@ -204,7 +204,7 @@ sl_code sl_unseal(const uint8_t *sealed, size_t length, const uint8_t doc[32], s
 	out->bytes = allocate(commit->bytes.length + 1);
 	memcpy(out->bytes, commit->bytes.data, commit->bytes.length);
 	out->length = commit->bytes.length;
-	memcpy(out->name, name, 32);
+	memcpy(out->name, name, CM_NAME);
 	sl_stored(sealed, length, out->stored);
 	jsonFree(x);
 	return SL_OK;

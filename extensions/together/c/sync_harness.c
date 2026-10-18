@@ -1,4 +1,4 @@
-// Whole hosts (sync.h) on the line protocol (conformance/c/harness.h), as extensions/sync/typescript/
+// Whole hosts (sync.h) on the line protocol (conformance/c/harness.h), as extensions/together/typescript/
 // sync_harness.ts has them: each a table and sync over its own device and store, joined by in-memory
 // pipes (wires_harness.h); its header lists the requests and answers. State lasts for the process. The C host
 // has no places and no scheduler: reads are the table's, and sync is told the host's writes and the
@@ -95,7 +95,7 @@ static void random_of(void *context, uint8_t *out, size_t n) {
 	}
 	char *text = formatString("%s/%zu", h->name, counts[i].calls++);
 	uint8_t hash[32];
-	cm_name((const uint8_t *)text, strlen(text), hash);
+	cm_digest((const uint8_t *)text, strlen(text), hash);
 	free(text);
 	memcpy(out, hash, n < 32 ? n : 32);
 }
@@ -270,10 +270,10 @@ static struct {
 } *ids;
 static size_t id_count;
 // commit labels by name (the first), and names by label
-static im_map labels;
+static im_map labels = {.width = CM_NAME};
 static struct {
 	char *label;
-	uint8_t name[32];
+	uint8_t name[CM_NAME];
 } *names;
 static size_t name_count;
 
@@ -284,36 +284,36 @@ static const char *id_of(const op_value *x) {
 	return s != NULL ? s : "";
 }
 
-static void put_label(FILE *out, const uint8_t name[32]) {
+static void put_label(FILE *out, const uint8_t name[CM_NAME]) {
 	const char *label = im_get(&labels, name);
 	if (label != NULL) op_json_string(out, label);
-	else cf_put_hex(out, name, 32);
+	else cf_put_hex(out, name, CM_NAME);
 }
 
-static void put_name(void *context, FILE *out, const uint8_t name[32]) {
+static void put_name(void *context, FILE *out, const uint8_t name[CM_NAME]) {
 	(void)context;
 	put_label(out, name);
 }
 
-static bool name_of(const op_value *x, uint8_t name[32], FILE *out) {
+static bool name_of(const op_value *x, uint8_t name[CM_NAME], FILE *out) {
 	const char *s = x != NULL && x->type == OP_STR ? x->str : NULL;
 	for (size_t i = 0; s != NULL && i < name_count; i++) {
 		if (strcmp(names[i].label, s) == 0) {
-			memcpy(name, names[i].name, 32);
+			memcpy(name, names[i].name, CM_NAME);
 			return true;
 		}
 	}
 	uint8_t *b;
 	size_t n;
-	if (s != NULL && strlen(s) == 64 && cf_unhex(s, &b, &n)) {
-		memcpy(name, b, 32);
+	if (s != NULL && strlen(s) == 2 * CM_NAME && cf_unhex(s, &b, &n)) {
+		memcpy(name, b, CM_NAME);
 		return true;
 	}
 	hh_error(out, "no commit %s", s ? s : "(none)");
 	return false;
 }
 
-static void label(const char *as, const uint8_t name[32]) {
+static void label(const char *as, const uint8_t name[CM_NAME]) {
 	size_t i = 0;
 	while (i < name_count && strcmp(names[i].label, as) != 0) i++;
 	if (i == name_count) {
@@ -321,7 +321,7 @@ static void label(const char *as, const uint8_t name[32]) {
 		if (names == NULL) abort();
 		names[name_count++].label = copyString(as);
 	}
-	memcpy(names[i].name, name, 32);
+	memcpy(names[i].name, name, CM_NAME);
 	if (!im_has(&labels, name)) im_set(&labels, name, names[i].label);
 }
 
@@ -673,7 +673,7 @@ static void conflicts(const op_value *r, FILE *out) {
 		fputs("{\"head\":", out);
 		uint8_t *name;
 		size_t n;
-		if (head != NULL && head->type == OP_STR && cf_unhex(head->str, &name, &n) && n == 32) put_label(out, name);
+		if (head != NULL && head->type == OP_STR && cf_unhex(head->str, &name, &n) && n == CM_NAME) put_label(out, name);
 		else op_json_write(out, head);
 		fputs(",\"lamport\":", out);
 		op_json_write(out, op_get(c, "lamport"));
@@ -707,7 +707,7 @@ static void overlay(const op_value *r, FILE *out) {
 		fputs(",\"name\":", out);
 		uint8_t *bytes;
 		size_t n;
-		if (name != NULL && name->type == OP_STR && cf_unhex(name->str, &bytes, &n) && n == 32) put_label(out, bytes);
+		if (name != NULL && name->type == OP_STR && cf_unhex(name->str, &bytes, &n) && n == CM_NAME) put_label(out, bytes);
 		else op_json_write(out, name);
 		fputs(",\"tables\":", out);
 		op_json_write(out, op_get(o, "tables"));
@@ -718,11 +718,11 @@ static void overlay(const op_value *r, FILE *out) {
 	fputs("]}}", out);
 }
 
-// a commit's name (64 hex digits) as its label, else as it is
+// a commit's name (hex) as its label, else as it is
 static void put_named(FILE *out, const op_value *v) {
 	uint8_t *name;
 	size_t n;
-	if (v != NULL && v->type == OP_STR && strlen(v->str) == 64 && cf_unhex(v->str, &name, &n) && n == 32) put_label(out, name);
+	if (v != NULL && v->type == OP_STR && strlen(v->str) == 2 * CM_NAME && cf_unhex(v->str, &name, &n) && n == CM_NAME) put_label(out, name);
 	else op_json_write(out, v);
 }
 
@@ -866,7 +866,7 @@ static void commits(const op_value *r, FILE *out) {
 static void commit(const op_value *r, FILE *out) {
 	host_t *h;
 	hy_history *history = history_of(r, out, &h);
-	uint8_t name[32];
+	uint8_t name[CM_NAME];
 	if (history == NULL || !name_of(op_get(r, "commit"), name, out)) return;
 	const hy_kept *k = hy_get(history, name);
 	cm_commit c;
@@ -883,7 +883,7 @@ static void commit(const op_value *r, FILE *out) {
 static void get(const op_value *r, FILE *out) {
 	host_t *h;
 	hy_history *history = history_of(r, out, &h);
-	uint8_t name[32];
+	uint8_t name[CM_NAME];
 	if (history == NULL || !name_of(op_get(r, "commit"), name, out)) return;
 	rp_tables t;
 	if (sy_get(h->sync, id_of(op_get(r, "id")), name, &t) != RP_OK) {

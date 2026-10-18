@@ -1,4 +1,4 @@
-// Two hosts typing into one text at once, merging by eg-walker (extensions/sync/typescript/
+// Two hosts typing into one text at once, merging by eg-walker (extensions/together/typescript/
 // merge_bench.ts, in C): the CPU time it takes (the machine may be loaded, so wall time misleads), and
 // the part of it merging. merge-bench [keys per host] [pure: eg-walker from scratch every merge,
 // without its walker]. Two syncs over one in-memory pipe (wires_harness.h), each with a table of its own; the
@@ -66,7 +66,7 @@ static void random_of(void *context, uint8_t *out, size_t n) {
 	char text[32];
 	snprintf(text, sizeof text, "%s/%u", h->name, h->calls++);
 	uint8_t hash[32];
-	cm_name((const uint8_t *)text, strlen(text), hash);
+	cm_digest((const uint8_t *)text, strlen(text), hash);
 	memcpy(out, hash, n < 32 ? n : 32);
 }
 

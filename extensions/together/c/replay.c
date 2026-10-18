@@ -115,7 +115,7 @@ static op_value *hex_value(const uint8_t *bytes, size_t n) {
 }
 
 const ch_header *rp_signed(rp_tables *t, const ch_header *change, const uint8_t *signer, size_t signer_length,
-	const uint8_t name[32]) {
+	const uint8_t name[CM_NAME]) {
 	owned *o = t->own;
 	ch_header *c = block(o, sizeof *c);
 	*c = *change;
@@ -126,7 +126,7 @@ const ch_header *rp_signed(rp_tables *t, const ch_header *change, const uint8_t 
 		const char *k = change->metadata[i].key;
 		if (k == NULL || (strcmp(k, "signer") != 0 && strcmp(k, "commit") != 0)) es[n++] = change->metadata[i];
 	}
-	op_value *key = hex_value(signer, signer_length), *named = hex_value(name, 32);
+	op_value *key = hex_value(signer, signer_length), *named = hex_value(name, CM_NAME);
 	es[n] = (ch_entry){"signer", held(o, key)};
 	es[n + 1] = (ch_entry){"commit", held(o, named)};
 	op_free(key);
@@ -189,7 +189,7 @@ bool rp_check(const rp_tables *t, const cm_commit *c) {
 	return true;
 }
 
-rp_code rp_apply(rp_tables *t, cm_commit *c, const uint8_t name[32]) {
+rp_code rp_apply(rp_tables *t, cm_commit *c, const uint8_t name[CM_NAME]) {
 	owned *o = t->own;
 	size_t i = slot_of(t, c->table);
 	nd_entry *e = i < t->length ? t->slots[i].entry : NULL;
@@ -234,7 +234,7 @@ typedef struct {
 	void *context;
 } plain_t;
 
-static rp_code walk(const hy_history *h, const uint8_t name[32], rp_snapshots snapshots, void *context,
+static rp_code walk(const hy_history *h, const uint8_t name[CM_NAME], rp_snapshots snapshots, void *context,
 	const rp_merges *merges, bool merging, rp_tables *out);
 
 // what a rule is given: one commit's tables had without merging; never several
@@ -248,7 +248,7 @@ static bool plain_get(void *context, const hy_kept *const *from, size_t n, rp_ta
 	return true;
 }
 
-static rp_code walk(const hy_history *h, const uint8_t name[32], rp_snapshots snapshots, void *context,
+static rp_code walk(const hy_history *h, const uint8_t name[CM_NAME], rp_snapshots snapshots, void *context,
 	const rp_merges *merges, bool merging, rp_tables *out) {
 	rp_init(out);
 	const hy_kept *k = hy_get(h, name);
@@ -294,12 +294,12 @@ static rp_code walk(const hy_history *h, const uint8_t name[32], rp_snapshots sn
 	return code;
 }
 
-rp_code rp_replay(const hy_history *h, const uint8_t name[32], rp_snapshots snapshots, void *context,
+rp_code rp_replay(const hy_history *h, const uint8_t name[CM_NAME], rp_snapshots snapshots, void *context,
 	const rp_merges *merges, rp_tables *out) {
 	return walk(h, name, snapshots, context, merges, true, out);
 }
 
-bool rp_matches(const hy_history *h, const uint8_t name[32], const uint8_t *bytes, size_t length,
+bool rp_matches(const hy_history *h, const uint8_t name[CM_NAME], const uint8_t *bytes, size_t length,
 	rp_snapshots snapshots, void *context, const rp_merges *merges) {
 	rp_tables replayed, given;
 	if (rp_replay(h, name, snapshots, context, merges, &replayed) != RP_OK) return false;
@@ -310,7 +310,7 @@ bool rp_matches(const hy_history *h, const uint8_t name[32], const uint8_t *byte
 	return same;
 }
 
-rp_code rp_plain(const hy_history *h, const uint8_t name[32], rp_snapshots snapshots, void *context,
+rp_code rp_plain(const hy_history *h, const uint8_t name[CM_NAME], rp_snapshots snapshots, void *context,
 	rp_tables *out) {
 	return walk(h, name, snapshots, context, NULL, false, out);
 }

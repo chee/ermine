@@ -31,7 +31,7 @@
 // name?, patches, base?, merge?, actor, reader?, site?, cause?, wallclock?, message?, value?}. A
 // commit changes one table of the node: kind "write" its value, "info" its attributes, "children"
 // its children; name is the one name every patch is under, when there is one. commit is the
-// commit's name, parents, base and signer as it holds them, each 64 hex digits; patches as it holds
+// commit's name, parents, base and signer as it holds them, in hex (a name 68 digits); patches as it holds
 // them; actor, reader, site (its first external), cause, wallclock and message from its change.
 // time: the change's, µs since 1970 (a commit always has one: sync stamps what has none). value:
 // the node's value after it; left out when there is none, or when it is more than 4 KB as JSON.
@@ -59,6 +59,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+// HEX: a name's hex digits and the end (CM_NAME bytes: 0x1e 0x20, then the BLAKE3 digest)
+#define HEX (2 * CM_NAME + 1)
+
 #define IRQ 65
 #define LIVE_IRQ 68
 #define SMALL 4096 // bytes of JSON: a value kept with each change, at most
@@ -71,7 +74,7 @@ typedef struct Served {
 	ErmMap done;        // a name (hex) -> (void *)1, each commit in changes
 	ErmMap values;      // a name (hex) -> the node's value after it, held; a commit after which there is none has no entry
 	int64_t time, lamport;
-	char last[65];      // the greatest made, by order: its time, Lamport number and name; "": none
+	char last[HEX];      // the greatest made, by order: its time, Lamport number and name; "": none
 } Served;
 
 static struct {
@@ -103,9 +106,11 @@ static void valuesFree(ErmMap *m) {
 	mapFree(m);
 }
 
-static void hex32(const uint8_t *bytes, char out[65]) {
-	for (int i = 0; i < 32; i++) snprintf(out + 2 * i, 3, "%02x", bytes[i]);
+static void hexOfBytes(const uint8_t *bytes, size_t length, char *out) {
+	for (size_t i = 0; i < length; i++) snprintf(out + 2 * i, 3, "%02x", bytes[i]);
+	out[2 * length] = 0;
 }
+static void hexName(const uint8_t *bytes, char out[HEX]) { hexOfBytes(bytes, CM_NAME, out); }
 
 /** an id as a want names it, "ermine://<hex>" or the bare hex, to its hex; NULL for anything else */
 static const char *hexOf(const char *id) {
@@ -138,7 +143,7 @@ static void told(void *context, const char *doc) {
 /** a commit not yet in the history, as it is ordered */
 typedef struct {
 	const hy_kept *kept;
-	char hex[65];
+	char hex[HEX];
 	int64_t time, lamport;
 } Fresh;
 
@@ -174,8 +179,8 @@ static int collect(const Served *s, const hy_history *h, Fresh **out) {
 	free(heads);
 	while (todo.count) {
 		const hy_kept *k = todo.items[--todo.count];
-		char x[65];
-		hex32(k->name, x);
+		char x[HEX];
+		hexName(k->name, x);
 		if (ermMapHas(&s->done, x) || ermMapHas(&visited, x)) continue;
 		ermMapPut(&visited, x, (void *)1);
 		Fresh f = { .kept = k, .time = timeOf(k), .lamport = k->lamport };
@@ -205,12 +210,12 @@ static const char *const CARRIED[] = { "cause", "wallclock", "message" };
 
 /** the node's value after the commit, held: from the value after what it follows, else sync's replay; NULL: none */
 static op_value *valueAfter(Served *s, const char *doc, const Fresh *f, const cm_commit *c) {
-	const uint8_t (*from)[32];
+	const uint8_t (*from)[CM_NAME];
 	size_t n = hy_follows(f->kept, &from);
 	bool write = !strcmp(c->table, "value");
 	if (n <= 1) {
-		char h[65];
-		if (n) hex32(from[0], h);
+		char h[HEX];
+		if (n) hexName(from[0], h);
 		const op_value *before = n ? ermMapGet(&s->values, h) : NULL;
 		bool known = n == 0 || ermMapHas(&s->done, h);
 		if (known && !write) return before ? op_ref((op_value *)before) : NULL;
@@ -238,13 +243,13 @@ static void add(Served *s, const char *doc, const Fresh *f) {
 	op_value *e = op_map(), *parents = op_list();
 	op_set(e, "commit", op_str(f->hex));
 	for (size_t i = 0; i < c.parents_length; i++) {
-		char h[65];
-		hex32(c.parents[i], h);
+		char h[HEX];
+		hexName(c.parents[i], h);
 		op_push(parents, op_str(h));
 	}
 	op_set(e, "parents", parents);
-	char signer[65];
-	hex32(c.signer, signer);
+	char signer[2 * CM_SIGNER_MAX + 1];
+	hexOfBytes(c.signer, c.signer_length, signer);
 	op_set(e, "signer", op_str(signer));
 	op_set(e, "lamport", op_num((double)c.lamport));
 	if (f->time) op_set(e, "time", op_num((double)f->time));
@@ -264,8 +269,8 @@ static void add(Served *s, const char *doc, const Fresh *f) {
 	if (name && !write) op_set(e, "name", op_str(name));
 	op_set(e, "patches", j ? valOf(jsonGet(j, "patches")) : op_list());
 	if (c.has_base) {
-		char base[65];
-		hex32(c.base, base);
+		char base[HEX];
+		hexName(c.base, base);
 		op_set(e, "base", op_str(base));
 	}
 	if (c.merge) op_set(e, "merge", op_str(c.merge));
@@ -361,8 +366,8 @@ static bool grow(Served *s) {
 	for (int k = 0; k < m; k++) {
 		const hy_kept *c = fresh[k].kept;
 		for (size_t q = 0; q < c->parents_length; q++) {
-			char x[65];
-			hex32(c->parents[q], x);
+			char x[HEX];
+			hexName(c->parents[q], x);
 			intptr_t j = (intptr_t)ermMapGet(&at, x);
 			if (!j || j - 1 == k) continue;
 			waiting[k]++;

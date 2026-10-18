@@ -731,6 +731,32 @@ int api_read(api *a, api_target x, const op_key *path, size_t n, const op_value 
 	return code;
 }
 
+typedef struct {
+	api *a;
+	api_target x;
+	const op_key *path;
+	size_t n;
+	const op_value **out;
+	int code;
+} peeped;
+
+static void peep_run(void *ctx) {
+	peeped *p = ctx;
+	p->code = api_read(p->a, p->x, p->path, p->n, p->out);
+}
+
+int api_peep(api *a, api_target x, const op_key *path, size_t n, const op_value **out) {
+	peeped p = {a, x, path, n, out, 0};
+	pl_peep(a->places, peep_run, &p);
+	if (p.code == API_PENDING) {
+		free(a->why);
+		a->why = NULL;
+		*out = NULL;
+		return 0;
+	}
+	return p.code;
+}
+
 void api_items_free(api_items *items) {
 	for (size_t i = 0; i < items->n; i++) {
 		op_free(items->items[i].value);
@@ -990,6 +1016,10 @@ static int do_move(api *a, void *data) {
 	nd_entry *source = NULL;
 	const char *name = NULL;
 	if (!code) code = slot(a, from.v, from.n, &source, &name);
+	if (!code) {
+		gd_refusal why = {0};
+		code = answered(a, gd_move(CP(from.v), from.n, CP(to.v), to.n, &why), &why);
+	}
 	if (!code) {
 		parent = id_at(a, from.v, from.n - 1);
 		code = ask_slot(a, parent, from.v, from.n);

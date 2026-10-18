@@ -9,12 +9,12 @@
 #include <string.h>
 
 static void put_bytes_and_name(FILE *out, const uint8_t *bytes, size_t length) {
-	uint8_t name[32];
+	uint8_t name[CM_NAME];
 	cm_name(bytes, length, name);
 	fputs("{\"bytes\":", out);
 	cf_put_hex(out, bytes, length);
 	fputs(",\"name\":", out);
-	cf_put_hex(out, name, 32);
+	cf_put_hex(out, name, CM_NAME);
 	fputc('}', out);
 }
 
@@ -61,12 +61,12 @@ static void decode(const op_value *r, FILE *out) {
 		free(field);
 		return;
 	}
-	uint8_t name[32];
+	uint8_t name[CM_NAME];
 	cm_name(bytes, length, name);
 	fputs("{\"commit\":", out);
 	cf_put_commit(out, &c, NULL, NULL);
 	fputs(",\"name\":", out);
-	cf_put_hex(out, name, 32);
+	cf_put_hex(out, name, CM_NAME);
 	fputc('}', out);
 	cm_free(&c);
 }

@@ -1,4 +1,4 @@
-// A node's tables at a head, packed (extensions/sync/typescript/snapshot.ts), in C: each kept table's
+// A node's tables at a head, packed (extensions/together/typescript/snapshot.ts), in C: each kept table's
 // entry, value and change, as pack.h writes a node, under the table and an id of none. Read back as new
 // entries each time: replay applies to them in place
 #ifndef SN_SNAPSHOT_H

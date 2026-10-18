@@ -144,13 +144,13 @@ void cf_put_commit(FILE *out, const cm_commit *c, cf_name name, void *context) {
 	for (size_t i = 0; i < c->parents_length; i++) {
 		if (i) fputc(',', out);
 		if (name != NULL) name(context, out, c->parents[i]);
-		else cf_put_hex(out, c->parents[i], 32);
+		else cf_put_hex(out, c->parents[i], CM_NAME);
 	}
 	fputc(']', out);
 	if (c->has_base) {
 		fputs(",\"base\":", out);
 		if (name != NULL) name(context, out, c->base);
-		else cf_put_hex(out, c->base, 32);
+		else cf_put_hex(out, c->base, CM_NAME);
 	}
 	if (c->merge != NULL) fputs(",\"merge\":", out), op_json_string(out, c->merge);
 	fprintf(out, ",\"lamport\":%lld,\"patches\":", (long long)c->lamport);

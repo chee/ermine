@@ -115,16 +115,16 @@ static Json *deltas(const int64_t *xs, size_t n) {
 
 // the commits' names by place, first of each: a hash on the name's first bytes
 typedef struct {
-	const uint8_t (*names)[32];
+	const uint8_t (*names)[CM_NAME];
 	size_t *slot, mask;
 } places;
 
-static size_t hash_of(const uint8_t name[32]) {
+static size_t hash_of(const uint8_t name[CM_NAME]) {
 	size_t h;
-	memcpy(&h, name, sizeof h);
+	memcpy(&h, name + CM_NAME - sizeof h, sizeof h);
 	return h;
 }
-static void places_make(places *p, const uint8_t (*names)[32], size_t n) {
+static void places_make(places *p, const uint8_t (*names)[CM_NAME], size_t n) {
 	size_t slots = 4;
 	while (slots < 2 * n + 2) slots *= 2;
 	p->names = names;
@@ -132,15 +132,15 @@ static void places_make(places *p, const uint8_t (*names)[32], size_t n) {
 	p->mask = slots - 1;
 	for (size_t i = 0; i < n; i++) {
 		size_t s = hash_of(names[i]) & p->mask;
-		while (p->slot[s] != 0 && memcmp(names[p->slot[s] - 1], names[i], 32) != 0) s = (s + 1) & p->mask;
+		while (p->slot[s] != 0 && memcmp(names[p->slot[s] - 1], names[i], CM_NAME) != 0) s = (s + 1) & p->mask;
 		if (p->slot[s] == 0) p->slot[s] = i + 1;
 	}
 }
 // the first place of the name, or n when none
-static size_t places_find(const places *p, const uint8_t name[32], size_t n) {
+static size_t places_find(const places *p, const uint8_t name[CM_NAME], size_t n) {
 	size_t s = hash_of(name) & p->mask;
 	while (p->slot[s] != 0) {
-		if (memcmp(p->names[p->slot[s] - 1], name, 32) == 0) return p->slot[s] - 1;
+		if (memcmp(p->names[p->slot[s] - 1], name, CM_NAME) == 0) return p->slot[s] - 1;
 		s = (s + 1) & p->mask;
 	}
 	return n;
@@ -164,10 +164,14 @@ rn_code rn_pack(const rn_item *sealed, size_t n, uint8_t **out, size_t *length) 
 	*length = 0;
 	rn_code code = RN_OK;
 	Json **commits = allocate((n + 1) * sizeof *commits);
-	uint8_t(*names)[32] = allocate((n + 1) * 32), (*ids)[32] = allocate((n + 1) * 32);
+	uint8_t(*names)[CM_NAME] = allocate((n + 1) * CM_NAME), (*ids)[32] = allocate((n + 1) * 32);
 	// each signature's varsig header, and the bytes after it (NULL: given without a seal)
 	Json **header = allocate((n + 1) * sizeof *header), **tail = allocate((n + 1) * sizeof *tail);
 	bool *vouched = allocate((n + 1) * sizeof *vouched);
+	// each commit's own bytes, when they are not what its columns encode to
+	uint8_t **raw = allocate((n + 1) * sizeof *raw);
+	size_t *raw_length = allocate((n + 1) * sizeof *raw_length);
+	bool extra = false;
 	size_t made = 0;
 	for (; made < n; made++) {
 		const rn_item *it = &sealed[made];
@@ -183,7 +187,7 @@ rn_code rn_pack(const rn_item *sealed, size_t n, uint8_t **out, size_t *length) 
 		}
 		if (cb != NULL) {
 			c = cborDecode(cb, cl, NULL, NULL);
-			if (c != NULL && cm_check(c, NULL) != CM_OK) jsonFree(c), c = NULL;
+			if (c != NULL && cm_check_decoded(c, NULL) != CM_OK) jsonFree(c), c = NULL;
 		}
 		if (c == NULL) {
 			jsonFree(x);
@@ -191,6 +195,8 @@ rn_code rn_pack(const rn_item *sealed, size_t n, uint8_t **out, size_t *length) 
 			goto done;
 		}
 		commits[made] = c;
+		// a key no commit has (a later device's): the columns leave it out, so the bytes go too
+		if (cm_check(c, NULL) != CM_OK) raw[made] = memcpy(allocate(cl), cb, cl), raw_length[made] = cl, extra = true;
 		cm_name(cb, cl, names[made]);
 		if (it->stored != NULL) memcpy(ids[made], it->stored, 32);
 		else {
@@ -205,7 +211,7 @@ rn_code rn_pack(const rn_item *sealed, size_t n, uint8_t **out, size_t *length) 
 	for (size_t i = 0; i + 1 < n; i++) {
 		const Json *ps = jsonGet(commits[i + 1], "parents"), *a = jsonGet(commits[i], "signer"),
 			   *b = jsonGet(commits[i + 1], "signer");
-		vouched[i] = ps->array.count == 1 && memcmp(ps->array.items[0]->bytes.data, names[i], 32) == 0 &&
+		vouched[i] = ps->array.count == 1 && memcmp(ps->array.items[0]->bytes.data, names[i], CM_NAME) == 0 &&
 			a->bytes.length == b->bytes.length && memcmp(a->bytes.data, b->bytes.data, a->bytes.length) == 0;
 	}
 	for (size_t i = 0; i < n; i++) {
@@ -215,7 +221,7 @@ rn_code rn_pack(const rn_item *sealed, size_t n, uint8_t **out, size_t *length) 
 		goto done;
 	}
 	places at;
-	places_make(&at, (const uint8_t(*)[32])names, n);
+	places_make(&at, (const uint8_t(*)[CM_NAME])names, n);
 	Json *cols = jsonObject(), *none = jsonNull();
 	const Json **v = allocate((n + 1) * sizeof *v);
 	int64_t *numbers = allocate((n + 1) * sizeof *numbers);
@@ -236,7 +242,7 @@ rn_code rn_pack(const rn_item *sealed, size_t n, uint8_t **out, size_t *length) 
 	Json *parents = jsonArray();
 	for (size_t i = 0; i < n; i++) {
 		const Json *ps = jsonGet(commits[i], "parents");
-		if (i > 0 && ps->array.count == 1 && memcmp(ps->array.items[0]->bytes.data, names[i - 1], 32) == 0) {
+		if (i > 0 && ps->array.count == 1 && memcmp(ps->array.items[0]->bytes.data, names[i - 1], CM_NAME) == 0) {
 			jsonPush(parents, jsonNull());
 			continue;
 		}
@@ -260,6 +266,11 @@ rn_code rn_pack(const rn_item *sealed, size_t n, uint8_t **out, size_t *length) 
 		v[i] = m != NULL ? (merges = true, m) : none;
 	}
 	if (merges) jsonAdd(cols, "merge", runs(v, n));
+	if (extra) {
+		Json *list = jsonArray();
+		for (size_t i = 0; i < n; i++) jsonPush(list, raw[i] != NULL ? jsonBytes(raw[i], raw_length[i]) : jsonNull());
+		jsonAdd(cols, "bytes", list);
+	}
 	for (size_t i = 0; i < n; i++) v[i] = vouched[i] ? none : header[i];
 	jsonAdd(cols, "headers", runs(v, n));
 	Json *patches = jsonArray();
@@ -309,7 +320,7 @@ done:
 // --- reading ---
 
 static const char *const COLUMNS[] = {"n", "table", "actor", "reader", "external", "metadata", "signer",
-	"time", "nonce", "lamport", "parents", "base", "merge", "patches", "headers", "signatures", "ids"};
+	"time", "nonce", "lamport", "parents", "base", "merge", "bytes", "patches", "headers", "signatures", "ids"};
 
 // canonical order: shorter first, then bytewise (a key's U+0000 held as C0 80 is the byte 00)
 static size_t real(const char *s, size_t n, unsigned char *out) {
@@ -379,7 +390,7 @@ static rn_code fail(rn_code code, char **column, const char *name) {
 }
 
 // the commit i's place or name, from a ref: bytes are the name; a whole number below i a place
-static bool deref(const Json *r, size_t i, const uint8_t (*names)[32], const Json **bytes, const uint8_t **name) {
+static bool deref(const Json *r, size_t i, const uint8_t (*names)[CM_NAME], const Json **bytes, const uint8_t **name) {
 	int64_t j;
 	if (is_bytes(r)) return *bytes = r, true;
 	if (!safe_integer(r, &j) || j < 0 || (uint64_t)j >= i) return false;
@@ -388,7 +399,7 @@ static bool deref(const Json *r, size_t i, const uint8_t (*names)[32], const Jso
 
 // a name as the Json the commit has it
 static Json *name_json(const Json *bytes, const uint8_t *name) {
-	return bytes != NULL ? jsonRef((Json *)bytes) : jsonBytes(name, 32);
+	return bytes != NULL ? jsonRef((Json *)bytes) : jsonBytes(name, CM_NAME);
 }
 
 // what a run of this many bytes may give, as run.ts's most: 64 times, and a MiB
@@ -439,7 +450,7 @@ rn_code rn_each(const uint8_t *bytes, size_t length, rn_each_fn each, void *cont
 	const Json **col[9] = {0};
 	int64_t *time = allocate((n + 1) * sizeof *time), *nonce = allocate((n + 1) * sizeof *nonce),
 		*lamport = allocate((n + 1) * sizeof *lamport);
-	uint8_t(*names)[32] = allocate((n + 1) * 32);
+	uint8_t(*names)[CM_NAME] = allocate((n + 1) * CM_NAME);
 	Json *before = NULL;
 	// one with no header, until the next shows it vouched for
 	rn_member held = {0};
@@ -454,6 +465,17 @@ rn_code rn_each(const uint8_t *bytes, size_t length, rn_each_fn each, void *cont
 	if (jsonGet(x, "merge") != NULL && (col[7] = unruns(jsonGet(x, "merge"), n)) == NULL) {
 		code = fail(RN_RUNS, column, "merge");
 		goto done;
+	}
+	// bytes: only when the run has the column, a list of n: null, or a commit's own bytes
+	const Json *exact = jsonGet(x, "bytes");
+	if (exact != NULL) {
+		bool shaped = exact->type == JSON_ARRAY && (size_t)exact->array.count == n;
+		for (int i = 0; shaped && i < exact->array.count; i++)
+			shaped = exact->array.items[i]->type == JSON_NULL || is_bytes(exact->array.items[i]);
+		if (!shaped) {
+			code = fail(RN_RUNS, column, "bytes");
+			goto done;
+		}
 	}
 	// headers: runs of bytes, or null for one vouched for by the next
 	if ((col[8] = unruns(jsonGet(x, "headers"), n)) == NULL) {
@@ -502,12 +524,12 @@ rn_code rn_each(const uint8_t *bytes, size_t length, rn_each_fn each, void *cont
 	for (size_t i = 0; i < n; i++) {
 		const Json *ps = parents->array.items[i], *p = patches->array.items[i];
 		Json *plist = jsonArray(), *c = NULL, *own_patches = NULL;
-		if (ps->type == JSON_NULL && i > 0) jsonPush(plist, jsonBytes(names[i - 1], 32));
+		if (ps->type == JSON_NULL && i > 0) jsonPush(plist, jsonBytes(names[i - 1], CM_NAME));
 		else if (ps->type == JSON_ARRAY) {
 			for (int k = 0; k < ps->array.count; k++) {
 				const Json *b;
 				const uint8_t *name;
-				if (!deref(ps->array.items[k], i, (const uint8_t(*)[32])names, &b, &name)) {
+				if (!deref(ps->array.items[k], i, (const uint8_t(*)[CM_NAME])names, &b, &name)) {
 					jsonFree(plist);
 					code = RN_REF;
 					goto done;
@@ -558,7 +580,7 @@ rn_code rn_each(const uint8_t *bytes, size_t length, rn_each_fn each, void *cont
 		if (col[6][i]->type != JSON_NULL) {
 			const Json *b;
 			const uint8_t *name;
-			if (deref(col[6][i], i, (const uint8_t(*)[32])names, &b, &name)) jsonAdd(c, "base", name_json(b, name));
+			if (deref(col[6][i], i, (const uint8_t(*)[CM_NAME])names, &b, &name)) jsonAdd(c, "base", name_json(b, name));
 			else bad_ref = true;
 		}
 		if (col[7] != NULL && col[7][i]->type != JSON_NULL) jsonAdd(c, "merge", jsonRef((Json *)col[7][i]));
@@ -576,11 +598,34 @@ rn_code rn_each(const uint8_t *bytes, size_t length, rn_each_fn each, void *cont
 			code = RN_COMMIT;
 			goto done;
 		}
+		// the commit as its own bytes have it: the columns' and no other
+		if (exact != NULL && is_bytes(exact->array.items[i])) {
+			const Json *g = exact->array.items[i];
+			cm_commit d;
+			uint8_t *e = NULL;
+			size_t e_length = 0;
+			bool ok = cm_decode(g->bytes.data, g->bytes.length, &d, NULL) == CM_OK;
+			if (ok) {
+				ok = cm_encode(&d, &e, &e_length, NULL) == CM_OK && e_length == b_length && memcmp(e, b, b_length) == 0;
+				cm_free(&d);
+				free(e);
+			}
+			if (!ok) {
+				jsonFree(c);
+				free(b);
+				code = RN_COMMIT;
+				goto done;
+			}
+			free(b);
+			b = allocate(g->bytes.length + 1);
+			memcpy(b, g->bytes.data, g->bytes.length);
+			b_length = g->bytes.length;
+		}
 		cm_name(b, b_length, names[i]);
 		// the one before, held: vouched for only if this one goes on it alone, by its signer
 		if (held.commit != NULL) {
 			const Json *ps = jsonGet(c, "parents"), *was = col[5][i - 1], *now = col[5][i];
-			bool on = ps->array.count == 1 && memcmp(ps->array.items[0]->bytes.data, held.name, 32) == 0 &&
+			bool on = ps->array.count == 1 && memcmp(ps->array.items[0]->bytes.data, held.name, CM_NAME) == 0 &&
 				was->bytes.length == now->bytes.length &&
 				memcmp(was->bytes.data, now->bytes.data, was->bytes.length) == 0;
 			if (!on) code = RN_VOUCHED;
@@ -603,7 +648,7 @@ rn_code rn_each(const uint8_t *bytes, size_t length, rn_each_fn each, void *cont
 		if (h->type == JSON_NULL) {
 			held = (rn_member){.commit = b, .commit_length = b_length};
 			held_commit = b;
-			memcpy(held.name, names[i], 32);
+			memcpy(held.name, names[i], CM_NAME);
 			memcpy(held.stored, ids->array.items[id++]->bytes.data, 32);
 			if (made > room) {
 				code = RN_SIZE;
@@ -631,7 +676,7 @@ rn_code rn_each(const uint8_t *bytes, size_t length, rn_each_fn each, void *cont
 			goto done;
 		}
 		rn_member m = {.commit = b, .commit_length = b_length, .sealed = sealed, .sealed_length = size};
-		memcpy(m.name, names[i], 32);
+		memcpy(m.name, names[i], CM_NAME);
 		sl_stored(sealed, size, m.stored);
 		bool on = each(context, &m);
 		free(sealed), free(b);

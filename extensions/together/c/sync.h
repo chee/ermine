@@ -105,7 +105,7 @@ void sy_table_changed(sy_sync *s, tb_key part, tb_key id);
 // stamped now)
 cm_code sy_settle(sy_sync *s, const char *id, const ch_header *change);
 // the node's tables at a commit (a version), new ones in *out; RP_NOT_TAKEN when it has no such commit
-rp_code sy_get(sy_sync *s, const char *id, const uint8_t name[32], rp_tables *out);
+rp_code sy_get(sy_sync *s, const char *id, const uint8_t name[CM_NAME], rp_tables *out);
 
 // the rule kept nodes merge by from now (one of merges), or none (NULL): every followed node with
 // several heads shows again as the rule says (merged, or the first head and its conflicts). false: no
@@ -116,7 +116,7 @@ bool sy_use(sy_sync *s, const char *merge);
 // then name; *out malloc'd (free it)
 typedef struct {
 	uint8_t key[SL_KEY];
-	uint8_t tip[32];
+	uint8_t tip[CM_NAME];
 } sy_standing_row;
 size_t sy_standing(sy_sync *s, const char *id, sy_standing_row **out);
 
