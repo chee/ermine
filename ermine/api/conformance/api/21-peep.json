@@ -1,0 +1,64 @@
+{
+	"title": "peep: a value read untracked: a memo peeping a node does not rerun when it changes, and sees its newest value when it reruns for something it read; from outside, the value. a peep by path tracks the walk neither: a node made there reruns nothing",
+	"steps": [
+		{ "op": "kids", "id": "R", "value": { "w": "W" }, "expect": {} },
+		{
+			"op": "start",
+			"name": "p",
+			"at": ["w", "p"],
+			"program": [
+				{ "do": ["open", "./n", 1], "as": "n" },
+				{ "do": ["open", "./k", "a"], "as": "k" },
+				{
+					"do": ["memo", "both", { "equal": "json" }, ["all", ["read", "$n"], ["peep", "$k"]]],
+					"as": "both"
+				},
+				{ "do": ["effect", "show", ["read", "$both"], "seen"] }
+			],
+			"expect": { "id": "proc:p" }
+		},
+		{ "op": "log", "name": "seen", "expect": { "values": [[1, "a"]] } },
+		{
+			"op": "do",
+			"process": "p",
+			"call": ["edit", "$k", [{ "path": [], "value": "b" }]],
+			"expect": {}
+		},
+		{ "op": "log", "name": "seen", "expect": { "values": [[1, "a"]] } },
+		{
+			"op": "do",
+			"process": "p",
+			"call": ["edit", "$n", [{ "path": [], "value": 2 }]],
+			"expect": {}
+		},
+		{ "op": "log", "name": "seen", "expect": { "values": [[1, "a"], [2, "b"]] } },
+		{ "op": "do", "process": "p", "call": ["peep", "$k"], "expect": { "value": "b" } },
+		{
+			"op": "start",
+			"name": "q",
+			"at": ["w", "q"],
+			"program": [
+				{ "do": ["open", "./x", 1], "as": "x" },
+				{
+					"do": [
+						"memo",
+						"bypath",
+						{ "equal": "json" },
+						["all", ["read", "$x"], ["peep", "./later"]]
+					],
+					"as": "bp"
+				},
+				{ "do": ["effect", "showbp", ["read", "$bp"], "bp"] }
+			],
+			"expect": { "id": "proc:q" }
+		},
+		{ "op": "log", "name": "bp", "expect": { "values": [[1, null]] } },
+		{
+			"op": "do",
+			"process": "q",
+			"call": ["open", "./later", "here"],
+			"expect": { "value": { "path": ["w", "later"], "part": "value" } }
+		},
+		{ "op": "log", "name": "bp", "expect": { "values": [[1, null]] } }
+	]
+}

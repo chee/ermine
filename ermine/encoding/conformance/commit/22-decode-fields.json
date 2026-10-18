@@ -109,7 +109,19 @@
 				"patches": [{ "path": ["title"], "value": "hi" }],
 				"node": "x"
 			},
-			"expect": { "error": "not-a-commit", "field": "node" }
+			"expect": {
+				"commit": {
+					"table": "value",
+					"actor": "chee",
+					"time": 1760000000,
+					"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+					"nonce": 1,
+					"parents": ["1e202222222222222222222222222222222222222222222222222222222222222222"],
+					"lamport": 2,
+					"patches": [{ "path": ["title"], "value": "hi" }]
+				},
+				"name": "1e204c888cc5d1ba642a500150b84cefe1d3b3dcd3aae12ab22fb24c3a07eff8071e"
+			}
 		},
 		{ "op": "decode", "value": {}, "expect": { "error": "not-a-commit", "field": "table" } },
 		{

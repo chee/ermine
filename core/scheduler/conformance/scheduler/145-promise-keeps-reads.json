@@ -1,0 +1,447 @@
+{
+	"title": "a run whose promise is out after x keeps y: landing done lets y go then; landing failed keeps it (a write to y is a retry); a rerun before landing does the letting go, the landing lands nowhere",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x1": 0,
+				"y1": 0,
+				"x2": 0,
+				"y2": 0,
+				"x3": 0,
+				"y3": 0
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "c1",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": "x1"
+					},
+					{
+						"if": [
+							{
+								"eq": [
+									{
+										"read": "x1"
+									},
+									1
+								]
+							},
+							{
+								"wait": [
+									"p1"
+								]
+							},
+							{
+								"read": "y1"
+							}
+						]
+					}
+				]
+			},
+			"to": "k1",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c2",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": "x2"
+					},
+					{
+						"if": [
+							{
+								"eq": [
+									{
+										"read": "x2"
+									},
+									1
+								]
+							},
+							{
+								"wait": [
+									"p2"
+								]
+							},
+							{
+								"read": "y2"
+							}
+						]
+					}
+				]
+			},
+			"to": "k2",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c3",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": "x3"
+					},
+					{
+						"if": [
+							{
+								"eq": [
+									{
+										"read": "x3"
+									},
+									1
+								]
+							},
+							{
+								"wait": [
+									"p3"
+								]
+							},
+							{
+								"if": [
+									{
+										"eq": [
+											{
+												"read": "x3"
+											},
+											2
+										]
+									},
+									0,
+									{
+										"read": "y3"
+									}
+								]
+							}
+						]
+					}
+				]
+			},
+			"to": "k3",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c1",
+						"tick": 2
+					},
+					{
+						"due": "c2",
+						"tick": 3
+					},
+					{
+						"due": "c3",
+						"tick": 4
+					},
+					{
+						"starts": "c1",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c1",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c2",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c2",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c3",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c3",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x1": 1,
+				"x2": 1,
+				"x3": 1
+			},
+			"expect": {
+				"tick": 8
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c1",
+						"tick": 8
+					},
+					{
+						"due": "c2",
+						"tick": 8
+					},
+					{
+						"due": "c3",
+						"tick": 8
+					},
+					{
+						"starts": "c1",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "c1",
+						"run": 2,
+						"ended": "pending"
+					},
+					{
+						"starts": "c2",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "c2",
+						"run": 2,
+						"ended": "pending"
+					},
+					{
+						"starts": "c3",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "c3",
+						"run": 2,
+						"ended": "pending"
+					}
+				]
+			}
+		},
+		{
+			"op": "forgotten",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "resolve",
+			"promise": "p1",
+			"value": 7,
+			"expect": {}
+		},
+		{
+			"op": "forgotten",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"ends": "c1",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "forgotten",
+			"expect": {
+				"keys": [
+					"y1"
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "k1",
+			"expect": {
+				"value": 7
+			}
+		},
+		{
+			"op": "reject",
+			"promise": "p2",
+			"error": "bad",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"ends": "c2",
+						"run": 2,
+						"ended": "failed",
+						"error": "bad"
+					}
+				]
+			}
+		},
+		{
+			"op": "forgotten",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"y2": 1
+			},
+			"expect": {
+				"tick": 10
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c2",
+						"tick": 10
+					},
+					{
+						"starts": "c2",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"ends": "c2",
+						"run": 3,
+						"ended": "pending"
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x3": 2
+			},
+			"expect": {
+				"tick": 11
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c3",
+						"tick": 11
+					},
+					{
+						"starts": "c3",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"ends": "c3",
+						"run": 3,
+						"ended": "done",
+						"equal": true
+					}
+				]
+			}
+		},
+		{
+			"op": "forgotten",
+			"expect": {
+				"keys": [
+					"y3"
+				]
+			}
+		},
+		{
+			"op": "resolve",
+			"promise": "p3",
+			"value": 9,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		},
+		{
+			"op": "forgotten",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "get",
+			"key": "k3",
+			"expect": {
+				"value": 0
+			}
+		}
+	]
+}

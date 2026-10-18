@@ -195,7 +195,7 @@ export const plants: Plant[] = [
 		file: `core/unread/${T}/unread.ts`,
 		find: "\t\towner.delete(v)\n\t\tif (typed(v)) return\n\t\tif (Array.isArray(v)) {",
 		replace: "\t\tif (typed(v)) return\n\t\tif (Array.isArray(v)) {",
-		catcher: { differ: "unread" },
+		catcher: fuzzUnread,
 	},
 	// places
 	{
@@ -224,6 +224,6 @@ export const plants: Plant[] = [
 		file: `filesystem/places/${T}/path.ts`,
 		find: "else if (names.length) names.pop()",
 		replace: "else if (names.length > 1) names.pop()",
-		catcher: fuzzPlacesUpdate,
+		catcher: fuzzPlaces,
 	},
 ]

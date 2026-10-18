@@ -1,0 +1,415 @@
+{
+	"title": "a computation failing again and again, reading x and y in turn in a new order: each write runs it once, and a write of x or y after makes it due once",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"flip": false,
+				"x": 0,
+				"y": 0,
+				"bad": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"if": [
+							{
+								"read": "flip"
+							},
+							{
+								"do": [
+									{
+										"read": "x"
+									},
+									{
+										"read": "y"
+									}
+								]
+							},
+							{
+								"do": [
+									{
+										"read": "y"
+									},
+									{
+										"read": "x"
+									}
+								]
+							}
+						]
+					},
+					{
+						"if": [
+							{
+								"eq": [
+									{
+										"read": "bad"
+									},
+									1
+								]
+							},
+							{
+								"throw": "no"
+							},
+							null
+						]
+					},
+					{
+						"read": "x"
+					}
+				]
+			},
+			"to": "k",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 2
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "failed",
+						"error": "no",
+						"reads": [
+							"flip",
+							"y",
+							"x",
+							"bad"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"flip": true
+			},
+			"expect": {
+				"tick": 3
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 3
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "failed",
+						"error": "no",
+						"reads": [
+							"flip",
+							"x",
+							"y",
+							"bad"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"flip": false
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 4
+					},
+					{
+						"starts": "c",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 3,
+						"ended": "failed",
+						"error": "no",
+						"reads": [
+							"flip",
+							"y",
+							"x",
+							"bad"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"flip": true
+			},
+			"expect": {
+				"tick": 5
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 5
+					},
+					{
+						"starts": "c",
+						"run": 4,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 4,
+						"ended": "failed",
+						"error": "no",
+						"reads": [
+							"flip",
+							"x",
+							"y",
+							"bad"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"flip": false
+			},
+			"expect": {
+				"tick": 6
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 6
+					},
+					{
+						"starts": "c",
+						"run": 5,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 5,
+						"ended": "failed",
+						"error": "no",
+						"reads": [
+							"flip",
+							"y",
+							"x",
+							"bad"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1
+			},
+			"expect": {
+				"tick": 7
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 7
+					},
+					{
+						"starts": "c",
+						"run": 6,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 6,
+						"ended": "failed",
+						"error": "no"
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"y": 1
+			},
+			"expect": {
+				"tick": 8
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 8
+					},
+					{
+						"starts": "c",
+						"run": 7,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 7,
+						"ended": "failed",
+						"error": "no"
+					}
+				]
+			}
+		},
+		{
+			"op": "forgotten",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"bad": 0
+			},
+			"expect": {
+				"tick": 9
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 9
+					},
+					{
+						"starts": "c",
+						"run": 8,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 8,
+						"ended": "done",
+						"equal": false,
+						"reads": [
+							"flip",
+							"y",
+							"x",
+							"bad",
+							"x"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "forgotten",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "get",
+			"key": "k",
+			"expect": {
+				"value": 1
+			}
+		}
+	]
+}

@@ -1,0 +1,334 @@
+{
+	"title": "a child made as an effect, made again as a compute at the same name: the same computation (its runs counted on), now a compute: its result goes to set, equal to the last or not, it acts no more; the cleanups of its last run and of its last act run once its first run as a compute is done",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"mode": 0,
+				"x": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "p",
+			"scope": "o",
+			"f": {
+				"if": [
+					{
+						"eq": [
+							{
+								"read": "mode"
+							},
+							1
+						]
+					},
+					{
+						"compute": [
+							"k",
+							{
+								"do": [
+									{
+										"cleanup": [
+											null,
+											{
+												"log": "run cleanup"
+											}
+										]
+									},
+									{
+										"read": "x"
+									}
+								]
+							},
+							"out"
+						]
+					},
+					{
+						"effect": [
+							"k",
+							{
+								"do": [
+									{
+										"cleanup": [
+											null,
+											{
+												"log": "run cleanup"
+											}
+										]
+									},
+									{
+										"read": "x"
+									}
+								]
+							},
+							{
+								"do": [
+									{
+										"cleanup": [
+											null,
+											{
+												"log": "act cleanup"
+											}
+										]
+									},
+									{
+										"log": {
+											"given": "value"
+										}
+									}
+								]
+							}
+						]
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "p",
+						"tick": 2
+					},
+					{
+						"starts": "p",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"due": "k",
+						"tick": 3,
+						"writer": "p"
+					},
+					{
+						"ends": "p",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "k",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "k",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "k",
+						"run": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					1
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"mode": 1
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "p",
+						"tick": 4
+					},
+					{
+						"starts": "p",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"due": "k",
+						"tick": 5,
+						"writer": "p"
+					},
+					{
+						"ends": "p",
+						"run": 2,
+						"ended": "done",
+						"equal": true
+					},
+					{
+						"starts": "k",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "k",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					"act cleanup",
+					"run cleanup"
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "out",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 2
+			},
+			"expect": {
+				"tick": 7
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "k",
+						"tick": 7
+					},
+					{
+						"starts": "k",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"ends": "k",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					"run cleanup"
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "out",
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"mode": 0
+			},
+			"expect": {
+				"tick": 9
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "p",
+						"tick": 9
+					},
+					{
+						"starts": "p",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"due": "k",
+						"tick": 10,
+						"writer": "p"
+					},
+					{
+						"ends": "p",
+						"run": 3,
+						"ended": "done",
+						"equal": true
+					},
+					{
+						"starts": "k",
+						"run": 4,
+						"rank": 0
+					},
+					{
+						"ends": "k",
+						"run": 4,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "k",
+						"run": 4
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					"run cleanup",
+					2
+				]
+			}
+		}
+	]
+}

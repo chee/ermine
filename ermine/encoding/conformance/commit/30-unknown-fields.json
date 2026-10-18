@@ -1,0 +1,62 @@
+{
+	"title": "decoded, a key no commit has is left out and the commit taken, its name over all the bytes; a known field wrong is still named",
+	"steps": [
+		{
+			"op": "decode",
+			"value": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": { "/": { "bytes": "ERERERERERERERERERERERERERERERERERERERERERE" } },
+				"nonce": 1,
+				"parents": [{ "/": { "bytes": "HiAiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIg" } }],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"zz": { "later": [1, 2] },
+				"node": 1
+			},
+			"expect": {
+				"commit": {
+					"table": "value",
+					"actor": "chee",
+					"time": 1760000000,
+					"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+					"nonce": 1,
+					"parents": ["1e202222222222222222222222222222222222222222222222222222222222222222"],
+					"lamport": 2,
+					"patches": [{ "path": ["title"], "value": "hi" }]
+				},
+				"name": "1e2082a756998b59e90587c4b558c8f5ff1fd78859b3c074246bee9b3980099f8653"
+			}
+		},
+		{
+			"op": "decode",
+			"value": {
+				"table": "value",
+				"actor": "chee",
+				"time": "x",
+				"signer": { "/": { "bytes": "ERERERERERERERERERERERERERERERERERERERERERE" } },
+				"nonce": 1,
+				"parents": [{ "/": { "bytes": "HiAiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIg" } }],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"zz": 1
+			},
+			"expect": { "error": "not-a-commit", "field": "time" }
+		},
+		{
+			"op": "decode",
+			"value": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": { "/": { "bytes": "ERERERERERERERERERERERERERERERERERERERERERE" } },
+				"nonce": 1,
+				"parents": [{ "/": { "bytes": "HiAiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIg" } }],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi", "zz": 1 }]
+			},
+			"expect": { "error": "not-a-commit", "field": "patches" }
+		}
+	]
+}

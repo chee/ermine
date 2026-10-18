@@ -1,0 +1,96 @@
+{
+	"title": "an entry taken out whole goes as a removal, stamped with the time now and no actor",
+	"steps": [
+		{
+			"op": "host",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": { "key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }
+		},
+		{
+			"op": "host",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": { "key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394" }
+		},
+		{
+			"op": "mint",
+			"host": "a",
+			"as": "x",
+			"expect": {
+				"id": "ermine://b40fde52c568d2f3864d68739e98b72b9f144f5566afcbb238fd354ecdc7c755"
+			}
+		},
+		{ "op": "follow", "host": "b", "id": "x", "expect": {} },
+		{ "op": "connect", "a": "a", "b": "b", "expect": {} },
+		{
+			"op": "write",
+			"host": "a",
+			"table": "attributes",
+			"id": "x",
+			"patches": [{ "path": [], "value": { "k": 1 } }],
+			"name": "w1",
+			"expect": { "commits": 1 }
+		},
+		{ "op": "quiet", "expect": {} },
+		{
+			"op": "read",
+			"host": "b",
+			"table": "attributes",
+			"id": "x",
+			"expect": { "value": { "k": 1 } }
+		},
+		{
+			"op": "remove",
+			"host": "a",
+			"table": "attributes",
+			"id": "x",
+			"time": 1760000200,
+			"name": "r",
+			"expect": { "commits": 1 }
+		},
+		{ "op": "quiet", "expect": {} },
+		{ "op": "read", "host": "b", "table": "attributes", "id": "x", "expect": {} },
+		{
+			"op": "commit",
+			"host": "b",
+			"id": "x",
+			"commit": "r",
+			"expect": {
+				"commit": {
+					"table": "attributes",
+					"actor": null,
+					"time": 1760000200,
+					"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"nonce": 3338457402,
+					"parents": ["w1"],
+					"lamport": 2,
+					"patches": [{ "path": [] }]
+				}
+			}
+		},
+		{
+			"op": "get",
+			"host": "b",
+			"id": "x",
+			"commit": "w1",
+			"expect": {
+				"tables": {
+					"attributes": {
+						"value": { "k": 1 },
+						"change": {
+							"time": 1760000000,
+							"actor": "a",
+							"external": [{ "file": "scenario", "line": 1 }],
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "1e209a699c0340ba53b0cf22ae66ffd0391e2f68e3b31d26d296aa4d5933e890e5db"
+							}
+						}
+					}
+				}
+			}
+		},
+		{ "op": "get", "host": "b", "id": "x", "commit": "r", "expect": { "tables": {} } }
+	]
+}

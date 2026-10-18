@@ -1,0 +1,249 @@
+{
+	"title": "a run that fails after reading x keeps y, which the run before read: y is not forgotten, a write to y makes it due again (a retry), and the run that reads x and y again starts nothing",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 0,
+				"y": 0
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": "x"
+					},
+					{
+						"if": [
+							{
+								"eq": [
+									{
+										"read": "x"
+									},
+									1
+								]
+							},
+							{
+								"throw": "no"
+							},
+							null
+						]
+					},
+					{
+						"read": "y"
+					}
+				]
+			},
+			"to": "k",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "started",
+			"expect": {
+				"keys": [
+					"x",
+					"y"
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 2
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false,
+						"reads": [
+							"x",
+							"x",
+							"y"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 4
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "failed",
+						"error": "no",
+						"reads": [
+							"x",
+							"x"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "forgotten",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"y": 5
+			},
+			"expect": {
+				"tick": 5
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 5
+					},
+					{
+						"starts": "c",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 3,
+						"ended": "failed",
+						"error": "no",
+						"reads": [
+							"x",
+							"x"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "forgotten",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 2
+			},
+			"expect": {
+				"tick": 6
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 6
+					},
+					{
+						"starts": "c",
+						"run": 4,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 4,
+						"ended": "done",
+						"equal": false,
+						"reads": [
+							"x",
+							"x",
+							"y"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "started",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "forgotten",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "get",
+			"key": "k",
+			"expect": {
+				"value": 5
+			}
+		}
+	]
+}

@@ -1,0 +1,218 @@
+{
+	"title": "a run stopped at kw (its writer due) keeps y, read by the run before; the rerun in the same pulse reads y again: y neither forgotten nor started",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 0,
+				"s": 0,
+				"y": 0
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": "x"
+					},
+					{
+						"if": [
+							{
+								"eq": [
+									{
+										"read": "x"
+									},
+									1
+								]
+							},
+							{
+								"read": "kw"
+							},
+							null
+						]
+					},
+					{
+						"read": "y"
+					}
+				]
+			},
+			"to": "k",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "w",
+			"scope": "o",
+			"f": {
+				"read": "s"
+			},
+			"to": "kw",
+			"declared": true,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 2
+					},
+					{
+						"due": "w",
+						"tick": 3
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "w",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "w",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "started",
+			"expect": {
+				"keys": [
+					"x",
+					"y",
+					"s"
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1
+			},
+			"expect": {
+				"tick": 6
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"s": 1
+			},
+			"expect": {
+				"tick": 7
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 6
+					},
+					{
+						"due": "w",
+						"tick": 7
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "stopped",
+						"waits": "w",
+						"reads": [
+							"x",
+							"x",
+							"kw"
+						]
+					},
+					{
+						"starts": "w",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "w",
+						"run": 2,
+						"ended": "done",
+						"equal": false,
+						"reads": [
+							"s"
+						]
+					},
+					{
+						"starts": "c",
+						"run": 3,
+						"rank": 1
+					},
+					{
+						"ends": "c",
+						"run": 3,
+						"ended": "done",
+						"equal": true,
+						"reads": [
+							"x",
+							"x",
+							"kw",
+							"y"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "forgotten",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "started",
+			"expect": {
+				"keys": [
+					"kw"
+				]
+			}
+		}
+	]
+}

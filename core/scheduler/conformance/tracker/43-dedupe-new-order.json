@@ -1,0 +1,240 @@
+{
+	"title": "runs left again and again, reading in turn in a new order: each makes a new link in front, and dedupe drops the kept one it repeats, so the links stay one per spot",
+	"steps": [
+		{
+			"op": "begin",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "track",
+			"from": "r",
+			"to": "x",
+			"expect": {}
+		},
+		{
+			"op": "track",
+			"from": "r",
+			"to": "y",
+			"expect": {}
+		},
+		{
+			"op": "end",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "begin",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "track",
+			"from": "r",
+			"to": "y",
+			"expect": {}
+		},
+		{
+			"op": "leave",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "reads",
+			"of": "r",
+			"expect": {
+				"names": [
+					"y",
+					"x",
+					"y"
+				]
+			}
+		},
+		{
+			"op": "readers",
+			"of": "y",
+			"expect": {
+				"names": [
+					"r",
+					"r"
+				]
+			}
+		},
+		{
+			"op": "dedupe",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "reads",
+			"of": "r",
+			"expect": {
+				"names": [
+					"y",
+					"x"
+				]
+			}
+		},
+		{
+			"op": "readers",
+			"of": "y",
+			"expect": {
+				"names": [
+					"r"
+				]
+			}
+		},
+		{
+			"op": "readers",
+			"of": "x",
+			"expect": {
+				"names": [
+					"r"
+				]
+			}
+		},
+		{
+			"op": "begin",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "track",
+			"from": "r",
+			"to": "x",
+			"expect": {}
+		},
+		{
+			"op": "leave",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "reads",
+			"of": "r",
+			"expect": {
+				"names": [
+					"x",
+					"y",
+					"x"
+				]
+			}
+		},
+		{
+			"op": "dedupe",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "reads",
+			"of": "r",
+			"expect": {
+				"names": [
+					"x",
+					"y"
+				]
+			}
+		},
+		{
+			"op": "begin",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "track",
+			"from": "r",
+			"to": "y",
+			"expect": {}
+		},
+		{
+			"op": "leave",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "dedupe",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "reads",
+			"of": "r",
+			"expect": {
+				"names": [
+					"y",
+					"x"
+				]
+			}
+		},
+		{
+			"op": "begin",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "track",
+			"from": "r",
+			"to": "x",
+			"expect": {}
+		},
+		{
+			"op": "track",
+			"from": "r",
+			"to": "y",
+			"expect": {}
+		},
+		{
+			"op": "leave",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "dedupe",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "reads",
+			"of": "r",
+			"expect": {
+				"names": [
+					"x",
+					"y"
+				]
+			}
+		},
+		{
+			"op": "readers",
+			"of": "x",
+			"expect": {
+				"names": [
+					"r"
+				]
+			}
+		},
+		{
+			"op": "readers",
+			"of": "y",
+			"expect": {
+				"names": [
+					"r"
+				]
+			}
+		},
+		{
+			"op": "dedupe",
+			"from": "r",
+			"expect": {}
+		},
+		{
+			"op": "reads",
+			"of": "r",
+			"expect": {
+				"names": [
+					"x",
+					"y"
+				]
+			}
+		}
+	]
+}

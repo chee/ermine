@@ -1,0 +1,184 @@
+{
+	"title": "move into itself: a node moved to a path under its own path (a to a/b/x, or a/x) is refused by path, nothing changes, no policy needed; the same place is no move; a to ab/x (a prefix of the name, not of the path) and a rename in the same folder go through",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"w": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"a": "A",
+				"ab": "AB"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "A",
+			"value": {
+				"b": "B"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "B",
+			"value": {
+				"c": "C"
+			},
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": [
+				"w",
+				"p"
+			],
+			"program": [],
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"move",
+				"./a",
+				"./a/b/x"
+			],
+			"fails": true,
+			"expect": {
+				"error": "refused"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"move",
+				"./a",
+				"./a/x"
+			],
+			"fails": true,
+			"expect": {
+				"error": "refused"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"list",
+				"./a"
+			],
+			"expect": {
+				"value": [
+					"b"
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"list",
+				"./a/b"
+			],
+			"expect": {
+				"value": [
+					"c"
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"move",
+				"./a",
+				"./a"
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"list",
+				"./a"
+			],
+			"expect": {
+				"value": [
+					"b"
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"move",
+				"./a",
+				"./ab/x"
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"list",
+				"./ab"
+			],
+			"expect": {
+				"value": [
+					"x"
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"list",
+				"./ab/x"
+			],
+			"expect": {
+				"value": [
+					"b"
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"move",
+				"./ab/x",
+				"./ab/y"
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"list",
+				"./ab"
+			],
+			"expect": {
+				"value": [
+					"y"
+				]
+			}
+		}
+	]
+}
