@@ -59,21 +59,11 @@ typedef struct {
 // an entry: value: NULL, none. change: the latest change's header, borrowed pieces and all:
 // the caller keeps them alive while the entry refers to them. undo: the entry's own, for update's
 // undo (update.h): not read or set by a caller
-// in_place: update changes the containers of the value in place (op_apply's in_place); set by
-// nd_make_entry only
 typedef struct {
 	op_value *value;
 	ch_header change;
 	op_undo undo;
-	int in_place;
 } nd_entry;
-
-// what nd_make_entry is given besides: in_place 1, an entry whose value update changes in place. Whatever
-// else holds the value then sees it change: put in nothing you do not want changed, or copy it
-// first
-typedef struct {
-	int in_place;
-} nd_entry_options;
 
 // the time now, as nd_make_entry and nd_make_node take it when no time is given: an int64_t of
 // whole seconds since 1970, by default (int64_t)time(NULL). A build with no clock defines its own
@@ -85,8 +75,8 @@ typedef struct {
 // kept by the caller; nothing checked: checks are a layer above's. The entry takes an op_ref on the
 // value (NULL: none), so the caller may op_free its own hold. header: the entry's change, as given,
 // not copied (NULL: an empty one); with no time, the time now, whole seconds since 1970. NULL
-// when out of memory. options may be NULL
-nd_entry *nd_make_entry(op_value *value, const ch_header *header, const nd_entry_options *options);
+// when out of memory
+nd_entry *nd_make_entry(op_value *value, const ch_header *header);
 // frees what the entry owns: its hold on the value, its undo. Nothing given to it
 void nd_free_entry(nd_entry *n);
 
@@ -109,12 +99,11 @@ typedef struct {
 } nd_value;
 
 // a node made from plain values: each table's value made an entry by nd_make_entry, the one header
-// shared by them all (with no time, the time now, the same for every table) and the one options.
+// shared by them all (with no time, the time now, the same for every table).
 // the node owns its slots and entries (nd_free_node); the table names are borrowed: the caller
-// keeps them alive. nothing checked. NULL when out of memory. header and options may be NULL. a
+// keeps them alive. nothing checked. NULL when out of memory. header may be NULL. a
 // node made another way is just as good, but is the caller's to free
-nd_node *nd_make_node(const nd_value *values, size_t length, const ch_header *header,
-	const nd_entry_options *options);
+nd_node *nd_make_node(const nd_value *values, size_t length, const ch_header *header);
 // frees a node nd_make_node made: its slots and entries; not the table names
 void nd_free_node(nd_node *n);
 

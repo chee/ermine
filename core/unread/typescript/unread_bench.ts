@@ -1,10 +1,10 @@
 // deno run core/unread/typescript/unread_bench.ts [name…]
 // µs per write, fastest of 31 rounds (the machine may be busy): node's update copying on write
-// ("copy"), node's update in place (cow: false, as places keeps children: "in place"), and unread.
+// ("copy"), in place (op's apply with cow: false: "in place"), and unread.
 // a burst: writes with no read between; read between: unread is told of a read before each write
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
-import type { Patch } from "@ermine/op/apply"
+import apply, { type Patch } from "@ermine/op/apply"
 import { createPlaces, type Places } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
 import { createScheduler } from "@ermine/scheduler"
@@ -14,6 +14,16 @@ import { createUnread, keeping, reading } from "./unread.ts"
 
 const only = Deno.args
 const h: ChangeHeader = { time: 1, actor: "bench" }
+
+// in place, as op's apply does with cow: false: the value changed where it is, the change made
+// as node's update makes it
+function inPlace(e: Entry<unknown>, ps: Patch[], change: ChangeHeader) {
+	const undo: Patch[] = []
+	const after = apply(e.value, ps, { undo, cow: false })
+	if (after === undefined) delete e.value
+	else e.value = after
+	e.change = { ...change, op: { patches: ps, undo } }
+}
 
 function fastest(f: () => void, calls: number): number {
 	for (let i = 0; i < calls; i++) f()
@@ -42,9 +52,9 @@ function ways(start: () => unknown, patch: (i: number) => Patch[], read = false)
 			return () => update(e, patch(i++), h)
 		},
 		"in place": () => {
-			const e = createEntry(start(), h, { cow: false })
+			const e = createEntry<unknown>(start(), h)
 			let i = 0
-			return () => update(e, patch(i++), h)
+			return () => inPlace(e, patch(i++), h)
 		},
 		unread: () => {
 			const u = createUnread()
@@ -174,8 +184,6 @@ function world(way: "copy" | "in place" | "unread") {
 	const header = s.runWithScope(host, () => createChangeHeader(s))
 	table.sub("children", "F", createEntry(folder(1000)(), header) as never)
 	const e = table.get("children", "F")! as Entry<unknown>
-	// places keeps children in place: copy's world undoes that
-	if (way === "copy") delete e.cow
 	s.runWithScope(
 		s.createRootScope({ actor: "r" }),
 		() => s.createComputer(() => places.readValue("children", "F", ["name0"]), () => {}),
@@ -185,6 +193,7 @@ function world(way: "copy" | "in place" | "unread") {
 	return () => {
 		const ps = rename(++i)
 		if (way === "unread") u.update(e, ps, header)
+		else if (way === "in place") inPlace(e, ps, header)
 		else update(e, ps, header)
 		places.commit([e])
 		s.pulse()

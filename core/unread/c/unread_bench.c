@@ -1,6 +1,6 @@
 // unread (unread.h) on what typescript/unread_bench.ts measures at the entry (its places row is
 // the TypeScript's): fastest of 31 rounds, µs per write. copy: nd_update on a copying entry; in
-// place: nd_update on an in_place entry (op_apply in place); unread. a burst: no read between;
+// place: op_apply with in_place on the entry's value; unread. a burst: no read between;
 // read between: unread is told of a read before each write. then a first write to each of many
 // entries, kept, and the scheduler's chain (what the TypeScript bench has, but its places row)
 // make core/unread/c/unread-bench
@@ -148,10 +148,28 @@ static void sample(long i, op_patch *out) {
 		.value = one_sample[i % 1000]};
 }
 
+// in place, as op_apply's in_place does: the value changed where it is, the change made as nd_update makes it
+static void in_place(nd_entry *e, const op_patch *p, size_t n, ch_header header) {
+	op_undo undo = {0};
+	op_apply_options ao = {.undo = &undo, .in_place = 1};
+	op_value *after = NULL;
+	if (op_apply(e->value, p, n, &ao, &after, NULL) != OP_OK) abort();
+	op_free(e->value);
+	e->value = after;
+	op_undo_free(&e->undo);
+	e->undo = undo;
+	e->change = header;
+	e->change.has_op = 1;
+	e->change.patches = p;
+	e->change.patches_length = n;
+	e->change.undo = undo.patches;
+	e->change.undo_length = undo.n;
+}
+
 // µs per write of a way, fastest of 31 rounds of calls writes after calls to warm up
 static double fastest(const row *r, int way, int reading, int calls) {
 	un_unread *u = un_new();
-	nd_entry *e = nd_make_entry(r->start(), &header, &(nd_entry_options){.in_place = way == IN_PLACE});
+	nd_entry *e = nd_make_entry(r->start(), &header);
 	long i = 0;
 	double best = 1e30;
 	for (int round = -1; round < 31; round++) {
@@ -162,6 +180,8 @@ static double fastest(const row *r, int way, int reading, int calls) {
 			if (way == UNREAD) {
 				if (reading) un_read(u, e);
 				un_update(u, e, p, r->n, header, NULL);
+			} else if (way == IN_PLACE) {
+				in_place(e, p, r->n, header);
 			} else {
 				nd_update(e, p, r->n, header, NULL);
 			}
@@ -190,7 +210,7 @@ static void first_writes(void) {
 		static nd_entry *es[ENTRIES];
 		for (int r = 0; r < 11; r++) {
 			un_unread *u = un_new();
-			for (int k = 0; k < ENTRIES; k++) es[k] = nd_make_entry(doc(), &header, NULL);
+			for (int k = 0; k < ENTRIES; k++) es[k] = nd_make_entry(doc(), &header);
 			op_patch p;
 			field(1, &p);
 			double t0 = now();

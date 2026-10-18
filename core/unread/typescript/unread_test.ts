@@ -95,15 +95,6 @@ Deno.test("unread: a write that throws changes nothing", () => {
 	assertEquals(e.value, { a: { x: 1 } })
 })
 
-Deno.test("unread: cow false is not read: a reader's value is never changed under it", () => {
-	const u = createUnread()
-	const e = createEntry<unknown>({ names: { a: "A" } }, h(), { cow: false })
-	const held = e.value as Doc
-	u.read(e)
-	u.update(e, [{ path: ["names", "b"], value: "B" }], h())
-	assertEquals(held, { names: { a: "A" } })
-})
-
 Deno.test("unread: through reading, a get is a read; a get of ids is not", () => {
 	const u = createUnread()
 	const table = createTable()

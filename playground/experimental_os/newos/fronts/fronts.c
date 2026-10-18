@@ -71,7 +71,7 @@ int fr_add(pl *l, tb_table *table, const char *part, tb_key parent, const char *
 	if (tb_get(table, tb_string(part), parent) == NULL) {
 		op_value *map = op_map();
 		op_set(map, name, list);
-		nd_entry *node = nd_make_entry(map, &header, &(nd_entry_options){.in_place = 1});
+		nd_entry *node = nd_make_entry(map, &header);
 		op_free(map);
 		pl_own(l, node);
 		tb_add(table, tb_string(part), parent, node);
@@ -79,7 +79,7 @@ int fr_add(pl *l, tb_table *table, const char *part, tb_key parent, const char *
 		return 0;
 	}
 	const char *path[] = {name};
-	pl_upsert(l, tb_string(part), parent, path, 1, list, header, changed, NULL);
+	pl_upsert_unread(l, tb_string(part), parent, path, 1, list, header, changed, NULL);
 	op_free(list);
 	return 0;
 }
@@ -108,7 +108,7 @@ int fr_remove(pl *l, tb_table *table, const char *part, tb_key parent, const cha
 		for (size_t k = 0; k < was->count; k++)
 			if ((long)k != i) op_push(list, op_ref(was->items[k]));
 		const char *path[] = {name};
-		pl_upsert(l, tb_string(part), parent, path, 1, list, header, changed, NULL);
+		pl_upsert_unread(l, tb_string(part), parent, path, 1, list, header, changed, NULL);
 		op_free(list);
 		return 0;
 	}
@@ -119,7 +119,7 @@ int fr_remove(pl *l, tb_table *table, const char *part, tb_key parent, const cha
 	b->key = (op_key){.type = OP_STR_KEY, .s = b->name};
 	b->patch = (op_patch){.place = {.path = &b->key, .length = 1}};
 	size_t failed;
-	int code = nd_update(entry, &b->patch, 1, header, &failed);
+	int code = un_update(pl_unread(l), entry, &b->patch, 1, header, &failed);
 	if (code != OP_OK) {
 		fprintf(stderr, "fronts: remove: %s\n", op_code_name(code));
 		abort();

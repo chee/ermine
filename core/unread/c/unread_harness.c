@@ -129,7 +129,7 @@ static void reset(void) {
 
 void hh_start(void) {
 	unread = un_new();
-	entry = nd_make_entry(NULL, &(ch_header){.has_time = 1, .time = 1, .actor = "test"}, NULL);
+	entry = nd_make_entry(NULL, &(ch_header){.has_time = 1, .time = 1, .actor = "test"});
 }
 
 void hh_finish(void) {
@@ -206,8 +206,7 @@ void hh_answer(const op_value *r, FILE *out) {
 	} else if (strcmp(op, "start") == 0) {
 		reset();
 		unread = un_new();
-		entry = nd_make_entry(op_get(r, "value"), &(ch_header){.has_time = 1, .time = 1, .actor = "test"},
-			NULL);
+		entry = nd_make_entry(op_get(r, "value"), &(ch_header){.has_time = 1, .time = 1, .actor = "test"});
 		fputs("{}", out);
 	} else if (strcmp(op, "write") == 0) {
 		const op_value *list = op_get(r, "patches");

@@ -619,7 +619,7 @@ static void liveWrite(Card *c, Live *l, uint64_t now) {
 	if (stop) {
 		if (was) tb_del(c->table, part, id);
 	} else {
-		nd_entry *e = nd_make_entry(l->pending, NULL, NULL);
+		nd_entry *e = nd_make_entry(l->pending, NULL);
 		if (!e) abort();
 		if (was) tb_sub(c->table, part, id, e);
 		else tb_add(c->table, part, id, e);

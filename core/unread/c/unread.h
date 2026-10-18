@@ -36,8 +36,7 @@ void un_free(un_unread *u);
 // as given and their undo (the patches' undos, the last patch's first). memory as nd_update's:
 // patches and header pieces borrowed until the next update or nd_free_entry; the undo is the
 // entry's own. op's code on an invalid patch, *failed its index in the whole write (may be
-// NULL), and nothing changes. entry->in_place is not read: what is changed in place is decided
-// here
+// NULL), and nothing changes
 int un_update(un_unread *u, nd_entry *entry, const op_patch *patches, size_t n, ch_header header,
 	size_t *failed);
 

@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-nd_entry *nd_make_entry(op_value *value, const ch_header *header, const nd_entry_options *options) {
+nd_entry *nd_make_entry(op_value *value, const ch_header *header) {
 	nd_entry *n = calloc(1, sizeof *n);
 	if (n == NULL) return NULL;
 	if (header != NULL) n->change = *header;
@@ -11,7 +11,6 @@ nd_entry *nd_make_entry(op_value *value, const ch_header *header, const nd_entry
 		n->change.has_time = 1;
 		n->change.time = ND_NOW();
 	}
-	n->in_place = options != NULL && options->in_place;
 	n->value = op_ref(value);
 	return n;
 }
@@ -23,8 +22,7 @@ void nd_free_entry(nd_entry *n) {
 	free(n);
 }
 
-nd_node *nd_make_node(const nd_value *values, size_t length, const ch_header *header,
-	const nd_entry_options *options) {
+nd_node *nd_make_node(const nd_value *values, size_t length, const ch_header *header) {
 	nd_node *n = calloc(1, sizeof *n);
 	if (n == NULL) return NULL;
 	n->slots = calloc(length ? length : 1, sizeof *n->slots);
@@ -34,7 +32,7 @@ nd_node *nd_make_node(const nd_value *values, size_t length, const ch_header *he
 	if (!h.has_time) h.has_time = 1, h.time = ND_NOW();
 	for (size_t i = 0; i < length; i++) {
 		if (values[i].value == NULL) continue;
-		nd_entry *e = nd_make_entry(values[i].value, &h, options);
+		nd_entry *e = nd_make_entry(values[i].value, &h);
 		if (e == NULL) return nd_free_node(n), NULL;
 		n->slots[n->length++] = (nd_slot){values[i].table, e};
 	}

@@ -81,31 +81,3 @@ Deno.test("update: patches given as any iterable", () => {
 	assertEquals(n.value, { a: 1, b: 2 })
 	assertEquals(n.change.op!.patches, [{ path: ["b"], value: 2 }])
 })
-
-Deno.test("update: an entry with cow: false changes its value in place", () => {
-	const value: { l: number[]; m: Record<string, number> } = { l: [1], m: { a: 1 } }
-	const l = value.l
-	const n = createEntry<typeof value>(value, { time: 0, actor: "me" }, { cow: false })
-	update(n, [{ path: ["l"], range: [1, 1], value: [2] }, { path: ["m", "b"], value: 2 }], by)
-	assertStrictEquals(n.value, value)
-	assertStrictEquals(n.value!.l, l)
-	assertEquals(value, { l: [1, 2], m: { a: 1, b: 2 } })
-	// the undo is the same as with copy-on-write
-	const other = createEntry({ l: [1], m: { a: 1 } }, { time: 0, actor: "me" })
-	update(other, [{ path: ["l"], range: [1, 1], value: [2] }, { path: ["m", "b"], value: 2 }], by)
-	assertEquals(n.change.op, other.change.op)
-	// refused: the value as it was, the change too
-	const change = n.change
-	assertEquals(
-		code(() => update(n, [{ path: ["l", 0] }, { path: ["x", 1], value: 1 }], by)),
-		"no-key",
-	)
-	assertEquals(value, { l: [1, 2], m: { a: 1, b: 2 } })
-	assertStrictEquals(n.value!.l, l)
-	assertStrictEquals(n.change, change)
-	// the value emptied and made again
-	update(n, [{ path: [] }], by)
-	assertEquals("value" in n, false)
-	update(n, [{ path: [], value: { z: 1 } }], by)
-	assertEquals(n.value as unknown, { z: 1 })
-})
