@@ -142,11 +142,12 @@ export type Scope = {
 // a computer is a scope too: what is under it is old as each run starts (an effect's act's, gone
 // before each act)
 export type Computer = Scope & {
-	readonly kind: "compute" | "effect"
-	readonly f: (previous: unknown) => unknown
-	readonly set?: (value: never) => void
-	readonly effect?: (value: never, previous: never) => void
-	readonly equal?: Equal
+	// what it is: claim(c, as) may give it another (As)
+	kind: "compute" | "effect"
+	f: (previous: unknown) => unknown
+	set?: (value: never) => void
+	effect?: (value: never, previous: never) => void
+	equal?: Equal
 	readonly node: Node<unknown>
 	runs: number
 	// a compute's: the last result given to set; an effect's: the last acted on
@@ -159,6 +160,10 @@ export type Computer = Scope & {
 	// an effect's: the cleanups made in its last act, and whether one is going on
 	deeds: (() => unknown)[]
 	doing: boolean
+	// its cleanups going just before an act, and whether the last act skipped for one of their
+	// writes (a second time running is a loop, a first is not)
+	cleaning: boolean
+	cleaned: boolean
 	// the causes of the marks since its last run that ended done (causes.ts): never a run's
 	// given, which its cause holds
 	kept: Cause<Computer>[]
@@ -189,8 +194,24 @@ export type Computer = Scope & {
 	// the loop of a run known to loop that queued them: their loop marks are cut, as its own are
 	cuts?: Computer[]
 	// an effect's: it acts in the round's early queue
-	readonly early: boolean
+	early: boolean
 }
+
+// what a computer claimed becomes (claim): a compute, or an effect, with its code
+export type As =
+	| {
+		kind: "compute"
+		f: (previous: never) => unknown
+		set: (value: never) => void
+		equal?: Equal<never>
+	}
+	| {
+		kind: "effect"
+		f: (previous: never) => unknown
+		effect: (value: never, previous: never) => void
+		equal?: Equal<never>
+		early?: boolean
+	}
 
 // early: acted on in the round's early queue, and its first run and act when made
 export type EffectOptions = { early?: boolean }
@@ -506,8 +527,9 @@ export function createScheduler(): Scheduler {
 
 	// an old child of the run open's computer, claimed: back under it, the newest, and due (a
 	// tick, told as a mark with no keys, by the run open). not old: false
-	function claim(c: Computer): boolean {
+	function claim(c: Computer, as?: As): boolean {
 		if (!c.old || c.state !== "alive") return false
+		if (as !== undefined) become(c, as)
 		unlink(c)
 		link(c.parent!, c)
 		// as a computer made: in a run known to loop, the loop is cut there
@@ -525,6 +547,40 @@ export function createScheduler(): Scheduler {
 		}
 		rethrow(outer)
 		return true
+	}
+
+	// c takes as: its code, and its kind (chee 10-18: "Swap kind too"). an act queued is dropped
+	// (its next run is due). a new kind: its last result is forgotten, so its next is set or acted
+	// on, equal or not; a compute become an effect is the writer of nothing; an effect become a
+	// compute: what its last act made is its runs' (old at its next run), and the cleanups made in
+	// that act are its own, set aside as its next run starts, as a replaced function's are
+	function become(c: Computer, as: As) {
+		if (c.acting) unact(c)
+		const was = c.kind
+		c.kind = as.kind
+		c.f = as.f as Computer["f"]
+		c.equal = as.equal as Equal | undefined
+		if (as.kind === "compute") {
+			c.set = as.set
+			c.effect = undefined
+			c.early = false
+		} else {
+			c.effect = as.effect
+			c.set = undefined
+			c.early = as.early === true
+		}
+		if (was === as.kind) return
+		c.last = undefined
+		if (as.kind === "effect") {
+			for (const k of c.wrote) if (writers.get(k) === c) writers.delete(k)
+			c.wrote.clear()
+			return
+		}
+		for (let x = c.newest; x !== undefined; x = x.older) x.deed = false
+		if (c.deeds.length) {
+			c.teardowns = c.teardowns.concat(c.deeds)
+			c.deeds = []
+		}
 	}
 
 	// r done: what is still old on c goes, newest first (the first error held); its cleanups set
@@ -667,14 +723,14 @@ export function createScheduler(): Scheduler {
 		}
 	}
 
-	// a run's end: the tracker drops the links after its cursor, what the run did not track
-	// again; the keys nobody tracks now are untracked
-	function end(n: Node<unknown>) {
+	// a run done, its latest: the tracker drops the links after its cursor, what the run did not
+	// track again; the keys nobody tracks now are untracked
+	function trim(n: Node<unknown>) {
 		let l = n.cursor !== null ? n.cursor.next : n.reads
-		if (l === null) return tracker.end(n)
+		if (l === null) return
 		const stale: Node<unknown>[] = []
 		for (; l !== null; l = l.next) stale.push(l.to)
-		tracker.end(n)
+		tracker.trim(n)
 		for (const node of stale) unread(node)
 	}
 
@@ -719,6 +775,8 @@ export function createScheduler(): Scheduler {
 			seen: 0,
 			wrote: new Set(),
 			looping: false,
+			cleaning: false,
+			cleaned: false,
 			before: undefined,
 			deeds: [],
 			doing: false,
@@ -778,19 +836,23 @@ export function createScheduler(): Scheduler {
 		return r.cause
 	}
 
-	// c due, by the run that made the change: true when it was not already
-	function due(c: Computer, t: number, by?: Ran): boolean {
+	// c due, by the run that made the change: true when it was not already. old: by an old link
+	// (one its latest run did not read, that run not done): a retry, its cause held, but no loop
+	// through c (it does not flag it, nor cut the run known to loop that made it)
+	function due(c: Computer, t: number, by?: Ran, old?: boolean): boolean {
 		if (c.state !== "alive") return false
 		// a run since run again: no loop through its changes
 		const cause = by && by === by.c.ran ? causeOf(by) : undefined
 		if (cause) causes.keep(c, cause)
-		const loop = causes.loop(cause, c)
+		let loop = causes.loop(cause, c)
+		// its own cleanups before an act write what it reads: one rerun, no loop (a second in a row is)
+		if (loop && by && by.c === c && c.cleaning && !c.cleaned) loop = undefined
 		// a loop mark from a run known to loop: the loop is cut there, and the run ends looping
 		if (loop && by!.loop) {
-			by!.cut = true
+			if (!old) by!.cut = true
 			return false
 		}
-		c.loop = loop
+		if (!old) c.loop = loop
 		// a looping computer is due again only by a change from outside the loop
 		if (c.looping) {
 			if (loop) return false
@@ -813,10 +875,14 @@ export function createScheduler(): Scheduler {
 			if (w) write(w, key)
 			const node = nodes.get(key)
 			if (node === undefined) continue
-			// walked in place: due changes no links
+			// walked in place: due changes no links. an old link (its reader's latest run did not read
+			// it, that run over): a retry; its own set, act or cleanup going on: not reached (done, it
+			// lets it go)
 			for (let l = node.first; l !== null; l = l.after) {
 				const c = l.from.owner as Computer
-				if (due(c, t, r) && now !== none) now.push(c)
+				const old = tracker.old(l)
+				if (old && running?.c === c) continue
+				if (due(c, t, r, old) && now !== none) now.push(c)
 			}
 		}
 		// every listener told; the first error after
@@ -976,7 +1042,8 @@ export function createScheduler(): Scheduler {
 			open = wasOpen
 			reading = was
 			running = wasRunning
-			end(c.node)
+			// what it did not reach stays, old, till it ends: trimmed if done (finish), else held
+			tracker.leave(c.node)
 		}
 		if (c.state !== "alive") return
 		if (r.stopped) return stop(r)
@@ -1062,8 +1129,15 @@ export function createScheduler(): Scheduler {
 		if (r.loop && r.cut && (ended === "failed" || ended === "done" && more.equal)) {
 			return finish(r, "looping", { ...more, through: r.loop })
 		}
-		// done, its latest: what it did not make again goes, its old cleanups are queued
-		if (ended === "done" && c.ran === r && c.state === "alive") dropUnclaimedChildren(c, r)
+		// done, its latest: the old links go (untracked), what it did not make again goes, its old
+		// cleanups are queued. ended any other way, its latest: what it read and the old links all
+		// stay, no repeats
+		if (c.ran === r && c.state === "alive") {
+			if (ended === "done") {
+				trim(c.node)
+				dropUnclaimedChildren(c, r)
+			} else tracker.dedupe(c.node)
+		}
 		if (c.state === "alive") {
 			if (ended !== "done" && r.given.length) {
 				c.kept = r.given.concat(c.kept)
@@ -1167,8 +1241,8 @@ export function createScheduler(): Scheduler {
 
 	// what the effect's last act made goes, and the cleanups made in it run (a cleanup's error is the
 	// act's; a listener's is held, out once the act is done); then it acts, with the value it acted
-	// on last. due again (an earlier act this round changed what it read): its value
-	// is old, so it does not act; its next run does. torn down by a teardown: nothing more
+	// on last. due again (an earlier act this round, or a cleanup just now, changed what it read): its
+	// value is old, so it does not act; its next run does. torn down by a teardown: nothing more
 	function act(a: Act) {
 		const c = a.r.c
 		c.acting = undefined
@@ -1188,12 +1262,23 @@ export function createScheduler(): Scheduler {
 		}
 		const fs = c.deeds
 		c.deeds = []
+		c.cleaning = true
 		let failed = down(c, deeds, fs)
+		c.cleaning = false
 		if (c.state !== "alive") {
 			reading = was
 			running = wasRunning
 			return
 		}
+		// a cleanup wrote what it reads: due again, it does not act on the old value, its run does
+		if (order.has(c)) {
+			c.cleaned = true
+			reading = was
+			running = wasRunning
+			if (failed) hold(failed.error)
+			return
+		}
+		c.cleaned = false
 		c.doing = true
 		try {
 			const effect = c.effect as (value: unknown, previous: unknown) => void
@@ -1368,8 +1453,9 @@ export type Scheduler = {
 	teardown: (o: Scope) => void
 	// a computer its owner's earlier run made, made again by its run going on: kept, back under the
 	// owner and due. not old (made or claimed in this run already, or no run of its owner since):
-	// false
-	claim: (c: Computer) => boolean
+	// false. as: it takes that code and kind (a compute made again as an effect, or the reverse;
+	// become, above)
+	claim: (c: Computer, as?: As) => boolean
 	createComputer: <T>(
 		f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
 		set: (value: T) => void,
@@ -1430,8 +1516,9 @@ export type Scheduler = {
 	// a pulse ended: nothing due, every act done (not told when one threw). a pulse called here is
 	// a new one
 	onAfterPulse: (f: () => void) => () => void
-	// a key nobody tracks any more: at once when its last tracker's run did not track it again or
-	// it was torn down (a sweep now and then catches any other)
+	// a key nobody tracks any more: at once when its last tracker's run that ended done (its
+	// latest; a promise's, as it lands) did not track it again, or it was torn down (a sweep now and
+	// then catches any other). a run ending any other way keeps what it did not reach (above)
 	onTrackingEnd: (f: (key: unknown) => void) => () => void
 	// a key tracked by someone again, after nobody did (or the first time): a provider can start
 	// making it then, and stop at onTrackingEnd. told in the reading run: a write made now is that run's,
