@@ -37,7 +37,7 @@ Deno.test("update: a whole header kept, its fields as given", () => {
 		actor: { actor: "a1", person: "p1", trusted: false, code: ["c1", "c2"] },
 		reader: "pid3",
 		external: [{ file: "file:///x.ts", line: 9 }],
-		metadata: [["why", "a new list"]],
+		metadata: { why: "a new list" },
 	}
 	update(n, [{ path: [], value: 2 }], header)
 	const { op: _, ...rest } = n.change
