@@ -295,6 +295,8 @@ const site: Plugin = {
 	async closeBundle() {
 		// the pages, written last of all (vite's html), up out of web/
 		const web = `${here}dist/catclock/web/`
+		// none: the build failed (closeBundle runs then too), its own error the one to see
+		if (!existsSync(web)) return
 		for (const e of Deno.readDirSync(web)) {
 			Deno.renameSync(web + e.name, `${here}dist/catclock/${e.name}`)
 		}

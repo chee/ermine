@@ -20,7 +20,6 @@
 		"./filesystem/clingy",
 		"./extensions/subduction",
 		"./extensions/together",
-		"./playground/egwalker",
 		"./extensions/programs",
 		"./extensions/presence",
 		"./extensions/patch-nodes",
