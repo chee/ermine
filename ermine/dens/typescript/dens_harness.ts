@@ -1,13 +1,15 @@
-// dens_harness: dens (dens.ts) on the line protocol, one JSON request per line in, one answer per
-// line out. two devices, "mac" and "card" (dev; none: "mac"), each its own scheduler, table,
-// paths, places (root "R" unless root said; contributors [processes(root), away(root), children]),
-// scope nodes, host scope { actor: <dev> }; one clock (ms, from 0) only now moves. names in answers
-// (and taken back in requests): a den's node "den:<den id>", a process "proc:<its name>", a derived
-// id its owner's name and the rest (den:mac/runners/javascript); any other id as it is. a
-// PlacesError: { error: code }. live runners: record ({ dev, process, code, args, keys }; its stop
-// { dev, process, reason }, reason null: none), boom (throws Error("boom")). createProcessAPI:
-// { den: den.id, places, process }. the policy "grants": protect's grants({ part: "value", id:
-// "rules" }), every ask recorded { op, who: { actor, reader?, device? }, part?, id, path? }
+// dens_harness: dens (dens.ts) and away (away.ts) on the line protocol, one JSON request per line
+// in, one answer per line out. two devices, "mac" and "card" (dev; none: "mac"), each its own
+// scheduler, table, paths, places (root "R" unless root said; contributors [processes(root),
+// away(root), children]), scope nodes, host scope { actor: <dev> }; one clock (ms, from 0) only now
+// moves; an in-memory channel pair (presence's createPair) named "mac" and "card", made at the
+// first connect. names in answers (and taken back in requests): a den's node "den:<den id>", a
+// process "proc:<its name>", a derived id its owner's name and the rest (den:mac/runners/javascript);
+// any other id as it is. a PlacesError: { error: code }. live runners: record ({ dev, process,
+// code, args, keys }; its stop { dev, process, reason }, reason null: none), boom (throws
+// Error("boom")). createProcessAPI: { den: den.id, places, process }. the policy "grants": protect's
+// grants({ part: "value", id: "rules" }), every ask recorded { op, who: { actor, reader?, device? },
+// part?, id, path? }
 //
 // world
 // { op: "root", dev?, root }                         -> {}   before the device's first other line
@@ -32,6 +34,7 @@
 // { op: "close", dev?, reason? }                     -> {}
 // { op: "pulse", dev? }                              -> {}
 // { op: "settle" }                                   -> {}   mac, card, mac, card, mac, card pulsed
+//    (those made)
 // reads, outside any run, untracked (places.peep)
 // { op: "here", dev?, path, box? }                   -> { id }   null: nothing
 // { op: "list", dev?, path, box? }                   -> { names }
@@ -40,9 +43,18 @@
 //    | null; children (null: no entry); live: its value is a function
 // { op: "runs" }                                     -> { runs, stops }   every device's, in order
 // { op: "asked", dev? }                              -> { asks }   since the last asked
-//
-// open: other dens (away.ts): connect, announce, beat, disconnect, sweep, remote, answer, forge,
-// on the in-memory channel pair (presence's createPair) named "mac" and "card"
+// other dens
+// { op: "connect", dev?, topic?, under?, publish?, processes?, ttl? } -> {}   connect, the host's
+//    scope open, the device's channel; ttl none: 10000; now: the clock
+// { op: "announce" | "beat" | "disconnect", dev? }    -> {}   disconnect: the link's stop
+// { op: "sweep", dev? }                              -> { swept: [{ anchor, who }] }
+// { op: "remote", dev?, to, ask: "start", name, runner, program, code?, at, args?, cwd?, actor? }
+//    -> { n }   program: an address on dev (carry, with code when code is true) or { id, ... }
+// { op: "remote", dev?, to, ask: "stop", process, reason?, actor? } -> { n }   process: a name or id
+// { op: "answer", dev?, n }                          -> { answer }   null: none yet
+// { op: "forge", dev?, value, ttl? }                 -> {}   setPresence of value (names taken back,
+//    keys too) as the device's channel name at its link's anchor, its den bypassed; ttl none: 10000
+// a remote start's process is named from its answer, as start's is
 import createEntry from "@ermine/node/entry"
 import { createScheduler, PENDING, type Scheduler, type Scope } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
@@ -52,19 +64,19 @@ import { get, list } from "@ermine/places/lib"
 import { createChangeHeader } from "@ermine/places/header"
 import { STATUS } from "@ermine/places/status"
 import { type Address, type Box, createBox } from "@ermine/boxes"
-import { processes, trie } from "@ermine/processes"
+import { processes } from "@ermine/processes"
 import { createScopeNodes, type ScopeNodes } from "@ermine/processes/scopes"
 import { type Ask, grants, type Policy } from "@ermine/protect"
+import { setPresence } from "@ermine/presence"
+import { type Channel, createPair } from "@ermine/presence/channel"
 import { fromJson, toJson } from "../../../conformance/typescript/form.ts"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { type Context, createDen, type Den, type Program, type Runner } from "./dens.ts"
+import { away, connect, type Link, type Options, type Remote } from "./away.ts"
 
 type Json = unknown
 
-// away.ts' part: other dens' rows, walked as processes' are
-const AWAY = "away" as string as Key
-
-// a device: its world, its boxes by name, its den, the asks its policy was asked
+// a device: its world, its boxes by name, its den and its link, the asks its policy was asked
 type Device = {
 	readonly name: string
 	readonly s: Scheduler
@@ -74,6 +86,7 @@ type Device = {
 	readonly host: Scope
 	readonly boxes: Map<string, Box>
 	den?: Den
+	link?: Link
 	asks: Json[]
 }
 
@@ -91,7 +104,7 @@ function device(name: string): Device {
 		table,
 		paths,
 		scheduler: s,
-		contributors: [processes(root), trie(AWAY, root, "away"), children],
+		contributors: [processes(root), away(root), children],
 	})
 	s.onTrackingEnd((key) => places.release(key))
 	const scopes = createScopeNodes({ scheduler: s, table })
@@ -110,6 +123,18 @@ const dev = (r: Request): Device => {
 const denOf = (d: Device): Den => {
 	if (d.den === undefined) throw new Error(`no den on ${d.name}`)
 	return d.den
+}
+
+const linkOf = (d: Device): Link => {
+	if (d.link === undefined) throw new Error(`no link on ${d.name}`)
+	return d.link
+}
+
+// the channel pair, made at the first connect: mac's, card's
+let pair: { a: Channel; b: Channel } | undefined
+function channelOf(d: Device): Channel {
+	pair ??= createPair("mac", "card")
+	return d.name === "mac" ? pair.a : pair.b
 }
 
 // names: an id as answers show it, and back
@@ -136,6 +161,21 @@ function take(v: string): Id {
 	const i = v.indexOf("/")
 	const owner = i > 0 ? known.get(v.slice(0, i)) : undefined
 	return owner === undefined ? v : `${String(owner)}${v.slice(i)}`
+}
+
+// a request's value taken back, its keys too (a row's nodes are by id)
+function backAll(x: unknown): unknown {
+	const walk = (y: unknown): unknown => {
+		if (typeof y === "string") return take(y)
+		if (Array.isArray(y)) return y.map(walk)
+		if (typeof y === "object" && y !== null && Object.getPrototypeOf(y) === Object.prototype) {
+			return Object.fromEntries(
+				Object.entries(y).map(([k, z]) => [String(take(k)), walk(z)]),
+			)
+		}
+		return y
+	}
+	return walk(fromJson(x))
 }
 
 // an answer as JSON: ids by name, bytes in their JSON form
@@ -258,6 +298,19 @@ function programOf(p: unknown): Address | Program {
 	return out as Program
 }
 
+// a process by its name, else an id taken back
+const processAt = (name: unknown): Id => known.get(`proc:${name}`) ?? take(String(name))
+
+// the names remote starts are to give their processes, by device and n, until their answer lands
+const naming = new Map<string, string>()
+function named(d: Device, n: number) {
+	const as = naming.get(`${d.name} ${n}`)
+	const got: unknown = linkOf(d).answer(n)
+	if (as === undefined || !isMap(got) || got.id === undefined) return
+	naming.delete(`${d.name} ${n}`)
+	name(got.id as Id, `proc:${as}`)
+}
+
 // what a start gave: its id named, shown as { id, at }; or the refusal
 function started(r: unknown, as: unknown): Json {
 	if (isMap(r) && "refused" in r) return plain(r)
@@ -371,7 +424,7 @@ function answer(r: Request): Json {
 				return started(hosted(d, () => den.ask(a)), r.name)
 			}
 			if (r.ask === "stop") {
-				const id = known.get(`proc:${r.process}`) ?? take(String(r.process))
+				const id = processAt(r.process)
 				const a = {
 					op: "stop" as const,
 					who: back(r.who),
@@ -442,6 +495,67 @@ function answer(r: Request): Json {
 			return { runs: plain(ran), stops: plain(stops) }
 		case "asked":
 			return { asks: plain(dev(r).asks.splice(0)) }
+		case "connect": {
+			const d = dev(r)
+			const options: Options = { ttl: r.ttl ?? 10000, now: () => clock.t }
+			if (r.topic !== undefined) options.topic = take(String(r.topic))
+			if (r.under !== undefined) options.under = r.under
+			if (r.publish !== undefined) options.publish = r.publish
+			if (r.processes !== undefined) options.processes = r.processes
+			const den = denOf(d)
+			d.link = hosted(d, () => connect(den, channelOf(d), options))
+			return {}
+		}
+		case "announce":
+			linkOf(dev(r)).announce()
+			return {}
+		case "beat":
+			linkOf(dev(r)).beat()
+			return {}
+		case "disconnect":
+			linkOf(dev(r)).stop()
+			return {}
+		case "sweep":
+			return { swept: plain(linkOf(dev(r)).sweep()) }
+		case "remote": {
+			const d = dev(r)
+			const link = linkOf(d)
+			let ask: Remote
+			if (r.ask === "start") {
+				const program = typeof r.program === "string" || Array.isArray(r.program)
+					? link.carry(r.program, { code: r.code === true })
+					: programOf(r.program) as Program
+				ask = {
+					op: "start",
+					runner: r.runner,
+					program,
+					at: r.at,
+					...(r.args === undefined ? {} : { args: r.args }),
+					...(r.cwd === undefined ? {} : { cwd: r.cwd }),
+				}
+			} else if (r.ask === "stop") {
+				ask = {
+					op: "stop",
+					process: processAt(r.process),
+					...(r.reason === undefined ? {} : { reason: back(r.reason) }),
+				}
+			} else throw new Error(`no ask ${r.ask}`)
+			const n = hosted(d, () => link.ask(r.to, ask), r.actor)
+			if (r.ask === "start" && r.name !== undefined) naming.set(`${d.name} ${n}`, r.name)
+			named(d, n)
+			return { n }
+		}
+		case "answer": {
+			const d = dev(r)
+			named(d, r.n)
+			return { answer: plain(linkOf(d).answer(r.n) ?? null) }
+		}
+		case "forge": {
+			const d = dev(r)
+			const link = linkOf(d)
+			setPresence(link.world, link.anchor, channelOf(d).name, backAll(r.value), r.ttl ?? 10000)
+			return {}
+		}
 	}
 	throw new Error(`unknown op ${r.op}`)
 }

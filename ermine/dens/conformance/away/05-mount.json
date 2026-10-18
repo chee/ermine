@@ -1,0 +1,296 @@
+{
+	"title": "a mounted root: card's root is M, so its den publishes at the anchor dens:M; mac's root R holds M saved at /mnt/pi, and mac connects to topic M under [mnt, pi], not publishing there (M is not its root). on mac card's den shows at /mnt/pi/system/dens/card and its process at /mnt/pi/work/blink, the leaves at under + their paths in mac's away trie; mac's own /system/dens has mac alone, and /mnt/pi/system/den is nothing (no den's here travels). card sees itself alone",
+	"steps": [
+		{
+			"op": "root",
+			"dev": "card",
+			"root": "M",
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"dev": "card",
+			"id": "M",
+			"value": {
+				"apps": "APPS"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"dev": "card",
+			"id": "APPS",
+			"value": {
+				"clock.js": "CLOCK"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"dev": "card",
+			"id": "CLOCK",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"dev": "card",
+			"id": "CLOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "den",
+			"dev": "card",
+			"expect": {
+				"id": "den:card"
+			}
+		},
+		{
+			"op": "offer",
+			"dev": "card",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api"
+			},
+			"live": "record",
+			"expect": {
+				"id": "den:card/runners/javascript",
+				"at": [
+					"system",
+					"dens",
+					"card",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"dev": "card",
+			"name": "blink",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"blink"
+			],
+			"expect": {
+				"id": "proc:blink",
+				"at": [
+					"work",
+					"blink"
+				]
+			}
+		},
+		{
+			"op": "kids",
+			"dev": "mac",
+			"id": "R",
+			"value": {
+				"mnt": "MNT"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"dev": "mac",
+			"id": "MNT",
+			"value": {
+				"pi": "M"
+			},
+			"expect": {}
+		},
+		{
+			"op": "den",
+			"dev": "mac",
+			"expect": {
+				"id": "den:mac"
+			}
+		},
+		{
+			"op": "connect",
+			"dev": "card",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"dev": "mac",
+			"topic": "M",
+			"under": [
+				"mnt",
+				"pi"
+			],
+			"expect": {}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"mnt",
+				"pi",
+				"system",
+				"dens",
+				"card"
+			],
+			"expect": {
+				"id": "den:card"
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"mnt",
+				"pi",
+				"system",
+				"dens",
+				"card",
+				"runners",
+				"javascript"
+			],
+			"expect": {
+				"id": "den:card/runners/javascript"
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"mnt",
+				"pi",
+				"work",
+				"blink"
+			],
+			"expect": {
+				"id": "proc:blink"
+			}
+		},
+		{
+			"op": "list",
+			"dev": "mac",
+			"path": [
+				"mnt",
+				"pi",
+				"system",
+				"dens"
+			],
+			"expect": {
+				"names": [
+					"card"
+				]
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"mnt",
+				"pi",
+				"system",
+				"den"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "list",
+			"dev": "mac",
+			"path": [
+				"system",
+				"dens"
+			],
+			"expect": {
+				"names": [
+					"mac"
+				]
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"system",
+				"dens",
+				"card"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"skip": [
+				"parts",
+				"status",
+				"children",
+				"live"
+			],
+			"id": "proc:blink",
+			"expect": {
+				"attributes": {
+					"ermine.type": "ermine.process",
+					"ermine.process.runner": {
+						"id": "den:card/runners/javascript",
+						"at": [
+							"system",
+							"den",
+							"runners",
+							"javascript"
+						]
+					},
+					"ermine.process.program": {
+						"id": "CLOCK",
+						"at": [
+							"apps",
+							"clock.js"
+						],
+						"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+					},
+					"ermine.process.den": {
+						"id": "den:card",
+						"at": [
+							"system",
+							"dens",
+							"card"
+						]
+					},
+					"ermine.process.cwd": [
+						"work"
+					]
+				}
+			}
+		},
+		{
+			"op": "list",
+			"dev": "card",
+			"path": [
+				"system",
+				"dens"
+			],
+			"expect": {
+				"names": [
+					"card"
+				]
+			}
+		}
+	]
+}

@@ -1,18 +1,30 @@
-// what the conformance suites cannot say (dens.ts): runners giving promises, a process offering
-// from inside its run, ermine/api's runner and createProcessAPI on a den, what nodes() shows, the
-// owner torn down from above, and the type-level fits. one world: a scheduler, table and places
-// (root R, asked processes' rows and children), the host's scope { actor: "host" }, a program
-// /apps/clock.js ("hi", javascript source), a den "mac" with no policy
-import { assert, assertEquals, assertInstanceOf, assertStrictEquals } from "@std/assert"
+// what the conformance suites cannot say (dens.ts, away.ts): runners giving promises, a process
+// offering from inside its run, ermine/api's runner and createProcessAPI on a den, what nodes()
+// shows, the owner torn down from above, and the type-level fits; and of a link: what connect
+// needs, answer(n) tracked over a channel that delivers later, carry, what a link drops or answers
+// with an error, and its scope torn down from above. one world: a scheduler, table and places
+// (root R, asked processes' rows, the away trie and children), the host's scope { actor: "host" },
+// a program /apps/clock.js ("hi", javascript source), a den "mac" with no policy (a link's two
+// devices: dens "mac" and "card", each saying yes to all, on an in-memory pair)
+import {
+	assert,
+	assertEquals,
+	assertInstanceOf,
+	assertStrictEquals,
+	assertThrows,
+} from "@std/assert"
+import { encode } from "@ermine/encoding/cbor"
 import createEntry, { type Entry } from "@ermine/node/entry"
-import { createScheduler, PENDING } from "@ermine/scheduler"
+import { createScheduler, PENDING, SchedulerError } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/table"
-import { children, createPlaces } from "@ermine/places"
+import { children, createPlaces, PlacesError } from "@ermine/places"
 import { get } from "@ermine/places/lib"
 import { createChangeHeader } from "@ermine/places/header"
 import { STATUS } from "@ermine/places/status"
 import { processes } from "@ermine/processes"
+import { readPresence } from "@ermine/presence"
+import { type Channel, createPair } from "@ermine/presence/channel"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import { type API, createProcessAPIs, type ProcessAPIs } from "@ermine/api"
 import type { Context as ProgramsContext, Runner as ProgramsRunner } from "@ermine/programs/start"
@@ -30,13 +42,16 @@ import {
 	type Setup,
 	TAKES,
 } from "./dens.ts"
+import { anchorOf, away, connect } from "./away.ts"
 
 const JS = "com.netscape.javascript-source"
 const RUNNER = ["system", "den", "runners", "javascript"]
 const CLOCK = ["apps", "clock.js"]
 const tick = () => new Promise((r) => setTimeout(r, 0))
 
-function world(o: { createProcessAPI?: Setup["createProcessAPI"] } = {}) {
+function world(
+	o: { createProcessAPI?: Setup["createProcessAPI"]; id?: string; may?: Setup["may"] } = {},
+) {
 	const s = createScheduler()
 	const table = createTable((part, id) => places.onTableChange(part as Key, id))
 	const paths = createPaths<unknown>()
@@ -45,7 +60,7 @@ function world(o: { createProcessAPI?: Setup["createProcessAPI"] } = {}) {
 		table,
 		paths,
 		scheduler: s,
-		contributors: [processes("R"), children],
+		contributors: [processes("R"), away("R"), children],
 	})
 	s.onTrackingEnd((key) => places.release(key))
 	const scopes = createScopeNodes({ scheduler: s, table })
@@ -65,7 +80,8 @@ function world(o: { createProcessAPI?: Setup["createProcessAPI"] } = {}) {
 			places,
 			scopes,
 			createProcessAPI: o.createProcessAPI ?? ((ctx) => ctx),
-			id: "mac",
+			id: o.id ?? "mac",
+			...(o.may === undefined ? {} : { may: o.may }),
 		})
 	)
 	const offer = (name: string, live: unknown, attributes: Record<string, unknown> = {}) =>
@@ -318,4 +334,119 @@ Deno.test("types: realms.run, programs' Runner and ermine/api's run fit a den's 
 		Fits<ProcessAPIs["createProcessAPI"], Setup["createProcessAPI"]>,
 	] = [true, true, true, true, true]
 	assertStrictEquals(fits.every((x) => x), true)
+})
+
+// two devices, each saying yes to all, a javascript runner offered on each; their channels deliver
+// at flush (held: a channel that delivers later), else at once
+function two(held = false) {
+	const pair = createPair("mac", "card")
+	const queue: (() => void)[] = []
+	const hold = (c: Channel): Channel =>
+		held ? { name: c.name, on: c.on, send: (t, b) => void queue.push(() => c.send(t, b)) } : c
+	const yes = () => ({ answer: "yes" as const })
+	const mac = world({ id: "mac", may: yes }), card = world({ id: "card", may: yes })
+	const record: Runner = () => ({ stop: () => {} })
+	mac.offer("javascript", record)
+	card.offer("javascript", record)
+	const flush = () => {
+		while (queue.length) queue.shift()!()
+	}
+	return { mac, card, channels: { mac: hold(pair.a), card: hold(pair.b) }, flush }
+}
+
+Deno.test("connect: a scope open, and a channel named its den's id", () => {
+	const { mac, channels } = two()
+	assertThrows(() => mac.hosted(() => connect(mac.den, channels.card)), Error, "named its id")
+	assertThrows(() => connect(mac.den, channels.mac), SchedulerError)
+	const link = mac.hosted(() => connect(mac.den, channels.mac))
+	assertEquals(link.anchor, anchorOf("R"))
+	link.stop()
+})
+
+Deno.test("answer(n) is tracked: undefined until the answer lands from the den it was sent to, a reader then rerun; an answer from another den is dropped", () => {
+	const { mac, card, channels, flush } = two(true)
+	const toCard = mac.hosted(() => connect(mac.den, channels.mac))
+	card.hosted(() => connect(card.den, channels.card))
+	const program = toCard.carry(CLOCK)
+	const n = mac.hosted(() =>
+		toCard.ask("card", { op: "start", runner: RUNNER, program, at: ["work", "clock"] })
+	)
+	const seen: unknown[] = []
+	mac.hosted(() => mac.s.createComputer(() => toCard.answer(n), (v) => void seen.push(v)))
+	mac.s.pulse()
+	assertEquals(seen, [undefined])
+	flush()
+	mac.s.pulse()
+	const got = toCard.answer(n)
+	assert(got !== undefined && "id" in got)
+	assertEquals(seen, [undefined, got])
+	assertEquals(card.den.find(got.id)?.at, ["work", "clock"])
+	// an ask to a den nobody is: an answer from card to its n is not kept
+	const m = mac.hosted(() => toCard.ask("nobody", { op: "stop", process: got.id }))
+	channels.card.send(`${anchorOf("R")}/answer/mac`, encode({ n: m, answer: {} }))
+	flush()
+	assertEquals(toCard.answer(m), undefined)
+})
+
+Deno.test("carry: a node of the den's as a program, by address or id: its id, its value's hash, its form; its code when asked; no value there: PlacesError nothing-there", () => {
+	const { mac, channels } = two()
+	const link = mac.hosted(() => connect(mac.den, channels.mac))
+	const js = "com.netscape.javascript-source"
+	assertEquals(link.carry("/apps/clock.js"), { id: "CLOCK", hash: hashOf("hi"), type: js })
+	mac.put("attributes", "CLOCK", { "ermine.type": js, [PROGRAM_API]: "ermine.api" })
+	assertEquals(link.carry({ id: "CLOCK" }, { code: true }), {
+		id: "CLOCK",
+		hash: hashOf("hi"),
+		type: js,
+		api: "ermine.api",
+		code: "hi",
+	})
+	const nothing = assertThrows(() => link.carry(["apps", "none.js"]), PlacesError)
+	assertEquals(nothing.code, "nothing-there")
+	assertThrows(() => link.carry({ id: "APPS" }), PlacesError)
+})
+
+Deno.test("what a link is sent that is no ask is dropped; an ask its den throws on is answered with the error's code", () => {
+	const { mac, card, channels } = two()
+	const toCard = mac.hosted(() => connect(mac.den, channels.mac))
+	card.hosted(() => connect(card.den, channels.card))
+	const sent: unknown[] = []
+	channels.mac.on(`${anchorOf("R")}/answer/mac`, (_, bytes) => void sent.push(bytes))
+	channels.mac.send(`${anchorOf("R")}/ask/card`, new Uint8Array([0xff]))
+	channels.mac.send(`${anchorOf("R")}/ask/card`, encode({ n: 9, op: "dance" }))
+	channels.mac.send(`${anchorOf("R")}/ask/card`, encode({ op: "stop", process: "x" }))
+	assertEquals(sent, [])
+	const n = mac.hosted(() =>
+		toCard.ask("card", {
+			op: "start",
+			runner: RUNNER,
+			program: toCard.carry(CLOCK),
+			at: ["work", ".."],
+		})
+	)
+	assertEquals(toCard.answer(n), { error: "not-a-name" })
+	assertEquals([sent.length, card.den.processes()], [1, []])
+})
+
+Deno.test("a link's scope torn down from above: the link stopped, its mirrors out, its listeners off; its row left on the other device to lapse", () => {
+	const { mac, card, channels } = two()
+	const o = mac.hosted(() => mac.s.createScope({ for: "a while" }))
+	const toCard = mac.s.runWithScope(o, () => connect(mac.den, channels.mac))
+	const toMac = card.hosted(() => connect(card.den, channels.card))
+	for (let i = 0; i < 2; i++) mac.s.pulse(), card.s.pulse()
+	const there = (w: ReturnType<typeof world>, path: string[]) =>
+		w.places.peep(() => get(w.places, path))
+	assertEquals(there(mac, ["system", "dens", "card"]), card.den.node)
+	assertEquals(there(card, ["system", "dens", "mac"]), mac.den.node)
+	mac.s.teardown(o)
+	assertEquals(there(mac, ["system", "dens", "card"]), undefined)
+	assertEquals(mac.table.get(card.den.node), [])
+	card.s.pulse()
+	assertEquals(there(card, ["system", "dens", "mac"]), mac.den.node)
+	assertEquals(readPresence(toMac.world, toMac.anchor).map((r) => r.who), ["mac", "card"])
+	// stopped: asks refused, the rest nothing
+	assertThrows(() => mac.hosted(() => toCard.ask("card", { op: "stop", process: "x" })), Error)
+	toCard.stop()
+	toCard.beat()
+	assertEquals(toCard.sweep(), [])
 })

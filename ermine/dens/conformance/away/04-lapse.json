@@ -1,0 +1,206 @@
+{
+	"title": "rows lapse: each row lives until now + ttl as set (5 s here); mac beats at 4 s, card does not, so at 7 s mac's sweep takes card's row and card's den goes from mac (its leaf, its nodes); card's sweep takes its own row, lapsed too, and not mac's (the beat renewed it there). card's beat sets its row again, whole, and its den is back on mac",
+	"steps": [
+		{
+			"op": "now",
+			"t": 1000,
+			"expect": {}
+		},
+		{
+			"op": "den",
+			"dev": "mac",
+			"expect": {
+				"id": "den:mac"
+			}
+		},
+		{
+			"op": "den",
+			"dev": "card",
+			"expect": {
+				"id": "den:card"
+			}
+		},
+		{
+			"op": "connect",
+			"dev": "mac",
+			"ttl": 5000,
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"dev": "card",
+			"ttl": 5000,
+			"expect": {}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "list",
+			"dev": "mac",
+			"path": [
+				"system",
+				"dens"
+			],
+			"expect": {
+				"names": [
+					"card",
+					"mac"
+				]
+			}
+		},
+		{
+			"op": "now",
+			"t": 4000,
+			"expect": {}
+		},
+		{
+			"op": "beat",
+			"dev": "mac",
+			"expect": {}
+		},
+		{
+			"op": "now",
+			"t": 7000,
+			"expect": {}
+		},
+		{
+			"op": "sweep",
+			"dev": "mac",
+			"expect": {
+				"swept": [
+					{
+						"anchor": "dens:R",
+						"who": "card"
+					}
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"dev": "mac",
+			"expect": {}
+		},
+		{
+			"op": "list",
+			"dev": "mac",
+			"path": [
+				"system",
+				"dens"
+			],
+			"expect": {
+				"names": [
+					"mac"
+				]
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"system",
+				"dens",
+				"card"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"id": "den:card",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "sweep",
+			"dev": "card",
+			"expect": {
+				"swept": [
+					{
+						"anchor": "dens:R",
+						"who": "card"
+					}
+				]
+			}
+		},
+		{
+			"op": "list",
+			"dev": "card",
+			"path": [
+				"system",
+				"dens"
+			],
+			"expect": {
+				"names": [
+					"card",
+					"mac"
+				]
+			}
+		},
+		{
+			"op": "beat",
+			"dev": "card",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"dev": "mac",
+			"expect": {}
+		},
+		{
+			"op": "list",
+			"dev": "mac",
+			"path": [
+				"system",
+				"dens"
+			],
+			"expect": {
+				"names": [
+					"card",
+					"mac"
+				]
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"system",
+				"dens",
+				"card"
+			],
+			"expect": {
+				"id": "den:card"
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"skip": [
+				"parts",
+				"children",
+				"live"
+			],
+			"id": "den:card",
+			"expect": {
+				"attributes": {
+					"ermine.type": "ermine.den",
+					"ermine.den.id": "card",
+					"ermine.process.cwd": [
+						"system",
+						"dens"
+					]
+				},
+				"status": null
+			}
+		}
+	]
+}

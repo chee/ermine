@@ -1,0 +1,300 @@
+{
+	"title": "a den's close clears its row at once, not at its until: card closes (the clock not moved), and at mac's next pulse card's den and its process are gone from mac (leaves, nodes); card's process stopped den-stopped; card's own view of mac goes with its link",
+	"steps": [
+		{
+			"op": "kids",
+			"dev": "mac",
+			"id": "R",
+			"value": {
+				"apps": "APPS"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"dev": "mac",
+			"id": "APPS",
+			"value": {
+				"clock.js": "CLOCK"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"dev": "mac",
+			"id": "CLOCK",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"dev": "mac",
+			"id": "CLOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "den",
+			"dev": "mac",
+			"expect": {
+				"id": "den:mac"
+			}
+		},
+		{
+			"op": "offer",
+			"dev": "mac",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api"
+			},
+			"live": "record",
+			"expect": {
+				"id": "den:mac/runners/javascript",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "kids",
+			"dev": "card",
+			"id": "R",
+			"value": {
+				"apps": "APPS"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"dev": "card",
+			"id": "APPS",
+			"value": {
+				"clock.js": "CLOCK"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"dev": "card",
+			"id": "CLOCK",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"dev": "card",
+			"id": "CLOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "den",
+			"dev": "card",
+			"expect": {
+				"id": "den:card"
+			}
+		},
+		{
+			"op": "offer",
+			"dev": "card",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api"
+			},
+			"live": "record",
+			"expect": {
+				"id": "den:card/runners/javascript",
+				"at": [
+					"system",
+					"dens",
+					"card",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"dev": "card",
+			"name": "clock",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"id": "proc:clock",
+				"at": [
+					"work",
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "connect",
+			"dev": "mac",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"dev": "card",
+			"expect": {}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"id": "proc:clock"
+			}
+		},
+		{
+			"op": "list",
+			"dev": "mac",
+			"path": [
+				"system",
+				"dens"
+			],
+			"expect": {
+				"names": [
+					"card",
+					"mac"
+				]
+			}
+		},
+		{
+			"op": "close",
+			"dev": "card",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"dev": "mac",
+			"expect": {}
+		},
+		{
+			"op": "list",
+			"dev": "mac",
+			"path": [
+				"system",
+				"dens"
+			],
+			"expect": {
+				"names": [
+					"mac"
+				]
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"id": "den:card",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"id": "proc:clock",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"dev": "card",
+						"process": "proc:clock",
+						"code": "hi",
+						"args": [],
+						"keys": [
+							"den",
+							"places",
+							"process"
+						]
+					}
+				],
+				"stops": [
+					{
+						"dev": "card",
+						"process": "proc:clock",
+						"reason": "den-stopped"
+					}
+				]
+			}
+		},
+		{
+			"op": "list",
+			"dev": "card",
+			"path": [
+				"system",
+				"dens"
+			],
+			"expect": {
+				"names": []
+			}
+		},
+		{
+			"op": "node",
+			"dev": "card",
+			"id": "den:mac",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		}
+	]
+}

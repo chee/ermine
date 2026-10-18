@@ -1,0 +1,397 @@
+{
+	"title": "a stop asked over the link: mac's policy asked stop on the process's node with card's who; refused as guest (still running), done as chee with the reason sent, given to the handle; card's view of it gone at the next pulses. a stop of a process mac no longer runs, or of mac's den itself (not one it started): not-there",
+	"steps": [
+		{
+			"op": "kids",
+			"dev": "mac",
+			"id": "R",
+			"value": {
+				"apps": "APPS"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"dev": "mac",
+			"id": "APPS",
+			"value": {
+				"clock.js": "CLOCK"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"dev": "mac",
+			"id": "CLOCK",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"dev": "mac",
+			"id": "CLOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"dev": "mac",
+			"id": "rules",
+			"value": [
+				{
+					"actor": "chee"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "den",
+			"dev": "mac",
+			"policy": "grants",
+			"expect": {
+				"id": "den:mac"
+			}
+		},
+		{
+			"op": "offer",
+			"dev": "mac",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api"
+			},
+			"live": "record",
+			"expect": {
+				"id": "den:mac/runners/javascript",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "kids",
+			"dev": "card",
+			"id": "R",
+			"value": {
+				"apps": "APPS"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"dev": "card",
+			"id": "APPS",
+			"value": {
+				"clock.js": "CLOCK",
+				"tock.js": "TOCK"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"dev": "card",
+			"id": "CLOCK",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"dev": "card",
+			"id": "CLOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"dev": "card",
+			"id": "TOCK",
+			"value": "tock",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"dev": "card",
+			"id": "TOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "den",
+			"dev": "card",
+			"expect": {
+				"id": "den:card"
+			}
+		},
+		{
+			"op": "connect",
+			"dev": "mac",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"dev": "card",
+			"expect": {}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "remote",
+			"dev": "card",
+			"to": "mac",
+			"ask": "start",
+			"name": "clock",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"code": false,
+			"at": [
+				"work",
+				"clock"
+			],
+			"args": [
+				"x"
+			],
+			"actor": "chee",
+			"expect": {
+				"n": 1
+			}
+		},
+		{
+			"op": "answer",
+			"dev": "card",
+			"n": 1,
+			"expect": {
+				"answer": {
+					"id": "proc:clock",
+					"at": [
+						"work",
+						"clock"
+					]
+				}
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "asked",
+			"dev": "mac"
+		},
+		{
+			"op": "remote",
+			"dev": "card",
+			"to": "mac",
+			"ask": "stop",
+			"process": "clock",
+			"actor": "guest",
+			"reason": "SIGTERM",
+			"expect": {
+				"n": 2
+			}
+		},
+		{
+			"op": "answer",
+			"dev": "card",
+			"n": 2,
+			"expect": {
+				"answer": {
+					"refused": "no-permission",
+					"op": "stop",
+					"answer": {
+						"answer": "no",
+						"reason": "no grant"
+					}
+				}
+			}
+		},
+		{
+			"op": "asked",
+			"dev": "mac",
+			"expect": {
+				"asks": [
+					{
+						"op": "stop",
+						"who": {
+							"actor": "guest",
+							"device": "card"
+						},
+						"id": "proc:clock",
+						"path": [
+							"work",
+							"clock"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"id": "proc:clock"
+			}
+		},
+		{
+			"op": "remote",
+			"dev": "card",
+			"to": "mac",
+			"ask": "stop",
+			"process": "clock",
+			"actor": "chee",
+			"reason": "SIGTERM",
+			"expect": {
+				"n": 3
+			}
+		},
+		{
+			"op": "answer",
+			"dev": "card",
+			"n": 3,
+			"expect": {
+				"answer": {}
+			}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"dev": "mac",
+						"process": "proc:clock",
+						"code": "hi",
+						"args": [
+							"x"
+						],
+						"keys": [
+							"den",
+							"places",
+							"process"
+						]
+					}
+				],
+				"stops": [
+					{
+						"dev": "mac",
+						"process": "proc:clock",
+						"reason": "SIGTERM"
+					}
+				]
+			}
+		},
+		{
+			"op": "here",
+			"dev": "card",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"id": "proc:clock"
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "here",
+			"dev": "card",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "remote",
+			"dev": "card",
+			"to": "mac",
+			"ask": "stop",
+			"process": "clock",
+			"actor": "chee",
+			"expect": {
+				"n": 4
+			}
+		},
+		{
+			"op": "answer",
+			"dev": "card",
+			"n": 4,
+			"expect": {
+				"answer": {
+					"refused": "not-there",
+					"process": "proc:clock"
+				}
+			}
+		},
+		{
+			"op": "remote",
+			"dev": "card",
+			"to": "mac",
+			"ask": "stop",
+			"process": "den:mac",
+			"actor": "chee",
+			"expect": {
+				"n": 5
+			}
+		},
+		{
+			"op": "answer",
+			"dev": "card",
+			"n": 5,
+			"expect": {
+				"answer": {
+					"refused": "not-there",
+					"process": "den:mac"
+				}
+			}
+		},
+		{
+			"op": "asked",
+			"dev": "mac",
+			"expect": {
+				"asks": [
+					{
+						"op": "stop",
+						"who": {
+							"actor": "chee",
+							"device": "card"
+						},
+						"id": "proc:clock",
+						"path": [
+							"work",
+							"clock"
+						]
+					}
+				]
+			}
+		}
+	]
+}

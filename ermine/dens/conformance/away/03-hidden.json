@@ -1,0 +1,234 @@
+{
+	"title": "a den connected with processes: false publishes its own node and offers alone: on mac, card's den and its runners show, the process card runs does not, nor the runner that process offers under its node; on card both are where they are",
+	"steps": [
+		{
+			"op": "den",
+			"dev": "mac",
+			"expect": {
+				"id": "den:mac"
+			}
+		},
+		{
+			"op": "connect",
+			"dev": "mac",
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"dev": "card",
+			"id": "R",
+			"value": {
+				"apps": "APPS"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"dev": "card",
+			"id": "APPS",
+			"value": {
+				"lisp.js": "LISP"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"dev": "card",
+			"id": "LISP",
+			"value": "lisp",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"dev": "card",
+			"id": "LISP",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "den",
+			"dev": "card",
+			"expect": {
+				"id": "den:card"
+			}
+		},
+		{
+			"op": "offer",
+			"dev": "card",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api"
+			},
+			"live": "record",
+			"expect": {
+				"id": "den:card/runners/javascript",
+				"at": [
+					"system",
+					"dens",
+					"card",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "connect",
+			"dev": "card",
+			"processes": false,
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"dev": "card",
+			"name": "lisp",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"lisp.js"
+			],
+			"at": [
+				"work",
+				"lisp"
+			],
+			"expect": {
+				"id": "proc:lisp",
+				"at": [
+					"work",
+					"lisp"
+				]
+			}
+		},
+		{
+			"op": "offer",
+			"dev": "card",
+			"kind": "runners",
+			"name": "lisp",
+			"attrs": {
+				"ermine.runner.takes": "ermine.lisp-source"
+			},
+			"live": "record",
+			"by": "lisp",
+			"expect": {
+				"id": "proc:lisp/runners/lisp",
+				"at": [
+					"work",
+					"lisp",
+					"runners",
+					"lisp"
+				]
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"system",
+				"dens",
+				"card"
+			],
+			"expect": {
+				"id": "den:card"
+			}
+		},
+		{
+			"op": "list",
+			"dev": "mac",
+			"path": [
+				"system",
+				"dens",
+				"card",
+				"runners"
+			],
+			"expect": {
+				"names": [
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"work",
+				"lisp"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"work",
+				"lisp",
+				"runners",
+				"lisp"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"id": "proc:lisp",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"id": "proc:lisp/runners/lisp",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "here",
+			"dev": "card",
+			"path": [
+				"work",
+				"lisp"
+			],
+			"expect": {
+				"id": "proc:lisp"
+			}
+		},
+		{
+			"op": "here",
+			"dev": "card",
+			"path": [
+				"work",
+				"lisp",
+				"runners",
+				"lisp"
+			],
+			"expect": {
+				"id": "proc:lisp/runners/lisp"
+			}
+		}
+	]
+}
