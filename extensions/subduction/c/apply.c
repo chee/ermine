@@ -18,55 +18,118 @@ static void *grab(size_t n) {
 	return p;
 }
 
-// a patch's value as op holds it, new; NULL for what it cannot
-op_value *apply_value(const Json *j) {
-	op_value *v, *item;
-	switch (j->type) {
-	case JSON_NULL: return op_null();
-	case JSON_BOOLEAN: return op_bool(j->boolean);
-	case JSON_NUMBER: return j->big ? op_whole(j->bigNegative, j->big, j->bigLength) : op_num(j->number);
-	case JSON_STRING: return op_str_n(j->string, j->stringLength);
-	case JSON_BYTES: return op_bytes(j->bytes.data, j->bytes.length);
-	case JSON_TYPED: return op_typed((op_elements)j->typed.kind, j->typed.data, j->typed.count);
-	case JSON_STAND:
-		if ((item = apply_value(j->stand.kind)) == NULL) return NULL;
-		return op_stand(item);
-	case JSON_ARRAY:
-		v = op_list();
-		for (int i = 0; i < j->array.count; i++) {
-			if ((item = apply_value(j->array.items[i])) == NULL) return op_free(v), NULL;
-			op_push(v, item);
-		}
-		return v;
-	case JSON_OBJECT:
-		v = op_map();
-		for (int i = 0; i < j->object.count; i++) {
-			if ((item = apply_value(j->object.members[i].value)) == NULL) return op_free(v), NULL;
-			op_set(v, j->object.members[i].key, item);
-		}
-		return v;
-	default: return NULL;
-	}
+// a patch's value as op holds it, new; NULL for what it cannot. No recursion: what is being made
+// waits on a stack of its own, so a value may nest as deep as memory allows
+typedef struct {
+	const Json *from;
+	op_value *made; // the list or map filling; NULL for a stand, which waits on its kind
+	int done;       // children taken in
+} making;
+
+static size_t children(const Json *j) {
+	return j->type == JSON_ARRAY ? (size_t)j->array.count : j->type == JSON_OBJECT ? (size_t)j->object.count : 1;
+}
+static const Json *child(const Json *j, int i) {
+	return j->type == JSON_ARRAY ? j->array.items[i] : j->type == JSON_OBJECT ? j->object.members[i].value : j->stand.kind;
 }
 
-Json *apply_json(const op_value *v) {
-	Json *j;
-	switch (v->type) {
-	case OP_NULL: return jsonNull();
-	case OP_BOOL: return jsonBoolean(v->bool_);
-	case OP_NUM: return v->big ? jsonWhole(v->bigNegative, v->big, v->bigLength) : jsonNumber(v->num);
-	case OP_STR: return jsonStringOfLength(v->str, v->bytes);
-	case OP_BYTES: return jsonBytes(v->data, v->bytes);
-	case OP_TYPED: return jsonTyped((JsonKind)v->kind, v->data, op_length(v));
-	case OP_STAND: return jsonStand(apply_json(v->items[0]));
-	case OP_LIST:
-		j = jsonArray();
-		for (size_t i = 0; i < v->count; i++) jsonPush(j, apply_json(v->items[i]));
-		return j;
-	default:
-		j = jsonObject();
-		for (size_t i = 0; i < v->count; i++) jsonAdd(j, v->keys[i], apply_json(v->items[i]));
-		return j;
+op_value *apply_value(const Json *root) {
+	making *stack = NULL;
+	size_t n = 0, room = 0;
+	op_value *result = NULL;
+	const Json *j = root;
+	for (;;) {
+		switch (j->type) {
+		case JSON_NULL: result = op_null(); break;
+		case JSON_BOOLEAN: result = op_bool(j->boolean); break;
+		case JSON_NUMBER: result = j->big ? op_whole(j->bigNegative, j->big, j->bigLength) : op_num(j->number); break;
+		case JSON_STRING: result = op_str_n(j->string, j->stringLength); break;
+		case JSON_BYTES: result = op_bytes(j->bytes.data, j->bytes.length); break;
+		case JSON_TYPED: result = op_typed((op_elements)j->typed.kind, j->typed.data, j->typed.count); break;
+		case JSON_STAND:
+		case JSON_ARRAY:
+		case JSON_OBJECT:
+			if (n == room) stack = realloc(stack, (room = room ? room * 2 : 16) * sizeof *stack);
+			if (stack == NULL) abort();
+			stack[n++] = (making){j, j->type == JSON_ARRAY ? op_list() : j->type == JSON_OBJECT ? op_map() : NULL, 0};
+			break;
+		default: goto fail;
+		}
+		// a value is done (result) or a container just begun (result NULL): take it in, then go on to
+		// the next child, or finish the container and take that in
+		for (;;) {
+			if (n == 0) {
+				free(stack);
+				return result;
+			}
+			making *f = &stack[n - 1];
+			if (result != NULL) {
+				if (f->from->type == JSON_ARRAY) op_push(f->made, result);
+				else if (f->from->type == JSON_OBJECT) op_set(f->made, f->from->object.members[f->done].key, result);
+				else f->made = op_stand(result);
+				result = NULL;
+				f->done++;
+			}
+			if ((size_t)f->done < children(f->from)) {
+				j = child(f->from, f->done);
+				break;
+			}
+			result = f->made;
+			n--;
+		}
+	}
+fail:
+	for (size_t i = 0; i < n; i++)
+		if (stack[i].made != NULL) op_free(stack[i].made);
+	free(stack);
+	return NULL;
+}
+
+typedef struct {
+	const op_value *from;
+	Json *made; // the array or object filling; NULL for a stand
+	size_t done;
+} writing;
+
+Json *apply_json(const op_value *root) {
+	writing *stack = NULL;
+	size_t n = 0, room = 0;
+	Json *result = NULL;
+	const op_value *v = root;
+	for (;;) {
+		switch (v->type) {
+		case OP_NULL: result = jsonNull(); break;
+		case OP_BOOL: result = jsonBoolean(v->bool_); break;
+		case OP_NUM: result = v->big ? jsonWhole(v->bigNegative, v->big, v->bigLength) : jsonNumber(v->num); break;
+		case OP_STR: result = jsonStringOfLength(v->str, v->bytes); break;
+		case OP_BYTES: result = jsonBytes(v->data, v->bytes); break;
+		case OP_TYPED: result = jsonTyped((JsonKind)v->kind, v->data, op_length(v)); break;
+		default:
+			if (n == room) stack = realloc(stack, (room = room ? room * 2 : 16) * sizeof *stack);
+			if (stack == NULL) abort();
+			stack[n++] = (writing){v, v->type == OP_LIST ? jsonArray() : v->type == OP_MAP ? jsonObject() : NULL, 0};
+			break;
+		}
+		for (;;) {
+			if (n == 0) {
+				free(stack);
+				return result;
+			}
+			writing *f = &stack[n - 1];
+			if (result != NULL) {
+				if (f->from->type == OP_LIST) jsonPush(f->made, result);
+				else if (f->from->type == OP_MAP) jsonAdd(f->made, f->from->keys[f->done], result);
+				else f->made = jsonStand(result);
+				result = NULL;
+				f->done++;
+			}
+			if (f->done < (f->from->type == OP_STAND ? 1 : f->from->count)) {
+				v = f->from->items[f->done];
+				break;
+			}
+			result = f->made;
+			n--;
+		}
 	}
 }
 
