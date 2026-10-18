@@ -22,6 +22,8 @@
 //   open(p, value?)      the node at p; a value: made (with folders) if missing, else unchanged
 //   create(folder, v)    a new node in folder, named by its id
 //   read(x, path?)       value at path, tracked; none: undefined; a pending memo throws PENDING
+//   peep(x, path?)       value at path, untracked (no dependency: a write there reruns nothing);
+//                        none, or a pending memo: undefined
 //   entries(x)           every item: [{ value, from, id, refused? }]; none: []
 //   list(x)              the names under x, tracked
 //   info(x)              x's attributes, as a node
@@ -211,6 +213,7 @@ export type API = {
 	open: (at: string | Path, value?: unknown) => Node
 	create: (folder: string | Path, value: unknown) => Node
 	read: (x: Target, path?: readonly Step[]) => unknown
+	peep: (x: Target, path?: readonly Step[]) => unknown
 	entries: (x: Target) => Item[]
 	list: (x: Target) => string[]
 	info: (x: Target) => Node
@@ -488,6 +491,18 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			return places.readValue(n.part, id, path)
 		}
 
+		// read's, untracked: the value now, nothing to rerun from it
+		function peep(x: Target, path: readonly Step[] = []): unknown {
+			return places.peep(() => {
+				try {
+					return read(x, path)
+				} catch (e) {
+					if (e === PENDING) return undefined
+					throw e
+				}
+			})
+		}
+
 		function entries(x: Target): Item[] {
 			const n = nodeOf(x)
 			if (n.path === undefined) {
@@ -577,6 +592,7 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			within(() => {
 				const fromPath = resolve(from)
 				const source = slot(fromPath)
+				guard.move(fromPath, resolve(to))
 				ask("place", slotAt(fromPath, get(places, fromPath.slice(0, -1))!))
 				const path = resolve(to)
 				const parent = get(places, path.slice(0, -1))
@@ -987,6 +1003,7 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			open,
 			create,
 			read,
+			peep,
 			entries,
 			list,
 			info,
