@@ -1,15 +1,27 @@
 import { assertEquals, assertThrows } from "@std/assert"
-import { type Commit, CommitError, decode, encode, joinKey, name, splitKey } from "./commit.ts"
+import {
+	type Commit,
+	CommitError,
+	decode,
+	encode,
+	joinKey,
+	joinName,
+	name,
+	splitKey,
+	splitName,
+} from "./commit.ts"
 import * as cbor from "./cbor.ts"
 
 const bytes = (n: number, b = 1) => new Uint8Array(n).fill(b)
+// a name of BLAKE3: its code, its length, a digest of b bytes
+const nm = (b: number) => joinName(0x1e, bytes(32, b))
 const commit = (more: Partial<Commit> = {}): Commit => ({
 	table: "children",
 	actor: "chee",
 	time: 1_760_000_000,
 	signer: joinKey(0xed, bytes(32)),
 	nonce: 7,
-	parents: [bytes(32, 2)],
+	parents: [nm(2)],
 	lamport: 2,
 	patches: [{ path: ["notes"], value: "ermine://" + "ab".repeat(32) }],
 	...more,
@@ -24,7 +36,7 @@ Deno.test("commit: round trip, optional fields left out, the name its bytes' has
 	const b = encode({ ...c, reader: c.reader, base: undefined })
 	const back = decode(b)
 	assertEquals(back, c)
-	assertEquals(name(b).length, 32)
+	assertEquals(name(b).length, 34)
 	// the same commit, the same bytes and name
 	assertEquals(
 		name(
@@ -70,7 +82,7 @@ Deno.test("commit: a signer is a multikey: any well formed one is carried, its c
 })
 
 Deno.test("commit: a move, a range, several parents with base", () => {
-	const p = [bytes(32, 2), bytes(32, 3)]
+	const p = [nm(2), nm(3)]
 	const c = commit({
 		parents: p,
 		base: p[1],
@@ -84,7 +96,7 @@ Deno.test("commit: a move, a range, several parents with base", () => {
 })
 
 Deno.test("commit: a merge, several parents and a rule's name, no base", () => {
-	const c = commit({ parents: [bytes(32, 2), bytes(32, 3)], merge: "eg-walker" })
+	const c = commit({ parents: [nm(2), nm(3)], merge: "eg-walker" })
 	assertEquals(decode(encode(c)), c)
 })
 
@@ -101,17 +113,17 @@ Deno.test("commit: refused, naming the first field that says no", () => {
 	no(commit({ signer: Uint8Array.of(0xed) }), "signer")
 	no(commit({ signer: Uint8Array.of(0x80, 0x00, 0x01) }), "signer")
 	no(commit({ signer: new Uint8Array(1025).fill(1) }), "signer")
-	no(commit({ parents: [bytes(32, 3), bytes(32, 2)] }), "parents")
+	no(commit({ parents: [nm(3), nm(2)] }), "parents")
 	// several parents need a base, one of them
-	no(commit({ parents: [bytes(32, 2), bytes(32, 3)] }), "base")
-	no(commit({ parents: [bytes(32, 2), bytes(32, 3)], base: bytes(32, 4) }), "base")
+	no(commit({ parents: [nm(2), nm(3)] }), "base")
+	no(commit({ parents: [nm(2), nm(3)], base: nm(4) }), "base")
 	// one parent: no base
-	no(commit({ base: bytes(32, 2) }), "base")
+	no(commit({ base: nm(2) }), "base")
 	// merge: a rule's name, with several parents and no base
 	no(commit({ merge: "eg-walker" }), "merge")
-	no(commit({ parents: [bytes(32, 2), bytes(32, 3)], base: bytes(32, 3), merge: "x" }), "merge")
-	no(commit({ parents: [bytes(32, 2), bytes(32, 3)], merge: 1 as never }), "merge")
-	no(commit({ parents: [bytes(32, 2), bytes(32, 3)], merge: "" }), "merge")
+	no(commit({ parents: [nm(2), nm(3)], base: nm(3), merge: "x" }), "merge")
+	no(commit({ parents: [nm(2), nm(3)], merge: 1 as never }), "merge")
+	no(commit({ parents: [nm(2), nm(3)], merge: "" }), "merge")
 	no(commit({ lamport: 0 }), "lamport")
 	no(commit({ patches: [{ path: ["a"], value: 1, move: { path: ["b"] } }] }), "patches")
 	no(commit({ metadata: [["a", 1]] as never }), "metadata")
@@ -132,4 +144,21 @@ Deno.test("commit: metadata in the old form, [key, value] pairs, is read as an o
 	// a pair not a pair: not a commit
 	const bad = cbor.encode({ ...rest, metadata: [["a", 1, 2]] } as never)
 	assertEquals(assertThrows(() => decode(bad), CommitError).field, "metadata")
+})
+
+Deno.test("commit: a name is a multihash: BLAKE3's code, length 32, the digest; any other is no name", () => {
+	const n = nm(5)
+	assertEquals(n.slice(0, 2), Uint8Array.of(0x1e, 0x20))
+	assertEquals(splitName(n), { code: 0x1e, digest: bytes(32, 5) })
+	assertEquals(splitName(name(new Uint8Array(0)))?.code, 0x1e)
+	const no = (b: unknown) => assertEquals(splitName(b), undefined)
+	no(bytes(32, 5))
+	no(Uint8Array.of(0x1f, 0x20, ...bytes(32)))
+	no(Uint8Array.of(0x1e, 0x21, ...bytes(33)))
+	no(Uint8Array.of(0x1e, 0x20, ...bytes(31)))
+	no(Uint8Array.of(0x1e, 0x20, ...bytes(33)))
+	no(Uint8Array.of(0x9e, 0x00, 0x20, ...bytes(32)))
+	no(Uint8Array.of(0x1e, 0xa0, 0x00, ...bytes(32)))
+	no(Uint8Array.of(0x1e))
+	no("1e20")
 })

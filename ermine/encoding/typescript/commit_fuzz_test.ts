@@ -76,7 +76,7 @@ export function commit(pick: Pick): Record<string, unknown> {
 		lamport: whole(pick) || 1,
 		patches: Array.from({ length: pick(4) }, () => patch(pick)),
 	}
-	const parents = Array.from({ length: pick(4) }, () => bytes(pick, 32))
+	const parents = Array.from({ length: pick(4) }, () => named(bytes(pick, 32)))
 		.sort((a, b) => hex(a) < hex(b) ? -1 : 1)
 		.filter((p, i, all) => i === 0 || hex(p) !== hex(all[i - 1]))
 	c.parents = parents
@@ -143,7 +143,7 @@ function wrong(pick: Pick, c: Record<string, unknown>): Record<string, unknown> 
 		}
 		default: {
 			// the parents, base and merge
-			const p = Array.from({ length: 2 }, () => bytes(pick, 32))
+			const p = Array.from({ length: 2 }, () => named(bytes(pick, 32)))
 			const k = pick(5)
 			if (k === 0) w.parents = [p[0], p[0]]
 			else if (k === 1) w.parents = p.sort((a, b) => hex(a) < hex(b) ? 1 : -1)
@@ -188,7 +188,7 @@ Deno.test(`commit fuzz: ${SEEDS} seeds, a commit encodes, decodes to itself, one
 			assert(same(back, c), `${at}: back as ${show(back)}`)
 			assertEquals(hex(encode(back)), hex(b), `${at}: encoded again`)
 			assertEquals(hex(encode(shuffled(pick, c as never) as never)), hex(b), `${at}: keys`)
-			assertEquals(hex(name(b)), hex(blake3(b)), at)
+			assertEquals(hex(name(b)), "1e20" + hex(blake3(b)), at)
 		}
 	}
 })
