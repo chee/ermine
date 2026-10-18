@@ -19,7 +19,7 @@
 		"./ermine/sites",
 		"./filesystem/clingy",
 		"./extensions/subduction",
-		"./extensions/sync",
+		"./extensions/together",
 		"./extensions/programs",
 		"./extensions/presence",
 		"./extensions/patch-nodes",
