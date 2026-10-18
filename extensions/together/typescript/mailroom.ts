@@ -70,7 +70,7 @@ export type Sealed = {
 }
 
 // a taken-in seal: its commit's name, lamport and parents' names, its commit's bytes, its sealed
-// bytes (none: a commit a run's next vouched for, held without a seal), and the stored ids of the
+// bytes (none: a commit a pack's next vouched for, held without a seal), and the stored ids of the
 // seals it was taken in over (the commit's parents; or, for a seal alone, every seal of each)
 export type Seen = {
 	name: string
@@ -81,7 +81,7 @@ export type Seen = {
 	ids: string[]
 }
 
-// a fragment's member: its sealed bytes (none: vouched for by the next in its run), and its commit
+// a fragment's member: its sealed bytes (none: vouched for by the next in its pack), and its commit
 // as the mailroom reads it
 export type Member = { sealed?: Uint8Array; it: Sealed }
 
