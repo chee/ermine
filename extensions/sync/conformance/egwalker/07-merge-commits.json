@@ -88,7 +88,7 @@
 							"actor": null,
 							"metadata": {
 								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-								"commit": "0a072b87ffa6c0163f5e22a6814839d402c43980500ec1896e418b8386c359fe"
+								"commit": "1e20b2ee405c1ae8e320a750681849f98663f1bab2099cecea489800d4ea34cf82bf"
 							}
 						}
 					}
@@ -130,7 +130,7 @@
 							"actor": null,
 							"metadata": {
 								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-								"commit": "6db19bba18470c17c7e957ef98c2bc965a2eb262f9eeb71b6291e61498c4e023"
+								"commit": "1e20b2ee405c1ae8e320a750681849f98663f1bab2099cecea489800d4ea34cf82bf"
 							}
 						}
 					}
@@ -171,7 +171,7 @@
 							"actor": null,
 							"metadata": {
 								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-								"commit": "ffc17c851409777107f0eeaf2891253f4bb3028342842400f28379bf32e72ffe"
+								"commit": "1e20430a0d569e6a2dbd8a33e53145df0fcffa2d08de8383a55f53fcdf41797f3e28"
 							}
 						}
 					}
@@ -188,10 +188,10 @@
 					"r"
 				],
 				"commits": [
-					"a",
 					"b",
-					"m",
+					"a",
 					"c",
+					"m",
 					"m2"
 				]
 			}

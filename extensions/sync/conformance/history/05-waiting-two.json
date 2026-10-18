@@ -58,8 +58,8 @@
 			"expect": {
 				"added": {
 					"waiting": [
-						"b",
-						"c"
+						"c",
+						"b"
 					]
 				}
 			}
@@ -71,8 +71,8 @@
 					{
 						"name": "m",
 						"waiting": [
-							"b",
-							"c"
+							"c",
+							"b"
 						]
 					}
 				]

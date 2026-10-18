@@ -76,14 +76,14 @@
 			"op": "name",
 			"commit": "a",
 			"expect": {
-				"name": "73c54963cf9c7d6c75064210ecd6819f38e8618139d4b71d4ad8fd9c4f3b008e"
+				"name": "1e20387094f29d4a80b6e20ee6cc2b2bd96d15b0fd5c0e749ee9f5dda0c8b6b9f0e9"
 			}
 		},
 		{
 			"op": "name",
 			"commit": "b",
 			"expect": {
-				"name": "41b7eacb7f402557d00fc9dadef7422244d814b6bfdcc9266bab4df63e4d7c1d"
+				"name": "1e2085e8e76df4bcaa7655b2560ce7c51d36d1a852dd165d55330b4aa2cf01aefdf1"
 			}
 		},
 		{
@@ -96,7 +96,7 @@
 				"tables": {
 					"value": {
 						"value": {
-							"n": 2,
+							"n": 3,
 							"x": "from a",
 							"y": "from b",
 							"keep": "k",
@@ -107,7 +107,7 @@
 							"actor": null,
 							"metadata": {
 								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-								"commit": "73c54963cf9c7d6c75064210ecd6819f38e8618139d4b71d4ad8fd9c4f3b008e"
+								"commit": "1e2085e8e76df4bcaa7655b2560ce7c51d36d1a852dd165d55330b4aa2cf01aefdf1"
 							}
 						}
 					}
@@ -153,7 +153,7 @@
 							"actor": null,
 							"metadata": {
 								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-								"commit": "de9c4d4d3c1a143c98465090b7142e605fd4a93c98eb705acfd9d7f98c87e87c"
+								"commit": "1e20549504ca8bd4bcaf9721620f7c833432a56c3f58da031e114991b4b6d9d81bc8"
 							}
 						}
 					}

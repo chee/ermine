@@ -57,22 +57,22 @@
 			"op": "name",
 			"commit": "b",
 			"expect": {
-				"name": "1d8d3c833997bf17708cd96a9c728f643142682d569bd246c8dd2023af7888c7"
+				"name": "1e20990548b7084080ef28ce81fd2600bb5085d059b4e260653ace20258513f28052"
 			}
 		},
 		{
 			"op": "name",
 			"commit": "c",
 			"expect": {
-				"name": "64ecdb5209c1dcde507c880380fb2789f29581bc204dc13edb223bbe8b01507b"
+				"name": "1e2031fc036e9b08117d20295b8ebf204ce3b32ee7c4ee01f222ace2aeb424137e21"
 			}
 		},
 		{
 			"op": "heads",
 			"expect": {
 				"heads": [
-					"c",
-					"b"
+					"b",
+					"c"
 				]
 			}
 		},
@@ -135,8 +135,8 @@
 			"op": "heads",
 			"expect": {
 				"heads": [
-					"e",
-					"d"
+					"d",
+					"e"
 				]
 			}
 		}

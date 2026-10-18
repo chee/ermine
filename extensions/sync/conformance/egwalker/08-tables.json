@@ -96,7 +96,7 @@
 							"actor": "a",
 							"metadata": {
 								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-								"commit": "0f67d28d3165ed4db37c7d0a3eaec02639c571a10f25f84731d86780428d3bf6"
+								"commit": "1e200792fa5264eeeb512a5d1e78b940af5b049e5d003cb1fc10d4a9d2e8e0af7e6e"
 							}
 						}
 					},
@@ -110,7 +110,7 @@
 							"actor": "b",
 							"metadata": {
 								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-								"commit": "1ca8f97e3dd85e030bc902062f667e8952522e59ffa098c876ec186da6341f42"
+								"commit": "1e20c7e311b7471b1ced4bead870f0d6e6f35145176961fb257e3e5dd310a0837040"
 							}
 						}
 					}
