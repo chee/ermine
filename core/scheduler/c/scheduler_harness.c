@@ -11,7 +11,7 @@
 // it in its context, so a write in a run (after an await too) names the run; in a set, act,
 // teardown or run(), the computer's latest run (sc_latest); else none; "open": the run open
 // (sc_get_run); a computation's name: its latest run (sc_latest). a scope's info is the
-// request's own pairs; every line is retained to the end, so what points into one stays good. a
+// request's own object, as pairs; every line is retained to the end, so what points into one stays good. a
 // pulse past ENDLESS moments is left as the reference's is: every moment after throws (sc_throw),
 // and what is thrown out leaves the pulse (sc_escaped): it answers {"error":"endless"}. what the
 // scheduler throws out of a call (sc_escaped) is that request's error, or, in a program, thrown
@@ -401,37 +401,30 @@ static val made_in(const char *form, const op_value *a0, const op_value *a1, con
 static sc_pair **infos;
 static size_t ninfos, capinfos;
 
-// a request's [[key, value]..] as pairs, its own keys and values; NULL, *n 0: none
-static const sc_pair *info_of(const op_value *list, size_t *n) {
+// a request's info object as pairs, its own keys and values (unique: a map's); NULL, *n 0: none
+static const sc_pair *info_of(const op_value *map, size_t *n) {
 	*n = 0;
-	if (!is(list, OP_LIST) || list->count == 0) return NULL;
-	sc_pair *out = allocate(list->count * sizeof *out);
+	if (!is(map, OP_MAP) || map->count == 0) return NULL;
+	sc_pair *out = allocate(map->count * sizeof *out);
 	PUSH(infos, ninfos, capinfos, out);
-	for (size_t i = 0; i < list->count; i++) {
-		const op_value *p = list->items[i];
-		if (!is(p, OP_LIST) || p->count != 2 || !is(p->items[0], OP_STR)) continue;
-		out[(*n)++] = (sc_pair){text(p->items[0]), p->items[1]};
+	for (size_t i = 0; i < map->count; i++) out[(*n)++] = (sc_pair){map->keys[i], map->items[i]};
+	return out;
+}
+
+// an info as an object: a computer's run and mark are the scheduler's numbers, any other value a
+// request's
+static op_value *object_of(const sc_info *info) {
+	op_value *out = op_map();
+	for (size_t j = 0; j < info->n; j++) {
+		const sc_pair *q = &info->pairs[j];
+		if (strcmp(q->key, "run") == 0 || strcmp(q->key, "mark") == 0)
+			op_set(out, q->key, integer((int64_t)*(const uint64_t *)q->value));
+		else op_set(out, q->key, op_ref((op_value *)q->value));
 	}
 	return out;
 }
 
-// an info as [[key, value]..]: a computer's run and mark are the scheduler's numbers, any other
-// value a request's
-static op_value *pairs_of(const sc_info *info) {
-	op_value *pairs = op_list();
-	for (size_t j = 0; j < info->n; j++) {
-		const sc_pair *q = &info->pairs[j];
-		op_value *p = op_list();
-		op_push(p, op_str(q->key));
-		if (strcmp(q->key, "run") == 0 || strcmp(q->key, "mark") == 0)
-			op_push(p, integer((int64_t)*(const uint64_t *)q->value));
-		else op_push(p, op_ref((op_value *)q->value));
-		op_push(pairs, p);
-	}
-	return pairs;
-}
-
-// what is open: {scope, pairs, writer?}, by the computer of the run; nothing: null
+// what is open: {scope, info, writer?}, by the computer of the run; nothing: null
 static op_value *current(void) {
 	sc_scope *open = sc_get_current_scope(sch);
 	if (open == NULL) return op_null();
@@ -440,7 +433,7 @@ static op_value *current(void) {
 	op_value *out = op_map();
 	const char *name = sc_scope_user(open);
 	op_set(out, "scope", name ? op_str(name) : op_null());
-	op_set(out, "pairs", pairs_of(sc_get_info(sch)));
+	op_set(out, "info", object_of(sc_get_info(sch)));
 	sc_run *writer = sc_get_run(sch);
 	if (writer) op_set(out, "writer", op_str(sc_scope_user(sc_run_computer(writer))));
 	return out;
@@ -880,10 +873,13 @@ struct making {
 	sc_def def;
 	bool effect;
 	sc_computer *c;
+	const sc_pair *info;
+	size_t n;
 };
 static void in_making(void *data) {
 	struct making *m = data;
-	m->c = m->effect ? sc_create_effect(sch, m->def) : sc_create_computer(sch, m->def);
+	m->c = m->effect ? sc_create_effect(sch, m->def, m->info, m->n)
+	                 : sc_create_computer(sch, m->def, m->info, m->n);
 }
 
 static op_value *make_computer(const op_value *r, bool effect) {
@@ -908,7 +904,8 @@ static op_value *make_computer(const op_value *r, bool effect) {
 		.early = effect && is(early, OP_BOOL) && early->bool_};
 	if (effect) def.effect = program_effect;
 	else def.set = program_set;
-	struct making m = {def, effect, NULL};
+	struct making m = {def, effect, NULL, NULL, 0};
+	m.info = info_of(op_get(r, "info"), &m.n);
 	const char *name = text(op_get(r, "name"));
 	PUSH(naming, nnaming, capnaming, name ? name : "");
 	const char *why = sc_run_with_scope(o, in_making, &m);
@@ -966,7 +963,7 @@ static val made_in(const char *form, const op_value *a0, const op_value *a1, con
 	}
 	// an early one runs and acts before it is given back: itself, the scope open then (self_of)
 	PUSH(naming, nnaming, capnaming, name);
-	sc_computer *c = effect ? sc_create_effect(sch, def) : sc_create_computer(sch, def);
+	sc_computer *c = effect ? sc_create_effect(sch, def, NULL, 0) : sc_create_computer(sch, def, NULL, 0);
 	nnaming--;
 	if (c == NULL) return thrown(unmade(NULL));
 	p->self = c;

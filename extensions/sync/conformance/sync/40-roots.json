@@ -108,13 +108,10 @@
 						{ "file": "y.ts", "line": 4, "column": 1 },
 						{ "file": "scenario", "line": 1 }
 					],
-					"metadata": [
-						[
-							"signer",
-							"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-						],
-						["commit", "7f64bbd42be6897fed96a7e0fa0bdad9a3bd1e0d6a5359c79cd8c241f79b79fb"]
-					]
+					"metadata": {
+						"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"commit": "c483a596d9d0bce7b48dd8c02f4b6f3dd736d13f2ed0d6a6d0d4d49c9b2018f8"
+					}
 				}
 			}
 		},

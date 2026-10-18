@@ -448,16 +448,7 @@
 						"function": "write"
 					}
 				],
-				"metadata": [
-					[
-						"cause",
-						0
-					],
-					[
-						"tool",
-						"pen"
-					]
-				],
+				"metadata": { "cause": 0, "tool": "pen" },
 				"op": {
 					"patches": [
 						{
@@ -554,16 +545,7 @@
 			"change": {
 				"time": 1760000018,
 				"actor": "chee",
-				"metadata": [
-					[
-						"cause",
-						6
-					],
-					[
-						"tool",
-						"pen"
-					]
-				]
+				"metadata": { "cause": 6, "tool": "pen" }
 			},
 			"value": {
 				"title": "wren paper 6",
@@ -674,16 +656,7 @@
 						"function": "write"
 					}
 				],
-				"metadata": [
-					[
-						"cause",
-						12
-					],
-					[
-						"tool",
-						"pen"
-					]
-				]
+				"metadata": { "cause": 12, "tool": "pen" }
 			},
 			"value": {
 				"title": "otter otter 12",
@@ -757,16 +730,7 @@
 			"change": {
 				"time": 1760000054,
 				"actor": "chee",
-				"metadata": [
-					[
-						"cause",
-						18
-					],
-					[
-						"tool",
-						"pen"
-					]
-				],
+				"metadata": { "cause": 18, "tool": "pen" },
 				"op": {
 					"patches": [
 						{
@@ -877,16 +841,7 @@
 						"function": "write"
 					}
 				],
-				"metadata": [
-					[
-						"cause",
-						24
-					],
-					[
-						"tool",
-						"pen"
-					]
-				]
+				"metadata": { "cause": 24, "tool": "pen" }
 			},
 			"value": {
 				"title": "lemon lemon 24",
@@ -986,16 +941,7 @@
 				"time": 1760000090,
 				"actor": "chee",
 				"reader": "circle",
-				"metadata": [
-					[
-						"cause",
-						30
-					],
-					[
-						"tool",
-						"pen"
-					]
-				]
+				"metadata": { "cause": 30, "tool": "pen" }
 			},
 			"value": {
 				"title": "wren paper 30",
@@ -1081,16 +1027,7 @@
 						"function": "write"
 					}
 				],
-				"metadata": [
-					[
-						"cause",
-						36
-					],
-					[
-						"tool",
-						"pen"
-					]
-				],
+				"metadata": { "cause": 36, "tool": "pen" },
 				"op": {
 					"patches": [
 						{
@@ -1189,16 +1126,7 @@
 				"actor": {
 					"name": "juno"
 				},
-				"metadata": [
-					[
-						"cause",
-						42
-					],
-					[
-						"tool",
-						"pen"
-					]
-				]
+				"metadata": { "cause": 42, "tool": "pen" }
 			},
 			"value": {
 				"title": "paper wren 42",
@@ -1302,16 +1230,7 @@
 						"function": "write"
 					}
 				],
-				"metadata": [
-					[
-						"cause",
-						48
-					],
-					[
-						"tool",
-						"pen"
-					]
-				]
+				"metadata": { "cause": 48, "tool": "pen" }
 			},
 			"value": {
 				"title": "lemon lemon 48",
@@ -1390,16 +1309,7 @@
 			"change": {
 				"time": 1760000162,
 				"actor": "chee",
-				"metadata": [
-					[
-						"cause",
-						54
-					],
-					[
-						"tool",
-						"pen"
-					]
-				],
+				"metadata": { "cause": 54, "tool": "pen" },
 				"op": {
 					"patches": [
 						{
@@ -1944,16 +1854,7 @@
 							"function": "write"
 						}
 					],
-					"metadata": [
-						[
-							"cause",
-							0
-						],
-						[
-							"tool",
-							"pen"
-						]
-					],
+					"metadata": { "cause": 0, "tool": "pen" },
 					"op": {
 						"patches": [
 							{
@@ -2062,16 +1963,7 @@
 					"actor": {
 						"name": "juno"
 					},
-					"metadata": [
-						[
-							"cause",
-							42
-						],
-						[
-							"tool",
-							"pen"
-						]
-					]
+					"metadata": { "cause": 42, "tool": "pen" }
 				},
 				"value": {
 					"body": "lemon cherry paperlemon cherry paperlemon cherry paper",
@@ -2189,16 +2081,7 @@
 							"function": "write"
 						}
 					],
-					"metadata": [
-						[
-							"cause",
-							36
-						],
-						[
-							"tool",
-							"pen"
-						]
-					],
+					"metadata": { "cause": 36, "tool": "pen" },
 					"op": {
 						"patches": [
 							{
@@ -2342,16 +2225,7 @@
 					"time": 1760000090,
 					"actor": "chee",
 					"reader": "circle",
-					"metadata": [
-						[
-							"cause",
-							30
-						],
-						[
-							"tool",
-							"pen"
-						]
-					]
+					"metadata": { "cause": 30, "tool": "pen" }
 				},
 				"value": {
 					"body": "lemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wren",
@@ -2447,16 +2321,7 @@
 							"function": "write"
 						}
 					],
-					"metadata": [
-						[
-							"cause",
-							24
-						],
-						[
-							"tool",
-							"pen"
-						]
-					]
+					"metadata": { "cause": 24, "tool": "pen" }
 				},
 				"value": {
 					"body": "lemon",
@@ -2588,16 +2453,7 @@
 				"change": {
 					"time": 1760000054,
 					"actor": "chee",
-					"metadata": [
-						[
-							"cause",
-							18
-						],
-						[
-							"tool",
-							"pen"
-						]
-					],
+					"metadata": { "cause": 18, "tool": "pen" },
 					"op": {
 						"patches": [
 							{
@@ -2714,16 +2570,7 @@
 							"function": "write"
 						}
 					],
-					"metadata": [
-						[
-							"cause",
-							12
-						],
-						[
-							"tool",
-							"pen"
-						]
-					]
+					"metadata": { "cause": 12, "tool": "pen" }
 				},
 				"value": {
 					"body": "lemon cherry paper ink otter",
@@ -2795,16 +2642,7 @@
 				"change": {
 					"time": 1760000162,
 					"actor": "chee",
-					"metadata": [
-						[
-							"cause",
-							54
-						],
-						[
-							"tool",
-							"pen"
-						]
-					],
+					"metadata": { "cause": 54, "tool": "pen" },
 					"op": {
 						"patches": [
 							{
@@ -2841,16 +2679,7 @@
 				"change": {
 					"time": 1760000018,
 					"actor": "chee",
-					"metadata": [
-						[
-							"cause",
-							6
-						],
-						[
-							"tool",
-							"pen"
-						]
-					]
+					"metadata": { "cause": 6, "tool": "pen" }
 				},
 				"value": {
 					"body": "lemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wren",
@@ -2960,16 +2789,7 @@
 							"function": "write"
 						}
 					],
-					"metadata": [
-						[
-							"cause",
-							48
-						],
-						[
-							"tool",
-							"pen"
-						]
-					]
+					"metadata": { "cause": 48, "tool": "pen" }
 				},
 				"value": {
 					"body": "lemon",

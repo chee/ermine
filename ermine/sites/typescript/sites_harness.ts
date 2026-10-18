@@ -14,7 +14,7 @@ import { createScheduler, type Scope } from "@ermine/scheduler"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { createSites } from "./sites.ts"
 
-const info: [string, unknown][] = [["owner", "test"]]
+const info = { owner: "test" }
 const scheduler = createScheduler()
 const sites = createSites(scheduler)
 const named = new Map<string, Scope>()

@@ -1,15 +1,12 @@
 {
-	"title": "keys are any string, compared whole: one with a NUL inside, the empty one, a lone surrogate, either half of a pair and the pair are each a key of their own; a value of -0 is kept as -0, and is not 0 by Object.is",
+	"title": "keys are any string, compared whole: one with a NUL inside, the empty one, a lone surrogate, either half of a pair and the pair are each a key of their own; a value of -0 is 0 (whole numbers are integers): 0 written after it is equal",
 	"steps": [
 		{
 			"op": "root",
 			"name": "o",
-			"info": [
-				[
-					"actor",
-					"test"
-				]
-			],
+			"info": {
+				"actor": "test"
+			},
 			"expect": {}
 		},
 		{
@@ -184,7 +181,7 @@
 			"op": "get",
 			"key": "z",
 			"expect": {
-				"value": -0
+				"value": 0
 			}
 		},
 		{
@@ -205,7 +202,7 @@
 			"op": "get",
 			"key": "d",
 			"expect": {
-				"value": -0
+				"value": 0
 			}
 		},
 		{
@@ -253,7 +250,7 @@
 						"ends": "d",
 						"run": 2,
 						"ended": "done",
-						"equal": false
+						"equal": true
 					}
 				]
 			}

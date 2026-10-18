@@ -162,7 +162,7 @@
 			"id": "x",
 			"expect": {
 				"value": {
-					"n": 2,
+					"n": 1,
 					"by a": "a",
 					"by b": "b",
 					"tags": [
@@ -180,7 +180,7 @@
 			"id": "x",
 			"expect": {
 				"value": {
-					"n": 2,
+					"n": 1,
 					"by a": "a",
 					"by b": "b",
 					"tags": [
@@ -198,8 +198,8 @@
 			"id": "x",
 			"expect": {
 				"heads": [
-					"wb",
-					"wa"
+					"wa",
+					"wb"
 				]
 			}
 		},

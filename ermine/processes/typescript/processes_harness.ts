@@ -1,10 +1,10 @@
 // processes (processes.ts) on the line protocol: one JSON request per line in, one answer per line
 // out, in order. one world per process: a scheduler, table, paths, and places (root "R",
 // contributors [processes("R"), children]). ids are strings, a path a list of names. the host
-// writes with its scope open, info [["actor","test"]]. a PlacesError answers { error: code }
+// writes with its scope open, info {"actor":"test"}. a PlacesError answers { error: code }
 //
 // the world:
-// { op: "root", name, info }               → {}   a scope with no parent, those info pairs
+// { op: "root", name, info }               → {}   a scope with no parent, that info
 // { op: "kids", id, value }                → {}   the children entry, replaced (a table event)
 // { op: "place", at, name, id }            → {}   places' place, at the parent's id
 // { op: "rename", at, name, to }           → {}
@@ -21,10 +21,8 @@
 // { op: "members", at }                    → { members }   each { name, id?, from } (level: no id)
 // { op: "lookup", names, from }            → { path? }
 // scope nodes (scopes.ts):
-// { op: "scope", name, parent, info }      → {}   a scope under the named one, those info pairs
+// { op: "scope", name, parent, info }      → {}   a scope under the named one, that info
 // { op: "give", scope, id? }               → { id }   the scope's node id, made the first time
-// { op: "nodeOf", scope }                  → { id? }
-// { op: "nearest", scope }                 → { id? }   its own, or the nearest above with one
 // { op: "write", id, part, value }         → {}   the entry, replaced (a table event)
 // { op: "parts", id }                      → { parts }   the parts at the id, sorted
 // { op: "teardown", scope }                → {}
@@ -73,7 +71,7 @@ const places = createPlaces({
 	contributors: [counted, children],
 })
 s.onTrackingEnd((key) => places.release(key))
-const host = s.createRootScope([["actor", "test"]])
+const host = s.createRootScope({ actor: "test" })
 const nodes = createScopeNodes({ scheduler: s, table })
 const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 const header = () => createChangeHeader(s)
@@ -176,14 +174,6 @@ function answer(r: Request): Json {
 		}
 		case "give":
 			return { id: nodes.give(named(r.scope), r.id) }
-		case "nodeOf": {
-			const id = nodes.nodeOf(named(r.scope))
-			return id === undefined ? {} : { id }
-		}
-		case "nearest": {
-			const id = nodes.nearest(named(r.scope))
-			return id === undefined ? {} : { id }
-		}
 		case "write":
 			hosted(() => table.sub(r.part, r.id, createEntry(r.value, header())))
 			return {}

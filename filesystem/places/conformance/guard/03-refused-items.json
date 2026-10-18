@@ -13,12 +13,7 @@
 		{
 			"op": "root",
 			"name": "chee",
-			"info": [
-				[
-					"actor",
-					"chee"
-				]
-			],
+			"info": { "actor": "chee" },
 			"expect": {}
 		},
 		{

@@ -11,10 +11,10 @@
 // { op: "kids", id, value }                → {}   children entry replaced
 // { op: "put", part, id, value }           → {}   entry replaced
 // { op: "saved", part, id, path? }        → { value? }   at path (none: the whole value)
-// { op: "change", part, id }               → { actor?, process?, caller? }   latest change's, the
-//    first of each key in its metadata; the header's own actor if it has one
-// { op: "metadata", part, id }             → { keys, node? }   latest change's metadata: each pair's
-//    key in order, and the "node" pair's value
+// { op: "change", part, id }               → { actor?, process?, caller? }   latest change's, from
+//    its metadata; the header's own actor if it has one
+// { op: "metadata", part, id }             → { keys, node? }   latest change's metadata: its keys,
+//    sorted, and the NODE key's value
 // { op: "id", path }                       → { id? }   from "R"
 // { op: "uuids", paths }                   → { v7, ordered }   each a uuidv7, each after the last
 // { op: "now", t }                         → {}   presence clock, ms
@@ -50,7 +50,7 @@ import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Id, type Key, type Table } from "@ermine/table"
 import { children, createPlaces, type Places, PlacesError } from "@ermine/places"
 import { get } from "@ermine/places/lib"
-import { createChangeHeader } from "@ermine/places/header"
+import { createChangeHeader, NODE } from "@ermine/places/header"
 import { Refusal } from "@ermine/places/guard"
 import { addProcess, processes, removeProcess } from "@ermine/processes"
 import { createScopeNodes } from "@ermine/processes/scopes"
@@ -100,8 +100,8 @@ function make(o: Request = {}): Made {
 	const commit = (changed: Parameters<Places["commit"]>[0]) =>
 		overlay ? overlay.commit(changed) : places.commit(changed)
 	const scopes = createScopeNodes({ scheduler: s, table })
-	const host = s.createRootScope([["actor", "test"]])
-	const above = s.createScope([["role", "programs"]], host)
+	const host = s.createRootScope({ actor: "test" })
+	const above = s.createScope({ role: "programs" }, host)
 	const clock = { now: 0 }
 	const later: (() => void)[] = []
 	const deny = (o.deny ?? []) as { op: string; path: string }[]
@@ -138,6 +138,7 @@ function make(o: Request = {}): Made {
 			})
 			s.teardown(p.scope)
 		},
+		runs: undefined,
 	}
 	const apis = createProcessAPIs({
 		scheduler: s,
@@ -151,7 +152,6 @@ function make(o: Request = {}): Made {
 		overlay,
 		schedule: (f) => void later.push(f),
 		id: o.uuid ? undefined : () => `n${++n}`,
-		scopes,
 	})
 	return {
 		s,
@@ -264,8 +264,9 @@ function drain() {
 function start(r: Request): { id: Id } {
 	const m = world()
 	const at = r.at as string[]
-	const scope = m.s.createScope([["process", at]], m.above)
-	const id = m.scopes.give(scope, `proc:${r.name}`)
+	const id: Id = `proc:${r.name}`
+	const scope = m.s.createScope({ process: at, [NODE]: id }, m.above)
+	m.scopes.give(scope, id)
 	m.s.runWithScope(
 		scope,
 		() => m.places.commit(addProcess(m.table, "R", at, id, createChangeHeader(m.s))),
@@ -309,23 +310,18 @@ function answer(r: Request): Record<string, unknown> {
 		}
 		case "metadata": {
 			const c = world().table.get(r.part as Key, r.id)?.change
-			const pairs = (c?.metadata ?? []) as [string, unknown][]
-			const node = pairs.find(([k]) => k === "node")
-			return node
-				? { keys: pairs.map(([k]) => k), node: node[1] }
-				: { keys: pairs.map(([k]) => k) }
+			const m = c?.metadata ?? {}
+			const keys = Object.keys(m).sort()
+			return NODE in m ? { keys, node: m[NODE] } : { keys }
 		}
 		case "change": {
 			const c = world().table.get(r.part as Key, r.id)?.change
 			if (c === undefined) return {}
-			const found = new Map<string, unknown>()
-			for (const [k, v] of (c.metadata ?? []) as [string, unknown][]) {
-				if (!found.has(k)) found.set(k, v)
-			}
-			const actor = c.actor ?? found.get("actor")
+			const m = c.metadata ?? {}
+			const actor = c.actor ?? m.actor
 			const out: Record<string, unknown> = {}
 			if (actor !== undefined) out.actor = actor
-			for (const k of ["process", "caller"]) if (found.has(k)) out[k] = found.get(k)
+			for (const k of ["process", "caller"]) if (k in m) out[k] = m[k]
 			return out
 		}
 		case "id": {

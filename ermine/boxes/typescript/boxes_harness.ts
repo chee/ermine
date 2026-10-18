@@ -50,7 +50,7 @@ const paths = createPaths<unknown>()
 const places = createPlaces({ root: "R", table, paths, scheduler: s })
 s.onTrackingEnd((key) => places.release(key))
 const host: Host = { places, table, scheduler: s }
-const scope = s.createRootScope([["actor", "test"]])
+const scope = s.createRootScope({ actor: "test" })
 const hosted = <T>(f: () => T) => s.runWithScope(scope, f)
 const header = () => createChangeHeader(s)
 

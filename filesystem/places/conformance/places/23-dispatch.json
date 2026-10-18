@@ -1,5 +1,5 @@
 {
-	"title": "a click dispatched in a run, its scope made under the run's: its write is by the run, its header the process's actor, the click's pairs then the run's info then the process's, flat",
+	"title": "a click dispatched in a run, its scope made under the run's: its write is by the run, its header the process's actor, its metadata the click's info merged over the run's and the process's, inner keys first",
 	"steps": [
 		{
 			"op": "kids",
@@ -10,12 +10,7 @@
 		{
 			"op": "root",
 			"name": "notes",
-			"info": [
-				[
-					"actor",
-					"notes"
-				]
-			],
+			"info": { "actor": "notes" },
 			"expect": {}
 		},
 		{
@@ -34,12 +29,7 @@
 							null,
 							{
 								"within": [
-									[
-										[
-											"event",
-											"click"
-										]
-									],
+									{ "event": "click" },
 									{
 										"write": {
 											"op": "place",
@@ -73,12 +63,7 @@
 			"scope": "notes",
 			"f": {
 				"within": [
-					[
-						[
-							"event",
-							"click"
-						]
-					],
+					{ "event": "click" },
 					{
 						"header": null
 					}
@@ -158,24 +143,7 @@
 				"runs": 1,
 				"value": {
 					"actor": "notes",
-					"metadata": [
-						[
-							"event",
-							"click"
-						],
-						[
-							"run",
-							1
-						],
-						[
-							"mark",
-							2
-						],
-						[
-							"actor",
-							"notes"
-						]
-					],
+					"metadata": { "event": "click", "run": 1, "mark": 2, "actor": "notes" },
 					"timely": true,
 					"sites": 1
 				}

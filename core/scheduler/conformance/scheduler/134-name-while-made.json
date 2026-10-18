@@ -4,12 +4,7 @@
 		{
 			"op": "root",
 			"name": "o",
-			"info": [
-				[
-					"actor",
-					"test"
-				]
-			],
+			"info": { "actor": "test" },
 			"expect": {}
 		},
 		{
@@ -22,12 +17,7 @@
 					{
 						"scope": [
 							"e",
-							[
-								[
-									"a",
-									1
-								]
-							]
+							{ "a": 1 }
 						]
 					},
 					1
@@ -75,12 +65,7 @@
 			"op": "scope",
 			"name": "e",
 			"parent": "o",
-			"info": [
-				[
-					"a",
-					1
-				]
-			],
+			"info": { "a": 1 },
 			"expect": {
 				"error": "name taken: e"
 			}

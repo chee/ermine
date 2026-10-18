@@ -1,7 +1,7 @@
 {
 	"title": "a pending run's cause ends with its pulse: its landing in a later pulse makes no false loop, and an outside change is not lost (proof async3)",
 	"steps": [
-		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
+		{ "op": "root", "name": "o", "info": { "actor": "test" }, "expect": {} },
 		{ "op": "write", "values": { "x": 1, "flag": false }, "expect": { "tick": 1 } },
 		{
 			"op": "compute",

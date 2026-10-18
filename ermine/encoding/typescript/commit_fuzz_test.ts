@@ -87,7 +87,9 @@ export function commit(pick: Pick): Record<string, unknown> {
 	if (pick(2)) c.reader = TEXTS[pick(TEXTS.length)]
 	if (pick(2)) c.external = Array.from({ length: pick(3) }, () => site(pick))
 	if (pick(2)) {
-		c.metadata = Array.from({ length: pick(3) }, () => [TEXTS[pick(TEXTS.length)], value(pick)])
+		c.metadata = Object.fromEntries(
+			Array.from({ length: pick(3) }, () => [TEXTS[pick(TEXTS.length)], value(pick)]),
+		)
 	}
 	return c
 }
@@ -127,7 +129,7 @@ function wrong(pick: Pick, c: Record<string, unknown>): Record<string, unknown> 
 			break
 		}
 		case 4: {
-			// in a site or a metadata pair
+			// in a site, or metadata not a map (the old form, pairs, too: read, never written)
 			if (pick(2)) {
 				const s = site(pick)
 				const k = pick(4)
@@ -135,7 +137,7 @@ function wrong(pick: Pick, c: Record<string, unknown>): Record<string, unknown> 
 				else s[["file", "line", "column", "function"][pick(4)]] = junk()
 				w.external = [s]
 			} else {
-				w.metadata = [[[1, 2], ["a"], ["a", 1, 2], [junk(), 1], junk()][pick(5)]]
+				w.metadata = [[["a", 1]], [], 1, "a", null][pick(5)]
 			}
 			break
 		}

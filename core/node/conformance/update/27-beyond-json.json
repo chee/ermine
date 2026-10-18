@@ -1,5 +1,5 @@
 {
-	"title": "values beyond JSON put, replaced and taken back whole: -0, the words, 64-bit elements, a map whose one key is \"/\"",
+	"title": "values beyond JSON put, replaced and taken back whole: -0 (as 0; a float typed array keeps it), the words, 64-bit elements, a map whose one key is \"/\"",
 	"steps": [
 		{
 			"op": "start",
@@ -78,7 +78,7 @@
 			"expect": {
 				"entry": {
 					"value": {
-						"n": -0,
+						"n": 0,
 						"f": {
 							"/": {
 								"float64": [
@@ -123,7 +123,7 @@
 									"path": [
 										"n"
 									],
-									"value": -0
+									"value": 0
 								},
 								{
 									"path": [
@@ -379,7 +379,7 @@
 									"path": [
 										"n"
 									],
-									"value": -0
+									"value": 0
 								}
 							]
 						}

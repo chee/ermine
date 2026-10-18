@@ -5,12 +5,9 @@
 			"op": "entry",
 			"value": 1,
 			"header": {
-				"metadata": [
-					[
-						"k",
-						1
-					]
-				],
+				"metadata": {
+					"k": 1
+				},
 				"external": [
 					{
 						"file": "f.ts",
@@ -27,7 +24,7 @@
 				"actor": [
 					1,
 					{
-						"a": -0
+						"a": 0
 					}
 				],
 				"time": 3
@@ -40,7 +37,7 @@
 						"actor": [
 							1,
 							{
-								"a": -0
+								"a": 0
 							}
 						],
 						"reader": "",
@@ -56,12 +53,9 @@
 								"column": 0
 							}
 						],
-						"metadata": [
-							[
-								"k",
-								1
-							]
-						]
+						"metadata": {
+							"k": 1
+						}
 					}
 				}
 			}
@@ -118,7 +112,7 @@
 				"b": 2
 			},
 			"header": {
-				"metadata": [],
+				"metadata": {},
 				"actor": "me",
 				"time": 5
 			},
@@ -129,7 +123,7 @@
 						"change": {
 							"time": 5,
 							"actor": "me",
-							"metadata": []
+							"metadata": {}
 						}
 					},
 					"b": {
@@ -137,7 +131,7 @@
 						"change": {
 							"time": 5,
 							"actor": "me",
-							"metadata": []
+							"metadata": {}
 						}
 					}
 				}

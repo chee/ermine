@@ -53,8 +53,8 @@
 			"actor": "a",
 			"nonce": "0000000a00000000",
 			"expect": {
-				"name": "d1481136fe619e7cf1ee2608607edb4dd2d6e80d3e471a3a15e8b9a34eca16e7",
-				"stored": "e5c5acdd938478e645149c6b3e7e5c6883dd2f63116baf60f237cdf45d8f1e27"
+				"name": "dd0869556b34f56d0503705716b82af289b78b3afdcc0113220822c5406c93ef",
+				"stored": "46b1fa8187ef9b608e0d74dc7dd42c97a6599d10f3b2c4ab74fa129449972bdd"
 			}
 		},
 		{
@@ -71,8 +71,8 @@
 			"actor": "a",
 			"nonce": "0000000b00000000",
 			"expect": {
-				"name": "a27918a2bb7f5a280872eee693aa33add21e9ed2e6a7b35cc8ff4c9ca4e9f03b",
-				"stored": "fda6150d310d7394787ae0f04db2ab5f02357ef1829907d316e865684f13b609"
+				"name": "d87e242821ab6f67072951c3bbc2943a1623fab3fa1765b72cf97a34b3f24e64",
+				"stored": "4b9dcc4dece3f938a54f87998e105cc0cdd19b88c28b6cec727f087c161223f9"
 			}
 		},
 		{
@@ -89,8 +89,8 @@
 			"actor": "a",
 			"nonce": "0000000c00000000",
 			"expect": {
-				"name": "18ed73516976a7fa65772f7013ef0383fef66574743c7b30919df0ee4fab10df",
-				"stored": "8756e2e01bad6a7de1fce97dffa5e9acea8904f1a100096fa753c6c3cdefccbc"
+				"name": "af0c951f61982b2541c1778a734cf9c45ce7f54734e78636252dbef7dae467a6",
+				"stored": "b1d2f77f21835ee99efb6a39916aaa1ff89b116b633d613cbd8ccf1e30835e22"
 			}
 		},
 		{
@@ -127,7 +127,7 @@
 			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
 			"expect": {
 				"heads": [
-					"18ed73516976a7fa65772f7013ef0383fef66574743c7b30919df0ee4fab10df"
+					"af0c951f61982b2541c1778a734cf9c45ce7f54734e78636252dbef7dae467a6"
 				],
 				"history": {
 					"waiting": [],
@@ -145,9 +145,9 @@
 			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
 			"expect": {
 				"stored": [
-					"8756e2e01bad6a7de1fce97dffa5e9acea8904f1a100096fa753c6c3cdefccbc",
-					"e5c5acdd938478e645149c6b3e7e5c6883dd2f63116baf60f237cdf45d8f1e27",
-					"fda6150d310d7394787ae0f04db2ab5f02357ef1829907d316e865684f13b609"
+					"46b1fa8187ef9b608e0d74dc7dd42c97a6599d10f3b2c4ab74fa129449972bdd",
+					"4b9dcc4dece3f938a54f87998e105cc0cdd19b88c28b6cec727f087c161223f9",
+					"b1d2f77f21835ee99efb6a39916aaa1ff89b116b633d613cbd8ccf1e30835e22"
 				]
 			}
 		}

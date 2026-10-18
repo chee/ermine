@@ -152,8 +152,8 @@
 					"a",
 					"b",
 					"a2",
-					"m",
-					"n"
+					"n",
+					"m"
 				]
 			}
 		},
@@ -177,7 +177,15 @@
 				"q",
 				"b"
 			],
-			"expect": { "from": [], "commits": ["r", "q", "x", "b"] }
+			"expect": {
+				"from": [],
+				"commits": [
+					"q",
+					"r",
+					"x",
+					"b"
+				]
+			}
 		},
 		{
 			"op": "merge",
@@ -192,16 +200,10 @@
 						"change": {
 							"time": 0,
 							"actor": null,
-							"metadata": [
-								[
-									"signer",
-									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-								],
-								[
-									"commit",
-									"71b8e9b4067b4131e6414d51ef780a3575b39e85dc0571509481208d5c40637b"
-								]
-							]
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "2e77341161edc0e439be2c8ded55f4d952460969cbc6768b8c8c26ba77a5fd4b"
+							}
 						}
 					}
 				}

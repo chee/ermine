@@ -33,7 +33,7 @@
 					}
 				]
 			},
-			"name": "91d962384bb499ede5a6e673beca4735c0d4863da136c66e5fe5db747d1643b4",
+			"name": "2afe4fa1b8e9de5a81c8397c74783909c20ac40187a7cdba4c515d3077433384",
 			"expect": {
 				"added": "taken"
 			}
@@ -57,7 +57,7 @@
 				"parents": [
 					{
 						"/": {
-							"bytes": "kdliOEu0me3lpuZzvspHNcDUhj2hNsZuX+XbdH0WQ7Q"
+							"bytes": "Kv5Pobjp3lqByDl8dHg5CcIKxAGHp826TFFdMHdDM4Q"
 						}
 					}
 				],
@@ -71,7 +71,7 @@
 					}
 				]
 			},
-			"name": "05a1bb613ce5095003de7fca229b694dc19107a19590ba17150e472fe2ef6506",
+			"name": "4f17719463417f22091ace86fbd443a56ff08b1a1b9abc40e7ae7fb870016774",
 			"expect": {
 				"added": "taken"
 			}
@@ -95,7 +95,7 @@
 				"parents": [
 					{
 						"/": {
-							"bytes": "kdliOEu0me3lpuZzvspHNcDUhj2hNsZuX+XbdH0WQ7Q"
+							"bytes": "Kv5Pobjp3lqByDl8dHg5CcIKxAGHp826TFFdMHdDM4Q"
 						}
 					}
 				],
@@ -110,7 +110,7 @@
 					}
 				]
 			},
-			"name": "caeb2dc44102967c17a088278dc6f9af14ff9afcd3b52432b68fa142f97ebb20",
+			"name": "88901fa3602051f62d462d751dfec3d5831488cf2b8758d54ad4f0e399493641",
 			"expect": {
 				"added": {
 					"refused": "patches"
@@ -144,7 +144,7 @@
 					}
 				]
 			},
-			"name": "f284c39d55ed6a4055095e61acbb3e1915de4c7815eae31b92308320437ae654",
+			"name": "500a19adde5fbe9fef22f0f37171461573fcdfc6431cfa1223a7b4db392ac6bf",
 			"expect": {
 				"added": {
 					"refused": "patches"
@@ -170,7 +170,7 @@
 				"parents": [
 					{
 						"/": {
-							"bytes": "kdliOEu0me3lpuZzvspHNcDUhj2hNsZuX+XbdH0WQ7Q"
+							"bytes": "Kv5Pobjp3lqByDl8dHg5CcIKxAGHp826TFFdMHdDM4Q"
 						}
 					}
 				],
@@ -182,7 +182,7 @@
 					}
 				]
 			},
-			"name": "7cdfdffb65e58744a72e83cd70d839f96cf40ba932bf95e02adb0038daaa1a54",
+			"name": "a91011a9c271c03aba018d22431db2a56a6c1eb23b309e6a831f72fe425b3994",
 			"expect": {
 				"added": "taken"
 			}
@@ -206,12 +206,12 @@
 				"parents": [
 					{
 						"/": {
-							"bytes": "BaG7YTzlCVAD3n/KIptpTcGRB6GVkLoXFQ5HL+LvZQY"
+							"bytes": "TxdxlGNBfyIJGs6G+9RDpW/wixobmrxA565/uHABZ3Q"
 						}
 					},
 					{
 						"/": {
-							"bytes": "fN/f+2Xlh0SnLoPNcNg5+Wz0C6kyv5XgKtsAONqqGlQ"
+							"bytes": "qRARqcJxwDq6AY0iQx2ypWpsHrI7MJ5qgx9y/kJbOZQ"
 						}
 					}
 				],
@@ -226,11 +226,11 @@
 				],
 				"base": {
 					"/": {
-						"bytes": "BaG7YTzlCVAD3n/KIptpTcGRB6GVkLoXFQ5HL+LvZQY"
+						"bytes": "TxdxlGNBfyIJGs6G+9RDpW/wixobmrxA565/uHABZ3Q"
 					}
 				}
 			},
-			"name": "8e721b67a328aeb8c0f72e40ad1aa5b00bd5484da2b294a452f16abdebfc557e",
+			"name": "5f6fe64ad25c347d93697cdad615caf0318c84f0d2cf56c9ab21b91d47c88760",
 			"expect": {
 				"added": "taken"
 			}
@@ -254,12 +254,12 @@
 				"parents": [
 					{
 						"/": {
-							"bytes": "BaG7YTzlCVAD3n/KIptpTcGRB6GVkLoXFQ5HL+LvZQY"
+							"bytes": "TxdxlGNBfyIJGs6G+9RDpW/wixobmrxA565/uHABZ3Q"
 						}
 					},
 					{
 						"/": {
-							"bytes": "fN/f+2Xlh0SnLoPNcNg5+Wz0C6kyv5XgKtsAONqqGlQ"
+							"bytes": "qRARqcJxwDq6AY0iQx2ypWpsHrI7MJ5qgx9y/kJbOZQ"
 						}
 					}
 				],
@@ -274,11 +274,11 @@
 				],
 				"base": {
 					"/": {
-						"bytes": "fN/f+2Xlh0SnLoPNcNg5+Wz0C6kyv5XgKtsAONqqGlQ"
+						"bytes": "qRARqcJxwDq6AY0iQx2ypWpsHrI7MJ5qgx9y/kJbOZQ"
 					}
 				}
 			},
-			"name": "3d5221bb5ffcb4985b5a5e812242e7901e17a32398561863245aedace073b7bc",
+			"name": "dd5443c529a82d251c3e85d430bf8f98a69eac3da695f9b2585b7ffad5df64c1",
 			"expect": {
 				"added": {
 					"refused": "patches"
@@ -304,12 +304,12 @@
 				"parents": [
 					{
 						"/": {
-							"bytes": "BaG7YTzlCVAD3n/KIptpTcGRB6GVkLoXFQ5HL+LvZQY"
+							"bytes": "TxdxlGNBfyIJGs6G+9RDpW/wixobmrxA565/uHABZ3Q"
 						}
 					},
 					{
 						"/": {
-							"bytes": "fN/f+2Xlh0SnLoPNcNg5+Wz0C6kyv5XgKtsAONqqGlQ"
+							"bytes": "qRARqcJxwDq6AY0iQx2ypWpsHrI7MJ5qgx9y/kJbOZQ"
 						}
 					}
 				],
@@ -324,12 +324,12 @@
 				],
 				"base": {
 					"/": {
-						"bytes": "BaG7YTzlCVAD3n/KIptpTcGRB6GVkLoXFQ5HL+LvZQY"
+						"bytes": "TxdxlGNBfyIJGs6G+9RDpW/wixobmrxA565/uHABZ3Q"
 					}
 				},
 				"combine": true
 			},
-			"name": "50e9bdc3f68200cb922aac563a298385a35e466d98a48d653168d7ad5936bc7f",
+			"name": "6ed1552b0c309e9b5b644fcb52e9bcf608ec5820bd13973dba244102884dd567",
 			"expect": {
 				"added": "taken"
 			}
@@ -353,7 +353,7 @@
 				"parents": [
 					{
 						"/": {
-							"bytes": "kdliOEu0me3lpuZzvspHNcDUhj2hNsZuX+XbdH0WQ7Q"
+							"bytes": "Kv5Pobjp3lqByDl8dHg5CcIKxAGHp826TFFdMHdDM4Q"
 						}
 					}
 				],
@@ -368,7 +368,7 @@
 					}
 				]
 			},
-			"name": "fed18670d34e2418acf05b3d8ceac9e8bb3f99096817d71ada388c03c1db977c",
+			"name": "0c2a22f651d72735eacc5d88f4d1c76eb4242cefe275dcd628b6c8c1949faf63",
 			"expect": {
 				"added": {
 					"refused": "lamport"
@@ -381,51 +381,7 @@
 			"expect": {
 				"heads": [
 					{
-						"name": "8e721b67a328aeb8c0f72e40ad1aa5b00bd5484da2b294a452f16abdebfc557e",
-						"blop": {
-							"node": "n",
-							"object": "value",
-							"actor": "a",
-							"signer": {
-								"/": {
-									"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
-								}
-							},
-							"nonce": {
-								"/": {
-									"bytes": "MwAAADMAAAA"
-								}
-							},
-							"parents": [
-								{
-									"/": {
-										"bytes": "BaG7YTzlCVAD3n/KIptpTcGRB6GVkLoXFQ5HL+LvZQY"
-									}
-								},
-								{
-									"/": {
-										"bytes": "fN/f+2Xlh0SnLoPNcNg5+Wz0C6kyv5XgKtsAONqqGlQ"
-									}
-								}
-							],
-							"lamport": 3,
-							"patches": [
-								{
-									"path": [
-										"a"
-									],
-									"value": 3
-								}
-							],
-							"base": {
-								"/": {
-									"bytes": "BaG7YTzlCVAD3n/KIptpTcGRB6GVkLoXFQ5HL+LvZQY"
-								}
-							}
-						}
-					},
-					{
-						"name": "50e9bdc3f68200cb922aac563a298385a35e466d98a48d653168d7ad5936bc7f",
+						"name": "6ed1552b0c309e9b5b644fcb52e9bcf608ec5820bd13973dba244102884dd567",
 						"blop": {
 							"node": "n",
 							"object": "value",
@@ -443,12 +399,12 @@
 							"parents": [
 								{
 									"/": {
-										"bytes": "BaG7YTzlCVAD3n/KIptpTcGRB6GVkLoXFQ5HL+LvZQY"
+										"bytes": "TxdxlGNBfyIJGs6G+9RDpW/wixobmrxA565/uHABZ3Q"
 									}
 								},
 								{
 									"/": {
-										"bytes": "fN/f+2Xlh0SnLoPNcNg5+Wz0C6kyv5XgKtsAONqqGlQ"
+										"bytes": "qRARqcJxwDq6AY0iQx2ypWpsHrI7MJ5qgx9y/kJbOZQ"
 									}
 								}
 							],
@@ -463,10 +419,54 @@
 							],
 							"base": {
 								"/": {
-									"bytes": "BaG7YTzlCVAD3n/KIptpTcGRB6GVkLoXFQ5HL+LvZQY"
+									"bytes": "TxdxlGNBfyIJGs6G+9RDpW/wixobmrxA565/uHABZ3Q"
 								}
 							},
 							"combine": true
+						}
+					},
+					{
+						"name": "5f6fe64ad25c347d93697cdad615caf0318c84f0d2cf56c9ab21b91d47c88760",
+						"blop": {
+							"node": "n",
+							"object": "value",
+							"actor": "a",
+							"signer": {
+								"/": {
+									"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+								}
+							},
+							"nonce": {
+								"/": {
+									"bytes": "MwAAADMAAAA"
+								}
+							},
+							"parents": [
+								{
+									"/": {
+										"bytes": "TxdxlGNBfyIJGs6G+9RDpW/wixobmrxA565/uHABZ3Q"
+									}
+								},
+								{
+									"/": {
+										"bytes": "qRARqcJxwDq6AY0iQx2ypWpsHrI7MJ5qgx9y/kJbOZQ"
+									}
+								}
+							],
+							"lamport": 3,
+							"patches": [
+								{
+									"path": [
+										"a"
+									],
+									"value": 3
+								}
+							],
+							"base": {
+								"/": {
+									"bytes": "TxdxlGNBfyIJGs6G+9RDpW/wixobmrxA565/uHABZ3Q"
+								}
+							}
 						}
 					}
 				]
@@ -474,7 +474,7 @@
 		},
 		{
 			"op": "get",
-			"name": "3d5221bb5ffcb4985b5a5e812242e7901e17a32398561863245aedace073b7bc",
+			"name": "dd5443c529a82d251c3e85d430bf8f98a69eac3da695f9b2585b7ffad5df64c1",
 			"expect": {}
 		},
 		{
@@ -482,20 +482,20 @@
 			"expect": {
 				"refused": [
 					{
-						"name": "3d5221bb5ffcb4985b5a5e812242e7901e17a32398561863245aedace073b7bc",
-						"refused": "patches"
-					},
-					{
-						"name": "caeb2dc44102967c17a088278dc6f9af14ff9afcd3b52432b68fa142f97ebb20",
-						"refused": "patches"
-					},
-					{
-						"name": "f284c39d55ed6a4055095e61acbb3e1915de4c7815eae31b92308320437ae654",
-						"refused": "patches"
-					},
-					{
-						"name": "fed18670d34e2418acf05b3d8ceac9e8bb3f99096817d71ada388c03c1db977c",
+						"name": "0c2a22f651d72735eacc5d88f4d1c76eb4242cefe275dcd628b6c8c1949faf63",
 						"refused": "lamport"
+					},
+					{
+						"name": "500a19adde5fbe9fef22f0f37171461573fcdfc6431cfa1223a7b4db392ac6bf",
+						"refused": "patches"
+					},
+					{
+						"name": "88901fa3602051f62d462d751dfec3d5831488cf2b8758d54ad4f0e399493641",
+						"refused": "patches"
+					},
+					{
+						"name": "dd5443c529a82d251c3e85d430bf8f98a69eac3da695f9b2585b7ffad5df64c1",
+						"refused": "patches"
 					}
 				]
 			}

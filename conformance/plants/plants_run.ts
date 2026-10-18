@@ -19,7 +19,7 @@ const TIMEOUT = 180_000
 
 // the tree a catcher imports: core, filesystem, conformance, and the two ermine packages they
 // use; no node_modules, no c binaries outside core (the differ's c impl runs core's)
-const copied = ["core", "filesystem", "conformance", "ermine/encoding", "ermine/clingy"]
+const copied = ["core", "filesystem", "conformance", "ermine/encoding"]
 const only = (dir: string) => dir.startsWith("ermine/") ? ["--exclude", "c"] : []
 
 async function sh(cmd: string[], cwd?: string, timeout = TIMEOUT) {

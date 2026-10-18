@@ -6,9 +6,10 @@
 // write's change is the request's, else { time: 1760000000, actor: <host>, external: [{ file:
 // "scenario", line: 1 }] }; sync's own stamps use the request's time, default 1760000000
 //
-// { op: "host", name, seed, zeros?, tables?, merges?, merge?, ephemeral?, lazy? } → { key }
-//    zeros, tables, merge, lazy: createSync's; merges: rules known, default [merge] or none;
-//    ephemeral: tables going out ephemerally
+// { op: "host", name, seed, zeros?, tables?, merges?, merge?, ephemeral?, lazy?, roots?, commit? }
+//    → { key }  zeros, tables, merge, lazy, roots: createSync's; merges: rules known, default
+//    [merge] or none; ephemeral: tables going out ephemerally; commit: false, no commit option
+//    (what comes in reaches the host as table events only)
 // { op: "ephemeral", host, tables }     → {}
 // { op: "stop", host, id, table? }      → {}                sync.stop, default table value
 // { op: "advance", ms }                 → {}                clock (from 1760000000000) on, hosts
@@ -24,12 +25,18 @@
 //    no entry: the first patch's value is it. commits/ephemeral: counts made; name: last's label
 // { op: "type", host, table?, id, path, at, text, change?, name? } → { commits }  a write per
 //    code point, inserting from at
+// { op: "writes", host, writes: [{ table?, id, patches, change? }] } → { commits }  each entry
+//    there already, its patches applied; then all told to sync at once (one wrote). commits: made
+//    at the ids, in all
 // { op: "remove", host, table?, id, time?, name? } → { commits }
 // { op: "settle", host, id, change?, time?, name? } → { commits }
 // { op: "quiet" }                       → {}                every host idle, nothing crossing
 // { op: "read", host, table?, id }      → { value } | {}
 // { op: "change", host, table?, id }    → { change } | {}   without its op
 // { op: "conflicts", host, id }         → { conflicts }     [{ head, lamport, actor, tables }]
+// { op: "status", host, id }            → { status } | {}   the status table's (sync.ts Status)
+// { op: "events", host, id, table? }    → { events }        the table's events at (table, id)
+//                                                           since last asked, how many
 // { op: "heads", host, id, layer? }     → { heads }         agreed order; stored (default) |
 //                                                           ephemeral
 // { op: "commits", host, id, layer? }   → { commits }       count taken in
@@ -56,7 +63,7 @@ import { type Answer, type Request, serve } from "../../../conformance/typescrip
 import { hex, jsonOf, unhex } from "../../../ermine/encoding/typescript/commit_harness.ts"
 import { pipe, quiet, tablesJson } from "./harnesses.ts"
 import { createSigner } from "./seal.ts"
-import { type Conflict, createSync, type Ephemeral, type Sync } from "./sync.ts"
+import { type Conflict, createSync, type Ephemeral, type Status, type Sync } from "./sync.ts"
 import { egwalker } from "./egwalker.ts"
 import type { Merges } from "./replay.ts"
 import type { Kept } from "./history.ts"
@@ -77,6 +84,8 @@ type Options = {
 	merge?: string
 	ephemeral: string[]
 	lazy: boolean
+	roots?: string[]
+	commit: boolean
 }
 type Host = {
 	name: string
@@ -86,6 +95,8 @@ type Host = {
 	table: Table
 	places: Places
 	sync: Sync
+	// table events by "table id", since last asked
+	events: Map<string, number>
 }
 const hosts = new Map<string, Host>()
 const links = new Map<string, { cut(): void }>()
@@ -106,7 +117,10 @@ function randomOf(name: string) {
 async function make(name: string, options: Options, storage: sd.MemoryStorage): Promise<Host> {
 	const signer = await createSigner(unhex(options.seed))
 	const scheduler = createScheduler()
+	const events = new Map<string, number>()
 	const table = createTable((part, id) => {
+		const at = `${String(part)} ${String(id)}`
+		events.set(at, (events.get(at) ?? 0) + 1)
 		places.onTableChange(part, id)
 		sync.tableChanged(part, id)
 	})
@@ -128,10 +142,11 @@ async function make(name: string, options: Options, storage: sd.MemoryStorage): 
 		now: () => clock,
 		storage: storage as unknown as sd.SedimentreeStorage,
 		random: randomOf(name),
-		commit: (changed) => places.commit(changed),
+		roots: options.roots,
+		...options.commit && { commit: (changed) => places.commit(changed) },
 	})
 	await sync.device.ready()
-	return { name, options, key: signer.key, storage, table, places, sync }
+	return { name, options, key: signer.key, storage, table, places, sync, events }
 }
 
 function of(name: unknown): Host {
@@ -224,6 +239,8 @@ async function answer(r: Request): Promise<Answer> {
 				merge: r.merge,
 				ephemeral: (r.ephemeral ?? []) as string[],
 				lazy: r.lazy === true,
+				roots: r.roots,
+				commit: r.commit !== false,
 			}
 			const h = await make(r.name, options, new sd.MemoryStorage())
 			hosts.set(r.name, h)
@@ -301,6 +318,27 @@ async function answer(r: Request): Promise<Answer> {
 				}
 			})
 		}
+		case "writes": {
+			const h = of(r.host)
+			const ws = (r.writes as Request[]).map((w) => ({
+				part: (w.table ?? "value") as Key,
+				id: idOf(w.id),
+				patches: revive(w.patches) as Patch[],
+				change: headerOf(h, w),
+			}))
+			const docs = [...new Set(ws.map((w) => w.id))].filter((id) => ID.test(id))
+			const count = () => docs.reduce((n, id) => n + h.sync.device.history(id).all().length, 0)
+			const before = count()
+			const changed = ws.map((w) => {
+				const e = h.table.get(w.part, w.id)
+				if (e === undefined) throw new Error(`nothing at ${w.id}`)
+				update(e, w.patches as never, w.change)
+				return e
+			})
+			h.places.commit(changed)
+			h.sync.wrote(changed)
+			return { commits: count() - before }
+		}
 		case "remove": {
 			const h = of(r.host), id = idOf(r.id)
 			return counting(h, id, r, () => h.table.del(r.table ?? "value", id))
@@ -333,6 +371,29 @@ async function answer(r: Request): Promise<Answer> {
 					tables: toJson(c.tables),
 				})),
 			}
+		}
+		case "status": {
+			const e = of(r.host).table.get("status", idOf(r.id))
+			if (e === undefined || e.value === undefined) return {}
+			const v = e.value as Status
+			const named = <T extends object>(x: T) =>
+				"commit" in x ? { ...x, commit: label(x.commit as string) } : x
+			return {
+				status: {
+					waiting: v.waiting.map((w) =>
+						"parents" in w ? { ...named(w), parents: w.parents.map(label) } : named(w)
+					),
+					refused: v.refused.map(named),
+					unsent: v.unsent,
+					count: v.count,
+				},
+			}
+		}
+		case "events": {
+			const h = of(r.host), at = `${r.table ?? "value"} ${idOf(r.id)}`
+			const n = h.events.get(at) ?? 0
+			h.events.delete(at)
+			return { events: n }
 		}
 		case "heads":
 			return {

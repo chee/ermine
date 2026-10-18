@@ -1,7 +1,7 @@
 {
 	"title": "a computation disposed by a cleanup: a compute's cleanups wait till its next run is done, so that run goes ahead and its value lands, then the cleanup disposes it; an effect's run before its act, so it does not act (proof D2)",
 	"steps": [
-		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
+		{ "op": "root", "name": "o", "info": { "actor": "test" }, "expect": {} },
 		{
 			"op": "compute",
 			"name": "c",
@@ -12,7 +12,7 @@
 			"to": "c",
 			"expect": {}
 		},
-		{ "op": "scope", "name": "p", "parent": "o", "info": [["why", "p"]], "expect": {} },
+		{ "op": "scope", "name": "p", "parent": "o", "info": { "why": "p" }, "expect": {} },
 		{
 			"op": "compute",
 			"name": "d",

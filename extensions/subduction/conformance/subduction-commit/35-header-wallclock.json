@@ -20,12 +20,7 @@
 				"header": {
 					"time": 5,
 					"actor": "me",
-					"metadata": [
-						[
-							"wallclock",
-							1760000000
-						]
-					]
+					"metadata": { "wallclock": 1760000000 }
 				},
 				"signer": {
 					"/": {

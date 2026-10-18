@@ -56,8 +56,8 @@ const generator: Generator = {
 			const name = `o${i}`
 			scopes.push(name)
 			alive.add(name)
-			if (i === 0 || pick(2)) out.push({ op: "root", name, info: [["actor", name]] })
-			else out.push({ op: "scope", name, parent: `o${pick(i)}`, info: [["why", name]] })
+			if (i === 0 || pick(2)) out.push({ op: "root", name, info: { actor: name } })
+			else out.push({ op: "scope", name, parent: `o${pick(i)}`, info: { why: name } })
 		}
 		const values: Record<string, number | string> = {}
 		for (const h of HOST) values[h] = pick(6)
@@ -410,15 +410,15 @@ function attempt(f: () => unknown): Result {
 }
 
 // a request as the generator makes them, its fields there and of their kinds
-const pair = (p: unknown) => Array.isArray(p) && p.length === 2 && typeof p[0] === "string"
+const info = (x: unknown) =>
+	typeof x === "object" && x !== null && !Array.isArray(x) && Object.keys(x).length > 0
 const text = (x: unknown) => typeof x === "string"
 function shaped(r: Request): boolean {
 	switch (r.op) {
 		case "root":
-			return text(r.name) && Array.isArray(r.info) && r.info.length > 0 && r.info.every(pair)
+			return text(r.name) && info(r.info)
 		case "scope":
-			return text(r.name) && text(r.parent) && Array.isArray(r.info) && r.info.length > 0 &&
-				r.info.every(pair)
+			return text(r.name) && text(r.parent) && info(r.info)
 		case "compute":
 			return text(r.name) && text(r.scope) && "f" in r && (r.to === undefined || text(r.to))
 		case "effect":
@@ -615,7 +615,7 @@ function invariant(
 			case "root":
 			case "scope": {
 				const up = r.op === "scope" ? things.get(r.parent) : undefined
-				if (!Array.isArray(r.info) || r.info.length === 0 || (r.op === "scope" && !up)) {
+				if (!info(r.info) || (r.op === "scope" && !up)) {
 					lost = true
 					break
 				}

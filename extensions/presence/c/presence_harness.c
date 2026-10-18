@@ -191,7 +191,7 @@ static bool watch_equal(const void *a, const void *b, void *data) {
 static void make_watch(void *data) {
 	watch *w = data;
 	sc_def def = {.f = watch_f, .set = watch_set, .equal = watch_equal, .data = w};
-	sc_create_computer(w->d->scheduler, def);
+	sc_create_computer(w->d->scheduler, def, NULL, 0);
 }
 
 // a path watch: the patches it was told, counted

@@ -40,7 +40,7 @@ Deno.test(`update fuzz: ${SEEDS} seeds × ${STEPS} updates, every change kept wa
 			const header: ChangeHeader = {
 				time: step + 1,
 				actor: pick(2) ? "me" : { person: "p", step },
-				metadata: [["step", step]],
+				metadata: { step },
 			}
 			const headerWas = snap(header)
 			const before = n.value, beforeWas = snap(before), had = "value" in n

@@ -23,7 +23,7 @@
 		{
 			"op": "make",
 			"name": "c2",
-			"nonce": 1528,
+			"nonce": 137,
 			"parents": [
 				"c1"
 			],

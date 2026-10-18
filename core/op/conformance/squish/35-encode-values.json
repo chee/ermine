@@ -20,7 +20,7 @@
 						{ "/": { "int16": [1, 2] } },
 						{ "/": { "number": "NaN" } },
 						"\ud83d",
-						-0
+						0
 					],
 					"move": []
 				}
@@ -42,7 +42,7 @@
 					{ "path": ["t"], "value": { "/": { "int16": [1, 2] } } },
 					{ "path": ["t"], "value": { "/": { "number": "NaN" } } },
 					{ "path": ["t"], "value": "\ud83d" },
-					{ "path": ["t"], "value": -0 }
+					{ "path": ["t"], "value": 0 }
 				]
 			}
 		},

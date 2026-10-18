@@ -1,38 +1,23 @@
 {
-	"title": "a handler's call as a scope: under the definer's, the caller and trusted as its info, written by the caller's run; it goes with the definer, not the caller",
+	"title": "a handler's call as a scope: under the definer's, the caller and trusted-event as its info, written by the caller's run; it goes with the definer, not the caller",
 	"steps": [
 		{
 			"op": "root",
 			"name": "notes",
-			"info": [
-				[
-					"actor",
-					"notes"
-				]
-			],
+			"info": { "actor": "notes" },
 			"expect": {}
 		},
 		{
 			"op": "scope",
 			"name": "handler",
 			"parent": "notes",
-			"info": [
-				[
-					"handler",
-					"click"
-				]
-			],
+			"info": { "handler": "click" },
 			"expect": {}
 		},
 		{
 			"op": "root",
 			"name": "games",
-			"info": [
-				[
-					"actor",
-					"games"
-				]
-			],
+			"info": { "actor": "games" },
 			"expect": {}
 		},
 		{
@@ -47,16 +32,7 @@
 					{
 						"scope": [
 							"call",
-							[
-								[
-									"caller",
-									"games"
-								],
-								[
-									"trusted",
-									false
-								]
-							],
+							{ "caller": "games", "trusted-event": false },
 							"handler"
 						]
 					},
@@ -83,16 +59,7 @@
 			"expect": {
 				"value": {
 					"scope": "call",
-					"pairs": [
-						[
-							"caller",
-							"games"
-						],
-						[
-							"trusted",
-							false
-						]
-					],
+					"info": { "caller": "games", "trusted-event": false },
 					"writer": "g"
 				}
 			}
@@ -111,16 +78,7 @@
 			"expect": {
 				"value": {
 					"scope": "call",
-					"pairs": [
-						[
-							"caller",
-							"games"
-						],
-						[
-							"trusted",
-							false
-						]
-					]
+					"info": { "caller": "games", "trusted-event": false }
 				}
 			}
 		},

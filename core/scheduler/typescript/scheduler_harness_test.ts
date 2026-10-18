@@ -88,7 +88,7 @@ function generate(seed: number) {
 		scopes.set(os[i], { parent, alive: true })
 		send(
 			parent === undefined
-				? { op: "root", name: os[i], info: [["actor", os[i]]] }
+				? { op: "root", name: os[i], info: { actor: os[i] } }
 				: { op: "scope", name: os[i], parent, info: [[text(), os[i]]] },
 		)
 	}

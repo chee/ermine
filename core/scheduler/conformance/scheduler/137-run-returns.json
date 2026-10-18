@@ -1,7 +1,7 @@
 {
 	"title": "a run's return (onRunReturn): told once per run, after its body, before anything is done with the value: before its set's mark (d due, writer c) and its end, an equal result too; an effect's too; none for a run that throws or is pending; an awaited one when it lands, before that end. moments shows them only when asked",
 	"steps": [
-		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
+		{ "op": "root", "name": "o", "info": { "actor": "test" }, "expect": {} },
 		{ "op": "write", "values": { "x": 1 }, "expect": { "tick": 1 } },
 		{
 			"op": "compute",

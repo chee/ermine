@@ -50,7 +50,7 @@ import { openwith, type Refusal, satisfy, type Way, type Why } from "./programs.
 import { installTypes, typeOf } from "@ermine/types"
 import { level } from "@ermine/places"
 import { members } from "@ermine/places/lib"
-import { keyOrder } from "@ermine/encoding/cbor"
+import { keyorder } from "@ermine/util/keyorder"
 
 type Json = unknown
 
@@ -59,7 +59,7 @@ const table = createTable((part, id) => places.onTableChange(part as Key, id))
 const paths = createPaths<unknown>()
 const places = createPlaces({ root: "R", table, paths, scheduler: s })
 s.onTrackingEnd((key) => places.release(key))
-const host = s.createRootScope([["actor", "test"]])
+const host = s.createRootScope({ actor: "test" })
 const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 const header = () => createChangeHeader(s)
 const commit = (changed: Entry<unknown>[]) => places.commit(changed)
@@ -97,7 +97,7 @@ function look(r: Request): Json {
 	if (r.node !== undefined) return { type: typeOf(p, r.node) ?? null }
 	if (r.folder !== undefined) {
 		const here = members(p, r.folder).filter((m) => m.id !== level)
-		here.sort((a, b) => keyOrder(a.name, b.name))
+		here.sort((a, b) => keyorder(a.name, b.name))
 		return {
 			types: Object.fromEntries(
 				here.map((m) => [m.name, typeOf(p, { id: m.id, at: [...r.folder, m.name] }) ?? null]),

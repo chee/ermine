@@ -104,14 +104,7 @@
 									"function": "f"
 								}
 							],
-							"metadata": [
-								[
-									"cause",
-									{
-										"why": "because"
-									}
-								]
-							],
+							"metadata": { "cause": { "why": "because" } },
 							"time": 1057
 						},
 						"because": {

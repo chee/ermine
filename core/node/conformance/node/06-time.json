@@ -4,23 +4,52 @@
 		{
 			"op": "entry",
 			"value": 1,
-			"header": { "actor": "me", "metadata": [["why", "a test"]] },
+			"header": {
+				"actor": "me",
+				"metadata": {
+					"why": "a test"
+				}
+			},
 			"expect": {
 				"entry": {
 					"value": 1,
-					"change": { "time": "now", "actor": "me", "metadata": [["why", "a test"]] }
+					"change": {
+						"time": "now",
+						"actor": "me",
+						"metadata": {
+							"why": "a test"
+						}
+					}
 				}
 			}
 		},
 		{
 			"op": "entry",
-			"header": { "time": 0, "actor": "me" },
-			"expect": { "entry": { "change": { "time": 0, "actor": "me" } } }
+			"header": {
+				"time": 0,
+				"actor": "me"
+			},
+			"expect": {
+				"entry": {
+					"change": {
+						"time": 0,
+						"actor": "me"
+					}
+				}
+			}
 		},
 		{
 			"op": "entry",
-			"header": { "time": -5 },
-			"expect": { "entry": { "change": { "time": -5 } } }
+			"header": {
+				"time": -5
+			},
+			"expect": {
+				"entry": {
+					"change": {
+						"time": -5
+					}
+				}
+			}
 		}
 	]
 }

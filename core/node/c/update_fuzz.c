@@ -22,7 +22,7 @@ static void die(const char *why, int round) {
 }
 
 static const ch_site sites[] = {{"a.c", 1, 2, "f", 1}, {"b.c", 3, 0, NULL, 0}};
-static const ch_entry entries[] = {{"k", "v"}, {"k", "w"}};
+static const ch_entry entries[] = {{"k", "v"}, {"j", "w"}};
 
 static int same(const op_value *a, const op_value *b) { return fz_equal(a, b); }
 

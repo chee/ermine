@@ -19,16 +19,10 @@
 						"change": {
 							"time": 5,
 							"actor": "chee",
-							"metadata": [
-								[
-									"signer",
-									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-								],
-								[
-									"commit",
-									"66e5a03a51facd311f6e68262626c28b68cd7ebb4d2dd7359d2dac11277c2772"
-								]
-							]
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "603644db0f9969b0cd3b08816afe8753b64507f5ad4e1f69d285263ff0504220"
+							}
 						}
 					}
 				}

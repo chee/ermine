@@ -162,9 +162,8 @@ function table(seed: number): Table {
 			})
 		}
 		if (pick(3) === 0) {
-			change.metadata = Array.from(
-				{ length: pick(4) },
-				() => [["sync", "why"][pick(2)], toJson(value(1))],
+			change.metadata = Object.fromEntries(
+				Array.from({ length: pick(4) }, () => [["sync", "why"][pick(2)], toJson(value(1))]),
 			)
 		}
 		if (pick(3) === 0) {

@@ -47,8 +47,8 @@
 			"actor": "a",
 			"nonce": "0000000500000000",
 			"expect": {
-				"name": "e69c1722e0ce970084667c97aedc8829ddebfbee571709d206e81122156a426e",
-				"stored": "14777b641b7cf94c13f432cb08a77e06696be320acd651cb738d55379c079b42"
+				"name": "672b3e37b1c6b1cbe85ed146bd6008ebddc2d1afb66172c5e35ab012195b4cec",
+				"stored": "73fa5e1eb5b15ee7eac5e456543a92931e914992039a8f73af6c65e02ca7245e"
 			}
 		},
 		{
@@ -65,8 +65,8 @@
 			"actor": "b",
 			"nonce": "0000000600000000",
 			"expect": {
-				"name": "b7213c27bd4cd854e96b858979f5b9affc61c4de81325c7dca8938784780b337",
-				"stored": "b7ca5f358bd32a8be96c33922c51fbd852204e7cf36a067be790c5b267ff1456"
+				"name": "672c3fe0c1568cb02b53bc4f4370bb3348af285115e96e8439717cd1be97aeea",
+				"stored": "ec08bc287dd0986610f541e7d27c56da06d634efc7c7b1e5b0bf8b7b108f5e7a"
 			}
 		},
 		{
@@ -85,8 +85,8 @@
 			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
 			"expect": {
 				"heads": [
-					"e69c1722e0ce970084667c97aedc8829ddebfbee571709d206e81122156a426e",
-					"b7213c27bd4cd854e96b858979f5b9affc61c4de81325c7dca8938784780b337"
+					"672c3fe0c1568cb02b53bc4f4370bb3348af285115e96e8439717cd1be97aeea",
+					"672b3e37b1c6b1cbe85ed146bd6008ebddc2d1afb66172c5e35ab012195b4cec"
 				],
 				"history": {
 					"waiting": [],
@@ -104,8 +104,8 @@
 			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
 			"expect": {
 				"heads": [
-					"e69c1722e0ce970084667c97aedc8829ddebfbee571709d206e81122156a426e",
-					"b7213c27bd4cd854e96b858979f5b9affc61c4de81325c7dca8938784780b337"
+					"672c3fe0c1568cb02b53bc4f4370bb3348af285115e96e8439717cd1be97aeea",
+					"672b3e37b1c6b1cbe85ed146bd6008ebddc2d1afb66172c5e35ab012195b4cec"
 				],
 				"history": {
 					"waiting": [],

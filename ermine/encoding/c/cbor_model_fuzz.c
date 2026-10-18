@@ -5,7 +5,9 @@
 //   holding a key twice, more than CBOR_DEPTH containers one in the next;
 // - taken: decoding gives an equal value, encoding that again the same bytes; the same value with
 //   every map's keys in reverse the same bytes; hashValue BLAKE3 of them;
-// - a number alone: the shortest float that holds it (_Float16, float, double), the one NaN f97e00;
+// - a number alone: a whole one the integer (major type 0 or 1, a bignum past 64 bits, -0 as 00),
+//   modelled from long double and its bits; the rest the shortest float that holds it (_Float16,
+//   float, double), the one NaN f97e00; whole numbers made from bytes (jsonWhole) round trip too;
 // - nothing leaks, ASan and UBSan quiet.
 #include "blake3/blake3.h"
 #include "cbor.h"
@@ -116,7 +118,7 @@ static double number(Bytes *b) {
 		}
 		case 3: {
 			static const double edges[] = { 0, -0.0, 1, -1, 65504, 65505, 65520, 0x1p-24, 0x1p-25, 0x1p-14,
-				0x1p-149, 0x1p-150, 0x1p-1074, 0x1p53, 0x1p53 + 2, 0x1p64, 1e300, FLT_MAX, DBL_MAX, 0.1,
+				0x1p-149, 0x1p-150, 0x1p-1074, 0x1p53, 0x1p53 + 2, 0x1p64, -0x1p64, 0x1p63, -0x1p63, 1e300, FLT_MAX, DBL_MAX, 0.1,
 				INFINITY, -INFINITY, NAN };
 			return edges[byte(b) % (sizeof edges / sizeof *edges)];
 		}
@@ -135,8 +137,15 @@ static Json *make(Bytes *b, int depth, Model *m) {
 	unsigned k = byte(b) % (depth > 6 ? 7 : 10);
 	switch (k) {
 		case 0: return byte(b) % 3 ? jsonBoolean(byte(b) & 1) : jsonNull();
-		case 1:
-		case 2: return jsonNumber(number(b));
+		case 1: return jsonNumber(number(b));
+		case 2: {
+			// a whole number of up to 20 bytes, either sign
+			bool negative = byte(b) & 1;
+			unsigned char d[20];
+			size_t n = byte(b) % sizeof d;
+			for (size_t i = 0; i < n; i++) d[i] = (unsigned char)byte(b);
+			return jsonWhole(negative, d, n);
+		}
 		case 3: {
 			size_t n;
 			bool good;
@@ -238,8 +247,56 @@ static unsigned char *encoded(const Json *v, size_t *length, bool *ok) {
 	return out;
 }
 
-// the shortest float that holds x
+// a whole number's bytes: n = (negative ? -1 - a : a), a the argument, big-endian bytes m (no
+// leading zero) of a; a head when they fit 64 bits, else tag 2 or 3 over them
+static void modelWhole(bool negative, const unsigned char *a, size_t n, unsigned char *out, size_t *length) {
+	unsigned major = negative ? 0x20 : 0;
+	if (n <= 8) {
+		uint64_t u = 0;
+		for (size_t i = 0; i < n; i++) u = u << 8 | a[i];
+		int w = u < 24 ? 0 : u <= 0xff ? 1 : u <= 0xffff ? 2 : u <= 0xffffffffu ? 4 : 8;
+		out[0] = (unsigned char)(major | (w == 0 ? (unsigned)u : w == 1 ? 24u : w == 2 ? 25u : w == 4 ? 26u : 27u));
+		for (int i = 0; i < w; i++) out[1 + i] = (unsigned char)(u >> (8 * (w - 1 - i)));
+		*length = 1 + (size_t)w;
+		return;
+	}
+	out[0] = negative ? 0xc3 : 0xc2;
+	size_t h;
+	if (n < 24) out[1] = (unsigned char)(0x40 | n), h = 2;
+	else out[1] = 0x58, out[2] = (unsigned char)n, h = 3;
+	memcpy(out + h, a, n);
+	*length = h + n;
+}
+
+// a whole double's argument bytes: |x| (or |x| - 1 for a negative), by long double halving
+static size_t argument(double x, unsigned char *a) {
+	unsigned char rev[160];
+	size_t n = 0;
+	// |x| - 1 for a negative is exact in its bytes: take the bytes of |x|, then subtract one
+	long double m = fabsl((long double)x);
+	while (m >= 1) {
+		long double q = floorl(m / 256);
+		rev[n++] = (unsigned char)(m - q * 256);
+		m = q;
+	}
+	if (x < 0) {
+		for (size_t i = 0; i < n; i++) {
+			if (rev[i]--) break;
+		}
+	}
+	while (n && !rev[n - 1]) n--;
+	for (size_t i = 0; i < n; i++) a[i] = rev[n - 1 - i];
+	return n;
+}
+
+// whole: the integer; else the shortest float that holds x
 static void model(double x, unsigned char *out, size_t *length) {
+	if (isfinite(x) && floor(x) == x) {
+		unsigned char a[160];
+		size_t n = argument(x, a);
+		modelWhole(x < 0, a, n, out, length);
+		return;
+	}
 	if (isnan(x)) {
 		out[0] = 0xf9, out[1] = 0x7e, out[2] = 0, *length = 3;
 		return;
@@ -279,9 +336,41 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 		Json *n = jsonNumber(x);
 		size_t length, want;
 		bool ok;
-		unsigned char *out = encoded(n, &length, &ok), shortest[9];
+		unsigned char *out = encoded(n, &length, &ok), shortest[200];
 		model(x, shortest, &want);
-		if (!ok || length != want || memcmp(out, shortest, want) != 0) die("a number not in its shortest float");
+		if (!ok || length != want || memcmp(out, shortest, want) != 0) die("a number not the integer or its shortest float");
+		free(out);
+		jsonFree(n);
+	}
+	// a whole number from bytes: its encoding as modelled, read back the same, as int64 when it fits
+	{
+		bool negative = byte(&b) & 1;
+		unsigned char m[24];
+		size_t k = byte(&b) % sizeof m;
+		for (size_t i = 0; i < k; i++) m[i] = (unsigned char)byte(&b);
+		Json *n = jsonWhole(negative, m, k);
+		// the argument: the magnitude, less one for a negative; -0 is 0
+		unsigned char a[25];
+		size_t i = 0, an;
+		while (i < k && !m[i]) i++;
+		an = k - i;
+		memcpy(a, m + i, an);
+		if (negative && an) {
+			for (size_t j = an; j-- > 0;) {
+				if (a[j]--) break;
+			}
+			size_t z = 0;
+			while (z < an && !a[z]) z++;
+			memmove(a, a + z, an - z), an -= z;
+		}
+		size_t length, want;
+		bool ok;
+		unsigned char *out = encoded(n, &length, &ok), model2[40];
+		modelWhole(negative && k > i, a, an, model2, &want);
+		if (!ok || length != want || memcmp(out, model2, want) != 0) die("a whole number not as modelled");
+		Json *back = cborDecode(out, length, NULL, NULL);
+		if (!back || !jsonEqual(back, n)) die("a whole number read back another");
+		jsonFree(back);
 		free(out);
 		jsonFree(n);
 	}

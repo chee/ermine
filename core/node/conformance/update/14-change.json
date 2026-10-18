@@ -14,12 +14,9 @@
 			"header": {
 				"time": 0,
 				"actor": "host",
-				"metadata": [
-					[
-						"note",
-						"first"
-					]
-				]
+				"metadata": {
+					"note": "first"
+				}
 			},
 			"expect": {}
 		},
@@ -38,12 +35,9 @@
 					"change": {
 						"time": 0,
 						"actor": "host",
-						"metadata": [
-							[
-								"note",
-								"first"
-							]
-						]
+						"metadata": {
+							"note": "first"
+						}
 					}
 				}
 			}
@@ -82,25 +76,15 @@
 						"line": 4
 					}
 				],
-				"metadata": [
-					[
-						"note",
-						"edit"
-					],
-					[
-						"tag",
-						{
-							"n": [
-								1,
-								2
-							]
-						}
-					],
-					[
-						"note",
-						"again"
-					]
-				]
+				"metadata": {
+					"note": "edit",
+					"tag": {
+						"n": [
+							1,
+							2
+						]
+					}
+				}
 			},
 			"expect": {}
 		},
@@ -130,25 +114,15 @@
 								"line": 4
 							}
 						],
-						"metadata": [
-							[
-								"note",
-								"edit"
-							],
-							[
-								"tag",
-								{
-									"n": [
-										1,
-										2
-									]
-								}
-							],
-							[
-								"note",
-								"again"
-							]
-						],
+						"metadata": {
+							"note": "edit",
+							"tag": {
+								"n": [
+									1,
+									2
+								]
+							}
+						},
 						"op": {
 							"patches": [
 								{

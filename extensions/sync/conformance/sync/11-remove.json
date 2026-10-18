@@ -82,16 +82,10 @@
 							"time": 1760000000,
 							"actor": "a",
 							"external": [{ "file": "scenario", "line": 1 }],
-							"metadata": [
-								[
-									"signer",
-									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-								],
-								[
-									"commit",
-									"4ec66c3cff79d827ada9f62787db31074461b817105b4a85d76b1690818eb08f"
-								]
-							]
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "9a699c0340ba53b0cf22ae66ffd0391e2f68e3b31d26d296aa4d5933e890e5db"
+							}
 						}
 					}
 				}

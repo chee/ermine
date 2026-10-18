@@ -3,14 +3,14 @@
 	"steps": [
 		{ "op": "scope", "name": "x", "expect": { "error": "unscoped" } },
 		{ "op": "current", "expect": { "value": null } },
-		{ "op": "root", "name": "z", "info": [], "expect": { "error": "empty" } },
-		{ "op": "root", "name": "a", "info": [["actor", "chee"]], "expect": {} },
-		{ "op": "scope", "name": "y", "parent": "a", "info": [], "expect": { "error": "empty" } },
+		{ "op": "root", "name": "z", "info": {}, "expect": { "error": "empty" } },
+		{ "op": "root", "name": "a", "info": { "actor": "chee" }, "expect": {} },
+		{ "op": "scope", "name": "y", "parent": "a", "info": {}, "expect": { "error": "empty" } },
 		{
 			"op": "scope",
 			"name": "b",
 			"parent": "a",
-			"info": [["app", "notes"], ["actor", "notes"]],
+			"info": { "app": "notes", "actor": "notes" },
 			"expect": {}
 		},
 		{
@@ -20,7 +20,7 @@
 			"expect": {
 				"value": {
 					"scope": "b",
-					"pairs": [["app", "notes"], ["actor", "notes"]]
+					"info": { "app": "notes", "actor": "notes" }
 				}
 			}
 		},
@@ -28,12 +28,12 @@
 			"op": "run",
 			"scope": "b",
 			"do": {
-				"do": [{ "scope": ["k", [["why", "save"]]] }, { "in": ["k", { "current": null }] }]
+				"do": [{ "scope": ["k", { "why": "save" }] }, { "in": ["k", { "current": null }] }]
 			},
 			"expect": {
 				"value": {
 					"scope": "k",
-					"pairs": [["why", "save"]]
+					"info": { "why": "save" }
 				}
 			}
 		},
@@ -44,7 +44,7 @@
 			"op": "scope",
 			"name": "k2",
 			"parent": "b",
-			"info": [["why", "late"]],
+			"info": { "why": "late" },
 			"expect": { "error": "disposed" }
 		}
 	]

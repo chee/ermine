@@ -20,16 +20,7 @@
 				"header": {
 					"time": 5,
 					"actor": "me",
-					"metadata": [
-						[
-							"wallclock",
-							1760000000
-						],
-						[
-							"message",
-							"tidy up"
-						]
-					]
+					"metadata": { "wallclock": 1760000000, "message": "tidy up" }
 				},
 				"signer": {
 					"/": {
@@ -114,16 +105,7 @@
 						"content": 1,
 						"change": {
 							"actor": "me",
-							"metadata": [
-								[
-									"wallclock",
-									1760000000
-								],
-								[
-									"message",
-									"tidy up"
-								]
-							],
+							"metadata": { "wallclock": 1760000000, "message": "tidy up" },
 							"time": 1106
 						},
 						"because": {

@@ -1,7 +1,7 @@
 {
 	"title": "ranks rise as edges change, and are made whole again when a mend runs too long: low, raised to 2 by reading b0, keeps 2 after it reads only x; then a rises under 20 b's, each under 20 c's, the mend gives up, everything is ranked again from the edges then, and low is 0",
 	"steps": [
-		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
+		{ "op": "root", "name": "o", "info": { "actor": "test" }, "expect": {} },
 		{
 			"op": "write",
 			"values": { "u": 0, "x": 0, "flag": false, "lflag": false },

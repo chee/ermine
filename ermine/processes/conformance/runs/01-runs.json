@@ -1,5 +1,5 @@
 {
-	"title": "a computer's latest run is on its own node: its number, how it ended (an error with its message), and its reads in the order first read, each once, as places names them, each with the change it saw (whose: the actor), a key places can't name as null; its writes, each with its change. a rerun reading the same writes nothing to its reads, so a reader of them does not rerun; a rerun reading differently replaces them; a pending run keeps what it read; a computer given no node writes none",
+	"title": "a computer's latest run is in the runs' own table, by its node id (not in the graph's table): its number, how it ended (an error with its message), and its reads in the order first read, each once, as places names them, each with the change it saw (whose: the actor), a key places can't name as null; its writes, each with its change. a rerun reading the same writes nothing to its reads, so a reader of them does not rerun; a rerun reading differently replaces them; a pending run keeps what it read; a computer given no node has none",
 	"steps": [
 		{
 			"op": "runs",
@@ -34,12 +34,7 @@
 		{
 			"op": "root",
 			"name": "o",
-			"info": [
-				[
-					"actor",
-					"o"
-				]
-			],
+			"info": { "actor": "o" },
 			"expect": {}
 		},
 		{
@@ -423,7 +418,7 @@
 		{
 			"op": "node",
 			"part": "attributes",
-			"id": "alone",
+			"id": "S",
 			"expect": {}
 		},
 		{
@@ -433,24 +428,16 @@
 			"f": {
 				"if": [
 					{
-						"read": [
-							"attributes",
+						"run": [
 							"S",
-							[
-								"ermine.computer.run",
-								"reads"
-							]
+							"reads"
 						]
 					},
 					{
 						"count": {
-							"read": [
-								"attributes",
+							"run": [
 								"S",
-								[
-									"ermine.computer.run",
-									"reads"
-								]
+								"reads"
 							]
 						}
 					},

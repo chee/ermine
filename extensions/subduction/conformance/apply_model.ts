@@ -108,13 +108,13 @@ export function heads(all: B[], object: Which): B[] {
 // ---- versions, in JSON form
 export function version(b: B, content: Side): unknown {
 	// a change header as history makes one: the reader; the site as external; the cause, wallclock
-	// and message as metadata pairs, in that order
+	// and message as metadata keys
 	const header: Record<string, unknown> = { actor: b.blop.actor }
 	if ("reader" in b.blop) header.reader = b.blop.reader
 	if ("site" in b.blop) header.external = [b.blop.site]
 	const metadata = ["cause", "wallclock", "message"].filter((k) => k in b.blop)
 		.map((k) => [k, b.blop[k]])
-	if (metadata.length) header.metadata = metadata
+	if (metadata.length) header.metadata = Object.fromEntries(metadata)
 	header.time = b.time
 	return toJson({
 		...(content === NONE ? {} : { content }),

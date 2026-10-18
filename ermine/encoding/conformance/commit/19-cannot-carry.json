@@ -26,7 +26,7 @@
 				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
 				"lamport": 2,
 				"patches": [{ "path": ["title"], "value": "hi" }],
-				"metadata": [["who", { "/": { "symbol": "me" } }]]
+				"metadata": { "who": { "/": { "symbol": "me" } } }
 			},
 			"expect": { "error": "cannot-carry", "field": "metadata" }
 		},

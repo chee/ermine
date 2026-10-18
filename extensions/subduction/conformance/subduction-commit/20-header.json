@@ -32,14 +32,7 @@
 							"function": "go"
 						}
 					],
-					"metadata": [
-						[
-							"cause",
-							{
-								"why": "save"
-							}
-						]
-					]
+					"metadata": { "cause": { "why": "save" } }
 				},
 				"signer": {
 					"/": {
@@ -158,14 +151,7 @@
 									"function": "go"
 								}
 							],
-							"metadata": [
-								[
-									"cause",
-									{
-										"why": "save"
-									}
-								]
-							],
+							"metadata": { "cause": { "why": "save" } },
 							"time": 555
 						},
 						"because": {

@@ -155,8 +155,8 @@ static op_value *with_value(const op_value *v) {
 	return o;
 }
 
-// the header of a write made now, with the scope open (the request's metadata after the scope's
-// pairs), its time the request's if it gives one. 0, or -1 with *why
+// the header of a write made now, with the scope open (the request's metadata over the scope's
+// info), its time the request's if it gives one. 0, or -1 with *why
 static int header_now(const op_value *r, ch_header *h, pl_made **made, const char **why) {
 	size_t n;
 	const sc_pair *extra = world_info(op_get(r, "metadata"), &n);
@@ -310,17 +310,12 @@ static op_value *answer(const op_value *r) {
 	if (op == NULL) return world_error("no op");
 	if (!connected) start();
 	if (strcmp(op, "root") == 0 || strcmp(op, "scope") == 0) {
-		// a scope needs an info pair: a step that gives none is the test's
+		// a scope needs an info key: a step that gives none is the test's
 		op_value *info = op_get(r, "info");
-		if (info == NULL || (info->type == OP_LIST && info->count == 0)) {
-			op_value *pair = op_list();
-			op_push(pair, op_str("test"));
-			op_push(pair, op_ref(op_get(r, "name")));
-			if (info == NULL) {
-				info = op_list();
-				op_set((op_value *)r, "info", info);
-			}
-			op_push(info, pair);
+		if (info == NULL || info->type != OP_MAP || info->count == 0) {
+			info = op_map();
+			op_set(info, "test", op_ref(op_get(r, "name")));
+			op_set((op_value *)r, "info", info);
 		}
 	}
 	const char *hosted[] = {"kids", "value", "patch", "edit", "del", "land"};
@@ -360,14 +355,10 @@ static op_value *answer(const op_value *r) {
 		op_set(o, "time", op_num((double)h->time));
 		if (h->actor != NULL) op_set(o, "actor", world_snap(h->actor));
 		if (h->metadata_length > 0) {
-			op_value *list = op_list();
-			for (size_t i = 0; i < h->metadata_length; i++) {
-				op_value *pair = op_list();
-				op_push(pair, op_str(h->metadata[i].key));
-				op_push(pair, world_snap(h->metadata[i].value));
-				op_push(list, pair);
-			}
-			op_set(o, "metadata", list);
+			op_value *map = op_map();
+			for (size_t i = 0; i < h->metadata_length; i++)
+				op_set(map, h->metadata[i].key, world_snap(h->metadata[i].value));
+			op_set(o, "metadata", map);
 		}
 		op_set(o, "hasOp", op_bool(h->has_op));
 		return o;

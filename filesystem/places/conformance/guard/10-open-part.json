@@ -4,12 +4,7 @@
 		{
 			"op": "root",
 			"name": "notes",
-			"info": [
-				[
-					"actor",
-					"notes"
-				]
-			],
+			"info": { "actor": "notes" },
 			"expect": {}
 		},
 		{
@@ -71,12 +66,7 @@
 						},
 						"who": {
 							"actor": "notes",
-							"metadata": [
-								[
-									"actor",
-									"notes"
-								]
-							]
+							"metadata": { "actor": "notes" }
 						}
 					}
 				]
@@ -135,12 +125,7 @@
 			"expect": {
 				"value": {
 					"actor": "notes",
-					"metadata": [
-						[
-							"actor",
-							"notes"
-						]
-					],
+					"metadata": { "actor": "notes" },
 					"timely": true,
 					"sites": 1
 				}
@@ -161,12 +146,7 @@
 						},
 						"who": {
 							"actor": "notes",
-							"metadata": [
-								[
-									"actor",
-									"notes"
-								]
-							]
+							"metadata": { "actor": "notes" }
 						}
 					}
 				]

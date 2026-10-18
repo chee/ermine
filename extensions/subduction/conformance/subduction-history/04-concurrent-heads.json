@@ -26,7 +26,7 @@
 				"lamport": 1,
 				"patches": []
 			},
-			"name": "5051cd482bd7eb66794dfcff3d3f4ab80b298244a2c52bdac6a76faf60e78ee4",
+			"name": "60f5361ecce34ed2ad597991048f06554117727116f1fa57fc5039d1a7a42b41",
 			"expect": {
 				"added": "taken"
 			}
@@ -50,14 +50,14 @@
 				"parents": [
 					{
 						"/": {
-							"bytes": "UFHNSCvX62Z5Tfz/PT9KuAspgkSixSvaxqdvr2DnjuQ"
+							"bytes": "YPU2HszjTtKtWXmRBI8GVUEXcnEW8fpX/FA50aekK0E"
 						}
 					}
 				],
 				"lamport": 2,
 				"patches": []
 			},
-			"name": "bfcd87809e882bf3591d15b8ade9fe7aa9fc4dc5188bb24036ba4a5a6c706804",
+			"name": "a93be5d97e3f3731dd08190c65a71b70315ea6869d80198d2ab115925f8adbb1",
 			"expect": {
 				"added": "taken"
 			}
@@ -81,14 +81,14 @@
 				"parents": [
 					{
 						"/": {
-							"bytes": "UFHNSCvX62Z5Tfz/PT9KuAspgkSixSvaxqdvr2DnjuQ"
+							"bytes": "YPU2HszjTtKtWXmRBI8GVUEXcnEW8fpX/FA50aekK0E"
 						}
 					}
 				],
 				"lamport": 2,
 				"patches": []
 			},
-			"name": "15ba532363f5c155972f71b6e6cc0b7e6fb506eb50c41e07492284a97b6bbd16",
+			"name": "b0f93721af57e5463fa6544f5d56cf45cecb2d74edce3a97489c1b5f364fdfe8",
 			"expect": {
 				"added": "taken"
 			}
@@ -99,34 +99,7 @@
 			"expect": {
 				"heads": [
 					{
-						"name": "bfcd87809e882bf3591d15b8ade9fe7aa9fc4dc5188bb24036ba4a5a6c706804",
-						"blop": {
-							"node": "n",
-							"object": "value",
-							"actor": "a",
-							"signer": {
-								"/": {
-									"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
-								}
-							},
-							"nonce": {
-								"/": {
-									"bytes": "BwAAAAcAAAA"
-								}
-							},
-							"parents": [
-								{
-									"/": {
-										"bytes": "UFHNSCvX62Z5Tfz/PT9KuAspgkSixSvaxqdvr2DnjuQ"
-									}
-								}
-							],
-							"lamport": 2,
-							"patches": []
-						}
-					},
-					{
-						"name": "15ba532363f5c155972f71b6e6cc0b7e6fb506eb50c41e07492284a97b6bbd16",
+						"name": "b0f93721af57e5463fa6544f5d56cf45cecb2d74edce3a97489c1b5f364fdfe8",
 						"blop": {
 							"node": "n",
 							"object": "value",
@@ -144,7 +117,34 @@
 							"parents": [
 								{
 									"/": {
-										"bytes": "UFHNSCvX62Z5Tfz/PT9KuAspgkSixSvaxqdvr2DnjuQ"
+										"bytes": "YPU2HszjTtKtWXmRBI8GVUEXcnEW8fpX/FA50aekK0E"
+									}
+								}
+							],
+							"lamport": 2,
+							"patches": []
+						}
+					},
+					{
+						"name": "a93be5d97e3f3731dd08190c65a71b70315ea6869d80198d2ab115925f8adbb1",
+						"blop": {
+							"node": "n",
+							"object": "value",
+							"actor": "a",
+							"signer": {
+								"/": {
+									"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+								}
+							},
+							"nonce": {
+								"/": {
+									"bytes": "BwAAAAcAAAA"
+								}
+							},
+							"parents": [
+								{
+									"/": {
+										"bytes": "YPU2HszjTtKtWXmRBI8GVUEXcnEW8fpX/FA50aekK0E"
 									}
 								}
 							],
@@ -174,14 +174,14 @@
 				"parents": [
 					{
 						"/": {
-							"bytes": "FbpTI2P1wVWXL3G25swLfm+1ButQxB4HSSKEqXtrvRY"
+							"bytes": "sPk3Ia9X5UY/plRPXVbPRc7LLXTtzjqXSJwbXzZP3+g"
 						}
 					}
 				],
 				"lamport": 3,
 				"patches": []
 			},
-			"name": "a1b44fb22f4e52d4eaa80061ec3590231d24984ae2924987afd2aae6f623c68a",
+			"name": "3e8515d4c7e2e24863464bb067f769fa92c044d4be207136cbaeda8ab9d10830",
 			"expect": {
 				"added": "taken"
 			}
@@ -192,7 +192,7 @@
 			"expect": {
 				"heads": [
 					{
-						"name": "a1b44fb22f4e52d4eaa80061ec3590231d24984ae2924987afd2aae6f623c68a",
+						"name": "3e8515d4c7e2e24863464bb067f769fa92c044d4be207136cbaeda8ab9d10830",
 						"blop": {
 							"node": "n",
 							"object": "value",
@@ -210,7 +210,7 @@
 							"parents": [
 								{
 									"/": {
-										"bytes": "FbpTI2P1wVWXL3G25swLfm+1ButQxB4HSSKEqXtrvRY"
+										"bytes": "sPk3Ia9X5UY/plRPXVbPRc7LLXTtzjqXSJwbXzZP3+g"
 									}
 								}
 							],
@@ -219,7 +219,7 @@
 						}
 					},
 					{
-						"name": "bfcd87809e882bf3591d15b8ade9fe7aa9fc4dc5188bb24036ba4a5a6c706804",
+						"name": "a93be5d97e3f3731dd08190c65a71b70315ea6869d80198d2ab115925f8adbb1",
 						"blop": {
 							"node": "n",
 							"object": "value",
@@ -237,7 +237,7 @@
 							"parents": [
 								{
 									"/": {
-										"bytes": "UFHNSCvX62Z5Tfz/PT9KuAspgkSixSvaxqdvr2DnjuQ"
+										"bytes": "YPU2HszjTtKtWXmRBI8GVUEXcnEW8fpX/FA50aekK0E"
 									}
 								}
 							],
@@ -267,12 +267,12 @@
 				"parents": [
 					{
 						"/": {
-							"bytes": "obRPsi9OUtTqqABh7DWQIx0kmErikkmHr9Kq5vYjxoo"
+							"bytes": "PoUV1Mfi4khjRkuwZ/dp+pLARNS+IHE2y67airnRCDA"
 						}
 					},
 					{
 						"/": {
-							"bytes": "v82HgJ6IK/NZHRW4ren+eqn8TcUYi7JANrpKWmxwaAQ"
+							"bytes": "qTvl2X4/NzHdCBkMZacbcDFepoadgBmNKrEVkl+K27E"
 						}
 					}
 				],
@@ -280,11 +280,11 @@
 				"patches": [],
 				"base": {
 					"/": {
-						"bytes": "obRPsi9OUtTqqABh7DWQIx0kmErikkmHr9Kq5vYjxoo"
+						"bytes": "PoUV1Mfi4khjRkuwZ/dp+pLARNS+IHE2y67airnRCDA"
 					}
 				}
 			},
-			"name": "f517d4e82e8525d2fa5e8357a507c3b63614473cbf069eeeab83a6ced6157b24",
+			"name": "8b26972ec4f412cb146385c989da5f14f811250ceb83fb75404adbc1b41bcb00",
 			"expect": {
 				"added": "taken"
 			}
@@ -295,7 +295,7 @@
 			"expect": {
 				"heads": [
 					{
-						"name": "f517d4e82e8525d2fa5e8357a507c3b63614473cbf069eeeab83a6ced6157b24",
+						"name": "8b26972ec4f412cb146385c989da5f14f811250ceb83fb75404adbc1b41bcb00",
 						"blop": {
 							"node": "n",
 							"object": "value",
@@ -313,12 +313,12 @@
 							"parents": [
 								{
 									"/": {
-										"bytes": "obRPsi9OUtTqqABh7DWQIx0kmErikkmHr9Kq5vYjxoo"
+										"bytes": "PoUV1Mfi4khjRkuwZ/dp+pLARNS+IHE2y67airnRCDA"
 									}
 								},
 								{
 									"/": {
-										"bytes": "v82HgJ6IK/NZHRW4ren+eqn8TcUYi7JANrpKWmxwaAQ"
+										"bytes": "qTvl2X4/NzHdCBkMZacbcDFepoadgBmNKrEVkl+K27E"
 									}
 								}
 							],
@@ -326,7 +326,7 @@
 							"patches": [],
 							"base": {
 								"/": {
-									"bytes": "obRPsi9OUtTqqABh7DWQIx0kmErikkmHr9Kq5vYjxoo"
+									"bytes": "PoUV1Mfi4khjRkuwZ/dp+pLARNS+IHE2y67airnRCDA"
 								}
 							}
 						}

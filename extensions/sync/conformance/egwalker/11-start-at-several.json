@@ -105,7 +105,17 @@
 				"m1",
 				"m2"
 			],
-			"expect": { "from": ["r"], "commits": ["b", "a", "m2", "m1"] }
+			"expect": {
+				"from": [
+					"r"
+				],
+				"commits": [
+					"a",
+					"b",
+					"m2",
+					"m1"
+				]
+			}
 		},
 		{
 			"op": "merge",
@@ -120,16 +130,10 @@
 						"change": {
 							"time": 0,
 							"actor": null,
-							"metadata": [
-								[
-									"signer",
-									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-								],
-								[
-									"commit",
-									"935bb30c404193280e171810ee368221a5886f9a0ae15abc05ed7d04b73006b9"
-								]
-							]
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "5d33019ac5396693912a568ccc752e82ed188e2a263189f1fe21813a3e552ab6"
+							}
 						}
 					}
 				}
@@ -158,7 +162,16 @@
 				"m1",
 				"m2"
 			],
-			"expect": { "from": ["a", "b"], "commits": ["m2", "m1"] }
+			"expect": {
+				"from": [
+					"b",
+					"a"
+				],
+				"commits": [
+					"m2",
+					"m1"
+				]
+			}
 		},
 		{
 			"op": "merge",
@@ -173,16 +186,10 @@
 						"change": {
 							"time": 0,
 							"actor": null,
-							"metadata": [
-								[
-									"signer",
-									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-								],
-								[
-									"commit",
-									"935bb30c404193280e171810ee368221a5886f9a0ae15abc05ed7d04b73006b9"
-								]
-							]
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "5d33019ac5396693912a568ccc752e82ed188e2a263189f1fe21813a3e552ab6"
+							}
 						}
 					}
 				}
@@ -215,7 +222,18 @@
 				"m2",
 				"c"
 			],
-			"expect": { "from": ["r"], "commits": ["b", "a", "m2", "m1", "c"] }
+			"expect": {
+				"from": [
+					"r"
+				],
+				"commits": [
+					"a",
+					"b",
+					"m2",
+					"m1",
+					"c"
+				]
+			}
 		},
 		{
 			"op": "merge",
@@ -231,16 +249,10 @@
 						"change": {
 							"time": 0,
 							"actor": null,
-							"metadata": [
-								[
-									"signer",
-									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-								],
-								[
-									"commit",
-									"ce84e20bcce956632f22479fed95a93a31cc9b2f1406fdc7d10647aa66b3786d"
-								]
-							]
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "6db19bba18470c17c7e957ef98c2bc965a2eb262f9eeb71b6291e61498c4e023"
+							}
 						}
 					}
 				}

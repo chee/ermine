@@ -4,12 +4,7 @@
 		{
 			"op": "root",
 			"name": "o",
-			"info": [
-				[
-					"actor",
-					"test"
-				]
-			],
+			"info": { "actor": "test" },
 			"expect": {}
 		},
 		{
@@ -40,12 +35,7 @@
 							},
 							{
 								"within": [
-									[
-										[
-											"why",
-											"run 1"
-										]
-									],
+									{ "why": "run 1" },
 									{
 										"cleanup": [
 											null,
@@ -73,12 +63,7 @@
 									},
 									{
 										"within": [
-											[
-												[
-													"why",
-													"run 2"
-												]
-											],
+											{ "why": "run 2" },
 											{
 												"cleanup": [
 													null,
@@ -96,12 +81,7 @@
 									},
 									{
 										"within": [
-											[
-												[
-													"why",
-													"run 3"
-												]
-											],
+											{ "why": "run 3" },
 											{
 												"cleanup": [
 													null,
@@ -188,12 +168,7 @@
 						"s goes",
 						{
 							"scope": null,
-							"pairs": [
-								[
-									"why",
-									"run 2"
-								]
-							],
+							"info": { "why": "run 2" },
 							"writer": "P"
 						}
 					],
@@ -201,12 +176,7 @@
 						"s goes",
 						{
 							"scope": null,
-							"pairs": [
-								[
-									"why",
-									"run 1"
-								]
-							],
+							"info": { "why": "run 1" },
 							"writer": "P"
 						}
 					]
@@ -226,12 +196,7 @@
 						"s goes",
 						{
 							"scope": null,
-							"pairs": [
-								[
-									"why",
-									"run 3"
-								]
-							],
+							"info": { "why": "run 3" },
 							"writer": "P"
 						}
 					]

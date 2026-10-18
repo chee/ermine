@@ -21,7 +21,7 @@
 			"op": "take",
 			"device": "a",
 			"name": "c2",
-			"nonce": 1528,
+			"nonce": 137,
 			"parents": ["c1"],
 			"patches": [{ "path": ["n"], "value": 2 }],
 			"expect": { "added": "taken" }
@@ -30,7 +30,7 @@
 			"op": "take",
 			"device": "a",
 			"name": "c3",
-			"nonce": 1529,
+			"nonce": 138,
 			"parents": ["c2"],
 			"patches": [{ "path": ["n"], "value": 3 }],
 			"expect": { "added": "taken" }
@@ -63,16 +63,10 @@
 						"change": {
 							"time": 0,
 							"actor": null,
-							"metadata": [
-								[
-									"signer",
-									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-								],
-								[
-									"commit",
-									"9a1c16e2ae83b80eb8c658ff0a7e2963e480a28290a28296eae0f3d3fe3148a0"
-								]
-							]
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "948f387441cc195ab553ae233d02da7a3b94b8952edaeda87b51966f7ec16922"
+							}
 						}
 					}
 				}

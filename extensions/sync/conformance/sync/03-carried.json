@@ -1,5 +1,5 @@
 {
-	"title": "what of a change a commit cannot carry is left out: an actor with no encoding is null, such a metadata pair goes",
+	"title": "what of a change a commit cannot carry is left out: an actor with no encoding is null, such a metadata key goes",
 	"steps": [
 		{
 			"op": "host",
@@ -31,7 +31,7 @@
 			"change": {
 				"time": 7,
 				"actor": { "/": { "symbol": "me" } },
-				"metadata": [["ok", 1], ["no", { "/": { "symbol": "s" } }]]
+				"metadata": { "ok": 1, "no": { "/": { "symbol": "s" } } }
 			},
 			"name": "w1",
 			"expect": { "commits": 1 }
@@ -45,7 +45,7 @@
 				"commit": {
 					"table": "value",
 					"actor": null,
-					"metadata": [["ok", 1]],
+					"metadata": { "ok": 1 },
 					"time": 7,
 					"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
 					"nonce": 3338457401,
@@ -64,14 +64,11 @@
 				"change": {
 					"time": 7,
 					"actor": null,
-					"metadata": [
-						["ok", 1],
-						[
-							"signer",
-							"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-						],
-						["commit", "2c9ee95dd6403b55af6b79e24acaa57b3e431dc69318fb033e83bd2865d03580"]
-					]
+					"metadata": {
+						"ok": 1,
+						"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"commit": "027eae2fa39775e57b7730f619ef60db195635c7ce33d3abd775922209cc76f3"
+					}
 				}
 			}
 		}

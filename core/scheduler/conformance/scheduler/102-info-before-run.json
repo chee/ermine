@@ -4,12 +4,7 @@
 		{
 			"op": "root",
 			"name": "o",
-			"info": [
-				[
-					"actor",
-					"test"
-				]
-			],
+			"info": { "actor": "test" },
 			"expect": {}
 		},
 		{
@@ -31,12 +26,7 @@
 			"expect": {
 				"value": {
 					"scope": "c",
-					"pairs": [
-						[
-							"mark",
-							1
-						]
-					]
+					"info": { "mark": 1 }
 				}
 			}
 		},
@@ -46,12 +36,7 @@
 			"do": {
 				"scope": [
 					"s",
-					[
-						[
-							"why",
-							"before"
-						]
-					]
+					{ "why": "before" }
 				]
 			},
 			"expect": {
@@ -67,12 +52,7 @@
 			"expect": {
 				"value": {
 					"scope": "s",
-					"pairs": [
-						[
-							"why",
-							"before"
-						]
-					]
+					"info": { "why": "before" }
 				}
 			}
 		},
@@ -89,16 +69,7 @@
 			"expect": {
 				"value": {
 					"scope": "c",
-					"pairs": [
-						[
-							"run",
-							1
-						],
-						[
-							"mark",
-							1
-						]
-					]
+					"info": { "run": 1, "mark": 1 }
 				}
 			}
 		},
@@ -124,12 +95,7 @@
 			"expect": {
 				"value": {
 					"scope": "o",
-					"pairs": [
-						[
-							"actor",
-							"test"
-						]
-					]
+					"info": { "actor": "test" }
 				}
 			}
 		},
@@ -144,12 +110,7 @@
 			"expect": {
 				"value": {
 					"scope": "o",
-					"pairs": [
-						[
-							"actor",
-							"test"
-						]
-					]
+					"info": { "actor": "test" }
 				}
 			}
 		}

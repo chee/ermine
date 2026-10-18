@@ -9,7 +9,7 @@
 // {node}; or {code, part?, id?} for a PackError
 // A part or an id: a string, or {"symbol": name}, Symbol.for(name). A node: {value?, change,
 // cow?: false}, change {time, actor?, reader?, external?, metadata?, op?}, the value, actor,
-// reader, each metadata value and each patch's value in their JSON form (form.ts)
+// reader, metadata (a map) and each patch's value in their JSON form (form.ts)
 import createEntry, { type ChangeHeader, type Entry as NodeEntry } from "@ermine/node/entry"
 import {
 	decode,
@@ -50,9 +50,7 @@ function header(c: Fields, f: (x: unknown) => unknown): Fields {
 	if ("actor" in c) out.actor = f(c.actor)
 	// a string, but a symbol for a test of one
 	if ("reader" in c) out.reader = f(c.reader)
-	if ("metadata" in c) {
-		out.metadata = (c.metadata as [string, unknown][]).map(([k, v]) => [k, f(v)])
-	}
+	if ("metadata" in c) out.metadata = f(c.metadata)
 	if ("op" in c) {
 		const op = c.op as Fields
 		out.op = { patches: patches(op.patches, f), undo: patches(op.undo, f) }

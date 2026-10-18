@@ -28,14 +28,14 @@
 			"patches": [
 				{
 					"path": [],
-					"value": 532
+					"value": 398
 				}
 			],
 			"actor": "a",
-			"nonce": "0000021500000000",
+			"nonce": "0000018f00000000",
 			"expect": {
-				"name": "f32a0a1b62d7162c131c1877c8fbec01db525844aa3f1e07202acbc9a796f178",
-				"stored": "a24a0aea8771255f1fbc6ff0a16874737ed17aaf37603d54418e980ea7a9ae22"
+				"name": "6b8e8220b2c8386292a9efe189375c88a253c00fa69770e56580ce5d1679c1fd",
+				"stored": "e43ced68542bd539f2563c4fca84d871820269de0e36c0b9767d94bd59c51db7"
 			}
 		},
 		{
@@ -46,14 +46,14 @@
 			"patches": [
 				{
 					"path": [],
-					"value": 533
+					"value": 399
 				}
 			],
 			"actor": "a",
-			"nonce": "0000021600000000",
+			"nonce": "0000019000000000",
 			"expect": {
-				"name": "90136a5b62a75c605f7c2bd0775bf0a2c8f4dec9cf2af4835eb60ae4ce6da1c4",
-				"stored": "a506f26fe5749a3761e7ce568dc9ecf394373dcfee5b4ac9142fd9e259d9dc6b"
+				"name": "13e1fc43bc681a35d1985061433c89558f0eadc200653ecd8ef7c6f85db4d93a",
+				"stored": "f53d9644fd47961c9fa78b4c8714ff0b77a0bc2afd0ac55ca833467690787bfd"
 			}
 		},
 		{
@@ -107,7 +107,7 @@
 			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
 			"expect": {
 				"heads": [
-					"90136a5b62a75c605f7c2bd0775bf0a2c8f4dec9cf2af4835eb60ae4ce6da1c4"
+					"13e1fc43bc681a35d1985061433c89558f0eadc200653ecd8ef7c6f85db4d93a"
 				],
 				"history": {
 					"waiting": [],

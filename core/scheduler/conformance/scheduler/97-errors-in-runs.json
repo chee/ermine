@@ -4,24 +4,14 @@
 		{
 			"op": "root",
 			"name": "o",
-			"info": [
-				[
-					"actor",
-					"test"
-				]
-			],
+			"info": { "actor": "test" },
 			"expect": {}
 		},
 		{
 			"op": "scope",
 			"name": "gone",
 			"parent": "o",
-			"info": [
-				[
-					"why",
-					"gone"
-				]
-			],
+			"info": { "why": "gone" },
 			"expect": {}
 		},
 		{
@@ -50,7 +40,7 @@
 					{
 						"scope": [
 							"s",
-							[]
+							{}
 						]
 					}
 				]
@@ -70,12 +60,7 @@
 					{
 						"scope": [
 							"s",
-							[
-								[
-									"why",
-									"b"
-								]
-							],
+							{ "why": "b" },
 							"gone"
 						]
 					}
@@ -96,12 +81,7 @@
 					{
 						"scope": [
 							"o",
-							[
-								[
-									"why",
-									"c"
-								]
-							]
+							{ "why": "c" }
 						]
 					}
 				]
@@ -443,12 +423,7 @@
 			"do": {
 				"scope": [
 					"t",
-					[
-						[
-							"why",
-							"t"
-						]
-					],
+					{ "why": "t" },
 					"gone"
 				]
 			},
@@ -487,12 +462,7 @@
 			"op": "scope",
 			"name": "z",
 			"parent": "gone",
-			"info": [
-				[
-					"why",
-					"z"
-				]
-			],
+			"info": { "why": "z" },
 			"expect": {
 				"error": "disposed"
 			}

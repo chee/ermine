@@ -1,5 +1,5 @@
 {
-	"title": "a change with every field: actor any value, sites, metadata repeating, op",
+	"title": "a change with every field: actor any value, sites, metadata (a map), op",
 	"entries": [
 		[
 			"value",
@@ -38,22 +38,7 @@
 						"function": "f"
 					}
 				],
-				"metadata": [
-					[
-						"sync",
-						{
-							"lamport": 1
-						}
-					],
-					[
-						"why",
-						"x"
-					],
-					[
-						"why",
-						"y"
-					]
-				],
+				"metadata": { "sync": { "lamport": 1 }, "why": "x" },
 				"op": {
 					"patches": [
 						{

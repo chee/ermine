@@ -1,0 +1,28 @@
+{
+	"title": "a record dropped (its computer gone) is none, and its readers rerun; the policy is asked as reading the computer's node: a no refuses runOf and fails a reading run",
+	"steps": [
+		{ "op": "runs", "expect": {} },
+		{ "op": "value", "id": "a", "value": { "x": 0 }, "expect": {} },
+		{ "op": "root", "name": "o", "info": { "actor": "o" }, "expect": {} },
+		{
+			"op": "watch",
+			"name": "c",
+			"scope": "o",
+			"f": { "read": ["value", "a", ["x"]] },
+			"expect": {}
+		},
+		{ "op": "watch", "name": "d", "scope": "o", "f": { "read": ["value", "a"] }, "expect": {} },
+		{ "op": "giveRun", "name": "c", "id": "C", "expect": {} },
+		{ "op": "giveRun", "name": "d", "id": "D", "expect": {} },
+		{ "op": "watch", "name": "reader", "scope": "o", "f": { "run": ["C", "end"] }, "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "state", "name": "reader", "expect": { "runs": 1, "value": "done" } },
+		{ "op": "dropRun", "id": "C", "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "runOf", "id": "C", "expect": { "run": null } },
+		{ "op": "state", "name": "reader", "expect": { "runs": 2, "value": null } },
+		{ "op": "deny", "id": "D", "expect": {} },
+		{ "op": "runOf", "id": "D", "expect": { "error": "refused" } },
+		{ "op": "runOf", "id": "C", "expect": { "run": null } }
+	]
+}

@@ -4,23 +4,13 @@
 		{
 			"op": "root",
 			"name": "o",
-			"info": [
-				[
-					"actor",
-					"test"
-				]
-			],
+			"info": { "actor": "test" },
 			"expect": {}
 		},
 		{
 			"op": "scope",
 			"name": "s",
-			"info": [
-				[
-					"why",
-					"a"
-				]
-			],
+			"info": { "why": "a" },
 			"parent": "o",
 			"expect": {}
 		},

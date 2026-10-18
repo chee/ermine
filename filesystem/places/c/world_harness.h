@@ -19,7 +19,7 @@ extern sc_scheduler *world_scheduler;
 extern tb_table *world_table;
 extern pt_paths *world_paths;
 extern pl *world_places;
-// the host's scope: its info is [["actor","test"]]
+// the host's scope: its info is {"actor":"test"}
 extern sc_scope *world_host;
 // the path cache (cache.h), made at the first ask (or the cache request), once; NULL until then
 pc_cache *world_cached(void);
@@ -65,9 +65,9 @@ sc_scope *world_scope(const char *name);
 // f once in the host's scope, as sc_run_with_scope
 const char *world_hosted(void (*f)(void *data), void *data);
 
-// pairs of scope info, from a request's [[key, value]..]: the key's text, the value the line's own
+// pairs of scope info, from a request's info object: each key, the value the line's own
 // (the line is kept). NULL, *n 0: none
-const sc_pair *world_info(const op_value *list, size_t *n);
+const sc_pair *world_info(const op_value *map, size_t *n);
 
 // a compute made by a harness's watch: its runs counted by the harness, its results kept. A
 // harness makes the compute with world_make: def.data is a struct of its own that starts with a

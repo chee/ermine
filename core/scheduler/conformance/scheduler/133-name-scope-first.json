@@ -4,12 +4,7 @@
 		{
 			"op": "root",
 			"name": "o",
-			"info": [
-				[
-					"actor",
-					"test"
-				]
-			],
+			"info": { "actor": "test" },
 			"expect": {}
 		},
 		{
@@ -42,12 +37,7 @@
 			"op": "scope",
 			"name": "c",
 			"parent": "nope",
-			"info": [
-				[
-					"a",
-					1
-				]
-			],
+			"info": { "a": 1 },
 			"expect": {
 				"error": "no scope nope"
 			}
@@ -58,12 +48,7 @@
 			"do": {
 				"scope": [
 					"c",
-					[
-						[
-							"a",
-							1
-						]
-					],
+					{ "a": 1 },
 					"nope"
 				]
 			},
@@ -84,12 +69,7 @@
 			"op": "scope",
 			"name": "c",
 			"parent": "o",
-			"info": [
-				[
-					"a",
-					1
-				]
-			],
+			"info": { "a": 1 },
 			"expect": {
 				"error": "name taken: c"
 			}
@@ -100,12 +80,7 @@
 			"do": {
 				"scope": [
 					"c",
-					[
-						[
-							"a",
-							1
-						]
-					],
+					{ "a": 1 },
 					"o"
 				]
 			},

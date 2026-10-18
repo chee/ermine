@@ -202,8 +202,8 @@
 					"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
 					"nonce": 4207839831,
 					"parents": [
-						"tb2",
-						"ta"
+						"ta",
+						"tb2"
 					],
 					"merge": "eg-walker",
 					"lamport": 8,
@@ -241,16 +241,10 @@
 				"change": {
 					"time": 1760000000,
 					"actor": null,
-					"metadata": [
-						[
-							"signer",
-							"ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
-						],
-						[
-							"commit",
-							"3183ec1ecc5d3717744338c2ae6bcdfba8ae61f1b8e4e2d5378b31a6db99c3de"
-						]
-					]
+					"metadata": {
+						"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+						"commit": "960c5a5eee6e8ff3931a57edf9ef478a54e387056907ac0ba542bc7a9f7c7ee6"
+					}
 				}
 			}
 		}

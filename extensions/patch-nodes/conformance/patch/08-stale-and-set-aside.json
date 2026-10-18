@@ -149,18 +149,7 @@
 			"expect": {
 				"time": 200,
 				"actor": "test",
-				"metadata": [
-					[
-						"actor",
-						"test"
-					],
-					[
-						"overlay",
-						[
-							"P"
-						]
-					]
-				],
+				"metadata": { "actor": "test", "overlay": ["P"] },
 				"hasOp": false
 			}
 		},

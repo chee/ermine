@@ -42,7 +42,7 @@ export function places(seed: number, n: number, steps: number) {
 	s.onRunEnd((_c, _n, _ended, _reads, more) => {
 		if ("kept" in more) hold(more.kept, "a run's kept")
 	})
-	const scope = s.createRootScope([["actor", "reader"]])
+	const scope = s.createRootScope({ actor: "reader" })
 	for (let i = 0; i < 2 + p(6); i++) {
 		const f = folders[p(folders.length)], how = HOWS[p(HOWS.length)]
 		const read = () => (s.track(f.key), f.e.value as Record<string, string>)

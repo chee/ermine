@@ -1,24 +1,24 @@
 {
-	"title": "numbers in patches: -0 a value kept as -0; -0 as an index or a span's end is 0; an index or end of 2^53 or 1e300 past the end",
+	"title": "numbers in patches: -0 is 0, as a value (a float typed array's element keeps it), an index or a span's end; an index or end of 2^53 or 1e300 past the end",
 	"steps": [
-		{ "op": "apply", "value": -0, "patches": [], "expect": { "value": -0 } },
+		{ "op": "apply", "value": -0, "patches": [], "expect": { "value": 0 } },
 		{
 			"op": "apply",
 			"value": 0,
 			"patches": [{ "path": [], "value": -0 }],
-			"expect": { "value": -0 }
+			"expect": { "value": 0 }
 		},
 		{
 			"op": "apply",
 			"value": { "a": 0 },
 			"patches": [{ "path": ["a"], "value": -0 }],
-			"expect": { "value": { "a": -0 } }
+			"expect": { "value": { "a": 0 } }
 		},
 		{
 			"op": "apply",
 			"value": { "a": -0 },
 			"patches": [{ "path": ["b"], "move": { "path": ["a"] } }],
-			"expect": { "value": { "b": -0 } }
+			"expect": { "value": { "b": 0 } }
 		},
 		{
 			"op": "apply",
@@ -27,7 +27,7 @@
 				{ "path": [0], "value": -0 },
 				{ "path": [], "range": [2, 2], "value": [-0, 0] }
 			],
-			"expect": { "value": [-0, 2, -0, 0] }
+			"expect": { "value": [0, 2, 0, 0] }
 		},
 		{
 			"op": "apply",

@@ -4,12 +4,7 @@
 		{
 			"op": "root",
 			"name": "o",
-			"info": [
-				[
-					"actor",
-					"test"
-				]
-			],
+			"info": { "actor": "test" },
 			"expect": {}
 		},
 		{
@@ -30,12 +25,7 @@
 				"do": [
 					{
 						"within": [
-							[
-								[
-									"why",
-									"run"
-								]
-							],
+							{ "why": "run" },
 							{
 								"cleanup": [
 									null,

@@ -1,13 +1,13 @@
 {
 	"title": "a scope made in an act stays past a later run that did not act (its result equal); its info is its own pairs, the effect's the latest run's",
 	"steps": [
-		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
+		{ "op": "root", "name": "o", "info": { "actor": "test" }, "expect": {} },
 		{
 			"op": "effect",
 			"name": "e",
 			"scope": "o",
 			"f": { "do": [{ "read": "a" }, 1] },
-			"act": { "scope": ["k", [["why", "listen"]]] },
+			"act": { "scope": ["k", { "why": "listen" }] },
 			"expect": {}
 		},
 		{ "op": "pulse", "expect": {} },
@@ -20,7 +20,7 @@
 			"expect": {
 				"value": {
 					"scope": "e",
-					"pairs": [["run", 2], ["mark", 2]]
+					"info": { "run": 2, "mark": 2 }
 				}
 			}
 		},
@@ -31,7 +31,7 @@
 			"expect": {
 				"value": {
 					"scope": "k",
-					"pairs": [["why", "listen"]]
+					"info": { "why": "listen" }
 				}
 			}
 		}

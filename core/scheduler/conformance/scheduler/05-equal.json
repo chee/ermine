@@ -1,7 +1,7 @@
 {
 	"title": "equal by its own comparison: a list equal by JSON stops there; by Object.is, a new list goes on",
 	"steps": [
-		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
+		{ "op": "root", "name": "o", "info": { "actor": "test" }, "expect": {} },
 		{ "op": "write", "values": { "a": 1, "b": 2 }, "expect": { "tick": 1 } },
 		{
 			"op": "compute",

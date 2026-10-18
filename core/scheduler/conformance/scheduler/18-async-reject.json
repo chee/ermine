@@ -1,7 +1,7 @@
 {
 	"title": "a promise rejected: the run failed, the error told",
 	"steps": [
-		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
+		{ "op": "root", "name": "o", "info": { "actor": "test" }, "expect": {} },
 		{
 			"op": "compute",
 			"name": "c",

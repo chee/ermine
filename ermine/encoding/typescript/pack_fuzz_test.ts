@@ -174,7 +174,9 @@ function node(pick: Pick, lone = false): Node {
 		})
 	}
 	if (pick(3) === 0) {
-		h.metadata = Array.from({ length: pick(3) }, () => [text(pick, lone), value(pick, lone, 1)])
+		h.metadata = Object.fromEntries(
+			Array.from({ length: pick(3) }, () => [text(pick, lone), value(pick, lone, 1)]),
+		)
 	}
 	if (pick(3) === 0) {
 		const target = () => {
@@ -329,8 +331,17 @@ Deno.test("pack fuzz: a lone surrogate or a symbol anywhere is cannot-carry, at 
 			["value in a map", () => createEntry({ a: [1, { b: bad }] }, { time: 1 } as never)],
 			["actor", () => createEntry(1, { time: 1, actor: bad } as never)],
 			["reader", () => createEntry(1, { time: 1, reader: bad } as never)],
-			["metadata key", () => createEntry(1, { time: 1, metadata: [[bad, 1]] } as never)],
-			["metadata value", () => createEntry(1, { time: 1, metadata: [["k", bad]] } as never)],
+			// a symbol key is no key of the map's (Object.keys): only a string's is refused
+			...typeof bad === "string"
+				? [[
+					"metadata key",
+					() => createEntry(1, { time: 1, metadata: { [bad]: 1 } } as never),
+				] as [
+					string,
+					() => Node,
+				]]
+				: [],
+			["metadata value", () => createEntry(1, { time: 1, metadata: { k: bad } } as never)],
 			["file", () => createEntry(1, { time: 1, external: [{ file: bad, line: 1 }] } as never)],
 			[
 				"function",
@@ -728,9 +739,7 @@ function form(n: Node): Record<string, unknown> {
 	const h = n.change as Record<string, unknown>
 	const c: Record<string, unknown> = { ...h }
 	if ("actor" in h) c.actor = toJson(h.actor)
-	if ("metadata" in h) {
-		c.metadata = (h.metadata as [string, unknown][]).map(([k, v]) => [k, toJson(v)])
-	}
+	if ("metadata" in h) c.metadata = toJson(h.metadata)
 	if ("op" in h) {
 		const op = h.op as { patches: Record<string, unknown>[]; undo: Record<string, unknown>[] }
 		const ps = (xs: Record<string, unknown>[]) =>

@@ -89,19 +89,17 @@ static void print_version(const apply_version *v) {
 	}
 	// the entries: a cause is a Json, a wallclock an int64, a message text
 	if (h->metadata_length) {
-		fputs(",\"metadata\":[", stdout);
+		fputs(",\"metadata\":{", stdout);
 		for (size_t i = 0; i < h->metadata_length; i++) {
 			const ch_entry *e = &h->metadata[i];
 			if (i) putchar(',');
-			fputs("[", stdout);
 			print_text(e->key);
-			putchar(',');
+			putchar(':');
 			if (strcmp(e->key, "cause") == 0) print_json(e->value);
 			else if (strcmp(e->key, "wallclock") == 0) printf("%lld", (long long)*(const int64_t *)e->value);
 			else print_text(e->value);
-			putchar(']');
 		}
-		putchar(']');
+		putchar('}');
 	}
 	fputs("},\"because\":{\"layer\":", stdout);
 	print_text(v->layer);

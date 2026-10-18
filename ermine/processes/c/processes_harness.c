@@ -319,12 +319,11 @@ static op_value *answer(const op_value *r) {
 		else op_set(o, "path", found);
 		return o;
 	}
-	if (strcmp(op, "give") == 0 || strcmp(op, "nodeOf") == 0 || strcmp(op, "nearest") == 0) {
+	if (strcmp(op, "give") == 0) {
 		sc_scope *o = world_scope(world_text(op_get(r, "scope")));
 		if (o == NULL) return world_error("no such scope");
 		if (nodes == NULL) nodes = sn_new(world_scheduler, world_table);
-		if (op[0] == 'g') return id_answer(sn_give(nodes, o, world_text(op_get(r, "id"))));
-		return id_answer(op[0] == 'n' && op[1] == 'o' ? sn_node_of(nodes, o) : sn_nearest(nodes, o));
+		return id_answer(sn_give(nodes, o, world_text(op_get(r, "id"))));
 	}
 	if (strcmp(op, "write") == 0) {
 		putting c = {.request = r};

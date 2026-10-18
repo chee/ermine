@@ -4,34 +4,19 @@
 		{
 			"op": "root",
 			"name": "o0",
-			"info": [
-				[
-					"actor",
-					"o0"
-				]
-			],
+			"info": { "actor": "o0" },
 			"expect": {}
 		},
 		{
 			"op": "root",
 			"name": "o1",
-			"info": [
-				[
-					"actor",
-					"o1"
-				]
-			],
+			"info": { "actor": "o1" },
 			"expect": {}
 		},
 		{
 			"op": "root",
 			"name": "o2",
-			"info": [
-				[
-					"actor",
-					"o2"
-				]
-			],
+			"info": { "actor": "o2" },
 			"expect": {}
 		},
 		{

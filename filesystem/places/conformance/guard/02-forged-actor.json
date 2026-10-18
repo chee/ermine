@@ -32,24 +32,14 @@
 		{
 			"op": "root",
 			"name": "juno",
-			"info": [
-				[
-					"actor",
-					"juno"
-				]
-			],
+			"info": { "actor": "juno" },
 			"expect": {}
 		},
 		{
 			"op": "scope",
 			"name": "quiet",
 			"parent": "juno",
-			"info": [
-				[
-					"why",
-					"save"
-				]
-			],
+			"info": { "why": "save" },
 			"expect": {}
 		},
 		{
@@ -85,12 +75,7 @@
 		{
 			"op": "root",
 			"name": "chee",
-			"info": [
-				[
-					"actor",
-					"chee"
-				]
-			],
+			"info": { "actor": "chee" },
 			"expect": {}
 		},
 		{
@@ -112,12 +97,7 @@
 			"expect": {
 				"value": {
 					"actor": "chee",
-					"metadata": [
-						[
-							"actor",
-							"chee"
-						]
-					],
+					"metadata": { "actor": "chee" },
 					"timely": true,
 					"sites": 1
 				}
@@ -127,12 +107,7 @@
 			"op": "scope",
 			"name": "named",
 			"parent": "juno",
-			"info": [
-				[
-					"actor",
-					"chee"
-				]
-			],
+			"info": { "actor": "chee" },
 			"expect": {}
 		},
 		{
@@ -154,16 +129,7 @@
 			"expect": {
 				"value": {
 					"actor": "chee",
-					"metadata": [
-						[
-							"actor",
-							"chee"
-						],
-						[
-							"actor",
-							"juno"
-						]
-					],
+					"metadata": { "actor": "chee" },
 					"timely": true,
 					"sites": 1
 				}

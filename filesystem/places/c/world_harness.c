@@ -124,34 +124,15 @@ char *world_name(sc_scope *o, const char *name) {
 	return NULL;
 }
 
-// the scopes given a node ("node" on root or scope), and its id (the line's, kept)
-typedef struct {
-	const sc_scope *scope;
-	const char *id;
-} given_node;
-static given_node *given;
-static size_t ngiven, capgiven;
-
-// places' node_of: the node a scope was given, else none
-static const char *node_of(void *data, const sc_scope *o) {
-	(void)data;
-	for (size_t i = 0; i < ngiven; i++)
-		if (given[i].scope == o) return given[i].id;
-	return NULL;
-}
-
 const char *world_hosted(void (*f)(void *data), void *data) {
 	return sc_run_with_scope(world_host, f, data);
 }
 
-const sc_pair *world_info(const op_value *list, size_t *n) {
+const sc_pair *world_info(const op_value *map, size_t *n) {
 	*n = 0;
-	if (!world_is(list, OP_LIST) || list->count == 0) return NULL;
-	sc_pair *out = hh_take(list->count * sizeof *out);
-	for (size_t i = 0; i < list->count; i++) {
-		const op_value *p = list->items[i];
-		out[(*n)++] = (sc_pair){world_text(p->items[0]), p->items[1]};
-	}
+	if (!world_is(map, OP_MAP) || map->count == 0) return NULL;
+	sc_pair *out = hh_take(map->count * sizeof *out);
+	for (size_t i = 0; i < map->count; i++) out[(*n)++] = (sc_pair){map->keys[i], map->items[i]};
 	return out;
 }
 
@@ -309,7 +290,8 @@ typedef struct {
 } making;
 static void make_in_scope(void *data) {
 	making *m = data;
-	m->made = m->effect ? sc_create_effect(world_scheduler, m->def) : sc_create_computer(world_scheduler, m->def);
+	m->made = m->effect ? sc_create_effect(world_scheduler, m->def, NULL, 0)
+	                     : sc_create_computer(world_scheduler, m->def, NULL, 0);
 }
 
 char *world_make(world_watch *w, const char *name, const char *scope, sc_def def, bool effect) {
@@ -400,14 +382,10 @@ op_value *world_summary(const ch_header *h) {
 	if (h->actor != NULL) op_set(o, "actor", world_snap(h->actor));
 	if (h->reader != NULL) op_set(o, "reader", op_str(h->reader));
 	if (h->metadata_length > 0) {
-		op_value *list = op_list();
-		for (size_t i = 0; i < h->metadata_length; i++) {
-			op_value *pair = op_list();
-			op_push(pair, op_str(h->metadata[i].key));
-			op_push(pair, world_snap(h->metadata[i].value));
-			op_push(list, pair);
-		}
-		op_set(o, "metadata", list);
+		op_value *map = op_map();
+		for (size_t i = 0; i < h->metadata_length; i++)
+			op_set(map, h->metadata[i].key, world_snap(h->metadata[i].value));
+		op_set(o, "metadata", map);
 	}
 	int64_t now = (int64_t)time(NULL);
 	op_set(o, "timely", op_bool(h->has_time && h->time > now - 5 && h->time < now + 5));
@@ -938,8 +916,6 @@ static op_value *world_answer(const op_value *r) {
 		}
 		char *bad = world_name(o, world_text(op_get(r, "name")));
 		if (bad) return world_error_take(bad);
-		const char *node = world_text(op_get(r, "node"));
-		if (node != NULL) PUSH(given, ngiven, capgiven, ((given_node){o, node}));
 		return op_map();
 	}
 	if (strcmp(op, "dispose") == 0) {
@@ -1003,7 +979,7 @@ static void world_start(void) {
 	world_paths = pt_new();
 	pl_connect(world_places, &(pl_setup){.root = tb_string("R"), .table = world_table, .paths = world_paths,
 		.scheduler = world_scheduler, .contributors = contributors,
-		.ncontributors = ncontributors, .node_of = node_of});
+		.ncontributors = ncontributors});
 	host_info = (sc_pair){"actor", op_str("test")};
 	world_host = sc_create_root_scope(world_scheduler, &host_info, 1);
 }
@@ -1059,8 +1035,6 @@ void world_finish(void) {
 	for (size_t i = 0; i < nnodes; i++) nd_free_entry(nodes[i]);
 	for (size_t i = 0; i < nvalues; i++) op_free(values[i]);
 	for (size_t i = 0; i < nlines; i++) hh_release(lines[i]);
-	free(watches), free(named), free(moments), free(nodes), free(lines), free(values), free(given);
-	given = NULL;
-	ngiven = capgiven = 0;
+	free(watches), free(named), free(moments), free(nodes), free(lines), free(values);
 	world_places = NULL;
 }

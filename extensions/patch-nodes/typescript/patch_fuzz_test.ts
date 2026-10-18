@@ -59,7 +59,7 @@ function run(seed: number) {
 		paths: createPaths(),
 		scheduler: s,
 	})
-	const host = s.createRootScope([["actor", "host"]])
+	const host = s.createRootScope({ actor: "host" })
 	const header = () => s.runWithScope(host, () => createChangeHeader(s))
 	const put = (part: Key, id: Id, v: unknown) =>
 		table.sub(part, id, createEntry(v, header()) as never)
@@ -69,7 +69,7 @@ function run(seed: number) {
 		PATHS.map((path) => {
 			const w = { part, path, value: undefined as unknown }
 			s.runWithScope(
-				s.createRootScope([["actor", "reader"]]),
+				s.createRootScope({ actor: "reader" }),
 				() =>
 					s.createComputer(
 						() => structuredClone(places.readValue(part, "N", path)),

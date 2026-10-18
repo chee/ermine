@@ -51,10 +51,10 @@
 				}
 			],
 			"actor": "a",
-			"nonce": "000001c600000000",
+			"nonce": "000000b100000000",
 			"layer": "ephemeral",
 			"expect": {
-				"name": "d0df0bee102189b076bc6caf12d45e154fc07352c7d6c3691fd4e822e8391347"
+				"name": "187a18ac88763c421ed920af5dd760fa269f73a96743eeb0eb88e6b7c02473a4"
 			}
 		},
 		{
@@ -68,7 +68,7 @@
 			"layer": "ephemeral",
 			"expect": {
 				"heads": [
-					"d0df0bee102189b076bc6caf12d45e154fc07352c7d6c3691fd4e822e8391347"
+					"187a18ac88763c421ed920af5dd760fa269f73a96743eeb0eb88e6b7c02473a4"
 				],
 				"history": {
 					"waiting": [],
@@ -87,7 +87,7 @@
 			"layer": "ephemeral",
 			"expect": {
 				"heads": [
-					"d0df0bee102189b076bc6caf12d45e154fc07352c7d6c3691fd4e822e8391347"
+					"187a18ac88763c421ed920af5dd760fa269f73a96743eeb0eb88e6b7c02473a4"
 				],
 				"history": {
 					"waiting": [],

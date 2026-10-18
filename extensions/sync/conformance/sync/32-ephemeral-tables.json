@@ -137,11 +137,11 @@
 				"standing": [
 					[
 						"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-						"ea"
+						"ev"
 					],
 					[
 						"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-						"ev"
+						"ea"
 					]
 				]
 			}
@@ -160,17 +160,17 @@
 					"on": [
 						{
 							"by": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-							"name": "ea",
+							"name": "ev",
 							"tables": [
-								"attributes"
+								"value"
 							],
 							"lamport": 2
 						},
 						{
 							"by": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-							"name": "ev",
+							"name": "ea",
 							"tables": [
-								"value"
+								"attributes"
 							],
 							"lamport": 2
 						}
@@ -235,17 +235,17 @@
 					"on": [
 						{
 							"by": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-							"name": "ev2",
+							"name": "ea",
 							"tables": [
-								"value"
+								"attributes"
 							],
 							"lamport": 2
 						},
 						{
 							"by": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-							"name": "ea",
+							"name": "ev2",
 							"tables": [
-								"attributes"
+								"value"
 							],
 							"lamport": 2
 						}

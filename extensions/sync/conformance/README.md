@@ -26,8 +26,9 @@ for one suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `f
 - a value (an actor, a metadata value, a patch's value, a table's value): its JSON form,
   `conformance/typescript/form.ts`. JSON for what JSON holds; `{"/": {"bytes": base64}}` (standard,
   unpadded): bytes inside a value are base64, never hex; `{"/": {kind: [...]}}` a typed array;
-  `{"/": {"number": "NaN"}}`; `{"/": {"live": kind}}` a stand-in; `-0` written `-0`;
-  `{"/": {"symbol": name}}` a symbol, for refusals only (no encoding). Lone surrogates are taken.
+  `{"/": {"number": "NaN"}}`; `{"/": {"live": kind}}` a stand-in; `{"/": {"bigint": "…"}}` a whole
+  number past 2^53 - 1; -0 is 0 (a float typed array keeps its -0); `{"/": {"symbol": name}}` a
+  symbol, for refusals only (no encoding). Lone surrogates are taken.
 - `value` in a request (decode, unseal, unpack, tables): a value in its JSON form, encoded
   canonically first. How refused bytes are written readably.
 - a key (`key`, `signer`, a device's, a sender's): a multikey in hex: the unsigned varint of the key
@@ -43,9 +44,9 @@ for one suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `f
   hex, and seal for it when given none). The transport harness seals a label for each document it is
   used in.
 - a commit in JSON: its fields as `commit.ts` names them. signer, each parent, base: hex. actor,
-  metadata values, patch values: values. external `[{file, line, column?, function?}]`. patches
-  `[{path, range?, value?, move?: {path, range?}}]`, merge: a rule's name. An optional field absent:
-  left out.
+  patch values: values. metadata: a map, its values values. external
+  `[{file, line, column?, function?}]`. patches `[{path, range?, value?, move?: {path, range?}}]`,
+  merge: a rule's name. An optional field absent: left out.
 - a commit by label (history, replay, snapshot, run, transport): made from the fields the request
   gives, labelled `name`. Defaults: table `"value"`, actor `null`, time `0`, seed `"01"` × 32 (the
   signer is its Ed25519 key as a multikey, `ed01` then the 32 bytes; transport: the device's seed),
@@ -62,8 +63,9 @@ for one suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `f
   seal's.
 - a commit in an answer: its label, else its name as hex (transport: its seal's stored id too).
 - a table's change from a commit (a replay, a merge, sync's table): the commit's header, its
-  metadata then `["signer", key]` and `["commit", name]`, both hex (`changeOf`, replay.ts). A new
-  commit never carries those two from its change; its sites' files as the host's roots say.
+  metadata with `signer` (key) and `commit` (name), both hex, over any of those keys it carried
+  (`changeOf`, replay.ts). A new commit never carries those two from its change; its sites' files as
+  the host's roots say.
 - refused, with a code: `{error: code, ...where}`, exact. commit: `not-a-commit` | `cannot-carry`,
   `field`. seal: `shape` | `signature`; a commit's own refusal as commit's. run: RunError's code,
   `column`. snapshot: PackError's code. A history's refusal is an answer: `{added: {refused}}`

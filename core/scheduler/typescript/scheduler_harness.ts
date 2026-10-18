@@ -6,19 +6,20 @@
 // Scopes and computations share one namespace of names. Keys are strings, any string, compared
 // whole (a NUL inside, the empty one, lone surrogates: each its own key). A change the harness
 // makes in a computation's code names that computation as the writer (a write in a run: the run,
-// as current().writer gave it at the run's start); the host's own (write, changed) name none. info: a scope's pairs, [[key, value]..]
+// as current().writer gave it at the run's start); the host's own (write, changed) name none. info: a scope's info, an object
 //
-//   {"op":"root","name":s,"info"?:pairs}                                             → {}
-//   {"op":"scope","name":s,"info"?:pairs,"parent"?:p}  under p; none: under the one open
+//   {"op":"root","name":s,"info"?:info}                                             → {}
+//   {"op":"scope","name":s,"info"?:info,"parent"?:p}  under p; none: under the one open
 //        (at the top nothing is open: unscoped, before empty)
-//   {"op":"compute","name":c,"scope":s,"f":e,"to"?:k,"equal"?:"json","declared"?:true,"set"?:e}
-//        made with s open                                                           → {}
+//   {"op":"compute","name":c,"scope":s,"f":e,"to"?:k,"equal"?:"json","declared"?:true,"set"?:e,
+//    "info"?:info}  made with s open                                               → {}
 //        declared: to is also given to the scheduler as the compute's key, its writer from the
 //        start (compute's key argument)
 //        set: evaluated in each set, after the result is kept at to and marked, given it as
 //        value; what it throws, the set throws
-//   {"op":"effect","name":c,"scope":s,"f":e,"act":e,"equal"?:"json","early"?:true}  → {}
-//        early: made early (it runs and acts in the request)
+//   {"op":"effect","name":c,"scope":s,"f":e,"act":e,"equal"?:"json","early"?:true,"info"?:info}
+//        early: made early (it runs and acts in the request)                        → {}
+//        info (compute, effect): the computer's own keys, given as it is made
 //        f: evaluated in each run. act: evaluated in each act, given value and previous.
 //        equal "json": results compared by their JSON (which has no -0: 0 and -0 equal); else
 //        Object.is (0 and -0 differ, a new list is never equal)
@@ -158,9 +159,10 @@
 // a cleanup's writer open: on a computation, it (its latest run: after a run, that run);
 //   on a plain scope, the teardown's: by a computation's teardown or clean, that computation; by a
 //   dispose, the writer open there (the host's: none)
-// info: a scope's pairs, those given, nothing appended, made once with it. a computation's,
-//   before its first run [["mark",t]], t the tick it was made at; from each run's start
-//   [["run",n],["mark",t]], t the tick that made that run due. current: scope, the name (none: null); pairs, its info; writer, the
+// info: a scope's object, as given, nothing added, made once with it. a computation's: its own
+//   keys (info, given; none: none) and mark: t, the tick it was made at; from each run's start
+//   run: n and mark: t, t the tick that made that run due, set in it. current: scope, the name
+//   (none: null); info, a copy of its info as it is then; writer, the
 //   computation of the run open (in a run, its own; in a set, act or a computation's cleanup, it,
 //   once it has run; in run(), the one open around it)
 // an error: a scheduler error's code ("disposed", "unscoped", "empty"), "pending" for a
@@ -204,7 +206,7 @@
 //   {"in":[s,e]}        e in run(s): untracked
 //   {"scope":[s,info,p?]}  s made under p, else under the one open; null
 //   {"within":[info,e]}  e in run(a new scope of info, under the one open, unnamed): untracked
-//   {"current":null}    what is open: {"scope":s,"pairs":[[k,v]..],"writer"?:c}, the computation
+//   {"current":null}    what is open: {"scope":s,"info":{..},"writer"?:c}, the computation
 //                       of the writer; nothing: null
 //   {"cleanup":[s,e]}   e when s is cleaned up; s null: the scope open; null
 //   {"effect":[c,f,act,early?]}  an effect c made under the scope open (in an act: its effect),
@@ -220,7 +222,7 @@
 import {
 	type Computer,
 	createScheduler,
-	type Pair,
+	type Info,
 	PENDING,
 	type Run,
 	SchedulerError,
@@ -228,6 +230,7 @@ import {
 } from "@ermine/scheduler"
 import { type Told, trace } from "./trace.ts"
 import { serve } from "../../../conformance/typescript/harness.ts"
+import { revive, toJson } from "../../../conformance/typescript/form.ts"
 
 type Json = unknown
 type Request = { op: string; [k: string]: Json }
@@ -371,11 +374,15 @@ function computation(n: Json): Computer {
 	return o as Computer
 }
 
-// what is open, by name: the scope, its pairs, and the computer of the run; nothing: null
+// what is open, by name: the scope, its info as it is now, and the computer of the run; nothing:
+// null
 function current(): Json {
 	const o = s.getCurrentScope()
 	if (o === undefined) return null
-	const out: Record<string, Json> = { scope: names.get(o) ?? null, pairs: s.getInfo()! }
+	const out: Record<string, Json> = {
+		scope: names.get(o) ?? null,
+		info: { ...s.getInfo()! } as Json,
+	}
 	const run = s.getRun()
 	const writer = run && names.get(run.computer)
 	if (writer !== undefined) out.writer = writer
@@ -464,12 +471,12 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 			// the scope under first, then the name
 			const up = a[2] === undefined ? undefined : scope(a[2])
 			vacant(a[0] as string)
-			name(s.createScope(a[1] as Pair[], up), a[0] as string)
+			name(s.createScope((a[1] ?? {}) as Info, up), a[0] as string)
 			return null
 		}
 		case "within":
 			return s.runWithScope(
-				s.createScope(a[0] as Pair[]),
+				s.createScope((a[0] ?? {}) as Info),
 				() => evaluate(a[1], { ...ctx, run: undefined }),
 			)
 		case "current":
@@ -558,13 +565,13 @@ async function run(r: Request): Promise<Json> {
 	switch (r.op) {
 		case "root":
 			vacant(r.name as string)
-			name(s.createRootScope((r.info ?? []) as Pair[]), r.name as string)
+			name(s.createRootScope((r.info ?? {}) as Info), r.name as string)
 			return {}
 		case "scope": {
 			// the scope under first, then the name
 			const up = r.parent === undefined ? undefined : scope(r.parent)
 			vacant(r.name as string)
-			const info = (r.info ?? []) as Pair[]
+			const info = (r.info ?? {}) as Info
 			name(s.createScope(info, up), r.name as string)
 			return {}
 		}
@@ -586,6 +593,7 @@ async function run(r: Request): Promise<Json> {
 						},
 						r.equal === "json" ? json : undefined,
 						r.declared === true ? to : undefined,
+						r.info as Info | undefined,
 					)), (x) => c = x)
 			return {}
 		}
@@ -602,6 +610,7 @@ async function run(r: Request): Promise<Json> {
 						(value, previous) => void evaluate(r.act, { self: self(), value, previous }),
 						r.equal === "json" ? json : undefined,
 						r.early === true ? { early: true } : undefined,
+						r.info as Info | undefined,
 					)), (c) => made = c)
 			return {}
 		}
@@ -621,7 +630,9 @@ async function run(r: Request): Promise<Json> {
 			return { value: current() }
 		case "write": {
 			const values = r.values as Record<string, Json>
-			for (const [k, v] of Object.entries(values)) keep(k, v)
+			// as values: "/" forms read, -0 is 0, a bigint JS holds exactly its number; given back in
+			// their JSON form (get)
+			for (const [k, v] of Object.entries(values)) keep(k, revive(v) as Json)
 			return { tick: s.mark(Object.keys(values)) }
 		}
 		case "changed":
@@ -652,7 +663,7 @@ async function run(r: Request): Promise<Json> {
 			return {}
 		}
 		case "get":
-			return { value: store.get(r.key as string) ?? null }
+			return { value: toJson(store.get(r.key as string) ?? null) }
 		case "log": {
 			const out = logged
 			logged = []

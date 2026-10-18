@@ -2,7 +2,7 @@
 // between lines. another implementation joins by speaking this (HARNESS). conventions:
 // extensions/sync/conformance/README.md
 //
-// bytes: lowercase hex. a value (actor, a metadata pair's value, a patch's value): its JSON form
+// bytes: lowercase hex. a value (actor, metadata, a patch's value): its JSON form
 // (conformance/typescript/form.ts), lone surrogates taken. a commit in JSON: its fields as commit.ts
 // names them, signer, each parent and base as hex; a byte field given as anything but a string is
 // passed on as its value (so encode can refuse it)
@@ -53,7 +53,7 @@ export function jsonOf(
 	const out: Record<string, unknown> = { table: c.table, actor: toJson(c.actor) }
 	if (c.reader !== undefined) out.reader = c.reader
 	if (c.external !== undefined) out.external = c.external
-	if (c.metadata !== undefined) out.metadata = c.metadata.map(([k, v]) => [k, toJson(v)])
+	if (c.metadata !== undefined) out.metadata = toJson(c.metadata)
 	out.time = c.time
 	out.signer = hex(c.signer)
 	out.nonce = c.nonce

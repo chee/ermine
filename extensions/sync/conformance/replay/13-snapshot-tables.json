@@ -42,16 +42,10 @@
 						"change": {
 							"time": 0,
 							"actor": null,
-							"metadata": [
-								[
-									"signer",
-									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-								],
-								[
-									"commit",
-									"204170567513b6040a41b7305a02c7583c3e9cd4e57692e6bf545300445461c9"
-								]
-							]
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "8d50f8a91391ab17e77d826f06131aaf20b7fb394e688cc8649869fbbdbc0517"
+							}
 						}
 					}
 				}
