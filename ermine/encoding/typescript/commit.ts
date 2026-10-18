@@ -28,7 +28,7 @@ export type Commit = {
 	// (Ed25519: 0xed 0x01, then 32 bytes). its did:key is "did:key:z" and its base58btc
 	signer: Uint8Array
 	// a count, the signer's own: two commits otherwise the same are told apart. counted up one a
-	// commit, so a run of them packs to almost nothing (run.ts)
+	// commit, so a run of them packs to almost nothing (packer.ts)
 	nonce: number
 	// the node's heads it was made on, by name (a multihash, below), ascending
 	parents: Uint8Array[]
@@ -202,11 +202,13 @@ const RULES: { [k in typeof FIELDS[number]]: (v: unknown, c: Fields) => boolean 
 		v.every((p) => place(p, PATCH) && (!("move" in p) || !("value" in p) && place(p.move, MOVE))),
 }
 
-// a key not listed, then the first field that says no, in the table's order; none: a commit
-function check(c: Fields): string | undefined {
+// a key not listed (when strict: encode), then the first field that says no, in the table's order;
+// none: a commit. decode is not strict: a field this device does not know is left out of what it
+// gives, a later device's, and its signature and name are over the bytes, which are kept as they are
+function check(c: Fields, strict: boolean): string | undefined {
 	// of several keys not listed, the first in canonical order: shorter first, then bytewise
 	const stray = Object.keys(c).filter((k) => !KNOWN.has(k)).sort(canonical)
-	if (stray.length > 0) return stray[0]
+	if (strict && stray.length > 0) return stray[0]
 	for (const k of FIELDS) {
 		if (!(k in c)) {
 			const needed = !OPTIONAL.has(k) ||
@@ -222,7 +224,7 @@ export function encode(commit: Commit): Uint8Array {
 	// a field with nothing is left out
 	const c: Fields = {}
 	for (const [k, v] of Object.entries(commit)) if (v !== undefined) c[k] = v
-	const field = check(c)
+	const field = check(c, true)
 	if (field !== undefined) throw new CommitError("not-a-commit", field)
 	try {
 		return cbor.encode(c as cbor.Value)
@@ -261,7 +263,8 @@ function pairs(list: unknown[]): unknown {
 	return out
 }
 
-// the commit back, its byte fields Uint8Arrays: new objects every time, shared with nothing
+// the commit back, a field not known left out (never encode it again to hash, check or send: keep
+// its bytes), its byte fields Uint8Arrays: new objects every time, shared with nothing
 export function decode(b: Uint8Array): Commit {
 	let x: unknown
 	try {
@@ -272,8 +275,9 @@ export function decode(b: Uint8Array): Commit {
 	}
 	if (!isFields(x)) throw new CommitError("not-a-commit")
 	if (Array.isArray(x.metadata)) x.metadata = pairs(x.metadata)
-	const field = check(x)
+	const field = check(x, false)
 	if (field !== undefined) throw new CommitError("not-a-commit", field)
+	for (const k of Object.keys(x)) if (!KNOWN.has(k)) delete x[k]
 	return x as Commit
 }
 
