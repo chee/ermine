@@ -21,9 +21,9 @@ nc_sources="$nc/core/op/c/value.c $nc/core/op/c/apply.c $nc/core/op/c/invert.c $
   $nc/ermine/processes/c/start.c $nc/ermine/sites/c/sites.c \
   $nc/extensions/programs/c/programs.c $nc/extensions/programs/c/programs_json.c $nc/extensions/programs/c/start.c $nc/extensions/programs/c/dlopen.c \
   $nc/ermine/encoding/c/json.c $nc/ermine/encoding/c/json_text.c $nc/ermine/encoding/c/cbor.c $nc/ermine/encoding/c/commit.c $nc/ermine/encoding/c/pack.c $nc/ermine/encoding/c/hash.c \
-  $nc/extensions/sync/c/sync.c $nc/extensions/sync/c/transport.c $nc/extensions/sync/c/ids.c $nc/extensions/sync/c/seal.c $nc/extensions/sync/c/history.c $nc/extensions/sync/c/replay.c \
-  $nc/extensions/sync/c/snapshot.c $nc/extensions/sync/c/run.c $nc/extensions/subduction/c/fragment.c \
-  $nc/ermine/encoding/c/blake3/blake3.c $nc/ermine/encoding/c/blake3/blake3_dispatch.c $nc/ermine/encoding/c/blake3/blake3_portable.c $nc/extensions/sync/c/ed25519/sha2.c \
+  $nc/extensions/together/c/sync.c $nc/extensions/together/c/transport.c $nc/extensions/together/c/mailroom.c $nc/extensions/together/stacks/subduction/c/subduction.c $nc/extensions/together/c/ids.c $nc/extensions/together/c/seal.c $nc/extensions/together/c/history.c $nc/extensions/together/c/replay.c \
+  $nc/extensions/together/c/snapshot.c $nc/extensions/together/c/packer.c $nc/extensions/subduction/c/fragment.c \
+  $nc/ermine/encoding/c/blake3/blake3.c $nc/ermine/encoding/c/blake3/blake3_dispatch.c $nc/ermine/encoding/c/blake3/blake3_portable.c $nc/extensions/together/c/ed25519/sha2.c \
   $nc/extensions/subduction/c/subduction/store_files.c $nc/extensions/subduction/c/subduction/platform_posix.c \
   $nc/extensions/subduction/c/subduction/websocket.c $nc/extensions/subduction/c/subduction/transport_openssl.c \
   $nc/playground/experimental_os/newos/fronts/fronts.c $nc/playground/experimental_os/newos/card/card.c $nc/playground/experimental_os/newos/card/net.c \
