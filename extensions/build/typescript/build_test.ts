@@ -6,7 +6,7 @@ import { createScheduler, PENDING } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/table"
 import { createPlaces } from "@ermine/places"
-import { createChangeHeader } from "@ermine/places/header"
+import { createChangeHeader, NODE } from "@ermine/places/header"
 import { STATUS } from "@ermine/places/status"
 import { upsert } from "@ermine/places/upsert"
 import type { Value } from "@ermine/encoding/cbor"
@@ -35,7 +35,7 @@ function world() {
 	})
 	const places = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler: s })
 	s.onTrackingEnd((key) => places.release(key))
-	const host = s.createRootScope([["actor", "host"]])
+	const host = s.createRootScope({ actor: "host" })
 	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 	const header = () => createChangeHeader(s)
 	const put = (part: Key, id: Id, v: unknown) =>
@@ -47,7 +47,7 @@ function world() {
 	const builds = () => hosted(() => createBuilds({ scheduler: s, table, places, cache: "CACHE" }))
 	// a computer, in a scope of its own: each run, f's result kept
 	function watch(f: () => unknown) {
-		const w = { runs: 0, last: undefined as unknown, o: s.createScope([["watch", "w"]], host) }
+		const w = { runs: 0, last: undefined as unknown, o: s.createScope({ watch: "w" }, host) }
 		s.runWithScope(
 			w.o,
 			() => s.createComputer(() => (w.runs++, { v: f() }), ({ v }) => void (w.last = v)),
@@ -360,7 +360,7 @@ Deno.test("early cutoff: an output equal by bytes to one the step keeps is kept 
 	let sets = 0
 	const outs: unknown[] = []
 	w.s.runWithScope(
-		w.hosted(() => w.s.createScope([["watch", "parity"]])),
+		w.hosted(() => w.s.createScope({ watch: "parity" })),
 		() =>
 			w.s.createComputer(
 				() =>
@@ -452,4 +452,19 @@ Deno.test("a step out goes once no run reads it: a reader that hits instead lets
 	await settled()
 	w.s.pulse()
 	assertEquals(entries(w, hex(hash(["slow", 0]))).length, 1)
+})
+
+Deno.test("a step's writes end at its status node: its computer's own info, NODE: step:…", () => {
+	const w = world()
+	w.value("UP", upper())
+	const b = w.builds()
+	const one = w.watch(() => b.compile("UP", "hi"))
+	w.s.pulse()
+	assertEquals(one.last, "HI")
+	const kids = w.table.get("children", "CACHE")!.value as Record<string, Id>
+	const step = kids[hex(hash(["UP", "hi"]))]
+	const metadata = w.table.get("value", step)!.change.metadata!
+	assertEquals(String(metadata[NODE]).startsWith("step:"), true)
+	assertEquals(Object.keys(metadata).sort(), ["mark", NODE, "run"].sort())
+	assertEquals("actor" in metadata, false)
 })

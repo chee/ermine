@@ -10,7 +10,7 @@ type Key = { name: string }
 function world() {
 	const s = createScheduler()
 	const store = new Map<Key, unknown>()
-	const root = s.createRootScope([["actor", "bench"]])
+	const root = s.createRootScope({ actor: "bench" })
 	const key = (name: string): Key => ({ name })
 	const read = <T>(k: Key) => (s.track(k), store.get(k) as T)
 	const write = (k: Key, v: unknown) => (store.set(k, v), s.mark([k]))
@@ -221,7 +221,7 @@ bench(`make, run, tear down 1000`, () => {
 	const src = w.key("src")
 	w.write(src, 0)
 	return [n, 20, () => {
-		const o = w.s.runWithScope(w.root, () => w.s.createScope([["why", "bench"]]))
+		const o = w.s.runWithScope(w.root, () => w.s.createScope({ why: "bench" }))
 		for (let i = 0; i < n; i++) w.compute(w.key("m" + i), () => w.read<number>(src) + i, o)
 		w.s.pulse()
 		w.s.teardown(o)
@@ -235,7 +235,7 @@ bench(`make, run, tear down a chain of 1000`, () => {
 	const src = w.key("src")
 	w.write(src, 0)
 	return [n, 2, () => {
-		const o = w.s.runWithScope(w.root, () => w.s.createScope([["why", "bench"]]))
+		const o = w.s.runWithScope(w.root, () => w.s.createScope({ why: "bench" }))
 		let prev = src
 		for (let i = 0; i < n; i++) {
 			const k = w.key("m" + i), p = prev

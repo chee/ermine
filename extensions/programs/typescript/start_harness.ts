@@ -1,6 +1,6 @@
 // start_harness: start and stop (start.ts) on the line protocol, one JSON request per line in, one
 // answer per line out. one world for the process: scheduler, table, paths, the host's places (root
-// "R"), scope nodes. the host writes with its scope open, info [["actor","test"]]. a box's folder
+// "R"), scope nodes. the host writes with its scope open, info {"actor":"test"}. a box's folder
 // answers as "box:<name>", a process's node as "proc:<name>". a PlacesError: { error: code }.
 // suites: conformance/start, conformance/load (TypeScript only), conformance/native (both).
 //

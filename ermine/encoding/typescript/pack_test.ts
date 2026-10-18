@@ -87,7 +87,7 @@ Deno.test("pack: a change and its op come back as written", () => {
 		actor: { name: "chee" },
 		reader: "r",
 		external: [{ file: "a.ts", line: 1, column: 0 }, { file: "b.ts", line: 2, function: "f" }],
-		metadata: [["sync", { lamport: 1 }], ["why", "x"], ["why", "y"]],
+		metadata: { sync: { lamport: 1 }, why: "x" },
 	})
 	update(node, [{ path: ["list"], range: [1, 2] }, { path: ["s"], range: [0, 1], value: "A" }], {
 		time: 1760000001,
@@ -194,7 +194,7 @@ Deno.test("pack: a symbol anywhere cannot be carried; getting rid of them is the
 		const change of [
 			{ time: 1, actor: s },
 			{ time: 1, actor: "a", reader: s as unknown as string },
-			{ time: 1, actor: "a", metadata: [["a", s]] as [string, unknown][] },
+			{ time: 1, actor: "a", metadata: { a: s } },
 			{ time: 1, actor: "a", op: { patches: [{ path: ["a"], value: s }], undo: [] } },
 		]
 	) assertEquals(code(() => encode(n(1, change))), "cannot-carry")
@@ -294,6 +294,20 @@ Deno.test("pack: reading takes exactly what writing gives", () => {
 	assertEquals(code(() => decode(pack([]))), "not-a-node")
 })
 
+Deno.test("pack: metadata in the old form, [key, value] pairs, is read as an object, of a key repeated the first", () => {
+	const old = { change: { time: 1, metadata: [["why", "x"], ["a", 1], ["why", "y"]] } }
+	const back = decode(cbor.encode(old))
+	assertEquals(back.change.metadata, { why: "x", a: 1 })
+	// written again: a map
+	assertEquals(
+		cbor.decode(encode(back)),
+		{ change: { time: 1, metadata: { a: 1, why: "x" } } },
+	)
+	const proto = decode(cbor.encode({ change: { time: 1, metadata: [["__proto__", 1]] } }))
+	assertEquals(Object.getPrototypeOf(proto.change.metadata), Object.prototype)
+	assertEquals(Object.keys(proto.change.metadata!), ["__proto__"])
+})
+
 Deno.test("pack: the first form ({keys, nodes}) is read, as exactly as it was written", () => {
 	const node = (value: number) => ({ change: { time: 1, actor: "a" }, value })
 	const good = { keys: [["value", "a", 0], ["value", "b", 1]], nodes: [node(1), node(2)] }
@@ -320,6 +334,7 @@ Deno.test("pack: the first form ({keys, nodes}) is read, as exactly as it was wr
 		["a change with no time", one({ change: { actor: "a" } })],
 		["a site with no line", one({ change: { time: 1, external: [{ file: "a" }] } })],
 		["a metadata entry of three", one({ change: { time: 1, metadata: [["a", 1, 2]] } })],
+		["metadata a string", one({ change: { time: 1, metadata: "a" } })],
 		[
 			"a patch with another key",
 			one({ change: { time: 1, op: { patches: [{ path: [], x: 1 }], undo: [] } } }),

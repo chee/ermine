@@ -1,4 +1,4 @@
-// deno run filesystem/places/typescript/runs_bench.ts
+// deno run ermine/processes/typescript/runs_bench.ts
 // what recording each run costs (runs.ts): a pulse rerunning computers that read through places,
 // with nothing recorded, with status.ts alone, with runs.ts, with both. medians of up to 21
 // rounds: µs per pulse, and per run where the pulse runs many. the host's write each pulse is
@@ -8,9 +8,9 @@ import update from "@ermine/node/update"
 import { createTable, type Key } from "@ermine/table"
 import { createScheduler } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
-import { createPlaces } from "./places.ts"
+import { createPlaces } from "@ermine/places"
 import { createRuns } from "./runs.ts"
-import { createStatus } from "./status.ts"
+import { createStatus } from "@ermine/places/status"
 
 type Shape = "none" | "status" | "runs" | "both"
 
@@ -21,7 +21,7 @@ function world(n: number, shape: Shape) {
 	s.onTrackingEnd((k) => places.release(k))
 	const table = createTable((part, id) => places.onTableChange(part as Key, id))
 	const places = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler: s })
-	const o = s.createRootScope([["actor", "bench"]])
+	const o = s.createRootScope({ actor: "bench" })
 	const h = (): ChangeHeader => ({ time: 0, actor: "bench" })
 	for (const k of ["a", "b"]) table.add("value", k, createEntry<unknown>({ x: 0 }, h()))
 	const statuses = shape === "status" || shape === "both"

@@ -76,7 +76,7 @@ async function host(n: number) {
 		merges: { "eg-walker": rule },
 		merge: "eg-walker",
 	})
-	const scope = scheduler.createRootScope([["actor", `host${n}`]])
+	const scope = scheduler.createRootScope({ actor: `host${n}` })
 	const write = (part: Key, id: Id, patches: Patch[]) =>
 		scheduler.runWithScope(scope, () => {
 			const entry = table.get(part, id)

@@ -690,7 +690,7 @@ Deno.test("scheduler: a reader linked twice to a spot runs once when it changes,
 	const s = createScheduler()
 	let runs = 0
 	let shape = ["a", "b"]
-	s.runWithScope(s.createRootScope([["actor", "test"]]), () =>
+	s.runWithScope(s.createRootScope({ actor: "test" }), () =>
 		s.createComputer(() => {
 			runs++
 			for (const k of shape) s.track(k)

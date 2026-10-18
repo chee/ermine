@@ -6,9 +6,8 @@ import { createScheduler, PENDING, type Scope } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/table"
 import { createPlaces } from "@ermine/places"
-import { createChangeHeader } from "@ermine/places/header"
+import { createChangeHeader, NODE } from "@ermine/places/header"
 import { STATUS } from "@ermine/places/status"
-import { RUN, type Run } from "@ermine/places/runs"
 import { box, createBox } from "@ermine/boxes"
 import { PROCESS } from "@ermine/processes"
 import { createScopeNodes } from "@ermine/processes/scopes"
@@ -42,9 +41,9 @@ function world(
 	const places = createPlaces({ root: "R", table, paths, scheduler: s })
 	s.onTrackingEnd((key) => places.release(key))
 	const scopes = createScopeNodes({ scheduler: s, table })
-	const host = s.createRootScope([["actor", "host"]])
+	const host = s.createRootScope({ actor: "host" })
 	// the programs' scope: a scope of the host's own, so it can be torn down
-	const above = s.createScope([["test", "above"]], host)
+	const above = s.createScope({ test: "above" }, host)
 	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 	const header = () => createChangeHeader(s)
 	const commit = (changed: readonly Entry<unknown>[]) => places.commit(changed)
@@ -162,13 +161,13 @@ Deno.test("the api is createProcessAPI's return, and nothing else: no scheduler,
 	}
 })
 
-Deno.test("places that name reads: the build's latest run on the process's node, what it read; none, nothing", () => {
+Deno.test("places that name reads: the build's latest run by the process's node id, what it read; none, nothing", () => {
 	const r = recording()
 	const w = world(r.runner, undefined, false, true)
 	const p = w.start(["a"])
 	w.s.pulse()
 	assertEquals(r.calls.length, 1)
-	const run = w.table.get("attributes", p.id)?.value?.[RUN] as Run
+	const run = w.programs.runs!(p.id)!
 	// pending while the compile's step was out, then done
 	assertEquals([run.n, run.end], [2, "done"])
 	// the cache's folder, read for the compile's entry
@@ -176,7 +175,7 @@ Deno.test("places that name reads: the build's latest run on the process's node,
 	const plain = world(recording().runner)
 	const q = plain.start(["a"])
 	plain.s.pulse()
-	assertEquals(plain.table.get("attributes", q.id)?.value?.[RUN], undefined)
+	assertEquals(plain.programs.runs?.(q.id), undefined)
 })
 
 Deno.test("a runner giving a promise: the process pending till it lands, then clear; stopped before it lands, its stop is called as it lands", async () => {
@@ -270,7 +269,7 @@ Deno.test("a scope above torn down: the runner stopped, the row out, the node's 
 	assertEquals(stops, 1)
 })
 
-Deno.test("writes carry the process's scope: the row and the node's attributes, by the host's actor, [process, at] in their metadata (then its owners', nested), their site the call into start", () => {
+Deno.test("writes carry the process's scope: the row and the node's attributes, by the host's actor, [process, at] in their metadata, then [node, the process's id] (stopping there), their site the call into start", () => {
 	const r = recording()
 	const w = world(r.runner)
 	const a = w.start(["clock"])
@@ -278,14 +277,8 @@ Deno.test("writes carry the process's scope: the row and the node's attributes, 
 	const attrs = w.table.get("attributes", a.id)!
 	for (const e of [row, attrs]) {
 		assertEquals(e.change.actor, "host")
-		// nested: the process's own pairs, then its owners', the programs' and the host's
-		assertEquals(e.change.metadata, [
-			["process", ["clock"]],
-			["owner", [["programs", "start"], ["owner", [["test", "above"], ["owner", [[
-				"actor",
-				"host",
-			]]]]]]],
-		])
+		// flat: the process's own pairs, then its node; the owners' above it not repeated
+		assertEquals(e.change.metadata, { process: ["clock"], [NODE]: a.id })
 		assert(e.change.external?.[0].file.endsWith("start_test.ts"), e.change.external?.[0].file)
 	}
 })

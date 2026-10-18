@@ -38,7 +38,7 @@ async function keep(behind: boolean) {
 	})
 	const places = createPlaces({ root: "R", table, paths: createPaths(), scheduler })
 	const sync = createSync({ table, device, signer, commit: (c) => places.commit(c) })
-	const scope = scheduler.createRootScope([["actor", "bench"]])
+	const scope = scheduler.createRootScope({ actor: "bench" })
 	const doc = id("unlocked", new Uint8Array(32).fill(7))
 	const start = performance.now()
 	scheduler.runWithScope(scope, () => {

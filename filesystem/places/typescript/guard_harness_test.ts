@@ -73,7 +73,7 @@ function sequence(seed: number): Request[] {
 		{ op: "value", id: "rules", value: rules() },
 		{ op: "guard", name: "g", may: { grants: ["value", "rules"] } },
 	]
-	ACTORS.forEach((a, i) => out.push({ op: "root", name: `o${i}`, info: [["actor", a]] }))
+	ACTORS.forEach((a, i) => out.push({ op: "root", name: `o${i}`, info: { actor: a } }))
 	for (let i = 0; i < STEPS; i++) {
 		const scope = `o${pick(ACTORS.length)}`
 		const k = pick(8)

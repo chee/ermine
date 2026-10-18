@@ -25,7 +25,7 @@ function world(bare = false) {
 		paths: createPaths(),
 		scheduler: s,
 	})
-	const host = s.createRootScope([["actor", "host"]])
+	const host = s.createRootScope({ actor: "host" })
 	const made = s.runWithScope(host, () => createChangeHeader(s))
 	let time = made.time
 	const header = (): ChangeHeader => ({ ...made, time: ++time })
@@ -55,7 +55,7 @@ function world(bare = false) {
 	function watch(path: (string | number)[]) {
 		const w = { runs: 0 }
 		s.runWithScope(
-			s.createRootScope([["actor", "reader"]]),
+			s.createRootScope({ actor: "reader" }),
 			() => s.createComputer(() => (w.runs++, places.readValue("value", "N", path)), () => {}),
 		)
 		s.pulse()

@@ -24,7 +24,7 @@ function world(contributors?: Contributor[]) {
 	const paths = createPaths<unknown>()
 	const places = createPlaces({ root: "R", table, paths, scheduler: s, contributors })
 	s.onTrackingEnd((key) => places.release(key))
-	const host = s.createRootScope([["actor", "host"]])
+	const host = s.createRootScope({ actor: "host" })
 	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 	const put = (part: Key, id: Id, v: unknown) =>
 		hosted(() => table.sub(part, id, createEntry(v as never, createChangeHeader(s))))
@@ -35,7 +35,7 @@ function world(contributors?: Contributor[]) {
 	// what each read of a run tracked, as places names it
 	const reads: unknown[] = []
 	s.onRunEnd((_c, _n, _e, keys) => reads.push(keys.map((k) => places.describe(k))))
-	const notes = s.createRootScope([["actor", "notes"]])
+	const notes = s.createRootScope({ actor: "notes" })
 	const tracked = (f: () => unknown) => {
 		reads.length = 0
 		s.runWithScope(notes, () => s.createComputer(f, () => {}))

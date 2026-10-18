@@ -41,7 +41,7 @@ function world() {
 	}
 	const places = createPlaces({ root: "R", table, paths, scheduler })
 	s.onTrackingEnd((key) => places.release(key))
-	const host = s.createRootScope([["actor", "bench"]])
+	const host = s.createRootScope({ actor: "bench" })
 	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 	const header = () => createChangeHeader(s)
 	const put = (part: Key, id: Id, v: unknown) =>

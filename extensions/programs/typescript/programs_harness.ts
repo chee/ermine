@@ -2,7 +2,7 @@
 // answer per line out, in order. one world per process: a scheduler, table, paths and the host's
 // places (root "R", children alone), told the table's events and every write (a box's places is a
 // view of it). boxes by name; a folder a box made is answered as "box:<name>" anywhere. ids are
-// strings, a path a list of names. the host writes with its scope open, info [["actor","test"]].
+// strings, a path a list of names. the host writes with its scope open, info {"actor":"test"}.
 // a PlacesError answers { error: code }
 //
 // the world:

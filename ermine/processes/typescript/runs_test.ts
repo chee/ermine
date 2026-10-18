@@ -1,23 +1,31 @@
-import { assert, assertEquals, assertInstanceOf, assertStrictEquals } from "@std/assert"
+import {
+	assert,
+	assertEquals,
+	assertInstanceOf,
+	assertStrictEquals,
+	assertThrows,
+} from "@std/assert"
 import createEntry from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import type { Patch } from "@ermine/op/apply"
+import { createPlaces } from "@ermine/places"
+import { createGuard, Refusal } from "@ermine/places/guard"
+import { createChangeHeader } from "@ermine/places/header"
+import { no, yes } from "@ermine/protect"
 import { createTable, type Key } from "@ermine/table"
 import { createScheduler, PENDING } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
-import { createChangeHeader } from "./header.ts"
-import { createPlaces } from "./places.ts"
-import { createRuns, latest, type Read, RUN } from "./runs.ts"
+import { createRuns, type Read } from "./runs.ts"
 
-// a world: each computer given a node has its latest run written on it as its runs end
+// a world: each computer given a node has its latest run in the runs' table as its runs end
 function world() {
 	const s = createScheduler()
 	s.onTrackingEnd((k) => places.release(k))
 	const table = createTable((part, id) => places.onTableChange(part as Key, id))
 	const places = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler: s })
 	const runs = createRuns({ places, table, scheduler: s })
-	const o = s.createRootScope([["actor", "host"]])
-	const other = s.createRootScope([["actor", "other"]])
+	const o = s.createRootScope({ actor: "host" })
+	const other = s.createRootScope({ actor: "other" })
 	for (const k of ["a", "b"]) {
 		table.add("value", k, createEntry<unknown>({ x: 0, y: 0 }, { time: 0, actor: "host" }))
 	}
@@ -45,7 +53,7 @@ Deno.test("runs: a computer reading two nodes records both, in the order first r
 		}, () => {}))
 	runs.give(c, "C")
 	s.pulse()
-	const run = latest(places, "C")!
+	const run = runs.read("C")!
 	assertEquals(run.n, 1)
 	assertEquals(run.end, "done")
 	assert(run.started! <= run.ended)
@@ -56,7 +64,22 @@ Deno.test("runs: a computer reading two nodes records both, in the order first r
 	assertEquals(run.writes, [])
 })
 
-Deno.test("runs: a rerun reading the same writes nothing to reads; its number and times are written", () => {
+Deno.test("runs: the record is not in the graph's table, and no table event is made", () => {
+	const { s, table, places, runs, o } = world()
+	let events = 0
+	places.watchAll(() => void events++)
+	const c = s.runWithScope(
+		o,
+		() => s.createComputer(() => places.readValue("value", "a"), () => {}),
+	)
+	runs.give(c, "C")
+	s.pulse()
+	assertEquals(runs.read("C")!.n, 1)
+	assertEquals([...table.get("C")], [])
+	assertEquals(events, 0)
+})
+
+Deno.test("runs: a rerun reading the same keeps its reads; a reader of reads does not rerun, a reader of n does", () => {
 	const { s, places, runs, o } = world()
 	const tick = {}
 	const c = s.runWithScope(o, () =>
@@ -65,29 +88,25 @@ Deno.test("runs: a rerun reading the same writes nothing to reads; its number an
 			return places.readValue("value", "a", ["x"])
 		}, () => {}))
 	runs.give(c, "C")
-	let seen = 0
+	let reads = 0, ns = 0
 	s.runWithScope(
 		o,
-		() =>
-			s.createComputer(
-				() => places.readValue("attributes", "C", [RUN, "reads"]),
-				() => void seen++,
-			),
+		() => s.createComputer(() => runs.read("C", "reads") ?? null, () => void reads++),
 	)
+	s.runWithScope(o, () => s.createComputer(() => runs.read("C", "n") ?? null, () => void ns++))
 	s.pulse()
-	const first = latest(places, "C")!
+	const first = runs.read("C")!
 	assertEquals(first.reads.map(where), [{ key: tick }, { part: "value", id: "a", path: ["x"] }])
-	assertEquals(seen, 1)
+	assertEquals([reads, ns], [1, 1])
 	s.mark([tick])
 	s.pulse()
-	const second = latest(places, "C")!
+	const second = runs.read("C")!
 	assertEquals(second.n, 2)
 	assertStrictEquals(second.reads, first.reads)
-	// the reader of reads did not run again
-	assertEquals(seen, 1)
+	assertEquals([reads, ns], [1, 2])
 })
 
-Deno.test("runs: a rerun reading differently replaces the reads; the version seen changes when the node is written", () => {
+Deno.test("runs: a read's change is the entry's header itself; a rerun reading differently replaces the reads", () => {
 	const { s, table, places, runs, o, other, edit } = world()
 	const c = s.runWithScope(o, () =>
 		s.createComputer(() => {
@@ -96,18 +115,18 @@ Deno.test("runs: a rerun reading differently replaces the reads; the version see
 		}, () => {}))
 	runs.give(c, "C")
 	s.pulse()
-	const before = latest(places, "C")!.reads[0] as Exclude<Read, { key: unknown }>
+	const before = runs.read("C")!.reads[0] as Exclude<Read, { key: unknown }>
 	assertStrictEquals(before.change, table.get("value", "a")!.change)
 	assertEquals(before.change!.actor, "host")
 	edit("a", [{ path: ["x"], value: 1 }], other)
 	s.pulse()
-	const run = latest(places, "C")!
+	const run = runs.read("C")!
 	assertEquals(run.reads.map(where), [
 		{ part: "value", id: "a", path: ["x"] },
 		{ part: "value", id: "b", path: ["y"] },
 	])
 	const after = run.reads[0] as Exclude<Read, { key: unknown }>
-	assert(after.change !== before.change)
+	assertStrictEquals(after.change, table.get("value", "a")!.change)
 	assertEquals(after.change!.actor, "other")
 	assertEquals(after.change!.op!.patches, [{ path: ["x"], value: 1 }])
 })
@@ -123,13 +142,13 @@ Deno.test("runs: a pending run records what it read before pending; its landing,
 		}, () => {}))
 	runs.give(c, "C")
 	s.pulse()
-	const pending = latest(places, "C")!
+	const pending = runs.read("C")!
 	assertEquals(pending.end, "pending")
 	assertEquals(pending.reads.map(where), [{ part: "value", id: "a", path: ["x"] }])
 	resolve(1)
 	await new Promise((r) => setTimeout(r, 0))
 	s.pulse()
-	const done = latest(places, "C")!
+	const done = runs.read("C")!
 	assertEquals([done.n, done.end, done.started], [1, "done", pending.started])
 	assertStrictEquals(done.reads, pending.reads)
 	// and a compute returning the scheduler's PENDING
@@ -140,8 +159,8 @@ Deno.test("runs: a pending run records what it read before pending; its landing,
 		}, () => {}))
 	runs.give(w, "W")
 	s.pulse()
-	assertEquals(latest(places, "W")!.end, "pending")
-	assertEquals(latest(places, "W")!.reads.map(where), [{ part: "value", id: "b", path: [] }])
+	assertEquals(runs.read("W")!.end, "pending")
+	assertEquals(runs.read("W")!.reads.map(where), [{ part: "value", id: "b", path: [] }])
 })
 
 Deno.test("runs: a failed run, its error; looping too", () => {
@@ -153,7 +172,7 @@ Deno.test("runs: a failed run, its error; looping too", () => {
 		}, () => {}))
 	runs.give(c, "C")
 	s.pulse()
-	const run = latest(places, "C")!
+	const run = runs.read("C")!
 	assertEquals(run.end, "failed")
 	assertInstanceOf(run.error, Error)
 	assertEquals(run.error.message, "boom")
@@ -170,7 +189,7 @@ Deno.test("runs: a failed run, its error; looping too", () => {
 	)
 	runs.give(l, "L")
 	s.pulse()
-	const looped = latest(places, "L")!
+	const looped = runs.read("L")!
 	assertEquals(looped.end, "looping")
 	assertEquals(looped.error!.message, "looping")
 })
@@ -192,13 +211,12 @@ Deno.test("runs: writes, each with its change: the run's code, its set, an effec
 		}))
 	runs.give(c, "C")
 	s.pulse()
-	const run = latest(places, "C")!
+	const run = runs.read("C")!
 	assertEquals(run.writes.map((w) => [w.part, w.id, w.change?.op?.patches]), [
 		["value", "a", [{ path: ["y"], value: 0 }]],
 		["value", "b", [{ path: ["x"], value: 0 }]],
 	])
-	// its own run in the metadata
-	assertEquals(run.writes[0].change!.metadata![0], ["run", 1])
+	assertStrictEquals(run.writes[1].change, table.get("value", "b")!.change)
 	// an effect: its act's writes come after its run's end
 	const e = s.runWithScope(
 		o,
@@ -211,57 +229,99 @@ Deno.test("runs: writes, each with its change: the run's code, its set, an effec
 	)
 	runs.give(e, "E")
 	s.pulse()
-	assertEquals(latest(places, "E")!.writes.map((w) => [w.part, w.id]), [["value", "a"]])
+	assertEquals(runs.read("E")!.writes.map((w) => [w.part, w.id]), [["value", "a"]])
 	// a write from outside lands in no record
-	const writes = latest(places, "C")!.writes
+	const writes = runs.read("C")!.writes
 	edit("b", [{ path: ["y"], value: 9 }])
-	assertStrictEquals(latest(places, "C")!.writes, writes)
+	assertStrictEquals(runs.read("C")!.writes, writes)
 })
 
-Deno.test("runs: a run that read a record writes none, so readers of records stop", () => {
+Deno.test("runs: records read in a loop (its own, each other's) end looping, as the scheduler sees any loop", () => {
 	const { s, places, runs, o, edit } = world()
-	let runsOfSelf = 0
+	const counts = { S: 0, P: 0, Q: 0 }
 	const self = s.runWithScope(o, () =>
 		s.createComputer(() => {
-			runsOfSelf++
+			counts.S++
 			places.readValue("value", "a", ["x"])
-			return places.readValue("attributes", "S")
+			return runs.read("S", "n") ?? null
 		}, () => {}))
-	runs.give(self, "S")
-	// two reading each other's
 	const p = s.runWithScope(o, () =>
 		s.createComputer(() => {
+			counts.P++
 			places.readValue("value", "a", ["x"])
-			return places.readValue("attributes", "Q", [RUN, "n"])
+			return runs.read("Q", "n") ?? null
 		}, () => {}))
-	const q = s.runWithScope(
-		o,
-		() => s.createComputer(() => places.readValue("attributes", "P", [RUN, "n"]), () => {}),
-	)
+	const q = s.runWithScope(o, () =>
+		s.createComputer(() => {
+			counts.Q++
+			return runs.read("P", "n") ?? null
+		}, () => {}))
+	runs.give(self, "S")
 	runs.give(p, "P")
 	runs.give(q, "Q")
 	s.pulse()
+	assertEquals([runs.read("S")!.end, runs.read("P")!.end, runs.read("Q")!.end], [
+		"looping",
+		"looping",
+		"looping",
+	])
+	const before = { ...counts }
 	edit("a", [{ path: ["x"], value: 1 }])
 	s.pulse()
-	// its first run read no record yet, so it ran once more, then stopped
-	assertEquals(runsOfSelf, 3)
-	assertEquals(latest(places, "S")!.n, 1)
-	assertEquals(latest(places, "P"), undefined)
-	assertEquals(latest(places, "Q"), undefined)
+	assertEquals(runs.read("S")!.end, "looping")
+	// each ran again a bounded number of times
+	assert(counts.S - before.S <= 2 && counts.P - before.P <= 3 && counts.Q - before.Q <= 3)
 })
 
-Deno.test("runs: a computer not given a node writes none; stop stops", () => {
-	const { s, table, places, runs, o, edit } = world()
+Deno.test("runs: a read asks the reader's guard as reading the computer's node; a no throws", () => {
+	const { s, table, places, runs, o } = world()
+	const c = s.runWithScope(
+		o,
+		() => s.createComputer(() => places.readValue("value", "a"), () => {}),
+	)
+	runs.give(c, "C")
+	s.pulse()
+	const asked: unknown[] = []
+	const guard = createGuard({
+		places,
+		table,
+		scheduler: s,
+		may: (
+			ask,
+		) => (asked.push([ask.op, ask.target.id, ask.target.part]),
+			ask.target.id === "C" ? no("not yours") : yes),
+	})
+	assertThrows(() => s.runWithScope(o, () => runs.read("C", guard)), Refusal)
+	assertThrows(() => s.runWithScope(o, () => runs.read("C", "reads", guard)), Refusal)
+	assertEquals(asked, [["read", "C", undefined], ["read", "C", undefined]])
+	const open = createGuard({ places, table, scheduler: s, may: () => yes })
+	assertEquals(s.runWithScope(o, () => runs.read("C", "n", open)), 1)
+})
+
+Deno.test("runs: drop takes the record out and tells its readers; a computer not given a node has none; stop stops", () => {
+	const { s, places, runs, o, edit } = world()
 	const c = s.runWithScope(
 		o,
 		() => s.createComputer(() => places.readValue("value", "a"), () => {}),
 	)
 	s.runWithScope(o, () => s.createComputer(() => places.readValue("value", "a"), () => {}))
 	runs.give(c, "C")
+	let seen: unknown = "never"
+	s.runWithScope(
+		o,
+		() => s.createComputer(() => runs.read("C", "n") ?? null, (v) => void (seen = v)),
+	)
 	s.pulse()
-	assertEquals([...table.get("C")].map(([part]) => part), ["attributes"])
-	runs.stop()
+	assertEquals(seen, 1)
+	runs.drop("C")
+	s.pulse()
+	assertEquals(seen, null)
+	assertEquals(runs.read("C"), undefined)
 	edit("a", [{ path: ["x"], value: 1 }])
 	s.pulse()
-	assertEquals(latest(places, "C")!.n, 1)
+	assertEquals(runs.read("C")!.n, 2)
+	runs.stop()
+	edit("a", [{ path: ["x"], value: 2 }])
+	s.pulse()
+	assertEquals(runs.read("C")!.n, 2)
 })

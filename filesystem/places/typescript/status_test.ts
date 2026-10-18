@@ -12,7 +12,7 @@ function world() {
 	const table = createTable((part, id) => places.onTableChange(part as Key, id))
 	const places = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler: s })
 	const statuses = createStatus({ places, table, scheduler: s })
-	const o = s.createRootScope([["actor", "host"]])
+	const o = s.createRootScope({ actor: "host" })
 	return { s, table, places, statuses, o }
 }
 

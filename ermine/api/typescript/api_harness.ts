@@ -1,6 +1,6 @@
 // the process api (api.ts) on the line protocol: one JSON request per line in, one answer per line
 // out, in order. one world per run: a scheduler, a table, places at the root "R", host scope
-// [["actor","test"]]. after every request the api's pulse runs, so readers have run by the next.
+// {"actor":"test"}. after every request the api's pulse runs, so readers have run by the next.
 // new ids "n1", "n2", … in order; a process's id "proc:<name>".
 // node: { path, part } | { id, part }.
 // processes are started by the harness (start, openwith, box need C not there yet).

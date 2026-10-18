@@ -5,8 +5,8 @@ import { createClingy } from "./clingy.ts"
 
 function setup() {
 	const s = createScheduler()
-	const root = s.createRootScope([["actor", "test"]])
-	const host = s.createRootScope([["actor", "host"]])
+	const root = s.createRootScope({ actor: "test" })
+	const host = s.createRootScope({ actor: "host" })
 	const gone: unknown[] = []
 	const clingy = createClingy<object>(s, (k) => void gone.push(k))
 	const on = {}

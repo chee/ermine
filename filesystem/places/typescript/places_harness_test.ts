@@ -39,7 +39,7 @@ const generator = (seed: number) => {
 function sequence(seed: number): Request[] {
 	const { pick, one } = generator(seed)
 	const entry = () => one(IDS)
-	const out: Request[] = [{ op: "root", name: "o", info: [["actor", "o"]] }]
+	const out: Request[] = [{ op: "root", name: "o", info: { actor: "o" } }]
 	const kids = () => {
 		const v: Record<string, unknown> = {}
 		// now and then something that is no id: taken, no item
