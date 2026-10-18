@@ -127,10 +127,12 @@ const BLAKE3 = 0x1e
 export function splitName(b: unknown): { code: number; digest: Uint8Array } | undefined {
 	if (!(b instanceof Uint8Array)) return undefined
 	const read = (at: number): [number, number] | undefined => {
-		let n = 0, i = at
-		while (i < b.length && i - at < 7 && b[i] & 0x80) n += (b[i++] & 0x7f) * 2 ** (7 * (i - 1 - at))
-		if (i >= b.length || i - at >= 7 || i > at && b[i] === 0) return undefined
-		return [n + b[i] * 2 ** (7 * (i - at)), i + 1]
+		let n = 0
+		for (let k = 0; k < 7 && at + k < b.length; k++) {
+			const byte = b[at + k]
+			n += (byte & 0x7f) * 2 ** (7 * k)
+			if (byte < 0x80) return k > 0 && byte === 0 ? undefined : [n, at + k + 1]
+		}
 	}
 	const code = read(0)
 	if (code === undefined || !HASHES.has(code[0])) return undefined
