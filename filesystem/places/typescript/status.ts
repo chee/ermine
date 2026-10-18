@@ -19,7 +19,7 @@ export const PENDING: unique symbol = Symbol.for("ermine.pending") as never
 export type Setup = {
 	places: Pick<Places, "commit">
 	table: Pick<Table, "get" | "add">
-	scheduler: Pick<Scheduler, "runWithScope" | "getInfo" | "getRun" | "onRunEnd">
+	scheduler: Pick<Scheduler, "runWithScope" | "getCurrentScope" | "getRun" | "onRunEnd">
 }
 
 // listens to the scheduler's onRunEnd from here on

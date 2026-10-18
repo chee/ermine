@@ -14,13 +14,13 @@
 // step: the first answer is where get goes, names are all of theirs. pruning: one may answer none
 // for a whole subtree, and is not asked again under there (that read is tracked, so something
 // arriving reruns the walk). describe(key): a held spot as a place, else undefined.
-// watchAll(fn): every fact as it lands (runs.ts). a cache (cache.ts) records reads outside runs:
+// watchAll(fn): every fact as it lands (ermine/processes' runs.ts). a cache (cache.ts) records reads outside runs:
 // commit right after update.
 import type { ChangeHeader, Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import type { Key as Step, Patch } from "@ermine/op/apply"
 import type { Scheduler } from "@ermine/scheduler"
-import { keyOrder } from "@ermine/encoding/cbor"
+import { keyorder } from "@ermine/util/keyorder"
 import type { createPaths, Spot } from "@ermine/scheduler/paths"
 import type { Id, Key, Table } from "@ermine/table"
 
@@ -628,7 +628,7 @@ export function createPlaces(setup: Setup): Places {
 					out.push({ name, from: c.from })
 				}
 			}
-			if (asked.length > 1) out.sort((a, b) => keyOrder(a.name, b.name))
+			if (asked.length > 1) out.sort((a, b) => keyorder(a.name, b.name))
 			return Object.assign(out, { gone: under })
 		}
 

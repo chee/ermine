@@ -23,7 +23,7 @@
 // read is the one tracked.
 // pl_view: the same places from another root with its own contributors, everything else shared.
 // pl_spot: names a held spot as a place; anything else none.
-// who: levels, innermost first: extra (if any), the scope open, its parents (sc_scope_parent) to
+// change base: levels, innermost first: extra (if any), the scope open, its parents (sc_scope_parent) to
 // the root. values are op_values, except a scope's "run" and "mark" (uint64_t, given as numbers).
 // actor: the first "actor" over all levels; reader: the first string "reader". metadata: the
 // levels merged into one map, inner keys over outer, up to and with the first scope whose own pairs
@@ -373,12 +373,12 @@ pl_members pl_members_at(pl *p, const char *const *path, size_t n);
 // (lib.ts' list is an iterator, a generator; C has none, so this returns the array)
 pl_members pl_list(pl *p, const char *const *path, size_t n);
 
-// who ------------------------------------------------------------------------------------------
+// change base -----------------------------------------------------------------------------------
 
-// who the scope open says a write is, extra (n pairs) its innermost level: a map of actor and
-// reader where there are some, and metadata (a map; see who above). New, the
+// the change base the scope open makes, extra (n pairs) its innermost level: a map of actor and
+// reader where there are some, and metadata (a map; see change base above). New, the
 // caller's to op_free. NULL: no scope open
-op_value *pl_who(pl *l, const sc_pair *extra, size_t n);
+op_value *pl_change_base(pl *l, const sc_pair *extra, size_t n);
 
 // a header made now, with the scope open
 typedef struct pl_made pl_made;

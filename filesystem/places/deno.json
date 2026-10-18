@@ -9,7 +9,6 @@
 		"./header": "./typescript/header.ts",
 		"./guard": "./typescript/guard.ts",
 		"./path": "./typescript/path.ts",
-		"./runs": "./typescript/runs.ts",
 		"./status": "./typescript/status.ts",
 		"./upsert": "./typescript/upsert.ts"
 	}

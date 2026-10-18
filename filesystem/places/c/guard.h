@@ -3,7 +3,7 @@
 // for a list. Same rules as guard.ts, which the suite in filesystem/places/conformance/guard/ holds
 // both to.
 //
-// An ask: who is the scope open (pl_who: an op_value map built from its pairs), from where the asker
+// An ask: who is the scope open (pl_change_base: an op_value map built from its pairs), from where the asker
 // is placed (a path), the policy given. A read is asked through places, told: a run asking tracks
 // what the policy read, so a change to the rules reruns it, refused or not. A write is asked of the
 // table, told no one: a write makes no run depend on the rules. No policy: everything is allowed.
