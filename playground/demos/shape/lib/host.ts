@@ -28,7 +28,7 @@ import {
 	rename,
 	unplace,
 } from "@ermine/places"
-import { createChangeHeader, getWho } from "@ermine/places/header"
+import { createChangeBase, createChangeHeader } from "@ermine/places/header"
 import { plan } from "@ermine/places/path"
 import { createStatus, STATUS } from "@ermine/places/status"
 import type { Answer, Policy, Target } from "@ermine/protect"
@@ -468,7 +468,7 @@ export function make(o: Options = {}): Host {
 	// protect asked: a no throws, a pending throws PENDING
 	function ask(c: Ctx, op: string, target: Target) {
 		if (!o.may || !c.asked) return
-		const who = getWho(s, c.extra)
+		const who = createChangeBase(s, c.extra)
 		const answer: Answer = o.may(
 			{ who, op, target, from: c.proc ? { path: c.place } : undefined },
 			(part, id, path) => c.r.value(part as Key, id as Id, path),

@@ -2,8 +2,9 @@
 ;;;
 ;;; a value, in lisp:
 ;;;   :null :true :false            null and the booleans
-;;;   integer                       a whole number (|n| <= 2^53)
-;;;   double-float                  every other number: -0, fractions, NaN, the infinities, big ones
+;;;   integer                       a whole number, any size, exact (a value never holds -0)
+;;;   double-float                  every other number: fractions, NaN, the infinities
+;;;                                 (typed float elements are doubles, -0 and whole ones too)
 ;;;   string                        code points; a lone surrogate is a surrogate char, a high then a
 ;;;                                 low always joined into one char (normalize)
 ;;;   jmap                          a map, its keys in order
@@ -49,6 +50,7 @@
 
 ;;; numbers
 (defconstant +2^53+ 9007199254740992)
+(defconstant +safe+ 9007199254740991)
 (defvar *inf* sb-ext:double-float-positive-infinity)
 (defvar *-inf* sb-ext:double-float-negative-infinity)
 (defvar *nan* (sb-kernel:make-double-float -524288 0))
@@ -61,13 +63,12 @@
       (and (floatp x) (not (sb-ext:float-nan-p x)) (not (sb-ext:float-infinity-p x))
            (= x (ffloor x)))))
 (defun norm-number (x)
-  "a number in its one lisp shape: whole and within 2^53 an integer, else a double; -0 a double"
-  (cond ((integerp x) (if (<= (abs x) +2^53+) x (coerce x 'double-float)))
-        ((rationalp x) (coerce x 'double-float))
+  "a number in its one lisp shape: whole an integer (any size, -0 is 0), else a double"
+  (cond ((integerp x) x)
+        ((rationalp x) (norm-number (coerce x 'double-float)))
         ((floatp x)
          (let ((d (coerce x 'double-float)))
-           (if (and (whole-number-p d) (not (minus-zero-p d)) (<= (abs d) +2^53+))
-               (round d) d)))
+           (if (whole-number-p d) (round d) d)))
         (t x)))
 (defun index-of (x)
   "a whole number >= 0 as an integer (-0 is 0, big doubles their integer)"
@@ -100,6 +101,8 @@
   (:report (lambda (c s) (format s "~a" (why c)))))
 (defun bad (fmt &rest args) (error 'bad-json :why (apply #'format nil fmt args)))
 
+(defvar *keep-zero* nil "reading the elements of a float typed array: -0 stays -0")
+
 (defun parse-json (text)
   (let ((i 0) (n (length text)))
     (labels ((peek () (if (< i n) (char text i) nil))
@@ -128,7 +131,8 @@
                        (ws) (expect #\")
                        (let ((k (str)))
                          (ws) (expect #\:)
-                         (let* ((v (val)) (e (assoc k (jmap-entries m) :test #'string=)))
+                         (let* ((v (let ((*keep-zero* (and (member k '("float32" "float64") :test #'string=) t))) (val)))
+                                (e (assoc k (jmap-entries m) :test #'string=)))
                            ;; a key given twice: the last wins, in the first's place (JSON.parse)
                            (if e (setf (cdr e) v)
                                (let ((cell (list (cons k v))))
@@ -199,16 +203,17 @@
                             (fp (if frac (parse-integer text :start frac :end frac-end) 0))
                             (fd (if frac (- frac-end frac) 0))
                             (r (* (+ ip (/ fp (expt 10 fd))) (if ex (expt 10 ex) 1))))
-                       (make-number r neg)))))))
+                       (make-number r neg (not (or frac ex)))))))))
       (let ((v (val)))
         (ws)
         (when (< i n) (bad "trailing text"))
         v))))
 
-(defun make-number (r neg)
-  "the number of rational magnitude r, negative when neg, as JavaScript reads it"
-  (cond ((zerop r) (if neg -0d0 0))
-        ((and (integerp r) (<= r +2^53+)) (if neg (- r) r))
+(defun make-number (r neg digits)
+  "the number of rational magnitude r, negative when neg; digits alone are that integer exactly,
+anything else the nearest double (whole: that integer). -0 is 0, but a float typed array's element"
+  (cond ((zerop r) (if (and neg *keep-zero*) -0d0 0))
+        (digits (if neg (- r) r))
         ((> r most-positive-double-float) (if neg *-inf* *inf*))
         (t (norm-number (let ((d (coerce r 'double-float))) (if neg (- d) d))))))
 
@@ -229,7 +234,10 @@
   (write-char #\" o))
 
 (defun write-number (x o)
-  (cond ((integerp x) (format o "~d" x))
+  (cond ((integerp x)
+         (if (<= (abs x) +safe+)
+             (format o "~d" x)
+             (format o "{\"/\":{\"bigint\":\"~d\"}}" x)))
         ((minus-zero-p x) (write-string "-0" o))
         ((sb-ext:float-nan-p x) (write-string "null" o))
         ((sb-ext:float-infinity-p x) (write-string "null" o))
@@ -282,7 +290,7 @@
         ((> (abs x) 3.4028235677973366d38)
          ;; past the largest float32, rounding to it or to infinity
          (if (>= (abs x) 3.4028235677973366d38) (if (plusp x) *inf* *-inf*) x))
-        (t (norm-number (coerce (coerce x 'single-float) 'double-float)))))
+        (t (coerce (coerce x 'single-float) 'double-float))))
 
 (defun typed-elem (kind e)
   "one element of a typed array from its JSON form"
@@ -296,7 +304,7 @@
              (no-form "typed"))
            v))
         ((float-kind-p kind)
-         (let ((v (cond ((realp e) e)
+         (let ((v (cond ((realp e) (if (floatp e) e (coerce e 'double-float)))
                         ((equal e "NaN") *nan*) ((equal e "Infinity") *inf*) ((equal e "-Infinity") *-inf*)
                         (t (no-form "typed")))))
            (if (string= kind "float32") (to-float32 v) v)))
@@ -345,6 +353,15 @@
                    ((string= tag "symbol")
                     (unless (and symbols (stringp body)) (no-form "symbol"))
                     (intern-jsym body))
+                   ((string= tag "bigint")
+                    (unless (and (stringp body) (plusp (length body))
+                                 (let ((d (if (char= (char body 0) #\-) (subseq body 1) body)))
+                                   (and (plusp (length d)) (every (lambda (c) (char<= #\0 c #\9)) d)
+                                        (or (= (length d) 1) (char/= (char d 0) #\0)))))
+                      (no-form "bigint"))
+                    (let ((v (parse-integer body)))
+                      (when (<= (abs v) +safe+) (no-form "bigint"))
+                      v))
                    ((string= tag "bytes") (make-bytes :data (b64-decode body)))
                    ((string= tag "number")
                     (cond ((equal body "NaN") *nan*) ((equal body "Infinity") *inf*)
@@ -358,6 +375,7 @@
                                         (unless (or surrogates (not (has-lone-p (car e)))) (no-form "a lone surrogate"))
                                         (cons (car e) (revive (cdr e) :symbols symbols :surrogates surrogates)))
                                       (jmap-entries x))))
+        ((floatp x) (norm-number x))
         (t x)))
 
 (defun slash (x) (jmap "/" x))
@@ -370,6 +388,7 @@
                ((eql x *inf*) (slash (jmap "number" "Infinity")))
                ((eql x *-inf*) (slash (jmap "number" "-Infinity")))
                (t x)))
+        ((and (integerp x) (> (abs x) +safe+)) (slash (jmap "bigint" (format nil "~d" x))))
         ((typed-p x)
          (let ((k (typed-kind x)))
            (slash (jmap k (mklist (map 'list (lambda (e)
@@ -394,8 +413,7 @@
         (t x)))
 
 (defun same-number (a b)
-  "Object.is on numbers"
+  "numbers by value: integers exactly, NaN equals NaN"
   (cond ((and (nanp a) (nanp b)) t)
         ((or (nanp a) (nanp b)) nil)
-        ((and (zerop a) (zerop b)) (eq (minus-zero-p a) (minus-zero-p b)))
         (t (= a b))))

@@ -71,7 +71,7 @@ export function feed<T>(
 		timer = setTimeout(flush, 100)
 	}
 	const { s, host } = world
-	const scope = s.createScope([["via", "solid"]], host)
+	const scope = s.createScope({ via: "solid" }, host)
 	let acted = false
 	s.runWithScope(
 		scope,
