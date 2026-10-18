@@ -100,7 +100,7 @@ void mr_sealed_free(mr_sealed_t *s);
 void mr_sealed_of(mr_sealed_t *s, sl_unsealed *u);
 
 // a seal taken in: its commit's name and lamport, its commit's bytes, its sealed bytes (NULL: a
-// commit a run's next vouched for, held without a seal), and the stored ids of the seals it was taken
+// commit a pack's next vouched for, held without a seal), and the stored ids of the seals it was taken
 // in over (its commit's parents; or, for a seal alone, every seal of each)
 typedef struct {
 	uint8_t stored[32], name[CM_NAME];
@@ -131,7 +131,7 @@ typedef struct {
 	size_t stuck_length;
 } mr_pending_t;
 
-// a fragment's member: its sealed bytes (NULL: vouched for by the next in its run), and its commit as
+// a fragment's member: its sealed bytes (NULL: vouched for by the next in its pack), and its commit as
 // the mailroom reads it
 typedef struct {
 	uint8_t *sealed;

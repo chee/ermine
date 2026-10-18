@@ -5,7 +5,7 @@
 //   deno run -A peer.ts --seed HEX [--doc ermine://…] [--store DIR] [--server wss://galaxy.observer]
 //     [--service NAME] [--zeros]
 //
-// the host is composed as sync_test.ts composes one: table, places, scheduler and sync (@ermine/sync).
+// the host is composed as sync_test.ts composes one: table, places, scheduler and sync (@ermine/together).
 // the document is a node of the table: stored changes are writes at it. no --doc: one is minted
 // (with --zeros, its last 16 bytes zero, for a server with no grant for it) and told in "ready"
 //   {cmd:"commit", value, n?}      n (default 1) writes of value at the document, kept; answers when
@@ -26,8 +26,8 @@ import { createChangeHeader } from "@ermine/places/header"
 import { createScheduler } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/table"
-import { type Conflict, createSync } from "@ermine/sync/sync"
-import { createSigner } from "@ermine/sync/seal"
+import { type Conflict, createSync } from "@ermine/together/sync"
+import { createSigner } from "@ermine/together/seal"
 import { files } from "./files.ts"
 import { Storage } from "./storage.ts"
 import { hexOf, unhex } from "./blob.ts"

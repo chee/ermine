@@ -8,7 +8,12 @@
 // built. the mailroom (mailroom.ts) holds the histories and what is taken in; this hands it what arrives
 // (pend, settle, member, hint, hear, stopped) and is its Stack (send, stop, handed, taking)
 import * as sd from "npm:@automerge/subduction@0.23.0"
-import { each as unpacking, pack as packing, PackError, type Unpacked } from "../../../typescript/packer.ts"
+import {
+	each as unpacking,
+	pack as packing,
+	PackError,
+	type Unpacked,
+} from "../../../typescript/packer.ts"
 import { hex, unhex } from "../../../typescript/hex.ts"
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import * as cbor from "@ermine/encoding/cbor"

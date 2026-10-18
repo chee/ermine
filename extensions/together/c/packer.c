@@ -16,24 +16,24 @@
 #define SAFE 9007199254740991.0
 #define SAFE_INT 9007199254740991LL
 
-const char *pk_code_name(pk_code code) {
+const char *pkr_code_name(pkr_code code) {
 	switch (code) {
-	case PK_NOT_A_PACK: return "not-a-pack";
-	case PK_COUNT: return "count";
-	case PK_SIGNATURES: return "signatures";
-	case PK_RUNS: return "runs";
-	case PK_DIFFERENCES: return "differences";
-	case PK_PARENTS: return "parents";
-	case PK_PATCHES: return "patches";
-	case PK_REF: return "ref";
-	case PK_INSERT: return "insert";
-	case PK_COMMIT: return "commit";
-	case PK_IDS: return "ids";
-	case PK_VOUCHED: return "vouched";
-	case PK_SIZE: return "size";
-	case PK_OK:
-	case PK_INPUT:
-	case PK_STOPPED: break;
+	case PKR_NOT_A_PACK: return "not-a-pack";
+	case PKR_COUNT: return "count";
+	case PKR_SIGNATURES: return "signatures";
+	case PKR_RUNS: return "runs";
+	case PKR_DIFFERENCES: return "differences";
+	case PKR_PARENTS: return "parents";
+	case PKR_PATCHES: return "patches";
+	case PKR_REF: return "ref";
+	case PKR_INSERT: return "insert";
+	case PKR_COMMIT: return "commit";
+	case PKR_IDS: return "ids";
+	case PKR_VOUCHED: return "vouched";
+	case PKR_SIZE: return "size";
+	case PKR_OK:
+	case PKR_INPUT:
+	case PKR_STOPPED: break;
 	}
 	return "";
 }
@@ -159,10 +159,10 @@ static bool same_path(const Json *a, const Json *b) {
 	return true;
 }
 
-pk_code pk_pack(const pk_item *sealed, size_t n, uint8_t **out, size_t *length) {
+pkr_code pkr_pack(const pkr_item *sealed, size_t n, uint8_t **out, size_t *length) {
 	*out = NULL;
 	*length = 0;
-	pk_code code = PK_OK;
+	pkr_code code = PKR_OK;
 	Json **commits = allocate((n + 1) * sizeof *commits);
 	uint8_t(*names)[CM_NAME] = allocate((n + 1) * CM_NAME), (*ids)[32] = allocate((n + 1) * 32);
 	// each signature's varsig header, and the bytes after it (NULL: given without a seal)
@@ -174,7 +174,7 @@ pk_code pk_pack(const pk_item *sealed, size_t n, uint8_t **out, size_t *length) 
 	bool extra = false;
 	size_t made = 0;
 	for (; made < n; made++) {
-		const pk_item *it = &sealed[made];
+		const pkr_item *it = &sealed[made];
 		Json *x = NULL, *c = NULL;
 		const Json *commit = NULL, *signature = NULL;
 		const uint8_t *cb = it->bytes;
@@ -191,7 +191,7 @@ pk_code pk_pack(const pk_item *sealed, size_t n, uint8_t **out, size_t *length) 
 		}
 		if (c == NULL) {
 			jsonFree(x);
-			code = PK_INPUT;
+			code = PKR_INPUT;
 			goto done;
 		}
 		commits[made] = c;
@@ -217,7 +217,7 @@ pk_code pk_pack(const pk_item *sealed, size_t n, uint8_t **out, size_t *length) 
 	for (size_t i = 0; i < n; i++) {
 		if (vouched[i] || header[i] != NULL) continue;
 		// one that must be signed, given without its seal
-		code = PK_INPUT;
+		code = PKR_INPUT;
 		goto done;
 	}
 	places at;
@@ -384,7 +384,7 @@ static bool undeltas(const Json *b, size_t n, int64_t *out) {
 	return at == b->bytes.length;
 }
 
-static pk_code fail(pk_code code, char **column, const char *name) {
+static pkr_code fail(pkr_code code, char **column, const char *name) {
 	if (column != NULL && name != NULL) *column = copyString(name);
 	return code;
 }
@@ -407,14 +407,14 @@ static size_t most(size_t length) {
 	return length > (SIZE_MAX - ((size_t)1 << 20)) / 64 ? SIZE_MAX : 64 * length + ((size_t)1 << 20);
 }
 
-pk_code pk_each(const uint8_t *bytes, size_t length, pk_each_fn each, void *context, char **column) {
+pkr_code pkr_each(const uint8_t *bytes, size_t length, pkr_each_fn each, void *context, char **column) {
 	if (column != NULL) *column = NULL;
 	Json *x = cborDecode(bytes, length, NULL, NULL);
-	if (x == NULL) return PK_NOT_A_PACK;
+	if (x == NULL) return PKR_NOT_A_PACK;
 	// a stand-in is an object with the one key kind
-	if (x->type == JSON_STAND) return jsonFree(x), fail(PK_NOT_A_PACK, column, "kind");
-	if (x->type != JSON_OBJECT) return jsonFree(x), PK_NOT_A_PACK;
-	pk_code code = PK_OK;
+	if (x->type == JSON_STAND) return jsonFree(x), fail(PKR_NOT_A_PACK, column, "kind");
+	if (x->type != JSON_OBJECT) return jsonFree(x), PKR_NOT_A_PACK;
+	pkr_code code = PKR_OK;
 	const JsonMember *stray = NULL;
 	for (int i = 0; i < x->object.count; i++) {
 		const JsonMember *m = &x->object.members[i];
@@ -425,25 +425,25 @@ pk_code pk_each(const uint8_t *bytes, size_t length, pk_each_fn each, void *cont
 	if (stray != NULL) {
 		if (column != NULL) *column = copyStringOfLength(stray->key, stray->keyLength);
 		jsonFree(x);
-		return PK_NOT_A_PACK;
+		return PKR_NOT_A_PACK;
 	}
 	int64_t n64;
 	const Json *signatures = jsonGet(x, "signatures"), *ids = jsonGet(x, "ids");
 	// Number.isSafeInteger(n) && n >= 0
-	if (!safe_integer(jsonGet(x, "n"), &n64) || n64 < 0) return jsonFree(x), PK_COUNT;
+	if (!safe_integer(jsonGet(x, "n"), &n64) || n64 < 0) return jsonFree(x), PKR_COUNT;
 	size_t n = (size_t)n64;
 	bool listed = signatures != NULL && signatures->type == JSON_ARRAY;
 	for (int i = 0; listed && i < signatures->array.count; i++) listed = is_bytes(signatures->array.items[i]);
 	if (!listed) {
 		jsonFree(x);
-		return PK_SIGNATURES;
+		return PKR_SIGNATURES;
 	}
 	listed = ids != NULL && ids->type == JSON_ARRAY;
 	for (int i = 0; listed && i < ids->array.count; i++)
 		listed = is_bytes(ids->array.items[i]) && ids->array.items[i]->bytes.length == 32;
 	if (!listed) {
 		jsonFree(x);
-		return PK_IDS;
+		return PKR_IDS;
 	}
 	// the columns of runs, in the order packer.ts reads them
 	static const char *const run_columns[] = {"table", "actor", "reader", "external", "metadata", "signer", "base"};
@@ -453,17 +453,17 @@ pk_code pk_each(const uint8_t *bytes, size_t length, pk_each_fn each, void *cont
 	uint8_t(*names)[CM_NAME] = allocate((n + 1) * CM_NAME);
 	Json *before = NULL;
 	// one with no header, until the next shows it vouched for
-	pk_member held = {0};
+	pkr_member held = {0};
 	uint8_t *held_commit = NULL;
 	for (int k = 0; k < 7; k++) {
 		if ((col[k] = unruns(jsonGet(x, run_columns[k]), n)) == NULL) {
-			code = fail(PK_RUNS, column, run_columns[k]);
+			code = fail(PKR_RUNS, column, run_columns[k]);
 			goto done;
 		}
 	}
 	// merge: only when the run has the column
 	if (jsonGet(x, "merge") != NULL && (col[7] = unruns(jsonGet(x, "merge"), n)) == NULL) {
-		code = fail(PK_RUNS, column, "merge");
+		code = fail(PKR_RUNS, column, "merge");
 		goto done;
 	}
 	// bytes: only when the run has the column, a list of n: null, or a commit's own bytes
@@ -473,51 +473,51 @@ pk_code pk_each(const uint8_t *bytes, size_t length, pk_each_fn each, void *cont
 		for (int i = 0; shaped && i < exact->array.count; i++)
 			shaped = exact->array.items[i]->type == JSON_NULL || is_bytes(exact->array.items[i]);
 		if (!shaped) {
-			code = fail(PK_RUNS, column, "bytes");
+			code = fail(PKR_RUNS, column, "bytes");
 			goto done;
 		}
 	}
 	// headers: runs of bytes, or null for one vouched for by the next
 	if ((col[8] = unruns(jsonGet(x, "headers"), n)) == NULL) {
-		code = fail(PK_RUNS, column, "headers");
+		code = fail(PKR_RUNS, column, "headers");
 		goto done;
 	}
 	size_t signed_count = 0;
 	for (size_t i = 0; i < n; i++) {
 		if (col[8][i]->type == JSON_NULL) continue;
 		if (!is_bytes(col[8][i])) {
-			code = fail(PK_RUNS, column, "headers");
+			code = fail(PKR_RUNS, column, "headers");
 			goto done;
 		}
 		signed_count++;
 	}
 	if ((size_t)signatures->array.count != signed_count) {
-		code = PK_SIGNATURES;
+		code = PKR_SIGNATURES;
 		goto done;
 	}
 	if ((size_t)ids->array.count != n - signed_count) {
-		code = PK_IDS;
+		code = PKR_IDS;
 		goto done;
 	}
 	if (!undeltas(jsonGet(x, "time"), n, time)) {
-		code = fail(PK_DIFFERENCES, column, "time");
+		code = fail(PKR_DIFFERENCES, column, "time");
 		goto done;
 	}
 	if (!undeltas(jsonGet(x, "nonce"), n, nonce)) {
-		code = fail(PK_DIFFERENCES, column, "nonce");
+		code = fail(PKR_DIFFERENCES, column, "nonce");
 		goto done;
 	}
 	if (!undeltas(jsonGet(x, "lamport"), n, lamport)) {
-		code = fail(PK_DIFFERENCES, column, "lamport");
+		code = fail(PKR_DIFFERENCES, column, "lamport");
 		goto done;
 	}
 	const Json *parents = jsonGet(x, "parents"), *patches = jsonGet(x, "patches");
 	if (parents == NULL || parents->type != JSON_ARRAY || (size_t)parents->array.count != n) {
-		code = PK_PARENTS;
+		code = PKR_PARENTS;
 		goto done;
 	}
 	if (patches == NULL || patches->type != JSON_ARRAY || (size_t)patches->array.count != n) {
-		code = PK_PATCHES;
+		code = PKR_PATCHES;
 		goto done;
 	}
 	size_t room = most(length), made = 0, sig = 0, id = 0;
@@ -531,14 +531,14 @@ pk_code pk_each(const uint8_t *bytes, size_t length, pk_each_fn each, void *cont
 				const uint8_t *name;
 				if (!deref(ps->array.items[k], i, (const uint8_t(*)[CM_NAME])names, &b, &name)) {
 					jsonFree(plist);
-					code = PK_REF;
+					code = PKR_REF;
 					goto done;
 				}
 				jsonPush(plist, name_json(b, name));
 			}
 		} else {
 			jsonFree(plist);
-			code = PK_PARENTS;
+			code = PKR_PARENTS;
 			goto done;
 		}
 		const Json *these;
@@ -548,7 +548,7 @@ pk_code pk_each(const uint8_t *bytes, size_t length, pk_each_fn each, void *cont
 			double at;
 			if (!insert_end(before, &path, &at)) {
 				jsonFree(plist);
-				code = PK_INSERT;
+				code = PKR_INSERT;
 				goto done;
 			}
 			Json *patch = jsonObject(), *range = jsonArray();
@@ -563,7 +563,7 @@ pk_code pk_each(const uint8_t *bytes, size_t length, pk_each_fn each, void *cont
 		} else if (p->type == JSON_ARRAY) these = p;
 		else {
 			jsonFree(plist);
-			code = PK_PATCHES;
+			code = PKR_PATCHES;
 			goto done;
 		}
 		c = jsonObject();
@@ -588,14 +588,14 @@ pk_code pk_each(const uint8_t *bytes, size_t length, pk_each_fn each, void *cont
 		jsonAdd(c, "patches", own_patches != NULL ? own_patches : jsonRef((Json *)these));
 		if (bad_ref) {
 			jsonFree(c);
-			code = PK_REF;
+			code = PKR_REF;
 			goto done;
 		}
 		uint8_t *b;
 		size_t b_length;
 		if (cm_encode_json(c, &b, &b_length, NULL) != CM_OK) {
 			jsonFree(c);
-			code = PK_COMMIT;
+			code = PKR_COMMIT;
 			goto done;
 		}
 		// the commit as its own bytes have it: the columns' and no other
@@ -613,7 +613,7 @@ pk_code pk_each(const uint8_t *bytes, size_t length, pk_each_fn each, void *cont
 			if (!ok) {
 				jsonFree(c);
 				free(b);
-				code = PK_COMMIT;
+				code = PKR_COMMIT;
 				goto done;
 			}
 			free(b);
@@ -628,12 +628,12 @@ pk_code pk_each(const uint8_t *bytes, size_t length, pk_each_fn each, void *cont
 			bool on = ps->array.count == 1 && memcmp(ps->array.items[0]->bytes.data, held.name, CM_NAME) == 0 &&
 				was->bytes.length == now->bytes.length &&
 				memcmp(was->bytes.data, now->bytes.data, was->bytes.length) == 0;
-			if (!on) code = PK_VOUCHED;
-			else if (!each(context, &held)) code = PK_STOPPED;
+			if (!on) code = PKR_VOUCHED;
+			else if (!each(context, &held)) code = PKR_STOPPED;
 			free(held_commit);
 			held_commit = NULL;
-			held = (pk_member){0};
-			if (code != PK_OK) {
+			held = (pkr_member){0};
+			if (code != PKR_OK) {
 				jsonFree(c);
 				free(b);
 				goto done;
@@ -646,12 +646,12 @@ pk_code pk_each(const uint8_t *bytes, size_t length, pk_each_fn each, void *cont
 		made += b_length;
 		const Json *h = col[8][i];
 		if (h->type == JSON_NULL) {
-			held = (pk_member){.commit = b, .commit_length = b_length};
+			held = (pkr_member){.commit = b, .commit_length = b_length};
 			held_commit = b;
 			memcpy(held.name, names[i], CM_NAME);
 			memcpy(held.stored, ids->array.items[id++]->bytes.data, 32);
 			if (made > room) {
-				code = PK_SIZE;
+				code = PKR_SIZE;
 				goto done;
 			}
 			continue;
@@ -672,21 +672,21 @@ pk_code pk_each(const uint8_t *bytes, size_t length, pk_each_fn each, void *cont
 		made += size;
 		if (made > room) {
 			free(sealed), free(b);
-			code = PK_SIZE;
+			code = PKR_SIZE;
 			goto done;
 		}
-		pk_member m = {.commit = b, .commit_length = b_length, .sealed = sealed, .sealed_length = size};
+		pkr_member m = {.commit = b, .commit_length = b_length, .sealed = sealed, .sealed_length = size};
 		memcpy(m.name, names[i], CM_NAME);
 		sl_stored(sealed, size, m.stored);
 		bool on = each(context, &m);
 		free(sealed), free(b);
 		if (!on) {
-			code = PK_STOPPED;
+			code = PKR_STOPPED;
 			goto done;
 		}
 	}
 	// the last one vouched for by none
-	if (held.commit != NULL) code = PK_VOUCHED;
+	if (held.commit != NULL) code = PKR_VOUCHED;
 done:
 	free(held_commit);
 	for (int k = 0; k < 9; k++) free((void *)col[k]);
@@ -697,11 +697,11 @@ done:
 }
 
 // each commit kept in the unpacked, its own bytes
-static bool collect(void *context, const pk_member *m) {
-	pk_unpacked *out = context;
+static bool collect(void *context, const pkr_member *m) {
+	pkr_unpacked *out = context;
 	out->members = realloc(out->members, (out->count + 1) * sizeof *out->members);
 	if (out->members == NULL) abort();
-	pk_member *k = &out->members[out->count++];
+	pkr_member *k = &out->members[out->count++];
 	*k = *m;
 	uint8_t *commit = allocate(m->commit_length + 1);
 	memcpy(commit, m->commit, m->commit_length);
@@ -714,15 +714,15 @@ static bool collect(void *context, const pk_member *m) {
 	return true;
 }
 
-pk_code pk_unpack(const uint8_t *bytes, size_t length, pk_unpacked *out, char **column) {
-	*out = (pk_unpacked){0};
-	pk_code code = pk_each(bytes, length, collect, out, column);
-	if (code != PK_OK) pk_free(out);
+pkr_code pkr_unpack(const uint8_t *bytes, size_t length, pkr_unpacked *out, char **column) {
+	*out = (pkr_unpacked){0};
+	pkr_code code = pkr_each(bytes, length, collect, out, column);
+	if (code != PKR_OK) pkr_free(out);
 	return code;
 }
 
-void pk_free(pk_unpacked *u) {
+void pkr_free(pkr_unpacked *u) {
 	for (size_t i = 0; i < u->count; i++) free((void *)u->members[i].commit), free((void *)u->members[i].sealed);
 	free(u->members);
-	*u = (pk_unpacked){0};
+	*u = (pkr_unpacked){0};
 }
