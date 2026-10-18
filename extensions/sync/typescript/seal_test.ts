@@ -1,7 +1,7 @@
 import { assertEquals, assertRejects } from "@std/assert"
 import { type Commit, encode, joinKey, name as nameOf } from "@ermine/encoding/commit"
 import * as cbor from "@ermine/encoding/cbor"
-import { createSigner, seal, SealError, unseal, type Verifier } from "./seal.ts"
+import { createSigner, ED25519, good, seal, SealError, unseal, type Verifier } from "./seal.ts"
 
 const DOC = new Uint8Array(32).fill(0x2a)
 
@@ -104,7 +104,7 @@ Deno.test("seal: a signature is checked by the verifier its header names, for a 
 	assertEquals(asked, 1)
 })
 
-Deno.test("seal: a seal is good in its own document only: what is signed is the domain, the document, then the name", async () => {
+Deno.test("seal: a seal is good in its own document only: what is signed is the domain, the document, the header, then the name", async () => {
 	const a = await createSigner(new Uint8Array(32).fill(1))
 	const sealed = await seal(encode(commitBy(a.key)), a, DOC)
 	assertEquals((await unseal(sealed, DOC)).commit.table, "value")
@@ -113,5 +113,26 @@ Deno.test("seal: a seal is good in its own document only: what is signed is the 
 	assertEquals(
 		(await assertRejects(() => unseal(sealed, new Uint8Array(31)), SealError)).code,
 		"shape",
+	)
+})
+
+Deno.test("seal: the varsig header is signed over: a header put on another's signature is refused", async () => {
+	const a = await createSigner(new Uint8Array(32).fill(1))
+	const dagcbor = Uint8Array.of(0x34, 0x01, 0xed, 0x01, 0xed, 0x01, 0x13, 0x71)
+	const also: Verifier = { header: dagcbor, code: ED25519, size: 64, verify: good }
+	const bytes = encode(commitBy(a.key))
+	// under its own header, good; under the other's, good where a verifier is given for it
+	const under = await seal(bytes, { ...a, header: dagcbor }, DOC)
+	assertEquals((await unseal(under, DOC, [also])).bytes, bytes)
+	assertEquals((await assertRejects(() => unseal(under, DOC), SealError)).code, "signature")
+	// the raw signature with the other header on it
+	const plain = cbor.decode(await seal(bytes, a, DOC)) as {
+		commit: Uint8Array
+		signature: Uint8Array
+	}
+	plain.signature.set(dagcbor)
+	assertEquals(
+		(await assertRejects(() => unseal(cbor.encode(plain), DOC, [also]), SealError)).code,
+		"signature",
 	)
 })

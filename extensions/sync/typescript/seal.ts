@@ -215,7 +215,9 @@ export async function unseal(
 		throw new SealError("signature", "the header and the signer's key differ")
 	}
 	if (signature.length !== v.header.length + v.size) throw new SealError("shape")
-	if (!(await v.verify(signature.subarray(v.header.length), key.key, message(doc, v.header, name)))) {
+	if (
+		!(await v.verify(signature.subarray(v.header.length), key.key, message(doc, v.header, name)))
+	) {
 		throw new SealError("signature")
 	}
 	return { commit, bytes: o.commit, name, stored: stored(sealed) }
