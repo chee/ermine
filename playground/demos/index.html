@@ -106,11 +106,11 @@
 		.pigs img {
 			object-position: 45% 70%;
 		}
-		.cat {
+		.catclock {
 			background: #0000ff;
 			padding: 0.8em;
 		}
-		.cat canvas {
+		.catclock canvas {
 			display: block;
 			image-rendering: pixelated;
 		}
@@ -286,112 +286,7 @@
 		</header>
 
 		<main>
-			<article class="demo">
-				<a class="picture" href="slaygrounds/" tabindex="-1">
-					<img src="pictures/slaygrounds.jpg"
-						alt="slaygrounds: fancy-synth, a little eurorack, beside its program" />
-				</a>
-				<div class="text">
-					<h2><a href="slaygrounds/">slaygrounds</a></h2>
-					<ul class="tags">
-						<li>browser</li>
-						<li>typescript</li>
-						<li>editor</li>
-					</ul>
-					<div class="buttons">
-						<a class="button go" href="slaygrounds/">open</a>
-					</div>
-				</div>
-			</article>
-
-			<article class="demo">
-				<a class="picture cat" href="catclock/" tabindex="-1" aria-label="the cat clock, now">
-					<canvas width="150" height="300"></canvas>
-				</a>
-				<div class="text">
-					<h2><a href="catclock/">catclock</a></h2>
-					<ul class="tags">
-						<li>browser</li>
-						<li>C</li>
-						<li>wasm</li>
-					</ul>
-					<div class="buttons">
-						<a class="button go" href="catclock/">open</a>
-						<a class="button" href="catclock/clock.html">the clock alone</a>
-					</div>
-				</div>
-			</article>
-
-			<article class="demo">
-				<a class="picture pigs" href="slaygrounds/#lab-pig" tabindex="-1">
-					<img src="pictures/pigs.png" alt="pigs on a field, drawn in a terminal" />
-				</a>
-				<div class="text">
-					<h2><a href="slaygrounds/#lab-pig">pigs</a></h2>
-					<ul class="tags">
-						<li>terminal</li>
-						<li>C</li>
-						<li>sync</li>
-					</ul>
-					<div class="buttons">
-						<a class="button go" href="slaygrounds/#lab-pig">the pigs on the web</a>
-						<a class="button"
-							href="https://github.com/chee/ermine/tree/main/playground/demos/pigs">source</a>
-					</div>
-				</div>
-			</article>
-
-			<article class="demo">
-				<a class="picture shape" href="shape/" tabindex="-1">
-					<img src="pictures/shape.png"
-						alt="shape: the places tree beside the scheduler's computers, in columns by rank" />
-				</a>
-				<div class="text">
-					<h2><a href="shape/">shape</a></h2>
-					<ul class="tags">
-						<li>browser</li>
-						<li>typescript</li>
-						<li>sync</li>
-					</ul>
-					<div class="buttons">
-						<a class="button go" href="shape/">open</a>
-					</div>
-				</div>
-			</article>
-
-			<article class="demo">
-				<a class="picture shape" href="architecture/" tabindex="-1">
-					<img src="pictures/ermine.svg" alt="ermine" />
-				</a>
-				<div class="text">
-					<h2><a href="architecture/">architecture</a></h2>
-					<ul class="tags">
-						<li>browser</li>
-						<li>diagram</li>
-					</ul>
-					<div class="buttons">
-						<a class="button go" href="architecture/">open</a>
-					</div>
-				</div>
-			</article>
-
-			<article class="demo">
-				<a class="picture shape" href="book/" tabindex="-1">
-					<img src="pictures/book.png" alt="the ermine book: a pixel pond with named fish, beside the tree of its value" />
-				</a>
-				<div class="text">
-					<h2><a href="book/">the book</a></h2>
-					<ul class="tags">
-						<li>browser</li>
-						<li>typescript</li>
-						<li>core</li>
-					</ul>
-					<div class="buttons">
-						<a class="button go" href="book/">open</a>
-						<a class="button" href="inside-a-node/">inside a node, step by step</a>
-					</div>
-				</div>
-			</article>
+			<!-- demos -->
 
 			<hr />
 
@@ -410,7 +305,7 @@
 		<script type="module">
 		// the cat, now: catclock.wasm on the card's canvas, by its own loader
 		import run from "./catclock/web/canvas.js"
-		const canvas = document.querySelector(".cat canvas")
+		const canvas = document.querySelector(".catclock canvas")
 		fetch("catclock/catclock.wasm")
 			.then((r) => r.arrayBuffer())
 			.then((wasm) => run({ wasm, canvas }))

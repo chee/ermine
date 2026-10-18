@@ -1,6 +1,6 @@
 # playground/demos/pigs: ermine-pigs, lab-pig's pigs in a terminal (c/pigs.c says how to use it), on the table
 # and sync (extensions/together/c), as playground/term builds its programs. Quiet by default: V=1 shows each
-# command.
+# command. littlesync/ is the pigs on littlesync, a small-device stack: littlesync-pigs (its Makefile).
 #   make            ermine-pigs (its looks: pixels, and --look nethack, c/hack.c) and walk-test
 #   make test       walk-test against program.ts's own walking (deno), the formula the web page runs
 #   make interop    ermine-pigs on a pty and lab-pig in headless Chrome, on galaxy.observer in a fresh (LOOK=nethack:

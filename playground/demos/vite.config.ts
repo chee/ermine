@@ -1,8 +1,10 @@
 // deno task dev     the demos at http://localhost:8040/, each page's .ts from source as it is now
 // deno task build   the same pages, static, into dist/ (Netlify), /slaygrounds/ built beside them
 //
-// - /: index.html, the demos listed; its <!-- examples --> filled with slaygrounds' examples
-//   (slaygrounds/examples/index.json)
+// - demos: each folder here with a demo.json is one (see Demo below): its pages are built, its card
+//   listed on the index. a folder without one (not ready, not pushed) is nothing to the site
+// - /: index.html; its <!-- demos --> filled with the cards, its <!-- examples --> with slaygrounds'
+//   examples (slaygrounds/examples/index.json)
 // - /catclock/: catclock/web/'s pages (index.html, clock.html) at /catclock/, with what they fetch:
 //   canvas.js, sources.json (the C), catclock.wasm (built here by wasm-clang, web/yowasp.ts: not in
 //   git). /catclock/compile is Netlify's (functions/compile.mts, netlify.toml); without it, wasm-clang
@@ -44,6 +46,113 @@ const KIND: Record<string, string> = {
 	txt: "text/plain",
 	map: "application/json",
 }
+
+// a folder's demo.json. paths in it (picture, href) are as the index writes them, from here
+//   title     the card's name
+//   order     where the card goes (then by folder name); default 100
+//   tags      the little chips
+//   picture   an image under here, or "canvas": the cat's own loader draws on the card
+//   alt       the picture's alt text (the canvas's label)
+//   href      what the card and the picture open; default the folder
+//   buttons   [{ label, href, go? }]; default one go button, "open", at href
+//   pages     the html to build, from the folder (served under /name/); only for a demo in here,
+//             one elsewhere (playground/*, core/*, ...) is a card only: [] * is any one folder; default ["index.html"]
+//   listed    false: built, no card
+// the index and slaygrounds are not in here: slaygrounds is built by its own task
+type Demo = {
+	name: string
+	dir: string
+	title: string
+	order?: number
+	tags?: string[]
+	picture?: string
+	alt?: string
+	href?: string
+	buttons?: { label: string; href: string; go?: boolean }[]
+	pages?: string[]
+	listed?: boolean
+}
+
+// where demo.json is looked for: these folders' children. a demo is served at /<its folder's name>/
+const ROOTS = ["playground/demos", "playground", "core", "ermine", "extensions"]
+
+function demos(): Demo[] {
+	const found = new Map<string, Demo>()
+	for (const root of ROOTS) {
+		if (!existsSync(repo + root)) continue
+		for (const e of Deno.readDirSync(repo + root)) {
+			const dir = `${repo}${root}/${e.name}/`
+			if (!e.isDirectory || !existsSync(`${dir}demo.json`)) continue
+			if (found.has(e.name)) {
+				throw new Error(`two demos named ${e.name}: ${found.get(e.name)!.dir}, ${dir}`)
+			}
+			found.set(e.name, {
+				...JSON.parse(Deno.readTextFileSync(`${dir}demo.json`)),
+				name: e.name,
+				dir,
+			})
+		}
+	}
+	return [...found.values()].sort((a, b) =>
+		(a.order ?? 100) - (b.order ?? 100) || (a.name < b.name ? -1 : 1)
+	)
+}
+
+// a demo's pages that exist, as absolute paths
+function pagesOf(demo: Demo): string[] {
+	const out: string[] = []
+	// vite builds only the html under its root (here): a page elsewhere is dropped, and the rest of
+	// the site with it
+	if (!demo.dir.startsWith(here) && demo.pages?.length !== 0) {
+		throw new Error(`${demo.dir}demo.json: outside ${here}, so "pages": [] (a card only)`)
+	}
+	for (const pattern of demo.pages ?? ["index.html"]) {
+		let paths = [demo.dir.slice(0, -1)]
+		for (const part of pattern.split("/")) {
+			paths = paths.flatMap((p) =>
+				part !== "*"
+					? [`${p}/${part}`]
+					: existsSync(p)
+					? [...Deno.readDirSync(p)].filter((e) => e.isDirectory).map((e) => `${p}/${e.name}`)
+					: []
+			)
+		}
+		out.push(...paths.filter(existsSync))
+	}
+	return out
+}
+
+const cards = () =>
+	demos().filter((d) => d.listed !== false).map((d) => {
+		const href = d.href ?? `${d.name}/`
+		const buttons = d.buttons ?? [{ label: "open", href, go: true }]
+		const alt = escape(d.alt ?? d.title)
+		const picture = d.picture === "canvas"
+			? `<a class="picture ${d.name}" href="${href}" tabindex="-1" aria-label="${alt}">
+					<canvas width="150" height="300"></canvas>
+				</a>`
+			: `<a class="picture ${d.name}" href="${href}" tabindex="-1">
+					<img src="${d.picture ?? "pictures/ermine.svg"}" alt="${alt}" />
+				</a>`
+		return `<article class="demo">
+				${picture}
+				<div class="text">
+					<h2><a href="${href}">${escape(d.title)}</a></h2>
+					<ul class="tags">
+${(d.tags ?? []).map((t) => `\t\t\t\t\t\t<li>${escape(t)}</li>`).join("\n")}
+					</ul>
+					<div class="buttons">
+${
+			buttons.map((b) =>
+				`\t\t\t\t\t\t<a class="button${b.go ? " go" : ""}" href="${b.href}">${
+					escape(b.label)
+				}</a>`
+			).join("\n")
+		}
+					</div>
+				</div>
+			</article>`
+	}).join("\n\n\t\t\t")
 
 // slaygrounds' examples, as the index's list: a title that starts with its name says it once
 function examples() {
@@ -159,7 +268,7 @@ const pages: Plugin = {
 		order: "pre",
 		handler(html, ctx) {
 			if (ctx.filename === `${here}index.html`) {
-				return html.replace("<!-- examples -->", examples)
+				return html.replace("<!-- demos -->", cards).replace("<!-- examples -->", examples)
 			}
 			// the page's demo.js is serve.ts' bundle of demo.ts: here, demo.ts itself
 			if (ctx.filename === `${cat}index.html`) {
@@ -214,6 +323,18 @@ const site: Plugin = {
 // the site gets beside them (in a worker's build, site would write it all again)
 const resolving = () => [specifiers, deno()]
 
+// every page of every demo: its path from the repo with / as -, no index.html
+function inputs() {
+	const input: Record<string, string> = { index: `${here}index.html` }
+	for (const page of demos().flatMap(pagesOf)) {
+		input[
+			page.slice(repo.length).replace(/(^|\/)index\.html$/, "").replace(/\.html$/, "")
+				.replaceAll("/", "-")
+		] = page
+	}
+	return input
+}
+
 export default defineConfig({
 	appType: "mpa",
 	plugins: [...resolving(), pages, site],
@@ -222,24 +343,7 @@ export default defineConfig({
 	// package, unbundled
 	optimizeDeps: {
 		exclude: ["@yowasp/clang"],
-		entries: [
-			"index.html",
-			"catclock/web/index.html",
-			"catclock/web/clock.html",
-			"shape/index.html",
-			"architecture/index.html",
-			"inside-a-node/index.html",
-			"book/index.html",
-			"book/node/index.html",
-			"book/patches/index.html",
-			"book/squish/index.html",
-			"book/tracking/index.html",
-			"book/rounds/index.html",
-			"book/waiting/index.html",
-			"book/loops/index.html",
-			"book/scopes/index.html",
-			"book/unread/index.html",
-		],
+		entries: ["index.html", ...demos().flatMap(pagesOf)],
 	},
 	server: { port: 8040, strictPort: true, fs: { allow: [repo] } },
 	build: {
@@ -247,24 +351,7 @@ export default defineConfig({
 		emptyOutDir: true,
 		target: "esnext",
 		rolldownOptions: {
-			input: {
-				index: `${here}index.html`,
-				catclock: `${cat}index.html`,
-				clock: `${cat}clock.html`,
-				shape: `${here}shape/index.html`,
-				architecture: `${here}architecture/index.html`,
-				"inside-a-node": `${here}inside-a-node/index.html`,
-				book: `${here}book/index.html`,
-				"book-node": `${here}book/node/index.html`,
-				"book-patches": `${here}book/patches/index.html`,
-				"book-squish": `${here}book/squish/index.html`,
-				"book-tracking": `${here}book/tracking/index.html`,
-				"book-rounds": `${here}book/rounds/index.html`,
-				"book-waiting": `${here}book/waiting/index.html`,
-				"book-loops": `${here}book/loops/index.html`,
-				"book-scopes": `${here}book/scopes/index.html`,
-				"book-unread": `${here}book/unread/index.html`,
-			},
+			input: inputs(),
 		},
 	},
 })

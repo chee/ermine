@@ -41,6 +41,8 @@ void dv_mint(dv *d, char out[DV_ID]);
 void dv_follow(dv *d, const char *id);
 // the id's value replaced by value (taken): one stored commit. 0, or op's code
 int dv_store(dv *d, const char *id, op_value *value);
+// one key of the node's value set, a stored commit (takes value): a map's key changed alone
+int dv_set(dv *d, const char *id, const char *key, op_value *value);
 // the same as an ephemeral commit
 int dv_wave(dv *d, const char *id, op_value *value);
 // the id's versions made one, keeping the one shown
