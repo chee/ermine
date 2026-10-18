@@ -421,20 +421,46 @@ Deno.test("a nested run's ending leaves the outer cursor where it was", () => {
 	assertEquals(reads("p"), ["a", "b"])
 })
 
-Deno.test("begin takes a new tick and resets the cursor; end clears it; a stale gen is not 'read this run'", () => {
+Deno.test("begin takes a new tick and resets the cursor; end closes it; a stale gen is not 'read this run'", () => {
 	const { t, n, run } = setup()
 	run("r", "a")
-	assertEquals(n("r").gen, 0)
+	assertEquals(n("r").open, false)
 	t.begin(n("r"))
 	const g = n("r").gen
 	assert(g > 0)
+	assert(n("r").open)
 	assertEquals(n("r").cursor, null)
 	t.end(n("r"))
+	assertEquals(n("r").open, false)
+	assertEquals(n("r").gen, g)
 	t.begin(n("r"))
 	assert(n("r").gen > g)
 	// r's old link to a has an old gen: reading a now confirms it
 	t.track(n("r"), n("a"))
 	assertEquals(n("r").reads!.gen, n("r").gen)
+})
+
+Deno.test("old: a link the latest run did not read, once that run is over", () => {
+	const { t, n } = setup()
+	t.begin(n("r"))
+	t.track(n("r"), n("a"))
+	t.track(n("r"), n("b"))
+	t.end(n("r"))
+	const [a, b] = t.readers(n("a")).concat(t.readers(n("b")))
+	assert(!t.old(a) && !t.old(b))
+	t.begin(n("r"))
+	t.track(n("r"), n("a"))
+	// in a run: nothing is old yet
+	assert(!t.old(a) && !t.old(b))
+	t.leave(n("r"))
+	assert(!t.old(a))
+	assert(t.old(b))
+	// read again: taken back
+	t.begin(n("r"))
+	t.track(n("r"), n("a"))
+	t.track(n("r"), n("b"))
+	t.leave(n("r"))
+	assert(!t.old(a) && !t.old(b))
 })
 
 Deno.test("a removed reader in the middle: the order is kept, the others untouched", () => {
