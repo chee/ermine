@@ -6,6 +6,7 @@
 import { blake3 } from "@ermine/blake3"
 import * as cbor from "./cbor.ts"
 import type { FileLocation } from "@ermine/util/stacktrace"
+import type { Metadata } from "@ermine/node/entry"
 
 export type Key = string | number
 export type Place = { path: readonly Key[]; range?: readonly [number, number] }
@@ -18,7 +19,9 @@ export type Commit = {
 	actor: unknown
 	reader?: string
 	external?: FileLocation[]
-	metadata?: [string, unknown][]
+	// a map, any keys (canonical: sorted); decoded from the old form too, a list of [key, value]
+	// pairs: an object, of a key repeated the first
+	metadata?: Metadata
 	// whole seconds since 1970, as the change header has it
 	time: number
 	// the device's key, a multikey: the unsigned varint of its multicodec code, then the raw key
@@ -81,8 +84,7 @@ const isFields = (x: unknown): x is Fields => {
 	return p === Object.prototype || p === null
 }
 // an integer from 0 to 2^53 - 1
-const whole = (n: unknown): n is number =>
-	Number.isSafeInteger(n) && (n as number) >= 0
+const whole = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) >= 0
 // a list's index, a site's line or column: an integer from 0 to 2^31 - 1, what any C long holds
 const small = (n: unknown): n is number => whole(n) && n < 2 ** 31
 const isKey = (k: unknown) => typeof k === "string" || small(k)
@@ -146,9 +148,7 @@ const RULES: { [k in typeof FIELDS[number]]: (v: unknown, c: Fields) => boolean 
 	actor: () => true,
 	reader: (v) => typeof v === "string",
 	external: (v) => Array.isArray(v) && v.every(site),
-	metadata: (v) =>
-		Array.isArray(v) &&
-		v.every((e) => Array.isArray(e) && e.length === 2 && typeof e[0] === "string"),
+	metadata: isFields,
 	time: whole,
 	signer: multikey,
 	nonce: whole,
@@ -209,6 +209,26 @@ export function encode(commit: Commit): Uint8Array {
 	}
 }
 
+// metadata in the old form, a list of [key, value] pairs, as an object: of a key repeated, the
+// first. anything else as it is, for check to refuse
+function pairs(list: unknown[]): unknown {
+	if (!list.every((e) => Array.isArray(e) && e.length === 2 && typeof e[0] === "string")) {
+		return list
+	}
+	const out: Fields = {}
+	for (const [k, v] of list as [string, unknown][]) {
+		if (!Object.hasOwn(out, k)) {
+			Object.defineProperty(out, k, {
+				value: v,
+				enumerable: true,
+				writable: true,
+				configurable: true,
+			})
+		}
+	}
+	return out
+}
+
 // the commit back, its byte fields Uint8Arrays: new objects every time, shared with nothing
 export function decode(b: Uint8Array): Commit {
 	let x: unknown
@@ -219,6 +239,7 @@ export function decode(b: Uint8Array): Commit {
 		throw e
 	}
 	if (!isFields(x)) throw new CommitError("not-a-commit")
+	if (Array.isArray(x.metadata)) x.metadata = pairs(x.metadata)
 	const field = check(x)
 	if (field !== undefined) throw new CommitError("not-a-commit", field)
 	return x as Commit

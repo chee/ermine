@@ -25,7 +25,7 @@ import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import { asId, type Id, level, type Path, type Places } from "@ermine/places"
 import { get, lookup, members } from "@ermine/places/lib"
-import { keyOrder } from "@ermine/encoding/cbor"
+import { keyorder } from "@ermine/util/keyorder"
 import type { Patch } from "@ermine/op/apply"
 import type { Table } from "@ermine/table"
 import list from "./utis.json" with { type: "json" }
@@ -194,7 +194,7 @@ export function extensionsOf(places: Reads, folder: Folder | undefined): Extensi
 	const by = new Map<string, string>()
 	if (folder === undefined) return by
 	const here = members(places, folder.path).filter((m) => m.id !== level)
-	here.sort((a, b) => keyOrder(a.name, b.name))
+	here.sort((a, b) => keyorder(a.name, b.name))
 	for (const m of here) {
 		for (const x of strings(places.readValue("value", m.id, ["fileNameExtension"]))) {
 			const e = lowered(x)

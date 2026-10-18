@@ -17,12 +17,16 @@ const char *sl_code_name(sl_code code) {
 	return "";
 }
 
-// what is signed: "ermine/v0/commit", the document's 32 bytes, then the commit's name
-#define MESSAGE 80
-static void message(const uint8_t doc[32], const uint8_t name[32], uint8_t m[MESSAGE]) {
+// what is signed: "ermine/v0/commit", the document's 32 bytes, the signature's header, then the
+// commit's name (a header tells its own length, as a name does). MESSAGE: the most the built in
+// verifier takes, its header 8 bytes
+#define MESSAGE 88
+static size_t message(const uint8_t doc[32], const uint8_t *header, size_t header_length, const uint8_t name[32], uint8_t *m) {
 	memcpy(m, "ermine/v0/commit", 16);
 	memcpy(m + 16, doc, 32);
-	memcpy(m + 48, name, 32);
+	memcpy(m + 48, header, header_length);
+	memcpy(m + 48 + header_length, name, 32);
+	return 48 + header_length + 32;
 }
 
 // Ed25519: the multicodec code of ed25519-pub (0xed, varint 0xed 0x01), and the varsig (v1, the
@@ -133,9 +137,10 @@ sl_code sl_seal(const uint8_t *commit, size_t length, const sl_signer *signer, c
 		(c->signer_length == signer->key_length && memcmp(c->signer, signer->key, signer->key_length) == 0);
 	cm_free(&decoded);
 	if (!same) return SL_SIGNATURE;
-	uint8_t m[MESSAGE], *signature = allocate(signer->header_length + SL_RAW_MAX);
-	message(doc, name, m);
-	size_t raw = signer->sign(signer->context, m, MESSAGE, signature + signer->header_length);
+	uint8_t *m = allocate(80 + signer->header_length), *signature = allocate(signer->header_length + SL_RAW_MAX);
+	size_t m_length = message(doc, signer->header, signer->header_length, name, m);
+	size_t raw = signer->sign(signer->context, m, m_length, signature + signer->header_length);
+	free(m);
 	if (raw == 0 || raw > SL_RAW_MAX) return free(signature), SL_SHAPE;
 	memcpy(signature, signer->header, signer->header_length);
 	Json *sealed = jsonObject();
@@ -163,9 +168,8 @@ sl_code sl_unseal(const uint8_t *sealed, size_t length, const uint8_t doc[32], s
 	}
 	cm_commit c;
 	if (cm_decode(commit->bytes.data, commit->bytes.length, &c, NULL) != CM_OK) return jsonFree(x), SL_SHAPE;
-	uint8_t m[MESSAGE], name[32];
+	uint8_t name[32];
 	cm_name(commit->bytes.data, commit->bytes.length, name);
-	message(doc, name, m);
 	// the built in, then more: the first whose header the signature begins with
 	const sl_verifier *v = NULL;
 	for (size_t i = 0; v == NULL && i < 1 + (more != NULL ? more->count : 0); i++) {
@@ -184,7 +188,12 @@ sl_code sl_unseal(const uint8_t *sealed, size_t length, const uint8_t doc[32], s
 		cm_free(&c);
 		jsonFree(x);
 		return SL_SHAPE;
-	} else if (!v->verify(v->context, signature->bytes.data + v->header_length, key, key_length, m, MESSAGE)) reason = "";
+	} else {
+		uint8_t *m = allocate(80 + v->header_length);
+		size_t m_length = message(doc, v->header, v->header_length, name, m);
+		if (!v->verify(v->context, signature->bytes.data + v->header_length, key, key_length, m, m_length)) reason = "";
+		free(m);
+	}
 	if (reason != NULL) {
 		cm_free(&c);
 		jsonFree(x);

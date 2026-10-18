@@ -59,7 +59,7 @@ export function createWorld(device: Device, o: Options): World {
 	const paths = createPaths<unknown>()
 	const places = createPlaces({ root: o.root, table, paths, scheduler })
 	scheduler.onTrackingEnd((key) => places.release(key))
-	const host = scheduler.createRootScope([["actor", o.actor]])
+	const host = scheduler.createRootScope({ actor: o.actor })
 
 	// patches to an entry that is there, or one made with them; told to places
 	function put(part: Key, id: Id, patches: Patch[], header: ChangeHeader): Entry<unknown> {

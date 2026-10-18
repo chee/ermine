@@ -28,7 +28,7 @@ import {
 import { tablesOf } from "./snapshot.ts"
 import { keep as hooks, type Taking } from "./transport_conformance_hook.ts"
 
-export type { Fragment }
+export type { Fragment, Taking }
 
 export type Layer = "stored" | "ephemeral"
 
@@ -73,7 +73,10 @@ export type Code = "lock" | "shape" | "signature" | "stored" | "parents" | "boun
 // fragment, then every loose commit, as a save is taken in; a commit whose parents come later waits,
 // as ever). everything that touches the network (connect, connectDiscover, follow) waits for that;
 // take's sealing and storing, put and the other work queue behind it. ready() resolves when it is
-// done; it throws what the storage threw
+// done; it throws what the storage threw. lazy: only the trees the storage holds are listed at the
+// start; a document's tree is taken in when it is followed (fragments, then loose commits, as the
+// start would), before it is fetched from any peer, so the histories hold the followed documents
+// and no other; a stored document never followed enters no history
 export type Device = {
 	ready(): Promise<void>
 	connect(transport: sd.Transport, initiator: boolean): Promise<void>
@@ -95,6 +98,13 @@ export type Device = {
 		made?: { commit: Commit; name: Uint8Array },
 	): Added
 	arrived(listener: (a: Arrival) => void): () => void
+	// told a document's id each time what is held back or refused there may have changed: after
+	// what came for it is taken in or refused, a commit of this device's is handed over, or changed()
+	// tried it again
+	moved(listener: (doc: string) => void): () => void
+	// what is held back or refused at the document before its histories, as
+	// transport_conformance_hook_taking says; the stored layer's by default
+	taking(doc: string, layer?: Layer): Taking
 	// told each ephemeral commit heard on a followed document whose signer is the sender, new or
 	// heard before (sent again), after any arrival it made: the document, the sender's key (its
 	// multikey, as lowercase hex), the commit's name. what keeps another device's ephemeral commits
@@ -107,6 +117,17 @@ export type Device = {
 	// was kept for it, as if never heard; heard again, it comes in again. false: none such, or
 	// something goes on it
 	forget(doc: string, name: Uint8Array): boolean
+	// this device's standing ephemeral commit at the document's table ends: a stop message on the
+	// document's ephemeral topic, {stop: table} as CBOR, queued as a take is. the message carries no
+	// name: a receiver drops whatever stands for its sender at that table. it travels as the ephemeral
+	// commits do, signed by Subduction with the sender's key (what hear checks a commit's signer
+	// against), so no other device can send one for this device. forgets nothing here: the
+	// integration forgets what stood
+	stop(doc: string, table: string): void
+	// told each stop heard on a followed document: the document, the sender's key (its multikey, as
+	// lowercase hex), the table. one for nothing standing from that sender is the integration's to
+	// ignore
+	stopped(listener: (doc: string, from: string, table: string) => void): () => void
 	// the tables at a commit, when a fragment headed by it carried a snapshot that a replay to it
 	// matched (or this device made): new objects each time
 	snapshot(doc: string, name: Uint8Array): Tables | undefined
@@ -263,6 +284,8 @@ export function createDevice(
 		join?: number
 		// where Subduction keeps what it saves (taken in on save as ever); default: in memory
 		storage?: sd.SedimentreeStorage
+		// what the storage holds is taken in as each document is followed, not at the start
+		lazy?: boolean
 		// default: everything applies
 		check?: Check
 		// the integration's: the tables at a fragment's head, packed (snapshot.ts), for its snapshot;
@@ -279,8 +302,12 @@ export function createDevice(
 	const join = options.join ?? 30000
 	const check: Check = options.check ?? (() => true)
 	const limits: Limits = { ...LIMITS, ...options.limits }
+	const lazy = options.lazy === true
 	const documents = new Map<string, Document>()
 	const followed = new Set<string>()
+	// lazy: the trees the storage held at the start, by hex, and those taken in since
+	const held = new Set<string>()
+	const taken = new Set<string>()
 	const peers = new Map<string, sd.PeerId>()
 	// topics listened on, by their hash's hex: the Topic and who is told
 	const topics = new Map<
@@ -315,7 +342,18 @@ export function createDevice(
 	// ---- taking in
 
 	const listeners = new Set<(a: Arrival) => void>()
+	const movers = new Set<(doc: string) => void>()
+	function moved(d: Document) {
+		for (const fn of [...movers]) {
+			try {
+				fn(d.id)
+			} catch (e) {
+				trouble.push(e)
+			}
+		}
+	}
 	const hearers = new Set<(doc: string, from: string, name: Uint8Array) => void>()
+	const stoppers = new Set<(doc: string, from: string, table: string) => void>()
 	// arrivals the histories' taken listeners told, told on after the add that let them in, so a
 	// listener never runs inside a history's add
 	const told: Arrival[] = []
@@ -853,9 +891,8 @@ export function createDevice(
 		for (const [k, j] of [...joining]) if (all || now - j.at >= join) joining.delete(k)
 	}
 
-	// a payload that is a part: a map of exactly whole, part, parts and bytes. undefined: not one
-	// (a commit, or no map); null: one, but its values are not (dropped)
-	function partOf(payload: Uint8Array) {
+	// a payload that is a map: its keys and values; undefined: not one (a commit, or no map)
+	function mapOf(payload: Uint8Array): { [key: string]: cbor.Value } | undefined {
 		let x: cbor.Value
 		try {
 			x = cbor.decode(payload)
@@ -866,7 +903,22 @@ export function createDevice(
 		if (x === null || typeof x !== "object" || Array.isArray(x) || ArrayBuffer.isView(x)) {
 			return
 		}
-		const m = x as { [key: string]: cbor.Value }
+		return x as { [key: string]: cbor.Value }
+	}
+
+	// a payload that is a stop (Device.stop): a map of exactly stop, a string: the table. undefined:
+	// not one
+	function stopOf(payload: Uint8Array): string | undefined {
+		const m = mapOf(payload)
+		if (m === undefined || Object.keys(m).join() !== "stop" || typeof m.stop !== "string") return
+		return m.stop
+	}
+
+	// a payload that is a part: a map of exactly whole, part, parts and bytes. undefined: not one
+	// (a commit, or no map); null: one, but its values are not (dropped)
+	function partOf(payload: Uint8Array) {
+		const m = mapOf(payload)
+		if (m === undefined) return
 		const keys = Object.keys(m).sort()
 		if (keys.join() !== "bytes,part,parts,whole") return
 		const { whole, part, parts, bytes } = m
@@ -988,6 +1040,7 @@ export function createDevice(
 			await fragment(d, head, f.boundary.map((b) => b.toBytes()), f.checkpoints, f.blob)
 			if (d.fragments.get(hex(head))?.members.length) later(() => compact(d, head))
 		}
+		moved(d)
 		// only a commit taken in that can head a fragment (a leading zero byte), or a fragment, makes
 		// one to build: walking every commit after each would make n commits cost n²
 		if (fragments.length || d.deep !== deep) await building(d)
@@ -1015,6 +1068,7 @@ export function createDevice(
 				hand(d, it, sealed, ids.map(hex).sort(by), true)
 				// a seal from elsewhere may wait on this one
 				settle(d)
+				moved(d)
 			}
 			return Promise.resolve(ids)
 		})
@@ -1146,42 +1200,71 @@ export function createDevice(
 				return
 			}
 			if (!d || !followed.has(k)) return
-			if (part === undefined) later(() => hear(d, payload, from.toBytes()))
+			// a stop: told in its turn, after the ephemeral commits heard before it
+			const stop = part === undefined ? stopOf(payload) : undefined
+			if (stop !== undefined) {
+				const who = hex(ed25519Key(from.toBytes()))
+				later(() => {
+					for (const fn of [...stoppers]) {
+						try {
+							fn(d.id, who, stop)
+						} catch (e) {
+							trouble.push(e)
+						}
+					}
+					return Promise.resolve()
+				})
+			} else if (part === undefined) later(() => hear(d, payload, from.toBytes()))
 			else if (part) {
 				later(() => gather(d.id, part, from.toBytes(), (all) => hear(d, all, from.toBytes())))
 			}
 		},
 	})
 
-	// starting: what the storage holds, taken in before any connection. read from the storage
-	// itself, not through the wrapper, so nothing is saved again. ephemeral commits are never
-	// stored, so none come back
+	// a tree the storage holds, taken in: its fragments, then its loose commits, as saves are, then
+	// its fragments built. read from the storage itself, not through the wrapper, so nothing is saved
+	// again. ephemeral commits are never stored, so none come back
+	async function load(tree: sd.SedimentreeId) {
+		const d = document(tree.toBytes())
+		for (const f of await memory.loadAllFragments(tree)) {
+			const signed = f.signed
+			await fragment(
+				d,
+				signed.payload.head.toBytes(),
+				signed.payload.boundary.map((b: sd.CommitId) => b.toBytes()),
+				checkpointsOf(signed.payload),
+				f.blob,
+			)
+		}
+		for (const c of await memory.loadAllCommits(tree)) {
+			const signed = c.signed
+			await commit(
+				d,
+				signed.payload.commitId.toBytes(),
+				signed.payload.parents.map((p: sd.CommitId) => p.toBytes()),
+				c.blob,
+			)
+		}
+		await building(d)
+	}
+
+	// starting: what the storage holds, taken in before any connection; lazy: only listed, each
+	// tree taken in when its document is followed
 	const loaded = run(async () => {
 		for (const tree of await memory.loadAllSedimentreeIds()) {
-			const d = document(tree.toBytes())
-			for (const f of await memory.loadAllFragments(tree)) {
-				const signed = f.signed
-				await fragment(
-					d,
-					signed.payload.head.toBytes(),
-					signed.payload.boundary.map((b: sd.CommitId) => b.toBytes()),
-					checkpointsOf(signed.payload),
-					f.blob,
-				)
-			}
-			for (const c of await memory.loadAllCommits(tree)) {
-				const signed = c.signed
-				await commit(
-					d,
-					signed.payload.commitId.toBytes(),
-					signed.payload.parents.map((p: sd.CommitId) => p.toBytes()),
-					c.blob,
-				)
-			}
-			await building(d)
+			if (lazy) held.add(hex(tree.toBytes()))
+			else await load(tree)
 		}
 	})
 	loaded.catch(() => {})
+
+	// lazy: a followed document's tree taken in from the storage, once, before anything else of it
+	async function loadFollowed(d: Document) {
+		const k = hex(d.bytes)
+		if (!lazy || !held.has(k) || taken.has(k)) return
+		taken.add(k)
+		await run(() => load(d.tree))
+	}
 
 	// a channel's topic: BLAKE3 of "ermine/v0/topic" then the topic's CBOR, so never a document's
 	function channelTopic(name: string) {
@@ -1247,6 +1330,36 @@ export function createDevice(
 		}
 	}
 
+	// what is held back or refused at the document, before its histories (Taking)
+	function taking(d: Document, layer: Layer): Taking {
+		if (layer === "ephemeral") {
+			return {
+				waiting: [],
+				refused: [...d.heard].sort(([a], [b]) => by(a, b)).map(([commit, refused]) => ({
+					commit,
+					refused,
+				})),
+			}
+		}
+		const waiting: Taking["waiting"] = []
+		const refused: (Taking["refused"][number] & { key: string })[] = []
+		for (const [commit, p] of d.pending) {
+			if (p.waiting) waiting.push({ commit, waiting: p.waiting })
+			else if (p.stuck) refused.push({ key: commit, commit, stuck: p.stuck })
+		}
+		for (const [commit, c] of d.locked) if (c.commit) waiting.push({ commit, waiting: [] })
+		for (const [commit, code] of d.refused) {
+			refused.push({ key: commit, commit, refused: code })
+		}
+		for (const [head, code] of d.broken) {
+			refused.push({ key: head, fragment: head, refused: code })
+		}
+		return {
+			waiting: waiting.sort((a, b) => by(a.commit, b.commit)),
+			refused: refused.sort((a, b) => by(a.key, b.key)).map(({ key: _, ...r }) => r),
+		}
+	}
+
 	const device: Device = {
 		ready: () => loaded,
 		async connect(transport, initiator) {
@@ -1279,6 +1392,7 @@ export function createDevice(
 			await loaded
 			const d = named(doc)
 			followed.add(hex(d.bytes))
+			await loadFollowed(d)
 			await subscribe(d.topic)
 			await fetched(d)
 			asking(d)
@@ -1304,9 +1418,22 @@ export function createDevice(
 			listeners.add(listener)
 			return () => void listeners.delete(listener)
 		},
+		moved(listener) {
+			movers.add(listener)
+			return () => void movers.delete(listener)
+		},
+		taking: (doc, layer = "stored") => taking(named(doc), layer),
 		heard(listener) {
 			hearers.add(listener)
 			return () => void hearers.delete(listener)
+		},
+		stop(doc, table) {
+			const d = named(doc)
+			outgoing(() => sub.publishEphemeral(d.topic, cbor.encode({ stop: table })))
+		},
+		stopped(listener) {
+			stoppers.add(listener)
+			return () => void stoppers.delete(listener)
 		},
 		again(doc, name) {
 			const d = named(doc)
@@ -1356,6 +1483,7 @@ export function createDevice(
 				await run(() => {
 					for (const layer of ["stored", "ephemeral"] as const) d.histories[layer].again()
 					tell()
+					moved(d)
 					return Promise.resolve()
 				})
 				await run(() => building(d))
@@ -1393,35 +1521,7 @@ export function createDevice(
 			))
 			await run(() => building(d))
 		},
-		taking(doc, layer) {
-			const d = named(doc)
-			if (layer === "ephemeral") {
-				return {
-					waiting: [],
-					refused: [...d.heard].sort(([a], [b]) => by(a, b)).map(([commit, refused]) => ({
-						commit,
-						refused,
-					})),
-				}
-			}
-			const waiting: Taking["waiting"] = []
-			const refused: (Taking["refused"][number] & { key: string })[] = []
-			for (const [commit, p] of d.pending) {
-				if (p.waiting) waiting.push({ commit, waiting: p.waiting })
-				else if (p.stuck) refused.push({ key: commit, commit, stuck: p.stuck })
-			}
-			for (const [commit, c] of d.locked) if (c.commit) waiting.push({ commit, waiting: [] })
-			for (const [commit, code] of d.refused) {
-				refused.push({ key: commit, commit, refused: code })
-			}
-			for (const [head, code] of d.broken) {
-				refused.push({ key: head, fragment: head, refused: code })
-			}
-			return {
-				waiting: waiting.sort((a, b) => by(a.commit, b.commit)),
-				refused: refused.sort((a, b) => by(a.key, b.key)).map(({ key: _, ...r }) => r),
-			}
-		},
+		taking: (doc, layer) => taking(named(doc), layer),
 	})
 	return device
 }

@@ -1,10 +1,11 @@
 // a commit signed by the device that made it, and the id it is stored under (extensions/subduction/
 // plan.org, Rewrite for the new shape, 2). sealed: {commit: its bytes, signature}, the signer's key
 // once (it is in the commit). signed: "ermine/v0/commit", the document's 32 bytes (the ermine://
-// id's), then the commit's name, so a seal is good in its document only (nothing of the document
-// goes in the seal: the document is where it came, a sedimentree). the signature is
-// self-describing: a varsig header, then the raw signature. the commit's signer is a multikey
-// (commit.ts). Ed25519 through WebCrypto, which every browser, Deno and Node have: a key made here
+// id's), the signature's varsig header, then the commit's name, so a seal is good in its document
+// only (nothing of the document goes in the seal: the document is where it came, a sedimentree),
+// and a header put on another signature is no longer good (the varsig spec recommends the header
+// be in what is signed). the signature is self-describing: a varsig header, then the raw signature.
+// the commit's signer is a multikey (commit.ts). Ed25519 through WebCrypto, which every browser, Deno and Node have: a key made here
 // never leaves as bytes; others by a verifier a caller adds
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import * as cbor from "@ermine/encoding/cbor"
@@ -69,13 +70,15 @@ const PKCS8 = Uint8Array.from([
 	0x20,
 ])
 
-// what is signed: the domain, the document's bytes, the commit's name
-const message = (doc: Uint8Array, name: Uint8Array) => {
+// what is signed: the domain, the document's bytes, the signature's header, the commit's name (a
+// header tells its own length, as a name does)
+const message = (doc: Uint8Array, header: Uint8Array, name: Uint8Array) => {
 	if (doc.length !== 32) throw new SealError("shape")
-	const m = new Uint8Array(DOMAIN.length + 32 + name.length)
+	const m = new Uint8Array(DOMAIN.length + 32 + header.length + name.length)
 	m.set(DOMAIN)
 	m.set(doc, DOMAIN.length)
-	m.set(name, DOMAIN.length + 32)
+	m.set(header, DOMAIN.length + 32)
+	m.set(name, DOMAIN.length + 32 + header.length)
 	return m
 }
 
@@ -166,7 +169,7 @@ export async function seal(
 ): Promise<Uint8Array> {
 	const commit = made ? made.commit : decode(bytes)
 	if (commit && !same(commit.signer, signer.key)) throw new SealError("signature")
-	const raw = await signer.sign(message(doc, made?.name ?? nameOf(bytes)))
+	const raw = await signer.sign(message(doc, signer.header, made?.name ?? nameOf(bytes)))
 	if (!(raw instanceof Uint8Array) || raw.length === 0) throw new SealError("shape")
 	const signature = new Uint8Array(signer.header.length + raw.length)
 	signature.set(signer.header)
@@ -212,7 +215,7 @@ export async function unseal(
 		throw new SealError("signature", "the header and the signer's key differ")
 	}
 	if (signature.length !== v.header.length + v.size) throw new SealError("shape")
-	if (!(await v.verify(signature.subarray(v.header.length), key.key, message(doc, name)))) {
+	if (!(await v.verify(signature.subarray(v.header.length), key.key, message(doc, v.header, name)))) {
 		throw new SealError("signature")
 	}
 	return { commit, bytes: o.commit, name, stored: stored(sealed) }

@@ -2,7 +2,8 @@
 // typescript/seal.ts), in C. The sealed commit is the canonical map {commit, signature}: the
 // commit's bytes, and a signature: a varsig header, then the raw signature (Ed25519: 8 bytes of header,
 // then 64); the signer's key, a multikey, is in the commit. What is signed is "ermine/v0/commit", the
-// document's 32 bytes, then the commit's name: a seal is good in its document only. A signature is checked by the verifier whose header it begins with. The built in
+// document's 32 bytes, the signature's header, then the commit's name: a seal is good in its document
+// only, and a header put on another signature is no longer good. A signature is checked by the verifier whose header it begins with. The built in
 // is Ed25519, checked strictly (ed25519.h): S below the group order, A and R canonical and not of
 // small order, the equation without the cofactor. Same bytes as seal.ts.
 #ifndef SL_SEAL_H

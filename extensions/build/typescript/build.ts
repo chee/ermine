@@ -1,59 +1,43 @@
-// build: steps cached with verifying traces (build systems à la carte), and compile, a step. chee
-// 10-15: "this is also where build a la carte comes in"; "we probably need to change our
-// createBuilds to be more like the notebook's interpretation of build-a-la-carte"
+// build: steps cached with verifying traces (build systems à la carte), and compile, a step
 //
 //   const builds = createBuilds({ scheduler, table, places, cache: CACHE })   // in a scope
 //   createComputer(() => builds.step(cell, source, () => run(source)), go)
 //   createComputer(() => builds.compile(CLANG, places.readValue("value", CAT)), go)
 //   // the output; PENDING; an Error (a BuildError: refused)
 //
-// a step: a name (stable: a cell, a compiler's identity) and its code (any value: its source, its
-// options). its key: hex of hash([name, code]) (@ermine/encoding's). a step learns what it depends
-// on only by running: run's reads, as places reads them, are its trace
+// a step: a name (stable: a cell, a compiler's identity) and its code (any value). key: hex of
+// hash([name, code]). its trace: the places reads its run makes
 //
-// the cache folder, one node per step at its key (mine, open):
-//   cache/<key>          the step: its value the output kept last (its type: ermine.type)
-//   cache/<key>/<n>      an entry, n counting up from 1: its value the output; its attribute
-//                        ermine.programs.trace the reads run made, in order, each
-//                        [part, id, path, hash] (hash: hex of what was there; nothing: null)
+// the cache folder, one node per step at its key:
+//   cache/<key>          the step: value the output kept last (typed: ermine.type, not in the key)
+//   cache/<key>/<n>      an entry, n from 1: value the output; attribute ermine.programs.trace the
+//                        reads in order, each [part, id, path, hash] (hash: hex, or null: nothing)
 //
-// a lookup, in the reader's run: the entries newest first, each checked by reading its trace again
-// in order, stopping at the first read whose hash differs (a later read may hang on an earlier
-// one). the first to match all through: a hit, its output given, run not called. every check read
-// is the reader's, tracked: a change there reruns it. none: a miss
-//
-// a miss: run in a computer of its own, one per key, shared by every reader wanting it. its reads
-// are recorded through the scheduler's onTrack, as the run makes them (only before its first
-// await, as the scheduler tracks), each named by places' describe and hashed as the output is
-// kept. a read builds can't name (none but places' value reads), or a value with no encoding (the
-// output, a read, the name or code): refused uncacheable. its output and trace kept as a new entry
-// (the same trace kept already: nothing new); an output equal by bytes to one this step keeps is
-// kept as that same value, so a reader comparing by identity stops there (early cutoff). while out,
-// the reader gets its status (status.ts): PENDING, or the Error. errors are never kept: a failed
-// step goes once no run reads it. a step goes once done, or once no run reads it (mine, open;
-// whether a run reads it: @ermine/clingy)
-//
-// never: run called in the reader's run, its result as it is, nothing looked up or kept (the
-// notebook's // nocache). type: its outputs' ermine.type, not in the key. every entry is kept: how many to keep is open
-//
-// compile(compiler, input): the step (the compiler's identity, its input). its run reads nothing,
-// so its one entry always hits. a compiler: a node whose value is a live function from the host,
-// never saved: (input, ctx) => Value | Promise<Value>. what it is: its attribute
-// ermine.programs.compiler, a plain value; none: its id. so two compiler nodes saying one identity
-// share every entry. the function is read untracked, only on a miss: a host replacing one changes
-// the identity (its version). its node's value not a function: refused not-a-compiler. an output
-// is typed with the compiler's ermine.programs.gives, if it says
-//
-// onStep(f): told what each lookup found, in the reader's run (a host saying hits and misses)
-//
-// writes: the cache's, by a step's computer with its scope open; status's. committed to the places
-// given, and only to it: a host with boxes hands a places whose commit tells them too
+// lookup, in the reader's run, tracked: entries newest first, each trace read again in order up to
+// the first differing hash; all match: a hit, run not called. none: a miss
+// miss: run in one computer per key, shared by its readers; reads recorded through onTrack (before
+// its first await only). a read places' describe can't name, or a value with no encoding: refused
+// uncacheable. a trace kept already: nothing new. an output equal by bytes to one kept is given as
+// that same value (early cutoff). while out, readers get its status: PENDING or the Error. errors
+// are never kept
+// never: run in the reader's run, nothing looked up or kept (the notebook's // nocache)
+// compile(compiler, input): the step (the compiler's identity, input); reads nothing, so its one
+// entry always hits. a compiler: a node whose value is a live host function (input, ctx) =>
+// Value | Promise<Value>, never saved, read untracked on a miss only. its identity: attribute
+// ermine.programs.compiler, else its id. not a function: refused not-a-compiler. outputs typed by
+// its ermine.programs.gives, if set
+// onStep(f): told what each lookup found, in the reader's run
+// writes: the cache's (a step's computer, scope open) and status's, committed only to the places
+// given (a host with boxes hands one whose commit tells them). a step's computer is made with
+// { [NODE]: its status node } (step:<uuid>, never saved): each header's metadata stops there
+// open: the cache layout; when a step goes (once done, or unread: @ermine/clingy); how many entries
+// to keep. to do: closer to the notebook's reading of build systems à la carte
 import { CborError, encode, type Value } from "@ermine/encoding/cbor"
 import { hash } from "@ermine/encoding/hash"
 import { createClingy } from "@ermine/clingy"
 import createEntry from "@ermine/node/entry"
 import { asId, at, type Id, type Places } from "@ermine/places"
-import { createChangeHeader } from "@ermine/places/header"
+import { createChangeHeader, NODE } from "@ermine/places/header"
 import { createStatus, status } from "@ermine/places/status"
 import { upsert } from "@ermine/places/upsert"
 import { type Computer, type Ended, PENDING, type Scheduler } from "@ermine/scheduler"
@@ -108,7 +92,7 @@ export type Setup = {
 		| "track"
 		| "mark"
 		| "getRun"
-		| "getInfo"
+		| "getCurrentScope"
 		| "onRunEnd"
 		| "onEffect"
 		| "onTrack"
@@ -191,13 +175,13 @@ const failed = (e: Ended | undefined) => e === "failed" || e === "looping"
 export function createBuilds(setup: Setup): Builds {
 	const { scheduler: s, table, places, cache } = setup
 	// the steps' owner, under the scope open
-	const scope = s.createScope([["builds", "steps"]])
+	const scope = s.createScope({ builds: "steps" })
+	const of = new WeakMap<Computer, Task>()
 	const statuses = createStatus({ places, table, scheduler: s })
 	// by key: the steps out
 	const tasks = new Map<string, Task>()
 	// every step out: whether a run reads it; the last reader gone, it goes
 	const clingy = createClingy<Task>(s, (t) => retire(t))
-	const of = new WeakMap<Computer, Task>()
 	// steps wanted in a run, made as it ends
 	const wanted: Task[] = []
 	// the step whose run is running now: its reads recorded
@@ -322,6 +306,9 @@ export function createBuilds(setup: Setup): Builds {
 					return isPromise(out) ? out.then((v) => checked(t, v)) : checked(t, out)
 				},
 				(out) => keep(t, out),
+				undefined,
+				undefined,
+				{ [NODE]: t.node },
 			))
 		t.c = c
 		of.set(c, t)
@@ -341,8 +328,7 @@ export function createBuilds(setup: Setup): Builds {
 	}
 
 	// a step done goes (its entry kept); failed, once no run reads it; out, once no run reads it
-	// (clingy's go, above; chee 10-16, not in core: "take it out of core, make it a library that
-	// can be used in the two places it was duplicated")
+	// (clingy's go, above)
 	const offs = [
 		s.onTrack((key, run) => {
 			if (recording !== undefined && run.computer === recording.c) recording.keys.push(key)

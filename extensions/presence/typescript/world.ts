@@ -13,7 +13,7 @@ export function device(name: string, clock: { t: number }): Device {
 	const table = createTable((part, id) => places.onTableChange(part as Key, id))
 	const places = createPlaces({ root: "R", table, paths, scheduler })
 	scheduler.onTrackingEnd((k) => places.release(k))
-	const scope = scheduler.createRootScope([["actor", name]])
+	const scope = scheduler.createRootScope({ actor: name })
 	return { table, places, scheduler, scope, now: () => clock.t }
 }
 

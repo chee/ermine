@@ -130,8 +130,8 @@ export function createSync(options: Options): Sync {
 			? { ...change }
 			: { time: Math.floor(Date.now() / 1000), actor: null }
 		// the time goes as the wallclock (a blop has no time of its own)
-		if (!h.metadata?.some(([k]) => k === "wallclock")) {
-			h.metadata = [...h.metadata ?? [], ["wallclock", h.time]]
+		if (!Object.hasOwn(h.metadata ?? {}, "wallclock")) {
+			h.metadata = { ...h.metadata, wallclock: h.time }
 		}
 		delete h.op
 		return h
@@ -175,7 +175,7 @@ export function createSync(options: Options): Sync {
 		try {
 			const head = list[0]?.because.place.name
 			if (!local) {
-				const time = list[0]?.change.metadata?.find(([k]) => k === "wallclock")?.[1]
+				const time = list[0]?.change.metadata?.wallclock
 				const change: ChangeHeader = {
 					...list[0]?.change,
 					time: typeof time === "number" ? time : Math.floor(Date.now() / 1000),

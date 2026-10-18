@@ -41,7 +41,7 @@ function world() {
 	const places = createPlaces({ root: "R", table, paths, scheduler: s })
 	s.onTrackingEnd((key) => places.release(key))
 	const host: Host = { places, table, scheduler: s }
-	const scope = s.createRootScope([["actor", "host"]])
+	const scope = s.createRootScope({ actor: "host" })
 	const hosted = <T>(f: () => T) => s.runWithScope(scope, f)
 	const header = () => createChangeHeader(s)
 	const put = (part: Key, id: Id, v: unknown) =>
@@ -217,7 +217,7 @@ Deno.test("openwith must not open a file whose id is outside the box", () => {
 	})
 	// S is beside the box; its id is handed straight to openwith
 	const ways = s.runWithScope(
-		s.createRootScope([["actor", "x"]]),
+		s.createRootScope({ actor: "x" }),
 		() => [...openwith(b.places, "S", [])],
 	)
 	assertEquals(ways.length, 0, "openwith produced a way to open a node beside the box")
@@ -251,7 +251,7 @@ Deno.test("satisfy's ways must stay bounded when many interchangeable loaders sh
 	})
 	let count = 0
 	const CAP = 3000
-	s.runWithScope(s.createRootScope([["actor", "x"]]), () => {
+	s.runWithScope(s.createRootScope({ actor: "x" }), () => {
 		for (const _ of satisfy(b.places, "prog", [])) {
 			if (++count >= CAP) break
 		}
@@ -344,7 +344,7 @@ Deno.test("HELD: satisfy from a box does not reach a loader placed above/beside 
 		)
 	})
 	const ways = s.runWithScope(
-		s.createRootScope([["actor", "x"]]),
+		s.createRootScope({ actor: "x" }),
 		() => [...satisfy(b.places, "prog", [])],
 	)
 	assertEquals(ways.length, 0, "satisfy reached a runner beside the box")

@@ -4,13 +4,15 @@
 //
 // { op: "key", seed }               → { key }       the Ed25519 key of a 32-byte seed, as a
 //                                                    multikey (0xed 0x01, then the 32 bytes)
-// { op: "seal", seed, commit, doc? } → { sealed }   commit: its bytes (hex), or a commit in JSON
+// { op: "seal", seed, commit, doc?, header? } → { sealed }   commit: its bytes (hex), or a commit in JSON
 //                                                    (encoded first); sealed by the seed's signer for
 //                                                    the document doc (32 bytes, hex; default
-//                                                    2a × 16 then 00 × 16, the default document's)
-// { op: "unseal", sealed, doc? }    → { commit, bytes, name, stored }   commit in JSON, bytes its
-//                                                    bytes, name its name, stored the seal's id
-// { op: "unseal", value, doc? }     → the same, the value (its JSON form) encoded canonically first
+//                                                    2a × 16 then 00 × 16, the default document's),
+//                                                    under the varsig header (hex; default Ed25519's)
+// { op: "unseal", sealed, doc?, also? } → { commit, bytes, name, stored }   commit in JSON, bytes its
+//                                                    bytes, name its name, stored the seal's id; also:
+//                                                    more varsig headers (hex), each checked as Ed25519
+// { op: "unseal", value, doc?, also? } → the same, the value (its JSON form) encoded canonically first
 // { op: "stored", sealed }          → { stored }
 // { op: "verify", key, message, signature } → { good }   the raw signature (64 bytes) the raw key's
 //                                                    (32 bytes) over the message, checked strictly
@@ -26,7 +28,7 @@ import {
 	refusal,
 	unhex,
 } from "../../../ermine/encoding/typescript/commit_harness.ts"
-import { createSigner, good, seal, SealError, stored, unseal } from "./seal.ts"
+import { createSigner, ED25519, good, seal, SealError, stored, unseal } from "./seal.ts"
 
 // the document a seal is for: the request's, else the default's 32 bytes
 export const docOf = (r: Request) => unhex(r.doc ?? "2a".repeat(16) + "00".repeat(16))
@@ -47,13 +49,20 @@ async function answer(r: Request): Promise<Answer> {
 				return { key: hex((await createSigner(unhex(r.seed))).key) }
 			case "seal": {
 				const signer = await createSigner(unhex(r.seed))
+				if (r.header !== undefined) signer.header = unhex(r.header)
 				return { sealed: hex(await seal(commitBytes(r.commit), signer, docOf(r))) }
 			}
 			case "unseal": {
 				const sealed = r.value !== undefined
 					? cbor.encode(revive(r.value) as cbor.Value)
 					: unhex(r.sealed)
-				const u = await unseal(sealed, docOf(r))
+				const more = (r.also ?? []).map((h: string) => ({
+					header: unhex(h),
+					code: ED25519,
+					size: 64,
+					verify: good,
+				}))
+				const u = await unseal(sealed, docOf(r), more)
 				return {
 					commit: jsonOf(u.commit),
 					bytes: hex(u.bytes),

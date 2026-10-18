@@ -13,7 +13,7 @@
 import {
 	type Computer,
 	type Equal,
-	type Pair,
+	type Info,
 	type PENDING,
 	type Scheduler,
 	type Scope,
@@ -83,15 +83,17 @@ export function createSites(
 		set: (value: T) => void,
 		equal?: Equal<T>,
 		key?: unknown,
-	): Computer => note(scheduler.createComputer(f, set, equal, key), hold(createComputer))
+		info?: Info,
+	): Computer => note(scheduler.createComputer(f, set, equal, key, info), hold(createComputer))
 	const createEffect = <T>(
 		f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
 		effect: (value: T, previous: T | undefined) => void,
 		equal?: Equal<T>,
 		options?: Parameters<Scheduler["createEffect"]>[3],
+		info?: Info,
 	): Computer => {
 		const site = hold(createEffect)
-		return note(scheduler.createEffect(f, effect, equal, options), site)
+		return note(scheduler.createEffect(f, effect, equal, options, info), site)
 	}
 
 	function siteOf(scope: Scope): FileLocation | undefined {

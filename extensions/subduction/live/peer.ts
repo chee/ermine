@@ -76,7 +76,7 @@ const sync = createSync({
 	commit: (changed) => places.commit(changed),
 })
 const device = sync.device
-const scope = scheduler.createRootScope([["actor", hexOf(key).slice(0, 8)]])
+const scope = scheduler.createRootScope({ actor: hexOf(key).slice(0, 8) })
 const DOC = given ?? sync.mint()
 
 // patches to the entry under (part, id), made whole first if none: told to places, then to sync

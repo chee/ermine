@@ -11,6 +11,7 @@ import apply from "@ermine/op/apply"
 import { type Commit, decode } from "@ermine/encoding/commit"
 import type { ChangeHeader, Entry } from "@ermine/node/entry"
 import type { History, Kept } from "./history.ts"
+import { hex } from "./hex.ts"
 import { alike, tablesOf } from "./snapshot.ts"
 
 // each table's entry: its value, and the change that last touched it
@@ -35,12 +36,16 @@ export type Merge =
 // the rules a device knows, by name
 export type Merges = Readonly<Record<string, Merge>>
 
-// a commit's change header, as the graph has one
-export function changeOf(c: Commit): ChangeHeader {
+// a commit's change header, as the graph has one. name (the commit's) given: who signed it and the
+// commit kept in its metadata, signer (its key, a multikey) and commit (name), both hex, over any
+// of those names the commit carried
+export function changeOf(c: Commit, name?: Uint8Array): ChangeHeader {
 	const h: ChangeHeader = { time: c.time, actor: c.actor }
 	if (c.reader !== undefined) h.reader = c.reader
 	if (c.external !== undefined) h.external = c.external
-	if (c.metadata !== undefined) h.metadata = c.metadata
+	if (name !== undefined) {
+		h.metadata = { ...c.metadata, signer: hex(c.signer), commit: hex(name) }
+	} else if (c.metadata !== undefined) h.metadata = c.metadata
 	return h
 }
 
@@ -93,7 +98,7 @@ function walk(
 	merging: boolean,
 ): Tables | undefined {
 	if (history.get(name) === undefined) return
-	const line: Uint8Array[] = []
+	const line: Kept[] = []
 	let tables: Tables = {}
 	for (let k = history.get(name); k !== undefined;) {
 		const s = snapshot(k.name)
@@ -101,7 +106,7 @@ function walk(
 			tables = s
 			break
 		}
-		line.push(k.bytes)
+		line.push(k)
 		if (k.merge !== undefined) {
 			const rule = merges[k.merge]
 			if (!merging || rule === undefined) return
@@ -116,10 +121,10 @@ function walk(
 		k = k.base === undefined ? undefined : history.get(k.base)
 	}
 	for (let i = line.length - 1; i >= 0; i--) {
-		const c = decode(line[i])
+		const c = decode(line[i].bytes)
 		const value = apply(tables[c.table]?.value, c.patches, { cow: false })
 		if (value === undefined) delete tables[c.table]
-		else tables[c.table] = { value, change: changeOf(c) }
+		else tables[c.table] = { value, change: changeOf(c, line[i].name) }
 	}
 	return tables
 }
