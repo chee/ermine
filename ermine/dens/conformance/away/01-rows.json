@@ -1,0 +1,323 @@
+{
+	"title": "each den sees the other: two devices on one root R, each den's row (its nodes(), at the anchor dens:R) mirrored on the other: the other den's node at /system/dens/<its id> beside the local one, its attributes as it wrote them and its status as it travels (gone after its first pulse), its children (on, its kinds) and what it offers under them, attributes only: no value (not live), on/start and on/stop no value either. /system/den stays each device's own den",
+	"steps": [
+		{
+			"op": "den",
+			"dev": "mac",
+			"expect": {
+				"id": "den:mac"
+			}
+		},
+		{
+			"op": "offer",
+			"dev": "mac",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api"
+			},
+			"live": "record",
+			"expect": {
+				"id": "den:mac/runners/javascript",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "den",
+			"dev": "card",
+			"expect": {
+				"id": "den:card"
+			}
+		},
+		{
+			"op": "offer",
+			"dev": "card",
+			"kind": "runners",
+			"name": "driver",
+			"attrs": {
+				"ermine.runner.takes": "party.chee.ermine.driver",
+				"ermine.runner.api": "ermine.native",
+				"ermine.runner.where": "den"
+			},
+			"live": "record",
+			"expect": {
+				"id": "den:card/runners/driver",
+				"at": [
+					"system",
+					"dens",
+					"card",
+					"runners",
+					"driver"
+				]
+			}
+		},
+		{
+			"op": "offer",
+			"dev": "card",
+			"kind": "surfaces",
+			"name": "lcd",
+			"attrs": {
+				"ermine.surface.kind": "pixels"
+			},
+			"expect": {
+				"id": "den:card/surfaces/lcd",
+				"at": [
+					"system",
+					"dens",
+					"card",
+					"surfaces",
+					"lcd"
+				]
+			}
+		},
+		{
+			"op": "connect",
+			"dev": "mac",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"dev": "card",
+			"expect": {}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "list",
+			"dev": "mac",
+			"path": [
+				"system",
+				"dens"
+			],
+			"expect": {
+				"names": [
+					"card",
+					"mac"
+				]
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"system",
+				"dens",
+				"card"
+			],
+			"expect": {
+				"id": "den:card"
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"system",
+				"den"
+			],
+			"expect": {
+				"id": "den:mac"
+			}
+		},
+		{
+			"op": "list",
+			"dev": "mac",
+			"path": [
+				"system",
+				"dens",
+				"card"
+			],
+			"expect": {
+				"names": [
+					"on",
+					"runners",
+					"surfaces"
+				]
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"system",
+				"dens",
+				"card",
+				"runners",
+				"driver"
+			],
+			"expect": {
+				"id": "den:card/runners/driver"
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"id": "den:card/runners/driver",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.runner.takes": "party.chee.ermine.driver",
+					"ermine.runner.api": "ermine.native",
+					"ermine.runner.where": "den",
+					"ermine.type": "ermine.runner"
+				},
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"id": "den:card/surfaces/lcd",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.surface.kind": "pixels",
+					"ermine.type": "ermine.surface"
+				},
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"id": "den:card",
+			"expect": {
+				"parts": [
+					"attributes",
+					"children"
+				],
+				"attributes": {
+					"ermine.type": "ermine.den",
+					"ermine.den.id": "card",
+					"ermine.process.cwd": [
+						"system",
+						"dens"
+					]
+				},
+				"status": null,
+				"children": {
+					"on": "den:card/on",
+					"runners": "den:card/runners",
+					"surfaces": "den:card/surfaces"
+				},
+				"live": false
+			}
+		},
+		{
+			"op": "list",
+			"dev": "mac",
+			"path": [
+				"system",
+				"dens",
+				"card",
+				"on"
+			],
+			"expect": {
+				"names": [
+					"start",
+					"stop"
+				]
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"system",
+				"dens",
+				"card",
+				"on",
+				"start"
+			],
+			"expect": {
+				"id": "den:card/on/start"
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"id": "den:card/on/start",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "list",
+			"dev": "card",
+			"path": [
+				"system",
+				"dens"
+			],
+			"expect": {
+				"names": [
+					"card",
+					"mac"
+				]
+			}
+		},
+		{
+			"op": "here",
+			"dev": "card",
+			"path": [
+				"system",
+				"den"
+			],
+			"expect": {
+				"id": "den:card"
+			}
+		},
+		{
+			"op": "here",
+			"dev": "card",
+			"path": [
+				"system",
+				"dens",
+				"mac",
+				"runners",
+				"javascript"
+			],
+			"expect": {
+				"id": "den:mac/runners/javascript"
+			}
+		},
+		{
+			"op": "node",
+			"dev": "card",
+			"id": "den:mac/runners/javascript",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.runner.takes": "com.netscape.javascript-source",
+					"ermine.runner.api": "ermine.api",
+					"ermine.type": "ermine.runner"
+				},
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		}
+	]
+}

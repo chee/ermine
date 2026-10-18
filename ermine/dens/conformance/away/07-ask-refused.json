@@ -1,0 +1,471 @@
+{
+	"title": "refusals over the link, in start's order, before any policy: by id and a hash mac's CLOCK does not have (mac's is other): not-there; an id mac has nothing at: not-there; no runner at the path on mac: not-a-runner; carried code in a form mac's runner does not take: wrong-form; nothing asked, nothing made. a runner mirrored from another den is no runner here (no value): not-a-runner. a den with no policy refuses every ask from another den (no policy) and still starts its own",
+	"steps": [
+		{
+			"op": "kids",
+			"dev": "mac",
+			"id": "R",
+			"value": {
+				"apps": "APPS"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"dev": "mac",
+			"id": "APPS",
+			"value": {
+				"clock.js": "CLOCK"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"dev": "mac",
+			"id": "CLOCK",
+			"value": "other",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"dev": "mac",
+			"id": "CLOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"dev": "mac",
+			"id": "rules",
+			"value": [
+				{}
+			],
+			"expect": {}
+		},
+		{
+			"op": "den",
+			"dev": "mac",
+			"policy": "grants",
+			"expect": {
+				"id": "den:mac"
+			}
+		},
+		{
+			"op": "offer",
+			"dev": "mac",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api"
+			},
+			"live": "record",
+			"expect": {
+				"id": "den:mac/runners/javascript",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "kids",
+			"dev": "card",
+			"id": "R",
+			"value": {
+				"apps": "APPS"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"dev": "card",
+			"id": "APPS",
+			"value": {
+				"clock.js": "CLOCK",
+				"gone.js": "GONE",
+				"main.c": "CSRC"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"dev": "card",
+			"id": "CLOCK",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"dev": "card",
+			"id": "CLOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"dev": "card",
+			"id": "GONE",
+			"value": "gone",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"dev": "card",
+			"id": "GONE",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"dev": "card",
+			"id": "CSRC",
+			"value": "int",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"dev": "card",
+			"id": "CSRC",
+			"value": {
+				"ermine.type": "public.c-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "den",
+			"dev": "card",
+			"expect": {
+				"id": "den:card"
+			}
+		},
+		{
+			"op": "offer",
+			"dev": "card",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api"
+			},
+			"live": "record",
+			"expect": {
+				"id": "den:card/runners/javascript",
+				"at": [
+					"system",
+					"dens",
+					"card",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "connect",
+			"dev": "mac",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"dev": "card",
+			"expect": {}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "remote",
+			"dev": "card",
+			"to": "mac",
+			"ask": "start",
+			"name": "a",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"a"
+			],
+			"expect": {
+				"n": 1
+			}
+		},
+		{
+			"op": "answer",
+			"dev": "card",
+			"n": 1,
+			"expect": {
+				"answer": {
+					"refused": "not-there",
+					"program": "CLOCK"
+				}
+			}
+		},
+		{
+			"op": "remote",
+			"dev": "card",
+			"to": "mac",
+			"ask": "start",
+			"name": "a",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"gone.js"
+			],
+			"at": [
+				"work",
+				"a"
+			],
+			"expect": {
+				"n": 2
+			}
+		},
+		{
+			"op": "answer",
+			"dev": "card",
+			"n": 2,
+			"expect": {
+				"answer": {
+					"refused": "not-there",
+					"program": "GONE"
+				}
+			}
+		},
+		{
+			"op": "remote",
+			"dev": "card",
+			"to": "mac",
+			"ask": "start",
+			"name": "a",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"nope"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"a"
+			],
+			"expect": {
+				"n": 3
+			}
+		},
+		{
+			"op": "answer",
+			"dev": "card",
+			"n": 3,
+			"expect": {
+				"answer": {
+					"refused": "not-a-runner",
+					"runner": [
+						"system",
+						"den",
+						"runners",
+						"nope"
+					]
+				}
+			}
+		},
+		{
+			"op": "remote",
+			"dev": "card",
+			"to": "mac",
+			"ask": "start",
+			"name": "a",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"main.c"
+			],
+			"at": [
+				"work",
+				"a"
+			],
+			"code": true,
+			"expect": {
+				"n": 4
+			}
+		},
+		{
+			"op": "answer",
+			"dev": "card",
+			"n": 4,
+			"expect": {
+				"answer": {
+					"refused": "wrong-form",
+					"program": {
+						"type": "public.c-source"
+					},
+					"runner": {
+						"takes": "com.netscape.javascript-source",
+						"api": "ermine.api"
+					}
+				}
+			}
+		},
+		{
+			"op": "asked",
+			"dev": "mac",
+			"expect": {
+				"asks": []
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"work",
+				"a"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [],
+				"stops": []
+			}
+		},
+		{
+			"op": "start",
+			"dev": "card",
+			"name": "x",
+			"runner": [
+				"system",
+				"dens",
+				"mac",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"x"
+			],
+			"expect": {
+				"refused": "not-a-runner",
+				"runner": [
+					"system",
+					"dens",
+					"mac",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "remote",
+			"dev": "mac",
+			"to": "card",
+			"ask": "start",
+			"name": "b",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"code": true,
+			"at": [
+				"work",
+				"b"
+			],
+			"expect": {
+				"n": 1
+			}
+		},
+		{
+			"op": "answer",
+			"dev": "mac",
+			"n": 1,
+			"expect": {
+				"answer": {
+					"refused": "no-permission",
+					"op": "start",
+					"answer": {
+						"answer": "no",
+						"reason": "no policy"
+					}
+				}
+			}
+		},
+		{
+			"op": "here",
+			"dev": "card",
+			"path": [
+				"work",
+				"b"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "start",
+			"dev": "card",
+			"name": "local",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"local"
+			],
+			"expect": {
+				"id": "proc:local",
+				"at": [
+					"work",
+					"local"
+				]
+			}
+		}
+	]
+}

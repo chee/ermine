@@ -1,0 +1,227 @@
+{
+	"title": "a row never writes over what is here: card's row forged to name mac's root R (a child evil) and mac's own den (another type), and to put a process at /work/w whose id is W, a node mac has: on mac R's children are as they were, mac's den's attributes are its own, and no leaf points at W (an id with entries here that the row did not write). an id card's row wrote before (its own den's) it may write again: den:card's attributes as forged, its children gone with the rest of its old row",
+	"steps": [
+		{
+			"op": "kids",
+			"dev": "mac",
+			"id": "R",
+			"value": {
+				"w": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"dev": "mac",
+			"id": "W",
+			"value": {
+				"ermine.type": "public.plain-text"
+			},
+			"expect": {}
+		},
+		{
+			"op": "den",
+			"dev": "mac",
+			"expect": {
+				"id": "den:mac"
+			}
+		},
+		{
+			"op": "den",
+			"dev": "card",
+			"expect": {
+				"id": "den:card"
+			}
+		},
+		{
+			"op": "connect",
+			"dev": "mac",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"dev": "card",
+			"expect": {}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"system",
+				"dens",
+				"card",
+				"on"
+			],
+			"expect": {
+				"id": "den:card/on"
+			}
+		},
+		{
+			"op": "forge",
+			"dev": "card",
+			"value": {
+				"den": "den:card",
+				"nodes": {
+					"R": {
+						"children": {
+							"evil": "X"
+						}
+					},
+					"den:mac": {
+						"attributes": {
+							"ermine.type": "x"
+						}
+					},
+					"den:card": {
+						"attributes": {
+							"ermine.type": "ermine.den"
+						}
+					}
+				},
+				"processes": [
+					{
+						"id": "W",
+						"at": [
+							"work",
+							"w"
+						]
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"dev": "mac",
+			"expect": {}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"w"
+			],
+			"expect": {
+				"id": "W"
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"evil"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"skip": [
+				"parts",
+				"attributes",
+				"status",
+				"live"
+			],
+			"id": "R",
+			"expect": {
+				"children": {
+					"w": "W"
+				}
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"id": "den:mac",
+			"expect": {
+				"parts": [
+					"attributes",
+					"children"
+				],
+				"attributes": {
+					"ermine.type": "ermine.den",
+					"ermine.den.id": "mac",
+					"ermine.process.cwd": [
+						"system",
+						"dens"
+					]
+				},
+				"status": null,
+				"children": {
+					"on": "den:mac/on"
+				},
+				"live": false
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"work",
+				"w"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"system",
+				"dens",
+				"card"
+			],
+			"expect": {
+				"id": "den:card"
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"id": "den:card",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.type": "ermine.den"
+				},
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "here",
+			"dev": "mac",
+			"path": [
+				"system",
+				"dens",
+				"card",
+				"on"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "node",
+			"dev": "mac",
+			"id": "den:card/on",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		}
+	]
+}
