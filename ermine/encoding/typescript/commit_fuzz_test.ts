@@ -11,7 +11,7 @@
 import { assert, assertEquals } from "@std/assert"
 import { blake3 } from "@ermine/blake3"
 import * as cbor from "./cbor.ts"
-import { type Commit, decode, encode, joinKey, name } from "./commit.ts"
+import { type Commit, decode, encode, joinKey, joinName, name } from "./commit.ts"
 import { toJson } from "../../../conformance/typescript/form.ts"
 import { ask, command, reference } from "../../../conformance/typescript/ask.ts"
 import {
@@ -32,6 +32,8 @@ const SEEDS = Number(Deno.env.get("SEEDS") ?? 40)
 const subject = command("commit"), here = reference("commit")
 
 const bytes = (pick: Pick, n: number) => Uint8Array.from({ length: n }, () => pick(256))
+// a digest as a name: BLAKE3's code and length before it
+const named = (digest: Uint8Array) => joinName(0x1e, digest)
 const whole = (pick: Pick) =>
 	[0, 1, 2 ** 31 - 1, 2 ** 31, 2 ** 53 - 1, 1760000000, pick(1000)][pick(7)]
 const small = (pick: Pick) => [0, 1, 2 ** 31 - 1, pick(100)][pick(4)]
