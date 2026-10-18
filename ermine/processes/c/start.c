@@ -234,6 +234,7 @@ typedef struct {
 	const pr_options *o;
 } starting;
 
+// the node's one attributes entry: options.attributes' pairs, then processes' own over them
 static void make_attributes(void *data) {
 	starting *c = data;
 	pr_process *p = c->p;
@@ -246,6 +247,12 @@ static void make_attributes(void *data) {
 		return;
 	}
 	op_value *attrs = op_map();
+	const op_value *given = c->o->attributes;
+	if (given != NULL && given->type == OP_MAP) {
+		for (size_t i = 0; i < given->count; i++) {
+			op_set_name(attrs, given->keys[i], op_ref(given->items[i]));
+		}
+	}
 	if (c->o->has_args) op_set(attrs, PR_ARGS, names_value(p->args, p->nargs));
 	op_set(attrs, PR_CWD, names_value(p->cwd, p->ncwd));
 	if (c->o->pin != NULL) op_set(attrs, PR_PIN, op_ref((op_value *)c->o->pin));

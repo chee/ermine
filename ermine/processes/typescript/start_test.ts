@@ -98,3 +98,26 @@ Deno.test("give: a computer's status on the process's node; torn down from above
 	w.s.teardown(p.scope)
 	assertEquals([stops, w.table.get(PROCESS, "R")?.value, p.scope.state], [1, {}, "gone"])
 })
+
+Deno.test("start: options.attributes in the one entry, beside the cwd and the status", () => {
+	const w = world()
+	const p = w.start(w.places, "work/clock", {
+		attributes: { "ermine.type": "ermine.process", "ermine.den.id": "mac" },
+	})
+	assertEquals(w.attrs(p), {
+		"ermine.type": "ermine.process",
+		"ermine.den.id": "mac",
+		[CWD]: ["work"],
+		[STATUS]: PENDING,
+	})
+	assertEquals(w.table.get(p.id).map(([part]) => part), ["attributes"])
+})
+
+Deno.test("start: a name options.attributes shares with processes' own is processes'", () => {
+	const w = world()
+	const p = w.start(w.places, "work/clock", {
+		args: ["a.txt"],
+		attributes: { [CWD]: ["elsewhere"], [ARGS]: ["b.txt"], [STATUS]: "mine", kept: 1 },
+	})
+	assertEquals(w.attrs(p), { [CWD]: ["work"], [ARGS]: ["a.txt"], [STATUS]: PENDING, kept: 1 })
+})
