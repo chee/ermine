@@ -4,7 +4,7 @@
 		{
 			"op": "add",
 			"name": "a",
-			"parents": ["abababababababababababababababababababababababababababababababab"],
+			"parents": ["1e20abababababababababababababababababababababababababababababababab"],
 			"lamport": 2,
 			"patches": [{ "path": [], "value": { "n": 0 } }],
 			"expect": {

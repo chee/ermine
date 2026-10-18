@@ -32,9 +32,9 @@
 			"nonce": 3,
 			"parents": [
 				"b",
-				"abababababababababababababababababababababababababababababababab"
+				"1e20abababababababababababababababababababababababababababababababab"
 			],
-			"base": "abababababababababababababababababababababababababababababababab",
+			"base": "1e20abababababababababababababababababababababababababababababababab",
 			"patches": []
 		},
 		{
