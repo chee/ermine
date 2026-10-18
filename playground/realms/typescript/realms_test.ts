@@ -8,16 +8,15 @@ import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/table"
 import { createPlaces } from "@ermine/places"
 import { get } from "@ermine/places/lib"
-import { createChangeHeader } from "@ermine/places/header"
+import { createChangeHeader, NODE } from "@ermine/places/header"
 import { STATUS } from "@ermine/places/status"
-import { RUN } from "@ermine/places/runs"
 import { box, createBox } from "@ermine/boxes"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import { createBuilds } from "@ermine/build"
 import { satisfy } from "@ermine/programs"
 import { createPrograms, type Process, type Programs } from "@ermine/programs/start"
 import { no, type Policy, yes } from "@ermine/protect"
-import { createProcessAPIs } from "@ermine/api"
+import { createProcessAPIs, SCOPE } from "@ermine/api"
 import { createRealms, type Realm } from "./realms.ts"
 
 const JS = "com.netscape.javascript-source"
@@ -38,8 +37,8 @@ export function world(o: { may?: Policy } = {}) {
 	const places = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler: s })
 	s.onTrackingEnd((key) => places.release(key))
 	const scopes = createScopeNodes({ scheduler: s, table })
-	const host = s.createRootScope([["actor", "host"]])
-	const above = s.createScope([["role", "programs"]], host)
+	const host = s.createRootScope({ actor: "host" })
+	const above = s.createScope({ role: "programs" }, host)
 	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 	const header = () => createChangeHeader(s)
 	const commit = (changed: readonly Entry<unknown>[]) => places.commit(changed)
@@ -191,7 +190,7 @@ Deno.test("a read of ./n: its first run pending, then the value lands and it run
 	w.done()
 })
 
-Deno.test("an edit from the worker lands as the process: its header the page's, its site the program's", async () => {
+Deno.test("an edit from the worker lands as its effect: the page's actor, the effect's node, the program's site", async () => {
 	const w = world()
 	const note = w.node("note", "a")
 	w.program(
@@ -205,11 +204,13 @@ Deno.test("an edit from the worker lands as the process: its header the page's, 
 	const p = w.start("editor.js", ["editor"])
 	await until(() => w.value(["note"]) === "b")
 	const change = w.table.get("value", note)!.change as ChangeHeader
-	// the page's idea of who: the host's actor, the process's scope; never the worker's own
+	// the page's idea of who: the host's actor; the metadata the realm's, ending at the effect's
+	// node (its act's run), the node's scope the process; never the worker's own root
 	assertEquals(change.actor, "host")
-	const flat = JSON.stringify(change.metadata)
-	assert(flat.includes(JSON.stringify(["process", ["editor"]])))
-	assert(!flat.includes("realm"))
+	const watch = get(w.b.places, ["editor", "watch"])!
+	assertEquals(change.metadata?.[NODE], watch)
+	assertEquals(w.attributes(watch)?.[SCOPE], p.id)
+	assert(!JSON.stringify(change.metadata).includes("realm"))
 	// the site: the realm's, not the page's realms.ts
 	assert(change.external?.length, "a site")
 	assert(!change.external![0].file.endsWith("realms.ts"), change.external![0].file)
@@ -217,7 +218,7 @@ Deno.test("an edit from the worker lands as the process: its header the page's, 
 	w.done()
 })
 
-Deno.test("a memo in the worker: its result node and its run record on the page", async () => {
+Deno.test("a memo in the worker: its result node on the page (its run record stays in the worker)", async () => {
 	const w = world()
 	const n = w.node("n", 7)
 	w.program(
@@ -231,10 +232,8 @@ Deno.test("a memo in the worker: its result node and its run record on the page"
 	const id = get(w.b.places, ["double"])!
 	// its id a new one, never from its name
 	assert(!String(id).includes("double"), String(id))
-	const record = w.attributes(id)?.[RUN] as { n: number; end: string; reads: unknown[] }
-	assertEquals(record.end, "done")
-	assertEquals(record.n, 2)
-	assert(record.reads.length > 0)
+	// a record is the worker's runs table's: no wire message carries it, so the page has none
+	assertEquals(w.apis.runs(id), undefined)
 	w.write(n, 8)
 	await until(() => w.value(["double"]) === 16)
 	w.done()
@@ -266,7 +265,7 @@ Deno.test("send from the page to a method in the worker, the caller on its write
 	assertEquals(back, "hi frog")
 	await until(() => w.value(["last"]) === "frog")
 	const change = w.table.get("value", get(w.b.places, ["last"])!)!.change
-	assert(change.metadata?.some(([k, v]) => k === "caller" && v === "host"))
+	assertEquals(change.metadata?.caller, "host")
 	await until(() => w.value(["answer"]) === "echo owl")
 	w.done()
 })

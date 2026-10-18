@@ -1,42 +1,38 @@
-// the wire between a page and a realm: the messages, in order, over one port (a worker's, or a
-// MessagePort), and how a value crosses. values cross by structured clone. one that won't is sent
-// again marked (enc), its functions and ermine's symbols put as marks:
-//   a function, the whole value of a node's "value" (a method): a stand-in on the other side, its
-//     calls crossing (send's promise). anywhere else: it won't cross
-//   PENDING, REFUSED: themselves again
-// still won't: a plain Error, thrown where it was sent (the realm's side), or the part sent as bad
-// (the page's side: a read of it in the realm throws)
+// the wire between a page and a realm: messages in order over one port (a worker's or a
+// MessagePort). values cross by structured clone; one that won't is sent again marked (enc):
+//   a function as a node's whole "value" (a method): a stand-in whose calls cross; elsewhere: won't
+//   PENDING, REFUSED: themselves
+// still won't (a plain Error): thrown on the realm's side; on the page's, sent as bad (a read of it
+// in the realm throws)
 //
-// the page's messages (seq: the page's count of what changed the realm's table, in order):
-//   start    { code, process, root, contributors, loads, seq }   the program, where it runs, what
-//            it is handed loaded: the root, the folders on the way to at and cwd, the process
+// the page's (seq: its count of what changed the realm's table, in order):
+//   start    { code, process, root, contributors, loads, seq }   the program, where it runs; loads:
+//            the root, the folders on the way to at and cwd, the process
 //   loaded   { load, seq }                       an id's entries, every part (none: nothing there)
 //   fact     { part, id, patches | gone | bad, change?, reset?, seq }   a change at a loaded id;
-//            reset: the page's entry whole, in place of the realm's (patches one at the root)
-//   call     { k, id, args, pairs }              a method of the realm's called (pairs: the call's)
-//   sent     { k, value | error }                a send of the realm's, landed
-//   look     {}                                  what the realm has, asked (to show it: nothing changes)
+//            reset: the page's entry whole, in place of the realm's
+//   call     { k, id, args, info }               a realm method called
+//   sent     { k, value | error }                a realm send, landed
+//   look     {}                                  what the realm has, asked (changes nothing)
 // the realm's:
 //   ready    { error? }                          setup ran (or threw)
 //   load     { id }                              an id it reached and does not have
 //   fact     { part, id, patches | gone, site?, call?, base }   a write; base: the page's seq it
-//            had then; call: the page's call open when it was made
+//            had; call: the page's call open then
 //   reset    { part, id }                        a write that won't cross: the page's entry again
-//   send     { k, id, args }                     a send to one of the page's methods
+//   send     { k, id, args }                     a call to a page method
 //   called   { k, value | error }                a call of its method, landed
-//   notice   { kind, id, path? }                 a memo, effect or method made (a computer's node:
-//            taken out at stop by the page, the realm being gone)
-//   error    { error }                           thrown in it, after setup
-//   looked   { tree? }                           its graph from its root, as its table has it: each
-//            node's state (here, waiting: pointed to and not loaded, none), its value shown, its
-//            names (process rows and children). none: not started
+//   notice   { kind, id, path? }                 a memo, effect or method made (the page takes its
+//            node out at stop)
+//   error    { error }                           thrown after setup
+//   looked   { tree? }                           its graph from its root: each node's state (here,
+//            waiting, none), value, names. none: not started
 import type { Patch } from "@ermine/op/apply"
-import type { ChangeHeader } from "@ermine/node/entry"
+import type { ChangeHeader, Metadata } from "@ermine/node/entry"
 import { REFUSED } from "@ermine/places/guard"
-import { PENDING } from "@ermine/scheduler"
+import { type Info, PENDING } from "@ermine/scheduler"
 import type { FileLocation } from "@ermine/util/stacktrace"
 
-export type Pair = readonly [string, unknown]
 export type Path = readonly string[]
 
 // what crosses for an entry: its value and change; bad: it won't cross (why)
@@ -69,7 +65,7 @@ export type PageMessage =
 		reset?: true
 		enc?: true
 	}
-	| { t: "call"; k: number; id: string; args: unknown[]; pairs: Pair[]; enc?: true }
+	| { t: "call"; k: number; id: string; args: unknown[]; info: Info; enc?: true }
 	| { t: "sent"; k: number; value?: unknown; error?: unknown; enc?: true }
 	| { t: "look" }
 
@@ -84,6 +80,9 @@ export type RealmMessage =
 		patches?: Patch[]
 		gone?: true
 		site?: FileLocation[]
+		// the realm's header's metadata: kept on the page when it ends at the process's node or one
+		// the realm made (realms.ts)
+		metadata?: Metadata
 		call?: number
 		enc?: true
 	}

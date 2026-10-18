@@ -1,71 +1,26 @@
-// realms: a host runner that runs a program in a worker, real ermine on both sides (worker.ts). 8b,
-// chee 10-15: "pending is the right choice here"; "why doesn't the worker have ermine in there?"
+// realms: a host runner that runs a program in a worker, with ermine on both sides (worker.ts)
 //
 //   page (main thread)                           worker (worker.ts)
 //     graph · scheduler · places · protect         scheduler · places · ermine/api, the program
 //     the page's table                ◄── port ──► a partial replica of it, filled as it is read
 //
 //   const realms = createRealms({ commit })
-//   const apis = createProcessAPIs({ ... })
 //   createPrograms({ ..., createProcessAPI: realms.wrap(apis.createProcessAPI) })
 //   put("value", "realm", realms.run)          // a host runner: takes javascript source text
 //
-// the code: a module's source text (a string), or { url } (a module's). its default export is called
-// with the api, once, as apis.run calls one. a function won't cross: it is an Error. what run gives
-// back: a promise of the handle, landing as setup has run (until then the process's status is
-// PENDING, start.ts'; setup throwing: the Error); the handle's stop terminates the worker, and every
-// watch, call and send with it. the process's scope torn down: the same
+// the page is the authority: a realm's writes are asked of the host's policy and written again
+// here; a write made on a stale value is rebased past the page's (rebase.ts). errors, and refused
+// writes, become the process's status. methods cross as promises.
 //
-// the page is the authority. a realm's write (a change at an entry: its patches, or the entry
-// gone) is written here again, with the process's scope open (or a call's: below), its header the
-// page's (createChangeHeader: who the process is, from here), but its site: the realm's, where its
-// write was made. the host's policy (may) is asked first, by op as ermine/api asks: a children entry
-// "place" on each name changed, an entry gone "remove", anything else "edit"; a node the realm made
-// (none here before it) is its own, never asked, nor the process's own value (the runner's write).
-// refused, or not landing: the page's entry is sent back in its place, and the refusal is the
-// process's status. a load asks "read" of each part: refused, it is sent as bad (a read of it in the
-// realm throws, saying why)
-//
-// what the page sends: an id's entries when the realm asks (load), then every change at an id the
-// realm has (loaded, or wrote), as it lands (places' watchAll), never one it just wrote itself. two
-// writes to one entry at once, the realm's and the page's: the page's order wins. the realm's
-// change was worked out on the value it had: when the page had sent changes there the realm had
-// not landed (their seq after the realm's base), its patches are rebased past them (rebase.ts: OT
-// with the page the one authority, chee 10-15), then put on the page's entry, and the page's entry
-// whole follows (reset), so both end the same. one of those a whole entry (a load, a reset, gone):
-// nothing to rebase past, put on as they are. a whole value is a whole value: two bumps of a
-// counter at once, one on each side, give one
-//
-// a method the realm made: its node's value on the page a stand-in, called by send as any method
-// is: the call crosses with its scope's pairs (the caller's), the realm's writes in it are written
-// in a scope of those pairs under the process's, and the return comes back as a promise. a value
-// that won't cross (an argument, a return): a plain Error
-//
-// errors only: a worker that throws or dies after setup, a write refused: the process's status
-// (status.ts' attribute on its node), an Error. a realm's memo and effect nodes are taken out at
-// stop, as ermine/api takes them out at its scope's teardown (the realm, terminated, can't)
-//
-// mine, open: realm ids stay loaded till stop; the page's seq and the realm's base as the only
-// clock; a node's path as the page last sent it (checked before asking with it)
-//
-// can't cross yet: start and stop (a realm has no programs: they throw), presence (none there:
-// it throws), patch nodes' overlay (a realm's layers are the table's own); a teardown is never told
-// "ended" (the worker is terminated); a live value (ref's, one with a function in it) won't clone:
-// a plain Error where it was written. an iframe: the wire is a port, so a frame running worker.ts'
-// serve on a MessagePort would do; not built. load (start.ts' loaded runners): not here, a loaded
-// form's run would be handed the page's api, which can't cross
-//
-// costs (measure.ts, an M-series laptop, deno 2.9): startup, new Worker to setup run, 33–50 ms (a
-// bare worker: 6–9 ms; the rest is importing ermine there); a first read, pending to its run with
-// the value, 3–7 ms; a rerun, a page write to a worker effect's act and its write back on the page,
-// 0.6–0.85 ms
+// not across yet: start and stop, presence, patch nodes' overlay, live values, iframes
+// costs (measure.ts): startup 33–50 ms, a first read 3–7 ms, a rerun round trip ~0.7 ms
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import apply, { type Patch } from "@ermine/op/apply"
 import type { API } from "@ermine/api"
 import { type Path, unplace } from "@ermine/places"
 import { get } from "@ermine/places/lib"
-import { createChangeHeader } from "@ermine/places/header"
+import { createChangeHeader, NODE } from "@ermine/places/header"
 import { createGuard, slot, target, type Thing } from "@ermine/places/guard"
 import { STATUS } from "@ermine/places/status"
 import type { Context, Handle, Runner } from "@ermine/programs/start"
@@ -193,6 +148,10 @@ export function createRealms(setup: Setup = {}): Realms {
 		let ks = 0
 		const computers = new Map<string, Path | undefined>()
 		let ready: { resolve: (h: Handle) => void; reject: (e: unknown) => void } | undefined
+
+		// the process's scope holds its NODE key (processes' start): a header's metadata stops
+		// there, a call's plain scope under it riding along
+		const header = () => createChangeHeader(s)
 
 		const guard = setup.may === undefined
 			? undefined
@@ -340,10 +299,10 @@ export function createRealms(setup: Setup = {}): Realms {
 			if (scope.state === "gone") return
 			const e = error instanceof Error ? error : new Error(String(error))
 			s.runWithScope(scope, () => {
-				const header = createChangeHeader(s)
+				const h = header()
 				const entry = table.get("attributes", process.id) as Entry<unknown> | undefined
 				if (entry === undefined) {
-					table.add("attributes", process.id, createEntry({ [STATUS]: e }, header))
+					table.add("attributes", process.id, createEntry({ [STATUS]: e }, h))
 					return
 				}
 				update(
@@ -351,7 +310,7 @@ export function createRealms(setup: Setup = {}): Realms {
 					isMap(entry.value)
 						? [{ path: [STATUS], value: e }]
 						: [{ path: [], value: { [STATUS]: e } }],
-					header,
+					h,
 				)
 				commit([entry])
 			})
@@ -376,6 +335,20 @@ export function createRealms(setup: Setup = {}): Realms {
 				if (p.move && typeof p.move.path[0] === "string") names.add(p.move.path[0])
 			}
 			for (const name of names) guard.write("place", slot(t, name))
+		}
+
+		// a realm's write's header: the page's (actor, reader, its metadata to the process's node), the
+		// realm's site; the realm's metadata in place of the page's when its NODE key (the scope
+		// it stops at) is the process's node or one the realm made (a memo's or effect's own)
+		function headerOf(m: Extract<RealmMessage, { t: "fact" }>): ChangeHeader {
+			const h = header()
+			if (m.site?.length) h.external = m.site
+			const meta = m.enc && m.metadata ? decode(m.metadata) as typeof m.metadata : m.metadata
+			const node = meta?.[NODE]
+			if (
+				node !== undefined && (node === String(process.id) || own.has(node as string))
+			) h.metadata = { ...meta }
+			return h
 		}
 
 		// a realm's write, written here as the process (or the call open when it was made)
@@ -407,8 +380,7 @@ export function createRealms(setup: Setup = {}): Realms {
 					refused = e
 					return
 				}
-				const header = createChangeHeader(s)
-				if (m.site?.length) header.external = m.site
+				const header = headerOf(m)
 				try {
 					const entry = table.get(part, id) as Entry<unknown> | undefined
 					if (gone) {
@@ -451,18 +423,17 @@ export function createRealms(setup: Setup = {}): Realms {
 		// a stand-in for the realm's method at id: the call crosses, its promise comes back
 		const standIn = (id: string) => (...args: unknown[]) => {
 			if (dead) throw new Error("the realm has stopped")
-			const info = s.getInfo() ?? []
-			const pairs = info.at(-1)?.[0] === "owner" ? info.slice(0, -1) : [...info]
+			const info = { ...s.getInfo() }
 			const k = ++ks
-			tell({ t: "call", k, id, args, pairs }, (x) => {
+			tell({ t: "call", k, id, args, info }, (x) => {
 				const y = x as Extract<PageMessage, { t: "call" }>
 				return {
 					...y,
 					args: y.args.map((a) => encode(a)),
-					pairs: encode(y.pairs, false, true) as never,
+					info: encode(y.info, false, true) as never,
 				}
 			})
-			const opened = s.createScope(pairs, scope)
+			const opened = s.createScope(info, scope)
 			return new Promise((resolve, reject) => calls.set(k, { resolve, reject, scope: opened }))
 		}
 
@@ -548,7 +519,7 @@ export function createRealms(setup: Setup = {}): Realms {
 						const kids = parent === undefined ? undefined : table.get("children", parent)
 						const name = path[path.length - 1]
 						if (kids !== undefined && isMap(kids.value) && kids.value[name] === id) {
-							commit(unplace(kids as Entry<unknown>, name, createChangeHeader(s)))
+							commit(unplace(kids as Entry<unknown>, name, header()))
 						}
 					}
 					for (const [part] of table.get(id)) table.del(part, id)

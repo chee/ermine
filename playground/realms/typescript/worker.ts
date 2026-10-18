@@ -14,9 +14,9 @@
 //
 // setup: run once, with the api, as start.ts runs a host runner (createProcessAPIs' run: its return
 // the process's value). a setup that reads what is not loaded yet throws PENDING: what it made is
-// torn down and it runs again once something lands (mine, open: its writes so far stay)
+// torn down and it runs again once something lands (open: its writes so far stay)
 //
-// a method's call from the page: run in a scope of the call's pairs, its writes sent with the call
+// a method's call from the page: run in a scope of the call's info, its writes sent with the call
 // (written on the page as the caller's), its return sent back (a promise: as it lands). a send to
 // a method of the page's: its node's value here is a stand-in, called as any method is, giving
 // back a promise of the page's answer
@@ -27,8 +27,9 @@ import update from "@ermine/node/update"
 import apply, { type Patch } from "@ermine/op/apply"
 import { createProcessAPIs } from "@ermine/api"
 import { children, type Contributor, createPlaces, type Fact, type Places } from "@ermine/places"
+import { NODE } from "@ermine/places/header"
 import { PROCESS, processes } from "@ermine/processes"
-import { createScheduler, PENDING, type Scope } from "@ermine/scheduler"
+import { createScheduler, type Info, PENDING, type Scope } from "@ermine/scheduler"
 import { isPromise } from "@ermine/scheduler/helpers"
 import { createPaths } from "@ermine/scheduler/paths"
 import type { Key } from "@ermine/table"
@@ -57,6 +58,7 @@ type World = {
 	r: Replica
 	places: Places
 	root: Scope
+	// the process's: [["process", at], [NODE, its id]] (the node's entries are the page's)
 	scope?: Scope
 	apis: ReturnType<typeof createProcessAPIs>
 }
@@ -200,7 +202,7 @@ export function serve(port: Port): () => void {
 
 	// a method of the realm's called from the page, in a scope of the call's pairs, its writes sent
 	// with the call. it throws PENDING (it reached what is not loaded yet): called again once
-	// something lands (mine, open: what it wrote before is written again)
+	// something lands (open: what it wrote before is written again)
 	function call(m: Extract<PageMessage, { t: "call" }>) {
 		const reply = (out: { value?: unknown; error?: unknown }) => {
 			try {
@@ -220,9 +222,9 @@ export function serve(port: Port): () => void {
 		const fn = r.raw.get("value", m.id)?.value
 		if (typeof fn !== "function") return reply({ error: new Error(`not-a-method (${m.id})`) })
 		const args = (m.enc ? decode(m.args) : m.args) as unknown[]
-		const pairs = (m.enc ? decode(m.pairs) : m.pairs) as [string, unknown][]
+		const info = (m.enc ? decode(m.info) : m.info) as Info
 		const once = () => {
-			const scope = s.createScope(pairs, w!.scope ?? w!.root)
+			const scope = s.createScope(info, w!.scope ?? w!.root)
 			// the scope torn down, the call still open (its teardowns' writes are the call's)
 			const done = () => {
 				current = m.k
@@ -277,7 +279,7 @@ export function serve(port: Port): () => void {
 			contributors: m.contributors.length ? m.contributors.map(by) : undefined,
 		})
 		s.onTrackingEnd((k) => places.release(k))
-		const root = s.createRootScope([["realm", "worker"]])
+		const root = s.createRootScope({ realm: "worker" })
 		const commit = (changed: Parameters<Places["commit"]>[0]) => places.commit(changed)
 		const apis = createProcessAPIs({
 			scheduler: s,
@@ -315,14 +317,16 @@ export function serve(port: Port): () => void {
 				id: f.id,
 				...(f.entry === undefined ? { gone: true as const } : { patches: [...f.patches] }),
 				...(f.change?.external ? { site: f.change.external } : {}),
+				...(f.change?.metadata ? { metadata: f.change.metadata } : {}),
 				...(current === undefined ? {} : { call: current }),
 			}
 			try {
 				tell(out, (x) => {
-					const y = x as { part: string; patches?: Patch[] }
+					const y = x as { part: string; patches?: Patch[]; metadata?: unknown }
 					return {
 						...x,
 						...(y.patches ? { patches: encodePatches(y.part, y.patches) } : {}),
+						...(y.metadata ? { metadata: encode(y.metadata, false, true) } : {}),
 					} as RealmMessage
 				})
 			} catch (e) {
@@ -348,7 +352,7 @@ export function serve(port: Port): () => void {
 		}
 		const { id, at, args, cwd } = m.process
 		for (;;) {
-			const scope = s.createScope([["process", [...at]]], w!.root)
+			const scope = s.createScope({ process: [...at], [NODE]: id }, w!.root)
 			w!.scope = scope
 			const api = apis.createProcessAPI({
 				box: { root: m.root, places },
