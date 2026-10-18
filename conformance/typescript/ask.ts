@@ -138,7 +138,10 @@ export async function ask(cmd: string[], requests: (Request | string)[]): Promis
 	// the answers are read while the requests are written: a big run fills the pipe both ways
 	const done = child.output()
 	const w = child.stdin.getWriter()
-	const text = requests.map((r) => typeof r === "string" ? r : line(r)).join("\n") + "\n"
+	// as the scenario has them: -0 too, for the harness to read
+	const text =
+		requests.map((r) => typeof r === "string" ? r : line(r, undefined, true)).join("\n") +
+		"\n"
 	// a harness that dies early closes its stdin: its exit says why
 	try {
 		await w.write(new TextEncoder().encode(text))

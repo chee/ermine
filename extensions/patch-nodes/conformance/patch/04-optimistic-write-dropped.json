@@ -73,12 +73,7 @@
 				}
 			],
 			"time": 160,
-			"metadata": [
-				[
-					"answers",
-					"pending/1"
-				]
-			],
+			"metadata": { "answers": "pending/1" },
 			"expect": {}
 		},
 		{
@@ -111,22 +106,7 @@
 			"expect": {
 				"time": 160,
 				"actor": "test",
-				"metadata": [
-					[
-						"answers",
-						"pending/1"
-					],
-					[
-						"actor",
-						"test"
-					],
-					[
-						"overlay",
-						[
-							"pending/1"
-						]
-					]
-				],
+				"metadata": { "answers": "pending/1", "actor": "test", "overlay": ["pending/1"] },
 				"hasOp": false
 			}
 		},

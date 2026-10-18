@@ -82,12 +82,7 @@
 						"content": "y",
 						"change": {
 							"actor": "a",
-							"metadata": [
-								[
-									"wallclock",
-									0
-								]
-							],
+							"metadata": { "wallclock": 0 },
 							"time": 1067
 						},
 						"because": {
@@ -105,16 +100,7 @@
 						"content": "x",
 						"change": {
 							"actor": "a",
-							"metadata": [
-								[
-									"wallclock",
-									1760000000
-								],
-								[
-									"message",
-									"tidy up"
-								]
-							],
+							"metadata": { "wallclock": 1760000000, "message": "tidy up" },
 							"time": 1066
 						},
 						"because": {

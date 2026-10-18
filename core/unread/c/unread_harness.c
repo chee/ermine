@@ -71,9 +71,9 @@ static char *act_nothing(void *value, void *previous, void *data) {
 static const char *mode;
 static void make_computer(void *data) {
 	(void)data;
-	if (strcmp(mode, "effect") == 0) sc_create_effect(run.s, (sc_def){.f = compute, .effect = act_nothing, .data = run.k});
-	else if (strcmp(mode, "fails") == 0) sc_create_computer(run.s, (sc_def){.f = compute, .set = set_fails, .data = run.k});
-	else sc_create_computer(run.s, (sc_def){.f = compute, .set = set_nothing, .data = run.k});
+	if (strcmp(mode, "effect") == 0) sc_create_effect(run.s, (sc_def){.f = compute, .effect = act_nothing, .data = run.k}, NULL, 0);
+	else if (strcmp(mode, "fails") == 0) sc_create_computer(run.s, (sc_def){.f = compute, .set = set_fails, .data = run.k}, NULL, 0);
+	else sc_create_computer(run.s, (sc_def){.f = compute, .set = set_nothing, .data = run.k}, NULL, 0);
 }
 // k kept as a computation's result at its run's end: a scheduler wired by un_keeping, a computer
 // returning k (mode: "compute", "fails": its set fails, "effect": an effect), a pulse

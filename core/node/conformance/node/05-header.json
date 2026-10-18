@@ -18,12 +18,9 @@
 						"function": "f"
 					}
 				],
-				"metadata": [
-					[
-						"note",
-						"hello"
-					]
-				]
+				"metadata": {
+					"note": "hello"
+				}
 			},
 			"expect": {
 				"entry": {
@@ -42,12 +39,9 @@
 								"function": "f"
 							}
 						],
-						"metadata": [
-							[
-								"note",
-								"hello"
-							]
-						]
+						"metadata": {
+							"note": "hello"
+						}
 					}
 				}
 			}

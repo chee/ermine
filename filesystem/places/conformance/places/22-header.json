@@ -1,5 +1,5 @@
 {
-	"title": "a write's header: levels innermost first, the write's extra (its own level), the scope open, its parent, ... the root. the actor: the first actor pair over all levels; the reader: the first reader holding a string; an owner pair is only a pair. the metadata: every level's pairs, flat, in order, repeats kept. the time now, one site. nothing open: unscoped",
+	"title": "a write's header: levels innermost first, the write's extra (its own level), the scope open, its parent, ... the root. the actor: the first actor key over all levels; the reader: the first reader holding a string; an owner key is only a key. the metadata: every level merged into one object, inner keys over outer. the time now, one site. nothing open: unscoped",
 	"steps": [
 		{
 			"op": "header",
@@ -10,36 +10,14 @@
 		{
 			"op": "root",
 			"name": "chee",
-			"info": [
-				[
-					"actor",
-					"chee"
-				],
-				[
-					"reader",
-					"juno"
-				],
-				[
-					"why",
-					"test"
-				]
-			],
+			"info": { "actor": "chee", "reader": "juno", "why": "test" },
 			"expect": {}
 		},
 		{
 			"op": "scope",
 			"name": "save",
 			"parent": "chee",
-			"info": [
-				[
-					"cause",
-					"x"
-				],
-				[
-					"actor",
-					"notes"
-				]
-			],
+			"info": { "cause": "x", "actor": "notes" },
 			"expect": {}
 		},
 		{
@@ -48,20 +26,7 @@
 			"expect": {
 				"actor": "chee",
 				"reader": "juno",
-				"metadata": [
-					[
-						"actor",
-						"chee"
-					],
-					[
-						"reader",
-						"juno"
-					],
-					[
-						"why",
-						"test"
-					]
-				],
+				"metadata": { "actor": "chee", "reader": "juno", "why": "test" },
 				"timely": true,
 				"sites": 1
 			}
@@ -69,49 +34,17 @@
 		{
 			"op": "header",
 			"scope": "save",
-			"extra": [
-				[
-					"then",
-					"y"
-				],
-				[
-					"actor",
-					"games"
-				]
-			],
+			"extra": { "then": "y", "actor": "games" },
 			"expect": {
 				"actor": "games",
 				"reader": "juno",
-				"metadata": [
-					[
-						"then",
-						"y"
-					],
-					[
-						"actor",
-						"games"
-					],
-					[
-						"cause",
-						"x"
-					],
-					[
-						"actor",
-						"notes"
-					],
-					[
-						"actor",
-						"chee"
-					],
-					[
-						"reader",
-						"juno"
-					],
-					[
-						"why",
-						"test"
-					]
-				],
+				"metadata": {
+					"then": "y",
+					"actor": "games",
+					"cause": "x",
+					"reader": "juno",
+					"why": "test"
+				},
 				"timely": true,
 				"sites": 1
 			}
@@ -122,28 +55,7 @@
 			"expect": {
 				"actor": "notes",
 				"reader": "juno",
-				"metadata": [
-					[
-						"cause",
-						"x"
-					],
-					[
-						"actor",
-						"notes"
-					],
-					[
-						"actor",
-						"chee"
-					],
-					[
-						"reader",
-						"juno"
-					],
-					[
-						"why",
-						"test"
-					]
-				],
+				"metadata": { "cause": "x", "actor": "notes", "reader": "juno", "why": "test" },
 				"timely": true,
 				"sites": 1
 			}
@@ -151,59 +63,17 @@
 		{
 			"op": "header",
 			"scope": "save",
-			"extra": [
-				[
-					"owner",
-					[
-						[
-							"actor",
-							"fake"
-						]
-					]
-				],
-				[
-					"reader",
-					5
-				]
-			],
+			"extra": { "owner": [["actor", "fake"]], "reader": 5 },
 			"expect": {
 				"actor": "notes",
 				"reader": "juno",
-				"metadata": [
-					[
-						"owner",
-						[
-							[
-								"actor",
-								"fake"
-							]
-						]
-					],
-					[
-						"reader",
-						5
-					],
-					[
-						"cause",
-						"x"
-					],
-					[
-						"actor",
-						"notes"
-					],
-					[
-						"actor",
-						"chee"
-					],
-					[
-						"reader",
-						"juno"
-					],
-					[
-						"why",
-						"test"
-					]
-				],
+				"metadata": {
+					"owner": [["actor", "fake"]],
+					"reader": 5,
+					"cause": "x",
+					"actor": "notes",
+					"why": "test"
+				},
 				"timely": true,
 				"sites": 1
 			}
@@ -211,24 +81,14 @@
 		{
 			"op": "root",
 			"name": "bare",
-			"info": [
-				[
-					"why",
-					"bare"
-				]
-			],
+			"info": { "why": "bare" },
 			"expect": {}
 		},
 		{
 			"op": "header",
 			"scope": "bare",
 			"expect": {
-				"metadata": [
-					[
-						"why",
-						"bare"
-					]
-				],
+				"metadata": { "why": "bare" },
 				"timely": true,
 				"sites": 1
 			}

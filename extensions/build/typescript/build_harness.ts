@@ -72,7 +72,7 @@ const s = createScheduler()
 const table = createTable((part, id) => places.onTableChange(part as Key, id))
 const places = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler: s })
 s.onTrackingEnd((key) => places.release(key))
-const host = s.createRootScope([["actor", "test"]])
+const host = s.createRootScope({ actor: "test" })
 const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 const header = () => createChangeHeader(s)
 
@@ -186,7 +186,7 @@ async function answer(r: Request): Promise<Json> {
 		case "watch": {
 			const b = builds
 			if (b === undefined) throw new Error("no builds")
-			const o = s.createScope([["watch", r.name]], host)
+			const o = s.createScope({ watch: r.name }, host)
 			made.push(o)
 			scopes.set(r.name, o)
 			const w = { runs: 0, value: undefined as unknown }
@@ -208,7 +208,7 @@ async function answer(r: Request): Promise<Json> {
 			if (b === undefined) throw new Error("no builds")
 			const run = runs[r.run]
 			if (run === undefined) throw new Error(`no run ${r.run}`)
-			const o = s.createScope([["watch", r.name]], host)
+			const o = s.createScope({ watch: r.name }, host)
 			made.push(o)
 			scopes.set(r.name, o)
 			const w: { runs: number; value: unknown; found?: Found } = { runs: 0, value: undefined }

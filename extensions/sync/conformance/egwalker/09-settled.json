@@ -100,16 +100,10 @@
 						"change": {
 							"time": 0,
 							"actor": null,
-							"metadata": [
-								[
-									"signer",
-									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-								],
-								[
-									"commit",
-									"ce84e20bcce956632f22479fed95a93a31cc9b2f1406fdc7d10647aa66b3786d"
-								]
-							]
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "8bf2d5eb4e067b7d7d9fc4f56f5acdf08a6c0eec6f98dfd74c52330a2ecd0d5b"
+							}
 						}
 					}
 				}
@@ -126,8 +120,8 @@
 					"a"
 				],
 				"commits": [
-					"s",
-					"c"
+					"c",
+					"s"
 				]
 			}
 		},
@@ -164,16 +158,10 @@
 						"change": {
 							"time": 0,
 							"actor": null,
-							"metadata": [
-								[
-									"signer",
-									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-								],
-								[
-									"commit",
-									"dd8188682c06b8d4014aeefa768028bb7057c9f0e6aa9b8f8120243474c52c38"
-								]
-							]
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "f9b5b06e14745f2b9d6513050e13ef61eccb752918741a0e52e0dec8d5fb7649"
+							}
 						}
 					}
 				}

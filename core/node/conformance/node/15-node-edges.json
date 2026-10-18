@@ -1,5 +1,5 @@
 {
-	"title": "a node's table names and values at their edges: NUL, lone surrogates, -0, forms; the time now for every table when the header has none",
+	"title": "a node's table names and values at their edges: NUL, lone surrogates, -0 (given back as 0), forms; the time now for every table when the header has none",
 	"steps": [
 		{
 			"op": "node",
@@ -48,7 +48,7 @@
 						}
 					},
 					"a": {
-						"value": -0,
+						"value": 0,
 						"change": {
 							"time": 2
 						}

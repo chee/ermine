@@ -174,19 +174,28 @@
 			"op": "read",
 			"host": "a",
 			"id": "x",
-			"expect": { "value": "{<[oh, hello! world" }
+			"expect": {
+				"value": "<{[oh, hello! world"
+			}
 		},
 		{
 			"op": "read",
 			"host": "b",
 			"id": "x",
-			"expect": { "value": "{<[oh, hello! world" }
+			"expect": {
+				"value": "<{[oh, hello! world"
+			}
 		},
 		{
 			"op": "heads",
 			"host": "a",
 			"id": "x",
-			"expect": { "heads": ["mb", "ma"] }
+			"expect": {
+				"heads": [
+					"ma",
+					"mb"
+				]
+			}
 		},
 		{
 			"op": "host",
@@ -217,13 +226,20 @@
 			"op": "read",
 			"host": "c",
 			"id": "x",
-			"expect": { "value": "{<[oh, hello! world" }
+			"expect": {
+				"value": "<{[oh, hello! world"
+			}
 		},
 		{
 			"op": "heads",
 			"host": "c",
 			"id": "x",
-			"expect": { "heads": ["mb", "ma"] }
+			"expect": {
+				"heads": [
+					"ma",
+					"mb"
+				]
+			}
 		},
 		{
 			"op": "conflicts",

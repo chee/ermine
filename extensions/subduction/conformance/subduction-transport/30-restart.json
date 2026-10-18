@@ -28,14 +28,14 @@
 			"patches": [
 				{
 					"path": [],
-					"value": 456
+					"value": 179
 				}
 			],
 			"actor": "a",
-			"nonce": "000001c900000000",
+			"nonce": "000000b400000000",
 			"expect": {
-				"name": "89a2782bad1aef63bbe4ce239c2ac5087c80229a5b8430511fa2073f61d836b7",
-				"stored": "fe4eb961c4b07990f8fca9e9939d32a64487128b7a298958079a1c420dbbe77c"
+				"name": "e09ca6eae2186a5d5fdbf5cecdf21f24bf358537694a8e9a56f9fe7cf55e3b58",
+				"stored": "6be6da159d159213069fffe2f4160b8773a47ac1c77a5d26f707c70d683a3e29"
 			}
 		},
 		{
@@ -46,14 +46,14 @@
 			"patches": [
 				{
 					"path": [],
-					"value": 457
+					"value": 180
 				}
 			],
 			"actor": "a",
-			"nonce": "000001ca00000000",
+			"nonce": "000000b500000000",
 			"expect": {
-				"name": "3be488a7352f6e1a4ca436d514431928c5f03190a2b719bf085aef8f51d45db7",
-				"stored": "cf20bc025226bb4c0115829e8011a9b56fa04b9d7f14918451eed6a985b1f17d"
+				"name": "7980e3d5d3b66970bc7c4a74edf1eacc2946378645e7d4d377066ebdd5088373",
+				"stored": "cfc1c212305df219614f72d9319420e9380bf2f575377963fd443b1392cbcf92"
 			}
 		},
 		{
@@ -64,14 +64,14 @@
 			"patches": [
 				{
 					"path": [],
-					"value": 458
+					"value": 181
 				}
 			],
 			"actor": "a",
-			"nonce": "0000020700000000",
+			"nonce": "0000018100000000",
 			"expect": {
-				"name": "fd5a4cd7a792c39f8e7acdf99b54e809fe62e5df20ef640f02854ea8ff794839",
-				"stored": "0030c840d07c143a2d64b0a1ddc1722b3a577dc8193b34d86a8760e999e4d4ef"
+				"name": "7296f5ea117f43f7035d7d49215928a91d0a6578b631856a6a1e544392defe9d",
+				"stored": "00a1cb140ab327556c58a545a04d9cc36001e162f895c034ee7ab1ca5f448f2a"
 			}
 		},
 		{
@@ -82,14 +82,14 @@
 			"patches": [
 				{
 					"path": [],
-					"value": 519
+					"value": 385
 				}
 			],
 			"actor": "a",
-			"nonce": "0000020800000000",
+			"nonce": "0000018200000000",
 			"expect": {
-				"name": "5e939f7d8149a866ad13155003c8172c732c90a0077044d8b4da65da4a22ef29",
-				"stored": "cc86ade87933231fe5669eaebadb43a718497c4238419dd86a1103dbcd98fb85"
+				"name": "5ec99afed630ced42e9f9d41ef2353ac005a44747b6e96f4e0c33056ecfdd2b0",
+				"stored": "e729875acb52a79d461f1eb85e4e5f10af2df54862568efba1516b4d21055f13"
 			}
 		},
 		{
@@ -103,11 +103,11 @@
 			"expect": {
 				"fragments": [
 					{
-						"head": "0030c840d07c143a2d64b0a1ddc1722b3a577dc8193b34d86a8760e999e4d4ef",
+						"head": "00a1cb140ab327556c58a545a04d9cc36001e162f895c034ee7ab1ca5f448f2a",
 						"members": [
-							"0030c840d07c143a2d64b0a1ddc1722b3a577dc8193b34d86a8760e999e4d4ef",
-							"cf20bc025226bb4c0115829e8011a9b56fa04b9d7f14918451eed6a985b1f17d",
-							"fe4eb961c4b07990f8fca9e9939d32a64487128b7a298958079a1c420dbbe77c"
+							"00a1cb140ab327556c58a545a04d9cc36001e162f895c034ee7ab1ca5f448f2a",
+							"6be6da159d159213069fffe2f4160b8773a47ac1c77a5d26f707c70d683a3e29",
+							"cfc1c212305df219614f72d9319420e9380bf2f575377963fd443b1392cbcf92"
 						],
 						"boundary": []
 					}
@@ -134,7 +134,7 @@
 			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
 			"expect": {
 				"heads": [
-					"5e939f7d8149a866ad13155003c8172c732c90a0077044d8b4da65da4a22ef29"
+					"5ec99afed630ced42e9f9d41ef2353ac005a44747b6e96f4e0c33056ecfdd2b0"
 				],
 				"history": {
 					"waiting": [],
@@ -153,11 +153,11 @@
 			"expect": {
 				"fragments": [
 					{
-						"head": "0030c840d07c143a2d64b0a1ddc1722b3a577dc8193b34d86a8760e999e4d4ef",
+						"head": "00a1cb140ab327556c58a545a04d9cc36001e162f895c034ee7ab1ca5f448f2a",
 						"members": [
-							"0030c840d07c143a2d64b0a1ddc1722b3a577dc8193b34d86a8760e999e4d4ef",
-							"cf20bc025226bb4c0115829e8011a9b56fa04b9d7f14918451eed6a985b1f17d",
-							"fe4eb961c4b07990f8fca9e9939d32a64487128b7a298958079a1c420dbbe77c"
+							"00a1cb140ab327556c58a545a04d9cc36001e162f895c034ee7ab1ca5f448f2a",
+							"6be6da159d159213069fffe2f4160b8773a47ac1c77a5d26f707c70d683a3e29",
+							"cfc1c212305df219614f72d9319420e9380bf2f575377963fd443b1392cbcf92"
 						],
 						"boundary": []
 					}
@@ -170,7 +170,7 @@
 			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
 			"expect": {
 				"stored": [
-					"cc86ade87933231fe5669eaebadb43a718497c4238419dd86a1103dbcd98fb85"
+					"e729875acb52a79d461f1eb85e4e5f10af2df54862568efba1516b4d21055f13"
 				]
 			}
 		}

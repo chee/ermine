@@ -1,0 +1,205 @@
+{
+	"title": "whole numbers past 2^53 - 1 put, replaced and taken back whole, as any value: in the value, the change's patches and their undo, in the bigint form",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"n": 1,
+				"l": []
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": {
+						"/": {
+							"bigint": "9007199254740993"
+						}
+					}
+				},
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						18446744073709551616,
+						2
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"n": {
+							"/": {
+								"bigint": "9007199254740993"
+							}
+						},
+						"l": [
+							{
+								"/": {
+									"bigint": "18446744073709551616"
+								}
+							},
+							2
+						]
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"n"
+									],
+									"value": {
+										"/": {
+											"bigint": "9007199254740993"
+										}
+									}
+								},
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										0,
+										0
+									],
+									"value": [
+										{
+											"/": {
+												"bigint": "18446744073709551616"
+											}
+										},
+										2
+									]
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										0,
+										2
+									]
+								},
+								{
+									"path": [
+										"n"
+									],
+									"value": 1
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 9007199254740991
+				},
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"n": 9007199254740991,
+						"l": [
+							2
+						]
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"n"
+									],
+									"value": 9007199254740991
+								},
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										0,
+										1
+									]
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										0,
+										0
+									],
+									"value": [
+										{
+											"/": {
+												"bigint": "18446744073709551616"
+											}
+										}
+									]
+								},
+								{
+									"path": [
+										"n"
+									],
+									"value": {
+										"/": {
+											"bigint": "9007199254740993"
+										}
+									}
+								}
+							]
+						}
+					}
+				}
+			}
+		}
+	]
+}

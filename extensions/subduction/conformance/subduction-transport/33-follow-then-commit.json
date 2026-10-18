@@ -47,14 +47,14 @@
 			"patches": [
 				{
 					"path": [],
-					"value": 522
+					"value": 388
 				}
 			],
 			"actor": "a",
-			"nonce": "0000020b00000000",
+			"nonce": "0000018500000000",
 			"expect": {
-				"name": "d18bb48522589da12569c823b9d70420adb6e1d4d164ad73ca227ec25c13bc5a",
-				"stored": "26490bfdccab806630001fa883e5e3a5bcc65a72697b49883852be8e7624e8a4"
+				"name": "d5191fd518454cb7fb414129ef0df3732681215dee91a946052ea0ec16f3366e",
+				"stored": "3a0fbd0f8384a803f779453334c03c6a99ee45f78cb20762f4be6a5dae64d944"
 			}
 		},
 		{
@@ -65,14 +65,14 @@
 			"patches": [
 				{
 					"path": [],
-					"value": 523
+					"value": 389
 				}
 			],
 			"actor": "a",
-			"nonce": "0000020c00000000",
+			"nonce": "0000018600000000",
 			"expect": {
-				"name": "00e7e57fabd4cde054cbe56e2fb2f401cf3c71c63d85256c97e3b54db23691ce",
-				"stored": "2dfc1af1feb0f71b3148ffb5ca72905c427af49edbcc611bd918bae156f1380b"
+				"name": "2d86fd445fa740629b14647a184d72f17ae6382563401b6649cb47fb45e518f7",
+				"stored": "920b9db9e229773571ee586e13ab326b7c8e22f4f8a6a22490e6ea68e2d0c20c"
 			}
 		},
 		{
@@ -85,7 +85,7 @@
 			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
 			"expect": {
 				"heads": [
-					"00e7e57fabd4cde054cbe56e2fb2f401cf3c71c63d85256c97e3b54db23691ce"
+					"2d86fd445fa740629b14647a184d72f17ae6382563401b6649cb47fb45e518f7"
 				],
 				"history": {
 					"waiting": [],
@@ -103,8 +103,8 @@
 			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
 			"expect": {
 				"stored": [
-					"26490bfdccab806630001fa883e5e3a5bcc65a72697b49883852be8e7624e8a4",
-					"2dfc1af1feb0f71b3148ffb5ca72905c427af49edbcc611bd918bae156f1380b"
+					"3a0fbd0f8384a803f779453334c03c6a99ee45f78cb20762f4be6a5dae64d944",
+					"920b9db9e229773571ee586e13ab326b7c8e22f4f8a6a22490e6ea68e2d0c20c"
 				]
 			}
 		}

@@ -53,8 +53,8 @@
 			"actor": "a",
 			"nonce": "0000001800000000",
 			"expect": {
-				"name": "a5a32791671260672945cd7a7eae058c22826799889a61b35dab5b10b72d656b",
-				"stored": "26cebedaa71740b9e40f4af6a61835ed1255216c7a7bb291dbe5a140015056ae"
+				"name": "95d0027e7227ebc4c1358a79c6298b011c7b3e17680c7ce38aaf996ee38cb7c2",
+				"stored": "fe235f1e955e805136b864c41384d86bd0ee3c1df723b398c9ac8c35a45bab5c"
 			}
 		},
 		{
@@ -71,8 +71,8 @@
 			"actor": "a",
 			"nonce": "0000001900000000",
 			"expect": {
-				"name": "77e3555b817d1920886c939f4aaed82f008953cf317f5c79ed2b131b78542db3",
-				"stored": "e0129be3a70fd4ea8305891acd7b4c7ca3ab964ec2fd7480f9a0ec14cc2bb3eb"
+				"name": "cf2f8dae33457346521633aa93300cc48d028b71374c238802767a0df670bec8",
+				"stored": "0ea8a338e70089907264ffd3172a4d575acf825c15349e2a8207b3007ad9ed24"
 			}
 		},
 		{
@@ -87,10 +87,10 @@
 				}
 			],
 			"actor": "a",
-			"nonce": "000000bb00000000",
+			"nonce": "0000004000000000",
 			"expect": {
-				"name": "5271869cc17b99cbb9d79f0e80ba4dff23adb043494d65d3135d989020124723",
-				"stored": "00a20c0a2ef3031453bb5a21e451ac4024da5f7a1571028355f219cd2d9de383"
+				"name": "0835be4d0c8c0bbbc9006e46db5c7dcad625b0a0d23b467416a699380e3693ab",
+				"stored": "0024238eacc18f759bed65b4a0860f9df8078164d4c524442ee5822bb92b2d2a"
 			}
 		},
 		{
@@ -101,14 +101,14 @@
 			"patches": [
 				{
 					"path": [],
-					"value": 187
+					"value": 64
 				}
 			],
 			"actor": "a",
-			"nonce": "000000bc00000000",
+			"nonce": "0000004100000000",
 			"expect": {
-				"name": "6c93a0a07908efd20d60d4fdd07b14d906f9f02bc91093033bd60320f1545206",
-				"stored": "696a75ce53a923b12b1d85fa59a6590eff82591a4dab0c97f73206f2ce9ea8a9"
+				"name": "07a4c26abee74c6f0348fd24fd53d3920e7f63e62d2e7229ef79b3e821ad7ea7",
+				"stored": "6aa7b1c3390476c6c75302bbf7aaf4dd4219f1eea128acf9036f79d496d79a0f"
 			}
 		},
 		{
@@ -122,11 +122,11 @@
 			"expect": {
 				"fragments": [
 					{
-						"head": "00a20c0a2ef3031453bb5a21e451ac4024da5f7a1571028355f219cd2d9de383",
+						"head": "0024238eacc18f759bed65b4a0860f9df8078164d4c524442ee5822bb92b2d2a",
 						"members": [
-							"00a20c0a2ef3031453bb5a21e451ac4024da5f7a1571028355f219cd2d9de383",
-							"26cebedaa71740b9e40f4af6a61835ed1255216c7a7bb291dbe5a140015056ae",
-							"e0129be3a70fd4ea8305891acd7b4c7ca3ab964ec2fd7480f9a0ec14cc2bb3eb"
+							"0024238eacc18f759bed65b4a0860f9df8078164d4c524442ee5822bb92b2d2a",
+							"0ea8a338e70089907264ffd3172a4d575acf825c15349e2a8207b3007ad9ed24",
+							"fe235f1e955e805136b864c41384d86bd0ee3c1df723b398c9ac8c35a45bab5c"
 						],
 						"boundary": []
 					}
@@ -140,11 +140,11 @@
 			"expect": {
 				"fragments": [
 					{
-						"head": "00a20c0a2ef3031453bb5a21e451ac4024da5f7a1571028355f219cd2d9de383",
+						"head": "0024238eacc18f759bed65b4a0860f9df8078164d4c524442ee5822bb92b2d2a",
 						"members": [
-							"00a20c0a2ef3031453bb5a21e451ac4024da5f7a1571028355f219cd2d9de383",
-							"26cebedaa71740b9e40f4af6a61835ed1255216c7a7bb291dbe5a140015056ae",
-							"e0129be3a70fd4ea8305891acd7b4c7ca3ab964ec2fd7480f9a0ec14cc2bb3eb"
+							"0024238eacc18f759bed65b4a0860f9df8078164d4c524442ee5822bb92b2d2a",
+							"0ea8a338e70089907264ffd3172a4d575acf825c15349e2a8207b3007ad9ed24",
+							"fe235f1e955e805136b864c41384d86bd0ee3c1df723b398c9ac8c35a45bab5c"
 						],
 						"boundary": []
 					}
@@ -181,7 +181,7 @@
 			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
 			"expect": {
 				"heads": [
-					"6c93a0a07908efd20d60d4fdd07b14d906f9f02bc91093033bd60320f1545206"
+					"07a4c26abee74c6f0348fd24fd53d3920e7f63e62d2e7229ef79b3e821ad7ea7"
 				],
 				"history": {
 					"waiting": [],
@@ -200,11 +200,11 @@
 			"expect": {
 				"fragments": [
 					{
-						"head": "00a20c0a2ef3031453bb5a21e451ac4024da5f7a1571028355f219cd2d9de383",
+						"head": "0024238eacc18f759bed65b4a0860f9df8078164d4c524442ee5822bb92b2d2a",
 						"members": [
-							"00a20c0a2ef3031453bb5a21e451ac4024da5f7a1571028355f219cd2d9de383",
-							"26cebedaa71740b9e40f4af6a61835ed1255216c7a7bb291dbe5a140015056ae",
-							"e0129be3a70fd4ea8305891acd7b4c7ca3ab964ec2fd7480f9a0ec14cc2bb3eb"
+							"0024238eacc18f759bed65b4a0860f9df8078164d4c524442ee5822bb92b2d2a",
+							"0ea8a338e70089907264ffd3172a4d575acf825c15349e2a8207b3007ad9ed24",
+							"fe235f1e955e805136b864c41384d86bd0ee3c1df723b398c9ac8c35a45bab5c"
 						],
 						"boundary": []
 					}

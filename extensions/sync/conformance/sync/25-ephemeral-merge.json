@@ -248,7 +248,12 @@
 			"host": "c",
 			"id": "x",
 			"layer": "ephemeral",
-			"expect": { "heads": ["ea", "eb"] }
+			"expect": {
+				"heads": [
+					"eb",
+					"ea"
+				]
+			}
 		},
 		{
 			"op": "ephemeral",

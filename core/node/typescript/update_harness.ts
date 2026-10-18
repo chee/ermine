@@ -42,6 +42,25 @@ let entry: Entry<unknown> = createEntry(undefined)
 // the patches of the latest update as asked, for an entry that changes in place
 let asked: Patch[] | undefined
 
+// a change as answered: the header's own fields, a patch's path, range, value and move only
+const pick = (o: Record<string, unknown>, keys: string[]) => {
+	const out: Record<string, unknown> = {}
+	for (const k of keys) if (k in o) out[k] = o[k]
+	return out
+}
+const patchShape = (p: Patch) =>
+	pick(p as unknown as Record<string, unknown>, ["path", "range", "value", "move"])
+const changeShape = (c: Entry<unknown>["change"], patches?: readonly Patch[]) => {
+	const out = pick(c, ["time", "actor", "reader", "external", "metadata"])
+	if (c.op) {
+		out.op = {
+			patches: (patches ?? c.op.patches).map(patchShape),
+			undo: c.op.undo.map(patchShape),
+		}
+	}
+	return toJson(out)
+}
+
 function answer(r: Request) {
 	try {
 		return run(r)
@@ -62,9 +81,7 @@ function run(r: Request) {
 			asked = undefined
 			return {}
 		case "entry": {
-			// deno-lint-ignore no-explicit-any
-			const change = toJson(entry.change) as Record<string, any>
-			if (entry.cow === false && asked && change.op) change.op.patches = toJson(asked)
+			const change = changeShape(entry.change, entry.cow === false ? asked : undefined)
 			return {
 				entry: { ...("value" in entry ? { value: toJson(entry.value) } : {}), change },
 			}

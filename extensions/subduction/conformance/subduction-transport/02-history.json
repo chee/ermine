@@ -53,8 +53,8 @@
 			"actor": "a",
 			"nonce": "0000000200000000",
 			"expect": {
-				"name": "5fa9f7e9c73b593f0308a5c6de164701d3610dc7f9f96dc8ea6f68b24cdd9b24",
-				"stored": "2fddf91d37795d365a6e08343df2bf93071001f669ab6c117a10de1cbdcb8e96"
+				"name": "feda03e9f13fcf0bac343ea3e8f2df9a9895cab660a84b46a06ee40f3db29f06",
+				"stored": "f5b86c77672f66ea2b55a3edd85a0ef4513257b885727e52e2cb4db9d383b3f8"
 			}
 		},
 		{
@@ -71,8 +71,8 @@
 			"actor": "a",
 			"nonce": "0000000300000000",
 			"expect": {
-				"name": "6940754dac550796f8b16f521ce301b56ca93c2870ac0399bcddeffad92df427",
-				"stored": "d5a761769b2a151156038c83938d99260ed5546afb43e23d48e8538bdf2aef66"
+				"name": "6533a40f2b13e1062ff8af4718f4c06e7e68cb39b9cb2d3e49ca5dae4414483a",
+				"stored": "3f749140660cef0526059fe3200dd5ee67c5f261df99539a73410e879ae31ab2"
 			}
 		},
 		{
@@ -89,8 +89,8 @@
 			"actor": "a",
 			"nonce": "0000000400000000",
 			"expect": {
-				"name": "8f993e0e700fbe62f944a4ab374b12e8192cbc35da551d2a38527072ac49bf0f",
-				"stored": "a5a7d71b27260caa01bdbce0656a48477a8f40b168ddf0d09aa00414f55d9f19"
+				"name": "57f3f1c960f562a2409e18391776e931c33ee94f42199389afede56c5745344a",
+				"stored": "315bf686f29b8cee54220c93c5af9677ab5d8cfb6313b0caea809b171c2dcda5"
 			}
 		},
 		{
@@ -103,7 +103,7 @@
 			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
 			"expect": {
 				"heads": [
-					"8f993e0e700fbe62f944a4ab374b12e8192cbc35da551d2a38527072ac49bf0f"
+					"57f3f1c960f562a2409e18391776e931c33ee94f42199389afede56c5745344a"
 				],
 				"history": {
 					"waiting": [],
@@ -121,9 +121,9 @@
 			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
 			"expect": {
 				"stored": [
-					"2fddf91d37795d365a6e08343df2bf93071001f669ab6c117a10de1cbdcb8e96",
-					"a5a7d71b27260caa01bdbce0656a48477a8f40b168ddf0d09aa00414f55d9f19",
-					"d5a761769b2a151156038c83938d99260ed5546afb43e23d48e8538bdf2aef66"
+					"315bf686f29b8cee54220c93c5af9677ab5d8cfb6313b0caea809b171c2dcda5",
+					"3f749140660cef0526059fe3200dd5ee67c5f261df99539a73410e879ae31ab2",
+					"f5b86c77672f66ea2b55a3edd85a0ef4513257b885727e52e2cb4db9d383b3f8"
 				]
 			}
 		}

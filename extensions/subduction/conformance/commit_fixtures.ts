@@ -46,13 +46,13 @@ type Header = {
 }
 
 // the header as a change carries it: the site as external, the cause, wallclock and message as
-// metadata pairs in that order; the rest as it is
+// metadata keys; the rest as it is
 function carried(h: Header): Record<string, unknown> {
 	const { site, cause, wallclock, message, ...rest } = h
 	const out: Record<string, unknown> = { ...rest }
 	if (site !== undefined) out.external = [site]
 	const metadata = Object.entries({ cause, wallclock, message }).filter(([, v]) => v !== undefined)
-	if (metadata.length) out.metadata = metadata
+	if (metadata.length) out.metadata = Object.fromEntries(metadata)
 	return out
 }
 

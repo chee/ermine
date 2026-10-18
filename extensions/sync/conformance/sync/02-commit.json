@@ -41,7 +41,7 @@
 				"actor": { "name": "juno" },
 				"reader": "ermine://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
 				"external": [{ "file": "notes.ts", "line": 4, "column": 2 }],
-				"metadata": [["cause", "typing"], ["tool", "pen"]]
+				"metadata": { "cause": "typing", "tool": "pen" }
 			},
 			"name": "w2",
 			"expect": { "commits": 1 }
@@ -76,7 +76,7 @@
 					"actor": { "name": "juno" },
 					"reader": "ermine://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
 					"external": [{ "file": "notes.ts", "line": 4, "column": 2 }],
-					"metadata": [["cause", "typing"], ["tool", "pen"]],
+					"metadata": { "cause": "typing", "tool": "pen" },
 					"time": 1760000005,
 					"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
 					"nonce": 3338457402,
@@ -98,7 +98,7 @@
 					"actor": { "name": "juno" },
 					"reader": "ermine://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
 					"external": [{ "file": "notes.ts", "line": 4, "column": 2 }],
-					"metadata": [["cause", "typing"], ["tool", "pen"]],
+					"metadata": { "cause": "typing", "tool": "pen" },
 					"time": 1760000005,
 					"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
 					"nonce": 3338457402,
@@ -118,15 +118,12 @@
 					"actor": { "name": "juno" },
 					"reader": "ermine://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
 					"external": [{ "file": "notes.ts", "line": 4, "column": 2 }],
-					"metadata": [
-						["cause", "typing"],
-						["tool", "pen"],
-						[
-							"signer",
-							"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-						],
-						["commit", "4275eabf1b06155f5414403dbb913671d810ffe385808794d3cd29a998486c9b"]
-					]
+					"metadata": {
+						"cause": "typing",
+						"tool": "pen",
+						"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"commit": "dee3cb10668c35029f4c100351957b97326fda64609bb93b3dbf356710793805"
+					}
 				}
 			}
 		},

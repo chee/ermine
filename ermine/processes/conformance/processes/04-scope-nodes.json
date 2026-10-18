@@ -1,39 +1,24 @@
 {
-	"title": "scope nodes: a scope's node id, made once; nearest is its own or the nearest above, a computer's its process's; at the scope's teardown the node's entries go",
+	"title": "scope nodes: a scope's node id, made once (the same after); at the scope's teardown the node's entries go",
 	"steps": [
 		{
 			"op": "root",
 			"name": "host",
-			"info": [
-				[
-					"test",
-					"host"
-				]
-			],
+			"info": { "test": "host" },
 			"expect": {}
 		},
 		{
 			"op": "scope",
 			"name": "p",
 			"parent": "host",
-			"info": [
-				[
-					"test",
-					"p"
-				]
-			],
+			"info": { "test": "p" },
 			"expect": {}
 		},
 		{
 			"op": "scope",
 			"name": "inner",
 			"parent": "p",
-			"info": [
-				[
-					"test",
-					"inner"
-				]
-			],
+			"info": { "test": "inner" },
 			"expect": {}
 		},
 		{
@@ -48,46 +33,6 @@
 			"op": "give",
 			"scope": "p",
 			"id": "other",
-			"expect": {
-				"id": "P"
-			}
-		},
-		{
-			"op": "nodeOf",
-			"scope": "p",
-			"expect": {
-				"id": "P"
-			}
-		},
-		{
-			"op": "nodeOf",
-			"scope": "inner",
-			"expect": {}
-		},
-		{
-			"op": "nearest",
-			"scope": "inner",
-			"expect": {
-				"id": "P"
-			}
-		},
-		{
-			"op": "nearest",
-			"scope": "host",
-			"expect": {}
-		},
-		{
-			"op": "watch",
-			"name": "c",
-			"scope": "inner",
-			"f": {
-				"get": []
-			},
-			"expect": {}
-		},
-		{
-			"op": "nearest",
-			"scope": "c",
 			"expect": {
 				"id": "P"
 			}
@@ -131,11 +76,6 @@
 			"expect": {
 				"parts": []
 			}
-		},
-		{
-			"op": "nodeOf",
-			"scope": "p",
-			"expect": {}
 		}
 	]
 }

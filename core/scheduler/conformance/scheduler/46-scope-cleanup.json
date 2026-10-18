@@ -4,24 +4,14 @@
 		{
 			"op": "root",
 			"name": "o",
-			"info": [
-				[
-					"actor",
-					"notes"
-				]
-			],
+			"info": { "actor": "notes" },
 			"expect": {}
 		},
 		{
 			"op": "scope",
 			"name": "p",
 			"parent": "o",
-			"info": [
-				[
-					"why",
-					"plain"
-				]
-			],
+			"info": { "why": "plain" },
 			"expect": {}
 		},
 		{
@@ -81,16 +71,7 @@
 				"log": [
 					{
 						"scope": "c",
-						"pairs": [
-							[
-								"run",
-								2
-							],
-							[
-								"mark",
-								3
-							]
-						],
+						"info": { "run": 2, "mark": 3 },
 						"writer": "c"
 					}
 				]
@@ -107,12 +88,7 @@
 				"log": [
 					{
 						"scope": "p",
-						"pairs": [
-							[
-								"why",
-								"plain"
-							]
-						]
+						"info": { "why": "plain" }
 					}
 				]
 			}

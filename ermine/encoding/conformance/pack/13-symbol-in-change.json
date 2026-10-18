@@ -12,16 +12,7 @@
 			"value": 1,
 			"change": {
 				"time": 1,
-				"metadata": [
-					[
-						"why",
-						{
-							"/": {
-								"symbol": "s"
-							}
-						}
-					]
-				]
+				"metadata": { "why": { "/": { "symbol": "s" } } }
 			}
 		}
 	],

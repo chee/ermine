@@ -41,16 +41,10 @@
 						"change": {
 							"time": 0,
 							"actor": null,
-							"metadata": [
-								[
-									"signer",
-									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-								],
-								[
-									"commit",
-									"e30fe8468675858f01740682b01dbccfe52ae25a5353f388ea69eb728faa6973"
-								]
-							]
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "39a5272289f2dce388e164e960e92cad980922d1e2c143cbac16ea4ef7a7c647"
+							}
 						}
 					}
 				}
@@ -66,16 +60,10 @@
 						"change": {
 							"time": 1,
 							"actor": null,
-							"metadata": [
-								[
-									"signer",
-									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-								],
-								[
-									"commit",
-									"9dbe0013ae2e38605137d7eb59fe3a01fba71941229e4e68107e41d187ef357e"
-								]
-							]
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "be1bb59a6539c71a7f45e11196b5211e4020c885ab6a9ff4fd8c0449801b0700"
+							}
 						}
 					}
 				}
@@ -91,16 +79,10 @@
 						"change": {
 							"time": 2,
 							"actor": null,
-							"metadata": [
-								[
-									"signer",
-									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-								],
-								[
-									"commit",
-									"910e7d94a4aabecf955a6aff4d503c39521533958272136216e3c641b37a86c3"
-								]
-							]
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "834a189259ff55949e997ad19969bd89937ddc8ddc71056d14c5b89c0d9c4caf"
+							}
 						}
 					}
 				}
@@ -116,16 +98,10 @@
 						"change": {
 							"time": 3,
 							"actor": null,
-							"metadata": [
-								[
-									"signer",
-									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-								],
-								[
-									"commit",
-									"aebecd675a00bbd77a524b20e92eced2f12745d29ed82e703a8c9ed77e7156c3"
-								]
-							]
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "b903d443d18af4935876cc12d052ba1e2906c4f8c1dd9b46fdb2e8a2c1080f02"
+							}
 						}
 					}
 				}

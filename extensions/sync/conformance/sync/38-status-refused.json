@@ -6,20 +6,26 @@
 			"name": "a",
 			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
 			"merge": "eg-walker",
-			"expect": { "key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }
+			"expect": {
+				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
 		},
 		{
 			"op": "host",
 			"name": "b",
 			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
 			"merge": "eg-walker",
-			"expect": { "key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394" }
+			"expect": {
+				"key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
 		},
 		{
 			"op": "host",
 			"name": "c",
 			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
-			"expect": { "key": "ed01ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1" }
+			"expect": {
+				"key": "ed01ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
 		},
 		{
 			"op": "mint",
@@ -29,21 +35,61 @@
 				"id": "ermine://b40fde52c568d2f3864d68739e98b72b9f144f5566afcbb238fd354ecdc7c755"
 			}
 		},
-		{ "op": "follow", "host": "b", "id": "x", "expect": {} },
-		{ "op": "follow", "host": "c", "id": "x", "expect": {} },
-		{ "op": "connect", "a": "a", "b": "b", "expect": {} },
-		{ "op": "connect", "a": "a", "b": "c", "expect": {} },
+		{
+			"op": "follow",
+			"host": "b",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "follow",
+			"host": "c",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "c",
+			"expect": {}
+		},
 		{
 			"op": "write",
 			"host": "a",
 			"id": "x",
-			"patches": [{ "path": [], "value": "ab" }],
+			"patches": [
+				{
+					"path": [],
+					"value": "ab"
+				}
+			],
 			"name": "w0",
-			"expect": { "commits": 1 }
+			"expect": {
+				"commits": 1
+			}
 		},
-		{ "op": "quiet", "expect": {} },
-		{ "op": "disconnect", "a": "a", "b": "b", "expect": {} },
-		{ "op": "disconnect", "a": "a", "b": "c", "expect": {} },
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "disconnect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "disconnect",
+			"a": "a",
+			"b": "c",
+			"expect": {}
+		},
 		{
 			"op": "type",
 			"host": "a",
@@ -52,7 +98,9 @@
 			"at": 1,
 			"text": "1",
 			"name": "ta",
-			"expect": { "commits": 1 }
+			"expect": {
+				"commits": 1
+			}
 		},
 		{
 			"op": "type",
@@ -62,10 +110,20 @@
 			"at": 2,
 			"text": "2",
 			"name": "tb",
-			"expect": { "commits": 1 }
+			"expect": {
+				"commits": 1
+			}
 		},
-		{ "op": "connect", "a": "a", "b": "b", "expect": {} },
-		{ "op": "quiet", "expect": {} },
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
 		{
 			"op": "type",
 			"host": "a",
@@ -74,7 +132,9 @@
 			"at": 0,
 			"text": ">",
 			"name": "m",
-			"expect": { "commits": 1 }
+			"expect": {
+				"commits": 1
+			}
 		},
 		{
 			"op": "type",
@@ -84,12 +144,39 @@
 			"at": 0,
 			"text": "-",
 			"name": "after",
-			"expect": { "commits": 1 }
+			"expect": {
+				"commits": 1
+			}
 		},
-		{ "op": "connect", "a": "a", "b": "c", "expect": {} },
-		{ "op": "quiet", "expect": {} },
-		{ "op": "heads", "host": "c", "id": "x", "expect": { "heads": ["tb", "ta"] } },
-		{ "op": "read", "host": "c", "id": "x", "expect": { "value": "ab2" } },
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "c",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "heads",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"heads": [
+					"ta",
+					"tb"
+				]
+			}
+		},
+		{
+			"op": "read",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"value": "a1b"
+			}
+		},
 		{
 			"op": "status",
 			"host": "c",
@@ -98,16 +185,43 @@
 				"status": {
 					"waiting": [],
 					"refused": [
-						{ "commit": "m", "code": "merge" },
-						{ "commit": "after", "code": "parent" }
+						{
+							"commit": "m",
+							"code": "merge"
+						},
+						{
+							"commit": "after",
+							"code": "parent"
+						}
 					],
 					"unsent": [],
-					"count": { "waiting": 0, "refused": 2, "unsent": 0 }
+					"count": {
+						"waiting": 0,
+						"refused": 2,
+						"unsent": 0
+					}
 				}
 			}
 		},
-		{ "op": "read", "host": "b", "id": "x", "expect": { "value": "->a1b2" } },
-		{ "op": "status", "host": "b", "id": "x", "expect": {} },
-		{ "op": "status", "host": "a", "id": "x", "expect": {} }
+		{
+			"op": "read",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"value": "->a1b2"
+			}
+		},
+		{
+			"op": "status",
+			"host": "b",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "status",
+			"host": "a",
+			"id": "x",
+			"expect": {}
+		}
 	]
 }

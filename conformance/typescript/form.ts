@@ -175,14 +175,18 @@ export function fromJson(x: unknown): unknown {
 	return out
 }
 
-// JSON.stringify, but -0 written -0 (a float typed array's element, in its form) and a bigint in
-// its form
+// JSON.stringify, but -0 written 0, save a float typed array's element (in its form: -0) or with
+// minus (a request as a scenario wrote it: what a harness reads), and a bigint as its digits, as json.ts reads them back (a value's goes through toJson first: the
+// bigint form)
 const MINUS = "\u0000-0\u0000"
-export function line(x: unknown, also: (v: unknown) => unknown = (v) => v): string {
-	return (JSON.stringify(
-		x,
-		(_, v) => Object.is(v, -0) ? MINUS : typeof v === "bigint" ? toJson(v) : also(v),
-	) ?? "undefined")
+const raw = (JSON as unknown as { rawJSON(s: string): unknown }).rawJSON
+export function line(x: unknown, also: (v: unknown) => unknown = (v) => v, minus = false): string {
+	const floats = new WeakSet<object>()
+	return (JSON.stringify(x, function (this: unknown, k, v) {
+		if ((k === "float32" || k === "float64") && Array.isArray(v)) floats.add(v)
+		if (Object.is(v, -0)) return minus || floats.has(this as object) ? MINUS : 0
+		return typeof v === "bigint" ? raw(String(v)) : also(v)
+	}) ?? "undefined")
 		.replaceAll(
 			JSON.stringify(MINUS),
 			"-0",

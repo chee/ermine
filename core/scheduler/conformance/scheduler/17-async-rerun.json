@@ -1,7 +1,7 @@
 {
 	"title": "a compute run again while pending: the earlier promise's settling lands nowhere",
 	"steps": [
-		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
+		{ "op": "root", "name": "o", "info": { "actor": "test" }, "expect": {} },
 		{ "op": "write", "values": { "a": "p1" }, "expect": { "tick": 1 } },
 		{
 			"op": "compute",

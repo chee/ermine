@@ -65,12 +65,7 @@
 		{
 			"op": "root",
 			"name": "o",
-			"info": [
-				[
-					"test",
-					"o"
-				]
-			],
+			"info": { "test": "o" },
 			"expect": {}
 		},
 		{

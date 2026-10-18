@@ -4,8 +4,8 @@
 // (conformance/typescript/harness.ts).
 //
 // id: a string. part: any string ("children" is the filesystem's). path: a list of names. value:
-// plain JSON. patch: { path, range?, value?, move?: { path, range? } }. pairs: [[key, value]..].
-// every write below is the host's, from outside, info [["actor","test"]].
+// plain JSON. patch: { path, range?, value?, move?: { path, range? } }. info: an object.
+// every write below is the host's, from outside, info {"actor":"test"}.
 //
 // { op: "kids", id, value }                  → {}   the children entry replaced (a table event)
 // { op: "value", id, value }                 → {}   the value entry replaced
@@ -31,19 +31,20 @@
 //    "pending" | { error } | null
 // the scheduler:
 // { op: "root", name, info? }                → {}   a scope with no parent
-// { op: "scope", name, parent, info? }       → {}
+// { op: "scope", name, parent, info? }        → {}
+//    a "node" key in info: a header's metadata stops after that scope's info
 // { op: "dispose", name }                    → {}
 // { op: "pulse" }                            → {}
 // { op: "state", name }                      → { runs, value }   a watch's run count, last result
 // { op: "moments" }                          → { moments }   since last asked, computes by name
 // { op: "header", scope?, extra? }           → { actor, reader?, metadata?, timely, sites }
-//    the header places makes with scope open, extra its own pairs; timely: time is now (whole
+//    the header places makes with scope open, extra its own info; timely: time is now (whole
 //    seconds); sites: its external's count. nothing open: { error: "unscoped" }
 // anything not understood: { error: text }
 import createEntry, { type ChangeHeader } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import { ApplyError, type Patch } from "@ermine/op/apply"
-import { type Computer, createScheduler, type Pair, type Scope } from "@ermine/scheduler"
+import { type Computer, createScheduler, type Info, type Scope } from "@ermine/scheduler"
 import { type Told, trace } from "@ermine/scheduler/trace"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/table"
@@ -77,7 +78,9 @@ s.onTrackingEnd((key) => places.release(key))
 export const table = createTable((part, id) => places.onTableChange(part as Key, id))
 export const paths = createPaths<unknown>()
 export const places = createPlaces({ root: "R", table, paths, scheduler: s })
-export const host = s.createRootScope([["actor", "test"]])
+export const host = s.createRootScope({ actor: "test" })
+// a write's header, made now
+export const header = (extra?: Info) => createChangeHeader(s, extra)
 
 // the moments, computations by name
 function moment(m: Told): Json {
@@ -141,7 +144,7 @@ export function summary(change: ChangeHeader): Json {
 // a value write: the patches to the entry there, then said written; none there: an entry made
 // with them, then added (a table event)
 export function edit(part: Key, id: Id, patches: Patch[]) {
-	const h = createChangeHeader(s)
+	const h = header()
 	const there = table.get(part, id)
 	if (there === undefined) {
 		const node = createEntry<unknown>(undefined, h)
@@ -173,7 +176,7 @@ export function write(r: Request): void {
 		if (n === undefined) throw new PlacesError("nothing-there")
 		return n
 	}
-	const h = () => createChangeHeader(s)
+	const h = () => header()
 	switch (r.op) {
 		case "edit":
 			edit(r.part, r.id, r.patches as Patch[])
@@ -213,7 +216,7 @@ export const json = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.strin
 // the programs' plain forms, shared by the harnesses; undefined: not one of them
 //   {"cat":[e..]} the strings joined   {"join":e} a list joined with ","   {"count":e} its length
 //   {"add":[a,b]} {"lt":[a,b]} {"if":[t,a,b]} {"do":[e..]} (the last)   {"quote":x}
-//   {"within":[pairs,e]}  e with a scope of those pairs open, made under the one open
+//   {"within":[info,e]}  e with a scope of that info open, made under the one open
 //   {"header":null}       the header of a write made now, summed up (as the header request)
 export function basic(m: Request, ev: (e: Json) => Json): Json | undefined {
 	if ("cat" in m) return (ev(m.cat) as unknown[]).join("")
@@ -225,9 +228,9 @@ export function basic(m: Request, ev: (e: Json) => Json): Json | undefined {
 	if ("do" in m) return (m.do as Json[]).reduce<Json>((_, x) => ev(x), null)
 	if ("quote" in m) return m.quote
 	if ("within" in m) {
-		return s.runWithScope(s.createScope(m.within[0] as Pair[]), () => ev(m.within[1]))
+		return s.runWithScope(s.createScope(m.within[0] as Info), () => ev(m.within[1]))
 	}
-	if ("header" in m) return summary(createChangeHeader(s))
+	if ("header" in m) return summary(header())
 }
 
 // the world's requests; undefined: not one of them
@@ -235,16 +238,14 @@ export function worldAnswer(r: Request): Json | undefined {
 	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 	switch (r.op) {
 		case "kids":
-			hosted(() => table.sub("children", r.id, createEntry(r.value, createChangeHeader(s))))
+			hosted(() => table.sub("children", r.id, createEntry(r.value, header())))
 			return {}
 		case "value":
-			hosted(() =>
-				table.sub("value", r.id, createEntry<unknown>(r.value, createChangeHeader(s)))
-			)
+			hosted(() => table.sub("value", r.id, createEntry<unknown>(r.value, header())))
 			return {}
 		case "share": {
 			hosted(() => {
-				const node = createEntry<unknown>(r.value, createChangeHeader(s))
+				const node = createEntry<unknown>(r.value, header())
 				for (const [part, id] of r.keys) table.add(part, id, node)
 			})
 			return {}
@@ -300,7 +301,7 @@ export function worldAnswer(r: Request): Json | undefined {
 						id(r.id),
 						r.path as string[],
 						() => r.value,
-						createChangeHeader(s),
+						header(),
 					)
 					places.commit(got.changed)
 					return got.value
@@ -340,7 +341,7 @@ export function worldAnswer(r: Request): Json | undefined {
 			return { moments: out }
 		}
 		case "header": {
-			const made = () => summary(createChangeHeader(s, r.extra))
+			const made = () => summary(header(r.extra))
 			return r.scope === undefined ? made() : s.runWithScope(scope(r.scope), made)
 		}
 	}

@@ -5,7 +5,8 @@
 //
 // a harness: one run per scenario, one JSON request per line in, one answer per line out, exit 0.
 // a non-zero exit or sanitizer report ("runtime error:", "Sanitizer") fails the scenario.
-// its JSON must keep lone surrogates, NUL, -0, integers to 2^53, doubles; "/" forms: form.ts.
+// its JSON must keep lone surrogates, NUL, -0 (read as 0: whole numbers are integers), whole
+// numbers exactly (digits alone past 2^53 - 1: a bigint), doubles; "/" forms: form.ts.
 // key order is kept on the way out, ignored when comparing (maps by content).
 //
 // scenario <package>/conformance/<suite>/NN-name.json: { title, steps }
@@ -52,7 +53,7 @@ function harness(s: Suite): string[] {
 
 const isMap = (x: unknown): x is Record<string, unknown> =>
 	x !== null && typeof x === "object" && !Array.isArray(x)
-// -0 shown as -0: JSON says 0
+// as line writes it: -0 as 0, but a float typed array's
 const show = (x: unknown) => line(x)
 // a map's keys sorted, at every depth (line's also): maps by content
 const sortKeys = (v: unknown) =>

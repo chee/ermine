@@ -22,16 +22,7 @@
 					"actor": {
 						"$live": "device"
 					},
-					"metadata": [
-						[
-							"cause",
-							{
-								"why": {
-									"$live": null
-								}
-							}
-						]
-					]
+					"metadata": { "cause": { "why": { "$live": null } } }
 				},
 				"signer": {
 					"/": {
@@ -138,18 +129,7 @@
 									"live": "device"
 								}
 							},
-							"metadata": [
-								[
-									"cause",
-									{
-										"why": {
-											"/": {
-												"live": null
-											}
-										}
-									}
-								]
-							],
+							"metadata": { "cause": { "why": { "/": { "live": null } } } },
 							"time": 1097
 						},
 						"because": {

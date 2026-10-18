@@ -84,7 +84,7 @@ export async function world(seed: number, ways: Ways = {}): Promise<string | und
 		hold(v, what)
 	}
 	let broke: string | undefined
-	const scope = s.createRootScope([["actor", "reader"]])
+	const scope = s.createRootScope({ actor: "reader" })
 	const gates: (() => void)[] = []
 	const all = paths(e.value)
 	// a computation handing on what it read: another reads its result

@@ -124,7 +124,7 @@ Deno.test("unread: through places and a scheduler with keeping, what a computati
 			paths: createPaths(),
 			scheduler: s,
 		})
-		const host = s.createRootScope([["actor", "host"]])
+		const host = s.createRootScope({ actor: "host" })
 		const header = () => s.runWithScope(host, () => createChangeHeader(s))
 		table.sub("value", "N", createEntry(start(p), header()) as never)
 		const e = table.get("value", "N")! as Entry<unknown>
@@ -138,7 +138,7 @@ Deno.test("unread: through places and a scheduler with keeping, what a computati
 			const w: Watch = { path: ps[p(ps.length)], how: p(3) }
 			watches.push(w)
 			s.runWithScope(
-				s.createRootScope([["actor", "reader"]]),
+				s.createRootScope({ actor: "reader" }),
 				() =>
 					s.createComputer(
 						() => shape(w, places.readValue("value", "N", w.path)),

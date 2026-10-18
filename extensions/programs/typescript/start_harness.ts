@@ -81,7 +81,7 @@ const sites = createSites(s, {
 		import.meta.resolve("@ermine/processes/start"),
 	],
 })
-const host = s.createRootScope([["actor", "test"]])
+const host = s.createRootScope({ actor: "test" })
 const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 const header = () => createChangeHeader(s)
 const commit = (changed: readonly Entry<unknown>[]) => places.commit(changed)

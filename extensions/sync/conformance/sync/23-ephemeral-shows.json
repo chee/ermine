@@ -141,16 +141,10 @@
 							"line": 1
 						}
 					],
-					"metadata": [
-						[
-							"signer",
-							"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-						],
-						[
-							"commit",
-							"fd1a9258c7c04992ae86951e2984542dca4d0b0e2987367eb178f557d41c8c28"
-						]
-					]
+					"metadata": {
+						"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"commit": "0bb42081f2e9f36f3bb7df72bd8249d7ff60dfbc815cac28df1436888e0b490f"
+					}
 				}
 			}
 		},

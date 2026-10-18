@@ -25,7 +25,7 @@
 		(v)[(n)++] = (x); \
 	} while (0)
 
-// the change op's keys: the first of each in the metadata, as the TS harness's
+// the change op's keys, from the metadata (keys unique), as the TS harness's
 static void found_pair(op_value *o, const char *key, const op_value *v) {
 	if (!key || !v) return;
 	if ((strcmp(key, "actor") == 0 || strcmp(key, "process") == 0 || strcmp(key, "caller") == 0) &&
@@ -39,6 +39,10 @@ static void *xalloc(size_t n) {
 	return p;
 }
 static char *xdup(const char *s) { return strcpy(xalloc(strlen(s) + 1), s); }
+// for qsort: two keys' texts
+static int by_text(const void *a, const void *b) {
+	return strcmp(*(const char *const *)a, *(const char *const *)b);
+}
 
 // names ------------------------------------------------------------------------------------------
 
@@ -87,7 +91,7 @@ typedef struct {
 	char *id;
 	char **at, **cwd, **args;
 	size_t nat, ncwd, nargs;
-	op_value *at_value;
+	op_value *at_value, *id_value;
 	sc_scope *scope;
 	api_process process;
 } running;
@@ -243,12 +247,6 @@ static void table_event(void *ctx, tb_key part, tb_key id) {
 	else pl_event(m->places, part, id);
 }
 
-// places' node_of: the scope's node (scope nodes, the processes' and the memos')
-static const char *scope_node(void *data, const sc_scope *o) {
-	world *m = data;
-	return m->scopes ? sn_node_of(m->scopes, o) : NULL;
-}
-
 static world *make(const op_value *o) {
 	world *m = xalloc(sizeof *m);
 	m->events = op_list();
@@ -267,8 +265,7 @@ static world *make(const op_value *o) {
 	pr_processes_init(&m->rows, tb_string("R"));
 	m->walk[0] = &m->rows.contributor, m->walk[1] = &pl_children;
 	pl_connect(m->places, &(pl_setup){.root = tb_string("R"), .table = m->view, .paths = m->paths,
-		.scheduler = m->s, .contributors = m->walk, .ncontributors = 2, .node_of = scope_node,
-		.node_data = m});
+		.scheduler = m->s, .contributors = m->walk, .ncontributors = 2});
 	if (m->overlay) pn_connect(m->overlay, m->table, m->view, m->places);
 	sc_on_tracking_end(m->s, pl_forget, m->places);
 	m->scopes = sn_new(m->s, m->table);
@@ -308,8 +305,7 @@ static world *make(const op_value *o) {
 		.who = m->who,
 		.overlay = m->overlay,
 		.schedule = schedule,
-		.schedule_ctx = m,
-		.scopes = m->scopes};
+		.schedule_ctx = m};
 	// uuid: no setup.id, new ids the api's own
 	const op_value *uuid = o ? op_get(o, "uuid") : NULL;
 	if (!(uuid && uuid->type == OP_BOOL && uuid->bool_)) setup.id = next_id, setup.id_ctx = m;
@@ -329,6 +325,7 @@ static void finish(world *m) {
 		for (size_t k = 0; k < r->nargs; k++) free(r->args[k]);
 		free(r->at), free(r->cwd), free(r->args), free(r->id), free(r->name);
 		op_free(r->at_value);
+		op_free(r->id_value);
 		free(r);
 	}
 	free(m->procs);
@@ -955,10 +952,15 @@ static op_value *answer(const op_value *r) {
 		const nd_entry *e = tb_get(m->table, tb_string(hh_str(r, "part")), tb_string(hh_str(r, "id")));
 		op_value *o = op_map(), *keys = op_list();
 		const op_value *node = NULL;
-		for (size_t i = 0; e && i < e->change.metadata_length; i++) {
-			op_push(keys, op_str(e->change.metadata[i].key));
-			if (node == NULL && strcmp(e->change.metadata[i].key, "node") == 0) node = e->change.metadata[i].value;
+		size_t n = e ? e->change.metadata_length : 0;
+		const char **sorted = xalloc((n ? n : 1) * sizeof *sorted);
+		for (size_t i = 0; i < n; i++) {
+			sorted[i] = e->change.metadata[i].key;
+			if (strcmp(e->change.metadata[i].key, PL_NODE) == 0) node = e->change.metadata[i].value;
 		}
+		qsort(sorted, n, sizeof *sorted, by_text);
+		for (size_t i = 0; i < n; i++) op_push(keys, op_str(sorted[i]));
+		free(sorted);
 		op_set(o, "keys", keys);
 		if (node) op_set(o, "node", op_ref((op_value *)node));
 		return o;
@@ -968,7 +970,7 @@ static op_value *answer(const op_value *r) {
 		op_value *o = op_map();
 		if (e == NULL) return o;
 		if (e->change.actor) op_set(o, "actor", op_ref((op_value *)e->change.actor));
-		// the first of each key in the pairs
+		// the keys asked for, from the metadata
 		for (size_t i = 0; i < e->change.metadata_length; i++)
 			found_pair(o, e->change.metadata[i].key, e->change.metadata[i].value);
 		return o;
@@ -1022,12 +1024,16 @@ static op_value *answer(const op_value *r) {
 			for (size_t i = 0; i < p->ncwd; i++) p->cwd[i] = xdup(p->at[i]);
 		}
 		p->args = strings_of(op_get(r, "args"), &p->nargs);
-		sc_pair *info = xalloc(sizeof *info);
-		*info = (sc_pair){"process", p->at_value};
-		p->scope = sc_create_scope(m->s, info, 1, m->above);
+		// its id first, then its scope [["process", at], [PL_NODE, id]]
 		char want[256];
 		snprintf(want, sizeof want, "proc:%s", p->name);
-		p->id = xdup(sn_give(m->scopes, p->scope, want));
+		p->id = xdup(want);
+		p->id_value = op_str(p->id);
+		sc_pair *info = xalloc(2 * sizeof *info);
+		info[0] = (sc_pair){"process", p->at_value};
+		info[1] = (sc_pair){PL_NODE, p->id_value};
+		p->scope = sc_create_scope(m->s, info, 2, m->above);
+		sn_give(m->scopes, p->scope, p->id);
 		PUSH(m->closures, m->nclosures, m->capclosures, info);
 		p->process = (api_process){p->id, (const char *const *)p->at, p->nat,
 			(const char *const *)p->cwd, p->ncwd, (const char *const *)p->args, p->nargs, p->scope};

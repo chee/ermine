@@ -339,10 +339,15 @@ function nowed(x: unknown, w: [number, number]): unknown {
 	return Number.isInteger(x) && (x as number) >= w[0] - 1 && (x as number) <= w[1] + 1 ? "now" : x
 }
 
-// indented, -0 written -0
+// indented, -0 written -0, a bigint as its digits
 const MINUS = "\u2063minus zero\u2063"
+const raw = (JSON as unknown as { rawJSON(s: string): unknown }).rawJSON
 const pretty = (x: unknown) =>
-	JSON.stringify(x, (_, v) => Object.is(v, -0) ? MINUS : v, "\t").replaceAll(`"${MINUS}"`, "-0")
+	JSON.stringify(
+		x,
+		(_, v) => Object.is(v, -0) ? MINUS : typeof v === "bigint" ? raw(String(v)) : v,
+		"\t",
+	).replaceAll(`"${MINUS}"`, "-0")
 
 type Seen = { count: number; stream: Request[]; finding: Finding; asked: string[] }
 const slug = (s: string) => s.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 80)

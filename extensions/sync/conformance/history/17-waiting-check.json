@@ -21,7 +21,9 @@
 		{ "op": "again", "expect": {} },
 		{
 			"op": "waiting",
-			"expect": { "waiting": [{ "name": "b", "waiting": [] }, { "name": "c", "waiting": ["b"] }] }
+			"expect": {
+				"waiting": [{ "name": "b", "waiting": [] }, { "name": "c", "waiting": ["b"] }]
+			}
 		},
 		{ "op": "heads", "expect": { "heads": ["a"] } },
 		{ "op": "hold", "commits": [], "expect": {} },
@@ -49,7 +51,9 @@
 		{ "op": "heads", "expect": { "heads": ["c"] } },
 		{
 			"op": "refused",
-			"expect": { "refused": [{ "name": "x", "refused": "patches" }, { "name": "y", "refused": "parent" }] }
+			"expect": {
+				"refused": [{ "name": "x", "refused": "patches" }, { "name": "y", "refused": "parent" }]
+			}
 		}
 	]
 }

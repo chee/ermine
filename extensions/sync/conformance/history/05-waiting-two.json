@@ -4,29 +4,125 @@
 		{
 			"op": "add",
 			"name": "a",
-			"patches": [{ "path": [], "value": { "n": 0 } }],
-			"expect": { "added": "taken" }
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"n": 0
+					}
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
 		},
-		{ "op": "make", "name": "b", "parents": ["a"], "patches": [{ "path": ["n"], "value": 1 }] },
+		{
+			"op": "make",
+			"name": "b",
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 1
+				}
+			]
+		},
 		{
 			"op": "make",
 			"name": "c",
-			"parents": ["a"],
+			"parents": [
+				"a"
+			],
 			"nonce": 1,
-			"patches": [{ "path": ["n"], "value": 2 }]
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 2
+				}
+			]
 		},
 		{
 			"op": "add",
 			"name": "m",
-			"parents": ["b", "c"],
+			"parents": [
+				"b",
+				"c"
+			],
 			"base": "b",
-			"expect": { "added": { "waiting": ["c", "b"] } }
+			"expect": {
+				"added": {
+					"waiting": [
+						"b",
+						"c"
+					]
+				}
+			}
 		},
-		{ "op": "waiting", "expect": { "waiting": [{ "name": "m", "waiting": ["c", "b"] }] } },
-		{ "op": "add", "name": "c", "expect": { "added": "taken" } },
-		{ "op": "waiting", "expect": { "waiting": [{ "name": "m", "waiting": ["b"] }] } },
-		{ "op": "add", "name": "b", "expect": { "added": "taken" } },
-		{ "op": "all", "expect": { "all": ["a", "c", "b", "m"] } },
-		{ "op": "heads", "expect": { "heads": ["m"] } }
+		{
+			"op": "waiting",
+			"expect": {
+				"waiting": [
+					{
+						"name": "m",
+						"waiting": [
+							"b",
+							"c"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "add",
+			"name": "c",
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "waiting",
+			"expect": {
+				"waiting": [
+					{
+						"name": "m",
+						"waiting": [
+							"b"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "all",
+			"expect": {
+				"all": [
+					"a",
+					"c",
+					"b",
+					"m"
+				]
+			}
+		},
+		{
+			"op": "heads",
+			"expect": {
+				"heads": [
+					"m"
+				]
+			}
+		}
 	]
 }

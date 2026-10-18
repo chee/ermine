@@ -4,24 +4,14 @@
 		{
 			"op": "root",
 			"name": "o",
-			"info": [
-				[
-					"actor",
-					"test"
-				]
-			],
+			"info": { "actor": "test" },
 			"expect": {}
 		},
 		{
 			"op": "scope",
 			"name": "p",
 			"parent": "o",
-			"info": [
-				[
-					"why",
-					"p"
-				]
-			],
+			"info": { "why": "p" },
 			"expect": {}
 		},
 		{
@@ -194,12 +184,7 @@
 			"op": "scope",
 			"name": "p",
 			"parent": "o",
-			"info": [
-				[
-					"why",
-					"p again"
-				]
-			],
+			"info": { "why": "p again" },
 			"expect": {}
 		},
 		{
@@ -211,12 +196,7 @@
 			"expect": {
 				"value": {
 					"scope": "p",
-					"pairs": [
-						[
-							"why",
-							"p again"
-						]
-					]
+					"info": { "why": "p again" }
 				}
 			}
 		},

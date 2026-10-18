@@ -11,7 +11,7 @@
 //    other field dropped. a time of -0 is 0
 //    the header's fields: time a whole number (0 and negatives kept); actor any JSON, null too;
 //    reader a string; external a list of sites { file, line, column?, function? }, column and
-//    function only when given; metadata a list of [string, value] pairs, in order, repeats kept.
+//    function only when given; metadata an object, any keys, any values.
 //    plain JSON, not the JSON form: give no form there
 //    the value given back as it was read: -0 kept, NUL and lone surrogates kept in strings and
 //    keys; a typed array's elements as its kind holds them
@@ -24,7 +24,7 @@
 //    table, and with no time the same time now for all. values: a map, always given
 // Errors, as { error: "text" } (the text is no part of the protocol), the harness going on:
 //    an op not understood or not given (ops are case-sensitive); a node with no values map; a
-//    metadata entry that is not a [string, value] pair; a value whose JSON form stands
+//    metadata that is not an object (a list, null, ...); a value whose JSON form stands
 //    for none (form.ts fromJson's refusals: bad base64 or padding, an element out of its kind's
 //    range, an unknown kind, a "/" map that is no form), at any depth, in any table: nothing made
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
@@ -32,15 +32,22 @@ import createNode from "@ermine/node"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"
 
+const checked = (h: ChangeHeader | undefined) => {
+	const m = h?.metadata as unknown
+	if (h && "metadata" in h && (typeof m !== "object" || m === null || Array.isArray(m))) {
+		throw new Error("metadata is not an object")
+	}
+	return h
+}
+
 const make = (r: Request) =>
-	createEntry(r.value === undefined ? undefined : revive(r.value), r.header)
+	createEntry(r.value === undefined ? undefined : revive(r.value), checked(r.header))
 
 // a header's fields in its order: a record, whose order is no meaning, answered in one
 const FIELDS = ["time", "actor", "reader", "external", "metadata", "op"]
 const header = (c: ChangeHeader) => {
 	const out: Record<string, unknown> = {}
 	for (const k of FIELDS) if (k in c) out[k] = c[k as keyof ChangeHeader]
-	for (const k of Object.keys(c)) if (!(k in out)) out[k] = c[k as keyof ChangeHeader]
 	return toJson(out)
 }
 
@@ -52,6 +59,9 @@ const show = (e: Entry<unknown>) => ({
 function answer(r: Request) {
 	if (r.op === "entry") return { entry: show(make(r)) }
 	if (r.op === "node") {
+		if (typeof r.values !== "object" || r.values === null || Array.isArray(r.values)) {
+			throw new Error("no values map")
+		}
 		const values: Record<string, unknown> = {}
 		for (const [t, v] of Object.entries(r.values as Record<string, unknown>)) {
 			Object.defineProperty(values, t, {
@@ -61,7 +71,7 @@ function answer(r: Request) {
 				configurable: true,
 			})
 		}
-		const node = createNode(values, r.header as ChangeHeader | undefined)
+		const node = createNode(values, checked(r.header as ChangeHeader | undefined))
 		const out: Record<string, unknown> = {}
 		for (const [t, e] of Object.entries(node)) {
 			Object.defineProperty(out, t, {

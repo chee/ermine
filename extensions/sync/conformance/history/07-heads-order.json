@@ -4,54 +4,141 @@
 		{
 			"op": "add",
 			"name": "a",
-			"patches": [{ "path": [], "value": { "n": 0 } }],
-			"expect": { "added": "taken" }
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"n": 0
+					}
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
 		},
 		{
 			"op": "add",
 			"name": "b",
-			"parents": ["a"],
-			"patches": [{ "path": ["n"], "value": 1 }],
-			"expect": { "added": "taken" }
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
 		},
 		{
 			"op": "add",
 			"name": "c",
-			"parents": ["a"],
+			"parents": [
+				"a"
+			],
 			"nonce": 1,
-			"patches": [{ "path": ["n"], "value": 2 }],
-			"expect": { "added": "taken" }
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
 		},
 		{
 			"op": "name",
 			"commit": "b",
-			"expect": { "name": "61b882b3f79ae2591eb7c822dc8671ce9d01bb1fea83de8ec11e29eadaeddbf1" }
+			"expect": {
+				"name": "1d8d3c833997bf17708cd96a9c728f643142682d569bd246c8dd2023af7888c7"
+			}
 		},
 		{
 			"op": "name",
 			"commit": "c",
-			"expect": { "name": "09f43a95d7bb886707e2a908877c4be38696f16e8e57d9255fecd5ec83cd4b78" }
+			"expect": {
+				"name": "64ecdb5209c1dcde507c880380fb2789f29581bc204dc13edb223bbe8b01507b"
+			}
 		},
-		{ "op": "heads", "expect": { "heads": ["b", "c"] } },
+		{
+			"op": "heads",
+			"expect": {
+				"heads": [
+					"c",
+					"b"
+				]
+			}
+		},
 		{
 			"op": "add",
 			"name": "d",
-			"parents": ["c"],
+			"parents": [
+				"c"
+			],
 			"nonce": 2,
-			"patches": [{ "path": ["n"], "value": 3 }],
-			"expect": { "added": "taken" }
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 3
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
 		},
-		{ "op": "heads", "expect": { "heads": ["d", "b"] } },
+		{
+			"op": "heads",
+			"expect": {
+				"heads": [
+					"d",
+					"b"
+				]
+			}
+		},
 		{
 			"op": "add",
 			"name": "e",
-			"parents": ["b"],
+			"parents": [
+				"b"
+			],
 			"nonce": 3,
-			"patches": [{ "path": ["n"], "value": 5 }],
-			"expect": { "added": "taken" }
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 5
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
 		},
-		{ "op": "name", "commit": "d" },
-		{ "op": "name", "commit": "e" },
-		{ "op": "heads", "expect": { "heads": ["e", "d"] } }
+		{
+			"op": "name",
+			"commit": "d"
+		},
+		{
+			"op": "name",
+			"commit": "e"
+		},
+		{
+			"op": "heads",
+			"expect": {
+				"heads": [
+					"e",
+					"d"
+				]
+			}
+		}
 	]
 }

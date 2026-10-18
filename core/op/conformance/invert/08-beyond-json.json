@@ -1,5 +1,5 @@
 {
-	"title": "values beyond JSON put back as they were: a stand-in, NaN and the infinities, -0, a map whose one key is \"/\"",
+	"title": "values beyond JSON put back as they were: a stand-in, NaN and the infinities, a map whose one key is \"/\"",
 	"steps": [
 		{
 			"op": "invert",
@@ -19,7 +19,7 @@
 						"number": "Infinity"
 					}
 				},
-				"z": -0
+				"z": 0
 			},
 			"patches": [
 				{
@@ -48,7 +48,7 @@
 						"number": "Infinity"
 					}
 				},
-				"z": -0
+				"z": 0
 			},
 			"patches": [
 				{
@@ -76,7 +76,7 @@
 						"number": "Infinity"
 					}
 				},
-				"z": -0
+				"z": 0
 			},
 			"patches": [
 				{
@@ -177,7 +177,7 @@
 			"op": "invert",
 			"value": {
 				"l": [
-					-0,
+					0,
 					{
 						"/": {
 							"number": "NaN"

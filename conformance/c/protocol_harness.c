@@ -95,15 +95,10 @@ ch_header hh_header(const op_value *p) {
 		h.external = ss;
 		h.external_length = at->count;
 	}
-	if (meta && meta->type == OP_LIST) {
+	if (meta) {
+		if (meta->type != OP_MAP) hh_fail("metadata is not an object");
 		ch_entry *es = hh_take((meta->count ? meta->count : 1) * sizeof *es);
-		for (size_t i = 0; i < meta->count; i++) {
-			const op_value *kv = meta->items[i];
-			if (kv->type != OP_LIST || kv->count != 2 || kv->items[0]->type != OP_STR) {
-				hh_fail("bad metadata entry");
-			}
-			es[i] = (ch_entry){kv->items[0]->str, kv->items[1]};
-		}
+		for (size_t i = 0; i < meta->count; i++) es[i] = (ch_entry){meta->keys[i], meta->items[i]};
 		h.metadata = es;
 		h.metadata_length = meta->count;
 	}
@@ -181,16 +176,14 @@ void hh_put_header(FILE *out, const ch_header *h) {
 		comma = ",";
 	}
 	if (h->metadata) {
-		fprintf(out, "%s\"metadata\":[", comma);
+		fprintf(out, "%s\"metadata\":{", comma);
 		for (size_t i = 0; i < h->metadata_length; i++) {
 			if (i) putc(',', out);
-			putc('[', out);
 			op_json_string(out, h->metadata[i].key);
-			putc(',', out);
+			putc(':', out);
 			op_json_write(out, h->metadata[i].value);
-			putc(']', out);
 		}
-		putc(']', out);
+		putc('}', out);
 		comma = ",";
 	}
 	if (h->has_op) {

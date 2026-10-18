@@ -3,7 +3,7 @@
 	"steps": [
 		{
 			"op": "seal",
-			"blop": "a16161f93c00",
+			"blop": "a1616101",
 			"seed": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
 			"expect": {
 				"code": "shape"

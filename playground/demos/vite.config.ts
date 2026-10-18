@@ -7,13 +7,15 @@
 //   canvas.js, sources.json (the C), catclock.wasm (built here by wasm-clang, web/yowasp.ts: not in
 //   git). /catclock/compile is Netlify's (functions/compile.mts, netlify.toml); without it, wasm-clang
 //   in the page is its compiler
-// - /slaygrounds/: its own vite build (deno task build there), copied in. in dev, its own dev server
-//   (deno task serve there, :8051), sent to
+// - /slaygrounds/: its own vite build (deno task build there), copied in — and in dev served here
+//   from that build, so its links run on this port; SLAY_PORT set (or nothing built): its own dev
+//   server (deno task serve there, :8051), sent to, for working on it live
 // - /shape/: shape/index.html, a page like any (it imports slaygrounds/src/graph-file.ts)
 // - pigs: a terminal program, so its card only
 // imports resolve as Deno resolves them (@deno/vite-plugin): the workspace's @ermine/* libraries from
 // source, npm packages from the repo's node_modules (`deno install`, the names in deno.json)
 import deno from "@deno/vite-plugin"
+import { existsSync } from "node:fs"
 import { defineConfig, type Plugin } from "vite"
 import { objectOf, SOURCES } from "./catclock/web/clang.ts"
 import { build } from "./catclock/web/yowasp.ts"
@@ -26,6 +28,22 @@ const slay = `${here}slaygrounds/`
 
 const escape = (s: string) =>
 	s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!)
+
+// what the slaygrounds dist is, by ending, served raw
+const KIND: Record<string, string> = {
+	html: "text/html",
+	js: "text/javascript",
+	mjs: "text/javascript",
+	json: "application/json",
+	css: "text/css",
+	svg: "image/svg+xml",
+	png: "image/png",
+	jpg: "image/jpeg",
+	ico: "image/x-icon",
+	wasm: "application/wasm",
+	txt: "text/plain",
+	map: "application/json",
+}
 
 // slaygrounds' examples, as the index's list: a title that starts with its name says it once
 function examples() {
@@ -85,10 +103,35 @@ const pages: Plugin = {
 		server.middlewares.use(async (req, res, next) => {
 			const path = req.url?.split("?")[0] ?? ""
 			try {
-				// the page only: a module under it (shape's import of src/graph-file.ts) is served here
+				// the slaygrounds page, from its built dist (deno task build in slaygrounds, what
+				// the site copies in), so the demos links run here, no server of its own; the
+				// files under it the same, read raw (an example's program.ts is fetched as text,
+				// which vite would parse instead). SLAY_PORT set, or no dist yet: its own dev
+				// server instead, sent to, for working on it live (deno task serve there, :8051).
+				// a path not in the dist goes on to vite: the sources, a module under it (shape's
+				// import of src/graph-file.ts)
 				if (path === "/slaygrounds" || path === "/slaygrounds/") {
 					const port = Number(Deno.env.get("SLAY_PORT") ?? 8051)
-					res.writeHead(302, { location: `http://localhost:${port}/` }).end()
+					if (Deno.env.has("SLAY_PORT") || !existsSync(`${slay}dist/index.html`)) {
+						res.writeHead(302, { location: `http://localhost:${port}/` }).end()
+					} else {
+						res.setHeader("content-type", "text/html")
+						res.end(Deno.readFileSync(`${slay}dist/index.html`))
+					}
+				} else if (path.startsWith("/slaygrounds/")) {
+					const rest = req.url!.slice("/slaygrounds/".length)
+					// a dist path is as vite's rewriting of the built html left it
+					const file =
+						`${slay}${rest.startsWith("dist/") ? rest : `dist/${rest}`}`.split("?")[0]
+					if (
+						!rest.includes("..") && existsSync(file) && Deno.statSync(file).isFile
+					) {
+						res.setHeader(
+							"content-type",
+							KIND[file.split(".").at(-1)!] ?? "application/octet-stream",
+						)
+						res.end(Deno.readFileSync(file))
+					} else next()
 				} else if (path === "/catclock") {
 					res.writeHead(301, { location: "/catclock/" }).end()
 				} else if (path === "/catclock/sources.json") {
@@ -184,6 +227,7 @@ export default defineConfig({
 			"catclock/web/index.html",
 			"catclock/web/clock.html",
 			"shape/index.html",
+			"architecture/index.html",
 		],
 	},
 	server: { port: 8040, strictPort: true, fs: { allow: [repo] } },
@@ -197,6 +241,7 @@ export default defineConfig({
 				catclock: `${cat}index.html`,
 				clock: `${cat}clock.html`,
 				shape: `${here}shape/index.html`,
+				architecture: `${here}architecture/index.html`,
 			},
 		},
 	},

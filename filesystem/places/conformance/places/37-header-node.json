@@ -1,76 +1,34 @@
 {
-	"title": "a write's header in a scope under a scope that has a node: the metadata stops after that scope's pairs, then [node, its id]; the actor and reader still found above it. a scope with no node above it: every level, no node pair",
+	"title": "a write's header in a scope under a scope whose own info holds the node key: the metadata is the levels merged, inner keys over outer, stopping after that scope's (its node key among them, nothing added); the actor and reader still found above it. no scope with a node key: every level",
 	"steps": [
 		{
 			"op": "root",
 			"name": "chee",
-			"info": [
-				[
-					"actor",
-					"chee"
-				],
-				[
-					"reader",
-					"juno"
-				]
-			],
+			"info": { "actor": "chee", "reader": "juno" },
 			"expect": {}
 		},
 		{
 			"op": "scope",
 			"name": "proc",
 			"parent": "chee",
-			"info": [
-				[
-					"why",
-					"process"
-				]
-			],
-			"node": "P",
+			"info": { "why": "process", "node": "P" },
 			"expect": {}
 		},
 		{
 			"op": "scope",
 			"name": "click",
 			"parent": "proc",
-			"info": [
-				[
-					"event",
-					"click"
-				]
-			],
+			"info": { "event": "click" },
 			"expect": {}
 		},
 		{
 			"op": "header",
 			"scope": "click",
-			"extra": [
-				[
-					"then",
-					"y"
-				]
-			],
+			"extra": { "then": "y" },
 			"expect": {
 				"actor": "chee",
 				"reader": "juno",
-				"metadata": [
-					[
-						"then",
-						"y"
-					],
-					[
-						"event",
-						"click"
-					],
-					[
-						"why",
-						"process"
-					],
-					[
-						"node",
-						"P"
-					]
-				],
+				"metadata": { "then": "y", "event": "click", "why": "process", "node": "P" },
 				"timely": true,
 				"sites": 1
 			}
@@ -81,16 +39,7 @@
 			"expect": {
 				"actor": "chee",
 				"reader": "juno",
-				"metadata": [
-					[
-						"why",
-						"process"
-					],
-					[
-						"node",
-						"P"
-					]
-				],
+				"metadata": { "why": "process", "node": "P" },
 				"timely": true,
 				"sites": 1
 			}
@@ -99,13 +48,7 @@
 			"op": "scope",
 			"name": "inner",
 			"parent": "click",
-			"info": [
-				[
-					"actor",
-					"inner"
-				]
-			],
-			"node": "I",
+			"info": { "node": "I", "actor": "inner" },
 			"expect": {}
 		},
 		{
@@ -114,16 +57,7 @@
 			"expect": {
 				"actor": "inner",
 				"reader": "juno",
-				"metadata": [
-					[
-						"actor",
-						"inner"
-					],
-					[
-						"node",
-						"I"
-					]
-				],
+				"metadata": { "node": "I", "actor": "inner" },
 				"timely": true,
 				"sites": 1
 			}
@@ -134,16 +68,7 @@
 			"expect": {
 				"actor": "chee",
 				"reader": "juno",
-				"metadata": [
-					[
-						"actor",
-						"chee"
-					],
-					[
-						"reader",
-						"juno"
-					]
-				],
+				"metadata": { "actor": "chee", "reader": "juno" },
 				"timely": true,
 				"sites": 1
 			}

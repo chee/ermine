@@ -16,12 +16,9 @@
 						"line": 1
 					}
 				],
-				"metadata": [
-					[
-						"first",
-						true
-					]
-				]
+				"metadata": {
+					"first": true
+				}
 			},
 			"expect": {}
 		},
@@ -42,12 +39,9 @@
 								"line": 1
 							}
 						],
-						"metadata": [
-							[
-								"first",
-								true
-							]
-						]
+						"metadata": {
+							"first": true
+						}
 					}
 				}
 			}
@@ -172,20 +166,10 @@
 						"line": 0
 					}
 				],
-				"metadata": [
-					[
-						"k",
-						1
-					],
-					[
-						"k",
-						1
-					],
-					[
-						"",
-						null
-					]
-				]
+				"metadata": {
+					"k": 1,
+					"": null
+				}
 			},
 			"expect": {}
 		},
@@ -217,20 +201,10 @@
 								"line": 0
 							}
 						],
-						"metadata": [
-							[
-								"k",
-								1
-							],
-							[
-								"k",
-								1
-							],
-							[
-								"",
-								null
-							]
-						],
+						"metadata": {
+							"k": 1,
+							"": null
+						},
 						"op": {
 							"patches": [
 								{

@@ -1,7 +1,7 @@
 {
 	"title": "a cleanup on a plain scope made in a run or an act, changing what its computation reads, written by the writer open: the loop ends, as one on the computation does (34). the run's scope stays, alive, through the next run and goes once that run is done; the act's, before the next act",
 	"steps": [
-		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
+		{ "op": "root", "name": "o", "info": { "actor": "test" }, "expect": {} },
 		{
 			"op": "compute",
 			"name": "c",
@@ -9,7 +9,7 @@
 			"f": {
 				"do": [
 					{
-						"within": [[["why", "within"]], {
+						"within": [{ "why": "within" }, {
 							"cleanup": [null, {
 								"write": ["k", { "sum": [{ "read": "k" }, 1] }, "open"]
 							}]
@@ -36,7 +36,7 @@
 				"do": [
 					{ "log": ["act", { "given": "value" }] },
 					{
-						"within": [[["why", "within"]], {
+						"within": [{ "why": "within" }, {
 							"cleanup": [null, {
 								"write": ["m", { "sum": [{ "given": "value" }, 1] }, "open"]
 							}]

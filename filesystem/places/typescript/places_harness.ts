@@ -20,12 +20,6 @@
 // { op: "reads", name }                     → { reads }   the latest ended run's, as spots then:
 //    { part, id, path } (path null: change spot), null not a spot; no run ended: []
 // { op: "spot", key }                       → { spot? }   places' spot of a string key
-// runs (runs.ts):
-// { op: "runs" }                            → {}   the runs listener, made once
-// { op: "giveRun", name, id }               → {}   the compute's runs written on node id
-// { op: "runOf", id }                       → { run }   outside a run: null |
-//    { n, end, error?, timed, reads, writes }; timed: started then ended; read: { part, id, path,
-//    keys?, actor } | null; write: { part, id, actor }
 // { op: "mark", keys }                      → {}   keys (as track's) marked from outside
 // pruning (places.ts):
 // { op: "rows" }                            → {}   from now on reads go through a view of "R" given
@@ -71,7 +65,6 @@ import {
 	write,
 } from "./world_harness.ts"
 import { status } from "./status.ts"
-import { createRuns, latest, type Run } from "./runs.ts"
 import { revive } from "../../../conformance/typescript/form.ts"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { get, list, lookup, members } from "./lib.ts"
@@ -90,8 +83,9 @@ const keyOf = (name: string) => {
 	return k
 }
 
-// the runs listener, once it is asked for
-let runs: ReturnType<typeof createRuns> | undefined
+// more program forms, a harness built on this one's (ermine/processes' runs): the first that
+// answers ({ value }) is the value
+export const forms: ((m: Request) => { value: Json } | undefined)[] = []
 
 // rows, each ask counted, and the places the filesystem's reads go through (rows: a view with it)
 const asked = { steps: 0, names: 0 }
@@ -115,28 +109,6 @@ const rows: Contributor = {
 		path !== undefined && filled(r.read("value", "rows", [...path, name])),
 }
 let reader: Places = places
-
-// a run as runOf tells it
-function runJson(run: Run | undefined): Json {
-	if (run === undefined) return null
-	const actor = (c: { actor: unknown } | undefined) => c === undefined ? null : c.actor ?? null
-	return {
-		n: run.n,
-		end: run.end,
-		...(run.error !== undefined && { error: run.error.message }),
-		timed: typeof run.started === "number" && run.started <= run.ended,
-		reads: run.reads.map((r) =>
-			"key" in r ? null : {
-				part: r.part,
-				id: r.id,
-				path: r.path,
-				...(r.keys && { keys: true }),
-				actor: actor(r.change),
-			}
-		),
-		writes: run.writes.map((w) => ({ part: w.part, id: w.id, actor: actor(w.change) })),
-	}
-}
 
 function evaluate(e: Json): Json {
 	if (e === null || typeof e !== "object") return e
@@ -177,10 +149,14 @@ function evaluate(e: Json): Json {
 	}
 	const plain = basic(m, evaluate)
 	if (plain !== undefined) return plain
+	for (const form of forms) {
+		const v = form(m)
+		if (v !== undefined) return v.value
+	}
 	throw new Error("unknown program")
 }
 
-function answer(r: Request): Json | undefined {
+export function answer(r: Request): Json | undefined {
 	switch (r.op) {
 		case "at": {
 			const v = at(revive(r.value), r.path)
@@ -228,15 +204,6 @@ function answer(r: Request): Json | undefined {
 			const w = places.describe(r.key)
 			return w === undefined ? {} : { spot: where(w) }
 		}
-		case "runs":
-			runs ??= createRuns({ places, table, scheduler: s })
-			return {}
-		case "giveRun":
-			if (runs === undefined) throw new Error("no runs")
-			runs.give(scope(r.name) as Computer, r.id)
-			return {}
-		case "runOf":
-			return { run: runJson(latest(places, r.id)) }
 		case "mark":
 			s.mark((r.keys as string[]).map(keyOf))
 			return {}

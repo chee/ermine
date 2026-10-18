@@ -58,14 +58,14 @@
 			"op": "name",
 			"commit": "a",
 			"expect": {
-				"name": "0aaa5bbeed41c89441b6a63bea761349c1759c9cb148c485f6b632d1d5a3db06"
+				"name": "2f8c7f3d029bfb74f5b6f86d00412fa117459b8819463b1c7c29ae359bc6b0d2"
 			}
 		},
 		{
 			"op": "name",
 			"commit": "b",
 			"expect": {
-				"name": "86ec5baa33fdda7540ad68de21eef9770045a08da03615fa857267c84756e9fc"
+				"name": "50df2315af9e4f48130bc028bf0e05c062f1ff9438db934620f6f0e0b47fc00f"
 			}
 		},
 		{
@@ -81,16 +81,10 @@
 						"change": {
 							"time": 0,
 							"actor": null,
-							"metadata": [
-								[
-									"signer",
-									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-								],
-								[
-									"commit",
-									"86ec5baa33fdda7540ad68de21eef9770045a08da03615fa857267c84756e9fc"
-								]
-							]
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "50df2315af9e4f48130bc028bf0e05c062f1ff9438db934620f6f0e0b47fc00f"
+							}
 						}
 					}
 				}
@@ -226,14 +220,14 @@
 			"op": "name",
 			"commit": "a3",
 			"expect": {
-				"name": "af97c06f24a5ce47d7e5f3d3c8fdce0e05592854be95fd12aae02d97f2af9252"
+				"name": "262c7861ded93fff807ba838be578ac97c124110e08a0435c495689462db09c9"
 			}
 		},
 		{
 			"op": "name",
 			"commit": "b3",
 			"expect": {
-				"name": "c701f98b928dc09c4eab74df299322b3ea109737ed7823d0447044a20f4d13dc"
+				"name": "b771be4bc346a9b95a010a857598555e0adaff5a5bb3e1a63bdb3dfc3fc36e02"
 			}
 		},
 		{
@@ -245,20 +239,14 @@
 			"expect": {
 				"tables": {
 					"value": {
-						"value": "789123hello",
+						"value": "123789hello",
 						"change": {
 							"time": 2,
 							"actor": null,
-							"metadata": [
-								[
-									"signer",
-									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-								],
-								[
-									"commit",
-									"c701f98b928dc09c4eab74df299322b3ea109737ed7823d0447044a20f4d13dc"
-								]
-							]
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "b771be4bc346a9b95a010a857598555e0adaff5a5bb3e1a63bdb3dfc3fc36e02"
+							}
 						}
 					}
 				}
@@ -273,20 +261,14 @@
 			"expect": {
 				"tables": {
 					"value": {
-						"value": "789123hello",
+						"value": "123789hello",
 						"change": {
 							"time": 2,
 							"actor": null,
-							"metadata": [
-								[
-									"signer",
-									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-								],
-								[
-									"commit",
-									"c701f98b928dc09c4eab74df299322b3ea109737ed7823d0447044a20f4d13dc"
-								]
-							]
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "b771be4bc346a9b95a010a857598555e0adaff5a5bb3e1a63bdb3dfc3fc36e02"
+							}
 						}
 					}
 				}

@@ -62,16 +62,10 @@
 							"time": 1760000000,
 							"actor": "a",
 							"external": [{ "file": "scenario", "line": 1 }],
-							"metadata": [
-								[
-									"signer",
-									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-								],
-								[
-									"commit",
-									"669ba90b44a0977f20e0887ca875bb3a630d58a956563944b8ddbde8bf3175c8"
-								]
-							]
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "a68380e71347b43c9a21d610a3777fe86617df4c164cedb3e25f5f336b8ac7f5"
+							}
 						}
 					}
 				}
@@ -90,16 +84,10 @@
 							"time": 1760000000,
 							"actor": "a",
 							"external": [{ "file": "scenario", "line": 1 }],
-							"metadata": [
-								[
-									"signer",
-									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-								],
-								[
-									"commit",
-									"af5b49a61e8ad9286bd192508512b317833f26f9bede8eba1cae28354f7f0b77"
-								]
-							]
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "200ccbfca8fd7b946c14746cf939ef467e8e7ad7420c1b90a68f29b6efa2272c"
+							}
 						}
 					}
 				}
@@ -118,16 +106,10 @@
 							"time": 1760000000,
 							"actor": "a",
 							"external": [{ "file": "scenario", "line": 1 }],
-							"metadata": [
-								[
-									"signer",
-									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-								],
-								[
-									"commit",
-									"af5b49a61e8ad9286bd192508512b317833f26f9bede8eba1cae28354f7f0b77"
-								]
-							]
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "200ccbfca8fd7b946c14746cf939ef467e8e7ad7420c1b90a68f29b6efa2272c"
+							}
 						}
 					},
 					"attributes": {
@@ -136,16 +118,10 @@
 							"time": 1760000000,
 							"actor": "a",
 							"external": [{ "file": "scenario", "line": 1 }],
-							"metadata": [
-								[
-									"signer",
-									"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
-								],
-								[
-									"commit",
-									"9ca758795934802c3a5fd53da77954599b71c7478a6bf6095fbfdd64f14fb643"
-								]
-							]
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "d318d477335df9ce16144279b06fb1899beb57384973286f002151feadb291cf"
+							}
 						}
 					}
 				}

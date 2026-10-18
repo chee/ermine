@@ -152,7 +152,7 @@ export function createHarness(): (r: Request) => Record<string, unknown> {
 						}
 					}
 					const f = () => (s.track(key), r.by === "run" && writes(), k)
-					s.runWithScope(s.createRootScope([["actor", "test"]]), () => {
+					s.runWithScope(s.createRootScope({ actor: "test" }), () => {
 						if (r.scheduler === "effect") s.createEffect(f, () => {})
 						else {
 							s.createComputer(f, () => {

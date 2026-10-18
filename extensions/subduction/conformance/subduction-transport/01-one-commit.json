@@ -53,8 +53,8 @@
 			"actor": "a",
 			"nonce": "0000000100000000",
 			"expect": {
-				"name": "76f58c10ed507bc7bfffc0349a2a52cc582e2e2c0a4b82b413c0f80bce1bf708",
-				"stored": "8275462e695098189ac7a5843943bf25606d53d0ee8de18460ed25ecdbbc0a21"
+				"name": "7b2bb4f03a1adae4d9656aaa8e020219b0ac7d309df0bf3687cf67f0912528c3",
+				"stored": "22824da1cfe7e0edf13590c86ea7bff9e79d700c31641b937e6b7c0cd748e824"
 			}
 		},
 		{
@@ -67,7 +67,7 @@
 			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
 			"expect": {
 				"heads": [
-					"76f58c10ed507bc7bfffc0349a2a52cc582e2e2c0a4b82b413c0f80bce1bf708"
+					"7b2bb4f03a1adae4d9656aaa8e020219b0ac7d309df0bf3687cf67f0912528c3"
 				],
 				"history": {
 					"waiting": [],
@@ -85,7 +85,7 @@
 			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
 			"expect": {
 				"heads": [
-					"76f58c10ed507bc7bfffc0349a2a52cc582e2e2c0a4b82b413c0f80bce1bf708"
+					"7b2bb4f03a1adae4d9656aaa8e020219b0ac7d309df0bf3687cf67f0912528c3"
 				],
 				"history": {
 					"waiting": [],
@@ -103,7 +103,7 @@
 			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
 			"expect": {
 				"stored": [
-					"8275462e695098189ac7a5843943bf25606d53d0ee8de18460ed25ecdbbc0a21"
+					"22824da1cfe7e0edf13590c86ea7bff9e79d700c31641b937e6b7c0cd748e824"
 				]
 			}
 		}

@@ -26,7 +26,7 @@
 				"lamport": 1,
 				"patches": []
 			},
-			"name": "5117868f2fb1d53fac0a7d2eb353c79ccfa596abadd5c6a95d91484690bfbad9",
+			"name": "d7293eb15b0fbc648921c0787cc97ae8010f06957e3f8dc87d021c4bd2801c99",
 			"expect": {
 				"added": "taken"
 			}
@@ -67,7 +67,7 @@
 			"expect": {
 				"heads": [
 					{
-						"name": "5117868f2fb1d53fac0a7d2eb353c79ccfa596abadd5c6a95d91484690bfbad9",
+						"name": "d7293eb15b0fbc648921c0787cc97ae8010f06957e3f8dc87d021c4bd2801c99",
 						"blop": {
 							"node": "n",
 							"object": "value",

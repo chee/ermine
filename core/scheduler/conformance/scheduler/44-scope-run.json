@@ -4,12 +4,7 @@
 		{
 			"op": "root",
 			"name": "o",
-			"info": [
-				[
-					"actor",
-					"notes"
-				]
-			],
+			"info": { "actor": "notes" },
 			"expect": {}
 		},
 		{
@@ -53,16 +48,7 @@
 			"expect": {
 				"value": {
 					"scope": "c",
-					"pairs": [
-						[
-							"run",
-							1
-						],
-						[
-							"mark",
-							1
-						]
-					],
+					"info": { "run": 1, "mark": 1 },
 					"writer": "c"
 				}
 			}
@@ -73,16 +59,7 @@
 				"log": [
 					{
 						"scope": "e",
-						"pairs": [
-							[
-								"run",
-								1
-							],
-							[
-								"mark",
-								2
-							]
-						],
+						"info": { "run": 1, "mark": 2 },
 						"writer": "e"
 					}
 				]
@@ -107,16 +84,7 @@
 			"expect": {
 				"value": {
 					"scope": "c",
-					"pairs": [
-						[
-							"run",
-							2
-						],
-						[
-							"mark",
-							4
-						]
-					],
+					"info": { "run": 2, "mark": 4 },
 					"writer": "c"
 				}
 			}
@@ -127,16 +95,7 @@
 				"log": [
 					{
 						"scope": "e",
-						"pairs": [
-							[
-								"run",
-								2
-							],
-							[
-								"mark",
-								4
-							]
-						],
+						"info": { "run": 2, "mark": 4 },
 						"writer": "e"
 					}
 				]

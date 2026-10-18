@@ -90,12 +90,7 @@
 		{
 			"op": "root",
 			"name": "o",
-			"info": [
-				[
-					"actor",
-					"test"
-				]
-			],
+			"info": { "actor": "test" },
 			"expect": {}
 		},
 		{
@@ -250,12 +245,7 @@
 			"op": "scope",
 			"name": "s",
 			"parent": "zz",
-			"info": [
-				[
-					"why",
-					"s"
-				]
-			],
+			"info": { "why": "s" },
 			"expect": {
 				"error": "no scope zz"
 			}

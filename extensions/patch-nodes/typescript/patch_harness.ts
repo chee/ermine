@@ -12,7 +12,7 @@
 // { op: "patch", id, on, part?, at?, patches, time? } → {}   a patch node's "patch" entry; part
 //    default "value"; at default: the target entry's change time now, or 0 (none there)
 // { op: "edit", part, id, patches, time?, metadata? } → {}   patches to the entry, said through the
-//    overlay's commit (none there: made). metadata: pairs after the header's own. an ApplyError
+//    overlay's commit (none there: made). metadata: over the scope's info. an ApplyError
 //    answers { error: code, patch: index }
 // { op: "del", part, id }                          → {}   the entry out of the table, or
 //                                                  → { error: "nothing-there" }
@@ -43,6 +43,7 @@ import { ApplyError, type Key as Step, type Patch } from "@ermine/op/apply"
 import { createPlaces } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
 import { get } from "@ermine/places/lib"
+import type { Info } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/table"
 import { revive } from "../../../conformance/typescript/form.ts"
@@ -66,7 +67,7 @@ const places = createPlaces({ root: "R", table: overlay, paths: createPaths(), s
 s.onTrackingEnd((key) => places.release(key))
 
 const hosted = <T>(f: () => T) => s.runWithScope(host, f)
-function header(time?: number, extra?: [string, unknown][]) {
+function header(time?: number, extra?: Info) {
 	const h = hosted(() => createChangeHeader(s, extra))
 	if (time !== undefined) h.time = time
 	return h
@@ -120,8 +121,10 @@ function answer(r: Request): Json | undefined {
 	switch (r.op) {
 		case "root":
 		case "scope":
-			// a scope needs an info pair: a step that gives none is the test's
-			if (!Array.isArray(r.info) || r.info.length === 0) r.info = [["test", r.name]]
+			// a scope needs an info key: a step that gives none is the test's
+			if (typeof r.info !== "object" || r.info === null || Object.keys(r.info).length === 0) {
+				r.info = { test: r.name }
+			}
 			return undefined
 		case "kids":
 			put("children", id(r.id), revive(r.value), r.time)

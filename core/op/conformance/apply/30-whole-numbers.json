@@ -1,0 +1,90 @@
+{
+	"title": "whole numbers are integers, of any size: 1.0 is 1; past 2^53 - 1 either way a bigint, read from digits or the bigint form and given back in the bigint form; one put, moved and spliced in like any value; an index or end past 2^53 - 1 past the end; a bigint form of a safe number, or with a leading zero, is no form",
+	"steps": [
+		{ "op": "apply", "value": 1.0, "patches": [], "expect": { "value": 1 } },
+		{ "op": "apply", "value": 2.5e1, "patches": [], "expect": { "value": 25 } },
+		{
+			"op": "apply",
+			"value": [9007199254740991, -9007199254740991],
+			"patches": [],
+			"expect": { "value": [9007199254740991, -9007199254740991] }
+		},
+		{
+			"op": "apply",
+			"value": [9007199254740992, -9007199254740992, 9007199254740993, -9007199254740993],
+			"patches": [],
+			"expect": {
+				"value": [
+					{ "/": { "bigint": "9007199254740992" } },
+					{ "/": { "bigint": "-9007199254740992" } },
+					{ "/": { "bigint": "9007199254740993" } },
+					{ "/": { "bigint": "-9007199254740993" } }
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": { "/": { "bigint": "9007199254740993" } },
+			"patches": [],
+			"expect": { "value": { "/": { "bigint": "9007199254740993" } } }
+		},
+		{
+			"op": "apply",
+			"value": [1e20, 18446744073709551616, -18446744073709551617],
+			"patches": [],
+			"expect": {
+				"value": [
+					{ "/": { "bigint": "100000000000000000000" } },
+					{ "/": { "bigint": "18446744073709551616" } },
+					{ "/": { "bigint": "-18446744073709551617" } }
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": [1, 2],
+			"patches": [
+				{
+					"path": [],
+					"range": [1, 1],
+					"value": [{ "/": { "bigint": "340282366920938463463374607431768211456" } }]
+				}
+			],
+			"expect": {
+				"value": [1, { "/": { "bigint": "340282366920938463463374607431768211456" } }, 2]
+			}
+		},
+		{
+			"op": "apply",
+			"value": { "a": { "/": { "bigint": "-18446744073709551617" } } },
+			"patches": [{ "path": ["b"], "move": { "path": ["a"] } }],
+			"expect": { "value": { "b": { "/": { "bigint": "-18446744073709551617" } } } }
+		},
+		{
+			"op": "apply",
+			"value": { "n": 1 },
+			"patches": [{ "path": ["n"], "value": { "/": { "bigint": "9007199254740993" } } }],
+			"expect": { "value": { "n": { "/": { "bigint": "9007199254740993" } } } }
+		},
+		{
+			"op": "apply",
+			"value": [1],
+			"patches": [{ "path": [9007199254740993] }],
+			"expect": { "error": { "code": "no-key", "patch": 0 } }
+		},
+		{
+			"op": "apply",
+			"value": "abc",
+			"patches": [{ "path": [], "range": [0, 9007199254740993] }],
+			"expect": { "error": { "code": "range", "patch": 0 } }
+		},
+		{ "op": "apply", "value": { "/": { "bigint": "5" } }, "patches": [], "fails": true },
+		{
+			"op": "apply",
+			"value": { "/": { "bigint": "09007199254740993" } },
+			"patches": [],
+			"fails": true
+		},
+		{ "op": "apply", "value": { "/": { "bigint": "-0" } }, "patches": [], "fails": true }
+	]
+}

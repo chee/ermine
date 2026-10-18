@@ -5,9 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "world_harness.h"
+#include "places_harness.h"
 #include "status.h"
-#include "runs.h"
 
 #define PUSH(v, n, cap, x) \
 	do { \
@@ -29,9 +28,6 @@ static const void *key_of(const char *name) {
 	PUSH(keys, nkeys, capkeys, world_copy(name));
 	return keys[nkeys - 1];
 }
-
-// the runs listener, once it is asked for
-static crn *runs;
 
 // pruning (places.h): rows, a trie on the value entry "rows" (a leaf an id, a level a map with
 // names; nothing on the path: PL_NONE), a stand-in for ermine/processes', each ask counted; the
@@ -93,13 +89,18 @@ static const pl_contributor *const rows_walk[] = {&rows, &pl_children};
 
 // what a program is evaluated in: how it ended early, if it did: stopped (a read said the run must
 // end), or an error
-typedef struct {
-	bool stopped;
-	bool waited;
-	char *error;
-} ctx;
+typedef ph_eval ctx;
+
+static ph_form *forms;
+static size_t nforms, capforms;
+void ph_add_form(ph_form form) { PUSH(forms, nforms, capforms, form); }
 
 static op_value *eval(const op_value *e, ctx *c);
+op_value *ph_eval_of(const op_value *e, ph_eval *c) { return eval(e, c); }
+void ph_throw(ph_eval *c, char *error) {
+	if (c->error == NULL) c->error = error;
+	else free(error);
+}
 static op_value *eval_for_fill(const op_value *e, void *c) { return eval(e, c); }
 
 static op_value *thrown(ctx *c, char *error) {
@@ -302,6 +303,11 @@ static op_value *eval(const op_value *e, ctx *c) {
 	op_value *plain = world_basic(e, eval_for_fill, c, &handled, &error);
 	if (error) return thrown(c, error);
 	if (handled) return plain;
+	for (size_t i = 0; i < nforms; i++) {
+		handled = false;
+		op_value *v = forms[i](e, c, &handled);
+		if (handled) return v;
+	}
 	return thrown(c, world_copy("unknown program"));
 }
 
@@ -336,52 +342,6 @@ static sc_out program_f(void *previous, void *data) {
 
 // requests --------------------------------------------------------------------------------------
 
-// the actor of a change as runOf tells it: null for none
-static op_value *actor_of(const op_value *change) {
-	const op_value *a = change != NULL && change->type == OP_MAP ? op_get(change, "actor") : NULL;
-	return a != NULL ? op_ref((op_value *)a) : op_null();
-}
-
-// a run as runOf tells it (typescript/places_harness.ts)
-static op_value *run_json(const op_value *run) {
-	if (run == NULL || run->type != OP_MAP) return op_null();
-	op_value *o = op_map();
-	op_set(o, "n", op_ref(op_get(run, "n")));
-	op_set(o, "end", op_ref(op_get(run, "end")));
-	const op_value *error = op_get(run, "error");
-	if (error != NULL) op_set(o, "error", op_str(cst_error(error) ? cst_error(error) : ""));
-	const op_value *started = op_get(run, "started"), *ended = op_get(run, "ended");
-	op_set(o, "timed", op_bool(started != NULL && ended != NULL && started->num <= ended->num));
-	const op_value *reads = op_get(run, "reads"), *writes = op_get(run, "writes");
-	op_value *rs = op_list();
-	for (size_t i = 0; i < reads->count; i++) {
-		const op_value *r = reads->items[i];
-		if (r->type != OP_MAP) {
-			op_push(rs, op_null());
-			continue;
-		}
-		op_value *m = op_map();
-		op_set(m, "part", op_ref(op_get(r, "part")));
-		op_set(m, "id", op_ref(op_get(r, "id")));
-		op_set(m, "path", op_ref(op_get(r, "path")));
-		if (op_get(r, "keys") != NULL) op_set(m, "keys", op_bool(1));
-		op_set(m, "actor", actor_of(op_get(r, "change")));
-		op_push(rs, m);
-	}
-	op_set(o, "reads", rs);
-	op_value *ws = op_list();
-	for (size_t i = 0; i < writes->count; i++) {
-		const op_value *w = writes->items[i];
-		op_value *m = op_map();
-		op_set(m, "part", op_ref(op_get(w, "part")));
-		op_set(m, "id", op_ref(op_get(w, "id")));
-		op_set(m, "actor", actor_of(op_get(w, "change")));
-		op_push(ws, m);
-	}
-	op_set(o, "writes", ws);
-	return o;
-}
-
 static op_value *with_value(const op_value *v) {
 	op_value *o = op_map();
 	if (v != NULL) op_set(o, "value", world_snap(v));
@@ -389,7 +349,7 @@ static op_value *with_value(const op_value *v) {
 }
 
 // places' requests; NULL: not one of them
-static op_value *answer(const op_value *r) {
+op_value *ph_answer(const op_value *r) {
 	const char *op = world_text(op_get(r, "op"));
 	if (op == NULL) return world_error("no op");
 	if (strcmp(op, "at") == 0) {
@@ -501,24 +461,6 @@ static op_value *answer(const op_value *r) {
 		op_set(o, "reads", reads ? op_ref((op_value *)reads) : op_list());
 		return o;
 	}
-	if (strcmp(op, "runs") == 0) {
-		if (runs == NULL) runs = crn_new(&(crn_setup){world_places, world_table, world_scheduler});
-		return op_map();
-	}
-	if (strcmp(op, "giveRun") == 0) {
-		if (runs == NULL) return world_error("no runs");
-		sc_scope *c = world_scope(world_text(op_get(r, "name")));
-		if (c == NULL) return world_error("no such scope");
-		crn_give(runs, c, world_key(op_get(r, "id")));
-		return op_map();
-	}
-	if (strcmp(op, "runOf") == 0) {
-		const op_value *run = crn_latest(world_places, world_key(op_get(r, "id")));
-		pl_status(world_places);
-		op_value *o = op_map();
-		op_set(o, "run", run_json(run));
-		return o;
-	}
 	if (strcmp(op, "mark") == 0) {
 		const op_value *names = op_get(r, "keys");
 		const void **ks = world_alloc((names->count + 1) * sizeof *ks);
@@ -548,17 +490,21 @@ static op_value *answer(const op_value *r) {
 	return NULL;
 }
 
-void hh_answer(const op_value *request, FILE *out) { world_line(request, out, answer); }
-
-void hh_finish(void) {
+void ph_finish(void) {
 	if (view != NULL) pl_free(view);
 	view = NULL;
-	crn_stop(runs);
 	world_finish();
-	crn_free(runs);
-	runs = NULL;
 	for (size_t i = 0; i < nkeys; i++) free(keys[i]);
 	free(keys);
 	for (size_t i = 0; i < nprograms; i++) free(programs[i]);
 	free(programs);
+	free(forms);
+	forms = NULL;
+	nforms = capforms = 0;
 }
+
+// a harness built on this one (PH_LIB) has its own loop
+#ifndef PH_LIB
+void hh_answer(const op_value *request, FILE *out) { world_line(request, out, ph_answer); }
+void hh_finish(void) { ph_finish(); }
+#endif

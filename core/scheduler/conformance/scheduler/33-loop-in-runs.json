@@ -1,7 +1,7 @@
 {
 	"title": "two computes each changing, in its run, what the other reads: the loop ends (proof C4)",
 	"steps": [
-		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
+		{ "op": "root", "name": "o", "info": { "actor": "test" }, "expect": {} },
 		{
 			"op": "compute",
 			"name": "x",

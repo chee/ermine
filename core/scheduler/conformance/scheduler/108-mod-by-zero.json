@@ -1,7 +1,7 @@
 {
 	"title": "a mod by 0 is an error",
 	"steps": [
-		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
+		{ "op": "root", "name": "o", "info": { "actor": "test" }, "expect": {} },
 		{ "op": "run", "scope": "o", "do": { "mod": [1, 0] }, "fails": true },
 		{ "op": "run", "scope": "o", "do": { "mod": [7, 3] }, "expect": { "value": 1 } }
 	]

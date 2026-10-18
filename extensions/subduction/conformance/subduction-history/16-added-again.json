@@ -26,7 +26,7 @@
 				"lamport": 1,
 				"patches": []
 			},
-			"name": "661d0cfadbdf40a607f481da708c88d4c993bbe87a81ddae9737fc1fea6775b5",
+			"name": "a5e697576391e5c5dbee7ea02487599b43fc68b35dfa4855c366cca2d65ef462",
 			"expect": {
 				"added": "taken"
 			}
@@ -50,14 +50,14 @@
 				"parents": [
 					{
 						"/": {
-							"bytes": "Zh0M+tvfQKYH9IHacIyI1MmTu+h6gd2ulzf8H+pndbU"
+							"bytes": "peaXV2OR5cXb7n6gJIdZm0P8aLNd+khVw2bMotZe9GI"
 						}
 					}
 				],
 				"lamport": 5,
 				"patches": []
 			},
-			"name": "67a16c69ca1e1db527f9b3b744fa2879de928700d1366b64b23860d4eb5ba784",
+			"name": "514e81c85d7e442da295ef585bdf91a93340537c1b9c09ec260410ec59aec5d7",
 			"expect": {
 				"added": {
 					"refused": "lamport"
@@ -83,14 +83,14 @@
 				"parents": [
 					{
 						"/": {
-							"bytes": "Zh0M+tvfQKYH9IHacIyI1MmTu+h6gd2ulzf8H+pndbU"
+							"bytes": "peaXV2OR5cXb7n6gJIdZm0P8aLNd+khVw2bMotZe9GI"
 						}
 					}
 				],
 				"lamport": 5,
 				"patches": []
 			},
-			"name": "67a16c69ca1e1db527f9b3b744fa2879de928700d1366b64b23860d4eb5ba784",
+			"name": "514e81c85d7e442da295ef585bdf91a93340537c1b9c09ec260410ec59aec5d7",
 			"expect": {
 				"added": {
 					"refused": "lamport"
@@ -116,18 +116,18 @@
 				"parents": [
 					{
 						"/": {
-							"bytes": "afZPdcFeuUM5XANUlG8zQrQV+RWeXvvWbPjftrkXDlY"
+							"bytes": "fYT7NRsLLvTcMXhThzMGdmgASbYlyUadxTrBq/qtfDU"
 						}
 					}
 				],
 				"lamport": 3,
 				"patches": []
 			},
-			"name": "f27f8e177cf367ce37313296134bdce06781113ba24f9a6a3c732227b6459949",
+			"name": "51f2643082a66f6727d40c1064e44106b19faa5fdb1e299ce3c9c5a84f6b113a",
 			"expect": {
 				"added": {
 					"waiting": [
-						"69f64f75c15eb943395c0354946f3342b415f9159e5efbd66cf8dfb6b9170e56"
+						"7d84fb351b0b2ef4dc31785387330676680049b625c9469dc53ac1abfaad7c35"
 					]
 				}
 			}
@@ -151,18 +151,18 @@
 				"parents": [
 					{
 						"/": {
-							"bytes": "afZPdcFeuUM5XANUlG8zQrQV+RWeXvvWbPjftrkXDlY"
+							"bytes": "fYT7NRsLLvTcMXhThzMGdmgASbYlyUadxTrBq/qtfDU"
 						}
 					}
 				],
 				"lamport": 3,
 				"patches": []
 			},
-			"name": "f27f8e177cf367ce37313296134bdce06781113ba24f9a6a3c732227b6459949",
+			"name": "51f2643082a66f6727d40c1064e44106b19faa5fdb1e299ce3c9c5a84f6b113a",
 			"expect": {
 				"added": {
 					"waiting": [
-						"69f64f75c15eb943395c0354946f3342b415f9159e5efbd66cf8dfb6b9170e56"
+						"7d84fb351b0b2ef4dc31785387330676680049b625c9469dc53ac1abfaad7c35"
 					]
 				}
 			}
@@ -186,18 +186,18 @@
 				"parents": [
 					{
 						"/": {
-							"bytes": "Z6FsacoeHbUn+bO3RPooed6ShwDRNmtksjhg1Otbp4Q"
+							"bytes": "UU6ByF1+RC2ile9YW9+RqTNAU3wbnAnsJgQQ7Fmuxdc"
 						}
 					}
 				],
 				"lamport": 6,
 				"patches": []
 			},
-			"name": "423d5ee0e943a4fdbb14439e80011395e19783a670d5d7aee8a115e446a2b7bb",
+			"name": "22bc11ca176046007224f9ad31e8ace6de9af0bbc0609eeb19152dcb02d3799f",
 			"expect": {
 				"added": {
 					"stuck": [
-						"67a16c69ca1e1db527f9b3b744fa2879de928700d1366b64b23860d4eb5ba784"
+						"514e81c85d7e442da295ef585bdf91a93340537c1b9c09ec260410ec59aec5d7"
 					]
 				}
 			}
@@ -221,18 +221,18 @@
 				"parents": [
 					{
 						"/": {
-							"bytes": "Z6FsacoeHbUn+bO3RPooed6ShwDRNmtksjhg1Otbp4Q"
+							"bytes": "UU6ByF1+RC2ile9YW9+RqTNAU3wbnAnsJgQQ7Fmuxdc"
 						}
 					}
 				],
 				"lamport": 6,
 				"patches": []
 			},
-			"name": "423d5ee0e943a4fdbb14439e80011395e19783a670d5d7aee8a115e446a2b7bb",
+			"name": "22bc11ca176046007224f9ad31e8ace6de9af0bbc0609eeb19152dcb02d3799f",
 			"expect": {
 				"added": {
 					"stuck": [
-						"67a16c69ca1e1db527f9b3b744fa2879de928700d1366b64b23860d4eb5ba784"
+						"514e81c85d7e442da295ef585bdf91a93340537c1b9c09ec260410ec59aec5d7"
 					]
 				}
 			}
@@ -256,12 +256,12 @@
 				"parents": [
 					{
 						"/": {
-							"bytes": "Z6FsacoeHbUn+bO3RPooed6ShwDRNmtksjhg1Otbp4Q"
+							"bytes": "RYSJT4LfD4dwT/UAY0G6SeNjFMWR/edUUJ96iv/QNO0"
 						}
 					},
 					{
 						"/": {
-							"bytes": "+IPE/Jx+QHKD37SVUK+d27xusGxpnL8xpmnrrLIhQuE"
+							"bytes": "UU6ByF1+RC2ile9YW9+RqTNAU3wbnAnsJgQQ7Fmuxdc"
 						}
 					}
 				],
@@ -269,15 +269,15 @@
 				"patches": [],
 				"base": {
 					"/": {
-						"bytes": "+IPE/Jx+QHKD37SVUK+d27xusGxpnL8xpmnrrLIhQuE"
+						"bytes": "RYSJT4LfD4dwT/UAY0G6SeNjFMWR/edUUJ96iv/QNO0"
 					}
 				}
 			},
-			"name": "cacf17eb40f9c0a4d27d4ae1394eeaff0b1fa29397e073a31701784ee23fed64",
+			"name": "1912f3af2d97cc5f1814a3afe4737d9309d45cb7475762b4c1f206bf7dbf863e",
 			"expect": {
 				"added": {
 					"stuck": [
-						"67a16c69ca1e1db527f9b3b744fa2879de928700d1366b64b23860d4eb5ba784"
+						"514e81c85d7e442da295ef585bdf91a93340537c1b9c09ec260410ec59aec5d7"
 					]
 				}
 			}
@@ -301,7 +301,7 @@
 				"parents": [
 					{
 						"/": {
-							"bytes": "Zh0M+tvfQKYH9IHacIyI1MmTu+h6gd2ulzf8H+pndbU"
+							"bytes": "peaXV2OR5cXb7n6gJIdZm0P8aLNd+khVw2bMotZe9GI"
 						}
 					}
 				],
@@ -315,7 +315,7 @@
 					}
 				]
 			},
-			"name": "f883c4fc9c7e407283dfb49550af9ddbbc6eb06c699cbf31a669ebacb22142e1",
+			"name": "4584894f82df0f87704ff5006341ba49e36314c591fde754509f7a8affd034ed",
 			"expect": {
 				"added": {
 					"refused": "patches"
@@ -341,12 +341,12 @@
 				"parents": [
 					{
 						"/": {
-							"bytes": "Z6FsacoeHbUn+bO3RPooed6ShwDRNmtksjhg1Otbp4Q"
+							"bytes": "RYSJT4LfD4dwT/UAY0G6SeNjFMWR/edUUJ96iv/QNO0"
 						}
 					},
 					{
 						"/": {
-							"bytes": "+IPE/Jx+QHKD37SVUK+d27xusGxpnL8xpmnrrLIhQuE"
+							"bytes": "UU6ByF1+RC2ile9YW9+RqTNAU3wbnAnsJgQQ7Fmuxdc"
 						}
 					}
 				],
@@ -354,16 +354,16 @@
 				"patches": [],
 				"base": {
 					"/": {
-						"bytes": "+IPE/Jx+QHKD37SVUK+d27xusGxpnL8xpmnrrLIhQuE"
+						"bytes": "RYSJT4LfD4dwT/UAY0G6SeNjFMWR/edUUJ96iv/QNO0"
 					}
 				}
 			},
-			"name": "cacf17eb40f9c0a4d27d4ae1394eeaff0b1fa29397e073a31701784ee23fed64",
+			"name": "1912f3af2d97cc5f1814a3afe4737d9309d45cb7475762b4c1f206bf7dbf863e",
 			"expect": {
 				"added": {
 					"stuck": [
-						"67a16c69ca1e1db527f9b3b744fa2879de928700d1366b64b23860d4eb5ba784",
-						"f883c4fc9c7e407283dfb49550af9ddbbc6eb06c699cbf31a669ebacb22142e1"
+						"4584894f82df0f87704ff5006341ba49e36314c591fde754509f7a8affd034ed",
+						"514e81c85d7e442da295ef585bdf91a93340537c1b9c09ec260410ec59aec5d7"
 					]
 				}
 			}
@@ -387,7 +387,7 @@
 				"parents": [
 					{
 						"/": {
-							"bytes": "Zh0M+tvfQKYH9IHacIyI1MmTu+h6gd2ulzf8H+pndbU"
+							"bytes": "peaXV2OR5cXb7n6gJIdZm0P8aLNd+khVw2bMotZe9GI"
 						}
 					}
 				],
@@ -401,7 +401,7 @@
 					}
 				]
 			},
-			"name": "f883c4fc9c7e407283dfb49550af9ddbbc6eb06c699cbf31a669ebacb22142e1",
+			"name": "4584894f82df0f87704ff5006341ba49e36314c591fde754509f7a8affd034ed",
 			"expect": {
 				"added": {
 					"refused": "patches"
@@ -427,14 +427,14 @@
 				"parents": [
 					{
 						"/": {
-							"bytes": "Zh0M+tvfQKYH9IHacIyI1MmTu+h6gd2ulzf8H+pndbU"
+							"bytes": "peaXV2OR5cXb7n6gJIdZm0P8aLNd+khVw2bMotZe9GI"
 						}
 					}
 				],
 				"lamport": 2,
 				"patches": []
 			},
-			"name": "69f64f75c15eb943395c0354946f3342b415f9159e5efbd66cf8dfb6b9170e56",
+			"name": "7d84fb351b0b2ef4dc31785387330676680049b625c9469dc53ac1abfaad7c35",
 			"expect": {
 				"added": "taken"
 			}
@@ -458,14 +458,14 @@
 				"parents": [
 					{
 						"/": {
-							"bytes": "afZPdcFeuUM5XANUlG8zQrQV+RWeXvvWbPjftrkXDlY"
+							"bytes": "fYT7NRsLLvTcMXhThzMGdmgASbYlyUadxTrBq/qtfDU"
 						}
 					}
 				],
 				"lamport": 3,
 				"patches": []
 			},
-			"name": "f27f8e177cf367ce37313296134bdce06781113ba24f9a6a3c732227b6459949",
+			"name": "51f2643082a66f6727d40c1064e44106b19faa5fdb1e299ce3c9c5a84f6b113a",
 			"expect": {
 				"added": "passed"
 			}
@@ -482,7 +482,7 @@
 			"expect": {
 				"heads": [
 					{
-						"name": "f27f8e177cf367ce37313296134bdce06781113ba24f9a6a3c732227b6459949",
+						"name": "51f2643082a66f6727d40c1064e44106b19faa5fdb1e299ce3c9c5a84f6b113a",
 						"blop": {
 							"node": "n",
 							"object": "value",
@@ -500,7 +500,7 @@
 							"parents": [
 								{
 									"/": {
-										"bytes": "afZPdcFeuUM5XANUlG8zQrQV+RWeXvvWbPjftrkXDlY"
+										"bytes": "fYT7NRsLLvTcMXhThzMGdmgASbYlyUadxTrBq/qtfDU"
 									}
 								}
 							],
@@ -516,25 +516,25 @@
 			"expect": {
 				"refused": [
 					{
-						"name": "423d5ee0e943a4fdbb14439e80011395e19783a670d5d7aee8a115e446a2b7bb",
+						"name": "1912f3af2d97cc5f1814a3afe4737d9309d45cb7475762b4c1f206bf7dbf863e",
 						"stuck": [
-							"67a16c69ca1e1db527f9b3b744fa2879de928700d1366b64b23860d4eb5ba784"
+							"4584894f82df0f87704ff5006341ba49e36314c591fde754509f7a8affd034ed",
+							"514e81c85d7e442da295ef585bdf91a93340537c1b9c09ec260410ec59aec5d7"
 						]
 					},
 					{
-						"name": "67a16c69ca1e1db527f9b3b744fa2879de928700d1366b64b23860d4eb5ba784",
-						"refused": "lamport"
-					},
-					{
-						"name": "cacf17eb40f9c0a4d27d4ae1394eeaff0b1fa29397e073a31701784ee23fed64",
+						"name": "22bc11ca176046007224f9ad31e8ace6de9af0bbc0609eeb19152dcb02d3799f",
 						"stuck": [
-							"67a16c69ca1e1db527f9b3b744fa2879de928700d1366b64b23860d4eb5ba784",
-							"f883c4fc9c7e407283dfb49550af9ddbbc6eb06c699cbf31a669ebacb22142e1"
+							"514e81c85d7e442da295ef585bdf91a93340537c1b9c09ec260410ec59aec5d7"
 						]
 					},
 					{
-						"name": "f883c4fc9c7e407283dfb49550af9ddbbc6eb06c699cbf31a669ebacb22142e1",
+						"name": "4584894f82df0f87704ff5006341ba49e36314c591fde754509f7a8affd034ed",
 						"refused": "patches"
+					},
+					{
+						"name": "514e81c85d7e442da295ef585bdf91a93340537c1b9c09ec260410ec59aec5d7",
+						"refused": "lamport"
 					}
 				]
 			}

@@ -69,8 +69,8 @@ static void make_computer(void *data) {
 	make *m = data;
 	int effect = strcmp(m->kind, "effect") == 0;
 	sc_def def = {.f = one, .set = effect ? NULL : nothing_set, .effect = effect ? nothing_effect : NULL};
-	if (m->wrapped) m->made = effect ? st_create_effect(sites, def) : st_create_computer(sites, def);
-	else m->made = effect ? sc_create_effect(scheduler, def) : sc_create_computer(scheduler, def);
+	if (m->wrapped) m->made = effect ? st_create_effect(sites, def, NULL, 0) : st_create_computer(sites, def, NULL, 0);
+	else m->made = effect ? sc_create_effect(scheduler, def, NULL, 0) : sc_create_computer(scheduler, def, NULL, 0);
 }
 
 void hh_answer(const op_value *r, FILE *out) {

@@ -239,12 +239,6 @@ static void write_native(void *ctx, const uint8_t *bytes, size_t n) {
 	PG_PUSH(wrote, nwrote, capwrote, w);
 }
 
-// places' node_of: the scope's node (the processes')
-static const char *scope_node(void *data, const sc_scope *o) {
-	(void)data;
-	return scope_nodes ? sn_node_of(scope_nodes, o) : NULL;
-}
-
 static void *create_api(const ps_context *c, void *data) {
 	(void)data;
 	api *a = pg_alloc(sizeof *a);
@@ -319,7 +313,7 @@ static hf_run runner(const op_value *code, void *api_, void *data) {
 		argwatch *w = pg_alloc(sizeof *w);
 		w->record = r, w->arg = i, w->api = a, w->name = r->names[i];
 		PG_PUSH(argwatches, nargwatches, capargwatches, w);
-		sc_create_computer(world_scheduler, (sc_def){.f = watch_f, .set = no_set, .data = w});
+		sc_create_computer(world_scheduler, (sc_def){.f = watch_f, .set = no_set, .data = w}, NULL, 0);
 	}
 	return (hf_run){.handle = {stop_runner, r->process}};
 }
@@ -849,7 +843,7 @@ void hh_answer(const op_value *request, FILE *out) {
 		root_walk[1] = &pl_children;
 		pl_connect(world_places, &(pl_setup){.root = tb_string("R"), .table = world_table,
 			.paths = world_paths, .scheduler = world_scheduler, .contributors = root_walk,
-			.ncontributors = 2, .node_of = scope_node});
+			.ncontributors = 2});
 		host_info = (sc_pair){"actor", op_str("test")};
 		world_host = sc_create_root_scope(world_scheduler, &host_info, 1);
 		scope_nodes = sn_new(world_scheduler, world_table);

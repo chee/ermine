@@ -1,5 +1,5 @@
 {
-	"title": "scope is a link (chee 10-17: \"it has to be a\"): a change's metadata is flat pairs, innermost first, up to the first scope with a node, then [\"node\", its id]. a process's write ends at the process's node (from a method's call too: its plain scope has no node, its caller pair rides along); a memo's own write ends at the memo's node, its run's pairs before it. a memo's or effect's node holds its scope once, as made: ermine.computer.scope, the node of the nearest scope above it with one: the process, or the memo whose run made it",
+	"title": "scope is a link (chee 10-17: \"it has to be a\"): a change's metadata is the levels merged, inner keys over outer, up to and with the first scope whose own info holds the \"node\" key. a process's scope holds its node's: its write ends there (from a method's call too: its plain scope has no node key, its caller key rides along); a memo or effect is made with {\"node\": its id}, so its own write is its info, run and mark among it. a memo's or effect's node holds its scope once, as made: ermine.computer.scope, the node id of the nearest scope above it with one: the process, or the memo whose run made it",
 	"steps": [
 		{
 			"op": "kids",
@@ -91,8 +91,8 @@
 			"id": "n1",
 			"expect": {
 				"keys": [
-					"process",
-					"node"
+					"node",
+					"process"
 				],
 				"node": "proc:p"
 			}
@@ -103,9 +103,9 @@
 			"id": "n2",
 			"expect": {
 				"keys": [
-					"run",
 					"mark",
-					"node"
+					"node",
+					"run"
 				],
 				"node": "n2"
 			}
@@ -116,9 +116,9 @@
 			"id": "n5",
 			"expect": {
 				"keys": [
-					"run",
 					"mark",
-					"node"
+					"node",
+					"run"
 				],
 				"node": "n5"
 			}
@@ -129,9 +129,9 @@
 			"id": "n4",
 			"expect": {
 				"keys": [
-					"run",
 					"mark",
-					"node"
+					"node",
+					"run"
 				],
 				"node": "n4"
 			}
@@ -230,9 +230,9 @@
 			"id": "n5",
 			"expect": {
 				"keys": [
-					"run",
 					"mark",
-					"node"
+					"node",
+					"run"
 				],
 				"node": "n5"
 			}
@@ -243,8 +243,8 @@
 			"id": "n1",
 			"expect": {
 				"keys": [
-					"process",
-					"node"
+					"node",
+					"process"
 				],
 				"node": "proc:p"
 			}
@@ -296,8 +296,8 @@
 			"expect": {
 				"keys": [
 					"caller",
-					"process",
-					"node"
+					"node",
+					"process"
 				],
 				"node": "proc:p"
 			}

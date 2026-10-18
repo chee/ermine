@@ -83,7 +83,9 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} requests against the model`, async (
 			if (pick(2)) header.time = pick(1 << 30)
 			if (pick(2)) header.actor = NAMES[pick(4)]
 			if (pick(3) === 0) {
-				header.metadata = Array.from({ length: pick(4) }, () => [NAMES[pick(2)], json(pick, 2)])
+				header.metadata = Object.fromEntries(
+					Array.from({ length: pick(4) }, () => [NAMES[pick(2)], json(pick, 2)]),
+				)
 			}
 			const sites: Site[] = []
 			for (let n = pick(3); n > 0; n--) {

@@ -1,32 +1,17 @@
-// boxes: a "/" of a process's own, a plain folder. chee 10-15: "a box should normally just be a
-// regular child actually placed where it's placed"; "if i box something in a folder that i share,
-// it's a choice i've made. i just don't want it seeing above that folder, it can look in that
-// folder and place stuff"; "often i'd be boxing in a new folder"
+// boxes: a "/" of a process's own, a plain folder placed as a regular child. what is boxed sees
+// nothing above that folder.
 //
-//   const host = { places, table, scheduler }            // the host's own (commit: none, places')
-//   const b = createBox(host, "somewhere/new-folder")      // made if missing: regular folders, saved
-//   box(b, ["loaders", "c"], "n:cc-wasm")                   // a regular placement in the folder
-//   get(b.places, ["loaders", "c"])                        // "n:cc-wasm"; lib.ts' reads, unchanged
+//   const host = { places, table, scheduler }
+//   const b = createBox(host, "somewhere/new-folder")   // made if missing: regular folders, saved
+//   box(b, ["loaders", "c"], "n:cc-wasm")                // a regular placement in the folder
+//   get(b.places, ["loaders", "c"])                      // "n:cc-wasm"; lib.ts' reads, unchanged
 //   unbox(b, ["loaders", "c"])
 //
-// a box is its folder's id (root) and a view of the host's places rooted there (places' view),
-// asked [processes(root), children]: the folder's saved names, and the processes started at root
-// (addProcess(table, b.root, ...)) seen at their path in it, the rows never saved. nothing more, so
-// any places rooted at the graph's root and asked the same stands in for one: the root is the
-// outermost box
-//
-// nothing above: no path from b.places' root reaches above it; lookup (lib.ts) goes from where you
-// are up to it and stops; an address's ".." at its "/" stays there (inside). what is in the box is
-// what is in the folder: ordinary children, so list, members, lookup, a path cache and tracking are
-// the ordinary children walk's, and the host sees all of it at the folder's path. one set of spots
-// with the host's places (view): a write committed to either tells the readers of both, and the
-// table's one hook (the host's) tells both
-//
-// writes go by saved children only (a process running at a path is not a folder to box in): the
-// folders on the way found, each missing one made (a new id placed as a regular child; the first in a
-// folder with no children entry: a table event), then committed by the host's commit. refused,
-// nothing changed: a name that is not one (not-a-name), a name holding something that is no id
-// (already-there)
+// a box: its folder's id (root) and a view of the host's places rooted there, asked
+// [processes(root), children]. the graph's root is the outermost box. ".." at its "/" stays there
+// (inside). writes through either places tell readers of both.
+// writes: saved children only; missing folders made, committed by the host. refused, nothing
+// changed: not-a-name, already-there (a name holding no id).
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
 import {
 	asId,
@@ -38,7 +23,7 @@ import {
 	PlacesError,
 	unplace,
 } from "@ermine/places"
-import { getWho } from "@ermine/places/header"
+import { getWho, type NodeOf } from "@ermine/places/header"
 import { parse } from "@ermine/places/path"
 import { processes } from "@ermine/processes"
 import { type Scheduler, SchedulerError } from "@ermine/scheduler"
@@ -49,9 +34,11 @@ import { capture } from "@ermine/util/stacktrace"
 export type Host = {
 	places: Places
 	table: Pick<Table, "get" | "add">
-	scheduler: Pick<Scheduler, "getInfo">
+	scheduler: Pick<Scheduler, "getCurrentScope">
 	// where its writes are said written; none: places.commit
 	commit?: (changed: readonly Entry<unknown>[]) => void
+	// the node a scope has (places' header.ts); none: no scope has one
+	nodeOf?: NodeOf
 }
 
 export type Box = {
@@ -142,7 +129,7 @@ export function unbox(somebox: Box, path: Address, header?: ChangeHeader): Entry
 	}
 	const kids = host.table.get("children", at) as Entry<unknown> | undefined
 	if (kids === undefined) throw new PlacesError("nothing-there", names[names.length - 1])
-	const changed = unplace(kids, names[names.length - 1], header ?? headerOf(host.scheduler, unbox))
+	const changed = unplace(kids, names[names.length - 1], header ?? headerOf(host, unbox))
 	said(host, changed)
 	return changed
 }
@@ -185,7 +172,7 @@ function land(
 	const changed: Entry<unknown>[] = []
 	if (k === names.length) return { id: at, changed }
 	for (const name of names.slice(k)) if (bad(name)) throw new PlacesError("not-a-name", name)
-	const h = header ?? headerOf(host.scheduler, entry)
+	const h = header ?? headerOf(host, entry)
 	for (; k < names.length; k++) {
 		const id = leaf !== undefined && k === names.length - 1 ? leaf : crypto.randomUUID()
 		const kids = host.table.get("children", at) as Entry<unknown> | undefined
@@ -206,8 +193,8 @@ function said(host: Host, changed: readonly Entry<unknown>[]) {
 // core candidate (places' header.ts): createChangeHeader taking the function called, so a site
 // is the caller's of a wrapper like this one
 const ours = new Set([import.meta.url])
-function headerOf(s: Pick<Scheduler, "getInfo">, entry: unknown): ChangeHeader {
-	const who = getWho(s)
+function headerOf(host: Host, entry: unknown): ChangeHeader {
+	const who = getWho(host.scheduler, [], host.nodeOf)
 	if (who === undefined) throw new SchedulerError("unscoped", "a write with no scope open")
 	const h: ChangeHeader = { ...who, time: Math.floor(Date.now() / 1000) }
 	const site = capture(ours, entry)

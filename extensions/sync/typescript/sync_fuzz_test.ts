@@ -66,11 +66,13 @@ function rng(seed: number) {
 type R = ReturnType<typeof rng>
 const pick = <T>(r: R, xs: readonly T[]): T => xs[r(xs.length)]
 
-// ---- values exactly: -0, typed arrays; maps by content (a map's key order is not part of its
-// value: op's apply.ts; what crosses a commit, canonical CBOR, has its keys in canonical order)
+// ---- values exactly: typed arrays (a float's -0 kept); maps by content (a map's key order is not
+// part of its value: op's apply.ts; what crosses a commit, canonical CBOR, has its keys in
+// canonical order). a number's -0 is 0 (whole numbers are integers, cbor.ts): the host that
+// wrote it may still hold -0 in memory, every other has 0
 
 function exact(a: unknown, b: unknown, at = "$"): string | undefined {
-	if (Object.is(a, b)) return
+	if (Object.is(a, b) || (a === 0 && b === 0)) return
 	if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) {
 		return `${at}: ${show(a)} ≠ ${show(b)}`
 	}

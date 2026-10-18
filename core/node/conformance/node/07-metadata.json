@@ -1,51 +1,23 @@
 {
-	"title": "metadata: entries kept as given, in order, repeats kept, any value",
+	"title": "metadata: an object, its keys kept as given, any value",
 	"steps": [
 		{
 			"op": "entry",
 			"header": {
 				"time": 1,
-				"metadata": [
-					[
-						"a",
-						1
-					],
-					[
-						"b",
-						"two"
-					],
-					[
-						"a",
-						1
-					],
-					[
-						"a",
-						3
-					]
-				]
+				"metadata": {
+					"a": 1,
+					"b": "two"
+				}
 			},
 			"expect": {
 				"entry": {
 					"change": {
 						"time": 1,
-						"metadata": [
-							[
-								"a",
-								1
-							],
-							[
-								"b",
-								"two"
-							],
-							[
-								"a",
-								1
-							],
-							[
-								"a",
-								3
-							]
-						]
+						"metadata": {
+							"a": 1,
+							"b": "two"
+						}
 					}
 				}
 			}
@@ -53,67 +25,43 @@
 		{
 			"op": "entry",
 			"header": {
-				"metadata": [
-					[
-						"z",
-						null
-					],
-					[
-						"y",
-						[
-							1,
-							{
-								"k": true
-							}
-						]
-					],
-					[
-						"x",
+				"metadata": {
+					"z": null,
+					"y": [
+						1,
 						{
-							"n": [
-								0.5,
-								"é 🦊"
-							]
+							"k": true
 						}
 					],
-					[
-						"",
-						""
-					]
-				]
+					"x": {
+						"n": [
+							0.5,
+							"é 🦊"
+						]
+					},
+					"": ""
+				}
 			},
 			"expect": {
 				"entry": {
 					"change": {
 						"time": "now",
-						"metadata": [
-							[
-								"z",
-								null
-							],
-							[
-								"y",
-								[
-									1,
-									{
-										"k": true
-									}
-								]
-							],
-							[
-								"x",
+						"metadata": {
+							"z": null,
+							"y": [
+								1,
 								{
-									"n": [
-										0.5,
-										"é 🦊"
-									]
+									"k": true
 								}
 							],
-							[
-								"",
-								""
-							]
-						]
+							"x": {
+								"n": [
+									0.5,
+									"é 🦊"
+								]
+							},
+							"": ""
+						}
 					}
 				}
 			}
@@ -121,13 +69,13 @@
 		{
 			"op": "entry",
 			"header": {
-				"metadata": []
+				"metadata": {}
 			},
 			"expect": {
 				"entry": {
 					"change": {
 						"time": "now",
-						"metadata": []
+						"metadata": {}
 					}
 				}
 			}
@@ -137,24 +85,18 @@
 			"header": {
 				"time": 2,
 				"actor": "me",
-				"metadata": [
-					[
-						"why",
-						"because"
-					]
-				]
+				"metadata": {
+					"why": "because"
+				}
 			},
 			"expect": {
 				"entry": {
 					"change": {
 						"time": 2,
 						"actor": "me",
-						"metadata": [
-							[
-								"why",
-								"because"
-							]
-						]
+						"metadata": {
+							"why": "because"
+						}
 					}
 				}
 			}

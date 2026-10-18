@@ -127,16 +127,16 @@ void cf_put_commit(FILE *out, const cm_commit *c, cf_name name, void *context) {
 		fputc(']', out);
 	}
 	if (h->metadata != NULL) {
-		fputs(",\"metadata\":[", out);
+		// a map; one whose one key is "/": {"/": {"map": it}} (form.ts)
+		bool slash = h->metadata_length == 1 && strcmp(h->metadata[0].key, "/") == 0;
+		fputs(slash ? ",\"metadata\":{\"/\":{\"map\":{" : ",\"metadata\":{", out);
 		for (size_t i = 0; i < h->metadata_length; i++) {
 			if (i) fputc(',', out);
-			fputc('[', out);
 			op_json_string(out, h->metadata[i].key);
-			fputc(',', out);
+			fputc(':', out);
 			op_json_write(out, h->metadata[i].value);
-			fputc(']', out);
 		}
-		fputc(']', out);
+		fputs(slash ? "}}}" : "}", out);
 	}
 	fprintf(out, ",\"time\":%lld,\"signer\":", (long long)h->time);
 	cf_put_hex(out, c->signer, c->signer_length);

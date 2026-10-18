@@ -74,7 +74,7 @@ function streams(seed: number, o: { wild: boolean }): Request[][] {
 		const r: Request = { op: "update", patches: formPatches(ps) }
 		const h = pick(4)
 		if (h === 0) r.header = {}
-		else if (h === 1) r.header = { time: 2 + step, actor: { step }, metadata: [["s", step]] }
+		else if (h === 1) r.header = { time: 2 + step, actor: { step }, metadata: { s: step } }
 		if (o.wild && pick(8) === 0) {
 			out.push(
 				[{ op: "update" }, { op: "update", patches: {} }, {

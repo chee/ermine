@@ -1,11 +1,11 @@
 {
 	"title": "disposing a scope takes everything under it: children first, newest first, then its cleanups, newest first",
 	"steps": [
-		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
-		{ "op": "scope", "name": "p", "parent": "o", "info": [["why", "p"]], "expect": {} },
+		{ "op": "root", "name": "o", "info": { "actor": "test" }, "expect": {} },
+		{ "op": "scope", "name": "p", "parent": "o", "info": { "why": "p" }, "expect": {} },
 		{ "op": "cleanup", "scope": "o", "do": { "log": "o1" }, "expect": {} },
 		{ "op": "compute", "name": "c", "scope": "p", "f": { "read": "x" }, "to": "c", "expect": {} },
-		{ "op": "scope", "name": "g", "parent": "p", "info": [["why", "g"]], "expect": {} },
+		{ "op": "scope", "name": "g", "parent": "p", "info": { "why": "g" }, "expect": {} },
 		{ "op": "cleanup", "scope": "g", "do": { "log": "g" }, "expect": {} },
 		{
 			"op": "effect",
@@ -17,7 +17,7 @@
 		},
 		{ "op": "cleanup", "scope": "p", "do": { "log": "p" }, "expect": {} },
 		{ "op": "cleanup", "scope": "o", "do": { "log": "o2" }, "expect": {} },
-		{ "op": "scope", "name": "q", "parent": "o", "info": [["why", "q"]], "expect": {} },
+		{ "op": "scope", "name": "q", "parent": "o", "info": { "why": "q" }, "expect": {} },
 		{ "op": "cleanup", "scope": "q", "do": { "log": "q" }, "expect": {} },
 		{ "op": "write", "values": { "x": 1 }, "expect": { "tick": 3 } },
 		{ "op": "pulse", "expect": {} },
@@ -73,7 +73,7 @@
 			"op": "scope",
 			"name": "r",
 			"parent": "o",
-			"info": [["why", "r"]],
+			"info": { "why": "r" },
 			"expect": { "error": "disposed" }
 		},
 		{ "op": "compute", "name": "c2", "scope": "p", "f": 1, "expect": { "error": "disposed" } },

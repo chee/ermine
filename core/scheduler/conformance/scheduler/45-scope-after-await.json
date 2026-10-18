@@ -1,7 +1,7 @@
 {
 	"title": "after an await nothing is open: making a scope there is unscoped, and the run fails",
 	"steps": [
-		{ "op": "root", "name": "o", "info": [["actor", "notes"]], "expect": {} },
+		{ "op": "root", "name": "o", "info": { "actor": "notes" }, "expect": {} },
 		{
 			"op": "compute",
 			"name": "c",
@@ -9,7 +9,7 @@
 			"f": {
 				"wait": [
 					"p",
-					{ "do": [{ "log": { "current": null } }, { "scope": ["k", [["why", "late"]]] }] }
+					{ "do": [{ "log": { "current": null } }, { "scope": ["k", { "why": "late" }] }] }
 				]
 			},
 			"to": "c",

@@ -148,12 +148,15 @@ static int header(Json *c, ch_header *h) {
 		h->external_length = n;
 	}
 	if (metadata != NULL) {
-		size_t n = (size_t)(*metadata)->array.count;
+		// a map, in its JSON form as a whole
+		if (!jsonDecode(metadata) || !jsonIsObject(*metadata)) return 0;
+		size_t n = (size_t)(*metadata)->object.count;
 		ch_entry *es = take((n + 1) * sizeof *es);
 		for (size_t i = 0; i < n; i++) {
-			Json *e = (*metadata)->array.items[i];
-			es[i].key = jsonText(e->array.items[0]);
-			if ((es[i].value = value_of(&e->array.items[1])) == NULL) return 0;
+			const JsonMember *m = &(*metadata)->object.members[i];
+			es[i].key = m->key;
+			if ((es[i].value = pk_of_json(m->value)) == NULL) return 0;
+			keep(&values, (void *)es[i].value);
 		}
 		h->metadata = es;
 		h->metadata_length = n;
@@ -231,14 +234,10 @@ static Json *show_node(const nd_entry *n) {
 		jsonAdd(c, "external", sites);
 	}
 	if (h->metadata) {
-		Json *entries = jsonArray();
-		for (size_t i = 0; i < h->metadata_length; i++) {
-			Json *entry = jsonArray();
-			jsonPush(entry, jsonString(h->metadata[i].key));
-			jsonPush(entry, pk_to_json(h->metadata[i].value));
-			jsonPush(entries, entry);
-		}
-		jsonAdd(c, "metadata", entries);
+		Json *map = jsonObject();
+		for (size_t i = 0; i < h->metadata_length; i++)
+			jsonAdd(map, h->metadata[i].key, pk_to_json(h->metadata[i].value));
+		jsonAdd(c, "metadata", map);
 	}
 	if (h->has_op) {
 		Json *op = jsonObject();

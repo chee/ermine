@@ -4,12 +4,7 @@
 		{
 			"op": "root",
 			"name": "o",
-			"info": [
-				[
-					"actor",
-					"test"
-				]
-			],
+			"info": { "actor": "test" },
 			"expect": {}
 		},
 		{
@@ -30,12 +25,7 @@
 					{
 						"scope": [
 							"r",
-							[
-								[
-									"why",
-									"run"
-								]
-							]
+							{ "why": "run" }
 						]
 					},
 					{
@@ -69,12 +59,7 @@
 					{
 						"scope": [
 							"t",
-							[
-								[
-									"why",
-									"act"
-								]
-							]
+							{ "why": "act" }
 						]
 					},
 					{

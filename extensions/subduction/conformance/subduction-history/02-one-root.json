@@ -33,7 +33,7 @@
 					}
 				]
 			},
-			"name": "6a3017468ead127d08b94b37b01533ddf4595d18ceeb09d3881b47aabc1fdd84",
+			"name": "9760d1e1a0efc28d572bdd6934416a609b80f22b0f96a4d4b8a63c2cdcf5b980",
 			"expect": {
 				"added": "taken"
 			}
@@ -44,7 +44,7 @@
 			"expect": {
 				"heads": [
 					{
-						"name": "6a3017468ead127d08b94b37b01533ddf4595d18ceeb09d3881b47aabc1fdd84",
+						"name": "9760d1e1a0efc28d572bdd6934416a609b80f22b0f96a4d4b8a63c2cdcf5b980",
 						"blop": {
 							"node": "n",
 							"object": "value",
@@ -76,7 +76,7 @@
 		},
 		{
 			"op": "get",
-			"name": "6a3017468ead127d08b94b37b01533ddf4595d18ceeb09d3881b47aabc1fdd84",
+			"name": "9760d1e1a0efc28d572bdd6934416a609b80f22b0f96a4d4b8a63c2cdcf5b980",
 			"expect": {
 				"blop": {
 					"node": "n",

@@ -1,7 +1,7 @@
 {
 	"title": "a compute returning pending: its run ends pending, nothing given to set",
 	"steps": [
-		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
+		{ "op": "root", "name": "o", "info": { "actor": "test" }, "expect": {} },
 		{
 			"op": "compute",
 			"name": "c",

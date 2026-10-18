@@ -47,14 +47,14 @@
 			"patches": [
 				{
 					"path": [],
-					"value": 188
+					"value": 65
 				}
 			],
 			"actor": "a",
-			"nonce": "000000bd00000000",
+			"nonce": "0000004200000000",
 			"layer": "ephemeral",
 			"expect": {
-				"name": "a3b8fb469d91d22e5b95aafa333e67da1edae785995f46432691feb6a17890b7"
+				"name": "fe0cdc6f428ff25abc2931c5e979e21f7adaa188b601d58ee30793d751dad9fc"
 			}
 		},
 		{
@@ -65,14 +65,14 @@
 			"patches": [
 				{
 					"path": [],
-					"value": 189
+					"value": 66
 				}
 			],
 			"actor": "a",
-			"nonce": "000000be00000000",
+			"nonce": "0000004300000000",
 			"layer": "ephemeral",
 			"expect": {
-				"name": "06185dbb67f6c55c0630c077bcf082787c88a84222a4721f488f7221270daa43"
+				"name": "57c9361846b118acbd58386dd89ced7f062291eb64d44df80f07ecf33d3c1500"
 			}
 		},
 		{
@@ -86,7 +86,7 @@
 			"layer": "ephemeral",
 			"expect": {
 				"heads": [
-					"06185dbb67f6c55c0630c077bcf082787c88a84222a4721f488f7221270daa43"
+					"57c9361846b118acbd58386dd89ced7f062291eb64d44df80f07ecf33d3c1500"
 				],
 				"history": {
 					"waiting": [],
@@ -105,7 +105,7 @@
 			"layer": "ephemeral",
 			"expect": {
 				"heads": [
-					"06185dbb67f6c55c0630c077bcf082787c88a84222a4721f488f7221270daa43"
+					"57c9361846b118acbd58386dd89ced7f062291eb64d44df80f07ecf33d3c1500"
 				],
 				"history": {
 					"waiting": [],
