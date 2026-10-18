@@ -1,31 +1,17 @@
 // protect: may this actor do this to that, at this version? an answer, never an effect: protect
-// stops nothing and keeps nothing. whoever asks (handle, sync, a host) decides what an answer does
+// stops and keeps nothing; whoever asks decides what an answer does.
 //
-// an ask is five things:
-//   who: the change being made, or asked for: a whole ChangeHeader (time, actor, reader, external,
-//     metadata), so a policy sees the caller and whoever defined what it calls, wherever the
-//     header puts them. opaque: protect never looks inside it, a policy does
-//   op: what for. any string, an open set (read, edit, execute, relay, share, place, ...): protect
-//     knows none of them, a policy matches the ones it means
-//   target: what on, a node or one field of it (below)
-//   from: the place the asker is at: its path and route, as a target's are (a process: where its
-//     node is placed). none: it is at none (the host, outside any process)
-//   at: the version the question is asked at. opaque, passed to the policy and to every read it
-//     makes (the reader's last argument), so what a version means is the reader's. none: now
+// an ask:
+//   who     the ChangeHeader being made or asked for; opaque to protect, a policy looks inside
+//   op      any string (read, edit, execute, relay, share, place, ...); protect knows none
+//   target  a node or a field: { part?, id, field?, path?, route? }; route[i] the id at each path
+//           step, route[0] the start (length path.length + 1)
+//   from    the asker's place (path, route); none: the host, outside any process
+//   at      the version, opaque, passed to the policy and its every read; none: now
 //
-// a target says as much as the asker knows. id: the node, with part when it is one of the
-// table's. field: steps into its value (none: the whole node). path: names from a start, when
-// it was asked by path; route: the id reached at each step of it, route[0] the start, so a
-// policy sees what the path went through (route.length is path.length + 1)
-//
-// a policy decides, and reads what it needs through the read it is given: that read is the asker's
-// own, so what a policy reads is tracked as the asker's reads are, and a change to it asks again.
-// a read of what is not there (not loaded yet, or never made) is undefined: a policy that needs it
-// answers pending
-//
-// answers: yes; no, with a reason; pending, with what it waits for (opaque). always at once: a
-// policy that cannot decide yet answers pending, having read the node its answer will arrive in
-// (an access node), so the asker is asked again when it changes
+// a policy reads through the asker's own read, so a change to what it read asks again. a read of
+// what is not there is undefined. answers, always at once: yes | no with a reason | pending with
+// what it waits for (having read the node the answer will arrive in)
 import type { Key as Step } from "@ermine/op/apply"
 
 export type Key = string | symbol
@@ -119,12 +105,19 @@ export type Where = { part: string; id: Key }
 //   from: a start of the asker's place's path
 //   field: a start of the target's field
 //   deny: true: a match is a no, and beats any yes
+// a grant with any other field, or a field of the wrong kind (op, id: a string; path, from,
+// field: a list; deny: a boolean), makes the whole node answer no, naming it: a misspelt field
+// must never widen. entries that are not maps are skipped.
 // a match: yes; no match: no. the node not there: pending, waiting for [part, id]
 export function grants(where: Where): Policy {
 	return (ask, read) => {
 		const rules = read(where.part, where.id)
 		if (rules === undefined) return pending([where.part, where.id])
 		if (!Array.isArray(rules)) return no("rules are not a list")
+		for (let i = 0; i < rules.length; i++) {
+			const bad = isMap(rules[i]) ? malformed(rules[i]) : undefined
+			if (bad !== undefined) return no(`bad grant ${i}: ${bad}`)
+		}
 		let allowed = false
 		for (const g of rules) {
 			if (!isMap(g) || !matches(g, ask)) continue
@@ -132,6 +125,31 @@ export function grants(where: Where): Policy {
 			allowed = true
 		}
 		return allowed ? yes : no("no grant")
+	}
+}
+
+// the first field of a grant that is not known, or of the wrong kind
+function malformed(g: Record<string, unknown>): string | undefined {
+	for (const [k, v] of Object.entries(g)) {
+		switch (k) {
+			case "actor":
+			case "reader":
+				break
+			case "op":
+			case "id":
+				if (typeof v !== "string") return k
+				break
+			case "path":
+			case "from":
+			case "field":
+				if (!Array.isArray(v)) return k
+				break
+			case "deny":
+				if (typeof v !== "boolean") return k
+				break
+			default:
+				return k
+		}
 	}
 }
 
