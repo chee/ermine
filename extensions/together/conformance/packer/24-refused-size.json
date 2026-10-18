@@ -1,5 +1,5 @@
 {
-	"title": "a run whose commits come to more than 64 times its own bytes and a MiB is refused (size) as it is read, before they are all made: a value the same on every commit is written once, but made for each",
+	"title": "a pack whose commits come to more than 64 times its own bytes and a MiB is refused (size) as it is read, before they are all made: a value the same on every commit is written once, but made for each",
 	"steps": [
 		{
 			"op": "unpack",

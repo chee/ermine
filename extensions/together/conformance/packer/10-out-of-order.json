@@ -1,5 +1,5 @@
 {
-	"title": "a commit before its parent in the run names its parent by name, never by a place after its own",
+	"title": "a commit before its parent in the pack names its parent by name, never by a place after its own",
 	"steps": [
 		{
 			"op": "make",

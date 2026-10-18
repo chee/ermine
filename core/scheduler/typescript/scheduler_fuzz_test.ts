@@ -7,10 +7,13 @@
 //     acted on last, with that value and the last as previous; at an act, every compute already
 //     has the model's value (no half-updated state, diamonds included)
 //   - set is never given a value equal to the last (the cut off stops there)
-//   - a run starts only for a reason: new, its last run stopped, or a key its last run read was
+//   - a run starts only for a reason: new, its last run stopped, or a key it still tracked was
 //     said changed since that run began
-//   - the tracker: every live computation's reads are its last run's keys, in first-read order;
-//     both lists of every link agree; a disposed computation holds no links
+//   - a run starts at a rank above every compute whose key its last run (not stopped) read
+//   - the tracker: every live computation's reads are its last run's keys, in first-read order,
+//     when that run was done; else those, then the old ones (a run not done holds what it did
+//     not reach), no repeats among the old; both lists of every link agree; a
+//     disposed computation holds no links
 // a few dozen seeds (fuzz runs small)
 import { assert, assertEquals } from "@std/assert"
 import { type Computer, createScheduler, type Run, type Scope } from "./scheduler.ts"
@@ -91,8 +94,16 @@ type Made = {
 	kind: "compute" | "effect"
 	e: Expr
 	c: Computer
-	// its runs: the one going on or last, and the one before
-	run?: { tick: number; reads: Set<string>; ended?: string }
+	// its runs: the one going on or last, and the one before. sources: the computes whose key it
+	// read once they had written it
+	run?: { tick: number; reads: Set<string>; sources: Set<Made>; ended?: string }
+	// the keys it tracks since its last run ended: a done run's reads; else those and the old
+	held: Set<string>
+	// the sources of its last run not stopped (the order's edges), and its rank at its last start
+	edges: Set<Made>
+	rank: number
+	// a compute's: its set has written its key
+	wrote: boolean
 	// an effect's: the value acted on last
 	acted?: { value: Value }
 }
@@ -113,7 +124,7 @@ function readersOf(node: Node<unknown>, at: string): Link<unknown>[] {
 	assert(node.last === before, `${at}: the readers' last`)
 	return out
 }
-function readsOf(node: Node<unknown>, at: string): Link<unknown>[] {
+function readsOf(node: Node<unknown>, at: string, done: boolean): Link<unknown>[] {
 	const out: Link<unknown>[] = []
 	let prev: Link<unknown> | null = null
 	for (let l = node.reads; l !== null; l = l.next) {
@@ -122,9 +133,9 @@ function readsOf(node: Node<unknown>, at: string): Link<unknown>[] {
 		out.push(l)
 		prev = l
 	}
-	// outside a run: the cursor is the last link
-	assert(node.cursor === prev, `${at}: the cursor`)
-	assertEquals(node.gen, 0, `${at}: gen outside a run`)
+	// outside a run, after a run done: the cursor is the last link
+	if (done) assert(node.cursor === prev, `${at}: the cursor`)
+	assertEquals(node.open, false, `${at}: open outside a run`)
 	return out
 }
 
@@ -210,10 +221,12 @@ function seeded(seed: number, reach: Reach) {
 		const keys = [...HOST, ...made.filter((m) => m.kind === "compute").map((m) => m.name)]
 		const e = expr(r, keys, 2 + r.pick(2))
 		const o = r.one(scopes.filter((o) => o.state === "alive"))
-		const m = { name, kind, e } as Made
+		const m = { name, kind, e, held: new Set(), edges: new Set(), rank: 0, wrote: false } as Made
 		const f = () =>
 			evaluate(e, (key) => {
 				m.run!.reads.add(key)
+				const y = made.find((x) => x.name === key)
+				if (y?.wrote) m.run!.sources.add(y)
 				s.track(key)
 				return store.get(key)
 			})
@@ -225,6 +238,7 @@ function seeded(seed: number, reach: Reach) {
 					}
 					store.set(name, v)
 					changed([name], m.c)
+					m.wrote = true
 				}))
 		} else {
 			m.c = s.runWithScope(
@@ -262,14 +276,25 @@ function seeded(seed: number, reach: Reach) {
 				const x = byComputation.get(m.starts)!
 				const last = x.run
 				if (last && last.ended !== "stopped") {
-					const why = [...last.reads].some((k) => (changedAt.get(k) ?? 0) > last.tick)
+					const why = [...x.held].some((k) => (changedAt.get(k) ?? 0) > last.tick)
 					if (!why) problems.push(`${at}: ${x.name} ran for no reason`)
 				}
-				x.run = { tick, reads: new Set() }
+				// above what it is after (the graph here has no cycles)
+				for (const y of x.edges) {
+					if (alive(y) && m.rank <= y.rank) {
+						problems.push(
+							`${at}: ${x.name} at rank ${m.rank}, not above ${y.name}'s ${y.rank}`,
+						)
+					}
+				}
+				x.rank = m.rank
+				x.run = { tick, reads: new Set(), sources: new Set() }
 				reach.runs++
 			} else if ("ends" in m) {
 				const x = byComputation.get(m.ends)!
 				x.run!.ended = m.ended
+				x.held = m.ended === "done" ? new Set(x.run!.reads) : x.held.union(x.run!.reads)
+				if (m.ended !== "stopped") x.edges = x.run!.sources
 				if (m.ended === "done" && m.equal) reach.cut++
 				if (m.ended === "failed") reach.failed++
 			}
@@ -304,7 +329,7 @@ function seeded(seed: number, reach: Reach) {
 		// the tracker: reads are the last run's, in order; both lists agree
 		for (const m of made) {
 			const node = m.c.node
-			const links = readsOf(node, `${at}: ${m.name}`)
+			const links = readsOf(node, `${at}: ${m.name}`, m.run?.ended === "done")
 			if (!alive(m)) {
 				assertEquals(links.length, 0, `${at}: ${m.name} disposed, still reading`)
 				continue
@@ -312,11 +337,24 @@ function seeded(seed: number, reach: Reach) {
 			assert(m.run?.ended !== undefined && m.run.ended !== "stopped", `${at}: ${m.name}`)
 			// a key met again in order after a new link to it was made keeps both (as the
 			// tracker's model does): once each, the keys are the run's, in first-read order
+			const reads = [...m.run!.reads]
 			assertEquals(
-				[...new Set(links.map((l) => l.to.owner))],
-				[...m.run!.reads],
+				[...new Set(links.map((l) => l.to.owner))].slice(0, reads.length),
+				reads,
 				`${at}: ${m.name}'s reads`,
 			)
+			assertEquals(
+				new Set(links.map((l) => l.to.owner)),
+				m.held,
+				`${at}: ${m.name}'s keys held`,
+			)
+			// after the cursor: old, each once, none read again
+			const old: unknown[] = []
+			for (let l = node.cursor ? node.cursor.next : node.reads; l !== null; l = l.next) {
+				old.push(l.to.owner)
+			}
+			assertEquals(new Set(old).size, old.length, `${at}: ${m.name} holds a key twice`)
+			for (const k of old) assert(!m.run!.reads.has(k as string), `${at}: ${m.name} holds ${k}`)
 			for (const l of links) {
 				const key = l.to.owner as string
 				if (!keyNodes.has(key)) keyNodes.set(key, new Set())
@@ -333,7 +371,7 @@ function seeded(seed: number, reach: Reach) {
 			}
 			assert(read <= 1, `${at}: ${key} read through ${read} nodes`)
 			for (const x of readers) assert(alive(x), `${at}: ${key} read by ${x.name}, disposed`)
-			const want = made.filter((x) => alive(x) && x.run!.reads.has(key))
+			const want = made.filter((x) => alive(x) && x.held.has(key))
 			assertEquals(
 				[...new Set(readers.map((x) => x.name))].sort(),
 				want.map((x) => x.name).sort(),
@@ -387,8 +425,8 @@ Deno.test(`scheduler fuzz: ${SEEDS} seeds × ${STEPS} steps, against a model, th
 // async computes whose promises settle while they are due again and write after their await
 // (with by, or as from outside), computations disposed by their own cleanups. checked after every
 // pulse: it ended (past BOUND runs the hook throws), it left nothing due (another pulse runs
-// nothing), no f, set or act was called for a computation gone, and an effect's runs pile
-// nothing up under it. a few dozen seeds (fuzz runs small)
+// nothing), no f, set or act was called for a computation gone, no effect acted while due again
+// (its value old), and an effect's runs pile nothing up under it. a few dozen seeds (fuzz runs small)
 const LOOP_SEEDS = 40
 const LOOP_STEPS = 15
 const BOUND = 5000
@@ -401,7 +439,19 @@ async function loops(seed: number, reach: Loops) {
 	const at = (s: string) => `loops seed ${seed}, ${s}`
 	let runs = 0
 	const s = createScheduler()
-	s.onRunStart(() => {
+	// the computations made due since they last started
+	const due = new Set<Computer>()
+	// a mark made with c or a scope under it open (its last act's cleanups, going just before its
+	// act) is left out: 34 and 48 pin that it acts then
+	const inside = (c: Computer) => {
+		for (let o = s.getCurrentScope(); o !== undefined; o = o.parent) if (o === c) return true
+		return false
+	}
+	s.onMark((_keys, _run, now) => {
+		for (const c of now) due.add(c)
+	})
+	s.onRunStart((c) => {
+		due.delete(c)
 		if (++runs > BOUND) throw new Error(at(`a pulse past ${BOUND} runs`))
 		reach.runs++
 	})
@@ -512,6 +562,7 @@ async function loops(seed: number, reach: Loops) {
 				return sum(s.track, ins)
 			}, (v) => {
 				called(c, "act")
+				if (due.has(c)) problems.push(`act of ${c.n}, due again`)
 				write(other, (v + 1) % 5, c)
 				if (p.makes && make(c, p.makes)) reach.made++
 			})

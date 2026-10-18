@@ -217,6 +217,7 @@ async function answer(r: Request): Promise<Answer> {
 			else {
 				const o: Record<string, cbor.Value> = r.form === "members"
 					? { members: seals }
+					// "run": the blob's key, kept as stored
 					: { run: pack(seals) }
 				if (r.tables !== undefined) o.snapshot = snapshot(revive(r.tables) as Tables)
 				blob = cbor.encode(o)
@@ -299,6 +300,7 @@ async function answer(r: Request): Promise<Answer> {
 			const all = await d.storage.loadAllFragments(tree) as sd.FragmentWithBlob[]
 			const f = all.find((f) => hex(f.signed.payload.head.toBytes()) === head)
 			if (f === undefined) return {}
+			// "run": the blob's key, kept as stored
 			const o = cbor.decode(f.blob) as { run: Uint8Array; snapshot?: Uint8Array }
 			const out: Answer = { members: unpack(o.run).map((u) => label(u.stored)) }
 			if (o.snapshot !== undefined) out.snapshot = tablesJson(tablesOf(o.snapshot))

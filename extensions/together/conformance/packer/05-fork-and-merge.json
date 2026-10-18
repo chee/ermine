@@ -1,5 +1,5 @@
 {
-	"title": "a fork and a merge: parents and base by their place in the run",
+	"title": "a fork and a merge: parents and base by their place in the pack",
 	"steps": [
 		{
 			"op": "make",

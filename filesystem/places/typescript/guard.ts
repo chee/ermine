@@ -58,6 +58,7 @@ export function createGuard(setup: Setup): {
 	read: (...targets: Target[]) => void
 	write: (op: string, ...targets: Target[]) => void
 	members: (list: readonly Member[], at?: Path) => Member[]
+	move: (source: Path, to: Path) => void
 } {
 	const { places, table, scheduler } = setup
 	const policy = setup.may ?? everything
@@ -97,9 +98,23 @@ export function createGuard(setup: Setup): {
 		return list.map((m, i) => answers[i].answer === "yes" ? m : { name: m.name, id: REFUSED })
 	}
 
+	// a move by path, refused when to is under from (strictly: the same place is no move): the
+	// node would be cut off, its own descendant its parent. needs no policy, asks none
+	function move(source: Path, to: Path) {
+		if (to.length <= source.length || !source.every((name, i) => to[i] === name)) return
+		const a: Ask = {
+			who: createChangeBase(scheduler),
+			op: "move",
+			target: { path: [...source] },
+			from,
+		}
+		throw new Refusal(no("into-itself"), a)
+	}
+
 	return {
 		read: (...targets) => demand(told, "read", targets),
 		write: (op, ...targets) => demand(quiet, op, targets),
 		members,
+		move,
 	}
 }

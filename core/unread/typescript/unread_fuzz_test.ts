@@ -17,7 +17,7 @@ import { createScheduler } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable } from "@ermine/table"
 import { rand } from "../../../conformance/typescript/rand.ts"
-import { at, isMap, made, patch, paths } from "./random_harness.ts"
+import { above, at, isMap, made, patch, paths } from "./random_harness.ts"
 import { createUnread, keeping } from "./unread.ts"
 
 const h = (): ChangeHeader => ({ time: 1, actor: "test" })
@@ -92,6 +92,21 @@ Deno.test("unread: as node's update, nothing held ever changes, and in place whe
 			} else if (k < 27) {
 				const undo = e.change.op?.undo
 				if (undo) write([...undo], `${where} (unwrite)`)
+			} else if (k < 34) {
+				// a put of a container the entry itself made and owns, alone or in a list: the
+				// caller's from now (held, and the patch lets go of what is owned in it), so the
+				// writes after never change it, though they reach the same spot through the tree
+				const ps = paths(e.value)
+				const from = ps[1 + p(ps.length - 1)] ?? []
+				const x = at(e.value, from)
+				const into = ps.filter((q) => !above(from, q))
+				if (from.length && typeof x === "object" && x !== null && into.length) {
+					const value = p(2) ? x : [x]
+					write([{ path: into[p(into.length)], value }], `${where} (put an owned)`)
+					// and a write right under what was put, in place if it were still owned
+					const under = paths(x)
+					write([{ path: [...from, ...under[p(under.length)]], value: made(p, 1) }], where)
+				}
 			} else {
 				write(Array.from({ length: 1 + p(3) }, () => patch(p, e.value)), where)
 			}

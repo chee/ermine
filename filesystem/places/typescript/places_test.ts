@@ -134,6 +134,26 @@ Deno.test("places: a keystroke in doc.body: a reader of doc.title doesn't rerun"
 	assertEquals([all.runs, all.value], [2, '{"title":"hi","body":"abcd"}'])
 })
 
+Deno.test("places: peep reads untracked: a reader peeping doc.body doesn't rerun when it changes, and sees it when it reruns", () => {
+	const { s, l, hosted, edit, value, watch } = world()
+	value("doc", { title: "hi", body: "abc" })
+	const w = watch(
+		() => [
+			l.readValue("value", "doc", ["title"]),
+			l.peep(() => l.readValue("value", "doc", ["body"])),
+		],
+	)
+	s.pulse()
+	hosted(() => edit("value", "doc", [{ path: ["body"], range: [3, 3], value: "d" }]))
+	s.pulse()
+	assertEquals([w.runs, w.value], [1, ["hi", "abc"]])
+	hosted(() => edit("value", "doc", [{ path: ["title"], value: "yo" }]))
+	s.pulse()
+	assertEquals([w.runs, w.value], [2, ["yo", "abcd"]])
+	// outside a run: the value
+	assertEquals(l.peep(() => l.readValue("value", "doc", ["nothing", "here"])), undefined)
+})
+
 Deno.test("places: a node added where a walk stopped (a table event): the reader reruns", () => {
 	const { s, kids, watch, walk } = world()
 	kids("R", { a: "A" })

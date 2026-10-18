@@ -3,26 +3,26 @@
 The suites for the new sync, against which a C port is built. The TypeScript is the reference; each
 harness's header lists its requests and answers.
 
-| suite     | scenarios                                | TypeScript harness                                |
-| --------- | ---------------------------------------- | ------------------------------------------------- |
-| commit    | `ermine/encoding/conformance/commit/`    | `ermine/encoding/typescript/commit_harness.ts`    |
+| suite     | scenarios                                    | TypeScript harness                                    |
+| --------- | -------------------------------------------- | ----------------------------------------------------- |
+| commit    | `ermine/encoding/conformance/commit/`        | `ermine/encoding/typescript/commit_harness.ts`        |
 | seal      | `extensions/together/conformance/seal/`      | `extensions/together/typescript/seal_harness.ts`      |
-| run       | `extensions/together/conformance/run/`       | `extensions/together/typescript/packer_harness.ts`       |
+| packer    | `extensions/together/conformance/packer/`    | `extensions/together/typescript/packer_harness.ts`    |
 | history   | `extensions/together/conformance/history/`   | `extensions/together/typescript/history_harness.ts`   |
-| replay    | `extensions/together/conformance/replay/`    | history's (`suite.json`)                          |
-| snapshot  | `extensions/together/conformance/snapshot/`  | history's (`suite.json`)                          |
+| replay    | `extensions/together/conformance/replay/`    | history's (`suite.json`)                              |
+| snapshot  | `extensions/together/conformance/snapshot/`  | history's (`suite.json`)                              |
 | transport | `extensions/together/conformance/transport/` | `extensions/together/typescript/transport_harness.ts` |
 | sync      | `extensions/together/conformance/sync/`      | `extensions/together/typescript/sync_harness.ts`      |
-| egwalker  | `extensions/together/conformance/egwalker/`  | history's (`suite.json`)                          |
+| egwalker  | `extensions/together/conformance/egwalker/`  | history's (`suite.json`)                              |
 
-Run: `deno task conformance commit seal run history replay snapshot transport sync egwalker`.
+Run: `deno task conformance commit seal packer history replay snapshot transport sync egwalker`.
 Another implementation: `--c` (the binary `<package>/c/<suite>-harness`), or `HARNESS="<command>"`
-for one suite. Format: `conformance/packer.ts` (a scenario, its steps, `expect`, `fails`, `skip`).
+for one suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `fails`, `skip`).
 
 ## Conventions
 
-- bytes: lowercase hex, two digits a byte. Commits, seals, runs, snapshots, names, stored ids, keys,
-  seeds, signer, parents, base.
+- bytes: lowercase hex, two digits a byte. Commits, seals, packs, snapshots, names, stored ids,
+  keys, seeds, signer, parents, base.
 - a value (an actor, a metadata value, a patch's value, a table's value): its JSON form,
   `conformance/typescript/form.ts`. JSON for what JSON holds; `{"/": {"bytes": base64}}` (standard,
   unpadded): bytes inside a value are base64, never hex; `{"/": {kind: [...]}}` a typed array;
@@ -48,13 +48,13 @@ for one suite. Format: `conformance/packer.ts` (a scenario, its steps, `expect`,
   then the commit's name: a seal is good in its own document only, and a header put on another
   signature is no longer good (the varsig spec recommends the header be signed over). A seal in a
   request or an answer is for the request's document: `doc`, default `ermine://2a…2a00…00` (16 bytes
-  each; the seal and run harnesses take its 32 bytes, hex, and seal for it when given none). The
+  each; the seal and packer harnesses take its 32 bytes, hex, and seal for it when given none). The
   transport harness seals a label for each document it is used in.
 - a commit in JSON: its fields as `commit.ts` names them. signer, each parent, base: hex. actor,
   patch values: values. metadata: a map, its values values. external
   `[{file, line, column?, function?}]`. patches `[{path, range?, value?, move?: {path, range?}}]`,
   merge: a rule's name. An optional field absent: left out.
-- a commit by label (history, replay, snapshot, run, transport): made from the fields the request
+- a commit by label (history, replay, snapshot, packer, transport): made from the fields the request
   gives, labelled `name`. Defaults: table `"value"`, actor `null`, time `0`, seed `"01"` × 32 (the
   signer is its Ed25519 key as a multikey, `ed01` then the 32 bytes; transport: the device's seed),
   nonce `0`, parents `[]`, lamport 1 + the highest lamport of its parents made here (0 for one not),
@@ -62,9 +62,9 @@ for one suite. Format: `conformance/packer.ts` (a scenario, its steps, `expect`,
   68 hex digits; parents sorted by name. A lamport is derived: a history refuses any other than 1 +
   the highest of its parents' (`lamport`). A commit that heads a fragment (a stored id with a
   leading zero byte, in its document) is made so by its nonce, found for that document.
-- a run (`packer.ts`): a commit the next one in it goes on alone, by the same signer, is vouched for by
-  that one's signature: its own is left out, its header `null`, its stored id in `ids`. Unpacked, a
-  signed one is its seal (a label, else hex); one vouched for is
+- a pack (`packer.ts`): a commit the next one in it goes on alone, by the same signer, is vouched
+  for by that one's signature: its own is left out, its header `null`, its stored id in `ids`.
+  Unpacked, a signed one is its seal (a label, else hex); one vouched for is
   `{vouched: label (or its name,
   hex), stored?}`, `stored` (hex) when it is not its label's
   seal's.
@@ -74,8 +74,8 @@ for one suite. Format: `conformance/packer.ts` (a scenario, its steps, `expect`,
   (`changeOf`, replay.ts). A new commit never carries those two from its change; its sites' files as
   the host's roots say.
 - refused, with a code: `{error: code, ...where}`, exact. commit: `not-a-commit` | `cannot-carry`,
-  `field`. seal: `shape` | `signature`; a commit's own refusal as commit's. run: PackError's code,
-  `column`. snapshot: PackError's code. A history's refusal is an answer: `{added: {refused}}`
+  `field`. seal: `shape` | `signature`; a commit's own refusal as commit's. packer: PackError's
+  code, `column`. snapshot: PackError's code. A history's refusal is an answer: `{added: {refused}}`
   (`shape` | `lamport` | `patches` | `parent` | `merge`: a merge by a rule the harness doesn't
   know); one the check cannot judge yet waits on it: `{added: {waiting: []}}` (history's `hold` and
   `again`). The transport's: `lock` | `shape` | `signature` | `stored` | `parents` | `boundary` (a
@@ -105,8 +105,8 @@ for one suite. Format: `conformance/packer.ts` (a scenario, its steps, `expect`,
 
 ## Merge rules (egwalker, sync)
 
-- the rules a harness knows: `"eg-walker"` (`extensions/together/typescript/egwalker.ts`, its header the
-  exact rules). The egwalker suite pins merged tables for small histories (history's `merge` and
+- the rules a harness knows: `"eg-walker"` (`extensions/together/typescript/egwalker.ts`, its header
+  the exact rules). The egwalker suite pins merged tables for small histories (history's `merge` and
   `since` ops), so another implementation matches exactly.
 - a sync host is given `merge` (the rule it merges by) and `merges` (the rules it knows, default
   `[merge]`): none, it is as without merging.
@@ -122,5 +122,5 @@ for one suite. Format: `conformance/packer.ts` (a scenario, its steps, `expect`,
 - equivocation (one signer, two commits on the same parents with the same nonce): nothing tells of
   it.
 - the wire between the TypeScript and the C, beyond the suites' shared bytes:
-  `extensions/together/typescript/wire_test.ts` (seals, runs and snapshots made by one, taken in by the
-  other), with the C harnesses built.
+  `extensions/together/typescript/wire_test.ts` (seals, packs and snapshots made by one, taken in by
+  the other), with the C harnesses built.

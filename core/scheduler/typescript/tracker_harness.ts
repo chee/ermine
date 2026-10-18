@@ -1,7 +1,7 @@
 // the tracker (tracker.ts) on the line protocol (conformance/typescript/harness.ts). A node's owner
 // is its name. Another implementation joins by speaking this (HARNESS).
 //
-// { op: "begin" | "end", from }        → {}   begin in a run is an error
+// { op: "begin" | "end" | "leave" | "trim" | "dedupe", from }        → {}   begin in a run is an error
 // { op: "track" | "add", from, to }    → {}
 // { op: "untrack", from, to? }         → {}   no to: all of from's
 // { op: "reads", of }                  → { names }   what of reads, in order
@@ -27,8 +27,16 @@
 //     readers; the cursor moves onto it
 // end(from): every link after the cursor (all of them with no cursor) is dropped, from from's
 //   reads and its spots' readers. outside a run: nothing.
-// add(from, to), outside a run: nothing if any link of from's goes to to; else a new link at the
-//   end of from's reads (outside a run the cursor is the last link), last among to's readers
+// leave(from): the run ends, no link dropped: the cursor stays on the last link it confirmed, the
+//   ones it did not reach after it, old. trim(from): every link after the cursor (all of them with no
+//   cursor) is dropped, as end drops them (end is leave, then trim). dedupe(from): of the links
+//   after the cursor, one to a spot a link before it goes to (one before the cursor, or an
+//   earlier one after it) is dropped, the rest stay in order. after end, trim and dedupe drop
+//   nothing; a begin puts the cursor back before the first link, so a run left and run again
+//   meets the old links in order
+// add(from, to), outside a run: nothing if any link of from's goes to to; else a new link right
+//   after the cursor (at the front with no cursor: after end, the end of from's reads), the cursor
+//   on it, last among to's readers
 // untrack(from, to): every link of from's to to, duplicates too; the cursor, if on one, steps
 //   back to the link before. in a run the run goes on. untrack(from): all of from's, the cursor
 //   back to none, so a run's later tracks start from the front.
@@ -45,7 +53,22 @@ const node = (name: string) => {
 	return n
 }
 
+// the fields an op uses, each there
+const uses: Record<string, string[]> = {
+	begin: ["from"],
+	end: ["from"],
+	leave: ["from"],
+	trim: ["from"],
+	dedupe: ["from"],
+	track: ["from", "to"],
+	add: ["from", "to"],
+	untrack: ["from"],
+	reads: ["of"],
+	readers: ["of"],
+}
+
 function answer(r: Request): Answer {
+	for (const k of uses[r.op] ?? []) if (r[k] === undefined) return { error: `no ${k}` }
 	switch (r.op) {
 		case "begin":
 			g.begin(node(r.from))
@@ -55,6 +78,15 @@ function answer(r: Request): Answer {
 			return {}
 		case "end":
 			g.end(node(r.from))
+			return {}
+		case "leave":
+			g.leave(node(r.from))
+			return {}
+		case "trim":
+			g.trim(node(r.from))
+			return {}
+		case "dedupe":
+			g.dedupe(node(r.from))
 			return {}
 		case "add":
 			g.add(node(r.from), node(r.to))

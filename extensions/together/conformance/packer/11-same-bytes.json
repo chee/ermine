@@ -1,5 +1,5 @@
 {
-	"title": "the same commits in the same order pack to the same bytes; what unpack gives packs to the run again",
+	"title": "the same commits in the same order pack to the same bytes; what unpack gives packs to the pack again",
 	"steps": [
 		{
 			"op": "make",
