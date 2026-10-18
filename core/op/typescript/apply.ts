@@ -67,6 +67,25 @@ const fail = (code: Code): never => {
 const high = (c: number) => (c & 0xfc00) === 0xd800
 const low = (c: number) => (c & 0xfc00) === 0xdc00
 
+// a bigint index or range end is the whole number it is (cbor.ts reads one past 2^53 - 1 as a
+// bigint: past every end); the patch as given when it has none
+const big = (k: unknown) => typeof k === "bigint"
+function numbered(p: Patch): Patch {
+	if (p === null || typeof p !== "object") return p
+	const path = isList(p.path) && p.path.some(big)
+		? p.path.map((k) => big(k) ? Number(k) : k) as Key[]
+		: p.path
+	const range = isList(p.range) && p.range.some(big)
+		? p.range.map((k) => big(k) ? Number(k) : k) as unknown as [number, number]
+		: p.range
+	const move = p.move !== null && typeof p.move === "object" ? numbered(p.move as Patch) : p.move
+	if (path === p.path && range === p.range && move === p.move) return p
+	const q = { ...p, path } as Patch
+	if (range !== undefined) q.range = range
+	if (move !== undefined) q.move = move
+	return q
+}
+
 function shape(p: Patch): boolean {
 	if (p === null || typeof p !== "object" || !isList(p.path)) return false
 	if (!p.path.every((k) => typeof k === "string" || Number.isInteger(k) && k >= 0)) return false
@@ -576,7 +595,8 @@ export default function apply(
 	const marks: number[] = []
 	let i = 0
 	try {
-		for (const p of patches) {
+		for (const given of patches) {
+			const p = numbered(given)
 			try {
 				if (!shape(p)) fail("not-a-patch")
 				if (undone) marks.push(undone.length)
