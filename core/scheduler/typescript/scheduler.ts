@@ -3,15 +3,16 @@
 // once, untracked. the scopes tree holds them: tearing a scope down takes everything under it.
 //
 // a scope is two things: an owner (what is made in it is put under it; the tree is parent) and the
-// info of the changes made in it: the pairs given, [key, value] in order, opaque, as keys are,
-// nothing appended. a write's pairs: the info of the scope open (getInfo). createScope(info,
-// parent?) makes one under parent, else under the one open; createRootScope(info) one with no
-// parent. no pairs given: empty. a scope is open only in a bracket, while its code is on the
+// info of the changes made in it: the object given (Info), kept as given, never copied, its keys
+// and values opaque, nothing added. a write's info: the info of the scope open (getInfo).
+// createScope(info, parent?) makes one under parent, else under the one open; createRootScope(info)
+// one with no parent. no keys given: empty. a scope is open only in a bracket, while its code is on the
 // stack: runWithScope(scope, f), and the scheduler's own. a computer is a scope under the one open
 // when it was made; its runs, sets and acts open it, written by itself (a run by its own Run, a set
-// or act by the computer). its info is its latest run's, set as the run starts: [["run", n],
-// ["mark", t]], n its number, t the tick of the mark that made it due; before its first run
-// [["mark", t]]. a scope's info is made once, with it; under a computer, it belongs to that run (a
+// or act by the computer). its info: one object, made as it is made, {...given, mark: t}, t the
+// tick of the mark that made it due (none given: no keys of its own); as each run starts,
+// info.run = n (its number) and info.mark = t, set in that object, never a new one. a scope is
+// made once; under a computer, it belongs to that run (a
 // plain scope is never claimed: it goes once a later run is done; what an act made, before the
 // next act; a computer claimed is a scope whose info is its own run's). a teardown opens its
 // scope, and what is under a scope goes with it open: a teardown on a plain scope under a
@@ -100,15 +101,33 @@ export type Equal<T = unknown> = (a: T, b: T) => boolean
 // one time a computer ran: the run open while it runs (getRun()), kept for a write after an await
 export type Run = { readonly computer: Computer; readonly n: number }
 
-export type Pair = readonly [key: string, value: unknown]
+// a scope's info: a plain object, any keys; the keys some layer reads by name typed here. node:
+// the id of the node whose computer it is (table's Id). run, mark: a computer's run number and
+// the tick that made it due (set here). actor, reader: a header's. caller, trusted-event: a send's.
+// place: a path. cause, wallclock, message: sync's
+export type Info = {
+	[key: string]: unknown
+	node?: string | symbol
+	run?: number
+	mark?: number
+	actor?: unknown
+	reader?: string
+	caller?: unknown
+	"trusted-event"?: boolean
+	place?: readonly string[]
+	cause?: unknown
+	wallclock?: number
+	message?: string
+}
 
 // a scope: the scopes and computers under it, in the order made (a list: newest, the newest under
 // it; older and newer, the one made before and after it under the same scope), and its teardowns;
-// its info: the pairs given (never change it); the tree is parent. a computer's: its latest run's
+// its info: the object given (never change it); the tree is parent. a computer's: its own, run
+// and mark set in it as each run starts
 export type Scope = {
 	readonly n: number
 	readonly parent: Scope | undefined
-	info: readonly Pair[]
+	readonly info: Info
 	newest: Scope | undefined
 	older: Scope | undefined
 	newer: Scope | undefined
@@ -235,7 +254,11 @@ function told<A extends unknown[]>() {
 // thrown at a read of a key whose writer is due: the run stops, and waits after it
 class Stop {}
 
-const nothing: readonly Pair[] = Object.freeze([])
+// no own keys
+const blank = (info: Info) => {
+	for (const _ in info) return false
+	return true
+}
 // an empty list shared, never added to
 const none = Object.freeze([]) as never[]
 
@@ -341,14 +364,13 @@ export function createScheduler(): Scheduler {
 		return open.scope
 	}
 
-	// no pairs: empty
-	function grow(up: Scope | undefined, info: Iterable<Pair>): Scope {
-		const pairs: Pair[] = [...info]
-		if (pairs.length === 0) throw empty()
+	// no keys: empty
+	function grow(up: Scope | undefined, info: Info): Scope {
+		if (blank(info)) throw empty()
 		const o: Scope = {
 			n: ++made,
 			parent: up,
-			info: pairs,
+			info,
 			newest: undefined,
 			older: undefined,
 			newer: undefined,
@@ -398,14 +420,15 @@ export function createScheduler(): Scheduler {
 	}
 
 	// a new scope under up, else under the one open; gone: disposed
-	function createScope(info: Iterable<Pair>, up?: Scope): Scope {
+	function createScope(info: Info, up?: Scope): Scope {
 		if (up === undefined) return grow(parent(), info)
 		if (up.state !== "alive") throw disposed()
 		return grow(up, info)
 	}
 
-	// the pairs of a write made now: the info of the scope open; nothing open: undefined
-	function getInfo(): readonly Pair[] | undefined {
+	// the info of a write made now: the scope open's own, live (a computer's changes as its runs
+	// start): read it now, do not keep it; nothing open: undefined
+	function getInfo(): Info | undefined {
 		return open?.scope.info
 	}
 
@@ -623,7 +646,7 @@ export function createScheduler(): Scheduler {
 
 	const disposed = () => new SchedulerError("disposed", "the scope is disposed")
 	const unscoped = () => new SchedulerError("unscoped", "no scope is open")
-	const empty = () => new SchedulerError("empty", "a scope's info has no pairs")
+	const empty = () => new SchedulerError("empty", "a scope's info has no keys")
 
 	// a key nobody tracks now: untracked, and told
 	function unread(node: Node<unknown>) {
@@ -665,12 +688,13 @@ export function createScheduler(): Scheduler {
 		equal?: Equal<never>,
 		key?: unknown,
 		options?: EffectOptions,
+		info?: Info,
 	): Computer {
 		const o = parent()
 		const c = {
 			n: ++made,
 			parent: o,
-			info: nothing,
+			info: undefined,
 			newest: undefined,
 			older: undefined,
 			newer: undefined,
@@ -710,9 +734,9 @@ export function createScheduler(): Scheduler {
 		// it changes is seen. made in a run known to loop: the loop is cut there, as a dropped
 		// loop mark cuts it
 		if (running?.loop) running.cut = true
-		const t = ++tick
-		// its info till its first run: the tick that made it due, its making
-		c.info = [["mark", t]]
+		const t = ++tick // its info, the one object it keeps: what was given, and the tick that made it due, its
+		 // making
+		;(c as { info: Info }).info = { ...info, mark: t }
 		const now = due(c, t, running) ? [c] : []
 		const outer = thrown
 		thrown = undefined
@@ -935,8 +959,9 @@ export function createScheduler(): Scheduler {
 			return
 		}
 		liftChildren(c)
-		// its info, from here: this run's number, and the tick of the mark that made it due
-		c.info = [["run", n], ["mark", mark]]
+		// its info, in place: this run's number, and the tick of the mark that made it due
+		c.info.run = n
+		c.info.mark = mark
 		let out: Out
 		reading = r
 		tracker.begin(c.node)
@@ -1271,7 +1296,7 @@ export function createScheduler(): Scheduler {
 	}
 
 	return {
-		createRootScope: (info: Iterable<Pair>) => grow(undefined, info),
+		createRootScope: (info: Info) => grow(undefined, info),
 		createScope,
 		runWithScope,
 		getCurrentScope: () => open?.scope,
@@ -1284,13 +1309,16 @@ export function createScheduler(): Scheduler {
 		// given its last result (the last given to set; none yet: undefined). what a listener throws
 		// as it is made comes out of a pulse (above).
 		// key: where set's results land, when the caller knows; then readers of it wait for this
-		// compute from the first pulse, rather than once it has written
+		// compute from the first pulse, rather than once it has written. info: its own keys, copied
+		// once into its info
 		createComputer: <T>(
 			f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
 			set: (value: T) => void,
 			equal?: Equal<T>,
 			key?: unknown,
-		): Computer => make("compute", f as Computer["f"], set, equal as Equal<never>, key),
+			info?: Info,
+		): Computer =>
+			make("compute", f as Computer["f"], set, equal as Equal<never>, key, undefined, info),
 		// tracked; a result not equal to the one it last acted on is acted on after the round's
 		// last run. first runs at the next pulse. f is given the last value acted on (none yet:
 		// undefined). early: acted on in the round's early queue (above)
@@ -1299,8 +1327,17 @@ export function createScheduler(): Scheduler {
 			effect: (value: T, previous: T | undefined) => void,
 			equal?: Equal<T>,
 			options?: EffectOptions,
+			info?: Info,
 		): Computer =>
-			make("effect", f as Computer["f"], effect, equal as Equal<never>, undefined, options),
+			make(
+				"effect",
+				f as Computer["f"],
+				effect,
+				equal as Equal<never>,
+				undefined,
+				options,
+				info,
+			),
 		track,
 		mark,
 		pulse,
@@ -1319,12 +1356,13 @@ export function createScheduler(): Scheduler {
 
 // each on… is told as it happens, and gives back its remove
 export type Scheduler = {
-	createRootScope: (info: Iterable<Pair>) => Scope
-	createScope: (info: Iterable<Pair>, parent?: Scope) => Scope
+	createRootScope: (info: Info) => Scope
+	createScope: (info: Info, parent?: Scope) => Scope
 	runWithScope: <T>(o: Scope, f: () => T) => T
 	// the scope open now; none: undefined
 	getCurrentScope: () => Scope | undefined
-	getInfo: () => readonly Pair[] | undefined
+	// the info open, live: read it now, do not keep it
+	getInfo: () => Info | undefined
 	getRun: () => Run | undefined
 	registerTeardown: (o: Scope, f: () => unknown) => void
 	teardown: (o: Scope) => void
@@ -1337,12 +1375,14 @@ export type Scheduler = {
 		set: (value: T) => void,
 		equal?: Equal<T>,
 		key?: unknown,
+		info?: Info,
 	) => Computer
 	createEffect: <T>(
 		f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
 		effect: (value: T, previous: T | undefined) => void,
 		equal?: Equal<T>,
 		options?: EffectOptions,
+		info?: Info,
 	) => Computer
 	track: (key: unknown) => void
 	// the tick it took
