@@ -1,4 +1,4 @@
-// what a realm costs, on this machine: deno run --allow-all ermine/realms/typescript/measure.ts
+// what a realm costs, on this machine: deno run --allow-all playground/realms/typescript/measure.ts
 //   startup      new Worker to setup run (the worker importing ermine: scheduler, table, places,
 //                ermine/api and what it imports), the first and then each one after
 //   first read   in the worker, a run reading what isn't loaded to its run with the value: pending,
