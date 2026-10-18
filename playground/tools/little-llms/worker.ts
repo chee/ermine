@@ -1,5 +1,6 @@
 // runs one answer in a fresh page and checks it; one job at a time, and the pool kills it when it loops forever
 
+import { TextLineStream } from "jsr:@std/streams@^1/text-line-stream"
 import { JSDOM, VirtualConsole } from "jsdom"
 import initSqlJs from "sql.js"
 import { transform as sucrase } from "sucrase"
@@ -393,8 +394,9 @@ async function run(job: Job): Promise<Outcome> {
 	}
 }
 
-const me = self as unknown as Worker
-// a page's promise that fails after its job is over must not take the worker (and the next job) down with it
+// a process of its own, so a page that never stops can be killed for real (a Worker's terminate leaves some running):
+// one job per line on stdin, one outcome per line on stdout
+// a page's promise that fails after its job is over must not take the process (and the next job) down with it
 let current: string[] | undefined
 globalThis.addEventListener("unhandledrejection", (e) => {
 	e.preventDefault()
@@ -404,11 +406,18 @@ globalThis.addEventListener("error", (e) => {
 	e.preventDefault()
 	current?.push(String(e.message).slice(0, 300))
 })
-me.onmessage = async (e: MessageEvent<Job>) => {
+const encoder = new TextEncoder()
+const say = async (v: unknown) => {
+	const bytes = encoder.encode(JSON.stringify(v) + "\n")
+	for (let n = 0; n < bytes.length;) n += await Deno.stdout.write(bytes.subarray(n))
+}
+await say("ready")
+for await (const line of Deno.stdin.readable.pipeThrough(new TextDecoderStream()).pipeThrough(new TextLineStream())) {
+	if (!line) continue
 	let outcome: Outcome
 	try {
 		current = []
-		outcome = await run(e.data)
+		outcome = await run(JSON.parse(line))
 		outcome.errors.push(...current)
 	} catch (err) {
 		outcome = {
@@ -419,6 +428,5 @@ me.onmessage = async (e: MessageEvent<Job>) => {
 		}
 	}
 	current = undefined
-	me.postMessage(JSON.parse(JSON.stringify(outcome)))
+	await say(outcome)
 }
-me.postMessage("ready")
