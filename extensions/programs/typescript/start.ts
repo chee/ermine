@@ -2,7 +2,7 @@
 // in it; and its stop. the process's life (scope, node, args, cwd, pin, status, stop) is
 // @ermine/processes/start's; this runs the way in it.
 //
-//   const programs = createPrograms({ scheduler, table, places, builds, scopes, createProcessAPI })
+//   const programs = createPrograms({ scheduler, table, places, builds, scopes, createAPI })
 //   const [way] = satisfy(b.places, "catclock.c", ["clocks"])   // the first; none: undefined
 //   const p = programs.start(b, way, "/clock")              // b: a box, or places
 //   // { id: "proc:<uuid>", at: ["clock"], cwd: [], scope }, or { refused: "taken", at: ["clock"] }
@@ -12,8 +12,8 @@
 // pin: the program's and each step's id, place and hash, the root and cwd; written at start.
 // build: the chain's compilers folded over the program's value, read once at start; status
 // PENDING while building, the Error on failure. then the runner is called once with the code and
-// createProcessAPI({ box, places, process: { id, at, args, cwd }, scheduler, table, scope }), the
-// process's scope open. a runner that throws or gives a promise: that outcome is the status.
+// createAPI(start), start the process's Start { box, places, process: { id, at, args, cwd },
+// scheduler, table, scope }, the process's scope open. a runner that throws or gives a promise: that outcome is the status.
 // loaded steps (by not empty): run through their by's runner's load(code) to a live form (compile
 // or run), each loaded once per key (id, value hash, by), held while a process using it runs.
 // failures: StartError not-a-runner, not-a-loader, not-a-compiler.
@@ -63,8 +63,8 @@ export type Loaded = {
 	readonly [Symbol.dispose]?: () => void
 }
 
-// what createProcessAPI is handed: the host's own, for making what the program gets
-export type Context = {
+// a start's facts: what createAPI is handed, the host's own, for making what the program gets
+export type Start = {
 	// where it runs: the box given, or { root, places } of the places given
 	readonly box: Box
 	// the box's
@@ -91,7 +91,7 @@ export type Setup = {
 	// scope nodes (@ermine/processes/scopes)
 	scopes: Pick<ScopeNodes, "give">
 	// what the program is given: its return, and nothing else
-	createProcessAPI: (ctx: Context) => unknown
+	createAPI: (start: Start) => unknown
 	// where the programs' scope and the processes' are made, noting each one's site (ermine/sites;
 	// its ours holds this file and processes' start.ts); none: the scheduler's, no sites
 	sites?: Pick<Sited, "createScope">
@@ -198,7 +198,7 @@ function tag(x: unknown): string {
 }
 
 export function createPrograms(setup: Setup): Programs {
-	const { scheduler: s, table, places, builds, scopes, createProcessAPI } = setup
+	const { scheduler: s, table, places, builds, scopes, createAPI } = setup
 	const createScope = setup.sites?.createScope ?? s.createScope
 	// the processes' owner, under the scope open; torn down, every process goes, and status with it
 	const owner = createScope({ programs: "start" })
@@ -419,7 +419,7 @@ export function createPrograms(setup: Setup): Programs {
 			const fn = live === undefined ? table.get("value", runner.id)?.value : live.run
 			if (typeof fn !== "function") throw new StartError("not-a-runner", runner.id)
 			const process = { id: p.id, at: p.at, args: p.args, cwd: p.cwd }
-			const ctx: Context = {
+			const start: Start = {
 				box: p.box,
 				places: p.box.places,
 				process,
@@ -427,7 +427,7 @@ export function createPrograms(setup: Setup): Programs {
 				table,
 				scope: p.scope,
 			}
-			const api = createProcessAPI(ctx)
+			const api = createAPI(start)
 			out = {
 				value: s.runWithScope(
 					p.scope,

@@ -1,6 +1,6 @@
 // realms on a real page: a scheduler, table, places, boxes and programs as ermine/api's tests make
 // them, javascript programs (source text) in a folder W, run in a worker by realms.run boxed at /run
-import { assert, assertEquals } from "@std/assert"
+import { assert, assertEquals, assertThrows } from "@std/assert"
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import { createScheduler, PENDING } from "@ermine/scheduler"
@@ -16,7 +16,7 @@ import { createBuilds } from "@ermine/build"
 import { satisfy } from "@ermine/programs"
 import { createPrograms, type Process, type Programs } from "@ermine/programs/start"
 import { no, type Policy, yes } from "@ermine/protect"
-import { createProcessAPIs, SCOPE } from "@ermine/api"
+import { createProcessContext, SCOPE } from "@ermine/api"
 import { createRealms, type Realm } from "./realms.ts"
 
 const JS = "com.netscape.javascript-source"
@@ -56,7 +56,7 @@ export function world(o: { may?: Policy } = {}) {
 		},
 	})
 	let programs!: Programs
-	const apis = createProcessAPIs({
+	const context = createProcessContext({
 		scheduler: s,
 		table,
 		commit,
@@ -80,7 +80,7 @@ export function world(o: { may?: Policy } = {}) {
 			places: writes,
 			builds,
 			scopes,
-			createProcessAPI: realms.wrap(apis.createProcessAPI),
+			createAPI: realms.wrap(context.createAPI),
 		})
 	})
 	// a node in W at name, holding v
@@ -131,7 +131,7 @@ export function world(o: { may?: Policy } = {}) {
 			? undefined
 			: table.get("attributes", id)?.value as Record<string, unknown> | undefined
 	// the host's own api, at W's root
-	const hostAPI = apis.createProcessAPI({
+	const hostAPI = context.createAPI({
 		box: b,
 		places: b.places,
 		process: { id: "host", at: [], args: [], cwd: [] },
@@ -140,7 +140,7 @@ export function world(o: { may?: Policy } = {}) {
 		scope: host,
 	})
 	const done = () => {
-		for (const p of running) apis.stop(p)
+		for (const p of running) context.stop(p)
 		for (const w of workers) w.terminate()
 	}
 	return {
@@ -148,7 +148,7 @@ export function world(o: { may?: Policy } = {}) {
 		table,
 		places,
 		b,
-		apis,
+		context,
 		node,
 		program,
 		start,
@@ -233,7 +233,7 @@ Deno.test("a memo in the worker: its result node on the page (its run record sta
 	// its id a new one, never from its name
 	assert(!String(id).includes("double"), String(id))
 	// a record is the worker's runs table's: no wire message carries it, so the page has none
-	assertEquals(w.apis.runs(id), undefined)
+	assertEquals(w.context.runs(id), undefined)
 	w.write(n, 8)
 	await until(() => w.value(["double"]) === 16)
 	w.done()
@@ -281,7 +281,7 @@ Deno.test("stop terminates the worker: no message arrives after", async () => {
 	)
 	const p = w.start("ticker.js", ["ticker"])
 	await until(() => (w.value(["tick"]) as number) > 2)
-	w.apis.stop(p)
+	w.context.stop(p)
 	const [tick, heard] = [w.value(["tick"]), w.heard()]
 	await new Promise((r) => setTimeout(r, 40))
 	assertEquals(w.value(["tick"]), tick)
@@ -386,4 +386,34 @@ Deno.test("a write on each side at once, to one node: both end the same, in the 
 	// the realm: its own write, the page's landing on it, then the page's entry whole (reset)
 	assertEquals(w.value(["seen"]), ["start", "worker", "page", "worker"])
 	w.done()
+})
+
+Deno.test("run given a den's start (its facts, not an api wrap made): the api made with setup.createAPI from that start; none given: refused, as a start with no wrap", () => {
+	const s = createScheduler()
+	const table = createTable(() => {})
+	const places = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler: s })
+	const start = {
+		box: { root: "R", places },
+		places,
+		process: { id: "proc:a", at: ["a"], args: [], cwd: [] },
+		scheduler: s,
+		table,
+		scope: s.createRootScope({ process: ["a"] }),
+	}
+	const bare = createRealms({ worker: () => assert(false, "no worker") as never })
+	assertThrows(
+		() => bare.run("export default () => {}", start),
+		Error,
+		"createRealms({ createAPI })",
+	)
+	const given: unknown[] = []
+	const realms = createRealms({
+		worker: () => assert(false, "no worker") as never,
+		createAPI: (st) => {
+			given.push(st)
+			throw new Error("made from the start")
+		},
+	})
+	assertThrows(() => realms.run("export default () => {}", start), Error, "made from the start")
+	assertEquals(given, [start])
 })

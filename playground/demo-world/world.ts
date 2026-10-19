@@ -45,8 +45,8 @@ import { processes as rows } from "@ermine/processes"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import { createBuilds } from "@ermine/build"
 import { satisfy } from "@ermine/programs"
-import { type Context, createPrograms, type Process } from "@ermine/programs/start"
-import { type API, createProcessAPIs, type Node, type Noticed } from "@ermine/api"
+import { createPrograms, type Process, type Start } from "@ermine/programs/start"
+import { type API, createProcessContext, type Node, type Noticed } from "@ermine/api"
 import { installTypes, type Known } from "@ermine/types"
 import type { Policy } from "@ermine/protect"
 import { startSweeper, type World as PresenceWorld } from "@ermine/presence"
@@ -81,7 +81,7 @@ export type Options = {
 	actor?: string
 	// a host's own tools, added to what a process is given (its power: "the host has this power, to
 	// let the user create processes with a different api")
-	extend?: (api: API & Tools, ctx: Context) => Record<string, unknown>
+	extend?: (api: API & Tools, ctx: Start) => Record<string, unknown>
 	// protect: the policy every process is asked of (none: everything allowed)
 	may?: Policy
 	// presence (playground/presence): a presence world on the host's scope, swept each second, its
@@ -192,10 +192,10 @@ export function createWorld(o: Options) {
 		}
 	})
 
-	const ctxs = new WeakMap<object, Context>()
+	const ctxs = new WeakMap<object, Start>()
 	const views = new Map<string, Element>()
 	let programs!: ReturnType<typeof createPrograms>
-	const apis = createProcessAPIs({
+	const apis = createProcessContext({
 		scheduler: s,
 		table,
 		commit,
@@ -237,7 +237,7 @@ export function createWorld(o: Options) {
 		return walk("root", [])
 	}
 	const pathOf = (x: Item) => x.path ?? where(x.id)
-	function viewer(api: API, ctx: Context) {
+	function viewer(api: API, ctx: Start) {
 		const at = [...ctx.process.at]
 		// h's find: "/" or any "." ".." in it, steps from the root (or from from); else the names under
 		// the process's own node, and nowhere else: h asks it whether the process has a name, and
@@ -278,7 +278,7 @@ export function createWorld(o: Options) {
 		for (; o !== undefined; o = o.parent) if (key in o.info) return o.info[key]
 		return undefined
 	}
-	function tools(api: API, ctx: Context): Tools {
+	function tools(api: API, ctx: Start): Tools {
 		const { scheduler: s, places } = ctx
 		if (ctx.process.at.length) named.set(ctx.process.id, ctx.process.at.join("/"))
 		// caller and trusted-event: given, or found; metadata as the change has it
@@ -339,9 +339,9 @@ export function createWorld(o: Options) {
 	}
 
 	// what a process is given: the api, the world's tools, and the host's own
-	// (the extras put on the api itself: the runner knows a process by its api)
-	function createProcessAPI(ctx: Context) {
-		const api = Object.assign(apis.createProcessAPI(ctx), {} as Tools)
+	// (the extras put on the api itself: show finds its start by the api, in ctxs)
+	function createAPI(ctx: Start) {
+		const api = Object.assign(apis.createAPI(ctx), {} as Tools)
 		ctxs.set(api, ctx)
 		Object.assign(api, tools(api, ctx))
 		if (o.extend) Object.assign(api, o.extend(api, ctx))
@@ -361,7 +361,7 @@ export function createWorld(o: Options) {
 	}
 
 	// ---- programs: a runner for javascript at /code/run, each export a node in /code ----
-	const hostCtx: Context = {
+	const hostCtx: Start = {
 		box: { root: "root", places },
 		places,
 		process: { id: "host", at: [], args: [], cwd: [] },
@@ -369,7 +369,7 @@ export function createWorld(o: Options) {
 		table,
 		scope: host,
 	}
-	const hostAPI = Object.assign(apis.createProcessAPI(hostCtx), {} as Tools)
+	const hostAPI = Object.assign(apis.createAPI(hostCtx), {} as Tools)
 	Object.assign(hostAPI, tools(hostAPI, hostCtx))
 	programs = s.runWithScope(above, () => {
 		// describe and watchAll: each process's latest run on its node too (runs.ts)
@@ -386,13 +386,13 @@ export function createWorld(o: Options) {
 			places: writes,
 			builds,
 			scopes,
-			createProcessAPI,
+			createAPI,
 			sites,
 		})
 	})
 	// a setup that throws is told on the console with its stack (programs keeps it as the process's
 	// status, which nobody here reads), then thrown on as before
-	const runner = apis.runner(show)
+	const runner = apis.runner({ show })
 	const run = (code: unknown, api: unknown) => {
 		try {
 			return runner(code, api)

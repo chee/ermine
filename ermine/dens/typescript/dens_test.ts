@@ -1,7 +1,9 @@
 // what the conformance suites cannot say (dens.ts, away.ts): runners giving promises (a late
 // handle's stop throwing too), an offer at an id another wrote, a process offering from inside its
-// run, ermine/api's runner and createProcessAPI on a den, what nodes() shows, the owner torn down
-// from above, and the type-level fits; and of a link: what connect needs, answer(n) tracked over a
+// run, a runner as { start, load, api } and as a function, ermine/api's runner on a den (its api
+// composed over, a stop's reason told to its teardowns, a load's live form called in a memo: its
+// throw the memo's), the pulse a start asks for, what nodes() shows, the owner torn down from above,
+// and the type-level fits; and of a link: what connect needs, answer(n) tracked over a
 // channel that delivers later, carry, what a link drops or answers with an error, what a stopped
 // link leaves on the den (nothing), a mirrored failure as an Error, and its scope torn down from
 // above. one world: a scheduler, table and places
@@ -28,20 +30,21 @@ import { processes } from "@ermine/processes"
 import { readPresence } from "@ermine/presence"
 import { type Channel, createPair } from "@ermine/presence/channel"
 import { createScopeNodes } from "@ermine/processes/scopes"
-import { type API, createProcessAPIs, type ProcessAPIs } from "@ermine/api"
-import type { Context as ProgramsContext, Runner as ProgramsRunner } from "@ermine/programs/start"
+import { type API, createProcessContext, type ProcessContext } from "@ermine/api"
+import type { Runner as ProgramsRunner, Start as ProgramsStart } from "@ermine/programs/start"
 import type { Realms } from "@ermine/realms"
 import {
 	API as GIVES_API,
-	type Context,
 	createDen,
 	type Handle,
 	hashOf,
 	type Process,
 	PROGRAM_API,
 	REASONS,
+	type Runnable,
 	type Runner,
 	type Setup,
+	type Start,
 	TAKES,
 } from "./dens.ts"
 import { anchorOf, away, connect } from "./away.ts"
@@ -51,8 +54,12 @@ const RUNNER = ["system", "den", "runners", "javascript"]
 const CLOCK = ["apps", "clock.js"]
 const tick = () => new Promise((r) => setTimeout(r, 0))
 
+// a runner as a function: its start
+type Fn = Runner["start"]
+
+// schedule none: the den's pulses asked for are dropped (these tests pulse by hand)
 function world(
-	o: { createProcessAPI?: Setup["createProcessAPI"]; id?: string; may?: Setup["may"] } = {},
+	o: { schedule?: Setup["schedule"] | null; id?: string; may?: Setup["may"] } = {},
 ) {
 	const s = createScheduler()
 	const table = createTable((part, id) => places.onTableChange(part as Key, id))
@@ -81,7 +88,7 @@ function world(
 			table,
 			places,
 			scopes,
-			createProcessAPI: o.createProcessAPI ?? ((ctx) => ctx),
+			...(o.schedule === null ? {} : { schedule: o.schedule ?? (() => {}) }),
 			id: o.id ?? "mac",
 			...(o.may === undefined ? {} : { may: o.may }),
 		})
@@ -109,7 +116,7 @@ function slow(fail = false) {
 	const stops: unknown[] = []
 	let land!: () => void
 	let calls = 0
-	const runner: Runner = () => {
+	const runner: Fn = () => {
 		calls++
 		return new Promise<Handle>((resolve, reject) => {
 			land = () =>
@@ -172,7 +179,7 @@ Deno.test("stopped before the promise lands, its handle's stop throwing: nothing
 	const w = world()
 	let land!: () => void
 	const stops: unknown[] = []
-	const runner: Runner = () =>
+	const runner: Fn = () =>
 		new Promise<Handle>((resolve) => {
 			land = () =>
 				resolve({
@@ -205,14 +212,12 @@ Deno.test("an offer at an id with entries already (another's): refused taken, no
 Deno.test("a process offering from inside its run: its runner under its node, started on; its stop stops its users first, runner-stopped", () => {
 	const w = world()
 	const log: unknown[] = []
-	const xs: Runner = (code, api) => {
-		const { process } = api as Context
+	const xs: Fn = (code, { process }) => {
 		log.push(["x ran", code, process.at])
 		return { stop: (reason) => void log.push(["x stopped", process.at, reason]) }
 	}
 	let offered: unknown
-	const lisp: Runner = (_, api) => {
-		const { den, process } = api as Context
+	const lisp: Fn = (_, { den, process }) => {
 		offered = den.offer("runners", "x", { [TAKES]: "ermine.x-source" }, xs, process.id)
 		return { stop: (reason) => void log.push(["lisp stopped", reason]) }
 	}
@@ -245,21 +250,21 @@ Deno.test("a process offering from inside its run: its runner under its node, st
 	assertEquals(w.den.offers().map((o) => o.name), ["javascript"])
 })
 
-Deno.test("ermine/api on a den: its createProcessAPI the den's, its run offered as runners/javascript; a module program's default export runs and writes through the api", () => {
-	// made after the den (it takes the den's host): asked when a process starts
-	const made: { apis?: ProcessAPIs } = {}
-	const w = world({ createProcessAPI: (ctx) => made.apis!.createProcessAPI(ctx) })
-	const apis = made.apis = createProcessAPIs({
+// ermine/api's context over a world's host: no programs (a den starts processes), no pulses of its own
+function contextOf(w: ReturnType<typeof world>): ProcessContext {
+	return createProcessContext({
 		scheduler: w.s,
 		table: w.table,
 		commit: w.commit,
 		host: { places: w.places, table: w.table, scheduler: w.s, commit: w.commit },
-		programs: () => {
-			throw new Error("a den starts processes, not programs")
-		},
 		schedule: () => {},
 	})
-	w.offer("javascript", apis.run, { [GIVES_API]: "ermine.api" })
+}
+
+Deno.test("ermine/api on a den: its run offered as runners/javascript, the api the runner's (made from the start); a module program's default export runs and writes through the api", () => {
+	const w = world()
+	const context = contextOf(w)
+	w.offer("javascript", context.run, { [GIVES_API]: "ermine.api" })
 	const seen: unknown[] = []
 	const program = {
 		default: (api: API) => {
@@ -287,9 +292,250 @@ Deno.test("ermine/api on a den: its createProcessAPI the den's, its run offered 
 	assertEquals(w.status(p), undefined)
 })
 
+Deno.test("a runner as { start, load, api }: start given the start's facts (box, places, process, scheduler, table, scope, den), with its own this; load given the loader's; a function is its start, its own load counted too", () => {
+	const w = world()
+	const facts: Start[] = []
+	const loaded: [unknown, Start][] = []
+	const runner = {
+		started: 0,
+		start(_code: unknown, start: Start) {
+			this.started++
+			facts.push(start)
+			return { stop: () => {} }
+		},
+		load: (code: unknown, start: Start) => (loaded.push([code, start]), { code }),
+		api: (start: Start) => ({ id: start.process.id }),
+	}
+	w.offer("javascript", runner)
+	const p = w.start(RUNNER, ["work", "clock"])
+	w.s.pulse()
+	assertEquals(runner.started, 1)
+	const [f] = facts
+	assertEquals(Object.keys(f).sort(), [
+		"box",
+		"den",
+		"places",
+		"process",
+		"scheduler",
+		"scope",
+		"table",
+	])
+	assertEquals(f.process, { id: p.id, at: ["work", "clock"], args: [], cwd: ["work"] })
+	assertStrictEquals(f.den, w.den)
+	assertStrictEquals(f.scope, p.scope)
+	assertEquals(f.box.root, "R")
+	const l = w.hosted(() => w.den.load(RUNNER, CLOCK, { by: p }))
+	assert(!("refused" in l))
+	assertEquals(l.live, { code: "hi" })
+	assertEquals(loaded.map(([c, s]) => [c, s.process.id, s.scope === p.scope]), [["hi", p.id, true]])
+	// a function with a load of its own: shorthand for { start, load }
+	const calls: unknown[] = []
+	const fn = Object.assign((code: unknown) => void calls.push(["start", code]), {
+		load: (code: unknown) => (calls.push(["load", code]), {}),
+	})
+	w.offer("fn", fn)
+	const q = w.start(["system", "den", "runners", "fn"], ["work", "fn"])
+	w.s.pulse()
+	w.hosted(() => w.den.load(["system", "den", "runners", "fn"], CLOCK, { by: q }))
+	assertEquals(calls, [["start", "hi"], ["load", "hi"]])
+	// a map with no start, a value that is no runner: not-a-runner
+	w.offer("nostart", { load: () => 1 })
+	assertEquals(w.hosted(() => w.den.start(["system", "den", "runners", "nostart"], CLOCK, ["x"])), {
+		refused: "not-a-runner",
+		runner: ["system", "den", "runners", "nostart"],
+	})
+})
+
+Deno.test("ermine/api on a den, its api composed: a runner's own over context.createAPI ({ ...api, more }); the process's value, its memos' status and runs still written (an api is not its process)", () => {
+	const w = world()
+	const context = contextOf(w)
+	type More = API & { offer: (name: string) => unknown }
+	const run = context.runner({
+		api: (start) => ({
+			...context.createAPI(start),
+			offer: (name: string) =>
+				(start as Start).den.offer("runners", name, { [TAKES]: "x" }, () => {}, start.process.id),
+		}),
+	})
+	w.offer("javascript", run)
+	const program = {
+		default: (api: More) => {
+			api.offer("inner")
+			const m = api.memo("m", () => {
+				throw new Error("boom")
+			})
+			api.effect("e", () => api.read(m), () => {})
+			return "composed"
+		},
+	}
+	w.put("value", "MOD", program)
+	w.put("children", "APPS", { "clock.js": "CLOCK", "mod.js": "MOD" })
+	w.put("attributes", "MOD", { "ermine.type": JS })
+	const p = w.start(RUNNER, ["work", "mod"], ["apps", "mod.js"])
+	for (let i = 0; i < 3; i++) w.s.pulse()
+	assertEquals(w.table.get("value", p.id)?.value, "composed")
+	assertEquals(w.den.offers().map((o) => [o.name, o.by]), [["javascript", w.den.node], [
+		"inner",
+		p.id,
+	]])
+	const m = w.places.peep(() => get(w.places, ["work", "mod", "m"]))
+	assert(m !== undefined)
+	const st = w.table.get("attributes", m)?.value?.[STATUS]
+	assertInstanceOf(st, Error)
+	assertEquals(context.runs(m)?.error instanceof Error, true)
+	// called as programs' runner is, run(code, api), with a copy of an api: it finds its process the same
+	w.offer("copy", (code: unknown, start: Start) => context.run(code, { ...run.api(start) }))
+	const q = w.start(["system", "den", "runners", "copy"], ["work", "two"], ["apps", "mod.js"])
+	w.s.pulse()
+	assertEquals(w.table.get("value", q.id)?.value, "composed")
+})
+
+Deno.test("a stop's reason reaches ermine/api's teardowns through a den: the handle's stop tells them (SIGHUP, runner-stopped, withdrawn, den-stopped; none: ended); a memo's teardown too", () => {
+	const w = world()
+	const context = contextOf(w)
+	w.offer("javascript", context.run)
+	const told: unknown[] = []
+	const program = {
+		default: (api: API) => {
+			api.teardown((why) => void told.push([api.args[0], why]))
+			api.memo("m", () => api.teardown((why) => void told.push([api.args[0], "memo", why])))
+		},
+	}
+	w.put("value", "MOD", program)
+	w.put("children", "APPS", { "clock.js": "CLOCK", "mod.js": "MOD" })
+	w.put("attributes", "MOD", { "ermine.type": JS })
+	const go = (name: string, runner = RUNNER) => {
+		const p = w.hosted(() =>
+			w.den.start(runner, ["apps", "mod.js"], ["work", name], { args: [name] })
+		)
+		if ("refused" in p) throw new Error(p.refused)
+		for (let i = 0; i < 2; i++) w.s.pulse()
+		return p
+	}
+	const a = go("a")
+	w.hosted(() => w.den.stop(a, "SIGHUP"))
+	const b = go("b")
+	w.hosted(() => w.den.stop(b))
+	// a process offering ermine/api's runner, a user on it
+	const h = go("h")
+	w.hosted(() => w.den.offer("runners", "inner", { [TAKES]: JS }, context.run, h.id))
+	go("c", ["work", "h", "runners", "inner"])
+	w.hosted(() => w.den.stop(h, "done"))
+	go("d")
+	w.hosted(() => w.den.close())
+	assertEquals(told, [
+		["a", "memo", "SIGHUP"],
+		["a", "SIGHUP"],
+		["b", "memo", "ended"],
+		["b", "ended"],
+		["c", "memo", "runner-stopped"],
+		["c", "runner-stopped"],
+		["h", "memo", "done"],
+		["h", "done"],
+		["d", "memo", "den-stopped"],
+		["d", "den-stopped"],
+	])
+})
+
+Deno.test("a start or a load outside a run asks for a pulse (as ermine/api's: a microtask, none given), so a start from a DOM callback runs with nothing else pulsing; once, however many ask; none in a run", async () => {
+	const w = world({ schedule: null })
+	const ran: unknown[] = []
+	w.offer(
+		"javascript",
+		Object.assign((_code: unknown, s: Start) => void ran.push(s.process.at), {
+			load: () => ({}),
+		}),
+	)
+	w.start(RUNNER, ["work", "a"])
+	w.start(RUNNER, ["work", "b"])
+	assertEquals(ran, [])
+	await tick()
+	assertEquals(ran, [["work", "a"], ["work", "b"]])
+	// asked through setup.schedule: one, however many start before it runs
+	const asked: (() => void)[] = []
+	const v = world({ schedule: (f) => void asked.push(f) })
+	v.offer("javascript", () => {})
+	v.start(RUNNER, ["work", "a"])
+	v.start(RUNNER, ["work", "b"])
+	assertEquals(asked.length, 1)
+	asked.shift()!()
+	v.hosted(() => v.den.load(RUNNER, CLOCK, {}))
+	assertEquals(asked.length, 0)
+	// a start in a run: none asked (its pulse is under way)
+	v.offer("loads", Object.assign(() => {}, { load: () => ({}) }))
+	v.hosted(() => v.s.createComputer(() => v.den.start(RUNNER, CLOCK, ["work", "c"]), () => {}))
+	v.s.pulse()
+	assertEquals([asked.length, v.den.processes().length], [0, 3])
+})
+
+Deno.test("a load is no process: its live form held by its loader, called in the loader's memo, its throw that memo's status and run (ermine/api's runs), its time that run's; let go at the loader's stop, after its handle's, newest first", () => {
+	const w = world()
+	const context = contextOf(w)
+	const order: unknown[] = []
+	const LETTER = "ermine.letter"
+	w.offer("letter", {
+		start: () => {},
+		load: (code: unknown) => ({
+			draw: () => {
+				if (code === "bad") throw new Error("bad letter")
+				return `drew ${code}`
+			},
+			[Symbol.dispose]: () => void order.push(["disposed", code]),
+		}),
+	}, { [TAKES]: LETTER })
+	// the engine's api: ermine/api's, and a load by the process (a runner's own, composed)
+	type Engine = API & { load: (code: string) => { draw: () => string } }
+	const run = context.runner({
+		api: (start) => ({
+			...context.createAPI(start),
+			load: (code: string) => {
+				const l = (start as Start).den.load(["system", "den", "runners", "letter"], {
+					id: code,
+					code,
+					type: LETTER,
+				}, { by: start.process.id })
+				if ("refused" in l) throw new Error(l.refused)
+				return l.live
+			},
+		}),
+	})
+	w.offer("javascript", {
+		start: (code: unknown, start: Start) => {
+			const h = run.start(code, start)
+			return { stop: (reason?: unknown) => (order.push("engine handle"), h.stop(reason)) }
+		},
+	})
+	const program = {
+		default: (api: Engine) => {
+			api.open("cells", {})
+			api.open("shown", {})
+			for (const code of ["e", "bad"]) {
+				const live = api.load(code)
+				const cell = api.memo(`cells/${code}`, () => live.draw())
+				api.effect(`shown/${code}`, () => api.read(cell), () => {})
+			}
+		},
+	}
+	w.put("value", "MOD", program)
+	w.put("children", "APPS", { "clock.js": "CLOCK", "mod.js": "MOD" })
+	w.put("attributes", "MOD", { "ermine.type": JS })
+	const p = w.start(RUNNER, ["work", "engine"], ["apps", "mod.js"])
+	for (let i = 0; i < 3; i++) w.s.pulse()
+	const cell = (c: string) => w.places.peep(() => get(w.places, ["work", "engine", "cells", c]))!
+	assertEquals(w.table.get("value", cell("e"))?.value, "drew e")
+	const st = w.table.get("attributes", cell("bad"))?.value?.[STATUS]
+	assertInstanceOf(st, Error)
+	assertEquals(st.message, "bad letter")
+	const ran = context.runs(cell("bad"))!
+	assertEquals([ran.end, ran.error?.message, typeof ran.ended], ["failed", "bad letter", "number"])
+	assertEquals(w.den.processes().map((q) => q.id), [p.id])
+	w.hosted(() => w.den.stop(p))
+	assertEquals(order, ["engine handle", ["disposed", "bad"], ["disposed", "e"]])
+})
+
 Deno.test("nodes: the den's description as it travels, tracked; status as pending, an attribute with no encoding left out, children only the den's own; processes: false, none", () => {
 	const w = world()
-	const record: Runner = () => ({ stop: () => {} })
+	const record: Fn = () => ({ stop: () => {} })
 	const js = w.offer("javascript", record, { live: () => 1 })
 	assert(!("refused" in js))
 	const D = w.den.node
@@ -328,7 +574,7 @@ Deno.test("nodes: the den's description as it travels, tracked; status as pendin
 	const hidden = w.den.nodes({ processes: false })
 	assertEquals([hidden.processes, hidden.nodes[p.id]], [undefined, undefined])
 	// a status as it travels
-	const boom: Runner = () => {
+	const boom: Fn = () => {
 		throw new Error("boom")
 	}
 	w.offer("boom", boom)
@@ -342,8 +588,7 @@ Deno.test("nodes: the den's description as it travels, tracked; status as pendin
 Deno.test("the owner torn down from above: every process goes newest first, its handle given den-stopped; the den's rows gone, the den closed", () => {
 	const w = world()
 	const stops: unknown[] = []
-	const record: Runner = (_, api) => {
-		const { process } = api as Context
+	const record: Fn = (_, { process }) => {
 		return { stop: (reason) => void stops.push([process.at[1], reason]) }
 	}
 	w.offer("javascript", record)
@@ -361,14 +606,15 @@ Deno.test("the owner torn down from above: every process goes newest first, its 
 // assignment checks, at type level: A fits where B is asked
 type Fits<A, B> = [A] extends [B] ? true : false
 
-Deno.test("types: realms.run, programs' Runner and ermine/api's run fit a den's Runner; a createProcessAPI of programs' Context fits Setup's", () => {
+Deno.test("types: realms.run and programs' Runner fit a den's runner as functions, ermine/api's run as one and as a Runner; an api made from programs' Start is made from a den's", () => {
 	const fits: [
-		Fits<Realms["run"], Runner>,
-		Fits<ProgramsRunner, Runner>,
-		Fits<ProcessAPIs["run"], Runner>,
-		Fits<(ctx: ProgramsContext) => API, Setup["createProcessAPI"]>,
-		Fits<ProcessAPIs["createProcessAPI"], Setup["createProcessAPI"]>,
-	] = [true, true, true, true, true]
+		Fits<Realms["run"], Runnable>,
+		Fits<ProgramsRunner, Runnable>,
+		Fits<ProcessContext["run"], Runnable>,
+		Fits<ProcessContext["run"], Runner>,
+		Fits<(start: ProgramsStart) => API, (start: Start) => unknown>,
+		Fits<ProcessContext["createAPI"], NonNullable<Runner["api"]>>,
+	] = [true, true, true, true, true, true]
 	assertStrictEquals(fits.every((x) => x), true)
 })
 
@@ -381,7 +627,7 @@ function two(held = false) {
 		held ? { name: c.name, on: c.on, send: (t, b) => void queue.push(() => c.send(t, b)) } : c
 	const yes = () => ({ answer: "yes" as const })
 	const mac = world({ id: "mac", may: yes }), card = world({ id: "card", may: yes })
-	const record: Runner = () => ({ stop: () => {} })
+	const record: Fn = () => ({ stop: () => {} })
 	mac.offer("javascript", record)
 	card.offer("javascript", record)
 	const flush = () => {

@@ -186,7 +186,7 @@ Deno.test("start must not read/run a program whose id is outside the box (crafte
 				},
 			},
 			scopes,
-			createProcessAPI: () => ({}),
+			createAPI: () => ({}),
 		})
 	)
 	// a Way pointing the program at the SECRET node, run by the host runner (empty by: host-runnable)

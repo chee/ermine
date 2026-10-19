@@ -1,0 +1,406 @@
+{
+	"title": "a stop's reason reaches the program: teller runs an ermine/api program (its api made from the start's facts) whose teardown is recorded, its handle's stop telling ermine/api the reason. a stop given one: told it; none: ended; a user of a runner offered by a process that stops: runner-stopped; of a runner withdrawn: withdrawn; the den closed: den-stopped",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"apps": "APPS"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "APPS",
+			"value": {
+				"clock.js": "CLOCK"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "CLOCK",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CLOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "den",
+			"expect": {
+				"id": "den:mac"
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "teller",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api"
+			},
+			"live": "teller",
+			"expect": {
+				"id": "den:mac/runners/teller",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"runners",
+					"teller"
+				]
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api"
+			},
+			"live": "record",
+			"expect": {
+				"id": "den:mac/runners/javascript",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"teller"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"a"
+			],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"work",
+					"a"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "b",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"teller"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"b"
+			],
+			"expect": {
+				"id": "proc:b",
+				"at": [
+					"work",
+					"b"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "told",
+			"expect": {
+				"told": []
+			}
+		},
+		{
+			"op": "stop",
+			"name": "a",
+			"reason": "SIGHUP",
+			"expect": {}
+		},
+		{
+			"op": "told",
+			"expect": {
+				"told": [
+					{
+						"dev": "mac",
+						"process": "proc:a",
+						"why": "SIGHUP"
+					}
+				]
+			}
+		},
+		{
+			"op": "stop",
+			"name": "b",
+			"expect": {}
+		},
+		{
+			"op": "told",
+			"expect": {
+				"told": [
+					{
+						"dev": "mac",
+						"process": "proc:a",
+						"why": "SIGHUP"
+					},
+					{
+						"dev": "mac",
+						"process": "proc:b",
+						"why": "ended"
+					}
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "h",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"h"
+			],
+			"expect": {
+				"id": "proc:h",
+				"at": [
+					"work",
+					"h"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "inner",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api"
+			},
+			"live": "teller",
+			"by": "h",
+			"expect": {
+				"id": "proc:h/runners/inner",
+				"at": [
+					"work",
+					"h",
+					"runners",
+					"inner"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "c",
+			"runner": [
+				"work",
+				"h",
+				"runners",
+				"inner"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"c"
+			],
+			"expect": {
+				"id": "proc:c",
+				"at": [
+					"work",
+					"c"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "d",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"teller"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"d"
+			],
+			"expect": {
+				"id": "proc:d",
+				"at": [
+					"work",
+					"d"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "stop",
+			"name": "h",
+			"expect": {}
+		},
+		{
+			"op": "withdraw",
+			"id": "den:mac/runners/teller",
+			"expect": {}
+		},
+		{
+			"op": "told",
+			"expect": {
+				"told": [
+					{
+						"dev": "mac",
+						"process": "proc:a",
+						"why": "SIGHUP"
+					},
+					{
+						"dev": "mac",
+						"process": "proc:b",
+						"why": "ended"
+					},
+					{
+						"dev": "mac",
+						"process": "proc:c",
+						"why": "runner-stopped"
+					},
+					{
+						"dev": "mac",
+						"process": "proc:d",
+						"why": "withdrawn"
+					}
+				]
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "again",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api"
+			},
+			"live": "teller",
+			"expect": {
+				"id": "den:mac/runners/again",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"runners",
+					"again"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "e",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"again"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"e"
+			],
+			"expect": {
+				"id": "proc:e",
+				"at": [
+					"work",
+					"e"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "close",
+			"expect": {}
+		},
+		{
+			"op": "told",
+			"expect": {
+				"told": [
+					{
+						"dev": "mac",
+						"process": "proc:a",
+						"why": "SIGHUP"
+					},
+					{
+						"dev": "mac",
+						"process": "proc:b",
+						"why": "ended"
+					},
+					{
+						"dev": "mac",
+						"process": "proc:c",
+						"why": "runner-stopped"
+					},
+					{
+						"dev": "mac",
+						"process": "proc:d",
+						"why": "withdrawn"
+					},
+					{
+						"dev": "mac",
+						"process": "proc:e",
+						"why": "den-stopped"
+					}
+				]
+			}
+		}
+	]
+}

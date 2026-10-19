@@ -1,0 +1,312 @@
+{
+	"title": "a start made outside a run asks the scheduler for a pulse (setup.schedule), so it runs with nothing else pulsing: one pulse however many start before it runs, none for a start refused; a load asks one too",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"apps": "APPS"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "APPS",
+			"value": {
+				"clock.js": "CLOCK"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "CLOCK",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CLOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "den",
+			"expect": {
+				"id": "den:mac"
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api"
+			},
+			"live": "record",
+			"expect": {
+				"id": "den:mac/runners/javascript",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "later",
+			"expect": {
+				"pulses": 0
+			}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"a"
+			],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"work",
+					"a"
+				]
+			}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [],
+				"stops": []
+			}
+		},
+		{
+			"op": "later",
+			"expect": {
+				"pulses": 1
+			}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"dev": "mac",
+						"process": "proc:a",
+						"code": "hi",
+						"args": [],
+						"keys": [
+							"den",
+							"places",
+							"process"
+						]
+					}
+				],
+				"stops": []
+			}
+		},
+		{
+			"op": "later",
+			"expect": {
+				"pulses": 0
+			}
+		},
+		{
+			"op": "start",
+			"name": "b",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"b"
+			],
+			"expect": {
+				"id": "proc:b",
+				"at": [
+					"work",
+					"b"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "c",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"c"
+			],
+			"expect": {
+				"id": "proc:c",
+				"at": [
+					"work",
+					"c"
+				]
+			}
+		},
+		{
+			"op": "later",
+			"expect": {
+				"pulses": 1
+			}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"dev": "mac",
+						"process": "proc:a",
+						"code": "hi",
+						"args": [],
+						"keys": [
+							"den",
+							"places",
+							"process"
+						]
+					},
+					{
+						"dev": "mac",
+						"process": "proc:b",
+						"code": "hi",
+						"args": [],
+						"keys": [
+							"den",
+							"places",
+							"process"
+						]
+					},
+					{
+						"dev": "mac",
+						"process": "proc:c",
+						"code": "hi",
+						"args": [],
+						"keys": [
+							"den",
+							"places",
+							"process"
+						]
+					}
+				],
+				"stops": []
+			}
+		},
+		{
+			"op": "start",
+			"name": "x",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"nope"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"x"
+			],
+			"expect": {
+				"refused": "not-a-runner",
+				"runner": [
+					"system",
+					"den",
+					"runners",
+					"nope"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "x",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"a"
+			],
+			"expect": {
+				"refused": "taken",
+				"at": [
+					"work",
+					"a"
+				]
+			}
+		},
+		{
+			"op": "later",
+			"expect": {
+				"pulses": 0
+			}
+		},
+		{
+			"op": "load",
+			"name": "l",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"expect": {}
+		},
+		{
+			"op": "later",
+			"expect": {
+				"pulses": 1
+			}
+		},
+		{
+			"op": "later",
+			"expect": {
+				"pulses": 0
+			}
+		}
+	]
+}

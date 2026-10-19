@@ -16,11 +16,11 @@ import { createSites, type Sited } from "@ermine/sites"
 import { type Compiler, createBuilds } from "@ermine/build"
 import { satisfy, type Way } from "./programs.ts"
 import {
-	type Context,
 	createPrograms,
 	type Handle,
 	type Process,
 	type Runner,
+	type Start,
 	StartError,
 } from "./start.ts"
 
@@ -31,7 +31,7 @@ const WASM = "public.wasm-executable"
 // places given to the programs name reads (describe, watchAll), so each build's latest run is written
 function world(
 	runner: Runner,
-	createProcessAPI: (ctx: Context) => unknown = (ctx) => ctx.process,
+	createAPI: (start: Start) => unknown = (start) => start.process,
 	sited = false,
 	named = false,
 ) {
@@ -83,7 +83,7 @@ function world(
 				: writes,
 			builds,
 			scopes,
-			createProcessAPI,
+			createAPI,
 			sites,
 		})
 	})
@@ -117,13 +117,13 @@ function recording() {
 	return { runner, calls, stops: () => stops }
 }
 
-Deno.test("the api is createProcessAPI's return, and nothing else: no scheduler, getCurrentScope or runWithScope unless it puts them there", () => {
+Deno.test("the api is createAPI's return, and nothing else: no scheduler, getCurrentScope or runWithScope unless it puts them there", () => {
 	const r = recording()
-	const given: Context[] = []
+	const given: Start[] = []
 	const made: unknown[] = []
-	const w = world(r.runner, (ctx) => {
-		given.push(ctx)
-		const api = { places: ctx.places, process: ctx.process }
+	const w = world(r.runner, (start) => {
+		given.push(start)
+		const api = { places: start.places, process: start.process }
 		made.push(api)
 		return api
 	})
@@ -249,12 +249,14 @@ Deno.test("a scope above torn down: the runner stopped, the row out, the node's 
 	let runs = 0
 	let stops = 0
 	const made: Scope[] = []
-	// this createProcessAPI gives a way to make a computer, and nothing else of the scheduler's
+	// this createAPI gives a way to make a computer, and nothing else of the scheduler's
 	type Api = { compute: (f: () => unknown) => void }
 	const w = world((_code, api) => {
 		;(api as Api).compute(() => runs++)
 		return { stop: () => void stops++ }
-	}, (ctx): Api => ({ compute: (f) => void made.push(ctx.scheduler.createComputer(f, () => {})) }))
+	}, (start): Api => ({
+		compute: (f) => void made.push(start.scheduler.createComputer(f, () => {})),
+	}))
 	const a = w.start(["clock"])
 	w.s.pulse()
 	assertEquals([runs, stops], [1, 0])

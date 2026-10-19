@@ -20,7 +20,7 @@
 // { op: "now", t }                         → {}   presence clock, ms
 // processes:
 // { op: "start", name, at, cwd?, args?, program } → { id }   program run as setup
-// { op: "stop", name, why? }               → {}   teardowns told why (none: "ended")
+// { op: "stop", name, why? }               → {}   teardowns told why, as given (none: "ended")
 // { op: "do", process, call, as? }         → { value }   call [fn, ...args] from outside;
 //    as: name the result
 // { op: "log", name }                      → { values }
@@ -59,7 +59,7 @@ import { no, type Policy, yes } from "@ermine/protect"
 import type { World } from "@ermine/presence"
 import { createOverlay, type Overlay } from "@ermine/patch-nodes"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
-import { type API, createProcessAPIs, type ProcessAPIs, SendError } from "./api.ts"
+import { type API, createProcessContext, type ProcessContext, SendError } from "./api.ts"
 
 type Env = Map<string, unknown>
 type Running = { api: API; env: Env; process: Process }
@@ -68,7 +68,7 @@ type Made = {
 	s: ReturnType<typeof createScheduler>
 	table: Table
 	places: Places
-	apis: ProcessAPIs
+	context: ProcessContext
 	host: Scope
 	above: Scope
 	scopes: ReturnType<typeof createScopeNodes>
@@ -140,7 +140,7 @@ function make(o: Request = {}): Made {
 		},
 		runs: undefined,
 	}
-	const apis = createProcessAPIs({
+	const context = createProcessContext({
 		scheduler: s,
 		table,
 		commit,
@@ -157,7 +157,7 @@ function make(o: Request = {}): Made {
 		s,
 		table,
 		places,
-		apis,
+		context,
 		host,
 		above,
 		scopes,
@@ -272,7 +272,7 @@ function start(r: Request): { id: Id } {
 		() => m.places.commit(addProcess(m.table, "R", at, id, createChangeHeader(m.s))),
 	)
 	const process: Process = { id, at, cwd: (r.cwd as string[]) ?? at.slice(0, -1), scope }
-	const api = m.apis.createProcessAPI({
+	const api = m.context.createAPI({
 		box: { root: "R", places: m.places },
 		places: m.places,
 		process: { id, at, args: (r.args as string[]) ?? [], cwd: process.cwd },
@@ -282,7 +282,7 @@ function start(r: Request): { id: Id } {
 	})
 	const env: Env = new Map()
 	m.running.set(r.name, { api, env, process })
-	m.s.runWithScope(scope, () => m.apis.run((a: API) => run(a, env, r.program as Step[]), api))
+	m.s.runWithScope(scope, () => m.context.run((a: API) => run(a, env, r.program as Step[]), api))
 	return { id }
 }
 
@@ -348,7 +348,7 @@ function answer(r: Request): Record<string, unknown> {
 		case "stop": {
 			const p = world().running.get(r.name)
 			if (p === undefined) throw new Error(`no process ${r.name}`)
-			world().apis.stop(p.process, r.why)
+			world().context.stop(p.process, r.why)
 			return {}
 		}
 		case "do": {
