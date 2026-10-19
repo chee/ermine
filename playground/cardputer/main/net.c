@@ -1,4 +1,5 @@
-// littlesync over WiFi (net.h): esp_wifi as a station, esp_http_client posting to the gateway
+// littlesync over WiFi (net.h): esp_wifi as a station, esp_http_client posting to the gateway (http, or
+// https checked against ESP-IDF's certificate bundle)
 #include "net.h"
 
 #include "http.h"
@@ -6,6 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "esp_crt_bundle.h"
 #include "esp_event.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
@@ -90,8 +92,9 @@ static int stop(void) {
 
 int net_start(ls_dev *dev, void (*random)(void *, uint8_t *, size_t)) {
 	if (dev == NULL || CONFIG_CARDPUTER_WIFI_SSID[0] == 0 || CONFIG_CARDPUTER_GATEWAY[0] == 0) return 0;
-	if (strncmp(CONFIG_CARDPUTER_GATEWAY, "http://", 7) != 0) {
-		ESP_LOGE(TAG, "the gateway is http://host:port (https later): %s", CONFIG_CARDPUTER_GATEWAY);
+	int secure = strncmp(CONFIG_CARDPUTER_GATEWAY, "https://", 8) == 0;
+	if (!secure && strncmp(CONFIG_CARDPUTER_GATEWAY, "http://", 7) != 0) {
+		ESP_LOGE(TAG, "the gateway is http://host:port or https://host: %s", CONFIG_CARDPUTER_GATEWAY);
 		return 0;
 	}
 	gate = ls_link(dev);
@@ -104,6 +107,8 @@ int net_start(ls_dev *dev, void (*random)(void *, uint8_t *, size_t)) {
 		.method = HTTP_METHOD_POST,
 		.timeout_ms = LS_HTTP_IDLE_MS + SLACK_MS,
 		.disable_auto_redirect = true,
+		// https: the server's certificate checked against the bundle (CONFIG_MBEDTLS_CERTIFICATE_BUNDLE)
+		.crt_bundle_attach = secure ? esp_crt_bundle_attach : NULL,
 	};
 	client = http && done ? esp_http_client_init(&c) : NULL;
 	if (client == NULL) return stop();
@@ -123,7 +128,8 @@ int net_start(ls_dev *dev, void (*random)(void *, uint8_t *, size_t)) {
 	esp_wifi_set_mode(WIFI_MODE_STA);
 	esp_wifi_set_config(WIFI_IF_STA, &w);
 	esp_wifi_start();
-	xTaskCreate(posting, "littlesync http", 6144, NULL, 5, &poster);
+	// a TLS handshake (mbedtls on this task) wants more stack than plain http
+	xTaskCreate(posting, "littlesync http", secure ? 8192 : 6144, NULL, 5, &poster);
 	ESP_LOGI(TAG, "wifi %s, gateway %s, session %s", CONFIG_CARDPUTER_WIFI_SSID, CONFIG_CARDPUTER_GATEWAY,
 		ls_http_session(http));
 	return 1;

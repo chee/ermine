@@ -68,9 +68,8 @@ typedef struct {
 } write;
 
 #define HELDS 8
-// presence rows a node, at most (the soonest to lapse goes for a new one), and my row's bytes at most
-#define ROWS 8
-#define ROW_MAX 1024
+// topics a peer may say it wants: past this, all
+#define WANTS 128
 #define RING 8
 // commits passing (no write stands) per node at most, and how long one waits for the links
 #define PASSING 16
@@ -113,11 +112,6 @@ struct ls_node {
 	size_t hold_length;
 	int64_t hold_sent;
 	bool hold_dirty;
-	ls_row rows[ROWS];
-	uint8_t *row; // my presence row: presence.ts's message, sent as it is
-	size_t row_length;
-	int64_t row_sent;
-	bool row_dirty;
 	uint32_t version;
 	// commits taken in from a link since the last tick: heads to the others then (once, however many came).
 	// news_from: the link they came on, -1: several
@@ -127,13 +121,26 @@ struct ls_node {
 	int64_t saved;
 };
 
+// a topic this device hears: told to options.heard (listen), its presence rows kept (room: a followed
+// node's id, or ls_presence_on), or both. rows: n_rows of them, in no order. row: my presence row,
+// presence.ts's message, sent as it is
+typedef struct {
+	char *name;
+	bool listen, room;
+	ls_row *rows;
+	size_t n_rows, c_rows;
+	uint8_t *row;
+	size_t row_length;
+	int64_t row_sent;
+	bool row_dirty;
+} topic;
+
 // one byte stream to one peer: what is said on it, and what is known of the peer on it
 struct ls_link {
 	ls_dev *dev;
 	unsigned slot;
 	uint8_t *out;
 	size_t out_used, out_cap;
-	uint8_t rx[LS_FRAME_MAX];
 	size_t rx_n;
 	bool rx_over;
 	bool up, beat, due;
@@ -141,6 +148,14 @@ struct ls_link {
 	uint8_t peer[LS_KEY_LEN];
 	bool has_peer;
 	ls_traffic traffic;
+	// the topics its peer wants sent to it (its last listen), or all. announce: it began again, so my
+	// rows go to it at its next listen. told: the listen last sent to it (a sum of hashes; 0: none since)
+	char **wants;
+	size_t n_wants;
+	bool wants_all, announce;
+	uint32_t told;
+	// the frame being read: the dev's frame bytes at most
+	uint8_t rx[];
 };
 
 struct ls_dev {
@@ -160,6 +175,11 @@ struct ls_dev {
 	unsigned keys_next;
 	ls_stats stats;
 	const char *reason;
+	// the topics heard (listened to, rooms); wants_changed: the links are told at the next tick
+	topic **topics;
+	size_t n_topics;
+	bool wants_changed;
+	size_t frame; // a link's rx bytes: a frame of the largest message
 };
 
 static void say(ls_dev *d, const char *format, ...) __attribute__((format(printf, 2, 3)));
@@ -275,13 +295,13 @@ static int open_seal(ls_dev *d, const uint8_t *sealed, size_t length, const uint
 
 // ---- the wire out
 
-// false: dropped (the out queue is full)
+// false: dropped (the out queue is full; an empty one takes any message)
 static bool send_message(struct ls_link *l, Json *m) {
 	size_t n;
 	uint8_t *b = encode(m, &n);
 	jsonFree(m);
 	if (b == NULL) return false;
-	if (l->out_used + n * 2 + 16 > (l->dev->o.max_out ? l->dev->o.max_out : OUT_MAX)) {
+	if (l->out_used > 0 && l->out_used + n * 2 + 16 > (l->dev->o.max_out ? l->dev->o.max_out : OUT_MAX)) {
 		l->traffic.dropped_out++;
 		free(b);
 		return false;
@@ -1145,6 +1165,7 @@ static ls_node *by_doc(ls_dev *d, const Json *b) {
 	return NULL;
 }
 
+static topic *topic_make(ls_dev *d, const char *name);
 ls_node *ls_follow(ls_dev *d, const char *id) {
 	ls_node *n = ls_find(d, id);
 	if (n != NULL) return n;
@@ -1163,6 +1184,9 @@ ls_node *ls_follow(ls_dev *d, const char *id) {
 	d->nodes[d->n_nodes++] = n;
 	for (unsigned i = 0; i < d->n_links; i++)
 		if (d->links[i] != NULL && d->links[i]->up) send_heads(n, d->links[i], false);
+	// its presence rows: a room on its id
+	topic *t = topic_make(d, id);
+	if (!t->room) t->room = true, d->wants_changed = true;
 	return n;
 }
 
@@ -1224,8 +1248,6 @@ static void node_free(ls_node *n) {
 	free(n->kept);
 	for (int i = 0; i < HELDS; i++) op_free(n->helds[i].value);
 	free(n->hold);
-	for (int i = 0; i < ROWS; i++) op_free(n->rows[i].value);
-	free(n->row);
 	free(n);
 }
 
@@ -1660,65 +1682,183 @@ const ls_held *ls_held_at(const ls_node *n, size_t at) {
 	return NULL;
 }
 
-// ---- presence
+// ---- short-lived messages: bytes on a topic, to the peers that want it, never stored
 
-// who's row: found, or (make) a free one, else the one of another device soonest to lapse. NULL: none
-static ls_row *row_of(ls_node *n, const uint8_t *who, size_t length, bool make) {
-	ls_row *free_ = NULL;
-	for (int i = 0; i < ROWS; i++) {
-		ls_row *r = &n->rows[i];
-		if (r->value != NULL && r->who_length == length && memcmp(r->who, who, length) == 0) return r;
-		if (r->value == NULL && free_ == NULL) free_ = r;
-	}
-	if (!make) return NULL;
-	for (int i = 0; free_ == NULL && i < ROWS; i++)
-		if (!n->rows[i].own) free_ = &n->rows[i];
-	for (int i = 0; i < ROWS; i++)
-		if (!n->rows[i].own && n->rows[i].until < free_->until) free_ = &n->rows[i];
-	op_free(free_->value);
-	memset(free_, 0, sizeof *free_);
-	memcpy(free_->who, who, length);
-	free_->who_length = length;
-	return free_;
+static const Json *field(const Json *m, const char *key, JsonType type) {
+	const Json *v = jsonGet(m, key);
+	return v != NULL && v->type == type ? v : NULL;
 }
 
-static void row_drop(ls_node *n, ls_row *r) {
-	if (r == NULL || r->value == NULL) return;
-	op_free(r->value);
-	memset(r, 0, sizeof *r);
-	n->version++;
+static size_t message_max(const ls_dev *d) { return d->o.message ? d->o.message : LS_MESSAGE; }
+static size_t rows_max(const ls_dev *d) { return d->o.rows ? d->o.rows : LS_ROWS; }
+
+static bool topic_ok(const char *name) {
+	size_t n = name != NULL ? strlen(name) : 0;
+	return n > 0 && n <= LS_TOPIC_MAX;
 }
 
-// a row (presence.ts's bytes) of who's to every link that is up but `except`; only: that link alone
-static void send_presence(ls_node *n, const struct ls_link *except, struct ls_link *only, const uint8_t *who, size_t who_length,
-	const uint8_t *row, size_t length) {
-	ls_dev *d = n->dev;
+static char *text_copy(const char *s) {
+	size_t n = strlen(s);
+	char *c = allocate(n + 1);
+	memcpy(c, s, n);
+	return c;
+}
+
+static topic *topic_find(const ls_dev *d, const char *name) {
+	for (size_t i = 0; i < d->n_topics; i++)
+		if (strcmp(d->topics[i]->name, name) == 0) return d->topics[i];
+	return NULL;
+}
+
+// the topic, made if it is not there (heard as nothing yet: the caller says listen or room)
+static topic *topic_make(ls_dev *d, const char *name) {
+	topic *t = topic_find(d, name);
+	if (t != NULL) return t;
+	t = allocate(sizeof *t);
+	t->name = text_copy(name);
+	t->row_sent = INT64_MIN / 2;
+	d->topics = realloc(d->topics, (d->n_topics + 1) * sizeof *d->topics);
+	if (d->topics == NULL) abort();
+	d->topics[d->n_topics++] = t;
+	return t;
+}
+
+static void topic_free(topic *t) {
+	for (size_t i = 0; i < t->n_rows; i++) op_free(t->rows[i].value);
+	free(t->rows);
+	free(t->row);
+	free(t->name);
+	free(t);
+}
+
+static bool wants(const struct ls_link *l, const char *name) {
+	if (l->wants_all) return true;
+	for (size_t i = 0; i < l->n_wants; i++)
+		if (strcmp(l->wants[i], name) == 0) return true;
+	return false;
+}
+
+// who's bytes on the topic to every link that is up and wants it, but `except`; only: that link alone
+static void send_say(ls_dev *d, const struct ls_link *except, struct ls_link *only, const char *name, const uint8_t *who,
+	size_t who_length, const uint8_t *bytes, size_t length) {
 	for (unsigned i = 0; i < d->n_links; i++) {
 		struct ls_link *l = d->links[i];
-		if (l == NULL || l == except || !l->up || (only != NULL && l != only)) continue;
-		Json *m = message("presence");
-		jsonAdd(m, "node", jsonBytes(n->doc, 32));
+		if (l == NULL || l == except || !l->up || (only != NULL && l != only) || !wants(l, name)) continue;
+		Json *m = message("say");
+		jsonAdd(m, "topic", jsonString(name));
 		jsonAdd(m, "who", jsonBytes(who, who_length));
-		jsonAdd(m, "row", jsonBytes(row, length));
-		say(d, "tx presence %.8s", short_id(n));
+		jsonAdd(m, "bytes", jsonBytes(length ? bytes : (const uint8_t *)"", length));
+		say(d, "tx say %.24s", name);
 		send_message(l, m);
 	}
 }
 
-static void send_row(ls_node *n, struct ls_link *only) {
-	ls_dev *d = n->dev;
-	if (only == NULL) n->row_sent = d->now, n->row_dirty = false;
-	ls_row *r = row_of(n, d->key, LS_KEY_LEN, false);
-	if (r != NULL && only == NULL) r->until = d->now + LS_TTL_MS;
-	if (n->row != NULL) send_presence(n, NULL, only, d->key, LS_KEY_LEN, n->row, n->row_length);
+ls_code ls_send(ls_dev *d, const char *name, const uint8_t *bytes, size_t length) {
+	if (!topic_ok(name) || (bytes == NULL && length) || length > message_max(d)) return LS_BAD;
+	send_say(d, NULL, NULL, name, d->key, LS_KEY_LEN, bytes, length);
+	return LS_OK;
 }
 
-ls_code ls_presence(ls_node *n, const op_value *value) {
-	ls_dev *d = n->dev;
+ls_code ls_listen(ls_dev *d, const char *name) {
+	if (!topic_ok(name)) return LS_BAD;
+	topic *t = topic_make(d, name);
+	if (!t->listen) t->listen = true, d->wants_changed = true;
+	return LS_OK;
+}
+
+// what the link's peer is told this device wants: the topics it hears, and (a relay) what the peers on
+// its other links want. Sent when it differs from the last told, or force
+static void send_listen(ls_dev *d, struct ls_link *l, bool force) {
+	const char **list = NULL;
+	size_t n = 0;
+	bool all = false;
+	uint32_t sum = 0;
+	for (unsigned k = 0; k <= d->n_links && !all; k++) {
+		const struct ls_link *o = k < d->n_links ? d->links[k] : NULL;
+		if (k < d->n_links && (o == NULL || o == l)) continue;
+		all = o != NULL && o->wants_all;
+		size_t count = o != NULL ? o->n_wants : d->n_topics;
+		for (size_t i = 0; i < count && !all; i++) {
+			const char *name = o != NULL ? o->wants[i] : d->topics[i]->name;
+			if (o == NULL && !d->topics[i]->listen && !d->topics[i]->room) continue;
+			bool there = false;
+			for (size_t j = 0; j < n && !there; j++) there = strcmp(list[j], name) == 0;
+			if (there) continue;
+			if (n == WANTS) all = true;
+			else {
+				if (n % 16 == 0 && (list = realloc(list, (n + 16) * sizeof *list)) == NULL) abort();
+				list[n++] = name;
+				// FNV-1a, summed: the same for the same set in any order
+				uint32_t h = 2166136261u;
+				for (const char *c = name; *c; c++) h = (h ^ (uint8_t)*c) * 16777619u;
+				sum += h;
+			}
+		}
+	}
+	uint32_t told = (all ? 0x9e3779b9u : sum + (uint32_t)n * 2654435761u) | 1;
+	if (force || told != l->told) {
+		l->told = told;
+		Json *m = message("listen"), *topics = jsonArray();
+		for (size_t i = 0; i < n && !all; i++) jsonPush(topics, jsonString(list[i]));
+		jsonAdd(m, "topics", topics);
+		if (all) jsonAdd(m, "all", jsonBoolean(true));
+		say(d, "tx listen %zu%s", all ? 0 : n, all ? " all" : "");
+		send_message(l, m);
+	}
+	free(list);
+}
+
+// ---- presence: rows on a topic, each a message (presence.ts's) of who's, lasting till its ttl
+
+static void rows_changed(ls_dev *d, const topic *t) {
+	ls_node *n = ls_find(d, t->name);
+	if (n != NULL) n->version++;
+}
+
+// who's row: found, or (make) a new one, else the one of another device soonest to lapse. NULL: none
+static ls_row *row_of(ls_dev *d, topic *t, const uint8_t *who, size_t length, bool make) {
+	for (size_t i = 0; i < t->n_rows; i++)
+		if (t->rows[i].who_length == length && memcmp(t->rows[i].who, who, length) == 0) return &t->rows[i];
+	if (!make) return NULL;
+	ls_row *r = NULL;
+	if (t->n_rows < rows_max(d)) {
+		if (t->n_rows == t->c_rows) {
+			t->c_rows = t->c_rows ? t->c_rows * 2 : 2;
+			if (t->c_rows > rows_max(d)) t->c_rows = rows_max(d);
+			if ((t->rows = realloc(t->rows, t->c_rows * sizeof *t->rows)) == NULL) abort();
+		}
+		r = &t->rows[t->n_rows++];
+	} else {
+		for (size_t i = 0; i < t->n_rows; i++)
+			if (!t->rows[i].own && (r == NULL || t->rows[i].until < r->until)) r = &t->rows[i];
+		if (r == NULL) return NULL;
+		op_free(r->value);
+	}
+	memset(r, 0, sizeof *r);
+	memcpy(r->who, who, length);
+	r->who_length = length;
+	return r;
+}
+
+static void row_drop(ls_dev *d, topic *t, ls_row *r) {
+	if (r == NULL) return;
+	op_free(r->value);
+	*r = t->rows[--t->n_rows];
+	rows_changed(d, t);
+}
+
+static void send_row(ls_dev *d, topic *t, struct ls_link *only) {
+	if (only == NULL) t->row_sent = d->now, t->row_dirty = false;
+	ls_row *r = row_of(d, t, d->key, LS_KEY_LEN, false);
+	if (r != NULL && only == NULL) r->until = d->now + LS_TTL_MS;
+	if (t->row != NULL) send_say(d, NULL, only, t->name, d->key, LS_KEY_LEN, t->row, t->row_length);
+}
+
+static ls_code presence_set(ls_dev *d, topic *t, const op_value *value) {
 	Json *m = jsonObject();
 	op_value *c = NULL;
 	if (value == NULL) {
-		if (n->row == NULL) return jsonFree(m), LS_OK;
+		if (t->row == NULL) return jsonFree(m), LS_OK;
 		jsonAdd(m, "gone", jsonBoolean(true));
 	} else {
 		c = copy(value, 0);
@@ -1730,47 +1870,91 @@ ls_code ls_presence(ls_node *n, const op_value *value) {
 	size_t length;
 	uint8_t *bytes = encode(m, &length);
 	jsonFree(m);
-	if (bytes == NULL || length > ROW_MAX) return free(bytes), op_free(c), LS_BAD;
-	free(n->row);
-	n->row = bytes, n->row_length = length;
+	if (bytes == NULL || length > message_max(d)) return free(bytes), op_free(c), LS_BAD;
+	free(t->row);
+	t->row = bytes, t->row_length = length;
 	if (c == NULL) {
 		// gone, told once: then no row of mine
-		row_drop(n, row_of(n, d->key, LS_KEY_LEN, false));
-		send_row(n, NULL);
-		free(n->row);
-		n->row = NULL;
+		row_drop(d, t, row_of(d, t, d->key, LS_KEY_LEN, false));
+		send_row(d, t, NULL);
+		free(t->row);
+		t->row = NULL;
 		return LS_OK;
 	}
-	ls_row *r = row_of(n, d->key, LS_KEY_LEN, true);
+	ls_row *r = row_of(d, t, d->key, LS_KEY_LEN, true);
 	op_free(r->value);
 	r->value = c;
 	r->own = 1;
 	r->until = d->now + LS_TTL_MS;
-	n->version++;
-	if (d->now - n->row_sent >= 50) send_row(n, NULL);
-	else n->row_dirty = true;
+	rows_changed(d, t);
+	if (d->now - t->row_sent >= 50) send_row(d, t, NULL);
+	else t->row_dirty = true;
 	return LS_OK;
 }
 
-size_t ls_rows(const ls_node *n) {
-	size_t k = 0;
-	for (int i = 0; i < ROWS; i++) k += n->rows[i].value != NULL;
-	return k;
+void ls_unlisten(ls_dev *d, const char *name) {
+	topic *t = topic_find(d, name);
+	if (t == NULL) return;
+	presence_set(d, t, NULL);
+	if (t->n_rows) rows_changed(d, t);
+	for (size_t i = 0; i < d->n_topics; i++)
+		if (d->topics[i] == t) {
+			d->topics[i] = d->topics[--d->n_topics];
+			break;
+		}
+	topic_free(t);
+	d->wants_changed = true;
 }
-const ls_row *ls_row_at(const ls_node *n, size_t at) {
-	for (int i = 0; i < ROWS; i++)
-		if (n->rows[i].value != NULL && at-- == 0) return &n->rows[i];
-	return NULL;
+
+ls_code ls_presence_on(ls_dev *d, const char *name, const op_value *value) {
+	if (!topic_ok(name)) return LS_BAD;
+	topic *t = topic_make(d, name);
+	if (!t->room) t->room = true, d->wants_changed = true;
+	return presence_set(d, t, value);
+}
+size_t ls_rows_on(const ls_dev *d, const char *name) {
+	const topic *t = topic_find(d, name);
+	return t != NULL && t->room ? t->n_rows : 0;
+}
+const ls_row *ls_row_on(const ls_dev *d, const char *name, size_t at) {
+	const topic *t = topic_find(d, name);
+	return t != NULL && t->room && at < t->n_rows ? &t->rows[at] : NULL;
+}
+ls_code ls_presence(ls_node *n, const op_value *value) { return ls_presence_on(n->dev, n->id, value); }
+size_t ls_rows(const ls_node *n) { return ls_rows_on(n->dev, n->id); }
+const ls_row *ls_row_at(const ls_node *n, size_t at) { return ls_row_on(n->dev, n->id, at); }
+
+// a row heard on a room (presence.ts's message): {ttl, value} who's row, {gone} none; a numbered patch
+// ({patches, n}) is not taken (the next renew is whole)
+static void take_row(ls_dev *d, topic *t, const Json *who, const Json *b) {
+	Json *row = cborDecode(b->bytes.data, b->bytes.length, NULL, NULL);
+	if (row == NULL || row->type != JSON_OBJECT) {
+		jsonFree(row);
+		return;
+	}
+	const Json *gone = field(row, "gone", JSON_BOOLEAN), *ttl = field(row, "ttl", JSON_NUMBER);
+	if (gone != NULL && gone->boolean) row_drop(d, t, row_of(d, t, who->bytes.data, who->bytes.length, false));
+	else if (jsonGet(row, "patches") == NULL) {
+		const Json *v = jsonGet(row, "value");
+		op_value *value = v != NULL ? pk_of_json(v) : op_null();
+		ls_row *r = value != NULL ? row_of(d, t, who->bytes.data, who->bytes.length, true) : NULL;
+		if (r != NULL) {
+			op_free(r->value);
+			r->value = value;
+			// the time left, as a peer said it (an hour at most)
+			int32_t ms = ttl == NULL || !(ttl->number > 0) ? 0 : ttl->number < 3600000 ? (int32_t)ttl->number : 3600000;
+			r->until = d->now + ms;
+			rows_changed(d, t);
+		} else op_free(value);
+	}
+	jsonFree(row);
 }
 
 // ---- the wire in
 
-static const Json *field(const Json *m, const char *key, JsonType type) {
-	const Json *v = jsonGet(m, key);
-	return v != NULL && v->type == type ? v : NULL;
-}
-
 static void to_peer_up(struct ls_link *l) {
+	// back from silent: told again what this device wants
+	if (!l->up) l->told = 0;
 	l->up = true;
 	l->heard = l->dev->now;
 }
@@ -1784,7 +1968,9 @@ static void forget_slot(ls_dev *d, unsigned slot) {
 			c->marks[slot >> 3] &= keep;
 			c->marks[d->w + (slot >> 3)] &= keep;
 		}
-	if (d->links[slot] != NULL) d->links[slot]->round = INT64_MIN / 2;
+	struct ls_link *l = d->links[slot];
+	// its peer knows nothing of what this device wants, nor of my rows
+	if (l != NULL) l->round = INT64_MIN / 2, l->told = 0, l->announce = true;
 }
 
 static void on_hello(struct ls_link *l, const Json *m) {
@@ -1802,8 +1988,7 @@ static void on_hello(struct ls_link *l, const Json *m) {
 	forget_slot(d, l->slot);
 	send_hello(l, !is_re);
 	for (size_t i = 0; i < d->n_nodes; i++) send_heads(d->nodes[i], l, false);
-	// someone new: my rows now (presence's announce)
-	for (size_t i = 0; i < d->n_nodes; i++) send_row(d->nodes[i], l);
+	// what this device wants, at the next tick; my rows once it says what it wants (presence's announce)
 }
 
 static bool in_list(const Json *list, const uint8_t name[CM_NAME]) {
@@ -1952,36 +2137,58 @@ static void on_ephemeral(struct ls_link *l, const Json *m) {
 	cm_free(&c);
 }
 
-static void on_presence(struct ls_link *l, const Json *m) {
+// what the peer wants sent to it: the topics (each once), or all. My rows go to it where it wants them
+// now and did not before (all of them when it began again)
+static void on_listen(struct ls_link *l, const Json *m) {
 	ls_dev *d = l->dev;
-	ls_node *n = by_doc(d, jsonGet(m, "node"));
-	const Json *who = field(m, "who", JSON_BYTES), *b = field(m, "row", JSON_BYTES);
-	if (n == NULL || who == NULL || b == NULL || who->bytes.length == 0 || who->bytes.length > LS_KEY_LEN) return;
-	if (who->bytes.length == LS_KEY_LEN && memcmp(who->bytes.data, d->key, LS_KEY_LEN) == 0) return;
-	Json *row = cborDecode(b->bytes.data, b->bytes.length, NULL, NULL);
-	if (row == NULL || row->type != JSON_OBJECT) {
-		jsonFree(row);
+	const Json *list = field(m, "topics", JSON_ARRAY), *all = field(m, "all", JSON_BOOLEAN);
+	if (list == NULL && all == NULL) return;
+	char **was = l->wants;
+	size_t was_n = l->n_wants;
+	bool was_all = l->wants_all;
+	l->wants = NULL, l->n_wants = 0;
+	l->wants_all = all != NULL && all->boolean;
+	for (int i = 0; list != NULL && !l->wants_all && i < list->array.count; i++) {
+		const Json *x = list->array.items[i];
+		if (x->type != JSON_STRING || !topic_ok(x->string) || wants(l, x->string)) continue;
+		if (l->n_wants == WANTS) l->wants_all = true;
+		else {
+			if (l->n_wants % 16 == 0 && (l->wants = realloc(l->wants, (l->n_wants + 16) * sizeof *l->wants)) == NULL) abort();
+			l->wants[l->n_wants++] = text_copy(x->string);
+		}
+	}
+	if (l->wants_all) {
+		for (size_t i = 0; i < l->n_wants; i++) free(l->wants[i]);
+		l->n_wants = 0;
+	}
+	say(d, "rx listen %zu%s", l->n_wants, l->wants_all ? " all" : "");
+	for (size_t i = 0; i < d->n_topics; i++) {
+		topic *t = d->topics[i];
+		bool before = was_all;
+		for (size_t k = 0; k < was_n && !before; k++) before = strcmp(was[k], t->name) == 0;
+		if (t->row != NULL && wants(l, t->name) && (l->announce || !before)) send_row(d, t, l);
+	}
+	l->announce = false;
+	for (size_t k = 0; k < was_n; k++) free(was[k]);
+	free(was);
+	d->wants_changed = true;
+}
+
+static void on_say(struct ls_link *l, const Json *m) {
+	ls_dev *d = l->dev;
+	const Json *name = field(m, "topic", JSON_STRING), *who = field(m, "who", JSON_BYTES), *b = field(m, "bytes", JSON_BYTES);
+	if (name == NULL || !topic_ok(name->string) || who == NULL || who->bytes.length == 0 || who->bytes.length > LS_KEY_LEN ||
+		b == NULL || b->bytes.length > message_max(d))
 		return;
-	}
-	say(d, "rx presence %.8s", short_id(n));
-	const Json *gone = field(row, "gone", JSON_BOOLEAN), *ttl = field(row, "ttl", JSON_NUMBER);
-	if (gone != NULL && gone->boolean) row_drop(n, row_of(n, who->bytes.data, who->bytes.length, false));
-	else if (jsonGet(row, "patches") == NULL) {
-		const Json *v = jsonGet(row, "value");
-		op_value *value = v != NULL ? pk_of_json(v) : op_null();
-		ls_row *r = value != NULL ? row_of(n, who->bytes.data, who->bytes.length, true) : NULL;
-		if (r != NULL) {
-			op_free(r->value);
-			r->value = value;
-			// the time left, as a peer said it (an hour at most)
-			int32_t t = ttl == NULL || !(ttl->number > 0) ? 0 : ttl->number < 3600000 ? (int32_t)ttl->number : 3600000;
-			r->until = d->now + t;
-			n->version++;
-		} else op_free(value);
-	}
-	jsonFree(row);
-	// on to the other peers, as it came
-	if (others_up(d, l)) send_presence(n, l, NULL, who->bytes.data, who->bytes.length, b->bytes.data, b->bytes.length);
+	// mine, come back round: dropped
+	if (who->bytes.length == LS_KEY_LEN && memcmp(who->bytes.data, d->key, LS_KEY_LEN) == 0) return;
+	say(d, "rx say %.24s", name->string);
+	// on to the other peers that want it, as it came (a ring of links would carry it round for ever)
+	send_say(d, l, NULL, name->string, who->bytes.data, who->bytes.length, b->bytes.data, b->bytes.length);
+	topic *t = topic_find(d, name->string);
+	if (t != NULL && t->room) take_row(d, t, who, b);
+	if (t != NULL && t->listen && d->o.heard != NULL)
+		d->o.heard(d->o.heard_context, name->string, who->bytes.data, who->bytes.length, b->bytes.data, b->bytes.length);
 }
 
 static void on_message(struct ls_link *l, const uint8_t *bytes, size_t length) {
@@ -2006,7 +2213,8 @@ static void on_message(struct ls_link *l, const uint8_t *bytes, size_t length) {
 	else if (strcmp(t->string, "commits") == 0) on_commits(l, m);
 	else if (strcmp(t->string, "ack") == 0) on_ack(l, m);
 	else if (strcmp(t->string, "ephemeral") == 0) on_ephemeral(l, m);
-	else if (strcmp(t->string, "presence") == 0) on_presence(l, m);
+	else if (strcmp(t->string, "say") == 0) on_say(l, m);
+	else if (strcmp(t->string, "listen") == 0) on_listen(l, m);
 	jsonFree(m);
 }
 
@@ -2014,7 +2222,7 @@ void ls_feed(struct ls_link *l, const uint8_t *bytes, size_t length) {
 	for (size_t i = 0; i < length; i++) {
 		uint8_t b = bytes[i];
 		if (b != 0) {
-			if (l->rx_n < LS_FRAME_MAX) l->rx[l->rx_n++] = b;
+			if (l->rx_n < l->dev->frame) l->rx[l->rx_n++] = b;
 			else l->rx_over = true;
 			continue;
 		}
@@ -2064,6 +2272,17 @@ void ls_tick(ls_dev *d, int64_t now) {
 		l->due = l->up && now - l->round >= 1000;
 		if (l->due) l->round = now;
 		any |= l->up;
+		// what this device wants: when it changed, to a peer that began again, and with each heads beat
+		if (l->up && (d->wants_changed || l->told == 0 || l->beat)) send_listen(d, l, l->beat);
+	}
+	d->wants_changed = false;
+	for (size_t i = 0; i < d->n_topics; i++) {
+		topic *t = d->topics[i];
+		for (size_t k = 0; k < t->n_rows;)
+			if (!t->rows[k].own && now >= t->rows[k].until) row_drop(d, t, &t->rows[k]);
+			else k++;
+		if (t->row != NULL && any && (now - t->row_sent >= LS_RENEW_MS || (t->row_dirty && now - t->row_sent >= 50)))
+			send_row(d, t, NULL);
 	}
 	for (size_t i = 0; i < d->n_nodes; i++) {
 		ls_node *n = d->nodes[i];
@@ -2075,10 +2294,6 @@ void ls_tick(ls_dev *d, int64_t now) {
 				n->version++;
 			}
 		}
-		for (int k = 0; k < ROWS; k++)
-			if (!n->rows[k].own && now >= n->rows[k].until) row_drop(n, &n->rows[k]);
-		if (n->row != NULL && any && (now - n->row_sent >= LS_RENEW_MS || (n->row_dirty && now - n->row_sent >= 50)))
-			send_row(n, NULL);
 		for (unsigned s = 0; n->news && s < d->n_links; s++)
 			if (d->links[s] != NULL && (int)s != n->news_from && d->links[s]->up) send_heads(n, d->links[s], false);
 		n->news = false;
@@ -2120,7 +2335,7 @@ struct ls_link *ls_link(ls_dev *d) {
 	unsigned slot = 0;
 	while (slot < d->n_links && d->links[slot] != NULL) slot++;
 	if (slot == d->n_links) return NULL;
-	struct ls_link *l = allocate(sizeof *l);
+	struct ls_link *l = allocate(sizeof *l + d->frame);
 	l->dev = d;
 	l->slot = slot;
 	l->hello_sent = INT64_MIN / 2;
@@ -2132,6 +2347,9 @@ struct ls_link *ls_link(ls_dev *d) {
 void ls_unlink(struct ls_link *l) {
 	if (l == NULL) return;
 	l->dev->links[l->slot] = NULL;
+	l->dev->wants_changed = true;
+	for (size_t i = 0; i < l->n_wants; i++) free(l->wants[i]);
+	free(l->wants);
 	free(l->out);
 	free(l);
 }
@@ -2144,6 +2362,10 @@ ls_dev *ls_open(const ls_options *o) {
 	d->o = *o;
 	d->n_links = o->links ? o->links : LS_LINKS;
 	d->w = (d->n_links + 7) / 8;
+	// a say's fields around its bytes (the topic at most), then COBS, "L", the CRC and the zeros
+	size_t frame = message_max(d) + LS_TOPIC_MAX + 128;
+	frame += frame / 254 + 16;
+	d->frame = frame > LS_FRAME_MAX ? frame : LS_FRAME_MAX;
 	d->links = allocate(d->n_links * sizeof *d->links);
 	d->up = allocate(d->w);
 	uint8_t *seed = NULL;
@@ -2175,6 +2397,8 @@ void ls_close(ls_dev *d) {
 		node_free(d->nodes[i]);
 	}
 	free(d->nodes);
+	for (size_t i = 0; i < d->n_topics; i++) topic_free(d->topics[i]);
+	free(d->topics);
 	for (unsigned i = 0; i < d->n_links; i++) ls_unlink(d->links[i]);
 	free(d->links), free(d->up), free(d);
 }

@@ -65,12 +65,16 @@ A second handle can hold a long `GET ?wait=25000` while the first only POSTs, fo
 
 In C: `../http.h` is this loop's exchange, sans-IO (`ls_http_begin`, the post on a thread of its
 own, `ls_http_end`; or `ls_http_turn` with a blocking post). The posts: `../http_posix.c` (plain
-sockets: littlesync-pigs `--http http://host:port`), the Cardputer's `main/net.c` (esp_http_client,
-WiFi and gateway set in `./idf.sh menuconfig`, "Cardputer: littlesync over WiFi"). `http://` only;
-https later. Two littlesync-pigs over HTTP to a gateway here:
+sockets: littlesync-pigs `--http http://host:port`; `https://` through libcurl, on a Mac always),
+the Cardputer's `main/net.c` (esp_http_client, https against ESP-IDF's certificate bundle; WiFi and
+gateway set in `./idf.sh menuconfig`, "Cardputer: littlesync over WiFi"). Deployed:
+`https://galaxy.observer` (Railway answers `http://` with a 301, which the devices don't follow:
+give https). Through Railway a connection is kept between posts, and a long poll ends at the
+gateway's hello beat (4 s), not at `wait`. Two littlesync-pigs over HTTP to a gateway here:
 `sh ../test/http.sh
 ../build/littlesync-pigs` (from `..`, in its `make test`; a second argument
-`wss://galaxy.observer` goes through galaxy).
+`wss://galaxy.observer` goes through galaxy); to the deployed one, a fresh room: `make galaxy` in
+`..`.
 
 ## upstream
 
@@ -85,16 +89,22 @@ it is back (`stats.upstream.held`). So a device keeps resending its own until th
 them. A connection that dies with no close (a dropped route, no FIN) is seen only when TCP gives up:
 no pings from here.
 
-## presence
+## messages
 
-A presence row (`../littlesync.h`, presence) is presence.ts's message, the bytes web pigs send on
-the topic `ermine://<node's hex>`; the gateway passes it on unchanged. From the server: each row
-heard on the topic of a node a device names goes down with its sender's key as `who`. From a device:
-the server names a row by the key it was published under, so each device key gets a Subduction peer
-of its own here (a key made for it: its rows' name in the room), dialled as the upstream is, let go
-of 10 s after its last row; none while there is no upstream. Rows heard back from those keys are not
-sent down again. A row also goes on to the other devices naming the node, as it came.
-`stats.presence`: rows in, rows out, peers now.
+A message (`../littlesync.h`, messages: `say {topic, who, bytes}`) is bytes on a topic, passed on
+unchanged; a littlesync topic is the same string as the together device's channel topic (`send`,
+`listen`; Subduction's ephemeral topic is its hash, so any string goes: a node's id, `dens:root`). A
+presence row is one: presence.ts's message, the bytes web pigs send on the topic
+`ermine://<node's
+hex>`. Each device is told `listen {all: true}` (on its hello, then every 10 s):
+what it says comes here. The topics a device says it listens to are listened to upstream (let go of
+when no device does). From the server: each message heard on a topic a device listens to goes down
+with its sender's key as `who` (over 4096 bytes: dropped, `big`). From a device: the server names a
+message by the key it was published under, so each device key gets a Subduction peer of its own here
+(a key made for it: its messages' name in the room), dialled as the upstream is, let go of 10 s
+after its last message; none while there is no upstream. Messages heard back from those keys are not
+sent down again. A message also goes on to the other devices listening to its topic, as it came.
+`stats.messages`: in, out, big, peers now.
 
 ## restart
 
@@ -113,19 +123,20 @@ ephemerals' signer) is new.
 ## files
 
 - `frame.ts`: COBS, CRC-32, frames, an unframer for a byte stream (`../frame.c`)
-- `wire.ts`: the messages, hello, heads, want, commits, ephemeral, ack, presence
+- `wire.ts`: the messages, hello, heads, want, commits, ephemeral, ack, listen, say
 - `link.ts`: one link, sans-IO (hello, up, the timers), as `ls_link` is
 - `gateway.ts`: the bridge (what goes which way: its header), the upstream kept
 - `http.ts`: HTTP sessions
 - `socket.ts`: a WebSocket as a Subduction transport
 - `main.ts`: the process
 - tests: `frame_test.ts`, `link_test.ts` (against littlesync-pigs `--pipe`), `gateway_test.ts` (the
-  gateway, littlesync-pigs and a sync.ts device in one process, no server; presence both ways),
-  `http_test.ts` (two devices over HTTP sessions and a sync.ts device), `upstream_test.ts` (a
-  sync.ts device serving WebSocket here, its socket closed under the gateway), `galaxy_test.ts`
-  (main.ts, littlesync-pigs and a lab-pig-style device in the pig room on `UPSTREAM`; two HTTP
-  devices; the upstream socket closed; presence rows between a presence.ts world and
-  littlesync-pigs); `pigs_harness.ts`, `host_harness.ts`, `http_harness.ts`
+  gateway, littlesync-pigs and a sync.ts device in one process, no server; presence both ways;
+  messages on a topic that is no node's), `http_test.ts` (two devices over HTTP sessions and a
+  sync.ts device), `upstream_test.ts` (a sync.ts device serving WebSocket here, its socket closed
+  under the gateway), `galaxy_test.ts` (main.ts, littlesync-pigs and a lab-pig-style device in the
+  pig room on `UPSTREAM`; two HTTP devices; the upstream socket closed; presence rows between a
+  presence.ts world and littlesync-pigs; messages on a fresh `dens:test-<random>` between a TS link
+  and a together device); `pigs_harness.ts`, `host_harness.ts`, `http_harness.ts`
 
 ## test
 

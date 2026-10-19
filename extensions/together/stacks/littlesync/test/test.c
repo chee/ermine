@@ -692,17 +692,20 @@ static uint8_t *row_bytes(const char *text, size_t *n) {
 	jsonFree(j);
 	return b;
 }
-// a presence message from a peer: who's row (the text) at the node
-static void feed_row(struct ls_link *l, const char *id, const uint8_t *who, size_t who_length, const char *text) {
-	size_t n;
-	uint8_t *b = row_bytes(text, &n), doc[32];
-	for (int i = 0; i < 32; i++) sscanf(id + 9 + 2 * i, "%2hhx", &doc[i]);
+// a message from a peer: who's bytes on the topic
+static void feed_say(struct ls_link *l, const char *topic, const uint8_t *who, size_t who_length, const uint8_t *b, size_t n) {
 	Json *m = jsonObject();
-	jsonAdd(m, "t", jsonString("presence"));
-	jsonAdd(m, "node", jsonBytes(doc, 32));
+	jsonAdd(m, "t", jsonString("say"));
+	jsonAdd(m, "topic", jsonString(topic));
 	jsonAdd(m, "who", jsonBytes(who, who_length));
-	jsonAdd(m, "row", jsonBytes(b, n));
+	jsonAdd(m, "bytes", jsonBytes(b, n));
 	feed_message(l, m);
+}
+// a presence row from a peer: who's row (the text) on the topic (a node's id: its room)
+static void feed_row(struct ls_link *l, const char *topic, const uint8_t *who, size_t who_length, const char *text) {
+	size_t n;
+	uint8_t *b = row_bytes(text, &n);
+	feed_say(l, topic, who, who_length, b, n);
 	free(b);
 }
 // the row of who's at the node (NULL: none)
@@ -716,7 +719,7 @@ static double pointer_x(const ls_row *r) {
 	const op_value *x = p && p->type == OP_MAP ? op_get(p, "x") : NULL;
 	return x && x->type == OP_NUM ? x->num : -1;
 }
-// the presence messages in bytes sent on a link: their rows, the last one's bytes copied out
+// the messages (say) in bytes sent on a link: how many, the last one's bytes copied out, the last one's bytes copied out
 static int rows_in(const uint8_t *b, size_t n, uint8_t *last, size_t *last_n, uint8_t *who) {
 	static uint8_t frame[LS_FRAME_MAX];
 	size_t k = 0;
@@ -730,8 +733,8 @@ static int rows_in(const uint8_t *b, size_t n, uint8_t *last, size_t *last_n, ui
 		size_t len;
 		if (k > 0 && ls_unframe(frame, k, &m, &len)) {
 			Json *j = cborDecode(m, len, NULL, NULL);
-			const Json *t = jsonGet(j, "t"), *r = jsonGet(j, "row"), *w = jsonGet(j, "who");
-			if (t && strcmp(t->string, "presence") == 0 && r && r->type == JSON_BYTES && w && w->type == JSON_BYTES) {
+			const Json *t = jsonGet(j, "t"), *r = jsonGet(j, "bytes"), *w = jsonGet(j, "who");
+			if (t && strcmp(t->string, "say") == 0 && r && r->type == JSON_BYTES && w && w->type == JSON_BYTES) {
 				found++;
 				memcpy(last, r->bytes.data, r->bytes.length), *last_n = r->bytes.length;
 				memcpy(who, w->bytes.data, w->bytes.length < LS_KEY_LEN ? w->bytes.length : LS_KEY_LEN);
@@ -814,17 +817,20 @@ static void t_presence(void) {
 	CHECK(row_by(pb, ls_key(a.d)) != NULL);
 	for (int i = 0; i < 50; i++) now += 10, ls_tick(b.d, now);
 	CHECK(row_by(pb, ls_key(a.d)) == NULL);
-	// many rows: the soonest to lapse goes, never mine
+	// many rows: LS_ROWS kept, the soonest to lapse goes, never mine
 	ls_presence(pb, v = op_json_read("{}", NULL));
 	op_free(v);
-	for (int i = 0; i < 12; i++) {
+	for (int i = 0; i < 24; i++) {
 		uint8_t k[LS_KEY_LEN] = {0xed, 0x01, (uint8_t)i};
 		char text[64];
 		snprintf(text, sizeof text, "{\"ttl\":%d,\"value\":{}}", 5000 + 100 * i);
 		feed_row(b.l, P1, k, LS_KEY_LEN, text);
 	}
-	uint8_t last[LS_KEY_LEN] = {0xed, 0x01, 11};
-	CHECK(ls_rows(pb) == 8 && row_by(pb, ls_key(b.d)) != NULL && row_by(pb, last) != NULL);
+	uint8_t last[LS_KEY_LEN] = {0xed, 0x01, 23}, first[LS_KEY_LEN] = {0xed, 0x01, 0};
+	CHECK(ls_rows(pb) == LS_ROWS && row_by(pb, ls_key(b.d)) != NULL && row_by(pb, last) != NULL && row_by(pb, first) == NULL);
+	// the test's own rows out at the end
+	ls_presence(pb, NULL);
+	CHECK(row_by(pb, ls_key(b.d)) == NULL);
 	close_side(&a), close_side(&b);
 	drop_dir(&a), drop_dir(&b);
 }
@@ -883,6 +889,186 @@ static void pump3(ls_dev *const devs[3], wire *w, size_t wires, int64_t ms) {
 			if (n == 0) break;
 		}
 	}
+}
+
+// ---- messages: bytes on any topic, to the peers that want it
+
+// what o.heard was told, the last of each side (context: its index)
+static struct {
+	int count;
+	char topic[LS_TOPIC_MAX + 1];
+	uint8_t who[LS_KEY_LEN];
+	uint8_t bytes[16384];
+	size_t length;
+} heard_by[3];
+static void heard(void *context, const char *topic, const uint8_t *who, size_t who_length, const uint8_t *bytes, size_t length) {
+	int i = (int)(intptr_t)context;
+	heard_by[i].count++;
+	snprintf(heard_by[i].topic, sizeof heard_by[i].topic, "%s", topic);
+	memcpy(heard_by[i].who, who, who_length < LS_KEY_LEN ? who_length : LS_KEY_LEN);
+	memcpy(heard_by[i].bytes, bytes, length < sizeof heard_by[i].bytes ? length : sizeof heard_by[i].bytes);
+	heard_by[i].length = length;
+}
+// a side with its own settings, heard told to heard_by[index]
+static side open_with(const char *tag, int index, size_t message, size_t rows) {
+	side s = {0};
+	snprintf(s.dir, sizeof s.dir, "build/state-%s-%d", tag, (int)getpid());
+	s.store = ls_store_file(s.dir);
+	ls_options o = {.store = s.store, .random = random_bytes, .message = message, .rows = rows, .heard = heard,
+		.heard_context = (void *)(intptr_t)index};
+	if (getenv("LSLOG")) o.log = logline, o.log_context = (void *)strdup(tag);
+	s.d = ls_open(&o);
+	s.l = ls_link(s.d);
+	return s;
+}
+// the says on the topic in bytes sent on a link
+static int says_in(const uint8_t *b, size_t n, const char *topic) {
+	static uint8_t frame[20000];
+	size_t k = 0;
+	int found = 0;
+	for (size_t i = 0; i < n; i++) {
+		if (b[i] != 0) {
+			if (k < sizeof frame) frame[k++] = b[i];
+			continue;
+		}
+		const uint8_t *m;
+		size_t len;
+		if (k > 0 && ls_unframe(frame, k, &m, &len)) {
+			Json *j = cborDecode(m, len, NULL, NULL);
+			const Json *t = jsonGet(j, "t"), *to = jsonGet(j, "topic");
+			if (t && strcmp(t->string, "say") == 0 && to && to->type == JSON_STRING && strcmp(to->string, topic) == 0) found++;
+			jsonFree(j);
+		}
+		k = 0;
+	}
+	return found;
+}
+// time passes for the devices, the wires carrying till quiet; says[i][0] counts the says on topic x sent
+// on w[i], says[i][1] those y sent
+static void pump_says(ls_dev *const *devs, size_t n, wire *w, size_t wires, int64_t ms, const char *topic, int (*says)[2]) {
+	for (int64_t end = now + ms; now <= end; now += 10) {
+		for (size_t i = 0; i < n; i++) ls_tick(devs[i], now);
+		for (int round = 0; round < 50; round++) {
+			size_t k = 0;
+			for (size_t i = 0; i < wires; i++)
+				for (int dir = 0; dir < 2; dir++) {
+					struct ls_link *from = dir ? w[i].y : w[i].x, *to = dir ? w[i].x : w[i].y;
+					const uint8_t *out;
+					size_t m = ls_next(from, &out);
+					if (m == 0) continue;
+					if (says != NULL) says[i][dir] += says_in(out, m, topic);
+					ls_feed(to, out, m);
+					k += m;
+				}
+			if (k == 0) break;
+		}
+	}
+}
+
+// a den's row, about 3.3 KB of CBOR
+static uint8_t *den_row(size_t length, uint8_t seed) {
+	uint8_t *b = malloc(length);
+	for (size_t i = 0; i < length; i++) b[i] = (uint8_t)(seed + i * 7);
+	return b;
+}
+
+static void t_messages(void) {
+	printf("messages: any topic, 3.3 KB, only to who listens, through a hub only where wanted, settings\n");
+	memset(heard_by, 0, sizeof heard_by);
+	char topic[64], other[64];
+	snprintf(topic, sizeof topic, "dens:test-%08x", rnd());
+	snprintf(other, sizeof other, "dens:test-%08x/ask/x", rnd());
+	side a = open_with("sa", 0, 0, 0), b = open_with("sb", 1, 0, 0), c = open_with("sc", 2, 0, 0);
+	struct ls_link *b2 = ls_link(b.d);
+	wire w[2] = {{a.l, b.l, 0, {0, 0}}, {b2, c.l, 0, {0, 0}}};
+	ls_dev *devs[3] = {a.d, b.d, c.d};
+	int says[2][2] = {{0}};
+	CHECK(ls_listen(c.d, topic) == LS_OK);
+	CHECK(ls_listen(c.d, "") == LS_BAD && ls_send(a.d, "", NULL, 0) == LS_BAD);
+	pump_says(devs, 3, w, 2, 300, topic, NULL);
+	// a den's row from a to c, through b: byte for byte, a's key; b hears nothing (it does not listen)
+	size_t length = 3300;
+	uint8_t *row = den_row(length, 1);
+	CHECK(ls_send(a.d, topic, row, length) == LS_OK);
+	pump_says(devs, 3, w, 2, 100, topic, says);
+	CHECK(heard_by[2].count == 1 && strcmp(heard_by[2].topic, topic) == 0 && heard_by[2].length == length);
+	CHECK(memcmp(heard_by[2].bytes, row, length) == 0 && memcmp(heard_by[2].who, ls_key(a.d), LS_KEY_LEN) == 0);
+	CHECK(heard_by[1].count == 0 && says[0][0] == 1 && says[1][0] == 1);
+	// a topic nobody wants: not on any wire
+	memset(says, 0, sizeof says);
+	CHECK(ls_send(a.d, other, row, 10) == LS_OK);
+	pump_says(devs, 3, w, 2, 100, other, says);
+	CHECK(says[0][0] == 0 && says[1][0] == 0 && heard_by[2].count == 1);
+	// c answers: to a once a listens; never back to c; b relays but does not hear
+	CHECK(ls_listen(a.d, other) == LS_OK);
+	pump_says(devs, 3, w, 2, 100, other, NULL);
+	memset(says, 0, sizeof says);
+	CHECK(ls_send(c.d, other, (const uint8_t *)"yes", 3) == LS_OK);
+	pump_says(devs, 3, w, 2, 100, other, says);
+	CHECK(heard_by[0].count == 1 && heard_by[0].length == 3 && memcmp(heard_by[0].bytes, "yes", 3) == 0);
+	CHECK(memcmp(heard_by[0].who, ls_key(c.d), LS_KEY_LEN) == 0 && heard_by[1].count == 0);
+	CHECK(says[1][1] == 1 && says[0][1] == 1 && says[0][0] == 0 && says[1][0] == 0);
+	// many listens, then c lets go of the topic: a's next goes nowhere
+	ls_unlisten(c.d, topic);
+	pump_says(devs, 3, w, 2, 100, topic, NULL);
+	memset(says, 0, sizeof says);
+	ls_send(a.d, topic, row, length);
+	pump_says(devs, 3, w, 2, 100, topic, says);
+	CHECK(says[0][0] == 0 && heard_by[2].count == 1);
+	// over the largest message: refused here
+	uint8_t *big = den_row(LS_MESSAGE + 1, 2);
+	CHECK(ls_send(a.d, topic, big, LS_MESSAGE + 1) == LS_BAD && ls_send(a.d, topic, big, LS_MESSAGE) == LS_OK);
+	// a room on any topic: rows as on a node's, through b; cleared at the end
+	char room[64];
+	snprintf(room, sizeof room, "dens:test-%08x", rnd());
+	op_value *v = op_json_read("{\"den\":\"a\"}", NULL);
+	CHECK(ls_presence_on(a.d, room, v) == LS_OK && ls_presence_on(c.d, room, NULL) == LS_OK);
+	op_free(v);
+	pump_says(devs, 3, w, 2, 300, room, NULL);
+	CHECK(ls_rows_on(c.d, room) == 1 && ls_rows_on(b.d, room) == 0 && ls_row_on(c.d, room, 0) != NULL &&
+		memcmp(ls_row_on(c.d, room, 0)->who, ls_key(a.d), LS_KEY_LEN) == 0);
+	CHECK(ls_rows_on(a.d, room) == 1 && ls_row_on(a.d, room, 0)->own);
+	ls_unlisten(a.d, room);
+	pump_says(devs, 3, w, 2, 100, room, NULL);
+	CHECK(ls_rows_on(c.d, room) == 0 && ls_rows_on(a.d, room) == 0);
+	ls_unlisten(c.d, room);
+	free(row), free(big);
+	close_side(&a), close_side(&b), close_side(&c);
+	drop_dir(&a), drop_dir(&b), drop_dir(&c);
+
+	// settings: a larger message both ends take; a peer with the default drops it; rows kept 4
+	memset(heard_by, 0, sizeof heard_by);
+	side x = open_with("sx", 0, 12000, 4), y = open_with("sy", 1, 12000, 0), z = open_with("sz", 2, 0, 0);
+	struct ls_link *x2 = ls_link(x.d);
+	wire v2[2] = {{x.l, y.l, 0, {0, 0}}, {x2, z.l, 0, {0, 0}}};
+	ls_dev *devs2[3] = {x.d, y.d, z.d};
+	ls_listen(y.d, topic), ls_listen(z.d, topic);
+	pump_says(devs2, 3, v2, 2, 300, topic, NULL);
+	size_t junk = ls_traffic_of(z.l)->junk;
+	big = den_row(10000, 3);
+	CHECK(ls_send(x.d, topic, big, 10000) == LS_OK);
+	pump_says(devs2, 3, v2, 2, 100, topic, NULL);
+	CHECK(heard_by[1].count == 1 && heard_by[1].length == 10000 && memcmp(heard_by[1].bytes, big, 10000) == 0);
+	CHECK(heard_by[2].count == 0 && ls_traffic_of(z.l)->junk > junk);
+	free(big);
+	CHECK(ls_presence_on(x.d, room, NULL) == LS_OK);
+	v = op_json_read("{}", NULL);
+	ls_presence_on(x.d, room, v);
+	op_free(v);
+	for (int i = 0; i < 10; i++) {
+		uint8_t k[LS_KEY_LEN] = {0xed, 0x01, 0x55, (uint8_t)i};
+		char text[64];
+		snprintf(text, sizeof text, "{\"ttl\":%d,\"value\":{}}", 3000 + 100 * i);
+		feed_row(x.l, room, k, LS_KEY_LEN, text);
+	}
+	CHECK(ls_rows_on(x.d, room) == 4);
+	// stale rows (a test run's, say) lapse at their ttl: then only mine
+	pump_says(devs2, 3, v2, 2, 4000, room, NULL);
+	CHECK(ls_rows_on(x.d, room) == 1 && ls_row_on(x.d, room, 0)->own);
+	ls_presence_on(x.d, room, NULL);
+	CHECK(ls_rows_on(x.d, room) == 0);
+	close_side(&x), close_side(&y), close_side(&z);
+	drop_dir(&x), drop_dir(&y), drop_dir(&z);
 }
 
 static void t_relay(void) {
@@ -949,6 +1135,9 @@ static void t_relay(void) {
 	ls_presence(pa, NULL);
 	pump3(devs, w, 2, 100);
 	CHECK(ls_rows(pc) == 1 && row_by(pc, ls_key(a.d)) == NULL);
+	ls_presence(pc, NULL);
+	pump3(devs, w, 2, 100);
+	CHECK(ls_rows(pa) == 0 && ls_rows(pb) == 0);
 	close_side(&a), close_side(&b), close_side(&c);
 	drop_dir(&a), drop_dir(&b), drop_dir(&c);
 }
@@ -1813,7 +2002,7 @@ static const struct {
 	void (*run)(void);
 } TESTS[] = {{"converge", t_converge}, {"moves", t_concurrent_moves}, {"deletes", t_delete_and_set}, {"made", t_made_parents},
 	{"older", t_older_commits}, {"far", t_far}, {"offline", t_offline}, {"adds", t_concurrent_adds}, {"garbage", t_garbage},
-	{"restart", t_restart}, {"fresh", t_fresh}, {"bad", t_bad_and_refused}, {"ephemeral", t_ephemeral}, {"presence", t_presence}, {"relay", t_relay}, {"acks", t_per_link_acks}, {"relink", t_relink}, {"limits", t_limits}, {"fuzz", t_fuzz},
+	{"restart", t_restart}, {"fresh", t_fresh}, {"bad", t_bad_and_refused}, {"ephemeral", t_ephemeral}, {"presence", t_presence}, {"messages", t_messages}, {"relay", t_relay}, {"acks", t_per_link_acks}, {"relink", t_relink}, {"limits", t_limits}, {"fuzz", t_fuzz},
 	{"cost", t_cost}, {"memory", t_memory}, {"links", t_many_links}, {"keep", t_keep}};
 
 // no arguments: every test; else the ones named

@@ -1,5 +1,7 @@
-// a post for http.h over plain sockets: http:// only, HTTP/1.1, Content-Length both ways, the
-// connection kept between posts. For a Mac or a test, not a device (esp_http_client there)
+// a post for http.h over plain sockets: HTTP/1.1, Content-Length both ways, the connection kept between
+// posts. https:// through libcurl when built with LS_HTTP_CURL (macOS ships it: -DLS_HTTP_CURL -lcurl;
+// Linux: libcurl's dev package), its handle kept so its connection is too; without, https fails (-1).
+// For a Mac or a test, not a device (esp_http_client there)
 #define _DARWIN_C_SOURCE
 #define _DEFAULT_SOURCE
 #include "http.h"
@@ -17,6 +19,9 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
+#ifdef LS_HTTP_CURL
+#include <curl/curl.h>
+#endif
 
 // dialling, and sending, give up after this long; an answer after the wait and this
 #define DIAL_MS 5000
@@ -28,11 +33,19 @@ typedef struct {
 	// bytes read past a header, kept for the body
 	char head[2048];
 	size_t had;
+#ifdef LS_HTTP_CURL
+	CURL *curl; // https: made on the first, kept
+	struct curl_slist *headers;
+#endif
 } conn;
 
 void *ls_http_socket_open(void) {
 	conn *c = calloc(1, sizeof *c);
 	if (c != NULL) c->fd = -1;
+#ifdef LS_HTTP_CURL
+	static int curl_up;
+	if (c != NULL && !curl_up) curl_up = curl_global_init(CURL_GLOBAL_DEFAULT) == CURLE_OK;
+#endif
 	return c;
 }
 
@@ -44,6 +57,11 @@ static void hang_up(conn *c) {
 void ls_http_socket_close(void *context) {
 	if (context == NULL) return;
 	hang_up(context);
+#ifdef LS_HTTP_CURL
+	conn *c = context;
+	if (c->curl) curl_easy_cleanup(c->curl);
+	curl_slist_free_all(c->headers);
+#endif
 	free(context);
 }
 
@@ -173,9 +191,58 @@ static long exchange(conn *c, const char *path, uint32_t wait_ms, const uint8_t 
 	return status == 200 && fits ? (long)want : -1;
 }
 
+#ifdef LS_HTTP_CURL
+// https: the answer into answer[0..room), more than room refused
+typedef struct {
+	uint8_t *to;
+	size_t room, got;
+} sink;
+
+static size_t take(char *data, size_t size, size_t n, void *context) {
+	sink *k = context;
+	size_t m = size * n;
+	if (m > k->room - k->got) return 0; // too big: curl stops (CURLE_WRITE_ERROR)
+	memcpy(k->to + k->got, data, m), k->got += m;
+	return m;
+}
+
+// one https POST on curl's handle (it keeps the connection, and dials again when it drops)
+static long secure(conn *c, const char *url, uint32_t wait_ms, const uint8_t *body, size_t length, uint8_t *answer,
+	size_t room) {
+	if (c->curl == NULL) {
+		if ((c->curl = curl_easy_init()) == NULL) return -1;
+		c->headers = curl_slist_append(NULL, "Content-Type: application/octet-stream");
+		c->headers = curl_slist_append(c->headers, "Expect:"); // no 100-continue round
+		curl_easy_setopt(c->curl, CURLOPT_HTTPHEADER, c->headers);
+		curl_easy_setopt(c->curl, CURLOPT_HTTP_VERSION, (long)CURL_HTTP_VERSION_1_1);
+		curl_easy_setopt(c->curl, CURLOPT_NOSIGNAL, 1L);
+		curl_easy_setopt(c->curl, CURLOPT_CONNECTTIMEOUT_MS, (long)DIAL_MS);
+		curl_easy_setopt(c->curl, CURLOPT_WRITEFUNCTION, take);
+		curl_easy_setopt(c->curl, CURLOPT_POST, 1L);
+	}
+	sink k = {answer, room, 0};
+	curl_easy_setopt(c->curl, CURLOPT_URL, url);
+	curl_easy_setopt(c->curl, CURLOPT_POSTFIELDS, length ? (const char *)body : "");
+	curl_easy_setopt(c->curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t)length);
+	curl_easy_setopt(c->curl, CURLOPT_WRITEDATA, &k);
+	curl_easy_setopt(c->curl, CURLOPT_TIMEOUT_MS, (long)wait_ms + SLACK_MS);
+	long status = 0;
+	if (curl_easy_perform(c->curl) != CURLE_OK) return -1;
+	curl_easy_getinfo(c->curl, CURLINFO_RESPONSE_CODE, &status);
+	return status == 200 ? (long)k.got : -1;
+}
+#endif
+
 long ls_http_socket(void *context, const char *url, uint32_t wait_ms, const uint8_t *body, size_t length, uint8_t *answer,
 	size_t room) {
 	conn *c = context;
+	if (strncmp(url, "https://", 8) == 0) {
+#ifdef LS_HTTP_CURL
+		return secure(c, url, wait_ms, body, length, answer, room);
+#else
+		return -1;
+#endif
+	}
 	char host[sizeof c->host], port[sizeof c->port];
 	const char *path;
 	if (!split(url, host, sizeof host, port, &path)) return -1;

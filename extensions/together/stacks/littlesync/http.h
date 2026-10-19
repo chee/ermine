@@ -9,7 +9,7 @@
 // gateway began again, or 30 s idle) brings the gateway's hello and the peer starts over.
 //
 // ---- use (a loop that must not stall: begin and end, the post on a thread or task of its own) ----
-//   ls_http *h = ls_http_open(ls_link(dev), &(ls_http_options){.url = "http://192.168.1.5:8080",
+//   ls_http *h = ls_http_open(ls_link(dev), &(ls_http_options){.url = "https://galaxy.observer",
 //                             .random = my_random});
 //   for (;;) {
 //     ls_tick(dev, now);
@@ -37,7 +37,7 @@ typedef long (*ls_http_post)(void *context, const char *url, uint32_t wait_ms, c
 	uint8_t *answer, size_t room);
 
 typedef struct {
-	const char *url;     // the gateway: "http://host:port" (/littlesync/<session> is added)
+	const char *url;     // the gateway: "http://host:port" or "https://host" (/littlesync/<session> is added)
 	const char *session; // 8 to 64 of A-Z a-z 0-9 _ -; NULL: 16 random hex from random
 	void (*random)(void *context, uint8_t *out, size_t n);
 	void *random_context;
@@ -77,8 +77,9 @@ int ls_http_turn(ls_http *http, int64_t now_ms, ls_http_post post, void *context
 const ls_http_stats *ls_http_stats_of(const ls_http *http);
 const char *ls_http_session(const ls_http *http);
 
-// http_posix.c: a post over plain sockets (http:// only, HTTP/1.1, the connection kept between posts,
-// dialled again when it drops). context: ls_http_socket_open's
+// http_posix.c: a post over plain sockets (http://, HTTP/1.1, the connection kept between posts,
+// dialled again when it drops); https:// through libcurl when built with LS_HTTP_CURL (else -1).
+// context: ls_http_socket_open's
 void *ls_http_socket_open(void);
 void ls_http_socket_close(void *context);
 long ls_http_socket(void *context, const char *url, uint32_t wait_ms, const uint8_t *body, size_t length,

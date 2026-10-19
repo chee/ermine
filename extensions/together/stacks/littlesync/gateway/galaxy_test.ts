@@ -4,7 +4,8 @@
 // failed on: the merge gap (gateway.ts, merges) is the thing to see. and two TS devices over HTTP
 // sessions (http.ts) in a room of their own; and the gateway's own socket to the server closed under
 // it (keep); and presence rows, as web pigs send them (presence.ts over the together device's channel),
-// between a C peer and a presence world, both ways
+// between a C peer and a presence world, both ways; and messages on a topic that is no node's
+// ("dens:test-<random>") between a TS littlesync link and a together device, both ways
 import { assert, assertEquals } from "@std/assert"
 import { hex } from "../../../typescript/hex.ts"
 import { httpDevice, names } from "./http_harness.ts"
@@ -17,6 +18,9 @@ import { type Pigs, row, spawnPigs, until } from "./pigs_harness.ts"
 import { clear, connect, ensure, readPresence, setPresence } from "@ermine/presence"
 import { device as presenceDevice } from "../../../../presence/typescript/world.ts"
 import { createChannel } from "../../../typescript/channel.ts"
+import * as cbor from "@ermine/encoding/cbor"
+import { Link } from "./link.ts"
+import type { Message } from "./wire.ts"
 
 const UPSTREAM = Deno.env.get("UPSTREAM") ?? "wss://galaxy.observer"
 const ROOM = "ermine://bf04115f9b284145026eab6801219d6e" + "0".repeat(32)
@@ -369,7 +373,7 @@ Deno.test({
 				"the C row gone in the presence world",
 			)
 			const st = await g.status()
-			console.log(`gateway presence stats: ${JSON.stringify(st.stats.presence)}`)
+			console.log(`gateway message stats: ${JSON.stringify(st.stats.messages)}`)
 		} catch (e) {
 			console.log(`gateway log:\n${g.lines.join("\n")}`)
 			if (pigs) console.log(`C screen:\n${pigs.dump()}`)
@@ -377,6 +381,78 @@ Deno.test({
 		} finally {
 			clearInterval(beat)
 			await pigs?.stop()
+			await host.close()
+			await g.stop()
+		}
+	},
+})
+
+Deno.test({
+	name: `galaxy: messages on a topic that is no node's, between a littlesync link and ${UPSTREAM}`,
+	...opts,
+	async fn() {
+		const g = await gateway()
+		const host = await createHost("ts-galaxy-topic")
+		// a fresh topic each run, as a den's: nothing of another run's is heard
+		const topic = `dens:test-${hex(crypto.getRandomValues(new Uint8Array(8)))}`
+		const heard: { from: string; bytes: Uint8Array }[] = []
+		const stop = host.device.listen(topic, (from, bytes) => void heard.push({ from, bytes }))
+		// a TS littlesync device on the gateway's WebSocket, listening to the topic
+		const signer = await createSigner()
+		const got: Message[] = []
+		const link = new Link(signer.key, (m) => got.push(m))
+		const ws = new WebSocket(`ws://localhost:${g.port}/littlesync`)
+		ws.binaryType = "arraybuffer"
+		const open = new Promise((r, j) => (ws.onopen = r, ws.onerror = j))
+		let timer: ReturnType<typeof setInterval> | undefined
+		let beat: ReturnType<typeof setInterval> | undefined
+		try {
+			await host.device.connectDiscover(UPSTREAM)
+			await open
+			ws.onmessage = (e) => link.feed(new Uint8Array(e.data as ArrayBuffer), Date.now())
+			timer = setInterval(() => {
+				link.tick(Date.now())
+				const b = link.next()
+				if (b.length && ws.readyState === WebSocket.OPEN) ws.send(b)
+			}, 20)
+			link.send({ t: "listen", topics: [topic] })
+			// down: a den's row (3.3 KB), sent till it comes (the gateway subscribes in its own time)
+			const row = crypto.getRandomValues(new Uint8Array(3300))
+			beat = setInterval(() => void host.device.send(topic, row).catch(() => {}), 1000)
+			const down = await until(
+				() => got.find((m) => m.t === "say" && m.topic === topic),
+				30000,
+				"the together device's message on the littlesync link",
+			)
+			clearInterval(beat)
+			assert(down.t === "say" && hex(down.bytes) === hex(row))
+			assertEquals(hex(down.who), hex(host.signer.key))
+			// up: an ask, under the key the gateway made for this link's device
+			const ask = cbor.encode({ n: 1, op: "look", at: topic })
+			beat = setInterval(
+				() => link.send({ t: "say", topic, who: signer.key, bytes: ask }),
+				1000,
+			)
+			const up = await until(
+				() => heard.find((h) => hex(h.bytes) === hex(ask)),
+				30000,
+				"the littlesync message on the together device",
+			)
+			assert(up.from !== hex(signer.key))
+			const st = await g.status()
+			console.log(
+				`topic ${topic}: down and up; gateway message stats: ${
+					JSON.stringify(st.stats.messages)
+				}`,
+			)
+		} catch (e) {
+			console.log(`gateway log:\n${g.lines.join("\n")}`)
+			throw e
+		} finally {
+			clearInterval(beat)
+			clearInterval(timer)
+			stop()
+			ws.close()
 			await host.close()
 			await g.stop()
 		}

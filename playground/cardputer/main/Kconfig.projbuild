@@ -15,10 +15,11 @@ config CARDPUTER_WIFI_PASSWORD
 		Empty: an open network.
 
 config CARDPUTER_GATEWAY
-	string "littlesync gateway (http://host:port)"
+	string "littlesync gateway (https://host or http://host:port)"
 	default ""
 	help
-		The gateway (extensions/together/stacks/littlesync/gateway) its HTTP sessions are at, as
-		http://host:port. Plain http only for now (https later). Empty: no WiFi.
+		The gateway (extensions/together/stacks/littlesync/gateway) its HTTP sessions are at:
+		https://galaxy.observer (deployed; the certificate checked against ESP-IDF's bundle) or
+		http://host:port. Empty: no WiFi.
 
 endmenu
