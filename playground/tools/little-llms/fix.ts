@@ -1,7 +1,8 @@
 // two passes, two models: a fixer is handed another model's answer and asked to correct it
 //   guided: only answers a host could see were broken, with what it saw
 //   blind: any answer, passing or not, with nothing but the task (does review fix more than it breaks?)
-//   deno run -A fix.ts --fixer qwen2.5-coder-1.5b [--blind] [--from results/] [--dir models/] [--server llama-server]
+//   self: guided, but the fixer is the author, in a fresh conversation (the in-conversation retry mostly repeats itself)
+//   deno run -A fix.ts --fixer qwen2.5-coder-1.5b [--blind | --self] [--from results/] [--dir models/] [--server llama-server]
 
 import { parseArgs } from "jsr:@std/cli@^1/parse-args"
 import { extract } from "./extract.ts"
@@ -14,7 +15,7 @@ import { taskById } from "./tasks.ts"
 export type Fix = {
 	fixer: string
 	model: string
-	how: "guided" | "blind"
+	how: "guided" | "blind" | "self"
 	exp: string
 	task: string
 	kit: string
@@ -28,7 +29,7 @@ export type Fix = {
 const here = (p: string) => new URL(p, import.meta.url).pathname
 const args = parseArgs(Deno.args, {
 	string: ["fixer", "from", "dir", "server", "only"],
-	boolean: ["blind"],
+	boolean: ["blind", "self"],
 })
 const from = args.from ?? here("./results")
 const dir = args.dir ?? Deno.env.get("LITTLE_LLMS_MODELS") ?? here("./models")
@@ -40,7 +41,7 @@ if (!fixer) {
 		"--fixer must be one of " + models.map((m) => m.name).join(", "),
 	)
 }
-const how = args.blind ? "blind" : "guided"
+const how = args.blind ? "blind" : args.self ? "self" : "guided"
 const only = args.only?.split(",")
 
 const cells: Cell[] = []
@@ -53,7 +54,7 @@ for await (const f of Deno.readDir(from)) {
 }
 // the example-prompted single answers, which every model has; a fixer does not review its own
 const candidates = cells.filter((c) =>
-	c.model != fixer.name && c.mode == "single" && c.prompting == "example" &&
+	(how == "self" ? c.model == fixer.name : c.model != fixer.name) && c.mode == "single" && c.prompting == "example" &&
 	c.wrap == "fence" && ["data", "ui", "canvas"].includes(c.exp) &&
 	c.first.code !== undefined &&
 	(how == "blind" || (!c.first.pass && c.first.signal))
@@ -80,7 +81,7 @@ async function fix(c: Cell): Promise<Fix> {
 	const task = taskById(c.task)
 	const kit = kits[c.kit]
 	const first = c.first as Attempt
-	const note = how == "guided" ? `It does not work. ${first.signal}` : `It may or may not be correct. Check it carefully against the task.`
+	const note = how != "blind" ? `It does not work. ${first.signal}` : `It may or may not be correct. Check it carefully against the task.`
 	const r = await chat(fixer!, [
 		{ role: "system", content: system(kit, "example", "fence") },
 		{
