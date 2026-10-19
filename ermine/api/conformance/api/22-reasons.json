@@ -1,0 +1,110 @@
+{
+	"title": "teardown is told the reason a stop was given, as it was given: a den's (runner-stopped), a reason that is no string; a memo's teardown inside the process too, as the process goes",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"w": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": [
+				"w",
+				"p"
+			],
+			"program": [
+				{
+					"do": [
+						"teardown",
+						"why"
+					]
+				},
+				{
+					"do": [
+						"memo",
+						"m",
+						{},
+						[
+							"teardown",
+							"inner"
+						]
+					]
+				}
+			],
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "stop",
+			"name": "p",
+			"why": "runner-stopped",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "why",
+			"expect": {
+				"values": [
+					"runner-stopped"
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "inner",
+			"expect": {
+				"values": [
+					"runner-stopped"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": [
+				"w",
+				"q"
+			],
+			"program": [
+				{
+					"do": [
+						"teardown",
+						"why"
+					]
+				}
+			],
+			"expect": {
+				"id": "proc:q"
+			}
+		},
+		{
+			"op": "stop",
+			"name": "q",
+			"why": {
+				"signal": "SIGHUP"
+			},
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "why",
+			"expect": {
+				"values": [
+					"runner-stopped",
+					{
+						"signal": "SIGHUP"
+					}
+				]
+			}
+		}
+	]
+}

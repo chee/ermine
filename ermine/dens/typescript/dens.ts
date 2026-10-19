@@ -6,11 +6,14 @@
 // runner at a path: the relation of the three, made at start, gone at stop. no lookup, no chain,
 // no build, no search: the program given is in the runner's form already
 //
-//   const den = createDen({ scheduler, table, places, scopes, createProcessAPI, id: "mac-7f3a", may })
+//   const den = createDen({ scheduler, table, places, scopes, id: "mac-7f3a", may })
 //   den.offer("runners", "javascript",
-//     { [TAKES]: "com.netscape.javascript-source", [API]: "ermine.api", [WHERE]: "thread" }, apis.run)
+//     { [TAKES]: "com.netscape.javascript-source", [API]: "ermine.api", [WHERE]: "thread" },
+//     context.run)                                // ermine/api's: createProcessContext(...).run
 //   const p = den.start("/system/den/runners/javascript", "/apps/clock.js", "/work/clock", { args })
 //   // { id: "proc:<uuid>", at: ["work", "clock"], cwd: ["work"], scope }, or { refused: ... }
+//   const l = den.load("/work/clock/runners/letter", { id, code, type }, { by: p })
+//   // { live, release }, or { refused: ... }
 //   den.stop(p, "SIGHUP")
 //   den.ask({ op: "start", who, runner: "/system/den/runners/javascript", program: { id, hash }, at })
 //   den.close()
@@ -30,6 +33,15 @@
 // refused stopped.
 // withdraw: its users stopped (newest first, "withdrawn"), its name out, its node gone. an owner's
 // stop withdraws its offers first, its users stopped "runner-stopped"
+// a runner (a runner node's value): { start(code, start) → handle, load?(code, start) → live,
+// api?(start) → api }, or a function, its start (its own load and api too, if it has them: a
+// function is shorthand for { start }). start is a Start: { box, places, process: { id, at, args,
+// cwd }, scheduler, table, scope, den }. what the program gets is the runner's: this makes no api
+// (no ermine/api here); a runner over ermine/api builds it from context.createAPI(start), api?
+// saying how (ermine/api's run is one). programs' runners are functions given the Start where
+// programs gives an api (realms.run: createRealms({ createAPI }); dlopen's: its pointer given it).
+// its limits are the runner's too: a loop budget, fuel, a cost a call, by wrapping what it starts or
+// loads; nothing here counts
 // start(runner, program, at, { args, cwd, box, pin }): runner from the den's root; program an
 // address from where's root (where: box, else the den's places) or { id, hash?, type?, api?,
 // code? }. refused, nothing made, the first that holds:
@@ -40,18 +52,30 @@
 //   wrong-form     the program's ermine.type (code given: type) is not the runner's
 //                  ermine.runner.takes (both strings, exact); or it names an api
 //                  (ermine.program.api; code given: api) the runner's ermine.runner.api is not
-//   not-a-runner   the runner's value is no function here
+//   not-a-runner   the runner's value is no runner here (no start)
 //   no-permission  the policy asked { who: the scope open, op: "start", target the runner },
 //                  then { op: "read", target the program's value } (not for code given): no, or
 //                  pending
 //   taken          a process at, above or under at (processes')
 // else processes' start with ermine.type ermine.process, ermine.process.runner { id, at },
 // .program { id, at?, hash? } (hash: of its value; none: a live value), .den { id, at }; the code
-// read once now; at the first pulse, a one-shot effect, the process's scope open: runner(code,
-// createProcessAPI({ box, places, process: { id, at, args, cwd }, scheduler, table, scope, den })).
-// a handle: kept; a throw, a rejected promise: the status
+// read once now; at the first pulse, a one-shot effect, the process's scope open: start(code,
+// { box, places, process: { id, at, args, cwd }, scheduler, table, scope, den }). a handle: kept;
+// a throw, a rejected promise: the status. a start made outside a run (an ask's too) asks for a
+// pulse (setup.schedule; none: queueMicrotask, as ermine/api's), so a start from a DOM callback runs
+// with nothing else pulsing
+// load(runner, program, { by?, box? }): the program made live on the runner with no process: its
+// load(code, start), start by's facts (by: a running process of this den's; none: the den's own,
+// let go at its close), the scope open (none: by's). checked as start is, in its order (no path, so never taken; the
+// policy asked start on the runner, read on the program); a runner with no load: not-a-runner.
+// what load throws: thrown. { live, release }: live held by by, let go (live[Symbol.dispose], if
+// it has one) at release or at by's stop, after its handle's, newest first. by no running
+// process: PlacesError nothing-there. made outside a run: a pulse asked for. no process: what
+// live does is its caller's, a call of it a run of the caller's memo or effect, so its cost is
+// that run's time and its throw that run's error and status (ermine/api's runs)
 // stop(p, reason?): asked { op: "stop", target p's node } (refused: still running); the users of
-// its offers stopped ("runner-stopped"), its handle's stop(reason), the row out, the node gone.
+// its offers stopped ("runner-stopped"), its handle's stop(reason) (ermine/api's: its teardowns
+// told reason), its loads let go, the row out, the node gone.
 // twice, or not this den's: nothing. p the den's own: close(reason). the reason is not written
 // ask(a): another den's: as start or stop, its who given (device: the transport's). no policy:
 // refused no "no policy". stop: of a process this den started; else not-there. a start's fields
@@ -59,7 +83,7 @@
 // an address nor a map: { id: "" } (an id that is no string: ""); a step that is no string, args
 // given that are no list of strings, a cwd given that is no address: PlacesError not-a-name
 // close(reason = "den-stopped"): every process stopped, newest first, each handle given reason;
-// the den's rows last. after it: start, ask, offer refused stopped
+// the den's rows last. after it: start, load, ask, offer refused stopped
 // nodes({ processes }): what others see, tracked; status as "pending" | { failed: message }, an
 // attribute with no encoding left out; children: only those dens wrote
 // unplace or move never stops a process: its row is in the process part, not in children
@@ -129,18 +153,9 @@ const KINDS: readonly Kind[] = ["runners", "compilers", "surfaces"]
 export type Place = { readonly id: Id; readonly at?: Path }
 // what a runner gives back; @ermine/programs/start's Handle is one
 export type Handle = { readonly stop: (reason?: unknown) => unknown }
-// a live runner; @ermine/programs/start's Runner is one (apis.run, realms.run, createDlopen's)
-export type Runner = (code: unknown, api: unknown) => Handle | PromiseLike<Handle> | void
-// a program by id (its hash, when given, must be its value's), or carried (code: run as it is)
-export type Program = {
-	readonly id: Id
-	readonly hash?: string
-	readonly type?: string
-	readonly api?: string
-	readonly code?: unknown
-}
-// what createProcessAPI is handed: @ermine/programs/start's Context, and the den
-export type Context = {
+// what a runner is handed: the start's facts (@ermine/programs/start's Start, and the den). a
+// load's: its by's
+export type Start = {
 	readonly box: Box
 	readonly places: Places
 	readonly process: {
@@ -154,13 +169,33 @@ export type Context = {
 	readonly scope: Scope
 	readonly den: Den
 }
+// a live runner: start a process's program; load, a program live with no process; api, what its
+// programs get (the runner's, over context.createAPI(start) for ermine/api's)
+export type Runner = {
+	readonly start: (code: unknown, start: Start) => Handle | PromiseLike<Handle> | void
+	readonly load?: (code: unknown, start: Start) => unknown
+	readonly api?: (start: Start) => unknown
+}
+// what a runner node may hold: a Runner, or a function, its start (with its own load and api, if
+// it has them); @ermine/programs/start's Runner is one (realms.run, createDlopen's), ermine/api's run
+// both
+export type Runnable = Runner | (Runner["start"] & Partial<Pick<Runner, "load" | "api">>)
+// a load: the live form, and its letting go now (else at its holder's stop)
+export type Loaded = { readonly live: unknown; readonly release: () => void }
+// a program by id (its hash, when given, must be its value's), or carried (code: run as it is)
+export type Program = {
+	readonly id: Id
+	readonly hash?: string
+	readonly type?: string
+	readonly api?: string
+	readonly code?: unknown
+}
 export type Setup = {
 	scheduler: Scheduler
 	table: Table
 	// the host's: its contributors start with processes(root) (and away(root), for away)
 	places: Places
 	scopes: Pick<ScopeNodes, "give">
-	createProcessAPI: (ctx: Context) => unknown
 	// a name: the step under /system/dens, the den's channel name
 	id: string
 	name?: string
@@ -170,6 +205,8 @@ export type Setup = {
 	// none: places.commit
 	commit?: (changed: readonly Entry<unknown>[]) => void
 	sites?: Pick<Sited, "createScope">
+	// how a pulse is asked for: f run soon, once (none: queueMicrotask), as ermine/api's
+	schedule?: (f: () => void) => void
 }
 export type Offered = {
 	readonly id: Id
@@ -255,6 +292,11 @@ export type Den = {
 	start: (runner: Address, program: Address | Program, at: Address, options?: Options) =>
 		| Process
 		| Refused
+	load: (
+		runner: Address,
+		program: Address | Program,
+		options?: { by?: Process | Id; box?: Box },
+	) => Loaded | Refused
 	stop: (p: Process | Id, reason?: unknown) => NoPermission | undefined
 	ask: (a: Ask) => Asked
 	find: (id: Id) => Process | undefined
@@ -309,14 +351,22 @@ function strings<K extends string>(o: Record<K, unknown>): Partial<Record<K, str
 
 const STOPPED: Stopped = { refused: "stopped" }
 
-// a den's node or a process's: the folders of what it offers, by kind, and its offers in order
+// a den's node or a process's: where it runs, its args and cwd; the folders of what it offers, by
+// kind, and its offers in order; the loads it holds, in order
 type Owner = {
 	readonly id: Id
 	readonly at: Path
 	readonly scope: Scope
+	readonly box: Box
+	readonly args: readonly string[]
+	readonly cwd: Path
 	readonly folders: Map<Kind, { readonly id: Id; readonly scope: Scope }>
 	readonly offers: Offer[]
+	readonly loads: Held[]
 }
+
+// a load's live form, held until let go
+type Held = { readonly live: unknown; released: boolean }
 
 // an offer: its node's scope, and the processes running on it, in start order
 type Offer = Offered & {
@@ -331,7 +381,6 @@ type Offer = Offered & {
 // the reason given (told: by a stop)
 type Running = Owner & {
 	process?: Process
-	readonly box: Box
 	readonly on?: Offer
 	handle?: Handle
 	ended: boolean
@@ -340,7 +389,7 @@ type Running = Owner & {
 }
 
 export function createDen(setup: Setup): Den {
-	const { scheduler: s, table, places, scopes, createProcessAPI } = setup
+	const { scheduler: s, table, places, scopes } = setup
 	if (bad(setup.id)) throw new PlacesError("not-a-name", String(setup.id))
 	const createScope = setup.sites?.createScope ?? s.createScope
 	const ours = new Set([import.meta.url])
@@ -384,6 +433,18 @@ export function createDen(setup: Setup): Den {
 	const within = <T>(o: Scope, f: () => T): T => o.state === "alive" ? s.runWithScope(o, f) : f()
 	const changed = () => void s.mark([version])
 
+	// one pulse asked for outside a run, however many ask (in a run: one is under way)
+	let queued = false
+	const schedule = setup.schedule ?? queueMicrotask
+	function later() {
+		if (queued || s.getRun() !== undefined) return
+		queued = true
+		schedule(() => {
+			queued = false
+			s.pulse()
+		})
+	}
+
 	// the den's own node as an owner: its folders and offers
 	let mine!: Owner
 	const attributes: Record<string, unknown> = { [ATTRIBUTE]: TYPE.den, [ID]: setup.id }
@@ -393,7 +454,17 @@ export function createDen(setup: Setup): Den {
 	let made: Process | { refused: "taken" }
 	try {
 		made = processes.start(home, at, { attributes }, (inside) => {
-			mine = { id: inside.id, at, scope: inside.scope, folders: new Map(), offers: [] }
+			mine = {
+				id: inside.id,
+				at,
+				scope: inside.scope,
+				box: home,
+				args: inside.args,
+				cwd: inside.cwd,
+				folders: new Map(),
+				offers: [],
+				loads: [],
+			}
 			methods(inside)
 			commit(addProcess(table, home.root, HERE, inside.id, headerOf()))
 			// its status gone at the first pulse
@@ -472,7 +543,7 @@ export function createDen(setup: Setup): Den {
 	}
 
 	// the den's own process going: its offers withdrawn (their users stopped with the den's
-	// reason), then here out. every step runs; the first error is thrown after
+	// reason), its loads let go, then here out. every step runs; the first error is thrown after
 	function ended() {
 		closed = true
 		let failed: { error: unknown } | undefined
@@ -483,6 +554,8 @@ export function createDen(setup: Setup): Den {
 				failed ??= { error }
 			}
 		}
+		const loose = letGo(mine)
+		if (loose) failed ??= loose
 		try {
 			commit(removeProcess(table, home.root, HERE, headerOf()))
 		} catch (e) {
@@ -613,17 +686,52 @@ export function createDen(setup: Setup): Den {
 		return isMap(v) ? v : {}
 	}
 
-	// start's checks in order, then processes' start. who: the policy's; remote: another den's ask
-	function begin(
+	// a runner node's value as a Runner: a map's or function's own start (load, api), else a
+	// function as its start; none: undefined
+	function runnerOf(v: unknown): Runner | undefined {
+		if (typeof v !== "function" && !isMap(v)) return undefined
+		const o = v as Partial<Runner>
+		const own = typeof o.start === "function"
+		if (!own && typeof v !== "function") return undefined
+		const start: Runner["start"] = own
+			? (code, start) => o.start!(code, start)
+			: (code, start) => (v as Runner["start"])(code, start)
+		return {
+			start,
+			...(typeof o.load === "function" ? { load: (code, start) => o.load!(code, start) } : {}),
+			...(typeof o.api === "function" ? { api: (start) => o.api!(start) } : {}),
+		}
+	}
+
+	// what an owner's runner is handed: its facts
+	const startOf = (o: Owner): Start => ({
+		box: o.box,
+		places: o.box.places,
+		process: { id: o.id, at: o.at, args: o.args, cwd: o.cwd },
+		scheduler: s,
+		table,
+		scope: o.scope,
+		den,
+	})
+
+	// start's checks in order, up to taken (processes'): the runner, the program read once, the
+	// policy asked. load: a runner with no load is not-a-runner
+	type Checked = {
+		readonly runner: { readonly id: Id; readonly path: Path }
+		readonly program: { readonly id: Id; readonly at?: Path }
+		readonly code: unknown
+		readonly digest?: string
+		readonly live: Runner
+	}
+	function check(
 		who: unknown,
 		remote: boolean,
 		runner: Address,
 		program: Address | Program,
-		address: Address,
-		options: Options,
-	): Running | Refused {
+		where: Box,
+		load: boolean,
+	): Checked | Refused {
 		if (closed) return STOPPED
-		const where = options.box ?? home
 		const r = resolve(home, runner)
 		const notRunner = { refused: "not-a-runner", runner: r.path } as const
 		if (r.id === undefined) return notRunner
@@ -675,8 +783,8 @@ export function createDen(setup: Setup): Den {
 				runner: strings({ takes, api: given }),
 			}
 		}
-		const fn = table.get("value", r.id)?.value
-		if (typeof fn !== "function") return notRunner
+		const live = runnerOf(table.get("value", r.id)?.value)
+		if (live === undefined || (load && live.load === undefined)) return notRunner
 		const allowed = permit(who, "start", { id: r.id, path: [...r.path] }, remote)
 		if (allowed.answer !== "yes") return refuse("start", allowed)
 		if (!carried) {
@@ -686,12 +794,33 @@ export function createDen(setup: Setup): Den {
 			const read = permit(who, "read", target, remote)
 			if (read.answer !== "yes") return refuse("read", read)
 		}
-		const on = offers.get(r.id)
-		const placed = { id, ...(path === undefined ? {} : { at: path }) }
+		return {
+			runner: { id: r.id, path: r.path },
+			program: { id, ...(path === undefined ? {} : { at: path }) },
+			code,
+			...(digest === undefined ? {} : { digest }),
+			live,
+		}
+	}
+
+	// start's checks, then processes' start. who: the policy's; remote: another den's ask
+	function begin(
+		who: unknown,
+		remote: boolean,
+		runner: Address,
+		program: Address | Program,
+		address: Address,
+		options: Options,
+	): Running | Refused {
+		const where = options.box ?? home
+		const c = check(who, remote, runner, program, where, false)
+		if ("refused" in c) return c
+		const { live, code, digest } = c
+		const on = offers.get(c.runner.id)
 		const attrs = {
 			[ATTRIBUTE]: TYPE.process,
-			[RUNNER]: { id: r.id, at: r.path },
-			[PROGRAM]: digest === undefined ? placed : { ...placed, hash: digest },
+			[RUNNER]: { id: c.runner.id, at: c.runner.path },
+			[PROGRAM]: digest === undefined ? c.program : { ...c.program, hash: digest },
 			[DEN]: { id: node, at },
 		}
 		let p: Running | undefined
@@ -704,9 +833,12 @@ export function createDen(setup: Setup): Den {
 					id: inside.id,
 					at: inside.at,
 					scope: inside.scope,
+					box: inside.box,
+					args: inside.args,
+					cwd: inside.cwd,
 					folders: new Map(),
 					offers: [],
-					box: inside.box,
+					loads: [],
 					on,
 					ended: false,
 					told: false,
@@ -715,11 +847,10 @@ export function createDen(setup: Setup): Den {
 				running.push(q)
 				byId.set(q.id, q)
 				on?.users.push(q)
-				const process = { id: q.id, at: q.at, args: inside.args, cwd: inside.cwd }
 				// core candidate (scheduler): an effect that acts once and goes
 				const first = s.createEffect(() => true, () => {
 					try {
-						run(q, inside, fn as Runner, code, process)
+						run(q, inside, live, code)
 					} finally {
 						s.teardown(first)
 					}
@@ -731,31 +862,17 @@ export function createDen(setup: Setup): Den {
 		if ("refused" in made) return made
 		p!.process = made
 		changed()
+		later()
 		return p!
 	}
 
-	// the runner called, the process's scope open. a handle at once: kept; a throw or a promise: a
-	// computer holding the outcome, its status the node's
-	function run(
-		p: Running,
-		inner: Inside,
-		fn: Runner,
-		code: unknown,
-		process: Context["process"],
-	) {
+	// the runner's start called, the process's scope open. a handle at once: kept; a throw or a
+	// promise: a computer holding the outcome, its status the node's
+	function run(p: Running, inner: Inside, live: Runner, code: unknown) {
 		let out: { value: unknown } | { error: unknown }
 		try {
-			const ctx: Context = {
-				box: p.box,
-				places: p.box.places,
-				process,
-				scheduler: s,
-				table,
-				scope: p.scope,
-				den,
-			}
-			const api = createProcessAPI(ctx)
-			out = { value: s.runWithScope(p.scope, () => fn(code, api)) }
+			const start = startOf(p)
+			out = { value: s.runWithScope(p.scope, () => live.start(code, start)) }
 		} catch (error) {
 			out = { error }
 		}
@@ -786,10 +903,36 @@ export function createDen(setup: Setup): Den {
 		else p.handle = h as Handle
 	}
 
+	// a held load let go: out of its holder's list, its live form disposed (if it can be)
+	function drop(o: Owner, h: Held) {
+		if (h.released) return
+		h.released = true
+		const i = o.loads.indexOf(h)
+		if (i !== -1) o.loads.splice(i, 1)
+		const v = h.live
+		const dispose = typeof v === "function" || isMap(v)
+			? (v as { [Symbol.dispose]?: unknown })[Symbol.dispose]
+			: undefined
+		if (typeof dispose === "function") dispose.call(v)
+	}
+
+	// every load an owner holds let go, newest first: the first error
+	function letGo(o: Owner): { error: unknown } | undefined {
+		let failed: { error: unknown } | undefined
+		for (const h of [...o.loads].reverse()) {
+			try {
+				drop(o, h)
+			} catch (error) {
+				failed ??= { error }
+			}
+		}
+		return failed
+	}
+
 	// a process going (its done, called by processes' stop, or by its scope torn down from above):
 	// its offers withdrawn newest first (their users stopped "runner-stopped"), then its handle's
-	// stop with the reason told (none told: the den's, the den going; else none). every step runs;
-	// the first error is thrown after
+	// stop with the reason told (none told: the den's, the den going; else none), then its loads let
+	// go, newest first. every step runs; the first error is thrown after
 	function done(p: Running) {
 		if (p.ended) return
 		p.ended = true
@@ -814,6 +957,8 @@ export function createDen(setup: Setup): Den {
 		} catch (error) {
 			failed ??= { error }
 		}
+		const loose = letGo(p)
+		if (loose) failed ??= loose
 		changed()
 		if (failed) throw failed.error
 	}
@@ -835,6 +980,24 @@ export function createDen(setup: Setup): Den {
 	): Process | Refused {
 		const r = begin(createChangeBase(s), false, runner, program, at, options)
 		return "refused" in r ? r : r.process!
+	}
+
+	function load(
+		runner: Address,
+		program: Address | Program,
+		options: { by?: Process | Id; box?: Box } = {},
+	): Loaded | Refused {
+		if (closed) return STOPPED
+		const by = ownerOf(options.by)
+		const c = check(createChangeBase(s), false, runner, program, options.box ?? by.box, true)
+		if ("refused" in c) return c
+		const start = startOf(by)
+		const f = () => c.live.load!(c.code, start)
+		const live = s.getCurrentScope() !== undefined ? f() : s.runWithScope(by.scope, f)
+		const h: Held = { live, released: false }
+		by.loads.push(h)
+		later()
+		return { live, release: () => drop(by, h) }
 	}
 
 	function stop(x: Process | Id, reason?: unknown): NoPermission | undefined {
@@ -957,6 +1120,7 @@ export function createDen(setup: Setup): Den {
 		offer,
 		withdraw,
 		start,
+		load,
 		stop,
 		ask: askedBy,
 		find: (id) => {

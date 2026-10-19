@@ -6,7 +6,7 @@
 //
 // compilers, each counting calls: upper (uppercase), wrap ({ wasm: input }), slow (input, once
 // settled), boom (throws Error("boom")). the runner records code, args and api keys; its program
-// looks each arg up from the process's folder every run. createProcessAPI gives { places,
+// looks each arg up from the process's folder every run. createAPI gives { places,
 // process: { id, at, args, cwd }, watch(name, seen) }.
 //
 // { op: "kids" | "attrs" | "value", id, value }  -> {}   that entry replaced (value: JSON form)
@@ -57,7 +57,7 @@ import { BuildError, type Compiler, createBuilds } from "@ermine/build"
 import { createDlopen, type Live } from "./dlopen.ts"
 import { openwith, type Refusal, satisfy, type Way, type Why } from "./programs.ts"
 import { ARGS, CWD, PIN } from "@ermine/processes/start"
-import { type Context, createPrograms, type Process, type Programs, type Runner } from "./start.ts"
+import { createPrograms, type Process, type Programs, type Runner, type Start } from "./start.ts"
 
 type Json = unknown
 
@@ -107,11 +107,11 @@ const compilers: Record<string, Compiler> = {
 // what the program is given
 type Api = {
 	places: Places
-	process: Context["process"]
+	process: Start["process"]
 	watch: (name: string, seen: (id: Id | null) => void) => void
 }
 
-const createProcessAPI = ({ places, process, scheduler }: Context): Api => ({
+const createAPI = ({ places, process, scheduler }: Start): Api => ({
 	places,
 	process,
 	watch: (name, seen) =>
@@ -391,7 +391,7 @@ async function answer(r: Request): Promise<Json> {
 					places: writes,
 					builds,
 					scopes,
-					createProcessAPI,
+					createAPI,
 					sites,
 				})
 			})

@@ -5,11 +5,15 @@
 // moves; an in-memory channel pair (presence's createPair) named "mac" and "card", made at the
 // first connect. names in answers (and taken back in requests): a den's node "den:<den id>", a
 // process "proc:<its name>", a derived id its owner's name and the rest (den:mac/runners/javascript);
-// any other id as it is. a PlacesError: { error: code }. live runners: record ({ dev, process,
-// code, args, keys }; its stop { dev, process, reason }, reason null: none), boom (throws
-// Error("boom")). createProcessAPI: { den: den.id, places, process }. the policy "grants": protect's
-// grants({ part: "value", id: "rules" }), every ask recorded { op, who: { actor, reader?, device? },
-// part?, id, path? }
+// any other id as it is. a PlacesError: { error: code }. live runners, each a function (its start)
+// given the start's facts: record (its run { dev, process, code, args, keys }, keys those of the
+// api it makes from them, { den: den.id, places, process }; its stop { dev, process, reason },
+// reason null: none; its load { dev, by, code }, by the process loading, its live form's dispose
+// { dev, by, code }), boom (throws Error("boom"), its load too), teller (ermine/api's run over the
+// device's context, a program whose teardown records { dev, process, why }; no load). the policy
+// "grants": protect's grants({ part: "value", id: "rules" }), every ask recorded { op, who: { actor,
+// reader?, device? }, part?, id, path? }. a den's pulses asked for (setup.schedule) are held, run
+// by later
 //
 // world
 // { op: "root", dev?, root }                         -> {}   before the device's first other line
@@ -21,12 +25,18 @@
 // { op: "den", dev?, id?, name?, device?, policy? }   -> { id }   createDen, the host's scope open;
 //    id none: dev; policy "grants" | none
 // { op: "offer", dev?, kind, name, attrs?, live?, by? } -> { id, at } | { refused, ... }
-//    live "record" | "boom" | none; by: a process's name
+//    live "record" | "boom" | "teller" | none; by: a process's name
 // { op: "withdraw", dev?, id }                       -> {}
 // { op: "start", dev?, name, runner, program, at, args?, cwd?, box?, pin?, actor? }
 //    -> { id, at } | refusal. runner, at: addresses; program: an address or { id, hash?, type?,
 //    api?, code? }; actor: a scope { actor } under the host's, open for the call
 // { op: "stop", dev?, name, reason?, actor? }        -> {} | refusal   name "den": the den's own
+// { op: "load", dev?, name, runner, program, by?, box?, actor? } -> {} | refusal | { failed }
+//    the load named name; by: a process's name ("den": the den's own; none: the den); failed: what
+//    the load threw, its message
+// { op: "release", dev?, name }                      -> {}   the load named name let go
+// { op: "later", dev? }                              -> { pulses }   the pulses the den asked for
+//    run, and how many
 // { op: "ask", dev?, ask: "start", name, who, runner, program, at, args?, cwd? } -> the answer
 // { op: "ask", dev?, ask: "stop", who, process, reason? }   -> the answer   process: a name or id
 // { op: "send", dev?, path, body, actor? }           -> what the method there gave (body's name:
@@ -43,6 +53,8 @@
 //    | null (PENDING, an Error, none; any other value: { raw: it }); children (null: no entry);
 //    live: its value is a function
 // { op: "runs" }                                     -> { runs, stops }   every device's, in order
+// { op: "loads" }                                    -> { loads, unloads }   every device's, in order
+// { op: "told" }                                     -> { told }   teller's teardowns, in order
 // { op: "asked", dev? }                              -> { asks }   since the last asked
 // other dens
 // { op: "connect", dev?, topic?, under?, publish?, processes?, ttl? } -> {}   connect, the host's
@@ -76,7 +88,17 @@ import { setPresence } from "@ermine/presence"
 import { type Channel, createPair } from "@ermine/presence/channel"
 import { fromJson, toJson } from "../../../conformance/typescript/form.ts"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
-import { type Context, createDen, type Den, type Program, type Runner } from "./dens.ts"
+import { type API, createProcessContext, type ProcessContext } from "@ermine/api"
+import {
+	createDen,
+	type Den,
+	type Loaded,
+	type Program,
+	type Refused,
+	type Runnable,
+	type Runner,
+	type Start,
+} from "./dens.ts"
 import { away, connect, type Link, type Options, type Remote } from "./away.ts"
 
 type Json = unknown
@@ -93,6 +115,10 @@ type Device = {
 	den?: Den
 	link?: Link
 	asks: Json[]
+	// the pulses its den asked for, not yet run; its loads by name; teller's context
+	asked: (() => void)[]
+	loads: Map<string, Loaded>
+	context?: ProcessContext
 }
 
 const clock = { t: 0 }
@@ -114,7 +140,18 @@ function device(name: string): Device {
 	s.onTrackingEnd((key) => places.release(key))
 	const scopes = createScopeNodes({ scheduler: s, table })
 	const host = s.createRootScope({ actor: name })
-	return { name, s, table, places, scopes, host, boxes: new Map(), asks: [] }
+	return {
+		name,
+		s,
+		table,
+		places,
+		scopes,
+		host,
+		boxes: new Map(),
+		asks: [],
+		asked: [],
+		loads: new Map(),
+	}
 }
 
 const dev = (r: Request): Device => {
@@ -224,32 +261,59 @@ function status(v: unknown): Json {
 const ran: Json[] = []
 const stops: Json[] = []
 
-type Api = { den: string; places: Places; process: Context["process"] }
+const loads: Json[] = []
+const unloads: Json[] = []
+const told: Json[] = []
 
-const record = (dev: string): Runner => (code, api) => {
-	const { process } = api as Api
-	ran.push({ dev, process: process.id, code, args: process.args, keys: Object.keys(api!).sort() })
-	return {
-		stop: (reason?: unknown) =>
-			void stops.push({ dev, process: process.id, reason: reason ?? null }),
-	}
-}
-const boom: Runner = () => {
+type Api = { den: string; places: Places; process: Start["process"] }
+
+const record = (dev: string): Runnable =>
+	Object.assign((code: unknown, start: Start) => {
+		const api: Api = { den: start.den.id, places: start.places, process: start.process }
+		const { process } = api
+		ran.push({ dev, process: process.id, code, args: process.args, keys: Object.keys(api).sort() })
+		return {
+			stop: (reason?: unknown) =>
+				void stops.push({ dev, process: process.id, reason: reason ?? null }),
+		}
+	}, {
+		load: (code: unknown, start: Start) => {
+			const by = start.process.id
+			loads.push({ dev, by, code })
+			return { [Symbol.dispose]: () => void unloads.push({ dev, by, code }) }
+		},
+	})
+const boom: Runnable = Object.assign(() => {
 	throw new Error("boom")
+}, {
+	load: () => {
+		throw new Error("boom")
+	},
+})
+
+// ermine/api's run, the program one whose teardown is recorded
+function teller(d: Device): Runner["start"] {
+	return (_code, start) => {
+		d.context ??= createProcessContext({
+			scheduler: d.s,
+			table: d.table,
+			commit: (changed) => d.places.commit(changed),
+			host: { places: d.places, table: d.table, scheduler: d.s },
+			schedule: () => {},
+		})
+		const program = (api: API) =>
+			void api.teardown((why) => void told.push({ dev: d.name, process: start.process.id, why }))
+		return d.context.run.start(program, start)
+	}
 }
 
 function live(d: Device, kind: unknown): unknown {
 	if (kind === undefined) return undefined
 	if (kind === "record") return record(d.name)
 	if (kind === "boom") return boom
+	if (kind === "teller") return teller(d)
 	throw new Error(`no runner ${kind}`)
 }
-
-const createProcessAPI = ({ den, places, process }: Context): Api => ({
-	den: den.id,
-	places,
-	process,
-})
 
 // grants, each ask recorded on the device
 function granted(d: Device): Policy {
@@ -369,7 +433,7 @@ function answer(r: Request): Json {
 					table: d.table,
 					places: d.places,
 					scopes: d.scopes,
-					createProcessAPI,
+					schedule: (f) => void d.asked.push(f),
 					id: r.id ?? d.name,
 					...(r.name === undefined ? {} : { name: r.name }),
 					...(r.device === undefined ? {} : { device: back(r.device) }),
@@ -413,6 +477,37 @@ function answer(r: Request): Json {
 			const id = processOf(d, r.name)
 			const reason = r.reason === undefined ? undefined : back(r.reason)
 			return plain(hosted(d, () => denOf(d).stop(id, reason), r.actor) ?? {})
+		}
+		case "load": {
+			const d = dev(r)
+			const den = denOf(d)
+			const options = {
+				...(r.by === undefined ? {} : { by: processOf(d, r.by) }),
+				...(r.box === undefined ? {} : { box: boxOf(d, r.box) }),
+			}
+			let made: Loaded | Refused
+			try {
+				made = hosted(d, () => den.load(r.runner, programOf(r.program), options), r.actor)
+			} catch (e) {
+				if (e instanceof PlacesError || !(e instanceof Error)) throw e
+				return { failed: e.message }
+			}
+			if ("refused" in made) return plain(made)
+			d.loads.set(r.name, made)
+			return {}
+		}
+		case "release": {
+			const d = dev(r)
+			const l = d.loads.get(r.name)
+			if (l === undefined) throw new Error(`no load ${r.name}`)
+			hosted(d, () => l.release())
+			return {}
+		}
+		case "later": {
+			const d = dev(r)
+			const fs = d.asked.splice(0)
+			for (const f of fs) f()
+			return { pulses: fs.length }
 		}
 		case "ask": {
 			const d = dev(r)
@@ -499,6 +594,10 @@ function answer(r: Request): Json {
 		}
 		case "runs":
 			return { runs: plain(ran), stops: plain(stops) }
+		case "loads":
+			return { loads: plain(loads), unloads: plain(unloads) }
+		case "told":
+			return { told: plain(told) }
 		case "asked":
 			return { asks: plain(dev(r).asks.splice(0)) }
 		case "connect": {
