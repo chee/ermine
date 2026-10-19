@@ -13,7 +13,7 @@
 //                   [--dump FILE] [--log FILE] [--keys KEYS] [--exit-after MS] [--pty-file FILE]
 // streams: each --port and --pty is one more (LS_LINKS at most), a link of its own; the device relays
 //   between them (a hop: a - b - c with b given two). None: the first /dev/cu.usbmodem*.
-// --http URL: the gateway (http://host:port, extensions/together/stacks/littlesync/gateway) over its
+// --http URL: the gateway (http://host:port, or https://galaxy.observer; extensions/together/stacks/littlesync/gateway) over its
 //   HTTP sessions (http.h), a link too; its posts on a thread of their own, so the loop never waits.
 // --pty: makes a pty and talks on its master; its slave path is printed on stderr (and written to
 //   --pty-file, a line per pty): another littlesync-pigs --port PATH is the other end. --pipe: the

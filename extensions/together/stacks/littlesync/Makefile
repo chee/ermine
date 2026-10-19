@@ -7,6 +7,8 @@
 #                    wss://galaxy.observer: through galaxy). littlesync-pigs, lab-pig's pigs
 #                    on littlesync, is a user of the library (playground/demos/pigs/littlesync), built into
 #                    build/ here; the tests use its pigs.c and pigs.h too
+#   make galaxy      two littlesync-pigs over https to the deployed gateway (https://galaxy.observer/littlesync/),
+#                    a fresh room each run (test/galaxy.sh; URL=... another). The network: not in make test
 #   make check       the host tests and the lists check under the address and undefined-behaviour sanitizers
 #   make pigs        littlesync-pigs, the Mac peer (playground/demos/pigs/littlesync/peer.c), into build/
 #   make esp-check   the library's .c files and the shared ones it uses, compiled for esp32s3 (xtensa),
@@ -65,6 +67,10 @@ test: $(BUILD)/test $(BUILD)/littlesync-pigs
 	$(Q)sh test/hop.sh $(BUILD)/littlesync-pigs
 	$(Q)sh test/http.sh $(BUILD)/littlesync-pigs
 
+URL = https://galaxy.observer
+galaxy: $(BUILD)/littlesync-pigs
+	$(Q)sh test/galaxy.sh $(BUILD)/littlesync-pigs $(URL)
+
 # the device build: -Os, the xtensa compiler of ESP-IDF's toolchain. Nothing is linked: each object's
 # size, then the sum. text is code and read-only data, data and bss the static RAM
 XT = $(firstword $(wildcard $(HOME)/.espressif/tools/xtensa-esp-elf/*/xtensa-esp-elf/bin))
@@ -98,4 +104,4 @@ esp-check:
 clean:
 	$(Q)rm -rf $(BUILD)
 
-.PHONY: all pigs test check esp-check clean FORCE
+.PHONY: all pigs test galaxy check esp-check clean FORCE

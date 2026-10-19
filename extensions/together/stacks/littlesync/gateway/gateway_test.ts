@@ -16,6 +16,9 @@ import { createHost } from "./host_harness.ts"
 const opts = { sanitizeOps: false, sanitizeResources: false }
 const zeros = (b: Uint8Array) => "ermine://" + hex(b) + "0".repeat(32)
 const fresh = () => zeros(crypto.getRandomValues(new Uint8Array(16)))
+// the says among what a device got
+const says = (got: Message[]) =>
+	got.filter((x): x is Extract<Message, { t: "say" }> => x.t === "say")
 
 async function world() {
 	const lines: string[] = []
@@ -294,6 +297,7 @@ Deno.test({
 		const f = await fake(w.gateway)
 		const node = unhex(room.slice(9))
 		f.link.send({ t: "heads", node, heads: [] })
+		f.link.send({ t: "listen", topics: [room] })
 		let beat: ReturnType<typeof setInterval> | undefined
 		try {
 			// C → TS: presence.ts's message, byte for byte as presence.ts encodes it
@@ -313,19 +317,19 @@ Deno.test({
 			assertEquals(cbor.encode(m as never), up.bytes)
 			// under a key the gateway made for that device: neither the device's nor the gateway's
 			const cKey = await until(
-				() => f.got.find((x) => x.t === "presence")?.who,
+				() => says(f.got).find((x) => x.topic === room)?.who,
 				5000,
 				"the C peer's row on the other device",
 			)
 			assert(up.from !== hex(cKey) && up.from !== hex(w.signer.key))
-			assertEquals(w.gateway.stats.presence.peers, 1)
+			assertEquals(w.gateway.stats.messages.peers, 1)
 			// device to device: its own key, the row as it came
 			const relayed = await until(
-				() => f.got.find((x) => x.t === "presence" && hex(x.row) === hex(up.bytes)),
+				() => f.got.find((x) => x.t === "say" && hex(x.bytes) === hex(up.bytes)),
 				5000,
 				"the moved row on the other device",
 			)
-			assert(relayed.t === "presence" && hex(relayed.who) === hex(cKey))
+			assert(relayed.t === "say" && hex(relayed.who) === hex(cKey))
 
 			// TS → C: a web pig's row, renewed, then gone
 			const juno = cbor.encode({
@@ -340,17 +344,69 @@ Deno.test({
 				10000,
 				"the TS row on the C screen",
 			)
-			const down = f.got.find((x) => x.t === "presence" && hex(x.who) === hex(w.host.signer.key))
-			assert(down?.t === "presence" && hex(down.row) === hex(juno))
+			const down = f.got.find((x) => x.t === "say" && hex(x.who) === hex(w.host.signer.key))
+			assert(down?.t === "say" && hex(down.bytes) === hex(juno))
 			clearInterval(beat)
 			await w.host.device.send(room, cbor.encode({ gone: true }))
 			await until(() => !pigs.dump().includes("@ juno"), 5000, "gone from the C screen")
-			assert(w.gateway.stats.presence.in > 0 && w.gateway.stats.presence.out > 0)
+			assert(w.gateway.stats.messages.in > 0 && w.gateway.stats.messages.out > 0)
 		} finally {
 			clearInterval(beat)
 			stop()
 			f.close()
 			await pigs.stop()
+			await w.close()
+		}
+	},
+})
+
+Deno.test({
+	name:
+		"gateway: messages on any topic (not a node's) both ways, 3.3 KB, only to the devices listening",
+	...opts,
+	async fn() {
+		const w = await world()
+		const topic = `dens:test-${hex(crypto.getRandomValues(new Uint8Array(8)))}`
+		const heard: { from: string; bytes: Uint8Array }[] = []
+		const stop = w.host.device.listen(topic, (from, bytes) => void heard.push({ from, bytes }))
+		const a = await fake(w.gateway), b = await fake(w.gateway)
+		a.link.send({ t: "listen", topics: [topic] })
+		b.link.send({ t: "listen", topics: [topic + "/ask/someone"] })
+		let beat: ReturnType<typeof setInterval> | undefined
+		try {
+			// told to send everything up
+			await until(
+				() => a.got.find((x) => x.t === "listen" && x.all === true),
+				5000,
+				"listen all from the gateway",
+			)
+			// TS → a: a den's row, byte for byte, under the TS device's key; b listens elsewhere
+			const row = crypto.getRandomValues(new Uint8Array(3300))
+			beat = setInterval(() => void w.host.device.send(topic, row), 300)
+			const down = await until(
+				() => a.got.find((x) => x.t === "say" && x.topic === topic),
+				10000,
+				"the TS message on a",
+			)
+			clearInterval(beat)
+			assert(down.t === "say" && hex(down.bytes) === hex(row))
+			assertEquals(hex(down.who), hex(w.host.signer.key))
+			// a → TS: under a key the gateway made for a; b hears nothing on that topic
+			const ask = cbor.encode({ n: 1, op: "look" })
+			a.link.send({ t: "say", topic, who: a.signer.key, bytes: ask })
+			const up = await until(
+				() => heard.find((h) => hex(h.bytes) === hex(ask)),
+				10000,
+				"a's message on the TS device",
+			)
+			assert(up.from !== hex(a.signer.key) && up.from !== hex(w.signer.key))
+			assert(!b.got.some((x) => x.t === "say"))
+			assert(w.gateway.stats.messages.in >= 1 && w.gateway.stats.messages.out >= 1)
+		} finally {
+			clearInterval(beat)
+			stop()
+			a.close()
+			b.close()
 			await w.close()
 		}
 	},

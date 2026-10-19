@@ -29,6 +29,11 @@
   off. http_posix.c (sockets, keep-alive) for littlesync-pigs --http URL, posts on a thread;
   test/http.sh (two peers, a local gateway, no server; or through galaxy). The Cardputer: main/net.c,
   esp_wifi station and esp_http_client on a task, from menuconfig (empty: USB only)
+- https (2026-10-19): http_posix.c through libcurl (LS_HTTP_CURL; the pigs Makefile on a Mac, or
+  where pkg-config finds it); net.c with the certificate bundle (common CAs). make galaxy
+  (test/galaxy.sh): two littlesync-pigs to https://galaxy.observer, a fresh room, converge. Railway
+  keeps the connection; a long poll ends at the gateway's 4 s hello (a 25 s hold through Railway
+  not seen)
 
 - server-sized (LS_SERVER, on but under ESP_PLATFORM): ls_options.links (runtime, 2 bits a link per
   commit, a resend round a second per link), max_out, keep (passing commits to the store by name, a
@@ -44,6 +49,16 @@
   its publisher). Mac peer: a pointer (hjkl), others' as @; Cardputer: /pigs/room/pointers, no row
   of its own. littlesync.c 22164 -> 24275 B text on the S3
 
+- messages (2026-10-19): short-lived bytes on any topic (a string: a node's id, "dens:root"), who
+  said them, never stored: ls_send, ls_listen/ls_unlisten, ls_options.heard; wire listen {topics,
+  all?} (each link tells its peer what it hears and what its other links' peers want; past 128: all)
+  and say {topic, who, bytes}, relayed only where wanted, never back. Presence is rows on a topic
+  (ls_presence_on/ls_rows_on/ls_row_on; a followed node is a room on its id), the presence message
+  gone. ls_options.message (4096: a den's 3.3 KB row fits a 4.5 KB frame; larger grows the rx buffer)
+  and rows (16 a topic). Gateway: listen all to each device, a device's listens listened to upstream
+  (the together device's channel: any string, hashed to Subduction's topic), says both ways.
+  littlesync.c 24275 -> 26555 B text on the S3
+
 * open
 - as a server (galaxy, over FFI): no follow-on-mention (a message for a node not followed is dropped);
   heads of every node to every link (no per-link interest); acks before the store has the commit;
@@ -52,10 +67,12 @@
   is pushed again to a link after a restart or a hello (acks are not stored); the tick's round
   walks every commit of every node per link; settle/covers/ls_values are linear or quadratic in writes
 - presence: a numbered patch message ({patches, n}) is relayed but not taken (the next renew is
-  whole); a device's row reaches the room under a key the gateway made, not its own; ls_close sends
+  whole); a device's row (any message) reaches the room under a key the gateway made, not its own
+  (sender identity: open); ls_close sends
   no gone (the host clears first); the Cardputer's /pigs/room/pointers built, not run on the device
-- HTTP: https (esp_http_client with a CA bundle; galaxy's container); the Cardputer over WiFi untested
-  on the device; a session id new each start (an old one idles out in 30 s)
+- HTTP: the Cardputer over WiFi, http and https, untested on the device (TLS heap, the handshake's
+  stack); a session id new each start (an old one idles out in 30 s); http:// to Railway is a 301,
+  not followed (fails)
 - the lists show more than lists.ts where a cover goes through commits this device never held (the
   fuzz: about 6 paths a seed, never fewer); a peer's covers answer, or a window, would close it
   (CONFLICTS.tex small devices)

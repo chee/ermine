@@ -18,7 +18,8 @@
 //   - per commit held, whether a commit taken in names it as a parent (then it is no head), and a few
 //     parents named that are not held (yet)
 //   - ephemeral values (a value being carried, held up by a device), per sending device, never stored
-//   - presence rows (who is here, a pointer), per device, never stored
+//   - the topics it hears (a name each), and per link the topics its peer wants
+//   - presence rows (who is here, a pointer), per topic and device, never stored
 // everything older is dropped.
 //
 // keep (ls_options.keep: a relay, a server): nothing is dropped. A passing commit is kept for ever, its
@@ -70,15 +71,16 @@
 // trust: the peers are trusted (your own Mac over USB). Any key may write: a seal shows who signed, not
 // that they may. A commit's lamport is taken as given (no parents are kept to check it), so a high
 // one wins every path it writes, and one at 2^53 - 1 leaves no lamport for this device's next write.
-// Ephemerals are not sealed: a held value may name any signer but this device's own. Not for a peer
-// you don't trust.
+// Ephemerals are not sealed: a held value may name any signer but this device's own. Nor are messages:
+// who is what the sender says. Not for a peer you don't trust.
 //
 // links: a device talks to several peers at once, each over its own byte stream (ls_link), up to
-// ls_options.links (hundreds work: per commit, 2 bits a link). A link has its own rx buffer (4.5 KB), out
+// ls_options.links (hundreds work: per commit, 2 bits a link). A link has its own rx buffer (4.5 KB; more past LS_MESSAGE), out
 // queue, hello and heads timers, and the record of which commits that peer has acked; the nodes and everything written are the device's. A write goes to every link that is up.
 // The device is a relay: what is taken in from one link is offered to the others (heads, then they want
 // it), never back to the one it came from; a held (ephemeral) value taken in on one link is sent on, still
-// unsealed, to the others. Links should not form a ring (a hold would go round for ever).
+// unsealed, to the others, and a message to the others that want its topic. Links should not form a ring
+// (a hold or a message would go round for ever).
 //
 // wire (frames in a byte stream that may also carry other text, a console log): 0x00, the COBS of
 // ("L", one CBOR message, the CRC-32 of the message, 4 bytes little end), 0x00. What does not decode
@@ -89,7 +91,9 @@
 //   commits    {node, sealed: [bytes]}                      seals (seal.h's format)
 //   ephemeral  {node, commit: bytes}                        an unsealed commit, one put at []
 //   ack        {node, names: [name]}
-//   presence   {node, who: key, row: bytes}                 a presence row (below), as presence.ts sends it
+//   listen     {topics: [string], all?: true}               the topics the sender wants sent to it (all:
+//                                                           every one), the whole list each time
+//   say        {topic: string, who: key, bytes}             a message (below)
 // sync: on hello, and whenever a node changes, each side sends heads for what it follows; a side that
 // lacks names sends want; the other sends the commits it still has; the receiver acks what it took
 // in. A heads that lacks names its receiver has is answered once with the receiver's heads (re).
@@ -97,16 +101,25 @@
 // ephemeral: shown on top of the stored value, one per sending device (its signer), dropped when that
 // device's next stored commit on the node lands, or 4 s after the last beat. ls_hold resends every 1 s.
 //
-// presence (extensions/presence/typescript/presence.ts, as web pigs use it): rows at a node, one a
-// device, never stored: who (a key), a value, until. row is presence.ts's message, the CBOR its channel
-// sends on the topic "ermine://<node's hex>": {ttl, value} (ttl: the ms it lasts, the time left, not a
-// time: clocks differ) or {gone: true}; a numbered patch ({patches, n}) is not taken (the next renew
-// is whole) but is relayed. who: the sender's key (over Subduction, the key it was published under; a
-// gateway names it). ls_presence: my row, sent now, every LS_RENEW_MS with ttl LS_TTL_MS, and to a
-// peer on its hello; NULL sends gone. Others' rows go at until or on gone. A row taken in on one link
-// is sent on, unchanged, to the others (as an ephemeral is); this device's own key coming back is
-// dropped. ls_close sends nothing: ls_presence(node, NULL) and an ls_next first tell the peers at
-// once, else the row lapses after its ttl.
+// messages (short-lived, never stored, as presence.ts's channel carries them): bytes (opaque, up to
+// ls_options.message) on a topic (a string, 1 to LS_TOPIC_MAX bytes: "ermine://<hex>", "dens:root"),
+// and who said them (a key, 1 to LS_KEY_LEN bytes; over Subduction the key it was published under, a
+// gateway names it). A device hears only the topics it listens to: each link tells its peer, in a
+// listen, the topics it hears and (a relay) the ones its other links' peers want, again when that
+// changes, to a peer that began again, and with each heads beat (past 128: all). A message goes to the
+// links whose peer wants its topic; one taken in goes on, unchanged, to the other links that want it,
+// never back; this device's own key coming back is dropped. ls_send: to the peers now (none up: lost).
+// ls_options.heard: each one heard on a topic of ls_listen's, called inside ls_feed.
+//
+// presence (extensions/presence/typescript/presence.ts, as web pigs use it): rows on a topic (a room),
+// one a device, never stored: who, a value, until. A row is a message on the room's topic: presence.ts's
+// CBOR, {ttl, value} (ttl: the ms it lasts, the time left, not a time: clocks differ) or {gone: true}; a
+// numbered patch ({patches, n}) is not taken (the next renew is whole) but is relayed. A followed node
+// is a room on its id ("ermine://<node's hex>", web pigs' topic); ls_presence_on makes one on any topic.
+// ls_presence: my row, sent now, every LS_RENEW_MS with ttl LS_TTL_MS, and to a peer when it begins to
+// want the room; NULL sends gone. Others' rows go at until or on gone; past ls_options.rows a room, the
+// other device's row soonest to lapse goes (never mine). ls_close sends nothing: ls_presence(node,
+// NULL) and an ls_next first tell the peers at once, else the row lapses after its ttl.
 //
 // storage (ls_store): one blob per name: "key" (the 32-byte seed) and "node:<id>" (the node's seals).
 //
@@ -131,6 +144,7 @@
 //     // write of this device's on the node
 //     // presence: ls_presence(room, v) my row ({name, colour, pointer: {x, y}} for pigs), renewed till
 //     // ls_presence(room, NULL); ls_row_at(room, i), i below ls_rows(room), the rows now, mine too
+//     // messages: ls_listen(d, "dens:root") once, then each heard comes to o.heard; ls_send(d, topic, b, n)
 //   }
 // no threads inside: call from one task. Everything the device hands out (values, held) is the
 // device's: never change it, it is valid until the next ls_ call.
@@ -169,6 +183,11 @@
 #ifndef LS_MAX_PARENTS
 #define LS_MAX_PARENTS 4
 #endif
+// a message's topic: this many bytes at most. Defaults of ls_options: a message's bytes at most (a
+// presence row's too: room for a den's row, about 3.3 KB), and the presence rows kept a topic
+#define LS_TOPIC_MAX 256
+#define LS_MESSAGE 4096
+#define LS_ROWS 16
 // a held (ephemeral) value goes after this long without a beat, and is resent this often
 #define LS_HELD_MS 4000
 #define LS_BEAT_MS 1000
@@ -212,8 +231,17 @@ typedef struct {
 	void (*log)(void *context, const char *line);
 	void *log_context;
 	size_t links;   // 0: LS_LINKS. at most this many links at once
-	size_t max_out; // 0: 16384. bytes queued on a link before a message is dropped (sent again later)
+	size_t max_out; // 0: 16384. bytes queued on a link before a message is dropped (sent again later; an empty queue takes any one)
 	int keep;       // 1: no commit is let go of (a relay, a server: see "keep" above). LS_SERVER only
+	// 0: LS_MESSAGE. a message's bytes at most, sent or taken. Past LS_MESSAGE each link's frame buffer
+	// grows to fit (4.5 KB by default); the peers need as much (a gateway takes 4.5 KB frames)
+	size_t message;
+	size_t rows; // 0: LS_ROWS. presence rows kept a topic
+	// each message heard on a topic listened to (ls_listen): its topic, who said it, its bytes, all good
+	// for the call only. Called inside ls_feed: it may ls_send, ls_listen and ls_unlisten (NULL: none)
+	void (*heard)(void *context, const char *topic, const uint8_t *who, size_t who_length, const uint8_t *bytes,
+		size_t length);
+	void *heard_context;
 } ls_options;
 
 typedef struct ls_dev ls_dev;
@@ -344,19 +372,32 @@ void ls_unhold(ls_node *node);
 size_t ls_helds(const ls_node *node);
 const ls_held *ls_held_at(const ls_node *node, size_t i);
 
+// messages (see "messages" above). send: bytes on the topic to the peers that want it, now. LS_BAD: no
+// topic, a topic over LS_TOPIC_MAX, or bytes over ls_options.message
+ls_code ls_send(ls_dev *dev, const char *topic, const uint8_t *bytes, size_t length);
+// hear the topic: its messages to ls_options.heard, the peers told. LS_BAD: not a topic
+ls_code ls_listen(ls_dev *dev, const char *topic);
+// the topic not heard any more: neither listened to nor a room (my row there told gone, the rows let go of)
+void ls_unlisten(ls_dev *dev, const char *topic);
+
 // a presence row: who (a key, a multikey as a rule), its value, until (on ls_tick's clock)
 typedef struct {
 	uint8_t who[LS_KEY_LEN];
 	size_t who_length;
-	op_value *value; // NULL: no row
+	op_value *value;
 	int own;
 	int64_t until;
 } ls_row;
-// my row at the node: value (copied) sent now and renewed, every LS_RENEW_MS, on every link; NULL: taken
-// out, gone told. LS_BAD: a value too deep, or over 1 KB as CBOR
+// my row at the node (its room, on its id): value (copied) sent now and renewed, every LS_RENEW_MS, to
+// the peers that want it; NULL: taken out, gone told. LS_BAD: a value too deep, or over
+// ls_options.message as CBOR
 ls_code ls_presence(ls_node *node, const op_value *value);
-// the rows now (mine too, own): i from 0 to ls_rows - 1
+// the rows now (mine too, own), in no order: i from 0 to ls_rows - 1. Their changes count in ls_version
 size_t ls_rows(const ls_node *node);
 const ls_row *ls_row_at(const ls_node *node, size_t i);
+// the same on any topic: ls_presence_on makes it a room (heard; value NULL: no row of mine, only others')
+ls_code ls_presence_on(ls_dev *dev, const char *topic, const op_value *value);
+size_t ls_rows_on(const ls_dev *dev, const char *topic);
+const ls_row *ls_row_on(const ls_dev *dev, const char *topic, size_t i);
 
 #endif
