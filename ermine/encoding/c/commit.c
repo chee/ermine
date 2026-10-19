@@ -133,13 +133,29 @@ static bool only(const Json *x, const char *const *keys) {
 }
 
 static bool place(const Json *x, bool patch) {
-	static const char *const patch_keys[] = {"path", "range", "value", "move", NULL};
+	static const char *const patch_keys[] = {"path", "range", "value", "move", "replaces", NULL};
 	if (!is_fields(x) || !only(x, patch ? patch_keys : (const char *const[]){"path", "range", NULL})) return false;
 	const Json *path = jsonGet(x, "path"), *range = jsonGet(x, "range");
 	if (!is_array(path)) return false;
 	for (int i = 0; i < path->array.count; i++)
 		if (!is_key(path->array.items[i])) return false;
 	return range == NULL || is_range(range);
+}
+
+// a key patch: a set or a delete at a path of keys, no range, move or list index
+static bool key_patch(const Json *p) {
+	if (!is_fields(p) || jsonGet(p, "range") != NULL || jsonGet(p, "move") != NULL) return false;
+	const Json *path = jsonGet(p, "path");
+	if (!is_array(path)) return false;
+	for (int i = 0; i < path->array.count; i++)
+		if (!jsonIsString(path->array.items[i])) return false;
+	return true;
+}
+static bool keys_only(const Json *patches) {
+	if (!is_array(patches)) return false;
+	for (int i = 0; i < patches->array.count; i++)
+		if (!key_patch(patches->array.items[i])) return false;
+	return true;
 }
 
 static bool site(const Json *x) {
@@ -199,6 +215,14 @@ static bool rule(int k, const Json *v, const Json *c) {
 			if (!place(p, true)) return false;
 			const Json *move = jsonGet(p, "move");
 			if (move != NULL && (jsonGet(p, "value") != NULL || !place(move, false))) return false;
+			const Json *replaces = jsonGet(p, "replaces");
+			if (replaces != NULL && !is_array(replaces)) return false;
+			for (int r = 0; replaces != NULL && r < replaces->array.count; r++) {
+				if (!is_name(replaces->array.items[r])) return false;
+				// ascending, each once (as parents)
+				if (r > 0 && memcmp(replaces->array.items[r - 1]->bytes.data, replaces->array.items[r]->bytes.data, CM_NAME) >= 0)
+					return false;
+			}
 		}
 		return true;
 	}
@@ -255,8 +279,9 @@ static cm_code check(const Json *c, char **field, bool strict) {
 		bool ok;
 		if (v == NULL) {
 			const Json *parents = jsonGet(c, "parents");
-			ok = optional(k) &&
-				!(k == BASE && is_array(parents) && parents->array.count >= 2 && jsonGet(c, "merge") == NULL);
+			// base: with several parents, no merge and a patch not a key patch
+			ok = optional(k) && !(k == BASE && is_array(parents) && parents->array.count >= 2 &&
+				jsonGet(c, "merge") == NULL && !keys_only(jsonGet(c, "patches")));
 		} else ok = rule(k, v, c);
 		if (!ok) {
 			name_field(field, NAMES[k], strlen(NAMES[k]));
@@ -426,13 +451,24 @@ static cm_code cm_of_json(const Json *c, cm_commit *out, char **field) {
 	if (merge != NULL) out->merge = dup(a, merge);
 	out->lamport = (int64_t)jsonGet(c, "lamport")->number;
 	op_patch *list = grab(a, (size_t)patches->array.count * sizeof *list);
+	cm_replaces *replaces = NULL;
 	for (int i = 0; i < patches->array.count; i++) {
 		const Json *p = patches->array.items[i], *value = jsonGet(p, "value"), *move = jsonGet(p, "move");
 		read_target(a, p, &list[i].place);
 		if (value != NULL) list[i].has_value = 1, list[i].value = hold(a, value);
 		if (move != NULL) list[i].has_move = 1, read_target(a, move, &list[i].move);
+		const Json *r = jsonGet(p, "replaces");
+		if (r == NULL) continue;
+		if (replaces == NULL) {
+			replaces = grab(a, (size_t)patches->array.count * sizeof *replaces);
+			memset(replaces, 0, (size_t)patches->array.count * sizeof *replaces);
+		}
+		uint8_t(*names)[CM_NAME] = grab(a, (size_t)r->array.count * CM_NAME);
+		for (int k = 0; k < r->array.count; k++) memcpy(names[k], r->array.items[k]->bytes.data, CM_NAME);
+		replaces[i] = (cm_replaces){.has = 1, .names = (const uint8_t(*)[CM_NAME])names, .length = (size_t)r->array.count};
 	}
 	out->patches = list;
+	out->replaces = replaces;
 	out->patches_length = (size_t)patches->array.count;
 	return CM_OK;
 }
@@ -535,6 +571,11 @@ Json *cm_to_json(const cm_commit *c) {
 			jsonAdd(o, "value", v);
 		}
 		if (p->has_move) jsonAdd(o, "move", target_json(jsonObject(), &p->move));
+		if (c->replaces != NULL && c->replaces[i].has) {
+			Json *names = jsonArray();
+			jsonAdd(o, "replaces", names);
+			for (size_t k = 0; k < c->replaces[i].length; k++) jsonPush(names, jsonBytes(c->replaces[i].names[k], CM_NAME));
+		}
 	}
 	return j;
 bad:

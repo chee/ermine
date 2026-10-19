@@ -51,6 +51,14 @@ int cm_name_split(const uint8_t *bytes, size_t length, uint64_t *code, const uin
 // a name from the code and the digest, into out (CM_NAME bytes at most): how long it is
 size_t cm_name_join(uint64_t code, const uint8_t *digest, size_t digest_length, uint8_t *out);
 
+// what a patch replaces: the names of the writes at or under its path its writer held and means to
+// replace. has 0: absent, ancestry decides (an older commit's); has 1, length 0: none
+typedef struct {
+	int has;
+	const uint8_t (*names)[CM_NAME];
+	size_t length;
+} cm_replaces;
+
 // a decoded commit. Everything it refers to is its own (cm_free), shared with nothing
 typedef struct {
 	char *table;
@@ -66,6 +74,8 @@ typedef struct {
 	// ascending by name
 	const uint8_t (*parents)[CM_NAME];
 	size_t parents_length;
+	// with several parents: the one its patches are over. None needed when every patch is a key patch
+	// (a set or a delete at a path of keys: no range, move or list index)
 	int has_base;
 	uint8_t base[CM_NAME];
 	// with several parents and no base: a merge rule's name; NULL when absent
@@ -73,6 +83,8 @@ typedef struct {
 	int64_t lamport;
 	op_patch *patches;
 	size_t patches_length;
+	// each patch's, patches_length of them; NULL: absent in every patch
+	const cm_replaces *replaces;
 	void *own;
 } cm_commit;
 
