@@ -13,8 +13,10 @@ harness's header lists its requests and answers.
 | snapshot  | `extensions/together/conformance/snapshot/`  | history's (`suite.json`)                              |
 | transport | `extensions/together/conformance/transport/` | `extensions/together/typescript/transport_harness.ts` |
 | sync      | `extensions/together/conformance/sync/`      | `extensions/together/typescript/sync_harness.ts`      |
+| lists     | `extensions/together/conformance/lists/`     | history's (`suite.json`)                              |
 
-Run: `deno task conformance commit seal packer history replay snapshot transport sync`. Another
+Run: `deno task conformance commit seal packer history replay snapshot transport sync lists`. A
+scenario with `"typescript": true` runs on the TypeScript harness only (none now). Another
 implementation: `--c` (the binary `<package>/c/<suite>-harness`), or `HARNESS="<command>"` for one
 suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `fails`, `skip`).
 

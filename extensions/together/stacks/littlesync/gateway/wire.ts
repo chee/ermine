@@ -4,7 +4,8 @@
 import * as cbor from "@ermine/encoding/cbor"
 
 export const STACK = "littlesync/0"
-// the merge rule a littlesync commit with several parents names (littlesync.h's LS_MERGE)
+// the merge rule an older littlesync commit with several parents named (littlesync now names none:
+// each patch says what it replaces, values.org)
 export const MERGE = "littlesync/lww-path"
 export const NAME = 34
 export const KEY = 34

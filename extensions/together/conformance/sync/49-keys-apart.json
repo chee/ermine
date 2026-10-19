@@ -1,6 +1,5 @@
 {
 	"title": "writes apart at different keys both show, composed: no clash, no values; a write after goes on both heads as a key patch, no base",
-	"typescript": true,
 	"steps": [
 		{
 			"op": "host",

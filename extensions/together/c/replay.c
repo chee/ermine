@@ -1,5 +1,6 @@
 // A node's tables at a commit (replay.h), in C
 #include "replay.h"
+#include "lists.h"
 #include "snapshot.h"
 
 #include <stdio.h>
@@ -94,7 +95,7 @@ static void made(owned *o, nd_entry *e) {
 }
 
 void rp_put(rp_tables *t, const char *table, op_value *value, const ch_header *change) {
-	nd_entry *e = nd_make_entry(value, change, NULL);
+	nd_entry *e = nd_make_entry(value, change);
 	if (e == NULL) abort();
 	made(t->own, e);
 	put_slot(t, table, e);
@@ -213,20 +214,25 @@ bool rp_check(const rp_tables *t, const cm_commit *c) {
 	const nd_entry *e = rp_find(t, c->table);
 	op_value *after;
 	size_t failed;
-	if (op_apply(e ? e->value : NULL, c->patches, c->patches_length, NULL, &after, &failed) != OP_OK)
+	if (ls_applies(e ? e->value : NULL, c->patches, c->patches_length, 0, &after, &failed) != OP_OK)
 		return false;
 	op_free(after);
 	return true;
 }
 
-rp_code rp_apply(rp_tables *t, cm_commit *c, const uint8_t name[CM_NAME]) {
+// lenient: as sync takes them (ls_applies); else op_apply's
+static rp_code apply(rp_tables *t, cm_commit *c, const uint8_t name[CM_NAME], bool lenient) {
 	owned *o = t->own;
 	size_t i = slot_of(t, c->table);
 	nd_entry *e = i < t->length ? t->slots[i].entry : NULL;
 	op_value *after;
 	size_t failed;
 	op_apply_options options = {.in_place = 1};
-	if (op_apply(e ? e->value : NULL, c->patches, c->patches_length, &options, &after, &failed) != OP_OK)
+	const op_value *before = e ? e->value : NULL;
+	// several patches in place, one of which may fail: nothing changes unless all apply
+	if (lenient && c->patches_length > 1 && !rp_check(t, c)) return RP_PATCHES;
+	if ((lenient ? ls_applies(before, c->patches, c->patches_length, 1, &after, &failed)
+		     : op_apply(before, c->patches, c->patches_length, &options, &after, &failed)) != OP_OK)
 		return RP_PATCHES;
 	// the commit is the tables' now: what the entry's change refers to. The one before it on this
 	// table is referred to by nothing now
@@ -261,13 +267,16 @@ rp_code rp_apply(rp_tables *t, cm_commit *c, const uint8_t name[CM_NAME]) {
 		return RP_OK;
 	}
 	if (after == NULL) return RP_OK;
-	e = nd_make_entry(after, change, NULL);
+	e = nd_make_entry(after, change);
 	if (e == NULL) abort();
 	op_free(after);
 	made(o, e);
 	put_slot(t, kept->table, e);
 	return RP_OK;
 }
+
+rp_code rp_apply(rp_tables *t, cm_commit *c, const uint8_t name[CM_NAME]) { return apply(t, c, name, false); }
+rp_code rp_applies(rp_tables *t, cm_commit *c, const uint8_t name[CM_NAME]) { return apply(t, c, name, true); }
 
 typedef struct {
 	const hy_history *h;
@@ -276,23 +285,47 @@ typedef struct {
 } plain_t;
 
 static rp_code walk(const hy_history *h, const uint8_t name[CM_NAME], rp_snapshots snapshots, void *context,
-	const rp_merges *merges, bool merging, rp_tables *out);
+	const rp_merges *merges, bool merging, bool own, rp_tables *out);
 
 // what a rule is given: one commit's tables had without merging; never several
 static bool plain_get(void *context, const hy_kept *const *from, size_t n, rp_tables *out) {
 	const plain_t *p = context;
 	if (n != 1) return false;
 	rp_tables t;
-	if (walk(p->h, from[0]->name, p->snapshots, p->context, NULL, false, &t) != RP_OK) return false;
+	if (walk(p->h, from[0]->name, p->snapshots, p->context, NULL, false, false, &t) != RP_OK) return false;
 	rp_free(out);
 	*out = t;
 	return true;
 }
 
+// key patches on several parents, or a commit naming what it replaces: its tables are the lists'
+static bool listed(const hy_kept *k) {
+	return k->merge == NULL && (k->replaces || (!k->has_base && k->parents_length > 1));
+}
+
+// what a walk's lists are given for a commit's tables: its own patches on what they are over
+typedef struct {
+	const hy_history *h;
+	rp_snapshots snapshots;
+	void *context;
+	const rp_merges *merges;
+	bool merging;
+} written_t;
+
+static void written_of(void *context, const hy_kept *k, rp_tables *out) {
+	const written_t *w = context;
+	rp_tables t;
+	if (walk(w->h, k->name, w->snapshots, w->context, w->merges, w->merging, true, &t) != RP_OK) return;
+	rp_free(out);
+	*out = t;
+}
+
+// merging: a merge commit met is merged; else the walk gives RP_UNMERGED. own: the commit's own
+// patches on what they are over (rp_written)
 static rp_code walk(const hy_history *h, const uint8_t name[CM_NAME], rp_snapshots snapshots, void *context,
-	const rp_merges *merges, bool merging, rp_tables *out) {
+	const rp_merges *merges, bool merging, bool own, rp_tables *out) {
 	rp_init(out);
-	const hy_kept *k = hy_get(h, name);
+	const hy_kept *start = hy_get(h, name), *k = start;
 	if (k == NULL) {
 		rp_free(out);
 		return RP_NOT_TAKEN;
@@ -301,7 +334,14 @@ static rp_code walk(const hy_history *h, const uint8_t name[CM_NAME], rp_snapsho
 	size_t n = 0, capacity = 0;
 	rp_code code = RP_OK;
 	for (; k != NULL;) {
-		if (snapshots != NULL && snapshots(context, k->name, out)) break;
+		bool first = own && k == start;
+		if (!first && snapshots != NULL && snapshots(context, k->name, out)) break;
+		if (!first && listed(k)) {
+			written_t w = {h, snapshots, context, merges, merging};
+			rp_free(out);
+			ls_state(h, &k, 1, written_of, &w, out);
+			break;
+		}
 		if (n == capacity) {
 			capacity = capacity ? capacity * 2 : 16;
 			line = realloc(line, capacity * sizeof *line);
@@ -328,7 +368,7 @@ static rp_code walk(const hy_history *h, const uint8_t name[CM_NAME], rp_snapsho
 	for (size_t i = n; i-- > 0 && code == RP_OK;) {
 		cm_commit c;
 		if (cm_decode(line[i]->bytes, line[i]->length, &c, NULL) != CM_OK) code = RP_PATCHES;
-		else if ((code = rp_apply(out, &c, line[i]->name)) != RP_OK) cm_free(&c);
+		else if ((code = rp_applies(out, &c, line[i]->name)) != RP_OK) cm_free(&c);
 	}
 	free(line);
 	if (code != RP_OK) rp_free(out);
@@ -337,7 +377,12 @@ static rp_code walk(const hy_history *h, const uint8_t name[CM_NAME], rp_snapsho
 
 rp_code rp_replay(const hy_history *h, const uint8_t name[CM_NAME], rp_snapshots snapshots, void *context,
 	const rp_merges *merges, rp_tables *out) {
-	return walk(h, name, snapshots, context, merges, true, out);
+	return walk(h, name, snapshots, context, merges, true, false, out);
+}
+
+rp_code rp_written(const hy_history *h, const uint8_t name[CM_NAME], rp_snapshots snapshots, void *context,
+	const rp_merges *merges, rp_tables *out) {
+	return walk(h, name, snapshots, context, merges, true, true, out);
 }
 
 bool rp_matches(const hy_history *h, const uint8_t name[CM_NAME], const uint8_t *bytes, size_t length,
@@ -353,5 +398,5 @@ bool rp_matches(const hy_history *h, const uint8_t name[CM_NAME], const uint8_t 
 
 rp_code rp_plain(const hy_history *h, const uint8_t name[CM_NAME], rp_snapshots snapshots, void *context,
 	rp_tables *out) {
-	return walk(h, name, snapshots, context, NULL, false, out);
+	return walk(h, name, snapshots, context, NULL, false, false, out);
 }

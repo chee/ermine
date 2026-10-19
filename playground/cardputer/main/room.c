@@ -87,6 +87,10 @@ void room_mirror(api *a) {
 		const op_value *h = NULL;
 		for (size_t k = 0; k < ls_helds(n) && h == NULL; k++) h = ls_held_at(n, k)->value;
 		put(a, held, h);
+		// a clash (two devices dropped it at once): the other drop, the pig drawn again
+		ls_item items[2];
+		snprintf(held, sizeof held, "%s/also", followed[i].path);
+		put(a, held, ls_values(n, NULL, 0, items, 2) > 1 ? items[1].value : NULL);
 	}
 }
 
@@ -109,7 +113,8 @@ static void push(api *a, const op_value *value, const op_value *before, void *ct
 	for (size_t i = 0; value && i < value->count && i < (size_t)nfollowed; i++) {
 		const op_value *v = value->items[i];
 		if (v->type == OP_NULL || same(v, ls_value(followed[i].node))) continue;
-		ls_put(followed[i].node, v);
+		// a person's edit: this is the value, every item replaced (a clash ends)
+		ls_pick(followed[i].node, v);
 	}
 }
 

@@ -27,7 +27,7 @@ FLAGS = $(BLAKE3FLAGS) $(rename) -I$(OPENSSL)/include
 # memory store and a WebSocket over OpenSSL; JSON for presence's messages
 graph = core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c
 sync = extensions/together/c/sync.c extensions/together/c/transport.c extensions/together/c/mailroom.c extensions/together/stacks/subduction/c/subduction.c extensions/together/c/ids.c extensions/together/c/history.c \
-	extensions/together/c/replay.c extensions/together/c/snapshot.c extensions/together/c/packer.c \
+	extensions/together/c/replay.c extensions/together/c/lists.c extensions/together/c/snapshot.c extensions/together/c/packer.c \
 	extensions/together/c/seal.c extensions/together/c/ed25519/ed25519.c extensions/together/c/ed25519/sha2.c extensions/subduction/c/fragment.c \
 	ermine/encoding/c/commit.c ermine/encoding/c/pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c ermine/encoding/c/json_text.c \
 	ermine/encoding/c/blake3/blake3.c ermine/encoding/c/blake3/blake3_dispatch.c ermine/encoding/c/blake3/blake3_portable.c \

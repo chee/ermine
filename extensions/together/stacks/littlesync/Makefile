@@ -1,15 +1,17 @@
 # extensions/together/stacks/littlesync: littlesync, a small-device sync stack (littlesync.h says what it is). Quiet by
 # default: V=1 shows each command.
-#   make test        host tests (test/test.c), then two littlesync-pigs over a pty pair (test/pty.sh), then
+#   make test        host tests (test/test.c), their lists against lists.ts on the same commits (test/lists.ts,
+#                    deno), then two littlesync-pigs over a pty pair (test/pty.sh), then
 #                    three in a line, the middle one relaying (test/hop.sh). littlesync-pigs, lab-pig's pigs
 #                    on littlesync, is a user of the library (playground/demos/pigs/littlesync), built into
 #                    build/ here; the tests use its pigs.c and pigs.h too
-#   make check       the same tests under the address and undefined-behaviour sanitizers
+#   make check       the host tests and the lists check under the address and undefined-behaviour sanitizers
 #   make pigs        littlesync-pigs, the Mac peer (playground/demos/pigs/littlesync/peer.c), into build/
 #   make esp-check   the library's .c files and the shared ones it uses, compiled for esp32s3 (xtensa),
 #                    with the sizes of each object and the total
 #   make clean
 CC ?= cc
+DENO ?= deno
 R = ../../../..
 Q = $(if $(V),,@)
 CFLAGS = -std=c11 -O2 -g -Wall -Wextra -Wpedantic -Wno-unused-parameter
@@ -52,9 +54,11 @@ check: test/test.c test/count.c test/count.h $(ours) $(base) $(shared) $(more) $
 	$(Q)$(CC) $(CFLAGS) $(SAN) -c -o $(BUILD)/count-check.o test/count.c
 	$(Q)$(CC) $(CFLAGS) $(SAN) $(B3) -include test/count.h -o $(BUILD)/test-check test/test.c $(BUILD)/count-check.o $(ours) $(base) $(shared) $(more) $(seal_ref) $(pigs_ref) -lm
 	$(Q)$(BUILD)/test-check
+	$(Q)$(DENO) run --allow-read test/lists.ts $(BUILD)/lists.jsonl
 
 test: $(BUILD)/test $(BUILD)/littlesync-pigs
 	$(Q)$(BUILD)/test
+	$(Q)$(DENO) run --allow-read test/lists.ts $(BUILD)/lists.jsonl
 	$(Q)sh test/pty.sh $(BUILD)/littlesync-pigs
 	$(Q)sh test/hop.sh $(BUILD)/littlesync-pigs
 

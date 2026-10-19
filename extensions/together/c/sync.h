@@ -2,11 +2,16 @@
 // children unless told) goes out as one commit naming its table (commit.h); what comes in is
 // written to the table (core/table/c/table.h). same rules as sync.ts.
 //
-// the table shows one head. a commit on it: applied by update (core/node/c/update.h); any other:
-// checked on a replay of its parent (replay.h), the table told only if the head shown changes.
-// several heads: the first in agreed order shows, the rest in the "conflicts" table
-// ([{head, lamport, actor, signer, time, external?, tables}]), the one shown in the "shown" table
-// ({head, lamport, actor, signer, time, external?}; sync.ts's Head). What is wrong with a node's sync right now is in the "status"
+// what a path holds is a list (lists.h): the table shows the first item at each path, composed. a
+// commit on the one head shown, naming nothing it replaces: applied by update (core/node/c/update.h);
+// any other: checked on a replay of its base (key patches alone never refused by what is there), then
+// the table becomes the lists' composed, each table told only when it changes. a node with an open
+// path has the "values" table at its id ({[table]: [{path, items: [{value? | gone?, inside?, at?,
+// from: head}]}]}); "conflicts" lists each commit with an item not shown ([{head, lamport, actor,
+// signer, time, external?, tables}]), "shown" the first head ({head, lamport, actor, signer, time,
+// external?}; sync.ts's Head). a write goes on every head (key patches alone when there are several,
+// or an edit of one version on its head, as base), replacing what the writer saw, or what its
+// change's metadata "replaces" says ("all", or names in hex; never carried). What is wrong with a node's sync right now is in the "status"
 // table at its id ({waiting, refused, unsent, count}, sync.ts's Status), none when nothing is: commits
 // waiting (on parents, or on authority), refused (with the code), and writes no commit could carry.
 // A change from elsewhere keeps who signed it and the commit, after its metadata (replay.h). a merge rule (replay.h): heads show merged; a write is then a
@@ -102,8 +107,8 @@ bool sy_follow(sy_sync *s, const char *id);
 cm_code sy_wrote(sy_sync *s, nd_entry *const *changed, size_t count);
 // the table's event: an entry under (part, id) put or taken out whole
 void sy_table_changed(sy_sync *s, tb_key part, tb_key id);
-// a merge of every head, keeping what shows (with a rule, the merge); change: who settled (NULL: none,
-// stamped now)
+// a write on every head of what shows at each open path, replacing every item there (with a rule, the
+// merge); change: who settled (NULL: none, stamped now)
 cm_code sy_settle(sy_sync *s, const char *id, const ch_header *change);
 // the node's tables at a commit (a version), new ones in *out; RP_NOT_TAKEN when it has no such commit
 rp_code sy_get(sy_sync *s, const char *id, const uint8_t name[CM_NAME], rp_tables *out);

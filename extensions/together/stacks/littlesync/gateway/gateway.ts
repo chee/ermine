@@ -19,8 +19,9 @@
 //                   again sends it again; a new one replaces it; a stop goes when the device's next
 //                   stored commit there lands, or after HELD_MS with no beat. one heard from the room
 //                   goes to each device naming the node as it came, then is let go of here
-//   merges          a commit by a merge rule (a littlesync write with several parents names
-//                   "littlesync/lww-path"): the history and mailroom here take it as any commit (they
+//   merges          a commit by a merge rule (an older littlesync write with several parents named
+//                   "littlesync/lww-path"; littlesync now writes neither base nor merge, each patch
+//                   saying what it replaces): the history and mailroom here take it as any commit (they
 //                   check no merge rule: that is sync.ts's check, which this has none of), so it is
 //                   forwarded; a sync.ts device refuses it ("merge") and every commit on it
 //                   ("parent"). each one is logged and counted, both ways

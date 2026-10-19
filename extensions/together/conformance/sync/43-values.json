@@ -1,6 +1,5 @@
 {
 	"title": "two writes apart at one path: once joined, both hosts show the first item (the agreed order) and list both in the values table, each from its commit; conflicts and shown as ever",
-	"typescript": true,
 	"steps": [
 		{
 			"op": "host",

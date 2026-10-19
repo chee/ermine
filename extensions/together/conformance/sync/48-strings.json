@@ -1,6 +1,5 @@
 {
-	"title": "strings keep both: typing apart into one string is two whole strings; typing on, replacing what showed, leaves the other; a write replacing all ends it, and with several heads it goes as a key patch (the whole string)",
-	"typescript": true,
+	"title": "strings keep both: typing apart into one string is two whole strings; typing on while both stand, replacing what showed, goes as the range with base the head shown and leaves the other; an edit naming the other goes as the range on it; a write replacing all ends it, and with several heads it goes as a key patch (the whole string)",
 	"steps": [
 		{
 			"op": "host",
@@ -213,13 +212,18 @@
 						"ta",
 						"tb"
 					],
+					"base": "tb",
 					"lamport": 3,
 					"patches": [
 						{
 							"path": [
 								"s"
 							],
-							"value": "!aby",
+							"range": [
+								0,
+								0
+							],
+							"value": "!",
 							"replaces": [
 								"tb"
 							]
@@ -241,6 +245,66 @@
 		{
 			"op": "values",
 			"host": "b",
+			"id": "x",
+			"expect": {
+				"values": {
+					"value": [
+						{
+							"path": [
+								"s"
+							],
+							"items": [
+								{
+									"value": "!aby",
+									"from": {
+										"head": "t2",
+										"lamport": 3,
+										"actor": "a",
+										"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+										"time": 1760000000,
+										"external": [
+											{
+												"file": "scenario",
+												"line": 1
+											}
+										]
+									}
+								},
+								{
+									"value": "xab",
+									"from": {
+										"head": "ta",
+										"lamport": 2,
+										"actor": "a",
+										"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+										"time": 1760000000,
+										"external": [
+											{
+												"file": "scenario",
+												"line": 1
+											}
+										]
+									}
+								}
+							]
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"value": {
+					"s": "!aby"
+				}
+			}
+		},
+		{
+			"op": "values",
+			"host": "a",
 			"id": "x",
 			"expect": {
 				"values": {
@@ -357,6 +421,362 @@
 		{
 			"op": "values",
 			"host": "a",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "disconnect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "type",
+			"host": "a",
+			"id": "x",
+			"path": [
+				"s"
+			],
+			"at": 0,
+			"text": "1",
+			"name": "u1",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "type",
+			"host": "b",
+			"id": "x",
+			"path": [
+				"s"
+			],
+			"at": 5,
+			"text": "2",
+			"name": "u2",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "values",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"values": {
+					"value": [
+						{
+							"path": [
+								"s"
+							],
+							"items": [
+								{
+									"value": "1?!aby",
+									"from": {
+										"head": "u1",
+										"lamport": 5,
+										"actor": "a",
+										"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+										"time": 1760000000,
+										"external": [
+											{
+												"file": "scenario",
+												"line": 1
+											}
+										]
+									}
+								},
+								{
+									"value": "?!aby2",
+									"from": {
+										"head": "u2",
+										"lamport": 5,
+										"actor": "b",
+										"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+										"time": 1760000000,
+										"external": [
+											{
+												"file": "scenario",
+												"line": 1
+											}
+										]
+									}
+								}
+							]
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "type",
+			"host": "b",
+			"id": "x",
+			"path": [
+				"s"
+			],
+			"at": 0,
+			"text": "3",
+			"name": "u3",
+			"replaces": [
+				"u2"
+			],
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "commit",
+			"host": "a",
+			"id": "x",
+			"commit": "u3",
+			"expect": {
+				"commit": {
+					"table": "value",
+					"actor": "b",
+					"external": [
+						{
+							"file": "scenario",
+							"line": 1
+						}
+					],
+					"time": 1760000000,
+					"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+					"nonce": 4207839829,
+					"parents": [
+						"u2",
+						"u1"
+					],
+					"base": "u2",
+					"lamport": 6,
+					"patches": [
+						{
+							"path": [
+								"s"
+							],
+							"range": [
+								0,
+								0
+							],
+							"value": "3",
+							"replaces": [
+								"u2"
+							]
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"value": {
+					"s": "3?!aby2"
+				}
+			}
+		},
+		{
+			"op": "read",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"value": {
+					"s": "3?!aby2"
+				}
+			}
+		},
+		{
+			"op": "values",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"values": {
+					"value": [
+						{
+							"path": [
+								"s"
+							],
+							"items": [
+								{
+									"value": "3?!aby2",
+									"from": {
+										"head": "u3",
+										"lamport": 6,
+										"actor": "b",
+										"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+										"time": 1760000000,
+										"external": [
+											{
+												"file": "scenario",
+												"line": 1
+											}
+										]
+									}
+								},
+								{
+									"value": "1?!aby",
+									"from": {
+										"head": "u1",
+										"lamport": 5,
+										"actor": "a",
+										"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+										"time": 1760000000,
+										"external": [
+											{
+												"file": "scenario",
+												"line": 1
+											}
+										]
+									}
+								}
+							]
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "disconnect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "type",
+			"host": "a",
+			"id": "x",
+			"path": [
+				"s"
+			],
+			"at": 0,
+			"text": "4",
+			"name": "v1",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "type",
+			"host": "b",
+			"id": "x",
+			"path": [
+				"s"
+			],
+			"at": 0,
+			"text": "5",
+			"name": "v2",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "type",
+			"host": "a",
+			"id": "x",
+			"path": [
+				"s"
+			],
+			"at": 0,
+			"text": "6",
+			"name": "v3",
+			"replaces": "all",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "commit",
+			"host": "b",
+			"id": "x",
+			"commit": "v3",
+			"expect": {
+				"commit": {
+					"table": "value",
+					"actor": "a",
+					"external": [
+						{
+							"file": "scenario",
+							"line": 1
+						}
+					],
+					"time": 1760000000,
+					"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"nonce": 3338457406,
+					"parents": [
+						"v2",
+						"v1"
+					],
+					"lamport": 8,
+					"patches": [
+						{
+							"path": [
+								"s"
+							],
+							"value": "643?!aby2"
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"value": {
+					"s": "643?!aby2"
+				}
+			}
+		},
+		{
+			"op": "read",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"value": {
+					"s": "643?!aby2"
+				}
+			}
+		},
+		{
+			"op": "values",
+			"host": "a",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "values",
+			"host": "b",
 			"id": "x",
 			"expect": {}
 		}

@@ -8,6 +8,7 @@
 // (hold) it cannot judge yet, and it waits on the check. A rule that keeps (create) merges twice: by
 // the pure rule, and by a state kept for the process, which must give the same, byte for byte
 #include "commits_harness.h"
+#include "lists.h"
 #include "rules_harness.h"
 #include "snapshot.h"
 
@@ -134,9 +135,111 @@ static hy_refusal check(void *context, const hy_kept *k, const cm_commit *commit
 	if (commit->merge != NULL) merged(commit->parents, commit->parents_length, commit->merge, &tables);
 	else if (!k->has_base || rp_replay(history, k->base, snapshots, NULL, &merges, &tables) != RP_OK)
 		rp_init(&tables);
-	bool ok = rp_check(&tables, commit);
+	// key patches alone: never refused by what is there
+	bool keys = true;
+	for (size_t i = 0; keys && i < commit->patches_length; i++) keys = !ls_whole(&commit->patches[i]);
+	bool ok = keys || rp_check(&tables, commit);
 	rp_free(&tables);
 	return ok ? 0 : HY_PATCHES;
+}
+
+// ---- lists (lists.h): of every commit taken, now
+
+static void written_of(void *context, const hy_kept *k, rp_tables *out) {
+	(void)context;
+	rp_tables t;
+	if (rp_written(history, k->name, snapshots, NULL, &merges, &t) != RP_OK) return;
+	rp_free(out);
+	*out = t;
+}
+
+static ls_lists *lists_now(void) {
+	ls_lists *l = ls_create(history, written_of, NULL);
+	const hy_kept **all;
+	size_t n = hy_all(history, &all);
+	for (size_t i = 0; i < n; i++) ls_add(l, all[i]);
+	free(all);
+	return l;
+}
+
+static void put_path(FILE *out, const char *const *path, size_t n) {
+	fputc('[', out);
+	for (size_t i = 0; i < n; i++) {
+		if (i) fputc(',', out);
+		op_json_string(out, path[i]);
+	}
+	fputc(']', out);
+}
+
+static void put_items(FILE *out, const ls_item *items, size_t n) {
+	fputc('[', out);
+	for (size_t i = 0; i < n; i++) {
+		if (i) fputc(',', out);
+		fputs("{\"commit\":", out);
+		cs_put_name(commits, out, items[i].write->kept->name);
+		if (items[i].gone) fputs(",\"gone\":true", out);
+		else fputs(",\"value\":", out), op_json_write(out, items[i].value);
+		if (items[i].inside) fputs(",\"inside\":true", out);
+		if (items[i].at != NULL) fputs(",\"at\":", out), put_path(out, items[i].at, items[i].at_length);
+		fputc('}', out);
+	}
+	fputc(']', out);
+}
+
+// { op: "items", table?, path? }: the items at [table, ...path]
+static void items(const op_value *r, FILE *out) {
+	const char *table = hh_str(r, "table");
+	const op_value *path = op_get(r, "path");
+	size_t n = path != NULL && path->type == OP_LIST ? path->count : 0;
+	const char **keys = hh_take((n + 2) * sizeof *keys);
+	keys[0] = table != NULL ? table : "value";
+	bool strings = true;
+	for (size_t i = 0; i < n; i++) {
+		if (path->items[i]->type != OP_STR) strings = false;
+		else keys[i + 1] = path->items[i]->str;
+	}
+	ls_lists *l = lists_now();
+	ls_item *list = NULL;
+	size_t count = strings ? ls_items(l, keys, n + 1, &list) : 0;
+	fputs("{\"items\":", out);
+	put_items(out, list, count);
+	fputc('}', out);
+	free(list);
+	ls_free(l);
+}
+
+static void opens(FILE *out) {
+	ls_lists *l = lists_now();
+	ls_open *list;
+	size_t n = ls_opens(l, &list);
+	fputs("{\"open\":[", out);
+	for (size_t i = 0; i < n; i++) {
+		if (i) fputc(',', out);
+		fputs("{\"path\":", out);
+		put_path(out, list[i].path, list[i].length);
+		fputs(",\"items\":", out);
+		put_items(out, list[i].items, list[i].count);
+		fputc('}', out);
+	}
+	fputs("]}", out);
+	ls_opens_free(list, n);
+	ls_free(l);
+}
+
+static void composed(FILE *out) {
+	ls_lists *l = lists_now();
+	rp_tables t;
+	ls_compose(l, NULL, &t);
+	fputs("{\"tables\":{", out);
+	for (size_t i = 0; i < t.length; i++) {
+		if (i) fputc(',', out);
+		op_json_string(out, t.slots[i].table);
+		fputc(':', out);
+		op_json_write(out, t.slots[i].entry->value);
+	}
+	fputs("}}", out);
+	rp_free(&t);
+	ls_free(l);
 }
 
 void hh_start(void) {
@@ -553,5 +656,8 @@ void hh_answer(const op_value *r, FILE *out) {
 	else if (strcmp(op, "since") == 0) since(r, out);
 	else if (strcmp(op, "snapshot") == 0) snapshot(r, out);
 	else if (strcmp(op, "tables") == 0) tables(r, out);
+	else if (strcmp(op, "items") == 0) items(r, out);
+	else if (strcmp(op, "open") == 0) opens(out);
+	else if (strcmp(op, "value") == 0) composed(out);
 	else hh_unknown(out, r);
 }
