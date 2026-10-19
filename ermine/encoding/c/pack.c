@@ -248,6 +248,111 @@ op_value *pk_of_json(const Json *root) {
 	return out;
 }
 
+// --- values as bytes ---
+
+static int key_compare(const char *a, const char *b) { return cborKeyCompare(a, strlen(a), b, strlen(b)); }
+static int key_order(const void *a, const void *b) { return key_compare(**(char **const *)a, **(char **const *)b); }
+
+// a container being written: its items written (done) of count (a list's or map's not NULL: pk_to_json
+// leaves those out; a stand-in's kind), where it is in them (a list's), the last key written (a small
+// map's: the next is found each time, as cbor.c's), a big map's keys in order
+typedef struct {
+	const op_value *from;
+	size_t at, done, count;
+	long last;
+	char ***order;
+} writing;
+
+// the next key of a small map after the one at last (-1: the first), of those with a value; -1: none
+static long next_key(const op_value *m, long last) {
+	long best = -1;
+	for (size_t i = 0; i < m->count; i++) {
+		if (m->items[i] == NULL || (last >= 0 && key_compare(m->keys[i], m->keys[last]) <= 0)) continue;
+		if (best < 0 || key_compare(m->keys[i], m->keys[best]) < 0) best = (long)i;
+	}
+	return best;
+}
+
+// No recursion: the containers being written are on a stack of their own (CBOR_DEPTH at most, 16 here
+// before it is malloc'd)
+int pk_put(CborOut *o, const op_value *v) {
+	writing first[16], *stack = first;
+	size_t n = 0, capacity = 16;
+	int ok = v != NULL;
+	while (ok) {
+		if (v != NULL) {
+			switch (v->type) {
+			case OP_NULL: cborPutNull(o); break;
+			case OP_BOOL: cborPutBoolean(o, v->bool_); break;
+			case OP_NUM:
+				if (v->big) cborPutWhole(o, v->bigNegative, v->big, v->bigLength);
+				else cborPutNumber(o, v->num);
+				break;
+			case OP_STR: ok = cborPutText(o, v->str, v->bytes); break;
+			case OP_BYTES: cborPutBytes(o, v->data, v->bytes); break;
+			case OP_TYPED: cborPutTyped(o, (JsonKind)v->kind, v->data, op_length(v)); break;
+			case OP_LIST:
+			case OP_MAP:
+			case OP_STAND: {
+				if (n >= CBOR_DEPTH || (v->type == OP_STAND && (v->count == 0 || v->items[0] == NULL))) {
+					ok = 0;
+					break;
+				}
+				if (n == capacity) {
+					capacity *= 2;
+					stack = stack == first ? memcpy(xrealloc(NULL, capacity * sizeof *stack), first, sizeof first)
+						: xrealloc(stack, capacity * sizeof *stack);
+				}
+				writing w = {v, 0, 0, 1, -1, NULL};
+				if (v->type == OP_STAND) cborPutStand(o);
+				else {
+					w.count = 0;
+					for (size_t i = 0; i < v->count; i++) w.count += v->items[i] != NULL;
+					cborPutHead(o, v->type == OP_LIST ? 4 : 5, w.count);
+				}
+				if (v->type == OP_MAP && w.count > 16) {
+					w.order = xrealloc(NULL, w.count * sizeof *w.order);
+					size_t k = 0;
+					for (size_t i = 0; i < v->count; i++)
+						if (v->items[i] != NULL) w.order[k++] = &v->keys[i];
+					qsort(w.order, k, sizeof *w.order, key_order);
+					for (size_t i = 1; i < k && ok; i++) ok = key_compare(*w.order[i - 1], *w.order[i]) != 0;
+				}
+				stack[n++] = w;
+				break;
+			}
+			default: ok = 0;
+			}
+			v = NULL;
+		}
+		// the next value to write, leaving every container that is done
+		while (ok && v == NULL && n) {
+			writing *t = &stack[n - 1];
+			const op_value *f = t->from;
+			if (t->done == t->count) {
+				free(t->order);
+				n--;
+			} else if (f->type == OP_STAND) {
+				v = f->items[0];
+				t->done++;
+			} else if (f->type == OP_LIST) {
+				while (f->items[t->at] == NULL) t->at++;
+				v = f->items[t->at++];
+				t->done++;
+			} else {
+				long i = t->order != NULL ? (long)(t->order[t->done] - f->keys) : next_key(f, t->last);
+				// none: a key twice
+				if (i < 0 || !cborPutText(o, f->keys[i], strlen(f->keys[i]))) ok = 0;
+				else t->last = i, t->done++, v = f->items[i];
+			}
+		}
+		if (v == NULL && n == 0) break;
+	}
+	for (size_t i = 0; i < n; i++) free(stack[i].order);
+	if (stack != first) free(stack);
+	return ok;
+}
+
 // --- writing ---
 
 // whether a whole number is one pack writes: a safe integer, as whole reads it

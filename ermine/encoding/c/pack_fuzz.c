@@ -10,7 +10,11 @@
 //   another deflate of the same map is no find; else the whole input. found: told on stderr (the
 //   first few), and with PACK_FUZZ_EXACT set, a crash;
 // - decoded strictly: encoding the node gives the input exactly; loosy: encoding it decodes
-//   strictly the same.
+//   strictly the same;
+// - pk_put of a value writes what cborEncode writes for its pk_to_json, or has no encoding when
+//   that has none: each node's value; the input read as one CBOR value, as it is and with every
+//   map's keys reversed and a NULL item in every list and map (pk_to_json leaves them out); once,
+//   values with no encoding (a stand-in with no kind, text and a key not UTF-8, CBOR_DEPTH + 1 deep).
 #include "pack.h"
 #include "deflate.h"
 
@@ -40,8 +44,72 @@ static void other(const char *why, const uint8_t *b, size_t n) {
 	if (told++ < 5) fputs("fuzz: ", stderr), fputs(why, stderr), fputs(": ", stderr), hex(b, n);
 }
 
+// pk_put writes the value as pk_to_json and cborEncode do
+static void put_same(const op_value *v) {
+	Json *j = pk_to_json(v);
+	size_t n = 0;
+	bool want = j != NULL && cborEncode(j, NULL, 0, &n, NULL);
+	uint8_t *bytes = malloc(n + 1);
+	if (want) cborEncode(j, bytes, n, &n, NULL);
+	CborOut o = {NULL, 0, 0, true};
+	bool got = pk_put(&o, v);
+	if (got != want) die(want ? "pk_put refuses a value cborEncode writes" : "pk_put writes a value with no encoding");
+	if (want && (o.length != n || memcmp(o.data, bytes, n) != 0)) die("pk_put writes other bytes");
+	free(o.data), free(bytes);
+	jsonFree(j);
+}
+
+// the value with every map's keys in reverse and a NULL item in each list and map (recursing:
+// CBOR_DEPTH at most)
+static op_value *twisted(const Json *j) {
+	if (j->type == JSON_ARRAY) {
+		op_value *l = op_list();
+		for (int i = 0; i < j->array.count; i++) {
+			if (i == j->array.count / 2) op_push(l, NULL);
+			op_push(l, twisted(j->array.items[i]));
+		}
+		if (j->array.count == 0) op_push(l, NULL);
+		return l;
+	}
+	if (j->type == JSON_OBJECT) {
+		op_value *m = op_map();
+		op_set(m, "\x01none", NULL);
+		for (int i = j->object.count - 1; i >= 0; i--) op_set(m, j->object.members[i].key, twisted(j->object.members[i].value));
+		return m;
+	}
+	if (j->type == JSON_STAND) return op_stand(twisted(j->stand.kind));
+	return pk_of_json(j);
+}
+
+// values with no encoding, and the deepest that has one
+static void edges(void) {
+	op_value *v = op_stand(NULL);
+	put_same(v);
+	op_free(v);
+	v = op_str("a\xff");
+	put_same(v);
+	op_free(v);
+	v = op_map();
+	op_set(v, "\xc3", op_null());
+	put_same(v);
+	op_free(v);
+	for (int deep = CBOR_DEPTH; deep <= CBOR_DEPTH + 1; deep++) {
+		v = op_list();
+		op_value *at = v;
+		for (int i = 1; i < deep; i++) {
+			op_value *in = i % 3 ? op_list() : op_map();
+			if (at->type == OP_MAP) op_set(at, "k", in);
+			else op_push(at, in);
+			at = in;
+		}
+		put_same(v);
+		op_free(v);
+	}
+}
+
 // a node's encoding, fresh; free it
 static pk_bytes encoded(const nd_entry *n) {
+	if (n->value != NULL) put_same(n->value);
 	pk_bytes b = {0};
 	if (pk_encode(n, NULL, &b) != PK_OK) die("a node read cannot be encoded");
 	return b;
@@ -175,6 +243,15 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 	size_t n = size - 1;
 	uint8_t *in = malloc(n ? n : 1);
 	memcpy(in, data + 1, n);
+	static int once;
+	if (!once++) edges();
+	Json *j = cborDecode(in, n, NULL, NULL);
+	if (j != NULL) {
+		op_value *v = pk_of_json(j), *t = twisted(j);
+		put_same(v), put_same(t);
+		op_free(v), op_free(t);
+		jsonFree(j);
+	}
 	if (how & 2) decoded(in, n, loosy, limit);
 	else if (how & 8) {
 		uint8_t *z;

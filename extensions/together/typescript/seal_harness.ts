@@ -16,6 +16,10 @@
 // { op: "stored", sealed }          → { stored }
 // { op: "verify", key, message, signature } → { good }   the raw signature (64 bytes) the raw key's
 //                                                    (32 bytes) over the message, checked strictly
+// { op: "seal-message", seed, topic, bytes, header? } → { sealed }   a message's bytes (hex) on the
+//                                                    topic, sealed by the seed's signer
+// { op: "open-message", sealed, topic, also? } → { signer, bytes }   checked for the topic
+// { op: "open-message", value, topic, also? } → the same, the value encoded canonically first
 // refused: { error: code }, SealError's code; a commit's own refusal as the commit harness gives it
 import * as cbor from "@ermine/encoding/cbor"
 import { encode } from "@ermine/encoding/commit"
@@ -28,7 +32,17 @@ import {
 	refusal,
 	unhex,
 } from "../../../ermine/encoding/typescript/commit_harness.ts"
-import { createSigner, ED25519, good, seal, SealError, stored, unseal } from "./seal.ts"
+import {
+	createSigner,
+	ED25519,
+	good,
+	openMessage,
+	seal,
+	SealError,
+	sealMessage,
+	stored,
+	unseal,
+} from "./seal.ts"
 
 // the document a seal is for: the request's, else the default's 32 bytes
 export const docOf = (r: Request) => unhex(r.doc ?? "2a".repeat(16) + "00".repeat(16))
@@ -41,6 +55,10 @@ export function sealRefusal(e: unknown): Answer {
 	if (e instanceof SealError) return { error: e.code }
 	return refusal(e)
 }
+
+// more varsig headers, each checked as Ed25519
+const also = (r: Request) =>
+	(r.also ?? []).map((h: string) => ({ header: unhex(h), code: ED25519, size: 64, verify: good }))
 
 async function answer(r: Request): Promise<Answer> {
 	try {
@@ -56,19 +74,25 @@ async function answer(r: Request): Promise<Answer> {
 				const sealed = r.value !== undefined
 					? cbor.encode(revive(r.value) as cbor.Value)
 					: unhex(r.sealed)
-				const more = (r.also ?? []).map((h: string) => ({
-					header: unhex(h),
-					code: ED25519,
-					size: 64,
-					verify: good,
-				}))
-				const u = await unseal(sealed, docOf(r), more)
+				const u = await unseal(sealed, docOf(r), also(r))
 				return {
 					commit: jsonOf(u.commit),
 					bytes: hex(u.bytes),
 					name: hex(u.name),
 					stored: hex(u.stored),
 				}
+			}
+			case "seal-message": {
+				const signer = await createSigner(unhex(r.seed))
+				if (r.header !== undefined) signer.header = unhex(r.header)
+				return { sealed: hex(await sealMessage(r.topic, unhex(r.bytes), signer)) }
+			}
+			case "open-message": {
+				const sealed = r.value !== undefined
+					? cbor.encode(revive(r.value) as cbor.Value)
+					: unhex(r.sealed)
+				const m = await openMessage(sealed, r.topic, also(r))
+				return { signer: hex(m.signer), bytes: hex(m.bytes) }
 			}
 			case "stored":
 				return { stored: hex(stored(unhex(r.sealed))) }

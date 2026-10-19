@@ -35,7 +35,16 @@ static void encode(const op_value *r, FILE *out) {
 		free(field);
 		return;
 	}
-	put_bytes_and_name(out, bytes, length);
+	// the commit read back, written from its cm_commit (no Json): the same bytes
+	cm_commit back;
+	uint8_t *again = NULL;
+	size_t again_length = 0;
+	if (cm_decode(bytes, length, &back, NULL) != CM_OK || cm_encode(&back, &again, &again_length, NULL) != CM_OK ||
+		again_length != length || memcmp(again, bytes, length) != 0)
+		hh_error(out, "cm_encode of the commit read writes other bytes");
+	else put_bytes_and_name(out, bytes, length);
+	cm_free(&back);
+	free(again);
 	free(bytes);
 }
 

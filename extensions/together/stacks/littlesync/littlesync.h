@@ -71,8 +71,8 @@
 // trust: the peers are trusted (your own Mac over USB). Any key may write: a seal shows who signed, not
 // that they may. A commit's lamport is taken as given (no parents are kept to check it), so a high
 // one wins every path it writes, and one at 2^53 - 1 leaves no lamport for this device's next write.
-// Ephemerals are not sealed: a held value may name any signer but this device's own. Nor are messages:
-// who is what the sender says. Not for a peer you don't trust.
+// Ephemerals are not sealed: a held value may name any signer but this device's own. Messages are (see
+// messages): who said one is the key that signed it, whoever carried it. Not for a peer you don't trust.
 //
 // links: a device talks to several peers at once, each over its own byte stream (ls_link), up to
 // ls_options.links (hundreds work: per commit, 2 bits a link). A link has its own rx buffer (4.5 KB; more past LS_MESSAGE), out
@@ -93,7 +93,7 @@
 //   ack        {node, names: [name]}
 //   listen     {topics: [string], all?: true}               the topics the sender wants sent to it (all:
 //                                                           every one), the whole list each time
-//   say        {topic: string, who: key, bytes}             a message (below)
+//   say        {topic: string, bytes: sealed}               a message, sealed by who said it (below)
 // sync: on hello, and whenever a node changes, each side sends heads for what it follows; a side that
 // lacks names sends want; the other sends the commits it still has; the receiver acks what it took
 // in. A heads that lacks names its receiver has is answered once with the receiver's heads (re).
@@ -103,12 +103,18 @@
 //
 // messages (short-lived, never stored, as presence.ts's channel carries them): bytes (opaque, up to
 // ls_options.message) on a topic (a string, 1 to LS_TOPIC_MAX bytes: "ermine://<hex>", "dens:root"),
-// and who said them (a key, 1 to LS_KEY_LEN bytes; over Subduction the key it was published under, a
-// gateway names it). A device hears only the topics it listens to: each link tells its peer, in a
+// sealed by who said them (seal.ts's sealMessage, together's channel's too): a say's bytes are the
+// canonical map {bytes, signer: multikey, signature: Ed25519's varsig header and 64 bytes}, at most
+// LS_SEALED more than the bytes. What is signed: "ermine/v0/message", the BLAKE3 of the bytes, the
+// signature's header, then the topic, so a seal is good on its own topic only. Who said it is the
+// signer, checked: a gateway relays the sealed bytes as they are and cannot make one for a device. One
+// unsealed or badly sealed (or by a key not Ed25519) is dropped, and not relayed; one sealed may be
+// sent again by anyone (nothing here stops a row heard again). A device hears only the topics it listens to: each link tells its peer, in a
 // listen, the topics it hears and (a relay) the ones its other links' peers want, again when that
 // changes, to a peer that began again, and with each heads beat (past 128: all). A message goes to the
 // links whose peer wants its topic; one taken in goes on, unchanged, to the other links that want it,
-// never back; this device's own key coming back is dropped. ls_send: to the peers now (none up: lost).
+// never back; this device's own key coming back is dropped. ls_send: sealed, to the peers now (none
+// up: lost).
 // ls_options.heard: each one heard on a topic of ls_listen's, called inside ls_feed.
 //
 // presence (extensions/presence/typescript/presence.ts, as web pigs use it): rows on a topic (a room),
@@ -187,6 +193,8 @@
 // presence row's too: room for a den's row, about 3.3 KB), and the presence rows kept a topic
 #define LS_TOPIC_MAX 256
 #define LS_MESSAGE 4096
+// the most a seal adds to a message's bytes on the wire (an Ed25519 one: 136 to 139)
+#define LS_SEALED 160
 #define LS_ROWS 16
 // a held (ephemeral) value goes after this long without a beat, and is resent this often
 #define LS_HELD_MS 4000
@@ -237,8 +245,8 @@ typedef struct {
 	// grows to fit (4.5 KB by default); the peers need as much (a gateway takes 4.5 KB frames)
 	size_t message;
 	size_t rows; // 0: LS_ROWS. presence rows kept a topic
-	// each message heard on a topic listened to (ls_listen): its topic, who said it, its bytes, all good
-	// for the call only. Called inside ls_feed: it may ls_send, ls_listen and ls_unlisten (NULL: none)
+	// each message heard on a topic listened to (ls_listen): its topic, who said it (the key that sealed
+	// it, checked), its bytes, all good for the call only. Called inside ls_feed: it may ls_send, ls_listen and ls_unlisten (NULL: none)
 	void (*heard)(void *context, const char *topic, const uint8_t *who, size_t who_length, const uint8_t *bytes,
 		size_t length);
 	void *heard_context;
@@ -380,7 +388,7 @@ ls_code ls_listen(ls_dev *dev, const char *topic);
 // the topic not heard any more: neither listened to nor a room (my row there told gone, the rows let go of)
 void ls_unlisten(ls_dev *dev, const char *topic);
 
-// a presence row: who (a key, a multikey as a rule), its value, until (on ls_tick's clock)
+// a presence row: who (the key that sealed its message, a multikey), its value, until (on ls_tick's clock)
 typedef struct {
 	uint8_t who[LS_KEY_LEN];
 	size_t who_length;

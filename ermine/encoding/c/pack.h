@@ -20,6 +20,7 @@
 #ifndef PACK_H
 #define PACK_H
 
+#include "cbor.h"
 #include "json.h"
 #include "../../../core/table/c/table.h"
 #include "../../../core/node/c/node.h"
@@ -90,6 +91,11 @@ pk_code pk_unpack(const uint8_t *bytes, size_t length, const pk_reading *reading
 pk_code pk_decode(const uint8_t *bytes, size_t length, const pk_reading *reading, pk_read *out);
 // what unpack or decode made, the nodes and what their headers refer to; no-op on {0}
 void pk_free(pk_read *r);
+
+// a value's encoding (cbor.h) appended to out: the bytes cborEncode writes for its pk_to_json, with no
+// Json made. 0 when it has none (a stand-in with no kind, a string or key that is not UTF-8, a map
+// holding a key twice, more than CBOR_DEPTH containers one in the next); out then holds part of it
+int pk_put(CborOut *out, const op_value *v);
 
 // values as json.h holds them, for callers whose values are Json. pk_to_json: a fresh value, NULL
 // when a stand-in has no kind
