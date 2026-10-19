@@ -57,7 +57,7 @@
 					"1e203333333333333333333333333333333333333333333333333333333333333333"
 				],
 				"lamport": 0,
-				"patches": [{ "path": ["title"], "value": "hi" }]
+				"patches": [{ "path": ["title"], "range": [0, 0], "value": "hi" }]
 			},
 			"expect": { "error": "not-a-commit", "field": "base" }
 		}

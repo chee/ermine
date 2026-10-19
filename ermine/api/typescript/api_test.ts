@@ -429,47 +429,99 @@ Deno.test("patch nodes: one over another node, read through the overlay, its lay
 	assertEquals(api.layers(face).length, 1)
 })
 
-Deno.test("reads: the value shown, then each other head's from sync's conflicts, at a path too; none: []; tracked", async () => {
+Deno.test("reads: the value read gives from its entry's change; with sync's values there, from its first item, then each other item from its commit, at a path under an open one too; none: []; tracked", async () => {
 	const w = world()
 	let api!: API
 	const seen: unknown[] = []
 	w.program("heads.js", (a) => {
 		api = a
-		const doc = a.open("./doc", { title: "pig", n: 1 })
+		const doc = a.open("./doc", { title: "pig", n: 1, m: { k: 1, j: 2 } })
 		a.effect("all", () => a.reads(doc, ["title"]), (v) => void seen.push(v))
 	})
 	w.start("heads.js", ["heads"])
 	await tick()
 	const doc = w.inW("doc")
-	assertEquals(api.reads("./doc"), [{ value: { title: "pig", n: 1 }, from: "shown" }])
+	// the entry's change: who, when, where
+	const change = w.table.get("value", doc)!.change
+	const mine = {
+		who: change.actor,
+		when: change.time,
+		...change.external && { where: change.external },
+	}
+	assertEquals([mine.who, typeof mine.when, mine.where?.length], ["host", "number", 1])
+	assertEquals(api.reads("./doc"), [{
+		value: { title: "pig", n: 1, m: { k: 1, j: 2 } },
+		from: mine,
+	}])
 	assertEquals(api.reads("./nothing"), [])
 	assertEquals(api.reads("./doc", ["gone"]), [])
-	// as sync writes them: each other head with the parts it differs in
-	w.put("conflicts" as Key, doc, [
-		{ head: "aa", lamport: 2, actor: null, tables: { value: { title: "cow", n: 1 } } },
-		{ head: "bb", lamport: 3, actor: null, tables: { attributes: { x: 1 } } },
+	// as sync writes them: each open path's items, each from its commit
+	const site = [{ file: "elsewhere.js", line: 7 }]
+	const cc = { head: "cc", lamport: 4, actor: "me", signer: "ed01cc", time: 30 }
+	const aa = { head: "aa", lamport: 2, actor: "pig", signer: "ed01aa", time: 10, external: site }
+	w.put("values" as Key, doc, {
+		value: [
+			{ path: ["title"], items: [{ value: "pig", from: cc }, { value: "cow", from: aa }] },
+			{ path: ["m"], items: [{ value: { k: 1, j: 2 }, inside: true, from: cc }] },
+			{ path: ["m", "k"], items: [{ value: 1, from: aa }, { gone: true, at: ["m"], from: cc }] },
+		],
+	})
+	const first = { who: "me", when: 30, head: "cc" }
+	const other = {
+		kind: "conflict",
+		by: undefined,
+		head: "aa",
+		who: "pig",
+		signer: "ed01aa",
+		when: 10,
+		lamport: 2,
+		where: site,
+		differs: ["value"],
+	}
+	assertEquals(api.reads("./doc", ["title"]), [
+		{ value: "pig", from: first },
+		{ value: "cow", from: other },
 	])
-	assertEquals(api.reads("./doc"), [
-		{ value: { title: "pig", n: 1 }, from: "shown" },
-		{ value: { title: "cow", n: 1 }, from: "aa" },
-		{ value: { title: "pig", n: 1 }, from: "bb" },
+	// position 0 is always what read gives; the item's marks with it
+	assertEquals(api.reads("./doc", ["m"]), [{ value: { k: 1, j: 2 }, from: first, inside: true }])
+	assertEquals(api.reads("./doc", ["m", "k"]).map((v) => [v.value, v.from.head, v.gone]), [
+		[1, "aa", undefined],
+		[undefined, "cc", true],
 	])
-	assertEquals(api.reads("./doc", ["title"]).map((v) => [v.value, v.from]), [
-		["pig", "shown"],
-		["cow", "aa"],
-		["pig", "bb"],
-	])
-	assertEquals(api.reads({ id: doc, part: "attributes" }).map((v) => v.from), ["bb"])
+	// under an open path: its items there
+	assertEquals(api.reads("./doc", ["m", "j"]), [{ value: 2, from: first, inside: true }])
+	// nothing open at or above: read's, from the entry's change
+	assertEquals(api.reads("./doc", ["n"]), [{ value: 1, from: mine }])
 	// a host's write asks no pulse: the host pulses
 	w.s.pulse()
 	assertEquals(seen.map((v) => (v as { value: unknown }[]).map((i) => i.value)), [
 		["pig"],
-		["pig", "cow", "pig"],
+		["pig", "cow"],
 	])
-	w.hosted(() => w.table.del("conflicts" as Key, doc))
+	w.hosted(() => w.table.del("values" as Key, doc))
 	w.s.pulse()
 	assertEquals(seen.length, 3)
-	assertEquals(api.reads("./doc", ["title"]), [{ value: "pig", from: "shown" }])
+	assertEquals(api.reads("./doc", ["title"]), [{ value: "pig", from: mine }])
+})
+
+Deno.test("edits: what a write replaces goes in its change for sync: edit none, edits every value or the ones given", async () => {
+	const w = world()
+	let api!: API
+	w.program("edits.js", (a) => {
+		api = a
+		a.open("./doc", { n: 1 })
+	})
+	w.start("edits.js", ["edits"])
+	await tick()
+	const doc = w.inW("doc")
+	const said = () => w.table.get("value", doc)!.change.metadata?.replaces
+	api.edit("./doc", (d: { n: number }) => void (d.n = 2))
+	assertEquals(said(), undefined)
+	api.edits("./doc", (d: { n: number }) => void (d.n = 3))
+	assertEquals([said(), api.read("./doc", ["n"])], ["all", 3])
+	const at = { who: "me", when: 1, head: "aa" }
+	api.edits("./doc", [{ path: ["n"], value: 4 }], [{ value: 3, from: at }, { value: 1, from: {} }])
+	assertEquals([said(), api.read("./doc", ["n"])], [["aa"], 4])
 })
 
 Deno.test("sites: a memo made in a program reports the program's line; its chain goes through the process, made where start was called, to where the programs were made", () => {

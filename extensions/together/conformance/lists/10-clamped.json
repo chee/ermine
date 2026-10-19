@@ -1,0 +1,93 @@
+{
+	"title": "replaces clamped to the writer's ancestors: naming a write apart replaces nothing",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"n": 0
+					}
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "c",
+			"parents": [
+				"a"
+			],
+			"nonce": 1,
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 2,
+					"replaces": [
+						"a",
+						"b"
+					]
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "items",
+			"path": [
+				"n"
+			],
+			"expect": {
+				"items": [
+					{
+						"commit": "c",
+						"value": 2
+					},
+					{
+						"commit": "b",
+						"value": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "items",
+			"path": [],
+			"expect": {
+				"items": [
+					{
+						"commit": "a",
+						"value": {
+							"n": 0
+						}
+					}
+				]
+			}
+		}
+	]
+}

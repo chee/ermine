@@ -1,14 +1,39 @@
 {
-	"title": "a commit whose node has no table has empty tables, which is not none; removing what is not there is refused",
+	"title": "a commit whose node has no table has empty tables, which is not none; removing what is not there through a list index is refused (a key patch never is: lists)",
 	"steps": [
-		{ "op": "add", "name": "a", "patches": [], "expect": { "added": "taken" } },
-		{ "op": "replay", "commit": "a", "expect": { "tables": {} } },
+		{
+			"op": "add",
+			"name": "a",
+			"patches": [],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "replay",
+			"commit": "a",
+			"expect": {
+				"tables": {}
+			}
+		},
 		{
 			"op": "add",
 			"name": "b",
-			"parents": ["a"],
-			"patches": [{ "path": [] }],
-			"expect": { "added": { "refused": "patches" } }
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						0
+					]
+				}
+			],
+			"expect": {
+				"added": {
+					"refused": "patches"
+				}
+			}
 		}
 	]
 }

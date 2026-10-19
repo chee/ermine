@@ -1,0 +1,94 @@
+{
+	"title": "two writes apart under a map not there yet (settings.theme, settings.font): taken, never refused for it; the map is made, holding both; nothing open",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"patches": [
+				{
+					"path": [],
+					"value": {}
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"settings",
+						"theme"
+					],
+					"value": "dark"
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "c",
+			"parents": [
+				"a"
+			],
+			"nonce": 1,
+			"patches": [
+				{
+					"path": [
+						"settings",
+						"font"
+					],
+					"value": "mono"
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "heads",
+			"expect": {
+				"heads": [
+					"c",
+					"b"
+				]
+			}
+		},
+		{
+			"op": "open",
+			"expect": {
+				"open": []
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"tables": {
+					"value": {
+						"settings": {
+							"theme": "dark",
+							"font": "mono"
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "items",
+			"path": [
+				"settings"
+			],
+			"expect": {
+				"items": []
+			}
+		}
+	]
+}

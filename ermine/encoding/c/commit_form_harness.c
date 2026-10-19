@@ -50,6 +50,30 @@ static Json *bytes_or(const op_value *v, const char **bad) {
 	return jsonBytes(b, n);
 }
 
+// a list of byte fields (parents, a patch's replaces): each as bytes_or; NULL with *bad
+static Json *names_or(const op_value *v, const char **bad) {
+	Json *j = jsonArray();
+	for (size_t p = 0; p < v->count; p++) {
+		Json *item = bytes_or(v->items[p], bad);
+		if (item == NULL) return jsonFree(j), NULL;
+		jsonPush(j, item);
+	}
+	return j;
+}
+
+// a patch: replaces, a list, as names_or; the rest its value
+static Json *patch_of(const op_value *v, const char **bad) {
+	if (v->type != OP_MAP) return pk_to_json(v);
+	Json *out = jsonObject();
+	for (size_t i = 0; i < v->count; i++) {
+		const op_value *x = v->items[i];
+		Json *j = strcmp(v->keys[i], "replaces") == 0 && x->type == OP_LIST ? names_or(x, bad) : pk_to_json(x);
+		if (j == NULL) return jsonFree(out), NULL;
+		jsonAdd(out, v->keys[i], j);
+	}
+	return out;
+}
+
 Json *cf_commit(const op_value *form, const char **bad) {
 	if (form == NULL) return jsonNull();
 	if (form->type != OP_MAP) return pk_to_json(form);
@@ -59,10 +83,11 @@ Json *cf_commit(const op_value *form, const char **bad) {
 		const op_value *v = form->items[i];
 		Json *j;
 		if (strcmp(k, "signer") == 0 || strcmp(k, "base") == 0) j = bytes_or(v, bad);
-		else if (strcmp(k, "parents") == 0 && v->type == OP_LIST) {
+		else if (strcmp(k, "parents") == 0 && v->type == OP_LIST) j = names_or(v, bad);
+		else if (strcmp(k, "patches") == 0 && v->type == OP_LIST) {
 			j = jsonArray();
 			for (size_t p = 0; p < v->count && j != NULL; p++) {
-				Json *item = bytes_or(v->items[p], bad);
+				Json *item = patch_of(v->items[p], bad);
 				if (item == NULL) jsonFree(j), j = NULL;
 				else jsonPush(j, item);
 			}
@@ -84,8 +109,10 @@ static void put_target(FILE *out, const op_target *t) {
 	if (t->has_range) fprintf(out, ",\"range\":[%lld,%lld]", (long long)t->from, (long long)t->to);
 }
 
-// the patches, as {path, range?, value?, move?} each
-static void cf_put_patches(FILE *out, const op_patch *ps, size_t length) {
+// the patches, as {path, range?, value?, move?, replaces?} each; a name replaced as name does
+static void cf_put_patches(FILE *out, const cm_commit *c, cf_name name, void *context) {
+	const op_patch *ps = c->patches;
+	size_t length = c->patches_length;
 	fputc('[', out);
 	for (size_t i = 0; i < length; i++) {
 		if (i) fputc(',', out);
@@ -99,6 +126,15 @@ static void cf_put_patches(FILE *out, const op_patch *ps, size_t length) {
 			fputs(",\"move\":{", out);
 			put_target(out, &ps[i].move);
 			fputc('}', out);
+		}
+		if (c->replaces != NULL && c->replaces[i].has) {
+			fputs(",\"replaces\":[", out);
+			for (size_t k = 0; k < c->replaces[i].length; k++) {
+				if (k) fputc(',', out);
+				if (name != NULL) name(context, out, c->replaces[i].names[k]);
+				else cf_put_hex(out, c->replaces[i].names[k], CM_NAME);
+			}
+			fputc(']', out);
 		}
 		fputc('}', out);
 	}
@@ -154,7 +190,7 @@ void cf_put_commit(FILE *out, const cm_commit *c, cf_name name, void *context) {
 	}
 	if (c->merge != NULL) fputs(",\"merge\":", out), op_json_string(out, c->merge);
 	fprintf(out, ",\"lamport\":%lld,\"patches\":", (long long)c->lamport);
-	cf_put_patches(out, c->patches, c->patches_length);
+	cf_put_patches(out, c, name, context);
 	fputc('}', out);
 }
 

@@ -1,0 +1,109 @@
+{
+	"title": "a key path ends at the first list: a write through a list index is a write of the whole list, so two apart are two items",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"list": [
+							1,
+							2
+						]
+					}
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"list",
+						0
+					],
+					"value": 9
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "c",
+			"parents": [
+				"a"
+			],
+			"nonce": 1,
+			"patches": [
+				{
+					"path": [
+						"list",
+						1
+					],
+					"value": 8
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "items",
+			"path": [
+				"list"
+			],
+			"expect": {
+				"items": [
+					{
+						"commit": "c",
+						"value": [
+							1,
+							8
+						]
+					},
+					{
+						"commit": "b",
+						"value": [
+							9,
+							2
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "items",
+			"path": [
+				"list",
+				0
+			],
+			"expect": {
+				"items": []
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"tables": {
+					"value": {
+						"list": [
+							1,
+							8
+						]
+					}
+				}
+			}
+		}
+	]
+}
