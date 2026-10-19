@@ -101,6 +101,9 @@ typedef struct {
 	// where memos, effects and send's scopes are noted (ermine/sites); NULL: not noted. a memo's site
 	// is the line that called api_memo (a macro), the program's
 	st_sites *sites;
+	// 1: no run records (runs.h) for its processes' computers, to save the memory (a small device);
+	// 0, the default: kept, as always
+	int no_runs;
 } api_setup;
 
 // the attribute a memo's or effect's node holds its scope in: the PL_NODE key's id of the nearest
