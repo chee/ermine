@@ -6,8 +6,12 @@
 // one channel pair (chn_pair_new) named "mac" and "card", made at the first connect. Names are one
 // map, filled as answers come back: a den's node "den:<den id>", a process "proc:<its name>", a
 // derived id its owner's name and the rest; a remote start's process named from its answer, at the
-// remote line or the first answer line after it. The runners: record (its run and its stop
-// recorded; hf_run.stop_reason given the reason) and boom (hf_run.error "boom"). The policy
+// remote line or the first answer line after it. The runners, each given the start's facts
+// (dn_starting): record (its run and its stop recorded; hf_run.stop_reason given the reason; its
+// load and its live form's close recorded, by the process the load request names, hf_loader being
+// given no facts), boom (hf_run.error "boom", its load's error too) and teller (the C api over the
+// device's api_context, api_new from the facts, its teardown recorded; its stop_reason api_stop's
+// why). A den's pulses asked for (dn_setup.schedule) are held, run by later. The policy
 // "grants": a pr_call recording each ask, then protect's grants on (value, rules). disconnect frees
 // the link at once (dn_disconnect, then dn_link_free, its den running).
 #include <stdio.h>
@@ -16,6 +20,7 @@
 
 #include "../../../conformance/c/harness.h"
 #include "../../../filesystem/places/c/status.h"
+#include "../../api/c/api.h"
 #include "../../boxes/c/boxes.h"
 #include "../../encoding/c/cbor.h"
 #include "../../encoding/c/pack.h"
@@ -70,6 +75,20 @@ typedef struct {
 	bx *box;
 } boxed;
 
+// a pulse a den asked for, held
+typedef struct {
+	void (*f)(void *data);
+	void *data;
+} asking;
+
+// a load by its request's name
+typedef struct {
+	char *name;
+	dn_loaded *l;
+} named_load;
+
+struct telling;
+
 typedef struct {
 	const char *name;
 	char *root;
@@ -98,6 +117,14 @@ typedef struct {
 	dn_link *link;
 	dn_link **links;
 	size_t nlinks, caplinks;
+	// the pulses its den asked for; its loads; teller's context and the apis it made
+	asking *asked;
+	size_t nasked, capasked;
+	named_load *loads;
+	size_t nloads, caploads;
+	api_context *context;
+	struct telling **tellings;
+	size_t ntellings, captellings;
 } device;
 
 static device devices[2] = {{.name = "mac"}, {.name = "card"}};
@@ -226,31 +253,19 @@ typedef struct {
 static handled **handles;
 static size_t nhandles, caphandles;
 
-// what the program is given: { den, places, process }
+// record's loads and its live forms' closes: { dev, by, code }; teller's teardowns: { dev, process,
+// why }
 typedef struct {
-	const char *den;
-	pl *places;
-	char *id;
-	op_value *args;
-} api;
-
-static void *create_api(const dn_context *c, void *data) {
-	(void)data;
-	api *a = xalloc(sizeof *a);
-	a->den = dn_id(c->den);
-	a->places = c->places;
-	a->id = xdup(c->process.id);
-	a->args = op_list();
-	for (size_t i = 0; i < c->process.nargs; i++) op_push(a->args, op_str(c->process.args[i]));
-	return a;
-}
-static void free_api(void *a_, void *data) {
-	(void)data;
-	api *a = a_;
-	free(a->id);
-	op_free(a->args);
-	free(a);
-}
+	const char *dev;
+	char *by;
+	op_value *code;
+} loaded;
+static loaded *loads, *unloads;
+static size_t nloads, caploads, nunloads, capunloads;
+static stopped *told;
+static size_t ntold, captold;
+// the process a load request names, as record's load is given none
+static const char *loading_by;
 
 static void record_stop(void *ctx, const op_value *reason) {
 	handled *h = ctx;
@@ -259,22 +274,91 @@ static void record_stop(void *ctx, const op_value *reason) {
 }
 static void record_stop_plain(void *ctx) { record_stop(ctx, NULL); }
 
-// the record runner: its run recorded; its handle's stop records the reason
+// the record runner: its run recorded, the api it would make the facts' { den, places, process };
+// its handle's stop records the reason
 static hf_run record(const op_value *code, void *api_, void *data) {
 	device *d = data;
-	api *a = api_;
-	ran r = {d->name, xdup(a->id), code != NULL ? op_ref((op_value *)code) : op_null(), op_ref(a->args)};
+	const dn_starting *st = api_;
+	op_value *args = op_list();
+	for (size_t i = 0; i < st->process.nargs; i++) op_push(args, op_str(st->process.args[i]));
+	ran r = {d->name, xdup(st->process.id), code != NULL ? op_ref((op_value *)code) : op_null(), args};
 	PUSH(runs, nruns, capruns, r);
 	handled *h = xalloc(sizeof *h);
 	h->d = d;
-	h->process = xdup(a->id);
+	h->process = xdup(st->process.id);
 	PUSH(handles, nhandles, caphandles, h);
 	return (hf_run){.handle = {record_stop_plain, h}, .stop_reason = record_stop};
+}
+
+// record's live form closed: recorded, let go
+static void record_close(void *data) {
+	loaded *l = data;
+	loaded u = {l->dev, l->by, l->code};
+	PUSH(unloads, nunloads, capunloads, u);
+	free(l);
+}
+static hf_loaded record_load(const op_value *code, void *data) {
+	device *d = data;
+	loaded l = {d->name, xdup(loading_by != NULL ? loading_by : ""),
+		code != NULL ? op_ref((op_value *)code) : op_null()};
+	PUSH(loads, nloads, caploads, l);
+	loaded *live = xalloc(sizeof *live);
+	*live = (loaded){d->name, xdup(l.by), op_ref(l.code)};
+	return (hf_loaded){.live = {.close = record_close, .data = live}};
 }
 
 static hf_run boom(const op_value *code, void *api_, void *data) {
 	(void)code, (void)api_, (void)data;
 	return (hf_run){.error = xdup("boom")};
+}
+static hf_loaded boom_load(const op_value *code, void *data) {
+	(void)code, (void)data;
+	return (hf_loaded){.error = xdup("boom")};
+}
+
+// teller: an api made from the facts, its teardown recorded; its stop's reason api_stop's why
+typedef struct telling {
+	device *d;
+	char *id;
+	api_process process;
+	api *a;
+} telling;
+static void told_f(const op_value *why, void *ctx) {
+	telling *t = ctx;
+	stopped s = {t->d->name, xdup(t->id), why != NULL ? op_ref((op_value *)why) : NULL};
+	PUSH(told, ntold, captold, s);
+}
+static void teller_stop(void *ctx, const op_value *reason) {
+	telling *t = ctx;
+	api_stop(t->d->context, &t->process, reason);
+}
+static void teller_stop_plain(void *ctx) { teller_stop(ctx, NULL); }
+// the api's own pulses: none asked (the harness pulses)
+static void no_schedule(void *ctx, void (*f)(void *data), void *data) { (void)ctx, (void)f, (void)data; }
+static hf_run teller(const op_value *code, void *api_, void *data) {
+	(void)code;
+	device *d = data;
+	const dn_starting *st = api_;
+	if (d->context == NULL) {
+		d->context = api_context_new(&(api_setup){.scheduler = d->s, .table = d->table,
+			.places = d->places, .schedule = no_schedule});
+	}
+	telling *t = xalloc(sizeof *t);
+	t->d = d;
+	t->id = xdup(st->process.id);
+	t->process = (api_process){.id = t->id, .at = st->process.at, .nat = st->process.nat,
+		.cwd = st->process.cwd, .ncwd = st->process.ncwd, .args = st->process.args,
+		.nargs = st->process.nargs, .scope = st->scope};
+	t->a = api_new(d->context, &(api_starting){.process = t->process, .places = st->places});
+	api_teardown(t->a, told_f, t);
+	PUSH(d->tellings, d->ntellings, d->captellings, t);
+	return (hf_run){.handle = {teller_stop_plain, t}, .stop_reason = teller_stop};
+}
+
+// a pulse a den asked for: held
+static void asking_f(void *ctx, void (*f)(void *data), void *data) {
+	device *d = ctx;
+	PUSH(d->asked, d->nasked, d->capasked, ((asking){f, data}));
 }
 
 // grants, each ask recorded on the device
@@ -320,8 +404,9 @@ static void make(device *d) {
 	d->host = sc_create_root_scope(d->s, &d->info, 1);
 	d->scopes = sn_new(d->s, d->table);
 	d->functions = hf_new();
-	hf_add_runner(d->functions, "record", record, d);
-	hf_add_runner(d->functions, "boom", boom, d);
+	hf_add_loader(d->functions, "record", record, record_load, d);
+	hf_add_loader(d->functions, "boom", boom, boom_load, d);
+	hf_add_runner(d->functions, "teller", teller, d);
 }
 
 static device *named_device(const char *n) {
@@ -546,7 +631,7 @@ static void make_den(void *data) {
 		.scopes = d->scopes, .functions = d->functions, .id = id != NULL ? id : d->name,
 		.name = text(get(r, "name")), .device = device_v,
 		.may = policy != NULL && strcmp(policy, "grants") == 0 ? d->policy : NULL,
-		.create_api = create_api, .free_api = free_api, .data = d}, &why);
+		.schedule = asking_f, .schedule_ctx = d}, &why);
 	op_free(device_v);
 	if (den == NULL) {
 		j->out = error(why);
@@ -590,7 +675,8 @@ static void offer(void *data) {
 		}
 	}
 	const char *live = text(get(r, "live"));
-	if (live != NULL && strcmp(live, "record") != 0 && strcmp(live, "boom") != 0) {
+	if (live != NULL && strcmp(live, "record") != 0 && strcmp(live, "boom") != 0 &&
+		strcmp(live, "teller") != 0) {
 		j->out = error("no such runner");
 		return;
 	}
@@ -622,20 +708,14 @@ static void withdraw(void *data) {
 	j->out = op_map();
 }
 
-// a start: its process named from the answer, proc:<name>
-static void start(void *data) {
-	job *j = data;
-	device *d = j->d;
-	const op_value *r = j->r;
-	steps runner = steps_of(get(r, "runner")), at = steps_of(get(r, "at"));
-	steps cwd = steps_of(get(r, "cwd")), args = steps_of(get(r, "args")), path = {0};
-	const op_value *pv = get(r, "program");
+// a request's program: an address (its steps in path), or { id, hash?, type?, api?, code? } (its id
+// taken back, in *id)
+static dn_program program_of(const op_value *pv, steps *path, char **id) {
 	dn_program program = {0};
-	char *id = NULL;
 	if (pv != NULL && pv->type == OP_MAP) {
 		const char *given = text(get(pv, "id"));
-		id = take(given != NULL ? given : "");
-		program.id = id;
+		*id = take(given != NULL ? given : "");
+		program.id = *id;
 		program.hash = text(get(pv, "hash"));
 		// a hash that is no string: none's, as an ask's
 		if (program.hash == NULL && get(pv, "hash") != NULL) program.hash = "";
@@ -643,11 +723,23 @@ static void start(void *data) {
 		program.api = text(get(pv, "api"));
 		program.code = get(pv, "code");
 	} else {
-		path = steps_of(pv);
-		program.at = (const char *const *)path.v;
-		program.nat = path.n;
+		*path = steps_of(pv);
+		program.at = (const char *const *)path->v;
+		program.nat = path->n;
 		program.has_at = 1;
 	}
+	return program;
+}
+
+// a start: its process named from the answer, proc:<name>
+static void start(void *data) {
+	job *j = data;
+	device *d = j->d;
+	const op_value *r = j->r;
+	steps runner = steps_of(get(r, "runner")), at = steps_of(get(r, "at"));
+	steps cwd = steps_of(get(r, "cwd")), args = steps_of(get(r, "args")), path = {0};
+	char *id = NULL;
+	dn_program program = program_of(get(r, "program"), &path, &id);
 	bx *b = NULL;
 	if (get(r, "box") != NULL && (b = box_of(d, text(get(r, "box")))) == NULL) {
 		j->out = error("no such box");
@@ -687,6 +779,62 @@ static void stop(void *data) {
 	dn_refusal no;
 	j->out = p != NULL && dn_stop(d->den, p, reason, &no) ? refusal(&no) : op_map();
 	op_free(reason);
+}
+
+// a load, named; by a process's name ("den": the den's own; none: the den)
+static void load(void *data) {
+	job *j = data;
+	device *d = j->d;
+	const op_value *r = j->r;
+	dn_process *by = NULL;
+	const char *by_name = text(get(r, "by"));
+	if (by_name != NULL) {
+		const char *pid = process_id(d->den, by_name);
+		if (pid == NULL) {
+			j->out = error("no such process");
+			return;
+		}
+		by = strcmp(pid, dn_node(d->den)) == 0 ? dn_self(d->den) : dn_find(d->den, pid);
+		if (by == NULL) {
+			j->out = error(pl_code_name(PL_NOTHING_THERE));
+			return;
+		}
+	}
+	bx *b = NULL;
+	if (get(r, "box") != NULL && (b = box_of(d, text(get(r, "box")))) == NULL) {
+		j->out = error("no such box");
+		return;
+	}
+	steps runner = steps_of(get(r, "runner")), path = {0};
+	char *id = NULL;
+	dn_program program = program_of(get(r, "program"), &path, &id);
+	dn_options o = {.box = b != NULL ? bx_places(b) : NULL};
+	loading_by = by != NULL ? dn_process_id(by) : dn_node(d->den);
+	dn_refusal no;
+	dn_loaded *l = dn_load(d->den, by, STEPS(runner), &program, &o, &no);
+	loading_by = NULL;
+	if (l == NULL && strcmp(no.refused, "failed") == 0) j->out = with("failed", op_str(no.error));
+	else if (l == NULL) j->out = refusal(&no);
+	else {
+		const char *n = text(get(r, "name"));
+		PUSH(d->loads, d->nloads, d->caploads, ((named_load){xdup(n != NULL ? n : ""), l}));
+		j->out = op_map();
+	}
+	free(id);
+	steps_free(&runner), steps_free(&path);
+}
+
+static void release_named(void *data) {
+	job *j = data;
+	device *d = j->d;
+	const char *n = text(get(j->r, "name"));
+	for (size_t i = d->nloads; n != NULL && i-- > 0;) {
+		if (strcmp(d->loads[i].name, n) != 0) continue;
+		dn_release(d->den, d->loads[i].l);
+		j->out = op_map();
+		return;
+	}
+	j->out = error("no such load");
 }
 
 // another den's ask, its who taken back as given
@@ -1050,6 +1198,30 @@ static op_value *node_json(device *d, const op_value *r) {
 	return o;
 }
 
+static op_value *loaded_json(const loaded *ls, size_t n) {
+	op_value *list = op_list();
+	for (size_t i = 0; i < n; i++) {
+		op_value *m = op_map();
+		op_set(m, "dev", op_str(ls[i].dev));
+		op_set(m, "by", op_str(ls[i].by));
+		op_set(m, "code", op_ref(ls[i].code));
+		op_push(list, m);
+	}
+	return plain_take(list);
+}
+
+static op_value *told_json(void) {
+	op_value *list = op_list();
+	for (size_t i = 0; i < ntold; i++) {
+		op_value *m = op_map();
+		op_set(m, "dev", op_str(told[i].dev));
+		op_set(m, "process", op_str(told[i].process));
+		op_set(m, "why", told[i].reason != NULL ? op_ref(told[i].reason) : op_null());
+		op_push(list, m);
+	}
+	return with("told", plain_take(list));
+}
+
 static op_value *runs_json(void) {
 	op_value *list = op_list();
 	for (size_t i = 0; i < nruns; i++) {
@@ -1102,6 +1274,13 @@ static op_value *answer(const op_value *r) {
 		return op_map();
 	}
 	if (strcmp(op, "runs") == 0) return runs_json();
+	if (strcmp(op, "loads") == 0) {
+		op_value *o = op_map();
+		op_set(o, "loads", loaded_json(loads, nloads));
+		op_set(o, "unloads", loaded_json(unloads, nunloads));
+		return o;
+	}
+	if (strcmp(op, "told") == 0) return told_json();
 	if (strcmp(op, "settle") == 0) {
 		for (int i = 0; i < 3; i++) {
 			for (int k = 0; k < 2; k++) {
@@ -1126,6 +1305,14 @@ static op_value *answer(const op_value *r) {
 		free(sc_escaped(d->s));
 		return op_map();
 	}
+	if (strcmp(op, "later") == 0) {
+		size_t n = d->nasked;
+		asking *held = d->asked;
+		d->asked = NULL, d->nasked = d->capasked = 0;
+		for (size_t i = 0; i < n; i++) held[i].f(held[i].data), free(sc_escaped(d->s));
+		free(held);
+		return with("pulses", op_num((double)n));
+	}
 	if (strcmp(op, "here") == 0 || strcmp(op, "list") == 0) {
 		bx *b = NULL;
 		if (op_get(r, "box") != NULL && (b = box_of(d, hh_str(r, "box"))) == NULL) {
@@ -1147,7 +1334,7 @@ static op_value *answer(const op_value *r) {
 	// the rest are the den's
 	if (strcmp(op, "offer") != 0 && strcmp(op, "withdraw") != 0 && strcmp(op, "start") != 0 &&
 		strcmp(op, "stop") != 0 && strcmp(op, "ask") != 0 && strcmp(op, "send") != 0 &&
-		strcmp(op, "close") != 0)
+		strcmp(op, "close") != 0 && strcmp(op, "load") != 0 && strcmp(op, "release") != 0)
 		return NULL;
 	if (d->den == NULL) return error("no den");
 	if (strcmp(op, "offer") == 0) hosted(d, offer, &j, NULL);
@@ -1156,6 +1343,8 @@ static op_value *answer(const op_value *r) {
 	else if (strcmp(op, "stop") == 0) hosted(d, stop, &j, actor);
 	else if (strcmp(op, "ask") == 0) hosted(d, ask, &j, NULL);
 	else if (strcmp(op, "close") == 0) hosted(d, closing, &j, NULL);
+	else if (strcmp(op, "load") == 0) hosted(d, load, &j, actor);
+	else if (strcmp(op, "release") == 0) hosted(d, release_named, &j, NULL);
 	else {
 		j.part = method_at(d, op_get(r, "path"));
 		if (j.part == NULL) return error("no method there");
@@ -1185,6 +1374,14 @@ void hh_finish(void) {
 		if (!d->made) continue;
 		sc_run_with_scope(d->host, close_all, d);
 		for (size_t i = 0; i < d->ndens; i++) dn_halt(d->dens[i]);
+		// teller's apis after their processes' scopes, then their context
+		for (size_t i = 0; i < d->ntellings; i++) {
+			api_free(d->tellings[i]->a);
+			free(d->tellings[i]->id);
+			free(d->tellings[i]);
+		}
+		free(d->tellings);
+		api_context_free(d->context);
 	}
 	for (size_t k = 0; k < 2; k++) {
 		device *d = &devices[k];
@@ -1203,6 +1400,9 @@ void hh_finish(void) {
 			op_free((op_value *)d->info.value);
 			for (size_t i = 0; i < d->nasks; i++) op_free(d->asks[i]);
 		}
+		for (size_t i = 0; i < d->nloads; i++) free(d->loads[i].name);
+		free(d->loads);
+		free(d->asked);
 		free(d->links);
 		free(d->dens);
 		free(d->boxes);
@@ -1217,6 +1417,12 @@ void hh_finish(void) {
 	free(stops);
 	for (size_t i = 0; i < nhandles; i++) free(handles[i]->process), free(handles[i]);
 	free(handles);
+	for (size_t i = 0; i < nloads; i++) free(loads[i].by), op_free(loads[i].code);
+	free(loads);
+	for (size_t i = 0; i < nunloads; i++) free(unloads[i].by), op_free(unloads[i].code);
+	free(unloads);
+	for (size_t i = 0; i < ntold; i++) free(told[i].process), op_free(told[i].reason);
+	free(told);
 	for (size_t i = 0; i < nto_names; i++) free(to_names[i].name);
 	free(to_names);
 	chn_pair_free(pair);

@@ -7,8 +7,9 @@
 //            bytes, malloc'd (the host's, let go with free), *outn their count. else failed (the int
 //            in the step's Error), *out untouched
 //   run      a runner: code, n the program's code's bytes, borrowed for the call; api what the
-//            host's createProcessAPI gave, as a pointer (TypeScript: the dlopen runner's pointer
-//            option; none: NULL), its shape the host's, not this ABI's. running (0): *state given
+//            starter gave the runner (programs': the host's createAPI's; a den's: the start's
+//            facts), as a pointer (TypeScript: the dlopen runner's pointer option; none: NULL),
+//            its shape the host's, not this ABI's. running (0): *state given
 //            back to stop. else failed (the int in the process's Error)
 //   stop     what run started stopped, once, as its process stops; none: nothing to stop. the
 //            library is let go after (dlclose) once no process holds it

@@ -81,7 +81,8 @@ typedef struct {
 	void (*stop_reason)(void *ctx, const op_value *reason);
 } hf_run;
 
-// a runner's function: the code (borrowed), the api createProcessAPI gave, the data given at hf_add_runner
+// a runner's function: the code (borrowed), what its starter gives (programs': create_api's api; a
+// den's: its dn_starting, the start's facts), the data given at hf_add_runner
 typedef hf_run (*hf_runner)(const op_value *code, void *api, void *data);
 
 // a loaded compiler's compile: the input (borrowed), the live form's data. as hf_compiler's out

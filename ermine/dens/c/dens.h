@@ -4,11 +4,14 @@
 //
 //   const char *error;
 //   dn *d = dn_new(&(dn_setup){.scheduler = s, .table = t, .places = p, .scopes = sn, .functions = fs,
-//     .id = "mac", .create_api = api, .data = h, .may = policy}, &error);   // with a scope open
+//     .id = "mac", .may = policy}, &error);                                 // with a scope open
 //   dn_refusal no;
 //   const char *js = dn_offer(d, NULL, DN_RUNNERS, "javascript", attrs, hf_value("javascript"), &no);
 //   dn_process *x = dn_start(d, runner, 4, &(dn_program){.at = prog, .nat = 2, .has_at = 1},
 //     at, 2, &(dn_options){..}, &no);                                       // NULL: refused
+//   dn_loaded *l = dn_load(d, x, letter, 6, &(dn_program){.id = "e", .code = c, .type = t},
+//     NULL, &no);                                                           // NULL: refused
+//   dn_loaded_live(l)->run(...);  dn_release(d, l);                         // else at x's stop
 //   dn_stop(d, x, reason, &no);
 //   dn_close(d, NULL);  dn_halt(d);  /* before sc_free */  ...  dn_free(d);  // after tb_free, pl_free
 //
@@ -31,33 +34,46 @@
 // not); not-a-runner (the runner's value no runner hf_find knows); no-permission (the policy asked
 // start on the runner, then read on the program's value, not for code given: no, or pending, its
 // need dropped); taken (processes'). else processes' start with ermine.type ermine.process,
-// ermine.process.runner { id, at }, .program { id, at?, hash? }, .den { id, at }.
+// ermine.process.runner { id, at }, .program { id, at?, hash? }, .den { id, at }. a start made
+// outside a run (sc_get_run NULL; an ask's too): a pulse asked for (setup.schedule; NULL: none, the
+// host pulses).
+// dn_load: the program made live on the runner with no process (dens.ts' load): checked as dn_start
+// is (never taken; a runner with no load, hf_add_loader's: not-a-runner), the load called with the
+// scope open (none: by's). by: a process of this den's (NULL: the den's own); not running: refused
+// nothing-there. the load failing: refused "failed", error its message. held by by, closed
+// (hf_live.close) at dn_release or at by's stop, after its handle's, newest first (the den's own at
+// its close). made: a pulse asked for, as dn_start's. its live form's calls are its caller's: their
+// cost and failures its caller's runs'.
 // dn_stop: asked stop on its node (refused: still running); its offers' users stopped, its handle
-// given the reason, the row out, the node gone; twice, or not running: nothing; the den's own:
-// dn_close. a process torn down from above (the owner going): the den's reason ("den-stopped", or
-// dn_close's); its own scope torn down directly: none.
+// given the reason, its loads closed, the row out, the node gone; twice, or not running: nothing;
+// the den's own: dn_close. a process torn down from above (the owner going): the den's reason
+// ("den-stopped", or dn_close's); its own scope torn down directly: none.
 // dn_ask: another den's start or stop, its who given (device: the transport's); no policy: refused
 // no "no policy". a start's fields (dn_ask's, dn_on's body's) as given: runner and at no address:
 // none; program neither an address nor a map: { id: "" } (an id that is no string: ""; a type or
 // api that is no string: none; a hash given that is no string: none's); a step that is no string,
 // args given that are no list of strings, a cwd given that is no address: refused not-a-name.
 // dn_close: every process stopped, newest first, each handle given the reason; the den's rows
-// last. after it: start, ask, offer refused stopped.
+// last. after it: start, load, ask, offer refused stopped.
 // unplace or move never stops a process: its row is in the process part, not in children.
 // writes: with the owner's scope open (the den, its offers) or the process's. policy reads: the
 // table, untracked.
 //
 // live values: hf stand-ins (extensions/build/c/host.h). a runner here: hf_find gives an entry with
 // a runner. it is called at the process's first pulse (a one-shot effect), the process's scope
-// open, with the code and create_api's api; hf_run.error: the status. a stop's reason: given to
-// hf_run.stop_reason when set, else handle.stop. no promises (hf_run has none). on/start and
-// on/stop hold hf_value(""); their call is dn_on. the policy: protect's (pr_ask_of), reading the
+// open, with the code and the start's facts (a dn_starting, borrowed for the call; its strings the
+// process's, until dn_free) as its api: what the program gets is the runner's to make, from its
+// data (hf_add_runner's) and the facts; no api here. its limits are its own too (fuel, a budget),
+// nothing here counts. hf_run.error: the status. a stop's reason: given to hf_run.stop_reason when
+// set, else handle.stop (a runner over ermine/api: api_stop with it, so its teardowns are told).
+// a load: the entry's load, given the code alone (host.h's hf_loader: no facts, unlike dens.ts').
+// no promises (hf_run has none). on/start and on/stop hold hf_value(""); their call is dn_on. the policy: protect's (pr_ask_of), reading the
 // table untracked. an ask's and an answer's shapes are dens.ts' (dn_ask, dn_refusal_value).
-// memory: a process or offer lives until dn_free; ids, paths, args copied; attributes, device,
+// memory: a process, offer or load lives until dn_free; ids, paths, args copied; attributes, device,
 // pins and codes held (op_ref); a dn_refusal's strings are the den's until its next call; its
-// answer is the policy's (until pr_policy_free). the apis create_api made: free_api'd at dn_free.
-// dn_free with the table and places gone: a process never stopped has its handle's stop called,
-// nothing written. out of memory aborts.
+// answer is the policy's (until pr_policy_free). dn_free with the table and places gone: a process
+// never stopped has its handle's stop called, a load never let go its close, nothing written. out of
+// memory aborts.
 // open: promises (hf_run has none); /system/den inside a box; boxed processes in dn_nodes
 #ifndef DENS_H
 #define DENS_H
@@ -100,9 +116,11 @@ extern const char *const dn_here[2];
 
 typedef struct dn dn;
 typedef struct dn_process dn_process;
+typedef struct dn_loaded dn_loaded;
 typedef enum { DN_RUNNERS, DN_COMPILERS, DN_SURFACES } dn_kind;
 
-// what create_api is handed: programs' ps_context's fields, and the den
+// a start's facts, what a runner is handed as its api (dens.ts' Start): programs' ps_context's
+// fields, and the den. a load's: its by's
 typedef struct {
 	pl *places;
 	const char *root;
@@ -119,7 +137,7 @@ typedef struct {
 	tb_table *table;
 	sc_scope *scope;
 	dn *den;
-} dn_context;
+} dn_starting;
 
 typedef struct {
 	sc_scheduler *scheduler;
@@ -135,10 +153,10 @@ typedef struct {
 	const op_value *device;
 	// NULL: a local ask yes, another den's no ("no policy")
 	const pr_policy *may;
-	void *(*create_api)(const dn_context *ctx, void *data);
-	// at dn_free, after its process stopped; NULL: nothing
-	void (*free_api)(void *api, void *data);
-	void *data;
+	// how a pulse is asked for: f(data) run soon, once. NULL: none asked (the host pulses: C has no
+	// microtasks, dens.ts' default)
+	void (*schedule)(void *ctx, void (*f)(void *data), void *data);
+	void *schedule_ctx;
 	// NULL: pl_commit on places
 	void (*commit)(void *ctx, const pl_changed *changed);
 	void *commit_ctx;
@@ -173,8 +191,9 @@ typedef struct {
 } dn_options;
 
 // refused: "stopped" "not-a-runner" "not-there" "wrong-form" "no-permission" "taken", or
-// "not-a-name" (offer, a bad name; start, a path with none), "nothing-there" (offer, by no running
-// process of this den's). the fields of the refusal given, the rest NULL or 0
+// "not-a-name" (offer, a bad name; start, a path with none), "nothing-there" (offer or load, by no
+// running process of this den's), "failed" (a load's, error its message). the fields of the refusal
+// given, the rest NULL or 0
 typedef struct {
 	const char *refused;
 	// not-a-runner: the runner's path
@@ -195,6 +214,8 @@ typedef struct {
 	// taken
 	const char *const *at;
 	size_t nat;
+	// failed
+	const char *error;
 } dn_refusal;
 
 // with a scope open. NULL: *error says (not-a-name, already-there). a macro: the site is the caller's
@@ -223,6 +244,14 @@ dn_process *dn_start_at(dn *d, const char *const *runner, size_t nrunner, const 
 	const char *const *at, size_t nat, const dn_options *options, dn_refusal *refused,
 	const char *file, int line, const char *func);
 #define dn_start(...) dn_start_at(__VA_ARGS__, __FILE__, __LINE__, __func__)
+// by: a process of the den's, NULL: the den. options: only box is read (where program is from; NULL:
+// by's places). NULL: refused
+dn_loaded *dn_load(dn *d, dn_process *by, const char *const *runner, size_t nrunner,
+	const dn_program *program, const dn_options *options, dn_refusal *refused);
+// its live form, the load's (hf_live)
+const hf_live *dn_loaded_live(const dn_loaded *l);
+// closed now (hf_live.close), out of by's; twice: nothing
+void dn_release(dn *d, dn_loaded *l);
 // with a scope open: asked op stop. 0: stopped, or nothing to stop; 1: refused (no-permission).
 // reason borrowed for the call (NULL: none). p the den's own: dn_close
 int dn_stop(dn *d, dn_process *p, const op_value *reason, dn_refusal *refused);

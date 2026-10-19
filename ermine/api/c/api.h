@@ -1,12 +1,12 @@
 // the process api (typescript/api.ts) in C: what a program is given. prefix api_. api.ts's header
 // is the spec; ermine/api/conformance/api/ holds both to it.
 //
-//   api_apis *x = api_apis_new(&setup);            // once, by the host
-//   api *a = api_new(x, &context);                 // one per process
+//   api_context *x = api_context_new(&setup);      // once, by the host: what every process's shares
+//   api *a = api_new(x, &start);                   // one per process (api.ts' createAPI)
 //   api_node notes;
 //   api_open(a, "./notes", value, &notes);
 //   api_read(a, api_of(&notes), NULL, 0, &v);
-//   api_node_free(&notes); api_free(a); api_apis_free(x);
+//   api_node_free(&notes); api_free(a); api_context_free(x);
 //
 // errors: returned codes, 0 none: nothing-there, already-there, not-a-name, refused, pending (a
 // compute returns SC_PENDING), not-a-method, stop (return at once, result dropped), failed
@@ -15,7 +15,13 @@
 // memory: values given are held (op_ref) if kept, else the caller's; values given back are
 // borrowed until the node changes (api_items, api_layers hold their own). api_node: the caller's,
 // api_node_free. options.drop must be api_drop. patches borrowed for the call and copied.
-// teardown: every process's scope, then api_apis_free, then the scheduler.
+// teardown: every process's scope, then its api (api_free), then api_context_free, then the
+// scheduler.
+// a teardown is told why (api_teardown): "replaced" (its owner ran again), the reason api_stop was
+// given (a den's through its handle's stop_reason: runner-stopped, den-stopped, the caller's), else
+// "ended". no runner here (a C program is native): a den's runner over this makes an api with
+// api_new from the start's facts (dens.h's dn_starting) and gives api_stop the reason its handle is
+// stopped with (dens_harness.c's teller).
 // not yet (not in the suite): start, stop, openwith, box, async memos.
 #ifndef API_H
 #define API_H
@@ -49,8 +55,6 @@ typedef enum {
 // "failed"; "" for 0
 const char *api_code_name(int code);
 
-typedef enum { API_ENDED, API_REPLACED } api_why_stopped;
-
 // a process, as the host knows it: its id, where it is, its working folder, its arguments, its
 // scope. borrowed: the host keeps them alive as long as its api
 typedef struct {
@@ -72,7 +76,8 @@ typedef struct {
 	// the host's commit (an overlay's pn_commit); NULL: pl_commit on places
 	void (*commit)(void *ctx, const pl_changed *changed);
 	void *commit_ctx;
-	// the host's stop of a process: its row out, its scope torn down (programs' stop)
+	// the host's stop of a process: its row out, its scope torn down (programs' stop). NULL (a den's
+	// world): api_stop tells the teardowns only, the starter stops it
 	void (*stop)(void *ctx, const api_process *p);
 	void *stop_ctx;
 	// what a send's scope holds beside the caller (the caller over it), keys unique: the host's
@@ -103,25 +108,28 @@ typedef struct {
 // memo or effect is made with {PL_NODE: its node's id}, so a header's metadata stops at it
 #define API_SCOPE "ermine.computer.scope"
 
-typedef struct api_apis api_apis;
+// the world every process's api shares (statuses, runs, methods, stop reasons): api.ts' context
+typedef struct api_context api_context;
 typedef struct api api;
 
-api_apis *api_apis_new(const api_setup *setup);
-void api_apis_free(api_apis *x);
+api_context *api_context_new(const api_setup *setup);
+void api_context_free(api_context *x);
 
 // the scheduler's options.drop: lets go of a memo's or effect's result
 void api_drop(void *value, void *data);
 
-// a process's api: process borrowed, places NULL: the setup's
+// a start's facts, what api_new is handed (api.ts' Start): process borrowed, places NULL: the setup's
 typedef struct {
 	api_process process;
 	pl *places;
-} api_context;
-api *api_new(api_apis *x, const api_context *context);
+} api_starting;
+api *api_new(api_context *x, const api_starting *start);
+// after its process's scope is gone
 void api_free(api *a);
 
-// a process stopped by the host: its teardowns told why. calls setup.stop
-void api_stop(api_apis *x, const api_process *p, api_why_stopped why);
+// a process stopped: its teardowns told why (borrowed for the call, held till then; NULL: "ended",
+// or a why given before), then setup.stop (NULL: told only, its starter's stop under way)
+void api_stop(api_context *x, const api_process *p, const op_value *why);
 
 const char *api_why(const api *a);
 
@@ -236,8 +244,10 @@ int api_send_at(api *a, api_target x, const op_value *const *args, size_t nargs,
 	const char *file, int line, const char *func);
 #define api_send(...) api_send_at(__VA_ARGS__, __FILE__, __LINE__, __func__)
 
-typedef void (*api_teardown_fn)(api_why_stopped why, void *ctx);
-// fn as the scope open goes: ended (the process stopped), replaced (a computer running again)
+// why: borrowed for the call, a string "replaced" | "ended", or the reason api_stop was given
+typedef void (*api_teardown_fn)(const op_value *why, void *ctx);
+// fn as the scope open goes: replaced (a computer running again), the reason its process was stopped
+// with (api_stop's why), else ended
 int api_teardown(api *a, api_teardown_fn fn, void *ctx);
 // the node at at, make() its value if nothing is there (the caller's, which this lets go of)
 int api_ref(api *a, const char *at, op_value *(*make)(void *ctx), void *ctx, api_node *out);
