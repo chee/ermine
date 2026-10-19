@@ -9,6 +9,7 @@
 #include "esp_lcd_panel_io.h"
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_panel_st7789.h"
+#include "fb.h"
 #include "font8x8.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -116,4 +117,19 @@ void screen_line(int row, const char *text, uint16_t ink, uint16_t paper) {
 		}
 	}
 	send(TOP + row * 8, 8, s);
+}
+
+void screen_frame(void) {
+	uint16_t pal[16];
+	for (int i = 0; i < 16; i++) pal[i] = wire(fb_565[i]);
+	for (int y = 0; y < HEIGHT; y += 8) {
+		int rows = HEIGHT - y < 8 ? HEIGHT - y : 8;
+		uint16_t *s = strip();
+		const uint8_t *from = fb + y * WIDTH / 2;
+		for (int i = 0; i < rows * WIDTH / 2; i++) {
+			s[2 * i] = pal[from[i] & 15];
+			s[2 * i + 1] = pal[from[i] >> 4];
+		}
+		send(y, rows, s);
+	}
 }

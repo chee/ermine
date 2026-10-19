@@ -1,6 +1,10 @@
 # ermine's C, built from where it lives in the repo: the process api and what it stands on
-# (the Makefile's api_src without the harnesses)
+# (the Makefile's api_src without the harnesses), and dens with away (its dens_src)
 set(R ${CMAKE_CURRENT_LIST_DIR}/../../../..)
+# cbor.c and pack.c from the main checkout, as littlesync is (../../CMakeLists.txt): its littlesync
+# writes CBOR by pieces (cborPutHead, pk_put), which this worktree's lack. main's are this one's and
+# more, so the rest builds against them unchanged
+set(MAIN ${CMAKE_CURRENT_LIST_DIR}/../../../../../ermine)
 idf_component_register(
 	SRCS
 		${R}/core/op/c/value.c ${R}/core/op/c/json.c ${R}/core/op/c/apply.c ${R}/core/op/c/invert.c
@@ -16,9 +20,16 @@ idf_component_register(
 		${R}/ermine/processes/c/processes.c ${R}/ermine/processes/c/scopes.c
 		${R}/ermine/sites/c/sites.c
 		${R}/ermine/api/c/api.c
-		${R}/ermine/encoding/c/pack.c ${R}/ermine/encoding/c/json.c ${R}/ermine/encoding/c/cbor.c
+		${MAIN}/ermine/encoding/c/pack.c ${R}/ermine/encoding/c/json.c ${MAIN}/ermine/encoding/c/cbor.c
 		${R}/extensions/presence/c/presence.c ${R}/extensions/presence/c/channel.c
 		${R}/extensions/patch-nodes/c/patch.c
+		${R}/core/unread/c/unread.c
+		${R}/ermine/processes/c/start.c ${R}/ermine/boxes/c/boxes.c ${R}/extensions/build/c/host.c
+		${R}/ermine/encoding/c/hash.c ${R}/ermine/encoding/c/blake3/blake3.c
+		${R}/ermine/encoding/c/blake3/blake3_dispatch.c ${R}/ermine/encoding/c/blake3/blake3_portable.c
+		${R}/ermine/dens/c/dens.c ${R}/ermine/dens/c/away.c
 	INCLUDE_DIRS ${R}
 )
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-error -w)
+# blake3 portable only (the Makefile's BLAKE3FLAGS)
+target_compile_definitions(${COMPONENT_LIB} PRIVATE BLAKE3_NO_SSE2 BLAKE3_NO_SSE41 BLAKE3_NO_AVX2 BLAKE3_NO_AVX512 BLAKE3_USE_NEON=0)

@@ -1,4 +1,6 @@
-// ermine on the Cardputer ADV: the host, its keyboard and display drivers, the shell
+// ermine on the Cardputer ADV: the host, its keyboard and display drivers, the shell, and a den
+// (den.h): keys, screen and pigs as things other dens can wire into. two modes, esc between them:
+// the den's (the screen thing's framebuffer, keys to /work/keys) and the shell's (text rows)
 #include <stdio.h>
 #include <string.h>
 
@@ -13,9 +15,16 @@
 #include "screen.h"
 #include "shell.h"
 #include "room.h"
+#include "net.h"
+#include "lschannel.h"
+#include "sdkconfig.h"
+#include "den.h"
+#include "fb.h"
+#include "things.h"
 #include "esp_random.h"
 #include "esp_timer.h"
 #include "nvs_flash.h"
+#include "nvs.h"
 
 #define LEMON RGB(0xff, 0xf6, 0x8f)
 #define INK RGB(0x10, 0x10, 0x10)
@@ -28,6 +37,12 @@ static struct ls_link *line;
 
 // the last screen drawn, printed on the serial line after a line typed there
 static op_value *last;
+// 1: the den's framebuffer shows, keys go to /work/keys; 0: the shell's text rows
+static int dens_mode = 1;
+
+void frame_show(void) {
+	if (dens_mode) screen_frame();
+}
 
 static void print(void) {
 	const op_value *lines = last ? op_get(last, "lines") : NULL;
@@ -39,7 +54,12 @@ static void print(void) {
 		printf("littlesync: in %u out %u junk %u refused %u bad seals %u commits %u applied %u (%s)\n",
 			(unsigned)tr->frames_in, (unsigned)tr->frames_out, (unsigned)tr->junk, (unsigned)st->refused,
 			(unsigned)st->bad_seals, (unsigned)st->commits_in, (unsigned)st->applied, ls_reason(ls_now));
+		if (net_status()) {
+			const ls_traffic *nt = ls_traffic_of(net_link());
+			printf("%s, in %u out %u\n", net_status(), (unsigned)nt->frames_in, (unsigned)nt->frames_out);
+		}
 	}
+	den_print();
 	printf("--- %u bytes free, %u least, stack %u left\n", (unsigned)heap_caps_get_free_size(MALLOC_CAP_8BIT),
 		(unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT), (unsigned)uxTaskGetStackHighWaterMark(NULL));
 	fflush(stdout);
@@ -56,9 +76,15 @@ static const char *serial_key(char c) {
 	return one;
 }
 
+static void draw_text(const op_value *screen);
 void show(const op_value *screen) {
 	if (last) op_free(last);
 	last = op_ref((op_value *)screen);
+	if (!dens_mode) draw_text(screen);
+}
+
+static void draw_text(const op_value *screen) {
+	if (screen == NULL) return;
 	const op_value *lines = op_get(screen, "lines"), *prompt = op_get(screen, "prompt");
 	screen_edges(LEMON);
 	// the free heap; and the pig that changed last: its id's first 4 hex, stored bytes, commits, parents
@@ -90,6 +116,62 @@ static void randoms(void *ctx, uint8_t *out, size_t n) {
 // whether the USB line is inside a littlesync frame
 static int framed;
 
+static const int shell_on = CONFIG_CARDPUTER_WIFI_SSID[0] == 0;
+// lab-pig's room on littlesync (room.c): followed without WiFi; with it, not for now, as its whole
+// history comes in from galaxy and littlesync's save of it runs the heap out. 1: followed anyway
+#define PIG_ROOM_OVER_WIFI 0
+static const int pig_room_on = shell_on || PIG_ROOM_OVER_WIFI;
+
+// a key from the keyboard: esc turns the mode (with the shell on); else to the shell, or to /work/keys
+static void pressed(api *keyboard_api, const char *k) {
+	if (strcmp(k, "esc") == 0) {
+		if (!shell_on) return;
+		dens_mode = !dens_mode;
+		if (dens_mode) screen_frame();
+		else draw_text(last);
+		return;
+	}
+	if (!dens_mode) {
+		keyboard_press(keyboard_api, k);
+		return;
+	}
+	if (strcmp(k, "backspace") == 0) things_key("del");
+	else if (strlen(k) == 1) things_key(k);
+}
+
+// the channel to the other dens: littlesync's messages, sealed by this device's key (lschannel.h).
+// away sends its row on "dens:<room id>", asks on "dens:<room id>/ask/<to>", answers on
+// "dens:<room id>/answer/<from>"; over USB to a Mac peer, or WiFi to the gateway and on to galaxy
+
+// the den's id: this device's littlesync key (a multikey) as hex, as the page's den id is its
+// device key's; no littlesync: a made-up one
+static char den_id[2 * LS_KEY_LEN + 1];
+static void id_of(ls_dev *ls) {
+	const uint8_t *key = ls ? ls_key(ls) : NULL;
+	if (key == NULL) {
+		strcpy(den_id, "cardputer-no-key");
+		return;
+	}
+	for (int i = 0; i < LS_KEY_LEN; i++) sprintf(den_id + 2 * i, "%02x", key[i]);
+}
+
+// the room's code: made once (four of DEN_LETTERS, at random), kept in NVS, the same after a restart
+static void room_code_of(char out[5]) {
+	nvs_handle_t h;
+	size_t n = 5;
+	if (nvs_open("dens", NVS_READWRITE, &h) != ESP_OK) {
+		strcpy(out, "ACDE");
+		return;
+	}
+	if (nvs_get_str(h, "room", out, &n) != ESP_OK || strlen(out) != 4) {
+		for (int i = 0; i < 4; i++) out[i] = DEN_LETTERS[esp_random() % 16];
+		out[4] = 0;
+		nvs_set_str(h, "room", out);
+		nvs_commit(h);
+	}
+	nvs_close(h);
+}
+
 void app_main(void) {
 	// room for a littlesync frame or two between loops
 	usb_serial_jtag_driver_config_t usb = {.rx_buffer_size = 8192, .tx_buffer_size = 4096};
@@ -99,22 +181,38 @@ void app_main(void) {
 	keys_init();
 	host_init();
 	api *keyboard_api = host_start("keyboard", keyboard);
-	host_start("shell", shell);
-	host_start("display", display);
+	// the shell and its display (a memo of the whole tree as text, made again at every change) only
+	// without WiFi: with it, the den, WiFi and a TLS handshake need all the heap there is
+	if (shell_on) {
+		host_start("shell", shell);
+		host_start("display", display);
+	}
 	// littlesync: its key and nodes in NVS, its frames on the USB line among the text
 	if (nvs_flash_init() != ESP_OK) nvs_flash_erase(), nvs_flash_init();
-	ls_dev *ls = ls_open(&(ls_options){.store = ls_store_nvs("littlesync"), .random = randoms});
+	ls_dev *ls = ls_open(&(ls_options){.store = ls_store_nvs("littlesync"), .random = randoms, .heard = lschannel_heard});
 	room_device(ls);
 	ls_now = ls;
 	// the USB line is one link; another line would be another
 	line = ls ? ls_link(ls) : NULL;
-	api *room_api = host_start("room", room);
-	printf("ermine: up, %u bytes free%s\n", (unsigned)heap_caps_get_free_size(MALLOC_CAP_8BIT),
-		ls ? ", littlesync on" : ", no littlesync");
+	// and the gateway over WiFi, a second link, when menuconfig names a network and a gateway (net.h)
+	int wifi = net_start(ls, randoms);
+	api *room_api = pig_room_on ? host_start("room", room) : NULL;
+	id_of(ls);
+	size_t before = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+	char code[5];
+	room_code_of(code);
+	if (den_boot(den_id, code) == 0) {
+		chn_channel *channel = lschannel(ls);
+		if (channel == NULL || den_connect(channel) == NULL) printf("den: link refused\n");
+	}
+	printf("den: room %s\n", code);
+	printf("den: %s up, %u bytes of heap\n", den_id, (unsigned)(before - heap_caps_get_free_size(MALLOC_CAP_8BIT)));
+	printf("ermine: up, %u bytes free%s%s\n", (unsigned)heap_caps_get_free_size(MALLOC_CAP_8BIT),
+		ls ? ", littlesync on" : ", no littlesync", wifi ? ", and over WiFi" : "");
 	for (;;) {
 		const char *k;
 		while ((k = keys_next())) {
-			keyboard_press(keyboard_api, k);
+			pressed(keyboard_api, k);
 			host_settle();
 		}
 		char typed[512];
@@ -128,7 +226,10 @@ void app_main(void) {
 			// \r\n is one enter
 			if (typed[i] == '\n' && i && typed[i - 1] == '\r') continue;
 			if ((k = serial_key(typed[i])) == NULL) continue;
+			// typed on the serial line: the shell's, and the den's keys' too
 			keyboard_press(keyboard_api, k);
+			if (strlen(k) == 1) things_key(k);
+			else if (strcmp(k, "backspace") == 0) things_key("del");
 			host_settle();
 			if (typed[i] == '\r' || typed[i] == '\n') print();
 		}
@@ -139,9 +240,11 @@ void app_main(void) {
 			size_t m = ls_next(line, &out);
 			// only while a peer is heard: the line also carries the log, and nobody needs hellos
 			if (m && ls_up(line)) usb_serial_jtag_write_bytes(out, m, portMAX_DELAY);
-			room_mirror(room_api);
+			net_turn(esp_timer_get_time() / 1000);
+			if (room_api) room_mirror(room_api);
 			host_settle();
 		}
+		den_tick(esp_timer_get_time() / 1000);
 		vTaskDelay(pdMS_TO_TICKS(10));
 	}
 }

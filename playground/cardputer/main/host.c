@@ -1,5 +1,7 @@
-// the host (host.h), as ermine/api/c/api_harness.c's world: places at the root "R" asked
-// [processes("R"), children], a host scope, a "programs" scope under it, a scope a process
+// the host (host.h), as ermine/api/c/api_harness.c's world: places at the root "root" asked
+// [processes("root"), away("root"), children] (dens_test.ts' world: other dens' things mirrored in),
+// a host scope, a "programs" scope under it, a scope a process. any mark that makes something due
+// asks for a pulse, soon (the page's soon())
 #include "host.h"
 
 #include <stdio.h>
@@ -9,6 +11,7 @@
 #include "ermine/processes/c/processes.h"
 #include "ermine/processes/c/scopes.h"
 #include "ermine/sites/c/sites.h"
+#include "ermine/dens/c/away.h"
 
 static struct {
 	sc_scheduler *s;
@@ -17,11 +20,12 @@ static struct {
 	pl *places;
 	sn *scopes;
 	st_sites *sites;
-	pr_processes rows;
-	const pl_contributor *walk[2];
+	pr_processes rows, away;
+	const pl_contributor *walk[3];
+	int pulsing;
 	sc_scope *host, *above;
 	sc_pair host_info, above_info;
-	api_apis *apis;
+	api_context *apis;
 	struct {
 		void (*f)(void *);
 		void *data;
@@ -47,9 +51,32 @@ void host_settle(void) {
 	w.qn = w.qhead = 0;
 }
 
+static void pulse_now(void *data) {
+	(void)data;
+	w.pulsing = 0;
+	sc_pulse(w.s);
+	free(sc_escaped(w.s));
+}
+
+void host_pulse_soon(void) {
+	if (w.pulsing) return;
+	w.pulsing = 1;
+	schedule(NULL, pulse_now, NULL);
+}
+
+static void marked(const void *const *keys, size_t nkeys, sc_run *run, sc_computer *const *due, size_t ndue,
+	uint64_t tick, void *data) {
+	(void)keys, (void)nkeys, (void)run, (void)due, (void)tick, (void)data;
+	if (ndue > 0) host_pulse_soon();
+}
+
 static void commit(void *ctx, const pl_changed *changed) {
 	(void)ctx;
 	pl_commit(w.places, changed);
+}
+
+host_world host_get(void) {
+	return (host_world){w.s, w.table, w.places, w.scopes, w.sites, w.host, schedule};
 }
 
 void host_init(void) {
@@ -57,23 +84,27 @@ void host_init(void) {
 	w.places = pl_new();
 	w.table = tb_make(pl_event, w.places);
 	w.paths = pt_new();
-	pr_processes_init(&w.rows, tb_string("R"));
-	w.walk[0] = &w.rows.contributor, w.walk[1] = &pl_children;
-	pl_connect(w.places, &(pl_setup){.root = tb_string("R"), .table = w.table, .paths = w.paths,
-		.scheduler = w.s, .contributors = w.walk, .ncontributors = 2});
+	pr_processes_init(&w.rows, tb_string(HOST_ROOT));
+	dn_away_init(&w.away, tb_string(HOST_ROOT));
+	w.walk[0] = &w.rows.contributor, w.walk[1] = &w.away.contributor, w.walk[2] = &pl_children;
+	pl_connect(w.places, &(pl_setup){.root = tb_string(HOST_ROOT), .table = w.table, .paths = w.paths,
+		.scheduler = w.s, .contributors = w.walk, .ncontributors = 3});
 	sc_on_tracking_end(w.s, pl_forget, w.places);
+	sc_on_mark(w.s, marked, NULL);
 	w.scopes = sn_new(w.s, w.table);
 	w.sites = st_new(w.s);
 	w.host_info = (sc_pair){"actor", op_str("cardputer")};
 	w.host = st_create_root_scope(w.sites, &w.host_info, 1);
 	w.above_info = (sc_pair){"role", op_str("programs")};
 	w.above = st_create_scope(w.sites, &w.above_info, 1, w.host);
-	w.apis = api_apis_new(&(api_setup){.scheduler = w.s,
+	w.apis = api_context_new(&(api_setup){.scheduler = w.s,
 		.table = w.table,
 		.places = w.places,
 		.commit = commit,
 		.schedule = schedule,
-		.sites = w.sites});
+		.sites = w.sites,
+		// no run records: the heap is for the den, WiFi and TLS (none of this device reads them)
+		.no_runs = 1});
 }
 
 typedef struct {
@@ -97,7 +128,7 @@ static void add_row(void *data) {
 	}
 	pl_changed changed = {0};
 	nd_entry *node = NULL;
-	r->code = pr_add(w.places, w.table, tb_string("R"), r->at, r->nat, tb_string(r->id), h, &changed, &node);
+	r->code = pr_add(w.places, w.table, tb_string(HOST_ROOT), r->at, r->nat, tb_string(r->id), h, &changed, &node);
 	if (r->code) {
 		pl_made_free(made);
 		return;
@@ -139,7 +170,7 @@ api *host_start(const char *name, host_program program) {
 	row r = {p->at, p->nat, id, 0};
 	sc_run_with_scope(scope, add_row, &r);
 	if (r.code) fprintf(stderr, "host: %s not placed: %s\n", name, pl_code_name(r.code));
-	api *a = api_new(w.apis, &(api_context){.process = *p});
+	api *a = api_new(w.apis, &(api_starting){.process = *p});
 	running x = {a, program, 0};
 	sc_run_with_scope(scope, run, &x);
 	if (x.code) fprintf(stderr, "host: %s: %s %s\n", name, api_code_name(x.code), api_why(a));
