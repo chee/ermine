@@ -104,23 +104,36 @@ static bool fitsFloat(double d) {
 
 // encoding --------------------------------------------------------------------
 
-typedef struct Out {
-	unsigned char *out;
-	size_t capacity, length;
-} Out;
+/** room for `more` bytes past length, when the buffer grows */
+static void grow(CborOut *o, size_t more) {
+	if (!o->grows || o->length + more <= o->capacity) return;
+	size_t c = o->capacity ? o->capacity : 64;
+	while (c < o->length + more) c *= 2;
+	unsigned char *data = realloc(o->data, c);
+	if (!data) abort();
+	o->data = data;
+	o->capacity = c;
+}
 
-static void putByte(Out *o, unsigned byte) {
-	if (o->length < o->capacity) o->out[o->length] = (unsigned char)byte;
+static void putByte(CborOut *o, unsigned byte) {
+	grow(o, 1);
+	if (o->length < o->capacity) o->data[o->length] = (unsigned char)byte;
 	o->length++;
 }
 
+static void putMany(CborOut *o, const unsigned char *bytes, size_t n) {
+	if (!n) return;
+	grow(o, n);
+	if (o->length < o->capacity) memcpy(o->data + o->length, bytes, o->capacity - o->length < n ? o->capacity - o->length : n);
+	o->length += n;
+}
+
 /** `count` bytes of a number, most significant first */
-static void putBig(Out *o, uint64_t number, int count) {
+static void putBig(CborOut *o, uint64_t number, int count) {
 	for (int i = count - 1; i >= 0; i--) putByte(o, (unsigned)(number >> (8 * i)) & 0xff);
 }
 
-/** a head in its shortest form */
-static void putHead(Out *o, unsigned major, uint64_t argument) {
+void cborPutHead(CborOut *o, unsigned major, uint64_t argument) {
 	major <<= 5;
 	if (argument < 24) putByte(o, major | (unsigned)argument);
 	else if (argument <= 0xff) putByte(o, major | 24), putBig(o, argument, 1);
@@ -129,8 +142,25 @@ static void putHead(Out *o, unsigned major, uint64_t argument) {
 	else putByte(o, major | 27), putBig(o, argument, 8);
 }
 
+void cborPutNull(CborOut *o) {
+	putByte(o, 0xf6);
+}
+
+void cborPutBoolean(CborOut *o, bool value) {
+	putByte(o, value ? 0xf5 : 0xf4);
+}
+
+void cborPutStand(CborOut *o) {
+	cborPutHead(o, 6, STAND);
+}
+
+void cborPutBytes(CborOut *o, const void *data, size_t length) {
+	cborPutHead(o, 2, length);
+	putMany(o, data, length);
+}
+
 /** a whole number: major type 0 or 1 in the shortest head, a bignum (tag 2 or 3 over its bytes) past 64 bits */
-static void putWhole(Out *o, bool negative, const unsigned char *m, size_t n) {
+static void putWhole(CborOut *o, bool negative, const unsigned char *m, size_t n) {
 	// a negative's argument is its magnitude less one: -1 - n
 	unsigned char less[129];
 	if (negative) {
@@ -143,24 +173,16 @@ static void putWhole(Out *o, bool negative, const unsigned char *m, size_t n) {
 	}
 	uint64_t argument;
 	if (whole_u64(m, n, &argument)) {
-		putHead(o, negative ? 1 : 0, argument);
+		cborPutHead(o, negative ? 1 : 0, argument);
 		return;
 	}
 	putByte(o, negative ? 0xc3 : 0xc2);
-	putHead(o, 2, n);
-	for (size_t i = 0; i < n; i++) putByte(o, m[i]);
+	cborPutBytes(o, m, n);
 }
 
-static void putNumber(Out *o, const Json *value) {
+/** a number that is no whole one: the shortest float that holds it exactly, the one NaN */
+static void putFloat(CborOut *o, double d) {
 	uint16_t half;
-	double d = value->number;
-	bool negative;
-	unsigned char m[128];
-	size_t n;
-	if (jsonMagnitude(value, &negative, m, &n)) {
-		putWhole(o, negative, m, n);
-		return;
-	}
 	if (isnan(d)) {
 		putByte(o, 0xf9), putBig(o, NAN16, 2);
 	} else if (halfOf(d, &half)) {
@@ -177,6 +199,31 @@ static void putNumber(Out *o, const Json *value) {
 	}
 }
 
+static void putNumber(CborOut *o, const Json *value) {
+	bool negative;
+	unsigned char m[128];
+	size_t n;
+	if (jsonMagnitude(value, &negative, m, &n)) putWhole(o, negative, m, n);
+	else putFloat(o, value->number);
+}
+
+void cborPutNumber(CborOut *o, double value) {
+	Json number = { .type = JSON_NUMBER, .number = value == 0 ? 0 : value };
+	putNumber(o, &number);
+}
+
+void cborPutInteger(CborOut *o, int64_t value) {
+	if (value < 0) cborPutHead(o, 1, (uint64_t)(-(value + 1)));
+	else cborPutHead(o, 0, (uint64_t)value);
+}
+
+void cborPutWhole(CborOut *o, bool negative, const unsigned char *magnitude, size_t length) {
+	while (length && !*magnitude) magnitude++, length--;
+	// as jsonWhole holds it: a double when one holds it exactly, past 128 bytes the double nearest
+	if (whole_exact(magnitude, length) || length > 128) cborPutNumber(o, whole_near(negative, magnitude, length));
+	else putWhole(o, negative, magnitude, length);
+}
+
 bool cborText(const char *text, size_t length) {
 	return isUtf8((const unsigned char *)text, length, true);
 }
@@ -189,11 +236,15 @@ static size_t plainLength(const char *text, size_t length) {
 	return plain;
 }
 
-/** a string or key as a text string; false when it is not UTF-8 */
-static bool putText(Out *o, const char *text, size_t length) {
+bool cborPutText(CborOut *o, const char *text, size_t length) {
 	const unsigned char *s = (const unsigned char *)text;
 	if (!isUtf8(s, length, true)) return false;
-	putHead(o, 3, plainLength(text, length));
+	size_t plain = plainLength(text, length);
+	cborPutHead(o, 3, plain);
+	if (plain == length) {
+		putMany(o, s, length);
+		return true;
+	}
 	for (size_t i = 0; i < length; i++) {
 		if (s[i] == 0xc0 && i + 1 < length && s[i + 1] == 0x80) {
 			putByte(o, 0);
@@ -214,17 +265,20 @@ static unsigned plainByte(const unsigned char *s, size_t length, size_t *i) {
 	return s[(*i)++];
 }
 
-/** two keys in the order of their encodings: the shorter first, then byte by byte */
-static int keyCompare(const JsonMember *a, const JsonMember *b) {
-	size_t al = plainLength(a->key, a->keyLength), bl = plainLength(b->key, b->keyLength);
+int cborKeyCompare(const char *a, size_t aLength, const char *b, size_t bLength) {
+	size_t al = plainLength(a, aLength), bl = plainLength(b, bLength);
 	if (al != bl) return al < bl ? -1 : 1;
-	const unsigned char *x = (const unsigned char *)a->key, *y = (const unsigned char *)b->key;
+	const unsigned char *x = (const unsigned char *)a, *y = (const unsigned char *)b;
 	size_t i = 0, j = 0;
-	while (i < a->keyLength && j < b->keyLength) {
-		unsigned p = plainByte(x, a->keyLength, &i), q = plainByte(y, b->keyLength, &j);
+	while (i < aLength && j < bLength) {
+		unsigned p = plainByte(x, aLength, &i), q = plainByte(y, bLength, &j);
 		if (p != q) return p < q ? -1 : 1;
 	}
 	return 0;
+}
+
+static int keyCompare(const JsonMember *a, const JsonMember *b) {
+	return cborKeyCompare(a->key, a->keyLength, b->key, b->keyLength);
 }
 
 /** the member whose key comes next after member `last` (-1: the first), or -1 */
@@ -276,14 +330,12 @@ static uint64_t elementBits(JsonKind kind, const unsigned char *at) {
 	}
 }
 
-static void putTyped(Out *o, const Json *value) {
-	JsonKind kind = value->typed.kind;
+void cborPutTyped(CborOut *o, JsonKind kind, const void *data, size_t count) {
 	size_t size = jsonKindSize(kind);
-	const unsigned char *data = value->typed.data;
-	putHead(o, 6, kindTags[kind]);
-	putHead(o, 2, (uint64_t)value->typed.count * size);
-	for (size_t i = 0; i < value->typed.count; i++) {
-		uint64_t bits = elementBits(kind, data + i * size);
+	cborPutHead(o, 6, kindTags[kind]);
+	cborPutHead(o, 2, (uint64_t)count * size);
+	for (size_t i = 0; i < count; i++) {
+		uint64_t bits = elementBits(kind, (const unsigned char *)data + i * size);
 		for (size_t k = 0; k < size; k++) putByte(o, (unsigned)(bits >> (8 * k)) & 0xff); // little-endian
 	}
 }
@@ -318,31 +370,27 @@ static const JsonMember **sortedMembers(const Json *object, bool *twice) {
 }
 
 // No recursion: the lists and maps being written are kept on a stack of their own.
-bool cborEncode(const Json *value, unsigned char *out, size_t capacity, size_t *length, const char **why) {
-	Out o = { out, capacity, 0 };
+bool cborPut(CborOut *o, const Json *value, const char **why) {
 	Writing *stack = NULL;
 	int depth = 0, room = 0;
 	const char *fault = NULL;
 	if (!value) fault = "no value";
 	while (value && !fault) {
 		switch (value->type) {
-			case JSON_NULL: putByte(&o, 0xf6); break;
-			case JSON_BOOLEAN: putByte(&o, value->boolean ? 0xf5 : 0xf4); break;
-			case JSON_NUMBER: putNumber(&o, value); break;
+			case JSON_NULL: cborPutNull(o); break;
+			case JSON_BOOLEAN: cborPutBoolean(o, value->boolean); break;
+			case JSON_NUMBER: putNumber(o, value); break;
 			case JSON_STRING:
-				if (!putText(&o, value->string, value->stringLength)) fault = "a string that is not UTF-8";
+				if (!cborPutText(o, value->string, value->stringLength)) fault = "a string that is not UTF-8";
 				break;
-			case JSON_BYTES:
-				putHead(&o, 2, value->bytes.length);
-				for (size_t i = 0; i < value->bytes.length; i++) putByte(&o, value->bytes.data[i]);
-				break;
-			case JSON_TYPED: putTyped(&o, value); break;
+			case JSON_BYTES: cborPutBytes(o, value->bytes.data, value->bytes.length); break;
+			case JSON_TYPED: cborPutTyped(o, value->typed.kind, value->typed.data, value->typed.count); break;
 			case JSON_STAND:
 				if (depth >= CBOR_DEPTH) {
 					fault = "a value nested deeper than " CBOR_DEPTH_TEXT;
 					break;
 				}
-				putHead(&o, 6, STAND);
+				cborPutStand(o);
 				stack = growArray(stack, depth, &room, sizeof *stack);
 				stack[depth++] = (Writing){ value, 0, -1, NULL };
 				break;
@@ -353,7 +401,7 @@ bool cborEncode(const Json *value, unsigned char *out, size_t capacity, size_t *
 					break;
 				}
 				bool list = value->type == JSON_ARRAY;
-				putHead(&o, list ? 4 : 5, (uint64_t)(list ? value->array.count : value->object.count));
+				cborPutHead(o, list ? 4 : 5, (uint64_t)(list ? value->array.count : value->object.count));
 				stack = growArray(stack, depth, &room, sizeof *stack);
 				stack[depth++] = (Writing){ value, 0, -1, NULL };
 				if (!list) {
@@ -386,7 +434,7 @@ bool cborEncode(const Json *value, unsigned char *out, size_t capacity, size_t *
 					break;
 				}
 				const JsonMember *member = &container->object.members[at];
-				if (!putText(&o, member->key, member->keyLength)) {
+				if (!cborPutText(o, member->key, member->keyLength)) {
 					fault = "a key that is not UTF-8";
 					break;
 				}
@@ -398,9 +446,15 @@ bool cborEncode(const Json *value, unsigned char *out, size_t capacity, size_t *
 	}
 	for (int i = 0; i < depth; i++) free(stack[i].order);
 	free(stack);
-	*length = o.length;
 	if (fault && why) *why = fault;
 	return !fault;
+}
+
+bool cborEncode(const Json *value, unsigned char *out, size_t capacity, size_t *length, const char **why) {
+	CborOut o = { out, capacity, 0, false };
+	bool ok = cborPut(&o, value, why);
+	*length = o.length;
+	return ok;
 }
 
 // decoding --------------------------------------------------------------------

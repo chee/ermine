@@ -16,6 +16,20 @@
 #include <string.h>
 #include <unistd.h>
 
+// LSWIRE=<file>: every ls_next's bytes and every blob saved, appended to it (two builds' runs compared byte for byte)
+static FILE *wire_log;
+static size_t logged_next(struct ls_link *l, const uint8_t **out) {
+	size_t n = ls_next(l, out);
+	if (wire_log != NULL && n) fwrite(*out, 1, n, wire_log);
+	return n;
+}
+#define ls_next logged_next
+static int (*file_save)(void *context, const char *name, const uint8_t *data, size_t length);
+static int logged_save(void *context, const char *name, const uint8_t *data, size_t length) {
+	if (wire_log != NULL) fputs(name, wire_log), fwrite(data, 1, length, wire_log);
+	return file_save(context, name, data, length);
+}
+
 static int failed, checks;
 #define CHECK(cond) \
 	do { \
@@ -62,6 +76,7 @@ static side open_side(const char *tag) {
 	side s = {0};
 	snprintf(s.dir, sizeof s.dir, "build/state-%s-%d", tag, (int)getpid());
 	s.store = ls_store_file(s.dir);
+	file_save = s.store.save, s.store.save = logged_save;
 	ls_options o = {.store = s.store, .random = random_bytes};
 	if (getenv("LSLOG")) o.log = logline, o.log_context = (void *)strdup(tag);
 	s.d = ls_open(&o);
@@ -1709,21 +1724,31 @@ static void t_memory(void) {
 	ls_set(ra, P1, yes());
 	pump(&a, &b, 100);
 	size_t m0 = 0, m1 = 0;
+	// per ls_hold and ls_put: the calls that took memory, and the most bytes held over those before it
+	size_t holds = 0, puts = 0, hold_peak = 0, put_peak = 0, at;
 	for (int i = 0; i < 10000; i++) {
 		if (i == 500) m0 = heap();
 		op_value *v = pig_make_held((i % 100) / 100.0, 0.5, "otter", "#d1495b", "abcd");
+		at = lsc_calls, lsc_peak = lsc_bytes, m1 = lsc_bytes;
 		ls_hold(pa, v);
+		holds += lsc_calls - at;
+		if (lsc_peak - m1 > hold_peak) hold_peak = lsc_peak - m1;
 		op_free(v);
 		// every few moves a drop: a stored commit, and everything pumped
 		if (i % 5 == 4) {
 			v = pig((i % 100) / 100.0, 0.5, i);
+			at = lsc_calls, lsc_peak = lsc_bytes, m1 = lsc_bytes;
 			ls_put(pa, v);
+			puts += lsc_calls - at;
+			if (lsc_peak - m1 > put_peak) put_peak = lsc_peak - m1;
 			op_free(v);
 		}
 		pump(&a, &b, 10);
 	}
 	m1 = heap();
 	printf("  heap after 500 moves %zu, after 10000 %zu (%+ld)\n", m0, m1, (long)m1 - (long)m0);
+	printf("  a call: ls_hold %.1f allocations, at most %zu B more held; ls_put (a drop, sent) %.1f, %zu B\n",
+		holds / 10000.0, hold_peak, puts / 2000.0, put_peak);
 	CHECK(m1 <= m0 + 4096);
 	CHECK(ls_commits(pa) == 1 && ls_commits(pb) == 1);
 	// the device's heap at rest and per node
@@ -2008,6 +2033,7 @@ static const struct {
 // no arguments: every test; else the ones named
 int main(int argc, char **argv) {
 	if (system("mkdir -p build")) {}
+	if (getenv("LSWIRE")) wire_log = fopen(getenv("LSWIRE"), "wb");
 	for (size_t i = 0; i < sizeof TESTS / sizeof *TESTS; i++) {
 		int wanted = argc == 1;
 		for (int k = 1; k < argc; k++) wanted |= strcmp(argv[k], TESTS[i].name) == 0;

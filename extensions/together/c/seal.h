@@ -108,4 +108,29 @@ void sl_free(sl_unsealed *u);
 // the id a sealed commit is stored under: the BLAKE3 hash of its sealed bytes
 void sl_stored(const uint8_t *sealed, size_t length, uint8_t stored[32]);
 
+// a message (a channel's bytes on a topic, littlesync's say; seal.ts's sealMessage), sealed so its sender
+// is the key that signed it, not the connection it came on. The sealed message is the canonical map
+// {bytes, signer, signature}, the signer's multikey in it. What is signed is "ermine/v0/message", the
+// BLAKE3 of the bytes, the signature's header, then the topic's bytes (the rest): a seal is good on its
+// own topic only. A topic is 1 to SL_TOPIC bytes
+#define SL_TOPIC 256
+// the sealed message's bytes, malloc'd into *out (free it). SL_SHAPE: a topic that is not one, or the
+// signature sign gave no bytes, or too many
+sl_code sl_seal_message(const char *topic, const uint8_t *bytes, size_t length, const sl_signer *signer, uint8_t **out,
+	size_t *out_length);
+// a message opened: its signer (a multikey) and its bytes (malloc'd: sl_message_free)
+typedef struct {
+	uint8_t signer[CM_SIGNER_MAX];
+	size_t signer_length;
+	uint8_t *bytes;
+	size_t length;
+	// on SL_SIGNATURE: why, a static string
+	const char *reason;
+} sl_message;
+// the message, checked for the topic. SL_SHAPE: not a map of exactly bytes, signer and signature (each
+// bytes), a signer not a multikey, a signature not the size its verifier says, a topic that is not one.
+// SL_SIGNATURE as sl_unseal. sl_message_free it on SL_OK
+sl_code sl_open_message(const uint8_t *sealed, size_t length, const char *topic, sl_message *out, const sl_verifiers *more);
+void sl_message_free(sl_message *m);
+
 #endif

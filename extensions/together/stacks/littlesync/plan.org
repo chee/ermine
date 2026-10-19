@@ -59,6 +59,17 @@
   (the together device's channel: any string, hashed to Subduction's topic), says both ways.
   littlesync.c 24275 -> 26555 B text on the S3
 
+- sealed messages (2026-10-19): a message is sealed by who said it, so its sender is the key that
+  signed it, not the connection it came on (a gateway published for its devices under keys it made,
+  so away named a cardputer's den wrongly and dropped its answers). say {topic, bytes} (no who): bytes
+  are seal.ts's sealMessage, {bytes, signer, signature}; signed "ermine/v0/message", BLAKE3 of the
+  bytes, the varsig header, the topic. A seal adds at most LS_SEALED (160; Ed25519: 136-139) past
+  ls_options.message: a 3.3 KB den row still fits a 4.5 KB frame (the most, 4096 and a 256-byte topic,
+  is about 4540). Unsealed or badly sealed: dropped and not relayed (chee). The row is sealed once a
+  change, resent as is. together's channel (TS and C) the same; seal conformance 13-14, C and TS byte
+  for byte. Gateway: relays the sealed bytes both ways, up through its own device; the per-device
+  peers (keys made per device) gone, and options.peer, stats.messages.peers with them
+
 * open
 - as a server (galaxy, over FFI): no follow-on-mention (a message for a node not followed is dropped);
   heads of every node to every link (no per-link interest); acks before the store has the commit;
@@ -67,8 +78,8 @@
   is pushed again to a link after a restart or a hello (acks are not stored); the tick's round
   walks every commit of every node per link; settle/covers/ls_values are linear or quadratic in writes
 - presence: a numbered patch message ({patches, n}) is relayed but not taken (the next renew is
-  whole); a device's row (any message) reaches the room under a key the gateway made, not its own
-  (sender identity: open); ls_close sends
+  whole); a sealed message can be sent again by anyone (a row heard again: its signer did say it,
+  once; no count or time in the seal); ls_close sends
   no gone (the host clears first); the Cardputer's /pigs/room/pointers built, not run on the device
 - HTTP: the Cardputer over WiFi, http and https, untested on the device (TLS heap, the handshake's
   stack); a session id new each start (an old one idles out in 30 s); http:// to Railway is a 301,

@@ -123,7 +123,7 @@ struct ls_node {
 
 // a topic this device hears: told to options.heard (listen), its presence rows kept (room: a followed
 // node's id, or ls_presence_on), or both. rows: n_rows of them, in no order. row: my presence row,
-// presence.ts's message, sent as it is
+// presence.ts's message, sealed (seal_said), sent as it is
 typedef struct {
 	char *name;
 	bool listen, room;
@@ -220,14 +220,9 @@ static void signed_message(const uint8_t doc[32], const uint8_t name[CM_NAME], u
 	memcpy(m + 56, name, CM_NAME);
 }
 
-static uint8_t *encode(const Json *j, size_t *length) {
-	size_t n = 0;
-	if (!cborEncode(j, NULL, 0, &n, NULL)) return NULL;
-	uint8_t *b = allocate(n ? n : 1);
-	cborEncode(j, b, n, &n, NULL);
-	*length = n;
-	return b;
-}
+// writing CBOR (cbor.h's writer): a buffer that grows from about `size` bytes; a key of a map
+static CborOut out_of(size_t size) { return (CborOut){allocate(size), size, 0, true}; }
+static void key(CborOut *o, const char *k) { cborPutText(o, k, strlen(k)); }
 
 // the sealed commit (seal.h's bytes), malloc'd
 static uint8_t *seal(ls_dev *d, const uint8_t *commit_bytes, size_t length, const uint8_t doc[32], size_t *out) {
@@ -236,12 +231,12 @@ static uint8_t *seal(ls_dev *d, const uint8_t *commit_bytes, size_t length, cons
 	signed_message(doc, name, m);
 	memcpy(signature, HEADER, 8);
 	ermEd25519Sign(d->seed, m, SIGNED, signature + 8);
-	Json *s = jsonObject();
-	jsonAdd(s, "commit", jsonBytes(commit_bytes, length));
-	jsonAdd(s, "signature", jsonBytes(signature, 72));
-	uint8_t *bytes = encode(s, out);
-	jsonFree(s);
-	return bytes;
+	CborOut o = out_of(length + 96);
+	cborPutHead(&o, 5, 2);
+	key(&o, "commit"), cborPutBytes(&o, commit_bytes, length);
+	key(&o, "signature"), cborPutBytes(&o, signature, 72);
+	*out = o.length;
+	return o.data;
 }
 
 typedef struct {
@@ -261,6 +256,14 @@ static bool peek_name(const uint8_t *sealed, size_t length, uint8_t name[CM_NAME
 	return ok;
 }
 
+// an Ed25519 key (its 32 bytes) ready to verify with, kept among the last four; NULL: not a key
+static const ermEd25519Key *key_of(ls_dev *d, const uint8_t pub[32]) {
+	for (unsigned i = 0; i < 4; i++)
+		if (d->keys[i].good && memcmp(d->keys[i].pub, pub, 32) == 0) return &d->keys[i];
+	ermEd25519Key *k = &d->keys[d->keys_next++ % 4];
+	return ermEd25519KeyOf(k, pub) ? k : NULL;
+}
+
 // the seal's commit, and with verify its signature for the document. 0: bad shape, 1: bad signature, 2: good
 static int open_seal(ls_dev *d, const uint8_t *sealed, size_t length, const uint8_t doc[32], bool verify, opened *o) {
 	memset(o, 0, sizeof *o);
@@ -276,16 +279,10 @@ static int open_seal(ls_dev *d, const uint8_t *sealed, size_t length, const uint
 		if (s->bytes.length != 72 || memcmp(s->bytes.data, HEADER, 8) != 0 || o->c.signer_length != LS_KEY_LEN ||
 			key[0] != 0xed || key[1] != 0x01) result = 1;
 		else {
-			ermEd25519Key *k = NULL;
-			for (unsigned i = 0; i < 4 && k == NULL; i++)
-				if (d->keys[i].good && memcmp(d->keys[i].pub, key + 2, 32) == 0) k = &d->keys[i];
-			if (k == NULL) {
-				k = &d->keys[d->keys_next++ % 4];
-				if (!ermEd25519KeyOf(k, key + 2)) result = 1;
-			}
+			const ermEd25519Key *k = key_of(d, key + 2);
 			uint8_t m[SIGNED];
 			signed_message(doc, o->name, m);
-			if (result == 2 && !ermEd25519VerifyKey(k, m, SIGNED, s->bytes.data + 8)) result = 1;
+			if (k == NULL || !ermEd25519VerifyKey(k, m, SIGNED, s->bytes.data + 8)) result = 1;
 		}
 	}
 	jsonFree(x);
@@ -293,23 +290,63 @@ static int open_seal(ls_dev *d, const uint8_t *sealed, size_t length, const uint
 	return result;
 }
 
+// a sealed message (seal.ts's sealMessage): {bytes, signer, signature}. What is signed:
+// "ermine/v0/message", the BLAKE3 of the bytes, the signature's header, then the topic (the rest)
+#define SAID_MAX (17 + 32 + 8 + LS_TOPIC_MAX)
+static size_t said(const char *topic, const uint8_t *bytes, size_t length, uint8_t m[SAID_MAX]) {
+	size_t t = strlen(topic);
+	memcpy(m, "ermine/v0/message", 17);
+	cm_digest(bytes, length, m + 17);
+	memcpy(m + 49, HEADER, 8);
+	memcpy(m + 57, topic, t);
+	return 57 + t;
+}
+
+// the bytes on the topic (a topic_ok one), sealed by this device: malloc'd
+static uint8_t *seal_said(ls_dev *d, const char *topic, const uint8_t *bytes, size_t length, size_t *out) {
+	uint8_t m[SAID_MAX], signature[72];
+	size_t n = said(topic, bytes, length, m);
+	memcpy(signature, HEADER, 8);
+	ermEd25519Sign(d->seed, m, n, signature + 8);
+	CborOut o = out_of(length + LS_SEALED);
+	cborPutHead(&o, 5, 3);
+	key(&o, "bytes"), cborPutBytes(&o, bytes, length);
+	key(&o, "signer"), cborPutBytes(&o, d->key, LS_KEY_LEN);
+	key(&o, "signature"), cborPutBytes(&o, signature, 72);
+	*out = o.length;
+	return o.data;
+}
+
+// a sealed message opened for the topic (a topic_ok one): its signer (an Ed25519 multikey) and bytes,
+// both in *x (jsonFree it, whatever the answer). false: not a sealed message, or its seal not good
+static bool open_said(ls_dev *d, const uint8_t *sealed, size_t length, const char *topic, Json **x, const Json **signer,
+	const Json **bytes) {
+	*x = cborDecode(sealed, length, NULL, NULL);
+	if (*x == NULL || (*x)->type != JSON_OBJECT || (*x)->object.count != 3) return false;
+	const Json *b = jsonGet(*x, "bytes"), *k = jsonGet(*x, "signer"), *s = jsonGet(*x, "signature");
+	if (b == NULL || b->type != JSON_BYTES || k == NULL || k->type != JSON_BYTES || k->bytes.length != LS_KEY_LEN ||
+		k->bytes.data[0] != 0xed || k->bytes.data[1] != 0x01 || s == NULL || s->type != JSON_BYTES ||
+		s->bytes.length != 72 || memcmp(s->bytes.data, HEADER, 8) != 0)
+		return false;
+	const ermEd25519Key *e = key_of(d, k->bytes.data + 2);
+	uint8_t m[SAID_MAX];
+	size_t n = said(topic, b->bytes.data, b->bytes.length, m);
+	if (e == NULL || !ermEd25519VerifyKey(e, m, n, s->bytes.data + 8)) return false;
+	*signer = k, *bytes = b;
+	return true;
+}
+
 // ---- the wire out
 
-// false: dropped (the out queue is full; an empty one takes any message)
-static bool send_message(struct ls_link *l, Json *m) {
-	size_t n;
-	uint8_t *b = encode(m, &n);
-	jsonFree(m);
-	if (b == NULL) return false;
-	if (l->out_used > 0 && l->out_used + n * 2 + 16 > (l->dev->o.max_out ? l->dev->o.max_out : OUT_MAX)) {
-		l->traffic.dropped_out++;
-		free(b);
-		return false;
-	}
-	ls_frame(b, n, &l->out, &l->out_used, &l->out_cap);
-	l->traffic.frames_out++;
-	free(b);
-	return true;
+// the message written (message, then its pairs) sent, and let go of. false: dropped (the out queue is
+// full; an empty one takes any message)
+static bool send_message(struct ls_link *l, CborOut *m) {
+	size_t n = m->length;
+	bool room = l->out_used == 0 || l->out_used + n * 2 + 16 <= (l->dev->o.max_out ? l->dev->o.max_out : OUT_MAX);
+	if (room) ls_frame(m->data, n, &l->out, &l->out_used, &l->out_cap), l->traffic.frames_out++;
+	else l->traffic.dropped_out++;
+	free(m->data);
+	return room;
 }
 
 // a commit's marks: the peer on slot s has it (acked), it went on slot s in the slot's round (sent)
@@ -328,27 +365,28 @@ static bool others_up(const ls_dev *d, const struct ls_link *except) {
 	return false;
 }
 
-static Json *message(const char *t) {
-	Json *m = jsonObject();
-	jsonAdd(m, "t", jsonString(t));
+// a message: a map of t and `pairs` more, each key then its value, the keys in canonical order (cbor.h:
+// the shorter first, then byte by byte; "t" first). size: about how many bytes it will be
+static CborOut message(const char *t, size_t pairs, size_t size) {
+	CborOut m = out_of(size);
+	cborPutHead(&m, 5, pairs + 1);
+	key(&m, "t"), key(&m, t);
 	return m;
 }
 
 static void send_hello(struct ls_link *l, bool re) {
 	ls_dev *d = l->dev;
-	Json *m = message("hello");
-	jsonAdd(m, "key", jsonBytes(d->key, LS_KEY_LEN));
-	jsonAdd(m, "stack", jsonString(LS_STACK));
-	if (re) jsonAdd(m, "re", jsonBoolean(true));
+	CborOut m = message("hello", 2 + re, 64);
+	if (re) key(&m, "re"), cborPutBoolean(&m, true);
+	key(&m, "key"), cborPutBytes(&m, d->key, LS_KEY_LEN);
+	key(&m, "stack"), key(&m, LS_STACK);
 	l->hello_sent = d->now;
 	say(d, "tx hello%s", re ? " re" : "");
-	send_message(l, m);
+	send_message(l, &m);
 }
 
 static void send_heads(ls_node *n, struct ls_link *l, bool re) {
 	ls_dev *d = n->dev;
-	Json *m = message("heads"), *list = jsonArray();
-	jsonAdd(m, "node", jsonBytes(n->doc, 32));
 	// the commits making the node (not the passing ones: those are sent to the links that lack them);
 	// the highest lamports, when there are too many
 	size_t held = 0;
@@ -368,22 +406,26 @@ static void send_heads(ls_node *n, struct ls_link *l, bool re) {
 	}
 	free(lam);
 	size_t put = 0;
-	for (size_t i = 0; i < n->n_commits && put < count; i++)
-		if (!n->commits[i]->passing && n->commits[i]->lamport >= floor_) jsonPush(list, jsonBytes(n->commits[i]->name, CM_NAME)), put++;
-	jsonAdd(m, "heads", list);
-	if (re) jsonAdd(m, "re", jsonBoolean(true));
+	for (size_t i = 0; i < n->n_commits && put < count; i++) put += !n->commits[i]->passing && n->commits[i]->lamport >= floor_;
+	CborOut m = message("heads", 2 + re, 64 + put * (CM_NAME + 2));
+	if (re) key(&m, "re"), cborPutBoolean(&m, true);
+	key(&m, "node"), cborPutBytes(&m, n->doc, 32);
+	key(&m, "heads"), cborPutHead(&m, 4, put);
+	for (size_t i = 0, k = 0; i < n->n_commits && k < put; i++)
+		if (!n->commits[i]->passing && n->commits[i]->lamport >= floor_) cborPutBytes(&m, n->commits[i]->name, CM_NAME), k++;
 	say(d, "tx heads %.8s %zu%s", short_id(n), put, re ? " re" : "");
-	send_message(l, m);
+	send_message(l, &m);
 }
 
 static void send_names(ls_node *n, struct ls_link *l, const char *t, const uint8_t (*names)[CM_NAME], size_t count) {
 	for (size_t at = 0; at < count; at += LS_MAX_HEADS) {
-		Json *m = message(t), *list = jsonArray();
-		jsonAdd(m, "node", jsonBytes(n->doc, 32));
-		for (size_t i = at; i < count && i < at + LS_MAX_HEADS; i++) jsonPush(list, jsonBytes(names[i], CM_NAME));
-		jsonAdd(m, "names", list);
-		say(n->dev, "tx %s %.8s %zu", t, short_id(n), count - at < LS_MAX_HEADS ? count - at : (size_t)LS_MAX_HEADS);
-		send_message(l, m);
+		size_t k = count - at < LS_MAX_HEADS ? count - at : (size_t)LS_MAX_HEADS;
+		CborOut m = message(t, 2, 64 + k * (CM_NAME + 2));
+		key(&m, "node"), cborPutBytes(&m, n->doc, 32);
+		key(&m, "names"), cborPutHead(&m, 4, k);
+		for (size_t i = at; i < at + k; i++) cborPutBytes(&m, names[i], CM_NAME);
+		say(n->dev, "tx %s %.8s %zu", t, short_id(n), k);
+		send_message(l, &m);
 	}
 }
 
@@ -399,23 +441,30 @@ static void send_commits(ls_node *n, struct ls_link *l, commit *const *given, si
 	commit **list = allocate((count + 1) * sizeof *list);
 	memcpy(list, given, count * sizeof *list);
 	if (count > 1) qsort(list, count, sizeof *list, lower);
+	// a message's seals, and whose each is (one read from the store is let go of once written)
+	uint8_t **seals = allocate((count + 1) * sizeof *seals);
+	commit **of = allocate((count + 1) * sizeof *of);
 	size_t at = 0;
 	while (at < count) {
-		Json *m = message("commits"), *seals = jsonArray();
-		jsonAdd(m, "node", jsonBytes(n->doc, 32));
 		size_t size = 0, k = 0, from = at;
 		while (at < count && (k == 0 || size + list[at]->length <= CHUNK)) {
 			uint8_t *b = seal_of(n, list[at]);
-			if (b != NULL) jsonPush(seals, jsonBytes(b, list[at]->length)), k++;
-			if (b != list[at]->sealed) free(b);
+			if (b != NULL) seals[k] = b, of[k++] = list[at];
 			size += list[at]->length + 4;
 			at++;
 		}
-		jsonAdd(m, "sealed", seals);
+		CborOut m = message("commits", 2, size + 64);
+		key(&m, "node"), cborPutBytes(&m, n->doc, 32);
+		key(&m, "sealed"), cborPutHead(&m, 4, k);
+		for (size_t i = 0; i < k; i++) {
+			cborPutBytes(&m, seals[i], of[i]->length);
+			if (seals[i] != of[i]->sealed) free(seals[i]);
+		}
 		say(d, "tx commits %.8s %zu", short_id(n), k);
-		if (send_message(l, m))
+		if (send_message(l, &m))
 			for (size_t i = from; i < at; i++) mark_sent(d, list[i], l->slot, true), list[i]->went = true;
 	}
+	free(seals), free(of);
 	free(list);
 }
 
@@ -428,7 +477,7 @@ static op_value *copy(const op_value *v, int depth) {
 	switch (v->type) {
 	case OP_NULL: return op_null();
 	case OP_BOOL: return op_bool(v->bool_);
-	case OP_NUM: return op_num(v->num);
+	case OP_NUM: return v->big ? op_whole(v->bigNegative, v->big, v->bigLength) : op_num(v->num);
 	case OP_STR: return op_str_n(v->str, v->bytes);
 	case OP_BYTES: return op_bytes(v->data, v->bytes);
 	case OP_TYPED: return op_typed(v->kind, v->data, op_length(v));
@@ -450,6 +499,16 @@ static op_value *copy(const op_value *v, int depth) {
 	}
 	}
 	return NULL;
+}
+
+// whether copy makes one
+static bool carried(const op_value *v, int depth) {
+	if (v == NULL) return false;
+	if (v->type != OP_MAP && v->type != OP_LIST && v->type != OP_STAND) return true;
+	if (depth > DEPTH || (v->type == OP_STAND && v->count == 0)) return false;
+	for (size_t i = 0; i < v->count; i++)
+		if (!carried(v->items[i], depth + 1)) return false;
+	return true;
 }
 
 // the value at keys (each ending in 0) inside v, through maps; NULL when there is none
@@ -1041,26 +1100,30 @@ static void kept_name(const ls_node *n, size_t k, char *out) { snprintf(out, 40 
 // what the store keeps for a node: {lamport, commits: [seal]} (keep: and kept, how many are off),
 // malloc'd
 static uint8_t *node_blob(const ls_node *n, size_t *len) {
-	Json *m = jsonObject(), *list = jsonArray();
-	jsonAdd(m, "lamport", jsonNumber((double)n->lamport));
+	size_t k = 0, size = 64;
 	for (size_t i = 0; i < n->n_commits; i++)
-		if (!n->commits[i]->passing) jsonPush(list, jsonBytes(n->commits[i]->sealed, n->commits[i]->length));
-	jsonAdd(m, "commits", list);
-	if (KEEPS(n->dev)) jsonAdd(m, "kept", jsonNumber((double)n->n_kept_saved));
-	uint8_t *b = encode(m, len);
-	jsonFree(m);
-	return b;
+		if (!n->commits[i]->passing) k++, size += n->commits[i]->length + 3;
+	CborOut m = out_of(size);
+	cborPutHead(&m, 5, 2 + KEEPS(n->dev));
+	if (KEEPS(n->dev)) key(&m, "kept"), cborPutInteger(&m, (int64_t)n->n_kept_saved);
+	key(&m, "commits"), cborPutHead(&m, 4, k);
+	for (size_t i = 0; i < n->n_commits; i++)
+		if (!n->commits[i]->passing) cborPutBytes(&m, n->commits[i]->sealed, n->commits[i]->length);
+	key(&m, "lamport"), cborPutInteger(&m, n->lamport);
+	*len = m.length;
+	return m.data;
 }
 
 // keep: the blobs of names off since the last save (the last one again, and the new ones)
 static void save_kept(ls_node *n) {
 	ls_dev *d = n->dev;
 	for (size_t k = n->n_kept_saved / KEPT; k * KEPT < n->n_kept; k++) {
-		Json *list = jsonArray();
-		for (size_t i = k * KEPT; i < n->n_kept && i < (k + 1) * KEPT; i++) jsonPush(list, jsonBytes(n->kept[i]->name, CM_NAME));
-		size_t len;
-		uint8_t *b = encode(list, &len);
-		jsonFree(list);
+		size_t end = (k + 1) * KEPT < n->n_kept ? (k + 1) * KEPT : n->n_kept;
+		CborOut list = out_of((end - k * KEPT) * (CM_NAME + 2) + 3);
+		cborPutHead(&list, 4, end - k * KEPT);
+		for (size_t i = k * KEPT; i < end; i++) cborPutBytes(&list, n->kept[i]->name, CM_NAME);
+		size_t len = list.length;
+		uint8_t *b = list.data;
 		char name[40 + LS_ID_LEN];
 		kept_name(n, k, name);
 		bool ok = b != NULL && d->o.store.save(d->o.store.context, name, b, len);
@@ -1301,20 +1364,15 @@ static void heads_parents(const ls_node *n, commit *const *named, size_t n_named
 	*count = m;
 }
 
-// a commit of the patches, on the parents (taken; NULL: none, a held value's) at the lamport
-static Json *commit_json(ls_dev *d, Json *patches, Json *parents, int64_t lamport) {
-	Json *j = jsonObject();
-	jsonAdd(j, "table", jsonString("value"));
-	jsonAdd(j, "actor", jsonNull());
-	jsonAdd(j, "time", jsonNumber((double)(d->o.epoch_ms + d->now)));
-	jsonAdd(j, "signer", jsonBytes(d->key, LS_KEY_LEN));
+// a commit of the patches (borrowed) at the lamport, no parents yet (a held value's: none), its bytes
+// cm_encode's. Key patches only: several parents need neither base nor merge (commit.h)
+static cm_commit commit_of(ls_dev *d, op_patch *patches, size_t n, int64_t lamport) {
+	cm_commit c = {.table = "value", .change = {.has_time = 1, .time = d->o.epoch_ms + d->now}, .signer_length = LS_KEY_LEN,
+		.lamport = lamport, .patches = patches, .patches_length = n};
+	memcpy(c.signer, d->key, LS_KEY_LEN);
 	d->nonce = d->nonce * 1664525u + 1013904223u;
-	jsonAdd(j, "nonce", jsonNumber((double)d->nonce));
-	jsonAdd(j, "parents", parents != NULL ? parents : jsonArray());
-	// key patches only: several parents need neither base nor merge (commit.h)
-	jsonAdd(j, "lamport", jsonNumber((double)lamport));
-	jsonAdd(j, "patches", patches);
-	return j;
+	c.nonce = d->nonce;
+	return c;
 }
 
 static void drop_hold(ls_node *n) {
@@ -1465,54 +1523,59 @@ ls_code ls_write(ls_node *n, const ls_patch *patches, size_t count) {
 	}
 	if (parents.n > 1) qsort(parents.names, parents.n, CM_NAME, name_order);
 	int64_t lamport = n_gone ? top + 1 : n->lamport + 1;
-	Json *list = jsonArray();
+	// the commit, its patches the caller's (borrowed: kept as they are, take_commit copies)
+	op_patch *list = allocate((count + 1) * sizeof *list);
+	cm_replaces *rs = allocate((count + 1) * sizeof *rs);
+	size_t keys = 0;
+	for (size_t i = 0; i < count; i++) keys += patches[i].length;
+	op_key *key_list = allocate((keys + 1) * sizeof *key_list), *at = key_list;
 	for (size_t i = 0; i < count && !bad; i++) {
 		const ls_patch *p = &patches[i];
-		Json *o = jsonObject(), *path = jsonArray();
-		jsonPush(list, o);
-		for (size_t q = 0; q < p->length; q++) jsonPush(path, jsonString(p->path[q]));
-		jsonAdd(o, "path", path);
-		if (p->value != NULL) {
-			op_value *c = copy(p->value, 0);
-			Json *v = c != NULL ? pk_to_json(c) : NULL;
-			op_free(c);
-			if (v == NULL) bad = true;
-			else jsonAdd(o, "value", v);
-		}
+		for (size_t q = 0; q < p->length; q++) at[q] = (op_key){.type = OP_STR_KEY, .s = p->path[q]};
+		list[i].place = (op_target){.path = at, .length = p->length};
+		at += p->length;
+		list[i].has_value = p->value != NULL;
+		list[i].value = p->value;
+		bad |= p->value != NULL && !carried(p->value, 0);
 		// replaces: always said, the names ascending (left out, it would mean ancestry: what a device
 		// without history can tell only in part)
 		if (named[i].n > 1) qsort(named[i].names, named[i].n, CM_NAME, name_order);
-		Json *r = jsonArray();
-		for (size_t x = 0; x < named[i].n; x++) jsonPush(r, jsonBytes(named[i].names[x], CM_NAME));
-		jsonAdd(o, "replaces", r);
+		rs[i] = (cm_replaces){.has = 1, .names = (const uint8_t(*)[CM_NAME])named[i].names, .length = named[i].n};
 	}
-	Json *pj = jsonArray();
-	for (size_t i = 0; i < parents.n; i++) jsonPush(pj, jsonBytes(parents.names[i], CM_NAME));
-	for (size_t i = 0; i < count; i++) free(named[i].names), free(paths[i]);
+	for (size_t i = 0; i < count; i++) free(paths[i]);
 	for (size_t g = 0; g < n_gone; g++) cm_free(&was[g].c);
-	free(named), free(heads_named), free(parents.names), free(reps), free(k), free(bytes), free(paths), free(was);
-	if (bad) return free(gone_), jsonFree(pj), jsonFree(list), LS_BAD;
-	Json *j = commit_json(d, list, pj, lamport);
-	uint8_t *encoded_;
+	free(heads_named), free(reps), free(k), free(bytes), free(paths), free(was);
+	cm_commit c = {0};
+	uint8_t *encoded_ = NULL;
 	size_t length;
-	if (cm_encode_json(j, &encoded_, &length, NULL) != CM_OK) return free(gone_), jsonFree(j), LS_BAD;
-	jsonFree(j);
-	size_t slength;
-	uint8_t *sealed = seal(d, encoded_, length, n->doc, &slength);
-	cm_commit c;
+	if (!bad) {
+		c = commit_of(d, list, count, lamport);
+		c.parents = (const uint8_t(*)[CM_NAME])parents.names;
+		c.parents_length = parents.n;
+		c.replaces = rs;
+		bad = cm_encode(&c, &encoded_, &length, NULL) != CM_OK;
+	}
+	size_t slength = 0;
+	uint8_t *sealed = NULL;
 	uint8_t name[CM_NAME];
-	cm_name(encoded_, length, name);
-	if (sealed == NULL || cm_decode(encoded_, length, &c, NULL) != CM_OK) return free(gone_), free(encoded_), free(sealed), LS_BAD;
+	if (!bad) {
+		cm_name(encoded_, length, name);
+		sealed = seal(d, encoded_, length, n->doc, &slength);
+	}
 	free(encoded_);
-	if (refusal(&c) != NULL) return free(gone_), free(sealed), cm_free(&c), LS_BAD;
 	// a seal that can't go in one message would be sent, dropped by the peer and sent again forever
-	if (slength > CHUNK) return free(gone_), free(sealed), cm_free(&c), LS_BAD;
-	// a write is this device's next stored commit: what it held goes
-	drop_hold(n);
-	held_landed(n, d->key, LS_KEY_LEN, c.lamport);
-	commit *kept = take_commit(n, name, sealed, slength, &c, true, -1);
-	cm_free(&c);
+	bad = bad || refusal(&c) != NULL || slength > CHUNK;
+	commit *kept = NULL;
+	if (!bad) {
+		// a write is this device's next stored commit: what it held goes
+		drop_hold(n);
+		held_landed(n, d->key, LS_KEY_LEN, c.lamport);
+		kept = take_commit(n, name, sealed, slength, &c, true, -1);
+	}
 	free(sealed);
+	for (size_t i = 0; i < count; i++) free(named[i].names);
+	free(named), free(parents.names), free(list), free(rs), free(key_list);
+	if (bad) return free(gone_), LS_BAD;
 	// the collapsed: their writes, and they, gone (nobody else had them)
 	for (size_t g = 0; g < n_gone; g++) {
 		size_t at = 0;
@@ -1627,11 +1690,11 @@ static void send_ephemeral(ls_node *n, const struct ls_link *except, const uint8
 	for (unsigned i = 0; i < d->n_links; i++) {
 		struct ls_link *l = d->links[i];
 		if (l == NULL || l == except || !l->up) continue;
-		Json *m = message("ephemeral");
-		jsonAdd(m, "node", jsonBytes(n->doc, 32));
-		jsonAdd(m, "commit", jsonBytes(bytes, length));
+		CborOut m = message("ephemeral", 2, length + 64);
+		key(&m, "node"), cborPutBytes(&m, n->doc, 32);
+		key(&m, "commit"), cborPutBytes(&m, bytes, length);
 		say(d, "tx ephemeral %.8s", short_id(n));
-		send_message(l, m);
+		send_message(l, &m);
 	}
 }
 
@@ -1644,18 +1707,12 @@ static void send_hold(ls_node *n) {
 ls_code ls_hold(ls_node *n, const op_value *value) {
 	ls_dev *d = n->dev;
 	op_value *c = copy(value, 0);
-	Json *v = c != NULL ? pk_to_json(c) : NULL;
-	if (v == NULL) return op_free(c), LS_BAD;
-	Json *patches = jsonArray(), *p = jsonObject();
-	jsonAdd(p, "path", jsonArray());
-	jsonAdd(p, "value", v);
-	jsonPush(patches, p);
-	Json *j = commit_json(d, patches, NULL, n->lamport + 1);
+	if (c == NULL) return LS_BAD;
+	op_patch p = {.has_value = 1, .value = c};
+	cm_commit j = commit_of(d, &p, 1, n->lamport + 1);
 	uint8_t *bytes;
 	size_t length;
-	cm_code code = cm_encode_json(j, &bytes, &length, NULL);
-	jsonFree(j);
-	if (code != CM_OK) return op_free(c), LS_BAD;
+	if (cm_encode(&j, &bytes, &length, NULL) != CM_OK) return op_free(c), LS_BAD;
 	free(n->hold);
 	n->hold = bytes;
 	n->hold_length = length;
@@ -1738,24 +1795,29 @@ static bool wants(const struct ls_link *l, const char *name) {
 	return false;
 }
 
-// who's bytes on the topic to every link that is up and wants it, but `except`; only: that link alone
-static void send_say(ls_dev *d, const struct ls_link *except, struct ls_link *only, const char *name, const uint8_t *who,
-	size_t who_length, const uint8_t *bytes, size_t length) {
+// a sealed message (seal_said's) on the topic to every link that is up and wants it, but `except`; only:
+// that link alone
+static void send_say(ls_dev *d, const struct ls_link *except, struct ls_link *only, const char *name, const uint8_t *sealed,
+	size_t length) {
 	for (unsigned i = 0; i < d->n_links; i++) {
 		struct ls_link *l = d->links[i];
 		if (l == NULL || l == except || !l->up || (only != NULL && l != only) || !wants(l, name)) continue;
-		Json *m = message("say");
-		jsonAdd(m, "topic", jsonString(name));
-		jsonAdd(m, "who", jsonBytes(who, who_length));
-		jsonAdd(m, "bytes", jsonBytes(length ? bytes : (const uint8_t *)"", length));
+		CborOut m = message("say", 2, length + strlen(name) + 32);
+		key(&m, "bytes"), cborPutBytes(&m, sealed, length);
+		key(&m, "topic");
+		bool ok = cborPutText(&m, name, strlen(name));
 		say(d, "tx say %.24s", name);
-		send_message(l, m);
+		if (ok) send_message(l, &m);
+		else free(m.data);
 	}
 }
 
 ls_code ls_send(ls_dev *d, const char *name, const uint8_t *bytes, size_t length) {
 	if (!topic_ok(name) || (bytes == NULL && length) || length > message_max(d)) return LS_BAD;
-	send_say(d, NULL, NULL, name, d->key, LS_KEY_LEN, bytes, length);
+	size_t n;
+	uint8_t *sealed = seal_said(d, name, bytes, length, &n);
+	send_say(d, NULL, NULL, name, sealed, n);
+	free(sealed);
 	return LS_OK;
 }
 
@@ -1798,12 +1860,16 @@ static void send_listen(ls_dev *d, struct ls_link *l, bool force) {
 	uint32_t told = (all ? 0x9e3779b9u : sum + (uint32_t)n * 2654435761u) | 1;
 	if (force || told != l->told) {
 		l->told = told;
-		Json *m = message("listen"), *topics = jsonArray();
-		for (size_t i = 0; i < n && !all; i++) jsonPush(topics, jsonString(list[i]));
-		jsonAdd(m, "topics", topics);
-		if (all) jsonAdd(m, "all", jsonBoolean(true));
-		say(d, "tx listen %zu%s", all ? 0 : n, all ? " all" : "");
-		send_message(l, m);
+		size_t size = 32, put = all ? 0 : n;
+		for (size_t i = 0; i < put; i++) size += strlen(list[i]) + 3;
+		CborOut m = message("listen", 1 + all, size);
+		if (all) key(&m, "all"), cborPutBoolean(&m, true);
+		key(&m, "topics"), cborPutHead(&m, 4, put);
+		bool ok = true;
+		for (size_t i = 0; i < put; i++) ok &= cborPutText(&m, list[i], strlen(list[i]));
+		say(d, "tx listen %zu%s", put, all ? " all" : "");
+		if (ok) send_message(l, &m);
+		else free(m.data);
 	}
 	free(list);
 }
@@ -1851,28 +1917,31 @@ static void send_row(ls_dev *d, topic *t, struct ls_link *only) {
 	if (only == NULL) t->row_sent = d->now, t->row_dirty = false;
 	ls_row *r = row_of(d, t, d->key, LS_KEY_LEN, false);
 	if (r != NULL && only == NULL) r->until = d->now + LS_TTL_MS;
-	if (t->row != NULL) send_say(d, NULL, only, t->name, d->key, LS_KEY_LEN, t->row, t->row_length);
+	if (t->row != NULL) send_say(d, NULL, only, t->name, t->row, t->row_length);
 }
 
 static ls_code presence_set(ls_dev *d, topic *t, const op_value *value) {
-	Json *m = jsonObject();
 	op_value *c = NULL;
+	CborOut m;
 	if (value == NULL) {
-		if (t->row == NULL) return jsonFree(m), LS_OK;
-		jsonAdd(m, "gone", jsonBoolean(true));
+		if (t->row == NULL) return LS_OK;
+		m = out_of(8);
+		cborPutHead(&m, 5, 1);
+		key(&m, "gone"), cborPutBoolean(&m, true);
 	} else {
 		c = copy(value, 0);
-		Json *v = c != NULL ? pk_to_json(c) : NULL;
-		if (v == NULL) return jsonFree(m), op_free(c), LS_BAD;
-		jsonAdd(m, "ttl", jsonNumber(LS_TTL_MS));
-		jsonAdd(m, "value", v);
+		if (c == NULL) return LS_BAD;
+		m = out_of(256);
+		cborPutHead(&m, 5, 2);
+		key(&m, "ttl"), cborPutInteger(&m, LS_TTL_MS);
+		key(&m, "value");
+		if (!pk_put(&m, c)) return free(m.data), op_free(c), LS_BAD;
 	}
-	size_t length;
-	uint8_t *bytes = encode(m, &length);
-	jsonFree(m);
-	if (bytes == NULL || length > message_max(d)) return free(bytes), op_free(c), LS_BAD;
+	if (m.length > message_max(d)) return free(m.data), op_free(c), LS_BAD;
+	// sealed once, sent as it is at each renew
 	free(t->row);
-	t->row = bytes, t->row_length = length;
+	t->row = seal_said(d, t->name, m.data, m.length, &t->row_length);
+	free(m.data);
 	if (c == NULL) {
 		// gone, told once: then no row of mine
 		row_drop(d, t, row_of(d, t, d->key, LS_KEY_LEN, false));
@@ -2174,21 +2243,28 @@ static void on_listen(struct ls_link *l, const Json *m) {
 	d->wants_changed = true;
 }
 
+// a sealed message: who said it is its signer, checked; unsealed, badly sealed or over the bytes allowed:
+// dropped, and not relayed
 static void on_say(struct ls_link *l, const Json *m) {
 	ls_dev *d = l->dev;
-	const Json *name = field(m, "topic", JSON_STRING), *who = field(m, "who", JSON_BYTES), *b = field(m, "bytes", JSON_BYTES);
-	if (name == NULL || !topic_ok(name->string) || who == NULL || who->bytes.length == 0 || who->bytes.length > LS_KEY_LEN ||
-		b == NULL || b->bytes.length > message_max(d))
+	const Json *name = field(m, "topic", JSON_STRING), *sealed = field(m, "bytes", JSON_BYTES), *who, *b;
+	if (name == NULL || !topic_ok(name->string) || sealed == NULL || sealed->bytes.length > message_max(d) + LS_SEALED)
 		return;
-	// mine, come back round: dropped
-	if (who->bytes.length == LS_KEY_LEN && memcmp(who->bytes.data, d->key, LS_KEY_LEN) == 0) return;
+	Json *x;
+	if (!open_said(d, sealed->bytes.data, sealed->bytes.length, name->string, &x, &who, &b) || b->bytes.length > message_max(d) ||
+		// mine, come back round: dropped
+		memcmp(who->bytes.data, d->key, LS_KEY_LEN) == 0) {
+		jsonFree(x);
+		return;
+	}
 	say(d, "rx say %.24s", name->string);
 	// on to the other peers that want it, as it came (a ring of links would carry it round for ever)
-	send_say(d, l, NULL, name->string, who->bytes.data, who->bytes.length, b->bytes.data, b->bytes.length);
+	send_say(d, l, NULL, name->string, sealed->bytes.data, sealed->bytes.length);
 	topic *t = topic_find(d, name->string);
 	if (t != NULL && t->room) take_row(d, t, who, b);
 	if (t != NULL && t->listen && d->o.heard != NULL)
 		d->o.heard(d->o.heard_context, name->string, who->bytes.data, who->bytes.length, b->bytes.data, b->bytes.length);
+	jsonFree(x);
 }
 
 static void on_message(struct ls_link *l, const uint8_t *bytes, size_t length) {
@@ -2362,8 +2438,8 @@ ls_dev *ls_open(const ls_options *o) {
 	d->o = *o;
 	d->n_links = o->links ? o->links : LS_LINKS;
 	d->w = (d->n_links + 7) / 8;
-	// a say's fields around its bytes (the topic at most), then COBS, "L", the CRC and the zeros
-	size_t frame = message_max(d) + LS_TOPIC_MAX + 128;
+	// a say's fields around its bytes and their seal (the topic at most), then COBS, "L", the CRC and the zeros
+	size_t frame = message_max(d) + LS_SEALED + LS_TOPIC_MAX + 128;
 	frame += frame / 254 + 16;
 	d->frame = frame > LS_FRAME_MAX ? frame : LS_FRAME_MAX;
 	d->links = allocate(d->n_links * sizeof *d->links);

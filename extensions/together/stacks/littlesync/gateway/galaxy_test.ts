@@ -9,7 +9,7 @@
 import { assert, assertEquals } from "@std/assert"
 import { hex } from "../../../typescript/hex.ts"
 import { httpDevice, names } from "./http_harness.ts"
-import { createSigner } from "../../../typescript/seal.ts"
+import { createSigner, openMessage, sealMessage } from "../../../typescript/seal.ts"
 import { createGateway } from "./gateway.ts"
 import { createSessions } from "./http.ts"
 import { dial, type Socket } from "./socket.ts"
@@ -336,7 +336,7 @@ Deno.test({
 		try {
 			await host.device.connectDiscover(UPSTREAM)
 			ensure(w, room)
-			connect(w, createChannel(host.device, host.signer.key), { topic: room })
+			connect(w, createChannel(host.device, host.signer), { topic: room })
 			setPresence(w, room, me, row(), 6000)
 			beat = setInterval(() => setPresence(w, room, me, row(), 6000), 2000)
 			// the C peer in that room, its pointer moved right three steps (0.56)
@@ -395,8 +395,9 @@ Deno.test({
 		const host = await createHost("ts-galaxy-topic")
 		// a fresh topic each run, as a den's: nothing of another run's is heard
 		const topic = `dens:test-${hex(crypto.getRandomValues(new Uint8Array(8)))}`
+		const channel = createChannel(host.device, host.signer)
 		const heard: { from: string; bytes: Uint8Array }[] = []
-		const stop = host.device.listen(topic, (from, bytes) => void heard.push({ from, bytes }))
+		const stop = channel.on(topic, (from, bytes) => void heard.push({ from, bytes }))
 		// a TS littlesync device on the gateway's WebSocket, listening to the topic
 		const signer = await createSigner()
 		const got: Message[] = []
@@ -418,27 +419,26 @@ Deno.test({
 			link.send({ t: "listen", topics: [topic] })
 			// down: a den's row (3.3 KB), sent till it comes (the gateway subscribes in its own time)
 			const row = crypto.getRandomValues(new Uint8Array(3300))
-			beat = setInterval(() => void host.device.send(topic, row).catch(() => {}), 1000)
+			beat = setInterval(() => channel.send(topic, row), 1000)
 			const down = await until(
 				() => got.find((m) => m.t === "say" && m.topic === topic),
 				30000,
 				"the together device's message on the littlesync link",
 			)
 			clearInterval(beat)
-			assert(down.t === "say" && hex(down.bytes) === hex(row))
-			assertEquals(hex(down.who), hex(host.signer.key))
-			// up: an ask, under the key the gateway made for this link's device
+			assert(down.t === "say")
+			const o = await openMessage(down.bytes, topic)
+			assertEquals([hex(o.signer), hex(o.bytes)], [hex(host.signer.key), hex(row)])
+			// up: an ask, sealed by this link's device: under its own key
 			const ask = cbor.encode({ n: 1, op: "look", at: topic })
-			beat = setInterval(
-				() => link.send({ t: "say", topic, who: signer.key, bytes: ask }),
-				1000,
-			)
+			const sealed = await sealMessage(topic, ask, signer)
+			beat = setInterval(() => link.send({ t: "say", topic, bytes: sealed }), 1000)
 			const up = await until(
 				() => heard.find((h) => hex(h.bytes) === hex(ask)),
 				30000,
 				"the littlesync message on the together device",
 			)
-			assert(up.from !== hex(signer.key))
+			assertEquals(up.from, hex(signer.key))
 			const st = await g.status()
 			console.log(
 				`topic ${topic}: down and up; gateway message stats: ${

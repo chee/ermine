@@ -51,6 +51,11 @@ suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `fails`, `
   request or an answer is for the request's document: `doc`, default `ermine://2a…2a00…00` (16 bytes
   each; the seal and packer harnesses take its 32 bytes, hex, and seal for it when given none). The
   transport harness seals a label for each document it is used in.
+- a sealed message (a channel's bytes on a topic, littlesync's say): `{bytes, signer, signature}`,
+  the signer's multikey in it. What it signs: `"ermine/v0/message"`, the BLAKE3 of the bytes, the
+  signature's varsig header, then the topic's UTF-8 (1 to 256 bytes): good on its own topic only.
+  Refused as a seal is: `shape` (not exactly those three, each bytes; a signer not a multikey; a topic
+  that is not one) or `signature` (seal/13, seal/14).
 - a commit in JSON: its fields as `commit.ts` names them. signer, each parent, base, each name a
   patch replaces: hex. actor, patch values: values. metadata: a map, its values values. external
   `[{file, line, column?, function?}]`. patches
