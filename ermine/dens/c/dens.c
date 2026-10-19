@@ -358,7 +358,7 @@ static void write_now(void *data) {
 			&born);
 		break;
 	case W_ADD:
-		born = nd_make_entry((op_value *)w->value, &h, NULL);
+		born = nd_make_entry((op_value *)w->value, &h);
 		pl_own(p, born);
 		w->code = tb_add(d->s.table, tb_string(w->part), tb_string(w->id), born);
 		break;

@@ -162,7 +162,7 @@ static void hold(world *w, nd_entry *node) { pl_hold(w->places, node, pl_made_re
 // a node of the value given, its header made once: added to the table (a table event tells)
 static void put(world *w, const char *part, const char *id, op_value *value) {
 	ch_header h = header(w);
-	nd_entry *node = nd_make_entry(value, &h, NULL);
+	nd_entry *node = nd_make_entry(value, &h);
 	hold(w, node);
 	keep_node(w, node);
 	tb_sub(w->table, tb_string(part), tb_string(keep_id(w, id)), node);

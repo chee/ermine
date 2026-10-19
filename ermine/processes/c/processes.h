@@ -52,7 +52,7 @@ void pr_trie_init(pr_processes *p, const char *part, tb_key root, const char *fr
 // (PL_ALREADY_THERE: a leaf holds no levels, a level is no leaf). a saved thing at the path is fine:
 // the row shadows it. the first row under root makes the part's entry (a table event tells readers):
 // *changed nothing, *made the entry (the places' own), for the caller to hold the header's block on;
-// else *made NULL. The entry is changed in place, as places' children are. made may be NULL. 0, or the code
+// else *made NULL. The entry is written through places' unread (pl_unread), as children are. made may be NULL. 0, or the code
 int pr_add(pl *l, tb_table *table, tb_key root, const char *const *path, size_t n, tb_key id,
 	ch_header header, pl_changed *changed, nd_entry **made);
 // pr_add on any part: id at path in root's trie there, by the same rules

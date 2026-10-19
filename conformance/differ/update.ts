@@ -1,4 +1,4 @@
-// update's streams: an entry started (cow: false now and then) on a random value
+// update's streams: an entry started on a random value
 // (core/fuzz/gen_harness.ts), then updates of a few patches each (some refused: they change nothing), an
 // entry asked after each; a put of a fresh list, map or string then spliced into in the same
 // update, now and then. headers given or not ({ time: 1, actor: "me" }), {} too.
@@ -61,7 +61,6 @@ function streams(seed: number, o: { wild: boolean }): Request[][] {
 	const begin = () => {
 		v = start(pick)
 		const r: Request = { op: "start", value: toJson(v), header: { time: 0, actor: "host" } }
-		if (pick(2)) r.cow = false
 		out.push(r, { op: "entry" })
 	}
 	begin()

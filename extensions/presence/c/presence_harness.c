@@ -224,7 +224,7 @@ static void mount_in(void *data) {
 	char *bad = pl_header(d->places, NULL, 0, CH_HERE, &h, &made);
 	if (bad != NULL) abort();
 	op_value *empty = op_map();
-	nd_entry *kids = nd_make_entry(empty, &h, NULL);
+	nd_entry *kids = nd_make_entry(empty, &h);
 	op_free(empty);
 	pl_hold(d->places, kids, made, pl_made_free);
 	pl_own(d->places, kids);

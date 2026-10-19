@@ -1,5 +1,5 @@
 {
-	"title": "the first form read: cow false kept, two nodes",
+	"title": "the first form read: cow false dropped, two nodes",
 	"bytes": "a2646b65797382836576616c7565616100836576616c7565616201656e6f64657382a363636f77f46576616c75658101666368616e6765a26474696d6501656163746f726161a26576616c75658101666368616e6765a26474696d6501656163746f726161",
 	"expect": {
 		"entries": [
@@ -22,8 +22,7 @@
 				},
 				"value": [
 					1
-				],
-				"cow": false
+				]
 			},
 			{
 				"change": {

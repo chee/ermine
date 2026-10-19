@@ -33,7 +33,10 @@
 // { op: "quiet" }                       → {}                every host idle, nothing crossing
 // { op: "read", host, table?, id }      → { value } | {}
 // { op: "change", host, table?, id }    → { change } | {}   without its op
-// { op: "conflicts", host, id }         → { conflicts }     [{ head, lamport, actor, tables }]
+// { op: "conflicts", host, id }         → { conflicts }     [{ head, lamport, actor, signer,
+//                                                           time, external?, tables }]
+// { op: "shown", host, id }             → { shown } | {}    { head, lamport, actor, signer, time,
+//                                                           external? }: the "shown" table's
 // { op: "status", host, id }            → { status } | {}   the status table's (sync.ts Status)
 // { op: "events", host, id, table? }    → { events }        the table's events at (table, id)
 //                                                           since last asked, how many
@@ -63,13 +66,20 @@ import { type Answer, type Request, serve } from "../../../conformance/typescrip
 import { hex, jsonOf, unhex } from "../../../ermine/encoding/typescript/commit_harness.ts"
 import { pipe, quiet, tablesJson } from "./harnesses.ts"
 import { createSigner } from "./seal.ts"
-import { type Conflict, createSync, type Ephemeral, type Status, type Sync } from "./sync.ts"
-import { egwalker } from "./egwalker.ts"
+import {
+	type Conflict,
+	createSync,
+	type Ephemeral,
+	type Head,
+	type Status,
+	type Sync,
+} from "./sync.ts"
 import type { Merges } from "./replay.ts"
+import { rules } from "./rules_harness.ts"
 import type { Kept } from "./history.ts"
 
-// every rule a host may be given
-const RULES: Merges = { "eg-walker": egwalker }
+// every rule a host may be given: run's (rules_harness.ts's alone)
+let known: Merges = {}
 
 export const TIME = 1_760_000_000
 const ID = /^ermine:\/\/[0-9a-f]{64}$/
@@ -132,8 +142,8 @@ async function make(name: string, options: Options, storage: sd.MemoryStorage): 
 		tables: options.tables,
 		merges: Object.fromEntries(
 			(options.merges ?? []).map((n) => {
-				if (!RULES[n]) throw new Error(`no rule ${n}`)
-				return [n, RULES[n]]
+				if (!known[n]) throw new Error(`no rule ${n}`)
+				return [n, known[n]]
 			}),
 		),
 		merge: options.merge,
@@ -172,6 +182,15 @@ const label = (n: Uint8Array | string) => {
 	const h = typeof n === "string" ? n : hex(n)
 	return labels.get(h) ?? h
 }
+// a head (sync.ts Head) in an answer: its label, its fields in their JSON form
+const headed = (h: Head) => ({
+	head: label(h.head),
+	lamport: h.lamport,
+	actor: toJson(h.actor),
+	signer: h.signer,
+	time: h.time,
+	...h.external && { external: toJson(h.external) },
+})
 const nameOf = (x: unknown) => {
 	const n = names.get(x as string) ?? x
 	if (typeof n !== "string" || !/^[0-9a-f]{68}$/.test(n)) throw new Error(`no commit ${x}`)
@@ -364,13 +383,12 @@ async function answer(r: Request): Promise<Answer> {
 		case "conflicts": {
 			const list = (of(r.host).table.get("conflicts", idOf(r.id))?.value ?? []) as Conflict[]
 			return {
-				conflicts: list.map((c) => ({
-					head: label(c.head),
-					lamport: c.lamport,
-					actor: toJson(c.actor),
-					tables: toJson(c.tables),
-				})),
+				conflicts: list.map((c) => ({ ...headed(c), tables: toJson(c.tables) })),
 			}
+		}
+		case "shown": {
+			const e = of(r.host).table.get("shown", idOf(r.id))
+			return e === undefined ? {} : { shown: headed(e.value as Head) }
 		}
 		case "status": {
 			const e = of(r.host).table.get("status", idOf(r.id))
@@ -444,10 +462,14 @@ async function answer(r: Request): Promise<Answer> {
 	throw new Error(`unknown op ${r.op}`)
 }
 
-if (import.meta.main) {
+// the harness, its hosts given these rules
+export async function run(given: Merges) {
+	known = given
 	// Subduction's logging (a connection closed, …) is not an answer
 	console.warn = () => {}
 	await serve(answer)
 	for (const h of hosts.values()) await shut(h).catch(() => {})
 	Deno.exit(0)
 }
+
+if (import.meta.main) await run(rules)

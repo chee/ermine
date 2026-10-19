@@ -23,8 +23,15 @@
 // changed for places' commit: a patch at the path, so a start or a stop marks its own path and the
 // names above it, nothing beside. refused: a PlacesError, nothing changed
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import { asId, type Contributor, type Id, none, type Path, PlacesError } from "@ermine/places"
+import {
+	asId,
+	type Contributor,
+	type Id,
+	none,
+	type Path,
+	PlacesError,
+	unread,
+} from "@ermine/places"
 import { upsert } from "@ermine/places/upsert"
 import type { Key, Table } from "@ermine/table"
 
@@ -79,8 +86,8 @@ export function trie(part: Key, root: Id, from: string): Contributor {
 // a name that is not one (not-a-name); a process at the path, above it or under it (already-there:
 // a leaf holds no levels, a level is no leaf). a saved thing at the path is fine: the row shadows it.
 // the first row under root makes the part's entry (a table event tells readers): nothing given
-// back. the entry is changed in place, as places' children are (a copy a start made 300 starts take
-// 0.4 s): a reader holding the trie whole sees it change under it, and is told by its spots
+// back. the entry is written through places' unread, as children are (a copy a start made 300
+// starts take 0.4 s)
 export const addProcess = (
 	table: Pick<Table, "get" | "add">,
 	root: Id,
@@ -103,7 +110,7 @@ export function addLeaf(
 	const there = table.get(part, root)
 	if (there === undefined) {
 		const trie = path.reduceRight<unknown>((v, k) => ({ [k]: v }), id)
-		table.add(part, root, createEntry(trie, header, { cow: false }) as never)
+		table.add(part, root, createEntry(trie, header) as never)
 		return []
 	}
 	let v: unknown = there.value
@@ -114,7 +121,7 @@ export function addLeaf(
 	if (isMap(v) && Object.keys(v).length) {
 		throw new PlacesError("already-there", path[path.length - 1])
 	}
-	return upsert(table, part, root, path, id, header)
+	return upsert(table, part, root, path, id, header, unread.update)
 }
 
 // the process at path under root taken out, and with it every level left empty: one patch, at the
@@ -147,6 +154,6 @@ export function removeLeaf(
 	}
 	let d = path.length - 1
 	while (d > 0 && Object.keys(levels[d]).length === 1) d--
-	update(entry, [{ path: path.slice(0, d + 1) }], header)
+	unread.update(entry, [{ path: path.slice(0, d + 1) }], header)
 	return [entry]
 }

@@ -200,11 +200,7 @@ function node(pick: Pick, lone = false): Node {
 			undo: Array.from({ length: pick(3) }, patch),
 		}
 	}
-	return createEntry(
-		pick(4) ? value(pick, lone) : undefined,
-		h as never,
-		pick(4) ? {} : { cow: false },
-	)
+	return createEntry(pick(4) ? value(pick, lone) : undefined, h as never)
 }
 
 const PARTS = ["value", "attributes", "children", "", "/", "__proto__", "é", "a\u0000"]
@@ -262,7 +258,6 @@ function shown(n: Node, op = true): unknown {
 	if (h.op !== undefined && op) c.op = h.op
 	const out: Record<string, unknown> = { change: c }
 	if (n.value !== undefined) out.value = n.value
-	if (n.cow === false) out.cow = false
 	return out
 }
 
@@ -473,7 +468,7 @@ function rewrites(pick: Pick, c: Record<string, cbor.Value>): [string, unknown][
 	if (c.has) {
 		const r = copy(), h = c.has as Uint8Array
 		r.has = Uint8Array.from([h[0] | 128, 1, ...h.slice(1)])
-		out.push(["a node with a bit past cow", r])
+		out.push(["a node with a bit past 64", r])
 	}
 	if (c.time) {
 		const r = copy()
@@ -748,7 +743,6 @@ function form(n: Node): Record<string, unknown> {
 	}
 	const out: Record<string, unknown> = { change: c }
 	if (n.value !== undefined) out.value = toJson(n.value)
-	if (n.cow === false) out.cow = false
 	return out
 }
 function asked(t: Entry[]) {

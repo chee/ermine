@@ -257,7 +257,7 @@ static void make_attributes(void *data) {
 	op_set(attrs, PR_CWD, names_value(p->cwd, p->ncwd));
 	if (c->o->pin != NULL) op_set(attrs, PR_PIN, op_ref((op_value *)c->o->pin));
 	op_set(attrs, CST_ATTRIBUTE, op_stand(op_str(PENDING_NAME)));
-	nd_entry *node = nd_make_entry(attrs, &h, NULL);
+	nd_entry *node = nd_make_entry(attrs, &h);
 	op_free(attrs);
 	pl_own(s->s.places, node);
 	pl_hold(s->s.places, node, made, pl_made_free);

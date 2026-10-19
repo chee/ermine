@@ -1,9 +1,22 @@
 #+title: littlesync
 
 * done
-- sans-IO device (littlesync.h), frames (COBS + CRC-32), lab-pig's pigs (pigs.h)
+- sans-IO device (littlesync.h), frames (COBS + CRC-32)
 - file store (Mac), NVS store (ESP-IDF, untested on hardware)
-- littlesync-pigs on a serial port, pty or pipe; make test, check, esp-check
+- make test, check, esp-check
+- users: lab-pig's pigs, playground/demos/pigs/littlesync (pigs.h, lab-pig's format; littlesync-pigs,
+  the Mac peer, on a serial port, pty or pipe), and the Cardputer
+- several peers: ls_link per byte stream (LS_LINKS 4), acks per link (a bitmask per commit), the device relays commits and
+  holds between links (a ring of links would loop a hold)
+- parents are the heads as far as the device can tell (held commits no taken commit names; a flag per
+  commit, 8 names pending), the highest held always one: the room of 30 pigs stored 13534 -> 9862 B
+  (one device), 11702 B (two adding at once: 2 parents and a merge each); lamport = 1 + parents' highest
+  checked in the tests
+- ls_cost_of: stored bytes, commits, seal bytes, the newest seal taken apart (signature, signer,
+  parents, patches, rest)
+- littlesync-pigs: cost per pig and the room's on screen and in --dump; several --port / --pty, a link
+  each (test/hop.sh: a - b - c over two pty pairs, b relays adds, moves, holds). The Cardputer's top
+  line: the last changed pig's cost
 
 * open
 - a bridge to the subduction stack / web lab-pig (the format is theirs: node ids, {x, y, at, seed}, held)
@@ -11,9 +24,14 @@
   the signed commit (seal.h signs the document, so a seal is good in its document only: a replay needs
   the same document; recheck when the owner decides what a node id is)
 - lists and strings: v1 refuses ranges, moves and list indexes
-- only one peer; a device with two peers would need acks per peer
 - the NVS partition size for many pigs (about 1 KB of seals per pig node)
 - whose merge rule a node follows: for now each stack merges its own way (here last writer per path,
   subduction's eg-walker + conflicts), so the same commits can show differently by route. other
   places it could live: a node attribute, the node's first commit, each commit. to come back to
 - lossy devices (ints only, cut precision) writing: whether their commits say so. not understood yet
+- red team 2026-10-18 (fixed: oversize own writes refused, own hold never evicted; not real: NUL in
+  keys). open, each a choice: who may write (an allowlist? Keyhive later); lamports taken as given
+  (high ones win every path, 2^53 - 1 freezes writes: a window past the node's own? the parents still
+  held?); no cap on commits/stamps per node (refuse and be resent, or ack and drop = lossy); unsealed
+  ephemerals (an Ed25519 sign per beat, unmeasured on the S3); resend rate limit; verify cache of 4
+  keys thrashes on many signers. stated in littlesync.h's "trust"

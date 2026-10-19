@@ -3,7 +3,7 @@
 // can't be carried.
 //
 // keys sorted by encoding, none twice; a node under several keys is one node again when read.
-// node: {change, value?, cow?} (cow only false). change: {time, actor?, reader?, external?,
+// node: {change, value?}. change: {time, actor?, reader?, external?,
 // metadata?, op?}; external: sites {file, line, column?, function?}; metadata: a map (read from
 // the old form too, a list of [key, value] pairs: of a key repeated, the first); op: {patches, undo}.
 // whole numbers: time, range ends (safe); line, column, path numbers (int32); written as integers.
@@ -14,7 +14,8 @@
 //   parts     runs [[part, how many], …]
 //   which     per key, its id's index
 //   nodes     per key, 0 new, k + 1 node k again
-//   has       per node, bits: 1 actor, 2 reader, 4 external, 8 metadata, 16 op, 32 value, 64 cow
+//   has       per node, bits: 1 actor, 2 reader, 4 external, 8 metadata, 16 op, 32 value; 64 (cow,
+//             a flag nodes no longer have) is read and dropped, never written
 //   time      per node, first then zigzag deltas
 //   actor, reader, external, metadata   runs [[it, how many], …] over nodes that have one
 //   op        per node with an op, {patches, undo}
@@ -92,7 +93,6 @@ function change(h: ChangeHeader, o: Options): Fields {
 function written(n: NodeEntry<unknown>, o: Options): Fields {
 	const out: Fields = { change: change(n.change, o) }
 	if (n.value !== undefined) out.value = n.value as cbor.Value
-	if (n.cow === false) out.cow = false
 	return out
 }
 
@@ -223,13 +223,14 @@ class Reader {
 		return h
 	}
 
-	// a node as written, new; none when it is not one
+	// a node as written, new; none when it is not one. cow: false, in what was written before
+	// nodes lost it, is dropped
 	node(x: unknown): NodeEntry<unknown> | undefined {
 		if (!isFields(x) || !this.only(x, ["change"], ["change", "value", "cow"])) return
 		if ("cow" in x && x.cow !== false) return
 		const h = this.header(x.change)
 		if (h === undefined) return
-		return createEntry<unknown>(x.value, h, "cow" in x ? { cow: false } : {})
+		return createEntry<unknown>(x.value, h)
 	}
 }
 
@@ -347,7 +348,7 @@ function map(fields: [string, Uint8Array][]): Uint8Array {
 }
 
 const ERMINE = /^ermine:\/\/[0-9a-f]{64}$/
-const HAS = { actor: 1, reader: 2, external: 4, metadata: 8, op: 16, value: 32, cow: 64 }
+const HAS = { actor: 1, reader: 2, external: 4, metadata: 8, op: 16, value: 32 }
 
 // a value's encoding; one that cannot be carried: cannot-carry at the key given
 function carried(x: unknown, part?: string, id?: string): Uint8Array {
@@ -413,7 +414,6 @@ export function pack(entries: Iterable<Entry>, options: Options = {}): Uint8Arra
 		if ("metadata" in c) bits |= HAS.metadata, metadata.push(carried(c.metadata, r.part, r.id))
 		if ("op" in c) bits |= HAS.op, op.push(carried(c.op, r.part, r.id))
 		if ("value" in w) bits |= HAS.value, values.push(carried(w.value, r.part, r.id))
-		if ("cow" in w) bits |= HAS.cow
 		has.put(bits)
 		time.diff(c.time as number, before)
 		before = c.time as number
@@ -557,7 +557,6 @@ function columns(z: unknown, r: Reader, limit: number): Entry[] {
 		if (b & HAS.op) change.op = take("op") as cbor.Value
 		const w: Fields = { change }
 		if (b & HAS.value) w.value = take("values") as cbor.Value
-		if (b & HAS.cow) w.cow = false
 		const n = r.node(w)
 		if (n === undefined) throw no()
 		nodes.push(n)

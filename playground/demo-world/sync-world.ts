@@ -127,8 +127,10 @@ export async function createSyncWorld(o: Options) {
 		s.runWithScope(host, () => {
 			let e = table.get(part, id)
 			if (e === undefined) {
-				table.add(part, id, createEntry(patches[0].value as never, header()))
-				patches = patches.slice(1)
+				// a whole put is the value; anything else (a key set) starts from an empty map
+				const whole = patches[0].path.length === 0 && patches[0].range === undefined
+				table.add(part, id, createEntry((whole ? patches[0].value : {}) as never, header()))
+				if (whole) patches = patches.slice(1)
 				e = table.get(part, id)!
 			}
 			if (patches.length) {

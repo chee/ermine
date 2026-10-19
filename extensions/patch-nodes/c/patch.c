@@ -511,7 +511,7 @@ static made *make(pn *o, const char *part, const char *id, const char *const *ps
 	m->meta[kept] = (ch_entry){"overlay", m->pair};
 	h.metadata = m->meta;
 	h.metadata_length = kept + 1;
-	m->entry = nd_make_entry((op_value *)value, &h, NULL);
+	m->entry = nd_make_entry((op_value *)value, &h);
 	return m;
 }
 
@@ -575,7 +575,7 @@ static void tell(pn *o, const char *part, const char *id, const op_value *before
 	h.has_op = 1;
 	h.patches = t->patches, h.patches_length = t->nspots;
 	h.undo = t->undo, h.undo_length = t->nspots;
-	t->entry = nd_make_entry(now ? now->value : NULL, &h, NULL);
+	t->entry = nd_make_entry(now ? now->value : NULL, &h);
 	nd_entry *real = tb_get(o->view, tb_string(part), tb_string(id));
 	put_view(o, part, id, t->entry, 1);
 	pl_changed changed = {1, {t->entry}};
@@ -774,7 +774,7 @@ int pn_land(pn *o, tb_key id, ch_header header, pl_changed *changed, nd_entry **
 	landed l = {parse(a.patches), op_ref(node->value)};
 	nd_entry *base = tb_get(o->table, tb_string(a.part), tb_string(a.on));
 	nd_entry *target_entry = base;
-	if (base == NULL) target_entry = nd_make_entry(NULL, &header, NULL);
+	if (base == NULL) target_entry = nd_make_entry(NULL, &header);
 	int code = nd_update(target_entry, l.ps.patches, l.ps.n, header, failed);
 	if (code != OP_OK) {
 		if (base == NULL) nd_free_entry(target_entry);

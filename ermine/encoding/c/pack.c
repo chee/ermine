@@ -358,8 +358,6 @@ static Json *json_node(const nd_entry *n, const pk_options *o) {
 		if (v == NULL) goto bad;
 		jsonAdd(node, "value", v);
 	}
-	// cow: false is a node changed in place
-	if (n->in_place) jsonAdd(node, "cow", jsonBoolean(false));
 	return node;
 bad:
 	jsonFree(node);
@@ -484,6 +482,7 @@ static void free_packing(packing *p) {
 }
 
 enum { HAS_ACTOR = 1, HAS_READER = 2, HAS_EXTERNAL = 4, HAS_METADATA = 8, HAS_OP = 16, HAS_VALUE = 32, HAS_COW = 64 };
+// HAS_COW: a flag nodes no longer have: read and dropped, never written
 
 // a node's pieces, each in its column, and what it has and its time; 0 when it cannot be carried
 static int node_pieces(const nd_entry *n, const pk_options *o, packing *p) {
@@ -504,7 +503,6 @@ static int node_pieces(const nd_entry *n, const pk_options *o, packing *p) {
 	PIECE(change, "op", HAS_OP, op)
 	PIECE(node, "value", HAS_VALUE, values)
 #undef PIECE
-	if (jsonGet(node, "cow") != NULL) has |= HAS_COW;
 	var(&p->has, has);
 	// the time, as its difference from the one before, zigzag
 	int64_t time = (int64_t)jsonGet(change, "time")->number, d = time - p->before;
@@ -899,9 +897,8 @@ static int read_header(arena *a, const Json *x, ch_header *h) {
 }
 
 // a node made of a header and a value (NULL: none)
-static nd_entry *make_node(arena *a, ch_header *h, const Json *v, int in_place) {
-	nd_entry_options options = {.in_place = in_place};
-	nd_entry *n = nd_make_entry(v != NULL ? hold(a, pk_of_json(v)) : NULL, h, &options);
+static nd_entry *make_node(arena *a, ch_header *h, const Json *v) {
+	nd_entry *n = nd_make_entry(v != NULL ? hold(a, pk_of_json(v)) : NULL, h);
 	if (n == NULL) {
 		fputs("pack: out of memory\n", stderr);
 		abort();
@@ -910,7 +907,8 @@ static nd_entry *make_node(arena *a, ch_header *h, const Json *v, int in_place) 
 	return n;
 }
 
-// a node as written, new; NULL when it is not one
+// a node as written, new; NULL when it is not one. cow: false, in what was written before nodes lost
+// it, is dropped
 static nd_entry *read_node(arena *a, const Json *x) {
 	if (!only(a, x, KEYS("change"), KEYS("change", "value", "cow"))) return NULL;
 	const Json *cow = jsonGet(x, "cow");
@@ -918,7 +916,7 @@ static nd_entry *read_node(arena *a, const Json *x) {
 	if (cow != NULL && !(cow->type == JSON_BOOLEAN && !cow->boolean)) return NULL;
 	ch_header h = {0};
 	if (!read_header(a, jsonGet(x, "change"), &h)) return NULL;
-	return make_node(a, &h, jsonGet(x, "value"), cow != NULL);
+	return make_node(a, &h, jsonGet(x, "value"));
 }
 
 // the first form, {keys, nodes}
@@ -1133,7 +1131,7 @@ static int read_columns(arena *a, const Json *x, size_t limit, pk_entry **entrie
 			}
 			ch_header h = {0};
 			if (!read_fields(a, time, fa, fr, fe, fm, fo, &h)) goto end;
-			made[i] = make_node(a, &h, fv, (bits & HAS_COW) != 0);
+			made[i] = make_node(a, &h, fv);
 		}
 		if (ia != na || ir != nr || ie != ne || im != nm || io != nop || iv != nv) goto end;
 		// the entries

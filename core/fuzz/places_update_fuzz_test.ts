@@ -62,9 +62,9 @@ Deno.test(`places + update fuzz: ${SEEDS} seeds × ${STEPS} writes, undo, nothin
 				assert(c.change !== b.change, `${at}: ${key} at a new change`)
 				const back = apply(c.value, c.change.op!.undo)
 				assertEquals(differ(back, b.was), "", `${at}: ${key}'s undo ${show(c.change.op)}`)
-				// a copy on write leaves the old value as it was; children and attributes change in
-				// place (places), so theirs is the new one
-				if (c.cow !== false) {
+				// children are written through places' unread: in place where it owns, else a copy,
+				// which leaves the old value as it was
+				if (c.value !== b.value) {
 					assertEquals(differ(b.value, b.was, true), "", `${at}: ${key}'s old value changed`)
 				}
 				undone++

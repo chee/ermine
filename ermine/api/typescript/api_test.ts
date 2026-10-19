@@ -469,6 +469,49 @@ Deno.test("patch nodes: one over another node, read through the overlay, its lay
 	assertEquals(api.layers(face).length, 1)
 })
 
+Deno.test("reads: the value shown, then each other head's from sync's conflicts, at a path too; none: []; tracked", async () => {
+	const w = world()
+	let api!: API
+	const seen: unknown[] = []
+	w.program("heads.js", (a) => {
+		api = a
+		const doc = a.open("./doc", { title: "pig", n: 1 })
+		a.effect("all", () => a.reads(doc, ["title"]), (v) => void seen.push(v))
+	})
+	w.start("heads.js", ["heads"])
+	await tick()
+	const doc = w.inW("doc")
+	assertEquals(api.reads("./doc"), [{ value: { title: "pig", n: 1 }, from: "shown" }])
+	assertEquals(api.reads("./nothing"), [])
+	assertEquals(api.reads("./doc", ["gone"]), [])
+	// as sync writes them: each other head with the parts it differs in
+	w.put("conflicts" as Key, doc, [
+		{ head: "aa", lamport: 2, actor: null, tables: { value: { title: "cow", n: 1 } } },
+		{ head: "bb", lamport: 3, actor: null, tables: { attributes: { x: 1 } } },
+	])
+	assertEquals(api.reads("./doc"), [
+		{ value: { title: "pig", n: 1 }, from: "shown" },
+		{ value: { title: "cow", n: 1 }, from: "aa" },
+		{ value: { title: "pig", n: 1 }, from: "bb" },
+	])
+	assertEquals(api.reads("./doc", ["title"]).map((v) => [v.value, v.from]), [
+		["pig", "shown"],
+		["cow", "aa"],
+		["pig", "bb"],
+	])
+	assertEquals(api.reads({ id: doc, part: "attributes" }).map((v) => v.from), ["bb"])
+	// a host's write asks no pulse: the host pulses
+	w.s.pulse()
+	assertEquals(seen.map((v) => (v as { value: unknown }[]).map((i) => i.value)), [
+		["pig"],
+		["pig", "cow", "pig"],
+	])
+	w.hosted(() => w.table.del("conflicts" as Key, doc))
+	w.s.pulse()
+	assertEquals(seen.length, 3)
+	assertEquals(api.reads("./doc", ["title"]), [{ value: "pig", from: "shown" }])
+})
+
 Deno.test("sites: a memo made in a program reports the program's line; its chain goes through the process, made where start was called, to where the programs were made", () => {
 	const w = world({ sites: true })
 	w.program("memo.js", (a) => void a.memo("one", () => 1)) // the program's line

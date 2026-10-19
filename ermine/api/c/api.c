@@ -520,7 +520,7 @@ static int write(api *a, const char *part, const char *id, const op_patch *patch
 	size_t failed = 0;
 	if (e == NULL) {
 		op_value *base = strcmp(part, API_ATTRIBUTES) == 0 ? op_map() : NULL;
-		e = nd_make_entry(base, &h, NULL);
+		e = nd_make_entry(base, &h);
 		op_free(base);
 		int bad = nd_update(e, b->patches, n, h, &failed);
 		if (bad == OP_OK && e->value != NULL) {
@@ -559,7 +559,7 @@ static int add_entry(api *a, const char *part, const char *id, const op_value *v
 	pl_made *made;
 	int code = header(a, &h, &made);
 	if (code) return code;
-	nd_entry *e = nd_make_entry((op_value *)value, &h, NULL);
+	nd_entry *e = nd_make_entry((op_value *)value, &h);
 	tb_add(a->x->s.table, tb_string(part), tb_string(id), e);
 	pl_own(a->x->s.places, e);
 	pl_hold(a->x->s.places, e, made, pl_made_free);
@@ -606,7 +606,7 @@ static int place_under(api *a, const char *parent, const char *name, const char 
 	if (children == NULL) {
 		op_value *m = op_map();
 		op_set(m, name, op_str(id));
-		nd_entry *e = nd_make_entry(m, &h, NULL);
+		nd_entry *e = nd_make_entry(m, &h);
 		op_free(m);
 		tb_add(x->s.table, tb_string("children"), tb_string(parent), e);
 		pl_own(x->s.places, e);

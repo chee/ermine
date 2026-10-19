@@ -177,8 +177,7 @@ static nd_entry *node_of(Json *s) {
 	if (value != NULL && (v = value_of(value)) == NULL) return NULL;
 	bent = 0;
 	if (!header(*change, &h) || bent) return NULL;
-	nd_entry_options options = {.in_place = at(s, "cow") != NULL};
-	nd_entry *n = nd_make_entry(v, &h, &options);
+	nd_entry *n = nd_make_entry(v, &h);
 	if (n == NULL) abort();
 	keep(&made, n);
 	return n;
@@ -246,7 +245,6 @@ static Json *show_node(const nd_entry *n) {
 		jsonAdd(c, "op", op);
 	}
 	if (n->value) jsonAdd(out, "value", pk_to_json(n->value));
-	if (n->in_place) jsonAdd(out, "cow", jsonBoolean(false));
 	return out;
 }
 

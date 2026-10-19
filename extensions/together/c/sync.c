@@ -1202,9 +1202,49 @@ static op_value *copied(const op_value *v) {
 	return out;
 }
 
+// a head as its commit tells it ({head, lamport, actor, signer, time, external?}, as sync.ts's Head):
+// signer hex, external each {file, line, column?, function?}
+static op_value *head_of(const hy_kept *k) {
+	op_value *m = op_map();
+	char head[2 * CM_NAME + 1];
+	for (int b = 0; b < CM_NAME; b++) snprintf(head + 2 * b, 3, "%02x", k->name[b]);
+	op_set(m, "head", op_str(head));
+	op_set(m, "lamport", op_num((double)k->lamport));
+	cm_commit c;
+	if (cm_decode(k->bytes, k->length, &c, NULL) != CM_OK) {
+		op_set(m, "actor", op_null());
+		return m;
+	}
+	op_set(m, "actor", c.change.actor != NULL ? op_ref((op_value *)c.change.actor) : op_null());
+	char *signer = malloc(2 * c.signer_length + 1);
+	if (signer == NULL) abort();
+	for (size_t b = 0; b < c.signer_length; b++) snprintf(signer + 2 * b, 3, "%02x", c.signer[b]);
+	signer[2 * c.signer_length] = 0;
+	op_set(m, "signer", op_str_take(signer, 2 * c.signer_length));
+	op_set(m, "time", op_num((double)c.change.time));
+	if (c.change.external != NULL) {
+		op_value *sites = op_list();
+		for (size_t i = 0; i < c.change.external_length; i++) {
+			const ch_site *x = &c.change.external[i];
+			op_value *site = op_map();
+			op_set(site, "file", op_str(x->file ? x->file : ""));
+			op_set(site, "line", op_num((double)x->line));
+			if (x->has_column) op_set(site, "column", op_num((double)x->column));
+			if (x->function != NULL) op_set(site, "function", op_str(x->function));
+			op_push(sites, site);
+		}
+		op_set(m, "external", sites);
+	}
+	cm_free(&c);
+	return m;
+}
+
+static void put_shown(sy_sync *s, const char *doc, const char *table, op_value *value, header_t *change);
+
 // several heads: the first shows, the others are listed in the conflicts table at the id, with the
-// tables in which they differ from the one shown (a table one has not is left out of the list). With a
-// rule, none: what shows is every head
+// tables in which they differ from the one shown (a table one has not is left out of the list), the
+// one shown in the shown table at the id (each a head as head_of tells it; both there or neither).
+// With a rule, none: what shows is every head
 static void conflicts(sy_sync *s, node_t *nd) {
 	const hy_kept **heads;
 	size_t n = hy_heads(tp_history(s->device, nd->id, TP_STORED), &heads);
@@ -1222,42 +1262,19 @@ static void conflicts(sy_sync *s, node_t *nd) {
 			const op_value *b = overlaid(nd, t) ? nd->under[t].value : ours ? ours->value : NULL;
 			if (a != NULL && !same(a, b)) op_set(differ, s->tables[t], copied(a));
 		}
-		op_value *actor = NULL;
-		cm_commit c;
-		if (cm_decode(k->bytes, k->length, &c, NULL) == CM_OK) {
-			actor = op_ref((op_value *)c.change.actor);
-			cm_free(&c);
-		}
-		char head[2 * CM_NAME + 1];
-		for (int b = 0; b < CM_NAME; b++) snprintf(head + 2 * b, 3, "%02x", k->name[b]);
-		op_value *m = op_map();
-		op_set(m, "head", op_str(head));
-		op_set(m, "lamport", op_num((double)k->lamport));
-		op_set(m, "actor", actor != NULL ? actor : op_null());
+		op_value *m = head_of(k);
 		op_set(m, "tables", differ);
 		op_push(list, m);
 	}
+	op_value *shown = list->count ? head_of(heads[0]) : NULL;
 	free(heads);
-	tb_key part = tb_string("conflicts");
-	nd_entry *have = tb_get(s->table, part, id);
 	if (list->count == 0) {
 		op_free(list);
-		if (have != NULL) {
-			tb_del(s->table, part, id);
-			gone(s, have);
-		}
-		return;
+		list = NULL;
 	}
-	header_t *c = stamp(now_of(s));
-	nd_entry *e = nd_make_entry(list, &c->h, NULL);
-	if (e == NULL) abort();
-	op_free(list);
-	hold_header(hold(s, e, "conflicts", nd->id, true), c);
-	if (have == NULL) tb_add(s->table, part, id, e);
-	else {
-		tb_sub(s->table, part, id, e);
-		gone(s, have);
-	}
+	int64_t now = now_of(s);
+	put_shown(s, nd->id, "conflicts", list, list != NULL ? stamp(now) : NULL);
+	put_shown(s, nd->id, "shown", shown, shown != NULL ? stamp(now) : NULL);
 }
 
 // the "status" table at the id: what the device holds back or refused there (the stored layer's),

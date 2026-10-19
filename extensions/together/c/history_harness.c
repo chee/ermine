@@ -1,14 +1,14 @@
 // A node's history, replay and snapshots on the line protocol (conformance/c/harness.h): the
-// history, replay, snapshot and egwalker suites, as extensions/together/typescript/history_harness.ts has
-// them. State lasts for the process: one history, the commits made by label, the snapshots kept. The
-// history's check is the integration's: a commit is taken in when its patches apply to its table at
-// its base (replay), kept snapshots used; a merge commit's, to its rule's merge of its parents. The
-// rules known: "eg-walker" (egwalker.h); a merge by any other is refused "merge"; a commit held (hold)
-// it cannot judge yet, and it waits on the check. eg-walker's merges
-// are made twice: by the pure rule, and by a keeping walker kept for the process, which must give the
-// same, byte for byte
+// history, replay and snapshot suites (and, built with its rules, playground/egwalker's egwalker
+// suite), as extensions/together/typescript/history_harness.ts has them. State lasts for the
+// process: one history, the commits made by label, the snapshots kept. The history's check is the
+// integration's: a commit is taken in when its patches apply to its table at its base (replay), kept
+// snapshots used; a merge commit's, to its rule's merge of its parents. The
+// rules known: those linked (rules_harness.h); a merge by any other is refused "merge"; a commit held
+// (hold) it cannot judge yet, and it waits on the check. A rule that keeps (create) merges twice: by
+// the pure rule, and by a state kept for the process, which must give the same, byte for byte
 #include "commits_harness.h"
-#include "egwalker.h"
+#include "rules_harness.h"
 #include "snapshot.h"
 
 #include "../../../conformance/c/protocol_harness.h"
@@ -32,9 +32,10 @@ static size_t kept_length;
 // the names the check cannot judge yet (hold)
 static uint8_t (*held)[CM_NAME];
 static size_t held_length;
-static const rp_merge rules[] = {{&eg_rule, NULL}};
-static const rp_merges merges = {rules, 1};
-static void *walked;
+// the rules known, each pure (NULL state); and each one's kept state, when it keeps
+static rp_merge *rules;
+static rp_merges merges;
+static void **walked;
 
 static int by_hex(const void *a, const void *b) { return strcmp(*(char *const *)a, *(char *const *)b); }
 
@@ -84,9 +85,9 @@ static bool several(const hy_kept *const *from, size_t n, rp_tables *out) {
 	return s != NULL && sn_tables(s->bytes, s->length, out) == PK_OK;
 }
 
-// what a rule is given: one commit's tables had without merging; several, kept as eg-walker's merge
+// what a rule is given: one commit's tables had without merging; several, kept as their merge
 static bool get(void *context, const hy_kept *const *from, size_t n, rp_tables *out) {
-	const char *rule = context;
+	(void)context;
 	if (n == 1) {
 		rp_tables t;
 		if (rp_plain(history, from[0]->name, snapshots, NULL, &t) != RP_OK) return false;
@@ -94,7 +95,7 @@ static bool get(void *context, const hy_kept *const *from, size_t n, rp_tables *
 		*out = t;
 		return true;
 	}
-	return strcmp(rule, eg_rule.name) == 0 && several(from, n, out);
+	return several(from, n, out);
 }
 
 // heads (taken) merged by the rule (known) into out, new tables
@@ -104,16 +105,17 @@ static void merged(const uint8_t (*names)[CM_NAME], size_t n, const char *rule, 
 	for (size_t i = 0; i < n; i++) heads[i] = hy_get(history, names[i]);
 	const rp_merge *m = rp_merge_find(&merges, rule);
 	rp_init(out);
-	m->rule->merge(m->state, history, heads, n, get, (void *)m->rule->name, out);
-	if (m->rule == &eg_rule) {
+	m->rule->merge(m->state, history, heads, n, get, NULL, out);
+	void *state = walked[m - rules];
+	if (state != NULL) {
 		rp_tables w;
 		rp_init(&w);
-		eg_rule.merge(walked, history, heads, n, get, (void *)m->rule->name, &w);
+		m->rule->merge(state, history, heads, n, get, NULL, &w);
 		uint8_t *a = NULL, *b = NULL;
 		size_t al = 0, bl = 0;
 		pk_code ca = sn_snapshot(out, &a, &al), cb = sn_snapshot(&w, &b, &bl);
 		if (ca != cb || al != bl || (al && memcmp(a, b, al) != 0)) {
-			fprintf(stderr, "eg-walker's walker merged otherwise\n");
+			fprintf(stderr, "%s's kept state merged otherwise\n", m->rule->name);
 			abort();
 		}
 		free(a), free(b);
@@ -140,13 +142,22 @@ static hy_refusal check(void *context, const hy_kept *k, const cm_commit *commit
 void hh_start(void) {
 	commits = cs_create();
 	history = hy_create(check, NULL);
-	walked = eg_rule.create();
+	rules = calloc(harness_rules_length + 1, sizeof *rules);
+	walked = calloc(harness_rules_length + 1, sizeof *walked);
+	if (rules == NULL || walked == NULL) abort();
+	for (size_t i = 0; i < harness_rules_length; i++) {
+		rules[i].rule = harness_rules[i];
+		if (harness_rules[i]->create != NULL) walked[i] = harness_rules[i]->create();
+	}
+	merges = (rp_merges){rules, harness_rules_length};
 }
 
 void hh_finish(void) {
 	for (size_t i = 0; i < kept_length; i++) free(kept[i].bytes), free(kept[i].key);
 	free(kept);
-	eg_rule.free(walked);
+	for (size_t i = 0; i < harness_rules_length; i++)
+		if (walked[i] != NULL) harness_rules[i]->free(walked[i]);
+	free(walked), free(rules);
 	hy_free(history);
 	cs_destroy(commits);
 	free(held);
@@ -408,7 +419,7 @@ static void hint(const op_value *r, FILE *out) {
 	fprintf(out, "{\"kept\":%s}", ok ? "true" : "false");
 }
 
-// heads (taken) merged by the rule, default eg-walker
+// heads (taken) merged by the rule, default the first known
 static void merge(const op_value *r, FILE *out) {
 	uint8_t(*names)[CM_NAME];
 	size_t n;
@@ -421,7 +432,7 @@ static void merge(const op_value *r, FILE *out) {
 		}
 	}
 	const char *rule = hh_str(r, "rule");
-	if (rule == NULL) rule = eg_rule.name;
+	if (rule == NULL) rule = harness_rules[0]->name;
 	if (rp_merge_find(&merges, rule) == NULL) {
 		hh_error(out, "no rule %s", rule);
 		free(names);
