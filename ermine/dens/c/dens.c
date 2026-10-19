@@ -97,11 +97,20 @@ struct dn_process {
 	void (*stop_reason)(void *ctx, const op_value *reason);
 	int has_handle;
 	sc_computer *first;
-	void *api;
-	int has_api;
 	char *failure;
 	op_value *reason;
 	int ended, told;
+	// the loads it holds, in the order made
+	dn_loaded **loads;
+	size_t nloads, caploads;
+};
+
+// a load: its live form, the process (or the den's own) holding it; released, closed
+struct dn_loaded {
+	dn *den;
+	dn_process *by;
+	hf_live live;
+	int released;
 };
 
 // an offer: its node (id, path), its owner and folder, its scope and the scope's info, the processes
@@ -155,9 +164,12 @@ struct dn {
 	size_t noffers, capoffers;
 	offer **live;
 	size_t nlive, caplive;
+	// every load made (until dn_free)
+	dn_loaded **loaded;
+	size_t nloaded, caploaded;
 	// what dn_nodes tracks, marked at every offer, withdraw, start and process end
 	char version;
-	int closed, here_placed, here_failed, freeing;
+	int closed, here_placed, here_failed, freeing, queued;
 	// the reason the den's own process goes with: dn_close's, else "den-stopped"
 	op_value *pending;
 	op_value *reasons[3];
@@ -254,6 +266,24 @@ static const char *keep_text(dn *d, const char *s) {
 	char *copy = xdup(s);
 	PUSH(d->scraps, d->nscraps, d->capscraps, ((scrap){NULL, 0, copy}));
 	return copy;
+}
+
+// a message taken (malloc'd), the den's until its next call
+static const char *keep_owned(dn *d, char *s) {
+	PUSH(d->scraps, d->nscraps, d->capscraps, ((scrap){NULL, 0, s}));
+	return s;
+}
+
+static void pulse_now(void *data) {
+	dn *d = data;
+	d->queued = 0;
+	sc_pulse(d->s.scheduler);
+}
+// one pulse asked for outside a run, however many ask (none to ask: the host pulses)
+static void later(dn *d) {
+	if (d->queued || d->s.schedule == NULL || sc_get_run(d->s.scheduler) != NULL) return;
+	d->queued = 1;
+	d->s.schedule(d->s.schedule_ctx, pulse_now, d);
 }
 
 static void set_reason(dn_process *p, const op_value *v) {
@@ -417,6 +447,23 @@ static void stop_handle(dn_process *p, const op_value *reason) {
 
 static void retract(dn *d, offer *o, const op_value *why);
 
+// a load closed, out of its holder's list; twice: nothing
+static void release(dn_loaded *l) {
+	if (l->released) return;
+	l->released = 1;
+	DROP(l->by->loads, l->by->nloads, l);
+	if (l->live.close != NULL) l->live.close(l->live.data);
+}
+
+// every load an owner holds closed, newest first
+static void let_go(dn_process *owner) {
+	size_t n = owner->nloads;
+	dn_loaded **copy = xalloc((n + 1) * sizeof *copy);
+	if (n > 0) memcpy(copy, owner->loads, n * sizeof *copy);
+	for (size_t i = n; i-- > 0;) release(copy[i]);
+	free(copy);
+}
+
 // an owner's offers withdrawn, newest first
 static void retract_all(dn *d, dn_process *owner, const op_value *why) {
 	size_t n = owner->noffers;
@@ -428,7 +475,7 @@ static void retract_all(dn *d, dn_process *owner, const op_value *why) {
 
 // a process going (its stop, as processes' start calls it, or its scope torn down from above): its
 // offers withdrawn newest first (their users stopped "runner-stopped"), then its handle's stop with
-// the reason told (none told: the den's, the den going; else none)
+// the reason told (none told: the den's, the den going; else none), then its loads closed
 static void process_end(pr_process *life, void *data) {
 	(void)life;
 	dn_process *p = data;
@@ -444,6 +491,7 @@ static void process_end(pr_process *life, void *data) {
 	if (p->on != NULL) DROP(p->on->users, p->on->nusers, p);
 	retract_all(d, p, d->reasons[R_RUNNER]);
 	stop_handle(p, p->reason);
+	let_go(p);
 	changed(d);
 }
 
@@ -498,6 +546,7 @@ static void den_end(pr_process *life, void *data) {
 	d->closed = 1;
 	if (d->freeing) return;
 	retract_all(d, self, d->pending);
+	let_go(self);
 	if (d->here_placed) {
 		d->here_placed = 0;
 		writing w = {.d = d, .what = W_UNHERE};
@@ -529,22 +578,24 @@ typedef struct {
 	sc_computer *outcome;
 } calling;
 
-// the api made, then the runner called with the code: the process's scope open
+// an owner's facts, as its runner is handed them
+static dn_starting starting_of(dn_process *p) {
+	dn *d = p->den;
+	dn_starting st = {.places = pr_places(p->life), .root = pr_root(p->life),
+		.scheduler = d->s.scheduler, .table = d->s.table, .scope = p->scope, .den = d};
+	st.process.id = p->id;
+	st.process.nat = pr_at(p->life, &st.process.at);
+	st.process.nargs = pr_args(p->life, &st.process.args);
+	st.process.ncwd = pr_cwd(p->life, &st.process.cwd);
+	return st;
+}
+
+// the runner called with the code and the start's facts: the process's scope open
 static void call_runner(void *data) {
 	calling *c = data;
 	dn_process *p = c->p;
-	dn *d = p->den;
-	if (!p->has_api) {
-		p->has_api = 1;
-		dn_context ctx = {.places = pr_places(p->life), .root = pr_root(p->life),
-			.scheduler = d->s.scheduler, .table = d->s.table, .scope = p->scope, .den = d};
-		ctx.process.id = p->id;
-		ctx.process.nat = pr_at(p->life, &ctx.process.at);
-		ctx.process.nargs = pr_args(p->life, &ctx.process.args);
-		ctx.process.ncwd = pr_cwd(p->life, &ctx.process.cwd);
-		p->api = d->s.create_api != NULL ? d->s.create_api(&ctx, d->s.data) : NULL;
-	}
-	c->out = p->fn.runner(p->code, p->api, p->fn.data);
+	dn_starting st = starting_of(p);
+	c->out = p->fn.runner(p->code, &st, p->fn.data);
 }
 
 // a computer that fails with the runner's failure, under the scope open
@@ -956,43 +1007,58 @@ static dn_process *not_a_runner(dn *d, found *f, dn_refusal *r) {
 	return NULL;
 }
 
-// start's checks in order, then processes' start. who: the policy's; remote: another den's ask
+// start's checks in order, up to taken (processes'): the runner and its entry (load: one with a
+// load), the program found, the policy asked. 0: refused, f let go; 1: f the caller's to let go
+static int check(dn *d, const op_value *who, int remote, const char *const *runner, size_t nrunner,
+	const dn_program *program, pl *where, int load, found *f, const hf_entry **out,
+	dn_refusal *refused) {
+	*refused = (dn_refusal){0};
+	if (d->closed) return refused->refused = "stopped", 0;
+	f->rpath = pr_names(runner, nrunner, &f->nr);
+	f->rid = resolve(d->s.places, f->rpath, f->nr);
+	const op_value *rattrs = f->rid != NULL ? attributes_of(d, f->rid) : NULL;
+	const op_value *rtype = get(rattrs, DN_ATTRIBUTE);
+	if (!is_str(rtype) || strcmp(rtype->str, DN_TYPE_RUNNER) != 0) {
+		return not_a_runner(d, f, refused), 0;
+	}
+	if (!program_of(d, where, program, f, refused)) return found_free(f), 0;
+	const op_value *takes = get(rattrs, DN_TAKES), *gives = get(rattrs, DN_API);
+	int fits = is_str(f->type) && is_str(takes) && strcmp(f->type->str, takes->str) == 0;
+	if (fits && f->api != NULL && !same_scalar(f->api, gives)) fits = 0;
+	if (!fits) {
+		refused->refused = "wrong-form";
+		refused->type = is_str(f->type) ? keep_text(d, f->type->str) : NULL;
+		refused->api = is_str(f->api) ? keep_text(d, f->api->str) : NULL;
+		refused->takes = is_str(takes) ? keep_text(d, takes->str) : NULL;
+		refused->runner_api = is_str(gives) ? keep_text(d, gives->str) : NULL;
+		found_free(f);
+		return 0;
+	}
+	const nd_entry *fv = tb_get(d->s.table, tb_string("value"), tb_string(f->rid));
+	const hf_entry *fn = fv != NULL ? hf_find(d->s.functions, fv->value) : NULL;
+	if (fn == NULL || (load ? fn->load == NULL : fn->runner == NULL)) {
+		return not_a_runner(d, f, refused), 0;
+	}
+	pr_answer a = permit(d, who, "start", NULL, f->rid, f->rpath, f->nr, remote);
+	if (a.verdict != PR_YES) return no_permission(refused, "start", a), found_free(f), 0;
+	if (!f->carried) {
+		a = permit(d, who, "read", "value", f->pid, f->ppath, f->npp, remote);
+		if (a.verdict != PR_YES) return no_permission(refused, "read", a), found_free(f), 0;
+	}
+	*out = fn;
+	return 1;
+}
+
+// start's checks, then processes' start. who: the policy's; remote: another den's ask
 static dn_process *begin(dn *d, const op_value *who, int remote, const char *const *runner,
 	size_t nrunner, const dn_program *program, const char *const *steps, size_t nsteps,
 	const dn_options *options, dn_refusal *refused, const char *file, int line, const char *func) {
-	*refused = (dn_refusal){0};
-	if (d->closed) return refused->refused = "stopped", NULL;
 	dn_options none = {0};
 	const dn_options *o = options != NULL ? options : &none;
 	pl *where = o->box != NULL ? o->box : d->s.places;
 	found f = {0};
-	f.rpath = pr_names(runner, nrunner, &f.nr);
-	f.rid = resolve(d->s.places, f.rpath, f.nr);
-	const op_value *rattrs = f.rid != NULL ? attributes_of(d, f.rid) : NULL;
-	const op_value *rtype = get(rattrs, DN_ATTRIBUTE);
-	if (!is_str(rtype) || strcmp(rtype->str, DN_TYPE_RUNNER) != 0) return not_a_runner(d, &f, refused);
-	if (!program_of(d, where, program, &f, refused)) return found_free(&f), NULL;
-	const op_value *takes = get(rattrs, DN_TAKES), *gives = get(rattrs, DN_API);
-	int fits = is_str(f.type) && is_str(takes) && strcmp(f.type->str, takes->str) == 0;
-	if (fits && f.api != NULL && !same_scalar(f.api, gives)) fits = 0;
-	if (!fits) {
-		refused->refused = "wrong-form";
-		refused->type = is_str(f.type) ? keep_text(d, f.type->str) : NULL;
-		refused->api = is_str(f.api) ? keep_text(d, f.api->str) : NULL;
-		refused->takes = is_str(takes) ? keep_text(d, takes->str) : NULL;
-		refused->runner_api = is_str(gives) ? keep_text(d, gives->str) : NULL;
-		found_free(&f);
-		return NULL;
-	}
-	const nd_entry *fv = tb_get(d->s.table, tb_string("value"), tb_string(f.rid));
-	const hf_entry *fn = fv != NULL ? hf_find(d->s.functions, fv->value) : NULL;
-	if (fn == NULL || fn->runner == NULL) return not_a_runner(d, &f, refused);
-	pr_answer a = permit(d, who, "start", NULL, f.rid, f.rpath, f.nr, remote);
-	if (a.verdict != PR_YES) return no_permission(refused, "start", a), found_free(&f), NULL;
-	if (!f.carried) {
-		a = permit(d, who, "read", "value", f.pid, f.ppath, f.npp, remote);
-		if (a.verdict != PR_YES) return no_permission(refused, "read", a), found_free(&f), NULL;
-	}
+	const hf_entry *fn = NULL;
+	if (!check(d, who, remote, runner, nrunner, program, where, 0, &f, &fn, refused)) return NULL;
 	op_value *attrs = op_map();
 	op_set(attrs, DN_ATTRIBUTE, op_str(DN_TYPE_PROCESS));
 	op_value *rv = op_map();
@@ -1031,6 +1097,7 @@ static dn_process *begin(dn *d, const op_value *who, int remote, const char *con
 		return NULL;
 	}
 	changed(d);
+	later(d);
 	return p;
 }
 
@@ -1043,6 +1110,59 @@ dn_process *dn_start_at(dn *d, const char *const *runner, size_t nrunner, const 
 		func);
 	op_free(who);
 	return p;
+}
+
+// load -------------------------------------------------------------------------------------------------
+
+typedef struct {
+	const hf_entry *fn;
+	const op_value *code;
+	hf_loaded out;
+} loading;
+
+static void call_load(void *data) {
+	loading *l = data;
+	l->out = l->fn->load(l->code, l->fn->data);
+}
+
+dn_loaded *dn_load(dn *d, dn_process *by, const char *const *runner, size_t nrunner,
+	const dn_program *program, const dn_options *options, dn_refusal *refused) {
+	forget(d);
+	*refused = (dn_refusal){0};
+	if (d->closed) return refused->refused = "stopped", NULL;
+	dn_process *o = by != NULL ? by : d->self;
+	if (o->den != d || o->ended || o->life == NULL) return refused->refused = "nothing-there", NULL;
+	pl *where = options != NULL && options->box != NULL ? options->box : pr_places(o->life);
+	op_value *who = pl_change_base(d->s.places, NULL, 0);
+	found f = {0};
+	const hf_entry *fn = NULL;
+	int ok = check(d, who, 0, runner, nrunner, program, where, 1, &f, &fn, refused);
+	op_free(who);
+	if (!ok) return NULL;
+	loading l = {.fn = fn, .code = f.code};
+	if (sc_get_current_scope(d->s.scheduler) != NULL) call_load(&l);
+	else sc_run_with_scope(o->scope, call_load, &l);
+	found_free(&f);
+	if (l.out.error != NULL) {
+		refused->refused = "failed";
+		refused->error = keep_owned(d, l.out.error);
+		return NULL;
+	}
+	dn_loaded *x = xalloc(sizeof *x);
+	x->den = d;
+	x->by = o;
+	x->live = l.out.live;
+	PUSH(d->loaded, d->nloaded, d->caploaded, x);
+	PUSH(o->loads, o->nloads, o->caploads, x);
+	later(d);
+	return x;
+}
+
+const hf_live *dn_loaded_live(const dn_loaded *l) { return &l->live; }
+
+void dn_release(dn *d, dn_loaded *l) {
+	if (l == NULL || l->den != d) return;
+	release(l);
 }
 
 // stop -------------------------------------------------------------------------------------------------
@@ -1357,9 +1477,16 @@ void dn_free(dn *d) {
 	d->freeing = 1;
 	// a process never stopped: its handle's stop (processes' pr_free calls its end)
 	pr_free(d->life);
+	// a load never let go: its close
+	for (size_t i = 0; i < d->nloaded; i++) {
+		dn_loaded *l = d->loaded[i];
+		if (!l->released && l->live.close != NULL) l->live.close(l->live.data);
+		free(l);
+	}
+	free(d->loaded);
 	for (size_t i = 0; i < d->nall; i++) {
 		dn_process *p = d->all[i];
-		if (p->has_api && p->api != NULL && d->s.free_api != NULL) d->s.free_api(p->api, d->s.data);
+		free(p->loads);
 		for (size_t k = 0; k < p->nfolders; k++) {
 			free(p->folders[k].id);
 			free_values(p->folders[k].values, 2);

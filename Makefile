@@ -200,9 +200,9 @@ runs_suite = runs
 runs_tests = $(wildcard ermine/processes/typescript/runs_harness_test.ts)
 LIBS += runs
 # dens (ermine/dens): a den's node, its offers, start by runner, stop, the asks; and other dens
-# over presence and its channel (away.c, suite away on this harness: its suite.json). two devices,
-# as presence's harness makes them
-dens_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/start.c ermine/processes/c/runs.c ermine/boxes/c/boxes.c ermine/sites/c/sites.c filesystem/protect/c/protect.c extensions/presence/c/presence.c extensions/presence/c/channel.c extensions/build/c/host.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c ermine/encoding/c/hash.c $(blake3_src) ermine/dens/c/dens.c ermine/dens/c/away.c ermine/dens/c/dens_harness.c
+# over presence and its channel (away.c, suite away on this harness: its suite.json); the C api
+# (ermine/api), for its teller runner. two devices, as presence's harness makes them
+dens_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/start.c ermine/processes/c/runs.c ermine/boxes/c/boxes.c ermine/sites/c/sites.c filesystem/protect/c/protect.c extensions/presence/c/presence.c extensions/presence/c/channel.c extensions/build/c/host.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c ermine/encoding/c/hash.c $(blake3_src) filesystem/places/c/guard.c extensions/patch-nodes/c/patch.c ermine/api/c/api.c ermine/dens/c/dens.c ermine/dens/c/away.c ermine/dens/c/dens_harness.c
 dens = ermine/dens/c/dens-harness
 dens_suite = dens away
 dens_tests = $(wildcard ermine/dens/typescript/dens_harness_test.ts)

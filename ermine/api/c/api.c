@@ -55,7 +55,7 @@ const char *api_code_name(int code) {
 
 typedef struct {
 	char *id;
-	api_why_stopped why;
+	op_value *why;
 } stopping;
 typedef struct {
 	api_method_fn fn;
@@ -74,16 +74,18 @@ typedef struct {
 	char *id;
 } memoed;
 
-struct api_apis {
+struct api_context {
 	api_setup s;
 	cst *statuses;
 	// each memo's and effect's latest run, on the runs' own table by its node's id (runs.h)
 	crn *runs;
 	sc_listener *settle;
 	int queued;
-	// why a process is stopping, said by api_stop before its scope goes
+	// why a process is stopping, by its id, said by api_stop before its scope goes: kept till its
+	// scope has gone (else, a den's, till its api_free)
 	stopping *whys;
 	size_t nwhys, capwhys;
+	op_value *ended, *replaced;
 	// the memos' nodes: a read of one pending with no value throws pending
 	memoed *memos;
 	size_t nmemos, capmemos;
@@ -96,7 +98,7 @@ struct api_apis {
 struct computer;
 
 struct api {
-	api_apis *x;
+	api_context *x;
 	api_process process;
 	pl *places;
 	gd *guard;
@@ -113,12 +115,12 @@ void api_drop(void *value, void *data) {
 }
 
 static void pulse_now(void *data) {
-	api_apis *x = data;
+	api_context *x = data;
 	x->queued = 0;
 	sc_pulse(x->s.scheduler);
 }
 // one pulse, soon, however many ask
-static void later(api_apis *x) {
+static void later(api_context *x) {
 	if (x->queued) return;
 	x->queued = 1;
 	if (x->s.schedule) x->s.schedule(x->s.schedule_ctx, pulse_now, x);
@@ -126,24 +128,28 @@ static void later(api_apis *x) {
 }
 static void settled(void *data) { later(data); }
 
-api_apis *api_apis_new(const api_setup *setup) {
-	api_apis *x = xalloc(sizeof *x);
+api_context *api_context_new(const api_setup *setup) {
+	api_context *x = xalloc(sizeof *x);
 	x->s = *setup;
 	x->statuses = cst_new(&(cst_setup){setup->places, setup->table, setup->scheduler});
 	x->runs = crn_new(&(crn_setup){setup->places, setup->table, setup->scheduler});
 	x->settle = sc_on_settle(setup->scheduler, settled, x);
+	x->ended = op_str("ended");
+	x->replaced = op_str("replaced");
 	return x;
 }
 
-void api_apis_free(api_apis *x) {
+void api_context_free(api_context *x) {
 	if (x == NULL) return;
 	sc_remove_listener(x->settle);
 	cst_stop(x->statuses);
 	cst_free(x->statuses);
 	crn_stop(x->runs);
 	crn_free(x->runs);
-	for (size_t i = 0; i < x->nwhys; i++) free(x->whys[i].id);
+	for (size_t i = 0; i < x->nwhys; i++) free(x->whys[i].id), op_free(x->whys[i].why);
 	free(x->whys);
+	op_free(x->ended);
+	op_free(x->replaced);
 	for (size_t i = 0; i < x->nmemos; i++) free(x->memos[i].id);
 	free(x->memos);
 	free(x->methods);
@@ -152,7 +158,7 @@ void api_apis_free(api_apis *x) {
 	free(x);
 }
 
-api *api_new(api_apis *x, const api_context *c) {
+api *api_new(api_context *x, const api_starting *c) {
 	api *a = xalloc(sizeof *a);
 	a->x = x;
 	a->process = c->process;
@@ -165,8 +171,20 @@ api *api_new(api_apis *x, const api_context *c) {
 	return a;
 }
 
+// a process's whys let go: the newest first, all of them
+static void forget(api_context *x, const char *id) {
+	for (size_t i = x->nwhys; i-- > 0;) {
+		if (strcmp(x->whys[i].id, id) != 0) continue;
+		free(x->whys[i].id);
+		op_free(x->whys[i].why);
+		memmove(&x->whys[i], &x->whys[i + 1], (x->nwhys - i - 1) * sizeof *x->whys);
+		x->nwhys--;
+	}
+}
+
 void api_free(api *a) {
 	if (a == NULL) return;
+	forget(a->x, a->process.id);
 	gd_free(a->guard);
 	free(a->why);
 	free(a->made);
@@ -188,7 +206,7 @@ static int fail(api *a, int code, const char *text) {
 // next ms
 static uint64_t last_ms;
 static unsigned last_count;
-static char *new_id(api_apis *x) {
+static char *new_id(api_context *x) {
 	if (x->s.id) return xdup(x->s.id(x->s.id_ctx));
 	unsigned char b[16] = {0};
 	FILE *f = fopen("/dev/urandom", "rb");
@@ -492,7 +510,7 @@ static block *block_new(const op_patch *src, size_t n) {
 // patches on (part, id): the entry made when there is none (the table event tells its readers),
 // else updated and committed
 static int write(api *a, const char *part, const char *id, const op_patch *patches, size_t n) {
-	api_apis *x = a->x;
+	api_context *x = a->x;
 	ch_header h;
 	pl_made *made;
 	int code = header(a, &h, &made);
@@ -579,7 +597,7 @@ static int place_under(api *a, const char *parent, const char *name, const char 
 		int code = ask_slot(a, parent, path, count);
 		if (code) return code;
 	}
-	api_apis *x = a->x;
+	api_context *x = a->x;
 	nd_entry *children = tb_get(x->s.table, tb_string("children"), tb_string(parent));
 	ch_header h;
 	pl_made *made;
@@ -698,7 +716,7 @@ int api_create(api *a, const char *folder, const op_value *value, api_node *out)
 
 // reads ----------------------------------------------------------------------------------------
 
-static const memoed *memo_of(api_apis *x, const char *id) {
+static const memoed *memo_of(api_context *x, const char *id) {
 	for (size_t i = 0; i < x->nmemos; i++) {
 		if (strcmp(x->memos[i].id, id) == 0) return &x->memos[i];
 	}
@@ -1093,7 +1111,7 @@ int api_remove(api *a, api_target x) {
 
 typedef struct computer {
 	api *a;
-	api_apis *x;
+	api_context *x;
 	char *id;
 	names path;
 	int memo, early;
@@ -1270,7 +1288,7 @@ static api_node node_at(const names *path) {
 
 static int make_computer(api *a, int memo, int early, const char *name, api_compute f, api_act act,
 	void *ctx, const api_options *options, api_node *out, const char *file, int line, const char *func) {
-	api_apis *x = a->x;
+	api_context *x = a->x;
 	sc_scope *own = owner(a);
 	if (!sc_scope_alive(own)) return fail(a, API_FAILED, SC_DISPOSED);
 	if (name == NULL) return fail(a, API_NOT_A_NAME, "a memo or effect with no name");
@@ -1373,7 +1391,7 @@ static int do_method(api *a, void *data) {
 	return code;
 }
 int api_method(api *a, const char *at, api_method_fn fn, void *ctx, api_node *out) {
-	api_apis *x = a->x;
+	api_context *x = a->x;
 	method_rec rec = {fn, ctx, owner(a)};
 	PUSH(x->methods, x->nmethods, x->capmethods, rec);
 	names p = {0};
@@ -1418,7 +1436,7 @@ static void send_do_call(void *data) {
 int api_send_at(api *a, api_target x, const op_value *const *args, size_t nargs, op_value **out,
 	const char *file, int line, const char *func) {
 	*out = NULL;
-	api_apis *ap = a->x;
+	api_context *ap = a->x;
 	found f;
 	int code = found_of(a, x, &f);
 	if (code) return code;
@@ -1467,11 +1485,11 @@ int api_send_at(api *a, api_target x, const op_value *const *args, size_t nargs,
 
 // teardown, ref ------------------------------------------------------------------------------
 
-static api_why_stopped why_of(api *a) {
+static const op_value *why_of(api *a) {
 	for (size_t i = a->x->nwhys; i-- > 0;) {
 		if (strcmp(a->x->whys[i].id, a->process.id) == 0) return a->x->whys[i].why;
 	}
-	return sc_scope_alive(a->process.scope) ? API_REPLACED : API_ENDED;
+	return sc_scope_alive(a->process.scope) ? a->x->replaced : a->x->ended;
 }
 typedef struct {
 	api *a;
@@ -1491,11 +1509,20 @@ int api_teardown(api *a, api_teardown_fn fn, void *ctx) {
 	return 0;
 }
 
-void api_stop(api_apis *x, const api_process *p, api_why_stopped why) {
-	stopping s = {xdup(p->id), why};
-	PUSH(x->whys, x->nwhys, x->capwhys, s);
+static int told_before(const api_context *x, const char *id) {
+	for (size_t i = 0; i < x->nwhys; i++) {
+		if (strcmp(x->whys[i].id, id) == 0) return 1;
+	}
+	return 0;
+}
+
+void api_stop(api_context *x, const api_process *p, const op_value *why) {
+	if (why != NULL || !told_before(x, p->id)) {
+		stopping s = {xdup(p->id), why ? op_ref((op_value *)why) : op_ref(x->ended)};
+		PUSH(x->whys, x->nwhys, x->capwhys, s);
+	}
 	if (x->s.stop) x->s.stop(x->s.stop_ctx, p);
-	free(x->whys[--x->nwhys].id);
+	if (!sc_scope_alive(p->scope)) forget(x, p->id);
 }
 
 typedef struct {
@@ -1651,7 +1678,7 @@ static int do_land(api *a, void *data) {
 	char *id;
 	code = need_id(a, f.n, &id);
 	if (code) return found_free(&f), code;
-	api_apis *ap = a->x;
+	api_context *ap = a->x;
 	if (ap->s.overlay == NULL) code = fail(a, API_FAILED, "no overlay here: the host gave none");
 	const nd_entry *e = code ? NULL : tb_get(ap->s.table, tb_string("patch"), tb_string(id));
 	if (e && e->value && e->value->type == OP_MAP) {

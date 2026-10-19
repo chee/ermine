@@ -1,5 +1,5 @@
 // start and stop (start.h) on the line protocol of typescript/start_harness.ts, which documents it, the
-// compilers, the runner and createProcessAPI (conformance/c/harness.h has the loop). Its world is places'
+// compilers, the runner and createAPI (conformance/c/harness.h has the loop). Its world is places'
 // (world_harness.h), made here before the first line: the host's places at R asked [processes(R), children]
 // (the outermost box), the table telling them alone (a box's places is a view of them); scope nodes,
 // builds and programs are made by the programs request. An address given as a string is split as

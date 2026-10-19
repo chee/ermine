@@ -116,7 +116,7 @@ typedef struct {
 	const pl_contributor *walk[2];
 	sc_scope *host, *above;
 	sc_pair host_info, above_info;
-	api_apis *apis;
+	api_context *context;
 	pr_policy *policy;
 	deny *denied;
 	size_t ndenied, capdenied;
@@ -309,7 +309,7 @@ static world *make(const op_value *o) {
 	// uuid: no setup.id, new ids the api's own
 	const op_value *uuid = o ? op_get(o, "uuid") : NULL;
 	if (!(uuid && uuid->type == OP_BOOL && uuid->bool_)) setup.id = next_id, setup.id_ctx = m;
-	m->apis = api_apis_new(&setup);
+	m->context = api_context_new(&setup);
 	return m;
 }
 
@@ -329,7 +329,7 @@ static void finish(world *m) {
 		free(r);
 	}
 	free(m->procs);
-	api_apis_free(m->apis);
+	api_context_free(m->context);
 	if (m->has_presence) pres_free(&m->presence);
 	if (m->overlay) pn_free(m->overlay);
 	sn_free(m->scopes);
@@ -577,11 +577,7 @@ static int method_f(api *a, const op_value *const *args, size_t nargs, op_value 
 	return code;
 }
 
-static void teardown_f(api_why_stopped why, void *ctx) {
-	op_value *s = op_str(why == API_REPLACED ? "replaced" : "ended");
-	log_to(ctx, s);
-	op_free(s);
-}
+static void teardown_f(const op_value *why, void *ctx) { log_to(ctx, why); }
 
 static op_value *patches_json(const pl_fact *f) {
 	char *text;
@@ -1052,7 +1048,7 @@ static op_value *answer(const op_value *r) {
 			free(s.out.text);
 			return e;
 		}
-		p->api = api_new(m->apis, &(api_context){.process = p->process});
+		p->api = api_new(m->context, &(api_starting){.process = p->process});
 		sc_run_with_scope(p->scope, run_program, &s);
 		if (s.out.code) {
 			op_value *e = error_answer(s.out.code, s.out.text);
@@ -1066,8 +1062,7 @@ static op_value *answer(const op_value *r) {
 	if (strcmp(op, "stop") == 0) {
 		running *p = running_named(hh_str(r, "name"));
 		if (p == NULL) return error_answer(API_FAILED, "no process");
-		const char *why = hh_str(r, "why");
-		api_stop(m->apis, &p->process, why && strcmp(why, "replaced") == 0 ? API_REPLACED : API_ENDED);
+		api_stop(m->context, &p->process, op_get(r, "why"));
 		return op_map();
 	}
 	if (strcmp(op, "do") == 0) {
