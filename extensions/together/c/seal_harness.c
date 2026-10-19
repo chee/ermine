@@ -120,6 +120,90 @@ static bool also_verify(void *context, const uint8_t *signature, const uint8_t *
 	return key_length == 32 && ermEd25519Verify(key, message, length, signature);
 }
 
+// also's headers into extra (16 at most); the answer is written when one is not hex
+static bool also_of(const op_value *r, FILE *out, sl_verifiers *extra) {
+	sl_verifier *more = (sl_verifier *)extra->items;
+	const op_value *also = op_get(r, "also");
+	for (size_t i = 0; also != NULL && also->type == OP_LIST && i < also->count && i < 16; i++) {
+		uint8_t *h;
+		size_t n;
+		if (also->items[i]->type != OP_STR || !cf_unhex(also->items[i]->str, &h, &n)) return hh_error(out, "not hex"), false;
+		more[extra->count++] = (sl_verifier){h, n, 0xed, 64, also_verify, NULL};
+	}
+	return true;
+}
+
+// a sealed thing: value (its JSON form, encoded canonically), else sealed (hex); the answer is
+// written when neither is
+static bool sealed_of(const op_value *r, FILE *out, uint8_t **bytes, size_t *length) {
+	const op_value *value = op_get(r, "value");
+	const char *hex = hh_str(r, "sealed");
+	if (value != NULL) {
+		if (!cf_value_bytes(value, bytes, length)) return hh_error(out, "no encoding"), false;
+	} else if (hex == NULL || !cf_unhex(hex, bytes, length)) return hh_error(out, "not hex"), false;
+	return true;
+}
+
+static void seal_message(const op_value *r, FILE *out) {
+	sl_seeded s;
+	if (!seed_of(r, out, &s)) return;
+	const char *header = hh_str(r, "header"), *topic = hh_str(r, "topic"), *hex = hh_str(r, "bytes");
+	if (header != NULL) {
+		uint8_t *h;
+		size_t n;
+		if (!cf_unhex(header, &h, &n)) {
+		hh_error(out, "not hex");
+		return;
+	}
+		s.signer.header = h, s.signer.header_length = n;
+	}
+	uint8_t *bytes, *sealed;
+	size_t length, sealed_length;
+	if (topic == NULL) {
+		hh_error(out, "no topic");
+		return;
+	}
+	if (hex == NULL || !cf_unhex(hex, &bytes, &length)) {
+		hh_error(out, "not hex");
+		return;
+	}
+	sl_code code = sl_seal_message(topic, bytes, length, &s.signer, &sealed, &sealed_length);
+	if (code != SL_OK) {
+		refuse(out, code);
+		return;
+	}
+	fputs("{\"sealed\":", out);
+	cf_put_hex(out, sealed, sealed_length);
+	fputc('}', out);
+	free(sealed);
+}
+
+static void open_message(const op_value *r, FILE *out) {
+	uint8_t *bytes;
+	size_t length;
+	const char *topic = hh_str(r, "topic");
+	if (topic == NULL) {
+		hh_error(out, "no topic");
+		return;
+	}
+	if (!sealed_of(r, out, &bytes, &length)) return;
+	sl_verifier more[16];
+	sl_verifiers extra = {more, 0};
+	if (!also_of(r, out, &extra)) return;
+	sl_message m;
+	sl_code code = sl_open_message(bytes, length, topic, &m, &extra);
+	if (code != SL_OK) {
+		refuse(out, code);
+		return;
+	}
+	fputs("{\"signer\":", out);
+	cf_put_hex(out, m.signer, m.signer_length);
+	fputs(",\"bytes\":", out);
+	cf_put_hex(out, m.bytes, m.length);
+	fputc('}', out);
+	sl_message_free(&m);
+}
+
 static void unseal(const op_value *r, FILE *out) {
 	const op_value *value = op_get(r, "value");
 	const char *hex = hh_str(r, "sealed");
@@ -138,16 +222,7 @@ static void unseal(const op_value *r, FILE *out) {
 	if (!doc_of(r, out, doc)) return;
 	sl_verifier more[16];
 	sl_verifiers extra = {more, 0};
-	const op_value *also = op_get(r, "also");
-	for (size_t i = 0; also != NULL && also->type == OP_LIST && i < also->count && i < 16; i++) {
-		uint8_t *h;
-		size_t n;
-		if (also->items[i]->type != OP_STR || !cf_unhex(also->items[i]->str, &h, &n)) {
-			hh_error(out, "not hex");
-			return;
-		}
-		more[extra.count++] = (sl_verifier){h, n, 0xed, 64, also_verify, NULL};
-	}
+	if (!also_of(r, out, &extra)) return;
 	sl_unsealed u;
 	sl_code code = sl_unseal(bytes, length, doc, &u, &extra);
 	if (code != SL_OK) {
@@ -205,6 +280,8 @@ void hh_answer(const op_value *r, FILE *out) {
 	else if (strcmp(op, "seal") == 0) seal(r, out);
 	else if (strcmp(op, "unseal") == 0) unseal(r, out);
 	else if (strcmp(op, "stored") == 0) stored(r, out);
+	else if (strcmp(op, "seal-message") == 0) seal_message(r, out);
+	else if (strcmp(op, "open-message") == 0) open_message(r, out);
 	else if (strcmp(op, "verify") == 0) verify(r, out);
 	else hh_unknown(out, r);
 }

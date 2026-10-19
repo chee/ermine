@@ -4,7 +4,7 @@
 //
 // bytes: lowercase hex. a value (actor, metadata, a patch's value): its JSON form
 // (conformance/typescript/form.ts), lone surrogates taken. a commit in JSON: its fields as commit.ts
-// names them, signer, each parent and base as hex; a byte field given as anything but a string is
+// names them, signer, each parent and base, and each name a patch replaces as hex; a byte field given as anything but a string is
 // passed on as its value (so encode can refuse it)
 //
 // { op: "encode", commit }        → { bytes, name }          commit: a commit in JSON, or any
@@ -33,6 +33,13 @@ const isMap = (x: unknown): x is Record<string, unknown> =>
 // a byte field: a string its hex, anything else the value it stands for
 const bytesOr = (x: unknown) => typeof x === "string" ? unhex(x) : revive(x)
 
+// a patch from its JSON form: replaces' names as parents'
+function patchOf(x: unknown): unknown {
+	if (!isMap(x) || !Array.isArray(x.replaces)) return revive(x)
+	const { replaces, ...rest } = x
+	return { ...(revive(rest) as object), replaces: replaces.map(bytesOr) }
+}
+
 // a commit from its JSON form; not a map: the value it stands for
 export function commitOf(x: unknown): Commit {
 	if (!isMap(x)) return revive(x) as Commit
@@ -40,12 +47,13 @@ export function commitOf(x: unknown): Commit {
 	for (const [k, v] of Object.entries(x)) {
 		if (k === "signer" || k === "base") out[k] = bytesOr(v)
 		else if (k === "parents") out[k] = Array.isArray(v) ? v.map(bytesOr) : revive(v)
+		else if (k === "patches" && Array.isArray(v)) out[k] = v.map(patchOf)
 		else out[k] = revive(v)
 	}
 	return out as Commit
 }
 
-// a commit's JSON form; names: how a parent or base is written (default hex)
+// a commit's JSON form; names: how a parent, base or replaced name is written (default hex)
 export function jsonOf(
 	c: Commit,
 	names: (b: Uint8Array) => string = hex,
@@ -61,7 +69,11 @@ export function jsonOf(
 	if (c.base !== undefined) out.base = names(c.base)
 	if (c.merge !== undefined) out.merge = c.merge
 	out.lamport = c.lamport
-	out.patches = toJson(c.patches)
+	out.patches = c.patches.map(({ replaces, ...p }) => {
+		const j = toJson(p) as Record<string, unknown>
+		if (replaces !== undefined) j.replaces = replaces.map(names)
+		return j
+	})
 	return out
 }
 

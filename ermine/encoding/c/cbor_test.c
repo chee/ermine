@@ -4,8 +4,10 @@
 // {"value": <its JSON form, json_text.h>, "cbor": "<hex>"}, so every codec checks
 // against the same bytes: each value encodes to exactly its bytes, and the
 // bytes decode to a value equal to it; {"cbor", "refused"}: bytes no value
-// encodes as; {"form", "refused"}: a JSON form that is no value. Then round trips, rejected inputs,
-// values with no encoding, a short buffer, and values as deep as CBOR_DEPTH and deeper.
+// encodes as; {"form", "refused"}: a JSON form that is no value. Each value written by pieces (the
+// cborPut* writer, keys sorted by cborKeyCompare) and into a buffer that grows: the same bytes. Then
+// round trips, rejected inputs, values with no encoding, a short buffer, numbers by pieces, and values
+// as deep as CBOR_DEPTH and deeper.
 
 #include "cbor.h"
 #include "json.h"
@@ -51,6 +53,58 @@ static unsigned char *encode(const Json *value, size_t *length, const char **why
 	return out;
 }
 
+/** the value written by pieces, as a writer of values of its own would (recursing: the vectors are shallow); false when it has none */
+static bool byPieces(const Json *v, CborOut *o) {
+	switch (v->type) {
+		case JSON_NULL: cborPutNull(o); return true;
+		case JSON_BOOLEAN: cborPutBoolean(o, v->boolean); return true;
+		case JSON_NUMBER:
+			if (v->big) cborPutWhole(o, v->bigNegative, v->big, v->bigLength);
+			else cborPutNumber(o, v->number);
+			return true;
+		case JSON_STRING: return cborPutText(o, v->string, v->stringLength);
+		case JSON_BYTES: cborPutBytes(o, v->bytes.data, v->bytes.length); return true;
+		case JSON_TYPED: cborPutTyped(o, v->typed.kind, v->typed.data, v->typed.count); return true;
+		case JSON_STAND: cborPutStand(o); return v->stand.kind && byPieces(v->stand.kind, o);
+		case JSON_ARRAY:
+			cborPutHead(o, 4, (uint64_t)v->array.count);
+			for (int i = 0; i < v->array.count; i++)
+				if (!byPieces(v->array.items[i], o)) return false;
+			return true;
+		case JSON_OBJECT: {
+			cborPutHead(o, 5, (uint64_t)v->object.count);
+			const JsonMember *last = NULL;
+			for (int k = 0; k < v->object.count; k++) {
+				const JsonMember *next = NULL;
+				for (int i = 0; i < v->object.count; i++) {
+					const JsonMember *m = &v->object.members[i];
+					if (last && cborKeyCompare(m->key, m->keyLength, last->key, last->keyLength) <= 0) continue;
+					if (!next || cborKeyCompare(m->key, m->keyLength, next->key, next->keyLength) < 0) next = m;
+				}
+				if (!next || !cborPutText(o, next->key, next->keyLength) || !byPieces(next->value, o)) return false;
+				last = next;
+			}
+			return true;
+		}
+	}
+	return false;
+}
+
+/** written by pieces and by cborPut into a buffer that grows, the value is the bytes cborEncode writes */
+static void expectPieces(const char *name, const Json *value, const unsigned char *bytes, size_t length) {
+	CborOut pieces = { NULL, 0, 0, true }, grown = { NULL, 0, 0, true };
+	if (!byPieces(value, &pieces) || pieces.length != length || memcmp(pieces.data, bytes, length) != 0) {
+		printf("FAIL %s: written by pieces, other bytes\n", name);
+		failures++;
+	}
+	if (!cborPut(&grown, value, NULL) || grown.length != length || memcmp(grown.data, bytes, length) != 0) {
+		printf("FAIL %s: written into a buffer that grows, other bytes\n", name);
+		failures++;
+	}
+	free(pieces.data);
+	free(grown.data);
+}
+
 /** the value encodes to the bytes, and the bytes decode to it */
 static void expectBoth(const char *name, const Json *value, const char *hex) {
 	size_t length;
@@ -61,6 +115,7 @@ static void expectBoth(const char *name, const Json *value, const char *hex) {
 		failures++;
 		return;
 	}
+	expectPieces(name, value, out, length);
 	char *got = hexOf(out, length);
 	if (strcmp(got, hex) != 0) {
 		printf("FAIL %s: encodes to %s, want %s\n", name, got, hex);
@@ -442,6 +497,47 @@ static void shortBuffer(void) {
 	jsonFree(value);
 }
 
+/** a number by pieces as its Json writes it */
+static void expectNumber(const char *name, Json *value, void (*put)(CborOut *o, const void *given), const void *given) {
+	size_t length;
+	unsigned char *want = encode(value, &length, NULL);
+	CborOut o = { NULL, 0, 0, true };
+	put(&o, given);
+	if (!want || o.length != length || memcmp(o.data, want, length) != 0) {
+		printf("FAIL %s: by pieces, other bytes\n", name);
+		failures++;
+	}
+	free(o.data);
+	free(want);
+	jsonFree(value);
+}
+static void putInteger(CborOut *o, const void *given) { cborPutInteger(o, *(const int64_t *)given); }
+static void putDouble(CborOut *o, const void *given) { cborPutNumber(o, *(const double *)given); }
+typedef struct { bool negative; unsigned char m[140]; size_t n; } Magnitude;
+static void putMagnitude(CborOut *o, const void *given) {
+	const Magnitude *w = given;
+	cborPutWhole(o, w->negative, w->m, w->n);
+}
+
+static void pieces(void) {
+	static const int64_t ints[] = { 0, 1, -1, 23, 24, -24, -25, 255, 256, -256, -257, 65535, 65536, INT64_MAX, INT64_MIN, INT64_MIN + 1, (int64_t)1 << 53, -((int64_t)1 << 53) - 1 };
+	for (size_t i = 0; i < sizeof ints / sizeof *ints; i++) expectNumber("an integer", jsonInteger(ints[i]), putInteger, &ints[i]);
+	static const double ds[] = { 0.0, -0.0, 0.5, -1.5, 1e300, 5e-324, 65504, 65505, 0x1p-24, 1e15, 9007199254740993.0, 1.8446744073709552e19, -1.8446744073709552e19, INFINITY, -INFINITY, NAN };
+	for (size_t i = 0; i < sizeof ds / sizeof *ds; i++) expectNumber("a double", jsonNumber(ds[i]), putDouble, &ds[i]);
+	// magnitudes: leading zeros, 0 and -0, 2^64 and past, exact in a double, past 128 bytes
+	Magnitude w[8];
+	memset(w, 0, sizeof w);
+	w[0] = (Magnitude){ true, { 0 }, 1 };
+	w[1] = (Magnitude){ false, { 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0 }, 11 };
+	w[2] = (Magnitude){ true, { 1, 0, 0, 0, 0, 0, 0, 0, 0 }, 9 };
+	w[3] = (Magnitude){ true, { 1, 0, 0, 0, 0, 0, 0, 0, 1 }, 9 };
+	w[4] = (Magnitude){ false, { 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff }, 10 };
+	w[5].n = 129, w[5].m[0] = 1, w[5].m[128] = 3;
+	w[6].n = 128, w[6].m[0] = 0x80, w[6].m[127] = 1, w[6].negative = true;
+	w[7] = (Magnitude){ true, { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff }, 8 };
+	for (size_t i = 0; i < 8; i++) expectNumber("a whole number", jsonWhole(w[i].negative, w[i].m, w[i].n), putMagnitude, &w[i]);
+}
+
 static void keys(void) {
 	// U+0000 in a key is the byte 00, and sorts first among keys of its length
 	char *why = NULL;
@@ -500,6 +596,7 @@ int main(int argc, char **argv) {
 	unencodable();
 	stands();
 	shortBuffer();
+	pieces();
 	keys();
 	deep();
 	if (failures) {

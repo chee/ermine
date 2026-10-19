@@ -1,6 +1,7 @@
 // A commit (commit.h), in C. The rules are commit.ts's, on a Json: a key not listed, then the first
 // field that says no, in the table's order. A commit is encoded and decoded by cbor.c, so the bytes
-// are commit.ts's.
+// are commit.ts's: a cm_commit written by pieces (cbor.h's writer, pack.h's pk_put), its Json form by
+// cborEncode, the same bytes.
 #include "commit.h"
 
 #include "blake3/blake3.h"
@@ -52,14 +53,25 @@ static bool optional(int k) { return k == READER || k == EXTERNAL || k == METADA
 
 static bool is_fields(const Json *x) { return x != NULL && x->type == JSON_OBJECT; }
 static bool is_array(const Json *x) { return x != NULL && x->type == JSON_ARRAY; }
+// each rule on what it says of a commit, for both forms (Json, cm_commit: fits, below)
 // an integer from 0 to 2^53 - 1
-static bool whole(const Json *x) {
-	if (x == NULL || x->type != JSON_NUMBER) return false;
-	double d = x->number;
-	return d >= 0 && d <= 9007199254740991.0 && d == floor(d);
-}
+static bool whole_number(double d) { return d >= 0 && d <= 9007199254740991.0 && d == floor(d); }
 // a list's index, a site's line or column: an integer from 0 to 2^31 - 1, what any long holds
-static bool small(const Json *x) { return whole(x) && x->number <= 2147483647.0; }
+static bool small_number(double d) { return whole_number(d) && d <= 2147483647.0; }
+// a table, a merge rule: a name, not empty
+static bool named(size_t length) { return length > 0; }
+static bool lamport_number(double d) { return whole_number(d) && d >= 1; }
+// parents and replaces: ascending, each once
+static bool ascending(const uint8_t *a, const uint8_t *b) { return memcmp(a, b, CM_NAME) < 0; }
+// base: one of several parents
+static bool base_rule(size_t parents, bool among) { return parents >= 2 && among; }
+// merge: with several parents and no base
+static bool merge_rule(size_t parents, bool base) { return parents >= 2 && !base; }
+// no base: needed with several parents, no merge and a patch that is no key patch
+static bool baseless_rule(size_t parents, bool merge, bool keys_only) { return parents < 2 || merge || keys_only; }
+
+static bool whole(const Json *x) { return x != NULL && x->type == JSON_NUMBER && whole_number(x->number); }
+static bool small(const Json *x) { return x != NULL && x->type == JSON_NUMBER && small_number(x->number); }
 static bool is_key(const Json *k) { return jsonIsString(k) || small(k); }
 static bool is_range(const Json *r) {
 	return is_array(r) && r->array.count == 2 && whole(r->array.items[0]) && whole(r->array.items[1]);
@@ -133,13 +145,29 @@ static bool only(const Json *x, const char *const *keys) {
 }
 
 static bool place(const Json *x, bool patch) {
-	static const char *const patch_keys[] = {"path", "range", "value", "move", NULL};
+	static const char *const patch_keys[] = {"path", "range", "value", "move", "replaces", NULL};
 	if (!is_fields(x) || !only(x, patch ? patch_keys : (const char *const[]){"path", "range", NULL})) return false;
 	const Json *path = jsonGet(x, "path"), *range = jsonGet(x, "range");
 	if (!is_array(path)) return false;
 	for (int i = 0; i < path->array.count; i++)
 		if (!is_key(path->array.items[i])) return false;
 	return range == NULL || is_range(range);
+}
+
+// a key patch: a set or a delete at a path of keys, no range, move or list index
+static bool key_patch(const Json *p) {
+	if (!is_fields(p) || jsonGet(p, "range") != NULL || jsonGet(p, "move") != NULL) return false;
+	const Json *path = jsonGet(p, "path");
+	if (!is_array(path)) return false;
+	for (int i = 0; i < path->array.count; i++)
+		if (!jsonIsString(path->array.items[i])) return false;
+	return true;
+}
+static bool keys_only(const Json *patches) {
+	if (!is_array(patches)) return false;
+	for (int i = 0; i < patches->array.count; i++)
+		if (!key_patch(patches->array.items[i])) return false;
+	return true;
 }
 
 static bool site(const Json *x) {
@@ -154,7 +182,7 @@ static bool site(const Json *x) {
 // each field's own rule, given the commit for base's
 static bool rule(int k, const Json *v, const Json *c) {
 	switch (k) {
-	case TABLE: return jsonIsString(v) && v->stringLength > 0;
+	case TABLE: return jsonIsString(v) && named(v->stringLength);
 	case ACTOR: return true;
 	case READER: return jsonIsString(v);
 	case EXTERNAL:
@@ -171,27 +199,26 @@ static bool rule(int k, const Json *v, const Json *c) {
 		if (!is_array(v)) return false;
 		for (int i = 0; i < v->array.count; i++) {
 			if (!is_name(v->array.items[i])) return false;
-			if (i > 0 && memcmp(v->array.items[i - 1]->bytes.data, v->array.items[i]->bytes.data, CM_NAME) >= 0)
-				return false;
+			if (i > 0 && !ascending(v->array.items[i - 1]->bytes.data, v->array.items[i]->bytes.data)) return false;
 		}
 		return true;
 	case BASE: {
 		const Json *parents = jsonGet(c, "parents");
-		if (!is_name(v) || !is_array(parents) || parents->array.count < 2) return false;
-		for (int i = 0; i < parents->array.count; i++) {
+		if (!is_name(v) || !is_array(parents)) return false;
+		bool among = false;
+		for (int i = 0; i < parents->array.count && !among; i++) {
 			const Json *p = parents->array.items[i];
-			if (p->type == JSON_BYTES && p->bytes.length == CM_NAME && memcmp(p->bytes.data, v->bytes.data, CM_NAME) == 0)
-				return true;
+			among = p->type == JSON_BYTES && p->bytes.length == CM_NAME && memcmp(p->bytes.data, v->bytes.data, CM_NAME) == 0;
 		}
-		return false;
+		return base_rule((size_t)parents->array.count, among);
 	}
-	// a rule's name, with several parents and no base
+	// a rule's name
 	case MERGE: {
 		const Json *parents = jsonGet(c, "parents");
-		return jsonIsString(v) && v->stringLength > 0 && is_array(parents) && parents->array.count >= 2 &&
-			jsonGet(c, "base") == NULL;
+		return jsonIsString(v) && named(v->stringLength) && is_array(parents) &&
+			merge_rule((size_t)parents->array.count, jsonGet(c, "base") != NULL);
 	}
-	case LAMPORT: return whole(v) && v->number >= 1;
+	case LAMPORT: return v != NULL && v->type == JSON_NUMBER && lamport_number(v->number);
 	case PATCHES:
 		if (!is_array(v)) return false;
 		for (int i = 0; i < v->array.count; i++) {
@@ -199,6 +226,13 @@ static bool rule(int k, const Json *v, const Json *c) {
 			if (!place(p, true)) return false;
 			const Json *move = jsonGet(p, "move");
 			if (move != NULL && (jsonGet(p, "value") != NULL || !place(move, false))) return false;
+			const Json *replaces = jsonGet(p, "replaces");
+			if (replaces != NULL && !is_array(replaces)) return false;
+			for (int r = 0; replaces != NULL && r < replaces->array.count; r++) {
+				if (!is_name(replaces->array.items[r])) return false;
+				if (r > 0 && !ascending(replaces->array.items[r - 1]->bytes.data, replaces->array.items[r]->bytes.data))
+					return false;
+			}
 		}
 		return true;
 	}
@@ -255,8 +289,8 @@ static cm_code check(const Json *c, char **field, bool strict) {
 		bool ok;
 		if (v == NULL) {
 			const Json *parents = jsonGet(c, "parents");
-			ok = optional(k) &&
-				!(k == BASE && is_array(parents) && parents->array.count >= 2 && jsonGet(c, "merge") == NULL);
+			ok = optional(k) && (k != BASE || !is_array(parents) ||
+				baseless_rule((size_t)parents->array.count, jsonGet(c, "merge") != NULL, keys_only(jsonGet(c, "patches"))));
 		} else ok = rule(k, v, c);
 		if (!ok) {
 			name_field(field, NAMES[k], strlen(NAMES[k]));
@@ -300,8 +334,145 @@ cm_code cm_encode_json(const Json *c, uint8_t **out, size_t *length, char **fiel
 	return CM_OK;
 }
 
+// the rules on a cm_commit, as check holds its Json form (cm_to_json) to them: true only when it would
+// take that form. A no names nothing here: cm_encode asks the Json form which field
+static bool key_ok(const op_key *k) {
+	return k->type == OP_STR_KEY ? k->s != NULL : k->type == OP_NUM_KEY && small_number((double)k->n);
+}
+static bool target_ok(const op_target *t) {
+	for (size_t i = 0; i < t->length; i++)
+		if (!key_ok(&t->path[i])) return false;
+	return !t->has_range || (whole_number((double)t->from) && whole_number((double)t->to));
+}
+static bool fits(const cm_commit *c) {
+	const ch_header *h = &c->change;
+	if (c->table == NULL || !named(strlen(c->table)) || !whole_number((double)h->time) || !whole_number((double)c->nonce) ||
+		!lamport_number((double)c->lamport) || !cm_multikey(c->signer, c->signer_length))
+		return false;
+	for (size_t i = 0; h->external != NULL && i < h->external_length; i++) {
+		const ch_site *x = &h->external[i];
+		if (x->file == NULL || !small_number((double)x->line) || (x->has_column && !small_number((double)x->column))) return false;
+	}
+	bool among = false, keys = true;
+	for (size_t i = 0; i < c->parents_length; i++) {
+		if (!cm_name_split(c->parents[i], CM_NAME, NULL, NULL, NULL) || (i > 0 && !ascending(c->parents[i - 1], c->parents[i])))
+			return false;
+		among |= c->has_base && memcmp(c->parents[i], c->base, CM_NAME) == 0;
+	}
+	if (c->has_base && (!cm_name_split(c->base, CM_NAME, NULL, NULL, NULL) || !base_rule(c->parents_length, among))) return false;
+	if (c->merge != NULL && (!named(strlen(c->merge)) || !merge_rule(c->parents_length, c->has_base))) return false;
+	for (size_t i = 0; i < c->patches_length; i++) {
+		const op_patch *p = &c->patches[i];
+		if (!target_ok(&p->place) || (p->has_move && (p->has_value || !target_ok(&p->move)))) return false;
+		keys &= !p->place.has_range && !p->has_move;
+		for (size_t k = 0; k < p->place.length; k++) keys &= p->place.path[k].type == OP_STR_KEY;
+		const cm_replaces *r = c->replaces != NULL && c->replaces[i].has ? &c->replaces[i] : NULL;
+		for (size_t k = 0; r != NULL && k < r->length; k++)
+			if (!cm_name_split(r->names[k], CM_NAME, NULL, NULL, NULL) || (k > 0 && !ascending(r->names[k - 1], r->names[k])))
+				return false;
+	}
+	return c->has_base || baseless_rule(c->parents_length, c->merge != NULL, keys);
+}
+
+// a commit's bytes, written as cm_to_json and cborEncode would (the keys in canonical order); false
+// when something in it has no encoding (text not UTF-8, a value pk_put cannot write, a metadata key
+// twice)
+static bool text(CborOut *o, const char *s) { return cborPutText(o, s, strlen(s)); }
+static void put_names(CborOut *o, const uint8_t (*names)[CM_NAME], size_t n) {
+	cborPutHead(o, 4, n);
+	for (size_t i = 0; i < n; i++) cborPutBytes(o, names[i], CM_NAME);
+}
+static bool put_path(CborOut *o, const op_target *t) {
+	text(o, "path");
+	cborPutHead(o, 4, t->length);
+	for (size_t i = 0; i < t->length; i++) {
+		if (t->path[i].type == OP_NUM_KEY) cborPutInteger(o, t->path[i].n);
+		else if (!text(o, t->path[i].s)) return false;
+	}
+	return true;
+}
+static void put_range(CborOut *o, const op_target *t) {
+	text(o, "range");
+	cborPutHead(o, 4, 2);
+	cborPutInteger(o, t->from), cborPutInteger(o, t->to);
+}
+static bool put_value(CborOut *o, const void *v) {
+	if (v == NULL) return cborPutNull(o), true;
+	return pk_put(o, v);
+}
+static int entry_order(const void *a, const void *b) {
+	const char *x = (*(const ch_entry *const *)a)->key, *y = (*(const ch_entry *const *)b)->key;
+	return cborKeyCompare(x, strlen(x), y, strlen(y));
+}
+static bool put_metadata(CborOut *o, const ch_header *h) {
+	const ch_entry **order = allocate((h->metadata_length + 1) * sizeof *order);
+	for (size_t i = 0; i < h->metadata_length; i++) order[i] = &h->metadata[i];
+	qsort(order, h->metadata_length, sizeof *order, entry_order);
+	bool ok = true;
+	cborPutHead(o, 5, h->metadata_length);
+	for (size_t i = 0; i < h->metadata_length && ok; i++)
+		ok = (i == 0 || entry_order(&order[i - 1], &order[i]) != 0) && text(o, order[i]->key) && put_value(o, order[i]->value);
+	free(order);
+	return ok;
+}
+static bool put_commit(CborOut *o, const cm_commit *c) {
+	const ch_header *h = &c->change;
+	cborPutHead(o, 5, 8 + (h->reader != NULL) + (h->external != NULL) + (h->metadata != NULL) + (c->has_base != 0) + (c->merge != NULL));
+	if (c->has_base) text(o, "base"), cborPutBytes(o, c->base, CM_NAME);
+	text(o, "time"), cborPutInteger(o, h->time);
+	if (text(o, "actor"), !put_value(o, h->actor)) return false;
+	if (c->merge != NULL && (text(o, "merge"), !text(o, c->merge))) return false;
+	text(o, "nonce"), cborPutInteger(o, c->nonce);
+	if (text(o, "table"), !text(o, c->table)) return false;
+	if (h->reader != NULL && (text(o, "reader"), !text(o, h->reader))) return false;
+	text(o, "signer"), cborPutBytes(o, c->signer, c->signer_length);
+	text(o, "lamport"), cborPutInteger(o, c->lamport);
+	text(o, "parents"), put_names(o, c->parents, c->parents_length);
+	text(o, "patches");
+	cborPutHead(o, 4, c->patches_length);
+	for (size_t i = 0; i < c->patches_length; i++) {
+		const op_patch *p = &c->patches[i];
+		const cm_replaces *r = c->replaces != NULL && c->replaces[i].has ? &c->replaces[i] : NULL;
+		cborPutHead(o, 5, 1 + (p->place.has_range != 0) + (p->has_value != 0) + (p->has_move != 0) + (r != NULL));
+		if (p->has_move) {
+			text(o, "move");
+			cborPutHead(o, 5, 1 + (p->move.has_range != 0));
+			if (!put_path(o, &p->move)) return false;
+			if (p->move.has_range) put_range(o, &p->move);
+		}
+		if (!put_path(o, &p->place)) return false;
+		if (p->place.has_range) put_range(o, &p->place);
+		if (p->has_value && (text(o, "value"), p->value == NULL || !pk_put(o, p->value))) return false;
+		if (r != NULL) text(o, "replaces"), put_names(o, r->names, r->length);
+	}
+	if (h->external != NULL) {
+		text(o, "external");
+		cborPutHead(o, 4, h->external_length);
+		for (size_t i = 0; i < h->external_length; i++) {
+			const ch_site *x = &h->external[i];
+			cborPutHead(o, 5, 2 + (x->has_column != 0) + (x->function != NULL));
+			if (text(o, "file"), !text(o, x->file)) return false;
+			text(o, "line"), cborPutInteger(o, x->line);
+			if (x->has_column) text(o, "column"), cborPutInteger(o, x->column);
+			if (x->function != NULL && (text(o, "function"), !text(o, x->function))) return false;
+		}
+	}
+	if (h->metadata != NULL && (text(o, "metadata"), !put_metadata(o, h))) return false;
+	return true;
+}
+
 cm_code cm_encode(const cm_commit *commit, uint8_t **out, size_t *length, char **field) {
 	if (field != NULL) *field = NULL;
+	// counted, then written into exactly that
+	CborOut o = {NULL, 0, 0, false};
+	if (fits(commit) && put_commit(&o, commit)) {
+		o = (CborOut){allocate(o.length ? o.length : 1), o.length, 0, false};
+		put_commit(&o, commit);
+		*out = o.data;
+		*length = o.length;
+		return CM_OK;
+	}
+	// a no: the Json form says which, and names the field (the rules in one place)
 	Json *j = cm_to_json(commit);
 	if (j == NULL) return *out = NULL, *length = 0, CM_CANNOT_CARRY;
 	cm_code code = cm_encode_json(j, out, length, field);
@@ -426,13 +597,24 @@ static cm_code cm_of_json(const Json *c, cm_commit *out, char **field) {
 	if (merge != NULL) out->merge = dup(a, merge);
 	out->lamport = (int64_t)jsonGet(c, "lamport")->number;
 	op_patch *list = grab(a, (size_t)patches->array.count * sizeof *list);
+	cm_replaces *replaces = NULL;
 	for (int i = 0; i < patches->array.count; i++) {
 		const Json *p = patches->array.items[i], *value = jsonGet(p, "value"), *move = jsonGet(p, "move");
 		read_target(a, p, &list[i].place);
 		if (value != NULL) list[i].has_value = 1, list[i].value = hold(a, value);
 		if (move != NULL) list[i].has_move = 1, read_target(a, move, &list[i].move);
+		const Json *r = jsonGet(p, "replaces");
+		if (r == NULL) continue;
+		if (replaces == NULL) {
+			replaces = grab(a, (size_t)patches->array.count * sizeof *replaces);
+			memset(replaces, 0, (size_t)patches->array.count * sizeof *replaces);
+		}
+		uint8_t(*names)[CM_NAME] = grab(a, (size_t)r->array.count * CM_NAME);
+		for (int k = 0; k < r->array.count; k++) memcpy(names[k], r->array.items[k]->bytes.data, CM_NAME);
+		replaces[i] = (cm_replaces){.has = 1, .names = (const uint8_t(*)[CM_NAME])names, .length = (size_t)r->array.count};
 	}
 	out->patches = list;
+	out->replaces = replaces;
 	out->patches_length = (size_t)patches->array.count;
 	return CM_OK;
 }
@@ -535,6 +717,11 @@ Json *cm_to_json(const cm_commit *c) {
 			jsonAdd(o, "value", v);
 		}
 		if (p->has_move) jsonAdd(o, "move", target_json(jsonObject(), &p->move));
+		if (c->replaces != NULL && c->replaces[i].has) {
+			Json *names = jsonArray();
+			jsonAdd(o, "replaces", names);
+			for (size_t k = 0; k < c->replaces[i].length; k++) jsonPush(names, jsonBytes(c->replaces[i].names[k], CM_NAME));
+		}
 	}
 	return j;
 bad:

@@ -403,9 +403,12 @@ hy_added hy_add(hy_history *h, const uint8_t *bytes, size_t length, const hy_mad
 	if (c->parents_length) memcpy(parents, c->parents, c->parents_length * CM_NAME);
 	k->parents = (const uint8_t(*)[CM_NAME])parents;
 	k->parents_length = c->parents_length;
+	// several parents, no base, no merge: key patches only, on all of them
 	if (c->merge != NULL) k->merge = copyString(c->merge);
 	else if (c->has_base) k->has_base = 1, memcpy(k->base, c->base, CM_NAME);
-	else if (c->parents_length > 0) k->has_base = 1, memcpy(k->base, c->parents[0], CM_NAME);
+	else if (c->parents_length == 1) k->has_base = 1, memcpy(k->base, c->parents[0], CM_NAME);
+	for (size_t i = 0; c->replaces != NULL && i < c->patches_length; i++)
+		if (c->replaces[i].has) k->replaces = true;
 	k->lamport = c->lamport;
 	size_t missing = 0;
 	for (size_t i = 0; i < c->parents_length; i++) missing += !is_taken(h, c->parents[i]);
@@ -564,9 +567,9 @@ uint64_t hy_serial(const hy_history *h) { return h->serial; }
 // --- since ---
 
 size_t hy_follows(const hy_kept *k, const uint8_t (**out)[CM_NAME]) {
-	if (k->merge != NULL) return *out = k->parents, k->parents_length;
+	if (k->merge != NULL || !k->has_base) return *out = k->parents, k->parents_length;
 	*out = (const uint8_t(*)[CM_NAME])k->base;
-	return k->has_base ? 1 : 0;
+	return 1;
 }
 
 // a set of kept, by address: each its number

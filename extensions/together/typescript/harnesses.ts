@@ -79,7 +79,16 @@ export function createCommits() {
 			parents,
 			lamport: r.lamport ??
 				1 + Math.max(0, ...parents.map((p: Uint8Array) => lamportOf(p) ?? 0)),
-			patches: revive(r.patches ?? []) as Commit["patches"],
+			// replaces: labels or names (68 hex digits), sorted
+			patches: (r.patches ?? []).map((p: Request) => {
+				const out = revive(p) as Commit["patches"][number]
+				if (Array.isArray(p.replaces)) {
+					out.replaces = p.replaces.map((x: unknown) =>
+						typeof x === "string" ? resolve(x) : revive(x) as Uint8Array
+					).sort(compare)
+				}
+				return out
+			}),
 		}
 		if (r.reader !== undefined) c.reader = r.reader
 		if (r.external !== undefined) c.external = r.external

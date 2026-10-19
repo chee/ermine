@@ -10,7 +10,9 @@ import type { Metadata } from "@ermine/node/entry"
 
 export type Key = string | number
 export type Place = { path: readonly Key[]; range?: readonly [number, number] }
-export type Patch = Place & { value?: unknown; move?: Place }
+// replaces: the names of the writes at or under its path its writer held and means to replace,
+// ascending (as parents). absent: ancestry decides (an older commit's); empty: none
+export type Patch = Place & { value?: unknown; move?: Place; replaces?: Uint8Array[] }
 
 // an optional field absent, or undefined, is left out; null is a value
 export type Commit = {
@@ -32,7 +34,8 @@ export type Commit = {
 	nonce: number
 	// the node's heads it was made on, by name (a multihash, below), ascending
 	parents: Uint8Array[]
-	// with several parents: the one its patches are over (a merge says what it keeps in them)
+	// with several parents: the one its patches are over (a merge says what it keeps in them). none
+	// needed when every patch is a key patch (keyPatch)
 	base?: Uint8Array
 	// with several parents and no base: a merge rule's name. its patches are over the merge of its
 	// parents by that rule; a device that doesn't know the rule can't read it
@@ -156,14 +159,25 @@ export function compare(a: Uint8Array, b: Uint8Array): number {
 	return a.length - b.length
 }
 
+// names, ascending and each once: parents, replaces
+function names(v: unknown): boolean {
+	if (!Array.isArray(v) || !v.every(isName)) return false
+	for (let i = 1; i < v.length; i++) if (compare(v[i - 1], v[i]) >= 0) return false
+	return true
+}
+
 function place(x: unknown, keys: ReadonlySet<string>): boolean {
 	if (!isFields(x)) return false
 	for (const k of Object.keys(x)) if (!keys.has(k)) return false
 	if (!Array.isArray(x.path) || !x.path.every(isKey)) return false
 	return !("range" in x) || isRange(x.range)
 }
-const PATCH: ReadonlySet<string> = new Set(["path", "range", "value", "move"])
+const PATCH: ReadonlySet<string> = new Set(["path", "range", "value", "move", "replaces"])
 const MOVE: ReadonlySet<string> = new Set(["path", "range"])
+// a key patch: a set or a delete at a path of keys, no range, move or list index
+const keyPatch = (p: unknown) =>
+	isFields(p) && !("range" in p) && !("move" in p) && Array.isArray(p.path) &&
+	p.path.every((k) => typeof k === "string")
 
 function site(x: unknown): boolean {
 	if (!isFields(x) || typeof x.file !== "string" || !small(x.line)) return false
@@ -184,11 +198,7 @@ const RULES: { [k in typeof FIELDS[number]]: (v: unknown, c: Fields) => boolean 
 	time: whole,
 	signer: multikey,
 	nonce: whole,
-	parents: (v) => {
-		if (!Array.isArray(v) || !v.every(isName)) return false
-		for (let i = 1; i < v.length; i++) if (compare(v[i - 1], v[i]) >= 0) return false
-		return true
-	},
+	parents: (v) => names(v),
 	base: (v, c) =>
 		isName(v) && Array.isArray(c.parents) && c.parents.length >= 2 &&
 		c.parents.some((p) => p instanceof Uint8Array && compare(p, v) === 0),
@@ -199,7 +209,10 @@ const RULES: { [k in typeof FIELDS[number]]: (v: unknown, c: Fields) => boolean 
 	lamport: (v) => whole(v) && v >= 1,
 	patches: (v) =>
 		Array.isArray(v) &&
-		v.every((p) => place(p, PATCH) && (!("move" in p) || !("value" in p) && place(p.move, MOVE))),
+		v.every((p) =>
+			place(p, PATCH) && (!("move" in p) || !("value" in p) && place(p.move, MOVE)) &&
+			(!("replaces" in p) || names(p.replaces))
+		),
 }
 
 // a key not listed (when strict: encode), then the first field that says no, in the table's order;
@@ -211,8 +224,10 @@ function check(c: Fields, strict: boolean): string | undefined {
 	if (strict && stray.length > 0) return stray[0]
 	for (const k of FIELDS) {
 		if (!(k in c)) {
+			// base: with several parents, no merge and a patch not a key patch
 			const needed = !OPTIONAL.has(k) ||
-				k === "base" && Array.isArray(c.parents) && c.parents.length >= 2 && !("merge" in c)
+				k === "base" && Array.isArray(c.parents) && c.parents.length >= 2 && !("merge" in c) &&
+					!(Array.isArray(c.patches) && c.patches.every(keyPatch))
 			if (needed) return k
 		} else if (!RULES[k](c[k], c)) return k
 	}

@@ -1,7 +1,7 @@
 #!/bin/sh
 # three littlesync-pigs in a line over two pty pairs, a - b - c: b opens both (two --port, two links)
 # and relays. a adds a pig, c sees it; c moves the first pig (d3b58353), a sees it moved; a carries
-# its pig, c sees it held. Screens in build/hop/*.txt, protocol events in build/hop/*.log.
+# its pig, c sees it held; each sees the others' pointers (presence rows, b relaying). Screens in build/hop/*.txt, protocol events in build/hop/*.log.
 # Usage: sh test/hop.sh build/littlesync-pigs
 pigs=${1:-build/littlesync-pigs}
 d=build/hop
@@ -36,6 +36,9 @@ grep "d3b58353 x=0.50" $d/a-before.txt >/dev/null && echo "  ok   a had the firs
 	{ echo "  FAIL a-before lacks d3b58353 at 0.50"; failed=1; }
 check $d/a.txt "d3b58353 x=0.66" "a sees the first pig where c moved it"
 check $d/c-mid.txt "held by otter" "c sees a's pig held while a carries it"
+check $d/c-mid.txt "^@ otter x=" "c sees a's pointer (its presence row, through b)"
+check $d/c-mid.txt "^@ newt x=0.50 y=0.50" "c sees b's pointer"
+check $d/a.txt "^@ wren x=0.66" "a sees c's pointer where c left it"
 ! grep -q "held by" $d/c.txt && echo "  ok   c sees it put down" || { echo "  FAIL c still shows it held"; failed=1; }
 la=$(grep '^[ab] [0-9a-f]\{8\} ' $d/a.txt | cut -d' ' -f1-4 | sort); lc=$(grep '^[ab] [0-9a-f]\{8\} ' $d/c.txt | cut -d' ' -f1-4 | sort)
 [ -n "$la" ] && [ "$la" = "$lc" ] && echo "  ok   a and c list the same pigs at the same places" ||

@@ -35,12 +35,14 @@ export type Kept = {
 	bytes: Uint8Array
 	table: string
 	parents: Uint8Array[]
-	// the parent its patches are over: the only one, or the base of several; none for a root or a
-	// merge
+	// the parent its patches are over: the only one, or the base of several; none for a root, a
+	// merge, or key patches on several
 	base: Uint8Array | undefined
 	// a merge commit's rule: its patches are over the merge of its parents
 	merge: string | undefined
 	lamport: number
+	// a patch names what it replaces: its tables are the lists' (lists.ts), not its base's patched
+	replaces?: true
 }
 
 export type History = {
@@ -204,10 +206,14 @@ export function createHistory(
 				bytes,
 				table: commit.table,
 				parents: commit.parents,
-				base: commit.merge === undefined ? commit.base ?? commit.parents[0] : undefined,
+				// several parents, no base, no merge: key patches only, on all of them
+				base: commit.merge === undefined && commit.parents.length < 2
+					? commit.parents[0]
+					: commit.base,
 				merge: commit.merge,
 				lamport: commit.lamport,
 			}
+			if (commit.patches.some((p) => p.replaces !== undefined)) kept.replaces = true
 			for (const p of commit.parents) {
 				if (refusals.has(hex(p))) {
 					refuse(n, "parent", hex(p))
@@ -275,10 +281,10 @@ export const agreed = (a: Kept, b: Kept) =>
 	a.lamport !== b.lamport ? b.lamport - a.lamport : compare(b.name, a.name)
 
 // what a commit's tables follow from: a merge's parents, else its base (a commit with a base keeps
-// what that one held, whatever its other parents did), else nothing (a root)
+// what that one held, whatever its other parents did), else its parents (key patches on all of
+// them; none: a root)
 export function follows(k: Kept): Uint8Array[] {
-	if (k.merge !== undefined) return k.parents
-	return k.base === undefined ? [] : [k.base]
+	return k.merge !== undefined || k.base === undefined ? k.parents : [k.base]
 }
 
 // the commits since heads' common ancestors, along follows. walked back from the heads in the

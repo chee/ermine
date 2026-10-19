@@ -1,6 +1,8 @@
 // A node's tables at a commit (extensions/together/typescript/replay.ts), in C: back along the bases
 // to the newest snapshot (or the root), then forward, each commit decoded from its bytes and
-// applied to its table in place (op's apply, core/op/c/apply.h). Everything built here is new:
+// applied to its table in place as sync takes it (ls_applies, lists.h). Key patches on several
+// parents, or a commit naming what it replaces: its tables are the lists' of it and its ancestors
+// (ls_state); the walk starts there too. Everything built here is new:
 // decoded from bytes, shared with nothing, so applying in place costs the patches, not the tables.
 //
 // Tables are entries (core/node/c/node.h): each table's value, and the change that last touched it,
@@ -93,6 +95,11 @@ rp_code rp_replay(const hy_history *h, const uint8_t name[CM_NAME], rp_snapshots
 bool rp_matches(const hy_history *h, const uint8_t name[CM_NAME], const uint8_t *bytes, size_t length,
 	rp_snapshots snapshots, void *context, const rp_merges *merges);
 
+// the tables a commit's own patches make, as its writer had them: on its base's tables (a merge's: on
+// its rule's merge), whatever the lists say of it; a whole write's value (lists.h)
+rp_code rp_written(const hy_history *h, const uint8_t name[CM_NAME], rp_snapshots snapshots, void *context,
+	const rp_merges *merges, rp_tables *out);
+
 // the tables at name when had without merging: a snapshot, or a walk back to one or the root that
 // meets no merge commit; else RP_UNMERGED
 rp_code rp_plain(const hy_history *h, const uint8_t name[CM_NAME], rp_snapshots snapshots, void *context,
@@ -107,7 +114,11 @@ rp_code rp_apply(rp_tables *t, cm_commit *commit, const uint8_t name[CM_NAME]);
 // What it adds is the tables' own; the rest is borrowed from change
 const ch_header *rp_signed(rp_tables *t, const ch_header *change, const uint8_t *signer, size_t signer_length,
 	const uint8_t name[CM_NAME]);
-// whether the commit's patches would apply to its table: nothing is changed, here or in the commit
+// rp_apply as sync takes the patches (ls_applies, lists.h): a key patch makes its missing parents, one
+// under a value not a map is left out
+rp_code rp_applies(rp_tables *t, cm_commit *commit, const uint8_t name[CM_NAME]);
+// whether the commit's patches would apply to its table (ls_applies): nothing is changed, here or in
+// the commit
 bool rp_check(const rp_tables *t, const cm_commit *commit);
 
 #endif

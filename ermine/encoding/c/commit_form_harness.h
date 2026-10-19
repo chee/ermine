@@ -16,9 +16,10 @@ void cf_put_hex(FILE *out, const uint8_t *bytes, size_t length);
 bool cf_unhex(const char *text, uint8_t **bytes, size_t *length);
 // the value (a request's) in canonical CBOR, the line's memory; false: it has no encoding
 bool cf_value_bytes(const op_value *value, uint8_t **bytes, size_t *length);
-// a commit from its JSON form, as a Json for cm_encode_json: signer, each parent and base given as
-// a string are hex (anything else is passed on as its value, to be refused); not a map: the value
-// it stands for. A fresh value (jsonFree it); NULL with *bad the error text when a hex is not
+// a commit from its JSON form, as a Json for cm_encode_json: signer, each parent, base and each name
+// a patch replaces given as a string are hex (anything else is passed on as its value, to be
+// refused); not a map: the value it stands for. A fresh value (jsonFree it); NULL with *bad the
+// error text when a hex is not
 Json *cf_commit(const op_value *form, const char **bad);
 // how a parent or base is written in a commit; NULL: hex
 typedef void (*cf_name)(void *context, FILE *out, const uint8_t name[CM_NAME]);

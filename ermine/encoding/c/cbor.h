@@ -16,7 +16,7 @@
 // decoding accepts exactly what the encoder writes (never a whole number as a float, a longer head,
 // a bignum a plain integer holds); anything else is rejected. ermine/encoding/typescript/cbor.ts's
 // header is the rule.
-// memory: encoding writes into the caller's buffer; decoding builds with json.h's constructors.
+// memory: encoding writes into the caller's buffer (or one it grows, CborOut); decoding builds with json.h's constructors.
 // nothing recurses; at most CBOR_DEPTH nested containers (cbor.ts's DEPTH).
 
 #ifndef CBOR_H
@@ -26,6 +26,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 /** how many containers a value nests at most, one inside the next */
 #define CBOR_DEPTH 1024
@@ -40,6 +41,44 @@
  * reason, a static string, in *why; *length is then meaningless.
  */
 bool cborEncode(const Json *value, unsigned char *out, size_t capacity, size_t *length, const char **why);
+
+// writing by pieces: a value's encoding item by item, the same bytes cborEncode writes for the same
+// value (cborEncode is these). A list or map is its head (cborPutHead, major 4 or 5, how many items
+// or pairs), then its items, a map's each a key (cborPutText) and its value, the keys in
+// cborKeyCompare's order, each once: the writer's to keep, nothing checks
+
+/**
+ * Bytes being written. Without `grows`, into the caller's data[0 .. capacity): length counts every
+ * byte, past capacity too (only the first capacity are written: write again with room for length;
+ * data may be NULL when capacity is 0). With `grows`, data is malloc'd (or NULL to begin) and made
+ * bigger to hold them all: free it. Out of memory aborts
+ */
+typedef struct CborOut {
+	unsigned char *data;
+	size_t capacity, length;
+	bool grows;
+} CborOut;
+
+/** a head in its shortest form: major 0 a whole number, 1 a negative one (-1 - argument), 2 bytes and 3 text (their length), 4 a list, 5 a map (items, pairs), 6 a tag */
+void cborPutHead(CborOut *out, unsigned major, uint64_t argument);
+void cborPutNull(CborOut *out);
+void cborPutBoolean(CborOut *out, bool value);
+/** a number as jsonNumber holds it: a whole one an integer, -0 as 0, else the shortest float */
+void cborPutNumber(CborOut *out, double value);
+void cborPutInteger(CborOut *out, int64_t value);
+/** a whole number from its sign and magnitude, big-endian (leading zeros allowed), as jsonWhole holds it */
+void cborPutWhole(CborOut *out, bool negative, const unsigned char *magnitude, size_t length);
+/** text as json.h holds it (C0 80 is 00); false, nothing written, when it is not UTF-8 (cborText) */
+bool cborPutText(CborOut *out, const char *text, size_t length);
+void cborPutBytes(CborOut *out, const void *data, size_t length);
+/** a typed array: `count` elements of the kind's C type */
+void cborPutTyped(CborOut *out, JsonKind kind, const void *data, size_t count);
+/** a stand-in's tag: its kind, one value, next */
+void cborPutStand(CborOut *out);
+/** a whole value, as cborEncode; false when it has none, with a reason in *why (may be NULL) */
+bool cborPut(CborOut *out, const Json *value, const char **why);
+/** two keys in the order of their encodings (the shorter first, then byte by byte): <0, 0, >0 */
+int cborKeyCompare(const char *a, size_t aLength, const char *b, size_t bLength);
 
 /**
  * The value `length` bytes encode, as cborEncode writes it, a fresh value

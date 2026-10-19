@@ -1,5 +1,5 @@
 {
-	"title": "a head with a higher lamport shows, whatever the names",
+	"title": "a head with a higher lamport shows, whatever the names; a write then goes on every head, replacing only what showed: one head, the other's item still listed",
 	"steps": [
 		{
 			"op": "host",
@@ -88,7 +88,7 @@
 			"expect": { "commits": 1 }
 		},
 		{ "op": "quiet", "expect": {} },
-		{ "op": "heads", "host": "a", "id": "x", "expect": { "heads": ["b2", "b1"] } },
+		{ "op": "heads", "host": "a", "id": "x", "expect": { "heads": ["b2"] } },
 		{ "op": "read", "host": "a", "id": "x", "expect": { "value": { "n": 4 } } },
 		{
 			"op": "conflicts",

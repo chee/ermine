@@ -1,14 +1,20 @@
 // littlesync-pigs: the Mac peer of a littlesync device (littlesync.h). Opens a serial port (the first
 // /dev/cu.usbmodem*, or --port PATH), follows lab-pig's room and its pigs, and shows them as letters on
 // a plain field in the terminal, and under it a line per pig: where, what it costs (stored bytes,
-// commits held, parents of its newest commit), who holds it; then the room's cost. Keys: tab selects,
-// space picks up and drops, arrows or hjkl carry (ephemeral beats go out while it is carried), a adds a
-// pig, q quits.
+// commits held, parents of its newest commit), who holds it; then the room's cost. A pig two devices
+// dropped at once (two items at its node, a clash) is drawn twice, the other faint, with an "also" line
+// for it under the pig's. Keys: tab selects, space picks up and drops (a drop replaces every item: the
+// clash ends), arrows or hjkl move this peer's pointer (+) and carry what it holds (ephemeral beats go
+// out while it is carried), a adds a pig, q quits. The pointer is this peer's presence row at the room
+// ({name, colour, pointer: {x, y}}, as web pigs' rows are); the others' pointers are drawn as @, and
+// listed under the pigs ("@ name x= y="), web pigs' and littlesync devices' alike.
 //
-//   littlesync-pigs [--port PATH | --pty | --pipe]... [--state DIR] [--room ID] [--name NAME]
+//   littlesync-pigs [--port PATH | --pty | --pipe | --http URL]... [--state DIR] [--room ID] [--name NAME]
 //                   [--dump FILE] [--log FILE] [--keys KEYS] [--exit-after MS] [--pty-file FILE]
 // streams: each --port and --pty is one more (LS_LINKS at most), a link of its own; the device relays
 //   between them (a hop: a - b - c with b given two). None: the first /dev/cu.usbmodem*.
+// --http URL: the gateway (http://host:port, or https://galaxy.observer; extensions/together/stacks/littlesync/gateway) over its
+//   HTTP sessions (http.h), a link too; its posts on a thread of their own, so the loop never waits.
 // --pty: makes a pty and talks on its master; its slave path is printed on stderr (and written to
 //   --pty-file, a line per pty): another littlesync-pigs --port PATH is the other end. --pipe: the
 //   protocol is stdin and stdout, no keyboard (for fifos, a pipeline). --state DIR: this peer's key and nodes (default
@@ -17,6 +23,7 @@
 //   --exit-after MS: quits then. Without a terminal there is no drawing: --dump is the screen.
 #define _DARWIN_C_SOURCE
 #include "../../../../extensions/together/stacks/littlesync/littlesync.h"
+#include "../../../../extensions/together/stacks/littlesync/http.h"
 #include "pigs.h"
 
 #include <ctype.h>
@@ -25,6 +32,7 @@
 #include <glob.h>
 #include <math.h>
 #include <poll.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,7 +42,7 @@
 #include <time.h>
 #include <unistd.h>
 
-enum { FW = 60, FH = 18, MAXPIGS = 26 };
+enum { FW = 60, FH = 18, MAXPIGS = 26, MAXITEMS = 4 };
 static const char *NAMES[] = {"otter", "newt", "wren", "moth", "vole", "finch", "toad", "hare", "mole", "kiwi"};
 static const char *COLOURS[] = {"#d1495b", "#2e86ab", "#3b8b5a", "#c27c0e", "#8e44ad", "#16a085", "#e4572e"};
 
@@ -76,10 +84,12 @@ typedef struct {
 } pigslot;
 
 static ls_dev *dev;
-// the byte streams, each a link: read from rfd, written to wfd
+// the byte streams, each a link: read from rfd, written to wfd. http: the gateway's session, rfd the
+// pipe its thread says a post is over on
 typedef struct {
 	int rfd, wfd, keep_open, pipe;
 	struct ls_link *link;
+	ls_http *http;
 } stream;
 static stream streams[LS_LINKS];
 static int n_streams;
@@ -90,7 +100,7 @@ static char my_who[LS_KEY_LEN * 2 + 1];
 static pigslot pigs[MAXPIGS];
 static int n_pigs, selected;
 static ls_node *carrying; // the pig carried by this peer
-static double carry_x, carry_y;
+static double carry_x = 0.5, carry_y = 0.5; // this peer's pointer: a carried pig is there
 
 static int cmp_id(const void *a, const void *b) { return strcmp(((const pigslot *)a)->id, ((const pigslot *)b)->id); }
 
@@ -139,9 +149,20 @@ static int where_is(const pigslot *p, double *x, double *y, const char **by) {
 	return 1;
 }
 
+// a presence row's pointer (0 to 1 each way, as web pigs clamp it) and name. 0: none
+static int pointer_of(const ls_row *r, double *x, double *y, const char **name) {
+	const op_value *v = r->value, *p = v && v->type == OP_MAP ? op_get(v, "pointer") : NULL;
+	if (p == NULL || p->type != OP_MAP) return 0;
+	const op_value *px = op_get(p, "x"), *py = op_get(p, "y"), *n = op_get(v, "name");
+	*x = px && px->type == OP_NUM && px->num == px->num ? fmin(fmax(px->num, 0), 1) : 0.5;
+	*y = py && py->type == OP_NUM && py->num == py->num ? fmin(fmax(py->num, 0), 1) : 0.5;
+	if (name != NULL) *name = n && n->type == OP_STR ? n->str : "?";
+	return 1;
+}
+
 // ---- the screen
 
-static char screen[(FW + 8) * (FH + 8 + MAXPIGS) + 1024];
+static char screen[(FW + 8) * (FH + 8 + MAXPIGS * 2) + 1024];
 static size_t screen_len;
 static void put(const char *s) {
 	size_t n = strlen(s);
@@ -166,6 +187,20 @@ static void render(int ansi) {
 	grid[FH - 1][FW - 1] = 'B';
 	int cell[FH][FW];
 	memset(cell, 0, sizeof cell);
+	// the other items of a clash first, faint (3), so a pig drawn over one wins the cell
+	for (int i = 0; i < n_pigs; i++) {
+		ls_item it[MAXITEMS];
+		size_t k = ls_values(pigs[i].node, NULL, 0, it, MAXITEMS);
+		for (size_t j = 1; j < k && j < MAXITEMS; j++) {
+			pig_value o;
+			if (it[j].value == NULL) continue;
+			pig_read(it[j].value, pigs[i].id, &o);
+			if (o.binned) continue;
+			int cx = (int)floor(fmin(fmax(o.x, 0), 1) * (FW - 1)), cy = (int)floor(fmin(fmax(o.y, 0), 1) * (FH - 1));
+			grid[cy][cx] = (char)('a' + i);
+			cell[cy][cx] = 3;
+		}
+	}
 	for (int i = 0; i < n_pigs; i++) {
 		double x, y;
 		const char *by;
@@ -173,6 +208,13 @@ static void render(int ansi) {
 		int cx = (int)floor(fmin(fmax(x, 0), 1) * (FW - 1)), cy = (int)floor(fmin(fmax(y, 0), 1) * (FH - 1));
 		grid[cy][cx] = (char)(i == selected && !ansi ? 'A' + i : 'a' + i);
 		cell[cy][cx] = i == selected ? 2 : 1;
+	}
+	// the pointers under the pigs: the others' (@), then mine (+)
+	for (size_t i = 0, k = ls_rows(room); i < k; i++) {
+		double x, y;
+		if (!pointer_of(ls_row_at(room, i), &x, &y, NULL)) continue;
+		int cx = (int)floor(x * (FW - 1)), cy = (int)floor(y * (FH - 1));
+		if (cell[cy][cx] == 0) grid[cy][cx] = ls_row_at(room, i)->own ? '+' : '@';
 	}
 	put("+");
 	for (int x = 0; x < FW; x++) put("-");
@@ -182,6 +224,7 @@ static void render(int ansi) {
 		for (int x = 0; x < FW; x++) {
 			char c[16];
 			if (ansi && cell[y][x] == 2) snprintf(c, sizeof c, "\x1b[7m%c\x1b[0m", grid[y][x]);
+			else if (ansi && cell[y][x] == 3) snprintf(c, sizeof c, "\x1b[2m%c\x1b[0m", grid[y][x]);
 			else snprintf(c, sizeof c, "%c", grid[y][x]);
 			put(c);
 		}
@@ -193,7 +236,7 @@ static void render(int ansi) {
 	char carried = '-';
 	for (int i = 0; i < n_pigs; i++)
 		if (pigs[i].node == carrying) carried = (char)('a' + i);
-	snprintf(line, sizeof line, "selected %c  carrying %c  (tab select, space pick up / drop, hjkl or arrows carry, a add, q quit)\n",
+	snprintf(line, sizeof line, "selected %c  carrying %c  (tab select, space pick up / drop, hjkl or arrows point and carry, a add, q quit)\n",
 		n_pigs ? 'a' + selected : '-', carried);
 	put(line);
 	for (int i = 0; i < n_pigs; i++) {
@@ -205,6 +248,33 @@ static void render(int ansi) {
 		ls_cost c = ls_cost_of(pigs[i].node);
 		snprintf(line, sizeof line, "%c %.8s x=%.2f y=%.2f %5zuB %2zuc %zup%s%s%s%s\n", 'a' + i, pigs[i].id + 9, x, y, c.stored,
 			c.commits, c.newest.parents, st.shame ? " shame" : "", shown ? "" : " binned", by ? " held by " : "", by ? by : "");
+		put(line);
+		// a clash: the items not shown, each where it was dropped and by whom (the first 4 hex of its key)
+		ls_item it[MAXITEMS];
+		size_t k = ls_values(pigs[i].node, NULL, 0, it, MAXITEMS);
+		for (size_t j = 1; j < k; j++) {
+			char who[16] = "?";
+			if (j < MAXITEMS && it[j].signer != NULL) {
+				if (memcmp(it[j].signer, ls_key(dev), LS_KEY_LEN) == 0) snprintf(who, sizeof who, "you");
+				else snprintf(who, sizeof who, "%02x%02x", it[j].signer[2], it[j].signer[3]);
+			}
+			pig_value o;
+			if (j >= MAXITEMS || it[j].far) snprintf(line, sizeof line, "  also (kept by name only)\n");
+			else if (it[j].value == NULL) snprintf(line, sizeof line, "  also gone, by %s\n", who);
+			else {
+				pig_read(it[j].value, pigs[i].id, &o);
+				snprintf(line, sizeof line, "  also x=%.2f y=%.2f by %s%s\n", o.x, o.y, who, o.binned ? " binned" : "");
+			}
+			put(line);
+		}
+	}
+	// the others' pointers: name, where, the first 4 hex of their key
+	for (size_t i = 0, k = ls_rows(room); i < k; i++) {
+		const ls_row *r = ls_row_at(room, i);
+		double x, y;
+		const char *name;
+		if (r->own || !pointer_of(r, &x, &y, &name)) continue;
+		snprintf(line, sizeof line, "@ %s x=%.2f y=%.2f %02x%02x\n", name, x, y, r->who[2], r->who[3]);
 		put(line);
 	}
 	ls_cost c = ls_cost_of(room);
@@ -265,8 +335,23 @@ static void add_pig(void) {
 		if (strcmp(pigs[i].id, id) == 0) selected = i;
 }
 
+// my presence row at the room: name, colour, the pointer
+static void point(void) {
+	op_value *v = op_map(), *p = op_map();
+	op_set(p, "x", op_num(carry_x));
+	op_set(p, "y", op_num(carry_y));
+	op_set(v, "name", op_str(my_name));
+	op_set(v, "colour", op_str(my_colour));
+	op_set(v, "pointer", p);
+	ls_presence(room, v);
+	op_free(v);
+}
+
+// the pointer moved there, and what it carries with it
 static void carry_to(double x, double y) {
 	carry_x = fmin(fmax(x, 0), 1), carry_y = fmin(fmax(y, 0), 1);
+	point();
+	if (carrying == NULL) return;
 	op_value *v = pig_make_held(carry_x, carry_y, my_name, my_colour, my_who);
 	ls_hold(carrying, v);
 	op_free(v);
@@ -281,12 +366,13 @@ static void space(void) {
 		carry_to(st.x, st.y);
 		return;
 	}
-	// let go: one stored commit, in the corner of shame or the bin if the feet are there
+	// let go: one stored commit, in the corner of shame or the bin if the feet are there. A person
+	// putting a pig down means "this is where it is": it replaces every item (ls_pick), ending a clash
 	pig_value p = {carry_x, carry_y, (double)wall_ms(), arc4random(), 0, 0};
 	p.shame = carry_x > 0.78 && carry_y < 0.45;
 	p.binned = carry_x > 0.92 && carry_y > 0.88;
 	op_value *v = pig_make(&p);
-	ls_put(carrying, v);
+	ls_pick(carrying, v);
 	op_free(v);
 	if (p.binned) {
 		for (int i = 0; i < n_pigs; i++)
@@ -309,12 +395,32 @@ static int key(int c) {
 		break;
 	case ' ': space(); break;
 	case 'a': add_pig(); break;
-	case 'h': case 'D': if (carrying) carry_to(carry_x - 0.02, carry_y); break;
-	case 'l': case 'C': if (carrying) carry_to(carry_x + 0.02, carry_y); break;
-	case 'k': case 'A': if (carrying) carry_to(carry_x, carry_y - 0.03); break;
-	case 'j': case 'B': if (carrying) carry_to(carry_x, carry_y + 0.03); break;
+	case 'h': case 'D': carry_to(carry_x - 0.02, carry_y); break;
+	case 'l': case 'C': carry_to(carry_x + 0.02, carry_y); break;
+	case 'k': case 'A': carry_to(carry_x, carry_y - 0.03); break;
+	case 'j': case 'B': carry_to(carry_x, carry_y + 0.03); break;
 	}
 	return 1;
+}
+
+// ---- the gateway over HTTP: one post at a time on a thread; a byte down go starts it, a byte up done
+// says it is over (ls_ calls stay on the loop's thread)
+
+static struct {
+	void *socket;
+	ls_http_request r;
+	long length;
+	int go[2], done[2], busy;
+} web;
+
+static void *poster(void *unused) {
+	(void)unused;
+	char b;
+	while (read(web.go[0], &b, 1) == 1) {
+		web.length = ls_http_socket(web.socket, web.r.url, web.r.wait_ms, web.r.body, web.r.length, web.r.answer, web.r.room);
+		if (write(web.done[1], &b, 1) != 1) break;
+	}
+	return NULL;
 }
 
 // ---- the port
@@ -340,19 +446,38 @@ static int open_port(const char *path) {
 	return fd;
 }
 
+// what the stack has for a stream, written
+static void out_to(stream *st) {
+	const uint8_t *out;
+	size_t n = ls_next(st->link, &out);
+	int wfd = st->wfd;
+	for (size_t at = 0; at < n;) {
+		ssize_t w = write(wfd, out + at, n - at);
+		if (w > 0) at += (size_t)w;
+		else if (w < 0 && errno == EAGAIN) {
+			// a full line: wait a little; the rest is dropped after a while (the stack resends)
+			struct pollfd p = {wfd, POLLOUT, 0};
+			if (poll(&p, 1, 50) == 0) break;
+		} else break;
+	}
+}
+
 int main(int argc, char **argv) {
 	const char *state = "./.littlesync-state", *logpath = NULL, *keys = "", *pty_file = NULL;
 	// the streams asked for, in order: a port's path, "" for a pty, NULL for the pipe
 	const char *asked[LS_LINKS];
 	int n_asked = 0, use_pipe = 0;
+	const char *http_url = NULL;
 	long exit_after = 0;
 	for (int i = 1; i < argc; i++) {
 		const char *a = argv[i], *v = i + 1 < argc ? argv[i + 1] : NULL;
-		int is_stream = (strcmp(a, "--port") == 0 && v) || strcmp(a, "--pty") == 0 || strcmp(a, "--pipe") == 0;
-		if (is_stream && n_asked == LS_LINKS) return fprintf(stderr, "at most %d streams\n", LS_LINKS), 2;
+		int is_stream = (strcmp(a, "--port") == 0 && v) || strcmp(a, "--pty") == 0 || strcmp(a, "--pipe") == 0 ||
+			(strcmp(a, "--http") == 0 && v);
+		if (is_stream && n_asked + (http_url != NULL) == LS_LINKS) return fprintf(stderr, "at most %d streams\n", LS_LINKS), 2;
 		if (strcmp(a, "--port") == 0 && v) asked[n_asked++] = v, i++;
 		else if (strcmp(a, "--pty") == 0) asked[n_asked++] = "";
 		else if (strcmp(a, "--pipe") == 0 && !use_pipe) asked[n_asked++] = NULL, use_pipe = 1;
+		else if (strcmp(a, "--http") == 0 && v && http_url == NULL) http_url = v, i++;
 		else if (strcmp(a, "--state") == 0 && v) state = v, i++;
 		else if (strcmp(a, "--room") == 0 && v) snprintf(room_id, sizeof room_id, "%s", v), i++;
 		else if (strcmp(a, "--name") == 0 && v) my_name = v, i++;
@@ -362,7 +487,7 @@ int main(int argc, char **argv) {
 		else if (strcmp(a, "--exit-after") == 0 && v) exit_after = atol(v), i++;
 		else if (strcmp(a, "--pty-file") == 0 && v) pty_file = v, i++;
 		else {
-			fprintf(stderr, "usage: littlesync-pigs [--port PATH | --pty | --pipe]... [--state DIR] [--room ID] [--name NAME]\n"
+			fprintf(stderr, "usage: littlesync-pigs [--port PATH | --pty | --pipe | --http URL]... [--state DIR] [--room ID] [--name NAME]\n"
 					"       [--dump FILE] [--log FILE] [--keys KEYS] [--exit-after MS] [--pty-file FILE]\n");
 			return 2;
 		}
@@ -373,9 +498,9 @@ int main(int argc, char **argv) {
 
 	// the streams: each one's fds now, its link once the device is open
 	glob_t g;
-	if (n_asked == 0) {
+	if (n_asked == 0 && http_url == NULL) {
 		if (glob("/dev/cu.usbmodem*", 0, NULL, &g) != 0 || g.gl_pathc == 0)
-			return fprintf(stderr, "no /dev/cu.usbmodem*: --port PATH, --pty or --pipe\n"), 1;
+			return fprintf(stderr, "no /dev/cu.usbmodem*: --port PATH, --pty, --pipe or --http URL\n"), 1;
 		asked[n_asked++] = g.gl_pathv[0];
 	}
 	FILE *ptys = pty_file != NULL ? fopen(pty_file, "w") : NULL;
@@ -407,11 +532,25 @@ int main(int argc, char **argv) {
 	dev = ls_open(&o);
 	if (dev == NULL) return fprintf(stderr, "no key in %s\n", state), 1;
 	for (int i = 0; i < n_streams; i++) streams[i].link = ls_link(dev);
+	if (http_url != NULL) {
+		stream *st = &streams[n_streams++];
+		st->keep_open = -1, st->wfd = -1;
+		st->link = ls_link(dev);
+		st->http = ls_http_open(st->link, &(ls_http_options){.url = http_url, .random = random_bytes});
+		pthread_t t;
+		if (st->http == NULL || pipe(web.go) != 0 || pipe(web.done) != 0 || (web.socket = ls_http_socket_open()) == NULL ||
+			pthread_create(&t, NULL, poster, NULL) != 0)
+			return fprintf(stderr, "--http %s: not a gateway url\n", http_url), 1;
+		pthread_detach(t);
+		st->rfd = web.done[0];
+		if (logfile) fprintf(logfile, "http %s session %s\n", http_url, ls_http_session(st->http));
+	}
 	for (int i = 0; i < LS_KEY_LEN; i++) sprintf(my_who + 2 * i, "%02x", ls_key(dev)[i]);
 	if (my_name == NULL) my_name = NAMES[ls_key(dev)[5] % 10];
 	my_colour = COLOURS[ls_key(dev)[6] % 7];
 	room = ls_follow(dev, room_id);
 	if (room == NULL) return fprintf(stderr, "not a room id: %s\n", room_id), 1;
+	point();
 	log_line(NULL, "start");
 
 	int has_tty = !use_pipe && isatty(0);
@@ -437,7 +576,10 @@ int main(int argc, char **argv) {
 		uint8_t buf[1024];
 		int quit = 0;
 		for (int i = 0; i < n_streams; i++)
-			if (fds[1 + i].revents & POLLIN) {
+			if ((fds[1 + i].revents & POLLIN) && streams[i].http != NULL) {
+				char b;
+				if (read(streams[i].rfd, &b, 1) == 1) web.busy = 0, ls_http_end(streams[i].http, now, web.length);
+			} else if (fds[1 + i].revents & POLLIN) {
 				ssize_t n = read(streams[i].rfd, buf, sizeof buf);
 				if (n > 0) ls_feed(streams[i].link, buf, (size_t)n);
 				else if (n == 0 && streams[i].pipe) quit = 1;
@@ -465,24 +607,24 @@ int main(int argc, char **argv) {
 			refresh_pigs();
 		}
 		for (int i = 0; i < n_streams; i++) {
-			const uint8_t *out;
-			size_t n = ls_next(streams[i].link, &out);
-			int wfd = streams[i].wfd;
-			for (size_t at = 0; at < n;) {
-				ssize_t w = write(wfd, out + at, n - at);
-				if (w > 0) at += (size_t)w;
-				else if (w < 0 && errno == EAGAIN) {
-					// a full line: wait a little; the rest is dropped after a while (the stack resends)
-					struct pollfd p = {wfd, POLLOUT, 0};
-					if (poll(&p, 1, 50) == 0) break;
-				} else break;
+			if (streams[i].http != NULL) {
+				if (!web.busy && ls_http_begin(streams[i].http, now, &web.r)) {
+					if (write(web.go[1], "p", 1) == 1) web.busy = 1;
+					else ls_http_end(streams[i].http, now, -1);
+				}
+				continue;
 			}
+			out_to(&streams[i]);
 		}
 		draw(0);
 	}
 	draw(1);
 	restore_tty();
 	log_line(NULL, "stop");
+	// my row out now, so the others do not wait for its ttl (not over HTTP: its posts are a thread's)
+	ls_presence(room, NULL);
+	for (int i = 0; i < n_streams; i++)
+		if (streams[i].http == NULL) out_to(&streams[i]);
 	ls_close(dev);
 	ls_store_file_free(&o.store);
 	for (int i = 0; i < n_streams; i++)

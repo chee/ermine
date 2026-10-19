@@ -1,5 +1,5 @@
 {
-	"title": "settled on one host: a merge keeping the head shown, one head everywhere, no conflicts, the merge's change on the entry",
+	"title": "settled on one host: a write on every head, what shows at each open path (key patches alone: no base), one head everywhere, no conflicts, the settle's change on the entry",
 	"steps": [
 		{
 			"op": "host",
@@ -78,7 +78,7 @@
 					"actor": "b",
 					"metadata": {
 						"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
-						"commit": "1e207716035b17896e3bae638c6bf6f6ce27ae9a2ecf7e3f89cc506de332234de624"
+						"commit": "1e2021ec1bf88fc089e0ba596a86a803dad92ff3c5e9db2c23b4fd9ef81c33acf64a"
 					}
 				}
 			}
@@ -93,7 +93,7 @@
 					"actor": "b",
 					"metadata": {
 						"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
-						"commit": "1e207716035b17896e3bae638c6bf6f6ce27ae9a2ecf7e3f89cc506de332234de624"
+						"commit": "1e2021ec1bf88fc089e0ba596a86a803dad92ff3c5e9db2c23b4fd9ef81c33acf64a"
 					}
 				}
 			}
@@ -111,9 +111,8 @@
 					"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
 					"nonce": 4207839827,
 					"parents": ["wa", "wb"],
-					"base": "wb",
 					"lamport": 3,
-					"patches": []
+					"patches": [{ "path": ["n"], "value": 2 }]
 				}
 			}
 		},

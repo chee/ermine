@@ -21,8 +21,10 @@
 // { op: "disconnect", a, b }            → {}
 // { op: "follow", host, id }            → {}
 // { op: "mint", host, as? }             → { id }            as: a label for the id
-// { op: "write", host, table?, id, patches, change?, name? } → { commits, ephemeral? }
-//    no entry: the first patch's value is it. commits/ephemeral: counts made; name: last's label
+// { op: "write", host, table?, id, patches, change?, name?, replaces? } → { commits, ephemeral? }
+//    no entry: the first patch's value is it. commits/ephemeral: counts made; name: last's label.
+//    replaces: "all" or [commit], what the write replaces (its change's metadata, sync.ts REPLACES);
+//    none: what shows
 // { op: "type", host, table?, id, path, at, text, change?, name? } → { commits }  a write per
 //    code point, inserting from at
 // { op: "writes", host, writes: [{ table?, id, patches, change? }] } → { commits }  each entry
@@ -37,6 +39,9 @@
 //                                                           time, external?, tables }]
 // { op: "shown", host, id }             → { shown } | {}    { head, lamport, actor, signer, time,
 //                                                           external? }: the "shown" table's
+// { op: "values", host, id }            → { values } | {}   the "values" table's: { [table]: [{ path,
+//                                                           items: [{ value? | gone?, inside?, at?,
+//                                                           from: head (as shown's) }] }] }
 // { op: "status", host, id }            → { status } | {}   the status table's (sync.ts Status)
 // { op: "events", host, id, table? }    → { events }        the table's events at (table, id)
 //                                                           since last asked, how many
@@ -71,8 +76,10 @@ import {
 	createSync,
 	type Ephemeral,
 	type Head,
+	REPLACES,
 	type Status,
 	type Sync,
+	type Values,
 } from "./sync.ts"
 import type { Merges } from "./replay.ts"
 import { rules } from "./rules_harness.ts"
@@ -228,10 +235,14 @@ function counting(h: Host, id: string, r: Request, f: () => void): Answer {
 	return fleeting > 0 ? { commits: made, ephemeral: fleeting } : { commits: made }
 }
 
-const headerOf = (h: Host, r: Request): ChangeHeader =>
-	r.change !== undefined
+function headerOf(h: Host, r: Request): ChangeHeader {
+	const c: ChangeHeader = r.change !== undefined
 		? revive(r.change) as ChangeHeader
 		: { time: TIME, actor: h.name, external: [{ file: "scenario", line: 1 }] }
+	if (r.replaces === undefined) return c
+	const said = r.replaces === "all" ? "all" : (r.replaces as string[]).map((x) => hex(nameOf(x)))
+	return { ...c, metadata: { ...c.metadata, [REPLACES]: said } }
+}
 
 function write(h: Host, part: Key, id: string, patches: Patch[], change: ChangeHeader) {
 	if (h.table.get(part, id) === undefined) {
@@ -389,6 +400,23 @@ async function answer(r: Request): Promise<Answer> {
 		case "shown": {
 			const e = of(r.host).table.get("shown", idOf(r.id))
 			return e === undefined ? {} : { shown: headed(e.value as Head) }
+		}
+		case "values": {
+			const e = of(r.host).table.get("values", idOf(r.id))
+			if (e === undefined || e.value === undefined) return {}
+			const out: Record<string, unknown> = {}
+			for (const [t, rows] of Object.entries(e.value as Values)) {
+				out[t] = rows.map((row) => ({
+					path: row.path,
+					items: row.items.map((i) => ({
+						...i.gone ? { gone: true } : { value: toJson(i.value) },
+						...i.inside && { inside: true },
+						...i.at && { at: i.at },
+						from: headed(i.from),
+					})),
+				}))
+			}
+			return { values: out }
 		}
 		case "status": {
 			const e = of(r.host).table.get("status", idOf(r.id))

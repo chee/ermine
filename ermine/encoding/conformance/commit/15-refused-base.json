@@ -1,5 +1,5 @@
 {
-	"title": "base: one of the parents, there exactly when there are several; a name as parents' are",
+	"title": "base: one of the parents, only when there are several, and needed then unless every patch is a key patch (no range, move or list index); a name as parents' are",
 	"steps": [
 		{
 			"op": "encode",
@@ -18,6 +18,10 @@
 					{
 						"path": [
 							"title"
+						],
+						"range": [
+							0,
+							0
 						],
 						"value": "hi"
 					}
