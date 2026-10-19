@@ -347,7 +347,8 @@ bool hostFailed(Host *h, const ap_error *e, const char *doing) {
 /** what the node at /dev/<source>/planes/<name> says, if a plane with that id */
 static bool planeNode(Host *h, const char *source, const char *name, int64_t id, HostPlaneSaid *out) {
 	size_t n;
-	const op_value *v = ap_read(h->peep, hostPath(h, &n, "dev", source, "planes", name, NULL), n);
+	const char *const *at = hostPath(h, &n, "dev", source, "planes", name, NULL);
+	const op_value *v = ap_read(h->peep, at, n);
 	const op_value *vid = v && v->type == OP_MAP ? op_get(v, "id") : NULL;
 	if (!vid || vid->type != OP_NUM || (int64_t)vid->num != id) return false;
 	const op_value *shm = op_get(v, "shm"), *file = op_get(v, "file"), *w = op_get(v, "w"), *hh = op_get(v, "h"), *stride = op_get(v, "stride"), *offset = op_get(v, "offset");
@@ -366,7 +367,8 @@ static bool planeFound(Host *h, const char *source, int64_t id, HostPlaneSaid *o
 	if (!source) return false;
 	size_t n;
 	ap_namelist names = { 0 };
-	if (ap_names(h->peep, hostPath(h, &n, "dev", source, "planes", NULL), n, &names)) return false;
+	const char *const *at = hostPath(h, &n, "dev", source, "planes", NULL);
+	if (ap_names(h->peep, at, n, &names)) return false;
 	for (size_t i = 0; i < names.n; i++)
 		if (planeNode(h, source, names.names[i], id, out)) {
 			if (node) *node = names.names[i];
@@ -1202,7 +1204,8 @@ static const op_value *ownerOf(Host *h, int irq) {
 	char line[32];
 	snprintf(line, sizeof line, "%d", irq);
 	size_t n;
-	const op_value *v = hostRead(ap_host(h->os), hostPath(h, &n, "hw", "irq", line, NULL), n);
+	const char *const *at = hostPath(h, &n, "hw", "irq", line, NULL);
+	const op_value *v = hostRead(ap_host(h->os), at, n);
 	const op_value *owner = v && v->type == OP_MAP ? op_get(v, "owner") : NULL;
 	return owner && owner->type == OP_LIST ? owner : NULL;
 }
@@ -1435,7 +1438,8 @@ void hostOff(Host *h) {
 		char *names = strdup(one), *more = names;
 		for (char *name; (name = strsep(&more, "/"));) if (*name) jsonPush(a, jsonString(name));
 		size_t n;
-		char *text = valPrint(hostRead(ap_host(h->os), hostPathOf(h, a, &n), n));
+		const char *const *at = hostPathOf(h, a, &n);
+		char *text = valPrint(hostRead(ap_host(h->os), at, n));
 		hostSay(h, "%s = %s", one, text);
 		free(text);
 		free(names);

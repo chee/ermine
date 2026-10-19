@@ -243,7 +243,8 @@ static void receive(Net *n) {
 /** /etc/sync's server and service: a server named anew is connected to at once */
 void netTarget(Net *n) {
 	size_t count;
-	const op_value *v = hostRead(ap_host(hostOs(n->host)), hostPath(n->host, &count, "etc", "sync", NULL), count);
+	const char *const *at = hostPath(n->host, &count, "etc", "sync", NULL);
+	const op_value *v = hostRead(ap_host(hostOs(n->host)), at, count);
 	const op_value *server = v && v->type == OP_MAP ? op_get(v, "server") : NULL, *service = v && v->type == OP_MAP ? op_get(v, "service") : NULL;
 	// no /etc/sync, or one naming none: the default; "" or null: none
 	const char *url = !server ? SERVER : server->type == OP_STR && *server->str ? server->str : NULL;
