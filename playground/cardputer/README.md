@@ -19,7 +19,7 @@ Type `name = value` (a number, `true`, `false`, `null`, `"text"`, or any text) o
 
 littlesync over WiFi too (`main/net.c`): `./idf.sh menuconfig`, "Cardputer: littlesync over WiFi":
 the network, its password, and a gateway: `https://galaxy.observer` (deployed), or
-`http://host:port` (`extensions/together/stacks/littlesync/gateway`, `make run` there). https checks
+`http://host:port` (`playground/together/stacks/littlesync/gateway`, `make run` there). https checks
 the server against ESP-IDF's common CAs (`sdkconfig.defaults`). Kept in `sdkconfig`, which git
 ignores: never put them in `sdkconfig.defaults`. Empty: the USB line only, and no WiFi code in the
 image (0.41 MB; with WiFi 1.09 MB, https 18 KB more (the common CAs), and 50 KB more static RAM). The USB line

@@ -1,4 +1,4 @@
-// A device for ermine-pigs: a table (core/table) with sync beside it (extensions/together/c/sync.h),
+// A device for ermine-pigs: a table (core/table) with sync beside it (playground/together/c/sync.h),
 // connected to one Subduction server over a WebSocket, as playground/term/host.c makes one, with
 // sync's ephemeral option on: a write made through dv_wave goes out as an ephemeral commit (seen on
 // top of what is stored, stored nowhere), every other write as a stored one. Its presence messages
@@ -9,7 +9,7 @@
 
 #include "../../../../core/node/c/node.h"
 #include "../../../../core/table/c/table.h"
-#include "../../../../extensions/together/c/sync.h"
+#include "../../../../playground/together/c/sync.h"
 
 #include <poll.h>
 #include <stdbool.h>

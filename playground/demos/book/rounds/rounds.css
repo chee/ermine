@@ -1,0 +1,132 @@
+/* a round: this page's own bits on the pond board */
+
+/* the pond picture, a little smaller than the book's */
+.box canvas.pond {
+	width: 360px;
+	height: 210px;
+}
+canvas.sign {
+	width: 180px;
+	height: 84px;
+	image-rendering: pixelated;
+	display: block;
+}
+
+/* the replay box */
+.box[data-id="replay"] .pulses {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	align-items: center;
+	margin-bottom: 6px;
+}
+.box[data-id="replay"] .lanes {
+	display: grid;
+	grid-template-columns: 7.5rem minmax(0, 1fr);
+}
+.box[data-id="replay"] .names div {
+	height: 22px;
+	font: 11px/22px var(--mono);
+	padding: 0 6px;
+	white-space: nowrap;
+}
+.box[data-id="replay"] .names div.on {
+	background: var(--ink);
+	color: var(--paper);
+}
+.box[data-id="replay"] .track {
+	position: relative;
+	height: 106px;
+	border-left: 1.5px solid var(--ink);
+	cursor: pointer;
+	touch-action: none;
+	user-select: none;
+}
+.box[data-id="replay"] .track:focus-visible {
+	outline: 2px solid var(--blue);
+}
+.box[data-id="replay"] .rule {
+	position: absolute;
+	left: 0;
+	right: 0;
+	border-top: 1px dotted #bbb;
+}
+.box[data-id="replay"] .t {
+	position: absolute;
+	height: 17px;
+	font: 9px/15px var(--mono);
+	text-align: center;
+	overflow: hidden;
+	white-space: nowrap;
+	border: 1.5px solid var(--ink);
+	background: var(--paper);
+	margin-left: 1px;
+}
+.box[data-id="replay"] .t.write {
+	background: var(--sky);
+}
+.box[data-id="replay"] .t.run {
+	background: var(--cherry);
+	color: var(--paper);
+	border-color: var(--cherry);
+}
+.box[data-id="replay"] .t.equal {
+	background: var(--stem);
+}
+.box[data-id="replay"] .t.stopped {
+	background: var(--lilac);
+}
+.box[data-id="replay"] .t.act {
+	background: var(--ink);
+	color: var(--paper);
+}
+.box[data-id="replay"] .t.over {
+	border-style: dotted;
+}
+.box[data-id="replay"] .t.past {
+	opacity: 0.5;
+}
+.box[data-id="replay"] .t.here {
+	outline: 2.5px solid var(--blue);
+	outline-offset: 1px;
+	z-index: 2;
+}
+.box[data-id="replay"] .head {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	border-left: 2px solid var(--blue);
+	z-index: 1;
+}
+.box[data-id="replay"] .round {
+	position: absolute;
+	top: 88px;
+	font: 10px var(--mono);
+	color: var(--grey);
+	border-left: 1px dashed var(--grey);
+	padding-left: 3px;
+	height: 18px;
+	white-space: nowrap;
+}
+.box[data-id="replay"] .controls {
+	display: flex;
+	gap: 4px;
+	align-items: center;
+	margin-top: 6px;
+	flex-wrap: wrap;
+}
+.box[data-id="replay"] .controls .key {
+	margin-left: auto;
+	font: 10px var(--mono);
+	color: var(--grey);
+	display: flex;
+	gap: 4px;
+	align-items: center;
+}
+.box[data-id="replay"] .controls .key .t {
+	position: static;
+	display: inline-block;
+	width: 12px;
+	height: 10px;
+	margin-left: 6px;
+}

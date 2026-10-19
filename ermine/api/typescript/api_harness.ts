@@ -6,8 +6,8 @@
 // processes are started by the harness (start, openwith, box need C not there yet).
 //
 // world (first, or a plain one):
-// { op: "world", deny?, presence?, overlay?, who?, uuid? } → {}   deny: [{ op, path }] refused;
-//    presence: on the host's scope, clock 0; overlay: places over a patch overlay; uuid: uuidv7 ids
+// { op: "world", deny?, overlay?, uuid? } → {}   deny: [{ op, path }] refused;
+//    overlay: places over a patch overlay; uuid: uuidv7 ids
 // { op: "kids", id, value }                → {}   children entry replaced
 // { op: "put", part, id, value }           → {}   entry replaced
 // { op: "saved", part, id, path? }        → { value? }   at path (none: the whole value)
@@ -17,7 +17,6 @@
 //    its keys, sorted, and the NODE key's and "replaces" key's values
 // { op: "id", path }                       → { id? }   from "R"
 // { op: "uuids", paths }                   → { v7, ordered }   each a uuidv7, each after the last
-// { op: "now", t }                         → {}   presence clock, ms
 // processes:
 // { op: "start", name, at, cwd?, args?, program } → { id }   program run as setup
 // { op: "stop", name, why? }               → {}   teardowns told why (none: "ended")
@@ -57,7 +56,6 @@ import { addProcess, processes, removeProcess } from "@ermine/processes"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import type { Process, Programs } from "@ermine/programs/start"
 import { no, type Policy, yes } from "@ermine/protect"
-import type { World } from "@ermine/presence"
 import { createOverlay, type Overlay } from "@ermine/patch-nodes"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { type API, createProcessAPIs, type ProcessAPIs, SendError } from "./api.ts"
@@ -73,7 +71,6 @@ type Made = {
 	host: Scope
 	above: Scope
 	scopes: ReturnType<typeof createScopeNodes>
-	clock: { now: number }
 	running: Map<string, Running>
 	logs: Map<string, unknown[]>
 	later: (() => void)[]
@@ -103,7 +100,6 @@ function make(o: Request = {}): Made {
 	const scopes = createScopeNodes({ scheduler: s, table })
 	const host = s.createRootScope({ actor: "test" })
 	const above = s.createScope({ role: "programs" }, host)
-	const clock = { now: 0 }
 	const later: (() => void)[] = []
 	const deny = (o.deny ?? []) as { op: string; path: string }[]
 	const may: Policy | undefined = o.deny
@@ -111,15 +107,6 @@ function make(o: Request = {}): Made {
 			deny.some((d) => d.op === ask.op && d.path === ask.target.path?.join("/"))
 				? no("denied")
 				: yes
-		: undefined
-	const presence: World | undefined = o.presence
-		? {
-			table,
-			places: { commit, readValue: places.readValue },
-			scheduler: s,
-			scope: host,
-			now: () => clock.now,
-		}
 		: undefined
 	let n = 0
 	const running = new Map<string, Running>()
@@ -148,8 +135,6 @@ function make(o: Request = {}): Made {
 		host: { places, table, scheduler: s, commit },
 		programs: () => programs,
 		may,
-		presence,
-		who: o.who,
 		overlay,
 		schedule: (f) => void later.push(f),
 		id: o.uuid ? undefined : () => `n${++n}`,
@@ -162,7 +147,6 @@ function make(o: Request = {}): Made {
 		host,
 		above,
 		scopes,
-		clock,
 		running,
 		logs: new Map(),
 		later,
@@ -351,9 +335,6 @@ function answer(r: Request): Record<string, unknown> {
 			const ordered = ids.every((id, i) => i === 0 || (id ?? "") > (ids[i - 1] ?? ""))
 			return { v7, ordered }
 		}
-		case "now":
-			world().clock.now = r.t
-			return {}
 		case "start":
 			return start(r)
 		case "stop": {

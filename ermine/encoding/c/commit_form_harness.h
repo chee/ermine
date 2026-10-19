@@ -1,4 +1,4 @@
-// What the C harnesses of commit, seal, run and history share (conventions: extensions/together/
+// What the C harnesses of commit, seal, run and history share (conventions: playground/together/
 // conformance/README.md): bytes as lowercase hex, a commit in JSON and back, a commit's refusal.
 // Written for the shared loop (conformance/c/harness.h): memory taken is the line's
 #ifndef CF_COMMIT_FORM_HARNESS_H

@@ -1,0 +1,178 @@
+/* rewind the farm: the farm picture, the day's cards, the wheel */
+canvas.farm-pic {
+	width: 600px;
+	height: 350px;
+	image-rendering: pixelated;
+	display: block;
+	border: 1.5px solid var(--ink);
+}
+.box.tone-hot canvas.farm-pic {
+	border-color: var(--cherry);
+}
+.row {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	margin-bottom: 6px;
+}
+.pigs {
+	font: 12px var(--mono);
+	margin-bottom: 6px;
+}
+.pigrow {
+	display: flex;
+	justify-content: space-between;
+	border-bottom: 1px dotted #bbb;
+	padding: 1px 0;
+}
+p.else {
+	font-size: 13px;
+	line-height: 1.35;
+	margin: 0 0 6px;
+}
+
+/* the day: little picture cards */
+.cards {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+.card {
+	width: 104px;
+	min-height: 70px;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 2px;
+	padding: 5px 6px;
+	border: 1.5px solid var(--ink);
+	background: var(--paper);
+	font: 11px/1.25 var(--mono);
+	text-align: left;
+	cursor: pointer;
+	transition: transform 0.25s, opacity 0.5s, background 0.2s;
+}
+.card canvas.icon {
+	width: 48px;
+	height: 28px;
+	image-rendering: pixelated;
+}
+.card b {
+	font-size: 12px;
+}
+.card:hover {
+	background: var(--lemon);
+}
+.card.here {
+	background: var(--cherry);
+	color: var(--paper);
+	border-color: var(--cherry);
+	transform: translateY(-3px);
+	box-shadow: 3px 3px 0 var(--ink);
+}
+.card.ahead {
+	border-style: dashed;
+	color: #888;
+	background: transparent;
+}
+.card.ahead canvas {
+	opacity: 0.45;
+}
+.card.new {
+	transform: translateY(10px);
+	opacity: 0;
+}
+.card.gone {
+	transform: translateY(26px) rotate(8deg);
+	opacity: 0;
+	pointer-events: none;
+}
+
+/* the wheel */
+.wheel svg {
+	display: block;
+	width: 240px;
+	height: 240px;
+	cursor: grab;
+	touch-action: none;
+	outline: none;
+}
+.wheel.held svg {
+	cursor: grabbing;
+}
+.wheel .ring {
+	fill: var(--paper);
+	stroke: var(--ink);
+	stroke-width: 2.5;
+}
+.wheel.keys svg:focus .ring {
+	stroke: var(--blue);
+}
+.wheel .arc {
+	fill: none;
+	stroke: var(--stem);
+	stroke-width: 8;
+	stroke-linecap: round;
+}
+.wheel.back .arc {
+	stroke: var(--cherry);
+}
+.wheel .notches line {
+	stroke: var(--ink);
+	stroke-width: 3;
+	stroke-linecap: round;
+}
+.wheel .notches line.ahead {
+	stroke: #aaa;
+}
+.wheel .notches line.here {
+	stroke: var(--cherry);
+	stroke-width: 5;
+}
+.wheel .shadow {
+	fill: rgba(0, 0, 0, 0.18);
+	transition: transform 0.1s;
+}
+.wheel.held .shadow {
+	transform: translate(-2px, -2px);
+}
+.wheel .knob {
+	transform-origin: 120px 120px;
+	transform-box: view-box;
+}
+.wheel .face {
+	fill: var(--lemon);
+	stroke: var(--ink);
+	stroke-width: 2.5;
+}
+.wheel.held .face {
+	fill: #fff1a0;
+}
+.wheel .knurl line {
+	stroke: var(--ink);
+	stroke-width: 1.5;
+}
+.wheel .pointer {
+	fill: var(--ink);
+}
+.wheel.back .pointer {
+	fill: var(--cherry);
+}
+.wheel .time {
+	font: 700 30px var(--mono);
+	pointer-events: none;
+}
+.wheel .where {
+	font: 11px var(--mono);
+	fill: var(--grey);
+	pointer-events: none;
+}
+.wheel .ends {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-top: 4px;
+}
+.box.flipped {
+	z-index: 6;
+}

@@ -23,7 +23,6 @@ import { satisfy } from "@ermine/programs"
 import { createPrograms, type Process, type Programs } from "@ermine/programs/start"
 import { no, type Policy, yes } from "@ermine/protect"
 import { Refusal } from "@ermine/places/guard"
-import type { World } from "@ermine/presence"
 import { createOverlay, type Overlay } from "@ermine/patch-nodes"
 import { createSites } from "@ermine/sites"
 import { type API, createProcessAPIs, type Noticed, SendError, uuidv7 } from "./api.ts"
@@ -31,7 +30,7 @@ import { type API, createProcessAPIs, type Noticed, SendError, uuidv7 } from "./
 const JS = "com.netscape.javascript-source"
 const tick = () => new Promise((r) => setTimeout(r, 0))
 
-function world(o: { may?: Policy; presence?: boolean; overlay?: boolean; sites?: boolean } = {}) {
+function world(o: { may?: Policy; overlay?: boolean; sites?: boolean } = {}) {
 	const s = createScheduler()
 	const table = createTable((part, id) =>
 		overlay ? overlay.onTableChange(part as Key, id) : places.onTableChange(part as Key, id)
@@ -49,16 +48,6 @@ function world(o: { may?: Policy; presence?: boolean; overlay?: boolean; sites?:
 		overlay ? overlay.commit(changed) : places.commit(changed)
 	const put = (part: Key, id: Id, v: unknown) =>
 		hosted(() => table.sub(part, id, createEntry(v, header())))
-	let now = 1000
-	const presence: World | undefined = o.presence
-		? {
-			table,
-			places: { commit, readValue: places.readValue },
-			scheduler: s,
-			scope: host,
-			now: () => now,
-		}
-		: undefined
 	let programs!: Programs
 	// sites: the api, start and the scheduler are ours, so a site is the program's line
 	const sites = o.sites
@@ -79,8 +68,6 @@ function world(o: { may?: Policy; presence?: boolean; overlay?: boolean; sites?:
 		host: { places, table, scheduler: s, commit },
 		programs: () => programs,
 		may: o.may,
-		presence,
-		who: "laptop",
 		overlay,
 		sites,
 		notice: (made) => void noticed.push(made),
@@ -129,8 +116,7 @@ function world(o: { may?: Policy; presence?: boolean; overlay?: boolean; sites?:
 		throw new Error(`no way for ${name}`)
 	}
 	const inW = (name: string) => (table.get("children", "W")?.value as Record<string, Id>)[name]
-	const later = (ms: number) => (now += ms)
-	return { s, table, b, apis, program, start, inW, put, hosted, later, sites, noticed }
+	return { s, table, b, apis, program, start, inW, put, hosted, sites, noticed }
 }
 
 Deno.test("open makes once; edit takes a recipe or patches; a write from outside needs no method, and pulses by itself", async () => {
@@ -388,28 +374,6 @@ Deno.test("protect: a policy's no refuses a read (Refusal) and a write; a list k
 	]])
 	api.edit("./open", () => 4)
 	assertEquals(api.read("./open"), 4)
-})
-
-Deno.test("presence: my row at a node, read live by a computation, gone when I am absent", async () => {
-	const w = world({ presence: true })
-	let api!: API
-	const seen: unknown[] = []
-	w.program("cursor.js", (a) => {
-		api = a
-		const doc = a.open("./doc", "hello")
-		a.effect(
-			"rows",
-			() => a.presence(doc).map((r) => [r.who, r.value]),
-			(rows) => void seen.push(rows),
-		)
-	})
-	w.start("cursor.js", ["cursor"])
-	await tick()
-	api.present("./doc", { at: 3 })
-	await tick()
-	api.absent("./doc")
-	await tick()
-	assertEquals(seen, [[], [["laptop", { at: 3 }]], []])
 })
 
 Deno.test("patch nodes: one over another node, read through the overlay, its layers, landed for real", async () => {

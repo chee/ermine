@@ -1,5 +1,5 @@
 // host.c: files url folder, the device host. See host.h. The folder half is the store's mirror, the files program and its
-// watcher on the files graph; the sync half is extensions/together over Subduction, told every table event and every write
+// watcher on the files graph; the sync half is playground/together over Subduction, told every table event and every write
 // (fg_options' event and wrote), and telling the graph what came in on the head shown (fg_landed).
 #if defined(__APPLE__)
 #define _DARWIN_C_SOURCE
@@ -9,10 +9,10 @@
 
 #include "host.h"
 
-#include "../../../../extensions/subduction/c/subduction/platform.h"
-#include "../../../../extensions/subduction/c/subduction/store.h"
-#include "../../../../extensions/subduction/c/subduction/transport.h"
-#include "../../../../extensions/together/c/sync.h"
+#include "../../../together/stacks/subduction/c/subduction/platform.h"
+#include "../../../together/stacks/subduction/c/subduction/store.h"
+#include "../../../together/stacks/subduction/c/subduction/transport.h"
+#include "../../../../playground/together/c/sync.h"
 #include "graph.h"
 #include "program.h"
 #include "store.h"

@@ -5,9 +5,9 @@
 
 #include "../../../../core/node/c/update.h"
 #include "../../../../ermine/encoding/c/json.h"
-#include "../../../../extensions/subduction/c/subduction/platform.h"
-#include "../../../../extensions/subduction/c/subduction/store.h"
-#include "../../../../extensions/subduction/c/subduction/transport.h"
+#include "../../../together/stacks/subduction/c/subduction/platform.h"
+#include "../../../together/stacks/subduction/c/subduction/store.h"
+#include "../../../together/stacks/subduction/c/subduction/transport.h"
 
 #include <stdio.h>
 #include <stdlib.h>

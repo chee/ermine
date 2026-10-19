@@ -49,7 +49,7 @@ import { type Context, createPrograms, type Process } from "@ermine/programs/sta
 import { type API, createProcessAPIs, type Node, type Noticed } from "@ermine/api"
 import { installTypes, type Known } from "@ermine/types"
 import type { Policy } from "@ermine/protect"
-import { startSweeper, type World as PresenceWorld } from "@ermine/presence"
+import { startSweeper, type World as PresenceWorld } from "@ermine/together/presence"
 import { createSites } from "@ermine/sites"
 import { createOverlay, type Overlay } from "@ermine/patch-nodes"
 
@@ -84,9 +84,9 @@ export type Options = {
 	extend?: (api: API & Tools, ctx: Context) => Record<string, unknown>
 	// protect: the policy every process is asked of (none: everything allowed)
 	may?: Policy
-	// presence (playground/presence): a presence world on the host's scope, swept each second, its
-	// rows named who (none: "chee@laptop"); present, absent and presence work. none: they throw
-	presence?: { who?: string; sweep?: number }
+	// presence (playground/together/presence): a presence world on the host's scope, swept each
+	// second, the world's presence: the host's, to hand programs as it likes (extend)
+	presence?: { sweep?: number }
 	// patch nodes (playground/patch-nodes): places over an overlay, so a patch node is read through
 	overlay?: boolean
 	// the types (@ermine/types) at /ermine/types, before any seed: true, the well-known list; a list,
@@ -204,8 +204,6 @@ export function createWorld(o: Options) {
 		info: () => ({ "trusted-event": trusted() }),
 		notice,
 		may: o.may,
-		presence,
-		who: o.presence?.who ?? o.actor ?? "chee@laptop",
 		overlay,
 		sites,
 	})

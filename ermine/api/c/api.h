@@ -31,7 +31,6 @@
 #include "../../../filesystem/places/c/places.h"
 #include "../../../filesystem/protect/c/protect.h"
 #include "../../../extensions/patch-nodes/c/patch.h"
-#include "../../../extensions/presence/c/presence.h"
 #include "../../sites/c/sites.h"
 
 typedef enum {
@@ -81,10 +80,6 @@ typedef struct {
 	void *info_ctx;
 	// the policy every process's reads and writes are asked of, from where it is; NULL: all allowed
 	const pr_policy *may;
-	// the host's presence world; NULL: present, absent and presence fail
-	pres_world *presence;
-	// who a process's presence row is, unless it says (the device); NULL: the process's id
-	const char *who;
 	// the overlay in front of places' table (patch nodes); NULL: patch, land and layers have none
 	pn *overlay;
 	// how the automatic pulse is asked for: f(data) run soon, once. NULL: run at once
@@ -284,16 +279,6 @@ typedef void (*api_teardown_fn)(api_why_stopped why, void *ctx);
 int api_teardown(api *a, api_teardown_fn fn, void *ctx);
 // the node at at, make() its value if nothing is there (the caller's, which this lets go of)
 int api_ref(api *a, const char *at, op_value *(*make)(void *ctx), void *ctx, api_node *out);
-
-// presence (the host's world)
-int api_presence(api *a, api_target x, pres_lives *out);
-typedef struct {
-	// ms; 0: ten seconds
-	int64_t ttl;
-	const char *who;
-} api_present;
-int api_present_at(api *a, api_target x, const op_value *value, const api_present *options);
-int api_absent(api *a, api_target x, const char *who);
 
 // patch nodes. patches: the JSON form (patch.h), a list
 int api_patch(api *a, const char *at, api_target over, const op_value *patches, api_node *out);

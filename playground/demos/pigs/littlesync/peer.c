@@ -13,7 +13,7 @@
 //                   [--dump FILE] [--log FILE] [--keys KEYS] [--exit-after MS] [--pty-file FILE]
 // streams: each --port and --pty is one more (LS_LINKS at most), a link of its own; the device relays
 //   between them (a hop: a - b - c with b given two). None: the first /dev/cu.usbmodem*.
-// --http URL: the gateway (http://host:port, or https://galaxy.observer; extensions/together/stacks/littlesync/gateway) over its
+// --http URL: the gateway (http://host:port, or https://galaxy.observer; playground/together/stacks/littlesync/gateway) over its
 //   HTTP sessions (http.h), a link too; its posts on a thread of their own, so the loop never waits.
 // --pty: makes a pty and talks on its master; its slave path is printed on stderr (and written to
 //   --pty-file, a line per pty): another littlesync-pigs --port PATH is the other end. --pipe: the
@@ -22,8 +22,8 @@
 //   FILE: the protocol events. --keys: keys as if typed, 120 ms apart, "." is a pause of 500 ms.
 //   --exit-after MS: quits then. Without a terminal there is no drawing: --dump is the screen.
 #define _DARWIN_C_SOURCE
-#include "../../../../extensions/together/stacks/littlesync/littlesync.h"
-#include "../../../../extensions/together/stacks/littlesync/http.h"
+#include "../../../../playground/together/stacks/littlesync/littlesync.h"
+#include "../../../../playground/together/stacks/littlesync/http.h"
 #include "pigs.h"
 
 #include <ctype.h>
@@ -417,7 +417,8 @@ static void *poster(void *unused) {
 	(void)unused;
 	char b;
 	while (read(web.go[0], &b, 1) == 1) {
-		web.length = ls_http_socket(web.socket, web.r.url, web.r.wait_ms, web.r.body, web.r.length, web.r.answer, web.r.room);
+		web.length = ls_http_socket(web.socket, web.r.url, web.r.wait_ms, web.r.body, web.r.pieces, web.r.length, web.r.answer,
+			web.r.room);
 		if (write(web.done[1], &b, 1) != 1) break;
 	}
 	return NULL;
@@ -449,17 +450,19 @@ static int open_port(const char *path) {
 // what the stack has for a stream, written
 static void out_to(stream *st) {
 	const uint8_t *out;
-	size_t n = ls_next(st->link, &out);
+	size_t n;
 	int wfd = st->wfd;
-	for (size_t at = 0; at < n;) {
-		ssize_t w = write(wfd, out + at, n - at);
-		if (w > 0) at += (size_t)w;
-		else if (w < 0 && errno == EAGAIN) {
-			// a full line: wait a little; the rest is dropped after a while (the stack resends)
-			struct pollfd p = {wfd, POLLOUT, 0};
-			if (poll(&p, 1, 50) == 0) break;
-		} else break;
-	}
+	// a frame a call to ls_next
+	while ((n = ls_next(st->link, &out)))
+		for (size_t at = 0; at < n;) {
+			ssize_t w = write(wfd, out + at, n - at);
+			if (w > 0) at += (size_t)w;
+			else if (w < 0 && errno == EAGAIN) {
+				// a full line: wait a little; the rest of the frame is dropped after a while (the stack resends)
+				struct pollfd p = {wfd, POLLOUT, 0};
+				if (poll(&p, 1, 50) == 0) return;
+			} else return;
+		}
 }
 
 int main(int argc, char **argv) {

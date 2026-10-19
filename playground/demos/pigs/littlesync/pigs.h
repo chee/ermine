@@ -1,5 +1,5 @@
 // lab-pig's format (playground/demos/slaygrounds/examples/lab-pig/program.ts), for a littlesync device
-// (extensions/together/stacks/littlesync) that reads and writes it: the room, what a pig's value and a
+// (playground/together/stacks/littlesync) that reads and writes it: the room, what a pig's value and a
 // carried pig look like. Plain functions on op_values.
 #ifndef PIGS_H
 #define PIGS_H

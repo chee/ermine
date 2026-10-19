@@ -52,7 +52,7 @@
 #include "../drv.h"
 #include "net.h"
 #include "card.h"
-#include "../../../../extensions/subduction/c/subduction/platform.h"
+#include "../../../together/stacks/subduction/c/subduction/platform.h"
 
 #include <stdint.h>
 #include <stdio.h>

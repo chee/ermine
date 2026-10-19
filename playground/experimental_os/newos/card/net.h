@@ -7,7 +7,7 @@
 
 #include "../host.h"
 
-#include "../../../../extensions/together/c/transport.h"
+#include "../../../../playground/together/c/transport.h"
 
 typedef struct Net Net;
 

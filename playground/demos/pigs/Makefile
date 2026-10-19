@@ -1,5 +1,5 @@
 # playground/demos/pigs: ermine-pigs, lab-pig's pigs in a terminal (c/pigs.c says how to use it), on the table
-# and sync (extensions/together/c), as playground/term builds its programs. Quiet by default: V=1 shows each
+# and sync (playground/together/c), as playground/term builds its programs. Quiet by default: V=1 shows each
 # command. littlesync/ is the pigs on littlesync, a small-device stack: littlesync-pigs (its Makefile).
 #   make            ermine-pigs (its looks: pixels, and --look nethack, c/hack.c) and walk-test
 #   make test       walk-test against program.ts's own walking (deno), the formula the web page runs
@@ -17,26 +17,26 @@ Q = $(if $(V),,@)
 BLAKE3FLAGS = -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512 -DBLAKE3_USE_NEON=0
 # Subduction's own BLAKE3 exports the same symbols as ermine/encoding/c/blake3: the C ones are renamed
 rename = $(foreach s,compress_in_place compress_in_place_portable compress_subtree_wide compress_xof compress_xof_portable hash_many hash_many_portable hasher_finalize hasher_finalize_seek hasher_init hasher_init_derive_key hasher_init_derive_key_raw hasher_reset hasher_update simd_degree version xof_many,-Dblake3_$(s)=ermc_blake3_$(s))
-subduction = $(R)/extensions/subduction/c/subduction/lib/libsubduction_c.a
+subduction = $(R)/playground/together/stacks/subduction/c/subduction/lib/libsubduction_c.a
 OPENSSL ?= $(shell brew --prefix openssl@3 2>/dev/null || echo /usr)
-LIBS = $(subduction) $(filter-out -lm,$(shell tr -d '\033' < $(R)/extensions/subduction/c/subduction/lib/link.txt | sed 's/\[[0-9;]*m//g')) \
+LIBS = $(subduction) $(filter-out -lm,$(shell tr -d '\033' < $(R)/playground/together/stacks/subduction/c/subduction/lib/link.txt | sed 's/\[[0-9;]*m//g')) \
 	-L$(OPENSSL)/lib -lssl -lcrypto -lm
 FLAGS = $(BLAKE3FLAGS) $(rename) -I$(OPENSSL)/include
 
 # the table, entries and op; sync, the transport and what they stand on; Subduction's host side, its
 # memory store and a WebSocket over OpenSSL; JSON for presence's messages
 graph = core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c
-sync = extensions/together/c/sync.c extensions/together/c/transport.c extensions/together/c/mailroom.c extensions/together/stacks/subduction/c/subduction.c extensions/together/c/ids.c extensions/together/c/history.c \
-	extensions/together/c/replay.c extensions/together/c/lists.c extensions/together/c/snapshot.c extensions/together/c/packer.c \
-	extensions/together/c/seal.c extensions/together/c/ed25519/ed25519.c extensions/together/c/ed25519/sha2.c extensions/subduction/c/fragment.c \
+sync = playground/together/c/sync.c playground/together/c/transport.c playground/together/c/mailroom.c playground/together/stacks/subduction/c/subduction.c playground/together/c/ids.c playground/together/c/history.c \
+	playground/together/c/replay.c playground/together/c/lists.c playground/together/c/snapshot.c playground/together/c/packer.c \
+	playground/together/c/seal.c playground/together/c/ed25519/ed25519.c playground/together/c/ed25519/sha2.c playground/together/stacks/subduction/c/fragment.c \
 	ermine/encoding/c/commit.c ermine/encoding/c/pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c ermine/encoding/c/json_text.c \
 	ermine/encoding/c/blake3/blake3.c ermine/encoding/c/blake3/blake3_dispatch.c ermine/encoding/c/blake3/blake3_portable.c \
-	extensions/subduction/c/subduction/platform_posix.c extensions/subduction/c/subduction/store_memory.c \
-	extensions/subduction/c/subduction/websocket.c extensions/subduction/c/subduction/transport_openssl.c
+	playground/together/stacks/subduction/c/subduction/platform_posix.c playground/together/stacks/subduction/c/subduction/store_memory.c \
+	playground/together/stacks/subduction/c/subduction/websocket.c playground/together/stacks/subduction/c/subduction/transport_openssl.c
 under = $(graph) $(sync)
 objects = $(addprefix lib/o/,$(subst /,_,$(under:.c=.o)))
 objects-check = $(addprefix lib/check/,$(subst /,_,$(under:.c=.o)))
-headers = $(wildcard c/*.h) $(wildcard $(R)/core/*/c/*.h $(R)/extensions/together/c/*.h $(R)/extensions/together/stacks/subduction/c/*.h $(R)/ermine/encoding/c/*.h $(R)/extensions/subduction/c/*.h $(R)/extensions/subduction/c/subduction/*.h)
+headers = $(wildcard c/*.h) $(wildcard $(R)/core/*/c/*.h $(R)/playground/together/c/*.h $(R)/playground/together/stacks/subduction/c/*.h $(R)/ermine/encoding/c/*.h $(R)/playground/together/stacks/subduction/c/subduction/*.h)
 pigs = c/pigs.c c/device.c c/screen.c c/walk.c
 # hack.c, the NetHack look, is part of pigs.c (included by it)
 looks = c/hack.c
