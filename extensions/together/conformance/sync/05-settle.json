@@ -64,6 +64,8 @@
 		{ "op": "heads", "host": "b", "id": "x", "expect": { "heads": ["m"] } },
 		{ "op": "conflicts", "host": "a", "id": "x", "expect": { "conflicts": [] } },
 		{ "op": "conflicts", "host": "b", "id": "x", "expect": { "conflicts": [] } },
+		{ "op": "shown", "host": "a", "id": "x", "expect": {} },
+		{ "op": "shown", "host": "b", "id": "x", "expect": {} },
 		{ "op": "read", "host": "a", "id": "x", "expect": { "value": { "n": 2 } } },
 		{ "op": "read", "host": "b", "id": "x", "expect": { "value": { "n": 2 } } },
 		{

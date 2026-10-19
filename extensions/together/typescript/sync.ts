@@ -7,7 +7,8 @@
 // too (patches that don't apply: refused). any other (fork, merge): checked on a replay of its
 // parent (replay.ts); the table told only if the head shown changes, then given the new head whole.
 // several heads: the first in agreed order shows, the rest in the "conflicts" table with the
-// tables they differ in; settle(id) makes a merge keeping the head shown. what is wrong with a
+// tables they differ in, the one shown in the "shown" table (both at the id, there together; each
+// a head as its commit tells it: Head); settle(id) makes a merge keeping the head shown. what is wrong with a
 // node's sync right now (commits waiting or refused, writes no commit could carry) is in the
 // "status" table at its id, none when nothing is.
 // a merge rule (merge, one of merges): heads show merged; a write is then a merge commit (every
@@ -30,7 +31,7 @@ import {
 	encode,
 	name as nameOf,
 } from "@ermine/encoding/commit"
-import type { Id, Key, Table } from "@ermine/table"
+import type { Id, Key, Table, Tables as Rows } from "@ermine/table"
 import type * as sd from "npm:@automerge/subduction@0.23.0"
 import { hex } from "./hex.ts"
 import { agreed, type Kept, type Refusal } from "./history.ts"
@@ -39,13 +40,20 @@ import { snapshot, tablesOf } from "./snapshot.ts"
 import type { Signer } from "./seal.ts"
 import { createDevice, type Device, type Lock } from "./transport.ts"
 
-// a head that does not show: who made it, and the tables in which it differs from the one shown
-export type Conflict = {
+// a head as its commit tells it: its name, lamport, actor, signer's key (hex), time and site
+// (external; none: not there)
+export type Head = {
 	head: string
 	lamport: number
 	actor: unknown
-	tables: Record<string, unknown>
+	signer: string
+	time: number
+	external?: Commit["external"]
 }
+
+// a head that does not show: as its commit tells it, and the tables in which it differs from the
+// one shown
+export type Conflict = Head & { tables: Record<string, unknown> }
 
 // what stands ephemeral at a node: the stored value under each overlaid table, and each standing
 // ephemeral commit (its signer's key and its name, hex; its table; its lamport) in the order they
@@ -72,6 +80,7 @@ export type Status = {
 declare module "@ermine/table" {
 	interface Tables {
 		conflicts: Conflict[]
+		shown: Head
 		ephemeral: Ephemeral
 		status: Status
 	}
@@ -733,21 +742,39 @@ export function createSync(options: Options): Sync {
 				const theirs = node[part as string]?.value
 				if (!same(theirs, storedEntry(doc, part)?.value)) differ[part as string] = theirs
 			}
-			return {
-				head: hex(k.name),
-				lamport: k.lamport,
-				actor: decode(k.bytes).actor,
-				tables: differ,
-			}
+			return { ...headOf(k), tables: differ }
 		})
-		const have = table.get("conflicts", doc)
-		if (list.length === 0) {
-			if (have !== undefined) table.del("conflicts", doc)
+		put("conflicts", doc, list.length ? list : undefined)
+		put("shown", doc, list.length ? headOf(heads[0]) : undefined)
+	}
+
+	// a head as its commit tells it
+	function headOf(k: Kept): Head {
+		const c = decode(k.bytes)
+		return {
+			head: hex(k.name),
+			lamport: k.lamport,
+			actor: c.actor,
+			signer: hex(c.signer),
+			time: c.time,
+			...c.external && { external: c.external },
+		}
+	}
+
+	// sync's own entry at (part, doc): value, or none when undefined
+	function put<P extends "conflicts" | "shown">(
+		part: P,
+		doc: string,
+		value: Rows[P] | undefined,
+	) {
+		const have = table.get(part, doc)
+		if (value === undefined) {
+			if (have !== undefined) table.del(part, doc)
 			return
 		}
-		const entry = createEntry(list, { time: Math.floor(Date.now() / 1000), actor: null })
-		if (have) table.sub("conflicts", doc, entry)
-		else table.add("conflicts", doc, entry)
+		const entry = createEntry(value, { time: Math.floor(Date.now() / 1000), actor: null })
+		if (have) table.sub(part, doc, entry)
+		else table.add(part, doc, entry)
 	}
 
 	function follow(id: string): Promise<void> {

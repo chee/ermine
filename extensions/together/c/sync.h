@@ -5,7 +5,8 @@
 // the table shows one head. a commit on it: applied by update (core/node/c/update.h); any other:
 // checked on a replay of its parent (replay.h), the table told only if the head shown changes.
 // several heads: the first in agreed order shows, the rest in the "conflicts" table
-// ([{head, lamport, actor, tables}]). What is wrong with a node's sync right now is in the "status"
+// ([{head, lamport, actor, signer, time, external?, tables}]), the one shown in the "shown" table
+// ({head, lamport, actor, signer, time, external?}; sync.ts's Head). What is wrong with a node's sync right now is in the "status"
 // table at its id ({waiting, refused, unsent, count}, sync.ts's Status), none when nothing is: commits
 // waiting (on parents, or on authority), refused (with the code), and writes no commit could carry.
 // A change from elsewhere keeps who signed it and the commit, after its metadata (replay.h). a merge rule (replay.h): heads show merged; a write is then a

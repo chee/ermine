@@ -120,6 +120,9 @@
 						"head": "ta",
 						"lamport": 2,
 						"actor": "a",
+						"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"time": 1760000000,
+						"external": [{ "file": "scenario", "line": 1 }],
 						"tables": {
 							"value": "note!"
 						}
@@ -167,6 +170,9 @@
 						"head": "ta",
 						"lamport": 2,
 						"actor": "a",
+						"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"time": 1760000000,
+						"external": [{ "file": "scenario", "line": 1 }],
 						"tables": {
 							"value": "note!"
 						}
@@ -305,6 +311,9 @@
 						"head": "ta2",
 						"lamport": 5,
 						"actor": "a",
+						"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"time": 1760000000,
+						"external": [{ "file": "scenario", "line": 1 }],
 						"tables": {
 							"value": "1>a not!e"
 						}
