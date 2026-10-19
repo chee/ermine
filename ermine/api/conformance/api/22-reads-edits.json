@@ -1,0 +1,253 @@
+{
+	"title": "reads: every value at a path, [{ value, from, gone?, inside? }]. nothing open: read's, from its entry's change; with sync's \"values\" there, position 0 read's from the first item's commit, then each other item, a conflict from its commit; under an open path, its items there; nothing: []; tracked. edits: what a write replaces goes in its change's metadata: edit none, edits \"all\", or the heads of the ones given",
+	"steps": [
+		{ "op": "kids", "id": "R", "value": { "w": "W" }, "expect": {} },
+		{
+			"op": "start",
+			"name": "p",
+			"at": ["w", "p"],
+			"program": [
+				{
+					"do": ["open", "./doc", { "title": "pig", "n": 1, "m": { "k": 1, "j": 2 } }],
+					"as": "doc"
+				},
+				{ "do": ["effect", "all", ["each", ["reads", "$doc", ["title"]], ["value"]], "seen"] }
+			],
+			"expect": { "id": "proc:p" }
+		},
+		{ "op": "id", "path": ["w", "doc"], "expect": { "id": "n1" } },
+		{ "op": "log", "name": "seen", "expect": { "values": [["pig"]] } },
+		{ "op": "do", "process": "p", "call": ["reads", "./nothing"], "expect": { "value": [] } },
+		{
+			"op": "do",
+			"process": "p",
+			"call": ["reads", "$doc", ["gone"]],
+			"expect": { "value": [] }
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": ["log", "x", ["each", ["reads", "$doc", ["n"]], ["value"]]],
+			"expect": { "value": [1] }
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": ["log", "x", ["each", ["reads", "$doc", ["n"]], ["from", "who"]]],
+			"expect": { "value": ["test"] }
+		},
+		{
+			"op": "put",
+			"part": "values",
+			"id": "n1",
+			"value": {
+				"value": [
+					{
+						"path": ["title"],
+						"items": [
+							{
+								"value": "pig",
+								"from": {
+									"head": "cc",
+									"lamport": 4,
+									"actor": "me",
+									"signer": "ed01cc",
+									"time": 30
+								}
+							},
+							{
+								"value": "cow",
+								"from": {
+									"head": "aa",
+									"lamport": 2,
+									"actor": "pig",
+									"signer": "ed01aa",
+									"time": 10,
+									"external": [{ "file": "elsewhere.js", "line": 7 }]
+								}
+							}
+						]
+					},
+					{
+						"path": ["m"],
+						"items": [
+							{
+								"value": { "k": 1, "j": 2 },
+								"inside": true,
+								"from": {
+									"head": "cc",
+									"lamport": 4,
+									"actor": "me",
+									"signer": "ed01cc",
+									"time": 30
+								}
+							}
+						]
+					},
+					{
+						"path": ["m", "k"],
+						"items": [
+							{
+								"value": 1,
+								"from": {
+									"head": "aa",
+									"lamport": 2,
+									"actor": "pig",
+									"signer": "ed01aa",
+									"time": 10,
+									"external": [{ "file": "elsewhere.js", "line": 7 }]
+								}
+							},
+							{
+								"gone": true,
+								"at": ["m"],
+								"from": {
+									"head": "cc",
+									"lamport": 4,
+									"actor": "me",
+									"signer": "ed01cc",
+									"time": 30
+								}
+							}
+						]
+					}
+				]
+			},
+			"expect": {}
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "name": "seen", "expect": { "values": [["pig"], ["pig", "cow"]] } },
+		{
+			"op": "do",
+			"process": "p",
+			"call": ["reads", "$doc", ["title"]],
+			"expect": {
+				"value": [
+					{ "value": "pig", "from": { "who": "me", "when": 30, "head": "cc" } },
+					{
+						"value": "cow",
+						"from": {
+							"kind": "conflict",
+							"head": "aa",
+							"who": "pig",
+							"signer": "ed01aa",
+							"when": 10,
+							"lamport": 2,
+							"where": [{ "file": "elsewhere.js", "line": 7 }],
+							"differs": ["value"]
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": ["reads", "$doc", ["m"]],
+			"expect": {
+				"value": [
+					{
+						"value": { "k": 1, "j": 2 },
+						"from": { "who": "me", "when": 30, "head": "cc" },
+						"inside": true
+					}
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"log",
+				"x",
+				[
+					"all",
+					["each", ["reads", "$doc", ["m", "k"]], ["value"]],
+					["each", ["reads", "$doc", ["m", "k"]], ["from", "head"]],
+					["each", ["reads", "$doc", ["m", "k"]], ["gone"]]
+				]
+			],
+			"expect": { "value": [[1, null], ["aa", "cc"], [null, true]] }
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": ["reads", "$doc", ["m", "j"]],
+			"expect": {
+				"value": [
+					{ "value": 2, "from": { "who": "me", "when": 30, "head": "cc" }, "inside": true }
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": ["log", "x", ["each", ["reads", "$doc", ["n"]], ["from", "head"]]],
+			"expect": { "value": [null] }
+		},
+		{ "op": "put", "part": "values", "id": "n1", "value": {}, "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "do",
+			"process": "p",
+			"call": ["log", "x", ["each", ["reads", "$doc", ["title"]], ["from", "head"]]],
+			"expect": { "value": [null] }
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": ["edit", "$doc", [{ "path": ["n"], "value": 2 }]],
+			"expect": {}
+		},
+		{ "op": "metadata", "part": "value", "id": "n1", "skip": ["keys", "node"], "expect": {} },
+		{
+			"op": "do",
+			"process": "p",
+			"call": ["edits", "$doc", [{ "path": ["n"], "value": 3 }]],
+			"expect": {}
+		},
+		{
+			"op": "metadata",
+			"part": "value",
+			"id": "n1",
+			"skip": ["keys", "node"],
+			"expect": { "replaces": "all" }
+		},
+		{ "op": "do", "process": "p", "call": ["read", "$doc", ["n"]], "expect": { "value": 3 } },
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"edits",
+				"$doc",
+				[{ "path": ["n"], "value": 4 }],
+				[
+					{ "value": 3, "from": { "who": "me", "when": 1, "head": "aa" } },
+					{ "value": 1, "from": {} }
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "metadata",
+			"part": "value",
+			"id": "n1",
+			"skip": ["keys", "node"],
+			"expect": { "replaces": ["aa"] }
+		},
+		{ "op": "do", "process": "p", "call": ["read", "$doc", ["n"]], "expect": { "value": 4 } },
+		{
+			"op": "do",
+			"process": "p",
+			"call": ["edits", "$doc", [{ "path": ["n"], "value": 5 }], []],
+			"expect": {}
+		},
+		{
+			"op": "metadata",
+			"part": "value",
+			"id": "n1",
+			"skip": ["keys", "node"],
+			"expect": { "replaces": [] }
+		}
+	]
+}
