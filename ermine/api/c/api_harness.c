@@ -510,6 +510,20 @@ static res expr(api *a, env *e, const op_value *x) {
 	if (strcmp(x->items[0]->str, "throw") == 0 && x->count >= 2 && x->items[1]->type == OP_STR) {
 		return broke(x->items[1]->str);
 	}
+	if (strcmp(x->items[0]->str, "each") == 0 && x->count >= 3) {
+		res r = expr(a, e, x->items[1]);
+		if (r.code) return r;
+		size_t n;
+		op_key *keys = keys_of(x->items[2], &n);
+		op_value *l = op_list();
+		for (size_t i = 0; r.v && r.v->type == OP_LIST && i < r.v->count; i++) {
+			const op_value *v = pl_at(r.v->items[i], keys, n, NULL);
+			op_push(l, v ? op_ref((op_value *)v) : op_null());
+		}
+		free(keys);
+		op_free(r.v);
+		return ok(l);
+	}
 	return call(a, e, x);
 }
 
@@ -621,6 +635,36 @@ static op_value *items_json(const api_items *items) {
 	return l;
 }
 
+// versions as api.ts' Version: { value?, from, gone?, inside? }; from a Shown's fields, or a
+// conflict's (by left out while it is none)
+static op_value *versions_json(const api_versions *vs) {
+	op_value *l = op_list();
+	for (size_t i = 0; i < vs->n; i++) {
+		const api_version *v = &vs->items[i];
+		const api_from *f = &v->from;
+		op_value *o = op_map(), *from = op_map();
+		if (v->value) op_set(o, "value", op_ref(v->value));
+		if (f->conflict) op_set(from, "kind", op_str("conflict"));
+		if (f->by) op_set(from, "by", op_str(f->by));
+		if (f->head) op_set(from, "head", op_str(f->head));
+		if (f->who) op_set(from, "who", op_ref(f->who));
+		if (f->signer) op_set(from, "signer", op_str(f->signer));
+		if (f->has_when) op_set(from, "when", op_num((double)f->when));
+		if (f->conflict) op_set(from, "lamport", op_num((double)f->lamport));
+		if (f->where) op_set(from, "where", op_ref(f->where));
+		if (f->conflict) {
+			op_value *d = op_list();
+			for (size_t k = 0; k < f->ndiffers; k++) op_push(d, op_str(f->differs[k]));
+			op_set(from, "differs", d);
+		}
+		op_set(o, "from", from);
+		if (v->gone) op_set(o, "gone", op_bool(1));
+		if (v->inside) op_set(o, "inside", op_bool(1));
+		op_push(l, o);
+	}
+	return l;
+}
+
 // an api function called as the program would: [fn, ...args]
 static res call(api *a, env *e, const op_value *c) {
 	if (c == NULL || c->type != OP_LIST || c->count == 0 || c->items[0]->type != OP_STR) {
@@ -726,6 +770,14 @@ static res call(api *a, env *e, const op_value *c) {
 		code = api_peep(a, t[0], keys, n, &v);
 		free(keys);
 		r = code ? bad(a, code) : ok(v ? op_ref((op_value *)v) : NULL);
+	} else if (strcmp(fn, "reads") == 0) {
+		size_t n;
+		op_key *keys = keys_of(nraw > 1 ? args[1] : NULL, &n);
+		api_versions vs;
+		code = api_reads(a, t[0], keys, n, &vs);
+		free(keys);
+		if (code) r = bad(a, code);
+		else r = ok(versions_json(&vs)), api_versions_free(&vs);
 	} else if (strcmp(fn, "entries") == 0) {
 		api_items items;
 		code = api_entries(a, t[0], &items);
@@ -748,6 +800,23 @@ static res call(api *a, env *e, const op_value *c) {
 		for (size_t i = 0; i < n; i++) hh_patch(ps->items[i], &patches[i]);
 		if (ps) hh_hold(op_ref((op_value *)ps));
 		code = api_edit(a, t[0], patches, n);
+		r = code ? bad(a, code) : ok(NULL);
+	} else if (strcmp(fn, "edits") == 0) {
+		const op_value *ps = nraw > 1 ? args[1] : NULL;
+		size_t n = ps && ps->type == OP_LIST ? ps->count : 0;
+		op_patch *patches = hh_take((n + 1) * sizeof *patches);
+		for (size_t i = 0; i < n; i++) hh_patch(ps->items[i], &patches[i]);
+		if (ps) hh_hold(op_ref((op_value *)ps));
+		// which: only each one's head is asked
+		const op_value *w = nraw > 2 ? args[2] : NULL;
+		size_t nw = w && w->type == OP_LIST ? w->count : 0;
+		api_version *which = w && w->type == OP_LIST ? xalloc((nw + 1) * sizeof *which) : NULL;
+		for (size_t i = 0; i < nw; i++) {
+			const op_value *from = w->items[i]->type == OP_MAP ? op_get(w->items[i], "from") : NULL;
+			which[i].from.head = (char *)(from && from->type == OP_MAP ? hh_str(from, "head") : NULL);
+		}
+		code = api_edits(a, t[0], patches, n, which, nw);
+		free(which);
 		r = code ? bad(a, code) : ok(NULL);
 	} else if (strcmp(fn, "place") == 0) {
 		code = api_place(a, s0, t[1]);
@@ -958,18 +1027,22 @@ static op_value *answer(const op_value *r) {
 	if (strcmp(op, "metadata") == 0) {
 		const nd_entry *e = tb_get(m->table, tb_string(hh_str(r, "part")), tb_string(hh_str(r, "id")));
 		op_value *o = op_map(), *keys = op_list();
-		const op_value *node = NULL;
+		const op_value *node = NULL, *replaces = NULL;
 		size_t n = e ? e->change.metadata_length : 0;
 		const char **sorted = xalloc((n ? n : 1) * sizeof *sorted);
 		for (size_t i = 0; i < n; i++) {
 			sorted[i] = e->change.metadata[i].key;
 			if (strcmp(e->change.metadata[i].key, PL_NODE) == 0) node = e->change.metadata[i].value;
+			if (strcmp(e->change.metadata[i].key, "replaces") == 0) {
+				replaces = e->change.metadata[i].value;
+			}
 		}
 		qsort(sorted, n, sizeof *sorted, by_text);
 		for (size_t i = 0; i < n; i++) op_push(keys, op_str(sorted[i]));
 		free(sorted);
 		op_set(o, "keys", keys);
 		if (node) op_set(o, "node", op_ref((op_value *)node));
+		if (replaces) op_set(o, "replaces", op_ref((op_value *)replaces));
 		return o;
 	}
 	if (strcmp(op, "change") == 0) {

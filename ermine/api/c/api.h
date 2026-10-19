@@ -160,6 +160,44 @@ int api_read(api *a, api_target x, const op_key *path, size_t n, const op_value 
 // api_read, untracked (a write there reruns nothing); a pending memo: *out NULL, 0
 int api_peep(api *a, api_target x, const op_key *path, size_t n, const op_value **out);
 
+// where a value a path holds is from (api.ts' From): the commit of the first item sync has there,
+// or none listed, its entry's change (Shown); or another value sync has there (a conflict). a field
+// not known: NULL, has_when 0
+typedef struct {
+	int conflict;
+	// the commit's name (hex); NULL: an entry's change
+	char *head;
+	// actor (sync's may be null)
+	op_value *who;
+	int has_when;
+	int64_t when;
+	// external: sites as values, [{file, line, column?, function?}]
+	op_value *where;
+	// a conflict's: by, the sync engine (NULL for now: the sync process's id once sync is one);
+	// signer hex; lamport; differs, the parts
+	char *by;
+	char *signer;
+	int64_t lamport;
+	char **differs;
+	size_t ndiffers;
+} api_from;
+// one value a path holds (api.ts' Version). gone: a delete; inside: a write under it is not its own
+typedef struct {
+	op_value *value;
+	api_from from;
+	int gone;
+	int inside;
+} api_version;
+typedef struct {
+	api_version *items;
+	size_t n;
+} api_versions;
+// every value at path, tracked: sync's items there (its "values" table at the id: the path's row,
+// or the nearest open path's above it, each item's value at path). position 0 is api_read's (NULL
+// too) from its item, else from its entry's change; then the rest, each from its commit. none: n 0
+int api_reads(api *a, api_target x, const op_key *path, size_t n, api_versions *out);
+void api_versions_free(api_versions *versions);
+
 typedef struct {
 	op_value *value;
 	char *from;
@@ -185,8 +223,13 @@ void api_names_free(api_names *names);
 
 // x's attributes, as a node
 int api_info(api *a, api_target x, api_node *out);
-// patches: one change on the part (none there: made)
+// patches: one change on the part (none there: made). synced, it replaces what reads showed first
+// at each path it writes
 int api_edit(api *a, api_target x, const op_patch *patches, size_t n);
+// api_edit's, its change saying what it replaces (metadata "replaces"): every value reads gives at
+// each path it writes (which NULL: "all"), or the ones given (their heads; none with one: [])
+int api_edits(api *a, api_target x, const op_patch *patches, size_t n, const api_version *which,
+	size_t nwhich);
 
 typedef struct api_watching api_watching;
 // fn is told each write landing at x, as it lands; stopped by its scope's teardown
