@@ -8,9 +8,7 @@
 // their keys and values) until the next update or nd_free_entry, so the caller keeps them alive until
 // then. The header's pieces (external, metadata, actor, ...) are borrowed the same way. The undo is the
 // entry's own, let go of by the next update or nd_free_entry. A failed call changes nothing and takes
-// no reference. An entry made in_place (node.h): the value's containers are changed where they are
-// (op_apply's in_place, apply.h), the patches' values put in are the value's from then on, and a
-// failed call is undone in place, a key put back going last in its map.
+// no reference.
 #ifndef ND_UPDATE_H
 #define ND_UPDATE_H
 

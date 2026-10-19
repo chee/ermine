@@ -833,8 +833,7 @@ static nd_entry *entry_at(Writing *w, const char *part, const char *id, int map)
 	nd_entry *e = tb_get(os->table, tb_string(part), tb_string(id));
 	if (e) return e;
 	op_value *v = map ? op_map() : NULL;
-	// a node's value is copy-on-write: what a patch leaves is the same value as before (val.h's kept Json)
-	e = nd_make_entry(v, &w->h, &(nd_entry_options){.in_place = strcmp(part, "value") != 0});
+	e = nd_make_entry(v, &w->h);
 	op_free(v);
 	pl_own(os->places, e);
 	const char *kept = keepdup(os, id);
@@ -906,11 +905,12 @@ static Held *held_of(const op_patch *patches, size_t n, const char *prefix) {
 static void apply(Writing *w, const char *part, const char *id, const op_patch *patches, size_t n, const char *prefix) {
 	ap_os *os = w->a->os;
 	nd_entry *e = entry_at(w, part, id, prefix != NULL);
-	// a value is changed copy-on-write, whoever made its entry (places' are in place)
-	if (!strcmp(part, "value")) e->in_place = 0;
 	Held *h = held_of(patches, n, prefix);
 	size_t failed = 0;
-	int code = nd_update(e, h->patches, h->n, w->h, &failed);
+	// a node's value is copy-on-write: what a patch leaves is the same value as before (val.h's kept Json); the
+	// places' own parts are written through its unread
+	int code = !strcmp(part, "value") ? nd_update(e, h->patches, h->n, w->h, &failed)
+					  : un_update(pl_unread(os->places), e, h->patches, h->n, w->h, &failed);
 	if (code != OP_OK) {
 		held_free(h);
 		w->e = fail(os, "wrong-field", "patch %zu: %s", failed, op_code_name(code));
@@ -1249,7 +1249,7 @@ static void creating(void *data) {
 		op_free(none);
 		return;
 	}
-	e = nd_make_entry((op_value *)c->value, &w->h, &(nd_entry_options){.in_place = 0});
+	e = nd_make_entry((op_value *)c->value, &w->h);
 	pl_own(os->places, e);
 	tb_add(os->table, tb_string("value"), tb_string(id), e);
 	born(w, e, "value", id);

@@ -49,7 +49,7 @@ static void build(void) {
 		const char *parts[3] = {"value", "attributes", "children"};
 		for (int p = 0; p < 3; p++) {
 			ch_header h = header(i);
-			nd_entry *n = nd_make_entry(values[p], &h, NULL);
+			nd_entry *n = nd_make_entry(values[p], &h);
 			nodes[3 * i + p] = n;
 			entries[3 * i + p] = (pk_entry){tb_string(parts[p]), tb_string(ids[i]), n};
 		}

@@ -236,7 +236,7 @@ static void put(void *data) {
 		c->why = SC_UNSCOPED;
 		return;
 	}
-	nd_entry *node = nd_make_entry((op_value *)op_get(c->request, "value"), &h, NULL);
+	nd_entry *node = nd_make_entry((op_value *)op_get(c->request, "value"), &h);
 	pl_hold(world_places, node, made, pl_made_free);
 	world_keep_node(node);
 	tb_sub(world_table, tb_string(world_part(op_get(c->request, "part"))),

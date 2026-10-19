@@ -582,7 +582,7 @@ static void put_entry(void *data) {
 			return;
 		}
 		op_value *x = back(v);
-		nd_entry *e = nd_make_entry(x, &h, NULL);
+		nd_entry *e = nd_make_entry(x, &h);
 		op_free(x);
 		pl_own(d->places, e);
 		pl_hold(d->places, e, made, pl_made_free);

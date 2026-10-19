@@ -418,7 +418,7 @@ static void write_part(dn_link *l, owned *o, int k, const op_value *v) {
 	if (!header_now(l, &h, &made)) return;
 	pl *p = l->world.places;
 	op_value *value = k == 0 ? attributes_of(v) : op_ref((op_value *)v);
-	nd_entry *e = nd_make_entry(value, &h, NULL);
+	nd_entry *e = nd_make_entry(value, &h);
 	op_free(value);
 	pl_own(p, e);
 	pl_hold(p, e, made, pl_made_free);

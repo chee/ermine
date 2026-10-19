@@ -98,7 +98,7 @@ int pr_add_in(pl *l, tb_table *table, const char *part, tb_key root, const char 
 			op_set(m, path[i], trie);
 			trie = m;
 		}
-		nd_entry *node = nd_make_entry(trie, &header, &(nd_entry_options){.in_place = 1});
+		nd_entry *node = nd_make_entry(trie, &header);
 		op_free(trie);
 		pl_own(l, node);
 		tb_add(table, tb_string(part), root, node);
@@ -117,7 +117,7 @@ int pr_add_in(pl *l, tb_table *table, const char *part, tb_key root, const char 
 		op_free(leaf);
 		return PL_ALREADY_THERE;
 	}
-	pl_upsert(l, tb_string(part), root, path, n, leaf, header, changed, NULL);
+	pl_upsert_unread(l, tb_string(part), root, path, n, leaf, header, changed, NULL);
 	op_free(leaf);
 	return 0;
 }
@@ -171,7 +171,7 @@ int pr_remove_in(pl *l, tb_table *table, const char *part, tb_key root, const ch
 	b->keys = keys_of((const char *const *)b->names, b->n, NULL);
 	b->patch = (op_patch){.place = {.path = b->keys, .length = b->n}};
 	size_t failed;
-	int code = nd_update(entry, &b->patch, 1, header, &failed);
+	int code = un_update(pl_unread(l), entry, &b->patch, 1, header, &failed);
 	if (code != OP_OK) {
 		fprintf(stderr, "processes: stop: %s\n", op_code_name(code));
 		abort();

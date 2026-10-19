@@ -873,7 +873,7 @@ static void put_in(void *data) {
 		p->code = -1;
 		return;
 	}
-	nd_entry *e = nd_make_entry((op_value *)p->value, &h, NULL);
+	nd_entry *e = nd_make_entry((op_value *)p->value, &h);
 	pl_own(m->places, e);
 	pl_hold(m->places, e, made, pl_made_free);
 	tb_sub(m->table, tb_string(p->part), tb_string(p->id), e);

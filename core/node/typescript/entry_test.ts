@@ -41,9 +41,3 @@ Deno.test("createEntry: the value given is the entry's, not copied", () => {
 	const v = { a: [1] }
 	assertStrictEquals(createEntry(v).value, v)
 })
-
-Deno.test("createEntry: cow: false is remembered, and only that", () => {
-	assertEquals(createEntry(1, undefined, { cow: false }).cow, false)
-	assertEquals("cow" in createEntry(1), false)
-	assertEquals("cow" in createEntry(1, undefined, {}), false)
-})

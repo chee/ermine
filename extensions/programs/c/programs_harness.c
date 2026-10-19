@@ -246,7 +246,7 @@ static void put_entry(const char *part, tb_key id, const op_value *value) {
 		free(bad);
 		return;
 	}
-	nd_entry *node = nd_make_entry((op_value *)value, &h, NULL);
+	nd_entry *node = nd_make_entry((op_value *)value, &h);
 	pl_hold(world_places, node, made, pl_made_free);
 	world_keep_node(node);
 	tb_sub(world_table, tb_string(part), id, node);

@@ -9,9 +9,10 @@
 // request's, or {time: 1760000000, actor: <host>, external: [{file: "scenario", line: 1}]}; what sync
 // stamps with the time now has the request's time, default 1760000000; the devices (and sync's beats
 // and ttl) run on the harness's clock, which quiet moves 2 ms a round and advance by its ms. A commit in an answer: its label (a write's
-// name), else its name as hex. An id: a label minted (as), else the string as given
-#include "egwalker.h"
+// name), else its name as hex. An id: a label minted (as), else the string as given. The rules a
+// host may be given: those linked (rules_harness.h)
 #include "ids.h"
+#include "rules_harness.h"
 #include "sync.h"
 #include "wires_harness.h"
 
@@ -33,7 +34,7 @@ typedef struct {
 	char **tables;
 	size_t tables_length;
 	// the rules it knows, and the one it merges by (NULL: none)
-	const rp_rule *merges[1];
+	const rp_rule **merges;
 	size_t merges_length;
 	char *merge;
 	// the tables whose changes go out ephemerally
@@ -251,6 +252,7 @@ static void host_free(host_t *h) {
 	if (h->sync != NULL) shut(h);
 	for (size_t i = 0; i < h->tables_length; i++) free(h->tables[i]);
 	free(h->tables);
+	free(h->merges);
 	free(h->merge);
 	ephemeral_set(h, NULL);
 	for (size_t i = 0; i < h->roots_length; i++) free(h->roots[i]);
@@ -495,20 +497,26 @@ static void host(const op_value *r, FILE *out) {
 		for (size_t i = 0; i < tables->count; i++)
 			if (tables->items[i]->type == OP_STR) h->tables[h->tables_length++] = copyString(tables->items[i]->str);
 	}
-	// every rule a host may be given: eg-walker. merges: their names, default [merge] or none
+	// every rule a host may be given: rules_harness.h's. merges: their names, default [merge] or none
 	const op_value *merges = op_get(r, "merges"), *merge = op_get(r, "merge");
 	if (merge != NULL && merge->type == OP_STR) h->merge = copyString(merge->str);
 	size_t known = merges != NULL && merges->type == OP_LIST ? merges->count : merges == NULL && h->merge != NULL;
+	h->merges = calloc(harness_rules_length + 1, sizeof *h->merges);
+	if (h->merges == NULL) abort();
 	for (size_t i = 0; i < known; i++) {
 		const char *rule = merges != NULL ? merges->items[i]->type == OP_STR ? merges->items[i]->str : "" : h->merge;
-		if (strcmp(rule, eg_rule.name) != 0) {
+		const rp_rule *found = NULL;
+		for (size_t j = 0; j < harness_rules_length && found == NULL; j++)
+			if (strcmp(rule, harness_rules[j]->name) == 0) found = harness_rules[j];
+		if (found == NULL) {
 			hh_error(out, "no rule %s", rule);
 			for (size_t t = 0; t < h->tables_length; t++) free(h->tables[t]);
-			free(h->tables), free(h->merge), free(h->name), free(h);
+			free(h->tables), free(h->merges), free(h->merge), free(h->name), free(h);
 			return;
 		}
-		h->merges[0] = &eg_rule;
-		h->merges_length = 1;
+		bool had = false;
+		for (size_t j = 0; j < h->merges_length; j++) had |= h->merges[j] == found;
+		if (!had) h->merges[h->merges_length++] = found;
 	}
 	ephemeral_set(h, op_get(r, "ephemeral"));
 	ErmStore *s = malloc(sizeof *s);
@@ -661,6 +669,24 @@ static void change(const op_value *r, FILE *out) {
 	fputc('}', out);
 }
 
+// a head (sync.c's head_of) in an answer: its label, its fields
+static void put_head(FILE *out, const op_value *c) {
+	const op_value *head = op_get(c, "head");
+	fputs("{\"head\":", out);
+	uint8_t *name;
+	size_t n;
+	if (head != NULL && head->type == OP_STR && cf_unhex(head->str, &name, &n) && n == CM_NAME) put_label(out, name);
+	else op_json_write(out, head);
+	static const char *const fields[] = {"lamport", "actor", "signer", "time", "external", "tables"};
+	for (size_t i = 0; i < sizeof fields / sizeof *fields; i++) {
+		const op_value *v = op_get(c, fields[i]);
+		if (v == NULL) continue;
+		fprintf(out, ",\"%s\":", fields[i]);
+		op_json_write(out, v);
+	}
+	fputc('}', out);
+}
+
 static void conflicts(const op_value *r, FILE *out) {
 	host_t *h = of(r, "host", out);
 	if (h == NULL) return;
@@ -668,22 +694,24 @@ static void conflicts(const op_value *r, FILE *out) {
 	fputs("{\"conflicts\":[", out);
 	const op_value *list = e != NULL ? e->value : NULL;
 	for (size_t i = 0; list != NULL && list->type == OP_LIST && i < list->count; i++) {
-		const op_value *c = list->items[i], *head = op_get(c, "head");
 		if (i) fputc(',', out);
-		fputs("{\"head\":", out);
-		uint8_t *name;
-		size_t n;
-		if (head != NULL && head->type == OP_STR && cf_unhex(head->str, &name, &n) && n == CM_NAME) put_label(out, name);
-		else op_json_write(out, head);
-		fputs(",\"lamport\":", out);
-		op_json_write(out, op_get(c, "lamport"));
-		fputs(",\"actor\":", out);
-		op_json_write(out, op_get(c, "actor"));
-		fputs(",\"tables\":", out);
-		op_json_write(out, op_get(c, "tables"));
-		fputc('}', out);
+		put_head(out, list->items[i]);
 	}
 	fputs("]}", out);
+}
+
+// the "shown" table's entry at the id: {shown: head}, or {}
+static void shown(const op_value *r, FILE *out) {
+	host_t *h = of(r, "host", out);
+	if (h == NULL) return;
+	nd_entry *e = tb_get(h->table, tb_string("shown"), tb_string(id_of(op_get(r, "id"))));
+	if (e == NULL) {
+		fputs("{}", out);
+		return;
+	}
+	fputs("{\"shown\":", out);
+	put_head(out, e->value);
+	fputc('}', out);
 }
 
 // the "ephemeral" table's entry at the id: {under, on: [{by, name, tables, lamport}]}, name a commit
@@ -989,6 +1017,7 @@ void hh_answer(const op_value *r, FILE *out) {
 	} else if (strcmp(op, "read") == 0) read_entry(r, out);
 	else if (strcmp(op, "change") == 0) change(r, out);
 	else if (strcmp(op, "conflicts") == 0) conflicts(r, out);
+	else if (strcmp(op, "shown") == 0) shown(r, out);
 	else if (strcmp(op, "status") == 0) status(r, out);
 	else if (strcmp(op, "events") == 0) events(r, out);
 	else if (strcmp(op, "writes") == 0) writes(r, out);

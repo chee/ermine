@@ -1,39 +1,38 @@
 {
-	"title": "cow: false is kept, as the node has it; two equal nodes but for cow are two nodes",
-	"entries": [
-		[
-			"value",
-			"a",
-			0
-		],
-		[
-			"value",
-			"b",
-			1
-		]
-	],
-	"nodes": [
-		{
-			"value": [
-				1
-			],
-			"change": {
-				"time": 1,
-				"actor": "a"
-			},
-			"cow": false
-		},
-		{
-			"value": [
-				1
-			],
-			"change": {
-				"time": 1,
-				"actor": "a"
-			}
-		}
-	],
+	"title": "cow (has bit 64), written before nodes lost it: read and dropped; two nodes still",
+	"bytes": "a167636f6c756d6e73584a1dc8c10d80200c05d0c226aed24d6af90612154351cf651ac7d4787cefd12cc63269493644644ebd6ce04810edb5f977117b4d3026c221ad9b0f5cb29e88b873d1cc1496df363c787801",
 	"expect": {
-		"bytes": "a167636f6c756d6e73584a1dc8c10d80200c05d0c226aed24d6af90612154351cf651ac7d4787cefd12cc63269493644644ebd6ce04810edb5f977117b4d3026c221ad9b0f5cb29e88b873d1cc1496df363c787801"
+		"entries": [
+			[
+				"value",
+				"a",
+				0
+			],
+			[
+				"value",
+				"b",
+				1
+			]
+		],
+		"nodes": [
+			{
+				"value": [
+					1
+				],
+				"change": {
+					"time": 1,
+					"actor": "a"
+				}
+			},
+			{
+				"value": [
+					1
+				],
+				"change": {
+					"time": 1,
+					"actor": "a"
+				}
+			}
+		]
 	}
 }

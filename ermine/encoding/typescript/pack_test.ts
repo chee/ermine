@@ -99,16 +99,11 @@ Deno.test("pack: a change and its op come back as written", () => {
 	assertEquals(hex(encode(back)), hex(encode(node)))
 })
 
-Deno.test("pack: cow: false is kept", () => {
-	const inPlace = createEntry([1], h(), { cow: false })
-	const back = decode(encode(inPlace))
-	assertEquals(back.cow, false)
-	assertEquals("cow" in decode(encode(n([1]))), false)
-	assertEquals(cbor.decode(encode(inPlace)), {
-		change: { time: 1, actor: "a" },
-		value: [1],
-		cow: false,
-	})
+Deno.test("pack: cow: false, written before nodes lost it, is read and dropped", () => {
+	const old = { change: { time: 1, actor: "a" }, value: [1], cow: false }
+	const back = decode(cbor.encode(old))
+	assertEquals("cow" in back, false)
+	assertEquals(back.value, [1])
 	const wrong = { change: { time: 1 }, cow: true }
 	assertEquals(code(() => decode(cbor.encode(wrong))), "not-a-node")
 })
@@ -273,7 +268,7 @@ Deno.test("pack: reading takes exactly what writing gives", () => {
 		["a node under no key", { ...good, nodes: Uint8Array.of(0, 1) }],
 		["fewer keys than parts", { ...good, which: Uint8Array.of(0) }],
 		["a run of none", { ...good, parts: [["value", 2], ["value", 0]] }],
-		["a node with bits past cow", { ...good, has: Uint8Array.of(32 | 128, 1, 32) }],
+		["a node with bits past 64", { ...good, has: Uint8Array.of(32 | 128, 1, 32) }],
 		["a value too few", { ...good, values: [1] }],
 		["a value too many", { ...good, values: [1, 2, 3] }],
 		["an ermine:// id as its text", { ...good, ids: ["ermine://" + "00".repeat(32), "b"] }],

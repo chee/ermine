@@ -2,13 +2,9 @@
 // JSON request per line in, one answer per line out, in order. State lasts for the process: one
 // entry. Another implementation joins by speaking this (HARNESS).
 //
-// { op: "start", value?, header?, cow? }  → {}   a fresh entry: the value (not given: none), the
+// { op: "start", value?, header? }  → {}   a fresh entry: the value (not given: none), the
 //    header its change (not given, or with no time: the time now added, whole seconds since 1970,
-//    as node's entry); cow: false: an entry whose value update changes in place (createEntry's
-//    cow option; any other cow, an ordinary entry). Everything it answers is the same as without
-//    it, a refused update included: the entry as it was.
-//    The values the patches put become the entry's value and change with it, so this harness gives
-//    such an entry copies of them and answers the patches as the request had them
+//    as node's entry)
 //    before any start: an entry with no value and a change of only the time now
 // { op: "update", patches, header? }
 //    patches: a list (always given) of JSON patches as op's apply has them, applied in order, each
@@ -39,8 +35,6 @@ import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"
 
 let entry: Entry<unknown> = createEntry(undefined)
-// the patches of the latest update as asked, for an entry that changes in place
-let asked: Patch[] | undefined
 
 // a change as answered: the header's own fields, a patch's path, range, value and move only
 const pick = (o: Record<string, unknown>, keys: string[]) => {
@@ -50,11 +44,11 @@ const pick = (o: Record<string, unknown>, keys: string[]) => {
 }
 const patchShape = (p: Patch) =>
 	pick(p as unknown as Record<string, unknown>, ["path", "range", "value", "move"])
-const changeShape = (c: Entry<unknown>["change"], patches?: readonly Patch[]) => {
+const changeShape = (c: Entry<unknown>["change"]) => {
 	const out = pick(c, ["time", "actor", "reader", "external", "metadata"])
 	if (c.op) {
 		out.op = {
-			patches: (patches ?? c.op.patches).map(patchShape),
+			patches: c.op.patches.map(patchShape),
 			undo: c.op.undo.map(patchShape),
 		}
 	}
@@ -73,15 +67,10 @@ function answer(r: Request) {
 function run(r: Request) {
 	switch (r.op) {
 		case "start":
-			entry = createEntry(
-				r.value === undefined ? undefined : revive(r.value),
-				r.header,
-				r.cow === false ? { cow: false } : {},
-			)
-			asked = undefined
+			entry = createEntry(r.value === undefined ? undefined : revive(r.value), r.header)
 			return {}
 		case "entry": {
-			const change = changeShape(entry.change, entry.cow === false ? asked : undefined)
+			const change = changeShape(entry.change)
 			return {
 				entry: { ...("value" in entry ? { value: toJson(entry.value) } : {}), change },
 			}
@@ -89,10 +78,7 @@ function run(r: Request) {
 		case "update": {
 			const header = r.header ?? { time: 1, actor: "me" }
 			const patches = (r.patches as Patch[]).map((p) => revive(p) as Patch)
-			if (entry.cow === false) {
-				update(entry, structuredClone(patches), header)
-				asked = patches
-			} else update(entry, patches, header)
+			update(entry, patches, header)
 			return {}
 		}
 		default:

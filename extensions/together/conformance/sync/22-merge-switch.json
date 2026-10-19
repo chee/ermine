@@ -6,7 +6,7 @@
 			"name": "a",
 			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
 			"merges": [
-				"eg-walker"
+				"serial"
 			],
 			"expect": {
 				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
@@ -17,7 +17,7 @@
 			"name": "b",
 			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
 			"merges": [
-				"eg-walker"
+				"serial"
 			],
 			"expect": {
 				"key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
@@ -120,6 +120,9 @@
 						"head": "ta",
 						"lamport": 2,
 						"actor": "a",
+						"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"time": 1760000000,
+						"external": [{ "file": "scenario", "line": 1 }],
 						"tables": {
 							"value": "note!"
 						}
@@ -131,14 +134,14 @@
 			"op": "use",
 			"host": "a",
 			"expect": {},
-			"merge": "eg-walker"
+			"merge": "serial"
 		},
 		{
 			"op": "read",
 			"host": "a",
 			"id": "x",
 			"expect": {
-				"value": "a note!"
+				"value": "a not!e"
 			}
 		},
 		{
@@ -167,6 +170,9 @@
 						"head": "ta",
 						"lamport": 2,
 						"actor": "a",
+						"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"time": 1760000000,
+						"external": [{ "file": "scenario", "line": 1 }],
 						"tables": {
 							"value": "note!"
 						}
@@ -215,7 +221,7 @@
 			"host": "b",
 			"id": "x",
 			"expect": {
-				"value": ">a note!"
+				"value": ">a not!e"
 			}
 		},
 		{
@@ -271,7 +277,7 @@
 			"host": "a",
 			"id": "x",
 			"expect": {
-				"value": "21>a note!"
+				"value": "21>a not!e"
 			}
 		},
 		{
@@ -292,7 +298,7 @@
 			"host": "a",
 			"id": "x",
 			"expect": {
-				"value": "2>a note!"
+				"value": "2>a not!e"
 			}
 		},
 		{
@@ -305,8 +311,11 @@
 						"head": "ta2",
 						"lamport": 5,
 						"actor": "a",
+						"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"time": 1760000000,
+						"external": [{ "file": "scenario", "line": 1 }],
 						"tables": {
-							"value": "1>a note!"
+							"value": "1>a not!e"
 						}
 					}
 				]
@@ -321,14 +330,14 @@
 			"op": "use",
 			"host": "a",
 			"expect": {},
-			"merge": "eg-walker"
+			"merge": "serial"
 		},
 		{
 			"op": "read",
 			"host": "a",
 			"id": "x",
 			"expect": {
-				"value": "21>a note!"
+				"value": "21>a not!e"
 			}
 		},
 		{
@@ -345,7 +354,7 @@
 			"host": "a",
 			"id": "x",
 			"expect": {
-				"value": "21>a note!"
+				"value": "21>a not!e"
 			}
 		},
 		{

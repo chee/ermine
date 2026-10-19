@@ -98,7 +98,7 @@ static void write_in_scope(void *data) {
 	if (there == NULL) {
 		op_value *m = op_map();
 		op_set(m, CST_ATTRIBUTE, w->status);
-		nd_entry *node = nd_make_entry(m, &h, NULL);
+		nd_entry *node = nd_make_entry(m, &h);
 		op_free(m);
 		if (s->nnodes == s->capnodes) {
 			s->capnodes = s->capnodes ? s->capnodes * 2 : 8;

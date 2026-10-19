@@ -67,7 +67,15 @@
 			"id": "x",
 			"expect": {
 				"conflicts": [
-					{ "head": "b1", "lamport": 2, "actor": "b", "tables": { "value": { "n": 3 } } }
+					{
+						"head": "b1",
+						"lamport": 2,
+						"actor": "b",
+						"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+						"time": 1760000000,
+						"external": [{ "file": "scenario", "line": 1 }],
+						"tables": { "value": { "n": 3 } }
+					}
 				]
 			}
 		},
@@ -88,7 +96,15 @@
 			"id": "x",
 			"expect": {
 				"conflicts": [
-					{ "head": "b1", "lamport": 2, "actor": "b", "tables": { "value": { "n": 3 } } }
+					{
+						"head": "b1",
+						"lamport": 2,
+						"actor": "b",
+						"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+						"time": 1760000000,
+						"external": [{ "file": "scenario", "line": 1 }],
+						"tables": { "value": { "n": 3 } }
+					}
 				]
 			}
 		}

@@ -139,7 +139,7 @@ function values(pick: (n: number) => number) {
 	return value
 }
 
-type Node = { value?: unknown; change: Record<string, unknown>; cow?: false }
+type Node = { value?: unknown; change: Record<string, unknown> }
 type Table = { entries: unknown[][]; nodes: Node[] }
 
 // a few ids, each with some parts; a node now and then under a second key
@@ -181,7 +181,6 @@ function table(seed: number): Table {
 		}
 		const n: Node = { change }
 		if (pick(4)) n.value = toJson(value(0))
-		if (pick(4) === 0) n.cow = false
 		return n
 	}
 	const parts = ["value", "attributes", "children", "drag"]

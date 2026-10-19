@@ -6,7 +6,7 @@ import createEntry from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import type { Patch } from "@ermine/op/apply"
 import produce from "@ermine/op/produce"
-import { createPlaces, type Places } from "@ermine/places"
+import { createPlaces, type Places, unread } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
 import { get } from "@ermine/places/lib"
 import { createScheduler, type Info } from "@ermine/scheduler"
@@ -367,28 +367,29 @@ Deno.test("patch nodes: cost: no patch node on the id is one Map check, and the 
 	assertEquals([checks, gets], [1, 1])
 })
 
-Deno.test("patch nodes: an entry changing in place is copied on write while a patch node is made over it, and in place again after", () => {
+Deno.test("patch nodes: an entry written through places' unread is copied on its next write once a patch node is made over it", () => {
 	const w = world()
-	// attributes change in place, as places keeps them
-	w.table.sub("attributes", "N", createEntry({ a: { x: 1 } }, w.header()) as never)
-	const n = w.table.get("attributes", "N")!
-	assertEquals(n.cow, false)
+	w.table.sub("children", "N", createEntry({ a: "A" }, w.header()) as never)
+	const n = w.table.get("children", "N")!
+	// owned by unread, so the next write is in place
+	unread.update(n, [{ path: ["b"], value: "B" }], w.header())
+	const mine = n.value
+	unread.update(n, [{ path: ["c"], value: "C" }], w.header())
+	assert(n.value === mine)
 	w.patch("P", {
 		on: "N",
-		part: "attributes",
+		part: "children",
 		at: 0,
 		patches: [{ path: ["m"], move: { path: ["a"] } }],
 	})
-	const r = w.watch(() => w.places.readValue("attributes", "N", ["m", "x"]))
-	assertEquals([r.runs, r.value], [1, 1])
-	assertEquals(n.cow, undefined)
+	const r = w.watch(() => w.places.readValue("children", "N", ["m"]))
+	assertEquals([r.runs, r.value], [1, "A"])
 	const before = n.value
-	w.edit("attributes", "N", [{ path: ["a", "x"], value: 2 }])
+	unread.update(n, [{ path: ["a"], value: "A2" }], w.header())
+	w.overlay.commit([n])
 	w.s.pulse()
 	// copied, not changed: the reader told where it lands
 	assert(n.value !== before)
-	assertEquals([r.runs, r.value], [2, 2])
-	w.table.del("patch", "P")
-	w.s.pulse()
-	assertEquals(n.cow, false)
+	assertEquals(before, { a: "A", b: "B", c: "C" })
+	assertEquals([r.runs, r.value], [2, "A2"])
 })

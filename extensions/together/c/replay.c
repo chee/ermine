@@ -7,11 +7,27 @@
 #include <string.h>
 
 typedef struct {
+	cm_commit commit;
+	void *block;
+	op_value *hex[2];
+} kept_t;
+
+static void kept_free(kept_t *k) {
+	cm_free(&k->commit);
+	free(k->block);
+	op_free(k->hex[0]), op_free(k->hex[1]);
+	free(k);
+}
+
+typedef struct {
 	size_t capacity;
 	pk_read read;
 	nd_entry **made;
 	size_t made_length, made_capacity;
-	cm_commit *commits;
+	// the commits an entry's change refers to: the latest applied per table, each with its signed
+	// change (one block: the header, then its metadata) and that change's two hex values. One a later
+	// commit to its table replaces is let go of, so a replay holds the tables, not the history
+	kept_t **commits;
 	size_t commits_length, commits_capacity;
 	// what rp_put_copy made: blocks to free, values to let go of
 	void **blocks;
@@ -29,7 +45,7 @@ void rp_free(rp_tables *t) {
 	owned *o = t->own;
 	if (o == NULL) return;
 	for (size_t i = 0; i < o->made_length; i++) nd_free_entry(o->made[i]);
-	for (size_t i = 0; i < o->commits_length; i++) cm_free(&o->commits[i]);
+	for (size_t i = 0; i < o->commits_length; i++) kept_free(o->commits[i]);
 	pk_free(&o->read);
 	for (size_t i = 0; i < o->blocks_length; i++) free(o->blocks[i]);
 	for (size_t i = 0; i < o->values_length; i++) op_free(o->values[i]);
@@ -84,14 +100,16 @@ void rp_put(rp_tables *t, const char *table, op_value *value, const ch_header *c
 	put_slot(t, table, e);
 }
 
-static void *block(owned *o, size_t n) {
+// a block the tables free with them
+static void *owns(owned *o, void *p) {
 	if (o->blocks_length == o->blocks_capacity) {
 		o->blocks_capacity = o->blocks_capacity ? o->blocks_capacity * 2 : 16;
 		o->blocks = realloc(o->blocks, o->blocks_capacity * sizeof *o->blocks);
 		if (o->blocks == NULL) abort();
 	}
-	return o->blocks[o->blocks_length++] = allocate(n ? n : 1);
+	return o->blocks[o->blocks_length++] = p;
 }
+static void *block(owned *o, size_t n) { return owns(o, allocate(n ? n : 1)); }
 static char *text(owned *o, const char *s) {
 	size_t n = strlen(s) + 1;
 	return memcpy(block(o, n), s, n);
@@ -114,25 +132,37 @@ static op_value *hex_value(const uint8_t *bytes, size_t n) {
 	return v;
 }
 
-const ch_header *rp_signed(rp_tables *t, const ch_header *change, const uint8_t *signer, size_t signer_length,
-	const uint8_t name[CM_NAME]) {
-	owned *o = t->own;
-	ch_header *c = block(o, sizeof *c);
+// a change signed: the header and its metadata in one block (*block, malloc'd), the two hex values
+// held in hex (op_free them)
+static ch_header *sign(const ch_header *change, const uint8_t *signer, size_t signer_length,
+	const uint8_t name[CM_NAME], void **block, op_value *hex[2]) {
+	ch_header *c = allocate(sizeof *c + (change->metadata_length + 2) * sizeof(ch_entry));
+	*block = c;
 	*c = *change;
 	// keys unique: signer and commit over any the commit carried
-	ch_entry *es = block(o, (change->metadata_length + 2) * sizeof *es);
+	ch_entry *es = (ch_entry *)(c + 1);
 	size_t n = 0;
 	for (size_t i = 0; i < change->metadata_length; i++) {
 		const char *k = change->metadata[i].key;
 		if (k == NULL || (strcmp(k, "signer") != 0 && strcmp(k, "commit") != 0)) es[n++] = change->metadata[i];
 	}
-	op_value *key = hex_value(signer, signer_length), *named = hex_value(name, CM_NAME);
-	es[n] = (ch_entry){"signer", held(o, key)};
-	es[n + 1] = (ch_entry){"commit", held(o, named)};
-	op_free(key);
-	op_free(named);
+	hex[0] = hex_value(signer, signer_length), hex[1] = hex_value(name, CM_NAME);
+	es[n] = (ch_entry){"signer", hex[0]};
+	es[n + 1] = (ch_entry){"commit", hex[1]};
 	c->metadata = es;
 	c->metadata_length = n + 2;
+	return c;
+}
+
+const ch_header *rp_signed(rp_tables *t, const ch_header *change, const uint8_t *signer, size_t signer_length,
+	const uint8_t name[CM_NAME]) {
+	owned *o = t->own;
+	void *b;
+	op_value *hex[2];
+	ch_header *c = sign(change, signer, signer_length, name, &b, hex);
+	owns(o, b);
+	held(o, hex[0]), held(o, hex[1]);
+	op_free(hex[0]), op_free(hex[1]);
 	return c;
 }
 
@@ -198,18 +228,29 @@ rp_code rp_apply(rp_tables *t, cm_commit *c, const uint8_t name[CM_NAME]) {
 	op_apply_options options = {.in_place = 1};
 	if (op_apply(e ? e->value : NULL, c->patches, c->patches_length, &options, &after, &failed) != OP_OK)
 		return RP_PATCHES;
-	// the commit is the tables' now: what the entry's change refers to
+	// the commit is the tables' now: what the entry's change refers to. The one before it on this
+	// table is referred to by nothing now
+	for (size_t j = 0; j < o->commits_length; j++) {
+		if (strcmp(o->commits[j]->commit.table, c->table) != 0) continue;
+		kept_free(o->commits[j]);
+		o->commits[j] = o->commits[--o->commits_length];
+		break;
+	}
 	if (o->commits_length == o->commits_capacity) {
 		o->commits_capacity = o->commits_capacity ? o->commits_capacity * 2 : 16;
 		o->commits = realloc(o->commits, o->commits_capacity * sizeof *o->commits);
 		if (o->commits == NULL) abort();
 	}
-	cm_commit *kept = &o->commits[o->commits_length++];
-	*kept = *c;
+	kept_t *k = allocate(sizeof *k);
+	*k = (kept_t){.commit = *c};
 	*c = (cm_commit){0};
-	const ch_header *change = name != NULL ? rp_signed(t, &kept->change, kept->signer, kept->signer_length, name)
-					       : &kept->change;
+	o->commits[o->commits_length++] = k;
+	cm_commit *kept = &k->commit;
+	const ch_header *change =
+		name != NULL ? sign(&kept->change, kept->signer, kept->signer_length, name, &k->block, k->hex) : &kept->change;
 	if (e != NULL) {
+		// the slot's table: this commit's (the one before's is let go of)
+		t->slots[i].table = kept->table;
 		// the hold apply made goes to the entry, the one before is let go of
 		op_free(e->value);
 		e->value = after;

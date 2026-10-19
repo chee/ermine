@@ -31,6 +31,9 @@
 //   read(x, path?)       value at path, tracked; none: undefined; a pending memo throws PENDING
 //   peep(x, path?)       value at path, untracked (no dependency: a write there reruns nothing);
 //                        none, or a pending memo: undefined
+//   reads(x, path?)      every value at path, tracked: [{ value, from }], the one read gives first
+//                        (from "shown"), then each head sync's "conflicts" holds (from its name);
+//                        none: []; a pending memo throws PENDING
 //   entries(x)           every item: [{ value, from, id, refused? }]; none: []
 //   list(x)              the names under x, tracked
 //   info(x)              x's attributes, as a node
@@ -95,6 +98,7 @@ import apply, { type Key as Step, type Patch } from "@ermine/op/apply"
 import produce from "@ermine/op/produce"
 import { type Box, box as boxInto, createBox, type Host, inside, unbox } from "@ermine/boxes"
 import {
+	at as dig,
 	type Fact,
 	type Id,
 	move as moveIn,
@@ -222,6 +226,13 @@ export type Item = {
 	readonly refused?: true
 }
 
+// one value a path holds: the one shown (from "shown"), or another head's (from its name)
+export type Version = { readonly value: unknown; readonly from: string }
+
+// a head that does not show, as sync writes it at "conflicts" (extensions/together's Conflict):
+// its name, and the parts it differs in (a part not there: as shown)
+type Head = { readonly head: string; readonly tables: Readonly<Record<string, unknown>> }
+
 export type BoxNode = {
 	readonly box: Box
 	place: (at: string | Path, x: Target) => void
@@ -236,6 +247,7 @@ export type API = {
 	create: (folder: string | Path, value: unknown) => Node
 	read: (x: Target, path?: readonly Step[]) => unknown
 	peep: (x: Target, path?: readonly Step[]) => unknown
+	reads: (x: Target, path?: readonly Step[]) => Version[]
 	entries: (x: Target) => Item[]
 	list: (x: Target) => string[]
 	info: (x: Target) => Node
@@ -551,6 +563,26 @@ export function createProcessContext(setup: Setup): ProcessContext {
 					throw e
 				}
 			})
+		}
+
+		function reads(x: Target, path: readonly Step[] = []): Version[] {
+			const n = nodeOf(x)
+			const shown = read(n, path)
+			const id = idOf(n)
+			if (id === undefined) return []
+			const items: Version[] = shown === undefined ? [] : [{ value: shown, from: "shown" }]
+			return items.concat(others(n.part, id, path, shown))
+		}
+		// the other heads' values at path, as sync gives them: its "conflicts" at id, tracked; a head
+		// with nothing there left out
+		function others(part: Key, id: Id, path: readonly Step[], shown: unknown): Version[] {
+			const heads = places.readValue("conflicts" as Key, id) as readonly Head[] | undefined
+			const items: Version[] = []
+			for (const h of heads ?? []) {
+				const value = Object.hasOwn(h.tables, part) ? dig(h.tables[part], path) : shown
+				if (value !== undefined) items.push({ value, from: h.head })
+			}
+			return items
 		}
 
 		function entries(x: Target): Item[] {
@@ -1054,6 +1086,7 @@ export function createProcessContext(setup: Setup): ProcessContext {
 			create,
 			read,
 			peep,
+			reads,
 			entries,
 			list,
 			info,

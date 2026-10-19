@@ -1,6 +1,7 @@
 // an NVS store (littlesync.h), for ESP-IDF: a blob for each name, under a key made of the name's hash
 // (NVS keys are 15 characters at most). A node's blob is its seals: a few hundred bytes each, so the
-// NVS partition wants room for them (the default 24 KB holds about 40 pigs)
+// NVS partition wants room for them (the default 24 KB holds about 40 nodes of a map of 4 numbers, a
+// lab-pig pig)
 #ifdef ESP_PLATFORM
 #include "littlesync.h"
 

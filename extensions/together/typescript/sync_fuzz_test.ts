@@ -32,8 +32,8 @@ import {
 	transport_conformance_hook_put,
 	transport_conformance_hook_taking,
 } from "./transport_conformance_hook.ts"
-import { egwalker } from "./egwalker.ts"
 import { type Merges, plain, replay, type Tables } from "./replay.ts"
+import { serial } from "./rules_harness.ts"
 import { hex } from "./hex.ts"
 
 const DOC = "ermine://" + "ab".repeat(32)
@@ -48,8 +48,8 @@ declare module "@ermine/table" {
 	}
 }
 const NEW: readonly Key[] = [...KEPT, "comments"]
-const MERGES: Merges = { "eg-walker": egwalker }
-type Rule = "eg-walker" | undefined
+const MERGES: Merges = { serial }
+type Rule = "serial" | undefined
 
 // ---- random
 
@@ -464,7 +464,7 @@ function script(
 ): { hosts: number; rule: Rule; steps: Step[] } {
 	const r = rng(seed)
 	const hosts = 2 + r(3)
-	const rule: Rule = seed % 2 === 0 ? "eg-walker" : undefined
+	const rule: Rule = seed % 2 === 0 ? "serial" : undefined
 	const steps: Step[] = []
 	for (let i = 0; i < length; i++) {
 		const h = r(hosts), x = r(100)
@@ -982,7 +982,7 @@ Deno.test({
 })
 
 Deno.test({
-	name: "sync fuzz: told patches, the history fresh and every host agree (eg-walker)",
+	name: "sync fuzz: told patches, the history fresh and every host agree (a rule)",
 	...opts,
 	async fn() {
 		for (const s of SEEDS) await fuzz(s * 2)
@@ -1059,7 +1059,7 @@ Deno.test({
 	ignore: true,
 	...opts,
 	fn: () =>
-		again(4, 2, "eg-walker", [{ k: "edit", h: 1, part: "children", r: 3588249658 }], {
+		again(4, 2, "serial", [{ k: "edit", h: 1, part: "children", r: 3588249658 }], {
 			...LOOSE,
 			alias: true,
 		}),
@@ -1070,16 +1070,22 @@ Deno.test({
 // old head) then the new ones; the own take is not checked, and show()'s replay of it throws
 // (wrong-kind) out of sync.wrote, into the host's write
 Deno.test({
-	name:
-		"sync fuzz FINDING: a drag after a stored commit lands under it throws (eg-walker, seed 40)",
+	name: "sync fuzz FINDING: a drag after a stored commit lands under it throws (a rule, seed 140)",
 	ignore: true,
 	...opts,
 	fn: () =>
-		again(40, 2, "eg-walker", [
-			{ k: "edit", h: 1, part: "value", r: 3434236702 },
-			{ k: "drag", h: 0, r: 2357922532 },
-			{ k: "deliver", h: 0, r: 2579717390 },
-			{ k: "edit", h: 0, part: "value", r: 2548861663 },
+		again(140, 3, "serial", [
+			{ k: "edit", h: 1, part: "value", r: 1192640834 },
+			{ k: "edit", h: 1, part: "value", r: 1290701903 },
+			{ k: "cut", h: 0 },
+			{ k: "edit", h: 1, part: "value", r: 1559388933 },
+			{ k: "drag", h: 1, r: 3004634121 },
+			{ k: "edit", h: 1, part: "children", r: 1255965707 },
+			{ k: "deliver", h: 2, r: 1682199185 },
+			{ k: "deliver", h: 2, r: 3439225392 },
+			{ k: "drag", h: 2, r: 3958628965 },
+			{ k: "deliver", h: 2, r: 2481673974 },
+			{ k: "edit", h: 2, part: "value", r: 800539675 },
 		], LOOSE),
 })
 
@@ -1089,12 +1095,11 @@ Deno.test({
 // write. the next drag starts its under from it (storedNow → replay → that state), so (b): the
 // history replayed says c.b is "", the host's stored says "x"
 Deno.test({
-	name:
-		"sync fuzz FINDING: a drop that merges keeps the stored state before it (eg-walker, seed 18)",
+	name: "sync fuzz FINDING: a drop that merges keeps the stored state before it (a rule, seed 18)",
 	ignore: true,
 	...opts,
 	fn: () =>
-		again(18, 3, "eg-walker", [
+		again(18, 3, "serial", [
 			{ k: "edit", h: 2, part: "value", r: 837242773 },
 			{ k: "edit", h: 0, part: "value", r: 3280471431 },
 			{ k: "drag", h: 2, r: 1601496281 },

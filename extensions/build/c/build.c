@@ -216,7 +216,7 @@ static char *traced(task *t, op_value **out) {
 
 // a node made and added at (part, id), holding value (held), its header's block held
 static void add(bd *b, const char *part, const char *id, op_value *value, ch_header *h, pl_made *made) {
-	nd_entry *node = nd_make_entry(value, h, NULL);
+	nd_entry *node = nd_make_entry(value, h);
 	pl_own(b->places, node);
 	pl_hold(b->places, node, pl_made_ref(made), pl_made_free);
 	tb_add(b->table, tb_string(part), tb_string(id), node);

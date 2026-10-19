@@ -4,7 +4,7 @@
 int nd_update(nd_entry *entry, const op_patch *patches, size_t n, ch_header header,
 	size_t *failed) {
 	op_undo undo = {0};
-	op_apply_options ao = {.undo = &undo, .in_place = entry->in_place};
+	op_apply_options ao = {.undo = &undo};
 	op_value *after = NULL;
 	int code = op_apply(entry->value, patches, n, &ao, &after, failed);
 	if (code != OP_OK) return code;

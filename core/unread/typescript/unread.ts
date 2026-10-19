@@ -1,7 +1,7 @@
 // unread: an entry's writes change in place what its own earlier writes copied, until someone
 // reads it. a write copies what it changes that it doesn't own (along its paths only, as op's
-// copy-on-write does) and owns the copies; the next write changes those in place, as places'
-// in place (cow: false) does. a read lets go of all of it: what a reader holds is never changed
+// copy-on-write does) and owns the copies; the next write changes those in place (op's apply with
+// cow: false). a read lets go of all of it: what a reader holds is never changed
 // under it, and the next write copies again. so a burst of writes with no read between costs one
 // copy, and a write between reads costs what copy-on-write does
 //
@@ -25,8 +25,7 @@
 // never a patch's value (op puts it in as given: the caller's; an owned container in one, of any
 // entry, is let go first: a walk over every container in each patch's value), nor what a write
 // takes out (its undo holds it): the next write through those copies them. a write that throws
-// changes nothing, which container is where too. cow (node's update's flag, set false by places for children and
-// attributes) is not read: what is changed in place is decided here, so a reader's never is
+// changes nothing, which container is where too
 import type { ChangeHeader, Entry } from "@ermine/node/entry"
 import apply, { type Patch } from "@ermine/op/apply"
 import type { Scheduler } from "@ermine/scheduler"

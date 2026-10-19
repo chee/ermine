@@ -1,11 +1,11 @@
 {
-	"title": "two hosts merging by eg-walker type into one text apart: once joined, both show the same text, every keystroke kept, two heads and no conflicts; settled, an empty merge commit",
+	"title": "two hosts merging by a rule type into one text apart: once joined, both show the same text, every keystroke kept, two heads and no conflicts; settled, an empty merge commit",
 	"steps": [
 		{
 			"op": "host",
 			"name": "a",
 			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
-			"merge": "eg-walker",
+			"merge": "serial",
 			"expect": {
 				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
 			}
@@ -14,7 +14,7 @@
 			"op": "host",
 			"name": "b",
 			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
-			"merge": "eg-walker",
+			"merge": "serial",
 			"expect": {
 				"key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
 			}
@@ -131,7 +131,7 @@
 			"host": "a",
 			"id": "x",
 			"expect": {
-				"value": "oh, hello! world"
+				"value": "oh, hellrld!owo "
 			}
 		},
 		{
@@ -139,7 +139,7 @@
 			"host": "b",
 			"id": "x",
 			"expect": {
-				"value": "oh, hello! world"
+				"value": "oh, hellrld!owo "
 			}
 		},
 		{
@@ -205,7 +205,7 @@
 						"tb2",
 						"ta"
 					],
-					"merge": "eg-walker",
+					"merge": "serial",
 					"lamport": 8,
 					"patches": []
 				}
@@ -230,7 +230,7 @@
 			"host": "a",
 			"id": "x",
 			"expect": {
-				"value": "oh, hello! world"
+				"value": "oh, hellrld!owo "
 			}
 		},
 		{
@@ -243,7 +243,7 @@
 					"actor": null,
 					"metadata": {
 						"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
-						"commit": "1e207e98cc7c8cd18f56c3f56717c7352eba4aba6336d491463ecc93f7c2fafa6d14"
+						"commit": "1e209ac11a8c77ab7411627ecd99cc0a871b18e6c81dd551db44ade5564b277a9a9b"
 					}
 				}
 			}

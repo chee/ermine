@@ -1,7 +1,9 @@
 // history_harness: history.ts, replay.ts and snapshot.ts on the line protocol (harness.ts), for
 // the history, replay and snapshot suites. one history per process; commits by label (conventions:
 // extensions/together/conformance/README.md). the check: patches apply at the base (replay), a merge
-// to its rule's merge; rules known: "eg-walker", others refused "merge". a held commit waits [].
+// to its rule's merge; rules known: run's (rules_harness.ts's alone), others refused "merge". a held
+// commit waits []. a rule that keeps (keeping) merges twice: from scratch, and by one kept for the
+// process, which must give the same, byte for byte
 //
 // { op: "make", name, ...fields }   → {}            made and labelled, not added
 // { op: "add", name, ...fields }    → { added }     made (no fields: the labelled one), added
@@ -16,7 +18,7 @@
 // { op: "refused" }                 → { refused }   [{ name, refused: code }], refusal order
 // { op: "name", commit }            → { name }      hex
 // { op: "replay", commit }          → { tables } | {}   {}: not taken
-// { op: "merge", heads, rule? }     → { tables }    default "eg-walker"
+// { op: "merge", heads, rule? }     → { tables }    default the first rule known
 // { op: "since", heads }            → { from, commits }   from [commit…] or []; causal order
 // { op: "keep", commits, tables }   → {}            these tables as the commits' merge
 // { op: "keep", commit, tables }    → {}            a snapshot at it, replay starts from it
@@ -33,9 +35,9 @@ import { revive } from "../../../conformance/typescript/form.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { hex, refusal, unhex } from "../../../ermine/encoding/typescript/commit_harness.ts"
 import { createCommits, tablesJson } from "./harnesses.ts"
-import { egwalker } from "./egwalker.ts"
 import { type Added, createHistory, since } from "./history.ts"
-import { matches, type Merges, plain, replay, type Tables } from "./replay.ts"
+import { matches, type Merge, type Merges, plain, replay, type Tables } from "./replay.ts"
+import { rules } from "./rules_harness.ts"
 import { snapshot, tablesOf } from "./snapshot.ts"
 
 const commits = createCommits()
@@ -50,23 +52,19 @@ const snapshots = (name: Uint8Array) => {
 	const b = kept.get(hex(name))
 	return b === undefined ? undefined : tablesOf(b)
 }
-const merges: Merges = { "eg-walker": egwalker }
-// eg-walker's merges made twice: from scratch, and by its walker kept for the process (walker.ts),
-// which must give the same, byte for byte
-const walked = egwalker.keeping!()
+// the rules known (run's), and each keeping one's kept merge
+let merges: Merges = {}
+const keeping = new Map<string, Merge>()
 const merged = (heads: Uint8Array[], rule: string) => {
 	const get = (ns: readonly Uint8Array[]) =>
-		ns.length === 1
-			? plain(history, ns[0], snapshots)
-			: rule === "eg-walker"
-			? several(ns)
-			: undefined
+		ns.length === 1 ? plain(history, ns[0], snapshots) : several(ns)
 	const ks = heads.map((n) => history.get(n)!)
 	const out = merges[rule](history, ks, get)
-	if (rule === "eg-walker") {
+	const walked = keeping.get(rule)
+	if (walked !== undefined) {
 		const a = snapshot(out), b = snapshot(walked(history, ks, get))
 		if (a.length !== b.length || a.some((x, i) => x !== b[i])) {
-			throw new Error("eg-walker's walker merged otherwise")
+			throw new Error(`${rule}'s kept merge merged otherwise`)
 		}
 	}
 	return out
@@ -138,7 +136,7 @@ async function answer(r: Request): Promise<Answer> {
 			case "merge": {
 				const heads = (r.heads as string[]).map(commits.name)
 				for (const h of heads) if (!history.get(h)) throw new Error(`not taken: ${h}`)
-				return { tables: tablesJson(merged(heads, r.rule ?? "eg-walker")) }
+				return { tables: tablesJson(merged(heads, r.rule ?? Object.keys(merges)[0])) }
 			}
 			case "since": {
 				const heads = (r.heads as string[]).map((h) => history.get(commits.name(h))!)
@@ -183,4 +181,13 @@ async function answer(r: Request): Promise<Answer> {
 	throw new Error(`unknown op ${r.op}`)
 }
 
-if (import.meta.main) await serve(answer)
+// the harness, knowing these rules (the first: a merge's default)
+export async function run(known: Merges) {
+	merges = known
+	for (const [name, rule] of Object.entries(known)) {
+		if (rule.keeping) keeping.set(name, rule.keeping())
+	}
+	await serve(answer)
+}
+
+if (import.meta.main) await run(rules)

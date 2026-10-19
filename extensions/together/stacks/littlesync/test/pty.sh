@@ -23,8 +23,9 @@ check $d/b.txt "pigs 2" "b has two pigs (the one a added)"
 check $d/a.txt "peer up" "a sees the peer up"
 check $d/b.txt "peer up" "b sees the peer up"
 grep -c "rx commits" $d/b.log | grep -qv '^0' && echo "  ok   b took commits in" || { echo "  FAIL b took no commits"; failed=1; }
-# the same letters and places on both
-la=$(grep '^[ab] ermine' $d/a.txt | sort); lb=$(grep '^[ab] ermine' $d/b.txt | sort)
+# the same letters and places on both (letter, id, x, y)
+la=$(grep '^[ab] [0-9a-f]\{8\} ' $d/a.txt | cut -d' ' -f1-4 | sort); lb=$(grep '^[ab] [0-9a-f]\{8\} ' $d/b.txt | cut -d' ' -f1-4 | sort)
+[ -n "$la" ] && echo "  ok   a lists its pigs" || { echo "  FAIL a lists no pigs"; failed=1; }
 [ "$la" = "$lb" ] && echo "  ok   both list the same pigs at the same places" || { echo "  FAIL pig lists differ"; echo "$la"; echo "$lb"; failed=1; }
 
 # second scenario: b picks up the first pig, carries it right, a sees it held, then b drops it
@@ -41,5 +42,5 @@ wait $a $b
 check $d/a2-mid.txt "held by newt" "a sees a pig held by b while b carries it"
 check $d/b2.txt "carrying -" "b let go"
 ! grep -q "held by" $d/a2.txt && echo "  ok   a sees it put down (no longer held)" || { echo "  FAIL a still shows it held"; failed=1; }
-grep "^[ab] ermine" $d/a2.txt | head -3
+grep "^[ab] [0-9a-f]\{8\} \|^room " $d/a2.txt
 exit $failed
