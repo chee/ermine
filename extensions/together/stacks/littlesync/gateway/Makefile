@@ -2,9 +2,9 @@
 #   make pigs           littlesync-pigs, built from playground/demos/pigs/littlesync into build/ here (the C
 #                       peer the tests drive)
 #   make test           the TS peer's unit tests, and the gateway with a C peer and a sync.ts device,
-#                       all in this process (no server)
+#                       all in this process (no server); HTTP sessions; the upstream dropped and dialled again
 #   make galaxy-test    the C peer, the gateway and a lab-pig-style device in the pig room on
-#                       wss://galaxy.observer (UPSTREAM=... another server)
+#                       wss://galaxy.observer (UPSTREAM=... another server); HTTP devices; a dropped socket
 #   make run            the gateway (PORT, UPSTREAM: README.md)
 #   make check          deno check and deno fmt --check of these files
 #   make clean
@@ -19,7 +19,7 @@ pigs:
 	$(Q)$(MAKE) --no-print-directory -C ../../../../../playground/demos/pigs/littlesync BUILD=$(BUILD)
 
 test: pigs
-	$(Q)PIGS=$(BUILD)/littlesync-pigs $(DENO) test --quiet $(PERMS) frame_test.ts link_test.ts gateway_test.ts
+	$(Q)PIGS=$(BUILD)/littlesync-pigs $(DENO) test --quiet $(PERMS) frame_test.ts link_test.ts gateway_test.ts http_test.ts upstream_test.ts
 
 galaxy-test: pigs
 	$(Q)PIGS=$(BUILD)/littlesync-pigs $(DENO) test --quiet $(PERMS) galaxy_test.ts

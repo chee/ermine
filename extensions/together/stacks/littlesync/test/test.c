@@ -51,6 +51,7 @@ typedef struct {
 } side;
 
 static int64_t now;
+#define ROW_SIZE 2048
 static int garbage; // text put between frames on the wire
 static int tamper;  // flip a byte of each seal on the wire
 static int tapped, tap_good, tap_bad;
@@ -677,6 +678,157 @@ static void t_ephemeral(void) {
 	drop_dir(&a), drop_dir(&b);
 }
 
+// ---- presence
+
+// a row as presence.ts sends it: the text made a value, its canonical CBOR
+static uint8_t *row_bytes(const char *text, size_t *n) {
+	op_value *v = op_json_read(text, NULL);
+	Json *j = pk_to_json(v);
+	op_free(v);
+	*n = 0;
+	cborEncode(j, NULL, 0, n, NULL);
+	uint8_t *b = malloc(*n);
+	cborEncode(j, b, *n, n, NULL);
+	jsonFree(j);
+	return b;
+}
+// a presence message from a peer: who's row (the text) at the node
+static void feed_row(struct ls_link *l, const char *id, const uint8_t *who, size_t who_length, const char *text) {
+	size_t n;
+	uint8_t *b = row_bytes(text, &n), doc[32];
+	for (int i = 0; i < 32; i++) sscanf(id + 9 + 2 * i, "%2hhx", &doc[i]);
+	Json *m = jsonObject();
+	jsonAdd(m, "t", jsonString("presence"));
+	jsonAdd(m, "node", jsonBytes(doc, 32));
+	jsonAdd(m, "who", jsonBytes(who, who_length));
+	jsonAdd(m, "row", jsonBytes(b, n));
+	feed_message(l, m);
+	free(b);
+}
+// the row of who's at the node (NULL: none)
+static const ls_row *row_by(const ls_node *n, const uint8_t *who) {
+	for (size_t i = 0; i < ls_rows(n); i++)
+		if (memcmp(ls_row_at(n, i)->who, who, LS_KEY_LEN) == 0) return ls_row_at(n, i);
+	return NULL;
+}
+static double pointer_x(const ls_row *r) {
+	const op_value *p = r && r->value && r->value->type == OP_MAP ? op_get(r->value, "pointer") : NULL;
+	const op_value *x = p && p->type == OP_MAP ? op_get(p, "x") : NULL;
+	return x && x->type == OP_NUM ? x->num : -1;
+}
+// the presence messages in bytes sent on a link: their rows, the last one's bytes copied out
+static int rows_in(const uint8_t *b, size_t n, uint8_t *last, size_t *last_n, uint8_t *who) {
+	static uint8_t frame[LS_FRAME_MAX];
+	size_t k = 0;
+	int found = 0;
+	for (size_t i = 0; i < n; i++) {
+		if (b[i] != 0) {
+			if (k < sizeof frame) frame[k++] = b[i];
+			continue;
+		}
+		const uint8_t *m;
+		size_t len;
+		if (k > 0 && ls_unframe(frame, k, &m, &len)) {
+			Json *j = cborDecode(m, len, NULL, NULL);
+			const Json *t = jsonGet(j, "t"), *r = jsonGet(j, "row"), *w = jsonGet(j, "who");
+			if (t && strcmp(t->string, "presence") == 0 && r && r->type == JSON_BYTES && w && w->type == JSON_BYTES) {
+				found++;
+				memcpy(last, r->bytes.data, r->bytes.length), *last_n = r->bytes.length;
+				memcpy(who, w->bytes.data, w->bytes.length < LS_KEY_LEN ? w->bytes.length : LS_KEY_LEN);
+			}
+			jsonFree(j);
+		}
+		k = 0;
+	}
+	return found;
+}
+
+static void t_presence(void) {
+	printf("presence: rows as presence.ts sends them, renewed, relayed, gone on a gone or past their ttl\n");
+	side a = open_side("pa"), b = open_side("pb");
+	ls_node *pa = ls_follow(a.d, P1), *pb = ls_follow(b.d, P1);
+	pump(&a, &b, 200);
+	// my row: presence.ts's message, byte for byte, with my key
+	const char *mine = "{\"name\":\"otter\",\"colour\":\"#d1495b\",\"pointer\":{\"x\":0.25,\"y\":0.5}}";
+	op_value *v = op_json_read(mine, NULL);
+	CHECK(ls_presence(pa, v) == LS_OK);
+	op_free(v);
+	CHECK(ls_rows(pa) == 1 && ls_row_at(pa, 0)->own && memcmp(ls_row_at(pa, 0)->who, ls_key(a.d), LS_KEY_LEN) == 0);
+	const uint8_t *out;
+	size_t n = ls_next(a.l, &out), got_n = 0, want_n;
+	uint8_t got[ROW_SIZE], who[LS_KEY_LEN] = {0};
+	CHECK(rows_in(out, n, got, &got_n, who) == 1);
+	uint8_t *want = row_bytes("{\"ttl\":6000,\"value\":{\"name\":\"otter\",\"colour\":\"#d1495b\",\"pointer\":{\"x\":0.25,\"y\":0.5}}}", &want_n);
+	CHECK(got_n == want_n && memcmp(got, want, want_n) == 0 && memcmp(who, ls_key(a.d), LS_KEY_LEN) == 0);
+	free(want);
+	ls_feed(b.l, out, n);
+	const ls_row *r = row_by(pb, ls_key(a.d));
+	CHECK(ls_rows(pb) == 1 && r != NULL && !r->own && pointer_x(r) == 0.25);
+	// renewed: still there long past its ttl
+	pump(&a, &b, 15000);
+	CHECK(pointer_x(row_by(pb, ls_key(a.d))) == 0.25);
+	// moved: the new value shows at once
+	v = op_json_read("{\"name\":\"otter\",\"pointer\":{\"x\":0.75,\"y\":0.5}}", NULL);
+	ls_presence(pa, v);
+	op_free(v);
+	pump(&a, &b, 100);
+	CHECK(pointer_x(row_by(pb, ls_key(a.d))) == 0.75);
+	// gone: at once
+	ls_presence(pa, NULL);
+	CHECK(ls_rows(pa) == 0);
+	pump(&a, &b, 100);
+	CHECK(ls_rows(pb) == 0);
+	// a web pig's row (another key, as the gateway names it), its ttl as given
+	uint8_t web[LS_KEY_LEN] = {0xed, 0x01, 7, 7, 7};
+	feed_row(b.l, P1, web, LS_KEY_LEN, "{\"ttl\":3000,\"value\":{\"name\":\"juno\",\"pointer\":{\"x\":0.5,\"y\":0.1}}}");
+	CHECK(pointer_x(row_by(pb, web)) == 0.5);
+	// it came on the link from a: never sent back on it. Lapses at its ttl
+	pump(&a, &b, 2900);
+	CHECK(row_by(pb, web) != NULL && row_by(pa, web) == NULL);
+	pump(&a, &b, 200);
+	CHECK(row_by(pb, web) == NULL);
+	// a patch message is not taken (no whole row); gone takes a row out; my own key coming back is dropped
+	feed_row(b.l, P1, web, LS_KEY_LEN, "{\"ttl\":3000,\"value\":{\"name\":\"juno\"}}");
+	feed_row(b.l, P1, web, LS_KEY_LEN, "{\"ttl\":3000,\"patches\":[{\"path\":[\"name\"],\"value\":\"june\"}],\"n\":2}");
+	r = row_by(pb, web);
+	CHECK(r != NULL && r->value->type == OP_MAP && strcmp(op_get(r->value, "name")->str, "juno") == 0);
+	feed_row(b.l, P1, web, LS_KEY_LEN, "{\"gone\":true}");
+	CHECK(row_by(pb, web) == NULL);
+	feed_row(b.l, P1, ls_key(b.d), LS_KEY_LEN, "{\"ttl\":3000,\"value\":{}}");
+	CHECK(ls_rows(pb) == 0);
+	// a row for a node not followed: nothing
+	feed_row(b.l, P2, web, LS_KEY_LEN, "{\"ttl\":3000,\"value\":{}}");
+	CHECK(ls_find(b.d, P2) == NULL && ls_rows(pb) == 0);
+	// a peer that goes quiet: its row lapses at its ttl
+	v = op_json_read(mine, NULL);
+	ls_presence(pa, v);
+	op_free(v);
+	pump(&a, &b, 100);
+	CHECK(row_by(pb, ls_key(a.d)) != NULL);
+	const uint8_t *drop;
+	for (int i = 0; i < 560; i++) {
+		now += 10;
+		ls_tick(a.d, now), ls_tick(b.d, now);
+		ls_next(a.l, &drop);
+	}
+	CHECK(row_by(pb, ls_key(a.d)) != NULL);
+	for (int i = 0; i < 50; i++) now += 10, ls_tick(b.d, now);
+	CHECK(row_by(pb, ls_key(a.d)) == NULL);
+	// many rows: the soonest to lapse goes, never mine
+	ls_presence(pb, v = op_json_read("{}", NULL));
+	op_free(v);
+	for (int i = 0; i < 12; i++) {
+		uint8_t k[LS_KEY_LEN] = {0xed, 0x01, (uint8_t)i};
+		char text[64];
+		snprintf(text, sizeof text, "{\"ttl\":%d,\"value\":{}}", 5000 + 100 * i);
+		feed_row(b.l, P1, k, LS_KEY_LEN, text);
+	}
+	uint8_t last[LS_KEY_LEN] = {0xed, 0x01, 11};
+	CHECK(ls_rows(pb) == 8 && row_by(pb, ls_key(b.d)) != NULL && row_by(pb, last) != NULL);
+	close_side(&a), close_side(&b);
+	drop_dir(&a), drop_dir(&b);
+}
+
 // ---- three devices in a line, a - b - c: b has two links
 
 // a wire between two links; cut: what is sent on it is thrown away. commits_out[0] counts the commits
@@ -782,6 +934,21 @@ static void t_relay(void) {
 	op_free(v);
 	pump3(devs, w, 2, 300);
 	CHECK(ls_helds(pc) == 1 && xof(pc) == 0.9);
+	// presence: a's row on c and c's on a, through b; a's gone too; a row past b on a late link
+	v = op_json_read("{\"name\":\"otter\",\"pointer\":{\"x\":0.3,\"y\":0.3}}", NULL);
+	CHECK(ls_presence(pa, v) == LS_OK);
+	op_free(v);
+	v = op_json_read("{\"name\":\"newt\",\"pointer\":{\"x\":0.6,\"y\":0.6}}", NULL);
+	ls_presence(pc, v);
+	op_free(v);
+	pump3(devs, w, 2, 300);
+	CHECK(ls_rows(pa) == 2 && ls_rows(pb) == 2 && ls_rows(pc) == 2);
+	CHECK(pointer_x(row_by(pc, ls_key(a.d))) == 0.3 && pointer_x(row_by(pa, ls_key(c.d))) == 0.6);
+	pump3(devs, w, 2, 10000);
+	CHECK(ls_rows(pa) == 2 && ls_rows(pc) == 2);
+	ls_presence(pa, NULL);
+	pump3(devs, w, 2, 100);
+	CHECK(ls_rows(pc) == 1 && row_by(pc, ls_key(a.d)) == NULL);
 	close_side(&a), close_side(&b), close_side(&c);
 	drop_dir(&a), drop_dir(&b), drop_dir(&c);
 }
@@ -1497,13 +1664,157 @@ static void t_fuzz(void) {
 	}
 }
 
+// ---- server-sized: many links on a hub, keep
+
+// a device with room for links (0: the default), keeping (keep: 1) or not, and no link yet
+static side open_hub(const char *tag, size_t links, int keep) {
+	side s = {0};
+	snprintf(s.dir, sizeof s.dir, "build/state-%s-%d", tag, (int)getpid());
+	s.store = ls_store_file(s.dir);
+	ls_options o = {.store = s.store, .random = random_bytes, .links = links, .keep = keep};
+	if (getenv("LSLOG")) o.log = logline, o.log_context = (void *)strdup(tag);
+	s.d = ls_open(&o);
+	return s;
+}
+
+// time passes for every device, the wires carrying till quiet
+static void pump_all(ls_dev *const *devs, size_t n, wire *w, size_t wires, int64_t ms) {
+	for (int64_t end = now + ms; now <= end; now += 10) {
+		for (size_t i = 0; i < n; i++)
+			if (devs[i] != NULL) ls_tick(devs[i], now);
+		for (int round = 0; round < 50; round++) {
+			size_t k = 0;
+			for (size_t i = 0; i < wires; i++) {
+				k += carry_one(w[i].x, w[i].y, w[i].cut, &w[i].commits_out[0]);
+				k += carry_one(w[i].y, w[i].x, w[i].cut, &w[i].commits_out[1]);
+			}
+			if (k == 0) break;
+		}
+	}
+}
+
+#define LEAVES 50
+static void t_many_links(void) {
+	printf("a hub with %d links: every leaf's writes on three nodes reach every leaf\n", LEAVES);
+	side small = open_hub("ms", 0, 0);
+	for (int i = 0; i < LS_LINKS; i++) CHECK(ls_link(small.d) != NULL);
+	CHECK(ls_link(small.d) == NULL);
+	close_side(&small), drop_dir(&small);
+	side hub = open_hub("mh", LEAVES, 0), leaf[LEAVES];
+	ls_dev *devs[LEAVES + 1] = {hub.d};
+	wire w[LEAVES];
+	const char *ids[3] = {P1, P2, P3};
+	ls_node *hn[3], *ln[LEAVES][3];
+	for (int k = 0; k < 3; k++) hn[k] = ls_follow(hub.d, ids[k]);
+	for (int i = 0; i < LEAVES; i++) {
+		char tag[16];
+		snprintf(tag, sizeof tag, "m%d", i);
+		leaf[i] = open_side(tag);
+		devs[i + 1] = leaf[i].d;
+		w[i] = (wire){ls_link(hub.d), leaf[i].l, 0, {0, 0}};
+		CHECK(w[i].x != NULL);
+		for (int k = 0; k < 3; k++) ln[i][k] = ls_follow(leaf[i].d, ids[k]);
+	}
+	CHECK(ls_link(hub.d) == NULL);
+	pump_all(devs, LEAVES + 1, w, LEAVES, 300);
+	int up = 0;
+	for (int i = 0; i < LEAVES; i++) up += ls_up(w[i].x) && ls_up(leaf[i].l);
+	CHECK(up == LEAVES);
+	// each leaf a key of its own on one node; then again, on another
+	for (int pass = 0; pass < 2; pass++) {
+		for (int i = 0; i < LEAVES; i++) {
+			char key[16];
+			snprintf(key, sizeof key, "k%d", i);
+			op_value *v = op_num(i + 100 * pass);
+			CHECK(ls_set(ln[i][(i + pass) % 3], key, v) == LS_OK);
+			op_free(v);
+		}
+		pump_all(devs, LEAVES + 1, w, LEAVES, 3000);
+	}
+	// what a full out queue dropped (a want's answer) comes with the next heads beat (10 s)
+	pump_all(devs, LEAVES + 1, w, LEAVES, 11000);
+	int good = 0, bad = 0;
+	for (int k = 0; k < 3; k++) {
+		const op_value *v = ls_value(hn[k]);
+		size_t want = 0;
+		for (int i = 0; i < LEAVES; i++) want += i % 3 == k || (i + 1) % 3 == k;
+		CHECK(v != NULL && v->type == OP_MAP && v->count == want);
+		for (int i = 0; i < LEAVES; i++) good += same(hn[k], ln[i][k]);
+	}
+	for (int i = 0; i < LEAVES + 1; i++) bad += ls_stats_of(devs[i])->bad_seals;
+	CHECK(good == 3 * LEAVES && bad == 0);
+	if (good != 3 * LEAVES) printf("  %d of %d leaf nodes the same as the hub's\n", good, 3 * LEAVES);
+	// k3: written on P1 first, then on P2
+	const op_value *k0 = op_get(ls_value(ln[7][0]), "k3"), *k1 = op_get(ls_value(ln[7][1]), "k3");
+	CHECK(k0 != NULL && k0->num == 3 && k1 != NULL && k1->num == 103);
+	close_side(&hub), drop_dir(&hub);
+	for (int i = 0; i < LEAVES; i++) close_side(&leaf[i]), drop_dir(&leaf[i]);
+}
+
+// how many files in the side's store begin with prefix
+static int files_like(const side *s, const char *prefix) {
+	char cmd[256];
+	snprintf(cmd, sizeof cmd, "ls %s | grep -c '^%s'", s->dir, prefix);
+	FILE *p = popen(cmd, "r");
+	int k = 0;
+	if (p != NULL && fscanf(p, "%d", &k) != 1) k = 0;
+	if (p != NULL) pclose(p);
+	return k;
+}
+
+#define MOVES 40
+static void t_keep(void) {
+	printf("keep: a relay lets go of no commit; a link that comes later gets all %d, after a restart too\n", MOVES);
+	for (int keep = 1; keep >= 0; keep--) {
+		side hub = open_hub(keep ? "kh" : "nh", 8, keep), a = open_side("ka"), c = open_side("kc");
+		ls_dev *devs[3] = {hub.d, a.d, c.d};
+		wire w[2] = {{ls_link(hub.d), a.l, 0, {0, 0}}, {NULL, c.l, 0, {0, 0}}};
+		ls_follow(hub.d, P1);
+		ls_node *pa = ls_follow(a.d, P1), *pc = ls_follow(c.d, P1);
+		pump_all(devs, 3, w, 1, 200);
+		// a moves the pig MOVES times, each replacing the last: one commit makes the value
+		for (int i = 0; i < MOVES; i++) {
+			op_value *v = pig(0.01 * i, 0.5, i);
+			ls_put(pa, v);
+			op_free(v);
+			pump_all(devs, 3, w, 1, 100);
+		}
+		CHECK(ls_commits(ls_find(hub.d, P1)) == 1);
+		// c comes later
+		w[1].x = ls_link(hub.d);
+		pump_all(devs, 3, w, 2, 3000);
+		CHECK(xof(pc) == xof(pa) && same(pa, pc));
+		const ls_stats *st = ls_stats_of(c.d);
+		if (keep) {
+			CHECK(st->applied == MOVES && st->bad_seals == 0);
+			CHECK(files_like(&hub, "seal_") == MOVES - 1);
+			if (st->applied != MOVES) printf("  late link applied %u of %d\n", st->applied, MOVES);
+			// the hub begins again from its store: a third, later still, gets all of it as well
+			close_side(&hub);
+			ls_options o = {.store = hub.store, .random = random_bytes, .links = 8, .keep = 1};
+			hub.d = devs[0] = ls_open(&o);
+			ls_follow(hub.d, P1);
+			side e = open_side("ke");
+			ls_node *pe = ls_follow(e.d, P1);
+			ls_dev *devs2[2] = {hub.d, e.d};
+			wire w2[1] = {{ls_link(hub.d), e.l, 0, {0, 0}}};
+			pump_all(devs2, 2, w2, 1, 3000);
+			CHECK(ls_stats_of(e.d)->applied == MOVES && xof(pe) == xof(pa));
+			CHECK(ls_commits(ls_find(hub.d, P1)) == 1);
+			close_side(&e), drop_dir(&e);
+		} else CHECK(st->applied == 1);
+		close_side(&hub), close_side(&a), close_side(&c);
+		drop_dir(&hub), drop_dir(&a), drop_dir(&c);
+	}
+}
+
 static const struct {
 	const char *name;
 	void (*run)(void);
 } TESTS[] = {{"converge", t_converge}, {"moves", t_concurrent_moves}, {"deletes", t_delete_and_set}, {"made", t_made_parents},
 	{"older", t_older_commits}, {"far", t_far}, {"offline", t_offline}, {"adds", t_concurrent_adds}, {"garbage", t_garbage},
-	{"restart", t_restart}, {"fresh", t_fresh}, {"bad", t_bad_and_refused}, {"ephemeral", t_ephemeral}, {"relay", t_relay}, {"acks", t_per_link_acks}, {"relink", t_relink}, {"limits", t_limits}, {"fuzz", t_fuzz},
-	{"cost", t_cost}, {"memory", t_memory}};
+	{"restart", t_restart}, {"fresh", t_fresh}, {"bad", t_bad_and_refused}, {"ephemeral", t_ephemeral}, {"presence", t_presence}, {"relay", t_relay}, {"acks", t_per_link_acks}, {"relink", t_relink}, {"limits", t_limits}, {"fuzz", t_fuzz},
+	{"cost", t_cost}, {"memory", t_memory}, {"links", t_many_links}, {"keep", t_keep}};
 
 // no arguments: every test; else the ones named
 int main(int argc, char **argv) {

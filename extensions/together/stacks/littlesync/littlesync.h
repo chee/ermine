@@ -1,6 +1,6 @@
 // littlesync: a small-device sync stack for ermine, in C. A device with no room for history (an ESP32-S3
-// with 512 KB of SRAM) follows a few nodes, keeps what makes their current value, and syncs with up to LS_LINKS peers
-// over byte streams (USB serial, a second serial line). Sans-IO: this file's device does no reading,
+// with 512 KB of SRAM) follows a few nodes, keeps what makes their current value, and syncs with a few peers
+// (ls_options.links, LS_LINKS by default) over byte streams (USB serial, a second serial line). Sans-IO: this file's device does no reading,
 // writing, sleeping or threading. Transports are parts outside it (see "use" below). A user: lab-pig's
 // pigs (playground/demos/pigs/littlesync: its value format, pigs.h, and littlesync-pigs, a Mac peer;
 // the Cardputer, playground/cardputer).
@@ -18,7 +18,15 @@
 //   - per commit held, whether a commit taken in names it as a parent (then it is no head), and a few
 //     parents named that are not held (yet)
 //   - ephemeral values (a value being carried, held up by a device), per sending device, never stored
+//   - presence rows (who is here, a pointer), per device, never stored
 // everything older is dropped.
+//
+// keep (ls_options.keep: a relay, a server): nothing is dropped. A passing commit is kept for ever, its
+// seal in the store ("seal:<node>:<name>", out of memory: read again when it is sent), its name in the
+// node's list of kept ("kept:<node>:<k>", 256 names a blob), and offered to every link till that peer
+// has it, so a peer that comes later gets every commit (the oldest first). In memory a kept commit is
+// its name, lamport and parents (about 150 B on a 64-bit host with the index, 8 more a parent). A start reads every kept seal once (its
+// lamport and parents), then lets go of it.
 //
 // lists, per path (values.org; lists.ts has the same rules over a history). Every patch is a set or a
 // delete at a path of string keys: a key path ends at the first list, and a range, a move or a list
@@ -65,9 +73,9 @@
 // Ephemerals are not sealed: a held value may name any signer but this device's own. Not for a peer
 // you don't trust.
 //
-// links: a device talks to several peers at once, each over its own byte stream (ls_link). A link has its own
-// rx buffer, out queue, hello and heads timers, and the record of which of the device's own commits that
-// peer has acked; the nodes and everything written are the device's. A write goes to every link that is up.
+// links: a device talks to several peers at once, each over its own byte stream (ls_link), up to
+// ls_options.links (hundreds work: per commit, 2 bits a link). A link has its own rx buffer (4.5 KB), out
+// queue, hello and heads timers, and the record of which commits that peer has acked; the nodes and everything written are the device's. A write goes to every link that is up.
 // The device is a relay: what is taken in from one link is offered to the others (heads, then they want
 // it), never back to the one it came from; a held (ephemeral) value taken in on one link is sent on, still
 // unsealed, to the others. Links should not form a ring (a hold would go round for ever).
@@ -81,12 +89,24 @@
 //   commits    {node, sealed: [bytes]}                      seals (seal.h's format)
 //   ephemeral  {node, commit: bytes}                        an unsealed commit, one put at []
 //   ack        {node, names: [name]}
+//   presence   {node, who: key, row: bytes}                 a presence row (below), as presence.ts sends it
 // sync: on hello, and whenever a node changes, each side sends heads for what it follows; a side that
 // lacks names sends want; the other sends the commits it still has; the receiver acks what it took
 // in. A heads that lacks names its receiver has is answered once with the receiver's heads (re).
 //
 // ephemeral: shown on top of the stored value, one per sending device (its signer), dropped when that
 // device's next stored commit on the node lands, or 4 s after the last beat. ls_hold resends every 1 s.
+//
+// presence (extensions/presence/typescript/presence.ts, as web pigs use it): rows at a node, one a
+// device, never stored: who (a key), a value, until. row is presence.ts's message, the CBOR its channel
+// sends on the topic "ermine://<node's hex>": {ttl, value} (ttl: the ms it lasts, the time left, not a
+// time: clocks differ) or {gone: true}; a numbered patch ({patches, n}) is not taken (the next renew
+// is whole) but is relayed. who: the sender's key (over Subduction, the key it was published under; a
+// gateway names it). ls_presence: my row, sent now, every LS_RENEW_MS with ttl LS_TTL_MS, and to a
+// peer on its hello; NULL sends gone. Others' rows go at until or on gone. A row taken in on one link
+// is sent on, unchanged, to the others (as an ephemeral is); this device's own key coming back is
+// dropped. ls_close sends nothing: ls_presence(node, NULL) and an ls_next first tell the peers at
+// once, else the row lapses after its ttl.
 //
 // storage (ls_store): one blob per name: "key" (the 32-byte seed) and "node:<id>" (the node's seals).
 //
@@ -109,6 +129,8 @@
 //     // ls_pick(node, v) the whole value, ending a clash
 //     // hold: ls_hold(node, v) shows v to the peers, sent every LS_BEAT_MS till ls_unhold(node) or a
 //     // write of this device's on the node
+//     // presence: ls_presence(room, v) my row ({name, colour, pointer: {x, y}} for pigs), renewed till
+//     // ls_presence(room, NULL); ls_row_at(room, i), i below ls_rows(room), the rows now, mine too
 //   }
 // no threads inside: call from one task. Everything the device hands out (values, held) is the
 // device's: never change it, it is valid until the next ls_ call.
@@ -120,8 +142,16 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// at most this many links on a device (each has a frame buffer). A commit marks the links that acked it in
-// one byte
+// 1: what a server needs is compiled in: keep (ls_options.keep) and an index of the commits by name (a
+// node with more than 32). 0 on a device (ESP-IDF's builds), where they would be about 2 KB of flash
+#ifndef LS_SERVER
+#ifdef ESP_PLATFORM
+#define LS_SERVER 0
+#else
+#define LS_SERVER 1
+#endif
+#endif
+// links on a device when ls_options.links is 0 (each has a frame buffer)
 #ifndef LS_LINKS
 #define LS_LINKS 4
 #endif
@@ -142,6 +172,9 @@
 // a held (ephemeral) value goes after this long without a beat, and is resent this often
 #define LS_HELD_MS 4000
 #define LS_BEAT_MS 1000
+// my presence row lasts this long unless renewed, and is renewed this often (presence's, web pigs')
+#define LS_TTL_MS 6000
+#define LS_RENEW_MS 2000
 
 typedef enum {
 	LS_OK,
@@ -178,6 +211,9 @@ typedef struct {
 	// protocol events, one line each (NULL: none)
 	void (*log)(void *context, const char *line);
 	void *log_context;
+	size_t links;   // 0: LS_LINKS. at most this many links at once
+	size_t max_out; // 0: 16384. bytes queued on a link before a message is dropped (sent again later)
+	int keep;       // 1: no commit is let go of (a relay, a server: see "keep" above). LS_SERVER only
 } ls_options;
 
 typedef struct ls_dev ls_dev;
@@ -185,11 +221,12 @@ typedef struct ls_node ls_node;
 // no typedef: ls_link is also the function that opens one
 struct ls_link;
 
-// NULL when there is no key and none could be made. Loads the key, or makes it from options.random
+// NULL when there is no key and none could be made (or keep without LS_SERVER). Loads the key, or makes it
+// from options.random
 ls_dev *ls_open(const ls_options *options);
 // saves every node and frees all
 void ls_close(ls_dev *dev);
-// a byte stream to one peer: NULL when the device has LS_LINKS already. Its peer is told hello at the next
+// a byte stream to one peer: NULL when the device has ls_options.links already. Its peer is told hello at the next
 // ls_tick
 struct ls_link *ls_link(ls_dev *dev);
 // the stream is closed: the link is freed (ls_close frees the rest). A link opened again starts over
@@ -306,5 +343,20 @@ void ls_unhold(ls_node *node);
 // the held values now: i from 0 to ls_helds - 1 (entries with a value only)
 size_t ls_helds(const ls_node *node);
 const ls_held *ls_held_at(const ls_node *node, size_t i);
+
+// a presence row: who (a key, a multikey as a rule), its value, until (on ls_tick's clock)
+typedef struct {
+	uint8_t who[LS_KEY_LEN];
+	size_t who_length;
+	op_value *value; // NULL: no row
+	int own;
+	int64_t until;
+} ls_row;
+// my row at the node: value (copied) sent now and renewed, every LS_RENEW_MS, on every link; NULL: taken
+// out, gone told. LS_BAD: a value too deep, or over 1 KB as CBOR
+ls_code ls_presence(ls_node *node, const op_value *value);
+// the rows now (mine too, own): i from 0 to ls_rows - 1
+size_t ls_rows(const ls_node *node);
+const ls_row *ls_row_at(const ls_node *node, size_t i);
 
 #endif

@@ -2,7 +2,9 @@
 # default: V=1 shows each command.
 #   make test        host tests (test/test.c), their lists against lists.ts on the same commits (test/lists.ts,
 #                    deno), then two littlesync-pigs over a pty pair (test/pty.sh), then
-#                    three in a line, the middle one relaying (test/hop.sh). littlesync-pigs, lab-pig's pigs
+#                    three in a line, the middle one relaying (test/hop.sh), then two over HTTP to the gateway
+#                    on a local port, no server (test/http.sh; sh test/http.sh build/littlesync-pigs
+#                    wss://galaxy.observer: through galaxy). littlesync-pigs, lab-pig's pigs
 #                    on littlesync, is a user of the library (playground/demos/pigs/littlesync), built into
 #                    build/ here; the tests use its pigs.c and pigs.h too
 #   make check       the host tests and the lists check under the address and undefined-behaviour sanitizers
@@ -61,15 +63,16 @@ test: $(BUILD)/test $(BUILD)/littlesync-pigs
 	$(Q)$(DENO) run --allow-read test/lists.ts $(BUILD)/lists.jsonl
 	$(Q)sh test/pty.sh $(BUILD)/littlesync-pigs
 	$(Q)sh test/hop.sh $(BUILD)/littlesync-pigs
+	$(Q)sh test/http.sh $(BUILD)/littlesync-pigs
 
 # the device build: -Os, the xtensa compiler of ESP-IDF's toolchain. Nothing is linked: each object's
 # size, then the sum. text is code and read-only data, data and bss the static RAM
 XT = $(firstword $(wildcard $(HOME)/.espressif/tools/xtensa-esp-elf/*/xtensa-esp-elf/bin))
 XCC = $(XT)/xtensa-esp32s3-elf-gcc
 XSIZE = $(XT)/xtensa-esp-elf-size
-XFLAGS = -std=gnu11 -Os -mlongcalls -ffunction-sections -fdata-sections -Wall -Wno-format -Wno-unused-parameter $(B3) \
+XFLAGS = -std=gnu11 -Os -mlongcalls -ffunction-sections -fdata-sections -Wall -Wno-format -Wno-unused-parameter $(B3) -DESP_PLATFORM \
 	-DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512 -DBLAKE3_USE_NEON=0
-esp_ours = littlesync.c frame.c
+esp_ours = littlesync.c frame.c http.c
 esp_all = $(esp_ours) $(shared) $(base) $(more)
 
 esp-check:

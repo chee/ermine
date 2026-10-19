@@ -20,6 +20,9 @@ export type Message =
 	| { t: "commits"; node: Uint8Array; sealed: Uint8Array[] }
 	| { t: "ephemeral"; node: Uint8Array; commit: Uint8Array }
 	| { t: "ack"; node: Uint8Array; names: Uint8Array[] }
+	// a presence row: presence.ts's message (CBOR, {ttl, value} or {gone: true}) as its channel sends
+	// it on the topic "ermine://<node's hex>", and who sent it (a key, as the C side takes it: 1 to 34 bytes)
+	| { t: "presence"; node: Uint8Array; who: Uint8Array; row: Uint8Array }
 
 export function encode(m: Message): Uint8Array {
 	const o: Record<string, cbor.Value> = {}
@@ -68,6 +71,9 @@ export function decode(bytes: Uint8Array): Message | undefined {
 		}
 		case "ephemeral":
 			return isBytes(o.commit) ? { t: "ephemeral", node, commit: o.commit } : undefined
+		case "presence":
+			if (!isBytes(o.who) || o.who.length === 0 || o.who.length > KEY || !isBytes(o.row)) return
+			return { t: "presence", node, who: o.who, row: o.row }
 	}
 }
 
