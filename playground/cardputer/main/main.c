@@ -143,9 +143,10 @@ void app_main(void) {
 		if (ls) {
 			ls_tick(ls, esp_timer_get_time() / 1000);
 			const uint8_t *out;
-			size_t m = ls_next(line, &out);
-			// only while a peer is heard: the line also carries the log, and nobody needs hellos
-			if (m && ls_up(line)) usb_serial_jtag_write_bytes(out, m, portMAX_DELAY);
+			size_t m;
+			// a frame a call; only while a peer is heard: the line also carries the log, and nobody needs hellos
+			while ((m = ls_next(line, &out)))
+				if (ls_up(line)) usb_serial_jtag_write_bytes(out, m, portMAX_DELAY);
 			net_turn(esp_timer_get_time() / 1000);
 			room_mirror(room_api);
 			host_settle();

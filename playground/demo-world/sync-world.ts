@@ -37,7 +37,7 @@ import {
 	setPresence,
 	startSweeper,
 	type World as Presence,
-} from "@ermine/presence"
+} from "@ermine/together/presence"
 import { createScheduler, type Scope } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { trace } from "@ermine/scheduler/trace"
@@ -182,7 +182,7 @@ export async function createSyncWorld(o: Options) {
 	}
 
 	// ---- the wire: sync's channel. a row or a message heard comes outside any run: a pulse soon ----
-	const wire = createChannel(device, signer.key)
+	const wire = createChannel(device, signer)
 	const channel = {
 		...wire,
 		on: (topic: string, fn: (from: string, bytes: Uint8Array) => void) =>

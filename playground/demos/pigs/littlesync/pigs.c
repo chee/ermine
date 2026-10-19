@@ -1,7 +1,7 @@
 // lab-pig's format (pigs.h)
 #include "pigs.h"
 
-#include "../../../../extensions/together/stacks/littlesync/littlesync.h"
+#include "../../../../playground/together/stacks/littlesync/littlesync.h"
 
 #include <string.h>
 

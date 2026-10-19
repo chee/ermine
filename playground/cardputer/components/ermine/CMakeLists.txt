@@ -18,7 +18,7 @@ idf_component_register(
 		${R}/ermine/sites/c/sites.c
 		${R}/ermine/api/c/api.c
 		${R}/ermine/encoding/c/pack.c ${R}/ermine/encoding/c/json.c ${R}/ermine/encoding/c/cbor.c
-		${R}/extensions/presence/c/presence.c ${R}/extensions/presence/c/channel.c
+		${R}/playground/together/presence/c/presence.c ${R}/playground/together/presence/c/channel.c
 		${R}/extensions/patch-nodes/c/patch.c
 	INCLUDE_DIRS ${R}
 )
