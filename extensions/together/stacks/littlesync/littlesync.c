@@ -17,18 +17,19 @@
 
 // ---- what a device holds
 
-// a commit that makes the value now: its seal, and who has it. Which links have it: a bitmask over link
-// slots (LS_LINKS, 4 at most), not a set of names per link. A commit is the one thing that knows it, there
-// is nothing to bound or search, and a link's slot is cleared in one pass when it opens or says hello
-// again. The same slots keep when each link was last sent it, so a resend on one link is not held back
-// by a send on another.
+// a commit that makes the value now: its seal, and who has it. Which links have it: a bitset over link
+// slots (marks), not a set of names per link. A commit is the one thing that knows it, there is nothing
+// to bound or search, and a link's slot is cleared in one pass when it opens or says hello again. A second
+// bitset: sent on that link (a want, a write) since its last round (a second, the link's): it waits a round
+// then, else it goes again each round till acked; a send on one link does not hold back another.
 typedef struct {
 	uint8_t name[CM_NAME];
-	uint8_t *sealed;
+	uint8_t *sealed; // NULL: off (keep: in the store, read again to send)
 	size_t length;
 	int64_t lamport;
 	uint32_t refs; // its writes standing
 	uint32_t signer_at; // where its signer's bytes are in sealed (0: not found)
+	uint32_t walk;      // the ancestor walk that went through it last
 	// its parents, each by PRE bytes of its name: what the device can tell of ancestry (parents of
 	// held commits, nothing further)
 	uint8_t (*parents)[8];
@@ -38,8 +39,8 @@ typedef struct {
 	bool went;    // put on a wire once (or loaded: it may have been)
 	bool passing; // no write of it stands: kept only till every link up has it (since: when)
 	int64_t since;
-	uint8_t acked;          // bit i: the peer on link slot i has it
-	int64_t sent[LS_LINKS]; // ms of the last send on each link slot, for resends
+	// per link slot a bit: acked (the peer has it), the dev's w bytes; then sent in the slot's round
+	uint8_t marks[];
 } commit;
 
 // a name in short: 8 bytes of its digest (after the multihash's 2-byte head)
@@ -67,12 +68,21 @@ typedef struct {
 } write;
 
 #define HELDS 8
+// presence rows a node, at most (the soonest to lapse goes for a new one), and my row's bytes at most
+#define ROWS 8
+#define ROW_MAX 1024
 #define RING 8
 // commits passing (no write stands) per node at most, and how long one waits for the links
 #define PASSING 16
 #define PASS_MS 30000
 #define NAMED 8
 #define OUT_MAX 16384
+// a node holding more commits than this finds them by an index (open addressing on 8 bytes of the name)
+#define INDEX 32
+// keep is ls_options.keep where it is compiled in
+#define KEEPS(d) (LS_SERVER && (d)->o.keep)
+// names in one blob of a keeping node's list
+#define KEPT 256
 #define CHUNK 3000
 #define DEPTH 16
 
@@ -86,6 +96,11 @@ struct ls_node {
 	size_t n_writes, c_writes;
 	commit **commits;
 	size_t n_commits, c_commits;
+	commit **index; // NULL: none (INDEX commits or fewer). c_index slots, a power of 2
+	size_t c_index;
+	// keep: the commits off, in the order they went (their names in "kept:<id>:<k>"), saved up to n_kept_saved
+	commit **kept;
+	size_t n_kept, c_kept, n_kept_saved;
 	uint8_t ring[RING][CM_NAME]; // names seen and let go of
 	unsigned ring_at, ring_n;
 	// parents named by commits taken in that were not held then (the first 8 bytes): one that comes
@@ -98,7 +113,16 @@ struct ls_node {
 	size_t hold_length;
 	int64_t hold_sent;
 	bool hold_dirty;
+	ls_row rows[ROWS];
+	uint8_t *row; // my presence row: presence.ts's message, sent as it is
+	size_t row_length;
+	int64_t row_sent;
+	bool row_dirty;
 	uint32_t version;
+	// commits taken in from a link since the last tick: heads to the others then (once, however many came).
+	// news_from: the link they came on, -1: several
+	bool news;
+	int news_from;
 	bool dirty;
 	int64_t saved;
 };
@@ -112,8 +136,8 @@ struct ls_link {
 	uint8_t rx[LS_FRAME_MAX];
 	size_t rx_n;
 	bool rx_over;
-	bool up;
-	int64_t heard, hello_sent, heads_sent;
+	bool up, beat, due;
+	int64_t heard, hello_sent, heads_sent, round;
 	uint8_t peer[LS_KEY_LEN];
 	bool has_peer;
 	ls_traffic traffic;
@@ -127,7 +151,10 @@ struct ls_dev {
 	uint32_t nonce;
 	ls_node **nodes;
 	size_t n_nodes;
-	struct ls_link *links[LS_LINKS];
+	struct ls_link **links;
+	size_t n_links, w; // w: bytes of a bitset over the link slots
+	uint8_t *up;       // the slots up, as bits (links_up)
+	uint32_t walks;
 	// public keys decoded once
 	ermEd25519Key keys[4];
 	unsigned keys_next;
@@ -202,6 +229,8 @@ typedef struct {
 	uint8_t name[CM_NAME];
 } opened;
 
+static bool is_name(const Json *b) { return b != NULL && b->type == JSON_BYTES && b->bytes.length == CM_NAME; }
+
 // a seal's commit name and nothing else (no check)
 static bool peek_name(const uint8_t *sealed, size_t length, uint8_t name[CM_NAME]) {
 	Json *x = cborDecode(sealed, length, NULL, NULL);
@@ -246,24 +275,35 @@ static int open_seal(ls_dev *d, const uint8_t *sealed, size_t length, const uint
 
 // ---- the wire out
 
-static void send_message(struct ls_link *l, Json *m) {
+// false: dropped (the out queue is full)
+static bool send_message(struct ls_link *l, Json *m) {
 	size_t n;
 	uint8_t *b = encode(m, &n);
 	jsonFree(m);
-	if (b == NULL) return;
-	if (l->out_used + n * 2 + 16 > OUT_MAX) {
+	if (b == NULL) return false;
+	if (l->out_used + n * 2 + 16 > (l->dev->o.max_out ? l->dev->o.max_out : OUT_MAX)) {
 		l->traffic.dropped_out++;
 		free(b);
-		return;
+		return false;
 	}
 	ls_frame(b, n, &l->out, &l->out_used, &l->out_cap);
 	l->traffic.frames_out++;
 	free(b);
+	return true;
+}
+
+// a commit's marks: the peer on slot s has it (acked), it went on slot s in the slot's round (sent)
+static bool acked(const commit *c, unsigned s) { return c->marks[s >> 3] >> (s & 7) & 1; }
+static void ack(commit *c, unsigned s) { c->marks[s >> 3] |= (uint8_t)(1u << (s & 7)); }
+static bool sent(const ls_dev *d, const commit *c, unsigned s) { return c->marks[d->w + (s >> 3)] >> (s & 7) & 1; }
+static void mark_sent(const ls_dev *d, commit *c, unsigned s, bool on) {
+	uint8_t *b = &c->marks[d->w + (s >> 3)], bit = (uint8_t)(1u << (s & 7));
+	*b = on ? *b | bit : *b & (uint8_t)~bit;
 }
 
 // the links that are up, but not `except` (NULL: all): what is sent to every peer but the one it came from
 static bool others_up(const ls_dev *d, const struct ls_link *except) {
-	for (unsigned i = 0; i < LS_LINKS; i++)
+	for (unsigned i = 0; i < d->n_links; i++)
 		if (d->links[i] != NULL && d->links[i] != except && d->links[i]->up) return true;
 	return false;
 }
@@ -327,30 +367,34 @@ static void send_names(ls_node *n, struct ls_link *l, const char *t, const uint8
 	}
 }
 
+static uint8_t *seal_of(ls_node *n, const commit *c);
+static int lower(const void *a, const void *b) {
+	const commit *x = *(commit *const *)a, *y = *(commit *const *)b;
+	return x->lamport != y->lamport ? (x->lamport < y->lamport ? -1 : 1) : memcmp(x->name, y->name, CM_NAME);
+}
 // the seals of the commits, in messages of about CHUNK bytes; the lower lamports first (a commit's
-// ancestors before it, so what it replaces is there to replace)
+// ancestors before it, so what it replaces is there to replace). Marked sent on the link if not dropped
 static void send_commits(ls_node *n, struct ls_link *l, commit *const *given, size_t count) {
+	ls_dev *d = n->dev;
 	commit **list = allocate((count + 1) * sizeof *list);
-	for (size_t i = 0; i < count; i++) {
-		size_t k = i;
-		for (; k > 0 && list[k - 1]->lamport > given[i]->lamport; k--) list[k] = list[k - 1];
-		list[k] = given[i];
-	}
+	memcpy(list, given, count * sizeof *list);
+	if (count > 1) qsort(list, count, sizeof *list, lower);
 	size_t at = 0;
 	while (at < count) {
 		Json *m = message("commits"), *seals = jsonArray();
 		jsonAdd(m, "node", jsonBytes(n->doc, 32));
-		size_t size = 0, k = 0;
+		size_t size = 0, k = 0, from = at;
 		while (at < count && (k == 0 || size + list[at]->length <= CHUNK)) {
-			jsonPush(seals, jsonBytes(list[at]->sealed, list[at]->length));
+			uint8_t *b = seal_of(n, list[at]);
+			if (b != NULL) jsonPush(seals, jsonBytes(b, list[at]->length)), k++;
+			if (b != list[at]->sealed) free(b);
 			size += list[at]->length + 4;
-			list[at]->sent[l->slot] = n->dev->now;
-			list[at]->went = true;
-			at++, k++;
+			at++;
 		}
 		jsonAdd(m, "sealed", seals);
-		say(n->dev, "tx commits %.8s %zu", short_id(n), k);
-		send_message(l, m);
+		say(d, "tx commits %.8s %zu", short_id(n), k);
+		if (send_message(l, m))
+			for (size_t i = from; i < at; i++) mark_sent(d, list[i], l->slot, true), list[i]->went = true;
 	}
 	free(list);
 }
@@ -452,17 +496,69 @@ static void ring_add(ls_node *n, const uint8_t name[CM_NAME]) {
 	if (n->ring_n < RING) n->ring_n++;
 }
 
-static commit *commit_find(const ls_node *n, const uint8_t name[CM_NAME]) {
+// the index: a commit's slot by PRE bytes of its name (they are a digest's: spread already)
+static size_t slot_of(const ls_node *n, const uint8_t *p) {
+	uint64_t h;
+	memcpy(&h, p, sizeof h);
+	return (size_t)h & (n->c_index - 1);
+}
+static void index_put(ls_node *n, commit *c) {
+	size_t i = slot_of(n, pre(c->name));
+	while (n->index[i] != NULL) i = (i + 1) & (n->c_index - 1);
+	n->index[i] = c;
+}
+// made again at 4 times the commits, when there are more than INDEX of them and it is half full
+static void index_grow(ls_node *n) {
+	if (n->n_commits <= INDEX || (n->index != NULL && n->n_commits * 2 < n->c_index)) return;
+	free(n->index);
+	for (n->c_index = 64; n->c_index < n->n_commits * 4; n->c_index *= 2) {}
+	n->index = calloc(n->c_index, sizeof *n->index);
+	if (n->index == NULL) abort();
+	for (size_t i = 0; i < n->n_commits; i++) index_put(n, n->commits[i]);
+}
+// out of the index: the ones after it in its run are put again
+static void index_drop(ls_node *n, const commit *c) {
+	if (n->index == NULL) return;
+	size_t i = slot_of(n, pre(c->name)), mask = n->c_index - 1;
+	while (n->index[i] != NULL && n->index[i] != c) i = (i + 1) & mask;
+	if (n->index[i] == NULL) return;
+	n->index[i] = NULL;
+	for (i = (i + 1) & mask; n->index[i] != NULL; i = (i + 1) & mask) {
+		commit *x = n->index[i];
+		n->index[i] = NULL;
+		index_put(n, x);
+	}
+}
+static void commit_add(ls_node *n, commit *k) {
+	if (n->n_commits == n->c_commits) {
+		n->c_commits = n->c_commits ? n->c_commits * 2 : 4;
+		n->commits = realloc(n->commits, n->c_commits * sizeof *n->commits);
+		if (n->commits == NULL) abort();
+	}
+	n->commits[n->n_commits++] = k;
+	if (!LS_SERVER) return;
+	if (n->index != NULL && n->n_commits * 2 < n->c_index) index_put(n, k);
+	else index_grow(n);
+}
+// out of the list (the last takes its place) and the index; not freed
+static void commit_remove(ls_node *n, size_t i) {
+	if (LS_SERVER) index_drop(n, n->commits[i]);
+	n->commits[i] = n->commits[--n->n_commits];
+}
+
+// by PRE bytes (whole: CM_NAME bytes of the name), the held commit, or NULL
+static commit *held_at(const ls_node *n, const uint8_t *p, bool whole) {
+	const uint8_t *q = whole ? pre(p) : p;
+	if (LS_SERVER && n->index != NULL) {
+		for (size_t i = slot_of(n, q); n->index[i] != NULL; i = (i + 1) & (n->c_index - 1))
+			if (whole ? memcmp(n->index[i]->name, p, CM_NAME) == 0 : memcmp(pre(n->index[i]->name), p, PRE) == 0) return n->index[i];
+		return NULL;
+	}
 	for (size_t i = 0; i < n->n_commits; i++)
-		if (memcmp(n->commits[i]->name, name, CM_NAME) == 0) return n->commits[i];
+		if (whole ? memcmp(n->commits[i]->name, p, CM_NAME) == 0 : memcmp(pre(n->commits[i]->name), p, PRE) == 0) return n->commits[i];
 	return NULL;
 }
-// by PRE bytes: the index of the held commit, or -1
-static long held_at(const ls_node *n, const uint8_t *p) {
-	for (size_t i = 0; i < n->n_commits; i++)
-		if (memcmp(pre(n->commits[i]->name), p, PRE) == 0) return (long)i;
-	return -1;
-}
+static commit *commit_find(const ls_node *n, const uint8_t name[CM_NAME]) { return held_at(n, name, true); }
 static bool seen(const ls_node *n, const uint8_t name[CM_NAME]) {
 	if (commit_find(n, name) != NULL) return true;
 	for (unsigned i = 0; i < n->ring_n; i++)
@@ -477,25 +573,69 @@ static void commit_free(commit *c) {
 }
 static void commit_drop(ls_node *n, size_t i) {
 	commit *c = n->commits[i];
-	n->commits[i] = n->commits[--n->n_commits];
+	commit_remove(n, i);
 	ring_add(n, c->name);
 	commit_free(c);
 }
-// the link slots that are up, as bits
-static uint8_t links_up(const ls_dev *d) {
-	uint8_t up = 0;
-	for (unsigned i = 0; i < LS_LINKS; i++)
-		if (d->links[i] != NULL && d->links[i]->up) up |= (uint8_t)(1u << i);
-	return up;
+// the link slots that are up, as bits (d->up)
+static void links_up(ls_dev *d) {
+	memset(d->up, 0, d->w);
+	for (unsigned i = 0; i < d->n_links; i++)
+		if (d->links[i] != NULL && d->links[i]->up) d->up[i >> 3] |= (uint8_t)(1u << (i & 7));
 }
-// passing commits let go of: each every link up has, or that waited PASS_MS; past PASSING, the oldest
+static bool all_up_have(const ls_dev *d, const commit *c) {
+	for (size_t i = 0; i < d->w; i++)
+		if ((c->marks[i] & d->up[i]) != d->up[i]) return false;
+	return true;
+}
+
+static void seal_name(const ls_node *n, const uint8_t name[CM_NAME], char *out) {
+	int k = snprintf(out, 16 + LS_ID_LEN, "seal:%s:", short_id(n));
+	for (int i = 0; i < CM_NAME; i++) snprintf(out + k + 2 * i, 3, "%02x", name[i]);
+}
+#define SEAL_NAME (16 + LS_ID_LEN + 2 * CM_NAME)
+// a commit's seal: held, or (off) read from the store, malloc'd (free it when it is not c->sealed). NULL:
+// not there
+static uint8_t *seal_of(ls_node *n, const commit *c) {
+	if (!LS_SERVER || c->sealed != NULL) return c->sealed;
+	char name[SEAL_NAME];
+	seal_name(n, c->name, name);
+	uint8_t *b;
+	size_t len;
+	if (!n->dev->o.store.load(n->dev->o.store.context, name, &b, &len)) return NULL;
+	if (len == c->length) return b;
+	free(b);
+	return NULL;
+}
+static void kept_add(ls_node *n, commit *c) {
+	if (n->n_kept == n->c_kept) {
+		n->c_kept = n->c_kept ? n->c_kept * 2 : 16;
+		n->kept = realloc(n->kept, n->c_kept * sizeof *n->kept);
+		if (n->kept == NULL) abort();
+	}
+	n->kept[n->n_kept++] = c;
+}
+// keep: a passing commit's seal to the store and out of memory, its name to the node's list
+static void go_off(ls_node *n, commit *c) {
+	ls_dev *d = n->dev;
+	char name[SEAL_NAME];
+	seal_name(n, c->name, name);
+	if (!d->o.store.save(d->o.store.context, name, c->sealed, c->length)) return;
+	free(c->sealed);
+	c->sealed = NULL;
+	kept_add(n, c);
+	n->dirty = true;
+}
+// passing commits let go of: each every link up has, or that waited PASS_MS; past PASSING, the oldest.
+// keep: none (each went off as it began passing)
 static void pass(ls_node *n) {
-	uint8_t up = links_up(n->dev);
+	if (KEEPS(n->dev)) return;
+	links_up(n->dev);
 	size_t count = 0;
 	for (size_t i = n->n_commits; i-- > 0;) {
 		commit *c = n->commits[i];
 		if (!c->passing) continue;
-		if ((c->acked & up) == up || n->dev->now - c->since >= PASS_MS) commit_drop(n, i);
+		if (all_up_have(n->dev, c) || n->dev->now - c->since >= PASS_MS) commit_drop(n, i);
 		else count++;
 	}
 	for (; count > PASSING; count--) {
@@ -511,7 +651,8 @@ static void unref(ls_node *n, commit *c) {
 	if (--c->refs != 0) return;
 	c->passing = true;
 	c->since = n->dev->now;
-	pass(n);
+	if (KEEPS(n->dev)) go_off(n, c);
+	else pass(n);
 }
 static void write_free(write *w) {
 	op_free(w->value);
@@ -546,22 +687,21 @@ static bool ancestor(const ls_node *n, const uint8_t a[CM_NAME], int64_t lamport
 	for (size_t i = 0; i < count; i++)
 		if (memcmp(parents[i], pre(a), PRE) == 0) return true;
 	if (n->n_commits == 0) return false;
-	bool *been = calloc(n->n_commits, 1), found = false;
-	size_t *todo = malloc(n->n_commits * sizeof *todo), m = 0;
-	if (been == NULL || todo == NULL) abort();
-	for (size_t i = 0; i < count; i++) {
-		long k = held_at(n, parents[i]);
-		if (k >= 0 && !been[k] && n->commits[k]->lamport > lamport) been[k] = true, todo[m++] = (size_t)k;
-	}
+	// been: marked with this walk's number
+	uint32_t walk = ++n->dev->walks;
+	bool found = false;
+	commit **todo = malloc(n->n_commits * sizeof *todo), *k;
+	size_t m = 0;
+	if (todo == NULL) abort();
+	for (size_t i = 0; i < count; i++)
+		if ((k = held_at(n, parents[i], false)) != NULL && k->walk != walk && k->lamport > lamport) k->walk = walk, todo[m++] = k;
 	while (m > 0 && !found) {
-		const commit *c = n->commits[todo[--m]];
+		const commit *c = todo[--m];
 		for (size_t i = 0; i < c->n_parents && !found; i++) {
 			if (memcmp(c->parents[i], pre(a), PRE) == 0) found = true;
-			long k = held_at(n, c->parents[i]);
-			if (k >= 0 && !been[k] && n->commits[k]->lamport > lamport) been[k] = true, todo[m++] = (size_t)k;
+			if ((k = held_at(n, c->parents[i], false)) != NULL && k->walk != walk && k->lamport > lamport) k->walk = walk, todo[m++] = k;
 		}
 	}
-	free(been);
 	free(todo);
 	return found;
 }
@@ -763,17 +903,20 @@ static uint32_t find(const uint8_t *in, size_t length, const uint8_t *bytes, siz
 // its path, but one a later patch of the commit overwrote (at a prefix of its path). A write is dead on
 // arrival when a standing write at or above it replaces it (it came late); dead or not, it replaces
 // what it covers at and under its path. The commit is kept while a write of it stands, then passes
-// (unref). from: the link slots it came on (acked). NULL when it is let go of at once
-static commit *take_commit(ls_node *n, const uint8_t name[CM_NAME], const uint8_t *sealed, size_t length, const cm_commit *c,
-	bool own, uint8_t from) {
-	commit *k = allocate(sizeof *k);
+// (unref). from: the link slot it came on (acked; -1: none). NULL when it is let go of at once
+static commit *commit_new(const ls_node *n, const uint8_t name[CM_NAME], const cm_commit *c, bool own) {
+	commit *k = allocate(sizeof *k + 2 * n->dev->w);
 	memcpy(k->name, name, CM_NAME);
 	k->lamport = c->lamport;
 	k->own = own;
-	for (unsigned i = 0; i < LS_LINKS; i++) k->sent[i] = INT64_MIN / 2;
 	k->n_parents = (uint16_t)(c->parents_length < UINT16_MAX ? c->parents_length : UINT16_MAX);
 	k->parents = allocate((k->n_parents + 1) * PRE);
 	for (size_t i = 0; i < k->n_parents; i++) memcpy(k->parents[i], pre(c->parents[i]), PRE);
+	return k;
+}
+static commit *take_commit(ls_node *n, const uint8_t name[CM_NAME], const uint8_t *sealed, size_t length, const cm_commit *c,
+	bool own, int from) {
+	commit *k = commit_new(n, name, c, own);
 	write *mine = allocate((c->patches_length + 1) * sizeof *mine);
 	bool *dead = allocate(c->patches_length + 1);
 	size_t m = 0;
@@ -855,14 +998,9 @@ static commit *take_commit(ls_node *n, const uint8_t name[CM_NAME], const uint8_
 	memcpy(k->sealed, sealed, length);
 	k->length = length;
 	k->signer_at = find(sealed, length, c->signer, c->signer_length);
-	k->acked = from;
-	k->went = from != 0;
-	if (n->n_commits == n->c_commits) {
-		n->c_commits = n->c_commits ? n->c_commits * 2 : 4;
-		n->commits = realloc(n->commits, n->c_commits * sizeof *n->commits);
-		if (n->commits == NULL) abort();
-	}
-	n->commits[n->n_commits++] = k;
+	if (from >= 0) ack(k, (unsigned)from);
+	k->went = from >= 0;
+	commit_add(n, k);
 	commit *kept = k;
 	if (k->refs == 0) {
 		// nothing of it stands: it passes on to the links that lack it, or goes
@@ -878,28 +1016,88 @@ static commit *take_commit(ls_node *n, const uint8_t name[CM_NAME], const uint8_
 
 static void blob_name(const ls_node *n, char *out) { snprintf(out, 16 + LS_ID_LEN, "node:%s", n->id); }
 
-// what the store keeps for a node: {lamport, commits: [seal]}, malloc'd
+static void kept_name(const ls_node *n, size_t k, char *out) { snprintf(out, 40 + LS_ID_LEN, "kept:%s:%zu", short_id(n), k); }
+
+// what the store keeps for a node: {lamport, commits: [seal]} (keep: and kept, how many are off),
+// malloc'd
 static uint8_t *node_blob(const ls_node *n, size_t *len) {
 	Json *m = jsonObject(), *list = jsonArray();
 	jsonAdd(m, "lamport", jsonNumber((double)n->lamport));
 	for (size_t i = 0; i < n->n_commits; i++)
 		if (!n->commits[i]->passing) jsonPush(list, jsonBytes(n->commits[i]->sealed, n->commits[i]->length));
 	jsonAdd(m, "commits", list);
+	if (KEEPS(n->dev)) jsonAdd(m, "kept", jsonNumber((double)n->n_kept_saved));
 	uint8_t *b = encode(m, len);
 	jsonFree(m);
 	return b;
+}
+
+// keep: the blobs of names off since the last save (the last one again, and the new ones)
+static void save_kept(ls_node *n) {
+	ls_dev *d = n->dev;
+	for (size_t k = n->n_kept_saved / KEPT; k * KEPT < n->n_kept; k++) {
+		Json *list = jsonArray();
+		for (size_t i = k * KEPT; i < n->n_kept && i < (k + 1) * KEPT; i++) jsonPush(list, jsonBytes(n->kept[i]->name, CM_NAME));
+		size_t len;
+		uint8_t *b = encode(list, &len);
+		jsonFree(list);
+		char name[40 + LS_ID_LEN];
+		kept_name(n, k, name);
+		bool ok = b != NULL && d->o.store.save(d->o.store.context, name, b, len);
+		free(b);
+		if (!ok) return;
+		n->n_kept_saved = (k + 1) * KEPT < n->n_kept ? (k + 1) * KEPT : n->n_kept;
+	}
 }
 
 static void save_node(ls_node *n) {
 	ls_dev *d = n->dev;
 	n->dirty = false;
 	n->saved = d->now;
+	if (KEEPS(d)) save_kept(n);
 	size_t len;
 	uint8_t *b = node_blob(n, &len);
 	char name[16 + LS_ID_LEN];
 	blob_name(n, name);
 	if (b != NULL) d->o.store.save(d->o.store.context, name, b, len);
 	free(b);
+}
+
+// keep: the commits off, from their blobs: each seal read for its lamport and parents, then let go of
+static void load_kept(ls_node *n, size_t count, parents_seen *ps) {
+	ls_dev *d = n->dev;
+	for (size_t k = 0; k * KEPT < count; k++) {
+		char name[40 + LS_ID_LEN];
+		kept_name(n, k, name);
+		uint8_t *b;
+		size_t len;
+		if (!d->o.store.load(d->o.store.context, name, &b, &len)) break;
+		Json *list = cborDecode(b, len, NULL, NULL);
+		free(b);
+		for (int i = 0; list != NULL && list->type == JSON_ARRAY && i < list->array.count && k * KEPT + (size_t)i < count; i++) {
+			const Json *x = list->array.items[i];
+			char sname[SEAL_NAME];
+			uint8_t *s;
+			size_t slen;
+			opened o;
+			if (!is_name(x) || commit_find(n, x->bytes.data) != NULL) continue;
+			seal_name(n, x->bytes.data, sname);
+			if (!d->o.store.load(d->o.store.context, sname, &s, &slen)) continue;
+			if (open_seal(d, s, slen, n->doc, false, &o) == 2) {
+				commit *c = commit_new(n, o.name, &o.c, memcmp(o.c.signer, d->key, LS_KEY_LEN) == 0);
+				c->length = slen;
+				c->passing = c->went = true;
+				c->since = d->now;
+				commit_add(n, c);
+				kept_add(n, c);
+				parents_add(ps, &o.c);
+				cm_free(&o.c);
+			}
+			free(s);
+		}
+		jsonFree(list);
+	}
+	n->n_kept_saved = n->n_kept;
 }
 
 static void load_node(ls_node *n) {
@@ -911,8 +1109,9 @@ static void load_node(ls_node *n) {
 	if (!d->o.store.load(d->o.store.context, name, &b, &len)) return;
 	Json *m = cborDecode(b, len, NULL, NULL);
 	free(b);
-	const Json *list = m != NULL ? jsonGet(m, "commits") : NULL;
+	const Json *list = m != NULL ? jsonGet(m, "commits") : NULL, *kept = m != NULL ? jsonGet(m, "kept") : NULL;
 	parents_seen ps = {0};
+	if (KEEPS(d) && kept != NULL && kept->type == JSON_NUMBER && kept->number > 0) load_kept(n, (size_t)kept->number, &ps);
 	if (list != NULL && list->type == JSON_ARRAY)
 		for (int i = 0; i < list->array.count; i++) {
 			const Json *s = list->array.items[i];
@@ -920,7 +1119,7 @@ static void load_node(ls_node *n) {
 			// our own store: not checked again
 			if (s->type != JSON_BYTES || open_seal(d, s->bytes.data, s->bytes.length, n->doc, false, &o) != 2) continue;
 			if (!seen(n, o.name) && refusal(&o.c) == NULL) {
-				commit *k = take_commit(n, o.name, s->bytes.data, s->bytes.length, &o.c, memcmp(o.c.signer, d->key, LS_KEY_LEN) == 0, 0);
+				commit *k = take_commit(n, o.name, s->bytes.data, s->bytes.length, &o.c, memcmp(o.c.signer, d->key, LS_KEY_LEN) == 0, -1);
 				// it may have gone to a peer before the restart
 				if (k != NULL) k->went = true;
 				parents_add(&ps, &o.c);
@@ -962,7 +1161,7 @@ ls_node *ls_follow(ls_dev *d, const char *id) {
 	d->nodes = realloc(d->nodes, (d->n_nodes + 1) * sizeof *d->nodes);
 	if (d->nodes == NULL) abort();
 	d->nodes[d->n_nodes++] = n;
-	for (unsigned i = 0; i < LS_LINKS; i++)
+	for (unsigned i = 0; i < d->n_links; i++)
 		if (d->links[i] != NULL && d->links[i]->up) send_heads(n, d->links[i], false);
 	return n;
 }
@@ -1021,8 +1220,12 @@ static void node_free(ls_node *n) {
 	free(n->writes);
 	for (size_t i = 0; i < n->n_commits; i++) commit_free(n->commits[i]);
 	free(n->commits);
+	free(n->index);
+	free(n->kept);
 	for (int i = 0; i < HELDS; i++) op_free(n->helds[i].value);
 	free(n->hold);
+	for (int i = 0; i < ROWS; i++) op_free(n->rows[i].value);
+	free(n->row);
 	free(n);
 }
 
@@ -1285,7 +1488,7 @@ ls_code ls_write(ls_node *n, const ls_patch *patches, size_t count) {
 	// a write is this device's next stored commit: what it held goes
 	drop_hold(n);
 	held_landed(n, d->key, LS_KEY_LEN, c.lamport);
-	commit *kept = take_commit(n, name, sealed, slength, &c, true, 0);
+	commit *kept = take_commit(n, name, sealed, slength, &c, true, -1);
 	cm_free(&c);
 	free(sealed);
 	// the collapsed: their writes, and they, gone (nobody else had them)
@@ -1298,14 +1501,14 @@ ls_code ls_write(ls_node *n, const ls_patch *patches, size_t count) {
 			if (n->writes[w].by == gone_[g]) write_free(&n->writes[w]);
 			else n->writes[keep++] = n->writes[w];
 		n->n_writes = keep;
-		n->commits[at] = n->commits[--n->n_commits];
+		commit_remove(n, at);
 		commit_free(gone_[g]);
 	}
 	if (n_gone) settle(n);
 	free(gone_);
 	n->version++;
 	if (kept != NULL)
-		for (unsigned i = 0; i < LS_LINKS; i++)
+		for (unsigned i = 0; i < d->n_links; i++)
 			if (d->links[i] != NULL && d->links[i]->up) send_commits(n, d->links[i], &kept, 1);
 	return LS_OK;
 }
@@ -1399,7 +1602,7 @@ size_t ls_values(const ls_node *n, const char *const *path, size_t length, ls_it
 // from a link goes on to the others
 static void send_ephemeral(ls_node *n, const struct ls_link *except, const uint8_t *bytes, size_t length) {
 	ls_dev *d = n->dev;
-	for (unsigned i = 0; i < LS_LINKS; i++) {
+	for (unsigned i = 0; i < d->n_links; i++) {
 		struct ls_link *l = d->links[i];
 		if (l == NULL || l == except || !l->up) continue;
 		Json *m = message("ephemeral");
@@ -1457,13 +1660,115 @@ const ls_held *ls_held_at(const ls_node *n, size_t at) {
 	return NULL;
 }
 
+// ---- presence
+
+// who's row: found, or (make) a free one, else the one of another device soonest to lapse. NULL: none
+static ls_row *row_of(ls_node *n, const uint8_t *who, size_t length, bool make) {
+	ls_row *free_ = NULL;
+	for (int i = 0; i < ROWS; i++) {
+		ls_row *r = &n->rows[i];
+		if (r->value != NULL && r->who_length == length && memcmp(r->who, who, length) == 0) return r;
+		if (r->value == NULL && free_ == NULL) free_ = r;
+	}
+	if (!make) return NULL;
+	for (int i = 0; free_ == NULL && i < ROWS; i++)
+		if (!n->rows[i].own) free_ = &n->rows[i];
+	for (int i = 0; i < ROWS; i++)
+		if (!n->rows[i].own && n->rows[i].until < free_->until) free_ = &n->rows[i];
+	op_free(free_->value);
+	memset(free_, 0, sizeof *free_);
+	memcpy(free_->who, who, length);
+	free_->who_length = length;
+	return free_;
+}
+
+static void row_drop(ls_node *n, ls_row *r) {
+	if (r == NULL || r->value == NULL) return;
+	op_free(r->value);
+	memset(r, 0, sizeof *r);
+	n->version++;
+}
+
+// a row (presence.ts's bytes) of who's to every link that is up but `except`; only: that link alone
+static void send_presence(ls_node *n, const struct ls_link *except, struct ls_link *only, const uint8_t *who, size_t who_length,
+	const uint8_t *row, size_t length) {
+	ls_dev *d = n->dev;
+	for (unsigned i = 0; i < d->n_links; i++) {
+		struct ls_link *l = d->links[i];
+		if (l == NULL || l == except || !l->up || (only != NULL && l != only)) continue;
+		Json *m = message("presence");
+		jsonAdd(m, "node", jsonBytes(n->doc, 32));
+		jsonAdd(m, "who", jsonBytes(who, who_length));
+		jsonAdd(m, "row", jsonBytes(row, length));
+		say(d, "tx presence %.8s", short_id(n));
+		send_message(l, m);
+	}
+}
+
+static void send_row(ls_node *n, struct ls_link *only) {
+	ls_dev *d = n->dev;
+	if (only == NULL) n->row_sent = d->now, n->row_dirty = false;
+	ls_row *r = row_of(n, d->key, LS_KEY_LEN, false);
+	if (r != NULL && only == NULL) r->until = d->now + LS_TTL_MS;
+	if (n->row != NULL) send_presence(n, NULL, only, d->key, LS_KEY_LEN, n->row, n->row_length);
+}
+
+ls_code ls_presence(ls_node *n, const op_value *value) {
+	ls_dev *d = n->dev;
+	Json *m = jsonObject();
+	op_value *c = NULL;
+	if (value == NULL) {
+		if (n->row == NULL) return jsonFree(m), LS_OK;
+		jsonAdd(m, "gone", jsonBoolean(true));
+	} else {
+		c = copy(value, 0);
+		Json *v = c != NULL ? pk_to_json(c) : NULL;
+		if (v == NULL) return jsonFree(m), op_free(c), LS_BAD;
+		jsonAdd(m, "ttl", jsonNumber(LS_TTL_MS));
+		jsonAdd(m, "value", v);
+	}
+	size_t length;
+	uint8_t *bytes = encode(m, &length);
+	jsonFree(m);
+	if (bytes == NULL || length > ROW_MAX) return free(bytes), op_free(c), LS_BAD;
+	free(n->row);
+	n->row = bytes, n->row_length = length;
+	if (c == NULL) {
+		// gone, told once: then no row of mine
+		row_drop(n, row_of(n, d->key, LS_KEY_LEN, false));
+		send_row(n, NULL);
+		free(n->row);
+		n->row = NULL;
+		return LS_OK;
+	}
+	ls_row *r = row_of(n, d->key, LS_KEY_LEN, true);
+	op_free(r->value);
+	r->value = c;
+	r->own = 1;
+	r->until = d->now + LS_TTL_MS;
+	n->version++;
+	if (d->now - n->row_sent >= 50) send_row(n, NULL);
+	else n->row_dirty = true;
+	return LS_OK;
+}
+
+size_t ls_rows(const ls_node *n) {
+	size_t k = 0;
+	for (int i = 0; i < ROWS; i++) k += n->rows[i].value != NULL;
+	return k;
+}
+const ls_row *ls_row_at(const ls_node *n, size_t at) {
+	for (int i = 0; i < ROWS; i++)
+		if (n->rows[i].value != NULL && at-- == 0) return &n->rows[i];
+	return NULL;
+}
+
 // ---- the wire in
 
 static const Json *field(const Json *m, const char *key, JsonType type) {
 	const Json *v = jsonGet(m, key);
 	return v != NULL && v->type == type ? v : NULL;
 }
-static bool is_name(const Json *b) { return b != NULL && b->type == JSON_BYTES && b->bytes.length == CM_NAME; }
 
 static void to_peer_up(struct ls_link *l) {
 	l->up = true;
@@ -1472,11 +1777,14 @@ static void to_peer_up(struct ls_link *l) {
 
 // a link slot's marks cleared: no commit has been sent on it or acked by it
 static void forget_slot(ls_dev *d, unsigned slot) {
+	uint8_t keep = (uint8_t)~(1u << (slot & 7));
 	for (size_t i = 0; i < d->n_nodes; i++)
 		for (size_t k = 0; k < d->nodes[i]->n_commits; k++) {
-			d->nodes[i]->commits[k]->acked &= (uint8_t)~(1u << slot);
-			d->nodes[i]->commits[k]->sent[slot] = INT64_MIN / 2;
+			commit *c = d->nodes[i]->commits[k];
+			c->marks[slot >> 3] &= keep;
+			c->marks[d->w + (slot >> 3)] &= keep;
 		}
+	if (d->links[slot] != NULL) d->links[slot]->round = INT64_MIN / 2;
 }
 
 static void on_hello(struct ls_link *l, const Json *m) {
@@ -1494,6 +1802,8 @@ static void on_hello(struct ls_link *l, const Json *m) {
 	forget_slot(d, l->slot);
 	send_hello(l, !is_re);
 	for (size_t i = 0; i < d->n_nodes; i++) send_heads(d->nodes[i], l, false);
+	// someone new: my rows now (presence's announce)
+	for (size_t i = 0; i < d->n_nodes; i++) send_row(d->nodes[i], l);
 }
 
 static bool in_list(const Json *list, const uint8_t name[CM_NAME]) {
@@ -1514,7 +1824,7 @@ static void on_heads(struct ls_link *l, const Json *m) {
 		const Json *h = heads->array.items[i];
 		if (!is_name(h)) continue;
 		commit *c = commit_find(n, h->bytes.data);
-		if (c != NULL) c->acked |= (uint8_t)(1u << l->slot);
+		if (c != NULL) ack(c, l->slot);
 		else if (!seen(n, h->bytes.data)) memcpy(lack[lacking++], h->bytes.data, CM_NAME);
 	}
 	if (lacking) send_names(n, l, "want", (const uint8_t(*)[CM_NAME])lack, lacking);
@@ -1554,7 +1864,6 @@ static void on_commits(struct ls_link *l, const Json *m) {
 	uint8_t(*took)[CM_NAME] = allocate((size_t)sealed->array.count * CM_NAME + CM_NAME);
 	size_t k = 0;
 	bool news = false;
-	uint8_t bit = (uint8_t)(1u << l->slot);
 	parents_seen ps = {0};
 	for (int i = 0; i < sealed->array.count; i++) {
 		const Json *s = sealed->array.items[i];
@@ -1566,7 +1875,7 @@ static void on_commits(struct ls_link *l, const Json *m) {
 		d->stats.commits_in++;
 		if (seen(n, name)) {
 			commit *c = commit_find(n, name);
-			if (c != NULL) c->acked |= bit;
+			if (c != NULL) ack(c, l->slot);
 			memcpy(took[k++], name, CM_NAME);
 			continue;
 		}
@@ -1586,10 +1895,10 @@ static void on_commits(struct ls_link *l, const Json *m) {
 			say(d, "rx refused: %s", why);
 		} else {
 			held_landed(n, o.c.signer, o.c.signer_length, o.c.lamport);
-			commit *c = take_commit(n, name, s->bytes.data, s->bytes.length, &o.c, false, bit);
+			commit *c = take_commit(n, name, s->bytes.data, s->bytes.length, &o.c, false, (int)l->slot);
 			parents_add(&ps, &o.c);
 			d->stats.applied++;
-			if (c != NULL) c->acked |= bit;
+			if (c != NULL) ack(c, l->slot);
 			news = true;
 		}
 		cm_free(&o.c);
@@ -1597,10 +1906,12 @@ static void on_commits(struct ls_link *l, const Json *m) {
 	parents_mark(n, &ps);
 	if (k) send_names(n, l, "ack", (const uint8_t(*)[CM_NAME])took, k);
 	free(took);
-	// a relay: the other peers are told what the node is now, and want what they lack (never this link)
-	if (news)
-		for (unsigned i = 0; i < LS_LINKS; i++)
-			if (d->links[i] != NULL && d->links[i] != l && d->links[i]->up) send_heads(n, d->links[i], false);
+	// a relay: the other peers are told what the node is now (at the next tick), and want what they lack
+	// (never this link)
+	if (news) {
+		n->news_from = n->news && n->news_from != (int)l->slot ? -1 : (int)l->slot;
+		n->news = true;
+	}
 }
 
 static void on_ack(struct ls_link *l, const Json *m) {
@@ -1612,7 +1923,7 @@ static void on_ack(struct ls_link *l, const Json *m) {
 	for (int i = 0; i < names->array.count; i++)
 		if (is_name(names->array.items[i])) {
 			commit *c = commit_find(n, names->array.items[i]->bytes.data);
-			if (c != NULL) c->acked |= (uint8_t)(1u << l->slot);
+			if (c != NULL) ack(c, l->slot);
 		}
 }
 
@@ -1641,6 +1952,38 @@ static void on_ephemeral(struct ls_link *l, const Json *m) {
 	cm_free(&c);
 }
 
+static void on_presence(struct ls_link *l, const Json *m) {
+	ls_dev *d = l->dev;
+	ls_node *n = by_doc(d, jsonGet(m, "node"));
+	const Json *who = field(m, "who", JSON_BYTES), *b = field(m, "row", JSON_BYTES);
+	if (n == NULL || who == NULL || b == NULL || who->bytes.length == 0 || who->bytes.length > LS_KEY_LEN) return;
+	if (who->bytes.length == LS_KEY_LEN && memcmp(who->bytes.data, d->key, LS_KEY_LEN) == 0) return;
+	Json *row = cborDecode(b->bytes.data, b->bytes.length, NULL, NULL);
+	if (row == NULL || row->type != JSON_OBJECT) {
+		jsonFree(row);
+		return;
+	}
+	say(d, "rx presence %.8s", short_id(n));
+	const Json *gone = field(row, "gone", JSON_BOOLEAN), *ttl = field(row, "ttl", JSON_NUMBER);
+	if (gone != NULL && gone->boolean) row_drop(n, row_of(n, who->bytes.data, who->bytes.length, false));
+	else if (jsonGet(row, "patches") == NULL) {
+		const Json *v = jsonGet(row, "value");
+		op_value *value = v != NULL ? pk_of_json(v) : op_null();
+		ls_row *r = value != NULL ? row_of(n, who->bytes.data, who->bytes.length, true) : NULL;
+		if (r != NULL) {
+			op_free(r->value);
+			r->value = value;
+			// the time left, as a peer said it (an hour at most)
+			int32_t t = ttl == NULL || !(ttl->number > 0) ? 0 : ttl->number < 3600000 ? (int32_t)ttl->number : 3600000;
+			r->until = d->now + t;
+			n->version++;
+		} else op_free(value);
+	}
+	jsonFree(row);
+	// on to the other peers, as it came
+	if (others_up(d, l)) send_presence(n, l, NULL, who->bytes.data, who->bytes.length, b->bytes.data, b->bytes.length);
+}
+
 static void on_message(struct ls_link *l, const uint8_t *bytes, size_t length) {
 	Json *m = cborDecode(bytes, length, NULL, NULL);
 	const Json *t = m != NULL && m->type == JSON_OBJECT ? field(m, "t", JSON_STRING) : NULL;
@@ -1663,6 +2006,7 @@ static void on_message(struct ls_link *l, const uint8_t *bytes, size_t length) {
 	else if (strcmp(t->string, "commits") == 0) on_commits(l, m);
 	else if (strcmp(t->string, "ack") == 0) on_ack(l, m);
 	else if (strcmp(t->string, "ephemeral") == 0) on_ephemeral(l, m);
+	else if (strcmp(t->string, "presence") == 0) on_presence(l, m);
 	jsonFree(m);
 }
 
@@ -1703,8 +2047,8 @@ size_t ls_next(struct ls_link *l, const uint8_t **out) {
 
 void ls_tick(ls_dev *d, int64_t now) {
 	d->now = now;
-	bool beat[LS_LINKS] = {false}, any = false;
-	for (unsigned i = 0; i < LS_LINKS; i++) {
+	bool any = false;
+	for (unsigned i = 0; i < d->n_links; i++) {
 		struct ls_link *l = d->links[i];
 		if (l == NULL) continue;
 		if (l->up && now - l->heard > 8000) {
@@ -1714,8 +2058,11 @@ void ls_tick(ls_dev *d, int64_t now) {
 		if (!l->up) {
 			if (now - l->hello_sent >= 2000) send_hello(l, false);
 		} else if (now - l->hello_sent >= 4000) send_hello(l, true);
-		beat[i] = l->up && now - l->heads_sent >= 10000;
-		if (beat[i]) l->heads_sent = now;
+		l->beat = l->up && now - l->heads_sent >= 10000;
+		if (l->beat) l->heads_sent = now;
+		// a round: what the peer lacks is sent again, but what went on the link in the last round
+		l->due = l->up && now - l->round >= 1000;
+		if (l->due) l->round = now;
 		any |= l->up;
 	}
 	for (size_t i = 0; i < d->n_nodes; i++) {
@@ -1728,25 +2075,39 @@ void ls_tick(ls_dev *d, int64_t now) {
 				n->version++;
 			}
 		}
+		for (int k = 0; k < ROWS; k++)
+			if (!n->rows[k].own && now >= n->rows[k].until) row_drop(n, &n->rows[k]);
+		if (n->row != NULL && any && (now - n->row_sent >= LS_RENEW_MS || (n->row_dirty && now - n->row_sent >= 50)))
+			send_row(n, NULL);
+		for (unsigned s = 0; n->news && s < d->n_links; s++)
+			if (d->links[s] != NULL && (int)s != n->news_from && d->links[s]->up) send_heads(n, d->links[s], false);
+		n->news = false;
 		if (n->hold != NULL && any && (now - n->hold_sent >= LS_BEAT_MS || (n->hold_dirty && now - n->hold_sent >= 50)))
 			send_hold(n);
-		for (unsigned s = 0; s < LS_LINKS; s++) {
+		for (unsigned s = 0; s < d->n_links; s++) {
 			struct ls_link *l = d->links[s];
 			if (l == NULL || !l->up) continue;
-			// own commits this peer has not said it has, and passing ones (resent each second)
+			// own commits this peer has not said it has, and passing ones (resent each round)
 			commit **list = NULL;
-			size_t k = 0;
-			for (size_t c = 0; c < n->n_commits; c++) {
+			size_t k = 0, room = 0;
+			for (size_t c = 0; c < n->n_commits && l->due; c++) {
 				commit *x = n->commits[c];
-				if ((x->own || x->passing) && !(x->acked & (1u << s)) && now - x->sent[s] >= 1000) {
-					list = realloc(list, (k + 1) * sizeof *list);
-					if (list == NULL) abort();
+				if (!(x->own || x->passing) || acked(x, s)) continue;
+				if (sent(d, x, s)) mark_sent(d, x, s, false);
+				else {
+					if (k == room) {
+						room = room ? room * 2 : 8;
+						list = realloc(list, room * sizeof *list);
+						if (list == NULL) abort();
+					}
 					list[k++] = x;
 				}
 			}
+			// a round's own sends do not hold back the next round
 			if (k) send_commits(n, l, list, k);
+			for (size_t i = 0; i < k; i++) mark_sent(d, list[i], s, false);
 			free(list);
-			if (beat[s]) send_heads(n, l, false);
+			if (l->beat) send_heads(n, l, false);
 		}
 		pass(n);
 		if (n->dirty && now - n->saved >= (d->o.save_ms ? d->o.save_ms : 2000)) save_node(n);
@@ -1757,14 +2118,14 @@ void ls_tick(ls_dev *d, int64_t now) {
 
 struct ls_link *ls_link(ls_dev *d) {
 	unsigned slot = 0;
-	while (slot < LS_LINKS && d->links[slot] != NULL) slot++;
-	if (slot == LS_LINKS) return NULL;
+	while (slot < d->n_links && d->links[slot] != NULL) slot++;
+	if (slot == d->n_links) return NULL;
 	struct ls_link *l = allocate(sizeof *l);
 	l->dev = d;
 	l->slot = slot;
 	l->hello_sent = INT64_MIN / 2;
-	forget_slot(d, slot);
 	d->links[slot] = l;
+	forget_slot(d, slot);
 	return l;
 }
 
@@ -1778,9 +2139,13 @@ void ls_unlink(struct ls_link *l) {
 // ---- the device
 
 ls_dev *ls_open(const ls_options *o) {
-	if (o->store.load == NULL || o->store.save == NULL || o->random == NULL) return NULL;
+	if (o->store.load == NULL || o->store.save == NULL || o->random == NULL || (o->keep && !LS_SERVER)) return NULL;
 	ls_dev *d = allocate(sizeof *d);
 	d->o = *o;
+	d->n_links = o->links ? o->links : LS_LINKS;
+	d->w = (d->n_links + 7) / 8;
+	d->links = allocate(d->n_links * sizeof *d->links);
+	d->up = allocate(d->w);
 	uint8_t *seed = NULL;
 	size_t length = 0;
 	if (o->store.load(o->store.context, "key", &seed, &length) && length == 32) memcpy(d->seed, seed, 32);
@@ -1788,7 +2153,7 @@ ls_dev *ls_open(const ls_options *o) {
 		o->random(o->random_context, d->seed, 32);
 		if (!o->store.save(o->store.context, "key", d->seed, 32)) {
 			free(seed);
-			free(d);
+			free(d->links), free(d->up), free(d);
 			return NULL;
 		}
 	}
@@ -1810,8 +2175,8 @@ void ls_close(ls_dev *d) {
 		node_free(d->nodes[i]);
 	}
 	free(d->nodes);
-	for (unsigned i = 0; i < LS_LINKS; i++) ls_unlink(d->links[i]);
-	free(d);
+	for (unsigned i = 0; i < d->n_links; i++) ls_unlink(d->links[i]);
+	free(d->links), free(d->up), free(d);
 }
 
 const uint8_t *ls_key(const ls_dev *d) { return d->key; }

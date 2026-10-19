@@ -1,6 +1,7 @@
 // the gateway as a process: WebSocket connections at /littlesync, each one littlesync link (binary
-// messages carry the byte stream), and one together device, a Subduction peer of the upstream
-// server. in memory only. README.md says how to run it.
+// messages carry the byte stream), HTTP sessions at /littlesync/<session> (http.ts), and one
+// together device, a Subduction peer of the upstream server, kept (dialled again when lost). in
+// memory only. README.md says how to run it.
 //   PORT              default 8080
 //   UPSTREAM          default wss://galaxy.observer
 //   UPSTREAM_SERVICE  the server's service name, when it isn't its url's host (a local subduction_cli:
@@ -12,6 +13,8 @@
 import { createSigner } from "../../../typescript/seal.ts"
 import { unhex } from "../../../typescript/hex.ts"
 import { createGateway } from "./gateway.ts"
+import { createSessions } from "./http.ts"
+import { dial } from "./socket.ts"
 
 const env = (k: string) => Deno.env.get(k) || undefined
 const port = Number(env("PORT") ?? 8080)
@@ -22,27 +25,20 @@ const quiet = env("QUIET") === "1"
 
 const signer = await createSigner(seed ? unhex(seed) : undefined)
 const stamp = () => new Date().toISOString().slice(11, 23)
+const log = quiet ? () => {} : (line: string) => console.log(`${stamp()} ${line}`)
+// the upstream's lines are logged even when quiet
 const gateway = createGateway({
 	signer,
-	log: quiet ? () => {} : (line) => console.log(`${stamp()} ${line}`),
+	service: service ?? new URL(upstream).host,
+	log: (line) => line.startsWith("upstream") ? console.log(`${stamp()} ${line}`) : log(line),
 })
+const sessions = createSessions(gateway, { log })
 
-// the server: tried until it answers, a while longer between tries each time
-async function join() {
-	for (let wait = 1000;; wait = Math.min(wait * 2, 30000)) {
-		try {
-			await gateway.connect(upstream, service)
-			console.log(`${stamp()} upstream ${upstream}: connected`)
-			return
-		} catch (e) {
-			console.error(`${stamp()} upstream ${upstream}: ${e}; again in ${wait} ms`)
-			await new Promise((r) => setTimeout(r, wait))
-		}
-	}
-}
-join()
+// the server: dialled until it answers, and again whenever it drops
+gateway.keep(() => dial(upstream))
 
 setInterval(() => gateway.tick(), 50)
+setInterval(() => sessions.tick(), 1000)
 
 Deno.serve(
 	{ port, onListen: ({ port }) => console.log(`${stamp()} listening on ${port}`) },
@@ -67,9 +63,13 @@ Deno.serve(
 			socket.onerror = () => conn?.close()
 			return response
 		}
+		if (url.pathname.startsWith("/littlesync/")) {
+			return sessions.handle(req, url.pathname.slice("/littlesync/".length))
+		}
 		if (url.pathname === "/") {
 			return Response.json({
 				upstream,
+				sessions: sessions.count(),
 				followed: gateway.followed(),
 				stats: gateway.stats,
 				refusals: gateway.refusals.slice(-50),

@@ -42,6 +42,7 @@ cp $d/a2.txt $d/a2-mid.txt
 wait $a $b
 check $d/a2-mid.txt "held by newt" "a sees a pig held by b while b carries it"
 check $d/b2.txt "carrying -" "b let go"
+check $d/a2-mid.txt "^@ newt x=" "a sees b's pointer (its presence row)"
 ! grep -q "held by" $d/a2.txt && echo "  ok   a sees it put down (no longer held)" || { echo "  FAIL a still shows it held"; failed=1; }
 grep "^[ab] [0-9a-f]\{8\} \|^room " $d/a2.txt
 
