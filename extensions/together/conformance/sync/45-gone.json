@@ -1,0 +1,182 @@
+{
+	"title": "a delete beside a set apart: the values list a gone item; read shows the first",
+	"typescript": true,
+	"steps": [
+		{
+			"op": "host",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "host",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "mint",
+			"host": "a",
+			"as": "x",
+			"expect": {
+				"id": "ermine://b40fde52c568d2f3864d68739e98b72b9f144f5566afcbb238fd354ecdc7c755"
+			}
+		},
+		{
+			"op": "follow",
+			"host": "b",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"n": 0
+					}
+				}
+			],
+			"name": "w0",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "disconnect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [
+				{
+					"path": [
+						"n"
+					]
+				}
+			],
+			"name": "wa",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "write",
+			"host": "b",
+			"id": "x",
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 2
+				}
+			],
+			"name": "wb",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"value": {
+					"n": 2
+				}
+			}
+		},
+		{
+			"op": "read",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"value": {
+					"n": 2
+				}
+			}
+		},
+		{
+			"op": "values",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"values": {
+					"value": [
+						{
+							"path": [
+								"n"
+							],
+							"items": [
+								{
+									"value": 2,
+									"from": {
+										"head": "wb",
+										"lamport": 2,
+										"actor": "b",
+										"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+										"time": 1760000000,
+										"external": [
+											{
+												"file": "scenario",
+												"line": 1
+											}
+										]
+									}
+								},
+								{
+									"gone": true,
+									"from": {
+										"head": "wa",
+										"lamport": 2,
+										"actor": "a",
+										"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+										"time": 1760000000,
+										"external": [
+											{
+												"file": "scenario",
+												"line": 1
+											}
+										]
+									}
+								}
+							]
+						}
+					]
+				}
+			}
+		}
+	]
+}

@@ -1,0 +1,330 @@
+{
+	"title": "a patch's replaces rides in the patches column, whole: an insert that replaces something (or names none, an empty list) is never the string shorthand, and the next insert still goes on from it; no bytes column, each commit's exact bytes back",
+	"steps": [
+		{
+			"op": "make",
+			"name": "a",
+			"nonce": 1,
+			"patches": [
+				{
+					"path": [
+						"body"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "hi"
+				}
+			]
+		},
+		{
+			"op": "make",
+			"name": "b",
+			"nonce": 2,
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"body"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "!",
+					"replaces": [
+						{
+							"/": {
+								"bytes": "HiBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ"
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"op": "make",
+			"name": "c",
+			"nonce": 3,
+			"parents": [
+				"b"
+			],
+			"patches": [
+				{
+					"path": [
+						"body"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "?",
+					"replaces": []
+				}
+			]
+		},
+		{
+			"op": "make",
+			"name": "d",
+			"nonce": 4,
+			"parents": [
+				"c"
+			],
+			"patches": [
+				{
+					"path": [
+						"body"
+					],
+					"range": [
+						4,
+						4
+					],
+					"value": "."
+				}
+			]
+		},
+		{
+			"op": "make",
+			"name": "e",
+			"nonce": 5,
+			"parents": [
+				"d"
+			],
+			"patches": [
+				{
+					"path": [
+						"title"
+					],
+					"value": "hi",
+					"replaces": [
+						{
+							"/": {
+								"bytes": "HiBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ"
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"op": "pack",
+			"commits": [
+				"a",
+				"b",
+				"c",
+				"d",
+				"e"
+			],
+			"name": "p",
+			"expect": {
+				"pack": "b0616e05636964738458200d603201553f51258aa4f0e64ba5cc24f071970e0af0e1f9b1362335ec262b425820625dd2eea95b103f0e185745782101d1577d2fad34f83048b08bd71990ca38fa5820d674233d449095f4270c55cda2d38d7f1b10b830e658007fe43dd7c3bf615e36582039e4c6f7a6cbd34f9850072b6410c684420228b335e23776f28b1dca705e920a64626173658182f6056474696d65450000000000656163746f728182f605656e6f6e6365450202020202657461626c6581826576616c756505667265616465728182f605667369676e657281825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0567686561646572738282f60482483401ed01ed01135f01676c616d706f727445020202020267706172656e74738580f6f6f6f667706174636865738581a364706174688164626f64796572616e67658200006576616c756562686981a464706174688164626f64796572616e67658202026576616c75656121687265706c616365738158221e20555555555555555555555555555555555555555555555555555555555555555581a464706174688164626f64796572616e67658203036576616c7565613f687265706c6163657380612e81a3647061746881657469746c656576616c7565626869687265706c616365738158221e2055555555555555555555555555555555555555555555555555555555555555556865787465726e616c8182f605686d657461646174618182f6056a7369676e617475726573815840db506e903718fae38a98be397d23e197508c2a5828cbc68d514d3b6a72b11ca7cc8b23b73eb74db00d31bce3fe503878f3e8a6ab5adb008814ed65c212991305"
+			}
+		},
+		{
+			"op": "columns",
+			"pack": "p",
+			"expect": {
+				"columns": {
+					"n": 5,
+					"ids": [
+						{
+							"/": {
+								"bytes": "DWAyAVU/USWKpPDmS6XMJPBxlw4K8OH5sTYjNewmK0I"
+							}
+						},
+						{
+							"/": {
+								"bytes": "Yl3S7qlbED8OGFdFeCEB0Vd9L600+DBIsIvXGZDKOPo"
+							}
+						},
+						{
+							"/": {
+								"bytes": "1nQjPUSQlfQnDFXNotONfxsQuDDmWAB/5D3Xw79hXjY"
+							}
+						},
+						{
+							"/": {
+								"bytes": "OeTG96bL00+YUAcrZBDGhEICKLM14jd28osdynBekgo"
+							}
+						}
+					],
+					"base": [
+						[
+							null,
+							5
+						]
+					],
+					"time": {
+						"/": {
+							"bytes": "AAAAAAA"
+						}
+					},
+					"actor": [
+						[
+							null,
+							5
+						]
+					],
+					"nonce": {
+						"/": {
+							"bytes": "AgICAgI"
+						}
+					},
+					"table": [
+						[
+							"value",
+							5
+						]
+					],
+					"reader": [
+						[
+							null,
+							5
+						]
+					],
+					"signer": [
+						[
+							{
+								"/": {
+									"bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA"
+								}
+							},
+							5
+						]
+					],
+					"headers": [
+						[
+							null,
+							4
+						],
+						[
+							{
+								"/": {
+									"bytes": "NAHtAe0BE18"
+								}
+							},
+							1
+						]
+					],
+					"lamport": {
+						"/": {
+							"bytes": "AgICAgI"
+						}
+					},
+					"parents": [
+						[],
+						null,
+						null,
+						null,
+						null
+					],
+					"patches": [
+						[
+							{
+								"path": [
+									"body"
+								],
+								"range": [
+									0,
+									0
+								],
+								"value": "hi"
+							}
+						],
+						[
+							{
+								"path": [
+									"body"
+								],
+								"range": [
+									2,
+									2
+								],
+								"value": "!",
+								"replaces": [
+									{
+										"/": {
+											"bytes": "HiBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ"
+										}
+									}
+								]
+							}
+						],
+						[
+							{
+								"path": [
+									"body"
+								],
+								"range": [
+									3,
+									3
+								],
+								"value": "?",
+								"replaces": []
+							}
+						],
+						".",
+						[
+							{
+								"path": [
+									"title"
+								],
+								"value": "hi",
+								"replaces": [
+									{
+										"/": {
+											"bytes": "HiBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ"
+										}
+									}
+								]
+							}
+						]
+					],
+					"external": [
+						[
+							null,
+							5
+						]
+					],
+					"metadata": [
+						[
+							null,
+							5
+						]
+					],
+					"signatures": [
+						{
+							"/": {
+								"bytes": "21BukDcY+uOKmL45fSPhl1CMKlgoy8aNUU07anKxHKfMiyO3PrdNsA0xvOP+UDh48+imq1rbAIgU7WXCEpkTBQ"
+							}
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "unpack",
+			"pack": "p",
+			"expect": {
+				"sealed": [
+					{
+						"vouched": "a"
+					},
+					{
+						"vouched": "b"
+					},
+					{
+						"vouched": "c"
+					},
+					{
+						"vouched": "d"
+					},
+					"e"
+				]
+			}
+		}
+	]
+}

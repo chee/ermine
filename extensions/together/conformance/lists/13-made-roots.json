@@ -1,0 +1,90 @@
+{
+	"title": "two roots apart, each a key under a map no one wrote (no table yet): both taken, the map made holding both; it has no item of its own",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"patches": [
+				{
+					"path": [
+						"settings",
+						"theme"
+					],
+					"value": "dark"
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"nonce": 1,
+			"patches": [
+				{
+					"path": [
+						"settings",
+						"font"
+					],
+					"value": "mono"
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "heads",
+			"expect": {
+				"heads": [
+					"b",
+					"a"
+				]
+			}
+		},
+		{
+			"op": "open",
+			"expect": {
+				"open": []
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"tables": {
+					"value": {
+						"settings": {
+							"theme": "dark",
+							"font": "mono"
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "items",
+			"path": [
+				"settings"
+			],
+			"expect": {
+				"items": []
+			}
+		},
+		{
+			"op": "items",
+			"path": [
+				"settings",
+				"font"
+			],
+			"expect": {
+				"items": [
+					{
+						"commit": "b",
+						"value": "mono"
+					}
+				]
+			}
+		}
+	]
+}

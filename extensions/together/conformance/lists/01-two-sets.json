@@ -1,0 +1,108 @@
+{
+	"title": "two writes apart at one path: two items, the first shown; neither replaces the other",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"n": 0
+					}
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "c",
+			"parents": [
+				"a"
+			],
+			"nonce": 1,
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "items",
+			"path": [
+				"n"
+			],
+			"expect": {
+				"items": [
+					{
+						"commit": "b",
+						"value": 1
+					},
+					{
+						"commit": "c",
+						"value": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "open",
+			"expect": {
+				"open": [
+					{
+						"path": [
+							"value",
+							"n"
+						],
+						"items": [
+							{
+								"commit": "b",
+								"value": 1
+							},
+							{
+								"commit": "c",
+								"value": 2
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"tables": {
+					"value": {
+						"n": 1
+					}
+				}
+			}
+		}
+	]
+}

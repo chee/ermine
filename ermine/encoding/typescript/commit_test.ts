@@ -114,8 +114,10 @@ Deno.test("commit: refused, naming the first field that says no", () => {
 	no(commit({ signer: Uint8Array.of(0x80, 0x00, 0x01) }), "signer")
 	no(commit({ signer: new Uint8Array(1025).fill(1) }), "signer")
 	no(commit({ parents: [nm(3), nm(2)] }), "parents")
-	// several parents need a base, one of them
-	no(commit({ parents: [nm(2), nm(3)] }), "base")
+	// several parents need a base, one of them, unless every patch is a key patch
+	const ranged = [{ path: ["notes"], range: [0, 0] as const, value: "x" }]
+	no(commit({ parents: [nm(2), nm(3)], patches: ranged }), "base")
+	encode(commit({ parents: [nm(2), nm(3)] }))
 	no(commit({ parents: [nm(2), nm(3)], base: nm(4) }), "base")
 	// one parent: no base
 	no(commit({ base: nm(2) }), "base")

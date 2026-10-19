@@ -1,0 +1,582 @@
+{
+	"title": "after a clash, a write replaces only what showed: one head, the other item stands, the clash stays; a write replacing all ends it everywhere; replaces naming items ends those",
+	"typescript": true,
+	"steps": [
+		{
+			"op": "host",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "host",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "mint",
+			"host": "a",
+			"as": "x",
+			"expect": {
+				"id": "ermine://b40fde52c568d2f3864d68739e98b72b9f144f5566afcbb238fd354ecdc7c755"
+			}
+		},
+		{
+			"op": "follow",
+			"host": "b",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"n": 0,
+						"m": 0
+					}
+				}
+			],
+			"name": "w0",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "disconnect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 1
+				},
+				{
+					"path": [
+						"m"
+					],
+					"value": 1
+				}
+			],
+			"name": "wa",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "write",
+			"host": "b",
+			"id": "x",
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"m"
+					],
+					"value": 2
+				}
+			],
+			"name": "wb",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "values",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"values": {
+					"value": [
+						{
+							"path": [
+								"n"
+							],
+							"items": [
+								{
+									"value": 2,
+									"from": {
+										"head": "wb",
+										"lamport": 2,
+										"actor": "b",
+										"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+										"time": 1760000000,
+										"external": [
+											{
+												"file": "scenario",
+												"line": 1
+											}
+										]
+									}
+								},
+								{
+									"value": 1,
+									"from": {
+										"head": "wa",
+										"lamport": 2,
+										"actor": "a",
+										"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+										"time": 1760000000,
+										"external": [
+											{
+												"file": "scenario",
+												"line": 1
+											}
+										]
+									}
+								}
+							]
+						},
+						{
+							"path": [
+								"m"
+							],
+							"items": [
+								{
+									"value": 2,
+									"from": {
+										"head": "wb",
+										"lamport": 2,
+										"actor": "b",
+										"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+										"time": 1760000000,
+										"external": [
+											{
+												"file": "scenario",
+												"line": 1
+											}
+										]
+									}
+								},
+								{
+									"value": 1,
+									"from": {
+										"head": "wa",
+										"lamport": 2,
+										"actor": "a",
+										"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+										"time": 1760000000,
+										"external": [
+											{
+												"file": "scenario",
+												"line": 1
+											}
+										]
+									}
+								}
+							]
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 3
+				}
+			],
+			"name": "e1",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "heads",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"heads": [
+					"e1"
+				]
+			}
+		},
+		{
+			"op": "read",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"value": {
+					"m": 2,
+					"n": 3
+				}
+			}
+		},
+		{
+			"op": "values",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"values": {
+					"value": [
+						{
+							"path": [
+								"n"
+							],
+							"items": [
+								{
+									"value": 3,
+									"from": {
+										"head": "e1",
+										"lamport": 3,
+										"actor": "a",
+										"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+										"time": 1760000000,
+										"external": [
+											{
+												"file": "scenario",
+												"line": 1
+											}
+										]
+									}
+								},
+								{
+									"value": 1,
+									"from": {
+										"head": "wa",
+										"lamport": 2,
+										"actor": "a",
+										"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+										"time": 1760000000,
+										"external": [
+											{
+												"file": "scenario",
+												"line": 1
+											}
+										]
+									}
+								}
+							]
+						},
+						{
+							"path": [
+								"m"
+							],
+							"items": [
+								{
+									"value": 2,
+									"from": {
+										"head": "wb",
+										"lamport": 2,
+										"actor": "b",
+										"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+										"time": 1760000000,
+										"external": [
+											{
+												"file": "scenario",
+												"line": 1
+											}
+										]
+									}
+								},
+								{
+									"value": 1,
+									"from": {
+										"head": "wa",
+										"lamport": 2,
+										"actor": "a",
+										"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+										"time": 1760000000,
+										"external": [
+											{
+												"file": "scenario",
+												"line": 1
+											}
+										]
+									}
+								}
+							]
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "commit",
+			"host": "b",
+			"id": "x",
+			"commit": "e1",
+			"expect": {
+				"commit": {
+					"table": "value",
+					"actor": "a",
+					"external": [
+						{
+							"file": "scenario",
+							"line": 1
+						}
+					],
+					"time": 1760000000,
+					"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"nonce": 3338457403,
+					"parents": [
+						"wa",
+						"wb"
+					],
+					"lamport": 3,
+					"patches": [
+						{
+							"path": [
+								"n"
+							],
+							"value": 3,
+							"replaces": [
+								"wb"
+							]
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "write",
+			"host": "b",
+			"id": "x",
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 4
+				}
+			],
+			"name": "e2",
+			"replaces": "all",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"value": {
+					"m": 2,
+					"n": 4
+				}
+			}
+		},
+		{
+			"op": "values",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"values": {
+					"value": [
+						{
+							"path": [
+								"m"
+							],
+							"items": [
+								{
+									"value": 2,
+									"from": {
+										"head": "wb",
+										"lamport": 2,
+										"actor": "b",
+										"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+										"time": 1760000000,
+										"external": [
+											{
+												"file": "scenario",
+												"line": 1
+											}
+										]
+									}
+								},
+								{
+									"value": 1,
+									"from": {
+										"head": "wa",
+										"lamport": 2,
+										"actor": "a",
+										"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+										"time": 1760000000,
+										"external": [
+											{
+												"file": "scenario",
+												"line": 1
+											}
+										]
+									}
+								}
+							]
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "commit",
+			"host": "a",
+			"id": "x",
+			"commit": "e2",
+			"expect": {
+				"commit": {
+					"table": "value",
+					"actor": "b",
+					"external": [
+						{
+							"file": "scenario",
+							"line": 1
+						}
+					],
+					"time": 1760000000,
+					"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+					"nonce": 4207839827,
+					"parents": [
+						"e1"
+					],
+					"lamport": 4,
+					"patches": [
+						{
+							"path": [
+								"n"
+							],
+							"value": 4
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [
+				{
+					"path": [
+						"m"
+					],
+					"value": 5
+				}
+			],
+			"name": "e3",
+			"replaces": [
+				"wa",
+				"wb"
+			],
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"value": {
+					"m": 5,
+					"n": 4
+				}
+			}
+		},
+		{
+			"op": "values",
+			"host": "b",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "conflicts",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"conflicts": []
+			}
+		},
+		{
+			"op": "commit",
+			"host": "b",
+			"id": "x",
+			"commit": "e3",
+			"expect": {
+				"commit": {
+					"table": "value",
+					"actor": "a",
+					"external": [
+						{
+							"file": "scenario",
+							"line": 1
+						}
+					],
+					"time": 1760000000,
+					"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"nonce": 3338457404,
+					"parents": [
+						"e2"
+					],
+					"lamport": 5,
+					"patches": [
+						{
+							"path": [
+								"m"
+							],
+							"value": 5
+						}
+					]
+				}
+			}
+		}
+	]
+}

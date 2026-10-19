@@ -1,8 +1,8 @@
 // history_harness: history.ts, replay.ts and snapshot.ts on the line protocol (harness.ts), for
 // the history, replay and snapshot suites. one history per process; commits by label (conventions:
-// extensions/together/conformance/README.md). the check: patches apply at the base (replay), a merge
-// to its rule's merge; rules known: run's (rules_harness.ts's alone), others refused "merge". a held
-// commit waits []. a rule that keeps (keeping) merges twice: from scratch, and by one kept for the
+// extensions/together/conformance/README.md). the check: key patches alone pass (lists.ts); else
+// patches apply at the base (replay), a merge to its rule's merge; rules known: run's
+// (rules_harness.ts's alone), others refused "merge". a held commit waits []. a rule that keeps (keeping) merges twice: from scratch, and by one kept for the
 // process, which must give the same, byte for byte
 //
 // { op: "make", name, ...fields }   → {}            made and labelled, not added
@@ -25,18 +25,23 @@
 // { op: "hint", commit, tables }    → { kept }      kept only when a replay to it matches
 // { op: "snapshot", tables }        → { snapshot }  packed, hex
 // { op: "tables", snapshot } | { op: "tables", value } → { tables }  value canonically encoded
+// lists (lists.ts, of every commit taken; the lists suite):
+// { op: "items", table?, path? }    → { items }     [{ commit, value? | gone?, inside?, at? }] at
+//                                                   [table, ...path]; table default "value"
+// { op: "open" }                    → { open }      [{ path, items }], path [table, ...keys]
+// { op: "value" }                   → { tables }    the first items composed, { [table]: value }
 // commit in an answer: its label, else hex name. tables: { [table]: { value, change } }, JSON form.
 // refused: { error: code } (PackError, CommitError)
-import apply from "@ermine/op/apply"
 import * as cbor from "@ermine/encoding/cbor"
 import { CommitError } from "@ermine/encoding/commit"
 import { PackError } from "@ermine/encoding/pack"
-import { revive } from "../../../conformance/typescript/form.ts"
+import { revive, toJson } from "../../../conformance/typescript/form.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { hex, refusal, unhex } from "../../../ermine/encoding/typescript/commit_harness.ts"
 import { createCommits, tablesJson } from "./harnesses.ts"
 import { type Added, createHistory, since } from "./history.ts"
-import { matches, type Merge, type Merges, plain, replay, type Tables } from "./replay.ts"
+import { applies, createLists, type Item } from "./lists.ts"
+import { matches, type Merge, type Merges, plain, replay, type Tables, written } from "./replay.ts"
 import { rules } from "./rules_harness.ts"
 import { snapshot, tablesOf } from "./snapshot.ts"
 
@@ -79,8 +84,15 @@ const history = createHistory((k, commit) => {
 		: k.base === undefined
 		? {}
 		: replay(history, k.base, snapshots, merges) ?? {}
+	// key patches alone: never refused by what is there
+	if (
+		commit.patches.every((p) =>
+			p.range === undefined && p.move === undefined &&
+			p.path.every((k) => typeof k === "string")
+		)
+	) return true
 	try {
-		apply(tables[commit.table]?.value, commit.patches, { cow: false })
+		applies(tables[commit.table]?.value, commit.patches)
 		return true
 	} catch {
 		return false
@@ -88,6 +100,19 @@ const history = createHistory((k, commit) => {
 })
 
 const tablesFrom = (x: unknown) => revive(x) as Tables
+
+// the lists of every commit taken, now
+function listsNow() {
+	const lists = createLists(history, (k) => written(history, k.name, snapshots, merges) ?? {})
+	for (const k of history.all()) lists.add(k)
+	return lists
+}
+const itemJson = (i: Item) => ({
+	commit: commits.label(i.write.kept.name),
+	...i.gone ? { gone: true } : { value: toJson(i.value) },
+	...i.inside && { inside: true },
+	...i.at && { at: i.at },
+})
 
 const added = (a: Added): unknown =>
 	typeof a === "object" && "waiting" in a ? { waiting: a.waiting.map(commits.label) } : a
@@ -166,6 +191,20 @@ async function answer(r: Request): Promise<Answer> {
 			}
 			case "snapshot":
 				return { snapshot: hex(snapshot(tablesFrom(r.tables))) }
+			case "items":
+				return {
+					items: listsNow().items([r.table ?? "value", ...r.path ?? []]).map(itemJson),
+				}
+			case "open":
+				return {
+					open: listsNow().open().map((o) => ({ path: o.path, items: o.items.map(itemJson) })),
+				}
+			case "value":
+				return {
+					tables: Object.fromEntries(
+						Object.entries(listsNow().compose()).map(([t, e]) => [t, toJson(e.value)]),
+					),
+				}
 			case "tables": {
 				const bytes = r.value !== undefined
 					? cbor.encode(revive(r.value) as cbor.Value)
