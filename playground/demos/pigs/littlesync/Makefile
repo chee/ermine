@@ -11,8 +11,8 @@ CFLAGS = -std=c11 -O2 -g -Wall -Wextra -Wpedantic -Wno-unused-parameter
 B3 = -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512 -DBLAKE3_USE_NEON=0
 BUILD = build
 
-# littlesync, with a file store, and what it stands on (its Makefile has the same lists)
-littlesync = $(L)/littlesync.c $(L)/frame.c $(L)/store_file.c
+# littlesync, with a file store and HTTP over sockets, and what it stands on (its Makefile has the same lists)
+littlesync = $(L)/littlesync.c $(L)/frame.c $(L)/store_file.c $(L)/http.c $(L)/http_posix.c
 under = $(R)/core/op/c/value.c $(R)/ermine/encoding/c/json.c $(R)/ermine/encoding/c/cbor.c $(R)/ermine/encoding/c/pack.c \
 	$(R)/ermine/encoding/c/commit.c $(R)/ermine/encoding/c/blake3/blake3.c $(R)/ermine/encoding/c/blake3/blake3_dispatch.c \
 	$(R)/ermine/encoding/c/blake3/blake3_portable.c $(R)/extensions/together/c/ed25519/ed25519.c $(R)/extensions/together/c/ed25519/sha2.c \
@@ -24,9 +24,9 @@ all: $(BUILD)/littlesync-pigs
 $(BUILD):
 	$(Q)mkdir -p $(BUILD)
 
-$(BUILD)/littlesync-pigs: $(ours) pigs.h $(littlesync) $(under) $(L)/littlesync.h $(L)/frame.h | $(BUILD)
+$(BUILD)/littlesync-pigs: $(ours) pigs.h $(littlesync) $(under) $(L)/littlesync.h $(L)/frame.h $(L)/http.h | $(BUILD)
 	$(Q)echo cc $@
-	$(Q)$(CC) $(CFLAGS) $(B3) -o $@ $(ours) $(littlesync) $(under) -lm
+	$(Q)$(CC) $(CFLAGS) $(B3) -o $@ $(ours) $(littlesync) $(under) -lm -lpthread
 
 clean:
 	$(Q)rm -rf $(BUILD)

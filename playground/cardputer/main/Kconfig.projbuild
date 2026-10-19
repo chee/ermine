@@ -1,0 +1,24 @@
+# littlesync over WiFi (net.c): set with ./idf.sh menuconfig, "Cardputer: littlesync over WiFi". Kept in
+# sdkconfig, which git ignores: never in sdkconfig.defaults. Empty network: no WiFi, the USB line only
+menu "Cardputer: littlesync over WiFi"
+
+config CARDPUTER_WIFI_SSID
+	string "WiFi network (SSID)"
+	default ""
+	help
+		The network to join. Empty: no WiFi (littlesync on the USB line only).
+
+config CARDPUTER_WIFI_PASSWORD
+	string "WiFi password"
+	default ""
+	help
+		Empty: an open network.
+
+config CARDPUTER_GATEWAY
+	string "littlesync gateway (http://host:port)"
+	default ""
+	help
+		The gateway (extensions/together/stacks/littlesync/gateway) its HTTP sessions are at, as
+		http://host:port. Plain http only for now (https later). Empty: no WiFi.
+
+endmenu
