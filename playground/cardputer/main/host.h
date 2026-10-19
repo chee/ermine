@@ -6,7 +6,26 @@
 
 #include "ermine/api/c/api.h"
 
+#include "ermine/processes/c/scopes.h"
+#include "ermine/sites/c/sites.h"
+
+#define HOST_ROOT "root"
+
 typedef int (*host_program)(api *a);
+
+// the world, for what runs beside the processes (the den)
+typedef struct {
+	sc_scheduler *s;
+	tb_table *table;
+	pl *places;
+	sn *scopes;
+	st_sites *sites;
+	sc_scope *host;
+	void (*schedule)(void *ctx, void (*f)(void *), void *data);
+} host_world;
+host_world host_get(void);
+// a pulse, at the next host_settle (one however many ask)
+void host_pulse_soon(void);
 
 void host_init(void);
 // a process named name running program; its api, the host's (never freed: processes don't stop)
