@@ -135,7 +135,33 @@ const cs_made *cs_make(cs_commits *c, const op_value *r, cs_failure *why) {
 	for (size_t i = 0; i < np; i++) jsonPush(ps, jsonBytes(sorted[i], CM_NAME));
 	jsonAdd(j, "parents", ps);
 	jsonAdd(j, "lamport", (v = given(r, "lamport")) ? pk_to_json(v) : jsonNumber((double)(1 + top)));
-	jsonAdd(j, "patches", (v = given(r, "patches")) ? pk_to_json(v) : jsonArray());
+	// replaces: labels or names (68 hex digits), sorted
+	Json *patches = (v = given(r, "patches")) ? pk_to_json(v) : jsonArray();
+	for (int i = 0; v != NULL && v->type == OP_LIST && i < patches->array.count && (size_t)i < v->count; i++) {
+		const op_value *p = v->items[i], *rs = p->type == OP_MAP ? op_get(p, "replaces") : NULL;
+		if (rs == NULL || rs->type != OP_LIST) continue;
+		uint8_t(*names)[CM_NAME] = hh_take((rs->count + 1) * CM_NAME);
+		const uint8_t **order = hh_take((rs->count + 1) * sizeof *order);
+		Json *list = jsonArray();
+		bool bytes = true;
+		for (size_t k = 0; k < rs->count; k++) {
+			const op_value *x = rs->items[k];
+			if (x->type != OP_STR) {
+				bytes = false;
+				break;
+			}
+			if (!cs_resolve(c, x, names[k], error)) return jsonFree(list), jsonFree(patches), jsonFree(j), NULL;
+			order[k] = names[k];
+		}
+		if (!bytes) {
+			jsonFree(list);
+			continue;
+		}
+		qsort(order, rs->count, sizeof *order, by_name);
+		for (size_t k = 0; k < rs->count; k++) jsonPush(list, jsonBytes(order[k], CM_NAME));
+		jsonSet(patches->array.items[i], "replaces", 8, list);
+	}
+	jsonAdd(j, "patches", patches);
 	static const char *const optional[] = {"reader", "external", "metadata"};
 	for (size_t i = 0; i < 3; i++)
 		if ((v = op_get(r, optional[i])) != NULL) jsonAdd(j, optional[i], pk_to_json(v));

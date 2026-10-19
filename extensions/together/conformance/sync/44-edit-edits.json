@@ -1,6 +1,5 @@
 {
 	"title": "after a clash, a write replaces only what showed: one head, the other item stands, the clash stays; a write replacing all ends it everywhere; replaces naming items ends those",
-	"typescript": true,
 	"steps": [
 		{
 			"op": "host",

@@ -7,6 +7,7 @@
 #include "../../../../../ermine/encoding/c/cbor.h"
 #include "../../../../../ermine/encoding/c/commit.h"
 #include "../../../../../ermine/encoding/c/json.h"
+#include "../../../../../ermine/encoding/c/pack.h"
 #include "../../../../../core/op/c/json.h"
 #include "../../../../../extensions/together/c/seal.h"
 
@@ -87,11 +88,43 @@ static struct {
 	size_t n_parents;
 } wire_seen[SEEN_MAX];
 static size_t n_wire_seen;
+static int merges_seen; // commits on the wire naming a merge rule
+static int memcmp_names(const void *a, const void *b) { return memcmp(a, b, CM_NAME); }
+
+// every commit seen on the wire since the last wire_bytes_clear: its bytes, once (for test/lists.ts)
+#define BYTES_MAX 4096
+static struct {
+	uint8_t name[CM_NAME];
+	uint8_t *bytes;
+	size_t length;
+} wire_bytes[BYTES_MAX];
+static size_t n_wire_bytes;
+static int capturing; // only while a test asks (wire_bytes_clear)
+static void wire_bytes_clear(void) {
+	for (size_t i = 0; i < n_wire_bytes; i++) free(wire_bytes[i].bytes);
+	n_wire_bytes = 0;
+	capturing = 1;
+}
+static void keep_bytes(const uint8_t *b, size_t n) {
+	if (!capturing) return;
+	uint8_t name[CM_NAME];
+	cm_name(b, n, name);
+	for (size_t i = 0; i < n_wire_bytes; i++)
+		if (memcmp(wire_bytes[i].name, name, CM_NAME) == 0) return;
+	if (n_wire_bytes == BYTES_MAX) return;
+	memcpy(wire_bytes[n_wire_bytes].name, name, CM_NAME);
+	wire_bytes[n_wire_bytes].bytes = malloc(n);
+	memcpy(wire_bytes[n_wire_bytes].bytes, b, n);
+	wire_bytes[n_wire_bytes++].length = n;
+}
+
 static void remember(const uint8_t *sealed, size_t length) {
 	Json *x = cborDecode(sealed, length, NULL, NULL);
 	const Json *c = x ? jsonGet(x, "commit") : NULL;
 	cm_commit cm;
 	if (c != NULL && c->type == JSON_BYTES && cm_decode(c->bytes.data, c->bytes.length, &cm, NULL) == CM_OK) {
+		keep_bytes(c->bytes.data, c->bytes.length);
+		if (cm.merge != NULL || cm.has_base) merges_seen++;
 		uint8_t name[CM_NAME];
 		cm_name(c->bytes.data, c->bytes.length, name);
 		bool known = false;
@@ -265,6 +298,60 @@ static bool same(const ls_node *a, const ls_node *b) {
 
 static op_value *yes(void) { return op_bool(1); }
 
+// ---- the lists, for test/lists.ts: the commits seen on the wire, and what each device holds at each
+// path asked, one JSON line per case into build/lists.jsonl. exact: the TS lists must be the same; else
+// a device may show more (a cover through commits it never held), never less
+
+static FILE *lists_out;
+static void hex_out(FILE *f, const uint8_t *b, size_t n) {
+	fputc('"', f);
+	for (size_t i = 0; i < n; i++) fprintf(f, "%02x", b[i]);
+	fputc('"', f);
+}
+typedef struct {
+	size_t n;
+	const char *k[2];
+} keys;
+static void dump_lists(const char *label, int exact, ls_node *const *nodes, size_t count, const keys *paths, size_t n_paths) {
+	if (lists_out == NULL) lists_out = fopen("build/lists.jsonl", "w");
+	FILE *f = lists_out;
+	fprintf(f, "{\"label\":\"%s\",\"exact\":%s,\"commits\":[", label, exact ? "true" : "false");
+	for (size_t i = 0; i < n_wire_bytes; i++) {
+		if (i) fputc(',', f);
+		hex_out(f, wire_bytes[i].bytes, wire_bytes[i].length);
+	}
+	fprintf(f, "],\"devices\":[");
+	for (size_t d = 0; d < count; d++) {
+		fprintf(f, "%s[", d ? "," : "");
+		for (size_t p = 0; p < n_paths; p++) {
+			ls_item items[16];
+			size_t k = ls_values(nodes[d], paths[p].k, paths[p].n, items, 16);
+			fprintf(f, "%s{\"path\":[", p ? "," : "");
+			for (size_t x = 0; x < paths[p].n; x++) fprintf(f, "%s\"%s\"", x ? "," : "", paths[p].k[x]);
+			fprintf(f, "],\"items\":[");
+			for (size_t i = 0; i < k && i < 16; i++) {
+				fprintf(f, "%s{\"name\":", i ? "," : "");
+				hex_out(f, items[i].name, CM_NAME);
+				fprintf(f, ",\"gone\":%s,\"far\":%s,\"inside\":%s,\"at\":%zu", items[i].gone ? "true" : "false",
+					items[i].far ? "true" : "false", items[i].inside ? "true" : "false", items[i].at);
+				if (items[i].value != NULL) {
+					char *t = op_json_text(items[i].value);
+					fprintf(f, ",\"value\":%s", t);
+					(free)(t);
+				}
+				fputc('}', f);
+			}
+			fprintf(f, "]}");
+		}
+		fputc(']', f);
+	}
+	fprintf(f, "]}\n");
+	fflush(f);
+}
+static const keys ROOT[] = {{0, {NULL}}};
+static const keys FUZZ_PATHS[] = {{0, {NULL}}, {1, {"p"}}, {1, {"q"}}, {1, {"r"}}, {2, {"p", "p"}}, {2, {"p", "q"}}, {2, {"p", "r"}},
+	{2, {"q", "p"}}, {2, {"q", "q"}}, {2, {"q", "r"}}, {2, {"r", "p"}}, {2, {"r", "q"}}, {2, {"r", "r"}}};
+
 // ---- tests
 
 static void t_converge(void) {
@@ -291,41 +378,6 @@ static void t_converge(void) {
 	CHECK(tapped > 0 && tap_bad == 0);
 	close_side(&a), close_side(&b);
 	drop_dir(&a), drop_dir(&b);
-}
-
-static void t_concurrent_moves(void) {
-	printf("concurrent moves of one pig: the same winner on both sides\n");
-	for (int round = 0; round < 12; round++) {
-		side a = open_side("ca"), b = open_side("cb");
-		n_wire_seen = 0;
-		ls_node *pa = ls_follow(a.d, P1), *pb = ls_follow(b.d, P1);
-		pump(&a, &b, 100);
-		op_value *v = pig(0.1, 0.1, 1);
-		ls_put(pa, v);
-		op_free(v);
-		pump(&a, &b, 100);
-		// cut: each writes while the other hears nothing
-		v = pig(0.3, 0.3, 2);
-		ls_put(pa, v);
-		op_free(v);
-		v = pig(0.6, 0.6, 3);
-		ls_put(pb, v);
-		op_free(v);
-		CHECK(xof(pa) == 0.3 && xof(pb) == 0.6);
-		// the heard-from is dropped by the cut: nothing carried for a while
-		cut(&a, &b);
-		pump(&a, &b, 2000);
-		CHECK(xof(pa) == xof(pb));
-		CHECK(ls_commits(pa) == 1 && ls_commits(pb) == 1);
-		// after the merge one head: a write names it alone
-		v = pig(0.7, 0.7, 4);
-		ls_put(pb, v);
-		op_free(v);
-		pump(&a, &b, 100);
-		check_lamports();
-		close_side(&a), close_side(&b);
-		drop_dir(&a), drop_dir(&b);
-	}
 }
 
 static void t_concurrent_adds(void) {
@@ -924,6 +976,330 @@ static void say_cost(const char *what, const ls_node *n) {
 		c.newest.parents, c.newest.patches, c.newest.rest);
 }
 
+// the items at a node's root (or at one key), and whether two lists are the same names in the same order
+static size_t items_at(const ls_node *n, const char *key, ls_item *out, size_t max) {
+	const char *path[1] = {key};
+	return ls_values(n, key ? path : NULL, key ? 1 : 0, out, max);
+}
+static bool same_items(const ls_item *a, size_t na, const ls_item *b, size_t nb) {
+	if (na != nb) return false;
+	for (size_t i = 0; i < na; i++)
+		if (memcmp(a[i].name, b[i].name, CM_NAME) != 0 || a[i].gone != b[i].gone || a[i].inside != b[i].inside) return false;
+	return true;
+}
+
+static void t_concurrent_moves(void) {
+	printf("concurrent drops of one pig: both stand, the same two in the same order; a move replaces the shown one; a pick ends it\n");
+	for (int round = 0; round < 12; round++) {
+		side a = open_side("ca"), b = open_side("cb");
+		n_wire_seen = 0;
+		wire_bytes_clear();
+		merges_seen = 0;
+		ls_node *pa = ls_follow(a.d, P1), *pb = ls_follow(b.d, P1);
+		ls_node *both[2] = {pa, pb};
+		pump(&a, &b, 100);
+		op_value *v = pig(0.1, 0.1, 1);
+		ls_put(pa, v);
+		op_free(v);
+		pump(&a, &b, 100);
+		// cut: each drops it while the other hears nothing
+		v = pig(0.3, 0.3, 2);
+		ls_put(pa, v);
+		op_free(v);
+		v = pig(0.6, 0.6, 3);
+		ls_put(pb, v);
+		op_free(v);
+		CHECK(xof(pa) == 0.3 && xof(pb) == 0.6);
+		cut(&a, &b);
+		pump(&a, &b, 2000);
+		ls_item ia[4], ib[4];
+		size_t na = items_at(pa, NULL, ia, 4), nb = items_at(pb, NULL, ib, 4);
+		CHECK(na == 2 && same_items(ia, na, ib, nb));
+		CHECK(xof(pa) == xof(pb) && ls_commits(pa) == 2 && ls_commits(pb) == 2);
+		// each item: its value, who and when
+		pig_value p0, p1;
+		pig_read(ia[0].value, P1, &p0), pig_read(ia[1].value, P1, &p1);
+		CHECK(p0.x != p1.x && (p0.x == 0.3 || p0.x == 0.6) && (p1.x == 0.3 || p1.x == 0.6));
+		CHECK(ia[0].lamport == ia[1].lamport && ia[0].signer != NULL && ia[0].signer_length == LS_KEY_LEN);
+		CHECK(memcmp(ia[0].signer, ls_key(p0.x == 0.3 ? a.d : b.d), LS_KEY_LEN) == 0);
+		CHECK(xof(pa) == p0.x);
+		if (round == 0) dump_lists("concurrent drops", 1, both, 2, ROOT, 1);
+		// an ordinary move by b: replaces only the item shown (the first), the other stays on both
+		uint8_t other[CM_NAME];
+		memcpy(other, ia[1].name, CM_NAME);
+		v = pig(0.7, 0.7, 4);
+		ls_put(pb, v);
+		op_free(v);
+		pump(&a, &b, 200);
+		na = items_at(pa, NULL, ia, 4), nb = items_at(pb, NULL, ib, 4);
+		CHECK(na == 2 && same_items(ia, na, ib, nb));
+		CHECK(memcmp(ia[1].name, other, CM_NAME) == 0 && xof(pa) == 0.7);
+		if (round == 0) dump_lists("an ordinary move in a clash", 1, both, 2, ROOT, 1);
+		// a pick by a (the replace-all drop) ends it on both
+		v = pig(0.2, 0.8, 5);
+		CHECK(ls_pick(pa, v) == LS_OK);
+		op_free(v);
+		pump(&a, &b, 200);
+		na = items_at(pa, NULL, ia, 4), nb = items_at(pb, NULL, ib, 4);
+		CHECK(na == 1 && nb == 1 && same_items(ia, na, ib, nb) && xof(pb) == 0.2);
+		CHECK(ls_commits(pa) == 1 && ls_commits(pb) == 1);
+		if (round == 0) dump_lists("a pick ends it", 1, both, 2, ROOT, 1);
+		// the writes after the clash had two parents, and no merge (key patches: neither base nor merge)
+		CHECK(most_parents() == 2 && merges_seen == 0);
+		check_lamports();
+		capturing = 0;
+		close_side(&a), close_side(&b);
+		drop_dir(&a), drop_dir(&b);
+	}
+}
+
+static void t_delete_and_set(void) {
+	printf("a delete and a concurrent set: a gone item and a value item, the same on both\n");
+	side a = open_side("da"), b = open_side("db");
+	wire_bytes_clear();
+	ls_node *ra = ls_follow(a.d, PIGS_ROOM), *rb = ls_follow(b.d, PIGS_ROOM);
+	ls_node *both[2] = {ra, rb};
+	pump(&a, &b, 100);
+	ls_set(ra, P2, yes());
+	pump(&a, &b, 100);
+	ls_del(ra, P2);
+	ls_set(rb, P2, op_bool(0));
+	cut(&a, &b);
+	pump(&a, &b, 2000);
+	ls_item ia[4], ib[4];
+	size_t na = items_at(ra, P2, ia, 4), nb = items_at(rb, P2, ib, 4);
+	CHECK(na == 2 && same_items(ia, na, ib, nb));
+	CHECK(ia[0].gone + ia[1].gone == 1);
+	const ls_item *set = ia[0].gone ? &ia[1] : &ia[0];
+	CHECK(set->value != NULL && set->value->type == OP_BOOL && !set->value->bool_);
+	// the value shows the first: gone, or there
+	CHECK((op_get(ls_value(ra), P2) == NULL) == (ia[0].gone != 0) && same(ra, rb));
+	const keys at[] = {{0, {NULL}}, {1, {P2}}};
+	dump_lists("a delete and a set", 1, both, 2, at, 2);
+	capturing = 0;
+	close_side(&a), close_side(&b);
+	drop_dir(&a), drop_dir(&b);
+}
+
+static void t_made_parents(void) {
+	printf("a deep write makes its missing parents as maps; under a value that is not a map it is left out\n");
+	side a = open_side("ma"), b = open_side("mb");
+	wire_bytes_clear();
+	ls_node *na = ls_follow(a.d, P3), *nb = ls_follow(b.d, P3);
+	ls_node *both[2] = {na, nb};
+	pump(&a, &b, 100);
+	const char *path[2] = {"p", "q"};
+	op_value *x = op_num(5);
+	ls_patch p = {path, 2, x, 0};
+	CHECK(ls_write(na, &p, 1) == LS_OK);
+	op_free(x);
+	pump(&a, &b, 200);
+	const op_value *v = ls_value(nb);
+	const op_value *pv = v ? op_get(v, "p") : NULL, *q = pv ? op_get(pv, "q") : NULL;
+	CHECK(pv != NULL && pv->type == OP_MAP && q != NULL && q->type == OP_NUM && q->num == 5);
+	// the items: one at /p/q, none at /p (no write is there)
+	ls_item it[4];
+	CHECK(ls_values(nb, path, 2, it, 4) == 1 && ls_values(nb, path, 1, it, 4) == 0);
+	// p becomes a number, concurrently with a write under it: the deep one is left out of the value, its
+	// item stays (and the shallow one is marked inside)
+	x = op_num(1);
+	ls_set(na, "p", x);
+	op_free(x);
+	const char *deep[2] = {"p", "r"};
+	x = op_num(9);
+	ls_patch d = {deep, 2, x, 0};
+	ls_write(nb, &d, 1);
+	op_free(x);
+	cut(&a, &b);
+	pump(&a, &b, 2000);
+	v = ls_value(na);
+	CHECK(same(na, nb) && v != NULL && op_get(v, "p") != NULL && op_get(v, "p")->type == OP_NUM);
+	CHECK(ls_values(na, deep, 2, it, 4) == 2 && it[0].value != NULL && it[0].value->num == 9 && it[1].at == 1 && it[1].gone);
+	CHECK(ls_values(na, path, 1, it, 4) == 1 && it[0].inside);
+	const keys at[] = {{0, {NULL}}, {1, {"p"}}, {2, {"p", "q"}}, {2, {"p", "r"}}};
+	dump_lists("made parents", 1, both, 2, at, 4);
+	capturing = 0;
+	close_side(&a), close_side(&b);
+	drop_dir(&a), drop_dir(&b);
+}
+
+// a commit sealed with a side's key, fed to another as a peer would send it; its name into name
+static void feed_commit(side *signer, side *to, const char *id, Json *c, uint8_t name[CM_NAME]) {
+	uint8_t *cb, *seed, *sealed, doc[32];
+	size_t cl, sl, sn;
+	CHECK(cm_encode_json(c, &cb, &cl, NULL) == CM_OK);
+	jsonFree(c);
+	cm_name(cb, cl, name);
+	keep_bytes(cb, cl);
+	CHECK(signer->store.load(signer->store.context, "key", &seed, &sl) && sl == 32);
+	sl_seeded sd;
+	sl_seeded_init(&sd, seed);
+	free(seed);
+	for (int i = 0; i < 32; i++) sscanf(id + 9 + 2 * i, "%2hhx", &doc[i]);
+	CHECK(sl_seal(cb, cl, &sd.signer, doc, NULL, &sealed, &sn, NULL, NULL) == SL_OK);
+	free(cb);
+	Json *m = jsonObject(), *list = jsonArray();
+	jsonAdd(m, "t", jsonString("commits"));
+	jsonAdd(m, "node", jsonBytes(doc, 32));
+	jsonPush(list, jsonBytes(sealed, sn));
+	jsonAdd(m, "sealed", list);
+	free(sealed);
+	feed_message(to->l, m);
+}
+// an older commit (no replaces), of a pig at x, on the parents given
+static Json *old_commit(side *signer, const uint8_t (*parents)[CM_NAME], size_t n, int64_t lamport, double x, int nonce) {
+	Json *c = jsonObject(), *ps = jsonArray(), *patches = jsonArray(), *p = jsonObject();
+	jsonAdd(c, "table", jsonString("value"));
+	jsonAdd(c, "actor", jsonNull());
+	jsonAdd(c, "time", jsonNumber(1));
+	jsonAdd(c, "signer", jsonBytes(ls_key(signer->d), LS_KEY_LEN));
+	jsonAdd(c, "nonce", jsonNumber(nonce));
+	for (size_t i = 0; i < n; i++) jsonPush(ps, jsonBytes(parents[i], CM_NAME));
+	jsonAdd(c, "parents", ps);
+	jsonAdd(c, "lamport", jsonNumber((double)lamport));
+	op_value *v = pig(x, 0.5, nonce);
+	jsonAdd(p, "path", jsonArray()), jsonAdd(p, "value", pk_to_json(v));
+	op_free(v);
+	jsonPush(patches, p);
+	jsonAdd(c, "patches", patches);
+	return c;
+}
+
+static void t_older_commits(void) {
+	printf("older commits (no replaces): a parent's write is replaced; one not known to be an ancestor stays\n");
+	side a = open_side("oa"), b = open_side("ob");
+	wire_bytes_clear();
+	ls_node *pb = ls_follow(b.d, P1);
+	ls_node *one[1] = {pb};
+	ls_follow(a.d, P1);
+	pump(&a, &b, 100);
+	uint8_t c1[CM_NAME], c2[CM_NAME], c3[CM_NAME], c4[CM_NAME], none[1][CM_NAME] = {{0x1e, 0x20, 0x77}};
+	feed_commit(&a, &b, P1, old_commit(&a, NULL, 0, 1, 0.1, 1), c1);
+	// on c1: replaces it (its parent)
+	feed_commit(&a, &b, P1, old_commit(&a, (const uint8_t(*)[CM_NAME])c1, 1, 2, 0.2, 2), c2);
+	CHECK(ls_commits(pb) == 1 && xof(pb) == 0.2);
+	// also on c1, concurrent with c2: both stand
+	feed_commit(&a, &b, P1, old_commit(&a, (const uint8_t(*)[CM_NAME])c1, 1, 2, 0.3, 3), c3);
+	ls_item it[4];
+	CHECK(items_at(pb, NULL, it, 4) == 2);
+	dump_lists("older commits", 1, one, 1, ROOT, 1);
+	// on c3 and c2: replaces both (each a parent)
+	uint8_t two[2][CM_NAME];
+	memcpy(two[0], memcmp(c2, c3, CM_NAME) < 0 ? c2 : c3, CM_NAME);
+	memcpy(two[1], memcmp(c2, c3, CM_NAME) < 0 ? c3 : c2, CM_NAME);
+	feed_commit(&a, &b, P1, old_commit(&a, (const uint8_t(*)[CM_NAME])two, 2, 3, 0.4, 4), c4);
+	CHECK(items_at(pb, NULL, it, 4) == 1 && xof(pb) == 0.4);
+	dump_lists("older commits, both replaced", 1, one, 1, ROOT, 1);
+	// on a parent never seen (the commits between left): unsure, so both stay, never hidden
+	uint8_t c5[CM_NAME];
+	feed_commit(&a, &b, P1, old_commit(&a, (const uint8_t(*)[CM_NAME])none, 1, 9, 0.9, 5), c5);
+	CHECK(items_at(pb, NULL, it, 4) == 2 && xof(pb) == 0.9 && memcmp(it[1].name, c4, CM_NAME) == 0);
+	CHECK(ls_stats_of(b.d)->refused == 0);
+	capturing = 0;
+	close_side(&a), close_side(&b);
+	drop_dir(&a), drop_dir(&b);
+}
+
+static void t_far(void) {
+	printf("past LS_ITEMS writes at a path: the rest kept by name only, never dropped; read again when they come up\n");
+	side a = open_side("fa"), b = open_side("fb");
+	ls_node *pb = ls_follow(b.d, P1);
+	ls_follow(a.d, P1);
+	pump(&a, &b, 100);
+	uint8_t c1[CM_NAME], c[LS_ITEMS + 2][CM_NAME];
+	feed_commit(&a, &b, P1, old_commit(&a, NULL, 0, 1, 0.1, 1), c1);
+	// on c1, so c1 goes: one item
+	feed_commit(&a, &b, P1, old_commit(&a, (const uint8_t(*)[CM_NAME])c1, 1, 2, 0.5, 100), c[0]);
+	const uint8_t *drop;
+	ls_next(b.l, &drop), ls_next(b.l, &drop);
+	size_t before = heap();
+	// a concurrent one: what an open clash costs
+	feed_commit(&a, &b, P1, old_commit(&a, (const uint8_t(*)[CM_NAME])c1, 1, 2, 0.51, 101), c[1]);
+	ls_next(b.l, &drop), ls_next(b.l, &drop);
+	size_t one = heap();
+	for (int i = 2; i < LS_ITEMS; i++) feed_commit(&a, &b, P1, old_commit(&a, (const uint8_t(*)[CM_NAME])c1, 1, 2, 0.2 + i / 100.0, 100 + i), c[i]);
+	ls_next(b.l, &drop), ls_next(b.l, &drop);
+	size_t full = heap();
+	for (int i = LS_ITEMS; i < LS_ITEMS + 2; i++) feed_commit(&a, &b, P1, old_commit(&a, (const uint8_t(*)[CM_NAME])c1, 1, 2, 0.2 + i / 100.0, 100 + i), c[i]);
+	ls_next(b.l, &drop), ls_next(b.l, &drop);
+	size_t after = heap();
+	printf("  heap: an open clash (a second pig drop standing) %zu B; one past LS_ITEMS (kept by name only) %zu B\n", one - before,
+		(after - full) / 2);
+	ls_item it[LS_ITEMS + 4];
+	size_t k = items_at(pb, NULL, it, LS_ITEMS + 4);
+	CHECK(k == LS_ITEMS + 2 && ls_commits(pb) == LS_ITEMS + 2);
+	size_t far = 0;
+	for (size_t i = 0; i < k; i++) far += it[i].far && it[i].value == NULL;
+	CHECK(far == 2 && it[0].value != NULL && !it[0].far && it[k - 1].far);
+	// a write that replaces the first LS_ITEMS by name: a far one comes up, read again from its seal
+	uint8_t last[CM_NAME], names[LS_ITEMS + 2][CM_NAME];
+	memcpy(last, it[k - 1].name, CM_NAME);
+	for (size_t i = 0; i < k; i++) memcpy(names[i], it[i].name, CM_NAME);
+	pig_value pl;
+	// a write on all of them (lamport 3) that replaces all but the last: the far one comes up
+	Json *w = jsonObject(), *ps = jsonArray(), *patches = jsonArray(), *p = jsonObject(), *r = jsonArray();
+	jsonAdd(w, "table", jsonString("value"));
+	jsonAdd(w, "actor", jsonNull());
+	jsonAdd(w, "time", jsonNumber(1));
+	jsonAdd(w, "signer", jsonBytes(ls_key(a.d), LS_KEY_LEN));
+	jsonAdd(w, "nonce", jsonNumber(8));
+	uint8_t sorted[LS_ITEMS + 2][CM_NAME];
+	memcpy(sorted, names, sizeof sorted);
+	qsort(sorted, k, CM_NAME, memcmp_names);
+	for (size_t i = 0; i < k; i++) jsonPush(ps, jsonBytes(sorted[i], CM_NAME));
+	jsonAdd(w, "parents", ps);
+	jsonAdd(w, "lamport", jsonNumber(3));
+	for (size_t i = 0; i < k; i++)
+		if (memcmp(sorted[i], last, CM_NAME) != 0) jsonPush(r, jsonBytes(sorted[i], CM_NAME));
+	op_value *v = pig(0.95, 0.5, 9);
+	jsonAdd(p, "path", jsonArray()), jsonAdd(p, "value", pk_to_json(v)), jsonAdd(p, "replaces", r);
+	op_free(v);
+	jsonPush(patches, p);
+	jsonAdd(w, "patches", patches);
+	uint8_t top[CM_NAME];
+	feed_commit(&a, &b, P1, w, top);
+	k = items_at(pb, NULL, it, LS_ITEMS + 4);
+	CHECK(k == 2 && memcmp(it[1].name, last, CM_NAME) == 0 && !it[1].far && it[1].value != NULL);
+	pig_read(it[1].value, P1, &pl);
+	CHECK(xof(pb) == 0.95 && pl.x > 0.2 && pl.x < 0.6);
+	close_side(&a), close_side(&b);
+	drop_dir(&a), drop_dir(&b);
+}
+
+static void t_offline(void) {
+	printf("moves while no peer hears: each one never sent is folded into the next, so a peer sees one write, exact\n");
+	side a = open_side("oa"), b = open_side("ob");
+	n_wire_seen = 0;
+	wire_bytes_clear();
+	ls_node *pa = ls_follow(a.d, P1), *pb = ls_follow(b.d, P1);
+	ls_node *both[2] = {pa, pb};
+	pump(&a, &b, 100);
+	op_value *v = pig(0.1, 0.1, 1);
+	ls_put(pa, v);
+	op_free(v);
+	pump(&a, &b, 100);
+	// a's line goes: three moves, none sent
+	ls_unlink(a.l);
+	a.l = NULL;
+	for (int i = 2; i <= 4; i++) {
+		v = pig(i / 10.0, 0.5, i);
+		ls_put(pa, v);
+		op_free(v);
+	}
+	CHECK(ls_commits(pa) == 1 && xof(pa) == 0.4);
+	a.l = ls_link(a.d);
+	pump(&a, &b, 3000);
+	ls_item it[4];
+	CHECK(items_at(pb, NULL, it, 4) == 1 && xof(pb) == 0.4 && ls_commits(pb) == 1);
+	// two commits on the wire in all; the last's parent the first, its lamport 2
+	CHECK(n_wire_bytes == 2 && it[0].lamport == 2);
+	dump_lists("moves while no peer hears", 1, both, 2, ROOT, 1);
+	check_lamports();
+	capturing = 0;
+	close_side(&a), close_side(&b);
+	drop_dir(&a), drop_dir(&b);
+}
+
 static void t_cost(void) {
 	printf("what a node costs\n");
 	side c = open_side("cost");
@@ -1066,6 +1442,7 @@ static void t_fuzz(void) {
 		rng = 0x9e3779b97f4a7c15ull * (uint64_t)seed;
 		side a = open_side("fa"), b = open_side("fb");
 		n_wire_seen = 0;
+		wire_bytes_clear();
 		ls_node *na = ls_follow(a.d, PIGS_ROOM), *nb = ls_follow(b.d, PIGS_ROOM);
 		pump(&a, &b, 100);
 		const char *keys[] = {"p", "q", "r"};
@@ -1088,7 +1465,7 @@ static void t_fuzz(void) {
 			} else if (kind == 3) {
 				const char *path[2] = {k1, k2};
 				op_value *x = op_num(rnd() % 100);
-				ls_patch p = {path, 2, rnd() % 4 ? x : NULL};
+				ls_patch p = {path, 2, rnd() % 4 ? x : NULL, 0};
 				ls_write(n, &p, 1);
 				op_free(x);
 			} else {
@@ -1102,6 +1479,11 @@ static void t_fuzz(void) {
 		}
 		pump(&a, &b, 12000);
 		check_lamports();
+		char label[32];
+		snprintf(label, sizeof label, "fuzz seed %d", seed);
+		ls_node *both[2] = {na, nb};
+		dump_lists(label, 0, both, 2, FUZZ_PATHS, sizeof FUZZ_PATHS / sizeof *FUZZ_PATHS);
+		capturing = 0;
 		bool ok = same(na, nb) && ls_commits(na) == ls_commits(nb);
 		if (!ok) {
 			char *x = ls_value(na) ? op_json_text(ls_value(na)) : (strdup)("-");
@@ -1118,7 +1500,8 @@ static void t_fuzz(void) {
 static const struct {
 	const char *name;
 	void (*run)(void);
-} TESTS[] = {{"converge", t_converge}, {"moves", t_concurrent_moves}, {"adds", t_concurrent_adds}, {"garbage", t_garbage},
+} TESTS[] = {{"converge", t_converge}, {"moves", t_concurrent_moves}, {"deletes", t_delete_and_set}, {"made", t_made_parents},
+	{"older", t_older_commits}, {"far", t_far}, {"offline", t_offline}, {"adds", t_concurrent_adds}, {"garbage", t_garbage},
 	{"restart", t_restart}, {"fresh", t_fresh}, {"bad", t_bad_and_refused}, {"ephemeral", t_ephemeral}, {"relay", t_relay}, {"acks", t_per_link_acks}, {"relink", t_relink}, {"limits", t_limits}, {"fuzz", t_fuzz},
 	{"cost", t_cost}, {"memory", t_memory}};
 

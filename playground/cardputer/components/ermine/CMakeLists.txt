@@ -10,6 +10,7 @@ idf_component_register(
 		${R}/core/scheduler/c/causes.c ${R}/core/scheduler/c/ptrmap.c ${R}/core/scheduler/c/tracker.c
 		${R}/core/scheduler/c/paths.c ${R}/core/scheduler/c/selector.c
 		${R}/filesystem/places/c/places.c ${R}/filesystem/places/c/cache.c ${R}/filesystem/places/c/status.c
+		${R}/core/unread/c/unread.c
 		${R}/ermine/processes/c/runs.c ${R}/filesystem/places/c/guard.c
 		${R}/filesystem/protect/c/protect.c
 		${R}/filesystem/clingy/c/clingy.c

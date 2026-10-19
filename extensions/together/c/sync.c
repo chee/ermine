@@ -4,6 +4,7 @@
 #include "sync.h"
 
 #include "ids.h"
+#include "lists.h"
 #include "snapshot.h"
 
 #include "../../../core/node/c/update.h"
@@ -80,6 +81,9 @@ static op_value *hex_value(const uint8_t *bytes, size_t n) {
 	free(text);
 	return v;
 }
+
+// the metadata key a write says what it replaces by: "all", or names (hex); never carried
+#define REPLACES "replaces"
 
 static bool signer_or_commit(const char *k) {
 	return k != NULL && (strcmp(k, "signer") == 0 || strcmp(k, "commit") == 0);
@@ -232,6 +236,11 @@ typedef struct {
 	op_value *unsent;
 	// its status to be worked out again
 	bool unwell;
+	// with no rule: the lists show (several heads, an open path, or a commit naming what it replaces
+	// since); its lists, every commit taken in added, once asked
+	bool open;
+	ls_lists *lists;
+	struct sy_sync *sync;
 } node_t;
 
 #define STATES 16
@@ -321,6 +330,7 @@ static node_t *node_of(sy_sync *s, const char *id) {
 	nd->others.width = nd->placed.width = CM_NAME;
 	memcpy(nd->bytes, bytes, 32);
 	memcpy(nd->id, id, sizeof nd->id - 1);
+	nd->sync = s;
 	im_set(&s->nodes, bytes, nd);
 	if (s->list_count == s->list_room) {
 		s->list_room = s->list_room ? s->list_room * 2 : 8;
@@ -718,7 +728,8 @@ static void carry(sy_sync *s, const ch_header *change, carried_t *out, bool fres
 	for (size_t i = 0; i < m; i++) {
 		const ch_entry *e = &change->metadata[i];
 		if (e->key == NULL || !carries(e->value)) continue;
-		if (fresh && (strcmp(e->key, "signer") == 0 || strcmp(e->key, "commit") == 0)) continue;
+		if (fresh && (strcmp(e->key, "signer") == 0 || strcmp(e->key, "commit") == 0 || strcmp(e->key, REPLACES) == 0))
+			continue;
 		out->metadata[n++] = *e;
 	}
 	if (n > 0) out->h.metadata = out->metadata, out->h.metadata_length = n;
@@ -799,6 +810,31 @@ static rp_tables *replayed_new(sy_sync *s, const char *doc, const uint8_t name[C
 	return t;
 }
 
+// a commit's own patches on what they are over: a whole write's value (lists.h)
+static void written_of(void *context, const hy_kept *k, rp_tables *out) {
+	node_t *nd = context;
+	replaying_t r = {nd->sync, nd->id};
+	rp_merges m = rules_of(nd->sync, nd);
+	rp_tables t;
+	if (rp_written(tp_history(nd->sync->device, nd->id, TP_STORED), k->name, snapshots, &r, &m, &t) != RP_OK) return;
+	rp_free(out);
+	*out = t;
+}
+
+// a node's lists, every commit taken in added
+static ls_lists *lists_of(sy_sync *s, node_t *nd) {
+	hy_history *history = tp_history(s->device, nd->id, TP_STORED);
+	const hy_kept **all;
+	size_t n = hy_all(history, &all);
+	if (nd->lists == NULL || ls_size(nd->lists) > n) {
+		ls_free(nd->lists);
+		nd->lists = ls_create(history, written_of, nd);
+	}
+	for (size_t i = ls_size(nd->lists); i < n; i++) ls_add(nd->lists, all[i]);
+	free(all);
+	return nd->lists;
+}
+
 // ---- the check
 
 static hy_refusal fleeting(sy_sync *s, const char *doc, const hy_kept *kept, const cm_commit *commit);
@@ -841,7 +877,7 @@ static bool step(sy_sync *s, const char *doc, const hy_kept *kept) {
 		if (op_apply(NULL, own.patches, own.patches_length, NULL, &after, &failed) != OP_OK) ok = false;
 		else if (after != NULL) {
 			header_t *c = signed_header(&own.change, own.signer, own.signer_length, kept->name);
-			nd_entry *n = nd_make_entry(after, &c->h, NULL);
+			nd_entry *n = nd_make_entry(after, &c->h);
 			if (n == NULL) abort();
 			op_free(after);
 			hold_t *h = hold(s, n, own.table, doc, true);
@@ -853,7 +889,7 @@ static bool step(sy_sync *s, const char *doc, const hy_kept *kept) {
 		size_t failed;
 		header_t *c = signed_header(&own.change, own.signer, own.signer_length, kept->name);
 		// no host's "a write landed": the table's event, a new entry in its place, whole
-		nd_entry *n = s->commit != NULL ? e : nd_make_entry(e->value, &e->change, NULL);
+		nd_entry *n = s->commit != NULL ? e : nd_make_entry(e->value, &e->change);
 		if (n == NULL) abort();
 		if (nd_update(n, own.patches, own.patches_length, c->h, &failed) != OP_OK) {
 			ok = false;
@@ -936,9 +972,34 @@ static hy_refusal check(void *context, const char *doc, const hy_kept *kept, con
 	}
 	const hy_kept *head = nd->shown;
 	bool single = commit->parents_length == 1;
-	bool on = commit->parents_length == 0 ? head == NULL
-					       : head != NULL && single && memcmp(commit->parents[0], head->name, CM_NAME) == 0;
-	if (on && kept_table(s, commit->table)) return step(s, doc, kept) ? 0 : HY_PATCHES;
+	bool on;
+	if (commit->parents_length == 0) {
+		const hy_kept **heads;
+		size_t n = hy_heads(tp_history(s->device, doc, TP_STORED), &heads);
+		free(heads);
+		on = head == NULL && (s->rule != NULL || n == 0);
+	} else on = head != NULL && single && memcmp(commit->parents[0], head->name, CM_NAME) == 0;
+	bool named = false, keys = true;
+	for (size_t i = 0; i < commit->patches_length; i++) {
+		if (commit->replaces != NULL && commit->replaces[i].has) named = true;
+		if (ls_whole(&commit->patches[i])) keys = false;
+	}
+	if (s->rule != NULL && on && kept_table(s, commit->table)) return step(s, doc, kept) ? 0 : HY_PATCHES;
+	if (s->rule == NULL && on && !named) {
+		// a table not kept here: the head shown moves on
+		if (!kept_table(s, commit->table)) return im_set(&s->stepped, kept->name, SET), 0;
+		if (step(s, doc, kept)) return 0;
+	}
+	// key patches alone are never refused by what is there
+	if (keys && (s->rule == NULL || !kept->has_base)) return 0;
+	if (s->rule == NULL) {
+		rp_tables node;
+		if (kept->has_base) replayed(s, doc, kept->base, &node);
+		else rp_init(&node);
+		bool ok = rp_check(&node, commit);
+		rp_free(&node);
+		return ok ? 0 : HY_PATCHES;
+	}
 	// a head that doesn't show, moved on in place: what it held goes with it
 	rp_tables *node = single ? im_get(&nd->others, commit->parents[0]) : NULL;
 	bool fresh = node == NULL;
@@ -950,7 +1011,7 @@ static hy_refusal check(void *context, const char *doc, const hy_kept *kept, con
 	}
 	cm_commit own;
 	bool ok = cm_decode(kept->bytes, kept->length, &own, NULL) == CM_OK;
-	if (ok && rp_apply(node, &own, kept->name) != RP_OK) {
+	if (ok && rp_applies(node, &own, kept->name) != RP_OK) {
 		cm_free(&own);
 		ok = false;
 	}
@@ -1076,13 +1137,59 @@ static bool among(const hy_kept *const *heads, size_t n, const uint8_t name[CM_N
 	return false;
 }
 
-// the table holds these tables, whole
-static void become(sy_sync *s, const char *doc, const rp_tables *node) {
+static bool same(const op_value *a, const op_value *b);
+
+// two changes the same, field by field (an op: never)
+static bool same_change(const ch_header *a, const ch_header *b) {
+	if (a == NULL || b == NULL) return a == b;
+	if (a->has_op || b->has_op || a->has_time != b->has_time || (a->has_time && a->time != b->time)) return false;
+	if (!same(a->actor, b->actor)) return false;
+	if ((a->reader == NULL) != (b->reader == NULL) || (a->reader != NULL && strcmp(a->reader, b->reader) != 0)) return false;
+	size_t ae = a->external != NULL ? a->external_length : 0, be = b->external != NULL ? b->external_length : 0;
+	if ((a->external == NULL) != (b->external == NULL) || ae != be) return false;
+	for (size_t i = 0; i < ae; i++) {
+		const ch_site *x = &a->external[i], *y = &b->external[i];
+		if (strcmp(x->file ? x->file : "", y->file ? y->file : "") != 0 || x->line != y->line ||
+			x->has_column != y->has_column || (x->has_column && x->column != y->column) ||
+			(x->function == NULL) != (y->function == NULL) || (x->function != NULL && strcmp(x->function, y->function) != 0))
+			return false;
+	}
+	size_t am = a->metadata != NULL ? a->metadata_length : 0, bm = b->metadata != NULL ? b->metadata_length : 0;
+	if ((a->metadata == NULL) != (b->metadata == NULL) || am != bm) return false;
+	// keys unique: each of a's in b, the same
+	for (size_t i = 0; i < am; i++) {
+		bool found = false;
+		for (size_t j = 0; j < bm && !found; j++) {
+			if (a->metadata[i].key == NULL || b->metadata[j].key == NULL || strcmp(a->metadata[i].key, b->metadata[j].key) != 0)
+				continue;
+			found = same(a->metadata[i].value, b->metadata[j].value);
+			if (!found) return false;
+		}
+		if (!found) return false;
+	}
+	return true;
+}
+
+// the table holds these tables, whole. quiet: a table whose entry is the same is left as it is
+static void become(sy_sync *s, const char *doc, const rp_tables *node, bool quiet) {
 	tb_key id = tb_string(doc);
 	node_t *nd = node_of(s, doc);
 	for (size_t i = 0; i < s->tables_length; i++) {
 		tb_key part = tb_string(s->tables[i]);
 		const nd_entry *want = rp_find(node, s->tables[i]);
+		if (quiet) {
+			const op_value *was = NULL;
+			const ch_header *change = NULL;
+			if (overlaid(nd, i)) {
+				was = nd->under[i].value;
+				change = was != NULL ? &nd->under[i].change->h : NULL;
+			} else {
+				const nd_entry *e = tb_get(s->table, part, id);
+				if (e != NULL && e->value != NULL) was = e->value, change = &e->change;
+			}
+			const op_value *v = want != NULL ? want->value : NULL;
+			if (same(v, was) && same_change(v != NULL ? &want->change : NULL, change)) continue;
+		}
 		if (overlaid(nd, i)) {
 			slot_t *u = &nd->under[i];
 			slot_clear(u);
@@ -1100,7 +1207,7 @@ static void become(sy_sync *s, const char *doc, const rp_tables *node) {
 			continue;
 		}
 		header_t *c = header_copy(&want->change);
-		nd_entry *e = nd_make_entry(want->value, &c->h, NULL);
+		nd_entry *e = nd_make_entry(want->value, &c->h);
 		if (e == NULL) abort();
 		hold_header(hold(s, e, s->tables[i], doc, true), c);
 		if (have == NULL) tb_add(s->table, part, id, e);
@@ -1115,6 +1222,13 @@ static void become(sy_sync *s, const char *doc, const rp_tables *node) {
 // rule and several heads, their merge shows once the commits coming in now are all in
 static void arrive(sy_sync *s, const char *doc, const hy_kept *kept) {
 	node_t *nd = node_of(s, doc);
+	if (s->rule == NULL) {
+		// stepped: the table is on it; else the lists show, once the commits coming in now are in
+		if (im_del(&s->stepped, kept->name) != NULL) nd->shown = kept;
+		else nd->shown = NULL, nd->open = true;
+		later(s, nd);
+		return;
+	}
 	if (im_del(&s->stepped, kept->name) != NULL) nd->shown = kept, merged_clear(nd);
 	const hy_kept **heads;
 	size_t n = hy_heads(tp_history(s->device, doc, TP_STORED), &heads);
@@ -1126,7 +1240,7 @@ static void arrive(sy_sync *s, const char *doc, const hy_kept *kept) {
 		const hy_kept *was = nd->shown;
 		rp_tables *node = im_del(&nd->others, first->name);
 		if (node == NULL) node = replayed_new(s, doc, first->name);
-		become(s, doc, node);
+		become(s, doc, node, false);
 		tables_free(node);
 		nd->shown = first;
 		merged_clear(nd);
@@ -1161,7 +1275,7 @@ static void show_merge(sy_sync *s, node_t *nd) {
 	merge_of(s, nd->id, heads, n, s->rule, &node);
 	// a rule keeping its work starts the next merge where this one ended: not packed again
 	if (s->rule->create == NULL) keep_state(nd, names_key(heads, NULL, n), &node);
-	become(s, nd->id, &node);
+	become(s, nd->id, &node, false);
 	rp_free(&node);
 	nd->shown = NULL;
 	merged_clear(nd);
@@ -1204,28 +1318,27 @@ static op_value *copied(const op_value *v) {
 
 // a head as its commit tells it ({head, lamport, actor, signer, time, external?}, as sync.ts's Head):
 // signer hex, external each {file, line, column?, function?}
-static op_value *head_of(const hy_kept *k) {
+static op_value *head_from(const hy_kept *k, const cm_commit *c) {
 	op_value *m = op_map();
 	char head[2 * CM_NAME + 1];
 	for (int b = 0; b < CM_NAME; b++) snprintf(head + 2 * b, 3, "%02x", k->name[b]);
 	op_set(m, "head", op_str(head));
 	op_set(m, "lamport", op_num((double)k->lamport));
-	cm_commit c;
-	if (cm_decode(k->bytes, k->length, &c, NULL) != CM_OK) {
+	if (c == NULL) {
 		op_set(m, "actor", op_null());
 		return m;
 	}
-	op_set(m, "actor", c.change.actor != NULL ? op_ref((op_value *)c.change.actor) : op_null());
-	char *signer = malloc(2 * c.signer_length + 1);
+	op_set(m, "actor", c->change.actor != NULL ? op_ref((op_value *)c->change.actor) : op_null());
+	char *signer = malloc(2 * c->signer_length + 1);
 	if (signer == NULL) abort();
-	for (size_t b = 0; b < c.signer_length; b++) snprintf(signer + 2 * b, 3, "%02x", c.signer[b]);
-	signer[2 * c.signer_length] = 0;
-	op_set(m, "signer", op_str_take(signer, 2 * c.signer_length));
-	op_set(m, "time", op_num((double)c.change.time));
-	if (c.change.external != NULL) {
+	for (size_t b = 0; b < c->signer_length; b++) snprintf(signer + 2 * b, 3, "%02x", c->signer[b]);
+	signer[2 * c->signer_length] = 0;
+	op_set(m, "signer", op_str_take(signer, 2 * c->signer_length));
+	op_set(m, "time", op_num((double)c->change.time));
+	if (c->change.external != NULL) {
 		op_value *sites = op_list();
-		for (size_t i = 0; i < c.change.external_length; i++) {
-			const ch_site *x = &c.change.external[i];
+		for (size_t i = 0; i < c->change.external_length; i++) {
+			const ch_site *x = &c->change.external[i];
 			op_value *site = op_map();
 			op_set(site, "file", op_str(x->file ? x->file : ""));
 			op_set(site, "line", op_num((double)x->line));
@@ -1235,46 +1348,112 @@ static op_value *head_of(const hy_kept *k) {
 		}
 		op_set(m, "external", sites);
 	}
+	return m;
+}
+
+static op_value *head_of(const hy_kept *k) {
+	cm_commit c;
+	if (cm_decode(k->bytes, k->length, &c, NULL) != CM_OK) return head_from(k, NULL);
+	op_value *m = head_from(k, &c);
 	cm_free(&c);
 	return m;
+
 }
 
 static void put_shown(sy_sync *s, const char *doc, const char *table, op_value *value, header_t *change);
 
-// several heads: the first shows, the others are listed in the conflicts table at the id, with the
-// tables in which they differ from the one shown (a table one has not is left out of the list), the
-// one shown in the shown table at the id (each a head as head_of tells it; both there or neither).
-// With a rule, none: what shows is every head
+static int by_agreed(const void *a, const void *b);
+
+// an item as the "values" table has it: {value? | gone?, inside?, at? (the path in its table), from}
+static op_value *item_of(const ls_item *i) {
+	op_value *m = op_map();
+	if (i->gone) op_set(m, "gone", op_bool(1));
+	else op_set(m, "value", copied(i->value));
+	if (i->inside) op_set(m, "inside", op_bool(1));
+	if (i->at != NULL) {
+		op_value *at = op_list();
+		for (size_t k = 1; k < i->at_length; k++) op_push(at, op_str(i->at[k]));
+		op_set(m, "at", at);
+	}
+	op_set(m, "from", head_from(i->write->kept, i->write->commit));
+	return m;
+}
+
+// with no rule, what the lists show: the table, each table's first items composed; "values", each
+// open path's items ({[table]: [{path, items}]}); "conflicts", each commit with an item not shown, the
+// tables as the node would show with its items first where they differ ([{head, lamport, actor,
+// signer, time, external?, tables}]); "shown", the first head (each a head as head_of tells it). one
+// head and nothing open: the table is on it, and steps again. With a rule, none: what shows is every
+// head
 static void conflicts(sy_sync *s, node_t *nd) {
+	int64_t now = now_of(s);
+	if (s->rule != NULL || !nd->open) {
+		put_shown(s, nd->id, "values", NULL, NULL);
+		put_shown(s, nd->id, "conflicts", NULL, NULL);
+		put_shown(s, nd->id, "shown", NULL, NULL);
+		return;
+	}
 	const hy_kept **heads;
 	size_t n = hy_heads(tp_history(s->device, nd->id, TP_STORED), &heads);
+	ls_lists *lists = lists_of(s, nd);
+	rp_tables node;
+	ls_compose(lists, NULL, &node);
+	become(s, nd->id, &node, true);
+	nd->shown = n == 1 ? heads[0] : NULL;
+	op_value *rows = op_map();
+	const hy_kept **others = NULL;
+	size_t no = 0;
+	ls_open *opens;
+	size_t nopen = ls_opens(lists, &opens);
+	for (size_t i = 0; i < nopen; i++) {
+		const ls_open *o = &opens[i];
+		if (!kept_table(s, o->path[0])) continue;
+		op_value *list = op_get(rows, o->path[0]);
+		if (list == NULL) op_set(rows, o->path[0], list = op_list());
+		op_value *row = op_map(), *path = op_list(), *items = op_list();
+		for (size_t k = 1; k < o->length; k++) op_push(path, op_str(o->path[k]));
+		for (size_t k = 0; k < o->count; k++) op_push(items, item_of(&o->items[k]));
+		op_set(row, "path", path);
+		op_set(row, "items", items);
+		op_push(list, row);
+		for (size_t k = 1; k < o->count; k++) {
+			const hy_kept *kk = o->items[k].write->kept;
+			bool has = false;
+			for (size_t j = 0; j < no && !has; j++) has = others[j] == kk;
+			if (has) continue;
+			others = realloc(others, (no + 1) * sizeof *others);
+			if (others == NULL) abort();
+			others[no++] = kk;
+		}
+	}
+	ls_opens_free(opens, nopen);
+	qsort(others, no, sizeof *others, by_agreed);
 	op_value *list = op_list();
-	tb_key id = tb_string(nd->id);
-	for (size_t i = 1; s->rule == NULL && i < n; i++) {
-		const hy_kept *k = heads[i];
-		rp_tables *node = im_get(&nd->others, k->name);
-		if (node == NULL) im_set(&nd->others, k->name, node = replayed_new(s, nd->id, k->name));
+	for (size_t i = 0; i < no; i++) {
+		rp_tables theirs;
+		ls_compose(lists, others[i], &theirs);
 		op_value *differ = op_map();
 		for (size_t t = 0; t < s->tables_length; t++) {
-			const nd_entry *theirs = rp_find(node, s->tables[t]);
-			const nd_entry *ours = overlaid(nd, t) ? NULL : tb_get(s->table, tb_string(s->tables[t]), id);
-			const op_value *a = theirs ? theirs->value : NULL;
-			const op_value *b = overlaid(nd, t) ? nd->under[t].value : ours ? ours->value : NULL;
-			if (a != NULL && !same(a, b)) op_set(differ, s->tables[t], copied(a));
+			const nd_entry *a = rp_find(&theirs, s->tables[t]), *b = rp_find(&node, s->tables[t]);
+			const op_value *v = a != NULL ? a->value : NULL;
+			if (v != NULL && !same(v, b != NULL ? b->value : NULL)) op_set(differ, s->tables[t], copied(v));
 		}
-		op_value *m = head_of(k);
+		rp_free(&theirs);
+		op_value *m = head_of(others[i]);
 		op_set(m, "tables", differ);
 		op_push(list, m);
 	}
+	free(others);
+	rp_free(&node);
+	bool none = rows->count == 0;
+	if (none) op_free(rows), rows = NULL;
 	op_value *shown = list->count ? head_of(heads[0]) : NULL;
-	free(heads);
-	if (list->count == 0) {
-		op_free(list);
-		list = NULL;
-	}
-	int64_t now = now_of(s);
+	if (list->count == 0) op_free(list), list = NULL;
+	put_shown(s, nd->id, "values", rows, rows != NULL ? stamp(now) : NULL);
 	put_shown(s, nd->id, "conflicts", list, list != NULL ? stamp(now) : NULL);
 	put_shown(s, nd->id, "shown", shown, shown != NULL ? stamp(now) : NULL);
+	if (n == 1 && none) nd->open = false;
+	free(heads);
 }
 
 // the "status" table at the id: what the device holds back or refused there (the stored layer's),
@@ -1368,7 +1547,7 @@ static void status(sy_sync *s, node_t *nd) {
 	}
 	header_t *c = stamp(now_of(s));
 	if (have == NULL || have->value == NULL) {
-		nd_entry *e = nd_make_entry(v, &c->h, NULL);
+		nd_entry *e = nd_make_entry(v, &c->h);
 		if (e == NULL) abort();
 		op_free(v);
 		hold_header(hold(s, e, "status", nd->id, true), c);
@@ -1406,7 +1585,7 @@ static void status(sy_sync *s, node_t *nd) {
 		header_free(c);
 		return;
 	}
-	nd_entry *n = nd_make_entry(have->value, &have->change, NULL);
+	nd_entry *n = nd_make_entry(have->value, &have->change);
 	if (n == NULL) abort();
 	if (nd_update(n, c->patches, c->patches_length, c->h, NULL) != OP_OK) abort();
 	hold_header(hold(s, n, "status", nd->id, true), c);
@@ -1497,6 +1676,254 @@ static int by_name(const void *a, const void *b) {
 	return memcmp(*(const uint8_t *const *)a, *(const uint8_t *const *)b, CM_NAME);
 }
 
+// what a write says it replaces (its change's metadata, REPLACES): nothing said, "all", names, or
+// something else (which names nothing, and is not nothing said)
+typedef enum { I_NONE, I_ALL, I_LIST, I_OTHER } intent_t;
+
+static intent_t intent_of(const ch_header *change, const op_value **given) {
+	*given = NULL;
+	for (size_t i = 0; change != NULL && change->metadata != NULL && i < change->metadata_length; i++) {
+		const ch_entry *e = &change->metadata[i];
+		if (e->key == NULL || strcmp(e->key, REPLACES) != 0 || e->value == NULL) continue;
+		const op_value *v = e->value;
+		if (v->type == OP_STR && strcmp(v->str, "all") == 0) return I_ALL;
+		if (v->type == OP_LIST) return *given = v, I_LIST;
+		return I_OTHER;
+	}
+	return I_NONE;
+}
+
+// a range or a list index (no move): an edit of the value at its key path
+static bool sequence(const op_patch *p) {
+	return !p->has_move && (p->place.has_range || ls_keyed(p) < p->place.length);
+}
+
+// a patch's key path as strings, into keys (room for its length): how many
+static size_t keys_of(const op_patch *p, const char **keys) {
+	size_t n = ls_keyed(p);
+	for (size_t i = 0; i < n; i++) keys[i] = p->place.path[i].s;
+	return n;
+}
+
+static bool hex_is(const uint8_t name[CM_NAME], const char *hex) {
+	char h[2 * CM_NAME + 1];
+	hex_name(name, h);
+	return hex != NULL && strcmp(h, hex) == 0;
+}
+
+// an edit of one version while several heads stand (a range or a list index, no move): the head whose
+// version it edited, its base. the version: at each such patch's key path, the item named (edits naming
+// one) or else the item shown; a head whose value there is that version's for every such patch, the
+// patches applying to its tables. none (NULL): the whole value goes (replacing)
+static const hy_kept *edited(sy_sync *s, node_t *nd, const char *part, const op_patch *patches, size_t count,
+	const hy_kept *const *heads, size_t n, intent_t intent, const op_value *given) {
+	bool ranged = false;
+	for (size_t i = 0; i < count; i++) {
+		if (patches[i].has_move) return NULL;
+		if (sequence(&patches[i])) ranged = true;
+	}
+	if (!ranged) return NULL;
+	if (intent == I_ALL || (intent == I_LIST && given->count != 1)) return NULL;
+	bool by_name = intent == I_LIST;
+	const char *named = by_name && given->items[0]->type == OP_STR ? given->items[0]->str : NULL;
+	ls_lists *lists = lists_of(s, nd);
+	// each ranged patch's path ([part, ...keys]) and the version's value at its keys (borrowed from the
+	// lists)
+	const op_value **want = calloc(count + 1, sizeof *want);
+	const char ***paths = calloc(count + 1, sizeof *paths);
+	size_t *lengths = calloc(count + 1, sizeof *lengths);
+	if (want == NULL || paths == NULL || lengths == NULL) abort();
+	bool ok = true;
+	for (size_t i = 0; ok && i < count; i++) {
+		const op_patch *p = &patches[i];
+		if (!sequence(p)) continue;
+		const char **path = paths[i] = malloc((p->place.length + 2) * sizeof *path);
+		if (path == NULL) abort();
+		path[0] = part;
+		size_t k = lengths[i] = keys_of(p, path + 1);
+		ok = false;
+		// the nearest items at or above it
+		for (size_t m = k + 1; m-- > 0;) {
+			ls_item *items;
+			size_t c = ls_items(lists, path, m + 1, &items);
+			if (c == 0) {
+				free(items);
+				continue;
+			}
+			const ls_item *it = NULL;
+			for (size_t j = 0; j < c && it == NULL; j++)
+				if (!by_name ? j == 0 : hex_is(items[j].write->kept->name, named)) it = &items[j];
+			if (it != NULL && !it->gone) {
+				want[i] = ls_dig(it->value, path + 1 + m, k - m);
+				ok = want[i] != NULL;
+			}
+			free(items);
+			break;
+		}
+	}
+	const hy_kept *base = NULL;
+	for (size_t h = 0; ok && h < n && base == NULL; h++) {
+		rp_tables t;
+		replayed(s, nd->id, heads[h]->name, &t);
+		const nd_entry *e = rp_find(&t, part);
+		const op_value *v = e != NULL ? e->value : NULL;
+		bool fits = true;
+		for (size_t i = 0; fits && i < count; i++)
+			if (paths[i] != NULL) fits = same(ls_dig(v, paths[i] + 1, lengths[i]), want[i]);
+		op_value *after;
+		if (fits && ls_applies(v, patches, count, 0, &after, NULL) == OP_OK) {
+			op_free(after);
+			base = heads[h];
+		}
+		rp_free(&t);
+	}
+	for (size_t i = 0; i < count; i++) free(paths[i]);
+	free(want), free(paths), free(lengths);
+	return base;
+}
+
+// what replacing makes, freed after the commit is encoded
+typedef struct {
+	op_patch *patches;
+	size_t count;
+	cm_replaces *replaces;
+	void **blocks;
+	size_t blocks_length;
+} replaced_t;
+
+static void *replaced_block(replaced_t *r, size_t n) {
+	r->blocks = realloc(r->blocks, (r->blocks_length + 1) * sizeof *r->blocks);
+	if (r->blocks == NULL) abort();
+	void *b = calloc(1, n ? n : 1);
+	if (b == NULL) abort();
+	return r->blocks[r->blocks_length++] = b;
+}
+
+static void replaced_free(replaced_t *r) {
+	for (size_t i = 0; i < r->blocks_length; i++) free(r->blocks[i]);
+	free(r->blocks);
+	*r = (replaced_t){0};
+}
+
+static bool path_prefix(const op_patch *a, const op_patch *b) {
+	if (a->place.length > b->place.length) return false;
+	for (size_t i = 0; i < a->place.length; i++)
+		if (strcmp(a->place.path[i].s, b->place.path[i].s) != 0) return false;
+	return true;
+}
+
+static int by_bytes(const void *a, const void *b) { return memcmp(a, b, CM_NAME); }
+
+// names, each once (by its bytes), in the order first met: how many after the name
+static size_t once_add(uint8_t (*names)[CM_NAME], size_t n, const uint8_t name[CM_NAME]) {
+	for (size_t i = 0; i < n; i++)
+		if (memcmp(names[i], name, CM_NAME) == 0) return n;
+	memcpy(names[n], name, CM_NAME);
+	return n + 1;
+}
+
+// a write's patches as a commit on every head carries them (sync.ts's replacing): several heads, key
+// patches alone (through a list or a range: the whole value at the key path, as now, after the write;
+// unless it edits one version, edited); each replacing what intent says: "all" or names (hex), or none
+// said, the first item at and under its path (what read showed). replaces left out when it is every
+// item there (absent: every ancestor at or under, the same on a commit on every head); based (a commit
+// with a base and several parents), never left out on a range or list index, so its tables are the
+// lists'. now: the value the write made (borrowed)
+static void replacing(sy_sync *s, node_t *nd, const char *part, const op_patch *patches, size_t count, bool several,
+	intent_t intent, const op_value *given, const op_value *now, bool based, replaced_t *r) {
+	*r = (replaced_t){0};
+	r->patches = replaced_block(r, (count + 1) * sizeof *r->patches);
+	size_t n = 0;
+	for (size_t i = 0; i < count; i++) {
+		const op_patch *p = &patches[i];
+		size_t k = ls_keyed(p);
+		if (!several || (k == p->place.length && !p->place.has_range && !p->has_move)) {
+			r->patches[n++] = *p;
+			continue;
+		}
+		const char **keys = replaced_block(r, (k + 1) * sizeof *keys);
+		keys_of(p, keys);
+		const op_value *v = ls_dig(now, keys, k);
+		op_patch q = {.place = {.path = p->place.path, .length = k}};
+		if (v != NULL) q.has_value = 1, q.value = v;
+		r->patches[n++] = q;
+	}
+	if (several) {
+		size_t m = 0;
+		for (size_t i = 0; i < n; i++) {
+			bool over = false;
+			for (size_t j = i + 1; j < n && !over; j++) over = path_prefix(&r->patches[j], &r->patches[i]);
+			if (!over) r->patches[m++] = r->patches[i];
+		}
+		n = m;
+	}
+	r->count = n;
+	bool all = intent == I_ALL || (intent == I_NONE && !nd->open);
+	if (all && !based) return;
+	// by name, each once
+	uint8_t(*named)[CM_NAME] = NULL;
+	size_t named_n = 0;
+	if (intent == I_LIST) {
+		named = replaced_block(r, (given->count + 1) * CM_NAME);
+		for (size_t i = 0; i < given->count; i++) {
+			const op_value *x = given->items[i];
+			if (x->type != OP_STR || x->bytes != 2 * CM_NAME) continue;
+			uint8_t name[CM_NAME];
+			bool hex = true;
+			for (size_t b = 0; hex && b < CM_NAME; b++) {
+				unsigned v = 0;
+				for (int d = 0; d < 2; d++) {
+					char ch = x->str[2 * b + d];
+					if (ch >= '0' && ch <= '9') v = v * 16 + (unsigned)(ch - '0');
+					else if (ch >= 'a' && ch <= 'f') v = v * 16 + (unsigned)(ch - 'a' + 10);
+					else hex = false;
+				}
+				name[b] = (uint8_t)v;
+			}
+			if (hex) named_n = once_add(named, named_n, name);
+		}
+	}
+	r->replaces = replaced_block(r, (n + 1) * sizeof *r->replaces);
+	ls_lists *lists = nd->open || based ? lists_of(s, nd) : NULL;
+	bool any = false;
+	for (size_t i = 0; i < n; i++) {
+		const op_patch *p = &r->patches[i];
+		const char **path = replaced_block(r, (p->place.length + 2) * sizeof *path);
+		path[0] = part;
+		size_t k = keys_of(p, path + 1);
+		ls_group *there = NULL;
+		size_t groups = lists != NULL ? ls_standing(lists, path, k + 1, &there) : 0;
+		size_t total = 0;
+		for (size_t g = 0; g < groups; g++) total += there[g].length;
+		uint8_t(*every)[CM_NAME] = replaced_block(r, (total + 1) * CM_NAME);
+		size_t every_n = 0;
+		for (size_t g = 0; g < groups; g++)
+			for (size_t w = 0; w < there[g].length; w++) every_n = once_add(every, every_n, there[g].writes[w]->kept->name);
+		uint8_t(*names)[CM_NAME];
+		size_t names_n = 0;
+		if (all) names = every, names_n = every_n;
+		else if (intent == I_LIST) names = named, names_n = named_n;
+		else {
+			names = replaced_block(r, (groups + 1) * CM_NAME);
+			for (size_t g = 0; g < groups; g++) names_n = once_add(names, names_n, there[g].writes[0]->kept->name);
+		}
+		ls_groups_free(there, groups);
+		bool full = names_n == every_n;
+		for (size_t a = 0; full && a < names_n; a++) {
+			bool in = false;
+			for (size_t b = 0; b < every_n && !in; b++) in = memcmp(names[a], every[b], CM_NAME) == 0;
+			full = in;
+		}
+		if (full && !(based && sequence(p))) continue;
+		uint8_t(*sorted)[CM_NAME] = replaced_block(r, (names_n + 1) * CM_NAME);
+		if (names_n) memcpy(sorted, names, names_n * CM_NAME);
+		qsort(sorted, names_n, CM_NAME, by_bytes);
+		r->replaces[i] = (cm_replaces){.has = 1, .names = (const uint8_t(*)[CM_NAME])sorted, .length = names_n};
+		any = true;
+	}
+	if (!any) r->replaces = NULL;
+}
+
 // one commit at the node, on what shows: the head shown, or with a rule, the heads merged. all: on
 // every head, keeping the head shown. Encoded now, so nothing it carries is held after. The commit
 // taken in, or NULL
@@ -1513,8 +1940,10 @@ static const hy_kept *send(sy_sync *s, const char *id, const char *part, const o
 	// the merged heads: the node's until the commit is taken, let go of then
 	const hy_kept **merged = nd->has_merged ? nd->merged : NULL;
 	bool on_merge = nd->has_merged;
-	const hy_kept *const *on = on_merge ? merged : all ? heads : &head;
-	size_t on_count = on_merge ? nd->merged_count : all ? n : head != NULL;
+	// with no rule: every head
+	bool every = s->rule == NULL || all;
+	const hy_kept *const *on = on_merge ? merged : every ? heads : &head;
+	size_t on_count = on_merge ? nd->merged_count : every ? n : head != NULL;
 	const uint8_t **sorted = malloc((on_count + 1) * sizeof *sorted);
 	uint8_t(*parents)[CM_NAME] = malloc(on_count * CM_NAME + 1);
 	if (sorted == NULL || parents == NULL) abort();
@@ -1531,7 +1960,8 @@ static const hy_kept *send(sy_sync *s, const char *id, const char *part, const o
 	op_value *stored = NULL;
 	static const op_key root[1];
 	op_patch whole = {.place = {.path = root, .length = 0}};
-	if (!all && at < s->tables_length && overlaid(nd, at)) {
+	bool over = !all && at < s->tables_length && overlaid(nd, at);
+	if (over) {
 		size_t failed;
 		if (op_apply(nd->under[at].value, patches, count, NULL, &stored, &failed) != OP_OK) {
 			nd_entry *e = tb_get(s->table, tb_string(part), tb_string(id));
@@ -1540,6 +1970,23 @@ static const hy_kept *send(sy_sync *s, const char *id, const char *part, const o
 			patches = &whole;
 			count = 1;
 		}
+	}
+	// with no rule: an edit of one version on its head (edited), else key patches alone; replacing
+	// what the writer saw
+	const hy_kept *base = NULL;
+	replaced_t replaced = {0};
+	if (s->rule == NULL) {
+		const op_value *given = NULL;
+		intent_t intent = all ? I_ALL : intent_of(change, &given);
+		if (on_count > 1 && !over) base = edited(s, nd, part, patches, count, on, on_count, intent, given);
+		const op_value *now = stored;
+		if (!over) {
+			nd_entry *e = tb_get(s->table, tb_string(part), tb_string(id));
+			now = e != NULL ? e->value : NULL;
+		}
+		replacing(s, nd, part, patches, count, on_count > 1 && base == NULL, intent, given, now, base != NULL, &replaced);
+		patches = replaced.patches;
+		count = replaced.count;
 	}
 	carried_t carried;
 	carry(s, change, &carried, true);
@@ -1551,10 +1998,12 @@ static const hy_kept *send(sy_sync *s, const char *id, const char *part, const o
 	c.parents = (const uint8_t(*)[CM_NAME])parents;
 	c.parents_length = on_count;
 	if (on_merge) c.merge = (char *)s->rule->name;
-	else if (on_count > 1) c.has_base = 1, memcpy(c.base, head->name, CM_NAME);
+	else if (on_count > 1 && s->rule != NULL) c.has_base = 1, memcpy(c.base, head->name, CM_NAME);
+	else if (base != NULL) c.has_base = 1, memcpy(c.base, base->name, CM_NAME);
 	c.lamport = 1 + top;
 	c.patches = (op_patch *)patches;
 	c.patches_length = count;
+	c.replaces = replaced.replaces;
 	uint8_t *bytes;
 	size_t length;
 	char *field = NULL;
@@ -1582,7 +2031,14 @@ static const hy_kept *send(sy_sync *s, const char *id, const char *part, const o
 			// kept until the end: on may be them
 			if (on_merge) nd->merged = NULL;
 			merged_clear(nd);
-			if (on_count > 1) {
+			// what the lists show may be other than what was written: worked out again, now
+			if (s->rule == NULL && (on_count > 1 || replaced.replaces != NULL || nd->open)) {
+				nd->open = true;
+				bool was = s->applying;
+				s->applying = true;
+				conflicts(s, nd);
+				s->applying = was;
+			} else if (on_count > 1) {
 				for (size_t i = 0; i < on_count; i++) tables_free(im_del(&nd->others, on[i]->name));
 				if (s->rule != NULL) remember(s, nd);
 				later(s, nd);
@@ -1599,6 +2055,7 @@ static const hy_kept *send(sy_sync *s, const char *id, const char *part, const o
 	}
 	op_free(stored);
 	carried_free(&carried);
+	replaced_free(&replaced);
 	free(sorted);
 	free(parents);
 	free(heads);
@@ -1826,6 +2283,7 @@ static void stored_now(sy_sync *s, node_t *nd, rp_tables *t) {
 		return;
 	}
 	if (nd->shown != NULL) replayed(s, nd->id, nd->shown->name, t);
+	else if (s->rule == NULL) ls_compose(lists_of(s, nd), NULL, t);
 	else rp_init(t);
 }
 
@@ -1840,7 +2298,13 @@ static void put_shown(sy_sync *s, const char *doc, const char *table, op_value *
 		gone(s, have);
 		return;
 	}
-	nd_entry *e = nd_make_entry(value, &change->h, NULL);
+	// the same: left as it is
+	if (have != NULL && same(have->value, value)) {
+		op_free(value);
+		header_free(change);
+		return;
+	}
+	nd_entry *e = nd_make_entry(value, &change->h);
 	if (e == NULL) abort();
 	op_free(value);
 	hold_header(hold(s, e, table, doc, true), change);
@@ -1916,7 +2380,7 @@ static void listed(sy_sync *s, node_t *nd) {
 		return;
 	}
 	header_t *c = stamp(now_of(s));
-	nd_entry *e = nd_make_entry(value, &c->h, NULL);
+	nd_entry *e = nd_make_entry(value, &c->h);
 	if (e == NULL) abort();
 	op_free(value);
 	hold_header(hold(s, e, "ephemeral", nd->id, true), c);
@@ -2347,6 +2811,7 @@ void sy_free(sy_sync *s) {
 		im_free(&nd->latest);
 		free(nd->sent);
 		op_free(nd->unsent);
+		ls_free(nd->lists);
 		free(nd);
 	}
 	free(s->list);
@@ -2451,13 +2916,50 @@ cm_code sy_settle(sy_sync *s, const char *id, const ch_header *change) {
 	const hy_kept **heads;
 	size_t n = hy_heads(history, &heads);
 	free(heads);
-	if (n < 2) return CM_OK;
-	cm_code code;
-	const hy_kept *k = send(s, id, "value", NULL, 0, change, true, &code);
+	node_t *nd = node_of(s, id);
+	// with no rule: what shows at each outermost open path of value, written
+	ls_open *opens = NULL;
+	size_t nopen = s->rule == NULL && nd->open ? ls_opens(lists_of(s, nd), &opens) : 0;
+	size_t at = table_index(s, "value");
+	const op_value *now = NULL;
+	if (at < s->tables_length && overlaid(nd, at)) now = nd->under[at].value;
+	else {
+		nd_entry *e = tb_get(s->table, tb_string("value"), tb_string(id));
+		now = e != NULL ? e->value : NULL;
+	}
+	op_patch *patches = calloc(nopen + 1, sizeof *patches);
+	op_key **keys = calloc(nopen + 1, sizeof *keys);
+	if (patches == NULL || keys == NULL) abort();
+	size_t count = 0;
+	for (size_t i = 0; i < nopen; i++) {
+		const ls_open *o = &opens[i];
+		if (strcmp(o->path[0], "value") != 0) continue;
+		bool outer = true;
+		for (size_t j = 0; j < nopen && outer; j++) {
+			const ls_open *q = &opens[j];
+			if (strcmp(q->path[0], "value") != 0 || q->length >= o->length) continue;
+			bool prefix = true;
+			for (size_t k = 1; k < q->length && prefix; k++) prefix = strcmp(q->path[k], o->path[k]) == 0;
+			if (prefix) outer = false;
+		}
+		if (!outer) continue;
+		op_key *ks = keys[count] = calloc(o->length, sizeof *ks);
+		if (ks == NULL) abort();
+		for (size_t k = 1; k < o->length; k++) ks[k - 1] = (op_key){.type = OP_STR_KEY, .s = o->path[k]};
+		op_patch *p = &patches[count++];
+		p->place = (op_target){.path = ks, .length = o->length - 1};
+		const op_value *v = ls_dig(now, o->path + 1, o->length - 1);
+		if (v != NULL) p->has_value = 1, p->value = v;
+	}
+	cm_code code = CM_OK;
+	const hy_kept *k = NULL;
+	if (n >= 2 || count > 0) k = send(s, id, "value", patches, count, change, true, &code);
+	for (size_t i = 0; i < count; i++) free(keys[i]);
+	free(keys), free(patches);
+	ls_opens_free(opens, nopen);
+	if (n < 2 && count == 0) return CM_OK;
 	// a merge is a write to its table like any other: the entry shown carries its change, as a replay
 	// of the merge (and so every other device) has it
-	node_t *nd = node_of(s, id);
-	size_t at = table_index(s, "value");
 	cm_commit own;
 	if (k != NULL && at < s->tables_length && overlaid(nd, at)) {
 		slot_t *u = &nd->under[at];
@@ -2476,7 +2978,7 @@ cm_code sy_settle(sy_sync *s, const char *id, const ch_header *change) {
 		s->applying = true;
 		header_t *c = signed_header(&own.change, own.signer, own.signer_length, k->name);
 		// no host's "a write landed": the table's event, a new entry in its place
-		nd_entry *n = s->commit != NULL ? e : nd_make_entry(e->value, &e->change, NULL);
+		nd_entry *n = s->commit != NULL ? e : nd_make_entry(e->value, &e->change);
 		if (n == NULL) abort();
 		if (nd_update(n, NULL, 0, c->h, NULL) == OP_OK) {
 			hold_t *h = hold(s, n, "value", id, n != e);
@@ -2522,13 +3024,7 @@ bool sy_use(sy_sync *s, const char *name) {
 		merged_clear(nd);
 		if (n > 1) {
 			if (s->rule != NULL) show_merge(s, nd);
-			else {
-				rp_tables *node = im_del(&nd->others, heads[0]->name);
-				if (node == NULL) node = replayed_new(s, nd->id, heads[0]->name);
-				become(s, nd->id, node);
-				tables_free(node);
-				nd->shown = heads[0];
-			}
+			else nd->shown = NULL, nd->open = true;
 		}
 		free(heads);
 		conflicts(s, nd);

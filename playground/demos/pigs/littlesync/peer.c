@@ -1,9 +1,10 @@
 // littlesync-pigs: the Mac peer of a littlesync device (littlesync.h). Opens a serial port (the first
 // /dev/cu.usbmodem*, or --port PATH), follows lab-pig's room and its pigs, and shows them as letters on
 // a plain field in the terminal, and under it a line per pig: where, what it costs (stored bytes,
-// commits held, parents of its newest commit), who holds it; then the room's cost. Keys: tab selects,
-// space picks up and drops, arrows or hjkl carry (ephemeral beats go out while it is carried), a adds a
-// pig, q quits.
+// commits held, parents of its newest commit), who holds it; then the room's cost. A pig two devices
+// dropped at once (two items at its node, a clash) is drawn twice, the other faint, with an "also" line
+// for it under the pig's. Keys: tab selects, space picks up and drops (a drop replaces every item: the
+// clash ends), arrows or hjkl carry (ephemeral beats go out while it is carried), a adds a pig, q quits.
 //
 //   littlesync-pigs [--port PATH | --pty | --pipe]... [--state DIR] [--room ID] [--name NAME]
 //                   [--dump FILE] [--log FILE] [--keys KEYS] [--exit-after MS] [--pty-file FILE]
@@ -34,7 +35,7 @@
 #include <time.h>
 #include <unistd.h>
 
-enum { FW = 60, FH = 18, MAXPIGS = 26 };
+enum { FW = 60, FH = 18, MAXPIGS = 26, MAXITEMS = 4 };
 static const char *NAMES[] = {"otter", "newt", "wren", "moth", "vole", "finch", "toad", "hare", "mole", "kiwi"};
 static const char *COLOURS[] = {"#d1495b", "#2e86ab", "#3b8b5a", "#c27c0e", "#8e44ad", "#16a085", "#e4572e"};
 
@@ -141,7 +142,7 @@ static int where_is(const pigslot *p, double *x, double *y, const char **by) {
 
 // ---- the screen
 
-static char screen[(FW + 8) * (FH + 8 + MAXPIGS) + 1024];
+static char screen[(FW + 8) * (FH + 8 + MAXPIGS * 2) + 1024];
 static size_t screen_len;
 static void put(const char *s) {
 	size_t n = strlen(s);
@@ -166,6 +167,20 @@ static void render(int ansi) {
 	grid[FH - 1][FW - 1] = 'B';
 	int cell[FH][FW];
 	memset(cell, 0, sizeof cell);
+	// the other items of a clash first, faint (3), so a pig drawn over one wins the cell
+	for (int i = 0; i < n_pigs; i++) {
+		ls_item it[MAXITEMS];
+		size_t k = ls_values(pigs[i].node, NULL, 0, it, MAXITEMS);
+		for (size_t j = 1; j < k && j < MAXITEMS; j++) {
+			pig_value o;
+			if (it[j].value == NULL) continue;
+			pig_read(it[j].value, pigs[i].id, &o);
+			if (o.binned) continue;
+			int cx = (int)floor(fmin(fmax(o.x, 0), 1) * (FW - 1)), cy = (int)floor(fmin(fmax(o.y, 0), 1) * (FH - 1));
+			grid[cy][cx] = (char)('a' + i);
+			cell[cy][cx] = 3;
+		}
+	}
 	for (int i = 0; i < n_pigs; i++) {
 		double x, y;
 		const char *by;
@@ -182,6 +197,7 @@ static void render(int ansi) {
 		for (int x = 0; x < FW; x++) {
 			char c[16];
 			if (ansi && cell[y][x] == 2) snprintf(c, sizeof c, "\x1b[7m%c\x1b[0m", grid[y][x]);
+			else if (ansi && cell[y][x] == 3) snprintf(c, sizeof c, "\x1b[2m%c\x1b[0m", grid[y][x]);
 			else snprintf(c, sizeof c, "%c", grid[y][x]);
 			put(c);
 		}
@@ -206,6 +222,24 @@ static void render(int ansi) {
 		snprintf(line, sizeof line, "%c %.8s x=%.2f y=%.2f %5zuB %2zuc %zup%s%s%s%s\n", 'a' + i, pigs[i].id + 9, x, y, c.stored,
 			c.commits, c.newest.parents, st.shame ? " shame" : "", shown ? "" : " binned", by ? " held by " : "", by ? by : "");
 		put(line);
+		// a clash: the items not shown, each where it was dropped and by whom (the first 4 hex of its key)
+		ls_item it[MAXITEMS];
+		size_t k = ls_values(pigs[i].node, NULL, 0, it, MAXITEMS);
+		for (size_t j = 1; j < k; j++) {
+			char who[16] = "?";
+			if (j < MAXITEMS && it[j].signer != NULL) {
+				if (memcmp(it[j].signer, ls_key(dev), LS_KEY_LEN) == 0) snprintf(who, sizeof who, "you");
+				else snprintf(who, sizeof who, "%02x%02x", it[j].signer[2], it[j].signer[3]);
+			}
+			pig_value o;
+			if (j >= MAXITEMS || it[j].far) snprintf(line, sizeof line, "  also (kept by name only)\n");
+			else if (it[j].value == NULL) snprintf(line, sizeof line, "  also gone, by %s\n", who);
+			else {
+				pig_read(it[j].value, pigs[i].id, &o);
+				snprintf(line, sizeof line, "  also x=%.2f y=%.2f by %s%s\n", o.x, o.y, who, o.binned ? " binned" : "");
+			}
+			put(line);
+		}
 	}
 	ls_cost c = ls_cost_of(room);
 	snprintf(line, sizeof line, "room %.8s %5zuB %2zuc %zup, newest seal %zuB (parents %zuB)\n", room_id + 9, c.stored, c.commits,
@@ -281,12 +315,13 @@ static void space(void) {
 		carry_to(st.x, st.y);
 		return;
 	}
-	// let go: one stored commit, in the corner of shame or the bin if the feet are there
+	// let go: one stored commit, in the corner of shame or the bin if the feet are there. A person
+	// putting a pig down means "this is where it is": it replaces every item (ls_pick), ending a clash
 	pig_value p = {carry_x, carry_y, (double)wall_ms(), arc4random(), 0, 0};
 	p.shame = carry_x > 0.78 && carry_y < 0.45;
 	p.binned = carry_x > 0.92 && carry_y > 0.88;
 	op_value *v = pig_make(&p);
-	ls_put(carrying, v);
+	ls_pick(carrying, v);
 	op_free(v);
 	if (p.binned) {
 		for (int i = 0; i < n_pigs; i++)

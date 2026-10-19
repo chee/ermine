@@ -6,24 +6,55 @@
 // the Cardputer, playground/cardputer).
 //
 // what a device keeps, per followed node (never a history):
-//   - its current value (an op_value, value.h)
-//   - per path written, a stamp: the lamport and name of the commit that last wrote there
-//   - the sealed bytes of the commits that hold a stamp (the ones that made the value), so a fresh
-//     peer can be sent them and verify them; its own until each peer has them
+//   - per path written, a short list of standing writes (usually one): each a patch of a held commit,
+//     its value (or gone: a delete stands as gone), the names its patch replaces, and up to 16 names
+//     it took over from the writes it replaced (8 bytes each)
+//   - its current value (an op_value, value.h): the first item at each path, composed
+//   - the sealed bytes of the commits with a write standing, so a fresh peer can be sent them and
+//     verify them; its own until each peer has them; and each one's parents (8 bytes of each name)
+//   - passing commits: ones no write of stands any more, kept only till every link that is up has
+//     them (at most 16 a node, 30 s), so the writes between reach each peer
 //   - a few names it has seen and dropped (so it does not ask for them again)
 //   - per commit held, whether a commit taken in names it as a parent (then it is no head), and a few
 //     parents named that are not held (yet)
 //   - ephemeral values (a value being carried, held up by a device), per sending device, never stored
-// everything older is dropped: a commit with no stamp left is gone.
+// everything older is dropped.
 //
-// merge, per path, last writer wins. every patch is a set or a delete at a path of string keys (a
-// range, a move or a list index is refused, with a reason). an incoming patch applies when its stamp
-// (lamport, then name bytes) beats the stamps on its path and on every ancestor path; applying it drops
-// the stamps below it, except the ones that beat it (they stay, and their values are put back on top).
-// So the same commits in any order give the same value. A new commit's lamport is 1 + the highest
-// held on its node; its parents are the heads, as far as the device can tell: the held commits no
-// commit it has taken in names as a parent (the LS_MAX_PARENTS highest when there are more, the
-// highest held always, so the lamport is 1 + its parents' highest). Nothing here walks parents.
+// lists, per path (values.org; lists.ts has the same rules over a history). Every patch is a set or a
+// delete at a path of string keys: a key path ends at the first list, and a range, a move or a list
+// index is refused, with a reason. A write stands until a later write at or above its path replaces
+// it: names its commit in the patch's replaces, or the replacer took the name over from a write it
+// replaced (the chain of replaces as this device saw it). A device without history can't clamp
+// replaces to ancestors (lists.ts does): it trusts them, but never a commit as late as the writer.
+// Replaces absent (an older commit's): ancestry, as far as the held commits' parents show; when
+// unsure both stay, never hidden. A write that comes late (a standing write at or above it replaces
+// it) stands not, but still replaces what it names. A patch overwritten by a later one of its commit
+// (at a prefix of its path) is no write. A deep write whose parents are missing has them made as maps
+// (sync only); under a value that is not a map it is left out of the value (its item stays). The items
+// at a path: its writes in the agreed order (higher lamport first, then the greater name: the same on
+// every device), each marked inside when a standing write under it is not its own (not of its commit
+// or a descendant, as far as the device can tell); then the shallower writes over it whose value there
+// is not what shows. Against lists.ts on the same commits (test/lists.ts): never fewer items; more
+// where a cover goes through commits this device never held (CONFLICTS.tex, small devices). Two
+// littlesync devices that saw the same commits hold the same lists.
+//
+// a write here replaces what the device shows: ls_set, ls_put, ls_del (and ls_write) the first item
+// at each path at and under the patch's path (an old program never ends a clash it could not see);
+// ls_pick (and ls_write with all) every item there (a person's "this is where it is"). Its replaces is
+// always said (absent would mean ancestry, which a device without history can tell only in part). A
+// write's parents are the heads, as far as the device can tell: the held commits no commit it has
+// taken in names as a parent (the LS_MAX_PARENTS highest when there are more, the highest held always,
+// so the lamport is 1 + its parents' highest), and every head it replaces a write of. Several parents,
+// key patches only: neither base nor merge (commit.h). An own commit never sent (no link was up) that
+// the next own write replaces whole, at its own paths, is folded into it: the write takes its parents
+// and names what it named, and the commit is as if never made (moves while nobody hears: one commit).
+// Nothing here walks a history.
+//
+// memory: an open clash (two writes standing at a path) costs one more write and one more held
+// commit: about 900 B for a pig on a Mac (test/test.c measures it: "far"), of it the seal (about
+// 250 B) and the value's copy. Past LS_ITEMS writes at one path the rest are kept by name only (far):
+// commit and seal held, so they are offered and can be replaced, but no value in memory (read again
+// from the seal when one comes up to the first LS_ITEMS): about 570 B each on a Mac. Never dropped.
 //
 // the node's id is in the signed message (a seal is good in its document only, seal.h), so a commit
 // sealed for one node does not verify in another.
@@ -73,7 +104,9 @@
 //     if (m) usb_serial_jtag_write_bytes(out, m, portMAX_DELAY);   // all of it: valid till the next ls_ call
 //     // read: when ls_version(node) != seen (then seen = it), ls_value(node) is the stored value, and
 //     // ls_held_at(node, i), i below ls_helds(node), the values peers hold up over it
-//     // write: ls_set(node, "x", v) one key, ls_put(node, v) the whole value; both copy v (op_free it)
+//     // and ls_values(node, path, n, items, max) the list at a path (two: a clash)
+//     // write: ls_set(node, "x", v) one key, ls_put(node, v) the whole value; both copy v (op_free it);
+//     // ls_pick(node, v) the whole value, ending a clash
 //     // hold: ls_hold(node, v) shows v to the peers, sent every LS_BEAT_MS till ls_unhold(node) or a
 //     // write of this device's on the node
 //   }
@@ -93,8 +126,10 @@
 #define LS_LINKS 4
 #endif
 #define LS_STACK "littlesync/0"
-// the merge rule a commit with several parents names (commit.h wants one): per-path last writer wins
-#define LS_MERGE "littlesync/lww-path"
+// at most this many writes at one path hold their value in memory; the rest are far (by name only)
+#ifndef LS_ITEMS
+#define LS_ITEMS 4
+#endif
 #define LS_ID_LEN 73
 // a multikey of an Ed25519 key (0xed 0x01 and 32 bytes)
 #define LS_KEY_LEN 34
@@ -112,7 +147,7 @@ typedef enum {
 	LS_OK,
 	LS_BAD,     // an argument that is not a thing (a path with no keys... a value too deep, a node not followed, a
 	            // write whose seal is over 3000 bytes: one message)
-	LS_REFUSED, // a commit with something v1 does not merge (ls_reason says what)
+	LS_REFUSED, // a commit with something littlesync does not keep (ls_reason says what)
 } ls_code;
 
 // storage: one blob under a name. load: 1 and a malloc'd *out (free it), 0 when there is none. save:
@@ -192,7 +227,8 @@ const char *ls_reason(const ls_dev *dev);
 ls_node *ls_follow(ls_dev *dev, const char *id);
 ls_node *ls_find(ls_dev *dev, const char *id);
 const char *ls_id(const ls_node *node);
-// the stored value (NULL: none). Counts up whenever the value or a held value changes
+// the stored value (NULL: none): the first item at each path, composed. Counts up whenever the value,
+// a list or a held value changes
 const op_value *ls_value(const ls_node *node);
 uint32_t ls_version(const ls_node *node);
 // how many commits make the value now, and the highest lamport held
@@ -213,24 +249,47 @@ typedef struct {
 		size_t parents;       // how many parents
 		size_t parents_bytes; // the parents list
 		size_t patches;       // the patches: paths and values
-		size_t rest;          // field names, table, actor, time, nonce, lamport, merge, the seal's map
+		size_t rest;          // field names, table, actor, time, nonce, lamport, the seal's map
 	} newest;
 } ls_cost;
 // encodes the node's blob and decodes its newest seal: for showing, not for every frame of a loop
 ls_cost ls_cost_of(const ls_node *node);
 
-// a write: a path of string keys (none: the whole value) set to value (NULL: deleted). Copied
+// a write: a path of string keys (none: the whole value) set to value (NULL: deleted). Copied. all: it
+// replaces every item at and under the path, not only the first at each (what ls_value shows)
 typedef struct {
 	const char *const *path;
 	size_t length;
 	const op_value *value;
+	int all;
 } ls_patch;
 // one commit of the patches, sealed and sent. Drops this device's hold on the node
 ls_code ls_write(ls_node *node, const ls_patch *patches, size_t n);
-// the whole value; one key of it; a key removed
+// the whole value; one key of it; a key removed. Each replaces the first item at and under its path
 ls_code ls_put(ls_node *node, const op_value *value);
 ls_code ls_set(ls_node *node, const char *key, const op_value *value);
 ls_code ls_del(ls_node *node, const char *key);
+// the whole value, replacing every item there: ends every clash in the node
+ls_code ls_pick(ls_node *node, const op_value *value);
+
+// an item of a path: a standing write there, or a shallower one's value at it
+typedef struct {
+	const op_value *value; // NULL: gone or far
+	int gone;              // a delete, or a shallower write with nothing at the path
+	int far;               // kept by name only (past LS_ITEMS at its path): no value in memory
+	int inside;            // a standing write under its path is not its own: what shows there differs
+	size_t at;             // how many keys of the path it was written at: the path's own, or fewer (a
+	                       // shallower write, shown because a write here is not its own)
+	// from: who sealed it (a multikey, NULL when unknown), its lamport and its commit's name
+	const uint8_t *signer;
+	size_t signer_length;
+	int64_t lamport;
+	uint8_t name[34];
+} ls_item;
+// the items at a path (length keys; 0: the whole value), first shown first: how many there are, the
+// first max of them into out. Usually 1; 2 or more, or one inside: an open clash. 0: no write is at the
+// path itself (read a shorter one). Valid until the next ls_ call
+size_t ls_values(const ls_node *node, const char *const *path, size_t length, ls_item *out, size_t max);
 
 // a held value: shown on top of the stored one, by the device whose key is signer
 typedef struct {

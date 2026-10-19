@@ -17,17 +17,24 @@
 - littlesync-pigs: cost per pig and the room's on screen and in --dump; several --port / --pty, a link
   each (test/hop.sh: a - b - c over two pty pairs, b relays adds, moves, holds). The Cardputer's top
   line: the last changed pig's cost
+- lists per path (values.org step 5, 2026-10-19): standing writes, replaces on every own write
+  (ls_set/ls_put/ls_del the shown item, ls_pick every item), ls_values, no merge field, passing
+  commits, own never-sent commits folded, names taken over (16 a write), LS_ITEMS far. test/lists.ts
+  checks the C lists against lists.ts on the same commits (exact cases, and never-less on the fuzz).
+  pigs: a clash drawn twice (Mac peer: a faint marker and an "also" line; Cardputer: /pigs/<id>/also),
+  a drop is a pick
 
 * open
+- the lists show more than lists.ts where a cover goes through commits this device never held (the
+  fuzz: about 6 paths a seed, never fewer); a peer's covers answer, or a window, would close it
+  (CONFLICTS.tex small devices)
+- flash: littlesync.c 14.9 KB -> 21.7 KB on the S3 with lists
 - a bridge to the subduction stack / web lab-pig (the format is theirs: node ids, {x, y, at, seed}, held)
 - a commit with no parents could be replayed into another node: the node id is in the message, not in
   the signed commit (seal.h signs the document, so a seal is good in its document only: a replay needs
   the same document; recheck when the owner decides what a node id is)
 - lists and strings: v1 refuses ranges, moves and list indexes
 - the NVS partition size for many pigs (about 1 KB of seals per pig node)
-- whose merge rule a node follows: for now each stack merges its own way (here last writer per path,
-  subduction's eg-walker + conflicts), so the same commits can show differently by route. other
-  places it could live: a node attribute, the node's first commit, each commit. to come back to
 - lossy devices (ints only, cut precision) writing: whether their commits say so. not understood yet
 - red team 2026-10-18 (fixed: oversize own writes refused, own hold never evicted; not real: NUL in
   keys). open, each a choice: who may write (an allowlist? Keyhive later); lamports taken as given

@@ -1,6 +1,5 @@
 {
 	"title": "a head with a higher lamport shows, whatever the names; a write then goes on every head, replacing only what showed: one head, the other's item still listed",
-	"typescript": true,
 	"steps": [
 		{
 			"op": "host",

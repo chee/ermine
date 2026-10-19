@@ -1,6 +1,5 @@
 {
 	"title": "writes through list indexes apart are whole lists at the list's path: two items",
-	"typescript": true,
 	"steps": [
 		{
 			"op": "host",

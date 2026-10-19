@@ -334,13 +334,41 @@ static const char *table_of(const op_value *r) {
 	return t ? t : "value";
 }
 
-// the request's change, else the host's default; the line's
-static ch_header header_of(host_t *h, const op_value *r) {
+// the request's change, else the host's default; the line's. replaces: "all" or [commit], what the
+// write replaces (its change's metadata, sync.c's REPLACES), names in hex
+static ch_header header_of(host_t *h, const op_value *r, FILE *out, bool *ok) {
 	const op_value *change = op_get(r, "change");
-	if (change != NULL) return hh_header(change);
-	ch_site *site = hh_take(sizeof *site);
-	*site = (ch_site){"scenario", 1, 0, NULL, 0};
-	return (ch_header){.has_time = 1, .time = TIME, .actor = hh_hold(op_str(h->name)), .external = site, .external_length = 1};
+	ch_header c;
+	*ok = true;
+	if (change != NULL) c = hh_header(change);
+	else {
+		ch_site *site = hh_take(sizeof *site);
+		*site = (ch_site){"scenario", 1, 0, NULL, 0};
+		c = (ch_header){.has_time = 1, .time = TIME, .actor = hh_hold(op_str(h->name)), .external = site, .external_length = 1};
+	}
+	const op_value *replaces = op_get(r, "replaces");
+	if (replaces == NULL) return c;
+	op_value *said;
+	if (replaces->type == OP_STR && strcmp(replaces->str, "all") == 0) said = hh_hold(op_str("all"));
+	else {
+		said = hh_hold(op_list());
+		for (size_t i = 0; replaces->type == OP_LIST && i < replaces->count; i++) {
+			uint8_t name[CM_NAME];
+			if (!name_of(replaces->items[i], name, out)) return *ok = false, c;
+			char hex[2 * CM_NAME + 1];
+			for (int b = 0; b < CM_NAME; b++) snprintf(hex + 2 * b, 3, "%02x", name[b]);
+			op_push(said, op_str(hex));
+		}
+	}
+	size_t m = c.metadata != NULL ? c.metadata_length : 0;
+	ch_entry *es = hh_take((m + 1) * sizeof *es);
+	size_t n = 0;
+	for (size_t i = 0; i < m; i++)
+		if (c.metadata[i].key == NULL || strcmp(c.metadata[i].key, "replaces") != 0) es[n++] = c.metadata[i];
+	es[n++] = (ch_entry){"replaces", said};
+	c.metadata = es;
+	c.metadata_length = n;
+	return c;
 }
 
 static ch_header *hold_header(ch_header h) {
@@ -356,7 +384,7 @@ static bool write_entry(host_t *h, const char *part, const char *id, const op_pa
 	tb_key p = tb_string(part), k = tb_string(id);
 	keep_line();
 	if (tb_get(h->table, p, k) == NULL) {
-		nd_entry *e = nd_make_entry((op_value *)patches[0].value, change, NULL);
+		nd_entry *e = nd_make_entry((op_value *)patches[0].value, change);
 		if (e == NULL) abort();
 		made(h, e);
 		tb_add(h->table, p, k, e);
@@ -403,10 +431,14 @@ static void counting(const op_value *r, writing_t what, FILE *out) {
 		size_t n = ps != NULL && ps->type == OP_LIST ? ps->count : 0;
 		op_patch *patches = hh_take((n + 1) * sizeof *patches);
 		for (size_t i = 0; i < n; i++) hh_patch(ps->items[i], &patches[i]);
-		ok = n > 0 && write_entry(h, part, id, patches, n, hold_header(header_of(h, r)), out);
+		ch_header c = header_of(h, r, out, &ok);
+		if (!ok) return (void)(now_s = TIME);
+		ok = n > 0 && write_entry(h, part, id, patches, n, hold_header(c), out);
 		if (n == 0) hh_error(out, "no patches");
 	} else if (what == W_TYPE) {
-		const ch_header *change = hold_header(header_of(h, r));
+		ch_header c = header_of(h, r, out, &ok);
+		if (!ok) return (void)(now_s = TIME);
+		const ch_header *change = hold_header(c);
 		const op_value *text = op_get(r, "text"), *path = op_get(r, "path"), *at = op_get(r, "at");
 		long from = at != NULL && at->type == OP_NUM ? (long)at->num : 0;
 		const char *s = text != NULL && text->type == OP_STR ? text->str : "";
@@ -714,6 +746,55 @@ static void shown(const op_value *r, FILE *out) {
 	fputc('}', out);
 }
 
+// the "values" table's entry at the id: {values: {[table]: [{path, items: [{value? | gone?, inside?,
+// at?, from: head}]}]}}, or {}
+static void values(const op_value *r, FILE *out) {
+	host_t *h = of(r, "host", out);
+	if (h == NULL) return;
+	nd_entry *e = tb_get(h->table, tb_string("values"), tb_string(id_of(op_get(r, "id"))));
+	const op_value *v = e != NULL ? e->value : NULL;
+	if (v == NULL || v->type != OP_MAP) {
+		fputs("{}", out);
+		return;
+	}
+	fputs("{\"values\":{", out);
+	for (size_t t = 0; t < v->count; t++) {
+		if (t) fputc(',', out);
+		op_json_string(out, v->keys[t]);
+		fputs(":[", out);
+		const op_value *rows = v->items[t];
+		for (size_t i = 0; rows->type == OP_LIST && i < rows->count; i++) {
+			const op_value *row = rows->items[i], *items = op_get(row, "items");
+			if (i) fputc(',', out);
+			fputs("{\"path\":", out);
+			op_json_write(out, op_get(row, "path"));
+			fputs(",\"items\":[", out);
+			for (size_t k = 0; items != NULL && items->type == OP_LIST && k < items->count; k++) {
+				const op_value *it = items->items[k];
+				if (k) fputc(',', out);
+				fputc('{', out);
+				bool first = true;
+				static const char *const fields[] = {"value", "gone", "inside", "at"};
+				for (size_t f = 0; f < 4; f++) {
+					const op_value *x = op_get(it, fields[f]);
+					if (x == NULL) continue;
+					if (!first) fputc(',', out);
+					first = false;
+					fprintf(out, "\"%s\":", fields[f]);
+					op_json_write(out, x);
+				}
+				if (!first) fputc(',', out);
+				fputs("\"from\":", out);
+				put_head(out, op_get(it, "from"));
+				fputc('}', out);
+			}
+			fputs("]}", out);
+		}
+		fputc(']', out);
+	}
+	fputs("}}", out);
+}
+
 // the "ephemeral" table's entry at the id: {under, on: [{by, name, tables, lamport}]}, name a commit
 static void overlay(const op_value *r, FILE *out) {
 	host_t *h = of(r, "host", out);
@@ -837,7 +918,10 @@ static void writes(const op_value *r, FILE *out) {
 		op_patch *patches = hh_take((pn + 1) * sizeof *patches);
 		for (size_t k = 0; k < pn; k++) hh_patch(ps->items[k], &patches[k]);
 		size_t failed;
-		int code = nd_update(e, patches, pn, *hold_header(header_of(h, w)), &failed);
+		bool fine;
+		ch_header c = header_of(h, w, out, &fine);
+		if (!fine) return;
+		int code = nd_update(e, patches, pn, *hold_header(c), &failed);
 		if (code != OP_OK) {
 			hh_error(out, "%s", op_code_name(code));
 			return;
@@ -1008,6 +1092,7 @@ void hh_answer(const op_value *r, FILE *out) {
 	else if (strcmp(op, "follow") == 0) follow(r, out);
 	else if (strcmp(op, "mint") == 0) mint(r, out);
 	else if (strcmp(op, "write") == 0) counting(r, W_WRITE, out);
+	else if (strcmp(op, "values") == 0) values(r, out);
 	else if (strcmp(op, "type") == 0) counting(r, W_TYPE, out);
 	else if (strcmp(op, "remove") == 0) counting(r, W_REMOVE, out);
 	else if (strcmp(op, "settle") == 0) counting(r, W_SETTLE, out);

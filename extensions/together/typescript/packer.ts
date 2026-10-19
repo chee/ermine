@@ -13,7 +13,8 @@
 //   bytes: per commit, null or its exact bytes; only when a commit's bytes are not what its columns
 //     encode to (a field a later device made, the commit's decode leaves out). the columns are still
 //     written; unpack checks they say the same commit as the bytes
-//   patches: a string when one insert continuing the commit before's text; else the patches
+//   patches: a string when one insert (no replaces) continuing the commit before's text; else the
+//     patches
 //   headers: runs of each signature's varsig header (seal.ts); empty: none read; null: vouched
 //   signatures: each signed one's bytes after its header, in order
 //   ids: each vouched one's stored id, in order
@@ -286,7 +287,8 @@ export function pack(members: readonly Member[]): Uint8Array {
 		patches: commits.map((c, i) => {
 			const p = c.patches[0], want = after(commits[i - 1])
 			if (
-				c.patches.length === 1 && want !== undefined && isInsert(p) &&
+				// a string is the insert alone: one that replaces something goes whole
+				c.patches.length === 1 && want !== undefined && isInsert(p) && !("replaces" in p) &&
 				samePath(p.path, want.path!) &&
 				p.range[0] === want.range![0]
 			) return p.value

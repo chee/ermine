@@ -46,12 +46,13 @@ port to the WebSocket: galaxy_test.ts's `cPeer` does this for littlesync-pigs `-
 
 ## the merge gap
 
-A littlesync write with several parents names the merge rule `littlesync/lww-path`. The gateway's
-history check and the mailroom check no merge rule (that check is sync.ts's), so such a commit is
-taken and forwarded like any other; a sync.ts device without the rule refuses it (`merge`) and every
-commit on it (`parent`). Each one is logged (`merge ... rule "littlesync/lww-path"`) and counted
-(`stats.merges`). Since littlesync names only its heads as parents, this happens on a fork (two
-writers at once), not on every write.
+An older littlesync write with several parents named the merge rule `littlesync/lww-path`. Now
+littlesync writes neither base nor merge: each patch says what it replaces (`replaces`, values.org),
+and the gateway passes the seals through as they are. An older merge commit is still taken and
+forwarded like any other (the gateway's history check and the mailroom check no merge rule; that
+check is sync.ts's), so a sync.ts device without the rule refuses it (`merge`) and every commit on
+it (`parent`). Each one is logged (`merge ... rule "littlesync/lww-path"`) and counted
+(`stats.merges`).
 
 ## left for the container
 
