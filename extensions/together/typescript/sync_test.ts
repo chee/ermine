@@ -2,7 +2,7 @@
 // places, a scheduler and sync over its own device,
 // joined by a pipe. one commit per entry change, the node one object, conflicts in a table, a
 // reload from storage, and what is not kept staying home
-import { assert, assertEquals } from "@std/assert"
+import { assert, assertEquals, assertNotEquals } from "@std/assert"
 import type { Transport } from "npm:@automerge/subduction@0.23.0"
 import * as sd from "npm:@automerge/subduction@0.23.0"
 import createEntry from "@ermine/node/entry"
@@ -16,7 +16,7 @@ import { createTable, type Id, type Key } from "@ermine/table"
 import { decode } from "@ermine/encoding/commit"
 import { hex } from "./hex.ts"
 import { createSigner } from "./seal.ts"
-import { createSync } from "./sync.ts"
+import { createSync, type Head } from "./sync.ts"
 import { serial } from "./rules_harness.ts"
 
 function pipe(): [Transport, Transport] {
@@ -87,7 +87,7 @@ async function host(
 			sync.wrote([e])
 		})
 	const read = (part: Key, id: Id) => table.get(part, id)?.value
-	return { device, table, places, sync, write, read, storage }
+	return { device, table, places, sync, write, read, storage, signer }
 }
 type Host = Awaited<ReturnType<typeof host>>
 
@@ -165,11 +165,27 @@ Deno.test({
 		assertEquals(ca.length, 1)
 		assertEquals(cb, ca)
 		assertEquals(ca[0].tables.value, { n: (shown as { n: number }).n === 1 ? 2 : 1 })
+		// each head as its commit tells it, the one shown beside: who, whose key, when, which
+		const other = ca[0] as unknown as Head, head = a.read("shown", id) as Head
+		assertEquals(b.read("shown", id), head)
+		const mine = (h: Host) => hex(h.signer.key)
+		assertEquals(
+			[head.actor, head.signer, other.actor, other.signer].sort(),
+			["host1", "host2", mine(a), mine(b)].sort(),
+		)
+		assertEquals((head.actor === "host1") === (head.signer === mine(a)), true)
+		assertNotEquals(head.head, other.head)
+		for (const h of [head, other]) {
+			assertEquals(typeof h.time, "number")
+			assertEquals(typeof h.lamport, "number")
+		}
 		// settled on one side: one head everywhere, nothing listed
 		a.sync.settle(id)
 		await quiet(a, b)
 		assertEquals(a.read("conflicts", id), undefined)
 		assertEquals(b.read("conflicts", id), undefined)
+		assertEquals(a.read("shown", id), undefined)
+		assertEquals(b.read("shown", id), undefined)
 		assertEquals(b.read("value", id), shown)
 		await a.device.close(), await b.device.close()
 	},

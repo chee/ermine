@@ -669,6 +669,24 @@ static void change(const op_value *r, FILE *out) {
 	fputc('}', out);
 }
 
+// a head (sync.c's head_of) in an answer: its label, its fields
+static void put_head(FILE *out, const op_value *c) {
+	const op_value *head = op_get(c, "head");
+	fputs("{\"head\":", out);
+	uint8_t *name;
+	size_t n;
+	if (head != NULL && head->type == OP_STR && cf_unhex(head->str, &name, &n) && n == CM_NAME) put_label(out, name);
+	else op_json_write(out, head);
+	static const char *const fields[] = {"lamport", "actor", "signer", "time", "external", "tables"};
+	for (size_t i = 0; i < sizeof fields / sizeof *fields; i++) {
+		const op_value *v = op_get(c, fields[i]);
+		if (v == NULL) continue;
+		fprintf(out, ",\"%s\":", fields[i]);
+		op_json_write(out, v);
+	}
+	fputc('}', out);
+}
+
 static void conflicts(const op_value *r, FILE *out) {
 	host_t *h = of(r, "host", out);
 	if (h == NULL) return;
@@ -676,22 +694,24 @@ static void conflicts(const op_value *r, FILE *out) {
 	fputs("{\"conflicts\":[", out);
 	const op_value *list = e != NULL ? e->value : NULL;
 	for (size_t i = 0; list != NULL && list->type == OP_LIST && i < list->count; i++) {
-		const op_value *c = list->items[i], *head = op_get(c, "head");
 		if (i) fputc(',', out);
-		fputs("{\"head\":", out);
-		uint8_t *name;
-		size_t n;
-		if (head != NULL && head->type == OP_STR && cf_unhex(head->str, &name, &n) && n == CM_NAME) put_label(out, name);
-		else op_json_write(out, head);
-		fputs(",\"lamport\":", out);
-		op_json_write(out, op_get(c, "lamport"));
-		fputs(",\"actor\":", out);
-		op_json_write(out, op_get(c, "actor"));
-		fputs(",\"tables\":", out);
-		op_json_write(out, op_get(c, "tables"));
-		fputc('}', out);
+		put_head(out, list->items[i]);
 	}
 	fputs("]}", out);
+}
+
+// the "shown" table's entry at the id: {shown: head}, or {}
+static void shown(const op_value *r, FILE *out) {
+	host_t *h = of(r, "host", out);
+	if (h == NULL) return;
+	nd_entry *e = tb_get(h->table, tb_string("shown"), tb_string(id_of(op_get(r, "id"))));
+	if (e == NULL) {
+		fputs("{}", out);
+		return;
+	}
+	fputs("{\"shown\":", out);
+	put_head(out, e->value);
+	fputc('}', out);
 }
 
 // the "ephemeral" table's entry at the id: {under, on: [{by, name, tables, lamport}]}, name a commit
@@ -997,6 +1017,7 @@ void hh_answer(const op_value *r, FILE *out) {
 	} else if (strcmp(op, "read") == 0) read_entry(r, out);
 	else if (strcmp(op, "change") == 0) change(r, out);
 	else if (strcmp(op, "conflicts") == 0) conflicts(r, out);
+	else if (strcmp(op, "shown") == 0) shown(r, out);
 	else if (strcmp(op, "status") == 0) status(r, out);
 	else if (strcmp(op, "events") == 0) events(r, out);
 	else if (strcmp(op, "writes") == 0) writes(r, out);
