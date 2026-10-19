@@ -132,7 +132,7 @@ api_context *api_context_new(const api_setup *setup) {
 	api_context *x = xalloc(sizeof *x);
 	x->s = *setup;
 	x->statuses = cst_new(&(cst_setup){setup->places, setup->table, setup->scheduler});
-	x->runs = crn_new(&(crn_setup){setup->places, setup->table, setup->scheduler});
+	x->runs = setup->no_runs ? NULL : crn_new(&(crn_setup){setup->places, setup->table, setup->scheduler});
 	x->settle = sc_on_settle(setup->scheduler, settled, x);
 	x->ended = op_str("ended");
 	x->replaced = op_str("replaced");
@@ -664,7 +664,7 @@ static void del_all(api *a, const char *id) {
 	for (size_t i = 0; i < n; i++) parts[i] = xdup(at[i].part.string);
 	for (size_t i = 0; i < n; i++) tb_del(a->x->s.table, tb_string(parts[i]), tb_string(id)), free(parts[i]);
 	free(parts);
-	crn_drop(a->x->runs, tb_string(id));
+	if (a->x->runs) crn_drop(a->x->runs, tb_string(id));
 }
 
 // open, create ---------------------------------------------------------------------------------
@@ -1138,7 +1138,7 @@ static sc_out computer_f(void *previous, void *data) {
 		c->given = 1;
 		sc_computer *self = sc_run_computer(sc_get_run(c->x->s.scheduler));
 		cst_give(c->x->statuses, self, tb_string(c->id));
-		crn_give(c->x->runs, self, tb_string(c->id));
+		if (c->x->runs) crn_give(c->x->runs, self, tb_string(c->id));
 	}
 	return c->f(c->a, previous, c->ctx);
 }
@@ -1340,7 +1340,7 @@ static int make_computer(api *a, int memo, int early, const char *name, api_comp
 	}
 	if (x->s.sites != NULL) st_note(x->s.sites, c->c, file, line, func);
 	cst_give(x->statuses, c->c, tb_string(c->id));
-	crn_give(x->runs, c->c, tb_string(c->id));
+	if (x->runs) crn_give(x->runs, c->c, tb_string(c->id));
 	*out = node_at(&c->path);
 	computer_hold(c);
 	later(x);
