@@ -415,14 +415,16 @@ static void commit(api *a, const pl_changed *c) {
 	else pl_commit(a->x->s.places, c);
 }
 
-// a header made now, with a scope open
-static int header(api *a, ch_header *h, pl_made **made) {
-	char *bad = pl_header(a->x->s.places, NULL, 0, NULL, h, made);
+// a header made now, with a scope open; extra (n pairs): its innermost metadata (edits: what it
+// replaces)
+static int header_with(api *a, const sc_pair *extra, size_t n, ch_header *h, pl_made **made) {
+	char *bad = pl_header(a->x->s.places, extra, n, NULL, h, made);
 	if (bad == NULL) return 0;
 	fail(a, API_FAILED, bad);
 	free(bad);
 	return API_FAILED;
 }
+static int header(api *a, ch_header *h, pl_made **made) { return header_with(a, NULL, 0, h, made); }
 // each entry changed told the header too, which the caller's hold is let go of
 static void hold_changed(api *a, const pl_changed *c, pl_made *made) {
 	for (size_t i = 0; i < c->n; i++) {
@@ -490,12 +492,13 @@ static block *block_new(const op_patch *src, size_t n) {
 }
 
 // patches on (part, id): the entry made when there is none (the table event tells its readers),
-// else updated and committed
-static int write(api *a, const char *part, const char *id, const op_patch *patches, size_t n) {
+// else updated and committed. extra: the change's innermost metadata
+static int write_with(api *a, const char *part, const char *id, const op_patch *patches, size_t n,
+	const sc_pair *extra, size_t nextra) {
 	api_apis *x = a->x;
 	ch_header h;
 	pl_made *made;
-	int code = header(a, &h, &made);
+	int code = header_with(a, extra, nextra, &h, &made);
 	if (code) return code;
 	block *b = block_new(patches, n);
 	nd_entry *e = tb_get(x->s.table, tb_string(part), tb_string(id));
@@ -528,6 +531,9 @@ static int write(api *a, const char *part, const char *id, const op_patch *patch
 	pl_hold(x->s.places, e, made, pl_made_free);
 	pl_hold_also(x->s.places, e, b, block_free);
 	return 0;
+}
+static int write(api *a, const char *part, const char *id, const op_patch *patches, size_t n) {
+	return write_with(a, part, id, patches, n, NULL, 0);
 }
 // a whole value as one patch; NULL: taken out
 static int write_whole(api *a, const char *part, const char *id, const op_value *v) {
@@ -757,6 +763,147 @@ int api_peep(api *a, api_target x, const op_key *path, size_t n, const op_value 
 	return p.code;
 }
 
+// a map's field; not a map: NULL
+static const op_value *field(const op_value *m, const char *key) {
+	return m && m->type == OP_MAP ? op_get(m, key) : NULL;
+}
+static int yes(const op_value *m, const char *key) {
+	const op_value *v = field(m, key);
+	return v && v->type == OP_BOOL && v->bool_;
+}
+// a number field of a map; none, or not a number: 0
+static int number_of(const op_value *m, const char *key, int64_t *out) {
+	const op_value *v = field(m, key);
+	if (v == NULL || v->type != OP_NUM) return 0;
+	*out = (int64_t)v->num;
+	return 1;
+}
+static char *text_of(const op_value *m, const char *key) {
+	const op_value *v = field(m, key);
+	return v && v->type == OP_STR ? xdup(v->str) : NULL;
+}
+// sites as values, as sync tells them (extensions/together's head_from)
+static op_value *sites_of(const ch_site *external, size_t n) {
+	op_value *sites = op_list();
+	for (size_t i = 0; i < n; i++) {
+		const ch_site *x = &external[i];
+		op_value *site = op_map();
+		op_set(site, "file", op_str(x->file ? x->file : ""));
+		op_set(site, "line", op_num((double)x->line));
+		if (x->has_column) op_set(site, "column", op_num((double)x->column));
+		if (x->function != NULL) op_set(site, "function", op_str(x->function));
+		op_push(sites, site);
+	}
+	return sites;
+}
+
+// a commit as sync tells it ({head, lamport, actor, signer, time, external?}): the first item's
+// from, or else a conflict's
+static api_from from_of(const op_value *h, const char *part, int conflict) {
+	api_from f = {.conflict = conflict, .head = text_of(h, "head"),
+		.who = op_ref((op_value *)field(h, "actor")),
+		.where = op_ref((op_value *)field(h, "external"))};
+	f.has_when = number_of(h, "time", &f.when);
+	if (conflict) {
+		f.signer = text_of(h, "signer");
+		number_of(h, "lamport", &f.lamport);
+		f.differs = xalloc(sizeof *f.differs);
+		f.differs[0] = xdup(part);
+		f.ndiffers = 1;
+	}
+	return f;
+}
+static void from_free(api_from *f) {
+	free(f->head), free(f->by), free(f->signer);
+	op_free(f->who), op_free(f->where);
+	for (size_t i = 0; i < f->ndiffers; i++) free(f->differs[i]);
+	free(f->differs);
+}
+void api_versions_free(api_versions *versions) {
+	for (size_t i = 0; i < versions->n; i++) {
+		op_free(versions->items[i].value);
+		from_free(&versions->items[i].from);
+	}
+	free(versions->items);
+	*versions = (api_versions){0};
+}
+
+// sync's row at path, as its "values" at id has them, tracked: the path's own, or the nearest
+// open path's above it ({path, items}); *depth its path's length. none listed: NULL
+static const op_value *listed(api *a, const char *part, const char *id, const op_key *path, size_t n,
+	size_t *depth) {
+	op_key at = {.type = OP_STR_KEY, .s = part};
+	const op_value *rows = pl_read(a->places, tb_string("values"), tb_string(id), &at, 1);
+	const op_value *near = NULL;
+	for (size_t r = 0; rows && rows->type == OP_LIST && r < rows->count; r++) {
+		const op_value *steps = field(rows->items[r], "path");
+		if (steps == NULL || steps->type != OP_LIST || steps->count > n) continue;
+		size_t k = 0;
+		for (; k < steps->count; k++) {
+			const op_value *s = steps->items[k];
+			if (s->type != OP_STR || path[k].type != OP_STR_KEY) break;
+			if (strcmp(s->str, path[k].s) != 0) break;
+		}
+		if (k < steps->count) continue;
+		if (near == NULL || steps->count > *depth) near = rows->items[r], *depth = steps->count;
+	}
+	return near;
+}
+
+int api_reads(api *a, api_target x, const op_key *path, size_t n, api_versions *out) {
+	*out = (api_versions){0};
+	found f;
+	int code = found_of(a, x, &f);
+	if (code) return code;
+	const op_value *shown;
+	code = api_read(a, api_of(f.n), path, n, &shown);
+	char *id = code ? NULL : id_of(a, f.n);
+	if (id == NULL) return found_free(&f), code;
+	const char *part = f.n->part;
+	op_value *value = op_ref((op_value *)shown);
+	size_t depth = 0;
+	const op_value *row = listed(a, part, id, path, n, &depth);
+	const op_value *items = field(row, "items");
+	code = alive(a);
+	if (!code && (items == NULL || items->type != OP_LIST || items->count == 0)) {
+		// nothing open there: what read gives, from its entry's change
+		const nd_entry *e = tb_get(a->x->s.table, tb_string(part), tb_string(id));
+		if (value) {
+			api_from from = {0};
+			if (e && e->change.actor) from.who = op_ref((op_value *)e->change.actor);
+			if (e && e->change.has_time) from.has_when = 1, from.when = e->change.time;
+			if (e && e->change.external) {
+				from.where = sites_of(e->change.external, e->change.external_length);
+			}
+			out->items = xalloc(sizeof *out->items);
+			out->items[0] = (api_version){.value = value, .from = from};
+			out->n = 1;
+			value = NULL;
+		}
+	} else if (!code) {
+		out->items = xalloc(items->count * sizeof *out->items);
+		op_value scratch = {0};
+		for (size_t i = 0; i < items->count; i++) {
+			const op_value *it = items->items[i];
+			// each value at path (none there: gone)
+			const op_value *v = yes(it, "gone") ? NULL
+				: pl_at(field(it, "value"), path + depth, n - depth, &scratch);
+			api_version version = {
+				.value = i == 0 ? value : v == &scratch ? op_num(scratch.num) : op_ref((op_value *)v),
+				.from = from_of(field(it, "from"), part, i > 0),
+				.gone = v == NULL,
+				.inside = yes(it, "inside"),
+			};
+			out->items[out->n++] = version;
+		}
+		value = NULL;
+	}
+	op_free(value);
+	free(id);
+	found_free(&f);
+	return code;
+}
+
 void api_items_free(api_items *items) {
 	for (size_t i = 0; i < items->n; i++) {
 		op_free(items->items[i].value);
@@ -879,6 +1026,9 @@ typedef struct {
 	api_target x;
 	const op_patch *patches;
 	size_t n;
+	// edits: what it replaces
+	const sc_pair *extra;
+	size_t nextra;
 } editing;
 static int do_edit(api *a, void *data) {
 	editing *e = data;
@@ -889,15 +1039,35 @@ static int do_edit(api *a, void *data) {
 	code = need_id(a, f.n, &id);
 	if (!code) {
 		code = ask(a, "edit", gd_target_of(thing_of(id, f.n), f.n->part, NULL));
-		if (!code && e->n) code = write(a, f.n->part, id, e->patches, e->n);
+		if (!code && e->n) code = write_with(a, f.n->part, id, e->patches, e->n, e->extra, e->nextra);
 		free(id);
 	}
 	found_free(&f);
 	return code;
 }
 int api_edit(api *a, api_target x, const op_patch *patches, size_t n) {
-	editing e = {x, patches, n};
+	editing e = {x, patches, n, NULL, 0};
 	int code = within(a, do_edit, &e);
+	if (!code) later(a->x);
+	return code;
+}
+
+// the metadata key a write says what it replaces by, for sync: "all", or commit names (hex)
+// (extensions/together's REPLACES)
+#define REPLACES "replaces"
+
+// api_edit's, telling sync what it replaces: every value at each path written, or the ones given
+// (by their heads)
+int api_edits(api *a, api_target x, const op_patch *patches, size_t n, const api_version *which,
+	size_t nwhich) {
+	op_value *said = which == NULL ? op_str("all") : op_list();
+	for (size_t i = 0; which != NULL && i < nwhich; i++) {
+		if (which[i].from.head) op_push(said, op_str(which[i].from.head));
+	}
+	sc_pair extra = {REPLACES, said};
+	editing e = {x, patches, n, &extra, 1};
+	int code = within(a, do_edit, &e);
+	op_free(said);
 	if (!code) later(a->x);
 	return code;
 }
