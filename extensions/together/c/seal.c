@@ -19,8 +19,8 @@ const char *sl_code_name(sl_code code) {
 
 // what is signed: "ermine/v0/commit", the document's 32 bytes, the signature's header, then the
 // commit's name (a header tells its own length, as a name does). MESSAGE: the most the built in
-// verifier takes, its header 8 bytes
-#define MESSAGE 90
+// verifier takes, its header 8 bytes: a sealed message's (said, below), with the longest topic
+#define MESSAGE (17 + 32 + 8 + SL_TOPIC)
 static size_t message(const uint8_t doc[32], const uint8_t *header, size_t header_length, const uint8_t name[CM_NAME], uint8_t *m) {
 	memcpy(m, "ermine/v0/commit", 16);
 	memcpy(m + 16, doc, 32);
@@ -208,6 +208,96 @@ sl_code sl_unseal(const uint8_t *sealed, size_t length, const uint8_t doc[32], s
 	sl_stored(sealed, length, out->stored);
 	jsonFree(x);
 	return SL_OK;
+}
+
+// what a message's seal signs: "ermine/v0/message", the BLAKE3 of the bytes, the signature's header,
+// then the topic (the rest). 0: a topic that is not one
+static size_t said(const char *topic, const uint8_t *header, size_t header_length, const uint8_t *bytes, size_t length,
+	uint8_t **m) {
+	size_t t = topic != NULL ? strlen(topic) : 0;
+	if (t == 0 || t > SL_TOPIC) return 0;
+	*m = allocate(49 + header_length + t);
+	memcpy(*m, "ermine/v0/message", 17);
+	cm_digest(bytes, length, *m + 17);
+	memcpy(*m + 49, header, header_length);
+	memcpy(*m + 49 + header_length, topic, t);
+	return 49 + header_length + t;
+}
+
+sl_code sl_seal_message(const char *topic, const uint8_t *bytes, size_t length, const sl_signer *signer, uint8_t **out,
+	size_t *out_length) {
+	*out = NULL;
+	uint8_t *m;
+	size_t m_length = said(topic, signer->header, signer->header_length, bytes, length, &m);
+	if (m_length == 0) return SL_SHAPE;
+	uint8_t *signature = allocate(signer->header_length + SL_RAW_MAX);
+	size_t raw = signer->sign(signer->context, m, m_length, signature + signer->header_length);
+	free(m);
+	if (raw == 0 || raw > SL_RAW_MAX) return free(signature), SL_SHAPE;
+	memcpy(signature, signer->header, signer->header_length);
+	// in the canonical order: bytes, signer, signature
+	Json *sealed = jsonObject();
+	jsonAdd(sealed, "bytes", jsonBytes(bytes, length));
+	jsonAdd(sealed, "signer", jsonBytes(signer->key, signer->key_length));
+	jsonAdd(sealed, "signature", jsonBytes(signature, signer->header_length + raw));
+	free(signature);
+	size_t n = 0;
+	cborEncode(sealed, NULL, 0, &n, NULL);
+	uint8_t *b = allocate(n);
+	cborEncode(sealed, b, n, &n, NULL);
+	jsonFree(sealed);
+	*out = b;
+	*out_length = n;
+	return SL_OK;
+}
+
+sl_code sl_open_message(const uint8_t *sealed, size_t length, const char *topic, sl_message *out, const sl_verifiers *more) {
+	memset(out, 0, sizeof *out);
+	Json *x = cborDecode(sealed, length, NULL, NULL);
+	if (x == NULL || x->type != JSON_OBJECT || x->object.count != 3) return jsonFree(x), SL_SHAPE;
+	const Json *bytes = jsonGet(x, "bytes"), *signer = jsonGet(x, "signer"), *signature = jsonGet(x, "signature");
+	uint64_t code;
+	const uint8_t *key;
+	size_t key_length;
+	if (bytes == NULL || bytes->type != JSON_BYTES || signer == NULL || signer->type != JSON_BYTES ||
+		signature == NULL || signature->type != JSON_BYTES || signer->bytes.length > CM_SIGNER_MAX ||
+		!cm_key_split(signer->bytes.data, signer->bytes.length, &code, &key, &key_length)) {
+		jsonFree(x);
+		return SL_SHAPE;
+	}
+	const sl_verifier *v = NULL;
+	for (size_t i = 0; v == NULL && i < 1 + (more != NULL ? more->count : 0); i++) {
+		const sl_verifier *w = i == 0 ? &BUILT_IN : &more->items[i - 1];
+		if (signature->bytes.length >= w->header_length && memcmp(signature->bytes.data, w->header, w->header_length) == 0) v = w;
+	}
+	const char *reason = NULL;
+	if (v == NULL) reason = "no verifier for this signature header";
+	else if (code != v->code) reason = "the header and the signer's key differ";
+	else if (signature->bytes.length != v->header_length + v->size) return jsonFree(x), SL_SHAPE;
+	else {
+		uint8_t *m;
+		size_t m_length = said(topic, v->header, v->header_length, bytes->bytes.data, bytes->bytes.length, &m);
+		if (m_length == 0) return jsonFree(x), SL_SHAPE;
+		if (!v->verify(v->context, signature->bytes.data + v->header_length, key, key_length, m, m_length)) reason = "";
+		free(m);
+	}
+	if (reason != NULL) {
+		jsonFree(x);
+		out->reason = reason[0] ? reason : NULL;
+		return SL_SIGNATURE;
+	}
+	memcpy(out->signer, signer->bytes.data, signer->bytes.length);
+	out->signer_length = signer->bytes.length;
+	out->bytes = allocate(bytes->bytes.length + 1);
+	memcpy(out->bytes, bytes->bytes.data, bytes->bytes.length);
+	out->length = bytes->bytes.length;
+	jsonFree(x);
+	return SL_OK;
+}
+
+void sl_message_free(sl_message *m) {
+	free(m->bytes);
+	*m = (sl_message){0};
 }
 
 void sl_free(sl_unsealed *u) {

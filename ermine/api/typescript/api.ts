@@ -31,13 +31,18 @@
 //   read(x, path?)       value at path, tracked; none: undefined; a pending memo throws PENDING
 //   peep(x, path?)       value at path, untracked (no dependency: a write there reruns nothing);
 //                        none, or a pending memo: undefined
-//   reads(x, path?)      every value at path, tracked: [{ value, from }], the one read gives first
-//                        (from "shown"), then each head sync's "conflicts" holds (from its name);
-//                        none: []; a pending memo throws PENDING
+//   reads(x, path?)      every value at path, tracked: [{ value, from, gone?, inside? }] (From),
+//                        sync's items there (its "values": the path's, or an open path's above
+//                        it, at path). position 0 is read's (undefined too), from its item, else
+//                        from its entry's change; then the rest, each from its commit; none: [];
+//                        a pending memo throws PENDING
 //   entries(x)           every item: [{ value, from, id, refused? }]; none: []
 //   list(x)              the names under x, tracked
 //   info(x)              x's attributes, as a node
-//   edit(x, change)      patches or a recipe; one change (made if missing)
+//   edit(x, change)      patches or a recipe; one change (made if missing). synced, it replaces
+//                        what reads showed first at each path it writes
+//   edits(x, change, which?)   edit's, replacing every value reads gives at each path it writes,
+//                        or the ones given (reads' items)
 //   watch(x, fn)         fn at each write at x, with patches, change and value; returns the stop
 //   place(p, x)          x's node at a second name. unplace(p): the name out, the node stays
 //   move(from, to)       places' move. remove(x): unplaced and its entries deleted
@@ -226,12 +231,63 @@ export type Item = {
 	readonly refused?: true
 }
 
-// one value a path holds: the one shown (from "shown"), or another head's (from its name)
-export type Version = { readonly value: unknown; readonly from: string }
+// one value a path holds, and where it is from. gone: a delete; inside: a write under it is not its
+// own (sync's items, extensions/together's lists)
+export type Version = {
+	readonly value: unknown
+	readonly from: From
+	readonly gone?: true
+	readonly inside?: true
+}
 
-// a head that does not show, as sync writes it at "conflicts" (extensions/together's Conflict):
-// its name, and the parts it differs in (a part not there: as shown)
-type Head = { readonly head: string; readonly tables: Readonly<Record<string, unknown>> }
+// the value read gives: the commit of the first item sync has there (who: actor, when: time,
+// where: external, head: its name), or none listed, its entry's change; a field not known left
+// out
+export type Shown = {
+	readonly who?: unknown
+	readonly when?: number
+	readonly where?: ChangeHeader["external"]
+	readonly head?: string
+}
+
+// another value sync has at the path (a conflict): by, the sync engine (undefined for now: it
+// becomes the sync process's id once hosts run sync as a process); its commit as it tells it (head:
+// its name, who: actor, signer hex, when: time, lamport, where: external); differs, the part
+export type Conflict = {
+	readonly kind: "conflict"
+	readonly by: Id | undefined
+	readonly head: string
+	readonly who: unknown
+	readonly signer: string
+	readonly when: number
+	readonly lamport: number
+	readonly where?: ChangeHeader["external"]
+	readonly differs: readonly string[]
+}
+
+export type From = Shown | Conflict
+
+// a commit as sync tells it (extensions/together's Head), and one item of a path's list and each
+// open path's, as its "values" table has them (Item, Values)
+type Head = {
+	readonly head: string
+	readonly lamport: number
+	readonly actor: unknown
+	readonly signer: string
+	readonly time: number
+	readonly external?: ChangeHeader["external"]
+}
+type Listed = {
+	readonly value?: unknown
+	readonly gone?: true
+	readonly inside?: true
+	readonly from: Head
+}
+type Row = { readonly path: readonly Step[]; readonly items: readonly Listed[] }
+
+// the metadata key a write says what it replaces by, for sync: "all", or commit names (hex)
+// (extensions/together's REPLACES)
+const REPLACES = "replaces"
 
 export type BoxNode = {
 	readonly box: Box
@@ -252,6 +308,7 @@ export type API = {
 	list: (x: Target) => string[]
 	info: (x: Target) => Node
 	edit: (x: Target, change: Change) => void
+	edits: (x: Target, change: Change, which?: readonly Version[]) => void
 	watch: (x: Target, fn: (w: Watched) => void) => () => void
 	place: (at: string | Path, x: Target) => void
 	unplace: (at: string | Path) => void
@@ -398,21 +455,22 @@ export function createProcessContext(setup: Setup): ProcessContext {
 	const newId = setup.id ?? uuidv7
 	s.onSettle(later)
 
-	const header = () => createChangeHeader(s)
+	const header = (extra?: Info) => createChangeHeader(s, extra)
 
 	// what a part holds when nothing is there: attributes are a map, so {}; a value, nothing
 	const empty = (part: Key) => part === "attributes" ? {} : undefined
 
 	// patches on (part, id): the entry made when there is none (the table event tells its readers),
 	// else updated and committed
-	function write(part: Key, id: Id, patches: readonly Patch[]) {
+	// extra: the change's innermost metadata (edits: what it replaces)
+	function write(part: Key, id: Id, patches: readonly Patch[], extra?: Info) {
 		const entry = table.get(part, id) as Entry<unknown> | undefined
 		if (entry === undefined) {
 			const v = apply(empty(part), patches)
-			if (v !== undefined) table.add(part, id, createEntry(v, header()) as never)
+			if (v !== undefined) table.add(part, id, createEntry(v, header(extra)) as never)
 			return
 		}
-		update(entry, patches, header())
+		update(entry, patches, header(extra))
 		commit([entry])
 	}
 
@@ -570,19 +628,65 @@ export function createProcessContext(setup: Setup): ProcessContext {
 			const shown = read(n, path)
 			const id = idOf(n)
 			if (id === undefined) return []
-			const items: Version[] = shown === undefined ? [] : [{ value: shown, from: "shown" }]
-			return items.concat(others(n.part, id, path, shown))
-		}
-		// the other heads' values at path, as sync gives them: its "conflicts" at id, tracked; a head
-		// with nothing there left out
-		function others(part: Key, id: Id, path: readonly Step[], shown: unknown): Version[] {
-			const heads = places.readValue("conflicts" as Key, id) as readonly Head[] | undefined
-			const items: Version[] = []
-			for (const h of heads ?? []) {
-				const value = Object.hasOwn(h.tables, part) ? dig(h.tables[part], path) : shown
-				if (value !== undefined) items.push({ value, from: h.head })
+			const items = listed(n.part, id, path)
+			if (items === undefined) {
+				// nothing open there: what read gives, from its entry's change
+				if (shown === undefined) return []
+				const change = (table.get(n.part, id) as Entry<unknown> | undefined)?.change
+				const from: Shown = {
+					...change?.actor !== undefined && { who: change.actor },
+					...change?.time !== undefined && { when: change.time },
+					...change?.external !== undefined && { where: change.external },
+				}
+				return [{ value: shown, from }]
 			}
-			return items
+			const marks = (i: Listed) => ({
+				...i.gone && { gone: true as const },
+				...i.inside && { inside: true as const },
+			})
+			const [first, ...rest] = items, h = first.from
+			const from: Shown = {
+				who: h.actor,
+				when: h.time,
+				...h.external !== undefined && { where: h.external },
+				head: h.head,
+			}
+			return [
+				{ value: shown, from, ...marks(first) },
+				...rest.map((i): Version => ({
+					value: i.value,
+					from: {
+						kind: "conflict",
+						by: undefined,
+						head: i.from.head,
+						who: i.from.actor,
+						signer: i.from.signer,
+						when: i.from.time,
+						lamport: i.from.lamport,
+						...i.from.external !== undefined && { where: i.from.external },
+						differs: [n.part as string],
+					},
+					...marks(i),
+				})),
+			]
+		}
+		// sync's items at path, as its "values" at id has them, tracked: the path's own, or the
+		// nearest open path's above it, each value at path (none there: gone). none listed: undefined
+		function listed(part: Key, id: Id, path: readonly Step[]): Listed[] | undefined {
+			const rows = places.readValue("values" as Key, id, [part as string]) as
+				| readonly Row[]
+				| undefined
+			let near: Row | undefined
+			for (const r of rows ?? []) {
+				if (r.path.length > path.length || !r.path.every((k, i) => k === path[i])) continue
+				if (near === undefined || r.path.length > near.path.length) near = r
+			}
+			if (near === undefined) return undefined
+			const rest = path.slice(near.path.length)
+			return near.items.map((i) => {
+				const value = i.gone ? undefined : dig(i.value, rest)
+				return value === undefined ? { ...i, value, gone: true } : { ...i, value }
+			})
 		}
 
 		function entries(x: Target): Item[] {
@@ -621,7 +725,7 @@ export function createProcessContext(setup: Setup): ProcessContext {
 
 		const info = (x: Target): Node => ({ ...nodeOf(x), part: "attributes" })
 
-		function edit(x: Target, change: Change) {
+		function edit(x: Target, change: Change, extra?: Info) {
 			within(() => {
 				const n = nodeOf(x)
 				const id = needId(n)
@@ -629,9 +733,16 @@ export function createProcessContext(setup: Setup): ProcessContext {
 				const patches = typeof change === "function"
 					? produce(table.get(n.part, id)?.value ?? empty(n.part), change as never)
 					: change
-				if (patches.length) write(n.part, id, patches)
+				if (patches.length) write(n.part, id, patches, extra)
 			})
 			later()
+		}
+
+		// edit's, telling sync what it replaces: every value at each path written, or the ones given
+		// (by their heads)
+		function edits(x: Target, change: Change, which?: readonly Version[]) {
+			const heads = which?.flatMap((v) => typeof v.from.head === "string" ? [v.from.head] : [])
+			edit(x, change, { [REPLACES]: heads ?? "all" })
 		}
 
 		function watch(x: Target, fn: (w: Watched) => void): () => void {
@@ -1090,7 +1201,8 @@ export function createProcessContext(setup: Setup): ProcessContext {
 			entries,
 			list,
 			info,
-			edit,
+			edit: (x: Target, change: Change) => edit(x, change),
+			edits,
 			watch,
 			place,
 			unplace,

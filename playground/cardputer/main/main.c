@@ -12,6 +12,7 @@
 #include "freertos/task.h"
 #include "host.h"
 #include "keys.h"
+#include "net.h"
 #include "screen.h"
 #include "shell.h"
 #include "room.h"

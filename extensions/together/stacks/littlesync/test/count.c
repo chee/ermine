@@ -2,13 +2,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-size_t lsc_bytes, lsc_blocks;
+size_t lsc_bytes, lsc_blocks, lsc_calls, lsc_peak;
 
 void *lsc_malloc(size_t n) {
 	size_t *p = malloc(n + 16);
 	if (p == NULL) return NULL;
 	p[0] = n;
-	lsc_bytes += n, lsc_blocks++;
+	lsc_bytes += n, lsc_blocks++, lsc_calls++;
+	if (lsc_bytes > lsc_peak) lsc_peak = lsc_bytes;
 	return p + 2;
 }
 void *lsc_calloc(size_t a, size_t b) {
@@ -28,7 +29,8 @@ void *lsc_realloc(void *q, size_t n) {
 	size_t *r = realloc(p, n + 16);
 	if (r == NULL) return NULL;
 	r[0] = n;
-	lsc_bytes += n - old;
+	lsc_bytes += n - old, lsc_calls++;
+	if (lsc_bytes > lsc_peak) lsc_peak = lsc_bytes;
 	return r + 2;
 }
 char *lsc_strdup(const char *s) {

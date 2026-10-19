@@ -281,7 +281,8 @@ pkr_code pkr_pack(const pkr_item *sealed, size_t n, uint8_t **out, size_t *lengt
 		if (ps->array.count == 1 && i > 0 && insert_end(jsonGet(commits[i - 1], "patches"), &path, &start)) {
 			const Json *p = ps->array.items[0], *p_path, *value = jsonGet(p, "value");
 			double p_start;
-			if (insert_end(ps, &p_path, &p_start) && same_path(p_path, path) &&
+			// a string is the insert alone: one that replaces something goes whole
+			if (insert_end(ps, &p_path, &p_start) && jsonGet(p, "replaces") == NULL && same_path(p_path, path) &&
 				jsonGet(p, "range")->array.items[0]->number == start) {
 				jsonPush(patches, jsonStringOfLength(value->string, value->stringLength));
 				continue;

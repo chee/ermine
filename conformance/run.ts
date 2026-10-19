@@ -9,7 +9,8 @@
 // numbers exactly (digits alone past 2^53 - 1: a bigint), doubles; "/" forms: form.ts.
 // key order is kept on the way out, ignored when comparing (maps by content).
 //
-// scenario <package>/conformance/<suite>/NN-name.json: { title, steps }
+// scenario <package>/conformance/<suite>/NN-name.json: { title, typescript?, steps }; typescript:
+// the TypeScript harness only (another implementation's comes later), as the suite option
 //   expect: answer fields, deep-equal; no others   fails: true: answer is { error }
 //   skip: fields not compared                      no expect: not compared
 // <suite>/suite.json:
@@ -40,6 +41,11 @@ const names = Deno.args.filter((a) => !a.startsWith("--"))
 const all = suites()
 const chosen = names.length ? names.map((n) => all.find((s) => s.name === n)!) : all
 for (const [i, s] of chosen.entries()) if (!s) throw new Error(`no suite ${names[i]}`)
+
+// a harness not TypeScript's (HARNESS: any other, as the Makefile's C runs): a scenario typescript:
+// true is not run on it
+const native = flags.some((f) => f === "--c" || f === "--check" || f === "--leaks")
+const other = native || Deno.env.get("HARNESS") !== undefined
 
 function harness(s: Suite): string[] {
 	if (Deno.env.get("HARNESS")) return command(s.name)
@@ -245,15 +251,15 @@ for (const s of chosen) {
 		})
 	}
 	for (const file of files) {
-		const { title, steps } = read(Deno.readTextFileSync(s.fixtures + file)) as {
+		const { title, typescript, steps } = read(Deno.readTextFileSync(s.fixtures + file)) as {
 			title: string
+			typescript?: boolean
 			steps: Step[]
 		}
 		for (const run of runs) {
 			Deno.test({
 				name: `${s.name}/${file}: ${title}${run.name}`,
-				ignore: s.options.typescript === true &&
-					flags.some((f) => f === "--c" || f === "--check" || f === "--leaks"),
+				ignore: s.options.typescript === true && native || typescript === true && other,
 			}, async () => {
 				const from = Math.floor(Date.now() / 1000)
 				// the steps, the reads around each refused one: where each step's answer is

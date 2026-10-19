@@ -3,12 +3,19 @@
 // comes in is written to the table. commits are kept as bytes, decoded fresh: nothing shared, no
 // copies, a change costs its patches.
 //
-// the table shows one head, nothing kept beside it. a commit on it: applied by update, its check
-// too (patches that don't apply: refused). any other (fork, merge): checked on a replay of its
-// parent (replay.ts); the table told only if the head shown changes, then given the new head whole.
-// several heads: the first in agreed order shows, the rest in the "conflicts" table with the
-// tables they differ in, the one shown in the "shown" table (both at the id, there together; each
-// a head as its commit tells it: Head); settle(id) makes a merge keeping the head shown. what is wrong with a
+// what a path holds is a list (lists.ts): the table shows the first item at each path, composed.
+// a commit on the one head shown, naming nothing it replaces: applied by update, its check too
+// (patches that don't apply: refused). any other (fork, several heads, a commit naming what it
+// replaces): checked on a replay of its base (key patches alone never refused by what is there),
+// then the table becomes the lists' composed, each table told only when its value changes. a node
+// with an open path (two items, or one marked inside) has the "values" table at its id: each open
+// path's items, where each is from (Item); "conflicts" lists each commit with an item not shown,
+// the tables as the node would show with its items first, and "shown" the first head (both kept
+// for readers of heads). a write here goes on every head, key patches alone when there are
+// several (a range or list index editing one version: as it is, base the head of that version),
+// and replaces what the writer saw: the first item at and under each patch's path; a
+// change whose metadata has replaces ("all", or names in hex) replaces every item there, or those
+// named. settle(id) writes what shows at each open path, replacing every item. what is wrong with a
 // node's sync right now (commits waiting or refused, writes no commit could carry) is in the
 // "status" table at its id, none when nothing is.
 // a merge rule (merge, one of merges): heads show merged; a write is then a merge commit (every
@@ -33,9 +40,17 @@ import {
 } from "@ermine/encoding/commit"
 import type { Id, Key, Table, Tables as Rows } from "@ermine/table"
 import type * as sd from "npm:@automerge/subduction@0.23.0"
-import { hex } from "./hex.ts"
+import { hex, unhex } from "./hex.ts"
 import { agreed, type Kept, type Refusal } from "./history.ts"
-import { changeOf, type Merges, plain, replay, type Tables } from "./replay.ts"
+import {
+	applies,
+	createLists,
+	dig,
+	type Item as Listed,
+	type Key as Step,
+	type Lists,
+} from "./lists.ts"
+import { changeOf, type Merges, plain, replay, type Tables, written } from "./replay.ts"
 import { snapshot, tablesOf } from "./snapshot.ts"
 import type { Signer } from "./seal.ts"
 import { createDevice, type Device, type Lock } from "./transport.ts"
@@ -51,9 +66,21 @@ export type Head = {
 	external?: Commit["external"]
 }
 
-// a head that does not show: as its commit tells it, and the tables in which it differs from the
-// one shown
+// a commit with an item not shown: as its commit tells it, and the tables as the node would show
+// with its items first, where they differ from what shows
 export type Conflict = Head & { tables: Record<string, unknown> }
+
+// one item of a path's list: its value (gone: a delete), inside: a write under it is not its own,
+// at: the shallower path of the write it is from (its value at this path); from: its commit
+export type Item = {
+	value?: unknown
+	gone?: true
+	inside?: true
+	at?: Step[]
+	from: Head
+}
+// each open path of a node, by table: its path in the table, its items, the first shown first
+export type Values = Record<string, { path: Step[]; items: Item[] }[]>
 
 // what stands ephemeral at a node: the stored value under each overlaid table, and each standing
 // ephemeral commit (its signer's key and its name, hex; its table; its lamport) in the order they
@@ -81,6 +108,7 @@ declare module "@ermine/table" {
 	interface Tables {
 		conflicts: Conflict[]
 		shown: Head
+		values: Values
 		ephemeral: Ephemeral
 		status: Status
 	}
@@ -190,6 +218,8 @@ export function same(a: unknown, b: unknown): boolean {
 
 // the metadata keys changeOf adds over a commit's own: who signed it and the commit
 const SIGNED = ["signer", "commit"]
+// the metadata key a write says what it replaces by: "all", or names (hex); never carried
+export const REPLACES = "replaces"
 // whether a change is a commit's, as changeOf gives it: both keys there, each a string
 const signed = (change: ChangeHeader | undefined) => {
 	const m = change?.metadata
@@ -230,7 +260,7 @@ function carried(
 		)
 	}
 	const metadata = Object.entries(change?.metadata ?? {}).filter(([k, v]) =>
-		ok(v) && (roots === undefined || !SIGNED.includes(k))
+		ok(v) && (roots === undefined || !SIGNED.includes(k) && k !== REPLACES)
 	)
 	if (metadata.length) out.metadata = Object.fromEntries(metadata)
 	return out
@@ -302,6 +332,21 @@ export function createSync(options: Options): Sync {
 	const unsent = new Map<string, Status["unsent"]>()
 	// nodes whose status is to be worked out again: once a batch
 	const unwell = new Set<string>()
+	// with no rule: nodes the lists show (several heads, an open path, or a commit naming what it
+	// replaces since), and each node's lists, once asked
+	const open = new Set<string>()
+	const held = new Map<string, Lists>()
+	// a node's lists, every commit taken in added
+	function listsOf(doc: string): Lists {
+		const history = device.history(doc), all = history.all()
+		let l = held.get(doc)
+		if (l === undefined || l.size > all.length) {
+			const after = (k: Kept) => written(history, k.name, snapshots(doc), rulesOf(doc)) ?? {}
+			held.set(doc, l = createLists(history, after))
+		}
+		for (let i = l.size; i < all.length; i++) l.add(all[i])
+		return l
+	}
 
 	// ---- ephemeral state
 	const me = hex(signer.key)
@@ -499,15 +544,37 @@ export function createSync(options: Options): Sync {
 		const head = shown.get(doc)
 		const single = commit.parents.length === 1 ? hex(commit.parents[0]) : undefined
 		const on = commit.parents.length === 0
-			? head === undefined
+			? head === undefined && (rule !== undefined || device.history(doc).heads().length === 0)
 			: head !== undefined && single === hex(head.name)
-		if (on && tables.includes(commit.table as Key)) return step(doc, kept, commit)
+		const named = commit.patches.some((p) => p.replaces !== undefined)
+		if (rule !== undefined && on && tables.includes(commit.table as Key)) {
+			return step(doc, kept, commit)
+		}
+		if (rule === undefined && on && !named) {
+			// a table not kept here: the head shown moves on
+			if (!tables.includes(commit.table as Key)) return void stepped.add(hex(kept.name)), true
+			if (step(doc, kept, commit)) return true
+		}
+		// key patches alone are never refused by what is there
+		const keys = commit.patches.every((p) =>
+			p.range === undefined && p.move === undefined && p.path.every((k) => typeof k === "string")
+		)
+		if (keys && (rule === undefined || kept.base === undefined)) return true
+		if (rule === undefined) {
+			try {
+				const node = kept.base === undefined ? {} : replayed(doc, kept.base)
+				applies(node[commit.table]?.value, commit.patches as Patch[])
+				return true
+			} catch {
+				return false
+			}
+		}
 		// a head that doesn't show, moved on in place: what it held goes with it
 		const mine = othersOf(doc)
 		const node = single !== undefined && mine.get(single) ||
 			(kept.base === undefined ? {} : replayed(doc, kept.base))
 		try {
-			const value = apply(node[commit.table]?.value, commit.patches as Patch[], { cow: false })
+			const value = applies(node[commit.table]?.value, commit.patches as Patch[])
 			if (value === undefined) delete node[commit.table]
 			else node[commit.table] = { value, change: changeOf(commit, kept.name) }
 		} catch {
@@ -564,11 +631,12 @@ export function createSync(options: Options): Sync {
 		return true
 	}
 
-	// the table holds these tables, whole
-	function become(doc: string, node: Tables) {
+	// the table holds these tables, whole. quiet: a table whose entry is the same is left as it is
+	function become(doc: string, node: Tables, quiet = false) {
 		const o = overlays.get(doc)
 		for (const part of tables) {
-			const want = node[part as string]
+			const want = node[part as string], was = storedEntry(doc, part)
+			if (quiet && same(want?.value, was?.value) && same(want?.change, was?.change)) continue
 			if (o?.over.has(part as string)) {
 				if (want === undefined) delete o.under[part as string]
 				else o.under[part as string] = want
@@ -587,6 +655,12 @@ export function createSync(options: Options): Sync {
 	// with a rule and several heads, their merge shows once the commits coming in now are all in
 	function arrive(doc: string, kept: Kept) {
 		const name = hex(kept.name)
+		if (rule === undefined) {
+			// stepped: the table is on it; else the lists show, once the commits coming in now are in
+			if (stepped.delete(name)) shown.set(doc, kept)
+			else shown.delete(doc), open.add(doc)
+			return later(doc)
+		}
 		if (stepped.delete(name)) shown.set(doc, kept), merged.delete(doc)
 		const heads = device.history(doc).heads()
 		const first = heads[0], mine = othersOf(doc)
@@ -731,26 +805,53 @@ export function createSync(options: Options): Sync {
 		recheck(id)
 	}
 
-	// with a rule, none: what shows is every head
+	// with no rule, what the lists show: the table, each table's first items composed; "values",
+	// each open path's items; "conflicts", each commit with an item not shown; "shown", the first
+	// head. one head and nothing open: the table is on it, and steps again. with a rule, none: what
+	// shows is every head
 	function conflicts(doc: string) {
-		const heads = device.history(doc).heads(), mine = othersOf(doc)
-		const list: Conflict[] = (rule === undefined ? heads.slice(1) : []).map((k) => {
-			let node = mine.get(hex(k.name))
-			if (node === undefined) mine.set(hex(k.name), node = replayed(doc, k.name))
-			const differ: Record<string, unknown> = {}
+		if (rule !== undefined || !open.has(doc)) {
+			for (const part of ["values", "conflicts", "shown"] as const) put(part, doc, undefined)
+			return
+		}
+		const heads = device.history(doc).heads(), lists = listsOf(doc)
+		const node = lists.compose()
+		become(doc, node, true)
+		if (heads.length === 1) shown.set(doc, heads[0])
+		else shown.delete(doc)
+		const rows: Values = {}, others: Kept[] = []
+		for (const o of lists.open()) {
+			const t = o.path[0] as string
+			if (!tables.includes(t as Key)) continue
+			;(rows[t] ??= []).push({ path: o.path.slice(1), items: o.items.map(itemOf) })
+			for (const i of o.items.slice(1)) {
+				if (!others.includes(i.write.kept)) others.push(i.write.kept)
+			}
+		}
+		const list: Conflict[] = others.sort(agreed).map((k) => {
+			const theirs = lists.compose(k), differ: Record<string, unknown> = {}
 			for (const part of tables) {
-				const theirs = node[part as string]?.value
-				if (!same(theirs, storedEntry(doc, part)?.value)) differ[part as string] = theirs
+				const v = theirs[part as string]?.value
+				if (!same(v, node[part as string]?.value)) differ[part as string] = v
 			}
 			return { ...headOf(k), tables: differ }
 		})
+		put("values", doc, Object.keys(rows).length ? rows : undefined)
 		put("conflicts", doc, list.length ? list : undefined)
 		put("shown", doc, list.length ? headOf(heads[0]) : undefined)
+		if (heads.length === 1 && Object.keys(rows).length === 0) open.delete(doc)
 	}
 
+	// an item as the "values" table has it: sync's own
+	const itemOf = (i: Listed): Item => ({
+		...i.gone ? { gone: true as const } : { value: structuredClone(i.value) },
+		...i.inside && { inside: true as const },
+		...i.at && { at: i.at.slice(1) },
+		from: headOf(i.write.kept, i.write.commit),
+	})
+
 	// a head as its commit tells it
-	function headOf(k: Kept): Head {
-		const c = decode(k.bytes)
+	function headOf(k: Kept, c = decode(k.bytes)): Head {
 		return {
 			head: hex(k.name),
 			lamport: k.lamport,
@@ -761,8 +862,8 @@ export function createSync(options: Options): Sync {
 		}
 	}
 
-	// sync's own entry at (part, doc): value, or none when undefined
-	function put<P extends "conflicts" | "shown">(
+	// sync's own entry at (part, doc): value, or none when undefined; the same, left as it is
+	function put<P extends "conflicts" | "shown" | "values">(
 		part: P,
 		doc: string,
 		value: Rows[P] | undefined,
@@ -772,6 +873,7 @@ export function createSync(options: Options): Sync {
 			if (have !== undefined) table.del(part, doc)
 			return
 		}
+		if (have !== undefined && same(have.value, value)) return
 		const entry = createEntry(value, { time: Math.floor(Date.now() / 1000), actor: null })
 		if (have) table.sub(part, doc, entry)
 		else table.add(part, doc, entry)
@@ -783,8 +885,9 @@ export function createSync(options: Options): Sync {
 		return device.follow(id)
 	}
 
-	// one commit at the node, on what shows: the head shown, or with a rule, the heads merged.
-	// all: on every head, keeping the head shown. encoded now, so nothing it carries is held after
+	// one commit at the node, on what shows: every head (with a rule: the heads merged, or the head
+	// shown). all: on every head, keeping the head shown; with no rule, replacing every item at its
+	// paths. encoded now, so nothing it carries is held after
 	function send(
 		id: string,
 		part: Key,
@@ -796,13 +899,29 @@ export function createSync(options: Options): Sync {
 		const history = device.history(id)
 		const on = merged.get(id)
 		const head = shown.get(id) ?? history.heads()[0]
-		const heads = on ?? (all ? history.heads() : head ? [head] : [])
+		const heads = on ??
+			(rule === undefined || all ? history.heads() : head ? [head] : [])
 		// the table shows something else than the stored: the patches tried on the stored, the
 		// whole value if they don't apply
 		const o = overlays.get(id)
 		let stored: unknown
-		if (!all && o?.over.has(part as string)) {
-			;[patches, stored] = tried(o.under[part as string]?.value, patches, table.get(part, id))
+		const over = !all && o?.over.has(part as string)
+		if (over) {
+			;[patches, stored] = tried(o!.under[part as string]?.value, patches, table.get(part, id))
+		}
+		let base: Kept | undefined
+		if (rule === undefined) {
+			const intent = all ? "all" : change?.metadata?.[REPLACES]
+			if (heads.length > 1 && !over) base = edited(id, part, patches, heads, intent)
+			patches = replacing(
+				id,
+				part,
+				patches,
+				heads.length > 1 && base === undefined,
+				intent,
+				() => over ? stored : table.get(part, id)?.value,
+				base !== undefined,
+			)
 		}
 		const commit: Commit = {
 			table: part as string,
@@ -814,7 +933,8 @@ export function createSync(options: Options): Sync {
 			patches: patches as Commit["patches"],
 		}
 		if (on !== undefined) commit.merge = rule
-		else if (heads.length > 1) commit.base = head!.name
+		else if (heads.length > 1 && rule !== undefined) commit.base = head!.name
+		else if (base !== undefined) commit.base = base.name
 		// what no commit can carry (a value with no encoding) is not sent, and the rest goes on: noted
 		let bytes: Uint8Array
 		try {
@@ -834,7 +954,18 @@ export function createSync(options: Options): Sync {
 			at.set(part as string, hex(name))
 			shown.set(id, history.get(name)!)
 			merged.delete(id)
-			if (heads.length > 1) {
+			// what the lists show may be other than what was written: worked out again, now
+			const named = patches.some((p) => (p as Commit["patches"][number]).replaces)
+			if (rule === undefined && (heads.length > 1 || named || open.has(id))) {
+				open.add(id)
+				const was = applying
+				applying = true
+				try {
+					conflicts(id)
+				} finally {
+					applying = was
+				}
+			} else if (heads.length > 1) {
 				const mine = othersOf(id)
 				for (const k of heads) mine.delete(hex(k.name))
 				if (rule !== undefined) remember(id)
@@ -844,6 +975,108 @@ export function createSync(options: Options): Sync {
 		}
 		return added === "taken" ? { commit, name } : undefined
 	}
+
+	// an edit of one version while several heads stand (a range or a list index, no move): the head
+	// whose version it edited, its base. the version: at each such patch's key path, the item named
+	// (edits naming one) or else the item shown; a head whose value there is that version's for
+	// every such patch, the patches applying to its tables. none: the whole value goes (replacing)
+	function edited(
+		id: string,
+		part: Key,
+		patches: readonly Patch[],
+		heads: readonly Kept[],
+		intent: unknown,
+	): Kept | undefined {
+		if (patches.some((p) => p.move !== undefined)) return
+		const ranged = patches.filter(sequence)
+		if (!ranged.length) return
+		const named = Array.isArray(intent) && intent.length === 1 ? intent[0] : undefined
+		if (intent === "all" || Array.isArray(intent) && named === undefined) return
+		const lists = listsOf(id)
+		// the version at a key path: the nearest items at or above it
+		const version = (keys: readonly Step[]): { value: unknown } | undefined => {
+			for (let n = keys.length; n >= 0; n--) {
+				const items = lists.items([part, ...keys.slice(0, n)])
+				if (!items.length) continue
+				const i = named === undefined
+					? items[0]
+					: items.find((i) => hex(i.write.kept.name) === named)
+				if (i === undefined || i.gone) return
+				const v = dig(i.value, keys.slice(n))
+				return v === undefined ? undefined : { value: v }
+			}
+		}
+		const wanted = ranged.map((p) => ({ keys: keyed(p.path), v: version(keyed(p.path)) }))
+		if (wanted.some((w) => w.v === undefined)) return
+		for (const h of heads) {
+			const t = replayed(id, h.name)[part as string]?.value
+			if (!wanted.every((w) => same(dig(t, w.keys), w.v!.value))) continue
+			try {
+				applies(t, patches)
+				return h
+			} catch {
+				continue
+			}
+		}
+	}
+
+	// a write's patches as a commit on every head carries them: several heads, key patches alone
+	// (through a list or a range: the whole value at the key path, as now, after the write; unless
+	// it edits one version, edited); each replacing what intent says: "all" or names (hex), or none
+	// said, the first item at and under its path (what read showed). replaces left out when it is
+	// every item there (absent: every ancestor at or under, the same on a commit on every head);
+	// based (a commit with a base and several parents), never left out on a range or list index,
+	// so its tables are the lists' (replay.ts)
+	function replacing(
+		id: string,
+		part: Key,
+		patches: readonly Patch[],
+		several: boolean,
+		intent: unknown,
+		now: () => unknown,
+		based = false,
+	): readonly Patch[] {
+		let out = patches
+		if (several) {
+			out = patches.map((p) => {
+				const i = p.path.findIndex((k) => typeof k !== "string")
+				if (i < 0 && p.range === undefined && p.move === undefined) return p
+				const path = i < 0 ? p.path : p.path.slice(0, i)
+				const v = dig(now(), path)
+				return v === undefined ? { path } : { path, value: v }
+			})
+			out = out.filter((p, i) =>
+				!out.slice(i + 1).some((l) =>
+					l.path.length <= p.path.length && l.path.every((k, j) => k === p.path[j])
+				)
+			)
+		}
+		const all = intent === "all" || intent === undefined && !open.has(id)
+		if (all && !based) return out
+		// by name, each once
+		const once = (ns: Uint8Array[]) => [...new Map(ns.map((n) => [hex(n), n])).values()]
+		const given = Array.isArray(intent)
+			? once(intent.filter((n) => typeof n === "string" && /^[0-9a-f]{68}$/.test(n)).map(unhex))
+			: undefined
+		return out.map((p) => {
+			const path = [part, ...keyed(p.path)]
+			const there = open.has(id) || based ? listsOf(id).standing(path) : []
+			const every = once(there.flat().map((w) => w.kept.name))
+			const names = all ? every : given ?? once(there.map((ws) => ws[0].kept.name))
+			const full = names.length === every.length &&
+				names.every((n) => every.some((m) => compare(n, m) === 0))
+			return full && !(based && sequence(p)) ? p : { ...p, replaces: names.sort(compare) }
+		})
+	}
+
+	// the key path a patch's path makes: up to the first list index
+	const keyed = (path: readonly Step[]) => {
+		const i = path.findIndex((k) => typeof k !== "string")
+		return i < 0 ? path.slice() : path.slice(0, i)
+	}
+	// a range or a list index (no move): an edit of the value at its key path
+	const sequence = (p: Patch) =>
+		p.move === undefined && (p.range !== undefined || p.path.some((k) => typeof k !== "string"))
 
 	const whole = (e: Entry<unknown> | undefined): Patch =>
 		e?.value === undefined ? { path: [] } : { path: [], value: e.value }
@@ -1018,7 +1251,8 @@ export function createSync(options: Options): Sync {
 		if (on !== undefined) {
 			return stateOf(doc, keyOf(on.map((k) => k.name))) ?? mergeOf(doc, on, rule!)
 		}
-		return head === undefined ? {} : replayed(doc, head.name)
+		if (head === undefined) return rule === undefined ? listsOf(doc).compose() : {}
+		return replayed(doc, head.name)
 	}
 
 	// a change to an ephemeral table here: one ephemeral commit on what a stored write goes on, in
@@ -1284,8 +1518,19 @@ export function createSync(options: Options): Sync {
 			else send(id, part, [whole(entry)], entry?.change)
 		},
 		settle(id, change) {
-			if (device.history(id).heads().length < 2) return
-			const made = send(id, "value", [], change, true)
+			// with no rule: what shows at each outermost open path of value, written
+			const paths = rule === undefined && open.has(id)
+				? listsOf(id).open().filter((o) => o.path[0] === "value").map((o) => o.path.slice(1))
+				: []
+			const now = storedEntry(id, "value")?.value
+			const patches: Patch[] = paths.filter((p) =>
+				!paths.some((q) => q.length < p.length && q.every((k, i) => k === p[i]))
+			).map((path) => {
+				const v = dig(now, path)
+				return v === undefined ? { path } : { path, value: v }
+			})
+			if (device.history(id).heads().length < 2 && !patches.length) return
+			const made = send(id, "value", patches, change, true)
 			// a merge is a write to its table like any other: the entry shown carries its change, as
 			// a replay of the merge (and so every other device) has it
 			const o = overlays.get(id)
@@ -1332,12 +1577,7 @@ export function createSync(options: Options): Sync {
 					merged.delete(doc)
 					if (heads.length > 1) {
 						if (rule !== undefined) showMerge(doc)
-						else {
-							const first = heads[0], mine = othersOf(doc)
-							become(doc, mine.get(hex(first.name)) ?? replayed(doc, first.name))
-							mine.delete(hex(first.name))
-							shown.set(doc, first)
-						}
+						else shown.delete(doc), open.add(doc)
 					}
 					conflicts(doc)
 				}

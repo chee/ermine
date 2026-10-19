@@ -1,49 +1,132 @@
 {
-	"title": "patches that do not apply to the table at the commit's base are refused",
+	"title": "patches that do not apply to the table at the commit's base are refused: a range, a move or a list index (key patches alone are never refused by what is there: lists)",
 	"steps": [
 		{
 			"op": "add",
 			"name": "a",
-			"patches": [{ "path": [], "value": { "n": 0 } }],
-			"expect": { "added": "taken" }
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"n": 0
+					}
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
 		},
 		{
 			"op": "add",
 			"name": "b",
-			"parents": ["a"],
-			"patches": [{ "path": ["missing", "deep"], "value": 1 }],
-			"expect": { "added": { "refused": "patches" } }
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"missing",
+						0
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"added": {
+					"refused": "patches"
+				}
+			}
 		},
 		{
 			"op": "add",
 			"name": "c",
-			"parents": ["a"],
+			"parents": [
+				"a"
+			],
 			"table": "attributes",
-			"patches": [{ "path": ["k"], "value": 1 }],
-			"expect": { "added": { "refused": "patches" } }
+			"patches": [
+				{
+					"path": [
+						0
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"added": {
+					"refused": "patches"
+				}
+			}
 		},
 		{
 			"op": "add",
 			"name": "d",
-			"parents": ["a"],
+			"parents": [
+				"a"
+			],
 			"table": "attributes",
-			"patches": [{ "path": [], "value": { "k": 1 } }],
-			"expect": { "added": "taken" }
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"k": 1
+					}
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
 		},
 		{
 			"op": "add",
 			"name": "e",
-			"parents": ["a"],
+			"parents": [
+				"a"
+			],
 			"nonce": 1,
-			"patches": [{ "path": ["n"], "range": [0, 1], "value": "x" }],
-			"expect": { "added": { "refused": "patches" } }
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"range": [
+						0,
+						1
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"added": {
+					"refused": "patches"
+				}
+			}
 		},
 		{
 			"op": "add",
 			"name": "f",
-			"patches": [{ "path": ["n"], "value": 1 }],
-			"expect": { "added": { "refused": "patches" } }
+			"patches": [
+				{
+					"path": [
+						"n",
+						0
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"added": {
+					"refused": "patches"
+				}
+			}
 		},
-		{ "op": "heads", "expect": { "heads": ["d"] } }
+		{
+			"op": "heads",
+			"expect": {
+				"heads": [
+					"d"
+				]
+			}
+		}
 	]
 }

@@ -1,6 +1,7 @@
 #!/bin/sh
-# two littlesync-pigs over a pty pair, one scripted scenario: a adds a pig; b sees it, picks it up and
-# carries it (a sees it held), drops it (a sees it where it was dropped). Screens in build/pty/*.txt,
+# two littlesync-pigs over a pty pair, scripted: a adds a pig; b sees it, picks it up and carries it (a
+# sees it held), drops it (a sees it where it was dropped); a clash (both drop one pig apart) shows on
+# both, and a drop ends it. Screens in build/pty/*.txt,
 # protocol events in build/pty/*.log. Usage: sh test/pty.sh build/littlesync-pigs
 pigs=${1:-build/littlesync-pigs}
 d=build/pty
@@ -41,6 +42,27 @@ cp $d/a2.txt $d/a2-mid.txt
 wait $a $b
 check $d/a2-mid.txt "held by newt" "a sees a pig held by b while b carries it"
 check $d/b2.txt "carrying -" "b let go"
+check $d/a2-mid.txt "^@ newt x=" "a sees b's pointer (its presence row)"
 ! grep -q "held by" $d/a2.txt && echo "  ok   a sees it put down (no longer held)" || { echo "  FAIL a still shows it held"; failed=1; }
 grep "^[ab] [0-9a-f]\{8\} \|^room " $d/a2.txt
+
+# third: a clash. Apart (each on a pty nobody opens), a and b each drop the first pig somewhere else;
+# then they meet: both show it twice (an "also" line). Then b picks it up and drops it: one again
+c=$d/clash
+mkdir -p $c
+$pigs --pty --state $c/a --name otter --dump $c/a0.txt --keys " llll " --exit-after 2500 2>/dev/null &
+$pigs --pty --state $c/b --name newt --dump $c/b0.txt --keys " jjjj " --exit-after 2500 2>/dev/null &
+wait
+$pigs --pty --pty-file $c/pty --state $c/a --name otter --dump $c/a.txt --exit-after 7500 2>/dev/null &
+a=$!
+n=0; while [ ! -s $c/pty ] && [ $n -lt 50 ]; do sleep 0.1; n=$((n+1)); done
+$pigs --port $(cat $c/pty) --state $c/b --name newt --dump $c/b.txt --keys "........ l " --exit-after 7000 2>/dev/null &
+b=$!
+sleep 3
+cp $c/a.txt $c/a-mid.txt; cp $c/b.txt $c/b-mid.txt
+wait $a $b
+check $c/a-mid.txt "^  also x=" "a shows the pig twice (both drops stand)"
+check $c/b-mid.txt "^  also x=" "b shows the pig twice"
+! grep -q "^  also" $c/a.txt && echo "  ok   b's drop ended the clash on a" || { echo "  FAIL a still shows two"; failed=1; }
+! grep -q "^  also" $c/b.txt && echo "  ok   and on b" || { echo "  FAIL b still shows two"; failed=1; }
 exit $failed

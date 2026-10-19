@@ -229,14 +229,14 @@ together-packer_suite = packer
 LIBS += together-packer
 # history, replay and snapshot: one harness, three suites (replay's and snapshot's suite.json name history's). The merge
 # rules it knows: rules_harness.c's (a rule for testing); playground/egwalker links its own (egwalker-history)
-together_history_src = $(together_harness_src) $(together_commits_src) conformance/c/protocol_harness.c extensions/together/c/history_harness.c extensions/together/c/history.c extensions/together/c/replay.c extensions/together/c/snapshot.c $(together_signed_src)
+together_history_src = $(together_harness_src) $(together_commits_src) conformance/c/protocol_harness.c extensions/together/c/history_harness.c extensions/together/c/history.c extensions/together/c/replay.c extensions/together/c/lists.c extensions/together/c/ids.c extensions/together/c/snapshot.c $(together_signed_src)
 together-history_src = $(together_history_src) extensions/together/c/rules_harness.c
 together-history = extensions/together/c/history-harness
-together-history_suite = history replay snapshot
+together-history_suite = history replay snapshot lists
 LIBS += together-history
 # the transport (devices over Subduction for C) and the integration with the table: Subduction's BLAKE3 and ermine/encoding's
 # are both linked, the C ones renamed (subduction_rename). Fragments are extensions/subduction's, as in the TypeScript
-together_transport_src = extensions/together/c/transport.c extensions/together/c/mailroom.c extensions/together/stacks/subduction/c/subduction.c extensions/together/c/ids.c extensions/together/c/history.c extensions/together/c/replay.c extensions/together/c/snapshot.c \
+together_transport_src = extensions/together/c/transport.c extensions/together/c/mailroom.c extensions/together/stacks/subduction/c/subduction.c extensions/together/c/ids.c extensions/together/c/history.c extensions/together/c/replay.c extensions/together/c/lists.c extensions/together/c/snapshot.c \
 	extensions/together/c/packer.c extensions/subduction/c/fragment.c extensions/subduction/c/subduction/platform_posix.c $(together_signed_src)
 together-transport_src = $(together_harness_src) $(together_commits_src) conformance/c/protocol_harness.c extensions/together/c/transport_harness.c extensions/together/c/wires_harness.c \
 	extensions/subduction/c/subduction/store_memory.c $(together_transport_src) $(subduction_lib)

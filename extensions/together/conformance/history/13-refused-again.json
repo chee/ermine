@@ -4,17 +4,61 @@
 		{
 			"op": "add",
 			"name": "a",
-			"patches": [{ "path": [], "value": { "n": 0 } }],
-			"expect": { "added": "taken" }
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"n": 0
+					}
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
 		},
 		{
 			"op": "add",
 			"name": "b",
-			"parents": ["a"],
-			"patches": [{ "path": ["x", "y"], "value": 1 }],
-			"expect": { "added": { "refused": "patches" } }
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"range": [
+						0,
+						1
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"added": {
+					"refused": "patches"
+				}
+			}
 		},
-		{ "op": "add", "name": "b", "expect": { "added": { "refused": "patches" } } },
-		{ "op": "refused", "expect": { "refused": [{ "name": "b", "refused": "patches" }] } }
+		{
+			"op": "add",
+			"name": "b",
+			"expect": {
+				"added": {
+					"refused": "patches"
+				}
+			}
+		},
+		{
+			"op": "refused",
+			"expect": {
+				"refused": [
+					{
+						"name": "b",
+						"refused": "patches"
+					}
+				]
+			}
+		}
 	]
 }

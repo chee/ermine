@@ -2,7 +2,8 @@
 // - cborCheck says the same: taken or not, and on a no the same reason at the same byte;
 // - taken: encoding the value gives the input exactly (decoding takes only the canonical
 //   encoding), and the value read again is equal to it; a short buffer gets the first bytes and
-//   the whole length; hashValue names it as BLAKE3 of the input;
+//   the whole length, a buffer that grows (CborOut) the same bytes; hashValue names it as BLAKE3 of
+//   the input;
 // - nothing leaks (the leak checker), nothing reads or writes out of bounds (ASan), no undefined
 //   behaviour (UBSan).
 #include "blake3/blake3.h"
@@ -48,6 +49,9 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 		if (memcmp(some, input, half) != 0) die("a short buffer, other bytes");
 		free(some);
 	}
+	CborOut grown = { NULL, 0, 0, true };
+	if (!cborPut(&grown, value, &why) || grown.length != size || memcmp(grown.data, input, size) != 0) die("a buffer that grows, other bytes");
+	free(grown.data);
 	Json *back = cborDecode(out, length, &why, &at);
 	if (!back) die("its own encoding is refused");
 	if (!jsonEqual(back, value)) die("read again, another value");

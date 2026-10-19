@@ -1,15 +1,21 @@
 # extensions/together/stacks/littlesync: littlesync, a small-device sync stack (littlesync.h says what it is). Quiet by
 # default: V=1 shows each command.
-#   make test        host tests (test/test.c), then two littlesync-pigs over a pty pair (test/pty.sh), then
-#                    three in a line, the middle one relaying (test/hop.sh). littlesync-pigs, lab-pig's pigs
+#   make test        host tests (test/test.c), their lists against lists.ts on the same commits (test/lists.ts,
+#                    deno), then two littlesync-pigs over a pty pair (test/pty.sh), then
+#                    three in a line, the middle one relaying (test/hop.sh), then two over HTTP to the gateway
+#                    on a local port, no server (test/http.sh; sh test/http.sh build/littlesync-pigs
+#                    wss://galaxy.observer: through galaxy). littlesync-pigs, lab-pig's pigs
 #                    on littlesync, is a user of the library (playground/demos/pigs/littlesync), built into
 #                    build/ here; the tests use its pigs.c and pigs.h too
-#   make check       the same tests under the address and undefined-behaviour sanitizers
+#   make galaxy      two littlesync-pigs over https to the deployed gateway (https://galaxy.observer/littlesync/),
+#                    a fresh room each run (test/galaxy.sh; URL=... another). The network: not in make test
+#   make check       the host tests and the lists check under the address and undefined-behaviour sanitizers
 #   make pigs        littlesync-pigs, the Mac peer (playground/demos/pigs/littlesync/peer.c), into build/
 #   make esp-check   the library's .c files and the shared ones it uses, compiled for esp32s3 (xtensa),
 #                    with the sizes of each object and the total
 #   make clean
 CC ?= cc
+DENO ?= deno
 R = ../../../..
 Q = $(if $(V),,@)
 CFLAGS = -std=c11 -O2 -g -Wall -Wextra -Wpedantic -Wno-unused-parameter
@@ -52,20 +58,27 @@ check: test/test.c test/count.c test/count.h $(ours) $(base) $(shared) $(more) $
 	$(Q)$(CC) $(CFLAGS) $(SAN) -c -o $(BUILD)/count-check.o test/count.c
 	$(Q)$(CC) $(CFLAGS) $(SAN) $(B3) -include test/count.h -o $(BUILD)/test-check test/test.c $(BUILD)/count-check.o $(ours) $(base) $(shared) $(more) $(seal_ref) $(pigs_ref) -lm
 	$(Q)$(BUILD)/test-check
+	$(Q)$(DENO) run --allow-read test/lists.ts $(BUILD)/lists.jsonl
 
 test: $(BUILD)/test $(BUILD)/littlesync-pigs
 	$(Q)$(BUILD)/test
+	$(Q)$(DENO) run --allow-read test/lists.ts $(BUILD)/lists.jsonl
 	$(Q)sh test/pty.sh $(BUILD)/littlesync-pigs
 	$(Q)sh test/hop.sh $(BUILD)/littlesync-pigs
+	$(Q)sh test/http.sh $(BUILD)/littlesync-pigs
+
+URL = https://galaxy.observer
+galaxy: $(BUILD)/littlesync-pigs
+	$(Q)sh test/galaxy.sh $(BUILD)/littlesync-pigs $(URL)
 
 # the device build: -Os, the xtensa compiler of ESP-IDF's toolchain. Nothing is linked: each object's
 # size, then the sum. text is code and read-only data, data and bss the static RAM
 XT = $(firstword $(wildcard $(HOME)/.espressif/tools/xtensa-esp-elf/*/xtensa-esp-elf/bin))
 XCC = $(XT)/xtensa-esp32s3-elf-gcc
 XSIZE = $(XT)/xtensa-esp-elf-size
-XFLAGS = -std=gnu11 -Os -mlongcalls -ffunction-sections -fdata-sections -Wall -Wno-format -Wno-unused-parameter $(B3) \
+XFLAGS = -std=gnu11 -Os -mlongcalls -ffunction-sections -fdata-sections -Wall -Wno-format -Wno-unused-parameter $(B3) -DESP_PLATFORM \
 	-DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512 -DBLAKE3_USE_NEON=0
-esp_ours = littlesync.c frame.c
+esp_ours = littlesync.c frame.c http.c
 esp_all = $(esp_ours) $(shared) $(base) $(more)
 
 esp-check:
@@ -91,4 +104,4 @@ esp-check:
 clean:
 	$(Q)rm -rf $(BUILD)
 
-.PHONY: all pigs test check esp-check clean FORCE
+.PHONY: all pigs test galaxy check esp-check clean FORCE

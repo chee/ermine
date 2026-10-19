@@ -64,7 +64,10 @@ int main(void) {
 	wr_connect(a, b);
 	for (int round = 0; round < 3000 && !wr_up(a, b); round++) tp_run(a), wr_drain(a), tp_run(b), wr_drain(b);
 	expect(wr_up(a, b), "the devices connect");
-	sc_channel *ca = sc_create(a), *cb = sc_create(b);
+	// each device's signer: its own key, from the same seed
+	sl_seeded ka, kb, kc;
+	sl_seeded_init(&ka, oa.seed), sl_seeded_init(&kb, ob.seed);
+	sc_channel *ca = sc_create(a, &ka.signer), *cb = sc_create(b, &kb.signer);
 	chn_channel *x = sc_channel_of(ca), *y = sc_channel_of(cb);
 	char key[2 * SL_KEY + 1];
 	for (int i = 0; i < SL_KEY; i++) snprintf(key + 2 * i, 3, "%02x", tp_key(a)[i]);
@@ -105,7 +108,32 @@ int main(void) {
 	expect(big.count == 1 && big.lengths[0] == n && memcmp(big.bytes[0], bytes, n) == 0, "a payload over the limit arrives whole");
 	free(bytes);
 
-	heard_free(&got), heard_free(&other), heard_free(&mine), heard_free(&stopped), heard_free(&big);
+	// named by the key that sealed it, not the connection that carried it (c is not on it: a publishes
+	// for it, a gateway's way); unsealed, badly sealed, or sealed for another topic: dropped
+	uint8_t seed[32];
+	memset(seed, 3, 32);
+	sl_seeded_init(&kc, seed);
+	char ckey[2 * SL_KEY + 1];
+	for (int i = 0; i < SL_KEY; i++) snprintf(ckey + 2 * i, 3, "%02x", kc.signer.key[i]);
+	heard_t room = {0};
+	y->on(y, "dens:root", heard, &room);
+	quiet(a, b);
+	uint8_t *sealed;
+	size_t length;
+	sl_seal_message("dens:root", (const uint8_t *)"from c", 6, &kc.signer, &sealed, &length);
+	tp_send(a, "dens:root", sealed, length);
+	sealed[length - 1] ^= 1;
+	tp_send(a, "dens:root", sealed, length);
+	free(sealed);
+	tp_send(a, "dens:root", (const uint8_t *)"unsealed", 8);
+	sl_seal_message("elsewhere", (const uint8_t *)"moved", 5, &kc.signer, &sealed, &length);
+	tp_send(a, "dens:root", sealed, length);
+	free(sealed);
+	quiet(a, b);
+	expect(room.count == 1 && strcmp(room.from[0], ckey) == 0 && room.lengths[0] == 6 && memcmp(room.bytes[0], "from c", 6) == 0,
+		"named by the key that sealed it; the rest dropped");
+
+	heard_free(&got), heard_free(&other), heard_free(&mine), heard_free(&stopped), heard_free(&big), heard_free(&room);
 	sc_free(ca);
 	sc_free(cb);
 	tp_free(a);

@@ -8,7 +8,7 @@
 set(R ${CMAKE_CURRENT_LIST_DIR}/../../../..)
 idf_component_register(
 	SRCS
-		littlesync.c frame.c store_nvs.c
+		littlesync.c frame.c store_nvs.c http.c
 		${R}/ermine/encoding/c/commit.c
 		${R}/ermine/encoding/c/blake3/blake3.c ${R}/ermine/encoding/c/blake3/blake3_dispatch.c
 		${R}/ermine/encoding/c/blake3/blake3_portable.c

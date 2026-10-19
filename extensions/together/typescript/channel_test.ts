@@ -6,7 +6,7 @@ import { createScheduler } from "@ermine/scheduler"
 import { createTable, type Key } from "@ermine/table"
 import { connect, readPresence, setPresence, type World } from "@ermine/presence"
 import { createChannel } from "./channel.ts"
-import { createSigner } from "./seal.ts"
+import { createSigner, sealMessage } from "./seal.ts"
 import { createDevice, LIMIT } from "./transport.ts"
 
 // a pipe: what one end sends the other receives, in order
@@ -116,7 +116,7 @@ Deno.test({
 	async fn() {
 		const { a, b } = await joined()
 		const wa = world("a"), wb = world("b")
-		const ca = createChannel(a.device, a.key), cb = createChannel(b.device, b.key)
+		const ca = createChannel(a.device, a.signer), cb = createChannel(b.device, b.signer)
 		assertEquals(ca.name, hex(a.key))
 		const anchor = "ermine://anchor" as never
 		connect(wa, ca, { topic: anchor })
@@ -128,6 +128,31 @@ Deno.test({
 			hex(a.key),
 			{ cursor: [12, 40] },
 		]])
+		await a.device.close(), await b.device.close()
+	},
+})
+
+Deno.test({
+	name:
+		"channel: named by the key that sealed it, not the connection that carried it; unsealed, badly sealed or sealed for another topic: dropped",
+	...opts,
+	async fn() {
+		const { a, b } = await joined()
+		// c: a device that is not on the connection, its message published by a (a gateway's way)
+		const c = await createSigner(new Uint8Array(32).fill(3))
+		const cb = createChannel(b.device, b.signer)
+		const got: [string, string][] = []
+		cb.on("dens:root", (from, bytes) => got.push([from, new TextDecoder().decode(bytes)]))
+		await wait(a, b)
+		await a.device.send("dens:root", await sealMessage("dens:root", text("from c"), c))
+		await a.device.send("dens:root", text("unsealed"))
+		const sealed = await sealMessage("dens:root", text("tampered"), c)
+		sealed[sealed.length - 1] ^= 1
+		await a.device.send("dens:root", sealed)
+		await a.device.send("dens:root", await sealMessage("elsewhere", text("moved"), c))
+		await a.device.send("dens:root", await sealMessage("dens:root", text("from a"), a.signer))
+		await wait(a, b)
+		assertEquals(got, [[hex(c.key), "from c"], [hex(a.key), "from a"]])
 		await a.device.close(), await b.device.close()
 	},
 })

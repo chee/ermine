@@ -6,12 +6,15 @@
 //
 // a merge commit on the way back: its tables are its rule's merge of its parents, given merges;
 // the walk starts there. a rule is given only what is had without merging (a snapshot, or a walk
-// back to one or the root that meets no merge commit), so a merge never waits on another
-import apply from "@ermine/op/apply"
+// back to one or the root that meets no merge commit), so a merge never waits on another. key
+// patches on several parents, or a commit naming what it replaces: its tables are the lists' of it
+// and its ancestors (lists.ts); the walk starts there too. patches apply as sync takes them
+// (lists.ts applies: a key patch makes its missing parents)
 import { type Commit, decode } from "@ermine/encoding/commit"
 import type { ChangeHeader, Entry } from "@ermine/node/entry"
 import type { History, Kept } from "./history.ts"
 import { hex } from "./hex.ts"
+import { applies, state } from "./lists.ts"
 import { alike, tablesOf } from "./snapshot.ts"
 
 // each table's entry: its value, and the change that last touched it
@@ -89,21 +92,44 @@ export function plain(
 	return walk(history, name, snapshot, {}, false)
 }
 
-// merging: a merge commit met is merged; else the walk gives undefined
+// the tables a commit's own patches make, as its writer had them: on its base's tables (a merge's:
+// on its rule's merge), whatever the lists say of it. a whole write's value (lists.ts)
+export function written(
+	history: History,
+	name: Uint8Array,
+	snapshot: Snapshots = () => undefined,
+	merges?: Merges,
+): Tables | undefined {
+	return walk(history, name, snapshot, merges ?? {}, true, true)
+}
+
+// key patches on several parents, or a commit naming what it replaces: its tables are the lists'
+const listed = (k: Kept) =>
+	k.merge === undefined && (k.replaces || k.base === undefined && k.parents.length > 1)
+
+// merging: a merge commit met is merged; else the walk gives undefined. own: the commit's own
+// patches on what they are over (written)
 function walk(
 	history: History,
 	name: Uint8Array,
 	snapshot: Snapshots,
 	merges: Merges,
 	merging: boolean,
+	own = false,
 ): Tables | undefined {
-	if (history.get(name) === undefined) return
+	const start = history.get(name)
+	if (start === undefined) return
 	const line: Kept[] = []
 	let tables: Tables = {}
-	for (let k = history.get(name); k !== undefined;) {
-		const s = snapshot(k.name)
+	for (let k: Kept | undefined = start; k !== undefined;) {
+		const s = own && k === start ? undefined : snapshot(k.name)
 		if (s !== undefined) {
 			tables = s
+			break
+		}
+		if (listed(k) && !(own && k === start)) {
+			const after = (j: Kept) => walk(history, j.name, snapshot, merges, merging, true) ?? {}
+			tables = state(history, [k], after)
 			break
 		}
 		line.push(k)
@@ -122,7 +148,7 @@ function walk(
 	}
 	for (let i = line.length - 1; i >= 0; i--) {
 		const c = decode(line[i].bytes)
-		const value = apply(tables[c.table]?.value, c.patches, { cow: false })
+		const value = applies(tables[c.table]?.value, c.patches)
 		if (value === undefined) delete tables[c.table]
 		else tables[c.table] = { value, change: changeOf(c, line[i].name) }
 	}

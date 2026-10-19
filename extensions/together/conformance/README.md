@@ -13,15 +13,17 @@ harness's header lists its requests and answers.
 | snapshot  | `extensions/together/conformance/snapshot/`  | history's (`suite.json`)                              |
 | transport | `extensions/together/conformance/transport/` | `extensions/together/typescript/transport_harness.ts` |
 | sync      | `extensions/together/conformance/sync/`      | `extensions/together/typescript/sync_harness.ts`      |
+| lists     | `extensions/together/conformance/lists/`     | history's (`suite.json`)                              |
 
-Run: `deno task conformance commit seal packer history replay snapshot transport sync`. Another
+Run: `deno task conformance commit seal packer history replay snapshot transport sync lists`. A
+scenario with `"typescript": true` runs on the TypeScript harness only (none now). Another
 implementation: `--c` (the binary `<package>/c/<suite>-harness`), or `HARNESS="<command>"` for one
 suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `fails`, `skip`).
 
 ## Conventions
 
 - bytes: lowercase hex, two digits a byte. Commits, seals, packs, snapshots, names, stored ids,
-  keys, seeds, signer, parents, base.
+  keys, seeds, signer, parents, base, replaces.
 - a value (an actor, a metadata value, a patch's value, a table's value): its JSON form,
   `conformance/typescript/form.ts`. JSON for what JSON holds; `{"/": {"bytes": base64}}` (standard,
   unpadded): bytes inside a value are base64, never hex; `{"/": {kind: [...]}}` a typed array;
@@ -49,10 +51,16 @@ suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `fails`, `
   request or an answer is for the request's document: `doc`, default `ermine://2a…2a00…00` (16 bytes
   each; the seal and packer harnesses take its 32 bytes, hex, and seal for it when given none). The
   transport harness seals a label for each document it is used in.
-- a commit in JSON: its fields as `commit.ts` names them. signer, each parent, base: hex. actor,
-  patch values: values. metadata: a map, its values values. external
-  `[{file, line, column?, function?}]`. patches `[{path, range?, value?, move?: {path, range?}}]`,
-  merge: a rule's name. An optional field absent: left out.
+- a sealed message (a channel's bytes on a topic, littlesync's say): `{bytes, signer, signature}`,
+  the signer's multikey in it. What it signs: `"ermine/v0/message"`, the BLAKE3 of the bytes, the
+  signature's varsig header, then the topic's UTF-8 (1 to 256 bytes): good on its own topic only.
+  Refused as a seal is: `shape` (not exactly those three, each bytes; a signer not a multikey; a topic
+  that is not one) or `signature` (seal/13, seal/14).
+- a commit in JSON: its fields as `commit.ts` names them. signer, each parent, base, each name a
+  patch replaces: hex. actor, patch values: values. metadata: a map, its values values. external
+  `[{file, line, column?, function?}]`. patches
+  `[{path, range?, value?, move?: {path, range?}, replaces?: [name]}]`, merge: a rule's name. An
+  optional field absent: left out.
 - a commit by label (history, replay, snapshot, packer, transport): made from the fields the request
   gives, labelled `name`. Defaults: table `"value"`, actor `null`, time `0`, seed `"01"` × 32 (the
   signer is its Ed25519 key as a multikey, `ed01` then the 32 bytes; transport: the device's seed),

@@ -11,8 +11,8 @@
 // checked after every step, on every host:
 // (a) the patches told, applied in order from nothing, are each table's value (exactly: -0; maps
 //     by content)
-// (b) the history computed fresh (replay of the first head; with a rule and several heads, its
-//     merge) is each kept table's value, or under a drag, what the "ephemeral" table says is under
+// (b) the history computed fresh (no rule: its lists composed, lists.ts; with a rule, the first
+//     head's replay, or with several heads their merge) is each kept table's value, or under a drag, what the "ephemeral" table says is under
 // (c) hosts with the same stored history and no drag show the same tables and conflicts
 // and now and then (and at the end, everything delivered) a fresh host fed the history is where
 // the host is. a failure is shrunk (steps dropped while the same check still fails) and printed
@@ -32,7 +32,8 @@ import {
 	transport_conformance_hook_put,
 	transport_conformance_hook_taking,
 } from "./transport_conformance_hook.ts"
-import { type Merges, plain, replay, type Tables } from "./replay.ts"
+import { state } from "./lists.ts"
+import { type Merges, plain, replay, type Tables, written } from "./replay.ts"
 import { serial } from "./rules_harness.ts"
 import { hex } from "./hex.ts"
 
@@ -432,7 +433,9 @@ function fresh(h: Host, rule: Rule): Tables {
 			(ns) => ns.length === 1 ? plain(history, ns[0]) : undefined,
 		)
 	}
-	return replay(history, heads[0].name, undefined, MERGES) ?? {}
+	if (rule !== undefined) return replay(history, heads[0].name, undefined, MERGES) ?? {}
+	// no rule: the lists of every commit, composed
+	return state(history, heads, (k) => written(history, k.name, undefined, MERGES) ?? {})
 }
 
 // ---- a run

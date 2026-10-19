@@ -5,7 +5,8 @@
 // A commit is a cm_commit: the change header as the graph has it (node.h's ch_header, never an op),
 // and the rest. The rules are written once, on a value in its Json form (json.h): cm_check. A
 // commit that is encoded is checked there, one that is decoded is checked there, and so is a
-// pack's column, made into a commit (packer.h). Out of memory aborts, as elsewhere. Nothing recurses
+// pack's column, made into a commit (packer.h). cm_encode writes a cm_commit with no Json made when
+// the same rules, on its fields, take it; what they refuse goes to its Json form, which names the field. Out of memory aborts, as elsewhere. Nothing recurses
 // on a value's depth.
 #ifndef CM_COMMIT_H
 #define CM_COMMIT_H
@@ -51,6 +52,14 @@ int cm_name_split(const uint8_t *bytes, size_t length, uint64_t *code, const uin
 // a name from the code and the digest, into out (CM_NAME bytes at most): how long it is
 size_t cm_name_join(uint64_t code, const uint8_t *digest, size_t digest_length, uint8_t *out);
 
+// what a patch replaces: the names of the writes at or under its path its writer held and means to
+// replace. has 0: absent, ancestry decides (an older commit's); has 1, length 0: none
+typedef struct {
+	int has;
+	const uint8_t (*names)[CM_NAME];
+	size_t length;
+} cm_replaces;
+
 // a decoded commit. Everything it refers to is its own (cm_free), shared with nothing
 typedef struct {
 	char *table;
@@ -66,6 +75,8 @@ typedef struct {
 	// ascending by name
 	const uint8_t (*parents)[CM_NAME];
 	size_t parents_length;
+	// with several parents: the one its patches are over. None needed when every patch is a key patch
+	// (a set or a delete at a path of keys: no range, move or list index)
 	int has_base;
 	uint8_t base[CM_NAME];
 	// with several parents and no base: a merge rule's name; NULL when absent
@@ -73,6 +84,8 @@ typedef struct {
 	int64_t lamport;
 	op_patch *patches;
 	size_t patches_length;
+	// each patch's, patches_length of them; NULL: absent in every patch
+	const cm_replaces *replaces;
 	void *own;
 } cm_commit;
 

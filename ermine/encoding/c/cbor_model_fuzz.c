@@ -4,7 +4,7 @@
 // - refused exactly when the model says: a string or key not UTF-8 (a lone surrogate too), a map
 //   holding a key twice, more than CBOR_DEPTH containers one in the next;
 // - taken: decoding gives an equal value, encoding that again the same bytes; the same value with
-//   every map's keys in reverse the same bytes; hashValue BLAKE3 of them;
+//   every map's keys in reverse the same bytes, and into a buffer that grows; hashValue BLAKE3 of them;
 // - a number alone: a whole one the integer (major type 0 or 1, a bignum past 64 bits, -0 as 00),
 //   modelled from long double and its bits; the rest the shortest float that holds it (_Float16,
 //   float, double), the one NaN f97e00; whole numbers made from bytes (jsonWhole) round trip too;
@@ -240,10 +240,18 @@ static Json *reversed(const Json *v) {
 static unsigned char *encoded(const Json *v, size_t *length, bool *ok) {
 	const char *why;
 	*ok = cborEncode(v, NULL, 0, length, &why);
-	if (!*ok) return NULL;
+	if (!*ok) {
+		CborOut refused = { NULL, 0, 0, true };
+		if (cborPut(&refused, v, &why)) die("a buffer that grows takes what has no encoding");
+		free(refused.data);
+		return NULL;
+	}
 	unsigned char *out = malloc(*length + 1);
 	size_t again;
 	if (!cborEncode(v, out, *length, &again, &why) || again != *length) die("encoding twice differs");
+	CborOut grown = { NULL, 0, 0, true };
+	if (!cborPut(&grown, v, &why) || grown.length != *length || memcmp(grown.data, out, *length) != 0) die("a buffer that grows, other bytes");
+	free(grown.data);
 	return out;
 }
 

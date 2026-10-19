@@ -66,6 +66,31 @@ static void put(api *a, const char *path, const op_value *v) {
 	op_free(value);
 }
 
+// the others' pointers at the room (their presence rows, littlesync's: web pigs' and devices'), as web
+// pigs' /pointers: [{who, name, colour, x, y, ...}], what else a row says kept, x and y 0 to 1
+static op_value *pointers(const ls_node *room) {
+	op_value *out = op_list();
+	for (size_t i = 0, k = ls_rows(room); i < k; i++) {
+		const ls_row *r = ls_row_at(room, i);
+		const op_value *v = r->value, *p = v->type == OP_MAP ? op_get(v, "pointer") : NULL;
+		if (r->own || p == NULL || p->type != OP_MAP) continue;
+		op_value *o = op_map();
+		for (size_t j = 0; j < v->count; j++)
+			if (strcmp(v->keys[j], "pointer") != 0) op_set(o, v->keys[j], op_ref(v->items[j]));
+		char who[2 * LS_KEY_LEN + 1];
+		for (size_t j = 0; j < r->who_length; j++) snprintf(who + 2 * j, 3, "%02x", r->who[j]);
+		op_set(o, "who", op_str(who));
+		const char *xy[] = {"x", "y"};
+		for (int j = 0; j < 2; j++) {
+			const op_value *n = op_get(p, xy[j]);
+			double d = n && n->type == OP_NUM && n->num == n->num ? n->num : 0.5;
+			op_set(o, xy[j], op_num(d < 0 ? 0 : d > 1 ? 1 : d));
+		}
+		op_push(out, o);
+	}
+	return out;
+}
+
 void room_mirror(api *a) {
 	if (dev == NULL) return;
 	// the room's pigs followed: the first unless the room says no, any it says yes to
@@ -80,13 +105,22 @@ void room_mirror(api *a) {
 		if (followed[i].mirrored && ls_version(n) == followed[i].seen) continue;
 		followed[i].seen = ls_version(n), followed[i].mirrored = 1;
 		put(a, followed[i].path, ls_value(n));
-		if (i == 0) continue;
+		if (i == 0) {
+			op_value *ps = pointers(n);
+			put(a, "/pigs/room/pointers", ps);
+			op_free(ps);
+			continue;
+		}
 		last = n;
 		char held[40];
 		snprintf(held, sizeof held, "%s/held", followed[i].path);
 		const op_value *h = NULL;
 		for (size_t k = 0; k < ls_helds(n) && h == NULL; k++) h = ls_held_at(n, k)->value;
 		put(a, held, h);
+		// a clash (two devices dropped it at once): the other drop, the pig drawn again
+		ls_item items[2];
+		snprintf(held, sizeof held, "%s/also", followed[i].path);
+		put(a, held, ls_values(n, NULL, 0, items, 2) > 1 ? items[1].value : NULL);
 	}
 }
 
@@ -109,7 +143,8 @@ static void push(api *a, const op_value *value, const op_value *before, void *ct
 	for (size_t i = 0; value && i < value->count && i < (size_t)nfollowed; i++) {
 		const op_value *v = value->items[i];
 		if (v->type == OP_NULL || same(v, ls_value(followed[i].node))) continue;
-		ls_put(followed[i].node, v);
+		// a person's edit: this is the value, every item replaced (a clash ends)
+		ls_pick(followed[i].node, v);
 	}
 }
 

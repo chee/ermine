@@ -33,12 +33,15 @@ typedef struct {
 	char *table;
 	const uint8_t (*parents)[CM_NAME];
 	size_t parents_length;
-	// the one its patches are over: the base, else the first parent; none for a root or a merge
+	// the one its patches are over: the base, else the only parent; none for a root, a merge, or key
+	// patches on several
 	int has_base;
 	uint8_t base[CM_NAME];
 	// a merge commit's rule (its patches are over the merge of its parents); NULL: none
 	const char *merge;
 	int64_t lamport;
+	// a patch names what it replaces: its tables are the lists' (lists.h), not its base's patched
+	bool replaces;
 } hy_kept;
 
 typedef enum { HY_TAKEN, HY_PASSED, HY_WAITING, HY_REFUSED } hy_kind;
@@ -121,7 +124,8 @@ uint64_t hy_serial(const hy_history *h);
 int hy_agreed(const hy_kept *a, const hy_kept *b);
 
 // what a commit's tables follow from: a merge's parents, else its base (a commit with a base keeps
-// what that one held, whatever its other parents did), else nothing (a root). Points into the kept
+// what that one held, whatever its other parents did), else its parents (key patches on all of
+// them; none: a root). Points into the kept
 size_t hy_follows(const hy_kept *k, const uint8_t (**out)[CM_NAME]);
 
 // whether the tables at from (one commit's, or several merged) can be had

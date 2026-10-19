@@ -13,8 +13,8 @@
 // { op: "saved", part, id, path? }        → { value? }   at path (none: the whole value)
 // { op: "change", part, id }               → { actor?, process?, caller? }   latest change's, from
 //    its metadata; the header's own actor if it has one
-// { op: "metadata", part, id }             → { keys, node? }   latest change's metadata: its keys,
-//    sorted, and the NODE key's value
+// { op: "metadata", part, id }             → { keys, node?, replaces? }   latest change's metadata:
+//    its keys, sorted, and the NODE key's and "replaces" key's values
 // { op: "id", path }                       → { id? }   from "R"
 // { op: "uuids", paths }                   → { v7, ordered }   each a uuidv7, each after the last
 // { op: "now", t }                         → {}   presence clock, ms
@@ -41,6 +41,7 @@
 //   ["ref", path, value]           ref(path, () => value)
 //   ["if", test, then, else?]      then's or else's value (none: undefined)
 //   ["throw", text]                throws an error of message text
+//   ["each", expr, path]           each item of expr's list, at path (none: null)
 // expr: [fn, ...args], ["all", expr, …], or "$x"
 // errors: PlacesError { error: code }, Refusal "refused", SendError "not-a-method", PENDING
 // "pending", else { error: text }
@@ -48,7 +49,7 @@ import createEntry from "@ermine/node/entry"
 import { createScheduler, PENDING, type Scope } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Id, type Key, type Table } from "@ermine/table"
-import { children, createPlaces, type Places, PlacesError } from "@ermine/places"
+import { at, children, createPlaces, type Places, PlacesError } from "@ermine/places"
 import { get } from "@ermine/places/lib"
 import { createChangeHeader, NODE } from "@ermine/places/header"
 import { Refusal } from "@ermine/places/guard"
@@ -199,6 +200,12 @@ function expr(api: API, env: Env, e: unknown): unknown {
 		return args.length > 2 ? expr(api, env, args[2]) : undefined
 	}
 	if (fn === "throw") throw new Error(args[0] as string)
+	if (fn === "each") {
+		const list = expr(api, env, args[0])
+		return Array.isArray(list)
+			? list.map((v) => at(v, args[1] as (string | number)[]) ?? null)
+			: []
+	}
 	return call(api, env, [fn, ...args])
 }
 
@@ -312,7 +319,11 @@ function answer(r: Request): Record<string, unknown> {
 			const c = world().table.get(r.part as Key, r.id)?.change
 			const m = c?.metadata ?? {}
 			const keys = Object.keys(m).sort()
-			return NODE in m ? { keys, node: m[NODE] } : { keys }
+			return {
+				keys,
+				...NODE in m && { node: m[NODE] },
+				..."replaces" in m && { replaces: m.replaces },
+			}
 		}
 		case "change": {
 			const c = world().table.get(r.part as Key, r.id)?.change
