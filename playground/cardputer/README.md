@@ -1,8 +1,7 @@
 # ermine on the Cardputer ADV
 
-The M5Stack Cardputer ADV (ESP32-S3, 8 MB flash, no PSRAM) running ermine's C: the process
-api and everything under it, built from where it lives in the repo
-(`components/ermine/CMakeLists.txt`).
+The M5Stack Cardputer ADV (ESP32-S3, 8 MB flash, no PSRAM) running ermine's C: the process api and
+everything under it, built from where it lives in the repo (`components/ermine/CMakeLists.txt`).
 
     ./setup.sh     # once: ESP-IDF v6.0.3 into ~/esp (about 2 GB, C only)
     ./flash.sh     # build, flash over USB, show the serial log (ctrl-] leaves)
@@ -11,12 +10,19 @@ api and everything under it, built from where it lives in the repo
 On the device:
 
 - `/keyboard`: the keyboard driver writes each key there.
-- `/programs/shell`: a program on the process api only. It keeps `line` and `said`, a memo
-  `sum` (the numbers at the root added up) and a memo `screen` (the tree from `/`).
+- `/programs/shell`: a program on the process api only. It keeps `line` and `said`, a memo `sum`
+  (the numbers at the root added up) and a memo `screen` (the tree from `/`).
 - `/programs/display`: an effect that draws `screen`.
 
-Type `name = value` (a number, `true`, `false`, `null`, `"text"`, or any text) or `rm name`;
-fn + `` ` `` is esc. The header shows the free heap.
+Type `name = value` (a number, `true`, `false`, `null`, `"text"`, or any text) or `rm name`; fn +
+`` ` `` is esc. The header shows the free heap.
+
+littlesync over WiFi too (`main/net.c`): `./idf.sh menuconfig`, "Cardputer: littlesync over WiFi":
+the network, its password, and a gateway as `http://host:port`
+(`extensions/together/stacks/littlesync/gateway`, `make run` there; plain http, https later). Kept
+in `sdkconfig`, which git ignores: never put them in `sdkconfig.defaults`. Empty: the USB line only,
+and no WiFi code in the image (0.41 MB; with WiFi 1.09 MB, and 50 KB more static RAM). The USB line
+keeps working beside it; a line typed there prints the WiFi's state with the rest.
 
 From the Mac, over USB: `python type.py /dev/cu.usbmodem* 'a = 3' 'b = 4'` types lines into the
 device and prints the tree after each one; `python log.py PORT` resets it and prints its log (use

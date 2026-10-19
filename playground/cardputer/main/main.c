@@ -10,6 +10,7 @@
 #include "freertos/task.h"
 #include "host.h"
 #include "keys.h"
+#include "net.h"
 #include "screen.h"
 #include "shell.h"
 #include "room.h"
@@ -39,6 +40,10 @@ static void print(void) {
 		printf("littlesync: in %u out %u junk %u refused %u bad seals %u commits %u applied %u (%s)\n",
 			(unsigned)tr->frames_in, (unsigned)tr->frames_out, (unsigned)tr->junk, (unsigned)st->refused,
 			(unsigned)st->bad_seals, (unsigned)st->commits_in, (unsigned)st->applied, ls_reason(ls_now));
+		if (net_status()) {
+			const ls_traffic *nt = ls_traffic_of(net_link());
+			printf("%s, in %u out %u\n", net_status(), (unsigned)nt->frames_in, (unsigned)nt->frames_out);
+		}
 	}
 	printf("--- %u bytes free, %u least, stack %u left\n", (unsigned)heap_caps_get_free_size(MALLOC_CAP_8BIT),
 		(unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT), (unsigned)uxTaskGetStackHighWaterMark(NULL));
@@ -108,9 +113,11 @@ void app_main(void) {
 	ls_now = ls;
 	// the USB line is one link; another line would be another
 	line = ls ? ls_link(ls) : NULL;
+	// and the gateway over WiFi, a second link, when menuconfig names a network and a gateway (net.h)
+	int wifi = net_start(ls, randoms);
 	api *room_api = host_start("room", room);
-	printf("ermine: up, %u bytes free%s\n", (unsigned)heap_caps_get_free_size(MALLOC_CAP_8BIT),
-		ls ? ", littlesync on" : ", no littlesync");
+	printf("ermine: up, %u bytes free%s%s\n", (unsigned)heap_caps_get_free_size(MALLOC_CAP_8BIT),
+		ls ? ", littlesync on" : ", no littlesync", wifi ? ", and over WiFi" : "");
 	for (;;) {
 		const char *k;
 		while ((k = keys_next())) {
@@ -139,6 +146,7 @@ void app_main(void) {
 			size_t m = ls_next(line, &out);
 			// only while a peer is heard: the line also carries the log, and nobody needs hellos
 			if (m && ls_up(line)) usb_serial_jtag_write_bytes(out, m, portMAX_DELAY);
+			net_turn(esp_timer_get_time() / 1000);
 			room_mirror(room_api);
 			host_settle();
 		}
