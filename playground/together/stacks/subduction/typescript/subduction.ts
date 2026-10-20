@@ -4,10 +4,11 @@
 // checks of what arrives before the mailroom's histories see it, and before Subduction stores it (only
 // what is taken in is). what a device holds for others is bounded (Limits). one sedimentree per
 // node: a commit names no node, it is the node's whose sedimentree it came on. adapted from
-// the old stack's transport.ts (now in ermine-graveyard/extensions/subduction), which carries blops. only the lock "unlocked" is
-// built. the mailroom (mailroom.ts) holds the histories and what is taken in; this hands it what arrives
+// the old stack's transport.ts (now in ermine-graveyard/extensions/subduction), which carries blops. the
+// lock is together's (../../../typescript/lock.ts). the mailroom (mailroom.ts) holds the histories and what is taken in; this hands it what arrives
 // (pend, settle, member, hint, hear, stopped) and is its Stack (send, stop, handed, taking)
 import * as sd from "npm:@automerge/subduction@0.23.0"
+import { type Lock, type Opened, unlocked } from "../../../typescript/lock.ts"
 import {
 	each as unpacking,
 	pack as packing,
@@ -36,22 +37,8 @@ import type { Taking } from "../../../typescript/transport_conformance_hook.ts"
 
 export type { Fragment }
 
-// what a lock's open gives: the bytes close was given; not yet; or never
-export type Opened = Uint8Array | { wait: true } | { refused: string }
-
-// the part of a lock the stack calls; doc: the document's 32 bytes
-export type Lock = {
-	close(
-		doc: Uint8Array,
-		name: Uint8Array,
-		parents: Uint8Array[],
-		bytes: Uint8Array,
-	): Uint8Array | Promise<Uint8Array>
-	open(doc: Uint8Array, bytes: Uint8Array): Opened | Promise<Opened>
-}
-
-// close and open give back what they are given
-export const unlocked: Lock = { close: (_d, _n, _p, bytes) => bytes, open: (_d, bytes) => bytes }
+// the lock (../../../typescript/lock.ts): the stack calls it; together owns it
+export { type Lock, type Opened, unlocked } from "../../../typescript/lock.ts"
 
 // Subduction drops an ephemeral payload over this; a closed commit over it is sent as parts of at
 // most PART bytes
@@ -109,7 +96,9 @@ type Tree = {
 	topic: sd.Topic
 	fragments: Map<string, Fragment>
 	broken: Map<string, Code>
-	locked: Map<string, { commit: boolean; again(): Promise<void> }>
+	// the text a lock refused a fragment with, by head
+	why: Map<string, string>
+	locked: Map<string, { commit: boolean; boundary: string[]; again(): Promise<void> }>
 	deep: number
 }
 
@@ -148,6 +137,7 @@ export function createSubduction(
 				topic: sd.Topic.fromBytes(d.bytes),
 				fragments: new Map(),
 				broken: new Map(),
+				why: new Map(),
 				locked: new Map(),
 				deep: 0,
 			}
@@ -178,7 +168,7 @@ export function createSubduction(
 		const open = await lock.open(d.bytes, blob)
 		if (!(open instanceof Uint8Array)) {
 			if ("wait" in open) return "wait"
-			refuse(d, h, "lock"), settle(d)
+			refuse(d, h, "lock", undefined, open.refused), settle(d)
 			return
 		}
 		let it: Sealed
@@ -202,7 +192,11 @@ export function createSubduction(
 		if (got === undefined) return
 		if (got === "wait") {
 			clear(d, h)
-			of(d).locked.set(h, { commit: true, again: () => commit(d, head, parents, blob) })
+			of(d).locked.set(h, {
+				commit: true,
+				boundary: [],
+				again: () => commit(d, head, parents, blob),
+			})
 			return
 		}
 		pend(d, h, {
@@ -369,7 +363,7 @@ export function createSubduction(
 		const open = await lock.open(d.bytes, blob)
 		if (!(open instanceof Uint8Array)) {
 			if ("wait" in open) return true
-			if (!d.seen.has(h)) broke(d, h, "lock")
+			if (!d.seen.has(h)) broke(d, h, "lock", open.refused)
 			return false
 		}
 		const got = await checked(d, head, boundary, checkpoints, open)
@@ -379,8 +373,9 @@ export function createSubduction(
 	}
 
 	// a fragment refused whole, by head
-	function broke(d: Doc, h: string, code: Code) {
+	function broke(d: Doc, h: string, code: Code, why?: string) {
 		note(limits.refused, of(d).broken, h, code)
+		if (why !== undefined) note(limits.refused, of(d).why, h, why)
 	}
 
 	// a fragment taken in: its members (each checked) as seals alone, its snapshot a hint. one whose
@@ -405,9 +400,10 @@ export function createSubduction(
 			} else if ("wait" in open) {
 				of(d).locked.set("f" + h, {
 					commit: false,
+					boundary: boundary.map(hex),
 					again: () => fragment(d, head, boundary, checkpoints, blob),
 				})
-			} else broke(d, h, "lock")
+			} else broke(d, h, "lock", open.refused)
 			return
 		}
 		const got = await checked(d, head, boundary, checkpoints, open)
@@ -431,7 +427,7 @@ export function createSubduction(
 	async function hear(d: Doc, blob: Uint8Array, from: Uint8Array) {
 		const open = await lock.open(d.bytes, blob)
 		if (!(open instanceof Uint8Array)) {
-			if (!("wait" in open)) mailroom.unheard(d, nameOf(blob), "lock")
+			if (!("wait" in open)) mailroom.unheard(d, nameOf(blob), "lock", open.refused)
 			return
 		}
 		mailroom.hear(d, open, ed25519Key(from))
@@ -561,7 +557,7 @@ export function createSubduction(
 			const bytes = cbor.encode(blob as cbor.Value)
 			const names = f.boundary.map((b) => unhex(d.seen.get(hex(b))!.name))
 				.sort((a, b) => by(hex(a), hex(b)))
-			const closed = await lock.close(d.bytes, blake3(bytes), names, bytes)
+			const closed = await lock.close(d.bytes, nameOf(bytes), names, bytes)
 			await sub.addFragment(
 				of(d).tree,
 				commitId(f.head),
@@ -957,10 +953,22 @@ export function createSubduction(
 		},
 		// what waits on the lock, and the fragments refused whole
 		taking(d) {
-			const { locked, broken } = of(d)
+			const { locked, broken, why } = of(d)
 			const waiting: Taking["waiting"] = [], refused: Taking["refused"] = []
-			for (const [commit, c] of locked) if (c.commit) waiting.push({ commit, waiting: [] })
-			for (const [head, code] of broken) refused.push({ fragment: head, refused: code })
+			for (const [head, c] of locked) {
+				waiting.push(
+					c.commit
+						? { commit: head, waiting: [] }
+						: { fragment: head.slice(1), boundary: c.boundary },
+				)
+			}
+			for (const [head, code] of broken) {
+				refused.push({
+					fragment: head,
+					refused: code,
+					...(code === "lock" && why.has(head) ? { why: why.get(head)! } : {}),
+				})
+			}
 			return { waiting, refused }
 		},
 	})

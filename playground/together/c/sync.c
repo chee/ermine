@@ -690,12 +690,9 @@ static const char *site_of(const sy_sync *s, const char *file) {
 }
 
 static bool carries(const void *value) {
-	Json *j = pk_to_json(value);
-	size_t n;
-	const char *why;
-	bool ok = j != NULL && cborEncode(j, NULL, 0, &n, &why);
-	jsonFree(j);
-	return ok;
+	// counted, nothing written
+	CborOut o = {NULL, 0, 0, false};
+	return pk_put(&o, value);
 }
 
 static void carry(sy_sync *s, const ch_header *change, carried_t *out, bool fresh) {
@@ -1471,10 +1468,20 @@ static op_value *waiting_row(const uint8_t *commit, size_t commit_length, const 
 	return m;
 }
 
-static op_value *refused_row(const char *key, const uint8_t *id, size_t id_length, const char *code) {
+// a fragment waiting on the lock waits on authority, as a commit does with no parent named
+static op_value *waiting_fragment_row(const uint8_t *head) {
+	op_value *m = op_map();
+	op_set(m, "fragment", hex_value(head, 32));
+	op_set(m, "authority", op_bool(1));
+	return m;
+}
+
+// why: the text a lock refused with, beside the code lock; NULL: none
+static op_value *refused_row(const char *key, const uint8_t *id, size_t id_length, const char *code, const char *why) {
 	op_value *m = op_map();
 	op_set(m, key, hex_value(id, id_length));
 	op_set(m, "code", op_str(code));
+	if (why != NULL) op_set(m, "why", op_str(why));
 	return m;
 }
 
@@ -1493,7 +1500,9 @@ static void status(sy_sync *s, node_t *nd) {
 	// a commit stuck behind a refused parent waits on that parent: a later change (the rule becoming
 	// known) could let both in
 	for (size_t i = 0; i < t.waiting_count; i++, waiting++)
-		if (wl->count < LIST) op_push(wl, waiting_row(t.waiting[i].commit, 32, t.waiting[i].names, t.waiting[i].count));
+		if (wl->count < LIST)
+			op_push(wl, t.waiting[i].fragment ? waiting_fragment_row(t.waiting[i].commit)
+							  : waiting_row(t.waiting[i].commit, 32, t.waiting[i].names, t.waiting[i].count));
 	for (size_t i = 0; i < wn; i++, waiting++)
 		if (wl->count < LIST) op_push(wl, waiting_row(ws[i].name, CM_NAME, ws[i].waiting, ws[i].waiting_length));
 	for (size_t i = 0; i < t.refused_count; i++) {
@@ -1503,7 +1512,7 @@ static void status(sy_sync *s, node_t *nd) {
 			waiting++;
 			continue;
 		}
-		if (rl->count < LIST) op_push(rl, refused_row(r->fragment ? "fragment" : "commit", r->id, r->id_length, tp_code_name(r->code)));
+		if (rl->count < LIST) op_push(rl, refused_row(r->fragment ? "fragment" : "commit", r->id, r->id_length, tp_code_name(r->code), r->why));
 		refused++;
 	}
 	for (size_t i = 0; i < rn; i++) {
@@ -1515,7 +1524,7 @@ static void status(sy_sync *s, node_t *nd) {
 			waiting++;
 			continue;
 		}
-		if (rl->count < LIST) op_push(rl, refused_row("commit", rs[i].name, CM_NAME, hy_refusal_name(rs[i].refusal)));
+		if (rl->count < LIST) op_push(rl, refused_row("commit", rs[i].name, CM_NAME, hy_refusal_name(rs[i].refusal), NULL));
 		refused++;
 	}
 	op_value *v = NULL;
@@ -2776,7 +2785,7 @@ sy_sync *sy_create(const sy_options *o) {
 	if (s->pure_list == NULL) abort();
 	s->pure_merges = pure(s, s->pure_list);
 	tp_options d = {.store = o->store, .now = o->now, .clock = o->clock, .check = check, .snapshot = snapshot_of, .context = s,
-		.merges = &s->pure_merges, .lazy = o->lazy};
+		.merges = &s->pure_merges, .lazy = o->lazy, .lock = o->lock};
 	memcpy(d.seed, o->seed, 32);
 	s->device = tp_create(&d);
 	if (s->device == NULL) {

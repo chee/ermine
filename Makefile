@@ -223,6 +223,14 @@ together-transport_suite = transport
 together-transport_flags = $(subduction_rename) -DCONFORMANCE_HOOK
 together-transport_libs = $(transport_libs)
 LIBS += together-transport
+# the lock's suite: transport's devices and harness, built as a library (-DTRANSPORT_LIBRARY: its loop is tph_*), under
+# lock_harness.c's loop with the test lock
+together-lock_src = $(together-transport_src) playground/together/c/lock_harness.c
+together-lock = playground/together/c/lock-harness
+together-lock_suite = lock
+together-lock_flags = $(subduction_rename) -DCONFORMANCE_HOOK -DTRANSPORT_LIBRARY
+together-lock_libs = $(transport_libs)
+LIBS += together-lock
 together_sync_src = $(together_harness_src) $(together_commits_src) conformance/c/protocol_harness.c playground/together/c/sync_harness.c playground/together/c/sync.c playground/together/c/wires_harness.c \
 	playground/together/stacks/subduction/c/subduction/store_memory.c core/table/c/table.c core/node/c/update.c $(together_transport_src) $(subduction_lib)
 together-sync_src = $(together_sync_src) playground/together/c/rules_harness.c

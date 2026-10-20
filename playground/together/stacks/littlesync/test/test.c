@@ -709,14 +709,11 @@ static void t_ephemeral(void) {
 // a row as presence.ts sends it: the text made a value, its canonical CBOR
 static uint8_t *row_bytes(const char *text, size_t *n) {
 	op_value *v = op_json_read(text, NULL);
-	Json *j = pk_to_json(v);
+	CborOut o = {NULL, 0, 0, true};
+	pk_put(&o, v);
 	op_free(v);
-	*n = 0;
-	cborEncode(j, NULL, 0, n, NULL);
-	uint8_t *b = malloc(*n);
-	cborEncode(j, b, *n, n, NULL);
-	jsonFree(j);
-	return b;
+	*n = o.length;
+	return o.data;
 }
 // a peer of the tests' own: its seed (the first byte the one given, the rest 0) and its key (an Ed25519
 // multikey), as littlesync makes one

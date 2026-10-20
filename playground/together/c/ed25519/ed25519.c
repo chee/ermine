@@ -387,24 +387,34 @@ void ermEd25519Public(const unsigned char seed[32], unsigned char pub[32]) {
 	pointPack(pub, &A);
 }
 
-void ermEd25519Sign(const unsigned char seed[32], const unsigned char *message, size_t length, unsigned char signature[64]) {
-	unsigned char a[32], prefix[32], pub[32], wide[64], r[32], k[32];
-	Point A, R;
+void ermEd25519PairOf(ermEd25519Pair *pair, const unsigned char seed[32]) {
+	Point A;
+	expand(seed, pair->a, pair->prefix);
+	pointMul(&A, &base, pair->a);
+	pointPack(pair->pub, &A);
+}
+
+void ermEd25519SignPair(const ermEd25519Pair *pair, const unsigned char *message, size_t length, unsigned char signature[64]) {
+	unsigned char wide[64], r[32], k[32];
+	Point R;
 	ErmSha512 h;
-	expand(seed, a, prefix);
-	pointMul(&A, &base, a);
-	pointPack(pub, &A);
 	// r = SHA-512(prefix || message) mod L; R = [r]B
 	ermSha512Start(&h);
-	ermSha512Add(&h, prefix, 32);
+	ermSha512Add(&h, pair->prefix, 32);
 	ermSha512Add(&h, message, length);
 	ermSha512End(&h, wide);
 	scalarReduce(r, wide);
 	pointMul(&R, &base, r);
 	pointPack(signature, &R);
 	// S = r + k a mod L
-	challenge(k, signature, pub, message, length);
-	scalarMulAdd(signature + 32, k, a, r);
+	challenge(k, signature, pair->pub, message, length);
+	scalarMulAdd(signature + 32, k, pair->a, r);
+}
+
+void ermEd25519Sign(const unsigned char seed[32], const unsigned char *message, size_t length, unsigned char signature[64]) {
+	ermEd25519Pair pair;
+	ermEd25519PairOf(&pair, seed);
+	ermEd25519SignPair(&pair, message, length, signature);
 }
 
 // The first strict check a signature fails, in the order they are made, or

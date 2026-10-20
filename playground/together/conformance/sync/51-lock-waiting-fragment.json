@@ -1,0 +1,29 @@
+{
+	"title": "a fragment that waits on the lock shows in the status as waiting on authority, by its head, until the lock opens it and the device is told",
+	"steps": [
+		{"op":"host","name":"a","seed":"0101010101010101010101010101010101010101010101010101010101010101","lock":"tag","expect":{"key":"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"}},
+		{"op":"mint","host":"a","as":"x","expect":{"id":"ermine://b40fde52c568d2f3864d68739e98b72b9f144f5566afcbb238fd354ecdc7c755"}},
+		{"op":"write","host":"a","id":"x","patches":[{"path":[],"value":{"body":""}}],"name":"w0","change":{"time":1760000750,"actor":"a"},"expect":{"commits":1}},
+		{"op":"type","host":"a","id":"x","path":["body"],"at":0,"text":"xxxxxxxxxxxxxxxxxxxx","name":"t20","expect":{"commits":20}},
+		{"op":"quiet","expect":{}},
+		{"op":"type","host":"a","id":"x","path":["body"],"at":20,"text":"x","name":"t21","expect":{"commits":1}},
+		{"op":"quiet","expect":{}},
+		{"op":"fragments","host":"a","id":"x","expect":{"fragments":1}},
+		{"op":"stored","host":"a","id":"x","expect":{"stored":0}},
+		{"op":"host","name":"b","seed":"0202020202020202020202020202020202020202020202020202020202020202","lock":"tag","expect":{"key":"ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"}},
+		{"op":"lock","host":"b","open":"wait","expect":{}},
+		{"op":"follow","host":"a","id":"x","expect":{}},
+		{"op":"follow","host":"b","id":"x","expect":{}},
+		{"op":"connect","a":"a","b":"b","expect":{}},
+		{"op":"quiet","expect":{}},
+		{"op":"status","host":"b","id":"x","expect":{"status":{"waiting":[{"fragment":"008b4f2c996e3c12b03c45542d8363ce8053feb20862822e9b3f27585d41dbad","authority":true}],"refused":[],"unsent":[],"count":{"waiting":1,"refused":0,"unsent":0}}}},
+		{"op":"fragments","host":"b","id":"x","expect":{"fragments":0}},
+		{"op":"commits","host":"b","id":"x","expect":{"commits":0}},
+		{"op":"lock","host":"b","open":"tag","expect":{}},
+		{"op":"changed","host":"b","expect":{}},
+		{"op":"quiet","expect":{}},
+		{"op":"status","host":"b","id":"x","expect":{}},
+		{"op":"fragments","host":"b","id":"x","expect":{"fragments":1}},
+		{"op":"commits","host":"b","id":"x","expect":{"commits":22}}
+	]
+}

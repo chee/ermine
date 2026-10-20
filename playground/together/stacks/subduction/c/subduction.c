@@ -39,6 +39,10 @@ static int by_id(const void *a, const void *b) {
 	return memcmp(a, b, 32);
 }
 
+static int by_name(const void *a, const void *b) {
+	return memcmp(a, b, CM_NAME);
+}
+
 static size_t depth(const uint8_t id[32]) {
 	return fragment_depth(id);
 }
@@ -48,13 +52,16 @@ static size_t depth(const uint8_t id[32]) {
 // what the stack keeps of a document: its fragments, and what is its alone
 typedef struct {
 	mr_doc *d;
+	sb_stack *t;
 	// by head (fragment *)
 	im_map fragments;
-	// fragments refused whole, by head (codes)
-	im_map broken;
-	mr_order_t broken_order;
+	// fragments refused whole, by head (codes), and the text a lock refused them with (malloc'd)
+	im_map broken, broken_why;
+	mr_order_t broken_order, broken_why_order;
 	// how many taken-in seals have a depth, so a build with none is passed over
 	size_t deep;
+	// what waits on the lock, by head: loose commits, and fragments (locked_t)
+	im_map locked, locked_fragments;
 	bool followed, follow_later;
 	// lazy: its tree taken in from the store (or queued to be)
 	bool loaded;
@@ -65,6 +72,23 @@ typedef struct {
 } sb_doc;
 
 #define SBD(d) ((sb_doc *)(d)->stack)
+
+// what the lock could not open yet, as it arrived: held to be opened again (sb_changed). list: a
+// loose commit's parents, a fragment's boundary (32 bytes each); checks: a fragment's checkpoints, 12
+// bytes each
+typedef struct {
+	uint8_t *list, *checks, *blob;
+	size_t count, checks_count, length;
+} locked_t;
+
+static void locked_free(void *x) {
+	locked_t *l = x;
+	if (l == NULL) return;
+	free(l->list);
+	free(l->checks);
+	free(l->blob);
+	free(l);
+}
 
 // ---- the queues
 
@@ -202,6 +226,7 @@ struct sb_stack {
 	sb_snapshot_fn snapshot;
 	void *context;
 	size_t joins, parts;
+	const lk_lock *lock;
 
 	mr_doc **followed;
 	size_t followed_count, followed_room;
@@ -238,10 +263,10 @@ struct sb_stack {
 
 // the stack's slot of a document, made as the mailroom makes the document; the stack's fragments go with it
 static void made(void *context, mr_doc *d) {
-	(void)context;
 	sb_doc *s = calloc(1, sizeof *s);
 	if (s == NULL) abort();
 	s->d = d;
+	s->t = context;
 	d->stack = s;
 }
 
@@ -320,39 +345,90 @@ static mr_code code_of(sl_code code) {
 	return code == SL_SIGNATURE ? MR_SIGNATURE : MR_SHAPE;
 }
 
-// a loose commit's first steps, the lock (unlocked), the seal, its stored id: its commit in *it;
-// false: refused, noted
-static bool opening(mr_doc *d, const uint8_t head[32], const uint8_t *blob, size_t length, sl_unsealed *it) {
-	sl_code code = sl_unseal(blob, length, d->bytes, it, NULL);
+// the lock's open of what landed: GOOD, its bytes in *open (lk_opened_free it); WAIT, it cannot yet; REFUSED
+typedef enum { OPEN_GOOD, OPEN_WAIT, OPEN_REFUSED } open_t;
+
+static open_t unlock(mr_doc *d, const uint8_t *blob, size_t length, lk_opened *open, const char **why) {
+	const lk_lock *lock = SBD(d)->t->lock;
+	*open = lock->open(lock->context, d->bytes, blob, length);
+	if (open->kind == LK_OPEN) return OPEN_GOOD;
+	lk_kind kind = open->kind;
+	*why = open->refused;
+	lk_opened_free(open);
+	return kind == LK_WAIT ? OPEN_WAIT : OPEN_REFUSED;
+}
+
+// a loose commit's first steps, the lock, the seal, its stored id: what the lock opened in *open, its
+// commit in *it (GOOD, then both are the caller's); WAIT: the lock cannot open it yet; REFUSED: noted
+static open_t opening(mr_doc *d, const uint8_t head[32], const uint8_t *blob, size_t length, lk_opened *open,
+	sl_unsealed *it) {
+	const lk_lock *lock = SBD(d)->t->lock;
+	*open = lock->open(lock->context, d->bytes, blob, length);
+	if (open->kind != LK_OPEN) {
+		lk_kind kind = open->kind;
+		const char *why = open->refused;
+		lk_opened_free(open);
+		if (kind == LK_WAIT) return OPEN_WAIT;
+		mr_refuse(d, head, MR_LOCK, NULL, why);
+		mr_settle(d);
+		return OPEN_REFUSED;
+	}
+	sl_code code = sl_unseal(open->bytes, open->length, d->bytes, it, NULL);
 	if (code != SL_OK) {
-		mr_refuse(d, head, code_of(code), NULL);
-		return false;
+		lk_opened_free(open);
+		mr_refuse(d, head, code_of(code), NULL, NULL);
+		return OPEN_REFUSED;
 	}
 	if (memcmp(it->stored, head, 32) != 0) {
 		uint8_t name[CM_NAME];
 		memcpy(name, it->name, CM_NAME);
 		sl_free(it);
-		mr_refuse(d, head, MR_STORED_ID, name);
+		lk_opened_free(open);
+		mr_refuse(d, head, MR_STORED_ID, name, NULL);
 		mr_settle(d);
-		return false;
+		return OPEN_REFUSED;
 	}
-	return true;
+	return OPEN_GOOD;
 }
 
-// the steps of a loose commit, in order: the lock (unlocked), the seal, its stored id, then pending
+// what waits on the lock held, to be opened again (sb_changed): the commit as it arrived
+static void hold(im_map *map, const uint8_t head[32], const uint8_t *list, size_t count, const uint8_t *checks,
+	size_t checks_count, const uint8_t *blob, size_t length) {
+	locked_free(im_del(map, head));
+	locked_t *l = calloc(1, sizeof *l);
+	if (l == NULL) abort();
+	l->list = mr_copy(list, count * 32);
+	l->count = count;
+	l->checks = mr_copy(checks, checks_count * 12);
+	l->checks_count = checks_count;
+	l->blob = mr_copy(blob, length);
+	l->length = length;
+	im_set(map, head, l);
+}
+
+// the steps of a loose commit, in order: the lock, the seal, its stored id, then pending
 static void take_commit(mr_doc *d, const uint8_t head[32], const uint8_t (*parents)[32], size_t count, const uint8_t *blob,
 	size_t length) {
 	if (im_has(&d->seen, head)) return;
+	locked_free(im_del(&SBD(d)->locked, head));
 	sl_unsealed u;
-	if (!opening(d, head, blob, length, &u)) return;
+	lk_opened open;
+	open_t got = opening(d, head, blob, length, &open, &u);
+	if (got == OPEN_REFUSED) return;
+	if (got == OPEN_WAIT) {
+		im_del(&d->refused, head);
+		hold(&SBD(d)->locked, head, (const uint8_t *)parents, count, NULL, 0, blob, length);
+		return;
+	}
 	im_del(&d->refused, head);
 	mr_pending_t *p = calloc(1, sizeof *p);
 	if (p == NULL) abort();
 	memcpy(p->key, head, 32);
 	p->commit = true;
 	mr_sealed_of(&p->it, &u);
-	p->sealed = mr_copy(blob, length);
-	p->sealed_length = length;
+	p->sealed = mr_copy(open.bytes, open.length);
+	p->sealed_length = open.length;
+	lk_opened_free(&open);
 	p->given = mr_copy(parents, count * 32);
 	p->given_length = count;
 	qsort(p->given, count, 32, by_id);
@@ -360,14 +436,15 @@ static void take_commit(mr_doc *d, const uint8_t head[32], const uint8_t (*paren
 	mr_settle(d);
 }
 
-// what Subduction may store of a loose commit (its admission): one that unseals under its stored id
-// (the lock, unlocked, opens all). What is refused is noted, as taking it in notes it
+// what Subduction may store of a loose commit (its admission): one that opens to a seal under its
+// stored id, or waits on the lock. What is refused is noted, as taking it in notes it
 static bool allows(mr_doc *d, const uint8_t head[32], const uint8_t *blob, size_t length) {
 	if (im_has(&d->seen, head)) return true;
 	sl_unsealed u;
-	if (!opening(d, head, blob, length, &u)) return false;
-	sl_free(&u);
-	return true;
+	lk_opened open;
+	open_t got = opening(d, head, blob, length, &open, &u);
+	if (got == OPEN_GOOD) sl_free(&u), lk_opened_free(&open);
+	return got != OPEN_REFUSED;
 }
 
 // a fragment's blob opened: {run: its members as a pack (packer.h), snapshot?: packed tables}, or
@@ -602,18 +679,33 @@ static mr_code vetted(mr_doc *d, const uint8_t head[32], const uint8_t (*boundar
 }
 
 // a fragment refused whole, by head
-static void broke(mr_doc *d, const uint8_t head[32], mr_code code) {
-	mr_note(&SBD(d)->broken, &SBD(d)->broken_order, head, CODE(code), mr_limits_of(d->mailroom)->refused, NULL);
+static void broke(mr_doc *d, const uint8_t head[32], mr_code code, const char *why) {
+	size_t most = mr_limits_of(d->mailroom)->refused;
+	mr_note(&SBD(d)->broken, &SBD(d)->broken_order, head, CODE(code), most, NULL);
+	if (why == NULL) return;
+	uint8_t k[32];
+	memcpy(k, head, 32);
+	free(im_del(&SBD(d)->broken_why, k));
+	mr_note(&SBD(d)->broken_why, &SBD(d)->broken_why_order, k, copyString(why), most, free);
 }
 
-// what Subduction may store of a fragment (its admission): one that is checked (vetted; the lock,
-// unlocked, opens all). One whose head is not here yet is noted refused whole
+// what Subduction may store of a fragment (its admission): one that opens and is checked, or waits
+// on the lock. One whose head is not here yet is noted refused whole
 static bool allows_fragment(mr_doc *d, const uint8_t head[32], const uint8_t (*boundary)[32], size_t count,
 	const uint8_t *checkpoints, size_t checks, const uint8_t *blob, size_t length) {
+	lk_opened open;
+	const char *why = NULL;
+	open_t opened = unlock(d, blob, length, &open, &why);
+	if (opened == OPEN_WAIT) return true;
+	if (opened == OPEN_REFUSED) {
+		if (!im_has(&d->seen, head)) broke(d, head, MR_LOCK, why);
+		return false;
+	}
 	contents_t got;
-	mr_code code = vetted(d, head, boundary, count, checkpoints, checks, blob, length, &got);
+	mr_code code = vetted(d, head, boundary, count, checkpoints, checks, open.bytes, open.length, &got);
+	lk_opened_free(&open);
 	if (code == 0) return contents_free(&got), true;
-	if (!im_has(&d->seen, head)) broke(d, head, code);
+	if (!im_has(&d->seen, head)) broke(d, head, code, NULL);
 	return false;
 }
 
@@ -643,10 +735,27 @@ static void take_fragment(mr_doc *d, const uint8_t head[32], const uint8_t (*bou
 	const uint8_t *checkpoints, size_t checks, const uint8_t *blob, size_t length) {
 	const mr_seen_t *here = im_get(&d->seen, head);
 	if (here != NULL && im_has(&SBD(d)->fragments, head) && im_has(&d->judged, here->name)) return;
+	locked_free(im_del(&SBD(d)->locked_fragments, head));
+	lk_opened open;
+	const char *why = NULL;
+	open_t opened = unlock(d, blob, length, &open, &why);
+	if (opened != OPEN_GOOD) {
+		// one whose head is here already is noted, with no members; else it waits, or is refused whole
+		if (here != NULL) {
+			if (!im_has(&SBD(d)->fragments, head)) {
+				contents_t none_read = {0};
+				put_fragment(d, fragment_of(head, &none_read, boundary, count));
+			}
+		} else if (opened == OPEN_WAIT)
+			hold(&SBD(d)->locked_fragments, head, (const uint8_t *)boundary, count, checkpoints, checks, blob, length);
+		else broke(d, head, MR_LOCK, why);
+		return;
+	}
 	contents_t got;
-	mr_code code = vetted(d, head, boundary, count, checkpoints, checks, blob, length, &got);
+	mr_code code = vetted(d, head, boundary, count, checkpoints, checks, open.bytes, open.length, &got);
+	lk_opened_free(&open);
 	if (code != 0) {
-		if (here == NULL) broke(d, head, code);
+		if (here == NULL) broke(d, head, code, NULL);
 		return;
 	}
 	im_del(&SBD(d)->broken, head);
@@ -955,8 +1064,25 @@ static uint64_t build_add(sb_stack *t, mr_doc *d, const fragment *f) {
 	if (bytes == NULL) abort();
 	cborEncode(blob, bytes, n, &n, NULL);
 	jsonFree(blob);
+	// closed by the lock: named by the bytes' name (a multihash), its parents the boundary's names, sorted
+	uint8_t digest[CM_NAME];
+	cm_name(bytes, n, digest);
+	uint8_t(*names)[CM_NAME] = malloc(f->boundary.count * CM_NAME + 1);
+	if (names == NULL) abort();
+	for (size_t i = 0; i < f->boundary.count; i++) {
+		const mr_seen_t *b = im_get(&d->seen, f->boundary.ids[i]);
+		if (b != NULL) memcpy(names[i], b->name, CM_NAME);
+		else memset(names[i], 0, CM_NAME);
+	}
+	qsort(names, f->boundary.count, CM_NAME, by_name);
+	lk_closed closed = t->lock->close(t->lock->context, d->bytes, digest, (const uint8_t(*)[CM_NAME])names,
+		f->boundary.count, bytes, n);
+	free(names);
+	if (closed.bytes == NULL) return free(bytes), 0;
 	uint64_t c = erm_sd_add_fragment(t->sd, d->bytes, f->head, f->boundary.count ? (const uint8_t *)f->boundary.ids : NULL,
-		f->boundary.count, f->checkpoints.count ? (const uint8_t *)f->checkpoints.ids : NULL, f->checkpoints.count, bytes, n);
+		f->boundary.count, f->checkpoints.count ? (const uint8_t *)f->checkpoints.ids : NULL, f->checkpoints.count,
+		closed.bytes, closed.length);
+	lk_closed_free(&closed);
 	free(bytes);
 	return c;
 }
@@ -1001,14 +1127,19 @@ static void compact(sb_stack *t, mr_doc *d, const uint8_t head[32]) {
 	bool ok = record(t, ERM_STORE_FRAGMENT, bytes != NULL ? bytes : none, length, &r);
 	erm_host_free(bytes);
 	if (!ok) return;
+	lk_opened open;
 	contents_t got;
-	if (contents(d->bytes, r.blob != NULL ? r.blob : none, r.length, &got) == 0) {
-		im_map reached = {0};
-		reach(head, &got, &reached);
-		for (size_t i = 0; i < reached.slots; i++)
-			if (reached.used[i]) t->inner.remove(t->inner.self, ERM_STORE_COMMIT, d->bytes, im_key(&reached, i));
-		im_free(&reached);
-		contents_free(&got);
+	const char *why = NULL;
+	if (unlock(d, r.blob != NULL ? r.blob : none, r.length, &open, &why) == OPEN_GOOD) {
+		if (contents(d->bytes, open.bytes, open.length, &got) == 0) {
+			im_map reached = {0};
+			reach(head, &got, &reached);
+			for (size_t i = 0; i < reached.slots; i++)
+				if (reached.used[i]) t->inner.remove(t->inner.self, ERM_STORE_COMMIT, d->bytes, im_key(&reached, i));
+			im_free(&reached);
+			contents_free(&got);
+		}
+		lk_opened_free(&open);
 	}
 	record_free(&r);
 }
@@ -1118,6 +1249,23 @@ static void follow_now(sb_stack *t, mr_doc *d) {
 typedef enum { STEP_DONE, STEP_WAIT } step_t;
 
 
+// an ephemeral commit heard from the peer with that key: the lock's open, then the mailroom's hear
+// (decode, its signer the sender's); never stored, no commit steps. one the lock cannot open yet is
+// let go of (nothing ephemeral is fetched), one it refuses is noted
+static void hear(mr_doc *d, const uint8_t *blob, size_t length, const uint8_t from[32]) {
+	lk_opened open;
+	const char *why = NULL;
+	open_t got = unlock(d, blob, length, &open, &why);
+	if (got != OPEN_GOOD) {
+		if (got == OPEN_REFUSED) mr_unheard(d, blob, length, MR_LOCK, why);
+		return;
+	}
+	uint8_t who[SL_KEY];
+	mr_peer(from, who);
+	mr_hear(d, open.bytes, open.length, who);
+	lk_opened_free(&open);
+}
+
 static step_t step(sb_stack *t, job *j) {
 	switch (j->kind) {
 	case J_LOAD: load(t); return STEP_DONE;
@@ -1129,21 +1277,13 @@ static step_t step(sb_stack *t, job *j) {
 		return STEP_DONE;
 	case J_TAKE: take(t, j, false); return STEP_DONE;
 	case J_SAVE: take(t, j, true); return STEP_DONE;
-	case J_HEAR: {
-		uint8_t who[SL_KEY];
-		mr_peer(j->from, who);
-		mr_hear(j->d, j->bytes, j->length, who);
-		return STEP_DONE;
-	}
+	case J_HEAR: hear(j->d, j->bytes, j->length, j->from); return STEP_DONE;
 	case J_GATHER: {
 		size_t length;
 		uint8_t *all = gather(t, j, &length);
 		if (all == NULL) return STEP_DONE;
-		if (!j->channel) {
-			uint8_t who[SL_KEY];
-			mr_peer(j->from, who);
-			mr_hear(j->d, all, length, who);
-		} else {
+		if (!j->channel) hear(j->d, all, length, j->from);
+		else {
 			channel_t *c = im_get(&t->channels, j->topic);
 			if (c != NULL) tell_channel(c, j->from, all, length);
 		}
@@ -1224,16 +1364,20 @@ static void store(sb_stack *t, mr_item *it) {
 		t->cur.state = 3;
 		return;
 	}
+	// closed by the lock before it leaves, its commit's name and parents given
+	lk_closed closed = t->lock->close(t->lock->context, d->bytes, k->name, k->parents, k->parents_length, sealed, length);
 	uint8_t(*ids)[32];
-	if (!mr_handed(d, k, sealed, length, s, &ids)) {
+	if (closed.bytes == NULL || !mr_handed(d, k, sealed, length, s, &ids)) {
+		lk_closed_free(&closed);
 		free(sealed);
 		t->cur.state = 3;
 		return;
 	}
 	memcpy(t->cur.stored, s, 32);
 	uint64_t c = erm_sd_add_commit(t->sd, d->bytes, s, k->parents_length ? (const uint8_t *)ids : NULL, k->parents_length,
-		sealed, length);
+		closed.bytes, closed.length);
 	free(ids);
+	lk_closed_free(&closed);
 	free(sealed);
 	if (c == 0) {
 		t->cur.state = 3;
@@ -1274,8 +1418,12 @@ static bool outgoing(sb_stack *t) {
 				else call(t, c, C_PUBLISH, cur), cur->state = 1;
 			} else if (it->layer == MR_STORED) store(t, it);
 			else {
-				// an ephemeral commit of this device's: closed (unlocked), published, as parts when over
-				uint64_t c = publish(t, it->d->bytes, it->kept->bytes, it->kept->length, false);
+				// an ephemeral commit of this device's: closed by the lock, published, as parts when over
+				const hy_kept *k = it->kept;
+				lk_closed closed = t->lock->close(t->lock->context, it->d->bytes, k->name, k->parents, k->parents_length,
+					k->bytes, k->length);
+				uint64_t c = closed.bytes == NULL ? 0 : publish(t, it->d->bytes, closed.bytes, closed.length, false);
+				lk_closed_free(&closed);
 				if (c == 0) cur->state = 3;
 				else call(t, c, C_PUBLISH, cur), cur->state = 1;
 			}
@@ -1585,6 +1733,7 @@ sb_stack *sb_create(const sb_options *o, mr_mailroom *mailroom) {
 	t->clock = o->clock;
 	t->snapshot = o->snapshot;
 	t->context = o->context;
+	t->lock = o->lock != NULL ? o->lock : lk_unlocked();
 	t->joins = o->joins ? o->joins : 64;
 	t->parts = o->parts ? o->parts : 1024;
 	t->lazy = o->lazy;
@@ -1611,7 +1760,17 @@ void sb_free(sb_stack *t) {
 			free(s->fragments.values[i]);
 		}
 		im_free(&s->fragments);
+		for (size_t i = 0; i < s->locked.slots; i++)
+			if (s->locked.used[i]) locked_free(s->locked.values[i]);
+		for (size_t i = 0; i < s->locked_fragments.slots; i++)
+			if (s->locked_fragments.used[i]) locked_free(s->locked_fragments.values[i]);
+		im_free(&s->locked);
+		im_free(&s->locked_fragments);
 		im_free(&s->broken);
+		for (size_t i = 0; i < s->broken_why.slots; i++)
+			if (s->broken_why.used[i]) free(s->broken_why.values[i]);
+		im_free(&s->broken_why);
+		mr_order_free(&s->broken_why_order);
 		mr_order_free(&s->broken_order);
 		free(s);
 		d->stack = NULL;
@@ -1844,6 +2003,64 @@ void sb_unlisten(sb_stack *t, sb_listener *l) {
 const im_map *sb_broken(const sb_stack *t, mr_doc *d) {
 	(void)t;
 	return &SBD(d)->broken;
+}
+
+const im_map *sb_locked(const sb_stack *t, mr_doc *d) {
+	(void)t;
+	return &SBD(d)->locked;
+}
+
+static int by_waiting_commit(const void *a, const void *b) {
+	return memcmp(((const mr_waiting_row *)a)->commit, ((const mr_waiting_row *)b)->commit, 32);
+}
+
+// what the stack adds to a taking (mr_taking_of's): the fragments waiting on the lock, each by its
+// head with its boundary, and the text a lock refused the fragments refused whole with
+void sb_taking(const sb_stack *t, mr_doc *d, mr_taking *taking) {
+	(void)t;
+	const im_map *m = &SBD(d)->locked_fragments;
+	if (m->count > 0) {
+		taking->waiting = realloc(taking->waiting, (taking->waiting_count + m->count + 1) * sizeof *taking->waiting);
+		if (taking->waiting == NULL) abort();
+		for (size_t i = 0; i < m->slots; i++) {
+			if (!m->used[i]) continue;
+			const locked_t *l = m->values[i];
+			mr_waiting_row *w = &taking->waiting[taking->waiting_count++];
+			*w = (mr_waiting_row){.fragment = true, .boundary_count = l->count};
+			memcpy(w->commit, im_key(m, i), 32);
+			w->boundary = mr_copy(l->list, l->count * 32);
+		}
+		qsort(taking->waiting, taking->waiting_count, sizeof *taking->waiting, by_waiting_commit);
+	}
+	for (size_t i = 0; i < taking->refused_count; i++) {
+		mr_refused_row *r = &taking->refused[i];
+		if (r->fragment && r->code == MR_LOCK) r->why = im_get(&SBD(d)->broken_why, r->id);
+	}
+}
+
+// what waited on the lock, each taken in again as it arrived, queued at the end of the jobs
+void sb_changed(sb_stack *t) {
+	for (mr_doc *d = mr_first(t->mailroom); d; d = d->next) {
+		for (int k = 0; k < 2; k++) {
+			const im_map *m = k == 0 ? &SBD(d)->locked : &SBD(d)->locked_fragments;
+			for (size_t i = 0; i < m->slots; i++) {
+				if (!m->used[i]) continue;
+				const locked_t *l = m->values[i];
+				job *j = job_new(J_TAKE, d);
+				j->record = k == 0 ? ERM_STORE_COMMIT : ERM_STORE_FRAGMENT;
+				memcpy(j->tree, d->bytes, 32);
+				j->given = true;
+				memcpy(j->head, im_key(m, i), 32);
+				j->list = (uint8_t(*)[32])mr_copy(l->list, l->count * 32);
+				j->count = l->count;
+				j->checks = l->checks_count ? mr_copy(l->checks, l->checks_count * 12) : NULL;
+				j->checks_count = l->checks_count;
+				j->bytes = mr_copy(l->blob, l->length);
+				j->length = l->length;
+				later(t, j);
+			}
+		}
+	}
 }
 
 // the harnesses' hooks (subduction_conformance_hook.h), only in their builds

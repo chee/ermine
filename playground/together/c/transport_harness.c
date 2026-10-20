@@ -13,6 +13,7 @@
 #include "snapshot.h"
 #include "transport.h"
 #include "transport_conformance_hook.h"
+#include "transport_harness.h"
 #include "wires_harness.h"
 
 #include "../../../conformance/c/protocol_harness.h"
@@ -21,6 +22,17 @@
 
 #include <stdlib.h>
 #include <string.h>
+
+// built under another harness (lock_harness.c): the loop's functions are the library's
+#ifdef TRANSPORT_LIBRARY
+#define hh_start tph_start
+#define hh_finish tph_finish
+#define hh_answer tph_answer
+#endif
+
+const lk_lock *(*tph_lock)(const op_value *request);
+uint8_t *(*tph_close)(const char *device, const uint8_t doc[32], const uint8_t name[CM_NAME],
+	const uint8_t (*parents)[CM_NAME], size_t count, const uint8_t *bytes, size_t length, size_t *out_length);
 
 static const char DOC[] = "ermine://2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a00000000000000000000000000000000";
 
@@ -85,6 +97,10 @@ static void put_label(FILE *out, const uint8_t *id, size_t length) {
 	const char *label = im_get(length == CM_NAME ? &labels : &stored_labels, id);
 	if (label != NULL) op_json_string(out, label);
 	else cf_put_hex(out, id, length);
+}
+
+void tph_label(FILE *out, const uint8_t *id, size_t length) {
+	put_label(out, id, length);
 }
 
 static const seal_t *sealed(const cs_made *m);
@@ -267,7 +283,8 @@ static void device(const op_value *r, FILE *out) {
 			storages[storage_count++].store = s;
 		}
 	}
-	tp_options o = {.store = d->store, .now = wr_clock, .snapshot = snapshot_of, .context = d};
+	tp_options o = {.store = d->store, .now = wr_clock, .snapshot = snapshot_of, .context = d,
+		.lock = tph_lock != NULL ? tph_lock(r) : NULL};
 	memcpy(o.seed, d->seed, 32);
 	const op_value *lazy = op_get(r, "lazy");
 	o.lazy = lazy != NULL && lazy->type == OP_BOOL && lazy->bool_;
@@ -396,6 +413,12 @@ static uint8_t (*ids_of(const op_value *list, size_t *count, FILE *out))[32] {
 	return ids;
 }
 
+// whether a request says closed
+static bool closed_by(const op_value *r) {
+	const op_value *x = op_get(r, "closed");
+	return x != NULL && x->type == OP_BOOL && x->bool_;
+}
+
 static void put(const op_value *r, FILE *out) {
 	device_t *d = of(r, "device", out);
 	if (d == NULL) return;
@@ -438,6 +461,21 @@ static void put(const op_value *r, FILE *out) {
 			// a name not made here: its digest, raw, as Subduction has it
 			else memcpy(parents[i], c.parents[i] + 2, 32);
 		}
+		cm_free(&c);
+	}
+	if (closed_by(r)) {
+		if (tph_close == NULL) {
+			hh_error(out, "closed: this harness has no lock");
+			return;
+		}
+		// named by the commit, its parents its commit's; a blob that is none: the digest of it
+		uint8_t digest[CM_NAME];
+		cm_commit c = {0};
+		const uint8_t *name = digest;
+		size_t names = 0;
+		if (m != NULL && cm_decode(m->bytes, m->length, &c, NULL) == CM_OK) name = m->name, names = c.parents_length;
+		else cm_name(blob, length, digest);
+		blob = tph_close(d->name, here, name, (const uint8_t(*)[CM_NAME])c.parents, names, blob, length, &length);
 		cm_free(&c);
 	}
 	if (!tp_conformance_hook_put(d->t, doc_of(r), head, (const uint8_t(*)[32])parents, count, blob, length)) {
@@ -559,6 +597,23 @@ static void fragment_op(const op_value *r, FILE *out) {
 			if (id[0] == 0 && memcmp(id, head, 32) != 0) memcpy(checkpoints[cn++], id, 32);
 		}
 	}
+	if (closed_by(r)) {
+		if (tph_close == NULL) {
+			hh_error(out, "closed: this harness has no lock");
+			return;
+		}
+		// named by the digest of the blob, its parents the names of the boundary (labels made here)
+		const op_value *given = op_get(r, "boundary");
+		size_t names = 0;
+		uint8_t(*parents)[CM_NAME] = hh_take((given != NULL && given->type == OP_LIST ? given->count : 0) * CM_NAME + 1);
+		for (size_t i = 0; given != NULL && given->type == OP_LIST && i < given->count; i++) {
+			const cs_made *b = given->items[i]->type == OP_STR ? cs_get(commits, given->items[i]->str) : NULL;
+			if (b != NULL) memcpy(parents[names++], b->name, CM_NAME);
+		}
+		uint8_t name[CM_NAME];
+		cm_name(blob, length, name);
+		blob = tph_close(d->name, here, name, (const uint8_t(*)[CM_NAME])parents, names, blob, length, &length);
+	}
 	if (!tp_conformance_hook_put_fragment(d->t, doc_of(r), head, (const uint8_t(*)[32])boundary, bn,
 		    (const uint8_t(*)[32])checkpoints, cn, blob, length)) {
 		hh_error(out, "not a document id: %s", doc_of(r));
@@ -625,6 +680,14 @@ static void taking(const op_value *r, FILE *out) {
 	fputs("{\"waiting\":[", out);
 	for (size_t i = 0; i < t.waiting_count; i++) {
 		if (i) fputc(',', out);
+		if (t.waiting[i].fragment) {
+			fputs("{\"fragment\":", out);
+			put_label(out, t.waiting[i].commit, 32);
+			fputs(",\"boundary\":", out);
+			put_labels(out, (const uint8_t *)t.waiting[i].boundary, t.waiting[i].boundary_count, 32);
+			fputc('}', out);
+			continue;
+		}
 		fputs("{\"commit\":", out);
 		put_label(out, t.waiting[i].commit, 32);
 		fputs(",\"waiting\":", out);
@@ -640,7 +703,13 @@ static void taking(const op_value *r, FILE *out) {
 		if (x->stuck) {
 			fputs(",\"stuck\":", out);
 			put_labels(out, (const uint8_t *)x->names, x->count, CM_NAME);
-		} else fprintf(out, ",\"refused\":\"%s\"", tp_code_name(x->code));
+		} else {
+			fprintf(out, ",\"refused\":\"%s\"", tp_code_name(x->code));
+			if (x->why != NULL) {
+				fputs(",\"why\":", out);
+				op_json_string(out, x->why);
+			}
+		}
 		fputc('}', out);
 	}
 	fputs("]}", out);
@@ -813,6 +882,69 @@ static void snapshot(const op_value *r, FILE *out) {
 	rp_free(&t);
 }
 
+// an ephemeral commit of the device's published again
+static void again(const op_value *r, FILE *out) {
+	device_t *d = of(r, "device", out);
+	if (d == NULL) return;
+	const cs_made *m = cs_get(commits, hh_str(r, "commit"));
+	if (m == NULL) {
+		hh_error(out, "no commit %s", hh_str(r, "commit") ? hh_str(r, "commit") : "(none)");
+		return;
+	}
+	bool ok = tp_again(d->t, doc_of(r), m->name);
+	settle(d);
+	fprintf(out, "{\"again\":%s}", ok ? "true" : "false");
+}
+
+static void changed(const op_value *r, FILE *out) {
+	device_t *d = of(r, "device", out);
+	if (d == NULL) return;
+	tp_changed(d->t);
+	settle(d);
+	fputs("{}", out);
+}
+
+// the first byte of what the device's store holds for a loose commit (a label) or a fragment (its head)
+static void closed(const op_value *r, FILE *out) {
+	device_t *d;
+	if (history_of(r, out, &d) == NULL) return;
+	uint8_t id[32], tree[32];
+	const op_value *commit = op_get(r, "commit");
+	if (!stored_id(commit != NULL ? commit : op_get(r, "head"), id, out)) return;
+	tp_doc(doc_of(r), tree);
+	int kind = commit != NULL ? ERM_STORE_COMMIT : ERM_STORE_FRAGMENT;
+	found_t ids = {0};
+	uint8_t *bytes = NULL;
+	size_t length = 0;
+	bool got = false;
+	if (kind == ERM_STORE_COMMIT) {
+		ids.ids = malloc(32);
+		if (ids.ids == NULL) abort();
+		memcpy(ids.ids[0], id, 32);
+		ids.count = 1;
+	} else d->store->list(d->store->self, kind, tree, found, &ids);
+	for (size_t i = 0; i < ids.count && !got; i++) {
+		uint8_t *record;
+		size_t n;
+		if (d->store->get(d->store->self, kind, tree, ids.ids[i], &record, &n) != 1) continue;
+		ErmSdRecord rec;
+		if (erm_sd_decode(kind, record, n, &rec)) {
+			if (memcmp(rec.id, id, 32) == 0)
+				got = d->store->get(d->store->self, ERM_STORE_BLOB, NULL, rec.digest, &bytes, &length) == 1;
+			erm_sd_free_record(&rec);
+		}
+		erm_host_free(record);
+	}
+	free(ids.ids);
+	if (!got || length == 0) fputs("{}", out);
+	else {
+		fputs("{\"first\":", out);
+		cf_put_hex(out, bytes, 1);
+		fputc('}', out);
+	}
+	erm_host_free(bytes);
+}
+
 void hh_start(void) {
 	commits = cs_create();
 }
@@ -843,6 +975,9 @@ void hh_answer(const op_value *r, FILE *out) {
 	} else if (strcmp(op, "take") == 0) take(r, out);
 	else if (strcmp(op, "put") == 0) put(r, out);
 	else if (strcmp(op, "fragment") == 0) fragment_op(r, out);
+	else if (strcmp(op, "again") == 0) again(r, out);
+	else if (strcmp(op, "changed") == 0) changed(r, out);
+	else if (strcmp(op, "closed") == 0) closed(r, out);
 	else if (strcmp(op, "quiet") == 0) {
 		if (quiet()) fputs("{}", out);
 		else hh_error(out, "never quiet");

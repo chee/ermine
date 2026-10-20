@@ -6,6 +6,7 @@
 		"./channel": "./typescript/channel.ts",
 		"./hex": "./typescript/hex.ts",
 		"./history": "./typescript/history.ts",
+		"./lock": "./typescript/lock.ts",
 		"./replay": "./typescript/replay.ts",
 		"./packer": "./typescript/packer.ts",
 		"./presence": "./presence/typescript/presence.ts",

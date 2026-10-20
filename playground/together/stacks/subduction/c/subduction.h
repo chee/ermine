@@ -5,7 +5,7 @@
 // it sends what the mailroom queues. A fragment carries {run, snapshot?} (packer.h, snapshot.h); a stored
 // fragment lets go of the loose commits it covers. An empty followed document is asked again, 0.25 s
 // doubling to 16 s. Ephemeral messages on hashed topics (sb_send, sb_listen), in parts over 65 536
-// bytes. Only lock "unlocked" is built.
+// bytes. Every commit leaves closed by the lock (lock.h) and lands opened by it.
 //
 // sans-IO: the host gives messages in (sb_received), sends what sb_next gives, and calls sb_run, which
 // says when to run again. One thread at a time. transport.h is the device that composes it with the
@@ -13,6 +13,7 @@
 #ifndef SB_SUBDUCTION_H
 #define SB_SUBDUCTION_H
 
+#include "../../../c/lock.h"
 #include "../../../c/mailroom.h"
 #include "fragment.h"
 #include "subduction/subduction.h"
@@ -45,6 +46,8 @@ typedef struct {
 	// NULL: no snapshots
 	sb_snapshot_fn snapshot;
 	void *context;
+	// NULL: lk_unlocked. borrowed: it must outlive the stack
+	const lk_lock *lock;
 	// the ephemeral payloads being joined, the parts one may have. 0: the default (64, 1 024)
 	size_t joins, parts;
 	// what the store holds is taken in as each document is followed, not at the first sb_run
@@ -98,8 +101,15 @@ size_t sb_stored(sb_stack *t, const char *doc, uint8_t (**out)[32]);
 // the fragments here, made or taken in: *out malloc'd (free it, not what it points to), good until the
 // next sb_run
 size_t sb_fragments(sb_stack *t, const char *doc, const fragment ***out);
-// the document's fragments refused whole, by head (codes), for mr_taking_of
+// the document's fragments refused whole, by head (codes), and its loose commits waiting on the lock
+// (by head), for mr_taking_of
 const im_map *sb_broken(const sb_stack *t, mr_doc *d);
+const im_map *sb_locked(const sb_stack *t, mr_doc *d);
+// what the stack adds to the document's taking (mr_taking_of's, the stored layer): its fragments waiting
+// on the lock, and why a lock refused those refused whole
+void sb_taking(const sb_stack *t, mr_doc *d, mr_taking *taking);
+// the lock's changed: what waited on it (a loose commit, a fragment) is opened again, at the next sb_run
+void sb_changed(sb_stack *t);
 
 // --- ephemeral messages on topics (a string, named by hash so it is never a document's)
 

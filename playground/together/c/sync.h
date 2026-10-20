@@ -57,6 +57,8 @@ typedef struct {
 	uint8_t seed[32];
 	const ErmStore *store;
 	bool lazy;
+	// the device's lock (transport.h); NULL: lk_unlocked. borrowed
+	const lk_lock *lock;
 	tp_clock_fn now;
 	void *clock;
 	// NULL: erm_host_random
