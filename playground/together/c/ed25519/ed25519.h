@@ -20,6 +20,18 @@ void ermEd25519Public(const unsigned char seed[32], unsigned char pub[32]);
 void ermEd25519Sign(const unsigned char seed[32], const unsigned char *message, size_t length, unsigned char signature[64]);
 
 /**
+ * A key pair worked out once from a seed: the secret scalar, the nonce prefix and the public key,
+ * together so they can never be mismatched (a signature made with the wrong public key gives the
+ * private key away). ermEd25519SignPair signs as ermEd25519Sign does, without working out the
+ * public key again: half of a sign's time.
+ */
+typedef struct {
+	unsigned char a[32], prefix[32], pub[32];
+} ermEd25519Pair;
+void ermEd25519PairOf(ermEd25519Pair *pair, const unsigned char seed[32]);
+void ermEd25519SignPair(const ermEd25519Pair *pair, const unsigned char *message, size_t length, unsigned char signature[64]);
+
+/**
  * Whether signature is pub's over message[0 .. length) by RFC 8032's
  * verification (5.1.7) with every strict check of SYNC.tex: S less than the
  * group order L; pub (A) and R each in their one canonical encoding, the one

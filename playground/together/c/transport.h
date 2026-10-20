@@ -5,7 +5,8 @@
 // fragments carry {run, snapshot?} (packer.h, snapshot.h); a snapshot is a hint, kept once a replay
 // agrees. a stored fragment lets go of the loose commits it covers. an empty followed document is
 // asked again, 0.25 s doubling to 16 s. ephemeral messages on hashed topics (tp_send, tp_listen),
-// in parts over 65 536 bytes. only lock "unlocked" is built.
+// in parts over 65 536 bytes. every commit leaves closed by the device's lock (lock.h) and lands opened by
+// it; only lk_unlocked is built.
 //
 // the device is two parts: the mailroom (mailroom.h: histories, taking in, own takes) and the Subduction stack
 // (subduction.h: the network, the store, fragments, topics). transport.c composes them; every name here
@@ -25,6 +26,7 @@
 #define TP_TRANSPORT_H
 
 #include "history.h"
+#include "lock.h"
 #include "mailroom.h"
 #include "replay.h"
 #include "seal.h"
@@ -95,6 +97,9 @@ typedef struct {
 	// NULL: erm_host_now
 	tp_clock_fn now;
 	void *clock;
+	// what a commit is closed into before it leaves and opened from where it lands; a lock that cannot
+	// open yet is asked again on tp_changed. NULL: lk_unlocked. borrowed: it must outlive the device
+	const lk_lock *lock;
 	// NULL: everything applies; none: no snapshots
 	tp_check_fn check;
 	tp_snapshot_fn snapshot;
@@ -240,7 +245,8 @@ typedef sb_listener tp_listener;
 // subscribes as needed; the listener, for tp_unlisten
 tp_listener *tp_listen(tp_device *t, const char *topic, tp_heard_fn fn, void *context);
 void tp_unlisten(tp_device *t, tp_listener *l);
-// the check's changed: what waited on it (HY_WAIT) is judged again, at the next tp_run
+// the check's changed, or the lock's: what waited on the check (HY_WAIT) is judged again, and what waited
+// on the lock (open said wait) is opened again, at the next tp_run
 void tp_changed(tp_device *t);
 
 #endif

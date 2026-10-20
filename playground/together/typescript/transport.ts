@@ -14,14 +14,21 @@ import {
 	LIMITS as KEEPING,
 	type Limits as Keeping,
 } from "./mailroom.ts"
-import { createSubduction, JOINING, type Joining, type Lock, type Wired } from "../stacks/subduction/typescript/subduction.ts"
+import {
+	createSubduction,
+	JOINING,
+	type Joining,
+	type Wired,
+} from "../stacks/subduction/typescript/subduction.ts"
+import type { Lock } from "./lock.ts"
 import type { Kept } from "./history.ts"
 import type { Merges } from "./replay.ts"
 import type { Signer, Verifier } from "./seal.ts"
 import { keep as hooks } from "./transport_conformance_hook.ts"
 
 export type { Arrival, Check, Code, Layer, Taking } from "./mailroom.ts"
-export { LIMIT, type Lock, type Opened, PART, unlocked } from "../stacks/subduction/typescript/subduction.ts"
+export { LIMIT, PART } from "../stacks/subduction/typescript/subduction.ts"
+export { type Lock, type Opened, unlocked } from "./lock.ts"
 export type { Fragment } from "../stacks/subduction/typescript/subduction.ts"
 
 // starting: createDevice returns at once, and begins taking in everything the storage holds (every

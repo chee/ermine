@@ -14,8 +14,9 @@ harness's header lists its requests and answers.
 | transport | `playground/together/conformance/transport/` | `playground/together/typescript/transport_harness.ts` |
 | sync      | `playground/together/conformance/sync/`      | `playground/together/typescript/sync_harness.ts`      |
 | lists     | `playground/together/conformance/lists/`     | history's (`suite.json`)                              |
+| lock      | `playground/together/conformance/lock/`      | `playground/together/typescript/lock_harness.ts`      |
 
-Run: `deno task conformance commit seal packer history replay snapshot transport sync lists`. A
+Run: `deno task conformance commit seal packer history replay snapshot transport sync lists lock`. A
 scenario with `"typescript": true` runs on the TypeScript harness only (none now). Another
 implementation: `--c` (the binary `<package>/c/<suite>-harness`), or `HARNESS="<command>"` for one
 suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `fails`, `skip`).
@@ -54,8 +55,8 @@ suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `fails`, `
 - a sealed message (a channel's bytes on a topic, littlesync's say): `{bytes, signer, signature}`,
   the signer's multikey in it. What it signs: `"ermine/v0/message"`, the BLAKE3 of the bytes, the
   signature's varsig header, then the topic's UTF-8 (1 to 256 bytes): good on its own topic only.
-  Refused as a seal is: `shape` (not exactly those three, each bytes; a signer not a multikey; a topic
-  that is not one) or `signature` (seal/13, seal/14).
+  Refused as a seal is: `shape` (not exactly those three, each bytes; a signer not a multikey; a
+  topic that is not one) or `signature` (seal/13, seal/14).
 - a commit in JSON: its fields as `commit.ts` names them. signer, each parent, base, each name a
   patch replaces: hex. actor, patch values: values. metadata: a map, its values values. external
   `[{file, line, column?, function?}]`. patches
@@ -96,6 +97,30 @@ suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `fails`, `
 - anything else wrong in a request (an unknown op, a label not made, hex that isn't):
   `{error: text}`. A scenario meets it only with `fails: true`.
 
+## The lock (lock)
+
+- a lock (`typescript/lock.ts`, `c/lock.h`): close(doc, name, parents, bytes) before a commit
+  leaves, open(doc, bytes) where it lands: the bytes, wait or refused (with a text). Unlocked gives
+  back what it is given. Closed: a stored commit's seal (name: the commit's, parents: its), a
+  fragment's blob (name: a multihash of its BLAKE3 as a commit's name is; parents: its boundary's
+  names, sorted), an ephemeral commit's bytes (name, parents: the commit's). Opened: the same three
+  where they land, and what the store holds as a device starts. An own take is never opened.
+- wait: a stored commit or a fragment is held and opened again on the device's changed; an ephemeral
+  commit is dropped, and heard when sent again. A loose commit that waits is stored and shown
+  waiting (no parents named); a fragment that waits is stored and shown waiting by its head with its
+  boundary (`{fragment, boundary}`; sync's status: `{fragment, authority: true}`).
+- refused: the code `lock` with the lock's text beside it (`why`): a loose commit by its stored id,
+  a fragment by its head (refused whole), an ephemeral commit by the name of the bytes as they
+  arrived (closed). Not asked again when the lock changes.
+- the harness (`lock_harness.ts`, `c/lock_harness.c`) is transport's with a device's `lock`:
+  `"unlocked"`, or `"tag"` (`tag_lock.ts`, `c/tag_lock.h`: closes by a byte, 0xff, before the bytes;
+  opens by taking it off, refusing bytes without it). `lock` sets what a tag lock's open does
+  (`tag`, `wait`, `refuse`); `calls` says what it was asked to close since last asked and whether it
+  was asked to open; `changed` tells the device; `again` sends an ephemeral commit again; `closed`
+  reads the first byte of what the store holds; `closed: true` on `put` and `fragment` closes the
+  blob first, as another tag lock's device would. The sync harness takes the same tag lock as a
+  host's `lock`, with `lock` and `changed` ops.
+
 ## Deterministic hosts (sync, transport)
 
 - seeds given. a host's random: call k (from 0, across restarts) is the first bytes of BLAKE3 of
@@ -123,8 +148,9 @@ suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `fails`, `
 
 - an ephemeral commit heard again by a device that never took the one before it (a joiner mid-drag):
   it waits for good, as nothing ephemeral is fetched; pinned only as "sees nothing" (29).
-- locks other than unlocked; an ephemeral payload over Subduction's limit (sent as parts); channels
-  (presence); the joins and parts limits.
+- a lock that really encrypts (the lock suite has a tag lock: a byte put before the bytes, no
+  cryptography); an ephemeral payload over Subduction's limit (sent as parts); channels (presence);
+  the joins and parts limits.
 - a check that cannot judge a commit yet, in the transport (only the history's, `hold`): the C's
   integration never answers so; the TypeScript's a throw (`transport_test.ts`).
 - equivocation (one signer, two commits on the same parents with the same nonce): nothing tells of

@@ -6,10 +6,15 @@
 // write's change is the request's, else { time: 1760000000, actor: <host>, external: [{ file:
 // "scenario", line: 1 }] }; sync's own stamps use the request's time, default 1760000000
 //
-// { op: "host", name, seed, zeros?, tables?, merges?, merge?, ephemeral?, lazy?, roots?, commit? }
-//    → { key }  zeros, tables, merge, lazy, roots: createSync's; merges: rules known, default
+// { op: "host", name, seed, zeros?, tables?, merges?, merge?, ephemeral?, lazy?, roots?, commit?, lock? }
+//    → { key }  zeros, tables, merge, lazy, roots: createSync's; lock: "unlocked" | "tag" (tag_lock.ts's
+//    test lock; none: the default, unlocked); merges: rules known, default
 //    [merge] or none; ephemeral: tables going out ephemerally; commit: false, no commit option
 //    (what comes in reaches the host as table events only)
+// { op: "lock", host, open }           → {}                what the tag lock's open does from now:
+//                                                           "tag", "wait" or "refuse"
+// { op: "changed", host }               → {}                the host's device told its lock changed:
+//                                                           what waited on it is opened again
 // { op: "ephemeral", host, tables }     → {}
 // { op: "stop", host, id, table? }      → {}                sync.stop, default table value
 // { op: "advance", ms }                 → {}                clock (from 1760000000000) on, hosts
@@ -70,7 +75,9 @@ import { revive, toJson } from "../../../conformance/typescript/form.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { hex, jsonOf, unhex } from "../../../ermine/encoding/typescript/commit_harness.ts"
 import { pipe, quiet, tablesJson } from "./harnesses.ts"
+import { unlocked } from "./lock.ts"
 import { createSigner } from "./seal.ts"
+import { createTag, type Tag } from "./tag_lock.ts"
 import {
 	type Conflict,
 	createSync,
@@ -103,6 +110,7 @@ type Options = {
 	lazy: boolean
 	roots?: string[]
 	commit: boolean
+	lock?: "unlocked" | "tag"
 }
 type Host = {
 	name: string
@@ -116,6 +124,8 @@ type Host = {
 	events: Map<string, number>
 }
 const hosts = new Map<string, Host>()
+// each tag lock by its host's name, kept across restarts
+const tags = new Map<string, Tag>()
 const links = new Map<string, { cut(): void }>()
 // each host's count of random calls, kept across restarts
 const calls = new Map<string, number>()
@@ -160,6 +170,11 @@ async function make(name: string, options: Options, storage: sd.MemoryStorage): 
 		storage: storage as unknown as sd.SedimentreeStorage,
 		random: randomOf(name),
 		roots: options.roots,
+		lock: options.lock === "tag"
+			? tags.get(name)!.lock
+			: options.lock === "unlocked"
+			? unlocked
+			: undefined,
 		...options.commit && { commit: (changed) => places.commit(changed) },
 	})
 	await sync.device.ready()
@@ -271,7 +286,9 @@ async function answer(r: Request): Promise<Answer> {
 				lazy: r.lazy === true,
 				roots: r.roots,
 				commit: r.commit !== false,
+				lock: r.lock,
 			}
+			if (r.lock === "tag") tags.set(r.name, createTag())
 			const h = await make(r.name, options, new sd.MemoryStorage())
 			hosts.set(r.name, h)
 			return { key: hex(h.key) }
@@ -282,6 +299,15 @@ async function answer(r: Request): Promise<Answer> {
 			hosts.set(h.name, await make(h.name, h.options, h.storage))
 			return {}
 		}
+		case "lock": {
+			const t = tags.get(r.host)
+			if (!t) throw new Error(`no tag lock on ${r.host}`)
+			t.open = r.open
+			return {}
+		}
+		case "changed":
+			await of(r.host).sync.device.changed()
+			return {}
 		case "ephemeral":
 			of(r.host).options.ephemeral = r.tables as string[]
 			return {}

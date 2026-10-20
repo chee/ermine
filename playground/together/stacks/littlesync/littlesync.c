@@ -163,6 +163,8 @@ struct ls_link {
 struct ls_dev {
 	ls_options o;
 	uint8_t seed[32];
+	// the key pair worked out once from the seed (ed25519.h): signing never works the public key out again
+	ermEd25519Pair pair;
 	uint8_t key[LS_KEY_LEN];
 	int64_t now;
 	uint32_t nonce;
@@ -232,7 +234,7 @@ static uint8_t *seal(ls_dev *d, const uint8_t *commit_bytes, size_t length, cons
 	cm_name(commit_bytes, length, name);
 	signed_message(doc, name, m);
 	memcpy(signature, HEADER, 8);
-	ermEd25519Sign(d->seed, m, SIGNED, signature + 8);
+	ermEd25519SignPair(&d->pair, m, SIGNED, signature + 8);
 	CborOut o = out_of(length + 96);
 	cborPutHead(&o, 5, 2);
 	key(&o, "commit"), cborPutBytes(&o, commit_bytes, length);
@@ -310,7 +312,7 @@ static void put_said(ls_dev *d, CborOut *o, const char *topic, const uint8_t *by
 	uint8_t m[SAID_MAX], signature[72];
 	size_t n = said(topic, bytes, length, m);
 	memcpy(signature, HEADER, 8);
-	ermEd25519Sign(d->seed, m, n, signature + 8);
+	ermEd25519SignPair(&d->pair, m, n, signature + 8);
 	CborOut count = {NULL, 0, 0, false};
 	for (CborOut *w = &count;; w = o) {
 		cborPutHead(w, 5, 3);
@@ -2049,27 +2051,29 @@ const ls_row *ls_row_at(const ls_node *n, size_t at) { return ls_row_on(n->dev, 
 // a row heard on a room (presence.ts's message): {ttl, value} who's row, {gone} none; a numbered patch
 // ({patches, n}) is not taken (the next renew is whole)
 static void take_row(ls_dev *d, topic *t, const Json *who, const Json *b) {
-	Json *row = cborDecode(b->bytes.data, b->bytes.length, NULL, NULL);
-	if (row == NULL || row->type != JSON_OBJECT) {
-		jsonFree(row);
+	op_value *row = pk_get(b->bytes.data, b->bytes.length, NULL, NULL);
+	if (row == NULL || row->type != OP_MAP) {
+		op_free(row);
 		return;
 	}
-	const Json *gone = field(row, "gone", JSON_BOOLEAN), *ttl = field(row, "ttl", JSON_NUMBER);
-	if (gone != NULL && gone->boolean) row_drop(d, t, row_of(d, t, who->bytes.data, who->bytes.length, false));
-	else if (jsonGet(row, "patches") == NULL) {
-		const Json *v = jsonGet(row, "value");
-		op_value *value = v != NULL ? pk_of_json(v) : op_null();
-		ls_row *r = value != NULL ? row_of(d, t, who->bytes.data, who->bytes.length, true) : NULL;
+	const op_value *gone = op_get(row, "gone"), *ttl = op_get(row, "ttl");
+	if (ttl != NULL && ttl->type != OP_NUM) ttl = NULL;
+	if (gone != NULL && gone->type == OP_BOOL && gone->bool_) row_drop(d, t, row_of(d, t, who->bytes.data, who->bytes.length, false));
+	else if (op_get(row, "patches") == NULL) {
+		// the value taken from the row read, not copied
+		op_value *v = op_get(row, "value");
+		op_value *value = v != NULL ? op_ref(v) : op_null();
+		ls_row *r = row_of(d, t, who->bytes.data, who->bytes.length, true);
 		if (r != NULL) {
 			op_free(r->value);
 			r->value = value;
 			// the time left, as a peer said it (an hour at most)
-			int32_t ms = ttl == NULL || !(ttl->number > 0) ? 0 : ttl->number < 3600000 ? (int32_t)ttl->number : 3600000;
+			int32_t ms = ttl == NULL || !(ttl->num > 0) ? 0 : ttl->num < 3600000 ? (int32_t)ttl->num : 3600000;
 			r->until = d->now + ms;
 			rows_changed(d, t);
 		} else op_free(value);
 	}
-	jsonFree(row);
+	op_free(row);
 }
 
 // ---- the wire in
@@ -2529,10 +2533,9 @@ ls_dev *ls_open(const ls_options *o) {
 		}
 	}
 	free(seed);
-	uint8_t pub[32];
-	ermEd25519Public(d->seed, pub);
+	ermEd25519PairOf(&d->pair, d->seed);
 	d->key[0] = 0xed, d->key[1] = 0x01;
-	memcpy(d->key + 2, pub, 32);
+	memcpy(d->key + 2, d->pair.pub, 32);
 	uint8_t r[4];
 	o->random(o->random_context, r, 4);
 	d->nonce = (uint32_t)r[0] | (uint32_t)r[1] << 8 | (uint32_t)r[2] << 16 | (uint32_t)r[3] << 24;

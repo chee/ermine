@@ -1,0 +1,20 @@
+{
+	"title": "a stored commit is closed before it is stored and sent, given its doc, its name and its parents; an own take is never opened; the device it lands on opens it",
+	"steps": [
+		{"op":"device","name":"a","seed":"0101010101010101010101010101010101010101010101010101010101010101","lock":"tag","expect":{"key":"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"}},
+		{"op":"device","name":"b","seed":"0202020202020202020202020202020202020202020202020202020202020202","lock":"tag","expect":{"key":"ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"}},
+		{"op":"follow","device":"a","expect":{}},
+		{"op":"follow","device":"b","expect":{}},
+		{"op":"connect","a":"a","b":"b","expect":{}},
+		{"op":"take","device":"a","name":"c1","nonce":1,"patches":[{"path":[],"value":{"n":1}}],"expect":{"added":"taken"}},
+		{"op":"take","device":"a","name":"c2","nonce":444,"parents":["c1"],"patches":[{"path":["n"],"value":2}],"expect":{"added":"taken"}},
+		{"op":"quiet","expect":{}},
+		{"op":"calls","device":"a","expect":{"closed":[{"name":"c1","parents":[]},{"name":"c2","parents":["c1"]}],"opened":false}},
+		{"op":"closed","device":"a","commit":"c1","expect":{"first":"ff"}},
+		{"op":"closed","device":"a","commit":"c2","expect":{"first":"ff"}},
+		{"op":"stored","device":"a","expect":{"stored":["c1","c2"]}},
+		{"op":"heads","device":"b","expect":{"heads":["c2"]}},
+		{"op":"calls","device":"b","expect":{"closed":[],"opened":true}},
+		{"op":"closed","device":"b","commit":"c2","expect":{"first":"ff"}}
+	]
+}

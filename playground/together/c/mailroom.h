@@ -199,12 +199,15 @@ struct mr_doc {
 	im_map snapshots, hints, judged;
 	// by a commit's head or a seal's stored id (mr_pending_t)
 	im_map pending;
-	// codes: by head or stored id; refused ephemeral commits, by name
+	// codes: by head or stored id; refused ephemeral commits, by the name of the bytes as they came
+	// (closed: one that is refused cannot be opened)
 	im_map refused, heard;
+	// the text a lock refused with (malloc'd), by the same keys
+	im_map why_refused, why_heard;
 	// names of seals refused here
 	im_map bad;
 	// the order each capped map's keys came in (mr_note)
-	mr_order_t pending_order, refused_order, heard_order, bad_order, hints_order;
+	mr_order_t pending_order, refused_order, heard_order, bad_order, hints_order, why_refused_order, why_heard_order;
 	// ephemeral commits to let go of once nothing queued holds them (mr_forget)
 	uint8_t (*forgets)[CM_NAME];
 	size_t forgets_count, forgets_room;
@@ -241,7 +244,7 @@ void mr_member(mr_doc *d, mr_member_t *m);
 // pending, the oldest let go of past the limit (heard again, it comes in again); its key's refusal let go
 void mr_pend(mr_doc *d, mr_pending_t *p);
 // a seal refused: noted by key, its name (NULL: none) noted bad; what pends under the key let go of
-void mr_refuse(mr_doc *d, const uint8_t key[32], mr_code code, const uint8_t *name);
+void mr_refuse(mr_doc *d, const uint8_t key[32], mr_code code, const uint8_t *name, const char *why);
 // for each pending seal, until none moves: stuck, waiting, or handed to the histories
 void mr_settle(mr_doc *d);
 // a snapshot a fragment carried is a hint, checked once its head is taken in; own: made here, kept
@@ -250,6 +253,9 @@ void mr_hint(mr_doc *d, const uint8_t name[CM_NAME], const uint8_t *bytes, size_
 // an ephemeral commit that arrived, opened, from a device with that key (a multikey): decode, its
 // signer the sender's; then handed to the ephemeral history; never stored
 void mr_hear(mr_doc *d, const uint8_t *blob, size_t length, const uint8_t from[SL_KEY]);
+// an ephemeral commit refused before it could be opened (the lock's refusal), noted under its name:
+// the name of the bytes as they arrived, closed
+void mr_unheard(mr_doc *d, const uint8_t *blob, size_t length, mr_code code, const char *why);
 // a stop heard from a device (a multikey): the listeners told
 void mr_tell_stopped(mr_doc *d, const uint8_t from[SL_KEY], const char *table);
 // a seal opened and checked, in its document: its commit in *u
@@ -295,6 +301,10 @@ typedef struct {
 	uint8_t commit[32];
 	uint8_t (*names)[CM_NAME];
 	size_t count;
+	// a fragment waiting on the lock (commit: its head): its boundary, stored ids
+	bool fragment;
+	uint8_t (*boundary)[32];
+	size_t boundary_count;
 } mr_waiting_row;
 // id: a stored id (32 bytes), or an ephemeral commit's name (CM_NAME): id_length
 typedef struct {
@@ -302,6 +312,8 @@ typedef struct {
 	size_t id_length;
 	bool fragment, stuck;
 	mr_code code;
+	// the text a lock refused with (code lock), borrowed from the document; NULL: none
+	const char *why;
 	uint8_t (*names)[CM_NAME];
 	size_t count;
 } mr_refused_row;
@@ -311,7 +323,9 @@ typedef struct {
 	mr_refused_row *refused;
 	size_t refused_count;
 } mr_taking;
-mr_taking mr_taking_of(mr_doc *d, mr_layer layer, const im_map *broken);
+// broken: the stack's fragments refused whole (by head, codes); locked: its loose commits waiting on the
+// lock (by head), each a waiting row with no parents named
+mr_taking mr_taking_of(mr_doc *d, mr_layer layer, const im_map *broken, const im_map *locked);
 void mr_taking_free(mr_taking *taking);
 
 // what a device does, whichever stack carries it (transport.h's tp_ names, one for one)

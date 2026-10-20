@@ -33,7 +33,7 @@ tp_device *tp_create(const tp_options *o) {
 	t->mailroom = mr_create(&k);
 	sb_options s = {.store = o->store, .service = o->service, .join = o->join, .now = o->now, .clock = o->clock,
 		.snapshot = o->snapshot, .context = o->context, .joins = o->limits.joins, .parts = o->limits.parts,
-		.lazy = o->lazy};
+		.lazy = o->lazy, .lock = o->lock};
 	memcpy(s.seed, o->seed, 32);
 	t->stack = sb_create(&s, t->mailroom);
 	if (t->stack == NULL) {
@@ -168,14 +168,18 @@ void tp_unlisten(tp_device *t, tp_listener *l) {
 }
 
 void tp_changed(tp_device *t) {
+	sb_changed(t->stack);
 	mr_changed(t->mailroom);
 }
 
-// what is held back or refused: the mailroom's, and the stack's fragments refused whole
+// what is held back or refused: the mailroom's, and the stack's fragments refused whole and commits
+// waiting on the lock
 tp_taking tp_taking_of(tp_device *t, const char *id, tp_layer layer) {
 	mr_doc *d = mr_named(t->mailroom, id);
 	if (d == NULL) return (tp_taking){0};
-	return mr_taking_of(d, layer, sb_broken(t->stack, d));
+	mr_taking taking = mr_taking_of(d, layer, sb_broken(t->stack, d), sb_locked(t->stack, d));
+	if (layer == TP_STORED) sb_taking(t->stack, d, &taking);
+	return taking;
 }
 
 void tp_taking_free(tp_taking *taking) {

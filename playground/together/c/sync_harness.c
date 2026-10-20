@@ -14,6 +14,7 @@
 #include "ids.h"
 #include "rules_harness.h"
 #include "sync.h"
+#include "tag_lock.h"
 #include "wires_harness.h"
 
 #include "../../../conformance/c/protocol_harness.h"
@@ -45,6 +46,9 @@ typedef struct {
 	// sync's roots
 	char **roots;
 	size_t roots_length;
+	// its lock: the tag lock (made with the host, kept across restarts) or lk_unlocked; none: the default
+	tg_lock *tag;
+	bool unlocked;
 	// the table's events by "table id", since last asked
 	struct {
 		char *key;
@@ -226,7 +230,8 @@ static void make(host_t *h) {
 		.zeros = h->zeros, .lazy = h->lazy, .tables = h->has_tables ? (const char *const *)h->tables : NULL,
 		.tables_length = h->tables_length, .merges = h->merges, .merges_length = h->merges_length,
 		.merge = h->merge, .drop = dropped, .ephemeral = ephemeral_of, .context = h,
-		.commit = h->commit ? landed : NULL, .roots = (const char *const *)h->roots, .roots_length = h->roots_length};
+		.commit = h->commit ? landed : NULL, .roots = (const char *const *)h->roots, .roots_length = h->roots_length,
+		.lock = h->tag != NULL ? &h->tag->lock : h->unlocked ? lk_unlocked() : NULL};
 	memcpy(o.seed, h->seed, 32);
 	h->sync = sy_create(&o);
 	if (h->sync == NULL) hh_fail("Subduction would not make a node");
@@ -260,6 +265,7 @@ static void host_free(host_t *h) {
 	for (size_t i = 0; i < h->event_count; i++) free(h->events[i].key);
 	free(h->events);
 	free(h->made);
+	tg_free(h->tag);
 	free(h->name);
 	free(h);
 }
@@ -493,6 +499,25 @@ static void counting(const op_value *r, writing_t what, FILE *out) {
 
 // ---- requests
 
+static void set_lock(const op_value *r, FILE *out) {
+	host_t *h = of(r, "host", out);
+	if (h == NULL) return;
+	if (h->tag == NULL || !tg_set(h->tag, hh_str(r, "open"))) {
+		hh_error(out, "no tag lock on %s or no open mode", h->name);
+		return;
+	}
+	fputs("{}", out);
+}
+
+// the host's device told its lock changed: what waited on it is opened again
+static void changed(const op_value *r, FILE *out) {
+	host_t *h = of(r, "host", out);
+	if (h == NULL) return;
+	tp_changed(sy_device(h->sync));
+	settle(h);
+	fputs("{}", out);
+}
+
 static void host(const op_value *r, FILE *out) {
 	const char *name = hh_str(r, "name"), *seed = hh_str(r, "seed");
 	for (size_t i = 0; name != NULL && i < host_count; i++) {
@@ -514,6 +539,9 @@ static void host(const op_value *r, FILE *out) {
 	const op_value *zeros = op_get(r, "zeros"), *tables = op_get(r, "tables"), *lazy = op_get(r, "lazy");
 	h->zeros = zeros != NULL && zeros->type == OP_BOOL && zeros->bool_;
 	h->lazy = lazy != NULL && lazy->type == OP_BOOL && lazy->bool_;
+	const char *lock = hh_str(r, "lock");
+	if (lock != NULL && strcmp(lock, "tag") == 0) h->tag = tg_make();
+	else h->unlocked = lock != NULL && strcmp(lock, "unlocked") == 0;
 	const op_value *commit = op_get(r, "commit"), *roots = op_get(r, "roots");
 	h->commit = commit == NULL || commit->type != OP_BOOL || commit->bool_;
 	if (roots != NULL && roots->type == OP_LIST) {
@@ -543,7 +571,7 @@ static void host(const op_value *r, FILE *out) {
 		if (found == NULL) {
 			hh_error(out, "no rule %s", rule);
 			for (size_t t = 0; t < h->tables_length; t++) free(h->tables[t]);
-			free(h->tables), free(h->merges), free(h->merge), free(h->name), free(h);
+			free(h->tables), free(h->merges), free(h->merge), tg_free(h->tag), free(h->name), free(h);
 			return;
 		}
 		bool had = false;
@@ -1084,6 +1112,8 @@ void hh_answer(const op_value *r, FILE *out) {
 	const char *op = hh_str(r, "op");
 	if (op == NULL) hh_unknown(out, r);
 	else if (strcmp(op, "host") == 0) host(r, out);
+	else if (strcmp(op, "lock") == 0) set_lock(r, out);
+	else if (strcmp(op, "changed") == 0) changed(r, out);
 	else if (strcmp(op, "restart") == 0) restart(r, out);
 	else if (strcmp(op, "close") == 0) close_host(r, out);
 	else if (strcmp(op, "use") == 0) use(r, out);

@@ -356,7 +356,7 @@ mr_doc *mr_document(mr_mailroom *k, const uint8_t tree[32]) {
 	// the maps keyed by names
 	d->elsewhere[0].width = d->elsewhere[1].width = d->own[0].width = d->own[1].width = CM_NAME;
 	d->names.width = d->snapshots.width = d->hints.width = d->judged.width = CM_NAME;
-	d->heard.width = d->bad.width = CM_NAME;
+	d->heard.width = d->bad.width = d->why_heard.width = CM_NAME;
 	memcpy(d->id, "ermine://", 9);
 	mr_hex(tree, 32, d->id + 9);
 	d->mailroom = k;
@@ -409,13 +409,19 @@ static void doc_free(mr_doc *d) {
 	}
 	im_free(&d->judged);
 	mr_order_t *orders[] = {&d->pending_order, &d->refused_order, &d->heard_order, &d->bad_order,
-		&d->hints_order};
+		&d->hints_order, &d->why_refused_order, &d->why_heard_order};
 	for (size_t i = 0; i < sizeof orders / sizeof *orders; i++) mr_order_free(orders[i]);
 	for (size_t i = 0; i < d->pending.slots; i++)
 		if (d->pending.used[i]) pending_free(d->pending.values[i]);
 	im_free(&d->pending);
 	im_free(&d->refused);
 	im_free(&d->heard);
+	for (int k = 0; k < 2; k++) {
+		im_map *m = k == 0 ? &d->why_refused : &d->why_heard;
+		for (size_t i = 0; i < m->slots; i++)
+			if (m->used[i]) free(m->values[i]);
+		im_free(m);
+	}
 	free(d->forgets);
 	im_free(&d->bad);
 	free(d);
@@ -468,12 +474,22 @@ static void hand(mr_doc *d, const mr_sealed_t *it, const uint8_t *sealed, size_t
 	tell(d->mailroom);
 }
 
-void mr_refuse(mr_doc *d, const uint8_t key[32], mr_code code, const uint8_t *name) {
+// the text a lock refused with, noted under the key (capped as the refusals are); none: nothing
+static void note_why(im_map *m, mr_order_t *o, const uint8_t *key, const char *why, size_t most) {
+	if (why == NULL) return;
+	uint8_t k[CM_NAME];
+	memcpy(k, key, im_width(m));
+	free(im_del(m, k));
+	mr_note(m, o, k, copyString(why), most, free);
+}
+
+void mr_refuse(mr_doc *d, const uint8_t key[32], mr_code code, const uint8_t *name, const char *why) {
 	uint8_t k[32], n[CM_NAME];
 	memcpy(k, key, 32);
 	if (name != NULL) memcpy(n, name, CM_NAME);
 	mr_pending_t *p = im_del(&d->pending, k);
 	mr_note(&d->refused, &d->refused_order, k, CODE(code), d->mailroom->limits.refused, NULL);
+	note_why(&d->why_refused, &d->why_refused_order, k, why, d->mailroom->limits.refused);
 	if (name != NULL) mr_note(&d->bad, &d->bad_order, n, SET, d->mailroom->limits.refused, NULL);
 	if (p != NULL) pending_free(p);
 }
@@ -551,7 +567,7 @@ void mr_settle(mr_doc *d) {
 					match = found;
 				}
 			}
-			if (!match) mr_refuse(d, p->key, MR_PARENTS, p->it.name);
+			if (!match) mr_refuse(d, p->key, MR_PARENTS, p->it.name, NULL);
 			else {
 				im_del(&d->pending, p->key);
 				if (p->commit) hand(d, &p->it, p->sealed, p->sealed_length, (const uint8_t(*)[32])p->given, p->given_length, false);
@@ -645,8 +661,8 @@ void mr_hint(mr_doc *d, const uint8_t name[CM_NAME], const uint8_t *bytes, size_
 	judge(d, name);
 }
 
-// an ephemeral commit heard from a device with that key, a multikey (never sealed): the lock's open
-// (unlocked), decode (shape), its signer the sender's (signature); then handed to the ephemeral history
+// an ephemeral commit heard from a device with that key, a multikey (never sealed), already opened by
+// the stack's lock: decode (shape), its signer the sender's (signature); then handed to the ephemeral history
 void mr_hear(mr_doc *d, const uint8_t *blob, size_t length, const uint8_t who[SL_KEY]) {
 	uint8_t name[CM_NAME];
 	cm_name(blob, length, name);
@@ -665,6 +681,14 @@ void mr_hear(mr_doc *d, const uint8_t *blob, size_t length, const uint8_t who[SL
 	admit(d, MR_EPHEMERAL, blob, length, name, true);
 	tell(d->mailroom);
 	for (size_t i = 0; i < d->mailroom->hearer_count; i++) d->mailroom->hearers[i].fn(d->mailroom->hearers[i].context, d->id, who, name);
+}
+
+// an ephemeral commit refused before it could be opened, noted by its name
+void mr_unheard(mr_doc *d, const uint8_t *blob, size_t length, mr_code code, const char *why) {
+	uint8_t name[CM_NAME];
+	cm_name(blob, length, name);
+	mr_note(&d->heard, &d->heard_order, name, CODE(code), d->mailroom->limits.refused, NULL);
+	note_why(&d->why_heard, &d->why_heard_order, name, why, d->mailroom->limits.refused);
 }
 
 // ---- own takes, handed to the stack
@@ -877,7 +901,7 @@ static int by_refused(const void *a, const void *b) {
 	return memcmp(((const mr_refused_row *)a)->id, ((const mr_refused_row *)b)->id, ((const mr_refused_row *)a)->id_length);
 }
 
-mr_taking mr_taking_of(mr_doc *d, mr_layer layer, const im_map *broken) {
+mr_taking mr_taking_of(mr_doc *d, mr_layer layer, const im_map *broken, const im_map *locked) {
 	mr_taking out = {0};
 	if (layer == MR_EPHEMERAL) {
 		out.refused = calloc(d->heard.count + 1, sizeof *out.refused);
@@ -888,11 +912,12 @@ mr_taking mr_taking_of(mr_doc *d, mr_layer layer, const im_map *broken) {
 			memcpy(r->id, im_key(&d->heard, i), CM_NAME);
 			r->id_length = CM_NAME;
 			r->code = (mr_code)(uintptr_t)d->heard.values[i];
+			if (r->code == MR_LOCK) r->why = im_get(&d->why_heard, im_key(&d->heard, i));
 		}
 		qsort(out.refused, out.refused_count, sizeof *out.refused, by_refused);
 		return out;
 	}
-	out.waiting = calloc(d->pending.count + 1, sizeof *out.waiting);
+	out.waiting = calloc(d->pending.count + (locked != NULL ? locked->count : 0) + 1, sizeof *out.waiting);
 	out.refused = calloc(d->pending.count + d->refused.count + (broken != NULL ? broken->count : 0) + 1, sizeof *out.refused);
 	if (out.waiting == NULL || out.refused == NULL) abort();
 	for (size_t i = 0; i < d->pending.slots; i++) {
@@ -912,6 +937,12 @@ mr_taking mr_taking_of(mr_doc *d, mr_layer layer, const im_map *broken) {
 			r->count = p->stuck_length;
 		}
 	}
+	// waiting on the lock: no parent named
+	for (size_t i = 0; locked != NULL && i < locked->slots; i++) {
+		if (!locked->used[i]) continue;
+		mr_waiting_row *w = &out.waiting[out.waiting_count++];
+		memcpy(w->commit, im_key(locked, i), 32);
+	}
 	for (int k = 0; k < 2; k++) {
 		const im_map *m = k == 0 ? &d->refused : broken;
 		if (m == NULL) continue;
@@ -922,6 +953,7 @@ mr_taking mr_taking_of(mr_doc *d, mr_layer layer, const im_map *broken) {
 			r->id_length = 32;
 			r->fragment = k == 1;
 			r->code = (mr_code)(uintptr_t)m->values[i];
+			if (k == 0 && r->code == MR_LOCK) r->why = im_get(&d->why_refused, im_key(m, i));
 		}
 	}
 	qsort(out.waiting, out.waiting_count, sizeof *out.waiting, by_waiting);
@@ -930,7 +962,7 @@ mr_taking mr_taking_of(mr_doc *d, mr_layer layer, const im_map *broken) {
 }
 
 void mr_taking_free(mr_taking *taking) {
-	for (size_t i = 0; i < taking->waiting_count; i++) free(taking->waiting[i].names);
+	for (size_t i = 0; i < taking->waiting_count; i++) free(taking->waiting[i].names), free(taking->waiting[i].boundary);
 	for (size_t i = 0; i < taking->refused_count; i++) free(taking->refused[i].names);
 	free(taking->waiting);
 	free(taking->refused);

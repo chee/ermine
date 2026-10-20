@@ -30,14 +30,14 @@ bool cf_unhex(const char *text, uint8_t **bytes, size_t *length) {
 }
 
 bool cf_value_bytes(const op_value *value, uint8_t **bytes, size_t *length) {
-	Json *j = pk_to_json(value);
-	size_t n = 0;
-	bool ok = j != NULL && cborEncode(j, NULL, 0, &n, NULL);
+	CborOut o = {NULL, 0, 0, true};
+	bool ok = value != NULL && pk_put(&o, value);
 	if (ok) {
-		*bytes = hh_take(n + 1);
-		cborEncode(j, *bytes, n, length, NULL);
+		*bytes = hh_take(o.length + 1);
+		if (o.length) memcpy(*bytes, o.data, o.length);
+		*length = o.length;
 	}
-	jsonFree(j);
+	free(o.data);
 	return ok;
 }
 

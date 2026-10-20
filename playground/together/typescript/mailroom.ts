@@ -120,8 +120,11 @@ export type Doc = {
 	refused: Map<string, Code>
 	// names of seals refused here
 	bad: Set<string>
-	// refused ephemeral commits, by their name (BLAKE3 of what the lock opened)
+	// refused ephemeral commits, by the name of the bytes as they came (closed: one that is refused
+	// cannot be opened)
 	heard: Map<string, Code>
+	// the text a lock refused with, by "r" + key (refused) or "h" + name (heard)
+	why: Map<string, string>
 }
 
 // what a stack is to the mailroom: the mailroom hands it what this device made, and what to say
@@ -326,6 +329,7 @@ export function createMailroom(
 			refused: new Map(),
 			bad: new Set(),
 			heard: new Map(),
+			why: new Map(),
 		}
 		documents.set(key, d)
 		return d
@@ -369,9 +373,10 @@ export function createMailroom(
 
 	// a seal, or a loose commit, refused: its key (the commit's head, or the seal's stored id), the
 	// name of its commit when that is not to be had from another seal (a parent of what waits)
-	function refuse(d: Doc, key: string, code: Code, name?: string) {
+	function refuse(d: Doc, key: string, code: Code, name?: string, why?: string) {
 		d.pending.delete(key)
 		note(limits.refused, d.refused, key, code)
+		if (why !== undefined) note(limits.refused, d.why, "r" + key, why)
 		if (name !== undefined) note(limits.refused, d.bad, name)
 	}
 
@@ -506,8 +511,9 @@ export function createMailroom(
 	}
 
 	// an ephemeral commit refused before it could be opened (by its name), noted
-	function unheard(d: Doc, name: Uint8Array, code: Code) {
+	function unheard(d: Doc, name: Uint8Array, code: Code, why?: string) {
 		note(limits.refused, d.heard, hex(name), code)
+		if (why !== undefined) note(limits.refused, d.why, "h" + hex(name), why)
 	}
 
 	// a stop heard from a device (the sender's key, a multikey as lowercase hex): told
@@ -563,6 +569,7 @@ export function createMailroom(
 				refused: [...d.heard].sort(([a], [b]) => by(a, b)).map(([commit, refused]) => ({
 					commit,
 					refused,
+					...why(d, "h" + commit, refused),
 				})),
 			}
 		}
@@ -572,15 +579,22 @@ export function createMailroom(
 			if (p.waiting) waiting.push({ commit, waiting: p.waiting })
 			else if (p.stuck) refused.push({ commit, stuck: p.stuck })
 		}
-		for (const [commit, code] of d.refused) refused.push({ commit, refused: code })
+		for (const [commit, code] of d.refused) {
+			refused.push({ commit, refused: code, ...why(d, "r" + commit, code) })
+		}
 		const more = stack?.taking?.(d)
 		if (more) waiting.push(...more.waiting), refused.push(...more.refused)
 		const key = (r: Taking["refused"][number]) => "fragment" in r ? r.fragment : r.commit
+		const id = (w: Taking["waiting"][number]) => "fragment" in w ? w.fragment : w.commit
 		return {
-			waiting: waiting.sort((a, b) => by(a.commit, b.commit)),
+			waiting: waiting.sort((a, b) => by(id(a), id(b))),
 			refused: refused.sort((a, b) => by(key(a), key(b))),
 		}
 	}
+
+	// the text a lock refused with, for a row refused with the code lock
+	const why = (d: Doc, key: string, code: Code) =>
+		code === "lock" && d.why.has(key) ? { why: d.why.get(key)! } : {}
 
 	// the histories judged again (the check changed), what that let in told
 	function retry(d: Doc) {

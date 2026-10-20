@@ -175,28 +175,6 @@ Deno.test({
 })
 
 Deno.test({
-	name: "transport: a lock that waits holds a commit until changed",
-	...opts,
-	async fn() {
-		let ready = false
-		const lock: Lock = { ...unlocked, open: (_d, bytes) => ready ? bytes : { wait: true } }
-		const a = await party(1, { lock })
-		const r = await make(a.signer, [], 1)
-		await transport_conformance_hook_put(a.device, DOC, r.stored, [], r.sealed)
-		await quiet(a)
-		assertEquals(transport_conformance_hook_taking(a.device, DOC).waiting, [{
-			commit: hex(r.stored),
-			waiting: [],
-		}])
-		ready = true
-		await a.device.changed()
-		assertEquals(transport_conformance_hook_taking(a.device, DOC), { waiting: [], refused: [] })
-		assertEquals(a.device.history(DOC).heads().length, 1)
-		await a.device.close()
-	},
-})
-
-Deno.test({
 	name:
 		"transport: an own take is in the history at once, never checked, announced or opened; sealed and stored after",
 	...opts,

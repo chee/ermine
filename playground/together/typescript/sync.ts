@@ -98,8 +98,17 @@ export type Ephemeral = {
 // no commit could carry, each with why (commit.ts's code and field), kept while sync runs. each list
 // its first LIST (100), count how many in all
 export type Status = {
-	waiting: ({ commit: string; parents: string[] } | { commit: string; authority: true })[]
-	refused: ({ commit: string; code: string } | { fragment: string; code: string })[]
+	// a fragment (by its head) waits on authority: the lock. why: the text a lock refused with, beside
+	// the code lock
+	waiting: (
+		| { commit: string; parents: string[] }
+		| { commit: string; authority: true }
+		| { fragment: string; authority: true }
+	)[]
+	refused: (
+		| { commit: string; code: string; why?: string }
+		| { fragment: string; code: string; why?: string }
+	)[]
 	unsent: { table: string; error: string; field?: string }[]
 	count: { waiting: number; refused: number; unsent: number }
 }
@@ -733,16 +742,23 @@ export function createSync(options: Options): Sync {
 		const on = (commit: string, parents: string[]): Status["waiting"][number] =>
 			parents.length ? { commit, parents } : { commit, authority: true }
 		const waiting = [
-			...t.waiting.map((w) => on(w.commit, w.waiting)),
+			...t.waiting.map((w): Status["waiting"][number] =>
+				"fragment" in w ? { fragment: w.fragment, authority: true } : on(w.commit, w.waiting)
+			),
 			...history.waiting().map((w) => on(w.name, w.waiting)),
 		]
 		const refused: Status["refused"] = []
 		// a commit stuck behind a refused parent waits on that parent: a later change (the rule
 		// becoming known) could let both in
 		for (const r of t.refused) {
-			if ("fragment" in r) refused.push({ fragment: r.fragment, code: r.refused })
-			else if ("stuck" in r) waiting.push(on(r.commit, r.stuck))
-			else refused.push({ commit: r.commit, code: r.refused })
+			if ("fragment" in r) {
+				refused.push({
+					fragment: r.fragment,
+					code: r.refused,
+					...(r.why ? { why: r.why } : {}),
+				})
+			} else if ("stuck" in r) waiting.push(on(r.commit, r.stuck))
+			else refused.push({ commit: r.commit, code: r.refused, ...(r.why ? { why: r.why } : {}) })
 		}
 		for (const r of history.refused()) {
 			if (r.on !== undefined) waiting.push(on(r.name, [r.on]))

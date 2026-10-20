@@ -16,7 +16,7 @@
 // decoding accepts exactly what the encoder writes (never a whole number as a float, a longer head,
 // a bignum a plain integer holds); anything else is rejected. ermine/encoding/typescript/cbor.ts's
 // header is the rule.
-// memory: encoding writes into the caller's buffer (or one it grows, CborOut); decoding builds with json.h's constructors.
+// memory: encoding writes into the caller's buffer (or one it grows, CborOut); decoding builds with json.h's constructors (or a maker's, cborRead).
 // nothing recurses; at most CBOR_DEPTH nested containers (cbor.ts's DEPTH).
 
 #ifndef CBOR_H
@@ -93,6 +93,39 @@ Json *cborDecode(const unsigned char *data, size_t length, const char **why, siz
  * a no, and no value made.
  */
 bool cborCheck(const unsigned char *data, size_t length, const char **why, size_t *at);
+
+// reading into values of another kind: cborDecode's walk and rules, each item handed to a maker
+
+typedef enum { CBOR_NULL, CBOR_BOOLEAN, CBOR_FLOAT, CBOR_UNSIGNED, CBOR_WHOLE, CBOR_TEXT, CBOR_BYTES, CBOR_TYPED, CBOR_LIST, CBOR_MAP, CBOR_STAND } CborWhat;
+
+/** one item read, as a maker is given it; the fields of its kind */
+typedef struct CborItem {
+	CborWhat what;
+	bool boolean; // CBOR_BOOLEAN
+	bool negative; // CBOR_WHOLE: its sign
+	double number; // CBOR_FLOAT: no whole number, -0 or NaN but the one
+	uint64_t argument; // CBOR_UNSIGNED
+	char *text; // CBOR_TEXT: as json.h holds it (00 as C0 80), length bytes and a NUL, malloc'd: the maker's to take
+	const unsigned char *data; // CBOR_WHOLE: the magnitude, big-endian (leading zeros may be); CBOR_BYTES; CBOR_TYPED: the elements, little-endian
+	size_t length; // data's bytes; text's
+	JsonKind kind; // CBOR_TYPED
+	size_t count; // CBOR_TYPED: elements; CBOR_LIST, CBOR_MAP: items, pairs; CBOR_STAND: 1
+	unsigned char room[9]; // the reader's
+	unsigned char *own; // the reader's
+} CborItem;
+
+/** what a reading makes values with. make: a fresh value of an item (a list, map or stand-in empty);
+ * place: an item made into a container, a list's next, a map's under key (as json.h holds it, keyLength
+ * bytes and a NUL, borrowed), a stand-in's kind; drop: frees a value made, all it holds */
+typedef struct CborMaker {
+	void *(*make)(void *self, const CborItem *item);
+	void (*place)(void *self, void *container, const char *key, size_t keyLength, void *item);
+	void (*drop)(void *self, void *value);
+	void *self;
+} CborMaker;
+
+/** as cborDecode, made by maker (NULL: as cborCheck, a value that is no value but not NULL) */
+void *cborRead(const unsigned char *data, size_t length, const CborMaker *maker, const char **why, size_t *at);
 
 /**
  * Whether the text is one cborEncode can write as a string: UTF-8, with U+0000 as json.h holds
