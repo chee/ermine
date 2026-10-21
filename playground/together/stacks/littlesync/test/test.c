@@ -61,9 +61,9 @@ static void random_bytes(void *context, uint8_t *out, size_t n) {
 	for (size_t i = 0; i < n; i++) out[i] = (uint8_t)rnd();
 }
 
-static const char *P1 = "ermine://d3b583537595c9a6de0110781d4566d1" "00000000000000000000000000000000";
-static const char *P2 = "ermine://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" "00000000000000000000000000000000";
-static const char *P3 = "ermine://bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" "00000000000000000000000000000000";
+static const char *P1 = "ermine:0010d3b583537595c9a6de0110781d4566d1";
+static const char *P2 = "ermine:0010aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+static const char *P3 = "ermine:0010bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
 // ---- a pair of devices and the pipe between them
 
@@ -219,7 +219,7 @@ static void tap(const uint8_t *b, size_t n) {
 				if (t && strcmp(t->string, "commits") == 0 && node && sealed)
 					for (int q = 0; q < sealed->array.count; q++) {
 						sl_unsealed u;
-						sl_code c = sl_unseal(sealed->array.items[q]->bytes.data, sealed->array.items[q]->bytes.length, node->bytes.data, &u, NULL);
+						sl_code c = sl_unseal(sealed->array.items[q]->bytes.data, sealed->array.items[q]->bytes.length, (const uint8_t *)node->string, node->stringLength, &u, NULL);
 						remember(sealed->array.items[q]->bytes.data, sealed->array.items[q]->bytes.length);
 						tapped++;
 						if (c == SL_OK) tap_good++, sl_free(&u);
@@ -302,8 +302,8 @@ static double xof(const ls_node *n) {
 	pig_read(ls_value(n), ls_id(n), &p);
 	return p.x;
 }
-static bool same(const ls_node *a, const ls_node *b) {
-	const op_value *x = ls_value(a), *y = ls_value(b);
+// two values alike: maps compared as sets of entries by text of each key
+static bool alike(const op_value *x, const op_value *y) {
 	char *tx = NULL, *ty = NULL;
 	bool ok;
 	if (x == NULL || y == NULL) return x == y;
@@ -322,8 +322,23 @@ static bool same(const ls_node *a, const ls_node *b) {
 	(free)(tx), (free)(ty);
 	return ok;
 }
+// two nodes alike: their values and their children
+static bool same(const ls_node *a, const ls_node *b) {
+	return alike(ls_value(a), ls_value(b)) && alike(ls_children(a), ls_children(b));
+}
 
 static op_value *yes(void) { return op_bool(1); }
+// a pig placed in the room, as lab-pig places one
+static ls_code put_in(ls_node *room, const char *id) {
+	char name[PIGS_NAME];
+	pig_name(id, name);
+	return ls_place(room, name, id);
+}
+static ls_code take_out(ls_node *room, const char *id) {
+	char name[PIGS_NAME];
+	pig_name(id, name);
+	return ls_unplace(room, name);
+}
 
 // ---- the lists, for test/lists.ts: the commits seen on the wire, and what each device holds at each
 // path asked, one JSON line per case into build/lists.jsonl. exact: the TS lists must be the same; else
@@ -391,10 +406,10 @@ static void t_converge(void) {
 	op_value *v = pig(0.25, 0.75, 1000);
 	CHECK(ls_put(pa, v) == LS_OK);
 	op_free(v);
-	CHECK(ls_set(ra, P1, yes()) == LS_OK);
+	CHECK(put_in(ra, P1) == LS_OK);
 	pump(&a, &b, 100);
 	CHECK(xof(pb) == 0.25);
-	CHECK(pig_room_has(ls_value(rb), P1));
+	CHECK(pig_room_has(ls_children(rb), P1));
 	v = pig(0.5, 0.5, 2000);
 	ls_put(pb, v);
 	op_free(v);
@@ -407,28 +422,73 @@ static void t_converge(void) {
 	drop_dir(&a), drop_dir(&b);
 }
 
+// a key id (ed 01 and an Ed25519 key's 32 bytes) is an ermine id as any: followed, and it syncs
+static void t_key_id(void) {
+	printf("a key id is followed and syncs as any ermine id; what is no ermine id is not followed\n");
+	static const char *K = "ermine:ed012a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a";
+	side a = open_side("a"), b = open_side("b");
+	ls_node *ka = ls_follow(a.d, K), *kb = ls_follow(b.d, K);
+	CHECK(ka != NULL && kb != NULL && strcmp(ls_id(ka), K) == 0);
+	CHECK(ls_follow(a.d, "ermine://2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a00000000000000000000000000000000") == NULL);
+	CHECK(ls_follow(a.d, "ermine:ed022a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a") == NULL);
+	pump(&a, &b, 100);
+	op_value *v = pig(0.25, 0.75, 1000);
+	CHECK(ka != NULL && ls_put(ka, v) == LS_OK);
+	op_free(v);
+	pump(&a, &b, 100);
+	CHECK(kb != NULL && xof(kb) == 0.25 && ls_commits(kb) == 1);
+	CHECK(ls_stats_of(a.d)->bad_seals == 0 && ls_stats_of(b.d)->bad_seals == 0);
+	close_side(&a), close_side(&b);
+	drop_dir(&a), drop_dir(&b);
+}
+
 static void t_concurrent_adds(void) {
 	printf("concurrent adds to the room both land\n");
 	side a = open_side("a"), b = open_side("b");
 	ls_node *ra = ls_follow(a.d, PIGS_ROOM), *rb = ls_follow(b.d, PIGS_ROOM);
 	pump(&a, &b, 100);
 	n_wire_seen = 0;
-	ls_set(ra, P2, yes());
-	ls_set(rb, P3, yes());
+	put_in(ra, P2);
+	put_in(rb, P3);
 	cut(&a, &b);
 	pump(&a, &b, 2000);
-	CHECK(pig_room_has(ls_value(ra), P2) && pig_room_has(ls_value(ra), P3));
-	CHECK(pig_room_has(ls_value(rb), P2) && pig_room_has(ls_value(rb), P3));
+	CHECK(pig_room_has(ls_children(ra), P2) && pig_room_has(ls_children(ra), P3));
+	CHECK(pig_room_has(ls_children(rb), P2) && pig_room_has(ls_children(rb), P3));
 	CHECK(ls_commits(ra) == 2 && ls_commits(rb) == 2);
-	// a bin: false stays, a later delete of the key too
-	CHECK(ls_set(ra, P2, op_bool(0)) == LS_OK);
+	// a bin: unplaced, on either side
+	CHECK(take_out(ra, P2) == LS_OK);
 	pump(&a, &b, 200);
-	CHECK(!pig_room_has(ls_value(rb), P2));
-	ls_del(rb, P3);
+	CHECK(!pig_room_has(ls_children(rb), P2));
+	take_out(rb, P3);
 	pump(&a, &b, 200);
-	CHECK(!pig_room_has(ls_value(ra), P3));
+	CHECK(!pig_room_has(ls_children(ra), P3) && pig_room_count(ls_children(ra)) == 0);
 	// the write after the two concurrent ones merged them: two parents, the rest one
 	CHECK(most_parents() == 2);
+	check_lamports();
+	close_side(&a), close_side(&b);
+	drop_dir(&a), drop_dir(&b);
+}
+
+static void t_tables(void) {
+	printf("a node's value and children are two tables: a write in one never covers the other\n");
+	side a = open_side("a"), b = open_side("b");
+	ls_node *ra = ls_follow(a.d, PIGS_ROOM), *rb = ls_follow(b.d, PIGS_ROOM);
+	pump(&a, &b, 100);
+	put_in(ra, P1);
+	op_value *v = op_str("a room");
+	CHECK(ls_put(ra, v) == LS_OK);
+	op_free(v);
+	pump(&a, &b, 200);
+	// the whole value put after the place: the place stands
+	CHECK(pig_room_has(ls_children(rb), P1) && ls_value(rb)->type == OP_STR);
+	CHECK(pig_room_name(ls_children(rb), P1) != NULL && strcmp(pig_room_name(ls_children(rb), P1), "pig-d3b58353") == 0);
+	// the value taken away, a pig placed beside: both stand, on both
+	CHECK(ls_write(rb, &(ls_patch){NULL, 0, NULL, 0}, 1) == LS_OK);
+	put_in(rb, P2);
+	pump(&a, &b, 200);
+	CHECK(ls_value(ra) == NULL && pig_room_count(ls_children(ra)) == 2 && same(ra, rb));
+	// a name holding no pig id is no pig
+	CHECK(ls_place(ra, "notes", "not a pig") == LS_OK && pig_room_count(ls_children(ra)) == 2);
 	check_lamports();
 	close_side(&a), close_side(&b);
 	drop_dir(&a), drop_dir(&b);
@@ -479,12 +539,13 @@ static void t_restart(void) {
 	ls_set(ra, P2, yes());
 	ls_set(ra, P3, yes());
 	ls_del(ra, P3);
+	put_in(ra, P1), put_in(ra, P2), take_out(ra, P1);
 	pump(&a, &b, 100);
 	uint8_t key[LS_KEY_LEN];
 	memcpy(key, ls_key(a.d), LS_KEY_LEN);
 	size_t commits = ls_commits(ra);
 	int64_t lamport = ls_lamport(ra);
-	char *before = op_json_text(ls_value(ra));
+	char *before = op_json_text(ls_value(ra)), *kids = op_json_text(ls_children(ra));
 	close_side(&a);
 	// the same directory again
 	ls_options o = {.store = a.store, .random = random_bytes};
@@ -493,10 +554,11 @@ static void t_restart(void) {
 	CHECK(memcmp(key, ls_key(a.d), LS_KEY_LEN) == 0);
 	pa = ls_follow(a.d, P1), ra = ls_follow(a.d, PIGS_ROOM);
 	CHECK(xof(pa) == 0.2);
-	char *after = op_json_text(ls_value(ra));
-	CHECK(strcmp(before, after) == 0);
+	char *after = op_json_text(ls_value(ra)), *kids2 = op_json_text(ls_children(ra));
+	CHECK(strcmp(before, after) == 0 && strcmp(kids, kids2) == 0);
+	CHECK(pig_room_has(ls_children(ra), P2) && !pig_room_has(ls_children(ra), P1));
 	CHECK(ls_commits(ra) == commits && ls_lamport(ra) == lamport);
-	(free)(before), (free)(after);
+	(free)(before), (free)(after), (free)(kids), (free)(kids2);
 	// it still talks: a write after the restart lands on the other
 	pump(&a, &b, 100);
 	v = pig(0.4, 0.4, 6);
@@ -519,12 +581,13 @@ static void t_fresh(void) {
 		ls_put(i % 2 ? p1 : p2, v);
 		op_free(v);
 	}
-	ls_set(ra, P1, yes()), ls_set(ra, P2, yes()), ls_set(ra, P3, yes());
+	put_in(ra, P1), put_in(ra, P2), put_in(ra, P3);
 	// many pigs: the room is many commits, past one message
 	char id[LS_ID_LEN + 1];
 	for (int i = 0; i < 30; i++) {
-		snprintf(id, sizeof id, "ermine://%032x" "00000000000000000000000000000000", 0x1000 + i);
-		ls_set(ra, id, yes());
+		// differing in the first 8 hex: each its own name
+		snprintf(id, sizeof id, "ermine:0010%08x" "000000000000000000000000", 0x1000 + i);
+		put_in(ra, id);
 	}
 	CHECK(ls_commits(ra) == 33);
 	side c = open_side("c");
@@ -626,15 +689,14 @@ static void t_bad_and_refused(void) {
 	sl_seeded sd;
 	sl_seeded_init(&sd, seed);
 	free(seed);
-	uint8_t doc[32];
-	for (int i = 0; i < 32; i++) sscanf(P1 + 9 + 2 * i, "%2hhx", &doc[i]);
+	// the wire's node: the id as text
 	uint8_t *sealed;
 	size_t sn;
-	CHECK(sl_seal(cb, cl, &sd.signer, doc, NULL, &sealed, &sn, NULL, NULL) == SL_OK);
+	CHECK(sl_seal(cb, cl, &sd.signer, (const uint8_t *)P1, strlen(P1), NULL, &sealed, &sn, NULL, NULL) == SL_OK);
 	free(cb);
 	Json *m = jsonObject(), *list = jsonArray();
 	jsonAdd(m, "t", jsonString("commits"));
-	jsonAdd(m, "node", jsonBytes(doc, 32));
+	jsonAdd(m, "node", jsonString(P1));
 	jsonPush(list, jsonBytes(sealed, sn));
 	jsonAdd(m, "sealed", list);
 	free(sealed);
@@ -1315,8 +1377,6 @@ static void t_limits(void) {
 	v = pig_make_held(0.3, 0.3, "otter", "#d1495b", "abcd");
 	CHECK(ls_hold(pa, v) == LS_OK);
 	op_free(v);
-	uint8_t doc[32];
-	for (int i = 0; i < 32; i++) sscanf(P1 + 9 + 2 * i, "%2hhx", &doc[i]);
 	// twelve unsealed holds, each by a key nobody has
 	for (int k = 0; k < 12; k++) {
 		uint8_t key[LS_KEY_LEN] = {0xed, 0x01};
@@ -1338,7 +1398,7 @@ static void t_limits(void) {
 		jsonFree(c);
 		Json *m = jsonObject();
 		jsonAdd(m, "t", jsonString("ephemeral"));
-		jsonAdd(m, "node", jsonBytes(doc, 32));
+		jsonAdd(m, "node", jsonString(P1));
 		jsonAdd(m, "commit", jsonBytes(cb, cl));
 		free(cb);
 		feed_message(a.l, m);
@@ -1550,7 +1610,7 @@ static void t_made_parents(void) {
 
 // a commit sealed with a side's key, fed to another as a peer would send it; its name into name
 static void feed_commit(side *signer, side *to, const char *id, Json *c, uint8_t name[CM_NAME]) {
-	uint8_t *cb, *seed, *sealed, doc[32];
+	uint8_t *cb, *seed, *sealed;
 	size_t cl, sl, sn;
 	CHECK(cm_encode_json(c, &cb, &cl, NULL) == CM_OK);
 	jsonFree(c);
@@ -1560,12 +1620,11 @@ static void feed_commit(side *signer, side *to, const char *id, Json *c, uint8_t
 	sl_seeded sd;
 	sl_seeded_init(&sd, seed);
 	free(seed);
-	for (int i = 0; i < 32; i++) sscanf(id + 9 + 2 * i, "%2hhx", &doc[i]);
-	CHECK(sl_seal(cb, cl, &sd.signer, doc, NULL, &sealed, &sn, NULL, NULL) == SL_OK);
+	CHECK(sl_seal(cb, cl, &sd.signer, (const uint8_t *)id, strlen(id), NULL, &sealed, &sn, NULL, NULL) == SL_OK);
 	free(cb);
 	Json *m = jsonObject(), *list = jsonArray();
 	jsonAdd(m, "t", jsonString("commits"));
-	jsonAdd(m, "node", jsonBytes(doc, 32));
+	jsonAdd(m, "node", jsonString(id));
 	jsonPush(list, jsonBytes(sealed, sn));
 	jsonAdd(m, "sealed", list);
 	free(sealed);
@@ -1824,7 +1883,7 @@ static void t_memory(void) {
 	ls_node *r = ls_follow(c.d, PIGS_ROOM);
 	for (int i = 0; i < 30; i++) {
 		char id[LS_ID_LEN + 1];
-		snprintf(id, sizeof id, "ermine://%032x" "00000000000000000000000000000000", 0x2000 + i);
+		snprintf(id, sizeof id, "ermine:0010%032x", 0x2000 + i);
 		ls_set(r, id, yes());
 	}
 	size_t h4 = heap();
@@ -1851,10 +1910,10 @@ static void t_memory(void) {
 		pump(&a, &b, 100);
 		for (int i = 0; i < 15; i++) {
 			char id[LS_ID_LEN + 1];
-			snprintf(id, sizeof id, "ermine://%032x" "00000000000000000000000000000000", 0x3000 + i);
+			snprintf(id, sizeof id, "ermine:0010%032x", 0x3000 + i);
 			ls_set(ra, id, yes());
 			if (!at_once) pump(&a, &b, 100);
-			snprintf(id, sizeof id, "ermine://%032x" "00000000000000000000000000000000", 0x4000 + i);
+			snprintf(id, sizeof id, "ermine:0010%032x", 0x4000 + i);
 			ls_set(rb, id, yes());
 			pump(&a, &b, 100);
 		}
@@ -2079,8 +2138,8 @@ static void t_keep(void) {
 static const struct {
 	const char *name;
 	void (*run)(void);
-} TESTS[] = {{"converge", t_converge}, {"moves", t_concurrent_moves}, {"deletes", t_delete_and_set}, {"made", t_made_parents},
-	{"older", t_older_commits}, {"far", t_far}, {"offline", t_offline}, {"adds", t_concurrent_adds}, {"garbage", t_garbage},
+} TESTS[] = {{"converge", t_converge}, {"key", t_key_id}, {"moves", t_concurrent_moves}, {"deletes", t_delete_and_set}, {"made", t_made_parents},
+	{"older", t_older_commits}, {"far", t_far}, {"offline", t_offline}, {"adds", t_concurrent_adds}, {"tables", t_tables}, {"garbage", t_garbage},
 	{"restart", t_restart}, {"fresh", t_fresh}, {"bad", t_bad_and_refused}, {"ephemeral", t_ephemeral}, {"presence", t_presence}, {"messages", t_messages}, {"relay", t_relay}, {"acks", t_per_link_acks}, {"relink", t_relink}, {"limits", t_limits}, {"fuzz", t_fuzz},
 	{"cost", t_cost}, {"memory", t_memory}, {"links", t_many_links}, {"keep", t_keep}};
 

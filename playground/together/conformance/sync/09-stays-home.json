@@ -1,5 +1,5 @@
 {
-	"title": "what is not kept stays home: an id that is not ermine://, a table not kept",
+	"title": "what is not synced stays home: an id that is not an ermine id (a local string), a table not synced; a key id (ed01 and an Ed25519 key) is an ermine id and syncs as any other",
 	"steps": [
 		{
 			"op": "host",
@@ -18,10 +18,16 @@
 			"host": "a",
 			"as": "x",
 			"expect": {
-				"id": "ermine://b40fde52c568d2f3864d68739e98b72b9f144f5566afcbb238fd354ecdc7c755"
+				"id": "ermine:0010b40fde52c568d2f3864d68739e98b72b"
 			}
 		},
 		{ "op": "follow", "host": "b", "id": "x", "expect": {} },
+		{
+			"op": "follow",
+			"host": "b",
+			"id": "ermine:ed012a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+			"expect": {}
+		},
 		{ "op": "connect", "a": "a", "b": "b", "expect": {} },
 		{
 			"op": "write",
@@ -38,11 +44,30 @@
 			"patches": [{ "path": [], "value": { "me": 1 } }],
 			"expect": { "commits": 0 }
 		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "ermine:ed012a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+			"patches": [{ "path": [], "value": 2 }],
+			"expect": { "commits": 1 }
+		},
 		{ "op": "quiet", "expect": {} },
 		{ "op": "stored", "host": "a", "id": "x", "expect": { "stored": 0 } },
 		{ "op": "commits", "host": "a", "id": "x", "expect": { "commits": 0 } },
 		{ "op": "read", "host": "a", "id": "local", "expect": { "value": 1 } },
 		{ "op": "read", "host": "b", "id": "local", "expect": {} },
-		{ "op": "read", "host": "b", "table": "presence", "id": "x", "expect": {} }
+		{ "op": "read", "host": "b", "table": "presence", "id": "x", "expect": {} },
+		{
+			"op": "read",
+			"host": "a",
+			"id": "ermine:ed012a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+			"expect": { "value": 2 }
+		},
+		{
+			"op": "read",
+			"host": "b",
+			"id": "ermine:ed012a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+			"expect": { "value": 2 }
+		}
 	]
 }

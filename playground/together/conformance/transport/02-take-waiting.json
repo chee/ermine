@@ -27,7 +27,7 @@
 		{
 			"op": "make",
 			"name": "c2",
-			"nonce": 619,
+			"nonce": 109,
 			"parents": ["c1"],
 			"patches": [{ "path": ["n"], "value": 2 }],
 			"expect": {}

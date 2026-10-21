@@ -16,6 +16,9 @@
 #include "sync.h"
 #include "tag_lock.h"
 #include "wires_harness.h"
+#ifdef CONFORMANCE_HOOK
+#include "transport_conformance_hook.h"
+#endif
 
 #include "../../../conformance/c/protocol_harness.h"
 #include "../../../core/node/c/update.h"
@@ -46,7 +49,7 @@ typedef struct {
 	// sync's roots
 	char **roots;
 	size_t roots_length;
-	// its lock: the tag lock (made with the host, kept across restarts) or lk_unlocked; none: the default
+	// its lock: the tag lock (made with the host, the same one across restarts) or lk_unlocked; none: the default
 	tg_lock *tag;
 	bool unlocked;
 	// the table's events by "table id", since last asked
@@ -682,7 +685,7 @@ static void stop(const op_value *r, FILE *out) {
 static void mint(const op_value *r, FILE *out) {
 	host_t *h = of(r, "host", out);
 	if (h == NULL) return;
-	char id[9 + 64 + 1];
+	char id[SY_ID];
 	sy_mint(h->sync, id);
 	const char *as = hh_str(r, "as");
 	if (as != NULL) {
@@ -1059,6 +1062,51 @@ static void fragments(const op_value *r, FILE *out) {
 	fprintf(out, "{\"fragments\":%zu}", n);
 }
 
+#ifdef CONFORMANCE_HOOK
+// the commit (a label, with no parents) host from holds at id, sealed by from's key for id, put to
+// host's device at id as a loose commit in an envelope naming as (an id's label, or the string as
+// given): what another device could send (tp_conformance_hook_put; sync_harness.ts's put)
+static void put(const op_value *r, FILE *out) {
+	host_t *h = of(r, "host", out), *from = h != NULL ? of(r, "from", out) : NULL;
+	if (from == NULL) return;
+	const char *id = id_of(op_get(r, "id")), *as = id_of(op_get(r, "as"));
+	uint8_t name[CM_NAME];
+	if (!name_of(op_get(r, "commit"), name, out)) return;
+	const hy_kept *k = hy_get(tp_history(sy_device(from->sync), id, TP_STORED), name);
+	if (k == NULL || k->parents_length) {
+		hh_error(out, "no commit with no parents");
+		return;
+	}
+	sl_seeded s;
+	sl_seeded_init(&s, from->seed);
+	uint8_t *sealed, stored[32];
+	size_t n;
+	if (sl_seal(k->bytes, k->length, &s.signer, (const uint8_t *)id, strlen(id), NULL, &sealed, &n, NULL, NULL) != SL_OK) {
+		hh_error(out, "not sealed");
+		return;
+	}
+	sl_stored(sealed, n, stored);
+	Json *e = jsonObject();
+	jsonAdd(e, "sealed", jsonBytes(sealed, n));
+	jsonAdd(e, "id", jsonString(as));
+	free(sealed);
+	size_t length = 0;
+	cborEncode(e, NULL, 0, &length, NULL);
+	uint8_t *blob = malloc(length + 1);
+	if (blob == NULL) abort();
+	cborEncode(e, blob, length, &length, NULL);
+	jsonFree(e);
+	bool ok = tp_conformance_hook_put(sy_device(h->sync), id, stored, NULL, 0, blob, length);
+	free(blob);
+	if (!ok) {
+		hh_error(out, "not a document id: %s", id);
+		return;
+	}
+	settle(h);
+	fputs("{}", out);
+}
+#endif
+
 // the host's ephemeral tables from now
 static void ephemeral(const op_value *r, FILE *out) {
 	host_t *h = of(r, "host", out);
@@ -1142,6 +1190,9 @@ void hh_answer(const op_value *r, FILE *out) {
 	else if (strcmp(op, "get") == 0) get(r, out);
 	else if (strcmp(op, "stored") == 0) stored(r, out);
 	else if (strcmp(op, "fragments") == 0) fragments(r, out);
+#ifdef CONFORMANCE_HOOK
+	else if (strcmp(op, "put") == 0) put(r, out);
+#endif
 	else if (strcmp(op, "ephemeral") == 0) ephemeral(r, out);
 	else if (strcmp(op, "stop") == 0) stop(r, out);
 	else if (strcmp(op, "advance") == 0) advance(r, out);

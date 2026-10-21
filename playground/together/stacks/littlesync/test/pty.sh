@@ -19,8 +19,9 @@ slave=$(cat $d/pty)
 $pigs --port $slave --state $d/b --name newt --dump $d/b.txt --log $d/b.log --keys "...." --exit-after 7000 2>/dev/null &
 b=$!
 wait $a $b
-check $d/a.txt "pigs 2" "a has two pigs"
-check $d/b.txt "pigs 2" "b has two pigs (the one a added)"
+# a fresh room has no pigs: the one a added is all
+check $d/a.txt "pigs 1" "a has one pig"
+check $d/b.txt "pigs 1" "b has one pig (the one a added)"
 check $d/a.txt "peer up" "a sees the peer up"
 check $d/b.txt "peer up" "b sees the peer up"
 grep -c "rx commits" $d/b.log | grep -qv '^0' && echo "  ok   b took commits in" || { echo "  FAIL b took no commits"; failed=1; }
@@ -29,7 +30,7 @@ la=$(grep '^[ab] [0-9a-f]\{8\} ' $d/a.txt | cut -d' ' -f1-4 | sort); lb=$(grep '
 [ -n "$la" ] && echo "  ok   a lists its pigs" || { echo "  FAIL a lists no pigs"; failed=1; }
 [ "$la" = "$lb" ] && echo "  ok   both list the same pigs at the same places" || { echo "  FAIL pig lists differ"; echo "$la"; echo "$lb"; failed=1; }
 
-# second scenario: b picks up the first pig, carries it right, a sees it held, then b drops it
+# second scenario: b picks up the pig, carries it right, a sees it held, then b drops it
 rm -rf $d/pty
 $pigs --pty --pty-file $d/pty --state $d/a --name otter --dump $d/a2.txt --log $d/a2.log --exit-after 7500 2>/dev/null &
 a=$!
@@ -46,10 +47,18 @@ check $d/a2-mid.txt "^@ newt x=" "a sees b's pointer (its presence row)"
 ! grep -q "held by" $d/a2.txt && echo "  ok   a sees it put down (no longer held)" || { echo "  FAIL a still shows it held"; failed=1; }
 grep "^[ab] [0-9a-f]\{8\} \|^room " $d/a2.txt
 
-# third: a clash. Apart (each on a pty nobody opens), a and b each drop the first pig somewhere else;
-# then they meet: both show it twice (an "also" line). Then b picks it up and drops it: one again
+# third: a clash. Together, a adds a pig; apart (each on a pty nobody opens), a and b each drop it
+# somewhere else; then they meet: both show it twice (an "also" line). Then b picks it up and drops it:
+# one again
 c=$d/clash
 mkdir -p $c
+$pigs --pty --pty-file $c/pty0 --state $c/a --name otter --dump $c/a00.txt --keys "a" --exit-after 3000 2>/dev/null &
+a=$!
+n=0; while [ ! -s $c/pty0 ] && [ $n -lt 50 ]; do sleep 0.1; n=$((n+1)); done
+$pigs --port $(cat $c/pty0) --state $c/b --name newt --dump $c/b00.txt --exit-after 3000 2>/dev/null &
+b=$!
+wait $a $b
+check $c/b00.txt "pigs 1" "b has the pig a added, before they part"
 $pigs --pty --state $c/a --name otter --dump $c/a0.txt --keys " llll " --exit-after 2500 2>/dev/null &
 $pigs --pty --state $c/b --name newt --dump $c/b0.txt --keys " jjjj " --exit-after 2500 2>/dev/null &
 wait

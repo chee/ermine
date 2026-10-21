@@ -5,6 +5,8 @@
 
 #include "ids.h"
 #include "lists.h"
+// ermine ids: together's own ids.h is its maps
+#include "../../../ermine/ids/c/ids.h"
 #include "snapshot.h"
 
 #include "../../../core/node/c/update.h"
@@ -193,7 +195,7 @@ typedef struct {
 // from replays and commits decoded, never shared); the bytes of its commits taken before each and it,
 // by name, and in all; the last snapshot's place and size
 typedef struct {
-	char id[9 + 64 + 1];
+	char id[ID_TEXT];
 	uint8_t bytes[32];
 	const hy_kept *shown;
 	im_map others;
@@ -257,7 +259,6 @@ struct sy_sync {
 	sy_time_fn time;
 	tp_clock_fn now;
 	void *clock;
-	bool zeros;
 	char **tables;
 	size_t tables_length;
 	// the rules known, and the one in use (NULL: none)
@@ -329,7 +330,7 @@ static node_t *node_of(sy_sync *s, const char *id) {
 	if (nd == NULL) abort();
 	nd->others.width = nd->placed.width = CM_NAME;
 	memcpy(nd->bytes, bytes, 32);
-	memcpy(nd->id, id, sizeof nd->id - 1);
+	snprintf(nd->id, sizeof nd->id, "%s", id);
 	nd->sync = s;
 	im_set(&s->nodes, bytes, nd);
 	if (s->list_count == s->list_room) {
@@ -2756,7 +2757,6 @@ sy_sync *sy_create(const sy_options *o) {
 	s->time = o->time;
 	s->now = o->now;
 	s->clock = o->clock;
-	s->zeros = o->zeros;
 	s->commit = o->commit;
 	s->drop = o->drop;
 	s->ephemeral = o->ephemeral;
@@ -2855,12 +2855,13 @@ tp_device *sy_device(sy_sync *s) {
 	return s->device;
 }
 
-void sy_mint(sy_sync *s, char out[9 + 64 + 1]) {
-	uint8_t bytes[32];
-	random_of(s, bytes, 32);
-	if (s->zeros) memset(bytes + 16, 0, 16);
-	memcpy(out, "ermine://", 9);
-	for (int i = 0; i < 32; i++) snprintf(out + 9 + 2 * i, 3, "%02x", bytes[i]);
+void sy_mint(sy_sync *s, char out[SY_ID]) {
+	uint8_t random[16], id[ID_SHORT];
+	random_of(s, random, 16);
+	id_fresh(random, id);
+	char text[ID_TEXT];
+	id_text(id, ID_SHORT, text);
+	memcpy(out, text, SY_ID);
 }
 
 bool sy_follow(sy_sync *s, const char *id) {

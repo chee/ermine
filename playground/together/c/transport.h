@@ -14,9 +14,10 @@
 //
 // sans-IO (subduction.h): the host gives messages in (tp_received), sends what tp_next gives, and
 // calls tp_run, which says when to run again. one thread at a time; time is the options' clock. a
-// document: an ermine:// id (64 hex digits); its tree and topic are its 32 bytes. the store
-// (store.h) holds only what the device admits; a new device takes in everything stored on its
-// first tp_run (lazy: per tree when followed, tp_options).
+// document: an ermine id, of any kind (ermine/ids: "ermine:" and hex); its tree and topic are its
+// tree id (32 bytes, ermine/ids' tree). the store (store.h) holds only what the device admits; a new
+// device takes in what is stored for the documents named on its first tp_run, the rest when each is
+// followed (tp_options).
 //
 // on a server (subduction/transport.h): ermTransportOpen(url), tp_service(url), tp_connect(t, name);
 // in the loop: ermTransportReceive -> tp_received, TP_SEND -> ermTransportSend, TP_CLOSE ->
@@ -108,15 +109,17 @@ typedef struct {
 	// borrowed: it must outlive the device
 	const rp_merges *merges;
 	tp_limits limits;
-	// what the store holds is taken in as each document is followed, not at the first tp_run: the
-	// first run takes in the trees of the documents followed before it, a later tp_follow reads its
+	// the first tp_run takes in what the store holds for each document whose id is named already; a
+	// tree whose id is not named yet is only listed (tp_unnamed), and a later tp_follow reads its
 	// document's tree from the store (fragments, then loose commits, as the first run would) before the
-	// document is fetched from any peer. So the histories hold the followed documents and no other; a
-	// stored document never followed enters no history
+	// document is fetched from any peer; a save or an arrival for a tree with no id named is refused.
+	// lazy: the first run takes in only the trees of the documents followed before it, so the histories
+	// hold the followed documents and no other; a stored document never followed enters no history
 	bool lazy;
 } tp_options;
 
-// a device; it takes in what the store holds on its first tp_run (lazy: only what is followed). NULL
+// a device; it takes in what the store holds for the documents named on its first tp_run (lazy: only
+// those followed), the rest as each is followed. NULL
 // when Subduction says no
 tp_device *tp_create(const tp_options *options);
 // lets go of everything, the store's contents aside (what is not stored yet is lost: run to tp_idle
@@ -165,8 +168,13 @@ void tp_out_free(tp_out *out);
 
 // --- documents
 
-// whether the text is a document id, and its bytes
-bool tp_doc(const char *doc, uint8_t bytes[32]);
+// whether the text is a document's id (for now an ermine id, of any kind: ermine/ids; which nodes
+// sync is sync's own question), and its tree id (32 bytes: what Subduction files it under, the
+// stack's sb_tree; a key for maps of documents)
+bool tp_doc(const char *doc, uint8_t tree[32]);
+// how many trees the store holds whose id is not named yet: listed, not taken in (a hash can't be turned
+// back into an id); each is taken in when its document is followed
+size_t tp_unnamed(const tp_device *t);
 // what comes for the document is taken in: synced with every peer (subscribed), now and on each
 // connection made after, its ephemeral messages subscribed; asked again while it is empty. false:
 // not a document id

@@ -27,8 +27,8 @@ const opts = { ignore: !built, sanitizeOps: false, sanitizeResources: false }
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const unhex = (h: string) => Uint8Array.from(h.match(/../g) ?? [], (x) => parseInt(x, 16))
-// the default document of the harnesses: 2a × 16, then 00 × 16
-const DOC = unhex("2a".repeat(16) + "00".repeat(16))
+// the default document of the harnesses: a fresh id, ermine:0010 then 2a × 16
+const DOC = "ermine:0010" + "2a".repeat(16)
 
 // typing on one node by one signer, a fork by another, as requests the harnesses make by label
 const requests = [

@@ -4,7 +4,8 @@ import { type Commit, compare, encode, joinName, name } from "@ermine/encoding/c
 import { pack, PackError, unpack, type Unpacked } from "./packer.ts"
 import { createSigner, seal, stored } from "./seal.ts"
 
-const DOC = new Uint8Array(32).fill(0x2a)
+// a fresh id: 00 10, then 16 bytes
+const DOC = "ermine:0010" + "2a".repeat(16)
 
 const signers = [
 	await createSigner(new Uint8Array(32).fill(1)),

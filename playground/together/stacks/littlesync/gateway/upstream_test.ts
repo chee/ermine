@@ -13,7 +13,7 @@ import { until } from "./pigs_harness.ts"
 import { createHost } from "./host_harness.ts"
 
 const opts = { sanitizeOps: false, sanitizeResources: false }
-const fresh = () => "ermine://" + hex(crypto.getRandomValues(new Uint8Array(16))) + "0".repeat(32)
+const fresh = () => "ermine:0010" + hex(crypto.getRandomValues(new Uint8Array(16)))
 
 Deno.test({
 	name:
@@ -60,7 +60,7 @@ Deno.test({
 				nonce: nonce++,
 				...c,
 			} as never)
-			const node = unhex(id.slice(9))
+			const node = id
 			link.send({ t: "commits", node, sealed: [await seal(bytes, signer as Signer, node)] })
 			return nameOf(bytes)
 		}

@@ -1,0 +1,150 @@
+{
+	"title": "a name a device holds, put again with other bytes: each is read at the door, and any that is not the commit named (the commit sealed for another id in an envelope for that id, another commit's seal, the commit with a signature not good) is passed over, not stored and not noted (the real one is here); a device joining later is sent the real commit, never a fake",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101"
+		},
+		{
+			"op": "device",
+			"name": "c",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303"
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"expect": {}
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"name": "c1",
+			"nonce": 1,
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"n": 1
+					}
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "make",
+			"name": "c2",
+			"nonce": 2,
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"n": 2
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "put",
+			"device": "a",
+			"commit": "c1",
+			"blob": "a3626964782b65726d696e653a30303130303030303030303030303030303030303030303030303030303030303030303066636f6d6d69745878a86474696d6500656163746f72f6656e6f6e636501657461626c656576616c7565667369676e65725822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c676c616d706f72740167706172656e747380677061746368657381a26470617468806576616c7565a1616e01697369676e617475726558483401ed01ed01135f8e0db7f27b0d6d5f25a0f211f076e5cede2973ebe45e9aa7e0c6f5afe252cb84b3885524fba6a8f4fb3c6c5506f119511602ae8f7cc4e7e4129869f5c603e900",
+			"head": "c1",
+			"id": "ermine:001000000000000000000000000000000000",
+			"expect": {}
+		},
+		{
+			"op": "put",
+			"device": "a",
+			"commit": "c1",
+			"blob": "a3626964782b65726d696e653a30303130303130313031303130313031303130313031303130313031303130313031303166636f6d6d69745878a86474696d6500656163746f72f6656e6f6e636501657461626c656576616c7565667369676e65725822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c676c616d706f72740167706172656e747380677061746368657381a26470617468806576616c7565a1616e01697369676e617475726558483401ed01ed01135f11ce1f5b562f3390c68c372089bcc3b3439600b84fce2c5da5feed420452851240522c5c27c8e2f63f6c897a95a69b12df5810f33eef9f53c61af9ee710b9305",
+			"head": "c1",
+			"id": "ermine:001001010101010101010101010101010101",
+			"expect": {}
+		},
+		{
+			"op": "put",
+			"device": "a",
+			"commit": "c2",
+			"head": "c1",
+			"expect": {}
+		},
+		{
+			"op": "put",
+			"device": "a",
+			"commit": "c1",
+			"blob": "a3626964782b65726d696e653a30303130326132613261326132613261326132613261326132613261326132613261326166636f6d6d69745878a86474696d6500656163746f72f6656e6f6e636501657461626c656576616c7565667369676e65725822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c676c616d706f72740167706172656e747380677061746368657381a26470617468806576616c7565a1616e01697369676e617475726558483401ed01ed01135f1470d9a7290cedda0247cf4ae45572c97bf1b94d150bdc84b06fdbaa246fb53ab4782a1eafb162f2b3fb7e7c1f8edb1262a8cca17afc7b9124b9a08c85242209",
+			"head": "c1",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "taking",
+			"device": "a",
+			"expect": {
+				"waiting": [],
+				"refused": []
+			}
+		},
+		{
+			"op": "heads",
+			"device": "a",
+			"expect": {
+				"heads": [
+					"c1"
+				]
+			}
+		},
+		{
+			"op": "follow",
+			"device": "c",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "c",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "heads",
+			"device": "c",
+			"expect": {
+				"heads": [
+					"c1"
+				]
+			}
+		},
+		{
+			"op": "stored",
+			"device": "c",
+			"expect": {
+				"stored": [
+					"c1"
+				]
+			}
+		},
+		{
+			"op": "taking",
+			"device": "c",
+			"expect": {
+				"waiting": [],
+				"refused": []
+			}
+		}
+	]
+}

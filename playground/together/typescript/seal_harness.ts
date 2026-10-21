@@ -6,14 +6,16 @@
 //                                                    multikey (0xed 0x01, then the 32 bytes)
 // { op: "seal", seed, commit, doc?, header? } → { sealed }   commit: its bytes (hex), or a commit in JSON
 //                                                    (encoded first); sealed by the seed's signer for
-//                                                    the document doc (32 bytes, hex; default
-//                                                    2a × 16 then 00 × 16, the default document's),
+//                                                    the document doc (its id, any string; default
+//                                                    ermine:0010 then 2a × 16, the default
+//                                                    document's),
 //                                                    under the varsig header (hex; default Ed25519's)
 // { op: "unseal", sealed, doc?, also? } → { commit, bytes, name, stored }   commit in JSON, bytes its
 //                                                    bytes, name its name, stored the seal's id; also:
 //                                                    more varsig headers (hex), each checked as Ed25519
 // { op: "unseal", value, doc?, also? } → the same, the value (its JSON form) encoded canonically first
-// { op: "stored", sealed }          → { stored }
+// { op: "stored", sealed }          → { stored }       a seal's stored id, from the id and commit in it
+// { op: "stored", name, doc? }      → { stored }       the stored id of a commit's name in the document
 // { op: "verify", key, message, signature } → { good }   the raw signature (64 bytes) the raw key's
 //                                                    (32 bytes) over the message, checked strictly
 // { op: "seal-message", seed, topic, bytes, header? } → { sealed }   a message's bytes (hex) on the
@@ -44,8 +46,8 @@ import {
 	unseal,
 } from "./seal.ts"
 
-// the document a seal is for: the request's, else the default's 32 bytes
-export const docOf = (r: Request) => unhex(r.doc ?? "2a".repeat(16) + "00".repeat(16))
+// the document a seal is for: the request's id, else the default's (a fresh id)
+export const docOf = (r: Request): string => r.doc ?? "ermine:0010" + "2a".repeat(16)
 
 // a commit's bytes: hex, or a commit in JSON encoded
 export const commitBytes = (x: unknown) => typeof x === "string" ? unhex(x) : encode(commitOf(x))
@@ -95,7 +97,13 @@ async function answer(r: Request): Promise<Answer> {
 				return { signer: hex(m.signer), bytes: hex(m.bytes) }
 			}
 			case "stored":
-				return { stored: hex(stored(unhex(r.sealed))) }
+				return {
+					stored: hex(
+						r.sealed !== undefined
+							? stored(unhex(r.sealed))
+							: stored(docOf(r), unhex(r.name)),
+					),
+				}
 			case "verify": {
 				const key = unhex(r.key), signature = unhex(r.signature)
 				const ok = key.length === 32 && signature.length === 64 &&

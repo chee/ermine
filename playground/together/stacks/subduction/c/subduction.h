@@ -2,8 +2,15 @@
 // has them. What it carries: stored commits, sealed, as loose commits and fragments, each fragment
 // with a snapshot of the tables at its head; ephemeral ones, never sealed, as its ephemeral messages.
 // It reads the store (store.h), a clock and the network; every commit it takes in goes to the mailroom, and
-// it sends what the mailroom queues. A fragment carries {run, snapshot?} (packer.h, snapshot.h); a stored
-// fragment lets go of the loose commits it covers. An empty followed document is asked again, 0.25 s
+// it sends what the mailroom queues. What it stores and sends of a node is an envelope (subduction.ts):
+// a map of the node's id and what it carries, {id, sealed} a loose commit's seal, {id, commit} an
+// ephemeral commit, {id, run, snapshot?} a fragment (packer.h, snapshot.h). What Subduction is about to
+// store is read at the door first (subduction.ts): an envelope for another id, a seal for another id
+// than its envelope's, a stored id not the one the id and the commit's name give, or a fragment not
+// closed (a member's parent left out, a boundary not its members' own), is passed over (not stored, no
+// error; noted MR_ID, MR_STORED_ID or MR_BOUNDARY when followed), a tree not named yet too, its id
+// read from the envelope; a followed document's commit that passes is checked whole. A stored fragment
+// lets go of the loose commits it covers. An empty followed document is asked again, 0.25 s
 // doubling to 16 s. Ephemeral messages on hashed topics (sb_send, sb_listen), in parts over 65 536
 // bytes. Every commit leaves closed by the lock (lock.h) and lands opened by it.
 //
@@ -92,6 +99,11 @@ void sb_out_free(sb_out *out);
 
 // --- documents
 
+// the tree id Subduction files a node under, from its id (length bytes of UTF-8): the first 16 bytes
+// of BLAKE3 of the pieces "ermine/v1/tree" and the id, each its length as an unsigned varint then its
+// bytes, then 16 zeros (galaxy's Keyhive rule). false: the id is not well-formed UTF-8
+bool sb_tree(const char *id, size_t length, uint8_t tree[32]);
+
 // what comes for the document is taken in: synced with every peer (subscribed), asked again while it
 // is empty. false: not a document id
 bool sb_follow(sb_stack *t, const char *doc);
@@ -101,6 +113,8 @@ size_t sb_stored(sb_stack *t, const char *doc, uint8_t (**out)[32]);
 // the fragments here, made or taken in: *out malloc'd (free it, not what it points to), good until the
 // next sb_run
 size_t sb_fragments(sb_stack *t, const char *doc, const fragment ***out);
+// how many trees the store holds whose id is not named yet: listed, not taken in
+size_t sb_unnamed(const sb_stack *t);
 // the document's fragments refused whole, by head (codes), and its loose commits waiting on the lock
 // (by head), for mr_taking_of
 const im_map *sb_broken(const sb_stack *t, mr_doc *d);

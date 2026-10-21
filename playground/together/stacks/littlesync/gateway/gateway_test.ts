@@ -21,8 +21,7 @@ import { row, spawnPigs, until } from "./pigs_harness.ts"
 import { createHost } from "./host_harness.ts"
 
 const opts = { sanitizeOps: false, sanitizeResources: false }
-const zeros = (b: Uint8Array) => "ermine://" + hex(b) + "0".repeat(32)
-const fresh = () => zeros(crypto.getRandomValues(new Uint8Array(16)))
+const fresh = () => "ermine:0010" + hex(crypto.getRandomValues(new Uint8Array(16)))
 // the says among what a device got
 const says = (got: Message[]) =>
 	got.filter((x): x is Extract<Message, { t: "say" }> => x.t === "say")
@@ -89,7 +88,7 @@ async function fake(gateway: Gateway) {
 				nonce: nonce++,
 				...c,
 			} as never)
-			const node = unhex(id.slice(9))
+			const node = id
 			link.send({ t: "commits", node, sealed: [await seal(bytes, signer as Signer, node)] })
 			return nameOf(bytes)
 		},
@@ -106,19 +105,32 @@ Deno.test({
 	async fn() {
 		const w = await world()
 		const room = fresh()
-		await w.host.sync.follow(room)
-		// the room has a value, as lab-pig's has (a key set on nothing is refused by sync.ts)
-		w.host.store(room, {})
-		await w.host.sync.idle()
 		const dir = await Deno.makeTempDir({ prefix: "littlesync-gateway-" })
 		// the C peer adds a pig at 0.7 s, picks it up at about 5 s and carries it right
 		let pigs = await cPeer(w.gateway, { dir, room, keys: "a......... lll" })
+		// the gateway names the room as the C peer does (it follows what a device names), before the
+		// TS device writes there: what a peer sends for a tree whose id is not named yet is refused
+		await until(
+			() => w.gateway.followed().includes(room),
+			3000,
+			"the room followed at the gateway",
+		)
+		await w.host.sync.follow(room)
+		// the room has a value and children, as lab-pig's has (a key set on nothing is refused by
+		// sync.ts)
+		w.host.store(room, {})
+		w.host.place(room, {})
+		await w.host.sync.idle()
 		try {
-			// the room's key, then the pig's value, on the sync.ts device
+			// the room's children name the pig (pig-<its hex>: its id), then the pig's value, on the
+			// sync.ts device
 			const pig = await until(
-				() => Object.keys(w.host.read(room) ?? {}).find((k) => k.startsWith("ermine://")),
+				() =>
+					Object.values(w.host.children(room) ?? {}).find((v): v is string =>
+						typeof v === "string" && v.startsWith("ermine:")
+					),
 				10000,
-				"the room's new key on the TS device",
+				"the room's new pig on the TS device",
 			)
 			await w.host.sync.follow(pig)
 			const stored = await until(
@@ -172,6 +184,28 @@ Deno.test({
 			assert(w.gateway.stats.ephemeral.out > 0)
 		} finally {
 			await pigs.stop()
+			await w.close()
+		}
+	},
+})
+
+Deno.test({
+	name:
+		"gateway: a key id (ed01 and an Ed25519 key) is a node as any ermine id: a commit there reaches a sync.ts device",
+	...opts,
+	async fn() {
+		const w = await world()
+		const id = "ermine:ed01" + hex(crypto.getRandomValues(new Uint8Array(32)))
+		await w.host.sync.follow(id)
+		const f = await fake(w.gateway)
+		try {
+			await until(() => f.link.up, 3000, "the fake device up")
+			await f.commit(id, { parents: [], lamport: 1, patches: [{ path: [], value: { a: 1 } }] })
+			await until(() => w.host.read(id)?.a === 1, 5000, "the key id's value on the TS device")
+			assert(w.gateway.followed().includes(id))
+			assert(!w.lines.some((l) => l.includes("not a node's id")))
+		} finally {
+			f.close()
 			await w.close()
 		}
 	},
@@ -298,7 +332,7 @@ Deno.test({
 		const pigs = await cPeer(w.gateway, { room, name: "otter", keys: "lll" })
 		// a fake device naming the room: rows come down to it too
 		const f = await fake(w.gateway)
-		const node = unhex(room.slice(9))
+		const node = room
 		f.link.send({ t: "heads", node, heads: [] })
 		f.link.send({ t: "listen", topics: [room] })
 		let beat: ReturnType<typeof setInterval> | undefined

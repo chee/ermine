@@ -14,7 +14,8 @@
 // stop. a name under "./" must not be a process's name (a running process shadows it).
 // reload: code written again, each process stopped ("replaced") and started on the new code.
 // globalThis.ermine (the inspector): table, places, s, host, header, writes, parts, statusIds,
-// pending, moments (last 4000), call, defined, binds, apis, programs, processes, sites
+// pending, moments (last 4000), call, defined, binds, apis, programs, processes, sites, api (the
+// host's process api)
 //
 // the world's tools, on every process's api and the host's: what hosts each wrote by hand, the api
 // having no word for it:
@@ -480,6 +481,8 @@ export function createWorld(o: Options) {
 		// siteOf(scope) and sitesOf(scope): a memo's or effect's computer (parts' keys), a process's
 		// scope (processes' values)
 		sites,
+		// the host's own process api: what devtools reads and writes through (protect asked)
+		api: hostAPI,
 	}
 	;(globalThis as Record<string, unknown>).ermine = world
 

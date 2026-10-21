@@ -55,13 +55,15 @@ typedef struct {
 	sb_stack *t;
 	// by head (fragment *)
 	im_map fragments;
-	// fragments refused whole, by head (codes), and the text a lock refused them with (malloc'd)
-	im_map broken, broken_why;
-	mr_order_t broken_order, broken_why_order;
+	// fragments refused whole, by head (mr_refusal: the code, and the text a lock refused with)
+	im_map broken;
+	mr_order_t broken_order;
 	// how many taken-in seals have a depth, so a build with none is passed over
 	size_t deep;
-	// what waits on the lock, by head: loose commits, and fragments (locked_t)
+	// what waits on the lock, by head: loose commits, and fragments (locked_t); each at most the
+	// pending limit, the oldest let go of past it (stored still: it comes in again as the device starts)
 	im_map locked, locked_fragments;
+	mr_order_t locked_order, locked_fragments_order;
 	bool followed, follow_later;
 	// lazy: its tree taken in from the store (or queued to be)
 	bool loaded;
@@ -69,16 +71,20 @@ typedef struct {
 	bool asking;
 	size_t ask;
 	uint64_t due;
+	// its tree id (sb_tree), made from its id
+	uint8_t tree[32];
 } sb_doc;
 
 #define SBD(d) ((sb_doc *)(d)->stack)
+#define TREE(d) (SBD(d)->tree)
 
 // what the lock could not open yet, as it arrived: held to be opened again (sb_changed). list: a
 // loose commit's parents, a fragment's boundary (32 bytes each); checks: a fragment's checkpoints, 12
-// bytes each
+// bytes each; queued: sb_changed has queued it to be opened again (once, however often it is told)
 typedef struct {
 	uint8_t *list, *checks, *blob;
 	size_t count, checks_count, length;
+	bool queued;
 } locked_t;
 
 static void locked_free(void *x) {
@@ -117,6 +123,8 @@ struct job {
 	int record;
 	uint8_t tree[32];
 	bool given;
+	// J_TAKE: what sb_changed queued, taken only while it is held still, as queued
+	bool again;
 	uint8_t *checks;
 	size_t checks_count;
 	uint8_t head[32];
@@ -250,10 +258,19 @@ struct sb_stack {
 	join_t *joins_list;
 
 	size_t fetching, putting;
+	// this device's own loose commit being added (one at a time): its stored id and closed bytes, which
+	// pass the door unopened (an own commit is never opened); NULL: none
+	uint8_t own_stored[32];
+	uint8_t *own;
+	size_t own_length;
 	bool loaded;
-	// lazy, and the trees the store held at the start, each taken in when its document is followed
+	// lazy; and the trees the store held at the start, each taken in then if its id was named (and not
+	// lazy), else when its document is followed
 	bool lazy;
 	im_map trees;
+	// the documents by their tree ids (mr_doc *): which id made this tree id. None for a tree until its
+	// document is named (a hash can't be turned back into an id): what comes for it is unnamed
+	im_map docs;
 	// sb_stored's call, and its answer
 	uint64_t want;
 	bool answered;
@@ -268,12 +285,46 @@ static void made(void *context, mr_doc *d) {
 	s->d = d;
 	s->t = context;
 	d->stack = s;
+	sb_tree(d->id, d->length, s->tree);
+	im_set(&s->t->docs, s->tree, d);
 }
 
-// a seal taken in at the document: a depth makes it worth building
+// the document filed under a tree id, or NULL
+static mr_doc *document(const sb_stack *t, const uint8_t tree[32]) {
+	return im_get(&t->docs, tree);
+}
+
+bool sb_tree(const char *id, size_t length, uint8_t tree[32]) {
+	if (!sl_id((const uint8_t *)id, length)) return false;
+	static const char DOMAIN[] = "ermine/v1/tree";
+	uint8_t *all = malloc(2 * 10 + sizeof DOMAIN + length);
+	if (all == NULL) abort();
+	size_t at = 0;
+	const struct {
+		const void *bytes;
+		size_t length;
+	} pieces[2] = {{DOMAIN, sizeof DOMAIN - 1}, {id, length}};
+	for (int k = 0; k < 2; k++) {
+		size_t v = pieces[k].length;
+		do all[at++] = (uint8_t)((v & 0x7f) | (v >= 0x80 ? 0x80 : 0)), v >>= 7;
+		while (v > 0);
+		memcpy(all + at, pieces[k].bytes, pieces[k].length);
+		at += pieces[k].length;
+	}
+	uint8_t digest[32];
+	cm_digest(all, at, digest);
+	free(all);
+	memcpy(tree, digest, 16);
+	memset(tree + 16, 0, 16);
+	return true;
+}
+
+// a seal taken in at the document: a depth makes it worth building. a loose commit of it waiting on
+// the lock waits no more (it got in another way: a fragment's member)
 static void handed(void *context, mr_doc *d, const uint8_t stored[32]) {
 	(void)context;
 	if (depth(stored) > 0) SBD(d)->deep++;
+	locked_free(im_del(&SBD(d)->locked, stored));
 }
 
 static uint64_t now_of(const sb_stack *t) {
@@ -339,18 +390,75 @@ static job *build_job(mr_doc *d, const uint8_t (*heads)[32], size_t count) {
 	return j;
 }
 
+// ---- envelopes (subduction.ts's): what is stored and sent of a node, before the lock closes it
+
+// why an envelope for another id is refused, beside MR_ID
+#define OTHER "the envelope is for another id"
+// an envelope for another id, as contents and vetted give it: noted MR_ID with OTHER (MR_ID itself
+// there: a member sealed for another id, noted with SL_ELSEWHERE)
+#define ENVELOPE ((mr_code)(MR_ID + 1))
+// a fragment that fails the door's closure (names): passed over, noted MR_BOUNDARY
+#define CLOSURE ((mr_code)(MR_ID + 2))
+
+// an envelope's bytes: the id and what it carries (carries, taken), canonical CBOR, malloc'd
+static uint8_t *wrap(const mr_doc *d, Json *carries, size_t *length) {
+	jsonAdd(carries, "id", jsonStringOfLength(d->id, d->length));
+	size_t n = 0;
+	cborEncode(carries, NULL, 0, &n, NULL);
+	uint8_t *bytes = malloc(n + 1);
+	if (bytes == NULL) abort();
+	cborEncode(carries, bytes, n, &n, NULL);
+	jsonFree(carries);
+	*length = n;
+	return bytes;
+}
+
+// an envelope opened: its map (jsonFree it) when it is a map with a text id, else NULL (shape); *other:
+// its id is not the document's. The caller checks its form (shape) before its id (MR_ID), as
+// subduction.ts's opens does
+static Json *unwrap(const mr_doc *d, const uint8_t *open, size_t length, bool *other) {
+	*other = false;
+	Json *x = cborDecode(open, length, NULL, NULL);
+	const Json *id = x != NULL && x->type == JSON_OBJECT ? jsonGet(x, "id") : NULL;
+	if (id == NULL || id->type != JSON_STRING) return jsonFree(x), NULL;
+	*other = id->stringLength != d->length || memcmp(id->string, d->id, d->length) != 0;
+	return x;
+}
+
 // ---- taking in
 
 static mr_code code_of(sl_code code) {
-	return code == SL_SIGNATURE ? MR_SIGNATURE : MR_SHAPE;
+	return code == SL_SIGNATURE ? MR_SIGNATURE : code == SL_ID ? MR_ID : MR_SHAPE;
 }
 
-// the lock's open of what landed: GOOD, its bytes in *open (lk_opened_free it); WAIT, it cannot yet; REFUSED
-typedef enum { OPEN_GOOD, OPEN_WAIT, OPEN_REFUSED } open_t;
+// the lock's open of what landed: GOOD, its bytes in *open (lk_opened_free it); WAIT, it cannot yet;
+// REFUSED. PASSED (opening's): it fails the door, not the commit named
+typedef enum { OPEN_GOOD, OPEN_WAIT, OPEN_REFUSED, OPEN_PASSED } open_t;
+
+// what the door makes of a save (subduction.ts's Door): stored; passed over (not stored, no error);
+// refused (the save fails)
+typedef enum { DOOR_STORE, DOOR_PASS, DOOR_REFUSE } door_t;
+
+// a seal's commit's name, the stored id the id in it gives it (own), and the one the id given gives it
+// (mine, when id is not NULL); false: not a seal's shape, or an id that is not one
+static bool peek_seal(const uint8_t *sealed, size_t length, const uint8_t *id, size_t id_length,
+	uint8_t name[CM_NAME], uint8_t own[32], uint8_t mine[32]) {
+	Json *x = cborDecode(sealed, length, NULL, NULL);
+	const Json *i = x != NULL && x->type == JSON_OBJECT ? jsonGet(x, "id") : NULL;
+	const Json *c = x != NULL && x->type == JSON_OBJECT ? jsonGet(x, "commit") : NULL;
+	bool ok = i != NULL && i->type == JSON_STRING && c != NULL && c->type == JSON_BYTES;
+	if (ok) {
+		cm_name(c->bytes.data, c->bytes.length, name);
+		ok = sl_stored_id((const uint8_t *)i->string, i->stringLength, name, own) &&
+			(id == NULL || sl_stored_id(id, id_length, name, mine));
+	}
+	jsonFree(x);
+	return ok;
+}
 
 static open_t unlock(mr_doc *d, const uint8_t *blob, size_t length, lk_opened *open, const char **why) {
 	const lk_lock *lock = SBD(d)->t->lock;
-	*open = lock->open(lock->context, d->bytes, blob, length);
+	*open = lock->open(lock->context, (const uint8_t *)d->id, d->length, blob, length);
 	if (open->kind == LK_OPEN) return OPEN_GOOD;
 	lk_kind kind = open->kind;
 	*why = open->refused;
@@ -358,43 +466,56 @@ static open_t unlock(mr_doc *d, const uint8_t *blob, size_t length, lk_opened *o
 	return kind == LK_WAIT ? OPEN_WAIT : OPEN_REFUSED;
 }
 
-// a loose commit's first steps, the lock, the seal, its stored id: what the lock opened in *open, its
-// commit in *it (GOOD, then both are the caller's); WAIT: the lock cannot open it yet; REFUSED: noted
-static open_t opening(mr_doc *d, const uint8_t head[32], const uint8_t *blob, size_t length, lk_opened *open,
-	sl_unsealed *it) {
-	const lk_lock *lock = SBD(d)->t->lock;
-	*open = lock->open(lock->context, d->bytes, blob, length);
-	if (open->kind != LK_OPEN) {
-		lk_kind kind = open->kind;
-		const char *why = open->refused;
-		lk_opened_free(open);
-		if (kind == LK_WAIT) return OPEN_WAIT;
-		mr_refuse(d, head, MR_LOCK, NULL, why);
-		mr_settle(d);
-		return OPEN_REFUSED;
+// a loose commit's not taken, noted at its head when note says so
+static open_t no(mr_doc *d, const uint8_t head[32], bool note, open_t to, mr_code code, const uint8_t *name,
+	const char *why) {
+	if (note) mr_refuse(d, head, code, name, why), mr_settle(d);
+	return to;
+}
+
+// a loose commit's steps, the lock, the door (the envelope's id, the seal's, its stored id), then the
+// seal: the seal in *sealed (malloc'd), its commit in *it (GOOD, then both are the caller's); WAIT: the
+// lock cannot open it yet; PASSED: it fails the door; REFUSED: not good. Noted (note): either, at the head
+static open_t opening(mr_doc *d, const uint8_t head[32], const uint8_t *blob, size_t length, bool note,
+	uint8_t **sealed, size_t *sealed_length, sl_unsealed *it) {
+	const char *why = NULL;
+	lk_opened open;
+	open_t got = unlock(d, blob, length, &open, &why);
+	if (got == OPEN_WAIT) return OPEN_WAIT;
+	if (got == OPEN_REFUSED) return no(d, head, note, OPEN_REFUSED, MR_LOCK, NULL, why);
+	bool other;
+	Json *x = unwrap(d, open.bytes, open.length, &other);
+	lk_opened_free(&open);
+	const Json *s = x != NULL ? jsonGet(x, "sealed") : NULL;
+	if (x == NULL || x->object.count != 2 || s == NULL || s->type != JSON_BYTES) {
+		jsonFree(x);
+		return no(d, head, note, OPEN_REFUSED, MR_SHAPE, NULL, NULL);
 	}
-	sl_code code = sl_unseal(open->bytes, open->length, d->bytes, it, NULL);
+	if (other) return jsonFree(x), no(d, head, note, OPEN_PASSED, MR_ID, NULL, OTHER);
+	uint8_t name[CM_NAME], own[32], mine[32];
+	if (peek_seal(s->bytes.data, s->bytes.length, (const uint8_t *)d->id, d->length, name, own, mine)) {
+		if (memcmp(own, mine, 32) != 0) return jsonFree(x), no(d, head, note, OPEN_PASSED, MR_ID, NULL, SL_ELSEWHERE);
+		if (memcmp(mine, head, 32) != 0) return jsonFree(x), no(d, head, note, OPEN_PASSED, MR_STORED_ID, name, NULL);
+	}
+	sl_code code = sl_unseal(s->bytes.data, s->bytes.length, (const uint8_t *)d->id, d->length, it, NULL);
 	if (code != SL_OK) {
-		lk_opened_free(open);
-		mr_refuse(d, head, code_of(code), NULL, NULL);
+		jsonFree(x);
+		if (note) mr_refuse(d, head, code_of(code), NULL, code == SL_ID ? it->reason : NULL);
 		return OPEN_REFUSED;
 	}
-	if (memcmp(it->stored, head, 32) != 0) {
-		uint8_t name[CM_NAME];
-		memcpy(name, it->name, CM_NAME);
-		sl_free(it);
-		lk_opened_free(open);
-		mr_refuse(d, head, MR_STORED_ID, name, NULL);
-		mr_settle(d);
-		return OPEN_REFUSED;
-	}
+	*sealed = mr_copy(s->bytes.data, s->bytes.length);
+	*sealed_length = s->bytes.length;
+	jsonFree(x);
 	return OPEN_GOOD;
 }
 
-// what waits on the lock held, to be opened again (sb_changed): the commit as it arrived
-static void hold(im_map *map, const uint8_t head[32], const uint8_t *list, size_t count, const uint8_t *checks,
-	size_t checks_count, const uint8_t *blob, size_t length) {
-	locked_free(im_del(map, head));
+// what waits on the lock held, to be opened again (sb_changed): the commit as it arrived; past the
+// pending limit, the oldest let go of
+static void hold(mr_doc *d, im_map *map, mr_order_t *order, const uint8_t head[32], const uint8_t *list, size_t count,
+	const uint8_t *checks, size_t checks_count, const uint8_t *blob, size_t length) {
+	uint8_t k[32];
+	memcpy(k, head, 32);
+	locked_free(im_del(map, k));
 	locked_t *l = calloc(1, sizeof *l);
 	if (l == NULL) abort();
 	l->list = mr_copy(list, count * 32);
@@ -403,7 +524,7 @@ static void hold(im_map *map, const uint8_t head[32], const uint8_t *list, size_
 	l->checks_count = checks_count;
 	l->blob = mr_copy(blob, length);
 	l->length = length;
-	im_set(map, head, l);
+	mr_note(map, order, k, l, mr_limits_of(d->mailroom)->pending, locked_free);
 }
 
 // the steps of a loose commit, in order: the lock, the seal, its stored id, then pending
@@ -412,23 +533,23 @@ static void take_commit(mr_doc *d, const uint8_t head[32], const uint8_t (*paren
 	if (im_has(&d->seen, head)) return;
 	locked_free(im_del(&SBD(d)->locked, head));
 	sl_unsealed u;
-	lk_opened open;
-	open_t got = opening(d, head, blob, length, &open, &u);
-	if (got == OPEN_REFUSED) return;
+	uint8_t *sealed;
+	size_t sealed_length;
+	open_t got = opening(d, head, blob, length, true, &sealed, &sealed_length, &u);
+	if (got == OPEN_REFUSED || got == OPEN_PASSED) return;
 	if (got == OPEN_WAIT) {
-		im_del(&d->refused, head);
-		hold(&SBD(d)->locked, head, (const uint8_t *)parents, count, NULL, 0, blob, length);
+		mr_refusal_del(&d->refused, head);
+		hold(d, &SBD(d)->locked, &SBD(d)->locked_order, head, (const uint8_t *)parents, count, NULL, 0, blob, length);
 		return;
 	}
-	im_del(&d->refused, head);
+	mr_refusal_del(&d->refused, head);
 	mr_pending_t *p = calloc(1, sizeof *p);
 	if (p == NULL) abort();
 	memcpy(p->key, head, 32);
 	p->commit = true;
 	mr_sealed_of(&p->it, &u);
-	p->sealed = mr_copy(open.bytes, open.length);
-	p->sealed_length = open.length;
-	lk_opened_free(&open);
+	p->sealed = sealed;
+	p->sealed_length = sealed_length;
 	p->given = mr_copy(parents, count * 32);
 	p->given_length = count;
 	qsort(p->given, count, 32, by_id);
@@ -436,19 +557,29 @@ static void take_commit(mr_doc *d, const uint8_t head[32], const uint8_t (*paren
 	mr_settle(d);
 }
 
-// what Subduction may store of a loose commit (its admission): one that opens to a seal under its
-// stored id, or waits on the lock. What is refused is noted, as taking it in notes it
-static bool allows(mr_doc *d, const uint8_t head[32], const uint8_t *blob, size_t length) {
-	if (im_has(&d->seen, head)) return true;
+// what Subduction may store of a loose commit in a followed document (its admission, subduction.ts's
+// allows): STORE, one that passes the door and opens to a good seal, or waits on the lock; PASS, one
+// that fails the door (stored, it would stand under the name of a commit it isn't), or any not good
+// under a name held already (that one is here); REFUSE: the commit named, not good. What is passed
+// over or refused is noted, as taking it in notes it (a name held: not noted). A refusal fails the
+// save, which drops the peer's connection
+static door_t allows(mr_doc *d, const uint8_t head[32], const uint8_t *blob, size_t length) {
+	const sb_stack *t = SBD(d)->t;
+	if (t->own != NULL && memcmp(t->own_stored, head, 32) == 0 && t->own_length == length &&
+		memcmp(t->own, blob, length) == 0)
+		return DOOR_STORE;
+	bool here = im_has(&d->seen, head);
 	sl_unsealed u;
-	lk_opened open;
-	open_t got = opening(d, head, blob, length, &open, &u);
-	if (got == OPEN_GOOD) sl_free(&u), lk_opened_free(&open);
-	return got != OPEN_REFUSED;
+	uint8_t *sealed;
+	size_t sealed_length;
+	open_t got = opening(d, head, blob, length, !here, &sealed, &sealed_length, &u);
+	if (got == OPEN_GOOD) sl_free(&u), free(sealed);
+	if (got == OPEN_GOOD || got == OPEN_WAIT) return DOOR_STORE;
+	return here || got == OPEN_PASSED ? DOOR_PASS : DOOR_REFUSE;
 }
 
-// a fragment's blob opened: {run: its members as a pack (packer.h), snapshot?: packed tables}, or
-// {members: [sealed...], snapshot?} as it was first written. Each member unsealed as it is read, in
+// a fragment's envelope opened: {id, run: its members as a pack (packer.h), snapshot?: packed
+// tables}, or {id, members: [sealed...], snapshot?} as it was first written. Each member unsealed as it is read, in
 // order: the first that is not good ends it, and the fragment is refused whole with its code (a pack
 // that is not one, or comes to too much: shape). The snapshot dropped when it does not read back
 typedef struct {
@@ -474,7 +605,7 @@ static void contents_free(contents_t *c) {
 // by one not read yet
 typedef struct {
 	contents_t *c;
-	const uint8_t *doc;
+	const mr_doc *d;
 	mr_member_t *vouched;
 	size_t vouched_count, vouched_room;
 } reading_t;
@@ -509,7 +640,7 @@ static bool read_member(void *context, const pkr_member *r) {
 		return true;
 	}
 	sl_unsealed u;
-	sl_code code = sl_unseal(r->sealed, r->sealed_length, g->doc, &u, NULL);
+	sl_code code = sl_unseal(r->sealed, r->sealed_length, (const uint8_t *)g->d->id, g->d->length, &u, NULL);
 	if (code != SL_OK) {
 		c->code = code_of(code);
 		return false;
@@ -529,16 +660,127 @@ static bool read_seal(reading_t *g, const uint8_t *sealed, size_t length) {
 	return read_member(g, &r);
 }
 
-// 0, or the code the fragment is refused with (out is left empty)
-static mr_code contents(const uint8_t doc[32], const uint8_t *open, size_t length, contents_t *out) {
+// the door's reading of a fragment's members, no signature checked (subduction.ts's names): each
+// one's stored id the one the id gives its commit's name (a seal for another id: MR_ID; one a pack
+// claims for a commit it vouches for: MR_STORED_ID), and the head, when given, one of them. closing (a
+// head given): each one's stored id and its parents' names kept, for the closure
+typedef struct {
+	const uint8_t *id;
+	size_t length;
+	const uint8_t *head;
+	bool has, closing, undecoded;
+	mr_code code;
+	im_map ids;
+	uint8_t (*parents)[CM_NAME];
+	size_t count, room;
+} naming_t;
+
+static bool name_member(void *context, const pkr_member *r) {
+	naming_t *n = context;
+	uint8_t mine[32];
+	if (!sl_stored_id(n->id, n->length, r->name, mine)) return n->code = MR_SHAPE, false;
+	if (memcmp(mine, r->stored, 32) != 0) return n->code = r->sealed != NULL ? MR_ID : MR_STORED_ID, false;
+	if (n->head != NULL && memcmp(r->stored, n->head, 32) == 0) n->has = true;
+	if (!n->closing) return true;
+	im_set(&n->ids, r->stored, SET);
+	cm_commit commit;
+	if (r->commit == NULL || cm_decode(r->commit, r->commit_length, &commit, NULL) != CM_OK) {
+		n->undecoded = true;
+		return true;
+	}
+	for (size_t i = 0; i < commit.parents_length; i++) {
+		ROOM(n->parents, n->count, n->room);
+		memcpy(n->parents[n->count++], commit.parents[i], CM_NAME);
+	}
+	cm_free(&commit);
+	return true;
+}
+
+// the door's check of a fragment's closure (subduction.ts's closure): each member's parent a member, or
+// one of the head's depth or more and in the boundary (the walk stops there); one of less depth not a
+// member was taken out as a member of a fragment below (Subduction's build does so), so only with a
+// boundary. None such: the boundary is those parents, no more. A commit that does not decode is the
+// seals' check's. 0, or CLOSURE
+static mr_code closure(const naming_t *n, const uint8_t (*boundary)[32], size_t count) {
+	if (n->undecoded) return 0;
+	size_t top = depth(n->head);
+	im_map given = {0}, reached = {0};
+	for (size_t i = 0; i < count; i++) im_set(&given, boundary[i], SET);
+	bool below = false, ok = true;
+	for (size_t i = 0; i < n->count && ok; i++) {
+		uint8_t s[32];
+		if (!sl_stored_id(n->id, n->length, n->parents[i], s) || im_has(&n->ids, s)) continue;
+		if (depth(s) < top) below = true;
+		else if (im_has(&given, s)) im_set(&reached, s, SET);
+		else ok = false;
+	}
+	if (ok) ok = below ? given.count > 0 : reached.count == given.count;
+	im_free(&given), im_free(&reached);
+	return ok ? 0 : CLOSURE;
+}
+
+// a seal's commit, as bytes in *x (jsonFree it), or NULL
+static const Json *seal_commit(const uint8_t *sealed, size_t length, Json **x) {
+	*x = cborDecode(sealed, length, NULL, NULL);
+	const Json *c = *x != NULL && (*x)->type == JSON_OBJECT ? jsonGet(*x, "commit") : NULL;
+	return c != NULL && c->type == JSON_BYTES ? c : NULL;
+}
+
+// names' reading of the members, into n
+static mr_code named(naming_t *n, const Json *packed, const Json *members) {
+	if (packed != NULL) {
+		if (packed->type != JSON_BYTES) return MR_SHAPE;
+		pkr_code c = pkr_each(packed->bytes.data, packed->bytes.length, name_member, n, NULL);
+		if (c == PKR_STOPPED) return n->code;
+		if (c != PKR_OK) return MR_SHAPE;
+	} else {
+		if (members->type != JSON_ARRAY) return MR_SHAPE;
+		for (int i = 0; i < members->array.count; i++) {
+			const Json *m = members->array.items[i];
+			pkr_member r = {0};
+			uint8_t mine[32];
+			if (m->type != JSON_BYTES || !peek_seal(m->bytes.data, m->bytes.length, NULL, 0, r.name, r.stored, mine))
+				return MR_SHAPE;
+			r.sealed = m->bytes.data, r.sealed_length = m->bytes.length;
+			Json *x = NULL;
+			const Json *c = n->closing ? seal_commit(r.sealed, r.sealed_length, &x) : NULL;
+			if (c != NULL) r.commit = c->bytes.data, r.commit_length = c->bytes.length;
+			bool on = name_member(n, &r);
+			jsonFree(x);
+			if (!on) return n->code;
+		}
+	}
+	return n->head != NULL && !n->has ? MR_STORED_ID : 0;
+}
+
+// 0, or the code, of a pack (packed) or a list of seals (members); a pack that is not one, or a
+// member that is no seal: MR_SHAPE. With the head, the closure too, against the boundary
+static mr_code names(const uint8_t *id, size_t length, const Json *packed, const Json *members, const uint8_t *head,
+	const uint8_t (*boundary)[32], size_t count) {
+	naming_t n = {.id = id, .length = length, .head = head, .closing = head != NULL};
+	mr_code code = named(&n, packed, members);
+	if (code == 0 && n.closing) code = closure(&n, boundary, count);
+	im_free(&n.ids);
+	free(n.parents);
+	return code;
+}
+
+// 0, or the code the fragment is refused with (out is left empty): ENVELOPE, an envelope for another id.
+// First the door's checks (names; head, when given, one of them; with the boundary, the closure), then
+// each member unsealed
+static mr_code contents(const mr_doc *d, const uint8_t *open, size_t length, const uint8_t *head,
+	const uint8_t (*boundary)[32], size_t count, contents_t *out) {
 	*out = (contents_t){0};
-	reading_t g = {out, doc, NULL, 0, 0};
-	Json *x = cborDecode(open, length, NULL, NULL);
-	if (x == NULL || x->type != JSON_OBJECT || x->object.count < 1 || x->object.count > 2) return jsonFree(x), MR_SHAPE;
-	// "run": the blob's key, kept as stored
+	reading_t g = {out, d, NULL, 0, 0};
+	bool other;
+	Json *x = unwrap(d, open, length, &other);
+	if (x == NULL || x->object.count < 2 || x->object.count > 3) return jsonFree(x), MR_SHAPE;
+	// "run": the blob's key, as stored
 	const Json *packed = jsonGet(x, "run"), *members = jsonGet(x, "members"), *snapshot = jsonGet(x, "snapshot");
-	if ((packed == NULL) == (members == NULL) || (size_t)x->object.count != 1 + (snapshot != NULL)) return jsonFree(x), MR_SHAPE;
-	mr_code code = 0;
+	if ((packed == NULL) == (members == NULL) || (size_t)x->object.count != 2 + (snapshot != NULL)) return jsonFree(x), MR_SHAPE;
+	if (other) return jsonFree(x), ENVELOPE;
+	mr_code code = names((const uint8_t *)d->id, d->length, packed, members, head, boundary, count);
+	if (code != 0) return jsonFree(x), code;
 	if (packed != NULL) {
 		if (packed->type != JSON_BYTES) code = MR_SHAPE;
 		else {
@@ -612,66 +854,54 @@ static bool same_ids(const uint8_t (*a)[32], size_t an, const uint8_t (*b)[32], 
 }
 
 // a fragment's contents (into got), checked against what Subduction says of it, as subduction.ts's
-// checked: its head one of its members; its head of depth 1 or more, every other member of less depth,
-// and reached from the head along parents among the members; its boundary of the head's depth or more
-// and none of its members; its checkpoints (their first 12 bytes; NULL: none said) each member but the
-// head with a depth; a member's stored id seen here under its own name. A head here whose walk can be
-// made here: its members and boundary that walk's.
+// checked: its head one of its members, and its members and boundary closed (the door's, in contents);
+// its head of depth 1 or more, every other member of less depth, and reached from the head along parents
+// among the members; its boundary of the head's depth or more and none of its members; its checkpoints
+// (their first 12 bytes; NULL: none said) each member but the head with a depth. A head here whose walk
+// can be made here: its members and boundary that walk's.
 // 0, or the code it is refused with (got left empty)
 static mr_code vetted(mr_doc *d, const uint8_t head[32], const uint8_t (*boundary)[32], size_t count,
 	const uint8_t *checkpoints, size_t checks, const uint8_t *open, size_t length, contents_t *got) {
-	mr_code code = contents(d->bytes, open, length, got);
+	mr_code code = contents(d, open, length, head, boundary, count, got);
 	if (code != 0) return code;
 	size_t top = depth(head);
-	bool has = false;
 	im_map ids = {0}, reached = {0};
-	for (size_t i = 0; i < got->count; i++) {
-		has = has || memcmp(got->members[i].it.stored, head, 32) == 0;
-		im_set(&ids, got->members[i].it.stored, SET);
+	for (size_t i = 0; i < got->count; i++) im_set(&ids, got->members[i].it.stored, SET);
+	reach(head, got, &reached);
+	if (top == 0 || reached.count != ids.count) code = MR_BOUNDARY;
+	for (size_t i = 0; i < got->count && code == 0; i++) {
+		const uint8_t *id = got->members[i].it.stored;
+		if (memcmp(id, head, 32) != 0 && depth(id) >= top) code = MR_BOUNDARY;
 	}
-	// a stored id here already is under the name it has here (a vouched one's is only said)
-	for (size_t i = 0; i < got->count && has; i++) {
-		const mr_seen_t *was = im_get(&d->seen, got->members[i].it.stored);
-		if (was != NULL && memcmp(was->name, got->members[i].it.name, CM_NAME) != 0) has = false;
-	}
-	if (!has) code = MR_STORED_ID;
-	else {
-		reach(head, got, &reached);
-		if (top == 0 || reached.count != ids.count) code = MR_BOUNDARY;
-		for (size_t i = 0; i < got->count && code == 0; i++) {
-			const uint8_t *id = got->members[i].it.stored;
-			if (memcmp(id, head, 32) != 0 && depth(id) >= top) code = MR_BOUNDARY;
+	for (size_t i = 0; i < count && code == 0; i++)
+		if (depth(boundary[i]) < top || im_has(&ids, boundary[i])) code = MR_BOUNDARY;
+	if (code == 0 && checkpoints != NULL) {
+		im_map want = {0}, given = {0};
+		uint8_t k[32] = {0};
+		for (size_t i = 0; i < ids.slots; i++) {
+			if (!ids.used[i] || memcmp(im_key(&ids, i), head, 32) == 0 || depth(im_key(&ids, i)) == 0) continue;
+			memcpy(k, im_key(&ids, i), 12);
+			im_set(&want, k, SET);
 		}
-		for (size_t i = 0; i < count && code == 0; i++)
-			if (depth(boundary[i]) < top || im_has(&ids, boundary[i])) code = MR_BOUNDARY;
-		if (code == 0 && checkpoints != NULL) {
-			im_map want = {0}, given = {0};
-			uint8_t k[32] = {0};
-			for (size_t i = 0; i < ids.slots; i++) {
-				if (!ids.used[i] || memcmp(im_key(&ids, i), head, 32) == 0 || depth(im_key(&ids, i)) == 0) continue;
-				memcpy(k, im_key(&ids, i), 12);
-				im_set(&want, k, SET);
-			}
-			for (size_t i = 0; i < checks; i++) memcpy(k, checkpoints + 12 * i, 12), im_set(&given, k, SET);
-			bool same = want.count == given.count;
-			for (size_t i = 0; i < want.slots && same; i++) same = !want.used[i] || im_has(&given, im_key(&want, i));
+		for (size_t i = 0; i < checks; i++) memcpy(k, checkpoints + 12 * i, 12), im_set(&given, k, SET);
+		bool same = want.count == given.count;
+		for (size_t i = 0; i < want.slots && same; i++) same = !want.used[i] || im_has(&given, im_key(&want, i));
+		if (!same) code = MR_BOUNDARY;
+		im_free(&want), im_free(&given);
+	}
+	if (code == 0 && im_has(&d->seen, head)) {
+		fragment w = {0};
+		if (fragment_walk(head, lookup, known, d, &w) == FRAGMENT_OK) {
+			uint8_t(*mine)[32] = malloc(got->count * 32 + 1);
+			if (mine == NULL) abort();
+			for (size_t i = 0; i < got->count; i++) memcpy(mine[i], got->members[i].it.stored, 32);
+			bool same = same_ids((const uint8_t(*)[32])w.members.ids, w.members.count, (const uint8_t(*)[32])mine,
+					    got->count) &&
+				same_ids((const uint8_t(*)[32])w.boundary.ids, w.boundary.count, boundary, count);
+			free(mine);
 			if (!same) code = MR_BOUNDARY;
-			im_free(&want), im_free(&given);
 		}
-		if (code == 0 && im_has(&d->seen, head)) {
-			fragment w = {0};
-			if (fragment_walk(head, lookup, known, d, &w) == FRAGMENT_OK) {
-				uint8_t(*mine)[32] = malloc(got->count * 32 + 1);
-				if (mine == NULL) abort();
-				for (size_t i = 0; i < got->count; i++) memcpy(mine[i], got->members[i].it.stored, 32);
-				bool same = same_ids((const uint8_t(*)[32])w.members.ids, w.members.count, (const uint8_t(*)[32])mine,
-						    got->count) &&
-					same_ids((const uint8_t(*)[32])w.boundary.ids, w.boundary.count, boundary, count);
-				free(mine);
-				if (!same) code = MR_BOUNDARY;
-			}
-			fragment_free(&w);
-		}
+		fragment_free(&w);
 	}
 	im_free(&ids), im_free(&reached);
 	if (code != 0) contents_free(got);
@@ -680,33 +910,38 @@ static mr_code vetted(mr_doc *d, const uint8_t head[32], const uint8_t (*boundar
 
 // a fragment refused whole, by head
 static void broke(mr_doc *d, const uint8_t head[32], mr_code code, const char *why) {
-	size_t most = mr_limits_of(d->mailroom)->refused;
-	mr_note(&SBD(d)->broken, &SBD(d)->broken_order, head, CODE(code), most, NULL);
-	if (why == NULL) return;
-	uint8_t k[32];
-	memcpy(k, head, 32);
-	free(im_del(&SBD(d)->broken_why, k));
-	mr_note(&SBD(d)->broken_why, &SBD(d)->broken_why_order, k, copyString(why), most, free);
+	mr_refusal_note(&SBD(d)->broken, &SBD(d)->broken_order, head, code, why, mr_limits_of(d->mailroom)->refused);
 }
 
-// what Subduction may store of a fragment (its admission): one that opens and is checked, or waits
-// on the lock. One whose head is not here yet is noted refused whole
-static bool allows_fragment(mr_doc *d, const uint8_t head[32], const uint8_t (*boundary)[32], size_t count,
+// a fragment refused whole with what vetted gave: ENVELOPE is MR_ID with OTHER, a member sealed for
+// another id MR_ID with SL_ELSEWHERE, CLOSURE MR_BOUNDARY
+static void broke_with(mr_doc *d, const uint8_t head[32], mr_code code) {
+	if (code == ENVELOPE) broke(d, head, MR_ID, OTHER);
+	else if (code == CLOSURE) broke(d, head, MR_BOUNDARY, NULL);
+	else broke(d, head, code, code == MR_ID ? SL_ELSEWHERE : NULL);
+}
+
+// what Subduction may store of a fragment in a followed document (its admission), as allows: one that
+// opens and is checked, or waits on the lock, stored; one that fails the door (an envelope for another
+// id, a member's stored id not its own, the head none of them, a member's parent left out or a boundary
+// not the members' own) passed over; one not good otherwise refused. One whose head is not here yet is
+// noted refused whole
+static door_t allows_fragment(mr_doc *d, const uint8_t head[32], const uint8_t (*boundary)[32], size_t count,
 	const uint8_t *checkpoints, size_t checks, const uint8_t *blob, size_t length) {
 	lk_opened open;
 	const char *why = NULL;
 	open_t opened = unlock(d, blob, length, &open, &why);
-	if (opened == OPEN_WAIT) return true;
+	if (opened == OPEN_WAIT) return DOOR_STORE;
 	if (opened == OPEN_REFUSED) {
 		if (!im_has(&d->seen, head)) broke(d, head, MR_LOCK, why);
-		return false;
+		return DOOR_REFUSE;
 	}
 	contents_t got;
 	mr_code code = vetted(d, head, boundary, count, checkpoints, checks, open.bytes, open.length, &got);
 	lk_opened_free(&open);
-	if (code == 0) return contents_free(&got), true;
-	if (!im_has(&d->seen, head)) broke(d, head, code, NULL);
-	return false;
+	if (code == 0) return contents_free(&got), DOOR_STORE;
+	if (!im_has(&d->seen, head)) broke_with(d, head, code);
+	return code == ENVELOPE || code == MR_ID || code == MR_STORED_ID || code == CLOSURE ? DOOR_PASS : DOOR_REFUSE;
 }
 
 // a fragment taken in: its members as its blob has them (sorted, a seal there twice kept twice, as
@@ -747,7 +982,8 @@ static void take_fragment(mr_doc *d, const uint8_t head[32], const uint8_t (*bou
 				put_fragment(d, fragment_of(head, &none_read, boundary, count));
 			}
 		} else if (opened == OPEN_WAIT)
-			hold(&SBD(d)->locked_fragments, head, (const uint8_t *)boundary, count, checkpoints, checks, blob, length);
+			hold(d, &SBD(d)->locked_fragments, &SBD(d)->locked_fragments_order, head, (const uint8_t *)boundary, count,
+				checkpoints, checks, blob, length);
 		else broke(d, head, MR_LOCK, why);
 		return;
 	}
@@ -755,10 +991,10 @@ static void take_fragment(mr_doc *d, const uint8_t head[32], const uint8_t (*bou
 	mr_code code = vetted(d, head, boundary, count, checkpoints, checks, open.bytes, open.length, &got);
 	lk_opened_free(&open);
 	if (code != 0) {
-		if (here == NULL) broke(d, head, code, NULL);
+		if (here == NULL) broke_with(d, head, code);
 		return;
 	}
-	im_del(&SBD(d)->broken, head);
+	mr_refusal_del(&SBD(d)->broken, head);
 	uint8_t top[CM_NAME];
 	for (size_t i = 0; i < got.count; i++)
 		if (memcmp(got.members[i].it.stored, head, 32) == 0) memcpy(top, got.members[i].it.name, CM_NAME);
@@ -846,7 +1082,7 @@ static void expire(sb_stack *t, bool all) {
 static uint8_t *gather(sb_stack *t, const job *p, size_t *length) {
 	expire(t, false);
 	join_t *j = t->joins_list;
-	while (j && !(j->channel == p->channel && memcmp(j->where, p->channel ? p->topic : p->d->bytes, 32) == 0 &&
+	while (j && !(j->channel == p->channel && memcmp(j->where, p->channel ? p->topic : TREE(p->d), 32) == 0 &&
 			     memcmp(j->from, p->from, 32) == 0 && memcmp(j->whole, p->whole, 32) == 0))
 		j = j->next;
 	if (j == NULL) {
@@ -861,7 +1097,7 @@ static uint8_t *gather(sb_stack *t, const job *p, size_t *length) {
 		}
 		j = calloc(1, sizeof *j);
 		if (j == NULL) abort();
-		memcpy(j->where, p->channel ? p->topic : p->d->bytes, 32);
+		memcpy(j->where, p->channel ? p->topic : TREE(p->d), 32);
 		j->channel = p->channel;
 		memcpy(j->from, p->from, 32);
 		memcpy(j->whole, p->whole, 32);
@@ -1046,7 +1282,7 @@ static uint64_t build_add(sb_stack *t, mr_doc *d, const fragment *f) {
 	free(ms);
 	free(items);
 	Json *blob = jsonObject();
-	// "run": the blob's key, kept as stored
+	// "run": the blob's key, as stored; the envelope's id beside it
 	jsonAdd(blob, "run", jsonBytes(packed, packed_length));
 	free(packed);
 	const mr_seen_t *top = im_get(&d->seen, f->head);
@@ -1058,12 +1294,8 @@ static uint64_t build_add(sb_stack *t, mr_doc *d, const fragment *f) {
 		mr_hint(d, top->name, snapshot, snapshot_length, true);
 		free(snapshot);
 	}
-	size_t n = 0;
-	cborEncode(blob, NULL, 0, &n, NULL);
-	uint8_t *bytes = malloc(n + 1);
-	if (bytes == NULL) abort();
-	cborEncode(blob, bytes, n, &n, NULL);
-	jsonFree(blob);
+	size_t n;
+	uint8_t *bytes = wrap(d, blob, &n);
 	// closed by the lock: named by the bytes' name (a multihash), its parents the boundary's names, sorted
 	uint8_t digest[CM_NAME];
 	cm_name(bytes, n, digest);
@@ -1075,11 +1307,11 @@ static uint64_t build_add(sb_stack *t, mr_doc *d, const fragment *f) {
 		else memset(names[i], 0, CM_NAME);
 	}
 	qsort(names, f->boundary.count, CM_NAME, by_name);
-	lk_closed closed = t->lock->close(t->lock->context, d->bytes, digest, (const uint8_t(*)[CM_NAME])names,
+	lk_closed closed = t->lock->close(t->lock->context, (const uint8_t *)d->id, d->length, digest, (const uint8_t(*)[CM_NAME])names,
 		f->boundary.count, bytes, n);
 	free(names);
 	if (closed.bytes == NULL) return free(bytes), 0;
-	uint64_t c = erm_sd_add_fragment(t->sd, d->bytes, f->head, f->boundary.count ? (const uint8_t *)f->boundary.ids : NULL,
+	uint64_t c = erm_sd_add_fragment(t->sd, TREE(d), f->head, f->boundary.count ? (const uint8_t *)f->boundary.ids : NULL,
 		f->boundary.count, f->checkpoints.count ? (const uint8_t *)f->checkpoints.ids : NULL, f->checkpoints.count,
 		closed.bytes, closed.length);
 	lk_closed_free(&closed);
@@ -1122,7 +1354,7 @@ static const uint8_t none[1];
 static void compact(sb_stack *t, mr_doc *d, const uint8_t head[32]) {
 	uint8_t *bytes = NULL;
 	size_t length = 0;
-	if (t->inner.get(t->inner.self, ERM_STORE_FRAGMENT, d->bytes, head, &bytes, &length) != 1) return;
+	if (t->inner.get(t->inner.self, ERM_STORE_FRAGMENT, TREE(d), head, &bytes, &length) != 1) return;
 	record_t r;
 	bool ok = record(t, ERM_STORE_FRAGMENT, bytes != NULL ? bytes : none, length, &r);
 	erm_host_free(bytes);
@@ -1131,11 +1363,11 @@ static void compact(sb_stack *t, mr_doc *d, const uint8_t head[32]) {
 	contents_t got;
 	const char *why = NULL;
 	if (unlock(d, r.blob != NULL ? r.blob : none, r.length, &open, &why) == OPEN_GOOD) {
-		if (contents(d->bytes, open.bytes, open.length, &got) == 0) {
+		if (contents(d, open.bytes, open.length, NULL, NULL, 0, &got) == 0) {
 			im_map reached = {0};
 			reach(head, &got, &reached);
 			for (size_t i = 0; i < reached.slots; i++)
-				if (reached.used[i]) t->inner.remove(t->inner.self, ERM_STORE_COMMIT, d->bytes, im_key(&reached, i));
+				if (reached.used[i]) t->inner.remove(t->inner.self, ERM_STORE_COMMIT, TREE(d), im_key(&reached, i));
 			im_free(&reached);
 			contents_free(&got);
 		}
@@ -1158,7 +1390,13 @@ static void take(sb_stack *t, job *j, bool save) {
 		blob = r.blob ? r.blob : none, length = r.length;
 		checks = r.rec.checkpoints != NULL ? r.rec.checkpoints : none, checks_count = r.rec.checkpointCount;
 	}
-	mr_doc *d = mr_document(t->mailroom, j->tree);
+	mr_doc *d = document(t, j->tree);
+	if (j->again) {
+		// passed over unless held still as queued: one taken in or let go of since needs nothing, one
+		// held again was opened since (the next changed opens it again)
+		const locked_t *l = im_get(j->record == ERM_STORE_COMMIT ? &SBD(d)->locked : &SBD(d)->locked_fragments, head);
+		if (l == NULL || !l->queued) return;
+	}
 	size_t deep = SBD(d)->deep;
 	if (j->record == ERM_STORE_COMMIT) take_commit(d, head, list, count, blob, length);
 	else take_fragment(d, head, list, count, checks, checks_count, blob, length);
@@ -1198,14 +1436,14 @@ static void load_doc(sb_stack *t, mr_doc *d) {
 	for (int k = 0; k < 2; k++) {
 		int kind = k == 0 ? ERM_STORE_FRAGMENT : ERM_STORE_COMMIT;
 		collected_t ids = {0};
-		t->inner.list(t->inner.self, kind, d->bytes, collect, &ids);
+		t->inner.list(t->inner.self, kind, TREE(d), collect, &ids);
 		for (size_t n = 0; n < ids.count; n++) {
 			uint8_t *bytes = NULL;
 			size_t length = 0;
-			if (t->inner.get(t->inner.self, kind, d->bytes, ids.ids[n], &bytes, &length) != 1) continue;
+			if (t->inner.get(t->inner.self, kind, TREE(d), ids.ids[n], &bytes, &length) != 1) continue;
 			job *j = job_new(J_TAKE, d);
 			j->record = kind;
-			memcpy(j->tree, d->bytes, 32);
+			memcpy(j->tree, TREE(d), 32);
 			j->bytes = mr_copy(bytes ? bytes : none, length);
 			j->length = length;
 			erm_host_free(bytes);
@@ -1216,18 +1454,16 @@ static void load_doc(sb_stack *t, mr_doc *d) {
 	next(t, build_job(d, NULL, 0));
 }
 
-// starting: what the store holds, taken in before anything else, each tree; lazy: only listed, and
-// the trees of the documents followed before this taken in
+// starting: what the store holds, taken in before anything else, for each tree whose id is named
+// already (lazy: only the documents followed before this); every other tree only listed (a hash can't
+// be turned back into an id), taken in when its document is followed
 static void load(sb_stack *t) {
 	collected_t trees = {0};
 	t->inner.list(t->inner.self, ERM_STORE_TREE, NULL, collect, &trees);
 	for (size_t i = 0; i < trees.count; i++) {
-		if (!t->lazy) load_doc(t, mr_document(t->mailroom, trees.ids[i]));
-		else {
-			im_set(&t->trees, trees.ids[i], SET);
-			mr_doc *d = mr_find(t->mailroom, trees.ids[i]);
-			if (d != NULL && SBD(d)->follow_later) load_doc(t, d);
-		}
+		im_set(&t->trees, trees.ids[i], SET);
+		mr_doc *d = document(t, trees.ids[i]);
+		if (d != NULL && (!t->lazy || SBD(d)->follow_later)) load_doc(t, d);
 	}
 	free(trees.ids);
 	next(t, job_new(J_LOADED, NULL));
@@ -1242,7 +1478,7 @@ static void follow_now(sb_stack *t, mr_doc *d) {
 		ROOM(t->followed, t->followed_count, t->followed_room);
 		t->followed[t->followed_count++] = d;
 	}
-	subscribe(t, d->bytes);
+	subscribe(t, TREE(d));
 	fetch(t, d, F_FOLLOW, 0);
 }
 
@@ -1260,10 +1496,25 @@ static void hear(mr_doc *d, const uint8_t *blob, size_t length, const uint8_t fr
 		if (got == OPEN_REFUSED) mr_unheard(d, blob, length, MR_LOCK, why);
 		return;
 	}
+	// the envelope: {id, commit}
+	bool other;
+	Json *x = unwrap(d, open.bytes, open.length, &other);
+	lk_opened_free(&open);
+	const Json *c = x != NULL ? jsonGet(x, "commit") : NULL;
+	if (x == NULL || x->object.count != 2 || c == NULL || c->type != JSON_BYTES) {
+		jsonFree(x);
+		mr_unheard(d, blob, length, MR_SHAPE, NULL);
+		return;
+	}
+	if (other) {
+		jsonFree(x);
+		mr_unheard(d, blob, length, MR_ID, OTHER);
+		return;
+	}
 	uint8_t who[SL_KEY];
 	mr_peer(from, who);
-	mr_hear(d, open.bytes, open.length, who);
-	lk_opened_free(&open);
+	mr_hear(d, c->bytes.data, c->bytes.length, who);
+	jsonFree(x);
 }
 
 static step_t step(sb_stack *t, job *j) {
@@ -1365,19 +1616,30 @@ static void store(sb_stack *t, mr_item *it) {
 		return;
 	}
 	// closed by the lock before it leaves, its commit's name and parents given
-	lk_closed closed = t->lock->close(t->lock->context, d->bytes, k->name, k->parents, k->parents_length, sealed, length);
+	Json *e = jsonObject();
+	jsonAdd(e, "sealed", jsonBytes(sealed, length));
+	size_t n;
+	uint8_t *enveloped = wrap(d, e, &n);
+	lk_closed closed = t->lock->close(t->lock->context, (const uint8_t *)d->id, d->length, k->name, k->parents,
+		k->parents_length, enveloped, n);
 	uint8_t(*ids)[32];
 	if (closed.bytes == NULL || !mr_handed(d, k, sealed, length, s, &ids)) {
 		lk_closed_free(&closed);
+		free(enveloped);
 		free(sealed);
 		t->cur.state = 3;
 		return;
 	}
 	memcpy(t->cur.stored, s, 32);
-	uint64_t c = erm_sd_add_commit(t->sd, d->bytes, s, k->parents_length ? (const uint8_t *)ids : NULL, k->parents_length,
+	free(t->own);
+	memcpy(t->own_stored, s, 32);
+	t->own = mr_copy(closed.bytes, closed.length);
+	t->own_length = closed.length;
+	uint64_t c = erm_sd_add_commit(t->sd, TREE(d), s, k->parents_length ? (const uint8_t *)ids : NULL, k->parents_length,
 		closed.bytes, closed.length);
 	free(ids);
 	lk_closed_free(&closed);
+	free(enveloped);
 	free(sealed);
 	if (c == 0) {
 		t->cur.state = 3;
@@ -1412,7 +1674,7 @@ static bool outgoing(sb_stack *t) {
 				if (bytes == NULL) abort();
 				cborEncode(m, bytes, size, &size, NULL);
 				jsonFree(m);
-				uint64_t c = publish(t, it->d->bytes, bytes, size, false);
+				uint64_t c = publish(t, TREE(it->d), bytes, size, false);
 				free(bytes);
 				if (c == 0) cur->state = 3;
 				else call(t, c, C_PUBLISH, cur), cur->state = 1;
@@ -1420,10 +1682,15 @@ static bool outgoing(sb_stack *t) {
 			else {
 				// an ephemeral commit of this device's: closed by the lock, published, as parts when over
 				const hy_kept *k = it->kept;
-				lk_closed closed = t->lock->close(t->lock->context, it->d->bytes, k->name, k->parents, k->parents_length,
-					k->bytes, k->length);
-				uint64_t c = closed.bytes == NULL ? 0 : publish(t, it->d->bytes, closed.bytes, closed.length, false);
+				Json *e = jsonObject();
+				jsonAdd(e, "commit", jsonBytes(k->bytes, k->length));
+				size_t n;
+				uint8_t *enveloped = wrap(it->d, e, &n);
+				lk_closed closed = t->lock->close(t->lock->context, (const uint8_t *)it->d->id, it->d->length, k->name,
+					k->parents, k->parents_length, enveloped, n);
+				uint64_t c = closed.bytes == NULL ? 0 : publish(t, TREE(it->d), closed.bytes, closed.length, false);
 				lk_closed_free(&closed);
+				free(enveloped);
 				if (c == 0) cur->state = 3;
 				else call(t, c, C_PUBLISH, cur), cur->state = 1;
 			}
@@ -1439,7 +1706,7 @@ static bool outgoing(sb_stack *t) {
 // ---- fetching
 
 static void fetch(sb_stack *t, mr_doc *d, fetch_kind kind, size_t ask) {
-	uint64_t c = erm_sd_sync(t->sd, d->bytes, 1, 0);
+	uint64_t c = erm_sd_sync(t->sd, TREE(d), 1, 0);
 	if (c == 0) return;
 	fetch_t *f = malloc(sizeof *f);
 	if (f == NULL) abort();
@@ -1514,7 +1781,7 @@ static void given_save(sb_stack *t, put_t *p, int kind) {
 	job *j = job_new(J_SAVE, p->d);
 	j->record = kind;
 	j->given = true;
-	memcpy(j->tree, p->d->bytes, 32);
+	memcpy(j->tree, TREE(p->d), 32);
 	memcpy(j->head, p->head, 32);
 	j->list = p->list, j->count = p->count, p->list = NULL;
 	j->bytes = p->blob, j->length = p->length, p->blob = NULL;
@@ -1539,6 +1806,8 @@ static void done(sb_stack *t, uint64_t number, bool ok) {
 	case C_STORE: {
 		cur_t *it = c.what;
 		it->state = 3;
+		free(t->own);
+		t->own = NULL;
 		if (ok && depth(it->stored) > 0) {
 			// Subduction asks for a fragment (FragmentRequested): built in the queue, and waited for
 			it->build = build_job(mr_front(t->mailroom)->d, (const uint8_t(*)[32])it->stored, 1);
@@ -1554,7 +1823,7 @@ static void done(sb_stack *t, uint64_t number, bool ok) {
 	case C_FETCH: {
 		fetch_t *f = c.what;
 		if (f->round == 1) {
-			uint64_t again = erm_sd_sync(t->sd, f->d->bytes, 1, 0);
+			uint64_t again = erm_sd_sync(t->sd, TREE(f->d), 1, 0);
 			if (again != 0) {
 				f->round = 2;
 				call(t, again, C_FETCH, f);
@@ -1586,7 +1855,7 @@ static void done(sb_stack *t, uint64_t number, bool ok) {
 
 // an ephemeral message: a document's (followed), or a channel's
 static void heard(sb_stack *t, const uint8_t topic[32], const uint8_t from[32], const uint8_t *payload, size_t length) {
-	mr_doc *d = mr_find(t->mailroom, topic);
+	mr_doc *d = document(t, topic);
 	part_t p;
 	part_kind kind = part_of(payload, length, t->parts, &p);
 	channel_t *c = im_get(&t->channels, topic);
@@ -1667,32 +1936,87 @@ static bool events(sb_stack *t) {
 
 // ---- Subduction's store, wrapped: what it saves is taken in
 
-// what Subduction may store (its admission: allows, allows_fragment), the record decoded and its blob,
-// put just before it, read. One not admitted is refused (the save fails), its blob let go of too
-static bool admits(sb_stack *t, int kind, const uint8_t tree[32], const uint8_t *bytes, size_t length) {
+// the door for a tree not named yet (subduction.ts's stranger): a loose commit's (ERM_STORE_COMMIT) or a
+// fragment's envelope (with its boundary), its id read from it: the id makes this tree, and the names
+// and the closure pass (as for a followed one). One the lock cannot open without its id: stored as it
+// came
+static door_t stranger(sb_stack *t, int kind, const uint8_t tree[32], const uint8_t head[32],
+	const uint8_t (*boundary)[32], size_t count, const uint8_t *blob, size_t length) {
+	lk_opened open = t->lock->open(t->lock->context, (const uint8_t *)"", 0, blob, length);
+	if (open.kind != LK_OPEN) return lk_opened_free(&open), DOOR_STORE;
+	Json *x = cborDecode(open.bytes, open.length, NULL, NULL);
+	lk_opened_free(&open);
+	const Json *id = x != NULL && x->type == JSON_OBJECT ? jsonGet(x, "id") : NULL;
+	uint8_t mine[32];
+	bool ok = id != NULL && id->type == JSON_STRING && sb_tree(id->string, id->stringLength, mine) &&
+		memcmp(mine, tree, 32) == 0;
+	const uint8_t *i = ok ? (const uint8_t *)id->string : NULL;
+	size_t n = ok ? id->stringLength : 0;
+	if (ok && kind == ERM_STORE_COMMIT) {
+		const Json *s = jsonGet(x, "sealed");
+		uint8_t name[CM_NAME], own[32];
+		ok = x->object.count == 2 && s != NULL && s->type == JSON_BYTES &&
+			peek_seal(s->bytes.data, s->bytes.length, i, n, name, own, mine) && memcmp(own, mine, 32) == 0 &&
+			memcmp(mine, head, 32) == 0;
+	} else if (ok) {
+		const Json *packed = jsonGet(x, "run"), *members = jsonGet(x, "members"), *snapshot = jsonGet(x, "snapshot");
+		ok = (packed == NULL) != (members == NULL) && (size_t)x->object.count == 2 + (snapshot != NULL) &&
+			names(i, n, packed, members, head, boundary, count) == 0;
+	}
+	jsonFree(x);
+	return ok ? DOOR_STORE : DOOR_PASS;
+}
+
+// what Subduction may store (its admission: allows, allows_fragment; a tree not named yet, stranger), the
+// record decoded and its blob, put just before it, read. One passed over or refused has its blob let go
+// of too, and the document's movers told
+static door_t admits(sb_stack *t, int kind, const uint8_t tree[32], const uint8_t *bytes, size_t length) {
 	record_t r;
-	if (!record(t, kind, bytes, length, &r)) return false;
-	mr_doc *d = mr_document(t->mailroom, tree);
+	if (!record(t, kind, bytes, length, &r)) return DOOR_REFUSE;
+	mr_doc *d = document(t, tree);
 	const uint8_t *blob = r.blob != NULL ? r.blob : none;
-	bool ok = kind == ERM_STORE_COMMIT
+	door_t door;
+	// a tree whose id is not named yet, past the door: stored, the tree listed; taken in, each checked
+	// whole, when its document is followed. Nothing is refused (it would leave Subduction never sending
+	// it again on that connection)
+	if (d == NULL) {
+		door = stranger(t, kind, tree, r.rec.id, (const uint8_t(*)[32])r.rec.parents, r.rec.parentCount, blob, r.length);
+		if (door == DOOR_STORE) im_set(&t->trees, tree, SET);
+		else t->inner.remove(t->inner.self, ERM_STORE_BLOB, NULL, r.rec.digest);
+		record_free(&r);
+		return door;
+	}
+	door = kind == ERM_STORE_COMMIT
 		? allows(d, r.rec.id, blob, r.length)
 		: allows_fragment(d, r.rec.id, (const uint8_t(*)[32])r.rec.parents, r.rec.parentCount,
 			  r.rec.checkpoints != NULL ? r.rec.checkpoints : none, r.rec.checkpointCount, blob, r.length);
-	if (!ok) t->inner.remove(t->inner.self, ERM_STORE_BLOB, NULL, r.rec.digest);
+	if (door != DOOR_STORE) {
+		t->inner.remove(t->inner.self, ERM_STORE_BLOB, NULL, r.rec.digest);
+		// passed over or refused: told now, as a take tells, so it shows (sync's status) before anything
+		// else moves
+		mr_tell_moved(t->mailroom, d);
+	}
 	record_free(&r);
-	return ok;
+	return door;
 }
 
 static int saved(void *self, int kind, const uint8_t *tree, const uint8_t id[32], const uint8_t *bytes, size_t length) {
 	sb_stack *t = self;
-	if ((kind == ERM_STORE_COMMIT || kind == ERM_STORE_FRAGMENT) && !admits(t, kind, tree, bytes, length)) return -1;
+	if (kind == ERM_STORE_COMMIT || kind == ERM_STORE_FRAGMENT) {
+		door_t door = admits(t, kind, tree, bytes, length);
+		// passed over: not stored, and the save is as if it were
+		if (door == DOOR_PASS) return 0;
+		if (door == DOOR_REFUSE) return -1;
+	}
 	int r = t->inner.put(t->inner.self, kind, tree, id, bytes, length);
 	if (r != 0 || (kind != ERM_STORE_COMMIT && kind != ERM_STORE_FRAGMENT)) return r;
+	// unnamed: only stored, taken in on follow
+	if (document(t, tree) == NULL) return 0;
 	call_kind waits = kind == ERM_STORE_COMMIT ? C_PUT : C_PUT_FRAGMENT;
 	for (size_t i = 0; i < t->call_count; i++) {
 		if (t->calls[i].kind != waits) continue;
 		put_t *p = t->calls[i].what;
-		if (memcmp(p->d->bytes, tree, 32) == 0 && memcmp(p->head, id, 32) == 0) p->saw = true;
+		if (memcmp(TREE(p->d), tree, 32) == 0 && memcmp(p->head, id, 32) == 0) p->saw = true;
 	}
 	job *j = job_new(J_SAVE, NULL);
 	j->record = kind;
@@ -1766,16 +2090,15 @@ void sb_free(sb_stack *t) {
 			if (s->locked_fragments.used[i]) locked_free(s->locked_fragments.values[i]);
 		im_free(&s->locked);
 		im_free(&s->locked_fragments);
-		im_free(&s->broken);
-		for (size_t i = 0; i < s->broken_why.slots; i++)
-			if (s->broken_why.used[i]) free(s->broken_why.values[i]);
-		im_free(&s->broken_why);
-		mr_order_free(&s->broken_why_order);
+		mr_order_free(&s->locked_order);
+		mr_order_free(&s->locked_fragments_order);
+		mr_refusals_free(&s->broken);
 		mr_order_free(&s->broken_order);
 		free(s);
 		d->stack = NULL;
 	}
 	im_free(&t->trees);
+	im_free(&t->docs);
 	free(t->followed);
 	for (job *j = t->jobs; j;) {
 		job *n = j->next;
@@ -1806,6 +2129,7 @@ void sb_free(sb_stack *t) {
 	im_free(&t->channels);
 	expire(t, true);
 	free(t->found);
+	free(t->own);
 	free(t->service);
 	free(t);
 }
@@ -1928,7 +2252,7 @@ bool sb_follow(sb_stack *t, const char *id) {
 	mr_doc *d = mr_named(t->mailroom, id);
 	if (d == NULL) return false;
 	if (!t->loaded) SBD(d)->follow_later = true;
-	else if (t->lazy && !SBD(d)->loaded && im_has(&t->trees, d->bytes)) {
+	else if (!SBD(d)->loaded && im_has(&t->trees, TREE(d))) {
 		// its tree read from the store first, the follow behind it (J_LOAD_DOC)
 		SBD(d)->loaded = true;
 		later(t, job_new(J_LOAD_DOC, d));
@@ -1944,12 +2268,19 @@ size_t sb_stored(sb_stack *t, const char *id, uint8_t (**out)[32]) {
 	t->found = NULL;
 	t->found_count = 0;
 	t->answered = false;
-	t->want = erm_sd_commits(t->sd, d->bytes);
+	t->want = erm_sd_commits(t->sd, TREE(d));
 	for (int round = 0; round < 10000 && !t->answered; round++) sb_run(t);
 	*out = t->found;
 	t->found = NULL;
 	size_t n = t->found_count;
 	t->found_count = 0;
+	return n;
+}
+
+size_t sb_unnamed(const sb_stack *t) {
+	size_t n = 0;
+	for (size_t i = 0; i < t->trees.slots; i++)
+		if (t->trees.used[i] && document(t, im_key(&t->trees, i)) == NULL) n++;
 	return n;
 }
 
@@ -2015,7 +2346,7 @@ static int by_waiting_commit(const void *a, const void *b) {
 }
 
 // what the stack adds to a taking (mr_taking_of's): the fragments waiting on the lock, each by its
-// head with its boundary, and the text a lock refused the fragments refused whole with
+// head with its boundary
 void sb_taking(const sb_stack *t, mr_doc *d, mr_taking *taking) {
 	(void)t;
 	const im_map *m = &SBD(d)->locked_fragments;
@@ -2032,24 +2363,24 @@ void sb_taking(const sb_stack *t, mr_doc *d, mr_taking *taking) {
 		}
 		qsort(taking->waiting, taking->waiting_count, sizeof *taking->waiting, by_waiting_commit);
 	}
-	for (size_t i = 0; i < taking->refused_count; i++) {
-		mr_refused_row *r = &taking->refused[i];
-		if (r->fragment && r->code == MR_LOCK) r->why = im_get(&SBD(d)->broken_why, r->id);
-	}
 }
 
-// what waited on the lock, each taken in again as it arrived, queued at the end of the jobs
+// what waited on the lock, each taken in again as it arrived, queued at the end of the jobs: once,
+// however often this is called before it runs
 void sb_changed(sb_stack *t) {
 	for (mr_doc *d = mr_first(t->mailroom); d; d = d->next) {
 		for (int k = 0; k < 2; k++) {
 			const im_map *m = k == 0 ? &SBD(d)->locked : &SBD(d)->locked_fragments;
 			for (size_t i = 0; i < m->slots; i++) {
 				if (!m->used[i]) continue;
-				const locked_t *l = m->values[i];
+				locked_t *l = m->values[i];
+				if (l->queued) continue;
+				l->queued = true;
 				job *j = job_new(J_TAKE, d);
 				j->record = k == 0 ? ERM_STORE_COMMIT : ERM_STORE_FRAGMENT;
-				memcpy(j->tree, d->bytes, 32);
+				memcpy(j->tree, TREE(d), 32);
 				j->given = true;
+				j->again = true;
 				memcpy(j->head, im_key(m, i), 32);
 				j->list = (uint8_t(*)[32])mr_copy(l->list, l->count * 32);
 				j->count = l->count;

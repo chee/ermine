@@ -1,5 +1,5 @@
-// sync: the Subduction integration for the graph. every entry change at a kept node (an ermine://
-// id; value, attributes and children unless told) goes out as one commit naming its table; what
+// sync: the Subduction integration for the graph. every entry change at a kept node (an ermine
+// id, of any kind: ermine/ids; value, attributes and children unless told) goes out as one commit naming its table; what
 // comes in is written to the table. commits are kept as bytes, decoded fresh: nothing shared, no
 // copies, a change costs its patches.
 //
@@ -54,6 +54,7 @@ import { changeOf, type Merges, plain, replay, type Tables, written } from "./re
 import { snapshot, tablesOf } from "./snapshot.ts"
 import type { Signer } from "./seal.ts"
 import { createDevice, type Device, type Lock } from "./transport.ts"
+import { fresh as freshId, kind, text } from "@ermine/ids"
 
 // a head as its commit tells it: its name, lamport, actor, signer's key (hex), time and site
 // (external; none: not there)
@@ -134,8 +135,8 @@ export type Options = {
 	lazy?: boolean
 	// default: crypto.getRandomValues
 	random?: (n: number) => Uint8Array
-	// until Keyhive: ids minted with their last 16 bytes zero, which a Subduction server with no
-	// Keyhive grant for a document (wss://galaxy.observer) stores. such an id binds no lock
+	// accepted and ignored: a tree id always ends in 16 zeros (the Subduction stack's treeOf), which a Subduction
+	// server with no Keyhive grant for a document (wss://galaxy.observer) stores
 	zeros?: boolean
 	// the tables kept; default value, attributes and children
 	tables?: readonly Key[]
@@ -166,7 +167,7 @@ export type Options = {
 
 export type Sync = {
 	device: Device
-	// a new kept id
+	// a new kept id: a fresh ermine id (ermine/ids), its text
 	mint(): string
 	// what comes for this id is taken in (sync follows the ids it writes by itself)
 	follow(id: string): Promise<void>
@@ -199,7 +200,8 @@ export type Sync = {
 }
 
 const random32 = (n: number) => crypto.getRandomValues(new Uint8Array(n))
-const ID = /^ermine:\/\/[0-9a-f]{64}$/
+// a node syncs only with an ermine id (of any kind: each has a tree id)
+const syncs = (id: string) => kind(id) !== undefined
 // the most of each list in a node's status
 const LIST = 100
 
@@ -1505,14 +1507,14 @@ export function createSync(options: Options): Sync {
 	}
 
 	const kept = (part: Key, id: Id): id is string =>
-		typeof id === "string" && ID.test(id) && tables.includes(part)
+		typeof id === "string" && syncs(id) && tables.includes(part)
 
 	return {
 		device,
 		mint() {
-			const out = random(32)
-			if (options.zeros) out.fill(0, 16)
-			return "ermine://" + hex(out)
+			const id = freshId()
+			id.set(random(16), 2)
+			return text(id)!
 		},
 		follow,
 		wrote(changed) {

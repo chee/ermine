@@ -1,7 +1,8 @@
 // A pack of sealed commits as columns, in C (playground/together/typescript/packer.ts):
 // it packs consecutive sealed commits for any stack to carry (a Subduction fragment is one use). One
 // signature for a run of typing: a commit the next goes on alone, by the same signer, is
-// vouched for by that one's signature, its own left out and its stored id in ids. Unpack gives back
+// vouched for by that one's signature, its own left out and its stored id in ids (only said: a reader
+// that knows the id works it out and checks it, as the subduction stack's door does). Unpack gives back
 // each commit's exact bytes, its stored id, and each signed one's sealed bytes; deterministic (the
 // same commits in the same order give the same bytes on any device). Same bytes, and the same leniency
 // on unpack, as packer.ts: its header lists the columns and the order the checks run in. Numbers
@@ -20,7 +21,7 @@ typedef enum {
 	PKR_NOT_A_PACK,   // not CBOR, not a map, or a key that is no column (that column named)
 	PKR_COUNT,       // n not a whole number
 	PKR_SIGNATURES,  // not a list of n byte strings
-	PKR_RUNS,        // a column of runs (table, actor, reader, external, metadata, signer, base, merge, headers): column named
+	PKR_RUNS,        // a column of runs (table, actor, reader, external, metadata, signer, base, merge, headers, id): column named
 	PKR_DIFFERENCES, // a column of differences (time, nonce, lamport): column named
 	PKR_PARENTS,
 	PKR_PATCHES,

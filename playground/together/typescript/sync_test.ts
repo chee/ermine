@@ -14,6 +14,7 @@ import { createScheduler } from "@ermine/scheduler"
 import { createPaths, marks } from "@ermine/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/table"
 import { decode } from "@ermine/encoding/commit"
+import { kind } from "@ermine/ids"
 import { hex } from "./hex.ts"
 import { createSigner } from "./seal.ts"
 import { createSync, type Head } from "./sync.ts"
@@ -116,11 +117,11 @@ Deno.test({
 		a.write("value", id, [{ path: [], value: { title: "hi" } }])
 		a.write("value", id, [{ path: ["title"], value: "hello" }])
 		a.write("attributes", id, [{ path: [], value: { color: "cherry" } }])
-		a.write("children", id, [{ path: [], value: { notes: "ermine://" + "ab".repeat(32) } }])
+		a.write("children", id, [{ path: [], value: { notes: "ermine:0010" + "ab".repeat(16) } }])
 		await quiet(a, b)
 		assertEquals(b.read("value", id), { title: "hello" })
 		assertEquals(b.read("attributes", id), { color: "cherry" })
-		assertEquals(b.read("children", id), { notes: "ermine://" + "ab".repeat(32) })
+		assertEquals(b.read("children", id), { notes: "ermine:0010" + "ab".repeat(16) })
 		// four entry changes, four commits
 		// (counted in the history: storage lets go of loose commits a fragment stands for)
 		assertEquals(a.device.history(id).all().length, 4)
@@ -212,14 +213,14 @@ Deno.test({
 })
 
 Deno.test({
-	name: "sync: until Keyhive, ids can be minted with their last 16 bytes zero",
+	name: "sync: zeros is accepted and ignored: a minted id is a fresh ermine id either way",
 	...opts,
 	async fn() {
-		const a = await host(1, undefined, true)
-		const id = a.sync.mint()
-		assert(id.startsWith("ermine://"))
-		assert(id.endsWith("0".repeat(32)))
-		assert(!(await host(2)).sync.mint().endsWith("0".repeat(32)))
+		for (const zeros of [true, false]) {
+			const id = (await host(1, undefined, zeros)).sync.mint()
+			assert(/^ermine:0010[0-9a-f]{32}$/.test(id), id)
+			assertEquals(kind(id), "fresh")
+		}
 	},
 })
 
@@ -231,7 +232,7 @@ Deno.test({
 		const id = a.sync.mint()
 		await b.sync.follow(id)
 		await connect(a, b)
-		const x = "ermine://" + "cd".repeat(32)
+		const x = "ermine:0010" + "cd".repeat(16)
 		a.write("children", id, [{ path: [], value: { old: x } }])
 		a.write("children", id, [{ path: ["new"], move: { path: ["old"] } }])
 		a.write("value", id, [{ path: [], value: { doc: { lines: ["a", "b"] } } }])
@@ -260,7 +261,7 @@ Deno.test({
 		await connect(a, b)
 		const names: Record<string, string> = {}
 		for (let i = 0; i < 1000; i++) {
-			names["n" + i] = "ermine://" + (i % 256).toString(16).padStart(2, "0").repeat(32)
+			names["n" + i] = "ermine:0010" + (i % 256).toString(16).padStart(2, "0").repeat(16)
 		}
 		// the entry holds names itself, changed in place from here on: what n7 was, kept apart
 		const seven = names.n7

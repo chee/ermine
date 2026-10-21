@@ -1,5 +1,5 @@
 {
-	"title": "typing until a commit can head a fragment: the fragment is built, carries the run, and its loose commits go; a late joiner and a reload get it back",
+	"title": "typing until a commit can head a fragment: the fragment is built, carries the run, and its loose commits go; a late joiner (following first) and a reload get it back",
 	"steps": [
 		{
 			"op": "host",
@@ -14,7 +14,7 @@
 			"host": "a",
 			"as": "x",
 			"expect": {
-				"id": "ermine://b40fde52c568d2f3864d68739e98b72b9f144f5566afcbb238fd354ecdc7c755"
+				"id": "ermine:0010b40fde52c568d2f3864d68739e98b72b"
 			}
 		},
 		{
@@ -31,7 +31,7 @@
 			],
 			"name": "w0",
 			"change": {
-				"time": 1760000750,
+				"time": 1760001363,
 				"actor": "a"
 			},
 			"expect": {
@@ -157,15 +157,15 @@
 			}
 		},
 		{
-			"op": "connect",
-			"a": "c",
-			"b": "a",
-			"expect": {}
-		},
-		{
 			"op": "follow",
 			"host": "c",
 			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "c",
+			"b": "a",
 			"expect": {}
 		},
 		{
@@ -238,7 +238,7 @@
 							],
 							"metadata": {
 								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-								"commit": "1e20fed3fa9a5f132a494763c8b10ea46ad2c96f546bbb8eaef0ea6cfafef75bc999"
+								"commit": "1e20f746cabae24bdf67422d137a57c01cbc887f906d7a205e5faf7ace3ddb432536"
 							}
 						}
 					}

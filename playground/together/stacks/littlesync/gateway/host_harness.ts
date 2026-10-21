@@ -55,9 +55,14 @@ export async function createHost(name = "ts") {
 		table,
 		// a stored write of the node's whole value
 		store: (id: string, value: unknown) => write("value", id, [{ path: [], value }]),
+		// a stored write of the node's whole children
+		place: (id: string, children: Record<string, string>) =>
+			write("children", id, [{ path: [], value: children }]),
 		// one key of the node's value
 		set: (id: string, key: string, value: unknown) =>
 			write("value", id, [{ path: [key], value }]),
+		// one name taken out of the node's children (the node stays)
+		unplace: (id: string, name: string) => write("children", id, [{ path: [name] }]),
 		// an ephemeral write of it
 		wave(id: string, value: unknown) {
 			waving = id
@@ -68,6 +73,8 @@ export async function createHost(name = "ts") {
 			}
 		},
 		read: (id: string) => table.get("value", id)?.value as Record<string, unknown> | undefined,
+		children: (id: string) =>
+			table.get("children", id)?.value as Record<string, unknown> | undefined,
 		close: () => sync.close(),
 	}
 }

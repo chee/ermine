@@ -35,7 +35,7 @@ Deno.test("history: taken in order, a child before its parent waits, heads in th
 	const b = make("value", [a.name], 2, [{ path: ["n"], value: 1 }])
 	const c = make("children", [a.name], 2, [{
 		path: [],
-		value: { x: "ermine://" + "ab".repeat(32) },
+		value: { x: "ermine:0010" + "ab".repeat(16) },
 	}])
 	assertEquals(h.add(b.bytes), { waiting: [hex(a.name)] })
 	assertEquals(h.add(a.bytes), "taken")
@@ -67,12 +67,12 @@ Deno.test("replay: back along the bases, then forward, each table its own; a mer
 	const b = make("value", [a.name], 2, [{ path: ["n"], value: 1 }])
 	const c = make("children", [b.name], 3, [{
 		path: [],
-		value: { k: "ermine://" + "cd".repeat(32) },
+		value: { k: "ermine:0010" + "cd".repeat(16) },
 	}])
 	const d = make("value", [a.name], 2, [{ path: ["list"], range: [0, 0], value: [1, 2] }])
 	for (const x of [a, b, c, d]) h.add(x.bytes)
 	assertEquals(replay(h, c.name)!.value.value, { n: 1, list: [] })
-	assertEquals(replay(h, c.name)!.children.value, { k: "ermine://" + "cd".repeat(32) })
+	assertEquals(replay(h, c.name)!.children.value, { k: "ermine:0010" + "cd".repeat(16) })
 	assertEquals(replay(h, d.name)!.value.value, { n: 0, list: [1, 2] })
 	assertEquals(replay(h, d.name)!.children, undefined)
 	// a merge over c's line, saying what it takes from d's

@@ -35,7 +35,7 @@ export async function httpDevice(base: string, o: { wait?: number } = {}) {
 		posts: () => posts,
 		// the node named: its heads (none), so the gateway follows it for this device
 		follow(id: string) {
-			link.send({ t: "heads", node: unhex(id.slice(9)), heads: [] })
+			link.send({ t: "heads", node: id, heads: [] })
 		},
 		async commit(id: string, c: { parents: Uint8Array[]; lamport: number; patches: unknown[] }) {
 			const bytes = encodeCommit({
@@ -46,7 +46,7 @@ export async function httpDevice(base: string, o: { wait?: number } = {}) {
 				nonce: nonce++,
 				...c,
 			} as never)
-			const node = unhex(id.slice(9))
+			const node = id
 			link.send({ t: "commits", node, sealed: [await seal(bytes, signer as Signer, node)] })
 			return nameOf(bytes)
 		},

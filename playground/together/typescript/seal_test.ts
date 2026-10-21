@@ -1,9 +1,20 @@
-import { assertEquals, assertRejects } from "@std/assert"
+import { assertEquals, assertNotEquals, assertRejects } from "@std/assert"
 import { type Commit, encode, joinKey, name as nameOf } from "@ermine/encoding/commit"
 import * as cbor from "@ermine/encoding/cbor"
-import { createSigner, ED25519, good, seal, SealError, unseal, type Verifier } from "./seal.ts"
+import {
+	createSigner,
+	ED25519,
+	good,
+	seal,
+	SealError,
+	stored,
+	unseal,
+	type Verifier,
+} from "./seal.ts"
+import { hex } from "./hex.ts"
 
-const DOC = new Uint8Array(32).fill(0x2a)
+// an id: any well-formed string (the harnesses' default, a fresh ermine id)
+const DOC = "ermine:0010" + "2a".repeat(16)
 
 const commitBy = (key: Uint8Array): Commit => ({
 	table: "value",
@@ -104,16 +115,40 @@ Deno.test("seal: a signature is checked by the verifier its header names, for a 
 	assertEquals(asked, 1)
 })
 
-Deno.test("seal: a seal is good in its own document only: what is signed is the domain, the document, the header, then the name", async () => {
+Deno.test("seal: a seal is good in its own document only: what is signed is the domain, the id's length and UTF-8, the header, then the name", async () => {
 	const a = await createSigner(new Uint8Array(32).fill(1))
 	const sealed = await seal(encode(commitBy(a.key)), a, DOC)
 	assertEquals((await unseal(sealed, DOC)).commit.table, "value")
-	const elsewhere = new Uint8Array(32).fill(0x2b)
-	assertEquals((await assertRejects(() => unseal(sealed, elsewhere), SealError)).code, "signature")
-	assertEquals(
-		(await assertRejects(() => unseal(sealed, new Uint8Array(31)), SealError)).code,
-		"shape",
-	)
+	const elsewhere = "ermine:0010" + "2b".repeat(16)
+	const e1 = await assertRejects(() => unseal(sealed, elsewhere), SealError)
+	assertEquals([e1.code, e1.reason], ["id", "the seal is for another id"])
+	// the id it is for in it: rewritten to another, the signature is not that id's
+	const o = cbor.decode(sealed) as { id: string; commit: Uint8Array; signature: Uint8Array }
+	const moved = cbor.encode({ ...o, id: elsewhere })
+	assertEquals((await assertRejects(() => unseal(moved, elsewhere), SealError)).code, "signature")
+	assertNotEquals(hex(stored(moved)), hex(stored(sealed)))
+	// no id, or one not a string: not a seal
+	const { id: _, ...none } = o
+	for (const x of [none, { ...o, id: 1 }, { ...o, id: new Uint8Array(2) }]) {
+		assertEquals(
+			(await assertRejects(() => unseal(cbor.encode(x), DOC), SealError)).code,
+			"shape",
+		)
+	}
+	// any string is an id, compared as its bytes, never normalised: é and e + U+0301 are two
+	for (const [one, two] of [["caf\u00e9", "cafe\u0301"], ["a", "a "], ["", " "]]) {
+		const s = await seal(encode(commitBy(a.key)), a, one)
+		assertEquals((await unseal(s, one)).commit.table, "value")
+		assertEquals((await assertRejects(() => unseal(s, two), SealError)).code, "id")
+	}
+	// not well-formed (a lone surrogate): refused, sealing and unsealing
+	assertEquals((await assertRejects(() => unseal(sealed, "a\ud800"), SealError)).code, "shape")
+	const e = await assertRejects(() => seal(encode(commitBy(a.key)), a, "\udc00"), SealError)
+	assertEquals(e.code, "shape")
+	// U+0000 in an id: refused too (C ids end at it)
+	assertEquals((await assertRejects(() => unseal(sealed, "a\u0000"), SealError)).code, "shape")
+	const z = await assertRejects(() => seal(encode(commitBy(a.key)), a, "\u0000"), SealError)
+	assertEquals(z.code, "shape")
 })
 
 Deno.test("seal: the varsig header is signed over: a header put on another's signature is refused", async () => {

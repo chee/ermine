@@ -1,6 +1,6 @@
 /** @jsxImportSource ermine-h */
 import type { Tools } from "./host.ts"
-import { bind } from "ermine-h"
+import { bind, under } from "ermine-h"
 
 // program.ts: pigs on a field, shared by everyone who opens this example (wss://galaxy.observer).
 // edit me while it runs.
@@ -11,28 +11,31 @@ import { bind } from "ermine-h"
 // first pig too). drop a pig in the top right corner: it stands there, facing the wall, ashamed,
 // until someone picks it up. pick up one pig in both windows at once: the later drag shows. let go
 // in both at once: two versions of where it rests, the one in the agreed order shows; settle keeps
-// it. add a pig in both at once: two versions of the list, mended to hold both pigs
+// it. add a pig in both at once: two versions of the room, mended to hold both pigs
 //
 // ---- the format (what another viewer, in C or anything, reads and writes the same way) ----
-// ids: ermine://<64 hex>. the room: the host's (ermine://bf04115f9b284145026eab6801219d6e and 32
-// zeros, or ?room=). the first pig: FIRST below. a kept node's value table only.
+// ids: ermine ids, "ermine:" and their hex (a fresh one: 0010 and 32 hex). the room: the host's
+// (ermine:0010bf04115f9b284145026eab6801219d6e, or ?room=). each pig a kept node.
 //
-// the room's value: {[pig id]: true | false}. true: the pig is in the room; false: it was binned
-//   (and stays binned: when versions are mended, false wins). FIRST is in the room unless the room
-//   says FIRST: false. a key that isn't a pig id is ignored.
+// the room's children: {pig-<the first 8 hex of its id after the code>: pig id}, each pig in the room placed there. added:
+//   placed; binned: unplaced (after its stored binned: true). when versions are mended, every pig
+//   placed in any of them is placed again, but those stored binned. a name not holding a pig id is
+//   ignored. the room has no value (an old room's {[pig id]: true | false} is moved into its
+//   children once, by whoever sees it: each true placed, and FIRST below unless false, then
+//   the value cleared)
 // a pig's stored value: {x, y, at, seed, shame?, binned?}
 //   x, y   where its feet were set down, 0 to 1 across and down the field
 //   at     when, ms since 1970 (the setter's clock)
 //   seed   an integer, 0 to 2^32 - 1: how it wanders
 //   shame  true: set down in the corner of shame; it stands at x, y, facing right (the wall),
 //          head down, not smiling, and doesn't walk, until picked up again
-//   binned true: dropped in the bin; the room's false for it follows
+//   binned true: dropped in the bin; its unplacing from the room follows
 //   missing at: 0. missing seed: hash(id). missing or bad x, y: 0.5. old values {x, y}: as these
 // a pig being carried, an ephemeral commit on its node (sync's, on top of the stored value, gone
 //   when that device's next stored commit there lands or it goes quiet):
 //   {x, y, held: true, by: name, colour: "#rrggbb", who: device key, hex}. x, y: its feet's spot
 //   on the ground under it. dropped: one stored commit, {x, y, at: now, seed: new random}, plus
-//   shame: true in the corner of shame, or binned: true in the bin (then the room's [id]: false)
+//   shame: true in the corner of shame, or binned: true in the bin (then it is unplaced)
 // the corner of shame: x > 0.78 and y < 0.45 (field units, where a pig's feet are). a pig let go
 //   with its feet there is stored with shame: true. the corner is open while any pig in the room
 //   has a stored value with shame: true (the stored one: while it is carried too)
@@ -47,8 +50,7 @@ import { bind } from "ermine-h"
 //   once a frame while dragging, then {to, by, who, done: true} at the let go. Their @ goes to the
 //   floor cell nearest x, y, through walls (the closet's too, in or out); a pig they carry comes
 //   along; their presence row follows, so everyone sees them move
-// placed (this device's graph, never synced): /room is the room, /pigs/pig-<id's first 8 hex> each
-//   pig in the room
+// placed (this device's graph, never synced): /room is the room, so /room/pig-… each pig in it
 //
 // walking, exactly (a resting pig, not ashamed, not binned; the same on every device):
 //   hash(id)   FNV-1a, 32 bits, over the id's characters: h = 2166136261; for each c:
@@ -80,7 +82,8 @@ import { bind } from "ermine-h"
 //   as min(1, g |(du/ds)| / 0.7). look, from random(hash(id)): size 0.86 + 0.24 draw; tint from
 //   random(hash(id) ^ 0x9E3779B9): hue 333 + 20 draw, lightness 81 + 6 draw (%)
 
-const FIRST = "ermine://d3b583537595c9a6de0110781d4566d1" + "0".repeat(32)
+// the first pig: in every room the value had, unless it said false
+const FIRST = "ermine:0010d3b583537595c9a6de0110781d4566d1"
 const W = 110 // a pig's width in px at size 1; its height is 100/130 of it
 const LIFT = 26 // px a held pig is lifted above its shadow
 // the corner of shame, in field units (its feet): x from 0.78 to 1, y from 0 to 0.45
@@ -139,7 +142,7 @@ const CSS = `
 .field { position: relative; height: 70vh; border: 1px solid #111; background: #fff8d6;
 	overflow: hidden; touch-action: none; user-select: none; }
 .pig { position: absolute; left: 0; top: 0; will-change: transform; }
-.pig:not([data-ready]), .pig.gone { display: none; }
+.pig:not([data-ready]) { display: none; }
 .pig .shadow { position: absolute; border-radius: 50%; pointer-events: none;
 	background: radial-gradient(closest-side, rgba(60, 40, 0, .42), rgba(60, 40, 0, .22) 60%,
 		rgba(60, 40, 0, 0));
@@ -203,14 +206,14 @@ type Rest = {
 	binned: boolean
 }
 type Held = { held: true; x: number; y: number; by: string; colour: string; who: string }
-type Conflicts = { id: string; versions: number; values: unknown[] }[]
+type Conflicts = { id: string; versions: number; values: unknown[]; children: unknown[] }[]
 
 const isMap = (v: unknown): v is Record<string, unknown> =>
 	typeof v === "object" && v !== null && !Array.isArray(v)
 const num = (v: unknown, or: number) => typeof v === "number" && v === v ? v : or
 const clamp = (v: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v))
-const isPig = (k: string) => /^ermine:\/\/[0-9a-f]{64}$/.test(k)
-const placeOf = (id: string) => `/pigs/pig-${id.slice(9, 17)}`
+const isPig = (k: string) => /^ermine:(0010|1e10)[0-9a-f]{32}$/.test(k)
+const placeOf = (id: string) => `/room/pig-${id.slice(11, 19)}`
 
 // a number from a string (FNV-1a), and numbers from a seed (mulberry32): the same everywhere
 function hash(s: string) {
@@ -362,8 +365,8 @@ export default function program(t: Tools) {
 	}
 	// held here: which pig, where on the pig it was taken (feet minus pointer)
 	let holding: { pig: Pig; off: At } | undefined
-	let room: Record<string, unknown> = {}
-	let firstGone = false
+	// how many pigs are in the room (drawn), said in the header
+	const count = document.createElement("small")
 
 	// the bin, out near the bottom right corner; the corner of shame, top right
 	const bin = Object.assign(document.createElement("div"), { className: "bin", innerHTML: BIN })
@@ -538,10 +541,7 @@ export default function program(t: Tools) {
 			}
 			t.store(pig.id, { ...rest, ...pig.g, binned: true })
 			gulp()
-			setTimeout(() => {
-				t.set(t.room, pig.id, false)
-				t.unplace(placeOf(pig.id))
-			}, 420)
+			setTimeout(() => t.unplace(placeOf(pig.id)), 420)
 		} else if (inShame(pig.g)) t.store(pig.id, { ...rest, shame: true })
 		else t.store(pig.id, rest)
 	}
@@ -557,7 +557,6 @@ export default function program(t: Tools) {
 		const st = pig.state, el = pig.el
 		if (!st || !el) return
 		if (!pig.ready) el.setAttribute("data-ready", ""), pig.ready = true
-		if (pig.id === FIRST) el.classList.toggle("gone", firstGone)
 		const mine = holding?.pig === pig
 		const held = mine || st.held
 		const shame = !held && !st.held && st.shame, binned = !held && !st.held && st.binned
@@ -637,8 +636,16 @@ export default function program(t: Tools) {
 	let raf = requestAnimationFrame(function frame(now) {
 		const clock = Date.now()
 		open = false
+		// a pig unplaced from the room (its element taken away) is let go of here too
+		let n = 0
+		for (const [id, pig] of pigs) {
+			if (pig.el && !pig.el.isConnected) pigs.delete(id)
+			else if (pig.el) n++
+		}
+		const said = `${n} pigs`
+		if (count.textContent !== said) count.textContent = said
 		for (const pig of pigs.values()) {
-			if (pig.shamed && !(pig.id === FIRST && firstGone)) open = true
+			if (pig.shamed) open = true
 		}
 		corner.classList.toggle("shown", open || nearShame)
 		for (const pig of pigs.values()) step(pig, now, clock)
@@ -646,24 +653,18 @@ export default function program(t: Tools) {
 	})
 	t.teardown(() => (cancelAnimationFrame(raf), size.disconnect(), clearTimeout(gulping)))
 
-	// ---- the room: which pigs are in it, placed in this device's graph ----
-	const inRoom = (v: unknown, id: string) =>
-		isMap(v) ? (id === FIRST ? v[id] !== false : v[id] === true) : id === FIRST
-	const others = (v: unknown) =>
-		isMap(v) ? Object.keys(v).filter((k) => isPig(k) && k !== FIRST && v[k] === true) : []
-	const placed = new Set<string>()
-	// placing writes: after the binding that asked has acted
-	function place(v: unknown) {
+	// ---- the room: its children, the pigs in it ----
+	setTimeout(() => t.place("/room", t.room), 0)
+	// an old room's value, moved into its children once: after the binding that saw it has acted
+	function move(v: unknown) {
+		if (!isMap(v)) return
 		setTimeout(() => {
-			const want = new Set([...others(v), ...(inRoom(v, FIRST) ? [FIRST] : [])])
-			for (const id of want) if (!placed.has(id)) placed.add(id), t.place(placeOf(id), id)
-			for (const id of placed) {
-				if (!want.has(id)) placed.delete(id), t.unplace(placeOf(id))
-			}
+			const ids = Object.keys(v).filter((k) => isPig(k) && v[k] === true)
+			if (v[FIRST] !== false && !ids.includes(FIRST)) ids.push(FIRST)
+			for (const id of ids) t.place(placeOf(id), id)
+			t.clear(t.room)
 		}, 0)
 	}
-	setTimeout(() => t.place("/room", t.room), 0)
-	place(undefined)
 
 	function add() {
 		const id = t.make()
@@ -674,32 +675,31 @@ export default function program(t: Tools) {
 			at: Date.now(),
 			seed: Math.floor(r() * 2 ** 32),
 		})
-		t.set(t.room, id, true)
+		t.place(placeOf(id), id)
 	}
-	// the list's other versions: a pig added in one is put back, a pig binned in one stays binned;
-	// then they are settled. a while first, at random, so two devices rarely both mend at once
+	// the room's other versions: a pig placed in one is placed again, unless stored binned; then
+	// they are settled. a while first, at random, so two devices rarely both mend at once
 	let mending: ReturnType<typeof setTimeout> | undefined
 	let conflicts: Conflicts = []
-	function mended() {
-		const all: Record<string, unknown> = { ...room }
-		let changed = false
-		for (const v of conflicts.find((c) => c.id === t.room)?.values ?? []) {
+	function missing() {
+		const out: string[] = []
+		for (const v of conflicts.find((c) => c.id === t.room)?.children ?? []) {
 			if (!isMap(v)) continue
-			for (const k of Object.keys(v)) {
-				if (!isPig(k)) continue
-				const next = all[k] === false || v[k] === false ? false : true
-				if (all[k] !== next) all[k] = next, changed = true
+			for (const id of Object.values(v)) {
+				if (typeof id !== "string" || !isPig(id) || out.includes(id)) continue
+				const st = pigs.get(id)?.state
+				if (!pigs.get(id)?.el?.isConnected && !(st && !st.held && st.binned)) out.push(id)
 			}
 		}
-		return changed ? all : undefined
+		return out
 	}
 	function mend(cs: Conflicts) {
 		conflicts = cs
-		if (mending || !mended()) return
+		if (mending || !missing().length) return
 		mending = setTimeout(() => {
 			mending = undefined
-			const all = mended()
-			if (all) t.store(t.room, all), t.settle(t.room)
+			for (const id of missing()) t.place(placeOf(id), id)
+			t.settle(t.room)
 		}, 300 + Math.random() * 1500)
 	}
 	t.teardown(() => clearTimeout(mending))
@@ -733,10 +733,8 @@ export default function program(t: Tools) {
 				{bind("/me", (m) => <b style={{ color: m.colour }}>{m.name}</b>)}
 				{bind("/me", (m) => <small>server: {m.server}</small>)}
 				<button onClick={() => add()}>add a pig</button>
-				{bind(
-					t.node(t.room),
-					(v) => <small>{others(v).length + (inRoom(v, FIRST) ? 1 : 0)} pigs</small>,
-				)}
+				{count}
+				{bind(t.node(t.room), (v) => (move(v), null))}
 				{bind("/conflicts", (cs: Conflicts) => {
 					mend(cs)
 					return cs.length
@@ -769,16 +767,10 @@ export default function program(t: Tools) {
 				onPointerLeave={() => holding || dragging || (t.pointer(undefined), corners(undefined))}
 			>
 				{corner}
-				<Pig id={FIRST} />
-				{bind(t.node(t.room), (v) => {
-					room = isMap(v) ? v : {}
-					firstGone = !inRoom(v, FIRST)
-					place(v)
-					const ids = others(v)
-					// a pig gone from the room is let go of here too
-					for (const id of pigs.keys()) if (id !== FIRST && !ids.includes(id)) pigs.delete(id)
-					return ids.map((id) => <Pig key={id} id={id} />)
-				})}
+				{under(
+					t.node(t.room),
+					(item) => isPig(String(item.id)) ? <Pig id={String(item.id)} /> : null,
+				)}
 				{bin}
 				{bind(
 					"/pointers",

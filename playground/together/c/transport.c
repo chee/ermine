@@ -20,8 +20,13 @@ const char *tp_code_name(tp_code code) {
 	return mr_code_name(code);
 }
 
-bool tp_doc(const char *doc, uint8_t bytes[32]) {
-	return mr_id(doc, bytes);
+bool tp_doc(const char *doc, uint8_t tree[32]) {
+	uint8_t key[32];
+	return mr_id(doc, key) && sb_tree(doc, strlen(doc), tree);
+}
+
+size_t tp_unnamed(const tp_device *t) {
+	return sb_unnamed(t->stack);
 }
 
 tp_device *tp_create(const tp_options *o) {

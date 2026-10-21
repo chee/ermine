@@ -44,8 +44,17 @@ Deno.test("frame: round trip, random sizes, no zero inside", () => {
 })
 
 Deno.test("frame: an unframer finds frames among text and half frames; junk counted", () => {
-	const m1 = encode({ t: "ack", node: new Uint8Array(32).fill(1), names: [] })
-	const m2 = encode({ t: "want", node: new Uint8Array(32).fill(2), names: [] })
+	// nodes: fresh ermine ids (ermine:0010, then 16 bytes in hex)
+	const m1 = encode({
+		t: "ack",
+		node: "ermine:0010" + "01".repeat(16),
+		names: [],
+	})
+	const m2 = encode({
+		t: "want",
+		node: "ermine:0010" + "02".repeat(16),
+		names: [],
+	})
 	const f1 = frame(m1), f2 = frame(m2)
 	const bad = frame(m2).slice()
 	bad[5] ^= 0x40

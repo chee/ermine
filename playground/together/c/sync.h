@@ -1,4 +1,5 @@
-// sync.h: sync.ts in C. every entry change at a kept node (an ermine:// id; value, attributes and
+// sync.h: sync.ts in C. every entry change at a kept node (an ermine id, of any kind:
+// ermine/ids; value, attributes and
 // children unless told) goes out as one commit naming its table (commit.h); what comes in is
 // written to the table (core/table/c/table.h). same rules as sync.ts.
 //
@@ -65,8 +66,8 @@ typedef struct {
 	sy_random_fn random;
 	// NULL: the device's clock
 	sy_time_fn time;
-	// until Keyhive: ids minted with their last 16 bytes zero, which a Subduction server with no
-	// Keyhive grant for a document stores. Such an id binds no lock
+	// accepted and ignored: a tree id always ends in 16 zeros (ermine/ids' tree), which a Subduction
+	// server with no Keyhive grant for a document stores
 	bool zeros;
 	// the tables kept (copied); none: value, attributes and children
 	const char *const *tables;
@@ -99,8 +100,10 @@ sy_sync *sy_create(const sy_options *options);
 void sy_free(sy_sync *s);
 tp_device *sy_device(sy_sync *s);
 
-// a new kept id: "ermine://" and 64 hex digits
-void sy_mint(sy_sync *s, char out[9 + 64 + 1]);
+// a minted id's text, its NUL included: "ermine:" and a fresh id's 36 hex digits
+#define SY_ID (7 + 36 + 1)
+// a new kept id: a fresh ermine id (00 10 and 16 random bytes), its text
+void sy_mint(sy_sync *s, char out[SY_ID]);
 // what comes for this id is taken in (sync follows the ids it writes by itself). false: not an id
 bool sy_follow(sy_sync *s, const char *id);
 // after the host's write landed (places.commit): each change at a kept node's kept table, one commit.

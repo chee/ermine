@@ -31,14 +31,18 @@ export { LIMIT, PART } from "../stacks/subduction/typescript/subduction.ts"
 export { type Lock, type Opened, unlocked } from "./lock.ts"
 export type { Fragment } from "../stacks/subduction/typescript/subduction.ts"
 
-// starting: createDevice returns at once, and begins taking in everything the storage holds (every
-// fragment, then every loose commit, as a save is taken in; a commit whose parents come later waits,
-// as ever). everything that touches the network (connect, connectDiscover, follow) waits for that;
+// starting: createDevice returns at once, and begins taking in what the storage holds for each
+// document whose id is named already (every fragment, then every loose commit, as a save is taken
+// in; a commit whose parents come later waits, as ever). a tree whose id is not named yet (a tree id
+// is a hash of the id: it can't be turned back) is only listed (unnamed() counts them), and taken
+// in when its document is first followed (fragments, then loose commits, as the start would),
+// before it is fetched from any peer; a save or an arrival for a tree with no id named is stored as
+// it came, unchecked (its envelopes can't be opened without the id), and taken in on follow.
+// everything that touches the network (connect, connectDiscover, follow) waits for the start;
 // take's sealing and storing, put and the other work queue behind it. ready() resolves when it is
-// done; it throws what the storage threw. lazy: only the trees the storage holds are listed at the
-// start; a document's tree is taken in when it is followed (fragments, then loose commits, as the
-// start would), before it is fetched from any peer, so the histories hold the followed documents
-// and no other; a stored document never followed enters no history
+// done; it throws what the storage threw. lazy: every tree only listed at the start, so the
+// histories hold the followed documents and no other; a stored document never followed enters no
+// history
 export type Device = Held & Wired
 
 // what a device holds for others at most, each letting go of its oldest past it (heard again, it
@@ -58,7 +62,7 @@ export function createDevice(
 		join?: number
 		// where Subduction keeps what it saves (taken in on save as ever); default: in memory
 		storage?: sd.SedimentreeStorage
-		// what the storage holds is taken in as each document is followed, not at the start
+		// what the storage holds is taken in as each document is followed, never at the start
 		lazy?: boolean
 		// default: everything applies
 		check?: Check
@@ -75,6 +79,9 @@ export function createDevice(
 	const mailroom = createMailroom({ ...options, limits })
 	const wired = createSubduction(mailroom, { ...options, limits })
 	const device: Device = { ...mailroom.device, ...wired.device }
-	hooks(device, { ...wired.inside, taking: (doc, layer) => mailroom.device.taking(doc, layer) })
+	hooks(device, {
+		...wired.inside,
+		taking: (doc, layer) => mailroom.device.taking(doc, layer),
+	})
 	return device
 }

@@ -1,0 +1,80 @@
+{
+	"title": "a key id (ed01 and an Ed25519 key's 32 bytes) is an ermine id like any other: followed, written, its tree a hash then zeros as every kind's; what is not an ermine id (the old ermine:// form) can't be",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": { "key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": { "key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394" }
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"doc": "ermine:ed012a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+			"expect": {}
+		},
+		{
+			"op": "follow",
+			"device": "b",
+			"doc": "ermine:ed012a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+			"expect": {}
+		},
+		{ "op": "connect", "a": "a", "b": "b", "expect": {} },
+		{
+			"op": "take",
+			"device": "a",
+			"doc": "ermine:ed012a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+			"name": "k1",
+			"nonce": 1,
+			"patches": [{ "path": [], "value": { "n": 1 } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"doc": "ermine://2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a00000000000000000000000000000000",
+			"fails": true
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"doc": "ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+			"expect": {}
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"doc": "ermine:1e102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+			"expect": {}
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"doc": "ermine:1e102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+			"name": "h1",
+			"nonce": 2,
+			"patches": [{ "path": [], "value": { "n": 1 } }],
+			"expect": { "added": "taken" }
+		},
+		{ "op": "quiet", "expect": {} },
+		{
+			"op": "heads",
+			"device": "b",
+			"doc": "ermine:ed012a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+			"expect": { "heads": ["k1"] }
+		},
+		{
+			"op": "heads",
+			"device": "a",
+			"doc": "ermine:1e102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+			"expect": { "heads": ["h1"] }
+		},
+		{ "op": "heads", "device": "a", "expect": { "heads": [] } }
+	]
+}

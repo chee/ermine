@@ -13,22 +13,21 @@ static void refuse(FILE *out, sl_code code) {
 	fprintf(out, "{\"error\":\"%s\"}", sl_code_name(code));
 }
 
-// the document a seal is for: doc (hex), else the default's 32 bytes; refused shape when not 32
-// bytes, the answer written
-static bool doc_of(const op_value *r, FILE *out, uint8_t doc[32]) {
-	const char *hex = hh_str(r, "doc");
-	if (hex == NULL) {
-		// 2a × 16, then 00 × 16
-		memset(doc, 0, 32);
-		memset(doc, 0x2a, 16);
-		return true;
+// the document a seal is for: doc (its id, any string), else the default's (a fresh id), its UTF-8
+// malloc'd into *doc. The line holds a U+0000 as C0 80 (json.h), made 00 here; a lone surrogate
+// stays as the line holds it (WTF-8), which the seal refuses
+static size_t doc_of(const op_value *r, uint8_t **doc) {
+	static const char DEFAULT[] = "ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a";
+	const op_value *v = op_get(r, "doc");
+	const char *s = v != NULL && v->type == OP_STR ? v->str : DEFAULT;
+	size_t length = v != NULL && v->type == OP_STR ? v->bytes : strlen(DEFAULT), n = 0;
+	*doc = malloc(length + 1);
+	if (*doc == NULL) abort();
+	for (size_t i = 0; i < length; i++) {
+		if ((uint8_t)s[i] == 0xc0 && i + 1 < length && (uint8_t)s[i + 1] == 0x80) (*doc)[n++] = 0, i++;
+		else (*doc)[n++] = (uint8_t)s[i];
 	}
-	uint8_t *b;
-	size_t n;
-	if (!cf_unhex(hex, &b, &n)) return hh_error(out, "not hex"), false;
-	if (n != 32) return refuse(out, SL_SHAPE), false;
-	memcpy(doc, b, 32);
-	return true;
+	return n;
 }
 
 // a seed: hex, 32 bytes; the answer is written when it is not
@@ -94,12 +93,10 @@ static void seal(const op_value *r, FILE *out) {
 	size_t sealed_length;
 	cm_code why;
 	char *field;
-	uint8_t doc[32];
-	if (!doc_of(r, out, doc)) {
-		if (made) free(commit);
-		return;
-	}
-	sl_code code = sl_seal(commit, length, &s.signer, doc, NULL, &sealed, &sealed_length, &why, &field);
+	uint8_t *doc;
+	size_t doc_length = doc_of(r, &doc);
+	sl_code code = sl_seal(commit, length, &s.signer, doc, doc_length, NULL, &sealed, &sealed_length, &why, &field);
+	free(doc);
 	if (made) free(commit);
 	if (code == SL_COMMIT) {
 		cf_put_refusal(out, why, field);
@@ -218,13 +215,14 @@ static void unseal(const op_value *r, FILE *out) {
 		hh_error(out, "not hex");
 		return;
 	}
-	uint8_t doc[32];
-	if (!doc_of(r, out, doc)) return;
 	sl_verifier more[16];
 	sl_verifiers extra = {more, 0};
 	if (!also_of(r, out, &extra)) return;
+	uint8_t *doc;
+	size_t doc_length = doc_of(r, &doc);
 	sl_unsealed u;
-	sl_code code = sl_unseal(bytes, length, doc, &u, &extra);
+	sl_code code = sl_unseal(bytes, length, doc, doc_length, &u, &extra);
+	free(doc);
 	if (code != SL_OK) {
 		refuse(out, code);
 		return;
@@ -241,16 +239,28 @@ static void unseal(const op_value *r, FILE *out) {
 	sl_free(&u);
 }
 
+// { op: "stored", sealed } or { op: "stored", name, doc? }: a seal's stored id, or the document's for
+// a commit's name
 static void stored(const op_value *r, FILE *out) {
-	const char *hex = hh_str(r, "sealed");
+	bool named = op_get(r, "sealed") == NULL;
+	const char *hex = hh_str(r, named ? "name" : "sealed");
 	uint8_t *bytes;
 	size_t length;
-	if (hex == NULL || !cf_unhex(hex, &bytes, &length)) {
+	if (hex == NULL || !cf_unhex(hex, &bytes, &length) || (named && length != CM_NAME)) {
 		hh_error(out, "not hex");
 		return;
 	}
-	uint8_t id[32];
-	sl_stored(bytes, length, id);
+	uint8_t id[32], *doc = NULL;
+	bool ok;
+	if (named) {
+		size_t doc_length = doc_of(r, &doc);
+		ok = sl_stored_id(doc, doc_length, bytes, id);
+	} else ok = sl_stored(bytes, length, id);
+	free(doc);
+	if (!ok) {
+		refuse(out, SL_SHAPE);
+		return;
+	}
 	fputs("{\"stored\":", out);
 	cf_put_hex(out, id, 32);
 	fputc('}', out);

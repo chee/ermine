@@ -9,8 +9,8 @@ static bool put(sb_stack *t, const char *id, call_kind kind, const uint8_t head[
 	mr_doc *d = mr_named(t->mailroom, id);
 	if (d == NULL) return false;
 	uint64_t c = kind == C_PUT
-		? erm_sd_add_commit(t->sd, d->bytes, head, count ? (const uint8_t *)list : NULL, count, blob, length)
-		: erm_sd_add_fragment(t->sd, d->bytes, head, count ? (const uint8_t *)list : NULL, count,
+		? erm_sd_add_commit(t->sd, TREE(d), head, count ? (const uint8_t *)list : NULL, count, blob, length)
+		: erm_sd_add_fragment(t->sd, TREE(d), head, count ? (const uint8_t *)list : NULL, count,
 			checks ? (const uint8_t *)checkpoints : NULL, checks, blob, length);
 	if (c == 0) return false;
 	put_t *p = calloc(1, sizeof *p);

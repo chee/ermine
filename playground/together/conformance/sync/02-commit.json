@@ -18,7 +18,7 @@
 			"host": "a",
 			"as": "x",
 			"expect": {
-				"id": "ermine://b40fde52c568d2f3864d68739e98b72b9f144f5566afcbb238fd354ecdc7c755"
+				"id": "ermine:0010b40fde52c568d2f3864d68739e98b72b"
 			}
 		},
 		{ "op": "follow", "host": "b", "id": "x", "expect": {} },
@@ -39,7 +39,7 @@
 			"change": {
 				"time": 1760000005,
 				"actor": { "name": "juno" },
-				"reader": "ermine://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+				"reader": "ermine:0010cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
 				"external": [{ "file": "notes.ts", "line": 4, "column": 2 }],
 				"metadata": { "cause": "typing", "tool": "pen" }
 			},
@@ -74,7 +74,7 @@
 				"commit": {
 					"table": "value",
 					"actor": { "name": "juno" },
-					"reader": "ermine://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+					"reader": "ermine:0010cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
 					"external": [{ "file": "notes.ts", "line": 4, "column": 2 }],
 					"metadata": { "cause": "typing", "tool": "pen" },
 					"time": 1760000005,
@@ -96,7 +96,7 @@
 				"commit": {
 					"table": "value",
 					"actor": { "name": "juno" },
-					"reader": "ermine://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+					"reader": "ermine:0010cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
 					"external": [{ "file": "notes.ts", "line": 4, "column": 2 }],
 					"metadata": { "cause": "typing", "tool": "pen" },
 					"time": 1760000005,
@@ -116,13 +116,13 @@
 				"change": {
 					"time": 1760000005,
 					"actor": { "name": "juno" },
-					"reader": "ermine://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+					"reader": "ermine:0010cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
 					"external": [{ "file": "notes.ts", "line": 4, "column": 2 }],
 					"metadata": {
 						"cause": "typing",
 						"tool": "pen",
 						"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-						"commit": "1e205e86a8dfcf8f32bda984b38261e2ae9b30133ebc71df325bd47c291e61d004dc"
+						"commit": "1e206f188c4d1b97480f89810751980a1ceb54ea4d827f4862b2cb1c0a1ec2c45a43"
 					}
 				}
 			}
