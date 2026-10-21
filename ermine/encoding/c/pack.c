@@ -657,22 +657,6 @@ bad:
 	return 0;
 }
 
-// an ermine:// id: the scheme, then 64 lowercase hex digits
-static int ermine_id(const char *id, uint8_t *bytes) {
-	if (strlen(id) != 73 || memcmp(id, "ermine://", 9) != 0) return 0;
-	for (int i = 0; i < 32; i++) {
-		int v = 0;
-		for (int k = 0; k < 2; k++) {
-			char c = id[9 + 2 * i + k];
-			int digit = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
-			if (digit < 0) return 0;
-			v = v * 16 + digit;
-		}
-		bytes[i] = (uint8_t)v;
-	}
-	return 1;
-}
-
 static size_t text_hash(const char *s) {
 	uint64_t h = 1469598103934665603u;
 	for (; *s; s++) h = (h ^ (unsigned char)*s) * 1099511628211u;
@@ -767,10 +751,9 @@ pk_code pk_pack(const pk_entry *entries, size_t length, const pk_options *option
 		while (id_seats[s].id != NULL && strcmp(id_seats[s].id, e->id.string) != 0) s = (s + 1) & (slots - 1);
 		if (id_seats[s].id == NULL) {
 			id_seats[s] = (id_seat){e->id.string, id_count++};
-			uint8_t raw[32];
+			// an id as the string it is, whatever it looks like
 			begin(&p.ids);
-			if (ermine_id(e->id.string, raw)) head(&p.ids.data, 2, 32), put(&p.ids.data, raw, 32);
-			else text(&p.ids.data, e->id.string);
+			text(&p.ids.data, e->id.string);
 		}
 		var(&p.which, id_seats[s].number);
 		s = (size_t)(((uintptr_t)e->node >> 4) * 0x9E3779B97F4A7C15u) & (slots - 1);
@@ -1179,7 +1162,7 @@ static int spread(const op_value *c, const char *name, pile *tmp, size_t bound, 
 	return 1;
 }
 
-// an id as it is carried: the text, or an ermine:// id as its 32 bytes
+// an id as it is carried: its text
 typedef struct {
 	const char *text;
 	size_t length;
@@ -1221,14 +1204,9 @@ static int read_columns(arena *a, const op_value *x, size_t limit, pk_entry **en
 		carried *ids = scratch(&tmp, (ni + 1) * sizeof *ids);
 		for (size_t i = 0; i < ni; i++) {
 			const op_value *id = id_items[i];
-			uint8_t raw[32];
-			if (id->type == OP_STR && !ermine_id(id->str, raw)) ids[i] = (carried){id->str, id->bytes};
-			else if (id->type == OP_BYTES && id->bytes == 32) {
-				char *text = scratch(&tmp, 74);
-				memcpy(text, "ermine://", 9);
-				for (int b = 0; b < 32; b++) snprintf(text + 9 + 2 * b, 3, "%02x", id->data[b]);
-				ids[i] = (carried){text, 73};
-			} else goto end;
+			// each id a string (one written as bytes, as ermine ids once were: not a pack)
+			if (id->type == OP_STR) ids[i] = (carried){id->str, id->bytes};
+			else goto end;
 		}
 		// ids in the order the keys first name them, each named
 		size_t seen = 0;

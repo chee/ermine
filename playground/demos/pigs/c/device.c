@@ -5,9 +5,9 @@
 
 #include "../../../../core/node/c/update.h"
 #include "../../../../ermine/encoding/c/json.h"
-#include "../../../../extensions/subduction/c/subduction/platform.h"
-#include "../../../../extensions/subduction/c/subduction/store.h"
-#include "../../../../extensions/subduction/c/subduction/transport.h"
+#include "../../../together/stacks/subduction/c/subduction/platform.h"
+#include "../../../together/stacks/subduction/c/subduction/store.h"
+#include "../../../together/stacks/subduction/c/subduction/transport.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,7 +32,7 @@ static put_t *put_new(const char *key, op_value *value) {
 		p->path[0] = (op_key){.type = OP_STR_KEY, .s = p->key};
 		length = 1;
 	}
-	p->patch = (op_patch){.place = {.path = p->path, .length = length}, .has_value = 1, .value = value};
+	p->patch = (op_patch){.place = {.path = p->path, .length = length}, .has_value = value != NULL, .value = value};
 	return p;
 }
 
@@ -228,14 +228,17 @@ void dv_follow(dv *d, const char *id) {
 	sy_follow(d->sync, id);
 }
 
-static int write(dv *d, const char *id, const char *key, op_value *value, const ch_site *site) {
+// the entry under (part, id) written: key (NULL: the whole) set to value (NULL: removed)
+static int write(dv *d, const char *part, const char *id, const char *key, op_value *value, const ch_site *site) {
 	dv_follow(d, id);
+	tb_key pk = tb_string(part), ik = tb_string(id);
+	nd_entry *e = tb_get(d->table, pk, ik);
+	// nothing there to remove
+	if (!e && !value) return 0;
 	put_t *p = put_new(key, value);
 	p->site = *site;
 	ch_header header = {.has_time = 1, .time = (int64_t)dv_now(), .actor = d->actor, .external = &p->site,
 		.external_length = 1};
-	tb_key pk = tb_string("value"), ik = tb_string(id);
-	nd_entry *e = tb_get(d->table, pk, ik);
 	if (!e) {
 		// none there: one made holding the value, or a map of the one key (its event tells sync)
 		op_value *whole = value;
@@ -265,13 +268,23 @@ static int write(dv *d, const char *id, const char *key, op_value *value, const 
 	return 0;
 }
 
-int dv_store(dv *d, const char *id, op_value *value) { return write(d, id, NULL, value, CH_HERE); }
+int dv_store(dv *d, const char *id, op_value *value) { return write(d, "value", id, NULL, value, CH_HERE); }
 
-int dv_set(dv *d, const char *id, const char *key, op_value *value) { return write(d, id, key, value, CH_HERE); }
+int dv_set(dv *d, const char *id, const char *key, op_value *value) { return write(d, "value", id, key, value, CH_HERE); }
+
+int dv_clear(dv *d, const char *id) { return write(d, "value", id, NULL, NULL, CH_HERE); }
+
+int dv_place(dv *d, const char *holder, const char *name, const char *id) {
+	return write(d, "children", holder, name, op_str(id), CH_HERE);
+}
+
+int dv_unplace(dv *d, const char *holder, const char *name) {
+	return write(d, "children", holder, name, NULL, CH_HERE);
+}
 
 int dv_wave(dv *d, const char *id, op_value *value) {
 	d->waving = id;
-	int code = write(d, id, NULL, value, CH_HERE);
+	int code = write(d, "value", id, NULL, value, CH_HERE);
 	d->waving = NULL;
 	return code;
 }

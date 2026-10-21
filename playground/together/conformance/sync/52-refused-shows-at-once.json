@@ -1,0 +1,57 @@
+{
+	"title": "a commit refused as it arrives (here: closed by a lock, at a host with none, so its shape is not a seal's) shows in the status as soon as it is refused, before anything else moves at the node",
+	"steps": [
+		{
+			"op": "host",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"lock": "tag",
+			"expect": { "key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }
+		},
+		{
+			"op": "host",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"lock": "unlocked",
+			"expect": { "key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394" }
+		},
+		{
+			"op": "mint",
+			"host": "a",
+			"as": "x",
+			"expect": { "id": "ermine:0010b40fde52c568d2f3864d68739e98b72b" }
+		},
+		{ "op": "follow", "host": "a", "id": "x", "expect": {} },
+		{ "op": "follow", "host": "b", "id": "x", "expect": {} },
+		{ "op": "connect", "a": "a", "b": "b", "expect": {} },
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [{ "path": [], "value": { "n": 1 } }],
+			"name": "w1",
+			"change": { "time": 1760000750, "actor": "a" },
+			"expect": { "commits": 1 }
+		},
+		{ "op": "quiet", "expect": {} },
+		{
+			"op": "status",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"status": {
+					"waiting": [],
+					"refused": [
+						{
+							"commit": "71d8fece3fbac9ed08e626538ef24dcd5ee31855a4d503228a970fde56115602",
+							"code": "shape"
+						}
+					],
+					"unsent": [],
+					"count": { "waiting": 0, "refused": 1, "unsent": 0 }
+				}
+			}
+		},
+		{ "op": "heads", "host": "b", "id": "x", "expect": { "heads": [] } }
+	]
+}

@@ -1,0 +1,55 @@
+{
+	"title": "child: hashed under ermine/v1/id/child of the parent id's bytes then the name's UTF-8; a parent not an ermine id is an error",
+	"steps": [
+		{
+			"op": "child",
+			"parent": "001000112233445566778899aabbccddeeff",
+			"name": "on",
+			"expect": {
+				"id": "1e10bae980cf456903c2f5183d2d90fdb1ca"
+			}
+		},
+		{
+			"op": "child",
+			"parent": "1e103acada92c16500df68b5452b5da63236",
+			"name": "on",
+			"expect": {
+				"id": "1e1054c2b754c7556439aca6e9ce82e2ed1a"
+			}
+		},
+		{
+			"op": "child",
+			"parent": "ed01d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+			"name": "runners",
+			"expect": {
+				"id": "1e10bc4a0ffe6e5db2a63a73c3a04b4be638"
+			}
+		},
+		{
+			"op": "child",
+			"parent": "001000112233445566778899aabbccddeeff",
+			"name": "",
+			"expect": {
+				"id": "1e10980540f30153df3329a1ba99b68d6940"
+			}
+		},
+		{
+			"op": "child",
+			"parent": "001100000000000000000000000000000000",
+			"name": "on",
+			"fails": true
+		},
+		{
+			"op": "child",
+			"parent": "001000112233445566778899aabbccddeeff00",
+			"name": "on",
+			"fails": true
+		},
+		{
+			"op": "child",
+			"parent": "",
+			"name": "on",
+			"fails": true
+		}
+	]
+}

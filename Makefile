@@ -21,24 +21,10 @@ node_src = $(harness_src) conformance/c/protocol_harness.c core/node/c/node_harn
 pack_src = core/node/c/node.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c ermine/encoding/c/pack.c ermine/encoding/c/pack_harness.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
 cbor_src = ermine/encoding/c/cbor_test.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c
 blop_src = ermine/encoding/c/blop.c ermine/encoding/c/blop_harness.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c $(blake3_src)
-id_src = extensions/subduction/c/id.c extensions/subduction/c/id_harness.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c $(blake3_src)
-seal_src = extensions/subduction/c/seal.c extensions/subduction/c/seal_harness.c ermine/encoding/c/blop.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c $(blake3_src) extensions/subduction/c/ed25519/ed25519.c extensions/subduction/c/ed25519/sha2.c
-history_src = extensions/subduction/c/history.c extensions/subduction/c/apply.c extensions/subduction/c/history_harness.c ermine/encoding/c/blop.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c $(blake3_src) \
-	core/op/c/value.c core/op/c/apply.c core/node/c/update.c core/node/c/node.c
-apply_src = extensions/subduction/c/history.c extensions/subduction/c/apply.c extensions/subduction/c/apply_harness.c ermine/encoding/c/blop.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c $(blake3_src) \
-	core/op/c/value.c core/op/c/apply.c core/node/c/update.c core/node/c/node.c
-commit_src = extensions/subduction/c/history.c extensions/subduction/c/apply.c extensions/subduction/c/commit.c extensions/subduction/c/commit_harness.c ermine/encoding/c/blop.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c $(blake3_src) \
-	core/op/c/value.c core/op/c/apply.c core/node/c/update.c core/node/c/node.c
 # Subduction's own BLAKE3 exports the same symbols as ermine/encoding/c/blake3: the C ones are renamed, in every file of the harness
 subduction_rename = $(foreach s,compress_in_place compress_in_place_portable compress_subtree_wide compress_xof compress_xof_portable hash_many hash_many_portable hasher_finalize hasher_finalize_seek hasher_init hasher_init_derive_key hasher_init_derive_key_raw hasher_reset hasher_update simd_degree version xof_many,-Dblake3_$(s)=ermc_blake3_$(s))
-subduction_lib = extensions/subduction/c/subduction/lib/libsubduction_c.a
-transport_flags = -Ic/subduction $(subduction_rename)
-transport_libs = $(subduction_lib) $(filter-out -lm,$(shell tr -d '\033' < extensions/subduction/c/subduction/lib/link.txt | sed 's/\[[0-9;]*m//g'))
-transport_src = extensions/subduction/c/transport.c extensions/subduction/c/transport_harness.c extensions/subduction/c/id.c extensions/subduction/c/seal.c extensions/subduction/c/history.c extensions/subduction/c/apply.c extensions/subduction/c/commit.c extensions/subduction/c/fragment.c \
-	ermine/encoding/c/blop.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c $(blake3_src) extensions/subduction/c/ed25519/ed25519.c extensions/subduction/c/ed25519/sha2.c \
-	core/op/c/value.c core/op/c/apply.c core/node/c/update.c core/node/c/node.c \
-	extensions/subduction/c/subduction/store_memory.c extensions/subduction/c/subduction/platform_posix.c $(subduction_lib)
-fragment_src = extensions/subduction/c/fragment.c extensions/subduction/c/fragment_harness.c ermine/encoding/c/json.c
+subduction_lib = playground/together/stacks/subduction/c/subduction/lib/libsubduction_c.a
+transport_libs = $(subduction_lib) $(filter-out -lm,$(shell tr -d '\033' < playground/together/stacks/subduction/c/subduction/lib/link.txt | sed 's/\[[0-9;]*m//g'))
 squish_src = $(harness_src) core/op/c/squish.c core/op/c/squish_harness.c
 op-apply_src = $(harness_src) conformance/c/protocol_harness.c core/op/c/apply_harness.c core/op/c/apply.c core/op/c/invert.c core/node/c/node.c
 paths_src = $(harness_src) conformance/c/protocol_harness.c core/scheduler/c/paths_harness.c core/scheduler/c/paths.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
@@ -77,13 +63,6 @@ node = core/node/c/node-harness
 pack = ermine/encoding/c/pack-harness
 cbor = ermine/encoding/c/cbor-test
 blop = ermine/encoding/c/blop-harness
-id = extensions/subduction/c/id-harness
-seal = extensions/subduction/c/seal-harness
-fragment = extensions/subduction/c/fragment-harness
-transport = extensions/subduction/c/transport-harness
-history = extensions/subduction/c/history-harness
-apply = extensions/subduction/c/apply-harness
-commit = extensions/subduction/c/commit-harness
 squish = core/op/c/squish-harness
 op-apply = core/op/c/apply-harness
 paths = core/scheduler/c/paths-harness
@@ -101,12 +80,12 @@ store = playground/tools/files/c/store-harness
 program = playground/tools/files/c/program-harness
 sys = playground/tools/files/c/sys-harness
 
-# presence (extensions/presence): its harness on places, the table and the scheduler (the C harness has no BroadcastChannel)
-presence_src = $(harness_src) extensions/presence/c/presence_harness.c extensions/presence/c/presence.c extensions/presence/c/channel.c filesystem/places/c/places.c core/unread/c/unread.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
-presence = extensions/presence/c/presence-harness
+# presence (playground/together/presence): its harness on places, the table and the scheduler (the C harness has no BroadcastChannel)
+presence_src = $(harness_src) playground/together/presence/c/presence_harness.c playground/together/presence/c/presence.c playground/together/presence/c/channel.c filesystem/places/c/places.c core/unread/c/unread.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
+presence = playground/together/presence/c/presence-harness
 presence_suite = presence
-presence_tests = $(wildcard extensions/presence/typescript/presence_harness_test.ts)
-LIBS = tracker table node pack cbor blop id seal fragment history apply commit transport squish op-apply paths places processes protect update guard scheduler names diag layout manifest store program sys
+presence_tests = $(wildcard playground/together/presence/typescript/presence_harness_test.ts)
+LIBS = tracker table node pack cbor blop squish op-apply paths places processes protect update guard scheduler names diag layout manifest store program sys
 LIBS += presence
 # hash (ermine/encoding): a value's name, BLAKE3 of its canonical CBOR, against conformance/hash/vectors.json
 hash_src = ermine/encoding/c/hash_test.c ermine/encoding/c/hash.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src)
@@ -151,6 +130,11 @@ sites_tests = $(wildcard ermine/sites/typescript/sites_harness_test.ts)
 sites-test_src = core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c ermine/sites/c/sites.c ermine/sites/c/sites_test.c
 sites-test = ermine/sites/c/sites-test
 LIBS += sites sites-test
+# ids (ermine/ids): ermine ids, their text and tree ids, on ermine/encoding's BLAKE3
+ids_src = $(harness_src) ermine/ids/c/ids.c ermine/ids/c/ids_harness.c $(blake3_src)
+ids = ermine/ids/c/ids-harness
+ids_suite = ids
+LIBS += ids
 # clingy (filesystem/clingy): keys known tracked or not, told when their last tracker goes; no suite
 clingy-test_src = core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c filesystem/clingy/c/clingy.c filesystem/clingy/c/clingy_test.c
 clingy-test = filesystem/clingy/c/clingy-test
@@ -186,8 +170,8 @@ $(programs-start) $(programs-start)-check: $(native_fixtures)
 clean: clean-native
 clean-native:
 	rm -f $(native_fixtures)
-# the process api (ermine/api): its harness on places, processes, guard, status, presence and patch nodes, on its own world
-api_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/runs.c filesystem/places/c/guard.c filesystem/protect/c/protect.c extensions/presence/c/presence.c extensions/presence/c/channel.c extensions/patch-nodes/c/patch.c ermine/api/c/api.c ermine/api/c/api_harness.c ermine/sites/c/sites.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
+# the process api (ermine/api): its harness on places, processes, guard, status and patch nodes, on its own world
+api_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/runs.c filesystem/places/c/guard.c filesystem/protect/c/protect.c extensions/patch-nodes/c/patch.c ermine/api/c/api.c ermine/api/c/api_harness.c ermine/sites/c/sites.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
 api = ermine/api/c/api-harness
 api_suite = api
 api_tests = $(wildcard ermine/api/typescript/api_harness_test.ts)
@@ -208,61 +192,77 @@ LIBS += pullynode
 # dens (playground/dens): a den's node, its offers, start by runner, stop, the asks; and other dens
 # over presence and its channel (away.c, suite away on this harness: its suite.json); the C api
 # (ermine/api), for its teller runner. two devices, as presence's harness makes them
-dens_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/start.c ermine/processes/c/runs.c ermine/boxes/c/boxes.c ermine/sites/c/sites.c filesystem/protect/c/protect.c extensions/presence/c/presence.c extensions/presence/c/channel.c extensions/build/c/host.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c ermine/encoding/c/hash.c $(blake3_src) filesystem/places/c/guard.c extensions/patch-nodes/c/patch.c ermine/api/c/api.c playground/dens/c/common.c playground/dens/c/policy.c playground/dens/c/offers.c playground/dens/c/start.c playground/dens/c/handlers.c playground/dens/c/here.c playground/dens/c/dens.c playground/dens/c/away.c playground/dens/c/dens_harness.c
+dens_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/start.c ermine/processes/c/runs.c ermine/boxes/c/boxes.c ermine/sites/c/sites.c filesystem/protect/c/protect.c playground/together/presence/c/presence.c playground/together/presence/c/channel.c extensions/build/c/host.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c ermine/encoding/c/hash.c $(blake3_src) filesystem/places/c/guard.c extensions/patch-nodes/c/patch.c ermine/api/c/api.c playground/dens/c/common.c playground/dens/c/policy.c playground/dens/c/offers.c playground/dens/c/start.c playground/dens/c/handlers.c playground/dens/c/here.c playground/dens/c/dens.c playground/dens/c/away.c playground/dens/c/dens_harness.c
 dens = playground/dens/c/dens-harness
 dens_suite = dens away
 dens_tests = $(wildcard playground/dens/typescript/dens_harness_test.ts)
 LIBS += dens
-# sync's pieces for the new commit shape (ermine/encoding commit, extensions/together): their own loop (lines_harness.c is conformance/c/harness.c
-# reading a symbol as a string no one can carry), against the suites in ermine/encoding/conformance and extensions/together/conformance.
+# sync's pieces for the new commit shape (ermine/encoding commit, playground/together): their own loop (lines_harness.c is conformance/c/harness.c
+# reading a symbol as a string no one can carry), against the suites in ermine/encoding/conformance and playground/together/conformance.
 # commit_form_harness.c (a commit's forms on the line) and commits_harness.c (the commits a harness makes by label) are the harnesses', never
 # the libraries'
 together_harness_src = ermine/encoding/c/lines_harness.c core/op/c/value.c core/op/c/json.c ermine/encoding/c/commit_form_harness.c
-together_commits_src = extensions/together/c/commits_harness.c
+together_commits_src = playground/together/c/commits_harness.c
 together_commit_src = ermine/encoding/c/commit.c ermine/encoding/c/pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src) core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
 together-commit_src = $(together_harness_src) ermine/encoding/c/commit_harness.c $(together_commit_src)
 together-commit = ermine/encoding/c/commit-harness
 together-commit_suite = commit
 LIBS += together-commit
-together-seal_src = $(together_harness_src) extensions/together/c/seal_harness.c extensions/together/c/seal.c extensions/together/c/ed25519/ed25519.c extensions/together/c/ed25519/sha2.c $(together_commit_src)
-together-seal = extensions/together/c/seal-harness
+together-seal_src = $(together_harness_src) playground/together/c/seal_harness.c playground/together/c/seal.c playground/together/c/ed25519/ed25519.c playground/together/c/ed25519/sha2.c $(together_commit_src)
+together-seal = playground/together/c/seal-harness
 together-seal_suite = seal
 LIBS += together-seal
-together_signed_src = extensions/together/c/seal.c extensions/together/c/ed25519/ed25519.c extensions/together/c/ed25519/sha2.c $(together_commit_src)
-together-packer_src = $(together_harness_src) $(together_commits_src) extensions/together/c/packer_harness.c extensions/together/c/packer.c $(together_signed_src)
-together-packer = extensions/together/c/packer-harness
+together_signed_src = playground/together/c/seal.c playground/together/c/ed25519/ed25519.c playground/together/c/ed25519/sha2.c $(together_commit_src)
+together-packer_src = $(together_harness_src) $(together_commits_src) playground/together/c/packer_harness.c playground/together/c/packer.c $(together_signed_src)
+together-packer = playground/together/c/packer-harness
 together-packer_suite = packer
 LIBS += together-packer
 # history, replay and snapshot: one harness, three suites (replay's and snapshot's suite.json name history's). The merge
 # rules it knows: rules_harness.c's (a rule for testing); playground/egwalker links its own (egwalker-history)
-together_history_src = $(together_harness_src) $(together_commits_src) conformance/c/protocol_harness.c extensions/together/c/history_harness.c extensions/together/c/history.c extensions/together/c/replay.c extensions/together/c/lists.c extensions/together/c/ids.c extensions/together/c/snapshot.c $(together_signed_src)
-together-history_src = $(together_history_src) extensions/together/c/rules_harness.c
-together-history = extensions/together/c/history-harness
+together_history_src = $(together_harness_src) $(together_commits_src) conformance/c/protocol_harness.c playground/together/c/history_harness.c playground/together/c/history.c playground/together/c/replay.c playground/together/c/lists.c playground/together/c/ids.c playground/together/c/snapshot.c $(together_signed_src)
+together-history_src = $(together_history_src) playground/together/c/rules_harness.c
+together-history = playground/together/c/history-harness
 together-history_suite = history replay snapshot lists
 LIBS += together-history
+# the subduction stack's fragments (stacks/subduction/c/fragment.c), and their fuzz against Subduction's own code (the oracle,
+# playground/together/conformance/fragment_oracle/)
+together-fragment_src = playground/together/stacks/subduction/c/fragment.c playground/together/c/fragment_harness.c ermine/encoding/c/json.c
+together-fragment = playground/together/c/fragment-harness
+together-fragment_suite = fragment
+together-fragment_tests = playground/together/conformance/fragment_fuzz_test.ts
+LIBS += together-fragment
 # the transport (devices over Subduction for C) and the integration with the table: Subduction's BLAKE3 and ermine/encoding's
-# are both linked, the C ones renamed (subduction_rename). Fragments are extensions/subduction's, as in the TypeScript
-together_transport_src = extensions/together/c/transport.c extensions/together/c/mailroom.c extensions/together/stacks/subduction/c/subduction.c extensions/together/c/ids.c extensions/together/c/history.c extensions/together/c/replay.c extensions/together/c/lists.c extensions/together/c/snapshot.c \
-	extensions/together/c/packer.c extensions/subduction/c/fragment.c extensions/subduction/c/subduction/platform_posix.c $(together_signed_src)
-together-transport_src = $(together_harness_src) $(together_commits_src) conformance/c/protocol_harness.c extensions/together/c/transport_harness.c extensions/together/c/wires_harness.c \
-	extensions/subduction/c/subduction/store_memory.c $(together_transport_src) $(subduction_lib)
-together-transport = extensions/together/c/transport-harness
+# are both linked, the C ones renamed (subduction_rename). Fragments are the subduction stack's, as in the TypeScript
+# (the mailroom names its documents by ermine ids: ermine/ids/c/ids.c)
+together_transport_src = playground/together/c/transport.c playground/together/c/mailroom.c playground/together/stacks/subduction/c/subduction.c playground/together/c/ids.c ermine/ids/c/ids.c playground/together/c/history.c playground/together/c/replay.c playground/together/c/lists.c playground/together/c/snapshot.c \
+	playground/together/c/packer.c playground/together/stacks/subduction/c/fragment.c playground/together/stacks/subduction/c/subduction/platform_posix.c $(together_signed_src)
+together-transport_src = $(together_harness_src) $(together_commits_src) conformance/c/protocol_harness.c playground/together/c/transport_harness.c playground/together/c/wires_harness.c \
+	playground/together/stacks/subduction/c/subduction/store_memory.c $(together_transport_src) $(subduction_lib)
+together-transport = playground/together/c/transport-harness
 together-transport_suite = transport
 together-transport_flags = $(subduction_rename) -DCONFORMANCE_HOOK
 together-transport_libs = $(transport_libs)
 LIBS += together-transport
-together_sync_src = $(together_harness_src) $(together_commits_src) conformance/c/protocol_harness.c extensions/together/c/sync_harness.c extensions/together/c/sync.c extensions/together/c/wires_harness.c \
-	extensions/subduction/c/subduction/store_memory.c core/table/c/table.c core/node/c/update.c $(together_transport_src) $(subduction_lib)
-together-sync_src = $(together_sync_src) extensions/together/c/rules_harness.c
-together-sync = extensions/together/c/sync-harness
+# the lock's suite: transport's devices and harness, built as a library (-DTRANSPORT_LIBRARY: its loop is tph_*), under
+# lock_harness.c's loop with the test lock
+together-lock_src = $(together-transport_src) playground/together/c/lock_harness.c
+together-lock = playground/together/c/lock-harness
+together-lock_suite = lock
+together-lock_flags = $(subduction_rename) -DCONFORMANCE_HOOK -DTRANSPORT_LIBRARY
+together-lock_libs = $(transport_libs)
+LIBS += together-lock
+together_sync_src = $(together_harness_src) $(together_commits_src) conformance/c/protocol_harness.c playground/together/c/sync_harness.c playground/together/c/sync.c playground/together/c/wires_harness.c \
+	playground/together/stacks/subduction/c/subduction/store_memory.c core/table/c/table.c core/node/c/update.c $(together_transport_src) $(subduction_lib)
+together-sync_src = $(together_sync_src) playground/together/c/rules_harness.c
+together-sync = playground/together/c/sync-harness
 together-sync_suite = sync
-together-sync_flags = $(subduction_rename)
+together-sync_flags = $(subduction_rename) -DCONFORMANCE_HOOK
 together-sync_libs = $(transport_libs)
 LIBS += together-sync
 # the presence channel over a device's ephemeral messages: two devices on a pipe, as channel_test.ts tries it; no suite
-together-channel-test_src = extensions/together/c/channel_test.c extensions/together/c/channel.c extensions/together/c/wires_harness.c core/op/c/value.c \
-	extensions/subduction/c/subduction/store_memory.c $(together_transport_src) $(subduction_lib)
-together-channel-test = extensions/together/c/channel-test
+together-channel-test_src = playground/together/c/channel_test.c playground/together/c/channel.c playground/together/c/wires_harness.c core/op/c/value.c \
+	playground/together/stacks/subduction/c/subduction/store_memory.c $(together_transport_src) $(subduction_lib)
+together-channel-test = playground/together/c/channel-test
 together-channel-test_flags = $(subduction_rename)
 together-channel-test_libs = $(transport_libs)
 LIBS += together-channel-test
@@ -279,8 +279,8 @@ egwalker-sync_flags = $(subduction_rename)
 egwalker-sync_libs = $(transport_libs)
 LIBS += egwalker-sync
 # two hosts typing into one text, merging by eg-walker (merge_bench.ts in C): merge-bench [keys] [pure]; no suite
-egwalker-merge-bench_src = playground/egwalker/c/merge_bench.c extensions/together/c/sync.c playground/egwalker/c/egwalker.c extensions/together/c/wires_harness.c \
-	core/op/c/value.c core/op/c/json.c extensions/subduction/c/subduction/store_memory.c core/table/c/table.c core/node/c/update.c \
+egwalker-merge-bench_src = playground/egwalker/c/merge_bench.c playground/together/c/sync.c playground/egwalker/c/egwalker.c playground/together/c/wires_harness.c \
+	core/op/c/value.c core/op/c/json.c playground/together/stacks/subduction/c/subduction/store_memory.c core/table/c/table.c core/node/c/update.c \
 	$(together_transport_src) $(subduction_lib)
 egwalker-merge-bench = playground/egwalker/c/merge-bench
 egwalker-merge-bench_flags = $(subduction_rename)
@@ -289,7 +289,7 @@ LIBS += egwalker-merge-bench
 # JSON text (ermine/encoding/c/json_text.c): only what reads or writes it, the harnesses and the files store; program
 # has it through store
 json_text_src = ermine/encoding/c/json_text.c
-$(foreach l,blop cbor hash pack id seal history apply commit fragment transport together-packer names diag layout manifest store,$(eval $(l)_src += $(json_text_src)))
+$(foreach l,blop cbor hash pack together-fragment together-packer names diag layout manifest store,$(eval $(l)_src += $(json_text_src)))
 HARNESSES = $(foreach l,$(LIBS),$($(l)))
 CHECKS = $(addsuffix -check,$(HARNESSES))
 
@@ -342,19 +342,6 @@ guard_tests = $(wildcard filesystem/places/typescript/guard_harness_test.ts)
 # the rest: env var, then the folders of their scenarios (conformance/<lib>/)
 pack_test = PACK_HARNESS conformance/pack/ conformance/cbor/
 blop_test = BLOP_HARNESS conformance/blop/
-# extensions/subduction's suites (extensions/subduction/conformance/subduction-<suite>/, the names of extensions/together's and core/op's
-# are theirs): the C commit has no live values, so subduction-commit-live is only the TypeScript harness's (not here: HARNESS would send it to C)
-id_suite = subduction-id
-seal_suite = subduction-seal
-fragment_suite = subduction-fragment
-history_suite = subduction-history
-apply_suite = subduction-apply
-commit_suite = subduction-commit
-transport_suite = subduction-transport
-# their fuzzes, against the same harness (HARNESS): the id's, the history's order fuzz and the fragment's against Subduction's own code
-id_tests = extensions/subduction/conformance/id_fuzz_test.ts
-history_tests = extensions/subduction/conformance/history_fuzz_test.ts
-fragment_tests = extensions/subduction/conformance/fragment_fuzz_test.ts
 # the files program's suites (playground/tools/files/conformance); the manifest's, the store's and the program's harnesses
 # work in temp folders of their own, the store's and the program's on real folders with extended attributes (macOS)
 names_suite = names
@@ -429,12 +416,12 @@ core/unread/c/unread-bench: core/node/c/node.c core/node/c/update.c core/op/c/va
 # host.c is a stub that says so. No suite, not part of all; playground/tools/files/c/test/cli.sh tries it. playground/tools/files/c/files-check:
 # the same with the sanitizers
 # the files tool, and its host (host.c): the store, the files program and its watcher on the files graph, synced by
-# extensions/together over Subduction (its files store, a WebSocket over OpenSSL)
+# playground/together over Subduction (its files store, a WebSocket over OpenSSL)
 OPENSSL ?= $(shell brew --prefix openssl@3 2>/dev/null || echo /usr)
 files_src = $(sort playground/tools/files/c/files.c playground/tools/files/c/host.c playground/tools/files/c/program.c playground/tools/files/c/watch.c playground/tools/files/c/graph.c \
 	$(filter-out playground/tools/files/c/store_harness.c playground/tools/files/c/disk_harness.c,$(store_src)) $(graph_src) \
-	extensions/together/c/sync.c $(together_transport_src) extensions/subduction/c/subduction/store_files.c \
-	extensions/subduction/c/subduction/websocket.c extensions/subduction/c/subduction/transport_openssl.c)
+	playground/together/c/sync.c $(together_transport_src) playground/together/stacks/subduction/c/subduction/store_files.c \
+	playground/together/stacks/subduction/c/subduction/websocket.c playground/together/stacks/subduction/c/subduction/transport_openssl.c)
 files_flags = $(subduction_rename) -I$(OPENSSL)/include
 files_libs = $(transport_libs) $(program_libs) -L$(OPENSSL)/lib -lssl -lcrypto
 playground/tools/files/c/files: $(files_src) $(wildcard */*/c/*.h */*/stacks/*/c/*.h)

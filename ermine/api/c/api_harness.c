@@ -122,10 +122,6 @@ typedef struct {
 	size_t ndenied, capdenied;
 	env **envs;
 	size_t nenvs, capenvs;
-	pres_world presence;
-	int has_presence;
-	int64_t clock;
-	char *who;
 	unsigned counter;
 	char idbuf[32];
 	running **procs;
@@ -169,8 +165,6 @@ static pr_answer deny_policy(void *ctx, const pr_ask *ask, const pr_read *read) 
 	}
 	return (pr_answer){PR_YES, "", NULL};
 }
-
-static int64_t read_clock(void *ctx) { return ((world *)ctx)->clock; }
 
 static const char *next_id(void *ctx) {
 	world *m = ctx;
@@ -281,18 +275,6 @@ static world *make(const op_value *o) {
 		}
 		m->policy = pr_call(deny_policy, m);
 	}
-	const op_value *pres = o ? op_get(o, "presence") : NULL;
-	if (pres && pres->type == OP_BOOL && pres->bool_) {
-		m->has_presence = 1;
-		m->presence = (pres_world){.table = m->table,
-			.places = m->places,
-			.scheduler = m->s,
-			.scope = m->host,
-			.now = read_clock,
-			.now_ctx = m};
-	}
-	const char *who = o ? hh_str(o, "who") : NULL;
-	if (who) m->who = xdup(who);
 	api_setup setup = {.scheduler = m->s,
 		.table = m->table,
 		.places = m->places,
@@ -301,8 +283,6 @@ static world *make(const op_value *o) {
 		.stop = stop_hook,
 		.stop_ctx = m,
 		.may = m->policy,
-		.presence = m->has_presence ? &m->presence : NULL,
-		.who = m->who,
 		.overlay = m->overlay,
 		.schedule = schedule,
 		.schedule_ctx = m};
@@ -330,7 +310,6 @@ static void finish(world *m) {
 	}
 	free(m->procs);
 	api_context_free(m->context);
-	if (m->has_presence) pres_free(&m->presence);
 	if (m->overlay) pn_free(m->overlay);
 	sn_free(m->scopes);
 	sc_free(m->s);
@@ -353,7 +332,6 @@ static void finish(world *m) {
 	free(m->queue);
 	op_free((op_value *)m->host_info.value);
 	op_free((op_value *)m->above_info.value);
-	free(m->who);
 	free(m);
 }
 
@@ -830,36 +808,6 @@ static res call(api *a, env *e, const op_value *c) {
 		op_value *back;
 		code = api_send(a, t[0], (const op_value *const *)args + 1, nraw ? nraw - 1 : 0, &back);
 		r = code ? bad(a, code) : ok(back);
-	} else if (strcmp(fn, "presence") == 0) {
-		pres_lives rows;
-		code = api_presence(a, t[0], &rows);
-		if (code) r = bad(a, code);
-		else {
-			op_value *l = op_list();
-			for (size_t i = 0; i < rows.n; i++) {
-				op_value *o = op_map();
-				op_set(o, "who", op_str(rows.items[i].who));
-				op_set(o, "value", op_ref(rows.items[i].value));
-				op_set(o, "until", op_num((double)rows.items[i].until));
-				op_push(l, o);
-			}
-			pres_lives_free(&rows);
-			r = ok(l);
-		}
-	} else if (strcmp(fn, "present") == 0) {
-		const op_value *o = nraw > 2 ? args[2] : NULL;
-		api_present options = {0};
-		if (o && o->type == OP_MAP) {
-			const op_value *ttl = op_get(o, "ttl");
-			if (ttl && ttl->type == OP_NUM) options.ttl = (int64_t)ttl->num;
-			options.who = hh_str(o, "who");
-		}
-		code = api_present_at(a, t[0], nraw > 1 ? args[1] : NULL, &options);
-		r = code ? bad(a, code) : ok(NULL);
-	} else if (strcmp(fn, "absent") == 0) {
-		const op_value *o = nraw > 1 ? args[1] : NULL;
-		code = api_absent(a, t[0], o && o->type == OP_MAP ? hh_str(o, "who") : NULL);
-		r = code ? bad(a, code) : ok(NULL);
 	} else if (strcmp(fn, "patch") == 0) {
 		code = api_patch(a, s0, t[1], nraw > 2 ? args[2] : NULL, &out);
 		r = code ? bad(a, code) : ok(node_json(&out));
@@ -1082,10 +1030,6 @@ static op_value *answer(const op_value *r) {
 		op_set(o, "v7", op_bool(v7));
 		op_set(o, "ordered", op_bool(ordered));
 		return o;
-	}
-	if (strcmp(op, "now") == 0) {
-		m->clock = (int64_t)op_get(r, "t")->num;
-		return op_map();
 	}
 	if (strcmp(op, "start") == 0) {
 		running *p = xalloc(sizeof *p);

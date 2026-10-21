@@ -1,0 +1,195 @@
+{
+	"title": "a parent not in the pack is written as its name",
+	"steps": [
+		{
+			"op": "make",
+			"name": "a",
+			"nonce": 1,
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			]
+		},
+		{
+			"op": "make",
+			"name": "b",
+			"nonce": 2,
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			]
+		},
+		{
+			"op": "make",
+			"name": "c",
+			"nonce": 3,
+			"parents": [
+				"b",
+				"1e20abababababababababababababababababababababababababababababababab"
+			],
+			"base": "1e20abababababababababababababababababababababababababababababababab",
+			"patches": []
+		},
+		{
+			"op": "pack",
+			"commits": [
+				"b",
+				"c"
+			],
+			"name": "r",
+			"expect": {
+				"pack": "b1616e026269648182782b65726d696e653a30303130326132613261326132613261326132613261326132613261326132613261326102636964738064626173658282f6018258221e20abababababababababababababababababababababababababababababababab016474696d65420000656163746f728182f602656e6f6e6365420402657461626c6581826576616c756502667265616465728182f602667369676e657281825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0267686561646572738182483401ed01ed01135f02676c616d706f727442040267706172656e7473828158221e20ea22c7c32ac17f2b66416889cd46a308eaaed5d50eb6dfa9e5ff7564e8d69e398258221e20abababababababababababababababababababababababababababababababab0067706174636865738281a26470617468806576616c756502806865787465726e616c8182f602686d657461646174618182f6026a7369676e617475726573825840b343bdd98a01c274a5b2d1facad1c2a22cf21f1aabd36b6faf99c3eef3a631c2e1060946d4a5395bae5004901e68de1c15e7ae0b8c0a9271d288d6d6c37d760158406ca365252ba70bf4c6f84dec9a8cc1e32a13c6ec1d41cc83a9f681f61c450a98b844780f3cc929500b80ac6b1833c89523b5a6c01457a29ae8372d23a5693b07"
+			}
+		},
+		{
+			"op": "columns",
+			"pack": "r",
+			"expect": {
+				"columns": {
+					"n": 2,
+					"id": [
+						[
+							"ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+							2
+						]
+					],
+					"ids": [],
+					"base": [
+						[
+							null,
+							1
+						],
+						[
+							{
+								"/": {
+									"bytes": "HiCrq6urq6urq6urq6urq6urq6urq6urq6urq6urq6urqw"
+								}
+							},
+							1
+						]
+					],
+					"time": {
+						"/": {
+							"bytes": "AAA"
+						}
+					},
+					"actor": [
+						[
+							null,
+							2
+						]
+					],
+					"nonce": {
+						"/": {
+							"bytes": "BAI"
+						}
+					},
+					"table": [
+						[
+							"value",
+							2
+						]
+					],
+					"reader": [
+						[
+							null,
+							2
+						]
+					],
+					"signer": [
+						[
+							{
+								"/": {
+									"bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA"
+								}
+							},
+							2
+						]
+					],
+					"headers": [
+						[
+							{
+								"/": {
+									"bytes": "NAHtAe0BE18"
+								}
+							},
+							2
+						]
+					],
+					"lamport": {
+						"/": {
+							"bytes": "BAI"
+						}
+					},
+					"parents": [
+						[
+							{
+								"/": {
+									"bytes": "HiDqIsfDKsF/K2ZBaInNRqMI6q7V1Q6236nl/3Vk6NaeOQ"
+								}
+							}
+						],
+						[
+							{
+								"/": {
+									"bytes": "HiCrq6urq6urq6urq6urq6urq6urq6urq6urq6urq6urqw"
+								}
+							},
+							0
+						]
+					],
+					"patches": [
+						[
+							{
+								"path": [],
+								"value": 2
+							}
+						],
+						[]
+					],
+					"external": [
+						[
+							null,
+							2
+						]
+					],
+					"metadata": [
+						[
+							null,
+							2
+						]
+					],
+					"signatures": [
+						{
+							"/": {
+								"bytes": "s0O92YoBwnSlstH6ytHCoizyHxqr02tvr5nD7vOmMcLhBglG1KU5W65QBJAeaN4cFeeuC4wKknHSiNbWw312AQ"
+							}
+						},
+						{
+							"/": {
+								"bytes": "bKNlJSunC/TG+E3smozB4yoTxuwdQcyDqfaB9hxFCpi4RHgPPMkpUAuArGsYM8iVI7WmwBRXoproNy0jpWk7Bw"
+							}
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "unpack",
+			"pack": "r",
+			"expect": {
+				"sealed": [
+					"b",
+					"c"
+				]
+			}
+		}
+	]
+}

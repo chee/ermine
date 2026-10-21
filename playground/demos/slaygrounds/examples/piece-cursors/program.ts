@@ -11,6 +11,12 @@ import { bind, handler } from "ermine-h"
 
 // what the host's extend adds (host.ts): the phone's world, and what crossed the channels
 type Host = {
+	laptop: {
+		rows: () => Live[]
+		set: (v: unknown) => void
+		renew: () => void
+		clear: () => void
+	}
 	phone: {
 		rows: () => Live[]
 		set: (v: unknown) => void
@@ -43,9 +49,9 @@ function cursor(who: string, me: boolean) {
 }
 
 export default function program(
-	{ open, read, edit, method, effect, presence, present, absent, teardown, ...host }: API & Host,
+	{ open, read, edit, method, effect, teardown, ...host }: API & Host,
 ) {
-	const { phone, crossed } = host
+	const { laptop, phone, crossed } = host
 	const beat = open("./beat", { laptop: true, phone: true })
 	method(
 		"on/beat",
@@ -54,7 +60,7 @@ export default function program(
 	const info = crossed()
 
 	// each device's pane: a pad and its rows, drawn by an effect from the rows its own world reads.
-	// the laptop's are the api's presence at /pad; the phone's are the host's, in its own world
+	// both are the host's: the laptop's in this world, the phone's in its own
 	const panes = new Map<string, { pad: HTMLElement; rows: HTMLElement }>()
 	const device = (
 		name: string,
@@ -102,12 +108,11 @@ export default function program(
 			tick()
 		})
 	}
-	let mine: { x: number; y: number } | undefined
 	device(
 		"laptop",
-		() => presence("/pad") as Live[],
-		(v) => present("/pad", mine = v, { ttl: TTL }),
-		() => (mine = undefined, absent("/pad")),
+		laptop.rows,
+		laptop.set,
+		laptop.clear,
 		(read, act) => effect("pointers", read, act),
 	)
 	device("phone", phone.rows, phone.set, phone.clear, phone.effect)
@@ -115,9 +120,7 @@ export default function program(
 	// the heartbeat: each device with it on renews its row (only one that is there) every second
 	const hb = setInterval(() => {
 		const b = read(beat) as Record<string, boolean>
-		if (b.laptop && mine && (presence("/pad") as Live[]).some((l) => l.who === "laptop")) {
-			present("/pad", mine, { ttl: TTL })
-		}
+		if (b.laptop) laptop.renew()
 		if (b.phone) phone.renew()
 	}, 1000)
 	// not the graph's: how long each row has left, drawn ten times a second

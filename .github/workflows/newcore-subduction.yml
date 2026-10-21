@@ -1,8 +1,8 @@
 # Builds Subduction for newcore's C sync once, so no one has to compile Rust
-# to use it: extensions/subduction/c/subduction's no_std library with a C ABI
+# to use it: playground/together/stacks/subduction/c/subduction's no_std library with a C ABI
 # (libsubduction_c.a, subduction.h) for each target, with what else it must be
 # linked with (link.txt). Each lands on the release `newcore-subduction-c`,
-# which `make -C extensions/subduction/c/subduction fetch` downloads; then `make` there
+# which `make -C playground/together/stacks/subduction/c/subduction fetch` downloads; then `make` there
 # only compiles C.
 #
 # - build: the library per target. riscv64gc must build (nothing pulls in
@@ -16,7 +16,7 @@ name: newcore-subduction
 on:
   push:
     paths:
-      - "extensions/subduction/c/subduction/**"
+      - "playground/together/stacks/subduction/c/subduction/**"
       - ".github/workflows/newcore-subduction.yml"
   workflow_dispatch:
 
@@ -47,7 +47,7 @@ jobs:
     continue-on-error: ${{ matrix.allowed == true }}
     defaults:
       run:
-        working-directory: extensions/subduction/c/subduction
+        working-directory: playground/together/stacks/subduction/c/subduction
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -55,7 +55,7 @@ jobs:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: extensions/subduction/c/subduction
+          workspaces: playground/together/stacks/subduction/c/subduction
           key: ${{ matrix.target }}
       - name: Build the library, and print what it must be linked with
         run: |
@@ -72,7 +72,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: subduction-c-${{ matrix.target }}
-          path: extensions/subduction/c/subduction/subduction-c-${{ matrix.target }}.tar.gz
+          path: playground/together/stacks/subduction/c/subduction/subduction-c-${{ matrix.target }}.tar.gz
 
   link:
     needs: build
@@ -89,13 +89,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     defaults:
       run:
-        working-directory: extensions/subduction/c/subduction
+        working-directory: playground/together/stacks/subduction/c/subduction
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: subduction-c-${{ matrix.target }}
-          path: extensions/subduction/c/subduction/build
+          path: playground/together/stacks/subduction/c/subduction/build
       - uses: dtolnay/rust-toolchain@stable
       - name: Link smoke.c and conformance/ against the library just built, and run them
         run: |
@@ -107,7 +107,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: extensions/subduction/c/subduction
+        working-directory: playground/together/stacks/subduction/c/subduction
     steps:
       - uses: actions/checkout@v4
       - name: A 32-bit RISC-V GCC, with picolibc
@@ -135,5 +135,5 @@ jobs:
           gh release view newcore-subduction-c --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 ||
             gh release create newcore-subduction-c --repo "$GITHUB_REPOSITORY" --prerelease \
               --title "Subduction for newcore's C sync (no_std, sans-IO)" \
-              --notes "libsubduction_c.a, its headers and link.txt for each target, built from extensions/subduction/c/subduction by .github/workflows/newcore-subduction.yml. Fetch with: make -C extensions/subduction/c/subduction fetch"
+              --notes "libsubduction_c.a, its headers and link.txt for each target, built from playground/together/stacks/subduction/c/subduction by .github/workflows/newcore-subduction.yml. Fetch with: make -C playground/together/stacks/subduction/c/subduction fetch"
           gh release upload newcore-subduction-c packs/*.tar.gz --repo "$GITHUB_REPOSITORY" --clobber

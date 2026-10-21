@@ -1,5 +1,5 @@
 // the pack fuzz: tables of nodes under (part, id) keys (nodes under several keys, the same key
-// twice, ermine:// ids and tricky ones), values of every kind (-0, NaN, typed arrays, bytes,
+// twice, ermine ids and tricky ones), values of every kind (-0, NaN, typed arrays, bytes,
 // stand-ins, maps with "__proto__", "/" and "" keys). checked:
 // - round trip: unpack(pack(t)) is t by content, keys sorted, none twice, a node under several
 //   keys one node; packing that again, or t in another order, the same bytes; op: false leaves
@@ -7,7 +7,7 @@
 // - encode and decode of one node: back by content, encoding again the same bytes
 // - cannot-carry: a lone surrogate or a symbol anywhere a node or a key has a string
 // - canonical: the columns rewritten as pack never writes them (a run split in two, a varint
-//   longer than it needs, an empty column written, an ermine:// id as text, …) and deflated as
+//   longer than it needs, an empty column written, an ermine id as text, …) and deflated as
 //   pack does: refused. another deflate of the same columns is told, not checked (open)
 // - fields: a key no map has, at every level, refused unless loosyGoosy, which passes it over;
 //   whole numbers at their edges (time and range ends safe, line, column and path numbers int32,
@@ -204,19 +204,26 @@ function node(pick: Pick, lone = false): Node {
 }
 
 const PARTS = ["value", "attributes", "children", "", "/", "__proto__", "é", "a\u0000"]
-const hexid = (pick: Pick) =>
-	Array.from({ length: 64 }, () => "0123456789abcdef"[pick(16)]).join("")
+const hexid = (pick: Pick, n = 32) =>
+	Array.from({ length: n }, () => "0123456789abcdef"[pick(16)]).join("")
+// ermine ids of each kind (fresh, hashed, key), and tricky ones: upper case, a digit short, an
+// unknown code, the old ermine:// form
 function id(pick: Pick): string {
-	switch (pick(8)) {
+	switch (pick(10)) {
 		case 0:
+			return "ermine:0010" + hexid(pick)
 		case 1:
-			return "ermine://" + hexid(pick)
+			return "ermine:" + ["0010", "1e10"][pick(2)] + hexid(pick)
 		case 2:
-			return "ermine://" + hexid(pick).toUpperCase()
+			return "ermine:ed01" + hexid(pick, 64)
 		case 3:
-			return "ermine://" + hexid(pick).slice(1)
+			return "ermine:0010" + hexid(pick).toUpperCase()
 		case 4:
-			return ["", "/", "__proto__", "\u0000", "😀", "ermine://"][pick(6)]
+			return "ermine:0010" + hexid(pick).slice(1)
+		case 5:
+			return ["ermine:0011" + hexid(pick), "ermine://" + hexid(pick, 64)][pick(2)]
+		case 6:
+			return ["", "/", "__proto__", "\u0000", "😀", "ermine:"][pick(6)]
 		default:
 			return `n${pick(6)}`
 	}
@@ -462,8 +469,11 @@ function rewrites(pick: Pick, c: Record<string, cbor.Value>): [string, unknown][
 	const raw = ids?.findIndex((i) => i instanceof Uint8Array) ?? -1
 	if (ids && raw >= 0) {
 		const r = copy()
-		;(r.ids as cbor.Value[])[raw] = "ermine://" + hex(ids[raw] as Uint8Array)
-		out.push(["an ermine:// id as text", r])
+		;(r.ids as cbor.Value[])[raw] = "ermine:" + hex(ids[raw] as Uint8Array)
+		out.push(["an ermine id as text", r])
+		const old = copy()
+		;(old.ids as cbor.Value[])[raw] = new Uint8Array(32)
+		out.push(["an old pack's id: 32 bytes", old])
 	}
 	if (c.has) {
 		const r = copy(), h = c.has as Uint8Array

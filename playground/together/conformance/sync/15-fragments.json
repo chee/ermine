@@ -1,0 +1,308 @@
+{
+	"title": "typing until a commit can head a fragment: the fragment is built, carries the run, and its loose commits go; a late joiner (following first) and a reload get it back",
+	"steps": [
+		{
+			"op": "host",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "mint",
+			"host": "a",
+			"as": "x",
+			"expect": {
+				"id": "ermine:0010b40fde52c568d2f3864d68739e98b72b"
+			}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"body": ""
+					}
+				}
+			],
+			"name": "w0",
+			"change": {
+				"time": 1760001363,
+				"actor": "a"
+			},
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "type",
+			"host": "a",
+			"id": "x",
+			"path": [
+				"body"
+			],
+			"at": 0,
+			"text": "xxxxxxxxxxxxxxxxxxxx",
+			"name": "t20",
+			"expect": {
+				"commits": 20
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "fragments",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"fragments": 0
+			}
+		},
+		{
+			"op": "stored",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"stored": 21
+			}
+		},
+		{
+			"op": "type",
+			"host": "a",
+			"id": "x",
+			"path": [
+				"body"
+			],
+			"at": 20,
+			"text": "x",
+			"name": "t21",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "fragments",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"fragments": 1
+			}
+		},
+		{
+			"op": "stored",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"stored": 0
+			}
+		},
+		{
+			"op": "commits",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"commits": 22
+			}
+		},
+		{
+			"op": "type",
+			"host": "a",
+			"id": "x",
+			"path": [
+				"body"
+			],
+			"at": 21,
+			"text": "yz",
+			"name": "t23",
+			"expect": {
+				"commits": 2
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "fragments",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"fragments": 1
+			}
+		},
+		{
+			"op": "stored",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"stored": 2
+			}
+		},
+		{
+			"op": "host",
+			"name": "c",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"expect": {
+				"key": "ed01ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
+		},
+		{
+			"op": "follow",
+			"host": "c",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "c",
+			"b": "a",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"value": {
+					"body": "xxxxxxxxxxxxxxxxxxxxxyz"
+				}
+			}
+		},
+		{
+			"op": "heads",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"heads": [
+					"t23"
+				]
+			}
+		},
+		{
+			"op": "commits",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"commits": 24
+			}
+		},
+		{
+			"op": "fragments",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"fragments": 1
+			}
+		},
+		{
+			"op": "stored",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"stored": 2
+			}
+		},
+		{
+			"op": "get",
+			"host": "c",
+			"id": "x",
+			"commit": "t20",
+			"expect": {
+				"tables": {
+					"value": {
+						"value": {
+							"body": "xxxxxxxxxxxxxxxxxxxx"
+						},
+						"change": {
+							"time": 1760000000,
+							"actor": "a",
+							"external": [
+								{
+									"file": "scenario",
+									"line": 1
+								}
+							],
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "1e20f746cabae24bdf67422d137a57c01cbc887f906d7a205e5faf7ace3ddb432536"
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "restart",
+			"host": "a",
+			"expect": {}
+		},
+		{
+			"op": "follow",
+			"host": "a",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"value": {
+					"body": "xxxxxxxxxxxxxxxxxxxxxyz"
+				}
+			}
+		},
+		{
+			"op": "heads",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"heads": [
+					"t23"
+				]
+			}
+		},
+		{
+			"op": "commits",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"commits": 24
+			}
+		},
+		{
+			"op": "fragments",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"fragments": 1
+			}
+		},
+		{
+			"op": "stored",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"stored": 2
+			}
+		}
+	]
+}

@@ -50,9 +50,11 @@ static long post(const ls_http_request *r) {
 		esp_http_client_set_url(client, r->url);
 		esp_http_client_set_timeout_ms(client, (int)(r->wait_ms + SLACK_MS));
 		int64_t size = -1;
-		if (esp_http_client_open(client, (int)r->length) == ESP_OK &&
-			(r->length == 0 || esp_http_client_write(client, (const char *)r->body, (int)r->length) == (int)r->length))
-			size = esp_http_client_fetch_headers(client);
+		// the length first, then the body's pieces as they are (the link's frames, never gathered)
+		int ok = esp_http_client_open(client, (int)r->length) == ESP_OK;
+		for (size_t i = 0; ok && i < r->pieces; i++)
+			ok = esp_http_client_write(client, (const char *)r->body[i].bytes, (int)r->body[i].length) == (int)r->body[i].length;
+		if (ok) size = esp_http_client_fetch_headers(client);
 		if (size < 0) {
 			esp_http_client_close(client);
 			if (kept) continue;

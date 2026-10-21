@@ -1,0 +1,152 @@
+{
+	"title": "one commit: its columns, and its sealed bytes back exactly",
+	"steps": [
+		{
+			"op": "make",
+			"name": "a",
+			"time": 1760000000,
+			"nonce": 1,
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"title": "hi"
+					}
+				}
+			]
+		},
+		{
+			"op": "sealed",
+			"commit": "a",
+			"expect": {
+				"sealed": "a3626964782b65726d696e653a30303130326132613261326132613261326132613261326132613261326132613261326166636f6d6d69745882a86474696d651a68e77800656163746f72f6656e6f6e636501657461626c656576616c7565667369676e65725822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c676c616d706f72740167706172656e747380677061746368657381a26470617468806576616c7565a1657469746c65626869697369676e617475726558483401ed01ed01135fd7220333e041fd7724036f686fbe2909d9105ab9d0da7b4350b097f7a97b435248e21d0251fca4a7a391740a7cde537984919a34cae54391b8bd395cfcf6ca06"
+			}
+		},
+		{
+			"op": "pack",
+			"commits": [
+				"a"
+			],
+			"name": "r",
+			"expect": {
+				"pack": "b1616e016269648182782b65726d696e653a30303130326132613261326132613261326132613261326132613261326132613261326101636964738064626173658182f6016474696d654580e0bb8e0d656163746f728182f601656e6f6e63654102657461626c6581826576616c756501667265616465728182f601667369676e657281825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0167686561646572738182483401ed01ed01135f01676c616d706f7274410267706172656e7473818067706174636865738181a26470617468806576616c7565a1657469746c656268696865787465726e616c8182f601686d657461646174618182f6016a7369676e617475726573815840d7220333e041fd7724036f686fbe2909d9105ab9d0da7b4350b097f7a97b435248e21d0251fca4a7a391740a7cde537984919a34cae54391b8bd395cfcf6ca06"
+			}
+		},
+		{
+			"op": "columns",
+			"pack": "r",
+			"expect": {
+				"columns": {
+					"n": 1,
+					"id": [
+						[
+							"ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+							1
+						]
+					],
+					"ids": [],
+					"base": [
+						[
+							null,
+							1
+						]
+					],
+					"time": {
+						"/": {
+							"bytes": "gOC7jg0"
+						}
+					},
+					"actor": [
+						[
+							null,
+							1
+						]
+					],
+					"nonce": {
+						"/": {
+							"bytes": "Ag"
+						}
+					},
+					"table": [
+						[
+							"value",
+							1
+						]
+					],
+					"reader": [
+						[
+							null,
+							1
+						]
+					],
+					"signer": [
+						[
+							{
+								"/": {
+									"bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA"
+								}
+							},
+							1
+						]
+					],
+					"headers": [
+						[
+							{
+								"/": {
+									"bytes": "NAHtAe0BE18"
+								}
+							},
+							1
+						]
+					],
+					"lamport": {
+						"/": {
+							"bytes": "Ag"
+						}
+					},
+					"parents": [
+						[]
+					],
+					"patches": [
+						[
+							{
+								"path": [],
+								"value": {
+									"title": "hi"
+								}
+							}
+						]
+					],
+					"external": [
+						[
+							null,
+							1
+						]
+					],
+					"metadata": [
+						[
+							null,
+							1
+						]
+					],
+					"signatures": [
+						{
+							"/": {
+								"bytes": "1yIDM+BB/XckA29ob74pCdkQWrnQ2ntDULCX96l7Q1JI4h0CUfykp6ORdAp83lN5hJGaNMrlQ5G4vTlc/PbKBg"
+							}
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "unpack",
+			"pack": "r",
+			"expect": {
+				"sealed": [
+					"a"
+				]
+			}
+		}
+	]
+}

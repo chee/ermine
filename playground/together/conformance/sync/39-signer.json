@@ -1,0 +1,134 @@
+{
+	"title": "a change from elsewhere keeps who signed it and the commit in its metadata: signer (key) and commit (name), hex; a write here never carries those keys from its change, so it claims no one else's signature",
+	"steps": [
+		{
+			"op": "host",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": { "key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }
+		},
+		{
+			"op": "host",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": { "key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394" }
+		},
+		{
+			"op": "mint",
+			"host": "a",
+			"as": "x",
+			"expect": {
+				"id": "ermine:0010b40fde52c568d2f3864d68739e98b72b"
+			}
+		},
+		{ "op": "follow", "host": "b", "id": "x", "expect": {} },
+		{ "op": "connect", "a": "a", "b": "b", "expect": {} },
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [{ "path": [], "value": { "n": 1 } }],
+			"change": { "time": 5, "actor": "a", "metadata": { "note": "hi" } },
+			"name": "w1",
+			"expect": { "commits": 1 }
+		},
+		{ "op": "quiet", "expect": {} },
+		{
+			"op": "change",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"change": {
+					"time": 5,
+					"actor": "a",
+					"metadata": {
+						"note": "hi",
+						"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"commit": "1e202eb445e06e0db953c2c44ab5e51e937b3ed59002e1bcf90579c9cb1f770ec3d0"
+					}
+				}
+			}
+		},
+		{
+			"op": "change",
+			"host": "a",
+			"id": "x",
+			"expect": { "change": { "time": 5, "actor": "a", "metadata": { "note": "hi" } } }
+		},
+		{
+			"op": "write",
+			"host": "b",
+			"id": "x",
+			"patches": [{ "path": ["n"], "value": 2 }],
+			"change": {
+				"time": 6,
+				"actor": "b",
+				"metadata": {
+					"note": "on it",
+					"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"commit": "00"
+				}
+			},
+			"name": "w2",
+			"expect": { "commits": 1 }
+		},
+		{
+			"op": "commit",
+			"host": "b",
+			"id": "x",
+			"commit": "w2",
+			"expect": {
+				"commit": {
+					"table": "value",
+					"actor": "b",
+					"metadata": { "note": "on it" },
+					"time": 6,
+					"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+					"nonce": 4207839826,
+					"parents": ["w1"],
+					"lamport": 2,
+					"patches": [{ "path": ["n"], "value": 2 }]
+				}
+			}
+		},
+		{ "op": "quiet", "expect": {} },
+		{
+			"op": "change",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"change": {
+					"time": 6,
+					"actor": "b",
+					"metadata": {
+						"note": "on it",
+						"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+						"commit": "1e20bea36f4e48d7c5a6ab734367a710241ad05301969cc7ea187b50516dca818f26"
+					}
+				}
+			}
+		},
+		{
+			"op": "get",
+			"host": "b",
+			"id": "x",
+			"commit": "w1",
+			"expect": {
+				"tables": {
+					"value": {
+						"value": { "n": 1 },
+						"change": {
+							"time": 5,
+							"actor": "a",
+							"metadata": {
+								"note": "hi",
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "1e202eb445e06e0db953c2c44ab5e51e937b3ed59002e1bcf90579c9cb1f770ec3d0"
+							}
+						}
+					}
+				}
+			}
+		}
+	]
+}

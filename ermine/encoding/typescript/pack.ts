@@ -10,7 +10,7 @@
 // absent fields are left out.
 //
 // written: {columns: bytes}, deflate.ts's deflate of a map of columns (empty ones left out):
-//   ids       ids in first-named order: ermine:// as 32 bytes, others as text
+//   ids       ids in first-named order, each as the string it is (text)
 //   parts     runs [[part, how many], …]
 //   which     per key, its id's index
 //   nodes     per key, 0 new, k + 1 node k again
@@ -22,7 +22,8 @@
 //   values    per node with a value
 // which, nodes, has, time: varints, 7 bits a byte, low first.
 // reading also takes the first form {keys: [[part, id, n], …], nodes: [...]}; unknown keys are
-// skipped (loosyGoosy).
+// skipped (loosyGoosy). an id as bytes (as ermine ids, and before them an old pack's 32 bytes, were
+// once written): not a pack.
 import * as cbor from "./cbor.ts"
 import { deflate, DeflateError, inflate } from "./deflate.ts"
 import createEntry, { type ChangeHeader, type Entry as NodeEntry } from "@ermine/node/entry"
@@ -347,7 +348,6 @@ function map(fields: [string, Uint8Array][]): Uint8Array {
 	return cat([head(5, ks.length), ...ks.flatMap(([k, v]) => [k, v])])
 }
 
-const ERMINE = /^ermine:\/\/[0-9a-f]{64}$/
 const HAS = { actor: 1, reader: 2, external: 4, metadata: 8, op: 16, value: 32 }
 
 // a value's encoding; one that cannot be carried: cannot-carry at the key given
@@ -389,11 +389,8 @@ export function pack(entries: Iterable<Entry>, options: Options = {}): Uint8Arra
 		let i = ids.get(r.id)
 		if (i === undefined) {
 			ids.set(r.id, i = idItems.length)
-			idItems.push(
-				ERMINE.test(r.id)
-					? bytesOf(Uint8Array.from(r.id.slice(9).match(/../g)!, (h) => parseInt(h, 16)))
-					: cbor.encode(r.id),
-			)
+			// an id as the string it is, whatever it looks like
+			idItems.push(cbor.encode(r.id))
 		}
 		which.put(i)
 		const n = numbers.get(r.node)
@@ -507,11 +504,9 @@ function columns(z: unknown, r: Reader, limit: number): Entry[] {
 		}
 		return out
 	}
+	// each id a string (one written as bytes, as ermine ids once were: not a pack)
 	const ids = listOf("ids").map((i) => {
-		if (typeof i === "string" && !ERMINE.test(i)) return i
-		if (i instanceof Uint8Array && i.length === 32) {
-			return "ermine://" + Array.from(i, (b) => b.toString(16).padStart(2, "0")).join("")
-		}
+		if (typeof i === "string") return i
 		throw no()
 	})
 	const parts = spread("parts"), which = numbers("which"), named = numbers("nodes")

@@ -1,6 +1,6 @@
 // the commit (commit.ts) on the line protocol (conformance/typescript/harness.ts). nothing lasts
 // between lines. another implementation joins by speaking this (HARNESS). conventions:
-// extensions/together/conformance/README.md
+// playground/together/conformance/README.md
 //
 // bytes: lowercase hex. a value (actor, metadata, a patch's value): its JSON form
 // (conformance/typescript/form.ts), lone surrogates taken. a commit in JSON: its fields as commit.ts

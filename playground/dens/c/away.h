@@ -41,7 +41,7 @@
 
 #include "dens.h"
 #include "../../../ermine/processes/c/processes.h"
-#include "../../../extensions/presence/c/presence.h"
+#include "../../together/presence/c/presence.h"
 
 #define DN_AWAY "away"
 // the anchor and topic: "dens:" and the topic

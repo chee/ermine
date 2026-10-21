@@ -1,4 +1,4 @@
-// the room driver: lab-pig's room and pigs on littlesync (extensions/together/stacks/littlesync; the
+// the room driver: lab-pig's room and pigs on littlesync (playground/together/stacks/littlesync; the
 // format: playground/demos/pigs/littlesync/pigs.h) as nodes in the graph.
 // /pigs/room is the room's value, /pigs/<first 8 hex of a pig's id> a pig's stored value, and
 // /pigs/<pig>/held the value its carrier is holding up (null: none), /pigs/<pig>/also the other drop

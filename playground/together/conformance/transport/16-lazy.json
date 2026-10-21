@@ -1,0 +1,195 @@
+{
+	"title": "lazy: a device made again on a storage holding three documents takes in only the ones it follows: the first on following, from the storage, before any peer; a second followed later comes from the storage too; the third never enters a history; a third device on the same storage, following one before its first run, holds that one alone",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"storage": "s",
+			"expect": { "key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }
+		},
+		{ "op": "follow", "device": "a", "expect": {} },
+		{
+			"op": "follow",
+			"device": "a",
+			"doc": "ermine:00102b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
+			"expect": {}
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"doc": "ermine:00102c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c",
+			"expect": {}
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"name": "c1",
+			"nonce": 1,
+			"patches": [{ "path": [], "value": { "n": 1 } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"doc": "ermine:00102b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
+			"name": "c2",
+			"nonce": 2,
+			"patches": [{ "path": [], "value": { "n": 2 } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"doc": "ermine:00102c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c",
+			"name": "c3",
+			"nonce": 3,
+			"patches": [{ "path": [], "value": { "n": 3 } }],
+			"expect": { "added": "taken" }
+		},
+		{ "op": "quiet", "expect": {} },
+		{ "op": "close", "device": "a", "expect": {} },
+		{
+			"op": "device",
+			"name": "a2",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"storage": "s",
+			"lazy": true,
+			"expect": { "key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }
+		},
+		{ "op": "quiet", "expect": {} },
+		{ "op": "heads", "device": "a2", "expect": { "heads": [] } },
+		{ "op": "arrived", "device": "a2", "expect": { "arrived": [] } },
+		{ "op": "follow", "device": "a2", "expect": {} },
+		{ "op": "quiet", "expect": {} },
+		{ "op": "heads", "device": "a2", "expect": { "heads": ["c1"] } },
+		{ "op": "heads", "device": "a2", "layer": "ephemeral", "expect": { "heads": ["c1"] } },
+		{
+			"op": "arrived",
+			"device": "a2",
+			"expect": {
+				"arrived": [
+					[
+						"ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+						"stored",
+						"c1",
+						false
+					],
+					[
+						"ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+						"ephemeral",
+						"c1",
+						false
+					]
+				]
+			}
+		},
+		{
+			"op": "heads",
+			"device": "a2",
+			"doc": "ermine:00102b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
+			"expect": { "heads": [] }
+		},
+		{
+			"op": "stored",
+			"device": "a2",
+			"doc": "ermine:00102b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
+			"expect": { "stored": ["c2"] }
+		},
+		{
+			"op": "follow",
+			"device": "a2",
+			"doc": "ermine:00102b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
+			"expect": {}
+		},
+		{ "op": "quiet", "expect": {} },
+		{
+			"op": "heads",
+			"device": "a2",
+			"doc": "ermine:00102b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
+			"expect": { "heads": ["c2"] }
+		},
+		{
+			"op": "arrived",
+			"device": "a2",
+			"expect": {
+				"arrived": [
+					[
+						"ermine:00102b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
+						"stored",
+						"c2",
+						false
+					],
+					[
+						"ermine:00102b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
+						"ephemeral",
+						"c2",
+						false
+					]
+				]
+			}
+		},
+		{
+			"op": "heads",
+			"device": "a2",
+			"doc": "ermine:00102c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c",
+			"expect": { "heads": [] }
+		},
+		{
+			"op": "stored",
+			"device": "a2",
+			"doc": "ermine:00102c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c",
+			"expect": { "stored": ["c3"] }
+		},
+		{
+			"op": "taking",
+			"device": "a2",
+			"doc": "ermine:00102c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c",
+			"expect": { "waiting": [], "refused": [] }
+		},
+		{ "op": "close", "device": "a2", "expect": {} },
+		{
+			"op": "device",
+			"name": "a3",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"storage": "s",
+			"lazy": true,
+			"follow": ["ermine:00102b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b"],
+			"expect": { "key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }
+		},
+		{ "op": "quiet", "expect": {} },
+		{
+			"op": "heads",
+			"device": "a3",
+			"doc": "ermine:00102b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
+			"expect": { "heads": ["c2"] }
+		},
+		{ "op": "heads", "device": "a3", "expect": { "heads": [] } },
+		{
+			"op": "heads",
+			"device": "a3",
+			"doc": "ermine:00102c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c",
+			"expect": { "heads": [] }
+		},
+		{
+			"op": "arrived",
+			"device": "a3",
+			"expect": {
+				"arrived": [
+					[
+						"ermine:00102b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
+						"stored",
+						"c2",
+						false
+					],
+					[
+						"ermine:00102b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
+						"ephemeral",
+						"c2",
+						false
+					]
+				]
+			}
+		}
+	]
+}

@@ -1,0 +1,158 @@
+{
+	"title": "Subduction stores only what passes the door: a loose commit that is no seal is refused (shape) before it is stored, so it is never sent; one not under its stored id (another commit put under a name) is passed over: not stored and no error, noted stored; Subduction (0.23) still lists it in its own tree in memory until it restarts, and pushes it to a peer subscribed, whose door passes it over too; a good one is stored and sent",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101"
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202"
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"expect": {}
+		},
+		{
+			"op": "follow",
+			"device": "b",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "make",
+			"name": "x",
+			"nonce": 9,
+			"patches": [
+				{
+					"path": [],
+					"value": 0
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "make",
+			"name": "y",
+			"nonce": 10,
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "put",
+			"device": "a",
+			"blob": "010203",
+			"head": "1111111111111111111111111111111111111111111111111111111111111111",
+			"expect": {}
+		},
+		{
+			"op": "put",
+			"device": "a",
+			"commit": "x",
+			"head": "2222222222222222222222222222222222222222222222222222222222222222",
+			"expect": {}
+		},
+		{
+			"op": "put",
+			"device": "a",
+			"commit": "y",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "stored",
+			"device": "a",
+			"expect": {
+				"stored": [
+					"2222222222222222222222222222222222222222222222222222222222222222",
+					"y"
+				]
+			}
+		},
+		{
+			"op": "stored",
+			"device": "b",
+			"expect": {
+				"stored": [
+					"2222222222222222222222222222222222222222222222222222222222222222",
+					"y"
+				]
+			}
+		},
+		{
+			"op": "closed",
+			"device": "b",
+			"commit": "y",
+			"expect": {
+				"first": "a2"
+			}
+		},
+		{
+			"op": "closed",
+			"device": "b",
+			"commit": "2222222222222222222222222222222222222222222222222222222222222222",
+			"expect": {}
+		},
+		{
+			"op": "closed",
+			"device": "a",
+			"commit": "2222222222222222222222222222222222222222222222222222222222222222",
+			"expect": {}
+		},
+		{
+			"op": "taking",
+			"device": "a",
+			"expect": {
+				"waiting": [],
+				"refused": [
+					{
+						"commit": "1111111111111111111111111111111111111111111111111111111111111111",
+						"refused": "shape"
+					},
+					{
+						"commit": "2222222222222222222222222222222222222222222222222222222222222222",
+						"refused": "stored"
+					}
+				]
+			}
+		},
+		{
+			"op": "taking",
+			"device": "b",
+			"expect": {
+				"waiting": [],
+				"refused": [
+					{
+						"commit": "2222222222222222222222222222222222222222222222222222222222222222",
+						"refused": "stored"
+					}
+				]
+			}
+		},
+		{
+			"op": "heads",
+			"device": "b",
+			"expect": {
+				"heads": [
+					"y"
+				]
+			}
+		}
+	]
+}

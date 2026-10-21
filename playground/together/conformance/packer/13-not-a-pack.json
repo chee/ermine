@@ -1,0 +1,137 @@
+{
+	"title": "not CBOR, not a map, or a key that is no column: not a pack",
+	"steps": [
+		{
+			"op": "make",
+			"name": "a",
+			"time": 1760000000,
+			"nonce": 1,
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"body": ""
+					}
+				}
+			]
+		},
+		{
+			"op": "make",
+			"name": "b",
+			"time": 1760000000,
+			"nonce": 2,
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"body"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "h"
+				}
+			]
+		},
+		{
+			"op": "make",
+			"name": "c",
+			"time": 1760000000,
+			"nonce": 3,
+			"parents": [
+				"b"
+			],
+			"patches": [
+				{
+					"path": [
+						"body"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "i"
+				}
+			]
+		},
+		{
+			"op": "pack",
+			"commits": [
+				"a",
+				"b",
+				"c"
+			],
+			"name": "r"
+		},
+		{
+			"op": "unpack",
+			"pack": "ff",
+			"expect": {
+				"error": "not-a-pack"
+			}
+		},
+		{
+			"op": "unpack",
+			"value": [],
+			"expect": {
+				"error": "not-a-pack"
+			}
+		},
+		{
+			"op": "unpack",
+			"value": "run",
+			"expect": {
+				"error": "not-a-pack"
+			}
+		},
+		{
+			"op": "unpack",
+			"value": {
+				"/": {
+					"bytes": "AQID"
+				}
+			},
+			"expect": {
+				"error": "not-a-pack"
+			}
+		},
+		{
+			"op": "unpack",
+			"pack": "r",
+			"set": {
+				"extra": 1
+			},
+			"expect": {
+				"error": "not-a-pack",
+				"column": "extra"
+			}
+		},
+		{
+			"op": "unpack",
+			"pack": "r",
+			"set": {
+				"aaa": 1,
+				"zz": 1
+			},
+			"expect": {
+				"error": "not-a-pack",
+				"column": "zz"
+			}
+		},
+		{
+			"op": "unpack",
+			"pack": "r",
+			"set": {
+				"x": 1,
+				"n": -1
+			},
+			"expect": {
+				"error": "not-a-pack",
+				"column": "x"
+			}
+		}
+	]
+}

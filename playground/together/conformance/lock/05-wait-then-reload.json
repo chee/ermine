@@ -1,0 +1,67 @@
+{
+	"title": "what a lock held is in the storage: a device made again on it, whose lock opens, takes it in as it starts",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"lock": "tag",
+			"storage": "s",
+			"expect": { "key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"lock": "tag",
+			"storage": "t",
+			"expect": { "key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394" }
+		},
+		{ "op": "lock", "device": "b", "open": "wait", "expect": {} },
+		{ "op": "follow", "device": "a", "expect": {} },
+		{ "op": "follow", "device": "b", "expect": {} },
+		{ "op": "connect", "a": "a", "b": "b", "expect": {} },
+		{
+			"op": "take",
+			"device": "a",
+			"name": "c1",
+			"nonce": 1,
+			"patches": [{ "path": [], "value": { "n": 1 } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"name": "c2",
+			"nonce": 444,
+			"parents": ["c1"],
+			"patches": [{ "path": ["n"], "value": 2 }],
+			"expect": { "added": "taken" }
+		},
+		{ "op": "quiet", "expect": {} },
+		{ "op": "heads", "device": "b", "expect": { "heads": [] } },
+		{
+			"op": "taking",
+			"device": "b",
+			"expect": {
+				"waiting": [{ "commit": "c2", "waiting": [] }, { "commit": "c1", "waiting": [] }],
+				"refused": []
+			}
+		},
+		{ "op": "stored", "device": "b", "expect": { "stored": ["c2", "c1"] } },
+		{ "op": "close", "device": "b", "expect": {} },
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"lock": "tag",
+			"storage": "t",
+			"expect": { "key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394" }
+		},
+		{ "op": "follow", "device": "b", "expect": {} },
+		{ "op": "quiet", "expect": {} },
+		{ "op": "heads", "device": "b", "expect": { "heads": ["c2"] } },
+		{ "op": "taking", "device": "b", "expect": { "waiting": [], "refused": [] } },
+		{ "op": "stored", "device": "b", "expect": { "stored": ["c2", "c1"] } }
+	]
+}

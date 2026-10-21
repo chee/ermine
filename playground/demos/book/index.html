@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>the ermine book</title>
+<meta name="description" content="ermine's core, one idea a page, each one running the real code for you to poke.">
+<link rel="icon" href="../pictures/ermine.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@400..800&display=swap">
+<link rel="stylesheet" href="./book.css">
+<style>
+body { height: auto; min-height: 100vh; }
+.cover { max-width: 46rem; margin: 0 auto; padding: 32px 16px 48px; }
+.cover h1 { font-size: 2.4rem; margin: 0; line-height: 1; }
+#cover { width: 100%; aspect-ratio: 240 / 110; image-rendering: pixelated; border: 1.5px solid var(--ink); box-shadow: 4px 4px 0 rgba(0,0,0,.15); margin-bottom: 20px; display: block; }
+.cover .sub { margin: 8px 0 24px; max-width: 34rem; }
+ol.toc { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+ol.toc a {
+	display: grid; grid-template-columns: 3rem 1fr; align-items: baseline; gap: 0 12px;
+	background: var(--paper); border: 1px solid var(--ink); padding: 10px 14px;
+	color: var(--ink); text-decoration: none;
+}
+ol.toc a:hover { background: var(--ink); color: var(--paper); }
+ol.toc a:hover .about { color: var(--lemon); }
+ol.toc .n { font: 700 1.6rem var(--mono); color: var(--cherry); grid-row: span 2; }
+ol.toc .t { font-size: 1.2rem; font-weight: 600; }
+ol.toc .about { color: #333; }
+ol.toc li.part { margin: 24px 0 6px; }
+ol.toc li.part h2 { margin: 0; font-size: 1.6rem; }
+ol.toc li.part p { margin: 2px 0 0; }
+.cover .foot { font-size: .85rem; color: #333; margin-top: 20px; }
+</style>
+<header class="bar">
+	<a class="name" href="../">🐰 ermine demos</a>
+	<span class="title">the book</span>
+</header>
+<div class="cover">
+	<canvas id="cover" aria-label="a pond with fish, minnows, lilies and an ermine on the bank"></canvas>
+	<h1>the ermine book</h1>
+	<p class="sub">ermine's core, one idea a page, all in one pond. every page runs the real code from
+		<span class="m">core/</span> for you to poke, so what you see is what ermine does.</p>
+	<h2 style="margin:0 0 8px;font-size:1.6rem">how it works</h2>
+	<ol class="toc" id="toc"></ol>
+	<p class="foot">Read them in order, or jump. Each page is a board you can drag around, with a notes card you can fold away.</p>
+</div>
+<script type="module">
+import { CHAPTERS, hrefOf } from "./book.ts"
+import { createPond, sprite } from "./kit/sprites.ts"
+const cv = document.getElementById("cover")
+const pond = createPond(cv, { width: 240, height: 110 })
+pond.draw({ fish: 7, minnows: 14, pike: 1, lilies: 5, sign: "the ermine book" })
+// the ermine, watching from the bank: drawn over each frame
+const ctx = cv.getContext("2d")
+;(function bank() {
+	sprite(ctx, "ermine", 214, 4, 1)
+	requestAnimationFrame(bank)
+})()
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c])
+document.getElementById("toc").innerHTML = CHAPTERS.map((c, i) =>
+	(c.part === "why" && CHAPTERS[i - 1]?.part !== "why"
+		? `<li class="part"><h2>what it's for</h2><p>four moments on a pig farm, each beside what other software does instead</p></li>`
+		: "") +
+	`<li><a href="${hrefOf(c, "book")}"><span class="n">${i + 1}</span><span class="t">${esc(c.title)}</span><span class="about">${esc(c.about)}</span></a></li>`
+).join("")
+</script>

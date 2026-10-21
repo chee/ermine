@@ -1,5 +1,5 @@
 // files: a command-line tool over the C store (store.h): a shared document laid out in a folder,
-// kept in step both ways (host.h, extensions/together), or a store on a real folder, no sync
+// kept in step both ways (host.h, playground/together), or a store on a real folder, no sync
 //
 //   files new <folder> [--server wss://…] [--home DIR]
 //                                   a new document laid out in the folder; prints its ermine:// id

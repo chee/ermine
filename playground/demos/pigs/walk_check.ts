@@ -14,9 +14,9 @@ const m = await import(`file://${file}`)
 await Deno.remove(file)
 
 const ids = [
-	"ermine://d3b583537595c9a6de0110781d4566d1" + "0".repeat(32),
-	"ermine://bf04115f9b284145026eab6801219d6e" + "0".repeat(32),
-	"ermine://0123456789abcdef0123456789abcdef" + "0".repeat(32),
+	"ermine:0010d3b583537595c9a6de0110781d4566d1",
+	"ermine:0010bf04115f9b284145026eab6801219d6e",
+	"ermine:00100123456789abcdef0123456789abcdef",
 ]
 const cases: string[] = []
 const now = Date.now()

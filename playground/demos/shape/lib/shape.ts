@@ -38,7 +38,13 @@ const ROW = 50
 const CAP = 600
 
 const isComputer = (o: Scope): o is Computer => "kind" in o
-const given = (o: Scope) => o.info.filter(([k]) => k !== "run" && k !== "mark")
+const given = (o: Scope) => Object.entries(o.info).filter(([k]) => k !== "run" && k !== "mark")
+// the scopes and computers under o, in the order made (its list runs newest to older)
+const kidsOf = (o: Scope) => {
+	const out: Scope[] = []
+	for (let k = o.newest; k; k = k.older) out.unshift(k)
+	return out
+}
 const short = (v: unknown, n = 24) => {
 	let s: string
 	try {
@@ -90,7 +96,7 @@ export function readShape(roots: Scope[], mode: Mode, name: (id: string) => stri
 		if (scopes.length >= CAP * 2) return void (capped = true)
 		scopes.push(o)
 		if (isComputer(o)) computers.push(o)
-		for (const kid of o.children) walk(kid)
+		for (const kid of kidsOf(o)) walk(kid)
 	}
 	for (const r of roots) walk(r)
 
@@ -222,7 +228,7 @@ export function readShape(roots: Scope[], mode: Mode, name: (id: string) => stri
 		const place = (o: Scope, depth: number): Box => {
 			const b = isComputer(o) ? computerBox(o) : scopeBox(o)
 			b.x = depth * COL
-			const kids = o.children.filter((k) => k.state !== "gone" && scopes.includes(k))
+			const kids = kidsOf(o).filter((k) => k.state !== "gone" && scopes.includes(k))
 			if (!kids.length) b.y = row++ * ROW
 			else {
 				const ys = kids.map((k) => {

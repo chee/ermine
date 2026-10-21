@@ -1,0 +1,78 @@
+{
+	"title": "a host made again over its storage has its nodes back",
+	"steps": [
+		{
+			"op": "host",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": { "key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }
+		},
+		{
+			"op": "mint",
+			"host": "a",
+			"as": "x",
+			"expect": {
+				"id": "ermine:0010b40fde52c568d2f3864d68739e98b72b"
+			}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [{ "path": [], "value": "kept" }],
+			"name": "w1",
+			"expect": { "commits": 1 }
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"table": "attributes",
+			"id": "x",
+			"patches": [{ "path": [], "value": { "k": 1 } }],
+			"name": "w2",
+			"expect": { "commits": 1 }
+		},
+		{ "op": "quiet", "expect": {} },
+		{ "op": "stored", "host": "a", "id": "x", "expect": { "stored": 2 } },
+		{ "op": "restart", "host": "a", "expect": {} },
+		{ "op": "follow", "host": "a", "id": "x", "expect": {} },
+		{ "op": "quiet", "expect": {} },
+		{ "op": "read", "host": "a", "id": "x", "expect": { "value": "kept" } },
+		{
+			"op": "read",
+			"host": "a",
+			"table": "attributes",
+			"id": "x",
+			"expect": { "value": { "k": 1 } }
+		},
+		{ "op": "heads", "host": "a", "id": "x", "expect": { "heads": ["w2"] } },
+		{ "op": "commits", "host": "a", "id": "x", "expect": { "commits": 2 } },
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [{ "path": [], "value": "again" }],
+			"name": "w3",
+			"expect": { "commits": 1 }
+		},
+		{
+			"op": "commit",
+			"host": "a",
+			"id": "x",
+			"commit": "w3",
+			"expect": {
+				"commit": {
+					"table": "value",
+					"actor": "a",
+					"external": [{ "file": "scenario", "line": 1 }],
+					"time": 1760000000,
+					"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"nonce": 2609446591,
+					"parents": ["w2"],
+					"lamport": 3,
+					"patches": [{ "path": [], "value": "again" }]
+				}
+			}
+		}
+	]
+}

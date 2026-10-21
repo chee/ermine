@@ -375,7 +375,7 @@ static void hack_draw(double now, double clock, double dt) {
 	bool near = near_bin(h_x(H.col), h_y(H.row)) || now < w.gulp_until;
 	if (near) h_put(h_row((by0 + by1) / 2), h_col((bx0 + bx1) / 2), "_", H_GOLD, true);
 	// the pigs: each a q where its feet are; one carried, a q above its holder's @
-	const op_value *room = room_value();
+	const op_value *room = room_kids();
 	for (size_t i = 0; i < npigs; i++) pigs[i].drawn = false;
 	for (int pass = 0; pass < 2; pass++)
 		for (size_t i = 0; i < npigs; i++) {
@@ -429,7 +429,7 @@ static void hack_draw(double now, double clock, double dt) {
 	for (size_t i = 0; i < npigs; i++)
 		if (in_room(room, pigs[i].id)) count++;
 	char status[512];
-	snprintf(status, sizeof status, "%s the Swineherd   Room:%.8s   Pigs:%d   Carrying:%s", w.name, ROOM + 9, count,
+	snprintf(status, sizeof status, "%s the Swineherd   Room:%.8s   Pigs:%d   Carrying:%s", w.name, ROOM + 11, count,
 		held ? pig_name(held->id) : "nothing");
 	int col = screen_text(s, s->rows - 2, 0, status, H_GREY, &H_BLACK, false);
 	(void)col;
