@@ -1,21 +1,70 @@
 {
 	"title": "a fragment is closed before it is stored: named by a multihash of its bytes (1e20, then their BLAKE3), its parents the names of its boundary; one that lands is opened, the loose commits it covers let go",
 	"steps": [
-		{"op":"device","name":"a","seed":"0101010101010101010101010101010101010101010101010101010101010101","lock":"tag","expect":{"key":"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"}},
-		{"op":"device","name":"b","seed":"0202020202020202020202020202020202020202020202020202020202020202","lock":"tag","expect":{"key":"ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"}},
-		{"op":"follow","device":"a","expect":{}},
-		{"op":"take","device":"a","name":"c1","nonce":1,"patches":[{"path":[],"value":{"n":1}}],"expect":{"added":"taken"}},
-		{"op":"take","device":"a","name":"c2","nonce":619,"parents":["c1"],"patches":[{"path":["n"],"value":2}],"expect":{"added":"taken"}},
-		{"op":"quiet","expect":{}},
-		{"op":"calls","device":"a","expect":{"closed":[{"name":"c1","parents":[]},{"name":"c2","parents":["c1"]},{"name":"1e2059ee2092f1886325ef81a2b56cee5147d979e2afd7c03740db7d2dedef78ec68","parents":[]}],"opened":true}},
-		{"op":"closed","device":"a","head":"c2","expect":{"first":"ff"}},
-		{"op":"fragments","device":"a","expect":{"fragments":[{"head":"c2","members":["c2","c1"],"boundary":[]}]}},
-		{"op":"stored","device":"a","expect":{"stored":[]}},
-		{"op":"follow","device":"b","expect":{}},
-		{"op":"connect","a":"a","b":"b","expect":{}},
-		{"op":"quiet","expect":{}},
-		{"op":"fragments","device":"b","expect":{"fragments":[{"head":"c2","members":["c2","c1"],"boundary":[]}]}},
-		{"op":"heads","device":"b","expect":{"heads":["c2"]}},
-		{"op":"closed","device":"b","head":"c2","expect":{"first":"ff"}}
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"lock": "tag",
+			"expect": { "key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"lock": "tag",
+			"expect": { "key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394" }
+		},
+		{ "op": "follow", "device": "a", "expect": {} },
+		{
+			"op": "take",
+			"device": "a",
+			"name": "c1",
+			"nonce": 1,
+			"patches": [{ "path": [], "value": { "n": 1 } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"name": "c2",
+			"nonce": 109,
+			"parents": ["c1"],
+			"patches": [{ "path": ["n"], "value": 2 }],
+			"expect": { "added": "taken" }
+		},
+		{ "op": "quiet", "expect": {} },
+		{
+			"op": "calls",
+			"device": "a",
+			"expect": {
+				"closed": [
+					{ "name": "c1", "parents": [] },
+					{ "name": "c2", "parents": ["c1"] },
+					{
+						"name": "1e20bfab2d016a3b1534cd67d1d52720bba4ddfec6795323c797c4e32cea7b30c0c4",
+						"parents": []
+					}
+				],
+				"opened": true
+			}
+		},
+		{ "op": "closed", "device": "a", "head": "c2", "expect": { "first": "ff" } },
+		{
+			"op": "fragments",
+			"device": "a",
+			"expect": { "fragments": [{ "head": "c2", "members": ["c2", "c1"], "boundary": [] }] }
+		},
+		{ "op": "stored", "device": "a", "expect": { "stored": [] } },
+		{ "op": "follow", "device": "b", "expect": {} },
+		{ "op": "connect", "a": "a", "b": "b", "expect": {} },
+		{ "op": "quiet", "expect": {} },
+		{
+			"op": "fragments",
+			"device": "b",
+			"expect": { "fragments": [{ "head": "c2", "members": ["c2", "c1"], "boundary": [] }] }
+		},
+		{ "op": "heads", "device": "b", "expect": { "heads": ["c2"] } },
+		{ "op": "closed", "device": "b", "head": "c2", "expect": { "first": "ff" } }
 	]
 }

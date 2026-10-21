@@ -6,6 +6,7 @@ import { type Commit, compare, encode, name as nameOf } from "@ermine/encoding/c
 import type { Kept } from "./history.ts"
 import { replay, type Tables } from "./replay.ts"
 import { createSigner, seal, type Signer, stored } from "./seal.ts"
+import { envelope, treeOf } from "../stacks/subduction/typescript/subduction.ts"
 import {
 	type Arrival,
 	type Check,
@@ -21,8 +22,8 @@ import {
 	transport_conformance_hook_taking,
 } from "./transport_conformance_hook.ts"
 
-const DOC = "ermine://" + "2a".repeat(16) + "0".repeat(32)
-const DOC_BYTES = Uint8Array.from(DOC.slice(9).match(/../g)!, (x) => parseInt(x, 16))
+// a fresh ermine id, and its bytes (what a seal binds)
+const DOC = "ermine:0010" + "2a".repeat(16)
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const names = (ks: Kept[]) => ks.map((k) => hex(k.name))
 
@@ -97,7 +98,7 @@ function commitBy(key: Uint8Array, parents: On[], value: unknown) {
 async function make(signer: Signer, parents: On[] = [], value: unknown = 0, deep = false) {
 	for (;;) {
 		const c = commitBy(signer.key, parents, value)
-		const sealed = await seal(c.bytes, signer, DOC_BYTES)
+		const sealed = await seal(c.bytes, signer, DOC)
 		const s = stored(sealed)
 		if ((s[0] === 0) === deep) return { ...c, sealed, stored: s }
 	}
@@ -160,13 +161,25 @@ Deno.test({
 	async fn() {
 		const a = await party(1)
 		const p = await make(a.signer, [], 1), c = await make(a.signer, [p], 2)
-		await transport_conformance_hook_put(a.device, DOC, c.stored, [p.stored], c.sealed)
+		await transport_conformance_hook_put(
+			a.device,
+			DOC,
+			c.stored,
+			[p.stored],
+			envelope(DOC, { sealed: c.sealed }),
+		)
 		await quiet(a)
 		assertEquals(transport_conformance_hook_taking(a.device, DOC).waiting, [{
 			commit: hex(c.stored),
 			waiting: [hex(p.name)],
 		}])
-		await transport_conformance_hook_put(a.device, DOC, p.stored, [], p.sealed)
+		await transport_conformance_hook_put(
+			a.device,
+			DOC,
+			p.stored,
+			[],
+			envelope(DOC, { sealed: p.sealed }),
+		)
 		await quiet(a)
 		assertEquals(transport_conformance_hook_taking(a.device, DOC), { waiting: [], refused: [] })
 		assertEquals(names(a.device.history(DOC).heads()), [hex(c.name)])
@@ -303,6 +316,9 @@ Deno.test({
 
 		const again = await party(1, { storage })
 		await again.device.ready()
+		// the tree is listed until its id is named: taken in on following
+		assertEquals(again.device.unnamed(), 1)
+		await again.device.follow(DOC)
 		await quiet(again)
 		assertEquals(again.device.snapshot(DOC, c2.name)?.value.value, want)
 		assertEquals(names(again.device.history(DOC).heads()), [hex(c3.name)])
@@ -343,7 +359,7 @@ Deno.test({
 
 Deno.test({
 	name:
-		"transport: a device made again on its storage takes in every commit, checked and announced",
+		"transport: a device made again on its storage takes in every commit once it follows the document, checked and announced",
 	...opts,
 	async fn() {
 		const storage = new sd.MemoryStorage() as unknown as sd.SedimentreeStorage
@@ -360,6 +376,9 @@ Deno.test({
 		const arrivals: Arrival[] = []
 		device.arrived((r) => arrivals.push(r))
 		await device.ready()
+		await device.idle()
+		assertEquals(arrivals.length, 0)
+		await device.follow(DOC)
 		await device.idle()
 		assertEquals(checked, 6)
 		const stored = told(arrivals.filter((r) => r.layer === "stored"))
@@ -423,5 +442,64 @@ Deno.test({
 		await quiet(b)
 		assertEquals(names(b.device.history(DOC).heads()), [hex(c.name)])
 		await a.device.close(), await b.device.close()
+	},
+})
+
+Deno.test({
+	name:
+		"transport: a tree not named yet gets the door: another commit under a real one's name, from a peer that stored it with no door, is not stored, and once the device restarts the real one comes",
+	...opts,
+	async fn() {
+		const tree = sd.SedimentreeId.fromBytes(treeOf(DOC))
+		const a = await party(1)
+		await a.device.follow(DOC)
+		const real = await make(a.signer, [], 1)
+		assertEquals(a.device.take(DOC, real.bytes, "stored"), "taken")
+		// m: a Subduction with no door, holding another commit's seal under the real one's stored id
+		const m = await party(9)
+		const fake = await make(m.signer, [], 2)
+		const mstore = new sd.MemoryStorage()
+		const raw = new sd.Subduction({
+			signer: {
+				sign: (x: Uint8Array) => m.signer.sign(x),
+				verifyingKey: () => m.key.subarray(2),
+			},
+			storage: mstore as unknown as sd.SedimentreeStorage,
+			onEphemeral: () => {},
+		})
+		await raw.addCommit(
+			tree,
+			new sd.CommitId(real.stored),
+			[],
+			envelope(DOC, { sealed: fake.sealed }),
+		)
+		const holder = await party(9, { storage: mstore as unknown as sd.SedimentreeStorage })
+		await holder.device.follow(DOC)
+		// b, not following yet: what comes for the tree passes its door or is not stored
+		const bstore = new sd.MemoryStorage()
+		let b = await party(2, { storage: bstore as unknown as sd.SedimentreeStorage })
+		{
+			const [x, y] = pipe()
+			await Promise.all([holder.device.connect(x, true), b.device.connect(y, false)])
+		}
+		await quiet(holder, b)
+		assertEquals((await bstore.loadAllCommits(tree)).length, 0)
+		assertEquals(b.device.unnamed(), 0)
+		// it came: Subduction (0.23) holds the name in its own tree in memory, until b restarts
+		assertEquals((await b.device.stored(DOC)).map(hex), [hex(real.stored)])
+		// made again on its storage, following, connected to the real one's holder: it comes
+		await b.device.close()
+		b = await party(2, { storage: bstore as unknown as sd.SedimentreeStorage })
+		await b.device.follow(DOC)
+		{
+			const [x, y] = pipe()
+			await Promise.all([a.device.connect(x, true), b.device.connect(y, false)])
+		}
+		await quiet(a, b)
+		for (let i = 0; i < 40 && b.device.history(DOC).heads().length === 0; i++) {
+			await new Promise((r) => setTimeout(r, 50))
+		}
+		assertEquals(names(b.device.history(DOC).heads()), [hex(real.name)])
+		await a.device.close(), await b.device.close(), await holder.device.close()
 	},
 })

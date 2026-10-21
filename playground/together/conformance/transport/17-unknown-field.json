@@ -18,16 +18,40 @@
 		{
 			"op": "put",
 			"device": "a",
-			"blob": "a266636f6d6d6974588fa9627a7aa1656c617465728201026474696d651a68e77800656163746f72f6656e6f6e636501657461626c656576616c7565667369676e65725822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c676c616d706f72740167706172656e747380677061746368657381a26470617468806576616c7565a1657469746c65626869697369676e617475726558483401ed01ed01135f99c4634ab2d932552008c79feb79c50bebdeb83fe9f88dc82b3bb414af310b2db38b8af9bc936d1f49f51a2da74541096d9d14038841e93d3b1d5ec28083fb0c",
+			"blob": "a3626964782b65726d696e653a30303130326132613261326132613261326132613261326132613261326132613261326166636f6d6d6974588fa9627a7aa1656c617465728201026474696d651a68e77800656163746f72f6656e6f6e636501657461626c656576616c7565667369676e65725822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c676c616d706f72740167706172656e747380677061746368657381a26470617468806576616c7565a1657469746c65626869697369676e617475726558483401ed01ed01135fbf0c523cee5921763a4fe462aa83ee5f0c9a129e00a2e915eb4d91bd4ef1e5cf9ef004194da01eafa44dd8a0ad146ce2a70b711c81b23cbaf93d9f8dabe4ba03",
 			"parents": [],
 			"expect": {}
 		},
 		{ "op": "connect", "a": "a", "b": "b", "expect": {} },
 		{ "op": "quiet", "expect": {} },
-		{ "op": "heads", "device": "a", "expect": { "heads": ["1e203b6db03a3df9c5ee99448de97fb5577539d4c8a7216005c7cc8451316ec75b92"] } },
-		{ "op": "heads", "device": "b", "expect": { "heads": ["1e203b6db03a3df9c5ee99448de97fb5577539d4c8a7216005c7cc8451316ec75b92"] } },
-		{ "op": "stored", "device": "a", "expect": { "stored": ["6efe3e1ce25fb3563cceec1ffd711dcee43cebed3e706ba4f76782d07b56d4ca"] } },
-		{ "op": "stored", "device": "b", "expect": { "stored": ["6efe3e1ce25fb3563cceec1ffd711dcee43cebed3e706ba4f76782d07b56d4ca"] } },
+		{
+			"op": "heads",
+			"device": "a",
+			"expect": {
+				"heads": ["1e203b6db03a3df9c5ee99448de97fb5577539d4c8a7216005c7cc8451316ec75b92"]
+			}
+		},
+		{
+			"op": "heads",
+			"device": "b",
+			"expect": {
+				"heads": ["1e203b6db03a3df9c5ee99448de97fb5577539d4c8a7216005c7cc8451316ec75b92"]
+			}
+		},
+		{
+			"op": "stored",
+			"device": "a",
+			"expect": {
+				"stored": ["733a5a4a84617cd5929fde65c8bbc4984fc9e889cab430a4373224fb3f7ab239"]
+			}
+		},
+		{
+			"op": "stored",
+			"device": "b",
+			"expect": {
+				"stored": ["733a5a4a84617cd5929fde65c8bbc4984fc9e889cab430a4373224fb3f7ab239"]
+			}
+		},
 		{ "op": "taking", "device": "b", "expect": { "waiting": [], "refused": [] } }
 	]
 }

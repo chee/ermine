@@ -6,10 +6,10 @@
 // the Cardputer, playground/cardputer).
 //
 // what a device keeps, per followed node (never a history):
-//   - per path written, a short list of standing writes (usually one): each a patch of a held commit,
+//   - per path written (in its value or its children: no other table is kept), a short list of standing writes (usually one): each a patch of a held commit,
 //     its value (or gone: a delete stands as gone), the names its patch replaces, and up to 16 names
 //     it took over from the writes it replaced (8 bytes each)
-//   - its current value (an op_value, value.h): the first item at each path, composed
+//   - its current value and children (op_values, value.h): the first item at each path, composed
 //   - the sealed bytes of the commits with a write standing, so a fresh peer can be sent them and
 //     verify them; its own until each peer has them; and each one's parents (8 bytes of each name)
 //   - passing commits: ones no write of stands any more, kept only till every link that is up has
@@ -65,8 +65,8 @@
 // commit and seal held, so they are offered and can be replaced, but no value in memory (read again
 // from the seal when one comes up to the first LS_ITEMS): about 570 B each on a Mac. Never dropped.
 //
-// the node's id is in the signed message (a seal is good in its document only, seal.h), so a commit
-// sealed for one node does not verify in another.
+// the node's id is in the signed message and in the seal (a seal is good in its document only,
+// seal.h), so a commit sealed for one node does not open in another.
 //
 // trust: the peers are trusted (your own Mac over USB). Any key may write: a seal shows who signed, not
 // that they may. A commit's lamport is taken as given (no parents are kept to check it), so a high
@@ -86,7 +86,8 @@
 // ("L", one CBOR message, the CRC-32 of the message, 4 bytes little end), 0x00. What does not decode
 // is dropped (ls_stats.junk). Messages are maps with "t":
 //   hello      {key: multikey, stack: "littlesync/0", re?: true}
-//   heads      {node: 32 bytes, heads: [name], re?: true}  names of the commits making the node
+//   heads      {node: text, heads: [name], re?: true}     names of the commits making the node (node:
+//                                                        its id, at most LS_ID_LEN bytes of UTF-8)
 //   want       {node, names: [name]}
 //   commits    {node, sealed: [bytes]}                      seals (seal.h's format)
 //   ephemeral  {node, commit: bytes}                        an unsealed commit, one put at []
@@ -102,7 +103,7 @@
 // device's next stored commit on the node lands, or 4 s after the last beat. ls_hold resends every 1 s.
 //
 // messages (short-lived, never stored, as presence.ts's channel carries them): bytes (opaque, up to
-// ls_options.message) on a topic (a string, 1 to LS_TOPIC_MAX bytes: "ermine://<hex>", "dens:root"),
+// ls_options.message) on a topic (a string, 1 to LS_TOPIC_MAX bytes: "ermine:<hex>", "dens:root"),
 // sealed by who said them (seal.ts's sealMessage, together's channel's too): a say's bytes are the
 // canonical map {bytes, signer: multikey, signature: Ed25519's varsig header and 64 bytes}, at most
 // LS_SEALED more than the bytes. What is signed: "ermine/v0/message", the BLAKE3 of the bytes, the
@@ -121,7 +122,7 @@
 // one a device, never stored: who, a value, until. A row is a message on the room's topic: presence.ts's
 // CBOR, {ttl, value} (ttl: the ms it lasts, the time left, not a time: clocks differ) or {gone: true}; a
 // numbered patch ({patches, n}) is not taken (the next renew is whole) but is relayed. A followed node
-// is a room on its id ("ermine://<node's hex>", web pigs' topic); ls_presence_on makes one on any topic.
+// is a room on its id ("ermine:<node's hex>", web pigs' topic); ls_presence_on makes one on any topic.
 // ls_presence: my row, sent now, every LS_RENEW_MS with ttl LS_TTL_MS, and to a peer when it begins to
 // want the room; NULL sends gone. Others' rows go at until or on gone; past ls_options.rows a room, the
 // other device's row soonest to lapse goes (never mine). ls_close sends nothing: ls_presence(node,
@@ -134,7 +135,7 @@
 //   ls_options o = {.store = st, .random = my_random};   // my_random: esp_fill_random
 //   ls_dev *d = ls_open(&o);
 //   ls_link *usb = ls_link(d);                           // one per byte stream; ls_unlink when it goes away
-//   ls_node *node = ls_follow(d, "ermine://<64 hex>");   // a node: its saved value, then its peers'
+//   ls_node *node = ls_follow(d, "ermine:0010<32 hex>");   // a node: its saved value, then its peers'
 //   uint32_t seen = 0;
 //   for (;;) {                                           // one task, 8 KB of stack or more
 //     n = usb_serial_jtag_read_bytes(buf, sizeof buf, 0); if (n > 0) ls_feed(usb, buf, n);
@@ -180,7 +181,10 @@
 #ifndef LS_ITEMS
 #define LS_ITEMS 4
 #endif
-#define LS_ID_LEN 73
+// a node's id at most, in bytes of UTF-8 (on the wire: the id as text, with its length): a longer one
+// is refused (ls_follow). For now a node is an ermine id ("ermine:" and 36 or 68 hex: 43 or 75 bytes):
+// which nodes sync is sync's own question
+#define LS_ID_LEN 128
 // a multikey of an Ed25519 key (0xed 0x01 and 32 bytes)
 #define LS_KEY_LEN 34
 // at most this many commits are named in one heads (the highest lamports): a node with more is
@@ -297,13 +301,16 @@ const ls_stats *ls_stats_of(const ls_dev *dev);
 // why the last commit was refused, a static string ("" if none)
 const char *ls_reason(const ls_dev *dev);
 
-// follow a node by id ("ermine://" and 64 hex): loads what was saved. NULL: not an id, or too many nodes
+// follow a node by id (for now "ermine:" and an ermine id's hex, of any kind: ermine/ids; at most
+// LS_ID_LEN bytes): loads what was saved. NULL: not such an id, or too many nodes
 ls_node *ls_follow(ls_dev *dev, const char *id);
 ls_node *ls_find(ls_dev *dev, const char *id);
 const char *ls_id(const ls_node *node);
 // the stored value (NULL: none): the first item at each path, composed. Counts up whenever the value,
 // a list or a held value changes
 const op_value *ls_value(const ls_node *node);
+// the node's children (NULL: none), composed as the value is: a map, each name the id placed there
+const op_value *ls_children(const ls_node *node);
 uint32_t ls_version(const ls_node *node);
 // how many commits make the value now, and the highest lamport held
 size_t ls_commits(const ls_node *node);
@@ -323,7 +330,7 @@ typedef struct {
 		size_t parents;       // how many parents
 		size_t parents_bytes; // the parents list
 		size_t patches;       // the patches: paths and values
-		size_t rest;          // field names, table, actor, time, nonce, lamport, the seal's map
+		size_t rest;          // field names, table, actor, time, nonce, lamport, the seal's map and its id
 	} newest;
 } ls_cost;
 // encodes the node's blob and decodes its newest seal: for showing, not for every frame of a loop
@@ -339,6 +346,10 @@ typedef struct {
 } ls_patch;
 // one commit of the patches, sealed and sent. Drops this device's hold on the node
 ls_code ls_write(ls_node *node, const ls_patch *patches, size_t n);
+// the same in the node's children: id placed under name (copied), or the name taken out (the node it
+// held stays)
+ls_code ls_place(ls_node *node, const char *name, const char *id);
+ls_code ls_unplace(ls_node *node, const char *name);
 // the whole value; one key of it; a key removed. Each replaces the first item at and under its path
 ls_code ls_put(ls_node *node, const op_value *value);
 ls_code ls_set(ls_node *node, const char *key, const op_value *value);

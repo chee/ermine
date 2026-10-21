@@ -14,7 +14,7 @@ import { createGateway } from "./gateway.ts"
 import { createSessions } from "./http.ts"
 import { dial, type Socket } from "./socket.ts"
 import { createHost } from "./host_harness.ts"
-import { type Pigs, row, spawnPigs, until } from "./pigs_harness.ts"
+import { type Pigs, spawnPigs, until } from "./pigs_harness.ts"
 import {
 	clear,
 	connect,
@@ -29,7 +29,7 @@ import { Link } from "./link.ts"
 import type { Message } from "./wire.ts"
 
 const UPSTREAM = Deno.env.get("UPSTREAM") ?? "wss://galaxy.observer"
-const ROOM = "ermine://bf04115f9b284145026eab6801219d6e" + "0".repeat(32)
+const ROOM = "ermine:0010bf04115f9b284145026eab6801219d6e"
 const opts = { sanitizeOps: false, sanitizeResources: false }
 
 // main.ts, on a free port: its log lines kept
@@ -102,26 +102,45 @@ Deno.test({
 		try {
 			await host.device.connectDiscover(UPSTREAM)
 			await host.sync.follow(ROOM)
-			const before = await until(() => host.read(ROOM), 30000, "the room on the TS device")
-			report.push(`room on the TS device: ${Object.keys(before).length} keys`)
+			// the room is its children (lab-pig's format): pig-<hex>, each a pig's id. none on the
+			// server yet: made here, as lab-pig's first place makes them (a name set on nothing is
+			// refused by sync.ts)
+			const before = await until(() => host.children(ROOM), 15000, "the room on the TS device")
+				.catch(() => undefined)
+			if (before === undefined) {
+				host.place(ROOM, {})
+				await host.sync.idle()
+			}
+			report.push(
+				`room on the TS device: ${
+					before ? `${Object.keys(before).length} names` : "none on the server, made here"
+				}`,
+			)
 			const dir = await Deno.makeTempDir({ prefix: "littlesync-galaxy-" })
 			// the C peer: 10 s for the room to come, adds a pig, then picks it up and carries it
 			pigs = await cPeer(g.port, { dir, keys: ".".repeat(20) + "a" + ".".repeat(8) + " lll" })
 			let followed: string[] = []
 			const poll = setInterval(() => g.status().then((st) => followed = st.followed), 500)
+			// its row on the C screen gives the name it is placed under (pig- and the row's hex); the
+			// room's children on the TS device give the id there
+			let name = ""
 			const id = await until(
 				() => {
 					const d = pigs!.dump()
 					const sel = d.split("\n").find((l) => l.startsWith("selected "))?.[9]
 					if (!sel || sel === "-" || !d.includes("carrying " + sel)) return
 					const r = d.split("\n").find((l) => l.startsWith(sel + " "))
-					return r && followed.find((f) => f.startsWith("ermine://" + r.slice(2, 10)))
+					if (!r) return
+					name = "pig-" + r.slice(2, 10)
+					const id = host.children(ROOM)?.[name]
+					return typeof id === "string" && followed.includes(id) && id
 				},
 				40000,
-				"the C peer's new pig, carried, followed at the gateway",
+				"the C peer's new pig, carried, in the room on the TS device, followed at the gateway",
 			).finally(() => clearInterval(poll))
-			assert(id)
-			report.push(`C pig ${id}`)
+			report.push(`C pig ${name}: ${id}`)
+			// its row on the C screen, by its name's hex
+			const mine = (d: string) => d.split("\n").find((l) => "pig-" + l.slice(2, 10) === name)
 			await host.sync.follow(id)
 			const value = await until(() => host.read(id), 30000, "the C pig's value on the TS device")
 			report.push(`C pig on the TS device: ${JSON.stringify(value)}`)
@@ -131,18 +150,20 @@ Deno.test({
 				"the C hold on the TS device",
 			)
 			report.push(`C hold on the TS device: ${JSON.stringify(held)}`)
-			// the room: whether the C peer's key landed, or what refused it
+			// the room: whether the C peer's name stands, or what refused it
 			await new Promise((r) => setTimeout(r, 2000))
-			report.push(`room key on the TS device: ${JSON.stringify(host.read(ROOM)?.[id])}`)
+			report.push(`room name on the TS device: ${name} → ${host.children(ROOM)?.[name]}`)
 			const refused = host.device.history(ROOM).refused()
 			report.push(
 				`room refusals on the TS device: ${
 					JSON.stringify(refused.slice(-5))
 				} (${refused.length})`,
 			)
-			const rh = pigs.log().split("\n").filter((l) =>
-				l.includes("heads bf04115f") || l.includes("refused")
-			)
+			// the C log's heads lines name a node by a piece of its id
+			const rh = pigs.log().split("\n").filter((l) => {
+				const at = l.match(/heads (\S+)/)?.[1]
+				return (at !== undefined && ROOM.includes(at)) || l.includes("refused")
+			})
 			report.push(`C log, the room's heads and refusals: ${rh.slice(-4).join(" | ")}`)
 			await pigs.stop()
 
@@ -150,28 +171,28 @@ Deno.test({
 			pigs = await cPeer(g.port, { dir })
 			host.store(id, { x: 0.25, y: 0.75, at: Date.now(), seed: 9 })
 			await until(
-				() => row(pigs!.dump(), id)?.includes("x=0.25 y=0.75"),
+				() => mine(pigs!.dump())?.includes("x=0.25 y=0.75"),
 				30000,
 				"the TS move on the C screen",
 			)
-			report.push(`TS move on the C screen: ${row(pigs.dump(), id)}`)
+			report.push(`TS move on the C screen: ${mine(pigs.dump())}`)
 			const wave = () =>
 				host.wave(id, { x: 0.5, y: 0.5, held: true, by: "tsdev", colour: "#000000", who: "ts" })
 			wave()
 			const beat = setInterval(wave, 500)
 			try {
 				await until(
-					() => row(pigs!.dump(), id)?.includes("held by tsdev"),
+					() => mine(pigs!.dump())?.includes("held by tsdev"),
 					30000,
 					"the TS hold on the C screen",
 				)
 			} finally {
 				clearInterval(beat)
 			}
-			report.push(`TS hold on the C screen: ${row(pigs.dump(), id)}`)
-			// tidy: the test pig binned for everyone (lab-pig's format)
+			report.push(`TS hold on the C screen: ${mine(pigs.dump())}`)
+			// tidy: the test pig binned for everyone (lab-pig's format: stored binned, then unplaced)
 			host.store(id, { x: 0.96, y: 0.96, at: Date.now(), seed: 1, binned: true })
-			host.set(ROOM, id, false)
+			host.unplace(ROOM, name)
 			await host.sync.idle()
 			const st = await g.status()
 			report.push(`gateway stats: ${JSON.stringify(st.stats)}`)
@@ -210,7 +231,7 @@ Deno.test({
 		const base = `http://localhost:${g.port}/littlesync/`
 		const a = await httpDevice(base), b = await httpDevice(base)
 		// a room of its own, zero-padded as galaxy stores
-		const room = "ermine://" + hex(crypto.getRandomValues(new Uint8Array(16))) + "0".repeat(32)
+		const room = "ermine:0010" + hex(crypto.getRandomValues(new Uint8Array(16)))
 		try {
 			await host.device.connectDiscover(UPSTREAM)
 			await host.sync.follow(room)
@@ -279,7 +300,7 @@ Deno.test({
 		const tick = setInterval(() => gw.tick(), 50)
 		const host = await createHost("ts-galaxy-again")
 		const d = await httpDevice(`http://localhost:${server.addr.port}/littlesync/`)
-		const room = "ermine://" + hex(crypto.getRandomValues(new Uint8Array(16))) + "0".repeat(32)
+		const room = "ermine:0010" + hex(crypto.getRandomValues(new Uint8Array(16)))
 		try {
 			await host.device.connectDiscover(UPSTREAM)
 			await host.sync.follow(room)
@@ -328,7 +349,7 @@ Deno.test({
 	async fn() {
 		const g = await gateway()
 		const host = await createHost("ts-galaxy-presence")
-		const room = "ermine://" + hex(crypto.getRandomValues(new Uint8Array(16))) + "0".repeat(32)
+		const room = "ermine:0010" + hex(crypto.getRandomValues(new Uint8Array(16)))
 		// lab-pig's sync world, in short: presence.ts's rows at the room, over the device's channel
 		const w = presenceDevice("web", {
 			get t() {

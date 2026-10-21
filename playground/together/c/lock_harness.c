@@ -46,7 +46,7 @@ static const lk_lock *made(const op_value *r) {
 }
 
 // bytes closed for a put or a fragment that says closed: the tag, not in the calls
-static uint8_t *closer(const char *device, const uint8_t doc[32], const uint8_t name[CM_NAME],
+static uint8_t *closer(const char *device, const char *doc, const uint8_t name[CM_NAME],
 	const uint8_t (*parents)[CM_NAME], size_t count, const uint8_t *bytes, size_t length, size_t *out_length) {
 	(void)device, (void)doc, (void)name, (void)parents, (void)count;
 	uint8_t *out = hh_take(length + 1);
@@ -66,8 +66,8 @@ static void set_lock(const op_value *r, FILE *out) {
 	fputs("{}", out);
 }
 
-static const uint8_t DEFAULT_DOC[32] = {0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a,
-	0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a};
+// the default document: a fresh id, 00 10 then 2a × 16
+static const char DEFAULT_DOC[] = "ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a";
 
 // what the lock was asked since last asked
 static void calls(const op_value *r, FILE *out) {
@@ -79,10 +79,16 @@ static void calls(const op_value *r, FILE *out) {
 		tg_call *c = &l->closed[i];
 		if (i) fputc(',', out);
 		fputc('{', out);
-		if (memcmp(c->doc, DEFAULT_DOC, 32) != 0) {
-			fputs("\"doc\":\"ermine://", out);
-			for (int k = 0; k < 32; k++) fprintf(out, "%02x", c->doc[k]);
-			fputs("\",", out);
+		// the id's UTF-8 (as tag_lock.h holds it), as text
+		if (c->doc_length != strlen(DEFAULT_DOC) || memcmp(c->doc, DEFAULT_DOC, c->doc_length) != 0) {
+			char *text = malloc(c->doc_length + 1);
+			if (text == NULL) abort();
+			memcpy(text, c->doc, c->doc_length);
+			text[c->doc_length] = 0;
+			fputs("\"doc\":", out);
+			op_json_string(out, text);
+			fputc(',', out);
+			free(text);
 		}
 		fputs("\"name\":", out);
 		tph_label(out, c->name, CM_NAME);
@@ -96,6 +102,14 @@ static void calls(const op_value *r, FILE *out) {
 	fprintf(out, "],\"opened\":%s}", l->opened ? "true" : "false");
 	tg_forget(l);
 	l->opened = false;
+}
+
+// how often the lock's open was asked since last asked
+static void opens(const op_value *r, FILE *out) {
+	test_t *t = test_of(r, out);
+	if (t == NULL) return;
+	fprintf(out, "{\"opens\":%zu}", t->tag->opens);
+	t->tag->opens = 0;
 }
 
 void hh_start(void) {
@@ -118,5 +132,6 @@ void hh_answer(const op_value *r, FILE *out) {
 	const char *op = hh_str(r, "op");
 	if (op != NULL && strcmp(op, "lock") == 0) set_lock(r, out);
 	else if (op != NULL && strcmp(op, "calls") == 0) calls(r, out);
+	else if (op != NULL && strcmp(op, "opens") == 0) opens(r, out);
 	else tph_answer(r, out);
 }

@@ -279,6 +279,13 @@ export async function createSyncWorld(o: Options) {
 			return id === undefined ? [] : [{ id, name: path[path.length - 1], path }]
 		},
 		get: (item: { id: unknown }) => places.readValue("value", item.id as string),
+		// under: each name in the node's children holding an id, by its id (a kept node has no path)
+		members(item: { id: unknown }) {
+			const map = places.readValue("children", item.id as string)
+			if (map === null || typeof map !== "object" || Array.isArray(map)) return []
+			return Object.entries(map).filter(([, to]) => typeof to === "string")
+				.map(([name, id]) => ({ id, name }))
+		},
 		call: () => undefined,
 		effect: (read: () => unknown, act: (v: unknown, before: unknown) => void) =>
 			s.createEffect(read, act),

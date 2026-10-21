@@ -1,8 +1,10 @@
-// the lock: what a commit is closed into before any carrier takes it, and opened from where it lands
-// (encryption, or nothing). a carrier (the subduction stack, littlesync, a gateway) calls it; none of
-// them owns it. doc: the document's 32 bytes; name and parents: the commit's, given so a lock can bind
-// them (they travel in clear: a carrier needs the history's shape). name: a commit's, or a fragment's:
-// the multihash of its BLAKE3 (1e20 then the digest, as a commit's name is). only "unlocked" is built
+// the lock: what a carrier's envelope (the subduction stack's: the id and a commit's seal, a fragment,
+// or an ephemeral commit) is closed into before it is stored or sent, and opened from where it lands
+// (encryption, or nothing). a carrier (the subduction stack, a gateway) calls it; none of them owns
+// it. doc: the document's id, its UTF-8 (the id the device follows: an envelope opened is checked
+// against it); name and parents: the commit's, given so a lock can bind them
+// (they travel in clear: a carrier needs the history's shape). name: a commit's, or a fragment's: the
+// multihash of its BLAKE3 (1e20 then the digest, as a commit's name is). only "unlocked" is built
 
 // what a lock's open gives: the bytes close was given; not yet (no key here yet: wait); or never
 // (refused: the text is shown beside the code lock wherever the refusal shows). a stored commit or a

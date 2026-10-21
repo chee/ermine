@@ -1,5 +1,5 @@
 {
-	"title": "a fragment from elsewhere: its members checked and taken in; its snapshot a hint, checked once its head is in: forged, it is let go of, and so is any after it for that head; one that matches is kept; a bare list, or members without the head, refused whole; the first shape, {members}, taken",
+	"title": "a fragment from elsewhere: its members checked and taken in; its snapshot a hint, checked once its head is in: forged, it is let go of, and so is any after it for that head; one that matches stays; a bare list refused whole, members without the head passed over at the door (noted stored); the first shape, {members}, taken",
 	"steps": [
 		{
 			"op": "device",
@@ -26,7 +26,7 @@
 		{
 			"op": "make",
 			"name": "c2",
-			"nonce": 619,
+			"nonce": 109,
 			"parents": [
 				"c1"
 			],
@@ -43,8 +43,8 @@
 		{
 			"op": "make",
 			"name": "c2d",
-			"doc": "ermine://2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d00000000000000000000000000000000",
-			"nonce": 218,
+			"doc": "ermine:00102d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d",
+			"nonce": 177,
 			"parents": [
 				"c1"
 			],
@@ -61,8 +61,8 @@
 		{
 			"op": "make",
 			"name": "c2e",
-			"doc": "ermine://2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e00000000000000000000000000000000",
-			"nonce": 265,
+			"doc": "ermine:00102e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e",
+			"nonce": 36,
 			"parents": [
 				"c1"
 			],
@@ -134,7 +134,7 @@
 						"actor": null,
 						"metadata": {
 							"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-							"commit": "1e2036f151425697def02cf5aa48d36c693bde0da2e29b193abb2bccbf59b0d6553e"
+							"commit": "1e209dc1522798e47862d9195ca581d5d0f10aaf4a98507afcf1644472ce2b5442c9"
 						}
 					}
 				}
@@ -154,7 +154,7 @@
 		{
 			"op": "fragment",
 			"device": "a",
-			"doc": "ermine://2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e00000000000000000000000000000000",
+			"doc": "ermine:00102e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e",
 			"head": "c2e",
 			"members": [
 				"c1",
@@ -170,7 +170,7 @@
 						"actor": null,
 						"metadata": {
 							"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-							"commit": "1e208178c4b8962dc9580f45acd853434d467910a0ffb78b4a771f92db9983619a18"
+							"commit": "1e20594dbb60776a9699a300553c1f01c77ccd37fb4778749118aff34c80a61ffe6b"
 						}
 					}
 				}
@@ -184,7 +184,7 @@
 		{
 			"op": "snapshot",
 			"device": "a",
-			"doc": "ermine://2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e00000000000000000000000000000000",
+			"doc": "ermine:00102e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e",
 			"commit": "c2e",
 			"expect": {
 				"tables": {
@@ -197,7 +197,7 @@
 							"actor": null,
 							"metadata": {
 								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-								"commit": "1e208178c4b8962dc9580f45acd853434d467910a0ffb78b4a771f92db9983619a18"
+								"commit": "1e20594dbb60776a9699a300553c1f01c77ccd37fb4778749118aff34c80a61ffe6b"
 							}
 						}
 					}
@@ -223,7 +223,7 @@
 		{
 			"op": "fragment",
 			"device": "a",
-			"doc": "ermine://2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b00000000000000000000000000000000",
+			"doc": "ermine:00102b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
 			"head": "c2",
 			"members": [
 				"c2"
@@ -234,7 +234,7 @@
 		{
 			"op": "fragment",
 			"device": "a",
-			"doc": "ermine://2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c00000000000000000000000000000000",
+			"doc": "ermine:00102c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c",
 			"head": "c2",
 			"members": [
 				"c1"
@@ -244,7 +244,7 @@
 		{
 			"op": "fragment",
 			"device": "a",
-			"doc": "ermine://2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d00000000000000000000000000000000",
+			"doc": "ermine:00102d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d",
 			"head": "c2d",
 			"members": [
 				"c1",
@@ -260,7 +260,7 @@
 		{
 			"op": "taking",
 			"device": "a",
-			"doc": "ermine://2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b00000000000000000000000000000000",
+			"doc": "ermine:00102b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
 			"expect": {
 				"waiting": [],
 				"refused": [
@@ -274,7 +274,7 @@
 		{
 			"op": "heads",
 			"device": "a",
-			"doc": "ermine://2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b00000000000000000000000000000000",
+			"doc": "ermine:00102b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
 			"expect": {
 				"heads": []
 			}
@@ -282,7 +282,7 @@
 		{
 			"op": "taking",
 			"device": "a",
-			"doc": "ermine://2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c00000000000000000000000000000000",
+			"doc": "ermine:00102c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c",
 			"expect": {
 				"waiting": [],
 				"refused": [
@@ -296,7 +296,7 @@
 		{
 			"op": "heads",
 			"device": "a",
-			"doc": "ermine://2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d00000000000000000000000000000000",
+			"doc": "ermine:00102d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d",
 			"expect": {
 				"heads": [
 					"c2d"

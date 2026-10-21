@@ -18,8 +18,9 @@
 
 typedef struct dv dv;
 
-// an id: "ermine://" and 64 hex digits, and the NUL
-enum { DV_ID = 9 + 64 + 1 };
+// an id at most: littlesync's longest (LS_ID_LEN, 128 bytes; today's ids are ermine ids, "ermine:"
+// and 36 or 68 hex), and the NUL
+enum { DV_ID = 128 + 1 };
 // a device's key as hex: its multikey (seal.h), and the 0
 enum { DV_KEY = 2 * SL_KEY + 1 };
 
@@ -43,6 +44,11 @@ void dv_follow(dv *d, const char *id);
 int dv_store(dv *d, const char *id, op_value *value);
 // one key of the node's value set, a stored commit (takes value): a map's key changed alone
 int dv_set(dv *d, const char *id, const char *key, op_value *value);
+// the node's value taken away, a stored commit: it has none
+int dv_clear(dv *d, const char *id);
+// id placed under name in holder's children, a stored commit; unplace: the name taken out (the node stays)
+int dv_place(dv *d, const char *holder, const char *name, const char *id);
+int dv_unplace(dv *d, const char *holder, const char *name);
 // the same as an ephemeral commit
 int dv_wave(dv *d, const char *id, op_value *value);
 // the id's versions made one, keeping the one shown

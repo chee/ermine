@@ -130,6 +130,11 @@ sites_tests = $(wildcard ermine/sites/typescript/sites_harness_test.ts)
 sites-test_src = core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c ermine/sites/c/sites.c ermine/sites/c/sites_test.c
 sites-test = ermine/sites/c/sites-test
 LIBS += sites sites-test
+# ids (ermine/ids): ermine ids, their text and tree ids, on ermine/encoding's BLAKE3
+ids_src = $(harness_src) ermine/ids/c/ids.c ermine/ids/c/ids_harness.c $(blake3_src)
+ids = ermine/ids/c/ids-harness
+ids_suite = ids
+LIBS += ids
 # clingy (filesystem/clingy): keys known tracked or not, told when their last tracker goes; no suite
 clingy-test_src = core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c filesystem/clingy/c/clingy.c filesystem/clingy/c/clingy_test.c
 clingy-test = filesystem/clingy/c/clingy-test
@@ -214,7 +219,8 @@ together-fragment_tests = playground/together/conformance/fragment_fuzz_test.ts
 LIBS += together-fragment
 # the transport (devices over Subduction for C) and the integration with the table: Subduction's BLAKE3 and ermine/encoding's
 # are both linked, the C ones renamed (subduction_rename). Fragments are the subduction stack's, as in the TypeScript
-together_transport_src = playground/together/c/transport.c playground/together/c/mailroom.c playground/together/stacks/subduction/c/subduction.c playground/together/c/ids.c playground/together/c/history.c playground/together/c/replay.c playground/together/c/lists.c playground/together/c/snapshot.c \
+# (the mailroom names its documents by ermine ids: ermine/ids/c/ids.c)
+together_transport_src = playground/together/c/transport.c playground/together/c/mailroom.c playground/together/stacks/subduction/c/subduction.c playground/together/c/ids.c ermine/ids/c/ids.c playground/together/c/history.c playground/together/c/replay.c playground/together/c/lists.c playground/together/c/snapshot.c \
 	playground/together/c/packer.c playground/together/stacks/subduction/c/fragment.c playground/together/stacks/subduction/c/subduction/platform_posix.c $(together_signed_src)
 together-transport_src = $(together_harness_src) $(together_commits_src) conformance/c/protocol_harness.c playground/together/c/transport_harness.c playground/together/c/wires_harness.c \
 	playground/together/stacks/subduction/c/subduction/store_memory.c $(together_transport_src) $(subduction_lib)
@@ -236,7 +242,7 @@ together_sync_src = $(together_harness_src) $(together_commits_src) conformance/
 together-sync_src = $(together_sync_src) playground/together/c/rules_harness.c
 together-sync = playground/together/c/sync-harness
 together-sync_suite = sync
-together-sync_flags = $(subduction_rename)
+together-sync_flags = $(subduction_rename) -DCONFORMANCE_HOOK
 together-sync_libs = $(transport_libs)
 LIBS += together-sync
 # the presence channel over a device's ephemeral messages: two devices on a pipe, as channel_test.ts tries it; no suite

@@ -8,8 +8,9 @@
 import { type Commit, CommitError, decode, name as nameOf } from "@ermine/encoding/commit"
 import { type Added, createHistory, type History, type Judged, type Kept } from "./history.ts"
 import { hex, unhex } from "./hex.ts"
+import { kind } from "@ermine/ids"
 import { matches, type Merges, type Tables } from "./replay.ts"
-import { seal, type Signer, stored, unseal, type Verifier } from "./seal.ts"
+import { seal, type Signer, stored, unseal, utf8, type Verifier } from "./seal.ts"
 import { tablesOf } from "./snapshot.ts"
 import type { Taking } from "./transport_conformance_hook.ts"
 
@@ -34,23 +35,33 @@ export type Check = (
 
 // why the mailroom or a stack refused a seal, a fragment or an ephemeral message before a history saw it.
 // what a history refuses (lamport, patches, a parent) is the history's: history(doc).refused().
-// boundary: a fragment's members, boundary or checkpoints not what its head's walk makes them
-export type Code = "lock" | "shape" | "signature" | "stored" | "parents" | "boundary"
+// boundary: a fragment's members, boundary or checkpoints not what its head's walk makes them. id:
+// an envelope opened (a stack's: the id and what it carries) naming another id than the one followed
+// (the refusal of a second id for a tree held is replaced by the envelope's id check), or a seal for
+// another id (seal.ts)
+export type Code = "lock" | "shape" | "signature" | "stored" | "parents" | "boundary" | "id"
+// a refusal as it is noted: its code, and the text beside it (a lock's, or why an envelope's or a
+// seal's id is not this one)
+export type Refusal = { code: Code; why?: string }
 
 // what a device holds for others at most, each letting go of its oldest past it (heard again, it
 // comes in again). pending: a document's seals waiting on a parent's seal, and its stored commits
-// waiting on a parent; refused: its refusals noted (each kind), and its snapshot hints; waiting: its
-// ephemeral commits waiting on a parent
+// waiting on a parent, and at the stack what waits on the lock (loose commits and fragments, each
+// apart); refused: its refusals noted (each kind), and its snapshot hints; waiting: its ephemeral
+// commits waiting on a parent
 export type Limits = { pending: number; refused: number; waiting: number }
 export const LIMITS: Limits = { pending: 65536, refused: 4096, waiting: 1024 }
 
 export const by = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0
-const ID = /^ermine:\/\/[0-9a-f]{64}$/
 
-// a document's 32 bytes, from its ermine:// id
+// a document's id as its UTF-8 (what a seal and the lock bind). for now only an ermine id (of any
+// kind: ermine/ids) is a document here: which nodes sync is sync's own question, and changes with
+// its plan, not here
 export function bytesOf(doc: string): Uint8Array {
-	if (typeof doc !== "string" || !ID.test(doc)) throw new TypeError(`not a document id: ${doc}`)
-	return unhex(doc.slice("ermine://".length))
+	if (typeof doc !== "string" || kind(doc) === undefined) {
+		throw new TypeError(`not a document id: ${doc}`)
+	}
+	return utf8(doc)
 }
 
 // noted in a map (or a set), the oldest let go of past most
@@ -59,6 +70,10 @@ export function note<K, V>(most: number, m: Map<K, V> | Set<K>, key: K, value?: 
 	if (m instanceof Map) m.set(key, value!)
 	else m.add(key)
 }
+
+// a refusal of that code, with the text a lock refused with beside it (none: no text)
+export const refusal = (code: Code, why?: string): Refusal =>
+	why === undefined ? { code } : { code, why }
 
 // a seal's commit, as far as the mailroom reads it: its name, bytes, stored id, lamport, parents
 export type Sealed = {
@@ -98,7 +113,8 @@ export type Pending = {
 }
 
 // a document as the mailroom holds it. a stack reads names and seen (what it builds from); it changes
-// nothing here but through the mailroom's functions
+// nothing here but through the mailroom's functions. bytes: its id's UTF-8 (what the lock binds;
+// a seal binds the id). a stack files it under its own address (Subduction's: a tree id)
 export type Doc = {
 	id: string
 	bytes: Uint8Array
@@ -107,7 +123,7 @@ export type Doc = {
 	elsewhere: Record<Layer, Map<string, boolean>>
 	// this device's own takes waiting on a parent, by name: sent once let in
 	own: Record<Layer, Set<string>>
-	// a taken-in seal's name to its stored ids: a signer may have signed twice
+	// a taken-in seal's name to its stored ids (one: a stored id is of the id and the name, seal.ts)
 	names: Map<string, string[]>
 	seen: Map<string, Seen>
 	// the snapshots fragments carried, packed, by their head's name, each checked (hint)
@@ -117,18 +133,18 @@ export type Doc = {
 	judged: Set<string>
 	// by the commit's head, or the seal's stored id
 	pending: Map<string, Pending>
-	refused: Map<string, Code>
+	refused: Map<string, Refusal>
 	// names of seals refused here
 	bad: Set<string>
-	// refused ephemeral commits, by the name of the bytes as they came (closed: one that is refused
-	// cannot be opened)
-	heard: Map<string, Code>
-	// the text a lock refused with, by "r" + key (refused) or "h" + name (heard)
-	why: Map<string, string>
+	// refused ephemeral commits: one the lock refused by the name of the bytes as they came (closed:
+	// it could not be opened), one refused after (shape, signature) by the opened commit's
+	heard: Map<string, Refusal>
 }
 
 // what a stack is to the mailroom: the mailroom hands it what this device made, and what to say
 export type Stack = {
+	// a document made (first named): the stack may file it under its own address
+	made?(d: Doc): void
 	// an own take, taken into the histories, going out: a stored one sealed and stored, an
 	// ephemeral one published. called one at a time in the order made, so a commit's parents are
 	// stored before it
@@ -273,16 +289,17 @@ export function createMailroom(
 	// own takes that waited, let in by an add: sent by tell, after what let them in
 	const released: { d: Doc; layer: Layer; kept: Kept }[] = []
 
-	// own takes and the check: everything from elsewhere is marked in elsewhere before its history's
-	// add, and stays marked until taken in. the history's check asks the integration's only for a
-	// marked commit; one not marked is this device's own take (or a seal of it, handed over after),
-	// which applied here already, so passes unchecked and is not announced. a commit from elsewhere
-	// that waited, let in by an own take, is still marked: checked, and announced
-	function document(tree: Uint8Array): Doc {
-		const key = hex(tree)
-		let d = documents.get(key)
+	// a document by its id, made when first named (the stack told, so it files it under its own
+	// address). an id is compared as its bytes: two ids, two documents
+	function named(id: string): Doc {
+		let d = documents.get(id)
 		if (d) return d
-		const id = "ermine://" + key
+		const bytes = bytesOf(id)
+		// own takes and the check: everything from elsewhere is marked in elsewhere before its
+		// history's add, and stays marked until taken in. the history's check asks the integration's
+		// only for a marked commit; one not marked is this device's own take (or a seal of it, handed
+		// over after), which applied here already, so passes unchecked and is not announced. a commit
+		// from elsewhere that waited, let in by an own take, is still marked: checked, and announced
 		const elsewhere: Record<Layer, Map<string, boolean>> = {
 			stored: new Map(),
 			ephemeral: new Map(),
@@ -316,7 +333,7 @@ export function createMailroom(
 		}
 		d = {
 			id,
-			bytes: tree,
+			bytes,
 			histories: { stored: make("stored"), ephemeral: make("ephemeral") },
 			elsewhere,
 			own,
@@ -329,12 +346,11 @@ export function createMailroom(
 			refused: new Map(),
 			bad: new Set(),
 			heard: new Map(),
-			why: new Map(),
 		}
-		documents.set(key, d)
+		documents.set(id, d)
+		stack?.made?.(d)
 		return d
 	}
-	const named = (doc: string) => document(bytesOf(doc))
 
 	// a commit from elsewhere, added to the layer's history, marked until taken in. what a stack with
 	// no seals around its commits hands over; a seal's commit goes by pend and settle
@@ -375,8 +391,7 @@ export function createMailroom(
 	// name of its commit when that is not to be had from another seal (a parent of what waits)
 	function refuse(d: Doc, key: string, code: Code, name?: string, why?: string) {
 		d.pending.delete(key)
-		note(limits.refused, d.refused, key, code)
-		if (why !== undefined) note(limits.refused, d.why, "r" + key, why)
+		note(limits.refused, d.refused, key, refusal(code, why))
 		if (name !== undefined) note(limits.refused, d.bad, name)
 	}
 
@@ -418,7 +433,7 @@ export function createMailroom(
 	// a seal opened and checked, in its document: its commit, as the mailroom reads it. a SealError:
 	// refused
 	async function opened(d: Doc, sealed: Uint8Array): Promise<Sealed> {
-		const u = await unseal(sealed, d.bytes, options.verifiers)
+		const u = await unseal(sealed, d.id, options.verifiers)
 		const { lamport, parents } = u.commit
 		return { name: u.name, bytes: u.bytes, stored: u.stored, lamport, parents }
 	}
@@ -491,11 +506,11 @@ export function createMailroom(
 			c = decode(open)
 		} catch (e) {
 			if (!(e instanceof CommitError)) throw e
-			note(limits.refused, d.heard, key, "shape")
+			note(limits.refused, d.heard, key, refusal("shape"))
 			return
 		}
 		if (hex(c.signer) !== hex(from)) {
-			note(limits.refused, d.heard, key, "signature")
+			note(limits.refused, d.heard, key, refusal("signature"))
 			return
 		}
 		d.heard.delete(key)
@@ -512,8 +527,7 @@ export function createMailroom(
 
 	// an ephemeral commit refused before it could be opened (by its name), noted
 	function unheard(d: Doc, name: Uint8Array, code: Code, why?: string) {
-		note(limits.refused, d.heard, hex(name), code)
-		if (why !== undefined) note(limits.refused, d.why, "h" + hex(name), why)
+		note(limits.refused, d.heard, hex(name), refusal(code, why))
 	}
 
 	// a stop heard from a device (the sender's key, a multikey as lowercase hex): told
@@ -531,7 +545,7 @@ export function createMailroom(
 
 	// a stored commit of this device's: sealed, and its stored id. named already, its signer this one
 	async function sealed(d: Doc, kept: Kept) {
-		const sealed = await seal(kept.bytes, options.signer, d.bytes, { name: kept.name })
+		const sealed = await seal(kept.bytes, options.signer, d.id, { name: kept.name })
 		return { sealed, stored: stored(sealed) }
 	}
 
@@ -566,10 +580,9 @@ export function createMailroom(
 		if (layer === "ephemeral") {
 			return {
 				waiting: [],
-				refused: [...d.heard].sort(([a], [b]) => by(a, b)).map(([commit, refused]) => ({
+				refused: [...d.heard].sort(([a], [b]) => by(a, b)).map(([commit, r]) => ({
 					commit,
-					refused,
-					...why(d, "h" + commit, refused),
+					...shown(r),
 				})),
 			}
 		}
@@ -579,9 +592,7 @@ export function createMailroom(
 			if (p.waiting) waiting.push({ commit, waiting: p.waiting })
 			else if (p.stuck) refused.push({ commit, stuck: p.stuck })
 		}
-		for (const [commit, code] of d.refused) {
-			refused.push({ commit, refused: code, ...why(d, "r" + commit, code) })
-		}
+		for (const [commit, r] of d.refused) refused.push({ commit, ...shown(r) })
 		const more = stack?.taking?.(d)
 		if (more) waiting.push(...more.waiting), refused.push(...more.refused)
 		const key = (r: Taking["refused"][number]) => "fragment" in r ? r.fragment : r.commit
@@ -592,9 +603,11 @@ export function createMailroom(
 		}
 	}
 
-	// the text a lock refused with, for a row refused with the code lock
-	const why = (d: Doc, key: string, code: Code) =>
-		code === "lock" && d.why.has(key) ? { why: d.why.get(key)! } : {}
+	// a refusal as a row shows it: its code, and the text beside it when it has one
+	const shown = (r: Refusal) => ({
+		refused: r.code,
+		...(r.why !== undefined ? { why: r.why } : {}),
+	})
 
 	// the histories judged again (the check changed), what that let in told
 	function retry(d: Doc) {
@@ -668,6 +681,7 @@ export function createMailroom(
 		// the stack the mailroom hands what goes out to: before anything is taken
 		attach(k: Stack) {
 			stack = k
+			for (const d of documents.values()) k.made?.(d)
 		},
 		// the queue taking in and building go through, one at a time; what a stack's work throws
 		// waits in trouble for idle
@@ -675,7 +689,6 @@ export function createMailroom(
 		later,
 		trouble,
 		documents,
-		document,
 		named,
 		moved,
 		admit,

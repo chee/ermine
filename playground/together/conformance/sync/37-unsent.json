@@ -18,7 +18,7 @@
 			"host": "a",
 			"as": "x",
 			"expect": {
-				"id": "ermine://b40fde52c568d2f3864d68739e98b72b9f144f5566afcbb238fd354ecdc7c755"
+				"id": "ermine:0010b40fde52c568d2f3864d68739e98b72b"
 			}
 		},
 		{
@@ -26,7 +26,7 @@
 			"host": "a",
 			"as": "y",
 			"expect": {
-				"id": "ermine://9b88febf6d4322956444b084a735e05da8aa437e2ceff806b8cb3a6db5d12bfb"
+				"id": "ermine:00109b88febf6d4322956444b084a735e05d"
 			}
 		},
 		{ "op": "follow", "host": "b", "id": "x", "expect": {} },

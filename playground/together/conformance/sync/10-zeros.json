@@ -1,5 +1,5 @@
 {
-	"title": "until Keyhive, a host may mint ids whose last 16 bytes are zero",
+	"title": "zeros is accepted and ignored: a host mints fresh ids (00 10 and 16 random bytes) with it or without it; a tree id ends in 16 zeros either way (ermine/ids)",
 	"steps": [
 		{
 			"op": "host",
@@ -19,7 +19,7 @@
 			"host": "z",
 			"as": "x",
 			"expect": {
-				"id": "ermine://82eabaa37cbbf3a63ebcbced1cd956c800000000000000000000000000000000"
+				"id": "ermine:001082eabaa37cbbf3a63ebcbced1cd956c8"
 			}
 		},
 		{
@@ -27,7 +27,7 @@
 			"host": "z",
 			"as": "y",
 			"expect": {
-				"id": "ermine://5e00763fcb25fbe66cbd68c23ac20a7c00000000000000000000000000000000"
+				"id": "ermine:00105e00763fcb25fbe66cbd68c23ac20a7c"
 			}
 		},
 		{
@@ -35,7 +35,7 @@
 			"host": "n",
 			"as": "w",
 			"expect": {
-				"id": "ermine://09fad8c6a6b1e36bf9a6f3a151ab7c126e5fb2382420bd420ffa4cc6f759887b"
+				"id": "ermine:001009fad8c6a6b1e36bf9a6f3a151ab7c12"
 			}
 		}
 	]

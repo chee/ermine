@@ -47,7 +47,9 @@ typedef struct {
 #define PRE 8
 static const uint8_t *pre(const uint8_t name[CM_NAME]) { return name + 2; }
 
-// a standing write: one patch of a held commit, at a path (its keys each followed by a 0), that no later
+// a standing write: one patch of a held commit, at a path (its commit's table, then its keys, each
+// followed by a 0: "value", "children" are first keys of one tree, so writes of two tables never
+// cover each other), that no later
 // write has replaced. value: NULL when gone (a delete stands as gone) or far (past LS_ITEMS at its path:
 // read again from the seal when it comes up). replaces: what its patch names, PRE bytes each
 // (has_replaces 0: absent, an older commit's: ancestry, as far as the device can tell)
@@ -87,9 +89,10 @@ typedef struct {
 
 struct ls_node {
 	ls_dev *dev;
+	// its id, the wire's node and what a seal binds (its UTF-8, id_length bytes)
 	char id[LS_ID_LEN + 1];
-	uint8_t doc[32];
-	op_value *value; // the first item at each path, composed
+	size_t id_length;
+	op_value *value; // the first item at each path, composed: {value?, children?}, a key a table
 	// sorted: by depth, then path, then the agreed order (higher lamport first, then the greater name)
 	write *writes;
 	size_t n_writes, c_writes;
@@ -197,46 +200,61 @@ static void say(ls_dev *d, const char *format, ...) {
 	d->o.log(d->o.log_context, line);
 }
 
-static const char *short_id(const ls_node *n) { return n->id + 9; }
+static const char *short_id(const ls_node *n) {
+	return n->id_length > 7 && strncmp(n->id, "ermine:", 7) == 0 ? n->id + 7 : n->id;
+}
 
 // ---- ids, seals
 
 static int digit(char c) { return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1; }
-// ermine://<64 hex>: the document's 32 bytes are the 64 hex
-static bool id_doc(const char *id, uint8_t doc[32]) {
-	if (strncmp(id, "ermine://", 9) != 0 || strlen(id) != LS_ID_LEN) return false;
-	for (int i = 0; i < 32; i++) {
-		int a = digit(id[9 + 2 * i]), b = digit(id[10 + 2 * i]);
-		if (a < 0 || b < 0) return false;
-		doc[i] = (uint8_t)(a << 4 | b);
+// whether the id is a node here: for now an ermine id (ermine/ids' rules; littlesync links nothing of
+// it): "ermine:" and the lowercase hex of 00 10 or 1e 10 and 16 bytes, or ed 01 and 32. Which nodes
+// sync is sync's own question, and changes with its plan, not here
+static bool syncs(const char *id) {
+	size_t n = strlen(id);
+	if (strncmp(id, "ermine:", 7) != 0 || (n != 7 + 36 && n != 7 + 68)) return false;
+	uint8_t b[34];
+	for (size_t i = 0; i < (n - 7) / 2; i++) {
+		int x = digit(id[7 + 2 * i]), y = digit(id[8 + 2 * i]);
+		if (x < 0 || y < 0) return false;
+		b[i] = (uint8_t)(x << 4 | y);
 	}
-	return true;
+	if (n == 7 + 36) return (b[0] == 0x00 || b[0] == 0x1e) && b[1] == 0x10;
+	return b[0] == 0xed && b[1] == 0x01;
 }
 
 // the varsig header of Ed25519 (seal.c's): a seal here is exactly header and 64 bytes
 static const uint8_t HEADER[8] = {0x34, 0x01, 0xed, 0x01, 0xed, 0x01, 0x13, 0x5f};
-// what is signed (seal.h's): "ermine/v0/commit", the document, the signature's header, the commit's name
-#define SIGNED 90
-static void signed_message(const uint8_t doc[32], const uint8_t name[CM_NAME], uint8_t m[SIGNED]) {
-	memcpy(m, "ermine/v0/commit", 16);
-	memcpy(m + 16, doc, 32);
-	memcpy(m + 48, HEADER, 8);
-	memcpy(m + 56, name, CM_NAME);
+// what is signed (seal.h's): "ermine/v1/commit", the length of the node's id's UTF-8 (an unsigned
+// varint: 2 bytes at most for LS_ID_LEN), that UTF-8, the signature's header, the commit's name.
+// SIGNED: the most; its length
+#define SIGNED (16 + 2 + LS_ID_LEN + 8 + CM_NAME)
+static size_t signed_message(const char *id, size_t length, const uint8_t name[CM_NAME], uint8_t m[SIGNED]) {
+	memcpy(m, "ermine/v1/commit", 16);
+	size_t at = 16, v = length;
+	do m[at++] = (uint8_t)((v & 0x7f) | (v >= 0x80 ? 0x80 : 0)), v >>= 7;
+	while (v > 0);
+	memcpy(m + at, id, length);
+	memcpy(m + at + length, HEADER, 8);
+	memcpy(m + at + length + 8, name, CM_NAME);
+	return at + length + 8 + CM_NAME;
 }
 
 // writing CBOR (cbor.h's writer): a buffer that grows from about `size` bytes; a key of a map
 static CborOut out_of(size_t size) { return (CborOut){allocate(size), size, 0, true}; }
 static void key(CborOut *o, const char *k) { cborPutText(o, k, strlen(k)); }
 
-// the sealed commit (seal.h's bytes), malloc'd
-static uint8_t *seal(ls_dev *d, const uint8_t *commit_bytes, size_t length, const uint8_t doc[32], size_t *out) {
+// the sealed commit (seal.h's bytes: {id, commit, signature}, the node's id in it), malloc'd
+static uint8_t *seal(ls_dev *d, const uint8_t *commit_bytes, size_t length, const ls_node *n, size_t *out) {
 	uint8_t name[CM_NAME], m[SIGNED], signature[72];
 	cm_name(commit_bytes, length, name);
-	signed_message(doc, name, m);
+	size_t signed_length = signed_message(n->id, n->id_length, name, m);
 	memcpy(signature, HEADER, 8);
-	ermEd25519SignPair(&d->pair, m, SIGNED, signature + 8);
-	CborOut o = out_of(length + 96);
-	cborPutHead(&o, 5, 2);
+	ermEd25519SignPair(&d->pair, m, signed_length, signature + 8);
+	CborOut o = out_of(length + 96 + n->id_length);
+	// in the canonical order: id, commit, signature
+	cborPutHead(&o, 5, 3);
+	key(&o, "id"), cborPutText(&o, n->id, n->id_length);
 	key(&o, "commit"), cborPutBytes(&o, commit_bytes, length);
 	key(&o, "signature"), cborPutBytes(&o, signature, 72);
 	*out = o.length;
@@ -268,25 +286,28 @@ static const ermEd25519Key *key_of(ls_dev *d, const uint8_t pub[32]) {
 	return ermEd25519KeyOf(k, pub) ? k : NULL;
 }
 
-// the seal's commit, and with verify its signature for the document. 0: bad shape, 1: bad signature, 2: good
-static int open_seal(ls_dev *d, const uint8_t *sealed, size_t length, const uint8_t doc[32], bool verify, opened *o) {
+// the seal's commit, and with verify its signature for the document. 0: bad shape, 1: for another
+// node (its id not this one's) or a bad signature, 2: good
+static int open_seal(ls_dev *d, const uint8_t *sealed, size_t length, const ls_node *n, bool verify, opened *o) {
 	memset(o, 0, sizeof *o);
 	Json *x = cborDecode(sealed, length, NULL, NULL);
-	if (x == NULL || x->type != JSON_OBJECT || x->object.count != 2) return jsonFree(x), 0;
-	const Json *c = jsonGet(x, "commit"), *s = jsonGet(x, "signature");
-	if (c == NULL || c->type != JSON_BYTES || s == NULL || s->type != JSON_BYTES) return jsonFree(x), 0;
+	if (x == NULL || x->type != JSON_OBJECT || x->object.count != 3) return jsonFree(x), 0;
+	const Json *id = jsonGet(x, "id"), *c = jsonGet(x, "commit"), *s = jsonGet(x, "signature");
+	if (id == NULL || id->type != JSON_STRING || c == NULL || c->type != JSON_BYTES || s == NULL || s->type != JSON_BYTES)
+		return jsonFree(x), 0;
 	if (cm_decode(c->bytes.data, c->bytes.length, &o->c, NULL) != CM_OK) return jsonFree(x), 0;
 	cm_name(c->bytes.data, c->bytes.length, o->name);
 	int result = 2;
-	if (verify) {
+	if (id->stringLength != n->id_length || memcmp(id->string, n->id, n->id_length) != 0) result = 1;
+	else if (verify) {
 		const uint8_t *key = o->c.signer;
 		if (s->bytes.length != 72 || memcmp(s->bytes.data, HEADER, 8) != 0 || o->c.signer_length != LS_KEY_LEN ||
 			key[0] != 0xed || key[1] != 0x01) result = 1;
 		else {
 			const ermEd25519Key *k = key_of(d, key + 2);
 			uint8_t m[SIGNED];
-			signed_message(doc, o->name, m);
-			if (k == NULL || !ermEd25519VerifyKey(k, m, SIGNED, s->bytes.data + 8)) result = 1;
+			size_t signed_length = signed_message(n->id, n->id_length, o->name, m);
+			if (k == NULL || !ermEd25519VerifyKey(k, m, signed_length, s->bytes.data + 8)) result = 1;
 		}
 	}
 	jsonFree(x);
@@ -436,7 +457,7 @@ static void send_heads(ls_node *n, struct ls_link *l, bool re) {
 	for (size_t i = 0; i < n->n_commits && put < count; i++) put += !n->commits[i]->passing && n->commits[i]->lamport >= floor_;
 	CborOut m = message("heads", 2 + re, 64 + put * (CM_NAME + 2));
 	if (re) key(&m, "re"), cborPutBoolean(&m, true);
-	key(&m, "node"), cborPutBytes(&m, n->doc, 32);
+	key(&m, "node"), cborPutText(&m, n->id, n->id_length);
 	key(&m, "heads"), cborPutHead(&m, 4, put);
 	for (size_t i = 0, k = 0; i < n->n_commits && k < put; i++)
 		if (!n->commits[i]->passing && n->commits[i]->lamport >= floor_) cborPutBytes(&m, n->commits[i]->name, CM_NAME), k++;
@@ -448,7 +469,7 @@ static void send_names(ls_node *n, struct ls_link *l, const char *t, const uint8
 	for (size_t at = 0; at < count; at += LS_MAX_HEADS) {
 		size_t k = count - at < LS_MAX_HEADS ? count - at : (size_t)LS_MAX_HEADS;
 		CborOut m = message(t, 2, 64 + k * (CM_NAME + 2));
-		key(&m, "node"), cborPutBytes(&m, n->doc, 32);
+		key(&m, "node"), cborPutText(&m, n->id, n->id_length);
 		key(&m, "names"), cborPutHead(&m, 4, k);
 		for (size_t i = at; i < at + k; i++) cborPutBytes(&m, names[i], CM_NAME);
 		say(n->dev, "tx %s %.8s %zu", t, short_id(n), k);
@@ -481,7 +502,7 @@ static void send_commits(ls_node *n, struct ls_link *l, commit *const *given, si
 			at++;
 		}
 		CborOut m = message("commits", 2, size + 64);
-		key(&m, "node"), cborPutBytes(&m, n->doc, 32);
+		key(&m, "node"), cborPutText(&m, n->id, n->id_length);
 		key(&m, "sealed"), cborPutHead(&m, 4, k);
 		for (size_t i = 0; i < k; i++) {
 			cborPutBytes(&m, seals[i], of[i]->length);
@@ -846,7 +867,7 @@ static int write_cmp(const write *a, const write *b) {
 // a far write's value, read again from its commit's seal
 static void reread(ls_node *n, write *w) {
 	opened o;
-	if (open_seal(n->dev, w->by->sealed, w->by->length, n->doc, false, &o) != 2) return;
+	if (open_seal(n->dev, w->by->sealed, w->by->length, n, false, &o) != 2) return;
 	if (w->patch < o.c.patches_length && o.c.patches[w->patch].has_value) {
 		w->value = copy(o.c.patches[w->patch].value, 0);
 		w->far = w->value == NULL;
@@ -901,7 +922,7 @@ static bool shallow(const op_value *v, int depth) {
 
 // a commit's patches, if v1 merges them all: NULL, else why not
 static const char *refusal(const cm_commit *c) {
-	if (strcmp(c->table, "value") != 0) return "only the value table is kept";
+	if (strcmp(c->table, "value") != 0 && strcmp(c->table, "children") != 0) return "only the value and children tables are kept";
 	for (size_t i = 0; i < c->patches_length; i++) {
 		const op_patch *p = &c->patches[i];
 		if (p->has_move) return "a move patch is not merged";
@@ -1028,14 +1049,16 @@ static commit *take_commit(ls_node *n, const uint8_t name[CM_NAME], const uint8_
 	size_t m = 0;
 	for (size_t i = 0; i < c->patches_length && i < UINT16_MAX; i++) {
 		const op_patch *p = &c->patches[i];
-		size_t bytes = 0;
+		size_t bytes = strlen(c->table) + 1;
 		for (size_t j = 0; j < p->place.length; j++) bytes += strlen(p->place.path[j].s) + 1;
 		const cm_replaces *r = c->replaces != NULL && c->replaces[i].has ? &c->replaces[i] : NULL;
 		size_t nr = r != NULL ? (r->length < UINT16_MAX ? r->length : UINT16_MAX) : 0;
-		write w = {.bytes = bytes, .depth = p->place.length, .by = k, .patch = (uint16_t)i, .n_replaces = (uint16_t)nr,
+		write w = {.bytes = bytes, .depth = p->place.length + 1, .by = k, .patch = (uint16_t)i, .n_replaces = (uint16_t)nr,
 			.gone = !p->has_value, .has_replaces = r != NULL};
 		w.path = allocate(bytes + nr * PRE + 1);
 		char *at = w.path;
+		memcpy(at, c->table, strlen(c->table) + 1);
+		at += strlen(c->table) + 1;
 		for (size_t j = 0; j < p->place.length; j++) {
 			size_t len = strlen(p->place.path[j].s) + 1;
 			memcpy(at, p->place.path[j].s, len);
@@ -1193,7 +1216,7 @@ static void load_kept(ls_node *n, size_t count, parents_seen *ps) {
 			if (!is_name(x) || commit_find(n, x->bytes.data) != NULL) continue;
 			seal_name(n, x->bytes.data, sname);
 			if (!d->o.store.load(d->o.store.context, sname, &s, &slen)) continue;
-			if (open_seal(d, s, slen, n->doc, false, &o) == 2) {
+			if (open_seal(d, s, slen, n, false, &o) == 2) {
 				commit *c = commit_new(n, o.name, &o.c, memcmp(o.c.signer, d->key, LS_KEY_LEN) == 0);
 				c->length = slen;
 				c->passing = c->went = true;
@@ -1227,7 +1250,7 @@ static void load_node(ls_node *n) {
 			const Json *s = list->array.items[i];
 			opened o;
 			// our own store: not checked again
-			if (s->type != JSON_BYTES || open_seal(d, s->bytes.data, s->bytes.length, n->doc, false, &o) != 2) continue;
+			if (s->type != JSON_BYTES || open_seal(d, s->bytes.data, s->bytes.length, n, false, &o) != 2) continue;
 			if (!seen(n, o.name) && refusal(&o.c) == NULL) {
 				commit *k = take_commit(n, o.name, s->bytes.data, s->bytes.length, &o.c, memcmp(o.c.signer, d->key, LS_KEY_LEN) == 0, -1);
 				// it may have gone to a peer before the restart
@@ -1248,10 +1271,12 @@ ls_node *ls_find(ls_dev *d, const char *id) {
 	return NULL;
 }
 
+// the node the wire's node names (its id as text, at most LS_ID_LEN bytes)
 static ls_node *by_doc(ls_dev *d, const Json *b) {
-	if (b == NULL || b->type != JSON_BYTES || b->bytes.length != 32) return NULL;
+	if (b == NULL || b->type != JSON_STRING || b->stringLength > LS_ID_LEN) return NULL;
 	for (size_t i = 0; i < d->n_nodes; i++)
-		if (memcmp(d->nodes[i]->doc, b->bytes.data, 32) == 0) return d->nodes[i];
+		if (d->nodes[i]->id_length == b->stringLength && memcmp(d->nodes[i]->id, b->string, b->stringLength) == 0)
+			return d->nodes[i];
 	return NULL;
 }
 
@@ -1259,12 +1284,11 @@ static topic *topic_make(ls_dev *d, const char *name);
 ls_node *ls_follow(ls_dev *d, const char *id) {
 	ls_node *n = ls_find(d, id);
 	if (n != NULL) return n;
-	uint8_t doc[32];
-	if (!id_doc(id, doc) || d->n_nodes >= (d->o.max_nodes ? d->o.max_nodes : 64)) return NULL;
+	if (strlen(id) > LS_ID_LEN || !syncs(id) || d->n_nodes >= (d->o.max_nodes ? d->o.max_nodes : 64)) return NULL;
 	n = allocate(sizeof *n);
 	n->dev = d;
-	memcpy(n->id, id, LS_ID_LEN);
-	memcpy(n->doc, doc, 32);
+	snprintf(n->id, sizeof n->id, "%s", id);
+	n->id_length = strlen(id);
 	n->version = 1;
 	n->saved = d->now;
 	n->hold_sent = INT64_MIN / 2;
@@ -1281,7 +1305,11 @@ ls_node *ls_follow(ls_dev *d, const char *id) {
 }
 
 const char *ls_id(const ls_node *n) { return n->id; }
-const op_value *ls_value(const ls_node *n) { return n->value; }
+static const op_value *table_of(const ls_node *n, const char *table) {
+	return n->value != NULL && n->value->type == OP_MAP ? op_get(n->value, table) : NULL;
+}
+const op_value *ls_value(const ls_node *n) { return table_of(n, "value"); }
+const op_value *ls_children(const ls_node *n) { return table_of(n, "children"); }
 uint32_t ls_version(const ls_node *n) { return n->version; }
 size_t ls_commits(const ls_node *n) {
 	size_t k = 0;
@@ -1393,8 +1421,8 @@ static void heads_parents(const ls_node *n, commit *const *named, size_t n_named
 
 // a commit of the patches (borrowed) at the lamport, no parents yet (a held value's: none), its bytes
 // cm_encode's. Key patches only: several parents need neither base nor merge (commit.h)
-static cm_commit commit_of(ls_dev *d, op_patch *patches, size_t n, int64_t lamport) {
-	cm_commit c = {.table = "value", .change = {.has_time = 1, .time = d->o.epoch_ms + d->now}, .signer_length = LS_KEY_LEN,
+static cm_commit commit_of(ls_dev *d, const char *table, op_patch *patches, size_t n, int64_t lamport) {
+	cm_commit c = {.table = (char *)table, .change = {.has_time = 1, .time = d->o.epoch_ms + d->now}, .signer_length = LS_KEY_LEN,
 		.lamport = lamport, .patches = patches, .patches_length = n};
 	memcpy(c.signer, d->key, LS_KEY_LEN);
 	d->nonce = d->nonce * 1664525u + 1013904223u;
@@ -1413,14 +1441,17 @@ static void drop_hold(ls_node *n) {
 	n->hold = NULL;
 }
 
-// a patch's path as a write's (keys each followed by a 0), malloc'd; NULL: a key that is none
-static char *path_bytes(const ls_patch *p, size_t *bytes) {
-	size_t b = 0;
+// a patch's path in a table as a write's (the table, then the keys, each followed by a 0), malloc'd;
+// NULL: a key that is none
+static char *path_bytes(const char *table, const ls_patch *p, size_t *bytes) {
+	size_t b = strlen(table) + 1;
 	for (size_t k = 0; k < p->length; k++) {
 		if (p->path[k] == NULL) return NULL;
 		b += strlen(p->path[k]) + 1;
 	}
 	char *out = allocate(b + 1), *at = out;
+	memcpy(at, table, strlen(table) + 1);
+	at += strlen(table) + 1;
 	for (size_t k = 0; k < p->length; k++) {
 		size_t m = strlen(p->path[k]) + 1;
 		memcpy(at, p->path[k], m);
@@ -1432,9 +1463,9 @@ static char *path_bytes(const ls_patch *p, size_t *bytes) {
 
 // what patch replaces: the commits of the first item at each path at and under it (what ls_value
 // shows), or with all of every item there. Each once, into out (n_writes room); how many
-static size_t replaced(const ls_node *n, const ls_patch *p, commit **out) {
+static size_t replaced(const ls_node *n, const char *table, const ls_patch *p, commit **out) {
 	size_t bytes, m = 0;
-	char *path = path_bytes(p, &bytes);
+	char *path = path_bytes(table, p, &bytes);
 	if (path == NULL) return 0;
 	write me = {.path = path, .bytes = bytes};
 	for (size_t i = 0; i < n->n_writes; i++) {
@@ -1465,7 +1496,8 @@ static void name_add(names *s, const uint8_t name[CM_NAME]) {
 }
 static int name_order(const void *a, const void *b) { return memcmp(a, b, CM_NAME); }
 
-ls_code ls_write(ls_node *n, const ls_patch *patches, size_t count) {
+// one commit of the patches in a table
+static ls_code write_in(ls_node *n, const char *table, const ls_patch *patches, size_t count) {
 	ls_dev *d = n->dev;
 	if (count == 0) return LS_BAD;
 	// what each patch replaces (commits)
@@ -1475,9 +1507,9 @@ ls_code ls_write(ls_node *n, const ls_patch *patches, size_t count) {
 	char **paths = allocate(count * sizeof *paths);
 	bool bad = false;
 	for (size_t i = 0; i < count; i++) {
-		paths[i] = path_bytes(&patches[i], &bytes[i]);
+		paths[i] = path_bytes(table, &patches[i], &bytes[i]);
 		bad |= paths[i] == NULL;
-		k[i] = replaced(n, &patches[i], reps + i * room);
+		k[i] = replaced(n, table, &patches[i], reps + i * room);
 	}
 	// an own commit never sent, every write of which this one replaces at that write's own path, is as
 	// if never made (collapsed): this write takes its parents, and names what it named in its place.
@@ -1498,7 +1530,7 @@ ls_code ls_write(ls_node *n, const ls_patch *patches, size_t count) {
 					for (size_t j = 0; j < k[i] && !hit; j++) hit = reps[i * room + j] == x;
 			all = hit;
 		}
-		if (!all || open_seal(d, x->sealed, x->length, n->doc, false, &was[n_gone]) != 2) continue;
+		if (!all || open_seal(d, x->sealed, x->length, n, false, &was[n_gone]) != 2) continue;
 		gone_[n_gone++] = x;
 	}
 	// the names per patch: a collapsed commit's own in its place (absent: its parents, which is what
@@ -1519,9 +1551,9 @@ ls_code ls_write(ls_node *n, const ls_patch *patches, size_t count) {
 			const cm_commit *cc = &was[g].c;
 			for (size_t p = 0; p < cc->patches_length; p++) {
 				const op_target *t = &cc->patches[p].place;
-				size_t b = 0;
+				size_t b = strlen(cc->table) + 1;
 				for (size_t q = 0; q < t->length; q++) b += strlen(t->path[q].s) + 1;
-				bool here = b == bytes[i] && t->length == patches[i].length;
+				bool here = strcmp(cc->table, table) == 0 && b == bytes[i] && t->length == patches[i].length;
 				for (size_t q = 0; q < t->length && here; q++) here = strcmp(t->path[q].s, patches[i].path[q]) == 0;
 				if (!here) continue;
 				if (cc->replaces != NULL && cc->replaces[p].has)
@@ -1576,7 +1608,7 @@ ls_code ls_write(ls_node *n, const ls_patch *patches, size_t count) {
 	uint8_t *encoded_ = NULL;
 	size_t length;
 	if (!bad) {
-		c = commit_of(d, list, count, lamport);
+		c = commit_of(d, table, list, count, lamport);
 		c.parents = (const uint8_t(*)[CM_NAME])parents.names;
 		c.parents_length = parents.n;
 		c.replaces = rs;
@@ -1587,7 +1619,7 @@ ls_code ls_write(ls_node *n, const ls_patch *patches, size_t count) {
 	uint8_t name[CM_NAME];
 	if (!bad) {
 		cm_name(encoded_, length, name);
-		sealed = seal(d, encoded_, length, n->doc, &slength);
+		sealed = seal(d, encoded_, length, n, &slength);
 	}
 	free(encoded_);
 	// a seal that can't go in one message would be sent, dropped by the peer and sent again forever
@@ -1623,6 +1655,23 @@ ls_code ls_write(ls_node *n, const ls_patch *patches, size_t count) {
 		for (unsigned i = 0; i < d->n_links; i++)
 			if (d->links[i] != NULL && d->links[i]->up) send_commits(n, d->links[i], &kept, 1);
 	return LS_OK;
+}
+
+ls_code ls_write(ls_node *n, const ls_patch *patches, size_t count) { return write_in(n, "value", patches, count); }
+
+ls_code ls_place(ls_node *n, const char *name, const char *id) {
+	if (id == NULL) return LS_BAD;
+	const char *path[1] = {name};
+	op_value *v = op_str(id);
+	ls_patch p = {path, 1, v, 0};
+	ls_code code = write_in(n, "children", &p, 1);
+	op_free(v);
+	return code;
+}
+ls_code ls_unplace(ls_node *n, const char *name) {
+	const char *path[1] = {name};
+	ls_patch p = {path, 1, NULL, 0};
+	return write_in(n, "children", &p, 1);
 }
 
 ls_code ls_put(ls_node *n, const op_value *value) {
@@ -1671,14 +1720,16 @@ static bool inside_of(const ls_node *n, const write *w) {
 size_t ls_values(const ls_node *n, const char *const *path, size_t length, ls_item *out, size_t max) {
 	ls_patch p = {path, length, NULL, 0};
 	size_t bytes, k = 0;
-	char *keys = path_bytes(&p, &bytes);
+	char *keys = path_bytes("value", &p, &bytes);
 	if (keys == NULL) return 0;
+	// the depth of the writes': the table is the first key
+	length++;
 	write me = {.path = keys, .bytes = bytes, .depth = length};
 	// the writes at the path, in the agreed order (the writes are sorted)
 	for (size_t i = 0; i < n->n_writes; i++) {
 		const write *w = &n->writes[i];
 		if (!same_path(w, &me)) continue;
-		if (k < max) item_of(w, length, w->value, w->gone, inside_of(n, w), &out[k]);
+		if (k < max) item_of(w, length - 1, w->value, w->gone, inside_of(n, w), &out[k]);
 		k++;
 	}
 	// a shallower write over it, when one here is not its own: its value at the path, in the agreed order
@@ -1700,7 +1751,7 @@ size_t ls_values(const ls_node *n, const char *const *path, size_t length, ls_it
 		const write *c = over[i];
 		const char *rest = keys + c->bytes;
 		const op_value *v = c->gone || c->far ? NULL : dig(c->value, rest, length - c->depth);
-		if (k < max) item_of(c, c->depth, v, c->gone || (!c->far && v == NULL), inside_of(n, c), &out[k]);
+		if (k < max) item_of(c, c->depth - 1, v, c->gone || (!c->far && v == NULL), inside_of(n, c), &out[k]);
 		k++;
 	}
 	free(over);
@@ -1723,7 +1774,7 @@ static void send_ephemeral(ls_node *n, const struct ls_link *except, const uint8
 		// framed once, for every link
 		if (f == NULL) {
 			CborOut m = message("ephemeral", 2, length + 64);
-			key(&m, "node"), cborPutBytes(&m, n->doc, 32);
+			key(&m, "node"), cborPutText(&m, n->id, n->id_length);
 			key(&m, "commit"), cborPutBytes(&m, bytes, length);
 			f = ls_framed_of(m.data, size = m.length);
 			free(m.data);
@@ -1744,7 +1795,7 @@ ls_code ls_hold(ls_node *n, const op_value *value) {
 	op_value *c = copy(value, 0);
 	if (c == NULL) return LS_BAD;
 	op_patch p = {.has_value = 1, .value = c};
-	cm_commit j = commit_of(d, &p, 1, n->lamport + 1);
+	cm_commit j = commit_of(d, "value", &p, 1, n->lamport + 1);
 	uint8_t *bytes;
 	size_t length;
 	if (cm_encode(&j, &bytes, &length, NULL) != CM_OK) return op_free(c), LS_BAD;
@@ -2191,7 +2242,7 @@ static void on_commits(struct ls_link *l, const Json *m) {
 			continue;
 		}
 		opened o;
-		int r = open_seal(d, s->bytes.data, s->bytes.length, n->doc, true, &o);
+		int r = open_seal(d, s->bytes.data, s->bytes.length, n, true, &o);
 		if (r != 2) {
 			d->stats.bad_seals++;
 			say(d, "rx bad seal %.8s", short_id(n));
@@ -2245,7 +2296,7 @@ static void on_ephemeral(struct ls_link *l, const Json *m) {
 	if (n == NULL || b == NULL) return;
 	cm_commit c;
 	if (cm_decode(b->bytes.data, b->bytes.length, &c, NULL) != CM_OK) return;
-	if (c.patches_length == 1 && c.patches[0].place.length == 0 && c.patches[0].has_value &&
+	if (strcmp(c.table, "value") == 0 && c.patches_length == 1 && c.patches[0].place.length == 0 && c.patches[0].has_value &&
 		c.patches[0].value != NULL && c.signer_length == LS_KEY_LEN && memcmp(c.signer, d->key, LS_KEY_LEN) != 0) {
 		ls_held *h = held_of(n, c.signer, c.signer_length, true);
 		if (h != NULL && c.lamport > h->last) {

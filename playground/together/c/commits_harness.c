@@ -198,10 +198,12 @@ const cs_made *cs_make(cs_commits *c, const op_value *r, cs_failure *why) {
 	return c->made[c->length++] = m;
 }
 
-const uint8_t cs_doc[32] = {0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a};
+const char cs_doc[] = "ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a";
 
-void cs_sealed(const cs_made *m, const uint8_t doc[32], uint8_t **out, size_t *length) {
+void cs_sealed(const cs_made *m, const char *doc, uint8_t **out, size_t *length) {
 	sl_made made = {.commit = NULL};
 	memcpy(made.name, m->name, CM_NAME);
-	if (sl_seal(m->bytes, m->length, &m->signer->signer, doc, &made, out, length, NULL, NULL) != SL_OK) abort();
+	if (sl_seal(m->bytes, m->length, &m->signer->signer, (const uint8_t *)doc, strlen(doc), &made, out, length, NULL,
+		    NULL) != SL_OK)
+		abort();
 }

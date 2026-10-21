@@ -4,9 +4,10 @@
 //
 // A device here checks nothing (every commit applies) and gives every fragment it builds a snapshot:
 // the tables at its head (replay.h), packed. A commit a request makes is signed by its seed, default
-// the device's, sealed for each document it is used in. doc: an ermine:// id, default ermine://2a...2a00...00 (16 bytes each). A commit in an
+// the device's, sealed for each document it is used in. doc: an ermine id, default ermine:0010 then 2a × 16 (a fresh id). A commit in an
 // answer: its label (for its name and its seal's stored id alike), else hex. Deterministic: the
-// devices run on the harness's clock (wires_harness.h), which quiet moves 2 ms a round
+// devices run on the harness's clock (wires_harness.h), which quiet moves 2 ms a round. What is put
+// is an envelope (subduction.h): the id (id, default doc) and the seal or the fragment
 #include "commits_harness.h"
 #include "ids.h"
 #include "packer.h"
@@ -19,6 +20,7 @@
 #include "../../../conformance/c/protocol_harness.h"
 #include "../../../ermine/encoding/c/cbor.h"
 #include "../../../ermine/encoding/c/commit_form_harness.h"
+#include "../../../ermine/ids/c/ids.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -31,10 +33,10 @@
 #endif
 
 const lk_lock *(*tph_lock)(const op_value *request);
-uint8_t *(*tph_close)(const char *device, const uint8_t doc[32], const uint8_t name[CM_NAME],
+uint8_t *(*tph_close)(const char *device, const char *doc, const uint8_t name[CM_NAME],
 	const uint8_t (*parents)[CM_NAME], size_t count, const uint8_t *bytes, size_t length, size_t *out_length);
 
-static const char DOC[] = "ermine://2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a00000000000000000000000000000000";
+static const char DOC[] = "ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a";
 
 // ---- devices
 
@@ -81,14 +83,15 @@ static cs_commits *commits;
 // a commit's seal for a document (a seal is good in its own only)
 typedef struct {
 	char *label;
-	uint8_t doc[32];
+	char *doc;
 	uint8_t *bytes;
 	size_t length;
 } seal_t;
 static seal_t *seals;
 static size_t seal_count, seal_room;
-// the document of the request being answered: what a label is sealed for
-static uint8_t here[32];
+// the document of the request being answered, its id: what a label is sealed for (NULL: not an ermine
+// id, for now the only documents a device takes)
+static const char *here;
 // a name, or a stored id, to its label (the first given)
 static im_map labels = {.width = CM_NAME}, stored_labels;
 
@@ -104,19 +107,21 @@ void tph_label(FILE *out, const uint8_t *id, size_t length) {
 }
 
 static const seal_t *sealed(const cs_made *m);
+static const char *doc_of(const op_value *r);
 
 // a label's seal for the request's document, made then if it is not yet
 static const seal_t *seal_of(const char *label) {
 	for (size_t i = 0; label != NULL && i < seal_count; i++)
-		if (strcmp(seals[i].label, label) == 0 && memcmp(seals[i].doc, here, 32) == 0) return &seals[i];
+		if (here != NULL && strcmp(seals[i].label, label) == 0 && strcmp(seals[i].doc, here) == 0) return &seals[i];
 	const cs_made *m = label != NULL ? cs_get(commits, label) : NULL;
 	return m != NULL ? sealed(m) : NULL;
 }
 
-// the made commit's seal for the request's document, made once
+// the made commit's seal for the request's document, made once; NULL: the document is not an ermine id
 static const seal_t *sealed(const cs_made *m) {
+	if (here == NULL) return NULL;
 	for (size_t i = 0; i < seal_count; i++)
-		if (strcmp(seals[i].label, m->label) == 0 && memcmp(seals[i].doc, here, 32) == 0) return &seals[i];
+		if (strcmp(seals[i].label, m->label) == 0 && strcmp(seals[i].doc, here) == 0) return &seals[i];
 	if (seal_count == seal_room) {
 		seal_room = seal_room ? seal_room * 2 : 16;
 		seals = realloc(seals, seal_room * sizeof *seals);
@@ -124,7 +129,7 @@ static const seal_t *sealed(const cs_made *m) {
 	}
 	seal_t *n = &seals[seal_count++];
 	n->label = copyString(m->label);
-	memcpy(n->doc, here, 32);
+	n->doc = copyString(here);
 	cs_sealed(m, here, &n->bytes, &n->length);
 	uint8_t stored[32];
 	sl_stored(n->bytes, n->length, stored);
@@ -153,7 +158,10 @@ static const cs_made *make(const op_value *r, const uint8_t *seed, FILE *out) {
 		free(why.field);
 		return NULL;
 	}
-	sealed(m);
+	if (sealed(m) == NULL) {
+		hh_error(out, "not an ermine id: %s", doc_of(r));
+		return NULL;
+	}
 	return m;
 }
 
@@ -376,6 +384,19 @@ static void follow(const op_value *r, FILE *out) {
 	fputs("{}", out);
 }
 
+// an envelope's bytes (subduction.h): the id (the request's id, default its doc) and what it carries
+// (carries, taken), canonical CBOR, hh_take'n
+static uint8_t *envelope(const op_value *r, Json *carries, size_t *length) {
+	const char *id = hh_str(r, "id");
+	jsonAdd(carries, "id", jsonString(id != NULL ? id : doc_of(r)));
+	*length = 0;
+	cborEncode(carries, NULL, 0, length, NULL);
+	uint8_t *bytes = hh_take(*length + 1);
+	cborEncode(carries, bytes, *length, length, NULL);
+	jsonFree(carries);
+	return bytes;
+}
+
 static void take(const op_value *r, FILE *out) {
 	device_t *d = of(r, "device", out);
 	if (d == NULL) return;
@@ -443,7 +464,14 @@ static void put(const op_value *r, FILE *out) {
 	uint8_t head[32];
 	if (op_get(r, "head") != NULL) {
 		if (!stored_id(op_get(r, "head"), head, out)) return;
-	} else sl_stored(blob, length, head);
+	} else if (!sl_stored(blob, length, head)) {
+		// bytes that are no seal: their BLAKE3, a name for them, as a peer might give
+		cm_digest(blob, length, head);
+	}
+	// the seal in its envelope
+	Json *e = jsonObject();
+	jsonAdd(e, "sealed", jsonBytes(blob, length));
+	blob = envelope(r, e, &length);
 	size_t count;
 	uint8_t(*parents)[32];
 	if (op_get(r, "parents") != NULL) {
@@ -475,7 +503,7 @@ static void put(const op_value *r, FILE *out) {
 		size_t names = 0;
 		if (m != NULL && cm_decode(m->bytes, m->length, &c, NULL) == CM_OK) name = m->name, names = c.parents_length;
 		else cm_name(blob, length, digest);
-		blob = tph_close(d->name, here, name, (const uint8_t(*)[CM_NAME])c.parents, names, blob, length, &length);
+		blob = tph_close(d->name, doc_of(r), name, (const uint8_t(*)[CM_NAME])c.parents, names, blob, length, &length);
 		cm_free(&c);
 	}
 	if (!tp_conformance_hook_put(d->t, doc_of(r), head, (const uint8_t(*)[32])parents, count, blob, length)) {
@@ -559,7 +587,7 @@ static void fragment_op(const op_value *r, FILE *out) {
 					hh_error(out, "not sealed commits");
 					return;
 				}
-				// "run": the blob's key, kept as stored
+				// "run": the blob's key, as stored
 				jsonAdd(o, "run", jsonBytes(packed, n));
 				free(packed);
 			}
@@ -574,11 +602,14 @@ static void fragment_op(const op_value *r, FILE *out) {
 				free(snapshot);
 			}
 		}
-		length = 0;
-		cborEncode(o, NULL, 0, &length, NULL);
-		blob = hh_take(length + 1);
-		cborEncode(o, blob, length, &length, NULL);
-		jsonFree(o);
+		// a list: no envelope; else the fragment in its envelope
+		if (o == list) {
+			length = 0;
+			cborEncode(o, NULL, 0, &length, NULL);
+			blob = hh_take(length + 1);
+			cborEncode(o, blob, length, &length, NULL);
+			jsonFree(o);
+		} else blob = envelope(r, o, &length);
 	}
 	uint8_t head[32];
 	if (!stored_id(op_get(r, "head"), head, out)) return;
@@ -612,7 +643,7 @@ static void fragment_op(const op_value *r, FILE *out) {
 		}
 		uint8_t name[CM_NAME];
 		cm_name(blob, length, name);
-		blob = tph_close(d->name, here, name, (const uint8_t(*)[CM_NAME])parents, names, blob, length, &length);
+		blob = tph_close(d->name, doc_of(r), name, (const uint8_t(*)[CM_NAME])parents, names, blob, length, &length);
 	}
 	if (!tp_conformance_hook_put_fragment(d->t, doc_of(r), head, (const uint8_t(*)[32])boundary, bn,
 		    (const uint8_t(*)[32])checkpoints, cn, blob, length)) {
@@ -899,7 +930,10 @@ static void again(const op_value *r, FILE *out) {
 static void changed(const op_value *r, FILE *out) {
 	device_t *d = of(r, "device", out);
 	if (d == NULL) return;
-	tp_changed(d->t);
+	// told times (default 1) before any of it runs
+	const op_value *times = op_get(r, "times");
+	size_t n = times != NULL && times->type == OP_NUM && times->num >= 1 ? (size_t)times->num : 1;
+	for (size_t i = 0; i < n; i++) tp_changed(d->t);
 	settle(d);
 	fputs("{}", out);
 }
@@ -953,7 +987,7 @@ void hh_finish(void) {
 	for (size_t i = 0; i < device_count; i++) device_free(devices[i]);
 	free(devices);
 	wr_free();
-	for (size_t i = 0; i < seal_count; i++) free(seals[i].label), free(seals[i].bytes);
+	for (size_t i = 0; i < seal_count; i++) free(seals[i].label), free(seals[i].doc), free(seals[i].bytes);
 	free(seals);
 	im_free(&labels);
 	for (size_t i = 0; i < storage_count; i++) free(storages[i].label);
@@ -963,13 +997,19 @@ void hh_finish(void) {
 
 void hh_answer(const op_value *r, FILE *out) {
 	const char *op = hh_str(r, "op");
-	if (!tp_doc(doc_of(r), here)) memset(here, 0, 32);
+	const char *doc = doc_of(r);
+	uint8_t bytes[ID_MAX];
+	here = id_parse(doc, strlen(doc), bytes) != 0 ? doc : NULL;
 	if (op == NULL) hh_unknown(out, r);
 	else if (strcmp(op, "device") == 0) device(r, out);
 	else if (strcmp(op, "close") == 0) close_device(r, out);
 	else if (strcmp(op, "connect") == 0) join_devices(r, out);
 	else if (strcmp(op, "disconnect") == 0) disconnect(r, out);
 	else if (strcmp(op, "follow") == 0) follow(r, out);
+	else if (strcmp(op, "unnamed") == 0) {
+		device_t *d = of(r, "device", out);
+		if (d != NULL) fprintf(out, "{\"unnamed\":%zu}", tp_unnamed(d->t));
+	}
 	else if (strcmp(op, "make") == 0) {
 		if (make(r, NULL, out) != NULL) fputs("{}", out);
 	} else if (strcmp(op, "take") == 0) take(r, out);

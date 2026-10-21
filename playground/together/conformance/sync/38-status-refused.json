@@ -32,7 +32,7 @@
 			"host": "a",
 			"as": "x",
 			"expect": {
-				"id": "ermine://b40fde52c568d2f3864d68739e98b72b9f144f5566afcbb238fd354ecdc7c755"
+				"id": "ermine:0010b40fde52c568d2f3864d68739e98b72b"
 			}
 		},
 		{

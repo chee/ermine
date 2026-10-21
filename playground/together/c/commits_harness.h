@@ -42,10 +42,11 @@ bool cs_resolve(const cs_commits *c, const op_value *x, uint8_t name[CM_NAME], c
 const cs_made *cs_find(const cs_commits *c, const uint8_t name[CM_NAME]);
 // a name as a JSON string: its label, else its hex
 void cs_put_name(const cs_commits *c, FILE *out, const uint8_t name[CM_NAME]);
-// the made commit, sealed by its seed's signer for a document (its 32 bytes): malloc'd into *out,
+// the made commit, sealed by its seed's signer for a document (its id, text): malloc'd into *out,
 // free it
-void cs_sealed(const cs_made *m, const uint8_t doc[32], uint8_t **out, size_t *length);
-// the default document's 32 bytes (2a × 16, then 00 × 16): what a harness seals for when told none
-extern const uint8_t cs_doc[32];
+void cs_sealed(const cs_made *m, const char *doc, uint8_t **out, size_t *length);
+// the default document's id (a fresh id: ermine:0010, then 2a × 16): what a harness seals for when
+// told none
+extern const char cs_doc[];
 
 #endif

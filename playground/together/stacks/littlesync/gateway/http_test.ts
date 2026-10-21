@@ -14,7 +14,7 @@ import { until } from "./pigs_harness.ts"
 import { createHost } from "./host_harness.ts"
 
 const opts = { sanitizeOps: false, sanitizeResources: false }
-const fresh = () => "ermine://" + hex(crypto.getRandomValues(new Uint8Array(16))) + "0".repeat(32)
+const fresh = () => "ermine:0010" + hex(crypto.getRandomValues(new Uint8Array(16)))
 
 async function world(o: { idle?: number } = {}) {
 	const gateway = createGateway({ signer: await createSigner(), log: () => {} })
@@ -133,7 +133,8 @@ Deno.test({
 			const heads = () =>
 				frame(encode({
 					t: "heads",
-					node: crypto.getRandomValues(new Uint8Array(32)),
+					// a fresh ermine id
+					node: "ermine:0010" + hex(crypto.getRandomValues(new Uint8Array(16))),
 					heads: [nameOf(crypto.getRandomValues(new Uint8Array(8)))],
 				}))
 			const three = new Uint8Array([...heads(), ...heads(), ...heads()])

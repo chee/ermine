@@ -167,6 +167,8 @@ pkr_code pkr_pack(const pkr_item *sealed, size_t n, uint8_t **out, size_t *lengt
 	uint8_t(*names)[CM_NAME] = allocate((n + 1) * CM_NAME), (*ids)[32] = allocate((n + 1) * 32);
 	// each signature's varsig header, and the bytes after it (NULL: given without a seal)
 	Json **header = allocate((n + 1) * sizeof *header), **tail = allocate((n + 1) * sizeof *tail);
+	// the id each seal is for (NULL: given without a seal)
+	Json **doc = allocate((n + 1) * sizeof *doc);
 	bool *vouched = allocate((n + 1) * sizeof *vouched);
 	// each commit's own bytes, when they are not what its columns encode to
 	uint8_t **raw = allocate((n + 1) * sizeof *raw);
@@ -176,13 +178,14 @@ pkr_code pkr_pack(const pkr_item *sealed, size_t n, uint8_t **out, size_t *lengt
 	for (; made < n; made++) {
 		const pkr_item *it = &sealed[made];
 		Json *x = NULL, *c = NULL;
-		const Json *commit = NULL, *signature = NULL;
+		const Json *commit = NULL, *signature = NULL, *id = NULL;
 		const uint8_t *cb = it->bytes;
 		size_t cl = it->length;
 		if (it->stored == NULL) {
 			x = cborDecode(it->bytes, it->length, NULL, NULL);
-			commit = jsonGet(x, "commit"), signature = jsonGet(x, "signature");
-			if (is_bytes(commit) && is_bytes(signature)) cb = commit->bytes.data, cl = commit->bytes.length;
+			id = jsonGet(x, "id"), commit = jsonGet(x, "commit"), signature = jsonGet(x, "signature");
+			if (id != NULL && id->type == JSON_STRING && is_bytes(commit) && is_bytes(signature))
+				cb = commit->bytes.data, cl = commit->bytes.length;
 			else cb = NULL;
 		}
 		if (cb != NULL) {
@@ -204,6 +207,7 @@ pkr_code pkr_pack(const pkr_item *sealed, size_t n, uint8_t **out, size_t *lengt
 			size_t h = sl_header_length(signature->bytes.data, signature->bytes.length);
 			header[made] = jsonBytes(signature->bytes.data, h);
 			tail[made] = jsonBytes(signature->bytes.data + h, signature->bytes.length - h);
+			doc[made] = jsonRef((Json *)id);
 		}
 		jsonFree(x);
 	}
@@ -273,6 +277,8 @@ pkr_code pkr_pack(const pkr_item *sealed, size_t n, uint8_t **out, size_t *lengt
 	}
 	for (size_t i = 0; i < n; i++) v[i] = vouched[i] ? none : header[i];
 	jsonAdd(cols, "headers", runs(v, n));
+	for (size_t i = 0; i < n; i++) v[i] = vouched[i] ? none : doc[i];
+	jsonAdd(cols, "id", runs(v, n));
 	Json *patches = jsonArray();
 	for (size_t i = 0; i < n; i++) {
 		const Json *ps = jsonGet(commits[i], "patches"), *path;
@@ -308,12 +314,13 @@ pkr_code pkr_pack(const pkr_item *sealed, size_t n, uint8_t **out, size_t *lengt
 	free(at.slot);
 	made = n;
 done:
-	for (size_t i = 0; i < made; i++) jsonFree(commits[i]), jsonFree(header[i]), jsonFree(tail[i]);
+	for (size_t i = 0; i < made; i++) jsonFree(commits[i]), jsonFree(header[i]), jsonFree(tail[i]), jsonFree(doc[i]);
 	free(commits);
 	free(names);
 	free(ids);
 	free(header);
 	free(tail);
+	free(doc);
 	free(vouched);
 	return code;
 }
@@ -321,7 +328,7 @@ done:
 // --- reading ---
 
 static const char *const COLUMNS[] = {"n", "table", "actor", "reader", "external", "metadata", "signer",
-	"time", "nonce", "lamport", "parents", "base", "merge", "bytes", "patches", "headers", "signatures", "ids"};
+	"time", "nonce", "lamport", "parents", "base", "merge", "bytes", "patches", "headers", "id", "signatures", "ids"};
 
 // canonical order: shorter first, then bytewise (a key's U+0000 held as C0 80 is the byte 00)
 static size_t real(const char *s, size_t n, unsigned char *out) {
@@ -448,7 +455,8 @@ pkr_code pkr_each(const uint8_t *bytes, size_t length, pkr_each_fn each, void *c
 	}
 	// the columns of runs, in the order packer.ts reads them
 	static const char *const run_columns[] = {"table", "actor", "reader", "external", "metadata", "signer", "base"};
-	const Json **col[9] = {0};
+	// 9: the id each signed one is sealed for, null where vouched
+	const Json **col[10] = {0};
 	int64_t *time = allocate((n + 1) * sizeof *time), *nonce = allocate((n + 1) * sizeof *nonce),
 		*lamport = allocate((n + 1) * sizeof *lamport);
 	uint8_t(*names)[CM_NAME] = allocate((n + 1) * CM_NAME);
@@ -491,6 +499,16 @@ pkr_code pkr_each(const uint8_t *bytes, size_t length, pkr_each_fn each, void *c
 			goto done;
 		}
 		signed_count++;
+	}
+	// id: runs of a string where there is a header, null where there is none
+	if ((col[9] = unruns(jsonGet(x, "id"), n)) == NULL) {
+		code = fail(PKR_RUNS, column, "id");
+		goto done;
+	}
+	for (size_t i = 0; i < n; i++) {
+		if (col[8][i]->type == JSON_NULL ? col[9][i]->type == JSON_NULL : col[9][i]->type == JSON_STRING) continue;
+		code = fail(PKR_RUNS, column, "id");
+		goto done;
 	}
 	if ((size_t)signatures->array.count != signed_count) {
 		code = PKR_SIGNATURES;
@@ -659,6 +677,7 @@ pkr_code pkr_each(const uint8_t *bytes, size_t length, pkr_each_fn each, void *c
 		}
 		const Json *t = signatures->array.items[sig++];
 		Json *s = jsonObject();
+		jsonAdd(s, "id", jsonRef((Json *)col[9][i]));
 		jsonAdd(s, "commit", jsonBytes(b, b_length));
 		uint8_t *whole = allocate(h->bytes.length + t->bytes.length + 1);
 		memcpy(whole, h->bytes.data, h->bytes.length);
@@ -690,7 +709,7 @@ pkr_code pkr_each(const uint8_t *bytes, size_t length, pkr_each_fn each, void *c
 	if (held.commit != NULL) code = PKR_VOUCHED;
 done:
 	free(held_commit);
-	for (int k = 0; k < 9; k++) free((void *)col[k]);
+	for (int k = 0; k < 10; k++) free((void *)col[k]);
 	free(time), free(nonce), free(lamport), free(names);
 	jsonFree(before);
 	jsonFree(x);

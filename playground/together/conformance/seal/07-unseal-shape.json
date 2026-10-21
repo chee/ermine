@@ -1,5 +1,5 @@
 {
-	"title": "a seal is a map of exactly commit (a commit's bytes) and signature (bytes: a varsig header, then 64); anything else is refused shape",
+	"title": "a seal is a map of exactly id (the id it is for, a string), commit (a commit's bytes) and signature (bytes: a varsig header, then 64); anything else is refused shape",
 	"steps": [
 		{
 			"op": "unseal",
@@ -25,7 +25,7 @@
 				},
 				{
 					"/": {
-						"bytes": "NAHtAe0BE199K8Zb3ESW3Ovku8FFkGNoddXjVKMZ9qlpXER4IV+yfL7+qlmMrHSaEU4jMROkn4C/Rj9Qsr670Vk14YnVujkG"
+						"bytes": "NAHtAe0BE1/iuoTTmNEKX0bAWBTJ5sJWYs0RHtzaOQYUPnwJw+s84+AgacIIZJapRi0JhUR6Yo27iM4F/JRyNVjUU1J9WUoP"
 					}
 				}
 			],
@@ -36,6 +36,7 @@
 		{
 			"op": "unseal",
 			"value": {
+				"id": "ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
 				"commit": {
 					"/": {
 						"bytes": "qGR0aW1lGmjneABlYWN0b3JkY2hlZWVub25jZQFldGFibGVldmFsdWVmc2lnbmVyWCLtAYqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29cZ2xhbXBvcnQBZ3BhcmVudHOAZ3BhdGNoZXOBomRwYXRogGV2YWx1ZaFldGl0bGViaGk"
@@ -49,9 +50,10 @@
 		{
 			"op": "unseal",
 			"value": {
+				"id": "ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
 				"signature": {
 					"/": {
-						"bytes": "NAHtAe0BE199K8Zb3ESW3Ovku8FFkGNoddXjVKMZ9qlpXER4IV+yfL7+qlmMrHSaEU4jMROkn4C/Rj9Qsr670Vk14YnVujkG"
+						"bytes": "NAHtAe0BE1/iuoTTmNEKX0bAWBTJ5sJWYs0RHtzaOQYUPnwJw+s84+AgacIIZJapRi0JhUR6Yo27iM4F/JRyNVjUU1J9WUoP"
 					}
 				}
 			},
@@ -62,6 +64,7 @@
 		{
 			"op": "unseal",
 			"value": {
+				"id": "ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
 				"commit": {
 					"/": {
 						"bytes": "qGR0aW1lGmjneABlYWN0b3JkY2hlZWVub25jZQFldGFibGVldmFsdWVmc2lnbmVyWCLtAYqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29cZ2xhbXBvcnQBZ3BhcmVudHOAZ3BhdGNoZXOBomRwYXRogGV2YWx1ZaFldGl0bGViaGk"
@@ -69,7 +72,7 @@
 				},
 				"signature": {
 					"/": {
-						"bytes": "NAHtAe0BE199K8Zb3ESW3Ovku8FFkGNoddXjVKMZ9qlpXER4IV+yfL7+qlmMrHSaEU4jMROkn4C/Rj9Qsr670Vk14YnVujkG"
+						"bytes": "NAHtAe0BE1/iuoTTmNEKX0bAWBTJ5sJWYs0RHtzaOQYUPnwJw+s84+AgacIIZJapRi0JhUR6Yo27iM4F/JRyNVjUU1J9WUoP"
 					}
 				},
 				"key": "x"
@@ -81,6 +84,7 @@
 		{
 			"op": "unseal",
 			"value": {
+				"id": "ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
 				"commit": {
 					"/": {
 						"bytes": "qGR0aW1lGmjneABlYWN0b3JkY2hlZWVub25jZQFldGFibGVldmFsdWVmc2lnbmVyWCLtAYqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29cZ2xhbXBvcnQBZ3BhcmVudHOAZ3BhdGNoZXOBomRwYXRogGV2YWx1ZaFldGl0bGViaGk"
@@ -99,6 +103,7 @@
 		{
 			"op": "unseal",
 			"value": {
+				"id": "ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
 				"commit": {
 					"/": {
 						"bytes": "qGR0aW1lGmjneABlYWN0b3JkY2hlZWVub25jZQFldGFibGVldmFsdWVmc2lnbmVyWCLtAYqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29cZ2xhbXBvcnQBZ3BhcmVudHOAZ3BhdGNoZXOBomRwYXRogGV2YWx1ZaFldGl0bGViaGk"
@@ -113,10 +118,11 @@
 		{
 			"op": "unseal",
 			"value": {
+				"id": "ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
 				"commit": "x",
 				"signature": {
 					"/": {
-						"bytes": "NAHtAe0BE199K8Zb3ESW3Ovku8FFkGNoddXjVKMZ9qlpXER4IV+yfL7+qlmMrHSaEU4jMROkn4C/Rj9Qsr670Vk14YnVujkG"
+						"bytes": "NAHtAe0BE1/iuoTTmNEKX0bAWBTJ5sJWYs0RHtzaOQYUPnwJw+s84+AgacIIZJapRi0JhUR6Yo27iM4F/JRyNVjUU1J9WUoP"
 					}
 				}
 			},
@@ -127,6 +133,7 @@
 		{
 			"op": "unseal",
 			"value": {
+				"id": "ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
 				"commit": {
 					"/": {
 						"bytes": "oA"
@@ -134,7 +141,7 @@
 				},
 				"signature": {
 					"/": {
-						"bytes": "NAHtAe0BE199K8Zb3ESW3Ovku8FFkGNoddXjVKMZ9qlpXER4IV+yfL7+qlmMrHSaEU4jMROkn4C/Rj9Qsr670Vk14YnVujkG"
+						"bytes": "NAHtAe0BE1/iuoTTmNEKX0bAWBTJ5sJWYs0RHtzaOQYUPnwJw+s84+AgacIIZJapRi0JhUR6Yo27iM4F/JRyNVjUU1J9WUoP"
 					}
 				}
 			},
@@ -145,6 +152,7 @@
 		{
 			"op": "unseal",
 			"value": {
+				"id": "ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
 				"commit": {
 					"/": {
 						"bytes": "AQID"
@@ -152,7 +160,7 @@
 				},
 				"signature": {
 					"/": {
-						"bytes": "NAHtAe0BE199K8Zb3ESW3Ovku8FFkGNoddXjVKMZ9qlpXER4IV+yfL7+qlmMrHSaEU4jMROkn4C/Rj9Qsr670Vk14YnVujkG"
+						"bytes": "NAHtAe0BE1/iuoTTmNEKX0bAWBTJ5sJWYs0RHtzaOQYUPnwJw+s84+AgacIIZJapRi0JhUR6Yo27iM4F/JRyNVjUU1J9WUoP"
 					}
 				}
 			},
@@ -163,6 +171,7 @@
 		{
 			"op": "unseal",
 			"value": {
+				"id": "ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
 				"Commit": {
 					"/": {
 						"bytes": "qGR0aW1lGmjneABlYWN0b3JkY2hlZWVub25jZQFldGFibGVldmFsdWVmc2lnbmVyWCLtAYqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29cZ2xhbXBvcnQBZ3BhcmVudHOAZ3BhdGNoZXOBomRwYXRogGV2YWx1ZaFldGl0bGViaGk"
@@ -170,7 +179,7 @@
 				},
 				"signature": {
 					"/": {
-						"bytes": "NAHtAe0BE199K8Zb3ESW3Ovku8FFkGNoddXjVKMZ9qlpXER4IV+yfL7+qlmMrHSaEU4jMROkn4C/Rj9Qsr670Vk14YnVujkG"
+						"bytes": "NAHtAe0BE1/iuoTTmNEKX0bAWBTJ5sJWYs0RHtzaOQYUPnwJw+s84+AgacIIZJapRi0JhUR6Yo27iM4F/JRyNVjUU1J9WUoP"
 					}
 				}
 			},
@@ -188,7 +197,68 @@
 				},
 				"signature": {
 					"/": {
-						"bytes": "NAHtAe0BE199K8Zb3ESW3Ovku8FFkGNoddXjVKMZ9qlpXER4IV+yfL7+qlmMrHSaEU4jMROkn4C/Rj9Qsr670Vk14YnVujkG"
+						"bytes": "NAHtAe0BE1/iuoTTmNEKX0bAWBTJ5sJWYs0RHtzaOQYUPnwJw+s84+AgacIIZJapRi0JhUR6Yo27iM4F/JRyNVjUU1J9WUoP"
+					}
+				}
+			},
+			"expect": {
+				"error": "shape"
+			}
+		},
+		{
+			"op": "unseal",
+			"value": {
+				"id": 1,
+				"commit": {
+					"/": {
+						"bytes": "qGR0aW1lGmjneABlYWN0b3JkY2hlZWVub25jZQFldGFibGVldmFsdWVmc2lnbmVyWCLtAYqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29cZ2xhbXBvcnQBZ3BhcmVudHOAZ3BhdGNoZXOBomRwYXRogGV2YWx1ZaFldGl0bGViaGk"
+					}
+				},
+				"signature": {
+					"/": {
+						"bytes": "NAHtAe0BE1/iuoTTmNEKX0bAWBTJ5sJWYs0RHtzaOQYUPnwJw+s84+AgacIIZJapRi0JhUR6Yo27iM4F/JRyNVjUU1J9WUoP"
+					}
+				}
+			},
+			"expect": {
+				"error": "shape"
+			}
+		},
+		{
+			"op": "unseal",
+			"value": {
+				"id": {
+					"/": {
+						"bytes": "KioqKg"
+					}
+				},
+				"commit": {
+					"/": {
+						"bytes": "qGR0aW1lGmjneABlYWN0b3JkY2hlZWVub25jZQFldGFibGVldmFsdWVmc2lnbmVyWCLtAYqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29cZ2xhbXBvcnQBZ3BhcmVudHOAZ3BhdGNoZXOBomRwYXRogGV2YWx1ZaFldGl0bGViaGk"
+					}
+				},
+				"signature": {
+					"/": {
+						"bytes": "NAHtAe0BE1/iuoTTmNEKX0bAWBTJ5sJWYs0RHtzaOQYUPnwJw+s84+AgacIIZJapRi0JhUR6Yo27iM4F/JRyNVjUU1J9WUoP"
+					}
+				}
+			},
+			"expect": {
+				"error": "shape"
+			}
+		},
+		{
+			"op": "unseal",
+			"value": {
+				"id": "ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+				"commit": {
+					"/": {
+						"bytes": "qGR0aW1lGmjneABlYWN0b3JkY2hlZWVub25jZQFldGFibGVldmFsdWVmc2lnbmVyWCLtAYqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29cZ2xhbXBvcnQBZ3BhcmVudHOAZ3BhdGNoZXOBomRwYXRogGV2YWx1ZaFldGl0bGViaGk"
+					}
+				},
+				"signature": {
+					"/": {
+						"bytes": "NAHtAe0BE1/iuoTTmNEKX0bAWBTJ5sJWYs0RHtzaOQYUPnwJw+s84+AgacIIZJapRi0JhUR6Yo27iM4F/JRyNVjUU1J9WUoP"
 					}
 				}
 			},
@@ -212,7 +282,7 @@
 				},
 				"bytes": "a86474696d651a68e77800656163746f726463686565656e6f6e636501657461626c656576616c7565667369676e65725822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c676c616d706f72740167706172656e747380677061746368657381a26470617468806576616c7565a1657469746c65626869",
 				"name": "1e2042f2c38bcfd72023d3dfd994daab7b2b17a20312ee3586c5ad04fe41d32775f4",
-				"stored": "d789659bddcd568a5d3793b1334f90c204846bdf9a034234569b1c9937cec7ed"
+				"stored": "3910822748d95a8d1902f811d1ab1becfd33a4b30984837b7c75ba8cd0466ade"
 			}
 		}
 	]

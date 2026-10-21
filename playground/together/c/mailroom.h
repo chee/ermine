@@ -18,6 +18,9 @@
 #include "history.h"
 #include "ids.h"
 #include "replay.h"
+// ermine ids: for now only an ermine id is a document here (mr_id); together's own ids.h is the maps
+// above
+#include "../../../ermine/ids/c/ids.h"
 #include "seal.h"
 
 #include <stdbool.h>
@@ -34,14 +37,24 @@ const char *mr_layer_name(mr_layer layer);
 
 // why the mailroom or the stack refused a seal, a fragment or an ephemeral commit before a history saw it
 // (what a history refuses is the history's: hy_refused). MR_BOUNDARY: a fragment's members, boundary
-// or checkpoints not what its head's walk makes them
-typedef enum { MR_LOCK = 1, MR_SHAPE, MR_SIGNATURE, MR_STORED_ID, MR_PARENTS, MR_BOUNDARY } mr_code;
-// "lock", "shape", "signature", "stored", "parents", "boundary"
+// or checkpoints not what its head's walk makes them. MR_ID: an envelope opened (a stack's: the id and
+// what it carries) naming another id than the one followed (the refusal of a second id for a tree held
+// is replaced by the envelope's id check), or a seal for another id (SL_ID)
+typedef enum { MR_LOCK = 1, MR_SHAPE, MR_SIGNATURE, MR_STORED_ID, MR_PARENTS, MR_BOUNDARY, MR_ID } mr_code;
+// "lock", "shape", "signature", "stored", "parents", "boundary", "id"
 const char *mr_code_name(mr_code code);
+// a refusal as the maps of them hold it (the refused, the heard, the stack's fragments refused whole):
+// its code, and the text beside it (a lock's, or why an envelope's id is not this one; malloc'd; NULL:
+// none)
+typedef struct {
+	mr_code code;
+	char *why;
+} mr_refusal;
 
 // what a device holds for others at most, each letting go of its oldest past it (heard again, it
 // comes in again), as mailroom.ts's Limits: pending, a document's seals waiting on a parent's seal and its
-// stored commits waiting on a parent; refused, its refusals noted (each kind) and its snapshot hints;
+// stored commits waiting on a parent, and at the stack what waits on the lock (loose commits and
+// fragments, each apart); refused, its refusals noted (each kind) and its snapshot hints;
 // waiting, its ephemeral commits waiting on a parent. 0: the default (65 536, 4 096, 1 024)
 typedef struct {
 	size_t pending, refused, waiting;
@@ -139,7 +152,7 @@ typedef struct {
 	mr_sealed_t it;
 } mr_member_t;
 
-// a name's stored ids: a signer may have signed it twice
+// a name's stored ids (one: a stored id is of the id and the name, seal.h)
 typedef struct {
 	uint8_t (*ids)[32];
 	size_t length, room;
@@ -176,9 +189,13 @@ typedef struct {
 	mr_layer layer;
 } mr_side;
 
+// a document: its id (text, malloc'd; its UTF-8, length bytes, is what a seal and the lock bind), and
+// the mailroom's key for it (mr_id: a hash of the id, never stored or sent). A stack files it under
+// its own address (Subduction's: a tree id) in its slot
 struct mr_doc {
-	char id[9 + 64 + 1];
-	uint8_t bytes[32];
+	char *id;
+	size_t length;
+	uint8_t key[32];
 	mr_mailroom *mailroom;
 	// the stack's: made by its mr_stack.made
 	void *stack;
@@ -199,15 +216,14 @@ struct mr_doc {
 	im_map snapshots, hints, judged;
 	// by a commit's head or a seal's stored id (mr_pending_t)
 	im_map pending;
-	// codes: by head or stored id; refused ephemeral commits, by the name of the bytes as they came
-	// (closed: one that is refused cannot be opened)
+	// refusals (mr_refusal): by head or stored id; refused ephemeral commits by name: one the lock
+	// refused by the name of the bytes as they came (closed: it could not be opened), one refused after
+	// (shape, signature) by the opened commit's
 	im_map refused, heard;
-	// the text a lock refused with (malloc'd), by the same keys
-	im_map why_refused, why_heard;
 	// names of seals refused here
 	im_map bad;
 	// the order each capped map's keys came in (mr_note)
-	mr_order_t pending_order, refused_order, heard_order, bad_order, hints_order, why_refused_order, why_heard_order;
+	mr_order_t pending_order, refused_order, heard_order, bad_order, hints_order;
 	// ephemeral commits to let go of once nothing queued holds them (mr_forget)
 	uint8_t (*forgets)[CM_NAME];
 	size_t forgets_count, forgets_room;
@@ -224,13 +240,16 @@ void mr_attach(mr_mailroom *k, const mr_stack *stack, void *context);
 const uint8_t *mr_key(const mr_mailroom *k);
 const mr_limits *mr_limits_of(const mr_mailroom *k);
 
-// whether the text is a document id, and its bytes
-bool mr_id(const char *doc, uint8_t bytes[32]);
-// the document (made at first); NULL: not a document id
-mr_doc *mr_document(mr_mailroom *k, const uint8_t tree[32]);
+// whether the text is a document's id, and the mailroom's key for it (the BLAKE3 of its UTF-8). For
+// now only an ermine id (of any kind: ermine/ids) is: which nodes sync is sync's own question, and
+// changes with its plan, not here
+bool mr_id(const char *doc, uint8_t key[32]);
+// the document by its id, made when first named (the stack told: mr_stack.made). NULL: not a
+// document's id. An id is compared as its bytes: two ids, two documents
 mr_doc *mr_named(mr_mailroom *k, const char *id);
-// the document if it is here, else NULL; and the first of all, in the order made (mr_doc.next)
-mr_doc *mr_find(const mr_mailroom *k, const uint8_t tree[32]);
+// the document under the key (mr_id) if it is here, else NULL; and the first of all, in the order
+// made (mr_doc.next)
+mr_doc *mr_find(const mr_mailroom *k, const uint8_t key[32]);
 mr_doc *mr_first(const mr_mailroom *k);
 
 // a peer's key (Subduction's, Ed25519) as the multikey the commits carry it as
@@ -243,6 +262,13 @@ void *mr_copy(const void *bytes, size_t length);
 void mr_member(mr_doc *d, mr_member_t *m);
 // pending, the oldest let go of past the limit (heard again, it comes in again); its key's refusal let go
 void mr_pend(mr_doc *d, mr_pending_t *p);
+// a refusal noted under the key in m (o: its order): the code and a copy of the text (NULL: none),
+// in place of any before; past most, the oldest let go of
+void mr_refusal_note(im_map *m, mr_order_t *o, const uint8_t *key, mr_code code, const char *why, size_t most);
+// the refusal under the key let go of, its text with it
+void mr_refusal_del(im_map *m, const uint8_t *key);
+// every refusal in m let go of, and m
+void mr_refusals_free(im_map *m);
 // a seal refused: noted by key, its name (NULL: none) noted bad; what pends under the key let go of
 void mr_refuse(mr_doc *d, const uint8_t key[32], mr_code code, const uint8_t *name, const char *why);
 // for each pending seal, until none moves: stuck, waiting, or handed to the histories
@@ -323,7 +349,7 @@ typedef struct {
 	mr_refused_row *refused;
 	size_t refused_count;
 } mr_taking;
-// broken: the stack's fragments refused whole (by head, codes); locked: its loose commits waiting on the
+// broken: the stack's fragments refused whole (by head, mr_refusal); locked: its loose commits waiting on the
 // lock (by head), each a waiting row with no parents named
 mr_taking mr_taking_of(mr_doc *d, mr_layer layer, const im_map *broken, const im_map *locked);
 void mr_taking_free(mr_taking *taking);

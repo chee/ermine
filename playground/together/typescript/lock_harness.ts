@@ -10,15 +10,15 @@
 //    closed: [{doc?, name, parents}] in order, doc when not the default; name: the commit's label (else
 //    hex: a fragment's is the multihash of its bytes); parents: labels (else hex); opened: whether open
 //    was asked at all
+// { op: "opens", device }       → { opens }  how often the tag lock's open was asked since last asked
 // put's and fragment's closed: the tag put before the blob, as another device with the tag lock closes
 //    it (not in calls)
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
-import { hex } from "../../../ermine/encoding/typescript/commit_harness.ts"
 import { unlocked } from "./lock.ts"
 import { createTag, type Tag, tagged } from "./tag_lock.ts"
 import { answer, finish, hooks, label } from "./transport_harness.ts"
 
-const DOC = "ermine://" + "2a".repeat(16) + "00".repeat(16)
+const DOC = "ermine:0010" + "2a".repeat(16)
 
 const tests = new Map<string, Tag>()
 
@@ -46,7 +46,8 @@ async function lock(r: Request): Promise<Answer> {
 		case "calls": {
 			const t = of(r.device)
 			const closed = t.closed.splice(0).map((c) => {
-				const doc = "ermine://" + hex(c.doc)
+				// the id's UTF-8
+				const doc = new TextDecoder().decode(c.doc)
 				return {
 					...(doc === DOC ? {} : { doc }),
 					name: label(c.name),
@@ -56,6 +57,11 @@ async function lock(r: Request): Promise<Answer> {
 			const opened = t.opened
 			t.opened = false
 			return { closed, opened }
+		}
+		case "opens": {
+			const t = of(r.device), opens = t.opens
+			t.opens = 0
+			return { opens }
 		}
 	}
 	return await answer(r)

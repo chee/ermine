@@ -2,7 +2,9 @@
 // Subduction with no table, joined by in-memory pipes. conventions:
 // playground/together/conformance/README.md. a device here checks nothing and gives each fragment it
 // builds a snapshot (replay.ts). a commit is signed by its seed (default the device's). doc: an
-// ermine:// id, default ermine://2a…2a00…00
+// ermine id (ermine/ids: for now the only documents a device takes), default ermine:0010 then 2a ×
+// 16 (a fresh id). what is put is an envelope (subduction.ts): the id (id, default doc) and the seal
+// or the fragment
 //
 // { op: "device", name, seed, storage?, limits?, lazy?, follow?, lock? } → { key }  storage: a label,
 //    taken in; limits: transport.ts Limits; follow: docs followed before the first run; lock: a
@@ -10,21 +12,25 @@
 // { op: "close", device }                 → {}         closed, pipes cut
 // { op: "connect", a, b }                 → {}         pipe + handshake (a starts)
 // { op: "disconnect", a, b }              → {}
-// { op: "follow", device, doc? }          → {}
+// { op: "follow", device, doc? }          → {}         not an ermine id: refused
+// { op: "unnamed", device }               → { unnamed }  trees the storage holds whose id is not
+//    named yet: listed, not taken in
 // { op: "make", name, ...fields }         → {}         made, labelled, sealed
 // { op: "take", device, doc?, layer?, name, ...fields } → { added }  the device's take (made
 //    first when fields given); layer stored (default) | ephemeral
-// { op: "put", device, doc?, commit, head?, parents?, blob?, closed? } → {}  addCommit as given;
-//    defaults from the commit's seal and stored ids; closed: the blob is closed first, as another
-//    device's lock would (the harness built on this one says how)
+// { op: "put", device, doc?, commit, head?, parents?, blob?, id?, closed? } → {}  addCommit as
+//    given: the envelope {id, sealed}; defaults from the commit's seal and stored ids; blob: the
+//    seal (hex) instead; id: the envelope's (default doc); closed: the envelope is closed first, as
+//    another device's lock would (the harness built on this one says how)
 // { op: "fragment", device, doc?, head, members?, boundary?, checkpoints?, tables?, form?, blob?,
-//   tamper? } → {}  addFragment as given: blob {run, snapshot?}; form "members" | "list"; blob: a
-//    JSON value instead; checkpoints default: members with a leading zero byte; tamper: seals'
-//    last signature byte flipped; closed: as put's
+//   id?, tamper? } → {}  addFragment as given: the envelope {id, run, snapshot?}; form "members" |
+//    "list" (a list of seals, no envelope); blob: a JSON value instead; id: as put's;
+//    checkpoints default: members with a leading zero byte; tamper: seals' last signature byte
+//    flipped; closed: as put's
 // { op: "again", device, doc?, commit }   → { again }  an ephemeral commit of the device's published
 //    again (a beat); false: no such commit
-// { op: "changed", device }               → {}         the device's changed: what waited on its lock
-//    (or check) is tried again
+// { op: "changed", device, times? }       → {}         the device's changed: what waited on its lock
+//    (or check) is tried again. times: told so often (default 1) before any of it runs
 // { op: "closed", device, doc?, commit?, head? } → { first }  the first byte (hex) of what the device's
 //    storage holds for a loose commit (a label) or a fragment (its head): as the lock closed it
 // { op: "quiet" }                         → {}         every device idle, nothing crossing
@@ -45,6 +51,7 @@ import { revive } from "../../../conformance/typescript/form.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { name as nameOf, splitName } from "@ermine/encoding/commit"
 import { hex, unhex } from "../../../ermine/encoding/typescript/commit_harness.ts"
+import { envelope, treeOf } from "../stacks/subduction/typescript/subduction.ts"
 import { createCommits, type Made, pipe, quiet, tablesJson } from "./harnesses.ts"
 import type { Added } from "./history.ts"
 import { replay, type Tables } from "./replay.ts"
@@ -58,7 +65,11 @@ import {
 	transport_conformance_hook_taking,
 } from "./transport_conformance_hook.ts"
 
-const DOC = "ermine://" + "2a".repeat(16) + "00".repeat(16)
+const DOC = "ermine:0010" + "2a".repeat(16)
+
+// a document's id as its UTF-8 (what a lock is given), and its tree id (the stack's)
+const idOf = (doc: string) => new TextEncoder().encode(doc)
+const treeId = (doc: string) => sd.SedimentreeId.fromBytes(treeOf(doc))
 
 // what a harness built on this one adds (lock_harness.ts): the lock a device is made with (its
 // request), and how bytes are closed for a put or a fragment that says closed
@@ -106,7 +117,7 @@ async function made(m: Made, doc: string): Promise<Uint8Array> {
 	const k = m.label + " " + doc
 	let s = seals.get(k)
 	if (s) return s
-	s = await commits.sealed(m, unhex(doc.slice("ermine://".length)))
+	s = await commits.sealed(m, doc)
 	seals.set(k, s)
 	for (const h of [hex(m.name), hex(storedOf(s))]) if (!labels.has(h)) labels.set(h, m.label)
 	return s
@@ -129,6 +140,14 @@ const storedId = async (x: unknown, doc: string) =>
 	typeof x === "string" && commits.get(x) !== undefined
 		? storedOf(await sealOf(x, doc))
 		: unhex(x as string)
+// a seal's stored id; bytes that are no seal: their BLAKE3 (a name for them, as a peer might give)
+function storedOfAny(sealed: Uint8Array): Uint8Array {
+	try {
+		return storedOf(sealed)
+	} catch {
+		return blake3(sealed)
+	}
+}
 const storedIds = (xs: unknown[], doc: string) => Promise.all(xs.map((x) => storedId(x, doc)))
 
 // bytes closed for a put or a fragment that says closed: by the harness built on this one
@@ -140,7 +159,7 @@ async function close(
 	bytes: Uint8Array,
 ) {
 	if (!hooks.close) throw new Error("closed: this harness has no lock")
-	return await hooks.close(device, unhex(doc.slice("ermine://".length)), name, parents, bytes)
+	return await hooks.close(device, idOf(doc), name, parents, bytes)
 }
 
 const added = (a: Added): unknown =>
@@ -204,6 +223,8 @@ export async function answer(r: Request): Promise<Answer> {
 		case "follow":
 			await of(r.device).device.follow(doc)
 			return {}
+		case "unnamed":
+			return { unnamed: of(r.device).device.unnamed() }
 		case "make":
 			await make(r, doc)
 			return {}
@@ -219,8 +240,9 @@ export async function answer(r: Request): Promise<Answer> {
 		case "put": {
 			const d = of(r.device)
 			const m = typeof r.commit === "string" ? commits.get(r.commit) : undefined
-			const blob = r.blob !== undefined ? unhex(r.blob) : await sealOf(r.commit, doc)
-			const head = r.head !== undefined ? await storedId(r.head, doc) : storedOf(blob)
+			const sealed = r.blob !== undefined ? unhex(r.blob) : await sealOf(r.commit, doc)
+			const head = r.head !== undefined ? await storedId(r.head, doc) : storedOfAny(sealed)
+			const blob = envelope(r.id ?? doc, { sealed })
 			const closed = r.closed === true
 				? await close(d.name, doc, m?.name ?? blake3(blob), m?.commit.parents ?? [], blob)
 				: blob
@@ -244,20 +266,20 @@ export async function answer(r: Request): Promise<Answer> {
 				.map((s, i) => {
 					const m = r.members[i]
 					if (!tamper.has(m)) return s
-					const o = cbor.decode(s) as { commit: Uint8Array; signature: Uint8Array }
+					const o = cbor.decode(s) as { id: string; commit: Uint8Array; signature: Uint8Array }
 					const signature = o.signature.slice()
 					signature[signature.length - 1] ^= 1
-					return cbor.encode({ commit: o.commit, signature })
+					return cbor.encode({ ...o, signature })
 				})
 			if (r.blob !== undefined) blob = cbor.encode(revive(r.blob) as cbor.Value)
 			else if (r.form === "list") blob = cbor.encode(seals)
 			else {
 				const o: Record<string, cbor.Value> = r.form === "members"
 					? { members: seals }
-					// "run": the blob's key, kept as stored
+					// "run": the blob's key, as stored
 					: { run: pack(seals) }
 				if (r.tables !== undefined) o.snapshot = snapshot(revive(r.tables) as Tables)
-				blob = cbor.encode(o)
+				blob = envelope(r.id ?? doc, o)
 			}
 			const head = await storedId(r.head, doc)
 			const boundary = await storedIds(r.boundary ?? [], doc)
@@ -287,11 +309,13 @@ export async function answer(r: Request): Promise<Answer> {
 			return { again: d.device.again(doc, name) }
 		}
 		case "changed":
-			await of(r.device).device.changed()
+			await Promise.all(
+				Array.from({ length: r.times ?? 1 }, () => of(r.device).device.changed()),
+			)
 			return {}
 		case "closed": {
 			const d = of(r.device)
-			const tree = sd.SedimentreeId.fromBytes(unhex(doc.slice("ermine://".length)))
+			const tree = treeId(doc)
 			let blob: Uint8Array | undefined
 			if (r.commit !== undefined) {
 				const id = hex(await storedId(r.commit, doc))
@@ -366,11 +390,11 @@ export async function answer(r: Request): Promise<Answer> {
 		}
 		case "blob": {
 			const d = of(r.device), head = hex(await storedId(r.head, doc))
-			const tree = sd.SedimentreeId.fromBytes(unhex(doc.slice("ermine://".length)))
+			const tree = treeId(doc)
 			const all = await d.storage.loadAllFragments(tree) as sd.FragmentWithBlob[]
 			const f = all.find((f) => hex(f.signed.payload.head.toBytes()) === head)
 			if (f === undefined) return {}
-			// "run": the blob's key, kept as stored
+			// "run": the blob's key, as stored; the envelope's id beside it
 			const o = cbor.decode(f.blob) as { run: Uint8Array; snapshot?: Uint8Array }
 			const out: Answer = { members: unpack(o.run).map((u) => label(u.stored)) }
 			if (o.snapshot !== undefined) out.snapshot = tablesJson(tablesOf(o.snapshot))

@@ -91,9 +91,9 @@ export async function until<T>(
 	}
 }
 
-// a pig's row on the C peer's screen: "a d3b58353 x=0.50 y=0.50 ...", by the first 8 hex of its id
+// a pig's row on the C peer's screen: "a d3b58353 x=0.50 y=0.50 ...", by the first 8 hex of its id after its code
 export function row(dump: string, id: string): string | undefined {
-	const h = id.replace("ermine://", "").slice(0, 8)
+	const h = id.slice(11, 19)
 	return dump.split("\n").find((l) => l.slice(2, 10) === h)
 }
 

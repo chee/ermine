@@ -18,6 +18,7 @@
 		"./playground/realms",
 		"./playground/together",
 		"./ermine/sites",
+		"./ermine/ids",
 		"./filesystem/clingy",
 		"./extensions/programs",
 		"./extensions/patch-nodes",

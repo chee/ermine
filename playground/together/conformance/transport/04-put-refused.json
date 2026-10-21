@@ -1,5 +1,5 @@
 {
-	"title": "a loose commit is refused by the transport: not a seal (shape), not under its stored id (stored), its parents not its commit's (parents); what is on a refused one is stuck until it comes right",
+	"title": "a loose commit is not taken by the transport: not a seal (refused shape), not under its stored id (passed over at the door, noted stored), its parents not its commit's (parents); what is on a refused one is stuck until it comes right",
 	"steps": [
 		{
 			"op": "device",
@@ -26,7 +26,7 @@
 		{
 			"op": "make",
 			"name": "c2",
-			"nonce": 619,
+			"nonce": 109,
 			"parents": [
 				"c1"
 			],

@@ -118,7 +118,7 @@ Deno.test({
 		const wa = world("a"), wb = world("b")
 		const ca = createChannel(a.device, a.signer), cb = createChannel(b.device, b.signer)
 		assertEquals(ca.name, hex(a.key))
-		const anchor = "ermine://anchor" as never
+		const anchor = "ermine:anchor" as never
 		connect(wa, ca, { topic: anchor })
 		connect(wb, cb, { topic: anchor })
 		await wait(a, b)

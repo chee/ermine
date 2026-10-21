@@ -64,9 +64,9 @@ export function transport_conformance_hook_putFragment(
 
 // what the transport holds back or refused before the histories. waiting: a loose commit (by its
 // head), or a fragment's member (by its seal's stored id), and the names of its parents not here; or
-// a fragment waiting on the lock (by its head, its boundary: stored ids). refused, by id: a commit (code), a fragment refused whole, or one stuck on a parent refused or
-// stuck here. each list sorted by id. the ephemeral layer: no waiting, the refused ephemeral commits
-// by name
+// a fragment waiting on the lock (by its head, its boundary: stored ids). refused, by id: a commit
+// (code), a fragment refused whole, or one stuck on a parent refused or stuck here. each list sorted
+// by id. the ephemeral layer: no waiting, the refused ephemeral commits by name
 export function transport_conformance_hook_taking(
 	device: Device,
 	doc: string,

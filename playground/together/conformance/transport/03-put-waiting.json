@@ -40,25 +40,25 @@
 			"expect": {
 				"arrived": [
 					[
-						"ermine://2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a00000000000000000000000000000000",
+						"ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
 						"stored",
 						"c1",
 						false
 					],
 					[
-						"ermine://2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a00000000000000000000000000000000",
+						"ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
 						"ephemeral",
 						"c1",
 						false
 					],
 					[
-						"ermine://2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a00000000000000000000000000000000",
+						"ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
 						"stored",
 						"c2",
 						false
 					],
 					[
-						"ermine://2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a00000000000000000000000000000000",
+						"ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
 						"ephemeral",
 						"c2",
 						false

@@ -9,7 +9,8 @@ import type { Message } from "./wire.ts"
 import { row, rows, spawnPigs, until } from "./pigs_harness.ts"
 
 const key = (n: number) => Uint8Array.from([0xed, 0x01, ...new Uint8Array(32).fill(n)])
-const node = new Uint8Array(32).fill(7)
+// a fresh ermine id: ermine:0010, then 16 bytes in hex
+const node = "ermine:0010" + "07".repeat(16)
 
 Deno.test("link: two TS links say hello, come up, pass messages; silent after 8 s", () => {
 	const got: Message[][] = [[], []]
@@ -58,7 +59,7 @@ Deno.test({
 		"link: against littlesync-pigs over --pipe, both ways (C seals open in TS, TS seals show in C)",
 	...opts,
 	async fn() {
-		const room = "ermine://" + "ab".repeat(16) + "0".repeat(32)
+		const room = "ermine:0010" + "ab".repeat(16)
 		const pigs = await spawnPigs({ keys: "a", room })
 		const signer = await createSigner()
 		const got: Message[] = []
@@ -78,10 +79,13 @@ Deno.test({
 			const commits = sealedIn()
 			const opened = []
 			for (const m of commits) for (const s of m.sealed) opened.push(await unseal(s, m.node))
-			const roomCommit = opened.find((u) => u.commit.patches[0].path.length === 1)!
-			assert(roomCommit, "a commit setting a key of the room")
-			const pigId = roomCommit.commit.patches[0].path[0] as string
-			assertEquals(roomCommit.commit.patches[0].value, true)
+			// the room's children name the pig: pig-<its hex> holds its id
+			const roomCommit = opened.find((u) =>
+				u.commit.table === "children" && u.commit.patches[0].path.length === 1
+			)!
+			assert(roomCommit, "a commit naming the pig in the room's children")
+			const pigId = roomCommit.commit.patches[0].value as string
+			assert(typeof pigId === "string" && pigId.startsWith("ermine:"))
 			assertEquals(roomCommit.commit.lamport, 1)
 			const pigCommit = opened.find((u) => u.commit.patches[0].path.length === 0)!
 			const pigValue = pigCommit.commit.patches[0].value as Record<string, number>
@@ -99,7 +103,7 @@ Deno.test({
 				patches: [{ path: [], value: { x: 0.25, y: 0.75, at: Date.now(), seed: 7 } }],
 			}
 			const bytes = encodeCommit(commit)
-			const pigNode = unhex(pigId.slice(9))
+			const pigNode = pigId
 			link.send({ t: "commits", node: pigNode, sealed: [await seal(bytes, signer, pigNode)] })
 			await until(
 				() => row(pigs.dump(), pigId)?.includes("x=0.25 y=0.75"),
@@ -107,11 +111,11 @@ Deno.test({
 				"the C screen shows it",
 			)
 			// acked by the C side
-			const acks = got.filter((m) => m.t === "ack" && hex(m.node) === hex(pigNode))
+			const acks = got.filter((m) => m.t === "ack" && m.node === pigNode)
 			assert(
 				acks.some((m) => m.t === "ack" && m.names.some((n) => hex(n) === hex(nameOf(bytes)))),
 			)
-			assert(rows(pigs.dump()).includes(pigId.slice(9, 17)))
+			assert(rows(pigs.dump()).includes(pigId.slice(11, 19)))
 		} finally {
 			clearInterval(pump)
 			await pigs.stop()

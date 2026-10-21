@@ -1,30 +1,171 @@
 {
 	"title": "a fragment whose walk stops at another fragment's head has that head as its boundary: closed with its name and the boundary's names as parents, and held waiting (its head and boundary) until the lock opens it",
 	"steps": [
-		{"op":"device","name":"a","seed":"0101010101010101010101010101010101010101010101010101010101010101","lock":"tag","expect":{"key":"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"}},
-		{"op":"device","name":"b","seed":"0202020202020202020202020202020202020202020202020202020202020202","lock":"tag","expect":{"key":"ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"}},
-		{"op":"follow","device":"a","expect":{}},
-		{"op":"take","device":"a","name":"c1","nonce":1,"patches":[{"path":[],"value":{"n":1}}],"expect":{"added":"taken"}},
-		{"op":"take","device":"a","name":"c2","nonce":619,"parents":["c1"],"patches":[{"path":["n"],"value":2}],"expect":{"added":"taken"}},
-		{"op":"take","device":"a","name":"c3","nonce":138,"parents":["c2"],"patches":[{"path":["n"],"value":3}],"expect":{"added":"taken"}},
-		{"op":"take","device":"a","name":"c4","nonce":127,"parents":["c3"],"patches":[{"path":["n"],"value":4}],"expect":{"added":"taken"}},
-		{"op":"quiet","expect":{}},
-		{"op":"calls","device":"a","expect":{"closed":[{"name":"c1","parents":[]},{"name":"c2","parents":["c1"]},{"name":"1e2059ee2092f1886325ef81a2b56cee5147d979e2afd7c03740db7d2dedef78ec68","parents":[]},{"name":"c3","parents":["c2"]},{"name":"c4","parents":["c3"]},{"name":"1e203d67d8554aa9066c28c1e05dd5f3b42230915a4aefaeafb4f7e58451d4ac29e5","parents":["c2"]}],"opened":true}},
-		{"op":"fragments","device":"a","expect":{"fragments":[{"head":"c4","members":["c4","c3"],"boundary":["c2"]},{"head":"c2","members":["c2","c1"],"boundary":[]}]}},
-		{"op":"fragment","device":"b","head":"c2","members":["c1","c2"],"boundary":[],"closed":true,"expect":{}},
-		{"op":"quiet","expect":{}},
-		{"op":"fragments","device":"b","expect":{"fragments":[{"head":"c2","members":["c2","c1"],"boundary":[]}]}},
-		{"op":"lock","device":"b","open":"wait","expect":{}},
-		{"op":"fragment","device":"b","head":"c4","members":["c3","c4"],"boundary":["c2"],"closed":true,"expect":{}},
-		{"op":"quiet","expect":{}},
-		{"op":"taking","device":"b","expect":{"waiting":[{"fragment":"c4","boundary":["c2"]}],"refused":[]}},
-		{"op":"fragments","device":"b","expect":{"fragments":[{"head":"c2","members":["c2","c1"],"boundary":[]}]}},
-		{"op":"heads","device":"b","expect":{"heads":["c2"]}},
-		{"op":"lock","device":"b","open":"tag","expect":{}},
-		{"op":"changed","device":"b","expect":{}},
-		{"op":"quiet","expect":{}},
-		{"op":"taking","device":"b","expect":{"waiting":[],"refused":[]}},
-		{"op":"fragments","device":"b","expect":{"fragments":[{"head":"c4","members":["c4","c3"],"boundary":["c2"]},{"head":"c2","members":["c2","c1"],"boundary":[]}]}},
-		{"op":"heads","device":"b","expect":{"heads":["c4"]}}
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"lock": "tag",
+			"expect": { "key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"lock": "tag",
+			"expect": { "key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394" }
+		},
+		{ "op": "follow", "device": "a", "expect": {} },
+		{
+			"op": "take",
+			"device": "a",
+			"name": "c1",
+			"nonce": 1,
+			"patches": [{ "path": [], "value": { "n": 1 } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"name": "c2",
+			"nonce": 109,
+			"parents": ["c1"],
+			"patches": [{ "path": ["n"], "value": 2 }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"name": "c3",
+			"nonce": 138,
+			"parents": ["c2"],
+			"patches": [{ "path": ["n"], "value": 3 }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"name": "c4",
+			"nonce": 30,
+			"parents": ["c3"],
+			"patches": [{ "path": ["n"], "value": 4 }],
+			"expect": { "added": "taken" }
+		},
+		{ "op": "quiet", "expect": {} },
+		{
+			"op": "calls",
+			"device": "a",
+			"expect": {
+				"closed": [
+					{ "name": "c1", "parents": [] },
+					{ "name": "c2", "parents": ["c1"] },
+					{
+						"name": "1e20bfab2d016a3b1534cd67d1d52720bba4ddfec6795323c797c4e32cea7b30c0c4",
+						"parents": []
+					},
+					{ "name": "c3", "parents": ["c2"] },
+					{ "name": "c4", "parents": ["c3"] },
+					{
+						"name": "1e2006a3fb32bfd9b5bb9f52d8f0b18affe1d5f23b33e394b72d742dfe040b7bae92",
+						"parents": ["c2"]
+					}
+				],
+				"opened": true
+			}
+		},
+		{
+			"op": "fragments",
+			"device": "a",
+			"expect": {
+				"fragments": [
+					{
+						"head": "c2",
+						"members": [
+							"c2",
+							"c1"
+						],
+						"boundary": []
+					},
+					{
+						"head": "c4",
+						"members": [
+							"c4",
+							"c3"
+						],
+						"boundary": [
+							"c2"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "fragment",
+			"device": "b",
+			"head": "c2",
+			"members": ["c1", "c2"],
+			"boundary": [],
+			"closed": true,
+			"expect": {}
+		},
+		{ "op": "quiet", "expect": {} },
+		{
+			"op": "fragments",
+			"device": "b",
+			"expect": { "fragments": [{ "head": "c2", "members": ["c2", "c1"], "boundary": [] }] }
+		},
+		{ "op": "lock", "device": "b", "open": "wait", "expect": {} },
+		{
+			"op": "fragment",
+			"device": "b",
+			"head": "c4",
+			"members": ["c3", "c4"],
+			"boundary": ["c2"],
+			"closed": true,
+			"expect": {}
+		},
+		{ "op": "quiet", "expect": {} },
+		{
+			"op": "taking",
+			"device": "b",
+			"expect": { "waiting": [{ "fragment": "c4", "boundary": ["c2"] }], "refused": [] }
+		},
+		{
+			"op": "fragments",
+			"device": "b",
+			"expect": { "fragments": [{ "head": "c2", "members": ["c2", "c1"], "boundary": [] }] }
+		},
+		{ "op": "heads", "device": "b", "expect": { "heads": ["c2"] } },
+		{ "op": "lock", "device": "b", "open": "tag", "expect": {} },
+		{ "op": "changed", "device": "b", "expect": {} },
+		{ "op": "quiet", "expect": {} },
+		{ "op": "taking", "device": "b", "expect": { "waiting": [], "refused": [] } },
+		{
+			"op": "fragments",
+			"device": "b",
+			"expect": {
+				"fragments": [
+					{
+						"head": "c2",
+						"members": [
+							"c2",
+							"c1"
+						],
+						"boundary": []
+					},
+					{
+						"head": "c4",
+						"members": [
+							"c4",
+							"c3"
+						],
+						"boundary": [
+							"c2"
+						]
+					}
+				]
+			}
+		},
+		{ "op": "heads", "device": "b", "expect": { "heads": ["c4"] } }
 	]
 }

@@ -2,7 +2,7 @@
 // by its seed's signer; packs packed by label. conventions: playground/together/conformance/README.md
 //
 // { op: "make", name, ...fields }      → {}            made, labelled, sealed (default document:
-//                                                      2a × 16 then 00 × 16)
+//                                                      0010 then 2a × 16)
 // { op: "sealed", commit }             → { sealed }    hex
 // { op: "pack", commits, name? }       → { pack }     commits: labels, hex sealed bytes, or
 //                                                      { vouched: label, stored? }; name: kept so

@@ -1,7 +1,7 @@
 // ermine-pigs: lab-pig's pigs (playground/demos/slaygrounds/examples/lab-pig) in a terminal, on the
 // same nodes, the same server and the same room as the web page, so both show the same pigs and
 // either picks them up. The format and the walking are program.ts's (its top says them exactly).
-//   ermine-pigs [--server URL] [--service NAME] [--room ermine://...] [--offline] [--name NAME]
+//   ermine-pigs [--server URL] [--service NAME] [--room ermine:...] [--offline] [--name NAME]
 //               [--colour #rrggbb] [--look pixels|nethack] [--dump FILE] [--state FILE] [--log FILE]
 //               [--quit-after SECONDS] [--aa N]
 // --look nethack: the field as a NetHack room (hack.c says its keys); pixels, the default, as below
@@ -33,8 +33,9 @@
 #include <unistd.h>
 
 // ---- what program.ts says
-static const char *FIRST = "ermine://d3b583537595c9a6de0110781d4566d1" "00000000000000000000000000000000";
-static char ROOM[DV_ID] = "ermine://bf04115f9b284145026eab6801219d6e" "00000000000000000000000000000000";
+// the first pig: in every room an old room value had, unless it said false (room_move)
+static const char *FIRST = "ermine:0010d3b583537595c9a6de0110781d4566d1";
+static char ROOM[DV_ID] = "ermine:0010bf04115f9b284145026eab6801219d6e";
 // web px: a pig's width at size 1 (its height 100/130 of it); a held pig's lift; how near the bottom
 // right the bin comes out (and the top right, the corner of shame); the bin, from the bottom right
 enum { W = 110, LIFT = 26, NEAR = 240 };
@@ -68,11 +69,15 @@ static uint32_t u32(double v) {
 	if (m < 0) m += 4294967296.0;
 	return (uint32_t)m;
 }
+// an ermine id: "ermine:" and lowercase hex, its code saying its length (00 10 or 1e 10 and 16 bytes,
+// ed 01 and 32: ermine/ids)
 static bool is_pig(const char *k) {
-	if (strncmp(k, "ermine://", 9) || strlen(k) != 9 + 64) return false;
-	for (const char *p = k + 9; *p; p++)
+	size_t n = strlen(k);
+	if (strncmp(k, "ermine:", 7) || (n != 7 + 36 && n != 7 + 68)) return false;
+	for (const char *p = k + 7; *p; p++)
 		if (!((*p >= '0' && *p <= '9') || (*p >= 'a' && *p <= 'f'))) return false;
-	return true;
+	if (n == 7 + 68) return strncmp(k + 7, "ed01", 4) == 0;
+	return strncmp(k + 7, "0010", 4) == 0 || strncmp(k + 7, "1e10", 4) == 0;
 }
 static bool is_map(const op_value *v) { return v && v->type == OP_MAP; }
 static double num(const op_value *map, const char *key, double otherwise) {
@@ -354,7 +359,7 @@ static const char *pig_name(const char *id) {
 	static char out[4][16];
 	static int at;
 	at = (at + 1) % 4;
-	snprintf(out[at], sizeof out[at], "pig-%.8s", strlen(id) > 9 ? id + 9 : id);
+	snprintf(out[at], sizeof out[at], "pig-%.8s", strlen(id) > 11 ? id + 11 : id);
 	return out[at];
 }
 
@@ -368,37 +373,60 @@ static void set_note(const char *f, ...) {
 
 // ---- the room
 
-static const op_value *room_value(void) { return dv_value(w.d, "value", ROOM); }
-static bool in_room(const op_value *v, const char *id) {
-	if (!is_map(v)) return !strcmp(id, FIRST);
-	const op_value *x = op_get(v, id);
-	if (!strcmp(id, FIRST)) return !(x && x->type == OP_BOOL && !x->bool_);
-	return x && x->type == OP_BOOL && x->bool_;
+static const op_value *room_kids(void) { return dv_value(w.d, "children", ROOM); }
+// the name in the room's children holding id; NULL: not in the room
+static const char *room_name(const op_value *kids, const char *id) {
+	for (size_t i = 0; is_map(kids) && i < kids->count; i++) {
+		const op_value *x = kids->items[i];
+		if (x->type == OP_STR && !strcmp(x->str, id)) return kids->keys[i];
+	}
+	return NULL;
+}
+static bool in_room(const op_value *kids, const char *id) { return room_name(kids, id) != NULL; }
+// a pig's name in the room: pig- and its id's first 8 hex
+static void name_of(const char *id, char out[13]) { snprintf(out, 13, "pig-%.8s", id + 11); }
+static void room_place(const char *id) {
+	char name[13];
+	name_of(id, name);
+	dv_place(w.d, ROOM, name, id);
 }
 
-// a copy of the room's value, with id set to b (id NULL: none)
-static op_value *room_with(const char *id, bool b) {
-	const op_value *v = room_value();
-	op_value *m = op_map();
-	for (size_t i = 0; is_map(v) && i < v->count; i++)
-		if (!id || strcmp(v->keys[i], id)) op_set(m, v->keys[i], op_ref(v->items[i]));
-	if (id) op_set(m, id, op_bool(b));
-	return m;
+// an old room's value ({[pig id]: true | false}) moved into its children once: each true placed, and
+// FIRST unless false, then the value cleared
+static void room_move(void) {
+	const op_value *v = dv_value(w.d, "value", ROOM);
+	if (!is_map(v)) return;
+	// on the heap: 512 ids of DV_ID are 66 KB
+	char (*ids)[DV_ID] = malloc(512 * sizeof *ids);
+	if (ids == NULL) abort();
+	size_t n = 0;
+	bool first = true;
+	for (size_t i = 0; i < v->count && n < 512; i++) {
+		const op_value *x = v->items[i];
+		if (!strcmp(v->keys[i], FIRST) && x->type == OP_BOOL && !x->bool_) first = false;
+		if (is_pig(v->keys[i]) && x->type == OP_BOOL && x->bool_) snprintf(ids[n++], DV_ID, "%s", v->keys[i]);
+	}
+	if (first && n < 512) snprintf(ids[n++], DV_ID, "%s", FIRST);
+	for (size_t i = 0; i < n; i++)
+		if (!in_room(room_kids(), ids[i])) room_place(ids[i]);
+	free(ids);
+	dv_clear(w.d, ROOM);
+	say("moved the room's value into its children");
 }
 
-// the pigs here, as the room says: new ones followed, gone ones let go of
+// the pigs here, as the room's children say: new ones followed, gone ones let go of
 static void room_read(void) {
-	const op_value *v = room_value();
-	dv_follow(w.d, FIRST);
-	if (in_room(v, FIRST)) pig_add(w.d, FIRST);
-	for (size_t i = 0; is_map(v) && i < v->count; i++) {
-		if (!is_pig(v->keys[i]) || !in_room(v, v->keys[i])) continue;
-		bool new = !pig_find(v->keys[i]);
-		pig_add(w.d, v->keys[i]);
-		if (new && w.online_at && mono() - w.online_at > 4000 && strcmp(w.added, v->keys[i])) tell("A pig wanders in.");
+	room_move();
+	const op_value *kids = room_kids();
+	for (size_t i = 0; is_map(kids) && i < kids->count; i++) {
+		const op_value *x = kids->items[i];
+		if (x->type != OP_STR || !is_pig(x->str)) continue;
+		bool new = !pig_find(x->str);
+		pig_add(w.d, x->str);
+		if (new && w.online_at && mono() - w.online_at > 4000 && strcmp(w.added, x->str)) tell("A pig wanders in.");
 	}
 	for (size_t i = 0; i < npigs;) {
-		if (in_room(v, pigs[i].id)) {
+		if (in_room(room_kids(), pigs[i].id)) {
 			i++;
 			continue;
 		}
@@ -409,42 +437,39 @@ static void room_read(void) {
 	}
 }
 
-// the room's other versions: a pig added in one put back, a pig binned in one stays binned
-static op_value *mended(void) {
+// the room's other versions: each pig placed in one, not here and not stored binned, into out (at most
+// room); how many
+static size_t missing(char (*out)[DV_ID], size_t room) {
 	const op_value *cs = dv_value(w.d, "conflicts", ROOM);
-	if (!cs || cs->type != OP_LIST || !cs->count) return NULL;
-	op_value *all = room_with(NULL, false);
-	bool changed = false;
-	for (size_t i = 0; i < cs->count; i++) {
+	size_t n = 0;
+	for (size_t i = 0; cs && cs->type == OP_LIST && i < cs->count; i++) {
 		const op_value *tables = op_get(cs->items[i], "tables");
-		const op_value *v = is_map(tables) ? op_get(tables, "value") : NULL;
-		for (size_t k = 0; is_map(v) && k < v->count; k++) {
-			const char *key = v->keys[k];
-			if (!is_pig(key)) continue;
-			const op_value *had = op_get(all, key), *their = v->items[k];
-			bool next = !((had && had->type == OP_BOOL && !had->bool_) || (their->type == OP_BOOL && !their->bool_));
-			if (!had || had->type != OP_BOOL || had->bool_ != next) op_set(all, key, op_bool(next)), changed = true;
+		const op_value *v = is_map(tables) ? op_get(tables, "children") : NULL;
+		for (size_t k = 0; is_map(v) && k < v->count && n < room; k++) {
+			const op_value *x = v->items[k];
+			if (x->type != OP_STR || !is_pig(x->str) || in_room(room_kids(), x->str)) continue;
+			const pig *p = pig_find(x->str);
+			if (p && p->known && p->binned && !p->held) continue;
+			bool had = false;
+			for (size_t j = 0; j < n; j++) had = had || !strcmp(out[j], x->str);
+			if (!had) snprintf(out[n++], DV_ID, "%s", x->str);
 		}
 	}
-	if (!changed) op_free(all), all = NULL;
-	return all;
+	return n;
 }
 
 static void mend(void) {
-	op_value *all = mended();
-	if (!all) return;
+	char ids[64][DV_ID];
+	size_t n = missing(ids, 64);
+	if (!n) return;
 	if (!w.mend_at) {
 		// a while first, at random, so two devices rarely both mend at once
 		w.mend_at = mono() + 300 + (rand32() % 1500);
-		op_free(all);
 		return;
 	}
-	if (mono() < w.mend_at) {
-		op_free(all);
-		return;
-	}
+	if (mono() < w.mend_at) return;
 	w.mend_at = 0;
-	dv_store(w.d, ROOM, all);
+	for (size_t i = 0; i < n; i++) room_place(ids[i]);
 	dv_settle(w.d, ROOM);
 	say("mend room");
 }
@@ -699,7 +724,7 @@ static void add_pig(void) {
 	op_set(v, "at", op_num(ms_now()));
 	op_set(v, "seed", op_num(floor(pig_draw(&r) * 4294967296.0)));
 	dv_store(w.d, id, v);
-	dv_set(w.d, ROOM, id, op_bool(1));
+	room_place(id);
 	snprintf(w.selected, DV_ID, "%s", id);
 	say("add %s", id);
 	tell("You hear a pig grunt.");
@@ -709,7 +734,7 @@ static void add_pig(void) {
 
 // ---- choosing a pig with the keys
 
-static bool shown(const pig *p) { return p->known && !(p->binned && !p->held) && in_room(room_value(), p->id); }
+static bool shown(const pig *p) { return p->known && !(p->binned && !p->held) && in_room(room_kids(), p->id); }
 
 static void tab(int way) {
 	// in order across the field
@@ -1095,7 +1120,7 @@ static void draw(double now, double clock, double dt) {
 
 	pig *order[512];
 	size_t n = 0;
-	const op_value *room = room_value();
+	const op_value *room = room_kids();
 	for (size_t i = 0; i < npigs && n < 512; i++) {
 		pig *p = &pigs[i];
 		p->drawn = false;
@@ -1215,7 +1240,7 @@ static void state(const char *path) {
 	if (!f) return;
 	fprintf(f, "{\"name\":\"%s\",\"me\":\"%s\",\"online\":%s,\"cols\":%d,\"rows\":%d,\"selected\":\"%s\",\"holding\":\"%s\",\"pigs\":[",
 		w.name, w.me, w.online ? "true" : "false", w.s.cols, w.s.rows, w.selected, w.holding);
-	const op_value *room = room_value();
+	const op_value *room = room_kids();
 	bool first = true;
 	for (size_t i = 0; i < npigs; i++) {
 		pig *p = &pigs[i];
@@ -1284,14 +1309,14 @@ int main(int argc, char **argv) {
 			i++;
 		} else if (!strcmp(a, "--aa") && v) AA = atoi(v) < 1 ? 1 : atoi(v) > 4 ? 4 : atoi(v), i++;
 		else {
-			fprintf(stderr, "usage: ermine-pigs [--server URL|none] [--service NAME] [--room ermine://...] [--offline]\n"
+			fprintf(stderr, "usage: ermine-pigs [--server URL|none] [--service NAME] [--room ermine:...] [--offline]\n"
 				"                   [--name NAME] [--colour #rrggbb] [--look pixels|nethack] [--dump FILE] [--state FILE]\n"
 				"                   [--log FILE] [--quit-after S] [--aa N]\n");
 			return 2;
 		}
 	}
 	if (!is_pig(ROOM)) {
-		fprintf(stderr, "ermine-pigs: %s is no kept id (ermine:// and 64 hex digits)\n", ROOM);
+		fprintf(stderr, "ermine-pigs: %s is no kept id (ermine: and an ermine id's hex)\n", ROOM);
 		return 2;
 	}
 	w.colour = hex(w.colour_text, CHERRY);
@@ -1309,7 +1334,6 @@ int main(int argc, char **argv) {
 	snprintf(w.me, sizeof w.me, "%s", dv_key(w.d));
 	say("start %s %s room %s server %s", w.name, w.me, ROOM, server ? server : "none");
 	dv_follow(w.d, ROOM);
-	dv_follow(w.d, FIRST);
 	dv_listen(w.d, ROOM, heard, NULL);
 	// someone dragging this NetHack player: their requests, on the room's move topic
 	char moves[DV_ID + 8];
@@ -1394,11 +1418,12 @@ int main(int argc, char **argv) {
 		for (size_t i = 0; i < npigs; i++) pig_read(&pigs[i], now);
 		w.open = false;
 		for (size_t i = 0; i < npigs; i++)
-			if (pigs[i].known && pigs[i].shame && in_room(room_value(), pigs[i].id)) w.open = true;
+			if (pigs[i].known && pigs[i].shame && in_room(room_kids(), pigs[i].id)) w.open = true;
 		mend();
 		count_conflicts();
 		if (w.bin_later[0] && now >= w.bin_later_at) {
-			dv_set(w.d, ROOM, w.bin_later, op_bool(0));
+			const char *name = room_name(room_kids(), w.bin_later);
+			if (name) dv_unplace(w.d, ROOM, name);
 			say("binned %s", w.bin_later);
 			w.bin_later[0] = 0;
 		}

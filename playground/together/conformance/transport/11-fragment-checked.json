@@ -1,5 +1,5 @@
 {
-	"title": "a fragment from elsewhere is checked before anything of it is taken in or stored: each member's seal as it is read (one not good refuses it whole), its head of depth 1 or more, every member reached from the head, its boundary none of its members, its checkpoints its members with a depth",
+	"title": "a fragment from elsewhere is checked before anything of it is taken in or stored: each member's stored id the one its id and name give (the door: one not passes it over whole), then each member's seal as it is read (one not good refuses it whole), its head of depth 1 or more, every member reached from the head, its boundary none of its members, its checkpoints its members with a depth",
 	"steps": [
 		{
 			"op": "device",
@@ -23,7 +23,7 @@
 		{
 			"op": "make",
 			"name": "c2",
-			"nonce": 619,
+			"nonce": 109,
 			"parents": [
 				"c1"
 			],
@@ -54,7 +54,7 @@
 		{
 			"op": "fragment",
 			"device": "a",
-			"doc": "ermine://3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a00000000000000000000000000000000",
+			"doc": "ermine:00103a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a",
 			"head": "c2",
 			"members": [
 				"c1",
@@ -68,7 +68,7 @@
 		{
 			"op": "fragment",
 			"device": "a",
-			"doc": "ermine://3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b00000000000000000000000000000000",
+			"doc": "ermine:00103b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b",
 			"head": "c1",
 			"members": [
 				"c1"
@@ -78,7 +78,7 @@
 		{
 			"op": "fragment",
 			"device": "a",
-			"doc": "ermine://3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c00000000000000000000000000000000",
+			"doc": "ermine:00103c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c",
 			"head": "c2",
 			"members": [
 				"c1",
@@ -90,7 +90,7 @@
 		{
 			"op": "fragment",
 			"device": "a",
-			"doc": "ermine://3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d00000000000000000000000000000000",
+			"doc": "ermine:00103d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d",
 			"head": "c2",
 			"members": [
 				"c1",
@@ -104,7 +104,7 @@
 		{
 			"op": "fragment",
 			"device": "a",
-			"doc": "ermine://3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e00000000000000000000000000000000",
+			"doc": "ermine:00103e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e",
 			"head": "c2",
 			"members": [
 				"c1",
@@ -122,7 +122,7 @@
 		{
 			"op": "taking",
 			"device": "a",
-			"doc": "ermine://3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a00000000000000000000000000000000",
+			"doc": "ermine:00103a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a",
 			"expect": {
 				"waiting": [],
 				"refused": [
@@ -136,7 +136,7 @@
 		{
 			"op": "taking",
 			"device": "a",
-			"doc": "ermine://3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b00000000000000000000000000000000",
+			"doc": "ermine:00103b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b",
 			"expect": {
 				"waiting": [],
 				"refused": [
@@ -150,7 +150,7 @@
 		{
 			"op": "taking",
 			"device": "a",
-			"doc": "ermine://3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c00000000000000000000000000000000",
+			"doc": "ermine:00103c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c",
 			"expect": {
 				"waiting": [],
 				"refused": [
@@ -164,7 +164,7 @@
 		{
 			"op": "taking",
 			"device": "a",
-			"doc": "ermine://3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d00000000000000000000000000000000",
+			"doc": "ermine:00103d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d",
 			"expect": {
 				"waiting": [],
 				"refused": [
@@ -178,7 +178,7 @@
 		{
 			"op": "taking",
 			"device": "a",
-			"doc": "ermine://3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e00000000000000000000000000000000",
+			"doc": "ermine:00103e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e",
 			"expect": {
 				"waiting": [],
 				"refused": [
@@ -192,7 +192,7 @@
 		{
 			"op": "heads",
 			"device": "a",
-			"doc": "ermine://3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a00000000000000000000000000000000",
+			"doc": "ermine:00103a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a",
 			"expect": {
 				"heads": []
 			}
@@ -200,7 +200,7 @@
 		{
 			"op": "heads",
 			"device": "a",
-			"doc": "ermine://3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c00000000000000000000000000000000",
+			"doc": "ermine:00103c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c",
 			"expect": {
 				"heads": []
 			}
@@ -208,7 +208,7 @@
 		{
 			"op": "fragments",
 			"device": "a",
-			"doc": "ermine://3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c00000000000000000000000000000000",
+			"doc": "ermine:00103c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c",
 			"expect": {
 				"fragments": []
 			}
@@ -216,7 +216,7 @@
 		{
 			"op": "blob",
 			"device": "a",
-			"doc": "ermine://3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c00000000000000000000000000000000",
+			"doc": "ermine:00103c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c",
 			"head": "c2",
 			"expect": {}
 		}

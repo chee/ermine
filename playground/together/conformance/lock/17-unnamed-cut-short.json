@@ -1,0 +1,230 @@
+{
+	"title": "a tree not named yet gets the closure at the door too: a peer holding a fragment under a real head that holds that head's own seal alone, no boundary (here m, whose lock waited, so it stored it unopened) sends it to a device that does not follow the document yet: passed over, nothing stored (unnamed 0); Subduction (0.23) holds the head's fragment name in its own tree in memory, so that device, following and connecting to the real fragment's holder, is not sent it until it restarts (its storage lists the tree, unnamed 1, holding none of it); made again on its storage and connecting, it takes the real fragment",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"lock": "tag",
+			"expect": {
+				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "m",
+			"seed": "0909090909090909090909090909090909090909090909090909090909090909",
+			"lock": "tag",
+			"expect": {
+				"key": "ed01fd1724385aa0c75b64fb78cd602fa1d991fdebf76b13c58ed702eac835e9f618"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"lock": "tag",
+			"storage": "sb",
+			"expect": {
+				"key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"expect": {}
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"name": "c1",
+			"nonce": 1,
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"n": 1
+					}
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"name": "c2",
+			"nonce": 109,
+			"parents": [
+				"c1"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "follow",
+			"device": "m",
+			"expect": {}
+		},
+		{
+			"op": "lock",
+			"device": "m",
+			"open": "wait",
+			"expect": {}
+		},
+		{
+			"op": "fragment",
+			"device": "m",
+			"head": "c2",
+			"members": [
+				"c2"
+			],
+			"closed": true,
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "taking",
+			"device": "m",
+			"expect": {
+				"waiting": [
+					{
+						"fragment": "c2",
+						"boundary": []
+					}
+				],
+				"refused": []
+			}
+		},
+		{
+			"op": "connect",
+			"a": "m",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "unnamed",
+			"device": "b",
+			"expect": {
+				"unnamed": 0
+			}
+		},
+		{
+			"op": "follow",
+			"device": "b",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "heads",
+			"device": "b",
+			"expect": {
+				"heads": []
+			}
+		},
+		{
+			"op": "taking",
+			"device": "b",
+			"expect": {
+				"waiting": [],
+				"refused": []
+			}
+		},
+		{
+			"op": "close",
+			"device": "b",
+			"expect": {}
+		},
+		{
+			"op": "device",
+			"name": "b2",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"lock": "tag",
+			"storage": "sb",
+			"expect": {
+				"key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "unnamed",
+			"device": "b2",
+			"expect": {
+				"unnamed": 1
+			}
+		},
+		{
+			"op": "follow",
+			"device": "b2",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b2",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "heads",
+			"device": "b2",
+			"expect": {
+				"heads": [
+					"c2"
+				]
+			}
+		},
+		{
+			"op": "fragments",
+			"device": "b2",
+			"expect": {
+				"fragments": [
+					{
+						"head": "c2",
+						"members": [
+							"c2",
+							"c1"
+						],
+						"boundary": []
+					}
+				]
+			}
+		},
+		{
+			"op": "taking",
+			"device": "b2",
+			"expect": {
+				"waiting": [],
+				"refused": []
+			}
+		}
+	]
+}

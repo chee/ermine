@@ -12,7 +12,7 @@
 extern const lk_lock *(*tph_lock)(const op_value *request);
 // bytes closed for a put or a fragment that says closed (another device's lock closing them): into
 // hh_take'd bytes, their length in *out_length
-extern uint8_t *(*tph_close)(const char *device, const uint8_t doc[32], const uint8_t name[CM_NAME],
+extern uint8_t *(*tph_close)(const char *device, const char *doc, const uint8_t name[CM_NAME],
 	const uint8_t (*parents)[CM_NAME], size_t count, const uint8_t *bytes, size_t length, size_t *out_length);
 
 // a commit's label for its name (CM_NAME bytes) or its seal's stored id (32), else its hex, as an answer has it

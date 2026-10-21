@@ -26,6 +26,7 @@ import { createScheduler } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Key, type Table } from "@ermine/table"
 import { createSigner, seal, type Signer, stored } from "./seal.ts"
+import { envelope } from "../stacks/subduction/typescript/subduction.ts"
 import { createSync, type Ephemeral, type Sync } from "./sync.ts"
 import type { Device } from "./transport.ts"
 import {
@@ -37,8 +38,7 @@ import { type Merges, plain, replay, type Tables, written } from "./replay.ts"
 import { serial } from "./rules_harness.ts"
 import { hex } from "./hex.ts"
 
-const DOC = "ermine://" + "ab".repeat(32)
-const DOC_BYTES = new Uint8Array(32).fill(0xab)
+const DOC = "ermine:0010" + "ab".repeat(16)
 const TIME = 1_760_000_000
 const KEPT = ["value", "attributes", "children"] as const
 // a new kind of table: with comments on, h1 keeps it too and the other hosts are older ones that
@@ -205,7 +205,7 @@ const span = (r: R, n: number): [number, number] => {
 // one patch on v, for a table: value anything; attributes a map of small values; children a map
 // of names to ermine ids
 function patchOn(r: R, v: unknown, part: Key, s: Strings = PLAIN): Patch {
-	const child = () => "ermine://" + pick(r, ["01", "02", "03"]).repeat(32)
+	const child = () => "ermine:0010" + pick(r, ["01", "02", "03"]).repeat(16)
 	const small = () => pick(r, s.leaves)
 	if (part !== "value") {
 		const make = part === "children" ? child : small
@@ -553,7 +553,7 @@ async function run(
 		if (c.sealed === undefined) {
 			const commit = decode(c.bytes)
 			const signer = bySigner.get(hex(commit.signer))!
-			c.sealed = await seal(c.bytes, signer, DOC_BYTES, { commit, name: nameOf(c.bytes) })
+			c.sealed = await seal(c.bytes, signer, DOC, { commit, name: nameOf(c.bytes) })
 			c.id = stored(c.sealed)
 		}
 		return c
@@ -563,7 +563,13 @@ async function run(
 		const commit = decode(c.bytes)
 		const parents: Uint8Array[] = []
 		for (const p of commit.parents) parents.push((await sealOf(hex(p))).id!)
-		await transport_conformance_hook_put(to.device, DOC, c.id!, parents, c.sealed!)
+		await transport_conformance_hook_put(
+			to.device,
+			DOC,
+			c.id!,
+			parents,
+			envelope(DOC, { sealed: c.sealed! }),
+		)
 	}
 	const open = (to: number, name: string) =>
 		cut === undefined || (to !== cut && sent.get(name)!.from !== cut)
@@ -798,7 +804,7 @@ async function run(
 			value: { t: "hello", l: ["a", "b", "c"], m: { a: 1, b: "x" } },
 		}])
 		hosts[0].write("attributes", [{ path: [], value: { color: "red" } }])
-		hosts[0].write("children", [{ path: [], value: { notes: "ermine://" + "01".repeat(32) } }])
+		hosts[0].write("children", [{ path: [], value: { notes: "ermine:0010" + "01".repeat(16) } }])
 		await settled(hosts)
 		discover()
 		for (const h of hosts.slice(1)) {

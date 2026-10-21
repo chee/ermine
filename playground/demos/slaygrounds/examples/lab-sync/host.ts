@@ -19,7 +19,7 @@ const points = (s: string) => Array.from(s)
 
 const world = await createSyncWorld({
 	render,
-	room: "ermine://001f0433dad341e9b7664587af0aa79f" + "0".repeat(32),
+	room: "ermine:0010001f0433dad341e9b7664587af0aa79f",
 	merges: { "eg-walker": egwalker },
 	style: `
 	.pad { position: relative; }
@@ -82,7 +82,7 @@ type Peer = {
 	me: boolean
 	versions: number
 }
-const ID = /^ermine:\/\/[0-9a-f]{64}$/
+const ID = /^ermine:(0010|1e10)[0-9a-f]{32}$/
 let shown = ""
 s.runWithScope(host, () =>
 	s.createEffect(() => {

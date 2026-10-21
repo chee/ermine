@@ -104,15 +104,16 @@ static double carry_x = 0.5, carry_y = 0.5; // this peer's pointer: a carried pi
 
 static int cmp_id(const void *a, const void *b) { return strcmp(((const pigslot *)a)->id, ((const pigslot *)b)->id); }
 
-// the pigs of the room, followed, sorted by id so every peer has the same letters
+// the pigs of the room (its children), followed, sorted by id so every peer has the same letters
 static void refresh_pigs(void) {
-	const op_value *rv = ls_value(room);
+	const op_value *rv = ls_children(room);
 	pigslot found[MAXPIGS];
 	int n = 0;
-	if (pig_room_has(rv, PIGS_FIRST)) strcpy(found[n].id, PIGS_FIRST), n++;
 	for (size_t i = 0, k = pig_room_count(rv); i < k && n < MAXPIGS; i++) {
 		const char *id = pig_room_at(rv, i);
-		if (strcmp(id, PIGS_FIRST) != 0 && pig_room_has(rv, id)) strcpy(found[n++].id, id);
+		int had = 0;
+		for (int j = 0; j < n && !had; j++) had = strcmp(found[j].id, id) == 0;
+		if (!had) strcpy(found[n++].id, id);
 	}
 	qsort(found, (size_t)n, sizeof *found, cmp_id);
 	for (int i = 0; i < n; i++) found[i].node = ls_follow(dev, found[i].id);
@@ -178,7 +179,7 @@ static void render(int ansi) {
 	for (int i = 0; i < n_streams; i++)
 		snprintf(peers + strlen(peers), sizeof peers - strlen(peers), "%s%s", i ? "," : "",
 			ls_up(streams[i].link) ? "up" : ls_peer(streams[i].link) ? "down" : "down (not heard)");
-	snprintf(line, sizeof line, "littlesync-pigs  room %.8s  peer%s %s  pigs %d  you %s\n", room_id + 9, n_streams > 1 ? "s" : "",
+	snprintf(line, sizeof line, "littlesync-pigs  room %.8s  peer%s %s  pigs %d  you %s\n", room_id + 11, n_streams > 1 ? "s" : "",
 		peers, n_pigs, my_name);
 	put(line);
 	char grid[FH][FW];
@@ -246,7 +247,7 @@ static void render(int ansi) {
 		pig_read(ls_value(pigs[i].node), pigs[i].id, &st);
 		int shown = where_is(&pigs[i], &x, &y, &by);
 		ls_cost c = ls_cost_of(pigs[i].node);
-		snprintf(line, sizeof line, "%c %.8s x=%.2f y=%.2f %5zuB %2zuc %zup%s%s%s%s\n", 'a' + i, pigs[i].id + 9, x, y, c.stored,
+		snprintf(line, sizeof line, "%c %.8s x=%.2f y=%.2f %5zuB %2zuc %zup%s%s%s%s\n", 'a' + i, pigs[i].id + 11, x, y, c.stored,
 			c.commits, c.newest.parents, st.shame ? " shame" : "", shown ? "" : " binned", by ? " held by " : "", by ? by : "");
 		put(line);
 		// a clash: the items not shown, each where it was dropped and by whom (the first 4 hex of its key)
@@ -278,7 +279,7 @@ static void render(int ansi) {
 		put(line);
 	}
 	ls_cost c = ls_cost_of(room);
-	snprintf(line, sizeof line, "room %.8s %5zuB %2zuc %zup, newest seal %zuB (parents %zuB)\n", room_id + 9, c.stored, c.commits,
+	snprintf(line, sizeof line, "room %.8s %5zuB %2zuc %zup, newest seal %zuB (parents %zuB)\n", room_id + 11, c.stored, c.commits,
 		c.newest.parents, c.newest.length, c.newest.parents_bytes);
 	put(line);
 }
@@ -318,18 +319,22 @@ static void draw(int force) {
 static void add_pig(void) {
 	uint8_t r[16];
 	arc4random_buf(r, 16);
-	char id[LS_ID_LEN + 1] = "ermine://";
-	for (int i = 0; i < 16; i++) sprintf(id + 9 + 2 * i, "%02x", r[i]);
-	strcat(id, "00000000000000000000000000000000");
+	// a fresh ermine id: 00 10 and 16 random bytes
+	char id[LS_ID_LEN + 1] = "ermine:0010";
+	for (int i = 0; i < 16; i++) sprintf(id + 11 + 2 * i, "%02x", r[i]);
 	ls_node *n = ls_follow(dev, id);
 	if (n == NULL) return;
 	pig_value p = {(arc4random() % 800) / 1000.0 + 0.1, (arc4random() % 600) / 1000.0 + 0.3, (double)wall_ms(), arc4random(), 0, 0};
 	op_value *v = pig_make(&p);
 	ls_put(n, v);
 	op_free(v);
-	v = op_bool(1);
-	ls_set(room, id, v);
-	op_free(v);
+	char name[PIGS_NAME];
+	pig_name(id, name);
+	ls_place(room, name, id);
+	// for a test: which pig this peer added
+	char line[16 + LS_ID_LEN];
+	snprintf(line, sizeof line, "add %s", id);
+	log_line(NULL, line);
 	refresh_pigs();
 	for (int i = 0; i < n_pigs; i++)
 		if (strcmp(pigs[i].id, id) == 0) selected = i;
@@ -374,13 +379,14 @@ static void space(void) {
 	op_value *v = pig_make(&p);
 	ls_pick(carrying, v);
 	op_free(v);
+	// binned: unplaced from the room (after its stored binned: true)
 	if (p.binned) {
-		for (int i = 0; i < n_pigs; i++)
-			if (pigs[i].node == carrying) {
-				v = op_bool(0);
-				ls_set(room, pigs[i].id, v);
-				op_free(v);
-			}
+		for (int i = 0; i < n_pigs; i++) {
+			const char *at = pigs[i].node == carrying ? pig_room_name(ls_children(room), pigs[i].id) : NULL;
+			// copied: the write lets go of the children it was read from
+			char name[64];
+			if (at != NULL && strlen(at) < sizeof name) strcpy(name, at), ls_unplace(room, name);
+		}
 	}
 	carrying = NULL;
 	refresh_pigs();

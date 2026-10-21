@@ -60,6 +60,10 @@
 // { op: "get", host, id, commit }       → { tables } | {}   sync.get
 // { op: "stored", host, id }            → { stored }        count of loose commits
 // { op: "fragments", host, id }         → { fragments }     count
+// { op: "put", host, id, from, commit, as } → {}            the commit (a label, with no parents)
+//    host from holds at id, sealed by from's key for id, put to host's device at id as a loose
+//    commit in an envelope naming as (an id's label, or the string as given): what another device
+//    could send (transport_conformance_hook_put)
 // commit in an answer: its label, else hex name. id: a minted label, else the string as given
 import * as sd from "npm:@automerge/subduction@0.23.0"
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
@@ -71,12 +75,15 @@ import { createScheduler } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Key, type Table } from "@ermine/table"
 import { decode } from "@ermine/encoding/commit"
+import { kind } from "@ermine/ids"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { hex, jsonOf, unhex } from "../../../ermine/encoding/typescript/commit_harness.ts"
 import { pipe, quiet, tablesJson } from "./harnesses.ts"
 import { unlocked } from "./lock.ts"
-import { createSigner } from "./seal.ts"
+import { createSigner, seal, stored as storedOf } from "./seal.ts"
+import { envelope } from "../stacks/subduction/typescript/subduction.ts"
+import { transport_conformance_hook_put } from "./transport_conformance_hook.ts"
 import { createTag, type Tag } from "./tag_lock.ts"
 import {
 	type Conflict,
@@ -96,7 +103,8 @@ import type { Kept } from "./history.ts"
 let known: Merges = {}
 
 export const TIME = 1_760_000_000
-const ID = /^ermine:\/\/[0-9a-f]{64}$/
+// a document's id: an ermine id (of any kind)
+const isDoc = (id: string) => kind(id) !== undefined
 
 // ---- hosts
 
@@ -124,7 +132,7 @@ type Host = {
 	events: Map<string, number>
 }
 const hosts = new Map<string, Host>()
-// each tag lock by its host's name, kept across restarts
+// each tag lock by its host's name, the same one across restarts
 const tags = new Map<string, Tag>()
 const links = new Map<string, { cut(): void }>()
 // each host's count of random calls, kept across restarts
@@ -223,8 +231,8 @@ const nameOf = (x: unknown) => {
 // history takes them in (one replaced is let go of at once)
 function counting(h: Host, id: string, r: Request, f: () => void): Answer {
 	// an id that is not a document's has no history: nothing is made for it
-	const history = ID.test(id) ? h.sync.device.history(id) : undefined
-	const eph = ID.test(id) ? h.sync.device.history(id, "ephemeral") : undefined
+	const history = isDoc(id) ? h.sync.device.history(id) : undefined
+	const eph = isDoc(id) ? h.sync.device.history(id, "ephemeral") : undefined
 	const before = history?.all().length ?? 0
 	const taken: Kept[] = []
 	const off = eph?.taken((k) => taken.push(k))
@@ -382,7 +390,7 @@ async function answer(r: Request): Promise<Answer> {
 				patches: revive(w.patches) as Patch[],
 				change: headerOf(h, w),
 			}))
-			const docs = [...new Set(ws.map((w) => w.id))].filter((id) => ID.test(id))
+			const docs = [...new Set(ws.map((w) => w.id))].filter(isDoc)
 			const count = () => docs.reduce((n, id) => n + h.sync.device.history(id).all().length, 0)
 			const before = count()
 			const changed = ws.map((w) => {
@@ -512,6 +520,17 @@ async function answer(r: Request): Promise<Answer> {
 			return { stored: (await of(r.host).sync.device.stored(idOf(r.id))).length }
 		case "fragments":
 			return { fragments: of(r.host).sync.device.fragments(idOf(r.id)).length }
+		case "put": {
+			const h = of(r.host), from = of(r.from), id = idOf(r.id)
+			const c = from.sync.device.history(id).get(nameOf(r.commit))
+			if (c === undefined || c.parents.length) {
+				throw new Error(`no commit ${r.commit} with no parents`)
+			}
+			const sealed = await seal(c.bytes, await createSigner(unhex(from.options.seed)), id)
+			const blob = envelope(idOf(r.as), { sealed })
+			await transport_conformance_hook_put(h.sync.device, id, storedOf(sealed), [], blob)
+			return {}
+		}
 	}
 	throw new Error(`unknown op ${r.op}`)
 }
