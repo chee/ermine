@@ -2,10 +2,10 @@
 import type { API } from "@ermine/api"
 import { bind, handler } from "ermine-h"
 
-// piece-lazy: /dev/clock ticks only while someone reads its time. its provider is the host's: the
-// scheduler says when a run starts tracking a key nobody tracked (onTrackingStart), and when nobody
-// tracks it any more (onTrackingEnd). the key here is the clock's value at ["time"]: the first
-// reader wakes it, the last one leaving puts it to sleep (host.ts).
+// piece-lazy: /dev/clock ticks only while someone reads it. its provider is the host's, through
+// @ermine/pullynode: any run reading the clock's value wakes it, the last one to stop puts it to
+// sleep (host.ts). a reader woken late gets the last time at once, the clock's status saying how
+// fresh (ermine.provider.status: asleep, waking, awake).
 // each reader is a memo that reads the time only while its switch is on (the switch is ./<name>-on,
 // saved, so a reload finds it). this view never reads the time itself, only what the readers made
 // of it, and what the provider says (/provider)
@@ -66,8 +66,8 @@ export default function program({ open, read, edit, memo, method }: API) {
 				lazy<span>/dev/clock ticks only while someone reads its time</span>
 			</h1>
 			<p class="lede">
-				nobody asks the clock to start. its provider hears the scheduler: the first run to track
-				the clock's time wakes it (onTrackingStart), the last one to stop puts it to sleep
+				nobody asks the clock to start. its provider hears the scheduler: the first run to read
+				the clock wakes it (onTrackingStart), the last one to stop puts it to sleep
 				(onTrackingEnd). switch the readers off, all of them, and it stops writing.
 			</p>
 			<div class="cols">

@@ -199,6 +199,12 @@ runs_flags = -DPH_LIB
 runs_suite = runs
 runs_tests = $(wildcard ermine/processes/typescript/runs_harness_test.ts)
 LIBS += runs
+# pullynode (playground/pullynode): nodes made only while a run reads them; places' harness's world, programs and requests, and the providers'
+pullynode_src = $(places_src) playground/pullynode/c/pullynode.c playground/pullynode/c/pullynode_harness.c
+pullynode = playground/pullynode/c/pullynode-harness
+pullynode_flags = -DPH_LIB
+pullynode_suite = pullynode
+LIBS += pullynode
 # dens (playground/dens): a den's node, its offers, start by runner, stop, the asks; and other dens
 # over presence and its channel (away.c, suite away on this harness: its suite.json); the C api
 # (ermine/api), for its teller runner. two devices, as presence's harness makes them
