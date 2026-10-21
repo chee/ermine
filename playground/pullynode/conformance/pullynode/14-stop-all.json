@@ -1,0 +1,109 @@
+{
+	"title": "the providers' stop: every provider running stopped (asleep), the listeners off: a read after wakes nothing",
+	"steps": [
+		{
+			"op": "providers",
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "o"
+			},
+			"expect": {}
+		},
+		{
+			"op": "provide",
+			"name": "a",
+			"id": "A",
+			"expect": {}
+		},
+		{
+			"op": "provide",
+			"name": "b",
+			"id": "B",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "r",
+			"scope": "o",
+			"f": {
+				"read": [
+					"value",
+					"A"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "stopAll",
+			"expect": {}
+		},
+		{
+			"op": "said",
+			"name": "a",
+			"expect": {
+				"said": [
+					{
+						"start": "r"
+					},
+					"stop"
+				]
+			}
+		},
+		{
+			"op": "said",
+			"name": "b",
+			"expect": {
+				"said": []
+			}
+		},
+		{
+			"op": "read",
+			"part": "attributes",
+			"id": "A",
+			"path": [
+				"ermine.provider.status"
+			],
+			"expect": {
+				"value": "asleep"
+			}
+		},
+		{
+			"op": "watch",
+			"name": "r2",
+			"scope": "o",
+			"f": {
+				"read": [
+					"value",
+					"B"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "said",
+			"name": "b",
+			"expect": {
+				"said": []
+			}
+		},
+		{
+			"op": "reading",
+			"id": "B",
+			"expect": {
+				"reading": false
+			}
+		}
+	]
+}

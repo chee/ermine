@@ -1,0 +1,93 @@
+{
+	"title": "a write made in start is the provider's (its info's actor), not the reading run's, and lands as the pulse ends: awake at once; the reader sees it at the next pulse",
+	"steps": [
+		{
+			"op": "providers",
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "o"
+			},
+			"expect": {}
+		},
+		{
+			"op": "provide",
+			"name": "p",
+			"id": "N",
+			"info": {
+				"actor": "the provider"
+			},
+			"first": "now",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "r",
+			"scope": "o",
+			"f": {
+				"read": [
+					"value",
+					"N"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "said",
+			"name": "p",
+			"expect": {
+				"said": [
+					{
+						"start": "r"
+					}
+				]
+			}
+		},
+		{
+			"op": "state",
+			"name": "r",
+			"expect": {
+				"value": null,
+				"runs": 1
+			}
+		},
+		{
+			"op": "read",
+			"part": "attributes",
+			"id": "N",
+			"path": [
+				"ermine.provider.status"
+			],
+			"expect": {
+				"value": "awake"
+			}
+		},
+		{
+			"op": "actor",
+			"part": "value",
+			"id": "N",
+			"expect": {
+				"actor": "the provider"
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "r",
+			"expect": {
+				"value": "now",
+				"runs": 2
+			}
+		}
+	]
+}

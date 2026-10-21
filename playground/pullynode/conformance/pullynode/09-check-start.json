@@ -1,0 +1,76 @@
+{
+	"title": "a check, without once: started (no run), its first write given, then stopped; the status kept",
+	"steps": [
+		{
+			"op": "providers",
+			"expect": {}
+		},
+		{
+			"op": "provide",
+			"name": "p",
+			"id": "N",
+			"expect": {}
+		},
+		{
+			"op": "check",
+			"id": "N",
+			"as": "c",
+			"expect": {}
+		},
+		{
+			"op": "said",
+			"name": "p",
+			"expect": {
+				"said": [
+					"start"
+				]
+			}
+		},
+		{
+			"op": "checked",
+			"as": "c",
+			"expect": {}
+		},
+		{
+			"op": "put",
+			"name": "p",
+			"value": 3,
+			"expect": {}
+		},
+		{
+			"op": "checked",
+			"as": "c",
+			"expect": {
+				"value": 3
+			}
+		},
+		{
+			"op": "said",
+			"name": "p",
+			"expect": {
+				"said": [
+					"stop"
+				]
+			}
+		},
+		{
+			"op": "read",
+			"part": "attributes",
+			"id": "N",
+			"path": [
+				"ermine.provider.status"
+			],
+			"expect": {
+				"value": "asleep"
+			}
+		},
+		{
+			"op": "read",
+			"part": "value",
+			"id": "N",
+			"expect": {
+				"value": 3
+			}
+		}
+	]
+}
