@@ -7,7 +7,7 @@
 #ifndef DEN_H
 #define DEN_H
 
-#include "ermine/dens/c/away.h"
+#include "playground/dens/c/away.h"
 
 // after host_init. id: the den's (the page's: its device key's multikey as hex); code: the room's
 // (below), known before the screen first draws, which shows it. 0: up

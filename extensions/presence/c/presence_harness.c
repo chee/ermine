@@ -260,9 +260,7 @@ static op_value *answer(const op_value *r) {
 			op_value *m = op_map();
 			op_set(m, "from", op_str(sent[i].from));
 			op_set(m, "topic", op_str(sent[i].topic));
-			Json *j = cborDecode(sent[i].bytes, sent[i].n, NULL, NULL);
-			op_value *message = j != NULL ? pk_of_json(j) : NULL;
-			jsonFree(j);
+			op_value *message = pk_get(sent[i].bytes, sent[i].n, NULL, NULL);
 			op_set(m, "message", message != NULL ? message : op_null());
 			op_push(list, m);
 		}

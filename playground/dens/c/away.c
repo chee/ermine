@@ -7,9 +7,9 @@
 #include <string.h>
 
 #include "../../../filesystem/places/c/status.h"
-#include "../../encoding/c/cbor.h"
-#include "../../encoding/c/pack.h"
-#include "../../processes/c/start.h"
+#include "../../../ermine/encoding/c/cbor.h"
+#include "../../../ermine/encoding/c/pack.h"
+#include "../../../ermine/processes/c/start.h"
 
 static void *xalloc(size_t n) {
 	void *p = calloc(1, n ? n : 1);
@@ -210,6 +210,8 @@ struct dn_link {
 	size_t nasks, capasks;
 	unsigned count;
 	int stopped;
+	// its writes' site, and its asks' to the den: dn_connect's caller's (file NULL: none)
+	ch_site site;
 };
 
 // small pieces ---------------------------------------------------------------------------------
@@ -241,17 +243,13 @@ static void within(sc_scope *o, void (*f)(void *data), void *data) {
 // a value's encoding, fresh, and its length; NULL: none (a function hf holds, a stand-in of no kind)
 static unsigned char *encoded(const op_value *v, size_t *length) {
 	if (v == NULL || hf_holds(v)) return NULL;
-	Json *j = pk_to_json(v);
-	if (j == NULL) return NULL;
-	const char *why = NULL;
-	if (!cborEncode(j, NULL, 0, length, &why)) {
-		jsonFree(j);
+	CborOut o = {NULL, 0, 0, true};
+	if (!pk_put(&o, v)) {
+		free(o.data);
 		return NULL;
 	}
-	unsigned char *bytes = xalloc(*length);
-	cborEncode(j, bytes, *length, length, &why);
-	jsonFree(j);
-	return bytes;
+	*length = o.length;
+	return o.data;
 }
 
 // a message sent on the topic; 0: it has no encoding, nothing sent
@@ -266,10 +264,8 @@ static int send_on(dn_link *l, const char *topic, const op_value *m) {
 
 // a message as sent: a map with a number n, new; NULL: it does not decode, or is none
 static op_value *message_of(const unsigned char *bytes, size_t n) {
-	Json *j = cborDecode(bytes, n, NULL, NULL);
-	if (j == NULL) return NULL;
-	op_value *m = pk_of_json(j);
-	jsonFree(j);
+	op_value *m = pk_get(bytes, n, NULL, NULL);
+	if (m == NULL) return NULL;
 	const op_value *k = get(m, "n");
 	if (k == NULL || k->type != OP_NUM) {
 		op_free(m);
@@ -290,7 +286,7 @@ static int whole(const op_value *v, unsigned *out) {
 
 // a header made now, with the scope open; 0: none open
 static int header_now(dn_link *l, ch_header *h, pl_made **made) {
-	char *bad = pl_header(l->world.places, NULL, 0, CH_HERE, h, made);
+	char *bad = pl_header(l->world.places, NULL, 0, l->site.file != NULL ? &l->site : NULL, h, made);
 	if (bad == NULL) return 1;
 	free(bad);
 	return 0;
@@ -760,7 +756,7 @@ typedef struct {
 // the den asked, the link's scope open: its answer, a places code as { error }
 static void answer_now(void *data) {
 	answering *x = data;
-	op_value *got = dn_ask(x->l->den, x->who, x->ask);
+	op_value *got = dn_ask_at(x->l->den, x->who, x->ask, x->l->site.file != NULL ? &x->l->site : NULL);
 	const char *refused = str_at(got, "refused");
 	if (got == NULL || (refused != NULL && (strcmp(refused, "not-a-name") == 0 ||
 		strcmp(refused, "nothing-there") == 0 || strcmp(refused, "already-there") == 0))) {
@@ -926,7 +922,7 @@ static char *stop_teardown(void *data) {
 	return NULL;
 }
 
-dn_link *dn_connect(dn *d, chn_channel *channel, const dn_link_setup *setup) {
+dn_link *dn_connect_at(dn *d, chn_channel *channel, const dn_link_setup *setup, const ch_site *site) {
 	if (channel == NULL || channel->name == NULL || strcmp(channel->name, dn_id(d)) != 0) return NULL;
 	dn_link_setup none = {0};
 	const dn_link_setup *o = setup != NULL ? setup : &none;
@@ -938,6 +934,7 @@ dn_link *dn_connect(dn *d, chn_channel *channel, const dn_link_setup *setup) {
 	dn_link *l = xalloc(sizeof *l);
 	l->den = d;
 	l->channel = channel;
+	if (site != NULL) l->site = *site;
 	l->topic = xdup(topic);
 	l->anchor = cat3(DN_ANCHOR, topic, "");
 	l->under = xalloc((o->nunder + 1) * sizeof *l->under);

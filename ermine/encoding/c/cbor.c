@@ -458,6 +458,8 @@ bool cborEncode(const Json *value, unsigned char *out, size_t capacity, size_t *
 }
 
 // decoding --------------------------------------------------------------------
+// one walk holds every rule; what it finds goes to a maker (cborRead), json.h's for cborDecode, none
+// for cborCheck
 
 typedef struct In {
 	const unsigned char *data;
@@ -465,11 +467,12 @@ typedef struct In {
 	const char *why;
 	size_t whyAt;
 	bool build; // false: the rules are checked and no value is made
+	char *key; // a map key as json.h holds it, borrowed by the maker's place
+	size_t keyRoom;
 } In;
 
 // what stands in for a value that is not made, when only the rules are checked
-static Json noValue = { .type = JSON_NULL }, noList = { .type = JSON_ARRAY }, noMap = { .type = JSON_OBJECT }, noStand = { .type = JSON_STAND };
-static char noText[1];
+static char noValue;
 
 static bool fail(In *in, size_t at, const char *why) {
 	if (!in->why) in->why = why, in->whyAt = at;
@@ -512,144 +515,145 @@ static bool getLength(In *in, size_t start, unsigned info, size_t *length) {
 	return true;
 }
 
-/** a text string's contents (its head read) as json.h holds text: a fresh buffer, 00 as C0 80, a NUL after (noText when nothing is built) */
-static char *getText(In *in, size_t start, size_t length, size_t *held) {
-	const unsigned char *s = in->data + in->at;
-	if (!isUtf8(s, length, false)) {
-		fail(in, start, "text that is not UTF-8");
-		return NULL;
-	}
-	if (!in->build) {
-		in->at += length;
-		*held = length;
-		return noText;
-	}
-	size_t zeros = 0;
-	for (size_t i = 0; i < length; i++) zeros += s[i] == 0;
-	char *text = allocate(length + zeros + 1);
+/** plain UTF-8 as json.h holds text, into out (room for length, one more for each 00, and a NUL): 00 as C0 80, a NUL after; how many bytes before it */
+static size_t held(const unsigned char *s, size_t length, char *out) {
 	size_t o = 0;
 	for (size_t i = 0; i < length; i++) {
-		if (s[i] == 0) text[o++] = (char)0xc0, text[o++] = (char)0x80;
-		else text[o++] = (char)s[i];
+		if (s[i] == 0) out[o++] = (char)0xc0, out[o++] = (char)0x80;
+		else out[o++] = (char)s[i];
 	}
-	text[o] = 0;
-	in->at += length;
-	*held = o;
-	return text;
+	out[o] = 0;
+	return o;
 }
 
-static Json *getTyped(In *in, size_t start, uint64_t tag) {
+/** how many bytes text held so takes, the NUL too */
+static size_t heldRoom(const unsigned char *s, size_t length) {
+	size_t room = length + 1;
+	for (size_t i = 0; i < length; i++) room += s[i] == 0;
+	return room;
+}
+
+/** a text string's contents (its head read), checked and passed; *at where they begin */
+static bool getText(In *in, size_t start, size_t length, size_t *at) {
+	if (!isUtf8(in->data + in->at, length, false)) return fail(in, start, "text that is not UTF-8");
+	*at = in->at;
+	in->at += length;
+	return true;
+}
+
+static bool getTyped(In *in, size_t start, uint64_t tag, CborItem *item) {
 	int kind = -1;
 	for (int k = 0; k < JSON_KINDS; k++)
 		if (kindTags[k] == tag) kind = k;
-	if (kind < 0) return fail(in, start, "an unknown tag"), NULL;
+	if (kind < 0) return fail(in, start, "an unknown tag");
 	size_t inner = in->at;
-	if (!left(in)) return fail(in, inner, "the input ends after a tag"), NULL;
+	if (!left(in)) return fail(in, inner, "the input ends after a tag");
 	unsigned initial = in->data[in->at++];
-	if (initial >> 5 != 2) return fail(in, inner, "a typed array that is not over a byte string"), NULL;
+	if (initial >> 5 != 2) return fail(in, inner, "a typed array that is not over a byte string");
 	size_t length, size = jsonKindSize((JsonKind)kind);
-	if (!getLength(in, inner, initial & 31, &length)) return NULL;
-	if (length % size) return fail(in, inner, "a typed array that is not whole elements"), NULL;
+	if (!getLength(in, inner, initial & 31, &length)) return false;
+	if (length % size) return fail(in, inner, "a typed array that is not whole elements");
 	size_t count = length / size;
-	unsigned char *data = in->build ? allocate(length) : NULL;
 	const unsigned char *s = in->data + in->at;
 	for (size_t i = 0; i < count; i++) {
 		uint64_t bits = 0;
 		for (size_t k = 0; k < size; k++) bits |= (uint64_t)s[i * size + k] << (8 * k);
 		if ((kind == JSON_FLOAT32 && (bits & 0x7f800000u) == 0x7f800000u && (bits & 0x7fffffu) && bits != NAN32) ||
 		    (kind == JSON_FLOAT64 && (bits & UINT64_C(0x7ff0000000000000)) == UINT64_C(0x7ff0000000000000) &&
-		     (bits & UINT64_C(0xfffffffffffff)) && bits != NAN64)) {
-			free(data);
-			return fail(in, in->at + i * size, "a NaN element other than the one NaN"), NULL;
-		}
-		// the element's bits, as the machine holds that kind
-		if (!in->build) continue;
-		if (size == 1) data[i] = (unsigned char)bits;
-		else if (size == 2) memcpy(data + i * size, &(uint16_t){ (uint16_t)bits }, 2);
-		else if (size == 4) memcpy(data + i * size, &(uint32_t){ (uint32_t)bits }, 4);
-		else memcpy(data + i * size, &bits, 8);
+		     (bits & UINT64_C(0xfffffffffffff)) && bits != NAN64))
+			return fail(in, in->at + i * size, "a NaN element other than the one NaN");
 	}
 	in->at += length;
-	if (!in->build) return &noValue;
-	Json *value = jsonTyped((JsonKind)kind, NULL, 0);
-	free(value->typed.data);
-	value->typed.data = data;
-	value->typed.count = count;
-	return value;
+	item->what = CBOR_TYPED;
+	item->kind = (JsonKind)kind;
+	item->data = s;
+	item->length = length;
+	item->count = count;
+	return true;
 }
 
 /** a bignum's byte string (its tag read): more than 8 bytes (a plain integer holds the rest), no leading zero */
-static Json *getBignum(In *in, size_t start, bool negative) {
+static bool getBignum(In *in, size_t start, bool negative, CborItem *item) {
 	size_t inner = in->at, length;
-	if (!left(in)) return fail(in, inner, "the input ends after a tag"), NULL;
+	if (!left(in)) return fail(in, inner, "the input ends after a tag");
 	unsigned initial = in->data[in->at++];
-	if (initial >> 5 != 2) return fail(in, inner, "a bignum that is not over a byte string"), NULL;
-	if (!getLength(in, inner, initial & 31, &length)) return NULL;
+	if (initial >> 5 != 2) return fail(in, inner, "a bignum that is not over a byte string");
+	if (!getLength(in, inner, initial & 31, &length)) return false;
 	const unsigned char *m = in->data + in->at;
-	if (length <= 8) return fail(in, start, "a bignum a plain integer holds"), NULL;
-	if (!m[0]) return fail(in, start, "a bignum with a leading zero"), NULL;
+	if (length <= 8) return fail(in, start, "a bignum a plain integer holds");
+	if (!m[0]) return fail(in, start, "a bignum with a leading zero");
 	in->at += length;
-	if (!in->build) return &noValue;
-	if (!negative) return jsonWhole(false, m, length);
+	item->what = CBOR_WHOLE;
+	item->negative = negative;
+	item->data = m;
+	item->length = length;
+	if (!negative || !in->build) return true;
 	// -1 - n: the magnitude is n + 1
-	unsigned char *more = allocate(length + 1);
+	unsigned char *more = item->own = allocate(length + 1);
 	memcpy(more + 1, m, length);
 	for (size_t i = length + 1; i-- > 0;) {
 		if (++more[i]) break;
 	}
-	Json *value = jsonWhole(true, more, length + 1);
-	free(more);
-	return value;
+	item->data = more;
+	item->length = length + 1;
+	return true;
 }
 
-static Json *getSimple(In *in, size_t start, unsigned info) {
-	if (info == 20) return in->build ? jsonBoolean(false) : &noValue;
-	if (info == 21) return in->build ? jsonBoolean(true) : &noValue;
-	if (info == 22) return in->build ? jsonNull() : &noValue;
-	if (info < 25 || info > 27) return fail(in, start, "a simple value that is not false, true or null"), NULL;
+static bool getSimple(In *in, size_t start, unsigned info, CborItem *item) {
+	if (info == 20 || info == 21) {
+		item->what = CBOR_BOOLEAN;
+		item->boolean = info == 21;
+		return true;
+	}
+	if (info == 22) {
+		item->what = CBOR_NULL;
+		return true;
+	}
+	if (info < 25 || info > 27) return fail(in, start, "a simple value that is not false, true or null");
 	int size = info == 25 ? 2 : info == 26 ? 4 : 8;
-	if (left(in) < (size_t)size) return fail(in, start, "the input ends in a number"), NULL;
+	if (left(in) < (size_t)size) return fail(in, start, "the input ends in a number");
 	uint64_t bits = getBig(in, size);
 	uint16_t half;
 	double d;
 	if (size == 2) {
 		d = halfValue((uint16_t)bits);
-		if (isnan(d) && bits != NAN16) return fail(in, start, "a NaN other than f97e00"), NULL;
+		if (isnan(d) && bits != NAN16) return fail(in, start, "a NaN other than f97e00");
 	} else if (size == 4) {
 		float f;
 		uint32_t word = (uint32_t)bits;
 		memcpy(&f, &word, 4);
 		d = f;
-		if (isnan(d)) return fail(in, start, "a NaN other than f97e00"), NULL;
-		if (halfOf(d, &half)) return fail(in, start, "a single a half holds"), NULL;
+		if (isnan(d)) return fail(in, start, "a NaN other than f97e00");
+		if (halfOf(d, &half)) return fail(in, start, "a single a half holds");
 	} else {
 		memcpy(&d, &bits, 8);
-		if (isnan(d)) return fail(in, start, "a NaN other than f97e00"), NULL;
-		if (fitsFloat(d)) return fail(in, start, "a double a shorter float holds"), NULL;
+		if (isnan(d)) return fail(in, start, "a NaN other than f97e00");
+		if (fitsFloat(d)) return fail(in, start, "a double a shorter float holds");
 	}
-	if (isfinite(d) && floor(d) == d) return fail(in, start, "a whole number written as a float"), NULL;
-	return in->build ? jsonNumber(d) : &noValue;
+	if (isfinite(d) && floor(d) == d) return fail(in, start, "a whole number written as a float");
+	item->what = CBOR_FLOAT;
+	item->number = d;
+	return true;
 }
 
-/**
- * One item, made: a scalar, bytes, a typed array, or a list or map with
- * nothing in it yet, whose count is put in *count (-1 for anything else).
- */
-static Json *getItem(In *in, int64_t *count) {
+/** One item, read into *item: a scalar, bytes, a typed array, or a list, map or stand-in with its count */
+static bool getItem(In *in, CborItem *item) {
 	size_t start = in->at;
-	*count = -1;
-	if (!left(in)) return fail(in, start, "the input ends where an item should be"), NULL;
+	if (!left(in)) return fail(in, start, "the input ends where an item should be");
 	unsigned initial = in->data[in->at++], major = initial >> 5, info = initial & 31;
 	uint64_t argument;
-	size_t length;
+	size_t length, at;
 	switch (major) {
 		case 0:
 		case 1: {
-			if (!getArgument(in, start, info, &argument)) return NULL;
-			if (!in->build) return &noValue;
-			if (major == 0) return jsonUnsigned(argument);
+			if (!getArgument(in, start, info, &argument)) return false;
+			if (major == 0) {
+				item->what = CBOR_UNSIGNED;
+				item->argument = argument;
+				return true;
+			}
 			// -1 - argument: its magnitude is argument + 1, 2^64 at most
-			unsigned char m[9];
+			unsigned char *m = item->room;
 			size_t n = whole_of_u64(argument, m + 1);
 			memmove(m + 1 + (8 - n), m + 1, n); // right-aligned in m[1..8]
 			memset(m + 1, 0, 8 - n);
@@ -657,66 +661,90 @@ static Json *getItem(In *in, int64_t *count) {
 			for (int i = 8; i >= 0; i--) {
 				if (++m[i]) break;
 			}
-			return jsonWhole(true, m, 9);
+			item->what = CBOR_WHOLE;
+			item->negative = true;
+			item->data = m;
+			item->length = 9;
+			return true;
 		}
 		case 2:
-			if (!getLength(in, start, info, &length)) return NULL;
+			if (!getLength(in, start, info, &length)) return false;
+			item->what = CBOR_BYTES;
+			item->data = in->data + in->at;
+			item->length = length;
 			in->at += length;
-			return in->build ? jsonBytes(in->data + in->at - length, length) : &noValue;
+			return true;
 		case 3: {
-			if (!getLength(in, start, info, &length)) return NULL;
-			size_t held;
-			char *text = getText(in, start, length, &held);
-			if (!text) return NULL;
-			return in->build ? jsonStringTaking(text, held) : &noValue;
+			if (!getLength(in, start, info, &length) || !getText(in, start, length, &at)) return false;
+			item->what = CBOR_TEXT;
+			if (in->build) {
+				const unsigned char *s = in->data + at;
+				item->text = allocate(heldRoom(s, length));
+				item->length = held(s, length, item->text);
+			}
+			return true;
 		}
 		case 4:
 		case 5:
-			if (!getArgument(in, start, info, &argument)) return NULL;
+			if (!getArgument(in, start, info, &argument)) return false;
 			// every item is at least a byte: no more than the input can hold
-			if (argument > INT_MAX || argument > left(in) / (major == 5 ? 2 : 1)) return fail(in, start, "more items than the input holds"), NULL;
-			*count = (int64_t)argument;
-			if (!in->build) return major == 4 ? &noList : &noMap;
-			return major == 4 ? jsonArray() : jsonObject();
+			if (argument > INT_MAX || argument > left(in) / (major == 5 ? 2 : 1)) return fail(in, start, "more items than the input holds");
+			item->what = major == 4 ? CBOR_LIST : CBOR_MAP;
+			item->count = (size_t)argument;
+			return true;
 		case 6:
-			if (!getArgument(in, start, info, &argument)) return NULL;
+			if (!getArgument(in, start, info, &argument)) return false;
 			if (argument == STAND) {
-				*count = 1;
-				return in->build ? jsonStand(NULL) : &noStand;
+				item->what = CBOR_STAND;
+				item->count = 1;
+				return true;
 			}
-			if (argument == 2 || argument == 3) return getBignum(in, start, argument == 3);
-			return getTyped(in, start, argument);
-		default: return getSimple(in, start, info);
+			if (argument == 2 || argument == 3) return getBignum(in, start, argument == 3, item);
+			return getTyped(in, start, argument, item);
+		default: return getSimple(in, start, info, item);
 	}
 }
 
-/** a list or map being filled: how many members it still wants, the key read for the next, the last key's bytes */
+/** a list, map or stand-in being filled: how many members it still wants, where the key read for the next is, the last key's bytes */
 typedef struct Filling {
-	Json *container;
-	int64_t left;
-	char *key;
-	size_t keyLength;
+	void *container;
+	CborWhat what;
+	size_t left;
+	bool keyed;
+	size_t keyAt, keyLength; // the key's text in the input
 	size_t lastStart, lastEnd; // the last key's encoding in the input; lastEnd 0 when none
 } Filling;
 
+/** a map key as json.h holds it, in in->key */
+static const char *heldKey(In *in, const Filling *top, size_t *length) {
+	const unsigned char *s = in->data + top->keyAt;
+	size_t room = heldRoom(s, top->keyLength);
+	if (room > in->keyRoom) {
+		char *key = realloc(in->key, room);
+		if (!key) abort();
+		in->key = key, in->keyRoom = room;
+	}
+	*length = held(s, top->keyLength, in->key);
+	return in->key;
+}
+
 // No recursion: the lists and maps being filled are kept on a stack of their own.
-// One walk for both ways in: with `build` false it holds every rule and makes
-// nothing (the root is then noValue, not to be freed).
-static Json *decode(const unsigned char *data, size_t length, const char **why, size_t *at, bool build) {
-	In in = { data, length, 0, NULL, 0, build };
+void *cborRead(const unsigned char *data, size_t length, const CborMaker *maker, const char **why, size_t *at) {
+	In in = { data, length, 0, NULL, 0, maker != NULL, NULL, 0 };
 	Filling *stack = NULL;
 	int depth = 0, room = 0;
-	Json *root = NULL;
+	void *root = NULL;
 	bool ok = true;
 	while (ok) {
 		Filling *top = depth ? &stack[depth - 1] : NULL;
-		if (top && top->container->type == JSON_OBJECT && !top->key) {
+		if (top && top->what == CBOR_MAP && !top->keyed) {
 			// a key: a text string after the last key in encoding order
 			size_t start = in.at, textLength;
 			if (!left(&in)) ok = fail(&in, start, "the input ends where a key should be");
 			else if (in.data[in.at] >> 5 != 3) ok = fail(&in, start, "a key that is not a text string");
 			else if (in.at++, !getLength(&in, start, in.data[start] & 31, &textLength)) ok = false;
-			else if (!(top->key = getText(&in, start, textLength, &top->keyLength))) ok = false;
+			else if (!getText(&in, start, textLength, &top->keyAt)) ok = false;
+			else top->keyed = true, top->keyLength = textLength;
 			if (ok && top->lastEnd) {
 				size_t was = top->lastEnd - top->lastStart, is = in.at - start;
 				int order = memcmp(in.data + top->lastStart, in.data + start, was < is ? was : is);
@@ -725,45 +753,46 @@ static Json *decode(const unsigned char *data, size_t length, const char **why, 
 			if (ok) top->lastStart = start, top->lastEnd = in.at;
 			continue;
 		}
-		int64_t count;
+		CborItem item = { 0 };
 		size_t start = in.at;
-		Json *item = getItem(&in, &count);
-		if (!item) {
+		if (!getItem(&in, &item)) {
 			ok = false;
 			break;
 		}
+		bool container = item.what == CBOR_LIST || item.what == CBOR_MAP || item.what == CBOR_STAND;
 		// a container inside CBOR_DEPTH others
-		if (depth >= CBOR_DEPTH && (item->type == JSON_ARRAY || item->type == JSON_OBJECT || item->type == JSON_STAND)) {
-			if (build) jsonFree(item);
+		if (depth >= CBOR_DEPTH && container) {
 			ok = fail(&in, start, "nested deeper than " CBOR_DEPTH_TEXT);
 			break;
 		}
+		void *value = &noValue;
+		if (in.build) {
+			value = maker->make(maker->self, &item);
+			free(item.own);
+		}
 		if (!top) {
-			root = item;
-		} else if (top->container->type == JSON_STAND) {
-			if (build) top->container->stand.kind = item;
-			top->left--;
-		} else if (top->container->type == JSON_ARRAY) {
-			if (build) jsonPush(top->container, item);
-			top->left--;
+			root = value;
 		} else {
-			if (build) jsonAddTaking(top->container, top->key, top->keyLength, item);
-			top->key = NULL;
+			if (in.build) {
+				size_t keyLength = 0;
+				const char *key = top->what == CBOR_MAP ? heldKey(&in, top, &keyLength) : NULL;
+				maker->place(maker->self, top->container, key, keyLength, value);
+			}
+			top->keyed = false;
 			top->left--;
 		}
-		if (count > 0) {
+		if (container && item.count > 0) {
 			stack = growArray(stack, depth, &room, sizeof *stack);
-			stack[depth++] = (Filling){ item, count, NULL, 0, 0, 0 };
+			stack[depth++] = (Filling){ value, item.what, item.count, false, 0, 0, 0, 0 };
 		}
 		while (depth && !stack[depth - 1].left) depth--;
 		if (!depth) break;
 	}
 	if (ok && in.at != in.length) ok = fail(&in, in.at, "bytes after the value");
-	for (int i = 0; i < depth; i++)
-		if (build) free(stack[i].key);
 	free(stack);
+	free(in.key);
 	if (!ok) {
-		if (build) jsonFree(root);
+		if (in.build && root) maker->drop(maker->self, root);
 		root = NULL;
 		if (why) *why = in.why;
 		if (at) *at = in.whyAt;
@@ -771,10 +800,61 @@ static Json *decode(const unsigned char *data, size_t length, const char **why, 
 	return root;
 }
 
+// json.h's maker: cborDecode's values
+
+static void *jsonMake(void *self, const CborItem *item) {
+	(void)self;
+	switch (item->what) {
+		case CBOR_NULL: return jsonNull();
+		case CBOR_BOOLEAN: return jsonBoolean(item->boolean);
+		case CBOR_FLOAT: return jsonNumber(item->number);
+		case CBOR_UNSIGNED: return jsonUnsigned(item->argument);
+		case CBOR_WHOLE: return jsonWhole(item->negative, item->data, item->length);
+		case CBOR_TEXT: return jsonStringTaking(item->text, item->length);
+		case CBOR_BYTES: return jsonBytes(item->data, item->length);
+		case CBOR_TYPED: {
+			// the elements' bits, as the machine holds that kind
+			size_t size = jsonKindSize(item->kind);
+			unsigned char *data = allocate(item->length);
+			for (size_t i = 0; i < item->count; i++) {
+				uint64_t bits = 0;
+				for (size_t k = 0; k < size; k++) bits |= (uint64_t)item->data[i * size + k] << (8 * k);
+				if (size == 1) data[i] = (unsigned char)bits;
+				else if (size == 2) memcpy(data + i * size, &(uint16_t){ (uint16_t)bits }, 2);
+				else if (size == 4) memcpy(data + i * size, &(uint32_t){ (uint32_t)bits }, 4);
+				else memcpy(data + i * size, &bits, 8);
+			}
+			Json *value = jsonTyped(item->kind, NULL, 0);
+			free(value->typed.data);
+			value->typed.data = data;
+			value->typed.count = item->count;
+			return value;
+		}
+		case CBOR_LIST: return jsonArray();
+		case CBOR_MAP: return jsonObject();
+		default: return jsonStand(NULL);
+	}
+}
+
+static void jsonPlace(void *self, void *container, const char *key, size_t keyLength, void *item) {
+	(void)self;
+	Json *c = container;
+	if (c->type == JSON_STAND) c->stand.kind = item;
+	else if (c->type == JSON_ARRAY) jsonPush(c, item);
+	else jsonAddOfLength(c, key, keyLength, item);
+}
+
+static void jsonDrop(void *self, void *root) {
+	(void)self;
+	jsonFree(root);
+}
+
+static const CborMaker jsonMaker = { jsonMake, jsonPlace, jsonDrop, NULL };
+
 Json *cborDecode(const unsigned char *data, size_t length, const char **why, size_t *at) {
-	return decode(data, length, why, at, true);
+	return cborRead(data, length, &jsonMaker, why, at);
 }
 
 bool cborCheck(const unsigned char *data, size_t length, const char **why, size_t *at) {
-	return decode(data, length, why, at, false) != NULL;
+	return cborRead(data, length, NULL, why, at) != NULL;
 }

@@ -20,11 +20,11 @@
 
 #include "../../../conformance/c/harness.h"
 #include "../../../filesystem/places/c/status.h"
-#include "../../api/c/api.h"
-#include "../../boxes/c/boxes.h"
-#include "../../encoding/c/cbor.h"
-#include "../../encoding/c/pack.h"
-#include "../../processes/c/processes.h"
+#include "../../../ermine/api/c/api.h"
+#include "../../../ermine/boxes/c/boxes.h"
+#include "../../../ermine/encoding/c/cbor.h"
+#include "../../../ermine/encoding/c/pack.h"
+#include "../../../ermine/processes/c/processes.h"
 #include "away.h"
 #include "dens.h"
 
@@ -1198,6 +1198,18 @@ static op_value *node_json(device *d, const op_value *r) {
 	return o;
 }
 
+// whether the entry at (part, id) (part NULL: attributes) was last written with this file as its
+// site: the files differ by harness, so only yes or no
+static op_value *site_json(device *d, const op_value *r) {
+	const char *given = text(get(r, "id")), *part = text(get(r, "part"));
+	char *id = take(given != NULL ? given : "");
+	const nd_entry *e = tb_get(d->table, tb_string(part != NULL ? part : "attributes"), tb_string(id));
+	free(id);
+	int ours = e != NULL && e->change.external_length > 0 && e->change.external[0].file != NULL &&
+		strcmp(e->change.external[0].file, __FILE__) == 0;
+	return with("harness", op_bool(ours));
+}
+
 static op_value *loaded_json(const loaded *ls, size_t n) {
 	op_value *list = op_list();
 	for (size_t i = 0; i < n; i++) {
@@ -1323,6 +1335,7 @@ static op_value *answer(const op_value *r) {
 		return with("names", read_at(places, op_get(r, "path"), list_names));
 	}
 	if (strcmp(op, "node") == 0) return node_json(d, r);
+	if (strcmp(op, "site") == 0) return site_json(d, r);
 	if (strcmp(op, "asked") == 0) {
 		op_value *list = op_list();
 		for (size_t i = 0; i < d->nasks; i++) op_push(list, d->asks[i]);

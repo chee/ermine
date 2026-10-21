@@ -1,6 +1,8 @@
-// the framebuffer: the whole 240x135 screen, 4 bits a pixel (16200 bytes), sixteen colours. drawn into
-// here, then sent by the platform (screen_frame on the Cardputer, a PNG in the sim). two pixels a
-// byte, the left one in the low nibble
+// the framebuffer: a strip of the 240x135 screen, FB_STRIP rows from fb_top, 4 bits a pixel (960
+// bytes, not the whole screen's 16200), sixteen colours. a picture is a paint function: the platform
+// (screen_frame on the Cardputer, a PNG in the sim) moves the strip down the screen, calls it for each
+// strip and sends what it drew; what falls outside the strip is not drawn. coordinates are the whole
+// screen's. two pixels a byte, the left one in the low nibble
 #ifndef CARD_FB_H
 #define CARD_FB_H
 
@@ -28,13 +30,23 @@ enum {
 	FB_YELLOW,
 };
 
-extern uint8_t fb[FB_W * FB_H / 2];
+#define FB_STRIP 8
+extern uint8_t fb[FB_W * FB_STRIP / 2];
+// the screen row the strip starts at
+extern int fb_top;
+// a picture: drawn again for each strip, the same each time
+typedef void (*fb_paint)(void);
+
+// the strip moved to start at row top (cleared to nothing in particular: a paint clears it)
+void fb_strip(int top);
 // each colour as rgb565 and as 8-bit rgb
 extern const uint16_t fb_565[16];
 extern const uint8_t fb_rgb[16][3];
 
+// the strip all c
 void fb_clear(int c);
 void fb_pixel(int x, int y, int c);
+// a pixel of the strip (outside it: 0)
 int fb_get(int x, int y);
 void fb_rect(int x, int y, int w, int h, int c);
 // a line, width pixels wide (a round pen)

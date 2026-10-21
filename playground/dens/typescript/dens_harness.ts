@@ -271,7 +271,13 @@ const record = (dev: string): Runnable =>
 	Object.assign((code: unknown, start: Start) => {
 		const api: Api = { den: start.den.id, places: start.places, process: start.process }
 		const { process } = api
-		ran.push({ dev, process: process.id, code, args: process.args, keys: Object.keys(api).sort() })
+		ran.push({
+			dev,
+			process: process.id,
+			code,
+			args: process.args,
+			keys: Object.keys(api).sort(),
+		})
 		return {
 			stop: (reason?: unknown) =>
 				void stops.push({ dev, process: process.id, reason: reason ?? null }),
@@ -417,7 +423,9 @@ function answer(r: Request): Json {
 			const b = hosted(
 				d,
 				() =>
-					createBox({ places: d.places, table: d.table, scheduler: d.s }, { id: take(r.folder) }),
+					createBox({ places: d.places, table: d.table, scheduler: d.s }, {
+						id: take(r.folder),
+					}),
 			)
 			d.boxes.set(r.name, b)
 			return {}
@@ -592,6 +600,13 @@ function answer(r: Request): Json {
 				live: typeof d.table.get("value", id)?.value === "function",
 			}
 		}
+		case "site": {
+			// whether the entry at (part, id) (none: attributes) was last written with this file as its
+			// site: the files differ by harness, so only yes or no
+			const d = dev(r)
+			const e = d.table.get(r.part ?? "attributes", take(String(r.id)))
+			return { harness: e?.change.external?.[0]?.file === import.meta.url }
+		}
 		case "runs":
 			return { runs: plain(ran), stops: plain(stops) }
 		case "loads":
@@ -666,7 +681,10 @@ function answer(r: Request): Json {
 		}
 		case "say": {
 			const d = dev(r)
-			channelOf(d).send(`${String(linkOf(d).anchor)}/ask/${r.to}`, encode(back(r.message) as Value))
+			channelOf(d).send(
+				`${String(linkOf(d).anchor)}/ask/${r.to}`,
+				encode(back(r.message) as Value),
+			)
 			return {}
 		}
 	}

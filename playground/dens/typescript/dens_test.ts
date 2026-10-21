@@ -327,7 +327,11 @@ Deno.test("a runner as { start, load, api }: start given the start's facts (box,
 	const l = w.hosted(() => w.den.load(RUNNER, CLOCK, { by: p }))
 	assert(!("refused" in l))
 	assertEquals(l.live, { code: "hi" })
-	assertEquals(loaded.map(([c, s]) => [c, s.process.id, s.scope === p.scope]), [["hi", p.id, true]])
+	assertEquals(loaded.map(([c, s]) => [c, s.process.id, s.scope === p.scope]), [[
+		"hi",
+		p.id,
+		true,
+	]])
 	// a function with a load of its own: shorthand for { start, load }
 	const calls: unknown[] = []
 	const fn = Object.assign((code: unknown) => void calls.push(["start", code]), {
@@ -340,10 +344,13 @@ Deno.test("a runner as { start, load, api }: start given the start's facts (box,
 	assertEquals(calls, [["start", "hi"], ["load", "hi"]])
 	// a map with no start, a value that is no runner: not-a-runner
 	w.offer("nostart", { load: () => 1 })
-	assertEquals(w.hosted(() => w.den.start(["system", "den", "runners", "nostart"], CLOCK, ["x"])), {
-		refused: "not-a-runner",
-		runner: ["system", "den", "runners", "nostart"],
-	})
+	assertEquals(
+		w.hosted(() => w.den.start(["system", "den", "runners", "nostart"], CLOCK, ["x"])),
+		{
+			refused: "not-a-runner",
+			runner: ["system", "den", "runners", "nostart"],
+		},
+	)
 })
 
 Deno.test("ermine/api on a den, its api composed: a runner's own over context.createAPI ({ ...api, more }); the process's value, its memos' status and runs still written (an api is not its process)", () => {
@@ -354,7 +361,13 @@ Deno.test("ermine/api on a den, its api composed: a runner's own over context.cr
 		api: (start) => ({
 			...context.createAPI(start),
 			offer: (name: string) =>
-				(start as Start).den.offer("runners", name, { [TAKES]: "x" }, () => {}, start.process.id),
+				(start as Start).den.offer(
+					"runners",
+					name,
+					{ [TAKES]: "x" },
+					() => {},
+					start.process.id,
+				),
 		}),
 	})
 	w.offer("javascript", run)
@@ -763,4 +776,16 @@ Deno.test("a link's scope torn down from above: the link stopped, its mirrors ou
 	toCard.stop()
 	toCard.beat()
 	assertEquals(toCard.sweep(), [])
+})
+
+Deno.test("a den's writes name the outside call that made them: an offer's site and the den's node's are in the file that called", () => {
+	const w = world()
+	const o = w.offer("javascript", () => ({ stop: () => {} })) as { id: Id }
+	const offered = w.table.get("attributes", o.id)?.change.external?.[0]
+	assert(offered?.file.endsWith("dens_test.ts"), JSON.stringify(offered))
+	const made = w.table.get("attributes", w.den.node)?.change.external?.[0]
+	assert(made?.file.endsWith("dens_test.ts"), JSON.stringify(made))
+	// the den's body: its children (on), on's children, on/start's value
+	const on = w.table.get("children", w.den.node)?.change.external?.[0]
+	assert(on?.file.endsWith("dens_test.ts"), JSON.stringify(on))
 })

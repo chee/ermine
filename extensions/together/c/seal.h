@@ -10,6 +10,7 @@
 #define SL_SEAL_H
 
 #include "../../../ermine/encoding/c/commit.h"
+#include "ed25519/ed25519.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -67,6 +68,8 @@ typedef struct {
 typedef struct {
 	sl_signer signer;
 	uint8_t seed[32];
+	// the key pair worked out once from the seed: signing never works the public key out again
+	ermEd25519Pair pair;
 } sl_seeded;
 void sl_seeded_init(sl_seeded *s, const uint8_t seed[32]);
 

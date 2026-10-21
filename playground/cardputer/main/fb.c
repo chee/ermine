@@ -5,7 +5,13 @@
 
 #include "font8x8.h"
 
-uint8_t fb[FB_W * FB_H / 2];
+uint8_t fb[FB_W * FB_STRIP / 2];
+int fb_top;
+
+void fb_strip(int top) { fb_top = top; }
+
+// whether rows y0..y1 (both in) touch the strip
+static int touches(int y0, int y1) { return y1 >= fb_top && y0 < fb_top + FB_STRIP; }
 
 #define C(r, g, b) {r, g, b}
 const uint8_t fb_rgb[16][3] = {
@@ -39,20 +45,22 @@ const uint16_t fb_565[16] = {
 void fb_clear(int c) { memset(fb, (c & 15) | (c & 15) << 4, sizeof fb); }
 
 void fb_pixel(int x, int y, int c) {
-	if (x < 0 || y < 0 || x >= FB_W || y >= FB_H) return;
-	uint8_t *b = &fb[(y * FB_W + x) >> 1];
+	if (x < 0 || x >= FB_W || y < fb_top || y >= fb_top + FB_STRIP || y >= FB_H) return;
+	uint8_t *b = &fb[((y - fb_top) * FB_W + x) >> 1];
 	if (x & 1) *b = (uint8_t)((*b & 0x0f) | (c & 15) << 4);
 	else *b = (uint8_t)((*b & 0xf0) | (c & 15));
 }
 
 int fb_get(int x, int y) {
-	if (x < 0 || y < 0 || x >= FB_W || y >= FB_H) return 0;
-	uint8_t b = fb[(y * FB_W + x) >> 1];
+	if (x < 0 || x >= FB_W || y < fb_top || y >= fb_top + FB_STRIP || y >= FB_H) return 0;
+	uint8_t b = fb[((y - fb_top) * FB_W + x) >> 1];
 	return x & 1 ? b >> 4 : b & 15;
 }
 
 void fb_rect(int x, int y, int w, int h, int c) {
-	for (int j = y; j < y + h; j++)
+	// only the rows in the strip
+	int from = y > fb_top ? y : fb_top, to = y + h < fb_top + FB_STRIP ? y + h : fb_top + FB_STRIP;
+	for (int j = from; j < to; j++)
 		for (int i = x; i < x + w; i++) fb_pixel(i, j, c);
 }
 
@@ -68,6 +76,8 @@ static void dot(int x, int y, int c, int width) {
 }
 
 void fb_line(int x0, int y0, int x1, int y1, int c, int width) {
+	int lo = (y0 < y1 ? y0 : y1) - width, hi = (y0 > y1 ? y0 : y1) + width;
+	if (!touches(lo, hi)) return;
 	int dx = x1 > x0 ? x1 - x0 : x0 - x1, sx = x0 < x1 ? 1 : -1;
 	int dy = y1 > y0 ? y0 - y1 : y1 - y0, sy = y0 < y1 ? 1 : -1;
 	int err = dx + dy;
@@ -82,6 +92,7 @@ void fb_line(int x0, int y0, int x1, int y1, int c, int width) {
 
 void fb_text(int x, int y, const char *s, int c, int scale) {
 	if (scale < 1) scale = 1;
+	if (!touches(y, y + 8 * scale - 1)) return;
 	for (; *s; s++, x += 8 * scale) {
 		unsigned char ch = (unsigned char)*s;
 		const unsigned char *glyph = font8x8_basic[ch < 128 ? ch : '?'];
@@ -110,6 +121,7 @@ static const char *const PIG[FB_PIG_H] = {
 
 void fb_pig(int x, int y, int scale) {
 	if (scale < 1) scale = 1;
+	if (!touches(y, y + FB_PIG_H * scale - 1)) return;
 	for (int j = 0; j < FB_PIG_H; j++)
 		for (int i = 0; i < FB_PIG_W; i++) {
 			char p = PIG[j][i];

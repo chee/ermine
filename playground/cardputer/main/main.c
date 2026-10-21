@@ -18,6 +18,8 @@
 #include "room.h"
 #include "net.h"
 #include "lschannel.h"
+#include "peak.h"
+extern peak_step *lschannel_steps;
 #include "sdkconfig.h"
 #include "den.h"
 #include "fb.h"
@@ -41,8 +43,12 @@ static op_value *last;
 // 1: the den's framebuffer shows, keys go to /work/keys; 0: the shell's text rows
 static int dens_mode = 1;
 
-void frame_show(void) {
-	if (dens_mode) screen_frame();
+// the picture the den's screen shows, drawn again on the way back from the shell
+static void (*shown)(void);
+
+void frame_show(void (*paint)(void)) {
+	shown = paint;
+	if (dens_mode) screen_frame(paint);
 }
 
 static void print(void) {
@@ -128,8 +134,9 @@ static void pressed(api *keyboard_api, const char *k) {
 	if (strcmp(k, "esc") == 0) {
 		if (!shell_on) return;
 		dens_mode = !dens_mode;
-		if (dens_mode) screen_frame();
-		else draw_text(last);
+		if (dens_mode) {
+			if (shown) screen_frame(shown);
+		} else draw_text(last);
 		return;
 	}
 	if (!dens_mode) {
@@ -210,12 +217,13 @@ void app_main(void) {
 	printf("den: %s up, %u bytes of heap\n", den_id, (unsigned)(before - heap_caps_get_free_size(MALLOC_CAP_8BIT)));
 	printf("ermine: up, %u bytes free%s%s\n", (unsigned)heap_caps_get_free_size(MALLOC_CAP_8BIT),
 		ls ? ", littlesync on" : ", no littlesync", wifi ? ", and over WiFi" : "");
+	// keys: a key and what it set off; beat: the den's row set again and the sweep; send: a row sealed
+	// and framed; in: an HTTP answer fed in (seals checked, rows heard, mirrored); settle: what that set off
+	static peak_step steps[5] = {{"keys", 0, 0, 0}, {"beat", 0, 0, 0}, {"send", 0, 0, 0}, {"heard", 0, 0, 0}, {"settle", 0, 0, 0}};
+	lschannel_steps = &steps[3];
 	for (;;) {
 		const char *k;
-		while ((k = keys_next())) {
-			pressed(keyboard_api, k);
-			host_settle();
-		}
+		while ((k = keys_next())) PEAK(&steps[0], pressed(keyboard_api, k); host_settle());
 		char typed[512];
 		int n;
 		while ((n = usb_serial_jtag_read_bytes(typed, sizeof typed, 0)) > 0) {
@@ -229,9 +237,8 @@ void app_main(void) {
 			if ((k = serial_key(typed[i])) == NULL) continue;
 			// typed on the serial line: the shell's, and the den's keys' too
 			keyboard_press(keyboard_api, k);
-			if (strlen(k) == 1) things_key(k);
-			else if (strcmp(k, "backspace") == 0) things_key("del");
-			host_settle();
+			PEAK(&steps[0], if (strlen(k) == 1) things_key(k); else if (strcmp(k, "backspace") == 0) things_key("del");
+				host_settle());
 			if (typed[i] == '\r' || typed[i] == '\n') print();
 		}
 		}
@@ -243,9 +250,20 @@ void app_main(void) {
 			if (m && ls_up(line)) usb_serial_jtag_write_bytes(out, m, portMAX_DELAY);
 			net_turn(esp_timer_get_time() / 1000);
 			if (room_api) room_mirror(room_api);
-			host_settle();
+			PEAK(&steps[4], host_settle());
 		}
-		den_tick(esp_timer_get_time() / 1000);
+		PEAK(&steps[1], den_tick(esp_timer_get_time() / 1000));
+		PEAK(&steps[2], lschannel_tick(esp_timer_get_time() / 1000));
+		// the heap on the log every 10 s: what's free, the least yet, the biggest block (a frame needs one)
+		static int64_t heap_said;
+		int64_t now_ms = esp_timer_get_time() / 1000;
+		if (now_ms - heap_said >= 10000) {
+			heap_said = now_ms;
+			printf("heap: %u free, %u least, %u biggest\n", (unsigned)heap_caps_get_free_size(MALLOC_CAP_8BIT),
+				(unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT),
+				(unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+			peak_print(steps, 5);
+		}
 		vTaskDelay(pdMS_TO_TICKS(10));
 	}
 }

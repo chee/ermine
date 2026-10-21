@@ -68,7 +68,10 @@ static void chunk(FILE *f, const char *type, const unsigned char *data, size_t n
 	free(both);
 }
 
-// the framebuffer, each pixel 3x3 (so it can be looked at)
+// the whole screen, a colour a byte, put together strip by strip as the Cardputer sends them
+static uint8_t full[FB_W * FB_H];
+
+// the screen, each pixel 3x3 (so it can be looked at)
 #define ZOOM 3
 static void png(const char *path) {
 	int w = FB_W * ZOOM, h = FB_H * ZOOM;
@@ -77,7 +80,7 @@ static void png(const char *path) {
 	for (int y = 0; y < h; y++) {
 		unsigned char *r = raw + (size_t)y * row;
 		r[0] = 0;
-		for (int x = 0; x < w; x++) memcpy(r + 1 + x * 3, fb_rgb[fb_get(x / ZOOM, y / ZOOM)], 3);
+		for (int x = 0; x < w; x++) memcpy(r + 1 + x * 3, fb_rgb[full[(y / ZOOM) * FB_W + x / ZOOM]], 3);
 	}
 	size_t blocks = (raw_n + 65534) / 65535;
 	size_t zn = 2 + raw_n + blocks * 5 + 4;
@@ -111,7 +114,13 @@ static void png(const char *path) {
 static int frames;
 static char named_frame[64];
 
-void frame_show(void) {
+void frame_show(void (*paint)(void)) {
+	for (int top = 0; top < FB_H; top += FB_STRIP) {
+		fb_strip(top);
+		paint();
+		for (int y = top; y < top + FB_STRIP && y < FB_H; y++)
+			for (int x = 0; x < FB_W; x++) full[y * FB_W + x] = (uint8_t)fb_get(x, y);
+	}
 	mkdir("/tmp/dens", 0755), mkdir("/tmp/dens/card", 0755);
 	char path[128];
 	snprintf(path, sizeof path, "/tmp/dens/card/sim-%02d%s%s.png", frames++, named_frame[0] ? "-" : "", named_frame);
@@ -434,6 +443,32 @@ static int dens_demo(void) {
 	// text into the screen
 	strcpy(named_frame, "text");
 	b_put(b.drawing, "attributes", b.drawing_id, THING_OUT, op_str("hello pigs"));
+	settle();
+
+	// a pad's picture into the screen: 48x27 squares, a frame round the edge and a cross
+	strcpy(named_frame, "picture");
+	unsigned char sq[162] = {0};
+	for (int y = 0; y < 27; y++) {
+		for (int x = 0; x < 48; x++) {
+			int on = x == 0 || y == 0 || x == 47 || y == 26 || x * 27 / 48 == y || (47 - x) * 27 / 48 == y;
+			int i = y * 48 + x;
+			if (on) sq[i >> 3] |= (unsigned char)(0x80 >> (i & 7));
+		}
+	}
+	op_value *pic = op_map();
+	op_set(pic, "width", op_num(48));
+	op_set(pic, "height", op_num(27));
+	op_set(pic, "squares", op_bytes(sq, sizeof sq));
+	b_put(b.drawing, "attributes", b.drawing_id, THING_OUT, pic);
+	settle();
+
+	// the pigs' weights into the screen: the pigs, as big as they weigh
+	strcpy(named_frame, "weights");
+	op_value *w = op_map();
+	op_set(w, "babe", op_num(4));
+	op_set(w, "peppa", op_num(11));
+	op_set(w, "wilbur", op_num(19));
+	b_put(b.drawing, "attributes", b.drawing_id, THING_OUT, w);
 	settle();
 	printf("frames: %d\n", frames);
 	return 0;

@@ -96,15 +96,14 @@ size_t sl_header_length(const uint8_t *s, size_t length) {
 }
 
 static size_t seeded_sign(void *context, const uint8_t *m, size_t length, uint8_t signature[SL_RAW_MAX]) {
-	ermEd25519Sign(((sl_seeded *)context)->seed, m, length, signature);
+	ermEd25519SignPair(&((sl_seeded *)context)->pair, m, length, signature);
 	return 64;
 }
 
 void sl_seeded_init(sl_seeded *s, const uint8_t seed[32]) {
 	memcpy(s->seed, seed, 32);
-	uint8_t raw[32];
-	ermEd25519Public(s->seed, raw);
-	s->signer.key_length = cm_key_join(ED25519, raw, 32, s->signer.key);
+	ermEd25519PairOf(&s->pair, s->seed);
+	s->signer.key_length = cm_key_join(ED25519, s->pair.pub, 32, s->signer.key);
 	s->signer.header = ED25519_HEADER;
 	s->signer.header_length = sizeof ED25519_HEADER;
 	s->signer.sign = seeded_sign;
