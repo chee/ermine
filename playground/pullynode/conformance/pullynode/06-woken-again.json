@@ -1,0 +1,164 @@
+{
+	"title": "woken again, a reader gets the value last written at once (asleep), then waking, then the new value, awake",
+	"steps": [
+		{
+			"op": "providers",
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "o"
+			},
+			"expect": {}
+		},
+		{
+			"op": "provide",
+			"name": "p",
+			"id": "N",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "r0",
+			"scope": "o",
+			"f": {
+				"read": [
+					"value",
+					"N"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "put",
+			"name": "p",
+			"value": "old",
+			"expect": {}
+		},
+		{
+			"op": "dispose",
+			"name": "r0",
+			"expect": {}
+		},
+		{
+			"op": "said",
+			"name": "p",
+			"expect": {
+				"said": [
+					{
+						"start": "r0"
+					},
+					"stop"
+				]
+			}
+		},
+		{
+			"op": "read",
+			"part": "attributes",
+			"id": "N",
+			"path": [
+				"ermine.provider.status"
+			],
+			"expect": {
+				"value": "asleep"
+			}
+		},
+		{
+			"op": "watch",
+			"name": "r",
+			"scope": "o",
+			"f": [
+				{
+					"read": [
+						"value",
+						"N"
+					]
+				},
+				{
+					"read": [
+						"attributes",
+						"N",
+						[
+							"ermine.provider.status"
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "r",
+			"expect": {
+				"value": [
+					"old",
+					"asleep"
+				]
+			},
+			"skip": [
+				"runs"
+			]
+		},
+		{
+			"op": "said",
+			"name": "p",
+			"expect": {
+				"said": [
+					{
+						"start": "r"
+					}
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "r",
+			"expect": {
+				"value": [
+					"old",
+					"waking"
+				]
+			},
+			"skip": [
+				"runs"
+			]
+		},
+		{
+			"op": "put",
+			"name": "p",
+			"value": "new",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "r",
+			"expect": {
+				"value": [
+					"new",
+					"awake"
+				]
+			},
+			"skip": [
+				"runs"
+			]
+		}
+	]
+}

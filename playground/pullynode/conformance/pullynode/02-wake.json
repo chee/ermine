@@ -1,0 +1,119 @@
+{
+	"title": "a read of its value in a run wakes it, once the pulse ends: start is told the reading run (its computer). its status says waking, which the reader sees at the next pulse (the write lands as the pulse ends), then awake at its first write",
+	"steps": [
+		{
+			"op": "providers",
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "o"
+			},
+			"expect": {}
+		},
+		{
+			"op": "provide",
+			"name": "p",
+			"id": "N",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "r",
+			"scope": "o",
+			"f": [
+				{
+					"read": [
+						"value",
+						"N"
+					]
+				},
+				{
+					"read": [
+						"attributes",
+						"N",
+						[
+							"ermine.provider.status"
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "said",
+			"name": "p",
+			"expect": {
+				"said": [
+					{
+						"start": "r"
+					}
+				]
+			}
+		},
+		{
+			"op": "state",
+			"name": "r",
+			"expect": {
+				"value": [
+					null,
+					"asleep"
+				],
+				"runs": 1
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "r",
+			"expect": {
+				"value": [
+					null,
+					"waking"
+				],
+				"runs": 2
+			}
+		},
+		{
+			"op": "put",
+			"name": "p",
+			"value": 1,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "r",
+			"expect": {
+				"value": [
+					1,
+					"awake"
+				],
+				"runs": 3
+			}
+		},
+		{
+			"op": "read",
+			"part": "attributes",
+			"id": "N",
+			"path": [
+				"ermine.provider.status"
+			],
+			"expect": {
+				"value": "awake"
+			}
+		}
+	]
+}

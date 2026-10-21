@@ -1,0 +1,37 @@
+{
+	"title": "what once throws comes out of the check; nothing written",
+	"steps": [
+		{
+			"op": "providers",
+			"expect": {}
+		},
+		{
+			"op": "provide",
+			"name": "p",
+			"id": "N",
+			"once": {
+				"throw": "nope"
+			},
+			"expect": {}
+		},
+		{
+			"op": "check",
+			"id": "N",
+			"as": "c",
+			"expect": {}
+		},
+		{
+			"op": "checked",
+			"as": "c",
+			"expect": {
+				"error": "nope"
+			}
+		},
+		{
+			"op": "read",
+			"part": "value",
+			"id": "N",
+			"expect": {}
+		}
+	]
+}

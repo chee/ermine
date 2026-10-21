@@ -1,0 +1,69 @@
+{
+	"title": "a check while awake gives the value there, starting nothing",
+	"steps": [
+		{
+			"op": "providers",
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "o"
+			},
+			"expect": {}
+		},
+		{
+			"op": "provide",
+			"name": "p",
+			"id": "N",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "r",
+			"scope": "o",
+			"f": {
+				"read": [
+					"value",
+					"N"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "put",
+			"name": "p",
+			"value": 5,
+			"expect": {}
+		},
+		{
+			"op": "check",
+			"id": "N",
+			"as": "c",
+			"expect": {}
+		},
+		{
+			"op": "checked",
+			"as": "c",
+			"expect": {
+				"value": 5
+			}
+		},
+		{
+			"op": "said",
+			"name": "p",
+			"expect": {
+				"said": [
+					{
+						"start": "r"
+					}
+				]
+			}
+		}
+	]
+}
