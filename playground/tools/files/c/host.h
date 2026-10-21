@@ -1,7 +1,7 @@
 // files url folder (FILES.tex, A folder that is not a store), in C: a device host that lays a shared document out in a
 // folder, as a mirror (st_open_mirror) with the document's node as its root. The files program runs on it (program.h,
 // watch.h), on the files graph (graph.h), so an edit made in the folder is a change to the document, which sync
-// (extensions/together/c/sync.h) commits as any other; a change from another device arrives, and the next batch lays it out.
+// (playground/together/c/sync.h) commits as any other; a change from another device arrives, and the next batch lays it out.
 //
 // Kept: every ermine:// id a children entry reached from the root names is followed; an ephemeral node (the program's
 // listing) has an id of its own and never leaves the device. A document that has not arrived is not laid out: the folder

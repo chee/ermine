@@ -31,13 +31,18 @@ Deno.test("pack: one node under one key, written as the module says", () => {
 		actor: [["x", 1]],
 		values: ["hi"],
 	})
-	// an ermine:// id as its 32 bytes
-	const id = "ermine://" + "0f".repeat(32)
-	assertEquals(inner(pack([["value", id, n(1)]])).ids, [new Uint8Array(32).fill(15)])
-	assertEquals(unpack(pack([["value", id, n(1)]]))[0][1], id)
-	// not quite one (upper case hex): its text
-	const upper = "ermine://" + "0F".repeat(32)
-	assertEquals(inner(pack([["value", upper, n(1)]])).ids, [upper])
+	// an id as the string it is, whatever it looks like: an ermine id too, its text
+	for (
+		const text of [
+			"ermine:0010" + "0f".repeat(16),
+			"ermine:ed01" + "0f".repeat(32),
+			"ermine:0010" + "0F".repeat(16),
+			"ermine://" + "0f".repeat(32),
+		]
+	) {
+		assertEquals(inner(pack([["value", text, n(1)]])).ids, [text])
+		assertEquals(unpack(pack([["value", text, n(1)]]))[0][1], text)
+	}
 })
 
 Deno.test("pack: the same table is the same bytes, whatever order it is given in", () => {
@@ -271,7 +276,12 @@ Deno.test("pack: reading takes exactly what writing gives", () => {
 		["a node with bits past 64", { ...good, has: Uint8Array.of(32 | 128, 1, 32) }],
 		["a value too few", { ...good, values: [1] }],
 		["a value too many", { ...good, values: [1, 2, 3] }],
-		["an ermine:// id as its text", { ...good, ids: ["ermine://" + "00".repeat(32), "b"] }],
+		// an id is the string it is: bytes are none (as ermine ids, and an old pack's 32, once were)
+		["an ermine id as its bytes", {
+			...good,
+			ids: [Uint8Array.of(0, 0x10, ...Array(16).fill(0)), "b"],
+		}],
+		["an old pack's id: 32 bytes", { ...good, ids: [new Uint8Array(32), "b"] }],
 		["a varint that never ends", { ...good, time: Uint8Array.of(0x80) }],
 	]
 	for (const [name, x] of bad) assertEquals(code(() => unpack(wrap(x))), "not-a-pack", name)

@@ -1,4 +1,4 @@
-// a presence channel (extensions/presence/c/channel.h) over littlesync's messages (littlesync.h,
+// a presence channel (playground/together/presence/c/channel.h) over littlesync's messages (littlesync.h,
 // "messages"): send is ls_send (sealed by this device's key), on is ls_listen, and what is heard comes
 // from ls_options.heard, from: the hex of the key that sealed it (checked by littlesync), the same
 // name together's channel gives a browser's sender. its name: this device's key as hex, the den's id
@@ -10,7 +10,7 @@
 #define CARD_LSCHANNEL_H
 
 #include "littlesync.h"
-#include "extensions/presence/c/channel.h"
+#include "playground/together/presence/c/channel.h"
 
 // the channel over dev's messages; NULL: no key. a row (a message on a topic with no "/ask/" or
 // "/answer/" in it: presence's, whole each time) waits to go out until LSCHANNEL_GAP_MS after the

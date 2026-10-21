@@ -1,9 +1,10 @@
 // interop.ts: ermine-pigs and the web lab-pig on one server, checked against each other.
-//   deno run -A interop.ts [--look nethack] [--bin ./ermine-pigs-check] [--url http://localhost:8051/] [--room ermine://...] [--out DIR]
+//   deno run -A interop.ts [--look nethack] [--bin ./ermine-pigs-check] [--url http://localhost:8051/] [--room ermine:...] [--out DIR]
 // needs slaygrounds' dev server (cd ../ermine-slaygrounds && deno task serve) and make. The terminal
 // runs on a pty (pty_drive.py), its view read from its --state; the page in a headless Chrome
 // (web.ts), its view read from its DOM. A fresh room unless --room: only pigs this test adds are
-// moved, set down ashamed or binned (the first pig is in every room: it is only looked at)
+// moved, set down ashamed or binned (a fresh room starts with none: walking is checked once the
+// first two are added)
 import { open, type Page, type Seen, seen, start } from "./web.ts"
 
 const args = Deno.args
@@ -17,7 +18,7 @@ await Deno.mkdir(out, { recursive: true })
 const hex = (n: number) =>
 	Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0"))
 		.join("")
-const room = opt("--room", `ermine://${hex(16)}${"0".repeat(32)}`)
+const room = opt("--room", `ermine:0010${hex(16)}`)
 const url = `${opt("--url", "http://localhost:8051/")}?room=${encodeURIComponent(room)}#lab-pig`
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 // --look nethack: the terminal in its NetHack look, driven its way (travel, `,`, hjkl, d)
@@ -112,7 +113,7 @@ const t0 = await until(async () => (await tstate()).online && (await tstate()), 
 check(!!t0, "terminal online")
 const w0 = await until(async () => {
 	const s = await web()
-	return s && / online/.test(s.count) && s.pigs.length > 0 && s
+	return s && / online/.test(s.count) && s
 }, 40000)
 check(!!w0, "page online", w0?.count)
 if (!t0 || !w0) Deno.exit(1)
@@ -138,7 +139,7 @@ const nearest = (s: Seen, x: number, y: number) => {
 
 // the page's pig that is the terminal's id: the nearest to where the terminal has it, and only when
 // clearly it (the first pig, in every room, never taken by mistake): waits for the pigs to part
-const FIRST = "ermine://d3b583537595c9a6de0110781d4566d1" + "0".repeat(32)
+const FIRST = "ermine:0010d3b583537595c9a6de0110781d4566d1"
 const pagePig = (id: string) =>
 	until(async () => {
 		const [t, s] = await Promise.all([tstate(), web()])
@@ -247,7 +248,7 @@ const wc = 1 + Math.floor(0.78 * (COLS - 2)), wr = 2 + Math.floor(0.45 * (ROWS -
 const inCloset = (at: [number, number]) => at[0] > wc && at[1] < wr
 const told = async (text: string) => (await Deno.readTextFile(`${out}/terminal.log`)).includes(text)
 
-// ---- 1: walking agrees (the first pig, only looked at): read close together, several times
+// ---- 1: walking agrees (after 3, the pigs added): read close together, several times
 async function walking(what: string) {
 	let worst = 0, which = ""
 	for (let i = 0; i < 5; i++) {
@@ -256,7 +257,7 @@ async function walking(what: string) {
 			const n = near(s, p)
 			if (n.d > worst) {
 				worst = n.d
-				which = `${p.id.slice(9, 17)} at ${p.x.toFixed(3)}, ${p.y.toFixed(3)} here, ${
+				which = `${p.id.slice(11, 19)} at ${p.x.toFixed(3)}, ${p.y.toFixed(3)} here, ${
 					n.pig.x.toFixed(3)
 				}, ${n.pig.y.toFixed(3)} on the page`
 			}
@@ -270,7 +271,6 @@ async function walking(what: string) {
 		`worst distance ${worst.toFixed(4)} of the field${worst >= 0.03 ? ` (${which})` : ""}`,
 	)
 }
-await walking("walking positions agree")
 
 // ---- 2: a pig added in the terminal shows on the page
 let mine: Pig | undefined
@@ -312,6 +312,8 @@ let theirs: Pig | undefined
 		check(near(await web(), t).d < 0.03, "  and walks where the page walks it")
 	}
 }
+
+await walking("walking positions agree")
 
 // ---- 4: a drag on the page moves live in the terminal; the drop ends the hold there
 const found4 = theirs && await pagePig(theirs.id)

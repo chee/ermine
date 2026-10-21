@@ -1,0 +1,323 @@
+{
+	"title": "a fork and a merge: parents and base by their place in the pack",
+	"steps": [
+		{
+			"op": "make",
+			"name": "a",
+			"nonce": 1,
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"n": 0
+					}
+				}
+			]
+		},
+		{
+			"op": "make",
+			"name": "b",
+			"nonce": 2,
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 1
+				}
+			]
+		},
+		{
+			"op": "make",
+			"name": "c",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"nonce": 1,
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 2
+				}
+			]
+		},
+		{
+			"op": "make",
+			"name": "m",
+			"nonce": 3,
+			"parents": [
+				"b",
+				"c"
+			],
+			"base": "c",
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 2
+				}
+			]
+		},
+		{
+			"op": "make",
+			"name": "n",
+			"nonce": 4,
+			"parents": [
+				"m"
+			],
+			"patches": []
+		},
+		{
+			"op": "pack",
+			"commits": [
+				"a",
+				"b",
+				"c",
+				"m",
+				"n"
+			],
+			"name": "r",
+			"expect": {
+				"pack": "b1616e056269648482f60182782b65726d696e653a3030313032613261326132613261326132613261326132613261326132613261326132610282f60182782b65726d696e653a30303130326132613261326132613261326132613261326132613261326132613261326101636964738258206ff30dbbf9d9fa9a97dde54a1989e54e24c638cbecb3b805974d06f776a3054758205ec2e164524c5f3b1925b2ca7ed6f53845e5744d7b7af775699e24386a6d15c664626173658382f60382020182f6016474696d65450000000000656163746f728182f605656e6f6e6365450202010402657461626c6581826576616c756505667265616465728182f605667369676e657283825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c02825822ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b39401825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0267686561646572738482f60182483401ed01ed01135f0282f60182483401ed01ed01135f01676c616d706f727445020200020267706172656e74738580f68100820201f667706174636865738581a26470617468806576616c7565a1616e0081a2647061746881616e6576616c75650181a2647061746881616e6576616c75650281a2647061746881616e6576616c756502806865787465726e616c8182f605686d657461646174618182f6056a7369676e6174757265738358400d3362f3b3c7e660f8cd0abb38f5636834406a4113ff676fd3060533a57dfdefa04cd1e386587ce8b348775f3cce64c5dca5bd8d78f1749ed17096d759a2fb0858404f3f86e85db783bda5487dce03a5dacac0ba0ed90d13053e889c0fe7a4d2daac5f840432bf4c28d70e1d9be5c7beec9bab182cb307c0edc14060e30bd36d290f584011b09cc316799affedc246e1902b273bf47e61750e2db210a84deeb1d1047dd7f6bdfdd61e6aedb2d8906f7e56909e79df2592996e7e98977974d7e89d1c7701"
+			}
+		},
+		{
+			"op": "columns",
+			"pack": "r",
+			"expect": {
+				"columns": {
+					"n": 5,
+					"id": [
+						[
+							null,
+							1
+						],
+						[
+							"ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+							2
+						],
+						[
+							null,
+							1
+						],
+						[
+							"ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+							1
+						]
+					],
+					"ids": [
+						{
+							"/": {
+								"bytes": "b/MNu/nZ+pqX3eVKGYnlTiTGOMvss7gFl00G93ajBUc"
+							}
+						},
+						{
+							"/": {
+								"bytes": "XsLhZFJMXzsZJbLKftb1OEXldE17evd1aZ4kOGptFcY"
+							}
+						}
+					],
+					"base": [
+						[
+							null,
+							3
+						],
+						[
+							2,
+							1
+						],
+						[
+							null,
+							1
+						]
+					],
+					"time": {
+						"/": {
+							"bytes": "AAAAAAA"
+						}
+					},
+					"actor": [
+						[
+							null,
+							5
+						]
+					],
+					"nonce": {
+						"/": {
+							"bytes": "AgIBBAI"
+						}
+					},
+					"table": [
+						[
+							"value",
+							5
+						]
+					],
+					"reader": [
+						[
+							null,
+							5
+						]
+					],
+					"signer": [
+						[
+							{
+								"/": {
+									"bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA"
+								}
+							},
+							2
+						],
+						[
+							{
+								"/": {
+									"bytes": "7QGBOXcOqH0XX1ajVGbDTH7My42KkbTuN6Jd9g9bj8mzlA"
+								}
+							},
+							1
+						],
+						[
+							{
+								"/": {
+									"bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA"
+								}
+							},
+							2
+						]
+					],
+					"headers": [
+						[
+							null,
+							1
+						],
+						[
+							{
+								"/": {
+									"bytes": "NAHtAe0BE18"
+								}
+							},
+							2
+						],
+						[
+							null,
+							1
+						],
+						[
+							{
+								"/": {
+									"bytes": "NAHtAe0BE18"
+								}
+							},
+							1
+						]
+					],
+					"lamport": {
+						"/": {
+							"bytes": "AgIAAgI"
+						}
+					},
+					"parents": [
+						[],
+						null,
+						[
+							0
+						],
+						[
+							2,
+							1
+						],
+						null
+					],
+					"patches": [
+						[
+							{
+								"path": [],
+								"value": {
+									"n": 0
+								}
+							}
+						],
+						[
+							{
+								"path": [
+									"n"
+								],
+								"value": 1
+							}
+						],
+						[
+							{
+								"path": [
+									"n"
+								],
+								"value": 2
+							}
+						],
+						[
+							{
+								"path": [
+									"n"
+								],
+								"value": 2
+							}
+						],
+						[]
+					],
+					"external": [
+						[
+							null,
+							5
+						]
+					],
+					"metadata": [
+						[
+							null,
+							5
+						]
+					],
+					"signatures": [
+						{
+							"/": {
+								"bytes": "DTNi87PH5mD4zQq7OPVjaDRAakET/2dv0wYFM6V9/e+gTNHjhlh86LNId188zmTF3KW9jXjxdJ7RcJbXWaL7CA"
+							}
+						},
+						{
+							"/": {
+								"bytes": "Tz+G6F23g72lSH3OA6XaysC6DtkNEwU+iJwP56TS2qxfhAQyv0wo1w4dm+XHvuybqxgsswfA7cFAYOML020pDw"
+							}
+						},
+						{
+							"/": {
+								"bytes": "EbCcwxZ5mv/twkbhkCsnO/R+YXUOLbIQqE3usdEEfdf2vf3WHmrtstiQb35WkJ553yWSmW5+mJd5dNfonRx3AQ"
+							}
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "unpack",
+			"pack": "r",
+			"expect": {
+				"sealed": [
+					{
+						"vouched": "a"
+					},
+					"b",
+					"c",
+					{
+						"vouched": "m"
+					},
+					"n"
+				]
+			}
+		}
+	]
+}

@@ -1,4 +1,4 @@
-// card.h: the card (card.c): what ermineOS keeps and syncs, on extensions/together (sync.h) over today's
+// card.h: the card (card.c): what ermineOS keeps and syncs, on playground/together (sync.h) over today's
 // table, places and scheduler. Every node whose id is a document's (an ermine:// id) is kept: each
 // change to one of its tables goes out as one commit, stored on the card and sent to /etc/sync's
 // server; any other node (a process, a driver's state, "@n") is never stored or sent: that is what
@@ -15,7 +15,7 @@
 
 #include "../../../../filesystem/places/c/places.h"
 
-#include "../../../../extensions/together/c/sync.h"
+#include "../../../../playground/together/c/sync.h"
 
 #include <stdbool.h>
 #include <stdint.h>

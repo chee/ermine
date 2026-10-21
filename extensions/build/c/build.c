@@ -6,7 +6,7 @@
 #include "../../../core/op/c/json.h"
 #include "../../../core/scheduler/c/ptrmap.h"
 #include "../../../ermine/encoding/c/cbor.h"
-#include "../../../ermine/encoding/c/hash.h"
+#include "../../../ermine/encoding/c/blake3/blake3.h"
 #include "../../../filesystem/clingy/c/clingy.h"
 #include "../../../ermine/encoding/c/pack.h"
 #include "mem.h"
@@ -78,6 +78,9 @@ struct bd {
 static const char *unencodable(const op_value *v) {
 	if (v == NULL) return "no value";
 	if (hf_holds(v)) return "a function";
+	CborOut o = {NULL, 0, 0, false}; // counted, nothing written
+	if (pk_put(&o, v)) return NULL;
+	// none: why, as cborEncode says it
 	Json *j = pk_to_json(v);
 	if (j == NULL) return "no encoding";
 	size_t length;
@@ -96,29 +99,32 @@ static void hex_of(const uint8_t *b, char out[65]) {
 	out[64] = 0;
 }
 
-int bd_hash_hex(const op_value *v, char out[65]) {
-	if (unencodable(v) != NULL) return 0;
-	Json *j = pk_to_json(v);
-	uint8_t h[32];
-	const char *why;
-	int ok = hashValue(j, h, &why);
-	jsonFree(j);
-	if (ok) hex_of(h, out);
+// hex of the BLAKE3 of what o holds (hash.h's name of the value written), and o freed; 0: it had no encoding
+static int hash_hex(CborOut *o, int ok, char out[65]) {
+	if (ok) {
+		uint8_t h[32];
+		blake3_hasher b;
+		blake3_hasher_init(&b);
+		blake3_hasher_update(&b, o->data, o->length);
+		blake3_hasher_finalize(&b, h, 32);
+		hex_of(h, out);
+	}
+	free(o->data);
 	return ok;
+}
+
+int bd_hash_hex(const op_value *v, char out[65]) {
+	if (v == NULL || hf_holds(v)) return 0;
+	CborOut o = {NULL, 0, 0, true};
+	return hash_hex(&o, pk_put(&o, v), out);
 }
 
 // hex of hash([name, code]); 0: no encoding
 static int key_of(const op_value *name, const op_value *code, char out[65]) {
-	if (unencodable(name) != NULL || unencodable(code) != NULL) return 0;
-	Json *both = jsonArray();
-	jsonPush(both, pk_to_json(name));
-	jsonPush(both, pk_to_json(code));
-	uint8_t h[32];
-	const char *why;
-	int ok = hashValue(both, h, &why);
-	jsonFree(both);
-	if (ok) hex_of(h, out);
-	return ok;
+	if (name == NULL || code == NULL || hf_holds(name) || hf_holds(code)) return 0;
+	CborOut o = {NULL, 0, 0, true};
+	cborPutHead(&o, 4, 2);
+	return hash_hex(&o, pk_put(&o, name) && pk_put(&o, code), out);
 }
 
 static int is_map(const op_value *v) { return v != NULL && v->type == OP_MAP; }

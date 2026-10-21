@@ -1,8 +1,7 @@
 // cursors' host: the world (@ermine/slaygrounds/world) with presence, and a second device, the
 // phone: a world of its own (its table, places, scheduler), joined to the laptop's by a pair of
-// channels (and a BroadcastChannel, so this example open in another tab shows up here). a program
-// gets present/absent/presence from the api for the laptop; the phone is this host's, handed
-// over by extend: a program cannot make a world
+// channels (and a BroadcastChannel, so this example open in another tab shows up here). both
+// devices' rows are this host's, handed over by extend: a program cannot make a world
 import createEntry from "@ermine/node/entry"
 import { createPlaces } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
@@ -10,8 +9,15 @@ import { createScheduler } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable } from "@ermine/table"
 import { createWorld } from "@ermine/slaygrounds/world"
-import { clear, connect, readPresence, renew, setPresence, startSweeper } from "@ermine/presence"
-import { type Channel, createBroadcast, createPair } from "@ermine/presence/channel"
+import {
+	clear,
+	connect,
+	readPresence,
+	renew,
+	setPresence,
+	startSweeper,
+} from "@ermine/together/presence"
+import { type Channel, createBroadcast, createPair } from "@ermine/together/presence/channel"
 import { render } from "ermine-h"
 
 const TOPIC = "pad:7f3a" // what the channels call the pad: each world's own id for it differs
@@ -20,9 +26,10 @@ const TTL = 3000 // ms a row lives unless renewed
 const world = createWorld({
 	render,
 	processes: [{ name: "cursors" }],
-	presence: { who: "laptop", sweep: 300 },
+	presence: { sweep: 300 },
 	extend: (api) => ({
 		crossed,
+		laptop: here,
 		phone: {
 			...phone,
 			effect: (read: () => unknown, act: (v: any) => void) =>
@@ -64,6 +71,23 @@ const tabs: Channel = {
 }
 connect(laptop!, tabs, { topic: TOPIC, anchor: pad })
 startSweeper(far, 300)
+
+// the laptop as a program holds it: its rows at the pad (tracked in the world the program runs in),
+// its row set, renewed and cleared
+const here = {
+	rows: () => readPresence(laptop!, pad),
+	set(value: unknown) {
+		setPresence(laptop!, pad, "laptop", value, TTL)
+		s.pulse()
+	},
+	renew() {
+		if (renew(laptop!, pad, "laptop", TTL)) s.pulse()
+	},
+	clear() {
+		clear(laptop!, pad, "laptop")
+		s.pulse()
+	},
+}
 
 // the phone as a program holds it: its rows at the pad (tracked in its own world), its row set,
 // renewed and cleared, and an effect in its own scheduler that goes with the process (api.teardown)

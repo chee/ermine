@@ -1,0 +1,103 @@
+{
+	"title": "kind: 00 10 + 16 fresh, 1e 10 + 16 hashed, ed 01 + 32 key (an Ed25519 key); the codes say the format, never a role; any other code or length is no ermine id",
+	"steps": [
+		{
+			"op": "kind",
+			"id": "001000112233445566778899aabbccddeeff",
+			"expect": {
+				"kind": "fresh"
+			}
+		},
+		{
+			"op": "kind",
+			"id": "1e103acada92c16500df68b5452b5da63236",
+			"expect": {
+				"kind": "hashed"
+			}
+		},
+		{
+			"op": "kind",
+			"id": "ed01d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+			"expect": {
+				"kind": "key"
+			}
+		},
+		{
+			"op": "kind",
+			"id": "",
+			"expect": {
+				"kind": null
+			}
+		},
+		{
+			"op": "kind",
+			"id": "0010",
+			"expect": {
+				"kind": null
+			}
+		},
+		{
+			"op": "kind",
+			"id": "001000112233445566778899aabbccddee",
+			"expect": {
+				"kind": null
+			}
+		},
+		{
+			"op": "kind",
+			"id": "001000112233445566778899aabbccddeeff00",
+			"expect": {
+				"kind": null
+			}
+		},
+		{
+			"op": "kind",
+			"id": "00100000000000000000000000000000000000000000000000000000000000000000",
+			"expect": {
+				"kind": null
+			}
+		},
+		{
+			"op": "kind",
+			"id": "1e200000000000000000000000000000000000000000000000000000000000000000",
+			"expect": {
+				"kind": null
+			}
+		},
+		{
+			"op": "kind",
+			"id": "1e100000000000000000000000000000000000000000000000000000000000000000",
+			"expect": {
+				"kind": null
+			}
+		},
+		{
+			"op": "kind",
+			"id": "ed0100000000000000000000000000000000",
+			"expect": {
+				"kind": null
+			}
+		},
+		{
+			"op": "kind",
+			"id": "ed020000000000000000000000000000000000000000000000000000000000000000",
+			"expect": {
+				"kind": null
+			}
+		},
+		{
+			"op": "kind",
+			"id": "011000000000000000000000000000000000",
+			"expect": {
+				"kind": null
+			}
+		},
+		{
+			"op": "kind",
+			"id": "000000000000000000000000000000000000",
+			"expect": {
+				"kind": null
+			}
+		}
+	]
+}

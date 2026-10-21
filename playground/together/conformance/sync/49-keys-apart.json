@@ -1,0 +1,237 @@
+{
+	"title": "writes apart at different keys both show, composed: no clash, no values; a write after goes on both heads as a key patch, no base",
+	"steps": [
+		{
+			"op": "host",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "host",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "mint",
+			"host": "a",
+			"as": "x",
+			"expect": {
+				"id": "ermine:0010b40fde52c568d2f3864d68739e98b72b"
+			}
+		},
+		{
+			"op": "follow",
+			"host": "b",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"n": 0,
+						"m": 0
+					}
+				}
+			],
+			"name": "w0",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "disconnect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 1
+				}
+			],
+			"name": "wa",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "write",
+			"host": "b",
+			"id": "x",
+			"patches": [
+				{
+					"path": [
+						"m"
+					],
+					"value": 2
+				}
+			],
+			"name": "wb",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"value": {
+					"m": 2,
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "read",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"value": {
+					"m": 2,
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "values",
+			"host": "a",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "conflicts",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"conflicts": []
+			}
+		},
+		{
+			"op": "heads",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"heads": [
+					"wa",
+					"wb"
+				]
+			}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [
+				{
+					"path": [
+						"k"
+					],
+					"value": 3
+				}
+			],
+			"name": "wc",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "commit",
+			"host": "b",
+			"id": "x",
+			"commit": "wc",
+			"expect": {
+				"commit": {
+					"table": "value",
+					"actor": "a",
+					"external": [
+						{
+							"file": "scenario",
+							"line": 1
+						}
+					],
+					"time": 1760000000,
+					"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"nonce": 3338457403,
+					"parents": [
+						"wb",
+						"wa"
+					],
+					"lamport": 3,
+					"patches": [
+						{
+							"path": [
+								"k"
+							],
+							"value": 3
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "read",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"value": {
+					"m": 2,
+					"n": 1,
+					"k": 3
+				}
+			}
+		},
+		{
+			"op": "heads",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"heads": [
+					"wc"
+				]
+			}
+		}
+	]
+}

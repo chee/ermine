@@ -800,7 +800,7 @@ static char *text_of(const op_value *m, const char *key) {
 	const op_value *v = field(m, key);
 	return v && v->type == OP_STR ? xdup(v->str) : NULL;
 }
-// sites as values, as sync tells them (extensions/together's head_from)
+// sites as values, as sync tells them (playground/together's head_from)
 static op_value *sites_of(const ch_site *external, size_t n) {
 	op_value *sites = op_list();
 	for (size_t i = 0; i < n; i++) {
@@ -1071,7 +1071,7 @@ int api_edit(api *a, api_target x, const op_patch *patches, size_t n) {
 }
 
 // the metadata key a write says what it replaces by, for sync: "all", or commit names (hex)
-// (extensions/together's REPLACES)
+// (playground/together's REPLACES)
 #define REPLACES "replaces"
 
 // api_edit's, telling sync what it replaces: every value at each path written, or the ones given
@@ -1719,77 +1719,6 @@ int api_ref(api *a, const char *at, op_value *(*make_)(void *ctx), void *ctx, ap
 	later(a->x);
 	*out = node_of(&p, API_VALUE);
 	return 0;
-}
-
-// presence ---------------------------------------------------------------------------------------
-
-static int world(api *a, pres_world **w) {
-	*w = a->x->s.presence;
-	return *w ? 0 : fail(a, API_FAILED, "no presence here: the host gave none");
-}
-int api_presence(api *a, api_target x, pres_lives *out) {
-	*out = (pres_lives){0};
-	found f;
-	int code = found_of(a, x, &f);
-	if (code) return code;
-	char *id = id_of(a, f.n);
-	if (id) {
-		if (a->guarded) code = ask_read(a, gd_target_of(thing_of(id, f.n), PRES_PART, NULL));
-		pres_world *w;
-		if (!code) code = world(a, &w);
-		if (!code) {
-			*out = pres_read(w, id);
-			code = alive(a);
-			if (code) pres_lives_free(out);
-		}
-		free(id);
-	}
-	found_free(&f);
-	return code;
-}
-
-typedef struct {
-	api_target x;
-	const op_value *value;
-	const api_present *o;
-	int clear;
-} presenting;
-static int do_present(api *a, void *data) {
-	presenting *p = data;
-	found f;
-	int code = found_of(a, p->x, &f);
-	if (code) return code;
-	char *id;
-	code = need_id(a, f.n, &id);
-	if (!code) {
-		code = ask(a, "edit", gd_target_of(thing_of(id, f.n), PRES_PART, NULL));
-		pres_world *w;
-		if (!code) code = world(a, &w);
-		if (!code) {
-			const char *who = p->o && p->o->who ? p->o->who : a->x->s.who ? a->x->s.who : a->process.id;
-			if (p->clear) pres_clear(w, id, who);
-			else {
-				int64_t ttl = p->o && p->o->ttl ? p->o->ttl : 10000;
-				pres_set(w, id, who, p->value, ttl);
-			}
-		}
-		free(id);
-	}
-	found_free(&f);
-	return code;
-}
-int api_present_at(api *a, api_target x, const op_value *value, const api_present *options) {
-	presenting p = {x, value, options, 0};
-	int code = within(a, do_present, &p);
-	if (!code) later(a->x);
-	return code;
-}
-int api_absent(api *a, api_target x, const char *who) {
-	api_present o = {0, who};
-	presenting p = {x, NULL, &o, 1};
-	int code = within(a, do_present, &p);
-	if (!code) later(a->x);
-	return code;
 }
 
 // patch nodes ------------------------------------------------------------------------------------

@@ -36,7 +36,7 @@ import {
 	type Computer,
 	createScheduler,
 	type Ended,
-	type Pair,
+	type Info,
 	PENDING,
 	type Scheduler,
 	type Scope,
@@ -121,7 +121,7 @@ export type CallOp = {
 	address: Address
 	args?: unknown
 	place?: Address
-	// the host's: who calls, and whether a person did (pairs in the call's header)
+	// the host's: who calls, and whether a person did (keys in the call's header)
 	actor?: unknown
 	person?: unknown
 	trusted?: boolean
@@ -282,7 +282,7 @@ type Ctx = {
 	scope: () => Scope
 	proc?: Proc
 	asked: boolean
-	extra: Pair[]
+	extra: Info
 }
 
 const isMap = (v: unknown): v is Record<string, unknown> =>
@@ -340,7 +340,7 @@ export function make(o: Options = {}): Host {
 	const places = createPlaces({ root: ROOT, table, paths, scheduler: s })
 	s.onTrackingEnd((key) => places.release(key))
 	const statuses = createStatus({ places: { commit }, table, scheduler: s })
-	const host = s.createRootScope([["actor", o.actor ?? "host"]])
+	const host = s.createRootScope({ actor: o.actor ?? "host" })
 
 	const procs = new Map<Id, Proc>()
 	// each computer's process and part; what each wrote since its last moment
@@ -356,10 +356,10 @@ export function make(o: Options = {}): Host {
 
 	// ---- changes ----
 
-	// a change made now: the next tick, in a header with the open scope's pairs. quiet: no site
-	function header(extra: Pair[] = [], quiet = false): ChangeHeader {
+	// a change made now: the next tick, in a header with the open scope's info. quiet: no site
+	function header(extra: Info = {}, quiet = false): ChangeHeader {
 		const tick = ++clock.time
-		const h = createChangeHeader(s, [...extra, ["tick", tick]])
+		const h = createChangeHeader(s, { ...extra, tick })
 		const site = quiet ? undefined : o.site ? o.site() : capture()
 		if (site) h.external = [site]
 		else delete h.external
@@ -676,11 +676,11 @@ export function make(o: Options = {}): Host {
 					return id
 				}),
 			as(more) {
-				const extra: Pair[] = [...c.extra]
-				if (more.cause !== undefined) extra.push(["cause", more.cause])
-				if (more.message !== undefined) extra.push(["message", more.message])
+				const extra: Info = { ...c.extra }
+				if (more.cause !== undefined) extra.cause = more.cause
+				if (more.message !== undefined) extra.message = more.message
 				if (more.actor === undefined || c.proc) return api({ ...c, extra })
-				const scope = s.createRootScope([["actor", more.actor]])
+				const scope = s.createRootScope({ actor: more.actor })
 				return api({ ...c, extra, scope: () => scope, asked: true })
 			},
 		}
@@ -701,7 +701,7 @@ export function make(o: Options = {}): Host {
 	function childrenOf(id: Id): Entry<unknown> {
 		const e = table.get("children", id)
 		if (e) return e
-		table.add("children", id, createEntry({}, header([], true)))
+		table.add("children", id, createEntry({}, header({}, true)))
 		return table.get("children", id)!
 	}
 	function placing(child: Id, parent: Id, name: string) {
@@ -716,7 +716,7 @@ export function make(o: Options = {}): Host {
 	// a node taken out of every place it is in, and out of the table
 	function drop(id: Id) {
 		for (const [parent, name] of placed.get(id) ?? []) {
-			if (kid(parent, name) === id) commit(unplace(childrenOf(parent), name, header([], true)))
+			if (kid(parent, name) === id) commit(unplace(childrenOf(parent), name, header({}, true)))
 		}
 		placed.delete(id)
 		ephemerals.delete(id)
@@ -733,7 +733,7 @@ export function make(o: Options = {}): Host {
 		alive: () => true,
 		scope: () => host,
 		asked: false,
-		extra: [],
+		extra: {},
 	}
 
 	// the scope a process's write is made in: the one open, when it is the process's; else its own
@@ -757,7 +757,7 @@ export function make(o: Options = {}): Host {
 			scope: () => scopeOf(p),
 			proc: p,
 			asked: true,
-			extra: [],
+			extra: {},
 		}
 		const matched = new Set<string>()
 		const kind: Kind = part === "effect" ? "compute" : part
@@ -820,7 +820,7 @@ export function make(o: Options = {}): Host {
 	function value(p: Proc, v: unknown) {
 		const e = table.get("value", p.id)
 		if (v === undefined && e?.value === undefined) return
-		const h = header([], true)
+		const h = header({}, true)
 		const patch: Patch = v === undefined ? { path: [] } : { path: [], value: v }
 		if (e) (update(e, [patch], h), commit([e]))
 		else table.add("value", p.id, createEntry(v, h))
@@ -856,7 +856,7 @@ export function make(o: Options = {}): Host {
 	// the program, from the start. a path's code is found by the host's finder, tracked, and taken
 	// up whenever it gives other code
 	function load(p: Proc) {
-		const r = p.run = s.createScope([["why", "load"]], p.scope)
+		const r = p.run = s.createScope({ why: "load" }, p.scope)
 		s.runWithScope(r, () => {
 			if (!Array.isArray(p.program)) return install(p, p.program as Code)
 			const finder = o.code
@@ -868,7 +868,7 @@ export function make(o: Options = {}): Host {
 				() => finder({ id: p.id, name: p.name, place: p.place, program }, view),
 				(found) => {
 					if (inner) s.teardown(inner)
-					inner = s.createScope([["why", "install"]], r)
+					inner = s.createScope({ why: "install" }, r)
 					s.runWithScope(inner, () => install(p, found.code))
 				},
 				(a, b) =>
@@ -920,7 +920,7 @@ export function make(o: Options = {}): Host {
 				place: here,
 				program,
 				equal: op.equal,
-				scope: s.createScope([["process", pid], ["name", name ?? pid]], parent?.scope ?? host),
+				scope: s.createScope({ process: pid, name: name ?? pid }, parent?.scope ?? host),
 				kids: new Map(),
 				owned: [],
 				state: "running",
@@ -970,12 +970,12 @@ export function make(o: Options = {}): Host {
 			const owner = handlers.get(it.id)
 			const p = owner?.state === "running" ? owner : undefined
 			const handler = it.route.at(-1)?.name ?? it.id
-			const pairs: Pair[] = [["handler", handler]]
-			if (by) pairs.push(["caller", by.id])
-			if (op.actor !== undefined) pairs.push(["caller", op.actor])
-			if (op.person !== undefined) pairs.push(["person", op.person])
-			if (op.trusted !== undefined) pairs.push(["trusted", op.trusted])
-			const scope = s.createScope(pairs, p?.scope ?? host)
+			const info: Info = { handler }
+			if (by) info.caller = by.id
+			else if (op.actor !== undefined) info.caller = op.actor
+			if (op.person !== undefined) info.person = op.person
+			if (op.trusted !== undefined) info.trusted = op.trusted
+			const scope = s.createScope(info, p?.scope ?? host)
 			const list: number[] = []
 			calls.push(list)
 			const who = p?.id ?? "host"
@@ -1049,7 +1049,7 @@ export function make(o: Options = {}): Host {
 		if (!a || !("error" in more) || c.state !== "alive") return
 		const error = more.error instanceof Error ? more.error : new Error(String(more.error))
 		s.runWithScope(c, () => {
-			const h = header([], true)
+			const h = header({}, true)
 			const e = table.get("attributes", a.p.id) as Entry<unknown> | undefined
 			if (!e) {
 				return table.add("attributes", a.p.id, createEntry({ [STATUS]: error }, h) as never)
@@ -1062,7 +1062,7 @@ export function make(o: Options = {}): Host {
 
 	// ---- the root ----
 
-	s.runWithScope(host, () => made(undefined, ROOT, header([], true)))
+	s.runWithScope(host, () => made(undefined, ROOT, header({}, true)))
 
 	return {
 		...api(hostCtx),
@@ -1177,19 +1177,17 @@ export function idAt(api: Pick<Api, "look">, address: Where): Id | undefined {
 	return api.look(address).find((i) => i.node)?.id
 }
 
-// the stand-in's tick of a change, from its header's pairs
+// the stand-in's tick of a change, from its header's metadata
 export function tickOf(h: ChangeHeader | undefined): number | undefined {
 	const tick = whoOf(h).tick
 	return typeof tick === "number" ? tick : undefined
 }
 
-// who made a change: the header's actor, and its pairs (process, name, run, mark, handler,
-// caller, person, trusted, cause, message, tick), the innermost of each: the metadata is flat,
-// innermost first
+// who made a change: the header's actor, and its metadata (process, name, run, mark, handler,
+// caller, person, trusted, cause, message, tick), the innermost of each: the metadata merges the
+// levels, inner over outer
 export function whoOf(h: ChangeHeader | undefined): Record<string, unknown> {
-	const out: Record<string, unknown> = { actor: h?.actor }
-	for (const [k, v] of (h?.metadata ?? []) as readonly Pair[]) if (!(k in out)) out[k] = v
-	return out
+	return { ...h?.metadata, actor: h?.actor }
 }
 
 // the "?" on a demo's try line shows the longer story under it (browser only; no dom types here)

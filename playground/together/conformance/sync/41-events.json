@@ -1,0 +1,76 @@
+{
+	"title": "with no commit option (the host's \"a write landed\"), a change from elsewhere on the head shown reaches the host as the table's event, a new entry in its place; with one, through it, the entry changed in place, no event",
+	"steps": [
+		{
+			"op": "host",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": { "key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }
+		},
+		{
+			"op": "host",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"commit": false,
+			"expect": { "key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394" }
+		},
+		{
+			"op": "host",
+			"name": "c",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"expect": { "key": "ed01ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1" }
+		},
+		{
+			"op": "mint",
+			"host": "a",
+			"as": "x",
+			"expect": {
+				"id": "ermine:0010b40fde52c568d2f3864d68739e98b72b"
+			}
+		},
+		{ "op": "follow", "host": "b", "id": "x", "expect": {} },
+		{ "op": "follow", "host": "c", "id": "x", "expect": {} },
+		{ "op": "connect", "a": "a", "b": "b", "expect": {} },
+		{ "op": "connect", "a": "a", "b": "c", "expect": {} },
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [{ "path": [], "value": { "n": 1 } }],
+			"name": "w1",
+			"expect": { "commits": 1 }
+		},
+		{ "op": "quiet", "expect": {} },
+		{ "op": "events", "host": "b", "id": "x", "expect": { "events": 1 } },
+		{ "op": "events", "host": "c", "id": "x", "expect": { "events": 1 } },
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [{ "path": ["n"], "value": 2 }],
+			"name": "w2",
+			"expect": { "commits": 1 }
+		},
+		{ "op": "quiet", "expect": {} },
+		{ "op": "events", "host": "b", "id": "x", "expect": { "events": 1 } },
+		{ "op": "events", "host": "c", "id": "x", "expect": { "events": 0 } },
+		{ "op": "read", "host": "b", "id": "x", "expect": { "value": { "n": 2 } } },
+		{ "op": "read", "host": "c", "id": "x", "expect": { "value": { "n": 2 } } },
+		{
+			"op": "change",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"change": {
+					"time": 1760000000,
+					"actor": "a",
+					"external": [{ "file": "scenario", "line": 1 }],
+					"metadata": {
+						"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"commit": "1e20a6e30a98af310f205fe3882f1ca19834a6af9146c83566ea2bef91d91626c3dd"
+					}
+				}
+			}
+		}
+	]
+}

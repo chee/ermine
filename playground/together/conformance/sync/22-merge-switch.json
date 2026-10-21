@@ -1,0 +1,370 @@
+{
+	"title": "merging switched on and off while running: on, several heads show merged and the conflicts go; off, the first head and its conflicts again; a host that knows the rule takes a merge commit either way",
+	"steps": [
+		{
+			"op": "host",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"merges": [
+				"serial"
+			],
+			"expect": {
+				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "host",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"merges": [
+				"serial"
+			],
+			"expect": {
+				"key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "mint",
+			"host": "a",
+			"as": "x",
+			"expect": {
+				"id": "ermine:0010b40fde52c568d2f3864d68739e98b72b"
+			}
+		},
+		{
+			"op": "follow",
+			"host": "b",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [
+				{
+					"path": [],
+					"value": "note"
+				}
+			],
+			"expect": {
+				"commits": 1
+			},
+			"name": "w0"
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "disconnect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "type",
+			"host": "a",
+			"id": "x",
+			"path": [],
+			"at": 4,
+			"text": "!",
+			"name": "ta",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "type",
+			"host": "b",
+			"id": "x",
+			"path": [],
+			"at": 0,
+			"text": "a ",
+			"name": "tb",
+			"expect": {
+				"commits": 2
+			}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"value": "a note"
+			}
+		},
+		{
+			"op": "conflicts",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"conflicts": [
+					{
+						"head": "ta",
+						"lamport": 2,
+						"actor": "a",
+						"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"time": 1760000000,
+						"external": [{ "file": "scenario", "line": 1 }],
+						"tables": {
+							"value": "note!"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "use",
+			"host": "a",
+			"expect": {},
+			"merge": "serial"
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"value": "a not!e"
+			}
+		},
+		{
+			"op": "conflicts",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"conflicts": []
+			}
+		},
+		{
+			"op": "read",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"value": "a note"
+			}
+		},
+		{
+			"op": "conflicts",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"conflicts": [
+					{
+						"head": "ta",
+						"lamport": 2,
+						"actor": "a",
+						"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"time": 1760000000,
+						"external": [{ "file": "scenario", "line": 1 }],
+						"tables": {
+							"value": "note!"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "type",
+			"host": "a",
+			"id": "x",
+			"path": [],
+			"at": 0,
+			"text": ">",
+			"name": "m",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "heads",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"heads": [
+					"m"
+				]
+			}
+		},
+		{
+			"op": "heads",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"heads": [
+					"m"
+				]
+			}
+		},
+		{
+			"op": "read",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"value": ">a not!e"
+			}
+		},
+		{
+			"op": "conflicts",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"conflicts": []
+			}
+		},
+		{
+			"op": "disconnect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "type",
+			"host": "a",
+			"id": "x",
+			"path": [],
+			"at": 0,
+			"text": "1",
+			"name": "ta2",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "type",
+			"host": "b",
+			"id": "x",
+			"path": [],
+			"at": 0,
+			"text": "2",
+			"name": "tb2",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"value": "21>a not!e"
+			}
+		},
+		{
+			"op": "conflicts",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"conflicts": []
+			}
+		},
+		{
+			"op": "use",
+			"host": "a",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"value": "2>a not!e"
+			}
+		},
+		{
+			"op": "conflicts",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"conflicts": [
+					{
+						"head": "ta2",
+						"lamport": 5,
+						"actor": "a",
+						"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"time": 1760000000,
+						"external": [{ "file": "scenario", "line": 1 }],
+						"tables": {
+							"value": "1>a not!e"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "use",
+			"host": "a",
+			"expect": {}
+		},
+		{
+			"op": "use",
+			"host": "a",
+			"expect": {},
+			"merge": "serial"
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"value": "21>a not!e"
+			}
+		},
+		{
+			"op": "restart",
+			"host": "a",
+			"expect": {}
+		},
+		{ "op": "follow", "host": "a", "id": "x", "expect": {} },
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"value": "21>a not!e"
+			}
+		},
+		{
+			"op": "conflicts",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"conflicts": []
+			}
+		}
+	]
+}

@@ -1,0 +1,182 @@
+{
+	"title": "a loose commit is not taken by the transport: not a seal (refused shape), not under its stored id (passed over at the door, noted stored), its parents not its commit's (parents); what is on a refused one is stuck until it comes right",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "make",
+			"name": "c1",
+			"nonce": 1,
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"n": 1
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "make",
+			"name": "c2",
+			"nonce": 109,
+			"parents": [
+				"c1"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 2
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "make",
+			"name": "c3",
+			"nonce": 138,
+			"parents": [
+				"c2"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 3
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "make",
+			"name": "x",
+			"nonce": 9,
+			"patches": [
+				{
+					"path": [],
+					"value": 0
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "put",
+			"device": "a",
+			"blob": "010203",
+			"head": "1111111111111111111111111111111111111111111111111111111111111111",
+			"expect": {}
+		},
+		{
+			"op": "put",
+			"device": "a",
+			"commit": "x",
+			"head": "2222222222222222222222222222222222222222222222222222222222222222",
+			"expect": {}
+		},
+		{
+			"op": "put",
+			"device": "a",
+			"commit": "c1",
+			"expect": {}
+		},
+		{
+			"op": "put",
+			"device": "a",
+			"commit": "c2",
+			"parents": [],
+			"expect": {}
+		},
+		{
+			"op": "put",
+			"device": "a",
+			"commit": "c3",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "taking",
+			"device": "a",
+			"expect": {
+				"waiting": [],
+				"refused": [
+					{
+						"commit": "c2",
+						"refused": "parents"
+					},
+					{
+						"commit": "1111111111111111111111111111111111111111111111111111111111111111",
+						"refused": "shape"
+					},
+					{
+						"commit": "2222222222222222222222222222222222222222222222222222222222222222",
+						"refused": "stored"
+					},
+					{
+						"commit": "c3",
+						"stuck": [
+							"c2"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "heads",
+			"device": "a",
+			"expect": {
+				"heads": [
+					"c1"
+				]
+			}
+		},
+		{
+			"op": "put",
+			"device": "a",
+			"commit": "c2",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "taking",
+			"device": "a",
+			"expect": {
+				"waiting": [],
+				"refused": [
+					{
+						"commit": "1111111111111111111111111111111111111111111111111111111111111111",
+						"refused": "shape"
+					},
+					{
+						"commit": "2222222222222222222222222222222222222222222222222222222222222222",
+						"refused": "stored"
+					}
+				]
+			}
+		},
+		{
+			"op": "heads",
+			"device": "a",
+			"expect": {
+				"heads": [
+					"c3"
+				]
+			}
+		}
+	]
+}

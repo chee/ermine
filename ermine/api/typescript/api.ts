@@ -70,13 +70,8 @@
 //
 // protect (setup.may; none: all allowed): reads ask "read" (refused: Refusal thrown; entries keeps
 // the item with id REFUSED); writes ask with the open scope: edit "edit"; open, create, place,
-// unplace, move "place" on the slot; remove "remove"; send "execute"; present, absent, land "edit".
+// unplace, move "place" on the slot; remove "remove"; send "execute"; land "edit".
 // memo's and effect's own writes are not asked. open: the ops' names.
-//
-// presence (setup.presence; none: these throw):
-//   presence(x)          live rows at x: [{ who, value, until }], tracked
-//   present(x, v, { ttl?, who? })   my row at x; who: setup.who or the process id; ttl 10s
-//   absent(x, { who? })  my row out
 //
 // patch nodes (setup.overlay):
 //   patch(at, over, change)   a patch node at at over over's part, against the table's value
@@ -124,13 +119,6 @@ import {
 } from "@ermine/places/guard"
 import type { Policy } from "@ermine/protect"
 import {
-	clear,
-	type Live,
-	readPresence,
-	setPresence,
-	type World as PresenceWorld,
-} from "@ermine/presence"
-import {
 	entries as layersOf,
 	type Item as Layer,
 	land as landIn,
@@ -167,10 +155,6 @@ export type Setup = {
 	info?: () => Info
 	// the policy every process's reads and writes are asked of, from where it is; none: all allowed
 	may?: Policy
-	// the host's presence world (playground/presence); none: present, absent and presence throw
-	presence?: PresenceWorld
-	// who a process's presence row is, unless it says (the device); none: the process's id
-	who?: string
 	// the overlay in front of places' table (patch nodes), for layers; none: the table's layer alone
 	overlay?: Pick<Overlay, "layers">
 	// how the automatic pulse is asked for: f run soon, once (none: queueMicrotask). a harness, or a
@@ -232,7 +216,7 @@ export type Item = {
 }
 
 // one value a path holds, and where it is from. gone: a delete; inside: a write under it is not its
-// own (sync's items, extensions/together's lists)
+// own (sync's items, playground/together's lists)
 export type Version = {
 	readonly value: unknown
 	readonly from: From
@@ -267,7 +251,7 @@ export type Conflict = {
 
 export type From = Shown | Conflict
 
-// a commit as sync tells it (extensions/together's Head), and one item of a path's list and each
+// a commit as sync tells it (playground/together's Head), and one item of a path's list and each
 // open path's, as its "values" table has them (Item, Values)
 type Head = {
 	readonly head: string
@@ -286,7 +270,7 @@ type Listed = {
 type Row = { readonly path: readonly Step[]; readonly items: readonly Listed[] }
 
 // the metadata key a write says what it replaces by, for sync: "all", or commit names (hex)
-// (extensions/together's REPLACES)
+// (playground/together's REPLACES)
 const REPLACES = "replaces"
 
 export type BoxNode = {
@@ -348,9 +332,6 @@ export type API = {
 	stop: (p: Process) => void
 	openwith: (x: Target, options?: { onwhynot?: (why: Whynot) => void }) => Generator<Way, void>
 	box: (at: string | Path) => BoxNode
-	presence: (x: Target) => Live[]
-	present: (x: Target, value: unknown, options?: { ttl?: number; who?: string }) => void
-	absent: (x: Target, options?: { who?: string }) => void
 	patch: (at: string | Path, over: Target, change: Change) => Node
 	land: (p: Target) => void
 	layers: (x: Target, path?: readonly Step[]) => Layer[]
@@ -1121,42 +1102,6 @@ export function createProcessContext(setup: Setup): ProcessContext {
 			}
 		}
 
-		function world(): PresenceWorld {
-			if (setup.presence === undefined) throw new Error("no presence here: the host gave none")
-			return setup.presence
-		}
-		function presence(x: Target): Live[] {
-			const n = nodeOf(x)
-			const id = idOf(n)
-			if (id === undefined) return []
-			if (guarded) guard.read(targetOf(thing(id, n.path), "presence" as Key))
-			return readPresence(world(), id)
-		}
-		function present(x: Target, value: unknown, options: { ttl?: number; who?: string } = {}) {
-			within(() => {
-				const n = nodeOf(x)
-				const id = needId(n)
-				ask("edit", targetOf(thing(id, n.path), "presence" as Key))
-				setPresence(
-					world(),
-					id,
-					options.who ?? setup.who ?? String(process.id),
-					value,
-					options.ttl ?? 10_000,
-				)
-			})
-			later()
-		}
-		function absent(x: Target, options: { who?: string } = {}) {
-			within(() => {
-				const n = nodeOf(x)
-				const id = needId(n)
-				ask("edit", targetOf(thing(id, n.path), "presence" as Key))
-				clear(world(), id, options.who ?? setup.who ?? String(process.id))
-			})
-			later()
-		}
-
 		function patch(p: string | Path, over: Target, change: Change): Node {
 			const path = resolve(p)
 			within(() => {
@@ -1219,9 +1164,6 @@ export function createProcessContext(setup: Setup): ProcessContext {
 			stop: (p) => stop(p, "ended"),
 			openwith,
 			box,
-			presence,
-			present,
-			absent,
 			patch,
 			land,
 			layers,

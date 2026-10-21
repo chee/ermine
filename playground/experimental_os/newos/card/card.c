@@ -1,4 +1,4 @@
-// card.c: the card (card.h), on extensions/together. Sync holds the table: what the card's store held
+// card.c: the card (card.h), on playground/together. Sync holds the table: what the card's store held
 // is written to it as it is followed (sync.h's lazy: the root at boot, then each document the root
 // reaches; a document on the card nothing reaches stays in the store until something places its id:
 // only reachable exists), and what comes over the network after; a change the host makes to a kept
@@ -35,9 +35,9 @@
 
 #include "card.h"
 
-#include "../../../../extensions/together/c/ids.h"
-#include "../../../../extensions/subduction/c/subduction/platform.h"
-#include "../../../../extensions/subduction/c/subduction/store.h"
+#include "../../../../playground/together/c/ids.h"
+#include "../../../together/stacks/subduction/c/subduction/platform.h"
+#include "../../../together/stacks/subduction/c/subduction/store.h"
 #include "../../../../core/op/c/apply.h"
 
 #include <errno.h>

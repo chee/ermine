@@ -18,6 +18,7 @@ import { createLook } from "./inspect.ts"
 import { createExplain } from "./explain.ts"
 import { createMenu } from "./menu.ts"
 import { save } from "./graph-file.ts"
+import { devtools } from "../../../devtools/answer.ts"
 import { languageServerExtensions, LSPClient, type Transport } from "@codemirror/lsp-client"
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T
@@ -184,6 +185,7 @@ function restart() {
 	const mine = ++id
 	frame.replaceChildren()
 	inspector.setWorld(undefined)
+	answer(undefined)
 	look.attach()
 	explain.attach(undefined, undefined)
 	state.textContent = ""
@@ -245,11 +247,20 @@ async function reload() {
 ;(globalThis as unknown as Record<string, unknown>).__world = (run: number, w: unknown) => {
 	if (run !== id) return
 	inspector.setWorld(w)
+	answer(w)
 	look.attach()
 	explain.attach(w, win()?.document)
 }
 const win = () =>
 	frame.querySelector("iframe")?.contentWindow as (Window & typeof globalThis) | null
+// the devtools extension: the running world answers when it asks (playground/devtools), read and
+// written through its host's process api (world.api); a restart takes it out, the next world in
+let hide: (() => void) | undefined
+function answer(w: unknown) {
+	hide?.()
+	const api = (w as { api?: { entries?: unknown } } | undefined)?.api
+	hide = typeof api?.entries === "function" ? devtools(w, { name: "slaygrounds" }) : undefined
+}
 ;(globalThis as unknown as Record<string, unknown>).__console = (
 	run: number,
 	level: string,

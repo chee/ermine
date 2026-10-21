@@ -12,7 +12,7 @@
 				"parents": ["1e202222222222222222222222222222222222222222222222222222222222222222"],
 				"lamport": 2,
 				"patches": [{ "path": ["title"], "value": "hi" }],
-				"node": "ermine://abababababababababababababababababababababababababababababababab"
+				"node": "ermine:0010abababababababababababababababab"
 			},
 			"expect": { "error": "not-a-commit", "field": "node" }
 		},

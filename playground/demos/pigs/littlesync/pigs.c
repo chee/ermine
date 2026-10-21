@@ -1,15 +1,19 @@
 // lab-pig's format (pigs.h)
 #include "pigs.h"
 
-#include "../../../../extensions/together/stacks/littlesync/littlesync.h"
+#include "../../../../playground/together/stacks/littlesync/littlesync.h"
 
+#include <stdio.h>
 #include <string.h>
 
 int pig_id(const char *k) {
-	if (strncmp(k, "ermine://", 9) != 0 || strlen(k) != LS_ID_LEN) return 0;
-	for (const char *p = k + 9; *p; p++)
+	size_t n = strlen(k);
+	if (strncmp(k, "ermine:", 7) != 0 || (n != 7 + 36 && n != 7 + 68)) return 0;
+	for (const char *p = k + 7; *p; p++)
 		if (!((*p >= '0' && *p <= '9') || (*p >= 'a' && *p <= 'f'))) return 0;
-	return 1;
+	// its code says its length: 00 10 or 1e 10 and 16 bytes, ed 01 and 32
+	if (n == 7 + 68) return strncmp(k + 7, "ed01", 4) == 0;
+	return strncmp(k + 7, "0010", 4) == 0 || strncmp(k + 7, "1e10", 4) == 0;
 }
 
 static double number(const op_value *map, const char *key, double fallback) {
@@ -76,22 +80,33 @@ op_value *pig_make_held(double x, double y, const char *by, const char *colour, 
 	return m;
 }
 
-int pig_room_has(const op_value *room, const char *id) {
-	const op_value *v = room != NULL && room->type == OP_MAP ? op_get(room, id) : NULL;
-	if (strcmp(id, PIGS_FIRST) == 0) return !(v != NULL && v->type == OP_BOOL && !v->bool_);
-	return v != NULL && v->type == OP_BOOL && v->bool_;
+void pig_name(const char *id, char out[PIGS_NAME]) { snprintf(out, PIGS_NAME, "pig-%.8s", id + 11); }
+
+// the i'th pig id among the room's names, or the name holding id (id given): its index into room
+static long room_find(const op_value *room, const char *id, size_t i) {
+	if (room == NULL || room->type != OP_MAP) return -1;
+	for (size_t k = 0; k < room->count; k++) {
+		const op_value *v = room->items[k];
+		if (v->type != OP_STR || !pig_id(v->str)) continue;
+		if (id != NULL ? strcmp(v->str, id) == 0 : i-- == 0) return (long)k;
+	}
+	return -1;
 }
+
+const char *pig_room_name(const op_value *room, const char *id) {
+	long k = room_find(room, id, 0);
+	return k < 0 ? NULL : room->keys[k];
+}
+
+int pig_room_has(const op_value *room, const char *id) { return room_find(room, id, 0) >= 0; }
 
 size_t pig_room_count(const op_value *room) {
 	size_t n = 0;
-	if (room != NULL && room->type == OP_MAP)
-		for (size_t i = 0; i < room->count; i++) n += pig_id(room->keys[i]);
+	while (room_find(room, NULL, n) >= 0) n++;
 	return n;
 }
 
 const char *pig_room_at(const op_value *room, size_t i) {
-	if (room == NULL || room->type != OP_MAP) return NULL;
-	for (size_t k = 0; k < room->count; k++)
-		if (pig_id(room->keys[k]) && i-- == 0) return room->keys[k];
-	return NULL;
+	long k = room_find(room, NULL, i);
+	return k < 0 ? NULL : room->items[k]->str;
 }

@@ -1,0 +1,119 @@
+{
+	"title": "a column of runs: a list of [value, how many ≥ 1] making n values; id: a string for each signed one, null for each vouched (an id the pack names is the one its seal comes back for)",
+	"steps": [
+		{
+			"op": "make",
+			"name": "a",
+			"time": 1760000000,
+			"nonce": 1,
+			"patches": [{ "path": [], "value": { "body": "" } }]
+		},
+		{
+			"op": "make",
+			"name": "b",
+			"time": 1760000000,
+			"nonce": 2,
+			"parents": ["a"],
+			"patches": [{ "path": ["body"], "range": [0, 0], "value": "h" }]
+		},
+		{
+			"op": "make",
+			"name": "c",
+			"time": 1760000000,
+			"nonce": 3,
+			"parents": ["b"],
+			"patches": [{ "path": ["body"], "range": [1, 1], "value": "i" }]
+		},
+		{ "op": "pack", "commits": ["a", "b", "c"], "name": "r" },
+		{
+			"op": "unpack",
+			"pack": "r",
+			"set": { "table": "value" },
+			"expect": { "error": "runs", "column": "table" }
+		},
+		{
+			"op": "unpack",
+			"pack": "r",
+			"set": { "table": [["value", 3, 0]] },
+			"expect": { "error": "runs", "column": "table" }
+		},
+		{
+			"op": "unpack",
+			"pack": "r",
+			"set": { "table": [["value", 0], ["value", 3]] },
+			"expect": { "error": "runs", "column": "table" }
+		},
+		{
+			"op": "unpack",
+			"pack": "r",
+			"set": { "actor": [[null, 1.5], [null, 1.5]] },
+			"expect": { "error": "runs", "column": "actor" }
+		},
+		{
+			"op": "unpack",
+			"pack": "r",
+			"set": { "reader": [[null, 2]] },
+			"expect": { "error": "runs", "column": "reader" }
+		},
+		{
+			"op": "unpack",
+			"pack": "r",
+			"set": { "external": [[null, 4]] },
+			"expect": { "error": "runs", "column": "external" }
+		},
+		{
+			"op": "unpack",
+			"pack": "r",
+			"set": { "metadata": [[null, 9007199254740991]] },
+			"expect": { "error": "runs", "column": "metadata" }
+		},
+		{
+			"op": "unpack",
+			"pack": "r",
+			"drop": ["signer"],
+			"expect": { "error": "runs", "column": "signer" }
+		},
+		{
+			"op": "unpack",
+			"pack": "r",
+			"set": { "base": [null] },
+			"expect": { "error": "runs", "column": "base" }
+		},
+		{
+			"op": "unpack",
+			"pack": "r",
+			"set": { "table": [["", 1]], "actor": [] },
+			"expect": { "error": "runs", "column": "table" }
+		},
+		{
+			"op": "unpack",
+			"pack": "r",
+			"drop": ["id"],
+			"expect": { "error": "runs", "column": "id" }
+		},
+		{
+			"op": "unpack",
+			"pack": "r",
+			"set": { "id": [["ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a", 3]] },
+			"expect": { "error": "runs", "column": "id" }
+		},
+		{
+			"op": "unpack",
+			"pack": "r",
+			"set": { "id": [[null, 3]] },
+			"expect": { "error": "runs", "column": "id" }
+		},
+		{
+			"op": "unpack",
+			"pack": "r",
+			"set": { "id": [[null, 2], [{ "/": { "bytes": "KioqKg" } }, 1]] },
+			"expect": { "error": "runs", "column": "id" }
+		},
+		{
+			"op": "unpack",
+			"pack": "r",
+			"set": { "id": [[null, 2], ["ermine:00102b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b", 1]] },
+			"expect": { "sealed": [{ "vouched": "a" }, { "vouched": "b" }, "a3626964782b65726d696e653a30303130326232623262326232623262326232623262326232623262326232623262326266636f6d6d697458aca86474696d651a68e77800656163746f72f6656e6f6e636503657461626c656576616c7565667369676e65725822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c676c616d706f72740367706172656e74738158221e20e0597436cfc3af55c72e5dc2355c8f6bdd5bee69651e340d297cf3dc924d5db5677061746368657381a364706174688164626f64796572616e67658201016576616c75656169697369676e617475726558483401ed01ed01135fa3579da601c96adce9ef8e4ad8769602a1715bd39e8f7f5cda0576bedbac62a98d7c2642bd5f9ee692f233fca1c77e4499a9660c591ee67965727eada0b82c04"] }
+		}
+	]
+}

@@ -46,8 +46,8 @@ import {
 	setPresence,
 	sweep,
 	type World,
-} from "@ermine/presence"
-import type { Channel } from "@ermine/presence/channel"
+} from "@ermine/together/presence"
+import type { Channel } from "@ermine/together/presence/channel"
 import { PENDING, type Scope } from "@ermine/scheduler"
 import type { Key } from "@ermine/table"
 import {

@@ -1,0 +1,99 @@
+{
+	"title": "an id is well-formed UTF-8 without U+0000 (C ids end at it): one with a U+0000 anywhere is refused shape, sealing, unsealing (the id given, or the id in the seal) and working out a stored id",
+	"steps": [
+		{
+			"op": "seal",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+				"nonce": 1,
+				"parents": [],
+				"lamport": 1,
+				"patches": [
+					{
+						"path": [],
+						"value": {
+							"title": "hi"
+						}
+					}
+				]
+			},
+			"doc": "a\u0000",
+			"expect": {
+				"error": "shape"
+			}
+		},
+		{
+			"op": "seal",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+				"nonce": 1,
+				"parents": [],
+				"lamport": 1,
+				"patches": [
+					{
+						"path": [],
+						"value": {
+							"title": "hi"
+						}
+					}
+				]
+			},
+			"doc": "\u0000",
+			"expect": {
+				"error": "shape"
+			}
+		},
+		{
+			"op": "unseal",
+			"sealed": "a3626964782b65726d696e653a30303130326132613261326132613261326132613261326132613261326132613261326166636f6d6d69745886a86474696d651a68e77800656163746f726463686565656e6f6e636501657461626c656576616c7565667369676e65725822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c676c616d706f72740167706172656e747380677061746368657381a26470617468806576616c7565a1657469746c65626869697369676e617475726558483401ed01ed01135fe2ba84d398d10a5f46c05814c9e6c25662cd111edcda3906143e7c09c3eb3ce3e02069c2086496a9462d0985447a628dbb88ce05fc94723558d453527d594a0f",
+			"doc": "a\u0000",
+			"expect": {
+				"error": "shape"
+			}
+		},
+		{
+			"op": "unseal",
+			"value": {
+				"id": "a\u0000",
+				"commit": {
+					"/": {
+						"bytes": "qGR0aW1lGmjneABlYWN0b3JkY2hlZWVub25jZQFldGFibGVldmFsdWVmc2lnbmVyWCLtAYqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29cZ2xhbXBvcnQBZ3BhcmVudHOAZ3BhdGNoZXOBomRwYXRogGV2YWx1ZaFldGl0bGViaGk"
+					}
+				},
+				"signature": {
+					"/": {
+						"bytes": "NAHtAe0BE1/iuoTTmNEKX0bAWBTJ5sJWYs0RHtzaOQYUPnwJw+s84+AgacIIZJapRi0JhUR6Yo27iM4F/JRyNVjUU1J9WUoP"
+					}
+				}
+			},
+			"doc": "a\u0000",
+			"expect": {
+				"error": "shape"
+			}
+		},
+		{
+			"op": "stored",
+			"name": "1e2042f2c38bcfd72023d3dfd994daab7b2b17a20312ee3586c5ad04fe41d32775f4",
+			"doc": "a\u0000",
+			"expect": {
+				"error": "shape"
+			}
+		},
+		{
+			"op": "stored",
+			"name": "1e2042f2c38bcfd72023d3dfd994daab7b2b17a20312ee3586c5ad04fe41d32775f4",
+			"doc": "a",
+			"expect": {
+				"stored": "779746b54eb5bb55efc0c47f8b47350c1ccc01530a65d49f14277089f43627a8"
+			}
+		}
+	]
+}

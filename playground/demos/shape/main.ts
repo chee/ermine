@@ -23,6 +23,7 @@ import type { Entry } from "@ermine/node/entry"
 import { createSigner } from "@ermine/together/seal"
 import { createSync, type Sync } from "@ermine/together/sync"
 import { save } from "../slaygrounds/src/graph-file.ts"
+import { devtools } from "../../devtools/answer.ts"
 import {
 	type ComputeGiven,
 	type EffectGiven,
@@ -198,6 +199,8 @@ document.querySelector(".try-more")!.innerHTML =
 tryLine()
 
 const ins = inspector(s, $("#places"), { moments: 0 }) // the explorer opens on its map
+// the devtools extension: this page's host answers when it asks (playground/devtools)
+devtools(s, { name: "shape" })
 ;(document.querySelector("#places .vtabs button:nth-child(2)") as HTMLElement)?.click()
 
 const roots = rootsOf(w.scheduler, [w.scope])

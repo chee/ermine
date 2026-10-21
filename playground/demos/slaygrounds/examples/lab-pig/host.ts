@@ -5,20 +5,23 @@
 // teardown):
 //   kept nodes by id       node(id): a kept node followed, to bind, wherever it is (placed or not)
 //   placing by hand        place(path, id), unplace(path): a node shown at a path under the root,
-//                          local folders made on the way; the graph's places, never synced
-//   a new kept id          make(): zeros-tailed when the server needs it (galaxy, until Keyhive)
-//   a stored write         store(id, value): one commit; set(id, key, value): one key
+//                          local folders made on the way; never synced, but in a kept node's
+//                          children: a stored commit there
+//   a new kept id          make(): a fresh ermine id (sync's mint)
+//   a stored write         store(id, value): one commit; set(id, key, value): one key;
+//                          clear(id): no value
 //   an ephemeral write     wave(id, value): sync's ephemeral option, for that one write; the last
 //                          per id sent once a frame
 //   presence over the wire pointer(at): my row at the room; /pointers
-//   versions               /conflicts: every node given with several versions, and their values
+//   versions               /conflicts: every node given with several versions, their values and
+//                          children
 //
 // what this device has, as nodes (local, never synced):
 //   /me         who this device is: {name, colour, server}
 //   /pointers   the others' pointers: [{who, name, colour, x, y, ...}]: and whatever else their row
 //               says (a terminal's: look, "nethack" or "pixels"; stuck)
-//   /conflicts  each node given (node) with several versions: [{id, versions, values}], values
-//               the value of each version not shown (undefined where only other tables differ)
+//   /conflicts  each node given (node) with several versions: [{id, versions, values, children}],
+//               the value and children of each version not shown (undefined where they don't differ)
 // and whatever the program places (place), under its own names
 import { place, unplace } from "@ermine/places"
 import type { Conflict } from "@ermine/together/sync"
@@ -32,7 +35,7 @@ type At = { x: number; y: number }
 let waving: string | undefined
 const world = await createSyncWorld({
 	render,
-	room: "ermine://bf04115f9b284145026eab6801219d6e" + "0".repeat(32),
+	room: "ermine:0010bf04115f9b284145026eab6801219d6e",
 	ephemeral: (doc, part) => doc === waving && part === "value",
 })
 const { s, host, table, places, header, me, name, colour, room } = world
@@ -41,6 +44,7 @@ world.local("pointers", [])
 world.local("conflicts", [])
 
 // ---- placing by hand: a node at a path under the root, its folders local nodes, made as needed ----
+const kept = (id: string) => id.startsWith("ermine:")
 const kids = (id: string) => table.get("children", id)?.value as Record<string, string> | undefined
 function folder(names: string[]): string {
 	let id = "root"
@@ -52,9 +56,11 @@ function folder(names: string[]): string {
 			table.add("children", next, createEntry({}, header()))
 			places.commit(place(table.get("children", id)!, names[i], next, header()))
 		} else if (table.get("children", next) === undefined) {
-			// a kept node's children are synced: no folder is made in one by hand
-			if (next.startsWith("ermine://")) throw new Error(`${names[i]}: a kept node, not a folder`)
-			table.add("children", next, createEntry({}, header()))
+			// a kept node's children are synced: no folder is made in one by hand (the first place
+			// in it makes its children, a stored commit)
+			if (kept(next)) {
+				if (i < names.length - 1) throw new Error(`${names[i]}: a kept node, not a folder`)
+			} else table.add("children", next, createEntry({}, header()))
 		}
 		id = next
 	}
@@ -62,7 +68,10 @@ function folder(names: string[]): string {
 }
 
 // ---- kept nodes the program asked for: followed, and their versions listed ----
-const conflicted = new Map<string, { id: string; versions: number; values: unknown[] }>()
+const conflicted = new Map<
+	string,
+	{ id: string; versions: number; values: unknown[]; children: unknown[] }
+>()
 let shownConflicts = "[]"
 function follow(id: string) {
 	if (!world.follow(id)) return
@@ -75,6 +84,7 @@ function follow(id: string) {
 						id,
 						versions: 1 + cs.length,
 						values: cs.map((c) => c.tables.value),
+						children: cs.map((c) => c.tables.children),
 					})
 				} else conflicted.delete(id)
 				const all = [...conflicted.values()], q = JSON.stringify(all)
@@ -148,14 +158,16 @@ const tools = {
 		follow(id)
 		return { id }
 	},
-	// a node shown at a path under the root ("/pigs/a"): its folders made, what was there replaced
+	// a node shown at a path under the root ("/pigs/a"): its folders made, what was there replaced.
+	// in a kept node ("/room/a"): a stored commit to its children
 	place(path: string, id: string) {
-		const names = path.split("/").filter(Boolean)
+		const names = path.split("/").filter(Boolean), name = names.at(-1)!
+		const holder = s.runWithScope(host, () => folder(names.slice(0, -1)))
+		if (kids(holder)?.[name] === id) return
+		if (kept(holder)) return world.write("children", holder, [{ path: [name], value: id }])
 		s.runWithScope(host, () => {
-			const at = table.get("children", folder(names.slice(0, -1)))!, name = names.at(-1)!
-			const had = (at.value as Record<string, unknown> | undefined)?.[name]
-			if (had === id) return
-			if (had !== undefined) places.commit(unplace(at, name, header()))
+			const at = table.get("children", holder)!
+			if (kids(holder)?.[name] !== undefined) places.commit(unplace(at, name, header()))
 			places.commit(place(at, name, id, header()))
 		})
 		s.pulse()
@@ -169,9 +181,10 @@ const tools = {
 			if (next === undefined) return
 			id = next
 		}
-		const at = table.get("children", id)
-		if (at === undefined || kids(id)?.[names.at(-1)!] === undefined) return
-		s.runWithScope(host, () => places.commit(unplace(at, names.at(-1)!, header())))
+		const at = table.get("children", id), name = names.at(-1)!
+		if (at === undefined || kids(id)?.[name] === undefined) return
+		if (kept(id)) return world.write("children", id, [{ path: [name] }])
+		s.runWithScope(host, () => places.commit(unplace(at, name, header())))
 		s.pulse()
 	},
 	// the node's value, a stored commit; an ephemeral one not yet sent for it is dropped
@@ -179,6 +192,12 @@ const tools = {
 		waves.delete(id)
 		follow(id)
 		world.write("value", id, put(value))
+	},
+	// the node's value taken away, a stored commit: it has none
+	clear(id: string) {
+		waves.delete(id)
+		follow(id)
+		world.write("value", id, [{ path: [] }])
 	},
 	// one key of the node's value set, a stored commit: only that key changes (two devices setting
 	// different keys don't clobber each other)

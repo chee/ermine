@@ -1,0 +1,185 @@
+{
+	"title": "a device joining later gets the fragment, its snapshot and the loose commits after it",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"expect": {}
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"name": "c1",
+			"nonce": 1,
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"n": 1
+					}
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"name": "c2",
+			"nonce": 109,
+			"parents": [
+				"c1"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"name": "c3",
+			"nonce": 138,
+			"parents": [
+				"c2"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 3
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "follow",
+			"device": "b",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "b",
+			"b": "a",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "heads",
+			"device": "b",
+			"expect": {
+				"heads": [
+					"c3"
+				]
+			}
+		},
+		{
+			"op": "fragments",
+			"device": "b",
+			"expect": {
+				"fragments": [
+					{
+						"head": "c2",
+						"members": [
+							"c2",
+							"c1"
+						],
+						"boundary": []
+					}
+				]
+			}
+		},
+		{
+			"op": "stored",
+			"device": "b",
+			"expect": {
+				"stored": [
+					"c3"
+				]
+			}
+		},
+		{
+			"op": "snapshot",
+			"device": "b",
+			"commit": "c2",
+			"expect": {
+				"tables": {
+					"value": {
+						"value": {
+							"n": 2
+						},
+						"change": {
+							"time": 0,
+							"actor": null,
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "1e209dc1522798e47862d9195ca581d5d0f10aaf4a98507afcf1644472ce2b5442c9"
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "blob",
+			"device": "b",
+			"head": "c2",
+			"expect": {
+				"members": [
+					"c1",
+					"c2"
+				],
+				"snapshot": {
+					"value": {
+						"value": {
+							"n": 2
+						},
+						"change": {
+							"time": 0,
+							"actor": null,
+							"metadata": {
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "1e209dc1522798e47862d9195ca581d5d0f10aaf4a98507afcf1644472ce2b5442c9"
+							}
+						}
+					}
+				},
+				"hash": "bfab2d016a3b1534cd67d1d52720bba4ddfec6795323c797c4e32cea7b30c0c4"
+			}
+		}
+	]
+}

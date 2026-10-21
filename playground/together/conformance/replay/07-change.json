@@ -1,0 +1,42 @@
+{
+	"title": "the change a table has: the commit's time, actor, reader, external and metadata, never its other fields",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"time": 1760000000,
+			"actor": { "name": "juno", "id": 7 },
+			"reader": "ermine:0010cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+			"external": [{ "file": "notes.ts", "line": 3, "column": 1, "function": "save" }],
+			"metadata": { "cause": { "why": "typing" }, "tool": "pen" },
+			"nonce": 9,
+			"patches": [{ "path": [], "value": { "/": { "bytes": "AQID" } } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "replay",
+			"commit": "a",
+			"expect": {
+				"tables": {
+					"value": {
+						"value": { "/": { "bytes": "AQID" } },
+						"change": {
+							"time": 1760000000,
+							"actor": { "id": 7, "name": "juno" },
+							"reader": "ermine:0010cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+							"external": [
+								{ "file": "notes.ts", "line": 3, "column": 1, "function": "save" }
+							],
+							"metadata": {
+								"cause": { "why": "typing" },
+								"tool": "pen",
+								"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+								"commit": "1e20d50c3fd44e3a556a963f971044e77187ac864152580c15689acab627edca44f1"
+							}
+						}
+					}
+				}
+			}
+		}
+	]
+}

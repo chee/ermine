@@ -1,0 +1,223 @@
+{
+	"title": "a map merged per key: keys set apart both kept, one key set on both the later commit's, a key taken out on one gone",
+	"steps": [
+		{
+			"op": "host",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"merge": "serial",
+			"expect": {
+				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "host",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"merge": "serial",
+			"expect": {
+				"key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "mint",
+			"host": "a",
+			"as": "x",
+			"expect": {
+				"id": "ermine:0010b40fde52c568d2f3864d68739e98b72b"
+			}
+		},
+		{
+			"op": "follow",
+			"host": "b",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"title": "note",
+						"n": 0,
+						"old": true,
+						"tags": [
+							"x"
+						]
+					}
+				}
+			],
+			"expect": {
+				"commits": 1
+			},
+			"name": "w0"
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "disconnect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 1
+				},
+				{
+					"path": [
+						"by a"
+					],
+					"value": "a"
+				},
+				{
+					"path": [
+						"tags"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": [
+						"a"
+					]
+				}
+			],
+			"expect": {
+				"commits": 1
+			},
+			"name": "wa"
+		},
+		{
+			"op": "write",
+			"host": "b",
+			"id": "x",
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"by b"
+					],
+					"value": "b"
+				},
+				{
+					"path": [
+						"old"
+					]
+				},
+				{
+					"path": [
+						"tags"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						"b"
+					]
+				}
+			],
+			"expect": {
+				"commits": 1
+			},
+			"name": "wb"
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"value": {
+					"n": 1,
+					"tags": [
+						"b",
+						"a",
+						"x"
+					],
+					"title": "note",
+					"by b": "b",
+					"by a": "a"
+				}
+			}
+		},
+		{
+			"op": "read",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"value": {
+					"n": 1,
+					"tags": [
+						"b",
+						"a",
+						"x"
+					],
+					"title": "note",
+					"by b": "b",
+					"by a": "a"
+				}
+			}
+		},
+		{
+			"op": "heads",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"heads": [
+					"wa",
+					"wb"
+				]
+			}
+		},
+		{
+			"op": "conflicts",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"conflicts": []
+			}
+		},
+		{
+			"op": "conflicts",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"conflicts": []
+			}
+		}
+	]
+}

@@ -23,7 +23,7 @@ const commit = (more: Partial<Commit> = {}): Commit => ({
 	nonce: 7,
 	parents: [nm(2)],
 	lamport: 2,
-	patches: [{ path: ["notes"], value: "ermine://" + "ab".repeat(32) }],
+	patches: [{ path: ["notes"], value: "ermine:0010" + "ab".repeat(16) }],
 	...more,
 })
 

@@ -1,0 +1,116 @@
+{
+	"title": "an ephemeral commit is closed before it is published and opened where it is heard; one the lock cannot open yet is dropped (not held: it is heard when sent again), one it refuses is noted (code lock, with its text) under the name of the bytes as they came",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"lock": "tag",
+			"expect": { "key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"lock": "tag",
+			"expect": { "key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394" }
+		},
+		{ "op": "follow", "device": "a", "expect": {} },
+		{ "op": "follow", "device": "b", "expect": {} },
+		{ "op": "connect", "a": "a", "b": "b", "expect": {} },
+		{
+			"op": "take",
+			"device": "a",
+			"name": "e1",
+			"nonce": 1,
+			"patches": [{ "path": [], "value": "hi" }],
+			"layer": "ephemeral",
+			"expect": { "added": "taken" }
+		},
+		{ "op": "quiet", "expect": {} },
+		{
+			"op": "calls",
+			"device": "a",
+			"expect": { "closed": [{ "name": "e1", "parents": [] }], "opened": false }
+		},
+		{ "op": "heads", "device": "b", "layer": "ephemeral", "expect": { "heads": ["e1"] } },
+		{
+			"op": "arrived",
+			"device": "b",
+			"expect": {
+				"arrived": [["ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a", "ephemeral", "e1", true]]
+			}
+		},
+		{ "op": "lock", "device": "b", "open": "refuse", "expect": {} },
+		{
+			"op": "take",
+			"device": "a",
+			"name": "e2",
+			"nonce": 2,
+			"parents": ["e1"],
+			"patches": [{ "path": [], "value": "ho" }],
+			"layer": "ephemeral",
+			"expect": { "added": "taken" }
+		},
+		{ "op": "quiet", "expect": {} },
+		{
+			"op": "taking",
+			"device": "b",
+			"layer": "ephemeral",
+			"expect": {
+				"waiting": [],
+				"refused": [
+					{
+						"commit": "1e20349d092109ca144229c383ffe485c5d94c451413ba3126611a70bb2beef9cd16",
+						"refused": "lock",
+						"why": "the test lock refuses"
+					}
+				]
+			}
+		},
+		{ "op": "heads", "device": "b", "layer": "ephemeral", "expect": { "heads": ["e1"] } },
+		{ "op": "lock", "device": "b", "open": "wait", "expect": {} },
+		{
+			"op": "take",
+			"device": "a",
+			"name": "e3",
+			"nonce": 3,
+			"parents": ["e1"],
+			"patches": [{ "path": [], "value": "hm" }],
+			"layer": "ephemeral",
+			"expect": { "added": "taken" }
+		},
+		{ "op": "quiet", "expect": {} },
+		{
+			"op": "taking",
+			"device": "b",
+			"layer": "ephemeral",
+			"expect": {
+				"waiting": [],
+				"refused": [
+					{
+						"commit": "1e20349d092109ca144229c383ffe485c5d94c451413ba3126611a70bb2beef9cd16",
+						"refused": "lock",
+						"why": "the test lock refuses"
+					}
+				]
+			}
+		},
+		{ "op": "heads", "device": "b", "layer": "ephemeral", "expect": { "heads": ["e1"] } },
+		{ "op": "lock", "device": "b", "open": "tag", "expect": {} },
+		{ "op": "changed", "device": "b", "expect": {} },
+		{ "op": "quiet", "expect": {} },
+		{ "op": "heads", "device": "b", "layer": "ephemeral", "expect": { "heads": ["e1"] } },
+		{ "op": "arrived", "device": "b", "expect": { "arrived": [] } },
+		{ "op": "again", "device": "a", "commit": "e3", "expect": { "again": true } },
+		{ "op": "quiet", "expect": {} },
+		{ "op": "heads", "device": "b", "layer": "ephemeral", "expect": { "heads": ["e3"] } },
+		{
+			"op": "arrived",
+			"device": "b",
+			"expect": {
+				"arrived": [["ermine:00102a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a", "ephemeral", "e3", true]]
+			}
+		}
+	]
+}
