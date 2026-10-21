@@ -162,7 +162,9 @@ function attributesOf(v: Record<string, unknown>): Record<string, unknown> {
 	if (!Object.hasOwn(v, STATUS)) return v
 	const { [STATUS]: st, ...rest } = v
 	if (st === "pending") return { ...rest, [STATUS]: PENDING }
-	if (isMap(st) && typeof st.failed === "string") return { ...rest, [STATUS]: new Error(st.failed) }
+	if (isMap(st) && typeof st.failed === "string") {
+		return { ...rest, [STATUS]: new Error(st.failed) }
+	}
 	return rest
 }
 

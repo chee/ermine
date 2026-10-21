@@ -1,0 +1,1092 @@
+/* dens: cream paper, black ink, sunny yellow for yours and what you pick, cherry for what just
+   happened, stem for alive. glossy plastic frames; the kit's boxes inside, rounded */
+:root {
+	--paper-cream: #fdfaf2;
+	--sun: #ffd23f;
+	--sun-deep: #e8b400;
+	--soft-blue: #9cc4ff;
+	--serif: Petrona, Georgia, serif;
+	--pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+body {
+	background: var(--paper-cream);
+}
+header.bar {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 5px 16px;
+	background: var(--ink);
+	color: var(--paper);
+	white-space: nowrap;
+	font-size: 14px;
+}
+header.bar a {
+	color: var(--paper);
+	text-decoration: none;
+}
+header.bar a:hover {
+	text-decoration: underline;
+	text-decoration-color: var(--sun);
+}
+header.bar .title {
+	margin: 0;
+	font-family: var(--serif);
+	font-size: 17px;
+}
+header.bar .grow {
+	flex: 1;
+}
+header.bar .room {
+	font: 12px var(--mono);
+	color: var(--sun);
+}
+header.bar button {
+	font: 12px var(--mono);
+	background: var(--ink);
+	color: var(--paper);
+	border: 1px solid #666;
+	border-radius: 10px;
+	padding: 1px 9px;
+	cursor: pointer;
+}
+header.bar button:hover {
+	border-color: var(--sun);
+}
+/* the room's code: a little yellow tag, letters spaced like they are on a screen */
+header.bar button.code {
+	font: 700 12px var(--mono);
+	letter-spacing: 0.2em;
+	background: var(--sun);
+	color: var(--ink);
+	border-color: var(--sun);
+	border-radius: 4px;
+	padding: 1px 4px 1px 7px;
+}
+header.bar .join {
+	display: flex;
+	gap: 4px;
+}
+header.bar .join[hidden] {
+	display: none;
+}
+header.bar .join input {
+	width: 5.2em;
+	font: 12px var(--mono);
+	letter-spacing: 0.15em;
+	text-transform: uppercase;
+	background: #222;
+	color: var(--paper);
+	border: 1px solid #666;
+	border-radius: 10px;
+	padding: 1px 8px;
+	outline: none;
+}
+header.bar .join input::placeholder {
+	text-transform: none;
+	letter-spacing: normal;
+	color: #888;
+}
+header.bar .join input:focus {
+	border-color: var(--sun);
+}
+header.bar #sound[aria-pressed="false"] {
+	opacity: 0.55;
+}
+.board {
+	background-color: var(--paper-cream);
+	background-image: radial-gradient(circle, #e7dfc8 1.1px, transparent 1.2px);
+}
+.board-wires {
+	filter: url(#boil);
+}
+
+/* the welcome card */
+.welcome {
+	position: fixed;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	background: var(--paper-cream);
+	z-index: 20;
+}
+.welcome[hidden] {
+	display: none;
+}
+.welcome .card {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	width: 22rem;
+	padding: 28px 28px 24px;
+	background: linear-gradient(#fff, #f7f3e8);
+	border-radius: 18px;
+	box-shadow: inset 0 1px 0 #fff, 0 0 0 1.5px var(--ink), 0 6px 0 #e9e2cf,
+		0 10px 24px rgba(0, 0, 0, 0.08);
+}
+.welcome h1 {
+	font: 500 1.9rem/1.1 var(--serif);
+	margin: 0;
+}
+.welcome input {
+	font: 500 1.3rem var(--serif);
+	padding: 8px 12px;
+	border: 1.5px solid var(--ink);
+	border-radius: 12px;
+	background: #fff;
+	outline: none;
+}
+.welcome .joining {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	font: italic 0.95rem var(--serif);
+	color: #8a826c;
+}
+.welcome .joining[hidden] {
+	display: none;
+}
+.welcome .joining input {
+	font: 600 1.1rem var(--mono);
+	letter-spacing: 0.25em;
+	text-transform: uppercase;
+}
+.welcome .joining input::placeholder {
+	letter-spacing: normal;
+	text-transform: none;
+	font: italic 1rem var(--serif);
+}
+.welcome input:focus {
+	box-shadow: 0 0 0 4px var(--sun);
+}
+.welcome button.go {
+	font: 600 1rem Jost, sans-serif;
+	padding: 9px 14px;
+	border: 1.5px solid var(--ink);
+	border-radius: 12px;
+	background: var(--sun);
+	cursor: pointer;
+	box-shadow: 0 3px 0 var(--ink);
+	transition: transform 0.08s, box-shadow 0.08s;
+}
+.welcome button.go {
+	box-shadow: 0 4px 0 var(--ink);
+	transition: transform 0.12s var(--pop), box-shadow 0.12s var(--pop);
+}
+.welcome button.go:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 5px 0 var(--ink);
+}
+.welcome button.go:active {
+	transform: translateY(4px);
+	box-shadow: 0 0 0 var(--ink);
+	transition-duration: 0.025s;
+}
+
+/* frames: one per den. the shell is the plastic (boiled); the rest stays crisp. the frame lets
+   the pointer through to the paper, so dragging on it pans */
+.frame {
+	position: absolute;
+	pointer-events: none;
+}
+.frame .shell {
+	position: absolute;
+	inset: 0;
+	border-radius: 22px;
+	filter: url(#boil);
+}
+.frame.browser .shell {
+	background: linear-gradient(170deg, #ffffff 0%, #f8f5ec 38%, #efe9da 100%);
+	box-shadow: inset 0 2px 0 #fff, inset 0 -3px 0 rgba(0, 0, 0, 0.05), 0 0 0 1.5px var(--ink),
+		0 7px 0 #e4dcc6, 0 14px 30px rgba(0, 0, 0, 0.08);
+}
+.frame.browser.mine .shell {
+	box-shadow: inset 0 2px 0 #fff, inset 0 -3px 0 rgba(0, 0, 0, 0.05), 0 0 0 1.5px var(--ink),
+		0 0 0 6px var(--sun), 0 7px 0 6px #e9c43a, 0 16px 30px rgba(0, 0, 0, 0.1);
+}
+.frame.cardputer .shell {
+	background: linear-gradient(170deg, #f1efea, #dedbd3);
+	border-radius: 16px;
+	box-shadow: inset 0 2px 0 #fff, 0 0 0 1.5px var(--ink), 0 6px 0 #c9c5ba,
+		0 14px 30px rgba(0, 0, 0, 0.1);
+}
+.frame.cardputer.mine .shell {
+	box-shadow: inset 0 2px 0 #fff, 0 0 0 1.5px var(--ink), 0 0 0 6px var(--sun),
+		0 6px 0 6px #e9c43a, 0 14px 30px rgba(0, 0, 0, 0.1);
+}
+.frame .head {
+	position: absolute;
+	left: 18px;
+	right: 14px;
+	top: 12px;
+	height: 30px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	pointer-events: auto;
+}
+.frame .label {
+	flex: 1;
+	font: 500 1.25rem var(--serif);
+	white-space: nowrap;
+}
+.frame .live {
+	width: 11px;
+	height: 11px;
+	border-radius: 50%;
+	background: var(--stem);
+	box-shadow: 0 0 0 1.5px var(--ink), 0 0 0 4px rgba(64, 220, 186, 0.25);
+}
+.frame.quiet .live {
+	background: #bbb;
+	box-shadow: 0 0 0 1.5px #888;
+}
+.frame.quiet .label {
+	color: #999;
+}
+.frame .hinge {
+	position: absolute;
+	left: 14px;
+	right: 14px;
+	top: 50px;
+	height: 3px;
+	border-radius: 2px;
+	background: linear-gradient(#e2dbc8, #fff);
+	box-shadow: 0 -1px 0 rgba(0, 0, 0, 0.08);
+}
+.frame .glass {
+	position: absolute;
+	left: 12px;
+	right: 12px;
+	top: 58px;
+	bottom: 12px;
+	border-radius: 14px;
+	background: rgba(255, 255, 255, 0.45);
+	box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+.frame.cardputer .glass {
+	bottom: 162px;
+	background: #22262a;
+	border-radius: 8px;
+	box-shadow: inset 0 0 0 4px #111, inset 0 0 0 5px #444;
+}
+.frame.cardputer .hinge {
+	display: none;
+}
+.frame button.add,
+.frame button.flip {
+	font: 700 12px var(--mono);
+	border: 1.5px solid var(--ink);
+	border-radius: 12px;
+	padding: 3px 12px;
+	cursor: pointer;
+	background: var(--sun);
+	box-shadow: 0 2px 0 var(--ink);
+	transition: transform 0.1s var(--pop);
+}
+.frame button.flip {
+	background: #fff;
+	padding: 3px 8px;
+}
+.frame button.flip.on {
+	background: var(--ink);
+	color: #fff;
+}
+.frame button.add {
+	font-size: 14px;
+	padding: 4px 16px;
+	box-shadow: 0 3px 0 var(--ink);
+}
+.frame button.add:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 4px 0 var(--ink);
+}
+.frame button.add:active,
+.frame button.flip:active {
+	transform: translateY(3px);
+	box-shadow: 0 0 0 var(--ink);
+	transition-duration: 0.03s;
+}
+.frame button.add:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+.frame .back {
+	position: absolute;
+	left: 16px;
+	right: 16px;
+	top: 60px;
+	z-index: 7;
+	margin: 0;
+	padding: 12px 14px;
+	font: 11px/1.5 var(--mono);
+	white-space: pre;
+	overflow: auto;
+	max-height: calc(100% - 80px);
+	background: #fffdf3;
+	border: 1.5px solid var(--ink);
+	border-radius: 12px;
+	pointer-events: auto;
+}
+
+/* a browser's den: two parts, what shows on top, what you press below */
+.frame.browser .glass.top,
+.frame.browser .glass.bottom {
+	bottom: auto;
+}
+.frame.browser .glass.top {
+	background: linear-gradient(#fbfbf7, #f2efe4);
+	box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08), inset 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+.frame.browser .hinge {
+	/* no hinge: the two parts and the gap between them are enough */
+	display: none;
+	left: 40px;
+	right: 40px;
+	height: 12px;
+	border-radius: 6px;
+	background: linear-gradient(#f4f1e8, #ddd6c3 60%, #f7f4ec);
+	box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+.frame.browser .hinge i {
+	position: absolute;
+	top: -3px;
+	width: 46px;
+	height: 18px;
+	border-radius: 9px;
+	background: linear-gradient(#fff, #e3dccb);
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+.frame.browser .hinge i:first-child {
+	left: -30px;
+}
+.frame.browser .hinge i:last-child {
+	right: -30px;
+}
+
+/* the add menu: big friendly tiles */
+.menu {
+	position: absolute;
+	top: 46px;
+	transform: translateX(-100%);
+	display: grid;
+	grid-template-columns: repeat(5, 88px);
+	gap: 8px;
+	padding: 10px;
+	z-index: 8;
+	pointer-events: auto;
+	background: #fff;
+	border-radius: 18px;
+	box-shadow: 0 0 0 1.5px var(--ink), 0 6px 0 #e4dcc6, 0 14px 30px rgba(0, 0, 0, 0.12);
+	animation: pop 0.14s var(--pop);
+}
+.tile {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	padding: 12px 6px 8px;
+	font: 600 13px Jost, sans-serif;
+	border: 1.5px solid var(--ink);
+	border-radius: 14px;
+	cursor: pointer;
+	box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.7), 0 3px 0 var(--ink);
+	transition: transform 0.1s var(--pop);
+}
+.tile-button,
+.tile-timer,
+.tile-sound {
+	background: linear-gradient(#cfe2ff, var(--soft-blue));
+}
+.tile-counter,
+.tile-chart {
+	background: linear-gradient(#ffe79a, var(--sun));
+}
+.tile:hover,
+.tile:focus-visible {
+	transform: scale(1.06);
+}
+.tile:active {
+	transform: translateY(3px) scale(1);
+	box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.7), 0 0 0 var(--ink);
+	transition-duration: 0.03s;
+}
+
+/* the things: white cards in the chee rabbits family (chee.party): black 1px lines, a small
+   radius, a soft pink glow; buttons are keys (1px border, a hard shadow that drops when pressed) */
+.box {
+	border: 1px solid var(--ink);
+	border-radius: 0.5em;
+	box-shadow: 0 0 10px 2px #66003322;
+	overflow: visible;
+}
+.box-head {
+	border-radius: calc(0.5em - 1px) calc(0.5em - 1px) 0 0;
+	border-bottom: 1px solid var(--ink);
+	font: 600 11px Jost, sans-serif;
+	letter-spacing: 0.06em;
+	padding: 3px 4px 3px 9px;
+	background: #fff;
+}
+.kind-key .box-head,
+.kind-compute .box-head,
+.box.away .box-head {
+	background: #fff;
+}
+.box.away .box-title::after {
+	content: " ·";
+	color: var(--blue);
+}
+.box-back {
+	border-radius: 0 0 0.5em 0.5em;
+	max-width: 400px;
+}
+.box-flip,
+.box-x {
+	font: 700 10px var(--mono);
+	border: 1px solid var(--ink);
+	border-radius: 2px;
+	background: #fff;
+	padding: 0 4px;
+	cursor: pointer;
+	box-shadow: 1px 1px 0 var(--ink);
+}
+.box-x:hover {
+	background: var(--cherry);
+	color: #fff;
+}
+.box.dragging {
+	box-shadow: 0 0 14px 4px #66003333;
+}
+.box.pop {
+	animation: pop 0.15s var(--pop);
+}
+@keyframes pop {
+	from {
+		transform: scale(0.8);
+		opacity: 0;
+	}
+}
+.box:focus {
+	outline: none;
+}
+@keyframes ring {
+	0%,
+	100% {
+		box-shadow: 0 0 0 3px var(--sun), 0 0 0 4px var(--ink), 0 0 10px 2px #66003322;
+	}
+	50% {
+		box-shadow: 0 0 0 6px var(--sun), 0 0 0 7px var(--ink), 0 0 10px 2px #66003322;
+	}
+}
+.box:focus-visible,
+.box:hover:not(.dragging):not(.flash-hot),
+.frame button:focus-visible,
+.tile:focus-visible {
+	animation: ring 1.4s ease-in-out infinite;
+}
+.tile:focus-visible,
+.frame button:focus-visible {
+	outline: none;
+}
+.box.flash-hot {
+	animation: boxhot 0.8s ease-out;
+}
+.port .dot {
+	width: 10px;
+	height: 10px;
+	border-width: 1px;
+}
+.box-ins .port {
+	margin: 0 0 0 -5px;
+	justify-content: flex-start;
+}
+.box-outs .port {
+	margin: 0 -5px 0 0;
+	justify-content: flex-end;
+}
+.port.snap .dot {
+	animation: snap 0.15s var(--pop);
+}
+@keyframes snap {
+	from {
+		transform: scale(1.9);
+		background: var(--sun);
+	}
+}
+.note {
+	font: 11px Jost, sans-serif;
+	color: var(--grey);
+	margin-top: 6px;
+}
+.note:empty {
+	display: none;
+}
+/* a real key: lifts on hover, drops flat when pressed */
+.key-like,
+button.press,
+button.feed,
+button.step {
+	border: 1px solid var(--ink);
+	border-radius: 2px;
+	cursor: pointer;
+	transition: transform 0.05s, box-shadow 0.05s;
+}
+button.press {
+	display: block;
+	width: 100%;
+	height: 92px;
+	font: 700 22px Jost, sans-serif;
+	letter-spacing: 0.04em;
+	background: var(--cherry);
+	color: #fff;
+	box-shadow: 3px 3px 0 var(--ink);
+}
+button.press:hover:not(:disabled) {
+	transform: translate(-1px, -1px);
+	box-shadow: 4px 4px 0 var(--ink);
+}
+button.press:active:not(:disabled) {
+	transform: translate(3px, 3px);
+	box-shadow: 0 0 0 var(--ink);
+}
+button.press:disabled {
+	cursor: default;
+	background: #ffb3d4;
+	box-shadow: 1px 1px 0 var(--ink);
+}
+.tag {
+	display: inline-block;
+	margin-top: 9px;
+	padding: 1px 10px;
+	font: 600 12px var(--mono);
+	background: #ff8;
+	border: 1px solid var(--ink);
+	transform: skewX(-10deg);
+}
+.number {
+	font: 700 60px/1 var(--mono);
+	text-align: center;
+	padding: 14px 0 6px;
+}
+.thing-timer .number {
+	font-size: 46px;
+	padding: 6px 0 8px;
+}
+.steps {
+	display: flex;
+	gap: 5px;
+}
+button.step {
+	flex: 1;
+	font: 600 12px var(--mono);
+	padding: 4px 0;
+	background: #fff;
+	box-shadow: 2px 2px 0 var(--ink);
+}
+button.step[aria-pressed="true"] {
+	background: #ff8;
+}
+button.step.play {
+	flex: 1.4;
+	background: var(--stem);
+}
+button.step:hover:not(:disabled),
+button.feed:hover:not(:disabled) {
+	transform: translate(-1px, -1px);
+	box-shadow: 3px 3px 0 var(--ink);
+}
+button.step:active:not(:disabled),
+button.feed:active:not(:disabled) {
+	transform: translate(2px, 2px);
+	box-shadow: 0 0 0 var(--ink);
+}
+button.step:disabled {
+	cursor: default;
+	box-shadow: 1px 1px 0 var(--ink);
+	color: #555;
+}
+.lcd {
+	font: 700 52px/1.05 var(--mono);
+	background: #000;
+	color: #ff8;
+	border-radius: 2px;
+	min-height: 100px;
+	padding: 12px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	white-space: pre;
+	text-align: center;
+	overflow: hidden;
+}
+.lcd.small {
+	font-size: 20px;
+}
+.lcd.empty {
+	color: #555;
+}
+.lcd[hidden] {
+	display: none;
+}
+/* a screen showing a picture or pigs, and a pad: squares on a canvas */
+canvas.lcd-picture,
+canvas.lcd-pigs {
+	display: block;
+	border-radius: 2px;
+}
+canvas.lcd-pigs {
+	border: 1px solid #ddd;
+}
+canvas.pad {
+	display: block;
+	border: 1px solid var(--ink);
+	border-radius: 2px;
+	cursor: crosshair;
+	touch-action: none;
+}
+canvas.pad + button.step {
+	margin-top: 4px;
+}
+canvas.chart {
+	display: block;
+	border-radius: 2px;
+	border: 1px solid #ddd;
+}
+.soundrow {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 8px 4px;
+}
+canvas.speaker {
+	image-rendering: pixelated;
+}
+canvas.speaker.ping {
+	animation: ping 0.25s var(--pop);
+}
+@keyframes ping {
+	from {
+		transform: scale(1.35) rotate(-6deg);
+	}
+}
+.notename {
+	font: 700 40px var(--mono);
+}
+.typed {
+	font: 700 20px var(--mono);
+	min-height: 2.2em;
+	padding: 8px;
+	background: #000;
+	color: #ff8;
+	border-radius: 2px;
+	white-space: pre;
+	overflow: hidden;
+}
+.typed::after {
+	content: "_";
+	color: var(--cherry);
+}
+.thing-pigs canvas.pond {
+	border-radius: 2px;
+	width: 180px;
+	height: 104px;
+	border: 1px solid var(--ink);
+}
+.feeds {
+	display: flex;
+	gap: 6px;
+	margin-top: 7px;
+}
+.feeds:empty {
+	display: none;
+}
+button.feed {
+	flex: 1;
+	white-space: nowrap;
+	font: 600 12px Jost, sans-serif;
+	background: #ff8;
+	padding: 3px 4px;
+	box-shadow: 2px 2px 0 var(--ink);
+}
+::selection {
+	background: var(--mint);
+}
+
+/* the cardputer's little keyboard */
+.keyboard {
+	position: absolute;
+	left: 22px;
+	right: 22px;
+	bottom: 16px;
+	height: 132px;
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	pointer-events: auto;
+}
+.frame.cardputer:not(.mine) .keyboard {
+	opacity: 0.6;
+}
+.keyrow {
+	display: flex;
+	gap: 5px;
+	justify-content: center;
+}
+.key {
+	width: 40px;
+	height: 26px;
+	font: 12px var(--mono);
+	border: 1px solid #777;
+	border-radius: 6px;
+	background: linear-gradient(#fafafa, #d6d3cb);
+	box-shadow: 0 2px 0 #8a877f;
+	cursor: pointer;
+}
+.key.wide {
+	width: 120px;
+}
+.key:active,
+.key.down {
+	transform: translateY(2px);
+	box-shadow: none;
+	background: var(--sun);
+}
+
+.caption {
+	border-radius: 14px;
+	font-family: Jost, sans-serif;
+}
+.caption.tone-ok {
+	background: var(--ink);
+	box-shadow: 0 0 0 3px var(--stem);
+}
+@media (prefers-reduced-motion: reduce) {
+	.box.pop,
+	.menu,
+	.port.snap .dot,
+	.box:focus-visible,
+	.box:hover:not(.dragging) {
+		animation: none;
+	}
+	.box:focus-visible {
+		box-shadow: 0 0 0 5px var(--sun), 0 0 0 6.5px var(--ink);
+	}
+}
+
+.board-labels {
+	z-index: 4;
+}
+.wire-label {
+	border-radius: 2px;
+	box-shadow: 0 0 0 2px #fff;
+}
+.frame .hint {
+	display: none;
+	margin: 0;
+	padding: 24px;
+	text-align: center;
+	font: italic 1.05rem var(--serif);
+	color: #8a826c;
+}
+.frame.empty .hint {
+	display: block;
+}
+.frame.cardputer .hint {
+	color: #8c949b;
+}
+.box.flipped {
+	width: max-content !important;
+	z-index: 6;
+}
+
+.field {
+	position: relative;
+}
+.bubble {
+	position: absolute;
+	max-width: 150px;
+	padding: 2px 8px;
+	font: 600 14px Jost, sans-serif;
+	background: #fff;
+	border: 1px solid var(--ink);
+	border-radius: 10px;
+	box-shadow: 0 0 10px 2px #66003322;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	animation: pop 0.15s var(--pop);
+	pointer-events: none;
+}
+.bubble::after {
+	content: "";
+	position: absolute;
+	left: 14px;
+	bottom: -6px;
+	width: 9px;
+	height: 9px;
+	background: #fff;
+	border: solid var(--ink);
+	border-width: 0 1px 1px 0;
+	transform: rotate(45deg);
+}
+header.bar button:active {
+	transform: translateY(1px);
+}
+
+/* the board above, the finder docked under it */
+main.pondpage {
+	display: flex;
+	flex-direction: column;
+}
+#board.board {
+	position: relative;
+	inset: auto;
+	flex: 1;
+	min-height: 0;
+}
+main.pondpage .caption {
+	bottom: calc(var(--dock, 0px) + 18px);
+}
+.box-path {
+	font: 10px var(--mono);
+	color: var(--grey);
+	padding: 2px 9px 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.frame .denpath {
+	font: 11px var(--mono);
+	color: var(--grey);
+	margin-right: auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.frame .label {
+	flex: none;
+}
+.board-wires path.hit {
+	pointer-events: stroke;
+	cursor: help;
+}
+.board-wires path.hover {
+	stroke-width: 2.6;
+}
+.wire-tip {
+	position: absolute;
+	font: 11px var(--mono);
+	background: #ff8;
+	border: 1px solid var(--ink);
+	padding: 1px 6px;
+	white-space: nowrap;
+	transform: translate(-50%, -50%) skewX(-10deg);
+	pointer-events: none;
+	z-index: 6;
+}
+.box.tone-pick {
+	border-color: var(--blue);
+	box-shadow: 0 0 0 3px var(--blue), 0 0 10px 2px #66003322;
+}
+
+/* the finder: a column a level, white, 1px lines, mono names, lemon for the open row */
+.finder {
+	position: relative;
+	flex: none;
+	height: 220px;
+	display: flex;
+	flex-direction: column;
+	background: #fff;
+	border-top: 1px solid var(--ink);
+	font: 12px var(--mono);
+	z-index: 3;
+}
+.finder.folded {
+	height: auto !important;
+}
+.finder.folded .finder-cols {
+	display: none;
+}
+.finder-grab {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: -4px;
+	height: 8px;
+	cursor: ns-resize;
+}
+.finder-bar {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 3px 10px;
+	border-bottom: 1px solid var(--ink);
+	background: repeating-linear-gradient(#fff 0 2px, #eee 2px 3px);
+}
+.finder-bar b {
+	font: 600 12px Jost, sans-serif;
+	background: #fff;
+	padding: 0 6px;
+}
+.finder-bar .grow {
+	flex: 1;
+}
+.finder-crumb {
+	background: #fff;
+	padding: 0 6px;
+	order: 2;
+}
+.finder-bar b {
+	order: 1;
+}
+.finder-bar .grow {
+	order: 3;
+}
+.finder-fold {
+	order: 4;
+	font: 11px var(--mono);
+	border: 1px solid var(--ink);
+	border-radius: 2px;
+	background: #fff;
+	box-shadow: 1px 1px 0 var(--ink);
+	cursor: pointer;
+}
+.finder-fold:active {
+	transform: translate(1px, 1px);
+	box-shadow: none;
+}
+.finder-cols {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	overflow-x: auto;
+}
+.finder-col {
+	flex: none;
+	width: 210px;
+	overflow-y: auto;
+	border-right: 1px solid var(--ink);
+	padding: 2px 0;
+}
+.finder-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 1px 8px;
+	cursor: default;
+	white-space: nowrap;
+}
+.finder-row:hover {
+	background: #fffbe0;
+}
+.finder-row.on {
+	background: #ff8;
+}
+.finder-row.thing {
+	cursor: grab;
+}
+.finder-name {
+	flex: none;
+}
+.finder-badge {
+	font: 600 9px var(--mono);
+	padding: 0 4px;
+	border: 1px solid var(--blue);
+	color: var(--blue);
+	border-radius: 2px;
+}
+.finder-out {
+	margin-left: auto;
+	min-width: 0;
+	color: var(--cherry);
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.finder-arrow {
+	margin-left: auto;
+}
+.finder-out + .finder-arrow {
+	margin-left: 0;
+}
+.finder-empty {
+	color: #999;
+	padding: 2px 8px;
+}
+.finder-preview {
+	width: 520px;
+	padding: 6px 10px;
+}
+.finder-path {
+	font-weight: 700;
+}
+.finder-id {
+	color: #888;
+	font-size: 10px;
+	margin-bottom: 6px;
+}
+.finder-label {
+	font: 600 10px Jost, sans-serif;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: #888;
+	margin-top: 4px;
+}
+.finder-preview dl {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: 0 10px;
+	margin: 2px 0;
+}
+.finder-preview dt {
+	color: #555;
+}
+.finder-preview dd {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+.finder-preview .out {
+	color: var(--cherry);
+	font-weight: 700;
+}
+.finder-chip {
+	font: inherit;
+	padding: 0 5px;
+	margin: 1px 0;
+	background: var(--paper, #fff);
+	color: var(--blue);
+	border: 1px solid var(--blue);
+	border-radius: 2px;
+	cursor: pointer;
+	text-align: left;
+	overflow-wrap: anywhere;
+}
+.finder-chip:hover {
+	background: var(--blue);
+	color: #fff;
+}
+.finder-chip:active {
+	transform: translateY(1px);
+}
+.finder-chips,
+.finder-wire {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0 6px;
+}
+.finder-note {
+	color: #888;
+}
+.finder-value {
+	margin: 2px 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+/* a frame's buttons stay on one line */
+.frame .head button {
+	white-space: nowrap;
+	flex: none;
+}

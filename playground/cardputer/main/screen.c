@@ -119,13 +119,15 @@ void screen_line(int row, const char *text, uint16_t ink, uint16_t paper) {
 	send(TOP + row * 8, 8, s);
 }
 
-void screen_frame(void) {
+void screen_frame(void (*paint)(void)) {
 	uint16_t pal[16];
 	for (int i = 0; i < 16; i++) pal[i] = wire(fb_565[i]);
-	for (int y = 0; y < HEIGHT; y += 8) {
-		int rows = HEIGHT - y < 8 ? HEIGHT - y : 8;
+	for (int y = 0; y < HEIGHT; y += FB_STRIP) {
+		int rows = HEIGHT - y < FB_STRIP ? HEIGHT - y : FB_STRIP;
+		fb_strip(y);
+		paint();
 		uint16_t *s = strip();
-		const uint8_t *from = fb + y * WIDTH / 2;
+		const uint8_t *from = fb;
 		for (int i = 0; i < rows * WIDTH / 2; i++) {
 			s[2 * i] = pal[from[i] & 15];
 			s[2 * i + 1] = pal[from[i] >> 4];

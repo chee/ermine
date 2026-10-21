@@ -419,15 +419,11 @@ static void send(pres_conn *c, const char *who, const op_value *row, const op_va
 			op_set(m, "n", op_num((double)++k->n));
 		}
 	}
-	Json *j = pk_to_json(m);
+	CborOut o = {NULL, 0, 0, true};
+	if (!pk_put(&o, m)) abort();
 	op_free(m);
-	size_t length = 0;
-	if (j == NULL || !cborEncode(j, NULL, 0, &length, NULL)) abort();
-	unsigned char *bytes = xalloc(length);
-	cborEncode(j, bytes, length, &length, NULL);
-	jsonFree(j);
-	c->channel->send(c->channel, c->topic, bytes, length);
-	free(bytes);
+	c->channel->send(c->channel, c->topic, o.data, o.length);
+	free(o.data);
 }
 
 static void tell(pres_world *w, const char *anchor, const char *who, const op_value *row,
@@ -569,10 +565,8 @@ bool pres_keep(const pres_world *w, const char *part) {
 static void heard(void *ctx, const char *from, const unsigned char *bytes, size_t n) {
 	pres_conn *c = ctx;
 	pres_world *w = c->w;
-	Json *j = cborDecode(bytes, n, NULL, NULL);
-	if (j == NULL) return;
-	op_value *m = pk_of_json(j);
-	jsonFree(j);
+	op_value *m = pk_get(bytes, n, NULL, NULL);
+	if (m == NULL) return;
 	if (m->type == OP_MAP) {
 		const op_value *gone = op_get(m, "gone");
 		if (gone != NULL && gone->type == OP_BOOL && gone->bool_) {

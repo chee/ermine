@@ -15,8 +15,13 @@
 //   that has none: each node's value; the input read as one CBOR value, as it is and with every
 //   map's keys reversed and a NULL item in every list and map (pk_to_json leaves them out); once,
 //   values with no encoding (a stand-in with no kind, text and a key not UTF-8, CBOR_DEPTH + 1 deep).
+// - pk_get of bytes gives what pk_of_json gives for their cborDecode, exactly (numbers by their
+//   bits and big bytes, keys in order), or refuses where that refuses, with the same why and at: the
+//   input as it is; pk_put's bytes of each value above and of a value made from the input
+//   (fuzz_values.h); once, CBOR_DEPTH and CBOR_DEPTH + 1 lists deep.
 #include "pack.h"
 #include "deflate.h"
+#include "../../../core/op/c/fuzz_values.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -57,6 +62,53 @@ static void put_same(const op_value *v) {
 	if (want && (o.length != n || memcmp(o.data, bytes, n) != 0)) die("pk_put writes other bytes");
 	free(o.data), free(bytes);
 	jsonFree(j);
+}
+
+// two values exactly the same: numbers by their bits, keys in their order (recursing: CBOR_DEPTH at most)
+static int identical(const op_value *a, const op_value *b) {
+	if (a == NULL || b == NULL) return a == b;
+	if (a->type != b->type || a->count != b->count || a->capacity != b->capacity) return 0;
+	switch (a->type) {
+	case OP_NULL: return 1;
+	case OP_BOOL: return a->bool_ == b->bool_;
+	case OP_NUM:
+		if (memcmp(&a->num, &b->num, sizeof a->num) != 0 || (a->big == NULL) != (b->big == NULL)) return 0;
+		return a->big == NULL || (a->bigNegative == b->bigNegative && a->bigLength == b->bigLength &&
+			memcmp(a->big, b->big, a->bigLength) == 0);
+	case OP_STR:
+		return a->bytes == b->bytes && a->ascii == b->ascii && memcmp(a->str, b->str, a->bytes + 1) == 0;
+	case OP_TYPED:
+		if (a->kind != b->kind) return 0;
+		// fall through
+	case OP_BYTES: return a->bytes == b->bytes && (a->bytes == 0 || memcmp(a->data, b->data, a->bytes) == 0);
+	default:
+		for (size_t i = 0; i < a->count; i++) {
+			if (a->type == OP_MAP && strcmp(a->keys[i], b->keys[i]) != 0) return 0;
+			if (!identical(a->items[i], b->items[i])) return 0;
+		}
+		return 1;
+	}
+}
+
+// pk_get reads the bytes as cborDecode and pk_of_json do
+static void get_same(const uint8_t *in, size_t n) {
+	const char *why = NULL, *why2 = NULL;
+	size_t at = 0, at2 = 0;
+	Json *j = cborDecode(in, n, &why, &at);
+	op_value *want = j != NULL ? pk_of_json(j) : NULL;
+	op_value *got = pk_get(in, n, &why2, &at2);
+	if ((got != NULL) != (want != NULL)) die(want ? "pk_get refuses what cborDecode reads" : "pk_get reads what cborDecode refuses");
+	if (want == NULL && (why != why2 || at != at2)) die("pk_get refuses for another reason");
+	if (!identical(got, want)) die("pk_get reads another value");
+	op_free(got), op_free(want);
+	jsonFree(j);
+}
+
+// pk_get reads pk_put's bytes of the value as cborDecode and pk_of_json do
+static void put_get(const op_value *v) {
+	CborOut o = {NULL, 0, 0, true};
+	if (pk_put(&o, v)) get_same(o.data, o.length);
+	free(o.data);
 }
 
 // the value with every map's keys in reverse and a NULL item in each list and map (recursing:
@@ -103,7 +155,14 @@ static void edges(void) {
 			at = in;
 		}
 		put_same(v);
+		put_get(v);
 		op_free(v);
+		// as bytes: deep - 1 lists of one, an empty one in the last
+		uint8_t *b = malloc((size_t)deep);
+		memset(b, 0x81, (size_t)deep - 1);
+		b[deep - 1] = 0x80;
+		get_same(b, (size_t)deep);
+		free(b);
 	}
 }
 
@@ -245,10 +304,16 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 	memcpy(in, data + 1, n);
 	static int once;
 	if (!once++) edges();
+	get_same(in, n);
+	fz_bytes fb = {in, n, 0};
+	op_value *made = fz_value(&fb, 0);
+	put_get(made);
+	op_free(made);
 	Json *j = cborDecode(in, n, NULL, NULL);
 	if (j != NULL) {
 		op_value *v = pk_of_json(j), *t = twisted(j);
 		put_same(v), put_same(t);
+		put_get(v), put_get(t);
 		op_free(v), op_free(t);
 		jsonFree(j);
 	}

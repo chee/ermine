@@ -11,7 +11,7 @@
 #include "ermine/processes/c/processes.h"
 #include "ermine/processes/c/scopes.h"
 #include "ermine/sites/c/sites.h"
-#include "ermine/dens/c/away.h"
+#include "playground/dens/c/away.h"
 
 static struct {
 	sc_scheduler *s;

@@ -1,5 +1,5 @@
 // dens (typescript/dens.ts) in C: a den's node, what it offers, start by runner, stop, the asks,
-// close. same rules as dens.ts, held to by ermine/dens/conformance/{dens,away}. the processes'
+// close. same rules as dens.ts, held to by playground/dens/conformance/{dens,away}. the processes'
 // life is ermine/processes' start.h's (pr_*), inside dens.c only; a box here is its places.
 //
 //   const char *error;
@@ -21,12 +21,13 @@
 // /system/den (pr_add, the same id). its status: gone at the first pulse. id not a name:
 // not-a-name; /system/dens/<id> or /system/den taken: already-there.
 // dn_offer: a node <owner id>/<kind>/<name> in the folder <owner id>/<kind> (made at the first offer
-// of that kind, upserted into the owner's children; kept, empty, after its last offer goes), its
+// of that kind, upserted into the owner's children; held, empty, after its last offer goes), its
 // attributes as given and ermine.type ermine.runner | ermine.compiler | ermine.surface over them,
 // its value live; a name taken (offered, or entries at its id already): refused taken, nothing
-// made. dn_withdraw: its users stopped (newest first, "withdrawn"), its name out, its node
-// gone. an owner's stop withdraws its offers first, newest first, their users stopped
-// "runner-stopped", then its own handle.
+// made. a process runs under the scope of the offer it runs on (dens.ts' start), so an offer's node
+// going takes what runs on it, newest first. dn_withdraw: its name out, then its node gone, its
+// users stopped "withdrawn". an owner's stop takes its offers first, newest first, their users
+// stopped "runner-stopped", then its own handle.
 // dn_start refused, nothing made, the first that holds: stopped; not-a-runner (nothing at runner,
 // or its ermine.type no ermine.runner); not-there (no program node or no value; by id: none, or not
 // the hash given; code given: not the hash given); wrong-form (the program's type is not the
@@ -44,17 +45,19 @@
 // (hf_live.close) at dn_release or at by's stop, after its handle's, newest first (the den's own at
 // its close). made: a pulse asked for, as dn_start's. its live form's calls are its caller's: their
 // cost and failures its caller's runs'.
-// dn_stop: asked stop on its node (refused: still running); its offers' users stopped, its handle
-// given the reason, its loads closed, the row out, the node gone; twice, or not running: nothing;
-// the den's own: dn_close. a process torn down from above (the owner going): the den's reason
-// ("den-stopped", or dn_close's); its own scope torn down directly: none.
+// dn_stop: asked stop on its node (refused: still running); the reason told, then where it runs
+// torn down: its offers' users stopped, its handle given the reason, then its scope (what its
+// program made, its loads closed, the row out, the node gone); twice, or not running: nothing; the
+// den's own: dn_close. a process gone with what it runs under, not told: the den closing (or its
+// owner torn down), the den's reason ("den-stopped", or dn_close's); its runner's offer going, the
+// offer's ("withdrawn", else "runner-stopped"); else none.
 // dn_ask: another den's start or stop, its who given (device: the transport's); no policy: refused
 // no "no policy". a start's fields (dn_ask's, dn_on's body's) as given: runner and at no address:
 // none; program neither an address nor a map: { id: "" } (an id that is no string: ""; a type or
 // api that is no string: none; a hash given that is no string: none's); a step that is no string,
 // args given that are no list of strings, a cwd given that is no address: refused not-a-name.
-// dn_close: every process stopped, newest first, each handle given the reason; the den's rows
-// last. after it: start, load, ask, offer refused stopped.
+// dn_close: every process's scope torn down, newest first, each handle given the reason; then the
+// owner: the den's own and its rows last. after it: start, load, ask, offer refused stopped.
 // unplace or move never stops a process: its row is in the process part, not in children.
 // writes: with the owner's scope open (the den, its offers) or the process's. policy reads: the
 // table, untracked.
@@ -81,8 +84,8 @@
 #include "../../../filesystem/places/c/places.h"
 #include "../../../filesystem/protect/c/protect.h"
 #include "../../../extensions/build/c/host.h"
-#include "../../processes/c/scopes.h"
-#include "../../sites/c/sites.h"
+#include "../../../ermine/processes/c/scopes.h"
+#include "../../../ermine/sites/c/sites.h"
 
 // /system/dens and /system/den, from the root
 extern const char *const dn_dens[2];
@@ -218,9 +221,16 @@ typedef struct {
 	const char *error;
 } dn_refusal;
 
-// with a scope open. NULL: *error says (not-a-name, already-there). a macro: the site is the caller's
-dn *dn_new_at(const dn_setup *setup, const char **error, const char *file, int line, const char *func);
-#define dn_new(...) dn_new_at(__VA_ARGS__, __FILE__, __LINE__, __func__)
+// sites: each call that writes is an _at function taking its caller's site (ch_site, borrowed for the
+// call; NULL: none), and a macro of the plain name passing CH_HERE, so a write's site is the line
+// that called. a wrapper over dens passes its own caller's. the writes a call makes, and those it
+// sets off at once (an offer's users stopped, a process's row out), carry it; a write with no call
+// going on (a teardown from above, a pulse): the nearest site noted (setup.sites) up the run open's
+// computer, else up the scope open; none noted: none
+
+// with a scope open. NULL: *error says (not-a-name, already-there)
+dn *dn_new_at(const dn_setup *setup, const char **error, const ch_site *site);
+#define dn_new(...) dn_new_at(__VA_ARGS__, CH_HERE)
 const char *dn_id(const dn *d);
 const char *dn_node(const dn *d);
 dn_process *dn_self(const dn *d);
@@ -232,35 +242,43 @@ tb_table *dn_table(const dn *d);
 // by: a process of the den's, NULL: the den. attributes: a map (held; NULL: none). live: a stand-in
 // (held; NULL: none). the id (the den's until dn_free), or NULL and *refused (taken, not-a-name,
 // nothing-there, stopped)
-const char *dn_offer(dn *d, dn_process *by, dn_kind kind, const char *name,
-	const op_value *attributes, const op_value *live, dn_refusal *refused);
+const char *dn_offer_at(dn *d, dn_process *by, dn_kind kind, const char *name,
+	const op_value *attributes, const op_value *live, dn_refusal *refused, const ch_site *site);
+#define dn_offer(...) dn_offer_at(__VA_ARGS__, CH_HERE)
 // an offer's path from the root; 0: no such offer
 size_t dn_offered_at(dn *d, const char *id, const char *const **out);
-// its users stopped (newest first, "withdrawn"), its name out, its node gone; unknown: nothing
-void dn_withdraw(dn *d, const char *id);
+// its name out, its node gone, its users stopped (newest first, "withdrawn"); unknown: nothing
+void dn_withdraw_at(dn *d, const char *id, const ch_site *site);
+#define dn_withdraw(...) dn_withdraw_at(__VA_ARGS__, CH_HERE)
 
 // runner: nrunner steps from the den's root. NULL: refused (dens.ts' order)
 dn_process *dn_start_at(dn *d, const char *const *runner, size_t nrunner, const dn_program *program,
 	const char *const *at, size_t nat, const dn_options *options, dn_refusal *refused,
-	const char *file, int line, const char *func);
-#define dn_start(...) dn_start_at(__VA_ARGS__, __FILE__, __LINE__, __func__)
+	const ch_site *site);
+#define dn_start(...) dn_start_at(__VA_ARGS__, CH_HERE)
 // by: a process of the den's, NULL: the den. options: only box is read (where program is from; NULL:
 // by's places). NULL: refused
-dn_loaded *dn_load(dn *d, dn_process *by, const char *const *runner, size_t nrunner,
-	const dn_program *program, const dn_options *options, dn_refusal *refused);
+dn_loaded *dn_load_at(dn *d, dn_process *by, const char *const *runner, size_t nrunner,
+	const dn_program *program, const dn_options *options, dn_refusal *refused, const ch_site *site);
+#define dn_load(...) dn_load_at(__VA_ARGS__, CH_HERE)
 // its live form, the load's (hf_live)
 const hf_live *dn_loaded_live(const dn_loaded *l);
 // closed now (hf_live.close), out of by's; twice: nothing
-void dn_release(dn *d, dn_loaded *l);
+void dn_release_at(dn *d, dn_loaded *l, const ch_site *site);
+#define dn_release(...) dn_release_at(__VA_ARGS__, CH_HERE)
 // with a scope open: asked op stop. 0: stopped, or nothing to stop; 1: refused (no-permission).
 // reason borrowed for the call (NULL: none). p the den's own: dn_close
-int dn_stop(dn *d, dn_process *p, const op_value *reason, dn_refusal *refused);
+int dn_stop_at(dn *d, dn_process *p, const op_value *reason, dn_refusal *refused,
+	const ch_site *site);
+#define dn_stop(...) dn_stop_at(__VA_ARGS__, CH_HERE)
 // another den's ask, as dens.ts' Ask (a map: op, runner, program, at, args?, cwd? | op, process,
 // reason?), who given: the answer, new ({ id, at } | {} | a refusal's value). NULL: op neither
-op_value *dn_ask(dn *d, const op_value *who, const op_value *ask);
+op_value *dn_ask_at(dn *d, const op_value *who, const op_value *ask, const ch_site *site);
+#define dn_ask(...) dn_ask_at(__VA_ARGS__, CH_HERE)
 // the method at <den>/on/<op> ("start" | "stop"), the scope open's who: the answer, new. NULL: no
 // such method
-op_value *dn_on(dn *d, const char *op, const op_value *body);
+op_value *dn_on_at(dn *d, const char *op, const op_value *body, const ch_site *site);
+#define dn_on(...) dn_on_at(__VA_ARGS__, CH_HERE)
 // a refusal as dens.ts' Refused, new
 op_value *dn_refusal_value(const dn_refusal *r);
 
@@ -274,7 +292,8 @@ sc_scope *dn_process_scope(const dn_process *p);
 // dens.ts' nodes(): new, its reads told (sc_track, pl_read); processes 0: left out
 op_value *dn_nodes(dn *d, int processes);
 // every process stopped (newest first), each handle given reason (NULL: "den-stopped"); its rows last
-void dn_close(dn *d, const op_value *reason);
+void dn_close_at(dn *d, const op_value *reason, const ch_site *site);
+#define dn_close(...) dn_close_at(__VA_ARGS__, CH_HERE)
 void dn_halt(dn *d);
 void dn_free(dn *d);
 // core candidate (ermine/encoding, beside bd_hash_hex): hex of a value's hash; 0: no encoding (a

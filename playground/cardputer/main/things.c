@@ -9,6 +9,9 @@
 //                             weight this den's /work/pigs gives that name now (heavier, bigger:
 //                             1x to 3x, as book/kit/farm.ts' pigScale), centred on x, y, its name
 //                             and weight over it; a name the pigs don't give: drawn small and grey
+//   a picture                 { width, height, squares: bytes }: squares on or off, row after row,
+//                             the first of each byte its top bit (a pad's: 48x27, 5 pixels a square)
+//   the pigs' weights         { babe: 9, ... }: the pigs in a field, each as big as it weighs
 //   anything else             its JSON, wrapped
 #include "things.h"
 #include "den.h"
@@ -428,6 +431,50 @@ static void draw_wrapped(const char *s) {
 	}
 }
 
+// a picture's squares, as big as fit, in the middle: 1 if v is one
+static int draw_squares(const op_value *v) {
+	const op_value *sq = op_get(v, "squares");
+	double w, h;
+	if (sq == NULL || sq->type != OP_BYTES || !number(op_get(v, "width"), &w) || !number(op_get(v, "height"), &h) ||
+		w < 1 || h < 1 || w > FB_W || h > FB_H || (size_t)w * (size_t)h > sq->bytes * 8)
+		return 0;
+	int across = (int)w, down = (int)h;
+	int k = FB_W / across < FB_H / down ? FB_W / across : FB_H / down;
+	int x0 = (FB_W - across * k) / 2, y0 = (FB_H - down * k) / 2;
+	fb_clear(FB_LEMON);
+	for (int y = 0; y < down; y++) {
+		for (int x = 0; x < across; x++) {
+			size_t i = (size_t)y * (size_t)across + (size_t)x;
+			if (sq->data[i >> 3] >> (7 - (i & 7)) & 1) fb_rect(x0 + x * k, y0 + y * k, k, k, FB_INK);
+		}
+	}
+	return 1;
+}
+
+// the pigs' weights, as pigs in a field, each as big as it weighs, its name and weight over it: 1 if
+// v gives any of the pigs a number
+static int draw_pigs(const op_value *v) {
+	double w[3];
+	int any = 0;
+	for (int i = 0; i < 3; i++) any |= number(op_get(v, PIGS[i]), &w[i]);
+	if (!any) return 0;
+	fb_clear(FB_GRASS);
+	fb_rect(0, 0, FB_W, 18, FB_SKY);
+	for (int i = 0; i < 3; i++) {
+		if (!number(op_get(v, PIGS[i]), &w[i])) continue;
+		int k = pig_scale(w[i]);
+		// three across, the middle one lower, as the page's field has them
+		int cx = 40 + i * 80, cy = i == 1 ? 98 : 70;
+		int px = cx - FB_PIG_W * k / 2, py = cy - FB_PIG_H * k / 2;
+		fb_rect(px + 2, py + FB_PIG_H * k - 1, FB_PIG_W * k - 4, 3, FB_MUD);
+		fb_pig(px, py, k);
+		char l[32];
+		snprintf(l, sizeof l, "%s %.0f", PIGS[i], w[i]);
+		label(cx, py - 12, l, FB_INK);
+	}
+	return 1;
+}
+
 // nothing wired in: the room's code, big, to read off and type in on another screen
 static void draw_empty(void) {
 	fb_clear(FB_LEMON);
@@ -447,30 +494,47 @@ static void draw_empty(void) {
 	fb_text(4, 112, "wire into /work/screen", FB_GREY, 1);
 }
 
+// what the screen shows, kept to be drawn again strip by strip (fb.h): the in's out and the pigs'
+// (held), and a number or anything else as its text, made at the first strip that wants it
+static struct {
+	op_value *in, *weights;
+	char *text;
+} scene;
+
+static void scene_let_go(void) {
+	if (scene.in) op_free(scene.in);
+	if (scene.weights) op_free(scene.weights);
+	free(scene.text);
+	scene.in = scene.weights = NULL, scene.text = NULL;
+}
+
+// the scene into the framebuffer's strip
+static void paint(void) {
+	const op_value *in = scene.in;
+	if (in == NULL || in->type == OP_NULL) draw_empty();
+	else if (in->type == OP_STR) draw_text(in->str);
+	else if (in->type == OP_NUM) draw_text(scene.text ? scene.text : (scene.text = text_of(in)));
+	else if (in->type == OP_MAP && (op_get(in, "lines") || op_get(in, "pigs"))) draw_drawing(in, scene.weights);
+	else if (in->type == OP_MAP && (draw_squares(in) || draw_pigs(in))) {
+	} else draw_wrapped(scene.text ? scene.text : (scene.text = text_of(in)));
+}
+
 static char *draw_act(void *value, void *previous, void *data) {
 	(void)previous;
 	drawing *d = data;
 	if (d->t->stopped) return NULL;
 	const op_value *in = op_get(op_get(value, "in"), "v");
 	const op_value *weights = op_get(op_get(value, "pigs"), "v");
-	if (in == NULL || in->type == OP_NULL) draw_empty();
-	else if (in->type == OP_STR) draw_text(in->str);
-	else if (in->type == OP_NUM) {
-		char *s = text_of(in);
-		draw_text(s);
-		free(s);
-	} else if (in->type == OP_MAP && (op_get(in, "lines") || op_get(in, "pigs"))) draw_drawing(in, weights);
-	else {
-		char *s = text_of(in);
-		draw_wrapped(s);
-		free(s);
-	}
-	frame_show();
+	scene_let_go();
+	scene.in = in ? op_ref((op_value *)in) : NULL;
+	scene.weights = weights ? op_ref((op_value *)weights) : NULL;
+	frame_show(paint);
 	return NULL;
 }
 
 static char *drawing_free(void *data) {
 	drawing *d = data;
+	scene_let_go();
 	for (size_t i = 0; i < d->nin; i++) free(d->in[i]);
 	free(d->in);
 	free(d);

@@ -1,0 +1,199 @@
+{
+	"title": "a den's writes name the outside call that made them: the den's node (its attributes), an offer's node (attributes, value) and its name in its folder and the folder's in the den's children, a start's process node, a start sent to on/start, and the folder after a withdraw: each one's site is the harness's own file, not the den's (the files differ, so only whether). before any pulse",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"apps": "APPS"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "APPS",
+			"value": {
+				"clock.js": "CLOCK"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "CLOCK",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CLOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "den",
+			"expect": {
+				"id": "den:mac"
+			}
+		},
+		{
+			"op": "site",
+			"id": "den:mac",
+			"expect": {
+				"harness": true
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source"
+			},
+			"live": "record",
+			"expect": {
+				"id": "den:mac/runners/javascript",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "site",
+			"id": "den:mac/runners/javascript",
+			"expect": {
+				"harness": true
+			}
+		},
+		{
+			"op": "site",
+			"id": "den:mac/runners/javascript",
+			"part": "value",
+			"expect": {
+				"harness": true
+			}
+		},
+		{
+			"op": "site",
+			"id": "den:mac/runners",
+			"part": "children",
+			"expect": {
+				"harness": true
+			}
+		},
+		{
+			"op": "site",
+			"id": "den:mac",
+			"part": "children",
+			"expect": {
+				"harness": true
+			}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"a"
+			],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"work",
+					"a"
+				]
+			}
+		},
+		{
+			"op": "site",
+			"id": "proc:a",
+			"expect": {
+				"harness": true
+			}
+		},
+		{
+			"op": "send",
+			"path": [
+				"system",
+				"den",
+				"on",
+				"start"
+			],
+			"body": {
+				"runner": [
+					"system",
+					"den",
+					"runners",
+					"javascript"
+				],
+				"program": [
+					"apps",
+					"clock.js"
+				],
+				"at": [
+					"work",
+					"b"
+				],
+				"name": "b"
+			},
+			"expect": {
+				"id": "proc:b",
+				"at": [
+					"work",
+					"b"
+				]
+			}
+		},
+		{
+			"op": "site",
+			"id": "proc:b",
+			"expect": {
+				"harness": true
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "lua",
+			"live": "record",
+			"expect": {
+				"id": "den:mac/runners/lua",
+				"at": [
+					"system",
+					"dens",
+					"mac",
+					"runners",
+					"lua"
+				]
+			}
+		},
+		{
+			"op": "withdraw",
+			"id": "den:mac/runners/lua",
+			"expect": {}
+		},
+		{
+			"op": "site",
+			"id": "den:mac/runners",
+			"part": "children",
+			"expect": {
+				"harness": true
+			}
+		}
+	]
+}

@@ -1,7 +1,8 @@
 // Nodes under keys (pack.h), in C. A node is built as a Json tree, and its pieces written by
 // cbor.c: the one canonical encoding, so the bytes are pack.ts's; the columns pack.ts's header
 // lists are made from them, and deflated (deflate.c, included here). Reading is the reverse:
-// cbor.c's tree is checked as pack.ts checks it, then made into nodes.
+// the bytes read as op_values (pk_get, no Json), checked as pack.ts checks them, then made into
+// nodes that share those values.
 #include "pack.h"
 
 #include "cbor.h"
@@ -249,6 +250,42 @@ op_value *pk_of_json(const Json *root) {
 }
 
 // --- values as bytes ---
+
+// cbor.c's reading, made into op_values
+static void *of_item(void *self, const CborItem *item) {
+	(void)self;
+	switch (item->what) {
+	case CBOR_NULL: return op_null();
+	case CBOR_BOOLEAN: return op_bool(item->boolean);
+	case CBOR_FLOAT: return op_num(item->number);
+	case CBOR_UNSIGNED: return op_uint(item->argument);
+	case CBOR_WHOLE: return op_whole(item->negative, item->data, item->length);
+	case CBOR_TEXT: return op_str_take(item->text, item->length);
+	case CBOR_BYTES: return op_bytes(item->data, item->length);
+	case CBOR_TYPED: return op_typed((op_elements)item->kind, item->data, item->count);
+	case CBOR_LIST: return op_list();
+	case CBOR_MAP: return op_map();
+	default: return op_stand(NULL);
+	}
+}
+
+static void place(void *self, void *container, const char *key, size_t key_length, void *item) {
+	(void)self, (void)key_length;
+	op_value *c = container;
+	if (c->type == OP_LIST) op_push(c, item);
+	else if (c->type == OP_MAP) op_set(c, key, item);
+	else c->items[0] = item; // a stand-in's kind, NULL till now
+}
+
+static void drop(void *self, void *v) {
+	(void)self;
+	op_free(v);
+}
+
+op_value *pk_get(const uint8_t *bytes, size_t length, const char **why, size_t *at) {
+	static const CborMaker maker = {of_item, place, drop, NULL};
+	return cborRead(bytes, length, &maker, why, at);
+}
 
 static int key_compare(const char *a, const char *b) { return cborKeyCompare(a, strlen(a), b, strlen(b)); }
 static int key_order(const void *a, const void *b) { return key_compare(**(char **const *)a, **(char **const *)b); }
@@ -817,6 +854,10 @@ static op_value *hold(arena *a, op_value *v) {
 	add(&a->values, v);
 	return v;
 }
+// a value read, shared with the node: one more holder, let go of by pk_free
+static op_value *keep(arena *a, const op_value *v) {
+	return hold(a, op_ref((op_value *)v));
+}
 
 void pk_free(pk_read *r) {
 	arena *a = r->own;
@@ -831,9 +872,9 @@ void pk_free(pk_read *r) {
 }
 
 // a whole number, as pack.ts has it: a safe integer (to 2^53 - 1 either side; -0 is 0)
-static int whole64(const Json *j, int64_t *out) {
-	if (j == NULL || j->type != JSON_NUMBER) return 0;
-	double d = j->number;
+static int whole64(const op_value *j, int64_t *out) {
+	if (j == NULL || j->type != OP_NUM) return 0;
+	double d = j->num;
 	if (!(d >= -9007199254740991.0 && d <= 9007199254740991.0) || d != floor(d))
 		return 0;
 	*out = (int64_t)d;
@@ -841,7 +882,7 @@ static int whole64(const Json *j, int64_t *out) {
 }
 
 // one a long holds too: every one where a long is 64 bits
-static int whole(const Json *j, long *out) {
+static int whole(const op_value *j, long *out) {
 	int64_t n;
 	if (!whole64(j, &n) || n < LONG_MIN || n > LONG_MAX) return 0;
 	*out = (long)n;
@@ -850,58 +891,58 @@ static int whole(const Json *j, long *out) {
 
 // a path's number, a site's line or column: a whole number from -2^31 to 2^31 - 1, what any long
 // holds, on any machine
-static int narrow(const Json *j, long *out) {
+static int narrow(const op_value *j, long *out) {
 	int64_t n;
 	if (!whole64(j, &n) || n < -2147483648LL || n > 2147483647LL) return 0;
 	*out = (long)n;
 	return 1;
 }
 
-static int array(const Json *j) { return j != NULL && j->type == JSON_ARRAY; }
-static int string(const Json *j) { return j != NULL && j->type == JSON_STRING; }
+static int array(const op_value *j) { return j != NULL && j->type == OP_LIST; }
+static int string(const op_value *j) { return j != NULL && j->type == OP_STR; }
 
 #define KEYS(...) ((const char *const[]){__VA_ARGS__, NULL})
 
 // every key of need is in the object, and none but those of may
-static int only(const arena *a, const Json *o, const char *const *need, const char *const *may) {
-	if (o == NULL || o->type != JSON_OBJECT) return 0;
+static int only(const arena *a, const op_value *o, const char *const *need, const char *const *may) {
+	if (o == NULL || o->type != OP_MAP) return 0;
 	for (; *need; need++)
-		if (jsonGet(o, *need) == NULL) return 0;
-	for (int i = 0; !a->loose && i < o->object.count; i++) {
+		if (op_get(o, *need) == NULL) return 0;
+	for (size_t i = 0; !a->loose && i < o->count; i++) {
 		const char *const *m = may;
-		while (*m != NULL && strcmp(*m, o->object.members[i].key) != 0) m++;
+		while (*m != NULL && strcmp(*m, o->keys[i]) != 0) m++;
 		if (*m == NULL) return 0;
 	}
 	return 1;
 }
 
-static int read_target(arena *a, const Json *x, op_target *t, const char *const *may) {
+static int read_target(arena *a, const op_value *x, op_target *t, const char *const *may) {
 	if (!only(a, x, KEYS("path"), may)) return 0;
-	const Json *path = jsonGet(x, "path");
+	const op_value *path = op_get(x, "path");
 	if (!array(path)) return 0;
-	op_key *ks = grab(a, (size_t)path->array.count * sizeof *ks);
-	for (int i = 0; i < path->array.count; i++) {
-		const Json *k = path->array.items[i];
+	op_key *ks = grab(a, path->count * sizeof *ks);
+	for (size_t i = 0; i < path->count; i++) {
+		const op_value *k = path->items[i];
 		long m;
-		if (string(k)) ks[i] = (op_key){.type = OP_STR_KEY, .s = dup(a, k->string, k->stringLength)};
+		if (string(k)) ks[i] = (op_key){.type = OP_STR_KEY, .s = dup(a, k->str, k->bytes)};
 		else if (narrow(k, &m)) ks[i] = (op_key){.type = OP_NUM_KEY, .n = m};
 		else return 0;
 	}
 	t->path = ks;
-	t->length = (size_t)path->array.count;
-	const Json *range = jsonGet(x, "range");
+	t->length = path->count;
+	const op_value *range = op_get(x, "range");
 	if (range != NULL) {
-		if (!array(range) || range->array.count != 2) return 0;
-		if (!whole64(range->array.items[0], &t->from) || !whole64(range->array.items[1], &t->to)) return 0;
+		if (!array(range) || range->count != 2) return 0;
+		if (!whole64(range->items[0], &t->from) || !whole64(range->items[1], &t->to)) return 0;
 		t->has_range = 1;
 	}
 	return 1;
 }
 
-static int read_patch(arena *a, const Json *x, op_patch *p) {
+static int read_patch(arena *a, const op_value *x, op_patch *p) {
 	if (!read_target(a, x, &p->place, KEYS("path", "range", "value", "move"))) return 0;
-	const Json *v = jsonGet(x, "value"), *move = jsonGet(x, "move");
-	if (v != NULL) p->has_value = 1, p->value = hold(a, pk_of_json(v));
+	const op_value *v = op_get(x, "value"), *move = op_get(x, "move");
+	if (v != NULL) p->has_value = 1, p->value = keep(a, v);
 	if (move != NULL) {
 		p->has_move = 1;
 		if (!read_target(a, move, &p->move, KEYS("path", "range"))) return 0;
@@ -910,100 +951,99 @@ static int read_patch(arena *a, const Json *x, op_patch *p) {
 }
 
 // the patches of a list; NULL when there are none
-static int read_patches(arena *a, const Json *given, const op_patch **out, size_t *n) {
+static int read_patches(arena *a, const op_value *given, const op_patch **out, size_t *n) {
 	if (!array(given)) return 0;
-	op_patch *ps = given->array.count ? grab(a, (size_t)given->array.count * sizeof *ps) : NULL;
-	for (int i = 0; i < given->array.count; i++)
-		if (!read_patch(a, given->array.items[i], &ps[i])) return 0;
+	op_patch *ps = given->count ? grab(a, given->count * sizeof *ps) : NULL;
+	for (size_t i = 0; i < given->count; i++)
+		if (!read_patch(a, given->items[i], &ps[i])) return 0;
 	*out = ps;
-	*n = (size_t)given->array.count;
+	*n = given->count;
 	return 1;
 }
 
-static int read_site(arena *a, const Json *x, ch_site *s) {
+static int read_site(arena *a, const op_value *x, ch_site *s) {
 	if (!only(a, x, KEYS("file", "line"), KEYS("file", "line", "column", "function"))) return 0;
-	const Json *file = jsonGet(x, "file"), *column = jsonGet(x, "column"), *function = jsonGet(x, "function");
-	if (!string(file) || !narrow(jsonGet(x, "line"), &s->line)) return 0;
-	s->file = dup(a, file->string, file->stringLength);
+	const op_value *file = op_get(x, "file"), *column = op_get(x, "column"), *function = op_get(x, "function");
+	if (!string(file) || !narrow(op_get(x, "line"), &s->line)) return 0;
+	s->file = dup(a, file->str, file->bytes);
 	if (column != NULL) {
 		if (!narrow(column, &s->column)) return 0;
 		s->has_column = 1;
 	}
 	if (function != NULL) {
 		if (!string(function)) return 0;
-		s->function = dup(a, function->string, function->stringLength);
+		s->function = dup(a, function->str, function->bytes);
 	}
 	return 1;
 }
 
 // a change's fields, each one NULL when not there
-static int read_fields(arena *a, int64_t time, const Json *actor, const Json *reader, const Json *external,
-	const Json *metadata, const Json *op, ch_header *h) {
+static int read_fields(arena *a, int64_t time, const op_value *actor, const op_value *reader, const op_value *external,
+	const op_value *metadata, const op_value *op, ch_header *h) {
 	h->has_time = 1;
 	h->time = time;
-	if (actor != NULL) h->actor = hold(a, pk_of_json(actor));
+	if (actor != NULL) h->actor = keep(a, actor);
 	if (reader != NULL) {
 		if (!string(reader)) return 0;
-		h->reader = dup(a, reader->string, reader->stringLength);
+		h->reader = dup(a, reader->str, reader->bytes);
 	}
 	if (external != NULL) {
 		if (!array(external)) return 0;
 		// an empty list is none yet, not none: a block of its own
-		ch_site *ss = grab(a, ((size_t)external->array.count + 1) * sizeof *ss);
-		for (int i = 0; i < external->array.count; i++)
-			if (!read_site(a, external->array.items[i], &ss[i])) return 0;
+		ch_site *ss = grab(a, (external->count + 1) * sizeof *ss);
+		for (size_t i = 0; i < external->count; i++)
+			if (!read_site(a, external->items[i], &ss[i])) return 0;
 		h->external = ss;
-		h->external_length = (size_t)external->array.count;
+		h->external_length = external->count;
 	}
-	if (metadata != NULL && metadata->type == JSON_OBJECT) {
+	if (metadata != NULL && metadata->type == OP_MAP) {
 		// a map: its keys unique, the entries' too
-		ch_entry *es = grab(a, ((size_t)metadata->object.count + 1) * sizeof *es);
-		for (int i = 0; i < metadata->object.count; i++) {
-			const JsonMember *m = &metadata->object.members[i];
-			es[i].key = dup(a, m->key, m->keyLength);
-			es[i].value = hold(a, pk_of_json(m->value));
+		ch_entry *es = grab(a, (metadata->count + 1) * sizeof *es);
+		for (size_t i = 0; i < metadata->count; i++) {
+			es[i].key = dup(a, metadata->keys[i], strlen(metadata->keys[i]));
+			es[i].value = keep(a, metadata->items[i]);
 		}
 		h->metadata = es;
-		h->metadata_length = (size_t)metadata->object.count;
+		h->metadata_length = metadata->count;
 	} else if (metadata != NULL) {
 		// the old form, a list of [key, value] pairs: of a key repeated, the first
 		if (!array(metadata)) return 0;
-		ch_entry *es = grab(a, ((size_t)metadata->array.count + 1) * sizeof *es);
+		ch_entry *es = grab(a, (metadata->count + 1) * sizeof *es);
 		size_t n = 0;
-		for (int i = 0; i < metadata->array.count; i++) {
-			const Json *e = metadata->array.items[i];
-			if (!array(e) || e->array.count != 2 || !string(e->array.items[0])) return 0;
-			const Json *k = e->array.items[0];
+		for (size_t i = 0; i < metadata->count; i++) {
+			const op_value *e = metadata->items[i];
+			if (!array(e) || e->count != 2 || !string(e->items[0])) return 0;
+			const op_value *k = e->items[0];
 			size_t j = 0;
-			while (j < n && !(strlen(es[j].key) == k->stringLength && memcmp(es[j].key, k->string, k->stringLength) == 0))
+			while (j < n && !(strlen(es[j].key) == k->bytes && memcmp(es[j].key, k->str, k->bytes) == 0))
 				j++;
 			if (j < n) continue;
-			es[n].key = dup(a, k->string, k->stringLength);
-			es[n++].value = hold(a, pk_of_json(e->array.items[1]));
+			es[n].key = dup(a, k->str, k->bytes);
+			es[n++].value = keep(a, e->items[1]);
 		}
 		h->metadata = es;
 		h->metadata_length = n;
 	}
 	if (op != NULL) {
 		if (!only(a, op, KEYS("patches", "undo"), KEYS("patches", "undo"))) return 0;
-		if (!read_patches(a, jsonGet(op, "patches"), &h->patches, &h->patches_length)) return 0;
-		if (!read_patches(a, jsonGet(op, "undo"), &h->undo, &h->undo_length)) return 0;
+		if (!read_patches(a, op_get(op, "patches"), &h->patches, &h->patches_length)) return 0;
+		if (!read_patches(a, op_get(op, "undo"), &h->undo, &h->undo_length)) return 0;
 		h->has_op = 1;
 	}
 	return 1;
 }
 
-static int read_header(arena *a, const Json *x, ch_header *h) {
+static int read_header(arena *a, const op_value *x, ch_header *h) {
 	if (!only(a, x, KEYS("time"), KEYS("time", "actor", "reader", "external", "metadata", "op"))) return 0;
 	int64_t time;
-	if (!whole64(jsonGet(x, "time"), &time)) return 0;
-	return read_fields(a, time, jsonGet(x, "actor"), jsonGet(x, "reader"), jsonGet(x, "external"),
-		jsonGet(x, "metadata"), jsonGet(x, "op"), h);
+	if (!whole64(op_get(x, "time"), &time)) return 0;
+	return read_fields(a, time, op_get(x, "actor"), op_get(x, "reader"), op_get(x, "external"),
+		op_get(x, "metadata"), op_get(x, "op"), h);
 }
 
 // a node made of a header and a value (NULL: none)
-static nd_entry *make_node(arena *a, ch_header *h, const Json *v) {
-	nd_entry *n = nd_make_entry(v != NULL ? hold(a, pk_of_json(v)) : NULL, h);
+static nd_entry *make_node(arena *a, ch_header *h, const op_value *v) {
+	nd_entry *n = nd_make_entry(v != NULL ? keep(a, v) : NULL, h);
 	if (n == NULL) {
 		fputs("pack: out of memory\n", stderr);
 		abort();
@@ -1014,44 +1054,44 @@ static nd_entry *make_node(arena *a, ch_header *h, const Json *v) {
 
 // a node as written, new; NULL when it is not one. cow: false, in what was written before nodes lost
 // it, is dropped
-static nd_entry *read_node(arena *a, const Json *x) {
+static nd_entry *read_node(arena *a, const op_value *x) {
 	if (!only(a, x, KEYS("change"), KEYS("change", "value", "cow"))) return NULL;
-	const Json *cow = jsonGet(x, "cow");
+	const op_value *cow = op_get(x, "cow");
 	// nothing but false
-	if (cow != NULL && !(cow->type == JSON_BOOLEAN && !cow->boolean)) return NULL;
+	if (cow != NULL && !(cow->type == OP_BOOL && !cow->bool_)) return NULL;
 	ch_header h = {0};
-	if (!read_header(a, jsonGet(x, "change"), &h)) return NULL;
-	return make_node(a, &h, jsonGet(x, "value"));
+	if (!read_header(a, op_get(x, "change"), &h)) return NULL;
+	return make_node(a, &h, op_get(x, "value"));
 }
 
 // the first form, {keys, nodes}
-static int read_first(arena *a, const Json *x, pk_entry **entries_out, size_t *kn_out, nd_entry ***made_out,
+static int read_first(arena *a, const op_value *x, pk_entry **entries_out, size_t *kn_out, nd_entry ***made_out,
 	size_t *nn_out) {
 	pk_bytes key = {0}, last = {0};
 	nd_entry **made = NULL;
 	pk_entry *entries = NULL;
 	size_t nn = 0, kn = 0, next = 0;
-	const Json *keys, *nodes;
+	const op_value *keys, *nodes;
 	if (!only(a, x, KEYS("keys", "nodes"), KEYS("keys", "nodes"))) goto bad;
-	keys = jsonGet(x, "keys"), nodes = jsonGet(x, "nodes");
+	keys = op_get(x, "keys"), nodes = op_get(x, "nodes");
 	if (!array(keys) || !array(nodes)) goto bad;
-	nn = (size_t)nodes->array.count, kn = (size_t)keys->array.count;
+	nn = (size_t)nodes->count, kn = (size_t)keys->count;
 	made = grab(a, nn * sizeof *made);
 	for (size_t i = 0; i < nn; i++)
-		if ((made[i] = read_node(a, nodes->array.items[i])) == NULL) goto bad;
+		if ((made[i] = read_node(a, nodes->items[i])) == NULL) goto bad;
 	entries = grab(a, kn * sizeof *entries);
 	for (size_t i = 0; i < kn; i++) {
-		const Json *k = keys->array.items[i];
-		if (!array(k) || k->array.count != 3) goto bad;
-		const Json *part = k->array.items[0], *id = k->array.items[1];
+		const op_value *k = keys->items[i];
+		if (!array(k) || k->count != 3) goto bad;
+		const op_value *part = k->items[0], *id = k->items[1];
 		long m;
 		if (!string(part) || !string(id)) goto bad;
 		// numbered in the order first named
-		if (!whole(k->array.items[2], &m) || m < 0 || (size_t)m > next || (size_t)m >= nn) goto bad;
+		if (!whole(k->items[2], &m) || m < 0 || (size_t)m > next || (size_t)m >= nn) goto bad;
 		if ((size_t)m == next) next++;
 		// sorted, none twice
 		key.length = 0;
-		if (!key_bytes(&key, part->string, id->string)) goto bad;
+		if (!key_bytes(&key, part->str, id->str)) goto bad;
 		if (i > 0) {
 			size_t c = key.length < last.length ? key.length : last.length;
 			int d = memcmp(last.data, key.data, c);
@@ -1060,8 +1100,8 @@ static int read_first(arena *a, const Json *x, pk_entry **entries_out, size_t *k
 		pk_bytes swap = last;
 		last = key;
 		key = swap;
-		entries[i] = (pk_entry){tb_string(dup(a, part->string, part->stringLength)),
-			tb_string(dup(a, id->string, id->stringLength)), made[m]};
+		entries[i] = (pk_entry){tb_string(dup(a, part->str, part->bytes)),
+			tb_string(dup(a, id->str, id->bytes)), made[m]};
 	}
 	// every node under a key
 	if (next != nn) goto bad;
@@ -1082,30 +1122,30 @@ static void *scratch(pile *l, size_t n) {
 }
 
 // the items of a column that is a list; none when it is left out; 0: it is not a list (null included)
-static int items_of(const Json *c, const char *name, Json *const **items, size_t *n) {
-	const Json *v = jsonGet(c, name);
+static int items_of(const op_value *c, const char *name, op_value *const **items, size_t *n) {
+	const op_value *v = op_get(c, name);
 	*items = NULL, *n = 0;
 	if (v == NULL) return 1;
 	if (!array(v)) return 0;
-	*items = v->array.items, *n = (size_t)v->array.count;
+	*items = v->items, *n = v->count;
 	return 1;
 }
 
 // a column of whole numbers, 7 bits a byte, the low first, the high bit on all but a number's last
 // byte; none when it is left out; 0: it is not bytes, a number never ends, or is 2^64 or more (no
 // column has one)
-static int numbers_of(const Json *c, const char *name, pile *tmp, uint64_t **out, size_t *n) {
-	const Json *v = jsonGet(c, name);
+static int numbers_of(const op_value *c, const char *name, pile *tmp, uint64_t **out, size_t *n) {
+	const op_value *v = op_get(c, name);
 	*out = NULL, *n = 0;
 	if (v == NULL) return 1;
-	if (v->type != JSON_BYTES) return 0;
-	uint64_t *xs = scratch(tmp, (v->bytes.length + 1) * sizeof *xs);
+	if (v->type != OP_BYTES) return 0;
+	uint64_t *xs = scratch(tmp, (v->bytes + 1) * sizeof *xs);
 	size_t count = 0;
-	for (size_t at = 0; at < v->bytes.length;) {
+	for (size_t at = 0; at < v->bytes;) {
 		uint64_t x = 0;
 		for (unsigned shift = 0;; shift += 7) {
-			if (at >= v->bytes.length || shift > 63) return 0;
-			unsigned char byte = v->bytes.data[at++];
+			if (at >= v->bytes || shift > 63) return 0;
+			unsigned char byte = v->data[at++];
 			if (shift == 63 && (byte & 127) > 1) return 0;
 			x |= (uint64_t)(byte & 127) << shift;
 			if (byte < 128) break;
@@ -1118,22 +1158,22 @@ static int numbers_of(const Json *c, const char *name, pile *tmp, uint64_t **out
 
 // runs [[it, how many], ...] spread out, each how many whole and at least 1; more than bound
 // altogether: 0, as no pack has more
-static int spread(const Json *c, const char *name, pile *tmp, size_t bound, const Json ***out, size_t *n) {
-	Json *const *runs;
+static int spread(const op_value *c, const char *name, pile *tmp, size_t bound, const op_value ***out, size_t *n) {
+	op_value *const *runs;
 	size_t nr, total = 0, at = 0;
 	*out = NULL, *n = 0;
 	if (!items_of(c, name, &runs, &nr)) return 0;
 	for (size_t i = 0; i < nr; i++) {
 		long m;
-		if (!array(runs[i]) || runs[i]->array.count != 2 || !whole(runs[i]->array.items[1], &m) || m < 1) return 0;
+		if (!array(runs[i]) || runs[i]->count != 2 || !whole(runs[i]->items[1], &m) || m < 1) return 0;
 		if ((size_t)m > bound - total) return 0;
 		total += (size_t)m;
 	}
-	const Json **xs = scratch(tmp, (total + 1) * sizeof *xs);
+	const op_value **xs = scratch(tmp, (total + 1) * sizeof *xs);
 	for (size_t i = 0; i < nr; i++) {
 		long m = 0;
-		whole(runs[i]->array.items[1], &m);
-		for (long k = 0; k < m; k++) xs[at++] = runs[i]->array.items[0];
+		whole(runs[i]->items[1], &m);
+		for (long k = 0; k < m; k++) xs[at++] = runs[i]->items[0];
 	}
 	*out = xs, *n = total;
 	return 1;
@@ -1145,7 +1185,7 @@ typedef struct {
 	size_t length;
 } carried;
 
-static int read_columns(arena *a, const Json *x, size_t limit, pk_entry **entries_out, size_t *kn_out,
+static int read_columns(arena *a, const op_value *x, size_t limit, pk_entry **entries_out, size_t *kn_out,
 	nd_entry ***made_out, size_t *nn_out) {
 	static const char *const COLUMNS[] = {"ids", "parts", "which", "nodes", "has", "time", "actor", "reader",
 		"external", "metadata", "op", "values", NULL};
@@ -1153,19 +1193,19 @@ static int read_columns(arena *a, const Json *x, size_t limit, pk_entry **entrie
 	pk_bytes key = {0}, last = {0};
 	uint8_t *inner = NULL;
 	size_t inner_length = 0;
-	Json *c = NULL;
+	op_value *c = NULL;
 	int ok = 0;
-	const Json *z = jsonGet(x, "columns");
-	if (z->type != JSON_BYTES) goto end;
-	if (df_inflate(z->bytes.data, z->bytes.length, limit, &inner, &inner_length) != DF_OK) goto end;
-	if ((c = cborDecode(inner, inner_length, NULL, NULL)) == NULL) goto end;
+	const op_value *z = op_get(x, "columns");
+	if (z->type != OP_BYTES) goto end;
+	if (df_inflate(z->data, z->bytes, limit, &inner, &inner_length) != DF_OK) goto end;
+	if ((c = pk_get(inner, inner_length, NULL, NULL)) == NULL) goto end;
 	if (!only(a, c, (const char *const[]){NULL}, COLUMNS)) goto end;
 	{
-		Json *const *id_items, *const *op, *const *values;
+		op_value *const *id_items, *const *op, *const *values;
 		size_t ni, nop, nv;
 		uint64_t *which, *named, *has, *times;
 		size_t nwhich, nnamed, m, ntimes;
-		const Json **parts, **actor, **reader, **external, **metadata;
+		const op_value **parts, **actor, **reader, **external, **metadata;
 		size_t k, na, nr, ne, nm;
 		if (!items_of(c, "ids", &id_items, &ni) || !items_of(c, "op", &op, &nop) || !items_of(c, "values", &values, &nv))
 			goto end;
@@ -1180,13 +1220,13 @@ static int read_columns(arena *a, const Json *x, size_t limit, pk_entry **entrie
 		// the ids
 		carried *ids = scratch(&tmp, (ni + 1) * sizeof *ids);
 		for (size_t i = 0; i < ni; i++) {
-			const Json *id = id_items[i];
+			const op_value *id = id_items[i];
 			uint8_t raw[32];
-			if (id->type == JSON_STRING && !ermine_id(id->string, raw)) ids[i] = (carried){id->string, id->stringLength};
-			else if (id->type == JSON_BYTES && id->bytes.length == 32) {
+			if (id->type == OP_STR && !ermine_id(id->str, raw)) ids[i] = (carried){id->str, id->bytes};
+			else if (id->type == OP_BYTES && id->bytes == 32) {
 				char *text = scratch(&tmp, 74);
 				memcpy(text, "ermine://", 9);
-				for (int b = 0; b < 32; b++) snprintf(text + 9 + 2 * b, 3, "%02x", id->bytes.data[b]);
+				for (int b = 0; b < 32; b++) snprintf(text + 9 + 2 * b, 3, "%02x", id->data[b]);
 				ids[i] = (carried){text, 73};
 			} else goto end;
 		}
@@ -1209,7 +1249,7 @@ static int read_columns(arena *a, const Json *x, size_t limit, pk_entry **entrie
 			if (far > 2 * 9007199254740991ull) goto end;
 			time += times[i] % 2 == 0 ? (int64_t)far : -(int64_t)far;
 			if (time > 9007199254740991 || time < -9007199254740991) goto end;
-			const Json *fa = NULL, *fr = NULL, *fe = NULL, *fm = NULL, *fo = NULL, *fv = NULL;
+			const op_value *fa = NULL, *fr = NULL, *fe = NULL, *fm = NULL, *fo = NULL, *fv = NULL;
 			if (bits & HAS_ACTOR) {
 				if (ia >= na) goto end;
 				fa = actor[ia++];
@@ -1243,7 +1283,7 @@ static int read_columns(arena *a, const Json *x, size_t limit, pk_entry **entrie
 		pk_entry *entries = grab(a, (k + 1) * sizeof *entries);
 		size_t next = 0;
 		for (size_t i = 0; i < k; i++) {
-			const Json *part = parts[i];
+			const op_value *part = parts[i];
 			if (!string(part)) goto end;
 			carried id = ids[which[i]];
 			size_t n;
@@ -1253,7 +1293,7 @@ static int read_columns(arena *a, const Json *x, size_t limit, pk_entry **entrie
 			if (n >= m) goto end;
 			// sorted, none twice
 			key.length = 0;
-			if (!key_bytes(&key, part->string, id.text)) goto end;
+			if (!key_bytes(&key, part->str, id.text)) goto end;
 			if (i > 0) {
 				size_t len = key.length < last.length ? key.length : last.length;
 				int d = memcmp(last.data, key.data, len);
@@ -1262,7 +1302,7 @@ static int read_columns(arena *a, const Json *x, size_t limit, pk_entry **entrie
 			pk_bytes swap = last;
 			last = key;
 			key = swap;
-			entries[i] = (pk_entry){tb_string(dup(a, part->string, part->stringLength)),
+			entries[i] = (pk_entry){tb_string(dup(a, part->str, part->bytes)),
 				tb_string(dup(a, id.text, id.length)), made[n]};
 		}
 		// every node under a key
@@ -1273,13 +1313,13 @@ static int read_columns(arena *a, const Json *x, size_t limit, pk_entry **entrie
 end:
 	for (size_t i = 0; i < tmp.n; i++) free(tmp.p[i]);
 	free(tmp.p), free(key.data), free(last.data), free(inner);
-	jsonFree(c);
+	op_free(c);
 	return ok;
 }
 
 pk_code pk_unpack(const uint8_t *bytes, size_t length, const pk_reading *reading, pk_read *out) {
 	*out = (pk_read){0};
-	Json *x = cborDecode(bytes, length, NULL, NULL);
+	op_value *x = pk_get(bytes, length, NULL, NULL);
 	if (x == NULL) return PK_NOT_A_PACK;
 	arena *a = xrealloc(NULL, sizeof *a);
 	*a = (arena){.loose = reading != NULL && reading->loosy};
@@ -1287,10 +1327,10 @@ pk_code pk_unpack(const uint8_t *bytes, size_t length, const pk_reading *reading
 	pk_entry *entries = NULL;
 	size_t nn = 0, kn = 0;
 	size_t limit = reading != NULL && reading->limit ? reading->limit : (size_t)1 << 30;
-	int ok = jsonGet(x, "columns") != NULL && only(a, x, KEYS("columns"), KEYS("columns"))
+	int ok = op_get(x, "columns") != NULL && only(a, x, KEYS("columns"), KEYS("columns"))
 		? read_columns(a, x, limit, &entries, &kn, &made, &nn)
 		: read_first(a, x, &entries, &kn, &made, &nn);
-	jsonFree(x);
+	op_free(x);
 	if (!ok) {
 		pk_free(&(pk_read){.own = a});
 		return PK_NOT_A_PACK;
@@ -1301,12 +1341,12 @@ pk_code pk_unpack(const uint8_t *bytes, size_t length, const pk_reading *reading
 
 pk_code pk_decode(const uint8_t *bytes, size_t length, const pk_reading *reading, pk_read *out) {
 	*out = (pk_read){0};
-	Json *x = cborDecode(bytes, length, NULL, NULL);
+	op_value *x = pk_get(bytes, length, NULL, NULL);
 	if (x == NULL) return PK_NOT_A_NODE;
 	arena *a = xrealloc(NULL, sizeof *a);
 	*a = (arena){.loose = reading != NULL && reading->loosy};
 	nd_entry *n = read_node(a, x);
-	jsonFree(x);
+	op_free(x);
 	if (n == NULL) {
 		pk_free(&(pk_read){.own = a});
 		return PK_NOT_A_NODE;

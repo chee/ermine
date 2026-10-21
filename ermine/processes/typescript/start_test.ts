@@ -121,3 +121,15 @@ Deno.test("start: a name options.attributes shares with processes' own is proces
 	})
 	assertEquals(w.attrs(p), { [CWD]: ["work"], [ARGS]: ["a.txt"], [STATUS]: PENDING, kept: 1 })
 })
+
+Deno.test("start under a scope given: its scope under it; that scope torn down, the process goes (body's stop, the row out)", () => {
+	const w = world()
+	const above = w.hosted(() => w.s.createScope({ runner: "R" }))
+	let stops = 0
+	const p = w.start(w.places, "clock", { under: above }, () => () => void stops++)
+	assertStrictEquals(p.scope.parent, above)
+	w.s.teardown(above)
+	assertEquals([stops, w.table.get(PROCESS, "R")?.value, p.scope.state], [1, {}, "gone"])
+	w.life.stop(p)
+	assertEquals(stops, 1)
+})

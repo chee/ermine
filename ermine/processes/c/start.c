@@ -58,6 +58,9 @@ struct pr_process {
 	void (*stop)(pr_process *p, void *data);
 	void *data;
 	int ended, rowed;
+	// the sites of its writes: its start's caller's (file NULL: none); its stop's caller's (file
+	// NULL: torn down from above, processes' own)
+	ch_site site, stop_site;
 };
 
 struct pr {
@@ -165,7 +168,7 @@ static void add_row(void *data) {
 	pr *s = p->owner;
 	ch_header h;
 	pl_made *made;
-	char *bad = pl_header(s->s.places, NULL, 0, CH_HERE, &h, &made);
+	char *bad = pl_header(s->s.places, NULL, 0, p->site.file != NULL ? &p->site : NULL, &h, &made);
 	if (bad != NULL) {
 		free(bad);
 		r->code = -1;
@@ -188,7 +191,10 @@ static void remove_row(void *data) {
 	pr *s = p->owner;
 	ch_header h;
 	pl_made *made;
-	char *bad = pl_header(s->s.places, NULL, 0, CH_HERE, &h, &made);
+	ch_site buf;
+	const ch_site *at = &p->stop_site;
+	if (at->file == NULL) at = s->s.site != NULL ? s->s.site(s->s.site_ctx, &buf) : NULL;
+	char *bad = pl_header(s->s.places, NULL, 0, at != NULL ? at : CH_HERE, &h, &made);
 	if (bad != NULL) {
 		free(bad);
 		return;
@@ -227,6 +233,13 @@ static char *end_teardown(void *data) {
 	return NULL;
 }
 
+// its run record out, last
+static char *drop_teardown(void *data) {
+	pr_process *p = data;
+	if (p->owner->runs != NULL) crn_drop(p->owner->runs, tb_string(p->id));
+	return NULL;
+}
+
 // start ------------------------------------------------------------------------------------------------
 
 typedef struct {
@@ -241,7 +254,7 @@ static void make_attributes(void *data) {
 	pr *s = p->owner;
 	ch_header h;
 	pl_made *made;
-	char *bad = pl_header(s->s.places, NULL, 0, CH_HERE, &h, &made);
+	char *bad = pl_header(s->s.places, NULL, 0, p->site.file != NULL ? &p->site : NULL, &h, &made);
 	if (bad != NULL) {
 		free(bad);
 		return;
@@ -276,6 +289,7 @@ pr_process *pr_start_at(pr *s, pl *where, const char *const *steps, size_t nstep
 	const pr_options *o = options != NULL ? options : &none;
 	pr_process *p = xalloc(sizeof *p);
 	p->owner = s;
+	p->site = (ch_site){file, line, 0, func, 0};
 	p->places = where;
 	p->root = xdup(pl_root(where).string);
 	p->at = pr_names(steps, nsteps, &p->nat);
@@ -288,8 +302,8 @@ pr_process *pr_start_at(pr *s, pl *where, const char *const *steps, size_t nstep
 	p->id_value = op_str(p->id);
 	p->info[0] = (sc_pair){"process", p->at_value};
 	p->info[1] = (sc_pair){PL_NODE, p->id_value};
-	p->scope = sc_create_scope(s->s.scheduler, p->info, 2, s->owner);
-	if (s->s.sites != NULL) st_note(s->s.sites, p->scope, file, line, func);
+	p->scope = sc_create_scope(s->s.scheduler, p->info, 2, o->under != NULL ? o->under : s->owner);
+	if (s->s.sites != NULL && file != NULL) st_note(s->s.sites, p->scope, file, line, func);
 	sn_give(s->s.scopes, p->scope, p->id);
 	if (s->n == s->cap) {
 		s->cap = s->cap ? s->cap * 2 : 8;
@@ -310,6 +324,7 @@ pr_process *pr_start_at(pr *s, pl *where, const char *const *steps, size_t nstep
 	p->rowed = 1;
 	p->stop = o->stop;
 	p->data = o->data;
+	sc_register_teardown(s->s.scheduler, p->scope, drop_teardown, p);
 	sc_register_teardown(s->s.scheduler, p->scope, end_teardown, p);
 	starting c = {p, o};
 	sc_run_with_scope(p->scope, make_attributes, &c);
@@ -317,10 +332,11 @@ pr_process *pr_start_at(pr *s, pl *where, const char *const *steps, size_t nstep
 	return p;
 }
 
-void pr_stop(pr *s, pr_process *p) {
+void pr_stop_at(pr *s, pr_process *p, const char *file, int line, const char *func) {
+	p->stop_site = (ch_site){file, line, 0, func, 0};
+	(void)s;
 	end(p);
 	free(sc_teardown(p->scope));
-	if (s->runs != NULL) crn_drop(s->runs, tb_string(p->id));
 }
 
 void pr_halt(pr *s) {

@@ -1,5 +1,5 @@
 // away (typescript/away.ts) in C: other dens' rows over presence (presence.h) and asks over the
-// channel (channel.h). same rules, held to by ermine/dens/conformance/away. the away trie is
+// channel (channel.h). same rules, held to by playground/dens/conformance/away. the away trie is
 // processes.h's generic trie on the part "away".
 //
 //   pr_processes rows;  dn_away_init(&rows, root);       // a contributor, after processes' own
@@ -40,7 +40,7 @@
 #define DENS_AWAY_H
 
 #include "dens.h"
-#include "../../processes/c/processes.h"
+#include "../../../ermine/processes/c/processes.h"
 #include "../../../extensions/presence/c/presence.h"
 
 #define DN_AWAY "away"
@@ -69,8 +69,10 @@ typedef struct {
 } dn_link_setup;
 
 // with a scope open. NULL: the channel's name is not the den's id, no topic, or no scope open.
-// goes at the den's close
-dn_link *dn_connect(dn *d, chn_channel *channel, const dn_link_setup *setup);
+// goes at the den's close. a macro: the site of the link's writes, and of its asks answered
+// (dn_ask_at), is the caller's (copied; NULL: none)
+dn_link *dn_connect_at(dn *d, chn_channel *channel, const dn_link_setup *setup, const ch_site *site);
+#define dn_connect(...) dn_connect_at(__VA_ARGS__, CH_HERE)
 void dn_announce(dn_link *l);
 // the row set again (whole), until = now + ttl
 void dn_beat(dn_link *l);

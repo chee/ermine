@@ -23,7 +23,9 @@ idf_component_register(
 		${R}/ermine/processes/c/start.c ${R}/ermine/boxes/c/boxes.c ${R}/extensions/build/c/host.c
 		${R}/ermine/encoding/c/hash.c ${R}/ermine/encoding/c/blake3/blake3.c
 		${R}/ermine/encoding/c/blake3/blake3_dispatch.c ${R}/ermine/encoding/c/blake3/blake3_portable.c
-		${R}/ermine/dens/c/dens.c ${R}/ermine/dens/c/away.c
+		${R}/playground/dens/c/common.c ${R}/playground/dens/c/policy.c ${R}/playground/dens/c/offers.c
+		${R}/playground/dens/c/start.c ${R}/playground/dens/c/handlers.c ${R}/playground/dens/c/here.c
+		${R}/playground/dens/c/dens.c ${R}/playground/dens/c/away.c
 	INCLUDE_DIRS ${R}
 )
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-error -w)

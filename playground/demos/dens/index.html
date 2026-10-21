@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>dens</title>
+	<meta name="description"
+		content="two people, two screens, one graph: make a den, add things to it and to a friend's, and wire them together">
+	<link rel="icon" href="../pictures/ermine.svg" type="image/svg+xml">
+	<link rel="stylesheet"
+		href="https://fonts.googleapis.com/css2?family=Jost:wght@400..800&family=Petrona:ital,wght@0,400..600;1,400&display=swap">
+	<link rel="stylesheet" href="./kit/pond.css">
+	<link rel="stylesheet" href="./style.css">
+	<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+		<filter id="boil" x="-5%" y="-5%" width="110%" height="110%">
+			<feTurbulence id="boil-noise" type="fractalNoise" baseFrequency="0.035" numOctaves="2"
+				seed="1" />
+			<feDisplacementMap in="SourceGraphic" scale="1.5" />
+		</filter>
+	</svg>
+	<header class="bar">
+		<a href="/"><b>ermine</b></a><span class="title">dens</span>
+		<button id="code" class="code" hidden></button>
+		<span id="room" class="room"></span>
+		<form id="join" class="join" hidden><input name="code" placeholder="code" maxlength="6"
+				autocomplete="off" spellcheck="false" aria-label="another room's code"><button>join</button></form>
+		<span class="grow"></span>
+		<span id="who"></span>
+		<button id="rename" hidden>not you?</button>
+		<button id="sound" aria-pressed="true">sound on</button>
+	</header>
+	<div class="welcome" hidden>
+		<form class="card">
+			<h1>what's your name?</h1>
+			<input name="name" autocomplete="given-name" spellcheck="false" maxlength="24">
+			<label class="joining">a code from someone's screen? <input name="code" maxlength="6"
+					autocomplete="off" spellcheck="false" placeholder="optional"></label>
+			<button class="go">make my den</button>
+		</form>
+	</div>
+	<main class="pondpage" hidden>
+		<div id="board"></div>
+		<div class="caption"></div>
+		<section class="finder" aria-label="this page's tree">
+			<div class="finder-grab" title="drag to make it taller or shorter"></div>
+			<div
+				class="finder-bar"><b>this page's tree</b><span class="grow"></span><button class="finder-fold">fold</button></div>
+		</section>
+	</main>
+	<script type="module" src="./main.ts"></script>
+</html>

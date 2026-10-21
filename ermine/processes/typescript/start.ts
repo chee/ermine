@@ -14,14 +14,15 @@
 // root, names or a string ("." here, ".." back one); cwd default: at's folder. refused "taken",
 // nothing made: a process at, above or under the path. else, in order:
 //   1. its node's id (proc:<uuid>), then a scope { process: at, [NODE]: id } (given the node,
-//      scopes.ts), made through setup.sites when given
+//      scopes.ts) under options.under (none: the owner), made through setup.sites when given
 //   2. the row: addProcess at the path, committed to the places given
 //   3. node attributes: options.attributes, then ermine.process.args, .cwd, .pin, and status
 //      PENDING (processes' own win)
 //   4. body, scope open, given give(computer, { run }): the computer's status (with run: its
 //      latest run) on the node. a function returned: called at stop
-// stop(p): body's return (scope open), the row out, the scope torn down (from above: computers go
-// first). twice: nothing. every step runs; the first error is thrown after
+// stop(p): body's return (scope open), the row out, the scope torn down, its run record out. its
+// scope torn down from above (under's, the owner's): what is under it first, then the same. twice:
+// nothing. every step runs; the first error is thrown after
 // writes: each with the process's scope open, its site the call into start or stop
 // open: pid("clock") not built (at is a plain path); args as strings; cwd always written, never
 // checked to be there
@@ -73,6 +74,8 @@ export type Options = {
 	pin?: unknown
 	// written first, in the node's one attributes entry: a name processes' own write too is theirs
 	attributes?: Readonly<Record<string, unknown>>
+	// the scope its scope is made under: torn down, the process goes. none: the owner
+	under?: Scope
 }
 
 // body's: what to do at the stop
@@ -159,7 +162,7 @@ export function createProcesses(setup: Setup): Processes {
 		const box: Box = "places" in where ? where : { root: where.root, places: where }
 		const { at, cwd } = pathsOf(address, options.cwd)
 		const id: Id = `proc:${crypto.randomUUID()}`
-		const scope = createScope({ process: at, [NODE]: id }, owner)
+		const scope = createScope({ process: at, [NODE]: id }, options.under ?? owner)
 		scopes.give(scope, id)
 		try {
 			s.runWithScope(
@@ -175,6 +178,7 @@ export function createProcesses(setup: Setup): Processes {
 		const p: State = { id, at, cwd, scope, box, ended: false, rowed: true }
 		const process: Process = { id, at, cwd, scope }
 		states.set(process, p)
+		if (runs !== undefined) s.registerTeardown(scope, () => runs.drop(id))
 		s.registerTeardown(scope, () => end(p))
 		const attrs: Record<string, unknown> = { ...options.attributes }
 		if (options.args !== undefined) attrs[ARGS] = options.args
@@ -237,7 +241,6 @@ export function createProcesses(setup: Setup): Processes {
 			end(p, stop)
 		} finally {
 			s.teardown(p.scope)
-			runs?.drop(p.id)
 		}
 	}
 
