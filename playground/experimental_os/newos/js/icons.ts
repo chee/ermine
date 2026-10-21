@@ -837,7 +837,7 @@ export function folder(api: Api, path: string[]): string | null {
 	}
 }
 export const layout = {
-	/** a layout's address: an id is a name less its ermine:// (and any / in it) */
+	/** a layout's address: an id is a name less its "ermine:" (and any / in it) */
 	at: (
 		id: string,
 	) => [
@@ -845,7 +845,7 @@ export const layout = {
 		"apps",
 		"computer",
 		"layout",
-		id === "/" ? "root" : id.replace(/^ermine:\/\//, "").replaceAll("/", "∕"),
+		id === "/" ? "root" : id.replace(/^ermine:/, "").replaceAll("/", "∕"),
 	],
 	/** made the first time: /apps/computer/layout, a folder */
 	ready(api: Api) {

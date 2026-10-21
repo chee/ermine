@@ -7,16 +7,18 @@
 // entry of a followed one names: kept up entry by entry, "following" below), the places told of
 // what sync wrote, and the counts /dev/sync/link shows.
 //
-// The card's folder, sync/ inside the folder the metal gives (~/.ermine/disk): a new name, so a
-// card of the old layout beside it (device/, subduction/, seen) is never read:
-//   sync/key      the device's Ed25519 seed, 64 hex digits, made at the first boot
-//   sync/root     the root's id, made at the first boot
-//   sync/store/   what Subduction holds (subduction/store_files.c): trees, commits, fragments, blobs
+// The card's folder, card/ inside the folder the metal gives (~/.ermine/disk): a new name, so a
+// card of an old layout beside it (device/, subduction/, seen; then sync/, of ermine:// ids) is
+// never read:
+//   card/key      the device's Ed25519 seed, 64 hex digits, made at the first boot
+//   card/root     the root's id (ermine/ids: "ermine:" + 36 hex), made at the first boot
+//   card/store/   what Subduction holds (subduction/store_files.c): trees, commits, fragments, blobs
 //
 // Parts: value, attributes and children are sync's tables; any other part (fronts.h's "front") is
 // never sent. A node whose id is not a document's is never sent either: that is what ephemeral is.
-// Ids are minted with their last 16 bytes zero (sync.h, zeros): galaxy.observer stores no other
-// until Keyhive.
+// Ids: ermine ids (ermine/ids), a new document's fresh. sync.h's zeros is accepted and ignored: a
+// tree id (tp_doc: a hash of the id, never turned back into it) always ends in 16 zeros. A map
+// keyed by tree ids that must give the id again holds its text as the value (brought).
 //
 // What sync writes: an entry it replaces or takes out of the table is told through drop; the host's
 // entries are the places' own (pl_own), let go of at pl_free, so drop lets nothing go. An entry
@@ -36,6 +38,7 @@
 #include "card.h"
 
 #include "../../../../playground/together/c/ids.h"
+#include "../../../../ermine/ids/c/ids.h"
 #include "../../../together/stacks/subduction/c/subduction/platform.h"
 #include "../../../together/stacks/subduction/c/subduction/store.h"
 #include "../../../../core/op/c/apply.h"
@@ -87,7 +90,7 @@ struct Card {
 	sc_scheduler *s;
 	card_host host;
 	im_map followed; // the documents followed, by their bytes
-	im_map brought;  // the documents drivers bring (cardFollow): reached as the root is
+	im_map brought;  // the documents drivers bring (cardFollow), by tree id: reached as the root is; value: the id's text (strdup'd)
 	Key *keys;       // the keys sync changed in place this run, the places to be told
 	size_t nkeys, keys_room;
 	Ids look;        // the documents whose children entry is looked at this turn: changed, come, or newly followed
@@ -187,39 +190,40 @@ static void wipe(const char *path) {
 	free(command);
 }
 
-/** a new document's id: 16 random bytes, then 16 zero bytes (sync.h, zeros) */
+/** a new document's id: a fresh ermine id (16 random bytes), as text */
 static void fresh(char out[ID_LENGTH + 1]) {
-	uint8_t bytes[16];
-	erm_host_random(bytes, sizeof bytes);
-	char h[33];
-	hex(bytes, 16, h);
-	snprintf(out, ID_LENGTH + 1, "ermine://%s%032d", h, 0);
+	uint8_t random[16], id[ID_SHORT];
+	erm_host_random(random, sizeof random);
+	id_fresh(random, id);
+	char text[ID_TEXT];
+	id_text(id, sizeof id, text);
+	snprintf(out, ID_LENGTH + 1, "%s", text);
 }
 
 Card *cardOpen(const char *sd, bool clean, const char **why) {
 	Card *c = calloc(1, sizeof *c);
 	if (!c) abort();
-	c->folder = joined(sd, "sync");
+	c->folder = joined(sd, "card");
 	if (clean) wipe(c->folder);
 	char *keyPath = joined(c->folder, "key"), *rootPath = joined(c->folder, "root"), *storage = joined(c->folder, "store");
 	bool ok = made(sd) && made(c->folder);
 	if (!ok) *why = "the card's folder could not be made";
 	char *key = ok ? readText(keyPath) : NULL;
 	if (ok && key) {
-		if (strlen(key) != 64 || !unhex(key, 32, c->seed)) ok = false, *why = "sync/key is not 64 hex digits";
+		if (strlen(key) != 64 || !unhex(key, 32, c->seed)) ok = false, *why = "card/key is not 64 hex digits";
 	} else if (ok) {
 		erm_host_random(c->seed, 32);
 		char text[65];
 		hex(c->seed, 32, text);
-		if (!writeText(keyPath, text)) ok = false, *why = "sync/key could not be written";
+		if (!writeText(keyPath, text)) ok = false, *why = "card/key could not be written";
 	}
 	char *root = ok ? readText(rootPath) : NULL;
 	if (ok && root) {
-		if (!id_is(root)) ok = false, *why = "sync/root is not a document's id";
+		if (!id_is(root)) ok = false, *why = "card/root is not a document's id";
 		else snprintf(c->root, sizeof c->root, "%s", root);
 	} else if (ok) {
 		fresh(c->root);
-		if (!writeText(rootPath, c->root)) ok = false, *why = "sync/root could not be written";
+		if (!writeText(rootPath, c->root)) ok = false, *why = "card/root could not be written";
 	}
 	if (ok && ermStoreFiles(storage, &c->store, why) != 0) ok = false;
 	free(key), free(root), free(keyPath), free(rootPath), free(storage);
@@ -346,11 +350,8 @@ static size_t walk(Card *c, im_map *seen) {
 	push(&todo, c->root);
 	for (size_t i = 0; i < c->brought.slots; i++) {
 		if (!c->brought.used[i] || im_has(seen, im_key(&c->brought, i))) continue;
-		char id[ID_LENGTH + 1];
-		memcpy(id, "ermine://", 9);
-		hex(im_key(&c->brought, i), 32, id + 9);
 		im_set(seen, im_key(&c->brought, i), (void *)1);
-		push(&todo, id);
+		push(&todo, c->brought.values[i]);
 	}
 	while (todo.count) {
 		char *id = todo.items[--todo.count];
@@ -500,7 +501,7 @@ bool cardStart(Card *c, pl *places, tb_table *table, sc_scheduler *s, const card
 	c->check = getenv("ERMOS_CARD_CHECK") != NULL;
 	// lazy: only what is followed comes off the card (only reachable exists): the root, and what it
 	// reaches, document by document
-	sy_options o = {.table = table, .store = &c->store, .zeros = true, .lazy = true, .tables = KEPT, .tables_length = sizeof KEPT / sizeof *KEPT,
+	sy_options o = {.table = table, .store = &c->store, .lazy = true, .tables = KEPT, .tables_length = sizeof KEPT / sizeof *KEPT,
 		.ephemeral = liveTable, .beat = LIVE_BEAT, .commit = committed, .drop = dropped, .context = c};
 	memcpy(o.seed, c->seed, 32);
 	c->sync = sy_create(&o);
@@ -551,6 +552,8 @@ void cardFree(Card *c) {
 	free(c->keys);
 	for (size_t i = 0; i < c->look.count; i++) free(c->look.items[i]);
 	free(c->look.items);
+	for (size_t i = 0; i < c->brought.slots; i++)
+		if (c->brought.used[i]) free(c->brought.values[i]);
 	im_free(&c->followed), im_free(&c->brought), im_free(&c->looking), im_free(&c->shadow);
 	free(c->folder), free(c);
 }
@@ -570,7 +573,7 @@ const char *cardKey(Card *c) {
 void cardFollow(Card *c, const char *doc) {
 	uint8_t bytes[32];
 	if (!c->sync || !tp_doc(doc, bytes) || im_has(&c->brought, bytes)) return;
-	im_set(&c->brought, bytes, (void *)1);
+	im_set(&c->brought, bytes, strdup(doc));
 	follow(c, doc);
 }
 

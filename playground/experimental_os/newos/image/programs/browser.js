@@ -50,8 +50,8 @@ export default (given) => {
 	const TAB = (id) => [...WINDOW, String(id)]
 	const WANT = ["/", "dev", "sync", "want", `browser-${self}`]
 	const HISTORY = ["/", "dev", "sync", "history"]
-	// a document's history is named by its id's 64 hex digits: a name never holds "/" (ermine://)
-	const historyOf = (doc) => [...HISTORY, doc.replace(/^ermine:\/\//, "")]
+	// a document's history is named by its id's hex digits: its id less "ermine:"
+	const historyOf = (doc) => [...HISTORY, doc.replace(/^ermine:/, "")]
 	const VIEW = [...me, "view"]
 	const copy = (v) => JSON.parse(JSON.stringify(v))
 	const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)

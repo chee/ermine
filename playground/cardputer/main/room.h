@@ -1,6 +1,7 @@
 // the room driver: lab-pig's room and pigs on littlesync (playground/together/stacks/littlesync; the
 // format: playground/demos/pigs/littlesync/pigs.h) as nodes in the graph.
-// /pigs/room is the room's value, /pigs/<first 8 hex of a pig's id> a pig's stored value, and
+// /pigs/room is the room's value (its pigs are its children, each followed), /pigs/<first 8 hex of a
+// pig's id> a pig's stored value, and
 // /pigs/<pig>/held the value its carrier is holding up (null: none), /pigs/<pig>/also the other drop
 // when two devices dropped it at once (null: none), /pigs/room/pointers the others' pointers (their
 // presence rows at the room: web pigs' and littlesync devices', [{who, name, colour, x, y}]; this

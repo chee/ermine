@@ -40,7 +40,9 @@ export default (given) => {
 	const LAYERS = ["/", "dev", "display", "layers"]
 	const LAYER = [...LAYERS, d.layer ?? `erminex-${self}`]
 	const borrowed = !!d.layer
-	const called = /^[0-9a-f]{64}$/i.test(CHANNEL) ? CHANNEL.slice(0, 8) : CHANNEL
+	// a window's id called by 8 of its hex digits, after its code's 4 (0010, 1e10 or ed01)
+	const bare = CHANNEL.replace(/^ermine:/, "")
+	const called = /^((0010|1e10)[0-9a-f]{32}|ed01[0-9a-f]{64})$/i.test(bare) ? bare.slice(4, 12) : CHANNEL
 	const set = (key, value) => ({ path: [key], value })
 
 	make(api, VIEW.slice(0, -1), NAME, { channel: CHANNEL }, { ephemeral: true })

@@ -363,11 +363,11 @@ static void reading(ap_api *a, void (*f)(void *ctx), void *ctx) {
 	pl_set_free(&fresh);
 }
 
-static const char *const ID_TEXT[] = {"value", "attributes", "children"};
+static const char *const TABLES[] = {"value", "attributes", "children"};
 
 static int loaded(ap_os *os, const char *id) {
 	for (size_t i = 0; i < 3; i++)
-		if (tb_get(os->table, tb_string(ID_TEXT[i]), tb_string(id))) return 1;
+		if (tb_get(os->table, tb_string(TABLES[i]), tb_string(id))) return 1;
 	size_t n = 0;
 	tb_at(os->table, tb_string(id), &n);
 	return n > 0;

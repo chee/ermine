@@ -46,7 +46,8 @@ export type Options = {
 // every suite there is: a folder in <package>/conformance/ with an adapter in <package>/typescript/
 export function suites(): Suite[] {
 	const found: Suite[] = []
-	// a package is a folder of a group with conformance/ in it, or one folder further down (playground/tools/files)
+	// a package is a folder of a group with conformance/ in it, and any one folder further down
+	// (playground/tools/files, playground/together/presence)
 	const packages: string[] = []
 	const has = (path: string) => {
 		try {
@@ -59,11 +60,9 @@ export function suites(): Suite[] {
 		for (const p of Deno.readDirSync(`${root}${group}`)) {
 			if (!p.isDirectory) continue
 			if (has(`${group}/${p.name}`)) packages.push(`${group}/${p.name}`)
-			else {
-				for (const q of Deno.readDirSync(`${root}${group}/${p.name}`)) {
-					if (q.isDirectory && has(`${group}/${p.name}/${q.name}`)) {
-						packages.push(`${group}/${p.name}/${q.name}`)
-					}
+			for (const q of Deno.readDirSync(`${root}${group}/${p.name}`)) {
+				if (q.isDirectory && has(`${group}/${p.name}/${q.name}`)) {
+					packages.push(`${group}/${p.name}/${q.name}`)
 				}
 			}
 		}
