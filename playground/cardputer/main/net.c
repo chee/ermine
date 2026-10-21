@@ -25,6 +25,8 @@ static const char *TAG = "net";
 #define SLACK_MS 10000
 
 static volatile int joined;
+// why the last join failed (wifi_err_reason_t), 0 for none yet
+static volatile int why;
 static struct ls_link *gate;
 static ls_http *http;
 static esp_http_client_handle_t client;
@@ -35,9 +37,12 @@ static int busy;
 static char status[96];
 
 static void on_event(void *arg, esp_event_base_t base, int32_t id, void *data) {
-	(void)arg, (void)data;
+	(void)arg;
 	if (base == WIFI_EVENT && id == WIFI_EVENT_STA_START) esp_wifi_connect();
-	else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) joined = 0, esp_wifi_connect();
+	else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
+		joined = 0, why = ((wifi_event_sta_disconnected_t *)data)->reason;
+		esp_wifi_connect();
+	}
 	else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) joined = 1;
 }
 
@@ -147,9 +152,10 @@ void net_turn(int64_t now) {
 const char *net_status(void) {
 	if (http == NULL) return NULL;
 	const ls_http_stats *s = ls_http_stats_of(http);
+	char joining[24] = "joined";
+	if (!joined) snprintf(joining, sizeof joining, why ? "not joined (%d)" : "not joined", why);
 	snprintf(status, sizeof status, "wifi %s %s, session %s, posts %u failed %u%s", CONFIG_CARDPUTER_WIFI_SSID,
-		joined ? "joined" : "not joined", ls_http_session(http), (unsigned)s->posts, (unsigned)s->failed,
-		s->failing ? " (failing)" : "");
+		joining, ls_http_session(http), (unsigned)s->posts, (unsigned)s->failed, s->failing ? " (failing)" : "");
 	return status;
 }
 

@@ -305,7 +305,7 @@ export default (given) => {
 	// /etc/sync's presence (card/drv_sync.c, Live state). The words after share or mount choose:
 	// live (not without it), presence (so without it), nolive, nopresence.
 
-	const DOC = /^ermine:\/\/([0-9a-f]{64})$/
+	const DOC = /^ermine:((?:0010|1e10)[0-9a-f]{32}|ed01[0-9a-f]{64})$/
 	const SHARED = ["/", "dev", "sync", "shared"]
 	/** the choices the words make: a word chooses, "no" before it unchooses, none the default */
 	const choices = (words) => ({

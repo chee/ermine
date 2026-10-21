@@ -103,7 +103,7 @@ MallocStackLogging=1 leaks --atExit -- "$FILES" new "$tmp/A" --server "$url" --h
 a=$!
 pids="$pids $a"
 until_ "grep -q 'is laid out' '$tmp/A.log'" 60 || { echo "FAIL: A was not laid out" >&2; cat "$tmp/A.log" >&2; exit 1; }
-doc=$(grep -ao 'ermine://[0-9a-f]*' "$tmp/A.log" | head -1)
+doc=$(grep -ao 'ermine:[0-9a-f]*' "$tmp/A.log" | head -1)
 echo one >"$tmp/A/one.txt"
 mkdir "$tmp/A/dir" && echo two >"$tmp/A/dir/two.txt"
 MallocStackLogging=1 leaks --atExit -- "$FILES" "$doc" "$tmp/B" --server "$url" --home "$tmp/hB" >"$tmp/B.report" 2>"$tmp/B.log" &

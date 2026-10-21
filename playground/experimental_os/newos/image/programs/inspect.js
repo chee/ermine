@@ -1438,7 +1438,7 @@ export default (given) => {
 		if (!i || i.ephemeral === true) {
 			return [head, row("h.none", "none", undefined, { note: "ephemeral: no history kept" })]
 		}
-		const h = rd(api, ["/", "dev", "sync", "history", i.id.replace(/^ermine:\/\//, "")])[0]?.value
+		const h = rd(api, ["/", "dev", "sync", "history", i.id.replace(/^ermine:/, "")])[0]?.value
 		if (!h) {
 			return [
 				head,

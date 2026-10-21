@@ -71,7 +71,7 @@ void show(const op_value *screen) {
 	const ls_node *last_pig = room_last();
 	if (last_pig) {
 		ls_cost c = ls_cost_of(last_pig);
-		snprintf(pig, sizeof pig, "%.4s %uB %uc %up", ls_id(last_pig) + 9, (unsigned)c.stored, (unsigned)c.commits,
+		snprintf(pig, sizeof pig, "%.4s %uB %uc %up", ls_id(last_pig) + 11, (unsigned)c.stored, (unsigned)c.commits,
 			(unsigned)c.newest.parents);
 	}
 	snprintf(top, sizeof top, "ermine %-17.17s%4uK", pig, (unsigned)(heap_caps_get_free_size(MALLOC_CAP_8BIT) / 1024));

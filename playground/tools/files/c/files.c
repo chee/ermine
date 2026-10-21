@@ -2,10 +2,10 @@
 // kept in step both ways (host.h, playground/together), or a store on a real folder, no sync
 //
 //   files new <folder> [--server wss://…] [--home DIR]
-//                                   a new document laid out in the folder; prints its ermine:// id
-//   files ermine://… <folder> [--server wss://…] [--home DIR] [--named]
+//                                   a new document laid out in the folder; prints its ermine id
+//   files ermine:… <folder> [--server wss://…] [--home DIR] [--named]
 //                                   laid out, kept in step till C-c; --named: every node an
-//                                   ermine:// id in a value names laid out too
+//                                   ermine id in a value names laid out too
 // device: home/.ermine/device (--home, or HOME). server: wss://galaxy.observer unless --server
 // ("" for none)
 //
@@ -43,9 +43,9 @@ static const char USAGE[] =
 	"usage: files <command> <folder> ...\n"
 	"  new <folder> [--server URL] [--home DIR]\n"
 	"                                   a new shared document laid out in the folder; prints its id\n"
-	"  ermine://... <folder> [--server URL] [--home DIR] [--named]\n"
+	"  ermine:... <folder> [--server URL] [--home DIR] [--named]\n"
 	"                                   the document laid out in the folder, kept in step, till C-c;\n"
-	"                                   --named: and every node an ermine:// id in a value names\n"
+	"                                   --named: and every node an ermine id in a value names\n"
 	"  init <folder>                    a new store in the folder; prints the root's id\n"
 	"  put <folder> <path> [value]      the node at the slot path (a/b/c) gets the value: text,\n"
 	"                                   or --file F (its bytes), or --diag 'TEXT' (diagnostic notation)\n"
@@ -571,7 +571,7 @@ static void mend(const char *given, const char *const *paths, size_t n) {
 	check(st_mend(store, paths, n));
 }
 
-// files new|ermine://… <folder> [--server URL] [--home DIR] [--named]
+// files new|ermine:… <folder> [--server URL] [--home DIR] [--named]
 static int host(int argc, char **argv) {
 	fh_options o = {.doc = argv[1]};
 	const char *folder = NULL;
@@ -590,7 +590,7 @@ static int host(int argc, char **argv) {
 int main(int argc, char **argv) {
 	if (argc < 3) usage();
 	const char *command = argv[1], *where = argv[2];
-	if (strcmp(command, "new") == 0 || strncmp(command, "ermine://", 9) == 0) return host(argc, argv);
+	if (strcmp(command, "new") == 0 || strncmp(command, "ermine:", 7) == 0) return host(argc, argv);
 	if (strcmp(command, "init") == 0 && argc == 3) init(where);
 	else if (strcmp(command, "put") == 0 && argc >= 4) {
 		Json *value = NULL;

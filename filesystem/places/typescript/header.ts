@@ -55,23 +55,26 @@ export function createChangeBase(
 }
 
 // the header of a write made now
+// skip: files a library calls through on the way here (its own, and what it wraps calls in), so the
+// site is the first frame outside them too
 export function createChangeHeader(
 	scheduler: Pick<Scheduler, "getCurrentScope" | "getRun">,
 	extra?: Info,
+	skip?: Iterable<string>,
 ): ChangeHeader {
 	const w = createChangeBase(scheduler, extra)
 	if (w === undefined) throw new SchedulerError("unscoped", "a write with no scope open")
 	const h: ChangeHeader = { ...w, time: Math.floor(Date.now() / 1000) }
-	const site = siteOf(scheduler.getRun())
+	const site = siteOf(scheduler.getRun(), skip === undefined ? ours : new Set([...ours, ...skip]))
 	if (site) h.external = [site]
 	return h
 }
 
 // outside a run, the call's own; in a run, the run's, captured at its first write
-function siteOf(run: Run | undefined): FileLocation | undefined {
-	if (run === undefined) return capture(ours, createChangeHeader)
+function siteOf(run: Run | undefined, skip: ReadonlySet<string>): FileLocation | undefined {
+	if (run === undefined) return capture(skip, createChangeHeader)
 	if (sites.has(run)) return sites.get(run)
-	const site = capture(ours, createChangeHeader)
+	const site = capture(skip, createChangeHeader)
 	sites.set(run, site)
 	return site
 }

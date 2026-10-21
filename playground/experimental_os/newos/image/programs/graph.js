@@ -334,9 +334,8 @@ export default (given) => {
 		}
 		const i = idOf(api, path)
 		if (!i || i.ephemeral === true) return { none: "ephemeral: no history kept" }
-		const h =
-			rd(api, ["/", "dev", "sync", "history", i.id.replace(/^ermine:\/\//, "")])[0]?.value ??
-				null
+		const h = rd(api, ["/", "dev", "sync", "history", i.id.replace(/^ermine:/, "")])[0]?.value ??
+			null
 		return { id: i.id, h }
 	})
 	let wanted = null

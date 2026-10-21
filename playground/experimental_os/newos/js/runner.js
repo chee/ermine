@@ -4164,13 +4164,13 @@
     }
   }
   var layout = {
-    /** a layout's address: an id is a name less its ermine:// (and any / in it) */
+    /** a layout's address: an id is a name less its "ermine:" (and any / in it) */
     at: (id) => [
       "/",
       "apps",
       "computer",
       "layout",
-      id === "/" ? "root" : id.replace(/^ermine:\/\//, "").replaceAll("/", "\u2215")
+      id === "/" ? "root" : id.replace(/^ermine:/, "").replaceAll("/", "\u2215")
     ],
     /** made the first time: /apps/computer/layout, a folder */
     ready(api) {

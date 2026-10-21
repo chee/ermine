@@ -3,7 +3,7 @@
 // watch.h), on the files graph (graph.h), so an edit made in the folder is a change to the document, which sync
 // (playground/together/c/sync.h) commits as any other; a change from another device arrives, and the next batch lays it out.
 //
-// Kept: every ermine:// id a children entry reached from the root names is followed; an ephemeral node (the program's
+// Kept: every document's id (an ermine id: ermine/ids) a children entry reached from the root names is followed; an ephemeral node (the program's
 // listing) has an id of its own and never leaves the device. A document that has not arrived is not laid out: the folder
 // waits for the root's first entry, from the device's storage or the network.
 //
@@ -25,7 +25,7 @@
 #define FH_SERVER "wss://galaxy.observer"
 
 typedef struct {
-	// the document's ermine:// id, or "new" for a new one: its id is printed on stdout
+	// the document's ermine id, or "new" for a new one: its id is printed on stdout
 	const char *doc;
 	const char *folder;
 	// where ~ is: the device is in home/.ermine/device; NULL: $HOME
@@ -34,8 +34,8 @@ typedef struct {
 	const char *server;
 	// ms with no change before a batch is laid out; 0: 20
 	unsigned quiet;
-	// also every node an ermine:// id inside a value names (a key or a string, at any depth), followed and laid out as a
-	// slot of the node whose value names it, named by the id's first 8 hex digits. Only the layout has those slots
+	// also every node an ermine id inside a value names (a key or a string, at any depth), followed and laid out as a
+	// slot of the node whose value names it, named by the first 8 hex digits of the id after its code. Only the layout has those slots
 	bool named;
 } fh_options;
 

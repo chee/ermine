@@ -200,7 +200,7 @@ export default (given) => {
 	// a document's history, /dev/sync/history/<its id>: none while sync serves none (an id that is no name has none)
 	const historyOf = (api, doc) => {
 		try {
-			return val(api, [...HISTORY, doc.replace(/^ermine:\/\//, "")]) ?? null
+			return val(api, [...HISTORY, doc.replace(/^ermine:/, "")]) ?? null
 		} catch {
 			return null
 		}
