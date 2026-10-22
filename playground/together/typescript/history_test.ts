@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertThrows } from "@std/assert"
-import { type Commit, compare, encode, joinName, name } from "@ermine/encoding/commit"
+import { type Commit, compare, encode, joinName, name } from "@ermine/formats/commit"
 import { createHistory } from "./history.ts"
 import { replay } from "./replay.ts"
 import { snapshot, tablesOf } from "./snapshot.ts"

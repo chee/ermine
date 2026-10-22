@@ -2,7 +2,7 @@
 // (socket.ts), the gateway dialling it, a TS device (link.ts) on the gateway. the server's socket is
 // closed under it: the gateway dials again, and what either side wrote meanwhile crosses
 import { assert, assertEquals } from "@std/assert"
-import { encode as encodeCommit, name as nameOf } from "@ermine/encoding/commit"
+import { encode as encodeCommit, name as nameOf } from "@ermine/formats/commit"
 import { createSigner, seal, type Signer } from "../../../typescript/seal.ts"
 import { hex, unhex } from "../../../typescript/hex.ts"
 import { createGateway } from "./gateway.ts"

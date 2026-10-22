@@ -24,7 +24,7 @@
 // { op: "open-message", value, topic, also? } → the same, the value encoded canonically first
 // refused: { error: code }, SealError's code; a commit's own refusal as the commit harness gives it
 import * as cbor from "@ermine/encoding/cbor"
-import { encode } from "@ermine/encoding/commit"
+import { encode } from "@ermine/formats/commit"
 import { revive } from "../../../conformance/typescript/form.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
 import {
@@ -33,7 +33,7 @@ import {
 	jsonOf,
 	refusal,
 	unhex,
-} from "../../../ermine/encoding/typescript/commit_harness.ts"
+} from "../../encoding/typescript/commit_harness.ts"
 import {
 	createSigner,
 	ED25519,

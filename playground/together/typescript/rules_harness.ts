@@ -9,7 +9,7 @@
 // order (lower lamport, then lesser name) to its table; one whose patches don't apply is left out
 // whole. a table's change: the last commit applied to it. get is not asked: the same from any start
 import apply from "@ermine/op/apply"
-import { decode } from "@ermine/encoding/commit"
+import { decode } from "@ermine/formats/commit"
 import { since } from "./history.ts"
 import { changeOf, type Merge, type Merges, type Tables } from "./replay.ts"
 

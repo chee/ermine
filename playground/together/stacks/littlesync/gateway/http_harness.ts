@@ -1,6 +1,6 @@
 // a TS device (link.ts) over HTTP sessions (http.ts), for tests
 import { assertEquals } from "@std/assert"
-import { encode as encodeCommit, name as nameOf } from "@ermine/encoding/commit"
+import { encode as encodeCommit, name as nameOf } from "@ermine/formats/commit"
 import { createSigner, seal, type Signer } from "../../../typescript/seal.ts"
 import { hex, unhex } from "../../../typescript/hex.ts"
 import { type Message, peek as decodeSealed } from "./wire.ts"

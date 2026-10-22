@@ -16,7 +16,7 @@
 import * as cbor from "@ermine/encoding/cbor"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
-import { hex, unhex } from "../../../ermine/encoding/typescript/commit_harness.ts"
+import { hex, unhex } from "../../encoding/typescript/commit_harness.ts"
 import { createCommits } from "./harnesses.ts"
 import { type Member, pack, PackError, unpack } from "./packer.ts"
 import { stored } from "./seal.ts"

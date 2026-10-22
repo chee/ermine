@@ -15,7 +15,7 @@
 //
 // beside it, for merge rules: what a commit's tables follow from (follows), and the commits since a
 // set of heads' common ancestor, in causal order (since)
-import { type Commit, compare, decode, name as nameOf } from "@ermine/encoding/commit"
+import { type Commit, compare, decode, name as nameOf } from "@ermine/formats/commit"
 import { hex } from "./hex.ts"
 
 export type Refusal = "shape" | "lamport" | "patches" | "parent"

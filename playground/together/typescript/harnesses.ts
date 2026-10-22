@@ -2,10 +2,10 @@
 // makes from a request, each under a label, its fields from the request or their defaults, its
 // parents and base by label; tables as JSON; in-memory pipes
 import type { Transport } from "npm:@automerge/subduction@0.23.0"
-import { type Commit, compare, encode, name as nameOf } from "@ermine/encoding/commit"
+import { type Commit, compare, encode, name as nameOf } from "@ermine/formats/commit"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"
 import type { Request } from "../../../conformance/typescript/harness.ts"
-import { hex, unhex } from "../../../ermine/encoding/typescript/commit_harness.ts"
+import { hex, unhex } from "../../encoding/typescript/commit_harness.ts"
 import type { Tables } from "./replay.ts"
 import { createSigner, seal, type Signer } from "./seal.ts"
 
