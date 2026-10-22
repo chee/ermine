@@ -18,6 +18,7 @@
 #include <unistd.h>
 
 #include <curl/curl.h>
+#include <malloc/malloc.h>
 
 #include "core/ed25519/c/ed25519.h"
 #include "core/op/c/json.h"
@@ -137,6 +138,13 @@ void frame_again(void) {
 }
 
 void den_random(uint8_t *out, size_t n) { arc4random_buf(out, n); }
+
+void den_mark(const char *what) {
+	malloc_statistics_t m;
+	malloc_zone_statistics(NULL, &m);
+	size_t most, heap = den_heap(&most);
+	printf("mark: %s: %zu in use, tippet %zu\n", what, m.size_in_use, heap);
+}
 
 // ---- poll.h's workers: two threads, each with a curl handle kept between requests ----
 
@@ -284,7 +292,11 @@ int main(int argc, char **argv) {
 	}
 	char dir[256];
 	snprintf(dir, sizeof dir, "%s/%s", home, room);
+	malloc_statistics_t before, after;
+	malloc_zone_statistics(NULL, &before);
 	if (den_boot(&me, room, dir, now_ms())) return 1;
+	malloc_zone_statistics(NULL, &after);
+	printf("den: up, %zu bytes in use more (malloc's, ASan's own too)\n", after.size_in_use - before.size_in_use);
 	printf("den: %s in room %s\n", me.id, room);
 	int online = strcmp(server, "none") != 0;
 	if (online) {
@@ -315,6 +327,8 @@ int main(int argc, char **argv) {
 				if (strcmp(line, "tab") == 0) den_trust_last();
 				else if (strcmp(line, "print") == 0) den_print();
 				else if (strcmp(line, "quit") == 0) return 0;
+				else if (strcmp(line, "snapshot") == 0) den_snapshot();
+				else if (strcmp(line, "mark") == 0) den_mark("now");
 				else {
 					for (char *c = line; *c; c++) {
 						char key[2] = {*c, 0};

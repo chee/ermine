@@ -52,6 +52,9 @@ void den_band(void);
 // how many asks this den has answered; how many steps its log holds, every device's
 unsigned den_asks(void);
 uint64_t den_steps(void);
+// the history's snapshot into the log's store (tippet's): a boot loads it and the steps after. 0 or a
+// code
+int den_snapshot(void);
 // the dens heard, the keys, the log, a line each, on stdout
 void den_print(void);
 // tippet's own heap (its tp_mem): now, and the most yet
@@ -59,5 +62,7 @@ size_t den_heap(size_t *most);
 // the platform's: the screen drawn again (the last picture, with the band); n random bytes
 void frame_again(void);
 void den_random(uint8_t *out, size_t n);
+// the platform's: the heap at a stage of the den's boot, said
+void den_mark(const char *what);
 
 #endif

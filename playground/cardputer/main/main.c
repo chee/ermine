@@ -57,6 +57,10 @@ void den_random(uint8_t *out, size_t n) { esp_fill_random(out, n); }
 static size_t free_now(void) { return heap_caps_get_free_size(MALLOC_CAP_8BIT); }
 static size_t least(void) { return heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT); }
 
+void den_mark(const char *what) {
+	printf("heap: %s: %u free, tippet %u\n", what, (unsigned)free_now(), (unsigned)den_heap(NULL));
+}
+
 static void print(void) {
 	const op_value *lines = last ? op_get(last, "lines") : NULL;
 	printf("---\n");
@@ -79,7 +83,6 @@ static const char *serial_key(char c) {
 	if (c == '\r' || c == '\n') return "enter";
 	if (c == 0x7f || c == 0x08) return "backspace";
 	if (c == 0x1b) return "esc";
-	if (c == '\t') return "tab";
 	if (c < ' ' || c > '~') return NULL;
 	one[0] = c;
 	return one;
@@ -215,11 +218,11 @@ void app_main(void) {
 			for (int i = 0; i < n; i++) {
 				// \r\n is one enter
 				if (typed[i] == '\n' && i && typed[i - 1] == '\r') continue;
-				if ((k = serial_key(typed[i])) == NULL) continue;
-				if (strcmp(k, "tab") == 0) {
+				if (typed[i] == '\t') {
 					den_trust_last();
 					continue;
 				}
+				if ((k = serial_key(typed[i])) == NULL) continue;
 				// typed on the serial line: the shell's, and the den's keys' too
 				if (shell_on) keyboard_press(keyboard_api, k);
 				if (strlen(k) == 1) things_key(k);
