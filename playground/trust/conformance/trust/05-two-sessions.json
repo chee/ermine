@@ -1,0 +1,40 @@
+{
+	"title": "an install in the keys vouches for any number of sessions: two tabs of one install are each believed for what each signed",
+	"steps": [
+		{
+			"op": "session",
+			"name": "tab1",
+			"install": "I1",
+			"expect": {}
+		},
+		{
+			"op": "session",
+			"name": "tab2",
+			"install": "I1",
+			"expect": {}
+		},
+		{
+			"op": "keys",
+			"value": {
+				"I1": {}
+			},
+			"expect": {}
+		},
+		{
+			"op": "check",
+			"session": "tab1",
+			"message": "one",
+			"expect": {
+				"trusted": true
+			}
+		},
+		{
+			"op": "check",
+			"session": "tab2",
+			"message": "two",
+			"expect": {
+				"trusted": true
+			}
+		}
+	]
+}

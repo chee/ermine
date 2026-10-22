@@ -9,13 +9,13 @@
 // runs on it runs under it, so its node going takes them, newest first.
 // a stored owner's offers (an install's node): their folders and attributes stay when its scope
 // goes, only the live value goes, and a later offer of the name goes over them. any other owner's
-// go whole with it.
+// go whole with it, the folder's name out of the owner's children too.
 // a name taken (offered now; a live value there; for an owner not stored, any entry at its id):
 // refused taken, nothing made. not a name: PlacesError not-a-name; an owner whose scope is gone:
 // PlacesError nothing-there
 // withdraw: its name out of its folder and its attributes out, then its scope torn down, what runs
-// on it stopped "withdrawn". an id none offers now but a stored owner's folder names: out of its
-// folder (every name pointing at it), its attributes out. its owner going takes it with the rest of
+// on it stopped "withdrawn". an id none offers now but its folder (<owner>/<kind>) names: out of
+// the folder (every name pointing at it), its attributes out. its owner going takes it with the rest of
 // its scope, what runs on it stopped "runner-stopped"
 // a runner (a runner node's value): { start(code, start) → handle, load?(code, start) → live,
 // api?(start) → api }, or a function, its start (its own load and api too, if it has them)
@@ -100,7 +100,20 @@ export function createOffers(c: Ctx) {
 		if (folder === undefined) {
 			const fid: Id = `${String(o.id)}/${kind}`
 			const scope = createScope({ offers: kind, [NODE]: fid }, o.under)
-			if (!stored) scopes.give(scope, fid)
+			if (!stored) {
+				scopes.give(scope, fid)
+				// its name out of the owner's children as it goes (a process's whole node goes anyway;
+				// a place's stays). the host's scope going: everything goes, nothing to tidy
+				s.registerTeardown(scope, () => {
+					const there = table.get("children", o.id) as Entry<unknown> | undefined
+					if (there === undefined || !isMap(there.value) || there.value[kind] !== fid) return
+					if (c.scope.state !== "alive") return
+					s.runWithScope(c.scope, () => {
+						update(there, [{ path: [kind] }], headerOf())
+						commit([there])
+					})
+				})
+			}
 			folder = { id: fid, scope }
 			o.folders.set(kind, folder)
 			s.runWithScope(

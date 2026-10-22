@@ -1,0 +1,303 @@
+{
+	"title": "an owner whose scope is gone offers and loads nothing: PlacesError nothing-there, nothing made: a place whose scope went before it was first named, one named before (its offers gone with it), a stored one (its names there, the scope gone), the session after its scope went. the name and the kind are checked first: not-a-name, not a kind, before nothing-there",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"apps": "APPS",
+				"p": "P",
+				"q": "Q",
+				"i": "I"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "APPS",
+			"value": {
+				"clock.js": "CLOCK"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "CLOCK",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CLOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source"
+			},
+			"live": "record",
+			"expect": {
+				"id": "session/runners/javascript",
+				"at": [
+					"system",
+					"session",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "place",
+			"name": "p",
+			"id": "P",
+			"at": [
+				"p"
+			],
+			"expect": {}
+		},
+		{
+			"op": "close-place",
+			"name": "p",
+			"expect": {}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "x",
+			"live": "record",
+			"by": "p",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "load",
+			"name": "l",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"by": "p",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "node",
+			"id": "p/runners",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"id": "p/runners/x",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"id": "p",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "..",
+			"by": "p",
+			"expect": {
+				"error": "not-a-name"
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "folders",
+			"name": "x",
+			"by": "p",
+			"fails": true
+		},
+		{
+			"op": "place",
+			"name": "q",
+			"id": "Q",
+			"at": [
+				"q"
+			],
+			"expect": {}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "x",
+			"live": "record",
+			"by": "q",
+			"expect": {
+				"id": "q/runners/x",
+				"at": [
+					"q",
+					"runners",
+					"x"
+				]
+			}
+		},
+		{
+			"op": "close-place",
+			"name": "q",
+			"expect": {}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "y",
+			"live": "record",
+			"by": "q",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "node",
+			"id": "q/runners/y",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "place",
+			"name": "i",
+			"id": "I",
+			"at": [
+				"i"
+			],
+			"stored": true,
+			"expect": {}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "x",
+			"live": "record",
+			"by": "i",
+			"expect": {
+				"id": "i/runners/x",
+				"at": [
+					"i",
+					"runners",
+					"x"
+				]
+			}
+		},
+		{
+			"op": "close-place",
+			"name": "i",
+			"expect": {}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "x",
+			"live": "record",
+			"by": "i",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "y",
+			"live": "record",
+			"by": "i",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "node",
+			"id": "i/runners/y",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "loads",
+			"expect": {
+				"loads": [],
+				"unloads": []
+			}
+		},
+		{
+			"op": "offers",
+			"expect": {
+				"offers": [
+					{
+						"id": "session/runners/javascript",
+						"at": [
+							"system",
+							"session",
+							"runners",
+							"javascript"
+						],
+						"kind": "runners",
+						"name": "javascript",
+						"by": "session"
+					}
+				]
+			}
+		},
+		{
+			"op": "close-place",
+			"expect": {}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "again",
+			"live": "record",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "offers",
+			"expect": {
+				"offers": []
+			}
+		}
+	]
+}

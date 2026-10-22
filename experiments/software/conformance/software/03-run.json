@@ -1,0 +1,745 @@
+{
+	"title": "run: the runner by its path from places' root, the program by its path (a list or a string), a process at work/clock (proc:a). on its node at once: ermine.type ermine.process, ermine.process.runner (the offer's id and path), ermine.process.program (its id, its path, the hash of its value), its args and cwd (none given: at's folder), status pending; running() lists it. the code read once, at the run: a change before the first pulse is not what runs. nothing runs until the first pulse: then the runner's start called once, its process's scope open, with the code and the Start (box, places, process { id, at, args, cwd }, scheduler, table, scope), the status gone; another pulse calls it no more. cwd and pin given: ermine.process.cwd and .pin as given (a NaN and a big integer too). a program by id: no path, the hash of its value; carried code: the id given, the hash of the code; a program whose value is live: no hash",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"apps": "APPS"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "APPS",
+			"value": {
+				"clock.js": "CLOCK",
+				"live.js": "LIVE"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "CLOCK",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CLOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "LIVE",
+			"live": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "LIVE",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api"
+			},
+			"live": "record",
+			"expect": {
+				"id": "session/runners/javascript",
+				"at": [
+					"system",
+					"session",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "running",
+			"expect": {
+				"running": []
+			}
+		},
+		{
+			"op": "run",
+			"name": "a",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"clock"
+			],
+			"args": [
+				"a.txt"
+			],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"work",
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "proc:a",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.type": "ermine.process",
+					"ermine.process.runner": {
+						"id": "session/runners/javascript",
+						"at": [
+							"system",
+							"session",
+							"runners",
+							"javascript"
+						]
+					},
+					"ermine.process.program": {
+						"id": "CLOCK",
+						"at": [
+							"apps",
+							"clock.js"
+						],
+						"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+					},
+					"ermine.process.args": [
+						"a.txt"
+					],
+					"ermine.process.cwd": [
+						"work"
+					]
+				},
+				"status": "pending",
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"id": "proc:a"
+			}
+		},
+		{
+			"op": "running",
+			"expect": {
+				"running": [
+					"proc:a"
+				]
+			}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [],
+				"stops": []
+			}
+		},
+		{
+			"op": "value",
+			"id": "CLOCK",
+			"value": "changed",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "proc:a",
+						"code": "hi",
+						"args": [
+							"a.txt"
+						],
+						"cwd": [
+							"work"
+						],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					}
+				],
+				"stops": []
+			}
+		},
+		{
+			"op": "node",
+			"id": "proc:a",
+			"skip": [
+				"parts",
+				"attributes",
+				"children",
+				"live"
+			],
+			"expect": {
+				"status": null
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "proc:a",
+						"code": "hi",
+						"args": [
+							"a.txt"
+						],
+						"cwd": [
+							"work"
+						],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					}
+				],
+				"stops": []
+			}
+		},
+		{
+			"op": "run",
+			"name": "b",
+			"runner": "/system/session/runners/javascript",
+			"program": "/apps/clock.js",
+			"at": "/work/b",
+			"cwd": [
+				"apps"
+			],
+			"pin": {
+				"v": 1
+			},
+			"expect": {
+				"id": "proc:b",
+				"at": [
+					"work",
+					"b"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "proc:b",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.type": "ermine.process",
+					"ermine.process.runner": {
+						"id": "session/runners/javascript",
+						"at": [
+							"system",
+							"session",
+							"runners",
+							"javascript"
+						]
+					},
+					"ermine.process.program": {
+						"id": "CLOCK",
+						"at": [
+							"apps",
+							"clock.js"
+						],
+						"hash": "5ee6baea8386fb69bc73355a726aa9fc48cbbbc3a6113d116c6632f73db8177c"
+					},
+					"ermine.process.cwd": [
+						"apps"
+					],
+					"ermine.process.pin": {
+						"v": 1
+					}
+				},
+				"status": "pending",
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "run",
+			"name": "c",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"c"
+			],
+			"pin": [
+				{
+					"/": {
+						"number": "NaN"
+					}
+				},
+				{
+					"/": {
+						"bigint": "1152921504606846976"
+					}
+				},
+				1.5
+			],
+			"expect": {
+				"id": "proc:c",
+				"at": [
+					"work",
+					"c"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "proc:c",
+			"skip": [
+				"parts",
+				"status",
+				"children",
+				"live"
+			],
+			"expect": {
+				"attributes": {
+					"ermine.type": "ermine.process",
+					"ermine.process.runner": {
+						"id": "session/runners/javascript",
+						"at": [
+							"system",
+							"session",
+							"runners",
+							"javascript"
+						]
+					},
+					"ermine.process.program": {
+						"id": "CLOCK",
+						"at": [
+							"apps",
+							"clock.js"
+						],
+						"hash": "5ee6baea8386fb69bc73355a726aa9fc48cbbbc3a6113d116c6632f73db8177c"
+					},
+					"ermine.process.cwd": [
+						"work"
+					],
+					"ermine.process.pin": [
+						{
+							"/": {
+								"number": "NaN"
+							}
+						},
+						{
+							"/": {
+								"bigint": "1152921504606846976"
+							}
+						},
+						1.5
+					]
+				}
+			}
+		},
+		{
+			"op": "run",
+			"name": "d",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"javascript"
+			],
+			"program": {
+				"id": "CLOCK"
+			},
+			"at": [
+				"work",
+				"d"
+			],
+			"expect": {
+				"id": "proc:d",
+				"at": [
+					"work",
+					"d"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "proc:d",
+			"skip": [
+				"parts",
+				"status",
+				"children",
+				"live"
+			],
+			"expect": {
+				"attributes": {
+					"ermine.type": "ermine.process",
+					"ermine.process.runner": {
+						"id": "session/runners/javascript",
+						"at": [
+							"system",
+							"session",
+							"runners",
+							"javascript"
+						]
+					},
+					"ermine.process.program": {
+						"id": "CLOCK",
+						"hash": "5ee6baea8386fb69bc73355a726aa9fc48cbbbc3a6113d116c6632f73db8177c"
+					},
+					"ermine.process.cwd": [
+						"work"
+					]
+				}
+			}
+		},
+		{
+			"op": "run",
+			"name": "e",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"javascript"
+			],
+			"program": {
+				"id": "CLOCK",
+				"hash": "5ee6baea8386fb69bc73355a726aa9fc48cbbbc3a6113d116c6632f73db8177c"
+			},
+			"at": [
+				"work",
+				"e"
+			],
+			"expect": {
+				"id": "proc:e",
+				"at": [
+					"work",
+					"e"
+				]
+			}
+		},
+		{
+			"op": "run",
+			"name": "f",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"javascript"
+			],
+			"program": {
+				"id": "carried",
+				"code": "move",
+				"type": "com.netscape.javascript-source"
+			},
+			"at": [
+				"work",
+				"f"
+			],
+			"expect": {
+				"id": "proc:f",
+				"at": [
+					"work",
+					"f"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "proc:f",
+			"skip": [
+				"parts",
+				"status",
+				"children",
+				"live"
+			],
+			"expect": {
+				"attributes": {
+					"ermine.type": "ermine.process",
+					"ermine.process.runner": {
+						"id": "session/runners/javascript",
+						"at": [
+							"system",
+							"session",
+							"runners",
+							"javascript"
+						]
+					},
+					"ermine.process.program": {
+						"id": "carried",
+						"hash": "5972c310ef830f93a51f5956ba17a6acd6ee222b393bb7535c4ae183fdb599d3"
+					},
+					"ermine.process.cwd": [
+						"work"
+					]
+				}
+			}
+		},
+		{
+			"op": "run",
+			"name": "g",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"live.js"
+			],
+			"at": [
+				"work",
+				"g"
+			],
+			"expect": {
+				"id": "proc:g",
+				"at": [
+					"work",
+					"g"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "proc:g",
+			"skip": [
+				"parts",
+				"status",
+				"children",
+				"live"
+			],
+			"expect": {
+				"attributes": {
+					"ermine.type": "ermine.process",
+					"ermine.process.runner": {
+						"id": "session/runners/javascript",
+						"at": [
+							"system",
+							"session",
+							"runners",
+							"javascript"
+						]
+					},
+					"ermine.process.program": {
+						"id": "LIVE",
+						"at": [
+							"apps",
+							"live.js"
+						]
+					},
+					"ermine.process.cwd": [
+						"work"
+					]
+				}
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "proc:a",
+						"code": "hi",
+						"args": [
+							"a.txt"
+						],
+						"cwd": [
+							"work"
+						],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					},
+					{
+						"process": "proc:b",
+						"code": "changed",
+						"args": [],
+						"cwd": [
+							"apps"
+						],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					},
+					{
+						"process": "proc:c",
+						"code": "changed",
+						"args": [],
+						"cwd": [
+							"work"
+						],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					},
+					{
+						"process": "proc:d",
+						"code": "changed",
+						"args": [],
+						"cwd": [
+							"work"
+						],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					},
+					{
+						"process": "proc:e",
+						"code": "changed",
+						"args": [],
+						"cwd": [
+							"work"
+						],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					},
+					{
+						"process": "proc:f",
+						"code": "move",
+						"args": [],
+						"cwd": [
+							"work"
+						],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					},
+					{
+						"process": "proc:g",
+						"code": {
+							"live": true
+						},
+						"args": [],
+						"cwd": [
+							"work"
+						],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					}
+				],
+				"stops": []
+			}
+		},
+		{
+			"op": "running",
+			"expect": {
+				"running": [
+					"proc:a",
+					"proc:b",
+					"proc:c",
+					"proc:d",
+					"proc:e",
+					"proc:f",
+					"proc:g"
+				]
+			}
+		}
+	]
+}

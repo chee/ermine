@@ -5,13 +5,15 @@
 // owner of what is offered with no by. software made over it, its scope the host's, its pulses
 // asked for (setup.schedule) held, run by later. names in answers (and taken back in requests): the
 // session "session", a process "proc:<its name>", a place by its name, a derived id its longest
-// named prefix and the rest (session/runners/javascript); any other id as it is. a PlacesError:
-// { error: code }
+// named prefix and the rest (session/runners/javascript); any other id as it is. a value's strings
+// are taken back too, so a path inside one is written as a string ("/system/session/..."), never
+// a list holding "session". a PlacesError: { error: code }
 // live runners, each given the start's facts:
-//   record   a function, its start: its run { process, code, args, cwd, root, keys, open } (root:
-//            its box's root; keys: the start's, sorted; open: its scope the one open); its stop
-//            { process, reason } (reason null: none); its load { by, code, cwd, open } (by: the
-//            start's process id), its live form's dispose { by, code }
+//   record   a function, its start: its run { process, code, args, cwd, root, keys, open } (code a
+//            function: { live: true }; root: its box's root; keys: the start's, sorted; open: its
+//            scope the one open); its stop { process, reason } (reason null: none); its load
+//            { by, code, cwd, open } (by: the start's process id), its live form's dispose
+//            { by, code }
 //   object   record's start and load as a map's own { start, load }, not a function
 //   boom     throws Error("boom"), its load too
 //   quiet    its run recorded as record's; gives back {} (no stop); no load
@@ -207,7 +209,7 @@ function noted(code: unknown, start: Start) {
 	const { process } = start
 	ran.push({
 		process: process.id,
-		code,
+		code: typeof code === "function" ? { live: true } : code,
 		args: process.args,
 		cwd: process.cwd,
 		root: start.box.root,
