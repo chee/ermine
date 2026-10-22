@@ -3,7 +3,8 @@
 // {"actor":"test"}. after every request the api's pulse runs, so readers have run by the next.
 // new ids "n1", "n2", … in order; a process's id "proc:<name>".
 // node: { path, part } | { id, part }.
-// processes are started by the harness (start, openwith, box need C not there yet).
+// processes are started by the harness (box needs C not there yet; start, stop and openwith are a
+// program starter's).
 //
 // world (first, or a plain one):
 // { op: "world", deny?, overlay?, uuid? } → {}   deny: [{ op, path }] refused;
@@ -54,11 +55,11 @@ import { createChangeHeader, NODE } from "@ermine/places/header"
 import { Refusal } from "@ermine/places/guard"
 import { addProcess, processes, removeProcess } from "@ermine/processes"
 import { createScopeNodes } from "@ermine/processes/scopes"
-import type { Process, Programs } from "@ermine/programs/start"
+import type { Process } from "@ermine/processes/start"
 import { no, type Policy, yes } from "@ermine/protect"
 import { createOverlay, type Overlay } from "@ermine/patch-nodes"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
-import { type API, createProcessContext, type ProcessContext, SendError } from "./api.ts"
+import { type API, createProcessAPIs, type ProcessAPIs, SendError } from "./api.ts"
 
 type Env = Map<string, unknown>
 type Running = { api: API; env: Env; process: Process }
@@ -67,7 +68,7 @@ type Made = {
 	s: ReturnType<typeof createScheduler>
 	table: Table
 	places: Places
-	context: ProcessContext
+	apis: ProcessAPIs
 	host: Scope
 	above: Scope
 	scopes: ReturnType<typeof createScopeNodes>
@@ -110,30 +111,24 @@ function make(o: Request = {}): Made {
 		: undefined
 	let n = 0
 	const running = new Map<string, Running>()
-	// programs' stop, as the harness starts: the row out, the scope torn down
-	const programs: Programs = {
-		start: () => {
-			throw new Error("start: not in this suite")
-		},
-		stop: (p) => {
-			if (p.scope.state !== "alive") return
-			s.runWithScope(p.scope, () => {
-				try {
-					places.commit(removeProcess(table, "R", p.at, createChangeHeader(s)))
-				} catch (e) {
-					if (!(e instanceof PlacesError)) throw e
-				}
-			})
-			s.teardown(p.scope)
-		},
-		runs: undefined,
+	// the host's stop, as the harness starts: the row out, the scope torn down
+	const stop = (p: Process) => {
+		if (p.scope.state !== "alive") return
+		s.runWithScope(p.scope, () => {
+			try {
+				places.commit(removeProcess(table, "R", p.at, createChangeHeader(s)))
+			} catch (e) {
+				if (!(e instanceof PlacesError)) throw e
+			}
+		})
+		s.teardown(p.scope)
 	}
-	const context = createProcessContext({
+	const apis = createProcessAPIs({
 		scheduler: s,
 		table,
 		commit,
 		host: { places, table, scheduler: s, commit },
-		programs: () => programs,
+		stop,
 		may,
 		overlay,
 		schedule: (f) => void later.push(f),
@@ -143,7 +138,7 @@ function make(o: Request = {}): Made {
 		s,
 		table,
 		places,
-		context,
+		apis,
 		host,
 		above,
 		scopes,
@@ -263,7 +258,7 @@ function start(r: Request): { id: Id } {
 		() => m.places.commit(addProcess(m.table, "R", at, id, createChangeHeader(m.s))),
 	)
 	const process: Process = { id, at, cwd: (r.cwd as string[]) ?? at.slice(0, -1), scope }
-	const api = m.context.createAPI({
+	const api = m.apis.createProcessAPI({
 		box: { root: "R", places: m.places },
 		places: m.places,
 		process: { id, at, args: (r.args as string[]) ?? [], cwd: process.cwd },
@@ -273,7 +268,8 @@ function start(r: Request): { id: Id } {
 	})
 	const env: Env = new Map()
 	m.running.set(r.name, { api, env, process })
-	m.s.runWithScope(scope, () => m.context.run((a: API) => run(a, env, r.program as Step[]), api))
+	// the harness's runner: the program's steps run once with the api, the process's scope open
+	m.s.runWithScope(scope, () => run(api, env, r.program as Step[]))
 	return { id }
 }
 
@@ -340,7 +336,7 @@ function answer(r: Request): Record<string, unknown> {
 		case "stop": {
 			const p = world().running.get(r.name)
 			if (p === undefined) throw new Error(`no process ${r.name}`)
-			world().context.stop(p.process, r.why)
+			world().apis.stop(p.process, r.why)
 			return {}
 		}
 		case "do": {

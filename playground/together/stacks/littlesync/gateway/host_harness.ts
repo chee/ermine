@@ -29,7 +29,9 @@ export async function createHost(name = "ts") {
 		ephemeral: (doc, part) => doc === waving && part === "value",
 	})
 	const scope = scheduler.createRootScope({ actor: name })
-	const write = (part: Key, id: Id, patches: Patch[]) =>
+	// every node it writes is shared, as writing used to follow it
+	const write = (part: Key, id: Id, patches: Patch[]) => {
+		if (typeof id === "string") sync.share(id).catch(() => {})
 		scheduler.runWithScope(scope, () => {
 			let e = table.get(part, id)
 			if (e === undefined) {
@@ -47,6 +49,7 @@ export async function createHost(name = "ts") {
 				sync.wrote([e])
 			}
 		})
+	}
 	return {
 		name,
 		signer,

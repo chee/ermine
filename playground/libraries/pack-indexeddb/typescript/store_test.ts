@@ -3,7 +3,7 @@ import { assertEquals, assertRejects, assertStrictEquals } from "@std/assert"
 import { IDBFactory } from "npm:fake-indexeddb@6"
 import createEntry from "@ermine/node/entry"
 import update from "@ermine/node/update"
-import { PackError } from "@ermine/encoding/pack"
+import { PackError } from "@ermine/formats/pack"
 import { createStore, type Factory } from "./store.ts"
 
 const fresh = () => createStore("test", { indexedDB: new IDBFactory() as unknown as Factory })

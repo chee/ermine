@@ -46,6 +46,7 @@
 			"tables": [],
 			"expect": {}
 		},
+		{ "op": "share", "host": "a", "id": "x", "expect": {} },
 		{
 			"op": "write",
 			"host": "a",

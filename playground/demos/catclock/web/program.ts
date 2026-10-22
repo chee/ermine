@@ -8,7 +8,7 @@
 // Lines and columns stay where they were, so clang's errors land where you typed; and a comment
 // edited in place, or an edit undone, is the same unit: the same key, a cache hit. A line added
 // is not.
-import { hash } from "@ermine/encoding/hash"
+import { hash } from "@ermine/formats/hash"
 import type { Value } from "@ermine/encoding/cbor"
 
 export type Unit = { main: string; files: Record<string, string> }

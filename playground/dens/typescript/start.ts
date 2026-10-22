@@ -2,11 +2,12 @@
 // hash, the policy), then the process: started at a path, loaded live with no process, stopped, and
 // the reasons it is stopped with. which question: how a program runs on a runner
 //
-// a start is a Start: { box, places, process: { id, at, args, cwd }, scheduler, table, scope, den }.
-// what the program gets is the runner's: this makes no api (no ermine/api here); a runner over
-// ermine/api builds it from context.createAPI(start), api? saying how (ermine/api's run is one).
-// programs' runners are functions given the Start where programs gives an api (realms.run:
-// createRealms({ createAPI }); dlopen's: its pointer given it). its limits are the runner's too: a
+// a start is a Start: @ermine/processes/start's Context ({ box, places, process: { id, at, args,
+// cwd }, scheduler, table, scope }) and the den. what the program gets is the runner's: this makes
+// no api (no ermine/api here); a runner over ermine/api builds it from
+// apis.createProcessAPI(start), api? saying how (@ermine/programs/api's run is one). programs'
+// runners are functions given the Start where programs gives an api (realms.run:
+// createRealms({ createProcessAPI }); dlopen's: its pointer given it). its limits are the runner's too: a
 // loop budget, fuel, a cost a call, by wrapping what it starts or loads; nothing here counts
 // start(runner, program, at, { args, cwd, box, pin }): runner from the den's root; program an
 // address from where's root (where: box, else the den's places) or { id, hash?, type?, api?,
@@ -53,16 +54,14 @@
 // "runner-stopped"); else none
 import { CborError } from "@ermine/encoding/cbor"
 import type { Value } from "@ermine/encoding/cbor"
-import { hash } from "@ermine/encoding/hash"
+import { hash } from "@ermine/formats/hash"
 import { type Address, type Box, inside } from "@ermine/boxes"
-import type { Id, Path, Places } from "@ermine/places"
+import type { Id, Path } from "@ermine/places"
 import { get } from "@ermine/places/lib"
 import { createChangeBase } from "@ermine/places/header"
-import type { Inside, Process, Processes } from "@ermine/processes/start"
+import type { Context, Inside, Process, Processes } from "@ermine/processes/start"
 import type { Answer, Target } from "@ermine/protect"
-import type { Scheduler, Scope } from "@ermine/scheduler"
 import { isPromise } from "@ermine/scheduler/helpers"
-import type { Table } from "@ermine/table"
 import {
 	ATTRIBUTE,
 	type Ctx,
@@ -91,32 +90,19 @@ export const DEN = "ermine.process.den"
 
 // what a runner gives back; @ermine/programs/start's Handle is one
 export type Handle = { readonly stop: (reason?: unknown) => unknown }
-// what a runner is handed: the start's facts (@ermine/programs/start's Start, and the den). a
+// what a runner is handed: the start's facts (@ermine/processes/start's Context, and the den). a
 // load's: its by's
-export type Start = {
-	readonly box: Box
-	readonly places: Places
-	readonly process: {
-		readonly id: Id
-		readonly at: Path
-		readonly args: readonly string[]
-		readonly cwd: Path
-	}
-	readonly scheduler: Scheduler
-	readonly table: Table
-	readonly scope: Scope
-	readonly den: Den
-}
+export type Start = Context & { readonly den: Den }
 // a live runner: start a process's program; load, a program live with no process; api, what its
-// programs get (the runner's, over context.createAPI(start) for ermine/api's)
+// programs get (the runner's, over apis.createProcessAPI(start) for @ermine/programs/api's)
 export type Runner = {
 	readonly start: (code: unknown, start: Start) => Handle | PromiseLike<Handle> | void
 	readonly load?: (code: unknown, start: Start) => unknown
 	readonly api?: (start: Start) => unknown
 }
 // what a runner node may hold: a Runner, or a function, its start (with its own load and api, if
-// it has them); @ermine/programs/start's Runner is one (realms.run, createDlopen's), ermine/api's run
-// both
+// it has them); @ermine/programs/start's Runner is one (realms.run, createDlopen's),
+// @ermine/programs/api's run both
 export type Runnable = Runner | (Runner["start"] & Partial<Pick<Runner, "load" | "api">>)
 // a load: the live form, and its letting go now (else at its holder's stop)
 export type Loaded = { readonly live: unknown; readonly release: () => void }

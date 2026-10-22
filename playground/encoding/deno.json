@@ -1,0 +1,12 @@
+{
+	"name": "@ermine/formats",
+	"version": "0.0.0",
+	"license": "AGPL-3.0-or-later",
+	"exports": {
+		"./blop": "./typescript/blop.ts",
+		"./commit": "./typescript/commit.ts",
+		"./deflate": "./typescript/deflate.ts",
+		"./hash": "./typescript/hash.ts",
+		"./pack": "./typescript/pack.ts"
+	}
+}

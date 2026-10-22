@@ -8,7 +8,6 @@
 import { type Commit, CommitError, decode, name as nameOf } from "@ermine/encoding/commit"
 import { type Added, createHistory, type History, type Judged, type Kept } from "./history.ts"
 import { hex, unhex } from "./hex.ts"
-import { kind } from "@ermine/ids"
 import { matches, type Merges, type Tables } from "./replay.ts"
 import { seal, type Signer, stored, unseal, utf8, type Verifier } from "./seal.ts"
 import { tablesOf } from "./snapshot.ts"
@@ -35,10 +34,10 @@ export type Check = (
 
 // why the mailroom or a stack refused a seal, a fragment or an ephemeral message before a history saw it.
 // what a history refuses (lamport, patches, a parent) is the history's: history(doc).refused().
-// boundary: a fragment's members, boundary or checkpoints not what its head's walk makes them. id:
-// an envelope opened (a stack's: the id and what it carries) naming another id than the one followed
-// (the refusal of a second id for a tree held is replaced by the envelope's id check), or a seal for
-// another id (seal.ts)
+// boundary: a fragment's members, boundary or checkpoints not what Subduction's build makes them for
+// its head. id: an envelope opened (a stack's: the id and what it carries) naming another id than the
+// one followed (the refusal of a second id for a tree held is replaced by the envelope's id check), or
+// a seal for another id (seal.ts)
 export type Code = "lock" | "shape" | "signature" | "stored" | "parents" | "boundary" | "id"
 // a refusal as it is noted: its code, and the text beside it (a lock's, or why an envelope's or a
 // seal's id is not this one)
@@ -54,11 +53,10 @@ export const LIMITS: Limits = { pending: 65536, refused: 4096, waiting: 1024 }
 
 export const by = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0
 
-// a document's id as its UTF-8 (what a seal and the lock bind). for now only an ermine id (of any
-// kind: ermine/ids) is a document here: which nodes sync is sync's own question, and changes with
-// its plan, not here
+// a document's id as its UTF-8 (what a seal and the lock bind). any string within the wire's limits
+// is one: well-formed, no U+0000. which nodes sync is sync's own question, not here
 export function bytesOf(doc: string): Uint8Array {
-	if (typeof doc !== "string" || kind(doc) === undefined) {
+	if (typeof doc !== "string" || !doc.isWellFormed() || doc.includes("\0")) {
 		throw new TypeError(`not a document id: ${doc}`)
 	}
 	return utf8(doc)
@@ -690,6 +688,8 @@ export function createMailroom(
 		trouble,
 		documents,
 		named,
+		// a document let go of: named again, it starts fresh
+		drop: (id: string) => void documents.delete(id),
 		moved,
 		admit,
 		refuse,

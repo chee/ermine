@@ -2,9 +2,10 @@
 // form, its hash), then the process: run at a path, loaded live with no process, stopped, and the
 // reasons it is stopped with. which question: how a program runs on a runner
 //
-// what a runner is handed is a Start: { box, places, process: { id, at, args, cwd }, scheduler,
-// table, scope }. what the program gets is the runner's: this makes no api; a runner over
-// ermine/api builds it from context.createAPI(start) (api? saying how). its limits are the
+// what a runner is handed is a Start: @ermine/processes/start's Context ({ box, places, process:
+// { id, at, args, cwd }, scheduler, table, scope }). what the program gets is the runner's: this
+// makes no api; a runner over ermine/api builds it from apis.createProcessAPI(start)
+// (@ermine/programs/api's; api? saying how). its limits are the
 // runner's too: nothing here counts
 // run(runner, program, at, { args, cwd, box, pin }): runner from places' root; program an address
 // from where's root (where: box, else places) or { id, hash?, type?, api?, code? }. refused,
@@ -34,14 +35,12 @@
 // a process gone with what it runs under, not told: its runner's offer going, the offer's why
 // (none: "runner-stopped"); else none
 import { CborError, type Value } from "@ermine/encoding/cbor"
-import { hash } from "@ermine/encoding/hash"
+import { hash } from "@ermine/formats/hash"
 import { type Address, type Box, inside } from "@ermine/boxes"
-import type { Id, Path, Places } from "@ermine/places"
+import type { Id, Path } from "@ermine/places"
 import { get } from "@ermine/places/lib"
-import type { Inside, Process } from "@ermine/processes/start"
-import type { Scheduler, Scope } from "@ermine/scheduler"
+import type { Context, Inside, Process } from "@ermine/processes/start"
 import { isPromise } from "@ermine/scheduler/helpers"
-import type { Table } from "@ermine/table"
 import {
 	ATTRIBUTE,
 	type Ctx,
@@ -68,20 +67,8 @@ export const REASONS = { withdrawn: "withdrawn", runner: "runner-stopped" } as c
 
 // what a runner gives back; @ermine/programs/start's Handle is one
 export type Handle = { readonly stop: (reason?: unknown) => unknown }
-// what a runner is handed: the run's facts (a load's: its by's)
-export type Start = {
-	readonly box: Box
-	readonly places: Places
-	readonly process: {
-		readonly id: Id
-		readonly at: Path
-		readonly args: readonly string[]
-		readonly cwd: Path
-	}
-	readonly scheduler: Scheduler
-	readonly table: Table
-	readonly scope: Scope
-}
+// what a runner is handed: the run's facts, processes' Context (a load's: its by's)
+export type Start = Context
 // a live runner: start a process's program; load, a program live with no process; api, what its
 // programs get
 export type Runner = {

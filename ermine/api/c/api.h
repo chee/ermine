@@ -2,7 +2,7 @@
 // is the spec; ermine/api/conformance/api/ holds both to it.
 //
 //   api_context *x = api_context_new(&setup);      // once, by the host: what every process's shares
-//   api *a = api_new(x, &start);                   // one per process (api.ts' createAPI)
+//   api *a = api_new(x, &start);                   // one per process (api.ts' createProcessAPI)
 //   api_node notes;
 //   api_open(a, "./notes", value, &notes);
 //   api_read(a, api_of(&notes), NULL, 0, &v);
@@ -116,7 +116,8 @@ void api_context_free(api_context *x);
 // the scheduler's options.drop: lets go of a memo's or effect's result
 void api_drop(void *value, void *data);
 
-// a start's facts, what api_new is handed (api.ts' Start): process borrowed, places NULL: the setup's
+// a start's facts, what api_new is handed (@ermine/processes/start's Context): process borrowed,
+// places NULL: the setup's
 typedef struct {
 	api_process process;
 	pl *places;

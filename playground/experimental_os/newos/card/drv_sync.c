@@ -27,7 +27,7 @@
 // shell's word nopresence): off, the document is not watched and its presence nodes go, so nothing
 // is read, decoded or drawn for it; on again, built from what stands.
 //
-// A change, one commit (ermine/encoding/c/commit.h): {commit, parents, signer, lamport, time, kind,
+// A change, one commit (playground/encoding/c/commit.h): {commit, parents, signer, lamport, time, kind,
 // name?, patches, base?, merge?, actor, reader?, site?, cause?, wallclock?, message?, value?}. A
 // commit changes one table of the node: kind "write" its value, "info" its attributes, "children"
 // its children; name is the one name every patch is under, when there is one. commit is the
@@ -112,13 +112,13 @@ static void hexOfBytes(const uint8_t *bytes, size_t length, char *out) {
 }
 static void hexName(const uint8_t *bytes, char out[HEX]) { hexOfBytes(bytes, CM_NAME, out); }
 
-/** an id as a want names it, "ermine://<hex>" or the bare hex, to its hex; NULL for anything else */
+/** an id as a want names it, "ermine:<hex>" or the bare hex (an ermine id's, of any kind), to its hex; NULL for anything else */
 static const char *hexOf(const char *id) {
-	if (id && strncmp(id, "ermine://", 9) == 0) id += 9;
-	if (!id || strlen(id) != 64) return NULL;
-	for (const char *c = id; *c; c++)
-		if (!strchr("0123456789abcdef", *c)) return NULL;
-	return id;
+	if (id && strncmp(id, "ermine:", 7) == 0) id += 7;
+	if (!id || strlen(id) > ID_LENGTH - 7) return NULL;
+	char text[ID_LENGTH + 1];
+	snprintf(text, sizeof text, "ermine:%s", id);
+	return id_is(text) ? id : NULL;
 }
 
 static Served *servedOf(const char *hex) {
@@ -345,7 +345,7 @@ static int heapPop(Heap *h) {
  */
 static bool grow(Served *s) {
 	char doc[96];
-	snprintf(doc, sizeof doc, "ermine://%s", s->hex);
+	snprintf(doc, sizeof doc, "ermine:%s", s->hex);
 	const hy_history *h = tp_history(cardDevice(hist.card), doc, TP_STORED);
 	Fresh *fresh = NULL;
 	int m = h ? collect(s, h, &fresh) : 0;
@@ -395,7 +395,7 @@ static bool grow(Served *s) {
 /** the node's value: the changes made, each held by the list too */
 static op_value *historyOf(const Served *s) {
 	char doc[96];
-	snprintf(doc, sizeof doc, "ermine://%s", s->hex);
+	snprintf(doc, sizeof doc, "ermine:%s", s->hex);
 	op_value *v = op_map(), *list = op_list();
 	for (int i = 0; i < s->count; i++) op_push(list, op_ref(s->changes[i]));
 	op_set(v, "doc", op_str(doc));
@@ -593,13 +593,13 @@ static ErmErr liveEffect(void *data, const ErmGiven *g, Json **out) {
 		const char *hex = jsonText(watch->array.items[i]);
 		ermMapPut(&now, hex, (void *)1);
 		if (ermMapHas(&live.watching, hex)) continue;
-		snprintf(doc, sizeof doc, "ermine://%s", hex);
+		snprintf(doc, sizeof doc, "ermine:%s", hex);
 		cardWatch(hist.card, doc, true);
 	}
 	for (int i = 0; i < live.watching.count; i++) {
 		const char *hex = live.watching.entries[i].key;
 		if (ermMapHas(&now, hex)) continue;
-		snprintf(doc, sizeof doc, "ermine://%s", hex);
+		snprintf(doc, sizeof doc, "ermine:%s", hex);
 		cardWatch(hist.card, doc, false);
 		ermMapPut(&live.stood, hex, (void *)1);
 	}
@@ -621,7 +621,7 @@ static ErmErr liveEffect(void *data, const ErmGiven *g, Json **out) {
 		const char *hex = jsonText(docs->array.items[i]);
 		ermMapPut(&going, hex, (void *)1);
 		if (live.last && printed && !strcmp(live.last, printed) && ermMapHas(&live.going, hex)) continue;
-		snprintf(doc, sizeof doc, "ermine://%s", hex);
+		snprintf(doc, sizeof doc, "ermine:%s", hex);
 		cardLive(hist.card, doc, v);
 	}
 	free(live.last);
@@ -629,7 +629,7 @@ static ErmErr liveEffect(void *data, const ErmGiven *g, Json **out) {
 	for (int i = 0; i < live.going.count; i++) {
 		const char *hex = live.going.entries[i].key;
 		if (ermMapHas(&going, hex)) continue;
-		snprintf(doc, sizeof doc, "ermine://%s", hex);
+		snprintf(doc, sizeof doc, "ermine:%s", hex);
 		cardLive(hist.card, doc, NULL);
 	}
 	mapFree(&live.going);
@@ -658,7 +658,7 @@ static void lived(void *context, const char *doc) {
 static void presence(const ErmGiven *g, const char *hex) {
 	Json *at = drvPath("/", "dev", "sync", "presence", NULL), *folder = drvUnder(at, hex, NULL);
 	char doc[96];
-	snprintf(doc, sizeof doc, "ermine://%s", hex);
+	snprintf(doc, sizeof doc, "ermine:%s", hex);
 	card_stand *stands = NULL;
 	size_t n = ermMapHas(&live.watching, hex) ? cardStanding(hist.card, doc, &stands) : 0;
 	bool there = drvHas(g->api, folder);

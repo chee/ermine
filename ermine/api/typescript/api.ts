@@ -1,15 +1,10 @@
-// the process api: what context.createAPI gives a program; inside the graph, all a program has.
+// the process api: what createProcessAPI gives a program; inside the graph, all a program has.
 //
-//   const context = createProcessContext({ scheduler, table, commit, host, programs: () => p })
-//   const p = createPrograms({ ..., createAPI: context.createAPI })
-//   put("value", RUN, context.run)                    // a host runner for javascript programs
-//   den.offer("runners", "javascript", attributes, context.run)   // a den's, the same
-//   context.runner({ api: (start) => ({ ...context.createAPI(start), offer }) })   // its own api
+//   const apis = createProcessAPIs({ scheduler, table, commit, host, stop: (p) => processes.stop(p) })
+//   const api = apis.createProcessAPI(ctx)            // ctx: @ermine/processes/start's Context
 //
-// the context is the world every process's api shares (statuses, runs, methods, stop reasons);
-// createAPI(start) one process's, start its facts ({ box, places, process: { id, at, args, cwd },
-// scheduler, table, scope }; a den's has its den too). an api knows its process by a key it
-// carries (a symbol's field), not by being the api made: a copy (spread, Object.assign) is as good
+// what runs a program, and start, stop and openwith from one: its starter's, which wraps this
+// api
 //
 //   export default function ({ open, read, edit, memo, effect, method, send }) {
 //     const notes = open("./notes", { a: 1 })
@@ -57,14 +52,9 @@
 //   method(p, fn)        fn as the node's value, called by send in a scope under the open one
 //   send(p, ...args)     the method at p, in a scope { ...setup.info(), caller: id }; its return
 //   teardown(fn)         fn(why) as the open scope goes: "replaced" (its owner ran again), the
-//                        reason the process was stopped with (stop's why, a den's reason through
-//                        its handle: runner-stopped, den-stopped, the caller's), else "ended"
+//                        reason the process was stopped with (stop's why, as given: a starter's
+//                        reasons, the caller's), else "ended"
 //   ref(p, make)         the node at p, make() if missing: a live value kept while the node is
-//   start(program, at, { box?, args?, cwd?, onwhynot? })   program: a name or a way;
-//                        stopped with this one, its teardowns told this one's why; no way: refused
-//                        no-way (setup.programs none: thrown)
-//   stop(p)              a process this one started
-//   openwith(x, { onwhynot }?)   every way to open x, nearest first (a generator)
 //   box(at)              a box: the folder at, seen from its own "/" (ermine/boxes)
 //   args, pulse, PENDING, REFUSED
 //
@@ -82,21 +72,12 @@
 // (places' header.ts). a process's scope holds its node's; each memo and effect is made with
 // { [NODE]: its node's id }.
 //
-// runners (run, runner({ show?, api? })): each both @ermine/programs/start's (a function given the
-// code and an api) and a den's ({ start(code, start), api(start) }, api's none: createAPI). the
-// program is its value (or module's default) called with the api, once, untracked; its return
-// (show's) the process's value, written with the process's scope open. its handle's stop(reason):
-// the process's teardowns told reason, as stop's why (the starter's stop is under way: it is what
-// calls the handle's)
-// stop(p, why): p's teardowns told why (none: "ended"), then programs' stop (setup.programs none:
-// told only, its starter stops it)
-//
 // open: remove leaves what is under the node; memo claims skip notice and early's first run.
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import apply, { type Key as Step, type Patch } from "@ermine/op/apply"
 import produce from "@ermine/op/produce"
-import { type Box, box as boxInto, createBox, type Host, inside, unbox } from "@ermine/boxes"
+import { type Box, box as boxInto, createBox, type Host, unbox } from "@ermine/boxes"
 import {
 	at as dig,
 	type Fact,
@@ -127,8 +108,7 @@ import {
 } from "@ermine/patch-nodes"
 import { createStatus, STATUS } from "@ermine/places/status"
 import { createRuns, type Runs } from "@ermine/processes/runs"
-import { openwith as openwithIn, satisfy, type Way, type Whynot } from "@ermine/programs"
-import type { Handle, Process, Programs, Runner, Start } from "@ermine/programs/start"
+import type { Context, Process } from "@ermine/processes/start"
 import {
 	type Computer,
 	type Equal,
@@ -147,9 +127,9 @@ export type Setup = {
 	commit: (changed: readonly Entry<unknown>[]) => void
 	// what boxes are made over: the host's places, table and scheduler, and its commit
 	host: Host
-	// made after this (createPrograms takes createAPI): asked when used. none (a den's world): an
-	// api's start throws, stop only tells its teardowns
-	programs?: () => Programs
+	// the host's stop of a process (its starter's: its row out, its scope torn down); ProcessAPIs'
+	// stop tells its teardowns why around it
+	stop: (p: Process) => void
 	// what a send's scope holds beside the caller (the caller over it): the host's ("trusted-event", read
 	// from the native event)
 	info?: () => Info
@@ -197,7 +177,8 @@ export type Target = Node | string | readonly string[]
 export type Change = readonly Patch[] | ((draft: any, helpers: any) => unknown)
 
 // why a scope goes, as its teardowns are told: its owner ran again, the process ended, or the
-// reason its stop was given (a den's reasons and its caller's: a reason that is no string, as given)
+// reason its stop was given (a starter's reasons and its caller's: a reason that is no string, as
+// given)
 export type Why = "ended" | "replaced" | (string & Record<never, never>)
 
 // a write landing at a watched node
@@ -279,9 +260,6 @@ export type BoxNode = {
 	unplace: (at: string | Path) => void
 }
 
-// what a refusal from start says: start's, or no-way (satisfy yielded none), with the whynots
-export type Refusal = { readonly refused: string; readonly why?: readonly Whynot[] }
-
 export type API = {
 	open: (at: string | Path, value?: unknown) => Node
 	create: (folder: string | Path, value: unknown) => Node
@@ -319,18 +297,6 @@ export type API = {
 	send: (at: Target, ...args: unknown[]) => unknown
 	teardown: (fn: (why: Why) => unknown) => void
 	ref: <T>(at: string | Path, make: () => T) => Node
-	start: (
-		program: string | Way,
-		at: string | Path,
-		options?: {
-			box?: BoxNode
-			args?: readonly string[]
-			cwd?: string | Path
-			onwhynot?: (why: Whynot) => void
-		},
-	) => Process | Refusal
-	stop: (p: Process) => void
-	openwith: (x: Target, options?: { onwhynot?: (why: Whynot) => void }) => Generator<Way, void>
 	box: (at: string | Path) => BoxNode
 	patch: (at: string | Path, over: Target, change: Change) => Node
 	land: (p: Target) => void
@@ -348,30 +314,9 @@ export class SendError extends Error {
 	}
 }
 
-export type { Start }
-
-// what a runner of this context gives back: its stop(reason) tells the process's teardowns reason
-export type Told = Handle & { readonly stop: (reason?: unknown) => void }
-
-// a runner both programs' start and a den take: called (code, api), as programs' runner is; start,
-// as a den's is, given the start's facts, the program given api(start)
-export type Run = Runner & {
-	readonly start: (code: unknown, start: Start) => Told
-	readonly api: (start: Start) => API
-}
-
-export type ProcessContext = {
-	createAPI: (start: Start) => API
-	// a host runner for a javascript program: its value (or module's default) called with the api,
-	// once, untracked; its return the process's value
-	run: Run
-	// the same, show(value, api) making setup's return what is kept (a view made real, say), with
-	// the process's scope open; its return the process's value. api: what a den's start gives the
-	// program (none: createAPI), a runner's own over this one ({ ...createAPI(start), more })
-	runner: (
-		options?: { show?: (value: unknown, api: API) => unknown; api?: (start: Start) => API },
-	) => Run
-	// a process stopped, its teardowns told why
+export type ProcessAPIs = {
+	createProcessAPI: (ctx: Context) => API
+	// a process stopped (setup.stop), its teardowns told why, as given (none: "ended")
 	stop: (p: Process, why?: Why) => void
 	// a memo's, effect's or early's latest run, by its node's id (runs.ts)
 	runs: Runs["read"]
@@ -401,13 +346,7 @@ export function uuidv7(): string {
 
 const isNode = (x: Target): x is Node => typeof x === "object" && !Array.isArray(x)
 
-// what an api carries of its process: a key a copy keeps (an own enumerable field, a symbol's)
-const PROCESS = Symbol("ermine/api process")
-
-const isMap = (v: unknown): v is Record<PropertyKey, unknown> =>
-	typeof v === "object" && v !== null && !Array.isArray(v)
-
-export function createProcessContext(setup: Setup): ProcessContext {
+export function createProcessAPIs(setup: Setup): ProcessAPIs {
 	const { scheduler: s, table, commit } = setup
 	const sited = setup.sites ?? s
 	const statuses = createStatus({ places: { commit }, table, scheduler: s })
@@ -415,12 +354,10 @@ export function createProcessContext(setup: Setup): ProcessContext {
 	const runs = createRuns({ places: { describe, watchAll }, table, scheduler: s })
 	// a method's function: the scope open when it was made
 	const methods = new WeakMap<object, Scope>()
-	// why a process is stopping, by its scope, said by stop (or its handle's) before its scope goes
-	const whys = new WeakMap<Scope, Why>()
+	// why a process is stopping, said by stop before its scope goes
+	const whys = new Map<Id, Why>()
 	// the memos' nodes: a read of one pending with no value throws PENDING
 	const memos = new Set<Id>()
-	// each process, by the key its apis carry (PROCESS)
-	const inners = new WeakMap<object, { id: Id; scope: Scope }>()
 
 	// one pulse, in a microtask, however many ask
 	let queued = false
@@ -458,24 +395,17 @@ export function createProcessContext(setup: Setup): ProcessContext {
 	// a whole value as patches; undefined: taken out
 	const whole = (v: unknown): Patch[] => [v === undefined ? { path: [] } : { path: [], value: v }]
 
-	// a process's teardowns to be told why: a reason given, else "ended" (one given before kept)
-	function tell(scope: Scope, why?: unknown) {
-		if (why !== undefined) whys.set(scope, why as Why)
-		else if (!whys.has(scope)) whys.set(scope, "ended")
+	function stop(p: Process, why: Why = "ended") {
+		whys.set(p.id, why)
+		try {
+			setup.stop(p)
+		} finally {
+			whys.delete(p.id)
+		}
 	}
 
-	function stop(p: Process, why?: Why) {
-		tell(p.scope, why)
-		setup.programs?.().stop(p)
-	}
-
-	function programs(): Programs {
-		if (setup.programs === undefined) throw new Error("no programs here: the host gave none")
-		return setup.programs()
-	}
-
-	function createAPI(given: Start): API {
-		const { box: home, places, process, scope } = given
+	function createProcessAPI(ctx: Context): API {
+		const { box: home, places, process, scope } = ctx
 		const at = process.at
 		const cwd = process.cwd
 
@@ -1024,7 +954,7 @@ export function createProcessContext(setup: Setup): ProcessContext {
 		function teardown(fn: (why: Why) => unknown) {
 			s.registerTeardown(
 				owner(),
-				() => fn(whys.get(scope) ?? (scope.state === "alive" ? "replaced" : "ended")),
+				() => fn(whys.get(process.id) ?? (scope.state === "alive" ? "replaced" : "ended")),
 			)
 		}
 
@@ -1035,55 +965,6 @@ export function createProcessContext(setup: Setup): ProcessContext {
 			})
 			later()
 			return { path, part: "value" }
-		}
-
-		function start(
-			program: string | Way,
-			where: string | Path,
-			options: {
-				box?: BoxNode
-				args?: readonly string[]
-				cwd?: string | Path
-				onwhynot?: (why: Whynot) => void
-			} = {},
-		): Process | Refusal {
-			const target = options.box?.box ?? home
-			const path = options.box ? inside(where) : resolve(where)
-			const dir = options.cwd === undefined
-				? undefined
-				: options.box
-				? inside(options.cwd)
-				: resolve(options.cwd)
-			let way: Way | undefined
-			const why: Whynot[] = []
-			if (typeof program !== "string") way = program
-			else {
-				const onwhynot = (w: Whynot) => (why.push(w), options.onwhynot?.(w))
-				const from = target === home ? cwd : []
-				for (const w of satisfy(target.places, program, from, { onwhynot })) {
-					way = w
-					break
-				}
-			}
-			if (way === undefined) return { refused: "no-way", why }
-			const more = {
-				...(options.args === undefined ? {} : { args: options.args }),
-				...(dir === undefined ? {} : { cwd: dir }),
-			}
-			const found = way
-			const p = within(() => programs().start(target, found, path, more))
-			if (!("refused" in p)) {
-				s.registerTeardown(scope, () => stop(p, whys.get(scope) ?? "ended"))
-			}
-			later()
-			return p
-		}
-
-		function openwith(
-			x: Target,
-			options: { onwhynot?: (why: Whynot) => void } = {},
-		): Generator<Way, void> {
-			return openwithIn(places, needId(nodeOf(x)), cwd, options)
 		}
 
 		function box(where: string | Path): BoxNode {
@@ -1160,9 +1041,6 @@ export function createProcessContext(setup: Setup): ProcessContext {
 			send,
 			teardown,
 			ref,
-			start,
-			stop: (p) => stop(p, "ended"),
-			openwith,
 			box,
 			patch,
 			land,
@@ -1172,37 +1050,8 @@ export function createProcessContext(setup: Setup): ProcessContext {
 			PENDING,
 			REFUSED,
 		}
-		const key = {}
-		inners.set(key, { id: process.id, scope })
-		Object.defineProperty(api, PROCESS, { value: key, enumerable: true })
 		return api
 	}
 
-	const runner: ProcessContext["runner"] = (options = {}) => {
-		const { show } = options
-		const make = options.api ?? createAPI
-		// the program run with api; inner its process (none: an api of no process here, nothing kept)
-		const go = (code: unknown, api: unknown, inner?: { id: Id; scope: Scope }): Told => {
-			const f = typeof code === "function" ? code : (code as { default?: unknown } | null)?.default
-			if (typeof f !== "function") throw new TypeError("not a program: no function, no default")
-			const made = f(api)
-			const value = show === undefined ? made : show(made, api as API)
-			if (inner !== undefined && value !== undefined) {
-				s.runWithScope(inner.scope, () => write("value", inner.id, whole(value)))
-				later()
-			}
-			return { stop: (reason?: unknown) => void (inner && tell(inner.scope, reason)) }
-		}
-		const run = (code: unknown, api: unknown) => {
-			const key = isMap(api) ? api[PROCESS] : undefined
-			return go(code, api, isMap(key) ? inners.get(key) : undefined)
-		}
-		return Object.assign(run, {
-			start: (code: unknown, start: Start) =>
-				go(code, make(start), { id: start.process.id, scope: start.scope }),
-			api: make,
-		})
-	}
-
-	return { createAPI, run: runner(), runner, stop, runs: runs.read }
+	return { createProcessAPI, stop, runs: runs.read }
 }

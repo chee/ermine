@@ -15,6 +15,7 @@
 			"lock": "tag",
 			"expect": { "key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394" }
 		},
+		{ "op": "follow", "device": "b", "expect": {} },
 		{ "op": "follow", "device": "a", "expect": {} },
 		{
 			"op": "take",

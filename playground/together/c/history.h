@@ -7,8 +7,11 @@
 // (else it waits), its lamport 1 + the highest of theirs (1 for a root: derived, never chosen), and
 // check (the integration's: do its patches apply to its parent's node) says yes. A commit taken in
 // releases what waited on it, in order, depth first, as history.ts does. One the check cannot judge
-// yet waits on nothing named until hy_again. A commit refused for its shape releases nothing, as there. Out of memory
-// aborts. Nothing recurses on how long a chain of waiting commits is.
+// yet waits on nothing named until hy_again. One the check holds (HY_HOLD: a merge by a rule this
+// device doesn't know, or what goes on one touching its path) is taken in all the same, a head like
+// any other, its patches unapplied, its rule in its kept (held): a held parent's (the first), else
+// the nearest held ancestor's, else its own merge's. A commit refused for its shape releases nothing,
+// as there. Out of memory aborts. Nothing recurses on how long a chain of waiting commits is.
 #ifndef HY_HISTORY_H
 #define HY_HISTORY_H
 
@@ -18,10 +21,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// merge: a merge commit by a rule this device doesn't know. HY_WAIT is no refusal: what a check
-// gives for a commit it cannot judge yet (authority not here yet, say), which waits on the check
-typedef enum { HY_SHAPE = 1, HY_LAMPORT, HY_PATCHES, HY_PARENT, HY_MERGE, HY_WAIT } hy_refusal;
-// "shape", "lamport", "patches", "parent", "merge"; "" for HY_WAIT
+// merge: a merge commit by a rule this device doesn't know (sync.c's, until it holds them). HY_WAIT
+// and HY_HOLD are no refusals: what a check gives for a commit it cannot judge yet (authority not
+// here yet, say), which waits on the check; and for one it holds, taken in unapplied (one with no
+// rule to carry, neither on a held one nor a merge, is refused HY_PATCHES)
+typedef enum { HY_SHAPE = 1, HY_LAMPORT, HY_PATCHES, HY_PARENT, HY_MERGE, HY_WAIT, HY_HOLD } hy_refusal;
+// "shape", "lamport", "patches", "parent", "merge"; "" for HY_WAIT and HY_HOLD
 const char *hy_refusal_name(hy_refusal refusal);
 
 // what a commit is kept as: its bytes, and what ordering and replay read without decoding again.
@@ -42,12 +47,14 @@ typedef struct {
 	int64_t lamport;
 	// a patch names what it replaces: its tables are the lists' (lists.h), not its base's patched
 	bool replaces;
+	// held: the rule this device doesn't know that it waits for; NULL: none
+	const char *held;
 } hy_kept;
 
-typedef enum { HY_TAKEN, HY_PASSED, HY_WAITING, HY_REFUSED } hy_kind;
+typedef enum { HY_TAKEN, HY_PASSED, HY_WAITING, HY_REFUSED, HY_HELD } hy_kind;
 // what add answers. HY_WAITING: the names of the parents not taken in, in parents' order (waiting,
 // waiting_length; hy_added_free); none: it waits on the check. HY_REFUSED: refusal. PASSED: it is
-// here already
+// here already. HY_HELD: taken in, held
 typedef struct {
 	hy_kind kind;
 	hy_refusal refusal;
@@ -59,7 +66,7 @@ void hy_added_free(hy_added *a);
 // given a commit whose parents are all taken (its patches are borrowed, only to be read, and not
 // changed), whether its patches apply to its parent's node (the integration's, which may apply
 // them as it looks): 0 yes; else the refusal (HY_PATCHES: they don't apply; HY_MERGE: a rule not
-// known here); HY_WAIT: it cannot judge it yet
+// known here); HY_WAIT: it cannot judge it yet; HY_HOLD: hold it
 typedef hy_refusal (*hy_check)(void *context, const hy_kept *kept, const cm_commit *commit);
 
 typedef struct hy_history hy_history;
@@ -85,7 +92,7 @@ hy_added hy_add(hy_history *h, const uint8_t *bytes, size_t length, const hy_mad
 size_t hy_heads(const hy_history *h, const hy_kept ***out);
 // a commit taken in, or NULL
 const hy_kept *hy_get(const hy_history *h, const uint8_t name[CM_NAME]);
-// every commit taken in, in the order taken: *out malloc'd, free it
+// every commit taken in (held ones too), in the order taken: *out malloc'd, free it
 size_t hy_all(const hy_history *h, const hy_kept ***out);
 // a head taken in let go of, as if never told of it (its kept freed): its parents heads again where
 // nothing else goes on them. false: not taken, or something goes on it

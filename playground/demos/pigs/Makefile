@@ -29,14 +29,14 @@ graph = core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/v
 sync = playground/together/c/sync.c playground/together/c/transport.c playground/together/c/mailroom.c playground/together/stacks/subduction/c/subduction.c playground/together/c/ids.c ermine/ids/c/ids.c playground/together/c/history.c \
 	playground/together/c/replay.c playground/together/c/lists.c playground/together/c/snapshot.c playground/together/c/packer.c \
 	playground/together/c/seal.c core/ed25519/c/ed25519.c core/ed25519/c/sha2.c playground/together/stacks/subduction/c/fragment.c \
-	ermine/encoding/c/commit.c ermine/encoding/c/pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c ermine/encoding/c/json_text.c \
+	playground/encoding/c/commit.c playground/encoding/c/pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c ermine/encoding/c/json_text.c \
 	ermine/encoding/c/blake3/blake3.c ermine/encoding/c/blake3/blake3_dispatch.c ermine/encoding/c/blake3/blake3_portable.c \
 	playground/together/stacks/subduction/c/subduction/platform_posix.c playground/together/stacks/subduction/c/subduction/store_memory.c \
 	playground/together/stacks/subduction/c/subduction/websocket.c playground/together/stacks/subduction/c/subduction/transport_openssl.c
 under = $(graph) $(sync)
 objects = $(addprefix lib/o/,$(subst /,_,$(under:.c=.o)))
 objects-check = $(addprefix lib/check/,$(subst /,_,$(under:.c=.o)))
-headers = $(wildcard c/*.h) $(wildcard $(R)/core/*/c/*.h $(R)/playground/together/c/*.h $(R)/playground/together/stacks/subduction/c/*.h $(R)/ermine/encoding/c/*.h $(R)/playground/together/stacks/subduction/c/subduction/*.h)
+headers = $(wildcard c/*.h) $(wildcard $(R)/core/*/c/*.h $(R)/playground/together/c/*.h $(R)/playground/together/stacks/subduction/c/*.h $(R)/ermine/encoding/c/*.h $(R)/playground/encoding/c/*.h $(R)/playground/together/stacks/subduction/c/subduction/*.h)
 pigs = c/pigs.c c/device.c c/screen.c c/walk.c
 # hack.c, the NetHack look, is part of pigs.c (included by it)
 looks = c/hack.c

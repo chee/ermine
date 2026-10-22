@@ -3,7 +3,7 @@
 
 #ifdef ESP_PLATFORM
 #include "peak.h"
-#include "ermine/encoding/c/pack.h"
+#include "playground/encoding/c/pack.h"
 peak_step *lschannel_steps;
 #endif
 

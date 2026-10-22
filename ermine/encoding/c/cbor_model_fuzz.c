@@ -4,14 +4,12 @@
 // - refused exactly when the model says: a string or key not UTF-8 (a lone surrogate too), a map
 //   holding a key twice, more than CBOR_DEPTH containers one in the next;
 // - taken: decoding gives an equal value, encoding that again the same bytes; the same value with
-//   every map's keys in reverse the same bytes, and into a buffer that grows; hashValue BLAKE3 of them;
+//   every map's keys in reverse the same bytes, and into a buffer that grows;
 // - a number alone: a whole one the integer (major type 0 or 1, a bignum past 64 bits, -0 as 00),
 //   modelled from long double and its bits; the rest the shortest float that holds it (_Float16,
 //   float, double), the one NaN f97e00; whole numbers made from bytes (jsonWhole) round trip too;
 // - nothing leaks, ASan and UBSan quiet.
-#include "blake3/blake3.h"
 #include "cbor.h"
-#include "hash.h"
 
 #include <float.h>
 #include <math.h>
@@ -401,13 +399,6 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 		Json *r = reversed(v);
 		unsigned char *other = encoded(r, &again, &ok2);
 		if (!ok2 || again != length || memcmp(other, out, length) != 0) die("keys in another order, other bytes");
-		uint8_t name[32], want[32];
-		if (!hashValue(r, name, &why)) die("no hash");
-		blake3_hasher h;
-		blake3_hasher_init(&h);
-		blake3_hasher_update(&h, out, length);
-		blake3_hasher_finalize(&h, want, 32);
-		if (memcmp(name, want, 32) != 0) die("the hash is not BLAKE3 of the encoding");
 		free(other), free(twice);
 		jsonFree(r), jsonFree(back);
 	}

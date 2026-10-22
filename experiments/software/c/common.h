@@ -13,8 +13,8 @@
 
 #include "../../../filesystem/places/c/status.h"
 #include "../../../ermine/encoding/c/cbor.h"
-#include "../../../ermine/encoding/c/hash.h"
-#include "../../../ermine/encoding/c/pack.h"
+#include "../../../playground/encoding/c/hash.h"
+#include "../../../playground/encoding/c/pack.h"
 #include "../../../ermine/processes/c/processes.h"
 #include "../../../ermine/processes/c/start.h"
 

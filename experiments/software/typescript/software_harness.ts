@@ -20,7 +20,7 @@
 //   late     its run recorded as record's; gives back a promise of record's handle, settled by land
 //   spawn    its run recorded as record's, then, with the code a map { name, runner, program, at },
 //            run(runner, program, at), its process named name; record's handle
-//   teller   ermine/api's run over the world's context, a program whose teardown records
+//   teller   @ermine/programs/api's run over the world's apis, a program whose teardown records
 //            { process, why }; no load
 // every runner's event, besides, in one list (order): ["ran", process], ["stopped", process,
 // reason], ["loaded", by, code], ["unloaded", by, code], ["told", process, why]
@@ -77,7 +77,7 @@ import { type Address, type Box, createBox } from "@ermine/boxes"
 import { processes as trie } from "@ermine/processes"
 import { createProcesses, type Process } from "@ermine/processes/start"
 import { createScopeNodes } from "@ermine/processes/scopes"
-import { type API, createProcessContext, type ProcessContext } from "@ermine/api"
+import { type API, createProcessAPIs, type ProcessAPIs } from "@ermine/programs/api"
 import { fromJson, toJson } from "../../../conformance/typescript/form.ts"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import {
@@ -278,10 +278,10 @@ const spawn: Runnable = (code, start) => {
 	return handle(start)
 }
 
-// ermine/api's run, the program one whose teardown is recorded
-let context: ProcessContext | undefined
+// @ermine/programs/api's run, the program one whose teardown is recorded
+let apis: ProcessAPIs | undefined
 const teller: Runnable = (_code, start) => {
-	context ??= createProcessContext({
+	apis ??= createProcessAPIs({
 		scheduler: s,
 		table,
 		commit: (changed) => places.commit(changed),
@@ -293,7 +293,7 @@ const teller: Runnable = (_code, start) => {
 			told.push({ process: start.process.id, why })
 			order.push(["told", start.process.id, why])
 		})
-	return context.run.start(program, start)
+	return apis.run.start(program, start)
 }
 
 const runners: Record<string, unknown> = { record, object, boom, quiet, late, spawn, teller }

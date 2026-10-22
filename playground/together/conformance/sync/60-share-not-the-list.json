@@ -1,0 +1,59 @@
+{
+	"title": "share refuses the shared list's own id (here given as mine), so it can't be carried; the list itself is a node written here, never followed",
+	"typescript": true,
+	"steps": [
+		{
+			"op": "host",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			},
+			"shared": "mine"
+		},
+		{
+			"op": "mint",
+			"host": "a",
+			"as": "x",
+			"expect": {
+				"id": "ermine:0010b40fde52c568d2f3864d68739e98b72b"
+			}
+		},
+		{
+			"op": "share",
+			"host": "a",
+			"id": "mine",
+			"fails": true
+		},
+		{
+			"op": "share",
+			"host": "a",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "mine",
+			"expect": {
+				"value": {
+					"ermine:0010b40fde52c568d2f3864d68739e98b72b": {
+						"hand": true
+					}
+				}
+			}
+		},
+		{
+			"op": "commits",
+			"host": "a",
+			"id": "mine",
+			"expect": {
+				"commits": 1
+			}
+		}
+	]
+}

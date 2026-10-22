@@ -1,0 +1,253 @@
+{
+	"title": "linked: each says have first, and is sent the runs it lacks; a write later goes on its own",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"x": 1
+					}
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [
+						"x"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "cow",
+			"patches": [
+				{
+					"path": [],
+					"value": "cow"
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "link",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "queued",
+			"from": "a",
+			"to": "b",
+			"expect": {
+				"queued": [
+					[
+						"have",
+						{
+							"a": 2
+						}
+					]
+				]
+			}
+		},
+		{
+			"op": "queued",
+			"from": "b",
+			"to": "a",
+			"expect": {
+				"queued": [
+					[
+						"have",
+						{
+							"b": 1
+						}
+					]
+				]
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "a",
+			"to": "b",
+			"expect": {
+				"got": [
+					[
+						"have",
+						{
+							"a": 2
+						}
+					]
+				]
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "b",
+			"to": "a",
+			"expect": {
+				"got": [
+					[
+						"have",
+						{
+							"b": 1
+						}
+					],
+					[
+						"run",
+						"b",
+						1,
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "a",
+			"to": "b",
+			"expect": {
+				"got": [
+					[
+						"run",
+						"a",
+						1,
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "b",
+			"to": "a",
+			"expect": {
+				"got": []
+			}
+		},
+		{
+			"op": "have",
+			"device": "a",
+			"expect": {
+				"have": {
+					"a": 2,
+					"b": 1
+				}
+			}
+		},
+		{
+			"op": "have",
+			"device": "b",
+			"expect": {
+				"have": {
+					"b": 1,
+					"a": 2
+				}
+			}
+		},
+		{
+			"op": "value",
+			"device": "b",
+			"node": "pig",
+			"expect": {
+				"value": {
+					"x": 2
+				}
+			}
+		},
+		{
+			"op": "value",
+			"device": "a",
+			"node": "cow",
+			"expect": {
+				"value": "cow"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [
+						"x"
+					],
+					"value": 3
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "a",
+			"to": "b",
+			"expect": {
+				"got": [
+					[
+						"run",
+						"a",
+						3,
+						3
+					]
+				]
+			}
+		},
+		{
+			"op": "value",
+			"device": "b",
+			"node": "pig",
+			"expect": {
+				"value": {
+					"x": 3
+				}
+			}
+		},
+		{
+			"op": "queued",
+			"from": "b",
+			"to": "a",
+			"expect": {
+				"queued": []
+			}
+		}
+	]
+}

@@ -6,8 +6,9 @@
 // write's change is the request's, else { time: 1760000000, actor: <host>, external: [{ file:
 // "scenario", line: 1 }] }; sync's own stamps use the request's time, default 1760000000
 //
-// { op: "host", name, seed, zeros?, tables?, merges?, merge?, ephemeral?, lazy?, roots?, commit?, lock? }
-//    → { key }  zeros, tables, merge, lazy, roots: createSync's; lock: "unlocked" | "tag" (tag_lock.ts's
+// { op: "host", name, seed, zeros?, tables?, merges?, merge?, ephemeral?, lazy?, roots?, commit?, lock?,
+//   shared? } → { key }  zeros, tables, merge, lazy, roots, shared: createSync's (shared: the shared
+//    list's id, default "<name>/shared"); lock: "unlocked" | "tag" (tag_lock.ts's
 //    test lock; none: the default, unlocked); merges: rules known, default
 //    [merge] or none; ephemeral: tables going out ephemerally; commit: false, no commit option
 //    (what comes in reaches the host as table events only)
@@ -19,13 +20,18 @@
 // { op: "stop", host, id, table? }      → {}                sync.stop, default table value
 // { op: "advance", ms }                 → {}                clock (from 1760000000000) on, hosts
 //                                                           ticked
-// { op: "restart", host }               → {}                closed, made again on its storage
+// { op: "restart", host, merges?, merge? } → {}            closed, made again on its storage; given,
+//                                                           the rules it knows and merges by from now
 // { op: "close", host }                 → {}
 // { op: "use", host, merge? }           → {}                sync.use
 // { op: "connect", a, b }               → {}                pipe + handshake (a starts)
 // { op: "disconnect", a, b }            → {}
-// { op: "follow", host, id }            → {}
-// { op: "mint", host, as? }             → { id }            as: a label for the id
+// { op: "follow", host, id }            → {}                share's old name
+// { op: "share", host, id }             → {}
+// { op: "pause", host, id }             → {}
+// { op: "forget", host, id, only? }     → { forgot }
+// { op: "mint", host, as? }             → { id }            "ermine:0010" and the hex of 16 bytes
+//                                                           of the host's random; as: a label
 // { op: "write", host, table?, id, patches, change?, name?, replaces? } → { commits, ephemeral? }
 //    no entry: the first patch's value is it. commits/ephemeral: counts made; name: last's label.
 //    replaces: "all" or [commit], what the write replaces (its change's metadata, sync.ts REPLACES);
@@ -45,8 +51,9 @@
 // { op: "shown", host, id }             → { shown } | {}    { head, lamport, actor, signer, time,
 //                                                           external? }: the "shown" table's
 // { op: "values", host, id }            → { values } | {}   the "values" table's: { [table]: [{ path,
-//                                                           items: [{ value? | gone?, inside?, at?,
-//                                                           from: head (as shown's) }] }] }
+//                                                           items: [{ value? | gone? | held?,
+//                                                           inside?, at?, from: head (as shown's) }]
+//                                                           }] }
 // { op: "status", host, id }            → { status } | {}   the status table's (sync.ts Status)
 // { op: "events", host, id, table? }    → { events }        the table's events at (table, id)
 //                                                           since last asked, how many
@@ -75,7 +82,6 @@ import { createScheduler } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Key, type Table } from "@ermine/table"
 import { decode } from "@ermine/encoding/commit"
-import { kind } from "@ermine/ids"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { hex, jsonOf, unhex } from "../../../ermine/encoding/typescript/commit_harness.ts"
@@ -103,8 +109,6 @@ import type { Kept } from "./history.ts"
 let known: Merges = {}
 
 export const TIME = 1_760_000_000
-// a document's id: an ermine id (of any kind)
-const isDoc = (id: string) => kind(id) !== undefined
 
 // ---- hosts
 
@@ -119,6 +123,7 @@ type Options = {
 	roots?: string[]
 	commit: boolean
 	lock?: "unlocked" | "tag"
+	shared: string
 }
 type Host = {
 	name: string
@@ -178,6 +183,7 @@ async function make(name: string, options: Options, storage: sd.MemoryStorage): 
 		storage: storage as unknown as sd.SedimentreeStorage,
 		random: randomOf(name),
 		roots: options.roots,
+		shared: options.shared,
 		lock: options.lock === "tag"
 			? tags.get(name)!.lock
 			: options.lock === "unlocked"
@@ -230,12 +236,11 @@ const nameOf = (x: unknown) => {
 // what the host made in f: how many commits, the last labelled. the ephemeral ones as its ephemeral
 // history takes them in (one replaced is let go of at once)
 function counting(h: Host, id: string, r: Request, f: () => void): Answer {
-	// an id that is not a document's has no history: nothing is made for it
-	const history = isDoc(id) ? h.sync.device.history(id) : undefined
-	const eph = isDoc(id) ? h.sync.device.history(id, "ephemeral") : undefined
-	const before = history?.all().length ?? 0
+	const history = h.sync.device.history(id)
+	const eph = h.sync.device.history(id, "ephemeral")
+	const before = history.all().length
 	const taken: Kept[] = []
-	const off = eph?.taken((k) => taken.push(k))
+	const off = eph.taken((k) => taken.push(k))
 	const was = Date.now
 	const now = (r.time ?? TIME) * 1000
 	Date.now = () => now
@@ -243,12 +248,12 @@ function counting(h: Host, id: string, r: Request, f: () => void): Answer {
 		f()
 	} finally {
 		Date.now = was
-		off?.()
+		off()
 	}
-	const all = history?.all() ?? []
+	const all = history.all()
 	const made = all.length - before
 	// the ephemeral history takes every stored commit too
-	const fleeting = taken.filter((k) => history!.get(k.name) === undefined).length
+	const fleeting = taken.filter((k) => history.get(k.name) === undefined).length
 	const last = taken.length ? taken[taken.length - 1] : all[all.length - 1]
 	if (made + fleeting > 0 && typeof r.name === "string") {
 		const n = hex(last.name)
@@ -295,6 +300,7 @@ async function answer(r: Request): Promise<Answer> {
 				roots: r.roots,
 				commit: r.commit !== false,
 				lock: r.lock,
+				shared: typeof r.shared === "string" ? r.shared : `${r.name}/shared`,
 			}
 			if (r.lock === "tag") tags.set(r.name, createTag())
 			const h = await make(r.name, options, new sd.MemoryStorage())
@@ -304,6 +310,8 @@ async function answer(r: Request): Promise<Answer> {
 		case "restart": {
 			const h = of(r.host)
 			await shut(h)
+			if (r.merges !== undefined) h.options.merges = r.merges
+			if (r.merge !== undefined) h.options.merge = r.merge
 			hosts.set(h.name, await make(h.name, h.options, h.storage))
 			return {}
 		}
@@ -355,8 +363,17 @@ async function answer(r: Request): Promise<Answer> {
 		case "follow":
 			await of(r.host).sync.follow(idOf(r.id))
 			return {}
+		case "share":
+			await of(r.host).sync.share(idOf(r.id))
+			return {}
+		case "pause":
+			await of(r.host).sync.pause(idOf(r.id))
+			return {}
+		case "forget":
+			return { forgot: await of(r.host).sync.forget(idOf(r.id), r.only === true) }
 		case "mint": {
-			const id = of(r.host).sync.mint()
+			const h = of(r.host)
+			const id = "ermine:0010" + hex(randomOf(h.name)(16))
 			if (typeof r.as === "string") ids.set(r.as, id)
 			return { id }
 		}
@@ -390,7 +407,7 @@ async function answer(r: Request): Promise<Answer> {
 				patches: revive(w.patches) as Patch[],
 				change: headerOf(h, w),
 			}))
-			const docs = [...new Set(ws.map((w) => w.id))].filter(isDoc)
+			const docs = [...new Set(ws.map((w) => w.id))]
 			const count = () => docs.reduce((n, id) => n + h.sync.device.history(id).all().length, 0)
 			const before = count()
 			const changed = ws.map((w) => {
@@ -443,7 +460,11 @@ async function answer(r: Request): Promise<Answer> {
 				out[t] = rows.map((row) => ({
 					path: row.path,
 					items: row.items.map((i) => ({
-						...i.gone ? { gone: true } : { value: toJson(i.value) },
+						...i.held !== undefined
+							? { held: i.held }
+							: i.gone
+							? { gone: true }
+							: { value: toJson(i.value) },
 						...i.inside && { inside: true },
 						...i.at && { at: i.at },
 						from: headed(i.from),
@@ -466,6 +487,11 @@ async function answer(r: Request): Promise<Answer> {
 					refused: v.refused.map(named),
 					unsent: v.unsent,
 					count: v.count,
+					...v.paused && { paused: true },
+					...v.only && { only: true },
+					...v.heard && { heard: v.heard },
+					...v.offered && { offered: v.offered },
+					...v.held && { held: v.held.map(named) },
 				},
 			}
 		}

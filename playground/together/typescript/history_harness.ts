@@ -2,13 +2,15 @@
 // the history, replay and snapshot suites. one history per process; commits by label (conventions:
 // playground/together/conformance/README.md). the check: key patches alone pass (lists.ts); else
 // patches apply at the base (replay), a merge to its rule's merge; rules known: run's
-// (rules_harness.ts's alone), others refused "merge". a held commit waits []. a rule that keeps (keeping) merges twice: from scratch, and by one kept for the
-// process, which must give the same, byte for byte
+// (rules_harness.ts's alone), a merge by any other held, and what goes on a held one touching its
+// path (lists.ts, marks). a commit given to hold waits []. a rule that keeps (keeping) merges twice:
+// from scratch, and by one holding its work for the process, which must give the same, byte for
+// byte
 //
 // { op: "make", name, ...fields }   → {}            made and labelled, not added
 // { op: "add", name, ...fields }    → { added }     made (no fields: the labelled one), added
 // { op: "add", bytes }              → { added }     hex bytes as they are
-//    added: "taken" | "passed" | { waiting: [commit…] } | { refused: code }
+//    added: "taken" | "held" | "passed" | { waiting: [commit…] } | { refused: code }
 // { op: "hold", commits }           → {}            the check answers "wait" for these until the
 //                                                   next hold
 // { op: "again" }                   → {}            history.again
@@ -16,6 +18,7 @@
 // { op: "all" }                     → { all }       in the order taken
 // { op: "waiting" }                 → { waiting }   [{ name, waiting: [commit…] }], as arrived
 // { op: "refused" }                 → { refused }   [{ name, refused: code }], refusal order
+// { op: "held" }                    → { held }      [{ name, rule }], in the order taken
 // { op: "name", commit }            → { name }      hex
 // { op: "replay", commit }          → { tables } | {}   {}: not taken
 // { op: "merge", heads, rule? }     → { tables }    default the first rule known
@@ -40,7 +43,7 @@ import { type Answer, type Request, serve } from "../../../conformance/typescrip
 import { hex, refusal, unhex } from "../../../ermine/encoding/typescript/commit_harness.ts"
 import { createCommits, tablesJson } from "./harnesses.ts"
 import { type Added, createHistory, since } from "./history.ts"
-import { applies, createLists, type Item } from "./lists.ts"
+import { applies, createLists, createMarks, type Item } from "./lists.ts"
 import { matches, type Merge, type Merges, plain, replay, type Tables, written } from "./replay.ts"
 import { rules } from "./rules_harness.ts"
 import { snapshot, tablesOf } from "./snapshot.ts"
@@ -75,10 +78,11 @@ const merged = (heads: Uint8Array[], rule: string) => {
 	return out
 }
 // what the check cannot judge yet, by name
-let held = new Set<string>()
+let waits = new Set<string>()
 const history = createHistory((k, commit) => {
-	if (held.has(hex(k.name))) return "wait"
-	if (commit.merge !== undefined && merges[commit.merge] === undefined) return "merge"
+	if (waits.has(hex(k.name))) return "wait"
+	if (commit.merge !== undefined && merges[commit.merge] === undefined) return marks.hold(k)
+	if (marks.on(commit)) return marks.hold(k)
 	const tables = commit.merge !== undefined
 		? merged(commit.parents, commit.merge)
 		: k.base === undefined
@@ -98,6 +102,9 @@ const history = createHistory((k, commit) => {
 		return false
 	}
 })
+
+// the paths held commits mark, and what goes on them
+const marks = createMarks(history)
 
 const tablesFrom = (x: unknown) => revive(x) as Tables
 
@@ -129,7 +136,7 @@ async function answer(r: Request): Promise<Answer> {
 				return { added: added(history.add(m.bytes)) }
 			}
 			case "hold":
-				held = new Set((r.commits as string[]).map((c) => hex(commits.name(c))))
+				waits = new Set((r.commits as string[]).map((c) => hex(commits.name(c))))
 				return {}
 			case "again":
 				history.again()
@@ -150,6 +157,13 @@ async function answer(r: Request): Promise<Answer> {
 					refused: history.refused().map((w) => ({
 						name: commits.label(w.name),
 						refused: w.refused,
+					})),
+				}
+			case "held":
+				return {
+					held: history.all().filter((k) => k.held !== undefined).map((k) => ({
+						name: commits.label(k.name),
+						rule: k.held,
 					})),
 				}
 			case "name":

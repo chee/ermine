@@ -1,0 +1,159 @@
+{
+	"title": "two writes made apart at one lamport: the greater device's shows, whichever came first",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "device",
+			"name": "c",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"expect": {
+				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
+		},
+		{
+			"op": "device",
+			"name": "d",
+			"seed": "0404040404040404040404040404040404040404040404040404040404040404",
+			"expect": {
+				"key": "ca93ac1705187071d67b83c7ff0efe8108e8ec4530575d7726879333dbdabe7c"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": "a"
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": "b"
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "c",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "c",
+			"of": "b",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "d",
+			"of": "b",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "d",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "c",
+			"node": "pig",
+			"expect": {
+				"value": "a"
+			}
+		},
+		{
+			"op": "value",
+			"device": "d",
+			"node": "pig",
+			"expect": {
+				"value": "a"
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "a",
+			"of": "b",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "a",
+			"node": "pig",
+			"expect": {
+				"value": "a"
+			}
+		},
+		{
+			"op": "value",
+			"device": "b",
+			"node": "pig",
+			"expect": {
+				"value": "a"
+			}
+		}
+	]
+}

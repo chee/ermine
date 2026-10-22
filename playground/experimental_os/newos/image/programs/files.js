@@ -2389,7 +2389,7 @@ export default (given) => {
 			}
 			// its facts, a label and a value each, the label at the right of its column
 			const rows = [["where", "/" + it.key]]
-			if (it.id) rows.push(["id", it.id.startsWith("ermine://") ? it.id.slice(9, 17) : it.id])
+			if (it.id) rows.push(["id", it.id.startsWith("ermine:") ? it.id.slice(11, 19) : it.id])
 			if (it.members > 1) rows.push(["members", `${it.members}, the first shown`])
 			if (it.id && it.key !== "") rows.push(["keeps", it.ephemeral ? "ephemeral" : "a document"])
 			if (it.change) {

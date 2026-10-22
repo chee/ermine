@@ -2,6 +2,7 @@
 	"title": "what waits on the lock is opened once each time the device is told the lock changed, however often it is told before it gets to it",
 	"steps": [
 		{"op":"device","name":"a","seed":"0101010101010101010101010101010101010101010101010101010101010101","lock":"tag","expect":{"key":"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"}},
+		{"op":"follow","device":"a","expect":{}},
 		{"op":"lock","device":"a","open":"wait","expect":{}},
 		{"op":"make","name":"c1","nonce":1,"patches":[{"path":[],"value":{"n":1}}],"expect":{}},
 		{"op":"make","name":"c2","nonce":444,"parents":["c1"],"patches":[{"path":["n"],"value":2}],"expect":{}},

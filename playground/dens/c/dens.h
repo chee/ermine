@@ -67,7 +67,7 @@
 // writes: with the owner's scope open (the den, its offers) or the process's. policy reads: the
 // table, untracked.
 //
-// live values: hf stand-ins (extensions/build/c/host.h). a runner here: hf_find gives an entry with
+// live values: hf stand-ins (playground/build/c/host.h). a runner here: hf_find gives an entry with
 // a runner. it is called at the process's first pulse (a one-shot effect), the process's scope
 // open, with the code and the start's facts (a dn_starting, borrowed for the call; its strings the
 // process's, until dn_free) as its api: what the program gets is the runner's to make, from its
@@ -88,7 +88,7 @@
 
 #include "../../../filesystem/places/c/places.h"
 #include "../../../filesystem/protect/c/protect.h"
-#include "../../../extensions/build/c/host.h"
+#include "../../../playground/build/c/host.h"
 #include "../../../ermine/processes/c/scopes.h"
 #include "../../../ermine/sites/c/sites.h"
 

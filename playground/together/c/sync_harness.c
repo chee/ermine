@@ -10,7 +10,8 @@
 // stamps with the time now has the request's time, default 1760000000; the devices (and sync's beats
 // and ttl) run on the harness's clock, which quiet moves 2 ms a round and advance by its ms. A commit in an answer: its label (a write's
 // name), else its name as hex. An id: a label minted (as), else the string as given. The rules a
-// host may be given: those linked (rules_harness.h)
+// host may be given: those linked (rules_harness.h). share is follow here: the C sync still follows
+// every node it writes, and has no shared list, pause or forget yet
 #include "ids.h"
 #include "rules_harness.h"
 #include "sync.h"
@@ -1167,7 +1168,7 @@ void hh_answer(const op_value *r, FILE *out) {
 	else if (strcmp(op, "use") == 0) use(r, out);
 	else if (strcmp(op, "connect") == 0) join_hosts(r, out);
 	else if (strcmp(op, "disconnect") == 0) disconnect(r, out);
-	else if (strcmp(op, "follow") == 0) follow(r, out);
+	else if (strcmp(op, "follow") == 0 || strcmp(op, "share") == 0) follow(r, out);
 	else if (strcmp(op, "mint") == 0) mint(r, out);
 	else if (strcmp(op, "write") == 0) counting(r, W_WRITE, out);
 	else if (strcmp(op, "values") == 0) values(r, out);

@@ -11,7 +11,7 @@
 //   // offers made before the first pulse: asks stored while the den was down are answered then
 //   den.offer("runners", "javascript",
 //     { [TAKES]: "com.netscape.javascript-source", [API]: "ermine.api", [WHERE]: "thread" },
-//     context.run)                                // ermine/api's: createProcessContext(...).run
+//     apis.run)                                   // @ermine/programs/api's: createProcessAPIs(...).run
 //   const p = den.start("/system/den/runners/javascript", "/apps/clock.js", "/work/clock", { args })
 //   // { id: "proc:<uuid>", at: ["work", "clock"], cwd: ["work"], scope }, or { refused: ... }
 //   const l = den.load("/work/clock/runners/letter", { id, code, type }, { by: p })

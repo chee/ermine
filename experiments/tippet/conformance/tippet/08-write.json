@@ -1,0 +1,111 @@
+{
+	"title": "a device's writes: n from 1, lamport one past the highest seen, each naming the hash of the one before",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"x": 1
+					}
+				}
+			],
+			"when": 1760000000,
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [
+						"x"
+					],
+					"value": 2
+				}
+			],
+			"when": 1760000001,
+			"who": "juno",
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "steps",
+			"device": "a",
+			"of": "a",
+			"expect": {
+				"steps": [
+					"8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a26470617468806576616c7565a1617801011a68e77800",
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c025820eac74f8450c568031effdf7ebe47a3d7a9ff10ab44d01dcec9c3e8cd47725ad1637069676576616c756581a264706174688161786576616c756502021a68e77801646a756e6f"
+				]
+			}
+		},
+		{
+			"op": "hash",
+			"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a26470617468806576616c7565a1617801011a68e77800",
+			"expect": {
+				"hash": "eac74f8450c568031effdf7ebe47a3d7a9ff10ab44d01dcec9c3e8cd47725ad1"
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c025820eac74f8450c568031effdf7ebe47a3d7a9ff10ab44d01dcec9c3e8cd47725ad1637069676576616c756581a264706174688161786576616c756502021a68e77801646a756e6f",
+			"expect": {
+				"step": {
+					"device": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"n": 2,
+					"before": "eac74f8450c568031effdf7ebe47a3d7a9ff10ab44d01dcec9c3e8cd47725ad1",
+					"node": "pig",
+					"part": "value",
+					"patches": [
+						{
+							"path": [
+								"x"
+							],
+							"value": 2
+						}
+					],
+					"lamport": 2,
+					"when": 1760000001,
+					"who": "juno"
+				}
+			}
+		},
+		{
+			"op": "have",
+			"device": "a",
+			"expect": {
+				"have": {
+					"a": 2
+				}
+			}
+		},
+		{
+			"op": "value",
+			"device": "a",
+			"node": "pig",
+			"expect": {
+				"value": {
+					"x": 2
+				}
+			}
+		}
+	]
+}

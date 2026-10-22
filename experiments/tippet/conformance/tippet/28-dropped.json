@@ -1,0 +1,204 @@
+{
+	"title": "a message that isn't one is dropped: nothing answered, nothing changed",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "link",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "deliver",
+			"from": "a",
+			"to": "b",
+			"expect": {
+				"got": [
+					[
+						"have",
+						{
+							"a": 1
+						}
+					]
+				]
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "b",
+			"to": "a",
+			"expect": {
+				"got": [
+					[
+						"have",
+						{}
+					]
+				]
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "a",
+			"to": "b",
+			"expect": {
+				"got": [
+					[
+						"run",
+						"a",
+						1,
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "inject",
+			"from": "a",
+			"to": "b",
+			"bytes": "ff",
+			"expect": {}
+		},
+		{
+			"op": "inject",
+			"from": "a",
+			"to": "b",
+			"bytes": "f6",
+			"expect": {}
+		},
+		{
+			"op": "inject",
+			"from": "a",
+			"to": "b",
+			"bytes": "826468617665f6",
+			"expect": {}
+		},
+		{
+			"op": "inject",
+			"from": "a",
+			"to": "b",
+			"bytes": "826468617665818262616201",
+			"expect": {}
+		},
+		{
+			"op": "inject",
+			"from": "a",
+			"to": "b",
+			"bytes": "846372756e581f000000000000000000000000000000000000000000000000000000000000005840000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008101",
+			"expect": {}
+		},
+		{
+			"op": "inject",
+			"from": "a",
+			"to": "b",
+			"bytes": "83646c69766547000000000000004100",
+			"expect": {}
+		},
+		{
+			"op": "inject",
+			"from": "a",
+			"to": "b",
+			"bytes": "83677265667573656458208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c20",
+			"expect": {}
+		},
+		{
+			"op": "inject",
+			"from": "a",
+			"to": "b",
+			"bytes": "82646e6f706558208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+			"expect": {}
+		},
+		{
+			"op": "queued",
+			"from": "b",
+			"to": "a",
+			"expect": {
+				"queued": []
+			}
+		},
+		{
+			"op": "have",
+			"device": "b",
+			"expect": {
+				"have": {
+					"a": 1
+				}
+			}
+		},
+		{
+			"op": "heard",
+			"device": "b",
+			"expect": {
+				"heard": []
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "a",
+			"to": "b",
+			"expect": {
+				"got": [
+					[
+						"run",
+						"a",
+						2,
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "have",
+			"device": "b",
+			"expect": {
+				"have": {
+					"a": 2
+				}
+			}
+		}
+	]
+}

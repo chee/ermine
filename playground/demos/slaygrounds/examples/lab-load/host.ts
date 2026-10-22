@@ -1,7 +1,7 @@
 // lab-load's host: the world (@ermine/slaygrounds/world), one process, loader, and the host's own
 // method /host/on/load. a file the 💾 save graph button made (everything a root reaches, packed,
 // live values as stand-ins) has its nodes put in the table, and its root placed under /loaded
-import { unpack } from "@ermine/encoding/pack"
+import { unpack } from "@ermine/formats/pack"
 import { createWorld } from "@ermine/slaygrounds/world"
 import { render } from "ermine-h"
 

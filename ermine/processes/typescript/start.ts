@@ -58,6 +58,22 @@ export type Process = {
 	readonly scope: Scope
 }
 
+// what a process's api is made from (a host's createProcessAPI): where it runs (the box given, or
+// { root, places } of the places given) and the box's places, the process, and the host's own
+export type Context = {
+	readonly box: Box
+	readonly places: Places
+	readonly process: {
+		readonly id: Id
+		readonly at: Path
+		readonly args: readonly string[]
+		readonly cwd: Path
+	}
+	readonly scheduler: Scheduler
+	readonly table: Table
+	readonly scope: Scope
+}
+
 // what body is given
 export type Inside = Process & {
 	// where it runs: the box given, or { root, places } of the places given

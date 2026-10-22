@@ -21,7 +21,7 @@
 // when it changes (hot), or keeps the run it has and says what differs (pinned). it is an effect
 // on the host's own api, so it lives across program.ts reloads; a reload only mounts the files
 // and restarts the shell
-import { hash } from "@ermine/encoding/hash"
+import { hash } from "@ermine/formats/hash"
 import type { API } from "@ermine/api"
 import * as lib from "@ermine/places/lib"
 import { status as statusOf } from "@ermine/places/status"

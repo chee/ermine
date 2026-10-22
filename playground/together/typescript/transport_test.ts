@@ -4,6 +4,7 @@ import * as sd from "npm:@automerge/subduction@0.23.0"
 import * as cbor from "@ermine/encoding/cbor"
 import { type Commit, compare, encode, name as nameOf } from "@ermine/encoding/commit"
 import type { Kept } from "./history.ts"
+import { pack } from "./packer.ts"
 import { replay, type Tables } from "./replay.ts"
 import { createSigner, seal, type Signer, stored } from "./seal.ts"
 import { envelope, treeOf } from "../stacks/subduction/typescript/subduction.ts"
@@ -141,16 +142,15 @@ Deno.test({
 			[DOC, "ephemeral", hex(c.name), false],
 		])
 		assertEquals((await b.device.stored(DOC)).map(hex), [hex(c.stored)])
-		// not a seal: refused shape, by its head, and never stored, so never sent
+		// not a seal: refused shape, by its head, never stored and nothing thrown; Subduction (0.23)
+		// lists it in memory and pushes it on as it came, and b's door refuses it too
 		const head = new Uint8Array(32).fill(0x11)
 		await transport_conformance_hook_put(a.device, DOC, head, [], new Uint8Array([1, 2, 3]))
 		await quiet(a, b)
-		assertEquals(transport_conformance_hook_taking(a.device, DOC).refused, [{
-			commit: hex(head),
-			refused: "shape",
-		}])
-		assertEquals((await a.device.stored(DOC)).map(hex), [hex(c.stored)])
-		assertEquals(transport_conformance_hook_taking(b.device, DOC).refused, [])
+		const shape = [{ commit: hex(head), refused: "shape" as const }]
+		assertEquals(transport_conformance_hook_taking(a.device, DOC).refused, shape)
+		assertEquals(transport_conformance_hook_taking(b.device, DOC).refused, shape)
+		assertEquals(names(b.device.history(DOC).heads()), [hex(c.name)])
 		await a.device.close(), await b.device.close()
 	},
 })
@@ -160,6 +160,8 @@ Deno.test({
 	...opts,
 	async fn() {
 		const a = await party(1)
+		// a put is from elsewhere: stored only at a document followed
+		await a.device.follow(DOC)
 		const p = await make(a.signer, [], 1), c = await make(a.signer, [p], 2)
 		await transport_conformance_hook_put(
 			a.device,
@@ -338,6 +340,7 @@ Deno.test({
 	...opts,
 	async fn() {
 		const a = await party(1)
+		await a.device.follow(DOC)
 		const [, d] = await (line ??= deepLine(a.signer))
 		await transport_conformance_hook_putFragment(
 			a.device,
@@ -447,7 +450,7 @@ Deno.test({
 
 Deno.test({
 	name:
-		"transport: a tree not named yet gets the door: another commit under a real one's name, from a peer that stored it with no door, is not stored, and once the device restarts the real one comes",
+		"transport: not shared means not stored: another commit under a real one's name, from a peer that stored it with no door, is turned away at a device not following the tree (offered once), nothing of it stored or held in memory, so once that device follows the real one comes",
 	...opts,
 	async fn() {
 		const tree = sd.SedimentreeId.fromBytes(treeOf(DOC))
@@ -475,21 +478,22 @@ Deno.test({
 		)
 		const holder = await party(9, { storage: mstore as unknown as sd.SedimentreeStorage })
 		await holder.device.follow(DOC)
-		// b, not following yet: what comes for the tree passes its door or is not stored
+		// b, not following: what comes for the tree is turned away at its policy
 		const bstore = new sd.MemoryStorage()
-		let b = await party(2, { storage: bstore as unknown as sd.SedimentreeStorage })
+		const b = await party(2, { storage: bstore as unknown as sd.SedimentreeStorage })
 		{
 			const [x, y] = pipe()
 			await Promise.all([holder.device.connect(x, true), b.device.connect(y, false)])
 		}
 		await quiet(holder, b)
 		assertEquals((await bstore.loadAllCommits(tree)).length, 0)
+		assertEquals((await bstore.loadAllSedimentreeIds()).length, 0)
 		assertEquals(b.device.unnamed(), 0)
-		// it came: Subduction (0.23) holds the name in its own tree in memory, until b restarts
-		assertEquals((await b.device.stored(DOC)).map(hex), [hex(real.stored)])
-		// made again on its storage, following, connected to the real one's holder: it comes
-		await b.device.close()
-		b = await party(2, { storage: bstore as unknown as sd.SedimentreeStorage })
+		assertEquals(b.device.offered(), [{ tree: hex(treeOf(DOC)), count: 1 }])
+		// nothing of it in Subduction's memory either
+		assertEquals((await b.device.stored(DOC)).map(hex), [])
+		// following, the holder gone, connected to the real one's holder: it comes
+		await Promise.all([holder.device.disconnect(b.key), b.device.disconnect(holder.key)])
 		await b.device.follow(DOC)
 		{
 			const [x, y] = pipe()
@@ -501,5 +505,86 @@ Deno.test({
 		}
 		assertEquals(names(b.device.history(DOC).heads()), [hex(real.name)])
 		await a.device.close(), await b.device.close(), await holder.device.close()
+	},
+})
+
+Deno.test({
+	name:
+		"transport: what is refused as it is saved is no throw out of Subduction's storage: a bad signature and a fragment with one, from a peer with no door, are refused, and the connection stays up both ways (a throw: Subduction drops it, and sends that peer nothing more)",
+	...opts,
+	async fn() {
+		const tree = sd.SedimentreeId.fromBytes(treeOf(DOC))
+		// m: a Subduction with no door, so it stores and pushes whatever it is given
+		const m = await party(9)
+		const raw = new sd.Subduction({
+			signer: {
+				sign: (x: Uint8Array) => m.signer.sign(x),
+				verifyingKey: () => m.key.subarray(2),
+			},
+			storage: new sd.MemoryStorage() as unknown as sd.SedimentreeStorage,
+			onEphemeral: () => {},
+		})
+		const b = await party(2)
+		await b.device.follow(DOC)
+		// the ends' disconnects, counted
+		const [x, y] = pipe()
+		let dropped = 0
+		for (const end of [x, y]) {
+			end.disconnect = () => (dropped++, Promise.resolve())
+		}
+		await Promise.all([raw.connectTransport(x, "ermine"), b.device.connect(y, false)])
+		// m subscribed to the tree at b: what b takes is pushed to it while b holds the connection
+		await raw.syncWithAllPeers(tree, true)
+		const bad = (sealed: Uint8Array) => {
+			const o = cbor.decode(sealed) as { signature: Uint8Array }
+			const signature = o.signature.slice()
+			signature[signature.length - 1] ^= 1
+			return cbor.encode({ ...(o as Record<string, cbor.Value>), signature })
+		}
+		const x1 = await make(m.signer, [], 1)
+		await raw.addCommit(
+			tree,
+			new sd.CommitId(x1.stored),
+			[],
+			envelope(DOC, { sealed: bad(x1.sealed) }),
+		)
+		const [c1, c2] = await deepLine(m.signer)
+		await raw.addFragment(
+			tree,
+			new sd.CommitId(c2.stored),
+			[],
+			[],
+			envelope(DOC, { run: pack([c1.sealed, bad(c2.sealed)]) }),
+		)
+		const late = await make(m.signer, [], 4)
+		await raw.addCommit(
+			tree,
+			new sd.CommitId(late.stored),
+			[],
+			envelope(DOC, { sealed: late.sealed }),
+		)
+		for (let i = 0; i < 40 && b.device.history(DOC).heads().length === 0; i++) {
+			await quiet(b)
+		}
+		assertEquals(names(b.device.history(DOC).heads()), [hex(late.name)])
+		assertEquals(
+			transport_conformance_hook_taking(b.device, DOC).refused.map((r) => [
+				"commit" in r ? r.commit : r.fragment,
+				"refused" in r ? r.refused : "stuck",
+			]).sort(),
+			[[hex(c2.stored), "signature"], [hex(x1.stored), "signature"]].sort(),
+		)
+		// b took its own after them: pushed to m, so b holds the connection still
+		const back = await make(b.signer, [], 5)
+		assertEquals(b.device.take(DOC, back.bytes, "stored"), "taken")
+		const has = async () =>
+			((await raw.getCommits(tree)) ?? []).some((c) =>
+				hex(c.commitId.toBytes()) === hex(back.stored)
+			)
+		for (let i = 0; i < 40 && !await has(); i++) await quiet(b)
+		assert(await has())
+		assertEquals(dropped, 0)
+		await b.device.close()
+		await raw.disconnectAll()
 	},
 })
