@@ -1,8 +1,8 @@
-// a device's key: ed25519 (RFC 8032), on Monocypher (ed25519/). a device is named by its public
+// a device's key: ed25519 (RFC 8032), on Monocypher (core/ed25519). a device is named by its public
 // key; what it signs is the hash of its latest step, so one signature covers every step before it
 #include <string.h>
 
-#include "ed25519/ed25519.h"
+#include "../../../core/ed25519/c/ed25519.h"
 #include "tippet.h"
 
 void tp_key_of(tp_key *k, const uint8_t seed[32]) {
