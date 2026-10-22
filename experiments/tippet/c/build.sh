@@ -1,11 +1,11 @@
 #!/bin/sh
 # builds tippet's C: tippet-harness (the conformance suite's: conformance/tippet/), tippet-harness-check
 # (the same with the address and undefined-behaviour sanitizers), tippet-test (the stores),
-# tippet-http-test (the http client), and on macOS tippet-catchup-bench (a device's heap, catching
-# up). tippet's own files build as C99 with every warning an error, but history.c and the
-# harness's adapter, on the graph, as C11 (op's value.h is), every warning an error; what it reuses
-# (ermine/encoding's cbor and blake3, ed25519, the graph, the harness loop) as C11, as the root
-# Makefile builds them.
+# tippet-http-test (the http client), tippet-review-test-check (check_c_review_test.c, with the
+# sanitizers), and on macOS tippet-catchup-bench (a device's heap, catching up). tippet's own
+# files build as C99 with every warning an error, but history.c and the harness's adapter, on the
+# graph, as C11 (op's value.h is), every warning an error; what it reuses (ermine/encoding's cbor
+# and blake3, ed25519, the graph, the harness loop) as C11, as the root Makefile builds them.
 #   sh experiments/tippet/c/build.sh          all of them
 #   SIZE=1 sh experiments/tippet/c/build.sh   and each object's size, at -Os
 set -e
@@ -73,7 +73,7 @@ link() {
 	# the graph and the harness loop only where the harness is
 	case "$main" in
 		*harness*) $CC $opt -o "$here/$bin" $objs "$mainobj" ;;
-		catchup*) $CC $opt -o "$here/$bin" $(echo "$objs" | tr ' ' '\n' | grep -v -e conformance_c_) "$mainobj" ;;
+		catchup* | check_c_review*) $CC $opt -o "$here/$bin" $(echo "$objs" | tr ' ' '\n' | grep -v -e conformance_c_) "$mainobj" ;;
 		*) $CC $opt -o "$here/$bin" $(echo "$objs" | tr ' ' '\n' | grep -v -e conformance_c_ -e core_ -e filesystem_ -e history) "$mainobj" ;;
 	esac
 }
@@ -84,6 +84,7 @@ link plain "$PLAIN" tippet-test store_test.c
 link check "$CHECK" tippet-test-check store_test.c
 link plain "$PLAIN" tippet-http-test http_test.c
 link check "$CHECK" tippet-http-test-check http_test.c
+link check "$CHECK" tippet-review-test-check check_c_review_test.c
 # what a device holds catching up (macOS: it reads malloc's zone)
 [ "$(uname)" = Darwin ] && link plain "$PLAIN" tippet-catchup-bench catchup_bench.c
 

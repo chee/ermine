@@ -54,8 +54,9 @@ void tp_buf_free(tp_buf *b);
 // what is wrong with it: 0, TP_NOMEM or TP_BOUND
 int tp_buf_why(const tp_buf *b);
 
-// n bytes as 2n lowercase hex digits (no 0 after)
+// n bytes as 2n lowercase hex digits (no 0 after), and back: 0, or -1 not such digits
 void tp_hex(char *out, const uint8_t *b, size_t n);
+int tp_unhex(uint8_t *out, const uint8_t *s, size_t n);
 
 // a frame's length: 4 bytes, big-endian, read and written
 uint32_t tp_get32(const uint8_t *p);
