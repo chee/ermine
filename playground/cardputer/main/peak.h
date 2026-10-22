@@ -11,6 +11,8 @@
 typedef struct {
 	const char *name;
 	size_t most, last, times;
+	// the heap it kept, summed: free before, less free after (a step that lets go: less)
+	long kept;
 } peak_step;
 
 #define PEAK(step, ...) \
@@ -21,13 +23,14 @@ typedef struct {
 		size_t peak_least = heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT); \
 		heap_caps_monitor_local_minimum_free_size_stop(); \
 		size_t peak_took = peak_before > peak_least ? peak_before - peak_least : 0; \
+		(step)->kept += (long)peak_before - (long)heap_caps_get_free_size(MALLOC_CAP_8BIT); \
 		(step)->last = peak_took, (step)->times++; \
 		if (peak_took > (step)->most) (step)->most = peak_took; \
 	} while (0)
 
 static inline void peak_print(peak_step *steps, int n) {
 	printf("peak:");
-	for (int i = 0; i < n; i++) printf(" %s %u (x%u)", steps[i].name, (unsigned)steps[i].most, (unsigned)steps[i].times);
+	for (int i = 0; i < n; i++) printf(" %s %u (x%u) kept %ld", steps[i].name, (unsigned)steps[i].most, (unsigned)steps[i].times, steps[i].kept);
 	printf("\n");
 }
 

@@ -1,0 +1,59 @@
+{
+	"title": "provided inside a run, the status is written once no run is open (the pulse's end), not in the run",
+	"steps": [
+		{
+			"op": "providers",
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "o"
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "w",
+			"scope": "o",
+			"f": {
+				"provide": {
+					"name": "p",
+					"id": "N"
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"part": "attributes",
+			"id": "N",
+			"path": [
+				"ermine.provider.status"
+			],
+			"expect": {
+				"value": "asleep"
+			}
+		},
+		{
+			"op": "actor",
+			"part": "attributes",
+			"id": "N",
+			"expect": {
+				"actor": "N"
+			}
+		},
+		{
+			"op": "said",
+			"name": "p",
+			"expect": {
+				"said": []
+			}
+		}
+	]
+}

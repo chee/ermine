@@ -15,18 +15,23 @@
 //   dn_stop(d, x, reason, &no);
 //   dn_close(d, NULL);  dn_halt(d);  /* before sc_free */  ...  dn_free(d);  // after tb_free, pl_free
 //
-// dn_new, a scope open: an owner scope [["den", id]] under it; processes' start at
-// /system/dens/<id> under the owner, attributes { ermine.type: ermine.den, ermine.den.id, .name?,
-// .device? }; in its body: its children { on }, the folder on { start, stop } (method nodes), and
-// /system/den (pr_add, the same id). its status: gone at the first pulse. id not a name:
-// not-a-name; /system/dens/<id> or /system/den taken: already-there.
+// dn_new, a scope open: an owner scope [["den", id]] under it; processes' start at /system/session
+// under the owner, attributes { ermine.type: ermine.process, ermine.process.den: { id: the den's
+// node, at: /system/dens/<id> } } (its status: gone at the first pulse); in its body: the den's node's
+// attributes { ermine.type: ermine.den, ermine.den.id, .name?, .device? } written over what was
+// there, its children { on }, the folder on { start, stop } (method nodes, then the asks stored under
+// them answered: asks.h), and the leaves /system/dens/<id> and /system/den (pr_add, the den's node).
+// the den's node is the install's: setup.install is its id (NULL: a fresh one). its attributes,
+// children and offers' attributes are stored there and stay when the session ends; only the live
+// values (offers', methods') go with it. id not a name: not-a-name; /system/session, /system/dens/<id>
+// or /system/den taken: already-there.
 // dn_offer: a node <owner id>/<kind>/<name> in the folder <owner id>/<kind> (made at the first offer
 // of that kind, upserted into the owner's children; held, empty, after its last offer goes), its
 // attributes as given and ermine.type ermine.runner | ermine.compiler | ermine.surface over them,
 // its value live; a name taken (offered, or entries at its id already): refused taken, nothing
 // made. a process runs under the scope of the offer it runs on (dens.ts' start), so an offer's node
 // going takes what runs on it, newest first. dn_withdraw: its name out, then its node gone, its
-// users stopped "withdrawn". an owner's stop takes its offers first, newest first, their users
+// users stopped "withdrawn" (its attributes out too). an owner's stop takes its offers first, newest first, their users
 // stopped "runner-stopped", then its own handle.
 // dn_start refused, nothing made, the first that holds: stopped; not-a-runner (nothing at runner,
 // or its ermine.type no ermine.runner); not-there (no program node or no value; by id: none, or not
@@ -57,7 +62,7 @@
 // api that is no string: none; a hash given that is no string: none's); a step that is no string,
 // args given that are no list of strings, a cwd given that is no address: refused not-a-name.
 // dn_close: every process's scope torn down, newest first, each handle given the reason; then the
-// owner: the den's own and its rows last. after it: start, load, ask, offer refused stopped.
+// owner: the session's process and the leaves last. the den's node stays with what is stored on it. after it: start, load, ask, offer refused stopped.
 // unplace or move never stops a process: its row is in the process part, not in children.
 // writes: with the owner's scope open (the den, its offers) or the process's. policy reads: the
 // table, untracked.
@@ -70,7 +75,7 @@
 // nothing here counts. hf_run.error: the status. a stop's reason: given to hf_run.stop_reason when
 // set, else handle.stop (a runner over ermine/api: api_stop with it, so its teardowns are told).
 // a load: the entry's load, given the code alone (host.h's hf_loader: no facts, unlike dens.ts').
-// no promises (hf_run has none). on/start and on/stop hold hf_value(""); their call is dn_on. the policy: protect's (pr_ask_of), reading the
+// no promises (hf_run has none). on/start and on/stop hold hf_value(""); their call is dn_on. the asks stored under them (asks.h) are answered as dn_ask answers. the policy: protect's (pr_ask_of), reading the
 // table untracked. an ask's and an answer's shapes are dens.ts' (dn_ask, dn_refusal_value).
 // memory: a process, offer or load lives until dn_free; ids, paths, args copied; attributes, device,
 // pins and codes held (op_ref); a dn_refusal's strings are the den's until its next call; its
@@ -90,6 +95,8 @@
 // /system/dens and /system/den, from the root
 extern const char *const dn_dens[2];
 extern const char *const dn_here[2];
+// /system/session: this session's process
+extern const char *const dn_session[2];
 #define DN_ON "on"
 
 // the one field everything matches on (ermine/types' ATTRIBUTE)
@@ -151,6 +158,8 @@ typedef struct {
 	const hf *functions;
 	// a name, copied
 	const char *id;
+	// the install's id: the den's node's, the same every start (copied); NULL: a fresh one
+	const char *install;
 	// ermine.den.name (copied), ermine.den.device (held); NULL: not written
 	const char *name;
 	const op_value *device;
@@ -233,6 +242,8 @@ dn *dn_new_at(const dn_setup *setup, const char **error, const ch_site *site);
 #define dn_new(...) dn_new_at(__VA_ARGS__, CH_HERE)
 const char *dn_id(const dn *d);
 const char *dn_node(const dn *d);
+// this session's process (at /system/session): its id
+const char *dn_session_id(const dn *d);
 dn_process *dn_self(const dn *d);
 sc_scope *dn_scope(const dn *d);
 pl *dn_places(const dn *d);
@@ -281,6 +292,24 @@ op_value *dn_on_at(dn *d, const char *op, const op_value *body, const ch_site *s
 #define dn_on(...) dn_on_at(__VA_ARGS__, CH_HERE)
 // a refusal as dens.ts' Refused, new
 op_value *dn_refusal_value(const dn_refusal *r);
+
+// asks (asks.h): an ask written in the graph under a den's method, answered by the den. the name
+// of an ask's answer, under the ask
+#define DN_ANSWER "answer"
+
+// where an ask is written: the table and places, and the scope it is written in (its header's actor)
+typedef struct {
+	tb_table *table;
+	pl *places;
+	sc_scope *scope;
+} dn_world;
+
+// the ask written under the den's method (site: the caller's, as above): its id, new. NULL: an ask
+// that does not encode, or has no op
+char *dn_ask_write_at(const dn_world *w, const char *den, const op_value *ask, const ch_site *site);
+#define dn_ask_write(...) dn_ask_write_at(__VA_ARGS__, CH_HERE)
+// the answer to the ask n, the read told; NULL until there. borrowed
+const op_value *dn_ask_answer(const dn_world *w, const char *n);
 
 // running, not the den's own; NULL: none
 dn_process *dn_find(const dn *d, const char *id);

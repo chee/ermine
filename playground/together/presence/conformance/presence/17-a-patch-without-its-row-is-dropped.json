@@ -1,5 +1,5 @@
 {
-	"title": "a patch with no row there to take it is dropped: it makes no row",
+	"title": "a patch with no row there makes no row from itself: the receiver says hello, the sender announces, and the whole row lands",
 	"steps": [
 		{
 			"op": "now",
@@ -61,18 +61,6 @@
 			"dev": "b",
 			"anchor": "work",
 			"expect": {
-				"rows": []
-			}
-		},
-		{
-			"op": "announce",
-			"name": "ca"
-		},
-		{
-			"op": "presence",
-			"dev": "b",
-			"anchor": "work",
-			"expect": {
 				"rows": [
 					{
 						"who": "a",
@@ -85,6 +73,72 @@
 							]
 						},
 						"until": 5000
+					}
+				]
+			}
+		},
+		{
+			"op": "sent",
+			"expect": {
+				"sent": [
+					{
+						"from": "a",
+						"topic": "work",
+						"message": {
+							"ttl": 5000,
+							"value": {
+								"pts": []
+							},
+							"n": 1
+						}
+					},
+					{
+						"from": "a",
+						"topic": "work",
+						"message": {
+							"ttl": 5000,
+							"patches": [
+								{
+									"path": [
+										"pts"
+									],
+									"range": [
+										0,
+										0
+									],
+									"value": [
+										[
+											0,
+											0
+										]
+									]
+								}
+							],
+							"n": 2
+						}
+					},
+					{
+						"from": "b",
+						"topic": "work",
+						"message": {
+							"hello": true
+						}
+					},
+					{
+						"from": "a",
+						"topic": "work",
+						"message": {
+							"ttl": 5000,
+							"value": {
+								"pts": [
+									[
+										0,
+										0
+									]
+								]
+							},
+							"n": 3
+						}
 					}
 				]
 			}

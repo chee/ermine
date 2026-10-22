@@ -9,7 +9,7 @@
 #include "../../../../../ermine/encoding/c/json.h"
 #include "../../../../../ermine/encoding/c/pack.h"
 #include "../../../../../core/op/c/json.h"
-#include "../../../../../playground/together/c/ed25519/ed25519.h"
+#include "../../../../../core/ed25519/c/ed25519.h"
 #include "../../../../../playground/together/c/seal.h"
 
 #include <stdio.h>

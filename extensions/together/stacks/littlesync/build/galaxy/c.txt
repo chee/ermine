@@ -1,0 +1,27 @@
+littlesync-pigs  room 0c1aeeee  peer up  pigs 3  you wren
++------------------------------------------------------------+
+|                                                           S|
+|                                                            |
+|                                                            |
+|                                                            |
+|                                                            |
+|           b                                                |
+|                                                           c|
+|                                                            |
+|                             +                              |
+|                                                            |
+|                                                            |
+|                                                            |
+|                                                            |
+|      A                                                     |
+|                                                            |
+|                                                            |
+|                                                            |
+|                                                           B|
++------------------------------------------------------------+
+selected a  carrying -  (tab select, space pick up / drop, hjkl or arrows point and carry, a add, q quit)
+a 42281b94 x=0.11 y=0.79   299B  1c 0p
+b a89b13da x=0.20 y=0.31   371B  1c 1p
+c d3b58353 x=1.00 y=0.38   370B  1c 1p shame
+@ otter x=0.20 y=0.31 c865
+room 0c1aeeee   677B  2c 1p, newest seal 344B (parents 37B)

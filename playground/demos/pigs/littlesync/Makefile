@@ -15,7 +15,7 @@ BUILD = build
 littlesync = $(L)/littlesync.c $(L)/frame.c $(L)/store_file.c $(L)/http.c $(L)/http_posix.c
 under = $(R)/core/op/c/value.c $(R)/ermine/encoding/c/json.c $(R)/ermine/encoding/c/cbor.c $(R)/ermine/encoding/c/pack.c \
 	$(R)/ermine/encoding/c/commit.c $(R)/ermine/encoding/c/blake3/blake3.c $(R)/ermine/encoding/c/blake3/blake3_dispatch.c \
-	$(R)/ermine/encoding/c/blake3/blake3_portable.c $(R)/playground/together/c/ed25519/ed25519.c $(R)/playground/together/c/ed25519/sha2.c \
+	$(R)/ermine/encoding/c/blake3/blake3_portable.c $(R)/core/ed25519/c/ed25519.c $(R)/core/ed25519/c/sha2.c \
 	$(R)/core/op/c/json.c $(R)/core/node/c/node.c $(R)/core/op/c/apply.c $(R)/core/op/c/invert.c
 ours = peer.c pigs.c
 # https (http_posix.c through libcurl): macOS ships it; elsewhere when pkg-config finds it. CURL= turns it off

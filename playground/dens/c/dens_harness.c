@@ -5,8 +5,8 @@
 // first line as presence_harness.c makes its two; one clock, which only the "now" request moves;
 // one channel pair (chn_pair_new) named "mac" and "card", made at the first connect. Names are one
 // map, filled as answers come back: a den's node "den:<den id>", a process "proc:<its name>", a
-// derived id its owner's name and the rest; a remote start's process named from its answer, at the
-// remote line or the first answer line after it. The runners, each given the start's facts
+// derived id its longest named owner's name and the rest; a remote start's process named from its
+// answer, at the remote line or the first answer line after it. The runners, each given the start's facts
 // (dn_starting): record (its run and its stop recorded; hf_run.stop_reason given the reason; its
 // load and its live form's close recorded, by the process the load request names, hf_loader being
 // given no facts), boom (hf_run.error "boom", its load's error too) and teller (the C api over the
@@ -167,17 +167,18 @@ static const char *known_of(const char *as) {
 	return NULL;
 }
 
-// a string as shown (named, or derived: its owner's name and the rest), or taken back: fresh
+// a string as shown (named, or derived: its longest named owner's name and the rest), or taken back:
+// fresh
 static char *mapped(const char *v, const char *(*of)(const char *)) {
 	const char *named = of(v);
 	if (named != NULL) return xdup(named);
-	const char *slash = strchr(v, '/');
-	if (slash != NULL && slash > v) {
-		char *owner = xalloc((size_t)(slash - v) + 1);
-		memcpy(owner, v, (size_t)(slash - v));
+	for (size_t i = strlen(v); i-- > 1;) {
+		if (v[i] != '/') continue;
+		char *owner = xalloc(i + 1);
+		memcpy(owner, v, i);
 		const char *o = of(owner);
 		free(owner);
-		if (o != NULL) return concat(o, slash);
+		if (o != NULL) return concat(o, v + i);
 	}
 	return xdup(v);
 }
@@ -629,7 +630,7 @@ static void make_den(void *data) {
 	const char *why = NULL;
 	dn *den = dn_new(&(dn_setup){.scheduler = d->s, .table = d->table, .places = d->places,
 		.scopes = d->scopes, .functions = d->functions, .id = id != NULL ? id : d->name,
-		.name = text(get(r, "name")), .device = device_v,
+		.install = text(get(r, "install")), .name = text(get(r, "name")), .device = device_v,
 		.may = policy != NULL && strcmp(policy, "grants") == 0 ? d->policy : NULL,
 		.schedule = asking_f, .schedule_ctx = d}, &why);
 	op_free(device_v);
@@ -641,6 +642,9 @@ static void make_den(void *data) {
 	d->den = den;
 	char *as = concat("den:", dn_id(den));
 	name(dn_node(den), as);
+	free(as);
+	as = concat("session:", dn_id(den));
+	name(dn_session_id(den), as);
 	free(as);
 	j->out = plain_take(with("id", op_str(dn_node(den))));
 }
@@ -868,6 +872,69 @@ static void ask(void *data) {
 	op_free(a), op_free(who);
 	if (starting) j->out = started(got, text(get(r, "name")));
 	else j->out = got != NULL ? plain_take(got) : error("no answer");
+}
+
+// an ask written in the graph, named ask:<as>; the den's node by name (none: the device's den's)
+static op_value *write_ask(device *d, const op_value *r) {
+	const char *which = text(get(r, "ask")), *as = text(get(r, "as")), *given = text(get(r, "den"));
+	if (given == NULL && d->den == NULL) return error("no den");
+	op_value *a = op_map(), *who = back_or_null(get(r, "who"));
+	if (who != NULL) op_set(a, "who", who);
+	if (which != NULL && strcmp(which, "start") == 0) {
+		op_set(a, "op", op_str("start"));
+		static const char *const keys[4] = {"runner", "at", "args", "cwd"};
+		for (size_t i = 0; i < 4; i++) {
+			const op_value *x = get(r, keys[i]);
+			if (x != NULL) op_set(a, keys[i], op_ref((op_value *)x));
+		}
+		op_set(a, "program", program_value(get(r, "program")));
+	} else if (which != NULL && strcmp(which, "stop") == 0) {
+		op_set(a, "op", op_str("stop"));
+		char *id = process_at(get(r, "process"));
+		op_set(a, "process", op_str(id));
+		free(id);
+		if (get(r, "reason") != NULL) op_set(a, "reason", back(get(r, "reason")));
+	} else {
+		op_free(a);
+		return error("no such ask");
+	}
+	char *den = given != NULL ? take(given) : xdup(dn_node(d->den));
+	dn_world w = {d->table, d->places, d->host};
+	char *id = dn_ask_write(&w, den, a);
+	free(den);
+	op_free(a);
+	if (id == NULL) return error("an ask that does not encode");
+	char *n = concat("ask:", as != NULL ? as : "");
+	name(id, n);
+	free(n);
+	op_value *out = plain_take(with("id", op_str(id)));
+	free(id);
+	return out;
+}
+
+// the answer of an ask, read untracked: a copy
+typedef struct {
+	const dn_world *w;
+	const char *id;
+	op_value *out;
+} answering;
+static void answer_of(void *data) {
+	answering *g = data;
+	const op_value *got = dn_ask_answer(g->w, g->id);
+	g->out = got != NULL ? op_ref((op_value *)got) : NULL;
+}
+
+// the answer to the ask named as (or at id); null: none yet. name: what a process it started is named
+static op_value *answered(device *d, const op_value *r) {
+	const char *as = text(get(r, "as")), *id = text(get(r, "id"));
+	char *named = as != NULL ? concat("ask:", as) : NULL;
+	char *n = take(named != NULL ? named : id != NULL ? id : "");
+	free(named);
+	dn_world w = {d->table, d->places, d->host};
+	answering g = {&w, n, NULL};
+	pl_peep(d->places, answer_of, &g);
+	free(n);
+	return with("answer", g.out != NULL ? started(g.out, text(get(r, "name"))) : op_null());
 }
 
 // a method called (part: start | stop), the body's names taken back, its process by name
@@ -1335,6 +1402,15 @@ static op_value *answer(const op_value *r) {
 		return with("names", read_at(places, op_get(r, "path"), list_names));
 	}
 	if (strcmp(op, "node") == 0) return node_json(d, r);
+	if (strcmp(op, "write-ask") == 0) return write_ask(d, r);
+	if (strcmp(op, "answered") == 0) return answered(d, r);
+	if (strcmp(op, "raw") == 0) {
+		const char *given = text(get(r, "name"));
+		char *id = take(given != NULL ? given : "");
+		op_value *out = with("id", op_str(id));
+		free(id);
+		return out;
+	}
 	if (strcmp(op, "site") == 0) return site_json(d, r);
 	if (strcmp(op, "asked") == 0) {
 		op_value *list = op_list();

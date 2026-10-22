@@ -16,10 +16,15 @@ import type { Kind, Offered } from "./offers.ts"
 
 // what dens calls through on the way to a write, beside its own files (ours): the scheduler's
 // runWithScope, processes' start (which calls the den's body). places' header skips these too, so a write's site is the caller's
-const through = [
-	import.meta.resolve("@ermine/scheduler"),
-	import.meta.resolve("@ermine/processes/start"),
-]
+// (a browser can't resolve a bare name: there, none, and a site may name those files)
+const resolved = (name: string): string[] => {
+	try {
+		return [import.meta.resolve(name)]
+	} catch {
+		return []
+	}
+}
+const through = [...resolved("@ermine/scheduler"), ...resolved("@ermine/processes/start")]
 
 // the files of a den: a write's site is the first call outside them (each part adds its own)
 export const ours = new Set<string>()
@@ -116,6 +121,9 @@ export type Ctx = {
 	readonly byId: Map<Id, Running>
 	readonly offers: Map<Id, Offer>
 	readonly ownerOf: (by: Process | Id | undefined) => Owner
+	// whether the den's node is an install's, kept across sessions (setup.install given); else what
+	// is under it goes with the session, as a process's does
+	readonly stored: boolean
 	closed: boolean
 	// the reason the den's own process goes with, said by close
 	pending: unknown
@@ -124,6 +132,20 @@ export type Ctx = {
 	node: Id
 	den: Den
 }
+
+// a node of the den's that is stored (the install's), its live value just written: that value goes
+// at the scope's teardown (if it is still the one there); the node's other parts stay for the next
+// session (and for whoever it is carried to)
+export function liveUntil(c: Pick<Ctx, "s" | "table">, scope: Scope, id: Id) {
+	const written = c.table.get("value", id)
+	if (written === undefined) return
+	c.s.registerTeardown(scope, () => {
+		if (c.table.get("value", id) === written) c.table.del("value", id)
+	})
+}
+
+// the folder a den's methods are in
+export const ON = "on"
 
 // a held load let go: out of its holder's list, its live form disposed (if it can be)
 export function drop(o: Owner, h: Held) {
@@ -190,11 +212,12 @@ export function createCtx(setup: Setup): Ctx {
 		offers: new Map<Id, Offer>(),
 		ownerOf(by: Process | Id | undefined): Owner {
 			const id = by === undefined ? c.node : typeof by === "object" ? by.id : by
-			if (id === c.node) return c.mine
+			if (id === c.node || id === c.den?.process.id) return c.mine
 			const p = c.byId.get(id)
 			if (p === undefined || p.ended) throw new PlacesError("nothing-there", String(id))
 			return p
 		},
+		stored: setup.install !== undefined,
 		closed: false,
 		pending: REASONS.den as unknown,
 		version,

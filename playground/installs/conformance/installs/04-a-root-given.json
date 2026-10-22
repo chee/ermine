@@ -1,0 +1,27 @@
+{
+	"title": "a root given to an empty store's first open is its root, written; given later, a stored root stands",
+	"steps": [
+		{
+			"op": "open",
+			"root": "ermine:00100123456789abcdef0123456789abcdef",
+			"skip": ["id"],
+			"expect": {
+				"root": "ermine:00100123456789abcdef0123456789abcdef",
+				"kinds": { "id": "key", "root": "fresh" },
+				"wrote": ["secret", "root"],
+				"same": true
+			}
+		},
+		{
+			"op": "open",
+			"root": "ermine:0010ffffffffffffffffffffffffffffffff",
+			"skip": ["id"],
+			"expect": {
+				"root": "ermine:00100123456789abcdef0123456789abcdef",
+				"kinds": { "id": "key", "root": "fresh" },
+				"wrote": [],
+				"same": true
+			}
+		}
+	]
+}

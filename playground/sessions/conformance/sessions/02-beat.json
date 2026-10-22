@@ -1,0 +1,26 @@
+{
+	"title": "a beat: the session's entry at the node, its install and until; online at a time before until, not at until or after",
+	"steps": [
+		{ "op": "start", "name": "tab1", "install": "I1", "skip": ["kind", "differs"] },
+		{ "op": "beat", "session": "tab1", "node": "D", "until": 10000, "expect": {} },
+		{
+			"op": "entry",
+			"node": "D",
+			"expect": { "value": { "tab1": { "install": "I1", "until": 10000 } } }
+		},
+		{
+			"op": "online",
+			"node": "D",
+			"now": 0,
+			"expect": { "here": [{ "session": "tab1", "install": "I1", "until": 10000 }] }
+		},
+		{
+			"op": "online",
+			"node": "D",
+			"now": 9999,
+			"expect": { "here": [{ "session": "tab1", "install": "I1", "until": 10000 }] }
+		},
+		{ "op": "online", "node": "D", "now": 10000, "expect": { "here": [] } },
+		{ "op": "online", "node": "E", "now": 0, "expect": { "here": [] } }
+	]
+}

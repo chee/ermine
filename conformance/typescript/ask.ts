@@ -59,7 +59,8 @@ export function suites(): Suite[] {
 		for (const p of Deno.readDirSync(`${root}${group}`)) {
 			if (!p.isDirectory) continue
 			if (has(`${group}/${p.name}`)) packages.push(`${group}/${p.name}`)
-			else {
+			// and one further down either way (playground/together/presence, beside together's own)
+			{
 				for (const q of Deno.readDirSync(`${root}${group}/${p.name}`)) {
 					if (q.isDirectory && has(`${group}/${p.name}/${q.name}`)) {
 						packages.push(`${group}/${p.name}/${q.name}`)

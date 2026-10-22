@@ -50,8 +50,11 @@ static const char *offer_now(dn *d, dn_process *by, dn_kind kind, const char *na
 	char **at = dn_names_and((const char *const *)o->at, o->nat, dn_kinds[kind], name, &nat);
 	char *fid = dn_joined(o->id, dn_kinds[kind]);
 	char *id = dn_joined(fid, name);
+	// the den's own offers are stored: taken by a live value there; a process's by any entry
+	int stored = o == d->self && d->stored;
 	size_t there = 0;
-	tb_at(d->s.table, tb_string(id), &there);
+	if (stored) there = tb_get(d->s.table, tb_string("value"), tb_string(id)) != NULL;
+	else tb_at(d->s.table, tb_string(id), &there);
 	if (dn_live_offer(d, id) != NULL || there > 0) {
 		free(fid);
 		free(id);
@@ -65,7 +68,8 @@ static const char *offer_now(dn *d, dn_process *by, dn_kind kind, const char *na
 		f = &o->folders[o->nfolders++];
 		f->kind = kind;
 		f->id = fid;
-		f->scope = dn_scope_of(d, f->info, f->values, "offers", dn_kinds[kind], fid, o->under);
+		f->scope = dn_scope_of(d, f->info, f->values, "offers", dn_kinds[kind], fid, o->under,
+			!stored);
 		const char *path[1] = {dn_kinds[kind]};
 		op_value *v = op_str(fid);
 		dn_write_in(d, f->scope, (writing){.what = W_UPSERT, .part = "children", .id = o->id, .path = path,
@@ -81,7 +85,7 @@ static const char *offer_now(dn *d, dn_process *by, dn_kind kind, const char *na
 	x->name = dn_xdup(name);
 	x->owner = o;
 	x->folder = f;
-	x->scope = dn_scope_of(d, x->info, x->values, "offer", name, id, f->scope);
+	x->scope = dn_scope_of(d, x->info, x->values, "offer", name, id, f->scope, !stored);
 	PUSH(d->offers, d->noffers, d->capoffers, x);
 	PUSH(d->live, d->nlive, d->caplive, x);
 	PUSH(o->offers, o->noffers, o->capoffers, x);
@@ -94,10 +98,11 @@ static const char *offer_now(dn *d, dn_process *by, dn_kind kind, const char *na
 		}
 	}
 	op_set(attrs, DN_ATTRIBUTE, op_str(types[kind]));
-	dn_write_in(d, x->scope, (writing){.what = W_ADD, .part = "attributes", .id = id, .value = attrs});
+	dn_write_in(d, x->scope, (writing){.what = W_SUB, .part = "attributes", .id = id, .value = attrs});
 	op_free(attrs);
 	if (live != NULL) {
 		dn_write_in(d, x->scope, (writing){.what = W_ADD, .part = "value", .id = id, .value = live});
+		if (stored) dn_live_until(d, x->scope, id);
 	}
 	const char *path[1] = {name};
 	op_value *v = op_str(id);
@@ -123,13 +128,45 @@ size_t dn_offered_at(dn *d, const char *id, const char *const **out) {
 	return o->nat;
 }
 
+// a name an earlier session of this install left in one of the den's folders, offered by none now:
+// out of its folder, its attributes out
+static void unlist(dn *d, const char *id) {
+	if (!d->stored || d->closed || id == NULL) return;
+	for (size_t k = 0; k < 3; k++) {
+		char *fid = dn_joined(d->self->id, dn_kinds[k]);
+		const nd_entry *there = tb_get(d->s.table, tb_string("children"), tb_string(fid));
+		char *name = NULL;
+		for (size_t i = 0; dn_is_map(there != NULL ? there->value : NULL) && i < there->value->count; i++) {
+			const op_value *x = there->value->items[i];
+			if (dn_is_str(x) && strcmp(x->str, id) == 0) { free(name); name = dn_xdup(there->value->keys[i]); }
+		}
+		if (name != NULL) {
+			dn_write_in(d, d->self->scope, (writing){.what = W_UNPLACE, .id = fid, .name = name});
+			if (tb_get(d->s.table, tb_string("attributes"), tb_string(id)) != NULL) {
+				tb_del(d->s.table, tb_string("attributes"), tb_string(id));
+			}
+			dn_changed(d);
+		}
+		free(name);
+		free(fid);
+	}
+}
+
 void dn_withdraw_at(dn *d, const char *id, const ch_site *site) {
 	offer *o = dn_live_offer(d, id);
-	if (o == NULL || o->gone) return;
 	const ch_site *was = dn_enter(d, site);
-	// its name out of its folder, then its scope torn down: its users stopped "withdrawn"
+	if (o == NULL || o->gone) {
+		unlist(d, id);
+		dn_leave(d, was);
+		return;
+	}
+	// its name out of its folder and its attributes out, then its scope torn down: its users stopped
+	// "withdrawn"
 	o->why = d->reasons[R_WITHDRAWN];
 	dn_write_in(d, o->scope, (writing){.what = W_UNPLACE, .id = o->folder->id, .name = o->name});
+	if (tb_get(d->s.table, tb_string("attributes"), tb_string(o->id)) != NULL) {
+		tb_del(d->s.table, tb_string("attributes"), tb_string(o->id));
+	}
 	free(sc_teardown(o->scope));
 	dn_leave(d, was);
 }

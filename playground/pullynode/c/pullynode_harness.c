@@ -1,8 +1,7 @@
 // The C pullynode (pullynode.h) on the line protocol of typescript/pullynode_harness.ts, which
-// documents it and the program form (conformance/c/harness.h has the loop). Built on places' harness
+// documents it and the program forms (conformance/c/harness.h has the loop). Built on places' harness
 // (filesystem/places/c/places_harness.h, compiled with PH_LIB): its world, its programs, its
-// requests, and this one's besides. A pulse is places' pulse, then pul_flush (pullynode.h): the TS
-// runs it as the pulse ends.
+// requests, and this one's besides.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -100,6 +99,46 @@ static op_value *keys_form(const op_value *e, ph_eval *c, bool *handled) {
 	return list;
 }
 
+// a provide request (the line's, or a program's: kept either way): {} or an error
+static op_value *provide(const op_value *r) {
+	if (pn == NULL) return world_error("no providers");
+	hand *h = world_alloc(sizeof *h);
+	h->name = world_copy(world_text(op_get(r, "name")));
+	h->said = op_list();
+	h->first = op_get(r, "first");
+	h->once = op_get(r, "once");
+	h->has_once = h->once != NULL;
+	h->throws = h->has_once && op_get(h->once, "throw") != NULL;
+	size_t n;
+	const sc_pair *info = world_info(op_get(r, "info"), &n);
+	pul_provider p = {.start = start, .once = h->has_once ? once : NULL, .data = h};
+	h->node = pul_provide(pn, world_text(op_get(r, "id")), &p, info, n);
+	if (h->node == NULL) {
+		op_free(h->said);
+		free(h->name);
+		free(h);
+		return world_error("provided");
+	}
+	PUSH(hands, nhands, caphands, h);
+	return op_map();
+}
+
+// program e: {"provide": request}, made in the run; null
+static op_value *provide_form(const op_value *e, ph_eval *c, bool *handled) {
+	const op_value *x = op_get(e, "provide");
+	if (x == NULL) return NULL;
+	*handled = true;
+	op_value *a = provide(x);
+	const op_value *error = op_get(a, "error");
+	if (error != NULL) {
+		ph_throw(c, world_copy(world_text(error)));
+		op_free(a);
+		return NULL;
+	}
+	op_free(a);
+	return op_null();
+}
+
 static void checked(void *ctx, const op_value *value, const char *error) {
 	check *k = ctx;
 	op_value *a = op_map();
@@ -112,38 +151,12 @@ static void checked(void *ctx, const op_value *value, const char *error) {
 static op_value *answer(const op_value *r) {
 	const char *op = world_text(op_get(r, "op"));
 	if (op == NULL) return world_error("no op");
-	if (!formed) formed = true, ph_add_form(keys_form);
+	if (!formed) formed = true, ph_add_form(keys_form), ph_add_form(provide_form);
 	if (strcmp(op, "providers") == 0) {
 		if (pn == NULL) pn = pul_new(&(pul_setup){world_places, world_table, world_scheduler});
 		return op_map();
 	}
-	if (strcmp(op, "pulse") == 0) {
-		sc_pulse(world_scheduler);
-		if (pn != NULL) pul_flush(pn);
-		return op_map();
-	}
-	if (strcmp(op, "provide") == 0) {
-		if (pn == NULL) return world_error("no providers");
-		hand *h = world_alloc(sizeof *h);
-		h->name = world_copy(world_text(op_get(r, "name")));
-		h->said = op_list();
-		h->first = op_get(r, "first");
-		h->once = op_get(r, "once");
-		h->has_once = h->once != NULL;
-		h->throws = h->has_once && op_get(h->once, "throw") != NULL;
-		size_t n;
-		const sc_pair *info = world_info(op_get(r, "info"), &n);
-		pul_provider p = {.start = start, .once = h->has_once ? once : NULL, .data = h};
-		h->node = pul_provide(pn, world_text(op_get(r, "id")), &p, info, n);
-		if (h->node == NULL) {
-			op_free(h->said);
-			free(h->name);
-			free(h);
-			return world_error("provided");
-		}
-		PUSH(hands, nhands, caphands, h);
-		return op_map();
-	}
+	if (strcmp(op, "provide") == 0) return provide(r);
 	if (strcmp(op, "unprovide") == 0) {
 		hand *h = hand_of(world_text(op_get(r, "name")));
 		if (h == NULL) return world_error("no provider");

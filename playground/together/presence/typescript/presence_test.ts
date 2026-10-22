@@ -193,7 +193,7 @@ Deno.test("an edit with patches on: patches cross, the row is the sender's, one 
 	})
 })
 
-Deno.test("a missed patch message is dropped; the next whole row heals", () => {
+Deno.test("a missed patch message is dropped and the receiver says hello: the sender's announce heals at once", () => {
 	const clock = { t: 0 }
 	const a = device("a", clock), b = device("b", clock)
 	const pair = createPair("a", "b")
@@ -204,7 +204,7 @@ Deno.test("a missed patch message is dropped; the next whole row heals", () => {
 	editPresence(a, ANCHOR, "x", [{ path: [], range: [1, 1], value: [2] }], 5000)
 	connect(b, pair.b, { topic: ANCHOR, patches: true })
 	editPresence(a, ANCHOR, "x", [{ path: [], range: [2, 2], value: [3] }], 5000)
-	assertEquals(readRow(b, ANCHOR, "a")!.value, [1])
+	assertEquals(readRow(b, ANCHOR, "a")!.value, [1, 2, 3])
 	ca.announce()
 	assertEquals(readRow(b, ANCHOR, "a")!.value, [1, 2, 3])
 })

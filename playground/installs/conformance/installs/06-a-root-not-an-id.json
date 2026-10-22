@@ -1,0 +1,7 @@
+{
+	"title": "a root given that is no ermine id: an error, checked before anything is made: nothing written",
+	"steps": [
+		{ "op": "open", "root": "R", "fails": true },
+		{ "op": "stored", "expect": { "sizes": {} } }
+	]
+}

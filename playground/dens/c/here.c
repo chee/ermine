@@ -8,6 +8,7 @@
 
 const char *const dn_dens[2] = {"system", "dens"};
 const char *const dn_here[2] = {"system", "den"};
+const char *const dn_session[2] = {"system", "session"};
 
 // the den's status gone at the first pulse
 static char *den_act(void *value, void *previous, void *data) {
@@ -17,8 +18,8 @@ static char *den_act(void *value, void *previous, void *data) {
 	return NULL;
 }
 
-// the den's own process going, what is under it gone already (its offers and what ran on them, its
-// loads): /system/den out, if it was put there
+// the session's process going, what is under it gone already (its offers' live values and what ran
+// on them, its loads): the leaves out, if they were put there; the den's node stays
 void dn_den_end(pr_process *life, void *data) {
 	(void)life;
 	dn_process *self = data;
@@ -27,35 +28,52 @@ void dn_den_end(pr_process *life, void *data) {
 	self->ended = 1;
 	d->closed = 1;
 	if (d->freeing) return;
-	if (d->here_placed) {
-		d->here_placed = 0;
-		writing w = {.d = d, .what = W_UNHERE};
+	// /system/den first, then /system/dens/<id>
+	if (d->here_placed & 2) {
+		writing w = {.d = d, .what = W_UNHERE, .path = dn_here, .n = 2};
 		dn_write_now(&w);
 	}
+	if (d->here_placed & 1) {
+		writing w = {.d = d, .what = W_UNHERE, .path = (const char *const *)self->at, .n = self->nat};
+		dn_write_now(&w);
+	}
+	d->here_placed = 0;
 	dn_changed(d);
 }
 
-// in the den's scope, as processes' start gives it: its methods, /system/den, and the effect that
-// takes its status away at the first pulse
+// in the session's scope, as processes' start gives it: the den's node written, its methods, the
+// leaves /system/dens/<id> and /system/den, and the effect that takes its status away at the first
+// pulse
 void dn_den_body(pr_process *life, void *data) {
 	dn_process *self = data;
 	dn *d = self->den;
 	self->life = life;
-	self->id = dn_xdup(pr_id(life));
-	const char *const *at;
-	self->nat = pr_at(life, &at);
-	self->at = dn_copy_names(at, self->nat);
 	self->scope = pr_scope(life);
 	self->under = self->scope;
 	dn_holder(d, self);
-	dn_methods(d);
-	writing w = {.d = d, .what = W_HERE, .id = self->id};
-	dn_write_now(&w);
-	if (w.code != 0) {
-		d->here_failed = w.code > 0 ? w.code : PL_ALREADY_THERE;
-		return;
+	// a den with no install: its node goes with the session
+	if (!d->stored) {
+		d->node_scope = dn_scope_of(d, d->node_info, d->node_values, "den", "node", self->id, self->scope, 1);
 	}
-	d->here_placed = 1;
+	// what it says of itself, written over what was there
+	op_value *attrs = op_map();
+	op_set(attrs, DN_ATTRIBUTE, op_str(DN_TYPE_DEN));
+	op_set(attrs, DN_ID, op_str(d->id));
+	if (d->name != NULL) op_set(attrs, DN_NAME, op_str(d->name));
+	if (d->device != NULL) op_set(attrs, DN_DEVICE, op_ref(d->device));
+	dn_write_in(d, NULL, (writing){.what = W_SUB, .part = "attributes", .id = self->id, .value = attrs});
+	op_free(attrs);
+	dn_methods(d);
+	for (int k = 0; k < 2; k++) {
+		writing w = {.d = d, .what = W_HERE, .id = self->id,
+			.path = k == 0 ? (const char *const *)self->at : dn_here, .n = k == 0 ? self->nat : 2};
+		dn_write_now(&w);
+		if (w.code != 0) {
+			d->here_failed = w.code > 0 ? w.code : PL_ALREADY_THERE;
+			return;
+		}
+		d->here_placed |= 1 << k;
+	}
 	self->first = sc_create_effect(d->s.scheduler, (sc_def){.f = dn_once_f, .effect = den_act, .data = self},
 		NULL, 0);
 	if (self->first != NULL) pr_give(d->life, life, self->first, 0);
@@ -63,6 +81,7 @@ void dn_den_body(pr_process *life, void *data) {
 
 const char *dn_id(const dn *d) { return d->id; }
 const char *dn_node(const dn *d) { return d->self->id; }
+const char *dn_session_id(const dn *d) { return d->self->life != NULL ? pr_id(d->self->life) : NULL; }
 dn_process *dn_self(const dn *d) { return d->self; }
 sc_scope *dn_scope(const dn *d) { return d->owner; }
 pl *dn_places(const dn *d) { return d->s.places; }

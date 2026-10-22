@@ -134,6 +134,11 @@ void dn_write_now(void *data) {
 		pl_own(p, born);
 		w->code = tb_add(d->s.table, tb_string(w->part), tb_string(w->id), born);
 		break;
+	case W_SUB:
+		born = nd_make_entry((op_value *)w->value, &h);
+		pl_own(p, born);
+		tb_sub(d->s.table, tb_string(w->part), tb_string(w->id), born);
+		break;
 	case W_UNPLACE: {
 		nd_entry *there = tb_get(d->s.table, tb_string("children"), tb_string(w->id));
 		if (there != NULL && dn_is_map(there->value) && op_get(there->value, w->name) != NULL) {
@@ -142,10 +147,10 @@ void dn_write_now(void *data) {
 		break;
 	}
 	case W_HERE:
-		w->code = pr_add(p, d->s.table, pl_root(p), dn_here, 2, tb_string(w->id), h, &changes, &born);
+		w->code = pr_add(p, d->s.table, pl_root(p), w->path, w->n, tb_string(w->id), h, &changes, &born);
 		break;
 	case W_UNHERE:
-		w->code = pr_remove(p, d->s.table, pl_root(p), dn_here, 2, h, &changes);
+		w->code = pr_remove(p, d->s.table, pl_root(p), w->path, w->n, h, &changes);
 		break;
 	}
 	if (changes.n > 0) commit(d, &changes);
@@ -201,15 +206,55 @@ int dn_write_in(dn *d, sc_scope *o, writing w) {
 }
 
 sc_scope *dn_scope_of(dn *d, sc_pair *info, op_value **values, const char *key, const char *what,
-	const char *id, sc_scope *parent) {
+	const char *id, sc_scope *parent, int give) {
 	values[0] = op_str(what);
 	values[1] = op_str(id);
 	info[0] = (sc_pair){key, values[0]};
 	info[1] = (sc_pair){PL_NODE, values[1]};
 	sc_scope *o = sc_create_scope(d->s.scheduler, info, 2, parent);
-	if (o != NULL) sn_give(d->s.scopes, o, id);
+	if (o != NULL && give) sn_give(d->s.scopes, o, id);
 	return o;
 }
+
+static char *live_gone(void *data) {
+	living *l = data;
+	dn *d = l->den;
+	if (d->freeing) return NULL;
+	tb_key id = tb_string(l->id), value = tb_string("value");
+	if (!l->all) {
+		if (tb_get(d->s.table, value, id) == l->written) tb_del(d->s.table, value, id);
+		return NULL;
+	}
+	// the parts copied first: each delete changes the table's list
+	size_t n = 0;
+	const tb_entry *at = tb_at(d->s.table, id, &n);
+	char **parts = dn_xalloc((n + 1) * sizeof *parts);
+	for (size_t i = 0; i < n; i++) parts[i] = dn_xdup(at[i].part.string);
+	for (size_t i = 0; i < n; i++) {
+		tb_del(d->s.table, tb_string(parts[i]), id);
+		free(parts[i]);
+	}
+	free(parts);
+	return NULL;
+}
+
+static void going(dn *d, sc_scope *scope, const char *id, const void *written, int all) {
+	if (scope == NULL) return;
+	living *l = dn_xalloc(sizeof *l);
+	l->den = d;
+	l->id = dn_xdup(id);
+	l->written = written;
+	l->all = all;
+	PUSH(d->lives, d->nlives, d->caplives, l);
+	free(sc_register_teardown(d->s.scheduler, scope, live_gone, l));
+}
+
+void dn_live_until(dn *d, sc_scope *scope, const char *id) {
+	const void *written = tb_get(d->s.table, tb_string("value"), tb_string(id));
+	if (written != NULL) going(d, scope, id, written, 0);
+}
+
+void dn_forget_at(dn *d, sc_scope *scope, const char *id) { going(d, scope, id, NULL, 1); }
 
 // a one-shot effect's run: true, so it acts once
 sc_out dn_once_f(void *previous, void *data) {

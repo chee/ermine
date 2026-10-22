@@ -1,0 +1,23 @@
+{
+	"title": "a session started: a fresh id, never one before it; two started on one install are two",
+	"steps": [
+		{
+			"op": "start",
+			"name": "tab1",
+			"install": "I1",
+			"expect": { "kind": "fresh", "differs": true }
+		},
+		{
+			"op": "start",
+			"name": "tab2",
+			"install": "I1",
+			"expect": { "kind": "fresh", "differs": true }
+		},
+		{
+			"op": "start",
+			"name": "card",
+			"install": "I2",
+			"expect": { "kind": "fresh", "differs": true }
+		}
+	]
+}

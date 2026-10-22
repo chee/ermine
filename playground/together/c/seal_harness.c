@@ -1,7 +1,7 @@
 // The C seal on the line protocol (conformance/c/harness.h): requests and answers as
 // playground/together/typescript/seal_harness.ts has them. Nothing lasts between lines
 #include "seal.h"
-#include "ed25519/ed25519.h"
+#include "../../../core/ed25519/c/ed25519.h"
 
 #include "../../../ermine/encoding/c/commit_form_harness.h"
 #include "../../../ermine/encoding/c/pack.h"

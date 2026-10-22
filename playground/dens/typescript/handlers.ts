@@ -1,9 +1,10 @@
 // handlers: how a den is asked to do things from the graph. the method nodes under its node (on/start
-// and on/stop, each a function in the value of a node), and the ask another den makes of it. the
-// same two things done two ways: a body from a node, a map from a den. which question: how it is told
+// and on/stop, each a function in the value of a node), the asks stored under them (asks.ts), and
+// the ask another den makes of it. the same two things done three ways: a body from a node, an ask
+// from the graph, a map from a den. which question: how it is told
 //
 // the den's children { on }, the folder on { start, stop } (method nodes: on/start's value (body) =>
-// start's answer, on/stop's (body) => stop's)
+// start's answer, on/stop's (body) => stop's); the names stored, the functions this session's
 // ask(a): another den's: as start or stop, its who given (device: the transport's). no policy:
 // refused no "no policy". stop: of a process this den started; else not-there. a start's fields
 // (an ask's, on/start's body's) as given, untyped: runner and at no address: []; program neither
@@ -14,16 +15,16 @@ import type { Address } from "@ermine/boxes"
 import { type Id, type Path, PlacesError } from "@ermine/places"
 import { NODE } from "@ermine/places/header"
 import { upsert } from "@ermine/places/upsert"
-import type { Inside } from "@ermine/processes/start"
 import type { Answer, Target } from "@ermine/protect"
-import { type Ctx, isMap, ours, STOPPED } from "./common.ts"
+import type { Scope } from "@ermine/scheduler"
+import { answering } from "./asks.ts"
+import { type Ctx, isMap, liveUntil, ON, ours, STOPPED } from "./common.ts"
 import { refuse } from "./policy.ts"
 import type { createStart, NoPermission, Options, Program, Refused } from "./start.ts"
 
 ours.add(import.meta.url)
 
-// the folder a den's methods are in
-export const ON = "on"
+export { ON }
 
 export type Ask =
 	| {
@@ -53,22 +54,24 @@ export function createHandlers(c: Ctx, { start: life, permit, stop }: Deps) {
 	const { s, table, scopes, createScope, commit, headerOf } = c
 	const { start, begin, halt } = life
 
-	// the den's children { on }, the folder on { start, stop }, each a method node
-	function methods(inside: Inside) {
-		const folder: Id = `${String(inside.id)}/${ON}`
-		commit(upsert(table, "children", inside.id, [ON], folder, headerOf()))
-		const on = createScope({ den: ON, [NODE]: folder }, inside.scope)
-		scopes.give(on, folder)
+	// the den's children { on }, the folder on { start, stop }, each a method node: on an install's
+	// den the names stored and each method's function this session's (liveUntil), else all of it
+	// the session's; then the asks stored under them answered (asks')
+	function methods(node: Id, scope: Scope) {
+		const folder: Id = `${String(node)}/${ON}`
+		commit(upsert(table, "children", node, [ON], folder, headerOf()))
+		const on = createScope({ den: ON, [NODE]: folder }, scope)
+		if (!c.stored) scopes.give(on, folder)
 		const fns: Record<string, (body: unknown) => unknown> = { start: onStart, stop: onStop }
-		const ids: Record<string, Id> = {}
 		for (const [name, fn] of Object.entries(fns)) {
 			const id: Id = `${String(folder)}/${name}`
 			const m = createScope({ den: `${ON}/${name}`, [NODE]: id }, on)
-			scopes.give(m, id)
-			s.runWithScope(m, () => table.add("value", id, createEntry<unknown>(fn, headerOf())))
-			ids[name] = id
+			if (!c.stored) scopes.give(m, id)
+			s.runWithScope(m, () => table.sub("value", id, createEntry<unknown>(fn, headerOf())))
+			if (c.stored) liveUntil(c, m, id)
+			s.runWithScope(on, () => commit(upsert(table, "children", folder, [name], id, headerOf())))
 		}
-		s.runWithScope(on, () => table.add("children", folder, createEntry(ids, headerOf())))
+		s.runWithScope(on, () => answering(c, askedBy, on))
 	}
 
 	// on/start: start's answer, the body's runner, program and at

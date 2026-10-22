@@ -211,7 +211,12 @@ type Message = {
 	gone?: true
 	patches?: Patch[]
 	n?: number
+	same?: true
+	hello?: true
 }
+
+const sameBytes = (a: Uint8Array | undefined, b: Uint8Array) =>
+	a !== undefined && a.length === b.length && a.every((x, i) => x === b[i])
 
 // the rows at an anchor, over the channel on topic (default: the anchor). what is sent: my rows,
 // whole, as they are written, with the time left (not a time: devices' clocks differ). what is
@@ -221,7 +226,12 @@ type Message = {
 //   row, and every row sent carries n, a count up by one each send of a who on this connection.
 //   a receiver takes a whole row always, a patch message only when its n follows the last it took
 //   from that sender and the row is there: else it is dropped, and the row stays as it was until the
-//   next whole row (a set, a renew, an announce). a message without n is taken as it comes
+//   next whole row (a set, an announce). a message without n is taken as it comes
+// same: a row sent again with the value it was last sent with (a renew; a set of the same value) goes
+// as { ttl, same: true }, no value and no n: a receiver holding the sender's row moves its until.
+// hello: { hello: true }, sent by a receiver given a same or a patch for a row it doesn't hold, or a
+// patch after a missed one (once a sender, till a whole row from it lands): whoever hears one
+// announces. so a late joiner has every row by the next beat, and a missed patch heals at once
 export function connect(
 	w: World,
 	channel: Channel,
@@ -231,12 +241,20 @@ export function connect(
 	const topic = String(opts.topic)
 	const s = state(w)
 	const counts = new Map<string, number>()
-	const send = (e: Event) => {
+	// the value last sent for each who, encoded: what a same stands for
+	const sent = new Map<string, Uint8Array>()
+	// the senders a hello has gone out for, till a whole row from them lands
+	const asked = new Set<string>()
+	const send = (e: Event, whole = false) => {
 		let m: Message
-		if (e.row === undefined) m = { gone: true }
+		if (e.row === undefined) m = { gone: true }, sent.delete(e.who)
 		else {
 			m = { ttl: e.row.until - now(w) }
-			if (opts.patches) {
+			const value = encode(e.row.value as never)
+			const same = !whole && !e.patches && sameBytes(sent.get(e.who), value)
+			sent.set(e.who, value)
+			if (same) m.same = true
+			else if (opts.patches) {
 				const n = (counts.get(e.who) ?? 0) + 1
 				counts.set(e.who, n)
 				if (e.patches) m.patches = e.patches
@@ -245,6 +263,17 @@ export function connect(
 			} else m.value = e.row.value
 		}
 		channel.send(topic, encode(m as never))
+	}
+	const hello = (from: string) => {
+		if (asked.has(from)) return
+		asked.add(from)
+		channel.send(topic, encode({ hello: true }))
+	}
+	const announce = () => {
+		for (const who of s.mine.get(anchor) ?? []) {
+			const row = w.table.get(PART, anchor)?.value?.[who]
+			if (row) send({ who, row }, true)
+		}
 	}
 	let set = s.heard.get(anchor)
 	if (set === undefined) s.heard.set(anchor, set = new Set())
@@ -256,30 +285,28 @@ export function connect(
 		} catch {
 			return
 		}
+		if (m.hello) return announce()
 		if (m.gone) return void take(w, anchor, [from])
 		const until = now(w) + (m.ttl ?? 0)
 		let last = s.last.get(anchor)
 		if (last === undefined) s.last.set(anchor, last = new Map())
+		const held = w.table.get(PART, anchor)?.value?.[from]
+		if (m.same) {
+			if (held === undefined) return hello(from)
+			return put(w, anchor, from, { value: held.value, until })
+		}
 		if (m.patches !== undefined) {
-			if (typeof m.n === "number" && m.n !== (last.get(from) ?? NaN) + 1) return
-			if (w.table.get(PART, anchor)?.value?.[from] === undefined) return
+			if (typeof m.n === "number" && m.n !== (last.get(from) ?? NaN) + 1) return hello(from)
+			if (held === undefined) return hello(from)
 			try {
 				edit(w, anchor, from, m.patches, until)
 			} catch {
 				return
 			}
-		} else put(w, anchor, from, { value: m.value, until })
+		} else put(w, anchor, from, { value: m.value, until }), asked.delete(from)
 		if (typeof m.n === "number") last.set(from, m.n)
 	})
-	return {
-		stop: () => (off(), set.delete(send)),
-		announce: () => {
-			for (const who of s.mine.get(anchor) ?? []) {
-				const row = w.table.get(PART, anchor)?.value?.[who]
-				if (row) send({ who, row })
-			}
-		},
-	}
+	return { stop: () => (off(), set.delete(send)), announce }
 }
 
 // an entry for the anchor, so a path (a mounted node) can be watched before any row is there

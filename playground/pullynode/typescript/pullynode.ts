@@ -15,11 +15,13 @@
 // its attributes or children wake nothing. a read outside a run (a peep) wakes nothing; check is
 // the way to ask from outside.
 // what a reader gets: the value last written, whenever that was, and the node's status (the
-// attribute STATUS): "asleep", "waking" (started, nothing written since), "awake". how stale an
-// asleep value is: its entry's change.time.
+// attribute STATUS; attributes that are not a map are replaced by one): "asleep", "waking"
+// (started, nothing written since), "awake". how stale an asleep value is: its entry's
+// change.time.
 // when: never inside a run. what a run's read sets going (a start) or stops waits till no run is
-// open (the pulse's end); so a provider's writes are never the reading run's. writes are the
-// provider's own, under a root scope of the info given (default: actor, the id).
+// open (the pulse's end); so a provider's writes are never the reading run's (a provide made in a
+// run writes its first status then too). writes are the provider's own, under a root scope of the
+// info given (default: actor, the id).
 // the path cache's holds wake nothing (chee 10-21: for now; a possible places bug)
 import type { Patch } from "@ermine/op/apply"
 import createEntry, { type Entry } from "@ermine/node/entry"
@@ -65,7 +67,8 @@ export type Providers = {
 	// gives back its stop: stopped if running (then asleep). one provider an id: a second throws
 	provide: (id: Id, provider: Provider, info?: Info) => () => void
 	// the node's value now, asked from outside a run: awake, the value there; else once's (written
-	// to the node), or start's first write (started, stopped). the status is not changed by it
+	// to the node), or start's first write (started, stopped; the provider let go first: the value
+	// there). the status is not changed by it
 	check: (id: Id) => Promise<unknown>
 	// whether a run reads it now
 	reading: (id: Id) => boolean
@@ -113,8 +116,10 @@ export function createProviders(setup: Setup): Providers {
 	function status(h: Held, id: Id, s: Status) {
 		if (h.status === s) return
 		h.status = s
+		// attributes not a map: replaced by one
 		const v = table.get("attributes", id)?.value
-		const patches: Patch[] = v !== null && typeof v === "object" ? [] : [{ path: [], value: {} }]
+		const map = v !== null && typeof v === "object" && !Array.isArray(v)
+		const patches: Patch[] = map ? [] : [{ path: [], value: {} }]
 		patches.push({ path: [STATUS], value: s })
 		put(h, "attributes", id, patches)
 	}
@@ -136,7 +141,10 @@ export function createProviders(setup: Setup): Providers {
 	function settle(id: Id) {
 		const h = held.get(id)
 		if (h === undefined) return
-		if (h.keys.size && h.running === undefined) {
+		if (h.keys.size === 0 && h.status === undefined) {
+			// provided in a run: its first status, now
+			status(h, id, "asleep")
+		} else if (h.keys.size && h.running === undefined) {
 			status(h, id, "waking")
 			const woke = h.woke
 			h.woke = undefined
@@ -197,7 +205,7 @@ export function createProviders(setup: Setup): Providers {
 		const there = table.get("attributes", id)?.value as Record<string, unknown> | undefined
 		const was = there !== null && typeof there === "object" ? there[STATUS] : undefined
 		if (was === "asleep") h.status = "asleep"
-		else if (scheduler.getRun() === undefined) status(h, id, "asleep")
+		else soon(id)
 		return () => {
 			if (held.get(id) !== h) return
 			for (const k of h.keys) ids.delete(k)
@@ -205,13 +213,15 @@ export function createProviders(setup: Setup): Providers {
 		}
 	}
 
-	// h stopped and let go: asleep if it was running, and no run is open to write in
+	// h stopped and let go: asleep if it was running, and no run is open to write in. a check
+	// waiting on a first write answers with the value there
 	function end(id: Id, h: Held) {
-		const off = h.running
-		h.running = h.checking = undefined
+		const off = h.running, waiting = h.checking
+		h.running = h.checking = h.woke = undefined
 		off?.()
 		if (off && scheduler.getRun() === undefined) status(h, id, "asleep")
 		held.delete(id)
+		waiting?.()
 	}
 
 	async function check(id: Id): Promise<unknown> {

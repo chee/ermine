@@ -5,6 +5,26 @@
 #include "common.h"
 #include "here.h"
 #include "start.h"
+#include "../../../ermine/ids/c/ids.h"
+
+// a fresh ermine id's text (ermine/ids': randomness is the caller's)
+static char *fresh_id(void) {
+	uint8_t random[16], id[ID_SHORT];
+	arc4random_buf(random, sizeof random);
+	id_fresh(random, id);
+	char *text = dn_xalloc(ID_TEXT);
+	id_text(id, sizeof id, text);
+	return text;
+}
+
+// the den given up, nothing made: its owner torn down, itself freed
+static void give_up(dn *d) {
+	free(sc_teardown(d->owner));
+	d->site = NULL;
+	d->self->ended = 1;
+	pr_halt(d->life);
+	dn_free(d);
+}
 
 dn *dn_new_at(const dn_setup *setup, const char **error, const ch_site *site) {
 	if (setup->id == NULL || !pl_is_name(setup->id)) {
@@ -26,9 +46,14 @@ dn *dn_new_at(const dn_setup *setup, const char **error, const ch_site *site) {
 	d->scratch = op_num(0);
 	d->owner_value = op_str(d->id);
 	d->owner_info = (sc_pair){"den", d->owner_value};
+	d->stored = setup->install != NULL;
 	d->self = dn_xalloc(sizeof *d->self);
 	d->self->den = d;
 	d->self->self = 1;
+	d->self->id = setup->install != NULL ? dn_xdup(setup->install) : fresh_id();
+	const char *at[3] = {dn_dens[0], dn_dens[1], d->id};
+	d->self->nat = 3;
+	d->self->at = dn_copy_names(at, 3);
 	PUSH(d->all, d->nall, d->capall, d->self);
 	d->site = site;
 	ch_site buf;
@@ -48,26 +73,33 @@ dn *dn_new_at(const dn_setup *setup, const char **error, const ch_site *site) {
 		.commit_ctx = setup->commit_ctx, .sites = setup->sites, .runs = setup->runs, .owner = d->owner,
 		.site = dn_site_of, .site_ctx = d},
 		file, line, func);
+	// /system/dens/<id> or /system/den taken: already-there
+	const char *const *paths[2] = {(const char *const *)d->self->at, dn_here};
+	for (int k = 0; k < 2; k++) {
+		char *there = dn_resolve(setup->places, paths[k], k == 0 ? d->self->nat : 2);
+		if (there == NULL) continue;
+		free(there);
+		*error = pl_code_name(PL_ALREADY_THERE);
+		give_up(d);
+		return NULL;
+	}
+	// the session's process: in its body the den's node written and placed
 	op_value *attrs = op_map();
-	op_set(attrs, DN_ATTRIBUTE, op_str(DN_TYPE_DEN));
-	op_set(attrs, DN_ID, op_str(d->id));
-	if (d->name != NULL) op_set(attrs, DN_NAME, op_str(d->name));
-	if (d->device != NULL) op_set(attrs, DN_DEVICE, op_ref(d->device));
-	const char *at[3] = {dn_dens[0], dn_dens[1], d->id};
+	op_set(attrs, DN_ATTRIBUTE, op_str(DN_TYPE_PROCESS));
+	op_value *den = op_map();
+	op_set(den, "id", op_str(d->self->id));
+	op_set(den, "at", dn_names_value((const char *const *)d->self->at, 3));
+	op_set(attrs, DN_DEN, den);
 	pr_refusal no;
-	pr_process *life = pr_start_at(d->life, setup->places, at, 3,
+	pr_process *life = pr_start_at(d->life, setup->places, dn_session, 2,
 		&(pr_options){.body = dn_den_body, .stop = dn_den_end, .data = d->self, .attributes = attrs}, &no,
 		file, line, func);
 	op_free(attrs);
 	if (life == NULL || d->here_failed) {
-		free(sc_teardown(d->owner));
-		d->site = NULL;
 		if (life != NULL) *error = pl_code_name(d->here_failed);
 		else if (strcmp(no.refused, "taken") == 0) *error = pl_code_name(PL_ALREADY_THERE);
 		else *error = no.refused;
-		d->self->ended = 1;
-		pr_halt(d->life);
-		dn_free(d);
+		give_up(d);
 		return NULL;
 	}
 	d->site = NULL;
@@ -138,12 +170,17 @@ void dn_free(dn *d) {
 		free(d->on_ids[k]);
 		free_values(d->on_values[k], 2);
 	}
+	for (size_t i = 0; i < d->nlives; i++) free(d->lives[i]->id), free(d->lives[i]);
+	free(d->lives);
+	for (size_t i = 0; i < d->nanswered; i++) free(d->answered[i]);
+	free(d->answered);
 	dn_forget(d);
 	free(d->scraps);
 	free(d->all);
 	free(d->running);
 	free(d->offers);
 	free(d->live);
+	free_values(d->node_values, 2);
 	free_values(d->reasons, 3);
 	op_free(d->pending);
 	op_free(d->scratch);

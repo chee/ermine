@@ -43,6 +43,7 @@
 //   {"op":"moments"}        the moments since last asked, then forgotten     → {"moments":[..]}
 //   {"op":"moments","reads":true}   the same, an ends moment with its reads
 //   {"op":"moments","returns":true}   the same, with each returns moment (left out otherwise)
+//   {"op":"moments","pulses":true}    the same, with each pulsed moment (left out otherwise)
 //   {"op":"forgotten"}  the keys the scheduler stopped tracking (its forget) since last asked
 //                                                                             → {"keys":[k...]}
 //   {"op":"started"}  the keys that gained their first tracker since last asked (onTrackingStart),
@@ -55,7 +56,7 @@
 //        x, when given), once: "mark" (onMark; x one of its keys), "starts", "returns", "ends",
 //        "acts" (a run's start, its body's return (onRunReturn), its end, an act; x the
 //        computation), "forgotten", "started" (onTrackingEnd,
-//        onTrackingStart; x the key), "settles" (onSettle; no x). armed again: the last one. else
+//        onTrackingStart; x the key), "settles" (onSettle; no x), "pulsed" (onAfterPulse; no x). armed again: the last one. else
 //        "unknown listener l"
 //
 // thrown out (finish, then rethrow): what a listener throws, or a cleanup run once the round's runs
@@ -83,6 +84,8 @@
 //   {"returns":c,"run":n}   when asked for: the run's body returned a value (an awaited one: it
 //    landed), before anything is done with it: before its set's marks, before its end; once per
 //    run at most (none for a throw, PENDING, a stop). not counted toward ENDLESS
+//   {"pulsed":true}   when asked for: a pulse ended (onAfterPulse): nothing due, every act done;
+//    not for one left early. not counted toward ENDLESS
 // moments come as told: due when made due, starts and ends around a run (a run's own marks and
 // makings between them), acts after. due: made due by a mark (writer: the computation the change
 // named, its run; none, from outside) or by being made (writer: the computation whose run, set,
@@ -257,7 +260,9 @@ let logged: Json[] = []
 // as told; named when asked (a new computer is due before it has a name)
 // a run's body returned (onRunReturn): not trace's, shown when asked
 type Returns = { returns: Computer; run: number }
-let moments: (Told | Returns)[] = []
+// a pulse ended (onAfterPulse): shown when asked
+type Pulsed = { pulsed: true }
+let moments: (Told | Returns | Pulsed)[] = []
 let forgotten: unknown[] = []
 let started: unknown[] = []
 const named = new Map<string, Scope>()
@@ -274,7 +279,8 @@ const errorOf = (e: unknown): string =>
 		: String(e)
 const nameOf = (c: Computer) => names.get(c)!
 
-function moment(m: Told | Returns, reads: boolean): Json {
+function moment(m: Told | Returns | Pulsed, reads: boolean): Json {
+	if ("pulsed" in m) return { pulsed: true }
 	if ("returns" in m) return { returns: nameOf(m.returns), run: m.run }
 	if ("due" in m) {
 		return m.by ? { due: nameOf(m.due), tick: m.tick, writer: nameOf(m.by) } : {
@@ -304,7 +310,17 @@ let told = 0
 let pulsing = false
 // a listener armed to throw, once: which, at what (a computation's name, or a key), its message
 let armed: { on: string; at?: string; error: string } | undefined
-const LISTENERS = ["mark", "starts", "returns", "ends", "acts", "forgotten", "started", "settles"]
+const LISTENERS = [
+	"mark",
+	"starts",
+	"returns",
+	"ends",
+	"acts",
+	"forgotten",
+	"started",
+	"settles",
+	"pulsed",
+]
 function fire(on: string, at: () => string[]) {
 	if (armed?.on !== on || (armed.at !== undefined && !at().includes(armed.at))) return
 	const e = armed.error
@@ -322,6 +338,10 @@ trace(s, (m) => {
 s.onRunReturn((c, n) => {
 	moments.push({ returns: c, run: n })
 	fire("returns", () => [nameOf(c)])
+})
+s.onAfterPulse(() => {
+	moments.push({ pulsed: true })
+	fire("pulsed", () => [])
 })
 s.onTrackingEnd((key) => {
 	forgotten.push(key)
@@ -725,7 +745,9 @@ async function run(r: Request): Promise<Json> {
 			return { log: out }
 		}
 		case "moments": {
-			const out = moments.filter((m) => r.returns === true || !("returns" in m))
+			const out = moments.filter((m) =>
+				(r.returns === true || !("returns" in m)) && (r.pulses === true || !("pulsed" in m))
+			)
 				.map((m) => moment(m, r.reads === true))
 			moments = []
 			return { moments: out }

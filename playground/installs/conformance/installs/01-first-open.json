@@ -1,0 +1,15 @@
+{
+	"title": "an empty store: the first open makes a secret and a root and writes both, the secret first; the id is a key id, the root a fresh one; the secret 32 bytes, the root 18",
+	"steps": [
+		{
+			"op": "open",
+			"skip": ["id", "root"],
+			"expect": {
+				"kinds": { "id": "key", "root": "fresh" },
+				"wrote": ["secret", "root"],
+				"same": true
+			}
+		},
+		{ "op": "stored", "expect": { "sizes": { "secret": 32, "root": 18 } } }
+	]
+}

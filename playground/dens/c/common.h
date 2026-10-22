@@ -125,6 +125,15 @@ typedef struct {
 	char *text;
 } scrap;
 
+// a node's part going at a scope's teardown: its id, and the value entry written (it goes only if
+// still the one there), or all: every part goes; until dn_free
+typedef struct {
+	dn *den;
+	char *id;
+	const void *written;
+	int all;
+} living;
+
 struct dn {
 	dn_setup s;
 	char *id, *name;
@@ -154,8 +163,21 @@ struct dn {
 	// every load made (until dn_free)
 	dn_loaded **loaded;
 	size_t nloaded, caploaded;
+	// the stored nodes whose live value goes at a scope's teardown (until dn_free)
+	living **lives;
+	size_t nlives, caplives;
+	// the asks answered this session (their answer may not have landed yet), by id
+	char **answered;
+	size_t nanswered, capanswered;
 	// what dn_nodes tracks, marked at every offer, withdraw, start and process end
 	char version;
+	// the den's node is an install's: kept across sessions (else all of it goes with the session)
+	int stored;
+	// the node's own scope when it is not (given: its entries go with it)
+	sc_scope *node_scope;
+	sc_pair node_info[2];
+	op_value *node_values[2];
+	// here_placed: the leaves put in, 1 /system/dens/<name>, 2 /system/den
 	int closed, here_placed, here_failed, freeing, queued;
 	// the reason the den's own process goes with: dn_close's, else "den-stopped"
 	op_value *pending;
@@ -188,14 +210,21 @@ void dn_later(dn *d);
 void dn_changed(dn *d);
 // a one-shot effect's run: true, so it acts once
 sc_out dn_once_f(void *previous, void *data);
+// give: the node's entries go with the scope (sn_give); 0: a stored node's, kept
 sc_scope *dn_scope_of(dn *d, sc_pair *info, op_value **values, const char *key, const char *what,
-	const char *id, sc_scope *parent);
+	const char *id, sc_scope *parent, int give);
+// a stored node's live value (its function, just written) gone at the scope's teardown if still the
+// one there, its other parts left
+void dn_live_until(dn *d, sc_scope *scope, const char *id);
+// every part at the id gone at the scope's teardown
+void dn_forget_at(dn *d, sc_scope *scope, const char *id);
 
 // writes, with a scope open
-enum { W_UPSERT, W_ADD, W_UNPLACE, W_HERE, W_UNHERE };
+enum { W_UPSERT, W_ADD, W_SUB, W_UNPLACE, W_HERE, W_UNHERE };
 
-// one write: an upsert at path in (part, id); an entry added at (part, id); name out of id's
-// children; the den at /system/den, or out of it. code: 0, places' code, -1 (no scope open)
+// one write: an upsert at path in (part, id); an entry added at (part, id), or put in place of what
+// was there; name out of id's children; the den (id) at path in the process part, or out of it.
+// code: 0, places' code, -1 (no scope open)
 typedef struct {
 	dn *d;
 	int what;

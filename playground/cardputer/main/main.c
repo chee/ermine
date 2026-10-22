@@ -99,7 +99,7 @@ static void draw_text(const op_value *screen) {
 	const ls_node *last_pig = room_last();
 	if (last_pig) {
 		ls_cost c = ls_cost_of(last_pig);
-		snprintf(pig, sizeof pig, "%.4s %uB %uc %up", ls_id(last_pig) + 9, (unsigned)c.stored, (unsigned)c.commits,
+		snprintf(pig, sizeof pig, "%.4s %uB %uc %up", ls_id(last_pig) + 11, (unsigned)c.stored, (unsigned)c.commits,
 			(unsigned)c.newest.parents);
 	}
 	snprintf(top, sizeof top, "ermine %-17.17s%4uK", pig, (unsigned)(heap_caps_get_free_size(MALLOC_CAP_8BIT) / 1024));
@@ -219,7 +219,7 @@ void app_main(void) {
 		ls ? ", littlesync on" : ", no littlesync", wifi ? ", and over WiFi" : "");
 	// keys: a key and what it set off; beat: the den's row set again and the sweep; send: a row sealed
 	// and framed; in: an HTTP answer fed in (seals checked, rows heard, mirrored); settle: what that set off
-	static peak_step steps[5] = {{"keys", 0, 0, 0}, {"beat", 0, 0, 0}, {"send", 0, 0, 0}, {"heard", 0, 0, 0}, {"settle", 0, 0, 0}};
+	static peak_step steps[5] = {{"keys", 0, 0, 0, 0}, {"beat", 0, 0, 0, 0}, {"send", 0, 0, 0, 0}, {"heard", 0, 0, 0, 0}, {"settle", 0, 0, 0, 0}};
 	lschannel_steps = &steps[3];
 	for (;;) {
 		const char *k;

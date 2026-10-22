@@ -12,7 +12,7 @@ idf_component_register(
 		${R}/ermine/encoding/c/commit.c
 		${R}/ermine/encoding/c/blake3/blake3.c ${R}/ermine/encoding/c/blake3/blake3_dispatch.c
 		${R}/ermine/encoding/c/blake3/blake3_portable.c
-		${R}/playground/together/c/ed25519/ed25519.c ${R}/playground/together/c/ed25519/sha2.c
+		${R}/core/ed25519/c/ed25519.c ${R}/core/ed25519/c/sha2.c
 	INCLUDE_DIRS .
 	REQUIRES ermine nvs_flash
 )

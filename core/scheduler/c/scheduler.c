@@ -166,7 +166,7 @@ typedef struct queue {
 	size_t n, head, cap, live;
 } queue;
 
-typedef enum { ON_TRACK, ON_MARK, ON_START, ON_RETURN, ON_END, ON_EFFECT, ON_SETTLE, ON_UNTRACK, ON_FIRST, ON_KINDS } listening;
+typedef enum { ON_TRACK, ON_MARK, ON_START, ON_RETURN, ON_END, ON_EFFECT, ON_SETTLE, ON_UNTRACK, ON_FIRST, ON_PULSED, ON_KINDS } listening;
 
 struct sc_listener {
 	sc_scheduler *s;
@@ -180,6 +180,7 @@ struct sc_listener {
 		sc_effect_fn effect;
 		sc_settle_fn settle;
 		sc_tracking_end_fn untrack;
+		sc_after_pulse_fn pulsed;
 	} f;
 	void *data;
 };
@@ -312,6 +313,9 @@ sc_listener *sc_on_tracking_start(sc_scheduler *s, sc_track_fn f, void *data) {
 }
 sc_listener *sc_on_tracking_end(sc_scheduler *s, sc_tracking_end_fn f, void *data) {
 	return listen(s, ON_UNTRACK, (sc_listener){.f.untrack = f, .data = data});
+}
+sc_listener *sc_on_after_pulse(sc_scheduler *s, sc_after_pulse_fn f, void *data) {
+	return listen(s, ON_PULSED, (sc_listener){.f.pulsed = f, .data = data});
 }
 
 #define EACH(s, K, member, ...) \
@@ -1408,6 +1412,12 @@ void sc_pulse(sc_scheduler *s) {
 	cs_end(s->causes);
 	s->pulses++;
 	sweep(s);
+	// over: told, unless it was left early. what they throw is held, as any listener's; a pulse
+	// called there is a new one
+	if (!failed) {
+		for (size_t i = 0; i < s->nlisteners[ON_PULSED]; i++)
+			s->listeners[ON_PULSED][i]->f.pulsed(s->listeners[ON_PULSED][i]->data);
+	}
 	char *t = unbracket(s, outer);
 	if (failed) {
 		free(t);

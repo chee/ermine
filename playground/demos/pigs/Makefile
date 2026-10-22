@@ -28,7 +28,7 @@ FLAGS = $(BLAKE3FLAGS) $(rename) -I$(OPENSSL)/include
 graph = core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c
 sync = playground/together/c/sync.c playground/together/c/transport.c playground/together/c/mailroom.c playground/together/stacks/subduction/c/subduction.c playground/together/c/ids.c ermine/ids/c/ids.c playground/together/c/history.c \
 	playground/together/c/replay.c playground/together/c/lists.c playground/together/c/snapshot.c playground/together/c/packer.c \
-	playground/together/c/seal.c playground/together/c/ed25519/ed25519.c playground/together/c/ed25519/sha2.c playground/together/stacks/subduction/c/fragment.c \
+	playground/together/c/seal.c core/ed25519/c/ed25519.c core/ed25519/c/sha2.c playground/together/stacks/subduction/c/fragment.c \
 	ermine/encoding/c/commit.c ermine/encoding/c/pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c ermine/encoding/c/json_text.c \
 	ermine/encoding/c/blake3/blake3.c ermine/encoding/c/blake3/blake3_dispatch.c ermine/encoding/c/blake3/blake3_portable.c \
 	playground/together/stacks/subduction/c/subduction/platform_posix.c playground/together/stacks/subduction/c/subduction/store_memory.c \

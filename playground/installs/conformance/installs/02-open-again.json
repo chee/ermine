@@ -1,0 +1,20 @@
+{
+	"title": "opened again: the same id and root, nothing written",
+	"steps": [
+		{
+			"op": "open",
+			"skip": ["id", "root", "kinds"],
+			"expect": { "wrote": ["secret", "root"], "same": true }
+		},
+		{
+			"op": "open",
+			"skip": ["id", "root", "kinds"],
+			"expect": { "wrote": [], "same": true }
+		},
+		{
+			"op": "open",
+			"skip": ["id", "root", "kinds"],
+			"expect": { "wrote": [], "same": true }
+		}
+	]
+}

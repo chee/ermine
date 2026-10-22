@@ -1,43 +1,54 @@
-// here: the den's own node. where a den is (/system/dens/<id>, and /system/den inside it: the same
-// id, a second leaf), what it says of itself (id, name, device), how it closes, and what others
-// see of it. which question: where am i
+// here: the den's own node. a den is an install's: its node's id is the install's id
+// (setup.install; none: a fresh one, a den new each start), the same every start, so a room can
+// name it and an ask can wait for it. what it is (attributes), what it offers and its on folder are
+// stored there, written each start and left at the end: only the live values (runners, methods) go
+// with the session. the session's running den is a process of its own, at /system/session. where
+// it is: /system/dens/<name>, and /system/den inside it, both the den's node. which question:
+// where am i
 //
-// createDen, a scope open: an owner scope { den: id } under it; processes' start at
-// /system/dens/<id> under the owner, attributes { ermine.type: ermine.den, ermine.den.id,
-// .name?, .device? }; in its body: its children { on }, the folder on { start, stop }, and
-// /system/den (addProcess, the same id). its status: gone at the first pulse. id not a name:
-// PlacesError not-a-name; /system/dens/<id> or /system/den taken: already-there
-// the den's offers are scopes under its node's, so what runs on them is under it: its going takes
-// them, then its loads, then here and its row
+// createDen, a scope open: an owner scope { den: name } under it; processes' start at
+// /system/session under the owner, attributes { ermine.type: ermine.process, ermine.process.den:
+// { id: the den's node, at: /system/dens/<name> } } (its status: gone at the first pulse); in its
+// body: the den's node's attributes { ermine.type: ermine.den, ermine.den.id, .name?, .device? }
+// written over what was there, its children { on }, the folder on { start, stop } (handlers'), and
+// the leaves /system/dens/<name> and /system/den. name not a name: PlacesError not-a-name;
+// /system/session, /system/dens/<name> or /system/den taken: already-there
+// the den's offers are scopes under its process's, so what runs on them is under it: its going
+// takes them, then its loads, then here's leaves
 // close(reason = "den-stopped"): the reason the den's, then each process's scope torn down, newest
 // first (start order: a user of a process's runner before it, as it is newer), each handle given
-// reason; then the owner torn down: the den's own and its rows last. after it: start, load, ask,
-// offer refused stopped
+// reason; then the owner torn down: the session's process and the leaves last. the den's node stays
+// with what is stored on it. after it: start, load, ask, offer refused stopped
 // stop(reason): the den's own stopped as any process is asked (stop, its node); then close(reason)
 // nodes({ processes }): what others see, tracked; status as "pending" | { failed: message }, an
 // attribute with no encoding left out; children: only those dens wrote
 // unplace or move never stops a process: its row is in the process part, not in children
 // writes: with the owner's scope open (the den, its offers) or the process's
-// open: a promise never settling; /system/den inside a box; boxed processes in nodes()
+// open: a promise never settling; /system/den inside a box; boxed processes in nodes(); two
+// sessions of one install at once (both write the den's node, both answer its asks)
 import { CborError, encode, type Value } from "@ermine/encoding/cbor"
 import { type Id, type Path, PlacesError } from "@ermine/places"
 import { STATUS } from "@ermine/places/status"
 import { addProcess, removeProcess } from "@ermine/processes"
-import type { Inside, Process, Processes } from "@ermine/processes/start"
-import { createChangeBase } from "@ermine/places/header"
+import type { Process, Processes } from "@ermine/processes/start"
+import { createChangeBase, NODE } from "@ermine/places/header"
 import type { Answer, Target } from "@ermine/protect"
-import { PENDING } from "@ermine/scheduler"
+import { PENDING, type Scope } from "@ermine/scheduler"
+import { fresh, text } from "@ermine/ids"
+import createEntry from "@ermine/node/entry"
+import { get } from "@ermine/places/lib"
 import { ATTRIBUTE, type Ctx, holder, isMap, ours, type Owner, REASONS, TYPE } from "./common.ts"
-import { ON } from "./handlers.ts"
+import { ON } from "./common.ts"
 import { refuse } from "./policy.ts"
 import type { Setup } from "./dens.ts"
-import type { NoPermission } from "./start.ts"
+import { DEN, type NoPermission } from "./start.ts"
 
 ours.add(import.meta.url)
 
 // where dens are, and here: the one place each path is said
 export const DENS: Path = ["system", "dens"]
 export const HERE: Path = ["system", "den"]
+export const SESSION: Path = ["system", "session"]
 
 export const ID = "ermine.den.id"
 export const NAME = "ermine.den.name"
@@ -69,23 +80,34 @@ function encodes(v: unknown): boolean {
 export type Deps = {
 	readonly processes: Processes
 	// the den's children { on }, the methods: handlers'
-	readonly methods: (inside: Inside) => void
+	readonly methods: (node: Id, scope: Scope) => void
 	readonly permit: (who: unknown, op: string, target: Target, remote: boolean) => Answer
 }
 
 export function createHere(c: Ctx, setup: Setup, { processes, methods, permit }: Deps) {
-	const { s, table, places, home, commit, headerOf, changed } = c
+	const { s, table, places, scopes, createScope, home, commit, headerOf, changed } = c
 
-	// the den's own node as an owner: its folders and offers
+	// the den's node, and what it says of itself
+	const node: Id = setup.install?.id ?? text(fresh())!
+	c.node = node
 	const attributes: Record<string, unknown> = { [ATTRIBUTE]: TYPE.den, [ID]: setup.id }
 	if (setup.name !== undefined) attributes[NAME] = setup.name
 	if (setup.device !== undefined) attributes[DEVICE] = setup.device
 	const at = [...DENS, setup.id]
+	const taken = [at, HERE].find((path) => places.peep(() => get(places, path)) !== undefined)
+	if (taken !== undefined) {
+		s.teardown(c.owner)
+		throw new PlacesError("already-there", taken.join("/"))
+	}
+
+	// the session's process: in its body the den's node written and placed
 	let made: Process | { refused: "taken" }
 	try {
-		made = processes.start(home, at, { attributes }, (inside) => {
+		made = processes.start(home, SESSION, {
+			attributes: { [ATTRIBUTE]: TYPE.process, [DEN]: { id: node, at } },
+		}, (inside) => {
 			c.mine = {
-				id: inside.id,
+				id: node,
 				at,
 				scope: inside.scope,
 				under: inside.scope,
@@ -97,8 +119,12 @@ export function createHere(c: Ctx, setup: Setup, { processes, methods, permit }:
 				loads: [],
 			}
 			holder(s, c.mine)
-			methods(inside)
-			commit(addProcess(table, home.root, HERE, inside.id, headerOf()))
+			// a den with no install: its node goes with the session
+			if (!c.stored) scopes.give(createScope({ den: "node", [NODE]: node }, inside.scope), node)
+			table.sub("attributes", node, createEntry(attributes, headerOf()))
+			methods(node, inside.scope)
+			commit(addProcess(table, home.root, at, node, headerOf()))
+			commit(addProcess(table, home.root, HERE, node, headerOf()))
 			// its status gone at the first pulse
 			const first = s.createEffect(() => true, () => s.teardown(first))
 			inside.give(first)
@@ -110,26 +136,29 @@ export function createHere(c: Ctx, setup: Setup, { processes, methods, permit }:
 	}
 	if ("refused" in made) {
 		s.teardown(c.owner)
-		throw new PlacesError("already-there", setup.id)
+		throw new PlacesError("already-there", SESSION.join("/"))
 	}
 	const self = made
-	c.node = self.id
 
-	// the den's own process going, what is under it gone already (its offers and what ran on them,
-	// its loads): here out
+	// the session's process going, what is under it gone already (its offers' live values and what
+	// ran on them, its loads): the leaves out; the den's node stays
 	function ended() {
 		c.closed = true
 		try {
-			commit(removeProcess(table, c.home.root, HERE, headerOf()))
-		} catch (e) {
-			if (!(e instanceof PlacesError && e.code === "nothing-there")) throw e
+			for (const path of [HERE, at]) {
+				try {
+					commit(removeProcess(table, c.home.root, path, headerOf()))
+				} catch (e) {
+					if (!(e instanceof PlacesError && e.code === "nothing-there")) throw e
+				}
+			}
 		} finally {
 			changed()
 		}
 	}
 
 	// each process's scope torn down, newest first (what it goes with is its scope's, its reason
-	// the den's: start's); then the owner (the den's own, here, its row). every step runs; the
+	// the den's: start's); then the owner (the session's process, the leaves). every step runs; the
 	// first error is thrown after
 	function close(reason: unknown = REASONS.den) {
 		if (c.closed) return

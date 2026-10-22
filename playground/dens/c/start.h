@@ -18,5 +18,7 @@ int dn_stop_as(dn *d, const op_value *who, int remote, dn_process *p, const op_v
 	dn_refusal *refused);
 // a start's answer: { id, at }
 op_value *dn_id_at(const dn_process *p);
+// the id at a path from the places' root, untracked, copied; NULL: nothing there
+char *dn_resolve(pl *p, const char *const *path, size_t n);
 
 #endif

@@ -189,10 +189,20 @@ pullynode = playground/pullynode/c/pullynode-harness
 pullynode_flags = -DPH_LIB
 pullynode_suite = pullynode
 LIBS += pullynode
+# installs (playground/installs): who an install is, over a store and a key handed in; the harness's key is the repo's Ed25519
+installs_src = $(harness_src) ermine/ids/c/ids.c $(blake3_src) playground/installs/c/installs.c playground/installs/c/installs_harness.c core/ed25519/c/ed25519.c core/ed25519/c/sha2.c
+installs = playground/installs/c/installs-harness
+installs_suite = installs
+LIBS += installs
+# sessions (playground/sessions): the "online" part, a session's entry at a node; places' harness's world, without its harnesses
+sessions_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) ermine/ids/c/ids.c $(blake3_src) playground/sessions/c/sessions.c playground/sessions/c/sessions_harness.c
+sessions = playground/sessions/c/sessions-harness
+sessions_suite = sessions
+LIBS += sessions
 # dens (playground/dens): a den's node, its offers, start by runner, stop, the asks; and other dens
 # over presence and its channel (away.c, suite away on this harness: its suite.json); the C api
 # (ermine/api), for its teller runner. two devices, as presence's harness makes them
-dens_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/start.c ermine/processes/c/runs.c ermine/boxes/c/boxes.c ermine/sites/c/sites.c filesystem/protect/c/protect.c playground/together/presence/c/presence.c playground/together/presence/c/channel.c extensions/build/c/host.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c ermine/encoding/c/hash.c $(blake3_src) filesystem/places/c/guard.c extensions/patch-nodes/c/patch.c ermine/api/c/api.c playground/dens/c/common.c playground/dens/c/policy.c playground/dens/c/offers.c playground/dens/c/start.c playground/dens/c/handlers.c playground/dens/c/here.c playground/dens/c/dens.c playground/dens/c/away.c playground/dens/c/dens_harness.c
+dens_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/start.c ermine/processes/c/runs.c ermine/boxes/c/boxes.c ermine/sites/c/sites.c filesystem/protect/c/protect.c playground/together/presence/c/presence.c playground/together/presence/c/channel.c extensions/build/c/host.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c ermine/encoding/c/hash.c $(blake3_src) filesystem/places/c/guard.c extensions/patch-nodes/c/patch.c ermine/api/c/api.c playground/dens/c/common.c playground/dens/c/policy.c playground/dens/c/offers.c playground/dens/c/start.c playground/dens/c/handlers.c playground/dens/c/asks.c ermine/ids/c/ids.c playground/dens/c/here.c playground/dens/c/dens.c playground/dens/c/away.c playground/dens/c/dens_harness.c
 dens = playground/dens/c/dens-harness
 dens_suite = dens away
 dens_tests = $(wildcard playground/dens/typescript/dens_harness_test.ts)
@@ -208,11 +218,11 @@ together-commit_src = $(together_harness_src) ermine/encoding/c/commit_harness.c
 together-commit = ermine/encoding/c/commit-harness
 together-commit_suite = commit
 LIBS += together-commit
-together-seal_src = $(together_harness_src) playground/together/c/seal_harness.c playground/together/c/seal.c playground/together/c/ed25519/ed25519.c playground/together/c/ed25519/sha2.c $(together_commit_src)
+together-seal_src = $(together_harness_src) playground/together/c/seal_harness.c playground/together/c/seal.c core/ed25519/c/ed25519.c core/ed25519/c/sha2.c $(together_commit_src)
 together-seal = playground/together/c/seal-harness
 together-seal_suite = seal
 LIBS += together-seal
-together_signed_src = playground/together/c/seal.c playground/together/c/ed25519/ed25519.c playground/together/c/ed25519/sha2.c $(together_commit_src)
+together_signed_src = playground/together/c/seal.c core/ed25519/c/ed25519.c core/ed25519/c/sha2.c $(together_commit_src)
 together-packer_src = $(together_harness_src) $(together_commits_src) playground/together/c/packer_harness.c playground/together/c/packer.c $(together_signed_src)
 together-packer = playground/together/c/packer-harness
 together-packer_suite = packer

@@ -7,7 +7,7 @@
 #include "../../../../ermine/encoding/c/commit.h"
 #include "../../../../ermine/encoding/c/json.h"
 #include "../../../../ermine/encoding/c/pack.h"
-#include "../../../../playground/together/c/ed25519/ed25519.h"
+#include "../../../../core/ed25519/c/ed25519.h"
 
 #include <stdarg.h>
 #include <stdbool.h>

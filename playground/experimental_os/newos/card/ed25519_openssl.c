@@ -16,7 +16,7 @@
 #define ermEd25519Public ermEd25519PublicPortable
 #define ermEd25519Sign ermEd25519SignPortable
 #define ermEd25519Verify ermEd25519VerifyPortable
-#include "../../../../playground/together/c/ed25519/ed25519.c"
+#include "../../../../core/ed25519/c/ed25519.c"
 #undef ermEd25519Public
 #undef ermEd25519Sign
 #undef ermEd25519Verify

@@ -27,7 +27,7 @@ BUILD = build
 ours = littlesync.c frame.c store_file.c
 base = $(R)/core/op/c/value.c $(R)/ermine/encoding/c/json.c $(R)/ermine/encoding/c/cbor.c $(R)/ermine/encoding/c/pack.c
 shared = $(R)/ermine/encoding/c/commit.c $(R)/ermine/encoding/c/blake3/blake3.c $(R)/ermine/encoding/c/blake3/blake3_dispatch.c \
-	$(R)/ermine/encoding/c/blake3/blake3_portable.c $(R)/playground/together/c/ed25519/ed25519.c $(R)/playground/together/c/ed25519/sha2.c
+	$(R)/ermine/encoding/c/blake3/blake3_portable.c $(R)/core/ed25519/c/ed25519.c $(R)/core/ed25519/c/sha2.c
 # pack.c reads whole nodes: the op json it uses, and node.c's entry maker
 more = $(R)/core/op/c/json.c $(R)/core/node/c/node.c $(R)/core/op/c/apply.c $(R)/core/op/c/invert.c
 seal_ref = $(R)/playground/together/c/seal.c

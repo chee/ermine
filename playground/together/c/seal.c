@@ -2,7 +2,7 @@
 #include "seal.h"
 
 #include "../../../ermine/encoding/c/cbor.h"
-#include "ed25519/ed25519.h"
+#include "../../../core/ed25519/c/ed25519.h"
 
 #include <stdlib.h>
 #include <string.h>
