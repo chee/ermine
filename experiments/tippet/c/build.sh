@@ -18,9 +18,7 @@ mkdir -p "$out"
 own="wire step pack sign log store store_file sync http"
 # on the graph: C11
 graph="history"
-# Monocypher's ed25519 (ed25519/, copied from playground/together/c/ed25519): C11
-vendored="ed25519/ed25519 ed25519/sha2"
-reused="ermine/encoding/c/cbor ermine/encoding/c/json ermine/encoding/c/blake3/blake3 ermine/encoding/c/blake3/blake3_dispatch ermine/encoding/c/blake3/blake3_portable"
+reused="core/ed25519/c/ed25519 core/ed25519/c/sha2 ermine/encoding/c/cbor ermine/encoding/c/json ermine/encoding/c/blake3/blake3 ermine/encoding/c/blake3/blake3_dispatch ermine/encoding/c/blake3/blake3_portable"
 # the graph: table, node, op, places, scheduler (the root Makefile's places_src, but its harnesses)
 places="filesystem/places/c/places core/unread/c/unread filesystem/places/c/cache filesystem/clingy/c/clingy core/scheduler/c/selector filesystem/places/c/status core/table/c/table core/node/c/node core/node/c/update core/op/c/value core/op/c/apply core/op/c/invert core/scheduler/c/paths core/scheduler/c/scheduler core/scheduler/c/order core/scheduler/c/rank core/scheduler/c/causes core/scheduler/c/ptrmap core/scheduler/c/tracker"
 harness="conformance/c/harness conformance/c/protocol_harness core/op/c/json"
@@ -39,11 +37,6 @@ objects() {
 		o="$out/$kind/$(echo "$f" | tr / _).o"
 		mkdir -p "$out/$kind"
 		$CC $STRICT $opt -c "$here/$f.c" -o "$o"
-		list="$list $o"
-	done
-	for f in $vendored; do
-		o="$out/$kind/$(echo "$f" | tr / _).o"
-		$CC $LOOSE -Werror $opt -c "$here/$f.c" -o "$o"
 		list="$list $o"
 	done
 	for f in $graph; do
@@ -74,7 +67,7 @@ link() {
 	case "$main" in
 		*harness*) $CC $opt -o "$here/$bin" $objs "$mainobj" ;;
 		catchup* | check_c_review*) $CC $opt -o "$here/$bin" $(echo "$objs" | tr ' ' '\n' | grep -v -e conformance_c_) "$mainobj" ;;
-		*) $CC $opt -o "$here/$bin" $(echo "$objs" | tr ' ' '\n' | grep -v -e conformance_c_ -e core_ -e filesystem_ -e history) "$mainobj" ;;
+		*) $CC $opt -o "$here/$bin" $(echo "$objs" | tr ' ' '\n' | grep -vE 'conformance_c_|/core_(op|node|table|scheduler|unread)_|filesystem_|history') "$mainobj" ;;
 	esac
 }
 
