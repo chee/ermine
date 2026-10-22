@@ -7,14 +7,11 @@
 //
 //   pul *pn = pul_new(&(pul_setup){places, table, scheduler});
 //   pul_node *node = pul_provide(pn, "N", &provider, NULL, 0);   // NULL: "N" has one already
-//   sc_pulse(scheduler); pul_flush(pn);                          // after each pulse
 //   pul_check(pn, "N", done, ctx);                               // from outside a run
 //   pul_stop(pn);                                                // every provider stopped (a reload)
 //
-// The one difference from the TypeScript: C's scheduler has no onAfterPulse. pul_flush is what the
-// TS runs at a pulse's end: the host calls it after each sc_pulse (and nowhere else; it settles what
-// runs read or stopped reading, and does nothing while a run is open). A host that forgets it wakes
-// and stops nothing that a run's reads decided.
+// What a run's read sets going or stops is settled once no run is open: at once, else as the pulse
+// ends (sc_on_after_pulse).
 //
 // The status attribute (PUL_STATUS) of the node: "asleep", "waking", "awake".
 //
@@ -32,7 +29,8 @@
 // CHECK. C has no promises. With once, done is called at once, with its value or its error; awake,
 // or running for a reader, at once with the value there; otherwise the provider is started and done
 // is called at its first write (after that write's own work), then it is stopped again unless a
-// reader came meanwhile. A check whose provider is let go before its first write never calls done.
+// reader came meanwhile. A check whose provider is let go before its first write: done with the
+// value there.
 //
 // MEMORY. Keeps the places, table and scheduler as given, a copy of each id and of the pairs. A
 // pul_node (and so its writer) lives until pul_free, stopped or not: a handle may be used again
@@ -93,8 +91,6 @@ typedef void (*pul_done)(void *ctx, const op_value *value, const char *error);
 void pul_check(pul *pn, const char *id, pul_done done, void *ctx);
 // whether a run reads it now
 bool pul_reading(pul *pn, const char *id);
-// the host's, after each sc_pulse: what runs read or stopped reading is settled
-void pul_flush(pul *pn);
 // every provider stopped, the listeners off
 void pul_stop(pul *pn);
 void pul_free(pul *pn);

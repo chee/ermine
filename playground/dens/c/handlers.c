@@ -1,6 +1,7 @@
 // handlers (handlers.h), in C.
 #include "handlers.h"
 
+#include "asks.h"
 #include "here.h"
 #include "policy.h"
 #include "start.h"
@@ -42,7 +43,9 @@ static void steps_free(steps *s) {
 	*s = (steps){0};
 }
 
-// the den's children { on }, the folder on { start, stop }, each a method node holding hf_value("")
+// the den's children { on }, the folder on { start, stop }, each a method node: on an install's den
+// the names stored and each method's value (hf_value("")) this session's (dn_live_until), else all
+// of it the session's; then the asks stored under them answered (asks.c)
 void dn_methods(dn *d) {
 	dn_process *self = d->self;
 	d->on_ids[0] = dn_joined(self->id, DN_ON);
@@ -54,21 +57,23 @@ void dn_methods(dn *d) {
 		.n = 1, .value = folder_id});
 	op_free(folder_id);
 	d->on_scopes[0] = dn_scope_of(d, d->on_info[0], d->on_values[0], "den", DN_ON, d->on_ids[0],
-		self->scope);
-	op_value *ids = op_map();
+		self->scope, !d->stored);
 	static const char *const names[2] = {DN_ON "/start", DN_ON "/stop"};
 	for (size_t k = 1; k < 3; k++) {
 		d->on_scopes[k] = dn_scope_of(d, d->on_info[k], d->on_values[k], "den", names[k - 1], d->on_ids[k],
-			d->on_scopes[0]);
+			d->on_scopes[0], !d->stored);
 		op_value *fn = hf_value("");
-		dn_write_in(d, d->on_scopes[k], (writing){.what = W_ADD, .part = "value", .id = d->on_ids[k],
+		dn_write_in(d, d->on_scopes[k], (writing){.what = W_SUB, .part = "value", .id = d->on_ids[k],
 			.value = fn});
 		op_free(fn);
-		op_set(ids, k == 1 ? "start" : "stop", op_str(d->on_ids[k]));
+		if (d->stored) dn_live_until(d, d->on_scopes[k], d->on_ids[k]);
+		const char *name[1] = {k == 1 ? "start" : "stop"};
+		op_value *id = op_str(d->on_ids[k]);
+		dn_write_in(d, d->on_scopes[0], (writing){.what = W_UPSERT, .part = "children",
+			.id = d->on_ids[0], .path = name, .n = 1, .value = id});
+		op_free(id);
 	}
-	dn_write_in(d, d->on_scopes[0], (writing){.what = W_ADD, .part = "children", .id = d->on_ids[0],
-		.value = ids});
-	op_free(ids);
+	dn_answering(d);
 }
 
 // asks and methods ---------------------------------------------------------------------------------
@@ -167,7 +172,9 @@ op_value *dn_on_at(dn *d, const char *op, const op_value *body, const ch_site *s
 	if (op[2] == 'a') out = start_from(d, who, 0, body);
 	else {
 		const char *id = dn_str_at(body, "process");
-		int self = id != NULL && d->self->id != NULL && strcmp(id, d->self->id) == 0;
+		// the den's node, or its session's process
+		int self = id != NULL && (strcmp(id, d->self->id) == 0 ||
+			(d->self->life != NULL && strcmp(id, pr_id(d->self->life)) == 0));
 		const op_value *why = dn_get(body, "reason");
 		dn_refusal r;
 		int no = self ? dn_stop_self(d, who, 0, why, &r) : dn_stop_as(d, who, 0, dn_find(d, id), why, &r);

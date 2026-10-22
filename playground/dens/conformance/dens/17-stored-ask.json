@@ -1,0 +1,148 @@
+{
+	"title": "an ask in the graph: written under the den's on/start, named by its hash, its value the ask; answered at the den's next pulse, at <ask>/answer, as another den's ask is (the policy asked with the who it says); the same ask written again is the same node, answered once; a stop ask under on/stop stops what the start started; one the policy refuses is answered with the refusal",
+	"steps": [
+		{ "op": "kids", "id": "R", "value": { "apps": "APPS" }, "expect": {} },
+		{ "op": "kids", "id": "APPS", "value": { "clock.js": "CLOCK" }, "expect": {} },
+		{ "op": "value", "id": "CLOCK", "value": "hi", "expect": {} },
+		{
+			"op": "attrs",
+			"id": "CLOCK",
+			"value": { "ermine.type": "com.netscape.javascript-source" },
+			"expect": {}
+		},
+		{ "op": "value", "id": "rules", "value": [{ "actor": "chee" }], "expect": {} },
+		{ "op": "den", "policy": "grants", "expect": { "id": "den:mac" } },
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": { "ermine.runner.takes": "com.netscape.javascript-source" },
+			"live": "record",
+			"expect": {
+				"id": "den:mac/runners/javascript",
+				"at": ["system", "dens", "mac", "runners", "javascript"]
+			}
+		},
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "write-ask",
+			"as": "a1",
+			"ask": "start",
+			"who": { "actor": "chee" },
+			"runner": ["system", "den", "runners", "javascript"],
+			"program": {
+				"id": "CLOCK",
+				"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+			},
+			"at": ["work", "a1"],
+			"expect": { "id": "ask:a1" }
+		},
+		{
+			"op": "list",
+			"path": ["system", "den", "on", "start"],
+			"expect": { "names": ["9e7dfce174faf9844fc9bbcdc4d974fb740dc93a47b90c5f08c82f82dfd53a63"] }
+		},
+		{ "op": "answered", "as": "a1", "expect": { "answer": null } },
+		{ "op": "asked", "expect": { "asks": [] } },
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "answered",
+			"as": "a1",
+			"name": "a1",
+			"expect": { "answer": { "id": "proc:a1", "at": ["work", "a1"] } }
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"asks": [
+					{
+						"op": "start",
+						"who": { "actor": "chee" },
+						"id": "den:mac/runners/javascript",
+						"path": ["system", "den", "runners", "javascript"]
+					},
+					{ "op": "read", "who": { "actor": "chee" }, "part": "value", "id": "CLOCK" }
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "ask:a1",
+			"expect": {
+				"parts": ["children", "value"],
+				"attributes": null,
+				"status": null,
+				"children": { "answer": "ask:a1/answer" },
+				"live": false
+			}
+		},
+		{
+			"op": "write-ask",
+			"as": "a1",
+			"ask": "start",
+			"who": { "actor": "chee" },
+			"runner": ["system", "den", "runners", "javascript"],
+			"program": {
+				"id": "CLOCK",
+				"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+			},
+			"at": ["work", "a1"],
+			"expect": { "id": "ask:a1" }
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "asked", "expect": { "asks": [] } },
+		{
+			"op": "write-ask",
+			"as": "s1",
+			"ask": "stop",
+			"who": { "actor": "chee" },
+			"process": "a1",
+			"reason": "SIGHUP",
+			"expect": { "id": "ask:s1" }
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "answered", "as": "s1", "expect": { "answer": {} } },
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"dev": "mac",
+						"process": "proc:a1",
+						"code": "hi",
+						"args": [],
+						"keys": ["den", "places", "process"]
+					}
+				],
+				"stops": [{ "dev": "mac", "process": "proc:a1", "reason": "SIGHUP" }]
+			}
+		},
+		{ "op": "asked", "skip": ["asks"] },
+		{
+			"op": "write-ask",
+			"as": "g1",
+			"ask": "start",
+			"who": { "actor": "guest" },
+			"runner": ["system", "den", "runners", "javascript"],
+			"program": {
+				"id": "CLOCK",
+				"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+			},
+			"at": ["work", "g1"],
+			"expect": { "id": "ask:g1" }
+		},
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "answered",
+			"as": "g1",
+			"expect": {
+				"answer": {
+					"refused": "no-permission",
+					"op": "start",
+					"answer": { "answer": "no", "reason": "no grant" }
+				}
+			}
+		}
+	]
+}

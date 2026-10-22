@@ -21,7 +21,9 @@ import {
 	unparse,
 } from "./things.ts"
 import { picture } from "./pictures.ts"
-import { createFinder } from "./finder.ts"
+import { createFiles } from "./files.ts"
+import { createTerminal } from "./terminal.ts"
+import { createCode } from "./code.ts"
 import { get } from "@ermine/places/lib"
 import { sound } from "./sound.ts"
 import { DEVICE, NAME, RUNNER } from "@ermine/dens"
@@ -1101,7 +1103,7 @@ function connect(source: string, reader: string, input: string, port?: HTMLEleme
 }
 board.onConnect((from: Port, to: Port) => connect(from.box.id, to.box.id, to.name, to.el))
 
-// a finder row dropped on an in-port: the same wire
+// a thing dragged from the files, dropped on an in-port: the same wire
 board.world.addEventListener("dragover", (e) => {
 	const p = (e.target as HTMLElement).closest(".port")
 	if (!p || !e.dataTransfer?.types.includes("text/x-ermine-id")) return
@@ -1129,42 +1131,98 @@ board.onDisconnect((w: Wire) => {
 	if (r) restart(r.v, r.t, argsWith(r.t, w.to.name), `You unwired ${whose(r.v, r.t)}.`)
 })
 
-// ---- the finder, and one selection shared with the board ----
+// ---- the files and the terminal, docked under the board; one selection shared with the board ----
 let picked: Box | undefined
-page.style.setProperty("--dock", `${$(".finder").offsetHeight}px`)
+const dock = $(".dock")
+const docked = () => page.style.setProperty("--dock", `${dock.offsetHeight}px`)
+docked()
+new ResizeObserver(docked).observe(dock)
 function pick(b: Box | undefined) {
 	picked?.tone(undefined)
 	picked = b
 	b?.tone("pick")
 }
-const finder = createFinder(host, $(".finder"), {
+const files = createFiles(host, $(".files"), {
 	pick: (_, id) => {
 		const s = id === undefined ? undefined : shown.get(id)
 		pick(s?.box)
 		if (s) board.show(s.box)
 	},
 	isThing: (id) => shown.has(id),
+	live: (name, fn) => code.live(name, fn),
+})
+createTerminal(host, $(".term"))
+// the code window: the page's own files, and a live function's code. a site anywhere on the page
+// (data-code, data-line) opens its file there
+let showCode = (_: boolean) => {}
+const code = createCode($(".code.window"), () => showCode(true))
+addEventListener("click", (e) => {
+	const a = e.target instanceof Element ? e.target.closest<HTMLElement>("[data-code]") : null
+	if (!a) return
+	code.open(a.dataset.code!, Number(a.dataset.line))
 })
 board.onPick((b) => {
 	pick(b)
 	const f = b && find(b.id)
-	if (f) finder.select(f.t.at)
+	if (f) files.select(f.t.at)
 })
 {
-	const dock = $(".finder")
-	$(".finder-fold").onclick = () => {
-		dock.classList.toggle("folded")
-		page.style.setProperty("--dock", `${dock.offsetHeight}px`)
-		$(".finder-fold").textContent = dock.classList.contains("folded") ? "open" : "fold"
+	// the terminal shown or not, and the dock folded down to its toolbar: remembered
+	const term = $<HTMLButtonElement>(".show-term"), fold = $<HTMLButtonElement>(".fold")
+	const codes = $<HTMLButtonElement>(".show-code")
+	const kept = (k: string) => {
+		try {
+			return localStorage.getItem(k)
+		} catch {
+			return null
+		}
+	}
+	const keep = (k: string, v: string) => {
+		try {
+			localStorage.setItem(k, v)
+		} catch { /* this visit only */ }
+	}
+	const showTerm = (on: boolean) => {
+		dock.classList.toggle("no-term", !on)
+		term.setAttribute("aria-pressed", String(on))
+	}
+	const showFold = (on: boolean) => {
+		dock.classList.toggle("folded", on)
+		fold.setAttribute("aria-pressed", String(on))
+		fold.textContent = on ? "open" : "fold"
+		docked()
 		requestAnimationFrame(() => board.redraw())
 	}
-	const grab = $(".finder-grab")
+	showCode = (on: boolean) => {
+		dock.classList.toggle("no-code", !on)
+		codes.setAttribute("aria-pressed", String(on))
+		if (on && dock.classList.contains("folded")) showFold(false)
+	}
+	showCode(false)
+	codes.onclick = () => showCode(codes.getAttribute("aria-pressed") !== "true")
+	showTerm(kept("dens:dock:term") !== "0")
+	showFold(kept("dens:dock:folded") === "1")
+	term.onclick = () => {
+		const on = term.getAttribute("aria-pressed") !== "true"
+		showTerm(on)
+		keep("dens:dock:term", on ? "1" : "0")
+		if (on) $<HTMLInputElement>(".term input").focus()
+	}
+	fold.onclick = () => {
+		const on = !dock.classList.contains("folded")
+		showFold(on)
+		keep("dens:dock:folded", on ? "1" : "0")
+	}
+	const grab = $(".dock-grab")
 	grab.onpointerdown = (e) => {
 		grab.setPointerCapture(e.pointerId)
 		const y0 = e.clientY, h0 = dock.offsetHeight
+		if (dock.classList.contains("folded")) showFold(false)
 		grab.onpointermove = (m) => {
-			dock.style.height = `${Math.max(90, Math.min(innerHeight * 0.7, h0 - (m.clientY - y0)))}px`
-			page.style.setProperty("--dock", `${dock.offsetHeight}px`)
+			dock.style.height = `${
+				Math.max(120, Math.min(innerHeight * 0.75, h0 - (m.clientY - y0)))
+			}px`
+			docked()
 		}
 		grab.onpointerup = () => (grab.onpointermove = null, board.redraw())
 	}
@@ -1441,7 +1499,7 @@ addEventListener("keydown", (e) => {
 		ArrowDown: [0, 1],
 	}
 	const d = dirs[e.key]
-	if (!d || (e.target as HTMLElement).closest("input")) return
+	if (!d || (e.target as HTMLElement).closest("input, .dock")) return
 	const all = [...board.world.querySelectorAll<HTMLElement>(".box, .frame .add, .menu .tile")]
 	if (!all.length) return
 	e.preventDefault()

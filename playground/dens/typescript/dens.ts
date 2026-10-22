@@ -1,12 +1,14 @@
-// dens: one running ermine (one scheduler, one table) as the graph sees it. a den is a process the
-// host starts at boot: its node at /system/dens/<id>, placed again at /system/den (a second leaf of
-// the same id: "here", in each den). what it can run it offers as nodes under its node (runners,
-// compilers, surfaces), and so may any process it runs, under that process's node: attributes are
-// what travels, the value (the live function) is this den's alone. start runs a program on a
+// dens: one running ermine (one scheduler, one table) as the graph sees it. a den is an install's
+// node (its id the install's), reached at /system/dens/<name> and at /system/den ("here", in each
+// den); the host starts this session's den at boot, a process at /system/session. what it can run
+// it offers as nodes under its node (runners, compilers, surfaces), and so may any process it
+// runs, under that process's node: attributes are what travels, the value (the live function) is
+// this session's alone. start runs a program on a
 // runner at a path: the relation of the three, made at start, gone at stop. no lookup, no chain,
 // no build, no search: the program given is in the runner's form already
 //
-//   const den = createDen({ scheduler, table, places, scopes, id: "mac-7f3a", may })
+//   const den = createDen({ scheduler, table, places, scopes, id: "mac", install, may })
+//   // offers made before the first pulse: asks stored while the den was down are answered then
 //   den.offer("runners", "javascript",
 //     { [TAKES]: "com.netscape.javascript-source", [API]: "ermine.api", [WHERE]: "thread" },
 //     context.run)                                // ermine/api's: createProcessContext(...).run
@@ -19,8 +21,8 @@
 //   den.close()
 //
 // the rules are in the parts, each answering one question: offers (what is on offer), start (how a
-// program runs on a runner), policy (may it), handlers (how it is told), here (where it is), and
-// common (what they share). this file makes the context, makes the parts, and says what a den is
+// program runs on a runner), policy (may it), handlers (how it is told), asks (how it is asked
+// through the graph), here (where it is), and common (what they share). this file makes the context, makes the parts, and says what a den is
 import type { Address, Box } from "@ermine/boxes"
 import { type Id, type Path, type Places, PlacesError } from "@ermine/places"
 import { createProcesses, type Process, type Processes } from "@ermine/processes/start"
@@ -52,7 +54,7 @@ export type { Process }
 export { ATTRIBUTE, REASONS, TYPE } from "./common.ts"
 export { API, COMPILER_TAKES, GIVES, KIND, runnerOf, SIZE, TAKES, WHERE } from "./offers.ts"
 export { DEN, hashOf, PROGRAM, PROGRAM_API, RUNNER } from "./start.ts"
-export { DENS, DEVICE, HERE, ID, NAME } from "./here.ts"
+export { DENS, DEVICE, HERE, ID, NAME, SESSION } from "./here.ts"
 export { ON } from "./handlers.ts"
 export type { Kind, Offered } from "./offers.ts"
 export type { Ask, Asked } from "./handlers.ts"
@@ -81,6 +83,8 @@ export type Setup = {
 	scopes: Pick<ScopeNodes, "give">
 	// a name: the step under /system/dens, the den's channel name
 	id: string
+	// whose den it is: its node's id (installs'); none: a fresh id, a den new each start
+	install?: { readonly id: Id }
 	name?: string
 	device?: unknown
 	// none: local yes; an ask: no "no policy"
@@ -92,9 +96,10 @@ export type Setup = {
 	schedule?: (f: () => void) => void
 }
 export type Den = {
-	// the name given (setup.id), and the den's node id
+	// the name given (setup.id), and the den's node id (the install's; none given: a fresh one)
 	readonly id: string
 	readonly node: Id
+	// this session's running den, at /system/session
 	readonly process: Process
 	// the owner: torn down, every process goes
 	readonly scope: Scope
@@ -143,9 +148,11 @@ export function createDen(setup: Setup): Den {
 	const permit = createPolicy(c.table, setup.may)
 	const offers = createOffers(c)
 	const life = createStart(c, { processes, permit })
-	// the den's own: here's; any other: start's
-	const stop = (x: Process | Id, reason?: unknown) =>
-		(typeof x === "object" ? x.id : x) === c.node ? here.stop(reason) : life.stop(x, reason)
+	// the den's own (its node, or its session's process): here's; any other: start's
+	const stop = (x: Process | Id, reason?: unknown) => {
+		const id = typeof x === "object" ? x.id : x
+		return id === c.node || id === here.self.id ? here.stop(reason) : life.stop(x, reason)
+	}
 	const handlers = createHandlers(c, { start: life, permit, stop })
 	const here = createHere(c, setup, { processes, methods: handlers.methods, permit })
 	const { running, byId } = c

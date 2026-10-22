@@ -224,8 +224,8 @@ static void get_now(void *data) {
 }
 
 // the id at a path from the places' root, untracked; NULL: nothing there
-static char *resolve(pl *p, char *const *path, size_t n) {
-	getting g = {p, (const char *const *)path, n, NULL};
+char *dn_resolve(pl *p, const char *const *path, size_t n) {
+	getting g = {p, path, n, NULL};
 	pl_peep(p, get_now, &g);
 	return g.id;
 }
@@ -260,7 +260,7 @@ static int program_of(dn *d, pl *where, const dn_program *program, found *f, dn_
 	f->carried = !program->has_at && program->code != NULL;
 	if (program->has_at) {
 		f->ppath = pr_names(program->at, program->nat, &f->npp);
-		f->pid = resolve(where, f->ppath, f->npp);
+		f->pid = dn_resolve(where, (const char *const *)f->ppath, f->npp);
 		e = f->pid != NULL ? tb_get(d->s.table, tb_string("value"), tb_string(f->pid)) : NULL;
 		if (e == NULL) return not_there_at(d, f, r);
 		f->code = e->value;
@@ -306,7 +306,7 @@ static int check(dn *d, const op_value *who, int remote, const char *const *runn
 	*refused = (dn_refusal){0};
 	if (d->closed) return refused->refused = "stopped", 0;
 	f->rpath = pr_names(runner, nrunner, &f->nr);
-	f->rid = resolve(d->s.places, f->rpath, f->nr);
+	f->rid = dn_resolve(d->s.places, (const char *const *)f->rpath, f->nr);
 	const op_value *rattrs = f->rid != NULL ? attributes_of(d, f->rid) : NULL;
 	const op_value *rtype = dn_get(rattrs, DN_ATTRIBUTE);
 	if (!dn_is_str(rtype) || strcmp(rtype->str, DN_TYPE_RUNNER) != 0) {

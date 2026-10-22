@@ -205,11 +205,7 @@
 				],
 				"attributes": {
 					"ermine.type": "ermine.den",
-					"ermine.den.id": "card",
-					"ermine.process.cwd": [
-						"system",
-						"dens"
-					]
+					"ermine.den.id": "card"
 				},
 				"status": null,
 				"children": {

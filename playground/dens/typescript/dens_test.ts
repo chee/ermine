@@ -58,8 +58,15 @@ const tick = () => new Promise((r) => setTimeout(r, 0))
 type Fn = Runner["start"]
 
 // schedule none: the den's pulses asked for are dropped (these tests pulse by hand)
+const INSTALL = "ermine:ed01d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
+
 function world(
-	o: { schedule?: Setup["schedule"] | null; id?: string; may?: Setup["may"] } = {},
+	o: {
+		schedule?: Setup["schedule"] | null
+		id?: string
+		may?: Setup["may"]
+		install?: Setup["install"]
+	} = {},
 ) {
 	const s = createScheduler()
 	const table = createTable((part, id) => places.onTableChange(part as Key, id))
@@ -91,6 +98,7 @@ function world(
 			...(o.schedule === null ? {} : { schedule: o.schedule ?? (() => {}) }),
 			id: o.id ?? "mac",
 			...(o.may === undefined ? {} : { may: o.may }),
+			...(o.install === undefined ? {} : { install: o.install }),
 		})
 	)
 	const offer = (name: string, live: unknown, attributes: Record<string, unknown> = {}) =>
@@ -198,7 +206,7 @@ Deno.test("stopped before the promise lands, its handle's stop throwing: nothing
 	assertEquals([stops, w.table.get(p.id)], [["bye"], []])
 })
 
-Deno.test("an offer at an id with entries already (another's): refused taken, nothing made, the entries left as they are", () => {
+Deno.test("a den with no install: an offer at an id with entries already (another's): refused taken, nothing made, the entries left as they are", () => {
 	const w = world()
 	const id = `${String(w.den.node)}/runners/lisp`
 	w.put("attributes", id, { "ermine.type": "x" })
@@ -207,6 +215,40 @@ Deno.test("an offer at an id with entries already (another's): refused taken, no
 	assertEquals(w.den.offers(), [])
 	assertEquals(w.table.get("attributes", id)?.value, { "ermine.type": "x" })
 	assertEquals(w.table.get("children", `${String(w.den.node)}/runners`), undefined)
+})
+
+Deno.test("an offer of the den's at an id an earlier session left (attributes, no live value): offered again over them; one with a live value there: refused taken, nothing made, the entries left as they are", () => {
+	const w = world({ install: { id: INSTALL } })
+	const id = `${String(w.den.node)}/runners/lisp`
+	w.put("attributes", id, { "ermine.type": "x", "left": true })
+	const again = w.hosted(() => w.den.offer("runners", "lisp", { [TAKES]: JS }, () => {}))
+	assertEquals(again, {
+		id,
+		at: ["system", "dens", "mac", "runners", "lisp"],
+		kind: "runners",
+		name: "lisp",
+		by: w.den.node,
+	})
+	assertEquals(w.table.get("attributes", id)?.value, {
+		[TAKES]: JS,
+		"ermine.type": "ermine.runner",
+	})
+	const live = `${String(w.den.node)}/runners/cc`
+	w.put("value", live, "someone's")
+	const got = w.hosted(() => w.den.offer("runners", "cc", { [TAKES]: JS }, () => {}))
+	assertEquals(got, { refused: "taken", at: ["system", "dens", "mac", "runners", "cc"] })
+	assertEquals(w.den.offers().map((o) => o.name), ["lisp"])
+	assertEquals(w.table.get("value", live)?.value, "someone's")
+	assertEquals(w.table.get("attributes", live), undefined)
+})
+
+Deno.test("the den's session process as an owner is the den: an offer by it is the den's own, a load by it held by the den", () => {
+	const w = world()
+	const by = w.den.process
+	const made = w.hosted(() => w.den.offer("runners", "lisp", { [TAKES]: JS }, () => {}, by))
+	assert(!("refused" in made))
+	assertEquals(made.by, w.den.node)
+	assertEquals(made.id, `${String(w.den.node)}/runners/lisp`)
 })
 
 Deno.test("a process offering from inside its run: its runner under its node, started on; its stop stops its users first, runner-stopped", () => {
@@ -568,11 +610,7 @@ Deno.test("nodes: the den's description as it travels, tracked; status as pendin
 	assertEquals(seen.den, D)
 	assertEquals(seen.processes, [{ id: p.id, at: ["work", "clock"] }])
 	assertEquals(seen.nodes[D], {
-		attributes: {
-			"ermine.type": "ermine.den",
-			"ermine.den.id": "mac",
-			"ermine.process.cwd": ["system", "dens"],
-		},
+		attributes: { "ermine.type": "ermine.den", "ermine.den.id": "mac" },
 		children: { on: `${String(D)}/on`, runners: `${String(D)}/runners` },
 	})
 	assertEquals(seen.nodes[`${String(D)}/runners`], { children: { javascript: js.id } })
@@ -598,8 +636,8 @@ Deno.test("nodes: the den's description as it travels, tracked; status as pendin
 	assertEquals(w.den.nodes().nodes[q.id].attributes?.[STATUS], { failed: "boom" })
 })
 
-Deno.test("the owner torn down from above: every process goes newest first, its handle given den-stopped; the den's rows gone, the den closed", () => {
-	const w = world()
+Deno.test("the owner torn down from above: every process goes newest first, its handle given den-stopped; the session's process and the leaves gone, the den closed; the den's node stays with what is stored on it, its live values gone", () => {
+	const w = world({ install: { id: INSTALL } })
 	const stops: unknown[] = []
 	const record: Fn = (_, { process }) => {
 		return { stop: (reason) => void stops.push([process.at[1], reason]) }
@@ -608,11 +646,17 @@ Deno.test("the owner torn down from above: every process goes newest first, its 
 	w.start(RUNNER, ["work", "a"])
 	w.start(RUNNER, ["work", "b"])
 	w.s.pulse()
+	const D = String(w.den.node)
 	w.s.teardown(w.den.scope)
 	assertEquals(stops, [["b", REASONS.den], ["a", REASONS.den]])
-	assertEquals(w.places.peep(() => get(w.places, ["system", "den"])), undefined)
-	assertEquals(w.places.peep(() => get(w.places, ["system", "dens", "mac"])), undefined)
-	assertEquals(w.table.get(w.den.node), [])
+	for (const path of [["system", "den"], ["system", "dens", "mac"], ["system", "session"]]) {
+		assertEquals(w.places.peep(() => get(w.places, path)), undefined)
+	}
+	assertEquals(w.table.get(w.den.process.id), [])
+	const parts = (id: string) => w.table.get(id).map(([part]) => part).sort()
+	assertEquals(parts(D), ["attributes", "children"])
+	assertEquals(parts(`${D}/runners/javascript`), ["attributes"])
+	assertEquals(parts(`${D}/on/start`), [])
 	assertEquals(w.hosted(() => w.den.start(RUNNER, CLOCK, ["work", "c"])), { refused: "stopped" })
 })
 

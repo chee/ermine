@@ -57,16 +57,21 @@ typedef struct {
 	strs whos;
 } mine_of;
 
-// a count by name: the n last sent to a channel for a who, or the last taken from a sender
+// a count by name: the n last sent to a channel for a who, or the last taken from a sender. sent:
+// the value last sent for the who, as a hash of its CBOR (FNV-1a, 64 bits), what a same stands for
 typedef struct {
 	char *who;
 	int64_t n;
+	uint64_t sent;
+	int has_sent;
 } counted;
 
 struct pres_conn {
 	int patches;
 	counted *sent;
 	size_t nsent, capsent;
+	// the senders a hello has gone out for, till a whole row from them lands
+	strs asked;
 	pres_world *w;
 	chn_channel *channel;
 	char *topic;
@@ -399,24 +404,39 @@ static counted *count_of(counted **list, size_t *n, size_t *cap, const char *who
 		*list = realloc(*list, *cap * sizeof **list);
 		if (*list == NULL) abort();
 	}
-	(*list)[*n] = (counted){xdup(who), 0};
+	(*list)[*n] = (counted){xdup(who), 0, 0, 0};
 	return &(*list)[(*n)++];
 }
 
 // what a connection tells: my row (a map of value and until), or none: it is gone. patches: the
 // edit that made the row, sent instead of the row when the connection sends patches. a connection
 // that sends patches numbers what it sends, by who
-static void send(pres_conn *c, const char *who, const op_value *row, const op_value *patches) {
+static uint64_t fnv(const uint8_t *bytes, size_t n) {
+	uint64_t h = 14695981039346656037ull;
+	for (size_t i = 0; i < n; i++) h = (h ^ bytes[i]) * 1099511628211ull;
+	return h;
+}
+
+// whole: never a same (an announce)
+static void send(pres_conn *c, const char *who, const op_value *row, const op_value *patches, bool whole) {
 	op_value *m = op_map();
-	if (row == NULL) op_set(m, "gone", op_bool(1));
+	counted *k = count_of(&c->sent, &c->nsent, &c->capsent, who);
+	if (row == NULL) op_set(m, "gone", op_bool(1)), k->has_sent = 0;
 	else {
 		op_set(m, "ttl", op_num((double)(until_of(row) - now_of(c->w))));
 		const op_value *v = op_get(row, "value");
-		if (c->patches && patches != NULL) op_set(m, "patches", op_ref((op_value *)patches));
-		else op_set(m, "value", v != NULL ? op_ref((op_value *)v) : op_null());
-		if (c->patches) {
-			counted *k = count_of(&c->sent, &c->nsent, &c->capsent, who);
-			op_set(m, "n", op_num((double)++k->n));
+		op_value *value = v != NULL ? op_ref((op_value *)v) : op_null();
+		CborOut vo = {NULL, 0, 0, true};
+		if (!pk_put(&vo, value)) abort();
+		uint64_t h = fnv(vo.data, vo.length);
+		free(vo.data);
+		bool same = !whole && !(c->patches && patches != NULL) && k->has_sent && k->sent == h;
+		k->sent = h, k->has_sent = 1;
+		if (same) op_set(m, "same", op_bool(1)), op_free(value);
+		else {
+			if (c->patches && patches != NULL) op_set(m, "patches", op_ref((op_value *)patches)), op_free(value);
+			else op_set(m, "value", value);
+			if (c->patches) op_set(m, "n", op_num((double)++k->n));
 		}
 	}
 	CborOut o = {NULL, 0, 0, true};
@@ -432,7 +452,7 @@ static void tell(pres_world *w, const char *anchor, const char *who, const op_va
 	size_t n = s->nconns;
 	for (size_t i = 0; i < n; i++) {
 		pres_conn *c = s->conns[i];
-		if (c->active && strcmp(c->anchor, anchor) == 0) send(c, who, row, patches);
+		if (c->active && strcmp(c->anchor, anchor) == 0) send(c, who, row, patches, false);
 	}
 }
 
@@ -561,6 +581,16 @@ bool pres_keep(const pres_world *w, const char *part) {
 
 // connect -----------------------------------------------------------------------------------------
 
+// a hello for the sender's rows, once till a whole row from it lands
+static void hello(pres_conn *c, const char *from) {
+	for (size_t i = 0; i < c->asked.n; i++) {
+		if (strcmp(c->asked.items[i], from) == 0) return;
+	}
+	strs_add(&c->asked, from);
+	static const uint8_t m[] = {0xa1, 0x65, 'h', 'e', 'l', 'l', 'o', 0xf5};
+	c->channel->send(c->channel, c->topic, m, sizeof m);
+}
+
 // a message received: the sender's row, from outside, or its going
 static void heard(void *ctx, const char *from, const unsigned char *bytes, size_t n) {
 	pres_conn *c = ctx;
@@ -568,6 +598,12 @@ static void heard(void *ctx, const char *from, const unsigned char *bytes, size_
 	op_value *m = pk_get(bytes, n, NULL, NULL);
 	if (m == NULL) return;
 	if (m->type == OP_MAP) {
+		const op_value *hi = op_get(m, "hello");
+		if (hi != NULL && hi->type == OP_BOOL && hi->bool_) {
+			op_free(m);
+			pres_announce(c);
+			return;
+		}
 		const op_value *gone = op_get(m, "gone");
 		if (gone != NULL && gone->type == OP_BOOL && gone->bool_) {
 			const char *gone_who[1];
@@ -585,9 +621,26 @@ static void heard(void *ctx, const char *from, const unsigned char *bytes, size_
 				last = &s->taken[i];
 			}
 		}
+		const nd_entry *there = tb_get(w->table, tb_string(PRES_PART), tb_string(c->anchor));
+		const op_value *held = there != NULL && there->value != NULL && there->value->type == OP_MAP
+			? op_get(there->value, from)
+			: NULL;
+		const op_value *same = op_get(m, "same");
+		if (same != NULL && same->type == OP_BOOL && same->bool_) {
+			// the row as it is, its until moved; none here: hello
+			if (held == NULL) hello(c, from);
+			else {
+				op_value *row = row_of(op_get(held, "value"), now_of(w) + left);
+				put(w, c->anchor, from, row);
+				op_free(row);
+			}
+			op_free(m);
+			return;
+		}
 		if (patches != NULL) {
-			// only the next patch message, and only onto the row that is there
-			if (has_n && (last == NULL || (int64_t)n->num != last->n + 1)) {
+			// only the next patch message, and only onto the row that is there: else hello
+			if ((has_n && (last == NULL || (int64_t)n->num != last->n + 1)) || held == NULL) {
+				hello(c, from);
 				op_free(m);
 				return;
 			}
@@ -599,6 +652,7 @@ static void heard(void *ctx, const char *from, const unsigned char *bytes, size_
 			op_value *row = row_of(op_get(m, "value"), now_of(w) + left);
 			put(w, c->anchor, from, row);
 			op_free(row);
+			strs_del(&c->asked, from);
 		}
 		if (has_n) {
 			if (last == NULL) {
@@ -620,6 +674,7 @@ pres_conn *pres_connect_patches(pres_world *w, chn_channel *channel, const char 
 	const char *anchor, bool patches) {
 	state *s = state_of(w);
 	pres_conn *c = xalloc(sizeof *c);
+	c->asked = (strs){0};
 	c->w = w;
 	c->channel = channel;
 	c->topic = xdup(topic);
@@ -655,7 +710,7 @@ void pres_announce(pres_conn *c) {
 		const op_value *row = there != NULL && there->value != NULL && there->value->type == OP_MAP
 			? op_get(there->value, whos[i])
 			: NULL;
-		if (row != NULL) send(c, whos[i], row, NULL);
+		if (row != NULL) send(c, whos[i], row, NULL, true);
 		free(whos[i]);
 	}
 	free(whos);
@@ -698,6 +753,7 @@ void pres_free(pres_world *w) {
 		free(s->conns[i]->anchor);
 		for (size_t k = 0; k < s->conns[i]->nsent; k++) free(s->conns[i]->sent[k].who);
 		free(s->conns[i]->sent);
+		strs_free(&s->conns[i]->asked);
 		free(s->conns[i]);
 	}
 	free(s->conns);

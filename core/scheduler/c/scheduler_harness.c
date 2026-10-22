@@ -179,10 +179,11 @@ static op_value **logged;
 static size_t nlogged, caplogged;
 
 // moments, as told (named when asked: a new computer is due before it has a name). returns: a
-// run's body returned (sc_on_run_return; m.c and m.run only), not trace's, shown when asked
+// run's body returned (sc_on_run_return; m.c and m.run only), not trace's, shown when asked.
+// pulsed: a pulse ended (sc_on_after_pulse; nothing else set), shown when asked
 typedef struct moment {
 	sc_told m;
-	bool returns;
+	bool returns, pulsed;
 	char *error;
 	sc_computer **through;
 	const void **reads;
@@ -197,7 +198,7 @@ static bool pulsing;
 
 // a listener armed to throw, once: which, at what (a computation's name, or a key), its message
 static char *armed_on, *armed_at, *armed_error;
-static const char *const listeners[] = {"mark", "starts", "returns", "ends", "acts", "forgotten", "started", "settles"};
+static const char *const listeners[] = {"mark", "starts", "returns", "ends", "acts", "forgotten", "started", "settles", "pulsed"};
 
 // what a listener threw in a making or a settling (sc_escaped after it): kept, the first, to be
 // the answer of the pulse going on, else the next, as the reference's scheduler holds it
@@ -278,6 +279,14 @@ static void first_track(const void *key, sc_run *run, void *data) {
 static void settled(void *data) {
 	(void)data;
 	fire("settles", NULL);
+}
+
+// a pulse ended: a pulsed moment, not counted toward ENDLESS
+static void pulsed(void *data) {
+	(void)data;
+	moment x = {.pulsed = true};
+	PUSH(moments, nmoments, capmoments, x);
+	fire("pulsed", NULL);
 }
 
 // the tick of the latest mark (each mark and each new computer takes the next)
@@ -824,6 +833,10 @@ static op_value *name_json(const sc_computer *c) { return op_str((const char *)s
 static op_value *moment_json(const moment *x, bool reads) {
 	const sc_told *m = &x->m;
 	op_value *o = op_map();
+	if (x->pulsed) {
+		op_set(o, "pulsed", op_bool(true));
+		return o;
+	}
 	if (x->returns) {
 		op_set(o, "returns", name_json(m->c));
 		op_set(o, "run", integer(m->run));
@@ -1140,11 +1153,12 @@ static op_value *answer(const op_value *r) {
 		return out;
 	}
 	if (strcmp(op, "moments") == 0) {
-		const op_value *reads = op_get(r, "reads"), *returns = op_get(r, "returns");
+		const op_value *reads = op_get(r, "reads"), *returns = op_get(r, "returns"), *pulses = op_get(r, "pulses");
 		bool showReturns = is(returns, OP_BOOL) && returns->bool_;
+		bool showPulses = is(pulses, OP_BOOL) && pulses->bool_;
 		op_value *list = op_list();
 		for (size_t i = 0; i < nmoments; i++) {
-			if (showReturns || !moments[i].returns)
+			if ((showReturns || !moments[i].returns) && (showPulses || !moments[i].pulsed))
 				op_push(list, moment_json(&moments[i], is(reads, OP_BOOL) && reads->bool_));
 			free(moments[i].error);
 			free(moments[i].through);
@@ -1183,6 +1197,7 @@ void hh_answer(const op_value *r, FILE *out) {
 		sc_on_run_return(sch, run_returned, NULL);
 		sc_on_tracking_start(sch, first_track, NULL);
 		sc_on_settle(sch, settled, NULL);
+		sc_on_after_pulse(sch, pulsed, NULL);
 		sc_on_mark(sch, marked, NULL);
 	}
 	PUSH(lines, nlines, caplines, hh_retain());

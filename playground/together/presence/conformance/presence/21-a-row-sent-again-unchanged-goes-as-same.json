@@ -1,0 +1,213 @@
+{
+	"title": "a row sent again with the value it was last sent with (a renew; a set of an equal value) goes as same: the time left and no value, and the receiver moves its until; a changed value, or one set after a clear, goes whole",
+	"steps": [
+		{
+			"op": "now",
+			"t": 0
+		},
+		{
+			"op": "connect",
+			"dev": "a",
+			"name": "ca",
+			"topic": "work"
+		},
+		{
+			"op": "connect",
+			"dev": "b",
+			"name": "cb",
+			"topic": "work"
+		},
+		{
+			"op": "set",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x",
+			"value": {
+				"cursor": [
+					12,
+					40
+				]
+			},
+			"ttl": 5000
+		},
+		{
+			"op": "now",
+			"t": 2000
+		},
+		{
+			"op": "renew",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x",
+			"ttl": 5000,
+			"expect": {
+				"ok": true
+			}
+		},
+		{
+			"op": "presence",
+			"dev": "b",
+			"anchor": "work",
+			"expect": {
+				"rows": [
+					{
+						"who": "a",
+						"value": {
+							"cursor": [
+								12,
+								40
+							]
+						},
+						"until": 7000
+					}
+				]
+			}
+		},
+		{
+			"op": "set",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x",
+			"value": {
+				"cursor": [
+					12,
+					40
+				]
+			},
+			"ttl": 5000
+		},
+		{
+			"op": "set",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x",
+			"value": {
+				"cursor": [
+					13,
+					40
+				]
+			},
+			"ttl": 5000
+		},
+		{
+			"op": "clear",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x"
+		},
+		{
+			"op": "set",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x",
+			"value": {
+				"cursor": [
+					13,
+					40
+				]
+			},
+			"ttl": 5000
+		},
+		{
+			"op": "presence",
+			"dev": "b",
+			"anchor": "work",
+			"expect": {
+				"rows": [
+					{
+						"who": "a",
+						"value": {
+							"cursor": [
+								13,
+								40
+							]
+						},
+						"until": 7000
+					}
+				]
+			}
+		},
+		{
+			"op": "sent",
+			"expect": {
+				"sent": [
+					{
+						"from": "a",
+						"topic": "work",
+						"message": {
+							"ttl": 5000,
+							"value": {
+								"cursor": [
+									12,
+									40
+								]
+							}
+						}
+					},
+					{
+						"from": "a",
+						"topic": "work",
+						"message": {
+							"ttl": 5000,
+							"same": true
+						}
+					},
+					{
+						"from": "a",
+						"topic": "work",
+						"message": {
+							"ttl": 5000,
+							"same": true
+						}
+					},
+					{
+						"from": "a",
+						"topic": "work",
+						"message": {
+							"ttl": 5000,
+							"value": {
+								"cursor": [
+									13,
+									40
+								]
+							}
+						}
+					},
+					{
+						"from": "a",
+						"topic": "work",
+						"message": {
+							"gone": true
+						}
+					},
+					{
+						"from": "a",
+						"topic": "work",
+						"message": {
+							"ttl": 5000,
+							"value": {
+								"cursor": [
+									13,
+									40
+								]
+							}
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "bytes",
+			"expect": {
+				"bytes": [
+					"a26374746c1913886576616c7565a166637572736f72820c1828",
+					"a26374746c1913886473616d65f5",
+					"a26374746c1913886473616d65f5",
+					"a26374746c1913886576616c7565a166637572736f72820d1828",
+					"a164676f6e65f5",
+					"a26374746c1913886576616c7565a166637572736f72820d1828"
+				]
+			}
+		}
+	]
+}

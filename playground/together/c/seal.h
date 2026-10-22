@@ -16,7 +16,7 @@
 #define SL_SEAL_H
 
 #include "../../../ermine/encoding/c/commit.h"
-#include "ed25519/ed25519.h"
+#include "../../../core/ed25519/c/ed25519.h"
 
 #include <stdbool.h>
 #include <stddef.h>

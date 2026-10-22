@@ -1,5 +1,5 @@
 {
-	"title": "the den at boot, beside a saved /system: its node at /system/dens/mac and again at /system/den (one id, den:mac), the saved /system/palette still there (the trie's level merges with the saved folder); /system lists den, dens and palette, the den its on folder, on its two methods. the den's node: its type, id, name and device, processes' cwd, its children { on }, status pending until the first pulse; on/start a method node holding a function. a second den on the table: already-there; a den id that is not a name: not-a-name, checked first",
+	"title": "the den at boot, beside a saved /system: its node at /system/dens/mac and again at /system/den (one id, den:mac), its session's process at /system/session, the saved /system/palette still there (the trie's level merges with the saved folder); /system lists den, dens, palette and session, the den its on folder, on its two methods. the den's node: its type, id, name and device, its children { on }; the session's process: a process of the den's (ermine.process.den: the den's node at /system/dens/mac), processes' cwd, status pending until the first pulse; on/start a method node holding a function. a second den on the table: already-there; a den id that is not a name: not-a-name, checked first",
 	"steps": [
 		{
 			"op": "kids",
@@ -51,6 +51,16 @@
 			"op": "here",
 			"path": [
 				"system",
+				"session"
+			],
+			"expect": {
+				"id": "session:mac"
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"system",
 				"palette"
 			],
 			"expect": {
@@ -66,7 +76,8 @@
 				"names": [
 					"den",
 					"dens",
-					"palette"
+					"palette",
+					"session"
 				]
 			}
 		},
@@ -120,13 +131,9 @@
 					"ermine.type": "ermine.den",
 					"ermine.den.id": "mac",
 					"ermine.den.name": "chee's mac",
-					"ermine.den.device": "D1",
-					"ermine.process.cwd": [
-						"system",
-						"dens"
-					]
+					"ermine.den.device": "D1"
 				},
-				"status": "pending",
+				"status": null,
 				"children": {
 					"on": "den:mac/on"
 				},
@@ -163,6 +170,32 @@
 			}
 		},
 		{
+			"op": "node",
+			"id": "session:mac",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.type": "ermine.process",
+					"ermine.process.den": {
+						"id": "den:mac",
+						"at": [
+							"system",
+							"dens",
+							"mac"
+						]
+					},
+					"ermine.process.cwd": [
+						"system"
+					]
+				},
+				"status": "pending",
+				"children": null,
+				"live": false
+			}
+		},
+		{
 			"op": "pulse",
 			"expect": {}
 		},
@@ -178,16 +211,38 @@
 					"ermine.type": "ermine.den",
 					"ermine.den.id": "mac",
 					"ermine.den.name": "chee's mac",
-					"ermine.den.device": "D1",
-					"ermine.process.cwd": [
-						"system",
-						"dens"
-					]
+					"ermine.den.device": "D1"
 				},
 				"status": null,
 				"children": {
 					"on": "den:mac/on"
 				},
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"id": "session:mac",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.type": "ermine.process",
+					"ermine.process.den": {
+						"id": "den:mac",
+						"at": [
+							"system",
+							"dens",
+							"mac"
+						]
+					},
+					"ermine.process.cwd": [
+						"system"
+					]
+				},
+				"status": null,
+				"children": null,
 				"live": false
 			}
 		},

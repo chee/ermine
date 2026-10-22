@@ -23,6 +23,7 @@
 // { op: "stopAll" }                          → {}   the providers' stop
 // program e, besides places' harness's:
 //   {"keys":[part,id,path?]}    the names of the value there (places' readKeys); tracked
+//   {"provide":request}         provide's request (its fields but op), made in the run; null
 import type { Provider, Write } from "./pullynode.ts"
 import { createProviders, type Providers } from "./pullynode.ts"
 import {
@@ -50,6 +51,13 @@ forms.push((m) => {
 	if (!("keys" in m)) return
 	const [part, id, path] = m.keys
 	return { value: places.readKeys(part, id, path) }
+})
+
+forms.push((m) => {
+	if (!("provide" in m)) return
+	const a = own({ ...m.provide, op: "provide" }) as Record<string, unknown>
+	if (a.error !== undefined) throw new Error(String(a.error))
+	return { value: null }
 })
 
 function hand(name: string): Hand {
@@ -87,8 +95,11 @@ function own(r: Request): Json | undefined {
 			const h: Hand = { said: [] }
 			try {
 				h.stop = providers.provide(r.id, provider(h, r), r.info)
-			} catch {
-				return { error: "provided" }
+			} catch (e) {
+				if (e instanceof Error && e.message.endsWith("has a provider already")) {
+					return { error: "provided" }
+				}
+				throw e
 			}
 			hands.set(r.name, h)
 			return {}

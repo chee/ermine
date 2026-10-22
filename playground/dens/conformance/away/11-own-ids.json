@@ -447,7 +447,8 @@
 				"names": [
 					"den",
 					"dens",
-					"palette"
+					"palette",
+					"session"
 				]
 			}
 		},

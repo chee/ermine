@@ -1,5 +1,5 @@
 {
-	"title": "close: every process stopped newest first, each handle given the reason (a user of a process's runner first, as it is newer), then the den's own rows: /system/dens/mac and /system/den gone, /system empty, its nodes' entries gone. after it: start, offer and another den's ask (a stop too) refused stopped; close again is nothing",
+	"title": "close: every process stopped newest first, each handle given the reason (a user of a process's runner first, as it is newer), then the session's process and the leaves: /system/dens/mac, /system/den and /system/session gone, /system empty; a den with no install: its nodes' entries gone, as the session's process's. after it: start, offer and another den's ask (a stop too) refused stopped; close again is nothing",
 	"steps": [
 		{
 			"op": "kids",
@@ -284,6 +284,16 @@
 			}
 		},
 		{
+			"op": "here",
+			"path": [
+				"system",
+				"session"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
 			"op": "list",
 			"path": [
 				"system"
@@ -339,6 +349,17 @@
 		{
 			"op": "node",
 			"id": "proc:a/runners/x",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"id": "session:mac",
 			"expect": {
 				"parts": [],
 				"attributes": null,

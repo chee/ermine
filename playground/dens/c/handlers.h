@@ -5,7 +5,8 @@
 #define DN_HANDLERS_H
 #include "common.h"
 
-// the den's children { on }, the folder on { start, stop }, each a method node holding hf_value("")
+// the den's children { on }, the folder on { start, stop }, each a method node holding hf_value(""),
+// then the asks stored under them answered
 void dn_methods(dn *d);
 
 #endif

@@ -23,7 +23,7 @@ nc_sources="$nc/core/op/c/value.c $nc/core/op/c/apply.c $nc/core/op/c/invert.c $
   $nc/ermine/encoding/c/json.c $nc/ermine/encoding/c/json_text.c $nc/ermine/encoding/c/cbor.c $nc/ermine/encoding/c/commit.c $nc/ermine/encoding/c/pack.c $nc/ermine/encoding/c/hash.c \
   $nc/playground/together/c/sync.c $nc/playground/together/c/transport.c $nc/playground/together/c/mailroom.c $nc/playground/together/stacks/subduction/c/subduction.c $nc/playground/together/c/ids.c $nc/playground/together/c/seal.c $nc/playground/together/c/history.c $nc/playground/together/c/replay.c $nc/playground/together/c/lists.c \
   $nc/playground/together/c/snapshot.c $nc/playground/together/c/packer.c $nc/playground/together/stacks/subduction/c/fragment.c \
-  $nc/ermine/encoding/c/blake3/blake3.c $nc/ermine/encoding/c/blake3/blake3_dispatch.c $nc/ermine/encoding/c/blake3/blake3_portable.c $nc/playground/together/c/ed25519/sha2.c \
+  $nc/ermine/encoding/c/blake3/blake3.c $nc/ermine/encoding/c/blake3/blake3_dispatch.c $nc/ermine/encoding/c/blake3/blake3_portable.c $nc/core/ed25519/c/sha2.c \
   $nc/playground/together/stacks/subduction/c/subduction/store_files.c $nc/playground/together/stacks/subduction/c/subduction/platform_posix.c \
   $nc/playground/together/stacks/subduction/c/subduction/websocket.c $nc/playground/together/stacks/subduction/c/subduction/transport_openssl.c \
   $nc/playground/experimental_os/newos/fronts/fronts.c $nc/playground/experimental_os/newos/card/card.c $nc/playground/experimental_os/newos/card/net.c \

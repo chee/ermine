@@ -221,6 +221,10 @@ sc_listener *sc_on_effect(sc_scheduler *s, sc_effect_fn f, void *data);
 // a promise settled: its result waits for the next pulse
 typedef void (*sc_settle_fn)(void *data);
 sc_listener *sc_on_settle(sc_scheduler *s, sc_settle_fn f, void *data);
+// a pulse ended: nothing due, every act done (not told when one threw out of it). a pulse called
+// here is a new one. Mirrors TS' onAfterPulse
+typedef void (*sc_after_pulse_fn)(void *data);
+sc_listener *sc_on_after_pulse(sc_scheduler *s, sc_after_pulse_fn f, void *data);
 // a key nobody tracks any more: at once when its last tracker's run that ended done did not track
 // it again, or it was torn down (a sweep now and then catches any other)
 typedef void (*sc_tracking_end_fn)(const void *key, void *data);

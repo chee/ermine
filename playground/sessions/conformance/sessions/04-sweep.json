@@ -1,0 +1,17 @@
+{
+	"title": "a sweep takes out every entry whose until is not ahead of now, and only those; a sweep of a node with none: nothing",
+	"steps": [
+		{ "op": "start", "name": "tab1", "install": "I1", "skip": ["kind", "differs"] },
+		{ "op": "start", "name": "card", "install": "I2", "skip": ["kind", "differs"] },
+		{ "op": "beat", "session": "tab1", "node": "D", "until": 10000, "expect": {} },
+		{ "op": "beat", "session": "card", "node": "D", "until": 30000, "expect": {} },
+		{ "op": "sweep", "node": "D", "now": 10000, "expect": {} },
+		{
+			"op": "entry",
+			"node": "D",
+			"expect": { "value": { "card": { "install": "I2", "until": 30000 } } }
+		},
+		{ "op": "sweep", "node": "E", "now": 10000, "expect": {} },
+		{ "op": "entry", "node": "E", "expect": { "value": null } }
+	]
+}

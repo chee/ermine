@@ -45,8 +45,8 @@ static void follow(const char *id) {
 	if (n == NULL) return;
 	followed[nfollowed].node = n;
 	if (strcmp(id, PIGS_ROOM) == 0) snprintf(followed[nfollowed].path, sizeof followed[0].path, "/pigs/room");
-	// "ermine://" then the hex: the first 8 name it
-	else snprintf(followed[nfollowed].path, sizeof followed[0].path, "/pigs/%.8s", id + 9);
+	// "ermine:", the code (4 hex), then the hex: the first 8 after the code name it (pigs.c's pig_name)
+	else snprintf(followed[nfollowed].path, sizeof followed[0].path, "/pigs/%.8s", id + 11);
 	nfollowed++;
 }
 
@@ -93,13 +93,9 @@ static op_value *pointers(const ls_node *room) {
 
 void room_mirror(api *a) {
 	if (dev == NULL) return;
-	// the room's pigs followed: the first unless the room says no, any it says yes to
-	const op_value *room = ls_value(followed[0].node);
-	if (pig_room_has(room, PIGS_FIRST)) follow(PIGS_FIRST);
-	for (size_t i = 0; i < pig_room_count(room); i++) {
-		const char *id = pig_room_at(room, i);
-		if (pig_room_has(room, id)) follow(id);
-	}
+	// the room's pigs followed: each placed in its children
+	const op_value *room = ls_children(followed[0].node);
+	for (size_t i = 0; i < pig_room_count(room); i++) follow(pig_room_at(room, i));
 	for (int i = 0; i < nfollowed; i++) {
 		ls_node *n = followed[i].node;
 		if (followed[i].mirrored && ls_version(n) == followed[i].seen) continue;

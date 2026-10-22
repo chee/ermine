@@ -6,13 +6,18 @@
 // <owner id>/<kind> (made at the first offer of that kind, upserted into the owner's children:
 // by, a process of this den's; none: the den), its attributes as given and ermine.type
 // ermine.runner | ermine.compiler | ermine.surface over them, its value live (none: no value).
-// a name taken (offered, or entries at its id already): refused taken, nothing made; not a name:
-// PlacesError not-a-name; by no running process of this den's: PlacesError nothing-there; closed:
-// refused stopped.
+// an install's den's own offers are stored on its node: their folders and attributes stay when the
+// session ends, only the live value goes, and a later session offers the name again over them. a
+// process's offers go whole with it, as do a den's with no install.
+// a name taken (offered now; for a process's, entries at its id already; for the den's, a live
+// value there): refused taken, nothing made; not a name: PlacesError not-a-name; by no running
+// process of this den's: PlacesError nothing-there; closed: refused stopped.
 // an offer is a scope under its folder's, under its owner's: what runs on it runs under it (start's
 // under), so its node going takes them, newest first.
-// withdraw: its name out of its folder, then its scope torn down, its users stopped "withdrawn". its
-// owner's stop takes it with the rest of the owner's scope, its users stopped "runner-stopped"
+// withdraw: its name out of its folder and its attributes out, then its scope torn down, its users
+// stopped "withdrawn". a name an earlier session left, offered by none now: out of its folder, its
+// attributes out. its owner's stop takes it with the rest of the owner's scope, its users
+// stopped "runner-stopped"
 // a runner (a runner node's value): { start(code, start) → handle, load?(code, start) → live,
 // api?(start) → api }, or a function, its start (its own load and api too, if it has them: a
 // function is shorthand for { start })
@@ -27,6 +32,7 @@ import {
 	bad,
 	type Ctx,
 	isMap,
+	liveUntil,
 	type Offer,
 	ours,
 	REASONS,
@@ -89,14 +95,16 @@ export function createOffers(c: Ctx) {
 		if (!KINDS.includes(kind)) throw new TypeError(`not a kind of offer: ${String(kind)}`)
 		if (bad(name)) throw new PlacesError("not-a-name", String(name))
 		const o = c.ownerOf(by)
+		const stored = o === c.mine && c.stored
 		const id: Id = `${String(o.id)}/${kind}/${name}`
 		const at = [...o.at, kind, name]
-		if (c.offers.has(id) || table.get(id).length > 0) return { refused: "taken", at }
+		const there = stored ? table.get("value", id) !== undefined : table.get(id).length > 0
+		if (c.offers.has(id) || there) return { refused: "taken", at }
 		let folder = o.folders.get(kind)
 		if (folder === undefined) {
 			const fid: Id = `${String(o.id)}/${kind}`
 			const scope = createScope({ offers: kind, [NODE]: fid }, o.under)
-			scopes.give(scope, fid)
+			if (!stored) scopes.give(scope, fid)
 			folder = { id: fid, scope }
 			o.folders.set(kind, folder)
 			s.runWithScope(
@@ -105,7 +113,7 @@ export function createOffers(c: Ctx) {
 			)
 		}
 		const scope = createScope({ offer: name, [NODE]: id }, folder.scope)
-		scopes.give(scope, id)
+		if (!stored) scopes.give(scope, id)
 		const made: Offer = { id, at, kind, name, by: o.id, owner: o, scope, gone: false }
 		c.offers.set(id, made)
 		o.offers.push(made)
@@ -113,8 +121,9 @@ export function createOffers(c: Ctx) {
 		const fid = folder.id
 		s.runWithScope(scope, () => {
 			const attrs: Record<string, unknown> = { ...attributes, [ATTRIBUTE]: TYPE[kind] }
-			table.add("attributes", id, createEntry(attrs, headerOf()))
+			table.sub("attributes", id, createEntry(attrs, headerOf()))
 			if (live !== undefined) table.add("value", id, createEntry<unknown>(live, headerOf()))
+			if (stored) liveUntil(c, scope, id)
 			commit(upsert(table, "children", fid, [name], id, headerOf()))
 		})
 		changed()
@@ -135,7 +144,7 @@ export function createOffers(c: Ctx) {
 	// its name out of its folder, then its scope torn down: its users stopped "withdrawn"
 	function withdraw(x: Offered | Id) {
 		const o = c.offers.get(typeof x === "object" ? x.id : x)
-		if (o === undefined || o.gone) return
+		if (o === undefined || o.gone) return unlist(typeof x === "object" ? x.id : x)
 		o.why = REASONS.withdrawn
 		const folder = o.owner.folders.get(o.kind)
 		try {
@@ -145,9 +154,30 @@ export function createOffers(c: Ctx) {
 					update(there, [{ path: [o.name] }], headerOf())
 					commit([there])
 				}
+				if (table.get("attributes", o.id) !== undefined) table.del("attributes", o.id)
 			})
 		} finally {
 			s.teardown(o.scope)
+		}
+	}
+
+	// a name an earlier session of this install left in one of the den's folders, offered by none
+	// now: out of its folder, its attributes out
+	function unlist(id: Id) {
+		if (!c.stored || c.closed) return
+		for (const kind of KINDS) {
+			const fid: Id = `${String(c.node)}/${kind}`
+			const there = table.get("children", fid) as Entry<unknown> | undefined
+			const names = there?.value
+			if (there === undefined || !isMap(names)) continue
+			const name = Object.keys(names).find((k) => names[k] === id)
+			if (name === undefined) continue
+			s.runWithScope(c.mine.scope, () => {
+				update(there, [{ path: [name] }], headerOf())
+				commit([there])
+				if (table.get("attributes", id) !== undefined) table.del("attributes", id)
+			})
+			changed()
 		}
 	}
 

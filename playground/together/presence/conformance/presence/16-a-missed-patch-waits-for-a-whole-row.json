@@ -1,5 +1,5 @@
 {
-	"title": "a patch message that follows a missed one is dropped: the row stays as it was until a whole row heals it",
+	"title": "a patch message that follows a missed one is dropped, and the receiver says hello: the sender announces, and the whole row heals it at once",
 	"steps": [
 		{
 			"op": "now",
@@ -141,6 +141,14 @@
 								[
 									0,
 									0
+								],
+								[
+									1,
+									1
+								],
+								[
+									2,
+									2
 								]
 							]
 						},

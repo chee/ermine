@@ -4,7 +4,7 @@
 // away(root), children]), scope nodes, host scope { actor: <dev> }; one clock (ms, from 0) only now
 // moves; an in-memory channel pair (presence's createPair) named "mac" and "card", made at the
 // first connect. names in answers (and taken back in requests): a den's node "den:<den id>", a
-// process "proc:<its name>", a derived id its owner's name and the rest (den:mac/runners/javascript);
+// process "proc:<its name>", a derived id its longest named owner and the rest (den:mac/runners/javascript);
 // any other id as it is. a PlacesError: { error: code }. live runners, each a function (its start)
 // given the start's facts: record (its run { dev, process, code, args, keys }, keys those of the
 // api it makes from them, { den: den.id, places, process }; its stop { dev, process, reason },
@@ -22,8 +22,9 @@
 // { op: "create", dev?, name, folder }               -> {}   a box over the folder's id
 // { op: "now", t }                                   -> {}
 // the den
-// { op: "den", dev?, id?, name?, device?, policy? }   -> { id }   createDen, the host's scope open;
-//    id none: dev; policy "grants" | none
+// { op: "den", dev?, id?, name?, device?, policy?, install? } -> { id }   createDen, the host's
+//    scope open; id none: dev; policy "grants" | none; install: the install's id (none: none given).
+//    its session's process named "session:<den id>"
 // { op: "offer", dev?, kind, name, attrs?, live?, by? } -> { id, at } | { refused, ... }
 //    live "record" | "boom" | "teller" | none; by: a process's name
 // { op: "withdraw", dev?, id }                       -> {}
@@ -39,6 +40,13 @@
 //    run, and how many
 // { op: "ask", dev?, ask: "start", name, who, runner, program, at, args?, cwd? } -> the answer
 // { op: "ask", dev?, ask: "stop", who, process, reason? }   -> the answer   process: a name or id
+// { op: "write-ask", dev?, as, den?, ask: "start", who, runner, program, at, args?, cwd? }
+// { op: "write-ask", dev?, as, den?, ask: "stop", who, process, reason? }
+//    -> { id }   asks' ask, written in the graph with the host's scope open, the ask named "ask:<as>";
+//    den: a den's node by name (none: the device's den's)
+// { op: "answered", dev?, as?, id?, name? } -> { answer }   asks' answer to the ask named as (or
+//    at id); null: none yet. name: what a process it started is named (proc:<name>)
+// { op: "raw", name }                -> { id }   the id a name stands for, as it is
 // { op: "send", dev?, path, body, actor? }           -> what the method there gave (body's name:
 //    the process's; process: by name)
 // { op: "close", dev?, reason? }                     -> {}
@@ -100,6 +108,7 @@ import {
 	type Start,
 } from "./dens.ts"
 import { away, connect, type Link, type Options, type Remote } from "./away.ts"
+import { answer as answerOf, ask as writeAsk, type World } from "./asks.ts"
 
 type Json = unknown
 
@@ -187,22 +196,26 @@ const name = (id: Id, as: string) => {
 	known.set(as, id)
 }
 
-// a string as shown: a named id, or a derived one (its owner's name and the rest)
+// a string as shown: a named id, or a derived one (its longest named owner and the rest)
 function show(v: string): string {
 	const named = shown.get(v)
 	if (named !== undefined) return named
-	const i = v.indexOf("/")
-	const owner = i > 0 ? shown.get(v.slice(0, i)) : undefined
-	return owner === undefined ? v : owner + v.slice(i)
+	for (let i = v.lastIndexOf("/"); i > 0; i = v.lastIndexOf("/", i - 1)) {
+		const owner = shown.get(v.slice(0, i))
+		if (owner !== undefined) return owner + v.slice(i)
+	}
+	return v
 }
 
 // a string taken back: a name's id, or a derived one's
 function take(v: string): Id {
 	const id = known.get(v)
 	if (id !== undefined) return id
-	const i = v.indexOf("/")
-	const owner = i > 0 ? known.get(v.slice(0, i)) : undefined
-	return owner === undefined ? v : `${String(owner)}${v.slice(i)}`
+	for (let i = v.lastIndexOf("/"); i > 0; i = v.lastIndexOf("/", i - 1)) {
+		const owner = known.get(v.slice(0, i))
+		if (owner !== undefined) return `${String(owner)}${v.slice(i)}`
+	}
+	return v
 }
 
 // a request's value taken back, its keys too (a row's nodes are by id)
@@ -337,6 +350,14 @@ function granted(d: Device): Policy {
 	}
 }
 
+// the device as asks write in it: the host's scope
+const worldOf = (d: Device): World => ({
+	table: d.table,
+	places: d.places,
+	scheduler: d.s,
+	scope: d.host,
+})
+
 // f with the host's scope open, or a scope { actor } under it
 function hosted<T>(d: Device, f: () => T, actor?: unknown): T {
 	if (actor === undefined) return d.s.runWithScope(d.host, f)
@@ -446,9 +467,11 @@ function answer(r: Request): Json {
 					...(r.name === undefined ? {} : { name: r.name }),
 					...(r.device === undefined ? {} : { device: back(r.device) }),
 					...(r.policy === "grants" ? { may: granted(d) } : {}),
+					...(r.install === undefined ? {} : { install: { id: r.install } }),
 				}))
 			d.den = den
 			name(den.node, `den:${den.id}`)
+			name(den.process.id, `session:${den.id}`)
 			return plain({ id: den.node })
 		}
 		case "offer": {
@@ -544,6 +567,37 @@ function answer(r: Request): Json {
 			}
 			throw new Error(`no ask ${r.ask}`)
 		}
+		case "write-ask": {
+			const d = dev(r)
+			const den = r.den === undefined ? denOf(d).node : take(String(r.den))
+			const a = r.ask === "start"
+				? {
+					op: "start" as const,
+					who: back(r.who),
+					runner: r.runner,
+					program: programOf(r.program) as Program,
+					at: r.at,
+					...(r.args === undefined ? {} : { args: r.args }),
+					...(r.cwd === undefined ? {} : { cwd: r.cwd }),
+				}
+				: {
+					op: "stop" as const,
+					who: back(r.who),
+					process: processAt(r.process),
+					...(r.reason === undefined ? {} : { reason: back(r.reason) }),
+				}
+			const id = writeAsk(worldOf(d), den, a)
+			name(id, `ask:${r.as}`)
+			return plain({ id })
+		}
+		case "answered": {
+			const d = dev(r)
+			const n = r.as === undefined ? take(String(r.id)) : take(`ask:${r.as}`)
+			const got = d.places.peep(() => answerOf(worldOf(d), n))
+			return { answer: got === undefined ? null : started(got, r.name) }
+		}
+		case "raw":
+			return { id: String(take(String(r.name))) }
 		case "send": {
 			const d = dev(r)
 			const id = d.places.peep(() => get(d.places, r.path))

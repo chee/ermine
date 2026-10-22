@@ -52,7 +52,7 @@ struct pul {
 	pl *places;
 	tb_table *table;
 	sc_scheduler *scheduler;
-	sc_listener *starts, *ends;
+	sc_listener *starts, *ends, *pulsed;
 	// every node ever made (freed at the end), and the live ones among them
 	pul_node **nodes;
 	size_t nnodes, capnodes;
@@ -241,7 +241,10 @@ int pul_write(pul_writer *h, const op_patch *patches, size_t n) {
 // started or stopped as its readers say
 static void settle(pul_node *h) {
 	if (!h->live) return;
-	if (h->nkeys && !h->running) {
+	if (h->nkeys == 0 && h->status == NONE) {
+		// provided in a run: its first status, now
+		status(h, ASLEEP);
+	} else if (h->nkeys && !h->running) {
 		status(h, WAKING);
 		sc_run *woke = h->woke;
 		h->woke = NULL;
@@ -262,7 +265,7 @@ static void settle(pul_node *h) {
 	}
 }
 
-void pul_flush(pul *pn) {
+static void flush(pul *pn) {
 	while (pn->ndue > 0) {
 		pul_node *h = pn->due[0];
 		memmove(pn->due, pn->due + 1, --pn->ndue * sizeof *pn->due);
@@ -271,13 +274,15 @@ void pul_flush(pul *pn) {
 	}
 }
 
-// now when no run is open; else at the pulse's end (pul_flush)
+static void pulsed(void *data) { flush(data); }
+
+// now when no run is open; else at the pulse's end (pulsed)
 static void soon(pul_node *h) {
 	if (!h->queued) {
 		h->queued = 1;
 		PUSH(h->pn->due, h->pn->ndue, h->pn->capdue, h);
 	}
-	if (sc_get_run(h->pn->scheduler) == NULL) pul_flush(h->pn);
+	if (sc_get_run(h->pn->scheduler) == NULL) flush(h->pn);
 }
 
 static void on_start(const void *key, sc_run *run, void *data) {
@@ -321,6 +326,7 @@ pul *pul_new(const pul_setup *setup) {
 	pn->ids = tb_new();
 	pn->starts = sc_on_tracking_start(pn->scheduler, on_start, pn);
 	pn->ends = sc_on_tracking_end(pn->scheduler, on_end, pn);
+	pn->pulsed = sc_on_after_pulse(pn->scheduler, pulsed, pn);
 	return pn;
 }
 
@@ -344,13 +350,14 @@ pul_node *pul_provide(pul *pn, const char *id, const pul_provider *provider, con
 	const op_value *there = e != NULL && e->value != NULL && e->value->type == OP_MAP
 		? op_get(e->value, PUL_STATUS) : NULL;
 	if (there != NULL && there->type == OP_STR && strcmp(there->str, "asleep") == 0) h->status = ASLEEP;
-	else if (sc_get_run(pn->scheduler) == NULL) status(h, ASLEEP);
+	else soon(h);
 	return h;
 }
 
-// h stopped and let go: asleep if it was running, and no run is open to write in
+// h stopped and let go: asleep if it was running, and no run is open to write in. a check waiting
+// on a first write answers with the value there
 static void end(pul_node *h) {
-	int was = h->running;
+	int was = h->running, waiting = h->checking;
 	pul_off off = h->off;
 	h->running = h->checking = 0;
 	if (was && off.f != NULL) off.f(off.ctx);
@@ -358,6 +365,10 @@ static void end(pul_node *h) {
 	h->live = 0;
 	if (h->woke != NULL) sc_run_unref(h->woke);
 	h->woke = NULL;
+	if (waiting) {
+		const nd_entry *e = tb_get(h->pn->table, part_of("value"), tb_string(h->id));
+		h->done(h->ctx, e != NULL ? e->value : NULL, NULL);
+	}
 }
 
 void pul_unprovide(pul_node *h) {
@@ -410,7 +421,8 @@ bool pul_reading(pul *pn, const char *id) {
 void pul_stop(pul *pn) {
 	if (pn->starts != NULL) sc_remove_listener(pn->starts);
 	if (pn->ends != NULL) sc_remove_listener(pn->ends);
-	pn->starts = pn->ends = NULL;
+	if (pn->pulsed != NULL) sc_remove_listener(pn->pulsed);
+	pn->starts = pn->ends = pn->pulsed = NULL;
 	for (size_t i = 0; i < pn->nnodes; i++) {
 		if (pn->nodes[i]->live) end(pn->nodes[i]);
 	}

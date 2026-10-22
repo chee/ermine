@@ -3,6 +3,7 @@
 
 #ifdef ESP_PLATFORM
 #include "peak.h"
+#include "ermine/encoding/c/pack.h"
 peak_step *lschannel_steps;
 #endif
 
@@ -125,6 +126,14 @@ void lschannel_heard(void *context, const char *topic, const uint8_t *who, size_
 		next = l->next;
 		if (strcmp(l->topic, topic) != 0) continue;
 #ifdef ESP_PLATFORM
+		{
+			// a probe: the row's bytes, and what it takes decoded (let go of at once)
+			size_t before = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+			op_value *v = pk_get(bytes, length, NULL, NULL);
+			size_t after = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+			op_free(v);
+			printf("row: from %.8s, %u bytes, %u decoded\n", from, (unsigned)length, (unsigned)(before - after));
+		}
 		if (lschannel_steps) {
 			PEAK(lschannel_steps, l->fn(l->ctx, from, bytes, length));
 			continue;
