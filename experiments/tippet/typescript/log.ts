@@ -1,12 +1,6 @@
-// the log: what this device knows of every device's steps, by device, in order, and the
-// signatures that vouch for them. it is the store: what is on disk is the log's records, appended,
-// and now and then a snapshot (history.ts). the steps' bytes stay in the store; the log holds per
-// device only how many, their hashes and the signatures. it knows nothing of the graph: galaxy
-// holds logs with no graph at all
-//
-// steps move in runs. a writer closes a run every 32 steps or 2 KB, or when someone is waiting for
-// it, and signs its last step: the chain vouches for the rest. a run's end never moves, so whoever
-// passes it on passes the same run; one who holds the start of it is sent only the rest
+// the log: every device's steps this device holds, in order, and the signatures over their runs
+// (WIRE.md, runs). the steps' bytes stay in its store, appended, with now and then a snapshot; in
+// memory only each step's hash. it knows nothing of the graph: galaxy holds logs with no graph
 //
 //   const log = createLog({ store, writes: true })   // its key is the store's, made on first load
 //   await log.load()
@@ -27,7 +21,7 @@ export type At = [device: string, n: number]
 // where a log keeps itself: records appended in order, the steps among them got again by place,
 // one snapshot, replaced, and the key of the device that writes here
 export type Store = {
-	// each record, in order, given to read: one read says is a step is held to get. the snapshot
+	// each record, in order, given to read, which says which are steps to get later. the snapshot
 	load(read: (record: Uint8Array) => At | undefined): Promise<Uint8Array | undefined>
 	// a record at the end, after every one before it; at: the step it is
 	append(record: Uint8Array, at?: At): Promise<void>
@@ -36,6 +30,8 @@ export type Store = {
 	snapshot(bytes: Uint8Array): Promise<void>
 	// the key this store's device signs with: the one it holds, else seed, held from now on
 	key(seed: Uint8Array): Promise<Uint8Array>
+	// every record appended so far on disk, through a power cut
+	sync?(): Promise<void>
 	// what it holds open, let go
 	close?(): void
 }
@@ -78,7 +74,7 @@ const JUMP = 2 ** 20
 type Feed = { hashes: Uint8Array[]; sigs: Map<number, Uint8Array>; top: number }
 type Chained = { steps: Step[]; hashes: Uint8Array[] }
 // from: the link they came on; none: written here
-export type Told = (device: string, steps: Step[], from?: unknown) => void
+type Told = (device: string, steps: Step[], from?: unknown) => void
 
 export type Log = ReturnType<typeof createLog>
 
@@ -87,7 +83,6 @@ export type Log = ReturnType<typeof createLog>
 export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Array } = {}) {
 	const store = o.store ?? createMemoryStore()
 	let me: Signer | undefined
-	let loaded = false
 	const feeds = new Map<string, Feed>()
 	const told: Told[] = []
 	let lamport = 0
@@ -186,7 +181,7 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 		// a step of this device's, made now: lamport one past the highest seen. one that isn't a
 		// step as decodeStep takes one throws, and is never sent
 		write(s: Omit<Step, "device" | "n" | "before" | "lamport">): Step {
-			if (!me) throw new Error(loaded ? "this log writes nothing" : "load it first")
+			if (!me) throw new Error("this log writes nothing, or is not loaded")
 			if (lamport >= Number.MAX_SAFE_INTEGER) throw new RangeError("lamport is at its end")
 			const f = feed(me.device), n = f.hashes.length + 1
 			const step: Step = {
@@ -209,13 +204,18 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 		async run(device: string, from: number): Promise<Run | undefined> {
 			const f = feeds.get(device), held = count(device)
 			if (!f || from < 1 || from > held) return undefined
-			// this device's runs closed already are signed first, so none is mistaken for open
-			if (device === me?.device) await signing
+			// this device's runs closed already are signed first, so none is mistaken for open; and its
+			// steps are on disk before any leave, so a power cut can't make another step with their n
+			if (device === me?.device) {
+				await signing
+				if (!await saving.then(() => store.sync?.()).then(() => true, () => false)) {
+					return undefined
+				}
+			}
 			let end = from
 			while (end <= held && !f.sigs.has(end)) end++
 			if (end > held) {
 				if (device !== me?.device) return undefined
-				if (!await saving.then(() => true, () => false)) return undefined
 				if (!await sign(held).then(() => true, () => false)) return undefined
 				end = held
 			}
@@ -235,7 +235,7 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 				const first = decodeStep(b.steps[0]).n, last = first + b.steps.length - 1
 				if (first > held + 1) return { refused: "gap" }
 				const fresh = b.steps.slice(held - first + 1)
-				const c = fresh.length ? chain(b.device, fresh) : { steps: [], hashes: [] }
+				const c = chain(b.device, fresh)
 				if (!c) return { refused: "chain" }
 				if (c.steps.some((s) => s.lamport > lamport + JUMP)) return { refused: "lamport" }
 				const hash = (n: number) => n <= held ? f!.hashes[n - 1] : c.hashes[n - held - 1]
@@ -286,7 +286,6 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 				}
 			})
 			if (me) asked = feeds.get(me.device)?.top ?? 0
-			loaded = true
 			return snapshot
 		},
 		snapshot: (bytes: Uint8Array) => (saving = saving.then(() => store.snapshot(bytes))),

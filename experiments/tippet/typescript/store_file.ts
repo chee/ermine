@@ -1,8 +1,9 @@
 // a log's store on disk (deno): records appended to dir/log as frames (4 bytes big-endian length,
 // then the record), the snapshot in dir/snapshot, written whole beside it then renamed into place,
-// and the device's key in dir/key, written once. a frame cut short by a crash is cut off when
-// loaded, so the next append starts clean. steps are read back from the file by where they are:
-// in memory, only where each one starts and how long it is
+// and the device's key in dir/key, written once; dir made on the first write. a frame cut short by
+// a crash is cut off when loaded, so the next append starts clean. steps are read back from the
+// file by where they are: in memory, only where each one starts and how long it is. sync: every
+// append so far on disk, through a power cut
 //
 //   const log = createLog({ store: fileStore("./data/pigs"), writes: true })
 //   await log.close()
@@ -10,7 +11,9 @@ import type { At, Store } from "./log.ts"
 
 export function fileStore(dir: string): Store {
 	const records = `${dir}/log`, snap = `${dir}/snapshot`, keyfile = `${dir}/key`
-	const ready = Deno.mkdir(dir, { recursive: true })
+	// dir, made on the first write
+	let made: Promise<void> | undefined
+	const ready = () => made ??= Deno.mkdir(dir, { recursive: true })
 	const read = (path: string) =>
 		Deno.readFile(path).catch((e) => {
 			if (e instanceof Deno.errors.NotFound) return undefined
@@ -23,7 +26,7 @@ export function fileStore(dir: string): Store {
 	const name = ([d, n]: At) => `${n} ${d}`
 	// the file's length, with every append so far
 	let end = 0
-	let writing: Promise<unknown> = ready
+	let writing: Promise<unknown> = Promise.resolve()
 	let file: Deno.FsFile | undefined
 	const hold = ([d, n]: At, at: number, size: number) => {
 		let list = where.get(d)
@@ -33,7 +36,6 @@ export function fileStore(dir: string): Store {
 
 	return {
 		async load(each) {
-			await ready
 			const bytes = await read(records) ?? new Uint8Array()
 			const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
 			where = new Map()
@@ -58,6 +60,7 @@ export function fileStore(dir: string): Store {
 			if (step) hold(step, end + 4, record.length), written.set(name(step), record)
 			end += frame.length
 			writing = writing.catch(() => {}).then(async () => {
+				await ready()
 				await Deno.writeFile(records, frame, { append: true })
 				if (step) written.delete(name(step))
 			})
@@ -77,12 +80,12 @@ export function fileStore(dir: string): Store {
 			return out
 		},
 		async snapshot(bytes) {
-			await ready
+			await ready()
 			await Deno.writeFile(`${snap}.new`, bytes)
 			await Deno.rename(`${snap}.new`, snap)
 		},
 		async key(seed) {
-			await ready
+			await ready()
 			try {
 				await Deno.writeFile(keyfile, seed, { createNew: true, mode: 0o600 })
 				return seed
@@ -92,6 +95,11 @@ export function fileStore(dir: string): Store {
 				if (key.length !== 32) throw new Error(`${keyfile} is not a key`)
 				return key
 			}
+		},
+		async sync() {
+			await writing
+			const f = await Deno.open(records, { write: true })
+			await f.syncData().finally(() => f.close())
 		},
 		close() {
 			file?.close()

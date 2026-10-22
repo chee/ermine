@@ -1,7 +1,8 @@
 // galaxy: just another peer. per room, a log on disk and a sync that relays, and no graph and no
 // signer: it checks every step's chain and signature (log.take) and never reads a patch. a room is
 // loaded on use, and let go (its log closed) once it has had no links for 5 minutes. at most 1000
-// are open: past that the one idle longest is let go, and with none idle a new room is refused (503)
+// are open: past that the one least recently written is let go, links or not. its dir is made on
+// its first kept run
 //
 //   /tippet/<room>          a websocket (carriers/websocket.ts)
 //   /tippet/<room>/send     http long-poll (carriers/http.ts)
@@ -20,25 +21,14 @@ import { httpLinks } from "./carriers/http.ts"
 import { hex } from "./step.ts"
 import { blake3 } from "@ermine/blake3"
 
-// idle: since when it has had no links
+// written: when it last kept a run, 0 never
 type Room = {
 	log: Log
 	sync: Sync
 	http: ReturnType<typeof httpLinks>
 	sockets: Set<WebSocket>
-	idle?: number
+	written: number
 	timer?: ReturnType<typeof setTimeout>
-}
-
-// a room's name from its url-encoded form; undefined: not a name
-function name(raw: string): string | undefined {
-	let s: string
-	try {
-		s = decodeURIComponent(raw)
-	} catch {
-		return undefined
-	}
-	return s === "" || s === "." || s === ".." || s.includes("/") ? undefined : s
 }
 
 // idle: how long a room with no links stays open (ms); most: how many rooms are open at once
@@ -61,18 +51,15 @@ export function createGalaxy(o: { dir: string; at?: string; idle?: number; most?
 		closing.set(n, done)
 	}
 
-	// a room, loaded from disk on use; undefined: too many open. its dir is its name's hash, so names
-	// that a filesystem folds together (case, unicode normalization) stay apart
-	function room(n: string): Promise<Room> | undefined {
+	// a room, loaded from disk on use. its dir is its name's hash, so names that a filesystem folds
+	// together (case, unicode normalization) stay apart
+	function room(n: string): Promise<Room> {
 		let r = rooms.get(n)
 		if (r) return r
 		if (rooms.size >= most) {
 			let oldest: [string, Room] | undefined
-			for (const e of loaded) {
-				if ((e[1].idle ?? Infinity) < (oldest?.[1].idle ?? Infinity)) oldest = e
-			}
-			if (!oldest) return undefined
-			free(...oldest)
+			for (const e of loaded) if (!oldest || e[1].written < oldest[1].written) oldest = e
+			if (oldest) free(...oldest)
 		}
 		r = (async () => {
 			await closing.get(n)
@@ -85,12 +72,13 @@ export function createGalaxy(o: { dir: string; at?: string; idle?: number; most?
 				sync,
 				http: httpLinks((link) => sync.link(link)),
 				sockets: new Set<WebSocket>(),
+				written: 0,
 			}
+			log.on(() => room.written = Date.now())
 			// counted idle from its last link gone, until it is let go
 			const linked = () => {
 				clearTimeout(room.timer)
 				if (loaded.get(n) !== room) return
-				room.idle = sync.links ? undefined : Date.now()
 				if (!sync.links) room.timer = setTimeout(() => free(n, room), idle)
 			}
 			loaded.set(n, room)
@@ -107,8 +95,15 @@ export function createGalaxy(o: { dir: string; at?: string; idle?: number; most?
 		const path = new URL(req.url).pathname
 		const parts = path.startsWith(at) ? path.slice(at.length).split("/") : []
 		if (parts.length < 1 || parts.length > 2) return new Response("not found", { status: 404 })
-		const n = name(parts[0])
-		if (n === undefined) return new Response("not a room", { status: 400 })
+		let n = ""
+		try {
+			n = decodeURIComponent(parts[0])
+		} catch {
+			// not a name
+		}
+		if (["", ".", ".."].includes(n) || n.includes("/")) {
+			return new Response("not a room", { status: 400 })
+		}
 		if (parts.length === 2 && parts[1] !== "send" && parts[1] !== "recv") {
 			return new Response("not found", { status: 404 })
 		}
@@ -116,7 +111,6 @@ export function createGalaxy(o: { dir: string; at?: string; idle?: number; most?
 			return new Response("a websocket, or /send and /recv", { status: 426 })
 		}
 		const r = await room(n)
-		if (!r) return new Response("too many rooms open", { status: 503 })
 		if (parts.length === 2) return r.http(req)!
 		const { socket: ws, response } = Deno.upgradeWebSocket(req)
 		r.sockets.add(ws)

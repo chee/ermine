@@ -54,6 +54,13 @@ void tp_buf_free(tp_buf *b);
 // what is wrong with it: 0, TP_NOMEM or TP_BOUND
 int tp_buf_why(const tp_buf *b);
 
+// n bytes as 2n lowercase hex digits (no 0 after)
+void tp_hex(char *out, const uint8_t *b, size_t n);
+
+// a frame's length: 4 bytes, big-endian, read and written
+uint32_t tp_get32(const uint8_t *p);
+void tp_set32(uint8_t *p, uint32_t n);
+
 // memory through mem: a new, a grown and a let go
 void *tp_alloc(const tp_mem *mem, size_t size);
 void *tp_grow(const tp_mem *mem, void *p, size_t old, size_t size);

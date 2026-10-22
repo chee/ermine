@@ -280,11 +280,8 @@ static block *block_of(const uint8_t *bytes, size_t length) {
 		p->value = op_get(m, "value"), p->has_value = p->value != NULL;
 		if (move) p->has_move = 1, target_of(move, &p->move, &k);
 	}
-	static const char digits[] = "0123456789abcdef";
 	char hex[65];
-	for (size_t i = 0; i < 32; i++) {
-		hex[2 * i] = digits[s->items[0]->data[i] >> 4], hex[2 * i + 1] = digits[s->items[0]->data[i] & 15];
-	}
+	tp_hex(hex, s->items[0]->data, 32);
 	hex[64] = 0;
 	b->device = op_str(hex);
 	b->actor = op_ref(s->count == 9 ? s->items[8] : b->device);
@@ -596,7 +593,7 @@ tp_history *tp_history_new(const tp_history_options *o) {
 	return h;
 }
 
-static void let_go(tp_history *h, failures *list) {
+static void release(tp_history *h, failures *list) {
 	for (size_t i = 0; i < list->n; i++) {
 		failure *f = &list->items[i];
 		if (f->node) tp_free(&h->mem, f->node, strlen(f->node) + 1);
@@ -615,7 +612,7 @@ void tp_history_free(tp_history *h) {
 	tp_free(&h->mem, h->entries, h->roomentries * sizeof *h->entries);
 	tp_free(&h->mem, h->slots, h->nslots * sizeof *h->slots);
 	tp_free(&h->mem, h->devices, h->roomdevices * 32);
-	let_go(h, &h->failed), let_go(h, &h->unkept);
+	release(h, &h->failed), release(h, &h->unkept);
 	tp_buf_free(&h->bytes);
 	tp_mem mem = h->mem;
 	tp_free(&mem, h, sizeof *h);

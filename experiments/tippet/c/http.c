@@ -6,10 +6,6 @@
 
 #include "wire.h"
 
-static uint32_t length_at(const uint8_t *p) {
-	return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3];
-}
-
 int tp_http_open(tp_http *h, const tp_mem *mem, const char *id, size_t room) {
 	size_t n = strlen(id);
 	memset(h, 0, sizeof *h);
@@ -38,11 +34,10 @@ int tp_http_send(tp_http *h, const uint8_t *message, size_t length) {
 		h->frames = p, h->cap = cap;
 	}
 	uint8_t *at = h->frames + h->length;
-	at[0] = (uint8_t)(length >> 24), at[1] = (uint8_t)(length >> 16), at[2] = (uint8_t)(length >> 8);
-	at[3] = (uint8_t)length;
+	tp_set32(at, (uint32_t)length);
 	if (length) memcpy(at + 4, message, length);
 	h->length += 4 + length, h->waiting++, h->bytes += length;
-	return 0;
+	return h->bytes >= TP_BODY / 2;
 }
 
 size_t tp_http_query(const tp_http *h, char *out, size_t cap) {
@@ -56,7 +51,7 @@ size_t tp_http_query(const tp_http *h, char *out, size_t cap) {
 size_t tp_http_body(const tp_http *h, const uint8_t **body, size_t *count) {
 	size_t at = 0, n = 0;
 	while (at < h->length) {
-		size_t next = at + 4 + length_at(h->frames + at);
+		size_t next = at + 4 + tp_get32(h->frames + at);
 		if (next > TP_BODY) break;
 		at = next, n++;
 	}
@@ -76,7 +71,7 @@ int tp_http_sent(tp_http *h, int status, size_t count) {
 	// the first count frames taken: out of the outbox
 	size_t at = 0;
 	for (size_t i = 0; i < count && at < h->length; i++) {
-		size_t n = length_at(h->frames + at);
+		size_t n = tp_get32(h->frames + at);
 		h->bytes -= n, h->waiting--, h->sent++;
 		at += 4 + n;
 	}
@@ -93,16 +88,16 @@ int tp_http_recv(tp_http *h, int status, const uint8_t *answer, size_t length,
 	uint64_t got = 0;
 	size_t at = 4;
 	while (at + 4 <= length) {
-		size_t n = length_at(answer + at);
+		size_t n = tp_get32(answer + at);
 		if (n > length - at - 4) return 1;
 		at += 4 + n, got++;
 	}
 	if (at != length) return 1;
 	// the answer's number is its last message's: those past ack are new
-	uint64_t last = length_at(answer);
+	uint64_t last = tp_get32(answer);
 	int64_t k = (int64_t)last - (int64_t)got + 1;
 	for (at = 4; at < length; k++) {
-		size_t n = length_at(answer + at);
+		size_t n = tp_get32(answer + at);
 		if (k > (int64_t)h->ack) told(ctx, answer + at + 4, n);
 		at += 4 + n;
 	}

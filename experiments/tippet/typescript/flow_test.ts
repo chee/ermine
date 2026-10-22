@@ -264,22 +264,20 @@ Deno.test("9. galaxy lets a room with no links go, and loads it again on use", a
 	await Deno.remove(dir, { recursive: true })
 })
 
-Deno.test("9. galaxy keeps to its most rooms: the one idle longest let go, else 503", async () => {
+Deno.test("9. galaxy keeps to its most rooms: the one least recently written let go, links or not", async () => {
 	const dir = await Deno.makeTempDir()
 	const s = galaxy(dir, { idle: 60_000, most: 2 })
+	const a = await writer()
 	const pigs = s.open("pigs"), cows = s.open("cows")
-	createSync({ log: createLog() }).link(pigs.link)
+	createSync({ log: a }).link(pigs.link)
 	createSync({ log: createLog() }).link(cows.link)
+	put(a, 1)
 	await tick(100)
-	const full = await s.poke("hens")
-	await pigs.close()
-	await tick(20)
-	await cows.close()
-	await tick(20)
-	// pigs idle longest: let go for hens; cows stays
+	// cows never written: let go for hens, though linked; pigs stays
 	const hens = await s.poke("hens")
 	const open = s.g.open
+	await cows.close(), await pigs.close()
 	await s.close()
 	await Deno.remove(dir, { recursive: true })
-	assertEquals([full, hens, open], [503, 204, 2])
+	assertEquals([hens, open], [204, 2])
 })

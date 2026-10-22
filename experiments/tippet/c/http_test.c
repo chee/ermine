@@ -83,7 +83,8 @@ int main(void) {
 	// past a body: refused; past 1 MB unsent: closed, linked again
 	static uint8_t big[TP_BODY];
 	CHECK(tp_http_send(&h, big, TP_BODY) == TP_BOUND);
-	for (int i = 0; i < 3; i++) CHECK(tp_http_send(&h, big, TP_BODY / 3) == 0);
+	// half a body waiting: full
+	for (int i = 0; i < 3; i++) CHECK(tp_http_send(&h, big, TP_BODY / 3) == !!i);
 	length = tp_http_body(&h, &body, &count);
 	CHECK(count == 2 && length == 2 * (4 + TP_BODY / 3));
 	CHECK(tp_http_send(&h, big, 1024) == TP_GONE && h.closed);

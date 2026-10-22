@@ -1,18 +1,12 @@
-// pack: a run's steps, small on the wire. the first step goes whole; each after it is told only by
-// what isn't worked out from the one before (its n is one more, its before is the one before's
-// hash, its device the same), as columns: each field a run of [value, count, …], numbers as the
-// step from the one before, and every patch together as squish's columns. unpack makes each step's
-// bytes again exactly, so the chain and the signature are checked as ever: a wrong pack is refused
-//
-//   [first, lamport, when, node, part, who, count, columns]
+// pack: a run's steps, small on the wire (WIRE.md, pack). the first step goes whole; the rest only
+// as what can't be worked out from the step before, in columns. unpack makes each step's bytes again
+// exactly, so chain and signature are checked as ever, and throws on a pack that isn't one
 //
 //   const packed = pack(steps); const steps = unpack(packed)
 import type { Value } from "@ermine/encoding/cbor"
 import { type Columns, decode as patchesOf, encode as columns } from "@ermine/op/squish"
 import { decodeStep, encodeStep, hashStep, type Step } from "./step.ts"
 
-// per step after the first, as runs: lamport and when as steps from the one before; node, part
-// and who (null: none) as they are; how many patches each
 export type Packed = [
 	first: Uint8Array,
 	lamport: number[],
@@ -24,6 +18,7 @@ export type Packed = [
 	columns: Columns,
 ]
 
+// a list as runs, [value, count, …], and back
 function runs<T>(xs: T[]): T[] {
 	const out: T[] = []
 	for (const x of xs) {
@@ -42,7 +37,7 @@ function unruns<T>(rs: T[]): T[] {
 }
 
 // the most steps a pack holds, and patches
-export const STEPS = 4096, PATCHES = 65536
+const STEPS = 4096, PATCHES = 65536
 
 // how many a column's runs make, or -1: not runs (each count a whole number past 0)
 function length(rs: unknown): number {
@@ -82,11 +77,10 @@ function patchCount(c: Columns): number {
 
 export function pack(bytes: readonly Uint8Array[]): Packed {
 	const steps = bytes.map(decodeStep), rest = steps.slice(1)
-	const prev = (i: number) => steps[i]
 	return [
 		bytes[0],
-		runs(rest.map((s, i) => s.lamport - prev(i).lamport)),
-		runs(rest.map((s, i) => s.when - prev(i).when)),
+		runs(rest.map((s, i) => s.lamport - steps[i].lamport)),
+		runs(rest.map((s, i) => s.when - steps[i].when)),
 		runs(rest.map((s) => s.node)),
 		runs(rest.map((s) => s.part)),
 		runs(rest.map((s) => s.who ?? null)),
