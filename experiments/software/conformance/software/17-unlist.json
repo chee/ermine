@@ -1,0 +1,324 @@
+{
+	"title": "withdraw of an id none offers now that a stored owner's folder (<owner>/<kind>, the id's own) names: every name in the folder pointing at it out (an alias too; others' names left), its attributes out, the folder kept (empty, if nothing else); withdrawn again, nothing. an id no folder names (attributes alone there: left as they are), an id with no kind in it, a folder that is not there: nothing. after the place is placed again, a name it has not offered again is withdrawn so too; one offered again is an offer as ever",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"install": "INSTALL"
+			},
+			"expect": {}
+		},
+		{
+			"op": "place",
+			"name": "install",
+			"id": "INSTALL",
+			"at": [
+				"install"
+			],
+			"stored": true,
+			"expect": {}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source"
+			},
+			"live": "record",
+			"by": "install",
+			"expect": {
+				"id": "install/runners/javascript",
+				"at": [
+					"install",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "lisp",
+			"attrs": {
+				"ermine.runner.takes": "x-lisp"
+			},
+			"live": "record",
+			"by": "install",
+			"expect": {
+				"id": "install/runners/lisp",
+				"at": [
+					"install",
+					"runners",
+					"lisp"
+				]
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "surfaces",
+			"name": "display",
+			"attrs": {
+				"ermine.surface.kind": "pixels"
+			},
+			"by": "install",
+			"expect": {
+				"id": "install/surfaces/display",
+				"at": [
+					"install",
+					"surfaces",
+					"display"
+				]
+			}
+		},
+		{
+			"op": "close-place",
+			"name": "install",
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "install/runners",
+			"value": {
+				"javascript": "install/runners/javascript",
+				"lisp": "install/runners/lisp",
+				"alias": "install/runners/lisp",
+				"other": "X"
+			},
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "install/runners/ghost",
+			"value": {
+				"ermine.type": "ermine.runner"
+			},
+			"expect": {}
+		},
+		{
+			"op": "withdraw",
+			"id": "install/runners/lisp",
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"id": "install/runners",
+			"expect": {
+				"parts": [
+					"children"
+				],
+				"attributes": null,
+				"status": null,
+				"children": {
+					"javascript": "install/runners/javascript",
+					"other": "X"
+				},
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"id": "install/runners/lisp",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"id": "install/runners/javascript",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.runner.takes": "com.netscape.javascript-source",
+					"ermine.type": "ermine.runner"
+				},
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "withdraw",
+			"id": "install/runners/lisp",
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"id": "install/runners",
+			"expect": {
+				"parts": [
+					"children"
+				],
+				"attributes": null,
+				"status": null,
+				"children": {
+					"javascript": "install/runners/javascript",
+					"other": "X"
+				},
+				"live": false
+			}
+		},
+		{
+			"op": "withdraw",
+			"id": "install/runners/ghost",
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"id": "install/runners/ghost",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.type": "ermine.runner"
+				},
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "withdraw",
+			"id": "install/nothing/x",
+			"expect": {}
+		},
+		{
+			"op": "withdraw",
+			"id": "nowhere/runners/x",
+			"expect": {}
+		},
+		{
+			"op": "withdraw",
+			"id": "install/surfaces/display",
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"id": "install/surfaces",
+			"expect": {
+				"parts": [
+					"children"
+				],
+				"attributes": null,
+				"status": null,
+				"children": {},
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"id": "install/surfaces/display",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "place",
+			"name": "install",
+			"id": "INSTALL",
+			"at": [
+				"install"
+			],
+			"stored": true,
+			"expect": {}
+		},
+		{
+			"op": "offers",
+			"expect": {
+				"offers": []
+			}
+		},
+		{
+			"op": "withdraw",
+			"id": "install/runners/javascript",
+			"expect": {}
+		},
+		{
+			"op": "list",
+			"path": [
+				"install",
+				"runners"
+			],
+			"expect": {
+				"names": [
+					"other"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "install/runners/javascript",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "lisp",
+			"attrs": {
+				"ermine.runner.takes": "x-lisp"
+			},
+			"live": "record",
+			"by": "install",
+			"expect": {
+				"id": "install/runners/lisp",
+				"at": [
+					"install",
+					"runners",
+					"lisp"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "install/runners",
+			"expect": {
+				"parts": [
+					"children"
+				],
+				"attributes": null,
+				"status": null,
+				"children": {
+					"other": "X",
+					"lisp": "install/runners/lisp"
+				},
+				"live": false
+			}
+		},
+		{
+			"op": "offers",
+			"expect": {
+				"offers": [
+					{
+						"id": "install/runners/lisp",
+						"at": [
+							"install",
+							"runners",
+							"lisp"
+						],
+						"kind": "runners",
+						"name": "lisp",
+						"by": "install"
+					}
+				]
+			}
+		}
+	]
+}

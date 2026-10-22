@@ -1,0 +1,762 @@
+{
+	"title": "a place as a stored owner (an install's node): its offers' nodes in folders under it as any owner's; when its scope goes, what runs on them stopped runner-stopped, out of offers(), but their attributes, their folders and the folders' names in its children stay, only the live values go (a value written there since by another stays), so a runner left there is not-a-runner, and the place offers nothing more: nothing-there. placed again with a new scope: the names still listed, offered again over them (the same id, the attributes given now, a live value), refused taken only where a value is there (another's, left as it is), not for attributes alone, its folder named once. a place not stored: its offers' nodes and folders go whole with its scope, the folder's name out of its children, and it offers again once placed again",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"apps": "APPS",
+				"install": "INSTALL",
+				"desk": "DESK"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "APPS",
+			"value": {
+				"clock.js": "CLOCK"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "CLOCK",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CLOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "place",
+			"name": "install",
+			"id": "INSTALL",
+			"at": [
+				"install"
+			],
+			"stored": true,
+			"expect": {}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source"
+			},
+			"live": "record",
+			"by": "install",
+			"expect": {
+				"id": "install/runners/javascript",
+				"at": [
+					"install",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "lisp",
+			"attrs": {
+				"ermine.runner.takes": "x-lisp"
+			},
+			"live": "record",
+			"by": "install",
+			"expect": {
+				"id": "install/runners/lisp",
+				"at": [
+					"install",
+					"runners",
+					"lisp"
+				]
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "compilers",
+			"name": "clang",
+			"attrs": {
+				"ermine.compiler.takes": "public.c-source"
+			},
+			"by": "install",
+			"expect": {
+				"id": "install/compilers/clang",
+				"at": [
+					"install",
+					"compilers",
+					"clang"
+				]
+			}
+		},
+		{
+			"op": "offers",
+			"expect": {
+				"offers": [
+					{
+						"id": "install/runners/javascript",
+						"at": [
+							"install",
+							"runners",
+							"javascript"
+						],
+						"kind": "runners",
+						"name": "javascript",
+						"by": "install"
+					},
+					{
+						"id": "install/runners/lisp",
+						"at": [
+							"install",
+							"runners",
+							"lisp"
+						],
+						"kind": "runners",
+						"name": "lisp",
+						"by": "install"
+					},
+					{
+						"id": "install/compilers/clang",
+						"at": [
+							"install",
+							"compilers",
+							"clang"
+						],
+						"kind": "compilers",
+						"name": "clang",
+						"by": "install"
+					}
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "install/runners/javascript",
+			"expect": {
+				"parts": [
+					"attributes",
+					"value"
+				],
+				"attributes": {
+					"ermine.runner.takes": "com.netscape.javascript-source",
+					"ermine.type": "ermine.runner"
+				},
+				"status": null,
+				"children": null,
+				"live": true
+			}
+		},
+		{
+			"op": "run",
+			"name": "a",
+			"runner": [
+				"install",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"a"
+			],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"work",
+					"a"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "install/runners/lisp",
+			"value": "someone's",
+			"expect": {}
+		},
+		{
+			"op": "close-place",
+			"name": "install",
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "proc:a",
+						"code": "hi",
+						"args": [],
+						"cwd": [
+							"work"
+						],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					}
+				],
+				"stops": [
+					{
+						"process": "proc:a",
+						"reason": "runner-stopped"
+					}
+				]
+			}
+		},
+		{
+			"op": "running",
+			"expect": {
+				"running": []
+			}
+		},
+		{
+			"op": "offers",
+			"expect": {
+				"offers": []
+			}
+		},
+		{
+			"op": "node",
+			"id": "install/runners/javascript",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.runner.takes": "com.netscape.javascript-source",
+					"ermine.type": "ermine.runner"
+				},
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"id": "install/runners/lisp",
+			"expect": {
+				"parts": [
+					"attributes",
+					"value"
+				],
+				"attributes": {
+					"ermine.runner.takes": "x-lisp",
+					"ermine.type": "ermine.runner"
+				},
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"id": "install/compilers/clang",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.compiler.takes": "public.c-source",
+					"ermine.type": "ermine.compiler"
+				},
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"id": "install/runners",
+			"expect": {
+				"parts": [
+					"children"
+				],
+				"attributes": null,
+				"status": null,
+				"children": {
+					"javascript": "install/runners/javascript",
+					"lisp": "install/runners/lisp"
+				},
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"id": "install",
+			"expect": {
+				"parts": [
+					"children"
+				],
+				"attributes": null,
+				"status": null,
+				"children": {
+					"runners": "install/runners",
+					"compilers": "install/compilers"
+				},
+				"live": false
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"install",
+				"runners",
+				"javascript"
+			],
+			"expect": {
+				"id": "install/runners/javascript"
+			}
+		},
+		{
+			"op": "run",
+			"name": "b",
+			"runner": [
+				"install",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"b"
+			],
+			"expect": {
+				"refused": "not-a-runner",
+				"runner": [
+					"install",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "lua",
+			"by": "install",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "place",
+			"name": "install",
+			"id": "INSTALL",
+			"at": [
+				"install"
+			],
+			"stored": true,
+			"expect": {}
+		},
+		{
+			"op": "list",
+			"path": [
+				"install",
+				"runners"
+			],
+			"expect": {
+				"names": [
+					"lisp",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api"
+			},
+			"live": "record",
+			"by": "install",
+			"expect": {
+				"id": "install/runners/javascript",
+				"at": [
+					"install",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "install/runners/javascript",
+			"expect": {
+				"parts": [
+					"attributes",
+					"value"
+				],
+				"attributes": {
+					"ermine.runner.takes": "com.netscape.javascript-source",
+					"ermine.runner.api": "ermine.api",
+					"ermine.type": "ermine.runner"
+				},
+				"status": null,
+				"children": null,
+				"live": true
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "lisp",
+			"attrs": {
+				"ermine.runner.takes": "x-lisp"
+			},
+			"live": "record",
+			"by": "install",
+			"expect": {
+				"refused": "taken",
+				"at": [
+					"install",
+					"runners",
+					"lisp"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "install/runners/lisp",
+			"expect": {
+				"parts": [
+					"attributes",
+					"value"
+				],
+				"attributes": {
+					"ermine.runner.takes": "x-lisp",
+					"ermine.type": "ermine.runner"
+				},
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "attrs",
+			"id": "install/runners/cc",
+			"value": {
+				"ermine.type": "someone's"
+			},
+			"expect": {}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "cc",
+			"attrs": {
+				"ermine.runner.takes": "public.c-source"
+			},
+			"live": "record",
+			"by": "install",
+			"expect": {
+				"id": "install/runners/cc",
+				"at": [
+					"install",
+					"runners",
+					"cc"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "install/runners/cc",
+			"expect": {
+				"parts": [
+					"attributes",
+					"value"
+				],
+				"attributes": {
+					"ermine.runner.takes": "public.c-source",
+					"ermine.type": "ermine.runner"
+				},
+				"status": null,
+				"children": null,
+				"live": true
+			}
+		},
+		{
+			"op": "node",
+			"id": "install/runners",
+			"expect": {
+				"parts": [
+					"children"
+				],
+				"attributes": null,
+				"status": null,
+				"children": {
+					"javascript": "install/runners/javascript",
+					"lisp": "install/runners/lisp",
+					"cc": "install/runners/cc"
+				},
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"id": "install",
+			"expect": {
+				"parts": [
+					"children"
+				],
+				"attributes": null,
+				"status": null,
+				"children": {
+					"runners": "install/runners",
+					"compilers": "install/compilers"
+				},
+				"live": false
+			}
+		},
+		{
+			"op": "offers",
+			"expect": {
+				"offers": [
+					{
+						"id": "install/runners/javascript",
+						"at": [
+							"install",
+							"runners",
+							"javascript"
+						],
+						"kind": "runners",
+						"name": "javascript",
+						"by": "install"
+					},
+					{
+						"id": "install/runners/cc",
+						"at": [
+							"install",
+							"runners",
+							"cc"
+						],
+						"kind": "runners",
+						"name": "cc",
+						"by": "install"
+					}
+				]
+			}
+		},
+		{
+			"op": "run",
+			"name": "c",
+			"runner": [
+				"install",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"c"
+			],
+			"expect": {
+				"id": "proc:c",
+				"at": [
+					"work",
+					"c"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "proc:a",
+						"code": "hi",
+						"args": [],
+						"cwd": [
+							"work"
+						],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					},
+					{
+						"process": "proc:c",
+						"code": "hi",
+						"args": [],
+						"cwd": [
+							"work"
+						],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					}
+				],
+				"stops": [
+					{
+						"process": "proc:a",
+						"reason": "runner-stopped"
+					}
+				]
+			}
+		},
+		{
+			"op": "place",
+			"name": "desk",
+			"id": "DESK",
+			"at": [
+				"desk"
+			],
+			"expect": {}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source"
+			},
+			"live": "record",
+			"by": "desk",
+			"expect": {
+				"id": "desk/runners/javascript",
+				"at": [
+					"desk",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "desk",
+			"expect": {
+				"parts": [
+					"children"
+				],
+				"attributes": null,
+				"status": null,
+				"children": {
+					"runners": "desk/runners"
+				},
+				"live": false
+			}
+		},
+		{
+			"op": "close-place",
+			"name": "desk",
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"id": "desk/runners/javascript",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"id": "desk/runners",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"id": "desk",
+			"expect": {
+				"parts": [
+					"children"
+				],
+				"attributes": null,
+				"status": null,
+				"children": {},
+				"live": false
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"desk",
+				"runners",
+				"javascript"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "place",
+			"name": "desk",
+			"id": "DESK",
+			"at": [
+				"desk"
+			],
+			"expect": {}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source"
+			},
+			"live": "record",
+			"by": "desk",
+			"expect": {
+				"id": "desk/runners/javascript",
+				"at": [
+					"desk",
+					"runners",
+					"javascript"
+				]
+			}
+		}
+	]
+}

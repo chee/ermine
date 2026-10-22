@@ -30,6 +30,7 @@
 		"./playground/pullynode",
 		"./playground/installs",
 		"./playground/sessions",
+		"./playground/trust",
 		"./experiments/software"
 	],
 	"tasks": {

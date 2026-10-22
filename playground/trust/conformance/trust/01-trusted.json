@@ -1,0 +1,43 @@
+{
+	"title": "a session's message is believed when its install is in the keys, the install vouched for the session, and the session signed it; what is said of an install in the keys is not looked at",
+	"steps": [
+		{
+			"op": "session",
+			"name": "mac",
+			"install": "I1",
+			"expect": {}
+		},
+		{
+			"op": "keys",
+			"value": {
+				"I1": {
+					"name": "chee's mac"
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "check",
+			"session": "mac",
+			"message": "hello",
+			"expect": {
+				"trusted": true
+			}
+		},
+		{
+			"op": "keys",
+			"value": {
+				"I1": null
+			},
+			"expect": {}
+		},
+		{
+			"op": "check",
+			"session": "mac",
+			"message": "hello",
+			"expect": {
+				"trusted": true
+			}
+		}
+	]
+}

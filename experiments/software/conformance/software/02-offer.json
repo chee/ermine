@@ -1,0 +1,521 @@
+{
+	"title": "an offer is a node under its owner's (none given: the session's): runners, compilers and surfaces each in a folder of that kind, <owner>/<kind> (made at its first offer, named in the owner's children), the offer at <owner>/<kind>/<name> with the attributes given and ermine.type ermine.runner, ermine.compiler or ermine.surface over them (over one given too), its value the live runner given (none: no value); offers() lists them in order, by: the owner's id. a name offered now is refused taken, so is one whose id has entries already (another's, left as they are); not a name (\"\", \".\", \"..\", \"/\"): not-a-name; not a kind: an error. withdrawn: its name out of the folder (kept, empty), its node's entries gone, out of offers(); withdrawn again, or an id none offers: nothing; offered again: the same id",
+	"steps": [
+		{
+			"op": "offers",
+			"expect": {
+				"offers": []
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api",
+				"ermine.runner.where": "thread"
+			},
+			"live": "record",
+			"expect": {
+				"id": "session/runners/javascript",
+				"at": [
+					"system",
+					"session",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"system",
+				"session",
+				"runners",
+				"javascript"
+			],
+			"expect": {
+				"id": "session/runners/javascript"
+			}
+		},
+		{
+			"op": "node",
+			"id": "session/runners/javascript",
+			"expect": {
+				"parts": [
+					"attributes",
+					"value"
+				],
+				"attributes": {
+					"ermine.runner.takes": "com.netscape.javascript-source",
+					"ermine.runner.api": "ermine.api",
+					"ermine.runner.where": "thread",
+					"ermine.type": "ermine.runner"
+				},
+				"status": null,
+				"children": null,
+				"live": true
+			}
+		},
+		{
+			"op": "node",
+			"id": "session/runners",
+			"expect": {
+				"parts": [
+					"children"
+				],
+				"attributes": null,
+				"status": null,
+				"children": {
+					"javascript": "session/runners/javascript"
+				},
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"id": "session",
+			"expect": {
+				"parts": [
+					"attributes",
+					"children"
+				],
+				"attributes": {
+					"ermine.process.cwd": [
+						"system"
+					]
+				},
+				"status": "pending",
+				"children": {
+					"runners": "session/runners"
+				},
+				"live": false
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "compilers",
+			"name": "clang",
+			"attrs": {
+				"ermine.compiler.takes": "public.c-source",
+				"ermine.compiler.gives": "org.webassembly.wasm",
+				"ermine.programs.compiler": {
+					"name": "clang",
+					"version": "1"
+				}
+			},
+			"expect": {
+				"id": "session/compilers/clang",
+				"at": [
+					"system",
+					"session",
+					"compilers",
+					"clang"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "session/compilers/clang",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.compiler.takes": "public.c-source",
+					"ermine.compiler.gives": "org.webassembly.wasm",
+					"ermine.programs.compiler": {
+						"name": "clang",
+						"version": "1"
+					},
+					"ermine.type": "ermine.compiler"
+				},
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "surfaces",
+			"name": "display",
+			"attrs": {
+				"ermine.surface.kind": "pixels",
+				"ermine.surface.size": [
+					320,
+					240
+				],
+				"ermine.type": "overwritten"
+			},
+			"expect": {
+				"id": "session/surfaces/display",
+				"at": [
+					"system",
+					"session",
+					"surfaces",
+					"display"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "session/surfaces/display",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.surface.kind": "pixels",
+					"ermine.surface.size": [
+						320,
+						240
+					],
+					"ermine.type": "ermine.surface"
+				},
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "list",
+			"path": [
+				"system",
+				"session"
+			],
+			"expect": {
+				"names": [
+					"runners",
+					"surfaces",
+					"compilers"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "session",
+			"skip": [
+				"parts",
+				"attributes",
+				"status",
+				"live"
+			],
+			"expect": {
+				"children": {
+					"runners": "session/runners",
+					"compilers": "session/compilers",
+					"surfaces": "session/surfaces"
+				}
+			}
+		},
+		{
+			"op": "offers",
+			"expect": {
+				"offers": [
+					{
+						"id": "session/runners/javascript",
+						"at": [
+							"system",
+							"session",
+							"runners",
+							"javascript"
+						],
+						"kind": "runners",
+						"name": "javascript",
+						"by": "session"
+					},
+					{
+						"id": "session/compilers/clang",
+						"at": [
+							"system",
+							"session",
+							"compilers",
+							"clang"
+						],
+						"kind": "compilers",
+						"name": "clang",
+						"by": "session"
+					},
+					{
+						"id": "session/surfaces/display",
+						"at": [
+							"system",
+							"session",
+							"surfaces",
+							"display"
+						],
+						"kind": "surfaces",
+						"name": "display",
+						"by": "session"
+					}
+				]
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "x"
+			},
+			"live": "record",
+			"expect": {
+				"refused": "taken",
+				"at": [
+					"system",
+					"session",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "",
+			"attrs": {},
+			"expect": {
+				"error": "not-a-name"
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "..",
+			"expect": {
+				"error": "not-a-name"
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "/",
+			"expect": {
+				"error": "not-a-name"
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": ".",
+			"expect": {
+				"error": "not-a-name"
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "folders",
+			"name": "x",
+			"fails": true
+		},
+		{
+			"op": "list",
+			"path": [
+				"system",
+				"session"
+			],
+			"expect": {
+				"names": [
+					"runners",
+					"surfaces",
+					"compilers"
+				]
+			}
+		},
+		{
+			"op": "attrs",
+			"id": "session/runners/lisp",
+			"value": {
+				"ermine.type": "x"
+			},
+			"expect": {}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "lisp",
+			"attrs": {
+				"ermine.runner.takes": "x-lisp"
+			},
+			"live": "record",
+			"expect": {
+				"refused": "taken",
+				"at": [
+					"system",
+					"session",
+					"runners",
+					"lisp"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "session/runners/lisp",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.type": "x"
+				},
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "list",
+			"path": [
+				"system",
+				"session",
+				"runners"
+			],
+			"expect": {
+				"names": [
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "withdraw",
+			"id": "session/runners/javascript",
+			"expect": {}
+		},
+		{
+			"op": "here",
+			"path": [
+				"system",
+				"session",
+				"runners",
+				"javascript"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "list",
+			"path": [
+				"system",
+				"session",
+				"runners"
+			],
+			"expect": {
+				"names": []
+			}
+		},
+		{
+			"op": "node",
+			"id": "session/runners/javascript",
+			"expect": {
+				"parts": [],
+				"attributes": null,
+				"status": null,
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "node",
+			"id": "session/runners",
+			"expect": {
+				"parts": [
+					"children"
+				],
+				"attributes": null,
+				"status": null,
+				"children": {},
+				"live": false
+			}
+		},
+		{
+			"op": "offers",
+			"expect": {
+				"offers": [
+					{
+						"id": "session/compilers/clang",
+						"at": [
+							"system",
+							"session",
+							"compilers",
+							"clang"
+						],
+						"kind": "compilers",
+						"name": "clang",
+						"by": "session"
+					},
+					{
+						"id": "session/surfaces/display",
+						"at": [
+							"system",
+							"session",
+							"surfaces",
+							"display"
+						],
+						"kind": "surfaces",
+						"name": "display",
+						"by": "session"
+					}
+				]
+			}
+		},
+		{
+			"op": "withdraw",
+			"id": "session/runners/javascript",
+			"expect": {}
+		},
+		{
+			"op": "withdraw",
+			"id": "nobody",
+			"expect": {}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source"
+			},
+			"live": "record",
+			"expect": {
+				"id": "session/runners/javascript",
+				"at": [
+					"system",
+					"session",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "session/runners/javascript",
+			"expect": {
+				"parts": [
+					"attributes",
+					"value"
+				],
+				"attributes": {
+					"ermine.runner.takes": "com.netscape.javascript-source",
+					"ermine.type": "ermine.runner"
+				},
+				"status": null,
+				"children": null,
+				"live": true
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"system",
+				"session",
+				"runners",
+				"javascript"
+			],
+			"expect": {
+				"id": "session/runners/javascript"
+			}
+		}
+	]
+}

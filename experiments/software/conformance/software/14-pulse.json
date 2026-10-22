@@ -1,0 +1,552 @@
+{
+	"title": "a run made outside a run asks for a pulse (setup.schedule), so it runs with nothing else pulsing: one pulse however many run before it runs; none for an offer, a run refused, a stop, a withdraw; a load asks one too. a run made inside a run (a runner's start running another program) asks none: it runs in the same pulse",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"apps": "APPS"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "APPS",
+			"value": {
+				"clock.js": "CLOCK",
+				"spawn.js": "SPAWN"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "CLOCK",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CLOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "SPAWN",
+			"value": {
+				"name": "kid",
+				"runner": "/system/session/runners/javascript",
+				"program": "/apps/clock.js",
+				"at": "/work/kid"
+			},
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "SPAWN",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "javascript",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.runner.api": "ermine.api"
+			},
+			"live": "record",
+			"expect": {
+				"id": "session/runners/javascript",
+				"at": [
+					"system",
+					"session",
+					"runners",
+					"javascript"
+				]
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "spawn",
+			"attrs": {
+				"ermine.runner.takes": "com.netscape.javascript-source"
+			},
+			"live": "spawn",
+			"expect": {
+				"id": "session/runners/spawn",
+				"at": [
+					"system",
+					"session",
+					"runners",
+					"spawn"
+				]
+			}
+		},
+		{
+			"op": "later",
+			"expect": {
+				"pulses": 0
+			}
+		},
+		{
+			"op": "run",
+			"name": "a",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"a"
+			],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"work",
+					"a"
+				]
+			}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [],
+				"stops": []
+			}
+		},
+		{
+			"op": "later",
+			"expect": {
+				"pulses": 1
+			}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "proc:a",
+						"code": "hi",
+						"args": [],
+						"cwd": [
+							"work"
+						],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					}
+				],
+				"stops": []
+			}
+		},
+		{
+			"op": "later",
+			"expect": {
+				"pulses": 0
+			}
+		},
+		{
+			"op": "run",
+			"name": "b",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"b"
+			],
+			"expect": {
+				"id": "proc:b",
+				"at": [
+					"work",
+					"b"
+				]
+			}
+		},
+		{
+			"op": "run",
+			"name": "c",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"c"
+			],
+			"expect": {
+				"id": "proc:c",
+				"at": [
+					"work",
+					"c"
+				]
+			}
+		},
+		{
+			"op": "later",
+			"expect": {
+				"pulses": 1
+			}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "proc:a",
+						"code": "hi",
+						"args": [],
+						"cwd": [
+							"work"
+						],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					},
+					{
+						"process": "proc:b",
+						"code": "hi",
+						"args": [],
+						"cwd": [
+							"work"
+						],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					},
+					{
+						"process": "proc:c",
+						"code": "hi",
+						"args": [],
+						"cwd": [
+							"work"
+						],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					}
+				],
+				"stops": []
+			}
+		},
+		{
+			"op": "run",
+			"name": "x",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"nope"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"x"
+			],
+			"expect": {
+				"refused": "not-a-runner",
+				"runner": [
+					"system",
+					"session",
+					"runners",
+					"nope"
+				]
+			}
+		},
+		{
+			"op": "run",
+			"name": "x",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"work",
+				"a"
+			],
+			"expect": {
+				"refused": "taken",
+				"at": [
+					"work",
+					"a"
+				]
+			}
+		},
+		{
+			"op": "stop",
+			"name": "c",
+			"expect": {}
+		},
+		{
+			"op": "withdraw",
+			"id": "session/runners/nothing",
+			"expect": {}
+		},
+		{
+			"op": "later",
+			"expect": {
+				"pulses": 0
+			}
+		},
+		{
+			"op": "load",
+			"name": "l",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"javascript"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"expect": {}
+		},
+		{
+			"op": "later",
+			"expect": {
+				"pulses": 1
+			}
+		},
+		{
+			"op": "later",
+			"expect": {
+				"pulses": 0
+			}
+		},
+		{
+			"op": "run",
+			"name": "s",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"spawn"
+			],
+			"program": [
+				"apps",
+				"spawn.js"
+			],
+			"at": [
+				"work",
+				"s"
+			],
+			"expect": {
+				"id": "proc:s",
+				"at": [
+					"work",
+					"s"
+				]
+			}
+		},
+		{
+			"op": "later",
+			"expect": {
+				"pulses": 1
+			}
+		},
+		{
+			"op": "here",
+			"path": [
+				"work",
+				"kid"
+			],
+			"expect": {
+				"id": "proc:kid"
+			}
+		},
+		{
+			"op": "running",
+			"expect": {
+				"running": [
+					"proc:a",
+					"proc:b",
+					"proc:s",
+					"proc:kid"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "proc:kid",
+			"skip": [
+				"parts",
+				"children",
+				"live"
+			],
+			"expect": {
+				"attributes": {
+					"ermine.type": "ermine.process",
+					"ermine.process.runner": {
+						"id": "session/runners/javascript",
+						"at": [
+							"system",
+							"session",
+							"runners",
+							"javascript"
+						]
+					},
+					"ermine.process.program": {
+						"id": "CLOCK",
+						"at": [
+							"apps",
+							"clock.js"
+						],
+						"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+					},
+					"ermine.process.cwd": [
+						"work"
+					]
+				},
+				"status": null
+			}
+		},
+		{
+			"op": "later",
+			"expect": {
+				"pulses": 0
+			}
+		},
+		{
+			"op": "order",
+			"expect": {
+				"order": [
+					[
+						"ran",
+						"proc:a"
+					],
+					[
+						"ran",
+						"proc:b"
+					],
+					[
+						"ran",
+						"proc:c"
+					],
+					[
+						"stopped",
+						"proc:c",
+						null
+					],
+					[
+						"loaded",
+						"session",
+						"hi"
+					],
+					[
+						"ran",
+						"proc:s"
+					],
+					[
+						"ran",
+						"proc:kid"
+					]
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "order",
+			"expect": {
+				"order": [
+					[
+						"ran",
+						"proc:a"
+					],
+					[
+						"ran",
+						"proc:b"
+					],
+					[
+						"ran",
+						"proc:c"
+					],
+					[
+						"stopped",
+						"proc:c",
+						null
+					],
+					[
+						"loaded",
+						"session",
+						"hi"
+					],
+					[
+						"ran",
+						"proc:s"
+					],
+					[
+						"ran",
+						"proc:kid"
+					]
+				]
+			}
+		}
+	]
+}
