@@ -1,5 +1,6 @@
 {
-	"title": "a tree not named yet gets the door too, its id read from the envelope (the lock opened with no id): a peer holding another commit under a real commit's name (here m, whose lock waited, so it stored it unopened) sends it to a device that does not follow the document yet: passed over, nothing stored (unnamed 0) and nothing noted; Subduction (0.23) holds the name in its own tree in memory, so that device, following and connecting to the real commit's holder, is not sent it until it restarts (its storage lists the tree, unnamed 1, holding none of it); made again on its storage and connecting, it takes the real commit",
+	"title": "not shared means not stored, and a tree not followed is never at the door: a peer holding another commit under a real commit's name (here m, whose lock waited, so it stored it unopened) sends it to a device that does not follow the document: turned away at the policy, offered once, nothing stored (unnamed 0) and nothing of it in Subduction's memory either, so that device, following and connecting to the real commit's holder (m gone), takes the real commit at once",
+	"typescript": true,
 	"steps": [
 		{
 			"op": "device",
@@ -119,6 +120,24 @@
 			}
 		},
 		{
+			"op": "offered",
+			"device": "b",
+			"expect": {
+				"offered": [
+					{
+						"tree": "b07ff06085455a07ef1030766081007100000000000000000000000000000000",
+						"count": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "disconnect",
+			"a": "m",
+			"b": "b",
+			"expect": {}
+		},
+		{
 			"op": "follow",
 			"device": "b",
 			"expect": {}
@@ -137,67 +156,6 @@
 			"op": "heads",
 			"device": "b",
 			"expect": {
-				"heads": []
-			}
-		},
-		{
-			"op": "stored",
-			"device": "b",
-			"expect": {
-				"stored": [
-					"c1"
-				]
-			}
-		},
-		{
-			"op": "taking",
-			"device": "b",
-			"expect": {
-				"waiting": [],
-				"refused": []
-			}
-		},
-		{
-			"op": "close",
-			"device": "b",
-			"expect": {}
-		},
-		{
-			"op": "device",
-			"name": "b2",
-			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
-			"lock": "tag",
-			"storage": "sb",
-			"expect": {
-				"key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
-			}
-		},
-		{
-			"op": "unnamed",
-			"device": "b2",
-			"expect": {
-				"unnamed": 1
-			}
-		},
-		{
-			"op": "follow",
-			"device": "b2",
-			"expect": {}
-		},
-		{
-			"op": "connect",
-			"a": "a",
-			"b": "b2",
-			"expect": {}
-		},
-		{
-			"op": "quiet",
-			"expect": {}
-		},
-		{
-			"op": "heads",
-			"device": "b2",
-			"expect": {
 				"heads": [
 					"c1"
 				]
@@ -205,7 +163,7 @@
 		},
 		{
 			"op": "stored",
-			"device": "b2",
+			"device": "b",
 			"expect": {
 				"stored": [
 					"c1"
@@ -214,7 +172,7 @@
 		},
 		{
 			"op": "taking",
-			"device": "b2",
+			"device": "b",
 			"expect": {
 				"waiting": [],
 				"refused": []

@@ -66,6 +66,7 @@
 			"b": "c",
 			"expect": {}
 		},
+		{ "op": "share", "host": "b", "id": "x", "expect": {} },
 		{
 			"op": "write",
 			"host": "b",

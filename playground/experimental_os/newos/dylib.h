@@ -1,5 +1,5 @@
 // dylib.h: native programs (dylib.c; CLOADER.md, Native): the runner "dlopen", which runs a library
-// for this machine (extensions/programs/c/native.h's ABI), the dlopen runner of extensions/programs
+// for this machine (playground/programs/c/native.h's ABI), the dlopen runner of playground/programs
 // (dlopen.h) with its pieces wrapped, so a library's run is given as its api the table of
 // image/lib/c/ermine_host.h: ermine.h's entry points, done against newOS's API here. The compiler
 // that makes such a library from C is loader.c's ("clang-native").
@@ -9,7 +9,7 @@
 
 #include "host.h"
 
-#include "../../../extensions/build/c/host.h"
+#include "../../../playground/build/c/host.h"
 
 /** the type of a library for this machine, as the loaders say it */
 #define DYLIB_TYPE "com.apple.mach-o-dylib"

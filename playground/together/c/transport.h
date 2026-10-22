@@ -48,7 +48,7 @@ const char *tp_layer_name(tp_layer layer);
 
 // why the transport refused a seal, a fragment or an ephemeral commit before a history saw it (what a
 // history refuses is the history's: hy_refused). TP_BOUNDARY: a fragment's members, boundary or
-// checkpoints not what its head's walk makes them
+// checkpoints not what Subduction's build makes them for its head
 typedef mr_code tp_code;
 enum {
 	TP_LOCK = MR_LOCK,

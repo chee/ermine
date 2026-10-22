@@ -1,0 +1,261 @@
+{
+	"title": "a merge that reaches past the fragments below (Subduction's build, its post-pass): h's walk reaches z through x, but z is b2's member, and b2 is below b, h's boundary, so h's fragment is h and x alone (the walk alone takes out only the members of b, b's own); the device that built it holds h, and its check of the fragment, the head here, is that build's, so it is stored (its loose commits let go), and a device connecting takes all three",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"expect": {}
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"name": "z",
+			"nonce": 0,
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"n": 0
+					}
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"name": "b2",
+			"nonce": 9,
+			"parents": [
+				"z"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"name": "b",
+			"nonce": 104,
+			"parents": [
+				"b2"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"name": "x",
+			"nonce": 0,
+			"parents": [
+				"z"
+			],
+			"patches": [
+				{
+					"path": [
+						"x"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"name": "h",
+			"nonce": 70,
+			"parents": [
+				"b",
+				"x"
+			],
+			"base": "x",
+			"patches": [],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "fragments",
+			"device": "a",
+			"expect": {
+				"fragments": [
+					{
+						"head": "b",
+						"members": [
+							"b"
+						],
+						"boundary": [
+							"b2"
+						]
+					},
+					{
+						"head": "b2",
+						"members": [
+							"b2",
+							"z"
+						],
+						"boundary": []
+					},
+					{
+						"head": "h",
+						"members": [
+							"h",
+							"x"
+						],
+						"boundary": [
+							"b"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "blob",
+			"device": "a",
+			"head": "h",
+			"skip": [
+				"hash",
+				"snapshot"
+			],
+			"expect": {
+				"members": [
+					"x",
+					"h"
+				]
+			}
+		},
+		{
+			"op": "stored",
+			"device": "a",
+			"expect": {
+				"stored": []
+			}
+		},
+		{
+			"op": "follow",
+			"device": "b",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "heads",
+			"device": "b",
+			"expect": {
+				"heads": [
+					"h"
+				]
+			}
+		},
+		{
+			"op": "fragments",
+			"device": "b",
+			"expect": {
+				"fragments": [
+					{
+						"head": "b",
+						"members": [
+							"b"
+						],
+						"boundary": [
+							"b2"
+						]
+					},
+					{
+						"head": "b2",
+						"members": [
+							"b2",
+							"z"
+						],
+						"boundary": []
+					},
+					{
+						"head": "h",
+						"members": [
+							"h",
+							"x"
+						],
+						"boundary": [
+							"b"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "blob",
+			"device": "b",
+			"head": "h",
+			"skip": [
+				"hash",
+				"snapshot"
+			],
+			"expect": {
+				"members": [
+					"x",
+					"h"
+				]
+			}
+		},
+		{
+			"op": "taking",
+			"device": "b",
+			"expect": {
+				"waiting": [],
+				"refused": []
+			}
+		}
+	]
+}

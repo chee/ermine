@@ -4,7 +4,7 @@
 //   {op: "decode", bytes} -> {blop}  | {code, field?}
 //   {op: "name", bytes}   -> {name}
 // Another implementation joins by speaking this.
-import { BlopError, decode, encode, name } from "@ermine/encoding/blop"
+import { BlopError, decode, encode, name } from "@ermine/formats/blop"
 import { FormError, fromJson, line, toJson } from "../pack/form.ts"
 
 type Request = { op: string; blop?: unknown; bytes?: string }

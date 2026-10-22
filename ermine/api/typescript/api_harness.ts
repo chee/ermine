@@ -3,7 +3,8 @@
 // {"actor":"test"}. after every request the api's pulse runs, so readers have run by the next.
 // new ids "n1", "n2", … in order; a process's id "proc:<name>".
 // node: { path, part } | { id, part }.
-// processes are started by the harness (start, openwith, box need C not there yet).
+// processes are started by the harness (box needs C not there yet; start, stop and openwith are a
+// program starter's).
 //
 // world (first, or a plain one):
 // { op: "world", deny?, overlay?, uuid? } → {}   deny: [{ op, path }] refused;
@@ -54,7 +55,7 @@ import { createChangeHeader, NODE } from "@ermine/places/header"
 import { Refusal } from "@ermine/places/guard"
 import { addProcess, processes, removeProcess } from "@ermine/processes"
 import { createScopeNodes } from "@ermine/processes/scopes"
-import type { Process, Programs } from "@ermine/programs/start"
+import type { Process } from "@ermine/processes/start"
 import { no, type Policy, yes } from "@ermine/protect"
 import { createOverlay, type Overlay } from "@ermine/patch-nodes"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
@@ -110,30 +111,24 @@ function make(o: Request = {}): Made {
 		: undefined
 	let n = 0
 	const running = new Map<string, Running>()
-	// programs' stop, as the harness starts: the row out, the scope torn down
-	const programs: Programs = {
-		start: () => {
-			throw new Error("start: not in this suite")
-		},
-		stop: (p) => {
-			if (p.scope.state !== "alive") return
-			s.runWithScope(p.scope, () => {
-				try {
-					places.commit(removeProcess(table, "R", p.at, createChangeHeader(s)))
-				} catch (e) {
-					if (!(e instanceof PlacesError)) throw e
-				}
-			})
-			s.teardown(p.scope)
-		},
-		runs: undefined,
+	// the host's stop, as the harness starts: the row out, the scope torn down
+	const stop = (p: Process) => {
+		if (p.scope.state !== "alive") return
+		s.runWithScope(p.scope, () => {
+			try {
+				places.commit(removeProcess(table, "R", p.at, createChangeHeader(s)))
+			} catch (e) {
+				if (!(e instanceof PlacesError)) throw e
+			}
+		})
+		s.teardown(p.scope)
 	}
 	const apis = createProcessAPIs({
 		scheduler: s,
 		table,
 		commit,
 		host: { places, table, scheduler: s, commit },
-		programs: () => programs,
+		stop,
 		may,
 		overlay,
 		schedule: (f) => void later.push(f),
@@ -273,7 +268,8 @@ function start(r: Request): { id: Id } {
 	})
 	const env: Env = new Map()
 	m.running.set(r.name, { api, env, process })
-	m.s.runWithScope(scope, () => m.apis.run((a: API) => run(a, env, r.program as Step[]), api))
+	// the harness's runner: the program's steps run once with the api, the process's scope open
+	m.s.runWithScope(scope, () => run(api, env, r.program as Step[]))
 	return { id }
 }
 

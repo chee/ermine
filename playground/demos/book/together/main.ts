@@ -57,6 +57,8 @@ for (const [i, n] of NAMES.entries()) {
 }
 const [cp, mac] = hosts
 const pig = cp.sync.mint()
+// the cardputer shares its pig: what it writes there is carried
+await cp.sync.share(pig)
 const valueOf = (h: Host) => h.table.get("value", pig)?.value as Pig | undefined
 const conflictsOf = (h: Host) => h.table.get("conflicts", pig)?.value as Conflict[] | undefined
 const headsOf = (h: Host) => h.device.history(pig).heads()
@@ -69,9 +71,9 @@ function write(i: number, patch: { path: string[]; value: unknown }) {
 		mine = -1
 	}
 }
-// the farm starts on the cardputer; the mac follows the pig's id, and fetches it once plugged in
+// the farm starts on the cardputer; the mac shares the pig's id, and fetches it once plugged in
 write(0, { path: [], value: { name: "wilbur", weight: 6 } })
-await mac.sync.follow(pig)
+await mac.sync.share(pig)
 
 // ---- the board -------------------------------------------------------------------------------
 const style = document.createElement("style")
@@ -213,14 +215,16 @@ const sync = createSync({
   table, signer, // storage: Subduction's default, in memory
   commit: (changed) => places.commit(changed),
 })
+// the pig is carried: shared
+await sync.share(pig)
 
 // feed her: one update, one commit
 update(entry, [{ path: ["weight"], value: w + 4 }], change)
 places.commit([entry])
 sync.wrote([entry])`)
-devices[1].box.code(`// the mac follows the pig's id: what comes
+devices[1].box.code(`// the mac shares the pig's id: what comes
 // for it is taken in, from any connection
-await sync.follow(pig)
+await sync.share(pig)
 
 // what comes in on the head shown is written
 // to the table, and told to places as patches`)

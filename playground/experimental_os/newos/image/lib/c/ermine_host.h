@@ -1,6 +1,6 @@
 // ermine_host.h: what a native program is given (newos/native.c; CLOADER.md, Native). ermine.h
 // includes it when the program is compiled for this machine, not wasm32: its entry points are then
-// calls through this table, which the library's run (extensions/programs/c/native.h's ABI) is given
+// calls through this table, which the library's run (playground/programs/c/native.h's ABI) is given
 // as its api. The same entry points as the wasm imports (module "ermine"), each with the host's ctx
 // first, so one C source builds to either. A program includes ermine.h, never this.
 //

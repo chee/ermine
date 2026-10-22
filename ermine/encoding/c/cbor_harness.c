@@ -1,11 +1,10 @@
-// cbor.c and hash.c on the line protocol (typescript/cbor_harness.ts): one JSON request per line
+// cbor.c on the line protocol (typescript/cbor_harness.ts): one JSON request per line
 // in, one answer per line out. a value in its JSON form (json_text.h), lone surrogates taken (held
 // as WTF-8, so encoding can refuse them); bytes lowercase hex.
-//   {op: "encode", value} -> {bytes, hash} | {error: "no-encoding"} | {error: "not-a-form"}
+//   {op: "encode", value} -> {bytes} | {error: "no-encoding"} | {error: "not-a-form"}
 //   {op: "decode", bytes} -> {value, again} | {error: "not-an-encoding"}   again: value's encoding
 // the fuzz (typescript/cbor_fuzz_test.ts) and the scenarios (conformance/cbor/NN-*.json) ask it
 #include "cbor.h"
-#include "hash.h"
 #include "json.h"
 #include "json_text.h"
 
@@ -112,18 +111,11 @@ static void encodeOp(Json *request) {
 		puts("{\"error\":\"no-encoding\"}");
 		return;
 	}
-	unsigned char *out = allocate(length + 1), name[32];
+	unsigned char *out = allocate(length + 1);
 	size_t again;
 	cborEncode(*value, out, length, &again, &why);
-	if (!hashValue(*value, name, &why)) {
-		puts("{\"error\":\"no-hash\"}");
-		free(out);
-		return;
-	}
 	fputs("{\"bytes\":\"", stdout);
 	hex(out, length);
-	fputs("\",\"hash\":\"", stdout);
-	hex(name, 32);
 	puts("\"}");
 	free(out);
 }

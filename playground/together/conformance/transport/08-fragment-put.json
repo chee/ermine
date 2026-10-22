@@ -9,6 +9,31 @@
 				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
 			}
 		},
+		{ "op": "follow", "device": "a", "expect": {} },
+		{
+			"op": "follow",
+			"device": "a",
+			"doc": "ermine:00102e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e",
+			"expect": {}
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"doc": "ermine:00102b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
+			"expect": {}
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"doc": "ermine:00102c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c",
+			"expect": {}
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"doc": "ermine:00102d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d",
+			"expect": {}
+		},
 		{
 			"op": "make",
 			"name": "c1",

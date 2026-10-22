@@ -18,9 +18,9 @@ harness_src = conformance/c/harness.c core/op/c/value.c core/op/c/json.c
 tracker_src = $(harness_src) core/scheduler/c/tracker_harness.c core/scheduler/c/tracker.c
 table_src = $(harness_src) core/table/c/table_harness.c core/table/c/table.c
 node_src = $(harness_src) conformance/c/protocol_harness.c core/node/c/node_harness.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
-pack_src = core/node/c/node.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c ermine/encoding/c/pack.c ermine/encoding/c/pack_harness.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
+pack_src = core/node/c/node.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c playground/encoding/c/pack.c playground/encoding/c/pack_harness.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
 cbor_src = ermine/encoding/c/cbor_test.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c
-blop_src = ermine/encoding/c/blop.c ermine/encoding/c/blop_harness.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c $(blake3_src)
+blop_src = playground/encoding/c/blop.c playground/encoding/c/blop_harness.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c $(blake3_src)
 # Subduction's own BLAKE3 exports the same symbols as ermine/encoding/c/blake3: the C ones are renamed, in every file of the harness
 subduction_rename = $(foreach s,compress_in_place compress_in_place_portable compress_subtree_wide compress_xof compress_xof_portable hash_many hash_many_portable hasher_finalize hasher_finalize_seek hasher_init hasher_init_derive_key hasher_init_derive_key_raw hasher_reset hasher_update simd_degree version xof_many,-Dblake3_$(s)=ermc_blake3_$(s))
 subduction_lib = playground/together/stacks/subduction/c/subduction/lib/libsubduction_c.a
@@ -60,9 +60,9 @@ BLAKE3FLAGS = -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AV
 tracker = core/scheduler/c/tracker-harness
 table = core/table/c/table-harness
 node = core/node/c/node-harness
-pack = ermine/encoding/c/pack-harness
+pack = playground/encoding/c/pack-harness
 cbor = ermine/encoding/c/cbor-test
-blop = ermine/encoding/c/blop-harness
+blop = playground/encoding/c/blop-harness
 squish = core/op/c/squish-harness
 op-apply = core/op/c/apply-harness
 paths = core/scheduler/c/paths-harness
@@ -81,24 +81,24 @@ program = playground/tools/files/c/program-harness
 sys = playground/tools/files/c/sys-harness
 
 # presence (playground/together/presence): its harness on places, the table and the scheduler (the C harness has no BroadcastChannel)
-presence_src = $(harness_src) playground/together/presence/c/presence_harness.c playground/together/presence/c/presence.c playground/together/presence/c/channel.c filesystem/places/c/places.c core/unread/c/unread.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
+presence_src = $(harness_src) playground/together/presence/c/presence_harness.c playground/together/presence/c/presence.c playground/together/presence/c/channel.c filesystem/places/c/places.c core/unread/c/unread.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
 presence = playground/together/presence/c/presence-harness
 presence_suite = presence
 presence_tests = $(wildcard playground/together/presence/typescript/presence_harness_test.ts)
 LIBS = tracker table node pack cbor blop squish op-apply paths places processes protect update guard scheduler names diag layout manifest store program sys
 LIBS += presence
-# hash (ermine/encoding): a value's name, BLAKE3 of its canonical CBOR, against conformance/hash/vectors.json
-hash_src = ermine/encoding/c/hash_test.c ermine/encoding/c/hash.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src)
-hash = ermine/encoding/c/hash-test
+# hash (playground/encoding): a value's name, BLAKE3 of its canonical CBOR, against conformance/hash/vectors.json
+hash_src = playground/encoding/c/hash_test.c playground/encoding/c/hash.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src)
+hash = playground/encoding/c/hash-test
 LIBS += hash
-# deflate (ermine/encoding): the deterministic raw deflate and its inflater, on the one runner (pack.c includes deflate.c)
-deflate_src = $(harness_src) ermine/encoding/c/deflate_harness.c ermine/encoding/c/deflate.c $(blake3_src)
-deflate = ermine/encoding/c/deflate-harness
+# deflate (playground/encoding): the deterministic raw deflate and its inflater, on the one runner (pack.c includes deflate.c)
+deflate_src = $(harness_src) playground/encoding/c/deflate_harness.c playground/encoding/c/deflate.c $(blake3_src)
+deflate = playground/encoding/c/deflate-harness
 deflate_suite = deflate
 LIBS += deflate
 # cbor on the line protocol (ermine/encoding/c/cbor_harness.c): its scenarios (conformance/cbor/NN-*.json) and the fuzz against the
 # TypeScript (cbor_fuzz_test.ts, HARNESS)
-cbor-lines_src = ermine/encoding/c/cbor_harness.c ermine/encoding/c/cbor.c ermine/encoding/c/hash.c ermine/encoding/c/json.c ermine/encoding/c/json_text.c $(blake3_src)
+cbor-lines_src = ermine/encoding/c/cbor_harness.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c ermine/encoding/c/json_text.c
 cbor-lines = ermine/encoding/c/cbor-harness
 cbor-lines_suite = cbor
 cbor-lines_tests = ermine/encoding/typescript/cbor_fuzz_test.ts
@@ -140,30 +140,30 @@ clingy-test_src = core/scheduler/c/scheduler.c core/scheduler/c/order.c core/sch
 clingy-test = filesystem/clingy/c/clingy-test
 LIBS += clingy-test
 # programs (playground/programs): satisfy and open (programs) and start, over ermine/types, ermine/processes' start and
-# extensions/build's build and host functions; build (extensions/build) on its own. on the places harness's world with boxes
-programs_base = $(filter-out filesystem/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/boxes/c/boxes.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c ermine/encoding/c/hash.c $(blake3_src) extensions/build/c/host.c
-programs_lib = ermine/types/c/types.c ermine/types/c/utis.c extensions/programs/c/programs.c extensions/programs/c/programs_json.c
-programs_src = $(programs_base) $(programs_lib) extensions/programs/c/programs_harness.c
-programs = extensions/programs/c/programs-harness
+# playground/build's build and host functions; build (playground/build) on its own. on the places harness's world with boxes
+programs_base = $(filter-out filesystem/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/boxes/c/boxes.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) playground/build/c/host.c
+programs_lib = ermine/types/c/types.c ermine/types/c/utis.c playground/programs/c/programs.c playground/programs/c/programs_json.c
+programs_src = $(programs_base) $(programs_lib) playground/programs/c/programs_harness.c
+programs = playground/programs/c/programs-harness
 programs_suite = programs
-programs_tests = $(wildcard extensions/programs/typescript/programs_harness_test.ts)
-programs-build_src = $(programs_base) extensions/build/c/build.c extensions/build/c/build_harness.c
-programs-build = extensions/build/c/build-harness
+programs_tests = $(wildcard playground/programs/typescript/programs_harness_test.ts)
+programs-build_src = $(programs_base) playground/build/c/build.c playground/build/c/build_harness.c
+programs-build = playground/build/c/build-harness
 programs-build_suite = build
-programs-start_src = $(programs_base) $(programs_lib) extensions/build/c/build.c ermine/processes/c/start.c ermine/processes/c/runs.c extensions/programs/c/start.c extensions/programs/c/start_harness.c ermine/processes/c/scopes.c ermine/sites/c/sites.c extensions/programs/c/dlopen.c
-programs-start = extensions/programs/c/start-harness
+programs-start_src = $(programs_base) $(programs_lib) playground/build/c/build.c ermine/processes/c/start.c ermine/processes/c/runs.c playground/programs/c/start.c playground/programs/c/start_harness.c ermine/processes/c/scopes.c ermine/sites/c/sites.c playground/programs/c/dlopen.c
+programs-start = playground/programs/c/start-harness
 programs-start_suite = start
-programs-start_flags = -DPG_FIXTURES='"$(CURDIR)/extensions/programs/c/fixtures/"'
+programs-start_flags = -DPG_FIXTURES='"$(CURDIR)/playground/programs/c/fixtures/"'
 LIBS += programs programs-build programs-start
-# native fixtures (extensions/programs/c/fixtures): libraries for this machine (native.h) the start harnesses
+# native fixtures (playground/programs/c/fixtures): libraries for this machine (native.h) the start harnesses
 # load through the dlopen runner (conformance/native); built here with the harness, never checked in.
 # unsigned.so: runner.c with no ad hoc signature (macOS), for the runner to sign
-native_fixtures = extensions/programs/c/fixtures/reverse.so extensions/programs/c/fixtures/runner.so extensions/programs/c/fixtures/unsigned.so
+native_fixtures = playground/programs/c/fixtures/reverse.so playground/programs/c/fixtures/runner.so playground/programs/c/fixtures/unsigned.so
 native_darwin = $(filter Darwin,$(shell uname -s))
 native_shared = $(if $(native_darwin),-dynamiclib,-shared -fPIC)
-extensions/programs/c/fixtures/%.so: extensions/programs/c/fixtures/%.c extensions/programs/c/native.h
+playground/programs/c/fixtures/%.so: playground/programs/c/fixtures/%.c playground/programs/c/native.h
 	$(CC) $(CFLAGS) $(native_shared) -o $@ $<
-extensions/programs/c/fixtures/unsigned.so: extensions/programs/c/fixtures/runner.c extensions/programs/c/native.h
+playground/programs/c/fixtures/unsigned.so: playground/programs/c/fixtures/runner.c playground/programs/c/native.h
 	$(CC) $(CFLAGS) $(native_shared) $(if $(native_darwin),-Wl$(comma)-no_adhoc_codesign) -o $@ $<
 comma = ,
 $(programs-start) $(programs-start)-check: $(native_fixtures)
@@ -171,7 +171,7 @@ clean: clean-native
 clean-native:
 	rm -f $(native_fixtures)
 # the process api (ermine/api): its harness on places, processes, guard, status and patch nodes, on its own world
-api_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/runs.c filesystem/places/c/guard.c filesystem/protect/c/protect.c extensions/patch-nodes/c/patch.c ermine/api/c/api.c ermine/api/c/api_harness.c ermine/sites/c/sites.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
+api_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/runs.c filesystem/places/c/guard.c filesystem/protect/c/protect.c extensions/patch-nodes/c/patch.c ermine/api/c/api.c ermine/api/c/api_harness.c ermine/sites/c/sites.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
 api = ermine/api/c/api-harness
 api_suite = api
 api_tests = $(wildcard ermine/api/typescript/api_harness_test.ts)
@@ -183,15 +183,15 @@ runs_flags = -DPH_LIB
 runs_suite = runs
 runs_tests = $(wildcard ermine/processes/typescript/runs_harness_test.ts)
 LIBS += runs
-# sync's pieces for the new commit shape (ermine/encoding commit, playground/together): their own loop (lines_harness.c is conformance/c/harness.c
-# reading a symbol as a string no one can carry), against the suites in ermine/encoding/conformance and playground/together/conformance.
+# sync's pieces for the new commit shape (playground/encoding commit, playground/together): their own loop (lines_harness.c is conformance/c/harness.c
+# reading a symbol as a string no one can carry), against the suites in playground/encoding/conformance and playground/together/conformance.
 # commit_form_harness.c (a commit's forms on the line) and commits_harness.c (the commits a harness makes by label) are the harnesses', never
 # the libraries'
-together_harness_src = ermine/encoding/c/lines_harness.c core/op/c/value.c core/op/c/json.c ermine/encoding/c/commit_form_harness.c
+together_harness_src = playground/encoding/c/lines_harness.c core/op/c/value.c core/op/c/json.c playground/encoding/c/commit_form_harness.c
 together_commits_src = playground/together/c/commits_harness.c
-together_commit_src = ermine/encoding/c/commit.c ermine/encoding/c/pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src) core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
-together-commit_src = $(together_harness_src) ermine/encoding/c/commit_harness.c $(together_commit_src)
-together-commit = ermine/encoding/c/commit-harness
+together_commit_src = playground/encoding/c/commit.c playground/encoding/c/pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src) core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
+together-commit_src = $(together_harness_src) playground/encoding/c/commit_harness.c $(together_commit_src)
+together-commit = playground/encoding/c/commit-harness
 together-commit_suite = commit
 LIBS += together-commit
 together-seal_src = $(together_harness_src) playground/together/c/seal_harness.c playground/together/c/seal.c playground/together/c/ed25519/ed25519.c playground/together/c/ed25519/sha2.c $(together_commit_src)
@@ -382,9 +382,9 @@ test-check: $(addprefix test-check-,$(TESTED))
 test-leaks: $(addprefix test-leaks-,$(TESTED))
 
 # benches, -O2, not part of all
-BENCHES = ermine/encoding/c/pack-bench core/scheduler/c/paths-bench core/op/c/squish-bench core/op/c/apply-bench extensions/patch-nodes/c/patch-bench core/unread/c/unread-bench
+BENCHES = playground/encoding/c/pack-bench core/scheduler/c/paths-bench core/op/c/squish-bench core/op/c/apply-bench extensions/patch-nodes/c/patch-bench core/unread/c/unread-bench
 bench: $(BENCHES)
-ermine/encoding/c/pack-bench: core/node/c/node.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c ermine/encoding/c/pack.c ermine/encoding/c/pack_bench.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
+playground/encoding/c/pack-bench: core/node/c/node.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c playground/encoding/c/pack.c playground/encoding/c/pack_bench.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
 core/scheduler/c/paths-bench: core/scheduler/c/paths.c core/op/c/value.c core/scheduler/c/paths_bench.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm

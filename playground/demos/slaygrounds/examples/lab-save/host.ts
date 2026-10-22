@@ -1,7 +1,7 @@
 // lab-save's host: the world (@ermine/slaygrounds/world), one process, notebook, and the host's own
 // methods /host/on/save, load, forget. /data is packed (ermine/encoding's pack) and kept in
 // IndexedDB (playground/pack-indexeddb, experimental). a restart starts from what was saved
-import type { Entry } from "@ermine/encoding/pack"
+import type { Entry } from "@ermine/formats/pack"
 import createEntry from "@ermine/node/entry"
 import { createStore as createPacks } from "@ermine/pack-indexeddb"
 import { createWorld } from "@ermine/slaygrounds/world"

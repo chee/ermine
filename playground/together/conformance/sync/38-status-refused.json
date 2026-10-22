@@ -1,11 +1,12 @@
 {
-	"title": "what a host refuses is in the node's status, with the code: a merge commit by a rule it doesn't know (merge); what goes on it is listed waiting on that parent, not refused; a host that took them has none",
+	"title": "what a host holds is in the node's status: a merge commit by a rule it doesn't know is held, never refused, listed with its rule, and so is what goes on it touching its path; the merge is a head, its parents heads no more, and what shows is what it can read, the held one beside it; a host that took them has none",
+	"typescript": true,
 	"steps": [
 		{
 			"op": "host",
 			"name": "a",
 			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
-			"merge": "serial",
+			"merge": "serial/1",
 			"expect": {
 				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
 			}
@@ -14,7 +15,7 @@
 			"op": "host",
 			"name": "b",
 			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
-			"merge": "serial",
+			"merge": "serial/1",
 			"expect": {
 				"key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
 			}
@@ -59,6 +60,7 @@
 			"b": "c",
 			"expect": {}
 		},
+		{ "op": "share", "host": "a", "id": "x", "expect": {} },
 		{
 			"op": "write",
 			"host": "a",
@@ -158,23 +160,55 @@
 			"op": "quiet",
 			"expect": {}
 		},
+		{ "op": "heads", "host": "c", "id": "x", "expect": { "heads": ["after"] } },
+		{ "op": "read", "host": "c", "id": "x", "expect": { "value": "a1b" } },
 		{
-			"op": "heads",
+			"op": "values",
 			"host": "c",
 			"id": "x",
 			"expect": {
-				"heads": [
-					"ta",
-					"tb"
-				]
-			}
-		},
-		{
-			"op": "read",
-			"host": "c",
-			"id": "x",
-			"expect": {
-				"value": "a1b"
+				"values": {
+					"value": [
+						{
+							"path": [],
+							"items": [
+								{
+									"value": "a1b",
+									"from": {
+										"head": "ta",
+										"lamport": 2,
+										"actor": "a",
+										"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+										"time": 1760000000,
+										"external": [{ "file": "scenario", "line": 1 }]
+									}
+								},
+								{
+									"value": "ab2",
+									"from": {
+										"head": "tb",
+										"lamport": 2,
+										"actor": "b",
+										"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+										"time": 1760000000,
+										"external": [{ "file": "scenario", "line": 1 }]
+									}
+								},
+								{
+									"held": "serial/1",
+									"from": {
+										"head": "after",
+										"lamport": 4,
+										"actor": "a",
+										"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+										"time": 1760000000,
+										"external": [{ "file": "scenario", "line": 1 }]
+									}
+								}
+							]
+						}
+					]
+				}
 			}
 		},
 		{
@@ -183,26 +217,14 @@
 			"id": "x",
 			"expect": {
 				"status": {
-					"waiting": [
-						{
-							"commit": "after",
-							"parents": [
-								"m"
-							]
-						}
-					],
-					"refused": [
-						{
-							"commit": "m",
-							"code": "merge"
-						}
-					],
+					"waiting": [],
+					"refused": [],
 					"unsent": [],
-					"count": {
-						"waiting": 1,
-						"refused": 1,
-						"unsent": 0
-					}
+					"count": { "waiting": 0, "refused": 0, "unsent": 0 },
+					"held": [
+						{ "commit": "m", "rule": "serial/1" },
+						{ "commit": "after", "rule": "serial/1" }
+					]
 				}
 			}
 		},

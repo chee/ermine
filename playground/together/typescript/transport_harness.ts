@@ -1,10 +1,10 @@
 // transport_harness: devices (transport.ts) on the line protocol (harness.ts), commits over
 // Subduction with no table, joined by in-memory pipes. conventions:
 // playground/together/conformance/README.md. a device here checks nothing and gives each fragment it
-// builds a snapshot (replay.ts). a commit is signed by its seed (default the device's). doc: an
-// ermine id (ermine/ids: for now the only documents a device takes), default ermine:0010 then 2a ×
-// 16 (a fresh id). what is put is an envelope (subduction.ts): the id (id, default doc) and the seal
-// or the fragment
+// builds a snapshot (replay.ts). a commit is signed by its seed (default the device's). doc: any
+// string within the wire's limits (well-formed, no U+0000), default ermine:0010 then 2a × 16. a take
+// is sent only at a document the device follows (else stored there alone). what is put is an
+// envelope (subduction.ts): the id (id, default doc) and the seal or the fragment
 //
 // { op: "device", name, seed, storage?, limits?, lazy?, follow?, lock? } → { key }  storage: a label,
 //    taken in; limits: transport.ts Limits; follow: docs followed before the first run; lock: a
@@ -12,16 +12,23 @@
 // { op: "close", device }                 → {}         closed, pipes cut
 // { op: "connect", a, b }                 → {}         pipe + handshake (a starts)
 // { op: "disconnect", a, b }              → {}
-// { op: "follow", device, doc? }          → {}         not an ermine id: refused
+// { op: "follow", device, doc? }          → {}         past the wire's limits: refused
+// { op: "pause", device, doc? }           → {}         carried no more (Wired's pause)
+// { op: "heard", device, doc? }           → { heard }  puts and fetches for it turned away while
+//    not followed
+// { op: "offered", device }               → { offered }  [{ tree, count }] by tree (hex): trees not
+//    named here a peer put or asked for, once per tree per connection
+// { op: "elsewhere", device, doc? }       → { elsewhere }  a peer said it holds heads of it
 // { op: "unnamed", device }               → { unnamed }  trees the storage holds whose id is not
 //    named yet: listed, not taken in
 // { op: "make", name, ...fields }         → {}         made, labelled, sealed
 // { op: "take", device, doc?, layer?, name, ...fields } → { added }  the device's take (made
 //    first when fields given); layer stored (default) | ephemeral
 // { op: "put", device, doc?, commit, head?, parents?, blob?, id?, closed? } → {}  addCommit as
-//    given: the envelope {id, sealed}; defaults from the commit's seal and stored ids; blob: the
-//    seal (hex) instead; id: the envelope's (default doc); closed: the envelope is closed first, as
-//    another device's lock would (the harness built on this one says how)
+//    given, as from elsewhere (a document not followed: not stored): the envelope {id, sealed};
+//    defaults from the commit's seal and stored ids; blob: the seal (hex) instead; id: the
+//    envelope's (default doc); closed: the envelope is closed first, as another device's lock would
+//    (the harness built on this one says how)
 // { op: "fragment", device, doc?, head, members?, boundary?, checkpoints?, tables?, form?, blob?,
 //   id?, tamper? } → {}  addFragment as given: the envelope {id, run, snapshot?}; form "members" |
 //    "list" (a list of seals, no envelope); blob: a JSON value instead; id: as put's;
@@ -223,6 +230,15 @@ export async function answer(r: Request): Promise<Answer> {
 		case "follow":
 			await of(r.device).device.follow(doc)
 			return {}
+		case "pause":
+			await of(r.device).device.pause(doc)
+			return {}
+		case "heard":
+			return { heard: of(r.device).device.turned(doc) }
+		case "offered":
+			return { offered: of(r.device).device.offered() }
+		case "elsewhere":
+			return { elsewhere: of(r.device).device.elsewhere(doc) }
 		case "unnamed":
 			return { unnamed: of(r.device).device.unnamed() }
 		case "make":

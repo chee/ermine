@@ -6,7 +6,7 @@
 
 #include "host.h"
 
-#include "../../../extensions/build/c/host.h"
+#include "../../../playground/build/c/host.h"
 
 /** a driver's setup, NULL if ermineOS has none of that name */
 ap_fn *driverSetup(Host *host, const char *name);

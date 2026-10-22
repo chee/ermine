@@ -1,12 +1,11 @@
-// cbor.ts and hash.ts on the line protocol (conformance/typescript/harness.ts): nothing lasts
+// cbor.ts on the line protocol (conformance/typescript/harness.ts): nothing lasts
 // between lines. another implementation joins by speaking this (HARNESS; c/cbor_harness.c).
 // a value: its JSON form (conformance/typescript/form.ts), lone surrogates taken; bytes lowercase hex
 //
-// { op: "encode", value } → { bytes, hash }    or { error: "no-encoding" | "not-a-form" }
+// { op: "encode", value } → { bytes }          or { error: "no-encoding" | "not-a-form" }
 // { op: "decode", bytes } → { value, again }   or { error: "not-an-encoding" }
 //                                                again: the value encoded again, hex
 import { CborError, decode, encode, type Value } from "./cbor.ts"
-import { hash } from "./hash.ts"
 import { FormError, revive, toJson } from "../../../conformance/typescript/form.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
 
@@ -27,7 +26,7 @@ export function answer(r: Request): Answer {
 				throw e
 			}
 			try {
-				return { bytes: hex(encode(v)), hash: hex(hash(v)) }
+				return { bytes: hex(encode(v)) }
 			} catch (e) {
 				if (e instanceof CborError) return { error: "no-encoding" }
 				throw e

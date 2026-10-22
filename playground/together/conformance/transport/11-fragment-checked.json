@@ -7,6 +7,36 @@
 			"seed": "0101010101010101010101010101010101010101010101010101010101010101"
 		},
 		{
+			"op": "follow",
+			"device": "a",
+			"doc": "ermine:00103a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a",
+			"expect": {}
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"doc": "ermine:00103b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b",
+			"expect": {}
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"doc": "ermine:00103c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c",
+			"expect": {}
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"doc": "ermine:00103d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d",
+			"expect": {}
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"doc": "ermine:00103e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e",
+			"expect": {}
+		},
+		{
 			"op": "make",
 			"name": "c1",
 			"nonce": 1,

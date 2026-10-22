@@ -1,5 +1,5 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import type { API } from "@ermine/programs/api"
 import { bind, handler } from "ermine-h"
 
 // big-shell: a shell over the graph. it's a filesystem: ls, cd, cat, echo > a path, mkdir, mv

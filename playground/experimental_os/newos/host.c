@@ -21,7 +21,7 @@
 #include "loader.h"
 #include "card/net.h"
 
-#include "../../../extensions/programs/c/start.h"
+#include "../../../playground/programs/c/start.h"
 #include "../../../ermine/types/c/types.h"
 
 #include <fcntl.h>

@@ -16,7 +16,7 @@ import { createBuilds } from "@ermine/build"
 import { satisfy } from "@ermine/programs"
 import { createPrograms, type Process, type Programs } from "@ermine/programs/start"
 import { no, type Policy, yes } from "@ermine/protect"
-import { createProcessAPIs, SCOPE } from "@ermine/api"
+import { createProcessAPIs, SCOPE } from "@ermine/programs/api"
 import { createRealms, type Realm } from "./realms.ts"
 
 const JS = "com.netscape.javascript-source"

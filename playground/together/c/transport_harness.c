@@ -411,6 +411,7 @@ static void take(const op_value *r, FILE *out) {
 	switch (a.kind) {
 	case HY_TAKEN: fputs("\"taken\"", out); break;
 	case HY_PASSED: fputs("\"passed\"", out); break;
+	case HY_HELD: fputs("\"held\"", out); break;
 	case HY_REFUSED: fprintf(out, "{\"refused\":\"%s\"}", hy_refusal_name(a.refusal)); break;
 	case HY_WAITING:
 		fputs("{\"waiting\":[", out);
