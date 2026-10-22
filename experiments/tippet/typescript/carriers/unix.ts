@@ -1,10 +1,11 @@
-// links over unix domain sockets, for processes on one machine (deno). each message is a frame: its
-// length as 4 bytes, big-endian, then its bytes
+// links over unix domain sockets, for processes on one machine (deno). each message is a frame, as
+// http's: its length as 4 bytes, big-endian, then its bytes
 //
 //   const server = listen("/tmp/pigs.sock", (link) => a.link(link))
 //   b.link(await connect("/tmp/pigs.sock"))
 //   server.close()   // its links closed, the socket file removed
 import type { Link } from "../sync.ts"
+import { frames } from "./http.ts"
 
 // the biggest frame read: a longer one ends the link
 const most = 64 * 1024 * 1024
@@ -52,9 +53,7 @@ function framed(conn: Deno.Conn): Link {
 	return {
 		send(b) {
 			if (!open) throw new Error("closed")
-			const frame = new Uint8Array(4 + b.length)
-			new DataView(frame.buffer).setUint32(0, b.length)
-			frame.set(b, 4)
+			const frame = frames([b])
 			writing = writing.then(async () => {
 				for (let at = 0; at < frame.length;) at += await conn.write(frame.subarray(at))
 			}).catch(end)

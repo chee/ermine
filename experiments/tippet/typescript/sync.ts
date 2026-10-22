@@ -1,13 +1,6 @@
-// sync: a log's steps, caught up over links. a link is anything that carries bytes both ways
-// (carriers/). each side says what it has (have), and is sent what it lacks, a run at a time (run,
-// its steps packed: pack.ts). a step added later goes to every link that lacks it, whoever wrote it.
-// a run refused for good (its chain, signature, lamport, or this side's own device) is told back
-// (refused), and that device is sent no more on that link until it is made again. live things
-// (live) are sent on and never kept; a relay (galaxy) passes them to its other links. a message is
-// a cbor array, devices as their 32 bytes (WIRE.md); one that isn't one of these is dropped
-//
-//   ["have", [[device, n], …]]   ["run", device, sig, pack]   ["live", id, data]
-//   ["refused", device, n]
+// sync: a log's steps, caught up over links (WIRE.md, messages). a link is anything that carries
+// bytes both ways (carriers/). each side says what it has, and is sent what it lacks, a run at a
+// time; a step added later goes to every link that lacks it. live things are passed on, never kept
 //
 //   const sync = createSync({ log })
 //   const unlink = sync.link(link)
@@ -15,7 +8,7 @@
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
 import type { Log } from "./log.ts"
 import { pack, type Packed, unpack } from "./pack.ts"
-import { hex, key, unhex } from "./step.ts"
+import { decodeStep, hex, key, unhex, whole } from "./step.ts"
 
 export type Link = {
 	send(bytes: Uint8Array): void
@@ -47,7 +40,6 @@ export type Message =
 	| { t: "refused"; device: string; n: number }
 	| { t: "live"; id: string; data: Uint8Array }
 
-const whole = (x: unknown): x is number => Number.isSafeInteger(x) && (x as number) >= 0
 const sized = (x: unknown, n: number) => x instanceof Uint8Array && x.length === n
 // a message as this side reads it, or undefined
 export function read(b: Uint8Array): Message | undefined {
@@ -104,12 +96,13 @@ export function createSync(o: { log: Log; relay?: boolean }) {
 		if (seen.size > 1024) seen.delete(seen.values().next().value!)
 	}
 	const drop = (l: Linked) => links.delete(l) && tell()
-	// a link that can't send any more is gone
+	// a link that can't send any more is gone, and closed
 	const send = (l: Linked, bytes: Uint8Array) => {
 		try {
 			l.link.send(bytes)
 		} catch {
 			drop(l)
+			l.link.close?.()
 		}
 	}
 	const say = (l: Linked, m: Message) => send(l, wire(m))
@@ -163,16 +156,19 @@ export function createSync(o: { log: Log; relay?: boolean }) {
 			l.theirs = new Map(Object.entries(m.have))
 			for (const [d, n] of Object.entries(log.have())) if ((m.have[d] ?? 0) < n) push(l, d)
 		} else if (m.t === "run") {
-			let r
+			// last: the n of the run's last step, which they hold
+			let r, last = 0
 			try {
-				r = await log.take({ device: m.device, steps: unpack(m.pack), sig: m.sig }, l)
+				const steps = unpack(m.pack)
+				last = decodeStep(steps[0]).n + steps.length - 1
+				r = await log.take({ device: m.device, steps, sig: m.sig }, l)
 			} catch {
 				r = { refused: "pack" }
 			}
 			// a gap: say what this side has, and it is sent again from there. refused for good: say
 			// so, and it is sent no more
 			if ("added" in r) {
-				l.theirs.set(m.device, Math.max(l.theirs.get(m.device) ?? 0, log.count(m.device)))
+				l.theirs.set(m.device, Math.max(l.theirs.get(m.device) ?? 0, last))
 			} else if (r.refused === "gap") say(l, have())
 			else if (!many) say(l, { t: "refused", device: m.device, n: log.count(m.device) })
 		} else if (m.t === "refused") {

@@ -172,3 +172,15 @@ void tp_buf_free(tp_buf *b) {
 }
 
 int tp_buf_why(const tp_buf *b) { return b->bad; }
+
+void tp_hex(char *out, const uint8_t *b, size_t n) {
+	static const char digits[] = "0123456789abcdef";
+	for (size_t i = 0; i < n; i++) out[2 * i] = digits[b[i] >> 4], out[2 * i + 1] = digits[b[i] & 15];
+}
+
+uint32_t tp_get32(const uint8_t *p) {
+	return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3];
+}
+void tp_set32(uint8_t *p, uint32_t n) {
+	p[0] = (uint8_t)(n >> 24), p[1] = (uint8_t)(n >> 16), p[2] = (uint8_t)(n >> 8), p[3] = (uint8_t)n;
+}

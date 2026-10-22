@@ -1,9 +1,5 @@
-// a step: one kept write, as it travels. each device numbers its own steps from 1, and each step
-// names the hash of the one before it (before), so one signature over a device's latest step vouches
-// for all of them. a step is its bytes: a canonical cbor array, hashed with blake3, never encoded
-// twice
-//
-//   [device, n, before, node, part, patches, lamport, when, who?]   device, before: 32-byte bstr
+// a step: one kept write, as it travels (WIRE.md, step). a step is its bytes: encodeStep makes
+// them once, decodeStep reads them back and throws on anything that isn't one, hashStep names them
 //
 //   const bytes = encodeStep({ device, n: 1, before: null, node, part, patches, lamport, when })
 //   const step = decodeStep(bytes)
@@ -39,7 +35,7 @@ export function encodeStep(s: Step): Uint8Array {
 	return encode(a as Value)
 }
 
-const whole = (x: unknown): x is number => Number.isSafeInteger(x) && (x as number) >= 0
+export const whole = (x: unknown): x is number => Number.isSafeInteger(x) && (x as number) >= 0
 export const key = (x: unknown): x is Uint8Array => x instanceof Uint8Array && x.length === 32
 const only = (o: object, keys: string[]) => Object.keys(o).every((k) => keys.includes(k))
 const isMap = (x: unknown): x is Record<string, unknown> =>
@@ -57,23 +53,13 @@ const patch = (p: unknown) =>
 // number whole, so it packs and unpacks to the same bytes. anything else throws
 export function decodeStep(bytes: Uint8Array): Step {
 	const a = decode(bytes)
-	const ok = Array.isArray(a) &&
-		(a.length === 8 || (a.length === 9 && typeof a[8] === "string")) &&
-		key(a[0]) && whole(a[1]) && a[1] >= 1 && (a[2] === null || key(a[2])) &&
-		typeof a[3] === "string" && typeof a[4] === "string" && Array.isArray(a[5]) &&
-		a[5].every(patch) && whole(a[6]) && whole(a[7])
-	if (!ok) throw new TypeError("not a step")
-	const [device, n, before, node, part, patches, lamport, when, who] = a as [
-		Uint8Array,
-		number,
-		Uint8Array | null,
-		string,
-		string,
-		Patch[],
-		number,
-		number,
-		string?,
-	]
+	if (
+		!Array.isArray(a) || !(a.length === 8 || (a.length === 9 && typeof a[8] === "string")) ||
+		!key(a[0]) || !whole(a[1]) || a[1] < 1 || !(a[2] === null || key(a[2])) ||
+		typeof a[3] !== "string" || typeof a[4] !== "string" || !Array.isArray(a[5]) ||
+		!a[5].every(patch) || !whole(a[6]) || !whole(a[7])
+	) throw new TypeError("not a step")
+	const [device, n, before, node, part, patches, lamport, when, who] = a
 	const s: Step = { device: hex(device), n, before, node, part, patches, lamport, when }
 	if (who !== undefined) s.who = who
 	return s

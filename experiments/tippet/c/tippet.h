@@ -191,6 +191,8 @@ int tp_log_load(tp_log *log);
 // the device that writes here, or NULL
 const uint8_t *tp_log_device(const tp_log *log);
 uint64_t tp_log_lamport(const tp_log *log);
+// its limits, the defaults filled in
+tp_limits tp_log_limits(const tp_log *log);
 
 // a write: node, part, patches (an array, encoded), when, who (p NULL: none)
 typedef struct {
@@ -226,7 +228,8 @@ long tp_log_take(tp_log *log, const uint8_t device[32], const tp_span *steps, si
 typedef struct tp_sync tp_sync;
 typedef struct tp_link tp_link;
 
-// a message's bytes onto a link: 0 sent; anything else, the link is gone (let go here)
+// a message's bytes onto a link: 0 sent; 1 sent, but full: no more runs until tp_sync_go;
+// anything else, the link is gone (let go here)
 typedef int (*tp_send)(void *ctx, const uint8_t *bytes, size_t length);
 
 typedef struct {
@@ -247,9 +250,12 @@ tp_sync *tp_sync_new(const tp_sync_options *o);
 // every link let go
 void tp_sync_free(tp_sync *s);
 // a link, told have. many: one link to any number of peers (a broadcast): what they have is not
-// kept, only answered, with this device's own steps alone. NULL: no memory
+// kept, only answered, with this device's own steps alone. NULL: no memory, or the have couldn't
+// be sent
 tp_link *tp_sync_link(tp_sync *s, tp_send send, void *ctx, int many);
-// a link let go: what it was owed is dropped
+// a link that said it was full takes runs again
+void tp_sync_go(tp_sync *s, tp_link *l);
+// a link let go (once nothing here is using it): what it was owed is dropped
 void tp_sync_unlink(tp_sync *s, tp_link *l);
 size_t tp_sync_links(const tp_sync *s);
 // a message come on a link
@@ -288,8 +294,9 @@ typedef struct {
 int tp_http_open(tp_http *h, const tp_mem *mem, const char *id, size_t room);
 // what it holds let go
 void tp_http_close(tp_http *h);
-// a message into the outbox: 0; TP_BOUND (bigger than a body); TP_GONE (more than TP_BODY
-// unsent: it closes); TP_NOMEM
+// a message into the outbox: 0; 1 (taken, but half a TP_BODY or more waits: a link's full,
+// tp_sync_go once sent answers make it less); TP_BOUND (bigger than a body); TP_GONE (more than
+// TP_BODY unsent: it closes); TP_NOMEM
 int tp_http_send(tp_http *h, const uint8_t *message, size_t length);
 // the query of the next request (link, ack, n, room): its length, written to out when less than cap
 size_t tp_http_query(const tp_http *h, char *out, size_t cap);

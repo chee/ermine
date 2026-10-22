@@ -47,7 +47,7 @@ static int load(void *self, tp_read read, void *ctx) {
 	while (at + 4 <= size) {
 		uint8_t head[4];
 		if (readat(f->fd, head, 4, at)) break;
-		uint64_t length = (uint64_t)head[0] << 24 | head[1] << 16 | head[2] << 8 | head[3];
+		uint64_t length = tp_get32(head);
 		if (!length || length > size - at - 4) break;
 		if (length > f->max) {
 			why = TP_BOUND;
@@ -74,8 +74,8 @@ static int load(void *self, tp_read read, void *ctx) {
 static int append(void *self, const uint8_t *record, size_t length, const tp_at *at) {
 	file *f = self;
 	if (!length || length > f->max || length > 0xffffffffu) return TP_BOUND;
-	uint8_t head[4] = {(uint8_t)(length >> 24), (uint8_t)(length >> 16), (uint8_t)(length >> 8),
-		(uint8_t)length};
+	uint8_t head[4];
+	tp_set32(head, (uint32_t)length);
 	struct iovec v[2] = {{head, 4}, {(void *)(uintptr_t)record, length}};
 	size_t want = 4 + length;
 	ssize_t wrote;

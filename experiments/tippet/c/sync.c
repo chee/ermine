@@ -1,9 +1,6 @@
 // sync: a log's steps, caught up over links (typescript/sync.ts, ../WIRE.md messages). each side
-// says what it has (have) and is sent what it lacks, a run at a time. a link's pushes take turns:
-// one run of a device's, then the next device's, as sync.ts's chain of turns does
-//
-//   ["have", [[device, n], …]]   ["run", device, sig, pack]   ["live", id, data]
-//   ["refused", device, n]
+// says what it has and is sent what it lacks, a run at a time. a link's pushes take turns: one run
+// of a device's, then the next device's. tippet.h says how it's used
 #include <string.h>
 
 #include "wire.h"
@@ -26,8 +23,9 @@ struct tp_link {
 	// the devices whose turn is coming, by their place in peers, from first
 	size_t *turns;
 	size_t first, nturns, turnroom;
-	// pumping: its turns being taken; gone: let go, once they stop
-	int pumping, gone;
+	// pumping: its turns being taken; full: it takes no runs until it says go; gone: let go once
+	// nothing here is using it
+	int pumping, full, gone;
 };
 
 struct tp_sync {
@@ -37,8 +35,10 @@ struct tp_sync {
 	void (*heard)(void *ctx, const uint8_t *data, size_t length);
 	void (*random)(void *ctx, uint8_t *out, size_t n);
 	void *ctx;
-	size_t max;
+	size_t max, devices;
+	// the links, and how many calls are using them: none let go until they end
 	tp_link *links;
+	int depth;
 	// the link a run being taken came on: its steps are not sent back on it
 	tp_link *from;
 	// live ids lately seen, a ring: count of them, the next to go at at
@@ -58,12 +58,13 @@ tp_sync *tp_sync_new(const tp_sync_options *o) {
 	s->heard = o->heard, s->random = o->random, s->ctx = o->ctx;
 	s->most = o->seen ? o->seen : 1024;
 	s->max = o->max ? o->max : 1 << 24;
+	s->devices = tp_log_limits(o->log).devices;
 	s->steps = (tp_buf){NULL, 0, 0, s->max, &s->mem, 0};
 	s->out = (tp_buf){NULL, 0, 0, s->max, &s->mem, 0};
 	return s;
 }
 
-static void let_go(tp_sync *s, tp_link *l) {
+static void release(tp_sync *s, tp_link *l) {
 	tp_free(&s->mem, l->peers, l->room * sizeof *l->peers);
 	tp_free(&s->mem, l->turns, l->turnroom * sizeof *l->turns);
 	tp_free(&s->mem, l, sizeof *l);
@@ -71,7 +72,7 @@ static void let_go(tp_sync *s, tp_link *l) {
 
 void tp_sync_free(tp_sync *s) {
 	if (!s) return;
-	for (tp_link *l = s->links, *next; l; l = next) next = l->next, let_go(s, l);
+	for (tp_link *l = s->links, *next; l; l = next) next = l->next, release(s, l);
 	tp_free(&s->mem, s->seen, s->most * 8);
 	tp_free(&s->mem, s->spans, s->nspans * sizeof *s->spans);
 	tp_buf_free(&s->steps), tp_buf_free(&s->out);
@@ -81,34 +82,41 @@ void tp_sync_free(tp_sync *s) {
 
 size_t tp_sync_links(const tp_sync *s) {
 	size_t n = 0;
-	for (const tp_link *l = s->links; l; l = l->next) n++;
+	for (const tp_link *l = s->links; l; l = l->next) n += !l->gone;
 	return n;
 }
 
-// out of the links; let go now, or once its turns stop
-static void drop(tp_sync *s, tp_link *l) {
-	for (tp_link **p = &s->links; *p; p = &(*p)->next) {
-		if (*p == l) {
-			*p = l->next;
-			break;
-		}
+// the links gone, out and let go, once no call is using them
+static void sweep(tp_sync *s) {
+	if (s->depth) return;
+	for (tp_link **p = &s->links; *p;) {
+		tp_link *l = *p;
+		if (l->gone) *p = l->next, release(s, l);
+		else p = &l->next;
 	}
-	if (l->pumping) l->gone = 1;
-	else let_go(s, l);
 }
 
-void tp_sync_unlink(tp_sync *s, tp_link *l) { drop(s, l); }
+void tp_sync_unlink(tp_sync *s, tp_link *l) {
+	l->gone = 1;
+	sweep(s);
+}
 
-// a message's bytes onto a link; one that can't send any more is gone
+// a message's bytes onto a link; one that is full takes no runs until it says go, and one that
+// can't send any more is gone
 static void send(tp_sync *s, tp_link *l, const uint8_t *bytes, size_t length) {
-	if (!l->gone && l->send(l->ctx, bytes, length)) drop(s, l);
+	if (l->gone) return;
+	int r = l->send(l->ctx, bytes, length);
+	if (r == 1) l->full = 1;
+	else if (r) tp_sync_unlink(s, l);
 }
 
-// what the link knows of a device's, made when there is none: its place, or -1 (no memory)
+// what the link knows of a device's, made when there is none: its place, or -1 (no memory, or
+// as many as the devices the other side may have and this side may)
 static long peer_of(tp_sync *s, tp_link *l, const uint8_t device[32]) {
 	for (size_t i = 0; i < l->npeers; i++) {
 		if (!memcmp(l->peers[i].device, device, 32)) return (long)i;
 	}
+	if (l->npeers == 2 * s->devices) return -1;
 	if (l->npeers == l->room) {
 		size_t room = l->room ? 2 * l->room : 4;
 		peer *p = tp_grow(&s->mem, l->peers, l->room * sizeof *p, room * sizeof *p);
@@ -186,6 +194,12 @@ static int one(tp_sync *s, tp_link *l, size_t i) {
 
 // a device's turn, at the end of the link's
 static int queue(tp_sync *s, tp_link *l, size_t i) {
+	if (l->nturns == l->turnroom && l->first) {
+		// the turns taken, out
+		l->nturns -= l->first;
+		memmove(l->turns, l->turns + l->first, l->nturns * sizeof *l->turns);
+		l->first = 0;
+	}
 	if (l->nturns == l->turnroom) {
 		size_t room = l->turnroom ? 2 * l->turnroom : 4;
 		size_t *t = tp_grow(&s->mem, l->turns, l->turnroom * sizeof *t, room * sizeof *t);
@@ -209,29 +223,36 @@ static void push(tp_sync *s, tp_link *l, const uint8_t device[32]) {
 	if (!queue(s, l, (size_t)i)) p->pushing = 1;
 }
 
-// a link's turns taken, a run each, until none is left
+// a link's turns taken, a run each, until none is left or it is full
 static void pump(tp_sync *s, tp_link *l) {
 	if (l->pumping) return;
 	l->pumping = 1;
-	while (!l->gone && l->first < l->nturns) {
+	while (!l->gone && !l->full && l->first < l->nturns) {
 		size_t i = l->turns[l->first++];
 		int more = one(s, l, i);
 		peer *p = &l->peers[i];
 		if (!l->gone && (more || p->again) && !queue(s, l, i)) p->again = 0;
 		else p->pushing = 0;
 	}
-	l->first = l->nturns = 0;
+	if (l->first == l->nturns) l->first = l->nturns = 0;
 	l->pumping = 0;
-	if (l->gone) let_go(s, l);
+}
+
+void tp_sync_go(tp_sync *s, tp_link *l) {
+	l->full = 0;
+	s->depth++, pump(s, l), s->depth--;
+	sweep(s);
 }
 
 void tp_sync_told(void *ctx, const uint8_t device[32], uint64_t from, size_t count) {
 	tp_sync *s = ctx;
 	(void)from, (void)count;
-	for (tp_link *l = s->links, *next; l; l = next) {
-		next = l->next;
-		if (l != s->from) push(s, l, device), pump(s, l);
+	s->depth++;
+	for (tp_link *l = s->links; l; l = l->next) {
+		if (!l->gone && l != s->from) push(s, l, device), pump(s, l);
 	}
+	s->depth--;
+	sweep(s);
 }
 
 tp_link *tp_sync_link(tp_sync *s, tp_send send_, void *ctx, int many) {
@@ -244,15 +265,18 @@ tp_link *tp_sync_link(tp_sync *s, tp_send send_, void *ctx, int many) {
 		uint64_t have;
 		const uint8_t *device = tp_log_have(s->log, i, &have);
 		long k = peer_of(s, l, device);
-		if (k < 0) return let_go(s, l), NULL;
+		if (k < 0) return release(s, l), NULL;
 		l->peers[k].theirs = tp_log_count(s->log, device);
 	}
 	// last: the links in the order made
 	tp_link **end = &s->links;
 	while (*end) end = &(*end)->next;
 	*end = l;
-	say_have(s, l);
-	return l;
+	// a link that can't take its have is none
+	s->depth++, say_have(s, l), s->depth--;
+	if (!l->gone) return l;
+	sweep(s);
+	return NULL;
 }
 
 // ---- receiving
@@ -339,12 +363,12 @@ static void run(tp_sync *s, tp_link *l, const uint8_t *device, const uint8_t *si
 	}
 }
 
-void tp_sync_receive(tp_sync *s, tp_link *l, const uint8_t *bytes, size_t length) {
+static void receive(tp_sync *s, tp_link *l, const uint8_t *bytes, size_t length) {
 	tp_in in = {bytes, bytes + length};
 	uint64_t k, n;
 	tp_span t, x, y;
-	if (!tp_canonical(bytes, length) || tp_array(&in, &k) || !k || tp_text(&in, &t)) return;
-	if (tp_is(t, "have") && k == 2 && !tp_array(&in, &n)) {
+	if (l->gone || !tp_canonical(bytes, length) || tp_array(&in, &k) || !k || tp_text(&in, &t)) return;
+	if (tp_is(t, "have") && k == 2 && !tp_array(&in, &n) && n <= s->devices) {
 		// every entry [device, n], or the message is none
 		tp_in at = in;
 		for (uint64_t i = 0; i < n; i++) {
@@ -363,11 +387,15 @@ void tp_sync_receive(tp_sync *s, tp_link *l, const uint8_t *bytes, size_t length
 		if (seen(s, x.p)) return;
 		if (s->heard) s->heard(s->ctx, y.p, y.n);
 		if (!s->relay) return;
-		for (tp_link *o = s->links, *next; o; o = next) {
-			next = o->next;
+		for (tp_link *o = s->links; o; o = o->next) {
 			if (o != l) send(s, o, bytes, length);
 		}
 	}
+}
+
+void tp_sync_receive(tp_sync *s, tp_link *l, const uint8_t *bytes, size_t length) {
+	s->depth++, receive(s, l, bytes, length), s->depth--;
+	sweep(s);
 }
 
 int tp_sync_live(tp_sync *s, const uint8_t *data, size_t length) {
@@ -379,6 +407,9 @@ int tp_sync_live(tp_sync *s, const uint8_t *data, size_t length) {
 	tp_put_head(b, 4, 3), tp_put_text(b, "live");
 	tp_put_head(b, 2, 8), tp_put(b, id, 8), tp_put_head(b, 2, length), tp_put(b, data, length);
 	if (b->bad) return b->bad;
-	for (tp_link *l = s->links, *next; l; l = next) next = l->next, send(s, l, b->p, b->len);
+	s->depth++;
+	for (tp_link *l = s->links; l; l = l->next) send(s, l, b->p, b->len);
+	s->depth--;
+	sweep(s);
 	return 0;
 }

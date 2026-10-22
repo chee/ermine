@@ -1,13 +1,11 @@
-// history: a graph and its log, tied. every kept write here becomes a step (the recorder, on places'
-// watchAll); every step from elsewhere is written into the graph (the lander). the graph is the
-// last snapshot and the steps after it, like an image and its changes file
+// history: a graph and its log, tied. every kept write here becomes a step (the recorder); every
+// step from elsewhere is written into the graph (the lander). the graph is the last snapshot and the
+// steps after it, like an image and its changes file
 //
 // the merge, lofi: an entry's value is its steps' patches applied in order of lamport, then device,
-// from nothing. a step that arrives last in that order is applied as it is; one that arrives
-// earlier than steps already there, and the entry is worked out again from its steps. so devices
-// holding the same steps show the same values, whatever order they came in. a step whose patches
-// don't apply there is passed over, and listed in failed. text typed at once by two people is not
-// this file's job
+// from nothing. a step that lands last is applied as it is; one that lands earlier has its entry
+// worked out again. a step whose patches don't apply is passed over, and listed in failed until
+// they do. text typed at once by two people is not this file's job
 //
 //   const h = createHistory({ log, table, places, run: hosted })
 //   await h.load()
@@ -26,6 +24,8 @@ type Ref = [lamport: number, device: string, n: number]
 export type Failed = { device: string; n: number; node: string; part: string; why: string }
 
 const before = (a: Ref, b: Ref) => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1])
+// an entry's name in entries
+const name = (part: string, node: string) => `${part}\0${node}`
 
 // a patch as cbor can hold it: no undefined fields
 const clean = (p: Patch): Patch => ({
@@ -57,6 +57,7 @@ export function createHistory(o: {
 	const entries = new Map<string, Ref[]>()
 	const failed: Failed[] = []
 	const unkept: Omit<Failed, "device" | "n">[] = []
+	// writing into the graph: the recorder passes over what that makes
 	let landing = false
 	// entries with a write here that wasn't kept: their patches stay here until a whole write is
 	// kept, so a peer never gets a patch to a value it never had
@@ -69,8 +70,7 @@ export function createHistory(o: {
 		failed.push({ device: s.device, n: s.n, node: s.node, part: s.part, why: String(e) })
 		tell()
 	}
-	const stepOf = (r: Ref) => decodeStep(log.step(r[1], r[2]))
-	const headerOf = (s: Step): ChangeHeader => ({
+	const header = (s: Step): ChangeHeader => ({
 		time: s.when,
 		actor: s.who ?? s.device,
 		metadata: { device: s.device, n: s.n, lamport: s.lamport },
@@ -78,7 +78,7 @@ export function createHistory(o: {
 
 	// a step into its entry's list; true: it went last
 	function place(s: Step): boolean {
-		const k = `${s.part}\0${s.node}`, ref: Ref = [s.lamport, s.device, s.n]
+		const k = name(s.part, s.node), ref: Ref = [s.lamport, s.device, s.n]
 		let refs = entries.get(k)
 		if (!refs) entries.set(k, refs = [])
 		let i = refs.length
@@ -87,55 +87,75 @@ export function createHistory(o: {
 		return i === refs.length - 1
 	}
 
-	// the graph's entry made what its steps say: patches applied as given, or a whole value
-	function write(s: Step, patches: readonly Patch[], whole?: { value: unknown }) {
+	// f, in the host's run, its writes not recorded
+	function quietly(f: () => void) {
 		landing = true
 		try {
-			run(() => {
-				const e = table.get(s.part as Key, s.node)
-				const ps = whole
-					? [whole.value === undefined ? { path: [] } : { path: [], value: whole.value }]
-					: patches
-				if (e) return void (update(e, ps, headerOf(s)), places.commit([e]))
-				const v = apply(undefined, ps)
-				if (v !== undefined) {
-					table.add(s.part as Key, s.node, createEntry(v as never, headerOf(s)))
-				}
-			})
+			run(f)
 		} finally {
 			landing = false
 		}
 	}
 
+	// patches into the graph's entry, as step s
+	function write(s: Step, patches: readonly Patch[]) {
+		quietly(() => {
+			const e = table.get(s.part as Key, s.node)
+			if (e) return void (update(e, patches, header(s)), places.commit([e]))
+			const v = apply(undefined, patches)
+			if (v !== undefined) table.add(s.part as Key, s.node, createEntry(v as never, header(s)))
+		})
+	}
+
 	// an entry worked out again from all its steps
 	function redo(s: Step) {
-		const refs = entries.get(`${s.part}\0${s.node}`)!
+		const refs = entries.get(name(s.part, s.node))!
 		let value: unknown, last = s
+		// those failed before that apply now
+		const fixed = new Set<Failed>()
 		for (const r of refs) {
-			const step = stepOf(r)
+			const step = decodeStep(log.step(r[1], r[2])),
+				was = failed.find((f) => f.device === step.device && f.n === step.n)
 			try {
 				value = apply(value, step.patches)
 				last = step
+				if (was) fixed.add(was)
 			} catch (e) {
-				if (!failed.some((f) => f.device === step.device && f.n === step.n)) fail(step, e)
+				if (!was) fail(step, e)
 			}
 		}
-		write(last, [], { value })
+		write(last, [value === undefined ? { path: [] } : { path: [], value }])
+		if (fixed.size) {
+			failed.splice(0, failed.length, ...failed.filter((f) => !fixed.has(f))), tell()
+		}
 	}
 
-	function land(s: Step) {
-		if (!place(s)) return redo(s)
-		try {
-			write(s, s.patches)
-		} catch (e) {
-			fail(s, e)
+	// steps from elsewhere: each that goes last applied as it is; an entry one went earlier in is
+	// worked out again once, after them all
+	function land(steps: Step[]) {
+		const redos = new Map<string, Step>()
+		for (const s of steps) {
+			const k = name(s.part, s.node)
+			try {
+				if (!place(s) || redos.has(k)) redos.set(k, s)
+				else write(s, s.patches)
+			} catch (e) {
+				fail(s, e)
+			}
+		}
+		for (const s of redos.values()) {
+			try {
+				redo(s)
+			} catch (e) {
+				fail(s, e)
+			}
 		}
 	}
 
 	// the recorder: a kept write here, a step
 	const unwatch = places.watchAll((f) => {
 		if (landing || typeof f.id !== "string" || !kept(f.id, String(f.part))) return
-		const who = f.change?.actor, k = `${String(f.part)}\0${f.id}`
+		const who = f.change?.actor, k = name(String(f.part), f.id)
 		const first = f.patches[0], whole = first?.path.length === 0 && !first.range && !first.move
 		let s: Step
 		try {
@@ -158,14 +178,7 @@ export function createHistory(o: {
 	})
 	// the lander: steps from elsewhere (this device's own are only ever written here)
 	const unlisten = log.on((device, steps) => {
-		if (device === log.device) return
-		for (const s of steps) {
-			try {
-				land(s)
-			} catch (e) {
-				fail(s, e)
-			}
-		}
+		if (device !== log.device) land(steps)
 	})
 
 	return {
@@ -200,34 +213,25 @@ export function createHistory(o: {
 					entries: [string, string, unknown, Ref[]][]
 				}
 				count = snap.count
-				landing = true
-				try {
-					run(() => {
-						for (const [part, node, v, refs] of snap.entries) {
-							entries.set(`${part}\0${node}`, refs)
-							if (v !== null) {
-								table.sub(
-									part as Key,
-									node,
-									createEntry(v as never, { time: 0, actor: "snapshot" }),
-								)
-							}
-						}
-					})
-				} finally {
-					landing = false
-				}
+				quietly(() => {
+					for (const [part, node, v, refs] of snap.entries) {
+						entries.set(name(part, node), refs)
+						if (v === null) continue
+						table.sub(
+							part as Key,
+							node,
+							createEntry(v as never, { time: 0, actor: "snapshot" }),
+						)
+					}
+				})
 			}
+			const steps: Step[] = []
 			for (const device of Object.keys(log.have())) {
 				for (let n = (count[device] ?? 0) + 1; n <= log.count(device); n++) {
-					const s = decodeStep(log.step(device, n))
-					try {
-						land(s)
-					} catch (e) {
-						fail(s, e)
-					}
+					steps.push(decodeStep(log.step(device, n)))
 				}
 			}
+			land(steps)
 		},
 
 		stop() {

@@ -1,20 +1,6 @@
-// a link over http long-poll, for a device that can only make requests (the cardputer, with
-// esp_http_client). the wire, both ways: frames (a 4-byte big-endian length, then a message), back
-// to back
-//
-//   POST url/send?link=<id>&ack=<k>&n=<j>   body: frames, 1 MB at most (413 past it)
-//   GET  url/recv?link=<id>&ack=<k>         answer: a number (4 bytes big-endian), then frames
-//
-// a client makes a fresh link id each time it links. each side numbers what it sends on a link from
-// 1. an answer's number is that of its last message; ack is the last one the client got. what comes
-// after ack is sent again until a later recv acks it, so an answer lost on the way is not lost. n is
-// the number of a send's first message: a send tried again after its answer was lost is not taken
-// twice. with nothing queued, a recv is answered empty after about 25 s. a link with no recv for
-// 60 s, or with more than 8 MB queued, is closed; it takes more (wait) while under 1 MB. a link the
-// server closed (lately), or ack past 0 or n past 1 on one it doesn't hold (it restarted): 410. ack
-// behind what the server still holds, or past what it sent, or n past what it took (two clients on
-// one id): 409. either way the client's link closes, and its host links again; so does a client
-// holding more than 1 MB it couldn't send. room=<bytes> on the first request: the link's room
+// links over http long-poll (WIRE.md, http long-poll), for a device that can only make requests
+// (the cardputer, with esp_http_client): poll is the client, httpLinks the server. a client's link
+// closes when the server no longer holds it (410, 409), and its host links again
 //
 //   sync.link(poll("https://galaxy.example/tippet/pigs"))                // client
 //   const http = httpLinks((link) => sync.link(link))                     // server
@@ -26,8 +12,6 @@ const WAIT = 25_000, UNHEARD = 60_000, AGAIN = 1_000
 // the most bytes of a send's body, of what a link may hold unacked, and of what it holds and still
 // takes more; the most link ids closed here that are remembered
 const BODY = 1024 * 1024, QUEUE = 8 * 1024 * 1024, MORE = 1024 * 1024, GONE = 4096
-// room for steps in a send's body: what's left past the envelope and each step's length
-const ROOM = BODY - BODY / 16
 
 // messages, framed
 export function frames(list: readonly Uint8Array[]): Uint8Array<ArrayBuffer> {
@@ -76,12 +60,8 @@ export function poll(url: string, o: { room?: number } = {}): Link {
 	const rest = () =>
 		new Promise<void>((r) => {
 			if (stop.signal.aborted) return r()
-			const t = setTimeout(done, AGAIN)
-			function done() {
-				clearTimeout(t)
-				r()
-			}
-			stop.signal.addEventListener("abort", done, { once: true })
+			const t = setTimeout(r, AGAIN)
+			stop.signal.addEventListener("abort", () => (clearTimeout(t), r()), { once: true })
 		})
 	// 410: the server doesn't hold this link; 409: another client has its id
 	const gone = (status: number) => (status === 410 || status === 409) && (close(), true)

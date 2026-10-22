@@ -71,7 +71,7 @@ static int load(void *self, tp_read read, void *ctx) {
 	tp_index_clear(&m->index);
 	for (size_t at = 0; at + 4 <= m->frames.len;) {
 		const uint8_t *f = m->frames.p + at;
-		size_t length = (size_t)f[0] << 24 | (size_t)f[1] << 16 | (size_t)f[2] << 8 | f[3];
+		size_t length = tp_get32(f);
 		if (length > m->frames.len - at - 4) break;
 		tp_at step;
 		if (read(ctx, f + 4, length, &step)) {
@@ -85,10 +85,10 @@ static int load(void *self, tp_read read, void *ctx) {
 
 static int append(void *self, const uint8_t *record, size_t length, const tp_at *at) {
 	memory *m = self;
-	uint8_t head[4] = {(uint8_t)(length >> 24), (uint8_t)(length >> 16), (uint8_t)(length >> 8),
-		(uint8_t)length};
+	uint8_t head[4];
 	size_t offset = m->frames.len + 4;
 	if (length > 0xffffffffu) return TP_BOUND;
+	tp_set32(head, (uint32_t)length);
 	tp_put(&m->frames, head, 4);
 	tp_put(&m->frames, record, length);
 	int why = tp_buf_why(&m->frames);
