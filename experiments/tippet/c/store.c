@@ -1,5 +1,5 @@
 // a log's store in memory: its records as frames back to back, as the file store keeps them on
-// disk, and where each step is
+// disk, where each step is, and the snapshot
 #include <string.h>
 
 #include "store.h"
@@ -61,7 +61,7 @@ typedef struct {
 	tp_store store;
 	tp_mem mem;
 	tp_index index;
-	tp_buf frames;
+	tp_buf frames, snap;
 	uint8_t key[32];
 	int keyed;
 } memory;
@@ -108,6 +108,23 @@ static long get(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, 
 	return (long)length;
 }
 
+// one that doesn't fit: none
+static int snapshot(void *self, const uint8_t *bytes, size_t length) {
+	memory *m = self;
+	m->snap.len = 0, m->snap.bad = 0;
+	tp_put(&m->snap, bytes, length);
+	int why = tp_buf_why(&m->snap);
+	if (why) m->snap.len = 0;
+	return why;
+}
+
+static long snapped(void *self, uint8_t *out, size_t cap) {
+	memory *m = self;
+	if (!m->snap.len) return -1;
+	if (m->snap.len <= cap) memcpy(out, m->snap.p, m->snap.len);
+	return (long)m->snap.len;
+}
+
 static int key(void *self, const uint8_t seed[32], uint8_t out[32]) {
 	memory *m = self;
 	if (!m->keyed) memcpy(m->key, seed, 32), m->keyed = 1;
@@ -119,7 +136,7 @@ static void shut(void *self) {
 	memory *m = self;
 	tp_mem mem = m->mem;
 	tp_index_clear(&m->index);
-	tp_buf_free(&m->frames);
+	tp_buf_free(&m->frames), tp_buf_free(&m->snap);
 	tp_free(&mem, m, sizeof *m);
 }
 
@@ -130,6 +147,7 @@ tp_store *tp_memory_store(const tp_mem *mem, size_t max) {
 	m->mem = *mem;
 	m->index.mem = &m->mem;
 	m->frames.mem = &m->mem, m->frames.max = max;
-	m->store = (tp_store){m, load, append, get, key, shut};
+	m->snap.mem = &m->mem, m->snap.max = max;
+	m->store = (tp_store){m, load, append, get, snapshot, snapped, key, NULL, shut};
 	return &m->store;
 }

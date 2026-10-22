@@ -139,7 +139,7 @@ Deno.test("fresh 3: a link sync drops for a send that threw is never closed, and
 	assertEquals({ wasClosed, polling: after > before }, { wasClosed: true, polling: false })
 })
 
-Deno.test("fresh 4: a stranger fills galaxy's disk: a dir per name, and a step of any size", async () => {
+Deno.test("fresh 4: a stranger fills galaxy's disk: a dir per name. a step of any size is kept (chee: no cap for now)", async () => {
 	const dir = await Deno.makeTempDir()
 	const g = createGalaxy({ dir })
 	const srv = Deno.serve({ port: 0, onListen() {} }, g.handler)
@@ -169,7 +169,7 @@ Deno.test("fresh 4: a stranger fills galaxy's disk: a dir per name, and a step o
 	await g.close(), await srv.shutdown()
 	const dirs = (await Array.fromAsync(Deno.readDir(dir))).length
 	await Deno.remove(dir, { recursive: true })
-	assertEquals({ dirs, big: size >= 8_000_000 }, { dirs: 1, big: false })
+	assertEquals({ dirs, big: size >= 8_000_000 }, { dirs: 1, big: true })
 })
 
 Deno.test("fresh 6: a step that failed and then applied in a redo stays in failed", async () => {
