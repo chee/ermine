@@ -5,7 +5,7 @@
 #ifdef ESP_PLATFORM
 #include "littlesync.h"
 
-#include "../../../../ermine/encoding/c/commit.h"
+#include "../../../../playground/encoding/c/commit.h"
 
 #include "nvs.h"
 

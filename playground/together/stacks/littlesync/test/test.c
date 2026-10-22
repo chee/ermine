@@ -5,9 +5,9 @@
 #include "../../../../../playground/demos/pigs/littlesync/pigs.h"
 
 #include "../../../../../ermine/encoding/c/cbor.h"
-#include "../../../../../ermine/encoding/c/commit.h"
+#include "../../../../../playground/encoding/c/commit.h"
 #include "../../../../../ermine/encoding/c/json.h"
-#include "../../../../../ermine/encoding/c/pack.h"
+#include "../../../../../playground/encoding/c/pack.h"
 #include "../../../../../core/op/c/json.h"
 #include "../../../../../core/ed25519/c/ed25519.h"
 #include "../../../../../playground/together/c/seal.h"

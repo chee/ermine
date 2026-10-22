@@ -5,7 +5,7 @@
 // h'...', a typed array as its tag on its bytes, 85(h'0000803f'), a
 // stand-in as its tag on its kind, 305419896("clock"), and each
 // number as the shortest decimal that reads back as it, always with a point
-// or an exponent: 1.0, NaN, Infinity, -Infinity, -0.0. No final newline.
+// or an exponent: 1.0, NaN, Infinity, -Infinity, 0.0. No final newline.
 //
 // read: any spacing, comments as RFC 8610 Appendix G writes them, any key
 // order, indefinite lengths, bytes as h'', b64'' or '', any integer or
@@ -15,9 +15,8 @@
 //
 // Reading also takes what RFC 8949 and RFC 8610 allow beside these: integers
 // in 0x, 0o and 0b, encoding indicators (_0 to _3), ''_ and ""_, \u{...}, a
-// last comma, and spacing and comments inside h''. An integer has no sign
-// bit, so -0 is 0 and -0.0 is -0. A typed array's NaN elements read as the
-// one NaN.
+// last comma, and spacing and comments inside h''. Zero has no sign, so -0
+// and -0.0 are 0. A typed array's NaN elements read as the one NaN.
 
 import { CborError, decode, encode, Stand, type Value } from "@ermine/encoding/cbor"
 
@@ -48,6 +47,8 @@ export function write(value: Value): string {
 function show(x: Value, indent: string): string {
 	if (x === null || typeof x === "boolean") return String(x)
 	if (typeof x === "number") return decimal(x)
+	// a whole number past a double's exact ones: as the nearest double, as read
+	if (typeof x === "bigint") return decimal(Number(x))
 	if (typeof x === "string") return quote(x)
 	if (x instanceof Uint8Array) return hex(x)
 	if (x instanceof Stand) return `${STAND}(${show(x.kind, indent)})`
@@ -71,7 +72,7 @@ function show(x: Value, indent: string): string {
 /** The shortest decimal that reads back as x, with a point or an exponent. */
 function decimal(x: number): string {
 	if (!Number.isFinite(x)) return String(x) // NaN, Infinity, -Infinity
-	if (Object.is(x, -0)) return "-0.0"
+	if (Object.is(x, -0)) return "0.0" // zero has no sign
 	const s = String(x) // the fewest digits that read back as x
 	return /[.e]/.test(s) ? s : s + ".0"
 }
@@ -363,7 +364,8 @@ class Reader {
 			body = negative ? s.slice(1) : s
 		if (!/^0[xob]/i.test(body) && /[.e]/i.test(body)) {
 			this.indicator(false)
-			return Number(s) // the nearest, as JavaScript reads a decimal
+			const x = Number(s) // the nearest, as JavaScript reads a decimal
+			return x === 0 ? 0 : x // zero has no sign
 		}
 		const n = BigInt(body)
 		this.indicator(false)

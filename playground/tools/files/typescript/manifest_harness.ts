@@ -49,8 +49,8 @@ import createNode, {
 import * as m from "./manifest.ts"
 import type { Sys } from "./sys.ts"
 import { FormError, StoreError } from "./types.ts"
-import { fromJson, toJson } from "../../../conformance/typescript/form.ts"
-import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
+import { fromJson, toJson } from "../../../../conformance/typescript/form.ts"
+import { type Answer, type Request, serve } from "../../../../conformance/typescript/harness.ts"
 
 type V = Version<unknown, unknown>
 type N = Node<unknown, unknown>

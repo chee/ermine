@@ -26,7 +26,7 @@
 import { dir, disk, lay, prune, relative, sameInfo } from "./layout.ts"
 import * as names from "./names.ts"
 import type { Form, Graph, Id, Info, Layout, Node } from "./types.ts"
-import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
+import { type Answer, type Request, serve } from "../../../../conformance/typescript/harness.ts"
 
 /** The null value's hash. */
 export const NULL = "61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4"

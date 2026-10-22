@@ -36,7 +36,7 @@
 		{
 			"op": "decode",
 			"codec": "shown",
-			"bytes": "a164686f6d6583f93c006178f90000",
+			"bytes": "a164686f6d658301617800",
 			"expect": {
 				"code": "store"
 			}
@@ -44,7 +44,7 @@
 		{
 			"op": "decode",
 			"codec": "shown",
-			"bytes": "a16466696c65f93c00",
+			"bytes": "a16466696c6501",
 			"expect": {
 				"code": "store"
 			}
@@ -76,7 +76,7 @@
 		{
 			"op": "decode",
 			"codec": "shown",
-			"bytes": "a1657369646573826178f93c00",
+			"bytes": "a165736964657382617801",
 			"expect": {
 				"code": "store"
 			}
@@ -92,7 +92,7 @@
 		{
 			"op": "decode",
 			"codec": "shown",
-			"bytes": "a167656e7472696573a16161f93c00",
+			"bytes": "a167656e7472696573a1616101",
 			"expect": {
 				"code": "store"
 			}
@@ -108,7 +108,7 @@
 		{
 			"op": "decode",
 			"codec": "shown",
-			"bytes": "a167656e7472696573a16161826178f94000",
+			"bytes": "a167656e7472696573a1616182617802",
 			"expect": {
 				"code": "store"
 			}
@@ -140,7 +140,7 @@
 		{
 			"op": "decode",
 			"codec": "shown",
-			"bytes": "a1656578747261f93c00",
+			"bytes": "a165657874726101",
 			"expect": {
 				"code": "store"
 			}

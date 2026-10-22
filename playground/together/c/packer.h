@@ -10,7 +10,7 @@
 #ifndef PKR_PACKER_H
 #define PKR_PACKER_H
 
-#include "../../../ermine/encoding/c/commit.h"
+#include "../../../playground/encoding/c/commit.h"
 
 #include <stdbool.h>
 #include <stddef.h>

@@ -6,8 +6,8 @@
 // answered). A value that cannot be carried (a form standing for none): "cannot-carry". Another
 // implementation joins by speaking this (HARNESS).
 import { DiagError, read, write } from "./diag.ts"
-import { FormError, fromJson, toJson } from "../../../conformance/typescript/form.ts"
-import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
+import { FormError, fromJson, toJson } from "../../../../conformance/typescript/form.ts"
+import { type Answer, type Request, serve } from "../../../../conformance/typescript/harness.ts"
 
 function answer(r: Request): Answer {
 	try {

@@ -46,8 +46,8 @@ import { find, type Mirror, mirror, stores } from "./store.ts"
 import { byCodePoint } from "./names.ts"
 import { StoreError } from "./types.ts"
 import { Disk, storeSnapshot, UUIDS } from "./disk_harness.ts"
-import { fromJson, toJson } from "../../../conformance/typescript/form.ts"
-import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
+import { fromJson, toJson } from "../../../../conformance/typescript/form.ts"
+import { type Answer, type Request, serve } from "../../../../conformance/typescript/harness.ts"
 
 type V = Version<unknown, unknown>
 type N = Node<unknown, unknown>

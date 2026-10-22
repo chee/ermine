@@ -5,7 +5,7 @@
 #include "packer.h"
 
 #include "../../../ermine/encoding/c/cbor.h"
-#include "../../../ermine/encoding/c/commit.h"
+#include "../../../playground/encoding/c/commit.h"
 #include "seal.h"
 
 #include <math.h>

@@ -22,7 +22,8 @@
 // Another implementation joins by speaking this (HARNESS).
 import * as names from "./names.ts"
 import type { Form } from "./types.ts"
-import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
+import { toJson } from "../../../../conformance/typescript/form.ts"
+import { type Answer, type Request, serve } from "../../../../conformance/typescript/harness.ts"
 
 const unhex = (s: unknown) =>
 	Uint8Array.from(typeof s === "string" ? s.match(/../g) ?? [] : [], (x) => parseInt(x, 16))
@@ -61,8 +62,13 @@ function run(r: Request): unknown {
 			return names.passes(name, r.pass as string[])
 		case "member":
 			return names.member(r.n as number, r.words as string | undefined)
-		case "number":
-			return names.number(r.stem as string) ?? null
+		case "number": {
+			// in the JSON form: a whole number past 2^53 is a bigint, as C writes it; one past every
+			// double (Infinity): null
+			const got = names.number(r.stem as string)
+			if (got === undefined) return null
+			return toJson([Number.isFinite(got[0]) ? got[0] : null, got[1]]) as Answer
+		}
 		case "take":
 			return names.take(r.entry as string)
 		case "renamed":

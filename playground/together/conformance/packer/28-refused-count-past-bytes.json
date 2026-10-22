@@ -1,0 +1,25 @@
+{
+	"title": "n more than the pack has bytes is refused before anything is made for it: every commit takes a byte of time at least",
+	"steps": [
+		{
+			"op": "make",
+			"name": "a",
+			"time": 1760000000,
+			"nonce": 1,
+			"patches": [{ "path": [], "value": { "body": "" } }]
+		},
+		{ "op": "pack", "commits": ["a"], "name": "r" },
+		{
+			"op": "unpack",
+			"pack": "r",
+			"set": { "n": 9007199254740991 },
+			"expect": { "error": "count" }
+		},
+		{
+			"op": "unpack",
+			"pack": "r",
+			"set": { "n": 100000000, "table": [["t", 100000000]] },
+			"expect": { "error": "count" }
+		}
+	]
+}

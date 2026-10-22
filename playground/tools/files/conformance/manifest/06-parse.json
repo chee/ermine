@@ -228,7 +228,7 @@
 			"bytes": "2d302e30",
 			"form": "cbor",
 			"expect": {
-				"value": -0
+				"value": 0
 			}
 		},
 		{
@@ -244,7 +244,11 @@
 			"bytes": "31652b3231",
 			"form": "cbor",
 			"expect": {
-				"value": 1e+21
+				"value": {
+					"/": {
+						"bigint": "1000000000000000000000"
+					}
+				}
 			}
 		},
 		{
@@ -316,7 +320,7 @@
 			"expect": {
 				"value": {
 					"theme": "dark",
-					"n": -0,
+					"n": 0,
 					"b": {
 						"/": {
 							"bytes": "AAA"

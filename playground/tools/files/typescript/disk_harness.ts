@@ -24,7 +24,7 @@
 import * as cbor from "@ermine/encoding/cbor"
 import { byCodePoint } from "./names.ts"
 import { attr, type Sys, system } from "./sys.ts"
-import { fromJson, toJson } from "../../../conformance/typescript/form.ts"
+import { fromJson, toJson } from "../../../../conformance/typescript/form.ts"
 
 // the platform's calls, made when first needed
 let made: Sys | undefined

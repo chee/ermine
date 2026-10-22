@@ -87,13 +87,13 @@
 		},
 		{
 			"op": "write",
-			"path": "values/128157e5647a8d29a5d1c8edd204b8fb01c797c38ee02558d02158a4e3fb610f",
+			"path": "values/74a1c68dabb660207c842b9b7dd0953a6a8e8158bb397c5bd4ea9fceda0c4c96",
 			"bytes": "ff",
 			"expect": {}
 		},
 		{
 			"op": "get",
-			"hash": "128157e5647a8d29a5d1c8edd204b8fb01c797c38ee02558d02158a4e3fb610f",
+			"hash": "74a1c68dabb660207c842b9b7dd0953a6a8e8158bb397c5bd4ea9fceda0c4c96",
 			"form": "cbor",
 			"expect": {
 				"code": "store"

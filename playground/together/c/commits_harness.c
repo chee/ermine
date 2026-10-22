@@ -1,8 +1,8 @@
 // The commits a harness makes (commits_harness.h)
 #include "commits_harness.h"
 
-#include "../../../ermine/encoding/c/commit_form_harness.h"
-#include "../../../ermine/encoding/c/pack.h"
+#include "../../../playground/encoding/c/commit_form_harness.h"
+#include "../../../playground/encoding/c/pack.h"
 
 #include <stdlib.h>
 #include <string.h>

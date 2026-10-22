@@ -15,7 +15,7 @@
 #ifndef HY_HISTORY_H
 #define HY_HISTORY_H
 
-#include "../../../ermine/encoding/c/commit.h"
+#include "../../../playground/encoding/c/commit.h"
 
 #include <stdbool.h>
 #include <stddef.h>
