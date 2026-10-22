@@ -162,7 +162,7 @@ export function createOffers(c: Ctx) {
 	}
 
 	// a name an earlier session of this install left in one of the den's folders, offered by none
-	// now: out of its folder, its attributes out
+	// now: out of its folder (every name pointing at it), its attributes out
 	function unlist(id: Id) {
 		if (!c.stored || c.closed) return
 		for (const kind of KINDS) {
@@ -170,10 +170,10 @@ export function createOffers(c: Ctx) {
 			const there = table.get("children", fid) as Entry<unknown> | undefined
 			const names = there?.value
 			if (there === undefined || !isMap(names)) continue
-			const name = Object.keys(names).find((k) => names[k] === id)
-			if (name === undefined) continue
+			const gone = Object.keys(names).filter((k) => names[k] === id)
+			if (gone.length === 0) continue
 			s.runWithScope(c.mine.scope, () => {
-				update(there, [{ path: [name] }], headerOf())
+				update(there, gone.map((name) => ({ path: [name] })), headerOf())
 				commit([there])
 				if (table.get("attributes", id) !== undefined) table.del("attributes", id)
 			})

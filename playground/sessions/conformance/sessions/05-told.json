@@ -7,7 +7,8 @@
 			"install": "I1",
 			"skip": [
 				"kind",
-				"differs"
+				"differs",
+				"vouched"
 			]
 		},
 		{
@@ -16,7 +17,8 @@
 			"install": "I2",
 			"skip": [
 				"kind",
-				"differs"
+				"differs",
+				"vouched"
 			]
 		},
 		{

@@ -28,8 +28,8 @@
 // dn_offer: a node <owner id>/<kind>/<name> in the folder <owner id>/<kind> (made at the first offer
 // of that kind, upserted into the owner's children; held, empty, after its last offer goes), its
 // attributes as given and ermine.type ermine.runner | ermine.compiler | ermine.surface over them,
-// its value live; a name taken (offered, or entries at its id already): refused taken, nothing
-// made. a process runs under the scope of the offer it runs on (dens.ts' start), so an offer's node
+// its value live; a name taken (offered now; for a process's, entries at its id already; for the
+// den's, a live value there): refused taken, nothing made. a process runs under the scope of the offer it runs on (dens.ts' start), so an offer's node
 // going takes what runs on it, newest first. dn_withdraw: its name out, then its node gone, its
 // users stopped "withdrawn" (its attributes out too). an owner's stop takes its offers first, newest first, their users
 // stopped "runner-stopped", then its own handle.
@@ -305,7 +305,8 @@ typedef struct {
 } dn_world;
 
 // the ask written under the den's method (site: the caller's, as above): its id, new. NULL: an ask
-// that does not encode, or has no op
+// that does not encode, has no op, or has an op that is neither "start" nor "stop"; and with no scope
+// open (the header cannot be made): nothing is written
 char *dn_ask_write_at(const dn_world *w, const char *den, const op_value *ask, const ch_site *site);
 #define dn_ask_write(...) dn_ask_write_at(__VA_ARGS__, CH_HERE)
 // the answer to the ask n, the read told; NULL until there. borrowed

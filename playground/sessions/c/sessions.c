@@ -1,6 +1,7 @@
 // Sessions (sessions.h), after typescript/sessions.ts.
 #include "sessions.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,12 +13,48 @@ static void *xalloc(size_t n) {
 }
 static char *xdup(const char *s) { return strcpy(xalloc(strlen(s) + 1), s); }
 
-sess_session sess_start(const uint8_t random[16], const char *install) {
-	sess_session s = {.install = install};
-	uint8_t id[ID_SHORT];
-	id_fresh(random, id);
-	id_text(id, ID_SHORT, s.id);
-	return s;
+// what an install signs for a session: the domain (17 bytes), then the two keys (32 each)
+#define VOUCH_DOMAIN "ermine/v1/session"
+#define VOUCH_DOMAIN_LENGTH 17
+#define VOUCHING (VOUCH_DOMAIN_LENGTH + 64)
+
+// a key id's raw key; false: not a key id
+static bool key_of(const char *id, uint8_t key[32]) {
+	uint8_t bytes[ID_MAX];
+	size_t n = id_parse(id, strlen(id), bytes);
+	if (n == 0 || id_kind_of(bytes, n) != ID_KEY) return false;
+	memcpy(key, bytes + 2, 32);
+	return true;
+}
+
+static void vouching(const uint8_t install[32], const uint8_t session[32], uint8_t out[VOUCHING]) {
+	memcpy(out, VOUCH_DOMAIN, VOUCH_DOMAIN_LENGTH);
+	memcpy(out + VOUCH_DOMAIN_LENGTH, install, 32);
+	memcpy(out + VOUCH_DOMAIN_LENGTH + 32, session, 32);
+}
+
+int sess_start(const uint8_t random[32], const sess_install *install, const sess_signing *signing, sess_session *out) {
+	uint8_t install_key[32];
+	if (!key_of(install->id, install_key)) return SESS_BAD_INSTALL;
+	sess_session s = {.install = install->id};
+	memcpy(s.secret, random, 32);
+	if (!signing->public_key_of(signing->ctx, s.secret, s.key)) return SESS_FAILED;
+	uint8_t message[VOUCHING];
+	vouching(install_key, s.key, message);
+	if (!signing->sign(signing->ctx, install->secret, message, sizeof message, s.vouch)) return SESS_FAILED;
+	uint8_t id[34] = {0xed, 0x01};
+	memcpy(id + 2, s.key, 32);
+	id_text(id, sizeof id, s.id);
+	*out = s;
+	return SESS_OK;
+}
+
+bool sess_vouched(const char *id, const char *install, const uint8_t vouch[64], const sess_verifying *verifying) {
+	uint8_t install_key[32], session_key[32];
+	if (!key_of(install, install_key) || !key_of(id, session_key)) return false;
+	uint8_t message[VOUCHING];
+	vouching(install_key, session_key, message);
+	return verifying->verify(verifying->ctx, install_key, message, sizeof message, vouch);
 }
 
 // a write made as the world's scope
@@ -47,7 +84,8 @@ static bool is_map(const op_value *v) { return v != NULL && v->type == OP_MAP; }
 static bool is_beat(const op_value *v) {
 	if (!is_map(v)) return false;
 	const op_value *install = op_get(v, "install"), *until = op_get(v, "until");
-	return install != NULL && install->type == OP_STR && until != NULL && until->type == OP_NUM;
+	return install != NULL && install->type == OP_STR && until != NULL && until->type == OP_NUM &&
+		isfinite(until->num);
 }
 
 static double until_of(const op_value *beat) { return op_get(beat, "until")->num; }
@@ -171,7 +209,7 @@ void sess_sweep(sess_world *w, const char *node, int64_t now) {
 	char **names = xalloc(count * sizeof *names);
 	for (size_t i = 0; i < count; i++) {
 		const op_value *b = there->value->items[i];
-		if (!is_beat(b) || until_of(b) <= (double)now) names[old++] = xdup(there->value->keys[i]);
+		if (!is_beat(b) || !(until_of(b) > (double)now)) names[old++] = xdup(there->value->keys[i]);
 	}
 	remove_from(w, node, names, old);
 	for (size_t i = 0; i < old; i++) free(names[i]);
@@ -187,7 +225,7 @@ sess_heres sess_online(sess_world *w, const char *node, int64_t now) {
 	out.items = xalloc(all->count * sizeof *out.items);
 	for (size_t i = 0; i < all->count; i++) {
 		const op_value *b = all->items[i];
-		if (!is_beat(b) || until_of(b) <= (double)now) continue;
+		if (!is_beat(b) || !(until_of(b) > (double)now)) continue;
 		out.items[out.n++] = (sess_here){xdup(all->keys[i]), xdup(op_get(b, "install")->str),
 			(int64_t)until_of(b)};
 	}

@@ -47,7 +47,7 @@ static op_value *body_of(const op_value *ask) {
 
 char *dn_ask_write_at(const dn_world *w, const char *den, const op_value *ask, const ch_site *site) {
 	const char *op = dn_str_at(ask, "op");
-	if (op == NULL) return NULL;
+	if (op == NULL || (strcmp(op, "start") != 0 && strcmp(op, "stop") != 0)) return NULL;
 	op_value *body = body_of(ask);
 	char name[65];
 	if (!dn_hash_hex(body, name)) {
@@ -59,8 +59,9 @@ char *dn_ask_write_at(const dn_world *w, const char *den, const op_value *ask, c
 	char *id = dn_joined(method, name);
 	// a write with no den: the world's table and places, the caller's site
 	dn stub = {.s = {.table = w->table, .places = w->places}, .site = site};
+	int failed = 0;
 	if (tb_get(w->table, tb_string("value"), tb_string(id)) == NULL) {
-		dn_write_in(&stub, w->scope, (writing){.what = W_ADD, .part = "value", .id = id, .value = body});
+		if (dn_write_in(&stub, w->scope, (writing){.what = W_ADD, .part = "value", .id = id, .value = body}) == -1) failed = 1;
 	}
 	// the method reached from the den's node: its on folder, the folder's method, the method's ask
 	const char *steps[3] = {DN_ON, op, name};
@@ -68,13 +69,19 @@ char *dn_ask_write_at(const dn_world *w, const char *den, const op_value *ask, c
 	const char *kids[3] = {on, method, id};
 	for (size_t i = 0; i < 3; i++) {
 		op_value *v = op_str(kids[i]);
-		dn_write_in(&stub, w->scope, (writing){.what = W_UPSERT, .part = "children", .id = parents[i],
-			.path = &steps[i], .n = 1, .value = v});
+		if (dn_write_in(&stub, w->scope, (writing){.what = W_UPSERT, .part = "children", .id = parents[i],
+			.path = &steps[i], .n = 1, .value = v}) == -1)
+			failed = 1;
 		op_free(v);
 	}
 	free(on);
 	op_free(body);
 	free(method);
+	// no scope open: the header could not be made, nothing was written
+	if (failed) {
+		free(id);
+		return NULL;
+	}
 	return id;
 }
 
@@ -140,7 +147,7 @@ static void reply(dn *d, const char *op, const char *id) {
 	PUSH(d->answered, d->nanswered, d->capanswered, dn_xdup(id));
 	const nd_entry *e = tb_get(d->s.table, tb_string("value"), tb_string(id));
 	op_value *a = ask_of(op, e != NULL ? e->value : NULL);
-	op_value *out = a == NULL ? NULL : dn_ask_at(d, dn_get(a, "who"), a, NULL);
+	op_value *out = a == NULL ? NULL : dn_ask_inner(d, dn_get(a, "who"), a, NULL);
 	if (out == NULL) out = error_of("not-an-ask");
 	op_free(a);
 	// what start threw there (a places code) is { error }, as a refusal is not

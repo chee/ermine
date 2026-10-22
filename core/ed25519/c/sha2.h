@@ -1,5 +1,4 @@
-// SHA-512 (FIPS 180-4) for c/ed25519/ed25519.c, which includes "sha2.h" and finds none beside it
-// in newcore/c. Built with -Isync/c (the Makefile).
+// SHA-512 (FIPS 180-4) for ed25519.c, which includes "sha2.h" from beside it.
 #ifndef SHA2_H
 #define SHA2_H
 

@@ -138,7 +138,6 @@ static op_value *start_from(dn *d, const op_value *who, int remote, const op_val
 }
 
 static op_value *ask_now(dn *d, const op_value *who, const op_value *ask) {
-	dn_forget(d);
 	const char *op = dn_str_at(ask, "op");
 	if (op == NULL || (strcmp(op, "start") != 0 && strcmp(op, "stop") != 0)) return NULL;
 	if (d->closed) return with_refused("stopped");
@@ -156,11 +155,16 @@ static op_value *ask_now(dn *d, const op_value *who, const op_value *ask) {
 	return op_map();
 }
 
-op_value *dn_ask_at(dn *d, const op_value *who, const op_value *ask, const ch_site *site) {
+op_value *dn_ask_inner(dn *d, const op_value *who, const op_value *ask, const ch_site *site) {
 	const ch_site *was = dn_enter(d, site);
 	op_value *out = ask_now(d, who, ask);
 	dn_leave(d, was);
 	return out;
+}
+
+op_value *dn_ask_at(dn *d, const op_value *who, const op_value *ask, const ch_site *site) {
+	dn_forget(d);
+	return dn_ask_inner(d, who, ask, site);
 }
 
 op_value *dn_on_at(dn *d, const char *op, const op_value *body, const ch_site *site) {

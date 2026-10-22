@@ -1,12 +1,16 @@
 // The C sessions (sessions.h) on the line protocol of typescript/sessions_harness.ts, which documents
 // it (conformance/c/harness.h has the loop). One world for the run: a table, places, a scheduler and a
-// root scope the beats are written in. Sessions are named in requests and answers by the name they
-// were started with.
+// root scope the beats are written in. Sessions and installs are named in requests and answers by the
+// name they were started with. An install named N has the secret BLAKE3 of N's UTF-8, its id its
+// key's; Ed25519 is the repo's (core/ed25519/c: this harness's only, sessions knows none).
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "../../../conformance/c/harness.h"
+#include "../../../core/ed25519/c/ed25519.h"
+#include "../../../ermine/encoding/c/blake3/blake3.h"
 #include "sessions.h"
 
 #define PUSH(v, n, cap, x) \
@@ -34,9 +38,9 @@ static sc_scope *scope;
 static sc_pair info;
 static sess_world world;
 static int begun;
-// every line is kept: what the table holds refers into it (the nodes, the installs)
-static hh_line **lines;
-static size_t nlines, caplines;
+// the watches made, freed at the end
+static void **watches;
+static size_t nwatches, capwatches;
 
 static void drop(void *value, void *data) {
 	(void)data;
@@ -72,8 +76,60 @@ static named *session_named(const char *name) {
 	return NULL;
 }
 
-// the name a session id was started with, else the id itself
+// the installs, by name: each kept whole, a session borrows its id
+typedef struct {
+	char *name;
+	char id[ID_TEXT];
+	sess_install install;
+} installed;
+static installed **installs;
+static size_t ninstalls, capinstalls;
+
+static bool ed25519_of(void *ctx, const uint8_t secret[32], uint8_t out[32]) {
+	(void)ctx;
+	ermEd25519Public(secret, out);
+	return true;
+}
+
+static bool ed25519_sign(void *ctx, const uint8_t secret[32], const uint8_t *message, size_t length, uint8_t out[64]) {
+	(void)ctx;
+	ermEd25519Sign(secret, message, length, out);
+	return true;
+}
+
+static bool ed25519_verify(void *ctx, const uint8_t key[32], const uint8_t *message, size_t length,
+	const uint8_t signature[64]) {
+	(void)ctx;
+	return ermEd25519Verify(key, message, length, signature);
+}
+
+static const sess_signing signing = {.public_key_of = ed25519_of, .sign = ed25519_sign};
+static const sess_verifying verifying = {.verify = ed25519_verify};
+
+// the install a name stands for, made the first time
+static installed *install_named(const char *name) {
+	for (size_t i = 0; i < ninstalls; i++) {
+		if (strcmp(installs[i]->name, name) == 0) return installs[i];
+	}
+	installed *in = xalloc(sizeof *in);
+	in->name = xdup(name);
+	blake3_hasher h;
+	blake3_hasher_init(&h);
+	blake3_hasher_update(&h, name, strlen(name));
+	blake3_hasher_finalize(&h, in->install.secret, 32);
+	uint8_t id[34] = {0xed, 0x01};
+	ermEd25519Public(in->install.secret, id + 2);
+	id_text(id, sizeof id, in->id);
+	in->install.id = in->id;
+	PUSH(installs, ninstalls, capinstalls, in);
+	return in;
+}
+
+// the name a session or install id was started with, else the id itself
 static const char *name_of(const char *id) {
+	for (size_t i = 0; i < ninstalls; i++) {
+		if (strcmp(installs[i]->id, id) == 0) return installs[i]->name;
+	}
 	for (size_t i = 0; i < nsessions; i++) {
 		if (strcmp(sessions[i].session.id, id) == 0) return sessions[i].name;
 	}
@@ -90,7 +146,7 @@ static op_value *names_of(sess_heres *here) {
 }
 
 typedef struct {
-	const char *node;
+	char *node;
 	int64_t now;
 } watching;
 
@@ -144,6 +200,36 @@ static bool whole(const op_value *r, const char *key, int64_t *out) {
 	return true;
 }
 
+// the number "NaN" or "Infinity" stands for; NULL: v is neither. new
+static op_value *number_of(const op_value *v) {
+	if (v->type != OP_STR) return NULL;
+	if (strcmp(v->str, "NaN") == 0) return op_num(NAN);
+	if (strcmp(v->str, "Infinity") == 0) return op_num(INFINITY);
+	return NULL;
+}
+
+typedef struct {
+	const char *node, *key;
+	const op_value *value;
+} put_t;
+
+// the value at key in the node's online entry, as a carrier might bring it
+static void put_in(void *data) {
+	put_t *p = data;
+	ch_header h;
+	pl_made *made;
+	char *bad = pl_header(places, NULL, 0, CH_HERE, &h, &made);
+	if (bad != NULL) abort();
+	const char *path[1] = {p->key};
+	pl_changed changed;
+	nd_entry *node;
+	pl_upsert(places, tb_string(SESS_PART), tb_string(p->node), path, 1, p->value, h, &changed, &node);
+	for (size_t i = 0; i < changed.n; i++) pl_hold_also(places, changed.entries[i], pl_made_ref(made), pl_made_free);
+	if (node != NULL) pl_hold(places, node, made, pl_made_free);
+	else pl_made_free(made);
+	pl_commit(places, &changed);
+}
+
 static const char *kinds[] = {NULL, "fresh", "hashed", "key"};
 
 void hh_start(void) {}
@@ -155,9 +241,6 @@ void hh_answer(const op_value *r, FILE *out) {
 		return;
 	}
 	begin();
-	// the line is kept: the table holds strings of it
-	hh_line *line = hh_retain();
-	if (nlines == 0 || lines[nlines - 1] != line) PUSH(lines, nlines, caplines, line);
 	if (seen == NULL) seen = op_list();
 	const char *node = hh_str(r, "node");
 	int64_t n = 0;
@@ -167,13 +250,19 @@ void hh_answer(const op_value *r, FILE *out) {
 			hh_error(out, "start: no name or install");
 			return;
 		}
-		uint8_t random[16];
+		installed *in = install_named(install);
+		uint8_t random[32];
 		arc4random_buf(random, sizeof random);
-		sess_session s = sess_start(random, install);
+		sess_session s;
+		if (sess_start(random, &in->install, &signing, &s) != SESS_OK) {
+			hh_error(out, "start: no session");
+			return;
+		}
 		bool differs = true;
 		for (size_t i = 0; i < nsessions; i++) {
 			if (strcmp(sessions[i].session.id, s.id) == 0) differs = false;
 		}
+		bool vouched = sess_vouched(s.id, s.install, s.vouch, &verifying);
 		PUSH(sessions, nsessions, capsessions, ((named){xdup(name), s}));
 		uint8_t id[ID_MAX];
 		size_t m = id_parse(s.id, strlen(s.id), id);
@@ -181,7 +270,22 @@ void hh_answer(const op_value *r, FILE *out) {
 		fputs("{\"kind\":", out);
 		if (k) op_json_string(out, k);
 		else fputs("null", out);
-		fprintf(out, ",\"differs\":%s}", differs ? "true" : "false");
+		fprintf(out, ",\"differs\":%s,\"vouched\":%s}", differs ? "true" : "false", vouched ? "true" : "false");
+	} else if (strcmp(op, "vouched") == 0) {
+		named *s = session_named(hh_str(r, "session"));
+		if (s == NULL) {
+			hh_error(out, "no session %s", hh_str(r, "session") ? hh_str(r, "session") : "");
+			return;
+		}
+		const char *as = hh_str(r, "as"), *from = hh_str(r, "from");
+		named *taken = from ? session_named(from) : s;
+		if (taken == NULL) {
+			hh_error(out, "no session %s", from);
+			return;
+		}
+		const char *install = as ? install_named(as)->id : s->session.install;
+		bool ok = sess_vouched(s->session.id, install, taken->session.vouch, &verifying);
+		fprintf(out, "{\"vouched\":%s}", ok ? "true" : "false");
 	} else if (strcmp(op, "beat") == 0 || strcmp(op, "leave") == 0) {
 		named *s = session_named(hh_str(r, "session"));
 		if (s == NULL) {
@@ -222,7 +326,7 @@ void hh_answer(const op_value *r, FILE *out) {
 			fputs("{\"session\":", out);
 			op_json_string(out, name_of(rd.here.items[i].session));
 			fputs(",\"install\":", out);
-			op_json_string(out, rd.here.items[i].install);
+			op_json_string(out, name_of(rd.here.items[i].install));
 			fprintf(out, ",\"until\":%lld}", (long long)rd.here.items[i].until);
 		}
 		fputs("]}", out);
@@ -237,19 +341,54 @@ void hh_answer(const op_value *r, FILE *out) {
 		if (there != NULL && there->value != NULL && there->value->type == OP_MAP) {
 			op_value *v = op_map();
 			for (size_t i = 0; i < there->value->count; i++) {
-				op_set(v, name_of(there->value->keys[i]), op_ref(there->value->items[i]));
+				// the beat as stored, its install by name
+				const op_value *beat = there->value->items[i];
+				if (beat->type != OP_MAP) {
+					op_set(v, name_of(there->value->keys[i]), op_ref((op_value *)beat));
+					continue;
+				}
+				op_value *b = op_map();
+				const op_value *install = op_get(beat, "install");
+				op_set(b, "install", op_str(install && install->type == OP_STR ? name_of(install->str) : ""));
+				if (op_get(beat, "until")) op_set(b, "until", op_ref(op_get(beat, "until")));
+				op_set(v, name_of(there->value->keys[i]), b);
 			}
 			op_set(o, "value", v);
 		} else op_set(o, "value", op_null());
 		op_json_write(out, o);
 		op_free(o);
+	} else if (strcmp(op, "put") == 0) {
+		const char *key = hh_str(r, "key");
+		const op_value *value = op_get(r, "value");
+		if (node == NULL || key == NULL || value == NULL) {
+			hh_error(out, "put: no node, key or value");
+			return;
+		}
+		// "NaN" and "Infinity" stand for those numbers, as a value or as a map's until
+		op_value *v = number_of(value);
+		if (v == NULL) {
+			v = op_map();
+			for (size_t i = 0; i < value->count && value->type == OP_MAP; i++) {
+				op_value *x = strcmp(value->keys[i], "until") == 0 ? number_of(value->items[i]) : NULL;
+				op_set(v, value->keys[i], x != NULL ? x : op_ref((op_value *)value->items[i]));
+			}
+			if (value->type != OP_MAP) {
+				op_free(v);
+				v = op_ref((op_value *)value);
+			}
+		}
+		put_t p = {node, key, v};
+		sc_run_with_scope(scope, put_in, &p);
+		op_free(v);
+		fputs("{}", out);
 	} else if (strcmp(op, "watch") == 0) {
 		if (node == NULL || !whole(r, "now", &n)) {
 			hh_error(out, "watch: no node or now");
 			return;
 		}
 		watching *w = xalloc(sizeof *w);
-		*w = (watching){node, n};
+		*w = (watching){xdup(node), n};
+		PUSH(watches, nwatches, capwatches, w);
 		sc_run_with_scope(scope, make_watch, w);
 		fputs("{}", out);
 	} else if (strcmp(op, "pulse") == 0) {
@@ -272,6 +411,14 @@ void hh_finish(void) {
 	op_free(seen);
 	for (size_t i = 0; i < nsessions; i++) free(sessions[i].name);
 	free(sessions);
-	for (size_t i = 0; i < nlines; i++) hh_release(lines[i]);
-	free(lines);
+	for (size_t i = 0; i < ninstalls; i++) {
+		free(installs[i]->name);
+		free(installs[i]);
+	}
+	free(installs);
+	for (size_t i = 0; i < nwatches; i++) {
+		free(((watching *)watches[i])->node);
+		free(watches[i]);
+	}
+	free(watches);
 }

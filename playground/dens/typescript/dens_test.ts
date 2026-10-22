@@ -47,6 +47,7 @@ import {
 	type Start,
 	TAKES,
 } from "./dens.ts"
+import { write } from "./asks.ts"
 import { anchorOf, away, connect } from "./away.ts"
 
 const JS = "com.netscape.javascript-source"
@@ -832,4 +833,39 @@ Deno.test("a den's writes name the outside call that made them: an offer's site 
 	// the den's body: its children (on), on's children, on/start's value
 	const on = w.table.get("children", w.den.node)?.change.external?.[0]
 	assert(on?.file.endsWith("dens_test.ts"), JSON.stringify(on))
+})
+
+Deno.test("an ask written with a field set to undefined is the ask without it; one whose op is not start or stop is refused, nothing written", () => {
+	const w = world()
+	const wa = { table: w.table, places: w.places, scheduler: w.s, scope: w.den.scope }
+	const plain = write(wa, w.den.node, { op: "stop", who: { actor: "chee" }, process: "P" })
+	const spread = write(wa, w.den.node, {
+		op: "stop",
+		who: { actor: "chee" },
+		process: "P",
+		reason: undefined,
+	})
+	assertEquals(spread, plain)
+	assertThrows(
+		() =>
+			write(wa, w.den.node, {
+				op: "Start" as "start",
+				who: 1,
+				runner: [],
+				program: { id: "X" },
+				at: [],
+			}),
+		TypeError,
+	)
+	assertEquals(w.table.get(`${String(w.den.node)}/on/Start`), [])
+})
+
+Deno.test("withdraw of a name an earlier session left takes out every name pointing at it", () => {
+	const w = world({ install: { id: INSTALL } })
+	const id = `${String(w.den.node)}/runners/old`
+	w.put("children", `${String(w.den.node)}/runners`, { a: id, b: id, keep: "K" })
+	w.put("attributes", id, { "ermine.type": "ermine.runner" })
+	w.hosted(() => w.den.withdraw(id))
+	assertEquals(w.table.get("children", `${String(w.den.node)}/runners`)?.value, { keep: "K" })
+	assertEquals(w.table.get("attributes", id), undefined)
 })

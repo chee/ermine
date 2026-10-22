@@ -5,15 +5,15 @@
 // ask written twice is one ask (one hash), answered once: to ask for the same thing again, ask
 // something that differs (its who, its args). which question: how it is asked
 //
-//   const n = ask(world, den.node, { op: "start", who, runner, program, at })   // the ask's id
+//   const n = write(world, den.node, { op: "start", who, runner, program, at })  // the ask's id
 //   answer(world, n)              // { id, at } | {} | a refusal | { error }; undefined until then
 //
 // the den's side (answering): every ask under its methods with no answer, as its ask(a) answers
 // another den's (the policy asked, remote), in a run of one effect. only a name whose id is the
 // method's own <method>/<name> is an ask (a child pointing elsewhere is passed over), and only once
 // its value is there (a carrier may bring the name first); a value that is no ask: { error:
-// "not-an-ask" }; one that throws: { error: its code, or its message }. a den with no install: its
-// asks and their answers go with its session
+// "not-an-ask" }; one that throws: { error: its code, or its message }. a den with no install: the
+// asks it answered, and their answers, go with its session
 // who an ask is from is what it says (who): checked once installs sign what they carry; nothing
 // here checks it
 import createEntry from "@ermine/node/entry"
@@ -49,9 +49,12 @@ const methodOf = (den: Id, op: string): Id => `${String(den)}/${ON}/${op}`
 
 // the ask written under the den's method, and the method reached from the den's node (so whatever
 // carries the den's node by its children carries the ask, the den having started or not): its id.
-// one that does not encode: TypeError
-export function ask(w: World, den: Id, a: Ask): Id {
-	const { op, ...body } = a
+// a field set to undefined is left out; an op that is not start or stop, or an ask that does not
+// encode: TypeError
+export function write(w: World, den: Id, a: Ask): Id {
+	const { op, ...fields } = a
+	if (!(OPS as readonly string[]).includes(op)) throw new TypeError(`not an ask: ${String(op)}`)
+	const body = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined))
 	const name = hashOf(body)
 	if (name === undefined) throw new TypeError("an ask that does not encode")
 	const folder: Id = `${String(den)}/${ON}`
@@ -104,7 +107,7 @@ export function askOf(op: string, v: unknown): Ask | undefined {
 }
 
 // the den's side: an effect, made with scope open, answering every ask with no answer yet
-export function answering(c: Ctx, asked: (a: Ask) => Asked, scope: Scope) {
+export function answering(c: Ctx, respond: (a: Ask) => Asked, scope: Scope) {
 	const { s, table, places, commit, headerOf } = c
 	// answered this session (its answer may not have landed yet)
 	const done = new Set<Id>()
@@ -133,7 +136,7 @@ export function answering(c: Ctx, asked: (a: Ask) => Asked, scope: Scope) {
 		const a = askOf(op, value)
 		let out: unknown
 		try {
-			out = a === undefined ? { error: "not-an-ask" } : asked(a)
+			out = a === undefined ? { error: "not-an-ask" } : respond(a)
 		} catch (e) {
 			out = { error: e instanceof PlacesError ? e.code : String((e as Error)?.message ?? e) }
 		}
