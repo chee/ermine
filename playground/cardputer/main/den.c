@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "core/ed25519/c/ed25519.h"
 #include "core/op/c/apply.h"
@@ -51,7 +52,8 @@ static struct {
 	char id[65], room[5];
 	// the den's node and its shared nodes' ids, for the device's life
 	char *node, *things, *inbox, *keys_node;
-	tp_mem mem;
+	// where the log is kept
+	char *dir;
 	tp_log *log;
 	tp_history *history;
 	tp_sync *sync;
@@ -80,6 +82,11 @@ static struct {
 	// tippet's troubles said so far
 	size_t failed, unkept;
 	int kept_on_flash;
+	// the log's store, synced (fsync) a second after this den writes: a FAT file's length is only on
+	// flash once it is (store_file syncs only before its own steps leave on a link)
+	tp_store *store;
+	uint64_t synced;
+	int64_t sync_at;
 	unsigned asks;
 	int code;
 } me;
@@ -104,23 +111,27 @@ static char *joined(const char *a, const char *b) {
 	return c;
 }
 
-// ---- tippet's heap: counted ----
+// ---- tippet's heap: counted, each part's (store, log, history, sync) and all ----
 
-static size_t heap_now, heap_most;
+static const char *const PARTS[4] = {"store", "log", "history", "sync"};
+static size_t part_now[4], part_most[4], heap_now, heap_most;
 static void *counted(void *ctx, void *p, size_t old, size_t size) {
-	(void)ctx;
+	size_t *part = ctx;
 	if (size == 0) {
 		free(p);
-		heap_now -= old;
+		heap_now -= old, *part -= old;
 		return NULL;
 	}
 	void *q = realloc(p, size);
 	if (q != NULL) {
-		heap_now = heap_now - old + size;
+		heap_now = heap_now - old + size, *part = *part - old + size;
 		if (heap_now > heap_most) heap_most = heap_now;
+		size_t i = (size_t)(part - part_now);
+		if (*part > part_most[i]) part_most[i] = *part;
 	}
 	return q;
 }
+static tp_mem mem_of(int part) { return (tp_mem){counted, &part_now[part]}; }
 size_t den_heap(size_t *most) {
 	if (most) *most = heap_most;
 	return heap_now;
@@ -844,30 +855,35 @@ int den_boot(const inst_install *install, const char *code, const char *dir, int
 	snprintf(me.room, sizeof me.room, "%s", code);
 	hex(me.id, install->key, 32);
 	me.node = xstrdup(install->id);
+	me.dir = xstrdup(dir);
 	me.things = joined(me.node, "/things");
 	me.inbox = joined(me.node, "/inbox");
 	me.keys_node = joined(me.node, "/authorized_keys");
 	me.keys = op_map();
 	me.w = host_get();
-	me.mem = (tp_mem){counted, NULL};
 	snprintf(me.net, sizeof me.net, "offline");
 
 	// tippet: the log (the den's key), its history (what is kept), its sync
-	tp_store *store = tp_file_store(&me.mem, dir, 1 << 20);
+	tp_store *store = tp_file_store(&(tp_mem){counted, &part_now[0]}, dir, 1 << 20);
 	me.kept_on_flash = store != NULL;
-	if (store == NULL) store = tp_memory_store(&me.mem, 1 << 20);
-	me.log = tp_log_new(&(tp_log_options){.mem = me.mem, .store = store, .seed = install->secret, .strict = 1,
+	if (store == NULL) store = tp_memory_store(&(tp_mem){counted, &part_now[0]}, 1 << 20);
+	me.store = store;
+	me.log = tp_log_new(&(tp_log_options){.mem = mem_of(1), .store = store, .seed = install->secret, .strict = 1,
 		.told = told});
 	int why = me.log ? tp_log_load(me.log) : TP_NOMEM;
 	if (why) {
 		fprintf(stderr, "den: the log didn't load: %s\n", tp_why(why));
 		return 1;
 	}
-	me.history = tp_history_new(&(tp_history_options){.mem = me.mem, .log = me.log, .table = me.w.table,
+	me.history = tp_history_new(&(tp_history_options){.mem = mem_of(2), .log = me.log, .table = me.w.table,
 		.places = me.w.places, .kept = kept, .run = hosted});
 	if (me.history == NULL) return 1;
+	den_mark("log loaded");
 	if ((why = tp_history_load(me.history))) fprintf(stderr, "den: the history didn't load: %s\n", tp_why(why));
-	me.sync = tp_sync_new(&(tp_sync_options){.mem = me.mem, .log = me.log, .heard = heard, .random = random_bytes});
+	den_mark("history loaded");
+	// live ids remembered: 128, not 1024 (8 KB): one link, few dens beating
+	me.sync = tp_sync_new(&(tp_sync_options){.mem = mem_of(3), .log = me.log, .heard = heard, .random = random_bytes,
+		.seen = 128});
 	if (me.sync == NULL) return 1;
 	printf("den: log in %s%s, %llu steps of its own\n", dir, me.kept_on_flash ? "" : " (not kept: memory only)",
 		(unsigned long long)tp_log_count(me.log, install->key));
@@ -878,6 +894,7 @@ int den_boot(const inst_install *install, const char *code, const char *dir, int
 	}
 	// this den's keys as only its own steps make them
 	for (uint64_t n = 1; n <= tp_log_count(me.log, install->key); n++) keys_from(n);
+	me.synced = den_steps();
 
 	// the programs, at /things/<kind>: a few words of what it is, its form the runner's takes
 	me.functions = hf_new();
@@ -894,6 +911,7 @@ int den_boot(const inst_install *install, const char *code, const char *dir, int
 	}
 	sc_run_with_scope(me.w.host, make_den, NULL);
 	if (me.code) return me.code;
+	den_mark("den made");
 	// its shared nodes, under it; it trusts itself from the start
 	const char *names[3] = {"things", "inbox", "authorized_keys"};
 	const char *ids[3] = {me.things, me.inbox, me.keys_node};
@@ -903,6 +921,11 @@ int den_boot(const inst_install *install, const char *code, const char *dir, int
 	sc_run_with_scope(me.w.host, effects, NULL);
 	sc_run_with_scope(me.w.host, start_things, NULL);
 	host_settle();
+	den_mark("things started");
+	// the history as it is now, kept: the next boot loads it whole (each node's value once) and lands
+	// only the steps after it, where landing every step of the log, a node of each thing of each
+	// boot among them, would hold a few KB a boot
+	if (me.kept_on_flash && den_snapshot() == 0) den_mark("snapshot kept");
 	beat();
 	return 0;
 }
@@ -917,7 +940,7 @@ void den_net(const char *state) {
 
 // the band's lines, and whether they are hot (cherry); how many
 static int band(char lines[2][31], int *hot) {
-	lines[0][0] = lines[1][0] = 0;
+	memset(lines, 0, 2 * 31);
 	*hot = 0;
 	if (me.now < me.until) {
 		snprintf(lines[0], 31, "%s", me.said[0]);
@@ -925,20 +948,21 @@ static int band(char lines[2][31], int *hot) {
 		*hot = me.hot;
 		return lines[1][0] ? 2 : 1;
 	}
-	// who's here: those heard, as their attributes name them
+	// who's here: those heard, as their attributes name them; those here first, then the quiet
 	char line[128] = "";
 	int any = 0;
-	for (size_t i = 0; i < me.nothers; i++) {
-		const other *o = &me.others[i];
-		if (o->heard < 0) continue;
-		char n[80], name[16];
-		install_of(o->who, n);
-		if (tb_get(me.w.table, tb_string("attributes"), tb_string(n)) == NULL) continue;
-		short_name(n, name, sizeof name);
-		size_t l = strlen(line);
-		snprintf(line + l, sizeof line - l, "%s%s %s", any ? ", " : "", name,
-			o->heard > 0 && me.now - o->heard < DEN_QUIET ? "here" : "quiet");
-		any = 1;
+	for (int quiet = 0; quiet < 2; quiet++) {
+		for (size_t i = 0; i < me.nothers; i++) {
+			const other *o = &me.others[i];
+			if (o->heard < 0 || (o->heard > 0 && me.now - o->heard < DEN_QUIET) == quiet) continue;
+			char n[80], name[16];
+			install_of(o->who, n);
+			if (tb_get(me.w.table, tb_string("attributes"), tb_string(n)) == NULL) continue;
+			short_name(n, name, sizeof name);
+			size_t l = strlen(line);
+			snprintf(line + l, sizeof line - l, "%s%s %s", any ? ", " : "", name, quiet ? "quiet" : "here");
+			any = 1;
+		}
 	}
 	if (!any) snprintf(line, sizeof line, "%s: nobody else", me.net);
 	snprintf(lines[0], 31, "%s", line);
@@ -988,11 +1012,29 @@ void den_tick(int64_t now) {
 	}
 	host_settle();
 	troubles();
+	// what the log took since the last sync (its own steps, and others'), on flash within a second
+	uint64_t steps = den_steps();
+	if (steps != me.synced && me.sync_at == 0) me.sync_at = now + 1000;
+	if (me.sync_at && now >= me.sync_at && me.store->sync) {
+		me.sync_at = 0, me.synced = steps;
+		if (me.store->sync(me.store->self)) fprintf(stderr, "den: the log wasn't synced to flash\n");
+	}
 	// the band drawn again when what it says changes (a den gone quiet, a word timed out)
 	char lines[2][31];
 	int hot;
 	band(lines, &hot);
 	if (memcmp(lines, me.shown, sizeof lines) != 0 || hot != me.shown_hot) frame_again();
+}
+
+int den_snapshot(void) {
+	// FAT's rename keeps a file already at its new name: the old snapshot out first (lost on a power
+	// cut between: then a boot lands every step from the log, as with none)
+	char *was = joined(me.dir, "/snapshot");
+	unlink(was);
+	free(was);
+	int why = tp_history_snapshot(me.history);
+	if (why) fprintf(stderr, "den: no snapshot: %s\n", tp_why(why));
+	return why;
 }
 
 void den_trust_last(void) {
@@ -1035,6 +1077,9 @@ void den_print(void) {
 			o->heard < 0 ? "never heard" : o->heard > 0 && me.now - o->heard < DEN_QUIET ? "here" : "quiet",
 			(unsigned long long)tp_log_count(me.log, key), trusts(n) ? "trusted" : "not trusted");
 	}
+	printf("tippet heap by part, now (most):");
+	for (int i = 0; i < 4; i++) printf(" %s %zu (%zu)", PARTS[i], part_now[i], part_most[i]);
+	printf("\n");
 	size_t most, now = den_heap(&most);
 	printf("den %.8s in room %s (%s): %llu steps of its own, %zu devices, tippet heap %zu (most %zu)\n", me.id,
 		me.room, me.net, (unsigned long long)tp_log_count(me.log, me.install.key), tp_log_devices(me.log), now,
