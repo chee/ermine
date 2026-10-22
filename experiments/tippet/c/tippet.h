@@ -135,7 +135,7 @@ typedef struct {
 typedef int (*tp_read)(void *ctx, const uint8_t *record, size_t length, tp_at *at);
 
 // where a log keeps itself: records appended in order, the steps among them got again by place,
-// and the key of the device that writes here. each answers 0 or a code
+// one snapshot, replaced, and the key of the device that writes here. each answers 0 or a code
 typedef struct tp_store {
 	void *self;
 	int (*load)(void *self, tp_read read, void *ctx);
@@ -143,8 +143,14 @@ typedef struct tp_store {
 	int (*append)(void *self, const uint8_t *record, size_t length, const tp_at *at);
 	// a step's length, or -1 (not held); its bytes into out when no more than cap
 	long (*get)(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap);
+	// the snapshot, in place of the one before (NULL: none kept)
+	int (*snapshot)(void *self, const uint8_t *bytes, size_t length);
+	// the snapshot's length, or -1 (none); its bytes into out when no more than cap
+	long (*snapped)(void *self, uint8_t *out, size_t cap);
 	// the key held, else seed, held from now on
 	int (*key)(void *self, const uint8_t seed[32], uint8_t key[32]);
+	// every record appended so far on disk, through a power cut (NULL: nothing to do)
+	int (*sync)(void *self);
 	// all it holds let go, the store too
 	void (*close)(void *self);
 } tp_store;
@@ -152,8 +158,8 @@ typedef struct tp_store {
 // in memory: at most max bytes of records. NULL: no memory
 tp_store *tp_memory_store(const tp_mem *mem, size_t max);
 // on disk (POSIX), as typescript/store_file.ts: dir/log, frames (4 bytes big-endian length, then
-// the record), a frame cut short cut off when loaded; dir/key, written once. a record at most max
-// bytes. NULL: no memory, or dir not made
+// the record), a frame cut short cut off when loaded; dir/snapshot, written beside it then renamed
+// into place; dir/key, written once. a record at most max bytes. NULL: no memory, or dir not made
 tp_store *tp_file_store(const tp_mem *mem, const char *dir, size_t max);
 
 // ---- log
@@ -211,12 +217,16 @@ uint64_t tp_log_count(const tp_log *log, const uint8_t device[32]);
 // step n of device's: its length, the bytes in out when no more than cap; -1: none
 long tp_log_step(const tp_log *log, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap);
 // the run with step from in it, from there: 0 and its end and sig; 1: none held, or none closed.
-// this device's run still open is closed now
+// this device's run still open is closed now, and its steps synced first (1: they couldn't be)
 int tp_log_run(tp_log *log, const uint8_t device[32], uint64_t from, uint64_t *to, uint8_t sig[64]);
 // another's run, its steps in order and the sig over the last: the steps added, or a refusal
 // (TP_OWN, TP_GAP, TP_CHAIN, TP_LAMPORT, TP_SIGNATURE) or another code
 long tp_log_take(tp_log *log, const uint8_t device[32], const tp_span *steps, size_t n,
 	const uint8_t sig[64]);
+// the history's snapshot into the store, in place of the one before: 0 or a code
+int tp_log_snapshot(tp_log *log, const uint8_t *bytes, size_t length);
+// the snapshot: its length, the bytes in out when no more than cap; -1: none
+long tp_log_snapped(const tp_log *log, uint8_t *out, size_t cap);
 
 // ---- sync
 

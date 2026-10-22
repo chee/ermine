@@ -5,14 +5,16 @@
 // the merge: an entry's value is its steps' patches applied in order of lamport, then device, from
 // nothing. a step that sorts last is applied as it is; one that sorts before steps already there,
 // and the entry is worked out again from its steps, read back from the log's store. a step whose
-// patches don't apply there is passed over, and listed in failed
+// patches don't apply there is passed over, and listed in failed until they do. the graph is the
+// last snapshot and the steps after it
 //
 // C11 (op's value.h is). history's own memory goes through tp_mem; what it writes into the graph
 // (values, patches, headers) is the graph's, malloc'd, as everything there is
 //
 //   tp_history *h = tp_history_new(&o);       // records from now
 //   log's told: tp_history_told(h, ...), then the sync's
-//   tp_history_load(h);                       // after a restart: every step held landed
+//   tp_history_load(h);                       // after a restart: the snapshot, and the steps after it
+//   tp_history_snapshot(h);
 #ifndef TIPPET_HISTORY_H
 #define TIPPET_HISTORY_H
 
@@ -40,8 +42,13 @@ tp_history *tp_history_new(const tp_history_options *o);
 void tp_history_free(tp_history *h);
 // the lander: the log's told (a tp_told, ctx the history). this device's own steps are passed over
 void tp_history_told(void *ctx, const uint8_t device[32], uint64_t from, size_t count);
-// every step the log holds landed, this device's too: after a restart, into an empty graph
-void tp_history_load(tp_history *h);
+// after a restart, into an empty graph: the snapshot written into it, and every step held after it
+// landed, this device's too. 0, or a code (TP_NOTSTEP: a snapshot not as written, and no step
+// landed after it)
+int tp_history_load(tp_history *h);
+// each kept entry's value and its list of steps, and how many of each device's steps are in them,
+// into the store, in place of the snapshot before. 0, or a code. its bytes are held while written
+int tp_history_snapshot(tp_history *h);
 
 // a step that didn't land (device its writer's), or a write here not kept (device NULL, n 0)
 typedef struct {

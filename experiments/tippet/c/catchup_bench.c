@@ -102,7 +102,7 @@ static tp_store *heads_store(const tp_mem *mem) {
 	if (!h) return NULL;
 	memset(h, 0, sizeof *h);
 	h->mem = *mem;
-	h->store = (tp_store){h, h_load, h_append, h_get, h_key, h_close};
+	h->store = (tp_store){h, h_load, h_append, h_get, NULL, NULL, h_key, NULL, h_close};
 	return &h->store;
 }
 

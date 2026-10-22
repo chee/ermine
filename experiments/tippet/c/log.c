@@ -249,6 +249,10 @@ int tp_log_write(tp_log *log, const tp_write *w, uint64_t *n, uint64_t *lamport)
 int tp_log_run(tp_log *log, const uint8_t device[32], uint64_t at, uint64_t *to, uint8_t sig[64]) {
 	feed *f = find(log, device);
 	if (!f || at < 1 || at > f->count) return 1;
+	// this device's steps on disk before any leave, so a power cut can't make another step with
+	// their n
+	tp_store *st = log->store;
+	if (own(log, device) && st->sync && st->sync(st->self)) return 1;
 	size_t i = from(f, at);
 	if (i == f->nsigs) {
 		if (!own(log, device) || sign(log, f->count)) return 1;
@@ -317,16 +321,17 @@ done:
 	return why;
 }
 
-// ---- load
-
-static int unhex(uint8_t *out, const uint8_t *s, size_t n) {
-	for (size_t i = 0; i < 2 * n; i++) {
-		int c = s[i], d = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
-		if (d < 0) return -1;
-		out[i / 2] = (uint8_t)(i % 2 ? out[i / 2] << 4 | d : d);
-	}
-	return 0;
+int tp_log_snapshot(tp_log *log, const uint8_t *bytes, size_t length) {
+	tp_store *st = log->store;
+	return st->snapshot ? st->snapshot(st->self, bytes, length) : TP_STORE;
 }
+
+long tp_log_snapped(const tp_log *log, uint8_t *out, size_t cap) {
+	const tp_store *st = log->store;
+	return st->snapped ? st->snapped(st->self, out, cap) : -1;
+}
+
+// ---- load
 
 // a record: a signature's (vouched for when it is of a step held), or a step that goes on from
 // what is held (kept). anything else passed over
@@ -346,7 +351,7 @@ static int loaded(void *ctx, const uint8_t *r, size_t length, tp_at *at) {
 				: tp_skip(&in, NULL))
 				return 0;
 		}
-		if (!sig.p || device.n != 64 || unhex(d, device.p, 32)) return 0;
+		if (!sig.p || device.n != 64 || tp_unhex(d, device.p, 32)) return 0;
 		feed *f = find(log, d);
 		if (f && n >= 1 && n <= f->count) vouch(log, f, n, sig.p);
 		return 0;

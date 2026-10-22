@@ -1,10 +1,12 @@
 // a log's store on disk (POSIX), as typescript/store_file.ts: records appended to dir/log as frames
-// (4 bytes big-endian length, then the record), and the device's key in dir/key, written once. a
-// frame cut short by a crash is cut off when loaded, so the next append starts clean. steps are
-// read back from the file by where they are: in memory, only where each one starts and how long
+// (4 bytes big-endian length, then the record), the snapshot in dir/snapshot, written whole beside
+// it then renamed into place, and the device's key in dir/key, written once. a frame cut short by a
+// crash is cut off when loaded, so the next append starts clean. steps are read back from the file
+// by where they are: in memory, only where each one starts and how long. sync: fsync
 #define _POSIX_C_SOURCE 200809L
 #include <errno.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
@@ -18,11 +20,19 @@ typedef struct {
 	tp_mem mem;
 	tp_index index;
 	int fd;
-	uint64_t end; // the file's length, every append so far
+	uint64_t end, synced; // the file's length, every append so far; how much of it is synced
 	size_t max;
-	char *keyfile;
-	size_t keyroom;
+	// two rooms, each dir and then a name: dir's length, and a room's
+	char *path;
+	size_t dir, room;
 } file;
+
+// dir/name, in room i (0 or 1)
+static const char *named(file *f, int i, const char *name) {
+	char *p = f->path + (size_t)i * f->room;
+	memcpy(p + f->dir, name, strlen(name) + 1);
+	return p;
+}
 
 // all of it read at offset; 0, or -1 short
 static int readat(int fd, uint8_t *out, size_t n, uint64_t offset) {
@@ -99,16 +109,51 @@ static long get(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, 
 	return (long)length;
 }
 
+static int snapshot(void *self, const uint8_t *bytes, size_t length) {
+	file *f = self;
+	int fd = open(named(f, 0, "/snapshot.new"), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	if (fd < 0) return TP_STORE;
+	size_t done = 0;
+	while (done < length) {
+		ssize_t wrote = write(fd, bytes + done, length - done);
+		if (wrote < 0 && errno == EINTR) continue;
+		if (wrote <= 0) break;
+		done += (size_t)wrote;
+	}
+	if (close(fd) || done < length) return TP_STORE;
+	return rename(f->path, named(f, 1, "/snapshot")) ? TP_STORE : 0;
+}
+
+static long snapped(void *self, uint8_t *out, size_t cap) {
+	file *f = self;
+	int fd = open(named(f, 0, "/snapshot"), O_RDONLY);
+	struct stat st;
+	if (fd < 0) return -1;
+	long n = fstat(fd, &st) || st.st_size > 0x7fffffff ? -1 : (long)st.st_size;
+	if (n > 0 && (size_t)n <= cap && readat(fd, out, (size_t)n, 0)) n = -1;
+	close(fd);
+	return n;
+}
+
+static int flush(void *self) {
+	file *f = self;
+	if (f->synced == f->end) return 0;
+	if (fsync(f->fd)) return TP_STORE;
+	f->synced = f->end;
+	return 0;
+}
+
 static int key(void *self, const uint8_t seed[32], uint8_t out[32]) {
 	file *f = self;
-	int fd = open(f->keyfile, O_WRONLY | O_CREAT | O_EXCL, 0600);
+	const char *keyfile = named(f, 0, "/key");
+	int fd = open(keyfile, O_WRONLY | O_CREAT | O_EXCL, 0600);
 	if (fd >= 0) {
 		ssize_t wrote = write(fd, seed, 32);
 		if (close(fd) || wrote != 32) return TP_STORE;
 		memcpy(out, seed, 32);
 		return 0;
 	}
-	if (errno != EEXIST || (fd = open(f->keyfile, O_RDONLY)) < 0) return TP_STORE;
+	if (errno != EEXIST || (fd = open(keyfile, O_RDONLY)) < 0) return TP_STORE;
 	struct stat st;
 	int bad = fstat(fd, &st) || st.st_size != 32 || readat(fd, out, 32, 0);
 	close(fd);
@@ -120,7 +165,7 @@ static void shut(void *self) {
 	tp_mem mem = f->mem;
 	if (f->fd >= 0) close(f->fd);
 	tp_index_clear(&f->index);
-	tp_free(&mem, f->keyfile, f->keyroom);
+	tp_free(&mem, f->path, 2 * f->room);
 	tp_free(&mem, f, sizeof *f);
 }
 
@@ -130,14 +175,13 @@ tp_store *tp_file_store(const tp_mem *mem, const char *dir, size_t max) {
 	if (!f) return NULL;
 	memset(f, 0, sizeof *f);
 	f->mem = *mem, f->index.mem = &f->mem, f->max = max, f->fd = -1;
-	f->store = (tp_store){f, load, append, get, key, shut};
-	f->keyroom = n + 5;
-	if (!(f->keyfile = tp_alloc(mem, f->keyroom))) return shut(f), NULL;
+	f->store = (tp_store){f, load, append, get, snapshot, snapped, key, flush, shut};
+	// the longest name: /snapshot.new
+	f->dir = n, f->room = n + 14;
+	if (!(f->path = tp_alloc(mem, 2 * f->room))) return shut(f), NULL;
+	memcpy(f->path, dir, n), memcpy(f->path + f->room, dir, n);
 	if (mkdir(dir, 0777) && errno != EEXIST) return shut(f), NULL;
-	// dir/log, then dir/key in the same room
-	memcpy(f->keyfile, dir, n), memcpy(f->keyfile + n, "/log", 5);
-	f->fd = open(f->keyfile, O_RDWR | O_APPEND | O_CREAT, 0644);
-	memcpy(f->keyfile + n, "/key", 5);
+	f->fd = open(named(f, 0, "/log"), O_RDWR | O_APPEND | O_CREAT, 0644);
 	if (f->fd < 0) return shut(f), NULL;
 	return &f->store;
 }
