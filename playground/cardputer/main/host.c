@@ -1,5 +1,5 @@
 // the host (host.h), as ermine/api/c/api_harness.c's world: places at the root "root" asked
-// [processes("root"), away("root"), children] (dens_test.ts' world: other dens' things mirrored in),
+// [processes("root"), away("root"), children] (host.ts' world: other dens' things placed in),
 // a host scope, a "programs" scope under it, a scope a process. any mark that makes something due
 // asks for a pulse, soon (the page's soon())
 #include "host.h"
@@ -11,7 +11,6 @@
 #include "ermine/processes/c/processes.h"
 #include "ermine/processes/c/scopes.h"
 #include "ermine/sites/c/sites.h"
-#include "playground/dens/c/away.h"
 
 static struct {
 	sc_scheduler *s;
@@ -85,7 +84,8 @@ void host_init(void) {
 	w.table = tb_make(pl_event, w.places);
 	w.paths = pt_new();
 	pr_processes_init(&w.rows, tb_string(HOST_ROOT));
-	dn_away_init(&w.away, tb_string(HOST_ROOT));
+	// the away trie (dens' away.h, without its presence): other dens' things placed by den.c
+	pr_trie_init(&w.away, "away", tb_string(HOST_ROOT), "away");
 	w.walk[0] = &w.rows.contributor, w.walk[1] = &w.away.contributor, w.walk[2] = &pl_children;
 	pl_connect(w.places, &(pl_setup){.root = tb_string(HOST_ROOT), .table = w.table, .paths = w.paths,
 		.scheduler = w.s, .contributors = w.walk, .ncontributors = 3});

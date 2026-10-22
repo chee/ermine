@@ -1,11 +1,12 @@
 /// <reference lib="dom" />
 // dens: two people, two screens, one graph. each page is one running ermine (a den), its id its
-// tab's device key; the dens find each other over wss://galaxy.observer (host.ts' openChannel, the
-// one seam; ?server=none: the tabs of one browser), and each shows the others' things as they are
-// mirrored here. ?as=cardputer: chee's cardputer
+// tab's device key; the dens share their nodes through tippet, a room's log on galaxy
+// (wss://galaxy.observer, or ?server=ws://…; ?server=none: the tabs of one browser), and each shows
+// the others' things as their steps land here. an ask to another den goes in its inbox, and is done
+// only if that den trusts this one (its authorized_keys). ?as=cardputer: chee's cardputer
 import { type Box, createBoard, type Port, type Wire } from "./kit/board.ts"
 import { createFarm, type Farm } from "./kit/farm.ts"
-import { createHost, type Host, KINDS, newCode, OUT, roomCode } from "./host.ts"
+import { type Answer, createHost, KINDS, newCode, OUT, type Refusal, roomCode } from "./host.ts"
 import {
 	controls,
 	isPicture,
@@ -27,7 +28,6 @@ import { createCode } from "./code.ts"
 import { get } from "@ermine/places/lib"
 import { sound } from "./sound.ts"
 import { DEVICE, NAME, RUNNER } from "@ermine/dens"
-import type { Answered } from "@ermine/dens/away"
 
 const $ = <T extends HTMLElement = HTMLElement>(q: string, root: ParentNode = document) =>
 	root.querySelector(q) as T
@@ -108,8 +108,7 @@ const me = isCard
 	: { ...(await welcome()), device: "browser" }
 const room = roomOf("code" in me ? me.code : undefined)
 const host = await createHost({ ...me, room, seed: seed(), server })
-const ANCHOR = host.anchor
-const { den, link, hosted, table, places } = host
+const { den, hosted, table, places } = host
 const id = host.id
 if (isCard) {
 	for (const k of ["keys", "screen", "pigs"]) {
@@ -119,7 +118,10 @@ if (isCard) {
 
 // ---- what the page sees: each den, its things ----
 type Thing = {
+	// the node its attributes are on: here its process's, another den's its shared node
 	id: string
+	// its process, in its den
+	process: string
 	at: string[]
 	kind: string
 	out: unknown
@@ -141,13 +143,19 @@ type View = {
 const isMap = (v: unknown): v is Record<string, unknown> =>
 	typeof v === "object" && v !== null && !Array.isArray(v) && !ArrayBuffer.isView(v)
 
-function thingOf(id: string, at: string[], attrs: Record<string, unknown>): Thing | undefined {
+function thingOf(
+	id: string,
+	at: string[],
+	attrs: Record<string, unknown>,
+	process = id,
+): Thing | undefined {
 	const runner = attrs[RUNNER]
 	if (!isMap(runner) || !Array.isArray(runner.at)) return undefined
 	const given = attrs["ermine.process.args"]
 	const args = Array.isArray(given) ? given.map(String) : []
 	return {
 		id,
+		process,
 		at,
 		kind: String(runner.at.at(-1)),
 		out: attrs[OUT],
@@ -158,56 +166,34 @@ function thingOf(id: string, at: string[], attrs: Record<string, unknown>): Thin
 	}
 }
 
-// dens seen once, kept so a den gone quiet stays drawn (grey)
-const known = new Map<string, View>()
-
+// this den, then the others heard on this page: grey once not heard for 6 s, its things still
+// there (its steps last)
 function views(): View[] {
-	const now = Date.now()
-	const rows = (table.get("presence", ANCHOR)?.value ?? {}) as Record<
-		string,
-		{ value: unknown; until: number }
-	>
 	const mine: View = {
 		who: id,
 		name: me.name,
 		device: me.device,
-		alive: (rows[id]?.until ?? 0) > now,
+		alive: true,
 		mine: true,
 		things: den.processes().flatMap((p) => {
 			const t = thingOf(String(p.id), [...p.at], table.get("attributes", p.id)?.value ?? {})
 			return t ? [t] : []
 		}),
 	}
-	const out = [mine]
-	for (const [who, row] of Object.entries(rows)) {
-		if (who === id) continue
-		const v = row.value as {
-			den?: string
-			nodes?: Record<string, { attributes?: Record<string, unknown> }>
-			processes?: { id: string; at: string[] }[]
-		}
-		if (!isMap(v)) continue
-		const attrs = v.nodes?.[String(v.den)]?.attributes ?? {}
-		const things = (v.processes ?? []).flatMap((p) => {
-			// the mirrored node, here; else the row's own words for it
-			const a = table.get("attributes", p.id)?.value ?? v.nodes?.[p.id]?.attributes ?? {}
-			const t = thingOf(p.id, p.at, a as Record<string, unknown>)
-			return t ? [t] : []
-		})
-		known.set(who, {
-			who,
-			name: String(attrs[NAME] ?? who),
-			device: String(attrs[DEVICE] ?? "browser"),
-			alive: row.until > now,
+	return [
+		mine,
+		...host.others().map((o): View => ({
+			who: o.who,
+			name: String(o.attributes[NAME] ?? o.who),
+			device: String(o.attributes[DEVICE] ?? "browser"),
+			alive: o.alive,
 			mine: false,
-			things,
-		})
-	}
-	for (const [who, v] of known) {
-		if (!rows[who] || rows[who].until <= now) known.set(who, { ...v, alive: false })
-	}
-	out.push(...[...known.values()].sort((a, b) => a.who < b.who ? -1 : 1))
-	return out
+			things: o.things.flatMap((t) => {
+				const thing = thingOf(t.id, t.at, t.attributes, t.process)
+				return thing ? [thing] : []
+			}),
+		})),
+	]
 }
 
 const label = (v: View) => v.device === "cardputer" ? v.name : `${v.name}'s browser`
@@ -288,10 +274,17 @@ playing.play = (name, freq) => {
 }
 
 // ---- asks, answered ----
-function refusal(a: Answered): string {
+// why an ask to another den wasn't done, in words ("" : it was)
+function refusal(a: Answer): string {
 	if ("error" in a) return `it couldn't read the ask (${a.error})`
 	if (!("refused" in a)) return ""
 	switch (a.refused) {
+		case "not-trusted":
+			return a.why === "not-in-keys"
+				? `not trusted: ${a.who} isn't in its keys`
+				: a.why === "bad-signature"
+				? "not trusted: the ask's signature doesn't check out"
+				: "the ask wasn't made out to it"
 		case "no-permission":
 			return a.answer.answer === "no" ? `no, ${a.answer.reason}` : "it hasn't decided yet"
 		case "not-a-runner":
@@ -307,22 +300,47 @@ function refusal(a: Answered): string {
 	}
 }
 
-// f told the answer to ask n when it lands
-function answered(n: number, f: (a: Answered) => void) {
+// f told the answer to an ask of v's when it lands beside it in v's inbox; a word if it is slow
+function answered(v: View, n: string, f: (a: Answer) => void) {
+	const slow = setTimeout(
+		() => say(`No answer from ${label(v)} yet. Is it still here?`),
+		8000,
+	)
 	hosted(() => {
-		const c = host.s.createEffect(() => link.answer(n), (a) => {
+		const c = host.s.createEffect(() => host.answer(v.who, n), (a) => {
 			if (a === undefined) return
+			clearTimeout(slow)
 			host.s.teardown(c)
 			f(a)
 		})
 	})
 }
 
-const refused = (v: View, a: Answered) => {
+// an ask into v's inbox, then f told its answer; one that can't be written, said
+async function asking(v: View, ask: Parameters<typeof host.ask>[1], f: (a: Answer) => void) {
+	let n
+	try {
+		n = await host.ask(v.who, ask)
+	} catch (e) {
+		n = { problem: e instanceof Error ? e.message : String(e) }
+	}
+	if (typeof n !== "string") {
+		sound.no()
+		return say(`Couldn't ask ${label(v)}: ${n.problem}.`, "hot")
+	}
+	answered(v, n, f)
+}
+
+const refused = (v: View, a: Answer) => {
 	const why = refusal(a)
 	if (!why) return false
 	sound.no()
-	say(`${label(v)} said no: ${why}.`, "hot")
+	say(
+		"refused" in a && a.refused === "not-trusted" && a.why === "not-in-keys"
+			? `${label(v)} said no: ${why}. Whoever is at ${label(v)} can press trust on your den.`
+			: `${label(v)} said no: ${why}.`,
+		"hot",
+	)
 	return true
 }
 
@@ -338,16 +356,12 @@ function add(v: View, kind: string) {
 		say(`You started ${a} ${isCard ? "here" : "in your browser"}.`, "ok")
 		return
 	}
-	const n = hosted(() =>
-		link.ask(v.who, {
-			op: "start",
-			runner: runnerOf(kind),
-			program: link.carry(programOf(kind), { code: true }),
-			at,
-		})
-	)
 	say(`Asking ${label(v)} to start ${a}…`)
-	answered(n, (r) => refused(v, r) || say(`You started ${a} on ${label(v)}.`, "ok"))
+	asking(
+		v,
+		{ op: "start", runner: runnerOf(kind), program: host.carry(programOf(kind)), at },
+		(r) => refused(v, r) || say(`You started ${a} on ${label(v)}.`, "ok"),
+	)
 }
 
 // a reader started again at its spot, reading args ([den, process]) or nothing
@@ -358,23 +372,18 @@ function restart(v: View, t: Thing, args: string[], done: string) {
 		if ("refused" in r) return void refused(v, r)
 		return say(done, "ok")
 	}
-	// the start asked only once the stop is answered: the two can arrive the other way round (seen
-	// once in twelve to the cardputer through galaxy), and a start first is refused taken, then the
-	// stop takes the old one away. not there: gone already, so the spot is free
-	const s = hosted(() => link.ask(v.who, { op: "stop", process: t.id, reason: "rewired" }))
+	// the start asked only once the stop is answered, so it never finds the old one still there.
+	// not there: gone already, so the spot is free
 	say(`Rewiring ${whose(v, t)}…`)
-	answered(s, (a) => {
+	asking(v, { op: "stop", process: t.process, reason: "rewired" }, (a) => {
 		if (!("refused" in a && a.refused === "not-there") && refused(v, a)) return
-		const n = hosted(() =>
-			link.ask(v.who, {
-				op: "start",
-				runner: runnerOf(t.kind),
-				program: link.carry(programOf(t.kind), { code: true }),
-				at: t.at,
-				args,
-			})
-		)
-		answered(n, (r) => refused(v, r) || say(done, "ok"))
+		asking(v, {
+			op: "start",
+			runner: runnerOf(t.kind),
+			program: host.carry(programOf(t.kind)),
+			at: t.at,
+			args,
+		}, (r) => refused(v, r) || say(done, "ok"))
 	})
 }
 
@@ -383,17 +392,37 @@ function remove(v: View, t: Thing) {
 		hosted(() => den.stop(t.id, "removed"))
 		return say(`You took ${whose(v, t)} away.`)
 	}
-	const n = hosted(() => link.ask(v.who, { op: "stop", process: t.id }))
-	answered(n, (r) => refused(v, r) || say(`You took ${whose(v, t)} away.`))
+	asking(
+		v,
+		{ op: "stop", process: t.process },
+		(r) => refused(v, r) || say(`You took ${whose(v, t)} away.`),
+	)
 }
 
-// someone else's asks to this den, in words
+// another den put in this one's keys: its asks done from now on
+function trust(v: View) {
+	hosted(() => host.trust(v.who))
+	host.soon()
+	sound.chime()
+	say(`You trust ${label(v)} now: what it asks of your den will be done.`, "ok")
+}
+
+// someone else's asks to this den, in words: what they did, or why it wasn't done
 const rewiring = new Set<string>()
-host.onAsked(({ from, op, runner }) => {
-	const v = known.get(from)
+const inWordsHere = (r: Refusal) =>
+	r.why === "not-in-keys"
+		? `not trusted: ${r.who} isn't in your keys. Press trust on ${r.who}'s den to let them in.`
+		: r.why === "bad-signature"
+		? `not trusted: ${r.who}'s ask has a signature that doesn't check out.`
+		: `not trusted: ${r.who}'s ask wasn't made out to this den.`
+host.onAsked(({ from, op, runner, refused }) => {
+	const v = views().find((x) => x.who === from)
 	const who = v ? label(v) : from
 	const kind = Array.isArray(runner) ? runner.at(-1) : String(runner ?? "").split("/").at(-1)
-	if (op === "stop") {
+	if (refused) {
+		sound.no()
+		say(inWordsHere(refused), "hot")
+	} else if (op === "stop") {
 		// the start comes a round trip after its stop (restart waits for the stop's answer)
 		rewiring.add(from)
 		setTimeout(() => rewiring.delete(from), 5000)
@@ -405,6 +434,8 @@ host.onAsked(({ from, op, runner }) => {
 		)
 	}
 })
+// what went wrong in tippet: said, so it is seen
+host.onTrouble((words) => say(words, "hot"))
 
 // ---- frames: one per den ----
 const SLOT = { w: 300, h: 236 }
@@ -459,8 +490,8 @@ function denCode(v: View): string {
 	const id = JSON.stringify(v.who)
 	const common = `// what the page asks of a den (none of it is on the page)
 createDen({ scheduler, table, places, scopes,
-  id: ${id}, name: ${JSON.stringify(v.name)}, device: "${v.device}",
-  // a demo policy: yes to every ask, from anyone
+  id: ${id}, install, name: ${JSON.stringify(v.name)}, device: "${v.device}",
+  // yes to every ask that gets here: its inbox checks who asked first
   may: () => ({ answer: "yes" }) })
 for (const kind of ["button", "pad", "timer", "counter", "screen", "chart", "sound"${
 		v.device === "cardputer" ? `, "keys", "pigs"` : ""
@@ -468,10 +499,14 @@ for (const kind of ["button", "pad", "timer", "counter", "screen", "chart", "sou
   den.offer("runners", kind,
     { "ermine.runner.takes": "thing." + kind }, run[kind])
 // programs at /things/<kind>, ermine.type "thing.<kind>"
-// the room ${room}: its id is "ermine://" + hex(blake3("party.chee.ermine.dens.room:${room}"))
-const link = connect(den, channel, { topic: roomId("${room}"), publish: true })
-// its row at the presence anchor "${ANCHOR}": den.nodes(),
-// each process's node and attributes, whole, as they change`
+// the room ${room}: tippet's room "dens-${room}", its log on galaxy
+const log = createLog({ store, seed })   // the den's key
+createHistory({ log, table, places, kept })
+sync.link(socket(new WebSocket(server + "/littlesync/tippet/dens-${room}")))
+// kept, so in the room: the den's node, its things (each
+// one's attributes, thing.out among them), its inbox and
+// its authorized_keys. here: a live every 2 s
+// an ask: into its inbox, signed; done if trusted()`
 	return v.device === "cardputer"
 		? `${common}
 // at boot, its hardware as things:
@@ -500,7 +535,7 @@ function frameOf(v: View): Frame {
 		<pre class="back" hidden></pre>`
 		: `<div class="shell"></div>
 		<div class="head avoid"><span class="live"></span><span class="label"></span><span class="denpath"></span>
-			<button class="add" title="add a thing">+ add</button><button class="flip" title="turn it over">{ }</button></div>
+			<button class="trust" hidden></button><button class="add" title="add a thing">+ add</button><button class="flip" title="turn it over">{ }</button></div>
 		<div class="glass"><p class="hint">nothing here yet: <b>+ add</b> puts a thing in</p></div>
 		<pre class="back" hidden></pre>`
 	$(".label", el).textContent = label(v)
@@ -514,6 +549,10 @@ function frameOf(v: View): Frame {
 		const now = views().find((x) => x.who === v.who) ?? v
 		if (menu) closeMenu()
 		else openMenu(frame, now, e.currentTarget as HTMLElement)
+	}
+	$(".trust", el).onclick = (e) => {
+		e.stopPropagation()
+		if (!host.trusts(v.who)) trust(v)
 	}
 	$(".flip", el).onclick = () => {
 		const back = $(".back", el)
@@ -712,17 +751,20 @@ function thingCode(v: View, t: Thing): string {
 		? `den.start(\n  "${runnerOf(t.kind)}",\n  "${programOf(t.kind)}",\n  "/${t.at.join("/")}"${
 			list ? `,\n  { args: ${list} }` : ""
 		})`
-		: `link.ask(${JSON.stringify(v.who)}, { op: "start",\n  runner: "${
+		: `// written into ${label(v)}'s inbox, signed:
+host.ask(${JSON.stringify(v.who.slice(0, 8) + "…")}, { op: "start",\n  runner: "${
 			runnerOf(t.kind)
-		}",\n  program: link.carry("${programOf(t.kind)}", { code: true }),\n  at: "/${
-			t.at.join("/")
-		}"${list ? `,\n  args: ${list}` : ""} })`
+		}",\n  program: host.carry("${programOf(t.kind)}"),\n  at: "/${t.at.join("/")}"${
+			list ? `,\n  args: ${list}` : ""
+		} })`
 	const reads = t.sources.map((s) =>
 		`\n//   ${s.input}: the node at ${s.at}, its attributes["thing.out"]`
 	).join("")
 	return `// how this ${t.kind} came to be (as seen from here)
 ${start}
-// a process: /${t.at.join("/")}, node ${t.id.slice(0, 13)}…
+// a process: /${t.at.join("/")}, ${
+		v.mine ? `node ${t.id.slice(0, 13)}…` : `its den's process ${t.process.slice(0, 13)}…`
+	}${v.mine ? "" : `\n// shared here as the node …/things/${t.process.slice(0, 13)}…`}
 // what it gives, on its own node:
 //   attributes["thing.out"] = ${fmt(t.out)}${
 		reads ? `\n// what it reads, each its source's node, here or mirrored:${reads}` : ""
@@ -1296,6 +1338,21 @@ function render() {
 		f.el.classList.toggle("empty", v.things.length === 0)
 		$(".live", f.el).title = v.alive ? "here now" : "gone quiet"
 		$<HTMLButtonElement>(".add", f.el).disabled = !v.alive
+		// another den: whether this one trusts it (a button until it does), and whether it trusts you
+		if (!v.mine) {
+			const b = $<HTMLButtonElement>(".trust", f.el)
+			const yes = host.trusts(v.who), back = host.trustedBy(v.who)
+			b.hidden = false
+			b.classList.toggle("on", yes)
+			b.textContent = yes ? "trusted" : "trust"
+			b.setAttribute("aria-pressed", String(yes))
+			b.title = `${
+				yes
+					? `in your keys: what ${label(v)} asks of your den is done`
+					: `put ${label(v)} in your keys, so what it asks of your den is done`
+			}. ${back ? "it trusts you too" : "it doesn't trust you yet"}`
+			$(".denpath", f.el).textContent = `${back ? "trusts you · " : ""}/system/dens/${v.who}`
+		}
 		for (const t of v.things) {
 			live.add(t.id)
 			const g = groupOf(f, t)
@@ -1366,9 +1423,9 @@ function render() {
 				w.hint(
 					`reads ${src.at}${
 						s && s.v.who !== v.who
-							? ` (${label(s.v)}'s, placed in ${
+							? ` (${label(s.v)}'s: its steps come through tippet, and it is placed in ${
 								v.mine ? "this" : `${label(v)}'s`
-							} tree by away)`
+							} tree)`
 							: ""
 					}`,
 				)
@@ -1405,7 +1462,6 @@ function render() {
 			sound.chime()
 			say(`${label(v)} is here.`, "ok")
 		}
-		hosted(() => link.announce())
 	}
 	for (const who of seen) {
 		if (now.has(who)) continue

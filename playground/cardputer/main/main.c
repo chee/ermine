@@ -1,47 +1,44 @@
-// ermine on the Cardputer ADV: the host, its keyboard and display drivers, the shell, and a den
-// (den.h): keys, screen and pigs as things other dens can wire into. two modes, esc between them:
-// the den's (the screen thing's framebuffer, keys to /work/keys) and the shell's (text rows)
+// ermine on the Cardputer ADV: the host, its keyboard and display drivers, and a den (den.h) on
+// tippet: keys, screen and pigs as things other dens can wire into, in the room whose code the
+// screen shows, its log on flash (flash.h), linked to the server over WiFi by long-poll (poll.h,
+// wifi.h). tab trusts the den the last ask came from. without WiFi, the shell too, esc between the
+// den's screen and the shell's text rows
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
+#include "den.h"
 #include "driver/usb_serial_jtag.h"
 #include "driver/usb_serial_jtag_vfs.h"
 #include "drivers.h"
 #include "esp_heap_caps.h"
+#include "esp_random.h"
+#include "esp_timer.h"
+#include "fb.h"
+#include "flash.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "host.h"
 #include "keys.h"
-#include "net.h"
-#include "screen.h"
-#include "shell.h"
-#include "room.h"
-#include "net.h"
-#include "lschannel.h"
-#include "peak.h"
-extern peak_step *lschannel_steps;
-#include "sdkconfig.h"
-#include "den.h"
-#include "fb.h"
-#include "things.h"
-#include "esp_random.h"
-#include "esp_timer.h"
-#include "nvs_flash.h"
 #include "nvs.h"
+#include "nvs_flash.h"
+#include "poll.h"
+#include "screen.h"
+#include "sdkconfig.h"
+#include "shell.h"
+#include "things.h"
+#include "wifi.h"
 
 #define LEMON RGB(0xff, 0xf6, 0x8f)
 #define INK RGB(0x10, 0x10, 0x10)
 #define CHERRY RGB(0xd2, 0x04, 0x2d)
 #define WHITE RGB(0xff, 0xff, 0xff)
 
-// littlesync and its USB link, for print
-static ls_dev *ls_now;
-static struct ls_link *line;
-
-// the last screen drawn, printed on the serial line after a line typed there
+// the last screen the shell drew, printed on the serial line after a line typed there
 static op_value *last;
 // 1: the den's framebuffer shows, keys go to /work/keys; 0: the shell's text rows
 static int dens_mode = 1;
+static int wifi;
 
 // the picture the den's screen shows, drawn again on the way back from the shell
 static void (*shown)(void);
@@ -51,24 +48,28 @@ void frame_show(void (*paint)(void)) {
 	if (dens_mode) screen_frame(paint);
 }
 
+void frame_again(void) {
+	if (shown && dens_mode) screen_frame(shown);
+}
+
+void den_random(uint8_t *out, size_t n) { esp_fill_random(out, n); }
+
+static size_t free_now(void) { return heap_caps_get_free_size(MALLOC_CAP_8BIT); }
+static size_t least(void) { return heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT); }
+
 static void print(void) {
 	const op_value *lines = last ? op_get(last, "lines") : NULL;
 	printf("---\n");
 	for (size_t i = 0; lines && i < lines->count; i++) printf("%s\n", lines->items[i]->str);
-	if (ls_now) {
-		const ls_stats *st = ls_stats_of(ls_now);
-		const ls_traffic *tr = ls_traffic_of(line);
-		printf("littlesync: in %u out %u junk %u refused %u bad seals %u commits %u applied %u (%s)\n",
-			(unsigned)tr->frames_in, (unsigned)tr->frames_out, (unsigned)tr->junk, (unsigned)st->refused,
-			(unsigned)st->bad_seals, (unsigned)st->commits_in, (unsigned)st->applied, ls_reason(ls_now));
-		if (net_status()) {
-			const ls_traffic *nt = ls_traffic_of(net_link());
-			printf("%s, in %u out %u\n", net_status(), (unsigned)nt->frames_in, (unsigned)nt->frames_out);
-		}
-	}
 	den_print();
-	printf("--- %u bytes free, %u least, stack %u left\n", (unsigned)heap_caps_get_free_size(MALLOC_CAP_8BIT),
-		(unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT), (unsigned)uxTaskGetStackHighWaterMark(NULL));
+	if (wifi) {
+		unsigned requests, failed, in, out;
+		poll_counts(&requests, &failed, &in, &out);
+		printf("%s; %s: requests %u failed %u, messages in %u out %u\n", wifi_status(), poll_state(), requests,
+			failed, in, out);
+	}
+	printf("--- %u bytes free, %u least, stack %u left\n", (unsigned)free_now(), (unsigned)least(),
+		(unsigned)uxTaskGetStackHighWaterMark(NULL));
 	fflush(stdout);
 }
 
@@ -78,6 +79,7 @@ static const char *serial_key(char c) {
 	if (c == '\r' || c == '\n') return "enter";
 	if (c == 0x7f || c == 0x08) return "backspace";
 	if (c == 0x1b) return "esc";
+	if (c == '\t') return "tab";
 	if (c < ' ' || c > '~') return NULL;
 	one[0] = c;
 	return one;
@@ -94,15 +96,8 @@ static void draw_text(const op_value *screen) {
 	if (screen == NULL) return;
 	const op_value *lines = op_get(screen, "lines"), *prompt = op_get(screen, "prompt");
 	screen_edges(LEMON);
-	// the free heap; and the pig that changed last: its id's first 4 hex, stored bytes, commits, parents
-	char top[64], pig[24] = "";
-	const ls_node *last_pig = room_last();
-	if (last_pig) {
-		ls_cost c = ls_cost_of(last_pig);
-		snprintf(pig, sizeof pig, "%.4s %uB %uc %up", ls_id(last_pig) + 11, (unsigned)c.stored, (unsigned)c.commits,
-			(unsigned)c.newest.parents);
-	}
-	snprintf(top, sizeof top, "ermine %-17.17s%4uK", pig, (unsigned)(heap_caps_get_free_size(MALLOC_CAP_8BIT) / 1024));
+	char top[64];
+	snprintf(top, sizeof top, "ermine %-21.21s%4uK", den_room(), (unsigned)(free_now() / 1024));
 	screen_line(0, top, WHITE, CHERRY);
 	size_t n = lines ? lines->count : 0;
 	for (int row = 1; row < SCREEN_ROWS - 1; row++)
@@ -115,28 +110,20 @@ static void draw_text(const op_value *screen) {
 	screen_line(SCREEN_ROWS - 1, line, LEMON, INK);
 }
 
-static void randoms(void *ctx, uint8_t *out, size_t n) {
-	(void)ctx;
-	esp_fill_random(out, n);
-}
+static int shell_on;
 
-// whether the USB line is inside a littlesync frame
-static int framed;
-
-static const int shell_on = CONFIG_CARDPUTER_WIFI_SSID[0] == 0;
-// lab-pig's room on littlesync (room.c): followed without WiFi; with it, not for now, as its whole
-// history comes in from galaxy and littlesync's save of it runs the heap out. 1: followed anyway
-#define PIG_ROOM_OVER_WIFI 0
-static const int pig_room_on = shell_on || PIG_ROOM_OVER_WIFI;
-
-// a key from the keyboard: esc turns the mode (with the shell on); else to the shell, or to /work/keys
+// a key from the keyboard: tab trusts the den that asked last; esc turns the mode (with the shell
+// on); else to the shell, or to /work/keys
 static void pressed(api *keyboard_api, const char *k) {
+	if (strcmp(k, "tab") == 0) {
+		den_trust_last();
+		return;
+	}
 	if (strcmp(k, "esc") == 0) {
 		if (!shell_on) return;
 		dens_mode = !dens_mode;
-		if (dens_mode) {
-			if (shown) screen_frame(shown);
-		} else draw_text(last);
+		if (dens_mode) frame_again();
+		else draw_text(last);
 		return;
 	}
 	if (!dens_mode) {
@@ -145,22 +132,6 @@ static void pressed(api *keyboard_api, const char *k) {
 	}
 	if (strcmp(k, "backspace") == 0) things_key("del");
 	else if (strlen(k) == 1) things_key(k);
-}
-
-// the channel to the other dens: littlesync's messages, sealed by this device's key (lschannel.h).
-// away sends its row on "dens:<room id>", asks on "dens:<room id>/ask/<to>", answers on
-// "dens:<room id>/answer/<from>"; over USB to a Mac peer, or WiFi to the gateway and on to galaxy
-
-// the den's id: this device's littlesync key (a multikey) as hex, as the page's den id is its
-// device key's; no littlesync: a made-up one
-static char den_id[2 * LS_KEY_LEN + 1];
-static void id_of(ls_dev *ls) {
-	const uint8_t *key = ls ? ls_key(ls) : NULL;
-	if (key == NULL) {
-		strcpy(den_id, "cardputer-no-key");
-		return;
-	}
-	for (int i = 0; i < LS_KEY_LEN; i++) sprintf(den_id + 2 * i, "%02x", key[i]);
 }
 
 // the room's code: made once (four of DEN_LETTERS, at random), kept in NVS, the same after a restart
@@ -180,11 +151,17 @@ static void room_code_of(char out[5]) {
 	nvs_close(h);
 }
 
+// the heap's least yet, said at a stage of the den's life
+static void stage(const char *what) {
+	printf("heap: %s: %u free, %u least yet, %u biggest; tippet %u\n", what, (unsigned)free_now(), (unsigned)least(),
+		(unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT), (unsigned)den_heap(NULL));
+}
+
 void app_main(void) {
-	// room for a littlesync frame or two between loops
-	usb_serial_jtag_driver_config_t usb = {.rx_buffer_size = 8192, .tx_buffer_size = 4096};
+	usb_serial_jtag_driver_config_t usb = {.rx_buffer_size = 1024, .tx_buffer_size = 4096};
 	usb_serial_jtag_driver_install(&usb);
 	usb_serial_jtag_vfs_use_driver();
+	shell_on = CONFIG_CARDPUTER_WIFI_SSID[0] == 0;
 	screen_init();
 	keys_init();
 	host_init();
@@ -195,76 +172,93 @@ void app_main(void) {
 		host_start("shell", shell);
 		host_start("display", display);
 	}
-	// littlesync: its key and nodes in NVS, its frames on the USB line among the text
 	if (nvs_flash_init() != ESP_OK) nvs_flash_erase(), nvs_flash_init();
-	ls_dev *ls = ls_open(&(ls_options){.store = ls_store_nvs("littlesync"), .random = randoms, .heard = lschannel_heard});
-	room_device(ls);
-	ls_now = ls;
-	// the USB line is one link; another line would be another
-	line = ls ? ls_link(ls) : NULL;
-	// and the gateway over WiFi, a second link, when menuconfig names a network and a gateway (net.h)
-	int wifi = net_start(ls, randoms);
-	api *room_api = pig_room_on ? host_start("room", room) : NULL;
-	id_of(ls);
-	size_t before = heap_caps_get_free_size(MALLOC_CAP_8BIT);
-	char code[5];
-	room_code_of(code);
-	if (den_boot(den_id, code) == 0) {
-		chn_channel *channel = lschannel(ls);
-		if (channel == NULL || den_connect(channel) == NULL) printf("den: link refused\n");
+	inst_install me;
+	int code = flash_install(&me);
+	if (code != INST_OK) printf("install: %s\n", inst_error(code));
+	int mounted = flash_mount();
+	char room[5], dir[16];
+	room_code_of(room);
+	snprintf(dir, sizeof dir, "%s/%s", FLASH_DIR, room);
+	stage("before the den");
+	size_t before = free_now();
+	if (code != INST_OK || den_boot(&me, room, mounted ? dir : "/nowhere", esp_timer_get_time() / 1000)) {
+		printf("den: not up\n");
 	}
-	printf("den: room %s\n", code);
-	printf("den: %s up, %u bytes of heap\n", den_id, (unsigned)(before - heap_caps_get_free_size(MALLOC_CAP_8BIT)));
-	printf("ermine: up, %u bytes free%s%s\n", (unsigned)heap_caps_get_free_size(MALLOC_CAP_8BIT),
-		ls ? ", littlesync on" : ", no littlesync", wifi ? ", and over WiFi" : "");
-	// keys: a key and what it set off; beat: the den's row set again and the sweep; send: a row sealed
-	// and framed; in: an HTTP answer fed in (seals checked, rows heard, mirrored); settle: what that set off
-	static peak_step steps[5] = {{"keys", 0, 0, 0, 0}, {"beat", 0, 0, 0, 0}, {"send", 0, 0, 0, 0}, {"heard", 0, 0, 0, 0}, {"settle", 0, 0, 0, 0}};
-	lschannel_steps = &steps[3];
+	printf("den: %s in room %s, up, %u bytes of heap\n", me.id, room, (unsigned)(before - free_now()));
+	stage("den up");
+	wifi = wifi_start();
+	if (wifi) {
+		char url[160];
+		snprintf(url, sizeof url, "%s/littlesync/tippet/dens-%s", CONFIG_CARDPUTER_SERVER, room);
+		poll_start(den_sync(), url);
+		printf("poll: %s\n", url);
+	}
+	printf("ermine: up, %u bytes free%s\n", (unsigned)free_now(), wifi ? ", and over WiFi" : ", no WiFi");
+	// the lowest the heap went (every task's: the workers' TLS too) in each stage of the den's life,
+	// a loop at a time: joining the room (WiFi, the TLS handshakes, the first answer), catching up
+	// (the room's runs landing, till none come for 3 s), an ask answered, and steady after
+	enum { JOINING, CATCHING, ASK, STEADY };
+	static const char *const STAGES[4] = {"joining", "catching up", "an ask", "steady"};
+	size_t lowest[4] = {SIZE_MAX, SIZE_MAX, SIZE_MAX, SIZE_MAX};
+	int was_up = 0, was_joined = 0, caught = 0;
+	unsigned was_asks = 0;
+	uint64_t was_steps = 0;
+	int64_t heap_said = 0, quiet_since = 0;
 	for (;;) {
+		heap_caps_monitor_local_minimum_free_size_start();
 		const char *k;
-		while ((k = keys_next())) PEAK(&steps[0], pressed(keyboard_api, k); host_settle());
-		char typed[512];
+		while ((k = keys_next())) pressed(keyboard_api, k), host_settle();
+		char typed[256];
 		int n;
 		while ((n = usb_serial_jtag_read_bytes(typed, sizeof typed, 0)) > 0) {
-		if (line) ls_feed(line, (const uint8_t *)typed, n);
-		for (int i = 0; i < n; i++) {
-			// a frame is littlesync's (0x00 to 0x00); the text between is typing
-			if (typed[i] == 0) framed = !framed;
-			if (framed || typed[i] == 0) continue;
-			// \r\n is one enter
-			if (typed[i] == '\n' && i && typed[i - 1] == '\r') continue;
-			if ((k = serial_key(typed[i])) == NULL) continue;
-			// typed on the serial line: the shell's, and the den's keys' too
-			keyboard_press(keyboard_api, k);
-			PEAK(&steps[0], if (strlen(k) == 1) things_key(k); else if (strcmp(k, "backspace") == 0) things_key("del");
-				host_settle());
-			if (typed[i] == '\r' || typed[i] == '\n') print();
+			for (int i = 0; i < n; i++) {
+				// \r\n is one enter
+				if (typed[i] == '\n' && i && typed[i - 1] == '\r') continue;
+				if ((k = serial_key(typed[i])) == NULL) continue;
+				if (strcmp(k, "tab") == 0) {
+					den_trust_last();
+					continue;
+				}
+				// typed on the serial line: the shell's, and the den's keys' too
+				if (shell_on) keyboard_press(keyboard_api, k);
+				if (strlen(k) == 1) things_key(k);
+				else if (strcmp(k, "backspace") == 0) things_key("del");
+				host_settle();
+				if (typed[i] == '\r' || typed[i] == '\n') print();
+			}
 		}
+		int64_t now = esp_timer_get_time() / 1000;
+		if (wifi) {
+			poll_turn(now);
+			host_settle();
+			den_net(poll_state());
+			if (poll_up() && !was_up) stage("wifi joined");
+			if (poll_joined() && !was_joined) stage("room joined"), quiet_since = now;
+			was_up = poll_up(), was_joined = poll_joined();
 		}
-		if (ls) {
-			ls_tick(ls, esp_timer_get_time() / 1000);
-			const uint8_t *out;
-			size_t m;
-			// a frame a call; only while a peer is heard: the line also carries the log, and nobody needs hellos
-			while ((m = ls_next(line, &out)))
-				if (ls_up(line)) usb_serial_jtag_write_bytes(out, m, portMAX_DELAY);
-			net_turn(esp_timer_get_time() / 1000);
-			if (room_api) room_mirror(room_api);
-			PEAK(&steps[4], host_settle());
-		}
-		PEAK(&steps[1], den_tick(esp_timer_get_time() / 1000));
-		PEAK(&steps[2], lschannel_tick(esp_timer_get_time() / 1000));
-		// the heap on the log every 10 s: what's free, the least yet, the biggest block (a frame needs one)
-		static int64_t heap_said;
-		int64_t now_ms = esp_timer_get_time() / 1000;
-		if (now_ms - heap_said >= 10000) {
-			heap_said = now_ms;
-			printf("heap: %u free, %u least, %u biggest\n", (unsigned)heap_caps_get_free_size(MALLOC_CAP_8BIT),
-				(unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT),
-				(unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
-			peak_print(steps, 5);
-		}
+		den_tick(now);
 		vTaskDelay(pdMS_TO_TICKS(10));
+		size_t low = heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT);
+		heap_caps_monitor_local_minimum_free_size_stop();
+		// which stage this loop was in
+		int asked = den_asks() != was_asks;
+		was_asks = den_asks();
+		// catching up: the log's steps growing; caught up once they stand still 3 s
+		if (den_steps() != was_steps) was_steps = den_steps(), quiet_since = now;
+		else if (was_joined && !caught && quiet_since && now - quiet_since > 3000) caught = 1, stage("caught up");
+		int st = asked ? ASK : !was_joined ? JOINING : !caught ? CATCHING : STEADY;
+		if (low < lowest[st]) lowest[st] = low;
+		if (asked) stage("an ask answered");
+		// the heap on the log every 10 s: what's free, the least yet, the biggest block, and the
+		// lowest in each stage
+		if (now - heap_said >= 10000) {
+			heap_said = now;
+			stage("now");
+			printf("heap: lowest free");
+			for (int i = 0; i < 4; i++)
+				if (lowest[i] != SIZE_MAX) printf(", %s %u", STAGES[i], (unsigned)lowest[i]);
+			printf("\n");
+		}
 	}
 }

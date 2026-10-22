@@ -491,7 +491,7 @@ static void draw_empty(void) {
 		}
 		fb_text((FB_W - fb_text_width("the room's code", 1)) / 2, 86, "the room's code", FB_INK, 1);
 	}
-	fb_text(4, 112, "wire into /work/screen", FB_GREY, 1);
+	fb_text(4, 100, "wire into /work/screen", FB_GREY, 1);
 }
 
 // what the screen shows, kept to be drawn again strip by strip (fb.h): the in's out and the pigs'
@@ -517,6 +517,8 @@ static void paint(void) {
 	else if (in->type == OP_MAP && (op_get(in, "lines") || op_get(in, "pigs"))) draw_drawing(in, scene.weights);
 	else if (in->type == OP_MAP && (draw_squares(in) || draw_pigs(in))) {
 	} else draw_wrapped(scene.text ? scene.text : (scene.text = text_of(in)));
+	// who's here, or what just happened, at the foot
+	den_band();
 }
 
 static char *draw_act(void *value, void *previous, void *data) {

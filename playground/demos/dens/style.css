@@ -1961,3 +1961,31 @@ main.pondpage .caption {
 		display: none;
 	}
 }
+
+/* another den's trust button: lemon until pressed, then cherry, "trusted" */
+.frame button.trust {
+	font: 700 12px var(--mono);
+	border: 1.5px solid var(--ink);
+	border-radius: 12px;
+	padding: 3px 12px;
+	cursor: pointer;
+	background: #fff;
+	box-shadow: 0 2px 0 var(--ink);
+	transition: transform 0.1s var(--pop);
+}
+.frame button.trust:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 3px 0 var(--ink);
+}
+.frame button.trust:active {
+	transform: translateY(2px);
+	box-shadow: 0 0 0 var(--ink);
+	transition-duration: 0.03s;
+}
+.frame button.trust.on {
+	background: #ff2284;
+	color: #fff;
+	cursor: default;
+	transform: none;
+	box-shadow: 0 2px 0 var(--ink);
+}
