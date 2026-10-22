@@ -1,0 +1,201 @@
+{
+	"title": "anything else is not a step: its length, a kind in a place, a key or hash not 32 bytes, n of 0, a number not whole, a patch with another field, bytes not canonical",
+	"steps": [
+		{
+			"op": "decode",
+			"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a26470617468806576616c7565010100",
+			"expect": {
+				"step": {
+					"device": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"n": 1,
+					"before": null,
+					"node": "pig",
+					"part": "value",
+					"patches": [
+						{
+							"path": [],
+							"value": 1
+						}
+					],
+					"lamport": 1,
+					"when": 0
+				}
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8758208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a26470617468806576616c75650101",
+			"expect": {
+				"refused": true
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a26470617468806576616c75650101006377686f01",
+			"expect": {
+				"refused": true
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a26470617468806576616c756501010007",
+			"expect": {
+				"refused": true
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "88581f0000000000000000000000000000000000000000000000000000000000000001f6637069676576616c756581a26470617468806576616c7565010100",
+			"expect": {
+				"refused": true
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8878403861383865336464373430396631393566643532646232643363626135643732636136373039626631643934313231626633373438383031623430663666356301f6637069676576616c756581a26470617468806576616c7565010100",
+			"expect": {
+				"refused": true
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c00f6637069676576616c756581a26470617468806576616c7565010100",
+			"expect": {
+				"refused": true
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c6131f6637069676576616c756581a26470617468806576616c7565010100",
+			"expect": {
+				"refused": true
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01581f00000000000000000000000000000000000000000000000000000000000000637069676576616c756581a26470617468806576616c7565010100",
+			"expect": {
+				"refused": true
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6016576616c756581a26470617468806576616c7565010100",
+			"expect": {
+				"refused": true
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f663706967f681a26470617468806576616c7565010100",
+			"expect": {
+				"refused": true
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c7565a00100",
+			"expect": {
+				"refused": true
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a26470617468806576616c7565012000",
+			"expect": {
+				"refused": true
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a26470617468806576616c75650101f93800",
+			"expect": {
+				"refused": true
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a26470617468806576616c756501011b0020000000000000",
+			"expect": {
+				"refused": true
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a26470617468806576616c756501011b001fffffffffffff",
+			"expect": {
+				"step": {
+					"device": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"n": 1,
+					"before": null,
+					"node": "pig",
+					"part": "value",
+					"patches": [
+						{
+							"path": [],
+							"value": 1
+						}
+					],
+					"lamport": 1,
+					"when": 9007199254740991
+				}
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a3626f7061786470617468806576616c7565010100",
+			"expect": {
+				"refused": true
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a264706174688161746572616e6765830001020100",
+			"expect": {
+				"refused": true
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a264706174688161746572616e67658220010100",
+			"expect": {
+				"refused": true
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a1647061746881f93e000100",
+			"expect": {
+				"refused": true
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a2646d6f7665a264706174688161756576616c75650164706174688161740100",
+			"expect": {
+				"refused": true
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a16576616c7565010100",
+			"expect": {
+				"refused": true
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "a2616e016664657669636558208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+			"expect": {
+				"refused": true
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c1801f6637069676576616c756581a26470617468806576616c7565010100",
+			"expect": {
+				"refused": true
+			}
+		}
+	]
+}

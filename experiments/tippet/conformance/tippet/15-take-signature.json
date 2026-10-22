@@ -1,0 +1,114 @@
+{
+	"title": "a run whose signature is not its device's over its last step's hash is refused",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "device",
+			"name": "c",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"expect": {
+				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
+		},
+		{
+			"op": "take",
+			"device": "b",
+			"run": {
+				"device": "a",
+				"steps": [
+					{
+						"n": 1,
+						"node": "pig",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": 1
+							}
+						],
+						"lamport": 1,
+						"when": 0
+					}
+				],
+				"sign": "c"
+			},
+			"expect": {
+				"refused": "signature"
+			}
+		},
+		{
+			"op": "take",
+			"device": "b",
+			"run": {
+				"device": "a",
+				"steps": [
+					{
+						"n": 1,
+						"node": "pig",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": 1
+							}
+						],
+						"lamport": 1,
+						"when": 0
+					}
+				],
+				"sig": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+			},
+			"expect": {
+				"refused": "signature"
+			}
+		},
+		{
+			"op": "count",
+			"device": "b",
+			"of": "a",
+			"expect": {
+				"count": 0
+			}
+		},
+		{
+			"op": "take",
+			"device": "b",
+			"run": {
+				"device": "a",
+				"steps": [
+					{
+						"n": 1,
+						"node": "pig",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": 1
+							}
+						],
+						"lamport": 1,
+						"when": 0
+					}
+				]
+			},
+			"expect": {
+				"added": 1
+			}
+		}
+	]
+}

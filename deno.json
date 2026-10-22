@@ -25,7 +25,8 @@
 		"./extensions/patch-nodes",
 		"./playground/demo-world",
 		"./playground/demos",
-		"./playground/libraries/pack-indexeddb"
+		"./playground/libraries/pack-indexeddb",
+		"./experiments/tippet"
 	],
 	"tasks": {
 		"test": "deno test --allow-run --allow-read --allow-env && deno task conformance",
