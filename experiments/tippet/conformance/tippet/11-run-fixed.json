@@ -1,0 +1,151 @@
+{
+	"title": "a run's end never moves: asked for from inside, it is the rest of it, with its signature",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 3
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "run",
+			"device": "a",
+			"of": "a",
+			"from": 1,
+			"expect": {
+				"from": 1,
+				"to": 3,
+				"sig": "77770c1edd6bd6ee3be272fe144ff4a67f1265e8d7a9665cffcb5449a20dbd2fe5a73298f367a924ef1b2edc1ad5ecfafa1b513134087a73e12d7df66dc13604"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 4
+				}
+			],
+			"expect": {
+				"n": 4,
+				"lamport": 4
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 5
+				}
+			],
+			"expect": {
+				"n": 5,
+				"lamport": 5
+			}
+		},
+		{
+			"op": "run",
+			"device": "a",
+			"of": "a",
+			"from": 1,
+			"expect": {
+				"from": 1,
+				"to": 3,
+				"sig": "77770c1edd6bd6ee3be272fe144ff4a67f1265e8d7a9665cffcb5449a20dbd2fe5a73298f367a924ef1b2edc1ad5ecfafa1b513134087a73e12d7df66dc13604"
+			}
+		},
+		{
+			"op": "run",
+			"device": "a",
+			"of": "a",
+			"from": 2,
+			"expect": {
+				"from": 2,
+				"to": 3,
+				"sig": "77770c1edd6bd6ee3be272fe144ff4a67f1265e8d7a9665cffcb5449a20dbd2fe5a73298f367a924ef1b2edc1ad5ecfafa1b513134087a73e12d7df66dc13604"
+			}
+		},
+		{
+			"op": "run",
+			"device": "a",
+			"of": "a",
+			"from": 3,
+			"expect": {
+				"from": 3,
+				"to": 3,
+				"sig": "77770c1edd6bd6ee3be272fe144ff4a67f1265e8d7a9665cffcb5449a20dbd2fe5a73298f367a924ef1b2edc1ad5ecfafa1b513134087a73e12d7df66dc13604"
+			}
+		},
+		{
+			"op": "run",
+			"device": "a",
+			"of": "a",
+			"from": 4,
+			"expect": {
+				"from": 4,
+				"to": 5,
+				"sig": "4181d0b0452267ae6947f7849946465de9e001b8820f3d8a8ebb9ba61510fb10643f0d7ecc170630efcaf79fdd9673623502dc3771c31cd383a3e84782fa3801"
+			}
+		},
+		{
+			"op": "sign",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"bytes": "ac6f9136311820ca4690111ac6b4d762fb009c84dab623b0733864e7769dc1d5",
+			"expect": {
+				"sig": "77770c1edd6bd6ee3be272fe144ff4a67f1265e8d7a9665cffcb5449a20dbd2fe5a73298f367a924ef1b2edc1ad5ecfafa1b513134087a73e12d7df66dc13604"
+			}
+		}
+	]
+}

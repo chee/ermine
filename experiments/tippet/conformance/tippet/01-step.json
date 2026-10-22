@@ -1,0 +1,168 @@
+{
+	"title": "a step's bytes: a canonical cbor array of eight, or nine with who; read back the same",
+	"steps": [
+		{
+			"op": "encode",
+			"step": {
+				"device": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+				"n": 1,
+				"before": null,
+				"node": "pig",
+				"part": "value",
+				"patches": [
+					{
+						"path": [],
+						"value": {
+							"x": 1
+						}
+					}
+				],
+				"lamport": 1,
+				"when": 1760000000
+			},
+			"expect": {
+				"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a26470617468806576616c7565a1617801011a68e77800"
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a26470617468806576616c7565a1617801011a68e77800",
+			"expect": {
+				"step": {
+					"device": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"n": 1,
+					"before": null,
+					"node": "pig",
+					"part": "value",
+					"patches": [
+						{
+							"path": [],
+							"value": {
+								"x": 1
+							}
+						}
+					],
+					"lamport": 1,
+					"when": 1760000000
+				}
+			}
+		},
+		{
+			"op": "hash",
+			"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a26470617468806576616c7565a1617801011a68e77800",
+			"expect": {
+				"hash": "eac74f8450c568031effdf7ebe47a3d7a9ff10ab44d01dcec9c3e8cd47725ad1"
+			}
+		},
+		{
+			"op": "encode",
+			"step": {
+				"device": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+				"n": 2,
+				"before": "eac74f8450c568031effdf7ebe47a3d7a9ff10ab44d01dcec9c3e8cd47725ad1",
+				"node": "pig",
+				"part": "value",
+				"patches": [
+					{
+						"path": [
+							"name"
+						],
+						"range": [
+							0,
+							2
+						],
+						"value": "héllo 🦊"
+					},
+					{
+						"path": [
+							"list",
+							2
+						],
+						"move": {
+							"path": [
+								"list",
+								0
+							]
+						}
+					},
+					{
+						"path": [
+							"blob"
+						],
+						"value": {
+							"/": {
+								"bytes": "AQID"
+							}
+						}
+					},
+					{
+						"path": [
+							"gone"
+						]
+					}
+				],
+				"lamport": 7,
+				"when": 0,
+				"who": "juno"
+			},
+			"expect": {
+				"bytes": "8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c025820eac74f8450c568031effdf7ebe47a3d7a9ff10ab44d01dcec9c3e8cd47725ad1637069676576616c756584a3647061746881646e616d656572616e67658200026576616c75656b68c3a96c6c6f20f09fa68aa2646d6f7665a1647061746882646c69737400647061746882646c69737402a264706174688164626c6f626576616c756543010203a164706174688164676f6e650700646a756e6f"
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c025820eac74f8450c568031effdf7ebe47a3d7a9ff10ab44d01dcec9c3e8cd47725ad1637069676576616c756584a3647061746881646e616d656572616e67658200026576616c75656b68c3a96c6c6f20f09fa68aa2646d6f7665a1647061746882646c69737400647061746882646c69737402a264706174688164626c6f626576616c756543010203a164706174688164676f6e650700646a756e6f",
+			"expect": {
+				"step": {
+					"device": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"n": 2,
+					"before": "eac74f8450c568031effdf7ebe47a3d7a9ff10ab44d01dcec9c3e8cd47725ad1",
+					"node": "pig",
+					"part": "value",
+					"patches": [
+						{
+							"path": [
+								"name"
+							],
+							"range": [
+								0,
+								2
+							],
+							"value": "héllo 🦊"
+						},
+						{
+							"move": {
+								"path": [
+									"list",
+									0
+								]
+							},
+							"path": [
+								"list",
+								2
+							]
+						},
+						{
+							"path": [
+								"blob"
+							],
+							"value": {
+								"/": {
+									"bytes": "AQID"
+								}
+							}
+						},
+						{
+							"path": [
+								"gone"
+							]
+						}
+					],
+					"lamport": 7,
+					"when": 0,
+					"who": "juno"
+				}
+			}
+		}
+	]
+}

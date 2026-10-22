@@ -1,0 +1,166 @@
+{
+	"title": "a peer holding a run's start is sent only the rest, with the run's one signature",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "relay",
+			"name": "g",
+			"expect": {}
+		},
+		{
+			"op": "device",
+			"name": "c",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"expect": {
+				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 3
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "g",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "take",
+			"device": "c",
+			"run": {
+				"device": "a",
+				"steps": [
+					"8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a26470617468806576616c756501011a68e77800"
+				]
+			},
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "link",
+			"a": "c",
+			"b": "g",
+			"expect": {}
+		},
+		{
+			"op": "deliver",
+			"from": "c",
+			"to": "g",
+			"expect": {
+				"got": [
+					[
+						"have",
+						{
+							"a": 1
+						}
+					]
+				]
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "g",
+			"to": "c",
+			"expect": {
+				"got": [
+					[
+						"have",
+						{
+							"a": 3
+						}
+					],
+					[
+						"run",
+						"a",
+						2,
+						3
+					]
+				]
+			}
+		},
+		{
+			"op": "count",
+			"device": "c",
+			"of": "a",
+			"expect": {
+				"count": 3
+			}
+		},
+		{
+			"op": "run",
+			"device": "c",
+			"of": "a",
+			"from": 2,
+			"expect": {
+				"from": 2,
+				"to": 3,
+				"sig": "77770c1edd6bd6ee3be272fe144ff4a67f1265e8d7a9665cffcb5449a20dbd2fe5a73298f367a924ef1b2edc1ad5ecfafa1b513134087a73e12d7df66dc13604"
+			}
+		},
+		{
+			"op": "run",
+			"device": "a",
+			"of": "a",
+			"from": 1,
+			"expect": {
+				"from": 1,
+				"to": 3,
+				"sig": "77770c1edd6bd6ee3be272fe144ff4a67f1265e8d7a9665cffcb5449a20dbd2fe5a73298f367a924ef1b2edc1ad5ecfafa1b513134087a73e12d7df66dc13604"
+			}
+		}
+	]
+}
