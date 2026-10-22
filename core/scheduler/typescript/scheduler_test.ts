@@ -324,6 +324,41 @@ Deno.test("a computation disposed while pending: its promise lands nowhere", asy
 	assertEquals(ends(c).map((m) => m.ended), ["pending"])
 })
 
+Deno.test("a thenable settles once: what it says after its first resolve or reject is not heard", async () => {
+	const { s, at, ends } = setup()
+	let woken = 0
+	s.onSettle(() => woken++)
+	const set: number[] = []
+	// a thenable that keeps talking: resolve twice, then reject
+	const loud = {
+		then(resolve: (v: number) => void, reject: (e: unknown) => void) {
+			resolve(1)
+			resolve(2)
+			reject(new Error("late"))
+		},
+	}
+	const c = at(() => s.createComputer(() => loud as unknown as Promise<number>, (v) => set.push(v)))
+	s.pulse()
+	await new Promise((r) => setTimeout(r, 0))
+	s.pulse()
+	assertEquals([woken, set], [1, [1]])
+	assertEquals(ends(c).map((m) => m.ended), ["pending", "done"])
+})
+
+Deno.test("a thenable whose then throws: the run fails, as if it rejected", async () => {
+	const { s, at, ends } = setup()
+	const broken = {
+		then() {
+			throw new Error("no then")
+		},
+	}
+	const c = at(() => s.createComputer(() => broken as unknown as Promise<number>, () => {}))
+	s.pulse()
+	await new Promise((r) => setTimeout(r, 0))
+	s.pulse()
+	assertEquals(ends(c).map((m) => m.ended), ["pending", "failed"])
+})
+
 Deno.test("a pulse in a pulse does nothing; the outer one runs what it made due", () => {
 	const { s, at, write, get } = setup()
 	const seen: unknown[] = []

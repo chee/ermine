@@ -16,6 +16,7 @@
     "jsr:@std/net@^1.0.7": "1.0.7",
     "jsr:@std/path@^1.1.6": "1.1.6",
     "jsr:@std/streams@^1.2.0": "1.2.0",
+    "jsr:@std/yaml@*": "1.3.0",
     "npm:@automerge/subduction@0.23.0": "0.23.0",
     "npm:@codemirror/commands@6": "6.11.1",
     "npm:@codemirror/lang-javascript@6": "6.2.5",
@@ -98,6 +99,9 @@
     },
     "@std/streams@1.2.0": {
       "integrity": "256b934254778f2bf45f5713b934209ff29e9b4b7fd4ec095219966813758c5f"
+    },
+    "@std/yaml@1.3.0": {
+      "integrity": "b250103854378b8b36cbff0fe95aec017d3d9ce86b489c67605180c602fb4922"
     }
   },
   "npm": {

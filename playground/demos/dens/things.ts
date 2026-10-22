@@ -8,7 +8,7 @@ import { createChangeHeader } from "@ermine/places/header"
 import { upsert } from "@ermine/places/upsert"
 import { get } from "@ermine/places/lib"
 import { inside } from "@ermine/boxes"
-import type { Runner, Start } from "@ermine/dens"
+import type { Runner, Start } from "@ermine/software"
 
 // a runner here is its start alone: (code, start)
 type Run = Runner["start"]

@@ -26,14 +26,21 @@ typedef struct {
 	int status;
 	int done;
 } poll_request;
-// the platform's: r made on worker (0 recv, 1 send), r->done set (__atomic, release) once answered
+// the platform's: r made on worker (0 recv, 1 send; with one worker, 0), r->done set (__atomic, release) once answered
 void poll_do(int worker, poll_request *r);
 // the platform's: whether the network is up (a request now could be answered)
 int poll_up(void);
 
+// how many workers the platform runs: 1, recv and send take turns on one connection (one TLS
+// session's heap); 2, a recv waits on one while sends go on the other
+#ifndef POLL_WORKERS
+#define POLL_WORKERS 1
+#endif
 // the most an answer carries (room=), and the most a send's body copies (one message at least)
 #define POLL_ROOM 8192
 #define POLL_BODY 8192
+// the outbox's bytes at which the link says it is full (tp_send's 1)
+#define POLL_FULL 8192
 // the most of an answer a worker takes; more: no answer
 #define POLL_MOST (48 * 1024)
 

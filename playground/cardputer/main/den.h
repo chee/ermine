@@ -1,18 +1,21 @@
-// the cardputer's den on tippet (experiments/tippet), as the dens page's host.ts makes one (its
-// contract): the den is its install, its node "ermine:ed01" + its key's hex, its name under
-// /system/dens the key's hex, and the key the one its log signs with. in the host's world (host.h):
-// the programs at /things/<kind> (ermine.type "thing.<kind>"), a den "chee's cardputer" (device
-// "cardputer"; policy: yes to every ask, as the page's: the inbox checks who asked first), runners
-// keys, screen and pigs, a surface screen (framebuffer, 240x135), and /work/keys, /work/screen and
-// /work/pigs started. what syncs (history's kept): host.ts' list, as steps in the room's log
-//   <den>                   attributes, children { on, things, inbox, authorized_keys }
-//   <den>/things            children: each thing's process id -> <den>/things/<process id>
-//   <den>/things/<process>  attributes: the process's, and thing.at
-//   <den>/inbox             value: { <ask id>: { ask, claim, sig, answer? } }
-//   <den>/authorized_keys   value: { <install id>: { name } }
-// and the steps others write in their own (and into this inbox). who's here: tippet's live, every
-// 2 s, { den }; another den not heard for 6 s is quiet. the log's steps on flash (store_file, in
-// dir), so a reboot goes on from its last step
+// the cardputer's den on tippet (experiments/tippet), as the dens page's host.ts makes one: the
+// contract at its top. the den is its install: its node "ermine:ed01" + its key's hex, its id (its
+// name under /system/dens) the key's hex, and the key the one its log signs with. in the host's
+// world (host.h): the programs at /things/<kind> (ermine.type "thing.<kind>"), the den's node
+// (attributes ermine.type ermine.den, .id, .name "chee's cardputer", .device "cardputer") at
+// /system/den and /system/dens/<id>, software (experiments/software) with keys, screen and pigs
+// offered under the node, and /home/keys, /home/screen and /home/pigs run. what syncs (history's
+// kept): host.ts' list, as steps in the room's log
+//   <node>                   attributes; children { things, inbox, authorized_keys, runners }
+//   <node>/things            children: each thing's process id -> <node>/things/<process id>
+//   <node>/things/<process>  attributes: the process's, and thing.at
+//   <node>/inbox             value: { <ask id>: { ask, claim, sig, answer? } }
+//   <node>/authorized_keys   value: { <node>: { name } }, only this den's own steps believed
+// the inbox (den.c's, host.ts' /system/inbox): the one place that checks who may. start, stop and
+// unpair only from a den in authorized_keys; pair from anyone it says it is, put to a person (tab
+// yes, esc no). who's here: tippet's live, every 2 s, { den }, and { den, bye } going; another den
+// not heard for 6 s is quiet. the log's steps on flash (store_file, in dir), so a reboot goes on
+// from its last step
 #ifndef DEN_H
 #define DEN_H
 
@@ -20,7 +23,7 @@
 #include <stdint.h>
 
 #include "experiments/tippet/c/tippet.h"
-#include "playground/dens/c/dens.h"
+#include "experiments/software/c/software.h"
 #include "playground/installs/c/installs.h"
 
 // a room's code: 4 of these, read off a screen and typed (none that look like another); its tippet
@@ -34,24 +37,29 @@
 // after host_init: the den of the install, in room code, its log kept in dir (made when not there).
 // now: the clock's ms. 0: up
 int den_boot(const inst_install *install, const char *code, const char *dir, int64_t now);
-dn *den_get(void);
+sw *den_software(void);
 // the room's code ("": none yet)
 const char *den_room(void);
-// tippet's sync, for a carrier to link (poll.h); NULL before den_boot
+// tippet's sync, for a carrier to link (poll.h); NULL before den_boot. software, what runs here
 tp_sync *den_sync(void);
 // each loop, the clock's ms: the heartbeat every DEN_BEAT, the asks waiting answered, the screen's
 // band drawn again when who's here changes
 void den_tick(int64_t now);
 // the carrier's state, in a few words, for the screen ("on galaxy.observer", "offline")
 void den_net(const char *state);
-// pairing: the den an ask came from last put in this den's keys, and the screen says so
+// pairing (host.ts' pair ask): the oldest pair ask waiting answered, yes (tab: the asker in this
+// den's keys) or no (esc), and the screen says so; den_trust_last is a yes. whether one waits
+void den_pair_answer(int yes);
 void den_trust_last(void);
+int den_pair_waiting(void);
 // the band at the screen's foot (fb.h): who's here, or what just happened, in words. from the
 // screen thing's paint, last
 void den_band(void);
 // how many asks this den has answered; how many steps its log holds, every device's
 unsigned den_asks(void);
 uint64_t den_steps(void);
+// a thing of kind started at /home/<at> by the den itself (as at boot): 1 started
+int den_start(const char *kind, const char *at);
 // the history's snapshot into the log's store (tippet's): a boot loads it and the steps after. 0 or a
 // code
 int den_snapshot(void);
@@ -62,6 +70,8 @@ size_t den_heap(size_t *most);
 // the platform's: the screen drawn again (the last picture, with the band); n random bytes
 void frame_again(void);
 void den_random(uint8_t *out, size_t n);
+// the platform's: the heap free now (bytes)
+size_t den_free(void);
 // the platform's: the heap at a stage of the den's boot, said
 void den_mark(const char *what);
 

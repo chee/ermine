@@ -1,5 +1,5 @@
 # ermine's C, built from where it lives in the repo: the process api and what it stands on
-# (the Makefile's api_src without the harnesses), dens (its dens_src, without away and presence),
+# (the Makefile's api_src without the harnesses), software (experiments/software/c),
 # tippet (experiments/tippet/c), and trust, installs and sessions
 set(R ${CMAKE_CURRENT_LIST_DIR}/../../../..)
 set(TIPPET ${R}/experiments/tippet/c)
@@ -25,9 +25,8 @@ idf_component_register(
 		${R}/playground/encoding/c/hash.c ${R}/ermine/encoding/c/blake3/blake3.c
 		${R}/ermine/encoding/c/blake3/blake3_dispatch.c ${R}/ermine/encoding/c/blake3/blake3_portable.c
 		${R}/ermine/ids/c/ids.c
-		${R}/playground/dens/c/common.c ${R}/playground/dens/c/policy.c ${R}/playground/dens/c/offers.c
-		${R}/playground/dens/c/start.c ${R}/playground/dens/c/handlers.c ${R}/playground/dens/c/asks.c
-		${R}/playground/dens/c/here.c ${R}/playground/dens/c/dens.c
+		${R}/experiments/software/c/common.c ${R}/experiments/software/c/offers.c
+		${R}/experiments/software/c/run.c ${R}/experiments/software/c/software.c
 		${R}/core/ed25519/c/ed25519.c ${R}/core/ed25519/c/sha2.c
 		${TIPPET}/wire.c ${TIPPET}/step.c ${TIPPET}/pack.c ${TIPPET}/sign.c ${TIPPET}/log.c ${TIPPET}/store.c
 		${TIPPET}/store_file.c ${TIPPET}/sync.c ${TIPPET}/http.c ${TIPPET}/history.c

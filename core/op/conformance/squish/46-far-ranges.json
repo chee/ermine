@@ -1,0 +1,22 @@
+{
+	"title": "columns whose starts add up past a 64-bit whole number decode without overflowing; what comes back is not compared",
+	"steps": [
+		{
+			"op": "decode",
+			"columns": {
+				"paths": [["t"]],
+				"path": [0, 1100],
+				"shape": [1, 1100],
+				"from": [9007199254740991, 1100],
+				"size": [9007199254740991, 1100],
+				"value": [],
+				"move": []
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [{ "path": ["t"], "range": [0, 0], "value": "a" }],
+			"expect": { "patches": [{ "path": ["t"], "range": [0, 0], "value": "a" }] }
+		}
+	]
+}

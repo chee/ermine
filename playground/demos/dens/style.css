@@ -1962,8 +1962,8 @@ main.pondpage .caption {
 	}
 }
 
-/* another den's trust button: lemon until pressed, then cherry, "trusted" */
-.frame button.trust {
+/* another den's pair button: white until asked, lemon while it waits, "unpair" once paired */
+.frame button.pair {
 	font: 700 12px var(--mono);
 	border: 1.5px solid var(--ink);
 	border-radius: 12px;
@@ -1973,19 +1973,146 @@ main.pondpage .caption {
 	box-shadow: 0 2px 0 var(--ink);
 	transition: transform 0.1s var(--pop);
 }
-.frame button.trust:hover {
+.frame button.pair:hover {
 	transform: translateY(-1px);
 	box-shadow: 0 3px 0 var(--ink);
 }
-.frame button.trust:active {
+.frame button.pair:active {
 	transform: translateY(2px);
 	box-shadow: 0 0 0 var(--ink);
 	transition-duration: 0.03s;
 }
-.frame button.trust.on {
-	background: #ff2284;
+.frame.locked button.pair:not(.asked) {
+	background: var(--sun);
+}
+.frame button.pair.asked {
+	background: #fff8c8;
+	cursor: wait;
+}
+.frame button.pair.on {
+	background: #fff;
+	color: var(--ink);
+}
+
+/* another den's ins and outs before pairing: grey, a padlock where the dot was, and its note */
+.port.locked {
+	position: relative;
+	color: #aaa;
+	cursor: not-allowed;
+}
+.port.locked .dot {
+	display: none;
+}
+.port .lock {
+	position: relative;
+	width: 13px;
+	height: 15px;
+	color: #9a9a9a;
+	flex: none;
+	cursor: not-allowed;
+}
+.port .lock svg {
+	display: block;
+	width: 13px;
+	height: 15px;
+}
+.port.locked .port-label {
+	text-decoration: line-through;
+}
+.lock-note {
+	position: absolute;
+	top: 18px;
+	width: 88px;
+	font: 600 9px/1.25 var(--mono);
+	text-align: center;
+	color: var(--ink);
+	background: #fff8c8;
+	border: 1px solid var(--ink);
+	border-radius: 6px;
+	padding: 2px 4px;
+	white-space: normal;
+	box-shadow: 1px 1px 0 var(--ink);
+	pointer-events: none;
+	z-index: 3;
+}
+.port-in .lock-note {
+	left: -2px;
+}
+.port-out .lock-note {
+	right: -2px;
+}
+.lock.shake {
+	animation: shake 0.4s;
+}
+.lock.shake .lock-note {
+	background: var(--cherry);
 	color: #fff;
-	cursor: default;
-	transform: none;
+}
+@keyframes shake {
+	20%,
+	60% {
+		transform: translateX(-2px) rotate(-8deg);
+	}
+	40%,
+	80% {
+		transform: translateX(2px) rotate(8deg);
+	}
+}
+.box.locked .box-body {
+	opacity: 0.7;
+}
+
+/* a pair ask waiting for this den's yes or no: a little card at the top */
+.asking {
+	position: absolute;
+	top: 14px;
+	left: 50%;
+	transform: translateX(-50%);
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	z-index: 10;
+}
+.asking .want {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	background: #fff8c8;
+	border: 1.5px solid var(--ink);
+	border-radius: 14px;
+	padding: 8px 10px 8px 16px;
+	box-shadow: 0 4px 0 var(--ink);
+	font: 600 1.05rem Jost, sans-serif;
+	animation: want 0.35s var(--pop);
+}
+.asking .want p {
+	margin: 0 8px 0 0;
+}
+.asking .want button {
+	font: 700 13px var(--mono);
+	border: 1.5px solid var(--ink);
+	border-radius: 12px;
+	padding: 4px 14px;
+	cursor: pointer;
+	background: #fff;
 	box-shadow: 0 2px 0 var(--ink);
+}
+.asking .want button.yes {
+	background: var(--stem);
+}
+.asking .want button:active {
+	transform: translateY(2px);
+	box-shadow: 0 0 0 var(--ink);
+}
+@keyframes want {
+	from {
+		transform: translateY(-14px) scale(0.9);
+		opacity: 0;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.asking .want,
+	.lock.shake {
+		animation: none;
+	}
 }

@@ -6,10 +6,10 @@
 // selection is a key it tracks too)
 //
 //   const finder = createFinder(host, el, { pick: (path, id) => ..., drag: (path, id) => ... })
-//   finder.select(["work", "keys"])
+//   finder.select(["home", "keys"])
 import { level, type Path } from "@ermine/places"
 import { get, list, members } from "@ermine/places/lib"
-import { NAME } from "@ermine/dens"
+import { NAME } from "./host.ts"
 import type { Host } from "./host.ts"
 
 export type Row = {

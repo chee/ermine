@@ -36,13 +36,19 @@ static struct {
 
 static int done(int i) { return __atomic_load_n(&me.r[i].done, __ATOMIC_ACQUIRE); }
 
-// a message onto the link: into the outbox
+// a message onto the link: into the outbox. full (no more runs till tp_sync_go) at POLL_FULL bytes
+// waiting, not tp_http's half a megabyte: catching a room up on this den's steps would queue every
+// run at once, and the outbox, doubling, wants a block the heap doesn't have
 static int send(void *ctx, const uint8_t *bytes, size_t length) {
 	(void)ctx;
 	int r = tp_http_send(&me.h, bytes, length);
-	if (r < 0) me.gone = 1, me.link = NULL;
-	else me.out++;
-	return r;
+	if (r < 0) {
+		printf("poll: a message of %zu bytes not sent (%s): the link is gone\n", length, tp_why(r));
+		me.gone = 1, me.link = NULL;
+		return r;
+	}
+	me.out++;
+	return r || me.h.length >= POLL_FULL;
 }
 
 static void open_link(void) {
@@ -82,7 +88,7 @@ static void begin(int i, int post, const uint8_t *body, size_t n) {
 	snprintf(r->url, sizeof r->url, "%s/%s?%s", me.url, post ? "send" : "recv", query);
 	me.busy[i] = 1;
 	me.requests++;
-	poll_do(i, r);
+	poll_do(POLL_WORKERS == 1 ? 0 : i, r);
 }
 
 void poll_turn(int64_t now) {
@@ -93,7 +99,7 @@ void poll_turn(int64_t now) {
 		me.busy[0] = 0;
 		int code = r[0].status < 0 ? 1 : tp_http_recv(&me.h, r[0].status, r[0].answer, r[0].length, told, NULL);
 		free(r[0].answer), r[0].answer = NULL;
-		if (code == TP_GONE) me.gone = 1;
+		if (code == TP_GONE) me.gone = 1, printf("poll: recv answered %d: the link is gone\n", r[0].status);
 		else if (code) me.failed++, me.rest[0] = now + AGAIN;
 		else me.joined = 1;
 	}
@@ -103,9 +109,9 @@ void poll_turn(int64_t now) {
 		int code = tp_http_sent(&me.h, r[1].status < 0 ? 0 : r[1].status, me.count);
 		free(me.body), me.body = NULL;
 		free(r[1].answer), r[1].answer = NULL;
-		if (code == TP_GONE) me.gone = 1;
+		if (code == TP_GONE) me.gone = 1, printf("poll: send answered %d: the link is gone\n", r[1].status);
 		else if (code) me.failed++, me.rest[1] = now + AGAIN;
-		else if (me.link && me.h.bytes < TP_BODY / 2) tp_sync_go(me.sync, me.link);
+		else if (me.link && me.h.length < POLL_FULL) tp_sync_go(me.sync, me.link);
 	}
 	// lost: linked again with a new id once neither worker is busy
 	if (me.gone) {
@@ -117,8 +123,12 @@ void poll_turn(int64_t now) {
 		return;
 	}
 	if (!poll_up()) return;
-	if (!me.busy[0] && now >= me.rest[0]) begin(0, 0, NULL, 0);
-	if (!me.busy[1] && now >= me.rest[1] && me.h.length > 0) {
+	// one worker: a request at a time, a send first (a recv waits till something comes for this
+	// den, a live of another den's at the latest: 2 s with one in the room)
+	int one = POLL_WORKERS == 1, idle = !me.busy[0] && !me.busy[1];
+	int sending = !me.busy[1] && now >= me.rest[1] && me.h.length > 0 && (!one || idle);
+	if (!sending && !me.busy[0] && now >= me.rest[0] && (!one || idle)) begin(0, 0, NULL, 0);
+	if (sending) {
 		// the outbox's first frames, as many as fit in POLL_BODY (one at least), copied
 		size_t at = 0, n = 0;
 		while (at < me.h.length) {

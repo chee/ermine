@@ -59,6 +59,16 @@
 // createComputer and createEffect give back the computer; what a listener threw then comes out of
 // a pulse, the one going on or else the next, once it is done, before the pulse's own error.
 //
+// what a run read stays tracked till a run is done (chee 10-18: "_any_ throw is pending is kind
+// of beautiful i like it"): links a run does not read again are old; a run that ends done, its
+// computer's latest, lets the old ones go, at its end (a promise's, when it lands done; a run
+// since takes that over). one that ends any other way (failed, pending, stopped, looping) holds
+// what it read and the old ones: a mark of any makes it due again, and nothing it held is
+// untracked (no repeats: a run reading in a new order adds none). a mark of an old one is a retry
+// (mine): its cause is held, but it is no loop through it (it flags nothing, cuts nothing), and
+// its own set, act or cleanup does not reach it. only what it read counts toward
+// its rank (order.sees).
+//
 // it holds no values but each computation's last result:
 // a compute's goes to its set, whose writer says mark(keys, run), and what tracked those keys is
 // due. keys are opaque, compared by identity.

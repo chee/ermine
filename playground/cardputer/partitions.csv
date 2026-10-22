@@ -1,7 +1,8 @@
 # the Cardputer ADV's 8 MB: NVS where it was (the install, the room's code), the app, and "den": a FAT
-# file system (wear levelling) for the den's log (main/flash.c, mounted at /f)
-# Name,   Type, SubType, Offset,  Size
-nvs,      data, nvs,     0x9000,  0x6000
-phy_init, data, phy,     0xf000,  0x1000
-factory,  app,  factory, 0x10000, 3M
-den,      data, fat,     ,        1M
+# file system (wear levelling) for the den's log (main/flash.c, mounted at /f), at 4 MB, where flash.c
+# registered it when the table had none, so a den made then keeps its log
+# Name,   Type, SubType, Offset,   Size
+nvs,      data, nvs,     0x9000,   0x6000
+phy_init, data, phy,     0xf000,   0x1000
+factory,  app,  factory, 0x10000,  3M
+den,      data, fat,     0x400000, 1M

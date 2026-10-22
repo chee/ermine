@@ -1,43 +1,95 @@
 /// <reference lib="dom" />
 // the host: one world (a scheduler, a table, places with processes, away and children), one den in
-// it, and tippet (experiments/tippet) tying the world to the room's log. dens_test.ts' world(), made
-// in a page. the den is its install: its node's id is the install's ("ermine:ed01" + its key's
-// hex), its name under /system/dens is the key's hex, and the key is the tab's seed, the one the log
-// signs with: the den and its tippet device are one
+// it, software (experiments/software) running what the den runs, and tippet (experiments/tippet)
+// tying the world to the room's log. made in a page. software has no policy and no asking: what
+// decides who may ask this den for what is its inbox, a program the den runs at /system/inbox
 //
 //   const h = await createHost({ seed, name: "ada", device: "browser", room: "KAYA", server })
-//   h.den.start("/system/den/runners/button", "/things/button", "/work/button-1")
-//   const ask = await h.ask(other, { op: "start", ... })   // into its inbox; its answer beside it
-//   h.answer(other, ask)                                    // tracked; undefined until it lands
-//   h.trust(other)                                          // into this den's authorized_keys
+//   h.software.run("/system/den/runners/button", "/things/button", "/home/button-1a2b")
+//   const n = await h.ask(other, { op: "start", ... })   // into its inbox; its answer beside it
+//   h.answer(other, n)                                    // tracked; undefined until it lands
+//   await h.pair(other)                                   // a pair ask; h.onPair told its answer
+//   h.answerPair(n, true)                                 // yes to a pair ask in this den's inbox
+//   await h.unpair(other)                                 // out of both dens' keys
 //
-// what syncs (history's kept): this den's own nodes, as steps in the room's log
-//   <den>                   attributes (its name, device), children { on, things, inbox, authorized_keys }
-//   <den>/things            children: each thing's process id → <den>/things/<process id>
-//   <den>/things/<process>  attributes: the process's, as den.nodes() shows them, and thing.at
-//   <den>/inbox             value: { <ask id>: { ask, claim, sig, answer? } }: anyone writes an ask
-//   <den>/authorized_keys   value: { <install id>: { name } }: who this den does asks for
-// and the asks this den writes into another's inbox. never the page's own nodes (the root, the
-// programs at /things, /sync) nor a process's own node (its status, PENDING, is no value a step can
-// hold: history keeps no later patch to an entry with one write it couldn't keep)
+// ---- the contract: what a den is, as the cardputer's C (playground/cardputer) does it too ----
 //
-// who's here: no step (steps last forever) but tippet's live, every 2 s: { den }. a den not heard
-// for 6 s is grey, its things still drawn. a den shows once it has been heard on this page
+// a den is an install. its key: ed25519, from the seed (32 bytes). its id: the key's 64 hex. its
+// node: "ermine:ed01" + id. the room's log signs with the same key: the den and its tippet device
+// are one. a room: tippet's room "dens-" + CODE (4 of LETTERS), at <server>/littlesync/tippet/dens-CODE
 //
-// the old path, before tippet: each den's nodes() as a presence row (away's connect,
-// playground/dens/typescript/away.ts) on together's channel through wss://galaxy.observer, a 6 s
-// ttl, and asks as channel messages (link.ask). the cardputer (playground/cardputer/main/den.c)
-// still speaks that, so it is not in a tippet room until it is moved over too
-import createEntry, { type Entry } from "@ermine/node/entry"
-import { createScheduler, type Scope } from "@ermine/scheduler"
+// what syncs (history's kept): a den's own nodes, as steps in the room's log, each written by its
+// den alone. CBOR throughout, maps with string keys
+//   <node>                   attributes { "ermine.type": "ermine.den", "ermine.den.id": id,
+//                            "ermine.den.name": name, "ermine.den.device": "browser" | "cardputer" }
+//                            children { things: <node>/things, inbox: <node>/inbox,
+//                            authorized_keys: <node>/authorized_keys }, and runners: <node>/runners
+//                            (software's offers; nobody else reads them)
+//   <node>/things            children { <process id>: <node>/things/<process id> }, one a thing
+//   <node>/things/<process>  attributes: the thing's process's, as it runs, and "thing.at"
+//                            "/home/<kind>-<4 hex>" (its path in its den). what another den reads:
+//                              "ermine.process.runner" { id, at: [steps] }: at's last step is the kind
+//                              "ermine.process.args" [strings]: what it reads, as triples
+//                                <input> <den id> <path> (things.ts' parse), and "name=value"s
+//                              "thing.out": what it gives (a number, text, a map, a picture)
+//                              "thing.state", "thing.says": a timer's, a pad's, the pigs' extra
+//                              "ermine.computer.status": "pending" | { failed: words }, when so
+//                            and the rest software and processes write ("ermine.type"
+//                            "ermine.process", "ermine.process.program" { id, at?, hash? },
+//                            "ermine.process.cwd")
+//   <node>/authorized_keys   value { <node>: { name } }: the dens this den does asks for, its own
+//                            node among them from the start. only steps of the den's own count:
+//                            a step another device wrote there is not believed
+//   <node>/inbox             value { <ask id>: { ask, claim, sig, answer? } }: an asker writes a
+//                            patch at [<ask id>]; the den writes the answer at [<ask id>, "answer"]
+//
+// an ask, written into the asked den's inbox:
+//   ask    { op, id, from: the asker's node, to: the asked den's node, ...the op's fields }
+//          id: "<the asker's id's first 8 hex>-<its clock in ms, base 36>-<a count>"
+//   claim  { session, install: from, vouch }: this page's session (@ermine/sessions: its id
+//          "ermine:ed01" + the session key's hex, vouch the install's signature for it)
+//   sig    ed25519, by the session's key, over the ask's canonical CBOR
+// the ops, each with its answer:
+//   start   { runner: "/system/den/runners/<kind>", program: { id, code, hash?, type?, api? },
+//           at: "/home/<kind>-<4 hex>", args?: [strings] }
+//           → { id: <process id>, at: [steps] }, or software's refusal: { refused: "taken", at }
+//           | { refused: "not-a-runner", runner } | { refused: "not-there", program }
+//           | { refused: "wrong-form", program, runner }
+//   stop    { process: <process id>, reason? } → {} | { refused: "not-there", process }
+//   pair    { name: the asker's name } → { pair: "yes" } | { pair: "no" }: a person's answer (the
+//           cardputer: tab yes, esc no), none until then; from a den in authorized_keys already:
+//           { pair: "yes" } at once
+//   unpair  {} → {}
+// and to any: { refused: "not-trusted", who: <the asker's name>, why } or { error: <words> }
+// the inbox's checks, in order, the first that fails its why:
+//   to is not this den's node, or claim.install is not from              "not-for-here"
+//   pair: trusted({ [from]: {} }, claim, cbor(ask), sig) is false         "bad-signature"
+//   the rest: from not in authorized_keys                                 "not-in-keys"
+//             trusted(authorized_keys, claim, cbor(ask), sig) is false    "bad-signature"
+// (trusted: @ermine/trust: the install in keys, its vouch for the session good, the session's
+// signature over the bytes good)
+//
+// pairing: A asks B pair. B's screen: "<A's name> wants to pair", yes or no. yes: B puts A in its
+// authorized_keys ({ name }) and answers { pair: "yes" }; A, seeing that answer and itself in B's
+// authorized_keys, puts B in its own. no: { pair: "no" }, nothing else changes. unpair: A takes B
+// out of its authorized_keys and asks B unpair; B takes A out of its. paired: each in the other's
+// authorized_keys. until then neither reaches the other's ins and outs
+//
+// who's here: no step (steps last forever) but tippet's live (sync.live), CBOR { den: id } every
+// 2 s, and { den: id, bye: true } as the page goes. a den not heard for 6 s is grey, its things
+// still drawn. a den shows once it has been heard on this page
+//
+// never kept: the page's own nodes (the root, the programs at /things and /programs, /sync), and a
+// process's own node (its status, PENDING, is no value a step can hold)
+import { createScheduler, PENDING, type Scope } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/table"
 import { children, createPlaces, type Path, PlacesError } from "@ermine/places"
-import { createChangeHeader } from "@ermine/places/header"
 import { get } from "@ermine/places/lib"
-import { upsert } from "@ermine/places/upsert"
-import { addLeaf, PROCESS, processes, removeLeaf } from "@ermine/processes"
+import { STATUS } from "@ermine/places/status"
+import { addLeaf, addProcess, PROCESS, processes, removeLeaf, trie } from "@ermine/processes"
 import { createScopeNodes } from "@ermine/processes/scopes"
+import type { Process } from "@ermine/processes/start"
 import { type Address, inside } from "@ermine/boxes"
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
 import apply, { type Patch } from "@ermine/op/apply"
@@ -50,28 +102,38 @@ import { createHistory, createLog, createSync, show } from "@ermine/tippet"
 import { socket } from "@ermine/tippet/carriers/websocket"
 import { bus } from "@ermine/tippet/carriers/broadcastchannel"
 import {
-	type Asked,
 	ATTRIBUTE,
-	createDen,
-	type Den,
-	DENS,
+	createSoftware,
 	hashOf,
-	NAME,
-	type Nodes,
+	type Place,
 	type Program,
 	PROGRAM_API,
+	type Refused,
+	type Runner,
+	type Software,
 	TAKES,
-} from "@ermine/dens"
-import { AWAY, away, type Remote } from "@ermine/dens/away"
+} from "@ermine/software"
 import { RUNNERS } from "./things.ts"
+import { bytesOf, createWrites } from "./writes.ts"
 
 export const ROOT = "root"
 
+// a den's node's attributes
+export const NAME = "ermine.den.name"
+export const DEVICE = "ermine.den.device"
+const DEN_ID = "ermine.den.id"
+// where dens are in this tree: each at /system/dens/<id>, this one at /system/den too; its inbox
+// runs at /system/inbox
+export const DENS: Path = ["system", "dens"]
+export const HERE: Path = ["system", "den"]
+const INBOX_AT: Path = ["system", "inbox"]
+// the other dens' nodes and things, placed in this tree: a trie of their own, as processes' is
+const AWAY = "away" as string as Key
+
 // a room: who meets. its code is a few letters a person can read off a screen and type (no I, L,
 // O, B, G, Q, S, U, V, Z: none that look like another). its tippet room: "dens-" + the code, the
-// galaxy room /littlesync/tippet/dens-CODE. roomId is the old id (away's anchor, the cardputer's
-// den.c makes the same from the same code): "ermine://" + hex(blake3("party.chee.ermine.dens.room:"
-// + CODE))
+// galaxy room /littlesync/tippet/dens-CODE. roomId is the old id (the cardputer's den.c made the
+// same from the same code): "ermine://" + hex(blake3("party.chee.ermine.dens.room:" + CODE))
 export const LETTERS = "ACDEFHJKMNPRTWXY"
 export const roomCode = (typed: string): string | undefined => {
 	const c = typed.toUpperCase().replace(/[^A-Z]/g, "")
@@ -83,7 +145,7 @@ export const roomId = (code: string): string =>
 	"ermine://" + hex(blake3(new TextEncoder().encode(`party.chee.ermine.dens.room:${code}`)))
 export const roomName = (code: string) => `dens-${code}`
 export const OUT = "thing.out"
-// a thing's path in its den, on its shared node: "/work/button-1a2b"
+// a thing's path in its den, on its shared node: "/home/button-1a2b"
 export const AT = "thing.at"
 export const TYPE = (kind: string) => `thing.${kind}`
 // the kinds you can add; the cardputer's hardware (keys, screen, pigs) runs on three more
@@ -104,16 +166,6 @@ export const denOf = (install: unknown): string | undefined =>
 const isMap = (v: unknown): v is Record<string, unknown> =>
 	typeof v === "object" && v !== null && !Array.isArray(v) && !ArrayBuffer.isView(v)
 
-// a value's encoding; none: undefined
-function bytesOf(v: unknown): Uint8Array | undefined {
-	try {
-		return encode(v as Value)
-	} catch {
-		return undefined
-	}
-}
-const same = (a?: Uint8Array, b?: Uint8Array) =>
-	a !== undefined && b !== undefined && a.length === b.length && a.every((x, i) => x === b[i])
 // the fields that are not undefined (what encodes)
 const defined = (o: Record<string, unknown>) =>
 	Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined))
@@ -216,17 +268,38 @@ function carry(sync: Sync, room: string, server: string | undefined, told: (s: s
 
 // ---- what the page is told ----
 
-// an ask arriving for this den: who asked what, and whether it was done
-export type Heard = { from: string; op: string; runner?: unknown; refused?: Refusal }
-// why an ask wasn't done before it reached the den: who asked (a name), and what was wrong
+// what an ask carries beside op's own: id, from and to are the host's
+export type Request =
+	| { op: "start"; runner: string; program: Program; at: string; args?: readonly string[] }
+	| { op: "stop"; process: string; reason?: unknown }
+	| { op: "pair"; name: string }
+	| { op: "unpair" }
+// an ask arriving for this den: who asked what (from: the asker's id), and whether it was done.
+// wants: a pair ask's id, waiting for a person's yes or no (answerPair); name: the name it gave
+export type Heard = {
+	from: string
+	op: string
+	runner?: unknown
+	refused?: Refusal
+	wants?: string
+	name?: string
+}
+// why the inbox didn't do an ask: who asked (a name), and what was wrong
 export type Refusal = {
 	refused: "not-trusted"
 	who: string
 	why: "not-in-keys" | "bad-signature" | "not-for-here"
 }
-// an ask's answer: the den's (a start's { id, at }, a stop's {}, its refusal), what its ask threw,
-// or the inbox's refusal
-export type Answer = Asked | { readonly error: string } | Refusal
+// an ask's answer: a start's { id, at }, a stop's or an unpair's {}, a pair's, software's refusal,
+// what the ask threw, or the inbox's refusal
+export type Answer =
+	| { readonly id: Id; readonly at: Path }
+	| Record<never, never>
+	| Refused
+	| { readonly refused: "not-there"; readonly process: string }
+	| { readonly pair: "yes" | "no" }
+	| { readonly error: string }
+	| Refusal
 // another den, as this page has it: alive while heard lately; its things as its shared nodes say
 export type Other = {
 	who: string
@@ -244,31 +317,52 @@ export type Host = {
 	s: ReturnType<typeof createScheduler>
 	table: ReturnType<typeof createTable>
 	places: ReturnType<typeof createPlaces>
-	den: Den
+	// what runs here: things, and the inbox
+	software: Software
 	host: Scope
 	hosted: <T>(f: () => T) => T
+	// the things this den runs (its processes but the inbox), in start order; one by its id
+	things: () => readonly Process[]
+	find: (id: string) => Process | undefined
+	// the inbox's process, and its program's path
+	inbox: () => Process | undefined
 	// the other dens heard on this page, by name
 	others: () => Other[]
 	// an ask written into another den's inbox, signed by this session: its id, or why not
-	ask: (to: string, ask: Remote) => Promise<string | { problem: string }>
+	ask: (to: string, ask: Request) => Promise<string | { problem: string }>
 	// tracked; undefined until it lands
 	answer: (to: string, ask: string) => Answer | undefined
 	// a node of the den's (an address from its root) as an ask's program, its code with it
 	carry: (program: Address) => Program
-	// another den put in this den's keys; whether it is (as this den's own steps say); whether
-	// another den's keys have this one
-	trust: (who: string) => void
+	// pairing, through the inbox: a pair ask to another den (onPair told its answer); a yes or no to
+	// one in this den's inbox; another den out of this one's keys, and asked to take this one out
+	pair: (who: string) => Promise<string | { problem: string }>
+	answerPair: (ask: string, yes: boolean) => void
+	unpair: (who: string) => Promise<string | { problem: string }>
+	// whether this den has another in its keys; another has this one in its (as its own steps say);
+	// both
 	trusts: (who: string) => boolean
 	trustedBy: (who: string) => boolean
+	paired: (who: string) => boolean
+	// whether a pair ask to another is waiting for its answer
+	pairing: (who: string) => boolean
 	// a pulse soon (after what arrived or was written outside one)
 	soon: () => void
 	onPulse: (f: () => void) => void
 	onAsked: (f: (h: Heard) => void) => void
+	// a pair ask of this den's answered: who, and the answer
+	onPair: (f: (who: string, a: Answer) => void) => void
 	// the server's state as it changes (told the last at once)
 	onServer: (f: (state: string) => void) => void
 	// what went wrong in tippet, in words: a step that wouldn't apply, a write not kept
 	onTrouble: (f: (words: string) => void) => void
 }
+
+// the inbox's program, at /programs/inbox: words, as the things' are; the inbox's runner is the
+// function
+const INBOX_PROGRAM =
+	"the inbox: each ask written into this den's inbox node checked with trusted() against its authorized_keys, then done, or refused in words; pair asks shown to a person"
+const INBOX_TYPE = "dens.inbox"
 
 // seed: the device key's 32 bytes. server: none, tabs only
 export async function createHost(
@@ -301,7 +395,7 @@ export async function createHost(
 		table,
 		paths,
 		scheduler: s,
-		contributors: [processes(ROOT), away(ROOT), children],
+		contributors: [processes(ROOT), trie(AWAY, ROOT, "away"), children],
 	})
 	s.onTrackingEnd((key) => places.release(key))
 	// whatever made something due (a write here, a step landing): a pulse soon
@@ -309,17 +403,8 @@ export async function createHost(
 	const scopes = createScopeNodes({ scheduler: s, table })
 	const host = s.createRootScope({ actor: id })
 	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
-	const header = () => createChangeHeader(s)
-	const commit = (changed: readonly Entry<unknown>[]) =>
-		changed.length > 0 && places.commit(changed)
-	// a whole value, written only when it is another (as its encoding)
-	const put = (part: Key, id: Id, v: unknown) => {
-		const was = table.get(part, id)?.value
-		if (was !== undefined && same(bytesOf(was), bytesOf(v))) return
-		hosted(() => table.sub(part, id, createEntry(v as never, header())))
-	}
-	const patch = (part: Key, id: Id, path: string[], v: unknown) =>
-		hosted(() => commit(upsert(table, part, id, path, v, header())))
+	// put: a whole value, written only when it is another; a write's site is its caller's line
+	const { header, commit, put, patch } = createWrites({ scheduler: s, table, places, scope: host })
 
 	// troubles, in words: each listener told those before it too
 	const troubles: ((words: string) => void)[] = [], said: string[] = []
@@ -361,68 +446,103 @@ export async function createHost(
 	for (const d of Object.keys(log.have())) learn(d)
 	log.on((device) => learn(device))
 
-	// this den's keys as only its own steps make them: history lands any device's step on any node,
-	// so a step another wrote there is not believed
-	let keys: unknown = {}
-	const into = (part: string, n: string, patches: readonly Patch[]) => {
-		if (n !== KEYS || part !== "value") return
+	// each den's keys as only its own steps make them: history lands any device's step on any node,
+	// so a step another wrote there is not believed. this den's own among them. marked as they change
+	const keysBy = new Map<string, unknown>()
+	const keysChanged = {}
+	const into = (device: string, part: string, n: string, patches: readonly Patch[]) => {
+		if (n !== `${installOf(device)}/authorized_keys` || part !== "value") return
 		try {
-			keys = apply(keys, patches)
+			keysBy.set(device, apply(keysBy.get(device) ?? {}, patches))
+			s.mark([keysChanged])
 		} catch {
 			// not a value it can be: as it was
 		}
 	}
-	for (const b of log.steps(id)) {
-		const step = decode(b) as unknown[]
-		into(String(step[4]), String(step[3]), step[5] as Patch[])
+	for (const d of Object.keys(log.have())) {
+		for (const b of log.steps(d)) {
+			const step = decode(b) as unknown[]
+			into(d, String(step[4]), String(step[3]), step[5] as Patch[])
+		}
 	}
 	log.on((device, steps) => {
-		if (device === id) { for (const st of steps) into(st.part, st.node, st.patches) }
+		for (const st of steps) into(device, st.part, st.node, st.patches)
 	})
+	// whether den has another's node in its keys (tracked)
+	const has = (den: string, other: string) => {
+		s.track(keysChanged)
+		const k = keysBy.get(den)
+		return isMap(k) && Object.hasOwn(k, other)
+	}
 
-	// ---- the den ----
-	// the programs, at /things/<kind>: a few words of what it is, its form the runner's takes. /sync:
-	// tippet's own state (nodes.ts' show)
+	// ---- the den: its node, placed at /system/den and /system/dens/<id> ----
+	// the programs, at /things/<kind>: a few words of what it is, its form the runner's takes. the
+	// inbox's at /programs/inbox. /sync: tippet's own state (nodes.ts' show)
 	const all = Object.keys(RUNNERS) as Kind[]
-	put("children", ROOT, { things: "things", sync: "sync" })
+	put("children", ROOT, { things: "things", programs: "programs", sync: "sync" })
 	put("children", "things", Object.fromEntries(all.map((k) => [k, `things/${k}`])))
 	for (const k of all) {
 		put("value", `things/${k}`, RUNNERS[k].program)
-		put("attributes", `things/${k}`, { "ermine.type": TYPE(k) })
+		put("attributes", `things/${k}`, { [ATTRIBUTE]: TYPE(k) })
 	}
-	const den = hosted(() =>
-		createDen({
-			scheduler: s,
-			table,
-			places,
-			scopes,
-			// a start made outside a pulse (a click, an ask) asks for one: ours
-			schedule: () => soon(),
-			id,
-			install,
-			name: o.name,
-			device: o.device,
-			// yes to every ask that gets here: the inbox has checked who asked first
-			may: () => ({ answer: "yes" }),
-		})
-	)
-	for (const k of all) {
-		hosted(() => den.offer("runners", k, { [TAKES]: TYPE(k) }, RUNNERS[k].run))
-	}
+	put("children", "programs", { inbox: "programs/inbox" })
+	put("value", "programs/inbox", INBOX_PROGRAM)
+	put("attributes", "programs/inbox", { [ATTRIBUTE]: INBOX_TYPE })
+
+	put("attributes", node, {
+		[ATTRIBUTE]: "ermine.den",
+		[DEN_ID]: id,
+		[NAME]: o.name,
+		[DEVICE]: o.device,
+	})
+	for (const path of [HERE, [...DENS, id]]) commit(addProcess(table, ROOT, path, node, header()))
 	// its shared nodes, under it; it trusts itself from the start
 	for (const name of ["things", "inbox", "authorized_keys"]) {
 		patch("children", node, [name], `${node}/${name}`)
 	}
 	if (table.get("value", INBOX_) === undefined) put("value", INBOX_, {})
-	if (!isMap(keys) || !Object.hasOwn(keys, node)) patch("value", KEYS, [node], { name: o.name })
+	if (!has(id, node)) patch("value", KEYS, [node], { name: o.name })
+
+	// what runs here, on software: the den's node the owner its runners are offered under, stored
+	// (what is offered stays on the node; only the live functions go with the page)
+	const software = createSoftware({
+		scheduler: s,
+		table,
+		places,
+		scopes,
+		scope: host,
+		schedule: (f) => setTimeout(f, 0),
+	})
+	const owner: Place = { id: node, at: HERE, scope: host, stored: true }
+	hosted(() => {
+		for (const k of all) software.offer(owner, "runners", k, { [TAKES]: TYPE(k) }, RUNNERS[k].run)
+		software.offer(owner, "runners", "inbox", { [TAKES]: INBOX_TYPE }, inboxRun)
+	})
+	const isInbox = (p: Process) => p.at.join("/") === INBOX_AT.join("/")
+	const things = () => software.running().filter((p) => !isInbox(p))
+
+	// the attributes as they travel: the status as "pending" | { failed }, no other with no
+	// encoding. none: undefined. tracked
+	function shown(id: Id): Record<string, unknown> | undefined {
+		const v = places.readValue("attributes", id)
+		if (!isMap(v)) return undefined
+		const out: Record<string, unknown> = {}
+		for (const [k, x] of Object.entries(v)) {
+			if (k === STATUS) {
+				if (x === PENDING) out[k] = "pending"
+				else if (x instanceof Error) out[k] = { failed: x.message }
+			} else if (bytesOf(x) !== undefined) out[k] = x
+		}
+		return out
+	}
 
 	// what the den runs, shared: each thing's attributes on a node of the den's, as they change
-	function publish(seen: Nodes) {
+	function publish(seen: Map<string, Record<string, unknown>>) {
 		const want: Record<string, string> = {}
-		for (const p of seen.processes ?? []) {
-			const shared = `${THINGS}/${String(p.id)}`
-			want[String(p.id)] = shared
-			put("attributes", shared, { ...seen.nodes[p.id]?.attributes, [AT]: `/${p.at.join("/")}` })
+		for (const [p, attributes] of seen) {
+			const shared = `${THINGS}/${p}`
+			want[p] = shared
+			put("attributes", shared, attributes)
 		}
 		const was = table.get("children", THINGS)?.value
 		put("children", THINGS, want)
@@ -433,7 +553,13 @@ export async function createHost(
 		}
 	}
 	hosted(() =>
-		s.createEffect(() => den.nodes({ processes: true }), (seen) => hosted(() => publish(seen)))
+		s.createEffect(() => {
+			const seen = new Map<string, Record<string, unknown>>()
+			for (const p of things()) {
+				seen.set(String(p.id), { ...shown(p.id), [AT]: `/${p.at.join("/")}` })
+			}
+			return seen
+		}, (seen) => hosted(() => publish(seen)))
 	)
 
 	// ---- the other dens, placed in this tree (the away trie, this page's alone): each den's node
@@ -492,90 +618,14 @@ export async function createHost(
 
 	// ---- asks: into the asked den's inbox, signed by this session; answered beside them ----
 	const asks: ((h: Heard) => void)[] = []
+	const pairs: ((who: string, a: Answer) => void)[] = []
 	const nameOf = (install: string) => {
 		const n = table.get("attributes", install)?.value?.[NAME]
 		return typeof n === "string" ? n : `${denOf(install)?.slice(0, 6) ?? install}…`
 	}
 
-	// an ask's fields as den.ask takes them, who given; none: not one
-	function askOf(a: Record<string, unknown>, who: Record<string, unknown>) {
-		const isAddress = (x: unknown) => typeof x === "string" || Array.isArray(x)
-		if (a.op === "start") {
-			if (!isAddress(a.runner) || !isMap(a.program) || !isAddress(a.at)) return undefined
-			return defined({
-				op: "start",
-				who,
-				runner: a.runner,
-				program: a.program,
-				at: a.at,
-				args: a.args,
-				cwd: a.cwd,
-			})
-		}
-		if (a.op === "stop" && typeof a.process === "string") {
-			return defined({ op: "stop", who, process: a.process, reason: a.reason })
-		}
-		return undefined
-	}
-
-	// one ask in this den's inbox: who asked checked (in this den's keys, its session vouched for
-	// by its install, the ask signed by that session), then done, or not; the answer written beside it
-	async function answering(ask: string, e: Record<string, unknown>) {
-		const a = isMap(e.ask) ? e.ask : {}, c = isMap(e.claim) ? e.claim : {}
-		const from = String(a.from), who = nameOf(from)
-		const refuse = (why: Refusal["why"]): Refusal => ({ refused: "not-trusted", who, why })
-		let out: Answer
-		if (
-			a.to !== node || c.install !== from || typeof c.session !== "string" ||
-			!(c.vouch instanceof Uint8Array) || !(e.sig instanceof Uint8Array)
-		) out = refuse("not-for-here")
-		else if (!isMap(keys) || !Object.hasOwn(keys, from)) out = refuse("not-in-keys")
-		else if (
-			!(await trusted(
-				keys,
-				{ session: c.session, install: from, vouch: c.vouch },
-				encode(a as Value),
-				e.sig,
-				ed25519,
-			))
-		) out = refuse("bad-signature")
-		else {
-			const d = denOf(from) ?? from
-			const asked = askOf(a, { actor: d, device: d })
-			try {
-				out = asked === undefined
-					? { error: "not an ask" }
-					: hosted(() => den.ask(asked as Parameters<Den["ask"]>[0]))
-			} catch (e) {
-				out = {
-					error: e instanceof PlacesError
-						? e.code
-						: e instanceof Error
-						? e.message
-						: String(e),
-				}
-			}
-			if (bytesOf(out) === undefined) out = { error: "its answer has no encoding" }
-		}
-		patch("value", INBOX_, [ask, "answer"], out)
-		soon()
-		const told: Heard = { from: denOf(from) ?? from, op: String(a.op), runner: a.runner }
-		if ("refused" in out && out.refused === "not-trusted") told.refused = out
-		for (const f of asks) f(told)
-	}
-	const answered = new Set<string>()
-	hosted(() =>
-		s.createEffect(() => places.readValue("value", INBOX_), (v) => {
-			for (const [ask, e] of Object.entries(isMap(v) ? v : {})) {
-				if (answered.has(ask) || !isMap(e) || e.answer !== undefined) continue
-				answered.add(ask)
-				void answering(ask, e)
-			}
-		})
-	)
-
 	let count = 0
-	async function ask(to: string, r: Remote): Promise<string | { problem: string }> {
+	async function ask(to: string, r: Request): Promise<string | { problem: string }> {
 		const inbox = `${installOf(to)}/inbox`
 		if (table.get("value", inbox) === undefined) {
 			return { problem: "its inbox hasn't reached this page yet" }
@@ -591,6 +641,156 @@ export async function createHost(
 		soon()
 		return n
 	}
+
+	// ---- the inbox: a program the den runs at /system/inbox, the one place that decides who may.
+	// each ask in this den's inbox node checked (for here; in its keys, its session vouched for by
+	// its install, the ask signed by that session: trusted()), then done on software, or refused; the
+	// answer written beside it. a pair ask is shown to a person, whose yes puts the asker in this
+	// den's keys; this den's own pair asks' yeses put the other in them. its writes are its own, its
+	// scope open ----
+	type Inbox = {
+		answerPair: (ask: string, yes: boolean) => void
+		// a pair ask of this den's, to who, followed until its answer lands
+		follow: (who: string, ask: string) => void
+		// who out of this den's keys
+		forget: (who: string) => void
+		waiting: (who: string) => boolean
+	}
+	let inbox: Inbox | undefined
+	function inboxRun(_code: unknown, start: Parameters<Runner["start"]>[1]) {
+		const w = createWrites({ scheduler: s, table, places, scope: start.scope })
+		// the asks answered (or being answered) this page; the pair asks waiting for a person, by id;
+		// this den's pair asks waiting for an answer, by who
+		const answered = new Set<string>()
+		const wanting = new Map<string, { from: string; name: string }>()
+		const following = new Map<string, string>()
+		const followed = {}
+		const keep = (from: string, name: string) => w.patch("value", KEYS, [from], { name })
+
+		// an ask's fields as software takes them; none: not one
+		function done(a: Record<string, unknown>): Answer {
+			const isAddress = (x: unknown): x is Address => typeof x === "string" || Array.isArray(x)
+			const names = (x: unknown): x is string[] =>
+				Array.isArray(x) && x.every((y) => typeof y === "string")
+			if (a.op === "start") {
+				if (!isAddress(a.runner) || !isMap(a.program) || !isAddress(a.at)) {
+					return { error: "not a start: it needs a runner, a program and an at" }
+				}
+				if (a.args !== undefined && !names(a.args)) return { error: "its args aren't words" }
+				const r = software.run(a.runner, a.program as Program, a.at, defined({ args: a.args }))
+				return "refused" in r ? r : { id: r.id, at: r.at }
+			}
+			if (a.op === "stop" && typeof a.process === "string") {
+				const p = things().find((x) => x.id === a.process)
+				if (p === undefined) return { refused: "not-there", process: a.process }
+				software.stop(p, a.reason)
+				return {}
+			}
+			if (a.op === "unpair") {
+				w.drop("value", KEYS, [String(a.from)])
+				return {}
+			}
+			return { error: `not an ask: ${String(a.op)}` }
+		}
+
+		// one ask in this den's inbox: checked, then done, refused, or (a pair) put to a person
+		async function answering(n: string, e: Record<string, unknown>) {
+			const a = isMap(e.ask) ? e.ask : {}, c = isMap(e.claim) ? e.claim : {}
+			const from = String(a.from), who = nameOf(from)
+			const refuse = (why: Refusal["why"]): Refusal => ({ refused: "not-trusted", who, why })
+			const claim = { session: String(c.session), install: from, vouch: c.vouch as Uint8Array }
+			const signed = (keys: unknown) =>
+				trusted(keys, claim, encode(a as Value), e.sig as Uint8Array, ed25519)
+			const told: Heard = { from: denOf(from) ?? from, op: String(a.op), runner: a.runner }
+			let out: Answer
+			if (
+				a.to !== node || c.install !== from || typeof c.session !== "string" ||
+				!(c.vouch instanceof Uint8Array) || !(e.sig instanceof Uint8Array)
+			) out = refuse("not-for-here")
+			else if (a.op === "pair") {
+				// anyone may ask: it is checked only to be from whom it says
+				if (!(await signed({ [from]: {} }))) out = refuse("bad-signature")
+				else if (has(id, from)) out = { pair: "yes" }
+				else {
+					const name = typeof a.name === "string" ? a.name : who
+					wanting.set(n, { from, name })
+					for (const f of asks) f({ ...told, wants: n, name })
+					return
+				}
+			} else if (!has(id, from)) out = refuse("not-in-keys")
+			else if (!(await signed(keysBy.get(id)))) out = refuse("bad-signature")
+			else {
+				try {
+					out = s.runWithScope(start.scope, () => done(a))
+				} catch (e) {
+					out = {
+						error: e instanceof PlacesError
+							? e.code
+							: e instanceof Error
+							? e.message
+							: String(e),
+					}
+				}
+				if (bytesOf(out) === undefined) out = { error: "its answer has no encoding" }
+			}
+			w.patch("value", INBOX_, [n, "answer"], out)
+			soon()
+			if ("refused" in out && out.refused === "not-trusted") told.refused = out
+			for (const f of asks) f(told)
+		}
+
+		s.runWithScope(start.scope, () => {
+			s.createEffect(() => places.readValue("value", INBOX_), (v) => {
+				for (const [n, e] of Object.entries(isMap(v) ? v : {})) {
+					if (answered.has(n) || !isMap(e) || e.answer !== undefined) continue
+					answered.add(n)
+					void answering(n, e)
+				}
+			})
+			// this den's pair asks: a yes, once the other has this den in its own keys, puts the other
+			// in this den's; a no, or a refusal, told
+			s.createEffect(() => {
+				s.track(followed)
+				return [...following].map(([who, n]) => ({
+					who,
+					a: places.readValue("value", `${installOf(who)}/inbox`, [n, "answer"]),
+					back: has(who, node),
+				}))
+			}, (list) => {
+				for (const { who, a, back } of list) {
+					if (!isMap(a) || (a.pair === "yes" && !back)) continue
+					following.delete(who)
+					if (a.pair === "yes") keep(installOf(who), nameOf(installOf(who)))
+					for (const f of pairs) f(who, a as Answer)
+				}
+			})
+		})
+
+		inbox = {
+			answerPair(n, yes) {
+				const e = wanting.get(n)
+				if (e === undefined) return
+				wanting.delete(n)
+				if (yes) keep(e.from, e.name)
+				w.patch("value", INBOX_, [n, "answer"], { pair: yes ? "yes" : "no" })
+				soon()
+			},
+			follow(who, n) {
+				following.set(who, n)
+				s.mark([followed])
+			},
+			forget: (who) => w.drop("value", KEYS, [installOf(who)]),
+			waiting: (who) => following.has(who),
+		}
+		return { stop: () => void (inbox = undefined) }
+	}
+	// the inbox, started
+	const started = hosted(() =>
+		software.run(`/${HERE.join("/")}/runners/inbox`, "/programs/inbox", INBOX_AT)
+	)
+	if ("refused" in started) trouble(`The inbox didn't start: ${started.refused}.`)
+	const running = (): Inbox | { problem: string } =>
+		inbox ?? { problem: "this den's inbox isn't running" }
 
 	function carryOf(program: Address): Program {
 		const at = inside(program)
@@ -659,9 +859,12 @@ export async function createHost(
 		s,
 		table,
 		places,
-		den,
+		software,
 		host,
 		hosted,
+		things,
+		find: (pid) => things().find((p) => p.id === pid),
+		inbox: () => software.running().find(isInbox),
 		others: () => {
 			const now = Date.now()
 			const out: Other[] = []
@@ -688,15 +891,29 @@ export async function createHost(
 			return isMap(v) ? v as Answer : undefined
 		},
 		carry: carryOf,
-		trust: (who) => patch("value", KEYS, [installOf(who)], { name: nameOf(installOf(who)) }),
-		trusts: (who) => isMap(keys) && Object.hasOwn(keys, installOf(who)),
-		trustedBy: (who) => {
-			const theirs = table.get("value", `${installOf(who)}/authorized_keys`)?.value
-			return isMap(theirs) && Object.hasOwn(theirs, node)
+		async pair(who) {
+			const i = running()
+			if ("problem" in i) return i
+			const n = await ask(who, { op: "pair", name: o.name })
+			if (typeof n === "string") i.follow(who, n)
+			return n
 		},
+		answerPair: (n, yes) => inbox?.answerPair(n, yes),
+		async unpair(who) {
+			const i = running()
+			if ("problem" in i) return i
+			i.forget(who)
+			soon()
+			return await ask(who, { op: "unpair" })
+		},
+		trusts: (who) => has(id, installOf(who)),
+		trustedBy: (who) => has(who, node),
+		paired: (who) => has(id, installOf(who)) && has(who, node),
+		pairing: (who) => inbox?.waiting(who) ?? false,
 		soon,
 		onPulse: (f) => void pulsed.push(f),
 		onAsked: (f) => void asks.push(f),
+		onPair: (f) => void pairs.push(f),
 		onServer: (f) => (servers.push(f), f(state)),
 		onTrouble: (f) => (troubles.push(f), said.forEach(f)),
 	}

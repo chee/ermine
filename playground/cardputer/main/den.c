@@ -4,12 +4,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "core/ed25519/c/ed25519.h"
 #include "core/op/c/apply.h"
 #include "core/op/c/json.h"
+#include "ermine/encoding/c/cbor.h"
 #include "ermine/processes/c/processes.h"
+#include "ermine/encoding/c/blake3/blake3.h"
 #include "experiments/tippet/c/history.h"
 #include "fb.h"
 #include "host.h"
@@ -25,6 +28,9 @@ static const char *const PROGRAMS[3] = {
 };
 // host.ts' names: a thing's path in its den, on its shared node; a den's name
 #define AT "thing.at"
+#define NAME "ermine.den.name"
+#define DEVICE "ermine.den.device"
+#define DEN_ID "ermine.den.id"
 #define AWAY "away"
 #define OTHERS 16
 
@@ -46,8 +52,9 @@ typedef struct {
 static struct {
 	host_world w;
 	hf *functions;
-	pr_policy *may;
-	dn *den;
+	// software: what runs here (experiments/software), the den's node the owner its runners are
+	// offered under
+	sw *software;
 	inst_install install;
 	char id[65], room[5];
 	// the den's node and its shared nodes' ids, for the device's life
@@ -61,8 +68,8 @@ static struct {
 	op_value *keys;
 	other others[OTHERS];
 	size_t nothers;
-	// marked when a device comes (host.ts' devices)
-	int devices;
+	// marked when a device comes (host.ts' devices); and when a den is first heard
+	int devices, heard_key;
 	leaf *placed;
 	size_t nplaced;
 	// the asks taken in hand
@@ -85,13 +92,13 @@ static struct {
 	// the log's store, synced (fsync) a second after this den writes: a FAT file's length is only on
 	// flash once it is (store_file syncs only before its own steps leave on a link)
 	tp_store *store;
-	uint64_t synced;
-	int64_t sync_at;
+	uint64_t synced, snapped, last_held;
+	int64_t sync_at, still_since;
 	unsigned asks;
 	int code;
 } me;
 
-dn *den_get(void) { return me.den; }
+sw *den_software(void) { return me.software; }
 const char *den_room(void) { return me.room; }
 tp_sync *den_sync(void) { return me.sync; }
 
@@ -256,7 +263,7 @@ static void say(int hot, const char *one, const char *two) {
 // an install's name: its den's name, else its key's first 6 hex and … (host.ts' nameOf)
 static void name_of(const char *install, char *out, size_t cap) {
 	const nd_entry *e = tb_get(me.w.table, tb_string("attributes"), tb_string(install));
-	const op_value *n = e && is_map(e->value) ? op_get(e->value, DN_NAME) : NULL;
+	const op_value *n = e && is_map(e->value) ? op_get(e->value, NAME) : NULL;
 	if (is_str(n)) snprintf(out, cap, "%s", n->str);
 	else {
 		const char *d = den_of(install);
@@ -400,6 +407,11 @@ static void heard(void *ctx, const uint8_t *data, size_t length) {
 	const op_value *den = is_map(m) ? op_get(m, "den") : NULL;
 	if (is_str(den) && strcmp(den->str, me.id) != 0 && strlen(den->str) == 64) {
 		other *o = other_of(den->str, 1);
+		if (o && o->heard < 0) {
+			const void *key = &me.heard_key;
+			sc_mark(me.w.s, &key, 1, NULL);
+			host_pulse_soon();
+		}
 		if (o) o->heard = op_get(m, "bye") ? 0 : me.now;
 	}
 	if (m) op_free(m);
@@ -418,78 +430,140 @@ static void beat(void) {
 
 static op_value *attrs1(const char *k, op_value *v) { return map1(k, v); }
 
-static void make_den(void *data) {
-	(void)data;
-	const char *why = NULL;
-	op_value *device = op_str("cardputer");
-	me.den = dn_new(&(dn_setup){.scheduler = me.w.s, .table = me.w.table, .places = me.w.places,
-		.scopes = me.w.scopes, .functions = me.functions, .id = me.id, .install = me.node,
-		.name = "chee's cardputer", .device = device, .may = me.may, .schedule = me.w.schedule,
-		.sites = me.w.sites}, &why);
-	op_free(device);
-	if (me.den == NULL) {
-		fprintf(stderr, "den: not made: %s\n", why);
-		me.code = 1;
+// the den: its node's attributes, placed at /system/den and /system/dens/<id> (process rows: the
+// node's id there, as host.ts' addProcess), and software, its runners offered under the node
+static const char *const HERE[2] = {"system", "den"};
+
+typedef struct {
+	const char *const *at;
+	size_t n;
+} row;
+static void row_now(void *data) {
+	row *r = data;
+	ch_header h;
+	pl_made *made;
+	char *bad = pl_header(me.w.places, NULL, 0, NULL, &h, &made);
+	if (bad) {
+		fprintf(stderr, "den: %s\n", bad);
+		free(bad);
 		return;
 	}
-	dn_refusal no;
+	pl_changed changed = {0};
+	nd_entry *node = NULL;
+	int code = pr_add(me.w.places, me.w.table, tb_string(HOST_ROOT), r->at, r->n, tb_string(me.node), h, &changed, &node);
+	if (code) fprintf(stderr, "den: /%s/%s not placed: %s\n", r->at[0], r->at[1], pl_code_name(code));
+	if (changed.n) pl_commit(me.w.places, &changed);
+	for (size_t i = 0; i < changed.n; i++) pl_hold_also(me.w.places, changed.entries[i], pl_made_ref(made), pl_made_free);
+	if (node) pl_hold(me.w.places, node, pl_made_ref(made), pl_made_free);
+	pl_made_free(made);
+}
+
+static void make_den(void *data) {
+	(void)data;
+	op_value *a = op_map();
+	op_set(a, "ermine.type", op_str("ermine.den"));
+	op_set(a, DEN_ID, op_str(me.id));
+	op_set(a, NAME, op_str("chee's cardputer"));
+	op_set(a, DEVICE, op_str("cardputer"));
+	put("attributes", me.node, a);
+	const char *dens[3] = {"system", "dens", me.id};
+	row here = {HERE, 2}, there = {dens, 3};
+	row_now(&here), row_now(&there);
+	me.software = sw_new(&(sw_setup){.scheduler = me.w.s, .table = me.w.table, .places = me.w.places,
+		.scopes = me.w.scopes, .functions = me.functions, .scope = me.w.host, .sites = me.w.sites,
+		.schedule = me.w.schedule});
+	sw_place owner = {.id = me.node, .at = HERE, .nat = 2, .scope = me.w.host, .stored = 1};
+	sw_refusal no;
 	for (int i = 0; i < 3; i++) {
 		char takes[32];
 		snprintf(takes, sizeof takes, "thing.%s", KINDS[i]);
-		op_value *a = attrs1(DN_TAKES, op_str(takes)), *fn = hf_value(KINDS[i]);
-		if (dn_offer(me.den, NULL, DN_RUNNERS, KINDS[i], a, fn, &no) == NULL)
+		op_value *t = attrs1(SW_TAKES, op_str(takes)), *fn = hf_value(KINDS[i]);
+		if (sw_offer(me.software, &owner, SW_RUNNERS, KINDS[i], t, fn, &no) == NULL)
 			fprintf(stderr, "den: runner %s refused: %s\n", KINDS[i], no.refused);
-		op_free(a), op_free(fn);
+		op_free(t), op_free(fn);
 	}
-	// what it draws on: the whole screen, 4 bits a pixel (fb.h)
-	op_value *size = op_list();
-	op_push(size, op_int(240));
-	op_push(size, op_int(135));
-	op_value *s = attrs1(DN_KIND, op_str("framebuffer"));
-	op_set(s, DN_SIZE, size);
-	if (dn_offer(me.den, NULL, DN_SURFACES, "screen", s, NULL, &no) == NULL)
-		fprintf(stderr, "den: surface refused: %s\n", no.refused);
-	op_free(s);
 }
 
 static void start_things(void *data) {
 	(void)data;
-	dn_refusal no;
+	sw_refusal no;
 	for (int i = 0; i < 3; i++) {
 		const char *runner[4] = {"system", "den", "runners", KINDS[i]};
 		const char *prog[2] = {"things", KINDS[i]};
-		const char *at[2] = {"work", KINDS[i]};
-		dn_program program = {.at = prog, .nat = 2, .has_at = 1};
-		if (dn_start(me.den, runner, 4, &program, at, 2, &(dn_options){0}, &no) == NULL)
-			fprintf(stderr, "den: /work/%s refused: %s\n", KINDS[i], no.refused);
+		const char *at[2] = {"home", KINDS[i]};
+		sw_program program = {.at = prog, .nat = 2, .has_at = 1};
+		if (sw_run(me.software, runner, 4, &program, at, 2, &(sw_options){0}, &no) == NULL)
+			fprintf(stderr, "den: /home/%s refused: %s\n", KINDS[i], no.refused);
 	}
 }
 
 // ---- what the den runs, shared: each thing's attributes on a node of the den's ----
 
+// what others see of the den (its things' attributes and paths, tracked), kept only as its
+// encoding's hash: the effect holds its last value till the next
 static sc_out nodes_f(void *previous, void *data) {
 	(void)previous, (void)data;
-	return (sc_out){.kind = SC_VALUE, .value = dn_nodes(me.den, 1)};
+	sw_process *const *procs;
+	size_t count = sw_running(me.software, &procs);
+	op_value *seen = op_map();
+	for (size_t i = 0; i < count; i++) {
+		const char *id = sw_process_id(procs[i]);
+		const op_value *a = pl_read(me.w.places, tb_string("attributes"), tb_string(id), NULL, 0);
+		const char *const *at;
+		size_t nat = sw_process_at(procs[i], &at);
+		op_value *one = op_list();
+		op_push(one, a ? op_ref((op_value *)a) : op_null());
+		for (size_t k = 0; k < nat; k++) op_push(one, op_str(at[k]));
+		op_set(seen, id, one);
+	}
+	size_t n = 0;
+	uint8_t *b = encoded(seen, &n), h[32] = {0};
+	op_free(seen);
+	if (b) {
+		blake3_hasher x;
+		blake3_hasher_init(&x);
+		blake3_hasher_update(&x, b, n);
+		blake3_hasher_finalize(&x, h, 32);
+		free(b);
+	}
+	return (sc_out){.kind = SC_VALUE, .value = op_bytes(h, 32)};
+}
+static bool same_hash(const void *a, const void *b, void *data) {
+	(void)data;
+	const op_value *x = a, *y = b;
+	return x && y && x->bytes == y->bytes && memcmp(x->data, y->data, x->bytes) == 0;
 }
 
+// a value that has an encoding (host.ts' shown leaves the rest out)
+static int has_encoding(const op_value *v) {
+	size_t n;
+	uint8_t *b = encoded(v, &n);
+	free(b);
+	return b != NULL;
+}
+
+// each running thing's attributes, and thing.at, on <den>/things/<process id>; those gone, out
 static void publish_now(void *data) {
-	const op_value *seen = data, *procs = op_get(seen, "processes"), *nodes = op_get(seen, "nodes");
+	(void)data;
+	sw_process *const *procs;
+	size_t count = sw_running(me.software, &procs);
 	op_value *want = op_map();
-	for (size_t i = 0; procs && procs->type == OP_LIST && i < procs->count; i++) {
-		const op_value *p = procs->items[i], *id = op_get(p, "id"), *at = op_get(p, "at");
-		if (!is_str(id)) continue;
-		char *shared = xalloc(strlen(me.things) + strlen(id->str) + 2);
-		sprintf(shared, "%s/%s", me.things, id->str);
-		op_set(want, id->str, op_str(shared));
-		const op_value *n = nodes ? op_get(nodes, id->str) : NULL, *a = n ? op_get(n, "attributes") : NULL;
+	for (size_t i = 0; i < count; i++) {
+		const char *id = sw_process_id(procs[i]);
+		const char *const *at;
+		size_t nat = sw_process_at(procs[i], &at);
+		char *shared = xalloc(strlen(me.things) + strlen(id) + 2);
+		sprintf(shared, "%s/%s", me.things, id);
+		op_set(want, id, op_str(shared));
+		const nd_entry *e = tb_get(me.w.table, tb_string("attributes"), tb_string(id));
+		const op_value *a = e ? e->value : NULL;
 		op_value *attrs = op_map();
 		for (size_t k = 0; is_map(a) && k < a->count; k++)
-			if (a->items[k]) op_set(attrs, a->keys[k], op_ref(a->items[k]));
+			if (a->items[k] && has_encoding(a->items[k])) op_set(attrs, a->keys[k], op_ref(a->items[k]));
 		char path[160] = "";
-		for (size_t k = 0; at && at->type == OP_LIST && k < at->count; k++) {
-			if (!is_str(at->items[k])) continue;
+		for (size_t k = 0; k < nat; k++) {
 			size_t l = strlen(path);
-			snprintf(path + l, sizeof path - l, "/%s", at->items[k]->str);
+			snprintf(path + l, sizeof path - l, "/%s", at[k]);
 		}
 		op_set(attrs, AT, op_str(path));
 		put("attributes", shared, attrs);
@@ -512,14 +586,14 @@ static void publish_now(void *data) {
 
 static char *publish(void *value, void *previous, void *data) {
 	(void)previous, (void)data;
-	sc_run_with_scope(me.w.host, publish_now, value);
+	sc_run_with_scope(me.w.host, publish_now, NULL);
 	return NULL;
 }
 
 // ---- the other dens, placed in this tree (the away trie, this world's alone): each den's node at
 // /system/dens/<name>, each thing's shared node at its path ----
 
-// "/work/x" as its steps, into out (at most most); how many
+// "/home/x" as its steps, into out (at most most); how many
 static size_t steps_of(const char *at, char **out, size_t most) {
 	size_t n = 0;
 	for (const char *p = at; *p && n < most;) {
@@ -543,8 +617,11 @@ static sc_out want_f(void *previous, void *data) {
 	(void)previous, (void)data;
 	sc_track(me.w.s, &me.devices);
 	op_value *want = op_map();
+	sc_track(me.w.s, &me.heard_key);
 	for (size_t i = 0; i < me.nothers; i++) {
-		if (!me.others[i].logged) continue;
+		// only the dens heard since this boot: an old tab's den, never back, is not placed (its
+		// nodes are still in the graph, and in the log)
+		if (!me.others[i].logged || me.others[i].heard < 0) continue;
 		char n[80];
 		install_of(me.others[i].who, n);
 		if (pl_read(me.w.places, tb_string("attributes"), tb_string(n), NULL, 0) == NULL) continue;
@@ -659,25 +736,6 @@ static void copy_field(op_value *to, const op_value *from, const char *k) {
 	if (v) op_set(to, k, op_ref((op_value *)v));
 }
 
-// an ask's fields as dn_ask takes them; NULL: not one (host.ts' askOf)
-static op_value *ask_of(const op_value *a) {
-	const op_value *op = op_get(a, "op");
-	op_value *out = NULL;
-	if (str_is(op, "start")) {
-		if (!is_address(op_get(a, "runner")) || !is_map(op_get(a, "program")) || !is_address(op_get(a, "at")))
-			return NULL;
-		out = op_map();
-		op_set(out, "op", op_str("start"));
-		const char *fields[5] = {"runner", "program", "at", "args", "cwd"};
-		for (int i = 0; i < 5; i++) copy_field(out, a, fields[i]);
-	} else if (str_is(op, "stop") && is_str(op_get(a, "process"))) {
-		out = op_map();
-		op_set(out, "op", op_str("stop"));
-		copy_field(out, a, "process"), copy_field(out, a, "reason");
-	}
-	return out;
-}
-
 static op_value *refusal(const char *who, const char *why) {
 	op_value *r = op_map();
 	op_set(r, "refused", op_str("not-trusted"));
@@ -687,12 +745,89 @@ static op_value *refusal(const char *who, const char *why) {
 }
 static op_value *error_of(const char *why) { return map1("error", op_str(why)); }
 
+// an address (a string "/a/b" or a list of names) as its steps, into out (at most most, each
+// strdup'd, the caller's to free); how many; -1: not an address
+static long address_of(const op_value *v, char **out, size_t most) {
+	if (is_str(v)) return (long)steps_of(v->str, out, most);
+	if (v == NULL || v->type != OP_LIST || v->count > most) return -1;
+	for (size_t i = 0; i < v->count; i++) {
+		if (!is_str(v->items[i])) {
+			for (size_t k = 0; k < i; k++) free(out[k]);
+			return -1;
+		}
+		out[i] = xstrdup(v->items[i]->str);
+	}
+	return (long)v->count;
+}
+static void steps_free(char **v, long n) {
+	for (long i = 0; i < n; i++) free(v[i]);
+}
+
+// an ask done on software (host.ts' done): start, stop, unpair; its answer, new
 typedef struct {
-	op_value *who, *ask, *out;
+	const op_value *a;
+	const char *from;
+	op_value *out;
 } doing;
 static void do_now(void *data) {
 	doing *d = data;
-	d->out = dn_ask(me.den, d->who, d->ask);
+	const op_value *a = d->a, *op = op_get(a, "op");
+	if (str_is(op, "start")) {
+		const op_value *program = op_get(a, "program"), *args = op_get(a, "args");
+		char *runner[16], *at[16];
+		long nr = address_of(op_get(a, "runner"), runner, 16), na = address_of(op_get(a, "at"), at, 16);
+		if (nr < 0 || na < 0 || !is_map(program)) {
+			d->out = error_of("not a start: it needs a runner, a program and an at");
+		} else if (args != NULL && args->type != OP_LIST) {
+			d->out = error_of("its args aren't words");
+		} else {
+			const char *words[32];
+			size_t nargs = 0;
+			int ok = 1;
+			for (size_t i = 0; args && i < args->count && ok; i++) {
+				ok = is_str(args->items[i]) && nargs < 32;
+				if (ok) words[nargs++] = args->items[i]->str;
+			}
+			if (!ok) d->out = error_of("its args aren't words");
+			else {
+				const op_value *id = op_get(program, "id"), *hash = op_get(program, "hash"),
+					       *type = op_get(program, "type"), *api = op_get(program, "api");
+				sw_program pr = {.id = is_str(id) ? id->str : "", .hash = is_str(hash) ? hash->str : NULL,
+					.code = op_get(program, "code"), .type = is_str(type) ? type->str : NULL,
+					.api = is_str(api) ? api->str : NULL};
+				sw_refusal no;
+				sw_process *p = sw_run(me.software, (const char *const *)runner, (size_t)nr, &pr,
+					(const char *const *)at, (size_t)na,
+					&(sw_options){.args = words, .nargs = nargs, .has_args = args != NULL}, &no);
+				if (p == NULL) d->out = sw_refusal_value(&no);
+				else {
+					const char *const *where;
+					size_t n = sw_process_at(p, &where);
+					op_value *steps = op_list();
+					for (size_t k = 0; k < n; k++) op_push(steps, op_str(where[k]));
+					d->out = op_map();
+					op_set(d->out, "id", op_str(sw_process_id(p)));
+					op_set(d->out, "at", steps);
+				}
+			}
+		}
+		if (nr > 0) steps_free(runner, nr);
+		if (na > 0) steps_free(at, na);
+	} else if (str_is(op, "stop") && is_str(op_get(a, "process"))) {
+		const char *id = op_get(a, "process")->str;
+		if (sw_find(me.software, id) == NULL) {
+			d->out = op_map();
+			op_set(d->out, "refused", op_str("not-there"));
+			op_set(d->out, "process", op_str(id));
+		} else {
+			sw_stop(me.software, id, op_get(a, "reason"));
+			d->out = op_map();
+		}
+	} else {
+		char words[64];
+		snprintf(words, sizeof words, "not an ask: %s", is_str(op) ? op->str : "undefined");
+		d->out = error_of(words);
+	}
 }
 
 // the runner's kind, for words: the last step of its address
@@ -704,8 +839,51 @@ static void kind_of(const op_value *runner, char *out, size_t cap) {
 	snprintf(out, cap, "%s", s);
 }
 
-// one ask in the inbox: who asked checked (in this den's keys, its session vouched for by its
-// install, the ask signed by that session), then done, or not; the answer written beside it
+// whether a session's signature over the ask is good, its install in keys
+static int signed_by(const op_value *keys, const char *from, const op_value *a, const op_value *session,
+	const op_value *vouch, const op_value *sig) {
+	size_t n = 0;
+	uint8_t *m = encoded(a, &n);
+	trust_claim claim = {.session = session->str, .install = from};
+	int ok = m != NULL && vouch->bytes == 64 && sig->bytes == 64;
+	if (ok) {
+		memcpy(claim.vouch, vouch->data, 64);
+		ok = trust_check(keys, &claim, m, n, sig->data, &(sess_verifying){.verify = verify});
+	}
+	free(m);
+	return ok;
+}
+
+// a pair ask waiting for a person's yes (tab) or no (esc): its id, who, the name it gave
+#define WANTING 4
+static struct {
+	char ask[80], from[80], name[40];
+} wanting[WANTING];
+static size_t nwanting;
+
+// an answer beside its ask in this den's inbox
+static void answer_with(const char *ask, op_value *out) {
+	const char *path[2] = {ask, "answer"};
+	patch("value", me.inbox, path, 2, out);
+	host_pulse_soon();
+}
+
+// a den in this den's keys ({ name }), or out of them (name NULL): as host.ts' keep and drop
+static void keep(const char *install, const char *name) {
+	if (name) {
+		put1("value", me.keys_node, install, map1("name", op_str(name)));
+		return;
+	}
+	op_value *now = op_map();
+	for (size_t k = 0; is_map(me.keys) && k < me.keys->count; k++)
+		if (me.keys->items[k] && strcmp(me.keys->keys[k], install) != 0)
+			op_set(now, me.keys->keys[k], op_ref(me.keys->items[k]));
+	put("value", me.keys_node, now);
+}
+
+// one ask in the inbox (host.ts' answering): for here; a pair from whom it says, else put to a
+// person; the rest from a den in this den's keys, signed by its session, then done; the answer
+// beside it
 static void answering(const char *ask, const op_value *e) {
 	const op_value *a = op_get(e, "ask"), *c = op_get(e, "claim"), *sig = op_get(e, "sig");
 	if (!is_map(a)) a = NULL;
@@ -717,62 +895,80 @@ static void answering(const char *ask, const op_value *e) {
 	name_of(from, who, sizeof who);
 	short_name(from, shown, sizeof shown);
 	const op_value *session = c ? op_get(c, "session") : NULL, *vouch = c ? op_get(c, "vouch") : NULL;
+	const op_value *op = a ? op_get(a, "op") : NULL;
 	const char *why = NULL;
+	op_value *out = NULL;
+	char kind[24] = "";
+	snprintf(me.last, sizeof me.last, "%s", from);
+	snprintf(me.last_name, sizeof me.last_name, "%s", shown);
 	if (a == NULL || !str_is(op_get(a, "to"), me.node) || c == NULL || !str_is(op_get(c, "install"), from) ||
 		!is_str(session) || vouch == NULL || vouch->type != OP_BYTES || sig == NULL || sig->type != OP_BYTES)
 		why = "not-for-here";
-	else if (!trusts(from)) why = "not-in-keys";
-	else {
-		size_t n = 0;
-		uint8_t *m = encoded(a, &n);
-		trust_claim claim = {.session = session->str, .install = from};
-		int ok = m != NULL && vouch->bytes == 64 && sig->bytes == 64;
-		if (ok) {
-			memcpy(claim.vouch, vouch->data, 64);
-			ok = trust_check(me.keys, &claim, m, n, sig->data, &(sess_verifying){.verify = verify});
-		}
-		free(m);
+	else if (str_is(op, "pair")) {
+		// anyone may ask: checked only to be from whom it says
+		op_value *only = map1(from, op_map());
+		int ok = signed_by(only, from, a, session, vouch, sig);
+		op_free(only);
 		if (!ok) why = "bad-signature";
-	}
-	op_value *out;
-	char kind[24] = "";
+		else if (trusts(from)) out = map1("pair", op_str("yes"));
+		else {
+			// put to a person: tab yes, esc no
+			const op_value *nm = op_get(a, "name");
+			if (nwanting == WANTING) {
+				nwanting--;
+				memmove(&wanting[0], &wanting[1], nwanting * sizeof wanting[0]);
+			}
+			snprintf(wanting[nwanting].ask, sizeof wanting[0].ask, "%s", ask);
+			snprintf(wanting[nwanting].from, sizeof wanting[0].from, "%s", from);
+			snprintf(wanting[nwanting].name, sizeof wanting[0].name, "%s", is_str(nm) ? nm->str : who);
+			nwanting++;
+			char one[64], name[16];
+			size_t k = 0;
+			for (const char *x = is_str(nm) ? nm->str : shown; *x && k < 12; x++)
+				if ((unsigned char)*x < 0x80) name[k++] = *x;
+			name[k] = 0;
+			snprintf(one, sizeof one, "%s wants to pair", name);
+			me.until = 0;
+			say(0, one, "tab: yes   esc: no");
+			me.until = me.now + 60000;
+			frame_again();
+			return;
+		}
+	} else if (!trusts(from)) why = "not-in-keys";
+	else if (!signed_by(me.keys, from, a, session, vouch, sig)) why = "bad-signature";
 	if (why) out = refusal(who, why);
-	else {
-		const char *d = den_of(from) ? den_of(from) : from;
-		op_value *by = op_map();
-		op_set(by, "actor", op_str(d));
-		op_set(by, "device", op_str(d));
-		op_value *asked = ask_of(a);
-		doing x = {by, asked, NULL};
-		if (asked) sc_run_with_scope(me.w.host, do_now, &x);
-		out = x.out ? x.out : error_of("not an ask");
+	else if (out == NULL && str_is(op, "unpair")) {
+		keep(from, NULL);
+		out = op_map();
+	} else if (out == NULL) {
+		doing x = {a, from, NULL};
+		sc_run_with_scope(me.w.host, do_now, &x);
+		out = x.out;
 		size_t n;
 		uint8_t *b = encoded(out, &n);
 		if (b == NULL) op_free(out), out = error_of("its answer has no encoding");
 		free(b);
-		if (asked) op_free(asked);
-		op_free(by);
 		kind_of(op_get(a, "runner"), kind, sizeof kind);
 	}
-	const char *path[2] = {ask, "answer"};
 	op_value *said = op_ref(out);
-	patch("value", me.inbox, path, 2, out);
-	host_pulse_soon();
+	answer_with(ask, out);
 	// told, in words
-	snprintf(me.last, sizeof me.last, "%s", from);
-	snprintf(me.last_name, sizeof me.last_name, "%s", shown);
 	char one[64], two[64];
 	const op_value *refused = op_get(said, "refused"), *error = op_get(said, "error");
-	const op_value *op = a ? op_get(a, "op") : NULL;
 	if (why && strcmp(why, "not-in-keys") == 0) {
-		snprintf(one, sizeof one, "no to %s: not in keys", shown);
-		snprintf(two, sizeof two, "tab: trust %s", shown);
-		say(1, one, two);
+		snprintf(one, sizeof one, "no to %s: not paired", shown);
+		say(1, one, "pair with it first");
 	} else if (why && strcmp(why, "bad-signature") == 0) {
 		snprintf(one, sizeof one, "no to %s: bad signature", shown);
 		say(1, one, "its ask isn't signed right");
 	} else if (why) {
 		say(1, "an ask not made out to here", "so it was not done");
+	} else if (str_is(op, "pair")) {
+		snprintf(one, sizeof one, "%s asked to pair:", shown);
+		say(0, one, "paired already, so yes");
+	} else if (str_is(op, "unpair")) {
+		snprintf(one, sizeof one, "%s unpaired:", shown);
+		say(0, one, "its asks are locked again");
 	} else if (is_str(error)) {
 		snprintf(one, sizeof one, "%s's ask failed:", shown);
 		say(1, one, error->str);
@@ -792,6 +988,8 @@ static void answering(const char *ask, const op_value *e) {
 	frame_again();
 }
 
+int den_pair_waiting(void) { return nwanting > 0; }
+
 unsigned den_asks(void) { return me.asks; }
 
 uint64_t den_steps(void) {
@@ -801,6 +999,31 @@ uint64_t den_steps(void) {
 		n += tp_log_count(me.log, tp_log_have(me.log, i, &have));
 	}
 	return n;
+}
+
+// the oldest pair ask waiting: yes (the asker in this den's keys) or no, as its answer
+void den_pair_answer(int yes) {
+	if (nwanting == 0) {
+		say(0, "nobody wants to pair", "an ask to pair shows here");
+		frame_again();
+		return;
+	}
+	char ask[80], from[80], name[40], one[64], shown[16];
+	memcpy(ask, wanting[0].ask, sizeof ask), memcpy(from, wanting[0].from, sizeof from);
+	memcpy(name, wanting[0].name, sizeof name);
+	nwanting--;
+	memmove(&wanting[0], &wanting[1], nwanting * sizeof wanting[0]);
+	if (yes) keep(from, name);
+	answer_with(ask, map1("pair", op_str(yes ? "yes" : "no")));
+	host_settle();
+	size_t k = 0;
+	for (const char *x = name; *x && k < 12; x++)
+		if ((unsigned char)*x < 0x80) shown[k++] = *x;
+	shown[k] = 0;
+	snprintf(one, sizeof one, yes ? "paired with %s:" : "not paired with %s", shown);
+	say(0, one, yes ? "its asks are done now" : "you said no");
+	me.asks++;
+	frame_again();
 }
 
 typedef struct {
@@ -842,12 +1065,14 @@ static char *inbox_act(void *value, void *previous, void *data) {
 
 static void effects(void *data) {
 	(void)data;
-	sc_create_effect(me.w.s, (sc_def){.f = nodes_f, .effect = publish}, NULL, 0);
+	sc_create_effect(me.w.s, (sc_def){.f = nodes_f, .effect = publish, .equal = same_hash}, NULL, 0);
 	sc_create_effect(me.w.s, (sc_def){.f = want_f, .effect = place}, NULL, 0);
 	sc_create_effect(me.w.s, (sc_def){.f = inbox_f, .effect = inbox_act}, NULL, 0);
 }
 
 // ---- boot ----
+
+static int promote(void);
 
 int den_boot(const inst_install *install, const char *code, const char *dir, int64_t now) {
 	me.now = me.beat = now;
@@ -875,10 +1100,19 @@ int den_boot(const inst_install *install, const char *code, const char *dir, int
 		fprintf(stderr, "den: the log didn't load: %s\n", tp_why(why));
 		return 1;
 	}
+	// a snapshot written last time but not yet in place (a reset between), put in place first
+	if (me.kept_on_flash) promote();
 	me.history = tp_history_new(&(tp_history_options){.mem = mem_of(2), .log = me.log, .table = me.w.table,
 		.places = me.w.places, .kept = kept, .run = hosted});
 	if (me.history == NULL) return 1;
 	den_mark("log loaded");
+	{
+		struct stat st;
+		char *snap = joined(me.dir, "/snapshot"), *log = joined(me.dir, "/log");
+		long sn = stat(snap, &st) == 0 ? (long)st.st_size : -1, ln = stat(log, &st) == 0 ? (long)st.st_size : -1;
+		printf("den: the log %ld bytes, its snapshot %ld\n", ln, sn);
+		free(snap), free(log);
+	}
 	if ((why = tp_history_load(me.history))) fprintf(stderr, "den: the history didn't load: %s\n", tp_why(why));
 	den_mark("history loaded");
 	// live ids remembered: 128, not 1024 (8 KB): one link, few dens beating
@@ -899,7 +1133,6 @@ int den_boot(const inst_install *install, const char *code, const char *dir, int
 	// the programs, at /things/<kind>: a few words of what it is, its form the runner's takes
 	me.functions = hf_new();
 	things_add(me.functions);
-	me.may = pr_yes();
 	put1("children", HOST_ROOT, "things", op_str("things"));
 	for (int i = 0; i < 3; i++) {
 		char at[32], type[32];
@@ -907,7 +1140,7 @@ int den_boot(const inst_install *install, const char *code, const char *dir, int
 		snprintf(type, sizeof type, "thing.%s", KINDS[i]);
 		put1("children", "things", KINDS[i], op_str(at));
 		put("value", at, op_str(PROGRAMS[i]));
-		put("attributes", at, attrs1(DN_ATTRIBUTE, op_str(type)));
+		put("attributes", at, attrs1("ermine.type", op_str(type)));
 	}
 	sc_run_with_scope(me.w.host, make_den, NULL);
 	if (me.code) return me.code;
@@ -960,7 +1193,8 @@ static int band(char lines[2][31], int *hot) {
 			if (tb_get(me.w.table, tb_string("attributes"), tb_string(n)) == NULL) continue;
 			short_name(n, name, sizeof name);
 			size_t l = strlen(line);
-			snprintf(line + l, sizeof line - l, "%s%s %s", any ? ", " : "", name, quiet ? "quiet" : "here");
+			snprintf(line + l, sizeof line - l, "%s%s %s%s", any ? ", " : "", name, quiet ? "quiet" : "here",
+				trusts(n) ? " paired" : "");
 			any = 1;
 		}
 	}
@@ -1005,13 +1239,22 @@ static void troubles(void) {
 
 void den_tick(int64_t now) {
 	me.now = now;
-	if (me.den == NULL) return;
+	if (me.software == NULL) return;
 	if (now - me.beat >= DEN_BEAT) {
 		me.beat = now;
 		beat();
 	}
 	host_settle();
 	troubles();
+	// a snapshot again once 16 steps have come since the last and none for 5 s, with the heap to
+	// write it: a boot loads it, each node's value once, and lands only what came after it
+	uint64_t held = den_steps();
+	if (held != me.last_held || me.still_since == 0) me.last_held = held, me.still_since = now;
+	if (me.kept_on_flash && held >= me.snapped + 16 && now - me.still_since > 5000 && den_free() > 50000) {
+		den_mark("snapshot again");
+		den_snapshot();
+		den_mark("snapshot kept");
+	}
 	// what the log took since the last sync (its own steps, and others'), on flash within a second
 	uint64_t steps = den_steps();
 	if (steps != me.synced && me.sync_at == 0) me.sync_at = now + 1000;
@@ -1026,36 +1269,67 @@ void den_tick(int64_t now) {
 	if (memcmp(lines, me.shown, sizeof lines) != 0 || hot != me.shown_hot) frame_again();
 }
 
+typedef struct {
+	const char *kind, *at;
+	int ok;
+} starting;
+static void start_now(void *data) {
+	starting *x = data;
+	const char *runner[4] = {"system", "den", "runners", x->kind}, *prog[2] = {"things", x->kind};
+	const char *at[2] = {"home", x->at};
+	sw_program program = {.at = prog, .nat = 2, .has_at = 1};
+	sw_refusal no;
+	x->ok = sw_run(me.software, runner, 4, &program, at, 2, &(sw_options){0}, &no) != NULL;
+}
+int den_start(const char *kind, const char *at) {
+	starting x = {kind, at, 0};
+	sc_run_with_scope(me.w.host, start_now, &x);
+	host_settle();
+	return x.ok;
+}
+
+// a snapshot the store wrote beside the last (snapshot.new: FAT's rename won't replace a file)
+// put in its place, once it reads back as one whole canonical CBOR item; else let go. 0: there is a
+// snapshot now
+static int promote(void) {
+	char *now = joined(me.dir, "/snapshot"), *made = joined(me.dir, "/snapshot.new");
+	FILE *f = fopen(made, "rb");
+	int ok = 0;
+	if (f != NULL) {
+		fseek(f, 0, SEEK_END);
+		long n = ftell(f);
+		fseek(f, 0, SEEK_SET);
+		uint8_t *b = n > 0 ? malloc((size_t)n) : NULL;
+		ok = b != NULL && fread(b, 1, (size_t)n, f) == (size_t)n && cborCheck(b, (size_t)n, NULL, NULL);
+		free(b);
+		fclose(f);
+		if (ok) {
+			unlink(now);
+			ok = rename(made, now) == 0;
+		} else unlink(made);
+	}
+	FILE *there = fopen(now, "rb");
+	int has = there != NULL;
+	if (there) fclose(there);
+	free(now), free(made);
+	return has ? 0 : 1;
+}
+
 int den_snapshot(void) {
-	// FAT's rename keeps a file already at its new name: the old snapshot out first (lost on a power
-	// cut between: then a boot lands every step from the log, as with none)
-	char *was = joined(me.dir, "/snapshot");
-	unlink(was);
-	free(was);
 	int why = tp_history_snapshot(me.history);
+	// on FAT: written as snapshot.new, its rename refused (TP_STORE); put in place here
+	if (why == TP_STORE && promote() == 0) why = 0;
+	printf("den: snapshot at %llu steps: %s\n", (unsigned long long)den_steps(), why ? tp_why(why) : "kept");
 	if (why) fprintf(stderr, "den: no snapshot: %s\n", tp_why(why));
+	else me.snapped = den_steps();
 	return why;
 }
 
-void den_trust_last(void) {
-	if (!me.last[0]) {
-		say(0, "no ask has come yet,", "so there's nobody to trust");
-		frame_again();
-		return;
-	}
-	char name[64];
-	name_of(me.last, name, sizeof name);
-	put1("value", me.keys_node, me.last, map1("name", op_str(name)));
-	host_settle();
-	char one[64];
-	snprintf(one, sizeof one, "you trust %s now:", me.last_name);
-	say(0, one, "what it asks is done");
-	frame_again();
-}
+void den_trust_last(void) { den_pair_answer(1); }
 
 void den_print(void) {
 	for (int i = 0; i < 3; i++) {
-		const char *path[2] = {"work", KINDS[i]};
+		const char *path[2] = {"home", KINDS[i]};
 		tb_key id;
 		const op_value *v = NULL;
 		if (pl_get(me.w.places, path, 2, &id)) {
@@ -1063,7 +1337,7 @@ void den_print(void) {
 			v = pl_read(me.w.places, tb_string("attributes"), id, &k, 1);
 		}
 		char *j = v ? op_json_text(v) : NULL;
-		printf("/work/%s: %.80s\n", KINDS[i], j ? j : "-");
+		printf("/home/%s: %.80s\n", KINDS[i], j ? j : "-");
 		free(j);
 	}
 	for (size_t i = 0; i < me.nothers; i++) {

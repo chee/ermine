@@ -12,14 +12,14 @@
 // double click goes into a folder. a thing's row is draggable onto an in-port
 //
 //   const files = createFiles(host, el, { pick: (path, id) => ..., isThing: (id) => ... })
-//   files.select(["work", "counter-1a2b"])
+//   files.select(["home", "counter-1a2b"])
 import type { ChangeHeader } from "@ermine/node/entry"
 import { level, type Path } from "@ermine/places"
 import { members } from "@ermine/places/lib"
-import { NAME, RUNNER, TAKES } from "@ermine/dens"
+import { RUNNER, TAKES } from "@ermine/software"
 import { codeLink, linesHtml, onMaps, origin, siteHtml } from "./code.ts"
 import type { Host } from "./host.ts"
-import { OUT } from "./host.ts"
+import { NAME, OUT } from "./host.ts"
 import { isPicture } from "./things.ts"
 
 type Item = {
@@ -149,7 +149,7 @@ const TINT: Record<string, [string, string]> = {
 	root: ["#ffd95e", "#fff0a6"],
 	things: ["#ffa9cf", "#ffd2e6"],
 	system: ["#94c6ff", "#c8e2ff"],
-	work: ["#8ddbb5", "#c3f0da"],
+	home: ["#8ddbb5", "#c3f0da"],
 	other: ["#c3b2ff", "#e0d6ff"],
 }
 const tint = (path: string[]) => !path.length ? TINT.root : TINT[path[0]] ?? TINT.other
@@ -299,7 +299,7 @@ export function createFiles(
 	let here: string[] = [] // the folder shown (icons, list); columns and the map walk from the root
 	let picked: string | undefined // the item picked, by key
 	let wanted: string[] | undefined // a path asked for before it was in the tree
-	const open = new Set<string>(["", "work"]) // folders open in the list
+	const open = new Set<string>(["", "home"]) // folders open in the list
 	const past: string[][] = [], ahead: string[][] = []
 
 	// ---- what the tree holds: every node, walked from the root (tracked) ----
