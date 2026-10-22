@@ -1,8 +1,10 @@
 // the process api: what createProcessAPI gives a program; inside the graph, all a program has.
 //
-//   const apis = createProcessAPIs({ scheduler, table, commit, boxes, programs: () => programs })
-//   const programs = createPrograms({ ..., createProcessAPI: apis.createProcessAPI })
-//   put("value", RUN, apis.run)                       // a host runner for javascript programs
+//   const apis = createProcessAPIs({ scheduler, table, commit, host, stop: (p) => processes.stop(p) })
+//   const api = apis.createProcessAPI(ctx)            // ctx: @ermine/processes/start's Context
+//
+// what runs a program, and start, stop and openwith from one: its starter's, which wraps this
+// api
 //
 //   export default function ({ open, read, edit, memo, effect, method, send }) {
 //     const notes = open("./notes", { a: 1 })
@@ -51,10 +53,6 @@
 //   send(p, ...args)     the method at p, in a scope { ...setup.info(), caller: id }; its return
 //   teardown(fn)         fn(why) as the open scope goes: "ended" | "replaced"
 //   ref(p, make)         the node at p, make() if missing: a live value kept while the node is
-//   start(program, at, { box?, args?, cwd?, onwhynot? })   program: a name or a way;
-//                        stopped with this one; no way: refused no-way
-//   stop(p)              a process this one started
-//   openwith(x, { onwhynot }?)   every way to open x, nearest first (a generator)
 //   box(at)              a box: the folder at, seen from its own "/" (ermine/boxes)
 //   args, pulse, PENDING, REFUSED
 //
@@ -77,7 +75,7 @@ import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import apply, { type Key as Step, type Patch } from "@ermine/op/apply"
 import produce from "@ermine/op/produce"
-import { type Box, box as boxInto, createBox, type Host, inside, unbox } from "@ermine/boxes"
+import { type Box, box as boxInto, createBox, type Host, unbox } from "@ermine/boxes"
 import {
 	at as dig,
 	type Fact,
@@ -108,8 +106,7 @@ import {
 } from "@ermine/patch-nodes"
 import { createStatus, STATUS } from "@ermine/places/status"
 import { createRuns, type Runs } from "@ermine/processes/runs"
-import { openwith as openwithIn, satisfy, type Way, type Whynot } from "@ermine/programs"
-import type { Context, Process, Programs, Runner } from "@ermine/programs/start"
+import type { Context, Process } from "@ermine/processes/start"
 import {
 	type Computer,
 	type Equal,
@@ -128,8 +125,9 @@ export type Setup = {
 	commit: (changed: readonly Entry<unknown>[]) => void
 	// what boxes are made over: the host's places, table and scheduler, and its commit
 	host: Host
-	// made after this (createPrograms takes createProcessAPI): asked when used
-	programs: () => Programs
+	// the host's stop of a process (its starter's: its row out, its scope torn down); ProcessAPIs'
+	// stop tells its teardowns why around it
+	stop: (p: Process) => void
 	// what a send's scope holds beside the caller (the caller over it): the host's ("trusted-event", read
 	// from the native event)
 	info?: () => Info
@@ -257,9 +255,6 @@ export type BoxNode = {
 	unplace: (at: string | Path) => void
 }
 
-// what a refusal from start says: start's, or no-way (satisfy yielded none), with the whynots
-export type Refusal = { readonly refused: string; readonly why?: readonly Whynot[] }
-
 export type API = {
 	open: (at: string | Path, value?: unknown) => Node
 	create: (folder: string | Path, value: unknown) => Node
@@ -297,18 +292,6 @@ export type API = {
 	send: (at: Target, ...args: unknown[]) => unknown
 	teardown: (fn: (why: Why) => unknown) => void
 	ref: <T>(at: string | Path, make: () => T) => Node
-	start: (
-		program: string | Way,
-		at: string | Path,
-		options?: {
-			box?: BoxNode
-			args?: readonly string[]
-			cwd?: string | Path
-			onwhynot?: (why: Whynot) => void
-		},
-	) => Process | Refusal
-	stop: (p: Process) => void
-	openwith: (x: Target, options?: { onwhynot?: (why: Whynot) => void }) => Generator<Way, void>
 	box: (at: string | Path) => BoxNode
 	patch: (at: string | Path, over: Target, change: Change) => Node
 	land: (p: Target) => void
@@ -328,13 +311,7 @@ export class SendError extends Error {
 
 export type ProcessAPIs = {
 	createProcessAPI: (ctx: Context) => API
-	// a host runner for a javascript program: its value (or module's default) called with the api,
-	// once, untracked; its return the process's value
-	run: Runner
-	// the same, show(value, api) making setup's return what is kept (a view made real, say), with
-	// the process's scope open; its return the process's value
-	runner: (show?: (value: unknown, api: API) => unknown) => Runner
-	// a process stopped, its teardowns told why
+	// a process stopped (setup.stop), its teardowns told why
 	stop: (p: Process, why?: Why) => void
 	// a memo's, effect's or early's latest run, by its node's id (runs.ts)
 	runs: Runs["read"]
@@ -376,8 +353,6 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 	const whys = new Map<Id, Why>()
 	// the memos' nodes: a read of one pending with no value throws PENDING
 	const memos = new Set<Id>()
-	// each api's process
-	const inners = new WeakMap<object, { id: Id; scope: Scope }>()
 
 	// one pulse, in a microtask, however many ask
 	let queued = false
@@ -418,7 +393,7 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 	function stop(p: Process, why: Why = "ended") {
 		whys.set(p.id, why)
 		try {
-			setup.programs().stop(p)
+			setup.stop(p)
 		} finally {
 			whys.delete(p.id)
 		}
@@ -987,55 +962,6 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			return { path, part: "value" }
 		}
 
-		function start(
-			program: string | Way,
-			where: string | Path,
-			options: {
-				box?: BoxNode
-				args?: readonly string[]
-				cwd?: string | Path
-				onwhynot?: (why: Whynot) => void
-			} = {},
-		): Process | Refusal {
-			const target = options.box?.box ?? home
-			const path = options.box ? inside(where) : resolve(where)
-			const dir = options.cwd === undefined
-				? undefined
-				: options.box
-				? inside(options.cwd)
-				: resolve(options.cwd)
-			let way: Way | undefined
-			const why: Whynot[] = []
-			if (typeof program !== "string") way = program
-			else {
-				const onwhynot = (w: Whynot) => (why.push(w), options.onwhynot?.(w))
-				const from = target === home ? cwd : []
-				for (const w of satisfy(target.places, program, from, { onwhynot })) {
-					way = w
-					break
-				}
-			}
-			if (way === undefined) return { refused: "no-way", why }
-			const more = {
-				...(options.args === undefined ? {} : { args: options.args }),
-				...(dir === undefined ? {} : { cwd: dir }),
-			}
-			const found = way
-			const p = within(() => setup.programs().start(target, found, path, more))
-			if (!("refused" in p)) {
-				s.registerTeardown(scope, () => stop(p, whys.get(process.id) ?? "ended"))
-			}
-			later()
-			return p
-		}
-
-		function openwith(
-			x: Target,
-			options: { onwhynot?: (why: Whynot) => void } = {},
-		): Generator<Way, void> {
-			return openwithIn(places, needId(nodeOf(x)), cwd, options)
-		}
-
 		function box(where: string | Path): BoxNode {
 			const b = within(() => createBox(setup.host, resolve(where), home, header()))
 			later()
@@ -1110,9 +1036,6 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			send,
 			teardown,
 			ref,
-			start,
-			stop: (p) => stop(p, "ended"),
-			openwith,
 			box,
 			patch,
 			land,
@@ -1122,22 +1045,8 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			PENDING,
 			REFUSED,
 		}
-		inners.set(api, { id: process.id, scope })
 		return api
 	}
 
-	const runner = (show?: (value: unknown, api: API) => unknown): Runner => (code, api) => {
-		const f = typeof code === "function" ? code : (code as { default?: unknown } | null)?.default
-		if (typeof f !== "function") throw new TypeError("not a program: no function, no default")
-		const inner = inners.get(api as object)
-		const made = f(api)
-		const value = show === undefined ? made : show(made, api as API)
-		if (inner !== undefined && value !== undefined) {
-			s.runWithScope(inner.scope, () => write("value", inner.id, whole(value)))
-			later()
-		}
-		return { stop: () => {} }
-	}
-
-	return { createProcessAPI, run: runner(), runner, stop, runs: runs.read }
+	return { createProcessAPI, stop, runs: runs.read }
 }

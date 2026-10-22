@@ -1,11 +1,12 @@
 {
-	"title": "a host that knows no rule refuses a merge commit and what follows it, and shows its heads as before; one that knows the rule but merges by none takes it",
+	"title": "a host that knows no rule holds a merge commit, and what goes on it touching its path: they are heads in its history, its parents heads no more; it shows its heads as before, the held one an item beside them, and its status lists both with the rule; one that knows the rule but merges by none takes it",
+	"typescript": true,
 	"steps": [
 		{
 			"op": "host",
 			"name": "a",
 			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
-			"merge": "serial",
+			"merge": "serial/1",
 			"expect": {
 				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
 			}
@@ -14,7 +15,7 @@
 			"op": "host",
 			"name": "b",
 			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
-			"merge": "serial",
+			"merge": "serial/1",
 			"expect": {
 				"key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
 			}
@@ -52,7 +53,7 @@
 			"name": "d",
 			"seed": "0404040404040404040404040404040404040404040404040404040404040404",
 			"merges": [
-				"serial"
+				"serial/1"
 			],
 			"expect": {
 				"key": "ed01ca93ac1705187071d67b83c7ff0efe8108e8ec4530575d7726879333dbdabe7c"
@@ -82,6 +83,7 @@
 			"b": "d",
 			"expect": {}
 		},
+		{ "op": "share", "host": "a", "id": "x", "expect": {} },
 		{
 			"op": "write",
 			"host": "a",
@@ -237,8 +239,7 @@
 			"id": "x",
 			"expect": {
 				"heads": [
-					"ta",
-					"tb2"
+					"after"
 				]
 			}
 		},
@@ -247,7 +248,7 @@
 			"host": "c",
 			"id": "x",
 			"expect": {
-				"commits": 12
+				"commits": 14
 			}
 		},
 		{
@@ -276,6 +277,72 @@
 						}
 					}
 				]
+			}
+		},
+		{
+			"op": "values",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"values": {
+					"value": [
+						{
+							"path": [],
+							"items": [
+								{
+									"value": "hello world",
+									"from": {
+										"head": "ta",
+										"lamport": 7,
+										"actor": "a",
+										"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+										"time": 1760000000,
+										"external": [{ "file": "scenario", "line": 1 }]
+									}
+								},
+								{
+									"value": "oh, hello!",
+									"from": {
+										"head": "tb2",
+										"lamport": 6,
+										"actor": "b",
+										"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+										"time": 1760000000,
+										"external": [{ "file": "scenario", "line": 1 }]
+									}
+								},
+								{
+									"held": "serial/1",
+									"from": {
+										"head": "after",
+										"lamport": 9,
+										"actor": "a",
+										"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+										"time": 1760000000,
+										"external": [{ "file": "scenario", "line": 1 }]
+									}
+								}
+							]
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "status",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"status": {
+					"waiting": [],
+					"refused": [],
+					"unsent": [],
+					"count": { "waiting": 0, "refused": 0, "unsent": 0 },
+					"held": [
+						{ "commit": "m", "rule": "serial/1" },
+						{ "commit": "after", "rule": "serial/1" }
+					]
+				}
 			}
 		},
 		{
@@ -320,8 +387,7 @@
 			"id": "x",
 			"expect": {
 				"heads": [
-					"ta",
-					"tb2"
+					"after"
 				]
 			}
 		},
@@ -330,7 +396,7 @@
 			"host": "c",
 			"id": "x",
 			"expect": {
-				"commits": 12
+				"commits": 14
 			}
 		}
 	]

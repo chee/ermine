@@ -14,7 +14,8 @@ const char *hy_refusal_name(hy_refusal refusal) {
 	case HY_PATCHES: return "patches";
 	case HY_PARENT: return "parent";
 	case HY_MERGE: return "merge";
-	case HY_WAIT: break;
+	case HY_WAIT:
+	case HY_HOLD: break;
 	}
 	return "";
 }
@@ -70,6 +71,8 @@ struct hy_history {
 	size_t listeners_length;
 	// hy_limit's; how many recs wait (on parents or on the check)
 	size_t most, waiting;
+	// the lowest lamport of a held commit: none is under it
+	int64_t low;
 	void (*dropped)(void *context, const uint8_t name[CM_NAME]);
 	void *dropped_context;
 };
@@ -83,6 +86,7 @@ hy_history *hy_create(hy_check check, void *context) {
 	h->slots = 64;
 	h->table = allocate(h->slots * sizeof *h->table);
 	h->most = SIZE_MAX;
+	h->low = INT64_MAX;
 	return h;
 }
 
@@ -96,6 +100,7 @@ static void free_rec(rec *r) {
 	free(r->kept.bytes);
 	free(r->kept.table);
 	free((void *)r->kept.merge);
+	free((void *)r->kept.held);
 	free((void *)r->kept.parents);
 	free(r->on);
 	free(r->waiters);
@@ -300,8 +305,35 @@ static void hold(hy_history *h, rec *r) {
 	r->on_length = 0;
 }
 
-// the parents all taken: the lamport, then check; taken, waiting on the check, or refused (what
-// waits on it released or refused by the caller)
+// a held commit's rule: a held parent's (the first), else the nearest held ancestor's (back along
+// parents, in their order, none under the lowest held), else its own merge's; NULL: none
+static const char *held_by(const hy_history *h, const rec *r) {
+	for (size_t i = 0; i < r->kept.parents_length; i++) {
+		const rec *p = find(h, r->kept.parents[i]);
+		if (p->kept.held != NULL) return p->kept.held;
+	}
+	list todo = {0};
+	for (size_t i = 0; i < r->kept.parents_length; i++) push(&todo, find(h, r->kept.parents[i]));
+	const char *rule = NULL;
+	for (size_t i = 0; i < todo.n && rule == NULL; i++) {
+		if (todo.p[i]->kept.held != NULL) {
+			rule = todo.p[i]->kept.held;
+			break;
+		}
+		for (size_t k = 0; k < todo.p[i]->kept.parents_length; k++) {
+			rec *q = find(h, todo.p[i]->kept.parents[k]);
+			if (q == NULL || q->state != S_TAKEN || q->kept.lamport < h->low) continue;
+			bool seen = false;
+			for (size_t j = 0; j < todo.n && !seen; j++) seen = todo.p[j] == q;
+			if (!seen) push(&todo, q);
+		}
+	}
+	free(todo.p);
+	return rule != NULL ? rule : r->kept.merge;
+}
+
+// the parents all taken: the lamport, then check; taken (held or not), waiting on the check, or
+// refused (what waits on it released or refused by the caller)
 static bool take(hy_history *h, rec *r, const cm_commit *commit) {
 	int64_t top = 0;
 	for (size_t i = 0; i < r->kept.parents_length; i++) {
@@ -311,6 +343,15 @@ static bool take(hy_history *h, rec *r, const cm_commit *commit) {
 	if (r->kept.lamport != top + 1) return refuse(h, r, HY_LAMPORT, NULL), false;
 	hy_refusal why = h->check != NULL ? h->check(h->context, &r->kept, commit) : 0;
 	if (why == HY_WAIT) return hold(h, r), false;
+	if (why == HY_HOLD) {
+		const char *rule = held_by(h, r);
+		if (rule == NULL) why = HY_PATCHES;
+		else {
+			r->kept.held = copyString(rule);
+			if (r->kept.lamport < h->low) h->low = r->kept.lamport;
+			why = 0;
+		}
+	}
 	if (why != 0) return refuse(h, r, why, NULL), false;
 	become(h, r, S_TAKEN);
 	push(&h->taken, r);
@@ -438,7 +479,7 @@ hy_added hy_add(hy_history *h, const uint8_t *bytes, size_t length, const hy_mad
 			m->waiters[m->waiters_length++] = r;
 		}
 	} else if (take(h, r, c)) {
-		a.kind = HY_TAKEN;
+		a.kind = r->kept.held != NULL ? HY_HELD : HY_TAKEN;
 		release(h, r);
 	} else if (r->state == S_WAITING) a.kind = HY_WAITING;
 	else {

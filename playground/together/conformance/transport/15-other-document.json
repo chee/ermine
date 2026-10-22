@@ -1,11 +1,18 @@
 {
-	"title": "a seal is good in its own document only (it carries the id it is for, and what is signed names it): one sealed for another document, put under that document's name for its commit, fails the door (the seal is for another id): passed over, noted id, never stored, though Subduction (0.23) lists the name in its own tree in memory until it restarts; the same seal with its id rewritten to this one's is under the same stored id as the commit sealed for this one (a stored id is of the id and the commit's name, not the signature): it passes the door and is refused signature (the signature is not this id's), never stored; the commit sealed for this one, put after, is taken under that stored id",
+	"title": "a seal is good in its own document only (it carries the id it is for, and what is signed names it): one sealed for another document, put under that document's name for its commit, fails the door (the seal is for another id): passed over, noted id, never stored, though Subduction (0.23) lists the name in its own tree in memory until it restarts; the same seal with its id rewritten to this one's is under the same stored id as the commit sealed for this one (a stored id is of the id and the commit's name, not the signature): it passes the door and is refused signature (the signature is not this id's): never stored, no error, and listed in memory the same; the commit sealed for this one, put after, is taken under that stored id",
 	"steps": [
 		{
 			"op": "device",
 			"name": "a",
 			"seed": "0101010101010101010101010101010101010101010101010101010101010101"
 		},
+		{
+			"op": "follow",
+			"device": "a",
+			"doc": "ermine:00102f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f",
+			"expect": {}
+		},
+		{ "op": "follow", "device": "a", "expect": {} },
 		{
 			"op": "make",
 			"name": "c1",
@@ -103,6 +110,7 @@
 			"doc": "ermine:00102f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f",
 			"expect": {
 				"stored": [
+					"3aaca05cd3c644d92a2f5f4f50d74f79c1f8ee359550b5322b392c8760afff11",
 					"c1"
 				]
 			}

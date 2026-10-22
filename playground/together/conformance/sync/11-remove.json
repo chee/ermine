@@ -23,6 +23,7 @@
 		},
 		{ "op": "follow", "host": "b", "id": "x", "expect": {} },
 		{ "op": "connect", "a": "a", "b": "b", "expect": {} },
+		{ "op": "share", "host": "a", "id": "x", "expect": {} },
 		{
 			"op": "write",
 			"host": "a",

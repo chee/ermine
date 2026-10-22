@@ -1,9 +1,9 @@
-// EXPERIMENTAL, optional, not part of the plan: packs (ermine/encoding/typescript/pack.ts) kept in
+// EXPERIMENTAL, optional, not part of the plan: packs (playground/encoding/typescript/pack.ts) kept in
 // IndexedDB, for a page that wants its table back after a reload. One database, one object store,
 // "packs": a record per name, the pack's bytes and when it was saved. Saving a name again replaces
 // it whole. Which nodes go in is the caller's, as for pack itself; nothing here walks, loads into
 // a table, or keeps anything in step.
-import { type Entry, type Options, pack, type Reading, unpack } from "@ermine/encoding/pack"
+import { type Entry, type Options, pack, type Reading, unpack } from "@ermine/formats/pack"
 
 // the little of IndexedDB used, so this checks without the DOM's types
 type Req<T> = {

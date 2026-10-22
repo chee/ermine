@@ -1,5 +1,6 @@
-// together's own merge rules for its harnesses (rules_harness.h): "serial", as typescript/
-// rules_harness.ts has it (its header the rule). Pure; has no keeping state
+// together's own merge rules for its harnesses (rules_harness.h): "serial/1" and "serial/2" (the
+// same rule under a newer version), as typescript/rules_harness.ts has them (its header the rule).
+// A rule's name carries its version; nothing parses it. Pure; holds no state
 #include "rules_harness.h"
 
 #include <stdlib.h>
@@ -23,6 +24,7 @@ static void serial(void *state, const hy_history *h, const hy_kept *const *heads
 	free(from), free(commits);
 }
 
-static const rp_rule serial_rule = {"serial", serial, NULL, NULL};
-const rp_rule *const harness_rules[] = {&serial_rule};
-const size_t harness_rules_length = 1;
+static const rp_rule serial_rule = {"serial/1", serial, NULL, NULL};
+static const rp_rule newer_rule = {"serial/2", serial, NULL, NULL};
+const rp_rule *const harness_rules[] = {&serial_rule, &newer_rule};
+const size_t harness_rules_length = 2;

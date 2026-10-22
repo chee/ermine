@@ -27,7 +27,7 @@
 // shell's word nopresence): off, the document is not watched and its presence nodes go, so nothing
 // is read, decoded or drawn for it; on again, built from what stands.
 //
-// A change, one commit (ermine/encoding/c/commit.h): {commit, parents, signer, lamport, time, kind,
+// A change, one commit (playground/encoding/c/commit.h): {commit, parents, signer, lamport, time, kind,
 // name?, patches, base?, merge?, actor, reader?, site?, cause?, wallclock?, message?, value?}. A
 // commit changes one table of the node: kind "write" its value, "info" its attributes, "children"
 // its children; name is the one name every patch is under, when there is one. commit is the

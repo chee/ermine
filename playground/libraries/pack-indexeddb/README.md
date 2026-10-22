@@ -1,6 +1,6 @@
 # pack-indexeddb
 
-**Experimental, optional, not part of the plan.** Packs (`ermine/encoding/typescript/pack.ts`) kept
+**Experimental, optional, not part of the plan.** Packs (`playground/encoding/typescript/pack.ts`) kept
 in IndexedDB, so a page can get its table back after a reload. Nothing else depends on it.
 
 - `createStore(database?, {indexedDB?})`: one database, one object store `packs`, a record per name:

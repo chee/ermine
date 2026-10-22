@@ -1,5 +1,5 @@
 {
-	"title": "a lock that refuses a commit refuses it (code lock, with the text it refused with beside it) and nothing of it is stored; it is not opened again when the lock changes",
+	"title": "a lock that refuses a commit refuses it (code lock, with the text it refused with beside it): nothing of it is stored and nothing thrown (Subduction would drop the connection), though Subduction (0.23) lists the name in its own tree in memory until it restarts; it is not opened again when the lock changes",
 	"steps": [
 		{
 			"op": "device",
@@ -49,7 +49,8 @@
 			}
 		},
 		{ "op": "heads", "device": "b", "expect": { "heads": [] } },
-		{ "op": "stored", "device": "b", "expect": { "stored": [] } },
+		{ "op": "stored", "device": "b", "expect": { "stored": ["c2", "c1"] } },
+		{ "op": "closed", "device": "b", "commit": "c1", "expect": {} },
 		{ "op": "lock", "device": "b", "open": "tag", "expect": {} },
 		{ "op": "changed", "device": "b", "expect": {} },
 		{ "op": "quiet", "expect": {} },
@@ -65,6 +66,7 @@
 			}
 		},
 		{ "op": "heads", "device": "b", "expect": { "heads": [] } },
-		{ "op": "stored", "device": "b", "expect": { "stored": [] } }
+		{ "op": "stored", "device": "b", "expect": { "stored": ["c2", "c1"] } },
+		{ "op": "closed", "device": "b", "commit": "c2", "expect": {} }
 	]
 }

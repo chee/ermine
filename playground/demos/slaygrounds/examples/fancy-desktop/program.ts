@@ -1,5 +1,5 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import type { API } from "@ermine/programs/api"
 import type { Extra } from "./host.ts"
 import { bind, handler, under } from "ermine-h"
 

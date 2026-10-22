@@ -25,7 +25,7 @@
 import createEntry, { type ChangeHeader } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import apply, { type Patch } from "@ermine/op/apply"
-import { createProcessAPIs } from "@ermine/api"
+import { createProcessAPIs } from "@ermine/programs/api"
 import { children, type Contributor, createPlaces, type Fact, type Places } from "@ermine/places"
 import { NODE } from "@ermine/places/header"
 import { PROCESS, processes } from "@ermine/processes"

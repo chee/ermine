@@ -14,7 +14,6 @@ import { createScheduler } from "@ermine/scheduler"
 import { createPaths, marks } from "@ermine/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/table"
 import { decode } from "@ermine/encoding/commit"
-import { kind } from "@ermine/ids"
 import { hex } from "./hex.ts"
 import { createSigner } from "./seal.ts"
 import { createSync, type Head } from "./sync.ts"
@@ -112,6 +111,7 @@ Deno.test({
 	async fn() {
 		const a = await host(1), b = await host(2)
 		const id = a.sync.mint()
+		await a.sync.share(id)
 		await b.sync.follow(id)
 		await connect(a, b)
 		a.write("value", id, [{ path: [], value: { title: "hi" } }])
@@ -131,7 +131,8 @@ Deno.test({
 })
 
 Deno.test({
-	name: "sync: what isn't kept stays home: a local id, a table not kept",
+	name:
+		"sync: a table not synced makes no commit; a node never shared is stored here all the same",
 	...opts,
 	async fn() {
 		const a = await host(1)
@@ -140,6 +141,7 @@ Deno.test({
 		a.write("presence" as Key, id, [{ path: [], value: { me: 1 } }])
 		await quiet(a)
 		assertEquals((await a.device.stored(id)).length, 0)
+		assertEquals((await a.device.stored("local")).length, 1)
 		await a.device.close()
 	},
 })
@@ -150,6 +152,7 @@ Deno.test({
 	async fn() {
 		const a = await host(1), b = await host(2)
 		const id = a.sync.mint()
+		await a.sync.share(id)
 		await b.sync.follow(id)
 		await connect(a, b)
 		a.write("value", id, [{ path: [], value: { n: 0 } }])
@@ -219,7 +222,6 @@ Deno.test({
 		for (const zeros of [true, false]) {
 			const id = (await host(1, undefined, zeros)).sync.mint()
 			assert(/^ermine:0010[0-9a-f]{32}$/.test(id), id)
-			assertEquals(kind(id), "fresh")
 		}
 	},
 })
@@ -230,6 +232,7 @@ Deno.test({
 	async fn() {
 		const a = await host(1), b = await host(2)
 		const id = a.sync.mint()
+		await a.sync.share(id)
 		await b.sync.follow(id)
 		await connect(a, b)
 		const x = "ermine:0010" + "cd".repeat(16)
@@ -257,6 +260,7 @@ Deno.test({
 	async fn() {
 		const a = await host(1), b = await host(2)
 		const id = a.sync.mint()
+		await a.sync.share(id)
 		await b.sync.follow(id)
 		await connect(a, b)
 		const names: Record<string, string> = {}
@@ -289,6 +293,7 @@ Deno.test({
 	async fn() {
 		const a = await host(1), b = await host(2)
 		const id = a.sync.mint()
+		await a.sync.share(id)
 		await b.sync.follow(id)
 		await connect(a, b)
 		a.write("value", id, [{ path: [], value: { n: 0 } }])
@@ -317,6 +322,7 @@ Deno.test({
 	async fn() {
 		const a = await host(1, undefined, false, true), b = await host(2, undefined, false, true)
 		const id = a.sync.mint()
+		await a.sync.share(id)
 		await b.sync.follow(id)
 		await connect(a, b)
 		a.write("value", id, [{ path: [], value: "" }])
@@ -359,6 +365,7 @@ Deno.test({
 		})
 		const b = await host(2, undefined, false, false, { beat: 20, ttl: 100 })
 		const id = a.sync.mint()
+		await a.sync.share(id)
 		await b.sync.follow(id)
 		await connect(a, b)
 		a.write("value", id, [{ path: [], value: { x: 0, y: 0 } }])
@@ -408,6 +415,7 @@ Deno.test({
 		})
 		const b = await host(2, undefined, false, false, { now })
 		const id = a.sync.mint()
+		await a.sync.share(id)
 		await b.sync.follow(id)
 		await connect(a, b)
 		a.write("value", id, [{ path: [], value: { x: 0, y: 0 } }])

@@ -1,6 +1,6 @@
 // dylib.c: native programs (dylib.h; CLOADER.md, Native). A C program pinned to /loaders/clang-native
 // (ermine.programs.loader) is compiled to an arm64 dylib (loader.c, cc.c), cached by the build as a wasm
-// module is, and run by the runner "dlopen": extensions/programs' dlopen runner (dlopen.h), whose pieces
+// module is, and run by the runner "dlopen": playground/programs' dlopen runner (dlopen.h), whose pieces
 // are wrapped here so a library's run is given, as its api, a table of its own (image/lib/c/
 // ermine_host.h), not newOS's ap_api. The table is ermine.h's entry points, the wasm imports' (js/
 // wasm.ts), done against newOS's API: so one C source builds to wasm or to native.
@@ -24,7 +24,7 @@
 
 #include "image/lib/c/ermine_host.h"
 
-#include "../../../extensions/programs/c/dlopen.h"
+#include "../../../playground/programs/c/dlopen.h"
 
 #include <dirent.h>
 #include <errno.h>

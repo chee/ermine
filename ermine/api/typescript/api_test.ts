@@ -1,5 +1,7 @@
-// the process api on a real scheduler, table, places, boxes and programs: javascript programs in a
-// folder W, run by a host runner RUN (apis.run) boxed at /run, each started in W's box
+// the process api on a real scheduler, table, places, boxes and processes (@ermine/processes/start):
+// javascript programs in a folder W, each started in W's box (or another box) by the test, its
+// setup called once with its api, the process's scope open. programs' start, stop, openwith and its
+// runners: playground/programs (its api_test.ts)
 import {
 	assert,
 	assertEquals,
@@ -16,16 +18,21 @@ import { createPlaces } from "@ermine/places"
 import { get } from "@ermine/places/lib"
 import { createChangeHeader } from "@ermine/places/header"
 import type { Read } from "@ermine/processes/runs"
-import { box, createBox } from "@ermine/boxes"
+import { type Box, createBox } from "@ermine/boxes"
 import { createScopeNodes } from "@ermine/processes/scopes"
-import { createBuilds } from "@ermine/build"
-import { satisfy } from "@ermine/programs"
-import { createPrograms, type Process, type Programs } from "@ermine/programs/start"
+import { createProcesses, type Inside, type Process, type Processes } from "@ermine/processes/start"
 import { no, type Policy, yes } from "@ermine/protect"
 import { Refusal } from "@ermine/places/guard"
 import { createOverlay, type Overlay } from "@ermine/patch-nodes"
 import { createSites } from "@ermine/sites"
-import { type API, createProcessAPIs, type Noticed, SendError, uuidv7 } from "./api.ts"
+import {
+	type API,
+	type BoxNode,
+	createProcessAPIs,
+	type Noticed,
+	SendError,
+	uuidv7,
+} from "./api.ts"
 
 const JS = "com.netscape.javascript-source"
 const tick = () => new Promise((r) => setTimeout(r, 0))
@@ -41,20 +48,19 @@ function world(o: { may?: Policy; overlay?: boolean; sites?: boolean } = {}) {
 	s.onTrackingEnd((key) => places.release(key))
 	const scopes = createScopeNodes({ scheduler: s, table })
 	const host = s.createRootScope({ actor: "host" })
-	const above = s.createScope({ role: "programs" }, host)
+	const above = s.createScope({ role: "processes" }, host)
 	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 	const header = () => createChangeHeader(s)
 	const commit = (changed: readonly Entry<unknown>[]) =>
 		overlay ? overlay.commit(changed) : places.commit(changed)
 	const put = (part: Key, id: Id, v: unknown) =>
 		hosted(() => table.sub(part, id, createEntry(v, header())))
-	let programs!: Programs
-	// sites: the api, start and the scheduler are ours, so a site is the program's line
+	let processes!: Processes
+	// sites: the api, processes' start and the scheduler are ours, so a site is the program's line
 	const sites = o.sites
 		? createSites(s, {
 			ours: [
 				new URL("./api.ts", import.meta.url).href,
-				import.meta.resolve("@ermine/programs/start"),
 				import.meta.resolve("@ermine/processes/start"),
 				import.meta.resolve("@ermine/scheduler"),
 			],
@@ -66,7 +72,7 @@ function world(o: { may?: Policy; overlay?: boolean; sites?: boolean } = {}) {
 		table,
 		commit,
 		host: { places, table, scheduler: s, commit },
-		programs: () => programs,
+		stop: (p) => processes.stop(p),
 		may: o.may,
 		overlay,
 		sites,
@@ -74,23 +80,11 @@ function world(o: { may?: Policy; overlay?: boolean; sites?: boolean } = {}) {
 	})
 	put("children", "W", { lib: "LIB" })
 	put("children", "LIB", {})
-	put("value", "RUN", apis.run)
-	put("attributes", "RUN", { "ermine.programs.takes": [JS] })
 	const b = createBox({ places, table, scheduler: s, commit }, { id: "W" })
-	hosted(() => box(b, ["run"], "RUN", header()))
-	programs = s.runWithScope(above, () => {
-		const writes = { readValue: places.readValue, commit }
-		const builds = createBuilds({ scheduler: s, table, places: writes, cache: "CACHE" })
-		return createPrograms({ // where the programs are made
-			scheduler: s,
-			table,
-			places: writes,
-			builds,
-			scopes,
-			createProcessAPI: apis.createProcessAPI,
-			sites,
-		})
-	})
+	processes = s.runWithScope(
+		above,
+		() => createProcesses({ scheduler: s, table, places: { commit }, scopes, sites }), // where the processes are made
+	)
 	// a javascript program at name in W (or a folder in W), attributes beside its type
 	const program = (
 		name: string,
@@ -106,14 +100,22 @@ function world(o: { may?: Policy; overlay?: boolean; sites?: boolean } = {}) {
 			update(w, [{ path: [name], value: id }], header())
 			commit([w])
 		})
-	const start = (name: string, at: string[]): Process => {
-		for (const way of satisfy(b.places, name, [])) {
-			const p = hosted(() => programs.start(b, way, at)) // where start is called
-			if ("refused" in p) throw new Error(p.refused)
-			s.pulse()
-			return p
-		}
-		throw new Error(`no way for ${name}`)
+	// the program named in the box (none: W's) started at at: its setup called once with the api
+	const start = (name: string, at: string[], where: Box = b, args?: string[]): Process => {
+		const setup = table.get("value", get(where.places, [name])!)!.value as (api: API) => unknown
+		const body = (inside: Inside) =>
+			void setup(apis.createProcessAPI({
+				box: inside.box,
+				places: inside.box.places,
+				process: { id: inside.id, at: inside.at, args: inside.args, cwd: inside.cwd },
+				scheduler: s,
+				table,
+				scope: inside.scope,
+			}))
+		const p = hosted(() => processes.start(where, at, { args }, body)) // where start is called
+		if ("refused" in p) throw new Error(p.refused)
+		s.pulse()
+		return p
 	}
 	const inW = (name: string) => (table.get("children", "W")?.value as Record<string, Id>)[name]
 	return { s, table, b, apis, program, start, inW, put, hosted, sites, noticed }
@@ -130,15 +132,12 @@ Deno.test("open makes once; edit takes a recipe or patches; a write from outside
 		const n = a.memo("n", () => a.read(notes, ["a"]))
 		a.effect("seen", () => a.read(n), (v) => void seen.push(v))
 		a.edit(notes, (d: { a: number }) => void d.a++)
-		return "ticking"
 	})
-	const p = w.start("clock.js", ["clock"])
+	w.start("clock.js", ["clock"])
 	await tick()
 	assertEquals(seen, [2])
 	// ./notes is in the folder the process is in: W
 	assertEquals(w.table.get("value", w.inW("notes"))?.value, { a: 2 })
-	// setup's return: the process's value
-	assertEquals(w.table.get("value", p.id)?.value, "ticking")
 	api.edit("./notes", [{ path: ["a"], value: 5 }])
 	assertEquals(api.read("./notes"), { a: 5 })
 	await tick()
@@ -299,55 +298,25 @@ Deno.test("watch is told each write at the node, as it lands", async () => {
 	assertEquals(api.read(box), ["owl", "frog"])
 })
 
-Deno.test("start by name from a program, refused with its whynots, and stopped with the one that started it", async () => {
-	const w = world()
-	const whys: string[] = []
-	const started: unknown[] = []
-	w.program("kid.js", (a) => void a.teardown((why) => void whys.push(why)))
-	w.program("parent.js", (a) => {
-		started.push(a.start("kid.js", "./kid"))
-		started.push(a.start("nope.js", "./nope"))
-	})
-	const p = w.start("parent.js", ["parent"])
-	await tick()
-	const [kid, nope] = started as [Process, { refused: string; why: unknown[] }]
-	assert(get(w.b.places, ["kid"]) === kid.id)
-	assertEquals(nope.refused, "no-way")
-	assert(nope.why.length > 0)
-	w.apis.stop(p)
-	assertEquals(whys, ["ended"])
-	assertEquals(get(w.b.places, ["kid"]), undefined)
-})
-
-Deno.test("openwith: the ways to open a node, from the process's place", async () => {
-	const w = world()
-	let api!: API
-	w.program("viewer.js", () => {}, { "ermine.programs.opens": ["public.plain-text"] })
-	w.program("files.js", (a) => void (api = a))
-	w.start("files.js", ["files"])
-	await tick()
-	const notes = api.open("./notes", "hello")
-	api.edit(api.info(notes), () => ({ "ermine.type": "public.plain-text" }))
-	const ways = [...api.openwith(notes)]
-	assertEquals(ways.map((x) => x.program.at), [["viewer.js"]])
-})
-
-Deno.test("box: a child in a box of a folder, seeing only what is boxed into it", async () => {
+Deno.test("box: a process in a box of a folder, seeing only what is boxed into it", async () => {
 	const w = world()
 	let child!: API
+	let lib!: BoxNode
 	w.program("inside.js", (a) => void (child = a), {}, "LIB")
 	w.program("boxer.js", (a) => {
-		const b = a.box("./lib")
-		b.place("run", "./run")
-		const p = a.start("inside.js", "k", { box: b, args: ["hehe.txt"] })
-		assert(!("refused" in p))
+		lib = a.box("./lib")
+		a.open("./notes", "hi")
+		lib.place("notes", "./notes")
 	})
 	w.start("boxer.js", ["boxer"])
 	await tick()
+	w.start("inside.js", ["k"], lib.box, ["hehe.txt"])
+	await tick()
 	assertEquals(child.args, ["hehe.txt"])
-	// its "/" is lib: W's own names are not there
+	// its "/" is lib: W's own names are not there, but what was boxed in is
 	assertEquals(child.read("/lib"), undefined)
 	assert(child.list("/").includes("inside.js"))
+	assertEquals(child.read("/notes"), "hi")
 })
 
 Deno.test("protect: a policy's no refuses a read (Refusal) and a write; a list keeps a refused item, its id REFUSED", async () => {
@@ -488,7 +457,7 @@ Deno.test("edits: what a write replaces goes in its change for sync: edit none, 
 	assertEquals([said(), api.read("./doc", ["n"])], [["aa"], 4])
 })
 
-Deno.test("sites: a memo made in a program reports the program's line; its chain goes through the process, made where start was called, to where the programs were made", () => {
+Deno.test("sites: a memo made in a program reports the program's line; its chain goes through the process, made where start was called, to where the processes were made", () => {
 	const w = world({ sites: true })
 	w.program("memo.js", (a) => void a.memo("one", () => 1)) // the program's line
 	const p = w.start("memo.js", ["memo"])
@@ -500,7 +469,7 @@ Deno.test("sites: a memo made in a program reports the program's line; its chain
 	assertEquals(w.sites!.sitesOf(made.computer!).map(at), [
 		["api_test.ts", line("// the program's line")],
 		["api_test.ts", line("// where start is called")],
-		["api_test.ts", line("// where the programs are made")],
+		["api_test.ts", line("// where the processes are made")],
 	])
 	assertEquals(w.sites!.sitesOf(p.scope).map(at).slice(0, 1), [
 		["api_test.ts", line("// where start is called")],

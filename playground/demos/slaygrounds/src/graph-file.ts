@@ -7,7 +7,7 @@
 // saying what it was goes in its place, in a value and in a change. a field holding undefined is
 // left out, as pack leaves it. a symbol id cannot be carried either: its name is left out of the
 // children it was in, and it is not reached
-import { type Entry, pack } from "@ermine/encoding/pack"
+import { type Entry, pack } from "@ermine/formats/pack"
 import { Stand } from "@ermine/encoding/cbor"
 import type { ChangeHeader, Entry as Node } from "@ermine/node/entry"
 import type { Id, Key, Table } from "@ermine/table"

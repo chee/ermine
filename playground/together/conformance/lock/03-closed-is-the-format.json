@@ -1,5 +1,5 @@
 {
-	"title": "what is closed is what travels: a device with no lock, sent tagged commits, cannot read a seal in them and refuses each (shape), storing none",
+	"title": "what is closed is what travels: a device with no lock, sent tagged commits, cannot read a seal in them and refuses each (shape), storing none and throwing nothing (Subduction 0.23 lists each name in its own tree in memory until it restarts)",
 	"steps": [
 		{
 			"op": "device",
@@ -48,6 +48,8 @@
 				]
 			}
 		},
-		{ "op": "stored", "device": "b", "expect": { "stored": [] } }
+		{ "op": "stored", "device": "b", "expect": { "stored": ["c2", "c1"] } },
+		{ "op": "closed", "device": "b", "commit": "c1", "expect": {} },
+		{ "op": "closed", "device": "b", "commit": "c2", "expect": {} }
 	]
 }

@@ -1,0 +1,220 @@
+{
+	"title": "a paused node never changes from outside: a commit let in before the pause (here waiting on a's lock, as b's write arrived) is not taken in when the lock opens after it, and what b pushes after is turned away (heard 1 in the status beside paused); shared again, a takes in both",
+	"typescript": true,
+	"steps": [
+		{
+			"op": "host",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"lock": "tag",
+			"expect": {
+				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "host",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"lock": "tag",
+			"expect": {
+				"key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "mint",
+			"host": "a",
+			"as": "x",
+			"expect": {
+				"id": "ermine:0010b40fde52c568d2f3864d68739e98b72b"
+			}
+		},
+		{
+			"op": "share",
+			"host": "a",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "share",
+			"host": "b",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "lock",
+			"host": "a",
+			"open": "wait",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"host": "b",
+			"id": "x",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"n": 1
+					}
+				}
+			],
+			"name": "w1",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "status",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"status": {
+					"waiting": [
+						{
+							"commit": "1ac07170765de664071fbf5452f0d45deca5badee4b892da809b37254bff12cb",
+							"authority": true
+						}
+					],
+					"refused": [],
+					"unsent": [],
+					"count": {
+						"waiting": 1,
+						"refused": 0,
+						"unsent": 0
+					}
+				}
+			}
+		},
+		{
+			"op": "pause",
+			"host": "a",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "lock",
+			"host": "a",
+			"open": "tag",
+			"expect": {}
+		},
+		{
+			"op": "changed",
+			"host": "a",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "heads",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"heads": []
+			}
+		},
+		{
+			"op": "write",
+			"host": "b",
+			"id": "x",
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 2
+				}
+			],
+			"name": "w2",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "status",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"status": {
+					"waiting": [],
+					"refused": [],
+					"unsent": [],
+					"count": {
+						"waiting": 0,
+						"refused": 0,
+						"unsent": 0
+					},
+					"paused": true,
+					"heard": 1
+				}
+			}
+		},
+		{
+			"op": "share",
+			"host": "a",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"value": {
+					"n": 2
+				}
+			}
+		},
+		{
+			"op": "heads",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"heads": [
+					"w2"
+				]
+			}
+		},
+		{
+			"op": "status",
+			"host": "a",
+			"id": "x",
+			"expect": {}
+		}
+	]
+}

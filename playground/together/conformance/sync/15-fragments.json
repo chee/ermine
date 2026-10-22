@@ -17,6 +17,7 @@
 				"id": "ermine:0010b40fde52c568d2f3864d68739e98b72b"
 			}
 		},
+		{ "op": "share", "host": "a", "id": "x", "expect": {} },
 		{
 			"op": "write",
 			"host": "a",
