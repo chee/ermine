@@ -1,6 +1,7 @@
 /// <reference lib="dom" />
 // little sounds, made here (no files): a blip for a press, a snap for a wire, a chime for a den
-// arriving. quiet; nothing until the first gesture; muted is remembered
+// arriving, a ding-dong for a pair ask, a run up for a pairing. quiet; nothing until the first
+// gesture; muted is remembered
 const KEY = "dens.muted"
 let ctx: AudioContext | undefined
 let muted = localStorage.getItem(KEY) === "1"
@@ -67,6 +68,11 @@ export const sound = {
 	// a soft note (a sound thing's)
 	note: (freq: number) => (tone(freq, 0, 0.22, 0.04, "triangle"), tone(freq * 2, 0, 0.06, 0.012)),
 	no: () => tone(220, 0, 0.12, 0.04, "triangle"),
+	// someone asking to pair: a soft ding-dong
+	ask: () => (tone(1046.5, 0, 0.16, 0.025, "sine"), tone(784, 0.14, 0.26, 0.025, "sine")),
+	// paired: a happy little run up
+	yay: () =>
+		[523.3, 659.3, 784, 1046.5].forEach((f, i) => tone(f, i * 0.07, 0.14, 0.03, "triangle")),
 	get muted() {
 		return muted
 	},

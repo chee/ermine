@@ -22,6 +22,13 @@ config CARDPUTER_SERVER
 		Where the room is: its long-poll at <server>/littlesync/tippet/dens-<code>/send and /recv
 		(experiments/tippet/WIRE.md). https: the certificate checked against ESP-IDF's bundle.
 
+config CARDPUTER_ROOM
+	string "the den's room (4 of ACDEFHJKMNPRTWXY; empty: the one it has)"
+	default ""
+	help
+		A room's code: the den goes to it and remembers it (NVS). Empty: the room it was in, or a
+		new one made the first time.
+
 config CARDPUTER_GATEWAY
 	string "littlesync gateway (the old path, out of the build: main/net.c)"
 	default ""

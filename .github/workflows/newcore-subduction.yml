@@ -20,8 +20,9 @@ on:
       - ".github/workflows/newcore-subduction.yml"
   workflow_dispatch:
 
+# Only the release job writes; it asks for that itself.
 permissions:
-  contents: write
+  contents: read
 
 env:
   CARGO_TERM_COLOR: never
@@ -119,8 +120,13 @@ jobs:
             echo "$f: compiled"
           done
 
+  # Only main or a tag publishes: a push to any other branch builds and links,
+  # but must not clobber the assets everyone fetches.
   release:
     needs: build
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}

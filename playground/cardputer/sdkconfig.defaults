@@ -3,27 +3,58 @@ CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
 # partitions.csv: the app, NVS, and the den's FAT file system
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 CONFIG_COMPILER_OPTIMIZATION_PERF=y
-CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384
+# the loop's stack: 10 KB (it used under 6.5 KB through an end to end)
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=10240
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 CONFIG_FREERTOS_HZ=1000
 # https (main/wifi.c): a server's certificate checked against ESP-IDF's common CAs (ISRG Root X1 for
 # galaxy.observer's Let's Encrypt chain)
 CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
 CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_CMN=y
-# room in the heap for the den, WiFi and two TLS connections at once (no PSRAM): fewer WiFi buffers,
-# and mbedtls' buffers made per record and let go after
-CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=4
-CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=16
-CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=16
+
+# ---- the heap (no PSRAM): the den, WiFi and one TLS session at once ----
+# WiFi: 3 static RX buffers (1.6 KB each, made at init), 8 dynamic RX and TX (made as frames come)
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=3
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=8
+CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=8
+# no block-ack aggregation: no reorder buffers (throughput doesn't matter here)
+# CONFIG_ESP_WIFI_AMPDU_TX_ENABLED is not set
+# CONFIG_ESP_WIFI_AMPDU_RX_ENABLED is not set
+# 8 management buffers, not 32
+CONFIG_ESP_WIFI_MGMT_SBUF_NUM=8
+# WiFi's code in flash, not IRAM: on the S3 IRAM comes out of the same SRAM as the heap
+# CONFIG_ESP_WIFI_IRAM_OPT is not set
+# CONFIG_ESP_WIFI_RX_IRAM_OPT is not set
+# the heap's own functions in flash, for the same reason
+CONFIG_HEAP_PLACE_FUNCTION_INTO_FLASH=y
+# a station only: no soft AP, no enterprise, no OWE
+# CONFIG_ESP_WIFI_SOFTAP_SUPPORT is not set
+# CONFIG_ESP_WIFI_ENTERPRISE_SUPPORT is not set
+# CONFIG_ESP_WIFI_ENABLE_WPA3_OWE_STA is not set
+# mbedtls: buffers made per record and let go after; records in up to 10 KB (a recv answer, room
+# 8 KB), out 2 KB (a send's body goes as several)
 CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
 CONFIG_MBEDTLS_DYNAMIC_FREE_CONFIG_DATA=y
 CONFIG_MBEDTLS_DYNAMIC_FREE_CA_CERT=y
+CONFIG_MBEDTLS_ASYMMETRIC_CONTENT_LEN=y
 CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN=10240
+CONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN=2048
+# lwIP: one TCP connection at a time, small windows, small pools
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=2880
+CONFIG_LWIP_TCP_WND_DEFAULT=2880
+CONFIG_LWIP_TCPIP_RECVMBOX_SIZE=16
+CONFIG_LWIP_MAX_SOCKETS=6
+CONFIG_LWIP_MAX_ACTIVE_TCP=4
+CONFIG_LWIP_MAX_LISTENING_TCP=2
+CONFIG_LWIP_MAX_UDP_PCBS=8
 # the den's log on FAT (main/flash.c): 512-byte sectors (a 512-byte window in RAM, not 4 KB), 8.3
 # names only (the log's are: log, key, snapshot), one volume
 CONFIG_WL_SECTOR_SIZE_512=y
 CONFIG_FATFS_SECTOR_512=y
 CONFIG_FATFS_LFN_NONE=y
 CONFIG_FATFS_VOLUME_COUNT=1
+# the esp_timer task: 2.5 KB of stack (nothing of ours runs on it)
+CONFIG_ESP_TIMER_TASK_STACK_SIZE=2560

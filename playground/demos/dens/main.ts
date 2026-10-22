@@ -2,11 +2,24 @@
 // dens: two people, two screens, one graph. each page is one running ermine (a den), its id its
 // tab's device key; the dens share their nodes through tippet, a room's log on galaxy
 // (wss://galaxy.observer, or ?server=ws://…; ?server=none: the tabs of one browser), and each shows
-// the others' things as their steps land here. an ask to another den goes in its inbox, and is done
-// only if that den trusts this one (its authorized_keys). ?as=cardputer: chee's cardputer
+// the others' things as their steps land here. what a den runs runs on software (experiments/
+// software). an ask to another den goes in its inbox, a program that den runs, and is done only if
+// that den trusts this one (its authorized_keys). two dens pair first: until then each one's ins
+// and outs are locked on the other's screen. ?as=cardputer: chee's cardputer
 import { type Box, createBoard, type Port, type Wire } from "./kit/board.ts"
 import { createFarm, type Farm } from "./kit/farm.ts"
-import { type Answer, createHost, KINDS, newCode, OUT, type Refusal, roomCode } from "./host.ts"
+import {
+	type Answer,
+	createHost,
+	DEVICE,
+	type Heard,
+	KINDS,
+	NAME,
+	newCode,
+	OUT,
+	type Refusal,
+	roomCode,
+} from "./host.ts"
 import {
 	controls,
 	isPicture,
@@ -27,7 +40,7 @@ import { createTerminal } from "./terminal.ts"
 import { createCode } from "./code.ts"
 import { get } from "@ermine/places/lib"
 import { sound } from "./sound.ts"
-import { DEVICE, NAME, RUNNER } from "@ermine/dens"
+import { RUNNER } from "@ermine/software"
 
 const $ = <T extends HTMLElement = HTMLElement>(q: string, root: ParentNode = document) =>
 	root.querySelector(q) as T
@@ -108,11 +121,11 @@ const me = isCard
 	: { ...(await welcome()), device: "browser" }
 const room = roomOf("code" in me ? me.code : undefined)
 const host = await createHost({ ...me, room, seed: seed(), server })
-const { den, hosted, table, places } = host
+const { software, hosted, table, places } = host
 const id = host.id
 if (isCard) {
 	for (const k of ["keys", "screen", "pigs"]) {
-		hosted(() => den.start(`/system/den/runners/${k}`, `/things/${k}`, ["work", k]))
+		hosted(() => software.run(`/system/den/runners/${k}`, `/things/${k}`, ["home", k]))
 	}
 }
 
@@ -175,7 +188,7 @@ function views(): View[] {
 		device: me.device,
 		alive: true,
 		mine: true,
-		things: den.processes().flatMap((p) => {
+		things: host.things().flatMap((p) => {
 			const t = thingOf(String(p.id), [...p.at], table.get("attributes", p.id)?.value ?? {})
 			return t ? [t] : []
 		}),
@@ -277,16 +290,15 @@ playing.play = (name, freq) => {
 // why an ask to another den wasn't done, in words ("" : it was)
 function refusal(a: Answer): string {
 	if ("error" in a) return `it couldn't read the ask (${a.error})`
+	if ("pair" in a) return a.pair === "yes" ? "" : "it said no"
 	if (!("refused" in a)) return ""
 	switch (a.refused) {
 		case "not-trusted":
 			return a.why === "not-in-keys"
-				? `not trusted: ${a.who} isn't in its keys`
+				? "not trusted: you two aren't paired"
 				: a.why === "bad-signature"
 				? "not trusted: the ask's signature doesn't check out"
 				: "the ask wasn't made out to it"
-		case "no-permission":
-			return a.answer.answer === "no" ? `no, ${a.answer.reason}` : "it hasn't decided yet"
 		case "not-a-runner":
 			return "it has nothing that runs that"
 		case "not-there":
@@ -295,8 +307,6 @@ function refusal(a: Answer): string {
 			return "that isn't the kind of thing it runs"
 		case "taken":
 			return "something is already in that spot"
-		case "stopped":
-			return "it is switched off"
 	}
 }
 
@@ -337,7 +347,7 @@ const refused = (v: View, a: Answer) => {
 	sound.no()
 	say(
 		"refused" in a && a.refused === "not-trusted" && a.why === "not-in-keys"
-			? `${label(v)} said no: ${why}. Whoever is at ${label(v)} can press trust on your den.`
+			? `${label(v)} said no: ${why}. Press pair on ${label(v)} first.`
 			: `${label(v)} said no: ${why}.`,
 		"hot",
 	)
@@ -348,10 +358,10 @@ const runnerOf = (kind: string) => `/system/den/runners/${kind}`
 const programOf = (kind: string) => `/things/${kind}`
 
 function add(v: View, kind: string) {
-	const at = ["work", `${kind}-${hex4()}`]
+	const at = ["home", `${kind}-${hex4()}`]
 	const a = kind === "counter" ? "a counter" : `a ${kind}`
 	if (v.mine) {
-		const r = hosted(() => den.start(runnerOf(kind), programOf(kind), at))
+		const r = hosted(() => software.run(runnerOf(kind), programOf(kind), at))
 		if ("refused" in r) return void refused(v, r)
 		say(`You started ${a} ${isCard ? "here" : "in your browser"}.`, "ok")
 		return
@@ -359,7 +369,12 @@ function add(v: View, kind: string) {
 	say(`Asking ${label(v)} to start ${a}…`)
 	asking(
 		v,
-		{ op: "start", runner: runnerOf(kind), program: host.carry(programOf(kind)), at },
+		{
+			op: "start",
+			runner: runnerOf(kind),
+			program: host.carry(programOf(kind)),
+			at: `/${at.join("/")}`,
+		},
 		(r) => refused(v, r) || say(`You started ${a} on ${label(v)}.`, "ok"),
 	)
 }
@@ -367,8 +382,8 @@ function add(v: View, kind: string) {
 // a reader started again at its spot, reading args ([den, process]) or nothing
 function restart(v: View, t: Thing, args: string[], done: string) {
 	if (v.mine) {
-		hosted(() => den.stop(t.id, "rewired"))
-		const r = hosted(() => den.start(runnerOf(t.kind), programOf(t.kind), t.at, { args }))
+		hosted(() => software.stop(t.id, "rewired"))
+		const r = hosted(() => software.run(runnerOf(t.kind), programOf(t.kind), t.at, { args }))
 		if ("refused" in r) return void refused(v, r)
 		return say(done, "ok")
 	}
@@ -381,7 +396,7 @@ function restart(v: View, t: Thing, args: string[], done: string) {
 			op: "start",
 			runner: runnerOf(t.kind),
 			program: host.carry(programOf(t.kind)),
-			at: t.at,
+			at: `/${t.at.join("/")}`,
 			args,
 		}, (r) => refused(v, r) || say(done, "ok"))
 	})
@@ -389,7 +404,7 @@ function restart(v: View, t: Thing, args: string[], done: string) {
 
 function remove(v: View, t: Thing) {
 	if (v.mine) {
-		hosted(() => den.stop(t.id, "removed"))
+		hosted(() => software.stop(t.id, "removed"))
 		return say(`You took ${whose(v, t)} away.`)
 	}
 	asking(
@@ -399,29 +414,101 @@ function remove(v: View, t: Thing) {
 	)
 }
 
-// another den put in this one's keys: its asks done from now on
-function trust(v: View) {
-	hosted(() => host.trust(v.who))
+// ---- pairing: a pair ask into another den's inbox; its yes opens each den's ins and outs to the
+// other (render hears it: a happy sound on both screens); unpair locks them again ----
+function pair(v: View) {
+	say(`Asking ${label(v)} to pair…`)
+	sound.blip()
+	host.pair(v.who).then((n) => {
+		if (typeof n !== "string") {
+			sound.no()
+			say(`Couldn't ask ${label(v)} to pair: ${n.problem}.`, "hot")
+		}
+		host.soon()
+	})
+}
+function unpair(v: View) {
+	host.unpair(v.who).then((n) => {
+		if (typeof n !== "string") {
+			sound.no()
+			say(`Couldn't tell ${label(v)}: ${n.problem}.`, "hot")
+		}
+	})
 	host.soon()
-	sound.chime()
-	say(`You trust ${label(v)} now: what it asks of your den will be done.`, "ok")
+}
+host.onPair((who, a) => {
+	const v = views().find((x) => x.who === who)
+	const name = v ? label(v) : `${who.slice(0, 6)}…`
+	if ("pair" in a && a.pair === "no") {
+		sound.no()
+		say(`${name} said no.`, "hot")
+	} else if (v && !("pair" in a)) refused(v, a)
+	host.soon()
+})
+
+// a pair ask waiting in this den's inbox: "<name> wants to pair", yes or no (on the cardputer:
+// tab or esc), a soft sound as it comes
+const waiting = $(".asking")
+type Want = { n: string; from: string; name: string; el: HTMLElement }
+const wants: Want[] = []
+function answerPair(w: Want, yes: boolean) {
+	const i = wants.indexOf(w)
+	if (i === -1) return
+	wants.splice(i, 1)
+	w.el.remove()
+	host.answerPair(w.n, yes)
+	if (yes) say(`You said yes to ${w.name}…`, "ok")
+	else {
+		sound.no()
+		say(`You said no to ${w.name}.`)
+	}
+	host.soon()
+}
+function wanted(heard: Heard) {
+	const n = heard.wants
+	if (n === undefined || wants.some((w) => w.n === n)) return
+	const name = heard.name ?? heard.from.slice(0, 6)
+	const el = h("div", "want")
+	const yes = h("button", "yes", isCard ? "yes · tab" : "yes")
+	const no = h("button", "no", isCard ? "no · esc" : "no")
+	el.append(h("p", "", `${name} wants to pair`), yes, no)
+	const w: Want = { n, from: heard.from, name, el }
+	yes.onclick = () => answerPair(w, true)
+	no.onclick = () => answerPair(w, false)
+	wants.push(w)
+	waiting.append(el)
+	sound.ask()
+	say(`${name} wants to pair with your den.`)
+}
+if (isCard) {
+	addEventListener("keydown", (e) => {
+		const w = wants[0]
+		if (!w || (e.key !== "Tab" && e.key !== "Escape")) return
+		e.preventDefault()
+		e.stopImmediatePropagation()
+		answerPair(w, e.key === "Tab")
+	}, { capture: true })
 }
 
 // someone else's asks to this den, in words: what they did, or why it wasn't done
 const rewiring = new Set<string>()
 const inWordsHere = (r: Refusal) =>
 	r.why === "not-in-keys"
-		? `not trusted: ${r.who} isn't in your keys. Press trust on ${r.who}'s den to let them in.`
+		? `not trusted: ${r.who} isn't paired with your den, so it asked for nothing.`
 		: r.why === "bad-signature"
 		? `not trusted: ${r.who}'s ask has a signature that doesn't check out.`
 		: `not trusted: ${r.who}'s ask wasn't made out to this den.`
-host.onAsked(({ from, op, runner, refused }) => {
+host.onAsked((heard) => {
+	const { from, op, runner, refused } = heard
 	const v = views().find((x) => x.who === from)
-	const who = v ? label(v) : from
+	const who = v ? label(v) : heard.name ?? from
 	const kind = Array.isArray(runner) ? runner.at(-1) : String(runner ?? "").split("/").at(-1)
 	if (refused) {
 		sound.no()
 		say(inWordsHere(refused), "hot")
+	} else if (op === "pair") wanted(heard)
+	else if (op === "unpair") {
+		say(`${who} unpaired from your den: its ins and outs are locked again.`)
 	} else if (op === "stop") {
 		// the start comes a round trip after its stop (restart waits for the stop's answer)
 		rewiring.add(from)
@@ -487,18 +574,20 @@ function openMenu(f: Frame, v: View, button: HTMLElement) {
 }
 
 function denCode(v: View): string {
-	const id = JSON.stringify(v.who)
 	const common = `// what the page asks of a den (none of it is on the page)
-createDen({ scheduler, table, places, scopes,
-  id: ${id}, install, name: ${JSON.stringify(v.name)}, device: "${v.device}",
-  // yes to every ask that gets here: its inbox checks who asked first
-  may: () => ({ answer: "yes" }) })
+// the den: the install's node, "ermine:ed01${v.who.slice(0, 8)}…",
+// at /system/den and /system/dens/<id>; what it runs, on software
+const software = createSoftware({ scheduler, table, places, scopes, scope })
+const den = { id: node, at: ["system", "den"], scope, stored: true }
 for (const kind of ["button", "pad", "timer", "counter", "screen", "chart", "sound"${
 		v.device === "cardputer" ? `, "keys", "pigs"` : ""
 	}])
-  den.offer("runners", kind,
+  software.offer(den, "runners", kind,
     { "ermine.runner.takes": "thing." + kind }, run[kind])
 // programs at /things/<kind>, ermine.type "thing.<kind>"
+// its inbox: a program it runs, the one place that decides who may
+software.offer(den, "runners", "inbox", { "ermine.runner.takes": "dens.inbox" }, inbox)
+software.run("/system/den/runners/inbox", "/programs/inbox", "/system/inbox")
 // the room ${room}: tippet's room "dens-${room}", its log on galaxy
 const log = createLog({ store, seed })   // the den's key
 createHistory({ log, table, places, kept })
@@ -506,13 +595,14 @@ sync.link(socket(new WebSocket(server + "/littlesync/tippet/dens-${room}")))
 // kept, so in the room: the den's node, its things (each
 // one's attributes, thing.out among them), its inbox and
 // its authorized_keys. here: a live every 2 s
-// an ask: into its inbox, signed; done if trusted()`
+// an ask: into its inbox, signed; done if trusted().
+// pair: an ask anyone may make; a person says yes or no`
 	return v.device === "cardputer"
 		? `${common}
 // at boot, its hardware as things:
-den.start("/system/den/runners/keys", "/things/keys", "/work/keys")
-den.start("/system/den/runners/screen", "/things/screen", "/work/screen")
-den.start("/system/den/runners/pigs", "/things/pigs", "/work/pigs")`
+software.run("/system/den/runners/keys", "/things/keys", "/home/keys")
+software.run("/system/den/runners/screen", "/things/screen", "/home/screen")
+software.run("/system/den/runners/pigs", "/things/pigs", "/home/pigs")`
 		: common
 }
 
@@ -535,7 +625,7 @@ function frameOf(v: View): Frame {
 		<pre class="back" hidden></pre>`
 		: `<div class="shell"></div>
 		<div class="head avoid"><span class="live"></span><span class="label"></span><span class="denpath"></span>
-			<button class="trust" hidden></button><button class="add" title="add a thing">+ add</button><button class="flip" title="turn it over">{ }</button></div>
+			<button class="pair" hidden></button><button class="add" title="add a thing">+ add</button><button class="flip" title="turn it over">{ }</button></div>
 		<div class="glass"><p class="hint">nothing here yet: <b>+ add</b> puts a thing in</p></div>
 		<pre class="back" hidden></pre>`
 	$(".label", el).textContent = label(v)
@@ -550,9 +640,11 @@ function frameOf(v: View): Frame {
 		if (menu) closeMenu()
 		else openMenu(frame, now, e.currentTarget as HTMLElement)
 	}
-	$(".trust", el).onclick = (e) => {
+	$(".pair", el).onclick = (e) => {
 		e.stopPropagation()
-		if (!host.trusts(v.who)) trust(v)
+		const now = views().find((x) => x.who === v.who) ?? v
+		if (host.paired(v.who)) unpair(now)
+		else if (!host.pairing(v.who)) pair(now)
 	}
 	$(".flip", el).onclick = () => {
 		const back = $(".back", el)
@@ -583,7 +675,7 @@ function frameOf(v: View): Frame {
 // a key on a cardputer: to its keys thing, when it runs here
 function press(v: View, k: string) {
 	if (!v.mine) return say(`Type on ${label(v)} itself: its keys are there.`)
-	const keys = den.processes().find((p) => p.at.at(-1) === "keys")
+	const keys = host.things().find((p) => p.at.at(-1) === "keys")
 	const c = keys && controls.get(String(keys.id))
 	if (!c?.type) return
 	c.type(k)
@@ -748,9 +840,9 @@ const short = (a: string) => JSON.stringify(a.length > 22 ? a.slice(0, 22) + "�
 function thingCode(v: View, t: Thing): string {
 	const list = t.args.length ? `[${t.args.map(short).join(", ")}]` : ""
 	const start = v.mine
-		? `den.start(\n  "${runnerOf(t.kind)}",\n  "${programOf(t.kind)}",\n  "/${t.at.join("/")}"${
-			list ? `,\n  { args: ${list} }` : ""
-		})`
+		? `software.run(\n  "${runnerOf(t.kind)}",\n  "${programOf(t.kind)}",\n  "/${
+			t.at.join("/")
+		}"${list ? `,\n  { args: ${list} }` : ""})`
 		: `// written into ${label(v)}'s inbox, signed:
 host.ask(${JSON.stringify(v.who.slice(0, 8) + "…")}, { op: "start",\n  runner: "${
 			runnerOf(t.kind)
@@ -1076,6 +1168,46 @@ function makeShown(
 // ---- wires ----
 const wires = new Map<string, Wire & { text?: string }>()
 
+// another den not paired with this one: its ins and outs locked, greyed, each with a padlock and
+// its note. a wire can't start or end on one
+const LOCKED = "not trusted! pair first"
+const locked = (v: View) => !v.mine && !host.paired(v.who)
+const PADLOCK =
+	`<svg viewBox="0 0 12 14" aria-hidden="true"><path d="M3.2,6.2 V4.4 a2.8,2.8 0 0 1 5.6,0 V6.2" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="1.2" y="6" width="9.6" height="7" rx="1.6" fill="currentColor"/><circle cx="6" cy="9.4" r="1.1" fill="#fff"/></svg>`
+function lock(b: Box, on: boolean) {
+	b.el.classList.toggle("locked", on)
+	for (const p of b.el.querySelectorAll<HTMLElement>(".port")) {
+		p.classList.toggle("locked", on)
+		const there = p.querySelector(".lock")
+		if (on && !there) {
+			const l = h("span", "lock")
+			l.innerHTML = PADLOCK
+			l.title = LOCKED
+			l.append(h("span", "lock-note", LOCKED))
+			p.append(l)
+		} else if (!on && there) there.remove()
+	}
+}
+function refuseLocked(v: View) {
+	sound.no()
+	say(`${LOCKED}: press pair on ${label(v)}, and its ins and outs open once it says yes.`, "hot")
+	for (const n of board.world.querySelectorAll<HTMLElement>(".port.locked .lock")) {
+		n.classList.remove("shake")
+		void n.offsetWidth
+		n.classList.add("shake")
+	}
+}
+// a drag from a locked port never starts (before the board's own pointerdown on its dot)
+board.world.addEventListener("pointerdown", (e) => {
+	const p = (e.target as HTMLElement).closest<HTMLElement>(".port.locked")
+	if (!p) return
+	e.stopPropagation()
+	e.preventDefault()
+	const who = shown.get(p.closest<HTMLElement>(".box")?.dataset.id ?? "")?.who
+	const v = views().find((x) => x.who === who)
+	if (v) refuseLocked(v)
+}, { capture: true })
+
 function find(id: string): { v: View; t: Thing } | undefined {
 	for (const v of views()) {
 		const t = v.things.find((t) => t.id === id)
@@ -1124,6 +1256,10 @@ function connect(source: string, reader: string, input: string, port?: HTMLEleme
 	const s = find(source), r = find(reader)
 	if (!s || !r) return false
 	if (!(INPUTS[r.t.kind] ?? []).includes(input)) return false
+	if (locked(s.v) || locked(r.v)) {
+		refuseLocked(locked(s.v) ? s.v : r.v)
+		return false
+	}
 	if (loops(s.t.id, r.t.id)) {
 		sound.no()
 		say("That wire would make a loop: each would count the other forever.", "hot")
@@ -1273,6 +1409,7 @@ board.onPick((b) => {
 // ---- drawing it all ----
 let shape = ""
 let seen = new Set<string>()
+const pairedWas = new Map<string, boolean>()
 let first = true
 const centre = (b: Box) => b.pos().x + b.el.offsetWidth / 2
 
@@ -1338,20 +1475,23 @@ function render() {
 		f.el.classList.toggle("empty", v.things.length === 0)
 		$(".live", f.el).title = v.alive ? "here now" : "gone quiet"
 		$<HTMLButtonElement>(".add", f.el).disabled = !v.alive
-		// another den: whether this one trusts it (a button until it does), and whether it trusts you
+		// another den: paired or not (a pair button until it is, then unpair), and asked
 		if (!v.mine) {
-			const b = $<HTMLButtonElement>(".trust", f.el)
-			const yes = host.trusts(v.who), back = host.trustedBy(v.who)
+			const b = $<HTMLButtonElement>(".pair", f.el)
+			const yes = host.paired(v.who), asked = host.pairing(v.who)
 			b.hidden = false
 			b.classList.toggle("on", yes)
-			b.textContent = yes ? "trusted" : "trust"
-			b.setAttribute("aria-pressed", String(yes))
-			b.title = `${
-				yes
-					? `in your keys: what ${label(v)} asks of your den is done`
-					: `put ${label(v)} in your keys, so what it asks of your den is done`
-			}. ${back ? "it trusts you too" : "it doesn't trust you yet"}`
-			$(".denpath", f.el).textContent = `${back ? "trusts you · " : ""}/system/dens/${v.who}`
+			b.classList.toggle("asked", asked && !yes)
+			b.textContent = yes ? "unpair" : asked ? "asked…" : "pair"
+			b.title = yes
+				? `you and ${
+					label(v)
+				} are paired: each can reach the other's ins and outs. unpair locks them again`
+				: asked
+				? `waiting for ${label(v)} to say yes or no`
+				: `ask ${label(v)} to pair: until it says yes, its ins and outs are locked`
+			$(".denpath", f.el).textContent = `${yes ? "paired · " : ""}/system/dens/${v.who}`
+			f.el.classList.toggle("locked", !yes)
 		}
 		for (const t of v.things) {
 			live.add(t.id)
@@ -1387,6 +1527,7 @@ function render() {
 			pathEl.textContent = `/${t.at.join("/")}${here ? "" : " (not in this tree)"}`
 			s.box.code(thingCode(v, t))
 			s.box.tone(!v.alive ? "dim" : s.box === picked ? "pick" : undefined)
+			lock(s.box, locked(v))
 		}
 	}
 	for (const [id, s] of shown) {
@@ -1419,7 +1560,7 @@ function render() {
 					w.label(text)
 					w.flash("hot")
 				}
-				w.tone(s?.v.alive && v.alive ? undefined : "dim")
+				w.tone(s?.v.alive && v.alive && !locked(s.v) && !locked(v) ? undefined : "dim")
 				w.hint(
 					`reads ${src.at}${
 						s && s.v.who !== v.who
@@ -1469,6 +1610,17 @@ function render() {
 		if (v) say(`${label(v)} went quiet.`)
 	}
 	seen = now
+	// paired, or not any more: the padlocks open with a happy sound, or come back
+	for (const v of vs) {
+		if (v.mine) continue
+		const yes = host.paired(v.who), was = pairedWas.get(v.who)
+		pairedWas.set(v.who, yes)
+		if (was === undefined || was === yes) continue
+		if (yes) {
+			sound.yay()
+			say(`You and ${label(v)} are paired: wire your things to each other's.`, "ok")
+		} else say(`You and ${label(v)} aren't paired now: its ins and outs are locked.`)
+	}
 	first = false
 	// the view fitted when the frames change shape
 	const sh = vs.map((v) => `${v.who}:${frames.get(v.who)!.h}`).join()
@@ -1543,7 +1695,7 @@ host.soon()
 say(
 	isCard
 		? "This is chee's cardputer. Type on its keys, feed its pigs; other dens show up beside it."
-		: "Add things with + add, here or on another den. Drag from an out dot to an in dot to wire them.",
+		: "Add things with + add. Drag from an out dot to an in dot to wire them; another den's, once you pair.",
 )
 
 // arrows move the focus between things, nearest that way

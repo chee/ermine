@@ -1,5 +1,5 @@
 // the network on the Cardputer: esp_wifi as a station (the network menuconfig names), and poll.h's
-// two workers, each a task with an esp_http_client of its own, kept alive between requests: http,
+// workers (POLL_WORKERS: one, for the heap), each a task with an esp_http_client of its own, kept alive between requests: http,
 // or https checked against ESP-IDF's certificate bundle (sdkconfig.defaults' common CAs)
 #include "wifi.h"
 
@@ -143,8 +143,8 @@ int wifi_start(void) {
 	esp_wifi_set_config(WIFI_IF_STA, &w);
 	esp_wifi_start();
 	// a TLS handshake (mbedtls on the worker's task) wants more stack than plain http
-	for (int i = 0; i < 2; i++)
-		xTaskCreate(worker, i ? "tippet send" : "tippet recv", WIFI_STACK, (void *)(intptr_t)i, 5, &tasks[i]);
+	for (int i = 0; i < POLL_WORKERS; i++)
+		xTaskCreate(worker, i ? "tippet send" : "tippet poll", WIFI_STACK, (void *)(intptr_t)i, 5, &tasks[i]);
 	ESP_LOGI(TAG, "wifi %s", CONFIG_CARDPUTER_WIFI_SSID);
 	return 1;
 }

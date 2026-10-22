@@ -3,8 +3,8 @@
 #ifndef WIFI_H
 #define WIFI_H
 
-// each worker's stack: a TLS handshake runs on it
-#define WIFI_STACK 8192
+// the worker's stack: a TLS handshake runs on it (it used under 3.6 KB of 8)
+#define WIFI_STACK 6144
 
 // 1: started; 0: no network named
 int wifi_start(void);

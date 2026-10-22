@@ -29,6 +29,7 @@
 		"./playground/demos",
 		"./playground/libraries/pack-indexeddb",
 		"./playground/pullynode",
+		"./playground/tools/files",
 		"./playground/installs",
 		"./playground/sessions",
 		"./playground/trust",

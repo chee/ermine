@@ -6,7 +6,7 @@
 //   a drawing                 { lines: [[x0, y0, x1, y1, ...], ...], pigs: [{ name, x, y }, ...] }
 //                             in screen pixels (0..239, 0..134): each line its points joined, a
 //                             pen 2 wide; each pig stamp a pointer to a real pig, drawn at the
-//                             weight this den's /work/pigs gives that name now (heavier, bigger:
+//                             weight this den's /home/pigs gives that name now (heavier, bigger:
 //                             1x to 3x, as book/kit/farm.ts' pigScale), centred on x, y, its name
 //                             and weight over it; a name the pigs don't give: drawn small and grey
 //   a picture                 { width, height, squares: bytes }: squares on or off, row after row,
@@ -46,7 +46,7 @@ struct thing {
 	sc_scheduler *s;
 	pl *places;
 	sc_scope *scope;
-	// the den's, until dn_free (a table entry's id must outlive it)
+	// the software's, until sw_free (a table entry's id must outlive it)
 	const char *id;
 	char **args;
 	size_t nargs;
@@ -104,7 +104,7 @@ static void out(thing *t, op_value *v) { put(t, THING_OUT, v); }
 
 // sources -----------------------------------------------------------------------------------------
 
-// "/work/keys" as its steps
+// "/home/keys" as its steps
 static size_t steps(const char *at, char ***out) {
 	size_t n = 0;
 	char **v = xalloc((strlen(at) / 2 + 2) * sizeof *v);
@@ -227,7 +227,7 @@ static void stopped(void *ctx) {
 }
 
 static thing *thing_of(void *api) {
-	const dn_starting *st = api;
+	const sw_starting *st = api;
 	thing *t = xalloc(sizeof *t);
 	t->s = st->scheduler;
 	t->places = st->places;
@@ -343,7 +343,7 @@ static sc_out draw_f(void *previous, void *data) {
 	drawing *d = data;
 	op_value *both = op_map();
 	if (d->nin) op_set(both, "in", out_at(d->t->places, d->in, d->nin));
-	char *pigs_at[2] = {"work", "pigs"};
+	char *pigs_at[2] = {"home", "pigs"};
 	op_set(both, "pigs", out_at(d->t->places, pigs_at, 2));
 	return (sc_out){.kind = SC_VALUE, .value = both};
 }
@@ -491,7 +491,7 @@ static void draw_empty(void) {
 		}
 		fb_text((FB_W - fb_text_width("the room's code", 1)) / 2, 86, "the room's code", FB_INK, 1);
 	}
-	fb_text(4, 100, "wire into /work/screen", FB_GREY, 1);
+	fb_text(4, 100, "wire into /home/screen", FB_GREY, 1);
 }
 
 // what the screen shows, kept to be drawn again strip by strip (fb.h): the in's out and the pigs'

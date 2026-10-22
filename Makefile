@@ -139,6 +139,10 @@ LIBS += ids
 clingy-test_src = core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c filesystem/clingy/c/clingy.c filesystem/clingy/c/clingy_test.c
 clingy-test = filesystem/clingy/c/clingy-test
 LIBS += clingy-test
+# places (filesystem/places): a watch that writes, the watches after it told what landed first; no suite
+places-test_src = $(filter-out conformance/c/harness.c core/op/c/json.c conformance/c/protocol_harness.c filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) filesystem/places/c/places_test.c
+places-test = filesystem/places/c/places-test
+LIBS += places-test
 # programs (playground/programs): satisfy and open (programs) and start, over ermine/types, ermine/processes' start and
 # playground/build's build and host functions; build (playground/build) on its own. on the places harness's world with boxes
 programs_base = $(filter-out filesystem/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/boxes/c/boxes.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) experiments/software/c/functions.c

@@ -36,7 +36,7 @@
 
 // the last screen the shell drew, printed on the serial line after a line typed there
 static op_value *last;
-// 1: the den's framebuffer shows, keys go to /work/keys; 0: the shell's text rows
+// 1: the den's framebuffer shows, keys go to /home/keys; 0: the shell's text rows
 static int dens_mode = 1;
 static int wifi;
 
@@ -56,6 +56,8 @@ void den_random(uint8_t *out, size_t n) { esp_fill_random(out, n); }
 
 static size_t free_now(void) { return heap_caps_get_free_size(MALLOC_CAP_8BIT); }
 static size_t least(void) { return heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT); }
+
+size_t den_free(void) { return free_now(); }
 
 void den_mark(const char *what) {
 	printf("heap: %s: %u free, tippet %u\n", what, (unsigned)free_now(), (unsigned)den_heap(NULL));
@@ -115,14 +117,19 @@ static void draw_text(const op_value *screen) {
 
 static int shell_on;
 
-// a key from the keyboard: tab trusts the den that asked last; esc turns the mode (with the shell
-// on); else to the shell, or to /work/keys
+// a key from the keyboard: tab says yes to a pair ask waiting, esc no; esc else turns the mode
+// (with the shell on); else to the shell, or to /home/keys
 static void pressed(api *keyboard_api, const char *k) {
 	if (strcmp(k, "tab") == 0) {
 		den_trust_last();
 		return;
 	}
 	if (strcmp(k, "esc") == 0) {
+		// a pair ask waiting: no to it
+		if (den_pair_waiting()) {
+			den_pair_answer(0);
+			return;
+		}
 		if (!shell_on) return;
 		dens_mode = !dens_mode;
 		if (dens_mode) frame_again();
@@ -145,7 +152,12 @@ static void room_code_of(char out[5]) {
 		strcpy(out, "ACDE");
 		return;
 	}
-	if (nvs_get_str(h, "room", out, &n) != ESP_OK || strlen(out) != 4) {
+	// menuconfig's room, when it names one: kept from now on
+	if (strlen(CONFIG_CARDPUTER_ROOM) == 4) {
+		snprintf(out, 5, "%s", CONFIG_CARDPUTER_ROOM);
+		nvs_set_str(h, "room", out);
+		nvs_commit(h);
+	} else if (nvs_get_str(h, "room", out, &n) != ESP_OK || strlen(out) != 4) {
 		for (int i = 0; i < 4; i++) out[i] = DEN_LETTERS[esp_random() % 16];
 		out[4] = 0;
 		nvs_set_str(h, "room", out);
@@ -168,7 +180,8 @@ void app_main(void) {
 	screen_init();
 	keys_init();
 	host_init();
-	api *keyboard_api = host_start("keyboard", keyboard);
+	// the keyboard's process (/keyboard) is the shell's only: with WiFi, keys go to the den's keys thing
+	api *keyboard_api = shell_on ? host_start("keyboard", keyboard) : NULL;
 	// the shell and its display (a memo of the whole tree as text, made again at every change) only
 	// without WiFi: with it, the den, WiFi and a TLS handshake need all the heap there is
 	if (shell_on) {
@@ -222,6 +235,10 @@ void app_main(void) {
 					den_trust_last();
 					continue;
 				}
+				if (typed[i] == 0x1b && den_pair_waiting()) {
+					den_pair_answer(0);
+					continue;
+				}
 				if ((k = serial_key(typed[i])) == NULL) continue;
 				// typed on the serial line: the shell's, and the den's keys' too
 				if (shell_on) keyboard_press(keyboard_api, k);
@@ -258,6 +275,7 @@ void app_main(void) {
 		if (now - heap_said >= 10000) {
 			heap_said = now;
 			stage("now");
+			printf("stack: main %u left; %s\n", (unsigned)uxTaskGetStackHighWaterMark(NULL), wifi ? wifi_status() : "");
 			printf("heap: lowest free");
 			for (int i = 0; i < 4; i++)
 				if (lowest[i] != SIZE_MAX) printf(", %s %u", STAGES[i], (unsigned)lowest[i]);

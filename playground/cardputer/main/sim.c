@@ -1,11 +1,12 @@
 // the firmware's programs on the Mac: stdin is the keyboard (a line: its keys, then enter; a line
-// "tab": the tab key, the den that asked last trusted; "print": the den's state), the screen is
+// "tab": the tab key, yes to a pair ask; "esc": no; "print": the den's state), the screen is
 // printed, and the framebuffer written as a PNG (/tmp/dens/card/sim.png, and numbered beside it).
 // the den is the cardputer's (den.h) on tippet, its install and log in SIM_HOME
 // (/tmp/cardputer-sim), linked to SIM_SERVER's room (https://galaxy.observer; "none": alone) by
 // poll.h's long-poll, its two workers threads with curl. ./sim.sh builds and runs it.
 //
 //   SIM_ROOM=KAYA ./sim.sh          the den in room KAYA on galaxy.observer, typing into it
+#include <dlfcn.h>
 #include <errno.h>
 #include <pthread.h>
 #include <stdarg.h>
@@ -15,6 +16,7 @@
 #include <sys/select.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <time.h>
 #include <unistd.h>
 
 #include <curl/curl.h>
@@ -127,7 +129,10 @@ void frame_show(void (*paint)(void)) {
 	}
 	mkdir("/tmp/dens", 0755), mkdir("/tmp/dens/card", 0755);
 	char path[128];
-	snprintf(path, sizeof path, "/tmp/dens/card/sim-%03d.png", frames++);
+	// numbered from this run's start time, so a run after a reset doesn't write over the last's
+	static long run;
+	if (run == 0) run = (long)(time(NULL) % 100000);
+	snprintf(path, sizeof path, "/tmp/dens/card/sim-%05ld-%03d.png", run, frames++);
 	png(path);
 	png("/tmp/dens/card/sim.png");
 	printf("frame: %s\n", path);
@@ -139,7 +144,16 @@ void frame_again(void) {
 
 void den_random(uint8_t *out, size_t n) { arc4random_buf(out, n); }
 
+size_t den_free(void) { return 1 << 20; }
+
 void den_mark(const char *what) {
+	// SIM_TRACE_LOAD (with libtrace): what the history's load holds, by who allocated it
+	if (getenv("SIM_TRACE_LOAD")) {
+		void (*on)(int) = (void (*)(int))dlsym(RTLD_DEFAULT, "trace_on");
+		void (*dump)(const char *, int) = (void (*)(const char *, int))dlsym(RTLD_DEFAULT, "trace_dump");
+		if (on && strcmp(what, "log loaded") == 0) on(1);
+		if (on && dump && strcmp(what, "history loaded") == 0) on(0), dump("by 6 callers", 6);
+	}
 	malloc_statistics_t m;
 	malloc_zone_statistics(NULL, &m);
 	size_t most, heap = den_heap(&most);
@@ -324,11 +338,27 @@ int main(int argc, char **argv) {
 			char *nl;
 			while ((nl = memchr(line, '\n', at)) != NULL) {
 				*nl = 0;
-				if (strcmp(line, "tab") == 0) den_trust_last();
+				if (strcmp(line, "tab") == 0) den_pair_answer(1);
+				else if (strcmp(line, "esc") == 0) den_pair_answer(0);
 				else if (strcmp(line, "print") == 0) den_print();
 				else if (strcmp(line, "quit") == 0) return 0;
 				else if (strcmp(line, "snapshot") == 0) den_snapshot();
 				else if (strcmp(line, "mark") == 0) den_mark("now");
+				else if (strncmp(line, "measure ", 8) == 0) {
+					// a thing started, what it holds after, by who allocated it (SIM_TRACE: libtrace)
+					void (*on)(int) = (void (*)(int))dlsym(RTLD_DEFAULT, "trace_on");
+					void (*dump)(const char *, int) = (void (*)(const char *, int))dlsym(RTLD_DEFAULT, "trace_dump");
+					static int k;
+					char at[32];
+					snprintf(at, sizeof at, "m-%d", ++k);
+					den_mark("before");
+					if (on) on(1);
+					int ok = den_start(line + 8, at);
+					for (int i = 0; i < 5; i++) host_settle(), den_tick(now_ms());
+					if (on) on(0);
+					den_mark(ok ? "a thing started" : "a thing refused");
+					if (dump) dump("by caller", 1), dump("by 6 callers", 6);
+				}
 				else {
 					for (char *c = line; *c; c++) {
 						char key[2] = {*c, 0};

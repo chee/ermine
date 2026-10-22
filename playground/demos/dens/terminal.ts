@@ -14,8 +14,8 @@ import { level, type Path, place, PlacesError, unplace } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
 import { members } from "@ermine/places/lib"
 import { upsert } from "@ermine/places/upsert"
-import { DEN, NAME, RUNNER } from "@ermine/dens"
-import { type Host, KINDS, OUT } from "./host.ts"
+import { RUNNER } from "@ermine/software"
+import { type Host, KINDS, NAME, OUT } from "./host.ts"
 import { brief } from "./files.ts"
 import { siteHtml } from "./code.ts"
 import { sound } from "./sound.ts"
@@ -70,7 +70,7 @@ const HELP = [
 ]
 
 export function createTerminal(host: Host, root: HTMLElement) {
-	const { places, hosted, table, den } = host
+	const { places, hosted, table, software } = host
 	const out = root.querySelector<HTMLElement>(".term-out")!
 	const form = root.querySelector<HTMLFormElement>(".term-line")!
 	const field = root.querySelector<HTMLInputElement>(".term-line input")!
@@ -137,10 +137,12 @@ export function createTerminal(host: Host, root: HTMLElement) {
 		const r = attributes(id)?.[RUNNER]
 		return isMap(r) && Array.isArray(r.at) ? String(r.at.at(-1)) : undefined
 	}
-	// the den a mirrored thing runs on: its den's node (start writes it), by name
+	// the den a mirrored thing runs on, by name: its runner is offered under that den's node
+	// (<node>/runners/<kind>)
 	const runsOn = (id: string) => {
-		const d = attributes(id)?.[DEN]
-		const n = isMap(d) && typeof d.id === "string" ? attributes(d.id)?.[NAME] : undefined
+		const r = attributes(id)?.[RUNNER]
+		const d = isMap(r) && typeof r.id === "string" ? r.id.split("/runners/")[0] : undefined
+		const n = d === undefined ? undefined : attributes(d)?.[NAME]
 		return typeof n === "string" ? n : "another den"
 	}
 
@@ -320,14 +322,10 @@ export function createTerminal(host: Host, root: HTMLElement) {
 
 	function stopAt(cmd: string, path: string[], f: Found): boolean {
 		if (!f.id) return false
-		const p = den.find(f.id)
+		const p = host.find(f.id)
 		if (p) {
-			const r = write(() => den.stop(p, "removed"))
-			if (r) {
-				no(`${cmd}: ${show(path)} said no: ${
-					r.answer.answer === "no" ? r.answer.reason : "it hasn't decided yet"
-				}`)
-			} else ok(`stopped ${show(path)}`)
+			write(() => software.stop(p, "removed"))
+			ok(`stopped ${show(path)}`)
 			return true
 		}
 		const t = thingOf(f.id)
@@ -375,9 +373,9 @@ export function createTerminal(host: Host, root: HTMLElement) {
 		if (!(KINDS as readonly string[]).includes(kind)) {
 			return no(`start: there's no "${kind}" to start here. you can start: ${KINDS.join(", ")}`)
 		}
-		const at = name ? resolve(name) : ["work", `${kind}-${hex4()}`]
+		const at = name ? resolve(name) : ["home", `${kind}-${hex4()}`]
 		if (!at.length) return no("start: give it a name: start counter mine")
-		const r = write(() => den.start(`/system/den/runners/${kind}`, `/things/${kind}`, at))
+		const r = write(() => software.run(`/system/den/runners/${kind}`, `/things/${kind}`, at))
 		if (!("refused" in r)) return ok(`started ${a(kind)} at ${show(at)}`)
 		switch (r.refused) {
 			case "taken":
@@ -388,14 +386,6 @@ export function createTerminal(host: Host, root: HTMLElement) {
 				return no(`start: /things/${kind} isn't there any more`)
 			case "wrong-form":
 				return no(`start: /things/${kind} isn't the kind of thing the ${kind} runner runs`)
-			case "stopped":
-				return no("start: this den is switched off")
-			case "no-permission":
-				return no(
-					`start: not allowed: ${
-						r.answer.answer === "no" ? r.answer.reason : "not decided yet"
-					}`,
-				)
 		}
 	}
 

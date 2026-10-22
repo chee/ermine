@@ -79,9 +79,10 @@ typedef struct {
 	op_value scratch;
 	// the first answer that was not SC_OK to the reads told
 	sc_track_status status;
-	// what writes asked to be kept, by node, and in a list
+	// what writes asked to be kept, by node, and in a list; the ones let go of while a telling is
+	// on, till it ends (a fact being told may point into them)
 	pm holds;
-	hold *held;
+	hold *held, *dropped;
 	// the watches, in the order made; the ones stopped while being told, till the telling ends
 	pl_watch *watches, *watches_end, *dead;
 	// pl_watch_all's, in the order made
@@ -212,6 +213,11 @@ static void unhold(pl *l, hold *h) {
 	if (h->prev != NULL) h->prev->next = h->next;
 	else l->s->held = h->next;
 	if (h->next != NULL) h->next->prev = h->prev;
+	if (l->s->telling > 0) {
+		h->next = l->s->dropped;
+		l->s->dropped = h;
+		return;
+	}
 	h->release(h->block);
 	free(h);
 }
@@ -578,22 +584,31 @@ void pl_event(void *ctx, tb_key part, tb_key id) {
 	op_patch patch = {0};
 	if (entry != NULL && entry->value != NULL) {
 		patch.has_value = 1;
-		patch.value = entry->value;
+		patch.value = op_ref(entry->value);
 	}
-	pl_fact fact = {part, id, &patch, 1, entry != NULL ? &entry->change : NULL, entry};
+	// the value and change as they are now: a watch that writes the entry changes them
+	ch_header change = entry != NULL ? entry->change : (ch_header){0};
+	pl_fact fact = {part, id, &patch, 1, entry != NULL ? &change : NULL, entry};
+	l->s->telling++;
 	tell_alls(l, &fact, 1);
 	tell_watches(l, &fact, 1);
+	l->s->telling--;
+	if (l->s->telling == 0) free_dead(l);
+	op_free((op_value *)patch.value);
 }
 
 // what a write landed: a fact for each entry with a latest op, at every key it is under (tb_who).
-// The caller's, pl_facts_free; the patches and change are the entries'
+// The caller's, pl_facts_free; the patches are the entries', the change a copy of each entry's
+// (a watch that writes an entry changes its change)
 typedef struct {
 	size_t n;
 	pl_fact *items;
+	ch_header *changes;
 } pl_facts;
 
 static void pl_facts_free(pl_facts *facts) {
 	free(facts->items);
+	free(facts->changes);
 	*facts = (pl_facts){0};
 }
 
@@ -609,12 +624,15 @@ static pl_facts pl_each_entry_change(pl *l, const pl_changed *changed) {
 			if (out.n == capacity) {
 				capacity = capacity ? capacity * 2 : 4;
 				out.items = realloc(out.items, capacity * sizeof *out.items);
-				if (out.items == NULL) abort();
+				out.changes = realloc(out.changes, capacity * sizeof *out.changes);
+				if (out.items == NULL || out.changes == NULL) abort();
 			}
+			out.changes[out.n] = node->change;
 			out.items[out.n++] = (pl_fact){where[k].part, where[k].id, node->change.patches,
-				node->change.patches_length, &node->change, node};
+				node->change.patches_length, NULL, node};
 		}
 	}
+	for (size_t i = 0; i < out.n; i++) out.items[i].change = &out.changes[i];
 	return out;
 }
 
@@ -629,8 +647,12 @@ void pl_commit(pl *l, const pl_changed *changed) {
 	}
 	say(l, &out);
 	free(out.v);
+	// one telling over both: what a watch's write lets go of waits till every watch is told
+	l->s->telling++;
 	tell_alls(l, facts.items, facts.n);
 	tell_watches(l, facts.items, facts.n);
+	l->s->telling--;
+	if (l->s->telling == 0) free_dead(l);
 	pl_facts_free(&facts);
 }
 
@@ -802,11 +824,18 @@ static void free_watch(pl_watch *w) {
 	free(w);
 }
 
+// the watches stopped and the holds let go of while a telling was on
 static void free_dead(pl *l) {
 	while (l->s->dead != NULL) {
 		pl_watch *w = l->s->dead;
 		l->s->dead = w->next;
 		free_watch(w);
+	}
+	while (l->s->dropped != NULL) {
+		hold *h = l->s->dropped;
+		l->s->dropped = h->next;
+		h->release(h->block);
+		free(h);
 	}
 }
 
