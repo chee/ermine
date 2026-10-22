@@ -9,7 +9,7 @@
 
 #include "host.h"
 
-#include "../../../playground/build/c/host.h"
+#include "../../../experiments/software/c/functions.h"
 
 /** the type of a library for this machine, as the loaders say it */
 #define DYLIB_TYPE "com.apple.mach-o-dylib"

@@ -7,7 +7,7 @@
 
 #include "host.h"
 
-#include "../../../playground/build/c/host.h"
+#include "../../../experiments/software/c/functions.h"
 
 /** the exec programs' irq line: a program's frames or lines came, or it exited */
 #define EXEC_IRQ 60

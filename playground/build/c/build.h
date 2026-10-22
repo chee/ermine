@@ -8,7 +8,7 @@
 //   bd_free(b);                                        // after sc_free, tb_free and pl_free
 //
 // refused uncacheable: a read pl_spot can't name, or a value canonical CBOR can't encode.
-// a compiler's function: the registry's hf_compiler (host.h). a BuildError of the reference is a
+// a compiler's function: the registry's hf_compiler (experiments/software functions.h). a BuildError of the reference is a
 // message starting with its code here (a failed step's status has only the text).
 // a step's computer is made with [[PL_NODE, its status node (step:<uuid>)]]: its writes' metadata
 // stops there. bd_step and bd_compile are tracked reads. in a run, BD_STOP: a read ended the run; return now.
@@ -21,7 +21,7 @@
 
 #include "../../../filesystem/places/c/places.h"
 #include "../../../filesystem/places/c/status.h"
-#include "host.h"
+#include "../../../experiments/software/c/functions.h"
 
 #define BD_COMPILER "ermine.programs.compiler"
 #define BD_TRACE "ermine.programs.trace"

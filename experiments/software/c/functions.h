@@ -1,4 +1,4 @@
-// Host functions, in C: what typescript/build.ts' compilers and @ermine/programs' runners are, live
+// functions, in C: what typescript/build.ts' compilers and @ermine/programs' runners are, live
 // functions a host holds and never saves. C has no live values, so a node holding one holds a
 // stand-in (value.h): a stand-in whose kind is { "function": name }, the name looked up in the
 // host's registry (hf) for the function pointer and its context. A node's value that is no such
@@ -26,8 +26,8 @@
 // start.c) calls handle.stop, so a runner setting it sets both.
 //
 // MEMORY. The registry copies the names; it is let go of with hf_free (no node's value refers to it).
-#ifndef PROGRAMS_HOST_H
-#define PROGRAMS_HOST_H
+#ifndef SOFTWARE_FUNCTIONS_H
+#define SOFTWARE_FUNCTIONS_H
 
 #include <stdbool.h>
 #include <stddef.h>

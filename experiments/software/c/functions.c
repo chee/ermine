@@ -1,9 +1,9 @@
-// Host functions (host.h), in C.
-#include "host.h"
+// functions (functions.h), in C.
+#include "functions.h"
 
 #include <string.h>
 
-#include "mem.h"
+#include "../../../playground/build/c/mem.h"
 
 typedef struct {
 	char *name;

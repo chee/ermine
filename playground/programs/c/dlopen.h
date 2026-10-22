@@ -3,7 +3,7 @@
 // (its header says them once), which conformance/native holds both to.
 //
 //   dlr *d = dlr_new(&(dlr_setup){.dir = NULL});   // temp files in $TMPDIR (none: /tmp)
-//   hf_add_loader(functions, "dlopen", dlr_run, dlr_load, d);   // a runner with a load (host.h)
+//   hf_add_loader(functions, "dlopen", dlr_run, dlr_load, d);   // a runner with a load (functions.h)
 //   ...                                            // its node's value: hf_value("dlopen")
 //   dlr_free(d);                                   // after the last process holding a library stops
 //
@@ -15,7 +15,7 @@
 #ifndef PROGRAMS_DLOPEN_H
 #define PROGRAMS_DLOPEN_H
 
-#include "../../build/c/host.h"
+#include "../../../experiments/software/c/functions.h"
 
 typedef struct dlr dlr;
 
