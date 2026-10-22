@@ -3,7 +3,7 @@
 
 #include <string.h>
 
-#include "../../build/c/host.h"
+#include "../../../experiments/software/c/functions.h"
 #include "../../build/c/mem.h"
 
 // copies and frees -----------------------------------------------------------------------------
