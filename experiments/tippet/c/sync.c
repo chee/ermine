@@ -330,8 +330,12 @@ static void have(tp_sync *s, tp_link *l, tp_in in, uint64_t k) {
 
 static void run(tp_sync *s, tp_link *l, const uint8_t *device, const uint8_t *sig, tp_span pack) {
 	tp_steps steps;
+	tp_step first;
+	// last: the n of the run's last step, which they hold
+	uint64_t last = 0;
 	long r = tp_unpack(&s->mem, pack, s->max, &steps);
 	if (!r) {
+		if (!tp_step_decode(steps.bytes, steps.at[1], &first)) last = first.n + steps.count - 1;
 		tp_span *spans = tp_alloc(&s->mem, steps.count * sizeof *spans);
 		if (!spans) {
 			tp_steps_free(&s->mem, &steps);
@@ -354,8 +358,7 @@ static void run(tp_sync *s, tp_link *l, const uint8_t *device, const uint8_t *si
 	// and it is sent no more
 	if (r >= 0) {
 		long p = peer_of(s, l, device);
-		uint64_t count = tp_log_count(s->log, device);
-		if (p >= 0 && l->peers[p].theirs < count) l->peers[p].theirs = count;
+		if (p >= 0 && l->peers[p].theirs < last) l->peers[p].theirs = last;
 	} else if (r == TP_GAP) {
 		say_have(s, l);
 	} else if (r <= TP_OWN && !l->many) {
@@ -402,14 +405,15 @@ int tp_sync_live(tp_sync *s, const uint8_t *data, size_t length) {
 	uint8_t id[8];
 	s->random(s->ctx, id, 8);
 	seen(s, id);
-	tp_buf *b = &s->out;
-	b->len = 0, b->bad = 0;
-	tp_put_head(b, 4, 3), tp_put_text(b, "live");
-	tp_put_head(b, 2, 8), tp_put(b, id, 8), tp_put_head(b, 2, length), tp_put(b, data, length);
-	if (b->bad) return b->bad;
+	// its own buffer, not out: a send may be answered here, into out, before every link has it
+	tp_buf b = {NULL, 0, 0, s->max, &s->mem, 0};
+	tp_put_head(&b, 4, 3), tp_put_text(&b, "live");
+	tp_put_head(&b, 2, 8), tp_put(&b, id, 8), tp_put_head(&b, 2, length), tp_put(&b, data, length);
+	int why = tp_buf_why(&b);
 	s->depth++;
-	for (tp_link *l = s->links; l; l = l->next) send(s, l, b->p, b->len);
+	for (tp_link *l = s->links; l && !why; l = l->next) send(s, l, b.p, b.len);
 	s->depth--;
+	tp_buf_free(&b);
 	sweep(s);
-	return 0;
+	return why;
 }

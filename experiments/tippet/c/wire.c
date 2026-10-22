@@ -178,6 +178,15 @@ void tp_hex(char *out, const uint8_t *b, size_t n) {
 	for (size_t i = 0; i < n; i++) out[2 * i] = digits[b[i] >> 4], out[2 * i + 1] = digits[b[i] & 15];
 }
 
+int tp_unhex(uint8_t *out, const uint8_t *s, size_t n) {
+	for (size_t i = 0; i < 2 * n; i++) {
+		int c = s[i], d = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
+		if (d < 0) return -1;
+		out[i / 2] = (uint8_t)(i % 2 ? out[i / 2] << 4 | d : d);
+	}
+	return 0;
+}
+
 uint32_t tp_get32(const uint8_t *p) {
 	return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3];
 }
