@@ -5,7 +5,7 @@
 // what arrives to the mailroom (admit, pend, settle, member, hint, hear, stopped) and the mailroom hands the
 // stack what goes out (Stack). the mailroom never reads a network, a storage or a lock. adapted from
 // transport.ts, which composes it with the subduction stack
-import { type Commit, CommitError, decode, name as nameOf } from "@ermine/encoding/commit"
+import { type Commit, CommitError, decode, name as nameOf } from "@ermine/formats/commit"
 import { type Added, createHistory, type History, type Judged, type Kept } from "./history.ts"
 import { hex, unhex } from "./hex.ts"
 import { matches, type Merges, type Tables } from "./replay.ts"

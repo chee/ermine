@@ -11,7 +11,7 @@
 // and its ancestors (lists.ts); the walk starts there too. a held commit (history.ts) the same: the
 // lists show it beside what they show, so its tables are what its parents' are, composed. patches
 // apply as sync takes them (lists.ts applies: a key patch makes its missing parents)
-import { type Commit, decode } from "@ermine/encoding/commit"
+import { type Commit, decode } from "@ermine/formats/commit"
 import type { ChangeHeader, Entry } from "@ermine/node/entry"
 import type { History, Kept } from "./history.ts"
 import { hex } from "./hex.ts"

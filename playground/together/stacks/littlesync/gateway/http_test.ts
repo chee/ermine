@@ -1,7 +1,7 @@
 // HTTP sessions (http.ts): two TS devices (link.ts) each over POSTs to /littlesync/<session>, and a
 // lab-pig-style sync.ts device as the gateway's Subduction peer (an in-memory pipe), in one process
 import { assert, assertEquals } from "@std/assert"
-import { name as nameOf } from "@ermine/encoding/commit"
+import { name as nameOf } from "@ermine/formats/commit"
 import { pipe } from "../../../typescript/harnesses.ts"
 import { createSigner } from "../../../typescript/seal.ts"
 import { hex } from "../../../typescript/hex.ts"

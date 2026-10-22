@@ -1,7 +1,7 @@
 // the TS littlesync peer (link.ts, wire.ts) on its own, and against the C side: littlesync-pigs
 // --pipe, whose seals TS opens and whose screen shows what TS sealed
 import { assert, assertEquals } from "@std/assert"
-import { encode as encodeCommit, name as nameOf } from "@ermine/encoding/commit"
+import { encode as encodeCommit, name as nameOf } from "@ermine/formats/commit"
 import { createSigner, seal, unseal } from "../../../typescript/seal.ts"
 import { hex, unhex } from "../../../typescript/hex.ts"
 import { Link } from "./link.ts"

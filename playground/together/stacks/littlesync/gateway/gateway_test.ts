@@ -2,7 +2,7 @@
 // devices (link.ts) as others, and a lab-pig-style sync.ts device as the gateway's Subduction peer
 // (an in-memory pipe in place of the server)
 import { assert, assertEquals } from "@std/assert"
-import { encode as encodeCommit, name as nameOf } from "@ermine/encoding/commit"
+import { encode as encodeCommit, name as nameOf } from "@ermine/formats/commit"
 import { pipe } from "../../../typescript/harnesses.ts"
 import {
 	createSigner,

@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertThrows } from "@std/assert"
 import * as cbor from "@ermine/encoding/cbor"
-import { type Commit, compare, encode, joinName, name } from "@ermine/encoding/commit"
+import { type Commit, compare, encode, joinName, name } from "@ermine/formats/commit"
 import { pack, PackError, unpack, type Unpacked } from "./packer.ts"
 import { createSigner, seal, stored } from "./seal.ts"
 

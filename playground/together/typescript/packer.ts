@@ -44,7 +44,7 @@
 // order: the first five, then per commit: parents, patches, base, commit, vouched, size. commits
 // are given one at a time, so a reader can check each signature and stop.
 import * as cbor from "@ermine/encoding/cbor"
-import { type Commit, decode, encode, name as nameOf, type Patch } from "@ermine/encoding/commit"
+import { type Commit, decode, encode, name as nameOf, type Patch } from "@ermine/formats/commit"
 import { hex } from "./hex.ts"
 import { headerLength, stored } from "./seal.ts"
 

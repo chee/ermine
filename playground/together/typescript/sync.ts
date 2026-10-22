@@ -46,7 +46,7 @@ import {
 	decode,
 	encode,
 	name as nameOf,
-} from "@ermine/encoding/commit"
+} from "@ermine/formats/commit"
 import type { Id, Key, Table, Tables as Rows } from "@ermine/table"
 import type * as sd from "npm:@automerge/subduction@0.23.0"
 import { hex, unhex } from "./hex.ts"

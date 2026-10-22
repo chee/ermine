@@ -47,7 +47,7 @@ import {
 import { hex, unhex } from "../../../typescript/hex.ts"
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import * as cbor from "@ermine/encoding/cbor"
-import { CommitError, decode, name as nameOf, splitKey } from "@ermine/encoding/commit"
+import { CommitError, decode, name as nameOf, splitKey } from "@ermine/formats/commit"
 import { build, depth, type Fragment } from "./fragment.ts"
 import type { Kept } from "../../../typescript/history.ts"
 import {

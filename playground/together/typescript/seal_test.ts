@@ -1,5 +1,5 @@
 import { assertEquals, assertNotEquals, assertRejects } from "@std/assert"
-import { type Commit, encode, joinKey, name as nameOf } from "@ermine/encoding/commit"
+import { type Commit, encode, joinKey, name as nameOf } from "@ermine/formats/commit"
 import * as cbor from "@ermine/encoding/cbor"
 import {
 	createSigner,

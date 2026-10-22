@@ -36,11 +36,11 @@
 // commit in an answer: its label, else hex name. tables: { [table]: { value, change } }, JSON form.
 // refused: { error: code } (PackError, CommitError)
 import * as cbor from "@ermine/encoding/cbor"
-import { CommitError } from "@ermine/encoding/commit"
-import { PackError } from "@ermine/encoding/pack"
+import { CommitError } from "@ermine/formats/commit"
+import { PackError } from "@ermine/formats/pack"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
-import { hex, refusal, unhex } from "../../../ermine/encoding/typescript/commit_harness.ts"
+import { hex, refusal, unhex } from "../../encoding/typescript/commit_harness.ts"
 import { createCommits, tablesJson } from "./harnesses.ts"
 import { type Added, createHistory, since } from "./history.ts"
 import { applies, createLists, createMarks, type Item } from "./lists.ts"
