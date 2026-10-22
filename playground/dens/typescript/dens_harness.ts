@@ -108,7 +108,7 @@ import {
 	type Start,
 } from "./dens.ts"
 import { away, connect, type Link, type Options, type Remote } from "./away.ts"
-import { answer as answerOf, ask as writeAsk, type World } from "./asks.ts"
+import { answer as answerOf, type World, write as writeAsk } from "./asks.ts"
 
 type Json = unknown
 

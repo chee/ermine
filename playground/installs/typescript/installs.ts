@@ -3,7 +3,7 @@
 // machine may have many. it has one root. what it is called: its key, as an ermine id
 // ("ermine:ed01" + the key's hex), never chosen.
 //
-//   const install = await openInstall(store, ed25519)   // ed25519: a secret's public key, below
+//   const install = await openInstall(store, publicKeyOf)   // @ermine/ed25519's, or the host's
 //   install.id      // "ermine:ed01…", the same every time this store is opened
 //   install.root    // "ermine:0010…", made the first time (or the root given then)
 //
@@ -23,7 +23,7 @@ export type Store = {
 	write: (name: string, bytes: Uint8Array) => void | Promise<void>
 }
 
-// how a secret's Ed25519 public key (32 bytes) is worked out: ed25519 below, or the host's own
+// how a secret's Ed25519 public key (32 bytes) is worked out: @ermine/ed25519's, or the host's own
 export type PublicKeyOf = (secret: Uint8Array) => Uint8Array | Promise<Uint8Array>
 
 export type Install = {
@@ -38,8 +38,9 @@ export const SECRET = "secret"
 export const ROOT = "root"
 
 // root: the root an empty store's install has (none: a fresh id); a store with a root keeps its
-// own. everything is read and checked before anything is written, so an error leaves the store as
-// it was
+// own. everything is read and checked before anything is written, so a refusal leaves the store as
+// it was (a write the store fails part way leaves what it wrote: a secret with no root is opened
+// again with a fresh root)
 export async function openInstall(
 	store: Store,
 	publicKeyOf: PublicKeyOf,
@@ -65,42 +66,4 @@ export async function openInstall(
 	if (made.secret) await store.write(SECRET, secret)
 	if (made.root) await store.write(ROOT, root)
 	return { id: text(Uint8Array.of(0xed, 0x01, ...key))!, key, secret, root: text(root)! }
-}
-
-// a PublicKeyOf through WebCrypto (every browser, Deno and Node): the secret as an Ed25519 seed, wrapped as
-// PKCS#8 (RFC 8410) to import, its public half read from the JWK
-const PKCS8 = Uint8Array.of(
-	0x30,
-	0x2e,
-	0x02,
-	0x01,
-	0x00,
-	0x30,
-	0x05,
-	0x06,
-	0x03,
-	0x2b,
-	0x65,
-	0x70,
-	0x04,
-	0x22,
-	0x04,
-	0x20,
-)
-
-export async function ed25519(secret: Uint8Array): Promise<Uint8Array> {
-	const der = new Uint8Array([...PKCS8, ...secret])
-	const k = await crypto.subtle.importKey(
-		"pkcs8",
-		der,
-		{ name: "Ed25519" },
-		true,
-		["sign"],
-	)
-	const x = (await crypto.subtle.exportKey("jwk", k)).x!
-	const b64 = x.replace(/-/g, "+").replace(/_/g, "/").padEnd(
-		Math.ceil(x.length / 4) * 4,
-		"=",
-	)
-	return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
 }

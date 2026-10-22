@@ -8,7 +8,8 @@
 //   - what is stored is never made again: a secret not 32 bytes, or a root that is no ermine id, is
 //     an error (a new secret would be a new install, and everything the old one signed another's)
 //   - everything is read and checked, and the public key worked out and checked, before anything is
-//     written, so an error leaves the store as it was
+//     written, so a refusal leaves the store as it was (a write the store fails part way leaves what
+//     it wrote: a secret with no root is opened again with a fresh root)
 //   - two opens of an empty store at once each make a secret: the host opens one at a time
 //
 // The store and the key are the host's, handed in; the library knows no Ed25519. Randomness is the
@@ -60,6 +61,7 @@ typedef enum {
 	INST_BAD_GIVEN,
 	INST_BAD_SECRET,
 	INST_BAD_ROOT,
+	INST_NO_KEY,
 	INST_BAD_KEY,
 	INST_FAILED
 } inst_code;

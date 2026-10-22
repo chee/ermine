@@ -1,5 +1,5 @@
 // installs (installs.ts) on the line protocol: one JSON request per line in, one answer per line
-// out, in order. one store in memory for the run; the key is Ed25519 (installs' ed25519). bytes
+// out, in order. one store in memory for the run; the key is Ed25519 (@ermine/ed25519's). bytes
 // are lowercase hex
 //
 // { op: "put", name, hex }      -> {}   the store's name set to those bytes, as a host left it
@@ -9,7 +9,8 @@
 // { op: "stored" }              -> { sizes }   each stored name's length in bytes
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { kind } from "@ermine/ids"
-import { ed25519, openInstall, type Store } from "./installs.ts"
+import { publicKeyOf } from "@ermine/ed25519"
+import { openInstall, type Store } from "./installs.ts"
 
 function unhex(s: unknown): Uint8Array {
 	if (typeof s !== "string" || !/^([0-9a-f]{2})*$/.test(s)) {
@@ -38,7 +39,7 @@ export async function answer(r: Request): Promise<Record<string, unknown>> {
 			wrote = []
 			const install = await openInstall(
 				store,
-				ed25519,
+				publicKeyOf,
 				r.root === undefined ? {} : { root: r.root },
 			)
 			first ??= { id: install.id, root: install.root }

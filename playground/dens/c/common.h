@@ -203,6 +203,9 @@ char **dn_names_and(const char *const *names, size_t n, const char *a, const cha
 op_value *dn_names_value(const char *const *names, size_t n);
 // a refusal's strings, until the den's next call
 void dn_forget(dn *d);
+// dn_ask_at without the dn_forget: for a pulse answering a stored ask, which is no call of the host's
+// (the refusals it holds last till its next call)
+op_value *dn_ask_inner(dn *d, const op_value *who, const op_value *ask, const ch_site *site);
 const char *const *dn_keep_names(dn *d, char **names, size_t n);
 const char *dn_keep_text(dn *d, const char *s);
 const char *dn_keep_owned(dn *d, char *s);

@@ -16,10 +16,11 @@ import { list } from "@ermine/places/lib"
 import { createChangeHeader } from "@ermine/places/header"
 import { processes } from "@ermine/processes"
 import { createScopeNodes } from "@ermine/processes/scopes"
-import { ed25519, openInstall } from "@ermine/installs"
+import * as ed25519 from "@ermine/ed25519"
+import { openInstall } from "@ermine/installs"
 import { beat, online, startSession } from "@ermine/sessions"
 import { createDen, hashOf, TAKES } from "./dens.ts"
-import { answer, ask, type World } from "./asks.ts"
+import { answer, type World, write } from "./asks.ts"
 
 const JS = "com.netscape.javascript-source"
 const PARTS = ["attributes", "children", "value", "online"] as Key[]
@@ -76,8 +77,8 @@ const store = () => {
 
 Deno.test("a den from primitives: a room names an install's den, its session beats online, an ask carried there is answered and carried back; offline, the den is still there", async () => {
 	const mac = world("mac"), card = world("card")
-	const install = await openInstall(store(), ed25519)
-	const session = startSession(install)
+	const install = await openInstall(store(), ed25519.publicKeyOf)
+	const session = await startSession(install, ed25519)
 
 	// card: its den, the install's node, offering a runner that records what it runs
 	const ran: unknown[] = []
@@ -122,7 +123,7 @@ Deno.test("a den from primitives: a room names an install's den, its session bea
 	])
 
 	// mac asks card's den to start the clock; carried there, answered, carried back
-	const n = ask(mac.w, den.node, {
+	const n = write(mac.w, den.node, {
 		op: "start",
 		who: { install: "mac's" },
 		runner: ["system", "den", "runners", "javascript"],
@@ -144,7 +145,7 @@ Deno.test("a den from primitives: a room names an install's den, its session bea
 	assertEquals(mac.places.peep(() => [...list(mac.places, ["home", "card", "runners"])]), [
 		"javascript",
 	])
-	const later = ask(mac.w, den.node, {
+	const later = write(mac.w, den.node, {
 		op: "stop",
 		who: { install: "mac's" },
 		process: String((got as { id?: unknown }).id),

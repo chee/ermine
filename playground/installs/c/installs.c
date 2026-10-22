@@ -8,6 +8,7 @@ const char *inst_error(int code) {
 	case INST_BAD_GIVEN: return "the root given is not an ermine id";
 	case INST_BAD_SECRET: return "the stored secret is not 32 bytes";
 	case INST_BAD_ROOT: return "the stored root is not an ermine id";
+	case INST_NO_KEY: return "the public key could not be worked out";
 	case INST_BAD_KEY: return "an Ed25519 public key is 32 bytes";
 	case INST_FAILED: return "the store could not write";
 	default: return "";
@@ -48,7 +49,7 @@ int inst_open(const inst_store *store, const inst_public_key *public_key, const 
 		}
 	}
 	uint8_t raw[32], id[34] = {0xed, 0x01};
-	if (!public_key->public_key_of(public_key->ctx, secret, raw)) return INST_BAD_KEY;
+	if (!public_key->public_key_of(public_key->ctx, secret, raw)) return INST_NO_KEY;
 	if (!has_secret && !store->write(store->ctx, INST_SECRET, secret, 32)) return INST_FAILED;
 	if (!has_root && !store->write(store->ctx, INST_ROOT, stored, root_length)) return INST_FAILED;
 	memcpy(id + 2, raw, 32);

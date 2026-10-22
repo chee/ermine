@@ -1,0 +1,72 @@
+{
+	"title": "what a carrier may bring that is no beat: an until that is NaN or infinite, an until that is no number, no install, a value that is no map: none online, and a sweep takes every one out, whatever now",
+	"steps": [
+		{
+			"op": "put",
+			"node": "D",
+			"key": "nan",
+			"value": {
+				"install": "I1",
+				"until": "NaN"
+			},
+			"expect": {}
+		},
+		{
+			"op": "put",
+			"node": "D",
+			"key": "inf",
+			"value": {
+				"install": "I1",
+				"until": "Infinity"
+			},
+			"expect": {}
+		},
+		{
+			"op": "put",
+			"node": "D",
+			"key": "text",
+			"value": {
+				"install": "I1",
+				"until": "soon"
+			},
+			"expect": {}
+		},
+		{
+			"op": "put",
+			"node": "D",
+			"key": "who",
+			"value": {
+				"until": 5000
+			},
+			"expect": {}
+		},
+		{
+			"op": "put",
+			"node": "D",
+			"key": "five",
+			"value": 5,
+			"expect": {}
+		},
+		{
+			"op": "online",
+			"node": "D",
+			"now": 0,
+			"expect": {
+				"here": []
+			}
+		},
+		{
+			"op": "sweep",
+			"node": "D",
+			"now": 0,
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"node": "D",
+			"expect": {
+				"value": {}
+			}
+		}
+	]
+}

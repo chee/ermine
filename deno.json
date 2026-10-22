@@ -7,6 +7,7 @@
 		"./core/table",
 		"./core/unread",
 		"./core/blake3",
+		"./core/ed25519",
 		"./core/scheduler",
 		"./filesystem/protect",
 		"./ermine/encoding",
@@ -28,7 +29,8 @@
 		"./playground/libraries/pack-indexeddb",
 		"./playground/pullynode",
 		"./playground/installs",
-		"./playground/sessions"
+		"./playground/sessions",
+		"./experiments/software"
 	],
 	"tasks": {
 		"test": "deno test --allow-run --allow-read --allow-env && deno task conformance",

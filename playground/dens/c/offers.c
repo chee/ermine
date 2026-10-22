@@ -135,19 +135,28 @@ static void unlist(dn *d, const char *id) {
 	for (size_t k = 0; k < 3; k++) {
 		char *fid = dn_joined(d->self->id, dn_kinds[k]);
 		const nd_entry *there = tb_get(d->s.table, tb_string("children"), tb_string(fid));
-		char *name = NULL;
+		// every name pointing at it, copied first: each removal changes the map they are in
+		char **names = NULL;
+		size_t n = 0;
 		for (size_t i = 0; dn_is_map(there != NULL ? there->value : NULL) && i < there->value->count; i++) {
 			const op_value *x = there->value->items[i];
-			if (dn_is_str(x) && strcmp(x->str, id) == 0) { free(name); name = dn_xdup(there->value->keys[i]); }
+			if (dn_is_str(x) && strcmp(x->str, id) == 0) {
+				names = realloc(names, (n + 1) * sizeof *names);
+				if (names == NULL) abort();
+				names[n++] = dn_xdup(there->value->keys[i]);
+			}
 		}
-		if (name != NULL) {
-			dn_write_in(d, d->self->scope, (writing){.what = W_UNPLACE, .id = fid, .name = name});
+		for (size_t i = 0; i < n; i++) {
+			dn_write_in(d, d->self->scope, (writing){.what = W_UNPLACE, .id = fid, .name = names[i]});
+			free(names[i]);
+		}
+		if (n > 0) {
 			if (tb_get(d->s.table, tb_string("attributes"), tb_string(id)) != NULL) {
 				tb_del(d->s.table, tb_string("attributes"), tb_string(id));
 			}
 			dn_changed(d);
 		}
-		free(name);
+		free(names);
 		free(fid);
 	}
 }

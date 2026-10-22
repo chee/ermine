@@ -195,7 +195,7 @@ installs = playground/installs/c/installs-harness
 installs_suite = installs
 LIBS += installs
 # sessions (playground/sessions): the "online" part, a session's entry at a node; places' harness's world, without its harnesses
-sessions_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) ermine/ids/c/ids.c $(blake3_src) playground/sessions/c/sessions.c playground/sessions/c/sessions_harness.c
+sessions_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) ermine/ids/c/ids.c $(blake3_src) playground/sessions/c/sessions.c playground/sessions/c/sessions_harness.c core/ed25519/c/ed25519.c core/ed25519/c/sha2.c
 sessions = playground/sessions/c/sessions-harness
 sessions_suite = sessions
 LIBS += sessions
