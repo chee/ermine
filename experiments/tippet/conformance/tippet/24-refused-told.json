@@ -1,0 +1,179 @@
+{
+	"title": "a run refused for good is told back, and that device is sent no more on that link",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "device",
+			"name": "twin",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "twin",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 10
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "twin",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 11
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "link",
+			"a": "twin",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "deliver",
+			"from": "b",
+			"to": "twin",
+			"expect": {
+				"got": [
+					[
+						"have",
+						{
+							"a": 1
+						}
+					]
+				]
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "twin",
+			"to": "b",
+			"expect": {
+				"got": [
+					[
+						"have",
+						{
+							"a": 2
+						}
+					],
+					[
+						"run",
+						"a",
+						2,
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "b",
+			"to": "twin",
+			"expect": {
+				"got": [
+					[
+						"refused",
+						"a",
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "write",
+			"device": "twin",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 12
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "queued",
+			"from": "twin",
+			"to": "b",
+			"expect": {
+				"queued": []
+			}
+		},
+		{
+			"op": "count",
+			"device": "b",
+			"of": "a",
+			"expect": {
+				"count": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "b",
+			"node": "pig",
+			"expect": {
+				"value": 1
+			}
+		}
+	]
+}

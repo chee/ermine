@@ -2,7 +2,7 @@
 // code point and lone surrogates, typed arrays of each kind with NaN and -0 elements, maps of
 // tricky keys, deep and big ones) and bytes near an encoding. checked:
 // - round trip: decode(encode(v)) is v (maps by content), encode again the same bytes; a copy with
-//   its keys in another order the same bytes and hash
+//   its keys in another order the same bytes
 // - numbers: whole ones the integer (a bignum past 64 bits), against a model on bigints; the rest
 //   the shortest float, against a model on Math.f16round and Math.fround
 // - refused: each non-canonical rewrite of an encoding (a longer head, an indefinite length, a
@@ -11,12 +11,10 @@
 //   value, a NaN with a payload, part of a typed array element, bytes after, a prefix); bytes cut,
 //   grown and flipped are refused or are an encoding exactly
 // - across: the harness (HARNESS, the C one; default the TypeScript, against itself) answers
-//   each request as cbor_harness.ts does: same bytes and hash, same refusals, same values back
+//   each request as cbor_harness.ts does: same bytes, same refusals, same values back
 // a few dozen seeds (fuzz runs small; SEEDS for more). today's rules: see fuzz_values.ts
 import { assert, assertEquals, assertThrows } from "@std/assert"
-import { blake3 } from "@ermine/blake3"
 import { CborError, decode, DEPTH, encode, Stand, type Value } from "./cbor.ts"
-import { hash } from "./hash.ts"
 import { answer } from "./cbor_harness.ts"
 import { line, toJson } from "../../../conformance/typescript/form.ts"
 import {
@@ -88,7 +86,7 @@ function model(x: number | bigint): string {
 
 // TypeScript alone --------------------------------------------------------------------------
 
-Deno.test(`cbor fuzz: ${SEEDS} seeds, round trip, one encoding, one hash`, () => {
+Deno.test(`cbor fuzz: ${SEEDS} seeds, round trip, one encoding`, () => {
 	for (let seed = 1; seed <= SEEDS; seed++) {
 		const { pick } = rand(seed)
 		for (let n = 0; n < 20; n++) {
@@ -100,7 +98,6 @@ Deno.test(`cbor fuzz: ${SEEDS} seeds, round trip, one encoding, one hash`, () =>
 			assertEquals(hex(encode(back)), hex(b), `${at}: encoded again`)
 			const w = shuffled(pick, v)
 			assertEquals(hex(encode(w)), hex(b), `${at}: keys in another order`)
-			assertEquals(hex(hash(w)), hex(blake3(b)), `${at}: hash`)
 		}
 	}
 })

@@ -1,0 +1,162 @@
+{
+	"title": "a step's lamport at most 2^20 past the highest held",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "take",
+			"device": "b",
+			"run": {
+				"device": "a",
+				"steps": [
+					{
+						"n": 1,
+						"node": "pig",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": 1
+							}
+						],
+						"lamport": 1048577,
+						"when": 0
+					}
+				]
+			},
+			"expect": {
+				"refused": "lamport"
+			}
+		},
+		{
+			"op": "take",
+			"device": "b",
+			"run": {
+				"device": "a",
+				"steps": [
+					{
+						"n": 1,
+						"node": "pig",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": 1
+							}
+						],
+						"lamport": 1048576,
+						"when": 0
+					}
+				]
+			},
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "take",
+			"device": "b",
+			"run": {
+				"device": "a",
+				"steps": [
+					{
+						"n": 1,
+						"node": "pig",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": 1
+							}
+						],
+						"lamport": 1048576,
+						"when": 0
+					},
+					{
+						"n": 2,
+						"node": "pig",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": 2
+							}
+						],
+						"lamport": 2097153,
+						"when": 0
+					}
+				]
+			},
+			"expect": {
+				"refused": "lamport"
+			}
+		},
+		{
+			"op": "take",
+			"device": "b",
+			"run": {
+				"device": "a",
+				"steps": [
+					{
+						"n": 1,
+						"node": "pig",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": 1
+							}
+						],
+						"lamport": 1048576,
+						"when": 0
+					},
+					{
+						"n": 2,
+						"node": "pig",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": 2
+							}
+						],
+						"lamport": 2097152,
+						"when": 0
+					}
+				]
+			},
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 5
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 2097153
+			}
+		}
+	]
+}

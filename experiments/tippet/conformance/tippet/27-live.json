@@ -1,0 +1,259 @@
+{
+	"title": "live things: sent to every link, never kept; a relay passes them on; one seen lately is dropped",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "relay",
+			"name": "g",
+			"expect": {}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "device",
+			"name": "c",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"expect": {
+				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
+		},
+		{
+			"op": "link",
+			"a": "a",
+			"b": "g",
+			"expect": {}
+		},
+		{
+			"op": "link",
+			"a": "b",
+			"b": "g",
+			"expect": {}
+		},
+		{
+			"op": "link",
+			"a": "c",
+			"b": "g",
+			"expect": {}
+		},
+		{
+			"op": "deliver",
+			"from": "a",
+			"to": "g",
+			"expect": {
+				"got": [
+					[
+						"have",
+						{}
+					]
+				]
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "b",
+			"to": "g",
+			"expect": {
+				"got": [
+					[
+						"have",
+						{}
+					]
+				]
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "c",
+			"to": "g",
+			"expect": {
+				"got": [
+					[
+						"have",
+						{}
+					]
+				]
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "g",
+			"to": "a",
+			"expect": {
+				"got": [
+					[
+						"have",
+						{}
+					]
+				]
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "g",
+			"to": "b",
+			"expect": {
+				"got": [
+					[
+						"have",
+						{}
+					]
+				]
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "g",
+			"to": "c",
+			"expect": {
+				"got": [
+					[
+						"have",
+						{}
+					]
+				]
+			}
+		},
+		{
+			"op": "live",
+			"device": "a",
+			"data": "70696773",
+			"expect": {}
+		},
+		{
+			"op": "deliver",
+			"from": "a",
+			"to": "g",
+			"expect": {
+				"got": [
+					[
+						"live",
+						"0000000000000001",
+						"70696773"
+					]
+				]
+			}
+		},
+		{
+			"op": "queued",
+			"from": "g",
+			"to": "a",
+			"expect": {
+				"queued": []
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "g",
+			"to": "b",
+			"expect": {
+				"got": [
+					[
+						"live",
+						"0000000000000001",
+						"70696773"
+					]
+				]
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "g",
+			"to": "c",
+			"expect": {
+				"got": [
+					[
+						"live",
+						"0000000000000001",
+						"70696773"
+					]
+				]
+			}
+		},
+		{
+			"op": "heard",
+			"device": "g",
+			"expect": {
+				"heard": [
+					"70696773"
+				]
+			}
+		},
+		{
+			"op": "heard",
+			"device": "b",
+			"expect": {
+				"heard": [
+					"70696773"
+				]
+			}
+		},
+		{
+			"op": "inject",
+			"from": "b",
+			"to": "g",
+			"message": [
+				"live",
+				"0000000000000001",
+				"70696773"
+			],
+			"expect": {}
+		},
+		{
+			"op": "queued",
+			"from": "g",
+			"to": "c",
+			"expect": {
+				"queued": []
+			}
+		},
+		{
+			"op": "inject",
+			"from": "g",
+			"to": "b",
+			"message": [
+				"live",
+				"00000000000000ff",
+				"6f6e6365"
+			],
+			"expect": {}
+		},
+		{
+			"op": "queued",
+			"from": "b",
+			"to": "g",
+			"expect": {
+				"queued": []
+			}
+		},
+		{
+			"op": "heard",
+			"device": "b",
+			"expect": {
+				"heard": [
+					"70696773",
+					"6f6e6365"
+				]
+			}
+		},
+		{
+			"op": "have",
+			"device": "g",
+			"expect": {
+				"have": {}
+			}
+		}
+	]
+}

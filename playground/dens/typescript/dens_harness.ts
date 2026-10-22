@@ -9,8 +9,8 @@
 // given the start's facts: record (its run { dev, process, code, args, keys }, keys those of the
 // api it makes from them, { den: den.id, places, process }; its stop { dev, process, reason },
 // reason null: none; its load { dev, by, code }, by the process loading, its live form's dispose
-// { dev, by, code }), boom (throws Error("boom"), its load too), teller (ermine/api's run over the
-// device's context, a program whose teardown records { dev, process, why }; no load). the policy
+// { dev, by, code }), boom (throws Error("boom"), its load too), teller (@ermine/programs/api's run
+// over the device's apis, a program whose teardown records { dev, process, why }; no load). the policy
 // "grants": protect's grants({ part: "value", id: "rules" }), every ask recorded { op, who: { actor,
 // reader?, device? }, part?, id, path? }. a den's pulses asked for (setup.schedule) are held, run
 // by later
@@ -96,7 +96,7 @@ import { setPresence } from "@ermine/together/presence"
 import { type Channel, createPair } from "@ermine/together/presence/channel"
 import { fromJson, toJson } from "../../../conformance/typescript/form.ts"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
-import { type API, createProcessContext, type ProcessContext } from "@ermine/api"
+import { type API, createProcessAPIs, type ProcessAPIs } from "@ermine/programs/api"
 import {
 	createDen,
 	type Den,
@@ -124,10 +124,10 @@ type Device = {
 	den?: Den
 	link?: Link
 	asks: Json[]
-	// the pulses its den asked for, not yet run; its loads by name; teller's context
+	// the pulses its den asked for, not yet run; its loads by name; teller's apis
 	asked: (() => void)[]
 	loads: Map<string, Loaded>
-	context?: ProcessContext
+	apis?: ProcessAPIs
 }
 
 const clock = { t: 0 }
@@ -310,10 +310,10 @@ const boom: Runnable = Object.assign(() => {
 	},
 })
 
-// ermine/api's run, the program one whose teardown is recorded
+// @ermine/programs/api's run, the program one whose teardown is recorded
 function teller(d: Device): Runner["start"] {
 	return (_code, start) => {
-		d.context ??= createProcessContext({
+		d.apis ??= createProcessAPIs({
 			scheduler: d.s,
 			table: d.table,
 			commit: (changed) => d.places.commit(changed),
@@ -322,7 +322,7 @@ function teller(d: Device): Runner["start"] {
 		})
 		const program = (api: API) =>
 			void api.teardown((why) => void told.push({ dev: d.name, process: start.process.id, why }))
-		return d.context.run.start(program, start)
+		return d.apis.run.start(program, start)
 	}
 }
 

@@ -9,8 +9,8 @@
 //     keys   -> K   null; a typer each: <typer> -> T {from, keys}, key i numbered from + i
 //
 // seeing one:
-//   /dev/link/views/<name>       a program's, ephemeral: {channel}: W's id (ermine:// or its 64 hex
-//                                digits), or a name
+//   /dev/link/views/<name>       a program's, ephemeral: {channel}: W's id ("ermine:" and its hex
+//                                digits, or the bare digits), or a name
 //   /dev/link/windows/<name>     {channel, state: dialing|mounted|gone, owner?, why?}; screen -> S
 //   /dev/link/keys               on/keys (view's name, [key...]), keys as erminex.js gives them:
 //                                written to this device's T, made at the first key (as term's)
@@ -20,10 +20,9 @@
 //   /dev/link/shares/<name>      {window, program, state}; inside: window, name, the pty session
 //   /dev/link/driver/on/unshare  (name): ends now, its program hung up
 //
-// a name's node N: {name, window, by}; id "ermine://" + the first 16 bytes of
-// BLAKE3("ermine window:" name) as hex + 16 zero bytes (a fresh id's shape), so a share and a view
-// meet. a view follows N. an older N from elsewhere is written over once; two sharers at once
-// leave two versions, a view shows the first. reads are followed (cardFollow) so they come from the
+// a name's node N: {name, window, by}; id the name's (newos' own recipe, CHANNEL: a hashed id,
+// "ermine:1e10..."), so a share and a view meet. a view follows N. an older N from elsewhere is
+// written over once; two sharers at once leave two versions, a view shows the first. reads are followed (cardFollow) so they come from the
 // server when the card lacks them.
 
 #include "drivers.h"
@@ -34,7 +33,7 @@
 // an address that is a node, by its id (api.h's AP_ID)
 #define ID(id) (const char *const[]){ AP_ID, (id) }, 2
 
-#include "../../../ermine/encoding/c/blake3/blake3.h"
+#include "../../../ermine/ids/c/ids.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -94,30 +93,36 @@ static char *dup(const char *t) {
 	return t ? copyString(t) : NULL;
 }
 
-/** a channel as given: a window's id; 64 hex digits, with ermine:// or not; else a name, the id made of it. True: an id given */
+// a channel name's id: every newos that names it makes the same one, so a share and a view meet
+#define CHANNEL "party.chee.ermine.newos.channel"
+
+/** a channel as given: a window's id, an ermine id's text of any kind ("ermine:" and its hex digits, or the bare digits, any case); else a name, its id (CHANNEL). True: an id given */
 static bool idOf(const char *given, char out[ID_LENGTH + 1]) {
 	while (*given == ' ' || *given == '\t' || *given == '\n') given++;
 	size_t n = strlen(given);
 	while (n && (given[n - 1] == ' ' || given[n - 1] == '\t' || given[n - 1] == '\n')) n--;
-	const char *hex = n == ID_LENGTH && !strncmp(given, "ermine://", 9) ? given + 9 : n == 64 ? given : NULL;
-	bool ok = hex != NULL;
-	for (int i = 0; ok && i < 64; i++) ok = strchr("0123456789abcdefABCDEF", hex[i]) != NULL;
-	if (ok) {
-		memcpy(out, "ermine://", 9);
-		for (int i = 0; i < 64; i++) out[9 + i] = (char)(hex[i] >= 'A' && hex[i] <= 'F' ? hex[i] - 'A' + 'a' : hex[i]);
-		out[ID_LENGTH] = 0;
-		return true;
+	const char *hex = n >= 7 && !strncmp(given, "ermine:", 7) ? given + 7 : given;
+	size_t digits = (size_t)(given + n - hex);
+	uint8_t id[ID_MAX];
+	char text[ID_TEXT];
+	if (digits == 2 * ID_SHORT || digits == 2 * ID_MAX) {
+		memcpy(text, "ermine:", 7);
+		for (size_t i = 0; i < digits; i++) text[7 + i] = (char)(hex[i] >= 'A' && hex[i] <= 'F' ? hex[i] - 'A' + 'a' : hex[i]);
+		text[7 + digits] = 0;
+		if (id_parse(text, 7 + digits, id) != 0) {
+			memcpy(out, text, 7 + digits + 1);
+			return true;
+		}
 	}
-	blake3_hasher h;
-	blake3_hasher_init(&h);
-	blake3_hasher_update(&h, "ermine window:", 14);
-	blake3_hasher_update(&h, given, n);
-	uint8_t hash[32];
-	blake3_hasher_finalize(&h, hash, 32);
-	memcpy(out, "ermine://", 9);
-	for (int i = 0; i < 16; i++) snprintf(out + 9 + 2 * i, 3, "%02x", hash[i]);
-	memset(out + 41, '0', 32);
-	out[ID_LENGTH] = 0;
+	id_part name = {(const uint8_t *)given, n};
+	bool named = id_utf8((const uint8_t *)given, n) && id_hashed(CHANNEL, &name, 1, id);
+	size_t length = named ? id_text(id, ID_SHORT, text) : 0;
+	if (length == 0) {
+		// a name not well-formed UTF-8: no id of its own, so none a share could meet
+		*out = 0;
+		return false;
+	}
+	memcpy(out, text, length + 1);
 	return false;
 }
 

@@ -9,7 +9,7 @@
 #include "../../../../conformance/c/harness.h"
 #include "presence.h"
 #include "../../../../ermine/encoding/c/cbor.h"
-#include "../../../../ermine/encoding/c/pack.h"
+#include "../../../../playground/encoding/c/pack.h"
 
 #define PUSH(v, n, cap, x) \
 	do { \

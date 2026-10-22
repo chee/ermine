@@ -6,7 +6,7 @@
 			"name": "a",
 			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
 			"merges": [
-				"serial"
+				"serial/1"
 			],
 			"expect": {
 				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
@@ -17,7 +17,7 @@
 			"name": "b",
 			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
 			"merges": [
-				"serial"
+				"serial/1"
 			],
 			"expect": {
 				"key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
@@ -43,6 +43,7 @@
 			"b": "b",
 			"expect": {}
 		},
+		{ "op": "share", "host": "a", "id": "x", "expect": {} },
 		{
 			"op": "write",
 			"host": "a",
@@ -134,7 +135,7 @@
 			"op": "use",
 			"host": "a",
 			"expect": {},
-			"merge": "serial"
+			"merge": "serial/1"
 		},
 		{
 			"op": "read",
@@ -276,9 +277,7 @@
 			"op": "read",
 			"host": "a",
 			"id": "x",
-			"expect": {
-				"value": "21>a not!e"
-			}
+			"expect": { "value": "12>a not!e" }
 		},
 		{
 			"op": "conflicts",
@@ -297,9 +296,7 @@
 			"op": "read",
 			"host": "a",
 			"id": "x",
-			"expect": {
-				"value": "2>a not!e"
-			}
+			"expect": { "value": "1>a not!e" }
 		},
 		{
 			"op": "conflicts",
@@ -308,15 +305,13 @@
 			"expect": {
 				"conflicts": [
 					{
-						"head": "ta2",
+						"head": "tb2",
 						"lamport": 5,
-						"actor": "a",
-						"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"actor": "b",
+						"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
 						"time": 1760000000,
 						"external": [{ "file": "scenario", "line": 1 }],
-						"tables": {
-							"value": "1>a not!e"
-						}
+						"tables": { "value": "2>a not!e" }
 					}
 				]
 			}
@@ -330,15 +325,13 @@
 			"op": "use",
 			"host": "a",
 			"expect": {},
-			"merge": "serial"
+			"merge": "serial/1"
 		},
 		{
 			"op": "read",
 			"host": "a",
 			"id": "x",
-			"expect": {
-				"value": "21>a not!e"
-			}
+			"expect": { "value": "12>a not!e" }
 		},
 		{
 			"op": "restart",
@@ -354,9 +347,7 @@
 			"op": "read",
 			"host": "a",
 			"id": "x",
-			"expect": {
-				"value": "21>a not!e"
-			}
+			"expect": { "value": "12>a not!e" }
 		},
 		{
 			"op": "conflicts",

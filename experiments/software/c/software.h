@@ -62,7 +62,7 @@
 // writes: with the caller's scope open, or the owner's (an offer's), or the process's; a folder's
 // name out of a place's children with setup.scope open.
 //
-// live values: hf stand-ins (extensions/build/c/host.h). a runner here: hf_find gives an entry with
+// live values: hf stand-ins (playground/build/c/host.h). a runner here: hf_find gives an entry with
 // a runner (and, to load, a load). it is handed the code and a sw_starting (borrowed for the call;
 // its strings the process's, until sw_free) as its api: what the program gets is the runner's to
 // make; its limits are its own, nothing here counts. hf_run.error: the status. a stop's reason:
@@ -77,7 +77,7 @@
 #define SOFTWARE_H
 
 #include "../../../filesystem/places/c/places.h"
-#include "../../../extensions/build/c/host.h"
+#include "../../../playground/build/c/host.h"
 #include "../../../ermine/processes/c/scopes.h"
 #include "../../../ermine/sites/c/sites.h"
 

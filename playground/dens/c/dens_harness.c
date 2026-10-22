@@ -23,7 +23,7 @@
 #include "../../../ermine/api/c/api.h"
 #include "../../../ermine/boxes/c/boxes.h"
 #include "../../../ermine/encoding/c/cbor.h"
-#include "../../../ermine/encoding/c/pack.h"
+#include "../../../playground/encoding/c/pack.h"
 #include "../../../ermine/processes/c/processes.h"
 #include "away.h"
 #include "dens.h"

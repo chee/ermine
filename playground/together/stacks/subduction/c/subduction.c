@@ -435,9 +435,9 @@ static mr_code code_of(sl_code code) {
 // REFUSED. PASSED (opening's): it fails the door, not the commit named
 typedef enum { OPEN_GOOD, OPEN_WAIT, OPEN_REFUSED, OPEN_PASSED } open_t;
 
-// what the door makes of a save (subduction.ts's Door): stored; passed over (not stored, no error);
-// refused (the save fails)
-typedef enum { DOOR_STORE, DOOR_PASS, DOOR_REFUSE } door_t;
+// what the door makes of a save (subduction.ts's Door): stored; or not stored (passed over or
+// refused), the save as if it were
+typedef enum { DOOR_STORE, DOOR_PASS } door_t;
 
 // a seal's commit's name, the stored id the id in it gives it (own), and the one the id given gives it
 // (mine, when id is not NULL); false: not a seal's shape, or an id that is not one
@@ -558,11 +558,10 @@ static void take_commit(mr_doc *d, const uint8_t head[32], const uint8_t (*paren
 }
 
 // what Subduction may store of a loose commit in a followed document (its admission, subduction.ts's
-// allows): STORE, one that passes the door and opens to a good seal, or waits on the lock; PASS, one
-// that fails the door (stored, it would stand under the name of a commit it isn't), or any not good
-// under a name held already (that one is here); REFUSE: the commit named, not good. What is passed
-// over or refused is noted, as taking it in notes it (a name held: not noted). A refusal fails the
-// save, which drops the peer's connection
+// allows): STORE, one that passes the door and opens to a good seal, or waits on the lock; PASS, any
+// other: one that fails the door (stored, it would stand under the name of a commit it isn't), or is
+// not good (the lock refusing it too). What is passed over or refused is noted with its code, as
+// taking it in notes it (a name held: not noted, that one is here)
 static door_t allows(mr_doc *d, const uint8_t head[32], const uint8_t *blob, size_t length) {
 	const sb_stack *t = SBD(d)->t;
 	if (t->own != NULL && memcmp(t->own_stored, head, 32) == 0 && t->own_length == length &&
@@ -574,8 +573,7 @@ static door_t allows(mr_doc *d, const uint8_t head[32], const uint8_t *blob, siz
 	size_t sealed_length;
 	open_t got = opening(d, head, blob, length, !here, &sealed, &sealed_length, &u);
 	if (got == OPEN_GOOD) sl_free(&u), free(sealed);
-	if (got == OPEN_GOOD || got == OPEN_WAIT) return DOOR_STORE;
-	return here || got == OPEN_PASSED ? DOOR_PASS : DOOR_REFUSE;
+	return got == OPEN_GOOD || got == OPEN_WAIT ? DOOR_STORE : DOOR_PASS;
 }
 
 // a fragment's envelope opened: {id, run: its members as a pack (packer.h), snapshot?: packed
@@ -818,6 +816,21 @@ static mr_code contents(const mr_doc *d, const uint8_t *open, size_t length, con
 static bool lookup(void *context, const uint8_t id[32], const uint8_t (**parents)[32], size_t *count);
 static const fragment *known(void *context, const uint8_t head[32]);
 
+// a head's fragment built again here: the document's lookup and known, the head's own fragment left out
+typedef struct {
+	mr_doc *d;
+	const uint8_t *head;
+} besides_t;
+
+static bool lookup_besides(void *context, const uint8_t id[32], const uint8_t (**parents)[32], size_t *count) {
+	return lookup(((besides_t *)context)->d, id, parents, count);
+}
+
+static const fragment *known_besides(void *context, const uint8_t head[32]) {
+	const besides_t *b = context;
+	return memcmp(head, b->head, 32) == 0 ? NULL : known(b->d, head);
+}
+
 // the stored ids of the members reached from the head, along each one's parents (by name) among the
 // members, into reached (empty)
 static void reach(const uint8_t head[32], const contents_t *c, im_map *reached) {
@@ -857,8 +870,9 @@ static bool same_ids(const uint8_t (*a)[32], size_t an, const uint8_t (*b)[32], 
 // checked: its head one of its members, and its members and boundary closed (the door's, in contents);
 // its head of depth 1 or more, every other member of less depth, and reached from the head along parents
 // among the members; its boundary of the head's depth or more and none of its members; its checkpoints
-// (their first 12 bytes; NULL: none said) each member but the head with a depth. A head here whose walk
-// can be made here: its members and boundary that walk's.
+// (their first 12 bytes; NULL: none said) each member but the head with a depth. A head here whose
+// fragment Subduction's build makes here (its walk, less the members of every fragment below): its
+// members and boundary that fragment's.
 // 0, or the code it is refused with (got left empty)
 static mr_code vetted(mr_doc *d, const uint8_t head[32], const uint8_t (*boundary)[32], size_t count,
 	const uint8_t *checkpoints, size_t checks, const uint8_t *open, size_t length, contents_t *got) {
@@ -890,18 +904,24 @@ static mr_code vetted(mr_doc *d, const uint8_t head[32], const uint8_t (*boundar
 		im_free(&want), im_free(&given);
 	}
 	if (code == 0 && im_has(&d->seen, head)) {
-		fragment w = {0};
-		if (fragment_walk(head, lookup, known, d, &w) == FRAGMENT_OK) {
+		besides_t b = {d, head};
+		fragment *made;
+		size_t n;
+		fragment_build((const uint8_t(*)[32])head, 1, lookup_besides, known_besides, &b, &made, &n);
+		const fragment *w = NULL;
+		for (size_t i = 0; i < n && w == NULL; i++)
+			if (memcmp(made[i].head, head, 32) == 0) w = &made[i];
+		if (w != NULL) {
 			uint8_t(*mine)[32] = malloc(got->count * 32 + 1);
 			if (mine == NULL) abort();
 			for (size_t i = 0; i < got->count; i++) memcpy(mine[i], got->members[i].it.stored, 32);
-			bool same = same_ids((const uint8_t(*)[32])w.members.ids, w.members.count, (const uint8_t(*)[32])mine,
+			bool same = same_ids((const uint8_t(*)[32])w->members.ids, w->members.count, (const uint8_t(*)[32])mine,
 					    got->count) &&
-				same_ids((const uint8_t(*)[32])w.boundary.ids, w.boundary.count, boundary, count);
+				same_ids((const uint8_t(*)[32])w->boundary.ids, w->boundary.count, boundary, count);
 			free(mine);
 			if (!same) code = MR_BOUNDARY;
 		}
-		fragment_free(&w);
+		fragment_release(made, n);
 	}
 	im_free(&ids), im_free(&reached);
 	if (code != 0) contents_free(got);
@@ -922,10 +942,10 @@ static void broke_with(mr_doc *d, const uint8_t head[32], mr_code code) {
 }
 
 // what Subduction may store of a fragment in a followed document (its admission), as allows: one that
-// opens and is checked, or waits on the lock, stored; one that fails the door (an envelope for another
-// id, a member's stored id not its own, the head none of them, a member's parent left out or a boundary
-// not the members' own) passed over; one not good otherwise refused. One whose head is not here yet is
-// noted refused whole
+// opens and is checked, or waits on the lock, stored; any other not: one that fails the door (an
+// envelope for another id, a member's stored id not its own, the head none of them, a member's parent
+// left out or a boundary not the members' own) passed over, one not good otherwise (the lock refusing
+// it too) refused. One whose head is not here yet is noted refused whole with its code
 static door_t allows_fragment(mr_doc *d, const uint8_t head[32], const uint8_t (*boundary)[32], size_t count,
 	const uint8_t *checkpoints, size_t checks, const uint8_t *blob, size_t length) {
 	lk_opened open;
@@ -934,14 +954,14 @@ static door_t allows_fragment(mr_doc *d, const uint8_t head[32], const uint8_t (
 	if (opened == OPEN_WAIT) return DOOR_STORE;
 	if (opened == OPEN_REFUSED) {
 		if (!im_has(&d->seen, head)) broke(d, head, MR_LOCK, why);
-		return DOOR_REFUSE;
+		return DOOR_PASS;
 	}
 	contents_t got;
 	mr_code code = vetted(d, head, boundary, count, checkpoints, checks, open.bytes, open.length, &got);
 	lk_opened_free(&open);
 	if (code == 0) return contents_free(&got), DOOR_STORE;
 	if (!im_has(&d->seen, head)) broke_with(d, head, code);
-	return code == ENVELOPE || code == MR_ID || code == MR_STORED_ID || code == CLOSURE ? DOOR_PASS : DOOR_REFUSE;
+	return DOOR_PASS;
 }
 
 // a fragment taken in: its members as its blob has them (sorted, a seal there twice kept twice, as
@@ -1969,16 +1989,16 @@ static door_t stranger(sb_stack *t, int kind, const uint8_t tree[32], const uint
 
 // what Subduction may store (its admission: allows, allows_fragment; a tree not named yet, stranger), the
 // record decoded and its blob, put just before it, read. One passed over or refused has its blob let go
-// of too, and the document's movers told
+// of too, and the document's movers told. A record that does not decode, or whose blob is not there:
+// not stored, not noted (Subduction's own bytes, nothing a peer is told of)
 static door_t admits(sb_stack *t, int kind, const uint8_t tree[32], const uint8_t *bytes, size_t length) {
 	record_t r;
-	if (!record(t, kind, bytes, length, &r)) return DOOR_REFUSE;
+	if (!record(t, kind, bytes, length, &r)) return DOOR_PASS;
 	mr_doc *d = document(t, tree);
 	const uint8_t *blob = r.blob != NULL ? r.blob : none;
 	door_t door;
 	// a tree whose id is not named yet, past the door: stored, the tree listed; taken in, each checked
-	// whole, when its document is followed. Nothing is refused (it would leave Subduction never sending
-	// it again on that connection)
+	// whole, when its document is followed
 	if (d == NULL) {
 		door = stranger(t, kind, tree, r.rec.id, (const uint8_t(*)[32])r.rec.parents, r.rec.parentCount, blob, r.length);
 		if (door == DOOR_STORE) im_set(&t->trees, tree, SET);
@@ -2003,10 +2023,9 @@ static door_t admits(sb_stack *t, int kind, const uint8_t tree[32], const uint8_
 static int saved(void *self, int kind, const uint8_t *tree, const uint8_t id[32], const uint8_t *bytes, size_t length) {
 	sb_stack *t = self;
 	if (kind == ERM_STORE_COMMIT || kind == ERM_STORE_FRAGMENT) {
-		door_t door = admits(t, kind, tree, bytes, length);
-		// passed over: not stored, and the save is as if it were
-		if (door == DOOR_PASS) return 0;
-		if (door == DOOR_REFUSE) return -1;
+		// passed over or refused: not stored, and the save is as if it were. Never a failure: Subduction
+		// would drop the peer's connection (a relay, every follower's)
+		if (admits(t, kind, tree, bytes, length) == DOOR_PASS) return 0;
 	}
 	int r = t->inner.put(t->inner.self, kind, tree, id, bytes, length);
 	if (r != 0 || (kind != ERM_STORE_COMMIT && kind != ERM_STORE_FRAGMENT)) return r;

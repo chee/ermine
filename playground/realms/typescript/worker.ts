@@ -1,6 +1,6 @@
 // a realm's side: real ermine in a worker. its own scheduler, a table that is a partial replica of
 // the page's (replica.ts), places over it asked as the page's are, and ermine/api's
-// createProcessContext: the program is given the real api, unchanged. what it reaches and does not
+// createProcessAPIs: the program is given the real api, unchanged. what it reaches and does not
 // have is pending: asked of the page, and it runs again as it lands. what it writes (its edits, its
 // memos' and effects' results, their status and run records) is an ordinary write here, each change
 // sent to the page as it lands (places' watchAll), where it is written again as the process
@@ -12,7 +12,7 @@
 // it has (or wrote). a change landing from the page is written here with the page's header, told as
 // any write is, and never sent back
 //
-// setup: run once, with the api, as start.ts runs a host runner (the process context's run: its return
+// setup: run once, with the api, as start.ts runs a host runner (createProcessAPIs' run: its return
 // the process's value). a setup that reads what is not loaded yet throws PENDING: what it made is
 // torn down and it runs again once something lands (open: its writes so far stay)
 //
@@ -25,7 +25,7 @@
 import createEntry, { type ChangeHeader } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import apply, { type Patch } from "@ermine/op/apply"
-import { createProcessContext } from "@ermine/api"
+import { createProcessAPIs } from "@ermine/programs/api"
 import { children, type Contributor, createPlaces, type Fact, type Places } from "@ermine/places"
 import { NODE } from "@ermine/places/header"
 import { PROCESS, processes } from "@ermine/processes"
@@ -60,7 +60,7 @@ type World = {
 	root: Scope
 	// the process's: [["process", at], [NODE, its id]] (the node's entries are the page's)
 	scope?: Scope
-	context: ReturnType<typeof createProcessContext>
+	apis: ReturnType<typeof createProcessAPIs>
 }
 
 // the realm's side of the wire on port; gives back the stop (the port let go)
@@ -281,7 +281,7 @@ export function serve(port: Port): () => void {
 		s.onTrackingEnd((k) => places.release(k))
 		const root = s.createRootScope({ realm: "worker" })
 		const commit = (changed: Parameters<Places["commit"]>[0]) => places.commit(changed)
-		const context = createProcessContext({
+		const apis = createProcessAPIs({
 			scheduler: s,
 			table: r.table,
 			commit,
@@ -300,7 +300,7 @@ export function serve(port: Port): () => void {
 				})
 			},
 		})
-		w = { s, r, places, root, context }
+		w = { s, r, places, root, apis }
 		base = m.seq
 		r.point([m.root])
 		for (const load of m.loads) land(load, m.enc === true)
@@ -338,7 +338,7 @@ export function serve(port: Port): () => void {
 	}
 
 	async function setup(m: Start) {
-		const { s, context, places } = w!
+		const { s, apis, places } = w!
 		let mod: unknown
 		try {
 			const url = typeof m.code === "string"
@@ -354,7 +354,7 @@ export function serve(port: Port): () => void {
 		for (;;) {
 			const scope = s.createScope({ process: [...at], [NODE]: id }, w!.root)
 			w!.scope = scope
-			const api = context.createAPI({
+			const api = apis.createProcessAPI({
 				box: { root: m.root, places },
 				places,
 				process: { id, at, args, cwd },
@@ -363,7 +363,7 @@ export function serve(port: Port): () => void {
 				scope,
 			})
 			try {
-				s.runWithScope(scope, () => context.run(mod, api))
+				s.runWithScope(scope, () => apis.run(mod, api))
 				break
 			} catch (error) {
 				if (error !== PENDING) {

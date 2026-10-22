@@ -9,7 +9,7 @@
 // /programs/paint; "New C Program" makes one from /lib/c/hello.c (info ermine.program.provisions
 // {needs: ["c"]}) and opens it in the editor's C mode.
 // double-click: a folder goes in, a picture shows, an app ({kind: "app", run, icon}) runs, the rest
-// opens in /programs/edit. "Connect…" mounts an id (ermine://… or bare hex). Trash: /home/Trash; in
+// opens in /programs/edit. "Connect…" mounts an id (ermine:… or bare hex). Trash: /home/Trash; in
 // the Trash, lets go.
 // drag: moves where dropped; onto a folder, the Trash, another My Computer window or the desk
 // (/home/desktop), into it, through its on/drop (icons.dropped). option-cmd links instead; cmd-l
@@ -912,7 +912,7 @@ export default (given) => {
 	}
 
 	// shell.js's mount, by hand: a document this machine does not have is followed from the server
-	const DOC = /^ermine:\/\/([0-9a-f]{64})$/
+	const DOC = /^ermine:((?:0010|1e10)[0-9a-f]{32}|ed01[0-9a-f]{64})$/
 	const mount = (api, at, n, id) => {
 		const time = api.insert(idAt(api, ["/", ...at]), n, id)
 		const there = api.children(["/", ...at], n).find((i) => i.id === id)
@@ -925,10 +925,10 @@ export default (given) => {
 		}
 		return `${n}: connected, t=${time}`
 	}
-	// an id as a person pastes it: ermine://…, the bare hex, or any id as it is
+	// an id as a person pastes it: ermine:…, the bare hex (an ermine id's, of any kind), or any id as it is
 	const normal = (text) => {
 		const t = text.trim()
-		return /^[0-9a-f]{64}$/i.test(t) ? `ermine://${t.toLowerCase()}` : t
+		return /^((0010|1e10)[0-9a-f]{32}|ed01[0-9a-f]{64})$/i.test(t) ? `ermine:${t.toLowerCase()}` : t
 	}
 
 	// a dialog is data, so the view holds it: act names its answer (answers), name the entry it is about
@@ -1009,7 +1009,7 @@ export default (given) => {
 			)
 		} else if (what === "connect") {
 			ask(what, "Connect a node by its id", "Connect", [[
-				"Id (ermine://…, as share prints it)",
+				"Id (ermine:…, as share prints it)",
 				"",
 			], ["Name it", ""]])
 			s.dialog.fields.forEach((x) => (x.mark = null))

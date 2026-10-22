@@ -311,7 +311,7 @@ const programs = world.peek(() =>
 		builds: steps,
 		scopes,
 		// what he is given: his own name, path and args; the C asks for nothing more
-		createAPI: (start) => ({ process: start.process }),
+		createProcessAPI: (ctx) => ({ process: ctx.process }),
 	})
 )
 

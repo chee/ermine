@@ -11,10 +11,11 @@
 		"./core/scheduler",
 		"./filesystem/protect",
 		"./ermine/encoding",
+		"./playground/encoding",
 		"./ermine/processes",
 		"./playground/dens",
 		"./ermine/boxes",
-		"./extensions/build",
+		"./playground/build",
 		"./ermine/types",
 		"./ermine/api",
 		"./playground/realms",
@@ -22,7 +23,7 @@
 		"./ermine/sites",
 		"./ermine/ids",
 		"./filesystem/clingy",
-		"./extensions/programs",
+		"./playground/programs",
 		"./extensions/patch-nodes",
 		"./playground/demo-world",
 		"./playground/demos",
@@ -31,7 +32,8 @@
 		"./playground/installs",
 		"./playground/sessions",
 		"./playground/trust",
-		"./experiments/software"
+		"./experiments/software",
+		"./experiments/tippet"
 	],
 	"tasks": {
 		"test": "deno test --allow-run --allow-read --allow-env && deno task conformance",

@@ -32,6 +32,7 @@
 		{ "op": "follow", "host": "c", "id": "x", "expect": {} },
 		{ "op": "connect", "a": "a", "b": "b", "expect": {} },
 		{ "op": "connect", "a": "a", "b": "c", "expect": {} },
+		{ "op": "share", "host": "a", "id": "x", "expect": {} },
 		{
 			"op": "write",
 			"host": "a",

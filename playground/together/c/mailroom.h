@@ -37,9 +37,9 @@ const char *mr_layer_name(mr_layer layer);
 
 // why the mailroom or the stack refused a seal, a fragment or an ephemeral commit before a history saw it
 // (what a history refuses is the history's: hy_refused). MR_BOUNDARY: a fragment's members, boundary
-// or checkpoints not what its head's walk makes them. MR_ID: an envelope opened (a stack's: the id and
-// what it carries) naming another id than the one followed (the refusal of a second id for a tree held
-// is replaced by the envelope's id check), or a seal for another id (SL_ID)
+// or checkpoints not what Subduction's build makes them for its head. MR_ID: an envelope opened (a
+// stack's: the id and what it carries) naming another id than the one followed (the refusal of a
+// second id for a tree held is replaced by the envelope's id check), or a seal for another id (SL_ID)
 typedef enum { MR_LOCK = 1, MR_SHAPE, MR_SIGNATURE, MR_STORED_ID, MR_PARENTS, MR_BOUNDARY, MR_ID } mr_code;
 // "lock", "shape", "signature", "stored", "parents", "boundary", "id"
 const char *mr_code_name(mr_code code);

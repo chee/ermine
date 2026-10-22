@@ -1,4 +1,4 @@
-// Runs the scenarios (ermine/encoding/conformance/pack) against a pack harness. PACK_HARNESS: the
+// Runs the scenarios (playground/encoding/conformance/pack) against a pack harness. PACK_HARNESS: the
 // command for another implementation (default: the reference). The encoding is canonical, so bytes
 // are compared: each set of entries packs to the reference's bytes, which unpack as expected; each
 // node read back encodes alone to the reference's bytes, which decode back as it.
@@ -13,7 +13,7 @@ import { ask } from "./ask.ts"
 const here = new URL(".", import.meta.url).pathname
 const reference = `deno run --quiet --allow-env ${here}harness.ts`.split(" ")
 const subject = (Deno.env.get("PACK_HARNESS") ?? reference.join(" ")).split(" ")
-const dir = `${here}../../ermine/encoding/conformance/pack`
+const dir = `${here}../../playground/encoding/conformance/pack`
 
 type Node = { value?: unknown; change: Record<string, unknown> }
 type Shown = { entries: unknown[][]; nodes: Node[] }

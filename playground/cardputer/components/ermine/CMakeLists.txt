@@ -17,11 +17,11 @@ idf_component_register(
 		${R}/ermine/processes/c/processes.c ${R}/ermine/processes/c/scopes.c
 		${R}/ermine/sites/c/sites.c
 		${R}/ermine/api/c/api.c
-		${R}/ermine/encoding/c/pack.c ${R}/ermine/encoding/c/json.c ${R}/ermine/encoding/c/cbor.c
+		${R}/playground/encoding/c/pack.c ${R}/ermine/encoding/c/json.c ${R}/ermine/encoding/c/cbor.c
 		${R}/playground/together/presence/c/presence.c ${R}/playground/together/presence/c/channel.c
 		${R}/extensions/patch-nodes/c/patch.c
-		${R}/ermine/processes/c/start.c ${R}/ermine/boxes/c/boxes.c ${R}/extensions/build/c/host.c
-		${R}/ermine/encoding/c/hash.c ${R}/ermine/encoding/c/blake3/blake3.c
+		${R}/ermine/processes/c/start.c ${R}/ermine/boxes/c/boxes.c ${R}/playground/build/c/host.c
+		${R}/playground/encoding/c/hash.c ${R}/ermine/encoding/c/blake3/blake3.c
 		${R}/ermine/encoding/c/blake3/blake3_dispatch.c ${R}/ermine/encoding/c/blake3/blake3_portable.c
 		${R}/playground/dens/c/common.c ${R}/playground/dens/c/policy.c ${R}/playground/dens/c/offers.c
 		${R}/playground/dens/c/start.c ${R}/playground/dens/c/handlers.c ${R}/playground/dens/c/here.c

@@ -6,7 +6,7 @@
 //
 //   const software = createSoftware({ scheduler, table, places, scopes, scope })
 //   const js = software.offer(session, "runners", "javascript",
-//     { [TAKES]: "com.netscape.javascript-source", [API]: "ermine.api" }, context.run)
+//     { [TAKES]: "com.netscape.javascript-source", [API]: "ermine.api" }, apis.run)
 //   const p = software.run("/system/den/runners/javascript", "/apps/clock.js", "/work/clock")
 //   // a Process, or { refused: ... }
 //   const l = software.load("/work/clock/runners/letter", { id, code, type }, { by: p })

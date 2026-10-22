@@ -23,7 +23,7 @@
 //     ways fit but are farther; the misses are the ones a missing key stopped
 // what it does not do: compose (a list drawn as text drawn as view): one step only, and no renderer
 // is chosen for a node with no type
-import type { API } from "@ermine/api"
+import type { API } from "@ermine/programs/api"
 import { ATTRIBUTES as A } from "@ermine/programs"
 
 const JS = "com.netscape.javascript-source"

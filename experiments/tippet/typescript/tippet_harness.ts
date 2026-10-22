@@ -1,0 +1,435 @@
+// tippet_harness: tippet (WIRE.md) on the line protocol (conformance/typescript/harness.ts): its
+// bytes, a log, the merge (history.ts) and catch-up over links joined by hand. one process a
+// scenario: devices and links last between lines
+//
+// bytes are hex, lowercase. a value in a patch: conformance/typescript/form.ts's JSON form. a
+// device is named by its key, 64 hex; in an answer, by the first device made with that key, if any
+//
+// deterministic: keys from seeds; a write's when the request's, else 1760000000; the harness's
+// random: its k-th call (from 1) gives k, big-endian, in as many bytes as asked (a live id: 8)
+//
+// vectors
+// { op: "encode", step }               → { bytes }    step: { device, n, before, node, part,
+//                                                      patches, lamport, when, who? }, before
+//                                                      hex or null
+// { op: "decode", bytes }              → { step } | { refused: true }
+// { op: "hash", bytes }                → { hash }     blake3
+// { op: "sign", seed, bytes }          → { sig }      ed25519 over the bytes
+// { op: "pack", steps }                → { pack }     steps: hex; pack: its cbor
+// { op: "unpack", pack }               → { steps } | { refused: true }
+// { op: "message", message }           → { bytes }    message as on the wire, bytes hex, a run's
+//                                                      pack as its steps: ["run", device, sig, steps]
+// { op: "read", bytes }                → { message } | { refused: true }   as message gives one; a
+//                                                      run whose pack doesn't unpack: ["run",
+//                                                      device, "not a pack"] (a message still)
+//
+// a log
+// { op: "device", name, seed }         → { key }      a log that writes, its graph (history.ts)
+//                                                      and sync
+// { op: "relay", name }                → {}           a log with no key and no graph; its sync
+//                                                      a relay
+// { op: "write", device, node, part?, patches, when?, who? } → { n, lamport }
+//    into the graph, as a host writes: the step is what history makes of it. part: value. no
+//    entry there: patches must be one whole value, [{ path: [], value }]
+// { op: "value", device, node, part? } → { value } | {}   history.ts's merge: every step's patches
+//                                                      in order of lamport, then device
+// { op: "have", device }               → { have }     { device: n }, log.have()
+// { op: "count", device, of }          → { count }    steps held, signed or not
+// { op: "steps", device, of }          → { steps }    every step held, hex
+// { op: "run", device, of, from }      → { from, to, sig } | {}
+// { op: "take", device, run }          → { added } | { refused }   run: { device, steps, sign?,
+//                                                      sig? }; a step hex, or fields as encode's
+//                                                      (device: the run's; before: none, the hash
+//                                                      of the step before it in the list, null at
+//                                                      the first); sign: the device whose key signs
+//                                                      the last step's hash (the run's when none);
+//                                                      sig: hex, as given
+// { op: "pass", from, to, of, at }     → { added } | { refused }   to takes from's run(of, at)
+//
+// links, joined by hand: a message sent waits until delivered
+// { op: "link", a, b }                 → {}           a links, then b; each says have
+// { op: "unlink", a, b }               → {}           what waits is dropped
+// { op: "queued", from, to }           → { queued }   what waits from → to, as views
+// { op: "deliver", from, to, count? }  → { got }      what waits from → to (the first count),
+//                                                      delivered in order, as views
+// { op: "drop", from, to, count? }     → { dropped }  what waits, lost on the way, as deliver
+// { op: "inject", from, to, message? , bytes? } → {}  to gets it on its link from from: message
+//                                                      as message's, or bytes as they are
+// { op: "live", device, data }         → {}           sync.live
+// { op: "heard", device }              → { heard }    every live data heard, hex, in order
+//
+// views: ["have", { device: n }], ["run", device, from, to], ["live", id, data],
+// ["refused", device, n]
+//
+// after each request every device is idle: no take or run going on
+import { decode, encode, type Value } from "@ermine/encoding/cbor"
+import createEntry from "@ermine/node/entry"
+import update from "@ermine/node/update"
+import type { Patch } from "@ermine/op/apply"
+import { createScheduler } from "@ermine/scheduler"
+import { createPaths } from "@ermine/scheduler/paths"
+import { createTable, type Key, type Table } from "@ermine/table"
+import { children, createPlaces } from "@ermine/places"
+import { revive, toJson } from "../../../conformance/typescript/form.ts"
+import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
+import { createLog, type Log } from "./log.ts"
+import { createHistory } from "./history.ts"
+import { createSync, type Link, type Message, read, type Sync, wire } from "./sync.ts"
+import { createSigner, type Signer } from "./sign.ts"
+import { decodeStep, encodeStep, hashStep, hex, type Step, unhex } from "./step.ts"
+import { pack, unpack } from "./pack.ts"
+
+const WHEN = 1_760_000_000
+
+// the harness's random: the k-th call gives k
+let calls = 0
+crypto.getRandomValues = (<T extends ArrayBufferView>(a: T): T => {
+	const b = new Uint8Array(a.buffer, a.byteOffset, a.byteLength)
+	let k = ++calls
+	for (let i = b.length - 1; i >= 0; i--) b[i] = k % 256, k = Math.floor(k / 256)
+	return a
+}) as typeof crypto.getRandomValues
+
+// takes and runs going on, every device's: idle at none
+let pending = 0
+const track = <T>(p: Promise<T>) => {
+	pending++
+	return p.finally(() => pending--)
+}
+async function idle() {
+	for (let quiet = 0; quiet < 2;) {
+		await new Promise((r) => setTimeout(r, 0))
+		quiet = pending ? 0 : quiet + 1
+	}
+}
+
+// ---- devices
+
+type Device = {
+	log: Log
+	sync: Sync
+	signer?: Signer
+	graph?: {
+		table: Table
+		write: (node: string, part: string, patches: Patch[], when: number, who?: string) => void
+	}
+	heard: Uint8Array[]
+}
+const devices = new Map<string, Device>()
+const device = (name: string) => {
+	const d = devices.get(name)
+	if (!d) throw new Error(`no device ${name}`)
+	return d
+}
+// a device's key, by its name or as given
+const keyOf = (s: string) => devices.get(s)?.log.device ?? s
+// a key's name, the first device made with it, or the key
+const nameOf = (key: string) => {
+	for (const [n, d] of devices) if (d.log.device === key) return n
+	return key
+}
+
+function made(log: Log, relay: boolean, signer?: Signer): Device {
+	// a log whose takes and runs are counted
+	const tracked = new Proxy(log, {
+		get(t, k) {
+			const v = Reflect.get(t, k)
+			return k === "take" || k === "run"
+				? (...a: unknown[]) => track((v as (...a: unknown[]) => Promise<unknown>)(...a))
+				: v
+		},
+	})
+	const d: Device = { log, sync: createSync({ log: tracked, relay }), signer, heard: [] }
+	d.sync.onLive((b) => d.heard.push(b))
+	return d
+}
+
+async function createDevice(seed: Uint8Array): Promise<Device> {
+	const s = createScheduler()
+	const table = createTable((part, id) => places.onTableChange(part as Key, id))
+	const places = createPlaces({
+		root: "root",
+		table,
+		paths: createPaths(),
+		scheduler: s,
+		contributors: [children],
+	})
+	s.onTrackingEnd((k) => places.release(k))
+	const scope = s.createRootScope({ actor: "harness" })
+	const run = <T>(f: () => T) => s.runWithScope(scope, f)
+	const log = createLog({ writes: true, seed })
+	const history = createHistory({ log, table, places, run })
+	await history.load()
+	const d = made(log, false, await createSigner(seed))
+	d.graph = {
+		table,
+		write(node, part, patches, when, who) {
+			const change = { time: when, actor: who ?? null }, unkept = history.unkept.length
+			run(() => {
+				const e = table.get(part as Key, node)
+				if (e) return void (update(e, patches, change), places.commit([e]))
+				const [p] = patches
+				if (patches.length !== 1 || p.path.length || p.range || p.move || !("value" in p)) {
+					throw new Error("a first write is one whole value")
+				}
+				table.sub(part as Key, node, createEntry(p.value, change))
+			})
+			if (history.unkept.length > unkept) {
+				throw new Error(`not kept: ${history.unkept[unkept].why}`)
+			}
+		},
+	}
+	return d
+}
+
+// ---- forms
+
+const patchesIn = (ps: Patch[]): Patch[] =>
+	ps.map((p) => "value" in p ? { ...p, value: revive(p.value) } : p)
+const patchesOut = (ps: readonly Patch[]) =>
+	ps.map((p) => "value" in p ? { ...p, value: toJson(p.value) } : p)
+
+function stepIn(s: Request, device?: string, before?: Uint8Array | null): Step {
+	const out: Step = {
+		device: keyOf(s.device ?? device),
+		n: s.n,
+		before: s.before === undefined ? before ?? null : s.before === null ? null : unhex(s.before),
+		node: s.node,
+		part: s.part,
+		patches: patchesIn(s.patches),
+		lamport: s.lamport,
+		when: s.when,
+	}
+	if (s.who !== undefined) out.who = s.who
+	return out
+}
+function stepOut(s: Step) {
+	return {
+		device: s.device,
+		n: s.n,
+		before: s.before && hex(s.before),
+		node: s.node,
+		part: s.part,
+		patches: patchesOut(s.patches),
+		lamport: s.lamport,
+		when: s.when,
+		...(s.who !== undefined && { who: s.who }),
+	}
+}
+
+// a message from its form: ["have", [[device, n]]], ["run", device, sig, steps], ["live", id,
+// data], ["refused", device, n]
+function messageIn(m: unknown[]): Message {
+	const [t, x, y, z] = m as [string, unknown, unknown, unknown]
+	if (t === "have") {
+		return {
+			t,
+			have: Object.fromEntries((x as [string, number][]).map(([d, n]) => [keyOf(d), n])),
+		}
+	}
+	if (t === "run") {
+		return {
+			t,
+			device: keyOf(x as string),
+			sig: unhex(y as string),
+			pack: pack((z as string[]).map(unhex)),
+		}
+	}
+	if (t === "live") return { t, id: x as string, data: unhex(y as string) }
+	if (t === "refused") return { t, device: keyOf(x as string), n: y as number }
+	throw new Error(`not a message: ${t}`)
+}
+function messageOut(m: Message): unknown[] {
+	if (m.t === "have") return [m.t, Object.entries(m.have)]
+	if (m.t === "run") return [m.t, m.device, hex(m.sig), unpack(m.pack).map(hex)]
+	if (m.t === "live") return [m.t, m.id, hex(m.data)]
+	return [m.t, m.device, m.n]
+}
+// a message sent, as a scenario reads it
+function view(b: Uint8Array): unknown[] {
+	const m = read(b)
+	if (!m) return ["not a message", hex(b)]
+	if (m.t === "have") {
+		return [m.t, Object.fromEntries(Object.entries(m.have).map(([d, n]) => [nameOf(d), n]))]
+	}
+	if (m.t === "run") {
+		const steps = unpack(m.pack), from = decodeStep(steps[0]).n
+		return [m.t, nameOf(m.device), from, from + steps.length - 1]
+	}
+	if (m.t === "live") return [m.t, m.id, hex(m.data)]
+	return [m.t, nameOf(m.device), m.n]
+}
+const haveOut = (h: Record<string, number>) =>
+	Object.fromEntries(Object.entries(h).map(([d, n]) => [nameOf(d), n]))
+
+// ---- links
+
+// a side of a link: what it sent, waiting, and what it is told with
+type Side = { queue: Uint8Array[]; told?: (b: Uint8Array) => void; unlink?: () => void }
+const links = new Map<string, Side>()
+const side = (from: string, to: string) => {
+	const s = links.get(`${from} ${to}`)
+	if (!s) throw new Error(`no link ${from} ${to}`)
+	return s
+}
+function join(a: string, b: string) {
+	for (const [x, y] of [[a, b], [b, a]]) {
+		if (links.has(`${x} ${y}`)) throw new Error(`${x} and ${y} are linked`)
+		links.set(`${x} ${y}`, { queue: [] })
+	}
+	for (const [x, y] of [[a, b], [b, a]]) {
+		const mine = side(x, y)
+		const link: Link = {
+			send: (bytes) => void mine.queue.push(bytes),
+			onMessage: (fn) => void (side(y, x).told = fn),
+		}
+		mine.unlink = device(x).sync.link(link)
+	}
+}
+// to's side of the link from → to: what to hears from
+const hear = (from: string, to: string, bytes: Uint8Array) => {
+	const told = side(from, to).told
+	if (!told) throw new Error(`${to} does not listen to ${from}`)
+	told(bytes)
+}
+
+// ---- runs
+
+async function runIn(r: Request) {
+	const device = keyOf(r.device)
+	let before: Uint8Array | null = null
+	const steps = (r.steps as (string | Request)[]).map((s) => {
+		const bytes = typeof s === "string" ? unhex(s) : encodeStep(stepIn(s, device, before))
+		before = hashStep(bytes)
+		return bytes
+	})
+	const signer = r.sig === undefined ? signerOf(r.sign ?? r.device) : undefined
+	const sig = signer ? await signer.sign(hashStep(steps[steps.length - 1])) : unhex(r.sig)
+	return { device, steps, sig }
+}
+const signerOf = (name: string) => {
+	const s = device(name).signer
+	if (!s) throw new Error(`${name} signs nothing`)
+	return s
+}
+
+async function answer(r: Request): Promise<Answer> {
+	try {
+		return await one(r)
+	} finally {
+		await idle()
+	}
+}
+
+async function one(r: Request): Promise<Answer> {
+	switch (r.op) {
+		// vectors
+		case "encode":
+			return { bytes: hex(encodeStep(stepIn(r.step))) }
+		case "decode":
+			try {
+				return { step: stepOut(decodeStep(unhex(r.bytes))) }
+			} catch {
+				return { refused: true }
+			}
+		case "hash":
+			return { hash: hex(hashStep(unhex(r.bytes))) }
+		case "sign":
+			return { sig: hex(await (await createSigner(unhex(r.seed))).sign(unhex(r.bytes))) }
+		case "pack":
+			return { pack: hex(encode(pack((r.steps as string[]).map(unhex)) as unknown as Value)) }
+		case "unpack":
+			try {
+				return { steps: unpack(decode(unhex(r.pack))).map(hex) }
+			} catch {
+				return { refused: true }
+			}
+		case "message":
+			return { bytes: hex(wire(messageIn(r.message))) }
+		case "read": {
+			const m = read(unhex(r.bytes))
+			if (!m) return { refused: true }
+			try {
+				return { message: messageOut(m) }
+			} catch {
+				// a run whose pack doesn't unpack: a message still, refused when taken
+				return { message: [m.t, (m as { device: string }).device, "not a pack"] }
+			}
+		}
+
+		// a log
+		case "device": {
+			if (devices.has(r.name)) throw new Error(`${r.name} is made`)
+			const d = await createDevice(unhex(r.seed))
+			devices.set(r.name, d)
+			return { key: d.log.device! }
+		}
+		case "relay":
+			if (devices.has(r.name)) throw new Error(`${r.name} is made`)
+			devices.set(r.name, made(createLog(), true))
+			return {}
+		case "write": {
+			const d = device(r.device)
+			if (!d.graph) throw new Error(`${r.device} writes nothing`)
+			d.graph.write(r.node, r.part ?? "value", patchesIn(r.patches), r.when ?? WHEN, r.who)
+			const s = decodeStep(d.log.step(d.log.device!, d.log.count(d.log.device!)))
+			return { n: s.n, lamport: s.lamport }
+		}
+		case "value": {
+			const e = device(r.device).graph?.table.get((r.part ?? "value") as Key, r.node)
+			return e?.value === undefined ? {} : { value: toJson(e.value) }
+		}
+		case "have":
+			return { have: haveOut(device(r.device).log.have()) }
+		case "count":
+			return { count: device(r.device).log.count(keyOf(r.of)) }
+		case "steps":
+			return { steps: device(r.device).log.steps(keyOf(r.of)).map(hex) }
+		case "run": {
+			const b = await device(r.device).log.run(keyOf(r.of), r.from)
+			if (!b) return {}
+			const from = decodeStep(b.steps[0]).n
+			return { from, to: from + b.steps.length - 1, sig: hex(b.sig) }
+		}
+		case "take":
+			return await device(r.device).log.take(await runIn(r.run))
+		case "pass": {
+			const b = await device(r.from).log.run(keyOf(r.of), r.at)
+			if (!b) throw new Error(`${r.from} has no run of ${r.of} at ${r.at}`)
+			return await device(r.to).log.take(b)
+		}
+
+		// links
+		case "link":
+			device(r.a), device(r.b), join(r.a, r.b)
+			return {}
+		case "unlink":
+			for (const [x, y] of [[r.a, r.b], [r.b, r.a]]) side(x, y).unlink?.()
+			links.delete(`${r.a} ${r.b}`), links.delete(`${r.b} ${r.a}`)
+			return {}
+		case "queued":
+			return { queued: side(r.from, r.to).queue.map(view) }
+		case "deliver": {
+			const q = side(r.from, r.to).queue
+			const got = q.splice(0, r.count ?? q.length)
+			for (const b of got) hear(r.from, r.to, b)
+			return { got: got.map(view) }
+		}
+		case "drop": {
+			const q = side(r.from, r.to).queue
+			return { dropped: q.splice(0, r.count ?? q.length).map(view) }
+		}
+		case "inject":
+			hear(r.from, r.to, r.bytes !== undefined ? unhex(r.bytes) : wire(messageIn(r.message)))
+			return {}
+		case "live":
+			device(r.device).sync.live(unhex(r.data))
+			return {}
+		case "heard":
+			return { heard: device(r.device).heard.map(hex) }
+		default:
+			throw new Error(`unknown op ${r.op}`)
+	}
+}
+
+if (import.meta.main) await serve(answer)

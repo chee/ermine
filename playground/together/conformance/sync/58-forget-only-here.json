@@ -1,0 +1,132 @@
+{
+	"title": "forget asks first for a node only this device holds (never shared): it does nothing, says so (forgot false) and puts only in the node's status; forget with only true forgets it",
+	"typescript": true,
+	"steps": [
+		{
+			"op": "host",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "mint",
+			"host": "a",
+			"as": "x",
+			"expect": {
+				"id": "ermine:0010b40fde52c568d2f3864d68739e98b72b"
+			}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"n": 1
+					}
+				}
+			],
+			"name": "w1",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "forget",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"forgot": false
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"value": {
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "commits",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "status",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"status": {
+					"waiting": [],
+					"refused": [],
+					"unsent": [],
+					"count": {
+						"waiting": 0,
+						"refused": 0,
+						"unsent": 0
+					},
+					"only": true
+				}
+			}
+		},
+		{
+			"op": "forget",
+			"host": "a",
+			"id": "x",
+			"only": true,
+			"expect": {
+				"forgot": true
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "commits",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"commits": 0
+			}
+		},
+		{
+			"op": "stored",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"stored": 0
+			}
+		},
+		{
+			"op": "status",
+			"host": "a",
+			"id": "x",
+			"expect": {}
+		}
+	]
+}

@@ -7,7 +7,7 @@
 
 #include "host.h"
 
-#include "../../../extensions/build/c/host.h"
+#include "../../../playground/build/c/host.h"
 
 /** the irq line a compile done posts on: only a wake, the turn takes what is done (loaderTurn) */
 #define LOADER_IRQ 67

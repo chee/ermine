@@ -5,7 +5,7 @@
 			"op": "host",
 			"name": "a",
 			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
-			"merge": "serial",
+			"merge": "serial/1",
 			"expect": {
 				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
 			}
@@ -14,7 +14,7 @@
 			"op": "host",
 			"name": "b",
 			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
-			"merge": "serial",
+			"merge": "serial/1",
 			"expect": {
 				"key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
 			}
@@ -39,6 +39,7 @@
 			"b": "b",
 			"expect": {}
 		},
+		{ "op": "share", "host": "a", "id": "x", "expect": {} },
 		{
 			"op": "write",
 			"host": "a",
@@ -205,7 +206,7 @@
 						"tb2",
 						"ta"
 					],
-					"merge": "serial",
+					"merge": "serial/1",
 					"lamport": 8,
 					"patches": []
 				}
@@ -243,7 +244,7 @@
 					"actor": null,
 					"metadata": {
 						"signer": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
-						"commit": "1e209ac11a8c77ab7411627ecd99cc0a871b18e6c81dd551db44ade5564b277a9a9b"
+						"commit": "1e200e59342a69e51b982c6575f9ccc5ebce428ddc744e0e2f012eb3c21a9f9def4f"
 					}
 				}
 			}

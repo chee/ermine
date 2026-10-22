@@ -1,5 +1,5 @@
 {
-	"title": "Subduction stores only what passes the door: a loose commit that is no seal is refused (shape) before it is stored, so it is never sent; one not under its stored id (another commit put under a name) is passed over: not stored and no error, noted stored; Subduction (0.23) still lists it in its own tree in memory until it restarts, and pushes it to a peer subscribed, whose door passes it over too; a good one is stored and sent",
+	"title": "Subduction stores only what passes the door and is good, and its storage never throws (Subduction would drop the connection): a loose commit that is no seal is refused (shape), one not under its stored id (another commit put under a name) is passed over; neither is stored, no error, each noted (shape, stored); Subduction (0.23) still lists each in its own tree in memory until it restarts, and pushes it to a peer subscribed, whose door refuses or passes it over too; a good one is stored and sent",
 	"steps": [
 		{
 			"op": "device",
@@ -80,6 +80,7 @@
 			"device": "a",
 			"expect": {
 				"stored": [
+					"1111111111111111111111111111111111111111111111111111111111111111",
 					"2222222222222222222222222222222222222222222222222222222222222222",
 					"y"
 				]
@@ -90,6 +91,7 @@
 			"device": "b",
 			"expect": {
 				"stored": [
+					"1111111111111111111111111111111111111111111111111111111111111111",
 					"2222222222222222222222222222222222222222222222222222222222222222",
 					"y"
 				]
@@ -116,6 +118,18 @@
 			"expect": {}
 		},
 		{
+			"op": "closed",
+			"device": "a",
+			"commit": "1111111111111111111111111111111111111111111111111111111111111111",
+			"expect": {}
+		},
+		{
+			"op": "closed",
+			"device": "b",
+			"commit": "1111111111111111111111111111111111111111111111111111111111111111",
+			"expect": {}
+		},
+		{
 			"op": "taking",
 			"device": "a",
 			"expect": {
@@ -138,6 +152,10 @@
 			"expect": {
 				"waiting": [],
 				"refused": [
+					{
+						"commit": "1111111111111111111111111111111111111111111111111111111111111111",
+						"refused": "shape"
+					},
 					{
 						"commit": "2222222222222222222222222222222222222222222222222222222222222222",
 						"refused": "stored"

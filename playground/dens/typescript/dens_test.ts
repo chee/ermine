@@ -30,8 +30,9 @@ import { processes } from "@ermine/processes"
 import { readPresence } from "@ermine/together/presence"
 import { type Channel, createPair } from "@ermine/together/presence/channel"
 import { createScopeNodes } from "@ermine/processes/scopes"
-import { type API, createProcessContext, type ProcessContext } from "@ermine/api"
-import type { Runner as ProgramsRunner, Start as ProgramsStart } from "@ermine/programs/start"
+import { type API, createProcessAPIs, type ProcessAPIs } from "@ermine/programs/api"
+import type { Runner as ProgramsRunner } from "@ermine/programs/start"
+import type { Context } from "@ermine/processes/start"
 import type { Realms } from "@ermine/realms"
 import {
 	API as GIVES_API,
@@ -293,9 +294,10 @@ Deno.test("a process offering from inside its run: its runner under its node, st
 	assertEquals(w.den.offers().map((o) => o.name), ["javascript"])
 })
 
-// ermine/api's context over a world's host: no programs (a den starts processes), no pulses of its own
-function contextOf(w: ReturnType<typeof world>): ProcessContext {
-	return createProcessContext({
+// programs' apis (@ermine/programs/api) over a world's host: no programs (a den starts processes),
+// no pulses of its own
+function apisOf(w: ReturnType<typeof world>): ProcessAPIs {
+	return createProcessAPIs({
 		scheduler: w.s,
 		table: w.table,
 		commit: w.commit,
@@ -306,8 +308,8 @@ function contextOf(w: ReturnType<typeof world>): ProcessContext {
 
 Deno.test("ermine/api on a den: its run offered as runners/javascript, the api the runner's (made from the start); a module program's default export runs and writes through the api", () => {
 	const w = world()
-	const context = contextOf(w)
-	w.offer("javascript", context.run, { [GIVES_API]: "ermine.api" })
+	const apis = apisOf(w)
+	w.offer("javascript", apis.run, { [GIVES_API]: "ermine.api" })
 	const seen: unknown[] = []
 	const program = {
 		default: (api: API) => {
@@ -396,13 +398,13 @@ Deno.test("a runner as { start, load, api }: start given the start's facts (box,
 	)
 })
 
-Deno.test("ermine/api on a den, its api composed: a runner's own over context.createAPI ({ ...api, more }); the process's value, its memos' status and runs still written (an api is not its process)", () => {
+Deno.test("ermine/api on a den, its api composed: a runner's own over apis.createProcessAPI ({ ...api, more }); the process's value, its memos' status and runs still written (an api is not its process)", () => {
 	const w = world()
-	const context = contextOf(w)
+	const apis = apisOf(w)
 	type More = API & { offer: (name: string) => unknown }
-	const run = context.runner({
+	const run = apis.runner({
 		api: (start) => ({
-			...context.createAPI(start),
+			...apis.createProcessAPI(start),
 			offer: (name: string) =>
 				(start as Start).den.offer(
 					"runners",
@@ -438,9 +440,9 @@ Deno.test("ermine/api on a den, its api composed: a runner's own over context.cr
 	assert(m !== undefined)
 	const st = w.table.get("attributes", m)?.value?.[STATUS]
 	assertInstanceOf(st, Error)
-	assertEquals(context.runs(m)?.error instanceof Error, true)
+	assertEquals(apis.runs(m)?.error instanceof Error, true)
 	// called as programs' runner is, run(code, api), with a copy of an api: it finds its process the same
-	w.offer("copy", (code: unknown, start: Start) => context.run(code, { ...run.api(start) }))
+	w.offer("copy", (code: unknown, start: Start) => apis.run(code, { ...run.api(start) }))
 	const q = w.start(["system", "den", "runners", "copy"], ["work", "two"], ["apps", "mod.js"])
 	w.s.pulse()
 	assertEquals(w.table.get("value", q.id)?.value, "composed")
@@ -448,8 +450,8 @@ Deno.test("ermine/api on a den, its api composed: a runner's own over context.cr
 
 Deno.test("a stop's reason reaches ermine/api's teardowns through a den: the handle's stop tells them (SIGHUP, runner-stopped, withdrawn, den-stopped; none: ended); a memo's teardown too", () => {
 	const w = world()
-	const context = contextOf(w)
-	w.offer("javascript", context.run)
+	const apis = apisOf(w)
+	w.offer("javascript", apis.run)
 	const told: unknown[] = []
 	const program = {
 		default: (api: API) => {
@@ -474,7 +476,7 @@ Deno.test("a stop's reason reaches ermine/api's teardowns through a den: the han
 	w.hosted(() => w.den.stop(b))
 	// a process offering ermine/api's runner, a user on it
 	const h = go("h")
-	w.hosted(() => w.den.offer("runners", "inner", { [TAKES]: JS }, context.run, h.id))
+	w.hosted(() => w.den.offer("runners", "inner", { [TAKES]: JS }, apis.run, h.id))
 	go("c", ["work", "h", "runners", "inner"])
 	w.hosted(() => w.den.stop(h, "done"))
 	go("d")
@@ -526,7 +528,7 @@ Deno.test("a start or a load outside a run asks for a pulse (as ermine/api's: a 
 
 Deno.test("a load is no process: its live form held by its loader, called in the loader's memo, its throw that memo's status and run (ermine/api's runs), its time that run's; let go at the loader's stop, after its handle's, newest first", () => {
 	const w = world()
-	const context = contextOf(w)
+	const apis = apisOf(w)
 	const order: unknown[] = []
 	const LETTER = "ermine.letter"
 	w.offer("letter", {
@@ -541,9 +543,9 @@ Deno.test("a load is no process: its live form held by its loader, called in the
 	}, { [TAKES]: LETTER })
 	// the engine's api: ermine/api's, and a load by the process (a runner's own, composed)
 	type Engine = API & { load: (code: string) => { draw: () => string } }
-	const run = context.runner({
+	const run = apis.runner({
 		api: (start) => ({
-			...context.createAPI(start),
+			...apis.createProcessAPI(start),
 			load: (code: string) => {
 				const l = (start as Start).den.load(["system", "den", "runners", "letter"], {
 					id: code,
@@ -582,7 +584,7 @@ Deno.test("a load is no process: its live form held by its loader, called in the
 	const st = w.table.get("attributes", cell("bad"))?.value?.[STATUS]
 	assertInstanceOf(st, Error)
 	assertEquals(st.message, "bad letter")
-	const ran = context.runs(cell("bad"))!
+	const ran = apis.runs(cell("bad"))!
 	assertEquals([ran.end, ran.error?.message, typeof ran.ended], ["failed", "bad letter", "number"])
 	assertEquals(w.den.processes().map((q) => q.id), [p.id])
 	w.hosted(() => w.den.stop(p))
@@ -664,14 +666,14 @@ Deno.test("the owner torn down from above: every process goes newest first, its 
 // assignment checks, at type level: A fits where B is asked
 type Fits<A, B> = [A] extends [B] ? true : false
 
-Deno.test("types: realms.run and programs' Runner fit a den's runner as functions, ermine/api's run as one and as a Runner; an api made from programs' Start is made from a den's", () => {
+Deno.test("types: realms.run and programs' Runner fit a den's runner as functions, ermine/api's run as one and as a Runner; an api made from processes' Context is made from a den's Start", () => {
 	const fits: [
 		Fits<Realms["run"], Runnable>,
 		Fits<ProgramsRunner, Runnable>,
-		Fits<ProcessContext["run"], Runnable>,
-		Fits<ProcessContext["run"], Runner>,
-		Fits<(start: ProgramsStart) => API, (start: Start) => unknown>,
-		Fits<ProcessContext["createAPI"], NonNullable<Runner["api"]>>,
+		Fits<ProcessAPIs["run"], Runnable>,
+		Fits<ProcessAPIs["run"], Runner>,
+		Fits<(ctx: Context) => API, (start: Start) => unknown>,
+		Fits<ProcessAPIs["createProcessAPI"], NonNullable<Runner["api"]>>,
 	] = [true, true, true, true, true, true]
 	assertStrictEquals(fits.every((x) => x), true)
 })

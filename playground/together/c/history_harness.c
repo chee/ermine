@@ -4,9 +4,11 @@
 // process: one history, the commits made by label, the snapshots kept. The history's check is the
 // integration's: a commit is taken in when its patches apply to its table at its base (replay), kept
 // snapshots used; a merge commit's, to its rule's merge of its parents. The
-// rules known: those linked (rules_harness.h); a merge by any other is refused "merge"; a commit held
-// (hold) it cannot judge yet, and it waits on the check. A rule that keeps (create) merges twice: by
-// the pure rule, and by a state kept for the process, which must give the same, byte for byte
+// rules known: those linked (rules_harness.h); a merge by any other is held, and what goes on a held
+// one touching its path (lists.ts, createMarks: a merge's table, else its patches' key paths, carried
+// down); a commit given to hold it cannot judge yet, and it waits on the check. A rule that keeps
+// (create) merges twice: by the pure rule, and by a state for the process, which must give the
+// same, byte for byte
 #include "commits_harness.h"
 #include "lists.h"
 #include "rules_harness.h"
@@ -33,6 +35,8 @@ static size_t kept_length;
 // the names the check cannot judge yet (hold)
 static uint8_t (*held)[CM_NAME];
 static size_t held_length;
+// the lowest lamport of a commit the check held: none under it
+static int64_t low = INT64_MAX;
 // the rules known, each pure (NULL state); and each one's kept state, when it keeps
 static rp_merge *rules;
 static rp_merges merges;
@@ -125,12 +129,105 @@ static void merged(const uint8_t (*names)[CM_NAME], size_t n, const char *rule, 
 	free(heads);
 }
 
+// a key path a commit writes: its table, then the patch's string keys up to the first that is not
+// one (borrowed from the commit)
+typedef struct {
+	const char *table;
+	const op_key *keys;
+	size_t n;
+} mark;
+
+static size_t keyed(const op_target *t) {
+	size_t i = 0;
+	while (i < t->length && t->path[i].type == OP_STR_KEY) i++;
+	return i;
+}
+
+// the key paths a commit writes (lists.ts, pathsOf): a merge's, its table; else its patches' (a
+// move's both ends), added to marks
+static void paths_of(const cm_commit *c, mark **marks, size_t *n) {
+	size_t more = c->merge != NULL ? 1 : 2 * c->patches_length;
+	*marks = realloc(*marks, (*n + more + 1) * sizeof **marks);
+	if (*marks == NULL) abort();
+	if (c->merge != NULL) {
+		(*marks)[(*n)++] = (mark){c->table, NULL, 0};
+		return;
+	}
+	for (size_t i = 0; i < c->patches_length; i++) {
+		const op_patch *p = &c->patches[i];
+		(*marks)[(*n)++] = (mark){c->table, p->place.path, keyed(&p->place)};
+		if (p->has_move) (*marks)[(*n)++] = (mark){c->table, p->move.path, keyed(&p->move)};
+	}
+}
+
+// one at, over or under the other
+static bool meets(const mark *a, const mark *b) {
+	if (strcmp(a->table, b->table) != 0) return false;
+	for (size_t i = 0; i < a->n && i < b->n; i++)
+		if (strcmp(a->keys[i].s, b->keys[i].s) != 0) return false;
+	return true;
+}
+
+// whether a commit, its parents taken, goes on a held one's path: a merge with a held ancestor, or
+// a write meeting a held ancestor's path (no own commits here, so nothing writes a mark away)
+static bool marked(const cm_commit *commit) {
+	if (low == INT64_MAX) return false;
+	const hy_kept **todo = malloc((commit->parents_length + 1) * sizeof *todo);
+	size_t n = 0, cap = commit->parents_length + 1;
+	if (todo == NULL) abort();
+	for (size_t i = 0; i < commit->parents_length; i++) todo[n++] = hy_get(history, commit->parents[i]);
+	cm_commit *decoded = NULL;
+	size_t decoded_length = 0;
+	mark *marks = NULL;
+	size_t marks_length = 0;
+	for (size_t i = 0; i < n; i++) {
+		const hy_kept *k = todo[i];
+		if (k == NULL || k->lamport < low) continue;
+		if (k->held != NULL) {
+			decoded = realloc(decoded, (decoded_length + 1) * sizeof *decoded);
+			if (decoded == NULL) abort();
+			if (cm_decode(k->bytes, k->length, &decoded[decoded_length], NULL) == CM_OK)
+				paths_of(&decoded[decoded_length++], &marks, &marks_length);
+		}
+		for (size_t p = 0; p < k->parents_length; p++) {
+			const hy_kept *q = hy_get(history, k->parents[p]);
+			bool seen = false;
+			for (size_t j = 0; j < n && !seen; j++) seen = todo[j] == q;
+			if (seen) continue;
+			if (n == cap) {
+				todo = realloc(todo, (cap *= 2) * sizeof *todo);
+				if (todo == NULL) abort();
+			}
+			todo[n++] = q;
+		}
+	}
+	bool on = marks_length > 0 && commit->merge != NULL;
+	if (marks_length > 0 && !on) {
+		mark *own = NULL;
+		size_t own_length = 0;
+		paths_of(commit, &own, &own_length);
+		for (size_t i = 0; i < marks_length && !on; i++)
+			for (size_t j = 0; j < own_length && !on; j++) on = meets(&marks[i], &own[j]);
+		free(own);
+	}
+	for (size_t i = 0; i < decoded_length; i++) cm_free(&decoded[i]);
+	free(decoded), free(marks), free(todo);
+	return on;
+}
+
+// held: the check's answer, the lowest lamport noted
+static hy_refusal hold_it(const hy_kept *k) {
+	if (k->lamport < low) low = k->lamport;
+	return HY_HOLD;
+}
+
 // whether the commit's patches apply to its table at its base, or its rule's merge of its parents
 static hy_refusal check(void *context, const hy_kept *k, const cm_commit *commit) {
 	(void)context;
 	for (size_t i = 0; i < held_length; i++)
 		if (memcmp(held[i], k->name, CM_NAME) == 0) return HY_WAIT;
-	if (commit->merge != NULL && rp_merge_find(&merges, commit->merge) == NULL) return HY_MERGE;
+	if (commit->merge != NULL && rp_merge_find(&merges, commit->merge) == NULL) return hold_it(k);
+	if (marked(commit)) return hold_it(k);
 	rp_tables tables;
 	if (commit->merge != NULL) merged(commit->parents, commit->parents_length, commit->merge, &tables);
 	else if (!k->has_base || rp_replay(history, k->base, snapshots, NULL, &merges, &tables) != RP_OK)
@@ -276,6 +373,7 @@ static void put_added(FILE *out, hy_added *a) {
 	switch (a->kind) {
 	case HY_TAKEN: fputs("\"taken\"", out); break;
 	case HY_PASSED: fputs("\"passed\"", out); break;
+	case HY_HELD: fputs("\"held\"", out); break;
 	case HY_REFUSED: fprintf(out, "{\"refused\":\"%s\"}", hy_refusal_name(a->refusal)); break;
 	case HY_WAITING:
 		fputs("{\"waiting\":[", out);
@@ -363,6 +461,26 @@ static void refused(FILE *out) {
 	}
 	fputs("]}", out);
 	free(rows);
+}
+
+// the held commits, in the order taken, each with its rule
+static void put_held(FILE *out) {
+	const hy_kept **all;
+	size_t n = hy_all(history, &all);
+	fputs("{\"held\":[", out);
+	bool first = true;
+	for (size_t i = 0; i < n; i++) {
+		if (all[i]->held == NULL) continue;
+		if (!first) fputc(',', out);
+		first = false;
+		fputs("{\"name\":", out);
+		cs_put_name(commits, out, all[i]->name);
+		fputs(",\"rule\":", out);
+		op_json_string(out, all[i]->held);
+		fputc('}', out);
+	}
+	fputs("]}", out);
+	free(all);
 }
 
 // a commit named in a request: its name; the answer is written when there is none
@@ -642,6 +760,7 @@ void hh_answer(const op_value *r, FILE *out) {
 		put_names(out, "all", list, n);
 	} else if (strcmp(op, "waiting") == 0) waiting(out);
 	else if (strcmp(op, "refused") == 0) refused(out);
+	else if (strcmp(op, "held") == 0) put_held(out);
 	else if (strcmp(op, "name") == 0) {
 		uint8_t name[CM_NAME];
 		if (named(r, out, name)) {

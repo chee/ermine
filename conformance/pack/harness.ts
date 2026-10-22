@@ -21,7 +21,7 @@ import {
 	PackError,
 	type Reading,
 	unpack,
-} from "@ermine/encoding/pack"
+} from "@ermine/formats/pack"
 import { FormError, fromJson, line, toJson } from "./form.ts"
 
 type Fields = Record<string, unknown>

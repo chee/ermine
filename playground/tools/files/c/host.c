@@ -13,6 +13,7 @@
 #include "../../../together/stacks/subduction/c/subduction/store.h"
 #include "../../../together/stacks/subduction/c/subduction/transport.h"
 #include "../../../../playground/together/c/sync.h"
+#include "../../../../ermine/ids/c/ids.h"
 #include "graph.h"
 #include "program.h"
 #include "store.h"
@@ -146,13 +147,19 @@ typedef struct {
 
 // the folder --------------------------------------------------------------------------------------------------------------
 
-// named: the ermine:// ids in a value, its keys and strings at any depth, in the order met
+// whether the text is a document's id: an ermine id that syncs (of any kind: ermine/ids)
+static bool is_doc(const char *id) {
+	uint8_t tree[32];
+	return tp_doc(id, tree);
+}
+
+// named: the documents' ids in a value, its keys and strings at any depth, in the order met
 static void named_in(const op_value *v, names *out) {
 	if (!v) return;
-	if (v->type == OP_STR && strncmp(v->str, "ermine://", 9) == 0) add(out, v->str);
+	if (v->type == OP_STR && is_doc(v->str)) add(out, v->str);
 	if (v->type != OP_LIST && v->type != OP_MAP) return;
 	for (size_t i = 0; i < v->count; i++) {
-		if (v->type == OP_MAP && strncmp(v->keys[i], "ermine://", 9) == 0) add(out, v->keys[i]);
+		if (v->type == OP_MAP && is_doc(v->keys[i])) add(out, v->keys[i]);
 		named_in(v->items[i], out);
 	}
 }
@@ -193,8 +200,9 @@ static const sd_node *get_out(void *context, const char *id) {
 		const char *to = ids.items[k];
 		if (strcmp(to, id) == 0 || fg_ephemeral(h->g, to)) continue;
 		char name[65];
-		snprintf(name, sizeof name, "%.8s", to + 9);
-		if (taken(es, m, name)) snprintf(name, sizeof name, "%s", to + 9);
+		// the id's first 8 hex after "ermine:" and its code
+		snprintf(name, sizeof name, "%.8s", to + 11);
+		if (taken(es, m, name)) snprintf(name, sizeof name, "%s", to + 7);
 		if (taken(es, m, name)) continue;
 		sd_item *item = held(h, grab(sizeof *item));
 		item->id = held(h, copyString(to));
@@ -260,7 +268,7 @@ static void follow(host *h, const char *id) {
 	if (!sy_follow(h->sync, id)) say("following %s: not a document", id);
 }
 
-// every ermine:// id a children entry reached from the root names, followed; named, every one a value names too
+// every document's id a children entry reached from the root names, followed; named, every one a value names too
 static void reach(host *h) {
 	h->reach = false;
 	names seen = {0};
@@ -274,7 +282,7 @@ static void reach(host *h) {
 			const char **ids;
 			size_t m = fg_ids(h->g, id, slots[s], &ids);
 			for (size_t k = 0; k < m; k++)
-				if (strncmp(ids[k], "ermine://", 9) == 0 && !fg_ephemeral(h->g, ids[k])) add(&seen, ids[k]);
+				if (is_doc(ids[k]) && !fg_ephemeral(h->g, ids[k])) add(&seen, ids[k]);
 			free((void *)ids);
 		}
 		free((void *)slots);
@@ -321,23 +329,19 @@ static void dropped(void *context, nd_entry *entry) {
 
 static char *minted(void *context) {
 	host *h = context;
-	char id[9 + 64 + 1];
+	char id[SY_ID];
 	sy_mint(h->sync, id);
 	return copyString(id);
 }
 
-// a new document's id: 32 random bytes, or for a server with no Keyhive grant for it 16 and then 16 zero bytes
-static char *fresh(bool zeros) {
-	uint8_t bytes[32] = {0};
-	erm_host_random(bytes, zeros ? 16 : 32);
-	char text[65];
-	hex(bytes, 32, text);
-	return formatString("ermine://%s", text);
-}
-
-static bool is_doc(const char *id) {
-	uint8_t bytes[32];
-	return strncmp(id, "ermine://", 9) == 0 && strlen(id) == 9 + 64 && unhex(id + 9, 32, bytes);
+// a new document's id: a fresh ermine id (00 10 and 16 random bytes: ermine/ids), its text
+static char *fresh(void) {
+	uint8_t random[16], id[ID_SHORT];
+	erm_host_random(random, 16);
+	id_fresh(random, id);
+	char text[ID_TEXT];
+	id_text(id, ID_SHORT, text);
+	return copyString(text);
 }
 
 // the document laid out, and the files program started on it
@@ -639,8 +643,8 @@ int fh_run(const fh_options *o) {
 	h->zeros = *server && !local(server);
 	h->home = real(home);
 	h->made = strcmp(o->doc, "new") == 0;
-	h->doc = h->made ? fresh(h->zeros) : copyString(o->doc);
-	if (!is_doc(h->doc)) return say("files: %s is no document id (ermine:// and 64 hex digits)", o->doc), 1;
+	h->doc = h->made ? fresh() : copyString(o->doc);
+	if (!is_doc(h->doc)) return say("files: %s is no document id (ermine: and an ermine id's hex)", o->doc), 1;
 	h->quiet = o->quiet ? o->quiet : 20;
 	h->named = o->named;
 	// the folder as the system has it, as the watcher's events name it (/var is /private/var)

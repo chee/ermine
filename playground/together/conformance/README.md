@@ -17,9 +17,10 @@ harness's header lists its requests and answers.
 | lock      | `playground/together/conformance/lock/`      | `playground/together/typescript/lock_harness.ts`      |
 
 Run: `deno task conformance commit seal packer history replay snapshot transport sync lists lock`. A
-scenario with `"typescript": true` runs on the TypeScript harness only (none now). Another
-implementation: `--c` (the binary `<package>/c/<suite>-harness`), or `HARNESS="<command>"` for one
-suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `fails`, `skip`).
+scenario with `"typescript": true` runs on the TypeScript harness only (what the C does not do yet:
+pause, forget, the shared list, a node not shared, ids of any form). Another implementation: `--c`
+(the binary `<package>/c/<suite>-harness`), or `HARNESS="<command>"` for one suite. Format:
+`conformance/run.ts` (a scenario, its steps, `expect`, `fails`, `skip`).
 
 ## Conventions
 
@@ -46,12 +47,20 @@ suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `fails`, `
   name of another code, or of a length that is not its code's, is refused wherever a commit is
   decoded (`not-a-commit`, `parents` or `base`). A stored id (below), a tree id and a topic are not
   names: 32 bytes, as Subduction has them.
-- a document: an ermine id (`ermine/ids`), `ermine:` and the lowercase hex of its bytes; fresh
-  (`0010` and 16 bytes), hashed (`1e10` and 16) or a key (`ed01` and 32), each followed alike: the
-  code says the format, never a role (for now the only documents a device takes; which nodes sync is
-  sync's own question). Subduction files it under its tree id, made inside the stack from the id's
-  text (`subduction.ts` treeOf, `sb_tree`); a tree the storage holds whose id is not named yet is
-  listed (`unnamed`), taken in when its document is followed.
+- a document: any string within the wire's limits (well-formed, no U+0000), compared as its bytes;
+  no id's form decides anything (sync/61, transport/19). Subduction files it under its tree id, made
+  inside the stack from the id's UTF-8 (`subduction.ts` treeOf, `sb_tree`); a tree the storage holds
+  whose id is not named yet is listed (`unnamed`), taken in when its document is followed. Every
+  write is a commit, stored; it is sent only while its document is followed (shared: sync/54, 55),
+  and a pause stops that (sync/56).
+- not shared means not stored: a device stores its own commits, followed or not, and another's only
+  for a document it follows. A peer's put or fetch for a tree not followed is turned away at the
+  policy, never a throw (the connection stays up), counted once a connection: `heard` at a document
+  named here, `offered` (by tree id) for one not named (transport/30, 31, 32, sync/62, 63; lock/16,
+  17). Nothing of it is stored or listed (`unnamed` counts only a device's own trees). A paused
+  document never changes from outside: what was under way (a save let in before the pause, what
+  waited on the lock, a load) is taken in only if it is the device's own (sync/62). The C stack does
+  not do this yet: these scenarios are TypeScript's only.
 - a seal: `{id, commit, signature}`, canonical CBOR: the id it is for (text), the commit's bytes,
   the signature. Unsealed for a document: its id not that one's, refused `id`, with the why "the
   seal is for another id" (seal/11, transport/15, transport/21); no id, or one not text: `shape`
@@ -73,21 +82,17 @@ suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `fails`, `
 - an envelope: what the Subduction stack stores and sends, before the lock closes it: a map of the
   node's id and what it carries, `{id, sealed}` (a loose commit), `{id, commit}` (an ephemeral
   commit), `{id, run, snapshot?}` (a fragment).
-- the door: what Subduction is about to store under a name is read first, the lock opened (for a
-  tree not named yet, with no id): the envelope's id must make this tree, a seal in it must be for
-  that id, and the stored id it gives the commit must be the name given; a fragment's head must be
-  one of its members, and each member's stored id (a vouched one's too, as its pack says it) the one
-  its commit gives; and a fragment must be closed: each member's parent a member, or one of the
-  head's depth or more and in the boundary; one of less depth left out only with a boundary
-  (Subduction's build takes out the members of a fragment below, transport/26); none such, the
-  boundary exactly the parents the members reach out of, no more. No signature is checked for this.
-  One that fails is passed over: not stored, no error (a throw would drop the connection), noted
-  when the document is followed and the name is not held: `id` with the why "the envelope is for
-  another id" or "the seal is for another id", `stored`, or `boundary` (not closed) (transport/12,
-  15, 20, 21, 22, 23, 24, 25, sync/53, lock/16, 17). Subduction (0.23) still adds a name passed over
-  to its own tree in memory, lists it (`stored`) and pushes it to a peer subscribed, and does not
-  ask a peer for it again until it restarts (lock/16). One the lock cannot open yet is stored
-  unopened.
+- the door: what Subduction is about to store under a name is read first, the lock opened: the
+  envelope's id must make this tree, a seal in it must be for that id, and the stored id it gives
+  the commit must be the name given; a fragment's head must be one of its members, and each member's
+  stored id (a vouched one's too, as its pack says it) the one its commit gives; and a fragment must
+  be closed: each member's parent a member, or one of the head's depth or more and in the boundary;
+  one of less depth left out only with a boundary (Subduction's build takes out the members of every
+  fragment below, transport/26, 28); none such, the boundary exactly the parents the members reach
+  out of, no more. No signature is checked for this. One that fails is passed over, noted when the
+  document is followed and the name is not held: `id` with the why "the envelope is for another id"
+  or "the seal is for another id", `stored`, or `boundary` (not closed) (transport/12, 15, 20, 21,
+  22, 23, 24, 25, sync/53). One the lock cannot open yet is stored unopened.
 - a sealed message (a channel's bytes on a topic, littlesync's say): `{bytes, signer, signature}`,
   the signer's multikey in it. What it signs: `"ermine/v0/message"`, the BLAKE3 of the bytes, the
   signature's varsig header, then the topic's UTF-8 (1 to 256 bytes): good on its own topic only.
@@ -124,17 +129,22 @@ suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `fails`, `
   `{added: {refused}}` (`shape` | `lamport` | `patches` | `parent` | `merge`: a merge by a rule the
   harness doesn't know); one the check cannot judge yet waits on it: `{added: {waiting: []}}`
   (history's `hold` and `again`). The transport's: `lock` | `shape` | `signature` | `stored` |
-  `parents` | `boundary` (a fragment's members, boundary or checkpoints not its head's walk's) |
-  `id` (an envelope for another id; or a seal in it for another id, with its why); `stored` a name
-  the commit does not give (a fragment: a head none of its members, a member's stored id not its
-  own).
+  `parents` | `boundary` (a fragment's members, boundary or checkpoints not as Subduction's build
+  makes them: its shape; with the head here, that build's, transport/13, 28) | `id` (an envelope for
+  another id; or a seal in it for another id, with its why); `stored` a name the commit does not
+  give (a fragment: a head none of its members, a member's stored id not its own).
 - a snapshot from elsewhere is a hint: kept only when a replay to its commit gives the same tables
   (history's `hint`; the transport checks one a fragment carries once, when its head is in).
 - the transport admits to Subduction's storage only what passes the door and is taken in: a good
-  seal under its stored id, a fragment checked whole; what it passes over or refuses is never
-  stored, so never sent from storage. A name already held, put with other bytes that are not good,
-  is passed over unnoted (transport/22). A device's `limits` (the most it holds for others:
-  `pending`, `refused`, `waiting`, `joins`, `parts`) let go of the oldest past them.
+  seal under its stored id, a fragment checked whole; what it passes over or refuses (the lock's
+  refusal too) is never stored, so never sent from storage, and the save returns as if it were: the
+  storage never throws, as Subduction (0.23) drops the connection on a throw (a relay's, every
+  follower's) (transport/29, lock/18). Subduction still adds such a name to its own tree in memory,
+  lists it (`stored`) and pushes it to a peer subscribed, whose door judges it too, and does not ask
+  a peer for it again until it restarts (transport/12, lock/06); one the policy turns away (a tree
+  not followed) it holds nothing of (lock/16, 17). A name already held, put with other bytes that
+  are not good, is passed over unnoted (transport/22). A device's `limits` (the most it holds for
+  others: `pending`, `refused`, `waiting`, `joins`, `parts`) let go of the oldest past them.
 - anything else wrong in a request (an unknown op, a label not made, hex that isn't):
   `{error: text}`. A scenario meets it only with `fails: true`.
 
@@ -181,6 +191,9 @@ suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `fails`, `
   `advance` (then every host ticked or run). The C's devices share it, and its quiet and connect
   move it a few ms a round too, so the ephemeral scenarios keep hundreds of ms from every boundary.
 - pipes: in memory, in order; cut, a waiting receive fails.
+- a sync host's shared list: its value at `<host>/shared` unless the host is given `shared`. Its
+  commits count apart (their nonce from the start's other half, the top bit flipped), so a share
+  leaves the counts of the writes as they are, on the C (no list yet) too.
 
 ## Merge rules (history, sync)
 
@@ -205,11 +218,11 @@ suite. Format: `conformance/run.ts` (a scenario, its steps, `expect`, `fails`, `
 - a commit stored unopened because the lock waits is not read at the door (lock/16's m holds one).
 - a fragment under a real head with a member's parent of less depth left out and a boundary (as a
   fragment below would take it out): closed, so it passes the door and the checks of a device that
-  does not hold the head yet or the fragments below; it is stored, and the head waits on that parent
-  for good, the real fragment never fetched (Subduction keeps one fragment a head). An extra
-  boundary id beside such a gap passes the door too. For a tree not named yet the door has only the
-  names and the closure, not the rest of the checks (depth, reach, checkpoints): one that fails
-  those is stored unnamed and refused once followed, and stands in for the real one all the same.
+  does not hold the head yet (only one that does builds the head's fragment, and the fragments below
+  it, to compare); it is stored, and the head waits on that parent for good, the real fragment never
+  fetched (Subduction keeps one fragment a head). An extra boundary id beside such a gap passes the
+  door too. Subduction itself checks no fragment's members: only its signature, its blob's digest
+  and the storage's policy.
 - the wire between the TypeScript and the C, beyond the suites' shared bytes:
   `playground/together/typescript/wire_test.ts` (seals, packs and snapshots made by one, taken in by
   the other), with the C harnesses built.

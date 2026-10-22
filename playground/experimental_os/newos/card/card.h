@@ -1,5 +1,5 @@
 // card.h: the card (card.c): what ermineOS keeps and syncs, on playground/together (sync.h) over today's
-// table, places and scheduler. Every node whose id is a document's (an ermine:// id) is kept: each
+// table, places and scheduler. Every node whose id is a document's (an ermine id, of any kind) is kept: each
 // change to one of its tables goes out as one commit, stored on the card and sent to /etc/sync's
 // server; any other node (a process, a driver's state, "@n") is never stored or sent: that is what
 // ephemeral is here. What comes in (the card at boot, the network after) is written to the table by
@@ -22,8 +22,9 @@
 
 typedef struct Card Card;
 
-/** an id's length: "ermine://" and 64 hex digits */
-#define ID_LENGTH (9 + 64)
+/** an id's text at most: littlesync's longest (LS_ID_LEN, 128 bytes). Today's are ermine ids: "ermine:" and a
+ * key id's 68 hex digits (a fresh or hashed one's 36: ermine/ids) */
+#define ID_LENGTH 128
 /** whether text is a document's id (a kept node's) */
 bool id_is(const char *text);
 
@@ -38,7 +39,7 @@ typedef struct {
 	void *context;
 } card_host;
 
-/** the card in folder sd (its own folder sync/ inside, made if need be; fresh: emptied first): NULL, with why */
+/** the card in folder sd (its own folder card/ inside, made if need be; fresh: emptied first): NULL, with why */
 Card *cardOpen(const char *sd, bool fresh, const char **why);
 /** the root's id: a document, made at the card's first boot */
 const char *cardRoot(Card *c);
