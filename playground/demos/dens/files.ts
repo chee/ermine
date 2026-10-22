@@ -139,7 +139,7 @@ function ago(t: number | undefined) {
 const siteAt = (c?: ChangeHeader) => c?.external?.at(-1)
 const FROM: Record<string, string> = {
 	process: "running here (processes)",
-	away: "mirrored from another den (away)",
+	away: "another den's, its steps come through tippet (away places it)",
 	children: "saved here (children)",
 }
 
@@ -384,7 +384,7 @@ export function createFiles(
 		return typeof n === "string" ? n : den === host.id ? "this den" : short(den)
 	}
 	const who = (c?: ChangeHeader) => (c?.actor === undefined ? "—" : denName(c.actor))
-	// who changed it: a mirror of another den's node is written here, by this den's away
+	// who changed it: another den's node is written here as its steps land, by that den
 	const by = (it: Item) =>
 		it.from === "away" && last(it)?.actor === host.id ? "mirrored" : who(last(it))
 	// a name as shown: a den's key cut short, with the den's own name beside it
@@ -760,11 +760,7 @@ export function createFiles(
 		return `<p class="group">what runs it: ${esc(l.name)}</p>
 			<div class="code-peek">${linesHtml(String(l.fn))}</div>
 			<p class="code-acts"><button class="button" data-live>open it wide</button>${
-			home
-				? ` written at ${
-					codeLink(home.name, home.line, `${home.name}:${home.line}`)
-				}`
-				: ""
+			home ? ` written at ${codeLink(home.name, home.line, `${home.name}:${home.line}`)}` : ""
 		}</p>`
 	}
 

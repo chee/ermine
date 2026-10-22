@@ -1,32 +1,63 @@
-// the cardputer's den, as the dens page's (playground/demos/dens host.ts and main.ts ?as=cardputer):
-// in the host's world (host.h), the programs at /things/<kind> (ermine.type "thing.<kind>"), a den
-// "chee's cardputer" (device "cardputer"; policy: yes to every ask, as the page's), runners keys,
-// screen and pigs (ermine.runner.takes "thing.<kind>"), a surface screen (framebuffer, 240x135),
-// and at boot /work/keys, /work/screen and /work/pigs started. away links it to the other dens over
-// a channel named its id (away.h: the channel's name is the den's id)
+// the cardputer's den on tippet (experiments/tippet), as the dens page's host.ts makes one (its
+// contract): the den is its install, its node "ermine:ed01" + its key's hex, its name under
+// /system/dens the key's hex, and the key the one its log signs with. in the host's world (host.h):
+// the programs at /things/<kind> (ermine.type "thing.<kind>"), a den "chee's cardputer" (device
+// "cardputer"; policy: yes to every ask, as the page's: the inbox checks who asked first), runners
+// keys, screen and pigs, a surface screen (framebuffer, 240x135), and /work/keys, /work/screen and
+// /work/pigs started. what syncs (history's kept): host.ts' list, as steps in the room's log
+//   <den>                   attributes, children { on, things, inbox, authorized_keys }
+//   <den>/things            children: each thing's process id -> <den>/things/<process id>
+//   <den>/things/<process>  attributes: the process's, and thing.at
+//   <den>/inbox             value: { <ask id>: { ask, claim, sig, answer? } }
+//   <den>/authorized_keys   value: { <install id>: { name } }
+// and the steps others write in their own (and into this inbox). who's here: tippet's live, every
+// 2 s, { den }; another den not heard for 6 s is quiet. the log's steps on flash (store_file, in
+// dir), so a reboot goes on from its last step
 #ifndef DEN_H
 #define DEN_H
 
-#include "playground/dens/c/away.h"
+#include <stddef.h>
+#include <stdint.h>
 
-// after host_init. id: the den's (the page's: its device key's multikey as hex); code: the room's
-// (below), known before the screen first draws, which shows it. 0: up
-int den_boot(const char *id, const char *code);
-dn *den_get(void);
-// a room: who meets. its code: 4 of DEN_LETTERS, read off a screen and typed (none that look like
-// another); its id, the node the rows go on: "ermine://" + hex(blake3("party.chee.ermine.dens.room:"
-// + code)), as the dens page's host.ts makes it from the same code
+#include "experiments/tippet/c/tippet.h"
+#include "playground/dens/c/dens.h"
+#include "playground/installs/c/installs.h"
+
+// a room's code: 4 of these, read off a screen and typed (none that look like another); its tippet
+// room "dens-" + the code
 #define DEN_LETTERS "ACDEFHJKMNPRTWXY"
-#define DEN_ROOM_ID_LEN (9 + 64)
-void den_room_id(const char *code, char out[DEN_ROOM_ID_LEN + 1]);
-// the room's code it connected to ("": none yet)
+// how often this den says it is here, and how long until one not heard is quiet (host.ts' BEAT,
+// QUIET)
+#define DEN_BEAT 2000
+#define DEN_QUIET 6000
+
+// after host_init: the den of the install, in room code, its log kept in dir (made when not there).
+// now: the clock's ms. 0: up
+int den_boot(const inst_install *install, const char *code, const char *dir, int64_t now);
+dn *den_get(void);
+// the room's code ("": none yet)
 const char *den_room(void);
-// the link over channel (its name the den's id) in den_boot's room: its row at "dens:" + the
-// room's id, others' there mirrored in. NULL: refused
-dn_link *den_connect(chn_channel *channel);
-// the clock's ms: the row beat again every 3 s, lapsed rows swept every 1 s
-void den_tick(int64_t now_ms);
-// each /work thing's out, a line each, on stdout
+// tippet's sync, for a carrier to link (poll.h); NULL before den_boot
+tp_sync *den_sync(void);
+// each loop, the clock's ms: the heartbeat every DEN_BEAT, the asks waiting answered, the screen's
+// band drawn again when who's here changes
+void den_tick(int64_t now);
+// the carrier's state, in a few words, for the screen ("on galaxy.observer", "offline")
+void den_net(const char *state);
+// pairing: the den an ask came from last put in this den's keys, and the screen says so
+void den_trust_last(void);
+// the band at the screen's foot (fb.h): who's here, or what just happened, in words. from the
+// screen thing's paint, last
+void den_band(void);
+// how many asks this den has answered; how many steps its log holds, every device's
+unsigned den_asks(void);
+uint64_t den_steps(void);
+// the dens heard, the keys, the log, a line each, on stdout
 void den_print(void);
+// tippet's own heap (its tp_mem): now, and the most yet
+size_t den_heap(size_t *most);
+// the platform's: the screen drawn again (the last picture, with the band); n random bytes
+void frame_again(void);
+void den_random(uint8_t *out, size_t n);
 
 #endif
