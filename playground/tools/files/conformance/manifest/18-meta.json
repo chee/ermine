@@ -9,13 +9,13 @@
 				"time": 6
 			},
 			"expect": {
-				"bytes": "a264726f6f7461726474696d65f94600"
+				"bytes": "a264726f6f7461726474696d6506"
 			}
 		},
 		{
 			"op": "decode",
 			"codec": "meta",
-			"bytes": "a264726f6f7461726474696d65f94600",
+			"bytes": "a264726f6f7461726474696d6506",
 			"expect": {
 				"record": {
 					"root": "r",
@@ -56,7 +56,7 @@
 		{
 			"op": "decode",
 			"codec": "meta",
-			"bytes": "826172f94600",
+			"bytes": "82617206",
 			"expect": {
 				"code": "store"
 			}
@@ -64,7 +64,7 @@
 		{
 			"op": "decode",
 			"codec": "meta",
-			"bytes": "a264726f6f74f93c006474696d65f94600",
+			"bytes": "a264726f6f74016474696d6506",
 			"expect": {
 				"code": "store"
 			}

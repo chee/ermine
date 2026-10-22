@@ -48,7 +48,7 @@ static const unsigned kindTags[JSON_KINDS] = { 72, 77, 69, 78, 70, 79, 71, 85, 8
 /** the shortest decimal that reads back as x, with a point or an exponent, as Number#toString and diag.ts have it */
 static void decimal(Text *out, double x) {
 	if (isnan(x) || isinf(x) || x == 0) {
-		putText(out, isnan(x) ? "NaN" : isinf(x) ? (x < 0 ? "-Infinity" : "Infinity") : signbit(x) ? "-0.0" : "0.0");
+		putText(out, isnan(x) ? "NaN" : isinf(x) ? (x < 0 ? "-Infinity" : "Infinity") : "0.0"); // zero has no sign
 		return;
 	}
 	char buffer[40];
@@ -738,7 +738,7 @@ static Json *number(Reader *r) {
 			free(copy);
 			r->at = end;
 			if (!indicator(r, false)) return NULL;
-			return jsonNumber(x);
+			return jsonNumber(x == 0 ? 0.0 : x); // zero has no sign: -0.0 is 0
 		}
 	}
 	r->at = end;
@@ -758,7 +758,7 @@ static Json *number(Reader *r) {
 		r->at = after;
 		return jsonNumber(x);
 	}
-	return jsonNumber(x == 0 ? 0.0 : -x); // an integer has no sign bit: -0 is 0
+	return jsonNumber(x == 0 ? 0.0 : -x); // zero has no sign: -0 is 0
 }
 
 // values ---------------------------------------------------------------------------------

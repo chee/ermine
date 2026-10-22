@@ -21,7 +21,7 @@ Deno.test("write: null, booleans and numbers", () => {
 		[true, "true"],
 		[false, "false"],
 		[0, "0.0"],
-		[-0, "-0.0"],
+		[-0, "0.0"],
 		[1, "1.0"],
 		[-2, "-2.0"],
 		[100, "100.0"],
@@ -280,7 +280,7 @@ Deno.test("read: integers and decimals as the nearest number", () => {
 		["-5", -5],
 		["0", 0],
 		["-0", 0],
-		["-0.0", -0],
+		["-0.0", 0],
 		["0x1f", 31],
 		["0X1F", 31],
 		["-0x10", -16],
@@ -297,6 +297,8 @@ Deno.test("read: integers and decimals as the nearest number", () => {
 		["10_0", 10],
 	]
 	for (const [text, x] of cases) same(diag.read(text), x)
+	// zero has no sign (same can't see one: both encode alike)
+	assertEquals(Object.is(diag.read("-0.0"), 0), true)
 })
 
 Deno.test("read: strings with escapes", () => {

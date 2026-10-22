@@ -19,7 +19,7 @@
 
 #include "../../../conformance/c/protocol_harness.h"
 #include "../../../ermine/encoding/c/cbor.h"
-#include "../../../ermine/encoding/c/commit_form_harness.h"
+#include "../../../playground/encoding/c/commit_form_harness.h"
 #include "../../../ermine/ids/c/ids.h"
 
 #include <stdlib.h>

@@ -41,8 +41,8 @@ import { byCodePoint } from "./names.ts"
 import { type Watcher, watcher } from "./watch.ts"
 import { Disk, IDS, programSnapshot } from "./disk_harness.ts"
 import { no, type Policy, yes } from "@ermine/protect"
-import { fromJson, toJson } from "../../../conformance/typescript/form.ts"
-import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
+import { fromJson, toJson } from "../../../../conformance/typescript/form.ts"
+import { type Answer, type Request, serve } from "../../../../conformance/typescript/harness.ts"
 
 type Item = string | [string, number]
 type Path = Item[]

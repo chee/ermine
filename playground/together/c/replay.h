@@ -14,7 +14,7 @@
 #define RP_REPLAY_H
 
 #include "history.h"
-#include "../../../ermine/encoding/c/pack.h"
+#include "../../../playground/encoding/c/pack.h"
 
 #include <stdbool.h>
 #include <stddef.h>

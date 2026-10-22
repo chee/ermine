@@ -13,7 +13,7 @@
 #ifndef LK_LOCK_H
 #define LK_LOCK_H
 
-#include "../../../ermine/encoding/c/commit.h"
+#include "../../../playground/encoding/c/commit.h"
 
 #include <stdbool.h>
 #include <stddef.h>

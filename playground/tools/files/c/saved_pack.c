@@ -3,7 +3,6 @@
 #include "../../../../ermine/encoding/c/cbor.h"
 #include "../../../../ermine/encoding/c/json.h"
 
-#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -143,29 +142,14 @@ static const char *text(reader *r) {
 	return s;
 }
 
-static double half(uint64_t h) {
-	int e = (int)(h >> 10 & 0x1f);
-	double m = (double)(h & 0x3ff);
-	double v = e == 0 ? ldexp(m, -24) : e == 31 ? (m ? NAN : INFINITY) : ldexp(m + 1024, e - 25);
-	return h & 0x8000 ? -v : v;
-}
-
-// a number: a float, whole (a time, a line, a column); integers are not numbers here
+// a number: a whole one, an integer (a time, a line, a column); a float is not one here
 static int64_t number_in(reader *r) {
 	uint64_t n;
 	int ai, major = next(r, &n, &ai);
 	if (failed(r)) return 0;
-	if (major == 7 && ai >= 25 && ai <= 27) {
-		double d;
-		if (ai == 25) d = half(n);
-		else if (ai == 26) {
-			float f;
-			uint32_t u = (uint32_t)n;
-			memcpy(&f, &u, 4);
-			d = f;
-		} else memcpy(&d, &n, 8);
-		if (d == floor(d) && fabs(d) < 9223372036854775807.0) return (int64_t)d;
-	}
+	(void)ai;
+	if (major == 0 && n <= (uint64_t)INT64_MAX) return (int64_t)n;
+	if (major == 1 && n <= (uint64_t)INT64_MAX) return -1 - (int64_t)n;
 	r->bad = 1;
 	return 0;
 }

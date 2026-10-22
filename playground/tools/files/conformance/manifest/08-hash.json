@@ -31,7 +31,7 @@
 				]
 			},
 			"expect": {
-				"hash": "60912202d6d2f27afc3ee625c9763aec1e3c3bbb9927c6455f1d18f7a1d7483c"
+				"hash": "cfe69839ce84e59d18d56b8b65917e89c15a2db61228bf90bfb29e3a824275f8"
 			}
 		},
 		{
@@ -72,16 +72,16 @@
 		},
 		{
 			"op": "hash",
-			"value": -0,
+			"value": 0,
 			"expect": {
-				"hash": "931be8b2ed006e00d47665ab8f63c29d0427a69ab8eb091919734cee61a34d66"
+				"hash": "2d3adedff11b61f14c886e35afa036736dcd87a74d27b5c1510225d0f592e213"
 			}
 		},
 		{
 			"op": "hash",
 			"value": 9007199254740992,
 			"expect": {
-				"hash": "983be60d6254ad0b920a3d5c69e0791f42a9bd88f8a3ba43ddc6b1bc36c5d711"
+				"hash": "2eada5e315144dc0b00aabee393d315be1d0c5f922d90d14fc1751c2d5a5b7ea"
 			}
 		},
 		{
@@ -91,7 +91,7 @@
 				"a": 1
 			},
 			"expect": {
-				"hash": "a653b0a2109d94b8c22417ff991ebdadda2fb23d78cac5f5b7af0a647e0df336"
+				"hash": "7ee59ea6b0aab4ddb862c20b29ec133fc2fc6d2bafa1f0e4768314711f0dd674"
 			}
 		},
 		{

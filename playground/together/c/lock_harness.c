@@ -6,7 +6,7 @@
 #include "transport_harness.h"
 
 #include "../../../conformance/c/protocol_harness.h"
-#include "../../../ermine/encoding/c/commit_form_harness.h"
+#include "../../../playground/encoding/c/commit_form_harness.h"
 #include "../../../ermine/encoding/c/json.h"
 
 #include <stdlib.h>
