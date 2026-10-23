@@ -1,9 +1,11 @@
 // the things: one runner each, given the den's Start (the box, places, process, scheduler...). a thing
-// writes what it gives on its own process node, attributes["thing.out"], and reads its sources the
-// same way: their nodes' attributes, here or mirrored from away. its args say what it reads, as
-// triples [input, den id, path] (a counter's input is "in", a pig's its name; the path where the
-// source runs: here, or as away places another den's process), and any settings as "name=value"
-// (the pigs' weights to start at). by path, so a source started again is followed
+// writes what it gives on its own process node: its first outlet at attributes["thing.out"], any
+// other at attributes["thing.<name>"] (OUTLETS). it reads its sources the same way: their nodes'
+// attributes, here or mirrored from away. its args say what it reads, as triples [input, den id,
+// path] (a counter's input is "in", a pig's its name; the path where the source runs: here, or as
+// away places another den's process), each followed by "=<outlet>" when it reads an outlet other
+// than the first, and any settings as "name=value" (the pigs' weights to start at). by path, so a
+// source started again is followed
 import { createChangeHeader } from "@ermine/places/header"
 import { upsert } from "@ermine/places/upsert"
 import { get } from "@ermine/places/lib"
@@ -22,26 +24,45 @@ const OUT = "thing.out"
 // a timer's every and paused, beside its out
 export const STATE = "thing.state"
 
-export type Source = { input: string; den: string; at: string }
-// what args say: the sources, and the settings
+// from: the outlet it reads, by name; none: the source's first, its out
+export type Source = { input: string; den: string; at: string; from?: string }
+// the attribute an outlet is written at: the first (none named) at thing.out
+export const outlet = (from?: string) => from ? `thing.${from}` : OUT
+// what args say: the sources, and the settings. an arg starting "=" just after a triple names the
+// outlet that triple reads (a setting's name is never empty, so to a reader before outlets it is
+// a setting nobody asks for, and the triples come out the same)
 export function parse(
 	args: readonly string[],
 ): { sources: Source[]; settings: Record<string, string> } {
 	const sources: Source[] = [], settings: Record<string, string> = {}
+	// the arg just after the last triple
+	let after = -1
 	for (let i = 0; i < args.length; i++) {
 		const a = args[i]
 		const eq = a.indexOf("=")
-		if (eq !== -1) settings[a.slice(0, eq)] = a.slice(eq + 1)
+		if (eq === 0) {
+			if (i === after && a.length > 1) sources[sources.length - 1].from = a.slice(1)
+		} else if (eq !== -1) settings[a.slice(0, eq)] = a.slice(eq + 1)
 		else if (i + 2 < args.length) {
 			sources.push({ input: a, den: args[i + 1], at: args[i + 2] })
 			i += 2
+			after = i + 1
 		}
 	}
 	return { sources, settings }
 }
+// args that are wires only (no settings), as their sources; else undefined
+export function wires(args: readonly string[]): Source[] | undefined {
+	const { sources, settings } = parse(args)
+	const n = sources.reduce((n, s) => n + (s.from ? 4 : 3), 0)
+	return sources.length && n === args.length && Object.keys(settings).length === 0 &&
+			sources.every((s) => s.at.startsWith("/"))
+		? sources
+		: undefined
+}
 export function unparse(sources: readonly Source[], settings: Record<string, string> = {}) {
 	return [
-		...sources.flatMap((s) => [s.input, s.den, s.at]),
+		...sources.flatMap((s) => [s.input, s.den, s.at, ...(s.from ? [`=${s.from}`] : [])]),
 		...Object.entries(settings).map(([k, v]) => `${k}=${v}`),
 	]
 }
@@ -81,8 +102,8 @@ export const voice = {
 	play: (_name: Voice): "played" | "muted" | "waiting" | "silent" => "silent",
 	silent: false,
 }
-// what the pigs were told to say, beside their out
-export const SAYS = "thing.says"
+// what the pigs were told to say: their second outlet
+export const SAYS = outlet("says")
 
 // its out (or another attribute of its node), written with its scope open
 function writer(ctx: Context, name = OUT) {
@@ -94,12 +115,12 @@ function writer(ctx: Context, name = OUT) {
 			))
 }
 
-// the out of what is wired into input, tracked (the path, then the node there): f told each value;
+// the outlet wired into input, tracked (the path, then the node there): f told each value;
 // first: the first, or the first from a node now at that path (a source started again)
 function reading(ctx: Context, f: (v: unknown, first: boolean) => void, input = "in") {
 	const src = parse(ctx.process.args).sources.find((s) => s.input === input)
 	if (src === undefined) return
-	const path = inside(src.at)
+	const path = inside(src.at), name = outlet(src.from)
 	let was: unknown = undefined
 	ctx.scheduler.runWithScope(ctx.scope, () =>
 		ctx.scheduler.createEffect(
@@ -107,7 +128,7 @@ function reading(ctx: Context, f: (v: unknown, first: boolean) => void, input = 
 				const id = get(ctx.places, path)
 				return {
 					id,
-					v: id === undefined ? undefined : ctx.places.readValue("attributes", id, [OUT]),
+					v: id === undefined ? undefined : ctx.places.readValue("attributes", id, [name]),
 				}
 			},
 			({ id, v }) => {
@@ -177,23 +198,29 @@ const chart: Run = (_, api) => {
 	return gone(ctx)
 }
 
-// the cardputer's keyboard: gives what was typed, the last 18 letters
+// the cardputer's keyboard. text: what it holds, the last 280 letters. typed: each key as it is
+// pressed, { key, n }: a letter, " ", or "del", and how many keys so far (two a's in a row are two
+// values, n tells them apart); null until the first
+export const LONGEST = 280
 const keys: Run = (_, api) => {
 	const ctx = ctxOf(api)
-	const out = writer(ctx)
-	let text = ""
+	const out = writer(ctx), typed = writer(ctx, outlet("typed"))
+	let text = "", n = 0
 	out(text)
+	typed(null)
 	controls.set(String(ctx.process.id), {
 		type: (k) => {
-			text = k === "del" ? text.slice(0, -1) : (text + k).slice(-18)
+			text = k === "del" ? text.slice(0, -1) : (text + k).slice(-LONGEST)
 			out(text)
+			typed({ key: k, n: ++n })
 		},
 	})
 	return gone(ctx)
 }
 
 // the cardputer's pigs: gives { name: weight }; a feed puts one on. one input a pig: each change
-// of what is wired into it feeds that pig. the weights start where the settings say
+// of what is wired into it feeds that pig. the weights start where the settings say. says: what
+// came into "say", { pig, text, n }
 export const PIGS = ["babe", "peppa", "wilbur"]
 const pigs: Run = (_, api) => {
 	const ctx = ctxOf(api)
@@ -349,6 +376,22 @@ const pad: Run = (_, api) => {
 		},
 	}
 }
+
+// what each kind gives: its outlets, by name, each with a few words; the first is its out
+// (thing.out), whatever it is called. none listed: one, "out"
+export const OUTLETS: Record<string, [string, string][]> = {
+	keys: [
+		["text", "what it holds, the last 280 letters"],
+		["typed", 'each key as it is pressed: { key, n }, del as "del"'],
+	],
+	pigs: [
+		["weights", "each pig's weight"],
+		["says", "what the pigs were told to say: { pig, text, n }"],
+	],
+	speaker: [],
+}
+export const outletsOf = (kind: string): [string, string][] =>
+	OUTLETS[kind] ?? [["out", "what it gives"]]
 
 export const RUNNERS = {
 	button: { run: button, program: "a button: gives how many times it was pressed" },

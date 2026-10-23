@@ -411,8 +411,8 @@ export function renderers(h: API, at: string, given: Record<string, Renderer> = 
 }
 
 // a screen's runner at `at`: a live function from the host (no type) taking javascript, giving the
-// host. what it provides is the screen's keys: a renderer needing one has a way only on a walk with
-// a runner giving it
+// host (to @ermine/software, a runner: the function its start). what it provides is the screen's
+// keys: a renderer needing one has a way only on a walk with a runner giving it
 export function runner(h: API, at: string, host: Host, provides: readonly string[]) {
 	put(h, at, () => host, { [A.takes]: [JS], [A.provides]: provides })
 }

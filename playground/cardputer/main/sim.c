@@ -6,6 +6,7 @@
 // poll.h's long-poll, its two workers threads with curl. ./sim.sh builds and runs it.
 //
 //   SIM_ROOM=KAYA ./sim.sh          the den in room KAYA on galaxy.observer, typing into it
+#include <dirent.h>
 #include <dlfcn.h>
 #include <errno.h>
 #include <pthread.h>
@@ -15,6 +16,7 @@
 #include <string.h>
 #include <sys/select.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
@@ -147,6 +149,62 @@ static void draw(void (*paint)(void)) {
 
 void frame_again(void) {
 	if (shown || menu_open()) draw(menu_open() ? menu_paint : shown);
+}
+
+// the rooms kept in SIM_HOME (its t2<code> folders), and one let go whole
+static long dir_bytes(const char *dir) {
+	DIR *d = opendir(dir);
+	struct dirent *f;
+	struct stat st;
+	long n = 0;
+	char file[600];
+	while (d && (f = readdir(d)) != NULL) {
+		snprintf(file, sizeof file, "%s/%s", dir, f->d_name);
+		if (f->d_name[0] != '.' && stat(file, &st) == 0) n += (long)st.st_size;
+	}
+	if (d) closedir(d);
+	return n;
+}
+
+int rooms_list(menu_room *out, int most) {
+	DIR *d = opendir(home);
+	struct dirent *e;
+	int n = 0;
+	char dir[400];
+	while (d && (e = readdir(d)) != NULL && n < most) {
+		if (strncmp(e->d_name, "t2", 2) != 0 || strlen(e->d_name) != 6) continue;
+		snprintf(dir, sizeof dir, "%s/%s", home, e->d_name);
+		snprintf(out[n].code, 5, "%s", e->d_name + 2);
+		out[n].kb = (unsigned)((dir_bytes(dir) + 1023) / 1024);
+		snprintf(out[n].fs, sizeof out[n].fs, "sim");
+		n++;
+	}
+	if (d) closedir(d);
+	return n;
+}
+
+int room_delete(const char *code, unsigned *left, char *why, size_t cap) {
+	if (strcmp(code, den_room()) == 0) return snprintf(why, cap, "the den is in it"), -1;
+	char dir[400], file[600];
+	snprintf(dir, sizeof dir, "%s/t2%s", home, code);
+	DIR *d = opendir(dir);
+	if (d == NULL) return snprintf(why, cap, "it isn't here"), -1;
+	struct dirent *f;
+	while ((f = readdir(d)) != NULL) {
+		snprintf(file, sizeof file, "%s/%s", dir, f->d_name);
+		if (f->d_name[0] != '.') unlink(file);
+	}
+	closedir(d);
+	if (rmdir(dir) != 0) return snprintf(why, cap, "%s", strerror(errno)), -1;
+	struct statvfs v;
+	*left = statvfs(home, &v) == 0 ? (unsigned)((uint64_t)v.f_bavail * v.f_frsize / 1024) : 0;
+	return 0;
+}
+
+static void *sim_mem(void *ctx, void *p, size_t old, size_t size) {
+	(void)ctx, (void)old;
+	if (size == 0) return free(p), NULL;
+	return realloc(p, size);
 }
 
 // the room, kept in SIM_HOME/room (the device's NVS); room_go: kept, then the sim run again in it
@@ -372,9 +430,10 @@ int main(int argc, char **argv) {
 			while ((nl = memchr(line, '\n', at)) != NULL) {
 				*nl = 0;
 				if (strcmp(line, "g0") == 0) menu_toggle();
-				else if (menu_open() && strcmp(line, "tab") != 0) {
+				else if (menu_open() && (strcmp(line, "tab") != 0 || menu_key("tab"))) {
 					// the menu's keys: a line a key's name (esc, enter, up, down, backspace), or letters
-					if (!strcmp(line, "esc") || !strcmp(line, "enter") || !strcmp(line, "up") || !strcmp(line, "down") ||
+					if (!strcmp(line, "tab")) {
+					} else if (!strcmp(line, "esc") || !strcmp(line, "enter") || !strcmp(line, "up") || !strcmp(line, "down") ||
 						!strcmp(line, "backspace"))
 						menu_key(line);
 					else
@@ -388,7 +447,40 @@ int main(int argc, char **argv) {
 				else if (strcmp(line, "quit") == 0) return 0;
 				else if (strcmp(line, "snapshot") == 0) den_snapshot();
 				else if (strcmp(line, "mark") == 0) den_mark("now");
-				else if (strncmp(line, "measure ", 8) == 0) {
+				else if (strcmp(line, "packs") == 0) {
+					// the last few steps of this den's packed as one run: its bytes, against the steps alone
+					static uint8_t b[8][2048];
+					tp_span sp[8];
+					size_t total = 0;
+					int k = 0;
+					uint64_t count = den_steps_own();
+					for (uint64_t n = count > 6 ? count - 5 : 1; k < 6 && n <= count; n++) {
+						long l = den_own_step(n, b[k], sizeof b[k]);
+						if (l < 0) break;
+						sp[k % 8] = (tp_span){b[k], (size_t)l};
+						k++;
+					}
+					tp_mem mem = {sim_mem, NULL};
+					for (int i = 1; i <= k; i++) {
+						tp_span pack;
+						total = 0;
+						for (int j = 0; j < i; j++) total += sp[j].n;
+						if (tp_pack(&mem, sp, (size_t)i, 1 << 20, &pack) == 0) {
+							printf("packs: %d steps, %zu bytes alone, %zu packed\n", i, total, pack.n);
+							tp_span_free(&mem, &pack);
+						}
+					}
+				} else if (strncmp(line, "cycle ", 6) == 0) {
+					// a thing started and stopped 10 times: what each leaves behind
+					den_mark("before cycles");
+					for (int i = 0; i < 10; i++) {
+						den_start(line + 6, "cycled");
+						for (int k = 0; k < 3; k++) host_settle(), den_tick(now_ms());
+						den_stop("cycled");
+						for (int k = 0; k < 3; k++) host_settle(), den_tick(now_ms());
+						if (i == 0 || i == 9) den_mark(i ? "after 10" : "after 1");
+					}
+				} else if (strncmp(line, "measure ", 8) == 0) {
 					// a thing started, what it holds after, by who allocated it (SIM_TRACE: libtrace)
 					void (*on)(int) = (void (*)(int))dlsym(RTLD_DEFAULT, "trace_on");
 					void (*dump)(const char *, int) = (void (*)(const char *, int))dlsym(RTLD_DEFAULT, "trace_dump");
@@ -425,6 +517,7 @@ int main(int argc, char **argv) {
 			den_net(poll_state());
 		}
 		den_tick(now);
+		things_tick(now);
 		if (now - said > 10000) {
 			said = now;
 			unsigned requests = 0, failed = 0, i = 0, o = 0;

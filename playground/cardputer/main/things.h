@@ -10,8 +10,11 @@
 #define THING_OUT "thing.out"
 #define THING_SAYS "thing.says"
 
-// the runners into the registry: "keys", "screen", "pigs"
+// the runners into the registry: "keys", "screen", "pigs", the den's "speaker", and the parts'
+// (parts.h): "tilt", "loudness", "led", "ir", "battery", "sd", "grove"
 void things_add(hf *fs);
+// each loop: the parts' things (tilt, loudness, battery, sd, grove) read what they read
+void things_tick(int64_t now);
 // a key on the keyboard to the keys thing running here: a letter, " ", or "del"
 void things_key(const char *key);
 // the platform's: show a picture (fb.h's paint: called again for each strip, so it draws from what

@@ -23,6 +23,8 @@ import {
 import {
 	controls,
 	isPicture,
+	outlet,
+	outletsOf,
 	PAD,
 	parse,
 	type Picture,
@@ -151,6 +153,8 @@ type Thing = {
 	out: unknown
 	state: unknown
 	says: unknown
+	// all its attributes: what each outlet gives (outlet(name))
+	attrs: Record<string, unknown>
 	args: string[]
 	sources: Source[]
 	settings: Record<string, string>
@@ -185,6 +189,7 @@ function thingOf(
 		out: attrs[OUT],
 		state: attrs[STATE],
 		says: attrs[SAYS],
+		attrs,
 		args,
 		...parse(args),
 	}
@@ -885,18 +890,23 @@ host.ask(${JSON.stringify(v.who.slice(0, 8) + "…")}, { op: "start",\n  runner:
 			list ? `,\n  args: ${list}` : ""
 		} })`
 	const reads = t.sources.map((s) =>
-		`\n//   ${s.input}: the node at ${s.at}, its attributes["thing.out"]`
+		`\n//   ${s.input}: the node at ${s.at}, its attributes["${outlet(s.from)}"]`
+	).join("")
+	const gives = outletsOf(t.kind).map(([name], i) =>
+		`\n//   attributes["${outlet(i ? name : undefined)}"] = ${
+			fmt(t.attrs[outlet(i ? name : undefined)])
+		}${outletsOf(t.kind).length > 1 ? ` (${name})` : ""}`
 	).join("")
 	return `// how this ${t.kind} came to be (as seen from here)
 ${start}
 // a process: /${t.at.join("/")}, ${
 		v.mine ? `node ${t.id.slice(0, 13)}…` : `its den's process ${t.process.slice(0, 13)}…`
-	}${v.mine ? "" : `\n// shared here as the node …/things/${t.process.slice(0, 13)}…`}
-// what it gives, on its own node:
-//   attributes["thing.out"] = ${fmt(t.out)}${
+	}${v.mine ? "" : `\n// shared here as the node …${t.id.slice(t.id.indexOf("/things"))}`}
+// what it gives, on its own node:${gives}${
 		reads ? `\n// what it reads, each its source's node, here or mirrored:${reads}` : ""
 	}
-// args: [input, den id, process id] for each wire in,
+// args: [input, den id, path] for each wire in, then
+// "=<outlet>" when it reads a source's other outlet,
 // and settings as "name=value". a wire = this thing
 // started again with new args; in another den, an ask
 // to stop it and an ask to start it`
@@ -934,9 +944,17 @@ function makeShown(
 		title: t.kind,
 		kind: SHOWS.has(t.kind) || t.kind === "sound" ? "compute" : "key",
 		ins: (INPUTS[t.kind] ?? []).map((i) => [i, i] as [string, string]),
-		// a speaker only takes in
-		outs: t.kind === "speaker" ? [] : [["out", "out"]],
+		// its outlets: the first is its out (a speaker has none: it only takes in)
+		outs: outletsOf(t.kind).map(([name], i) => [i ? name : "out", name] as [string, string]),
 	})
+	// more than one: each named while the pointer is on it, its words as its title
+	if (outletsOf(t.kind).length > 1) {
+		outletsOf(t.kind).forEach(([name, words], i) => {
+			const p = box.port(i ? name : "out").el
+			p.classList.add("named")
+			p.title = `${name}: ${words}`
+		})
+	}
 	box.el.tabIndex = 0
 	box.el.classList.add("pop", `thing-${t.kind}`)
 	if (!v.mine) box.el.classList.add("away")
@@ -1098,6 +1116,8 @@ function makeShown(
 			}
 			sc.classList.toggle("empty", o === null || o === undefined)
 			sc.classList.toggle("small", typeof o !== "number")
+			// long text wraps, its end in view
+			sc.classList.toggle("long", typeof o === "string" && o.length > 10)
 			sc.textContent = o === null || o === undefined
 				? "—"
 				: isMap(o)
@@ -1201,10 +1221,12 @@ function makeShown(
 			last = n
 		}
 	} else if (t.kind === "keys") {
-		const typed = h("div", "typed")
+		// its end in view: what it holds runs off to the left
+		const typed = h("div", "typed"), held = h("span")
+		typed.append(held)
 		body.append(typed, note)
 		update = (t) => {
-			typed.textContent = String(t.out ?? "")
+			held.textContent = String(t.out ?? "")
 			note.textContent = v.mine ? "type on the keys below" : `typed ${theirs}`
 		}
 	} else if (t.kind === "pigs") {
@@ -1304,13 +1326,20 @@ addEventListener("pointerdown", (e) => {
 addEventListener("keydown", (e) => e.key === "Escape" && (voicePop?.remove(), voicePop = undefined))
 
 // ---- wires ----
-// by key: "<source's spot> <reader's spot> <input>"
+// by key: "<source's spot> <reader's spot> <input> <outlet>" (its port: "out", the first)
 const wires = new Map<string, Wire & { text?: string }>()
-const wireKey = (from: string, to: string, input: string) => `${from} ${to} ${input}`
+const wireKey = (from: string, to: string, input: string, out = "out") =>
+	`${from} ${to} ${input} ${out}`
+// the port an outlet is drawn at, and back
+const portOf = (from?: string) => from ?? "out"
+const fromOf = (port: string) => port === "out" ? undefined : port
 // a wire made or taken off, until the reader started again says so: made, drawn from the drop,
 // dashed (pending); taken off, not drawn meanwhile. the reader's box held while it starts again.
 // a refusal: as it was, with words. no answer in WAIT: let go
-const pending = new Map<string, { from: string; to: string; input: string; since: number }>()
+const pending = new Map<
+	string,
+	{ from: string; to: string; input: string; out: string; since: number }
+>()
 const dropped = new Map<string, number>()
 const holding = new Map<string, number>()
 const WAIT = 20000
@@ -1402,8 +1431,14 @@ const inWords = (v: View, t: Thing, input: string) =>
 		? (v.mine ? "what your pigs say" : `what the pigs on ${label(v)} say`)
 		: (v.mine ? `your pig ${input}` : `${input}, a pig on ${label(v)}`)
 
-// a wire: the reader started again, reading the source by its path
-function connect(source: string, reader: string, input: string, port?: HTMLElement): boolean {
+// a wire: the reader started again, reading the source's outlet out (its port) by its path
+function connect(
+	source: string,
+	reader: string,
+	input: string,
+	port?: HTMLElement,
+	out = "out",
+): boolean {
 	const s = find(source), r = find(reader)
 	if (!s || !r) return false
 	if (!(INPUTS[r.t.kind] ?? []).includes(input)) return false
@@ -1422,15 +1457,22 @@ function connect(source: string, reader: string, input: string, port?: HTMLEleme
 		void port.offsetWidth
 		port.classList.add("snap")
 	}
-	const from = spotOf(s.v, s.t), to = spotOf(r.v, r.t), k = wireKey(from, to, input)
-	pending.set(k, { from, to, input, since: Date.now() })
+	const from = spotOf(s.v, s.t), to = spotOf(r.v, r.t), k = wireKey(from, to, input, out)
+	pending.set(k, { from, to, input, out, since: Date.now() })
 	holding.set(to, Date.now())
 	render()
 	restart(
 		r.v,
 		r.t,
-		argsWith(r.t, input, { input, den: s.v.who, at: `/${s.t.at.join("/")}` }),
-		`You wired ${whose(s.v, s.t)} (/${s.t.at.join("/")}) to ${inWords(r.v, r.t, input)}.`,
+		argsWith(r.t, input, {
+			input,
+			den: s.v.who,
+			at: `/${s.t.at.join("/")}`,
+			...(fromOf(out) ? { from: fromOf(out) } : {}),
+		}),
+		`You wired ${whose(s.v, s.t)}${out === "out" ? "" : `'s ${out}`} (/${s.t.at.join("/")}) to ${
+			inWords(r.v, r.t, input)
+		}.`,
 		(ok) => {
 			holding.delete(to)
 			if (!ok) pending.delete(k)
@@ -1439,7 +1481,9 @@ function connect(source: string, reader: string, input: string, port?: HTMLEleme
 	)
 	return true
 }
-board.onConnect((from: Port, to: Port) => connect(from.box.id, to.box.id, to.name, to.el))
+board.onConnect((from: Port, to: Port) =>
+	connect(from.box.id, to.box.id, to.name, to.el, from.name)
+)
 
 // a thing dragged from the files, dropped on an in-port: the same wire
 board.world.addEventListener("dragover", (e) => {
@@ -1456,8 +1500,8 @@ board.world.addEventListener("drop", (e) => {
 	if (!p || !id) return
 	e.preventDefault()
 	const reader = p.closest<HTMLElement>(".box")?.dataset.id
-	const input = p.querySelector(".port-label")?.textContent ?? ""
-	if (!reader || !connect(id, reader, input, p)) {
+	const input = p.dataset.port ?? ""
+	if (!reader || !p.classList.contains("port-in") || !connect(id, reader, input, p)) {
 		sound.no()
 		say("Only an in can read: drop it on a dot marked in, or on a pig.", "hot")
 	}
@@ -1738,11 +1782,19 @@ function render() {
 	// for and not yet answered, dashed
 	const want = new Set<string>()
 	const partners = new Map<Port, number[]>()
-	const draw = (k: string, a: Shown, b: Shown, input: string, text: string, wait: boolean) => {
+	const draw = (
+		k: string,
+		a: Shown,
+		b: Shown,
+		input: string,
+		out: string,
+		text: string,
+		wait: boolean,
+	) => {
 		want.add(k)
 		let w = wires.get(k)
 		if (!w) {
-			w = board.wire(a.box.port("out"), b.box.port(input))
+			w = board.wire(a.box.port(out), b.box.port(input))
 			wires.set(k, w)
 			w.text = text
 			w.label(text)
@@ -1753,8 +1805,8 @@ function render() {
 		}
 		w.dashed(wait)
 		// each end faces the other
-		const out = a.box.port("out"), inp = b.box.port(input)
-		partners.set(out, [...(partners.get(out) ?? []), centre(b.box) - centre(a.box)])
+		const from = a.box.port(out), inp = b.box.port(input)
+		partners.set(from, [...(partners.get(from) ?? []), centre(b.box) - centre(a.box)])
 		partners.set(inp, [centre(a.box) - centre(b.box)])
 		return w
 	}
@@ -1767,15 +1819,27 @@ function render() {
 				const s = sourceOf(src)
 				const a = s && shown.get(spotOf(s.v, s.t))
 				if (!s || !a || !(INPUTS[t.kind] ?? []).includes(src.input)) continue
-				const k = wireKey(spotOf(s.v, s.t), spotOf(v, t), src.input)
+				// an outlet its source doesn't draw (one it doesn't give): no wire to show
+				if (!a.box.el.querySelector(`.port-out[data-port="${CSS.escape(portOf(src.from))}"]`)) {
+					continue
+				}
+				const k = wireKey(spotOf(s.v, s.t), spotOf(v, t), src.input, portOf(src.from))
 				there.add(k)
 				// taken off, not yet answered: not drawn again
 				if (dropped.has(k)) continue
 				pending.delete(k)
-				const w = draw(k, a, b, src.input, fmt(s.t.out), false)
+				const w = draw(
+					k,
+					a,
+					b,
+					src.input,
+					portOf(src.from),
+					fmt(s.t.attrs[outlet(src.from)]),
+					false,
+				)
 				w.tone(s.v.alive && v.alive && !locked(s.v) && !locked(v) ? undefined : "dim")
 				w.hint(
-					`reads ${src.at}${
+					`reads ${src.at}${src.from ? `, its ${src.from}` : ""}${
 						s.v.who !== v.who
 							? ` (${label(s.v)}'s: its steps come through tippet, and it is placed in ${
 								v.mine ? "this" : `${label(v)}'s`
@@ -1794,7 +1858,15 @@ function render() {
 			if (a && b) say("No answer to that wire yet, so it's gone: try it again.", "hot")
 			continue
 		}
-		const w = draw(k, a, b, p.input, find(p.from) ? fmt(find(p.from)!.t.out) : "", true)
+		const w = draw(
+			k,
+			a,
+			b,
+			p.input,
+			p.out,
+			find(p.from) ? fmt(find(p.from)!.t.attrs[outlet(fromOf(p.out))]) : "",
+			true,
+		)
 		w.tone(undefined)
 		w.hint("asked for: waiting for the answer")
 	}
@@ -1814,7 +1886,7 @@ function render() {
 		// a speaker's dot stays on the card's edge
 		if (s.kind === "speaker") continue
 		for (const p of [...s.box.el.querySelectorAll<HTMLElement>(".port")]) {
-			const port = s.box.port(p.querySelector(".port-label")!.textContent!)
+			const port = s.box.port(p.dataset.port!)
 			const ds = partners.get(port)
 			// an in faces its source when that is well to the left; else it faces right, the way
 			// outs face (so a source above or below joins it in a bracket)

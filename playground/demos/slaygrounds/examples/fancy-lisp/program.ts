@@ -211,7 +211,7 @@ export default function program(api: API & Extra) {
 					walk: walk.slice(0, k),
 					labels: labels.slice(0, k),
 					found: last && hit ? hit.parent : undefined,
-					var: last && hit ? String(hit.id) : undefined,
+					var: last && hit ? String(hit.found) : undefined,
 					miss: last && !hit,
 				} as Step
 			}

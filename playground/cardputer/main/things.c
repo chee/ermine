@@ -20,9 +20,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #include "core/op/c/json.h"
 #include "fb.h"
+#include "parts.h"
 
 static void *xalloc(size_t n) {
 	void *p = calloc(1, n ? n : 1);
@@ -58,6 +60,14 @@ struct thing {
 	// pigs
 	double weights[3];
 	unsigned turn;
+	// a part's (parts.h): what it does each loop, and when next; what it lets go of at its stop; what
+	// it gave last, and how many times (the speaker's, the IR's)
+	void (*tick)(thing *t, int64_t now);
+	void (*done)(thing *t);
+	int64_t next, said;
+	double x, y;
+	char last[96];
+	int n;
 };
 
 static const char *const PIGS[3] = {"babe", "peppa", "wilbur"};
@@ -206,9 +216,15 @@ static const char *setting(thing *t, const char *name) {
 // a thing's life ----------------------------------------------------------------------------------
 
 static thing *keys_running;
+// the parts' things running, ticked each loop
+#define PARTS 12
+static thing *ticking[PARTS];
 
 static char *let_go(void *data) {
 	thing *t = data;
+	for (int i = 0; i < PARTS; i++)
+		if (ticking[i] == t) ticking[i] = NULL;
+	if (t->done) t->done(t), t->done = NULL;
 	for (size_t i = 0; i < t->nsources; i++) {
 		for (size_t k = 0; k < t->sources[i].npath; k++) free(t->sources[i].path[k]);
 		free(t->sources[i].path);
@@ -224,6 +240,9 @@ static void stopped(void *ctx) {
 	thing *t = ctx;
 	t->stopped = 1;
 	if (keys_running == t) keys_running = NULL;
+	for (int i = 0; i < PARTS; i++)
+		if (ticking[i] == t) ticking[i] = NULL;
+	if (t->done) t->done(t), t->done = NULL;
 }
 
 static thing *thing_of(void *api) {
@@ -358,6 +377,12 @@ static bool draw_equal(const void *a, const void *b, void *data) {
 static int pig_scale(double w) {
 	double k = round(1 + (w - 5) / 10);
 	return k < 1 ? 1 : k > 4 ? 4 : (int)k;
+}
+
+static op_value *map_of(const char *k, op_value *v) {
+	op_value *m = op_map();
+	op_set(m, k, v);
+	return m;
 }
 
 static int number(const op_value *v, double *out) {
@@ -570,7 +595,291 @@ static hf_run screen(const op_value *code, void *api, void *data) {
 	return running(t);
 }
 
+// the parts (parts.h): each a thing, made only when added. what fails is said in words, as its out
+// and on the screen -------------------------------------------------------------------------------
+
+static void tick_me(thing *t, void (*tick)(thing *t, int64_t now), void (*done)(thing *t)) {
+	t->tick = tick, t->done = done;
+	for (int i = 0; i < PARTS; i++)
+		if (ticking[i] == NULL) {
+			ticking[i] = t;
+			return;
+		}
+}
+
+// a part that didn't start: its out the words, and the band says so
+static hf_run failed(thing *t, const char *what) {
+	char one[48];
+	snprintf(one, sizeof one, "%s didn't start:", what);
+	out(t, op_str(parts_why()));
+	den_say(1, one, parts_why());
+	frame_again();
+	return running(t);
+}
+
+void things_tick(int64_t now) {
+	parts_tick();
+	for (int i = 0; i < PARTS; i++) {
+		thing *t = ticking[i];
+		if (t && !t->stopped && t->tick && now >= t->next) t->tick(t, now);
+	}
+}
+
+// tilt: x and y, gravity's pull on each, -10 to 10 (tenths of g); given when one moves by 1 or more
+// past what was given, at most twice a second (each is a step kept for good, on flash and in the
+// room's log)
+static void tilt_tick(thing *t, int64_t now) {
+	float x, y;
+	t->next = now + 100;
+	if (parts_tilt_read(&x, &y)) return;
+	double dx = x * 10 - t->x, dy = y * 10 - t->y;
+	if ((fabs(dx) < 1 && fabs(dy) < 1 && t->n) || now - t->said < 500) return;
+	t->x = round(x * 10), t->y = round(y * 10), t->said = now, t->n++;
+	op_value *m = op_map();
+	op_set(m, "x", op_int((int64_t)fmax(-10, fmin(10, t->x))));
+	op_set(m, "y", op_int((int64_t)fmax(-10, fmin(10, t->y))));
+	out(t, m);
+}
+static void tilt_done(thing *t) { (void)t, parts_tilt(0); }
+static hf_run tilt(const op_value *code, void *api, void *data) {
+	(void)code, (void)data;
+	thing *t = thing_of(api);
+	if (parts_tilt(1)) return failed(t, "tilt");
+	tick_me(t, tilt_tick, tilt_done);
+	return running(t);
+}
+
+// loudness: the mic's level, 0 to 10; given when it moves by 1 or more, at most twice a second
+static void loud_tick(thing *t, int64_t now) {
+	t->next = now + 100;
+	int l = parts_loudness();
+	if (l < 0) return;
+	double v = l / 10.0;
+	if ((fabs(v - t->x) < 1 && t->n) || now - t->said < 500) return;
+	t->x = round(v), t->said = now, t->n++;
+	out(t, op_int((int64_t)t->x));
+}
+static void loud_done(thing *t) { (void)t, parts_listen(0); }
+static hf_run loudness(const op_value *code, void *api, void *data) {
+	(void)code, (void)data;
+	thing *t = thing_of(api);
+	if (parts_listen(1)) return failed(t, "loudness");
+	tick_me(t, loud_tick, loud_done);
+	return running(t);
+}
+
+// a colour: "#rgb", "#rrggbb", a name, a number (0xrrggbb), { r, g, b } or [r, g, b]: 1 when it is one
+static int colour_of(const op_value *v, uint8_t rgb[3]) {
+	static const struct {
+		const char *name;
+		uint32_t c;
+	} NAMES[] = {{"red", 0xff0000}, {"green", 0x00c000}, {"blue", 0x0040ff}, {"yellow", 0xffd000}, {"lemon", 0xfff68f},
+		{"cherry", 0xd2042d}, {"pink", 0xff60a0}, {"purple", 0x9020ff}, {"orange", 0xff7000}, {"white", 0xffffff},
+		{"black", 0}, {"off", 0}, {"cyan", 0x00e0ff}, {"mint", 0x60ffc0}};
+	uint32_t c = 0;
+	if (v->type == OP_STR && v->str[0] == '#') {
+		size_t n = strlen(v->str + 1);
+		char *end;
+		unsigned long x = strtoul(v->str + 1, &end, 16);
+		if (*end || (n != 3 && n != 6)) return 0;
+		c = n == 6 ? (uint32_t)x : (uint32_t)((x >> 8 & 15) * 0x110000 + (x >> 4 & 15) * 0x1100 + (x & 15) * 0x11);
+	} else if (v->type == OP_STR) {
+		size_t i = 0;
+		while (i < sizeof NAMES / sizeof *NAMES && strcasecmp(NAMES[i].name, v->str) != 0) i++;
+		if (i == sizeof NAMES / sizeof *NAMES) return 0;
+		c = NAMES[i].c;
+	} else if (v->type == OP_NUM && v->num >= 0 && v->num <= 0xffffff) c = (uint32_t)v->num;
+	else if (v->type == OP_MAP || (v->type == OP_LIST && v->count == 3)) {
+		double p[3];
+		for (int i = 0; i < 3; i++) {
+			const op_value *x = v->type == OP_LIST ? v->items[i] : op_get(v, (const char *[]){"r", "g", "b"}[i]);
+			if (!number(x, &p[i])) return 0;
+		}
+		c = (uint32_t)fmin(255, fmax(0, p[0])) << 16 | (uint32_t)fmin(255, fmax(0, p[1])) << 8 |
+			(uint32_t)fmin(255, fmax(0, p[2]));
+	} else return 0;
+	rgb[0] = (uint8_t)(c >> 16), rgb[1] = (uint8_t)(c >> 8), rgb[2] = (uint8_t)c;
+	return 1;
+}
+
+// led: shows the colour wired in (a quarter as bright: a WS2812 is very bright), gives it on as
+// "#rrggbb"; anything not a colour said so
+static void led_heard(thing *t, const op_value *v, int first, const char *input) {
+	(void)first, (void)input;
+	uint8_t c[3];
+	if (!colour_of(v, c)) {
+		out(t, op_str("not a colour: #rrggbb, a name, or { r, g, b }"));
+		return;
+	}
+	parts_led_set(c[0] / 4, c[1] / 4, c[2] / 4);
+	char hex[8];
+	snprintf(hex, sizeof hex, "#%02x%02x%02x", c[0], c[1], c[2]);
+	out(t, op_str(hex));
+}
+static void led_done(thing *t) { (void)t, parts_led(0); }
+static hf_run led(const op_value *code, void *api, void *data) {
+	(void)code, (void)data;
+	thing *t = thing_of(api);
+	if (parts_led(1)) return failed(t, "the LED");
+	t->done = led_done;
+	out(t, op_null());
+	reading(t, "in", led_heard);
+	return running(t);
+}
+
+// ir: each change wired in sent as NEC: a number (address << 8 | command, or 32 bits as sent), text
+// of hex ("0x20df10ef"), or { address, command }; gives { code, n }
+static void ir_heard(thing *t, const op_value *v, int first, const char *input) {
+	(void)input;
+	if (first) return;
+	double a, c;
+	uint32_t code;
+	int raw = 0;
+	if (number(v, &a) && a >= 0 && a <= 0xffffffff) code = (uint32_t)a, raw = a > 0xffff;
+	else if (v->type == OP_STR && strtoul(v->str, NULL, 16) > 0) code = (uint32_t)strtoul(v->str, NULL, 16), raw = code > 0xffff;
+	else if (number(op_get(v, "address"), &a) && number(op_get(v, "command"), &c))
+		code = ((uint32_t)a & 0xff) << 8 | ((uint32_t)c & 0xff);
+	else {
+		out(t, op_str("not a code: a number, hex, or { address, command }"));
+		return;
+	}
+	if (parts_ir_nec(code, raw)) {
+		out(t, op_str(parts_why()));
+		return;
+	}
+	char hex[12];
+	snprintf(hex, sizeof hex, "0x%lx", (unsigned long)code);
+	op_value *m = op_map();
+	op_set(m, "code", op_str(hex));
+	op_set(m, "n", op_int(++t->n));
+	out(t, m);
+}
+static void ir_done(thing *t) { (void)t, parts_ir(0); }
+static hf_run ir(const op_value *code, void *api, void *data) {
+	(void)code, (void)data;
+	thing *t = thing_of(api);
+	if (parts_ir(1)) return failed(t, "IR");
+	t->done = ir_done;
+	out(t, op_null());
+	reading(t, "in", ir_heard);
+	return running(t);
+}
+
+// battery: how full, a percentage, now and every 30 s, given when it changes
+static void battery_tick(thing *t, int64_t now) {
+	t->next = now + 30000;
+	int mv = parts_battery_mv();
+	if (mv < 0) {
+		if (strcmp(t->last, parts_why()) != 0) snprintf(t->last, sizeof t->last, "%s", parts_why()), out(t, op_str(t->last));
+		return;
+	}
+	int l = parts_battery_level(mv);
+	if (t->n && (int)t->x == l) return;
+	t->x = l, t->n++;
+	out(t, op_int(l));
+}
+static hf_run battery(const op_value *code, void *api, void *data) {
+	(void)code, (void)data;
+	thing *t = thing_of(api);
+	tick_me(t, battery_tick, NULL);
+	return running(t);
+}
+
+// sd: the card's top folder, its names (or words: no card), now and every 20 s when it changes
+static void sd_tick(thing *t, int64_t now) {
+	t->next = now + 20000;
+	char names[24][13];
+	int n = parts_sd_list(names, 24);
+	char sum[96] = "";
+	for (int i = 0; i < n; i++) {
+		size_t l = strlen(sum);
+		snprintf(sum + l, sizeof sum - l, "%s/", names[i]);
+	}
+	if (n < 0) snprintf(sum, sizeof sum, "%s", parts_why());
+	if (t->n && strcmp(sum, t->last) == 0) return;
+	snprintf(t->last, sizeof t->last, "%s", sum);
+	t->n++;
+	if (n < 0) {
+		out(t, op_str(parts_why()));
+		return;
+	}
+	op_value *l = op_list();
+	for (int i = 0; i < n; i++) op_push(l, op_str(names[i]));
+	out(t, l);
+}
+static hf_run sd(const op_value *code, void *api, void *data) {
+	(void)code, (void)data;
+	thing *t = thing_of(api);
+	tick_me(t, sd_tick, NULL);
+	return running(t);
+}
+
+// grove: the I2C addresses that answer on Port A ("0x3c"), now and every 5 s when they change
+static void grove_tick(thing *t, int64_t now) {
+	t->next = now + 5000;
+	uint8_t a[32];
+	int n = parts_grove_scan(a, 32);
+	char sum[96] = "";
+	for (int i = 0; i < n; i++) {
+		size_t l = strlen(sum);
+		snprintf(sum + l, sizeof sum - l, "%02x", a[i]);
+	}
+	if (t->n && strcmp(sum, t->last) == 0) return;
+	snprintf(t->last, sizeof t->last, "%s", sum);
+	t->n++;
+	op_value *l = op_list();
+	for (int i = 0; i < n; i++) {
+		char h[8];
+		snprintf(h, sizeof h, "0x%02x", a[i]);
+		op_push(l, op_str(h));
+	}
+	out(t, l);
+}
+static void grove_done(thing *t) { (void)t, parts_grove(0); }
+static hf_run grove(const op_value *code, void *api, void *data) {
+	(void)code, (void)data;
+	thing *t = thing_of(api);
+	if (parts_grove(1)) return failed(t, "Grove");
+	tick_me(t, grove_tick, grove_done);
+	return running(t);
+}
+
+// speaker: the den's, on its card (/system/speaker): each change wired in played, in the voice a
+// sound thing sent ({ sound }), else its own (setting sound=, else blip); gives { sound, n, heard }
+// and its own voice as thing.state { sound }, as things.ts' speaker
+static void speaker_heard(thing *t, const op_value *v, int first, const char *input) {
+	(void)input;
+	if (first) return;
+	const op_value *s = op_get(v, "sound");
+	const char *name = s && s->type == OP_STR ? s->str : t->last;
+	int played = parts_play(name) == 0;
+	if (!played) played = parts_play(t->last) == 0, name = t->last;
+	op_value *m = op_map();
+	op_set(m, "sound", op_str(name));
+	op_set(m, "n", op_int(++t->n));
+	op_set(m, "heard", op_str(played ? "played" : "silent"));
+	out(t, m);
+}
+static hf_run speaker(const op_value *code, void *api, void *data) {
+	(void)code, (void)data;
+	thing *t = thing_of(api);
+	const char *kept = setting(t, "sound");
+	snprintf(t->last, sizeof t->last, "%s", kept ? kept : "blip");
+	out(t, op_null());
+	put(t, "thing.state", map_of("sound", op_str(t->last)));
+	reading(t, "in", speaker_heard);
+	return running(t);
+}
+
 void things_add(hf *fs) {
+	hf_add_runner(fs, "speaker", speaker, NULL);
+	hf_add_runner(fs, "tilt", tilt, NULL);
+	hf_add_runner(fs, "loudness", loudness, NULL);
+	hf_add_runner(fs, "led", led, NULL);
+	hf_add_runner(fs, "ir", ir, NULL);
+	hf_add_runner(fs, "battery", battery, NULL);
+	hf_add_runner(fs, "sd", sd, NULL);
+	hf_add_runner(fs, "grove", grove, NULL);
 	hf_add_runner(fs, "keys", keys, NULL);
 	hf_add_runner(fs, "screen", screen, NULL);
 	hf_add_runner(fs, "pigs", pigs, NULL);

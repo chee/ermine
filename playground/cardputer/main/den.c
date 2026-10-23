@@ -24,11 +24,25 @@
 #include "things.h"
 #include "menu.h"
 
-static const char *const KINDS[3] = {"keys", "screen", "pigs"};
-static const char *const PROGRAMS[3] = {
+// the kinds offered here: keys, screen and pigs run at boot (/home/<kind>), the speaker too (at
+// /system/speaker, on the den's card), the parts (parts.h) only when a paired den adds one (each
+// running costs about 10 KB of heap)
+#define BOOTS 3
+#define OFFERED 11
+static const char *const KINDS[OFFERED] = {"keys", "screen", "pigs", "speaker", "tilt", "loudness", "led", "ir",
+	"battery", "sd", "grove"};
+static const char *const PROGRAMS[OFFERED] = {
 	"keys: gives what was typed",
 	"a screen: shows what it reads, big",
 	"pigs: gives each pig's weight",
+	"a speaker: plays each change of what is wired into it",
+	"tilt: gives x and y, -10 to 10, as the cardputer leans",
+	"loudness: gives how loud it is here, 0 to 10",
+	"an LED: shows the colour wired into it",
+	"IR: sends the NEC code wired into it",
+	"battery: gives how full it is, a percentage",
+	"microSD: gives the card's top folder",
+	"Grove: gives the I2C addresses that answer on Port A",
 };
 // host.ts' names: a thing's path in its den, on its shared node; a den's name
 #define AT "thing.at"
@@ -245,6 +259,25 @@ static void put1(const char *part, const char *id, const char *key, op_value *v)
 	const char *path[1] = {key};
 	patch(part, id, path, 1, v);
 }
+// a map, written as only the keys that are another (one patch each), or whole when it is new or
+// a key went; v taken
+static void put_keys(const char *part, const char *id, op_value *v) {
+	const nd_entry *e = tb_get(me.w.table, tb_string(part), tb_string(id));
+	const op_value *was = e ? e->value : NULL;
+	int whole = !is_map(was) || !is_map(v);
+	for (size_t k = 0; !whole && k < was->count; k++)
+		if (was->items[k] && op_get(v, was->keys[k]) == NULL) whole = 1;
+	if (whole) {
+		put(part, id, v);
+		return;
+	}
+	for (size_t k = 0; k < v->count; k++) {
+		const op_value *old = op_get(was, v->keys[k]);
+		if (v->items[k] == NULL || (old != NULL && same(old, v->items[k]))) continue;
+		put1(part, id, v->keys[k], op_ref(v->items[k]));
+	}
+	op_free(v);
+}
 static op_value *map1(const char *k, op_value *v) {
 	op_value *m = op_map();
 	op_set(m, k, v);
@@ -383,6 +416,7 @@ static int trusts(const char *install) { return is_map(me.keys) && op_get(me.key
 
 // ---- tippet: the log's told, the history's kept and run, the sync's heard ----
 
+static void step_said(uint64_t n);
 // the send path's times on the log (trace: lines), when 1 (ctrl-t on the serial line)
 int getenv_trace = 0;
 // the store's calls, timed (ms) and counted: tippet's file store on FAT
@@ -399,6 +433,7 @@ static void told(void *ctx, const uint8_t device[32], uint64_t from, size_t coun
 	if (me.history) tp_history_told(me.history, device, from, count);
 	int64_t t1 = den_clock();
 	if (me.sync) tp_sync_told(me.sync, device, from, count);
+	if (own && getenv_trace) printf("trace: pushed at %lld\n", (long long)den_clock());
 	if (own && getenv_trace) {
 		// the push: tippet's sync of the store, the run closed (its steps read back, signed, packed,
 		// appended), its message read back and handed to the link. the store's parts timed here; the
@@ -411,6 +446,8 @@ static void told(void *ctx, const uint8_t device[32], uint64_t from, size_t coun
 			(long long)(times.read - was.read), times.nread - was.nread, times.tailed - was.tailed,
 			(long long)((t2 - t1) - (times.sync - was.sync) - (times.append - was.append) - (times.read - was.read)));
 	}
+	// each step of this den's, as written: its node, part and patches, and how its bytes go
+	if (own && getenv_trace) step_said(from);
 	if (own) {
 		for (size_t i = 0; i < count; i++) keys_from(from + i);
 	} else learn(device);
@@ -511,7 +548,7 @@ static void make_den(void *data) {
 		.schedule = me.w.schedule});
 	sw_place owner = {.id = me.node, .at = HERE, .nat = 2, .scope = me.w.host, .stored = 1};
 	sw_refusal no;
-	for (int i = 0; i < 3; i++) {
+	for (int i = 0; i < OFFERED; i++) {
 		char takes[32];
 		snprintf(takes, sizeof takes, "thing.%s", KINDS[i]);
 		op_value *t = attrs1(SW_TAKES, op_str(takes)), *fn = hf_value(KINDS[i]);
@@ -524,7 +561,15 @@ static void make_den(void *data) {
 static void start_things(void *data) {
 	(void)data;
 	sw_refusal no;
-	for (int i = 0; i < 3; i++) {
+	// the speaker, on the den's card: where every den has its own (main.ts' SPEAKER)
+	{
+		const char *runner[4] = {"system", "den", "runners", "speaker"}, *prog[2] = {"things", "speaker"};
+		const char *at[2] = {"system", "speaker"};
+		sw_program program = {.at = prog, .nat = 2, .has_at = 1};
+		if (sw_run(me.software, runner, 4, &program, at, 2, &(sw_options){0}, &no) == NULL)
+			fprintf(stderr, "den: /system/speaker refused: %s\n", no.refused);
+	}
+	for (int i = 0; i < BOOTS; i++) {
 		const char *runner[4] = {"system", "den", "runners", KINDS[i]};
 		const char *prog[2] = {"things", KINDS[i]};
 		const char *at[2] = {"home", KINDS[i]};
@@ -579,7 +624,8 @@ static int has_encoding(const op_value *v) {
 	return b != NULL;
 }
 
-// each running thing's attributes, and thing.at, on <den>/things/<process id>; those gone, out
+// each running thing's attributes, and thing.at, on <den>/things<its path> (the same node each
+// boot, and short: /things/home/keys); those gone, out
 static void publish_now(void *data) {
 	(void)data;
 	sw_process *const *procs;
@@ -589,29 +635,35 @@ static void publish_now(void *data) {
 		const char *id = sw_process_id(procs[i]);
 		const char *const *at;
 		size_t nat = sw_process_at(procs[i], &at);
-		char *shared = xalloc(strlen(me.things) + strlen(id) + 2);
-		sprintf(shared, "%s/%s", me.things, id);
+		char path[160] = "";
+		for (size_t k = 0; k < nat; k++) {
+			size_t l = strlen(path);
+			snprintf(path + l, sizeof path - l, "/%s", at[k]);
+		}
+		char *shared = xalloc(strlen(me.things) + strlen(path) + 1);
+		sprintf(shared, "%s%s", me.things, path);
 		op_set(want, id, op_str(shared));
 		const nd_entry *e = tb_get(me.w.table, tb_string("attributes"), tb_string(id));
 		const op_value *a = e ? e->value : NULL;
 		op_value *attrs = op_map();
 		for (size_t k = 0; is_map(a) && k < a->count; k++)
 			if (a->items[k] && has_encoding(a->items[k])) op_set(attrs, a->keys[k], op_ref(a->items[k]));
-		char path[160] = "";
-		for (size_t k = 0; k < nat; k++) {
-			size_t l = strlen(path);
-			snprintf(path + l, sizeof path - l, "/%s", at[k]);
-		}
 		op_set(attrs, AT, op_str(path));
-		put("attributes", shared, attrs);
+		put_keys("attributes", shared, attrs);
 		free(shared);
 	}
 	const nd_entry *e = tb_get(me.w.table, tb_string("children"), tb_string(me.things));
 	op_value *was = e && e->value ? op_ref(e->value) : NULL, *wanted = op_ref(want);
 	put("children", me.things, want);
+	// a shared node gone: none of the running things' (a thing started again at the same path has
+	// another process id, the same node)
 	for (size_t k = 0; is_map(was) && k < was->count; k++) {
 		const op_value *shared = was->items[k];
-		if (!is_str(shared) || op_get(wanted, was->keys[k]) != NULL) continue;
+		if (!is_str(shared)) continue;
+		int kept = 0;
+		for (size_t j = 0; !kept && j < wanted->count; j++)
+			kept = is_str(wanted->items[j]) && strcmp(wanted->items[j]->str, shared->str) == 0;
+		if (kept) continue;
 		if (tb_get(me.w.table, tb_string("attributes"), tb_string(shared->str))) {
 			deleting d = {"attributes", shared->str};
 			del_now(&d);
@@ -809,7 +861,9 @@ typedef struct {
 static void do_now(void *data) {
 	doing *d = data;
 	const op_value *a = d->a, *op = op_get(a, "op");
-	if (str_is(op, "start")) {
+	if (str_is(op, "start") && den_free() < DEN_ROOM) {
+		d->out = error_of("too little memory here to start a thing");
+	} else if (str_is(op, "start")) {
 		const op_value *program = op_get(a, "program"), *args = op_get(a, "args");
 		char *runner[16], *at[16];
 		long nr = address_of(op_get(a, "runner"), runner, 16), na = address_of(op_get(a, "at"), at, 16);
@@ -1121,7 +1175,7 @@ static void menu_again(const char *ask, const op_value *e) {
 	if (menued == NULL) abort();
 	menued[nmenued++] = xstrdup(ask);
 	const op_value *from = op_get(a, "from"), *session = op_get(c, "session"), *vouch = op_get(c, "vouch");
-	const op_value *name = op_get(a, "name"), *h = op_get(a, "handler");
+	const op_value *name = op_get(a, "name");
 	if (!is_str(from) || !is_str(name) || !str_is(op_get(a, "to"), me.node) || !str_is(op_get(c, "install"), from->str) ||
 		!is_str(session) || vouch == NULL || vouch->type != OP_BYTES || sig == NULL || sig->type != OP_BYTES ||
 		!trusts(from->str) || !signed_by(me.keys, from->str, a, session, vouch, sig))
@@ -1335,13 +1389,14 @@ static long (*store_run)(void *self, const uint8_t device[32], uint64_t n, uint8
 	uint64_t *last);
 static long (*store_drop)(void *self, const uint8_t device[32], uint64_t n);
 
-// the records appended last, kept in memory too (TAIL of them, TAIL_BYTES at most): a step written
+// this den's own records appended last, kept in memory too (TAIL of them, TAIL_BYTES at most; others'
+// are never read back on the way out, so never held): a step written
 // is read straight back when its run closes, and the run when it goes out, and on FAT each read
 // there seeks off the file's unsynced last sector and so writes it first (about 50 ms each). the
 // newest record holding a step is the one the store's own index holds for it, so the newest here
 // holding it answers as the store would
-#define TAIL 6
-#define TAIL_BYTES 6144
+#define TAIL 4
+#define TAIL_BYTES 2048
 static struct {
 	uint8_t *bytes;
 	size_t length;
@@ -1355,7 +1410,7 @@ static void tail_clear(void) {
 	ntail = 0;
 }
 static void tail_hold(const uint8_t *record, size_t length, const tp_at *at) {
-	if (at == NULL || length > TAIL_BYTES) return;
+	if (at == NULL || length > TAIL_BYTES || memcmp(at->device, me.install.key, 32) != 0) return;
 	uint8_t *b = malloc(length);
 	if (b == NULL) return;
 	memcpy(b, record, length);
@@ -1383,13 +1438,30 @@ static int timed_append(void *self, const uint8_t *record, size_t length, const 
 	int64_t t = den_clock();
 	int why = store_append(self, record, length, at);
 	times.append += den_clock() - t, times.nappend++;
+	if (getenv_trace) {
+		// what it was: a run (its steps, its device's), or a step kept alone; and the log's size now
+		char who[9] = "?";
+		if (at) hex(who, at->device, 4);
+		char *log = joined(me.dir, "/log");
+		struct stat st;
+		long size = stat(log, &st) == 0 ? (long)st.st_size : -1;
+		free(log);
+		printf("trace: appended %u bytes (+4 framing) in %lld ms at %lld: %s of %s%s, steps %llu..%llu; the log %ld bytes\n",
+			(unsigned)length, (long long)(den_clock() - t), (long long)den_clock(),
+			tp_is_run(record, length) ? "a run" : "a step alone", who,
+			at && memcmp(at->device, me.install.key, 32) == 0 ? " (this den's)" : "", at ? (unsigned long long)at->first : 0,
+			at ? (unsigned long long)at->last : 0, size);
+	}
 	if (why == 0) tail_hold(record, length, at);
 	return why;
 }
 static long timed_get(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap) {
-	long i = tail_find(device, n);
-	// a step kept alone: its record is the step
-	if (i >= 0 && !tail[i].run) {
+	// a step kept alone, held here: its record is the step, the same bytes once its run has closed
+	// too (this den reads its own step back for its keys just after the run goes out)
+	long i = -1;
+	for (size_t k = ntail; k-- > 0 && i < 0;)
+		if (!tail[k].run && tail[k].first == n && memcmp(tail[k].device, device, 32) == 0) i = (long)k;
+	if (i >= 0) {
 		if (out && tail[i].length <= cap) memcpy(out, tail[i].bytes, tail[i].length);
 		times.tailed++;
 		return (long)tail[i].length;
@@ -1528,7 +1600,9 @@ int den_boot(const inst_install *install, const char *code, const char *dir, int
 	me.functions = hf_new();
 	things_add(me.functions);
 	put1("children", HOST_ROOT, "things", op_str("things"));
-	for (int i = 0; i < 3; i++) {
+	// the programs of those it starts itself (keys, screen, pigs, the speaker): a paired den's start
+	// carries its program's code, so the parts need none here (each node costs about 1 KB of heap)
+	for (int i = 0; i < BOOTS + 1; i++) {
 		char at[32], type[32];
 		snprintf(at, sizeof at, "things/%s", KINDS[i]);
 		snprintf(type, sizeof type, "thing.%s", KINDS[i]);
@@ -1757,7 +1831,7 @@ int den_snapshot(void) {
 void den_trust_last(void) { den_pair_answer(1); }
 
 void den_print(void) {
-	for (int i = 0; i < 3; i++) {
+	for (int i = 0; i < BOOTS; i++) {
 		const char *path[2] = {"home", KINDS[i]};
 		tb_key id;
 		const op_value *v = NULL;
@@ -1801,6 +1875,15 @@ op_value *den_do(const char *from, const char *name, const op_value *handler) {
 		frame_again();
 		return refusal(shown, "not-in-keys");
 	}
+	// a thing started with the heap nearly gone would stop the den (an allocation that fails ends
+	// it): refused, in words
+	if (str_is(op_get(handler, "op"), "start") && den_free() < DEN_ROOM) {
+		snprintf(one, sizeof one, "\"%.20s\" not done:", name);
+		snprintf(two, sizeof two, "%uK free, too little", (unsigned)(den_free() / 1024));
+		say(1, one, two);
+		frame_again();
+		return error_of("too little memory here to start a thing");
+	}
 	doing x = {handler, from, NULL};
 	sc_run_with_scope(me.w.host, do_now, &x);
 	host_settle();
@@ -1835,3 +1918,42 @@ long den_own_step(uint64_t n, uint8_t *out, size_t cap) {
 	return n ? tp_log_step(me.log, me.install.key, n, out, cap) : -1;
 }
 const uint8_t *den_seed(void) { return me.install.secret; }
+
+// the thing at /home/<at> stopped (the sim's, to measure what a start and stop leave behind): 1 done
+int den_stop(const char *at) {
+	sw_process *const *procs;
+	size_t n = sw_running(me.software, &procs);
+	for (size_t i = 0; i < n; i++) {
+		const char *const *where;
+		size_t k = sw_process_at(procs[i], &where);
+		if (k == 2 && strcmp(where[0], "home") == 0 && strcmp(where[1], at) == 0) {
+			char *id = xstrdup(sw_process_id(procs[i]));
+			sw_stop(me.software, id, NULL);
+			free(id);
+			host_settle();
+			return 1;
+		}
+	}
+	return 0;
+}
+
+// a step of this den's, said on the log (the trace's): its node, part, patches (as JSON, bytes as
+// base64), its bytes in all and their parts
+static void step_said(uint64_t n) {
+	long length = tp_log_step(me.log, me.install.key, n, NULL, 0);
+	if (length < 0) return;
+	uint8_t *b = xalloc((size_t)length);
+	tp_log_step(me.log, me.install.key, n, b, (size_t)length);
+	tp_step s;
+	if (tp_step_decode(b, (size_t)length, &s) == 0) {
+		op_value *ps = pk_get(s.patches.p, s.patches.n, NULL, NULL);
+		char *j = ps ? op_json_text(ps) : NULL;
+		printf("trace: step %llu: %ld bytes: node %.*s (%u), part %.*s (%u), patches %u bytes, %u of them: %s\n",
+			(unsigned long long)n, length, (int)s.node.n, (const char *)s.node.p, (unsigned)s.node.n, (int)s.part.n,
+			(const char *)s.part.p, (unsigned)s.part.n, (unsigned)s.patches.n, (unsigned)s.count, j ? j : "?");
+		free(j);
+		if (ps) op_free(ps);
+	}
+	free(b);
+}
+uint64_t den_steps_own(void) { return me.log ? tp_log_count(me.log, me.install.key) : 0; }

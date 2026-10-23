@@ -10,6 +10,7 @@
 import { level, type Path } from "@ermine/places"
 import { get, list, members } from "@ermine/places/lib"
 import { NAME } from "./host.ts"
+import { wires } from "./things.ts"
 import type { Host } from "./host.ts"
 
 export type Row = {
@@ -221,16 +222,14 @@ export function createFinder(
 			dd.append(chip(v))
 			return dd
 		}
-		// a wire: [input, den, path] triples, each "input ← path"
-		if (
-			k === "ermine.process.args" && isPath(v) && v.length > 0 && v.length % 3 === 0 &&
-			v.every((x, i) => i % 3 !== 2 || x.startsWith("/"))
-		) {
-			for (let i = 0; i < v.length; i += 3) {
+		// a wire: [input, den, path] triples (each maybe "=<outlet>" after), each "input ← path"
+		const wired = k === "ermine.process.args" && isPath(v) ? wires(v) : undefined
+		if (wired) {
+			for (const s of wired) {
 				const line = h("span", "finder-wire")
 				line.append(
-					h("span", "finder-note", `${v[i]} ←`),
-					chip(split(v[i + 2]), `on ${denName(v[i + 1])}`),
+					h("span", "finder-note", `${s.input} ←`),
+					chip(split(s.at), `${s.from ? `its ${s.from}, ` : ""}on ${denName(s.den)}`),
 				)
 				dd.append(line)
 			}

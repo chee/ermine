@@ -68,9 +68,10 @@ int flash_install(inst_install *out) {
 #define SPARE_SIZE 0x100000
 
 static int mounted2;
+static wl_handle_t wl1 = WL_INVALID_HANDLE, wl2 = WL_INVALID_HANDLE;
 
 int flash_mount(void) {
-	static wl_handle_t wl = WL_INVALID_HANDLE;
+	wl_handle_t wl = WL_INVALID_HANDLE;
 	if (esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_FAT, "den") == NULL) {
 		const esp_partition_t *p;
 		esp_err_t e = esp_partition_register_external(NULL, SPARE_AT, SPARE_SIZE, "den", ESP_PARTITION_TYPE_DATA,
@@ -80,9 +81,9 @@ int flash_mount(void) {
 	esp_vfs_fat_mount_config_t c = {.format_if_mount_failed = true, .max_files = 3,
 		.allocation_unit_size = CONFIG_WL_SECTOR_SIZE};
 	esp_err_t e = esp_vfs_fat_spiflash_mount_rw_wl(FLASH_DIR, "den", &c, &wl);
+	wl1 = wl;
 	if (e != ESP_OK) printf("flash: not mounted: %s\n", esp_err_to_name(e));
 	// "den2", when the table has it: made the first time
-	static wl_handle_t wl2 = WL_INVALID_HANDLE;
 	if (esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_FAT, "den2") != NULL) {
 		esp_err_t e2 = esp_vfs_fat_spiflash_mount_rw_wl(FLASH_DIR2, "den2", &c, &wl2);
 		mounted2 = e2 == ESP_OK;
@@ -91,8 +92,26 @@ int flash_mount(void) {
 	return e == ESP_OK;
 }
 
+// once settled (flash_settle): the volume let go, the rooms on it and its bytes free, as they were
+static int settled;
+static char away[24][5];
+static unsigned away_kb[24];
+static int naway;
+static size_t away_free;
+static const char *gone_dir;
+
 void flash_room_dir(const char *code, char out[16]) {
 	struct stat st;
+	if (settled) {
+		for (int i = 0; i < naway; i++)
+			if (strcasecmp(away[i], code) == 0) {
+				snprintf(out, 16, "%s/t2%s", gone_dir, code);
+				return;
+			}
+		// not on the one let go: on the one mounted, made there when new
+		snprintf(out, 16, "%s/t2%s", strcmp(gone_dir, FLASH_DIR) == 0 ? FLASH_DIR2 : FLASH_DIR, code);
+		return;
+	}
 	snprintf(out, 16, "%s/t2%s", FLASH_DIR, code);
 	if (stat(out, &st) != 0 && mounted2) snprintf(out, 16, "%s/t2%s", FLASH_DIR2, code);
 }
@@ -100,9 +119,148 @@ void flash_room_dir(const char *code, char out[16]) {
 size_t flash_free_for(const char *code) {
 	char dir[16];
 	flash_room_dir(code, dir);
+	const char *base = strncmp(dir, FLASH_DIR2, 2) == 0 ? FLASH_DIR2 : FLASH_DIR;
+	if (settled && strcmp(base, gone_dir) == 0) return away_free;
 	uint64_t total = 0, left = 0;
-	return esp_vfs_fat_info(strncmp(dir, FLASH_DIR2, 2) == 0 ? FLASH_DIR2 : FLASH_DIR, &total, &left) == ESP_OK
-		? (size_t)left : 0;
+	return esp_vfs_fat_info(base, &total, &left) == ESP_OK ? (size_t)left : 0;
+}
+
+// a room's folder's files, in K (rounded up)
+static unsigned room_kb(const char *base, const char *name) {
+	char dir[300], file[600];
+	snprintf(dir, sizeof dir, "%s/%s", base, name);
+	DIR *d = opendir(dir);
+	struct dirent *f;
+	struct stat st;
+	long n = 0;
+	while (d && (f = readdir(d)) != NULL) {
+		snprintf(file, sizeof file, "%s/%s", dir, f->d_name);
+		if (f->d_name[0] != '.' && stat(file, &st) == 0) n += (long)st.st_size;
+	}
+	if (d) closedir(d);
+	return (unsigned)((n + 1023) / 1024);
+}
+
+int flash_rooms(flash_room *out, int most) {
+	int n = 0;
+	const char *bases[2] = {FLASH_DIR, FLASH_DIR2};
+	for (int b = 0; b < 2; b++) {
+		const char *base = bases[b];
+		if (b == 1 && !mounted2) continue;
+		if (settled && strcmp(base, gone_dir) == 0) continue;
+		DIR *d = opendir(base);
+		struct dirent *e;
+		while (d && (e = readdir(d)) != NULL && n < most) {
+			if (strncasecmp(e->d_name, "t2", 2) != 0 || strlen(e->d_name) != 6 || strchr(e->d_name, '.')) continue;
+			snprintf(out[n].code, 5, "%s", e->d_name + 2);
+			out[n].kb = room_kb(base, e->d_name);
+			snprintf(out[n].fs, sizeof out[n].fs, "%s", base);
+			n++;
+		}
+		if (d) closedir(d);
+	}
+	for (int i = 0; settled && i < naway && n < most; i++) {
+		snprintf(out[n].code, 5, "%s", away[i]);
+		out[n].kb = away_kb[i];
+		snprintf(out[n].fs, sizeof out[n].fs, "%s", gone_dir);
+		n++;
+	}
+	return n;
+}
+
+// every file in dir let go, then dir: 0, or -1 (errno)
+static int remove_all(const char *dir) {
+	DIR *d = opendir(dir);
+	if (d == NULL) return errno == ENOENT ? 0 : -1;
+	struct dirent *f;
+	char file[64];
+	int bad = 0;
+	while ((f = readdir(d)) != NULL) {
+		if (f->d_name[0] == '.') continue;
+		snprintf(file, sizeof file, "%s/%s", dir, f->d_name);
+		if (unlink(file) != 0) bad = 1;
+	}
+	closedir(d);
+	return bad || rmdir(dir) != 0 ? -1 : 0;
+}
+
+int flash_delete(const char *code, unsigned *left, char *why, size_t cap) {
+	// on the file system let go for the heap: mounted again for it (about 10 KB, for a moment)
+	int there = -1;
+	for (int i = 0; settled && i < naway; i++)
+		if (strcasecmp(away[i], code) == 0) there = i;
+	const char *base = NULL;
+	wl_handle_t wl = WL_INVALID_HANDLE;
+	if (there >= 0) {
+		esp_vfs_fat_mount_config_t c = {.format_if_mount_failed = false, .max_files = 3,
+			.allocation_unit_size = CONFIG_WL_SECTOR_SIZE};
+		esp_err_t e = esp_vfs_fat_spiflash_mount_rw_wl(gone_dir, strcmp(gone_dir, FLASH_DIR) == 0 ? "den" : "den2", &c, &wl);
+		if (e != ESP_OK) return snprintf(why, cap, "%s won't mount: %s", gone_dir, esp_err_to_name(e)), -1;
+		base = gone_dir;
+	} else {
+		char dir[16];
+		flash_room_dir(code, dir);
+		base = strncmp(dir, FLASH_DIR2, 2) == 0 ? FLASH_DIR2 : FLASH_DIR;
+	}
+	char dir[24], tmp[24];
+	snprintf(dir, sizeof dir, "%s/t2%s", base, code);
+	snprintf(tmp, sizeof tmp, "%s/t2%s.tmp", base, code);
+	struct stat st;
+	int ok = stat(dir, &st) == 0;
+	if (!ok) snprintf(why, cap, "it isn't on %s", base);
+	else if (remove_all(dir) != 0) ok = 0, snprintf(why, cap, "%s", strerror(errno));
+	remove_all(tmp);
+	uint64_t total = 0, free_bytes = 0;
+	esp_vfs_fat_info(base, &total, &free_bytes);
+	*left = (unsigned)(free_bytes / 1024);
+	if (there >= 0) {
+		esp_vfs_fat_spiflash_unmount_rw_wl(base, wl);
+		away_free = (size_t)free_bytes;
+		if (ok) {
+			memmove(away[there], away[there + 1], (size_t)(naway - there - 1) * sizeof away[0]);
+			memmove(&away_kb[there], &away_kb[there + 1], (size_t)(naway - there - 1) * sizeof away_kb[0]);
+			naway--;
+		}
+	}
+	return ok ? 0 : -1;
+}
+
+int flash_room_there(const char *code) {
+	for (int i = 0; settled && i < naway; i++)
+		if (strcasecmp(away[i], code) == 0) return 1;
+	char dir[16];
+	struct stat st;
+	flash_room_dir(code, dir);
+	return stat(dir, &st) == 0;
+}
+
+void flash_settle(const char *room) {
+	if (!mounted2 || settled) return;
+	char dir[16];
+	flash_room_dir(room, dir);
+	int on2 = strncmp(dir, FLASH_DIR2, 2) == 0;
+	const char *other = on2 ? FLASH_DIR : FLASH_DIR2;
+	DIR *d = opendir(other);
+	struct dirent *e;
+	while (d && (e = readdir(d)) != NULL && naway < 24)
+		if (strncasecmp(e->d_name, "t2", 2) == 0 && strlen(e->d_name) == 6 && !strchr(e->d_name, '.')) {
+			snprintf(away[naway], 5, "%s", e->d_name + 2);
+			away_kb[naway++] = room_kb(other, e->d_name);
+		}
+	if (d) closedir(d);
+	uint64_t total = 0, left = 0;
+	esp_vfs_fat_info(other, &total, &left);
+	away_free = (size_t)left;
+	esp_err_t x = esp_vfs_fat_spiflash_unmount_rw_wl(other, on2 ? wl1 : wl2);
+	if (x != ESP_OK) {
+		printf("flash: %s not let go: %s\n", other, esp_err_to_name(x));
+		naway = 0;
+		return;
+	}
+	gone_dir = other, settled = 1;
+	if (on2) wl1 = WL_INVALID_HANDLE;
+	else wl2 = WL_INVALID_HANDLE, mounted2 = 0;
+	printf("flash: %s let go for the heap (the room is on %s); %d rooms there\n", other, on2 ? FLASH_DIR2 : FLASH_DIR, naway);
 }
 
 // ESP-IDF names writev (sys/uio.h) but has none: tippet's store_file appends a record's length and
@@ -129,7 +287,7 @@ unsigned flash_sweep(const char *const *keep, int nkeep) {
 	say_free("mounted");
 	uint64_t total = 0, free_bytes = 0;
 	esp_vfs_fat_info(FLASH_DIR, &total, &free_bytes);
-	int low = free_bytes < FLASH_LOW;
+	(void)keep, (void)nkeep;
 	DIR *d = opendir(FLASH_DIR);
 	if (d == NULL) return (unsigned)(free_bytes / 1024);
 	struct dirent *e;
@@ -152,12 +310,6 @@ unsigned flash_sweep(const char *const *keep, int nkeep) {
 			}
 			if (in) closedir(in);
 			printf("flash: %s: %ld bytes:%s\n", dir, total, each);
-			int kept = 0;
-			for (int i = 0; i < nkeep; i++) kept |= strcasecmp(e->d_name + 2, keep[i]) == 0;
-			if (low && !kept) {
-				snprintf(file, sizeof file, "%s/snapshot", dir);
-				if (unlink(file) == 0) printf("flash: %s let go (the flash nearly full; made again there)\n", file);
-			}
 			continue;
 		}
 		if (e->d_name[0] == '.') continue;

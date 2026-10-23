@@ -4,7 +4,8 @@
 // under its two boxes when it has to turn back; a label sits where it covers no box and nothing
 // marked .avoid; two ends facing the same way bend round as a bracket; a wire can carry a hint
 // shown on hover; show pans to a box; a box's drag can be held inside bounds; a wire is drawn
-// twice, a light glowing cord under a striped line, so it shows on light and dark alike)
+// twice, a light glowing cord under a striped line, so it shows on light and dark alike; a port's
+// element carries its name, data-port)
 // the board: a roomy canvas of boxes and wires, the book's stage. drag the paper to pan, wheel or
 // pinch to zoom, drag a box by its title. a box has ports: ins on its left, outs on its right. a
 // wire joins an out to an in and can carry a little label (what flows along it). a box can carry
@@ -317,6 +318,8 @@ export function createBoard(el: HTMLElement): Board {
 			},
 			addPort(n, side, label) {
 				const pe = h("div", `port port-${side}`)
+				// its name, whatever its label says
+				pe.dataset.port = n
 				const dot = h("span", "dot")
 				const lab = h("span", "port-label", label ?? n)
 				if (side === "in") pe.append(dot, lab)

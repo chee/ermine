@@ -153,6 +153,7 @@ static void draw_text(const op_value *screen) {
 }
 
 static int shell_on;
+static size_t window_low = SIZE_MAX;
 
 // what the screen shows, on the serial line: "screen: begin", then a line "s: " + a row's bytes in
 // hex (two pixels a byte, fb.h's), then "screen: end"
@@ -270,11 +271,8 @@ static void room_code_of(char out[5]) {
 void room_go(const char *code) {
 	nvs_handle_t h;
 	int kept = 0;
-	char dir[16];
-	struct stat st;
-	flash_room_dir(code, dir);
 	size_t left = flash_free_for(code);
-	if (stat(dir, &st) != 0 && left < ROOM_NEEDS) {
+	if (!flash_room_there(code) && left < ROOM_NEEDS) {
 		char two[32];
 		snprintf(two, sizeof two, "%uK free: a new room needs %u", (unsigned)(left / 1024), ROOM_NEEDS / 1024);
 		den_say(1, "the flash is too full", two);
@@ -334,6 +332,31 @@ static void bench(void) {
 	}
 	printf("bench: sign %lld us, pack one step (%ld bytes) %lld us, hash it %lld us\n", (long long)signed_us, n,
 		(long long)packed_us, (long long)hashed_us);
+}
+
+int rooms_list(menu_room *out, int most) {
+	flash_room r[32];
+	int n = flash_rooms(r, most < 32 ? most : 32);
+	for (int i = 0; i < n; i++) {
+		snprintf(out[i].code, 5, "%s", r[i].code);
+		out[i].kb = r[i].kb;
+		snprintf(out[i].fs, sizeof out[i].fs, "%s", r[i].fs);
+	}
+	return n;
+}
+
+int room_delete(const char *code, unsigned *left, char *why, size_t cap) {
+	if (strcmp(code, den_room()) == 0) return snprintf(why, cap, "the den is in it"), -1;
+	if (flash_delete(code, left, why, cap)) return -1;
+	// the way back from a den that won't come up never points at it
+	nvs_handle_t h;
+	char was[8] = "";
+	size_t n = sizeof was;
+	if (nvs_open("dens", NVS_READWRITE, &h) == ESP_OK) {
+		if (nvs_get_str(h, "left", was, &n) == ESP_OK && strcmp(was, code) == 0) nvs_erase_key(h, "left"), nvs_commit(h);
+		nvs_close(h);
+	}
+	return 0;
 }
 
 // the heap's least yet, said at a stage of the den's life
@@ -412,6 +435,7 @@ void app_main(void) {
 		}
 	}
 	printf("den: %s in room %s, up, %u bytes of heap\n", me.id, room, (unsigned)(before - free_now()));
+	if (mounted) flash_settle(room), stage("one file system");
 	flash_free = (unsigned)(flash_free_for(room) / 1024);
 	if (mounted && flash_free < FLASH_LOW / 1024) {
 		char two[32];
@@ -462,7 +486,9 @@ void app_main(void) {
 				// \r\n is one enter
 				if (typed[i] == '\n' && i && typed[i - 1] == '\r') continue;
 				if (typed[i] == '\t') {
-					den_trust_last();
+					// the menu's yes where it asks (a room's delete), else a pair ask's
+					if (!(menu_open() && menu_key("tab"))) den_trust_last();
+					host_settle();
 					continue;
 				}
 				// ctrl-s: the screen, on the serial line (a row of 4-bit colours a line, hex)
@@ -481,6 +507,12 @@ void app_main(void) {
 					extern int den_lazy;
 					den_lazy = !den_lazy;
 					printf("trace: the log's sync %s\n", den_lazy ? "when 3 s quiet" : "a second after");
+					continue;
+				}
+				// ctrl-n: the heap now, and the lowest since the last ctrl-h
+				if (typed[i] == 0x0e) {
+					printf("heap: window: %u free now, %u lowest since\n", (unsigned)free_now(), (unsigned)window_low);
+					window_low = SIZE_MAX;
 					continue;
 				}
 				// ctrl-g: G0, the menu
@@ -502,7 +534,9 @@ void app_main(void) {
 				if (getenv_trace) printf("trace: key %s at %lld\n", k, (long long)(esp_timer_get_time() / 1000));
 				if (strlen(k) == 1) things_key(k);
 				else if (strcmp(k, "backspace") == 0) things_key("del");
+				int64_t t0 = esp_timer_get_time();
 				host_settle();
+				if (getenv_trace) printf("trace: settled in %lld ms\n", (long long)((esp_timer_get_time() - t0) / 1000));
 				if (typed[i] == '\r' || typed[i] == '\n') print();
 			}
 		}
@@ -515,7 +549,11 @@ void app_main(void) {
 			if (carry_joined() && !was_joined) stage("room joined"), quiet_since = now;
 			was_up = poll_up(), was_joined = carry_joined();
 		}
+		int64_t t1 = esp_timer_get_time();
 		den_tick(now);
+		things_tick(now);
+		if (getenv_trace && esp_timer_get_time() - t1 > 20000)
+			printf("trace: the den's tick took %lld ms\n", (long long)((esp_timer_get_time() - t1) / 1000));
 		vTaskDelay(pdMS_TO_TICKS(10));
 		size_t low = heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT);
 		heap_caps_monitor_local_minimum_free_size_stop();
@@ -525,6 +563,8 @@ void app_main(void) {
 		// catching up: the log's steps growing; caught up once they stand still 3 s
 		if (den_steps() != was_steps) was_steps = den_steps(), quiet_since = now;
 		else if (was_joined && !caught && quiet_since && now - quiet_since > 3000) caught = 1, stage("caught up");
+		// the lowest since ctrl-h last asked (a thing's cost, measured from the Mac)
+		if (low < window_low) window_low = low;
 		int st = asked ? ASK : !was_joined ? JOINING : !caught ? CATCHING : STEADY;
 		if (low < lowest[st]) lowest[st] = low;
 		if (asked) stage("an ask answered");

@@ -156,11 +156,11 @@ const wasmClang: Compiler = (input, ctx) =>
 		next()
 	}).then((out) => answered(input as Ask, out))
 
-// ---- canvas: the page's runner, a live function. it runs /loaders/canvas.js's code on the
-// cat's canvas with the wasm it's given, and gives back how to stop ----
+// ---- canvas: the page's runner, live (@ermine/software's shape). it runs /loaders/canvas.js's
+// code on the cat's canvas with the wasm it's given, and gives back how to stop ----
 const canvas = $<HTMLCanvasElement>("#clock")
-const canvasRunner: Runner = async (code, api) => {
-	const me = (api as { process: { id: Id } }).process.id
+const canvasRunner: Runner = { start: (code, start) => draw(code, start.process.id) }
+async function draw(code: unknown, me: Id) {
 	try {
 		const text = world.table.get("value", RUNNER)?.value
 		if (typeof text !== "string") throw new Error("canvas.js has no code to run")
@@ -308,11 +308,9 @@ const programs = world.peek(() =>
 	createPrograms({
 		scheduler: world.s,
 		table: world.table,
-		places: writes,
+		places: world.places,
 		builds: steps,
 		scopes,
-		// what he is given: his own name, path and args; the C asks for nothing more
-		createProcessAPI: (ctx) => ({ process: ctx.process }),
 	})
 )
 

@@ -521,6 +521,38 @@ header.bar #sound[aria-pressed="false"] {
 .port.snap .dot {
 	animation: snap 0.15s var(--pop);
 }
+/* a thing with more than one outlet: each nub named while the pointer is on it (or a wire is
+   dragged near it), a small tag over the box beside it, so nothing moves */
+.port.named {
+	position: relative;
+}
+.port.named .port-label {
+	display: none;
+	position: absolute;
+	top: 50%;
+	transform: translateY(-50%);
+	font: 600 9px/1.2 var(--mono);
+	color: var(--ink);
+	background: #fff8c8;
+	border: 1px solid var(--ink);
+	border-radius: 6px;
+	padding: 1px 5px;
+	pointer-events: none;
+	z-index: 20;
+}
+.box-outs .port.named .port-label {
+	right: 14px;
+}
+.box-ins .port.named .port-label {
+	left: 14px;
+}
+.port.named:hover .port-label,
+.port.named.near .port-label {
+	display: block;
+}
+.box:has(.port.named:hover) {
+	z-index: 5;
+}
 @keyframes snap {
 	from {
 		transform: scale(1.9);
@@ -636,6 +668,15 @@ button.step:disabled {
 .lcd.small {
 	font-size: 20px;
 }
+/* long text: wrapped, as high as ever, its last lines in view (what doesn't fit runs off the top) */
+.lcd.long {
+	height: 100px;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	text-align: left;
+	align-items: flex-end;
+	justify-content: flex-start;
+}
 .lcd.empty {
 	color: #555;
 }
@@ -691,6 +732,8 @@ canvas.speaker.ping {
 .notename {
 	font: 700 40px var(--mono);
 }
+/* keys: one line, its end in view (laid right to left, so what doesn't fit runs off the left;
+   the text inside left to right) */
 .typed {
 	font: 700 20px var(--mono);
 	min-height: 2.2em;
@@ -700,8 +743,14 @@ canvas.speaker.ping {
 	border-radius: 2px;
 	white-space: pre;
 	overflow: hidden;
+	direction: rtl;
+	text-align: left;
 }
-.typed::after {
+.typed > span {
+	direction: ltr;
+	unicode-bidi: isolate;
+}
+.typed > span::after {
 	content: "_";
 	color: var(--cherry);
 }

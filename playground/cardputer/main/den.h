@@ -3,8 +3,9 @@
 // name under /system/dens) the key's hex, and the key the one its log signs with. in the host's
 // world (host.h): the programs at /things/<kind> (ermine.type "thing.<kind>"), the den's node
 // (attributes ermine.type ermine.den, .id, .name "chee's cardputer", .device "cardputer") at
-// /system/den and /system/dens/<id>, software (experiments/software) with keys, screen and pigs
-// offered under the node, and /home/keys, /home/screen and /home/pigs run. what syncs (history's
+// /system/den and /system/dens/<id>, software (experiments/software) with keys, screen, pigs, the
+// speaker and the parts (parts.h) offered under the node, and /home/keys, /home/screen, /home/pigs
+// and /system/speaker run. what syncs (history's
 // kept): host.ts' list, as steps in the room's log
 //   <node>                   attributes; children { things, inbox, authorized_keys, runners }
 //   <node>/things            children: each thing's process id -> <node>/things/<process id>
@@ -34,6 +35,9 @@
 // QUIET)
 #define DEN_BEAT 2000
 #define DEN_QUIET 6000
+// the heap a thing's start wants left (one costs about 10 KB, and WiFi's TLS takes 20 KB or so at
+// a record): under it, a start is refused in words
+#define DEN_ROOM (40 * 1024)
 
 // why the den isn't up, in words ("": it is)
 const char *den_why(void);
@@ -69,8 +73,9 @@ uint64_t den_steps(void);
 // forgetting (tippet's try-out): the history keeps the newest per node, and each snapshot lets go
 // of the runs that have passed on to galaxy (the keeper). before den_boot; off by default
 void den_forgets(int yes);
-// a thing of kind started at /home/<at> by the den itself (as at boot): 1 started
+// a thing of kind started at /home/<at> by the den itself (as at boot): 1 started; and stopped
 int den_start(const char *kind, const char *at);
+int den_stop(const char *at);
 // the history's snapshot into the log's store (tippet's): a boot loads it and the steps after. 0 or a
 // code
 int den_snapshot(void);
@@ -89,6 +94,8 @@ op_value *den_do(const char *from, const char *name, const op_value *handler);
 // none. the key it signs with (the bench's)
 long den_own_step(uint64_t n, uint8_t *out, size_t cap);
 const uint8_t *den_seed(void);
+// how many steps of this den's its log holds
+uint64_t den_steps_own(void);
 // the den going (a room switched): a bye said, the log synced to flash
 void den_leave(void);
 // the platform's: the screen drawn again (the last picture, with the band); n random bytes

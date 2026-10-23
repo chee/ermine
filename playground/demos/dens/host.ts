@@ -25,14 +25,22 @@
 //                            children { things: <node>/things, inbox: <node>/inbox,
 //                            authorized_keys: <node>/authorized_keys, files: <node>/files }, and
 //                            runners: <node>/runners (software's offers; nobody else reads them)
-//   <node>/things            children { <process id>: <node>/things/<process id> }, one a thing
-//   <node>/things/<process>  attributes: the thing's process's, as it runs, and "thing.at"
+//   <node>/things            children { <process id>: <node>/things<its path> }, one a thing
+//   <node>/things<path>      attributes: the thing's process's, as it runs, and "thing.at"
 //                            "/home/<kind>-<4 hex>" (its path in its den). what another den reads:
 //                              "ermine.process.runner" { id, at: [steps] }: at's last step is the kind
 //                              "ermine.process.args" [strings]: what it reads, as triples
 //                                <input> <den id> <path> (things.ts' parse), and "name=value"s
-//                              "thing.out": what it gives (a number, text, a map, a picture)
-//                              "thing.state", "thing.says": a timer's, a pad's, the pigs' extra
+//                                (a setting's name is never empty). a triple reading an outlet
+//                                other than the first has "=<outlet>" just after it, its path
+//                                ("/home/keys") then "=typed": it reads "thing.typed". none:
+//                                "thing.out". a reader before outlets takes "=typed" for a
+//                                setting with no name, one nobody asks for: its triples the same
+//                              "thing.out": what it gives, its first outlet (a number, text, a
+//                                map, a picture)
+//                              "thing.<outlet>": each other outlet's (things.ts' OUTLETS): the
+//                                keys' "typed" { key, n }, the pigs' "says" { pig, text, n }
+//                              "thing.state": a timer's, a pad's, a sound's extra
 //                              "ermine.computer.status": "pending" | { failed: words }, when so
 //                            and the rest software and processes write ("ermine.type"
 //                            "ermine.process", "ermine.process.program" { id, at?, hash? },
@@ -427,7 +435,12 @@ export async function createHost(
 	const host = s.createRootScope({ actor: id })
 	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 	// put: a whole value, written only when it is another; a write's site is its caller's line
-	const { header, commit, put, patch } = createWrites({ scheduler: s, table, places, scope: host })
+	const { header, commit, put, patch, drop } = createWrites({
+		scheduler: s,
+		table,
+		places,
+		scope: host,
+	})
 
 	// troubles, in words: each listener told those before it too
 	const troubles: ((words: string) => void)[] = [], said: string[] = []
@@ -561,18 +574,38 @@ export async function createHost(
 		return out
 	}
 
-	// what the den runs, shared: each thing's attributes on a node of the den's, as they change
+	// a map written as only its keys that are another, one patch each (a key gone: dropped); whole
+	// when there is none yet
+	const sameBytes = (a: unknown, b: unknown) => {
+		const x = bytesOf(a), y = bytesOf(b)
+		return x !== undefined && y !== undefined && x.length === y.length &&
+			x.every((n, i) => n === y[i])
+	}
+	function putKeys(part: Key, id: Id, v: Record<string, unknown>) {
+		const was = table.get(part, id)?.value
+		if (!isMap(was)) return put(part, id, v)
+		for (const k of Object.keys(was)) if (!Object.hasOwn(v, k)) drop(part, id, [k])
+		for (const [k, x] of Object.entries(v)) {
+			if (!Object.hasOwn(was, k) || !sameBytes(was[k], x)) patch(part, id, [k], x)
+		}
+	}
+
+	// what the den runs, shared: each thing's attributes on <den>/things<its path> (the same node
+	// each load, and short: /things/home/keys-1a2b), as they change
 	function publish(seen: Map<string, Record<string, unknown>>) {
 		const want: Record<string, string> = {}
 		for (const [p, attributes] of seen) {
-			const shared = `${THINGS}/${p}`
+			const shared = `${THINGS}${attributes[AT]}`
 			want[p] = shared
-			put("attributes", shared, attributes)
+			putKeys("attributes", shared, attributes)
 		}
 		const was = table.get("children", THINGS)?.value
 		put("children", THINGS, want)
-		for (const [p, shared] of Object.entries(isMap(was) ? was : {})) {
-			if (!(p in want) && typeof shared === "string" && table.get("attributes", shared)) {
+		// a shared node gone: none of the running things' (started again at the same path: another
+		// process id, the same node)
+		const kept = new Set(Object.values(want))
+		for (const shared of Object.values(isMap(was) ? was : {})) {
+			if (typeof shared === "string" && !kept.has(shared) && table.get("attributes", shared)) {
 				hosted(() => table.del("attributes", shared))
 			}
 		}

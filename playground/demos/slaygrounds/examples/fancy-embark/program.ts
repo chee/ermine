@@ -114,7 +114,8 @@ const FNS: Record<string, Fn> = {
 
 // ---- small types ----
 type Id = string
-type E = { readonly id: string; readonly part: "value"; readonly path?: string[] }
+type E = { readonly id: string; readonly part: "value" }
+type H = { readonly id: string; readonly path?: string[] }
 type Cam = { lat: number; lon: number; z: number }
 type Geo = {
 	lat: number
@@ -199,11 +200,13 @@ export default function program(api: API & Host) {
 	// the trip is saved under ./trip (a reload finds it as it was): doc, places, dates, ui. what is
 	// worked out is inside this process (gone at its stop, made again at the next start): index,
 	// menu, suggest, lit, and a result, geo or data memo per formula, place or view
-	// a node by id, with its names from the root where they are known (h reads them to say what a
-	// binding is of, and asking the graph for them is a walk). known is kept up as the outline
-	// changes: forest() sets it for everything, insert for what it makes
+	// a node by id, for the api; and for h, the same with its names from the root where they are
+	// known (h reads them to say what a binding is of, and asking the graph for them is a walk).
+	// known is kept up as the outline changes: forest() sets it for everything, insert for what it
+	// makes
 	const known = new Map<Id, string[]>()
-	const S = (id: Id): E => ({ id, part: "value", path: known.get(id) })
+	const S = (id: Id): E => ({ id, part: "value" })
+	const H = (id: Id): H => ({ id, path: known.get(id) })
 	const pathOf = (id: Id): string[] => {
 		const p = known.get(id)
 		if (!p) throw new Error(`no path known for ${id}`)
@@ -301,7 +304,7 @@ export default function program(api: API & Host) {
 	}
 	function insert(parent: Id, name: string, value: unknown, index?: number): Id {
 		const f = folder(parent, name)
-		const made = create(abs(f.path!), value).path!
+		const made = create(abs(pathOf(f.id)), value).path!
 		const id = made[made.length - 1]
 		known.set(id, made)
 		edit(f, (order: Id[]) => void order.splice(index ?? order.length, 0, id))
@@ -317,7 +320,7 @@ export default function program(api: API & Host) {
 			})
 		}
 		const into = folder(to, "items")
-		move(abs([...src.path!, id]), abs([...into.path!, id]))
+		move(abs([...pathOf(src.id), id]), abs([...pathOf(into.id), id]))
 		edit(src, (order: Id[]) => void order.splice(order.indexOf(id), 1))
 		edit(into, (order: Id[]) => void order.splice(clamp(index, order.length), 0, id))
 		forest() // its subtree is somewhere else now
@@ -325,7 +328,7 @@ export default function program(api: API & Host) {
 	function cut(parent: Id, name: string, id: Id) {
 		const f = folder(parent, name)
 		edit(f, (order: Id[]) => void order.splice(order.indexOf(id), 1))
-		gone(id, [...f.path!, id])
+		gone(id, [...pathOf(f.id), id])
 	}
 	// a node and everything under it taken out (unplaced from where it is, then deleted). a mentions
 	// folder holds placements of nodes that live elsewhere: it goes, what is in it stays
@@ -334,7 +337,7 @@ export default function program(api: API & Host) {
 			if (k.name === "mentions") remove({ id: k.id, part: "value" })
 			else gone(k.id)
 		}
-		remove(names ? { id, part: "value", path: names } : { id, part: "value" })
+		remove(names ? abs(names) : { id, part: "value" })
 		known.delete(id)
 	}
 	// the whole forest: the document and every place's own items. parent and children of each
@@ -401,11 +404,11 @@ export default function program(api: API & Host) {
 		if (!want.size && !kidAt(id, "mentions")) return
 		const f = folder(id, "mentions")
 		for (const m of membersOf(f.id)) {
-			if (want.get(m.name) !== m.id) unplace(abs([...f.path!, m.name]))
+			if (want.get(m.name) !== m.id) unplace(abs([...pathOf(f.id), m.name]))
 		}
 		const have = new Set(membersOf(f.id).map((m) => m.name))
 		for (const [label, node] of want) {
-			if (!have.has(label)) api.place(abs([...f.path!, label]), S(node))
+			if (!have.has(label)) api.place(abs([...pathOf(f.id), label]), S(node))
 		}
 	}
 
@@ -2008,9 +2011,9 @@ export default function program(api: API & Host) {
 	function Mention({ label, end }: { label: string; end: number }) {
 		return (
 			<span class="m" data-at={end} data-label={label}>
-				{each([placesE, label], (it) => <PlaceChip item={it} label={label} />)}
+				{each([H(placesE.id), label], (it) => <PlaceChip item={it} label={label} />)}
 				{each(
-					[datesE, label],
+					[H(datesE.id), label],
 					() => (
 						<span class="chip date" title="a date: its node is /embark/dates">
 							📅 {label}
@@ -2128,7 +2131,7 @@ export default function program(api: API & Host) {
 	// one outline item: its row (shown, or edited), its inline views, its items
 	function Item({ item }: { item: any }) {
 		const id = item.id as Id
-		const e = S(id)
+		const e = H(id)
 		return (
 			<li
 				key={id}
@@ -2147,8 +2150,8 @@ export default function program(api: API & Host) {
 		return (
 			<ul class="kids">
 				{bind(
-					[S(id), "items"],
-					(order) => (Array.isArray(order) ? order : []).map((k) => <Item item={S(k)} />),
+					[H(id), "items"],
+					(order) => (Array.isArray(order) ? order : []).map((k) => <Item item={H(k)} />),
 				)}
 			</ul>
 		)
@@ -2157,10 +2160,10 @@ export default function program(api: API & Host) {
 	function Views({ id }: { id: Id }) {
 		return (
 			<div class="views">
-				{bind([S(id), "views"], (order) =>
+				{bind([H(id), "views"], (order) =>
 					(Array.isArray(order) ? order : []).map((v) => (
 						<div key={v}>
-							{bind(S(v), (spec) => (!spec || spec.where === "side"
+							{bind(H(v), (spec) => (!spec || spec.where === "side"
 								? null
 								: <ViewBox view={v} item={id} spec={spec} />))}
 						</div>
@@ -2169,7 +2172,7 @@ export default function program(api: API & Host) {
 		)
 	}
 	function Row({ id, title }: { id: Id; title?: boolean }) {
-		const e = S(id)
+		const e = H(id)
 		return (
 			<div
 				class="row"
@@ -2389,7 +2392,7 @@ export default function program(api: API & Host) {
 				<header class="vh">
 					<span class="vk">{VIEWICON[spec.kind]} {spec.kind}</span>
 					<span class="of">
-						of “{bind(S(item), (v) => plain(String(v?.text ?? "")) || "…")}”
+						of “{bind(H(item), (v) => plain(String(v?.text ?? "")) || "…")}”
 					</span>
 					<span class="vstat">{bind(data, (d) => viewStatus(d))}</span>
 					<span class="fill" />
@@ -2917,7 +2920,7 @@ export default function program(api: API & Host) {
 					).map((v: any) => (
 						<div key={v.view}>
 							{bind(
-								S(v.view),
+								H(v.view),
 								(spec) => spec ? <ViewBox view={v.view} item={v.item} spec={spec} /> : null,
 							)}
 						</div>
@@ -2927,7 +2930,7 @@ export default function program(api: API & Host) {
 						<span class="vk">📍 places</span>
 						<span class="of">the other outline: what @ made, from OpenStreetMap</span>
 					</header>
-					<ul class="plist">{under(placesE, (p) => <PlaceRow item={p} />)}</ul>
+					<ul class="plist">{under(H(placesE.id), (p) => <PlaceRow item={p} />)}</ul>
 				</section>
 				<section class="panel net">
 					<header class="vh">
@@ -3153,7 +3156,7 @@ export default function program(api: API & Host) {
 				onMouseDown={(ev) => ev.stopPropagation()}
 			>
 				<header>
-					{bind(S(id), (v) => <b>{v?.name}</b>)}
+					{bind(H(id), (v) => <b>{v?.name}</b>)}
 					<span class="fill" />
 					<button class="mini" onClick={handler("on/card", [null])}>✕</button>
 				</header>
@@ -3218,7 +3221,7 @@ export default function program(api: API & Host) {
 				</span>
 				<span class="fill" />
 				<button
-					class={bind(threadsE, (v) => (v ? "on" : ""))}
+					class={bind(H(threadsE.id), (v) => (v ? "on" : ""))}
 					title="threads: hover a result to see what its run read"
 					onClick={handler("on/threads")}
 				>
@@ -3243,7 +3246,7 @@ export default function program(api: API & Host) {
 				</span>
 				<button title="how it works" onClick={handler("on/help")}>?</button>
 			</header>
-			{bind(helpE, (v) => (v ? <Help /> : null))}
+			{bind(H(helpE.id), (v) => (v ? <Help /> : null))}
 			<div class="cols">
 				<main class="doc">
 					{threads.svg}
@@ -3262,8 +3265,11 @@ export default function program(api: API & Host) {
 				<Side />
 			</div>
 			{bind("/embark/menulist", (m) => menuView(m))}
-			{bind(cardE, (c) => cardView(c))}
-			{bind(toastE, (v) => (v ? <div class="toast" key={String(v.at)}>{v.text}</div> : null))}
+			{bind(H(cardE.id), (c) => cardView(c))}
+			{bind(
+				H(toastE.id),
+				(v) => (v ? <div class="toast" key={String(v.at)}>{v.text}</div> : null),
+			)}
 		</div>
 	)
 }
