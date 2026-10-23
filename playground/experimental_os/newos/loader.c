@@ -1,7 +1,7 @@
 // loader.c: C programs (loader.h; CLOADER.md, How it runs), as ermine/programs runs any program: a
 // program of type public.c-source is run by /loaders' chain, the compiler "clang" (C to a wasm
-// module, org.webassembly.wasm) then the runner "wasm". The build (build.c) caches the compile by
-// its source: a program compiled before is not compiled again.
+// module, org.webassembly.wasm) then the runner "wasm". The compilers library (compilers.c) caches
+// the compile by its source: a program compiled before is not compiled again.
 //
 // The compile is cc.c's, on a thread: clang and wasm-ld, the headers in /lib/c given to it (read as
 // the compile starts, told to no one). Its promise settles at the turn after it is done, which the

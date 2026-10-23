@@ -822,3 +822,32 @@ const fromHash = () => (parseInt(location.hash.slice(1)) || 1) - 1
 addEventListener("hashchange", () => { if (fromHash() !== step) go(fromHash()) })
 go(fromHash())
 </script>
+<script type="module">
+// the devtools extension (playground/devtools): this page's table, read only, as a process api's
+// reads give it (entries, list, peep, reads), walked from root's children. the page has no places,
+// scheduler or api of its own: this is a stand-in over its copy, read each time devtools asks
+import { devtools } from "../../devtools/answer.ts"
+const idOf = (x) => {
+	if (x.id !== undefined) return x.id
+	let at = "root"
+	for (const name of x.path) if ((at = child(W.table.get("children", at), name)) === undefined) return
+	return at
+}
+const valueOf = (part, id) => W.table.get(part, id)?.value
+const at = (v, path = []) => path.reduce((o, k) => (isMap(o) || Array.isArray(o) ? o[k] : undefined), v)
+devtools({
+	entries(x) {
+		const id = idOf(x)
+		return id === undefined ? [] : [{ value: valueOf(x.part, id), from: "table", id }]
+	},
+	list(x) {
+		const kids = valueOf("children", idOf(x))
+		return isMap(kids) ? Object.keys(kids) : []
+	},
+	peep: (x, path) => at(valueOf(x.part, idOf(x)), path),
+	reads(x, path) {
+		const id = idOf(x)
+		return id === undefined ? [] : [{ value: at(valueOf(x.part, id), path), from: "table" }]
+	},
+}, { name: "inside a node" })
+</script>

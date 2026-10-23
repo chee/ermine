@@ -15,4 +15,8 @@ int flash_install(inst_install *out);
 // the file system mounted (made the first time): 1; 0 not
 int flash_mount(void);
 
+// the logs of tippet's old store format (folders not named t2…, which nothing reads now) let go,
+// for room; the bytes free said before and after
+void flash_sweep(void);
+
 #endif

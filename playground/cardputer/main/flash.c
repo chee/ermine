@@ -1,9 +1,13 @@
 // the den's place on flash (flash.h)
 #include "flash.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <dirent.h>
+#include <strings.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "playground/cardputer/components/ermine/iovec.h"
@@ -89,4 +93,36 @@ int writev(int fd, const struct iovec *iov, int count) {
 	ssize_t wrote = write(fd, b, total);
 	free(b);
 	return (int)wrote;
+}
+
+// the file system's bytes free, said
+static void say_free(const char *when) {
+	uint64_t total = 0, free_bytes = 0;
+	if (esp_vfs_fat_info(FLASH_DIR, &total, &free_bytes) == ESP_OK)
+		printf("flash: %s: %llu of %llu bytes free\n", when, (unsigned long long)free_bytes, (unsigned long long)total);
+}
+
+void flash_sweep(void) {
+	say_free("mounted");
+	DIR *d = opendir(FLASH_DIR);
+	if (d == NULL) return;
+	struct dirent *e;
+	char dir[300], file[600];
+	while ((e = readdir(d)) != NULL) {
+		if (strncasecmp(e->d_name, "t2", 2) == 0 || e->d_name[0] == '.') continue;
+		snprintf(dir, sizeof dir, "%s/%s", FLASH_DIR, e->d_name);
+		DIR *in = opendir(dir);
+		if (in == NULL) continue;
+		struct dirent *f;
+		while ((f = readdir(in)) != NULL) {
+			if (f->d_name[0] == '.') continue;
+			snprintf(file, sizeof file, "%s/%s", dir, f->d_name);
+			unlink(file);
+		}
+		closedir(in);
+		printf("flash: %s let go (a log in tippet's old format, never read now): %s\n", dir,
+			rmdir(dir) == 0 ? "done" : strerror(errno));
+	}
+	closedir(d);
+	say_free("swept");
 }

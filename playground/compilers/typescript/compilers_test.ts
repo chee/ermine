@@ -1,4 +1,4 @@
-// build's compile on a real scheduler, table, paths and places (root R): catclock.c (CAT, "hi"),
+// compilers' compile on a real scheduler, table, paths and places (root R): catclock.c (CAT, "hi"),
 // compilers as nodes holding live functions, the cache folder R/cache (CACHE)
 import { assertEquals, assertInstanceOf, assertStrictEquals } from "@std/assert"
 import createEntry from "@ermine/node/entry"
@@ -20,7 +20,7 @@ import {
 	createBuilds,
 	type Found,
 	TRACE,
-} from "./build.ts"
+} from "./compilers.ts"
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const CLANG = { name: "clang", version: "19.1.0", target: "wasm32", flags: ["-O2"] }

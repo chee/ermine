@@ -34,6 +34,13 @@
 #define DEN_BEAT 2000
 #define DEN_QUIET 6000
 
+// why the den isn't up, in words ("": it is)
+const char *den_why(void);
+// 1: a boot again would mend what kept it from coming up (a snapshot let go)
+int den_again(void);
+// a message from the server, before the sync takes it: a have saying the room holds more of this
+// den's steps than its log does is said on the screen
+void den_heard(const uint8_t *message, size_t length);
 // after host_init: the den of the install, in room code, its log kept in dir (made when not there).
 // now: the clock's ms. 0: up
 int den_boot(const inst_install *install, const char *code, const char *dir, int64_t now);
@@ -73,6 +80,8 @@ size_t den_heap(size_t *most);
 // the platform's: the screen drawn again (the last picture, with the band); n random bytes
 void frame_again(void);
 void den_random(uint8_t *out, size_t n);
+// the platform's: the clock, ms
+int64_t den_clock(void);
 // the platform's: the heap free now (bytes)
 size_t den_free(void);
 // the platform's: the heap at a stage of the den's boot, said

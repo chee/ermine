@@ -9,13 +9,13 @@
 // writes are the host's, in its scope, so each carries its site
 //
 //   createTerminal(host, el)
-import createEntry from "@ermine/node/entry"
-import { level, type Path, place, PlacesError, unplace } from "@ermine/places"
+import { level, type Path, PlacesError } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
 import { members } from "@ermine/places/lib"
 import { upsert } from "@ermine/places/upsert"
 import { RUNNER } from "@ermine/software"
 import { type Host, KINDS, NAME, OUT } from "./host.ts"
+import { FOLDER, MACHINERY, type Unplaced } from "./made.ts"
 import { brief } from "./files.ts"
 import { siteHtml } from "./code.ts"
 import { sound } from "./sound.ts"
@@ -63,7 +63,9 @@ const HELP = [
 	"cat path           what a node holds: its value, its attributes",
 	'name = value       put a value at name: a number, true, false, null, {}, "text", or any text',
 	"name.key = value   set one key of the map at name",
+	"new name           make a folder here (new name value: a node holding value)",
 	"rm name            take name out (a thing that runs: stopped)",
+	"undo               put back what rm last took out",
 	`start kind [name]  start a thing: ${KINDS.join(", ")}`,
 	"stop name          stop a thing that runs here",
 	"clear              a clean screen (esc clears the line)",
@@ -209,7 +211,8 @@ export function createTerminal(host: Host, root: HTMLElement) {
 		const path = arg ? resolve(arg) : []
 		const f = look(path)
 		if (!f) return no(`cd: nothing is at ${show(path)}`)
-		if (!f.names.length && path.length) {
+		const folder = f.id !== undefined && attributes(f.id)?.["ermine.type"] === FOLDER
+		if (!f.names.length && path.length && !folder) {
 			return no(
 				`cd: ${show(path)} has nothing under it to go into (cat it to see what it holds)`,
 			)
@@ -280,6 +283,10 @@ export function createTerminal(host: Host, root: HTMLElement) {
 		const v = parsed(text)
 		const f = look(path)
 		try {
+			const owner = f?.id === undefined ? undefined : host.made.theirs(f.id)
+			if (owner !== undefined || f?.from === "away") {
+				return no(`=: ${show(path)} is not yours: ${owner ?? "another den"}'s`)
+			}
 			if (f?.id) {
 				const id = f.id
 				write(() => places.commit(upsert(table, "value", id, key ? [key] : [], v, header())))
@@ -290,30 +297,11 @@ export function createTerminal(host: Host, root: HTMLElement) {
 					`=: ${show(path)} is a folder with no node of its own, so it can't hold a value`,
 				)
 			}
-			// a new node, placed in the folder it is in
-			const up = look(path.slice(0, -1))
-			if (!up) {
-				return no(
-					`=: nothing is at ${show(path.slice(0, -1))}, so ${path.at(-1)} can't go there`,
-				)
-			}
-			if (!up.id) {
-				return no(
-					`=: ${
-						show(path.slice(0, -1))
-					} is made by the den (${up.from}), not saved: nothing can be put in it. try / or /things`,
-				)
-			}
-			const folder = up.id
-			const id = crypto.randomUUID()
-			write(() => {
-				const h = header()
-				table.add("value", id, createEntry(key ? { [key]: v } : v, h) as never)
-				const kids = table.get("children", folder)
-				if (kids === undefined) {
-					table.add("children", folder, createEntry({ [path.at(-1)!]: id }, h) as never)
-				} else places.commit(place(kids, path.at(-1)!, id, h))
-			})
+			// a new node, made in the folder it is in (made.ts: kept, so it travels)
+			const r = write(() =>
+				host.made.make(path.slice(0, -1), path.at(-1)!, key ? { [key]: v } : v)
+			)
+			if ("refused" in r) return no(`=: ${r.refused}`)
 			ok(`made ${show(path)}${key ? `.${key}` : ""} = ${shown(v) || "nothing"}`)
 		} catch (e) {
 			no(`=: ${show(path)}: ${why(e)}`)
@@ -349,23 +337,34 @@ export function createTerminal(host: Host, root: HTMLElement) {
 		if (!path.length) return no("rm: the root stays")
 		const f = look(path)
 		if (!f) return no(`rm: nothing is at ${show(path)}`)
-		if (stopAt("rm", path, f)) return
-		if (f.from !== "children") {
-			const by = f.from === "away"
-				? "it is mirrored from another den, and goes when that den takes it away"
-				: "the den made it: it isn't saved in a folder"
-			return no(`rm: ${show(path)} can't be taken out: ${by}`)
-		}
-		const up = look(path.slice(0, -1))
-		// the folder's own children entry: what is written
-		const kids = up?.id ? table.get("children", up.id) : undefined
-		if (!kids) return no(`rm: ${show(path)} isn't in a folder it can be taken out of`)
-		try {
-			write(() => places.commit(unplace(kids, path.at(-1)!, header())))
-			ok(`took ${show(path)} out`)
-		} catch (e) {
-			no(`rm: ${show(path)}: ${why(e)}`)
-		}
+		// the den's machinery: its words first
+		if (!MACHINERY.includes(path[0]) && stopAt("rm", path, f)) return
+		const r = write(() => host.made.unplace(path))
+		if ("refused" in r) return no(`rm: ${r.refused}`)
+		if ("thing" in r) return no(`rm: ${show(path)} runs here: stop it with stop`)
+		undo = r
+		ok(`took ${show(path)} out (undo puts it back)`)
+	}
+
+	// new name: a folder; new name value: a node holding it
+	function make(name?: string, text?: string) {
+		if (!name) return no("new: new what? new name, or new name value")
+		const path = resolve(name)
+		if (!path.length) return no("new: give it a name: new notes")
+		const v = text === undefined ? undefined : parsed(text)
+		const r = write(() => host.made.make(path.slice(0, -1), path.at(-1)!, v))
+		if ("refused" in r) return no(`new: ${r.refused}`)
+		ok(`made ${show(r.path)}${v === undefined ? ", a folder" : ` = ${shown(v)}`}`)
+	}
+
+	// the last rm, put back
+	let undo: Unplaced | undefined
+	function again() {
+		if (!undo) return no("undo: nothing to put back")
+		const u = undo
+		undo = undefined
+		write(() => u.undo())
+		ok(`put ${show(u.path)} back`)
 	}
 
 	function start(kind?: string, name?: string) {
@@ -416,6 +415,10 @@ export function createTerminal(host: Host, root: HTMLElement) {
 				return cat(arg)
 			case "rm":
 				return rm(arg)
+			case "new":
+				return make(rest[0], rest.length > 1 ? rest.slice(1).join(" ") : undefined)
+			case "undo":
+				return again()
 			case "start":
 				return start(rest[0], rest[1])
 			case "stop":

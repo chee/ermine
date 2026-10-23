@@ -11,6 +11,12 @@
 // changed item lit up for a moment. a click picks a node (and shows its thing on the board); a
 // double click goes into a folder. a thing's row is draggable onto an in-port
 //
+// making and taking out (made.ts): "+ new", a right click, or n (a node) and shift n (a folder)
+// names a new one in place, in the folder shown: a name, then enter (a node: then its value, a
+// number, true, false or text, then enter); esc lets it go. delete (or the right click's) takes the
+// one picked out of its place, and "deleted <name> · undo" puts it back for a few seconds; z with
+// cmd or ctrl too. what isn't this den's, or is its machinery, is refused in words there
+//
 //   const files = createFiles(host, el, { pick: (path, id) => ..., isThing: (id) => ... })
 //   files.select(["home", "counter-1a2b"])
 import type { ChangeHeader } from "@ermine/node/entry"
@@ -20,6 +26,7 @@ import { RUNNER, TAKES } from "@ermine/software"
 import { codeLink, linesHtml, onMaps, origin, siteHtml } from "./code.ts"
 import type { Host } from "./host.ts"
 import { NAME, OUT } from "./host.ts"
+import { FOLDER, type Unplaced } from "./made.ts"
 import { isPicture } from "./things.ts"
 
 type Item = {
@@ -141,6 +148,7 @@ const FROM: Record<string, string> = {
 	process: "running here (processes)",
 	away: "another den's, its steps come through tippet (away places it)",
 	children: "saved here (children)",
+	made: "made here by a person: this den's own, its steps in the room's log",
 }
 
 // ---- icons: a folder, tinted by where it is; a page, with a band saying what's in it; a cog for
@@ -210,7 +218,12 @@ const cogSvg = (away: boolean) =>
 	}" stroke-width="2.6" stroke-dasharray="2.1 1.55"/><circle cx="8" cy="8" r="2" fill="${
 		away ? "#ff2284" : "#2269ff"
 	}"/></svg>`
-const isFolder = (it: Item) => (it.names.length > 0 && !it.again) || it.key === "" || isLevel(it)
+// a folder made here: one even while empty, so it can be gone into and filled
+const isMadeFolder = (it: Item) => it.attributes?.["ermine.type"] === FOLDER
+const isFolder = (it: Item) =>
+	(it.names.length > 0 && !it.again) || it.key === "" || isLevel(it) || isMadeFolder(it)
+// one that can be gone into
+const enterable = (it: Item) => isFolder(it) && (it.names.length > 0 || isMadeFolder(it))
 function icon(it: Item, size: "small" | "big" | "huge") {
 	if (thingKind(it)) {
 		return `<span class="icon i-${size} cog">${cogSvg(it.from === "away")}</span>`
@@ -272,6 +285,17 @@ function preview(it: Item) {
 	return `<pre class="peek">${esc(text)}</pre>`
 }
 
+// a value as typed: a number, true, false, null, or else the text
+function typed(t: string): unknown {
+	const s = t.trim()
+	if (s === "true") return true
+	if (s === "false") return false
+	if (s === "null") return null
+	if (s.length >= 2 && s.startsWith('"') && s.endsWith('"')) return s.slice(1, -1)
+	if (s !== "" && !Number.isNaN(Number(s))) return Number(s)
+	return t
+}
+
 // ---- the browser ----
 export function createFiles(
 	host: Host,
@@ -283,6 +307,8 @@ export function createFiles(
 		isThing: (id: string) => boolean
 		// "open it wide": a live function, in the code window
 		live: (name: string, fn: unknown) => void
+		// a running thing of this den's taken away (as its box's ×), by its node's id
+		remove: (id: string) => void
 	},
 ) {
 	const { s, places, hosted } = host
@@ -290,6 +316,8 @@ export function createFiles(
 	const side = $(".side"), main = $(".main"), info = $(".info"), crumbs = $(".crumbs")
 	const status = $(".status"), back = $<HTMLButtonElement>(".back")
 	const forward = $<HTMLButtonElement>(".forward")
+	// focusable, so a click on its paper takes the keys (n, shift n, delete)
+	main.tabIndex = -1
 
 	let view: View = "list"
 	try {
@@ -437,7 +465,7 @@ export function createFiles(
 		on.pick(it.path, typeof it.id === "string" ? it.id : undefined)
 	}
 	function activate(it: Item) {
-		if (isFolder(it) && it.names.length && view !== "map") {
+		if (enterable(it) && view !== "map") {
 			if (view === "columns") pick(it.key)
 			else go(it.path)
 		} else told(it)
@@ -446,7 +474,7 @@ export function createFiles(
 		picked = k
 		const it = items.get(k)
 		if (view === "columns" && it) {
-			here = isFolder(it) && it.names.length ? it.path : parent(it.path)
+			here = enterable(it) ? it.path : parent(it.path)
 		}
 		draw()
 	}
@@ -466,7 +494,8 @@ export function createFiles(
 
 	function draw() {
 		if (!items.size) return
-		if (holding) return void (owed = true)
+		// held, or a name being typed in place: drawn once it's let go
+		if (holding || naming) return void (owed = true)
 		owed = false
 		const focused = document.activeElement instanceof HTMLElement &&
 				main.contains(document.activeElement)
@@ -637,7 +666,7 @@ export function createFiles(
 		const folders: string[][] = [[]]
 		for (let i = 1; i <= trail.length; i++) {
 			const it = items.get(key(trail.slice(0, i)))
-			if (it && isFolder(it) && it.names.length) folders.push(trail.slice(0, i))
+			if (it && enterable(it)) folders.push(trail.slice(0, i))
 		}
 		main.innerHTML = `<div class="cols">${
 			folders.map((path, depth) => {
@@ -790,7 +819,7 @@ export function createFiles(
 		for (const [k, v] of attrs) {
 			rows.push([k === OUT ? "out" : k, shown(k, v), k === OUT ? "out" : undefined])
 		}
-		const enter = isFolder(it) && it.names.length > 0 && key(here) !== it.key && view !== "map"
+		const enter = enterable(it) && key(here) !== it.key && view !== "map"
 		const board = typeof it.id === "string" && on.isThing(it.id)
 		info.innerHTML = `<div class="hero${fresh(it.key)}" style="${blink(it.key)}">${
 			icon(it, "huge")
@@ -901,6 +930,7 @@ export function createFiles(
 		}
 	})
 	root.addEventListener("keydown", (e) => {
+		if ((e.target as Element).closest("input")) return
 		const item = (e.target as Element).closest<HTMLElement>("[data-key]")
 		if (item && main.contains(item) && e.key === "Enter") {
 			e.preventDefault()
@@ -909,7 +939,10 @@ export function createFiles(
 		} else if (item && main.contains(item) && e.key === " ") {
 			e.preventDefault()
 			pick(item.dataset.key!)
-		} else if (e.key === "Backspace" && here.length && (view === "icons" || view === "list")) {
+		} else if (
+			e.key === "Backspace" && !e.metaKey && !e.ctrlKey && here.length &&
+			(view === "icons" || view === "list")
+		) {
 			e.preventDefault()
 			go(parent(here), key(here))
 		}
@@ -937,6 +970,170 @@ export function createFiles(
 		here = ahead.pop()!
 		picked = undefined
 		draw()
+	})
+
+	// ---- making and taking out (made.ts) ----
+	// the folder new ones go in: the one shown (columns, the map: the picked one's, or it)
+	function target(): string[] {
+		if (view !== "columns" && view !== "map") return here
+		const it = picked === undefined ? undefined : items.get(picked)
+		if (!it) return here
+		return enterable(it) ? it.path : parent(it.path)
+	}
+	// a new one being named in place: its folder, and whether it is a folder; the drawing waits
+	let naming: { folder: string[]; folder_: boolean } | undefined
+	function startNaming(folder_: boolean) {
+		closeMenu()
+		naming = { folder: target(), folder_ }
+		const form = document.createElement("form")
+		form.className = "naming"
+		form.innerHTML = `${
+			folder_ ? folderSvg(tint(naming.folder), false) : pageSvg({ value: 1 } as Item, true)
+		}<span class="in">in /${esc(naming.folder.join("/"))}</span>
+			<input name="name" placeholder="${
+			folder_ ? "the folder's name" : "its name"
+		}" autocomplete="off" spellcheck="false" aria-label="name">${
+			folder_
+				? ""
+				: `<input name="value" placeholder="its value: 3, true, or text" autocomplete="off" spellcheck="false" aria-label="value">`
+		}<span class="hint">enter · esc</span>`
+		main.prepend(form)
+		const name = form.querySelector<HTMLInputElement>("[name=name]")!
+		const value = form.querySelector<HTMLInputElement>("[name=value]")
+		name.focus()
+		form.addEventListener("keydown", (e) => {
+			if (e.key === "Escape") {
+				e.preventDefault()
+				e.stopPropagation()
+				stopNaming()
+			} else if (e.key === "Enter") {
+				e.preventDefault()
+				e.stopPropagation()
+				if (e.target === name && value && !value.value) return value.focus()
+				finish(name.value, value?.value)
+			}
+		})
+		form.addEventListener("focusout", (e) => {
+			if (!form.contains(e.relatedTarget as Node | null)) {
+				setTimeout(() => naming && !form.contains(document.activeElement) && stopNaming())
+			}
+		})
+	}
+	function stopNaming() {
+		naming = undefined
+		main.querySelector(".naming")?.remove()
+		draw()
+	}
+	function finish(name: string, text: string | undefined) {
+		if (!naming) return
+		const { folder, folder_ } = naming
+		const v = folder_ ? undefined : typed(text ?? "")
+		const r = host.made.make(folder, name, v)
+		if ("refused" in r) return say(r.refused)
+		stopNaming()
+		open.add(key(folder))
+		wanted = [...r.path]
+		say(`made /${r.path.join("/")}${folder_ ? ", a folder" : ""}`, undefined, "ok")
+	}
+
+	// a word in the corner of the files: what was done (and its undo), or why not. gone in a few s
+	const toast = document.createElement("div")
+	toast.className = "ftoast"
+	toast.hidden = true
+	toast.setAttribute("role", "status")
+	root.append(toast)
+	let hush: ReturnType<typeof setTimeout> | undefined
+	let undoing: Unplaced | undefined
+	function say(words: string, undo?: Unplaced, tone: "hot" | "ok" = "hot") {
+		undoing = undo
+		toast.className = `ftoast tone-${undo ? "done" : tone}`
+		toast.innerHTML = `<span>${esc(words)}</span>${
+			undo ? `<span class="dot">·</span><button class="undo">undo</button>` : ""
+		}`
+		toast.hidden = false
+		clearTimeout(hush)
+		hush = setTimeout(() => (toast.hidden = true, undoing = undefined), undo ? 6000 : 4000)
+	}
+	function undo() {
+		const u = undoing
+		if (!u) return
+		u.undo()
+		undoing = undefined
+		say(`put /${u.path.join("/")} back`, undefined, "ok")
+	}
+	toast.addEventListener("click", (e) => {
+		if ((e.target as Element).closest(".undo")) undo()
+	})
+
+	// the one at key taken out of its place: a thing of this den's stopped (as its ×), else unplaced
+	function remove(k: string) {
+		const it = items.get(k)
+		if (!it) return
+		const r = host.made.unplace(it.path)
+		if ("refused" in r) return say(r.refused)
+		if ("thing" in r) return on.remove(r.thing)
+		if (picked === k) picked = undefined
+		say(`deleted ${short(it.name)}`, r)
+	}
+
+	// the right click's little menu: new folder, new node, and the one under it out
+	let menu: HTMLElement | undefined
+	function closeMenu() {
+		menu?.remove()
+		menu = undefined
+	}
+	function openMenu(x: number, y: number, under?: Item) {
+		closeMenu()
+		menu = document.createElement("div")
+		menu.className = "fmenu"
+		menu.setAttribute("role", "menu")
+		menu.innerHTML = `<button data-make="folder" role="menuitem">new folder</button>
+			<button data-make="node" role="menuitem">new node with a value</button>${
+			under
+				? `<button data-delete="${esc(under.key)}" role="menuitem">delete ${
+					esc(short(under.name))
+				}</button>`
+				: ""
+		}`
+		const r = root.getBoundingClientRect()
+		menu.style.left = `${Math.min(x - r.left, r.width - 190)}px`
+		menu.style.top = `${Math.min(y - r.top, r.height - 110)}px`
+		root.append(menu)
+		menu.querySelector("button")?.focus()
+	}
+	root.addEventListener("contextmenu", (e) => {
+		if (!main.contains(e.target as Node)) return
+		e.preventDefault()
+		const el = (e.target as Element).closest<HTMLElement>("[data-key]")
+		const it = el ? items.get(el.dataset.key!) : undefined
+		if (it) pick(it.key)
+		openMenu(e.clientX, e.clientY, it)
+	})
+	root.querySelector<HTMLButtonElement>(".new")!.addEventListener("click", (e) => {
+		const b = (e.currentTarget as HTMLElement).getBoundingClientRect()
+		menu ? closeMenu() : openMenu(b.left, b.bottom + 4)
+	})
+	root.addEventListener("click", (e) => {
+		const t = e.target as Element
+		const m = t.closest<HTMLElement>("[data-make]")
+		if (m) return startNaming(m.dataset.make === "folder")
+		const d = t.closest<HTMLElement>("[data-delete]")
+		if (d) return (closeMenu(), remove(d.dataset.delete!))
+		if (menu && !t.closest(".fmenu, .new")) closeMenu()
+	})
+	root.addEventListener("keydown", (e) => {
+		if ((e.target as Element).closest("input, .naming")) return
+		if (e.key === "Escape" && menu) return closeMenu()
+		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && undoing) {
+			e.preventDefault()
+			return undo()
+		}
+		if (e.metaKey || e.ctrlKey || e.altKey) {
+			if (e.key === "Backspace" && picked !== undefined) (e.preventDefault(), remove(picked))
+			return
+		}
+		if (e.key === "n" || e.key === "N") (e.preventDefault(), startNaming(e.key === "N"))
+		else if (e.key === "Delete" && picked !== undefined) (e.preventDefault(), remove(picked))
 	})
 
 	// a node picked elsewhere (the board): picked here too, its folders opened

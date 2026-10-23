@@ -15,7 +15,7 @@
 import type { World } from "./world.ts"
 import { short } from "./program.ts"
 import { ATTRIBUTES as A, satisfy, type Way, type Why } from "@ermine/programs"
-import { COMPILER } from "@ermine/build"
+import { COMPILER } from "@ermine/compilers"
 import { PIN } from "@ermine/processes/start"
 import type { Box } from "@ermine/boxes"
 import * as lib from "@ermine/places/lib"

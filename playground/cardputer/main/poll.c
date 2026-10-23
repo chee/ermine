@@ -65,6 +65,7 @@ static void open_link(void) {
 }
 
 void poll_start(tp_sync *sync, const char *url) {
+	if (sync == NULL) return;
 	me.sync = sync;
 	snprintf(me.url, sizeof me.url, "%s", url);
 	const char *h = strstr(url, "://");
@@ -77,6 +78,7 @@ void poll_start(tp_sync *sync, const char *url) {
 static void told(void *ctx, const uint8_t *message, size_t length) {
 	(void)ctx;
 	me.in++;
+	den_heard(message, length);
 	if (me.link) tp_sync_receive(me.sync, me.link, message, length);
 }
 

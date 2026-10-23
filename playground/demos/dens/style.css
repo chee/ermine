@@ -2176,3 +2176,179 @@ main.pondpage .caption {
 		animation: none;
 	}
 }
+
+/* ---- making and taking out, in the files: "+ new", a name typed in place, a little menu, and a
+   word in the corner with its undo. still: nothing on them moves ---- */
+.files .new {
+	flex: none;
+	font: 500 12.5px var(--sans);
+	color: var(--ink);
+	height: 26px;
+	padding: 0 10px;
+	border: 1px solid var(--line);
+	border-radius: var(--r-control);
+	background: #fff;
+	cursor: pointer;
+}
+.files .new:hover {
+	background: var(--lemon-soft);
+}
+.files .naming {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 8px 10px;
+	padding: 6px 8px;
+	border: 1px solid var(--line);
+	border-radius: var(--r-control);
+	background: var(--lemon-soft);
+}
+.files .naming svg {
+	width: 22px;
+	height: 20px;
+	flex: none;
+}
+.files .naming .in,
+.files .naming .hint {
+	font: 11px var(--mono);
+	color: var(--ink-2);
+	white-space: nowrap;
+}
+.files .naming input {
+	font: 13px var(--sans);
+	min-width: 0;
+	flex: 1;
+	padding: 3px 6px;
+	border: 1px solid var(--line);
+	border-radius: var(--r-control);
+	background: #fff;
+}
+.files .naming input:focus {
+	outline: 2px solid var(--blue);
+	outline-offset: -1px;
+}
+.files .fmenu {
+	position: absolute;
+	z-index: 10;
+	display: flex;
+	flex-direction: column;
+	min-width: 180px;
+	padding: 4px;
+	border: 1px solid var(--line);
+	border-radius: var(--r-control);
+	background: #fff;
+	box-shadow: 2px 2px 0 var(--line);
+}
+.files .fmenu button {
+	font: 13px var(--sans);
+	text-align: left;
+	color: var(--ink);
+	padding: 5px 10px;
+	border: none;
+	background: none;
+	cursor: pointer;
+}
+.files .fmenu button:hover,
+.files .fmenu button:focus-visible {
+	background: var(--lemon);
+	outline: none;
+}
+.files .fmenu button[data-delete] {
+	border-top: 1px solid var(--hair);
+	color: #c4005d;
+}
+.files .ftoast {
+	position: absolute;
+	z-index: 9;
+	left: 50%;
+	bottom: 34px;
+	transform: translateX(-50%);
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font: 13px var(--sans);
+	color: var(--ink);
+	padding: 6px 12px;
+	border: 1px solid var(--line);
+	border-radius: 14px;
+	background: #fff;
+	box-shadow: 2px 2px 0 var(--line);
+	white-space: nowrap;
+}
+.files .ftoast[hidden] {
+	display: none;
+}
+.files .ftoast.tone-hot {
+	background: #ffe3ef;
+}
+.files .ftoast.tone-ok,
+.files .ftoast.tone-done {
+	background: var(--lemon-soft);
+}
+.files .ftoast .dot {
+	color: var(--ink-3);
+}
+.files .ftoast .undo {
+	font: 600 13px var(--sans);
+	color: var(--blue);
+	padding: 0;
+	border: none;
+	background: none;
+	cursor: pointer;
+	text-decoration: underline;
+}
+
+/* ---- a sound: its big button in mint, its voices as chips; a den's speaker on its card's edge,
+   its voice in a little menu ---- */
+button.press.playit {
+	height: 64px;
+	background: var(--mint, #40dcba);
+	color: var(--ink);
+}
+button.press.playit:disabled {
+	background: #bdeee2;
+}
+.thing-sound .notename,
+.thing-speaker .notename {
+	font: 700 15px var(--mono);
+	white-space: nowrap;
+}
+.thing-sound .soundrow {
+	padding: 6px 2px 2px;
+	gap: 10px;
+}
+.voices {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-top: 4px;
+}
+button.voice {
+	font: 600 11px var(--mono);
+	padding: 2px 7px;
+	border: 1px solid var(--ink);
+	border-radius: 10px;
+	background: #fff;
+	cursor: pointer;
+}
+button.voice[aria-pressed="true"] {
+	background: #ff8;
+}
+button.voice:disabled {
+	cursor: default;
+	color: #777;
+}
+select.voicepick {
+	font: 600 12px var(--mono);
+	padding: 1px 4px;
+	border: 1px solid var(--ink);
+	border-radius: 2px;
+	background: #fff;
+}
+.thing-speaker .soundrow {
+	padding: 2px 2px 4px;
+	gap: 8px;
+}
+.thing-speaker .box-head {
+	background: #fff8c8 !important;
+}

@@ -144,21 +144,21 @@ places-test_src = $(filter-out conformance/c/harness.c core/op/c/json.c conforma
 places-test = filesystem/places/c/places-test
 LIBS += places-test
 # programs (playground/programs): satisfy and open (programs) and start, over ermine/types, ermine/processes' start and
-# playground/build's build and host functions; build (playground/build) on its own. on the places harness's world with boxes
+# the compilers library and host functions; compilers (playground/compilers) on its own. on the places harness's world with boxes
 programs_base = $(filter-out filesystem/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/boxes/c/boxes.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) experiments/software/c/functions.c
 programs_lib = ermine/types/c/types.c ermine/types/c/utis.c playground/programs/c/programs.c playground/programs/c/programs_json.c
 programs_src = $(programs_base) $(programs_lib) playground/programs/c/programs_harness.c
 programs = playground/programs/c/programs-harness
 programs_suite = programs
 programs_tests = $(wildcard playground/programs/typescript/programs_harness_test.ts)
-programs-build_src = $(programs_base) playground/build/c/build.c playground/build/c/build_harness.c
-programs-build = playground/build/c/build-harness
-programs-build_suite = build
-programs-start_src = $(programs_base) $(programs_lib) playground/build/c/build.c ermine/processes/c/start.c ermine/processes/c/runs.c playground/programs/c/start.c playground/programs/c/start_harness.c ermine/processes/c/scopes.c ermine/sites/c/sites.c playground/programs/c/dlopen.c
+compilers_src = $(programs_base) playground/compilers/c/compilers.c playground/compilers/c/compilers_harness.c
+compilers = playground/compilers/c/compilers-harness
+compilers_suite = compilers
+programs-start_src = $(programs_base) $(programs_lib) playground/compilers/c/compilers.c ermine/processes/c/start.c ermine/processes/c/runs.c playground/programs/c/start.c playground/programs/c/start_harness.c ermine/processes/c/scopes.c ermine/sites/c/sites.c playground/programs/c/dlopen.c
 programs-start = playground/programs/c/start-harness
 programs-start_suite = start
 programs-start_flags = -DPG_FIXTURES='"$(CURDIR)/playground/programs/c/fixtures/"'
-LIBS += programs programs-build programs-start
+LIBS += programs compilers programs-start
 # native fixtures (playground/programs/c/fixtures): libraries for this machine (native.h) the start harnesses
 # load through the dlopen runner (conformance/native); built here with the harness, never checked in.
 # unsigned.so: runner.c with no ad hoc signature (macOS), for the runner to sign

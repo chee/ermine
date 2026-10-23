@@ -1,5 +1,5 @@
-// Build (build.h), in C.
-#include "build.h"
+// Compilers (compilers.h), in C.
+#include "compilers.h"
 
 #include <string.h>
 
@@ -11,7 +11,7 @@
 #include "../../encoding/c/pack.h"
 #include "mem.h"
 
-// what an output is typed with, and what a compiler says it gives (as build.ts reads them)
+// what an output is typed with, and what a compiler says it gives (as compilers.ts reads them)
 #define BD_TYPE "ermine.type"
 #define BD_GIVES "ermine.programs.gives"
 
@@ -674,4 +674,48 @@ void bd_free(bd *b) {
 	op_free(b->info);
 	pm_clear(&b->of);
 	free(b);
+}
+
+// a chain's compilers -------------------------------------------------------------------------------
+
+op_value *bd_identity_of(tb_table *table, const char *id, const op_value *value) {
+	const nd_entry *e = tb_get(table, tb_string("attributes"), tb_string(id));
+	const op_value *attrs = e != NULL ? e->value : NULL;
+	const op_value *named = attrs != NULL && attrs->type == OP_MAP ? op_get(attrs, BD_COMPILER) : NULL;
+	if (named != NULL) return op_ref((op_value *)named);
+	char hex[65];
+	if (value == NULL || !bd_hash_hex(value, hex)) return op_str(id);
+	op_value *m = op_map();
+	op_set(m, "id", op_str(id));
+	op_set(m, "hash", op_str(hex));
+	return m;
+}
+
+// a loaded compiler's step run: its live form's compile, unless let go by now
+static hf_out loaded_run(const op_value *code, void *data) {
+	const bd_loaded *l = data;
+	if (l->closed) return (hf_out){.kind = HF_FAILED, .error = pg_dup("unloaded")};
+	return l->live.compile(code, l->live.data);
+}
+
+bd_folded bd_fold(const bd_folding *f, size_t n, const op_value *v) {
+	for (size_t i = 0; i < n; i++) {
+		bd_compiler c = f->next(i, f->ctx);
+		if (c.kind != BD_VALUE) return (bd_folded){.kind = c.kind, .error = c.error};
+		bd_result r;
+		if (c.load == NULL) r = bd_compile(f->builds, c.id, v);
+		else {
+			op_value *identity = bd_identity_of(f->table, c.id, c.value);
+			r = bd_step(f->builds, identity, v, loaded_run, (void *)c.load, 0);
+			op_free(identity);
+		}
+		switch (r.kind) {
+		case BD_STOP: return (bd_folded){.kind = BD_STOP};
+		case BD_PENDING: return (bd_folded){.kind = BD_PENDING};
+		case BD_REFUSED:
+		case BD_FAILED: return (bd_folded){.kind = BD_FAILED, .error = pg_dup(r.text)};
+		case BD_VALUE: v = r.value;
+		}
+	}
+	return (bd_folded){.kind = BD_VALUE, .value = v};
 }

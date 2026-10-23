@@ -318,7 +318,16 @@
       items(p, fresh) {
         if (fresh) procs = processes();
         const comps = computers();
-        return a.entries(node(p)).map((it, k) => {
+        const items = a.entries(node(p));
+        // a name with no node under it (a processes trie's /home, /system): a folder of the names
+        // listed there, so the walk goes on
+        if (!items.length) {
+          const kids = attempt(() => a.list(node(p)), []);
+          if (kids.length) {
+            return [{ id: pathText(p), loaded: true, has: false, infos: [], kids, kind: "" }];
+          }
+        }
+        return items.map((it, k) => {
           if (it.refused) return { id: `refused ${k}`, refused: "refused by protect" };
           const id = it.id;
           const attrs = attempt(() => a.peep({ id, part: "attributes" }), undefined);

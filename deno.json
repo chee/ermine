@@ -14,7 +14,7 @@
 		"./playground/encoding",
 		"./ermine/processes",
 		"./ermine/boxes",
-		"./playground/build",
+		"./playground/compilers",
 		"./ermine/types",
 		"./ermine/api",
 		"./playground/realms",

@@ -10,10 +10,11 @@
 //
 // refused, nothing made: no-runner (an empty chain), taken (the path has a running process).
 // pin: the program's and each step's id, place and hash, the root and cwd; written at start.
-// build: the chain's compilers folded over the program's value, read once at start; status
-// PENDING while building, the Error on failure. then the runner is called once with the code and
-// createProcessAPI({ box, places, process: { id, at, args, cwd }, scheduler, table, scope }), the
-// process's scope open. a runner that throws or gives a promise: that outcome is the status.
+// build: the chain's compilers folded over the program's value (@ermine/compilers' fold), read
+// once at start; status PENDING while building, the Error on failure. then the runner is called
+// once with the code and createProcessAPI({ box, places, process: { id, at, args, cwd },
+// scheduler, table, scope }), the process's scope open. a runner that throws or gives a promise:
+// that outcome is the status.
 // loaded steps (by not empty): run through their by's runner's load(code) to a live form (compile
 // or run), each loaded once per key (id, value hash, by), held while a process using it runs.
 // failures: StartError not-a-runner, not-a-loader, not-a-compiler.
@@ -40,7 +41,7 @@ import { type Computer, PENDING, type Scheduler } from "@ermine/scheduler"
 import { isPromise } from "@ermine/scheduler/helpers"
 import type { Sited } from "@ermine/sites"
 import type { Table } from "@ermine/table"
-import { type Builds, COMPILER } from "@ermine/build"
+import { type Builds, COMPILER, fold, type Live } from "@ermine/compilers"
 import type { Chain, Place, Step, Way } from "./programs.ts"
 
 // a process: processes' (start gives back what processes' start does); what createProcessAPI is
@@ -271,7 +272,7 @@ export function createPrograms(setup: Setup): Programs {
 			// core candidate (scheduler): an effect that acts once and goes
 			const build = s.createEffect<{ code: unknown; live?: Loaded }>(
 				() => {
-					const code = fold(p, compilers, value)
+					const code = folded(p, compilers, value)
 					if (code === PENDING) return PENDING
 					if (runner.by.length === 0) return { code }
 					const live = liveOf(p, runner)
@@ -290,30 +291,19 @@ export function createPrograms(setup: Setup): Programs {
 		})
 	}
 
-	// the value through the compilers, each a host's (builds.compile) or loaded (builds.step under
-	// its identity); PENDING while one is; an Error thrown
-	function fold(p: State, compilers: Chain, value: unknown): unknown {
-		let v = value
-		for (const c of compilers) {
-			if (c.by.length === 0) v = builds.compile(c.id, v)
-			else {
-				const live = liveOf(p, c)
-				if (live === PENDING) return PENDING
-				if (typeof live?.compile !== "function") throw new StartError("not-a-compiler", c.id)
-				if (builds.step === undefined) {
-					throw new Error(`a loaded compiler (${String(c.id)}) needs builds.step`)
-				}
-				const attrs = table.get("attributes", c.id)?.value
-				const named = isMap(attrs) ? attrs[COMPILER] : undefined
-				const h = named === undefined ? hashOf(p.values.get(c.id)) : undefined
-				const identity = named ?? (h === undefined ? c.id : { id: c.id, hash: h })
-				const input = v
-				v = builds.step(identity, input, () => live.compile!(input))
-			}
-			if (v === PENDING) return PENDING
-			if (v instanceof Error) throw v
-		}
-		return v
+	// the value through the compilers (the compilers library's fold), each a host's or loaded;
+	// PENDING while one is; an Error thrown
+	function folded(p: State, compilers: Chain, value: unknown): unknown {
+		return fold({ builds, table, loaded: (c) => compilerOf(p, c) }, compilers, value)
+	}
+
+	// a loaded compiler for fold: its live form's compile (none: not-a-compiler), and its value as
+	// read at start; PENDING while it loads; its failure thrown
+	function compilerOf(p: State, c: Step): Live | typeof PENDING {
+		const live = liveOf(p, c)
+		if (live === PENDING) return PENDING
+		if (typeof live?.compile !== "function") throw new StartError("not-a-compiler", c.id)
+		return { compile: (input) => live.compile!(input), value: p.values.get(c.id) }
 	}
 
 	// a step's live form: a host's, its node's value (a function, else not-a-runner); a loaded
@@ -331,7 +321,7 @@ export function createPrograms(setup: Setup): Programs {
 			const by = liveOf(p, runner)
 			if (by === PENDING) return PENDING
 			if (typeof by?.load !== "function") throw new StartError("not-a-loader", runner.id)
-			const code = fold(p, step.by.slice(0, -1), p.values.get(step.id))
+			const code = folded(p, step.by.slice(0, -1), p.values.get(step.id))
 			if (code === PENDING) return PENDING
 			l = { key, by, code, holders: new Set() }
 			loads.set(key, l)
@@ -352,7 +342,7 @@ export function createPrograms(setup: Setup): Programs {
 
 	// a load's computer, under the loads' scope: load called once, how it landed set, its readers
 	// marked. a failure is no one's but its holders'. held by none by now: not made
-	// core candidate (scheduler): a computer made for a run, not by it (as build.ts' steps)
+	// core candidate (scheduler): a computer made for a run, not by it (as compilers.ts' steps)
 	function begin(l: Load) {
 		if (loads.get(l.key) !== l || l.holders.size === 0 || loading.state !== "alive") return
 		l.c = s.runWithScope(loading, () =>

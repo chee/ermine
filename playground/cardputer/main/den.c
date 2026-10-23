@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -89,6 +91,11 @@ static struct {
 	// tippet's troubles said so far
 	size_t failed, unkept;
 	int kept_on_flash;
+	// why the den isn't up, in words ("": it is); again: a boot again would mend it
+	char why[112];
+	int again;
+	// the room holds more of this den's steps than its log: lost on flash (0: none)
+	uint64_t lost;
 	// the log's store, synced (fsync) a second after this den writes: a FAT file's length is only on
 	// flash once it is (store_file syncs only before its own steps leave on a link)
 	tp_store *store;
@@ -370,11 +377,14 @@ static int trusts(const char *install) { return is_map(me.keys) && op_get(me.key
 
 // ---- tippet: the log's told, the history's kept and run, the sync's heard ----
 
+// the send path's times on the log (trace: lines), when 1
+int getenv_trace = 0;
 static void told(void *ctx, const uint8_t device[32], uint64_t from, size_t count) {
 	(void)ctx;
 	if (me.history) tp_history_told(me.history, device, from, count);
 	if (me.sync) tp_sync_told(me.sync, device, from, count);
 	if (memcmp(device, me.install.key, 32) == 0) {
+		if (getenv_trace) printf("trace: step %llu written at %lld\n", (unsigned long long)from, (long long)den_clock());
 		for (size_t i = 0; i < count; i++) keys_from(from + i);
 	} else learn(device);
 }
@@ -1072,10 +1082,157 @@ static void effects(void *data) {
 
 // ---- boot ----
 
+const char *den_why(void) { return me.why; }
+int den_again(void) { return me.again; }
+
+// what the server says it has (tippet's have): more of this den's own steps than its log holds
+// means the log lost some (a reset, a mended tail) that went out: steps written from here on fork
+// the chain, and the room refuses them. said on the screen, in words, from then on
+void den_heard(const uint8_t *message, size_t length) {
+	// ["refused", device, n]: the server refused this den's runs (its chain there goes another way)
+	if (length > 10 && message[0] == 0x83 && memcmp(message + 1, "\x67refused", 8) == 0 && me.log) {
+		op_value *m = pk_get(message, length, NULL, NULL);
+		if (m && m->type == OP_LIST && m->count == 3 && m->items[1]->type == OP_BYTES && m->items[1]->bytes == 32 &&
+			memcmp(m->items[1]->data, me.install.key, 32) == 0 && !me.lost) {
+			me.lost = (uint64_t)m->items[2]->num;
+			if (me.lost == 0) me.lost = 1;
+			printf("den: the room refused this den's steps (it has %llu, the log here %llu): its chain there "
+			       "goes another way\n",
+				(unsigned long long)m->items[2]->num, (unsigned long long)tp_log_count(me.log, me.install.key));
+		}
+		if (m) op_free(m);
+		return;
+	}
+	if (length < 6 || message[0] != 0x82 || memcmp(message + 1, "\x64have", 5) != 0 || me.log == NULL) return;
+	op_value *m = pk_get(message, length, NULL, NULL);
+	const op_value *list = m && m->type == OP_LIST && m->count == 2 ? m->items[1] : NULL;
+	for (size_t i = 0; list && list->type == OP_LIST && i < list->count; i++) {
+		const op_value *e = list->items[i];
+		if (e->type != OP_LIST || e->count != 2 || e->items[0]->type != OP_BYTES || e->items[0]->bytes != 32) continue;
+		if (memcmp(e->items[0]->data, me.install.key, 32) != 0) continue;
+		uint64_t theirs = (uint64_t)e->items[1]->num, mine = tp_log_count(me.log, me.install.key);
+		if (theirs > mine && me.lost != theirs) {
+			me.lost = theirs;
+			printf("den: the room has %llu of this den's steps, its log %llu: the rest lost on flash\n",
+				(unsigned long long)theirs, (unsigned long long)mine);
+		}
+	}
+	if (m) op_free(m);
+}
+
+// a frame of the log at at: 4 bytes of length, then one whole canonical CBOR item (a step, a run,
+// a signature, a drop). its length, or 0 when it isn't one
+static long frame_at(int fd, long at, long size, uint8_t **buf, size_t *room) {
+	uint8_t head[4];
+	if (at + 4 > size || pread(fd, head, 4, at) != 4) return 0;
+	long length = (long)head[0] << 24 | (long)head[1] << 16 | (long)head[2] << 8 | head[3];
+	if (length <= 0 || length > (1 << 20) || length > size - at - 4) return 0;
+	if ((size_t)length > *room) {
+		uint8_t *more = realloc(*buf, (size_t)length);
+		if (more == NULL) return 0;
+		*buf = more, *room = (size_t)length;
+	}
+	if (pread(fd, *buf, (size_t)length, at + 4) != length) return 0;
+	return cborCheck(*buf, (size_t)length, NULL, NULL) ? length : 0;
+}
+
+// the store's files, checked before tippet loads them, so a reset at any moment leaves one that
+// loads, losing at most what it hadn't synced:
+// - the key file: the install's secret, 32 bytes: written again whole when it isn't
+// - log.new left by a reset in the middle of what's below: the log put back from it, or let go
+// - the log's frames: a frame a reset cut short (or a tail never written) is passed over, and the
+//   frames after it kept: on FAT a load's cut (store_file's ftruncate, never synced) can come undone
+//   at a reset, and the frames a later boot appended land after the torn one. the whole frames,
+//   back to back, written to log.new, synced, then put in place of the log
+// what it finds, and any errno, said
+static void check_store(const char *dir, const uint8_t secret[32]) {
+	char p[80], q[80];
+	struct stat st;
+	snprintf(p, sizeof p, "%s/key", dir);
+	if (stat(p, &st) == 0 && st.st_size != 32) {
+		printf("den: %s is %ld bytes, not 32: written again from the install's secret\n", p, (long)st.st_size);
+		FILE *f = fopen(p, "wb");
+		int ok = f != NULL && fwrite(secret, 1, 32, f) == 32;
+		if (f) ok = fclose(f) == 0 && ok;
+		if (!ok) printf("den: %s not written: %s\n", p, strerror(errno));
+	}
+	snprintf(p, sizeof p, "%s/log", dir);
+	snprintf(q, sizeof q, "%s/log.new", dir);
+	if (stat(q, &st) == 0) {
+		if (stat(p, &st) != 0 && rename(q, p) == 0) printf("den: %s put back from log.new\n", p);
+		else unlink(q);
+	}
+	errno = 0;
+	int fd = open(p, O_RDONLY);
+	if (fd < 0) {
+		if (errno != ENOENT) printf("den: %s won't open: %s\n", p, strerror(errno));
+		return;
+	}
+	if (fstat(fd, &st)) {
+		printf("den: %s: no size: %s\n", p, strerror(errno));
+		close(fd);
+		return;
+	}
+	long size = (long)st.st_size, at = 0, frames = 0, torn = 0, skipped = 0, n;
+	uint8_t *buf = NULL;
+	size_t room = 0;
+	// the whole frames first, then past each torn stretch to the next frame that is whole
+	while (at < size) {
+		if ((n = frame_at(fd, at, size, &buf, &room))) {
+			at += 4 + n, frames++;
+			continue;
+		}
+		long from = at;
+		while (++at + 4 <= size && !frame_at(fd, at, size, &buf, &room)) {
+		}
+		if (at + 4 > size) at = size;
+		torn++, skipped += at - from;
+	}
+	printf("den: %s: %ld bytes, %ld frames whole, %ld torn (%ld bytes)\n", p, size, frames, torn, skipped);
+	if (torn == 0) {
+		free(buf), close(fd);
+		return;
+	}
+	// the whole frames, written again back to back
+	errno = 0;
+	int out = open(q, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	const char *failed = out < 0 ? "open log.new" : NULL;
+	for (at = 0; !failed && at < size;) {
+		if ((n = frame_at(fd, at, size, &buf, &room))) {
+			uint8_t head[4] = {(uint8_t)(n >> 24), (uint8_t)(n >> 16), (uint8_t)(n >> 8), (uint8_t)n};
+			if (write(out, head, 4) != 4 || write(out, buf, (size_t)n) != n) failed = "write log.new (full?)";
+			at += 4 + n;
+		} else at++;
+	}
+	if (!failed && fsync(out)) failed = "sync log.new";
+	if (out >= 0 && close(out) && !failed) failed = "close log.new";
+	free(buf), close(fd);
+	if (!failed && unlink(p)) failed = "let the log go";
+	if (!failed && rename(q, p)) failed = "rename log.new";
+	if (!failed) printf("den: %s: its torn frames left out, the rest kept\n", p);
+	else {
+		printf("den: %s not mended: %s: %s\n", p, failed, strerror(errno));
+		// the log still there: log.new let go; else log.new is the log (a boot puts it back)
+		if (stat(p, &st) == 0) unlink(q);
+		else if (rename(q, p) == 0) printf("den: %s put back from log.new\n", p);
+	}
+}
+
 static int promote(void);
 static int (*store_snapshot)(void *self, const uint8_t *bytes, size_t length);
 static int snapshot_in_place(void *self, const uint8_t *bytes, size_t length);
 static int forgetting;
+// the store's sync (fsync), timed: on FAT each costs flash writes, and tippet syncs this den's steps
+// before any leave
+static int (*store_sync)(void *self);
+static int64_t sync_ms, syncs;
+static int timed_sync(void *self) {
+	int64_t t = den_clock();
+	int why = store_sync(self);
+	sync_ms += den_clock() - t, syncs++;
+	if (getenv_trace) printf("trace: synced in %lld ms at %lld\n", (long long)(den_clock() - t), (long long)den_clock());
+	return why;
+}
 
 int den_boot(const inst_install *install, const char *code, const char *dir, int64_t now) {
 	me.now = me.beat = now;
@@ -1091,14 +1248,21 @@ int den_boot(const inst_install *install, const char *code, const char *dir, int
 	me.w = host_get();
 	snprintf(me.net, sizeof me.net, "offline");
 
-	// tippet: the log (the den's key), its history (what is kept), its sync
+	// tippet: the log (the den's key), its history (what is kept), its sync. a store that can't be
+	// had is no den: one in memory would start its chain at step 1 again, in a room that has its
+	// steps, and the room would pass over every step after
+	check_store(dir, install->secret);
 	tp_store *store = tp_file_store(&(tp_mem){counted, &part_now[0]}, dir, 1 << 20);
 	me.kept_on_flash = store != NULL;
-	if (store == NULL) store = tp_memory_store(&(tp_mem){counted, &part_now[0]}, 1 << 20);
-	else {
+	if (store == NULL) {
+		snprintf(me.why, sizeof me.why, "its log on flash won't open (%s)", strerror(errno));
+		fprintf(stderr, "den: %s\n", me.why);
+		return 1;
+	} else {
 		// the file store, its snapshot put in place on FAT (snapshot_in_place)
 		static tp_store wrapped;
 		wrapped = *store, store_snapshot = store->snapshot, wrapped.snapshot = snapshot_in_place;
+		store_sync = store->sync, wrapped.sync = timed_sync;
 		store = &wrapped;
 	}
 	me.store = store;
@@ -1106,7 +1270,8 @@ int den_boot(const inst_install *install, const char *code, const char *dir, int
 		.told = told});
 	int why = me.log ? tp_log_load(me.log) : TP_NOMEM;
 	if (why) {
-		fprintf(stderr, "den: the log didn't load: %s\n", tp_why(why));
+		snprintf(me.why, sizeof me.why, "its log didn't load: %s (%s)", tp_why(why), errno ? strerror(errno) : "-");
+		fprintf(stderr, "den: %s\n", me.why);
 		return 1;
 	}
 	// a snapshot written last time but not yet in place (a reset between), put in place first
@@ -1122,7 +1287,18 @@ int den_boot(const inst_install *install, const char *code, const char *dir, int
 		printf("den: the log %ld bytes, its snapshot %ld\n", ln, sn);
 		free(snap), free(log);
 	}
-	if ((why = tp_history_load(me.history))) fprintf(stderr, "den: the history didn't load: %s\n", tp_why(why));
+	if ((why = tp_history_load(me.history))) {
+		// a snapshot that doesn't read back: let go, and the boot again lands every step from the log
+		// (a boot that went on would snapshot what it has, an empty graph, over it)
+		char *snap = joined(me.dir, "/snapshot");
+		unlink(snap);
+		free(snap);
+		snprintf(me.why, sizeof me.why, "its snapshot didn't load (%s): let go, so it starts again from its log",
+			tp_why(why));
+		fprintf(stderr, "den: %s\n", me.why);
+		me.again = 1;
+		return 1;
+	}
 	den_mark("history loaded");
 	// live ids remembered: 128, not 1024 (8 KB): one link, few dens beating
 	me.sync = tp_sync_new(&(tp_sync_options){.mem = mem_of(3), .log = me.log, .heard = heard, .random = random_bytes,
@@ -1190,6 +1366,13 @@ void den_net(const char *state) {
 static int band(char lines[2][31], int *hot) {
 	memset(lines, 0, 2 * 31);
 	*hot = 0;
+	if (me.lost) {
+		snprintf(lines[0], 31, "room has %llu steps, I %llu:", (unsigned long long)me.lost,
+			(unsigned long long)tp_log_count(me.log, me.install.key));
+		snprintf(lines[1], 31, "lost here: use another room");
+		*hot = 1;
+		return 2;
+	}
 	if (me.now < me.until) {
 		snprintf(lines[0], 31, "%s", me.said[0]);
 		snprintf(lines[1], 31, "%s", me.said[1]);
@@ -1373,6 +1556,7 @@ void den_print(void) {
 			o->heard < 0 ? "never heard" : o->heard > 0 && me.now - o->heard < DEN_QUIET ? "here" : "quiet",
 			(unsigned long long)tp_log_count(me.log, key), trusts(n) ? "trusted" : "not trusted");
 	}
+	printf("store syncs: %lld, %lld ms in all\n", (long long)syncs, (long long)sync_ms);
 	printf("tippet heap by part, now (most):");
 	for (int i = 0; i < 4; i++) printf(" %s %zu (%zu)", PARTS[i], part_now[i], part_most[i]);
 	printf("\n");

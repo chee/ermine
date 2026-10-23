@@ -13,7 +13,7 @@ import { PROCESS } from "@ermine/processes"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import type { Value } from "@ermine/encoding/cbor"
 import { createSites, type Sited } from "@ermine/sites"
-import { type Compiler, createBuilds } from "@ermine/build"
+import { type Compiler, createBuilds } from "@ermine/compilers"
 import { satisfy, type Way } from "./programs.ts"
 import {
 	type Context,

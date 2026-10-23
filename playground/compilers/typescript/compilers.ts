@@ -1,9 +1,10 @@
-// build: steps cached with verifying traces (build systems à la carte), and compile, a step
+// compilers: steps cached with verifying traces (build systems à la carte), and compile, a step
 //
 //   const builds = createBuilds({ scheduler, table, places, cache: CACHE })   // in a scope
 //   createComputer(() => builds.step(cell, source, () => run(source)), go)
 //   createComputer(() => builds.compile(CLANG, places.readValue("value", CAT)), go)
 //   // the output; PENDING; an Error (a BuildError: refused)
+//   fold({ builds, table, loaded }, compilers, value)       // a chain's compilers over a value
 //
 // a step: a name (stable: a cell, a compiler's identity) and its code (any value). key: hex of
 // hash([name, code]). its trace: the places reads its run makes
@@ -27,6 +28,10 @@
 // ermine.programs.compiler, else its id. not a function: refused not-a-compiler. outputs typed by
 // its ermine.programs.gives, if set
 // onStep(f): told what each lookup found, in the reader's run
+// fold(folding, compilers, input): the input through a chain's compilers in turn: a host's (by
+// empty) by compile; a loaded one's by step, named by identityOf, its compile and value as loaded
+// gives them. PENDING while one is; an Error thrown. identityOf(table, id, value): a loaded
+// compiler's identity: its ermine.programs.compiler, else { id, hash } of its value, else its id
 // writes: the cache's (a step's computer, scope open) and status's, committed only to the places
 // given (a host with boxes hands one whose commit tells them). a step's computer is made with
 // { [NODE]: its status node } (step:<uuid>, never saved): each header's metadata stops there
@@ -457,4 +462,57 @@ export function createBuilds(setup: Setup): Builds {
 	}
 
 	return { step, compile, onStep, stop }
+}
+
+// a compiler of a chain, as fold reads it: its node, and what loads it (empty: a host's, its node's
+// value a live function)
+export type Link = { readonly id: Id; readonly by: readonly unknown[] }
+
+// a loaded compiler, as fold uses it: its compile, and its value (what its identity hashes)
+export type Live = { readonly compile: (input: unknown) => unknown; readonly value: unknown }
+
+export type Folding<L extends Link = Link> = {
+	// a loaded compiler's steps go through step (none: such a fold throws)
+	builds: Pick<Builds, "compile"> & Partial<Pick<Builds, "step">>
+	// where a loaded compiler's attributes are read, untracked
+	table: Pick<Table, "get">
+	// a loaded compiler, live: PENDING while it loads; its failure thrown
+	loaded: (c: L) => Live | typeof PENDING
+}
+
+// a loaded compiler's identity, the name its steps are cached under: its ermine.programs.compiler;
+// none, { id, hash } of its value; no value, or one with no encoding, its id
+export function identityOf(table: Pick<Table, "get">, id: Id, value: unknown): unknown {
+	const attrs = table.get("attributes", id)?.value
+	const named = isMap(attrs) ? attrs[COMPILER] : undefined
+	if (named !== undefined) return named
+	const h = value === undefined ? undefined : hashed(value)
+	return typeof h === "string" ? { id, hash: h } : id
+}
+
+// the input through the compilers in turn: a host's by builds.compile, a loaded one's by builds.step
+// under its identity; PENDING while one is; an Error thrown
+export function fold<L extends Link>(
+	folding: Folding<L>,
+	compilers: readonly L[],
+	input: unknown,
+): unknown {
+	const { builds, table, loaded } = folding
+	let v = input
+	for (const c of compilers) {
+		if (c.by.length === 0) v = builds.compile(c.id, v)
+		else {
+			const live = loaded(c)
+			if (live === PENDING) return PENDING
+			if (builds.step === undefined) {
+				throw new Error(`a loaded compiler (${String(c.id)}) needs builds.step`)
+			}
+			const identity = identityOf(table, c.id, live.value)
+			const given = v
+			v = builds.step(identity, given, () => live.compile(given))
+		}
+		if (v === PENDING) return PENDING
+		if (v instanceof Error) throw v
+	}
+	return v
 }

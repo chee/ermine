@@ -18,8 +18,8 @@
 // chain); another place's code: not-a-name.
 // loading, as start.ts': a step with a non-empty by: its value through by's compilers, then by's
 // runner's load (hf_add_loader) gives its live form (hf_live), used as the step (a compiler through
-// bd_step under its identity: ermine.programs.compiler, else { id, hash }, else its id). keyed by
-// the step's id, its value's hash and by's keys; made once, held by its processes, closed at the
+// bd_fold: bd_step under bd_identity_of, ermine.programs.compiler, else { id, hash }, else its
+// id). keyed by the step's id, its value's hash and by's keys; made once, held by its processes, closed at the
 // last one's stop (dlopen: dlclose, file removed). a failure: its holders' status (the next start
 // loads again); not-a-loader, not-a-compiler, not-a-runner. C loads are synchronous, in the
 // build's run. dlopen.h loads native libraries (native.h; conformance/native).
@@ -31,7 +31,7 @@
 #define PROGRAMS_START_H
 
 #include "../../../ermine/processes/c/start.h"
-#include "../../build/c/build.h"
+#include "../../compilers/c/compilers.h"
 #include "programs.h"
 
 typedef struct ps ps;

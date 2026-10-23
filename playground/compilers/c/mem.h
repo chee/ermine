@@ -1,7 +1,7 @@
-// Small memory helpers shared by programs' C files: calloc and strdup that abort, and a growing
-// array. Out of memory aborts, as everywhere in core.
-#ifndef PROGRAMS_MEM_H
-#define PROGRAMS_MEM_H
+// Small memory helpers shared by the compilers' and programs' C files: calloc and strdup that
+// abort, and a growing array. Out of memory aborts, as everywhere in core.
+#ifndef COMPILERS_MEM_H
+#define COMPILERS_MEM_H
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -1,4 +1,4 @@
-// build (build.h) on the line protocol of typescript/build_harness.ts, which documents it and the
+// compilers (compilers.h) on the line protocol of typescript/compilers_harness.ts, which documents it and the
 // compilers (conformance/c/harness.h has the loop). Its world is places' (world_harness.h): the scheduler, the
 // table, the host's scope and places (root "R", children alone); this adds the builds, the watches and
 // the compilers.
@@ -8,7 +8,7 @@
 #include <ctype.h>
 
 #include "../../../filesystem/places/c/world_harness.h"
-#include "build.h"
+#include "compilers.h"
 #include "mem.h"
 
 static hf *functions;
@@ -66,7 +66,7 @@ static hf_out live(const op_value *input, const hf_context *ctx, void *data) {
 	return (hf_out){.kind = HF_VALUE, .value = hf_value("")};
 }
 
-// the step runs, and their calls: each reads through places (build_harness.ts says them)
+// the step runs, and their calls: each reads through places (compilers_harness.ts says them)
 static unsigned ran_sum, ran_pick, ran_parity, ran_label, ran_wait, ran_oops, ran_tick;
 
 static const op_value *value_of(const op_value *id) {

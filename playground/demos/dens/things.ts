@@ -9,6 +9,10 @@ import { upsert } from "@ermine/places/upsert"
 import { get } from "@ermine/places/lib"
 import { inside } from "@ermine/boxes"
 import type { Runner, Start } from "@ermine/software"
+import { isVoice, type Voice } from "./sound.ts"
+
+const isMap = (v: unknown): v is Record<string, unknown> =>
+	typeof v === "object" && v !== null && !Array.isArray(v) && !ArrayBuffer.isView(v)
 
 // a runner here is its start alone: (code, start)
 type Run = Runner["start"]
@@ -49,6 +53,8 @@ export type Control = {
 	type?: (key: string) => void
 	every?: (seconds: number) => void
 	pause?: () => void
+	// a sound's or a speaker's voice
+	choose?: (name: Voice) => void
 	// a pad: one square set (on) or cleared; all cleared; its squares as drawn here, and what is
 	// drawn under them, now (its out lags a little behind)
 	draw?: (x: number, y: number, on: boolean) => void
@@ -69,8 +75,12 @@ export function square(p: Picture, x: number, y: number): boolean {
 	return ((p.squares[i >> 3] >> (7 - (i & 7))) & 1) === 1
 }
 export const controls = new Map<string, Control>()
-// what a sound thing plays through: the page's (its mute), set by the page
-export const speaker = { play: (_note: string, _freq: number) => {} }
+// what a sound thing and a speaker play through: the page's (its mute, its waiting for a click),
+// set by the page. silent: a den whose speaker isn't driven (the cardputer's, for now)
+export const voice = {
+	play: (_name: Voice): "played" | "muted" | "waiting" | "silent" => "silent",
+	silent: false,
+}
 // what the pigs were told to say, beside their out
 export const SAYS = "thing.says"
 
@@ -213,30 +223,46 @@ const pigs: Run = (_, api) => {
 	return gone(ctx)
 }
 
-// a note each time what is wired in changes: the newest letter of text (a to z over a pentatonic
-// scale), or a number's value round the scale. gives the note's name
-const SCALE = [["c", 0], ["d", 2], ["e", 4], ["g", 7], ["a", 9]] as const
-export function noteOf(v: unknown): { name: string; freq: number } | undefined {
-	let i: number
-	if (typeof v === "number") i = Math.abs(Math.round(v))
-	else if (typeof v === "string") {
-		const c = v.toLowerCase().replace(/[^a-z]/g, "").at(-1)
-		if (c === undefined) return undefined
-		i = c.charCodeAt(0) - 97
-	} else return undefined
-	const step = i % 10, [name, semis] = SCALE[step % 5], octave = 4 + Math.floor(step / 5)
-	return { name: `${name}${octave}`, freq: 261.63 * 2 ** ((semis + 12 * (octave - 4)) / 12) }
-}
+// a sound: one of the voices (sound.ts), chosen on its box; its big button plays it here, and so
+// does each change of what is wired into its in. gives { sound, n }: the voice, the nth time
 const sound: Run = (_, api) => {
 	const ctx = ctxOf(api)
-	const out = writer(ctx)
+	const out = writer(ctx), state = writer(ctx, STATE)
+	const kept = parse(ctx.process.args).settings.sound
+	let chosen: Voice = isVoice(kept) ? kept : "ding", n = 0
 	out(null)
+	state({ sound: chosen })
+	const play = () => {
+		voice.play(chosen)
+		out({ sound: chosen, n: ++n })
+	}
+	reading(ctx, (_, first) => void (first || play()))
+	controls.set(String(ctx.process.id), {
+		press: play,
+		choose: (name) => (chosen = name, state({ sound: chosen })),
+	})
+	return gone(ctx)
+}
+
+// a den's speaker, on its card: each change of what is wired in played on this den's machine: the
+// voice a sound thing sent, else the one chosen on the card (a blip to start). gives { sound, n,
+// heard }: what it played, the nth time, and whether it was heard ("played", "muted", "waiting"
+// for a click, "silent": not driven here)
+const speaker: Run = (_, api) => {
+	const ctx = ctxOf(api)
+	const out = writer(ctx), state = writer(ctx, STATE)
+	const kept = parse(ctx.process.args).settings.sound
+	let chosen: Voice = isVoice(kept) ? kept : "blip", n = 0
+	out(null)
+	state({ sound: chosen })
 	reading(ctx, (v, first) => {
 		if (first) return
-		const n = noteOf(v)
-		if (!n) return
-		speaker.play(n.name, n.freq)
-		out(n.name)
+		const name = isMap(v) && isVoice(v.sound) ? v.sound : chosen
+		const heard = voice.silent ? "silent" : voice.play(name)
+		out({ sound: name, n: ++n, heard })
+	})
+	controls.set(String(ctx.process.id), {
+		choose: (name) => (chosen = name, state({ sound: chosen })),
 	})
 	return gone(ctx)
 }
@@ -330,7 +356,11 @@ export const RUNNERS = {
 	counter: { run: counter, program: "a counter: counts the changes of what it reads" },
 	screen: { run: screen, program: "a screen: shows what it reads, big" },
 	chart: { run: chart, program: "a chart: a line over time of what it reads" },
-	sound: { run: sound, program: "a sound: plays a note each time what it reads changes" },
+	sound: { run: sound, program: "a sound: a voice to play, by its button or what it reads" },
+	speaker: {
+		run: speaker,
+		program: "a speaker: on a den's card, it plays each change of what is wired into it",
+	},
 	timer: { run: timer, program: "a timer: ticks up every so many seconds" },
 	keys: { run: keys, program: "keys: gives what was typed" },
 	pigs: { run: pigs, program: "pigs: gives each pig's weight" },
