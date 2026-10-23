@@ -1,0 +1,41 @@
+{
+	"title": "a refused member keeps its name and its from (the contributor that gave it), its id REFUSED; one given no from has none",
+	"steps": [
+		{
+			"op": "root",
+			"name": "chee",
+			"info": { "actor": "chee" },
+			"expect": {}
+		},
+		{
+			"op": "guard",
+			"name": "g",
+			"may": {
+				"denyid": "Y"
+			},
+			"expect": {}
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "chee",
+			"e": {
+				"ask": [
+					["a", "X", "children"],
+					["b", "Y", "processes"],
+					["c", "Y"],
+					["d", "Z"]
+				],
+				"at": []
+			},
+			"expect": {
+				"value": [
+					["X", "a", "children"],
+					["REFUSED", "b", "processes"],
+					["REFUSED", "c"],
+					["Z", "d"]
+				]
+			}
+		}
+	]
+}
