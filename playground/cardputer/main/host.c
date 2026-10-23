@@ -149,10 +149,12 @@ static void run(void *data) {
 	r->code = r->program(r->a);
 }
 
-api *host_start(const char *name, host_program program) {
+api *host_start(const char *name, host_program program) { return host_start_at(name, "programs", program); }
+
+api *host_start_at(const char *name, const char *folder, host_program program) {
 	// kept for the process's life, which is the device's
 	char **at = calloc(2, sizeof *at);
-	at[0] = strdup("programs"), at[1] = strdup(name);
+	at[0] = strdup(folder), at[1] = strdup(name);
 	op_value *where = op_list();
 	op_push(where, op_str(at[0]));
 	op_push(where, op_str(at[1]));

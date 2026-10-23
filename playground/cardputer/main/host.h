@@ -30,6 +30,8 @@ void host_pulse_soon(void);
 void host_init(void);
 // a process named name running program; its api, the host's (never freed: processes don't stop)
 api *host_start(const char *name, host_program program);
+// the same at /<folder>/<name> (the menu's: /system/menu), its working folder /<folder>
+api *host_start_at(const char *name, const char *folder, host_program program);
 // what the api asked to run later, till none is asked for
 void host_settle(void);
 
