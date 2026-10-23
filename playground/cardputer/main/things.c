@@ -988,16 +988,14 @@ static hf_run speaker(const op_value *code, void *api, void *data) {
 	return running(t);
 }
 
-void things_add(hf *fs) {
-	hf_add_runner(fs, "speaker", speaker, NULL);
-	hf_add_runner(fs, "tilt", tilt, NULL);
-	hf_add_runner(fs, "loudness", loudness, NULL);
-	hf_add_runner(fs, "led", led, NULL);
-	hf_add_runner(fs, "ir", ir, NULL);
-	hf_add_runner(fs, "battery", battery, NULL);
-	hf_add_runner(fs, "sd", sd, NULL);
-	hf_add_runner(fs, "grove", grove, NULL);
-	hf_add_runner(fs, "keys", keys, NULL);
-	hf_add_runner(fs, "screen", screen, NULL);
-	hf_add_runner(fs, "pigs", pigs, NULL);
+// a part's driver, by kind (NULL: none)
+hf_runner things_runner(const char *kind) {
+	static const struct {
+		const char *kind;
+		hf_runner run;
+	} ALL[] = {{"keys", keys}, {"screen", screen}, {"pigs", pigs}, {"speaker", speaker}, {"tilt", tilt},
+		{"loudness", loudness}, {"led", led}, {"ir", ir}, {"battery", battery}, {"sd", sd}, {"grove", grove}};
+	for (size_t i = 0; i < sizeof ALL / sizeof *ALL; i++)
+		if (strcmp(ALL[i].kind, kind) == 0) return ALL[i].run;
+	return NULL;
 }

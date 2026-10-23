@@ -19,11 +19,12 @@ Type `name = value` (a number, `true`, `false`, `null`, `"text"`, or any text) o
 
 The den is on tippet (`experiments/tippet`), as the dens page's `playground/demos/dens/host.ts`
 makes one (the contract at its top): its node `ermine:ed01<key hex>` (the install: `main/flash.c`,
-kept in NVS), its runners keys, screen, pigs, speaker and the parts (below) offered under it on
-software (`experiments/software`), its things at `/home/keys`, `/home/screen`, `/home/pigs` and
-`/system/speaker`, their attributes at `<den>/things/<process
-id>`, its `inbox` and
-`authorized_keys`, as steps in the room's log, `dens-<code>` on the server
+kept in NVS), its parts (keys, screen, pigs, speaker and those below: no software, each a plain
+process it starts itself, ermine/processes' start, its body the C driver in `main/things.c`; their
+kinds said on its node's `ermine.den.parts`, a start ask names one), its things at `/home/keys`,
+`/home/screen`, `/home/pigs` and `/system/speaker`, their attributes at `<den>/things/<process
+id>`,
+its `inbox` and `authorized_keys`, as steps in the room's log, `dens-<code>` on the server
 (`https://galaxy.observer` by default), linked by tippet's http long-poll (`main/poll.c`) over WiFi
 (`main/wifi.c`: one esp_http_client on one task, https checked against ESP-IDF's common CAs). Who's
 here: a live every 2 s; another den not heard for 6 s shows as quiet in the band at the foot of the
@@ -49,13 +50,14 @@ right. A den that doesn't come up in a room offers G0: back to the room before. 
 items in through the inbox (host.ts' contract: the `menu` ask), each a start or stop done when
 picked, while it is still paired; they come back at each boot.
 
-Offered beside keys, screen and pigs, not running until a paired den adds one (each about 10 KB of
-heap): `tilt` (BMI270: x and y, -10 to 10), `loudness` (the mic, 0 to 10), `led` (the WS2812 on G21:
-the colour wired in), `ir` (G44: NEC codes), `battery` (ADC G10: a percentage), `sd` (the microSD's
-top folder), `grove` (Port A's I2C addresses), all in `main/parts.c` (pins from M5's page and
-M5Unified), the runners in `main/things.c`. The den's `speaker` runs at `/system/speaker` (on its
-card): each change wired in plays one of the dens' voices (ding pop sparkle plink blip tick chime),
-made on the device through the ES8311 (16 kHz, small DMA), let go 3 s after.
+Its parts beside keys, screen and pigs, not running until a paired den asks for one by kind (each
+about 10 KB of heap running): `tilt` (BMI270: x and y, -10 to 10), `loudness` (the mic, 0 to 10),
+`led` (the WS2812 on G21: the colour wired in), `ir` (G44: NEC codes), `battery` (ADC G10: a
+percentage), `sd` (the microSD's top folder), `grove` (Port A's I2C addresses), all in
+`main/parts.c` (pins from M5's page and M5Unified), the runners in `main/things.c`. The den's
+`speaker` runs at `/system/speaker` (on its card): each change wired in plays one of the dens'
+voices (ding pop sparkle plink blip tick chime), made on the device through the ES8311 (16 kHz,
+small DMA), let go 3 s after.
 
 On the serial line: ctrl-s prints the screen (hex rows), ctrl-t the send path's times (`trace:`),
 ctrl-n the heap now and its lowest since the last ctrl-n, ctrl-y the log's own sync (3 s quiet, or a

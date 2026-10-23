@@ -403,6 +403,23 @@ const pad: Run = (_, api) => {
 	}
 }
 
+// a thing's kind from its node's attributes: a part's "thing.kind" (the cardputer's, a plain
+// process), else its runner's last step (software's); none: not a thing
+export function kindOf(attrs: unknown): string | undefined {
+	if (!isMap(attrs)) return undefined
+	if (typeof attrs["thing.kind"] === "string") return attrs["thing.kind"]
+	const r = attrs["ermine.process.runner"]
+	return isMap(r) && Array.isArray(r.at) && r.at.length ? String(r.at.at(-1)) : undefined
+}
+// how it is: "running", "starting" (its status pending), or "failed: <words>"
+export function stateOf(attrs: unknown): string {
+	const st = isMap(attrs) ? attrs["ermine.computer.status"] : undefined
+	if (st === "pending" || typeof st === "symbol") return "starting"
+	if (st instanceof Error) return `failed: ${st.message}`
+	if (isMap(st) && typeof st.failed === "string") return `failed: ${st.failed}`
+	return "running"
+}
+
 // what each kind gives: its outlets, by name, each with a few words; the first is its out
 // (thing.out), whatever it is called. none listed: one, "out"
 export const OUTLETS: Record<string, [string, string][]> = {

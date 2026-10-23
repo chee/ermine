@@ -36,7 +36,7 @@ import {
 	unparse,
 	voice,
 } from "./things.ts"
-import { picture } from "./pictures.ts"
+import { drawFace, face, FACES, picture } from "./pictures.ts"
 import { createFiles } from "./files.ts"
 import { createTerminal } from "./terminal.ts"
 import { createCode } from "./code.ts"
@@ -166,6 +166,9 @@ type View = {
 	alive: boolean
 	mine: boolean
 	things: Thing[]
+	// the parts a den starts itself, by kind, and a few words each (the cardputer's,
+	// ermine.den.parts): asked for by kind, not by runner and program
+	parts?: Record<string, string>
 }
 
 const isMap = (v: unknown): v is Record<string, unknown> =>
@@ -177,15 +180,21 @@ function thingOf(
 	attrs: Record<string, unknown>,
 	process = id,
 ): Thing | undefined {
+	// its kind: a part's thing.kind (the cardputer's), else its runner's last step (software's)
 	const runner = attrs[RUNNER]
-	if (!isMap(runner) || !Array.isArray(runner.at)) return undefined
+	const kind = typeof attrs["thing.kind"] === "string"
+		? attrs["thing.kind"] as string
+		: isMap(runner) && Array.isArray(runner.at)
+		? String(runner.at.at(-1))
+		: undefined
+	if (kind === undefined) return undefined
 	const given = attrs["ermine.process.args"]
 	const args = Array.isArray(given) ? given.map(String) : []
 	return {
 		id,
 		process,
 		at,
-		kind: String(runner.at.at(-1)),
+		kind,
 		out: attrs[OUT],
 		state: attrs[STATE],
 		says: attrs[SAYS],
@@ -217,6 +226,13 @@ function views(): View[] {
 			device: String(o.attributes[DEVICE] ?? "browser"),
 			alive: o.alive,
 			mine: false,
+			parts: isMap(o.attributes["ermine.den.parts"])
+				? Object.fromEntries(
+					Object.entries(o.attributes["ermine.den.parts"] as Record<string, unknown>).map((
+						[k, w],
+					) => [k, String(w)]),
+				)
+				: undefined,
 			things: o.things.flatMap((t) => {
 				const thing = thingOf(t.id, t.at, t.attributes, t.process)
 				return thing ? [thing] : []
@@ -319,6 +335,10 @@ function refusal(a: Answer): string {
 				: "the ask wasn't made out to it"
 		case "not-a-runner":
 			return "it has nothing that runs that"
+		case "not-a-kind":
+			return "it has no part of that kind"
+		case "not-here":
+			return "a part only starts in its /home"
 		case "not-there":
 			return "process" in a ? "that thing isn't running there any more" : "it doesn't have that"
 		case "wrong-form":
@@ -387,7 +407,7 @@ function add(v: View, kind: string) {
 	say(`Asking ${label(v)} to start ${a}…`)
 	asking(
 		v,
-		{
+		v.parts ? { op: "start", kind, at: `/${at.join("/")}` } : {
 			op: "start",
 			runner: runnerOf(kind),
 			program: host.carry(programOf(kind)),
@@ -418,17 +438,21 @@ function restart(
 	say(`Rewiring ${whose(v, t)}…`)
 	asking(v, { op: "stop", process: t.process, reason: "rewired" }, (a) => {
 		if (!("refused" in a && a.refused === "not-there") && refused(v, a)) return after(false)
-		asking(v, {
-			op: "start",
-			runner: runnerOf(t.kind),
-			program: host.carry(programOf(t.kind)),
-			at: `/${t.at.join("/")}`,
-			args,
-		}, (r) => {
-			const no = refused(v, r)
-			after(!no)
-			if (!no) say(done, "ok")
-		})
+		asking(
+			v,
+			v.parts ? { op: "start", kind: t.kind, at: `/${t.at.join("/")}`, args } : {
+				op: "start",
+				runner: runnerOf(t.kind),
+				program: host.carry(programOf(t.kind)),
+				at: `/${t.at.join("/")}`,
+				args,
+			},
+			(r) => {
+				const no = refused(v, r)
+				after(!no)
+				if (!no) say(done, "ok")
+			},
+		)
 	})
 }
 
@@ -593,21 +617,45 @@ board.el.addEventListener("pointerdown", (e) => {
 function openMenu(f: Frame, v: View, button: HTMLElement) {
 	closeMenu()
 	menu = h("div", "menu")
-	for (const k of KINDS) {
+	// a den that says its parts: those (the cardputer's hardware); else the kinds a browser runs
+	for (const k of v.parts ? Object.keys(v.parts).sort() : KINDS) {
 		const tile = h("button", `tile tile-${k}`)
 		tile.append(picture(k, 5), h("span", "", k))
+		if (v.parts) tile.title = v.parts[k]
 		tile.onclick = () => {
 			closeMenu()
 			add(v, k)
 		}
 		menu.append(tile)
 	}
+	// two rows at most, as tall as a browser's (a cardputer has more parts than a browser kinds)
+	menu.style.gridTemplateColumns = `repeat(${
+		Math.max(5, Math.ceil(menu.children.length / 2))
+	}, 88px)`
 	f.el.append(menu)
-	menu.style.left = `${button.offsetLeft + button.offsetWidth - 4}px`
+	// its right edge under the button's: the button's place in the frame (it sits in the head)
+	const head = button.offsetParent as HTMLElement
+	const right = (head === f.el ? 0 : head.offsetLeft) + button.offsetLeft + button.offsetWidth
+	menu.style.right = `${f.el.offsetWidth - right}px`
 	;(menu.firstElementChild as HTMLElement).focus()
 }
 
 function denCode(v: View): string {
+	// a den that says its parts (the cardputer's C): each a plain process it starts itself
+	if (v.parts) {
+		return `// what the page asks of a den (none of it is on the page)
+// the den: the install's node, "ermine:ed01${v.who.slice(0, 8)}…",
+// at /system/den and /system/dens/<id>. no software: its parts are
+// its own C drivers, each a plain process it starts (processes' start)
+// its parts, said on its node's "ermine.den.parts":
+${Object.entries(v.parts).map(([k, w]) => `//   ${k}: ${w}`).join("\n")}
+// at boot: keys, screen and pigs at /home/<kind>, its speaker at
+// /system/speaker; a paired den's start ask names a kind:
+host.ask(den, { op: "start", kind: "tilt", at: "/home/tilt-1a2b" })
+// the room ${room}: tippet's room "dens-${room}", its log on galaxy
+// an ask: into its inbox, signed; done if trusted().
+// pair: an ask anyone may make; a person says yes or no (tab, esc)`
+	}
 	const common = `// what the page asks of a den (none of it is on the page)
 // the den: the install's node, "ermine:ed01${v.who.slice(0, 8)}…",
 // at /system/den and /system/dens/<id>; what it runs, on software
@@ -883,6 +931,13 @@ function thingCode(v: View, t: Thing): string {
 		? `software.run(\n  "${runnerOf(t.kind)}",\n  "${programOf(t.kind)}",\n  "/${
 			t.at.join("/")
 		}"${list ? `,\n  { args: ${list} }` : ""})`
+		: v.parts
+		? `// written into ${label(v)}'s inbox, signed (a part, by kind):
+host.ask(${
+			JSON.stringify(v.who.slice(0, 8) + "…")
+		}, { op: "start",\n  kind: "${t.kind}",\n  at: "/${t.at.join("/")}"${
+			list ? `,\n  args: ${list}` : ""
+		} })`
 		: `// written into ${label(v)}'s inbox, signed:
 host.ask(${JSON.stringify(v.who.slice(0, 8) + "…")}, { op: "start",\n  runner: "${
 			runnerOf(t.kind)
@@ -921,6 +976,8 @@ const INPUTS: Record<string, string[]> = {
 	sound: ["in"],
 	speaker: ["in"],
 	pigs: [...PIGS, "say"],
+	led: ["in"],
+	ir: ["in"],
 }
 
 // a speech bubble shown a while after it changes
@@ -940,7 +997,14 @@ function makeShown(
 		x,
 		y,
 		bounds,
-		width: t.kind === "pigs" ? SLOT.w - 16 : t.kind === "speaker" ? undefined : SLOT.w - 50,
+		// a board part's face: a small box
+		width: t.kind === "pigs"
+			? SLOT.w - 16
+			: t.kind === "speaker"
+			? undefined
+			: FACES.has(t.kind)
+			? SLOT.w - 120
+			: SLOT.w - 50,
 		title: t.kind,
 		kind: SHOWS.has(t.kind) || t.kind === "sound" ? "compute" : "key",
 		ins: (INPUTS[t.kind] ?? []).map((i) => [i, i] as [string, string]),
@@ -1281,6 +1345,30 @@ function makeShown(
 				}
 				return b
 			}))
+		}
+	} else if (FACES.has(t.kind)) {
+		// a board part: a tiny face drawn from its out, and a line under it. drawn again only when
+		// its out changes; the IR's beam shows a moment as a new code comes, then goes
+		const c = h("canvas", "face")
+		const line = h("div", "face-line")
+		body.append(c, line)
+		let was = "", beam: ReturnType<typeof setTimeout> | undefined
+		const draw = (out: unknown, lit = false) => {
+			const f = face(t.kind, out, lit)
+			if (!f) return
+			drawFace(c, f)
+			line.textContent = f.line
+			line.title = f.line
+		}
+		update = (t) => {
+			const now = JSON.stringify(t.out ?? null) + String(t.out === undefined)
+			if (now === was) return
+			const fresh = was !== "" && t.kind === "ir" && isMap(t.out) &&
+				typeof t.out.code === "string"
+			was = now
+			clearTimeout(beam)
+			draw(t.out, fresh)
+			if (fresh) beam = setTimeout(() => draw(t.out), 700)
 		}
 	}
 	return { box, me, placed: { x, y }, kind: t.kind, who: v.who, out: "", update }

@@ -25,6 +25,7 @@
 
 #include "experiments/tippet/c/tippet.h"
 #include "experiments/software/c/software.h"
+#include "ermine/processes/c/start.h"
 #include "playground/installs/c/installs.h"
 #include "core/op/c/value.h"
 
@@ -49,7 +50,6 @@ void den_heard(const uint8_t *message, size_t length);
 // after host_init: the den of the install, in room code, its log kept in dir (made when not there).
 // now: the clock's ms. 0: up
 int den_boot(const inst_install *install, const char *code, const char *dir, int64_t now);
-sw *den_software(void);
 // the room's code ("": none yet)
 const char *den_room(void);
 // tippet's sync, for a carrier to link (poll.h); NULL before den_boot. software, what runs here

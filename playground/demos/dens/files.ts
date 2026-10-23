@@ -27,7 +27,7 @@ import { codeLink, linesHtml, onMaps, origin, siteHtml } from "./code.ts"
 import type { Host } from "./host.ts"
 import { NAME, OUT } from "./host.ts"
 import { FOLDER, type Unplaced } from "./made.ts"
-import { isPicture, wires } from "./things.ts"
+import { isPicture, kindOf, stateOf, wires } from "./things.ts"
 
 type Item = {
 	path: string[]
@@ -64,10 +64,8 @@ const short = (name: string) => /^[0-9a-f]{20,}$/.test(name) ? name.slice(0, 6) 
 
 // ---- what each item is, in words ----
 const isLevel = (it: Item) => it.id === level
-const thingKind = (it: Item) => {
-	const r = it.attributes?.[RUNNER]
-	return isMap(r) && Array.isArray(r.at) ? String(r.at.at(-1)) : undefined
-}
+// a thing's kind: a part's thing.kind, else its runner's (things.ts' kindOf)
+const thingKind = (it: Item) => kindOf(it.attributes)
 const time = (it: Item) => Math.max(it.change?.time ?? 0, it.marked?.time ?? 0)
 const last = (it: Item) => (it.marked?.time ?? 0) > (it.change?.time ?? 0) ? it.marked : it.change
 function valueKind(it: Item) {
@@ -82,7 +80,7 @@ function valueKind(it: Item) {
 function kind(it: Item) {
 	if (it.key === "") return "the root"
 	const t = thingKind(it)
-	if (t) return `${/^[aeiou]/.test(t) ? "an" : "a"} ${t}, running`
+	if (t) return `${/^[aeiou]/.test(t) ? "an" : "a"} ${t}, ${stateOf(it.attributes)}`
 	const v = valueKind(it)
 	const n = it.names.length
 	if (!n) return v ?? (isLevel(it) ? "folder, empty" : "empty")

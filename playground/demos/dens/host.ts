@@ -21,13 +21,17 @@
 // what syncs (history's kept): a den's own nodes, as steps in the room's log, each written by its
 // den alone. CBOR throughout, maps with string keys
 //   <node>                   attributes { "ermine.type": "ermine.den", "ermine.den.id": id,
-//                            "ermine.den.name": name, "ermine.den.device": "browser" | "cardputer" }
+//                            "ermine.den.name": name, "ermine.den.device": "browser" | "cardputer",
+//                            "ermine.den.parts"?: { <kind>: a few words }: the parts the den starts
+//                            itself, each a plain process (the cardputer's; a browser has none) }
 //                            children { things: <node>/things, inbox: <node>/inbox,
 //                            authorized_keys: <node>/authorized_keys, files: <node>/files }, and
-//                            runners: <node>/runners (software's offers; nobody else reads them)
+//                            runners: <node>/runners (a browser's software offers; nobody else
+//                            reads them)
 //   <node>/things            children { <process id>: <node>/things<its path> }, one a thing
 //   <node>/things<path>      attributes: the thing's process's, as it runs, and "thing.at"
 //                            "/home/<kind>-<4 hex>" (its path in its den). what another den reads:
+//                              "thing.kind": its kind (a part's); else
 //                              "ermine.process.runner" { id, at: [steps] }: at's last step is the kind
 //                              "ermine.process.args" [strings]: what it reads, as triples
 //                                <input> <den id> <path> (things.ts' parse), and "name=value"s
@@ -57,7 +61,10 @@
 //                            node among them from the start. only steps of the den's own count:
 //                            a step another device wrote there is not believed
 //   <node>/inbox             value { <ask id>: { ask, claim, sig, answer? } }: an asker writes a
-//                            patch at [<ask id>]; the den writes the answer at [<ask id>, "answer"]
+//                            patch at [<ask id>]; the den writes the answer at [<ask id>, "answer"].
+//                            a den may take answered asks out (a delete at [<ask id>]) to stay
+//                            small: the cardputer, past 12 answered, the oldest, 6 left; never one
+//                            waiting, nor a menu item's
 //
 // an ask, written into the asked den's inbox:
 //   ask    { op, id, from: the asker's node, to: the asked den's node, ...the op's fields }
@@ -66,11 +73,16 @@
 //          "ermine:ed01" + the session key's hex, vouch the install's signature for it)
 //   sig    ed25519, by the session's key, over the ask's canonical CBOR
 // the ops, each with its answer:
-//   start   { runner: "/system/den/runners/<kind>", program: { id, code, hash?, type?, api? },
-//           at: "/home/<kind>-<4 hex>", args?: [strings] }
+//   start   a browser den (software): { runner: "/system/den/runners/<kind>", program: { id, code,
+//           hash?, type?, api? }, at: "/home/<kind>-<4 hex>", args?: [strings] }
 //           → { id: <process id>, at: [steps] }, or software's refusal: { refused: "taken", at }
 //           | { refused: "not-a-runner", runner } | { refused: "not-there", program }
 //           | { refused: "wrong-form", program, runner }
+//           a den that says its parts (ermine.den.parts): { kind, at: "/home/<kind>-<4 hex>",
+//           args?: [strings] } (its speaker's at: "/system/speaker") → { id, at: [steps] }
+//           | { refused: "taken", at } | { refused: "not-a-kind", kind }
+//           | { refused: "not-here", why } (a part only starts in /home); a runner-and-program
+//           start there → { error: <words> }
 //   stop    { process: <process id>, reason? } → {} | { refused: "not-there", process }
 //   pair    { name: the asker's name } → { pair: "yes" } | { pair: "no" }: a person's answer (the
 //           cardputer: tab yes, esc no), none until then; from a den in authorized_keys already:
@@ -295,6 +307,8 @@ function carry(sync: Sync, room: string, server: string | undefined, told: (s: s
 // what an ask carries beside op's own: id, from and to are the host's
 export type Request =
 	| { op: "start"; runner: string; program: Program; at: string; args?: readonly string[] }
+	// a den that says its parts (ermine.den.parts, the cardputer): one started by kind
+	| { op: "start"; kind: string; at: string; args?: readonly string[] }
 	| { op: "stop"; process: string; reason?: unknown }
 	| { op: "pair"; name: string }
 	| { op: "unpair" }
@@ -321,6 +335,9 @@ export type Answer =
 	| Record<never, never>
 	| Refused
 	| { readonly refused: "not-there"; readonly process: string }
+	// a part's start, refused (a den that says its parts): no such kind; not a part's place
+	| { readonly refused: "not-a-kind"; readonly kind: string }
+	| { readonly refused: "not-here"; readonly why: string }
 	| { readonly pair: "yes" | "no" }
 	| { readonly error: string }
 	| Refusal
@@ -692,7 +709,7 @@ export async function createHost(
 		if (table.get("value", inbox) === undefined) {
 			return { problem: "its inbox hasn't reached this page yet" }
 		}
-		const fields = r.op === "start"
+		const fields = r.op === "start" && "program" in r
 			? defined({ ...r, program: defined({ ...r.program }) })
 			: defined({ ...r })
 		const n = `${id.slice(0, 8)}-${Date.now().toString(36)}-${++count}`
