@@ -2308,8 +2308,7 @@ button.press.playit {
 button.press.playit:disabled {
 	background: #bdeee2;
 }
-.thing-sound .notename,
-.thing-speaker .notename {
+.thing-sound .notename {
 	font: 700 15px var(--mono);
 	white-space: nowrap;
 }
@@ -2338,17 +2337,63 @@ button.voice:disabled {
 	cursor: default;
 	color: #777;
 }
-select.voicepick {
-	font: 600 12px var(--mono);
-	padding: 1px 4px;
-	border: 1px solid var(--ink);
-	border-radius: 2px;
+/* a den's speaker: no box, an icon set into the card's left edge, its one dot beside it */
+.box.thing-speaker {
+	min-width: 0;
+	border: none;
+	background: transparent;
+	box-shadow: none !important;
+	animation: none !important;
+	z-index: 3;
+}
+.box.thing-speaker::after,
+.thing-speaker .box-head,
+.thing-speaker .box-path,
+.thing-speaker .box-back,
+.thing-speaker .box-outs,
+.thing-speaker .port-label {
+	display: none !important;
+}
+.thing-speaker .box-row {
+	align-items: center;
+}
+.thing-speaker .box-mid,
+.thing-speaker .box-body {
+	padding: 0;
+	background: transparent;
+}
+button.speakicon {
+	display: grid;
+	place-items: center;
+	width: 30px;
+	height: 26px;
+	padding: 0;
+	border: 1.5px solid var(--ink);
+	border-radius: 7px;
+	background: #fff8c8;
+	box-shadow: 0 2px 0 var(--ink);
+	cursor: pointer;
+	transition: transform 0.12s ease-out;
+}
+button.speakicon canvas {
+	image-rendering: pixelated;
+}
+button.speakicon.pulse {
+	transform: scale(1.22);
+}
+button.speakicon:active {
+	transform: translateY(2px);
+	box-shadow: 0 0 0 var(--ink);
+}
+.voicepop {
+	position: absolute;
+	z-index: 12;
+	display: grid;
+	grid-template-columns: repeat(2, auto);
+	gap: 4px;
+	padding: 6px;
+	border: 1.5px solid var(--ink);
+	border-radius: 10px;
 	background: #fff;
-}
-.thing-speaker .soundrow {
-	padding: 2px 2px 4px;
-	gap: 8px;
-}
-.thing-speaker .box-head {
-	background: #fff8c8 !important;
+	box-shadow: 2px 2px 0 var(--ink);
 }

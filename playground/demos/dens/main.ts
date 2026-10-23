@@ -570,7 +570,6 @@ type Frame = {
 }
 // a den's things in slots: all but its speaker, which is on the card's edge
 const slotted = (v: View) => v.things.filter((t) => t.kind !== "speaker")
-const SPEAKER_W = 170
 const groupOf = (f: Frame, t: Thing): Group => !f.two ? "one" : SHOWS.has(t.kind) ? "top" : "bottom"
 const frames = new Map<string, Frame>()
 let menu: HTMLElement | undefined
@@ -929,7 +928,7 @@ function makeShown(
 		x,
 		y,
 		bounds,
-		width: t.kind === "pigs" ? SLOT.w - 16 : t.kind === "speaker" ? SPEAKER_W : SLOT.w - 50,
+		width: t.kind === "pigs" ? SLOT.w - 16 : t.kind === "speaker" ? undefined : SLOT.w - 50,
 		title: t.kind,
 		kind: SHOWS.has(t.kind) || t.kind === "sound" ? "compute" : "key",
 		ins: (INPUTS[t.kind] ?? []).map((i) => [i, i] as [string, string]),
@@ -1117,44 +1116,32 @@ function makeShown(
 			const src = sourceWords(t)
 			note.textContent = src ? `${src}, over time` : "wire something into its in"
 		}
-	} else if (t.kind === "sound" || t.kind === "speaker") {
-		// a sound: a big button, and a row of its voices to pick from. a speaker: what it played
-		// last, and a little picker for what it plays
-		const big = t.kind === "sound"
+	} else if (t.kind === "sound") {
+		// a sound: a big button, the voice it plays, and its voices as chips to pick from
 		const play = h("button", "press playit", "play")
-		const pic = picture("sound", big ? 4 : 3)
+		const pic = picture("sound", 4)
 		pic.classList.add("speaker")
 		const name = h("span", "notename")
-		// the sound's voices as chips; the speaker's, a little menu
 		const pickers = h("div", "voices")
 		const chips = new Map<Voice, HTMLButtonElement>()
-		const menu = h("select", "voicepick")
-		menu.title = "what the speaker plays (a sound thing wired in plays its own)"
-		menu.disabled = !v.mine
 		for (const n of VOICES) {
-			if (big) {
-				const c = h("button", "voice", n)
-				c.disabled = !v.mine
-				c.onclick = () => controls.get(me.id)?.choose?.(n)
-				chips.set(n, c)
-				pickers.append(c)
-			} else menu.append(new Option(n, n))
+			const c = h("button", "voice", n)
+			c.disabled = !v.mine
+			c.onclick = () => controls.get(me.id)?.choose?.(n)
+			chips.set(n, c)
+			pickers.append(c)
 		}
-		menu.onchange = () => controls.get(me.id)?.choose?.(menu.value as Voice)
-		if (!big) pickers.append(menu)
 		play.disabled = !v.mine
 		if (!v.mine) play.title = `press it ${theirs}`
 		play.onclick = () => controls.get(me.id)?.press?.()
 		const row = h("div", "soundrow")
 		row.append(pic, name)
-		if (big) body.append(play, row, pickers, note)
-		else body.append(row, pickers, note)
+		body.append(play, row, pickers, note)
 		let last = ""
 		update = (t) => {
 			const o = isMap(t.out) ? t.out : {}
 			const st = isMap(t.state) && isVoice(t.state.sound) ? t.state.sound : undefined
 			for (const [n, c] of chips) c.setAttribute("aria-pressed", String(n === st))
-			if (st && menu.value !== st && document.activeElement !== menu) menu.value = st
 			name.textContent = isVoice(o.sound) ? `♪ ${o.sound}${o.n ? ` · ${o.n}` : ""}` : "—"
 			const now = JSON.stringify(t.out)
 			if (now !== last && last !== "") {
@@ -1164,20 +1151,52 @@ function makeShown(
 			}
 			last = now
 			const src = sourceWords(t)
-			const card = v.device === "cardputer" && !big
-			note.textContent = card
+			note.textContent = src
+				? `plays each change of ${src}, and its button`
+				: `press play ${v.mine ? "" : theirs}`
+		}
+	} else if (t.kind === "speaker") {
+		// a den's speaker: an icon set into its card, its one inlet beside it. a tap: the voices,
+		// one picked played once here. a sound played: one small pulse. what it has to say is in
+		// its title, and in the caption when it matters. data-played, data-sound: what it played
+		const icon = h("button", "speakicon")
+		icon.append(picture("sound", 3))
+		body.append(icon)
+		icon.onclick = (e) => {
+			e.stopPropagation()
+			voicesFor(icon, v, me)
+		}
+		let last = -1
+		update = (t) => {
+			const o = isMap(t.out) ? t.out : {}
+			const st = isMap(t.state) && isVoice(t.state.sound) ? t.state.sound : "blip"
+			const n = typeof o.n === "number" ? o.n : 0
+			const card = v.device === "cardputer"
+			const src = sourceWords(t)
+			const words = card
 				? "the cardputer's speaker isn't on yet: what's wired in plays nothing on it"
 				: o.heard === "muted" && v.mine
 				? "sound is off here: the header's sound button turns it on"
 				: o.heard === "waiting" && v.mine
 				? "waiting for a click on the page before it can play"
-				: big
-				? src
-					? `plays each change of ${src}, and its button`
-					: `press play ${v.mine ? "" : theirs}`
 				: src
-				? `plays each change of ${src} ${v.mine ? "here" : theirs}`
-				: `wire anything into its in: it plays ${v.mine ? "here" : theirs}`
+				? `${v.mine ? "your" : `${label(v)}'s`} speaker: plays each change of ${src}`
+				: `${v.mine ? "your" : `${label(v)}'s`} speaker: wire anything into its dot`
+			icon.title = `${words}. it plays ${st}${v.mine ? ": tap to pick" : ""}`
+			icon.dataset.sound = isVoice(o.sound) ? o.sound : ""
+			icon.dataset.played = String(n)
+			icon.dataset.heard = typeof o.heard === "string" ? o.heard : ""
+			if (last >= 0 && n > last) {
+				// one small pulse: in, and back by its own transition
+				icon.classList.add("pulse")
+				setTimeout(() => icon.classList.remove("pulse"), 130)
+				// words when they matter: sound off here, or the cardputer's not on yet
+				if (card) calmly(icon, () => say(`${label(v)}: ${words}.`))
+				else if (o.heard === "muted" && v.mine) {
+					calmly(icon, () => say(`A sound came in: ${words}.`))
+				}
+			}
+			last = n
 		}
 	} else if (t.kind === "keys") {
 		const typed = h("div", "typed")
@@ -1242,6 +1261,43 @@ function makeShown(
 	}
 	return { box, me, placed: { x, y }, kind: t.kind, who: v.who, out: "", update }
 }
+
+// a speaker's voices, in a tiny popover by its icon: one picked is chosen and played once here
+let voicePop: HTMLElement | undefined
+function voicesFor(icon: HTMLElement, v: View, me: { id: string }) {
+	voicePop?.remove()
+	voicePop = undefined
+	if (!v.mine) {
+		return say(`${label(v)}'s speaker plays ${label(v)}'s own pick: only they can change it.`)
+	}
+	const pop = h("div", "voicepop")
+	pop.setAttribute("role", "menu")
+	for (const n of VOICES) {
+		const b = h("button", "voice", n)
+		b.setAttribute("role", "menuitem")
+		b.onclick = (e) => {
+			e.stopPropagation()
+			controls.get(me.id)?.choose?.(n)
+			voice.play(n)
+			pop.remove()
+			voicePop = undefined
+		}
+		pop.append(b)
+	}
+	const r = icon.getBoundingClientRect(), p = page.getBoundingClientRect()
+	pop.style.left = `${r.right - p.left + 6}px`
+	pop.style.top = `${r.top - p.top - 4}px`
+	page.append(pop)
+	voicePop = pop
+	;(pop.firstElementChild as HTMLElement).focus()
+}
+addEventListener("pointerdown", (e) => {
+	if (voicePop && !(e.target as Element).closest(".voicepop, .speakicon")) {
+		voicePop.remove()
+		voicePop = undefined
+	}
+})
+addEventListener("keydown", (e) => e.key === "Escape" && (voicePop?.remove(), voicePop = undefined))
 
 // ---- wires ----
 // by key: "<source's spot> <reader's spot> <input>"
@@ -1628,9 +1684,10 @@ function render() {
 			const g = groupOf(f, t)
 			const slot = f.slots.get(`${g} ${t.at.join("/")}`)
 			// the speaker: on the card's left edge, low down; the rest in their slots
-			const px = slot === undefined ? f.x - SPEAKER_W + 34 : f.x + 20 + (slot % COLS) * SLOT.w
+			// the speaker: set into the card's left edge, near the top; the rest in their slots
+			const px = slot === undefined ? f.x - 30 : f.x + 20 + (slot % COLS) * SLOT.w
 			const py = slot === undefined
-				? f.y + f.h - 150
+				? f.y + 70
 				: f.y + f.origin[g] + Math.floor(slot / COLS) * SLOT.h
 			let s = shown.get(spot)
 			if (s) {
@@ -1642,7 +1699,7 @@ function render() {
 			}
 			if (!s) {
 				s = makeShown(v, t, px, py, () => ({
-					x0: t.kind === "speaker" ? f.x - SPEAKER_W : f.x + 14,
+					x0: t.kind === "speaker" ? f.x - 40 : f.x + 14,
 					y0: f.y + 58,
 					x1: f.x + f.w - 14,
 					y1: f.y + f.h - (f.keyboard ? 168 : 12),
@@ -1652,7 +1709,7 @@ function render() {
 			s.me.id = t.id
 			const out = JSON.stringify(t.out ?? null)
 			if (out !== s.out) {
-				if (s.out !== "") calmly(s.box, () => s!.box.flash("hot"))
+				if (s.out !== "" && t.kind !== "speaker") calmly(s.box, () => s!.box.flash("hot"))
 				s.out = out
 			}
 			s.update(t, v)
@@ -1749,6 +1806,8 @@ function render() {
 		wires.delete(k)
 	}
 	for (const s of shown.values()) {
+		// a speaker's dot stays on the card's edge
+		if (s.kind === "speaker") continue
 		for (const p of [...s.box.el.querySelectorAll<HTMLElement>(".port")]) {
 			const port = s.box.port(p.querySelector(".port-label")!.textContent!)
 			const ds = partners.get(port)
