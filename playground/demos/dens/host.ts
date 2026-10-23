@@ -124,6 +124,7 @@ import { createHistory, createLog, createSync, show } from "@ermine/tippet"
 import { socket } from "@ermine/tippet/carriers/websocket"
 // the log's own index of its records, as tippet's stores use it (its package doesn't export it)
 import { createIndex, type Store } from "../../../experiments/tippet/typescript/log.ts"
+import { decodeStep } from "../../../experiments/tippet/typescript/step.ts"
 import { bus } from "@ermine/tippet/carriers/broadcastchannel"
 import {
 	ATTRIBUTE,
@@ -499,8 +500,9 @@ export async function createHost(
 	}
 	for (const d of Object.keys(log.have())) {
 		for (const b of log.steps(d)) {
-			const step = decode(b) as unknown[]
-			into(d, String(step[4]), String(step[3]), step[5] as Patch[])
+			// decoded by tippet, so a node written relative to its device comes back whole
+			const st = decodeStep(b)
+			into(d, st.part, st.node, st.patches as Patch[])
 		}
 	}
 	log.on((device, steps) => {
