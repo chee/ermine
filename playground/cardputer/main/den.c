@@ -260,14 +260,15 @@ static void put1(const char *part, const char *id, const char *key, op_value *v)
 	patch(part, id, path, 1, v);
 }
 // a map, written as only the keys that are another (one patch each), or whole when it is new or
-// a key went; v taken
+// a key went; v taken. what was there held meanwhile: each patch lets the entry's value go
 static void put_keys(const char *part, const char *id, op_value *v) {
 	const nd_entry *e = tb_get(me.w.table, tb_string(part), tb_string(id));
-	const op_value *was = e ? e->value : NULL;
+	op_value *was = e && e->value ? op_ref(e->value) : NULL;
 	int whole = !is_map(was) || !is_map(v);
 	for (size_t k = 0; !whole && k < was->count; k++)
 		if (was->items[k] && op_get(v, was->keys[k]) == NULL) whole = 1;
 	if (whole) {
+		if (was) op_free(was);
 		put(part, id, v);
 		return;
 	}
@@ -276,6 +277,7 @@ static void put_keys(const char *part, const char *id, op_value *v) {
 		if (v->items[k] == NULL || (old != NULL && same(old, v->items[k]))) continue;
 		put1(part, id, v->keys[k], op_ref(v->items[k]));
 	}
+	op_free(was);
 	op_free(v);
 }
 static op_value *map1(const char *k, op_value *v) {
@@ -404,7 +406,10 @@ static void keys_from(uint64_t n) {
 	uint8_t *b = xalloc((size_t)length);
 	tp_log_step(me.log, me.install.key, n, b, (size_t)length);
 	tp_step s;
-	if (tp_step_decode(b, (size_t)length, &s) == 0 && span_is(s.node, me.keys_node) && span_is(s.part, "value")) {
+	char node[160];
+	size_t nn = 0;
+	if (tp_step_decode(b, (size_t)length, &s) == 0) nn = tp_step_node(&s, node, sizeof node);
+	if (nn && nn < sizeof node && (node[nn] = 0, strcmp(node, me.keys_node) == 0) && span_is(s.part, "value")) {
 		op_value *ps = pk_get(s.patches.p, s.patches.n, NULL, NULL);
 		apply_to(&me.keys, ps);
 		if (ps) op_free(ps);
@@ -1948,8 +1953,11 @@ static void step_said(uint64_t n) {
 	if (tp_step_decode(b, (size_t)length, &s) == 0) {
 		op_value *ps = pk_get(s.patches.p, s.patches.n, NULL, NULL);
 		char *j = ps ? op_json_text(ps) : NULL;
-		printf("trace: step %llu: %ld bytes: node %.*s (%u), part %.*s (%u), patches %u bytes, %u of them: %s\n",
-			(unsigned long long)n, length, (int)s.node.n, (const char *)s.node.p, (unsigned)s.node.n, (int)s.part.n,
+		char node[160];
+		size_t nn = tp_step_node(&s, node, sizeof node - 1);
+		node[nn < sizeof node ? nn : 0] = 0;
+		printf("trace: step %llu: %ld bytes: node %s (%u%s), part %.*s (%u), patches %u bytes, %u of them: %s\n",
+			(unsigned long long)n, length, node, (unsigned)s.node.n, s.relative ? ", relative" : "", (int)s.part.n,
 			(const char *)s.part.p, (unsigned)s.part.n, (unsigned)s.patches.n, (unsigned)s.count, j ? j : "?");
 		free(j);
 		if (ps) op_free(ps);

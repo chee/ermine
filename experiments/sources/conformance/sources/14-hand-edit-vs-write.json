@@ -1,0 +1,38 @@
+{
+	"title": "a save not heard yet when a graph write lands: the mirror doesn't write over it, reads it in, and says so on its node; the graph's write stays in history",
+	"steps": [
+		{ "op": "graph", "name": "A" },
+		{ "op": "set", "graph": "A", "node": "NOTE", "value": "base" },
+		{
+			"op": "mirror",
+			"name": "M",
+			"graph": "A",
+			"node": "NOTE",
+			"file": "note.txt",
+			"actor": "laptop"
+		},
+		{ "op": "edit", "file": "note.txt", "text": "typed by hand", "heard": false },
+		{ "op": "set", "graph": "A", "node": "NOTE", "value": "from elsewhere" },
+		{ "op": "settle" },
+		{ "op": "text", "file": "note.txt", "expect": { "text": "typed by hand" } },
+		{ "op": "value", "graph": "A", "node": "NOTE", "expect": { "value": "typed by hand" } },
+		{
+			"op": "writes",
+			"holder": "A",
+			"expect": { "count": 3, "nodes": ["NOTE", "NOTE", "NOTE"] }
+		},
+		{
+			"op": "status",
+			"mirror": "M",
+			"expect": {
+				"file": "note.txt",
+				"node": "NOTE",
+				"state": {
+					"code": "changed-not-written",
+					"words": "the file changed since I last looked: not written; read in"
+				},
+				"unwritten": 1
+			}
+		}
+	]
+}

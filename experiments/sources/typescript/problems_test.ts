@@ -7,6 +7,7 @@ import { createTable, type Key } from "@ermine/table"
 import { createPlaces, type Fact, place } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
 import { upsert } from "@ermine/places/upsert"
+import { createScopeNodes } from "@ermine/processes/scopes"
 import createEntry from "@ermine/node/entry"
 import { createFakeFile, type FileAccess } from "./access.ts"
 import { denoFile } from "./deno.ts"
@@ -15,7 +16,8 @@ import { createHistory } from "./history.ts"
 import { ORPHAN } from "./holder.ts"
 import { createLink } from "./link.ts"
 import { createMemory } from "./memory.ts"
-import { openMirror, text } from "./mirror.ts"
+import { type Mirror, type MirrorSetup, openMirror, text } from "./mirror.ts"
+import { readRecord, readState, SKIPPED } from "./status.ts"
 import { createWorld, type World } from "./world.ts"
 
 const granted = (name: "write") => Deno.permissions.querySync({ name }).state === "granted"
@@ -23,37 +25,23 @@ const utf8 = (s: string) => new TextEncoder().encode(s)
 const read = (b: Uint8Array | undefined) => b && new TextDecoder().decode(b)
 const tick = () => new Promise((r) => setTimeout(r, 10))
 const device = (w: World) => w.scheduler.createRootScope({ actor: "laptop" })
+// a mirror opened, not refused
+async function open(setup: MirrorSetup): Promise<Mirror> {
+	const m = await openMirror(setup)
+	if ("refused" in m) throw new Error(`refused: ${m.refused}`)
+	return m
+}
 
 async function until(f: () => boolean) {
 	for (let i = 0; i < 400 && !f(); i++) await new Promise((r) => setTimeout(r, 5))
 	assert(f(), "never came")
 }
 
-// a file in memory that can also be taken away, as a person deleting or renaming it does
-function removable() {
-	const file = createFakeFile()
-	const pokes = new Set<() => void>()
-	const access: FileAccess = {
-		read: file.read,
-		write: file.write,
-		watch(poke) {
-			pokes.add(poke)
-			const stop = file.watch(poke)
-			return () => (pokes.delete(poke), stop())
-		},
-	}
-	const remove = () => {
-		file.bytes = undefined
-		queueMicrotask(() => [...pokes].forEach((p) => p()))
-	}
-	return { file, access, remove }
-}
-
 // ---- found before, checked again on this main
 
 Deno.test("problem: a holder's drop and a link's since don't meet: what was dropped is never sent again", async () => {
 	const a = createWorld("A"), m = createMemory()
-	const link = createLink(a.history, m)
+	const link = createLink(a.history, m, { graph: a })
 	a.set("N", 1)
 	await link.sync()
 	await m.drop("N")
@@ -70,7 +58,7 @@ Deno.test("problem: a holder's drop and a link's since don't meet: what was drop
 Deno.test("problem: refused for now is lost on that link: the disk comes back, the node never does", async () => {
 	const a = createWorld("A"), f = createFakeFile()
 	const holder = await openFile(f)
-	const link = createLink(a.history, holder)
+	const link = createLink(a.history, holder, { graph: a })
 	f.fail = true
 	a.set("N", 1)
 	assert((await link.sync()).ab.refused[0].why.startsWith(UNWRITABLE))
@@ -85,7 +73,7 @@ Deno.test("problem: a cursor can't move partway: a holder that says not now once
 	const a = createWorld("A")
 	let busy = true
 	const m = createMemory({ refuse: () => busy ? "busy" : undefined })
-	const link = createLink(a.history, m)
+	const link = createLink(a.history, m, { graph: a })
 	a.set("N", 1)
 	a.set("K", 1)
 	assertEquals((await link.sync()).ab.refused.length, 2)
@@ -142,12 +130,13 @@ Deno.test("problem: a history made after the graph's first write has no base; an
 	const table = createTable((part, id) => places.onTableChange(part as Key, id))
 	const places = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler })
 	const scope = scheduler.createRootScope({ actor: "A" })
+	const scopes = createScopeNodes({ scheduler, table })
 	const set = (value: unknown, path: string[]) =>
 		scheduler.runWithScope(scope, () => {
 			places.commit(upsert(table, "value", "N", path, value, createChangeHeader(scheduler)))
 		})
 	set({ a: 0, b: 0 }, [])
-	const late = createHistory({ table, places })
+	const late = createHistory({ table, places, scheduler, scope, scopes })
 	set(1, ["a"])
 	assertEquals(late.writes()[0].parents, [])
 	const b = createWorld("B")
@@ -162,7 +151,7 @@ Deno.test("problem: echo by a flag: a watcher writing back while a write lands i
 		if (f.id === "N" && v && !("seen" in v)) b.set("N", true, ["seen"])
 	})
 	a.set("N", { x: 1 })
-	await createLink(a.history, b.history).sync()
+	await createLink(a.history, b.history, { graph: a }).sync()
 	assertEquals(b.value("N"), { x: 1, seen: true })
 	assertEquals(b.history.writes().length, 1)
 	assertEquals(a.value("N"), { x: 1 })
@@ -173,7 +162,7 @@ Deno.test("problem: a holder that can't list: a poke has nothing to say, so the 
 	const n = createMemory({ lists: false })
 	b.set("N", 1)
 	await n.put(b.history.writes())
-	const link = createLink(a.history, n)
+	const link = createLink(a.history, n, { graph: a })
 	await link.sync()
 	assertEquals(a.value("N"), undefined)
 	await link.fetch("N")
@@ -184,8 +173,8 @@ Deno.test("problem: the mirror's whole-value write: a hand edit and a write else
 	const a = createWorld("A"), b = createWorld("B")
 	const f = createFakeFile()
 	a.set("NOTE", "hello world")
-	const mirror = await openMirror({ ...a, scope: device(a), node: "NOTE", file: f, codec: text })
-	const link = createLink(a.history, b.history)
+	const mirror = await open({ ...a, scope: device(a), node: "NOTE", file: f, codec: text })
+	const link = createLink(a.history, b.history, { graph: a })
 	await link.sync()
 	f.edit(utf8("hello world!"))
 	await until(() => a.value("NOTE") === "hello world!")
@@ -200,61 +189,20 @@ Deno.test("problem: the mirror's whole-value write: a hand edit and a write else
 	mirror.stop()
 })
 
-// ---- found now
+// ---- found on main (10-23), still standing after the mirror refuses and shows itself
 
-Deno.test("problem: a hand edit not yet heard when a graph write lands is written over, in no history", async () => {
+Deno.test("problem: a file renamed by hand is not followed: the mirror says it is gone; the renamed file is never read", async () => {
 	const w = createWorld("A")
-	const f = createFakeFile()
-	w.set("NOTE", "base")
-	const mirror = await openMirror({ ...w, scope: device(w), node: "NOTE", file: f, codec: text })
-	f.edit(utf8("typed by hand"))
-	w.set("NOTE", "from elsewhere")
-	await tick()
-	await mirror.idle()
-	assertEquals(read(f.bytes), "from elsewhere")
-	assertEquals(w.value("NOTE"), "from elsewhere")
-	assert(!w.history.writes().some((x) => x.patches.some((p) => p.value === "typed by hand")))
-	mirror.stop()
-})
-
-Deno.test("problem: a file that wouldn't write is never written again, and a hand edit to it then wins over the newer value", async () => {
-	const w = createWorld("A")
-	const f = createFakeFile()
-	w.set("NOTE", "old")
-	const mirror = await openMirror({ ...w, scope: device(w), node: "NOTE", file: f, codec: text })
-	f.fail = true
-	w.set("NOTE", "new")
-	await mirror.idle()
-	assert(mirror.trouble()?.includes("the disk said no"))
-	f.fail = false
-	await tick()
-	await mirror.idle()
-	assertEquals(read(f.bytes), "old")
-	f.edit(utf8("old, edited"))
-	await until(() => w.value("NOTE") === "old, edited")
-	mirror.stop()
-})
-
-Deno.test("problem: a file deleted by hand is nothing; it comes back on the next write", async () => {
-	const w = createWorld("A")
-	const { file, access, remove } = removable()
+	const f = createFakeFile("note.txt"), renamed = createFakeFile("note2.txt")
 	w.set("NOTE", "one")
-	const mirror = await openMirror({
-		...w,
-		scope: device(w),
-		node: "NOTE",
-		file: access,
-		codec: text,
-	})
-	const before = w.history.writes().length
-	remove()
+	const mirror = await open({ ...w, scope: device(w), node: "NOTE", file: f, codec: text })
+	renamed.edit(f.bytes!)
+	f.remove()
+	renamed.edit(utf8("one, edited where it went"))
 	await tick()
 	await mirror.idle()
+	assertEquals(readState(w.places, mirror.process.id)?.code, "gone")
 	assertEquals(w.value("NOTE"), "one")
-	assertEquals(w.history.writes().length, before)
-	w.set("NOTE", "two")
-	await mirror.idle()
-	assertEquals(read(file.bytes), "two")
 	mirror.stop()
 })
 
@@ -262,7 +210,7 @@ Deno.test("problem: a value taken out leaves the file; a hand edit to it brings 
 	const w = createWorld("A")
 	const f = createFakeFile()
 	w.set("NOTE", "here")
-	const mirror = await openMirror({ ...w, scope: device(w), node: "NOTE", file: f, codec: text })
+	const mirror = await open({ ...w, scope: device(w), node: "NOTE", file: f, codec: text })
 	w.scheduler.runWithScope(w.scope, () => w.table.del("value", "NOTE"))
 	await tick()
 	await mirror.idle()
@@ -272,16 +220,18 @@ Deno.test("problem: a value taken out leaves the file; a hand edit to it brings 
 	mirror.stop()
 })
 
-Deno.test("problem: two mirrors on one file: the second's node is written over when opened, then the two are tied", async () => {
+Deno.test("problem: one file under two names (a symlink, a mirror in another process): not seen as one; the second's node written over when opened, then the two tied, nothing said", async () => {
 	const w = createWorld("A")
-	const f = createFakeFile()
+	const f = createFakeFile("note.txt")
+	const alias: FileAccess = { ...f, name: "a-link-to-note.txt" }
 	w.set("N", "n's")
 	w.set("M", "m's")
-	const one = await openMirror({ ...w, scope: device(w), node: "N", file: f, codec: text })
-	const two = await openMirror({ ...w, scope: device(w), node: "M", file: f, codec: text })
+	const one = await open({ ...w, scope: device(w), node: "N", file: f, codec: text })
+	const two = await open({ ...w, scope: device(w), node: "M", file: alias, codec: text })
 	assertEquals(w.value("M"), "n's")
 	w.set("N", "only n")
 	await until(() => w.value("M") === "only n")
+	assertEquals(readState(w.places, two.process.id)?.code, "in-step")
 	one.stop()
 	two.stop()
 })
@@ -290,27 +240,11 @@ Deno.test("problem: text: a value not a string goes out as JSON and comes back a
 	const w = createWorld("A")
 	const f = createFakeFile()
 	w.set("N", { a: 1 })
-	const mirror = await openMirror({ ...w, scope: device(w), node: "N", file: f, codec: text })
+	const mirror = await open({ ...w, scope: device(w), node: "N", file: f, codec: text })
 	assertEquals(read(f.bytes), '{"a":1}')
 	f.edit(utf8('{"a":2}'))
 	await until(() => typeof w.value("N") === "string")
 	assertEquals(w.value("N"), '{"a":2}')
-	mirror.stop()
-})
-
-Deno.test("problem: a file that won't decode: trouble on the mirror only; the next write goes over the person's bytes", async () => {
-	const w = createWorld("A")
-	const f = createFakeFile()
-	w.set("NOTE", "fine")
-	const mirror = await openMirror({ ...w, scope: device(w), node: "NOTE", file: f, codec: text })
-	f.edit(new Uint8Array([0x68, 0x69, 0xff]))
-	await tick()
-	await mirror.idle()
-	assert(mirror.trouble()?.startsWith("unreadable"))
-	assertEquals(w.value("NOTE"), "fine")
-	w.set("NOTE", "later")
-	await mirror.idle()
-	assertEquals(read(f.bytes), "later")
 	mirror.stop()
 })
 
@@ -319,21 +253,8 @@ Deno.test("problem: opened, the file wins over the graph's value, no one asked",
 	const f = createFakeFile()
 	w.set("NOTE", "the graph's")
 	f.bytes = utf8("the file's")
-	const mirror = await openMirror({ ...w, scope: device(w), node: "NOTE", file: f, codec: text })
+	const mirror = await open({ ...w, scope: device(w), node: "NOTE", file: f, codec: text })
 	assertEquals(w.value("NOTE"), "the file's")
-	mirror.stop()
-})
-
-Deno.test("problem: a hand edit's site is mirror.ts, and nothing in its change names the file", async () => {
-	const w = createWorld("A")
-	const f = createFakeFile()
-	w.set("NOTE", "a")
-	const mirror = await openMirror({ ...w, scope: device(w), node: "NOTE", file: f, codec: text })
-	f.edit(utf8("b"))
-	await until(() => w.value("NOTE") === "b")
-	const change = w.history.writes().at(-1)!.change
-	assert(change.external?.[0].file.endsWith("/mirror.ts"))
-	assertEquals(change.metadata, { actor: "laptop" })
 	mirror.stop()
 })
 
@@ -363,10 +284,12 @@ Deno.test("problem: a merge lands as one whole value under the last write's chan
 	assert(kept === "a's" || kept === "b's")
 })
 
-Deno.test("problem: every node is recorded and landed, reachable or not; the host has no say in what syncs", async () => {
+// what syncs is the host's rule now (history's records, by id and part); this world's says yes to
+// all but its own nodes (status.ts')
+Deno.test("problem: the host's rule is asked by id and part only: an unplaced node goes as any, reachable or not", async () => {
 	const a = createWorld("A"), b = createWorld("B")
 	a.set("SECRET", "not placed anywhere")
-	await createLink(a.history, b.history).sync()
+	await createLink(a.history, b.history, { graph: a }).sync()
 	assertEquals(b.value("SECRET"), "not placed anywhere")
 	assertEquals(b.table.get("children", "R"), undefined)
 })
@@ -381,7 +304,7 @@ Deno.test("problem: a scope whose info holds a function: all its writes are skip
 	})
 	assertEquals(w.value("N"), 1)
 	assertEquals(w.history.writes(), [])
-	assertEquals(w.history.skipped(), 1)
+	assertEquals(readRecord(w.places, w.history.id)[SKIPPED], 1)
 })
 
 Deno.test("problem: a write at a symbol id is dropped, not even counted", () => {
@@ -391,21 +314,29 @@ Deno.test("problem: a write at a symbol id is dropped, not even counted", () => 
 		w.places.commit(upsert(w.table, "value", id, [], 1, createChangeHeader(w.scheduler)))
 	})
 	assertEquals(w.table.get("value", id)?.value, 1)
-	assertEquals([w.history.writes().length, w.history.skipped()], [0, 0])
+	assertEquals([w.history.writes().length, readRecord(w.places, w.history.id)[SKIPPED]], [0, 0])
 })
 
 Deno.test("problem: one process's drop is undone by another's next save", async () => {
 	const a = createWorld("A"), f = createFakeFile()
 	const one = await openFile(f), two = await openFile(f)
 	a.set("N", 1)
-	await createLink(a.history, one).sync()
+	await createLink(a.history, one, { graph: a }).sync()
 	await two.load()
 	await one.drop("N")
 	assertEquals((await one.get!("N")).length, 0)
 	a.set("K", 1)
-	await createLink(a.history, two).sync()
+	await createLink(a.history, two, { graph: a }).sync()
 	await one.load()
 	assertEquals((await one.get!("N")).length, 1)
+})
+
+Deno.test("problem: a file holder's trouble reading its file is on the object only, not in the graph", async () => {
+	const f = createFakeFile()
+	f.bytes = new Uint8Array([0xff])
+	const holder = await openFile(f)
+	assert(holder.trouble()?.startsWith("unreadable"))
+	holder.close()
 })
 
 Deno.test({
@@ -417,7 +348,7 @@ Deno.test({
 			await Deno.writeTextFile(`${dir}/real.txt`, "a")
 			await Deno.symlink(`${dir}/real.txt`, `${dir}/note.txt`)
 			const w = createWorld("A")
-			const mirror = await openMirror({
+			const mirror = await open({
 				...w,
 				scope: device(w),
 				node: "NOTE",

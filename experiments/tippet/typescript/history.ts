@@ -225,7 +225,9 @@ export function createHistory(o: {
 			await snapshot()
 			const passed = sync.passed()
 			log.drop(
-				Object.fromEntries(Object.entries(held).map(([d, n]) => [d, Math.min(n, passed[d] ?? 0)])),
+				Object.fromEntries(
+					Object.entries(held).map(([d, n]) => [d, Math.min(n, passed[d] ?? 0)]),
+				),
 			)
 		},
 

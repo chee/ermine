@@ -176,8 +176,11 @@ static int packed(tp_sync *s, const uint8_t device[32], uint64_t from, uint64_t 
 		s->spans[k] = (tp_span){NULL, (size_t)n};
 	}
 	for (size_t k = 0, at = 0; k < count; at += s->spans[k++].n) s->spans[k].p = s->steps.p + at;
+	// against the step before, which they hold
 	tp_span pack;
-	if (tp_pack(&s->mem, s->spans, count, s->max, &pack)) return -1;
+	tp_prior prior;
+	int against = from > 1 && !tp_log_prior(s->log, device, from - 1, &prior);
+	if (tp_pack_after(&s->mem, against ? &prior : NULL, s->spans, count, s->max, &pack)) return -1;
 	tp_buf *b = &s->out;
 	tp_put_head(b, 4, 4), tp_put_text(b, "run");
 	tp_put_head(b, 2, 32), tp_put(b, device, 32), tp_put_head(b, 2, 64), tp_put(b, sig, 64);
@@ -349,9 +352,19 @@ static void run(tp_sync *s, tp_link *l, const uint8_t *device, const uint8_t *si
 	tp_steps steps;
 	tp_step first;
 	// last: the n of the run's last step, which they hold
-	uint64_t last = 0;
-	long r = tp_unpack(&s->mem, pack, s->max, &steps);
-	if (!r) {
+	uint64_t last = 0, n0;
+	// packed against the step before: every step held already, passed over; past what is held, a
+	// gap; held but not to be read (let go), refused (TP_BEFORE): it is never guessed
+	int after = 0;
+	tp_prior prior;
+	uint64_t held = tp_log_count(s->log, device);
+	long r = tp_pack_first(pack, &n0, &after);
+	int passed = !r && after && tp_pack_count(pack) && n0 + tp_pack_count(pack) - 1 <= held;
+	if (passed) last = held;
+	else if (!r && after && n0 - 1 > held) r = TP_GAP;
+	else if (!r && after && tp_log_prior(s->log, device, n0 - 1, &prior)) r = TP_BEFORE;
+	else if (!r) r = tp_unpack_after(&s->mem, pack, s->max, after ? &prior : NULL, &steps);
+	if (!r && !passed) {
 		if (!tp_step_decode(steps.bytes, steps.at[1], &first)) last = first.n + steps.count - 1;
 		tp_span *spans = tp_alloc(&s->mem, steps.count * sizeof *spans);
 		if (!spans) {

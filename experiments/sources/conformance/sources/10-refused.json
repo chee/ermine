@@ -18,7 +18,11 @@
 		{
 			"op": "status",
 			"link": "AM",
-			"expect": { "known": { "a": 2, "b": 1 }, "refused": ["not-here"] }
+			"expect": {
+				"state": { "code": "in-step", "words": "in step" },
+				"known": { "a": 2, "b": 1 },
+				"refused": ["not-here"]
+			}
 		},
 		{ "op": "forge", "holder": "M", "expect": { "outcome": { "refused": "misnamed" } } },
 		{ "op": "forge", "holder": "A", "expect": { "outcome": { "refused": "misnamed" } } }

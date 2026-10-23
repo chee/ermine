@@ -48,6 +48,8 @@ enum {
 	TP_CHAIN = -12,
 	TP_LAMPORT = -13,
 	TP_SIGNATURE = -14,
+	// a pack against a step before it not held here, or let go: never guessed
+	TP_BEFORE = -15,
 };
 // what a code is called: "own", "gap", "chain", "lamport", "signature", …
 const char *tp_why(int code);
@@ -115,12 +117,34 @@ void tp_steps_free(const tp_mem *mem, tp_steps *s);
 #define TP_STEPS 4096
 #define TP_PATCHES 65536
 
+// what a step after this one is worked out from (../WIRE.md pack): its device, n, hash, lamport,
+// when
+typedef struct {
+	uint8_t device[32];
+	uint64_t n;
+	uint8_t hash[32];
+	uint64_t lamport, when;
+} tp_prior;
+// a step's prior, from its bytes: 0 or TP_NOTSTEP
+int tp_prior_of(const uint8_t *bytes, size_t length, tp_prior *p);
+
 // a pack of n steps (each a step, n from 1, at most TP_STEPS): its bytes in *pack, made with mem,
-// at most max of them. 0, TP_NOTSTEP, TP_BOUND or TP_NOMEM
+// at most max of them. the first whole. 0, TP_NOTSTEP, TP_BOUND or TP_NOMEM
 int tp_pack(const tp_mem *mem, const tp_span *steps, size_t n, size_t max, tp_span *pack);
+// the same, the first worked out from prior, the step before it (TP_NOTSTEP: it isn't); prior
+// NULL, or the first at n = 1: whole
+int tp_pack_after(const tp_mem *mem, const tp_prior *prior, const tp_span *steps, size_t n, size_t max,
+	tp_span *pack);
 // a pack's steps, each worked out from the one before: at most max bytes of them. 0, TP_NOTSTEP
-// (refused: nothing made), TP_BOUND or TP_NOMEM
+// (refused: nothing made), TP_BOUND or TP_NOMEM; TP_BEFORE: packed against the step before it
 int tp_unpack(const tp_mem *mem, tp_span pack, size_t max, tp_steps *out);
+// the same, one packed against the step before it made from prior, which must be that step's
+// (TP_BEFORE: none, or another)
+int tp_unpack_after(const tp_mem *mem, tp_span pack, size_t max, const tp_prior *prior, tp_steps *out);
+// a pack's first step: its n, and 1 in *after when it is packed against the step before. 0 or
+// TP_NOTSTEP. and how many steps it holds, or 0 (not a pack)
+int tp_pack_first(tp_span pack, uint64_t *n, int *after);
+size_t tp_pack_count(tp_span pack);
 // a span made by tp_pack, let go
 void tp_span_free(const tp_mem *mem, tp_span *s);
 
@@ -243,6 +267,8 @@ size_t tp_log_devices(const tp_log *log);
 const uint8_t *tp_log_have(const tp_log *log, size_t i, uint64_t *have);
 // how many of device's steps are held
 uint64_t tp_log_count(const tp_log *log, const uint8_t device[32]);
+// what a step after device's step n is worked out from: 0; TP_BEFORE: not held, or let go
+int tp_log_prior(const tp_log *log, const uint8_t device[32], uint64_t n, tp_prior *p);
 // step n of device's: its length, the bytes in out when no more than cap; -1: none
 long tp_log_step(const tp_log *log, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap);
 // the run with step from in it, from there: 0 and its end and sig; 1: none held, or none closed.

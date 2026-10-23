@@ -20,6 +20,7 @@ const char *tp_why(int code) {
 		case TP_CHAIN: return "chain";
 		case TP_LAMPORT: return "lamport";
 		case TP_SIGNATURE: return "signature";
+		case TP_BEFORE: return "before";
 		default: return "unknown";
 	}
 }

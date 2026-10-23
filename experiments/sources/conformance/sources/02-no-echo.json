@@ -17,6 +17,14 @@
 		},
 		{ "op": "writes", "holder": "A", "expect": { "count": 2, "nodes": ["N", "M"] } },
 		{ "op": "writes", "holder": "B", "expect": { "count": 2, "nodes": ["M", "N"] } },
-		{ "op": "status", "link": "AB", "expect": { "known": { "a": 2, "b": 2 }, "refused": [] } }
+		{
+			"op": "status",
+			"link": "AB",
+			"expect": {
+				"state": { "code": "in-step", "words": "in step" },
+				"known": { "a": 2, "b": 2 },
+				"refused": []
+			}
+		}
 	]
 }

@@ -3,12 +3,14 @@
 // experiment's own; the graph's side is fixed: writes out through places.watchAll, changes in at a
 // node, a part and patches
 //
-//   const history = createHistory({ table, places })   // made before the graph's first write
-//   createLink(history, createMemory()).start()
+//   const history = createHistory({ table, places, scheduler, scope, scopes, records })
+//   // made before the graph's first write; records: the host's rule, (id, part) recorded or not
+//   createLink(history, createMemory(), { graph }).start()
 //
-// out: each fact as it lands (places.watchAll) at a string id is a write, its parents the part's
-// heads then, and it becomes the one head. a fact with something no encoding has (a function, a
-// symbol) is not named, and is counted in skipped
+// out: each fact as it lands (places.watchAll) at a string id the host's rule records is a write,
+// its parents the part's heads then, and it becomes the one head. a fact with something no
+// encoding has (a function, a symbol) is not named, and is counted: on the history's own node
+// (status.ts' openRecord), SKIPPED, never recorded itself
 //
 // in: put takes a write whose parents are held. on top of the heads (its parents are all of them),
 // its patches land as they are. beside them (made at the same time as another), the part's whole
@@ -24,32 +26,45 @@ import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import apply, { type Patch } from "@ermine/op/apply"
 import type { Fact, Places } from "@ermine/places"
+import type { ScopeNodes } from "@ermine/processes/scopes"
+import type { Scheduler, Scope } from "@ermine/scheduler"
 import type { Key, Table } from "@ermine/table"
 import type { Holder, Outcome } from "./holder.ts"
 import { createLog } from "./log.ts"
+import { type Graph, openRecord, SKIPPED } from "./status.ts"
 import { fresh, name, same, type Write } from "./write.ts"
 
 export type History = Holder & {
 	// the names of a part's heads now, sorted: one, unless writes made at once came in
 	readonly heads: (node: string, part: Key) => string[]
-	// the facts that could not be named
-	readonly skipped: () => number
 	readonly writes: () => Write[]
-	// the history stops recording
+	// its own node: what it could not name (SKIPPED)
+	readonly id: string
+	// the history stops recording; its node goes
 	stop(): void
 }
 
 export function createHistory(
-	setup: {
+	setup: Graph & {
+		scheduler: Pick<Scheduler, "createScope" | "teardown">
+		scopes: Pick<ScopeNodes, "give">
 		table: Pick<Table, "get" | "add" | "del">
 		places: Pick<Places, "watchAll" | "commit">
+		// the scope its node's goes under (the device's)
+		scope: Scope
+		// the host's: whether a fact at (id, part) is recorded. none: every string id
+		records?: (id: string, part: Key) => boolean
 	},
 ): History {
 	const { table, places } = setup
 	const log = createLog()
 	const pokes = new Set<() => void>()
 	const poke = () => [...pokes].forEach((p) => p())
+	// its own node, not a process: it has no state that changes (it records until stopped), only
+	// a record, the facts it could not name
+	const status = openRecord(setup, setup.scope, { sources: "history" })
 	let skipped = 0
+	status.record({ [SKIPPED]: skipped })
 
 	// node → part → the names of its heads
 	const tips = new Map<string, Map<Key, Set<string>>>()
@@ -65,7 +80,8 @@ export function createHistory(
 	let landing: { node: string; part: Key } | undefined
 
 	function record(fact: Fact) {
-		if (typeof fact.id !== "string") return
+		if (typeof fact.id !== "string" || fact.id === status.id) return
+		if (setup.records && !setup.records(fact.id, fact.part)) return
 		if (landing && landing.node === fact.id && landing.part === fact.part) return
 		const heads = headsOf(fact.id, fact.part)
 		let write: Write
@@ -78,7 +94,7 @@ export function createHistory(
 				change: changeOf(fact.change),
 			})
 		} catch {
-			skipped++
+			status.record({ [SKIPPED]: ++skipped })
 			return
 		}
 		log.add(write)
@@ -87,7 +103,7 @@ export function createHistory(
 		poke()
 	}
 
-	const stop = places.watchAll(record)
+	const unwatch = places.watchAll(record)
 
 	// every write of one part, played again in the one order, from nothing: the value it gives
 	function replay(node: string, part: Key): unknown {
@@ -176,9 +192,12 @@ export function createHistory(
 			return () => void pokes.delete(p)
 		},
 		heads: (node, part) => [...headsOf(node, part)].sort(),
-		skipped: () => skipped,
 		writes: log.all,
-		stop,
+		id: status.id,
+		stop() {
+			unwatch()
+			status.close()
+		},
 	}
 }
 

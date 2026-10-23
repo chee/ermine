@@ -4,7 +4,7 @@ import { assert, assertEquals } from "@std/assert"
 import { decode, encode } from "@ermine/encoding/cbor"
 import { createLog, createMemoryStore, type Log } from "./log.ts"
 import { createSync, type Link } from "./sync.ts"
-import { unpack } from "./pack.ts"
+import { type Packed, stepsIn } from "./pack.ts"
 import { hex } from "./step.ts"
 import { createGalaxy } from "./galaxy.ts"
 import { frames, httpLinks, poll } from "./carriers/http.ts"
@@ -51,7 +51,7 @@ function tally(list: Uint8Array[]) {
 	const out: Record<string, number> = { steps: 0 }
 	for (const m of list.map(read)) {
 		out[m.t] = (out[m.t] ?? 0) + 1
-		if (m.t === "run") out.steps += unpack(m.pack).length
+		if (m.t === "run") out.steps += stepsIn(m.pack as Packed)
 	}
 	return out
 }

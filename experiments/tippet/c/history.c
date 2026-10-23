@@ -2,7 +2,6 @@
 // the merge, each entry's steps in order of lamport, then device
 #include "history.h"
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -268,11 +267,11 @@ static block *block_of(const uint8_t *bytes, size_t length) {
 	if (s->items[3]->type == OP_LIST) {
 		// a node relative to the step's device: its id, whole
 		const op_value *r = s->items[3]->items[0];
-		fprintf(stderr, "DEBUG rel count %zu type %d bytes %zu str %s\n", s->items[3]->count, r->type, r->bytes, r->str);
-		char *full = must(TP_OWN_ID + r->bytes);
+		size_t n = TP_OWN_ID + r->bytes;
+		char *full = must(n);
 		memcpy(full, "ermine:ed01", 11), tp_hex(full + 11, s->items[0]->data, 32);
 		memcpy(full + TP_OWN_ID, r->str, r->bytes);
-		op_free(s->items[3]), s->items[3] = op_str_n(full, TP_OWN_ID + r->bytes);
+		op_free(s->items[3]), s->items[3] = op_str_n(full, n);
 		free(full);
 	}
 	b->node = s->items[3]->str, b->part = s->items[4]->str;
@@ -334,7 +333,6 @@ static char *copy(tp_history *h, const char *s) {
 
 static void note(tp_history *h, failures *list, const uint8_t *device, uint64_t n,
 	const char *node, const char *part, const char *why) {
-	fprintf(stderr, "DEBUG note %s %s %s\n", node, part, why);
 	failure *items = grown(h, list->items, &list->room, list->n, sizeof *items);
 	if (!items) return;
 	list->items = items;
@@ -470,7 +468,6 @@ static void write_f(void *data) {
 	tb_key part = tb_string(b->part), id = tb_string(b->node);
 	nd_entry *e = tb_get(h->table, part, id);
 	size_t failed;
-	fprintf(stderr, "DEBUG write %s %s\n", b->part, b->node);
 	if (e) {
 		if ((w->code = nd_update(e, b->patches, b->count, b->header, &failed))) return;
 		// held before it is told, so what is told of it in turn holds its own after it

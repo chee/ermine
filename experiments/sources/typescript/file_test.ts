@@ -20,11 +20,11 @@ Deno.test("a graph's writes saved in a file, and read back by a holder opened la
 	const holder = await openFile(file)
 	a.set("N", 1)
 	a.set("N", 2)
-	await createLink(a.history, holder).sync()
+	await createLink(a.history, holder, { graph: a }).sync()
 	assert(file.bytes !== undefined)
 	const again = await openFile(file)
 	const b = createWorld("B")
-	await createLink(again, b.history).sync()
+	await createLink(again, b.history, { graph: b }).sync()
 	assertEquals(b.value("N"), 2)
 	holder.close()
 	again.close()
@@ -35,7 +35,8 @@ Deno.test("another process writing the file: heard, loaded, and on to the graph 
 	const a = createWorld("A"), b = createWorld("B")
 	// two holders over one file, as two processes would have
 	const mine = await openFile(file), theirs = await openFile(file)
-	const ab = createLink(a.history, mine), bb = createLink(theirs, b.history)
+	const ab = createLink(a.history, mine, { graph: a }),
+		bb = createLink(theirs, b.history, { graph: b })
 	ab.start()
 	bb.start()
 	a.set("N", "from a")
@@ -54,7 +55,7 @@ Deno.test("a file that won't write: refused, nothing held", async () => {
 	const a = createWorld("A")
 	a.set("N", 1)
 	file.fail = true
-	const round = await createLink(a.history, holder).sync()
+	const round = await createLink(a.history, holder, { graph: a }).sync()
 	assertEquals(round.ab.refused.map((r) => r.why.split(":")[0]), [UNWRITABLE])
 	assertEquals((await holder.since!()).writes, [])
 	holder.close()
@@ -77,7 +78,7 @@ Deno.test("drop: the node's writes gone from the file too", async () => {
 	const a = createWorld("A")
 	a.set("N", 1)
 	a.set("M", 1)
-	await createLink(a.history, holder).sync()
+	await createLink(a.history, holder, { graph: a }).sync()
 	await holder.drop("N")
 	const again = await openFile(file)
 	assertEquals((await again.since!()).writes.map((w) => w.node), ["M"])
@@ -97,8 +98,8 @@ Deno.test({
 			b.set("N", "from b")
 			// the other process: b's writes, saved to the file by a holder of its own
 			const other = createWorld("O")
-			await createLink(b.history, other.history).sync()
-			const link = createLink(holder, a.history)
+			await createLink(b.history, other.history, { graph: b }).sync()
+			const link = createLink(holder, a.history, { graph: a })
 			link.start()
 			const writes = JSON.stringify(other.history.writes())
 			const script = `

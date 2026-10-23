@@ -16,8 +16,9 @@
 // { op: "decode", bytes }              → { step } | { refused: true }
 // { op: "hash", bytes }                → { hash }     blake3
 // { op: "sign", seed, bytes }          → { sig }      ed25519 over the bytes
-// { op: "pack", steps }                → { pack }     steps: hex; pack: its cbor
-// { op: "unpack", pack }               → { steps } | { refused: true }
+// { op: "pack", steps, before? }       → { pack }     steps: hex; pack: its cbor; before: hex,
+//                                                      the step before, packed against
+// { op: "unpack", pack, before? }      → { steps } | { refused: true }   before: as pack's
 // { op: "message", message }           → { bytes }    message as on the wire, bytes hex, a run's
 //                                                      pack as its steps: ["run", device, sig, steps]
 // { op: "read", bytes }                → { message } | { refused: true }   as message gives one; a
@@ -92,7 +93,7 @@ import { createHistory } from "./history.ts"
 import { createSync, type Link, type Message, read, type Sync, wire } from "./sync.ts"
 import { createSigner, type Signer } from "./sign.ts"
 import { decodeStep, encodeStep, hashStep, hex, type Step, unhex } from "./step.ts"
-import { pack, unpack } from "./pack.ts"
+import { firstOf, pack, type Packed, priorOf, stepsIn, unpack } from "./pack.ts"
 
 const WHEN = 1_760_000_000
 
@@ -228,10 +229,9 @@ function framesOf(bytes: Uint8Array) {
 		at += 4 + size
 		try {
 			if (isRun(r)) {
-				const m = read(r)
-				if (m?.t !== "run") throw new Error()
-				const steps = unpack(m.pack), from = decodeStep(steps[0]).n
-				out.push(["run", nameOf(m.device), from, from + steps.length - 1])
+				const [, device, , p] = decode(r) as [string, Uint8Array, Uint8Array, Packed]
+				const from = firstOf(p).n
+				out.push(["run", nameOf(hex(device)), from, from + stepsIn(p) - 1])
 			} else {
 				const s = decodeStep(r)
 				out.push(["step", nameOf(s.device), s.n])
@@ -315,8 +315,8 @@ function view(b: Uint8Array): unknown[] {
 		return [m.t, Object.fromEntries(Object.entries(m.have).map(([d, n]) => [nameOf(d), n]))]
 	}
 	if (m.t === "run") {
-		const steps = unpack(m.pack), from = decodeStep(steps[0]).n
-		return [m.t, nameOf(m.device), from, from + steps.length - 1]
+		const from = firstOf(m.pack).n
+		return [m.t, nameOf(m.device), from, from + stepsIn(m.pack) - 1]
 	}
 	if (m.t === "live") return [m.t, m.id, hex(m.data)]
 	return [m.t, nameOf(m.device), m.n]
@@ -398,11 +398,16 @@ async function one(r: Request): Promise<Answer> {
 			return { hash: hex(hashStep(unhex(r.bytes))) }
 		case "sign":
 			return { sig: hex(await (await createSigner(unhex(r.seed))).sign(unhex(r.bytes))) }
-		case "pack":
-			return { pack: hex(encode(pack((r.steps as string[]).map(unhex)) as unknown as Value)) }
+		case "pack": {
+			const before = r.before === undefined ? undefined : priorOf(unhex(r.before))
+			return {
+				pack: hex(encode(pack((r.steps as string[]).map(unhex), before) as unknown as Value)),
+			}
+		}
 		case "unpack":
 			try {
-				return { steps: unpack(decode(unhex(r.pack))).map(hex) }
+				const before = r.before === undefined ? undefined : priorOf(unhex(r.before))
+				return { steps: unpack(decode(unhex(r.pack)), before).map(hex) }
 			} catch {
 				return { refused: true }
 			}

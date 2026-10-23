@@ -2,11 +2,13 @@ import { assert, assertEquals } from "@std/assert"
 import type { Holder } from "./holder.ts"
 import { createLink } from "./link.ts"
 import { createMemory } from "./memory.ts"
+import { get } from "@ermine/places/lib"
+import { KNOWN, readRecord, readState, REFUSED } from "./status.ts"
 import { createWorld } from "./world.ts"
 
 Deno.test("two graphs through a link: each gets what the other wrote", async () => {
 	const a = createWorld("A"), b = createWorld("B")
-	const link = createLink(a.history, b.history)
+	const link = createLink(a.history, b.history, { graph: a })
 	a.set("N", "hi")
 	const one = await link.sync()
 	assertEquals([one.ab.sent, one.ab.taken, one.ba.sent], [1, 1, 0])
@@ -19,7 +21,7 @@ Deno.test("two graphs through a link: each gets what the other wrote", async () 
 
 Deno.test("no echo: nothing goes back to where it came from, nor is named again on landing", async () => {
 	const a = createWorld("A"), b = createWorld("B")
-	const link = createLink(a.history, b.history)
+	const link = createLink(a.history, b.history, { graph: a })
 	a.set("N", 1)
 	b.set("M", 2)
 	const one = await link.sync()
@@ -28,12 +30,12 @@ Deno.test("no echo: nothing goes back to where it came from, nor is named again 
 	assertEquals(b.history.writes().length, 2)
 	const again = await link.sync()
 	assertEquals([again.ab.sent, again.ba.sent, again.ab.passed, again.ba.passed], [0, 0, 0, 0])
-	assertEquals(link.status().known, { a: 2, b: 2 })
+	assertEquals(readRecord(a.places, link.process.id)[KNOWN], { a: 2, b: 2 })
 })
 
 Deno.test("through a holder in memory: A to M to B, and back", async () => {
 	const a = createWorld("A"), b = createWorld("B"), m = createMemory()
-	const am = createLink(a.history, m), mb = createLink(m, b.history)
+	const am = createLink(a.history, m, { graph: a }), mb = createLink(m, b.history, { graph: b })
 	a.set("N", { x: 1 })
 	await am.sync()
 	await mb.sync()
@@ -49,37 +51,37 @@ Deno.test("two holders naming one node: the union, nothing held twice", async ()
 	const p = createWorld("P"), q = createWorld("Q")
 	const h1 = createMemory(), h2 = createMemory()
 	p.set("N", 1)
-	await createLink(p.history, h1).sync()
-	await createLink(p.history, h2).sync()
+	await createLink(p.history, h1, { graph: p }).sync()
+	await createLink(p.history, h2, { graph: p }).sync()
 	await q.history.put(h2.writes())
 	p.set("N", 2)
 	q.set("N", 3)
-	await createLink(p.history, h1).sync()
-	await createLink(q.history, h2).sync()
+	await createLink(p.history, h1, { graph: p }).sync()
+	await createLink(q.history, h2, { graph: q }).sync()
 	assertEquals([h1.writes().length, h2.writes().length], [2, 2])
 
 	const g = createWorld("G"), g2 = createWorld("G2")
-	const r1 = await createLink(h1, g.history).sync()
-	const r2 = await createLink(h2, g.history).sync()
+	const r1 = await createLink(h1, g.history, { graph: g }).sync()
+	const r2 = await createLink(h2, g.history, { graph: g }).sync()
 	assertEquals([r1.ab.taken, r2.ab.taken, r2.ab.passed], [2, 1, 1])
 	assertEquals(g.history.writes().length, 3)
 	assertEquals(g.history.heads("N", "value").length, 2)
 	// the other order: the same value
-	await createLink(h2, g2.history).sync()
-	await createLink(h1, g2.history).sync()
+	await createLink(h2, g2.history, { graph: g2 }).sync()
+	await createLink(h1, g2.history, { graph: g2 }).sync()
 	assertEquals(g2.value("N"), g.value("N"))
 })
 
 Deno.test("a refused put: the link says so, passes it by, and goes on", async () => {
 	const a = createWorld("A")
 	const m = createMemory({ refuse: (w) => w.node === "secret" ? "not-here" : undefined })
-	const link = createLink(a.history, m)
+	const link = createLink(a.history, m, { graph: a })
 	a.set("secret", 1)
 	a.set("N", 1)
 	const round = await link.sync()
 	assertEquals(round.ab.taken, 1)
 	assertEquals(round.ab.refused.map((r) => [r.node, r.why]), [["secret", "not-here"]])
-	assertEquals(link.status().refused.length, 1)
+	assertEquals(readRecord(a.places, link.process.id)[REFUSED], [round.ab.refused[0]])
 	assertEquals(m.writes().map((w) => w.node), ["N"])
 	// not asked again
 	a.set("N", 2)
@@ -91,14 +93,14 @@ Deno.test("a put that throws (it never should) is refused, not thrown", async ()
 	const a = createWorld("A")
 	const bad: Holder = { ...createMemory(), put: () => Promise.reject(new Error("no")) }
 	a.set("N", 1)
-	const round = await createLink(a.history, bad).sync()
+	const round = await createLink(a.history, bad, { graph: a }).sync()
 	assertEquals(round.ab.refused[0].why, "threw: Error: no")
 })
 
 Deno.test("back-pressure: at most limit a leg; behind until caught up", async () => {
 	const a = createWorld("A"), b = createWorld("B")
 	for (let i = 0; i < 5; i++) a.set("N", i)
-	const link = createLink(a.history, b.history, { limit: 2 })
+	const link = createLink(a.history, b.history, { graph: a, limit: 2 })
 	const first = await link.round()
 	assertEquals([first.ab.sent, first.ab.behind], [2, true])
 	assertEquals(b.value("N"), 1)
@@ -109,7 +111,7 @@ Deno.test("back-pressure: at most limit a leg; behind until caught up", async ()
 
 Deno.test("live: started, it syncs whenever either side is poked; stopped, it doesn't", async () => {
 	const a = createWorld("A"), b = createWorld("B")
-	const link = createLink(a.history, b.history)
+	const link = createLink(a.history, b.history, { graph: a })
 	link.start()
 	a.set("N", 1)
 	await link.idle()
@@ -121,7 +123,7 @@ Deno.test("live: started, it syncs whenever either side is poked; stopped, it do
 	a.set("N", 3)
 	await link.idle()
 	assertEquals(b.value("N"), 2)
-	assertEquals(link.status().busy, false)
+	assertEquals(readState(a.places, link.process.id)?.code, "in-step")
 })
 
 Deno.test("a holder that can't list: nothing pulled from it by since; fetch asks it by node", async () => {
@@ -129,9 +131,9 @@ Deno.test("a holder that can't list: nothing pulled from it by since; fetch asks
 	const hidden = createMemory({ lists: false })
 	a.set("N", 1)
 	a.set("M", 1)
-	await createLink(a.history, hidden).sync()
+	await createLink(a.history, hidden, { graph: a }).sync()
 	assertEquals(hidden.writes().length, 2)
-	const link = createLink(hidden, b.history)
+	const link = createLink(hidden, b.history, { graph: b })
 	const round = await link.sync()
 	assertEquals(round.ab.sent, 0)
 	const fetched = await link.fetch("N")
@@ -142,7 +144,7 @@ Deno.test("a holder that can't list: nothing pulled from it by since; fetch asks
 
 Deno.test("drop: let go of, not sent again by a link that knows it was held; a new link sends it", async () => {
 	const a = createWorld("A"), m = createMemory()
-	const link = createLink(a.history, m)
+	const link = createLink(a.history, m, { graph: a })
 	a.set("N", 1)
 	await link.sync()
 	await m.drop("N")
@@ -151,5 +153,49 @@ Deno.test("drop: let go of, not sent again by a link that knows it was held; a n
 	a.set("N", 2)
 	// the second write's parent is gone from m: refused
 	assertEquals((await link.sync()).ab.refused.map((r) => r.why), ["missing-parents"])
-	assertEquals((await createLink(a.history, m).sync()).ab.taken, 2)
+	assertEquals((await createLink(a.history, m, { graph: a }).sync()).ab.taken, 2)
+})
+
+Deno.test("shown: a link is a process under /system/links; its state its computer's value, its records attributes, readable by anyone tracking the graph", async () => {
+	const a = createWorld("A")
+	const m = createMemory({ refuse: (w) => w.node === "secret" ? "not-here" : undefined })
+	const link = createLink(a.history, m, { graph: a, at: ["system", "links", "to-memory"] })
+	const id = link.process.id
+	assertEquals(get(a.places, ["system", "links", "to-memory"]), id)
+	const seen: unknown[] = []
+	a.scheduler.runWithScope(a.scope, () =>
+		a.scheduler.createComputer(
+			() => readState(a.places, id)?.code,
+			(v) => void seen.push(v),
+		))
+	a.scheduler.pulse()
+	a.set("secret", 1)
+	await link.sync()
+	a.scheduler.pulse()
+	const shown = readRecord(a.places, id)
+	assertEquals(shown[KNOWN], { a: 1, b: 0 })
+	assertEquals((shown[REFUSED] as { why: string }[]).map((r) => r.why), ["not-here"])
+	assertEquals(seen, ["not-synced", "syncing", "in-step"])
+	// this device's: never recorded, never sent
+	assert(!a.history.writes().some((w) => w.node === id))
+	// a sync that throws: said on the node
+	const broken = { ...m, since: () => Promise.reject(new Error("gone away")) }
+	const bad = createLink(broken, a.history, { graph: a })
+	await bad.sync().catch(() => {})
+	assertEquals(readState(a.places, bad.process.id), {
+		code: "cant-sync",
+		words: "can't sync",
+		why: "gone away",
+	})
+	// a path taken: thrown
+	let thrown = ""
+	try {
+		createLink(a.history, m, { graph: a, at: ["system", "links", "to-memory"] })
+	} catch (e) {
+		thrown = (e as Error).message
+	}
+	assertEquals(thrown, "taken: /system/links/to-memory")
+	// closed: its node goes
+	link.close()
+	assertEquals([readRecord(a.places, id), readState(a.places, id)], [{}, undefined])
 })

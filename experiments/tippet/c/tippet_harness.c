@@ -757,14 +757,13 @@ static void view(FILE *out, const uint8_t *b, size_t n) {
 		}
 		fputs("}]", out);
 	} else if (tp_is(t, "run")) {
-		tp_steps s;
-		tp_step first;
+		uint64_t first;
+		int after;
 		tp_bytes(&in, 32, &x), tp_bytes(&in, 64, &y);
-		if (tp_unpack(&w.mem, (tp_span){in.p, (size_t)(in.end - in.p)}, MAX, &s)) goto none;
-		tp_step_decode(s.bytes, s.at[1], &first);
+		tp_span pack = {in.p, (size_t)(in.end - in.p)};
+		if (tp_pack_first(pack, &first, &after) || !tp_pack_count(pack)) goto none;
 		fputs("[\"run\",", out), nameof(out, x.p);
-		fprintf(out, ",%llu,%llu]", (unsigned long long)first.n, (unsigned long long)(first.n + s.count - 1));
-		tp_steps_free(&w.mem, &s);
+		fprintf(out, ",%llu,%llu]", (unsigned long long)first, (unsigned long long)(first + tp_pack_count(pack) - 1));
 	} else if (tp_is(t, "live")) {
 		tp_bytes(&in, 8, &x), tp_bytes(&in, 0, &y);
 		fputs("[\"live\",", out), hex(out, x.p, 8), fputc(',', out), hex(out, y.p, y.n), fputc(']', out);
@@ -921,13 +920,15 @@ static void frames(FILE *out, const uint8_t *b, size_t size) {
 		if (!length || length > size - at - 4) break;
 		const uint8_t *r = b + at + 4;
 		tp_step s;
-		tp_steps steps;
+		tp_span pack;
+		tp_prior prior;
+		int has, after;
+		uint64_t first;
 		if (i) fputc(',', out);
-		if (tp_is_run(r, length) && !tp_unpack(&w.mem, (tp_span){r + TP_HEAD, length - TP_HEAD}, MAX, &steps)) {
-			tp_step_decode(steps.bytes, steps.at[1], &s);
+		if (tp_is_run(r, length)) tp_record_pack(r, length, &pack, &prior, &has);
+		if (tp_is_run(r, length) && !tp_pack_first(pack, &first, &after) && tp_pack_count(pack)) {
 			fputs("[\"run\",", out), nameof(out, r + 7);
-			fprintf(out, ",%llu,%llu]", (unsigned long long)s.n, (unsigned long long)(s.n + steps.count - 1));
-			tp_steps_free(&w.mem, &steps);
+			fprintf(out, ",%llu,%llu]", (unsigned long long)first, (unsigned long long)(first + tp_pack_count(pack) - 1));
 		} else if (!tp_step_decode(r, length, &s)) {
 			fputs("[\"step\",", out), nameof(out, s.device), fprintf(out, ",%llu]", (unsigned long long)s.n);
 		} else {
@@ -1042,16 +1043,26 @@ void hh_answer(const op_value *r, FILE *out) {
 		fputs("{\"sig\":", out), hex(out, sig, 64), fputc('}', out);
 	} else if (!strcmp(op, "pack")) {
 		tp_span *s, pack;
+		tp_prior prior;
 		long k = spans(op_get(r, "steps"), &s);
-		int why = k < 0 ? TP_NOTSTEP : tp_pack(&w.mem, s, (size_t)k, MAX, &pack);
+		int why = k < 0 ? TP_NOTSTEP : 0;
+		// before: the step before the first, which it is packed against
+		if (!why && hh_str(r, "before") && ((n = unhex(hh_str(r, "before"), &b)) < 0 || tp_prior_of(b, (size_t)n, &prior)))
+			why = TP_NOTSTEP;
+		if (!why) why = tp_pack_after(&w.mem, hh_str(r, "before") ? &prior : NULL, s, (size_t)k, MAX, &pack);
 		if (why) { hh_error(out, "%s", tp_why(why)); return; }
 		fputs("{\"pack\":", out), hex(out, pack.p, pack.n), fputc('}', out);
 		tp_span_free(&w.mem, &pack);
 	} else if (!strcmp(op, "unpack")) {
 		tp_steps s;
+		tp_prior prior;
+		uint8_t *before;
+		long m = 0;
 		if ((n = unhex(hh_str(r, "pack"), &b)) < 0) { hh_error(out, "not hex"); return; }
-		int why = tp_unpack(&w.mem, (tp_span){b, (size_t)n}, MAX, &s);
-		if (why == TP_NOTSTEP) { fputs("{\"refused\":true}", out); return; }
+		if (hh_str(r, "before") && ((m = unhex(hh_str(r, "before"), &before)) < 0 || tp_prior_of(before, (size_t)m, &prior)))
+			{ hh_error(out, "not a step before"); return; }
+		int why = tp_unpack_after(&w.mem, (tp_span){b, (size_t)n}, MAX, hh_str(r, "before") ? &prior : NULL, &s);
+		if (why == TP_NOTSTEP || why == TP_BEFORE) { fputs("{\"refused\":true}", out); return; }
 		if (why) { hh_error(out, "%s", tp_why(why)); return; }
 		fputs("{\"steps\":", out), steps(out, &s), fputc('}', out);
 		tp_steps_free(&w.mem, &s);
