@@ -21,6 +21,7 @@
 #include "playground/encoding/c/pack.h"
 #include "playground/trust/c/trust.h"
 #include "things.h"
+#include "menu.h"
 
 static const char *const KINDS[3] = {"keys", "screen", "pigs"};
 static const char *const PROGRAMS[3] = {
@@ -259,7 +260,9 @@ static void del_now(void *data) {
 
 // ---- what is said on the screen ----
 
-static void say(int hot, const char *one, const char *two) {
+void den_say(int hot, const char *one, const char *two);
+static void say(int hot, const char *one, const char *two) { den_say(hot, one, two); }
+void den_say(int hot, const char *one, const char *two) {
 	snprintf(me.said[0], sizeof me.said[0], "%s", one);
 	snprintf(me.said[1], sizeof me.said[1], "%s", two ? two : "");
 	me.hot = hot;
@@ -278,7 +281,9 @@ static void name_of(const char *install, char *out, size_t cap) {
 	}
 }
 // the same, for the screen's font: ASCII, short
-static void short_name(const char *install, char *out, size_t cap) {
+void den_short_name(const char *install, char *out, size_t cap);
+static void short_name(const char *install, char *out, size_t cap) { den_short_name(install, out, cap); }
+void den_short_name(const char *install, char *out, size_t cap) {
 	char n[64];
 	name_of(install, n, sizeof n);
 	size_t k = 0;
@@ -833,6 +838,13 @@ static void do_now(void *data) {
 			sw_stop(me.software, id, op_get(a, "reason"));
 			d->out = op_map();
 		}
+	} else if (str_is(op, "menu") && is_str(op_get(a, "name"))) {
+		// a menu item (menu.h): its handler an ask of these, done when it's picked; none: out
+		const op_value *h = op_get(a, "handler");
+		const op_value *hop = is_map(h) ? op_get(h, "op") : NULL;
+		if (h != NULL && h->type != OP_NULL && !(str_is(hop, "start") || str_is(hop, "stop")))
+			d->out = error_of("a menu item's handler: a start or a stop ask");
+		else d->out = menu_ask(d->from, op_get(a, "name")->str, h && h->type != OP_NULL ? h : NULL);
 	} else {
 		char words[64];
 		snprintf(words, sizeof words, "not an ask: %s", is_str(op) ? op->str : "undefined");
@@ -891,6 +903,8 @@ static void keep(const char *install, const char *name) {
 	put("value", me.keys_node, now);
 }
 
+static char **menued;
+static size_t nmenued;
 // one ask in the inbox (host.ts' answering): for here; a pair from whom it says, else put to a
 // person; the rest from a den in this den's keys, signed by its session, then done; the answer
 // beside it
@@ -961,6 +975,11 @@ static void answering(const char *ask, const op_value *e) {
 		kind_of(op_get(a, "runner"), kind, sizeof kind);
 	}
 	op_value *said = op_ref(out);
+	if (str_is(op, "menu")) {
+		menued = realloc(menued, (nmenued + 1) * sizeof *menued);
+		if (menued == NULL) abort();
+		menued[nmenued++] = xstrdup(ask);
+	}
 	answer_with(ask, out);
 	// told, in words
 	char one[64], two[64];
@@ -985,6 +1004,12 @@ static void answering(const char *ask, const op_value *e) {
 	} else if (is_str(refused)) {
 		snprintf(one, sizeof one, "%s's ask: no,", shown);
 		say(1, one, refused->str);
+	} else if (str_is(op, "menu")) {
+		const op_value *h = op_get(a, "handler");
+		snprintf(one, sizeof one, h && h->type != OP_NULL ? "%s put in the menu:" : "%s took out of the menu:",
+			shown);
+		snprintf(two, sizeof two, "\"%.24s\" (G0)", op_get(a, "name")->str);
+		say(0, one, two);
 	} else if (str_is(op, "start")) {
 		snprintf(one, sizeof one, "%s started", shown);
 		snprintf(two, sizeof two, "a %s here", kind[0] ? kind : "thing");
@@ -1053,11 +1078,32 @@ static sc_out inbox_f(void *previous, void *data) {
 	return (sc_out){.kind = SC_VALUE, .value = v ? op_ref((op_value *)v) : op_null()};
 }
 
+// the menu items paired dens put in before this boot (their asks answered {}), in again: checked as
+// when they came (made out to here, from a den in keys, signed by its session)
+static void menu_again(const char *ask, const op_value *e) {
+	const op_value *a = op_get(e, "ask"), *c = op_get(e, "claim"), *sig = op_get(e, "sig"), *ans = op_get(e, "answer");
+	if (!is_map(a) || !str_is(op_get(a, "op"), "menu") || !is_map(ans) || ans->count != 0 || !is_map(c)) return;
+	for (size_t k = 0; k < nmenued; k++)
+		if (strcmp(menued[k], ask) == 0) return;
+	menued = realloc(menued, (nmenued + 1) * sizeof *menued);
+	if (menued == NULL) abort();
+	menued[nmenued++] = xstrdup(ask);
+	const op_value *from = op_get(a, "from"), *session = op_get(c, "session"), *vouch = op_get(c, "vouch");
+	const op_value *name = op_get(a, "name"), *h = op_get(a, "handler");
+	if (!is_str(from) || !is_str(name) || !str_is(op_get(a, "to"), me.node) || !str_is(op_get(c, "install"), from->str) ||
+		!is_str(session) || vouch == NULL || vouch->type != OP_BYTES || sig == NULL || sig->type != OP_BYTES ||
+		!trusts(from->str) || !signed_by(me.keys, from->str, a, session, vouch, sig))
+		return;
+	op_value *r = menu_ask(from->str, name->str, is_map(h) ? h : NULL);
+	op_free(r);
+}
+
 static char *inbox_act(void *value, void *previous, void *data) {
 	(void)previous, (void)data;
 	const op_value *v = value;
 	for (size_t i = 0; is_map(v) && i < v->count; i++) {
 		const op_value *e = v->items[i];
+		if (is_map(e) && op_get(e, "answer") != NULL) menu_again(v->keys[i], e);
 		if (!is_map(e) || op_get(e, "answer") != NULL) continue;
 		int seen = 0;
 		for (size_t k = 0; k < me.nanswered && !seen; k++) seen = strcmp(me.answered[k], v->keys[i]) == 0;
@@ -1342,6 +1388,8 @@ int den_boot(const inst_install *install, const char *code, const char *dir, int
 	for (int i = 0; i < 3; i++) put1("children", me.node, names[i], op_str(ids[i]));
 	if (tb_get(me.w.table, tb_string("value"), tb_string(me.inbox)) == NULL) put("value", me.inbox, op_map());
 	if (!trusts(me.node)) put1("value", me.keys_node, me.node, map1("name", op_str("chee's cardputer")));
+	// the G0 menu, /system/menu, before the inbox is read (its items paired dens put in, in again)
+	menu_start();
 	sc_run_with_scope(me.w.host, effects, NULL);
 	sc_run_with_scope(me.w.host, start_things, NULL);
 	host_settle();
@@ -1408,6 +1456,11 @@ void den_band(void) {
 	int top = FB_H - 10 * n - 1;
 	fb_rect(0, top, FB_W, FB_H - top, hot ? FB_CHERRY : FB_INK);
 	for (int i = 0; i < n; i++) fb_text(2, top + 1 + 10 * i, lines[i], FB_WHITE, 1);
+	// the room's code, always, at the top right
+	if (me.room[0]) {
+		fb_rect(FB_W - 44, 1, 42, 11, FB_WHITE);
+		fb_text(FB_W - 39, 3, me.room, FB_CHERRY, 1);
+	}
 	memcpy(me.shown, lines, sizeof me.shown);
 	me.shown_hot = hot;
 }
@@ -1564,4 +1617,44 @@ void den_print(void) {
 	printf("den %.8s in room %s (%s): %llu steps of its own, %zu devices, tippet heap %zu (most %zu)\n", me.id,
 		me.room, me.net, (unsigned long long)tp_log_count(me.log, me.install.key), tp_log_devices(me.log), now,
 		most);
+}
+
+// ---- the menu's: a paired den's item picked, and a room left ----
+
+op_value *den_do(const char *from, const char *name, const op_value *handler) {
+	char shown[16], one[64], two[64];
+	short_name(from, shown, sizeof shown);
+	if (!trusts(from)) {
+		snprintf(one, sizeof one, "\"%.20s\" is %s's:", name, shown);
+		say(1, one, "not paired now, so not done");
+		frame_again();
+		return refusal(shown, "not-in-keys");
+	}
+	doing x = {handler, from, NULL};
+	sc_run_with_scope(me.w.host, do_now, &x);
+	host_settle();
+	const op_value *refused = op_get(x.out, "refused"), *error = op_get(x.out, "error");
+	char kind[24] = "";
+	kind_of(op_get(handler, "runner"), kind, sizeof kind);
+	snprintf(one, sizeof one, "%.24s:", name);
+	if (is_str(error)) snprintf(two, sizeof two, "%s", error->str);
+	else if (is_str(refused)) snprintf(two, sizeof two, "no, %s", refused->str);
+	else if (str_is(op_get(handler, "op"), "start")) snprintf(two, sizeof two, "a %s started", kind[0] ? kind : "thing");
+	else snprintf(two, sizeof two, "a thing stopped");
+	say(is_str(error) || is_str(refused), one, two);
+	frame_again();
+	return x.out;
+}
+
+void den_leave(void) {
+	if (me.sync) {
+		op_value *m = map1("den", op_str(me.id));
+		op_set(m, "bye", op_bool(1));
+		size_t n;
+		uint8_t *b = encoded(m, &n);
+		if (b) tp_sync_live(me.sync, b, n);
+		free(b);
+		op_free(m);
+	}
+	if (me.store && me.store->sync && me.store->sync(me.store->self)) fprintf(stderr, "den: the log wasn't synced to flash\n");
 }
