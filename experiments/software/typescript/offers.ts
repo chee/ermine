@@ -30,12 +30,15 @@ import { REASONS, type Runner } from "./run.ts"
 
 ours.add(import.meta.url)
 
-// the attributes of an offer, as nodes carry them
-export const TAKES = "ermine.runner.takes"
+// the attributes of an offer, as nodes carry them. takes and gives are programs' names for now
+// (@ermine/programs' ATTRIBUTES), one set for both: a runner's and a compiler's takes, the UTIs it
+// takes (a list; one string: a list of one), a type fitting when it conforms to one; a compiler's
+// gives, the UTI it gives. each name said here once
+export const TAKES = "ermine.programs.takes"
 export const API = "ermine.runner.api"
 export const WHERE = "ermine.runner.where"
-export const COMPILER_TAKES = "ermine.compiler.takes"
-export const GIVES = "ermine.compiler.gives"
+export const COMPILER_TAKES = "ermine.programs.takes"
+export const GIVES = "ermine.programs.gives"
 export const KIND = "ermine.surface.kind"
 export const SIZE = "ermine.surface.size"
 
@@ -50,6 +53,10 @@ export type Offered = {
 	// the owner's node id
 	readonly by: Id
 }
+
+// a takes as a list of its strings: a string, a list of one; anything else, none
+export const takesOf = (v: unknown): string[] =>
+	typeof v === "string" ? [v] : Array.isArray(v) ? v.filter((x) => typeof x === "string") : []
 
 // a runner node's value as a Runner: a map's or function's own start (load, api), else a
 // function as its start; none: undefined

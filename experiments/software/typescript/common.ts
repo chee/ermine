@@ -41,7 +41,7 @@ const resolved = (name: string): string[] => {
 export const through = [...resolved("@ermine/scheduler"), ...resolved("@ermine/processes/start")]
 
 // an owner's facts: its place, its box, its args and cwd (a process's), the folders of what it
-// offers, by kind, its offers in order, the loads it holds in order
+// offers, by kind, its offers in order, its holds on loads in order
 export type Owner = Place & {
 	readonly under: Scope
 	readonly box: Box
@@ -51,8 +51,17 @@ export type Owner = Place & {
 	readonly offers: Offer[]
 	readonly loads: Held[]
 }
-// a load's live form, held until let go
-export type Held = { readonly live: unknown; released: boolean }
+// a load, shared by every owner holding it: its key (loads' key), its live form, its scope (what
+// its load made goes with it), the holds on it; gone: let go, out of the shared ones
+export type Load = {
+	readonly key: string
+	readonly live: unknown
+	readonly scope: Scope
+	readonly holds: Set<Held>
+	gone: boolean
+}
+// one owner's hold on a load, until let go
+export type Held = { readonly load: Load; released: boolean }
 // an offer: its node's scope; why: the reason it is withdrawn with (none: "runner-stopped")
 export type Offer = Offered & {
 	readonly owner: Owner
@@ -91,6 +100,8 @@ export type Ctx = {
 	readonly running: Running[]
 	readonly byId: Map<Id, Running>
 	readonly offers: Map<Id, Offer>
+	// the loads standing, by key, shared by their holders
+	readonly loads: Map<string, Load>
 	readonly ownerOf: (by: Place) => Owner
 }
 
@@ -100,27 +111,33 @@ export const isMap = (v: unknown): v is Record<string, unknown> =>
 export const bad = (name: unknown) =>
 	typeof name !== "string" || name === "" || name === "." || name === ".." || name === "/"
 
-// a held load let go: out of its holder's list, its live form disposed (if it can be)
-export function drop(o: Owner, h: Held) {
+// a hold let go: out of its holder's list, out of its load's holds; the last one: the load's scope
+// torn down, so the load goes (run.ts' unload)
+export function drop(s: Scheduler, o: Owner, h: Held) {
 	if (h.released) return
 	h.released = true
 	const i = o.loads.indexOf(h)
 	if (i !== -1) o.loads.splice(i, 1)
-	const v = h.live
-	const dispose = typeof v === "function" || isMap(v)
-		? (v as { [Symbol.dispose]?: unknown })[Symbol.dispose]
-		: undefined
-	if (typeof dispose === "function") dispose.call(v)
+	h.load.holds.delete(h)
+	if (h.load.holds.size === 0) s.teardown(h.load.scope)
 }
 
-// at an owner's scope's teardown every load it holds let go, newest first (the first error thrown
+// a live form's dispose called, if it has one
+export function dispose(v: unknown) {
+	const f = typeof v === "function" || isMap(v)
+		? (v as { [Symbol.dispose]?: unknown })[Symbol.dispose]
+		: undefined
+	if (typeof f === "function") f.call(v)
+}
+
+// at an owner's scope's teardown every hold it has let go, newest first (the first error thrown
 // after)
 export function holder(s: Scheduler, o: Owner) {
 	s.registerTeardown(o.scope, () => {
 		let failed: { error: unknown } | undefined
 		for (const h of [...o.loads].reverse()) {
 			try {
-				drop(o, h)
+				drop(s, o, h)
 			} catch (error) {
 				failed ??= { error }
 			}
