@@ -21,6 +21,8 @@
 #include "freertos/task.h"
 #include "host.h"
 #include "keys.h"
+#include "menu.h"
+#include "driver/gpio.h"
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "poll.h"
@@ -60,13 +62,14 @@ static int wifi;
 // the picture the den's screen shows, drawn again on the way back from the shell
 static void (*shown)(void);
 
+// the menu (G0) over whatever the den shows, while it is open
 void frame_show(void (*paint)(void)) {
 	shown = paint;
-	if (dens_mode) screen_frame(paint);
+	if (dens_mode) screen_frame(menu_open() ? menu_paint : paint);
 }
 
 void frame_again(void) {
-	if (shown && dens_mode) screen_frame(shown);
+	if (dens_mode && (shown || menu_open())) screen_frame(menu_open() ? menu_paint : shown);
 }
 
 void den_random(uint8_t *out, size_t n) { esp_fill_random(out, n); }
@@ -164,6 +167,8 @@ static void paint_not_up(void) {
 // a key from the keyboard: tab says yes to a pair ask waiting, esc no; esc else turns the mode
 // (with the shell on); else to the shell, or to /home/keys
 static void pressed(api *keyboard_api, const char *k) {
+	// the menu, open, takes the keys (not tab: a pair ask's yes)
+	if (dens_mode && menu_key(k)) return;
 	if (strcmp(k, "tab") == 0) {
 		den_trust_last();
 		return;
@@ -188,7 +193,17 @@ static void pressed(api *keyboard_api, const char *k) {
 	else if (strlen(k) == 1) things_key(k);
 }
 
-// the room's code: made once (four of DEN_LETTERS, at random), kept in NVS, the same after a restart
+// whether a code is a room's: 4 of DEN_LETTERS
+static int is_code(const char *c) {
+	if (strlen(c) != 4) return 0;
+	for (int i = 0; i < 4; i++)
+		if (strchr(DEN_LETTERS, c[i]) == NULL) return 0;
+	return 1;
+}
+
+// the room's code, kept in NVS ("dens"/"room"): the one there, else menuconfig's
+// (CONFIG_CARDPUTER_ROOM), else four of DEN_LETTERS at random; kept from then on. the menu's join
+// and new room change it (room_go)
 static void room_code_of(char out[5]) {
 	nvs_handle_t h;
 	size_t n = 5;
@@ -196,18 +211,40 @@ static void room_code_of(char out[5]) {
 		strcpy(out, "ACDE");
 		return;
 	}
-	// menuconfig's room, when it names one: kept from now on
-	if (strlen(CONFIG_CARDPUTER_ROOM) == 4) {
-		snprintf(out, 5, "%s", CONFIG_CARDPUTER_ROOM);
-		nvs_set_str(h, "room", out);
-		nvs_commit(h);
-	} else if (nvs_get_str(h, "room", out, &n) != ESP_OK || strlen(out) != 4) {
-		for (int i = 0; i < 4; i++) out[i] = DEN_LETTERS[esp_random() % 16];
-		out[4] = 0;
+	if (nvs_get_str(h, "room", out, &n) != ESP_OK || !is_code(out)) {
+		if (is_code(CONFIG_CARDPUTER_ROOM)) snprintf(out, 5, "%s", CONFIG_CARDPUTER_ROOM);
+		else {
+			for (int i = 0; i < 4; i++) out[i] = DEN_LETTERS[esp_random() % 16];
+			out[4] = 0;
+		}
 		nvs_set_str(h, "room", out);
 		nvs_commit(h);
 	}
 	nvs_close(h);
+}
+
+// to another room: kept in NVS, the den's bye said and its log synced, a moment for the bye to go,
+// then a restart, which boots the den in it (its own folder, /f/t2<code>: a room it was in before
+// goes on from its last step)
+void room_go(const char *code) {
+	nvs_handle_t h;
+	int kept = 0;
+	if (is_code(code) && nvs_open("dens", NVS_READWRITE, &h) == ESP_OK) {
+		kept = nvs_set_str(h, "room", code) == ESP_OK && nvs_commit(h) == ESP_OK;
+		nvs_close(h);
+	}
+	if (!kept) {
+		den_say(1, "the room wasn't kept", "so this den stays here");
+		return;
+	}
+	printf("den: to room %s: restarting\n", code);
+	den_leave();
+	for (int i = 0; i < 40; i++) {
+		if (wifi) carry_turn(esp_timer_get_time() / 1000);
+		vTaskDelay(pdMS_TO_TICKS(10));
+	}
+	fflush(stdout);
+	esp_restart();
 }
 
 // the heap's least yet, said at a stage of the den's life
@@ -223,6 +260,9 @@ void app_main(void) {
 	shell_on = CONFIG_CARDPUTER_WIFI_SSID[0] == 0;
 	screen_init();
 	keys_init();
+	// G0, the BOOT button: the menu (low when pressed)
+	gpio_config_t g0 = {.pin_bit_mask = 1ULL << 0, .mode = GPIO_MODE_INPUT, .pull_up_en = GPIO_PULLUP_ENABLE};
+	gpio_config(&g0);
 	host_init();
 	// the keyboard's process (/keyboard) is the shell's only: with WiFi, keys go to the den's keys thing
 	api *keyboard_api = shell_on ? host_start("keyboard", keyboard) : NULL;
@@ -288,6 +328,11 @@ void app_main(void) {
 		heap_caps_monitor_local_minimum_free_size_start();
 		const char *k;
 		while ((k = keys_next())) pressed(keyboard_api, k), host_settle();
+		// G0 pressed (down for 2 loops): the menu opened or shut
+		static int g0_low, g0_was;
+		g0_low = gpio_get_level(0) == 0 ? g0_low + 1 : 0;
+		if (g0_low == 2 && !g0_was && dens_mode) menu_toggle();
+		g0_was = g0_low >= 2;
 		char typed[256];
 		int n;
 		while ((n = usb_serial_jtag_read_bytes(typed, sizeof typed, 0)) > 0) {
@@ -296,6 +341,15 @@ void app_main(void) {
 				if (typed[i] == '\n' && i && typed[i - 1] == '\r') continue;
 				if (typed[i] == '\t') {
 					den_trust_last();
+					continue;
+				}
+				// ctrl-g: G0, the menu
+				if (typed[i] == 0x07) {
+					menu_toggle();
+					continue;
+				}
+				if (menu_open() && (k = serial_key(typed[i])) != NULL && menu_key(k)) {
+					host_settle();
 					continue;
 				}
 				if (typed[i] == 0x1b && den_pair_waiting()) {

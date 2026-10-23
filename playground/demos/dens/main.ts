@@ -742,8 +742,11 @@ function slotOf(f: Frame, t: Thing, live: Set<string>): number {
 }
 
 // ---- things: one box each ----
+type Edge = "left" | "right" | "top" | "bottom"
 type Shown = {
 	box: Box
+	// a speaker's: the card's edge it is on
+	edge?: Edge
 	// the thing's node now: a rewire starts it again under a new id, at the same spot, in the same box
 	me: { id: string }
 	// where the page last put it (dragged elsewhere since: left there)
@@ -1284,10 +1287,19 @@ function voicesFor(icon: HTMLElement, v: View, me: { id: string }) {
 		}
 		pop.append(b)
 	}
+	// it opens inward, into the card, from the edge the speaker is on
+	const edge = icon.closest<HTMLElement>(".box")?.dataset.edge ?? "left"
 	const r = icon.getBoundingClientRect(), p = page.getBoundingClientRect()
-	pop.style.left = `${r.right - p.left + 6}px`
-	pop.style.top = `${r.top - p.top - 4}px`
 	page.append(pop)
+	const pw = pop.offsetWidth, ph = pop.offsetHeight
+	const x = edge === "left"
+		? r.right + 6
+		: edge === "right"
+		? r.left - 6 - pw
+		: r.left + r.width / 2 - pw / 2
+	const y = edge === "top" ? r.bottom + 6 : edge === "bottom" ? r.top - 6 - ph : r.top - 4
+	pop.style.left = `${x - p.left}px`
+	pop.style.top = `${y - p.top}px`
 	voicePop = pop
 	;(pop.firstElementChild as HTMLElement).focus()
 }
@@ -1684,12 +1696,12 @@ function render() {
 			const g = groupOf(f, t)
 			const slot = f.slots.get(`${g} ${t.at.join("/")}`)
 			// the speaker: on the card's left edge, low down; the rest in their slots
-			// the speaker: set into the card's left edge, near the top; the rest in their slots
-			const px = slot === undefined ? f.x - 30 : f.x + 20 + (slot % COLS) * SLOT.w
-			const py = slot === undefined
-				? f.y + 70
-				: f.y + f.origin[g] + Math.floor(slot / COLS) * SLOT.h
+			// the speaker: on its card's edge (placed below, once every card is); the rest in slots
 			let s = shown.get(spot)
+			const px = slot === undefined ? s?.placed.x ?? f.x - 30 : f.x + 20 + (slot % COLS) * SLOT.w
+			const py = slot === undefined
+				? s?.placed.y ?? f.y + 70
+				: f.y + f.origin[g] + Math.floor(slot / COLS) * SLOT.h
 			if (s) {
 				const p = s.box.pos()
 				if (p.x === s.placed.x && p.y === s.placed.y && (p.x !== px || p.y !== py)) {
@@ -1719,6 +1731,39 @@ function render() {
 			s.box.code(thingCode(v, t))
 			s.box.tone(!v.alive ? "dim" : s.box === picked ? "pick" : undefined)
 			lock(s.box, locked(v))
+		}
+	}
+	// each den's speaker on the edge of its card that faces the middle of the other cards (no
+	// others: the left), near the top of a side edge or the middle of the top or bottom one. moved
+	// only when that changes: as cards move, come or go
+	for (const v of vs) {
+		const t = v.things.find((x) => x.kind === "speaker")
+		const s = t && shown.get(spotOf(v, t)), f = frames.get(v.who)
+		if (!s || !f) continue
+		const rest = vs.filter((o) => o.who !== v.who).map((o) => frames.get(o.who)!)
+		let edge: Edge = "left"
+		if (rest.length) {
+			const dx = rest.reduce((a, o) => a + o.x + o.w / 2, 0) / rest.length - (f.x + f.w / 2)
+			const dy = rest.reduce((a, o) => a + o.y + o.h / 2, 0) / rest.length - (f.y + f.h / 2)
+			edge = Math.abs(dx) >= Math.abs(dy)
+				? (dx > 0 ? "right" : "left")
+				: (dy > 0 ? "bottom" : "top")
+		}
+		const w = s.box.el.offsetWidth || 50, ht = s.box.el.offsetHeight || 28
+		const at = edge === "left"
+			? { x: f.x - 30, y: f.y + 70 }
+			: edge === "right"
+			? { x: f.x + f.w + 30 - w, y: f.y + 70 }
+			: { x: f.x + f.w / 2 - w / 2, y: edge === "top" ? f.y - ht / 2 : f.y + f.h - ht / 2 }
+		if (s.edge !== edge) {
+			s.edge = edge
+			board.face(s.box.port("in"), edge === "right" ? "right" : "left")
+			s.box.el.dataset.edge = edge
+		}
+		const p = s.box.pos()
+		if (p.x !== at.x || p.y !== at.y) {
+			s.box.move(at.x, at.y)
+			s.placed = { ...at }
 		}
 	}
 	// a reader starting again keeps its box meanwhile (a stop answered before its start)

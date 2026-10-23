@@ -2350,7 +2350,6 @@ button.voice:disabled {
 .thing-speaker .box-head,
 .thing-speaker .box-path,
 .thing-speaker .box-back,
-.thing-speaker .box-outs,
 .thing-speaker .port-label {
 	display: none !important;
 }
