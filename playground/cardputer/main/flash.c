@@ -109,7 +109,26 @@ void flash_sweep(void) {
 	struct dirent *e;
 	char dir[300], file[600];
 	while ((e = readdir(d)) != NULL) {
-		if (strncasecmp(e->d_name, "t2", 2) == 0 || e->d_name[0] == '.') continue;
+		if (strncasecmp(e->d_name, "t2", 2) == 0) {
+			// a room's log: its files' bytes, said
+			snprintf(dir, sizeof dir, "%s/%s", FLASH_DIR, e->d_name);
+			DIR *in = opendir(dir);
+			long total = 0;
+			char each[160] = "";
+			struct dirent *f;
+			struct stat st;
+			while (in && (f = readdir(in)) != NULL) {
+				snprintf(file, sizeof file, "%s/%s", dir, f->d_name);
+				if (f->d_name[0] == '.' || stat(file, &st)) continue;
+				total += (long)st.st_size;
+				size_t l = strlen(each);
+				snprintf(each + l, sizeof each - l, " %s %ld", f->d_name, (long)st.st_size);
+			}
+			if (in) closedir(in);
+			printf("flash: %s: %ld bytes:%s\n", dir, total, each);
+			continue;
+		}
+		if (e->d_name[0] == '.') continue;
 		snprintf(dir, sizeof dir, "%s/%s", FLASH_DIR, e->d_name);
 		DIR *in = opendir(dir);
 		if (in == NULL) continue;

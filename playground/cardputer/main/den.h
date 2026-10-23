@@ -85,6 +85,10 @@ void den_short_name(const char *install, char *out, size_t cap);
 // a menu item a paired den added (menu.h), picked: its handler (a start or stop ask) done as if
 // from asked it now, refused when from isn't paired now; said in words. its answer, new
 op_value *den_do(const char *from, const char *name, const op_value *handler);
+// this den's step n (0: its last) out of its log: its length, the bytes in out when they fit; -1:
+// none. the key it signs with (the bench's)
+long den_own_step(uint64_t n, uint8_t *out, size_t cap);
+const uint8_t *den_seed(void);
 // the den going (a room switched): a bye said, the log synced to flash
 void den_leave(void);
 // the platform's: the screen drawn again (the last picture, with the band); n random bytes

@@ -68,6 +68,12 @@
 //           cardputer: tab yes, esc no), none until then; from a den in authorized_keys already:
 //           { pair: "yes" } at once
 //   unpair  {} → {}
+//   menu    { name: 1 to 24 printable ASCII, no "/", handler?: a start or a stop, as above (its op
+//           and the op's fields) } → {} | { refused: "taken", name } (the den's own item, or another
+//           den's) | { error: <words> }. the cardputer's G0 menu (/system/menu): an item named name,
+//           from the asker. picked: handler done as if the asker asked it then (not-in-keys once
+//           unpaired). no handler: its item taken out. its {}-answered menu asks put in again at
+//           each boot, in the order they were made. (no browser page asks it yet)
 // and to any: { refused: "not-trusted", who: <the asker's name>, why } or { error: <words> }
 // the inbox's checks, in order, the first that fails its why:
 //   to is not this den's node, or claim.install is not from              "not-for-here"
