@@ -126,12 +126,14 @@ int tp_verify(const uint8_t device[32], const uint8_t *m, size_t n, const uint8_
 
 // ---- store
 
-// a step's place: its device and n
+// a record's steps: their device, and the n of the first and of the last. a record is a run as it
+// came or as it goes, its run message (../WIRE.md messages), or a step of this device's kept alone
+// until its run closes
 typedef struct {
 	const uint8_t *device;
-	uint64_t n;
+	uint64_t first, last;
 } tp_at;
-// told each record held, in order: 1 and *at when it is a step to keep, 0 when not
+// told each record held, in order: 1 and *at when it holds steps to keep, 0 when not
 typedef int (*tp_read)(void *ctx, const uint8_t *record, size_t length, tp_at *at);
 
 // where a log keeps itself: records appended in order, the steps among them got again by place,
@@ -139,10 +141,16 @@ typedef int (*tp_read)(void *ctx, const uint8_t *record, size_t length, tp_at *a
 typedef struct tp_store {
 	void *self;
 	int (*load)(void *self, tp_read read, void *ctx);
-	// a record after every one before it; at: the step it is, or NULL
+	// a record after every one before it; at: the steps it holds, in place of any held that it
+	// covers; NULL: none
 	int (*append)(void *self, const uint8_t *record, size_t length, const tp_at *at);
-	// a step's length, or -1 (not held); its bytes into out when no more than cap
+	// step n's length, or -1 (not held); its bytes into out when no more than cap, as if kept
+	// alone: out of its run, unpacked
 	long (*get)(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap);
+	// the record holding step n: its length, or -1 (not held); its first and last; its first cap
+	// bytes, at most, into out
+	long (*run)(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap,
+		uint64_t *first, uint64_t *last);
 	// the snapshot, in place of the one before (NULL: none kept)
 	int (*snapshot)(void *self, const uint8_t *bytes, size_t length);
 	// the snapshot's length, or -1 (none); its bytes into out when no more than cap
@@ -153,6 +161,9 @@ typedef struct tp_store {
 	int (*sync)(void *self);
 	// all it holds let go, the store too
 	void (*close)(void *self);
+	// forgetting (history.h): the records holding device's steps through n no longer got, their
+	// bytes left where they are: how many (NULL: it never lets any go)
+	long (*drop)(void *self, const uint8_t device[32], uint64_t n);
 } tp_store;
 
 // in memory: at most max bytes of records. NULL: no memory
@@ -205,28 +216,35 @@ typedef struct {
 	tp_span node, part, patches, who;
 	uint64_t when;
 } tp_write;
-// a step of this device's, lamport one past the highest seen: its n and lamport. a run closes
-// at 32 steps or 2048 bytes since the last close
+// a step of this device's, lamport one past the highest seen: its n and lamport. kept alone until
+// its run closes, at 32 steps or 2048 bytes since the last close
 int tp_log_write(tp_log *log, const tp_write *w, uint64_t *n, uint64_t *lamport);
 
-// the devices held: the i-th's key, and how many of its steps are vouched for (this device's: all)
+// the devices held: the i-th's key, and how many of its steps are held (another's: all signed)
 size_t tp_log_devices(const tp_log *log);
 const uint8_t *tp_log_have(const tp_log *log, size_t i, uint64_t *have);
-// how many of device's steps are held, signed or not
+// how many of device's steps are held
 uint64_t tp_log_count(const tp_log *log, const uint8_t device[32]);
 // step n of device's: its length, the bytes in out when no more than cap; -1: none
 long tp_log_step(const tp_log *log, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap);
 // the run with step from in it, from there: 0 and its end and sig; 1: none held, or none closed.
 // this device's run still open is closed now, and its steps synced first (1: they couldn't be)
 int tp_log_run(tp_log *log, const uint8_t device[32], uint64_t from, uint64_t *to, uint8_t sig[64]);
+// that run as held, its run message, when it is held from from: its length, the bytes in out when
+// no more than cap; -1: it isn't (pack it from from)
+long tp_log_message(tp_log *log, const uint8_t device[32], uint64_t from, uint8_t *out, size_t cap);
 // another's run, its steps in order and the sig over the last: the steps added, or a refusal
-// (TP_OWN, TP_GAP, TP_CHAIN, TP_LAMPORT, TP_SIGNATURE) or another code
+// (TP_OWN, TP_GAP, TP_CHAIN, TP_LAMPORT, TP_SIGNATURE) or another code. came: the run message
+// they came in (p NULL: none), held as it is when every step is new; else what is new is packed
 long tp_log_take(tp_log *log, const uint8_t device[32], const tp_span *steps, size_t n,
-	const uint8_t sig[64]);
+	const uint8_t sig[64], tp_span came);
 // the history's snapshot into the store, in place of the one before: 0 or a code
 int tp_log_snapshot(tp_log *log, const uint8_t *bytes, size_t length);
 // the snapshot: its length, the bytes in out when no more than cap; -1: none
 long tp_log_snapped(const tp_log *log, uint8_t *out, size_t cap);
+// forgetting (history.h): device's steps through n no longer got from the store, and so never
+// sent; said in a record, so a load lets them go too. 0 or a code
+int tp_log_drop(tp_log *log, const uint8_t device[32], uint64_t n);
 
 // ---- sync
 
@@ -274,6 +292,12 @@ void tp_sync_receive(tp_sync *s, tp_link *l, const uint8_t *bytes, size_t length
 void tp_sync_told(void *ctx, const uint8_t device[32], uint64_t from, size_t count);
 // a live thing to every link: 0, or TP_NOMEM / TP_BOUND
 int tp_sync_live(tp_sync *s, const uint8_t *data, size_t length);
+// forgetting (history.h): l's other side keeps every run it is sent (galaxy), as the host knows
+void tp_sync_keeper(tp_sync *s, tp_link *l);
+// forgetting: how many of device's steps have passed on. another's: as many as every link has, or
+// has been sent (a broadcast is sent only this device's own; one that refused them is sent no
+// more); none without a link. this device's own: as many as a link to a keeper last said it holds
+uint64_t tp_sync_passed(const tp_sync *s, const uint8_t device[32]);
 
 // ---- http long-poll
 

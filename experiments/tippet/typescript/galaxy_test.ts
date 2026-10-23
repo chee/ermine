@@ -79,20 +79,20 @@ Deno.test("a file store: records and snapshot back after a restart, a torn tail 
 	const store = fileStore(dir)
 	await store.load(() => undefined)
 	await store.append(new Uint8Array([1]))
-	await store.append(new Uint8Array([2, 3]), ["d", 1])
+	await store.append(new Uint8Array([2, 3]), ["d", 1, 1])
 	await store.snapshot(new Uint8Array([9]))
 	await Deno.writeFile(`${dir}/log`, new Uint8Array([0, 0, 0, 7, 4]), { append: true })
 	const again = fileStore(dir), records: Uint8Array[] = []
 	const snapshot = await again.load((
 		r,
-	) => (records.push(r), r.length === 2 ? ["d", 1] : undefined))
+	) => (records.push(r), r.length === 2 ? ["d", 1, 1] : undefined))
 	assertEquals({ records, snapshot }, {
 		records: [new Uint8Array([1]), new Uint8Array([2, 3])],
 		snapshot: new Uint8Array([9]),
 	})
 	// a step read back from the file, and one not yet written
 	assertEquals(again.get("d", 1), new Uint8Array([2, 3]))
-	const appended = again.append(new Uint8Array([5]), ["d", 2])
+	const appended = again.append(new Uint8Array([5]), ["d", 2, 2])
 	assertEquals(again.get("d", 2), new Uint8Array([5]))
 	await appended
 	assertEquals(again.get("d", 2), new Uint8Array([5]))

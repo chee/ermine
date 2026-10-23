@@ -495,7 +495,7 @@ static device *made(const char *name, const uint8_t *seed, FILE *out) {
 			.paths = d->paths, .scheduler = d->scheduler});
 		d->info = (sc_pair){"actor", op_str("harness")};
 		d->scope = sc_create_root_scope(d->scheduler, &d->info, 1);
-		tp_history_options ho = {w.mem, log, d->table, d->places, NULL, inside, d};
+		tp_history_options ho = {w.mem, log, d->table, d->places, NULL, inside, d, 0};
 		if (!(d->history = tp_history_new(&ho))) hh_fail("out of memory");
 		tp_history_load(d->history);
 	}
@@ -546,7 +546,7 @@ static void take(const op_value *r, FILE *out) {
 		if (!signer || !signer->keyed) { hh_error(out, "%s signs nothing", by); return; }
 		tp_sign(&signer->key, before, 32, sig);
 	}
-	taken(out, tp_log_take(d->log, key, s, list->count, sig));
+	taken(out, tp_log_take(d->log, key, s, list->count, sig, (tp_span){NULL, 0}));
 }
 
 // from's run of a device's, at n, taken by to
@@ -563,7 +563,7 @@ static void pass(const op_value *r, FILE *out) {
 	size_t n = (size_t)(end - (uint64_t)at + 1);
 	tp_span *s = hh_take(n * sizeof *s);
 	for (size_t i = 0; i < n; i++) s[i] = stepof(from->log, key, (uint64_t)at + i);
-	taken(out, tp_log_take(to->log, key, s, n, sig));
+	taken(out, tp_log_take(to->log, key, s, n, sig, (tp_span){NULL, 0}));
 }
 
 // ---- the graph
