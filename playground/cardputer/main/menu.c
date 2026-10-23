@@ -29,7 +29,7 @@ static struct {
 	// what shows: the list; a code being typed; a new room's code; going to a room
 	enum { LIST, JOINING, MADE, GOING } mode;
 	int at;
-	char typed[5], made[5];
+	char typed[5], made[5], going[5];
 	item *items;
 	// the names in the order shown (the den's two, then the rest by name), from the folder
 	char names[16][LONGEST + 1];
@@ -133,6 +133,14 @@ static void pick(void) {
 	}
 }
 
+// to a room: said on the screen, then the platform's room_go (a restart)
+static void go(const char *code) {
+	snprintf(m.going, sizeof m.going, "%s", code);
+	m.mode = GOING;
+	again();
+	room_go(code);
+}
+
 int menu_key(const char *k) {
 	if (!m.open || m.mode == GOING) return m.open;
 	int esc = strcmp(k, "esc") == 0, enter = strcmp(k, "enter") == 0;
@@ -152,7 +160,7 @@ int menu_key(const char *k) {
 		} else if (enter) {
 			if (n < 4) den_say(1, "a room's code is 4 letters", "type the rest, then enter");
 			else if (strcmp(m.typed, den_room()) == 0) den_say(0, "you're in that room now", "esc: back");
-			else m.mode = GOING, again(), room_go(m.typed);
+			else go(m.typed);
 		} else if (!k[1]) {
 			char c = k[0] >= 'a' && k[0] <= 'z' ? (char)(k[0] - 32) : k[0];
 			if (strchr(DEN_LETTERS, c) == NULL || c == 0) {
@@ -163,7 +171,7 @@ int menu_key(const char *k) {
 		}
 	} else if (m.mode == MADE) {
 		if (esc) m.mode = LIST;
-		else if (enter) m.mode = GOING, again(), room_go(m.made);
+		else if (enter) go(m.made);
 	}
 	if (m.open && m.mode == LIST) list();
 	again();
@@ -217,7 +225,9 @@ op_value *menu_ask(const char *from, const char *name, const op_value *handler) 
 			op_free(r);
 			char why[64];
 			snprintf(why, sizeof why, "not added: %s", api_code_name(code));
-			return map_error(why);
+			r = op_map();
+			op_set(r, "error", op_str(why));
+			return r;
 		}
 		api_node_free(&node);
 		it->next = m.items, m.items = it;
@@ -288,8 +298,7 @@ void menu_paint(void) {
 	} else {
 		fb_clear(FB_LEMON);
 		fb_text(4, 20, "going to room", FB_INK, 2);
-		fb_text(4, 50, m.typed[0] && m.made[0] == 0 ? m.typed : m.mode == GOING && m.typed[0] ? m.typed : m.made,
-			FB_CHERRY, 5);
+		fb_text(4, 50, m.going, FB_CHERRY, 5);
 		return;
 	}
 	den_band();

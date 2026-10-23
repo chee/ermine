@@ -25,6 +25,7 @@
 #include "experiments/tippet/c/tippet.h"
 #include "experiments/software/c/software.h"
 #include "playground/installs/c/installs.h"
+#include "core/op/c/value.h"
 
 // a room's code: 4 of these, read off a screen and typed (none that look like another); its tippet
 // room "dens-" + the code
@@ -77,6 +78,15 @@ int den_snapshot(void);
 void den_print(void);
 // tippet's own heap (its tp_mem): now, and the most yet
 size_t den_heap(size_t *most);
+// what just happened, in words, in the band for 10 s (hot: cherry)
+void den_say(int hot, const char *one, const char *two);
+// an install's name, short and ASCII, for the screen
+void den_short_name(const char *install, char *out, size_t cap);
+// a menu item a paired den added (menu.h), picked: its handler (a start or stop ask) done as if
+// from asked it now, refused when from isn't paired now; said in words. its answer, new
+op_value *den_do(const char *from, const char *name, const op_value *handler);
+// the den going (a room switched): a bye said, the log synced to flash
+void den_leave(void);
 // the platform's: the screen drawn again (the last picture, with the band); n random bytes
 void frame_again(void);
 void den_random(uint8_t *out, size_t n);
