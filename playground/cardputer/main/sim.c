@@ -305,7 +305,8 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	char dir[256];
-	snprintf(dir, sizeof dir, "%s/%s", home, room);
+	snprintf(dir, sizeof dir, "%s/t2%s", home, room);
+	if (getenv("SIM_FORGET")) den_forgets(1);
 	malloc_statistics_t before, after;
 	malloc_zone_statistics(NULL, &before);
 	if (den_boot(&me, room, dir, now_ms())) return 1;

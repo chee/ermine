@@ -470,27 +470,40 @@ header.bar #sound[aria-pressed="false"] {
 .box:focus {
 	outline: none;
 }
-@keyframes ring {
-	0%,
-	100% {
-		box-shadow: 0 0 0 3px var(--sun), 0 0 0 4px var(--ink), 0 0 10px 2px #66003322;
-	}
-	50% {
-		box-shadow: 0 0 0 6px var(--sun), 0 0 0 7px var(--ink), 0 0 10px 2px #66003322;
-	}
-}
+/* a ring round what is focused or under the pointer: still (a ring that breathed forever was
+   painted again every frame) */
 .box:focus-visible,
 .box:hover:not(.dragging):not(.flash-hot),
 .frame button:focus-visible,
 .tile:focus-visible {
-	animation: ring 1.4s ease-in-out infinite;
+	box-shadow: 0 0 0 4px var(--sun), 0 0 0 5.5px var(--ink), 0 0 10px 2px #66003322;
 }
 .tile:focus-visible,
 .frame button:focus-visible {
 	outline: none;
 }
+/* a box's flash: a ring fading out, on a layer of its own (opacity only: nothing painted again) */
 .box.flash-hot {
-	animation: boxhot 0.8s ease-out;
+	animation: none;
+}
+.box.flash-hot::after {
+	content: "";
+	position: absolute;
+	inset: -1px;
+	border-radius: inherit;
+	box-shadow: 0 0 0 6px var(--cherry);
+	opacity: 0;
+	pointer-events: none;
+	animation: boxglow 0.8s ease-out;
+}
+@keyframes boxglow {
+	from {
+		opacity: 1;
+	}
+}
+/* a wire's flash: its label only; the wires' layer (filtered, glowing) is painted once */
+.board-wires path.flash {
+	animation: none;
 }
 .port .dot {
 	width: 10px;
@@ -637,6 +650,11 @@ canvas.lcd-pigs {
 }
 canvas.lcd-pigs {
 	border: 1px solid #ddd;
+}
+/* a screen shows one of its three: the others take no room */
+canvas.lcd-picture[hidden],
+canvas.lcd-pigs[hidden] {
+	display: none;
 }
 canvas.pad {
 	display: block;
@@ -869,6 +887,7 @@ main.pondpage .caption {
 	flex: none;
 }
 .board-wires path.hit {
+	stroke-dasharray: none;
 	pointer-events: stroke;
 	cursor: help;
 }
@@ -1586,14 +1605,9 @@ main.pondpage .caption {
 	transform: none;
 }
 
-/* what just changed: a lemon flash, fading */
+/* what just changed: lemon a moment, still (files.ts draws it again without) */
 .files .fresh {
-	animation: fresh 1.8s ease-out var(--age, 0ms) both;
-}
-@keyframes fresh {
-	0% {
-		background-color: var(--lemon);
-	}
+	background-color: var(--lemon);
 }
 
 .files .status {
@@ -1994,22 +2008,30 @@ main.pondpage .caption {
 	color: var(--ink);
 }
 
-/* another den's ins and outs before pairing: grey, a padlock where the dot was, and its note */
+/* another den's ins and outs before pairing: grey, a padlock over the dot (the dot keeps its place,
+   so a wire still ends there), and its note as a tooltip while the pointer is on it */
 .port.locked {
-	position: relative;
 	color: #aaa;
 	cursor: not-allowed;
 }
 .port.locked .dot {
-	display: none;
+	position: relative;
+	z-index: 20;
+	visibility: hidden;
+	cursor: not-allowed;
+	transform: none;
 }
 .port .lock {
-	position: relative;
+	visibility: visible;
+	position: absolute;
+	left: 50%;
+	top: 50%;
 	width: 13px;
 	height: 15px;
+	transform: translate(-50%, -55%);
 	color: #9a9a9a;
-	flex: none;
-	cursor: not-allowed;
+	/* above the box's dimmed body, so its note is too */
+	z-index: 20;
 }
 .port .lock svg {
 	display: block;
@@ -2020,46 +2042,84 @@ main.pondpage .caption {
 	text-decoration: line-through;
 }
 .lock-note {
+	display: none;
 	position: absolute;
-	top: 18px;
-	width: 88px;
-	font: 600 9px/1.25 var(--mono);
-	text-align: center;
+	bottom: 18px;
+	left: 50%;
+	transform: translateX(-50%);
+	font: 600 9px/1.2 var(--mono);
 	color: var(--ink);
 	background: #fff8c8;
 	border: 1px solid var(--ink);
 	border-radius: 6px;
-	padding: 2px 4px;
-	white-space: normal;
+	padding: 2px 6px;
+	white-space: nowrap;
 	box-shadow: 1px 1px 0 var(--ink);
 	pointer-events: none;
-	z-index: 3;
+	z-index: 20;
 }
-.port-in .lock-note {
-	left: -2px;
+.port.locked:hover .lock-note {
+	display: block;
 }
-.port-out .lock-note {
-	right: -2px;
+/* over the box, not off its edge: an in's note runs right from its padlock, an out's left */
+.box-ins .lock-note {
+	left: -4px;
+	transform: none;
+}
+.box-outs .lock-note {
+	left: auto;
+	right: -4px;
+	transform: none;
+}
+.port.locked:hover .lock {
+	color: var(--cherry);
+}
+.box:has(.port.locked:hover) {
+	z-index: 5;
 }
 .lock.shake {
 	animation: shake 0.4s;
-}
-.lock.shake .lock-note {
-	background: var(--cherry);
-	color: #fff;
+	color: var(--cherry);
 }
 @keyframes shake {
 	20%,
 	60% {
-		transform: translateX(-2px) rotate(-8deg);
+		transform: translate(-50%, -55%) translateX(-2px) rotate(-8deg);
 	}
 	40%,
 	80% {
-		transform: translateX(2px) rotate(8deg);
+		transform: translate(-50%, -55%) translateX(2px) rotate(8deg);
 	}
 }
 .box.locked .box-body {
 	opacity: 0.7;
+}
+
+/* a wire: a little string. a light cord with a soft glow under a striped ink line, so it shows on
+   the cream board and on a cardputer's dark face alike. painted once: nothing on it moves */
+.board-wires path {
+	stroke-width: 2;
+	stroke-dasharray: 6 3.5;
+	stroke-linecap: round;
+}
+.board-wires path.cord {
+	stroke: #fffbe3;
+	stroke-width: 5.5;
+	stroke-dasharray: none;
+	filter: drop-shadow(0 0 2px rgba(255, 200, 50, 0.85));
+}
+.board-wires path.cord.tone-dim {
+	stroke: #f4f1e8;
+	filter: none;
+}
+/* asked for, not yet answered: fainter, the stripes spaced out */
+.board-wires path.dashed {
+	stroke-dasharray: 2 6;
+	opacity: 0.75;
+}
+.board-wires path.cord.dashed {
+	stroke-dasharray: none;
+	opacity: 0.6;
 }
 
 /* a pair ask waiting for this den's yes or no: a little card at the top */

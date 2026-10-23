@@ -100,6 +100,8 @@ import { startSession } from "@ermine/sessions"
 import { trusted } from "@ermine/trust"
 import { createHistory, createLog, createSync, show } from "@ermine/tippet"
 import { socket } from "@ermine/tippet/carriers/websocket"
+// the log's own index of its records, as tippet's stores use it (its package doesn't export it)
+import { createIndex, type Store } from "../../../experiments/tippet/typescript/log.ts"
 import { bus } from "@ermine/tippet/carriers/broadcastchannel"
 import {
 	ATTRIBUTE,
@@ -174,8 +176,6 @@ const defined = (o: Record<string, unknown>) =>
 
 // tippet's mod.ts names neither type: they are worked out from what it gives
 type Sync = ReturnType<typeof createSync>
-type Store = NonNullable<NonNullable<Parameters<typeof createLog>[0]>["store"]>
-type At = [device: string, n: number]
 
 const asked = <T>(r: IDBRequest<T>) =>
 	new Promise<T>((ok, no) => (r.onsuccess = () => ok(r.result), r.onerror = () => no(r.error)))
@@ -189,7 +189,9 @@ const done = (t: IDBTransaction) =>
 // room), so a reload is the same den going on from its own last step. one that forgets (tippet's
 // memory store) starts the den at step 1 again, a step 1 the room holds already: the room passes
 // over every step after, and the den stands still. none to be had (a private window): memory only,
-// and said (kept false)
+// and said (kept false). the records as tippet's log gives them (a run message, or a step not yet
+// in a closed run), held in memory too and found again by tippet's own index, as its stores do.
+// name: a new one for each new form of record, so an old one is never half read
 async function browserStore(name: string): Promise<{ store: Store; kept: boolean }> {
 	let db: IDBDatabase | undefined
 	try {
@@ -202,31 +204,29 @@ async function browserStore(name: string): Promise<{ store: Store; kept: boolean
 	} catch {
 		db = undefined
 	}
-	let records: Uint8Array[] = [], steps = new Map<string, Uint8Array[]>()
-	const hold = (r: Uint8Array, [d, n]: At) => {
-		let list = steps.get(d)
-		if (!list) steps.set(d, list = [])
-		list[n - 1] = r
-	}
+	let records: Uint8Array[] = []
+	const index = createIndex<Uint8Array>((r) => r)
 	const store: Store = {
 		async load(read) {
 			if (db) records = await asked(db.transaction("records").objectStore("records").getAll())
-			steps = new Map()
+			index.clear()
 			for (const r of records) {
 				const at = read(r)
-				if (at) hold(r, at)
+				if (at) index.hold(at, r)
 			}
 			return undefined
 		},
 		append(r, at) {
 			records.push(r)
-			if (at) hold(r, at)
+			if (at) index.hold(at, r)
 			if (!db) return Promise.resolve()
 			const t = db.transaction("records", "readwrite")
 			t.objectStore("records").add(r)
 			return done(t)
 		},
-		get: (d, n) => steps.get(d)![n - 1],
+		run: index.run,
+		get: index.get,
+		drop: index.drop,
 		// history's snapshot is never asked for here: the records are the den
 		snapshot: () => Promise.resolve(),
 		async key(seed) {
@@ -411,7 +411,7 @@ export async function createHost(
 	const trouble = (words: string) => (said.push(words), troubles.forEach((f) => f(words)))
 
 	// ---- tippet: the log (the den's key), its history (what is kept), its sync ----
-	const { store, kept: stored } = await browserStore(`ermine-dens:${roomName(o.room)}:${id}`)
+	const { store, kept: stored } = await browserStore(`ermine-dens-runs:${roomName(o.room)}:${id}`)
 	const log = createLog({ store, seed: o.seed })
 	const kept = (n: string, part: string) =>
 		(n === node && (part === "attributes" || part === "children")) ||

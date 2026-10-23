@@ -195,7 +195,11 @@ void app_main(void) {
 	int mounted = flash_mount();
 	char room[5], dir[16];
 	room_code_of(room);
-	snprintf(dir, sizeof dir, "%s/%s", FLASH_DIR, room);
+	// t2: tippet's packed-run store (its files from before are another format: never read)
+	snprintf(dir, sizeof dir, "%s/t2%s", FLASH_DIR, room);
+#ifdef CONFIG_CARDPUTER_FORGETS
+	den_forgets(1);
+#endif
 	stage("before the den");
 	size_t before = free_now();
 	if (code != INST_OK || den_boot(&me, room, mounted ? dir : "/nowhere", esp_timer_get_time() / 1000)) {

@@ -354,9 +354,10 @@ static bool draw_equal(const void *a, const void *b, void *data) {
 		heard_equal(op_get(a, "pigs"), op_get(b, "pigs"), NULL);
 }
 
+// how big a pig of this weight is drawn: 1x to 4x (about 30 and over: the fattest), as the page's
 static int pig_scale(double w) {
 	double k = round(1 + (w - 5) / 10);
-	return k < 1 ? 1 : k > 3 ? 3 : (int)k;
+	return k < 1 ? 1 : k > 4 ? 4 : (int)k;
 }
 
 static int number(const op_value *v, double *out) {

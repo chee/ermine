@@ -29,9 +29,10 @@ screen. The inbox (`main/den.c`) is the one place that checks who may: a pair as
 by who it says) shows "<name> wants to pair": **tab** is yes (the asker into `authorized_keys`),
 **esc** (fn + `` ` ``) no; start, stop and unpair only from a den in `authorized_keys`, and a refusal shows in words.
 The log is kept on flash (a FAT file system on the `den` partition,
-`partitions.csv`, at `/f/<code>`), so a reset goes on from its last step; a snapshot of the history
+`partitions.csv`, at `/f/t2<code>`: tippet's packed runs), so a reset goes on from its last step; a snapshot of the history
 is kept at each boot and again once 16 steps have come and none for 5 s, so a boot loads it (each
-node's value once) and lands only the steps after.
+node's value once) and lands only the steps after. `CONFIG_CARDPUTER_FORGETS` (off) tries
+tippet's forgetting: each snapshot lets go of the runs galaxy has.
 
 The network: `sdkconfig.secrets` (git ignores it), two lines, made once by hand:
 

@@ -13,7 +13,6 @@
 		"./ermine/encoding",
 		"./playground/encoding",
 		"./ermine/processes",
-		"./playground/dens",
 		"./ermine/boxes",
 		"./playground/build",
 		"./ermine/types",

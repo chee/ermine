@@ -60,6 +60,8 @@ static void open_link(void) {
 	me.gone = 0, me.joined = 0;
 	me.link = tp_sync_link(me.sync, send, NULL, 0);
 	if (me.link == NULL) me.gone = 1;
+	// the server (galaxy) keeps every run it is sent: what has passed on to it may be forgotten here
+	else tp_sync_keeper(me.sync, me.link);
 }
 
 void poll_start(tp_sync *sync, const char *url) {
