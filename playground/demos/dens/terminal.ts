@@ -19,6 +19,7 @@ import { FOLDER, MACHINERY, type Unplaced } from "./made.ts"
 import { brief } from "./files.ts"
 import { siteHtml } from "./code.ts"
 import { sound } from "./sound.ts"
+import { kindOf, stateOf } from "./things.ts"
 
 type Tone = "echo" | "ok" | "err" | "said"
 type Found = { id?: string; from?: string; names: string[] }
@@ -135,15 +136,17 @@ export function createTerminal(host: Host, root: HTMLElement) {
 		const v = peep(() => places.readValue("attributes", id))
 		return isMap(v) ? v : undefined
 	}
-	const thingOf = (id: string) => {
-		const r = attributes(id)?.[RUNNER]
-		return isMap(r) && Array.isArray(r.at) ? String(r.at.at(-1)) : undefined
-	}
+	// a thing's kind: a part's thing.kind, else its runner's (things.ts' kindOf)
+	const thingOf = (id: string) => kindOf(attributes(id))
 	// the den a mirrored thing runs on, by name: its runner is offered under that den's node
-	// (<node>/runners/<kind>)
+	// (<node>/runners/<kind>); a part's shared node is under it (<node>/things<its path>)
 	const runsOn = (id: string) => {
 		const r = attributes(id)?.[RUNNER]
-		const d = isMap(r) && typeof r.id === "string" ? r.id.split("/runners/")[0] : undefined
+		const d = isMap(r) && typeof r.id === "string"
+			? r.id.split("/runners/")[0]
+			: id.includes("/things/")
+			? id.split("/things/")[0]
+			: undefined
 		const n = d === undefined ? undefined : attributes(d)?.[NAME]
 		return typeof n === "string" ? n : "another den"
 	}
@@ -197,7 +200,9 @@ export function createTerminal(host: Host, root: HTMLElement) {
 				const o = attributes(r.id)?.[OUT]
 				const n = attributes(r.id)?.[NAME]
 				said = t
-					? `${a(t)}, running${o === undefined ? "" : ` · out ${brief(o, 24)}`}`
+					? `${a(t)}, ${stateOf(attributes(r.id))}${
+						o === undefined ? "" : ` · out ${brief(o, 24)}`
+					}`
 					: typeof n === "string"
 					? n
 					: shown(value(r.id))

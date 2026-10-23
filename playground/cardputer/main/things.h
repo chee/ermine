@@ -1,4 +1,4 @@
-// the cardputer's things: runners on software (experiments/software/c), as the dens page's things.ts:
+// the cardputer's things: its parts' drivers (den.c starts each as a plain process), as the dens page's things.ts:
 // keys, screen, pigs. each writes what it gives on its own process node: its first outlet at
 // attributes["thing.out"], any other at attributes["thing.<name>"] (keys: text, then typed; pigs:
 // their weights, then says). it reads its sources the same way, by path (their nodes here, or
@@ -16,9 +16,11 @@
 // the most letters the keys thing holds
 #define KEYS_LONGEST 280
 
-// the runners into the registry: "keys", "screen", "pigs", the den's "speaker", and the parts'
-// (parts.h): "tilt", "loudness", "led", "ir", "battery", "sd", "grove"
-void things_add(hf *fs);
+// a part's driver, by kind: "keys", "screen", "pigs", the den's "speaker", and the parts (parts.h):
+// "tilt", "loudness", "led", "ir", "battery", "sd", "grove". called as software called a runner,
+// with the process's facts (a sw_starting, its software NULL); its handle's stop is the part's stop.
+// NULL: no such kind
+hf_runner things_runner(const char *kind);
 // each loop: the parts' things (tilt, loudness, battery, sd, grove) read what they read
 void things_tick(int64_t now);
 // a key on the keyboard to the keys thing running here: a letter, " ", or "del"

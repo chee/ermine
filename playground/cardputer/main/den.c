@@ -24,11 +24,14 @@
 #include "things.h"
 #include "menu.h"
 
-// the kinds offered here: keys, screen and pigs run at boot (/home/<kind>), the speaker too (at
-// /system/speaker, on the den's card), the parts (parts.h) only when a paired den adds one (each
-// running costs about 10 KB of heap)
+// the parts this den can start (things.c's drivers), each a plain process it starts itself
+// (ermine/processes' start, no runner, no program): keys, screen and pigs at boot (/home/<kind>),
+// the speaker too (/system/speaker, on the den's card), the rest when a paired den asks for one by
+// kind. said on the den's node (attributes PARTS_SAID: { kind: a few words }) for the dens that ask
 #define BOOTS 3
 #define OFFERED 11
+#define PARTS_SAID "ermine.den.parts"
+#define KIND "thing.kind"
 static const char *const KINDS[OFFERED] = {"keys", "screen", "pigs", "speaker", "tilt", "loudness", "led", "ir",
 	"battery", "sd", "grove"};
 static const char *const PROGRAMS[OFFERED] = {
@@ -69,10 +72,6 @@ typedef struct {
 
 static struct {
 	host_world w;
-	hf *functions;
-	// software: what runs here (experiments/software), the den's node the owner its runners are
-	// offered under
-	sw *software;
 	inst_install install;
 	char id[65], room[5];
 	// the den's node and its shared nodes' ids, for the device's life
@@ -121,7 +120,6 @@ static struct {
 	int code;
 } me;
 
-sw *den_software(void) { return me.software; }
 const char *den_room(void) { return me.room; }
 tp_sync *den_sync(void) { return me.sync; }
 
@@ -537,6 +535,8 @@ static void row_now(void *data) {
 	pl_made_free(made);
 }
 
+// the parts' processes (ermine/processes' start)
+static pr *life;
 static void make_den(void *data) {
 	(void)data;
 	op_value *a = op_map();
@@ -544,43 +544,166 @@ static void make_den(void *data) {
 	op_set(a, DEN_ID, op_str(me.id));
 	op_set(a, NAME, op_str("chee's cardputer"));
 	op_set(a, DEVICE, op_str("cardputer"));
+	op_value *kinds = op_map();
+	for (int i = 0; i < OFFERED; i++) op_set(kinds, KINDS[i], op_str(PROGRAMS[i]));
+	op_set(a, PARTS_SAID, kinds);
 	put("attributes", me.node, a);
 	const char *dens[3] = {"system", "dens", me.id};
 	row here = {HERE, 2}, there = {dens, 3};
 	row_now(&here), row_now(&there);
-	me.software = sw_new(&(sw_setup){.scheduler = me.w.s, .table = me.w.table, .places = me.w.places,
-		.scopes = me.w.scopes, .functions = me.functions, .scope = me.w.host, .sites = me.w.sites,
-		.schedule = me.w.schedule});
-	sw_place owner = {.id = me.node, .at = HERE, .nat = 2, .scope = me.w.host, .stored = 1};
-	sw_refusal no;
-	for (int i = 0; i < OFFERED; i++) {
-		char takes[32];
-		snprintf(takes, sizeof takes, "thing.%s", KINDS[i]);
-		op_value *t = attrs1(SW_TAKES, op_str(takes)), *fn = hf_value(KINDS[i]);
-		if (sw_offer(me.software, &owner, SW_RUNNERS, KINDS[i], t, fn, &no) == NULL)
-			fprintf(stderr, "den: runner %s refused: %s\n", KINDS[i], no.refused);
-		op_free(t), op_free(fn);
+	// the parts' lives: processes' start, its processes under the host's scope
+	life = pr_new(&(pr_setup){.scheduler = me.w.s, .table = me.w.table, .places = me.w.places,
+		.scopes = me.w.scopes, .sites = me.w.sites, .owner = me.w.host});
+}
+
+// ---- the parts: each a plain process the den starts itself, its body the driver ----
+
+typedef struct part {
+	int kind;
+	pr_process *p;
+	char *id;
+	// the driver's handle: its stop
+	hf_run run;
+	struct part *next;
+} part;
+static part *parts;
+// marked when a part starts or stops (what publishes tracks it)
+static int parts_key;
+
+static int kind_of_name(const char *k) {
+	for (int i = 0; k && i < OFFERED; i++)
+		if (strcmp(KINDS[i], k) == 0) return i;
+	return -1;
+}
+
+// a part's status: a computer with a value (a part is up once its driver has started), so the
+// process isn't pending
+static sc_out up_f(void *previous, void *data) {
+	(void)previous, (void)data;
+	return (sc_out){.kind = SC_VALUE, .value = op_bool(1)};
+}
+static char *up_act(void *value, void *previous, void *data) {
+	(void)value, (void)previous, (void)data;
+	return NULL;
+}
+
+// its body, its scope open: the driver called with the process's facts (as software handed them)
+static void part_body(pr_process *p, void *data) {
+	part *x = data;
+	x->p = p;
+	x->id = xstrdup(pr_id(p));
+	const char *const *at, *const *args, *const *cwd;
+	size_t nat = pr_at(p, &at), nargs = pr_args(p, &args), ncwd = pr_cwd(p, &cwd);
+	sw_starting st = {.places = pr_places(p), .root = pr_root(p),
+		.process = {.id = x->id, .at = at, .nat = nat, .args = args, .nargs = nargs, .cwd = cwd, .ncwd = ncwd},
+		.scheduler = me.w.s, .table = me.w.table, .scope = pr_scope(p)};
+	x->run = things_runner(KINDS[x->kind])(NULL, &st, NULL);
+	free(x->run.error);
+	x->run.error = NULL;
+	sc_computer *c = sc_create_effect(me.w.s, (sc_def){.f = up_f, .effect = up_act}, NULL, 0);
+	if (c) pr_give(life, p, c, 0);
+	x->next = parts, parts = x;
+	const void *key = &parts_key;
+	sc_mark(me.w.s, &key, 1, NULL);
+	host_pulse_soon();
+}
+
+// its stop (asked, or its scope torn down from above): the driver's stop, it out of the list
+static void part_stop(pr_process *p, void *data) {
+	(void)p;
+	part *x = data;
+	if (x->run.handle.stop) x->run.handle.stop(x->run.handle.ctx);
+	for (part **q = &parts; *q; q = &(*q)->next)
+		if (*q == x) {
+			*q = x->next;
+			break;
+		}
+	const void *key = &parts_key;
+	sc_mark(me.w.s, &key, 1, NULL);
+	host_pulse_soon();
+	free(x->id);
+	free(x);
+}
+
+// a part of kind started at at (args: its triples and settings): its answer, new, as a start's was
+// ({ id, at }, or a refusal: "taken", "not-a-kind", "not-here")
+typedef struct {
+	int kind;
+	const char *const *at;
+	size_t nat;
+	const char *const *args;
+	size_t nargs;
+	int has_args;
+	op_value *out;
+} part_starting;
+static void part_start_now(void *data) {
+	part_starting *y = data;
+	part *x = xalloc(sizeof *x);
+	x->kind = y->kind;
+	op_value *attrs = map1(KIND, op_str(KINDS[y->kind]));
+	pr_refusal no;
+	pr_process *p = pr_start(life, me.w.places, y->at, y->nat,
+		&(pr_options){.args = y->args, .nargs = y->nargs, .has_args = y->has_args, .body = part_body,
+			.stop = part_stop, .data = x, .attributes = attrs},
+		&no);
+	op_free(attrs);
+	if (p == NULL) {
+		free(x);
+		y->out = op_map();
+		op_set(y->out, "refused", op_str(no.refused ? no.refused : "taken"));
+		op_value *where = op_list();
+		for (size_t k = 0; k < no.nat; k++) op_push(where, op_str(no.at[k]));
+		op_set(y->out, "at", where);
+		return;
 	}
+	const char *const *where;
+	size_t n = pr_at(p, &where);
+	op_value *steps = op_list();
+	for (size_t k = 0; k < n; k++) op_push(steps, op_str(where[k]));
+	y->out = op_map();
+	op_set(y->out, "id", op_str(pr_id(p)));
+	op_set(y->out, "at", steps);
+}
+static op_value *part_start(int kind, const char *const *at, size_t nat, const char *const *args, size_t nargs,
+	int has_args) {
+	// a part's place: /home/<name>, and the speaker's /system/speaker
+	int here = (nat == 2 && strcmp(at[0], "home") == 0) ||
+		(nat == 2 && strcmp(at[0], "system") == 0 && strcmp(at[1], "speaker") == 0 && strcmp(KINDS[kind], "speaker") == 0);
+	if (!here) {
+		op_value *r = op_map();
+		op_set(r, "refused", op_str("not-here"));
+		op_set(r, "why", op_str("a part starts at /home/<name> (the speaker at /system/speaker)"));
+		return r;
+	}
+	part_starting y = {kind, at, nat, args, nargs, has_args, NULL};
+	sc_run_with_scope(me.w.host, part_start_now, &y);
+	host_settle();
+	return y.out;
+}
+
+static part *part_find(const char *id) {
+	for (part *x = parts; x; x = x->next)
+		if (strcmp(x->id, id) == 0) return x;
+	return NULL;
+}
+
+static void part_stop_now(void *data) { pr_stop(life, ((part *)data)->p); }
+static void part_end(part *x) {
+	sc_run_with_scope(me.w.host, part_stop_now, x);
+	host_settle();
 }
 
 static void start_things(void *data) {
 	(void)data;
-	sw_refusal no;
-	// the speaker, on the den's card: where every den has its own (main.ts' SPEAKER)
-	{
-		const char *runner[4] = {"system", "den", "runners", "speaker"}, *prog[2] = {"things", "speaker"};
-		const char *at[2] = {"system", "speaker"};
-		sw_program program = {.at = prog, .nat = 2, .has_at = 1};
-		if (sw_run(me.software, runner, 4, &program, at, 2, &(sw_options){0}, &no) == NULL)
-			fprintf(stderr, "den: /system/speaker refused: %s\n", no.refused);
-	}
+	const char *speaker[2] = {"system", "speaker"};
+	op_value *r = part_start(kind_of_name("speaker"), speaker, 2, NULL, 0, 0);
+	if (op_get(r, "refused")) fprintf(stderr, "den: /system/speaker refused\n");
+	op_free(r);
 	for (int i = 0; i < BOOTS; i++) {
-		const char *runner[4] = {"system", "den", "runners", KINDS[i]};
-		const char *prog[2] = {"things", KINDS[i]};
 		const char *at[2] = {"home", KINDS[i]};
-		sw_program program = {.at = prog, .nat = 2, .has_at = 1};
-		if (sw_run(me.software, runner, 4, &program, at, 2, &(sw_options){0}, &no) == NULL)
-			fprintf(stderr, "den: /home/%s refused: %s\n", KINDS[i], no.refused);
+		r = part_start(i, at, 2, NULL, 0, 0);
+		if (op_get(r, "refused")) fprintf(stderr, "den: /home/%s refused\n", KINDS[i]);
+		op_free(r);
 	}
 }
 
@@ -590,14 +713,13 @@ static void start_things(void *data) {
 // encoding's hash: the effect holds its last value till the next
 static sc_out nodes_f(void *previous, void *data) {
 	(void)previous, (void)data;
-	sw_process *const *procs;
-	size_t count = sw_running(me.software, &procs);
+	sc_track(me.w.s, &parts_key);
 	op_value *seen = op_map();
-	for (size_t i = 0; i < count; i++) {
-		const char *id = sw_process_id(procs[i]);
+	for (part *x = parts; x; x = x->next) {
+		const char *id = x->id;
 		const op_value *a = pl_read(me.w.places, tb_string("attributes"), tb_string(id), NULL, 0);
 		const char *const *at;
-		size_t nat = sw_process_at(procs[i], &at);
+		size_t nat = pr_at(x->p, &at);
 		op_value *one = op_list();
 		op_push(one, a ? op_ref((op_value *)a) : op_null());
 		for (size_t k = 0; k < nat; k++) op_push(one, op_str(at[k]));
@@ -633,13 +755,11 @@ static int has_encoding(const op_value *v) {
 // boot, and short: /things/home/keys); those gone, out
 static void publish_now(void *data) {
 	(void)data;
-	sw_process *const *procs;
-	size_t count = sw_running(me.software, &procs);
 	op_value *want = op_map();
-	for (size_t i = 0; i < count; i++) {
-		const char *id = sw_process_id(procs[i]);
+	for (part *x = parts; x; x = x->next) {
+		const char *id = x->id;
 		const char *const *at;
-		size_t nat = sw_process_at(procs[i], &at);
+		size_t nat = pr_at(x->p, &at);
 		char path[160] = "";
 		for (size_t k = 0; k < nat; k++) {
 			size_t l = strlen(path);
@@ -857,7 +977,7 @@ static void steps_free(char **v, long n) {
 	for (long i = 0; i < n; i++) free(v[i]);
 }
 
-// an ask done on software (host.ts' done): start, stop, unpair; its answer, new
+// an ask done (host.ts' done): start (a part, by kind), stop, menu; its answer, new
 typedef struct {
 	const op_value *a;
 	const char *from;
@@ -868,12 +988,21 @@ static void do_now(void *data) {
 	const op_value *a = d->a, *op = op_get(a, "op");
 	if (str_is(op, "start") && den_free() < DEN_ROOM) {
 		d->out = error_of("too little memory here to start a thing");
+	} else if (str_is(op, "start") && !is_str(op_get(a, "kind"))) {
+		// the asks of before (a runner and a program, software's): this den has no software now
+		d->out = error_of("this den starts its parts by kind: { op: \"start\", kind, at, args? } "
+				  "(its kinds: its node's ermine.den.parts)");
 	} else if (str_is(op, "start")) {
-		const op_value *program = op_get(a, "program"), *args = op_get(a, "args");
-		char *runner[16], *at[16];
-		long nr = address_of(op_get(a, "runner"), runner, 16), na = address_of(op_get(a, "at"), at, 16);
-		if (nr < 0 || na < 0 || !is_map(program)) {
-			d->out = error_of("not a start: it needs a runner, a program and an at");
+		const op_value *args = op_get(a, "args");
+		int kind = kind_of_name(op_get(a, "kind")->str);
+		char *at[16];
+		long na = address_of(op_get(a, "at"), at, 16);
+		if (kind < 0) {
+			d->out = op_map();
+			op_set(d->out, "refused", op_str("not-a-kind"));
+			op_set(d->out, "kind", op_ref((op_value *)op_get(a, "kind")));
+		} else if (na < 0) {
+			d->out = error_of("not a start: it needs a kind and an at");
 		} else if (args != NULL && args->type != OP_LIST) {
 			d->out = error_of("its args aren't words");
 		} else {
@@ -885,38 +1014,18 @@ static void do_now(void *data) {
 				if (ok) words[nargs++] = args->items[i]->str;
 			}
 			if (!ok) d->out = error_of("its args aren't words");
-			else {
-				const op_value *id = op_get(program, "id"), *hash = op_get(program, "hash"),
-					       *type = op_get(program, "type"), *api = op_get(program, "api");
-				sw_program pr = {.id = is_str(id) ? id->str : "", .hash = is_str(hash) ? hash->str : NULL,
-					.code = op_get(program, "code"), .type = is_str(type) ? type->str : NULL,
-					.api = is_str(api) ? api->str : NULL};
-				sw_refusal no;
-				sw_process *p = sw_run(me.software, (const char *const *)runner, (size_t)nr, &pr,
-					(const char *const *)at, (size_t)na,
-					&(sw_options){.args = words, .nargs = nargs, .has_args = args != NULL}, &no);
-				if (p == NULL) d->out = sw_refusal_value(&no);
-				else {
-					const char *const *where;
-					size_t n = sw_process_at(p, &where);
-					op_value *steps = op_list();
-					for (size_t k = 0; k < n; k++) op_push(steps, op_str(where[k]));
-					d->out = op_map();
-					op_set(d->out, "id", op_str(sw_process_id(p)));
-					op_set(d->out, "at", steps);
-				}
-			}
+			else d->out = part_start(kind, (const char *const *)at, (size_t)na, words, nargs, args != NULL);
 		}
-		if (nr > 0) steps_free(runner, nr);
 		if (na > 0) steps_free(at, na);
 	} else if (str_is(op, "stop") && is_str(op_get(a, "process"))) {
 		const char *id = op_get(a, "process")->str;
-		if (sw_find(me.software, id) == NULL) {
+		part *x = part_find(id);
+		if (x == NULL) {
 			d->out = op_map();
 			op_set(d->out, "refused", op_str("not-there"));
 			op_set(d->out, "process", op_str(id));
 		} else {
-			sw_stop(me.software, id, op_get(a, "reason"));
+			part_end(x);
 			d->out = op_map();
 		}
 	} else if (str_is(op, "menu") && is_str(op_get(a, "name"))) {
@@ -1235,6 +1344,78 @@ static char *inbox_act(void *value, void *previous, void *data) {
 	return NULL;
 }
 
+// ---- the inbox, kept small: every ask and its answer stay in the inbox's value (the history
+// holds each whole, about 2 KB of heap an ask here), so once more than INBOX_MOST are answered the
+// oldest answered are taken out, INBOX_KEEP left: a delete at each one's id, a step of this den's
+// own on its own node. kept always: one not answered (a pair ask waiting for a person), and a menu
+// item's (a boot puts it in again from its ask) ----
+
+#define INBOX_MOST 12
+#define INBOX_KEEP 6
+typedef struct {
+	const char **ids;
+	size_t n;
+} pruning;
+static void prune_now(void *data) {
+	pruning *x = data;
+	nd_entry *e = (nd_entry *)tb_get(me.w.table, tb_string("value"), tb_string(me.inbox));
+	if (e == NULL) return;
+	ch_header h;
+	pl_made *made;
+	char *bad = pl_header(me.w.places, NULL, 0, NULL, &h, &made);
+	if (bad) {
+		free(bad);
+		return;
+	}
+	op_key *keys = xalloc(x->n * sizeof *keys);
+	op_patch *ps = xalloc(x->n * sizeof *ps);
+	for (size_t i = 0; i < x->n; i++) {
+		keys[i] = (op_key){.type = OP_STR_KEY, .s = x->ids[i]};
+		ps[i] = (op_patch){.place = {.path = &keys[i], .length = 1}};
+	}
+	size_t failed;
+	if (nd_update(e, ps, x->n, h, &failed) == 0) {
+		pl_hold_also(me.w.places, e, pl_made_ref(made), pl_made_free);
+		pl_changed changed = {1, {e, NULL}};
+		pl_commit(me.w.places, &changed);
+	}
+	pl_made_free(made);
+	free(keys), free(ps);
+}
+static void inbox_prune(void) {
+	const nd_entry *e = tb_get(me.w.table, tb_string("value"), tb_string(me.inbox));
+	const op_value *v = e ? e->value : NULL;
+	if (!is_map(v)) return;
+	size_t *order = xalloc(v->count * sizeof *order), n = 0;
+	for (size_t i = 0; i < v->count; i++) {
+		const op_value *a = v->items[i];
+		if (!is_map(a) || op_get(a, "answer") == NULL || str_is(op_get(op_get(a, "ask"), "op"), "menu")) continue;
+		order[n++] = i;
+	}
+	if (n > INBOX_MOST) {
+		sorting = v;
+		qsort(order, n, sizeof *order, by_made);
+		pruning x = {xalloc((n - INBOX_KEEP) * sizeof(char *)), n - INBOX_KEEP};
+		for (size_t k = 0; k < x.n; k++) x.ids[k] = xstrdup(v->keys[order[k]]);
+		sc_run_with_scope(me.w.host, prune_now, &x);
+		host_settle();
+		printf("den: %zu answered asks taken out of the inbox, %d kept\n", x.n, INBOX_KEEP);
+		for (size_t k = 0; k < x.n; k++) free((char *)x.ids[k]);
+		free(x.ids);
+	}
+	free(order);
+	// the asks taken in hand: only those still waiting for their answer to land
+	e = tb_get(me.w.table, tb_string("value"), tb_string(me.inbox));
+	v = e ? e->value : NULL;
+	size_t kept = 0;
+	for (size_t k = 0; k < me.nanswered; k++) {
+		const op_value *a = is_map(v) ? op_get(v, me.answered[k]) : NULL;
+		if (is_map(a) && op_get(a, "answer") == NULL) me.answered[kept++] = me.answered[k];
+		else free(me.answered[k]);
+	}
+	me.nanswered = kept;
+}
+
 static void effects(void *data) {
 	(void)data;
 	sc_create_effect(me.w.s, (sc_def){.f = nodes_f, .effect = publish, .equal = same_hash}, NULL, 0);
@@ -1383,6 +1564,8 @@ static void check_store(const char *dir, const uint8_t secret[32]) {
 static int promote(void);
 static int (*store_snapshot)(void *self, const uint8_t *bytes, size_t length);
 static int snapshot_in_place(void *self, const uint8_t *bytes, size_t length);
+// the last snapshot's size: what the next wants of the heap at once
+static size_t snapped_bytes;
 static int forgetting;
 // the store's sync (fsync), timed: on FAT each costs flash writes, and tippet syncs this den's steps
 // before any leave
@@ -1565,6 +1748,7 @@ int den_boot(const inst_install *install, const char *code, const char *dir, int
 		char *snap = joined(me.dir, "/snapshot"), *log = joined(me.dir, "/log");
 		long sn = stat(snap, &st) == 0 ? (long)st.st_size : -1, ln = stat(log, &st) == 0 ? (long)st.st_size : -1;
 		printf("den: the log %ld bytes, its snapshot %ld\n", ln, sn);
+		if (sn > 0) snapped_bytes = (size_t)sn;
 		free(snap), free(log);
 	}
 	if ((why = tp_history_load(me.history))) {
@@ -1601,20 +1785,6 @@ int den_boot(const inst_install *install, const char *code, const char *dir, int
 	for (uint64_t n = 1; n <= tp_log_count(me.log, install->key); n++) keys_from(n);
 	me.synced = den_steps();
 
-	// the programs, at /things/<kind>: a few words of what it is, its form the runner's takes
-	me.functions = hf_new();
-	things_add(me.functions);
-	put1("children", HOST_ROOT, "things", op_str("things"));
-	// the programs of those it starts itself (keys, screen, pigs, the speaker): a paired den's start
-	// carries its program's code, so the parts need none here (each node costs about 1 KB of heap)
-	for (int i = 0; i < BOOTS + 1; i++) {
-		char at[32], type[32];
-		snprintf(at, sizeof at, "things/%s", KINDS[i]);
-		snprintf(type, sizeof type, "thing.%s", KINDS[i]);
-		put1("children", "things", KINDS[i], op_str(at));
-		put("value", at, op_str(PROGRAMS[i]));
-		put("attributes", at, attrs1("ermine.type", op_str(type)));
-	}
 	sc_run_with_scope(me.w.host, make_den, NULL);
 	if (me.code) return me.code;
 	den_mark("den made");
@@ -1729,7 +1899,7 @@ static void troubles(void) {
 
 void den_tick(int64_t now) {
 	me.now = now;
-	if (me.software == NULL) return;
+	if (life == NULL) return;
 	if (now - me.beat >= DEN_BEAT) {
 		me.beat = now;
 		beat();
@@ -1740,7 +1910,10 @@ void den_tick(int64_t now) {
 	// write it: a boot loads it, each node's value once, and lands only what came after it
 	uint64_t held = den_steps();
 	if (held != me.last_held || me.still_since == 0) me.last_held = held, me.still_since = now;
-	if (me.kept_on_flash && held >= me.snapped + 16 && now - me.still_since > 5000 && den_free() > 50000) {
+	// the heap it wants: the snapshot's bytes whole (the last one's size, and some), and room left
+	// for WiFi's TLS after
+	size_t wants = snapped_bytes + snapped_bytes / 4 + 48 * 1024;
+	if (me.kept_on_flash && held >= me.snapped + 16 && now - me.still_since > 5000 && den_free() > wants) {
 		den_mark("snapshot again");
 		den_snapshot();
 		den_mark("snapshot kept");
@@ -1755,6 +1928,9 @@ void den_tick(int64_t now) {
 		me.sync_at = 0, me.synced = steps;
 		if (me.store->sync(me.store->self)) fprintf(stderr, "den: the log wasn't synced to flash\n");
 	}
+	// the inbox kept small, every 10 s
+	static int64_t pruned;
+	if (now - pruned > 10000) pruned = now, inbox_prune();
 	// the band drawn again when what it says changes (a den gone quiet, a word timed out)
 	char lines[2][31];
 	int hot;
@@ -1762,23 +1938,14 @@ void den_tick(int64_t now) {
 	if (memcmp(lines, me.shown, sizeof lines) != 0 || hot != me.shown_hot) frame_again();
 }
 
-typedef struct {
-	const char *kind, *at;
-	int ok;
-} starting;
-static void start_now(void *data) {
-	starting *x = data;
-	const char *runner[4] = {"system", "den", "runners", x->kind}, *prog[2] = {"things", x->kind};
-	const char *at[2] = {"home", x->at};
-	sw_program program = {.at = prog, .nat = 2, .has_at = 1};
-	sw_refusal no;
-	x->ok = sw_run(me.software, runner, 4, &program, at, 2, &(sw_options){0}, &no) != NULL;
-}
 int den_start(const char *kind, const char *at) {
-	starting x = {kind, at, 0};
-	sc_run_with_scope(me.w.host, start_now, &x);
-	host_settle();
-	return x.ok;
+	int k = kind_of_name(kind);
+	if (k < 0) return 0;
+	const char *where[2] = {"home", at};
+	op_value *r = part_start(k, where, 2, NULL, 0, 0);
+	int ok = op_get(r, "id") != NULL;
+	op_free(r);
+	return ok;
 }
 
 // a snapshot the store wrote beside the last (snapshot.new: FAT's rename won't replace a file)
@@ -1807,9 +1974,22 @@ static int promote(void) {
 
 // the store's snapshot, with promote after it: on FAT the store's rename onto the old snapshot is
 // refused (TP_STORE), its new one left beside it, put in place here
+// the history's bytes are still held while this runs, so the new file is never read back whole
+// here (that held the snapshot twice: about 80 KB at once for a 40 KB one, the heap's whole room):
+// written whole (its size the length given), it is put in place by name alone. promote's read-back
+// is for a boot, which finds one a reset may have cut short
 static int snapshot_in_place(void *self, const uint8_t *bytes, size_t length) {
 	int why = store_snapshot(self, bytes, length);
-	if (why == TP_STORE && promote()) why = 0;
+	if (why == TP_STORE) {
+		char *now = joined(me.dir, "/snapshot"), *made = joined(me.dir, "/snapshot.new");
+		struct stat st;
+		if (stat(made, &st) == 0 && (size_t)st.st_size == length) {
+			unlink(now);
+			if (rename(made, now) == 0) why = 0;
+		} else unlink(made);
+		free(now), free(made);
+	}
+	if (why == 0) snapped_bytes = length;
 	return why;
 }
 
@@ -1926,16 +2106,11 @@ const uint8_t *den_seed(void) { return me.install.secret; }
 
 // the thing at /home/<at> stopped (the sim's, to measure what a start and stop leave behind): 1 done
 int den_stop(const char *at) {
-	sw_process *const *procs;
-	size_t n = sw_running(me.software, &procs);
-	for (size_t i = 0; i < n; i++) {
+	for (part *x = parts; x; x = x->next) {
 		const char *const *where;
-		size_t k = sw_process_at(procs[i], &where);
+		size_t k = pr_at(x->p, &where);
 		if (k == 2 && strcmp(where[0], "home") == 0 && strcmp(where[1], at) == 0) {
-			char *id = xstrdup(sw_process_id(procs[i]));
-			sw_stop(me.software, id, NULL);
-			free(id);
-			host_settle();
+			part_end(x);
 			return 1;
 		}
 	}
