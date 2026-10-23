@@ -886,6 +886,11 @@ static op_value *world_answer(const op_value *r) {
 		world_cached();
 		return op_map();
 	}
+	if (strcmp(op, "cacheStop") == 0) {
+		pc_free(cache);
+		cache = NULL;
+		return op_map();
+	}
 	if (strcmp(op, "cacheKept") == 0) {
 		pc_kept k = cache != NULL ? pc_kept_of(cache) : (pc_kept){0};
 		op_value *o = op_map();

@@ -4,7 +4,7 @@
 //
 //   pc_cache *c = pc_new(places, scheduler);   // after sc_on_tracking_end(s, pl_forget, places)
 //   char *id = pc_get(c, path, n);             // in a run: the run tracks one key for the path
-//   pc_free(c);                                // before sc_free: it takes its listeners away
+//   pc_free(c);                                // before sc_free: its listeners taken away, its spots given back
 //
 // an entry: one question (at, list, members) about one path, its answer, its keys, what it read.
 // worked out when first asked (pl_record), a path's entry reading its folder's. a read key marked:
@@ -29,7 +29,8 @@ typedef struct pc_cache pc_cache;
 // the places and the scheduler it is connected to (the places' own, and its untrack listener already
 // there). Listens to the scheduler's marks, tracks and untracks
 pc_cache *pc_new(pl *places, sc_scheduler *scheduler);
-// takes its listeners from the scheduler (still alive) and frees everything; tells nothing
+// takes its listeners from the scheduler (still alive), gives back the spots it keeps (letting go
+// those it took that no run tracks) and frees everything; tells nothing
 void pc_free(pc_cache *c);
 
 // the id at a path: a copy for the caller to free, NULL: nothing there. The root: its id

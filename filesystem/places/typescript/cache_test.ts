@@ -159,6 +159,23 @@ Deno.test("cache: teardown leaves nothing, no entry, no spot", () => {
 	assertEquals(w.count(), { entries: 0, reads: 0, spots: 0 })
 })
 
+Deno.test("cache: stopped, it hears nothing more and gives back what it holds", () => {
+	const w = world()
+	w.tree()
+	const r = w.watch(() => w.cache.get(["work", "clock", "on", "reset"]))
+	w.s.pulse()
+	const index = keyed(w.s), told = index.deliveries()
+	w.cache.stop()
+	w.kids("C0", { on: "ON1" })
+	w.s.pulse()
+	// no mark reaches it, so none of its readers reruns
+	assertEquals(index.deliveries(), told)
+	assertEquals(r.runs, 1)
+	assertEquals(w.cache.kept(), { entries: 0, reads: 0 })
+	w.s.teardown(r.c)
+	assertEquals(w.count().spots, 0)
+})
+
 Deno.test("cache: a read outside any run keeps nothing", () => {
 	const w = world()
 	w.tree()

@@ -89,13 +89,19 @@ export function createGuard(setup: Setup): {
 	}
 
 	// the members of a list, each asked to be read (at: the path they are under): a refused one in
-	// its place, its name kept and its id REFUSED. any pending: PENDING
+	// its place, its name and from kept and its id REFUSED. any pending: PENDING
 	function members(list: readonly Member[], at?: Path): Member[] {
 		const answers = list.map((m) =>
 			asked(told, "read", target({ id: m.id, path: at && [...at, m.name] }))[1]
 		)
 		if (answers.some((a) => a.answer === "pending")) throw PENDING
-		return list.map((m, i) => answers[i].answer === "yes" ? m : { name: m.name, id: REFUSED })
+		return list.map((m, i) =>
+			answers[i].answer === "yes"
+				? m
+				: m.from === undefined
+				? { name: m.name, id: REFUSED }
+				: { name: m.name, id: REFUSED, from: m.from }
+		)
 	}
 
 	// a move by path, refused when to is under from (strictly: the same place is no move): the
