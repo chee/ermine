@@ -2,8 +2,8 @@
 // treats the code as a shared library for this machine (native.h's ABI). Same rules as dlopen.ts
 // (its header says them once), which conformance/native holds both to.
 //
-//   dlr *d = dlr_new(&(dlr_setup){.dir = NULL});   // temp files in $TMPDIR (none: /tmp)
-//   hf_add_loader(functions, "dlopen", dlr_run, dlr_load, d);   // a runner with a load (functions.h)
+//   dlr *d = dlr_new(&(dlr_setup){.dir = NULL, .api = make_api});   // temp files in $TMPDIR (none: /tmp)
+//   hf_add_loader(functions, "dlopen", dlr_run, dlr_load, d);   // software's runner: start and load
 //   ...                                            // its node's value: hf_value("dlopen")
 //   dlr_free(d);                                   // after the last process holding a library stops
 //
@@ -25,13 +25,18 @@ typedef struct {
 	// told what is worth telling: what ("signed", "not written", "dlopen failed") and its detail;
 	// NULL: a line to stderr
 	void (*note)(const char *what, const char *detail, void *ctx);
+	// what a program is given, the runner's api, made from the start's facts its starter hands the
+	// runner (software's sw_starting; the host's, as its createProcessAPI's), handed on to the
+	// library's run; the host's to let go. NULL: the start's facts as they are
+	void *(*api)(void *start, void *ctx);
 	void *ctx;
 } dlr_setup;
 
 dlr *dlr_new(const dlr_setup *setup);
 void dlr_free(dlr *d);
-// the runner and its load, for a host's registry: data is the dlr
-hf_run dlr_run(const op_value *code, void *api, void *data);
+// the runner (its start: the code a library run as a program) and its load (a live form whose run
+// is a start), for a host's registry: data is the dlr. start: the start's facts, made the api
+hf_run dlr_run(const op_value *code, void *start, void *data);
 hf_loaded dlr_load(const op_value *code, void *data);
 
 #endif

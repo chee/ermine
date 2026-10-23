@@ -3,6 +3,7 @@
 // without --allow-ffi, --allow-write and --allow-run
 import { assertEquals, assertInstanceOf, assertThrows } from "@std/assert"
 import { createDlopen, type Live } from "./dlopen.ts"
+import type { Start } from "./start.ts"
 
 const fixtures = new URL("../c/fixtures/", import.meta.url).pathname
 const darwin = Deno.build.os === "darwin"
@@ -37,6 +38,8 @@ const reverse = () => build("reverse")
 const runner = () => build("runner")
 const test = (name: string, fn: () => void, ignore = false) =>
 	Deno.test({ name, ignore: ignore || !allowed, fn })
+// the start's facts a runner is handed: none of them read here (no api given: they are the api)
+const start = {} as Start
 
 // a runner with its files in a folder of its own, its notes kept
 function world(pointer?: (api: unknown) => Deno.PointerValue) {
@@ -65,10 +68,10 @@ function api() {
 	return { wrote, pointer: () => Deno.UnsafePointer.of(struct), close: () => write.close() }
 }
 
-test("load: compile there, run not; bytes reversed, a string's UTF-8 too; disposed, the file gone and compile unloaded", () => {
+test("load: compile there, start not; bytes reversed, a string's UTF-8 too; disposed, the file gone and compile unloaded", () => {
 	const w = world()
 	const live: Live = w.dl.load(reverse())
-	assertEquals([typeof live.compile, live.run, w.files()], ["function", undefined, 1])
+	assertEquals([typeof live.compile, live.start, w.files()], ["function", undefined, 1])
 	assertEquals(live.compile!(new Uint8Array([1, 2, 3])), new Uint8Array([3, 2, 1]))
 	assertEquals(live.compile!("hé"), new Uint8Array([0xa9, 0xc3, 0x68]))
 	assertEquals(live.compile!(""), new Uint8Array(0))
@@ -88,12 +91,12 @@ test("load: bytes that are no library, an Error dlopen failed (its cause dlopen'
 	assertThrows(() => w.dl.load("a string"), Error, "not bytes")
 })
 
-test("load: a runner's run given the code and the api through pointer, its stop the library's", () => {
+test("load: a runner's start given the code and the api through pointer, its stop the library's", () => {
 	const a = api()
 	const w = world(a.pointer)
 	const live = w.dl.load(runner())
 	assertEquals(live.compile, undefined)
-	const h = live.run!("tick", {}) as { stop: () => void }
+	const h = live.start!("tick", start)
 	h.stop()
 	assertEquals(a.wrote, ["tick", "stop"])
 	live[Symbol.dispose]()
@@ -104,18 +107,18 @@ test("load: a runner's run given the code and the api through pointer, its stop 
 test("load: a run failing (no api: null), an Error run failed with its number", () => {
 	const w = world()
 	const live = w.dl.load(runner())
-	assertThrows(() => live.run!("tick", {}), Error, "run failed: 2")
+	assertThrows(() => live.start!("tick", start), Error, "run failed: 2")
 	live[Symbol.dispose]()
 })
 
-test("the runner's own run: the library run as a program, no code; stopped, its stop then the library let go", () => {
+test("the runner's own start: the library run as a program, no code; stopped, its stop then the library let go", () => {
 	const a = api()
 	const w = world(a.pointer)
-	const h = w.dl(runner(), {})
+	const h = w.dl.start(runner(), start)
 	assertEquals([a.wrote, w.files()], [[""], 1])
 	h.stop()
 	assertEquals([a.wrote, w.files()], [["", "stop"], 0])
-	assertThrows(() => w.dl(reverse(), {}), Error, "no run in the library")
+	assertThrows(() => w.dl.start(reverse(), start), Error, "no run in the library")
 	assertEquals(w.files(), 0)
 	a.close()
 })
@@ -126,7 +129,7 @@ test("an unsigned library (macOS on arm64): signed ad hoc, noted, then opened", 
 	const w = world(a.pointer)
 	const live = w.dl.load(unsigned)
 	assertEquals(w.notes, ["signed"])
-	const h = live.run!("hi", {}) as { stop: () => void }
+	const h = live.start!("hi", start)
 	h.stop()
 	assertEquals(a.wrote, ["hi", "stop"])
 	live[Symbol.dispose]()

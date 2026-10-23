@@ -12,9 +12,9 @@
 // it has (or wrote). a change landing from the page is written here with the page's header, told as
 // any write is, and never sent back
 //
-// setup: run once, with the api, as start.ts runs a host runner (createProcessAPIs' run: its return
-// the process's value). a setup that reads what is not loaded yet throws PENDING: what it made is
-// torn down and it runs again once something lands (open: its writes so far stay)
+// setup: run once, with the api, as software runs a runner (createProcessAPIs' run.start: its
+// return the process's value). a setup that reads what is not loaded yet throws PENDING: what it
+// made is torn down and it runs again once something lands (open: its writes so far stay)
 //
 // a method's call from the page: run in a scope of the call's info, its writes sent with the call
 // (written on the page as the caller's), its return sent back (a promise: as it lands). a send to
@@ -354,16 +354,16 @@ export function serve(port: Port): () => void {
 		for (;;) {
 			const scope = s.createScope({ process: [...at], [NODE]: id }, w!.root)
 			w!.scope = scope
-			const api = apis.createProcessAPI({
+			const ctx = {
 				box: { root: m.root, places },
 				places,
 				process: { id, at, args, cwd },
 				scheduler: s,
 				table: w!.r.table,
 				scope,
-			})
+			}
 			try {
-				s.runWithScope(scope, () => apis.run(mod, api))
+				s.runWithScope(scope, () => apis.run.start(mod, ctx))
 				break
 			} catch (error) {
 				if (error !== PENDING) {

@@ -4,10 +4,13 @@
 //     graph · scheduler · places · protect         scheduler · places · ermine/api, the program
 //     the page's table                ◄── port ──► a partial replica of it, filled as it is read
 //
-//   const realms = createRealms({ commit })
-//   createPrograms({ ..., createProcessAPI: realms.wrap(apis.createProcessAPI) })
+//   const realms = createRealms({ commit, createProcessAPI: apis.createProcessAPI })
 //   put("value", "realm", realms.run)          // a host runner: takes javascript source text
-//   den.offer("runners", "realm", attributes, realms.run)   // a den's: createRealms({ createProcessAPI })
+//   software.offer(session, "runners", "realm", attributes, realms.run)   // software's, the same
+//
+// realms.run is a runner in @ermine/software's shape: start(code, ctx), ctx the start's facts (its
+// Start, processes' Context), the page's side of the program's api made from it with
+// setup.createProcessAPI (its api)
 //
 // the page is the authority: a realm's writes are asked of the host's policy and written again
 // here; a write made on a stale value is rebased past the page's (rebase.ts). errors, and refused
@@ -25,7 +28,7 @@ import { createChangeHeader, NODE } from "@ermine/places/header"
 import { createGuard, slot, target, type Thing } from "@ermine/places/guard"
 import { STATUS } from "@ermine/places/status"
 import type { Context } from "@ermine/processes/start"
-import type { Handle, Runner } from "@ermine/programs/start"
+import type { Handle, Runner } from "@ermine/software"
 import type { Policy } from "@ermine/protect"
 import { PENDING, type Scope } from "@ermine/scheduler"
 import type { Key } from "@ermine/table"
@@ -60,17 +63,12 @@ export type Setup = {
 	worker?: () => Realm
 	// how a pulse is asked for (none: queueMicrotask)
 	schedule?: (f: () => void) => void
-	// run given a start's facts, not an api (a den's runner is given its Context): the api made with
-	// this, as wrap makes it. none: such a run throws
+	// the page's side of a program's api, made from the start's facts: a host's createProcessAPI.
+	// none: a start throws
 	createProcessAPI?: (ctx: Context) => API
 }
 
-export type Realms = {
-	run: Runner
-	// createProcessAPI, its apis remembered with their Context, for run (programs' runner is handed
-	// only the api)
-	wrap: <A>(create: (ctx: Context) => A) => (ctx: Context) => A
-}
+export type Realms = { run: Runner }
 
 const key = (part: string, id: string) => `${part}\u0000${id}`
 const empty = (part: string) => part === "attributes" ? {} : undefined
@@ -87,31 +85,18 @@ const strip = (c: ChangeHeader | undefined) => {
 const plain = (e: unknown) => e instanceof Error ? e.message : String(e)
 
 export function createRealms(setup: Setup = {}): Realms {
-	const contexts = new WeakMap<object, Context>()
-	const wrap = <A>(create: (ctx: Context) => A) => (ctx: Context): A => {
-		const api = create(ctx)
-		if (typeof api === "object" && api !== null) contexts.set(api, ctx)
-		return api
-	}
-	// a start's facts, as a den hands them
-	const isContext = (x: unknown): x is Context =>
-		isMap(x) && isMap(x.process) && "scheduler" in x && "table" in x && "scope" in x && "box" in x
 	const make = setup.worker ??
 		(() =>
 			new Worker(new URL("./worker.ts", import.meta.url), {
 				type: "module",
 			}) as unknown as Realm)
 
-	const run: Runner = (code, given) => {
-		let ctx = contexts.get(given as object)
-		let api = given as API
-		if (ctx === undefined && isContext(given) && setup.createProcessAPI !== undefined) {
-			ctx = given
-			api = wrap(setup.createProcessAPI)(given)
-		}
-		if (ctx === undefined) {
+	// a program's source run in a realm of its own, the page's side of its api made from the start
+	function start(code: unknown, ctx: Context): Promise<Handle> {
+		const createProcessAPI = setup.createProcessAPI
+		if (createProcessAPI === undefined) {
 			throw new Error(
-				"a realm needs the process's context: make its api with realms.wrap (a den's: createRealms({ createProcessAPI }))",
+				"a realm makes its program's api from the start: createRealms({ createProcessAPI })",
 			)
 		}
 		if (typeof code === "function") {
@@ -125,7 +110,11 @@ export function createRealms(setup: Setup = {}): Realms {
 			? { url: code.url }
 			: undefined
 		if (source === undefined) throw new Error("not a program: no source text, no { url }")
-		return open(source, api, ctx)
+		return open(source, createProcessAPI(ctx), ctx)
+	}
+	const run: Runner = {
+		start,
+		...(setup.createProcessAPI === undefined ? {} : { api: setup.createProcessAPI }),
 	}
 
 	function open(code: string | { url: string }, api: API, ctx: Context): Promise<Handle> {
@@ -625,5 +614,5 @@ export function createRealms(setup: Setup = {}): Realms {
 		return promise
 	}
 
-	return { run, wrap }
+	return { run }
 }

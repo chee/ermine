@@ -1,5 +1,6 @@
 // start and stop (start.h) on the line protocol of typescript/start_harness.ts, which documents it, the
-// compilers, the runner and createProcessAPI (conformance/c/harness.h has the loop). Its world is places'
+// compilers, the runner (software's shape: its api createProcessAPI of the start's facts) and
+// createProcessAPI (conformance/c/harness.h has the loop). software's pulses: none asked. Its world is places'
 // (world_harness.h), made here before the first line: the host's places at R asked [processes(R), children]
 // (the outermost box), the table telling them alone (a box's places is a view of them); scope nodes,
 // builds and programs are made by the programs request. An address given as a string is split as
@@ -239,8 +240,11 @@ static void write_native(void *ctx, const uint8_t *bytes, size_t n) {
 	PG_PUSH(wrote, nwrote, capwrote, w);
 }
 
-static void *create_api(const ps_context *c, void *data) {
-	(void)data;
+// the harness's createProcessAPI: made by a runner from the start's facts (software's), the
+// harness's till its end
+static api **apis;
+static size_t napis, capapis;
+static api *create_api(const sw_starting *c) {
 	api *a = pg_alloc(sizeof *a);
 	a->ctx = a;
 	a->write = write_native;
@@ -252,11 +256,8 @@ static void *create_api(const ps_context *c, void *data) {
 	a->nargs = c->process.nargs;
 	a->cwd = c->process.cwd;
 	a->ncwd = c->process.ncwd;
+	PG_PUSH(apis, napis, capapis, a);
 	return a;
-}
-static void free_api(void *a, void *data) {
-	(void)data;
-	free(a);
 }
 
 // looks the arg up from the process's cwd each run (nearest first, up to its root), keeping what it
@@ -295,9 +296,10 @@ static void stop_runner(void *ctx) {
 	PG_PUSH(stops, nstops, capstops, copy);
 }
 
-static hf_run runner(const op_value *code, void *api_, void *data) {
+// the runner (software's shape): its api the harness's createProcessAPI of the start's facts
+static hf_run runner(const op_value *code, void *start, void *data) {
 	(void)data;
-	api *a = api_;
+	api *a = create_api(start);
 	const char *name = name_of_process(a->id);
 	ran *r = pg_alloc(sizeof *r);
 	r->process = pg_dup(name);
@@ -334,9 +336,9 @@ static hf_out counted_compile(const op_value *input, void *data) {
 	native_compiles++;
 	return c->inner.compile(input, c->inner.data);
 }
-static hf_run counted_run(const op_value *code, void *api_, void *data) {
+static hf_run counted_run(const op_value *code, void *start, void *data) {
 	counted *c = data;
-	return c->inner.run(code, api_, c->inner.data);
+	return c->inner.run(code, start, c->inner.data);
 }
 static void counted_close(void *data) {
 	counted *c = data;
@@ -355,9 +357,15 @@ static hf_loaded counted_load(const op_value *code, void *data) {
 	return out;
 }
 
-static hf_run counted_program(const op_value *code, void *api_, void *data) {
+static hf_run counted_program(const op_value *code, void *start, void *data) {
 	native_loads++;
-	return dlr_run(code, api_, data);
+	return dlr_run(code, start, data);
+}
+
+// the dlopen runner's api: createProcessAPI's
+static void *native_api(void *start, void *ctx) {
+	(void)ctx;
+	return create_api(start);
 }
 
 static void native_note(const char *what, const char *detail, void *ctx) {
@@ -375,7 +383,7 @@ static void native_runner(void) {
 		dir = NULL;
 	}
 	native_dir = dir;
-	native = dlr_new(&(dlr_setup){.dir = native_dir, .note = native_note});
+	native = dlr_new(&(dlr_setup){.dir = native_dir, .note = native_note, .api = native_api});
 	hf_add_loader(functions, "dlopen", counted_program, counted_load, native);
 }
 
@@ -520,8 +528,8 @@ static void make_programs(void *data) {
 	builds = bd_new(&(bd_setup){.places = world_places, .table = world_table, .scheduler = world_scheduler,
 		.cache = cache, .functions = functions, .commit = commit_host});
 	programs = ps_new(&(ps_setup){.scheduler = world_scheduler, .table = world_table, .places = world_places,
-		.builds = builds, .scopes = scope_nodes, .functions = functions, .create_api = create_api,
-		.free_api = free_api, .commit = commit_host, .sites = sites});
+		.builds = builds, .scopes = scope_nodes, .functions = functions, .commit = commit_host,
+		.sites = sites});
 }
 
 typedef struct {
@@ -711,7 +719,7 @@ static op_value *answer(const op_value *r) {
 	if (strcmp(op, "stop") == 0) {
 		started *p = proc_named(world_text(op_get(r, "name")));
 		if (p == NULL) return world_error("no such process");
-		ps_stop(programs, p->process);
+		ps_stop(programs, p->process, NULL);
 		return op_map();
 	}
 	if (strcmp(op, "settle") == 0) {
@@ -888,6 +896,8 @@ void hh_finish(void) {
 		free(r);
 	}
 	free(ran_list);
+	for (size_t i = 0; i < napis; i++) free(apis[i]);
+	free(apis);
 	for (size_t i = 0; i < nargwatches; i++) free(argwatches[i]);
 	free(argwatches);
 	for (size_t i = 0; i < nstops; i++) free(stops[i]);

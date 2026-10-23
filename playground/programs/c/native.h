@@ -6,8 +6,8 @@
 //   compile  a compiler: in, n its input's bytes, borrowed for the call. done (0): *out its output's
 //            bytes, malloc'd (the host's, let go with free), *outn their count. else failed (the int
 //            in the step's Error), *out untouched
-//   run      a runner: code, n the program's code's bytes, borrowed for the call; api what the
-//            starter gave the runner (programs': the host's createProcessAPI's; a den's: the start's
+//   run      a runner: code, n the program's code's bytes, borrowed for the call; api the
+//            program's api, the dlopen runner's api option made of the start's facts (none: the
 //            facts), as a pointer (TypeScript: the dlopen runner's pointer option; none: NULL),
 //            its shape the host's, not this ABI's. running (0): *state given
 //            back to stop. else failed (the int in the process's Error)

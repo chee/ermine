@@ -204,7 +204,8 @@ static const char *type_of(search_t *s, const pg_place *at) {
 	return ty_by_name(&s->ext, at->at[at->n - 1]);
 }
 
-// a host runner's mark: its value a live function. read only for a node with no type
+// a host runner's mark: its value live, a function stand-in (hf_value: a function, or a runner in
+// software's shape, start and load, by its registry's name). read only for a node with no type
 static int hosted(search_t *s, const char *id) {
 	return hf_name(pl_read(s->places, tb_string("value"), tb_string(id), NULL, 0)) != NULL;
 }

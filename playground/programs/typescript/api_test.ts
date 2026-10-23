@@ -1,6 +1,7 @@
 // programs' process api (api.ts) on a real scheduler, table, places, boxes and programs: javascript
-// programs in a folder W, run by a host runner RUN (apis.run) boxed at /run, each started in W's
-// box. what it adds to ermine/api's: start, stop and openwith on each api, and the runners
+// programs in a folder W, run by a host runner RUN (apis.run, or apis.runner's) boxed at /run, each
+// started in W's box. what it adds to ermine/api's: start, stop and openwith on each api, and the
+// runners
 import { assert, assertEquals, assertInstanceOf } from "@std/assert"
 import createEntry, { type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
@@ -16,7 +17,7 @@ import { createScopeNodes } from "@ermine/processes/scopes"
 import { createBuilds } from "@ermine/compilers"
 import { createSites } from "@ermine/sites"
 import { satisfy } from "./programs.ts"
-import { createPrograms, type Process, type Programs } from "./start.ts"
+import { createPrograms, ours, type Process, type Programs } from "./start.ts"
 import { type API, createProcessAPIs, type Noticed } from "./api.ts"
 
 const JS = "com.netscape.javascript-source"
@@ -44,13 +45,13 @@ function world(
 	const put = (part: Key, id: Id, v: unknown) =>
 		hosted(() => table.sub(part, id, createEntry(v, header())))
 	let programs!: Programs
-	// sites: the apis, start and the scheduler are ours, so a site is the program's line
+	// sites: the apis, programs, software and the scheduler are ours, so a site is the program's line
 	const sites = o.sites
 		? createSites(s, {
 			ours: [
 				new URL("./api.ts", import.meta.url).href,
 				import.meta.resolve("@ermine/api"),
-				new URL("./start.ts", import.meta.url).href,
+				...ours,
 				import.meta.resolve("@ermine/processes/start"),
 				import.meta.resolve("@ermine/scheduler"),
 			],
@@ -68,7 +69,14 @@ function world(
 	})
 	put("children", "W", { lib: "LIB" })
 	put("children", "LIB", {})
-	put("value", "RUN", o.show ? apis.runner({ show: o.show }) : apis.run)
+	// the runner's api: createProcessAPI's, or a host's own over it
+	const api = o.more === undefined
+		? undefined
+		: (ctx: Parameters<typeof apis.createProcessAPI>[0]) => ({
+			...apis.createProcessAPI(ctx),
+			...o.more,
+		})
+	put("value", "RUN", o.show || api ? apis.runner({ show: o.show, api }) : apis.run)
 	put("attributes", "RUN", { "ermine.programs.takes": [JS] })
 	const b = createBox({ places, table, scheduler: s, commit }, { id: "W" })
 	hosted(() => box(b, ["run"], "RUN", header()))
@@ -78,12 +86,9 @@ function world(
 		return createPrograms({ // where the programs are made
 			scheduler: s,
 			table,
-			places: writes,
+			places,
 			builds,
 			scopes,
-			createProcessAPI: o.more === undefined
-				? apis.createProcessAPI
-				: (ctx) => ({ ...apis.createProcessAPI(ctx), ...o.more }),
 			sites,
 		})
 	})
@@ -127,7 +132,7 @@ Deno.test("run: setup's return is the process's value, written with its scope op
 	assertEquals(w.table.get("value", q.id), undefined)
 })
 
-Deno.test("an api composed over createProcessAPI's ({ ...api, more }): a copy, not the api made, and still its process's: setup's return its value, a memo's status and run on its node, a teardown told", async () => {
+Deno.test("a runner's own api over createProcessAPI's ({ ...api, more }): a copy, not the api made, and still its process's: setup's return its value, a memo's status and run on its node, a teardown told", async () => {
 	const w = world({ more: { hello: () => "hi" } })
 	const whys: string[] = []
 	let given!: API & { hello: () => string }
@@ -147,15 +152,11 @@ Deno.test("an api composed over createProcessAPI's ({ ...api, more }): a copy, n
 	const st = w.table.get("attributes", memo.id)?.value as Record<string, unknown> | undefined
 	assertInstanceOf(st?.[STATUS], Error)
 	assertEquals(w.apis.runs(memo.id)?.end, "failed")
-	// a copy of that copy, given to the runner as programs' start gives it: the same process's
-	const copy = { ...given }
-	w.s.runWithScope(p.scope, () => w.apis.run(() => "again", copy))
-	assertEquals(w.table.get("value", p.id)?.value, "again")
 	w.apis.stop(p, "replaced")
 	assertEquals(whys, ["replaced"])
 })
 
-Deno.test("runner({ show }): show's return is what is kept, given setup's return and the api", async () => {
+Deno.test("runner({ show }): show's return is the process's value, given setup's return and the api", async () => {
 	const seen: unknown[] = []
 	const w = world({
 		show: (value, api) => {
@@ -254,6 +255,7 @@ Deno.test("sites: a memo made in a program reports the program's line; its chain
 	assertEquals(made.kind, "memo")
 	assertEquals(w.sites!.sitesOf(made.computer!).map(at), [
 		["api_test.ts", line("// the program's line")],
+		["api_test.ts", line("// where start is called")],
 		["api_test.ts", line("// where start is called")],
 		["api_test.ts", line("// where the programs are made")],
 	])

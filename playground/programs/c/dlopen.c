@@ -21,11 +21,13 @@ extern char **environ;
 struct dlr {
 	char *dir;
 	void (*note)(const char *what, const char *detail, void *ctx);
+	void *(*api)(void *start, void *ctx);
 	void *ctx;
 };
 
-// a library loaded: its handle, its file, its exports (NULL: not exported)
+// a library loaded: its runner, its handle, its file, its exports (NULL: not exported)
 typedef struct {
+	dlr *d;
 	void *handle;
 	char *path;
 	native_compile *compile;
@@ -46,7 +48,7 @@ dlr *dlr_new(const dlr_setup *setup) {
 	d->dir = pg_dup(dir != NULL && *dir ? dir : "/tmp");
 	size_t n = strlen(d->dir);
 	while (n > 1 && d->dir[n - 1] == '/') d->dir[--n] = '\0';
-	if (setup != NULL) d->note = setup->note, d->ctx = setup->ctx;
+	if (setup != NULL) d->note = setup->note, d->api = setup->api, d->ctx = setup->ctx;
 	return d;
 }
 
@@ -160,9 +162,11 @@ static void stop_running(void *ctx) {
 	free(r);
 }
 
-// run called; a handle when there is a stop to call or a library to let go
-static hf_run started(lib *l, const uint8_t *code, size_t n, void *api, lib *own) {
+// run called with the program's api (the runner's api option of the start's facts; none: them);
+// a handle when there is a stop to call or a library to let go
+static hf_run started(lib *l, const uint8_t *code, size_t n, void *start, lib *own) {
 	void *state = NULL;
+	void *api = l->d->api != NULL ? l->d->api(start, l->d->ctx) : start;
 	int rc = l->run(code, n, api, &state);
 	if (rc != 0) {
 		if (own != NULL) lib_close(own);
@@ -174,11 +178,11 @@ static hf_run started(lib *l, const uint8_t *code, size_t n, void *api, lib *own
 	return (hf_run){.handle = {stop_running, r}};
 }
 
-static hf_run lib_run(const op_value *code, void *api, void *data) {
+static hf_run lib_run(const op_value *code, void *start, void *data) {
 	const uint8_t *in;
 	size_t n;
 	if (!bytes_of(code, &in, &n)) return (hf_run){.error = pg_dup("not bytes")};
-	return started(data, in, n, api, NULL);
+	return started(data, in, n, start, NULL);
 }
 
 hf_loaded dlr_load(const op_value *code, void *data) {
@@ -202,6 +206,7 @@ hf_loaded dlr_load(const op_value *code, void *data) {
 		}
 	}
 	lib *l = pg_alloc(sizeof *l);
+	l->d = d;
 	l->handle = h;
 	l->path = path;
 	EXPORT(l, compile, "compile");
@@ -215,7 +220,7 @@ hf_loaded dlr_load(const op_value *code, void *data) {
 	}};
 }
 
-hf_run dlr_run(const op_value *code, void *api, void *data) {
+hf_run dlr_run(const op_value *code, void *start, void *data) {
 	hf_loaded out = dlr_load(code, data);
 	if (out.error != NULL) return (hf_run){.error = out.error};
 	lib *l = out.live.data;
@@ -223,5 +228,5 @@ hf_run dlr_run(const op_value *code, void *api, void *data) {
 		lib_close(l);
 		return (hf_run){.error = pg_dup("no run in the library")};
 	}
-	return started(l, (const uint8_t *)"", 0, api, l);
+	return started(l, (const uint8_t *)"", 0, start, l);
 }

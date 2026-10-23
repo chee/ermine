@@ -733,10 +733,10 @@ static hf_run wrap(Instance *in, hf_run r) {
 	return (hf_run){ .handle = { stopping, s } };
 }
 
-/** a library run as a program: its run given the table */
-static hf_run dylibRun(const op_value *code, void *api, void *data) {
+/** a library run as a program: its run given the table, its instance newOS's API of software's start facts */
+static hf_run dylibRun(const op_value *code, void *start, void *data) {
 	(void)data;
-	Instance *in = instance(api);
+	Instance *in = instance(hostApi(D.host, start));
 	return wrap(in, dlr_run(code, &in->table, D.d));
 }
 
@@ -750,9 +750,9 @@ static hf_out liveCompile(const op_value *input, void *data) {
 	return l->live.compile(input, l->live.data);
 }
 
-static hf_run liveRun(const op_value *code, void *api, void *data) {
+static hf_run liveRun(const op_value *code, void *start, void *data) {
 	Live *l = data;
-	Instance *in = instance(api);
+	Instance *in = instance(hostApi(D.host, start));
 	return wrap(in, l->live.run(code, &in->table, l->live.data));
 }
 
