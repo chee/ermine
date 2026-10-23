@@ -208,20 +208,12 @@ trust_src = $(filter-out playground/sessions/c/sessions_harness.c,$(sessions_src
 trust = playground/trust/c/trust-harness
 trust_suite = trust
 LIBS += trust
-# software (experiments/software): offers and run, dens' without the den, its policy or its asks; processes of its own; the C api
+# software (experiments/software): offers and run, with no den, policy or asks; processes of its own; the C api
 # (ermine/api), for its teller runner
 software_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/start.c ermine/processes/c/runs.c ermine/boxes/c/boxes.c ermine/sites/c/sites.c filesystem/protect/c/protect.c experiments/software/c/functions.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) filesystem/places/c/guard.c extensions/patch-nodes/c/patch.c ermine/api/c/api.c experiments/software/c/common.c experiments/software/c/offers.c experiments/software/c/run.c experiments/software/c/software.c experiments/software/c/software_harness.c
 software = experiments/software/c/software-harness
 software_suite = software
 LIBS += software
-# dens (playground/dens): a den's node, its offers, start by runner, stop, the asks; and other dens
-# over presence and its channel (away.c, suite away on this harness: its suite.json); the C api
-# (ermine/api), for its teller runner. two devices, as presence's harness makes them
-dens_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/start.c ermine/processes/c/runs.c ermine/boxes/c/boxes.c ermine/sites/c/sites.c filesystem/protect/c/protect.c playground/together/presence/c/presence.c playground/together/presence/c/channel.c experiments/software/c/functions.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) filesystem/places/c/guard.c extensions/patch-nodes/c/patch.c ermine/api/c/api.c playground/dens/c/common.c playground/dens/c/policy.c playground/dens/c/offers.c playground/dens/c/start.c playground/dens/c/handlers.c playground/dens/c/asks.c ermine/ids/c/ids.c playground/dens/c/here.c playground/dens/c/dens.c playground/dens/c/away.c playground/dens/c/dens_harness.c
-dens = playground/dens/c/dens-harness
-dens_suite = dens away
-dens_tests = $(wildcard playground/dens/typescript/dens_harness_test.ts)
-LIBS += dens
 # sync's pieces for the new commit shape (playground/encoding commit, playground/together): their own loop (lines_harness.c is conformance/c/harness.c
 # reading a symbol as a string no one can carry), against the suites in playground/encoding/conformance and playground/together/conformance.
 # commit_form_harness.c (a commit's forms on the line) and commits_harness.c (the commits a harness makes by label) are the harnesses', never

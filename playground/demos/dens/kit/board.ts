@@ -3,7 +3,8 @@
 // face either way (face), a wire bends out of each end the way its port faces and goes round
 // under its two boxes when it has to turn back; a label sits where it covers no box and nothing
 // marked .avoid; two ends facing the same way bend round as a bracket; a wire can carry a hint
-// shown on hover; show pans to a box; a box's drag can be held inside bounds)
+// shown on hover; show pans to a box; a box's drag can be held inside bounds; a wire is drawn
+// twice, a light glowing cord under a striped line, so it shows on light and dark alike)
 // the board: a roomy canvas of boxes and wires, the book's stage. drag the paper to pan, wheel or
 // pinch to zoom, drag a box by its title. a box has ports: ins on its left, outs on its right. a
 // wire joins an out to an in and can carry a little label (what flows along it). a box can carry
@@ -424,7 +425,10 @@ export function createBoard(el: HTMLElement): Board {
 		const path = document.createElementNS(SVG, "path")
 		const hit = document.createElementNS(SVG, "path")
 		hit.classList.add("hit")
-		svg.append(hit, path)
+		// the cord under the line: light, glowing a little
+		const cord = document.createElementNS(SVG, "path")
+		cord.classList.add("cord")
+		svg.append(hit, cord, path)
 		const lab = h("span", "wire-label")
 		lab.hidden = true
 		labels.append(lab)
@@ -436,6 +440,7 @@ export function createBoard(el: HTMLElement): Board {
 			const low = Math.max(bottom(from.box), bottom(to.box)) + 26
 			const d = bend(a, dir(from), b, dir(to), low)
 			path.setAttribute("d", d)
+			cord.setAttribute("d", d)
 			hit.setAttribute("d", d)
 			if (!lab.hidden) place(path, lab)
 		}
@@ -462,10 +467,13 @@ export function createBoard(el: HTMLElement): Board {
 				draw()
 			},
 			tone(t) {
-				path.setAttribute("class", t ? `tone-${t}` : "")
+				// its dashes kept: a tone and a dash say two things
+				const dashed = path.classList.contains("dashed") ? " dashed" : ""
+				path.setAttribute("class", `${t ? `tone-${t}` : ""}${dashed}`)
+				cord.setAttribute("class", `cord${t ? ` tone-${t}` : ""}${dashed}`)
 				lab.className = `wire-label ${t ? `tone-${t}` : ""}`
 			},
-			dashed: (on) => void path.classList.toggle("dashed", on),
+			dashed: (on) => (path.classList.toggle("dashed", on), cord.classList.toggle("dashed", on)),
 			flash(t = "hot") {
 				path.classList.remove("flash")
 				void path.getBBox()
@@ -482,6 +490,7 @@ export function createBoard(el: HTMLElement): Board {
 			},
 			remove() {
 				path.remove()
+				cord.remove()
 				hit.remove()
 				lab.remove()
 				all.delete(w)

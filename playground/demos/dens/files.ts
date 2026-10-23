@@ -347,7 +347,7 @@ export function createFiles(
 	let byId = new Map<string | symbol, string[]>()
 
 	// what changed since the last look: lit up for a moment; seen, in order, for "changed lately"
-	const lit = new Map<string, number>()
+	const lit = new Map<string, number>(), litAt = new Map<string, number>()
 	const seen = new Map<string, number>()
 	let looks = 0
 	function landed(next: Items) {
@@ -359,7 +359,12 @@ export function createFiles(
 					!was || was.change !== it.change || was.marked !== it.marked ||
 					key(was.names) !== key(it.names)
 				) {
-					lit.set(k, now)
+					// lit at most once in 4 s, and still (a fade was painted every frame, and a node
+					// changing every second kept one going): drawn again without it once it's over
+					if (now - (litAt.get(k) ?? -Infinity) > 4000) {
+						lit.set(k, now), litAt.set(k, now)
+						setTimeout(later, 1900)
+					}
 					seen.set(k, looks)
 				}
 			}

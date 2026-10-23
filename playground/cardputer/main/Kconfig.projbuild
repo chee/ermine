@@ -29,6 +29,13 @@ config CARDPUTER_ROOM
 		A room's code: the den goes to it and remembers it (NVS). Empty: the room it was in, or a
 		new one made the first time.
 
+config CARDPUTER_FORGETS
+	bool "forget runs that have passed on to galaxy (tippet's try-out)"
+	default n
+	help
+		The history keeps the newest state per node, and each snapshot lets go of the runs galaxy
+		(a keeper) has: less heap and flash, and a late step older than the newest is passed over.
+
 config CARDPUTER_GATEWAY
 	string "littlesync gateway (the old path, out of the build: main/net.c)"
 	default ""

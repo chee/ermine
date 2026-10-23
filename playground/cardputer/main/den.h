@@ -58,6 +58,9 @@ void den_band(void);
 // how many asks this den has answered; how many steps its log holds, every device's
 unsigned den_asks(void);
 uint64_t den_steps(void);
+// forgetting (tippet's try-out): the history keeps the newest per node, and each snapshot lets go
+// of the runs that have passed on to galaxy (the keeper). before den_boot; off by default
+void den_forgets(int yes);
 // a thing of kind started at /home/<at> by the den itself (as at boot): 1 started
 int den_start(const char *kind, const char *at);
 // the history's snapshot into the log's store (tippet's): a boot loads it and the steps after. 0 or a

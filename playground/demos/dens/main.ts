@@ -268,17 +268,8 @@ if (!isCard) {
 	}
 }
 
-// a hand-drawn boil on the frames' shells and the wires: six seeds, a slow round of them, the
-// noise's grain gliding between (index.html's animate); still under reduced motion
-{
-	const turb = document.getElementById("boil-noise")!
-	if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
-		turb.querySelector("animate")?.remove()
-	} else {
-		let i = 0
-		setInterval(() => turb.setAttribute("seed", String(1 + (i++ % 6))), 400)
-	}
-}
+// a hand-drawn wobble on the frames' shells and the wires (index.html's #boil), still: a seed
+// changed every 400 ms filtered every frame and every wire again each time, and kept a GPU busy
 
 // a sound thing's notes, through the page's sound (its mute)
 playing.play = (name, freq) => {
@@ -379,26 +370,38 @@ function add(v: View, kind: string) {
 	)
 }
 
-// a reader started again at its spot, reading args ([den, process]) or nothing
-function restart(v: View, t: Thing, args: string[], done: string) {
+// a reader started again at its spot, reading args ([den, process]) or nothing; after told
+// whether it was (a refusal said in words)
+function restart(
+	v: View,
+	t: Thing,
+	args: string[],
+	done: string,
+	after: (ok: boolean) => void = () => {},
+) {
 	if (v.mine) {
 		hosted(() => software.stop(t.id, "rewired"))
 		const r = hosted(() => software.run(runnerOf(t.kind), programOf(t.kind), t.at, { args }))
-		if ("refused" in r) return void refused(v, r)
+		if ("refused" in r) return void (refused(v, r), after(false))
+		after(true)
 		return say(done, "ok")
 	}
 	// the start asked only once the stop is answered, so it never finds the old one still there.
 	// not there: gone already, so the spot is free
 	say(`Rewiring ${whose(v, t)}…`)
 	asking(v, { op: "stop", process: t.process, reason: "rewired" }, (a) => {
-		if (!("refused" in a && a.refused === "not-there") && refused(v, a)) return
+		if (!("refused" in a && a.refused === "not-there") && refused(v, a)) return after(false)
 		asking(v, {
 			op: "start",
 			runner: runnerOf(t.kind),
 			program: host.carry(programOf(t.kind)),
 			at: `/${t.at.join("/")}`,
 			args,
-		}, (r) => refused(v, r) || say(done, "ok"))
+		}, (r) => {
+			const no = refused(v, r)
+			after(!no)
+			if (!no) say(done, "ok")
+		})
 	})
 }
 
@@ -715,6 +718,8 @@ function slotOf(f: Frame, t: Thing, live: Set<string>): number {
 // ---- things: one box each ----
 type Shown = {
 	box: Box
+	// the thing's node now: a rewire starts it again under a new id, at the same spot, in the same box
+	me: { id: string }
 	// where the page last put it (dragged elsewhere since: left there)
 	placed: { x: number; y: number }
 	kind: string
@@ -722,7 +727,9 @@ type Shown = {
 	out: string
 	update: (t: Thing, v: View) => void
 }
+// by spot: a thing's den and path, which a rewire keeps
 const shown = new Map<string, Shown>()
+const spotOf = (v: View, t: Thing) => `${v.who}:/${t.at.join("/")}`
 const COLOURS = ["#ff2284", "#2269ff", "#13917a", "#000"]
 
 function lines(canvas: HTMLCanvasElement, series: Record<string, number[]>) {
@@ -888,8 +895,9 @@ function makeShown(
 	y: number,
 	bounds: () => { x0: number; y0: number; x1: number; y1: number },
 ): Shown {
+	const me = { id: t.id }, spot = spotOf(v, t)
 	const box = board.box({
-		id: t.id,
+		id: spot,
 		x,
 		y,
 		bounds,
@@ -907,7 +915,7 @@ function makeShown(
 	x2.onclick = (e) => {
 		e.stopPropagation()
 		const now = views().find((q) => q.who === v.who)
-		const tt = now?.things.find((q) => q.id === t.id)
+		const tt = now?.things.find((q) => spotOf(now, q) === spot)
 		if (now && tt) remove(now, tt)
 	}
 	$(".box-head", box.el).append(x2)
@@ -924,7 +932,7 @@ function makeShown(
 		b.disabled = !v.mine
 		if (!v.mine) b.title = `press it ${theirs}`
 		b.onclick = () => {
-			controls.get(t.id)?.press?.()
+			controls.get(me.id)?.press?.()
 		}
 		box.el.addEventListener("keydown", (e) => {
 			if ((e.key === "Enter" || e.key === " ") && e.target === box.el) {
@@ -944,13 +952,13 @@ function makeShown(
 		for (const sec of [1, 2, 5]) {
 			const b = h("button", "step", `${sec} s`)
 			b.disabled = !v.mine
-			b.onclick = () => controls.get(t.id)?.every?.(sec)
+			b.onclick = () => controls.get(me.id)?.every?.(sec)
 			pick.set(sec, b)
 			row.append(b)
 		}
 		const play = h("button", "step play")
 		play.disabled = !v.mine
-		play.onclick = () => controls.get(t.id)?.pause?.()
+		play.onclick = () => controls.get(me.id)?.pause?.()
 		row.append(play)
 		body.append(n, row, note)
 		update = (t) => {
@@ -976,7 +984,7 @@ function makeShown(
 		let last = t
 		// here: your squares in ink over what is wired in, in cherry, as you draw; away: its out
 		const paint = () => {
-			const live = v.mine ? controls.get(t.id)?.now?.() : undefined
+			const live = v.mine ? controls.get(me.id)?.now?.() : undefined
 			squares(
 				c,
 				"#fff",
@@ -986,7 +994,7 @@ function makeShown(
 			)
 		}
 		clear.onclick = () => {
-			controls.get(t.id)?.clear?.()
+			controls.get(me.id)?.clear?.()
 			paint()
 		}
 		if (v.mine) {
@@ -1004,16 +1012,16 @@ function makeShown(
 				e.stopPropagation()
 				e.preventDefault()
 				c.setPointerCapture(e.pointerId)
-				const now = controls.get(t.id)?.now?.()
+				const now = controls.get(me.id)?.now?.()
 				at = cell(e)
 				on = !(now && square(now.mine, at[0], at[1]))
-				controls.get(t.id)?.draw?.(at[0], at[1], on)
+				controls.get(me.id)?.draw?.(at[0], at[1], on)
 				paint()
 			}
 			c.onpointermove = (e) => {
 				if (!at) return
 				const to = cell(e)
-				for (const [x, y] of between(at, to)) controls.get(t.id)?.draw?.(x, y, on)
+				for (const [x, y] of between(at, to)) controls.get(me.id)?.draw?.(x, y, on)
 				at = to
 				paint()
 			}
@@ -1156,20 +1164,30 @@ function makeShown(
 			feeds.replaceChildren(...(v.mine ? ns : []).map((name) => {
 				const b = h("button", "feed", `feed ${name}`)
 				b.onclick = () => {
-					controls.get(t.id)?.feed?.(name)
+					controls.get(me.id)?.feed?.(name)
 				}
 				return b
 			}))
 		}
 	}
-	return { box, placed: { x, y }, kind: t.kind, who: v.who, out: "", update }
+	return { box, me, placed: { x, y }, kind: t.kind, who: v.who, out: "", update }
 }
 
 // ---- wires ----
+// by key: "<source's spot> <reader's spot> <input>"
 const wires = new Map<string, Wire & { text?: string }>()
+const wireKey = (from: string, to: string, input: string) => `${from} ${to} ${input}`
+// a wire made or taken off, until the reader started again says so: made, drawn from the drop,
+// dashed (pending); taken off, not drawn meanwhile. the reader's box held while it starts again.
+// a refusal: as it was, with words. no answer in WAIT: let go
+const pending = new Map<string, { from: string; to: string; input: string; since: number }>()
+const dropped = new Map<string, number>()
+const holding = new Map<string, number>()
+const WAIT = 20000
 
-// another den not paired with this one: its ins and outs locked, greyed, each with a padlock and
-// its note. a wire can't start or end on one
+// another den not paired with this one: its ins and outs locked, greyed, a padlock over each dot
+// (inside it, so the board's face() keeps it and a wire still ends there), its note shown while
+// the pointer is on it. a wire can't start or end on one
 const LOCKED = "not trusted! pair first"
 const locked = (v: View) => !v.mine && !host.paired(v.who)
 const PADLOCK =
@@ -1182,20 +1200,20 @@ function lock(b: Box, on: boolean) {
 		if (on && !there) {
 			const l = h("span", "lock")
 			l.innerHTML = PADLOCK
-			l.title = LOCKED
 			l.append(h("span", "lock-note", LOCKED))
-			p.append(l)
+			p.querySelector(".dot")!.append(l)
 		} else if (!on && there) there.remove()
 	}
 }
-function refuseLocked(v: View) {
+// a wire tried on a locked port (or from one): said, and its padlock shaken
+function refuseLocked(v: View, port?: HTMLElement) {
 	sound.no()
 	say(`${LOCKED}: press pair on ${label(v)}, and its ins and outs open once it says yes.`, "hot")
-	for (const n of board.world.querySelectorAll<HTMLElement>(".port.locked .lock")) {
-		n.classList.remove("shake")
-		void n.offsetWidth
-		n.classList.add("shake")
-	}
+	const n = port?.querySelector<HTMLElement>(".lock")
+	if (!n) return
+	n.classList.remove("shake")
+	void n.offsetWidth
+	n.classList.add("shake")
 }
 // a drag from a locked port never starts (before the board's own pointerdown on its dot)
 board.world.addEventListener("pointerdown", (e) => {
@@ -1205,12 +1223,13 @@ board.world.addEventListener("pointerdown", (e) => {
 	e.preventDefault()
 	const who = shown.get(p.closest<HTMLElement>(".box")?.dataset.id ?? "")?.who
 	const v = views().find((x) => x.who === who)
-	if (v) refuseLocked(v)
+	if (v) refuseLocked(v, p)
 }, { capture: true })
 
+// a thing by its node's id, or by its spot (its box's id)
 function find(id: string): { v: View; t: Thing } | undefined {
 	for (const v of views()) {
-		const t = v.things.find((t) => t.id === id)
+		const t = v.things.find((t) => t.id === id || spotOf(v, t) === id)
 		if (t) return { v, t }
 	}
 }
@@ -1257,7 +1276,7 @@ function connect(source: string, reader: string, input: string, port?: HTMLEleme
 	if (!s || !r) return false
 	if (!(INPUTS[r.t.kind] ?? []).includes(input)) return false
 	if (locked(s.v) || locked(r.v)) {
-		refuseLocked(locked(s.v) ? s.v : r.v)
+		refuseLocked(locked(s.v) ? s.v : r.v, port)
 		return false
 	}
 	if (loops(s.t.id, r.t.id)) {
@@ -1271,11 +1290,20 @@ function connect(source: string, reader: string, input: string, port?: HTMLEleme
 		void port.offsetWidth
 		port.classList.add("snap")
 	}
+	const from = spotOf(s.v, s.t), to = spotOf(r.v, r.t), k = wireKey(from, to, input)
+	pending.set(k, { from, to, input, since: Date.now() })
+	holding.set(to, Date.now())
+	render()
 	restart(
 		r.v,
 		r.t,
 		argsWith(r.t, input, { input, den: s.v.who, at: `/${s.t.at.join("/")}` }),
 		`You wired ${whose(s.v, s.t)} (/${s.t.at.join("/")}) to ${inWords(r.v, r.t, input)}.`,
+		(ok) => {
+			holding.delete(to)
+			if (!ok) pending.delete(k)
+			render()
+		},
 	)
 	return true
 }
@@ -1305,8 +1333,22 @@ board.world.addEventListener("drop", (e) => {
 
 board.onDisconnect((w: Wire) => {
 	const r = find(w.to.box.id)
-	for (const [k, x] of wires) if (x === w) wires.delete(k)
-	if (r) restart(r.v, r.t, argsWith(r.t, w.to.name), `You unwired ${whose(r.v, r.t)}.`)
+	for (const [k, x] of wires) {
+		if (x !== w) continue
+		wires.delete(k)
+		pending.delete(k)
+		dropped.set(k, Date.now())
+	}
+	if (!r) return
+	const to = spotOf(r.v, r.t)
+	holding.set(to, Date.now())
+	restart(r.v, r.t, argsWith(r.t, w.to.name), `You unwired ${whose(r.v, r.t)}.`, (ok) => {
+		holding.delete(to)
+		if (!ok) {
+			for (const k of [...dropped.keys()]) if (k.split(" ")[1] === to) dropped.delete(k)
+		}
+		render()
+	})
 })
 
 // ---- the files and the terminal, docked under the board; one selection shared with the board ----
@@ -1322,11 +1364,11 @@ function pick(b: Box | undefined) {
 }
 const files = createFiles(host, $(".files"), {
 	pick: (_, id) => {
-		const s = id === undefined ? undefined : shown.get(id)
+		const s = id === undefined ? undefined : [...shown.values()].find((x) => x.me.id === id)
 		pick(s?.box)
 		if (s) board.show(s.box)
 	},
-	isThing: (id) => shown.has(id),
+	isThing: (id) => [...shown.values()].some((x) => x.me.id === id),
 	live: (name, fn) => code.live(name, fn),
 })
 createTerminal(host, $(".term"))
@@ -1409,6 +1451,16 @@ board.onPick((b) => {
 // ---- drawing it all ----
 let shape = ""
 let seen = new Set<string>()
+// a flash at most once in CALM for each box and wire: a timer's every tick flashing kept the page
+// painting all the time
+const CALM = 4000
+const flashed = new WeakMap<object, number>()
+function calmly(o: object, f: () => void) {
+	const now = Date.now(), was = flashed.get(o)
+	if (was !== undefined && now - was < CALM) return
+	flashed.set(o, now)
+	f()
+}
 const pairedWas = new Map<string, boolean>()
 let first = true
 const centre = (b: Box) => b.pos().x + b.el.offsetWidth / 2
@@ -1494,12 +1546,13 @@ function render() {
 			f.el.classList.toggle("locked", !yes)
 		}
 		for (const t of v.things) {
-			live.add(t.id)
+			const spot = spotOf(v, t)
+			live.add(spot)
 			const g = groupOf(f, t)
 			const slot = f.slots.get(`${g} ${t.at.join("/")}`)!
 			const px = f.x + 20 + (slot % COLS) * SLOT.w
 			const py = f.y + f.origin[g] + Math.floor(slot / COLS) * SLOT.h
-			let s = shown.get(t.id)
+			let s = shown.get(spot)
 			if (s) {
 				const p = s.box.pos()
 				if (p.x === s.placed.x && p.y === s.placed.y && (p.x !== px || p.y !== py)) {
@@ -1514,11 +1567,12 @@ function render() {
 					x1: f.x + f.w - 14,
 					y1: f.y + f.h - (f.keyboard ? 168 : 12),
 				}))
-				shown.set(t.id, s)
+				shown.set(spot, s)
 			}
+			s.me.id = t.id
 			const out = JSON.stringify(t.out ?? null)
 			if (out !== s.out) {
-				if (s.out !== "") s.box.flash("hot")
+				if (s.out !== "") calmly(s.box, () => s!.box.flash("hot"))
 				s.out = out
 			}
 			s.update(t, v)
@@ -1530,55 +1584,87 @@ function render() {
 			lock(s.box, locked(v))
 		}
 	}
-	for (const [id, s] of shown) {
-		if (live.has(id)) continue
+	// a reader starting again keeps its box meanwhile (a stop answered before its start)
+	const now = Date.now()
+	for (const [spot, since] of holding) if (now - since > WAIT) holding.delete(spot)
+	for (const [spot, s] of shown) {
+		if (live.has(spot) || holding.has(spot)) continue
 		s.box.remove()
-		shown.delete(id)
+		shown.delete(spot)
 	}
-	// wires: each reader's sources, from the source's out to the reader's input
+	// wires: each reader's sources, from the source's out to the reader's input; then those asked
+	// for and not yet answered, dashed
 	const want = new Set<string>()
 	const partners = new Map<Port, number[]>()
+	const draw = (k: string, a: Shown, b: Shown, input: string, text: string, wait: boolean) => {
+		want.add(k)
+		let w = wires.get(k)
+		if (!w) {
+			w = board.wire(a.box.port("out"), b.box.port(input))
+			wires.set(k, w)
+			w.text = text
+			w.label(text)
+		} else if (w.text !== text) {
+			w.text = text
+			w.label(text)
+			calmly(w, () => w!.flash("hot"))
+		}
+		w.dashed(wait)
+		// each end faces the other
+		const out = a.box.port("out"), inp = b.box.port(input)
+		partners.set(out, [...(partners.get(out) ?? []), centre(b.box) - centre(a.box)])
+		partners.set(inp, [centre(a.box) - centre(b.box)])
+		return w
+	}
+	const there = new Set<string>()
 	for (const v of vs) {
 		for (const t of v.things) {
-			const b = shown.get(t.id)
+			const b = shown.get(spotOf(v, t))
 			if (!b) continue
 			for (const src of t.sources) {
 				const s = sourceOf(src)
-				const a = s && shown.get(s.t.id)
-				if (!a || !(INPUTS[t.kind] ?? []).includes(src.input)) continue
-				const k = `${s.t.id} ${t.id} ${src.input}`
-				want.add(k)
-				const text = fmt(s?.t.out)
-				let w = wires.get(k)
-				if (!w) {
-					w = board.wire(a.box.port("out"), b.box.port(src.input))
-					wires.set(k, w)
-					w.text = text
-					w.label(text)
-				} else if (w.text !== text) {
-					w.text = text
-					w.label(text)
-					w.flash("hot")
-				}
-				w.tone(s?.v.alive && v.alive && !locked(s.v) && !locked(v) ? undefined : "dim")
+				const a = s && shown.get(spotOf(s.v, s.t))
+				if (!s || !a || !(INPUTS[t.kind] ?? []).includes(src.input)) continue
+				const k = wireKey(spotOf(s.v, s.t), spotOf(v, t), src.input)
+				there.add(k)
+				// taken off, not yet answered: not drawn again
+				if (dropped.has(k)) continue
+				pending.delete(k)
+				const w = draw(k, a, b, src.input, fmt(s.t.out), false)
+				w.tone(s.v.alive && v.alive && !locked(s.v) && !locked(v) ? undefined : "dim")
 				w.hint(
 					`reads ${src.at}${
-						s && s.v.who !== v.who
+						s.v.who !== v.who
 							? ` (${label(s.v)}'s: its steps come through tippet, and it is placed in ${
 								v.mine ? "this" : `${label(v)}'s`
 							} tree)`
 							: ""
 					}`,
 				)
-				// each end faces the other
-				const out = a.box.port("out"), inp = b.box.port(src.input)
-				partners.set(out, [...(partners.get(out) ?? []), centre(b.box) - centre(a.box)])
-				partners.set(inp, [centre(a.box) - centre(b.box)])
 			}
 		}
 	}
+	for (const [k, since] of dropped) if (!there.has(k) || now - since > WAIT) dropped.delete(k)
+	for (const [k, p] of pending) {
+		const a = shown.get(p.from), b = shown.get(p.to)
+		if (!a || !b || now - p.since > WAIT) {
+			pending.delete(k)
+			if (a && b) say("No answer to that wire yet, so it's gone: try it again.", "hot")
+			continue
+		}
+		const w = draw(k, a, b, p.input, find(p.from) ? fmt(find(p.from)!.t.out) : "", true)
+		w.tone(undefined)
+		w.hint("asked for: waiting for the answer")
+	}
+	// a reader starting again keeps the other wires into it meanwhile
 	for (const [k, w] of wires) {
 		if (want.has(k)) continue
+		const [, to, input] = k.split(" ")
+		const replaced = [...pending.values()].some((p) => p.to === to && p.input === input)
+		if (holding.has(to) && !replaced && !dropped.has(k)) {
+			want.add(k)
+			continue
+		}
 		w.remove()
 		wires.delete(k)
 	}
@@ -1595,8 +1681,8 @@ function render() {
 		}
 	}
 	// someone new, or gone quiet
-	const now = new Set(vs.filter((v) => v.alive && !v.mine).map((v) => v.who))
-	for (const who of now) {
+	const here = new Set(vs.filter((v) => v.alive && !v.mine).map((v) => v.who))
+	for (const who of here) {
 		if (seen.has(who)) continue
 		const v = vs.find((x) => x.who === who)!
 		if (!first) {
@@ -1605,11 +1691,11 @@ function render() {
 		}
 	}
 	for (const who of seen) {
-		if (now.has(who)) continue
+		if (here.has(who)) continue
 		const v = vs.find((x) => x.who === who)
 		if (v) say(`${label(v)} went quiet.`)
 	}
-	seen = now
+	seen = here
 	// paired, or not any more: the padlocks open with a happy sound, or come back
 	for (const v of vs) {
 		if (v.mine) continue

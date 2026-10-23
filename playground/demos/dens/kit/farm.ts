@@ -27,8 +27,8 @@ export type FarmScene = {
 	stale?: boolean
 }
 
-// how big a pig of this weight is drawn: 1x to 3x
-export const pigScale = (w: number) => Math.max(1, Math.min(3, Math.round(1 + (w - 5) / 10)))
+// how big a pig of this weight is drawn: 1x to 4x (about 30 and over: the fattest)
+export const pigScale = (w: number) => Math.max(1, Math.min(4, Math.round(1 + (w - 5) / 10)))
 
 export function createFarm(
 	canvas: HTMLCanvasElement,
@@ -134,11 +134,19 @@ export function createFarm(
 			ctx.fillRect(0, 0, width, height)
 		}
 	}
+	// the pigs wobble a pixel or two, a few times a second: looked at ten times a second, drawn only
+	// when a pig has moved (drawing every frame kept the page painting all the time)
 	let running = false
-	const loop = (now: number) => {
-		t = now
-		frame()
-		if (!still && canvas.isConnected) requestAnimationFrame(loop)
+	const placed = () => scene.pigs.map((p) => where(p).x).join()
+	let drawn = ""
+	const loop = () => {
+		t = performance.now()
+		const now = placed()
+		if (now !== drawn) {
+			drawn = now
+			frame()
+		}
+		if (!still && canvas.isConnected) setTimeout(loop, 100)
 		else running = false
 	}
 	return {
@@ -146,9 +154,10 @@ export function createFarm(
 		draw(s: FarmScene) {
 			scene = s
 			frame()
+			drawn = placed()
 			if (!still && !running) {
 				running = true
-				requestAnimationFrame(loop)
+				setTimeout(loop, 100)
 			}
 		},
 		// the pig under a point on the canvas (client coordinates), if any

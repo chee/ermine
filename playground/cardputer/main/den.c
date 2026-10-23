@@ -1073,6 +1073,9 @@ static void effects(void *data) {
 // ---- boot ----
 
 static int promote(void);
+static int (*store_snapshot)(void *self, const uint8_t *bytes, size_t length);
+static int snapshot_in_place(void *self, const uint8_t *bytes, size_t length);
+static int forgetting;
 
 int den_boot(const inst_install *install, const char *code, const char *dir, int64_t now) {
 	me.now = me.beat = now;
@@ -1092,6 +1095,12 @@ int den_boot(const inst_install *install, const char *code, const char *dir, int
 	tp_store *store = tp_file_store(&(tp_mem){counted, &part_now[0]}, dir, 1 << 20);
 	me.kept_on_flash = store != NULL;
 	if (store == NULL) store = tp_memory_store(&(tp_mem){counted, &part_now[0]}, 1 << 20);
+	else {
+		// the file store, its snapshot put in place on FAT (snapshot_in_place)
+		static tp_store wrapped;
+		wrapped = *store, store_snapshot = store->snapshot, wrapped.snapshot = snapshot_in_place;
+		store = &wrapped;
+	}
 	me.store = store;
 	me.log = tp_log_new(&(tp_log_options){.mem = mem_of(1), .store = store, .seed = install->secret, .strict = 1,
 		.told = told});
@@ -1103,7 +1112,7 @@ int den_boot(const inst_install *install, const char *code, const char *dir, int
 	// a snapshot written last time but not yet in place (a reset between), put in place first
 	if (me.kept_on_flash) promote();
 	me.history = tp_history_new(&(tp_history_options){.mem = mem_of(2), .log = me.log, .table = me.w.table,
-		.places = me.w.places, .kept = kept, .run = hosted});
+		.places = me.w.places, .kept = kept, .run = hosted, .forgets = forgetting});
 	if (me.history == NULL) return 1;
 	den_mark("log loaded");
 	{
@@ -1126,7 +1135,13 @@ int den_boot(const inst_install *install, const char *code, const char *dir, int
 		uint64_t have;
 		learn(tp_log_have(me.log, i, &have));
 	}
-	// this den's keys as only its own steps make them
+	// this den's keys as only its own steps make them. forgetting, the steps in the snapshot are let
+	// go: its keys as the snapshot has them, then the own steps still held on top (a put again is
+	// the same put)
+	if (forgetting) {
+		const nd_entry *k = tb_get(me.w.table, tb_string("value"), tb_string(me.keys_node));
+		if (k && is_map(k->value)) op_free(me.keys), me.keys = op_ref(k->value);
+	}
 	for (uint64_t n = 1; n <= tp_log_count(me.log, install->key); n++) keys_from(n);
 	me.synced = den_steps();
 
@@ -1289,8 +1304,8 @@ int den_start(const char *kind, const char *at) {
 }
 
 // a snapshot the store wrote beside the last (snapshot.new: FAT's rename won't replace a file)
-// put in its place, once it reads back as one whole canonical CBOR item; else let go. 0: there is a
-// snapshot now
+// put in its place, once it reads back as one whole canonical CBOR item; else let go. 1: put in
+// place
 static int promote(void) {
 	char *now = joined(me.dir, "/snapshot"), *made = joined(me.dir, "/snapshot.new");
 	FILE *f = fopen(made, "rb");
@@ -1308,17 +1323,24 @@ static int promote(void) {
 			ok = rename(made, now) == 0;
 		} else unlink(made);
 	}
-	FILE *there = fopen(now, "rb");
-	int has = there != NULL;
-	if (there) fclose(there);
 	free(now), free(made);
-	return has ? 0 : 1;
+	return ok;
 }
 
+// the store's snapshot, with promote after it: on FAT the store's rename onto the old snapshot is
+// refused (TP_STORE), its new one left beside it, put in place here
+static int snapshot_in_place(void *self, const uint8_t *bytes, size_t length) {
+	int why = store_snapshot(self, bytes, length);
+	if (why == TP_STORE && promote()) why = 0;
+	return why;
+}
+
+// forgetting (tippet's try-out, history.h): set before den_boot
+void den_forgets(int yes) { forgetting = yes; }
+
 int den_snapshot(void) {
-	int why = tp_history_snapshot(me.history);
-	// on FAT: written as snapshot.new, its rename refused (TP_STORE); put in place here
-	if (why == TP_STORE && promote() == 0) why = 0;
+	// forgetting: the snapshot, then the runs in it that have passed on (to galaxy) let go
+	int why = forgetting ? tp_history_forget(me.history, me.sync) : tp_history_snapshot(me.history);
 	printf("den: snapshot at %llu steps: %s\n", (unsigned long long)den_steps(), why ? tp_why(why) : "kept");
 	if (why) fprintf(stderr, "den: no snapshot: %s\n", tp_why(why));
 	else me.snapped = den_steps();
