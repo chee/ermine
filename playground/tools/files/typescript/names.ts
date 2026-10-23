@@ -8,6 +8,15 @@
 
 import { type Form, type Kind, KINDS } from "./types.ts"
 
+/** A name in a folder, as the store makes them: not "", "." or "..", and no "/" or NUL. */
+export const isName = (x: string) => x !== "" && x !== "." && x !== ".." && !/[/\0]/.test(x)
+
+/**
+ * A path from the store's folder, as the store makes them: names joined by "/", or "" for the
+ * folder itself. Anything else (absolute, or ".." in it) could reach out of the folder.
+ */
+export const isPath = (x: string) => x === "" || x.split("/").every(isName)
+
 /** The names the files program passes over unless the host gives others. */
 export const PASS: readonly string[] = [
 	".DS_Store",

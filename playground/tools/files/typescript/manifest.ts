@@ -396,6 +396,24 @@ function text(x: unknown, what: string): string {
 	return x
 }
 
+function name(x: unknown, what: string): string {
+	if (!names.isName(text(x, what))) throw new StoreError(`${what} is not a name in a folder`)
+	return x as string
+}
+
+function filenames(x: unknown, what: string): string[] {
+	const out = texts(x, what)
+	if (!out.every(names.isName)) throw new StoreError(`${what} is not a list of names in a folder`)
+	return out
+}
+
+function path(x: unknown, what: string): string {
+	if (!names.isPath(text(x, what))) {
+		throw new StoreError(`${what} is not a path in the store's folder`)
+	}
+	return x as string
+}
+
 function texts(x: unknown, what: string): string[] {
 	if (!Array.isArray(x) || !x.every((s) => typeof s === "string")) {
 		throw new StoreError(`${what} is not a list of text`)
@@ -473,25 +491,30 @@ export const shown: Codec<Layout> = {
 				number(h[2], "a home's position"),
 			]
 		}
-		if ("file" in r) x.file = text(r.file, "a layout's file")
+		if ("file" in r) x.file = name(r.file, "a layout's file")
 		if ("laid" in r) x.laid = unbytes(r.laid, "a layout's laid")
 		if ("was" in r) x.was = unbytes(r.was, "a layout's was")
-		if ("sides" in r) x.sides = texts(r.sides, "a layout's sides")
+		if ("sides" in r) x.sides = filenames(r.sides, "a layout's sides")
 		if ("folder" in r) x.folder = yes(r.folder, "a layout's folder")
 		if ("entries" in r) {
 			const e = r.entries
 			if (!isFields(e)) throw new StoreError("a layout's entries are not a map")
 			x.entries = new Map()
 			for (const [k, v] of Object.entries(e)) {
-				if (typeof v === "string") x.entries.set(k, v)
+				if (typeof v === "string") x.entries.set(k, name(v, `the entry ${JSON.stringify(k)}`))
 				else {
-					const stems = texts(v, `the entry ${JSON.stringify(k)}`)
+					const stems = filenames(v, `the entry ${JSON.stringify(k)}`)
 					if (!stems.length) throw new StoreError(`the entry ${JSON.stringify(k)} has no stem`)
 					x.entries.set(k, stems)
 				}
 			}
 		}
-		if ("left" in r) x.left = texts(r.left, "a layout's left")
+		if ("left" in r) {
+			x.left = texts(r.left, "a layout's left")
+			if (!x.left.every(names.isPath)) {
+				throw new StoreError("a layout's left is not a list of paths")
+			}
+		}
 		if ("away" in r) x.away = yes(r.away, "a layout's away")
 		return x
 	},
@@ -583,8 +606,8 @@ export const plan: Codec<Step[]> = {
 				before: where.decode(r.before, `${what}'s before`),
 				after: where.decode(r.after, `${what}'s after`),
 			}
-			if ("from" in r) s.from = text(r.from, `${what}'s from`)
-			if ("to" in r) s.to = text(r.to, `${what}'s to`)
+			if ("from" in r) s.from = path(r.from, `${what}'s from`)
+			if ("to" in r) s.to = path(r.to, `${what}'s to`)
 			if ("id" in r) s.id = text(r.id, `${what}'s id`)
 			if ("slot" in r) {
 				const slot = texts(r.slot, `${what}'s slot`)
@@ -749,7 +772,11 @@ export function manifest(
 	async function through(name: string, bytes: Uint8Array, path: string) {
 		await Deno.mkdir(tmp, { recursive: true })
 		const t = `${tmp}/${name}`
-		await Deno.writeFile(t, bytes)
+		// a new file: what a crash left there (a link too) goes first, and is never written through
+		await Deno.remove(t).catch((e) => {
+			if (!(e instanceof Deno.errors.NotFound)) throw e
+		})
+		await Deno.writeFile(t, bytes, { createNew: true })
 		await sys.sync(t)
 		await Deno.rename(t, path)
 		await sys.sync(parent(path))

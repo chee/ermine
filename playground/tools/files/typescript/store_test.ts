@@ -359,9 +359,9 @@ Deno.test({
 			assertEquals(await listing(folder), {
 				"clock": "/",
 				"clock.FINAL.txt": "13:00",
-				"clock.FINAL.FINAL.text": '{\n  "at": 14.0\n}',
+				"clock.FINAL.FINAL.text": '{\n  "at": 14\n}',
 				"clock.txt": "12:00",
-				"clock/inner.text": "1.0",
+				"clock/inner.text": "1",
 			})
 			assertEquals(await attribute(sys, `${folder}/clock.FINAL.txt`, attr.side), "1")
 			assertEquals(await attribute(sys, `${folder}/clock.FINAL.txt`, attr.id), "c")
@@ -383,7 +383,7 @@ Deno.test({
 			assertEquals(await attribute(sys, `${folder}/clock.txt`, TAG), "Red")
 			for (const p of ["clock.txt", "clock"]) {
 				assertEquals(await attribute(sys, `${folder}/${p}`, attr.info + "color"), null)
-				assertEquals(await attribute(sys, `${folder}/${p}`, attr.info + "size"), "3.0")
+				assertEquals(await attribute(sys, `${folder}/${p}`, attr.info + "size"), "3")
 			}
 			// a side that goes is removed
 			m.sides("c", ["13:30"])

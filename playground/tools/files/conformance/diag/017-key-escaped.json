@@ -7,12 +7,12 @@
 				"a\nb": 1
 			},
 			"expect": {
-				"text": "{\n  \"a\\nb\": 1.0\n}"
+				"text": "{\n  \"a\\nb\": 1\n}"
 			}
 		},
 		{
 			"op": "read",
-			"text": "{\n  \"a\\nb\": 1.0\n}",
+			"text": "{\n  \"a\\nb\": 1\n}",
 			"expect": {
 				"value": {
 					"a\nb": 1

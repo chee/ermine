@@ -3,15 +3,19 @@
 //
 // write: two-space indentation, a map's keys in code point order, bytes as
 // h'...', a typed array as its tag on its bytes, 85(h'0000803f'), a
-// stand-in as its tag on its kind, 305419896("clock"), and each
-// number as the shortest decimal that reads back as it, always with a point
-// or an exponent: 1.0, NaN, Infinity, -Infinity, 0.0. No final newline.
+// stand-in as its tag on its kind, 305419896("clock"), a whole number as an
+// integer, its exact digits (1, -1, 0, 9007199254740992), and any other number
+// as the shortest decimal that reads back as it, with a point or an exponent
+// (1.5, 1e-7), or NaN, Infinity, -Infinity. No final newline.
 //
 // read: any spacing, comments as RFC 8610 Appendix G writes them, any key
-// order, indefinite lengths, bytes as h'', b64'' or '', any integer or
-// decimal as the nearest number. It refuses a tag other than a typed array's
-// or a stand-in's (64 among them: no uint8 kind, bytes are that),
-// undefined, other simple values, a key that is not text, and a key twice.
+// order, indefinite lengths, bytes as h'', b64'' or '', an integer as its
+// exact value (a bigint past 2^53 - 1, however big), and a decimal with a
+// point or an exponent as the nearest number, a bigint when that is whole and
+// past 2^53 - 1 (whole numbers are integers). It refuses a tag other than a
+// typed array's or a stand-in's (64 among them: no uint8 kind, bytes are
+// that), undefined, other simple values, a key that is not text, and a key
+// twice.
 //
 // Reading also takes what RFC 8949 and RFC 8610 allow beside these: integers
 // in 0x, 0o and 0b, encoding indicators (_0 to _3), ''_ and ""_, \u{...}, a
@@ -47,8 +51,7 @@ export function write(value: Value): string {
 function show(x: Value, indent: string): string {
 	if (x === null || typeof x === "boolean") return String(x)
 	if (typeof x === "number") return decimal(x)
-	// a whole number past a double's exact ones: as the nearest double, as read
-	if (typeof x === "bigint") return decimal(Number(x))
+	if (typeof x === "bigint") return String(x)
 	if (typeof x === "string") return quote(x)
 	if (x instanceof Uint8Array) return hex(x)
 	if (x instanceof Stand) return `${STAND}(${show(x.kind, indent)})`
@@ -69,12 +72,10 @@ function show(x: Value, indent: string): string {
 	return `{\n${lines.join(",\n")}\n${indent}}`
 }
 
-/** The shortest decimal that reads back as x, with a point or an exponent. */
+/** A whole number's exact digits (zero has no sign); else the shortest decimal that reads back as x. */
 function decimal(x: number): string {
-	if (!Number.isFinite(x)) return String(x) // NaN, Infinity, -Infinity
-	if (Object.is(x, -0)) return "0.0" // zero has no sign
-	const s = String(x) // the fewest digits that read back as x
-	return /[.e]/.test(s) ? s : s + ".0"
+	if (Number.isInteger(x)) return String(BigInt(x))
+	return String(x) // NaN, Infinity, -Infinity, or the fewest digits, with a point or an exponent
 }
 
 const ESCAPE = new Map([
@@ -364,8 +365,7 @@ class Reader {
 			body = negative ? s.slice(1) : s
 		if (!/^0[xob]/i.test(body) && /[.e]/i.test(body)) {
 			this.indicator(false)
-			const x = Number(s) // the nearest, as JavaScript reads a decimal
-			return x === 0 ? 0 : x // zero has no sign
+			return exact(Number(s)) // the nearest, as JavaScript reads a decimal
 		}
 		const n = BigInt(body)
 		this.indicator(false)
@@ -375,7 +375,7 @@ class Reader {
 			if (t[this.at] === "(") return this.tag(n, start)
 			this.at = after
 		}
-		return Number(negative ? -n : n) // the nearest, and -0 is 0
+		return exact(negative ? -n : n)
 	}
 
 	/** A tag: a typed array's over bytes, or a stand-in's over its kind. */
@@ -475,6 +475,15 @@ class Reader {
 		}
 	}
 }
+
+/** A whole number as a number while it is safe, a bigint past that, and -0 as 0; any other as it is. */
+function exact(n: number | bigint): number | bigint {
+	if (typeof n === "number" && !Number.isInteger(n)) return n // a fraction, NaN, an infinity
+	const b = BigInt(n)
+	return b >= -SAFE && b <= SAFE ? Number(b) : b
+}
+
+const SAFE = BigInt(Number.MAX_SAFE_INTEGER)
 
 /** A typed array from its tag and its bytes, each NaN the one NaN; undefined if not whole elements. */
 function typed(tag: number, bytes: Uint8Array): Value | undefined {

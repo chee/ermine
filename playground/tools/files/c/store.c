@@ -329,6 +329,21 @@ static const char *abs_(const S *s, const char *path) {
 	return fmt("%s/%s", s->folder, path);
 }
 
+// a path to write at, as abs_ has it, with no link on the way: a folder made a link (by a person, or a plan) is not
+// followed out of the store's folder; one is ENOTDIR, a fault, which a step lists
+static int onto(S *s, const char *path, const char **out) {
+	for (const char *slash = strchr(path, '/'); slash; slash = strchr(slash + 1, '/')) {
+		const char *p = fmt("%.*s", (int)(slash - path), path);
+		struct stat st;
+		if (strcmp(p, ".ermine") != 0 && lstat(abs_(s, p), &st) == 0 && S_ISLNK(st.st_mode)) {
+			errno = ENOTDIR;
+			return failed(s, false);
+		}
+	}
+	*out = abs_(s, path);
+	return 0;
+}
+
 static const char *number(double n) {
 	char text[32];
 	jsonNumberText(n, text);
@@ -468,9 +483,9 @@ static int readfile(S *s, const char *abspath, const uint8_t **data, size_t *len
 	return 0;
 }
 
-// Deno.writeFile: made if it is not there, made empty if it is
+// Deno.writeFile with createNew: a new file, never through one there (a link there is not followed)
 static int writefile(S *s, const char *abspath, const uint8_t *data, size_t length) {
-	int fd = open(abspath, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+	int fd = open(abspath, O_WRONLY | O_CREAT | O_EXCL, 0666);
 	if (fd < 0) return failed(s, false);
 	for (size_t at = 0; at < length;) {
 		ssize_t w = write(fd, data + at, length - at);
@@ -489,7 +504,8 @@ static int writefile(S *s, const char *abspath, const uint8_t *data, size_t leng
 // Deno.remove: a file, a link or an empty folder
 static int remove_(S *s, const char *path) {
 	struct stat st;
-	const char *a = abs_(s, path);
+	const char *a;
+	TRY(onto(s, path, &a));
 	if (lstat(a, &st) == -1) return failed(s, false);
 	if (S_ISDIR(st.st_mode) ? rmdir(a) == -1 : unlink(a) == -1) return failed(s, false);
 	return 0;
@@ -522,11 +538,15 @@ static int get_(S *s, const char *path, const char *name, const uint8_t **value,
 }
 
 static int set_(S *s, const char *path, const char *name, const uint8_t *value, size_t length) {
-	return sys_set(abs_(s, path), name, value, length) == -1 ? failed(s, true) : 0;
+	const char *a;
+	TRY(onto(s, path, &a));
+	return sys_set(a, name, value, length) == -1 ? failed(s, true) : 0;
 }
 
 static int unset_(S *s, const char *path, const char *name) {
-	return sys_unset(abs_(s, path), name) == -1 ? failed(s, true) : 0;
+	const char *a;
+	TRY(onto(s, path, &a));
+	return sys_unset(a, name) == -1 ? failed(s, true) : 0;
 }
 
 // the names of an entry's attributes
@@ -570,7 +590,10 @@ typedef struct {
 
 static int swapping(void *context) {
 	Move *m = context;
-	return sys_swap(abs_(m->s, m->a), abs_(m->s, m->b)) == -1 ? failed(m->s, true) : 0;
+	const char *a, *b;
+	TRY(onto(m->s, m->a, &a));
+	TRY(onto(m->s, m->b, &b));
+	return sys_swap(a, b) == -1 ? failed(m->s, true) : 0;
 }
 
 static int swap_(S *s, const char *a, const char *b) {
@@ -580,7 +603,10 @@ static int swap_(S *s, const char *a, const char *b) {
 
 static int renaming(void *context) {
 	Move *m = context;
-	int r = sys_rename(abs_(m->s, m->a), abs_(m->s, m->b));
+	const char *a, *b;
+	TRY(onto(m->s, m->a, &a));
+	TRY(onto(m->s, m->b, &b));
+	int r = sys_rename(a, b);
 	if (r < 0) return failed(m->s, true);
 	*m->taken = r == SYS_TAKEN;
 	return 0;
@@ -1220,11 +1246,13 @@ static int carry(S *s, const char *from, const char *to) {
 static int render(S *s, const char *path, const char *hash, const char *form) {
 	char none[65];
 	mf_null(none);
+	const char *at;
+	TRY(onto(s, path, &at));
 	if (s->mirror && strcmp(hash, none) != 0) {
 		const uint8_t *data;
 		size_t length;
 		TRY(shows(s, hash, form, &data, &length));
-		return writefile(s, abs_(s, path), data, length);
+		return writefile(s, at, data, length);
 	}
 	if (strcmp(hash, none) == 0 || strcmp(form, "cbor") == 0) {
 		Json *v;
@@ -1235,19 +1263,21 @@ static int render(S *s, const char *path, const char *hash, const char *form) {
 		jsonFree(v);
 		if (r) return free(b.data), r;
 		own((char *)b.data);
-		return writefile(s, abs_(s, path), b.data, b.length);
+		return writefile(s, at, b.data, b.length);
 	}
-	if (sys_clone(fmt("%s/values/%s", s->ermine, hash), abs_(s, path)) == -1) return failed(s, true);
+	if (sys_clone(fmt("%s/values/%s", s->ermine, hash), at) == -1) return failed(s, true);
 	return 0;
 }
 
 // sends an entry to the Trash
 static int bin(S *s, const char *path) {
+	const char *a;
+	TRY(onto(s, path, &a));
 	if (s->options.trash) {
-		if (s->options.trash(s->options.trash_context, abs_(s, path)) == -1) return failed(s, false);
+		if (s->options.trash(s->options.trash_context, a) == -1) return failed(s, false);
 		return 0;
 	}
-	if (sys_trash_in(s->options.home, abs_(s, path)) == -1) return failed(s, true);
+	if (sys_trash_in(s->options.home, a) == -1) return failed(s, true);
 	return 0;
 }
 
@@ -1405,7 +1435,11 @@ static int run(S *s, const Step *st, double t, Result *out) {
 		TRY(clear_(s, tp, st->to));
 		bool file = st->after.kind == FOUND_FILE;
 		if (file) TRY(render(s, tp, st->after.text, st->form));
-		else if (symlink(st->after.text, abs_(s, tp)) == -1) return failed(s, false);
+		else {
+			const char *at;
+			TRY(onto(s, tp, &at));
+			if (symlink(st->after.text, at) == -1) return failed(s, false);
+		}
 		if (st->id) TRY(mark(s, tp, st->id));
 		if (st->side) {
 			const char *n = fmt("%d", st->side);
@@ -1420,7 +1454,9 @@ static int run(S *s, const Step *st, double t, Result *out) {
 	}
 	if (strcmp(st->what, "folder") == 0) {
 		TRY(clear_(s, tp, st->to));
-		if (mkdir(abs_(s, tp), 0777) == -1) return failed(s, false);
+		const char *at;
+		TRY(onto(s, tp, &at));
+		if (mkdir(at, 0777) == -1) return failed(s, false);
 		if (st->id) TRY(mark(s, tp, st->id));
 		if (st->slot) {
 			size_t n;
@@ -2262,10 +2298,14 @@ static int fix(Mend *m, const char *p) {
 		} else TRY(inform(s, tp, w->info, p));
 		TRY(sync_(s, tp));
 	} else if (w->kind == LAID_LINK) {
-		if (symlink(w->target, abs_(s, tp)) == -1) return failed(s, false);
+		const char *at;
+		TRY(onto(s, tp, &at));
+		if (symlink(w->target, at) == -1) return failed(s, false);
 		TRY(mark(s, tp, w->id));
 	} else {
-		if (mkdir(abs_(s, tp), 0777) == -1) return failed(s, false);
+		const char *at;
+		TRY(onto(s, tp, &at));
+		if (mkdir(at, 0777) == -1) return failed(s, false);
 		if (w->kind == LAID_FOLDER) {
 			TRY(mark(s, tp, w->id));
 			TRY(inform(s, tp, w->info, p));
@@ -2884,19 +2924,30 @@ size_t st_others(st_store *s, const mf_record **records) {
 	return out.count;
 }
 
+// a path given that could reach out of the store's folder (absolute, or ".." in it) is refused, as store.ts's abs does
+static int given(S *s, const char *const *paths, size_t count) {
+	for (size_t i = 0; paths && i < count; i++)
+		if (!names_ispath(paths[i], strlen(paths[i]))) return refuse(s, "\"%s\" is not a path in the store's folder", paths[i]);
+	return 0;
+}
+
 st_code st_differences(st_store *s, const char *const *touched, size_t count, const st_difference **out, size_t *length) {
 	st_difference *d = NULL;
 	*length = 0;
+	*out = NULL;
+	if (given(s, touched, count)) return code(s, T_STORE);
 	int r = differences(s, touched, count, touched != NULL, &d, length);
 	*out = d;
 	return code(s, r);
 }
 
 st_code st_mend(st_store *s, const char *const *paths, size_t count) {
+	if (given(s, paths, count)) return code(s, T_STORE);
 	return code(s, mend(s, paths, count, paths != NULL));
 }
 
 st_code st_trash(st_store *s, const char *path, const char *why) {
+	if (given(s, &path, 1)) return code(s, T_STORE);
 	return code(s, toss(s, path, path, why));
 }
 

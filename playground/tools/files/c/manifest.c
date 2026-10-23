@@ -5,6 +5,7 @@
 #include "../../../../ermine/encoding/c/blake3/blake3.h"
 #include "../../../../ermine/encoding/c/cbor.h"
 #include "diag.h"
+#include "names.h"
 
 #include <dirent.h>
 #include <errno.h>
@@ -725,6 +726,20 @@ static bool texts(const Json *x) {
 	return true;
 }
 
+// a name in a folder (names.h), or a list of them; a path from the store's folder, or a list of them
+static bool aname(const Json *x) {
+	return jsonIsString(x) && names_isname(x->string, x->stringLength);
+}
+static bool apath(const Json *x) {
+	return jsonIsString(x) && names_ispath(x->string, x->stringLength);
+}
+static bool alist(const Json *x, bool (*each)(const Json *)) {
+	if (!jsonIsArray(x)) return false;
+	for (int i = 0; i < x->array.count; i++)
+		if (!each(x->array.items[i])) return false;
+	return true;
+}
+
 static bool oneof(const Json *key, const char *const *set, size_t n) {
 	for (size_t i = 0; i < n; i++)
 		if (strlen(set[i]) == key->stringLength && memcmp(set[i], key->string, key->stringLength) == 0) return true;
@@ -790,7 +805,7 @@ static Json *shownread(const Json *r) {
 	if ((v = jsonGet(r, "home"))) {
 		if (!jsonIsArray(v) || v->array.count != 3 || !jsonIsString(v->array.items[0]) || !jsonIsString(v->array.items[1]) || !jsonIsNumber(v->array.items[2]) || !add(x, "home", v)) goto bad;
 	}
-	if ((v = jsonGet(r, "file")) && (!jsonIsString(v) || !add(x, "file", v))) goto bad;
+	if ((v = jsonGet(r, "file")) && (!aname(v) || !add(x, "file", v))) goto bad;
 	for (int i = 0; i < 2; i++) {
 		const char *key = i ? "was" : "laid";
 		char hash[65];
@@ -799,7 +814,7 @@ static Json *shownread(const Json *r) {
 			jsonAdd(x, key, jsonString(hash));
 		}
 	}
-	if ((v = jsonGet(r, "sides")) && (!texts(v) || !add(x, "sides", v))) goto bad;
+	if ((v = jsonGet(r, "sides")) && (!alist(v, aname) || !add(x, "sides", v))) goto bad;
 	if ((v = jsonGet(r, "folder")) && (!istrue(v) || !add(x, "folder", v))) goto bad;
 	if ((v = jsonGet(r, "entries"))) {
 		if (!jsonIsObject(v)) goto bad;
@@ -808,13 +823,13 @@ static Json *shownread(const Json *r) {
 		for (int i = 0; i < v->object.count; i++) {
 			const JsonMember *k = &v->object.members[i];
 			// a stem, or a list of them, one at least
-			if (!jsonIsString(k->value) && !(texts(k->value) && k->value->array.count)) goto bad;
+			if (!aname(k->value) && !(alist(k->value, aname) && k->value->array.count)) goto bad;
 			Json *c = copyof(k->value);
 			if (!c) goto bad;
 			jsonAddOfLength(e, k->key, k->keyLength, c);
 		}
 	}
-	if ((v = jsonGet(r, "left")) && (!texts(v) || !add(x, "left", v))) goto bad;
+	if ((v = jsonGet(r, "left")) && (!alist(v, apath) || !add(x, "left", v))) goto bad;
 	if ((v = jsonGet(r, "away")) && (!istrue(v) || !add(x, "away", v))) goto bad;
 	return x;
 bad:
@@ -947,9 +962,10 @@ static Json *planread(const Json *list) {
 		if (before) jsonAdd(m, "before", before);
 		if (after) jsonAdd(m, "after", after);
 		if (!before || !after || !add(m, "number", number) || !add(m, "what", what)) goto bad;
+		// from and to: paths in the store's folder; id: any text
 		for (int k = 0; k < 3; k++) {
 			const char *key = k == 0 ? "from" : k == 1 ? "to" : "id";
-			if ((v = jsonGet(r, key)) && (!jsonIsString(v) || !add(m, key, v))) goto bad;
+			if ((v = jsonGet(r, key)) && (!(k < 2 ? apath(v) : jsonIsString(v)) || !add(m, key, v))) goto bad;
 		}
 		if ((v = jsonGet(r, "slot")) && (!texts(v) || v->array.count != 2 || !add(m, "slot", v))) goto bad;
 		if ((v = jsonGet(r, "form")) && (!knownjson(v) || !add(m, "form", v))) goto bad;
@@ -1328,7 +1344,7 @@ static int readfile(const char *path, uint8_t **data, size_t *length) {
 	return 0;
 }
 
-// writes the bytes to the file, made if it is not there; flags: O_TRUNC or O_APPEND
+// writes the bytes to the file; flags: O_EXCL (a new file) or O_APPEND (made if it is not there)
 static int writefile(const char *path, const uint8_t *data, size_t length, int flags) {
 	int fd = open(path, O_WRONLY | O_CREAT | flags, 0666);
 	if (fd < 0) return -1;
@@ -1346,11 +1362,12 @@ static int writefile(const char *path, const uint8_t *data, size_t length, int f
 	return close(fd);
 }
 
-// writes bytes in tmp/ as name, synced, then renames them to path, and syncs its folder
+// writes bytes in tmp/ as name, synced, then renames them to path, and syncs its folder. a new file: what a crash left
+// there (a link too) goes first, and is never written through
 static mf_code through(mf_manifest *m, const char *name, const uint8_t *data, size_t length, const char *path) {
 	mf_code c = MF_IO;
 	char *t = join(m->tmp, name), *folder = copy(path, (size_t)(strrchr(path, '/') - path));
-	if (mkdirs(m->tmp) == 0 && writefile(t, data, length, O_TRUNC) == 0 && syncpath(m, t) == 0 && rename(t, path) == 0 && syncpath(m, folder) == 0) c = MF_OK;
+	if (mkdirs(m->tmp) == 0 && (unlink(t) == 0 || errno == ENOENT) && writefile(t, data, length, O_EXCL) == 0 && syncpath(m, t) == 0 && rename(t, path) == 0 && syncpath(m, folder) == 0) c = MF_OK;
 	free(t), free(folder);
 	return c;
 }

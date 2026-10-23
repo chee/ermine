@@ -338,7 +338,7 @@
 					{
 						"path": "clock/inner.text",
 						"kind": "file",
-						"hex": "312e30",
+						"hex": "31",
 						"attrs": {
 							"party.chee.ermine.id": "i"
 						}
@@ -787,7 +787,7 @@
 								"hex": "0001ff"
 							},
 							"party.chee.ermine.info.shape": "{\n  \"round\": true\n}",
-							"party.chee.ermine.info.size": "3.0"
+							"party.chee.ermine.info.size": "3"
 						}
 					},
 					{
@@ -801,13 +801,13 @@
 								"hex": "0001ff"
 							},
 							"party.chee.ermine.info.shape": "{\n  \"round\": true\n}",
-							"party.chee.ermine.info.size": "3.0"
+							"party.chee.ermine.info.size": "3"
 						}
 					},
 					{
 						"path": "clock/inner.text",
 						"kind": "file",
-						"hex": "312e30",
+						"hex": "31",
 						"attrs": {
 							"party.chee.ermine.id": "i"
 						}
@@ -1362,7 +1362,7 @@
 								"hex": "0001ff"
 							},
 							"party.chee.ermine.info.shape": "{\n  \"round\": true\n}",
-							"party.chee.ermine.info.size": "4.0"
+							"party.chee.ermine.info.size": "4"
 						}
 					},
 					{
@@ -1376,13 +1376,13 @@
 								"hex": "0001ff"
 							},
 							"party.chee.ermine.info.shape": "{\n  \"round\": true\n}",
-							"party.chee.ermine.info.size": "3.0"
+							"party.chee.ermine.info.size": "3"
 						}
 					},
 					{
 						"path": "clock/inner.text",
 						"kind": "file",
-						"hex": "312e30",
+						"hex": "31",
 						"attrs": {
 							"party.chee.ermine.id": "i"
 						}
