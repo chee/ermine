@@ -1160,7 +1160,7 @@ function makeShown(
 		// one picked played once here. a sound played: one small pulse. what it has to say is in
 		// its title, and in the caption when it matters. data-played, data-sound: what it played
 		const icon = h("button", "speakicon")
-		icon.append(picture("sound", 3))
+		icon.append(picture("sound", 2))
 		body.append(icon)
 		icon.onclick = (e) => {
 			e.stopPropagation()
