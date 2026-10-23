@@ -87,6 +87,10 @@ presence_suite = presence
 presence_tests = $(wildcard playground/together/presence/typescript/presence_harness_test.ts)
 LIBS = tracker table node pack cbor blop squish op-apply paths places processes protect update guard scheduler names diag layout manifest store program sys
 LIBS += presence
+# squish at the ends of a 64-bit whole number, what no scenario reaches: a test of its own
+squish-test_src = core/op/c/squish.c core/op/c/squish_test.c
+squish-test = core/op/c/squish-test
+LIBS += squish-test
 # hash (playground/encoding): a value's name, BLAKE3 of its canonical CBOR, against conformance/hash/vectors.json
 hash_src = playground/encoding/c/hash_test.c playground/encoding/c/hash.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src)
 hash = playground/encoding/c/hash-test
@@ -143,10 +147,12 @@ LIBS += clingy-test
 places-test_src = $(filter-out conformance/c/harness.c core/op/c/json.c conformance/c/protocol_harness.c filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) filesystem/places/c/places_test.c
 places-test = filesystem/places/c/places-test
 LIBS += places-test
-# programs (playground/programs): satisfy and open (programs) and start, over ermine/types, ermine/processes' start and
+# programs (playground/programs): satisfy and open (programs) and start, over ermine/types, experiments/software (its processes ermine/processes' start) and
 # the compilers library and host functions; compilers (playground/compilers) on its own. on the places harness's world with boxes
 programs_base = $(filter-out filesystem/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/boxes/c/boxes.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) experiments/software/c/functions.c
 programs_lib = ermine/types/c/types.c ermine/types/c/utis.c playground/programs/c/programs.c playground/programs/c/programs_json.c
+# software's own files (experiments/software): start runs its processes on it
+software_lib = experiments/software/c/common.c experiments/software/c/offers.c experiments/software/c/run.c experiments/software/c/software.c
 programs_src = $(programs_base) $(programs_lib) playground/programs/c/programs_harness.c
 programs = playground/programs/c/programs-harness
 programs_suite = programs
@@ -154,7 +160,7 @@ programs_tests = $(wildcard playground/programs/typescript/programs_harness_test
 compilers_src = $(programs_base) playground/compilers/c/compilers.c playground/compilers/c/compilers_harness.c
 compilers = playground/compilers/c/compilers-harness
 compilers_suite = compilers
-programs-start_src = $(programs_base) $(programs_lib) playground/compilers/c/compilers.c ermine/processes/c/start.c ermine/processes/c/runs.c playground/programs/c/start.c playground/programs/c/start_harness.c ermine/processes/c/scopes.c ermine/sites/c/sites.c playground/programs/c/dlopen.c
+programs-start_src = $(programs_base) $(programs_lib) playground/compilers/c/compilers.c ermine/processes/c/start.c ermine/processes/c/runs.c $(software_lib) playground/programs/c/start.c playground/programs/c/start_harness.c ermine/processes/c/scopes.c ermine/sites/c/sites.c playground/programs/c/dlopen.c
 programs-start = playground/programs/c/start-harness
 programs-start_suite = start
 programs-start_flags = -DPG_FIXTURES='"$(CURDIR)/playground/programs/c/fixtures/"'

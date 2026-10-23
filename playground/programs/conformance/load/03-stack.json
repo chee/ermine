@@ -1,5 +1,5 @@
 {
-	"title": "loaders stack: toy (its type a toy script) is run by mid, a JavaScript runner whose load imports a toy script, itself run by js, the host's. tick.toy's chain: [toy (by [mid (by [js])])]: mid loaded by js, then toy by mid, then toy runs the program. the pin nests the bys. a second start: neither loaded again",
+	"title": "loaders stack: toy (its type a toy script) is run by mid, a JavaScript runner (software's shape: a start, unused here) whose load imports a toy script, itself run by js, the host's. tick.toy's chain: [toy (by [mid (by [js])])]: mid loaded by js, then toy by mid, then toy runs the program. the pin nests the bys. a second start: neither loaded again",
 	"steps": [
 		{
 			"op": "kids",
@@ -28,7 +28,7 @@
 		{
 			"op": "value",
 			"id": "T",
-			"value": "export function run(code, api) { say([\"run\", api.process.id, code]); return { stop: () => say([\"stop\", api.process.id]) } }",
+			"value": "export function start(code, ctx) { say([\"run\", ctx.process.id, code]); return { stop: () => say([\"stop\", ctx.process.id]) } }",
 			"expect": {}
 		},
 		{
@@ -45,7 +45,7 @@
 		{
 			"op": "value",
 			"id": "M",
-			"value": "export function load(code) { say([\"load\"]); return import(\"data:text/javascript,\" + encodeURIComponent(code)) }",
+			"value": "export function start() {} export function load(code) { say([\"load\"]); return import(\"data:text/javascript,\" + encodeURIComponent(code)) }",
 			"expect": {}
 		},
 		{
@@ -136,7 +136,7 @@
 								"toy"
 							],
 							"attributes": "05794a51b9b26fb15c65685a15e7349e279fda40a5398b7dd35655dc639eddb5",
-							"hash": "7889d48089a95b9f91ed0c64a561c90d2894807b8ccb8e639b53ed137486e677",
+							"hash": "9fc65bc43acae914c2ea14cae6454d9071bafa557ec3628adb929b57b5def008",
 							"by": [
 								{
 									"id": "M",
@@ -144,7 +144,7 @@
 										"mid"
 									],
 									"attributes": "075b27507bdd39154870c301ddf96c47fde97578a548a55c63db5f10b33cd4bb",
-									"hash": "17668321cf412ee9659cec36890b1531c8f621a4f7f29378cebdd674cc1cf998",
+									"hash": "7503e03f269717d6b8d5f1ce65d6ca796b930519cb2ca79776dc80f2795b8156",
 									"by": [
 										{
 											"id": "JS",
@@ -192,7 +192,7 @@
 								"toy"
 							],
 							"attributes": "05794a51b9b26fb15c65685a15e7349e279fda40a5398b7dd35655dc639eddb5",
-							"hash": "7889d48089a95b9f91ed0c64a561c90d2894807b8ccb8e639b53ed137486e677",
+							"hash": "9fc65bc43acae914c2ea14cae6454d9071bafa557ec3628adb929b57b5def008",
 							"by": [
 								{
 									"id": "M",
@@ -200,7 +200,7 @@
 										"mid"
 									],
 									"attributes": "075b27507bdd39154870c301ddf96c47fde97578a548a55c63db5f10b33cd4bb",
-									"hash": "17668321cf412ee9659cec36890b1531c8f621a4f7f29378cebdd674cc1cf998",
+									"hash": "7503e03f269717d6b8d5f1ce65d6ca796b930519cb2ca79776dc80f2795b8156",
 									"by": [
 										{
 											"id": "JS",

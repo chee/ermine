@@ -13,20 +13,27 @@ typedef struct {
 } sq_key;
 
 // what joins and cuts: a string (UTF-8, with a lone surrogate as WTF-8: n counts code points), a
-// list (n opaque elements); anything else, bytes included (one whole value, never spliced:
-// MUTATE.tex), is SQ_ANY and never joins. size: data's length in bytes. lone: a lone surrogate is in it, or in anything it holds (a string sets it itself; for a
-// list or any other value, the caller does: squish never reads those)
-typedef enum { SQ_ANY, SQ_STR, SQ_LIST } sq_kind;
+// list (n opaque elements), a typed array (n elements, each bytes long, of a kind: joins only with
+// its own kind); anything else, bytes included (one whole value, never spliced: MUTATE.tex), is
+// SQ_ANY and never joins. size: data's length in bytes. lone: a lone surrogate is in it, or in
+// anything it holds (a string sets it itself; for a list or any other value, the caller does:
+// squish never reads those)
+typedef enum { SQ_ANY, SQ_STR, SQ_LIST, SQ_TYPED } sq_kind;
 typedef struct {
 	sq_kind kind;
 	size_t n;
 	size_t size;
 	const void *data;
 	int lone;
+	// a typed array's kind (the caller's number for it), 0 for the rest; a list's or a typed array's
+	// bytes per element, 0 for the rest
+	int of;
+	size_t each;
 } sq_value;
 
 sq_value sq_str(const char *s, size_t size);
 sq_value sq_list(const void *const *elements, size_t n);
+sq_value sq_typed(int of, size_t each, const void *data, size_t n);
 sq_value sq_any(const void *v);
 
 // GRAPH.tex's patch. move: opaque, NULL for none; only move_path of it is read
@@ -38,9 +45,11 @@ typedef struct {
 	int has_value;
 	sq_value value;
 	const void *move;
-	// a move's from-path, when there is a move (squish reads only this of it)
+	// a move's from-path, and whether it takes a span, when there is a move (squish reads only these
+	// of it)
 	const sq_key *move_path;
 	size_t move_depth;
+	int move_has_range;
 } sq_patch;
 
 typedef struct sq sq;

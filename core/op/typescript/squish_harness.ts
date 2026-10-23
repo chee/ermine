@@ -52,8 +52,15 @@ import type { Patch } from "@ermine/op/apply"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 
+// a patch's own fields only: any other is dropped
 const patchesIn = (ps: Patch[]) =>
-	ps.map((p) => "value" in p ? { ...p, value: revive(p.value) } : p)
+	ps.map(({ path, range, value, move }) => {
+		const p: Patch = { path }
+		if (range !== undefined) p.range = range
+		if (value !== undefined) p.value = revive(value)
+		if (move !== undefined) p.move = move
+		return p
+	})
 const patchesOut = (ps: Patch[]) =>
 	ps.map((p) => "value" in p ? { ...p, value: toJson(p.value) } : p)
 
@@ -66,6 +73,11 @@ function answer(r: Request): Record<string, unknown> {
 			return { columns: { ...columns, value: columns.value.map(toJson) } }
 		}
 		case "decode": {
+			const c = r.columns
+			const fields = ["paths", "path", "shape", "from", "size", "value", "move"]
+			if (c === null || typeof c !== "object" || !fields.every((f) => Array.isArray(c[f]))) {
+				return { error: "columns: not a map of lists" }
+			}
 			const columns: Columns = { ...r.columns, value: r.columns.value.map(revive) }
 			return { patches: patchesOut(decode(columns)) }
 		}

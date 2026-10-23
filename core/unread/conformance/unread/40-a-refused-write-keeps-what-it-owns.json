@@ -1,0 +1,48 @@
+{
+	"title": "a refused write lets go of nothing: what a patch put and what a set's write lets go of first stay owned, so the next write changes them in place",
+	"steps": [
+		{ "op": "start", "value": { "a": { "k": 1 } }, "expect": {} },
+		{
+			"op": "write",
+			"patches": [{ "path": ["a", "k"], "value": 2 }],
+			"expect": { "undo": [{ "path": ["a", "k"], "value": 1 }] }
+		},
+		{ "op": "mark", "name": "root", "expect": {} },
+		{ "op": "mark", "name": "a", "path": ["a"], "expect": {} },
+		{
+			"op": "write",
+			"patches": [{ "path": ["b"] }, { "path": ["nope", "z"], "value": 1 }],
+			"marked": ["a"],
+			"expect": { "error": "no-key", "patch": 1 }
+		},
+		{
+			"op": "write",
+			"patches": [{ "path": ["a", "k"], "value": 3 }],
+			"expect": { "undo": [{ "path": ["a", "k"], "value": 2 }] }
+		},
+		{ "op": "same", "name": "root", "expect": { "same": true } },
+		{ "op": "same", "name": "a", "path": ["a"], "expect": { "same": true } },
+		{ "op": "value", "expect": { "value": { "a": { "k": 3 } } } },
+		{ "op": "start", "value": { "a": { "k": 1 }, "c": 0 }, "expect": {} },
+		{
+			"op": "write",
+			"patches": [{ "path": ["c"], "value": 1 }],
+			"expect": { "undo": [{ "path": ["c"], "value": 0 }] }
+		},
+		{ "op": "mark", "name": "root", "expect": {} },
+		{
+			"op": "keep",
+			"path": ["a"],
+			"scheduler": true,
+			"writes": [{ "path": ["nope", "z"], "value": 1 }],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [{ "path": ["c"], "value": 2 }],
+			"expect": { "undo": [{ "path": ["c"], "value": 1 }] }
+		},
+		{ "op": "same", "name": "root", "expect": { "same": true } },
+		{ "op": "value", "expect": { "value": { "a": { "k": 1 }, "c": 2 } } }
+	]
+}

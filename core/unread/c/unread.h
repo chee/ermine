@@ -10,7 +10,7 @@
 // given: the caller's; an owned container in one, of any entry, is let go of first: a walk over
 // every container in each patch's value), nor what a write takes out (its undo holds it). each
 // patch is owned and applied in the tree the ones before it left. a write that fails puts back
-// what landed and changes nothing, which container is where too
+// what landed and changes nothing, which container is where and what is owned too
 //
 // memory: the owned set of an entry holds one reference (op_ref) on every container in it, so
 // a container in a set is never freed and its address never reused; released when it leaves the

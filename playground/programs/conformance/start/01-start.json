@@ -1,5 +1,5 @@
 {
-	"title": "a start, in a box from W at clock: on the process's node (proc:a) at once its args, its pin (the program's id, place and hash of its value; each step's compiler identity, UP's, or the hash of its attributes, RUN's; the box's folder, W; the cwd) and its status, pending. the first pulse builds: upper called once, the runner called once with the built code, the args and the api's keys only (the harness's createProcessAPI: places, process, watch); the status gone. its scope's sites: where start was called, then where the programs were made (ermine/sites). the process is at clock in the box, its cwd the box's \"/\" (the folder clock is in); another box over the same folder sees it there too (a box is its folder)",
+	"title": "a start, in a box from W at clock: on the process's node (proc:a) at once its args, its pin (the program's id, place and hash of its value; each step's compiler identity, UP's, or the hash of its attributes, RUN's; the box's folder, W; the cwd) and its status, pending. the first pulse builds: upper called once, the runner called once with the built code, the args and the api's keys only (the harness's createProcessAPI: places, process, watch); the status gone. its scope's sites: where start was called (its own, then the one software runs it under), then where the programs were made (ermine/sites). the process is at clock in the box, its cwd the box's \"/\" (the folder clock is in); another box over the same folder sees it there too (a box is its folder)",
 	"steps": [
 		{
 			"op": "kids",
@@ -122,6 +122,7 @@
 			"name": "a",
 			"expect": {
 				"sites": [
+					"start_harness",
 					"start_harness",
 					"start_harness"
 				]
