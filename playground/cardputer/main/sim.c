@@ -168,6 +168,7 @@ void room_go(const char *code) {
 void den_random(uint8_t *out, size_t n) { arc4random_buf(out, n); }
 
 size_t den_free(void) { return 1 << 20; }
+size_t den_disk_free(void) { return 1 << 30; }
 int64_t den_clock(void) { return now_ms(); }
 
 void den_mark(const char *what) {

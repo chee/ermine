@@ -96,6 +96,8 @@ void frame_again(void);
 void den_random(uint8_t *out, size_t n);
 // the platform's: the clock, ms
 int64_t den_clock(void);
+// the platform's: the bytes free where the log is kept (the flash's file system)
+size_t den_disk_free(void);
 // the platform's: the heap free now (bytes)
 size_t den_free(void);
 // the platform's: the heap at a stage of the den's boot, said

@@ -17,8 +17,9 @@
 //   gives: a compiler's output UTI; none: a runner
 //   needs: what it needs from what runs it ([javascript, fetch]); a program may say it too
 //   provides: what a runner gives what it runs ([wasm32]). a fit: needs ⊆ provides
-// host runner: a node with no ermine.type whose value is a live host function (never saved); every
-// search ends at one. a live function named with an extension a type claims is typed by it
+// host runner: a node with no ermine.type whose value is live (never saved): a host function, or a
+// runner in @ermine/software's shape ({ start, load?, api? }); every search ends at one. a live
+// function named with an extension a type claims is typed by it
 //
 // satisfy and openwith are generators of { program, chain }, reading only as far as iterated
 // (nothing before the first next()). satisfy(places, name, from, { onwhynot }): name looked up from
@@ -37,10 +38,10 @@
 //   unknown-type  the same, the type not in the nearest ermine/types
 //   needs         a runner not providing what is needed (missing: those names)
 //   no-chain      fits, but its own run or the rest of its chain was not found
-//   no-type       fits, but no type and no live function: nothing runs it
+//   no-type       fits, but no type and nothing live: nothing runs it
 //   in-the-chain  fits, but is in the chain already, or runs it
 // the search's own (no for; nothing yielded): nothing-there { path, from }; no-type { id, at? } (a
-// program with none whose value is a live function: one way, chain empty); no-chain { id, at }
+// program with none whose value is live: one way, chain empty); no-chain { id, at }
 // openwith(places, file, from, { onwhynot }): file an id or { id, at }; every opener
 // (ermine.programs.opens: UTIs the file's type conforms to) with each of its chains, as satisfy's.
 // one with none: left out (no-chain); none opening it: nothing yielded, no refusal
@@ -280,8 +281,13 @@ function typeOf(s: Search, at: Place): string | undefined {
 	return typeAt(s.places, at, s.extensions ??= extensionsOf(s.places, folder(s)))
 }
 
-// a host runner's mark: its value a live function. read only for a node with no type
-const hosted = (s: Search, id: Id) => typeof s.places.readValue("value", id) === "function"
+// a host runner's mark: its value live, a function or a runner (a map with a start function). read
+// only for a node with no type
+function hosted(s: Search, id: Id): boolean {
+	const v = s.places.readValue("value", id) as { start?: unknown } | null | undefined
+	return typeof v === "function" ||
+		(typeof v === "object" && v !== null && typeof v.start === "function")
+}
 
 // a type's conformance, once a search: it, then what it conforms to
 function conforming(s: Search, uti: string): { known: boolean; all: string[] } {
@@ -509,7 +515,7 @@ function* chains(
 }
 
 // how a step c is itself run, the first chain in the same order, its level k or nearer looked
-// for: found (the host runs one with no type and a live function: an empty chain); no-type (no type,
+// for: found (the host runs one with no type and a live value: an empty chain); no-type (no type,
 // no function); no-chain; none up to level k yet: undefined (its search paused, kept)
 function runOf(
 	s: Search,

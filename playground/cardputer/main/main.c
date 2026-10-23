@@ -15,6 +15,7 @@
 #include "esp_random.h"
 #include "esp_system.h"
 #include "esp_timer.h"
+#include "esp_vfs_fat.h"
 #include "esp_private/esp_clk.h"
 #include "fb.h"
 #include "flash.h"
@@ -26,6 +27,7 @@
 #include "driver/gpio.h"
 #include "nvs.h"
 #include "nvs_flash.h"
+#include <sys/stat.h>
 #include "poll.h"
 #include "screen.h"
 #include "sdkconfig.h"
@@ -86,6 +88,7 @@ static size_t free_now(void) { return heap_caps_get_free_size(MALLOC_CAP_8BIT); 
 static size_t least(void) { return heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT); }
 
 size_t den_free(void) { return free_now(); }
+size_t den_disk_free(void) { return flash_free_for(den_room()); }
 int64_t den_clock(void) { return esp_timer_get_time() / 1000; }
 
 void den_mark(const char *what) {
@@ -171,8 +174,8 @@ static void dump(void) {
 	fflush(stdout);
 }
 
-// a den that isn't up: why, in words, on the screen
-static char not_up[128];
+// a den that isn't up: why, in words, on the screen; the room it was in before, to go back to
+static char not_up[128], back[5];
 static void paint_not_up(void) {
 	fb_clear(FB_LEMON);
 	fb_rect(0, 0, FB_W, 12, FB_CHERRY);
@@ -190,6 +193,12 @@ static void paint_not_up(void) {
 	}
 	fb_text(4, FB_H - 20, "its log is kept as it is:", FB_GREY, 1);
 	fb_text(4, FB_H - 10, "nothing joins the room", FB_GREY, 1);
+	if (back[0]) {
+		char line[32];
+		snprintf(line, sizeof line, "G0: back to room %s", back);
+		fb_rect(0, FB_H - 34, FB_W, 12, FB_INK);
+		fb_text(4, FB_H - 32, line, FB_WHITE, 1);
+	}
 }
 
 // a key from the keyboard: tab says yes to a pair ask waiting, esc no; esc else turns the mode
@@ -255,10 +264,26 @@ static void room_code_of(char out[5]) {
 // to another room: kept in NVS, the den's bye said and its log synced, a moment for the bye to go,
 // then a restart, which boots the den in it (its own folder, /f/t2<code>: a room it was in before
 // goes on from its last step)
+// a new room's log wants a little flash at once (its folder, its first steps, a snapshot): under
+// this, a room not joined before is refused, in words
+#define ROOM_NEEDS (24 * 1024)
 void room_go(const char *code) {
 	nvs_handle_t h;
 	int kept = 0;
+	char dir[16];
+	struct stat st;
+	flash_room_dir(code, dir);
+	size_t left = flash_free_for(code);
+	if (stat(dir, &st) != 0 && left < ROOM_NEEDS) {
+		char two[32];
+		snprintf(two, sizeof two, "%uK free: a new room needs %u", (unsigned)(left / 1024), ROOM_NEEDS / 1024);
+		den_say(1, "the flash is too full", two);
+		frame_again();
+		return;
+	}
 	if (is_code(code) && nvs_open("dens", NVS_READWRITE, &h) == ESP_OK) {
+		// the room left, for a way back when the next one won't come up
+		if (den_room()[0]) nvs_set_str(h, "left", den_room());
 		kept = nvs_set_str(h, "room", code) == ESP_OK && nvs_commit(h) == ESP_OK;
 		nvs_close(h);
 	}
@@ -280,7 +305,12 @@ void room_go(const char *code) {
 // and speed, an ed25519 signature (of a 32-byte hash, as tippet signs a run), a run of one step
 // packed, and its hash
 static void bench(void) {
-	printf("bench: cpu %u MHz, flash %s at %s\n", (unsigned)(esp_clk_cpu_freq() / 1000000), CONFIG_ESPTOOLPY_FLASHMODE,
+	printf("bench: cpu %u MHz, flash %s at %s\n", (unsigned)(esp_clk_cpu_freq() / 1000000),
+#ifdef CONFIG_ESPTOOLPY_FLASHMODE_QIO
+		"qio",
+#else
+		CONFIG_ESPTOOLPY_FLASHMODE,
+#endif
 		CONFIG_ESPTOOLPY_FLASHFREQ);
 	tp_key k;
 	tp_key_of(&k, den_seed());
@@ -336,11 +366,24 @@ void app_main(void) {
 	int code = flash_install(&me);
 	if (code != INST_OK) printf("install: %s\n", inst_error(code));
 	int mounted = flash_mount();
-	if (mounted) flash_sweep();
 	char room[5], dir[16];
 	room_code_of(room);
+	{
+		nvs_handle_t h;
+		size_t n = sizeof back;
+		if (nvs_open("dens", NVS_READONLY, &h) == ESP_OK) {
+			if (nvs_get_str(h, "left", back, &n) != ESP_OK || !is_code(back) || strcmp(back, room) == 0) back[0] = 0;
+			nvs_close(h);
+		}
+	}
+	// the room's own and the home room's (menuconfig's) snapshots kept, always
+	const char *keep[2] = {room, CONFIG_CARDPUTER_ROOM};
+	unsigned flash_free = mounted ? flash_sweep(keep, 2) : 0;
 	// t2: tippet's packed-run store (its files from before are another format: never read)
-	snprintf(dir, sizeof dir, "%s/t2%s", FLASH_DIR, room);
+	// "den" nearly full: the room's log moved to "den2", whole, before the den opens it
+	if (mounted && flash_free < FLASH_LOW / 1024) flash_move(room);
+	flash_room_dir(room, dir);
+	printf("flash: room %s's log in %s, %uK free there\n", room, dir, (unsigned)(flash_free_for(room) / 1024));
 #ifdef CONFIG_CARDPUTER_FORGETS
 	den_forgets(1);
 #endif
@@ -357,13 +400,24 @@ void app_main(void) {
 			vTaskDelay(pdMS_TO_TICKS(4000));
 			esp_restart();
 		}
-		for (;;) {
+		// G0 (or ctrl-g on the serial line): back to the room it was in
+		for (int low = 0;;) {
 			char typed[64];
-			if (usb_serial_jtag_read_bytes(typed, sizeof typed, 0) > 0) printf("den: not up: %s\n", not_up);
-			vTaskDelay(pdMS_TO_TICKS(100));
+			int n = usb_serial_jtag_read_bytes(typed, sizeof typed, 0), g = 0;
+			for (int i = 0; i < n; i++) g |= typed[i] == 0x07;
+			if (n > 0 && !g) printf("den: not up: %s\n", not_up);
+			low = gpio_get_level(0) == 0 ? low + 1 : 0;
+			if ((g || low == 2) && back[0]) room_go(back);
+			vTaskDelay(pdMS_TO_TICKS(50));
 		}
 	}
 	printf("den: %s in room %s, up, %u bytes of heap\n", me.id, room, (unsigned)(before - free_now()));
+	flash_free = (unsigned)(flash_free_for(room) / 1024);
+	if (mounted && flash_free < FLASH_LOW / 1024) {
+		char two[32];
+		snprintf(two, sizeof two, "%uK free where its log is", flash_free);
+		den_say(1, "the flash is nearly full:", two);
+	}
 	bench();
 	stage("den up");
 	wifi = wifi_start(WEBSOCKET ? 0 : POLL_WORKERS);

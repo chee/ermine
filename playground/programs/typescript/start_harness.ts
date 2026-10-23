@@ -5,9 +5,10 @@
 // suites: conformance/start, conformance/load (TypeScript only), conformance/native (both).
 //
 // compilers, each counting calls: upper (uppercase), wrap ({ wasm: input }), slow (input, once
-// settled), boom (throws Error("boom")). the runner records code, args and api keys; its program
-// looks each arg up from the process's folder every run. createProcessAPI gives { places,
-// process: { id, at, args, cwd }, watch(name, seen) }.
+// settled), boom (throws Error("boom")). the runner (@ermine/software's shape, its api the
+// harness's createProcessAPI) records code, args and api keys; its program looks each arg up from
+// the process's folder every run. createProcessAPI gives { places, process: { id, at, args, cwd },
+// watch(name, seen) }. software's pulses asked for are never run: each pulse is a request's.
 //
 // { op: "kids" | "attrs" | "value", id, value }  -> {}   that entry replaced (value: JSON form)
 // { op: "compiler", id, compiler }               -> {}   value: the named compiler
@@ -35,8 +36,8 @@
 // { op: "said" }                                 -> { said }  say(x) calls from loaded code
 // { op: "cache" }                                -> { size }
 // { op: "fixture", id, name }    -> {}  value: bytes of c/fixtures/<name>.so (native)
-// { op: "dlopen", id }           -> {}  value: the dlopen runner (dlopen.ts); native gets
-//    { ctx, write(ctx, bytes, n) }
+// { op: "dlopen", id }           -> {}  value: the dlopen runner (dlopen.ts), its api
+//    createProcessAPI's; native gets { ctx, write(ctx, bytes, n) }
 // { op: "native" }               -> { loads, compiles, files, signed, wrote }
 import createEntry, { type Entry } from "@ermine/node/entry"
 import { createScheduler, PENDING } from "@ermine/scheduler"
@@ -57,7 +58,14 @@ import { BuildError, type Compiler, createBuilds } from "@ermine/compilers"
 import { createDlopen, type Live } from "./dlopen.ts"
 import { openwith, type Refusal, satisfy, type Way, type Why } from "./programs.ts"
 import { ARGS, CWD, PIN } from "@ermine/processes/start"
-import { type Context, createPrograms, type Process, type Programs, type Runner } from "./start.ts"
+import {
+	type Context,
+	createPrograms,
+	ours,
+	type Process,
+	type Programs,
+	type Runner,
+} from "./start.ts"
 
 type Json = unknown
 
@@ -73,14 +81,9 @@ const places = createPlaces({
 })
 s.onTrackingEnd((key) => places.release(key))
 const scopes = createScopeNodes({ scheduler: s, table })
-// where scopes are made: start.ts and processes' are ours, so a process's site is where start was
-// called
-const sites = createSites(s, {
-	ours: [
-		new URL("./start.ts", import.meta.url).href,
-		import.meta.resolve("@ermine/processes/start"),
-	],
-})
+// where scopes are made: programs' and software's files and processes' are ours, so a process's
+// site is where start was called
+const sites = createSites(s, { ours: [...ours, import.meta.resolve("@ermine/processes/start")] })
 const host = s.createRootScope({ actor: "test" })
 const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 const header = () => createChangeHeader(s)
@@ -135,8 +138,8 @@ const ran: Json[] = []
 const stops: string[] = []
 const watching = new Map<string, { runs: number; found: Record<string, Json> }>()
 
-const runner = (code: unknown, api: unknown) => {
-	const a = api as Api
+const runner = (code: unknown, ctx: Context) => {
+	const a = createProcessAPI(ctx)
 	const name = procs.get(a.process.id) ?? String(a.process.id)
 	ran.push({ process: name, code, args: a.process.args, keys: Object.keys(a).sort() })
 	const p = { runs: 0, found: {} as Record<string, Json> }
@@ -219,7 +222,7 @@ function dlopenRunner(): Runner {
 		return Deno.UnsafePointer.of(struct)
 	}
 	const note = (what: string) => void (what === "signed" && native.signed++)
-	const runner = createDlopen({ dir, pointer, note })
+	const runner = createDlopen({ dir, pointer, note, api: createProcessAPI })
 	const load = (code: unknown): Live => {
 		native.loads++
 		const live = runner.load(code)
@@ -227,8 +230,8 @@ function dlopenRunner(): Runner {
 		if (compile === undefined) return live
 		return { ...live, compile: (input: unknown) => (native.compiles++, compile(input)) }
 	}
-	const run = (code: unknown, api: unknown) => (native.loads++, runner(code, api))
-	return dlopen = Object.assign(run, { load })
+	const start = (code: unknown, ctx: Context) => (native.loads++, runner.start(code, ctx))
+	return dlopen = { start, load, api: createProcessAPI }
 }
 
 function files(): number {
@@ -341,10 +344,7 @@ async function answer(r: Request): Promise<Json> {
 		case "runner": {
 			const load = r.load === undefined ? undefined : loads[r.load]
 			if (r.load !== undefined && load === undefined) throw new Error(`no load ${r.load}`)
-			const f: Runner = load === undefined ? runner : Object.assign(
-				(code: unknown, api: unknown) => runner(code, api),
-				{ load },
-			)
+			const f: Runner = { start: runner, api: createProcessAPI, ...(load ? { load } : {}) }
 			hosted(() => table.sub("value", r.id, createEntry(f, header())))
 			return {}
 		}
@@ -388,11 +388,11 @@ async function answer(r: Request): Promise<Json> {
 				programs = createPrograms({
 					scheduler: s,
 					table,
-					places: writes,
+					places,
 					builds,
 					scopes,
-					createProcessAPI,
 					sites,
+					schedule: () => {},
 				})
 			})
 			return {}
