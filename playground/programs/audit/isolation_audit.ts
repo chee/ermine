@@ -179,14 +179,13 @@ Deno.test("start must not read/run a program whose id is outside the box (crafte
 		createPrograms({
 			scheduler: sched as unknown as typeof s,
 			table,
-			places: { commit: places.commit },
+			places,
 			builds: {
 				compile: () => {
 					throw new Error("no compile expected")
 				},
 			},
 			scopes,
-			createProcessAPI: () => ({}),
 		})
 	)
 	// a Way pointing the program at the SECRET node, run by the host runner (empty by: host-runnable)

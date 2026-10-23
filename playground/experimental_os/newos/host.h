@@ -63,6 +63,8 @@ const char *const *hostPathOf(Host *host, const Json *names, size_t *n);
 const ap_item *hostLook(ap_api *api, const char *const *address, size_t n);
 /** the value at an address through api: its first version not a status; NULL if none */
 const op_value *hostRead(ap_api *api, const char *const *address, size_t n);
+/** what a program is given: newOS's API, for its process, made by its runner from software's start facts (sw_starting) */
+ap_api *hostApi(Host *host, const void *start);
 /** a node holding value made and placed at parent (an id) as name; its id, NULL on an error said */
 const char *hostPut(Host *host, ap_api *api, const char *parent, const char *name, const op_value *value, bool ephemeral);
 /** the value at an address written whole; an error if nothing is there */

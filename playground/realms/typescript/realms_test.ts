@@ -48,6 +48,7 @@ export function world(o: { may?: Policy } = {}) {
 	const realms = createRealms({
 		commit,
 		may: o.may,
+		createProcessAPI: (ctx) => apis.createProcessAPI(ctx),
 		worker: () => {
 			const w = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" })
 			w.addEventListener("message", () => void heard++)
@@ -74,14 +75,7 @@ export function world(o: { may?: Policy } = {}) {
 	programs = s.runWithScope(above, () => {
 		const writes = { readValue: places.readValue, commit }
 		const builds = createBuilds({ scheduler: s, table, places: writes, cache: "CACHE" })
-		return createPrograms({
-			scheduler: s,
-			table,
-			places: writes,
-			builds,
-			scopes,
-			createProcessAPI: realms.wrap(apis.createProcessAPI),
-		})
+		return createPrograms({ scheduler: s, table, places, builds, scopes })
 	})
 	// a node in W at name, holding v
 	const node = (name: string, v: unknown) =>
@@ -388,7 +382,7 @@ Deno.test("a write on each side at once, to one node: both end the same, in the 
 	w.done()
 })
 
-Deno.test("run given a den's start (its facts, not an api wrap made): the api made with setup.createProcessAPI from that start; none given: refused, as a start with no wrap", () => {
+Deno.test("run given a start's facts: the api made with setup.createProcessAPI from them; none given: refused", () => {
 	const s = createScheduler()
 	const table = createTable(() => {})
 	const places = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler: s })
@@ -402,7 +396,7 @@ Deno.test("run given a den's start (its facts, not an api wrap made): the api ma
 	}
 	const bare = createRealms({ worker: () => assert(false, "no worker") as never })
 	assertThrows(
-		() => bare.run("export default () => {}", start),
+		() => bare.run.start("export default () => {}", start),
 		Error,
 		"createRealms({ createProcessAPI })",
 	)
@@ -414,6 +408,10 @@ Deno.test("run given a den's start (its facts, not an api wrap made): the api ma
 			throw new Error("made from the start")
 		},
 	})
-	assertThrows(() => realms.run("export default () => {}", start), Error, "made from the start")
+	assertThrows(
+		() => realms.run.start("export default () => {}", start),
+		Error,
+		"made from the start",
+	)
 	assertEquals(given, [start])
 })

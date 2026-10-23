@@ -23,7 +23,7 @@
 // does, or Error "no run in the library", or "run failed: <n>"
 //
 // open: a string as UTF-8 and every output as bytes; the library's run as the runner's own
-import type { Handle, Runner, Start } from "./start.ts"
+import type { Handle, Start } from "./start.ts"
 
 export type Options = {
 	// where the files go; none: the system's temp folder
@@ -44,10 +44,11 @@ export type Live = Disposable & {
 	readonly start?: (code: unknown, start: Start) => Handle
 }
 
-// the runner: a library run as a program, and load (@ermine/software's Runner)
-export type Dlopen = Runner & {
+// the runner: a library run as a program, and load (@ermine/software's Runner); api, as given
+export type Dlopen = {
 	readonly start: (code: unknown, start: Start) => Handle
 	readonly load: (code: unknown, start?: Start) => Live
+	readonly api?: (start: Start) => unknown
 }
 
 const exports = {

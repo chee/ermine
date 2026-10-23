@@ -6,7 +6,8 @@
 //
 // A process is ermine/programs' (start.h): satisfy finds a program's way by
 // its type (/ermine/types) and the runners in /loaders, start puts it at its
-// path and runs it, and what it is given is newOS's API (create_api). What
+// path and runs it on software, and what it is given is newOS's API (hostApi,
+// each runner making it from software's start facts). What
 // the host keeps for itself (/hw, /loaders, /ermine/types, the clock) is
 // ephemeral, made again each boot.
 
@@ -262,7 +263,7 @@ static void stop(Host *h, const char *pid) {
 			h->nested[i] = h->nested[--h->nnested];
 			break;
 		}
-	ps_stop(h->programs, proc->p);
+	ps_stop(h->programs, proc->p, NULL);
 }
 
 /** the stops asked for */
@@ -292,7 +293,7 @@ const ap_error *hostRestart(Host *h, const char *const *address, size_t n) {
 	size_t nwhere = ps_at(proc->p, &where);
 	const char **copy = hostTemp(h, sizeof *copy * (nwhere + 1));
 	for (size_t i = 0; i < nwhere; i++) copy[i] = hostTempDup(h, where[i]);
-	ps_stop(h->programs, proc->p);
+	ps_stop(h->programs, proc->p, NULL);
 	const char *id = NULL;
 	return startProgram(h, copy, nwhere, path, at->count, NULL, &id);
 }
@@ -508,17 +509,17 @@ static void charge(Host *h, const char *const *address, size_t n, int64_t cpu, b
 	if (w) worked(w, cpu, failed);
 }
 
-/** a runner's run (the setup) timed, and charged to the process whose api it was given */
+/** a runner's run (the setup) given newOS's API of software's start facts, timed, and charged to the process */
 typedef struct {
 	Host *h;
 	hf_runner run;
 } Running;
 
-static hf_run running(const op_value *code, void *api, void *data) {
+static hf_run running(const op_value *code, void *start, void *data) {
 	Running *r = data;
+	ap_api *a = hostApi(r->h, start);
 	int64_t at = monotonic();
-	hf_run out = r->run(code, api, r->h);
-	ap_api *a = api;
+	hf_run out = r->run(code, a, r->h);
 	Work *w = a ? workOfPid(r->h, a->self) : NULL;
 	if (w) worked(w, monotonic() - at, out.error != NULL);
 	return out;
@@ -650,9 +651,9 @@ static void attribute(Host *h, const char *const *address, size_t n, const char 
 
 // --- processes: ermine/programs' start, found by satisfy
 
-/** what the program is given: newOS's API, for the process's scope and path (start.h's create_api) */
-static void *createApi(const ps_context *ctx, void *data) {
-	Host *h = data;
+/** what the program is given: newOS's API, for the process's scope and path, from software's start facts */
+ap_api *hostApi(Host *h, const void *start) {
+	const sw_starting *ctx = start;
 	ap_goes_with(h->os, ctx->scope, ctx->process.id);
 	ap_api *api = ap_process(h->os, ctx->scope, ctx->process.id, ctx->process.at, ctx->process.nat);
 	if (!workOfPid(h, ctx->process.id)) {
@@ -1146,7 +1147,7 @@ static void programsUp(void *data) {
 	h->builds = bd_new(&(bd_setup){ .places = ap_places(h->os), .table = ap_table(h->os), .scheduler = ap_scheduler(h->os),
 		.cache = "os.cache", .functions = h->functions, .commit = ap_commit, .commit_ctx = h->os });
 	h->programs = ps_new(&(ps_setup){ .scheduler = ap_scheduler(h->os), .table = ap_table(h->os), .places = ap_places(h->os),
-		.builds = h->builds, .scopes = ap_scopes(h->os), .sites = ap_sites(h->os), .functions = h->functions, .create_api = createApi, .data = h,
+		.builds = h->builds, .scopes = ap_scopes(h->os), .sites = ap_sites(h->os), .functions = h->functions,
 		.commit = ap_commit, .commit_ctx = h->os });
 }
 
