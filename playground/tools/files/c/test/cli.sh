@@ -56,7 +56,7 @@ printf '\211PNG\r\n\032\n\000\377' > "$tmp/pic.png"
 printf 'plain file\n' > "$tmp/plain.txt"
 "$files" put "$store" plain.txt --file "$tmp/plain.txt"
 ls_out=$("$files" tree "$store")
-for want in '"hello world"' '"# todo"' '"nested"' '"a": 1.0' "h'00ff'" '<10 bytes>' '"plain file\n"' deep; do
+for want in '"hello world"' '"# todo"' '"nested"' '"a": 1,' "h'00ff'" '<10 bytes>' '"plain file\n"' deep; do
 	printf '%s\n' "$ls_out" | grep -qF -- "$want" || fail "ls: wanted $want in: $ls_out"
 done
 

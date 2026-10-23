@@ -333,7 +333,7 @@
 					{
 						"path": "pile/3.text",
 						"kind": "file",
-						"hex": "7b0a2020227468697264223a20332e300a7d",
+						"hex": "7b0a2020227468697264223a20330a7d",
 						"attrs": {
 							"party.chee.ermine.id": "u3"
 						}
@@ -750,7 +750,7 @@
 					{
 						"path": "pile/2.text",
 						"kind": "file",
-						"hex": "7b0a2020227468697264223a20332e300a7d",
+						"hex": "7b0a2020227468697264223a20330a7d",
 						"attrs": {
 							"party.chee.ermine.id": "u3"
 						}
@@ -1292,7 +1292,7 @@
 					{
 						"path": "pile/3.text",
 						"kind": "file",
-						"hex": "7b0a2020227468697264223a20332e300a7d",
+						"hex": "7b0a2020227468697264223a20330a7d",
 						"attrs": {
 							"party.chee.ermine.id": "u3"
 						}

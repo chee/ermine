@@ -197,15 +197,41 @@ function build(folder: string, options: Options, mirror: boolean) {
 	}
 	const native = options.foundation ?? foundation
 	const coordinating = options.coordinate ?? true
-	/** A path from the store's folder, as the system has it: .ermine is the manifest's folder, wherever it is. */
-	const abs = (path: string) =>
-		path === ""
+	/**
+	 * A path from the store's folder, as the system has it: .ermine is the manifest's folder,
+	 * wherever it is. One that could reach out of the folder (absolute, or ".." in it) is refused.
+	 */
+	const abs = (path: string) => {
+		if (!names.isPath(path)) {
+			throw new StoreError(`${JSON.stringify(path)} is not a path in the store's folder`)
+		}
+		return path === ""
 			? folder
 			: path === ".ermine"
 			? ermine
 			: path.startsWith(".ermine/")
 			? ermine + path.slice(7)
 			: `${folder}/${path}`
+	}
+	/**
+	 * A path to write at, as abs has it, with no link on the way: a folder made a link (by a person,
+	 * or a plan) is not followed out of the store's folder. One is NotADirectory, which a step lists.
+	 */
+	const into = (path: string) => {
+		const steps = path.split("/")
+		for (let i = 1; i < steps.length; i++) {
+			const p = steps.slice(0, i).join("/")
+			if (p === ".ermine") continue
+			let link = false
+			try {
+				link = Deno.lstatSync(abs(p)).isSymlink
+			} catch {
+				// nothing there: the write says so
+			}
+			if (link) throw new Deno.errors.NotADirectory(`a link on the way to ${path}: ${p}`)
+		}
+		return abs(path)
+	}
 
 	// writes of entries a person sees go through NSFileCoordinator; those in tmp, id and values are
 	// no one's. fn is made at once, as foundation.ts says, so a sys call's effect is made inside
@@ -215,9 +241,9 @@ function build(folder: string, options: Options, mirror: boolean) {
 		return native.coordinate(abs(path), true, fn, how)
 	}
 	const swap = (a: string, b: string) =>
-		guard(b, WRITING.replacing, () => sys.swap(abs(a), abs(b)))
+		guard(b, WRITING.replacing, () => sys.swap(into(a), into(b)))
 	const move = (a: string, b: string) =>
-		guard(a, WRITING.moving, () => guard(b, WRITING.merging, () => sys.rename(abs(a), abs(b))))
+		guard(a, WRITING.moving, () => guard(b, WRITING.merging, () => sys.rename(into(a), into(b))))
 
 	// the manifest's records, each node's shape, the graph they give, the layout
 	let records = new Map<string, Uint8Array>()
@@ -365,7 +391,7 @@ function build(folder: string, options: Options, mirror: boolean) {
 
 	async function mark(path: string, id: Id) {
 		try {
-			await sys.set(abs(path), attr.id, utf8.encode(id))
+			await sys.set(into(path), attr.id, utf8.encode(id))
 		} catch (e) {
 			// Linux allows no attribute on a link
 			if (!(e instanceof Deno.errors.NotSupported)) throw e
@@ -382,11 +408,13 @@ function build(folder: string, options: Options, mirror: boolean) {
 			throw e
 		}
 		const now = new Set(info.map(([name]) => attr.info + name))
-		for (const n of had) if (n.startsWith(attr.info) && !now.has(n)) await sys.unset(abs(path), n)
+		for (const n of had) {
+			if (n.startsWith(attr.info) && !now.has(n)) await sys.unset(into(path), n)
+		}
 		for (const [name, h, f] of info) {
 			try {
 				const v = await valueOf(h, f)
-				await sys.set(abs(path), attr.info + name, manifest.render(v, f))
+				await sys.set(into(path), attr.info + name, manifest.render(v, f))
 			} catch (e) {
 				if (!fault(e)) throw e
 				list(
@@ -405,19 +433,21 @@ function build(folder: string, options: Options, mirror: boolean) {
 			for (const n of await sys.names(abs(from))) {
 				if (n.startsWith(attr.own)) continue
 				const v = await sys.get(abs(from), n)
-				if (v) await sys.set(abs(to), n, v)
+				if (v) await sys.set(into(to), n, v)
 			}
 		} catch (e) {
 			if (!fault(e)) throw e
 		}
 	}
 
-	/** A value's file: a clone of its kept file, or, for cbor, its diagnostic notation, or, for a mirror, written from the graph's value; null, which a node with no value shows, is kept nowhere. */
+	/** A value's file: a clone of its kept file, or, for cbor, its diagnostic notation, or, for a mirror, written from the graph's value; null, which a node with no value shows, is kept nowhere. A new file, never through one there (a link is not followed). */
 	async function render(path: string, hash: Hash, form: Form) {
-		if (hash === manifest.NULL) await Deno.writeFile(abs(path), manifest.render(null, "cbor"))
-		else if (form === "cbor" || mirror) {
-			await Deno.writeFile(abs(path), manifest.render(await valueOf(hash, form), form))
-		} else await sys.clone(`${ermine}/values/${hash}`, abs(path))
+		const make = { createNew: true }
+		if (hash === manifest.NULL) {
+			await Deno.writeFile(into(path), manifest.render(null, "cbor"), make)
+		} else if (form === "cbor" || mirror) {
+			await Deno.writeFile(into(path), manifest.render(await valueOf(hash, form), form), make)
+		} else await sys.clone(`${ermine}/values/${hash}`, into(path))
 	}
 
 	/**
@@ -433,7 +463,7 @@ function build(folder: string, options: Options, mirror: boolean) {
 				if (!fault(e)) throw e
 			}
 		}
-		await bin(abs(from))
+		await bin(into(from))
 		list(shown, why)
 	}
 
@@ -443,7 +473,7 @@ function build(folder: string, options: Options, mirror: boolean) {
 		if (!st) return
 		if (st.isDirectory && !(await empty(path))) {
 			await toss(path, shown, "left in the store's tmp holding entries")
-		} else await Deno.remove(abs(path))
+		} else await Deno.remove(into(path))
 	}
 
 	/** Keeps a file's size, time and id as the store laid it, so a pass need not read it. */
@@ -466,9 +496,11 @@ function build(folder: string, options: Options, mirror: boolean) {
 				await clear(tp, s.to!)
 				const after = s.after as { file: Hash } | { link: string }
 				if ("file" in after) await render(tp, after.file, s.form!)
-				else await Deno.symlink(after.link, abs(tp))
+				else await Deno.symlink(after.link, into(tp))
 				if (s.id !== undefined) await mark(tp, s.id)
-				if (s.side !== undefined) await sys.set(abs(tp), attr.side, utf8.encode(String(s.side)))
+				if (s.side !== undefined) {
+					await sys.set(into(tp), attr.side, utf8.encode(String(s.side)))
+				}
 				if (s.info) await inform(tp, s.info, s.to!)
 				if ("file" in after) {
 					if (s.before !== null) await carry(s.to!, tp)
@@ -478,9 +510,9 @@ function build(folder: string, options: Options, mirror: boolean) {
 			}
 			case "folder": {
 				await clear(tp, s.to!)
-				await Deno.mkdir(abs(tp))
+				await Deno.mkdir(into(tp))
 				if (s.id !== undefined) await mark(tp, s.id)
-				if (s.slot) await sys.set(abs(tp), attr.slot, encode([s.slot[0], s.slot[1]]))
+				if (s.slot) await sys.set(into(tp), attr.slot, encode([s.slot[0], s.slot[1]]))
 				if (s.info) await inform(tp, s.info, s.to!)
 				return await settle(s, tp)
 			}
@@ -1195,7 +1227,7 @@ function build(folder: string, options: Options, mirror: boolean) {
 	async function settled(path: string, was: Laid, now: Entry, st: Deno.FileInfo) {
 		if (was.kind === "union") {
 			if (now.kind === "folder" && !now.slot) {
-				await sys.set(abs(path), attr.slot, encode([was.holder, was.name]))
+				await sys.set(into(path), attr.slot, encode([was.holder, was.name]))
 			}
 		} else if (now.id === undefined) await mark(path, was.id)
 		if ((was.kind === "file" || was.kind === "side") && st.ino !== null) {
@@ -1305,7 +1337,7 @@ function build(folder: string, options: Options, mirror: boolean) {
 				return
 			}
 			// the store's own link, leading where it last pointed, is removed; anything else is trashed
-			if (it !== undefined && own(p)) await Deno.remove(abs(p))
+			if (it !== undefined && own(p)) await Deno.remove(into(p))
 			else if (it !== undefined) {
 				await toss(p, p, w ? "not what the store laid" : "not in the graph")
 			}
@@ -1315,18 +1347,18 @@ function build(folder: string, options: Options, mirror: boolean) {
 			if (w.kind === "file" || w.kind === "side") {
 				await render(tp, w.hash, w.form)
 				await mark(tp, w.id)
-				if (w.kind === "side") await sys.set(abs(tp), attr.side, utf8.encode(String(w.side)))
+				if (w.kind === "side") await sys.set(into(tp), attr.side, utf8.encode(String(w.side)))
 				else await inform(tp, w.info, p)
 				await sys.sync(abs(tp))
 			} else if (w.kind === "link") {
-				await Deno.symlink(w.target, abs(tp))
+				await Deno.symlink(w.target, into(tp))
 				await mark(tp, w.id)
 			} else {
-				await Deno.mkdir(abs(tp))
+				await Deno.mkdir(into(tp))
 				if (w.kind === "folder") {
 					await mark(tp, w.id)
 					await inform(tp, w.info, p)
-				} else await sys.set(abs(tp), attr.slot, encode([w.holder, w.name]))
+				} else await sys.set(into(tp), attr.slot, encode([w.holder, w.name]))
 			}
 			if ((await move(tp, p)) === "taken") {
 				await clear(tp, p)

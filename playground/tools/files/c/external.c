@@ -234,7 +234,7 @@ static int write_list(const char *home, const ex_stored *list, size_t count) {
 	ex_uuid(u);
 	char *tmp = format("%s/stores.%s", dir, u), *file = format("%s/stores", dir, NULL);
 	free(dir);
-	int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0666), r = fd < 0 ? -1 : 0;
+	int fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL, 0666), r = fd < 0 ? -1 : 0;
 	for (size_t at = 0; r == 0 && at < length;) {
 		ssize_t w = write(fd, body + at, length - at);
 		if (w < 0) {
@@ -313,6 +313,11 @@ static int carried(const char *folder, char **uuid) {
 	int r = sys_get(folder, SYS_STORE, &b, &n);
 	if (r < 0) return -1;
 	if (r > 0) return 0;
+	// a uuid names a folder in ~/.ermine/external: one that is no name there ("", "." or "..", or "/" or NUL in it) is
+	// none, and the folder a store with no uuid
+	bool name = n > 0 && !(n == 1 && b[0] == '.') && !(n == 2 && b[0] == '.' && b[1] == '.') && !memchr(b, '/', n) &&
+		!memchr(b, 0, n);
+	if (!name) return free(b), 0;
 	*uuid = malloc(n + 1);
 	if (!*uuid) abort();
 	memcpy(*uuid, b, n), (*uuid)[n] = 0;

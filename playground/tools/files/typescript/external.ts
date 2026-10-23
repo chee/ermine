@@ -19,6 +19,7 @@
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
 import { type Foundation, system as real } from "./foundation.ts"
 import { attr, type Sys } from "./sys.ts"
+import { isName } from "./names.ts"
 
 /** Where a host's home is, how to ask Foundation, and the places it names. */
 export type Where = {
@@ -133,7 +134,7 @@ async function write(home: string, all: Map<string, Stored>) {
 		]),
 	))
 	const tmp = `${dir}/stores.${crypto.randomUUID()}`
-	await Deno.writeFile(tmp, body)
+	await Deno.writeFile(tmp, body, { createNew: true })
 	await Deno.rename(tmp, `${dir}/stores`)
 }
 
@@ -264,7 +265,9 @@ export async function locate(folder: string, sys: Sys, w: Where = {}): Promise<L
 	let uuid: string | undefined
 	try {
 		const b = await sys.get(folder, attr.store)
-		if (b) uuid = utf8.decode(b)
+		// a uuid names a folder in ~/.ermine/external: one that is no name there (".." or "/" in
+		// it) is none, and the folder a store with no uuid
+		if (b && isName(utf8.decode(b))) uuid = utf8.decode(b)
 	} catch (e) {
 		if (!(e instanceof Deno.errors.NotFound)) throw e
 	}

@@ -20,17 +20,22 @@ Deno.test("write: null, booleans and numbers", () => {
 		[null, "null"],
 		[true, "true"],
 		[false, "false"],
-		[0, "0.0"],
-		[-0, "0.0"],
-		[1, "1.0"],
-		[-2, "-2.0"],
-		[100, "100.0"],
+		[0, "0"],
+		[-0, "0"],
+		[1, "1"],
+		[-2, "-2"],
+		[100, "100"],
+		[9007199254740992, "9007199254740992"],
+		[2 ** 60, "1152921504606846976"],
+		[1e21, "1000000000000000000000"],
+		[2n ** 64n, "18446744073709551616"],
+		[-(10n ** 40n) - 1n, "-10000000000000000000000000000000000000001"],
+		[Number.MAX_VALUE, String(BigInt(Number.MAX_VALUE))],
 		[1.5, "1.5"],
 		[0.1, "0.1"],
-		[1e21, "1e+21"],
+		[-2.5, "-2.5"],
 		[1e-7, "1e-7"],
 		[5e-324, "5e-324"],
-		[Number.MAX_VALUE, "1.7976931348623157e+308"],
 		[NaN, "NaN"],
 		[Infinity, "Infinity"],
 		[-Infinity, "-Infinity"],
@@ -94,7 +99,7 @@ Deno.test("write: lists and maps, two spaces, keys in code point order", () => {
   "": "empty",
   "a": {},
   "b": [
-    1.0,
+    1,
     {
       "a": null
     },
@@ -109,7 +114,7 @@ Deno.test("write: lists and maps, two spaces, keys in code point order", () => {
 	const order = { "😀": 1, "～": 2, b: 3, B: 4 }
 	assertEquals(
 		diag.write(order),
-		`{\n  "B": 4.0,\n  "b": 3.0,\n  "～": 2.0,\n  "😀": 1.0\n}`,
+		`{\n  "B": 4,\n  "b": 3,\n  "～": 2,\n  "😀": 1\n}`,
 	)
 })
 
@@ -117,7 +122,7 @@ Deno.test("write: a key named __proto__ is a key like any", () => {
 	const x = diag.read('{"__proto__": 1, "a": 2}')
 	assert(Object.hasOwn(x as object, "__proto__"))
 	assertEquals(Object.getPrototypeOf(x), Object.prototype)
-	assertEquals(diag.write(x), `{\n  "__proto__": 1.0,\n  "a": 2.0\n}`)
+	assertEquals(diag.write(x), `{\n  "__proto__": 1,\n  "a": 2\n}`)
 })
 
 Deno.test("write: what has no encoding throws as encode does", () => {
@@ -274,8 +279,8 @@ Deno.test("read: bytes as h'', b64'' and ''", () => {
 	assert(diag.read("''") instanceof Uint8Array)
 })
 
-Deno.test("read: integers and decimals as the nearest number", () => {
-	const cases: [string, number][] = [
+Deno.test("read: integers exactly, decimals as the nearest number", () => {
+	const cases: [string, Value][] = [
 		["1", 1],
 		["-5", -5],
 		["0", 0],
@@ -286,19 +291,28 @@ Deno.test("read: integers and decimals as the nearest number", () => {
 		["-0x10", -16],
 		["0o17", 15],
 		["0b101", 5],
-		["18446744073709551615", 18446744073709551615],
-		["-18446744073709551617", -18446744073709551616],
-		["9007199254740993", 9007199254740992],
+		["9007199254740991", 9007199254740991],
+		["-9007199254740991", -9007199254740991],
+		["9007199254740992", 9007199254740992n],
+		["9007199254740993", 9007199254740993n],
+		["-9007199254740993", -9007199254740993n],
+		["0x20000000000001", 9007199254740993n],
+		["18446744073709551615", 18446744073709551615n],
+		["-18446744073709551617", -18446744073709551617n],
+		["1" + "0".repeat(400), 10n ** 400n],
 		["1e3", 1000],
 		["1.5E-3", 0.0015],
 		["0.1", 0.1],
+		["9007199254740993.0", 9007199254740992n],
+		["1e21", 10n ** 21n],
 		["1e400", Infinity],
 		["1.5_1", 1.5],
 		["10_0", 10],
 	]
-	for (const [text, x] of cases) same(diag.read(text), x)
-	// zero has no sign (same can't see one: both encode alike)
+	for (const [text, x] of cases) assertEquals(diag.read(text), x, text)
+	// zero has no sign
 	assertEquals(Object.is(diag.read("-0.0"), 0), true)
+	assertEquals(Object.is(diag.read("-0"), 0), true)
 })
 
 Deno.test("read: strings with escapes", () => {

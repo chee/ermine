@@ -1,9 +1,10 @@
 // CBOR's diagnostic notation for .text files (newcore/files/FILES.tex), in C. Same rules as
 // diag.ts (the header there has them): write gives two-space indentation, a map's keys in code
-// point order, bytes as h'...', a typed array as its tag on its bytes, and each number as the
-// shortest decimal that reads back as it; read takes what RFC 8949 Section 8 and RFC 8610
-// Appendix G allow, and refuses a tag other than a typed array's, undefined, other simple
-// values, a key that is not text, and a key twice. Values are json.h's.
+// point order, bytes as h'...', a typed array as its tag on its bytes, a whole number as its
+// exact digits and any other as the shortest decimal that reads back as it; read takes what RFC
+// 8949 Section 8 and RFC 8610 Appendix G allow, an integer exactly, and refuses a tag other than
+// a typed array's, undefined, other simple values, a key that is not text, and a key twice.
+// Values are json.h's.
 //
 // Text is UTF-8 as json.h holds strings: U+0000 may be 00 or C0 80, a lone surrogate its 3-byte
 // form (and is refused inside a string). A fault's position is as diag.ts has it: the offset in

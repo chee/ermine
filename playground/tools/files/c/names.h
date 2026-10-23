@@ -58,4 +58,27 @@ char *names_unpercent(const char *segment);
 /** code point order, UTF-16's with surrogates after U+E000 to U+FFFF: <0, 0, >0 */
 int names_bycodepoint(const char *a, const char *b);
 
+/** a name in a folder, as the store makes them (n bytes): not "", "." or "..", and no "/" or NUL (raw, or as json.h
+ * holds it, C0 80) */
+static inline bool names_isname(const char *s, size_t n) {
+	if (n == 0 || (n == 1 && s[0] == '.') || (n == 2 && s[0] == '.' && s[1] == '.')) return false;
+	for (size_t i = 0; i < n; i++) {
+		unsigned char c = (unsigned char)s[i];
+		if (c == '/' || c == 0 || (c == 0xC0 && i + 1 < n && (unsigned char)s[i + 1] == 0x80)) return false;
+	}
+	return true;
+}
+/** a path from the store's folder, as the store makes them (n bytes): names joined by "/", or "" for the folder itself.
+ * Anything else (absolute, or ".." in it) could reach out of the folder */
+static inline bool names_ispath(const char *s, size_t n) {
+	if (n == 0) return true;
+	for (size_t at = 0;;) {
+		size_t end = at;
+		while (end < n && s[end] != '/') end++;
+		if (!names_isname(s + at, end - at)) return false;
+		if (end == n) return true;
+		at = end + 1;
+	}
+}
+
 #endif

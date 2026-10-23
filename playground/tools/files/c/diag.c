@@ -2,6 +2,8 @@
 
 #include "diag.h"
 
+#include "../../../../core/op/c/whole.h"
+
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -45,10 +47,22 @@ static void putText(Text *text, const char *s) {
 /** a typed array's tag (RFC 8746), by kind; no uint8, so never 64 */
 static const unsigned kindTags[JSON_KINDS] = { 72, 77, 69, 78, 70, 79, 71, 85, 86 };
 
-/** the shortest decimal that reads back as x, with a point or an exponent, as Number#toString and diag.ts have it */
-static void decimal(Text *out, double x) {
-	if (isnan(x) || isinf(x) || x == 0) {
-		putText(out, isnan(x) ? "NaN" : isinf(x) ? (x < 0 ? "-Infinity" : "Infinity") : "0.0"); // zero has no sign
+/** a whole number as its exact digits (zero has no sign); any other as the shortest decimal that
+ * reads back as it, with a point or an exponent, as Number#toString and diag.ts have it */
+static void decimal(Text *out, const Json *number) {
+	double x = number->number;
+	if (number->big || (isfinite(x) && floor(x) == x)) {
+		unsigned char m[128];
+		size_t n = number->big ? number->bigLength : whole_of_double(x, m);
+		char *digits = malloc(3 * n + 3);
+		if (!digits) abort();
+		whole_decimal(number->big ? number->bigNegative : x < 0, number->big ? number->big : m, n, digits);
+		putText(out, digits);
+		free(digits);
+		return;
+	}
+	if (isnan(x) || isinf(x)) {
+		putText(out, isnan(x) ? "NaN" : x < 0 ? "-Infinity" : "Infinity");
 		return;
 	}
 	char buffer[40];
@@ -70,10 +84,7 @@ static void decimal(Text *out, double x) {
 	while (k > 1 && digits[k - 1] == '0') k--;
 	Text s = { NULL, 0, 0 };
 	if (x < 0) put(&s, "-", 1);
-	if (k <= n && n <= 21) {
-		put(&s, digits, (size_t)k);
-		for (int i = k; i < n; i++) put(&s, "0", 1);
-	} else if (0 < n && n <= 21) {
+	if (0 < n && n <= 21) { // not whole, so k > n
 		put(&s, digits, (size_t)n);
 		put(&s, ".", 1);
 		put(&s, digits + n, (size_t)(k - n));
@@ -92,7 +103,6 @@ static void decimal(Text *out, double x) {
 		putText(&s, exponent);
 	}
 	put(out, s.data, s.length);
-	if (!strpbrk(s.data, ".e")) put(out, ".0", 2);
 	free(s.data);
 }
 
@@ -169,7 +179,7 @@ static bool show(Text *out, const Json *x, int indent, const char **why) {
 	switch (x->type) {
 		case JSON_NULL: putText(out, "null"); return true;
 		case JSON_BOOLEAN: putText(out, x->boolean ? "true" : "false"); return true;
-		case JSON_NUMBER: decimal(out, x->number); return true;
+		case JSON_NUMBER: decimal(out, x); return true;
 		case JSON_STRING:
 			if (!whole(x->string, x->stringLength, why)) return false;
 			quote(out, x->string, x->stringLength);
@@ -613,38 +623,35 @@ bad:
 
 // numbers and tags -----------------------------------------------------------------------
 
-/** an integer in base 8 or 2, or 16 as it is: the nearest double, from the digits at [from, to) */
-static double integerOf(const char *digits, size_t count, int base) {
-	Text hexText = { NULL, 0, 0 };
-	put(&hexText, "0x", 2);
-	if (base == 16) {
-		put(&hexText, digits, count);
-	} else {
-		// bits, most significant first, padded to whole hex digits
-		size_t per = base == 8 ? 3 : 1, total = count * per, pad = (4 - total % 4) % 4;
-		unsigned nibble = 0;
-		size_t held = 0;
-		for (size_t i = 0; i < pad + total; i++) {
-			unsigned bit = 0;
-			if (i >= pad) {
-				size_t j = i - pad, d = (unsigned)(digits[j / per] - '0');
-				bit = (d >> (per - 1 - j % per)) & 1;
-			}
-			nibble = nibble * 2 + bit;
-			if (++held == 4) {
-				char c = "0123456789abcdef"[nibble];
-				put(&hexText, &c, 1);
-				nibble = 0;
-				held = 0;
-			}
+/** an integer's digits at [digits, digits + count) in a base, 2 to 16, as a magnitude (whole.h),
+ * malloc'd, no leading zero; its length in *length */
+static unsigned char *magnitudeOf(const char *digits, size_t count, unsigned base, size_t *length) {
+	size_t room = count / 2 + 8; // a digit is at most 4 bits
+	unsigned char *m = calloc(room, 1);
+	if (!m) abort();
+	size_t top = room; // the bytes in use: m[top, room)
+	for (size_t k = 0; k < count;) {
+		// a few digits at once: m = m * base^j + their value
+		uint64_t times = 1, add = 0;
+		for (; k < count && times < (1u << 24); k++) {
+			unsigned c = (unsigned char)digits[k];
+			times *= base;
+			add = add * base + (c <= '9' ? c - '0' : (c | 32) - 'a' + 10);
 		}
+		uint64_t carry = add;
+		for (size_t i = room; i-- > top;) {
+			uint64_t now = m[i] * times + carry;
+			m[i] = (unsigned char)now;
+			carry = now >> 8;
+		}
+		for (; carry; carry >>= 8) m[--top] = (unsigned char)carry;
 	}
-	double x = strtod(hexText.data, NULL);
-	free(hexText.data);
-	return x;
+	memmove(m, m + top, room - top);
+	*length = room - top;
+	return m;
 }
 
-static Json *tag(Reader *r, double number, size_t start) {
+static Json *tag(Reader *r, uint64_t number, size_t start) {
 	int kind = -1;
 	for (int i = 0; i < JSON_KINDS; i++)
 		if (number == kindTags[i]) kind = i;
@@ -742,23 +749,27 @@ static Json *number(Reader *r) {
 		}
 	}
 	r->at = end;
-	double x;
-	if (base == 10) {
-		char *copy = copyStringOfLength(r->t + from, end - from);
-		x = strtod(copy, NULL);
-		free(copy);
-	} else {
-		x = integerOf(r->t + from, end - from, base);
-	}
-	if (!indicator(r, false)) return NULL;
+	// exact, of any size: a double when one holds it, its magnitude beside the nearest past that
+	size_t length;
+	unsigned char *m = magnitudeOf(r->t + from, end - from, (unsigned)base, &length);
+	Json *x = jsonWhole(negative, m, length); // zero has no sign: -0 is 0
+	uint64_t n;
+	if (!whole_u64(m, length, &n)) n = 0; // past every tag, as 0 is
+	free(m);
+	if (!indicator(r, false)) goto bad;
 	if (!negative) {
 		size_t after = r->at;
-		if (!space(r)) return NULL;
-		if (peek(r, 0) == '(') return tag(r, x, start);
+		if (!space(r)) goto bad;
+		if (peek(r, 0) == '(') {
+			jsonFree(x);
+			return tag(r, n, start);
+		}
 		r->at = after;
-		return jsonNumber(x);
 	}
-	return jsonNumber(x == 0 ? 0.0 : -x); // zero has no sign: -0 is 0
+	return x;
+bad:
+	jsonFree(x);
+	return NULL;
 }
 
 // values ---------------------------------------------------------------------------------

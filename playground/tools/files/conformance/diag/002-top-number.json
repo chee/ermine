@@ -1,16 +1,16 @@
 {
-	"title": "a number alone has its point",
+	"title": "a whole number alone is its digits, no point",
 	"steps": [
 		{
 			"op": "write",
 			"value": 42,
 			"expect": {
-				"text": "42.0"
+				"text": "42"
 			}
 		},
 		{
 			"op": "read",
-			"text": "42.0",
+			"text": "42",
 			"expect": {
 				"value": 42
 			}

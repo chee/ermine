@@ -7,12 +7,12 @@
 				"__proto__": 1
 			},
 			"expect": {
-				"text": "{\n  \"__proto__\": 1.0\n}"
+				"text": "{\n  \"__proto__\": 1\n}"
 			}
 		},
 		{
 			"op": "read",
-			"text": "{\n  \"__proto__\": 1.0\n}",
+			"text": "{\n  \"__proto__\": 1\n}",
 			"expect": {
 				"value": {
 					"__proto__": 1
