@@ -5,7 +5,7 @@
 //   const packed = pack(steps); const steps = unpack(packed)
 import type { Value } from "@ermine/encoding/cbor"
 import { type Columns, decode as patchesOf, encode as columns } from "@ermine/op/squish"
-import { decodeStep, encodeStep, hashStep, type Step } from "./step.ts"
+import { decodeStep, encodeStep, hashStep, own, type Step, written } from "./step.ts"
 
 export type Packed = [
 	first: Uint8Array,
@@ -18,12 +18,17 @@ export type Packed = [
 	columns: Columns,
 ]
 
+// the same value: a node relative ([rest]) by its rest
+const alike = (a: unknown, b: unknown) =>
+	a === b ||
+	(Array.isArray(a) && Array.isArray(b) && a.length === 1 && b.length === 1 && a[0] === b[0])
+
 // a list as runs, [value, count, …], and back
 function runs<T>(xs: T[]): T[] {
 	const out: T[] = []
 	for (const x of xs) {
 		const n = out.length
-		if (n && out[n - 2] === x) (out[n - 1] as number)++
+		if (n && alike(out[n - 2], x)) (out[n - 1] as number)++
 		else out.push(x, 1 as T)
 	}
 	return out
@@ -81,7 +86,7 @@ export function pack(bytes: readonly Uint8Array[]): Packed {
 		bytes[0],
 		runs(rest.map((s, i) => s.lamport - steps[i].lamport)),
 		runs(rest.map((s, i) => s.when - steps[i].when)),
-		runs(rest.map((s) => s.node)),
+		runs(rest.map(written)),
 		runs(rest.map((s) => s.part)),
 		runs(rest.map((s) => s.who ?? null)),
 		runs(rest.map((s) => s.patches.length)),
@@ -108,12 +113,22 @@ export function unpack(p: unknown): Uint8Array[] {
 		who = unruns(whos),
 		count = unruns(counts)
 	const all = patchesOf(cols)
+	// a node: its id, or [the rest after the device's]
+	if (
+		!node.every((x) =>
+			typeof x === "string" || (Array.isArray(x) && x.length === 1 && typeof x[0] === "string")
+		)
+	) {
+		throw new TypeError("not a pack")
+	}
 	for (let i = 0; i < count.length; i++) {
 		const s: Step = {
 			device: prev.device,
 			n: prev.n + 1,
 			before: hashStep(out[out.length - 1]),
-			node: node[i] as string,
+			...(typeof node[i] === "string"
+				? { node: node[i] as string }
+				: { node: own(prev.device) + (node[i] as string[])[0], relative: true }),
 			part: part[i] as string,
 			patches: all.slice(at, at += count[i]),
 			lamport: prev.lamport + lamport[i],

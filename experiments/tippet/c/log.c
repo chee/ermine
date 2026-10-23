@@ -57,7 +57,10 @@ void tp_log_free(tp_log *log) {
 	tp_mem mem = log->mem;
 	tp_free(&mem, log->feeds, log->feedroom * sizeof *log->feeds);
 	tp_buf_free(&log->scratch);
-	if (log->store) log->store->close(log->store->self);
+	// the open steps on disk too, then the store let go
+	tp_store *st = log->store;
+	if (st && st->sync) st->sync(st->self);
+	if (st) st->close(st->self);
 	memset(&log->key, 0, sizeof log->key);
 	tp_free(&mem, log, sizeof *log);
 }
@@ -225,7 +228,10 @@ int tp_log_write(tp_log *log, const tp_write *w, uint64_t *n, uint64_t *lamport)
 	if (!f) return unmade(log);
 	if (f->count >= log->limits.steps) return TP_BOUND;
 	tp_step s = {{0}, log->key.pub, f->count + 1, f->count ? f->last : NULL,
-		w->node, w->part, w->patches, w->who, 0, log->lamport + 1, w->when};
+		w->node, w->part, w->patches, w->who, 0, log->lamport + 1, w->when, 0};
+	// a node that is this device's own id, or under it: written relative to it
+	long rest = tp_step_rest(log->key.pub, w->node);
+	if (rest >= 0) s.relative = 1, s.node = (tp_span){w->node.p + w->node.n - (size_t)rest, (size_t)rest};
 	// written, then read as a step: one that isn't one is never kept
 	size_t length = tp_step_encode(&s, NULL, 0);
 	log->scratch.len = 0;
@@ -234,9 +240,10 @@ int tp_log_write(tp_log *log, const tp_write *w, uint64_t *n, uint64_t *lamport)
 	tp_step_encode(&s, bytes, length);
 	tp_step check;
 	if (tp_step_decode(bytes, length, &check)) return TP_NOTSTEP;
-	// the store, then the log: once the step is out, nothing fails
+	// the store (open there, else appended alone), then the log: once the step is out, nothing fails
 	tp_at at = {log->key.pub, s.n, s.n};
-	int why = log->store->append(log->store->self, bytes, length, &at);
+	tp_store *st = log->store;
+	int why = st->open ? st->open(st->self, bytes, length, &at) : st->append(st->self, bytes, length, &at);
 	if (why) return why;
 	f->count++;
 	tp_step_hash(bytes, length, f->last);
@@ -251,11 +258,11 @@ int tp_log_write(tp_log *log, const tp_write *w, uint64_t *n, uint64_t *lamport)
 int tp_log_run(tp_log *log, const uint8_t device[32], uint64_t at, uint64_t *to, uint8_t sig[64]) {
 	feed *f = find(log, device);
 	if (!f || at < 1 || at > f->count) return 1;
-	// this device's steps on disk before any leave, so a power cut can't make another step with
-	// their n; its run still open closed
+	// this device's run still open closed; and its steps on disk, in their runs, before any leave, so
+	// a power cut can't make another step with their n
 	tp_store *st = log->store;
-	if (own(log, device) && st->sync && st->sync(st->self)) return 1;
 	if (own(log, device) && at > log->closed && close_to(log, f->count)) return 1;
+	if (own(log, device) && st->sync && st->sync(st->self)) return 1;
 	uint8_t head[TP_HEAD];
 	uint64_t first;
 	long n = st->run(st->self, device, at, head, sizeof head, &first, to);
@@ -337,8 +344,9 @@ static int dropped(tp_log *log, const uint8_t *r, size_t length) {
 
 // ---- load
 
-// a record: a run, or a step of this device's kept alone, its steps going on from what is held
-// (those held already passed over); kept, signatures trusted. anything else passed over
+// a record: a run, or a step of this device's alone (open, or as logs before kept them), its steps
+// going on from what is held (those held already passed over; a step alone held only when new);
+// kept, signatures trusted. anything else passed over
 static int loaded(void *ctx, const uint8_t *r, size_t length, tp_at *at) {
 	tp_log *log = ctx;
 	if (dropped(log, r, length)) return 0;
@@ -364,7 +372,7 @@ static int loaded(void *ctx, const uint8_t *r, size_t length, tp_at *at) {
 	int why = 0;
 	feed *f = fresh > 0 ? fit(log, device, (size_t)fresh, &why) : NULL;
 	if (f) keep(log, f, (size_t)fresh, last, high);
-	ok = fresh >= 0 && !why;
+	ok = (run ? fresh >= 0 : fresh > 0) && !why;
 	if (ok) {
 		at->device = device, at->first = s.n, at->last = s.n + k - 1;
 		if (run && own(log, device) && at->last > log->closed) log->closed = at->last;

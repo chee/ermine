@@ -1,0 +1,132 @@
+{
+	"title": "an entry written through places' unread, under a patch node: its next write copies what the made entry shares, so the reader where it lands is told",
+	"steps": [
+		{
+			"op": "value",
+			"id": "N",
+			"value": {
+				"a": {
+					"x": 0
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "N",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 1
+				}
+			],
+			"unread": true,
+			"expect": {}
+		},
+		{
+			"op": "patch",
+			"id": "P",
+			"on": "N",
+			"patches": [
+				{
+					"path": [
+						"m"
+					],
+					"move": {
+						"path": [
+							"a"
+						]
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "m",
+			"scope": "o",
+			"f": {
+				"read": [
+					"N",
+					[
+						"m",
+						"x"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "m",
+			"expect": {
+				"runs": 1,
+				"value": 1
+			}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "N",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 2
+				}
+			],
+			"unread": true,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "m",
+			"expect": {
+				"runs": 2,
+				"value": 2
+			}
+		},
+		{
+			"op": "node",
+			"id": "N",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 2
+					}
+				}
+			}
+		},
+		{
+			"op": "read",
+			"id": "N",
+			"path": [
+				"m"
+			],
+			"expect": {
+				"value": {
+					"x": 2
+				}
+			}
+		}
+	]
+}

@@ -1,0 +1,230 @@
+{
+	"title": "dir/open torn by a power cut: the torn frame cut off when loaded, the steps before it held; the next write takes the torn one's n",
+	"steps": [
+		{
+			"op": "disk",
+			"name": "a",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303"
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "sync",
+			"device": "a",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 3
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "sync",
+			"device": "a",
+			"expect": {}
+		},
+		{
+			"op": "files",
+			"device": "a",
+			"expect": {
+				"log": [],
+				"open": [
+					[
+						"step",
+						"a",
+						1
+					],
+					[
+						"step",
+						"a",
+						2
+					],
+					[
+						"step",
+						"a",
+						3
+					]
+				]
+			},
+			"skip": [
+				"bytes"
+			]
+		},
+		{
+			"op": "tear",
+			"device": "a",
+			"file": "open",
+			"bytes": 10,
+			"expect": {}
+		},
+		{
+			"op": "files",
+			"device": "a",
+			"expect": {
+				"log": [],
+				"open": [
+					[
+						"step",
+						"a",
+						1
+					],
+					[
+						"step",
+						"a",
+						2
+					]
+				]
+			},
+			"skip": [
+				"bytes"
+			]
+		},
+		{
+			"op": "reset",
+			"device": "a",
+			"expect": {
+				"count": 2
+			}
+		},
+		{
+			"op": "files",
+			"device": "a",
+			"expect": {
+				"log": [],
+				"open": [
+					[
+						"step",
+						"a",
+						1
+					],
+					[
+						"step",
+						"a",
+						2
+					]
+				]
+			},
+			"skip": [
+				"bytes"
+			]
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 30
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "sync",
+			"device": "a",
+			"expect": {}
+		},
+		{
+			"op": "files",
+			"device": "a",
+			"expect": {
+				"log": [],
+				"open": [
+					[
+						"step",
+						"a",
+						1
+					],
+					[
+						"step",
+						"a",
+						2
+					],
+					[
+						"step",
+						"a",
+						3
+					]
+				]
+			},
+			"skip": [
+				"bytes"
+			]
+		},
+		{
+			"op": "relay",
+			"name": "r",
+			"expect": {}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "r",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "files",
+			"device": "a",
+			"expect": {
+				"log": [
+					[
+						"run",
+						"a",
+						1,
+						3
+					]
+				],
+				"open": []
+			},
+			"skip": [
+				"bytes"
+			]
+		}
+	]
+}

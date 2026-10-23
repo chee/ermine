@@ -13,6 +13,7 @@
 #include <unistd.h>
 
 #include "history.h"
+#include "store.h"
 #include "tippet.h"
 #include "wire.h"
 
@@ -403,8 +404,11 @@ static void cut(const char *dir) {
 	size_t ends[64], steps[64], nends = 0, held = 0;
 	for (size_t at = 0; at + 4 <= size;) {
 		size_t len = (size_t)all[at] << 24 | (size_t)all[at + 1] << 16 | (size_t)all[at + 2] << 8 | all[at + 3];
-		tp_step t;
-		if (!tp_step_decode(all + at + 4, len, &t)) held++;
+		// a run: its steps (this log's are all runs, each step once)
+		tp_steps t = {0};
+		if (tp_is_run(all + at + 4, len) && !tp_unpack(&mem, (tp_span){all + at + 4 + TP_HEAD, len - TP_HEAD}, 1 << 20, &t))
+			held += t.count;
+		tp_steps_free(&mem, &t);
 		at += 4 + len;
 		ends[nends] = at, steps[nends++] = held;
 	}
@@ -447,6 +451,8 @@ static void cut(const char *dir) {
 		unlink(f);
 		snprintf(f, sizeof f, "%s/key", d);
 		unlink(f);
+		snprintf(f, sizeof f, "%s/open", d);
+		unlink(f);
 		rmdir(d);
 	}
 	printf("  %zu cuts of a %zu-byte log (%zu frames): %d wrong\n", size + 1, size, nends, bad);
@@ -455,6 +461,7 @@ static void cut(const char *dir) {
 	snprintf(d, sizeof d, "%s/whole", dir);
 	snprintf(f, sizeof f, "%s/log", d), unlink(f);
 	snprintf(f, sizeof f, "%s/key", d), unlink(f);
+	snprintf(f, sizeof f, "%s/open", d), unlink(f);
 	rmdir(d);
 }
 
@@ -872,6 +879,7 @@ static void typescript(const char *dir) {
 		tp_log_free(log);
 		snprintf(path, sizeof path, "%s/synced/log", dir), unlink(path);
 		snprintf(path, sizeof path, "%s/synced/key", dir), unlink(path);
+		snprintf(path, sizeof path, "%s/synced/open", dir), unlink(path);
 		snprintf(path, sizeof path, "%s/synced", dir), rmdir(path);
 	}
 	// b. a run taken that this side held already: the sender holds that run, not all this side has
@@ -1028,8 +1036,8 @@ static void forgetting(const char *dir) {
 		part(e);
 		dev_free(&r);
 		tp_sync_free(b.sync), tp_log_free(w);
-		static const char *const files[3] = {"log", "snapshot", "key"};
-		for (int i = 0; i < 3; i++) snprintf(f, sizeof f, "%s/%s", d, files[i]), unlink(f);
+		static const char *const files[4] = {"log", "snapshot", "key", "open"};
+		for (int i = 0; i < 4; i++) snprintf(f, sizeof f, "%s/%s", d, files[i]), unlink(f);
 		rmdir(d);
 	}
 	// b. this device's own go only once a link to a keeper has said it holds them

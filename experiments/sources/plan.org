@@ -1,0 +1,65 @@
+#+title: sources, a first try
+
+An experiment from the sketch sources-2026-10-22 (ermine-plans): a holder, a link, a value mirror,
+and the smallest history to name writes. Nothing here is decided. Each line below is my pick, where
+the sketch left a choice open; any of them can change.
+
+* picks (mine, not decided)
+- a write: node, part, parents, patches, change (the header without its op); its name the blake3 of that, as canonical CBOR, in hex
+- a named write is read back from its encoding, sharing nothing (places' children change in place)
+- a fact with something no encoding has (a function, a symbol) is not named; history counts it in skipped
+- only string ids are recorded
+- an entry taken out with no scope open (no change from places): history makes its change, time now, actor null
+- history is made before the graph's first write; a value written before it has no base
+- writes made at once: the part's whole history played again, parents first, ties by the lower name; the value lands as one patch at the root
+- in the playing, a write whose patches don't apply there is passed over
+- a write lands with its own change (its actor, time and site), not the landing device's
+- history's echo: facts at the node and part being landed, while it lands, are its own
+- every holder refuses a write misnamed or missing a parent, so since gives parents first
+- put gives one outcome per write, in order
+- a cursor is a count: each write numbered as it comes; the file holder's is its memory's, not the file's
+- holder calls are async (a file is); watch is not
+- a link passes a refused write by (its cursor moves on) and keeps it in refused
+- a link remembers every name each side gave or acked, and never sends those to it; the sets only grow
+- back-pressure: since takes a limit, a link a limit per leg; one sync at a time, one more if poked meanwhile
+- a holder that can't list has no since; link.fetch(node) asks both sides by get
+- file holder: a CBOR list of writes, saved whole on each put and drop, read again before each save; loading only adds; no lock
+- file holder: a save that fails refuses that put's new writes ("unwritable"), and they are not held
+- Deno's file: written beside, then renamed over; the folder watched, events naming the file told
+- web's file: written, not run; no FileSystemObserver, never told
+- mirror: the whole value, one patch at the root; codec given (text: strict UTF-8, a BOM left in; cbor)
+- mirror's echo: by bytes, the ones the file holds as far as it knows (last read or written)
+- mirror opened: a file there goes into the graph; no file, the graph's value to the file; no value, the file left alone
+- history's drop: its writes and heads let go of, the value stays; the next write there has no parents
+- conformance: TypeScript only, files in memory; "experiments" added to the suite groups
+
+* found (for chee)
+- drop and since don't meet: a link still knows the other side held what it dropped, so never sends it again; history's drop makes the next write a second root
+- refused is two things: never (misnamed, the holder's say) and not now (a disk, a parent let go); a link can only pass by or stall, so not now is lost on that link
+- an opaque cursor can't move partway: a batch partly refused either all moves on or all comes again
+- table.del takes no header: a removal leaves the graph with no actor, time or site (on main 10-23: places makes one from the scope open, site table.del's caller; still none outside a scope, and a removal landed from elsewhere is told with none, or as the landing scope's)
+- facts share values with entries written in place: a holder keeping them as given would see them change (not reproduced on main 10-23: unread copies a patch's value before writing under it)
+- merging by playing again needs a part's history from its first write; the table can't list ids, so a late history has no base
+- echo by a flag swallows a write to the same node and part made while a write lands (a watch writing back)
+- a holder that can't list: a poke can't say which node, so there is nothing to ask it
+- the mirror's whole-value write: a hand edit and a write elsewhere at once, one of them lost whole
+- history as a holder: the graph's side of a link is one more holder, no special case
+
+* found on main (10-23), shown in typescript/problems_test.ts
+- a hand edit not yet heard when a graph write lands: the mirror writes the file over it; in no history
+- a file that wouldn't write is not written again until the next graph write; a hand edit to the stale file then wins over the newer value
+- a file deleted or renamed by hand: nothing happens; it comes back on the next graph write; a renamed file is never seen again
+- a value taken out leaves the file as it was; a hand edit to it brings the value back
+- two mirrors on one file: opening the second writes the first's value over its node; after that the two nodes are tied
+- text: a value not a string goes out as JSON and comes back as a string
+- a file that won't decode: trouble on the mirror object only, nothing in the graph; the next graph write goes over the person's bytes
+- opened on a file there, the file wins over the graph's value, no one asked
+- a hand edit's site is mirror.ts; nothing in its change says which file
+- Deno's file: renamed over, so a symlink is replaced by a plain file; a write that fails leaves the file beside
+- a merge lands as one whole value under the last write's change: another's change shows as that write's whole replace
+- two writes at one path at once: one value, by name order; the other in no read, only history
+- every string id is recorded and landed, reachable or not; nothing asks the host what syncs
+- a scope whose info holds a function: all its writes are skipped, only counted; the node goes out of step with no word where
+- a write at a symbol id is dropped, not even counted
+- file holder: one process's drop is undone by another's next save (loading only adds)
+- mirror.trouble, link.status, refused, skipped: kept on objects, nowhere in the graph

@@ -188,8 +188,9 @@ static nd_entry *made_node(const op_value *r, const op_value *value, op_value **
 	return node;
 }
 
-// a value write: the patches to the entry there, said through the overlay's commit; none there: an
-// entry made and added (the table's event tells)
+// a value write: the patches to the entry there, said through the overlay's commit (unread: written
+// through places' unread, in place where it owns); none there: an entry made and added (the table's
+// event tells)
 static void edit(const op_value *r, op_value **out) {
 	const op_value *patches = op_get(r, "patches");
 	size_t count = world_is(patches, OP_LIST) ? patches->count : 0;
@@ -216,7 +217,10 @@ static void edit(const op_value *r, op_value **out) {
 			tb_add(table, tb_string(part), id, node);
 		}
 	} else {
-		code = nd_update(node, list, count, h, &failed);
+		const op_value *unread = op_get(r, "unread");
+		code = unread != NULL && unread->type == OP_BOOL && unread->bool_
+			? un_update(pl_unread(world_places), node, list, count, h, &failed)
+			: nd_update(node, list, count, h, &failed);
 		if (code == OP_OK) {
 			pl_changed changed = {1, {node}};
 			pn_commit(overlay, &changed);
@@ -260,6 +264,25 @@ static void land(const op_value *r, op_value **out) {
 	*out = op_map();
 }
 
+// the entry under (part, id) put under each of ids too, the same entry (a table event each)
+static void share(const op_value *r, op_value **out) {
+	tb_key part = tb_string(world_part(op_get(r, "part")));
+	nd_entry *there = tb_get(table, part, world_key(op_get(r, "id")));
+	const op_value *ids = op_get(r, "ids");
+	if (there == NULL) {
+		*out = world_error("nothing-there");
+		return;
+	}
+	for (size_t i = 0; world_is(ids, OP_LIST) && i < ids->count; i++) {
+		if (!world_is(ids->items[i], OP_STR)) {
+			*out = world_error("id: not a string");
+			return;
+		}
+		tb_sub(table, part, world_key(ids->items[i]), there);
+	}
+	*out = op_map();
+}
+
 static void in_host(void *data) {
 	hosting *c = data;
 	const op_value *r = c->r;
@@ -297,6 +320,8 @@ static void in_host(void *data) {
 		edit(r, &c->out);
 	} else if (strcmp(op, "land") == 0) {
 		land(r, &c->out);
+	} else if (strcmp(op, "share") == 0) {
+		share(r, &c->out);
 	} else {
 		int code = tb_del(table, tb_string(world_part(op_get(r, "part"))), world_key(op_get(r, "id")));
 		c->out = code ? world_error(tb_code_name(code)) : op_map();
@@ -318,7 +343,7 @@ static op_value *answer(const op_value *r) {
 			op_set((op_value *)r, "info", info);
 		}
 	}
-	const char *hosted[] = {"kids", "value", "patch", "edit", "del", "land"};
+	const char *hosted[] = {"kids", "value", "patch", "edit", "del", "land", "share"};
 	for (size_t i = 0; i < sizeof hosted / sizeof *hosted; i++) {
 		if (strcmp(op, hosted[i]) != 0) continue;
 		if (!world_is(op_get(r, "id"), OP_STR)) return world_error("id: not a string");

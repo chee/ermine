@@ -120,9 +120,11 @@ int main(int argc, char **argv) {
 
 	CHECK(h.now == 0);
 	snprintf(path, sizeof path, "%s/log", relaydir), unlink(path);
+	snprintf(path, sizeof path, "%s/open", relaydir), unlink(path);
 	rmdir(relaydir);
 	snprintf(path, sizeof path, "%s/log", dir), unlink(path);
 	snprintf(path, sizeof path, "%s/key", dir), unlink(path);
+	snprintf(path, sizeof path, "%s/open", dir), unlink(path);
 	rmdir(dir);
 	printf("tippet-test: %s, peak heap %zu bytes\n", failed ? "FAILED" : "ok", h.peak);
 	return failed ? 1 : 0;

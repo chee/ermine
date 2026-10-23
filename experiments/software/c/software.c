@@ -9,8 +9,9 @@ sw *sw_new(const sw_setup *setup) {
 	s->reasons[R_RUNNER] = op_str(SW_RUNNER_STOPPED);
 	// its own processes, under setup.scope
 	s->life = pr_new(&(pr_setup){.scheduler = setup->scheduler, .table = setup->table,
-		.places = setup->places, .scopes = setup->scopes, .sites = setup->sites, .owner = setup->scope,
-		.site = sw_site_of, .site_ctx = s});
+		.places = setup->places, .scopes = setup->scopes, .commit = setup->commit,
+		.commit_ctx = setup->commit_ctx, .sites = setup->sites, .runs = setup->runs,
+		.owner = setup->scope, .site = sw_site_of, .site_ctx = s, .id = setup->id, .id_ctx = setup->id_ctx});
 	return s;
 }
 
@@ -79,7 +80,10 @@ static op_value *with_refused(const char *why) {
 op_value *sw_refusal_value(const sw_refusal *r) {
 	op_value *m = with_refused(r->refused);
 	const char *k = r->refused;
-	if (strcmp(k, "not-a-runner") == 0) op_set(m, "runner", sw_names_value(r->runner, r->nrunner));
+	if (strcmp(k, "not-a-runner") == 0) {
+		op_set(m, "runner", r->runner_id != NULL ? op_str(r->runner_id)
+		                                         : sw_names_value(r->runner, r->nrunner));
+	}
 	else if (strcmp(k, "not-there") == 0) {
 		if (r->program_has_at) op_set(m, "program", sw_names_value(r->program_at, r->nprogram_at));
 		else op_set(m, "program", op_str(r->program != NULL ? r->program : ""));

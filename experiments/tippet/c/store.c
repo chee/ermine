@@ -31,6 +31,13 @@ int tp_index_hold(tp_index *x, const tp_at *at, uint64_t offset, uint64_t length
 		if (!q) return TP_NOMEM;
 		p->held = q, p->room = room;
 	}
+	// the open steps it holds let go
+	if (x->ocount && !memcmp(x->odevice, at->device, 32) && at->last >= x->ofirst) {
+		size_t k = 0, from = 0;
+		while (k < x->ocount && x->ofirst + k <= at->last) from += 4 + tp_get32(x->open.p + from), k++;
+		memmove(x->open.p, x->open.p + from, x->open.len - from);
+		x->open.len -= from, x->ocount -= k, x->ofirst += k;
+	}
 	// those it covers, i up to j, out; it in their place
 	size_t i = p->count, j;
 	while (i > 0 && p->held[i - 1].first >= at->first) i--;
@@ -80,13 +87,39 @@ long tp_index_step(tp_index *x, const uint8_t device[32], uint64_t n, const tp_h
 	return (long)length;
 }
 
+int tp_index_open(tp_index *x, const uint8_t *step, size_t length, const tp_at *at) {
+	if (length > 0xffffffffu) return TP_BOUND;
+	if (!x->open.mem) x->open.mem = x->mem, x->open.max = x->max;
+	if (!x->ocount || memcmp(x->odevice, at->device, 32) || at->first != x->ofirst + x->ocount) {
+		x->open.len = 0, x->ocount = 0, x->ofirst = at->first;
+		memcpy(x->odevice, at->device, 32);
+	}
+	size_t was = x->open.len;
+	uint8_t head[4];
+	tp_set32(head, (uint32_t)length);
+	tp_put(&x->open, head, 4), tp_put(&x->open, step, length);
+	int why = tp_buf_why(&x->open);
+	if (why) x->open.bad = 0, x->open.len = was;
+	else x->ocount++;
+	return why;
+}
+
+const uint8_t *tp_index_opened(const tp_index *x, const uint8_t device[32], uint64_t n, size_t *length) {
+	if (!x->ocount || memcmp(x->odevice, device, 32) || n < x->ofirst || n - x->ofirst >= x->ocount) return NULL;
+	size_t at = 0;
+	for (uint64_t k = x->ofirst; k < n; k++) at += 4 + tp_get32(x->open.p + at);
+	*length = tp_get32(x->open.p + at);
+	return x->open.p + at + 4;
+}
+
 void tp_index_clear(tp_index *x) {
 	for (size_t i = 0; i < x->count; i++) {
 		tp_free(x->mem, x->places[i].held, x->places[i].room * sizeof(tp_held));
 	}
 	tp_free(x->mem, x->places, x->room * sizeof *x->places);
 	tp_steps_free(x->mem, &x->steps);
-	x->places = NULL, x->count = x->room = 0;
+	tp_buf_free(&x->open);
+	x->places = NULL, x->count = x->room = 0, x->ocount = 0;
 }
 
 long tp_index_drop(tp_index *x, const uint8_t device[32], uint64_t n) {
@@ -107,6 +140,7 @@ long tp_index_drop(tp_index *x, const uint8_t device[32], uint64_t n) {
 typedef struct {
 	tp_store store;
 	tp_mem mem;
+	size_t max;
 	tp_index index;
 	tp_buf frames, snap;
 	uint8_t key[32];
@@ -115,6 +149,10 @@ typedef struct {
 
 static int load(void *self, tp_read read, void *ctx) {
 	memory *m = self;
+	// the open steps, told again after the records
+	tp_buf open = m->index.open;
+	size_t count = m->index.ocount;
+	m->index.open = (tp_buf){NULL, 0, 0, m->max, &m->mem, 0};
 	tp_index_clear(&m->index);
 	for (size_t at = 0; at + 4 <= m->frames.len;) {
 		const uint8_t *f = m->frames.p + at;
@@ -127,7 +165,15 @@ static int load(void *self, tp_read read, void *ctx) {
 		}
 		at += 4 + length;
 	}
-	return 0;
+	int why = 0;
+	for (size_t i = 0, at = 0; i < count && !why; i++) {
+		size_t length = tp_get32(open.p + at);
+		tp_at step;
+		if (read(ctx, open.p + at + 4, length, &step)) why = tp_index_open(&m->index, open.p + at + 4, length, &step);
+		at += 4 + length;
+	}
+	tp_buf_free(&open);
+	return why;
 }
 
 static int append(void *self, const uint8_t *record, size_t length, const tp_at *at) {
@@ -149,6 +195,12 @@ static int append(void *self, const uint8_t *record, size_t length, const tp_at 
 
 static long get(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap) {
 	memory *m = self;
+	size_t length;
+	const uint8_t *p = tp_index_opened(&m->index, device, n, &length);
+	if (p) {
+		if (out && length <= cap) memcpy(out, p, length);
+		return (long)length;
+	}
 	const tp_held *r = tp_index_find(&m->index, device, n);
 	return r ? tp_index_step(&m->index, device, n, r, m->frames.p + r->offset, out, cap) : -1;
 }
@@ -156,6 +208,13 @@ static long get(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, 
 static long run(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap,
 	uint64_t *first, uint64_t *last) {
 	memory *m = self;
+	size_t length;
+	const uint8_t *p = tp_index_opened(&m->index, device, n, &length);
+	if (p) {
+		if (out) memcpy(out, p, length < cap ? length : cap);
+		*first = *last = n;
+		return (long)length;
+	}
 	const tp_held *r = tp_index_find(&m->index, device, n);
 	if (!r) return -1;
 	*first = r->first, *last = r->last;
@@ -192,6 +251,10 @@ static long drop(void *self, const uint8_t device[32], uint64_t n) {
 	return tp_index_drop(&((memory *)self)->index, device, n);
 }
 
+static int open_(void *self, const uint8_t *step, size_t length, const tp_at *at) {
+	return tp_index_open(&((memory *)self)->index, step, length, at);
+}
+
 static void shut(void *self) {
 	memory *m = self;
 	tp_mem mem = m->mem;
@@ -204,10 +267,10 @@ tp_store *tp_memory_store(const tp_mem *mem, size_t max) {
 	memory *m = tp_alloc(mem, sizeof *m);
 	if (!m) return NULL;
 	memset(m, 0, sizeof *m);
-	m->mem = *mem;
+	m->mem = *mem, m->max = max;
 	m->index.mem = &m->mem, m->index.max = max;
 	m->frames.mem = &m->mem, m->frames.max = max;
 	m->snap.mem = &m->mem, m->snap.max = max;
-	m->store = (tp_store){m, load, append, get, run, snapshot, snapped, key, NULL, shut, drop};
+	m->store = (tp_store){m, load, append, get, run, snapshot, snapped, key, NULL, shut, drop, open_};
 	return &m->store;
 }

@@ -12,6 +12,8 @@
 //     hf_value("javascript"), &no);                                     // NULL: refused
 //   sw_process *x = sw_run(s, runner, 4, &(sw_program){.at = prog, .nat = 2, .has_at = 1},
 //     at, 2, &(sw_options){..}, &no);                                  // NULL: refused
+//   sw_run_carried(s, &(sw_carried){.id = RUN, .live = fn}, &(sw_program){.id = CAT,
+//     .build = build, .build_data = b}, at, 2, NULL, &no);            // carried: programs' way
 //   sw_loaded *l = sw_load(s, &place, letter, 6, &(sw_program){.id = "e", .code = c, .type = t},
 //     NULL, &no);                                                      // NULL: refused
 //   sw_loaded_live(l)->run(...);  sw_release(s, l);                    // one hold; else at its
@@ -41,23 +43,29 @@
 // ermine.type is not ermine.runner); not-there (no program node, or no value; by id: none, or not
 // the hash given; code given: not the hash given); wrong-form (the program's type does not fit the
 // runner's takes, SW_TAKES; or it names an api, ermine.program.api, code given: api, the runner's
-// ermine.runner.api is not); not-a-runner (the runner's value no runner hf_find knows); taken
-// (processes'). the program's type: by an address, ermine/types' ty_type_of (its ermine.type, else
-// its name's extension, by the nearest ermine/types from its folder); by id, its ermine.type; code
-// given, type. it fits when the takes (a list; a string, a list of one) holds it or a type it
-// conforms to (ty_conform), by the nearest ermine/types from the program's folder (none: from
-// where's root); read untracked. else processes' start under a scope
+// ermine.runner.api is not); not-a-runner (the runner's value no runner hf_find knows; carried:
+// its live none, or with no runner); taken (processes'). sw_run_carried: a runner carried (its id,
+// its live form in hand, as programs holds a host's or a loaded runner): nothing of its node read,
+// no type, takes or api asked (its form the caller's to have matched), so only not-there,
+// not-a-runner (its id) and taken. the program's type: by an address, ermine/types' ty_type_of
+// (its ermine.type, else its name's extension, by the nearest ermine/types from its folder); by
+// id, its ermine.type; code or build given, type. it fits when the takes (a list; a string, a list
+// of one) holds it or a type it conforms to (ty_conform), by the nearest ermine/types from the
+// program's folder (none: from where's root); read untracked. else processes' start under a scope
 // of its own (under the runner's offer's, when offered here; else setup.scope), with ermine.type
-// ermine.process, ermine.process.runner { id, at }, .program { id, at?, hash? } (hash: of its value;
-// none: a live value); the code read once now; at the first pulse, a one-shot effect, the process's
-// scope open, the runner called with the code and its facts (sw_starting). a handle: held, its stop
-// its stopper's teardown (landing after the stop: called then); an error, or a handle that lands
-// later failing (sw_wait): the status. a run made outside a run (sc_get_run NULL): a pulse asked for
-// (setup.schedule; NULL: none, the host pulses).
+// ermine.process, ermine.process.runner { id, at } (carried: { id }), .program { id, at?, hash? }
+// (hash: of its value; none: a live value, or built); the code read once now; at the first pulse,
+// a one-shot effect, the process's scope open, the runner called with the code and its facts
+// (sw_starting). build given (no code): the code is what build gives, in that effect's run,
+// tracked: SC_PENDING, the process pending; failed, its status; the runner called once it gives
+// one. a handle: held, its stop its stopper's teardown (landing after the stop: called then); an
+// error, or a handle that lands later failing (sw_wait): the status. a run made outside a run
+// (sc_get_run NULL): a pulse asked for (setup.schedule; NULL: none, the host pulses).
 // sw_load: the program made live on the runner with no process, shared: one load per key, the
-// program's id, its value's hash (none: the value itself), the runner's id and function's name, and
-// the chain given (the keys of what else loads it, programs'). checked as sw_run is (no path, so
-// never taken); a runner with no load: not-a-runner. a key with no load standing: the entry's load
+// program's id, its value's hash (none: the value itself), the runner's id and function's name
+// (carried: its live form's functions and data), and the chain given (the keys of what else loads
+// it, programs'). checked as sw_run is (no path, so never taken; a build is sw_run's alone, not
+// read here); a runner with no load: not-a-runner. a key with no load standing: the entry's load
 // called with the code, by's facts there to read (sw_loading) and a scope of the load's own (under
 // setup.scope) open, its scope theirs; the load failing: refused "failed", error its message, the
 // scope gone. a sw_loaded: one hold by by, let go at sw_release or at by's scope's teardown (after
@@ -161,6 +169,16 @@ typedef struct {
 	// microtasks, software.ts' default)
 	void (*schedule)(void *ctx, void (*f)(void *data), void *data);
 	void *schedule_ctx;
+	// told every write's changed entries (the host's places, a box's shares it); NULL: pl_commit on
+	// places
+	void (*commit)(void *ctx, const pl_changed *changed);
+	void *commit_ctx;
+	// 1: each process's latest first run on the runs' table (processes' runs.h) by its node's id
+	// (software.ts' runs)
+	int runs;
+	// a new process's node id, malloc'd (processes' pr_setup.id). NULL: processes' own
+	char *(*id)(void *ctx);
+	void *id_ctx;
 } sw_setup;
 
 // an owner: its node, its path from the root, the scope what it offers goes with; stored: they stay
@@ -184,8 +202,17 @@ typedef struct {
 	const char *by;
 } sw_offered;
 
+// a runner carried (software.ts' Carried): its node's id, and its live form in hand (borrowed for
+// the call, copied; NULL: no runner)
+typedef struct {
+	const char *id;
+	const hf_entry *live;
+} sw_carried;
+
 // a run's program: an address from where's root (has_at), or by id; hash NULL: any; code non-NULL:
-// carried (nothing read), its form type and api
+// carried (nothing read), its form type and api. build (no code, sw_run's alone): carried, its code
+// what build(build_data) gives in the process's first run, tracked (SC_VALUE its value, the
+// scheduler's; SC_PENDING; SC_FAILED; SC_AWAIT), build_data the caller's while the process runs
 typedef struct {
 	const char *const *at;
 	size_t nat;
@@ -195,6 +222,8 @@ typedef struct {
 	const op_value *code;
 	const char *type;
 	const char *api;
+	sc_out (*build)(void *data);
+	void *build_data;
 } sw_program;
 
 typedef struct {
@@ -223,9 +252,10 @@ typedef struct {
 // "failed" (a load's, error its message). the fields of the refusal given, the rest NULL or 0
 typedef struct {
 	const char *refused;
-	// not-a-runner: the runner's path
+	// not-a-runner: the runner's path; carried, its id (runner_id, else NULL)
 	const char *const *runner;
 	size_t nrunner;
+	const char *runner_id;
 	// not-there: program_has_at: its path; else its id in program
 	const char *program;
 	const char *const *program_at;
@@ -265,11 +295,21 @@ sw_process *sw_run_at(sw *s, const char *const *runner, size_t nrunner, const sw
 	const char *const *at, size_t nat, const sw_options *options, sw_refusal *refused,
 	const ch_site *site);
 #define sw_run(...) sw_run_at(__VA_ARGS__, CH_HERE)
+// the same on a runner carried
+sw_process *sw_run_carried_at(sw *s, const sw_carried *runner, const sw_program *program,
+	const char *const *at, size_t nat, const sw_options *options, sw_refusal *refused,
+	const ch_site *site);
+#define sw_run_carried(...) sw_run_carried_at(__VA_ARGS__, CH_HERE)
 // by: its owner. options NULL: none. NULL: refused
 sw_loaded *sw_load_at(sw *s, const sw_place *by, const char *const *runner, size_t nrunner,
 	const sw_program *program, const sw_load_options *options, sw_refusal *refused,
 	const ch_site *site);
 #define sw_load(...) sw_load_at(__VA_ARGS__, CH_HERE)
+// the same on a runner carried
+sw_loaded *sw_load_carried_at(sw *s, const sw_place *by, const sw_carried *runner,
+	const sw_program *program, const sw_load_options *options, sw_refusal *refused,
+	const ch_site *site);
+#define sw_load_carried(...) sw_load_carried_at(__VA_ARGS__, CH_HERE)
 // its live form, the load's (hf_live)
 const hf_live *sw_loaded_live(const sw_loaded *l);
 // the hold let go now, out of its owner's (the last: the load closed, hf_live.close); twice: nothing

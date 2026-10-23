@@ -6,13 +6,17 @@
 // the library's memory goes through one allocator here, counted: TIPPET_HEAP set, its peak and
 // what is left at the end go to stderr. the graph's is malloc's, as everywhere in core
 #define _POSIX_C_SOURCE 200809L
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "../../../conformance/c/harness.h"
 #include "../../../conformance/c/protocol_harness.h"
 #include "../../../ermine/encoding/c/cbor.h"
 #include "history.h"
+#include "store.h"
 #include "tippet.h"
 #include "wire.h"
 
@@ -55,6 +59,10 @@ typedef struct {
 	// live data heard, in order
 	tp_span *heard;
 	size_t nheard;
+	// a disk's: its directory, its store, its seed
+	char *dir;
+	tp_store *store;
+	uint8_t seed[32];
 } device;
 
 // one way of a link: what from sent to, waiting; link: from's
@@ -106,7 +114,14 @@ void hh_finish(void) {
 			op_free((op_value *)d->info.value);
 		}
 		for (size_t k = 0; k < d->nheard; k++) free((void *)d->heard[k].p);
-		free(d->heard), free(d->name), free(d);
+		if (d->dir) {
+			static const char *const files[] = {"log", "open", "key", "snapshot", "snapshot.new"};
+			char path[4096];
+			for (size_t k = 0; k < sizeof files / sizeof *files; k++)
+				snprintf(path, sizeof path, "%s/%s", d->dir, files[k]), unlink(path);
+			rmdir(d->dir);
+		}
+		free(d->heard), free(d->dir), free(d->name), free(d);
 	}
 	free(w.devices);
 	bury();
@@ -264,9 +279,17 @@ static size_t stepin(const op_value *s, const uint8_t *device, const uint8_t *be
 	op_push(a, op_ref(op_get(s, "n")));
 	op_push(a, b ? op_bytes(bb, strlen(b) / 2) : bv || !before ? op_null() : op_bytes(before, 32));
 	const char *fields[] = {"node", "part", "patches", "lamport", "when", "who"};
+	const op_value *rel = op_get(s, "relative");
 	for (int i = 0; i < 6; i++) {
 		op_value *v = op_get(s, fields[i]);
-		if (v) op_push(a, op_ref(v));
+		if (!i && v && v->type == OP_STR && rel && rel->type == OP_BOOL && rel->bool_) {
+			// relative: [the rest after the device's own id]
+			long rest = tp_step_rest(key, (tp_span){(const uint8_t *)v->str, v->bytes});
+			if (rest < 0) return op_free(a), 0;
+			op_value *near = op_list();
+			op_push(near, op_str_n(v->str + v->bytes - (size_t)rest, (size_t)rest));
+			op_push(a, near);
+		} else if (v) op_push(a, op_ref(v));
 		else if (i < 5) return op_free(a), 0;
 	}
 	size_t n = encode(a, out);
@@ -613,11 +636,13 @@ static void write_f(void *data) {
 	tb_sub(d->table, part, id, e);
 }
 
-static void write(const op_value *r, FILE *out) {
+static void write_disk(device *d, const op_value *r, FILE *out);
+static void written(const op_value *r, FILE *out) {
 	device *d = which(r, "device", out);
 	const op_value *patches = op_get(r, "patches");
 	int64_t when = WHEN;
 	if (!d) return;
+	if (d->dir) { write_disk(d, r, out); return; }
 	if (!d->history) { hh_error(out, "%s writes nothing", d->name); return; }
 	if (!patches || patches->type != OP_LIST || !hh_str(r, "node")) { hh_error(out, "not a write"); return; }
 	if (op_get(r, "when") && !whole(op_get(r, "when"), &when)) { hh_error(out, "not a when"); return; }
@@ -795,6 +820,179 @@ static void inject(const op_value *r, FILE *out) {
 	fputs("{}", out);
 }
 
+// ---- a log on disk
+
+// a disk's log, on the file store in its dir, and its sync: 0 or a code
+static int on_disk(device *d) {
+	tp_store *store = tp_file_store(&w.mem, d->dir, MAX);
+	tp_log_options o = {w.mem, store, d->seed, 1, {0, 0, 0}, told, d};
+	tp_log *log = store ? tp_log_new(&o) : NULL;
+	int why = log ? tp_log_load(log) : TP_NOMEM;
+	if (why) {
+		if (log) tp_log_free(log);
+		else if (store) store->close(store->self);
+		return why;
+	}
+	d->log = log, d->store = store;
+	tp_sync_options so = {w.mem, log, 0, heard, random_, d, 0, MAX};
+	if (!(d->sync = tp_sync_new(&so))) hh_fail("out of memory");
+	return 0;
+}
+
+static void disk(const op_value *r, FILE *out) {
+	const char *name = hh_str(r, "name") ? hh_str(r, "name") : "";
+	uint8_t *seed, *log = NULL;
+	long n = 0;
+	if (named(name)) { hh_error(out, "%s is made", name); return; }
+	if (unhex(hh_str(r, "seed"), &seed) != 32) { hh_error(out, "a seed is 32 bytes"); return; }
+	if (hh_str(r, "log") && (n = unhex(hh_str(r, "log"), &log)) < 0) { hh_error(out, "not hex"); return; }
+	const char *tmp = getenv("TMPDIR") ? getenv("TMPDIR") : "/tmp";
+	char dir[4096];
+	static unsigned made_dirs;
+	snprintf(dir, sizeof dir, "%s/tippet-%ld-%u", tmp, (long)getpid(), made_dirs++);
+	if (mkdir(dir, 0700)) hh_fail("no directory");
+	if (log) {
+		char path[4200];
+		snprintf(path, sizeof path, "%s/log", dir);
+		FILE *f = fopen(path, "wb");
+		if (!f || fwrite(log, 1, (size_t)n, f) != (size_t)n || fclose(f)) hh_fail("log not written");
+	}
+	device *d = calloc(1, sizeof *d);
+	device **grown = realloc(w.devices, (w.count + 1) * sizeof *grown);
+	if (!d || !grown) hh_fail("out of memory");
+	w.devices = grown;
+	d->name = strdup(name), d->dir = strdup(dir);
+	memcpy(d->seed, seed, 32), tp_key_of(&d->key, seed), d->keyed = 1;
+	w.devices[w.count++] = d;
+	int why = on_disk(d);
+	if (why) { hh_error(out, "%s", tp_why(why)); return; }
+	fputs("{\"key\":", out), hex(out, tp_log_device(d->log), 32), fputc('}', out);
+}
+
+static device *on(const op_value *r, FILE *out) {
+	device *d = which(r, "device", out);
+	if (d && !d->dir) return hh_error(out, "%s is not on disk", d->name), NULL;
+	return d;
+}
+
+// its process gone, nothing more written (no sync), started again from its files
+static void reset(const op_value *r, FILE *out) {
+	device *d = on(r, out);
+	if (!d) return;
+	for (size_t i = 0; i < w.nsides; i++) {
+		if (!strcmp(w.sides[i]->from, d->name) || !strcmp(w.sides[i]->to, d->name))
+			{ hh_error(out, "%s is linked", d->name); return; }
+	}
+	d->store->sync = NULL;
+	tp_sync_free(d->sync), tp_log_free(d->log);
+	d->sync = NULL, d->log = NULL;
+	int why = on_disk(d);
+	if (why) { hh_error(out, "%s", tp_why(why)); return; }
+	fprintf(out, "{\"count\":%llu}", (unsigned long long)tp_log_count(d->log, tp_log_device(d->log)));
+}
+
+// dir/<name>'s bytes, the line's: its length (0: none)
+static size_t slurp(const device *d, const char *name, uint8_t **out) {
+	char path[4200];
+	snprintf(path, sizeof path, "%s/%s", d->dir, name);
+	FILE *f = fopen(path, "rb");
+	size_t n = 0, got;
+	uint8_t chunk[4096];
+	*out = NULL;
+	if (!f) return 0;
+	while ((got = fread(chunk, 1, sizeof chunk, f)) > 0) {
+		uint8_t *b = realloc(*out, n + got);
+		if (!b) hh_fail("out of memory");
+		memcpy(b + n, chunk, got), *out = b, n += got;
+	}
+	fclose(f);
+	if (*out) {
+		uint8_t *held = hh_take(n);
+		memcpy(held, *out, n), free(*out), *out = held;
+	}
+	return n;
+}
+
+// a file's whole frames: ["run", device, first, last], ["step", device, n] or ["other"]
+static void frames(FILE *out, const uint8_t *b, size_t size) {
+	fputc('[', out);
+	for (size_t at = 0, i = 0; at + 4 <= size; i++) {
+		size_t length = tp_get32(b + at);
+		if (!length || length > size - at - 4) break;
+		const uint8_t *r = b + at + 4;
+		tp_step s;
+		tp_steps steps;
+		if (i) fputc(',', out);
+		if (tp_is_run(r, length) && !tp_unpack(&w.mem, (tp_span){r + TP_HEAD, length - TP_HEAD}, MAX, &steps)) {
+			tp_step_decode(steps.bytes, steps.at[1], &s);
+			fputs("[\"run\",", out), nameof(out, r + 7);
+			fprintf(out, ",%llu,%llu]", (unsigned long long)s.n, (unsigned long long)(s.n + steps.count - 1));
+			tp_steps_free(&w.mem, &steps);
+		} else if (!tp_step_decode(r, length, &s)) {
+			fputs("[\"step\",", out), nameof(out, s.device), fprintf(out, ",%llu]", (unsigned long long)s.n);
+		} else {
+			fputs("[\"other\"]", out);
+		}
+		at += 4 + length;
+	}
+	fputc(']', out);
+}
+
+static void files(const op_value *r, FILE *out) {
+	device *d = on(r, out);
+	if (!d) return;
+	uint8_t *log, *open;
+	size_t nlog = slurp(d, "log", &log), nopen = slurp(d, "open", &open);
+	fputs("{\"log\":", out), frames(out, log, nlog);
+	fputs(",\"open\":", out), frames(out, open, nopen);
+	fprintf(out, ",\"bytes\":{\"log\":%zu,\"open\":%zu}}", nlog, nopen);
+}
+
+static void tear(const op_value *r, FILE *out) {
+	device *d = on(r, out);
+	const char *name = hh_str(r, "file");
+	int64_t k;
+	if (!d) return;
+	if (!name || !whole(op_get(r, "bytes"), &k)) { hh_error(out, "not a tear"); return; }
+	char path[4200];
+	struct stat st;
+	snprintf(path, sizeof path, "%s/%s", d->dir, name);
+	if (stat(path, &st)) { hh_error(out, "no %s", name); return; }
+	if (truncate(path, st.st_size > k ? st.st_size - k : 0)) hh_fail("not cut");
+	fputs("{}", out);
+}
+
+// a disk's write: a step of these fields, straight into its log
+static void write_disk(device *d, const op_value *r, FILE *out) {
+	const op_value *patches = op_get(r, "patches"), *who = op_get(r, "who");
+	int64_t when = WHEN;
+	uint8_t *ps;
+	if (!patches || patches->type != OP_LIST || !hh_str(r, "node")) { hh_error(out, "not a write"); return; }
+	if (op_get(r, "when") && !whole(op_get(r, "when"), &when)) { hh_error(out, "not a when"); return; }
+	op_value *revived = hh_hold(op_list());
+	// each patch as given, its value revived (the "/" forms)
+	for (size_t i = 0; i < patches->count; i++) {
+		const op_value *given = patches->items[i];
+		op_patch p;
+		hh_patch(given, &p);
+		op_value *m = op_map();
+		for (size_t k = 0; k < given->count; k++) {
+			int value = !strcmp(given->keys[k], "value");
+			op_set(m, given->keys[k], op_ref((op_value *)(value ? p.value : given->items[k])));
+		}
+		op_push(revived, m);
+	}
+	size_t np = encode(revived, &ps);
+	const char *node = hh_str(r, "node"), *part = hh_str(r, "part") ? hh_str(r, "part") : "value";
+	tp_write x = {{(const uint8_t *)node, strlen(node)}, {(const uint8_t *)part, strlen(part)}, {ps, np},
+		{who && who->type == OP_STR ? (const uint8_t *)who->str : NULL, who && who->type == OP_STR ? who->bytes : 0},
+		(uint64_t)when};
+	uint64_t n, lamport;
+	int why = tp_log_write(d->log, &x, &n, &lamport);
+	if (why) { hh_error(out, "%s", tp_why(why)); return; }
+	fprintf(out, "{\"n\":%llu,\"lamport\":%llu}", (unsigned long long)n, (unsigned long long)lamport);
+}
+
 // ---- answers
 
 void hh_answer(const op_value *r, FILE *out) {
@@ -821,7 +1019,12 @@ void hh_answer(const op_value *r, FILE *out) {
 		else fputs("null", out);
 		const char *fields[] = {"", "", "", "node", "part", "patches", "lamport", "when", "who"};
 		for (size_t i = 3; i < a->count; i++) {
-			fprintf(out, ",\"%s\":", fields[i]), op_json_write(out, a->items[i]);
+			fprintf(out, ",\"%s\":", fields[i]);
+			if (i != 3 || !s.relative) { op_json_write(out, a->items[i]); continue; }
+			size_t k = tp_step_node(&s, NULL, 0);
+			char *node = hh_take(k + 1);
+			tp_step_node(&s, node, k), node[k] = 0;
+			op_json_string(out, node), fputs(",\"relative\":true", out);
 		}
 		fputs("}}", out);
 	} else if (!strcmp(op, "hash")) {
@@ -864,10 +1067,23 @@ void hh_answer(const op_value *r, FILE *out) {
 		if (unhex(hh_str(r, "seed"), &seed) != 32) { hh_error(out, "a seed is 32 bytes"); return; }
 		device *d = made(hh_str(r, "name") ? hh_str(r, "name") : "", seed, out);
 		if (d) fputs("{\"key\":", out), hex(out, tp_log_device(d->log), 32), fputc('}', out);
+	} else if (!strcmp(op, "disk")) {
+		disk(r, out);
+	} else if (!strcmp(op, "sync")) {
+		device *d = on(r, out);
+		int why = d && d->store->sync ? d->store->sync(d->store->self) : 0;
+		if (d && why) hh_error(out, "%s", tp_why(why));
+		else if (d) fputs("{}", out);
+	} else if (!strcmp(op, "reset")) {
+		reset(r, out);
+	} else if (!strcmp(op, "tear")) {
+		tear(r, out);
+	} else if (!strcmp(op, "files")) {
+		files(r, out);
 	} else if (!strcmp(op, "relay")) {
 		if (made(hh_str(r, "name") ? hh_str(r, "name") : "", NULL, out)) fputs("{}", out);
 	} else if (!strcmp(op, "write")) {
-		write(r, out);
+		written(r, out);
 	} else if (!strcmp(op, "value")) {
 		value(r, out);
 	} else if (!strcmp(op, "link")) {

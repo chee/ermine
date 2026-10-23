@@ -137,7 +137,8 @@ void sw_write_now(void *data) {
 		break;
 	}
 	}
-	if (changes.n > 0) pl_commit(p, &changes);
+	if (changes.n > 0 && s->s.commit != NULL) s->s.commit(s->s.commit_ctx, &changes);
+	else if (changes.n > 0) pl_commit(p, &changes);
 	for (size_t i = 0; i < changes.n; i++) {
 		pl_hold_also(p, changes.entries[i], pl_made_ref(made), pl_made_free);
 	}

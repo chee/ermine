@@ -1,0 +1,19 @@
+{
+	"title": "a graph in a file, written by another process: heard, loaded, and on to the graph as writes",
+	"steps": [
+		{ "op": "graph", "name": "A" },
+		{ "op": "graph", "name": "B" },
+		{ "op": "file", "name": "FA", "file": "graph.cbor" },
+		{ "op": "file", "name": "FB", "file": "graph.cbor" },
+		{ "op": "link", "name": "AF", "a": "A", "b": "FA", "live": true },
+		{ "op": "link", "name": "FB", "a": "FB", "b": "B", "live": true },
+		{ "op": "set", "graph": "A", "node": "N", "value": "from a" },
+		{ "op": "settle" },
+		{ "op": "value", "graph": "B", "node": "N", "expect": { "value": "from a" } },
+		{ "op": "set", "graph": "B", "node": "N", "value": "from b" },
+		{ "op": "settle" },
+		{ "op": "value", "graph": "A", "node": "N", "expect": { "value": "from b" } },
+		{ "op": "writes", "holder": "FA", "expect": { "count": 2, "nodes": ["N", "N"] } },
+		{ "op": "writes", "holder": "FB", "expect": { "count": 2, "nodes": ["N", "N"] } }
+	]
+}

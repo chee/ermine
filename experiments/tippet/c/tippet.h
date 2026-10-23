@@ -68,7 +68,12 @@ typedef struct {
 	tp_span node, part, patches, who; // who.p NULL: none
 	size_t count;
 	uint64_t lamport, when;
+	// node is written relative to the device: node is the rest after its own id (tp_step_node)
+	int relative;
 } tp_step;
+
+// a device's own id as text, ermine:ed01 and its key's hex (ermine/ids): how long
+#define TP_OWN_ID 75
 
 // 0: the bytes are a step, its fields in *s; TP_NOTSTEP: they are not (../WIRE.md step)
 int tp_step_decode(const uint8_t *bytes, size_t length, tp_step *s);
@@ -77,6 +82,12 @@ int tp_step_decode(const uint8_t *bytes, size_t length, tp_step *s);
 size_t tp_step_encode(const tp_step *s, uint8_t *out, size_t cap);
 // blake3 of a step's bytes
 void tp_step_hash(const uint8_t *bytes, size_t length, uint8_t hash[32]);
+// a step's node, whole (relative: its device's own id, then the rest): its length, its bytes in out
+// when no more than cap (no 0 after)
+size_t tp_step_node(const tp_step *s, char *out, size_t cap);
+// how long the rest of node is after device's own id, when node is that id or under it ("" or
+// "/…"); -1 when not
+long tp_step_rest(const uint8_t device[32], tp_span node);
 
 // one patch of a step's, its fields as encoded: path the array, value any (p NULL: none), move
 // the map (p NULL: none)
@@ -127,13 +138,14 @@ int tp_verify(const uint8_t device[32], const uint8_t *m, size_t n, const uint8_
 // ---- store
 
 // a record's steps: their device, and the n of the first and of the last. a record is a run as it
-// came or as it goes, its run message (../WIRE.md messages), or a step of this device's kept alone
-// until its run closes
+// came or as it goes, its run message (../WIRE.md messages), or a step of this device's alone: open
+// (not yet in a closed run), or as logs before kept them
 typedef struct {
 	const uint8_t *device;
 	uint64_t first, last;
 } tp_at;
-// told each record held, in order: 1 and *at when it holds steps to keep, 0 when not
+// told each record held, in order, then each open step: 1 and *at when it holds steps to keep, 0
+// when not
 typedef int (*tp_read)(void *ctx, const uint8_t *record, size_t length, tp_at *at);
 
 // where a log keeps itself: records appended in order, the steps among them got again by place,
@@ -142,7 +154,7 @@ typedef struct tp_store {
 	void *self;
 	int (*load)(void *self, tp_read read, void *ctx);
 	// a record after every one before it; at: the steps it holds, in place of any held that it
-	// covers; NULL: none
+	// covers, open ones too; NULL: none
 	int (*append)(void *self, const uint8_t *record, size_t length, const tp_at *at);
 	// step n's length, or -1 (not held); its bytes into out when no more than cap, as if kept
 	// alone: out of its run, unpacked
@@ -157,20 +169,26 @@ typedef struct tp_store {
 	long (*snapped)(void *self, uint8_t *out, size_t cap);
 	// the key held, else seed, held from now on
 	int (*key)(void *self, const uint8_t seed[32], uint8_t key[32]);
-	// every record appended so far on disk, through a power cut (NULL: nothing to do)
+	// every record appended so far on disk, through a power cut, then the open steps (NULL: nothing
+	// to do)
 	int (*sync)(void *self);
 	// all it holds let go, the store too
 	void (*close)(void *self);
 	// forgetting (history.h): the records holding device's steps through n no longer got, their
 	// bytes left where they are: how many (NULL: it never lets any go)
 	long (*drop)(void *self, const uint8_t device[32], uint64_t n);
+	// a step of this device's not yet in a closed run, at its n alone: got as any step is, and on
+	// disk by the next sync; a run appended holding it lets it go. NULL: such a step is appended
+	// alone, as a record
+	int (*open)(void *self, const uint8_t *step, size_t length, const tp_at *at);
 } tp_store;
 
 // in memory: at most max bytes of records. NULL: no memory
 tp_store *tp_memory_store(const tp_mem *mem, size_t max);
 // on disk (POSIX), as typescript/store_file.ts: dir/log, frames (4 bytes big-endian length, then
-// the record), a frame cut short cut off when loaded; dir/snapshot, written beside it then renamed
-// into place; dir/key, written once. a record at most max bytes. NULL: no memory, or dir not made
+// the record), a frame cut short cut off when loaded; dir/open, the open steps as frames, written
+// by a sync; dir/snapshot, written beside it then renamed into place; dir/key, written once. a
+// record at most max bytes. NULL: no memory, or dir not made
 tp_store *tp_file_store(const tp_mem *mem, const char *dir, size_t max);
 
 // ---- log
@@ -216,8 +234,8 @@ typedef struct {
 	tp_span node, part, patches, who;
 	uint64_t when;
 } tp_write;
-// a step of this device's, lamport one past the highest seen: its n and lamport. kept alone until
-// its run closes, at 32 steps or 2048 bytes since the last close
+// a step of this device's, lamport one past the highest seen: its n and lamport. open in the store
+// until its run closes, at 32 steps or 2048 bytes since the last close
 int tp_log_write(tp_log *log, const tp_write *w, uint64_t *n, uint64_t *lamport);
 
 // the devices held: the i-th's key, and how many of its steps are held (another's: all signed)
@@ -228,7 +246,7 @@ uint64_t tp_log_count(const tp_log *log, const uint8_t device[32]);
 // step n of device's: its length, the bytes in out when no more than cap; -1: none
 long tp_log_step(const tp_log *log, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap);
 // the run with step from in it, from there: 0 and its end and sig; 1: none held, or none closed.
-// this device's run still open is closed now, and its steps synced first (1: they couldn't be)
+// this device's run still open is closed now, then synced (1: it couldn't be)
 int tp_log_run(tp_log *log, const uint8_t device[32], uint64_t from, uint64_t *to, uint8_t sig[64]);
 // that run as held, its run message, when it is held from from: its length, the bytes in out when
 // no more than cap; -1: it isn't (pack it from from)

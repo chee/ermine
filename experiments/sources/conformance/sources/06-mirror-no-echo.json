@@ -1,0 +1,23 @@
+{
+	"title": "a value mirror never echoes: its own file write heard back makes no write; its own graph write is not written back; the same bytes again are nothing",
+	"steps": [
+		{ "op": "graph", "name": "A" },
+		{ "op": "set", "graph": "A", "node": "NOTE", "value": "one" },
+		{ "op": "mirror", "graph": "A", "node": "NOTE", "file": "note.txt", "actor": "laptop" },
+		{ "op": "set", "graph": "A", "node": "NOTE", "value": "two" },
+		{ "op": "settle" },
+		{ "op": "text", "file": "note.txt", "expect": { "text": "two" } },
+		{ "op": "writes", "holder": "A", "expect": { "count": 2, "nodes": ["NOTE", "NOTE"] } },
+		{ "op": "edit", "file": "note.txt", "text": "three" },
+		{ "op": "settle" },
+		{ "op": "settle" },
+		{
+			"op": "writes",
+			"holder": "A",
+			"expect": { "count": 3, "nodes": ["NOTE", "NOTE", "NOTE"] }
+		},
+		{ "op": "edit", "file": "note.txt", "text": "three" },
+		{ "op": "settle" },
+		{ "op": "writes", "holder": "A", "expect": { "count": 3, "nodes": ["NOTE", "NOTE", "NOTE"] } }
+	]
+}

@@ -449,9 +449,14 @@ static const char **over(const pn *o, const char *id, const char *part, size_t *
 	return out;
 }
 
-// the table's entry under (part, id), each patch node in ps applied over it in order
+// the table's entry under (part, id), each patch node in ps applied over it in order. It shares what
+// no patch touched with its base, and holds its patch nodes' values: those entries read, for places'
+// unread (an entry written through it), so their next write copies and what readers had never
+// changes under them
 static made *make(pn *o, const char *part, const char *id, const char *const *ps, size_t nps) {
+	un_unread *u = pl_unread(o->places);
 	nd_entry *base = tb_get(o->table, tb_string(part), tb_string(id));
+	if (base != NULL) un_read(u, base);
 	made *m = alloc(sizeof *m);
 	m->part = copy(part);
 	m->id = copy(id);
@@ -465,6 +470,7 @@ static made *make(pn *o, const char *part, const char *id, const char *const *ps
 		nd_entry *node = tb_get(o->table, tb_string("patch"), tb_string(ps[i]));
 		aim a;
 		if (node == NULL || !aim_of(node->value, &a)) continue;
+		un_read(u, node);
 		int stale = base != NULL && a.at != NULL && a.at->type == OP_NUM &&
 			(double)base->change.time > a.at->num;
 		parsed p = parse(a.patches);
@@ -673,29 +679,30 @@ void pn_event(void *ctx, tb_key part, tb_key id) {
 void pn_commit(pn *o, const pl_changed *changed) {
 	// places' commit finds an entry's keys by the view: where patch nodes are over a key, the view
 	// holds what was made, so the written entry stands in its place for the call
-	struct {
+	struct swap {
 		const char *part, *id;
 		nd_entry *held;
-	} swapped[16];
-	size_t nswap = 0;
+	} *swapped = NULL;
+	size_t nswap = 0, capswap = 0;
 	for (size_t i = 0; i < changed->n; i++) {
 		nd_entry *e = changed->entries[i];
 		if (!e->change.has_op) continue;
 		size_t n;
 		const tb_where *who = tb_who(o->table, e, &n);
-		for (size_t k = 0; k < n && nswap < 16; k++) {
+		for (size_t k = 0; k < n; k++) {
 			const char *part = who[k].part.string, *id = who[k].id.string;
 			if (strcmp(part, "patch") == 0) continue;
 			size_t nps;
 			free((void *)over(o, id, part, &nps));
 			nd_entry *held = nps ? tb_get(o->view, who[k].part, who[k].id) : NULL;
 			if (held == NULL || held == e) continue;
-			swapped[nswap].part = part, swapped[nswap].id = id, swapped[nswap++].held = held;
+			PUSH(swapped, nswap, capswap, ((struct swap){part, id, held}));
 			put_view(o, part, id, e, 1);
 		}
 	}
 	pl_commit(o->places, changed);
 	for (size_t i = 0; i < nswap; i++) put_view(o, swapped[i].part, swapped[i].id, swapped[i].held, 1);
+	free(swapped);
 	for (size_t i = 0; i < changed->n; i++) {
 		const nd_entry *e = changed->entries[i];
 		if (!e->change.has_op) continue;

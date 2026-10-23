@@ -11,9 +11,12 @@
 // { op: "value", id, value, time? }                → {}   the value entry, replaced
 // { op: "patch", id, on, part?, at?, patches, time? } → {}   a patch node's "patch" entry; part
 //    default "value"; at default: the target entry's change time now, or 0 (none there)
-// { op: "edit", part, id, patches, time?, metadata? } → {}   patches to the entry, said through the
-//    overlay's commit (none there: made). metadata: over the scope's info. an ApplyError
-//    answers { error: code, patch: index }
+// { op: "edit", part, id, patches, time?, metadata?, unread? } → {}   patches to the entry, said
+//    through the overlay's commit (none there: made). metadata: over the scope's info. unread: an
+//    entry there written through places' unread, as children are (in place where it owns). an
+//    ApplyError answers { error: code, patch: index }
+// { op: "share", part?, id, ids }                  → {}   the entry under (part, id) put under
+//    each of ids too, the same entry (a table event each); none there: { error: "nothing-there" }
 // { op: "del", part, id }                          → {}   the entry out of the table, or
 //                                                  → { error: "nothing-there" }
 // { op: "land", id, time? }                        → {}   patch.ts' land, then the overlay's
@@ -40,7 +43,7 @@
 import createEntry from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import { ApplyError, type Key as Step, type Patch } from "@ermine/op/apply"
-import { createPlaces } from "@ermine/places"
+import { createPlaces, unread } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
 import { get } from "@ermine/places/lib"
 import type { Info } from "@ermine/scheduler"
@@ -149,9 +152,18 @@ function answer(r: Request): Json | undefined {
 					update(node, patches, h)
 					table.add(part, i, node as never)
 				} else {
-					update(there, patches, h)
+					const write = r.unread ? unread.update : update
+					write(there, patches, h)
 					overlay.commit([there])
 				}
+			})
+			return {}
+		}
+		case "share": {
+			const part = partOf(r.part), there = table.get(part, id(r.id))
+			if (there === undefined) throw new PatchError("nothing-there", id(r.id))
+			hosted(() => {
+				for (const i of r.ids as unknown[]) table.sub(part, id(i), there as never)
 			})
 			return {}
 		}

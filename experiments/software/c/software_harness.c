@@ -381,8 +381,20 @@ static void steps_free(steps *st) {
 }
 #define STEPS(x) ((const char *const *)(x).v), (x).n
 
-// a request's program: an address (its steps in path), or { id, hash?, type?, api?, code? } (its id
-// taken back, in *id)
+// a build of the value at an id (taken back, the harness's till its end): read tracked; none,
+// pending; { fail }, failed with fail
+static char **froms;
+static size_t nfroms, capfroms;
+static sc_out build_of(void *data) {
+	const op_value *v = pl_read(places, tb_string("value"), tb_string(data), NULL, 0);
+	if (pl_status(places) == SC_STOP) return (sc_out){.kind = SC_VALUE};
+	if (v == NULL) return (sc_out){.kind = SC_PENDING};
+	if (text(get(v, "fail")) != NULL) return (sc_out){.kind = SC_FAILED, .error = xdup(get(v, "fail")->str)};
+	return (sc_out){.kind = SC_VALUE, .value = op_ref((op_value *)v)};
+}
+
+// a request's program: an address (its steps in path), or { id, hash?, type?, api?, code?, build? }
+// (its id taken back, in *id; build { from }: build_of the value at from)
 static sw_program program_of(const op_value *pv, steps *path, char **id) {
 	sw_program program = {0};
 	if (pv != NULL && pv->type == OP_MAP) {
@@ -395,6 +407,12 @@ static sw_program program_of(const op_value *pv, steps *path, char **id) {
 		program.type = text(get(pv, "type"));
 		program.api = text(get(pv, "api"));
 		program.code = get(pv, "code");
+		const char *from = text(get(get(pv, "build"), "from"));
+		if (from != NULL) {
+			char *f = take(from);
+			PUSH(froms, nfroms, capfroms, f);
+			program.build = build_of, program.build_data = f;
+		}
 	} else {
 		*path = steps_of(pv);
 		program.at = (const char *const *)path->v;
@@ -471,6 +489,22 @@ static hf_run teller(const op_value *code, void *api_, void *data) {
 
 static const char *const runner_names[7] = {"record", "object", "boom", "quiet", "late", "spawn",
 	"teller"};
+
+// a request's runner: an address (its steps in path), else carried { id, live } (its id taken
+// back, in *id; live a runner by its name, else none)
+static int runner_of(const op_value *rv, steps *path, sw_carried *carried, char **id) {
+	if (rv == NULL || rv->type != OP_MAP) return *path = steps_of(rv), 0;
+	const char *given = text(get(rv, "id")), *live = text(get(rv, "live"));
+	*id = take(given != NULL ? given : "");
+	*carried = (sw_carried){.id = *id};
+	for (size_t i = 0; live != NULL && i < 7; i++) {
+		if (strcmp(live, runner_names[i]) != 0) continue;
+		op_value *fn = hf_value(live);
+		carried->live = hf_find(functions, fn);
+		op_free(fn);
+	}
+	return 1;
+}
 
 // a pulse software asked for: held
 static void asking_f(void *ctx, void (*f)(void *data), void *data) {
@@ -746,9 +780,11 @@ static void withdraw(void *data) {
 static void run(void *data) {
 	job *j = data;
 	const op_value *r = j->r;
-	steps runner = steps_of(get(r, "runner")), at = steps_of(get(r, "at"));
+	steps runner = {0}, at = steps_of(get(r, "at"));
 	steps cwd = steps_of(get(r, "cwd")), args = steps_of(get(r, "args")), path = {0};
-	char *id = NULL;
+	char *id = NULL, *rid = NULL;
+	sw_carried carried;
+	int is_carried = runner_of(get(r, "runner"), &runner, &carried, &rid);
 	sw_program program = program_of(get(r, "program"), &path, &id);
 	bx *b = NULL;
 	if (get(r, "box") != NULL && (b = box_of(text(get(r, "box")))) == NULL) {
@@ -759,7 +795,8 @@ static void run(void *data) {
 			.has_args = get(r, "args") != NULL, .cwd = (const char *const *)cwd.v, .ncwd = cwd.n,
 			.has_cwd = get(r, "cwd") != NULL, .box = b != NULL ? bx_places(b) : NULL, .pin = pin};
 		sw_refusal no;
-		sw_process *p = sw_run(software, STEPS(runner), &program, STEPS(at), &o, &no);
+		sw_process *p = is_carried ? sw_run_carried(software, &carried, &program, STEPS(at), &o, &no)
+		                           : sw_run(software, STEPS(runner), &program, STEPS(at), &o, &no);
 		op_free(pin);
 		if (p == NULL) j->out = refusal(&no);
 		else {
@@ -772,7 +809,7 @@ static void run(void *data) {
 			j->out = plain_take(m);
 		}
 	}
-	free(id);
+	free(id), free(rid);
 	steps_free(&runner), steps_free(&at), steps_free(&cwd), steps_free(&args), steps_free(&path);
 }
 
@@ -810,13 +847,16 @@ static void load(void *data) {
 		j->out = error("no such box");
 		return;
 	}
-	steps runner = steps_of(get(r, "runner")), path = {0}, chain = steps_of(get(r, "chain"));
-	char *id = NULL;
+	steps runner = {0}, path = {0}, chain = steps_of(get(r, "chain"));
+	char *id = NULL, *rid = NULL;
+	sw_carried carried;
+	int is_carried = runner_of(get(r, "runner"), &runner, &carried, &rid);
 	sw_program program = program_of(get(r, "program"), &path, &id);
 	sw_load_options options = {.box = b != NULL ? bx_places(b) : NULL,
 		.chain = (const char *const *)chain.v, .nchain = chain.n};
 	sw_refusal no;
-	sw_loaded *l = sw_load(software, &by, STEPS(runner), &program, &options, &no);
+	sw_loaded *l = is_carried ? sw_load_carried(software, &by, &carried, &program, &options, &no)
+	                          : sw_load(software, &by, STEPS(runner), &program, &options, &no);
 	if (l == NULL && strcmp(no.refused, "failed") == 0) j->out = with("failed", op_str(no.error));
 	else if (l == NULL) j->out = refusal(&no);
 	else {
@@ -824,7 +864,7 @@ static void load(void *data) {
 		PUSH(held, nheld, capheld, ((named_load){xdup(n != NULL ? n : ""), l}));
 		j->out = op_map();
 	}
-	free(id);
+	free(id), free(rid);
 	steps_free(&runner), steps_free(&path), steps_free(&chain);
 }
 
@@ -1086,6 +1126,8 @@ void hh_finish(void) {
 	free(landings);
 	for (size_t i = 0; i < nhandles; i++) free(handles[i]->process), free(handles[i]);
 	free(handles);
+	for (size_t i = 0; i < nfroms; i++) free(froms[i]);
+	free(froms);
 	for (size_t i = 0; i < nnames; i++) free(names[i].id), free(names[i].name);
 	free(names);
 	op_free(runs), op_free(stops), op_free(loads), op_free(unloads), op_free(told), op_free(order);

@@ -166,10 +166,20 @@ static void begin(owner *p) {
 	hold(p, c.out);
 }
 
-// the one act: the runner called, then the effect gone
-static char *run_act(void *value, void *previous, void *data) {
-	(void)value, (void)previous;
+// a built program's first run: its build's read, tracked (a value given NULL: null)
+static sc_out build_f(void *previous, void *data) {
+	(void)previous;
 	owner *p = data;
+	sc_out out = p->build(p->build_data);
+	if (out.kind == SC_VALUE && out.value == NULL) out.value = op_null();
+	return out;
+}
+
+// the one act: the runner called (built: with what build gave), then the effect gone
+static char *run_act(void *value, void *previous, void *data) {
+	(void)previous;
+	owner *p = data;
+	if (p->build != NULL && p->code == NULL && value != NULL) p->code = op_ref(value);
 	begin(p);
 	free(sc_teardown(p->first));
 	return NULL;
@@ -199,21 +209,23 @@ static void process_body(pr_process *life, void *data) {
 	free(sc_register_teardown(s->s.scheduler, p->scope, scope_gone, p));
 	sw_holder(s, p);
 	PUSH(s->running, s->nrunning, s->caprunning, p);
-	// core candidate (scheduler): an effect that acts once and goes
-	p->first = sc_create_effect(s->s.scheduler, (sc_def){.f = sw_once_f, .effect = run_act, .data = p},
-		NULL, 0);
+	// core candidate (scheduler): an effect that acts once and goes. built: its read makes the code,
+	// the process pending while it is
+	p->first = sc_create_effect(s->s.scheduler,
+		(sc_def){.f = p->build != NULL ? build_f : sw_once_f, .effect = run_act, .data = p}, NULL, 0);
 	if (p->first != NULL) pr_give(s->life, life, p->first, 1);
 }
 
 // the checks ---------------------------------------------------------------------------------------
 
-// what a run found, as it checks: the runner (its function's name), the program, its code, its
-// form, its hash
+// what a run found, as it checks: the runner (its function's name; carried, its live form), the
+// program, its code (built: its build), its form, its hash
 typedef struct {
 	char **rpath;
 	size_t nr;
 	char *rid;
 	const char *rname;
+	const hf_entry *rlive;
 	char **ppath;
 	size_t npp;
 	char *pid;
@@ -221,8 +233,17 @@ typedef struct {
 	const op_value *type, *api;
 	op_value *own_type, *own_api;
 	int carried, hashed;
+	sc_out (*build)(void *data);
+	void *build_data;
 	char hex[65];
 } found;
+
+// a runner as given: an address from setup's places' root, or carried
+typedef struct {
+	const char *const *at;
+	size_t nat;
+	const sw_carried *carried;
+} given;
 
 static void found_free(found *f) {
 	if (f->rpath != NULL) pr_names_free(f->rpath, f->nr);
@@ -352,10 +373,14 @@ static int not_there_id(sw *s, found *f, sw_refusal *r) {
 	return 0;
 }
 
-// the program: its node (or the code carried), its code read once, its form; 0: refused
-static int program_of(sw *s, pl *where, const sw_program *program, found *f, sw_refusal *r) {
+// the program: its node (or the code carried, or its build), its code read once, its form. to_load:
+// a build is not read. 0: refused
+static int program_of(sw *s, pl *where, const sw_program *program, int to_load, found *f,
+	sw_refusal *r) {
 	const nd_entry *e;
-	f->carried = !program->has_at && program->code != NULL;
+	int built = !to_load && program->code == NULL && program->build != NULL;
+	f->carried = !program->has_at && (program->code != NULL || built);
+	if (!program->has_at && built) f->build = program->build, f->build_data = program->build_data;
 	if (program->has_at) {
 		f->ppath = pr_names(program->at, program->nat, &f->npp);
 		f->pid = resolve(where, (const char *const *)f->ppath, f->npp);
@@ -393,33 +418,46 @@ static int program_of(sw *s, pl *where, const sw_program *program, found *f, sw_
 	return 1;
 }
 
-// refused not-a-runner: the runner's path, held
+// refused not-a-runner: the runner's path, held; carried, its id
 static int not_a_runner(sw *s, found *f, sw_refusal *r) {
 	r->refused = "not-a-runner";
-	r->runner = sw_keep_names(s, f->rpath, f->nr);
-	r->nrunner = f->nr;
-	f->rpath = NULL;
+	if (f->rpath == NULL) r->runner_id = sw_keep_text(s, f->rid);
+	else {
+		r->runner = sw_keep_names(s, f->rpath, f->nr);
+		r->nrunner = f->nr;
+		f->rpath = NULL;
+	}
 	found_free(f);
 	return 0;
 }
 
 // the checks in order, up to taken (processes'): the runner and its entry, the program read once.
-// to_load: a runner with no load is not-a-runner. 0: refused, f let go; 1: f the caller's to let go
-static int check(sw *s, const char *const *runner, size_t nrunner, const sw_program *program,
-	pl *where, int to_load, found *f, const hf_entry **out, sw_refusal *refused) {
+// to_load: a runner with no load is not-a-runner. carried: its id alone, its form the caller's. 0:
+// refused, f let go; 1: f the caller's to let go
+static int check(sw *s, const given *runner, const sw_program *program, pl *where, int to_load,
+	found *f, const hf_entry **out, sw_refusal *refused) {
 	*refused = (sw_refusal){0};
-	f->rpath = pr_names(runner, nrunner, &f->nr);
-	f->rid = resolve(s->s.places, (const char *const *)f->rpath, f->nr);
-	const op_value *rattrs = f->rid != NULL ? attributes_of(s, f->rid) : NULL;
-	const op_value *rtype = sw_get(rattrs, SW_ATTRIBUTE);
-	if (!sw_is_str(rtype) || strcmp(rtype->str, SW_TYPE_RUNNER) != 0) return not_a_runner(s, f, refused);
-	if (!program_of(s, where, program, f, refused)) return found_free(f), 0;
-	// its type fits from its folder; by id, or carried, from where's root
+	const op_value *rattrs = NULL;
+	if (runner->carried != NULL) {
+		f->rid = sw_xdup(runner->carried->id != NULL ? runner->carried->id : "");
+		f->rlive = runner->carried->live;
+	} else {
+		f->rpath = pr_names(runner->at, runner->nat, &f->nr);
+		f->rid = resolve(s->s.places, (const char *const *)f->rpath, f->nr);
+		rattrs = f->rid != NULL ? attributes_of(s, f->rid) : NULL;
+		const op_value *rtype = sw_get(rattrs, SW_ATTRIBUTE);
+		if (!sw_is_str(rtype) || strcmp(rtype->str, SW_TYPE_RUNNER) != 0) {
+			return not_a_runner(s, f, refused);
+		}
+	}
+	if (!program_of(s, where, program, to_load, f, refused)) return found_free(f), 0;
+	// its type fits from its folder; by id, or carried, from where's root. a carried runner's form
+	// is its caller's
 	const op_value *takes = sw_get(rattrs, SW_TAKES), *gives = sw_get(rattrs, SW_API);
 	size_t nfrom = f->ppath != NULL && f->npp > 0 ? f->npp - 1 : 0;
-	int fit = sw_is_str(f->type) &&
-		fits(where, (const char *const *)f->ppath, nfrom, f->type->str, takes);
-	if (fit && f->api != NULL && !same_scalar(f->api, gives)) fit = 0;
+	int fit = runner->carried != NULL || (sw_is_str(f->type) &&
+		fits(where, (const char *const *)f->ppath, nfrom, f->type->str, takes));
+	if (runner->carried == NULL && fit && f->api != NULL && !same_scalar(f->api, gives)) fit = 0;
 	if (!fit) {
 		refused->refused = "wrong-form";
 		refused->type = sw_is_str(f->type) ? sw_keep_text(s, f->type->str) : NULL;
@@ -431,33 +469,36 @@ static int check(sw *s, const char *const *runner, size_t nrunner, const sw_prog
 		return 0;
 	}
 	// a runner: one with a start (runnerOf's), and, to load, a load
-	const nd_entry *fv = tb_get(s->s.table, tb_string("value"), tb_string(f->rid));
-	const hf_entry *fn = fv != NULL ? hf_find(s->s.functions, fv->value) : NULL;
+	const hf_entry *fn = f->rlive;
+	const nd_entry *fv = NULL;
+	if (runner->carried == NULL) {
+		fv = tb_get(s->s.table, tb_string("value"), tb_string(f->rid));
+		fn = fv != NULL ? hf_find(s->s.functions, fv->value) : NULL;
+	}
 	if (fn == NULL || fn->runner == NULL || (to_load && fn->load == NULL)) {
 		return not_a_runner(s, f, refused);
 	}
-	f->rname = hf_name(fv->value);
+	f->rname = fv != NULL ? hf_name(fv->value) : NULL;
 	*out = fn;
 	return 1;
 }
 
 // run ----------------------------------------------------------------------------------------------
 
-static sw_process *run_now(sw *s, const char *const *runner, size_t nrunner,
-	const sw_program *program, const char *const *at, size_t nat, const sw_options *options,
-	sw_refusal *refused) {
+static sw_process *run_now(sw *s, const given *runner, const sw_program *program,
+	const char *const *at, size_t nat, const sw_options *options, sw_refusal *refused) {
 	sw_forget(s);
 	sw_options none = {0};
 	const sw_options *o = options != NULL ? options : &none;
 	pl *where = o->box != NULL ? o->box : s->s.places;
 	found f = {0};
 	const hf_entry *fn = NULL;
-	if (!check(s, runner, nrunner, program, where, 0, &f, &fn, refused)) return NULL;
+	if (!check(s, runner, program, where, 0, &f, &fn, refused)) return NULL;
 	op_value *attrs = op_map();
 	op_set(attrs, SW_ATTRIBUTE, op_str(SW_TYPE_PROCESS));
 	op_value *rv = op_map();
 	op_set(rv, "id", op_str(f.rid));
-	op_set(rv, "at", sw_names_value((const char *const *)f.rpath, f.nr));
+	if (f.rpath != NULL) op_set(rv, "at", sw_names_value((const char *const *)f.rpath, f.nr));
 	op_set(attrs, SW_RUNNER, rv);
 	op_value *pv = op_map();
 	op_set(pv, "id", op_str(f.pid));
@@ -470,6 +511,8 @@ static sw_process *run_now(sw *s, const char *const *runner, size_t nrunner,
 	p->on = sw_live_offer(s, f.rid);
 	p->fn = *fn;
 	p->code = f.code != NULL ? op_ref((op_value *)f.code) : NULL;
+	p->build = f.build;
+	p->build_data = f.build_data;
 	PUSH(s->all, s->nall, s->capall, p);
 	ch_site buf;
 	const ch_site *here = sw_site(s, &buf);
@@ -507,7 +550,16 @@ sw_process *sw_run_at(sw *s, const char *const *runner, size_t nrunner, const sw
 	const char *const *at, size_t nat, const sw_options *options, sw_refusal *refused,
 	const ch_site *site) {
 	const ch_site *was = sw_enter(s, site);
-	sw_process *p = run_now(s, runner, nrunner, program, at, nat, options, refused);
+	sw_process *p = run_now(s, &(given){runner, nrunner, NULL}, program, at, nat, options, refused);
+	sw_leave(s, was);
+	return p;
+}
+
+sw_process *sw_run_carried_at(sw *s, const sw_carried *runner, const sw_program *program,
+	const char *const *at, size_t nat, const sw_options *options, sw_refusal *refused,
+	const ch_site *site) {
+	const ch_site *was = sw_enter(s, site);
+	sw_process *p = run_now(s, &(given){NULL, 0, runner}, program, at, nat, options, refused);
 	sw_leave(s, was);
 	return p;
 }
@@ -579,8 +631,20 @@ static void text_part(text *t, const char *part) {
 	t->s[t->n] = '\0';
 }
 
+// a pointer's bytes in hex, a key's part (a function pointer's too: no conversion to void *)
+static void bytes_part(text *t, const void *p, size_t n) {
+	static const char hex[] = "0123456789abcdef";
+	char out[2 * sizeof(void (*)(void)) + 2 * sizeof(void *) + 1];
+	size_t k = 0;
+	const unsigned char *b = p;
+	for (size_t i = 0; i < n && k + 2 < sizeof out; i++) out[k++] = hex[b[i] >> 4], out[k++] = hex[b[i] & 15];
+	out[k] = '\0';
+	text_part(t, out);
+}
+
 // a load's key, new: the program's id, its value's hash (no encoding: the value's address), the
-// runner's id and function's name, then the chain's keys
+// runner's id and function's name (carried: its live form's runner, load and data), then the
+// chain's keys
 static char *key_of(const found *f, const sw_load_options *o) {
 	text t = {0};
 	text_part(&t, f->pid);
@@ -591,7 +655,12 @@ static char *key_of(const found *f, const sw_load_options *o) {
 		text_part(&t, at);
 	}
 	text_part(&t, f->rid);
-	text_part(&t, f->rname != NULL ? f->rname : "");
+	if (f->rlive == NULL) text_part(&t, f->rname != NULL ? f->rname : "");
+	else {
+		bytes_part(&t, &f->rlive->runner, sizeof f->rlive->runner);
+		bytes_part(&t, &f->rlive->load, sizeof f->rlive->load);
+		bytes_part(&t, &f->rlive->data, sizeof f->rlive->data);
+	}
 	for (size_t i = 0; i < o->nchain; i++) text_part(&t, o->chain[i]);
 	return t.s;
 }
@@ -654,7 +723,7 @@ static load *make(sw *s, owner *by, const found *f, const hf_entry *fn, char *ke
 	return l;
 }
 
-static sw_loaded *load_now(sw *s, const sw_place *by, const char *const *runner, size_t nrunner,
+static sw_loaded *load_now(sw *s, const sw_place *by, const given *runner,
 	const sw_program *program, const sw_load_options *options, sw_refusal *refused) {
 	sw_forget(s);
 	*refused = (sw_refusal){0};
@@ -665,7 +734,7 @@ static sw_loaded *load_now(sw *s, const sw_place *by, const char *const *runner,
 	pl *where = opts->box != NULL ? opts->box : o->run ? pr_places(o->life) : s->s.places;
 	found f = {0};
 	const hf_entry *fn = NULL;
-	if (!check(s, runner, nrunner, program, where, 1, &f, &fn, refused)) return NULL;
+	if (!check(s, runner, program, where, 1, &f, &fn, refused)) return NULL;
 	char *key = key_of(&f, opts);
 	load *l = standing(s, key);
 	if (l != NULL) free(key);
@@ -687,7 +756,16 @@ sw_loaded *sw_load_at(sw *s, const sw_place *by, const char *const *runner, size
 	const sw_program *program, const sw_load_options *options, sw_refusal *refused,
 	const ch_site *site) {
 	const ch_site *was = sw_enter(s, site);
-	sw_loaded *l = load_now(s, by, runner, nrunner, program, options, refused);
+	sw_loaded *l = load_now(s, by, &(given){runner, nrunner, NULL}, program, options, refused);
+	sw_leave(s, was);
+	return l;
+}
+
+sw_loaded *sw_load_carried_at(sw *s, const sw_place *by, const sw_carried *runner,
+	const sw_program *program, const sw_load_options *options, sw_refusal *refused,
+	const ch_site *site) {
+	const ch_site *was = sw_enter(s, site);
+	sw_loaded *l = load_now(s, by, &(given){NULL, 0, runner}, program, options, refused);
 	sw_leave(s, was);
 	return l;
 }

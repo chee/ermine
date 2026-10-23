@@ -22,8 +22,8 @@
 //   hf_add_loader(fs, "dlopen", run, load, ctx);   // a runner that loads: dlopen.h's
 //
 // A run's stop may be given a reason (dens.ts' Handle.stop(reason)): hf_run.stop_reason, which a
-// starter that gives reasons calls in place of the handle's stop. One that gives none (programs'
-// start.c) calls handle.stop, so a runner setting it sets both.
+// starter that gives reasons (software's, so programs' start too) calls in place of the handle's
+// stop. One that gives none calls handle.stop, so a runner setting it sets both.
 //
 // MEMORY. The registry copies the names; it is let go of with hf_free (no node's value refers to it).
 #ifndef SOFTWARE_FUNCTIONS_H
@@ -76,13 +76,14 @@ typedef struct {
 	char *error;
 	// a stop with a reason (dens' stop and its cascades): when set, a starter that gives reasons
 	// calls this with handle.ctx in place of handle.stop, once; reason borrowed for the call, NULL:
-	// none. handle.stop must still be set: a starter that gives none (programs' start.c) calls it.
+	// none. handle.stop must still be set: a starter that gives none calls it.
 	// NULL: every stop is handle.stop
 	void (*stop_reason)(void *ctx, const op_value *reason);
 } hf_run;
 
-// a runner's function: the code (borrowed), what its starter gives (programs': create_api's api; a
-// den's: its dn_starting, the start's facts), the data given at hf_add_runner
+// a runner's function (software's Runner's start): the code (borrowed), what its starter gives
+// (software's: its sw_starting, the start's facts, programs' start's too; the program's api is the
+// runner's to make from them), the data given at hf_add_runner
 typedef hf_run (*hf_runner)(const op_value *code, void *api, void *data);
 
 // a loaded compiler's compile: the input (borrowed), the live form's data. as hf_compiler's out

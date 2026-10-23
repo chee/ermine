@@ -1,0 +1,22 @@
+{
+	"title": "no echo: a write is never sent back to where it came from, nor named again where it lands",
+	"steps": [
+		{ "op": "graph", "name": "A" },
+		{ "op": "graph", "name": "B" },
+		{ "op": "link", "name": "AB", "a": "A", "b": "B" },
+		{ "op": "set", "graph": "A", "node": "N", "value": 1 },
+		{ "op": "set", "graph": "B", "node": "M", "value": 2 },
+		{ "op": "sync", "link": "AB", "skip": ["ab", "ba"] },
+		{
+			"op": "sync",
+			"link": "AB",
+			"expect": {
+				"ab": { "sent": 0, "taken": 0, "passed": 0, "refused": [], "behind": false },
+				"ba": { "sent": 0, "taken": 0, "passed": 0, "refused": [], "behind": false }
+			}
+		},
+		{ "op": "writes", "holder": "A", "expect": { "count": 2, "nodes": ["N", "M"] } },
+		{ "op": "writes", "holder": "B", "expect": { "count": 2, "nodes": ["M", "N"] } },
+		{ "op": "status", "link": "AB", "expect": { "known": { "a": 2, "b": 2 }, "refused": [] } }
+	]
+}

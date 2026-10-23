@@ -1,0 +1,17 @@
+{
+	"title": "drop: a holder lets go of one node, the rest stays; a graph's history dropping a node keeps its value",
+	"steps": [
+		{ "op": "graph", "name": "A" },
+		{ "op": "memory", "name": "M" },
+		{ "op": "link", "name": "AM", "a": "A", "b": "M" },
+		{ "op": "set", "graph": "A", "node": "N", "value": 1 },
+		{ "op": "set", "graph": "A", "node": "K", "value": 1 },
+		{ "op": "sync", "link": "AM", "skip": ["ab", "ba"] },
+		{ "op": "drop", "holder": "M", "node": "N" },
+		{ "op": "writes", "holder": "M", "expect": { "count": 1, "nodes": ["K"] } },
+		{ "op": "writes", "holder": "M", "node": "N", "expect": { "count": 0, "nodes": [] } },
+		{ "op": "drop", "holder": "A", "node": "K" },
+		{ "op": "writes", "holder": "A", "expect": { "count": 1, "nodes": ["N"] } },
+		{ "op": "value", "graph": "A", "node": "K", "expect": { "value": 1 } }
+	]
+}

@@ -1,0 +1,27 @@
+{
+	"title": "back-pressure: a link with a limit moves at most that many a leg, behind until caught up",
+	"steps": [
+		{ "op": "graph", "name": "A" },
+		{ "op": "graph", "name": "B" },
+		{ "op": "link", "name": "AB", "a": "A", "b": "B", "limit": 2 },
+		{ "op": "set", "graph": "A", "node": "N", "value": 0 },
+		{ "op": "set", "graph": "A", "node": "N", "value": 1 },
+		{ "op": "set", "graph": "A", "node": "N", "value": 2 },
+		{ "op": "set", "graph": "A", "node": "N", "value": 3 },
+		{ "op": "set", "graph": "A", "node": "N", "value": 4 },
+		{
+			"op": "round",
+			"link": "AB",
+			"skip": ["ba"],
+			"expect": { "ab": { "sent": 2, "taken": 2, "passed": 0, "refused": [], "behind": true } }
+		},
+		{ "op": "value", "graph": "B", "node": "N", "expect": { "value": 1 } },
+		{
+			"op": "sync",
+			"link": "AB",
+			"skip": ["ba"],
+			"expect": { "ab": { "sent": 3, "taken": 3, "passed": 0, "refused": [], "behind": false } }
+		},
+		{ "op": "value", "graph": "B", "node": "N", "expect": { "value": 4 } }
+	]
+}
