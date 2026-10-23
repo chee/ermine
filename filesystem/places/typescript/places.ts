@@ -20,6 +20,7 @@ import type { ChangeHeader, Entry } from "@ermine/node/entry"
 import { createUnread } from "@ermine/unread"
 import type { Key as Step, Patch } from "@ermine/op/apply"
 import type { Scheduler } from "@ermine/scheduler"
+import { createChangeHeader } from "./header.ts"
 import { keyorder } from "@ermine/util/keyorder"
 import type { createPaths, Spot } from "@ermine/scheduler/paths"
 import type { Id, Key, Table } from "@ermine/table"
@@ -34,9 +35,13 @@ export type Path = readonly string[]
 export type Setup = {
 	// where names start
 	root: Id
-	table: Pick<Table, "get" | "who">
+	// del, when given: a removal's site is its caller
+	table: Pick<Table, "get" | "who"> & Partial<Pick<Table, "del">>
 	paths: Paths
-	scheduler: Pick<Scheduler, "track" | "mark" | "getRun">
+	// getCurrentScope, when given: a removal's change is made from the scope open
+	scheduler:
+		& Pick<Scheduler, "track" | "mark" | "getRun">
+		& Partial<Pick<Scheduler, "getCurrentScope">>
 	// what answers each step, in order; none: children alone
 	contributors?: readonly Contributor[]
 }
@@ -113,7 +118,8 @@ export type Where = {
 export type Member = { readonly name: string; readonly id: Id; readonly from?: string }
 
 // what landed at one key: the patches a write put there (a table event: one at the root, the value
-// whole; taken out, one at the root with no value), the change, and the entry now (none: taken out)
+// whole; taken out, one at the root with no value), the change (taken out: one made then from the
+// scope open, its site del's caller; none open, none), and the entry now (none: taken out)
 export type Fact = {
 	readonly part: Key
 	readonly id: Id
@@ -301,9 +307,21 @@ export function createPlaces(setup: Setup): Places {
 		const patch: Patch = entry?.value === undefined
 			? { path: [] }
 			: { path: [], value: entry.value }
-		const facts = [{ part, id, patches: [patch], change: entry?.change, entry }]
+		const change = entry !== undefined ? entry.change : removal()
+		const facts = [{ part, id, patches: [patch], change, entry }]
 		tellAll(facts)
 		tellWatches(facts)
+	}
+
+	// an entry taken out leaves no change: one made now, as a write's is, from the scope open (none
+	// open: none); its site the caller of table.del (or of places', with no del given)
+	function removal(): ChangeHeader | undefined {
+		if (scheduler.getCurrentScope?.() === undefined) return undefined
+		const s = {
+			getCurrentScope: () => scheduler.getCurrentScope!(),
+			getRun: () => scheduler.getRun(),
+		}
+		return createChangeHeader(s, undefined, [import.meta.url], table.del)
 	}
 
 	// what watchAll was given, in the order given

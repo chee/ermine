@@ -746,3 +746,20 @@ Deno.test("places: a view reads from its own root, nothing above it, and shares 
 	w.hosted(() => w.edit("value", "C", [{ path: [], value: 2 }]))
 	assertEquals(told, 2)
 })
+
+Deno.test("places: an entry taken out is told with a change made then, from the scope open, its site the caller of del; none open, none", () => {
+	const { s, table, places, value, host } = world()
+	const facts: { id: Id; change?: ChangeHeader }[] = []
+	places.watchAll((f) => void facts.push({ id: f.id, change: f.change }))
+	value("a", 1)
+	value("b", 2)
+	const line = Number(new Error().stack!.split("\n")[1].split(":").at(-2)) + 1
+	s.runWithScope(host, () => table.del("value", "a"))
+	table.del("value", "b")
+	const [, , a, b] = facts
+	assertEquals(a.id, "a")
+	assertEquals(a.change?.actor, "host")
+	assert(a.change?.external?.[0]?.file.endsWith("places_test.ts"), JSON.stringify(a.change))
+	assertEquals(a.change?.external?.[0]?.line, line)
+	assertEquals(b, { id: "b", change: undefined })
+})

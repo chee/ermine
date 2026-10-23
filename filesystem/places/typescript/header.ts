@@ -56,25 +56,41 @@ export function createChangeBase(
 
 // the header of a write made now
 // skip: files a library calls through on the way here (its own, and what it wraps calls in), so the
-// site is the first frame outside them too
+// site is the first frame outside them too. from: the function whose caller is the site, where the
+// engine allows (a removal's header made inside table.del's event: del); none, this one
 export function createChangeHeader(
 	scheduler: Pick<Scheduler, "getCurrentScope" | "getRun">,
 	extra?: Info,
 	skip?: Iterable<string>,
+	from?: unknown,
 ): ChangeHeader {
 	const w = createChangeBase(scheduler, extra)
 	if (w === undefined) throw new SchedulerError("unscoped", "a write with no scope open")
 	const h: ChangeHeader = { ...w, time: Math.floor(Date.now() / 1000) }
-	const site = siteOf(scheduler.getRun(), skip === undefined ? ours : new Set([...ours, ...skip]))
+	const site = siteOf(
+		scheduler.getRun(),
+		skip === undefined ? ours : new Set([...ours, ...skip]),
+		from ?? createChangeHeader,
+	)
 	if (site) h.external = [site]
 	return h
 }
 
+// the caller of from; from not on the stack (an engine cuts everything then): the caller of
+// createChangeHeader
+const near = (skip: ReadonlySet<string>, from: unknown) =>
+	capture(skip, from) ??
+		(from === createChangeHeader ? undefined : capture(skip, createChangeHeader))
+
 // outside a run, the call's own; in a run, the run's, captured at its first write
-function siteOf(run: Run | undefined, skip: ReadonlySet<string>): FileLocation | undefined {
-	if (run === undefined) return capture(skip, createChangeHeader)
+function siteOf(
+	run: Run | undefined,
+	skip: ReadonlySet<string>,
+	from: unknown,
+): FileLocation | undefined {
+	if (run === undefined) return near(skip, from)
 	if (sites.has(run)) return sites.get(run)
-	const site = capture(skip, createChangeHeader)
+	const site = near(skip, from)
 	sites.set(run, site)
 	return site
 }
