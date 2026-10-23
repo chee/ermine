@@ -8,6 +8,7 @@ import { createWorld, type Tools } from "@ermine/slaygrounds/world"
 import type { Node } from "@ermine/api"
 import { get } from "@ermine/places/lib"
 import { satisfy, type Way } from "@ermine/programs"
+import type { Start } from "@ermine/programs/start"
 import { render } from "ermine-h"
 
 const RENDERER = "party.chee.ermine.renderer"
@@ -53,18 +54,16 @@ const world = createWorld({
 	}),
 })
 
-// the runner for a renderer: its code is the node's source text, handed to the program's
-// drawing export with the process's api. it takes the renderer type, so a renderer found by name
-// is run by it
+// the runner for a renderer (@ermine/software's shape): its code is the node's source text, handed
+// to the program's drawing export with the process's api, the world's. it takes the renderer type,
+// so a renderer found by name is run by it
 world.seed((host) => {
-	const run = host.open(
-		"/draw",
-		(text: unknown, api: unknown) =>
-			world.world.apis.run(
-				(api: any) => (current!.drawing as Function)(api, text),
-				api as never,
-			),
-	)
+	const draw = world.world.apis.runner({ api: world.world.createProcessAPI })
+	const run = host.open("/draw", {
+		start: (text: unknown, start: Start) =>
+			draw.start((api: any) => (current!.drawing as Function)(api, text), start),
+		api: draw.api,
+	})
 	host.edit(host.info(run), [{ path: [], value: { "ermine.programs.takes": [RENDERER] } }])
 })
 

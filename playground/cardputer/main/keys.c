@@ -20,6 +20,9 @@
 #define KP_GPIO3 0x1F
 
 static i2c_master_dev_handle_t dev;
+static i2c_master_bus_handle_t bus;
+// the bus, for the codec and the IMU on it too (parts.c)
+void *keys_bus(void) { return bus; }
 static int shift, fn, ctrl;
 
 // the keys as printed: plain, shifted. 0: a key with a name (named)
@@ -53,7 +56,6 @@ void keys_init(void) {
 		.clk_source = I2C_CLK_SRC_DEFAULT,
 		.glitch_ignore_cnt = 7,
 		.flags.enable_internal_pullup = true};
-	i2c_master_bus_handle_t bus;
 	ESP_ERROR_CHECK(i2c_new_master_bus(&bus_config, &bus));
 	i2c_device_config_t dev_config = {.dev_addr_length = I2C_ADDR_BIT_LEN_7,
 		.device_address = ADDRESS,

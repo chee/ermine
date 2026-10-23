@@ -1,7 +1,8 @@
 // the G0 menu (menu.c): a folder in the den's graph, /system/menu, a process's (its node the
 // folder): each child an item, its name what's shown, its value a handler, a method (the process
-// api's api_method), run with api_send when it is picked. two are the den's own: "join a room"
-// (four letters typed, enter) and "new room" (a code picked, shown big to read off). a paired den
+// api's api_method), run with api_send when it is picked. three are the den's own: "join a room"
+// (four letters typed, enter), "new room" (a code picked, shown big to read off) and "rooms" (every
+// room kept here with its size; one picked is deleted on tab, never the one it's in). a paired den
 // adds more through the inbox (host.ts' contract: the menu ask), each a start or stop it asked for,
 // done when picked as if it asked then, while it is still paired
 //
@@ -28,5 +29,18 @@ op_value *menu_ask(const char *from, const char *name, const op_value *handler);
 
 // the platform's: the den goes to room code, kept from now on (main.c: NVS, then a restart)
 void room_go(const char *code);
+
+// a room kept on this device: its code, its files' size in K (log, snapshot, key), the file
+// system it is on ("/f", "/g")
+typedef struct {
+	char code[5];
+	unsigned kb;
+	char fs[4];
+} menu_room;
+// the platform's: every room kept here (both file systems), at most most: how many
+int rooms_list(menu_room *out, int most);
+// the platform's: a room's files let go whole (never the room the den is in). 0, and *left the K
+// free on its file system after; -1, and why in words
+int room_delete(const char *code, unsigned *left, char *why, size_t cap);
 
 #endif

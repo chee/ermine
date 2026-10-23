@@ -27,7 +27,7 @@ import { codeLink, linesHtml, onMaps, origin, siteHtml } from "./code.ts"
 import type { Host } from "./host.ts"
 import { NAME, OUT } from "./host.ts"
 import { FOLDER, type Unplaced } from "./made.ts"
-import { isPicture } from "./things.ts"
+import { isPicture, wires } from "./things.ts"
 
 type Item = {
 	path: string[]
@@ -749,15 +749,13 @@ export function createFiles(
 		if (isMap(v) && isPath(v.at)) return chip(v.at)
 		// a folder, as a path
 		if (k === "ermine.process.cwd" && isPath(v)) return chip(v)
-		// a wire: [input, den, path] triples, each "input ← path"
-		if (
-			k === "ermine.process.args" && isPath(v) && v.length > 0 && v.length % 3 === 0 &&
-			v.every((x, i) => i % 3 !== 2 || x.startsWith("/"))
-		) {
+		// a wire: [input, den, path] triples (each maybe "=<outlet>" after), each "input ← path"
+		const wired = k === "ermine.process.args" && isPath(v) ? wires(v) : undefined
+		if (wired) {
 			let out = ""
-			for (let i = 0; i < v.length; i += 3) {
-				out += `<span class="wire"><span class="fnote">${esc(v[i])} ←</span> ${
-					chip(split(v[i + 2]), `on ${denName(v[i + 1])}`)
+			for (const s of wired) {
+				out += `<span class="wire"><span class="fnote">${esc(s.input)} ←</span> ${
+					chip(split(s.at), `${s.from ? `its ${s.from}, ` : ""}on ${denName(s.den)}`)
 				}</span>`
 			}
 			return out

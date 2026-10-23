@@ -11,8 +11,11 @@
 
 #define JOIN "join a room"
 #define NEW "new room"
+#define ROOMS "rooms"
 // the most items shown, and the longest name
 #define ROWS 6
+// the rooms shown at once
+#define ROOM_ROWS 6
 #define LONGEST 24
 
 // an item a paired den added: its name, the den (its node), the ask done when it's picked
@@ -26,10 +29,14 @@ typedef struct item {
 static struct {
 	api *a;
 	int open;
-	// what shows: the list; a code being typed; a new room's code; going to a room
-	enum { LIST, JOINING, MADE, GOING } mode;
+	// what shows: the list; a code being typed; a new room's code; going to a room; the rooms kept
+	// here; a room to delete, asked
+	enum { LIST, JOINING, MADE, GOING, ROOMING, DELETING } mode;
 	int at;
 	char typed[5], made[5], going[5];
+	// the rooms kept here, the one picked, the first shown
+	menu_room rooms[32];
+	int nrooms, rat, rtop;
 	item *items;
 	// the names in the order shown (the den's two, then the rest by name), from the folder
 	char names[16][LONGEST + 1];
@@ -66,6 +73,22 @@ static int fresh(api *a, const op_value *const *args, size_t nargs, op_value **o
 	return 0;
 }
 
+// every room kept here, by code
+static int by_code(const void *x, const void *y) { return strcmp(((const menu_room *)x)->code, ((const menu_room *)y)->code); }
+static void rooms_again(void) {
+	m.nrooms = rooms_list(m.rooms, 32);
+	qsort(m.rooms, (size_t)m.nrooms, sizeof *m.rooms, by_code);
+	if (m.rat >= m.nrooms) m.rat = m.nrooms ? m.nrooms - 1 : 0;
+}
+
+static int rooms(api *a, const op_value *const *args, size_t nargs, op_value **out, void *ctx) {
+	(void)a, (void)args, (void)nargs, (void)ctx;
+	m.mode = ROOMING, m.rat = m.rtop = 0;
+	rooms_again();
+	*out = NULL;
+	return 0;
+}
+
 // a paired den's: its ask done as if asked now (den.c checks it is still paired)
 static int theirs(api *a, const op_value *const *args, size_t nargs, op_value **out, void *ctx) {
 	(void)a, (void)args, (void)nargs;
@@ -79,6 +102,7 @@ static int menu_program(api *a) {
 	api_node n;
 	int code = api_method(a, JOIN, join, NULL, &n);
 	if (!code) api_node_free(&n), code = api_method(a, NEW, fresh, NULL, &n);
+	if (!code) api_node_free(&n), code = api_method(a, ROOMS, rooms, NULL, &n);
 	if (!code) api_node_free(&n);
 	return code;
 }
@@ -89,15 +113,17 @@ void menu_start(void) { m.a = host_start_at("menu", "system", menu_program); }
 
 static int by_name(const void *x, const void *y) { return strcmp(x, y); }
 
-// the folder's names: the den's two first, the rest by name
+static int own(const char *name) { return !strcmp(name, JOIN) || !strcmp(name, NEW) || !strcmp(name, ROOMS); }
+
+// the folder's names: the den's three first, the rest by name
 static void list(void) {
 	m.n = 0;
 	const nd_entry *e = tb_get(host_get().table, tb_string("children"), tb_string("proc:menu"));
 	const op_value *kids = e ? e->value : NULL;
-	strcpy(m.names[m.n++], JOIN), strcpy(m.names[m.n++], NEW);
+	strcpy(m.names[m.n++], JOIN), strcpy(m.names[m.n++], NEW), strcpy(m.names[m.n++], ROOMS);
 	int rest = m.n;
 	for (size_t i = 0; kids && kids->type == OP_MAP && i < kids->count && m.n < 16; i++) {
-		if (kids->items[i] == NULL || strcmp(kids->keys[i], JOIN) == 0 || strcmp(kids->keys[i], NEW) == 0) continue;
+		if (kids->items[i] == NULL || own(kids->keys[i])) continue;
 		snprintf(m.names[m.n++], LONGEST + 1, "%s", kids->keys[i]);
 	}
 	qsort(m.names[rest], (size_t)(m.n - rest), sizeof m.names[0], by_name);
@@ -146,8 +172,8 @@ static void go(const char *code) {
 int menu_key(const char *k) {
 	if (!m.open || m.mode == GOING) return m.open;
 	int esc = strcmp(k, "esc") == 0, enter = strcmp(k, "enter") == 0;
-	// tab is the pair ask's yes, still
-	if (strcmp(k, "tab") == 0) return 0;
+	// tab is the pair ask's yes, still, but where a room's delete is asked
+	if (strcmp(k, "tab") == 0 && m.mode != DELETING) return 0;
 	if (m.mode == LIST) {
 		if (esc) m.open = 0;
 		else if (enter) pick();
@@ -174,6 +200,40 @@ int menu_key(const char *k) {
 	} else if (m.mode == MADE) {
 		if (esc) m.mode = LIST;
 		else if (enter) go(m.made);
+	} else if (m.mode == ROOMING) {
+		if (esc) m.mode = LIST;
+		else if (m.nrooms == 0) {
+		} else if (strcmp(k, "up") == 0 || strcmp(k, ";") == 0) m.rat = (m.rat + m.nrooms - 1) % m.nrooms;
+		else if (strcmp(k, "down") == 0 || strcmp(k, ".") == 0) m.rat = (m.rat + 1) % m.nrooms;
+		else if (enter && strcmp(m.rooms[m.rat].code, den_room()) == 0) {
+			char one[40];
+			snprintf(one, sizeof one, "%s is the room you're in:", m.rooms[m.rat].code);
+			den_say(1, one, "join another to delete it");
+		} else if (enter) m.mode = DELETING;
+		// the one picked always among those shown
+		if (m.rat < m.rtop) m.rtop = m.rat;
+		if (m.rat >= m.rtop + ROOM_ROWS) m.rtop = m.rat - ROOM_ROWS + 1;
+	} else if (m.mode == DELETING) {
+		const menu_room *r = &m.rooms[m.rat];
+		if (esc) m.mode = ROOMING;
+		else if (strcmp(k, "tab") == 0) {
+			char code[5], fs[4], why[48], one[48], two[48];
+			unsigned kb = r->kb, left = 0;
+			snprintf(code, sizeof code, "%s", r->code), snprintf(fs, sizeof fs, "%s", r->fs);
+			if (room_delete(code, &left, why, sizeof why) == 0) {
+				printf("menu: room %s deleted, %uK freed; %s has %uK free\n", code, kb, fs, left);
+				snprintf(one, sizeof one, "%s deleted: %uK freed", code, kb);
+				snprintf(two, sizeof two, "%s has %uK free now", fs, left);
+				den_say(0, one, two);
+			} else {
+				printf("menu: room %s not deleted: %s\n", code, why);
+				snprintf(one, sizeof one, "%s not deleted:", code);
+				den_say(1, one, why);
+			}
+			m.mode = ROOMING;
+			rooms_again();
+			if (m.rtop > m.rat) m.rtop = m.rat;
+		}
 	}
 	if (m.open && m.mode == LIST) list();
 	again();
@@ -192,7 +252,7 @@ op_value *menu_ask(const char *from, const char *name, const op_value *handler) 
 		return r;
 	}
 	item *it = find(name);
-	if (strcmp(name, JOIN) == 0 || strcmp(name, NEW) == 0 || (it && strcmp(it->from, from) != 0)) {
+	if (own(name) || (it && strcmp(it->from, from) != 0)) {
 		op_set(r, "refused", op_str("taken"));
 		op_set(r, "name", op_str(name));
 		return r;
@@ -297,6 +357,29 @@ void menu_paint(void) {
 		fb_text(4, 17, "its code, to read off:", FB_INK, 1);
 		boxes(m.made, 28);
 		hint("enter go there  esc stay here");
+	} else if (m.mode == ROOMING) {
+		head("rooms kept here");
+		if (m.nrooms == 0) fb_text(6, 17, "none", FB_GREY, 1);
+		for (int i = m.rtop; i < m.nrooms && i < m.rtop + ROOM_ROWS; i++) {
+			const menu_room *r = &m.rooms[i];
+			int y = 17 + (i - m.rtop) * 13, on = i == m.rat, here = strcmp(r->code, den_room()) == 0;
+			if (on) fb_rect(2, y - 2, FB_W - 4, 12, FB_INK);
+			char row[32];
+			snprintf(row, sizeof row, "%s %5uK %s%s", r->code, r->kb, r->fs, here ? "  here" : "");
+			fb_text(6, y, row, on ? FB_WHITE : here ? FB_CHERRY : FB_INK, 1);
+		}
+		if (m.rtop > 0) fb_text(FB_W - 14, 17, "^", FB_GREY, 1);
+		if (m.rtop + ROOM_ROWS < m.nrooms) fb_text(FB_W - 14, 17 + (ROOM_ROWS - 1) * 13, "v", FB_GREY, 1);
+		hint(";. move enter delete esc back");
+	} else if (m.mode == DELETING) {
+		const menu_room *r = &m.rooms[m.rat];
+		head("delete a room?");
+		char line[40];
+		snprintf(line, sizeof line, "delete %s (%uK on %s)?", r->code, r->kb, r->fs);
+		fb_text(4, 17, line, FB_INK, 1);
+		boxes(r->code, 28);
+		fb_text(4, 80, "its log and all, for good", FB_CHERRY, 1);
+		hint("tab yes  esc no");
 	} else {
 		fb_clear(FB_LEMON);
 		fb_text(4, 20, "going to room", FB_INK, 2);

@@ -28,7 +28,7 @@ import { status as statusOf } from "@ermine/places/status"
 import { ATTRIBUTES as A, satisfy } from "@ermine/programs"
 import { COMPILER, createBuilds } from "@ermine/compilers"
 import type { Places } from "@ermine/places"
-import type { Process } from "@ermine/programs/start"
+import type { Process, Start } from "@ermine/programs/start"
 import { PENDING } from "@ermine/scheduler"
 import { createWorld } from "@ermine/slaygrounds/world"
 import { render } from "ermine-h"
@@ -232,8 +232,15 @@ function programs() {
 	return out
 }
 
-// ---- the page's own: live functions the host puts in the graph, never saved. satisfy's search
-// ends at them (a node with no type whose value is a function: the host runs it) ----
+// ---- the page's own: live values the host puts in the graph, never saved. satisfy's search ends
+// at them (a node with no type whose value is live, a function or a runner: the host runs it) ----
+
+// the page's runners are in @ermine/software's shape: start(code, start), start the start's facts,
+// the program's api the world's, made from them (runner)
+const runner = (run: (code: unknown, api: API) => Promise<{ stop(): void }>) => ({
+	start: (code: unknown, start: Start) => run(code, w.createProcessAPI(start)),
+	api: w.createProcessAPI,
+})
 
 // javascript source, imported as a module (once per code), its default export called with the api
 // the process is given. what it returns is the process's /value
@@ -708,8 +715,8 @@ world.seed((host) => {
 	// js and wasm run what they take; cc, clang on this machine, compiles c to wasm. what it is (its
 	// identity) is what the cache is keyed by, not the node
 	folder("/loaders")
-	loader("/loaders/js", js, { [A.takes]: [JS] })
-	loader("/loaders/wasm", wasm, { [A.takes]: [WASM] })
+	loader("/loaders/js", runner(js), { [A.takes]: [JS] })
+	loader("/loaders/wasm", runner(wasm), { [A.takes]: [WASM] })
 	host.open("/c", null)
 	folder("/c/loaders")
 	loader("/c/loaders/cc", compileC, {

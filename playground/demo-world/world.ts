@@ -9,13 +9,14 @@
 //
 // a program is a module; each process runs one export (default "default"), given the process api
 // and the world's tools (below; extend may add a host's own); its return, a view or an element, is
-// made real in the process's box. code: /code/<export>, run by the runner at /code/run. a process runs at /<name>
+// made real in the process's box. code: /code/<export>, run by the runner at /code/run (a runner in
+// @ermine/software's shape, its api the world's createProcessAPI). a process runs at /<name>
 // with cwd the root: "./x" is /x, saved across reloads; a bare "x" is inside the process, gone at
 // stop. a name under "./" must not be a process's name (a running process shadows it).
 // reload: code written again, each process stopped ("replaced") and started on the new code.
 // globalThis.ermine (the inspector): table, places, s, host, header, writes, parts, statusIds,
-// pending, moments (last 4000), call, defined, binds, apis, programs, processes, sites, api (the
-// host's process api)
+// pending, moments (last 4000), call, defined, binds, apis, createProcessAPI (what a process is
+// given, for a host's own runners), programs, processes, sites, api (the host's process api)
 //
 // the world's tools, on every process's api and the host's: what hosts each wrote by hand, the api
 // having no word for it:
@@ -28,8 +29,8 @@
 //   scoped(f, info?)     f run in a scope of its own under the process's: { value, stop }. what f
 //                        makes (memos, effects) goes at stop, or with the process
 //   up(address, from?, { stop?, walk? }?)   the nearest place walking up from `from` (names from
-//                        the root; none: the process's place) where address is: its node, id and the
-//                        place it was found in (parent), tracked. stop: the depth it ends at (1
+//                        the root; none: the process's place) where address is: its node (by its
+//                        path), the id found there and the place it was found in (parent), tracked. stop: the depth it ends at (1
 //                        leaves the root out); walk: the ids of the places visited pushed to it
 //   inspect(address)     that node picked in the page's graph tab
 import createEntry, { type ChangeHeader, type Metadata } from "@ermine/node/entry"
@@ -46,7 +47,13 @@ import { processes as rows } from "@ermine/processes"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import { createBuilds } from "@ermine/compilers"
 import { satisfy } from "@ermine/programs"
-import { type Context, createPrograms, type Process } from "@ermine/programs/start"
+import {
+	type Context,
+	createPrograms,
+	ours,
+	type Process,
+	type Runner,
+} from "@ermine/programs/start"
 import { type API, createProcessAPIs, type Node, type Noticed } from "@ermine/programs/api"
 import { installTypes, type Known } from "@ermine/types"
 import type { Policy } from "@ermine/protect"
@@ -106,7 +113,7 @@ export type Tools = {
 		address: readonly string[],
 		from?: readonly string[],
 		options?: { stop?: number; walk?: string[] },
-	) => (Node & { path: string[]; id: string; parent: string }) | undefined
+	) => (Node & { path: string[]; found: string; parent: string }) | undefined
 	inspect: (address: readonly string[]) => void
 }
 
@@ -132,12 +139,10 @@ export function createWorld(o: Options) {
 	}
 	const sites = createSites(s, {
 		ours: [
-			"@ermine/api",
-			"@ermine/scheduler",
-			"@ermine/programs/start",
-			"@ermine/processes/start",
-		]
-			.map(url),
+			...["@ermine/api", "@ermine/scheduler", "@ermine/processes/start"].map(url),
+			// programs' and software's own
+			...ours,
+		],
 	})
 	const table = createTable((part, id) =>
 		overlay ? overlay.onTableChange(part as Key, id) : places.onTableChange(part as Key, id)
@@ -330,7 +335,7 @@ export function createWorld(o: Options) {
 					walk?.push(here)
 					const path = [...from.slice(0, k), ...address]
 					const id = lib.get(places, path)
-					if (typeof id === "string") return { path, part: "value", id, parent: here }
+					if (typeof id === "string") return { path, part: "value", found: id, parent: here }
 				}
 			},
 			inspect: (address) => page.parent?.__pick?.([...address]),
@@ -338,8 +343,7 @@ export function createWorld(o: Options) {
 	}
 
 	// what a process is given: the api, the world's tools, and the host's own
-	// (the extras put on the api itself: the runner knows a process by its api)
-	function createProcessAPI(ctx: Context) {
+	function createProcessAPI(ctx: Context): API & Tools {
 		const api = Object.assign(apis.createProcessAPI(ctx), {} as Tools)
 		ctxs.set(api, ctx)
 		Object.assign(api, tools(api, ctx))
@@ -371,34 +375,25 @@ export function createWorld(o: Options) {
 	const hostAPI = Object.assign(apis.createProcessAPI(hostCtx), {} as Tools)
 	Object.assign(hostAPI, tools(hostAPI, hostCtx))
 	programs = s.runWithScope(above, () => {
-		// describe and watchAll: each process's latest run on its node too (runs.ts)
-		const writes = {
-			readValue: places.readValue,
-			commit,
-			describe: places.describe,
-			watchAll: places.watchAll,
-		}
+		// the world's places, its commits through the overlay when there is one; describe and
+		// watchAll: each process's latest run too (runs.ts)
+		const writes = { ...places, commit }
 		const builds = createBuilds({ scheduler: s, table, places: writes, cache: "cache" })
-		return createPrograms({
-			scheduler: s,
-			table,
-			places: writes,
-			builds,
-			scopes,
-			createProcessAPI,
-			sites,
-		})
+		return createPrograms({ scheduler: s, table, places: writes, builds, scopes, sites })
 	})
-	// a setup that throws is told on the console with its stack (programs keeps it as the process's
+	// a setup that throws is told on the console with its stack (programs holds it as the process's
 	// status, which nobody here reads), then thrown on as before
-	const runner = apis.runner({ show })
-	const run = (code: unknown, api: unknown) => {
-		try {
-			return runner(code, api)
-		} catch (e) {
-			console.error("a program's setup threw:", e)
-			throw e
-		}
+	const runner = apis.runner({ show, api: createProcessAPI })
+	const run: Runner = {
+		api: runner.api,
+		start: (code, ctx) => {
+			try {
+				return runner.start(code, ctx)
+			} catch (e) {
+				console.error("a program's setup threw:", e)
+				throw e
+			}
+		},
 	}
 	s.runWithScope(host, () => {
 		const runs = hostAPI.open("/code/run", run)
@@ -474,6 +469,7 @@ export function createWorld(o: Options) {
 		defined,
 		binds,
 		apis,
+		createProcessAPI,
 		programs,
 		processes: running,
 		presence,

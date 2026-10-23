@@ -13,6 +13,7 @@
 #include "den.h"
 #include "esp_crt_bundle.h"
 #include "esp_timer.h"
+#include "esp_heap_caps.h"
 #include "esp_tls.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -44,6 +45,11 @@ static int put(bytes *b, const void *p, size_t n) {
 static void let_go(bytes *b) {
 	free(b->p);
 	*b = (bytes){0};
+}
+// a buffer emptied, let go when it grew past 2 KB (a catch-up's big message would hold its room
+// for the line's whole life)
+static void shrink(bytes *b) {
+	if (b->n == 0 && b->room > 2048) let_go(b);
 }
 static int framed(bytes *b, const uint8_t *m, size_t n) {
 	uint8_t head[4] = {(uint8_t)(n >> 24), (uint8_t)(n >> 16), (uint8_t)(n >> 8), (uint8_t)n};
@@ -201,10 +207,12 @@ static int frames_in(bytes *r, bytes *msg) {
 		int ok = framed(&me.in, msg->p ? msg->p : (const uint8_t *)"", msg->n);
 		xSemaphoreGive(me.lock);
 		msg->n = 0;
+		shrink(msg);
 		if (!ok) return 0;
 	}
 	memmove(r->p, r->p + at, r->n - at);
 	r->n -= at;
+	shrink(r);
 	return 1;
 }
 
@@ -248,6 +256,8 @@ static void line(void *arg) {
 					}
 					extern int getenv_trace;
 					if (getenv_trace) printf("trace: ws wrote %u bytes at %lld\n", (unsigned)me.job.n, (long long)ms());
+					me.job.n = 0;
+					shrink(&me.job);
 					xSemaphoreTake(me.lock, portMAX_DELAY);
 					me.ready = 0;
 					xSemaphoreGive(me.lock);
@@ -285,7 +295,11 @@ static void line(void *arg) {
 		xSemaphoreTake(me.lock, portMAX_DELAY);
 		if (me.open) me.gen++;
 		me.open = 0, me.ready = 0;
-		snprintf(me.state, sizeof me.state, "offline: again in %d s", wait / 1000);
+		// a TLS session wants a block of about 16 KB at once: without one, said so
+		if (heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) < 16 * 1024)
+			snprintf(me.state, sizeof me.state, "offline: memory too low (%uK)",
+				(unsigned)(heap_caps_get_free_size(MALLOC_CAP_8BIT) / 1024));
+		else snprintf(me.state, sizeof me.state, "offline: again in %d s", wait / 1000);
 		xSemaphoreGive(me.lock);
 		printf("ws: the line to %s dropped: again in %d s\n", me.host, wait / 1000);
 		vTaskDelay(pdMS_TO_TICKS(wait));
@@ -361,9 +375,12 @@ void ws_turn(int64_t now) {
 		if (put(&me.job, me.out.p, at)) {
 			memmove(me.out.p, me.out.p + at, me.out.n - at);
 			me.out.n -= at;
+			shrink(&me.out);
 			xSemaphoreTake(me.lock, portMAX_DELAY);
 			me.ready = me.gen == gen;
 			xSemaphoreGive(me.lock);
+			extern int getenv_trace;
+			if (getenv_trace) printf("trace: ws handed %u bytes at %lld\n", (unsigned)at, (long long)ms());
 		}
 	}
 	if (me.full && me.out.n < WS_FULL / 2 && me.link) me.full = 0, tp_sync_go(me.sync, me.link);

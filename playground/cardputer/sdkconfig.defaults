@@ -55,11 +55,11 @@ CONFIG_LWIP_MAX_ACTIVE_TCP=4
 CONFIG_LWIP_MAX_LISTENING_TCP=2
 CONFIG_LWIP_MAX_UDP_PCBS=8
 # the den's log on FAT (main/flash.c): 512-byte sectors (a 512-byte window in RAM, not 4 KB), 8.3
-# names only (the log's are: log, key, snapshot), two volumes ("den" and "den2", partitions.csv)
+# names only (the log's are: log, key, snapshot), three volumes ("den" and "den2", partitions.csv, and a microSD looked at by the sd thing)
 CONFIG_WL_SECTOR_SIZE_512=y
 CONFIG_FATFS_SECTOR_512=y
 CONFIG_FATFS_LFN_NONE=y
-CONFIG_FATFS_VOLUME_COUNT=2
+CONFIG_FATFS_VOLUME_COUNT=3
 # the esp_timer task: 2.5 KB of stack (nothing of ours runs on it)
 CONFIG_ESP_TIMER_TASK_STACK_SIZE=2560
 # how the den reaches galaxy: the websocket (main/ws.c: one TLS session, the browsers' path). it

@@ -42,10 +42,17 @@ static void schedule(void *ctx, void (*f)(void *), void *data) {
 	w.queue[w.qn].f = f, w.queue[w.qn].data = data, w.qn++;
 }
 
+extern int getenv_trace;
+int64_t den_clock(void);
+static void pulse_now(void *data);
 void host_settle(void) {
 	while (w.qhead < w.qn) {
 		size_t i = w.qhead++;
+		int64_t t = getenv_trace ? den_clock() : 0;
 		w.queue[i].f(w.queue[i].data);
+		if (getenv_trace && den_clock() - t > 20)
+			printf("trace: a job took %lld ms (%s)\n", (long long)(den_clock() - t),
+				w.queue[i].f == pulse_now ? "a pulse" : "another");
 	}
 	w.qn = w.qhead = 0;
 }
