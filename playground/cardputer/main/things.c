@@ -23,8 +23,10 @@
 #include <strings.h>
 
 #include "core/op/c/json.h"
+#include "core/node/c/update.h"
 #include "fb.h"
 #include "parts.h"
+#include "host.h"
 
 static void *xalloc(size_t n) {
 	void *p = calloc(1, n ? n : 1);
@@ -103,6 +105,74 @@ static void write_now(void *data) {
 	for (size_t i = 0; i < changed.n; i++) pl_hold_also(p, changed.entries[i], pl_made_ref(made), pl_made_free);
 	if (born != NULL) pl_hold(p, born, pl_made_ref(made), pl_made_free);
 	pl_made_free(made);
+}
+
+// a splice of the string at its attribute name: at most two (a cut from the front, then what is put
+// at from..to), held by the entry until its next update
+typedef struct {
+	char *name;
+	op_key key;
+	op_patch patches[2];
+	op_value *values[2];
+} splice_block;
+static void splice_free(void *data) {
+	splice_block *b = data;
+	for (int i = 0; i < 2; i++)
+		if (b->values[i]) op_free(b->values[i]);
+	free(b->name);
+	free(b);
+}
+typedef struct {
+	thing *t;
+	splice_block *b;
+	size_t n;
+} splicing;
+static void splice_now(void *data) {
+	splicing *w = data;
+	pl *p = w->t->places;
+	nd_entry *e = tb_get(host_get().table, tb_string("attributes"), tb_string(w->t->id));
+	ch_header h;
+	pl_made *made;
+	char *bad = e ? pl_header(p, NULL, 0, NULL, &h, &made) : NULL;
+	if (e == NULL || bad != NULL) {
+		if (bad) fprintf(stderr, "things: %s\n", bad), free(bad);
+		splice_free(w->b);
+		return;
+	}
+	size_t failed;
+	int code = nd_update(e, w->b->patches, w->n, h, &failed);
+	if (code != OP_OK) {
+		fprintf(stderr, "things: %s not spliced: %s\n", w->b->name, op_code_name(code));
+		splice_free(w->b);
+		pl_made_free(made);
+		return;
+	}
+	pl_hold(p, e, w->b, splice_free);
+	pl_hold_also(p, e, pl_made_ref(made), pl_made_free);
+	pl_made_free(made);
+	pl_changed changed = {1, {e}};
+	pl_commit(p, &changed);
+}
+// the string at name: cut letters from the front (0: none), then add put at its end (NULL: none),
+// or take the last one off (put NULL, cut 0, end: how long it is now)
+static void splice(thing *t, const char *name, size_t cut, size_t end, const char *put) {
+	if (t->stopped) return;
+	splice_block *b = calloc(1, sizeof *b);
+	if (b == NULL) return;
+	b->name = strdup(name);
+	b->key = (op_key){.type = OP_STR_KEY, .s = b->name};
+	size_t n = 0;
+	if (cut) b->patches[n++] = (op_patch){.place = {.path = &b->key, .length = 1, .has_range = 1, .from = 0, .to = (int64_t)cut}};
+	if (put) {
+		b->values[n] = op_str(put);
+		b->patches[n] = (op_patch){.place = {.path = &b->key, .length = 1, .has_range = 1, .from = (int64_t)(end - cut),
+			.to = (int64_t)(end - cut)}, .has_value = 1, .value = b->values[n]};
+		n++;
+	} else if (!cut && end) b->patches[n++] = (op_patch){.place = {.path = &b->key, .length = 1, .has_range = 1,
+		.from = (int64_t)end - 1, .to = (int64_t)end}};
+	if (n == 0) return splice_free(b);
+	splicing w = {t, b, n};
+	sc_run_with_scope(t->scope, splice_now, &w);
 }
 
 // its attribute name set, with its scope open; v taken
@@ -291,14 +361,18 @@ static hf_run keys(const op_value *code, void *api, void *data) {
 void things_key(const char *key) {
 	thing *t = keys_running;
 	if (t == NULL) return;
+	// a splice, not the whole text: a key costs a letter
 	size_t n = strlen(t->text);
 	if (strcmp(key, "del") == 0) {
-		if (n) t->text[n - 1] = 0;
+		if (n == 0) return;
+		splice(t, THING_OUT, 0, n, NULL);
+		t->text[n - 1] = 0;
 	} else if (strlen(key) == 1) {
-		if (n == KEYS_LONGEST) memmove(t->text, t->text + 1, n--);
+		size_t cut = n == KEYS_LONGEST ? 1 : 0;
+		splice(t, THING_OUT, cut, n, key);
+		if (cut) memmove(t->text, t->text + 1, n--);
 		t->text[n] = key[0], t->text[n + 1] = 0;
 	} else return;
-	out(t, op_str(t->text));
 	op_value *m = op_map();
 	op_set(m, "key", op_str(key));
 	op_set(m, "n", op_int(++t->typed));
