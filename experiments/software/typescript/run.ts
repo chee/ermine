@@ -13,22 +13,29 @@
 //   not-a-runner   nothing at runner, or its ermine.type is not ermine.runner
 //   not-there      no program node, or no value; by id: none, or not the hash given; code given:
 //                  not the hash given
-//   wrong-form     the program's ermine.type (code given: type) is not the runner's
-//                  ermine.runner.takes (both strings, exact); or it names an api
-//                  (ermine.program.api; code given: api) the runner's ermine.runner.api is not
+//   wrong-form     the program's type does not fit the runner's takes (TAKES); or it names an
+//                  api (ermine.program.api; code given: api) the runner's ermine.runner.api is not
 //   not-a-runner   the runner's value is no runner here (no start)
 //   taken          a process at, above or under at (processes')
+// the program's type: by an address, @ermine/types' typeOf (its ermine.type, else its name's
+// extension, by the nearest ermine/types from its folder); by id, its ermine.type; code given, type.
+// it fits when the takes (a list; a string, a list of one) holds it or a type it conforms to, by
+// the nearest ermine/types from the program's folder (none: from where's root). read untracked
 // else processes' start under a scope of its own (under the runner's offer's, when offered here;
 // else setup.scope), with ermine.type ermine.process, ermine.process.runner { id, at },
 // .program { id, at?, hash? } (hash: of its value; none: a live value); the code read once now;
 // at the first pulse, a one-shot effect, the process's scope open: start(code, Start). a handle:
 // held, its stop its stopper's teardown (landing after the stop: called then); a throw, a
 // rejected promise: the status. a run made outside a pulse asks for one (setup.schedule)
-// load(runner, program, { by, box? }): the program made live on the runner with no process: its
-// load(code, start), start by's facts, by's scope open (unless one is). checked as run is (no
-// path, so never taken); a runner with no load: not-a-runner. what load throws: thrown.
-// { live, release }: live held by by, let go (live[Symbol.dispose], if it has one) at release or at
-// by's scope's teardown, after its handle's, newest first
+// load(runner, program, { by, box?, chain? }): the program made live on the runner with no
+// process, shared: one load per key, the program's id, its value's hash (none: the value itself),
+// the runner's id and live value, and chain (the keys of what else loads it, programs'; none:
+// none). checked as run is (no path, so never taken); a runner with no load: not-a-runner. a key
+// with no load standing: the runner's load(code, start), start by's facts and a scope of the
+// load's own (under setup.scope), open for the call; what load throws: thrown, the scope gone.
+// { live, release }: one hold by by. release lets go of it, as by's scope's teardown does (after
+// its handle's, newest first); the last hold let go, or setup.scope torn down: the load's scope
+// torn down, its live form's [Symbol.dispose] (if it has one) called before what its load made goes
 // stop(p, reason?): the reason told, then where it runs torn down, in the scheduler's order: its
 // offers and what runs on them ("runner-stopped"), its handle's stop(reason), then its own scope.
 // twice, or none run here: nothing
@@ -39,22 +46,25 @@ import { hash } from "@ermine/formats/hash"
 import { type Address, type Box, inside } from "@ermine/boxes"
 import type { Id, Path } from "@ermine/places"
 import { get } from "@ermine/places/lib"
+import { conformance, typeOf, typesAt } from "@ermine/types"
 import type { Context, Inside, Process } from "@ermine/processes/start"
 import { isPromise } from "@ermine/scheduler/helpers"
 import {
 	ATTRIBUTE,
 	type Ctx,
+	dispose,
 	drop,
 	type Held,
 	holder,
 	isMap,
+	type Load,
 	ours,
 	type Owner,
 	type Place,
 	type Running,
 	TYPE,
 } from "./common.ts"
-import { API, runnerOf, TAKES } from "./offers.ts"
+import { API, runnerOf, TAKES, takesOf } from "./offers.ts"
 
 ours.add(import.meta.url)
 
@@ -97,7 +107,8 @@ export type Refused =
 		readonly refused: "wrong-form"
 		// each field only when a string
 		readonly program: { readonly type?: string; readonly api?: string }
-		readonly runner: { readonly takes?: string; readonly api?: string }
+		// takes: the runner's, as a list; only when it takes any
+		readonly runner: { readonly takes?: readonly string[]; readonly api?: string }
 	}
 export type Options = {
 	args?: readonly string[]
@@ -106,6 +117,14 @@ export type Options = {
 	box?: Box
 	// ermine.process.pin, as processes' start writes it
 	pin?: unknown
+}
+export type LoadOptions = {
+	// who holds it
+	by: Place
+	// where the program is from; none: by's box
+	box?: Box
+	// the keys of what else loads it (programs' chain), part of the load's key
+	chain?: readonly string[]
 }
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
@@ -121,6 +140,18 @@ export function hashOf(v: unknown): string | undefined {
 }
 
 const isAddress = (x: unknown): x is Address => typeof x === "string" || Array.isArray(x)
+
+// a value's tag in a key: an object or a function, a number of its own; anything else, itself
+const tags = new WeakMap<object, number>()
+let tagged = 0
+function tag(x: unknown): string {
+	if ((typeof x === "object" && x !== null) || typeof x === "function") {
+		let n = tags.get(x)
+		if (n === undefined) tags.set(x, n = ++tagged)
+		return `#${n}`
+	}
+	return typeof x === "string" ? JSON.stringify(x) : String(x)
+}
 
 // the fields that are strings
 function strings<K extends string>(o: Record<K, unknown>): Partial<Record<K, string>> {
@@ -143,20 +174,34 @@ export function createRun(c: Ctx) {
 		return isMap(v) ? v : {}
 	}
 
-	// what an owner's runner is handed
-	const startOf = (o: Owner): Start => ({
+	// what an owner's runner is handed: its facts, and the scope open for the call (none: its own)
+	const startOf = (o: Owner, scope = o.scope): Start => ({
 		box: o.box,
 		places: o.box.places,
 		process: { id: o.id, at: o.at, args: o.args, cwd: o.cwd },
 		scheduler: s,
 		table,
-		scope: o.scope,
+		scope,
 	})
 
+	// a program's type at its place in where: its ermine.type, else its name's (@ermine/types'
+	// typeOf), untracked
+	const typeAt = (where: Box, id: Id, at: Path) =>
+		where.places.peep(() => typeOf(where.places, { id, at }))
+
+	// whether a type fits what a runner takes: one is it, or one it conforms to, by the nearest
+	// ermine/types from a folder in where, untracked
+	function fits(where: Box, from: Path, type: string, takes: readonly string[]): boolean {
+		if (takes.includes(type)) return true
+		const { places } = where
+		return places.peep(() => conformance(places, typesAt(places, from), type).all)
+			.some((t) => takes.includes(t))
+	}
+
 	// the checks in order, up to taken (processes'): the runner, the program read once. load: a
-	// runner with no load is not-a-runner
+	// runner with no load is not-a-runner. value: the runner node's, as read
 	type Checked = {
-		readonly runner: { readonly id: Id; readonly path: Path }
+		readonly runner: { readonly id: Id; readonly path: Path; readonly value: unknown }
 		readonly program: { readonly id: Id; readonly at?: Path }
 		readonly code: unknown
 		readonly digest?: string
@@ -186,7 +231,8 @@ export function createRun(c: Ctx) {
 			id = p.id
 			code = entry.value
 			digest = hashOf(code)
-			;({ [ATTRIBUTE]: type, [PROGRAM_API]: api } = attributesOf(id))
+			type = typeAt(where, id, path)
+			api = attributesOf(id)[PROGRAM_API]
 		} else if (program.code !== undefined) {
 			id = typeof program.id === "string" ? program.id : ""
 			code = program.code
@@ -207,21 +253,24 @@ export function createRun(c: Ctx) {
 			}
 			;({ [ATTRIBUTE]: type, [PROGRAM_API]: api } = attributesOf(id))
 		}
-		const takes = rattrs[TAKES], given = rattrs[API]
+		// its type fits from its folder; by id, or carried, from where's root
+		const takes = takesOf(rattrs[TAKES]), given = rattrs[API]
+		const from = path === undefined ? [] : path.slice(0, -1)
 		if (
-			typeof type !== "string" || typeof takes !== "string" || type !== takes ||
+			typeof type !== "string" || !fits(where, from, type, takes) ||
 			(api !== undefined && api !== given)
 		) {
 			return {
 				refused: "wrong-form",
 				program: strings({ type, api }),
-				runner: strings({ takes, api: given }),
+				runner: { ...(takes.length ? { takes } : {}), ...strings({ api: given }) },
 			}
 		}
-		const live = runnerOf(table.get("value", r.id)?.value)
+		const value = table.get("value", r.id)?.value
+		const live = runnerOf(value)
 		if (live === undefined || (load && live.load === undefined)) return notRunner
 		return {
-			runner: { id: r.id, path: r.path },
+			runner: { id: r.id, path: r.path, value },
 			program: { id, ...(path === undefined ? {} : { at: path }) },
 			code,
 			...(digest === undefined ? {} : { digest }),
@@ -373,18 +422,50 @@ export function createRun(c: Ctx) {
 	function load(
 		runner: Address,
 		program: Address | Program,
-		options: { by: Place; box?: Box },
+		options: LoadOptions,
 	): Loaded | Refused {
 		const by = c.ownerOf(options.by)
 		const ck = check(runner, program, options.box ?? by.box, true)
 		if ("refused" in ck) return ck
-		const start = startOf(by)
-		const f = () => ck.live.load!(ck.code, start)
-		const live = s.getCurrentScope() !== undefined ? f() : s.runWithScope(by.scope, f)
-		const h: Held = { live, released: false }
+		const key = JSON.stringify([
+			String(ck.program.id),
+			ck.digest ?? tag(ck.code),
+			String(ck.runner.id),
+			tag(ck.runner.value),
+			...(options.chain ?? []),
+		])
+		const l = c.loads.get(key) ?? make(key, ck, by)
+		const h: Held = { load: l, released: false }
+		l.holds.add(h)
 		by.loads.push(h)
 		later()
-		return { live, release: () => drop(by, h) }
+		return { live: l.live, release: () => drop(s, by, h) }
+	}
+
+	// a load made: its runner's load called, by's facts and the load's own scope open. its going
+	// (the last hold let go, or setup.scope torn down): out of the standing ones, its live form
+	// disposed, before what its load made goes
+	function make(key: string, ck: Checked, by: Owner): Load {
+		const scope = c.createScope({ load: ck.program.id, on: ck.runner.id }, c.scope)
+		let live: unknown
+		try {
+			const start = startOf(by, scope)
+			live = s.runWithScope(scope, () => ck.live.load!(ck.code, start))
+		} catch (e) {
+			s.teardown(scope)
+			throw e
+		}
+		const l: Load = { key, live, scope, holds: new Set(), gone: false }
+		c.loads.set(key, l)
+		s.registerTeardown(scope, () => unload(l))
+		return l
+	}
+
+	function unload(l: Load) {
+		if (l.gone) return
+		l.gone = true
+		if (c.loads.get(l.key) === l) c.loads.delete(l.key)
+		dispose(l.live)
 	}
 
 	function stop(x: Process | Id, reason?: unknown) {

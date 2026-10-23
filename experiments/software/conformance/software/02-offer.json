@@ -12,7 +12,7 @@
 			"kind": "runners",
 			"name": "javascript",
 			"attrs": {
-				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.programs.takes": "com.netscape.javascript-source",
 				"ermine.runner.api": "ermine.api",
 				"ermine.runner.where": "thread"
 			},
@@ -48,7 +48,7 @@
 					"value"
 				],
 				"attributes": {
-					"ermine.runner.takes": "com.netscape.javascript-source",
+					"ermine.programs.takes": "com.netscape.javascript-source",
 					"ermine.runner.api": "ermine.api",
 					"ermine.runner.where": "thread",
 					"ermine.type": "ermine.runner"
@@ -98,8 +98,8 @@
 			"kind": "compilers",
 			"name": "clang",
 			"attrs": {
-				"ermine.compiler.takes": "public.c-source",
-				"ermine.compiler.gives": "org.webassembly.wasm",
+				"ermine.programs.takes": "public.c-source",
+				"ermine.programs.gives": "org.webassembly.wasm",
 				"ermine.programs.compiler": {
 					"name": "clang",
 					"version": "1"
@@ -123,8 +123,8 @@
 					"attributes"
 				],
 				"attributes": {
-					"ermine.compiler.takes": "public.c-source",
-					"ermine.compiler.gives": "org.webassembly.wasm",
+					"ermine.programs.takes": "public.c-source",
+					"ermine.programs.gives": "org.webassembly.wasm",
 					"ermine.programs.compiler": {
 						"name": "clang",
 						"version": "1"
@@ -257,7 +257,7 @@
 			"kind": "runners",
 			"name": "javascript",
 			"attrs": {
-				"ermine.runner.takes": "x"
+				"ermine.programs.takes": "x"
 			},
 			"live": "record",
 			"expect": {
@@ -336,7 +336,7 @@
 			"kind": "runners",
 			"name": "lisp",
 			"attrs": {
-				"ermine.runner.takes": "x-lisp"
+				"ermine.programs.takes": "x-lisp"
 			},
 			"live": "record",
 			"expect": {
@@ -475,7 +475,7 @@
 			"kind": "runners",
 			"name": "javascript",
 			"attrs": {
-				"ermine.runner.takes": "com.netscape.javascript-source"
+				"ermine.programs.takes": "com.netscape.javascript-source"
 			},
 			"live": "record",
 			"expect": {
@@ -497,7 +497,7 @@
 					"value"
 				],
 				"attributes": {
-					"ermine.runner.takes": "com.netscape.javascript-source",
+					"ermine.programs.takes": "com.netscape.javascript-source",
 					"ermine.type": "ermine.runner"
 				},
 				"status": null,

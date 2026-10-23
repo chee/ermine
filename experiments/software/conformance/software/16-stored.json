@@ -48,7 +48,7 @@
 			"kind": "runners",
 			"name": "javascript",
 			"attrs": {
-				"ermine.runner.takes": "com.netscape.javascript-source"
+				"ermine.programs.takes": "com.netscape.javascript-source"
 			},
 			"live": "record",
 			"by": "install",
@@ -66,7 +66,7 @@
 			"kind": "runners",
 			"name": "lisp",
 			"attrs": {
-				"ermine.runner.takes": "x-lisp"
+				"ermine.programs.takes": "x-lisp"
 			},
 			"live": "record",
 			"by": "install",
@@ -84,7 +84,7 @@
 			"kind": "compilers",
 			"name": "clang",
 			"attrs": {
-				"ermine.compiler.takes": "public.c-source"
+				"ermine.programs.takes": "public.c-source"
 			},
 			"by": "install",
 			"expect": {
@@ -145,7 +145,7 @@
 					"value"
 				],
 				"attributes": {
-					"ermine.runner.takes": "com.netscape.javascript-source",
+					"ermine.programs.takes": "com.netscape.javascript-source",
 					"ermine.type": "ermine.runner"
 				},
 				"status": null,
@@ -243,7 +243,7 @@
 					"attributes"
 				],
 				"attributes": {
-					"ermine.runner.takes": "com.netscape.javascript-source",
+					"ermine.programs.takes": "com.netscape.javascript-source",
 					"ermine.type": "ermine.runner"
 				},
 				"status": null,
@@ -260,7 +260,7 @@
 					"value"
 				],
 				"attributes": {
-					"ermine.runner.takes": "x-lisp",
+					"ermine.programs.takes": "x-lisp",
 					"ermine.type": "ermine.runner"
 				},
 				"status": null,
@@ -276,7 +276,7 @@
 					"attributes"
 				],
 				"attributes": {
-					"ermine.compiler.takes": "public.c-source",
+					"ermine.programs.takes": "public.c-source",
 					"ermine.type": "ermine.compiler"
 				},
 				"status": null,
@@ -389,7 +389,7 @@
 			"kind": "runners",
 			"name": "javascript",
 			"attrs": {
-				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.programs.takes": "com.netscape.javascript-source",
 				"ermine.runner.api": "ermine.api"
 			},
 			"live": "record",
@@ -412,7 +412,7 @@
 					"value"
 				],
 				"attributes": {
-					"ermine.runner.takes": "com.netscape.javascript-source",
+					"ermine.programs.takes": "com.netscape.javascript-source",
 					"ermine.runner.api": "ermine.api",
 					"ermine.type": "ermine.runner"
 				},
@@ -426,7 +426,7 @@
 			"kind": "runners",
 			"name": "lisp",
 			"attrs": {
-				"ermine.runner.takes": "x-lisp"
+				"ermine.programs.takes": "x-lisp"
 			},
 			"live": "record",
 			"by": "install",
@@ -448,7 +448,7 @@
 					"value"
 				],
 				"attributes": {
-					"ermine.runner.takes": "x-lisp",
+					"ermine.programs.takes": "x-lisp",
 					"ermine.type": "ermine.runner"
 				},
 				"status": null,
@@ -469,7 +469,7 @@
 			"kind": "runners",
 			"name": "cc",
 			"attrs": {
-				"ermine.runner.takes": "public.c-source"
+				"ermine.programs.takes": "public.c-source"
 			},
 			"live": "record",
 			"by": "install",
@@ -491,7 +491,7 @@
 					"value"
 				],
 				"attributes": {
-					"ermine.runner.takes": "public.c-source",
+					"ermine.programs.takes": "public.c-source",
 					"ermine.type": "ermine.runner"
 				},
 				"status": null,
@@ -652,7 +652,7 @@
 			"kind": "runners",
 			"name": "javascript",
 			"attrs": {
-				"ermine.runner.takes": "com.netscape.javascript-source"
+				"ermine.programs.takes": "com.netscape.javascript-source"
 			},
 			"live": "record",
 			"by": "desk",
@@ -745,7 +745,7 @@
 			"kind": "runners",
 			"name": "javascript",
 			"attrs": {
-				"ermine.runner.takes": "com.netscape.javascript-source"
+				"ermine.programs.takes": "com.netscape.javascript-source"
 			},
 			"live": "record",
 			"by": "desk",

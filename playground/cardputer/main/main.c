@@ -143,6 +143,26 @@ static void draw_text(const op_value *screen) {
 
 static int shell_on;
 
+// what the screen shows, on the serial line: "screen: begin", then a line "s: " + a row's bytes in
+// hex (two pixels a byte, fb.h's), then "screen: end"
+static void dump(void) {
+	void (*paint)(void) = menu_open() ? menu_paint : shown;
+	if (paint == NULL) return;
+	printf("screen: begin %d %d\n", FB_W, FB_H);
+	char line[FB_W + 8];
+	for (int y = 0; y < FB_H; y += FB_STRIP) {
+		fb_strip(y);
+		paint();
+		for (int r = 0; r < FB_STRIP && y + r < FB_H; r++) {
+			const uint8_t *row = fb + r * FB_W / 2;
+			for (int i = 0; i < FB_W / 2; i++) sprintf(line + 2 * i, "%02x", row[i]);
+			printf("s: %s\n", line);
+		}
+	}
+	printf("screen: end\n");
+	fflush(stdout);
+}
+
 // a den that isn't up: why, in words, on the screen
 static char not_up[128];
 static void paint_not_up(void) {
@@ -307,6 +327,14 @@ void app_main(void) {
 	printf("den: %s in room %s, up, %u bytes of heap\n", me.id, room, (unsigned)(before - free_now()));
 	stage("den up");
 	wifi = wifi_start(WEBSOCKET ? 0 : POLL_WORKERS);
+	// a network named, but WiFi not started: said, in words (it is the heap, mostly: a room whose
+	// graph is big leaves too little for WiFi's tasks)
+	if (!wifi && CONFIG_CARDPUTER_WIFI_SSID[0]) {
+		char why[32];
+		snprintf(why, sizeof why, "no WiFi: %uK free, too little", (unsigned)(free_now() / 1024));
+		den_net(why);
+		den_say(1, "WiFi didn't start:", "too little memory. G0: a room");
+	}
 	if (wifi) {
 		char url[160];
 		snprintf(url, sizeof url, "%s/littlesync/tippet/dens-%s", CONFIG_CARDPUTER_SERVER, room);
@@ -341,6 +369,11 @@ void app_main(void) {
 				if (typed[i] == '\n' && i && typed[i - 1] == '\r') continue;
 				if (typed[i] == '\t') {
 					den_trust_last();
+					continue;
+				}
+				// ctrl-s: the screen, on the serial line (a row of 4-bit colours a line, hex)
+				if (typed[i] == 0x13) {
+					dump();
 					continue;
 				}
 				// ctrl-g: G0, the menu

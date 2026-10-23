@@ -1,0 +1,393 @@
+{
+	"title": "a runner's takes may be a list: a program fits when its type, or one it conforms to, is any of them. the strings in it only (5 passed over). a type none of them is, nor conforms to: wrong-form, the runner's takes the list of its strings. a list with no strings in it takes nothing: wrong-form, no takes. load checks it so too",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"apps": "APPS",
+				"ermine": "ERM"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "ERM",
+			"value": {
+				"types": "TYPES"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "TYPES",
+			"value": {
+				"public.plain-text": "TPLAIN",
+				"public.source-code": "TSRC",
+				"public.c-source": "TC"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "TPLAIN",
+			"value": {
+				"conformsTo": [],
+				"fileNameExtension": [
+					".txt"
+				],
+				"mimeType": []
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "TSRC",
+			"value": {
+				"conformsTo": [
+					"public.plain-text"
+				],
+				"fileNameExtension": [],
+				"mimeType": []
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "TC",
+			"value": {
+				"conformsTo": [
+					"public.source-code"
+				],
+				"fileNameExtension": [
+					".c"
+				],
+				"mimeType": []
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "APPS",
+			"value": {
+				"clock.js": "CLOCK",
+				"main.c": "MAIN",
+				"notes.txt": "NOTES",
+				"data.bin": "DATA"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "CLOCK",
+			"value": "clock",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CLOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "MAIN",
+			"value": "main",
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "NOTES",
+			"value": "notes",
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "DATA",
+			"value": "data",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "DATA",
+			"value": {
+				"ermine.type": "public.data"
+			},
+			"expect": {}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "many",
+			"attrs": {
+				"ermine.programs.takes": [
+					"com.netscape.javascript-source",
+					5,
+					"public.source-code"
+				]
+			},
+			"live": "record",
+			"expect": {
+				"id": "session/runners/many",
+				"at": [
+					"system",
+					"session",
+					"runners",
+					"many"
+				]
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "none",
+			"attrs": {
+				"ermine.programs.takes": [
+					5,
+					null
+				]
+			},
+			"live": "record",
+			"expect": {
+				"id": "session/runners/none",
+				"at": [
+					"system",
+					"session",
+					"runners",
+					"none"
+				]
+			}
+		},
+		{
+			"op": "run",
+			"name": "a",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"many"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"a"
+			],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"a"
+				]
+			}
+		},
+		{
+			"op": "run",
+			"name": "b",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"many"
+			],
+			"program": [
+				"apps",
+				"main.c"
+			],
+			"at": [
+				"b"
+			],
+			"expect": {
+				"id": "proc:b",
+				"at": [
+					"b"
+				]
+			}
+		},
+		{
+			"op": "run",
+			"name": "x",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"many"
+			],
+			"program": [
+				"apps",
+				"notes.txt"
+			],
+			"at": [
+				"x"
+			],
+			"expect": {
+				"refused": "wrong-form",
+				"program": {
+					"type": "public.plain-text"
+				},
+				"runner": {
+					"takes": [
+						"com.netscape.javascript-source",
+						"public.source-code"
+					]
+				}
+			}
+		},
+		{
+			"op": "run",
+			"name": "x",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"many"
+			],
+			"program": [
+				"apps",
+				"data.bin"
+			],
+			"at": [
+				"x"
+			],
+			"expect": {
+				"refused": "wrong-form",
+				"program": {
+					"type": "public.data"
+				},
+				"runner": {
+					"takes": [
+						"com.netscape.javascript-source",
+						"public.source-code"
+					]
+				}
+			}
+		},
+		{
+			"op": "run",
+			"name": "x",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"none"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"x"
+			],
+			"expect": {
+				"refused": "wrong-form",
+				"program": {
+					"type": "com.netscape.javascript-source"
+				},
+				"runner": {}
+			}
+		},
+		{
+			"op": "load",
+			"name": "l",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"many"
+			],
+			"program": [
+				"apps",
+				"main.c"
+			],
+			"expect": {}
+		},
+		{
+			"op": "load",
+			"name": "x",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"many"
+			],
+			"program": [
+				"apps",
+				"notes.txt"
+			],
+			"expect": {
+				"refused": "wrong-form",
+				"program": {
+					"type": "public.plain-text"
+				},
+				"runner": {
+					"takes": [
+						"com.netscape.javascript-source",
+						"public.source-code"
+					]
+				}
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "proc:a",
+						"code": "clock",
+						"args": [],
+						"cwd": [],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					},
+					{
+						"process": "proc:b",
+						"code": "main",
+						"args": [],
+						"cwd": [],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					}
+				],
+				"stops": []
+			}
+		},
+		{
+			"op": "loads",
+			"expect": {
+				"loads": [
+					{
+						"by": "session",
+						"code": "main",
+						"cwd": [
+							"system"
+						],
+						"open": true
+					}
+				],
+				"unloads": []
+			}
+		}
+	]
+}

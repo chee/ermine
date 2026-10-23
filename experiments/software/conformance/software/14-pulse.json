@@ -56,7 +56,7 @@
 			"kind": "runners",
 			"name": "javascript",
 			"attrs": {
-				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.programs.takes": "com.netscape.javascript-source",
 				"ermine.runner.api": "ermine.api"
 			},
 			"live": "record",
@@ -75,7 +75,7 @@
 			"kind": "runners",
 			"name": "spawn",
 			"attrs": {
-				"ermine.runner.takes": "com.netscape.javascript-source"
+				"ermine.programs.takes": "com.netscape.javascript-source"
 			},
 			"live": "spawn",
 			"expect": {

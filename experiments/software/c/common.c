@@ -165,11 +165,13 @@ const ch_site *sw_site(sw *s, ch_site *buf) {
 
 const ch_site *sw_site_of(void *software, ch_site *buf) { return sw_site(software, buf); }
 
+// at sw_free the scheduler may be gone: the loads are closed there
 void sw_drop(sw_loaded *l) {
 	if (l->released) return;
 	l->released = 1;
 	DROP(l->by->loads, l->by->nloads, l);
-	if (l->live.close != NULL) l->live.close(l->live.data);
+	load *x = l->load;
+	if (--x->holds == 0 && !l->sw->freeing) free(sc_teardown(x->scope));
 }
 
 static char *let_go(void *data) {

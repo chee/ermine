@@ -61,6 +61,7 @@ static int fresh(api *a, const op_value *const *args, size_t nargs, op_value **o
 	(void)a, (void)args, (void)nargs, (void)ctx;
 	code_new(m.made);
 	m.mode = MADE;
+	printf("menu: new room %s\n", m.made);
 	*out = NULL;
 	return 0;
 }
@@ -136,6 +137,7 @@ static void pick(void) {
 // to a room: said on the screen, then the platform's room_go (a restart)
 static void go(const char *code) {
 	snprintf(m.going, sizeof m.going, "%s", code);
+	printf("menu: going to room %s\n", code);
 	m.mode = GOING;
 	again();
 	room_go(code);

@@ -1,0 +1,329 @@
+{
+	"title": "a runner's takes may be one string: a list of one, matched as a list is, by conformance. a takes public.plain-text runs plain text and what conforms to it (source code, C source by its extension); not javascript, which the folder does not have: wrong-form, the runner's takes a list of the one string. the same string as a list: the same",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"apps": "APPS",
+				"ermine": "ERM"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "ERM",
+			"value": {
+				"types": "TYPES"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "TYPES",
+			"value": {
+				"public.plain-text": "TPLAIN",
+				"public.source-code": "TSRC",
+				"public.c-source": "TC"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "TPLAIN",
+			"value": {
+				"conformsTo": [],
+				"fileNameExtension": [
+					".txt"
+				],
+				"mimeType": []
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "TSRC",
+			"value": {
+				"conformsTo": [
+					"public.plain-text"
+				],
+				"fileNameExtension": [],
+				"mimeType": []
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "TC",
+			"value": {
+				"conformsTo": [
+					"public.source-code"
+				],
+				"fileNameExtension": [
+					".c"
+				],
+				"mimeType": []
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "APPS",
+			"value": {
+				"clock.js": "CLOCK",
+				"main.c": "MAIN",
+				"notes.txt": "NOTES"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "CLOCK",
+			"value": "clock",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CLOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "MAIN",
+			"value": "main",
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "NOTES",
+			"value": "notes",
+			"expect": {}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "text",
+			"attrs": {
+				"ermine.programs.takes": "public.plain-text"
+			},
+			"live": "record",
+			"expect": {
+				"id": "session/runners/text",
+				"at": [
+					"system",
+					"session",
+					"runners",
+					"text"
+				]
+			}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "listed",
+			"attrs": {
+				"ermine.programs.takes": [
+					"public.plain-text"
+				]
+			},
+			"live": "record",
+			"expect": {
+				"id": "session/runners/listed",
+				"at": [
+					"system",
+					"session",
+					"runners",
+					"listed"
+				]
+			}
+		},
+		{
+			"op": "run",
+			"name": "a",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"text"
+			],
+			"program": [
+				"apps",
+				"notes.txt"
+			],
+			"at": [
+				"a"
+			],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"a"
+				]
+			}
+		},
+		{
+			"op": "run",
+			"name": "b",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"text"
+			],
+			"program": [
+				"apps",
+				"main.c"
+			],
+			"at": [
+				"b"
+			],
+			"expect": {
+				"id": "proc:b",
+				"at": [
+					"b"
+				]
+			}
+		},
+		{
+			"op": "run",
+			"name": "x",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"text"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"x"
+			],
+			"expect": {
+				"refused": "wrong-form",
+				"program": {
+					"type": "com.netscape.javascript-source"
+				},
+				"runner": {
+					"takes": [
+						"public.plain-text"
+					]
+				}
+			}
+		},
+		{
+			"op": "run",
+			"name": "c",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"listed"
+			],
+			"program": [
+				"apps",
+				"main.c"
+			],
+			"at": [
+				"c"
+			],
+			"expect": {
+				"id": "proc:c",
+				"at": [
+					"c"
+				]
+			}
+		},
+		{
+			"op": "run",
+			"name": "x",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"listed"
+			],
+			"program": [
+				"apps",
+				"clock.js"
+			],
+			"at": [
+				"x"
+			],
+			"expect": {
+				"refused": "wrong-form",
+				"program": {
+					"type": "com.netscape.javascript-source"
+				},
+				"runner": {
+					"takes": [
+						"public.plain-text"
+					]
+				}
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "proc:a",
+						"code": "notes",
+						"args": [],
+						"cwd": [],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					},
+					{
+						"process": "proc:b",
+						"code": "main",
+						"args": [],
+						"cwd": [],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					},
+					{
+						"process": "proc:c",
+						"code": "main",
+						"args": [],
+						"cwd": [],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					}
+				],
+				"stops": []
+			}
+		}
+	]
+}

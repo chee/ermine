@@ -51,7 +51,7 @@
 			"kind": "runners",
 			"name": "javascript",
 			"attrs": {
-				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.programs.takes": "com.netscape.javascript-source",
 				"ermine.runner.api": "ermine.api"
 			},
 			"live": "record",
@@ -99,7 +99,7 @@
 			"kind": "runners",
 			"name": "lisp",
 			"attrs": {
-				"ermine.runner.takes": "ermine.lisp-source"
+				"ermine.programs.takes": "ermine.lisp-source"
 			},
 			"live": "record",
 			"by": "lisp",
@@ -149,7 +149,7 @@
 					"value"
 				],
 				"attributes": {
-					"ermine.runner.takes": "ermine.lisp-source",
+					"ermine.programs.takes": "ermine.lisp-source",
 					"ermine.type": "ermine.runner"
 				},
 				"status": null,
@@ -554,7 +554,7 @@
 			"kind": "runners",
 			"name": "lisp",
 			"attrs": {
-				"ermine.runner.takes": "ermine.lisp-source"
+				"ermine.programs.takes": "ermine.lisp-source"
 			},
 			"live": "record",
 			"by": "lisp2",
@@ -793,7 +793,7 @@
 			"kind": "runners",
 			"name": "lisp",
 			"attrs": {
-				"ermine.runner.takes": "ermine.lisp-source"
+				"ermine.programs.takes": "ermine.lisp-source"
 			},
 			"live": "record",
 			"by": "lisp2",

@@ -2361,16 +2361,19 @@ button.voice:disabled {
 	padding: 0;
 	background: transparent;
 }
+/* the speaker itself: a little rounded plate stuck on the card's corner, slightly raised, in the
+   card's cream and ink; a bigger pixel speaker on it */
 button.speakicon {
 	display: grid;
 	place-items: center;
-	width: 30px;
-	height: 26px;
+	width: 58px;
+	height: 52px;
+	margin-left: 2px;
 	padding: 0;
 	border: 1.5px solid var(--ink);
-	border-radius: 7px;
-	background: #fff8c8;
-	box-shadow: 0 2px 0 var(--ink);
+	border-radius: 12px;
+	background: linear-gradient(170deg, #ffffff 0%, #f8f5ec 50%, #efe9da 100%);
+	box-shadow: inset 0 2px 0 #fff, 0 3px 0 var(--ink);
 	cursor: pointer;
 	transition: transform 0.12s ease-out;
 }
@@ -2378,11 +2381,11 @@ button.speakicon canvas {
 	image-rendering: pixelated;
 }
 button.speakicon.pulse {
-	transform: scale(1.22);
+	transform: scale(1.12);
 }
 button.speakicon:active {
 	transform: translateY(2px);
-	box-shadow: 0 0 0 var(--ink);
+	box-shadow: inset 0 2px 0 #fff, 0 1px 0 var(--ink);
 }
 .voicepop {
 	position: absolute;

@@ -796,7 +796,7 @@ static void stop(void *data) {
 	j->out = op_map();
 }
 
-// a load, named; by as offer's
+// a load, named; by as offer's; chain, the keys given
 static void load(void *data) {
 	job *j = data;
 	const op_value *r = j->r;
@@ -810,11 +810,13 @@ static void load(void *data) {
 		j->out = error("no such box");
 		return;
 	}
-	steps runner = steps_of(get(r, "runner")), path = {0};
+	steps runner = steps_of(get(r, "runner")), path = {0}, chain = steps_of(get(r, "chain"));
 	char *id = NULL;
 	sw_program program = program_of(get(r, "program"), &path, &id);
+	sw_load_options options = {.box = b != NULL ? bx_places(b) : NULL,
+		.chain = (const char *const *)chain.v, .nchain = chain.n};
 	sw_refusal no;
-	sw_loaded *l = sw_load(software, &by, STEPS(runner), &program, b != NULL ? bx_places(b) : NULL, &no);
+	sw_loaded *l = sw_load(software, &by, STEPS(runner), &program, &options, &no);
 	if (l == NULL && strcmp(no.refused, "failed") == 0) j->out = with("failed", op_str(no.error));
 	else if (l == NULL) j->out = refusal(&no);
 	else {
@@ -823,7 +825,7 @@ static void load(void *data) {
 		j->out = op_map();
 	}
 	free(id);
-	steps_free(&runner), steps_free(&path);
+	steps_free(&runner), steps_free(&path), steps_free(&chain);
 }
 
 static void release_named(void *data) {

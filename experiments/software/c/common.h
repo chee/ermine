@@ -58,8 +58,8 @@ typedef struct offer offer;
 // node, its path, stored (a place's: what it offers stays when its scope goes), its scope and the
 // scope its offers' folders go under (a place's: its scope); its cwd (a place's: its path's folder;
 // a process's are its life's); the folders of what it offers (in the order made) and its offers (in
-// the order offered, while they stand); the loads it holds (in the order made, let go at its scope's
-// teardown). a process's: where it runs, the offer it runs on (NULL: a runner node offered by none
+// the order offered, while they stand); its holds on loads (in the order made, let go at its
+// scope's teardown). a process's: where it runs, the offer it runs on (NULL: a runner node offered by none
 // here); under, a scope under that offer's (none: setup.scope) holding, newest first, what it
 // offers, its stopper (its handle's stop the teardown, its info the process's), then its scope; the
 // runner and the code as read at the run, the handle once the runner gave one (or a late one
@@ -100,11 +100,26 @@ struct sw_process {
 };
 typedef struct sw_process owner;
 
-// a load: its live form, the owner holding it; released, closed
+// a load, shared by its holds: its key (run.c's key_of), the code (held, so a key naming it by its
+// address stays its own), its live form, its scope (what its load made goes with it) and the scope's
+// info, its holds standing; gone: closed, out of the standing ones
+typedef struct load {
+	sw *sw;
+	char *key;
+	op_value *code;
+	hf_live live;
+	sc_scope *scope;
+	sc_pair info[2];
+	op_value *values[2];
+	size_t holds;
+	int gone;
+} load;
+
+// one owner's hold on a load; released, let go
 struct sw_loaded {
 	sw *sw;
 	owner *by;
-	hf_live live;
+	load *load;
 	int released;
 };
 
@@ -168,9 +183,13 @@ struct sw {
 	size_t nlive, caplive;
 	const sw_offered **listing;
 	size_t caplisting;
-	// every load made, every late handle (until sw_free)
+	// every hold and load made, every late handle (until sw_free); the loads standing, by key
 	sw_loaded **loaded;
 	size_t nloaded, caploaded;
+	load **loads;
+	size_t nloads, caploads;
+	load **standing;
+	size_t nstanding, capstanding;
 	sw_late **lates;
 	size_t nlates, caplates;
 	// the stored nodes whose live value goes at a scope's teardown (until sw_free)
@@ -245,10 +264,11 @@ void sw_leave(sw *s, const ch_site *was);
 const ch_site *sw_site(sw *s, ch_site *buf);
 // a row's going with no stop's caller (processes' setup.site): sw_site
 const ch_site *sw_site_of(void *software, ch_site *buf);
-// a load closed, out of its holder's list; twice: nothing
+// a hold let go, out of its holder's list; the last on its load: the load's scope torn down (run.c's
+// unload closes it); twice: nothing
 void sw_drop(sw_loaded *l);
-// an owner just made (a process's: in its body): at its scope's teardown every load it holds
-// closed, newest first. registered then, so after what is registered later (its program's
+// an owner just made (a process's: in its body): at its scope's teardown every hold it has let
+// go, newest first. registered then, so after what is registered later (its program's
 // teardowns), before processes' own
 void sw_holder(sw *s, owner *o);
 

@@ -36,7 +36,7 @@
 			"kind": "runners",
 			"name": "boom",
 			"attrs": {
-				"ermine.runner.takes": "com.netscape.javascript-source"
+				"ermine.programs.takes": "com.netscape.javascript-source"
 			},
 			"live": "boom",
 			"expect": {
@@ -54,7 +54,7 @@
 			"kind": "runners",
 			"name": "quiet",
 			"attrs": {
-				"ermine.runner.takes": "com.netscape.javascript-source"
+				"ermine.programs.takes": "com.netscape.javascript-source"
 			},
 			"live": "quiet",
 			"expect": {
@@ -72,7 +72,7 @@
 			"kind": "runners",
 			"name": "late",
 			"attrs": {
-				"ermine.runner.takes": "com.netscape.javascript-source"
+				"ermine.programs.takes": "com.netscape.javascript-source"
 			},
 			"live": "late",
 			"expect": {

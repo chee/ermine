@@ -13,6 +13,7 @@ import { createChangeHeader } from "@ermine/places/header"
 import { processes as trie } from "@ermine/processes"
 import { createProcesses } from "@ermine/processes/start"
 import { createScopeNodes } from "@ermine/processes/scopes"
+import { installTypes } from "@ermine/types"
 import {
 	createSoftware,
 	hashOf,
@@ -110,7 +111,7 @@ Deno.test("refused, nothing made, the first that holds: not-a-runner, not-there,
 	assertEquals(run(RUNNERS, "/apps/clock.js", "/a"), {
 		refused: "wrong-form",
 		program: { type: "x-lisp" },
-		runner: { takes: JS },
+		runner: { takes: [JS] },
 	})
 	w.put("attributes", "CLOCK", { "ermine.type": JS })
 	assert(!("refused" in run(RUNNERS, "/apps/clock.js", "/a")))
@@ -255,4 +256,94 @@ Deno.test("a write's site is the call outside software that made it: an offer's,
 	assert(!("refused" in p))
 	const ran = w.table.get("attributes", p.id)?.change.external?.[0]
 	assert(ran?.file.endsWith("software_test.ts"), JSON.stringify(ran))
+})
+
+Deno.test("a program fits by conformance: a runner taking a type takes what conforms to it, the type from ermine.type or the name's extension, by the nearest ermine/types", () => {
+	const w = world()
+	const C = "public.c-source"
+	w.put("children", "APPS", { "clock.js": "CLOCK", "main.c": "MAIN", "plain": "PLAIN" })
+	w.put("value", "MAIN", "int main;")
+	w.put("value", "PLAIN", "words")
+	w.put("attributes", "PLAIN", { "ermine.type": "public.plain-text" })
+	const run = (program: string, at: string) =>
+		w.hosted(() => w.software.run(["source"], program, at))
+	w.put("children", "R", { apps: "APPS", source: "SOURCE" })
+	w.put("attributes", "SOURCE", { "ermine.type": "ermine.runner", [TAKES]: "public.source-code" })
+	w.put("value", "SOURCE", (code: unknown) => void w.ran.push(["source", code]))
+	// no types: main.c has no type, and C conforms to nothing but itself
+	assertEquals(run("/apps/main.c", "/a"), {
+		refused: "wrong-form",
+		program: {},
+		runner: { takes: ["public.source-code"] },
+	})
+	w.hosted(() =>
+		w.places.commit(
+			installTypes(w.table, "R", createChangeHeader(w.s), [
+				{ name: "public.source-code", conformsTo: "public.plain-text" },
+				{ name: C, conformsTo: "public.source-code", fileNameExtension: ".c" },
+				{ name: "public.plain-text" },
+			], (path) => `T:${path.join("/")}`),
+		)
+	)
+	assert(!("refused" in run("/apps/main.c", "/a")))
+	// a supertype is not its subtype: plain text is no source code
+	assertEquals(run("/apps/plain", "/b"), {
+		refused: "wrong-form",
+		program: { type: "public.plain-text" },
+		runner: { takes: ["public.source-code"] },
+	})
+	// a list: any one of them
+	w.put("attributes", "SOURCE", {
+		"ermine.type": "ermine.runner",
+		[TAKES]: [JS, "public.plain-text"],
+	})
+	assert(!("refused" in run("/apps/plain", "/b")))
+	assert(!("refused" in run("/apps/main.c", "/c")))
+	assert(!("refused" in run("/apps/clock.js", "/d")))
+	w.s.pulse()
+	assertEquals(w.ran, [["source", "int main;"], ["source", "words"], ["source", "int main;"], [
+		"source",
+		"hi",
+	]])
+})
+
+Deno.test("a load is shared: the same program on the same runner, by any holder, loaded once; let go at the last hold; a new key, a new load", () => {
+	const w = world()
+	const order: unknown[] = []
+	const loader = Object.assign(() => ({ stop: () => {} }), {
+		load: (code: unknown, start: { scope: unknown }) => {
+			order.push(["loaded", code, w.s.getCurrentScope() === start.scope])
+			return { [Symbol.dispose]: () => void order.push(["disposed", code]) }
+		},
+	})
+	w.offer(w.session, loader)
+	const desk = w.hosted(() => w.s.createScope({ desk: true }))
+	const by: Place = { id: "DESK", at: ["home", "desk"], scope: desk }
+	const load = (o: Place, chain?: string[]) =>
+		w.hosted(() => w.software.load(RUNNERS, "/apps/clock.js", { by: o, chain }))
+	const one = load(w.session)
+	const two = load(by)
+	assert(!("refused" in one) && !("refused" in two))
+	assertEquals(one.live, two.live)
+	// the same by again: another hold on the same load
+	const three = load(w.session)
+	assert(!("refused" in three))
+	assertEquals(three.live, one.live)
+	// another chain: its own
+	const other = load(w.session, ["compiled"])
+	assert(!("refused" in other))
+	assert(other.live !== one.live)
+	assertEquals(order, [["loaded", "hi", true], ["loaded", "hi", true]])
+	one.release()
+	one.release()
+	w.s.teardown(desk)
+	assertEquals(order.length, 2)
+	three.release()
+	assertEquals(order.slice(2), [["disposed", "hi"]])
+	// let go: loaded again
+	const again = load(w.session)
+	assert(!("refused" in again))
+	assertEquals(order.slice(3), [["loaded", "hi", true]])
+	w.s.teardown(w.session.scope)
+	assertEquals(order.slice(4), [["disposed", "hi"], ["disposed", "hi"]])
 })

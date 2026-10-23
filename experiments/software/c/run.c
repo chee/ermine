@@ -5,6 +5,8 @@
 // on a runner
 #include "common.h"
 
+#include "../../../ermine/types/c/types.h"
+
 static const op_value *attributes_of(const sw *s, const char *id) {
 	const nd_entry *e = tb_get(s->s.table, tb_string("attributes"), tb_string(id));
 	return e != NULL && sw_is_map(e->value) ? e->value : NULL;
@@ -205,11 +207,13 @@ static void process_body(pr_process *life, void *data) {
 
 // the checks ---------------------------------------------------------------------------------------
 
-// what a run found, as it checks: the runner, the program, its code, its form, its hash
+// what a run found, as it checks: the runner (its function's name), the program, its code, its
+// form, its hash
 typedef struct {
 	char **rpath;
 	size_t nr;
 	char *rid;
+	const char *rname;
 	char **ppath;
 	size_t npp;
 	char *pid;
@@ -264,6 +268,75 @@ static int same_scalar(const op_value *a, const op_value *b) {
 	}
 }
 
+// the type of a program at its place, untracked (types' ty_type_of)
+typedef struct {
+	pl *places;
+	const char *id;
+	const char *const *at;
+	size_t nat;
+	char *type;
+} typing;
+
+static void type_now(void *data) {
+	typing *t = data;
+	t->type = ty_type_of(t->places, t->id, t->at, t->nat, NULL);
+}
+
+// whether a takes (a string, or a list of them) holds a type
+static int takes_has(const op_value *takes, const char *type) {
+	if (sw_is_str(takes)) return strcmp(takes->str, type) == 0;
+	if (takes == NULL || takes->type != OP_LIST) return 0;
+	for (size_t i = 0; i < takes->count; i++) {
+		if (sw_is_str(takes->items[i]) && strcmp(takes->items[i]->str, type) == 0) return 1;
+	}
+	return 0;
+}
+
+// whether a type fits what a runner takes: one is it, or one it conforms to, by the nearest
+// ermine/types from a folder in where (from), untracked
+typedef struct {
+	pl *places;
+	const char *const *from;
+	size_t nfrom;
+	const char *type;
+	const op_value *takes;
+	int fits;
+} fitting;
+
+static void fit_now(void *data) {
+	fitting *f = data;
+	ty_folder folder;
+	int has = ty_at(f->places, f->from, f->nfrom, &folder);
+	ty_conformance c = ty_conform(f->places, has ? &folder : NULL, f->type);
+	for (size_t i = 0; i < c.n && !f->fits; i++) f->fits = takes_has(f->takes, c.all[i]);
+	ty_conformance_free(&c);
+	if (has) ty_folder_free(&folder);
+}
+
+static int fits(pl *where, const char *const *from, size_t nfrom, const char *type,
+	const op_value *takes) {
+	if (takes_has(takes, type)) return 1;
+	fitting f = {where, from, nfrom, type, takes, 0};
+	pl_peep(where, fit_now, &f);
+	return f.fits;
+}
+
+// a takes' strings, copied, for a refusal (a string: a list of one); none: NULL, *n 0
+static char **takes_names(const op_value *takes, size_t *n) {
+	*n = 0;
+	if (sw_is_str(takes)) {
+		*n = 1;
+		return sw_copy_names((const char *const *)&takes->str, 1);
+	}
+	if (takes == NULL || takes->type != OP_LIST) return NULL;
+	char **names = sw_xalloc((takes->count + 1) * sizeof *names);
+	for (size_t i = 0; i < takes->count; i++) {
+		if (sw_is_str(takes->items[i])) names[(*n)++] = sw_xdup(takes->items[i]->str);
+	}
+	if (*n == 0) free(names), names = NULL;
+	return names;
+}
+
 // refused not-there: the program's path (held), or its id
 static int not_there_at(sw *s, found *f, sw_refusal *r) {
 	r->refused = "not-there";
@@ -310,6 +383,13 @@ static int program_of(sw *s, pl *where, const sw_program *program, found *f, sw_
 		f->type = sw_get(attrs, SW_ATTRIBUTE);
 		f->api = sw_get(attrs, SW_PROGRAM_API);
 	}
+	// by its path: its ermine.type, else its name's
+	if (program->has_at) {
+		typing t = {where, f->pid, (const char *const *)f->ppath, f->npp, NULL};
+		pl_peep(where, type_now, &t);
+		f->type = f->own_type = t.type != NULL ? op_str(t.type) : NULL;
+		free(t.type);
+	}
 	return 1;
 }
 
@@ -324,9 +404,9 @@ static int not_a_runner(sw *s, found *f, sw_refusal *r) {
 }
 
 // the checks in order, up to taken (processes'): the runner and its entry, the program read once.
-// load: a runner with no load is not-a-runner. 0: refused, f let go; 1: f the caller's to let go
+// to_load: a runner with no load is not-a-runner. 0: refused, f let go; 1: f the caller's to let go
 static int check(sw *s, const char *const *runner, size_t nrunner, const sw_program *program,
-	pl *where, int load, found *f, const hf_entry **out, sw_refusal *refused) {
+	pl *where, int to_load, found *f, const hf_entry **out, sw_refusal *refused) {
 	*refused = (sw_refusal){0};
 	f->rpath = pr_names(runner, nrunner, &f->nr);
 	f->rid = resolve(s->s.places, (const char *const *)f->rpath, f->nr);
@@ -334,14 +414,18 @@ static int check(sw *s, const char *const *runner, size_t nrunner, const sw_prog
 	const op_value *rtype = sw_get(rattrs, SW_ATTRIBUTE);
 	if (!sw_is_str(rtype) || strcmp(rtype->str, SW_TYPE_RUNNER) != 0) return not_a_runner(s, f, refused);
 	if (!program_of(s, where, program, f, refused)) return found_free(f), 0;
+	// its type fits from its folder; by id, or carried, from where's root
 	const op_value *takes = sw_get(rattrs, SW_TAKES), *gives = sw_get(rattrs, SW_API);
-	int fits = sw_is_str(f->type) && sw_is_str(takes) && strcmp(f->type->str, takes->str) == 0;
-	if (fits && f->api != NULL && !same_scalar(f->api, gives)) fits = 0;
-	if (!fits) {
+	size_t nfrom = f->ppath != NULL && f->npp > 0 ? f->npp - 1 : 0;
+	int fit = sw_is_str(f->type) &&
+		fits(where, (const char *const *)f->ppath, nfrom, f->type->str, takes);
+	if (fit && f->api != NULL && !same_scalar(f->api, gives)) fit = 0;
+	if (!fit) {
 		refused->refused = "wrong-form";
 		refused->type = sw_is_str(f->type) ? sw_keep_text(s, f->type->str) : NULL;
 		refused->api = sw_is_str(f->api) ? sw_keep_text(s, f->api->str) : NULL;
-		refused->takes = sw_is_str(takes) ? sw_keep_text(s, takes->str) : NULL;
+		char **names = takes_names(takes, &refused->ntakes);
+		refused->takes = names != NULL ? sw_keep_names(s, names, refused->ntakes) : NULL;
 		refused->runner_api = sw_is_str(gives) ? sw_keep_text(s, gives->str) : NULL;
 		found_free(f);
 		return 0;
@@ -349,9 +433,10 @@ static int check(sw *s, const char *const *runner, size_t nrunner, const sw_prog
 	// a runner: one with a start (runnerOf's), and, to load, a load
 	const nd_entry *fv = tb_get(s->s.table, tb_string("value"), tb_string(f->rid));
 	const hf_entry *fn = fv != NULL ? hf_find(s->s.functions, fv->value) : NULL;
-	if (fn == NULL || fn->runner == NULL || (load && fn->load == NULL)) {
+	if (fn == NULL || fn->runner == NULL || (to_load && fn->load == NULL)) {
 		return not_a_runner(s, f, refused);
 	}
+	f->rname = hf_name(fv->value);
 	*out = fn;
 	return 1;
 }
@@ -473,34 +558,125 @@ static void call_load(void *data) {
 	l->out = l->fn->load(l->code, l->fn->data);
 }
 
+typedef struct {
+	char *s;
+	size_t n, cap;
+} text;
+
+// a part of a key: its length, then it, so no part runs into the next
+static void text_part(text *t, const char *part) {
+	char len[24];
+	snprintf(len, sizeof len, "%zu:", strlen(part));
+	size_t a = strlen(len), b = strlen(part);
+	while (t->n + a + b + 1 > t->cap) {
+		t->cap = t->cap ? t->cap * 2 : 64;
+		t->s = realloc(t->s, t->cap);
+		if (t->s == NULL) abort();
+	}
+	memcpy(t->s + t->n, len, a);
+	memcpy(t->s + t->n + a, part, b);
+	t->n += a + b;
+	t->s[t->n] = '\0';
+}
+
+// a load's key, new: the program's id, its value's hash (no encoding: the value's address), the
+// runner's id and function's name, then the chain's keys
+static char *key_of(const found *f, const sw_load_options *o) {
+	text t = {0};
+	text_part(&t, f->pid);
+	char at[32];
+	if (f->hashed) text_part(&t, f->hex);
+	else {
+		snprintf(at, sizeof at, "p%p", (const void *)f->code);
+		text_part(&t, at);
+	}
+	text_part(&t, f->rid);
+	text_part(&t, f->rname != NULL ? f->rname : "");
+	for (size_t i = 0; i < o->nchain; i++) text_part(&t, o->chain[i]);
+	return t.s;
+}
+
+static load *standing(const sw *s, const char *key) {
+	for (size_t i = 0; i < s->nstanding; i++) {
+		if (strcmp(s->standing[i]->key, key) == 0) return s->standing[i];
+	}
+	return NULL;
+}
+
+// a load going (its last hold let go, or setup.scope torn down): out of the standing ones, its
+// live form closed, before what its load made goes
+static char *unload(void *data) {
+	load *l = data;
+	if (l->gone) return NULL;
+	l->gone = 1;
+	DROP(l->sw->standing, l->sw->nstanding, l);
+	if (l->live.close != NULL) l->live.close(l->live.data);
+	return NULL;
+}
+
+// a load made: the entry's load called, by's facts and the load's own scope open. key: taken. NULL:
+// the load failed (refused failed), its scope gone
+static load *make(sw *s, owner *by, const found *f, const hf_entry *fn, char *key,
+	sw_refusal *refused) {
+	load *l = sw_xalloc(sizeof *l);
+	l->sw = s;
+	l->key = key;
+	l->code = f->code != NULL ? op_ref((op_value *)f->code) : NULL;
+	PUSH(s->loads, s->nloads, s->caploads, l);
+	l->values[0] = op_str(f->pid);
+	l->values[1] = op_str(f->rid);
+	l->info[0] = (sc_pair){"load", l->values[0]};
+	l->info[1] = (sc_pair){"on", l->values[1]};
+	l->scope = sc_create_scope(s->s.scheduler, l->info, 2, s->s.scope);
+	ch_site buf;
+	const ch_site *here = sw_site(s, &buf);
+	if (s->s.sites != NULL && here != NULL && here->file != NULL) {
+		st_note(s->s.sites, l->scope, here->file, (int)here->line, here->function);
+	}
+	// its facts there to read for the call (sw_loading)
+	sw_starting st = starting_of(by);
+	st.scope = l->scope;
+	const sw_starting *was = s->loading;
+	s->loading = &st;
+	loading c = {.fn = fn, .code = f->code};
+	sc_run_with_scope(l->scope, call_load, &c);
+	s->loading = was;
+	if (c.out.error != NULL) {
+		l->gone = 1;
+		free(sc_teardown(l->scope));
+		refused->refused = "failed";
+		refused->error = sw_keep_owned(s, c.out.error);
+		return NULL;
+	}
+	l->live = c.out.live;
+	PUSH(s->standing, s->nstanding, s->capstanding, l);
+	free(sc_register_teardown(s->s.scheduler, l->scope, unload, l));
+	return l;
+}
+
 static sw_loaded *load_now(sw *s, const sw_place *by, const char *const *runner, size_t nrunner,
-	const sw_program *program, pl *box, sw_refusal *refused) {
+	const sw_program *program, const sw_load_options *options, sw_refusal *refused) {
 	sw_forget(s);
 	*refused = (sw_refusal){0};
+	sw_load_options none = {0};
+	const sw_load_options *opts = options != NULL ? options : &none;
 	owner *o = by != NULL ? sw_owner_of(s, by) : NULL;
 	if (o == NULL) return refused->refused = pl_code_name(PL_NOTHING_THERE), NULL;
-	pl *where = box != NULL ? box : o->run ? pr_places(o->life) : s->s.places;
+	pl *where = opts->box != NULL ? opts->box : o->run ? pr_places(o->life) : s->s.places;
 	found f = {0};
 	const hf_entry *fn = NULL;
 	if (!check(s, runner, nrunner, program, where, 1, &f, &fn, refused)) return NULL;
-	// its facts there to read for the call (sw_loading)
-	sw_starting st = starting_of(o);
-	const sw_starting *was = s->loading;
-	s->loading = &st;
-	loading l = {.fn = fn, .code = f.code};
-	if (sc_get_current_scope(s->s.scheduler) != NULL) call_load(&l);
-	else sc_run_with_scope(o->scope, call_load, &l);
-	s->loading = was;
+	char *key = key_of(&f, opts);
+	load *l = standing(s, key);
+	if (l != NULL) free(key);
+	else l = make(s, o, &f, fn, key, refused);
 	found_free(&f);
-	if (l.out.error != NULL) {
-		refused->refused = "failed";
-		refused->error = sw_keep_owned(s, l.out.error);
-		return NULL;
-	}
+	if (l == NULL) return NULL;
 	sw_loaded *x = sw_xalloc(sizeof *x);
 	x->sw = s;
 	x->by = o;
-	x->live = l.out.live;
+	x->load = l;
+	l->holds++;
 	PUSH(s->loaded, s->nloaded, s->caploaded, x);
 	PUSH(o->loads, o->nloads, o->caploads, x);
 	sw_later(s);
@@ -508,16 +684,17 @@ static sw_loaded *load_now(sw *s, const sw_place *by, const char *const *runner,
 }
 
 sw_loaded *sw_load_at(sw *s, const sw_place *by, const char *const *runner, size_t nrunner,
-	const sw_program *program, pl *box, sw_refusal *refused, const ch_site *site) {
+	const sw_program *program, const sw_load_options *options, sw_refusal *refused,
+	const ch_site *site) {
 	const ch_site *was = sw_enter(s, site);
-	sw_loaded *l = load_now(s, by, runner, nrunner, program, box, refused);
+	sw_loaded *l = load_now(s, by, runner, nrunner, program, options, refused);
 	sw_leave(s, was);
 	return l;
 }
 
 const sw_starting *sw_loading(const sw *s) { return s->loading; }
 
-const hf_live *sw_loaded_live(const sw_loaded *l) { return &l->live; }
+const hf_live *sw_loaded_live(const sw_loaded *l) { return &l->load->live; }
 
 void sw_release_at(sw *s, sw_loaded *l, const ch_site *site) {
 	if (l == NULL || l->sw != s) return;
