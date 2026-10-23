@@ -26,6 +26,10 @@ struct tp_link {
 	// pumping: its turns being taken; full: it takes no runs until it says go; gone: let go once
 	// nothing here is using it
 	int pumping, full, gone;
+	// forgetting (history.h): keeper, the other side keeps every run (tp_sync_keeper); said, how
+	// many of this device's own its last have said it holds
+	int keeper;
+	uint64_t said;
 };
 
 struct tp_sync {
@@ -155,6 +159,33 @@ static void say_refused(tp_sync *s, tp_link *l, const uint8_t device[32]) {
 
 // ---- pushes
 
+// a run's steps, from to to, from the store, packed: its message into out. 0, or -1
+static int packed(tp_sync *s, const uint8_t device[32], uint64_t from, uint64_t to, const uint8_t sig[64]) {
+	size_t count = (size_t)(to - from + 1);
+	if (count > s->nspans) {
+		tp_span *p = tp_grow(&s->mem, s->spans, s->nspans * sizeof *p, count * sizeof *p);
+		if (!p) return -1;
+		s->spans = p, s->nspans = count;
+	}
+	s->steps.len = 0, s->steps.bad = 0;
+	for (size_t k = 0; k < count; k++) {
+		long n = tp_log_step(s->log, device, from + k, NULL, 0);
+		size_t at = s->steps.len;
+		if (n < 0 || !tp_reserve(&s->steps, (size_t)n)) return -1;
+		tp_log_step(s->log, device, from + k, s->steps.p + at, (size_t)n);
+		s->spans[k] = (tp_span){NULL, (size_t)n};
+	}
+	for (size_t k = 0, at = 0; k < count; at += s->spans[k++].n) s->spans[k].p = s->steps.p + at;
+	tp_span pack;
+	if (tp_pack(&s->mem, s->spans, count, s->max, &pack)) return -1;
+	tp_buf *b = &s->out;
+	tp_put_head(b, 4, 4), tp_put_text(b, "run");
+	tp_put_head(b, 2, 32), tp_put(b, device, 32), tp_put_head(b, 2, 64), tp_put(b, sig, 64);
+	tp_put(b, pack.p, pack.n);
+	tp_span_free(&s->mem, &pack);
+	return 0;
+}
+
 // one run of a device's to a link: 1 sent; 0 nothing more to send (or it can't be)
 static int one(tp_sync *s, tp_link *l, size_t i) {
 	uint8_t device[32], sig[64];
@@ -162,30 +193,13 @@ static int one(tp_sync *s, tp_link *l, size_t i) {
 	uint64_t from = l->peers[i].theirs + 1, to;
 	if (l->peers[i].refused || from > tp_log_count(s->log, device)) return 0;
 	if (tp_log_run(s->log, device, from, &to, sig)) return 0;
-	// its steps, back to back, from the store
-	size_t count = (size_t)(to - from + 1);
-	if (count > s->nspans) {
-		tp_span *p = tp_grow(&s->mem, s->spans, s->nspans * sizeof *p, count * sizeof *p);
-		if (!p) return 0;
-		s->spans = p, s->nspans = count;
-	}
-	s->steps.len = 0, s->steps.bad = 0;
-	for (size_t k = 0; k < count; k++) {
-		long n = tp_log_step(s->log, device, from + k, NULL, 0);
-		size_t at = s->steps.len;
-		if (n < 0 || !tp_reserve(&s->steps, (size_t)n)) return 0;
-		tp_log_step(s->log, device, from + k, s->steps.p + at, (size_t)n);
-		s->spans[k] = (tp_span){NULL, (size_t)n};
-	}
-	for (size_t k = 0, at = 0; k < count; at += s->spans[k++].n) s->spans[k].p = s->steps.p + at;
-	tp_span pack;
-	if (tp_pack(&s->mem, s->spans, count, s->max, &pack)) return 0;
+	// as the log holds it, when it is all of it; else packed from from
 	tp_buf *b = &s->out;
 	b->len = 0, b->bad = 0;
-	tp_put_head(b, 4, 4), tp_put_text(b, "run");
-	tp_put_head(b, 2, 32), tp_put(b, device, 32), tp_put_head(b, 2, 64), tp_put(b, sig, 64);
-	tp_put(b, pack.p, pack.n);
-	tp_span_free(&s->mem, &pack);
+	long held = tp_log_message(s->log, device, from, NULL, 0);
+	uint8_t *p = held > 0 ? tp_reserve(b, (size_t)held) : NULL;
+	if (p) tp_log_message(s->log, device, from, p, (size_t)held);
+	else if (held > 0 || packed(s, device, from, to, sig)) return 0;
 	if (b->bad) return 0;
 	send(s, l, b->p, b->len);
 	if (!l->gone) l->peers[i].theirs = to;
@@ -311,12 +325,14 @@ static void have(tp_sync *s, tp_link *l, tp_in in, uint64_t k) {
 		return;
 	}
 	for (size_t i = 0; i < l->npeers; i++) l->peers[i].theirs = 0;
+	l->said = 0;
 	for (uint64_t i = 0; i < k; i++) {
 		uint64_t n;
 		tp_span device;
 		tp_array(&in, &n), tp_bytes(&in, 32, &device), tp_whole(&in, &n);
 		long p = peer_of(s, l, device.p);
 		if (p >= 0) l->peers[p].theirs = n;
+		if (me && !memcmp(device.p, me, 32)) l->said = n;
 	}
 	// every device they lack, pushed, then their turns
 	for (size_t i = 0; i < tp_log_devices(s->log); i++) {
@@ -328,7 +344,8 @@ static void have(tp_sync *s, tp_link *l, tp_in in, uint64_t k) {
 	pump(s, l);
 }
 
-static void run(tp_sync *s, tp_link *l, const uint8_t *device, const uint8_t *sig, tp_span pack) {
+static void run(tp_sync *s, tp_link *l, const uint8_t *device, const uint8_t *sig, tp_span pack,
+	tp_span message) {
 	tp_steps steps;
 	tp_step first;
 	// last: the n of the run's last step, which they hold
@@ -346,7 +363,7 @@ static void run(tp_sync *s, tp_link *l, const uint8_t *device, const uint8_t *si
 		}
 		tp_link *was = s->from;
 		s->from = l;
-		r = tp_log_take(s->log, device, spans, steps.count, sig);
+		r = tp_log_take(s->log, device, spans, steps.count, sig, message);
 		s->from = was;
 		tp_free(&s->mem, spans, steps.count * sizeof *spans);
 		tp_steps_free(&s->mem, &steps);
@@ -381,7 +398,7 @@ static void receive(tp_sync *s, tp_link *l, const uint8_t *bytes, size_t length)
 		have(s, l, in, n);
 	} else if (tp_is(t, "run") && k == 4 && !tp_bytes(&in, 32, &x) && !tp_bytes(&in, 64, &y) &&
 		in.p < in.end && *in.p >> 5 == 4) {
-		run(s, l, x.p, y.p, (tp_span){in.p, (size_t)(in.end - in.p)});
+		run(s, l, x.p, y.p, (tp_span){in.p, (size_t)(in.end - in.p)}, (tp_span){bytes, length});
 	} else if (tp_is(t, "refused") && k == 3 && !tp_bytes(&in, 32, &x) && !tp_whole(&in, &n)) {
 		// one peer of a broadcast refusing is not the rest refusing
 		long p = !l->many && tp_log_count(s->log, x.p) ? peer_of(s, l, x.p) : -1;
@@ -416,4 +433,29 @@ int tp_sync_live(tp_sync *s, const uint8_t *data, size_t length) {
 	tp_buf_free(&b);
 	sweep(s);
 	return why;
+}
+
+// ---- forgetting (history.h, a try-out)
+
+void tp_sync_keeper(tp_sync *s, tp_link *l) { (void)s, l->keeper = 1; }
+
+uint64_t tp_sync_passed(const tp_sync *s, const uint8_t device[32]) {
+	const uint8_t *me = tp_log_device(s->log);
+	uint64_t out = 0;
+	int any = 0;
+	for (const tp_link *l = s->links; l; l = l->next) {
+		if (l->gone) continue;
+		if (me && !memcmp(me, device, 32)) {
+			if (l->keeper && l->said > out) out = l->said;
+			continue;
+		}
+		const peer *p = NULL;
+		for (size_t i = 0; i < l->npeers && !p; i++) {
+			if (!memcmp(l->peers[i].device, device, 32)) p = &l->peers[i];
+		}
+		if (l->many || (p && p->refused)) continue;
+		uint64_t theirs = p ? p->theirs : 0;
+		if (!any++ || theirs < out) out = theirs;
+	}
+	return out;
 }

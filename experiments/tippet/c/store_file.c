@@ -1,8 +1,9 @@
 // a log's store on disk (POSIX), as typescript/store_file.ts: records appended to dir/log as frames
 // (4 bytes big-endian length, then the record), the snapshot in dir/snapshot, written whole beside
 // it then renamed into place, and the device's key in dir/key, written once. a frame cut short by a
-// crash is cut off when loaded, so the next append starts clean. steps are read back from the file
-// by where they are: in memory, only where each one starts and how long. sync: fsync
+// crash is cut off when loaded, so the next append starts clean. records are read back from the
+// file by where they are: in memory, only where each one holding steps starts and how long, and the
+// last run read, unpacked. sync: fsync
 #define _POSIX_C_SOURCE 200809L
 #include <errno.h>
 #include <fcntl.h>
@@ -70,7 +71,8 @@ static int load(void *self, tp_read read, void *ctx) {
 		}
 		if (readat(f->fd, b.p, (size_t)length, at + 4)) break;
 		tp_at step;
-		if (read(ctx, b.p, (size_t)length, &step) && (why = tp_index_hold(&f->index, &step, at + 4, length)))
+		if (read(ctx, b.p, (size_t)length, &step) &&
+			(why = tp_index_hold(&f->index, &step, at + 4, length, tp_is_run(b.p, (size_t)length))))
 			break;
 		at += 4 + length;
 	}
@@ -98,15 +100,30 @@ static int append(void *self, const uint8_t *record, size_t length, const tp_at 
 	}
 	uint64_t offset = f->end + 4;
 	f->end += want;
-	return at ? tp_index_hold(&f->index, at, offset, length) : 0;
+	return at ? tp_index_hold(&f->index, at, offset, length, tp_is_run(record, length)) : 0;
 }
 
+// a step: alone, read as it is; in a run, out of the run last read, else the run read and unpacked
 static long get(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap) {
 	file *f = self;
-	uint64_t offset, length;
-	if (tp_index_find(&f->index, device, n, &offset, &length)) return -1;
-	if (length <= cap && readat(f->fd, out, (size_t)length, offset)) return -1;
-	return (long)length;
+	const tp_held *r = tp_index_find(&f->index, device, n);
+	if (!r) return -1;
+	if (!r->run) return r->length <= cap && readat(f->fd, out, r->length, r->offset) ? -1 : (long)r->length;
+	if (tp_index_read(&f->index, device, n)) return tp_index_step(&f->index, device, n, r, NULL, out, cap);
+	uint8_t *record = tp_alloc(&f->mem, r->length);
+	long got = record && !readat(f->fd, record, r->length, r->offset)
+		? tp_index_step(&f->index, device, n, r, record, out, cap) : -1;
+	tp_free(&f->mem, record, r->length);
+	return got;
+}
+
+static long run(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap,
+	uint64_t *first, uint64_t *last) {
+	file *f = self;
+	const tp_held *r = tp_index_find(&f->index, device, n);
+	if (!r || readat(f->fd, out, r->length < cap ? r->length : cap, r->offset)) return -1;
+	*first = r->first, *last = r->last;
+	return (long)r->length;
 }
 
 static int snapshot(void *self, const uint8_t *bytes, size_t length) {
@@ -160,6 +177,11 @@ static int key(void *self, const uint8_t seed[32], uint8_t out[32]) {
 	return bad ? TP_STORE : 0;
 }
 
+// forgetting: the bytes stay on disk
+static long drop(void *self, const uint8_t device[32], uint64_t n) {
+	return tp_index_drop(&((file *)self)->index, device, n);
+}
+
 static void shut(void *self) {
 	file *f = self;
 	tp_mem mem = f->mem;
@@ -174,8 +196,8 @@ tp_store *tp_file_store(const tp_mem *mem, const char *dir, size_t max) {
 	file *f = tp_alloc(mem, sizeof *f);
 	if (!f) return NULL;
 	memset(f, 0, sizeof *f);
-	f->mem = *mem, f->index.mem = &f->mem, f->max = max, f->fd = -1;
-	f->store = (tp_store){f, load, append, get, snapshot, snapped, key, flush, shut};
+	f->mem = *mem, f->index.mem = &f->mem, f->index.max = max, f->max = max, f->fd = -1;
+	f->store = (tp_store){f, load, append, get, run, snapshot, snapped, key, flush, shut, drop};
 	// the longest name: /snapshot.new
 	f->dir = n, f->room = n + 14;
 	if (!(f->path = tp_alloc(mem, 2 * f->room))) return shut(f), NULL;

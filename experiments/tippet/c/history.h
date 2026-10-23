@@ -8,6 +8,13 @@
 // patches don't apply there is passed over, and listed in failed until they do. the graph is the
 // last snapshot and the steps after it
 //
+// forgets (a try-out, off unless asked for): not a history keeper, a small device. it keeps the
+// newest state per node it holds, not the runs: tp_history_forget, now and then where a host would
+// snapshot, snapshots and lets go every run in the snapshot that has passed on (tp_sync_passed: to
+// every link; this device's own, to a keeper). it serves no one what it let go: keepers (galaxy,
+// browsers) do. an entry keeps no list of its steps, only the newest: a step that comes late, older
+// than the newest, is passed over, not merged in. lofi, and that's fine
+//
 // C11 (op's value.h is). history's own memory goes through tp_mem; what it writes into the graph
 // (values, patches, headers) is the graph's, malloc'd, as everything there is
 //
@@ -34,6 +41,8 @@ typedef struct {
 	// NULL: as they are
 	void (*run)(void *ctx, void (*f)(void *data), void *data);
 	void *ctx;
+	// not a history keeper (above)
+	int forgets;
 } tp_history_options;
 
 // NULL: no memory
@@ -59,5 +68,9 @@ typedef struct {
 // how many of each; the i-th in *out, good while the history is
 size_t tp_history_failed(const tp_history *h, size_t i, tp_failed *out);
 size_t tp_history_unkept(const tp_history *h, size_t i, tp_failed *out);
+
+// forgets: a snapshot, then every run in it that has passed on let go (above). 0, or a code
+// (TP_BOUND: this history keeps every run)
+int tp_history_forget(tp_history *h, const tp_sync *s);
 
 #endif

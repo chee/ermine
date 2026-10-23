@@ -98,6 +98,9 @@ Deno.test("2. a push whose store throws ends, and nothing is left unhandled", as
 			get: () => {
 				throw new Error("the disk is gone")
 			},
+			run: () => {
+				throw new Error("the disk is gone")
+			},
 		},
 	})
 	await relay.take((await a.run(a.device!, 1))!)

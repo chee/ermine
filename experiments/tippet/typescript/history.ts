@@ -7,6 +7,13 @@
 // worked out again. a step whose patches don't apply is passed over, and listed in failed until
 // they do. text typed at once by two people is not this file's job
 //
+// forgets (a try-out, off unless asked for): not a history keeper, a small device. it keeps the
+// newest state per node it holds, not the runs: forget(sync), now and then where a host would
+// snapshot, snapshots and lets go every run in the snapshot that has passed on (sync.passed: to
+// every link; this device's own, to a keeper). it serves no one what it let go: keepers (galaxy,
+// browsers) do. an entry keeps no list of its steps, only the newest: a step that comes late, older
+// than the newest, is passed over, not merged in. lofi, and that's fine
+//
 //   const h = createHistory({ log, table, places, run: hosted })
 //   await h.load()
 //   await h.snapshot()
@@ -18,6 +25,7 @@ import type { Places } from "@ermine/places"
 import type { Key, Table } from "@ermine/table"
 import { decodeStep, type Step } from "./step.ts"
 import type { Log } from "./log.ts"
+import type { Sync } from "./sync.ts"
 
 // a step, as an entry's list holds it
 type Ref = [lamport: number, device: string, n: number]
@@ -49,6 +57,8 @@ export function createHistory(o: {
 	kept?: (node: string, part: string) => boolean
 	// writes into the graph made inside it: the host's scope, say
 	run?: <T>(f: () => T) => T
+	// not a history keeper (above)
+	forgets?: boolean
 }) {
 	const { log, table, places } = o
 	const kept = o.kept ?? keptByDefault
@@ -76,11 +86,13 @@ export function createHistory(o: {
 		metadata: { device: s.device, n: s.n, lamport: s.lamport },
 	})
 
-	// a step into its entry's list; true: it went last
+	// a step into its entry's list; true: it went last. forgets: the list is the newest alone, and
+	// one older is not put in
 	function place(s: Step): boolean {
 		const k = name(s.part, s.node), ref: Ref = [s.lamport, s.device, s.n]
 		let refs = entries.get(k)
 		if (!refs) entries.set(k, refs = [])
+		if (o.forgets) return refs[0] && before(ref, refs[0]) ? false : (refs[0] = ref, true)
 		let i = refs.length
 		while (i > 0 && before(ref, refs[i - 1])) i--
 		refs.splice(i, 0, ref)
@@ -131,13 +143,15 @@ export function createHistory(o: {
 	}
 
 	// steps from elsewhere: each that goes last applied as it is; an entry one went earlier in is
-	// worked out again once, after them all
+	// worked out again once, after them all (forgets: one that goes earlier is passed over)
 	function land(steps: Step[]) {
 		const redos = new Map<string, Step>()
 		for (const s of steps) {
 			const k = name(s.part, s.node)
 			try {
-				if (!place(s) || redos.has(k)) redos.set(k, s)
+				const last = place(s)
+				if (o.forgets && !last) continue
+				if (!last || redos.has(k)) redos.set(k, s)
 				else write(s, s.patches)
 			} catch (e) {
 				fail(s, e)
@@ -150,6 +164,19 @@ export function createHistory(o: {
 				fail(s, e)
 			}
 		}
+	}
+
+	// each kept entry's value and its list of steps, and how many of each device's steps are in it
+	async function snapshot() {
+		const out: [string, string, Value | null, Ref[]][] = []
+		for (const [k, refs] of entries) {
+			const [part, node] = k.split("\0")
+			const v = table.get(part as Key, node)?.value
+			out.push([part, node, v === undefined ? null : v as Value, refs])
+		}
+		const count: Record<string, number> = {}
+		for (const d of Object.keys(log.have())) count[d] = log.count(d)
+		await log.snapshot(encode({ count, entries: out } as unknown as Value))
 	}
 
 	// the recorder: a kept write here, a step
@@ -189,21 +216,21 @@ export function createHistory(o: {
 			return () => void changed.splice(changed.indexOf(f), 1)
 		},
 
-		// each kept entry's value and its list of steps, and how many of each device's steps are in it
-		async snapshot() {
-			const out: [string, string, Value | null, Ref[]][] = []
-			for (const [k, refs] of entries) {
-				const [part, node] = k.split("\0")
-				const v = table.get(part as Key, node)?.value
-				out.push([part, node, v === undefined ? null : v as Value, refs])
-			}
-			const count: Record<string, number> = {}
-			for (const d of Object.keys(log.have())) count[d] = log.count(d)
-			await log.snapshot(encode({ count, entries: out } as unknown as Value))
+		snapshot,
+
+		// forgets: a snapshot, then every run in it that has passed on let go (above)
+		async forget(sync: Pick<Sync, "passed">) {
+			if (!o.forgets) throw new Error("this history keeps every run")
+			const held = log.have()
+			await snapshot()
+			const passed = sync.passed()
+			log.drop(
+				Object.fromEntries(Object.entries(held).map(([d, n]) => [d, Math.min(n, passed[d] ?? 0)])),
+			)
 		},
 
 		// after a restart: the log loaded, the snapshot written into the graph, and every step held
-		// after it landed, this device's too, and those whose signature never made it to disk
+		// after it landed, this device's too
 		async load() {
 			const bytes = await log.load()
 			let count: Record<string, number> = {}

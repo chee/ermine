@@ -1,7 +1,7 @@
 // one test per hardening: forks, packs, lamport, torn signatures, load, room, strict steps, the
 // store, throws, unkept entries. numbered as the reviews numbered them
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert"
-import { decode, encode } from "@ermine/encoding/cbor"
+import { decode, encode, type Value } from "@ermine/encoding/cbor"
 import createEntry from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import type { Patch } from "@ermine/op/apply"
@@ -14,7 +14,7 @@ import { createLog, createMemoryStore, type Log, type Run, type Store } from "./
 import { createHistory } from "./history.ts"
 import { createSync } from "./sync.ts"
 import { createSigner } from "./sign.ts"
-import { decodeStep, encodeStep, hashStep, type Step } from "./step.ts"
+import { decodeStep, encodeStep, hashStep, type Step, unhex } from "./step.ts"
 import { pack, unpack } from "./pack.ts"
 import { fileStore } from "./store_file.ts"
 import { port } from "./carriers/messagechannel.ts"
@@ -27,6 +27,10 @@ async function until(f: () => boolean, ms = 2000) {
 		await tick(5)
 	}
 }
+
+// a run as a store keeps it: its message. a load trusts the signature
+const kept = (device: string, steps: Uint8Array[], sig: Uint8Array = new Uint8Array(64)) =>
+	encode(["run", unhex(device), sig, pack(steps)] as Value)
 
 // a log that writes, loaded
 async function writer(o: { store?: Store; seed?: Uint8Array } = {}) {
@@ -159,14 +163,14 @@ Deno.test("2. a step far past the highest lamport is refused, and write never pa
 	assertEquals(await h.take({ device: far.device, steps: [bytes], sig }), { refused: "lamport" })
 	// held anyway, from a store written before: a write throws, and nothing is sent
 	const store = createMemoryStore()
-	await store.append(bytes)
+	await store.append(kept(far.device, [bytes], sig))
 	const old = await writer({ store })
 	assertEquals(old.lamport, Number.MAX_SAFE_INTEGER)
 	assertThrows(() => put(old, 1), RangeError)
 	assertEquals(old.count(old.device!), 0)
 })
 
-Deno.test("4. a step whose signature never reached the disk still lands after a restart", async () => {
+Deno.test("4. a run's steps and its signature are one record: after a restart, both or neither", async () => {
 	const a = await device(), store = createMemoryStore()
 	const b0 = await device({ store })
 	join(a, b0)
@@ -176,11 +180,11 @@ Deno.test("4. a step whose signature never reached the disk still lands after a 
 	closeAll()
 	const records: Uint8Array[] = []
 	await store.load((r) => void records.push(r))
-	const torn = createMemoryStore()
-	for (const r of records) if (!("sig" in (decode(r) as object))) await torn.append(r)
-	const b = await device({ store: torn })
-	assertEquals(b.log.have()[a.log.device!], 0)
-	assertEquals(b.value("pig"), { x: 1 })
+	const whole = createMemoryStore(), torn = createMemoryStore()
+	for (const r of records) await whole.append(r)
+	const b = await device({ store: whole }), cut = await device({ store: torn })
+	assertEquals([b.log.have()[a.log.device!], cut.log.have()[a.log.device!]], [1, undefined])
+	assertEquals([b.value("pig"), cut.value("pig")], [{ x: 1 }, undefined])
 })
 
 Deno.test("5. load passes over a record that breaks its chain, and keeps every one after it", async () => {
@@ -189,7 +193,14 @@ Deno.test("5. load passes over a record that breaks its chain, and keeps every o
 	const [a1, a2] = a.steps(a.device!), [c1] = c.steps(c.device!)
 	const bent = encodeStep({ ...decodeStep(a2), before: hashStep(a2) })
 	const store = createMemoryStore()
-	for (const r of [a1, encode("not a record"), bent, c1, a2]) await store.append(r)
+	const records = [
+		kept(a.device!, [a1]),
+		encode("not a record"),
+		kept(a.device!, [bent]),
+		kept(c.device!, [c1]),
+		kept(a.device!, [a2]),
+	]
+	for (const r of records) await store.append(r)
 	const g = createLog({ store })
 	await g.load()
 	assertEquals([g.count(a.device!), g.count(c.device!)], [2, 1])

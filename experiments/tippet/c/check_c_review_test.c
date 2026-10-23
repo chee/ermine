@@ -505,7 +505,7 @@ static void told_take(void *ctx, const uint8_t device[32], uint64_t from, size_t
 	(void)from, (void)count;
 	if (!e->armed) return;
 	e->armed = 0;
-	for (int i = 0; i < e->nruns; i++) tp_log_take(e->log, e->runs[i].device, e->runs[i].spans, e->runs[i].n, e->runs[i].sig);
+	for (int i = 0; i < e->nruns; i++) tp_log_take(e->log, e->runs[i].device, e->runs[i].spans, e->runs[i].n, e->runs[i].sig, (tp_span){NULL, 0});
 	memcpy(e->seen, device, 32);
 }
 
@@ -558,7 +558,7 @@ static void closing(void) {
 			tp_write w = put(i);
 			tp_log_write(log, &w, &n, &l);
 		}
-		CHECK(tp_log_take(log, r.device, r.spans, r.n, r.sig) == 3);
+		CHECK(tp_log_take(log, r.device, r.spans, r.n, r.sig, (tp_span){NULL, 0}) == 3);
 		CHECK(!tp_log_run(log, tp_log_device(log), 2, &to, sig) && to == 3);
 		tp_write w = put(9);
 		tp_log_write(log, &w, &n, &l);
@@ -567,7 +567,7 @@ static void closing(void) {
 		tp_log_free(other);
 		tp_log_free(log);
 	}
-	// c. the sig record doesn't fit: the write says it failed, but its step is held and told
+	// c. the run record doesn't fit: the write says it failed, but its step is held and told
 	{
 		uint8_t seed[32];
 		memset(seed, 22, 32);
@@ -586,7 +586,7 @@ static void closing(void) {
 			why = tp_log_write(log, &w, &n, &l);
 		}
 		uint64_t count = tp_log_count(log, tp_log_device(log));
-		printf("  sig record full: write %zu says %s; steps held %llu\n", i - 1, tp_why(why),
+		printf("  run record full: write %zu says %s; steps held %llu\n", i - 1, tp_why(why),
 			(unsigned long long)count);
 		CHECK(!why || count == i - 2);
 		tp_log_free(log);
@@ -598,7 +598,7 @@ static void closing(void) {
 		uint8_t seed[32];
 		memset(seed, 24, 32);
 		tp_log *log = memlog(seed, r.spans[0].n + r.spans[1].n + 8 + 20, NULL, NULL);
-		long got = tp_log_take(log, r.device, r.spans, r.n, r.sig);
+		long got = tp_log_take(log, r.device, r.spans, r.n, r.sig, (tp_span){NULL, 0});
 		uint64_t have = 0;
 		const uint8_t *d = tp_log_devices(log) ? tp_log_have(log, 0, &have) : NULL;
 		uint64_t count = tp_log_count(log, r.device);
@@ -771,11 +771,15 @@ typedef struct {
 	sc_pair info;
 	tp_log *log;
 	tp_history *history;
+	tp_sync *sync; // none, unless one is made
 } dev;
 static void dev_told(void *ctx, const uint8_t key[32], uint64_t from, size_t count) {
 	dev *d = ctx;
 	if (d->history) tp_history_told(d->history, key, from, count);
+	if (d->sync) tp_sync_told(d->sync, key, from, count);
 }
+// the next dev_make's history forgets (9)
+static int forgets;
 static void inside(void *ctx, void (*f)(void *data), void *data) { sc_run_with_scope(((dev *)ctx)->scope, f, data); }
 static void drop_value(void *value, void *data) {
 	(void)data;
@@ -797,11 +801,12 @@ static int dev_make(dev *d, tp_store *store, uint8_t s) {
 	tp_log_options o = {mem, store, seed, 1, {0, 0, 0}, dev_told, d};
 	d->log = tp_log_new(&o);
 	tp_log_load(d->log);
-	tp_history_options ho = {mem, d->log, d->table, d->places, NULL, inside, d};
+	tp_history_options ho = {mem, d->log, d->table, d->places, NULL, inside, d, forgets};
 	d->history = tp_history_new(&ho);
 	return tp_history_load(d->history);
 }
 static void dev_free(dev *d) {
+	tp_sync_free(d->sync);
 	tp_history_free(d->history), tp_log_free(d->log);
 	sc_free(d->s), tb_free(d->table), pt_free(d->paths), pl_free(d->places);
 	op_free((op_value *)d->info.value);
@@ -882,7 +887,7 @@ static void typescript(const char *dir) {
 		uint8_t seed[32];
 		memset(seed, 52, 32);
 		tp_log *log = memlog(seed, 1 << 20, NULL, NULL);
-		tp_log_take(log, r1.device, r1.spans, r1.n, r1.sig), tp_log_take(log, r2.device, r2.spans, r2.n, r2.sig);
+		tp_log_take(log, r1.device, r1.spans, r1.n, r1.sig, (tp_span){NULL, 0}), tp_log_take(log, r2.device, r2.spans, r2.n, r2.sig, (tp_span){NULL, 0});
 		tp_sync_options so = {mem, log, 0, NULL, NULL, NULL, 0, 0};
 		tp_sync *sync = tp_sync_new(&so);
 		counting c = {0, 0};
@@ -924,13 +929,13 @@ static void typescript(const char *dir) {
 		tp_log *a = writer(54, 0, NULL), *b = writer(55, 0, NULL);
 		edit(a, x0, sizeof x0), run_of(a, 1, &ra);
 		// b's step after a's: lamport 2
-		tp_log_take(b, ra.device, ra.spans, ra.n, ra.sig);
+		tp_log_take(b, ra.device, ra.spans, ra.n, ra.sig, (tp_span){NULL, 0});
 		edit(b, y1, sizeof y1), run_of(b, 1, &rb);
 		dev r;
 		dev_make(&r, tp_memory_store(&mem, 1 << 20), 56);
-		tp_log_take(r.log, rb.device, rb.spans, rb.n, rb.sig);
+		tp_log_take(r.log, rb.device, rb.spans, rb.n, rb.sig, (tp_span){NULL, 0});
 		size_t before = failures(&r);
-		tp_log_take(r.log, ra.device, ra.spans, ra.n, ra.sig);
+		tp_log_take(r.log, ra.device, ra.spans, ra.n, ra.sig, (tp_span){NULL, 0});
 		printf("  failed: %zu, then %zu after the redo; doc {x: %lld, y: %lld}\n", before, failures(&r),
 			(long long)field(&r, "x"), (long long)field(&r, "y"));
 		CHECK(before == 1 && failures(&r) == 0 && field(&r, "x") == 0 && field(&r, "y") == 1);
@@ -947,10 +952,10 @@ static void typescript(const char *dir) {
 		held = st->get, st->get = forgetful, st->close = kept_open;
 		dev r;
 		dev_make(&r, st, 58);
-		tp_log_take(r.log, r1.device, r1.spans, r1.n, r1.sig);
+		tp_log_take(r.log, r1.device, r1.spans, r1.n, r1.sig, (tp_span){NULL, 0});
 		CHECK(!tp_history_snapshot(r.history));
 		edit(w, y1, sizeof y1), run_of(w, 3, &r2);
-		tp_log_take(r.log, r2.device, r2.spans, r2.n, r2.sig);
+		tp_log_take(r.log, r2.device, r2.spans, r2.n, r2.sig, (tp_span){NULL, 0});
 		dev_free(&r);
 		forget = 2;
 		int why = dev_make(&r, st, 58);
@@ -961,6 +966,132 @@ static void typescript(const char *dir) {
 		forget = 0;
 		shut(st->self);
 		tp_log_free(w);
+	}
+}
+
+// ---- 9. forgetting (history.h, a try-out)
+
+// a and b's syncs joined by hand, a's end first: a is told b's have, and b not a's
+static void join(end e[2], tp_sync *a, tp_sync *b) {
+	e[0] = (end){a, NULL, &e[1], 0}, e[1] = (end){b, NULL, &e[0], 0};
+	e[0].link = tp_sync_link(a, deliver, &e[0], 0);
+	e[1].link = tp_sync_link(b, deliver, &e[1], 0);
+}
+static void part(end e[2]) {
+	tp_sync_unlink(e[0].sync, e[0].link), tp_sync_unlink(e[1].sync, e[1].link);
+}
+static tp_sync *sync_of(tp_log *log) {
+	tp_sync_options so = {mem, log, 0, NULL, NULL, NULL, 0, 0};
+	return tp_sync_new(&so);
+}
+
+static void forgetting(const char *dir) {
+	printf("9. forgetting (a try-out)\n");
+	char d[512], f[600];
+	snprintf(d, sizeof d, "%s/forgets", dir);
+	uint64_t to, n, l;
+	uint8_t sig[64];
+	// a. a run in a snapshot that every link has: let go, never sent; a reload keeps it gone
+	{
+		box b = {NULL};
+		uint8_t seed[32];
+		memset(seed, 60, 32);
+		tp_log *w = memlog(seed, 1 << 20, told_box, &b);
+		b.sync = sync_of(w);
+		dev r;
+		forgets = 1;
+		dev_make(&r, tp_file_store(&mem, d, 1 << 20), 61);
+		r.sync = sync_of(r.log);
+		end e[2];
+		join(e, r.sync, b.sync);
+		for (int i = 0; i < 40; i++) edit(w, i ? x1 : x0, i ? sizeof x1 : sizeof x0);
+		const uint8_t *wd = tp_log_device(w);
+		CHECK(tp_log_count(r.log, wd) == 40 && field(&r, "x") == 1);
+		CHECK(!tp_history_forget(r.history, r.sync));
+		uint64_t have;
+		tp_log_have(r.log, 0, &have);
+		int one = tp_log_run(r.log, wd, 1, &to, sig), forty = tp_log_run(r.log, wd, 40, &to, sig);
+		printf("  40 steps taken, forgotten: have %llu, run 1 %s, run 40 %s\n", (unsigned long long)have,
+			one ? "none" : "held", forty ? "none" : "held");
+		CHECK(have == 40 && one && forty);
+		part(e);
+		dev_free(&r);
+		dev_make(&r, tp_file_store(&mem, d, 1 << 20), 61);
+		CHECK(tp_log_count(r.log, wd) == 40 && tp_log_run(r.log, wd, 1, &to, sig) && field(&r, "x") == 1);
+		// more go on from there
+		r.sync = sync_of(r.log);
+		join(e, r.sync, b.sync);
+		edit(w, y1, sizeof y1);
+		printf("  loaded again: %llu held, doc {x: %lld, y: %lld}\n", (unsigned long long)tp_log_count(r.log, wd),
+			(long long)field(&r, "x"), (long long)field(&r, "y"));
+		CHECK(tp_log_count(r.log, wd) == 41 && field(&r, "y") == 1);
+		part(e);
+		dev_free(&r);
+		tp_sync_free(b.sync), tp_log_free(w);
+		static const char *const files[3] = {"log", "snapshot", "key"};
+		for (int i = 0; i < 3; i++) snprintf(f, sizeof f, "%s/%s", d, files[i]), unlink(f);
+		rmdir(d);
+	}
+	// b. this device's own go only once a link to a keeper has said it holds them
+	{
+		box b = {NULL};
+		uint8_t seed[32];
+		memset(seed, 62, 32);
+		tp_log *k = memlog(seed, 1 << 20, told_box, &b);
+		b.sync = sync_of(k);
+		dev r;
+		dev_make(&r, tp_memory_store(&mem, 1 << 20), 63);
+		r.sync = sync_of(r.log);
+		end e[2];
+		join(e, r.sync, b.sync);
+		tp_sync_keeper(r.sync, e[0].link);
+		for (int i = 0; i < 3; i++) {
+			tp_write w = put(i);
+			tp_log_write(r.log, &w, &n, &l);
+		}
+		const uint8_t *me = tp_log_device(r.log);
+		CHECK(tp_log_count(k, me) == 3);
+		tp_history_forget(r.history, r.sync);
+		int before = tp_log_run(r.log, me, 1, &to, sig);
+		part(e);
+		join(e, r.sync, b.sync);
+		tp_sync_keeper(r.sync, e[0].link);
+		tp_history_forget(r.history, r.sync);
+		int after = tp_log_run(r.log, me, 1, &to, sig);
+		printf("  own steps: before the keeper said %s, after %s\n", before ? "gone" : "held", after ? "gone" : "held");
+		CHECK(!before && after);
+		part(e);
+		dev_free(&r);
+		tp_sync_free(b.sync), tp_log_free(k);
+	}
+	// c. a late step older than the newest is passed over, not merged in
+	{
+		run r1, r2, r3;
+		tp_log *w1 = writer(64, 0, NULL), *w2 = writer(65, 0, NULL);
+		edit(w1, x0, sizeof x0), run_of(w1, 1, &r1);
+		tp_log_take(w2, r1.device, r1.spans, r1.n, r1.sig, (tp_span){NULL, 0});
+		for (int i = 0; i < 3; i++) {
+			tp_write w = put(i);
+			tp_log_write(w2, &w, &n, &l);
+		}
+		edit(w2, y1, sizeof y1), run_of(w2, 1, &r2);
+		// w1, not knowing w2's: older by lamport
+		edit(w1, x1, sizeof x1), run_of(w1, 2, &r3);
+		dev v[2];
+		for (int i = 0; i < 2; i++) {
+			forgets = !i;
+			dev_make(&v[i], tp_memory_store(&mem, 1 << 20), (uint8_t)(66 + i));
+			tp_log_take(v[i].log, r1.device, r1.spans, r1.n, r1.sig, (tp_span){NULL, 0});
+			tp_log_take(v[i].log, r2.device, r2.spans, r2.n, r2.sig, (tp_span){NULL, 0});
+			tp_log_take(v[i].log, r3.device, r3.spans, r3.n, r3.sig, (tp_span){NULL, 0});
+		}
+		printf("  forgetting doc {x: %lld, y: %lld}, keeping {x: %lld, y: %lld}\n", (long long)field(&v[0], "x"),
+			(long long)field(&v[0], "y"), (long long)field(&v[1], "x"), (long long)field(&v[1], "y"));
+		CHECK(field(&v[0], "x") == 0 && field(&v[0], "y") == 1 && failures(&v[0]) == 0);
+		CHECK(field(&v[1], "x") == 1 && field(&v[1], "y") == 1);
+		dev_free(&v[0]), dev_free(&v[1]);
+		tp_log_free(w1), tp_log_free(w2);
+		forgets = 0;
 	}
 }
 
@@ -979,6 +1110,7 @@ int main(int argc, char **argv) {
 	if (!only || strchr(only, 'f')) ring(1), printf("  heap now %zu\n", H.now);
 	if (!only || strchr(only, '7')) links(), printf("  heap now %zu\n", H.now);
 	if (!only || strchr(only, '8')) typescript(argv[1]), printf("  heap now %zu\n", H.now);
+	if (!only || strchr(only, '9')) forgetting(argv[1]), printf("  heap now %zu\n", H.now);
 	rmdir(argv[1]);
 	CHECK(H.now == 0);
 	printf("check-c-review: %s, %d failed\n", failed ? "FAIL" : "ok", failed);

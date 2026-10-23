@@ -103,8 +103,8 @@ int main(int argc, char **argv) {
 		CHECK(length > 0 && length <= 128);
 		steps[i] = (tp_span){bytes[i], (size_t)length};
 	}
-	CHECK(tp_log_take(r, device, steps, 21, sig) == 21);
-	CHECK(tp_log_take(r, device, steps, 21, sig) == 0);
+	CHECK(tp_log_take(r, device, steps, 21, sig, (tp_span){NULL, 0}) == 21);
+	CHECK(tp_log_take(r, device, steps, 21, sig, (tp_span){NULL, 0}) == 0);
 	tp_log_free(r);
 	r = open_log(&mem, relaydir, NULL);
 	CHECK(r && !tp_log_load(r) && tp_log_count(r, device) == 21 && tp_log_devices(r) == 1);

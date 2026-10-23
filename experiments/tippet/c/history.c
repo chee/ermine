@@ -47,6 +47,8 @@ struct tp_history {
 	int (*kept)(void *ctx, const char *node, const char *part);
 	void (*run)(void *ctx, void (*f)(void *data), void *data);
 	void *ctx;
+	// not a history keeper (history.h)
+	int forgets;
 	pl_watch *watch;
 	entry *entries;
 	size_t nentries, roomentries;
@@ -423,6 +425,9 @@ static int placed(tp_history *h, long k, const uint8_t device[32], uint64_t n, u
 	while (i > 0 && (refs[i - 1].lamport > lamport ||
 		(refs[i - 1].lamport == lamport && memcmp(h->devices[refs[i - 1].device], device, 32) > 0)))
 		i--;
+	// forgets: the list is the newest alone, and one older is not put in
+	if (h->forgets && i < e->count) return 0;
+	if (h->forgets) e->count = i = 0;
 	memmove(&refs[i + 1], &refs[i], (e->count - i) * sizeof *refs);
 	refs[i] = (ref){lamport, n, (uint32_t)d};
 	return ++e->count == i + 1;
@@ -529,7 +534,11 @@ static void land(tp_history *h, const uint8_t device[32], uint64_t n) {
 	int last = k < 0 ? -1 : placed(h, k, device, n, (uint64_t)int_of(b->step->items[6]));
 	// the step's node and part, past the block's going to the graph
 	op_value *s = op_ref(b->step);
-	int code = last < 0 ? (block_free(b), TP_NOMEM) : last ? write(h, b) : redo(h, k, b);
+	// forgets: one that goes earlier is passed over
+	int code = last < 0 ? (block_free(b), TP_NOMEM)
+		: last         ? write(h, b)
+		: h->forgets   ? (block_free(b), 0)
+			       : redo(h, k, b);
 	if (code) {
 		note(h, &h->failed, device, n, s->items[3]->str, s->items[4]->str,
 			code < 0 ? tp_why(code) : op_code_name(code));
@@ -750,7 +759,7 @@ tp_history *tp_history_new(const tp_history_options *o) {
 	if (!h) return NULL;
 	memset(h, 0, sizeof *h);
 	h->mem = o->mem, h->log = o->log, h->table = o->table, h->places = o->places;
-	h->kept = o->kept, h->run = o->run, h->ctx = o->ctx;
+	h->kept = o->kept, h->run = o->run, h->ctx = o->ctx, h->forgets = o->forgets;
 	h->bytes = (tp_buf){NULL, 0, 0, 1 << 20, &h->mem, 0};
 	h->nslots = 16;
 	if (!(h->slots = tp_alloc(&h->mem, h->nslots * sizeof *h->slots))) {
@@ -792,3 +801,17 @@ static size_t told(const failures *list, size_t i, tp_failed *out) {
 }
 size_t tp_history_failed(const tp_history *h, size_t i, tp_failed *out) { return told(&h->failed, i, out); }
 size_t tp_history_unkept(const tp_history *h, size_t i, tp_failed *out) { return told(&h->unkept, i, out); }
+
+// ---- forgetting (a try-out)
+
+int tp_history_forget(tp_history *h, const tp_sync *s) {
+	if (!h->forgets) return TP_BOUND;
+	int why = tp_history_snapshot(h);
+	for (size_t i = 0; i < tp_log_devices(h->log) && !why; i++) {
+		uint64_t held;
+		const uint8_t *device = tp_log_have(h->log, i, &held);
+		uint64_t passed = tp_sync_passed(s, device);
+		why = tp_log_drop(h->log, device, passed < held ? passed : held);
+	}
+	return why;
+}
