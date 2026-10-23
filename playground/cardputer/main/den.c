@@ -16,6 +16,7 @@
 #include "ermine/processes/c/processes.h"
 #include "ermine/encoding/c/blake3/blake3.h"
 #include "experiments/tippet/c/history.h"
+#include "experiments/tippet/c/store.h"
 #include "fb.h"
 #include "host.h"
 #include "playground/encoding/c/pack.h"
@@ -387,7 +388,7 @@ int getenv_trace = 0;
 // the store's calls, timed (ms) and counted: tippet's file store on FAT
 typedef struct {
 	int64_t sync, append, read;
-	int nsync, nappend, nread;
+	int nsync, nappend, nread, tailed;
 } store_times;
 static store_times times;
 static void told(void *ctx, const uint8_t device[32], uint64_t from, size_t count) {
@@ -404,10 +405,10 @@ static void told(void *ctx, const uint8_t device[32], uint64_t from, size_t coun
 		// rest (sign, pack, the encodings) is tippet's own
 		int64_t t2 = den_clock();
 		printf("trace: step %llu written at %lld; pushed in %lld ms: sync %lld (%d), append %lld (%d), read %lld (%d), "
-		       "the rest (sign, pack) %lld\n",
+		       "from memory %d, the rest (sign, pack) %lld\n",
 			(unsigned long long)from, (long long)t0, (long long)(t2 - t1), (long long)(times.sync - was.sync),
 			times.nsync - was.nsync, (long long)(times.append - was.append), times.nappend - was.nappend,
-			(long long)(times.read - was.read), times.nread - was.nread,
+			(long long)(times.read - was.read), times.nread - was.nread, times.tailed - was.tailed,
 			(long long)((t2 - t1) - (times.sync - was.sync) - (times.append - was.append) - (times.read - was.read)));
 	}
 	if (own) {
@@ -1332,13 +1333,67 @@ static int (*store_append)(void *self, const uint8_t *record, size_t length, con
 static long (*store_get)(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap);
 static long (*store_run)(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap, uint64_t *first,
 	uint64_t *last);
+static long (*store_drop)(void *self, const uint8_t device[32], uint64_t n);
+
+// the records appended last, kept in memory too (TAIL of them, TAIL_BYTES at most): a step written
+// is read straight back when its run closes, and the run when it goes out, and on FAT each read
+// there seeks off the file's unsynced last sector and so writes it first (about 50 ms each). the
+// newest record holding a step is the one the store's own index holds for it, so the newest here
+// holding it answers as the store would
+#define TAIL 6
+#define TAIL_BYTES 6144
+static struct {
+	uint8_t *bytes;
+	size_t length;
+	uint8_t device[32];
+	uint64_t first, last;
+	int run;
+} tail[TAIL];
+static size_t ntail;
+static void tail_clear(void) {
+	for (size_t i = 0; i < ntail; i++) free(tail[i].bytes);
+	ntail = 0;
+}
+static void tail_hold(const uint8_t *record, size_t length, const tp_at *at) {
+	if (at == NULL || length > TAIL_BYTES) return;
+	uint8_t *b = malloc(length);
+	if (b == NULL) return;
+	memcpy(b, record, length);
+	size_t bytes = length;
+	for (size_t i = 0; i < ntail; i++) bytes += tail[i].length;
+	// the oldest let go, till it fits
+	while (ntail && (ntail == TAIL || bytes > TAIL_BYTES)) {
+		bytes -= tail[0].length;
+		free(tail[0].bytes);
+		memmove(&tail[0], &tail[1], --ntail * sizeof tail[0]);
+	}
+	tail[ntail].bytes = b, tail[ntail].length = length;
+	memcpy(tail[ntail].device, at->device, 32);
+	tail[ntail].first = at->first, tail[ntail].last = at->last, tail[ntail].run = tp_is_run(record, length);
+	ntail++;
+}
+// the newest record here holding device's step n, or -1
+static long tail_find(const uint8_t device[32], uint64_t n) {
+	for (size_t i = ntail; i-- > 0;)
+		if (tail[i].first <= n && n <= tail[i].last && memcmp(tail[i].device, device, 32) == 0) return (long)i;
+	return -1;
+}
+
 static int timed_append(void *self, const uint8_t *record, size_t length, const tp_at *at) {
 	int64_t t = den_clock();
 	int why = store_append(self, record, length, at);
 	times.append += den_clock() - t, times.nappend++;
+	if (why == 0) tail_hold(record, length, at);
 	return why;
 }
 static long timed_get(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap) {
+	long i = tail_find(device, n);
+	// a step kept alone: its record is the step
+	if (i >= 0 && !tail[i].run) {
+		if (out && tail[i].length <= cap) memcpy(out, tail[i].bytes, tail[i].length);
+		times.tailed++;
+		return (long)tail[i].length;
+	}
 	int64_t t = den_clock();
 	long got = store_get(self, device, n, out, cap);
 	times.read += den_clock() - t, times.nread++;
@@ -1346,10 +1401,22 @@ static long timed_get(void *self, const uint8_t device[32], uint64_t n, uint8_t 
 }
 static long timed_run(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap, uint64_t *first,
 	uint64_t *last) {
+	long i = tail_find(device, n);
+	if (i >= 0) {
+		if (out) memcpy(out, tail[i].bytes, tail[i].length < cap ? tail[i].length : cap);
+		*first = tail[i].first, *last = tail[i].last;
+		times.tailed++;
+		return (long)tail[i].length;
+	}
 	int64_t t = den_clock();
 	long got = store_run(self, device, n, out, cap, first, last);
 	times.read += den_clock() - t, times.nread++;
 	return got;
+}
+// forgetting: what is let go is never read from here either
+static long tail_drop(void *self, const uint8_t device[32], uint64_t n) {
+	tail_clear();
+	return store_drop(self, device, n);
 }
 static int timed_sync(void *self) {
 	int64_t t = den_clock();
@@ -1381,7 +1448,13 @@ int den_boot(const inst_install *install, const char *code, const char *dir, int
 	tp_store *store = tp_file_store(&(tp_mem){counted, &part_now[0]}, dir, 1 << 20);
 	me.kept_on_flash = store != NULL;
 	if (store == NULL) {
-		snprintf(me.why, sizeof me.why, "its log on flash won't open (%s)", strerror(errno));
+		// FAT says EACCES (FR_DENIED) when a folder can't be made for want of a free cluster: a full
+		// flash, said as one
+		size_t left = den_disk_free();
+		if ((errno == EACCES || errno == ENOSPC) && left < 16 * 1024)
+			snprintf(me.why, sizeof me.why, "the flash is full (%uK free): no room for room %s's log",
+				(unsigned)(left / 1024), code);
+		else snprintf(me.why, sizeof me.why, "its log on flash won't open (%s)", strerror(errno));
 		fprintf(stderr, "den: %s\n", me.why);
 		return 1;
 	} else {
@@ -1392,6 +1465,7 @@ int den_boot(const inst_install *install, const char *code, const char *dir, int
 		store_append = store->append, wrapped.append = timed_append;
 		store_get = store->get, wrapped.get = timed_get;
 		store_run = store->run, wrapped.run = timed_run;
+		if (store->drop) store_drop = store->drop, wrapped.drop = tail_drop;
 		store = &wrapped;
 	}
 	me.store = store;
@@ -1667,8 +1741,16 @@ int den_snapshot(void) {
 	// forgetting: the snapshot, then the runs in it that have passed on (to galaxy) let go
 	int why = forgetting ? tp_history_forget(me.history, me.sync) : tp_history_snapshot(me.history);
 	printf("den: snapshot at %llu steps: %s\n", (unsigned long long)den_steps(), why ? tp_why(why) : "kept");
-	if (why) fprintf(stderr, "den: no snapshot: %s\n", tp_why(why));
-	else me.snapped = den_steps();
+	if (why) {
+		fprintf(stderr, "den: no snapshot: %s\n", tp_why(why));
+		// what it left (FAT's rename refused, or the flash full) let go; tried again 16 steps on, not
+		// every loop
+		char *made = joined(me.dir, "/snapshot.new");
+		unlink(made);
+		free(made);
+		say(1, "no snapshot kept:", why == TP_STORE ? "the flash may be full" : tp_why(why));
+	}
+	me.snapped = den_steps();
 	return why;
 }
 

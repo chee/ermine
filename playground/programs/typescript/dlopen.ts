@@ -1,28 +1,29 @@
-// dlopen: a host runner whose load treats the code as a shared library for this machine, the
-// native ABI (c/native.h says it once), through Deno.dlopen: --allow-ffi; its files, --allow-write;
+// dlopen: a runner whose load treats the code as a shared library for this machine, the native
+// ABI (c/native.h says it once), through Deno.dlopen: --allow-ffi; its files, --allow-write;
 // signing, --allow-run=/usr/bin/codesign. c/dlopen.h is the C's; conformance/native holds both
 //
-//   const dlopen = createDlopen({ dir, pointer, note })
-//   table.sub("value", "DL", createEntry(dlopen, header))   // start.ts' Runner: a by's last step
+//   const dlopen = createDlopen({ dir, pointer, note, api })
+//   table.sub("value", "DL", createEntry(dlopen, header))   // @ermine/software's runner: a by's last step
 //
-// load(code): code bytes (else Error "not bytes"), written to a file of its own in dir (none: the
-// system's temp folder), ermine-<random>.so, and opened (Deno.dlopen). its live form (start.ts'
-// Loaded), each there only when the library exports it:
+// load(code, start?): code bytes (else Error "not bytes"), written to a file of its own in dir
+// (none: the system's temp folder), ermine-<random>.so, and opened (Deno.dlopen). its live form,
+// each there only when the library exports it:
 //   compile(input)  input bytes, or a string's UTF-8 (else Error "not bytes"); its output bytes.
 //                   non-zero: Error "compile failed: <n>"
-//   run(code, api)  code as compile's input; api handed on through pointer (none: null). non-zero:
+//   start(code, start)  code as compile's input; the program's api (api(start); none: start as it
+//                   is) handed on through pointer (none: null), the library's run called. non-zero:
 //                   Error "run failed: <n>". its handle's stop: the library's stop (none: nothing)
-//   [Symbol.dispose]  the library closed, its file removed: start.ts calls it as the last process
-//                   holding it stops. compile, run or stop after: Error "unloaded"
+//   [Symbol.dispose]  the library closed, its file removed: software calls it as the last process
+//                   holding it stops. compile, start or stop after: Error "unloaded"
 // failing: the file removed, Error "dlopen failed", its cause what was thrown, noted ("not written",
 // "dlopen failed"). dlopen failing for a missing code signature (macOS): the file signed ad hoc
 // (codesign -s - -f), noted ("signed", the file), opened again
-// run(code, api): the code is a library run as a program: loaded, its run called with no code (0
-// bytes) and the api, its stop then the library let go as the process stops. fails as load does,
-// or Error "no run in the library", or "run failed: <n>"
+// start(code, start): the code is a library run as a program: loaded, its run called with no code
+// (0 bytes) and the api, its stop then the library let go as the process stops. fails as load
+// does, or Error "no run in the library", or "run failed: <n>"
 //
 // open: a string as UTF-8 and every output as bytes; the library's run as the runner's own
-import type { Handle, Loaded } from "./start.ts"
+import type { Handle, Runner, Start } from "./start.ts"
 
 export type Options = {
 	// where the files go; none: the system's temp folder
@@ -32,14 +33,21 @@ export type Options = {
 	// told what is worth telling: what ("signed", "not written", "dlopen failed") and its detail;
 	// none: a line to stderr
 	note?: (what: string, detail: string) => void
+	// what a program is given, the runner's api (a host's createProcessAPI); none: the start's
+	// facts as they are
+	api?: (start: Start) => unknown
 }
 
-// a library's live form, as load gives it
-export type Live = Loaded & Disposable
+// a library's live form, as load gives it: a compiler's compile, a runner's start
+export type Live = Disposable & {
+	readonly compile?: (input: unknown) => unknown
+	readonly start?: (code: unknown, start: Start) => Handle
+}
 
-// the runner: a library run as a program, and load (start.ts' Runner)
-export type Dlopen = ((code: unknown, api: unknown) => Handle) & {
-	readonly load: (code: unknown) => Live
+// the runner: a library run as a program, and load (@ermine/software's Runner)
+export type Dlopen = Runner & {
+	readonly start: (code: unknown, start: Start) => Handle
+	readonly load: (code: unknown, start?: Start) => Live
 }
 
 const exports = {
@@ -84,6 +92,7 @@ export function createDlopen(options: Options = {}): Dlopen {
 	const pointer = options.pointer ?? (() => null)
 	const note = options.note ??
 		((what: string, detail: string) => console.error(`dlopen: ${what}: ${detail}`))
+	const api = options.api ?? ((start: Start) => start)
 
 	function open(path: string): Library {
 		try {
@@ -129,7 +138,7 @@ export function createDlopen(options: Options = {}): Dlopen {
 			},
 		}
 		if (lib.symbols.compile !== null) live.compile = (input) => compile(symbols, input)
-		if (lib.symbols.run !== null) live.run = (code, api) => run(symbols, code, api)
+		if (lib.symbols.run !== null) live.start = (code, start) => run(symbols, code, start)
 		return live
 	}
 
@@ -148,25 +157,25 @@ export function createDlopen(options: Options = {}): Dlopen {
 		return got
 	}
 
-	function run(symbols: () => Library["symbols"], code: unknown, api: unknown): Handle {
+	function run(symbols: () => Library["symbols"], code: unknown, start: Start): Handle {
 		const bytes = bytesOf(code)
 		const state = new BigUint64Array(1)
-		const rc = symbols().run!(bytes, BigInt(bytes.length), pointer(api), state)
+		const rc = symbols().run!(bytes, BigInt(bytes.length), pointer(api(start)), state)
 		if (rc !== 0) throw new Error(`run failed: ${rc}`)
 		const st = Deno.UnsafePointer.create(state[0])
 		return { stop: () => void symbols().stop?.(st) }
 	}
 
 	// the library as a program
-	const runner = (code: unknown, api: unknown): Handle => {
+	const start = (code: unknown, given: Start): Handle => {
 		const live = load(code)
-		if (live.run === undefined) {
+		if (live.start === undefined) {
 			live[Symbol.dispose]()
 			throw new Error("no run in the library")
 		}
 		let h: Handle
 		try {
-			h = live.run(new Uint8Array(0), api) as Handle
+			h = live.start(new Uint8Array(0), given)
 		} catch (e) {
 			live[Symbol.dispose]()
 			throw e
@@ -181,7 +190,7 @@ export function createDlopen(options: Options = {}): Dlopen {
 			},
 		}
 	}
-	return Object.assign(runner, { load })
+	return { start, load, ...(options.api === undefined ? {} : { api: options.api }) }
 }
 
 function remove(path: string) {

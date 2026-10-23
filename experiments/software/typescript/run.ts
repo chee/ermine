@@ -7,30 +7,37 @@
 // makes no api; a runner over ermine/api builds it from apis.createProcessAPI(start)
 // (@ermine/programs/api's; api? saying how). its limits are the
 // runner's too: nothing here counts
-// run(runner, program, at, { args, cwd, box, pin }): runner from places' root; program an address
-// from where's root (where: box, else places) or { id, hash?, type?, api?, code? }. refused,
-// nothing made, the first that holds:
+// run(runner, program, at, { args, cwd, box, pin }): runner from places' root, or carried ({ id,
+// live }: its live form in hand, nothing of its node read); program an address from where's root
+// (where: box, else places) or { id, hash?, type?, api?, code?, build? }. refused, nothing made,
+// the first that holds:
 //   not-a-runner   nothing at runner, or its ermine.type is not ermine.runner
 //   not-there      no program node, or no value; by id: none, or not the hash given; code given:
 //                  not the hash given
 //   wrong-form     the program's type does not fit the runner's takes (TAKES); or it names an
 //                  api (ermine.program.api; code given: api) the runner's ermine.runner.api is not
-//   not-a-runner   the runner's value is no runner here (no start)
+//   not-a-runner   the runner's value (carried: its live) is no runner here (no start)
 //   taken          a process at, above or under at (processes')
+// a carried runner is run as the caller holds it: its form is the caller's to have matched
+// (programs' satisfy), so only not-there, not-a-runner and taken are asked
 // the program's type: by an address, @ermine/types' typeOf (its ermine.type, else its name's
 // extension, by the nearest ermine/types from its folder); by id, its ermine.type; code given, type.
 // it fits when the takes (a list; a string, a list of one) holds it or a type it conforms to, by
 // the nearest ermine/types from the program's folder (none: from where's root). read untracked
 // else processes' start under a scope of its own (under the runner's offer's, when offered here;
-// else setup.scope), with ermine.type ermine.process, ermine.process.runner { id, at },
-// .program { id, at?, hash? } (hash: of its value; none: a live value); the code read once now;
-// at the first pulse, a one-shot effect, the process's scope open: start(code, Start). a handle:
-// held, its stop its stopper's teardown (landing after the stop: called then); a throw, a
-// rejected promise: the status. a run made outside a pulse asks for one (setup.schedule)
+// else setup.scope), with ermine.type ermine.process, ermine.process.runner { id, at } (carried:
+// { id }), .program { id, at?, hash? } (hash: of its value; none: a live value, or built); the
+// code read once now; at the first pulse, a one-shot effect, the process's scope open:
+// start(code, Start). build given (carried, no code): the code is what build gives, read in that
+// effect's run, tracked: PENDING, the process pending; a throw, its status; start called once it
+// gives one. a handle: held, its stop its stopper's teardown (landing after the stop: called
+// then); a throw, a rejected promise: the status. a run made outside a pulse asks for one
+// (setup.schedule)
 // load(runner, program, { by, box?, chain? }): the program made live on the runner with no
 // process, shared: one load per key, the program's id, its value's hash (none: the value itself),
 // the runner's id and live value, and chain (the keys of what else loads it, programs'; none:
-// none). checked as run is (no path, so never taken); a runner with no load: not-a-runner. a key
+// none). checked as run is (no path, so never taken; a program's build is run's alone, not read
+// here); a runner with no load: not-a-runner. a key
 // with no load standing: the runner's load(code, start), start by's facts and a scope of the
 // load's own (under setup.scope), open for the call; what load throws: thrown, the scope gone.
 // { live, release }: one hold by by. release lets go of it, as by's scope's teardown does (after
@@ -88,19 +95,24 @@ export type Runner = {
 }
 // what a runner node may hold: a Runner, or a function, its start
 export type Runnable = Runner | (Runner["start"] & Partial<Pick<Runner, "load" | "api">>)
+// a runner carried: its node's id, and its live form in hand
+export type Carried = { readonly id: Id; readonly live: Runnable }
 // a load: the live form, and its letting go now (else at its holder's stop)
 export type Loaded = { readonly live: unknown; readonly release: () => void }
-// a program by id (its hash, when given, must be its value's), or carried (code: run as it is)
+// a program by id (its hash, when given, must be its value's), or carried (code: run as it is;
+// build: run's, its code made in the process's first run, tracked)
 export type Program = {
 	readonly id: Id
 	readonly hash?: string
 	readonly type?: string
 	readonly api?: string
 	readonly code?: unknown
+	readonly build?: () => unknown
 }
 export type Refused =
 	| { readonly refused: "taken"; readonly at: Path }
-	| { readonly refused: "not-a-runner"; readonly runner: Path }
+	// runner: its path (an address given) or its id (carried)
+	| { readonly refused: "not-a-runner"; readonly runner: Path | Id }
 	// program: its path (an address given) or its id (a Program given)
 	| { readonly refused: "not-there"; readonly program: Path | Id }
 	| {
@@ -199,28 +211,32 @@ export function createRun(c: Ctx) {
 	}
 
 	// the checks in order, up to taken (processes'): the runner, the program read once. load: a
-	// runner with no load is not-a-runner. value: the runner node's, as read
+	// runner with no load is not-a-runner. value: the runner node's, as read (carried: its live).
+	// build: run's, a carried program's code to come
 	type Checked = {
-		readonly runner: { readonly id: Id; readonly path: Path; readonly value: unknown }
+		readonly runner: { readonly id: Id; readonly path?: Path; readonly value: unknown }
 		readonly program: { readonly id: Id; readonly at?: Path }
 		readonly code: unknown
 		readonly digest?: string
+		readonly build?: () => unknown
 		readonly live: Runner
 	}
 	function check(
-		runner: Address,
+		runner: Address | Carried,
 		program: Address | Program,
 		where: Box,
 		load: boolean,
 	): Checked | Refused {
-		const r = resolve(home, runner)
-		const notRunner = { refused: "not-a-runner", runner: r.path } as const
+		// the runner: its node, looked up and typed; carried, its id alone
+		const carried = !isAddress(runner)
+		const r = carried ? { id: runner.id, path: undefined } : resolve(home, runner)
+		const notRunner = { refused: "not-a-runner", runner: r.path ?? r.id! } as const
 		if (r.id === undefined) return notRunner
-		const rattrs = attributesOf(r.id)
-		if (rattrs[ATTRIBUTE] !== TYPE.runners) return notRunner
+		const rattrs = carried ? {} : attributesOf(r.id)
+		if (!carried && rattrs[ATTRIBUTE] !== TYPE.runners) return notRunner
 		// the program: its node (or carried code), its form, and its code read once
 		let id: Id, path: Path | undefined, code: unknown, digest: string | undefined
-		let type: unknown, api: unknown
+		let type: unknown, api: unknown, build: (() => unknown) | undefined
 		if (isAddress(program)) {
 			const p = resolve(where, program)
 			path = p.path
@@ -233,10 +249,11 @@ export function createRun(c: Ctx) {
 			digest = hashOf(code)
 			type = typeAt(where, id, path)
 			api = attributesOf(id)[PROGRAM_API]
-		} else if (program.code !== undefined) {
+		} else if (program.code !== undefined || (!load && program.build !== undefined)) {
 			id = typeof program.id === "string" ? program.id : ""
 			code = program.code
-			digest = hashOf(code)
+			build = program.code === undefined ? program.build : undefined
+			digest = build === undefined ? hashOf(code) : undefined
 			if (program.hash !== undefined && program.hash !== digest) {
 				return { refused: "not-there", program: id }
 			}
@@ -253,12 +270,15 @@ export function createRun(c: Ctx) {
 			}
 			;({ [ATTRIBUTE]: type, [PROGRAM_API]: api } = attributesOf(id))
 		}
-		// its type fits from its folder; by id, or carried, from where's root
+		// its type fits from its folder; by id, or carried, from where's root. a carried runner's
+		// form is its caller's
 		const takes = takesOf(rattrs[TAKES]), given = rattrs[API]
 		const from = path === undefined ? [] : path.slice(0, -1)
 		if (
-			typeof type !== "string" || !fits(where, from, type, takes) ||
-			(api !== undefined && api !== given)
+			!carried && (
+				typeof type !== "string" || !fits(where, from, type, takes) ||
+				(api !== undefined && api !== given)
+			)
 		) {
 			return {
 				refused: "wrong-form",
@@ -266,20 +286,21 @@ export function createRun(c: Ctx) {
 				runner: { ...(takes.length ? { takes } : {}), ...strings({ api: given }) },
 			}
 		}
-		const value = table.get("value", r.id)?.value
+		const value = carried ? runner.live : table.get("value", r.id)?.value
 		const live = runnerOf(value)
 		if (live === undefined || (load && live.load === undefined)) return notRunner
 		return {
-			runner: { id: r.id, path: r.path, value },
+			runner: { id: r.id, ...(r.path === undefined ? {} : { path: r.path }), value },
 			program: { id, ...(path === undefined ? {} : { at: path }) },
 			code,
 			...(digest === undefined ? {} : { digest }),
+			...(build === undefined ? {} : { build }),
 			live,
 		}
 	}
 
 	function run(
-		runner: Address,
+		runner: Address | Carried,
 		program: Address | Program,
 		address: Address,
 		options: Options = {},
@@ -287,11 +308,13 @@ export function createRun(c: Ctx) {
 		const where = options.box ?? home
 		const ck = check(runner, program, where, false)
 		if ("refused" in ck) return ck
-		const { live, code, digest } = ck
+		const { live, code, digest, build } = ck
 		const on = c.offers.get(ck.runner.id)
 		const attrs = {
 			[ATTRIBUTE]: TYPE.process,
-			[RUNNER]: { id: ck.runner.id, at: ck.runner.path },
+			[RUNNER]: ck.runner.path === undefined
+				? { id: ck.runner.id }
+				: { id: ck.runner.id, at: ck.runner.path },
 			[PROGRAM]: digest === undefined ? ck.program : { ...ck.program, hash: digest },
 		}
 		// where it runs: a scope under its runner's offer (none: setup.scope) holding, newest first,
@@ -336,10 +359,11 @@ export function createRun(c: Ctx) {
 					p = q
 					c.running.push(q)
 					c.byId.set(q.id, q)
-					// core candidate (scheduler): an effect that acts once and goes
-					const first = s.createEffect(() => true, () => {
+					// core candidate (scheduler): an effect that acts once and goes. built: its read
+					// makes the code, the process pending while it is
+					const first = s.createEffect(() => build === undefined ? true : build(), (made) => {
 						try {
-							begin(q, inner, live, code)
+							begin(q, inner, live, build === undefined ? code : made)
 						} finally {
 							s.teardown(first)
 						}
@@ -420,7 +444,7 @@ export function createRun(c: Ctx) {
 	}
 
 	function load(
-		runner: Address,
+		runner: Address | Carried,
 		program: Address | Program,
 		options: LoadOptions,
 	): Loaded | Refused {

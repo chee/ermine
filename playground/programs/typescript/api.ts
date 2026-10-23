@@ -1,10 +1,10 @@
 // the process api with programs': ermine/api's, each process's api given start, stop and openwith,
-// and the host runners run and runner. ermine/api's stop is the programs' (asked when used)
+// and the runners run and runner. ermine/api's stop is the programs' (asked when used)
 //
 //   const apis = createProcessAPIs({ scheduler, table, commit, host, programs: () => programs })
-//   const programs = createPrograms({ ..., createProcessAPI: apis.createProcessAPI })
+//   const programs = createPrograms({ scheduler, table, places, builds, scopes })
 //   put("value", RUN, apis.run)                       // a host runner for javascript programs
-//   den.offer("runners", "javascript", attributes, apis.run)   // a den's, the same
+//   software.offer(session, "runners", "javascript", attributes, apis.run)   // software's, the same
 //   apis.runner({ api: (ctx) => ({ ...apis.createProcessAPI(ctx), offer }) })   // its own api
 //
 // programs none (a den's world, its starter the den): an api's start throws, and stop only tells
@@ -16,16 +16,14 @@
 //   stop(p)              a process this one started
 //   openwith(x, { onwhynot }?)   every way to open x, nearest first (a generator)
 //
-// run: a javascript program's value (or module's default) called with the api, once, untracked;
-// its return the process's value, written to the process's node with its scope open.
-// runner({ show?, api? }): the same, show(value, api) making setup's return what is kept (a view
-// made real, say); api: what a den's start gives the program (none: createProcessAPI), a runner's
-// own over this one ({ ...createProcessAPI(ctx), more }). each runner is both programs' (a function
-// given the code and an api) and a den's ({ start(code, ctx), api(ctx) }, ctx the start's facts,
-// @ermine/processes/start's Context, a den's with its den too). its handle's stop(reason): the
-// process's teardowns told reason (the starter's stop is under way: it is what calls the handle's)
-// an api knows its process by a key it carries (a symbol's field), not by being the api made: a
-// copy (spread, Object.assign) is as good
+// run: a runner in @ermine/software's shape, { start(code, ctx), api(ctx) }, ctx the start's facts
+// (software's Start, @ermine/processes/start's Context): a javascript program's value (or its
+// module's default) called with api(ctx), once, untracked; its return the process's value,
+// written to the process's node with its scope open.
+// runner({ show?, api? }): the same, show(value, api)'s return the process's value instead (a view
+// made real, say); api: what the program is given (none: createProcessAPI), a runner's own over
+// this one ({ ...createProcessAPI(ctx), more }). its handle's stop(reason): the process's
+// teardowns told reason (the starter's stop is under way: it is what calls the handle's)
 // a start, and a write of a process's value, asks for one pulse soon (setup.schedule, as the api's)
 import createEntry, { type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
@@ -77,8 +75,7 @@ export type Setup = Omit<BaseSetup, "stop"> & {
 // what a runner of these gives back: its stop(reason) tells the process's teardowns reason
 export type Told = Handle & { readonly stop: (reason?: unknown) => void }
 
-// a runner both programs' start and a den take: called (code, api), as programs' runner is; start,
-// as a den's is, given the start's facts, the program given api(ctx)
+// a runner (software's shape): start given the start's facts, the program given api(ctx)
 export type Run = Runner & {
 	readonly start: (code: unknown, ctx: Context) => Told
 	readonly api: (ctx: Context) => API
@@ -86,13 +83,12 @@ export type Run = Runner & {
 
 export type ProcessAPIs = Omit<Bases, "createProcessAPI"> & {
 	createProcessAPI: (ctx: Context) => API
-	// a host runner for a javascript program: its value (or module's default) called with the api,
-	// once, untracked; its return the process's value
+	// a runner for a javascript program: its value (or module's default) called with the api, once,
+	// untracked; its return the process's value
 	run: Run
-	// the same, show(value, api) making setup's return what is kept (a view made real, say), with
-	// the process's scope open; its return the process's value. api: what a den's start gives the
-	// program (none: createProcessAPI), a runner's own over this one ({ ...createProcessAPI(ctx),
-	// more })
+	// the same, show(value, api) called with the process's scope open, its return the process's
+	// value (a view made real, say). api: what the program is given (none: createProcessAPI), a
+	// runner's own over this one ({ ...createProcessAPI(ctx), more })
 	runner: (
 		options?: { show?: (value: unknown, api: API) => unknown; api?: (ctx: Context) => API },
 	) => Run
@@ -100,18 +96,10 @@ export type ProcessAPIs = Omit<Bases, "createProcessAPI"> & {
 
 const isNode = (x: Target): x is Node => typeof x === "object" && !Array.isArray(x)
 
-// what an api carries of its process: a key a copy keeps (an own enumerable field, a symbol's)
-const PROCESS = Symbol("ermine/programs api process")
-
-const isMap = (v: unknown): v is Record<PropertyKey, unknown> =>
-	typeof v === "object" && v !== null && !Array.isArray(v)
-
 export function createProcessAPIs(setup: Setup): ProcessAPIs {
 	const { programs: given, ...rest } = setup
 	const { scheduler: s, table, commit } = setup
 	const apis = createBase({ ...rest, stop: (p) => void given?.().stop(p) })
-	// each process, by the key its apis carry (PROCESS)
-	const contexts = new WeakMap<object, Context>()
 	// the reason a process's scope goes, told by its handle's stop (or stop with no programs)
 	// before it goes; its teardowns told it over ermine/api's why
 	const reasons = new WeakMap<Scope, unknown>()
@@ -227,38 +215,27 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			return openwithIn(places, idOf(x), cwd, options)
 		}
 
-		const api: API = { ...base, teardown, start, stop: (p) => stop(p, "ended"), openwith }
-		const key = {}
-		contexts.set(key, ctx)
-		Object.defineProperty(api, PROCESS, { value: key, enumerable: true })
-		return api
+		return { ...base, teardown, start, stop: (p) => stop(p, "ended"), openwith }
 	}
 
 	const runner: ProcessAPIs["runner"] = (options = {}) => {
 		const { show } = options
-		const make = options.api ?? createProcessAPI
-		// the program run with api; ctx its process's (none: an api of no process here, nothing kept)
-		const go = (code: unknown, api: unknown, ctx?: Context): Told => {
+		const api = options.api ?? createProcessAPI
+		const start = (code: unknown, ctx: Context): Told => {
 			const f = typeof code === "function"
 				? code
 				: (code as { default?: unknown } | null)?.default
 			if (typeof f !== "function") throw new TypeError("not a program: no function, no default")
-			const made = f(api)
-			const value = show === undefined ? made : show(made, api as API)
-			if (ctx !== undefined && value !== undefined) {
+			const given = api(ctx)
+			const made = f(given)
+			const value = show === undefined ? made : show(made, given)
+			if (value !== undefined) {
 				s.runWithScope(ctx.scope, () => write(ctx.process.id, value))
 				later()
 			}
-			return { stop: (reason?: unknown) => void (ctx && tell(ctx.scope, reason)) }
+			return { stop: (reason?: unknown) => tell(ctx.scope, reason) }
 		}
-		const run = (code: unknown, api: unknown) => {
-			const key = isMap(api) ? api[PROCESS] : undefined
-			return go(code, api, isMap(key) ? contexts.get(key) : undefined)
-		}
-		return Object.assign(run, {
-			start: (code: unknown, ctx: Context) => go(code, make(ctx), ctx),
-			api: make,
-		})
+		return { start, api }
 	}
 
 	return { ...apis, createProcessAPI, stop, run: runner(), runner }

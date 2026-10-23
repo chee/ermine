@@ -9,6 +9,7 @@
 //     { [TAKES]: "com.netscape.javascript-source", [API]: "ermine.api" }, apis.run)
 //   const p = software.run("/system/den/runners/javascript", "/apps/clock.js", "/work/clock")
 //   // a Process, or { refused: ... }
+//   software.run({ id: RUN, live }, { id: CAT, build }, "/work/cat")   // carried: programs' way
 //   const l = software.load("/work/clock/runners/letter", { id, code, type }, { by: p })
 //   // { live, release }: one hold; the same program on the same runner again shares the load
 //   software.stop(p, "SIGHUP")
@@ -21,7 +22,7 @@
 import type { Address, Box } from "@ermine/boxes"
 import { type Id, type Path, type Places, PlacesError } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
-import { createProcesses, type Process } from "@ermine/processes/start"
+import { createProcesses, type Process, type Processes } from "@ermine/processes/start"
 import type { ScopeNodes } from "@ermine/processes/scopes"
 import type { Scheduler, Scope } from "@ermine/scheduler"
 import type { Sited } from "@ermine/sites"
@@ -29,6 +30,7 @@ import type { Table } from "@ermine/table"
 import { type Ctx, holder, ours, type Owner, type Place, through } from "./common.ts"
 import { createOffers, type Kind, type Offered } from "./offers.ts"
 import {
+	type Carried,
 	createRun,
 	type Handle,
 	type Loaded,
@@ -40,8 +42,21 @@ import {
 
 ours.add(import.meta.url)
 
-export type { Handle, Kind, Loaded, LoadOptions, Offered, Options, Place, Program, Refused }
+export type {
+	Carried,
+	Handle,
+	Kind,
+	Loaded,
+	LoadOptions,
+	Offered,
+	Options,
+	Place,
+	Program,
+	Refused,
+}
 export { ATTRIBUTE, TYPE } from "./common.ts"
+// the files of software, for a host's sites (@ermine/sites' ours): a scope's site is past them
+export { ours } from "./common.ts"
 export { API, COMPILER_TAKES, GIVES, KIND, runnerOf, SIZE, TAKES, WHERE } from "./offers.ts"
 export { hashOf, PROGRAM, PROGRAM_API, REASONS, RUNNER } from "./run.ts"
 export type { Runnable, Runner, Start } from "./run.ts"
@@ -58,6 +73,9 @@ export type Setup = {
 	sites?: Pick<Sited, "createScope">
 	// how a pulse is asked for: f run soon, once (none: queueMicrotask)
 	schedule?: (f: () => void) => void
+	// files a write's site skips beside software's: a library's over it (programs'), so the site is
+	// its caller's
+	ours?: Iterable<string>
 }
 
 export type Software = {
@@ -69,16 +87,22 @@ export type Software = {
 		live?: unknown,
 	) => Offered | { readonly refused: "taken"; readonly at: Path }
 	withdraw: (offer: Offered | Id) => void
-	run: (runner: Address, program: Address | Program, at: Address, options?: Options) =>
-		| Process
-		| Refused
-	load: (runner: Address, program: Address | Program, options: LoadOptions) =>
+	run: (
+		runner: Address | Carried,
+		program: Address | Program,
+		at: Address,
+		options?: Options,
+	) => Process | Refused
+	load: (runner: Address | Carried, program: Address | Program, options: LoadOptions) =>
 		| Loaded
 		| Refused
 	stop: (p: Process | Id, reason?: unknown) => void
 	// the processes it runs, in start order; the offers it holds
 	running: () => readonly Process[]
 	offers: () => readonly Offered[]
+	// a process's latest first run by its node's id (processes'); none without places' describe
+	// and watchAll
+	runs?: Processes["runs"]
 }
 
 export function createSoftware(setup: Setup): Software {
@@ -87,6 +111,8 @@ export function createSoftware(setup: Setup): Software {
 	const version = {}
 	const queued = { now: false }
 	const owners = new Map<Id, Owner>()
+	// what a write's site skips: software's files, and the library's over it
+	const skip = new Set([...ours, ...setup.ours ?? []])
 	const c: Ctx = {
 		s,
 		table,
@@ -100,14 +126,14 @@ export function createSoftware(setup: Setup): Software {
 			scopes: setup.scopes,
 			sites: setup.sites,
 			owner: setup.scope,
-			ours,
+			ours: skip,
 		}),
 		scope: setup.scope,
 		createScope: setup.sites?.createScope ?? s.createScope,
 		commit: (changed) => {
 			if (changed.length) places.commit(changed)
 		},
-		headerOf: () => createChangeHeader(s, undefined, [...ours, ...through]),
+		headerOf: () => createChangeHeader(s, undefined, [...skip, ...through]),
 		version,
 		changed: () => void s.mark([version]),
 		later() {
@@ -157,6 +183,7 @@ export function createSoftware(setup: Setup): Software {
 		run: run.run,
 		load: run.load,
 		stop: run.stop,
+		runs: c.processes.runs,
 		running: () => {
 			s.track(version)
 			return c.running.flatMap((p) => p.process === undefined ? [] : [p.process])

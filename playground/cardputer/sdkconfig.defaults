@@ -5,6 +5,10 @@ CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+# the flash four lines wide (QIO, 80 MHz): the ADV's ESP32-S3FN8 has its 8 MB inside, quad. code and
+# constants run from it through the cache. (sdkconfig made before this says DIO: set it there too)
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
 CONFIG_COMPILER_OPTIMIZATION_PERF=y
 # the loop's stack: 12 KB (it used up to 7.4 KB through an end to end and a store mended)
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=12288
@@ -51,11 +55,11 @@ CONFIG_LWIP_MAX_ACTIVE_TCP=4
 CONFIG_LWIP_MAX_LISTENING_TCP=2
 CONFIG_LWIP_MAX_UDP_PCBS=8
 # the den's log on FAT (main/flash.c): 512-byte sectors (a 512-byte window in RAM, not 4 KB), 8.3
-# names only (the log's are: log, key, snapshot), one volume
+# names only (the log's are: log, key, snapshot), two volumes ("den" and "den2", partitions.csv)
 CONFIG_WL_SECTOR_SIZE_512=y
 CONFIG_FATFS_SECTOR_512=y
 CONFIG_FATFS_LFN_NONE=y
-CONFIG_FATFS_VOLUME_COUNT=1
+CONFIG_FATFS_VOLUME_COUNT=2
 # the esp_timer task: 2.5 KB of stack (nothing of ours runs on it)
 CONFIG_ESP_TIMER_TASK_STACK_SIZE=2560
 # how the den reaches galaxy: the websocket (main/ws.c: one TLS session, the browsers' path). it
