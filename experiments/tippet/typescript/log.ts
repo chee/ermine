@@ -10,7 +10,7 @@
 //   await log.take(run)                          // another's run, checked: chain and signature
 //   log.on((device, steps, from) => ...)         // steps added, and the link they came on
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
-import { decodeStep, encodeStep, hashStep, hex, same, type Step, unhex } from "./step.ts"
+import { decodeStep, encodeStep, hashStep, hex, rest, same, type Step, unhex } from "./step.ts"
 import { createSigner, type Signer, verify } from "./sign.ts"
 import { pack, type Packed, unpack } from "./pack.ts"
 
@@ -22,21 +22,26 @@ export type Run = { device: string; steps: Uint8Array[]; sig: Uint8Array; messag
 export type At = [device: string, first: number, last: number]
 
 // a run as a store keeps it: its run message (WIRE.md, messages), as it came or as it goes, so it
-// goes on as it is. this device's steps not yet in a closed run are kept alone, each its bytes
+// goes on as it is. this device's steps not yet in a closed run: open, each its bytes, beside the
+// records (a store with no open place: appended alone, as logs before it did)
 const record = (device: string, sig: Uint8Array, p: Packed) =>
 	encode(["run", unhex(device), sig, p] as Value)
-// a run's record: a message, an array of 4; a step's: an array of 8 or 9
+// a run's record: a message, an array of 4; a step's (open, or alone): an array of 8 or 9
 export const isRun = (record: Uint8Array) => record[0] === 0x84
 const opened = (record: Uint8Array) => decode(record) as [string, Uint8Array, Uint8Array, Packed]
 
 // where a log keeps itself: records appended in order, the steps among them got again by place,
 // one snapshot, replaced, and the key of the device that writes here
 export type Store = {
-	// each record, in order, given to read, which says which hold steps to get later. the snapshot
+	// each record, in order, given to read, which says which hold steps to get later; then each
+	// open step, in order, the same (one not held: let go). the snapshot
 	load(read: (record: Uint8Array) => At | undefined): Promise<Uint8Array | undefined>
 	// a record at the end, after every one before it; at: the steps it holds, in place of any
-	// held that it covers
+	// held that it covers, open ones too
 	append(record: Uint8Array, at?: At): Promise<void>
+	// a step of this device's not yet in a closed run, at: [device, n, n]. got as any step is, and
+	// on disk by the next sync; a run appended holding it lets it go. none: it is appended alone
+	open?(step: Uint8Array, at: At): void
 	// the record holding step n, and the n of its first step and its last
 	run(device: string, n: number): { record: Uint8Array; first: number; last: number } | undefined
 	// step n's bytes, as if kept alone: out of its run, unpacked
@@ -44,7 +49,7 @@ export type Store = {
 	snapshot(bytes: Uint8Array): Promise<void>
 	// the key this store's device signs with: the one it holds, else seed, held from now on
 	key(seed: Uint8Array): Promise<Uint8Array>
-	// every record appended so far on disk, through a power cut
+	// every record appended so far on disk, through a power cut, then the open steps
 	sync?(): Promise<void>
 	// what it holds open, let go
 	close?(): void
@@ -52,11 +57,16 @@ export type Store = {
 	drop?(device: string, n: number): number
 }
 
+// this device's steps not yet in a closed run, from first on, in order
+export type Open = { device: string; first: number; steps: Uint8Array[] }
+
 // what both stores keep in memory: per device, each record holding steps, in order, as [first,
-// last, where]; and the last run read, unpacked, so reading its steps in turn unpacks it once
+// last, where]; the open steps; and the last run read, unpacked, so reading its steps in turn
+// unpacks it once
 export function createIndex<W>(read: (where: W) => Uint8Array) {
 	let runs = new Map<string, [number, number, W][]>()
 	let last: { device: string; first: number; steps: Uint8Array[] } | undefined
+	let open: Open | undefined
 	const find = (device: string, n: number) => {
 		const list = runs.get(device) ?? []
 		let lo = 0, hi = list.length
@@ -69,8 +79,22 @@ export function createIndex<W>(read: (where: W) => Uint8Array) {
 		return r && n <= r[1] ? r : undefined
 	}
 	return {
-		clear: () => void (runs = new Map(), last = undefined),
+		clear: () => void (runs = new Map(), last = undefined, open = undefined),
+		// a step not yet in a closed run, after those open (one that doesn't follow: the only one)
+		open(step: Uint8Array, [device, n]: At) {
+			if (open?.device !== device || n !== open.first + open.steps.length) {
+				open = { device, first: n, steps: [] }
+			}
+			open.steps.push(step)
+		},
+		// the open steps, as they are now
+		opened: (): Open | undefined => open && { ...open, steps: [...open.steps] },
 		hold([device, first, end]: At, where: W) {
+			// the open steps it holds let go
+			if (open?.device === device && end >= open.first) {
+				const k = Math.min(open.steps.length, end - open.first + 1)
+				open.steps.splice(0, k), open.first += k
+			}
 			let list = runs.get(device)
 			if (!list) runs.set(device, list = [])
 			let i = list.length
@@ -84,6 +108,10 @@ export function createIndex<W>(read: (where: W) => Uint8Array) {
 			return r && { record: read(r[2]), first: r[0], last: r[1] }
 		},
 		get(device: string, n: number): Uint8Array {
+			const o = open
+			if (o?.device === device && n >= o.first && n < o.first + o.steps.length) {
+				return o.steps[n - o.first]
+			}
 			const l = last
 			if (l?.device === device && n >= l.first && n < l.first + l.steps.length) {
 				return l.steps[n - l.first]
@@ -110,10 +138,15 @@ export function createMemoryStore(): Store {
 	let snap: Uint8Array | undefined, key: Uint8Array
 	return {
 		load(read) {
+			const open = index.opened()
 			index.clear()
 			for (const r of records) {
 				const at = read(r)
 				if (at) index.hold(at, r)
+			}
+			for (const s of open?.steps ?? []) {
+				const at = read(s)
+				if (at) index.open(s, at)
 			}
 			return Promise.resolve(snap)
 		},
@@ -122,6 +155,7 @@ export function createMemoryStore(): Store {
 			if (at) index.hold(at, r)
 			return Promise.resolve()
 		},
+		open: index.open,
 		run: index.run,
 		get: index.get,
 		snapshot: (b) => (snap = b, Promise.resolve()),
@@ -184,12 +218,13 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 		feeds.set(device, { count: count(device) + c.steps.length, last: c.last })
 		for (const s of c.steps) lamport = Math.max(lamport, s.lamport)
 	}
-	// checked steps: counted, their record in the store, then told. a listener that throws stops
-	// no other
-	function add(device: string, record: Uint8Array, c: Chained, from?: unknown) {
-		const n = count(device)
+	// checked steps: counted, their record in the store (open: this device's one step, open there
+	// when the store has an open place), then told. a listener that throws stops no other
+	function add(device: string, record: Uint8Array, c: Chained, from?: unknown, open?: boolean) {
+		const n = count(device), at: At = [device, n + 1, n + c.steps.length]
 		keep(device, c)
-		save(record, [device, n + 1, n + c.steps.length])
+		if (open && store.open) store.open(record, at)
+		else save(record, at)
 		for (const t of told) {
 			try {
 				t(device, c.steps, from)
@@ -256,8 +291,9 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 		},
 
 		// a step of this device's, made now: lamport one past the highest seen. one that isn't a
-		// step as decodeStep takes one throws, and is never sent. kept alone until its run closes
-		write(s: Omit<Step, "device" | "n" | "before" | "lamport">): Step {
+		// step as decodeStep takes one throws, and is never sent. open in the store until its run
+		// closes
+		write(s: Omit<Step, "device" | "n" | "before" | "lamport" | "relative">): Step {
 			if (!me) throw new Error("this log writes nothing, or is not loaded")
 			if (lamport >= Number.MAX_SAFE_INTEGER) throw new RangeError("lamport is at its end")
 			const n = count(me.device) + 1
@@ -268,9 +304,12 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 				before: feeds.get(me.device)?.last ?? null,
 				lamport: lamport + 1,
 			}
+			// a node that is this device's own id, or under it: written relative to it
+			if (rest(me.device, step.node) !== undefined) step.relative = true
+			else delete step.relative
 			const bytes = encodeStep(step)
 			decodeStep(bytes)
-			add(me.device, bytes, { steps: [step], last: hashStep(bytes) })
+			add(me.device, bytes, { steps: [step], last: hashStep(bytes) }, undefined, true)
 			loose += bytes.length
 			if (n - asked >= EVERY || loose >= BYTES) close(n).catch(() => {})
 			return step
@@ -280,14 +319,15 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 		// run still open is closed now (someone is waiting for it), once its steps are in the store
 		async run(device: string, from: number): Promise<Run | undefined> {
 			if (from < 1 || from > count(device)) return undefined
-			// this device's runs asked to close are closed first, so none is mistaken for open; and its
-			// steps are on disk before any leave, so a power cut can't make another step with their n
+			// this device's runs asked to close are closed first, so none is mistaken for open; then
+			// the run still open; and its steps are on disk, in their runs, before any leave, so a
+			// power cut can't make another step with their n
 			if (device === me?.device) {
 				await signing
-				if (!await saving.then(() => store.sync?.()).then(() => true, () => false)) {
+				if (from > closed && !await close(count(device)).then(() => true, () => false)) {
 					return undefined
 				}
-				if (from > closed && !await close(count(device)).then(() => true, () => false)) {
+				if (!await saving.then(() => store.sync?.()).then(() => true, () => false)) {
 					return undefined
 				}
 			}
@@ -324,7 +364,8 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 
 		// the key, and what the store holds, back in memory: each step's chain checked, signatures
 		// trusted; a record that is neither, or doesn't go on from what is held, is passed over. a step
-		// kept alone is this device's only. the snapshot
+		// alone (open, or as logs before kept them) is this device's only, and held only when new.
+		// the snapshot
 		async load() {
 			if (o.writes || o.seed) {
 				const key = await store.key(o.seed ?? crypto.getRandomValues(new Uint8Array(32)))
@@ -336,7 +377,12 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 					if (dropped(r)) return
 					const steps = isRun(r) ? unpack(opened(r)[3]) : [r]
 					const s = decodeStep(steps[0]), c = chain(s.device, steps)
-					if (typeof c === "string" || (!isRun(r) && s.device !== me?.device)) return
+					if (
+						typeof c === "string" ||
+						(!isRun(r) && (s.device !== me?.device || !c.steps.length))
+					) {
+						return
+					}
 					keep(s.device, c)
 					const last = s.n + steps.length - 1
 					if (isRun(r) && s.device === me?.device) closed = Math.max(closed, last)
@@ -357,10 +403,14 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 		},
 		// every record on disk
 		saved: () => saving,
-		// every record on disk, and the store let go
+		// every record on disk, the open steps too, and the store let go
 		async close() {
 			await saving
-			store.close?.()
+			try {
+				await store.sync?.()
+			} finally {
+				store.close?.()
+			}
 		},
 	}
 }

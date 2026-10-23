@@ -1,0 +1,706 @@
+{
+	"title": "many writes, a peer asking after each and then none asking: the log holds each of this device's steps once, in its run; dir/open emptied once they are in runs",
+	"steps": [
+		{
+			"op": "disk",
+			"name": "a",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303"
+		},
+		{
+			"op": "relay",
+			"name": "r",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "r",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "r",
+			"of": "a",
+			"at": 2,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 3
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "r",
+			"of": "a",
+			"at": 3,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 4
+				}
+			],
+			"expect": {
+				"n": 4,
+				"lamport": 4
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "r",
+			"of": "a",
+			"at": 4,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 5
+				}
+			],
+			"expect": {
+				"n": 5,
+				"lamport": 5
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "r",
+			"of": "a",
+			"at": 5,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 6
+				}
+			],
+			"expect": {
+				"n": 6,
+				"lamport": 6
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "r",
+			"of": "a",
+			"at": 6,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 7
+				}
+			],
+			"expect": {
+				"n": 7,
+				"lamport": 7
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "r",
+			"of": "a",
+			"at": 7,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 8
+				}
+			],
+			"expect": {
+				"n": 8,
+				"lamport": 8
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "r",
+			"of": "a",
+			"at": 8,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 9
+				}
+			],
+			"expect": {
+				"n": 9,
+				"lamport": 9
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "r",
+			"of": "a",
+			"at": 9,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 10
+				}
+			],
+			"expect": {
+				"n": 10,
+				"lamport": 10
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "r",
+			"of": "a",
+			"at": 10,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "files",
+			"device": "a",
+			"expect": {
+				"log": [
+					[
+						"run",
+						"a",
+						1,
+						1
+					],
+					[
+						"run",
+						"a",
+						2,
+						2
+					],
+					[
+						"run",
+						"a",
+						3,
+						3
+					],
+					[
+						"run",
+						"a",
+						4,
+						4
+					],
+					[
+						"run",
+						"a",
+						5,
+						5
+					],
+					[
+						"run",
+						"a",
+						6,
+						6
+					],
+					[
+						"run",
+						"a",
+						7,
+						7
+					],
+					[
+						"run",
+						"a",
+						8,
+						8
+					],
+					[
+						"run",
+						"a",
+						9,
+						9
+					],
+					[
+						"run",
+						"a",
+						10,
+						10
+					]
+				],
+				"open": [],
+				"bytes": {
+					"log": 2617,
+					"open": 0
+				}
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 11
+				}
+			],
+			"expect": {
+				"n": 11,
+				"lamport": 11
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 12
+				}
+			],
+			"expect": {
+				"n": 12,
+				"lamport": 12
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 13
+				}
+			],
+			"expect": {
+				"n": 13,
+				"lamport": 13
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 14
+				}
+			],
+			"expect": {
+				"n": 14,
+				"lamport": 14
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 15
+				}
+			],
+			"expect": {
+				"n": 15,
+				"lamport": 15
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 16
+				}
+			],
+			"expect": {
+				"n": 16,
+				"lamport": 16
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 17
+				}
+			],
+			"expect": {
+				"n": 17,
+				"lamport": 17
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 18
+				}
+			],
+			"expect": {
+				"n": 18,
+				"lamport": 18
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 19
+				}
+			],
+			"expect": {
+				"n": 19,
+				"lamport": 19
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 20
+				}
+			],
+			"expect": {
+				"n": 20,
+				"lamport": 20
+			}
+		},
+		{
+			"op": "sync",
+			"device": "a",
+			"expect": {}
+		},
+		{
+			"op": "files",
+			"device": "a",
+			"expect": {
+				"log": [
+					[
+						"run",
+						"a",
+						1,
+						1
+					],
+					[
+						"run",
+						"a",
+						2,
+						2
+					],
+					[
+						"run",
+						"a",
+						3,
+						3
+					],
+					[
+						"run",
+						"a",
+						4,
+						4
+					],
+					[
+						"run",
+						"a",
+						5,
+						5
+					],
+					[
+						"run",
+						"a",
+						6,
+						6
+					],
+					[
+						"run",
+						"a",
+						7,
+						7
+					],
+					[
+						"run",
+						"a",
+						8,
+						8
+					],
+					[
+						"run",
+						"a",
+						9,
+						9
+					],
+					[
+						"run",
+						"a",
+						10,
+						10
+					]
+				],
+				"open": [
+					[
+						"step",
+						"a",
+						11
+					],
+					[
+						"step",
+						"a",
+						12
+					],
+					[
+						"step",
+						"a",
+						13
+					],
+					[
+						"step",
+						"a",
+						14
+					],
+					[
+						"step",
+						"a",
+						15
+					],
+					[
+						"step",
+						"a",
+						16
+					],
+					[
+						"step",
+						"a",
+						17
+					],
+					[
+						"step",
+						"a",
+						18
+					],
+					[
+						"step",
+						"a",
+						19
+					],
+					[
+						"step",
+						"a",
+						20
+					]
+				],
+				"bytes": {
+					"log": 2617,
+					"open": 1050
+				}
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "r",
+			"of": "a",
+			"at": 11,
+			"expect": {
+				"added": 10
+			}
+		},
+		{
+			"op": "files",
+			"device": "a",
+			"expect": {
+				"log": [
+					[
+						"run",
+						"a",
+						1,
+						1
+					],
+					[
+						"run",
+						"a",
+						2,
+						2
+					],
+					[
+						"run",
+						"a",
+						3,
+						3
+					],
+					[
+						"run",
+						"a",
+						4,
+						4
+					],
+					[
+						"run",
+						"a",
+						5,
+						5
+					],
+					[
+						"run",
+						"a",
+						6,
+						6
+					],
+					[
+						"run",
+						"a",
+						7,
+						7
+					],
+					[
+						"run",
+						"a",
+						8,
+						8
+					],
+					[
+						"run",
+						"a",
+						9,
+						9
+					],
+					[
+						"run",
+						"a",
+						10,
+						10
+					],
+					[
+						"run",
+						"a",
+						11,
+						20
+					]
+				],
+				"open": [],
+				"bytes": {
+					"log": 2916,
+					"open": 0
+				}
+			}
+		}
+	]
+}

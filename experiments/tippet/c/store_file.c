@@ -4,6 +4,11 @@
 // crash is cut off when loaded, so the next append starts clean. records are read back from the
 // file by where they are: in memory, only where each one holding steps starts and how long, and the
 // last run read, unpacked. sync: fsync
+//
+// open steps (this device's, not yet in a closed run): in memory, and in dir/open as frames, written
+// only by a sync, after the log's: those not yet there appended; and once every step there is in a
+// run on disk, it is emptied first. a step is written to dir/open only if no run held it by the sync
+// after it. loaded: a frame cut short cut off (and that synced), a step held already passed over
 #define _POSIX_C_SOURCE 200809L
 #include <errno.h>
 #include <fcntl.h>
@@ -22,6 +27,12 @@ typedef struct {
 	tp_index index;
 	int fd;
 	uint64_t end, synced; // the file's length, every append so far; how much of it is synced
+	// dir/open (-1: not opened): its length; the n of its first step and how many follow; dirty: it
+	// holds a frame that is no open step (held, or not one)
+	int ofd;
+	uint64_t oend, ffirst;
+	size_t fcount;
+	int dirty;
 	size_t max;
 	// two rooms, each dir and then a name: dir's length, and a room's
 	char *path;
@@ -43,6 +54,38 @@ static int readat(int fd, uint8_t *out, size_t n, uint64_t offset) {
 		if (got <= 0) return -1;
 		out += got, n -= (size_t)got, offset += (uint64_t)got;
 	}
+	return 0;
+}
+
+// dir/open's steps, each told to read after the log's records: those held open, the rest passed
+// over; a frame cut short cut off, and that synced
+static int load_open(file *f, tp_read read, void *ctx, tp_buf *b) {
+	struct stat st;
+	f->ffirst = 0, f->fcount = 0, f->dirty = 0, f->oend = 0;
+	if (f->ofd < 0 && (f->ofd = open(named(f, 0, "/open"), O_RDWR | O_APPEND)) < 0) return errno == ENOENT ? 0 : TP_STORE;
+	if (fstat(f->ofd, &st)) return TP_STORE;
+	uint64_t size = (uint64_t)st.st_size, at = 0;
+	while (at + 4 <= size) {
+		uint8_t head[4];
+		if (readat(f->ofd, head, 4, at)) break;
+		uint64_t length = tp_get32(head);
+		if (!length || length > size - at - 4) break;
+		if (length > f->max) return TP_BOUND;
+		b->len = 0;
+		if (!tp_reserve(b, (size_t)length)) return tp_buf_why(b);
+		if (readat(f->ofd, b->p, (size_t)length, at + 4)) break;
+		tp_at step;
+		if (!read(ctx, b->p, (size_t)length, &step)) f->dirty = 1;
+		else {
+			int why = tp_index_open(&f->index, b->p, (size_t)length, &step);
+			if (why) return why;
+			if (!f->fcount) f->ffirst = step.first;
+			f->fcount++;
+		}
+		at += 4 + length;
+	}
+	if (at < size && (ftruncate(f->ofd, (off_t)at) || fsync(f->ofd))) return TP_STORE;
+	f->oend = at;
 	return 0;
 }
 
@@ -76,11 +119,11 @@ static int load(void *self, tp_read read, void *ctx) {
 			break;
 		at += 4 + length;
 	}
-	tp_buf_free(&b);
-	if (why) return why;
-	if (at < size && ftruncate(f->fd, (off_t)at)) return TP_STORE;
+	if (!why && at < size && ftruncate(f->fd, (off_t)at)) why = TP_STORE;
 	f->end = at;
-	return 0;
+	if (!why) why = load_open(f, read, ctx, &b);
+	tp_buf_free(&b);
+	return why;
 }
 
 static int append(void *self, const uint8_t *record, size_t length, const tp_at *at) {
@@ -103,9 +146,16 @@ static int append(void *self, const uint8_t *record, size_t length, const tp_at 
 	return at ? tp_index_hold(&f->index, at, offset, length, tp_is_run(record, length)) : 0;
 }
 
-// a step: alone, read as it is; in a run, out of the run last read, else the run read and unpacked
+// a step: open, from memory; alone, read as it is; in a run, out of the run last read, else the run
+// read and unpacked
 static long get(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap) {
 	file *f = self;
+	size_t length;
+	const uint8_t *p = tp_index_opened(&f->index, device, n, &length);
+	if (p) {
+		if (out && length <= cap) memcpy(out, p, length);
+		return (long)length;
+	}
 	const tp_held *r = tp_index_find(&f->index, device, n);
 	if (!r) return -1;
 	if (!r->run) return r->length <= cap && readat(f->fd, out, r->length, r->offset) ? -1 : (long)r->length;
@@ -120,6 +170,13 @@ static long get(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, 
 static long run(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap,
 	uint64_t *first, uint64_t *last) {
 	file *f = self;
+	size_t length;
+	const uint8_t *p = tp_index_opened(&f->index, device, n, &length);
+	if (p) {
+		if (out) memcpy(out, p, length < cap ? length : cap);
+		*first = *last = n;
+		return (long)length;
+	}
 	const tp_held *r = tp_index_find(&f->index, device, n);
 	if (!r || readat(f->fd, out, r->length < cap ? r->length : cap, r->offset)) return -1;
 	*first = r->first, *last = r->last;
@@ -152,12 +209,49 @@ static long snapped(void *self, uint8_t *out, size_t cap) {
 	return n;
 }
 
+// dir/open made to hold the open steps: emptied first when every step there is in a run on disk
+// (and none is open), then those not yet there appended, and synced
+static int write_open(file *f) {
+	const tp_index *x = &f->index;
+	uint64_t first = x->ocount ? x->ofirst : UINT64_MAX;
+	int stale = f->dirty || (f->fcount && f->ffirst < first);
+	int empty = stale && !(f->fcount && f->ffirst + f->fcount > first);
+	// how many open steps dir/open holds already, and where those after them start
+	size_t skip = f->fcount && !empty ? (size_t)(f->ffirst + f->fcount - first) : 0, from = 0;
+	if (skip >= x->ocount && !empty) return 0;
+	for (size_t i = 0; i < skip; i++) from += 4 + tp_get32(x->open.p + from);
+	if (f->ofd < 0 && (f->ofd = open(named(f, 0, "/open"), O_RDWR | O_APPEND | O_CREAT, 0644)) < 0) return TP_STORE;
+	if (empty) {
+		if (ftruncate(f->ofd, 0)) return TP_STORE;
+		f->oend = 0, f->dirty = 0, f->fcount = 0;
+	}
+	if (!f->fcount) f->ffirst = first;
+	for (size_t done = from; done < x->open.len;) {
+		ssize_t wrote = write(f->ofd, x->open.p + done, x->open.len - done);
+		if (wrote < 0 && errno == EINTR) continue;
+		if (wrote <= 0) {
+			// a frame cut short is cut off: the file as it was
+			if (ftruncate(f->ofd, (off_t)f->oend)) return TP_STORE;
+			return TP_STORE;
+		}
+		done += (size_t)wrote;
+	}
+	if (fsync(f->ofd)) return TP_STORE;
+	f->oend += x->open.len - from, f->fcount += x->ocount - skip;
+	return 0;
+}
+
 static int flush(void *self) {
 	file *f = self;
-	if (f->synced == f->end) return 0;
-	if (fsync(f->fd)) return TP_STORE;
-	f->synced = f->end;
-	return 0;
+	if (f->synced != f->end) {
+		if (fsync(f->fd)) return TP_STORE;
+		f->synced = f->end;
+	}
+	return write_open(f);
+}
+
+static int open_(void *self, const uint8_t *step, size_t length, const tp_at *at) {
+	return tp_index_open(&((file *)self)->index, step, length, at);
 }
 
 static int key(void *self, const uint8_t seed[32], uint8_t out[32]) {
@@ -186,6 +280,7 @@ static void shut(void *self) {
 	file *f = self;
 	tp_mem mem = f->mem;
 	if (f->fd >= 0) close(f->fd);
+	if (f->ofd >= 0) close(f->ofd);
 	tp_index_clear(&f->index);
 	tp_free(&mem, f->path, 2 * f->room);
 	tp_free(&mem, f, sizeof *f);
@@ -196,8 +291,8 @@ tp_store *tp_file_store(const tp_mem *mem, const char *dir, size_t max) {
 	file *f = tp_alloc(mem, sizeof *f);
 	if (!f) return NULL;
 	memset(f, 0, sizeof *f);
-	f->mem = *mem, f->index.mem = &f->mem, f->index.max = max, f->max = max, f->fd = -1;
-	f->store = (tp_store){f, load, append, get, run, snapshot, snapped, key, flush, shut, drop};
+	f->mem = *mem, f->index.mem = &f->mem, f->index.max = max, f->max = max, f->fd = f->ofd = -1;
+	f->store = (tp_store){f, load, append, get, run, snapshot, snapped, key, flush, shut, drop, open_};
 	// the longest name: /snapshot.new
 	f->dir = n, f->room = n + 14;
 	if (!(f->path = tp_alloc(mem, 2 * f->room))) return shut(f), NULL;

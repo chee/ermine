@@ -38,12 +38,14 @@
 //    by: a place's name, a process's name; none: the session
 // { op: "withdraw", id }                             -> {}
 // { op: "run", name, runner, program, at, args?, cwd?, box?, pin?, actor? } -> { id, at } | refusal
-//    runner, at: addresses; program: an address or { id, hash?, type?, api?, code? }; the process
-//    named name
+//    runner: an address, or carried { id, live } (live: a runner's name, else its JSON value as
+//    it is); at: an address; program: an address or { id, hash?, type?, api?, code?, build? }
+//    (build { from }: the code is the value at from, read tracked: none, PENDING; { fail }, an
+//    Error of fail thrown); the process named name
 // { op: "stop", name, reason?, actor? }              -> {}   name: a process's name; "session"
 // { op: "load", name, runner, program, by?, box?, chain?, actor?, bare? } -> {} | refusal | { failed }
-//    the load named name; by as offer's; chain: the keys given (strings); failed: what the load
-//    threw, its message
+//    the load named name; runner as run's; by as offer's; chain: the keys given (strings); failed:
+//    what the load threw, its message
 // { op: "release", name }                            -> {}   the load named name let go
 // { op: "land", fail? }                              -> {}   the oldest late handle not landed:
 //    given (fail: rejected with Error("late")); then the promises settled
@@ -82,6 +84,7 @@ import { type API, createProcessAPIs, type ProcessAPIs } from "@ermine/programs/
 import { fromJson, toJson } from "../../../conformance/typescript/form.ts"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import {
+	type Carried,
 	createSoftware,
 	type Handle,
 	type Loaded,
@@ -336,6 +339,26 @@ function byOf(name: unknown): Place {
 	return placed.get(String(name)) ?? procOf(name)
 }
 
+// a request's runner: an address as it is, else carried, its live a runner by name or a value
+function runnerOf(r: unknown): Address | Carried {
+	if (typeof r === "string" || Array.isArray(r)) return r as Address
+	if (!isMap(r)) throw new Error("a runner: an address or { id, live }")
+	const named = typeof r.live === "string" && Object.hasOwn(runners, r.live)
+	return { id: take(String(r.id)), live: (named ? live(r.live) : fromJson(r.live)) as Runnable }
+}
+
+// a build of the value at an id: read tracked; none, PENDING; { fail }, an Error thrown
+function buildOf(b: unknown): () => unknown {
+	if (!isMap(b) || typeof b.from !== "string") throw new Error("a build: { from }")
+	const from = take(b.from)
+	return () => {
+		const v = places.readValue("value", from)
+		if (v === undefined) return PENDING
+		if (isMap(v) && typeof v.fail === "string") throw new Error(v.fail)
+		return v
+	}
+}
+
 // a request's program: an address as it is, else a Program, its names taken back
 function programOf(p: unknown): Address | Program {
 	if (typeof p === "string" || Array.isArray(p)) return p as Address
@@ -343,6 +366,7 @@ function programOf(p: unknown): Address | Program {
 	const out: Record<string, unknown> = { id: take(String(p.id)) }
 	for (const k of ["hash", "type", "api"]) if (p[k] !== undefined) out[k] = p[k]
 	if (p.code !== undefined) out.code = fromJson(p.code)
+	if (p.build !== undefined) out.build = buildOf(p.build)
 	return out as Program
 }
 
@@ -413,7 +437,7 @@ async function answer(r: Request): Promise<Json> {
 				...(r.pin === undefined ? {} : { pin: back(r.pin) }),
 			}
 			const made = hosted(
-				() => software.run(r.runner, programOf(r.program), r.at, options),
+				() => software.run(runnerOf(r.runner), programOf(r.program), r.at, options),
 				r.actor,
 			)
 			if ("refused" in made) return plain(made)
@@ -435,7 +459,7 @@ async function answer(r: Request): Promise<Json> {
 			let made: Loaded | Refused
 			try {
 				made = hosted(
-					() => software.load(r.runner, programOf(r.program), options),
+					() => software.load(runnerOf(r.runner), programOf(r.program), options),
 					r.actor,
 					r.bare,
 				)

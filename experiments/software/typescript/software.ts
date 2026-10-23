@@ -76,6 +76,8 @@ export type Setup = {
 	// files a write's site skips beside software's: a library's over it (programs'), so the site is
 	// its caller's
 	ours?: Iterable<string>
+	// a new process's node id (processes' Setup.id). none: processes' own
+	id?: () => Id
 }
 
 export type Software = {
@@ -127,6 +129,7 @@ export function createSoftware(setup: Setup): Software {
 			sites: setup.sites,
 			owner: setup.scope,
 			ours: skip,
+			id: setup.id,
 		}),
 		scope: setup.scope,
 		createScope: setup.sites?.createScope ?? s.createScope,

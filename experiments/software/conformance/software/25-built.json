@@ -1,0 +1,346 @@
+{
+	"title": "a program carried with a build (programs' compiled program): no code given, its code what build gives, read in the process's first run, tracked: the process pending till it gives one (each read again as what it read changes), then the runner's start called once with it; a build that throws, the process's status its Error, the runner not called. ermine.process.program its id alone (no hash: nothing read at run). here, build { from }: the value at from",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"apps": "APPS"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "APPS",
+			"value": {
+				"clock.c": "CLOCK"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "CLOCK",
+			"value": "int main;",
+			"expect": {}
+		},
+		{
+			"op": "offer",
+			"kind": "runners",
+			"name": "wasm",
+			"attrs": {
+				"ermine.programs.takes": "public.wasm-executable"
+			},
+			"live": "record",
+			"expect": {
+				"id": "session/runners/wasm",
+				"at": [
+					"system",
+					"session",
+					"runners",
+					"wasm"
+				]
+			}
+		},
+		{
+			"op": "run",
+			"name": "a",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"wasm"
+			],
+			"program": {
+				"id": "CLOCK",
+				"type": "public.wasm-executable",
+				"build": {
+					"from": "OUT"
+				}
+			},
+			"at": [
+				"work",
+				"a"
+			],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"work",
+					"a"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "proc:a",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"attributes": {
+					"ermine.type": "ermine.process",
+					"ermine.process.runner": {
+						"id": "session/runners/wasm",
+						"at": [
+							"system",
+							"session",
+							"runners",
+							"wasm"
+						]
+					},
+					"ermine.process.program": {
+						"id": "CLOCK"
+					},
+					"ermine.process.cwd": [
+						"work"
+					]
+				},
+				"status": "pending",
+				"children": null,
+				"live": false
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"id": "proc:a",
+			"skip": [
+				"parts",
+				"attributes",
+				"children",
+				"live"
+			],
+			"expect": {
+				"status": "pending"
+			}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [],
+				"stops": []
+			}
+		},
+		{
+			"op": "value",
+			"id": "OUT",
+			"value": "(wasm)",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "proc:a",
+						"code": "(wasm)",
+						"args": [],
+						"cwd": [
+							"work"
+						],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					}
+				],
+				"stops": []
+			}
+		},
+		{
+			"op": "node",
+			"id": "proc:a",
+			"skip": [
+				"parts",
+				"attributes",
+				"children",
+				"live"
+			],
+			"expect": {
+				"status": null
+			}
+		},
+		{
+			"op": "value",
+			"id": "OUT",
+			"value": "(wasm, again)",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "proc:a",
+						"code": "(wasm)",
+						"args": [],
+						"cwd": [
+							"work"
+						],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					}
+				],
+				"stops": []
+			}
+		},
+		{
+			"op": "value",
+			"id": "BAD",
+			"value": {
+				"fail": "no compiler"
+			},
+			"expect": {}
+		},
+		{
+			"op": "run",
+			"name": "b",
+			"runner": {
+				"id": "HELD",
+				"live": "record"
+			},
+			"program": {
+				"id": "CLOCK",
+				"build": {
+					"from": "BAD"
+				}
+			},
+			"at": [
+				"work",
+				"b"
+			],
+			"expect": {
+				"id": "proc:b",
+				"at": [
+					"work",
+					"b"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"id": "proc:b",
+			"skip": [
+				"parts",
+				"attributes",
+				"children",
+				"live"
+			],
+			"expect": {
+				"status": {
+					"failed": "no compiler"
+				}
+			}
+		},
+		{
+			"op": "run",
+			"name": "c",
+			"runner": [
+				"system",
+				"session",
+				"runners",
+				"wasm"
+			],
+			"program": {
+				"id": "CLOCK",
+				"type": "public.c-source",
+				"build": {
+					"from": "OUT"
+				}
+			},
+			"at": [
+				"work",
+				"c"
+			],
+			"expect": {
+				"refused": "wrong-form",
+				"program": {
+					"type": "public.c-source"
+				},
+				"runner": {
+					"takes": [
+						"public.wasm-executable"
+					]
+				}
+			}
+		},
+		{
+			"op": "stop",
+			"name": "b",
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "proc:a",
+						"code": "(wasm)",
+						"args": [],
+						"cwd": [
+							"work"
+						],
+						"root": "R",
+						"keys": [
+							"box",
+							"places",
+							"process",
+							"scheduler",
+							"scope",
+							"table"
+						],
+						"open": true
+					}
+				],
+				"stops": []
+			}
+		},
+		{
+			"op": "stop",
+			"name": "a",
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"skip": [
+				"runs"
+			],
+			"expect": {
+				"stops": [
+					{
+						"process": "proc:a",
+						"reason": null
+					}
+				]
+			}
+		}
+	]
+}

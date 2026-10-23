@@ -37,9 +37,9 @@
 // process, shared: one load per key, the program's id, its value's hash (none: the value itself),
 // the runner's id and live value, and chain (the keys of what else loads it, programs'; none:
 // none). checked as run is (no path, so never taken; a program's build is run's alone, not read
-// here); a runner with no load: not-a-runner. a key
-// with no load standing: the runner's load(code, start), start by's facts and a scope of the
-// load's own (under setup.scope), open for the call; what load throws: thrown, the scope gone.
+// here); a runner with no load: not-a-runner. a key with no load standing: the runner's
+// load(code, start), start by's facts and a scope of the load's own (under setup.scope), open for
+// the call; what load throws: thrown, the scope gone.
 // { live, release }: one hold by by. release lets go of it, as by's scope's teardown does (after
 // its handle's, newest first); the last hold let go, or setup.scope torn down: the load's scope
 // torn down, its live form's [Symbol.dispose] (if it has one) called before what its load made goes

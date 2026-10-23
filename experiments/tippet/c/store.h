@@ -4,6 +4,7 @@
 #define TIPPET_STORE_H
 
 #include "tippet.h"
+#include "wire.h"
 
 // a record: its steps, first to last; where it is and how long; run: a run message, else a step
 // kept alone
@@ -27,6 +28,12 @@ typedef struct {
 	uint8_t device[32];
 	uint64_t first;
 	tp_steps steps;
+	// the open steps: their device, the n of the first (when none, of the next), how many, and
+	// their frames back to back (4 bytes big-endian length, then the step)
+	uint8_t odevice[32];
+	uint64_t ofirst;
+	size_t ocount;
+	tp_buf open;
 } tp_index;
 
 // a run message's bytes, as a record: a fixed head (["run", device, sig, …]), then the pack
@@ -45,7 +52,11 @@ int tp_index_read(const tp_index *x, const uint8_t device[32], uint64_t n);
 // out when no more than cap; -1 when its run doesn't unpack
 long tp_index_step(tp_index *x, const uint8_t device[32], uint64_t n, const tp_held *r,
 	const uint8_t *record, uint8_t *out, size_t cap);
-// nothing held, its memory let go
+// a step open, after those open (one that doesn't follow them: the only one). 0 or a code
+int tp_index_open(tp_index *x, const uint8_t *step, size_t length, const tp_at *at);
+// open step n of device's: its bytes, *length long; NULL: not open
+const uint8_t *tp_index_opened(const tp_index *x, const uint8_t device[32], uint64_t n, size_t *length);
+// nothing held, open steps neither, its memory let go
 void tp_index_clear(tp_index *x);
 // forgetting: those holding device's steps through n out: how many
 long tp_index_drop(tp_index *x, const uint8_t device[32], uint64_t n);

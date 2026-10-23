@@ -63,7 +63,8 @@ typedef struct offer offer;
 // here); under, a scope under that offer's (none: setup.scope) holding, newest first, what it
 // offers, its stopper (its handle's stop the teardown, its info the process's), then its scope; the
 // runner and the code as read at the run, the handle once the runner gave one (or a late one
-// landed); ended: out of the lists; the reason given (told: by a stop)
+// landed; built: none till its build gives it); ended: out of the lists; the reason given (told: by
+// a stop)
 struct sw_process {
 	sw *sw;
 	int run;
@@ -89,6 +90,9 @@ struct sw_process {
 	offer *on;
 	hf_entry fn;
 	op_value *code;
+	// a built program's (sw_program's build): what gives the code in its first run
+	sc_out (*build)(void *data);
+	void *build_data;
 	hf_handle handle;
 	void (*stop_reason)(void *ctx, const op_value *reason);
 	int has_handle;

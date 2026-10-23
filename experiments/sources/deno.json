@@ -1,0 +1,18 @@
+{
+	"name": "@ermine/sources",
+	"version": "0.0.0",
+	"license": "AGPL-3.0-or-later",
+	"exports": {
+		".": "./typescript/holder.ts",
+		"./write": "./typescript/write.ts",
+		"./log": "./typescript/log.ts",
+		"./memory": "./typescript/memory.ts",
+		"./access": "./typescript/access.ts",
+		"./file": "./typescript/file.ts",
+		"./deno": "./typescript/deno.ts",
+		"./web": "./typescript/web.ts",
+		"./history": "./typescript/history.ts",
+		"./link": "./typescript/link.ts",
+		"./mirror": "./typescript/mirror.ts"
+	}
+}

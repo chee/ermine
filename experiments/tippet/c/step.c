@@ -97,7 +97,12 @@ int tp_step_decode(const uint8_t *bytes, size_t length, tp_step *s) {
 	if (tp_array(&in, &items) || (items != 8 && items != 9)) return TP_NOTSTEP;
 	if (tp_bytes(&in, 32, &device) || tp_whole(&in, &s->n) || s->n < 1) return TP_NOTSTEP;
 	if (!tp_null(&in) && tp_bytes(&in, 32, &before)) return TP_NOTSTEP;
-	if (tp_text(&in, &s->node) || tp_text(&in, &s->part)) return TP_NOTSTEP;
+	// node: its id, or [the rest after the device's own id], "" or "/…"
+	if (in.p < in.end && *in.p == 0x81) {
+		in.p++, s->relative = 1;
+		if (tp_text(&in, &s->node) || (s->node.n && *s->node.p != '/')) return TP_NOTSTEP;
+	} else if (tp_text(&in, &s->node)) return TP_NOTSTEP;
+	if (tp_text(&in, &s->part)) return TP_NOTSTEP;
 	const uint8_t *start = in.p;
 	if (tp_array(&in, &k)) return TP_NOTSTEP;
 	s->count = (size_t)k;
@@ -122,6 +127,7 @@ static void encode(tp_buf *b, const tp_step *s) {
 	tp_put_head(b, 0, s->n);
 	if (s->before) tp_put_head(b, 2, 32), tp_put(b, s->before, 32);
 	else tp_put(b, "\xf6", 1);
+	if (s->relative) tp_put_head(b, 4, 1);
 	tp_put_head(b, 3, s->node.n);
 	tp_put(b, s->node.p, s->node.n);
 	tp_put_head(b, 3, s->part.n);
@@ -136,6 +142,22 @@ size_t tp_step_encode(const tp_step *s, uint8_t *out, size_t cap) {
 	tp_buf b = {out, 0, cap, (size_t)-1, NULL, 0};
 	encode(&b, s);
 	return b.len;
+}
+
+size_t tp_step_node(const tp_step *s, char *out, size_t cap) {
+	size_t n = (s->relative ? TP_OWN_ID : 0) + s->node.n;
+	if (n > cap) return n;
+	if (s->relative) memcpy(out, "ermine:ed01", 11), tp_hex(out + 11, s->device, 32);
+	if (s->node.n) memcpy(out + n - s->node.n, s->node.p, s->node.n);
+	return n;
+}
+
+long tp_step_rest(const uint8_t device[32], tp_span node) {
+	char own[TP_OWN_ID];
+	memcpy(own, "ermine:ed01", 11), tp_hex(own + 11, device, 32);
+	if (node.n < TP_OWN_ID || memcmp(node.p, own, TP_OWN_ID)) return -1;
+	if (node.n > TP_OWN_ID && node.p[TP_OWN_ID] != '/') return -1;
+	return (long)(node.n - TP_OWN_ID);
 }
 
 void tp_step_hash(const uint8_t *bytes, size_t length, uint8_t hash[32]) {

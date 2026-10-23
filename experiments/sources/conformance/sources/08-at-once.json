@@ -1,0 +1,21 @@
+{
+	"title": "writes made at once on two graphs: after a sync both hold one value and two heads; the next write is on top of both",
+	"steps": [
+		{ "op": "graph", "name": "A" },
+		{ "op": "graph", "name": "B" },
+		{ "op": "link", "name": "AB", "a": "A", "b": "B" },
+		{ "op": "set", "graph": "A", "node": "N", "value": { "a": 0, "b": 0 } },
+		{ "op": "sync", "link": "AB", "skip": ["ab", "ba"] },
+		{ "op": "set", "graph": "A", "node": "N", "value": 1, "path": ["a"] },
+		{ "op": "set", "graph": "B", "node": "N", "value": 2, "path": ["b"] },
+		{ "op": "sync", "link": "AB", "skip": ["ab", "ba"] },
+		{ "op": "value", "graph": "A", "node": "N", "expect": { "value": { "a": 1, "b": 2 } } },
+		{ "op": "value", "graph": "B", "node": "N", "expect": { "value": { "a": 1, "b": 2 } } },
+		{ "op": "heads", "graph": "A", "node": "N", "expect": { "count": 2 } },
+		{ "op": "heads", "graph": "B", "node": "N", "expect": { "count": 2 } },
+		{ "op": "set", "graph": "A", "node": "N", "value": 3, "path": ["a"] },
+		{ "op": "sync", "link": "AB", "skip": ["ab", "ba"] },
+		{ "op": "heads", "graph": "B", "node": "N", "expect": { "count": 1 } },
+		{ "op": "value", "graph": "B", "node": "N", "expect": { "value": { "a": 3, "b": 2 } } }
+	]
+}

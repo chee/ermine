@@ -8,8 +8,9 @@
 // the columns, in the order they are written
 enum { LAMPORT, WHEN, NODE, PART, WHO, COUNT, PATH, SHAPE, FROM, SIZE, VALUE, MOVE };
 
-// an item of a column: a number, text, null, or an item's bytes as they are
-enum { NUM, TEXT, NUL, RAW };
+// an item of a column: a number, text, null, an item's bytes as they are, or a node relative to the
+// device ([text])
+enum { NUM, TEXT, NUL, RAW, NEAR };
 typedef struct {
 	int kind;
 	int64_t num;
@@ -24,7 +25,10 @@ static int same(const item *a, const item *b) {
 
 static void put(tp_buf *b, const item *x) {
 	if (x->kind == NUM) tp_put_int(b, x->num);
-	else if (x->kind == TEXT) tp_put_head(b, 3, x->span.n), tp_put(b, x->span.p, x->span.n);
+	else if (x->kind == TEXT || x->kind == NEAR) {
+		if (x->kind == NEAR) tp_put_head(b, 4, 1);
+		tp_put_head(b, 3, x->span.n), tp_put(b, x->span.p, x->span.n);
+	}
 	else if (x->kind == NUL) tp_put(b, "\xf6", 1);
 	else tp_put(b, x->span.p, x->span.n);
 }
@@ -62,7 +66,7 @@ static int get(const packing *k, int column, size_t i, uint64_t *last, item *x) 
 		switch (column) {
 			case LAMPORT: x->num = (int64_t)s->lamport - (int64_t)prev->lamport; break;
 			case WHEN: x->num = (int64_t)s->when - (int64_t)prev->when; break;
-			case NODE: x->kind = TEXT, x->span = s->node; break;
+			case NODE: x->kind = s->relative ? NEAR : TEXT, x->span = s->node; break;
 			case PART: x->kind = TEXT, x->span = s->part; break;
 			case WHO: x->kind = s->who.p ? TEXT : NUL, x->span = s->who; break;
 			default: x->num = (int64_t)s->count;
@@ -209,8 +213,8 @@ done:
 // ---- unpack
 
 // what a column's values are: whole or negative, text, text or null, whole, a shape (0 to 7), an
-// index into paths
-enum { K_INT, K_TEXT, K_WHO, K_WHOLE, K_SHAPE, K_INDEX };
+// index into paths, text or [text] (a node)
+enum { K_INT, K_TEXT, K_WHO, K_WHOLE, K_SHAPE, K_INDEX, K_NODE };
 
 // a column of runs, each value of its kind, each count from 1: how many items it makes (no more
 // than most); for shape, the patches with a range, a value, a move; for count, their sum (no more
@@ -225,8 +229,11 @@ static int column(tp_span c, int kind, uint64_t limit, uint64_t most, uint64_t *
 		int64_t v = 0;
 		uint64_t count;
 		tp_span s;
+		uint64_t one;
 		int bad = kind == K_TEXT ? tp_text(&in, &s)
 			: kind == K_WHO  ? !tp_null(&in) && tp_text(&in, &s)
+			: kind == K_NODE ? (in.p < in.end && *in.p == 0x81 ? tp_array(&in, &one) || tp_text(&in, &s)
+									   : tp_text(&in, &s))
 					 : tp_int(&in, &v);
 		if (bad || tp_whole(&in, &count) || count < 1 || count > most - *total) return -1;
 		*total += count;
@@ -312,7 +319,7 @@ int tp_unpack(const tp_mem *mem, tp_span pack, size_t max, tp_steps *out) {
 		tp_array(&moves, &nmoves))
 		return TP_NOTSTEP;
 	// the steps after the first, and the patches: every column as long as they say
-	static const int kinds[6] = {K_INT, K_INT, K_TEXT, K_TEXT, K_WHO, K_WHOLE};
+	static const int kinds[6] = {K_INT, K_INT, K_NODE, K_TEXT, K_WHO, K_WHOLE};
 	if (column(col[0], K_INT, 0, TP_STEPS - 1, &steps, sums)) return TP_NOTSTEP;
 	for (int i = 1; i < 6; i++) {
 		if (column(col[i], kinds[i], 0, steps, &n, sums) || n != steps) return TP_NOTSTEP;

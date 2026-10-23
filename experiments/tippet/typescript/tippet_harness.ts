@@ -9,9 +9,10 @@
 // random: its k-th call (from 1) gives k, big-endian, in as many bytes as asked (a live id: 8)
 //
 // vectors
-// { op: "encode", step }               → { bytes }    step: { device, n, before, node, part,
-//                                                      patches, lamport, when, who? }, before
-//                                                      hex or null
+// { op: "encode", step }               → { bytes }    step: { device, n, before, node,
+//                                                      relative?, part, patches, lamport, when,
+//                                                      who? }, before hex or null; relative: true,
+//                                                      node written relative to the device
 // { op: "decode", bytes }              → { step } | { refused: true }
 // { op: "hash", bytes }                → { hash }     blake3
 // { op: "sign", seed, bytes }          → { sig }      ed25519 over the bytes
@@ -30,7 +31,20 @@
 //                                                      a relay
 // { op: "write", device, node, part?, patches, when?, who? } → { n, lamport }
 //    into the graph, as a host writes: the step is what history makes of it. part: value. no
-//    entry there: patches must be one whole value, [{ path: [], value }]
+//    entry there: patches must be one whole value, [{ path: [], value }]. a disk's: a step of
+//    these fields, straight into its log
+//
+// a log on disk (the file store, in a directory of its own)
+// { op: "disk", name, seed, log? }     → { key }      a log that writes, no graph; its sync. log:
+//                                                      hex, what dir/log holds to start
+// { op: "sync", device }               → {}           store.sync
+// { op: "reset", device }              → { count }    its process gone, nothing more written, and
+//                                                      started again from its files (unlinked first):
+//                                                      its own steps held
+// { op: "tear", device, file, bytes }  → {}           dir/<file> (log, open) its last bytes cut off
+// { op: "files", device }              → { log, open, bytes }   each whole frame: ["run", device,
+//                                                      first, last], ["step", device, n] or
+//                                                      ["other"]; bytes: { log, open }, the sizes
 // { op: "value", device, node, part? } → { value } | {}   history.ts's merge: every step's patches
 //                                                      in order of lamport, then device
 // { op: "have", device }               → { have }     { device: n }, log.have()
@@ -72,7 +86,8 @@ import { createTable, type Key, type Table } from "@ermine/table"
 import { children, createPlaces } from "@ermine/places"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
-import { createLog, type Log } from "./log.ts"
+import { createLog, isRun, type Log, type Store } from "./log.ts"
+import { fileStore } from "./store_file.ts"
 import { createHistory } from "./history.ts"
 import { createSync, type Link, type Message, read, type Sync, wire } from "./sync.ts"
 import { createSigner, type Signer } from "./sign.ts"
@@ -109,6 +124,9 @@ type Device = {
 	log: Log
 	sync: Sync
 	signer?: Signer
+	// a disk's: its directory, and the store there
+	dir?: string
+	store?: Store
 	graph?: {
 		table: Table
 		write: (node: string, part: string, patches: Patch[], when: number, who?: string) => void
@@ -182,6 +200,48 @@ async function createDevice(seed: Uint8Array): Promise<Device> {
 	return d
 }
 
+// a log on a file store in dir, its sync
+async function onDisk(dir: string, seed: Uint8Array): Promise<Device> {
+	const store = fileStore(dir), log = createLog({ store, seed })
+	await log.load()
+	const d = made(log, false, await createSigner(seed))
+	d.dir = dir, d.store = store
+	return d
+}
+const disk = (name: string) => {
+	const d = device(name)
+	if (!d.dir) throw new Error(`${name} is not on disk`)
+	return d as Device & { dir: string; store: Store }
+}
+const readOr = (path: string) =>
+	Deno.readFile(path).catch((e) => {
+		if (e instanceof Deno.errors.NotFound) return new Uint8Array()
+		throw e
+	})
+// a file's whole frames, as files gives them
+function framesOf(bytes: Uint8Array) {
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), out = []
+	for (let at = 0; at + 4 <= bytes.length;) {
+		const size = view.getUint32(at)
+		if (!size || at + 4 + size > bytes.length) break
+		const r = bytes.slice(at + 4, at + 4 + size)
+		at += 4 + size
+		try {
+			if (isRun(r)) {
+				const m = read(r)
+				if (m?.t !== "run") throw new Error()
+				const steps = unpack(m.pack), from = decodeStep(steps[0]).n
+				out.push(["run", nameOf(m.device), from, from + steps.length - 1])
+			} else {
+				const s = decodeStep(r)
+				out.push(["step", nameOf(s.device), s.n])
+			}
+		} catch {
+			out.push(["other"])
+		}
+	}
+	return out
+}
 // ---- forms
 
 const patchesIn = (ps: Patch[]): Patch[] =>
@@ -195,6 +255,7 @@ function stepIn(s: Request, device?: string, before?: Uint8Array | null): Step {
 		n: s.n,
 		before: s.before === undefined ? before ?? null : s.before === null ? null : unhex(s.before),
 		node: s.node,
+		...(s.relative === true && { relative: true }),
 		part: s.part,
 		patches: patchesIn(s.patches),
 		lamport: s.lamport,
@@ -209,6 +270,7 @@ function stepOut(s: Step) {
 		n: s.n,
 		before: s.before && hex(s.before),
 		node: s.node,
+		...(s.relative && { relative: true }),
 		part: s.part,
 		patches: patchesOut(s.patches),
 		lamport: s.lamport,
@@ -364,12 +426,59 @@ async function one(r: Request): Promise<Answer> {
 			devices.set(r.name, d)
 			return { key: d.log.device! }
 		}
+		case "disk": {
+			if (devices.has(r.name)) throw new Error(`${r.name} is made`)
+			const dir = await Deno.makeTempDir()
+			if (r.log !== undefined) await Deno.writeFile(`${dir}/log`, unhex(r.log))
+			const d = await onDisk(dir, unhex(r.seed))
+			devices.set(r.name, d)
+			return { key: d.log.device! }
+		}
+		case "sync":
+			await disk(r.device).store.sync?.()
+			return {}
+		case "reset": {
+			const d = disk(r.device)
+			for (const k of links.keys()) {
+				if (k.split(" ").includes(r.device)) throw new Error(`${r.device} is linked`)
+			}
+			// what it appended is written; what it held only in memory is gone
+			await d.log.saved()
+			d.store.close?.()
+			const seed = await Deno.readFile(`${d.dir}/key`), again = await onDisk(d.dir, seed)
+			devices.set(r.device, again)
+			return { count: again.log.count(again.log.device!) }
+		}
+		case "tear": {
+			const path = `${disk(r.device).dir}/${r.file}`, size = (await Deno.stat(path)).size
+			await Deno.truncate(path, Math.max(0, size - r.bytes))
+			return {}
+		}
+		case "files": {
+			const d = disk(r.device)
+			const log = await readOr(`${d.dir}/log`), open = await readOr(`${d.dir}/open`)
+			return {
+				log: framesOf(log),
+				open: framesOf(open),
+				bytes: { log: log.length, open: open.length },
+			}
+		}
 		case "relay":
 			if (devices.has(r.name)) throw new Error(`${r.name} is made`)
 			devices.set(r.name, made(createLog(), true))
 			return {}
 		case "write": {
 			const d = device(r.device)
+			if (d.dir) {
+				const s = d.log.write({
+					node: r.node,
+					part: r.part ?? "value",
+					patches: patchesIn(r.patches),
+					when: r.when ?? WHEN,
+					...(r.who !== undefined && { who: r.who }),
+				})
+				return { n: s.n, lamport: s.lamport }
+			}
 			if (!d.graph) throw new Error(`${r.device} writes nothing`)
 			d.graph.write(r.node, r.part ?? "value", patchesIn(r.patches), r.when ?? WHEN, r.who)
 			const s = decodeStep(d.log.step(d.log.device!, d.log.count(d.log.device!)))
@@ -431,5 +540,10 @@ async function one(r: Request): Promise<Answer> {
 			throw new Error(`unknown op ${r.op}`)
 	}
 }
+
+// the disks' directories, let go at the end
+globalThis.addEventListener("unload", () => {
+	for (const d of devices.values()) if (d.dir) Deno.removeSync(d.dir, { recursive: true })
+})
 
 if (import.meta.main) await serve(answer)
