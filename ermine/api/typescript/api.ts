@@ -15,8 +15,8 @@
 //   }
 //
 // paths (path.ts' parse): crew inside the process's node (gone at stop), ./crew its cwd, ../crew
-// above, /crew the box's "/". a node: {path} (walked at each use) or {id}; part "value" or
-// "attributes".
+// above, /crew the box's "/". a node: {path} (walked at each use) or {id}, never both (both:
+// nothing-there); part "value" or "attributes".
 // pulses: every write and promise settling asks for one in a microtask; pulse() runs one now.
 // a read after a write sees it at once; a memo gives its last result until the pulse.
 // writes: under the open scope (none: the process's own; stopped: throws); patches or a recipe.
@@ -169,8 +169,10 @@ export type Noticed = {
 	readonly process: Id
 }
 
-// a node: walked to by its path at each use, or its id (a node with no place)
-export type Node = { readonly path?: Path; readonly id?: Id; readonly part: Key }
+// a node: walked to by its path at each use, or its id (a node with no place); never both
+export type Node =
+	| { readonly path: Path; readonly id?: undefined; readonly part: Key }
+	| { readonly id: Id; readonly path?: undefined; readonly part: Key }
 export type Target = Node | string | readonly string[]
 
 // a recipe (produce's), or patches
@@ -439,7 +441,15 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			if (names === undefined) throw new PlacesError("nothing-there", "..")
 			return names
 		}
-		const nodeOf = (x: Target): Node => isNode(x) ? x : { path: resolve(x), part: "value" }
+		// a node with a path and an id is nothing-there: the policy asks by the path, the read or
+		// write reaches the id
+		function nodeOf(x: Target): Node {
+			if (!isNode(x)) return { path: resolve(x), part: "value" }
+			if (x.path !== undefined && x.id !== undefined) {
+				throw new PlacesError("nothing-there", "a node with a path and an id")
+			}
+			return x
+		}
 		const idOf = (n: Node): Id | undefined => n.id ?? (n.path ? get(places, n.path) : undefined)
 		function needId(n: Node): Id {
 			const id = idOf(n)

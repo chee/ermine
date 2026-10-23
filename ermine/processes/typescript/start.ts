@@ -7,13 +7,13 @@
 //     inside.give(computer)                // its status on the process's node
 //     return () => {}                      // called at its stop
 //   })
-//   // { id: "proc:<uuid>", at: ["clock"], cwd: [], scope }, or { refused: "taken", at: ["clock"] }
+//   // { id: "proc:3fa9c1d2e4b5a6f7-1", at: ["clock"], cwd: [], scope }, or { refused: "taken", at: ["clock"] }
 //   processes.stop(p)
 //
 // start(where, at, opts, body): where a box ({ root, places }) or places. at, cwd: paths from its
 // root, names or a string ("." here, ".." back one); cwd default: at's folder. refused "taken",
 // nothing made: a process at, above or under the path. else, in order:
-//   1. its node's id (proc:<uuid>), then a scope { process: at, [NODE]: id } (given the node,
+//   1. its node's id (setup.id's, else proc:<boot>-<n>), then a scope { process: at, [NODE]: id } (given the node,
 //      scopes.ts) under options.under (none: the owner), made through setup.sites when given
 //   2. the row: addProcess at the path, committed to the places given
 //   3. node attributes: options.attributes, then ermine.process.args, .cwd, .pin, and status
@@ -115,6 +115,10 @@ export type Setup = {
 	owner?: Scope
 	// files a write's site skips beside this one: a starter's own, so the site is its caller's
 	ours?: Iterable<string>
+	// a new process's node id, the host's (unique for as long as its nodes are kept). none:
+	// "proc:<boot>-<n>", boot 16 hex random once per createProcesses, n from 1 (most of it the same
+	// each time, so it packs small)
+	id?: () => Id
 }
 
 export type Processes = {
@@ -143,6 +147,13 @@ export function createProcesses(setup: Setup): Processes {
 	const createScope = setup.sites?.createScope ?? s.createScope
 	const ours = new Set([import.meta.url, ...(setup.ours ?? [])])
 	const owner = setup.owner ?? createScope({ processes: "start" })
+	const boot = Array.from(
+		crypto.getRandomValues(new Uint8Array(8)),
+		(b) => b.toString(16).padStart(2, "0"),
+	)
+		.join("")
+	let made = 0
+	const makeId = setup.id ?? (() => `proc:${boot}-${++made}`)
 	const statuses = createStatus({ places, table, scheduler: s })
 	const { describe, watchAll } = places
 	const runs = describe && watchAll
@@ -177,7 +188,7 @@ export function createProcesses(setup: Setup): Processes {
 	): Process | Refused {
 		const box: Box = "places" in where ? where : { root: where.root, places: where }
 		const { at, cwd } = pathsOf(address, options.cwd)
-		const id: Id = `proc:${crypto.randomUUID()}`
+		const id: Id = makeId()
 		const scope = createScope({ process: at, [NODE]: id }, options.under ?? owner)
 		scopes.give(scope, id)
 		try {
