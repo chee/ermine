@@ -48,9 +48,9 @@ static void add(set *s, op_value *v) {
 	put(s, op_ref(v));
 	if (s->owner != NULL) pm_set(s->owner, v, s);
 }
-// 1 and let go of when v was in it
-static int del(set *s, const op_value *v) {
-	if (!has(s, v)) return 0;
+// v taken out of the set, its hold given to the caller; NULL when it was not in it
+static op_value *out(set *s, const op_value *v) {
+	if (!has(s, v)) return NULL;
 	size_t mask = s->capacity - 1, i = where(s, v);
 	while (s->slots[i] != v) i = (i + 1) & mask;
 	op_value *held = s->slots[i];
@@ -68,6 +68,12 @@ static int del(set *s, const op_value *v) {
 	}
 	s->count--;
 	if (s->owner != NULL) pm_delete(s->owner, held);
+	return held;
+}
+// 1 and let go of when v was in it
+static int del(set *s, const op_value *v) {
+	op_value *held = out(s, v);
+	if (held == NULL) return 0;
 	op_free(held);
 	return 1;
 }
@@ -115,12 +121,23 @@ typedef struct {
 	size_t at; // where it is in records
 } record;
 
+// a container a write let go of before it landed, and the set it was in (its hold kept)
+typedef struct {
+	set *in;
+	op_value *v;
+} gone;
+
 struct un_unread {
 	record **records; // each its own allocation: the by-entry map points at it
 	size_t count, capacity;
 	pm owner; // an owned container → the set it is in
 	pm by_entry; // an entry → its record
 	struct un_wiring *wirings;
+	// in a write, before it lands (noting): what it let go of, put back if it is refused, so
+	// ownership changes only once the write has
+	gone *gone;
+	size_t ngone, gone_capacity;
+	bool noting;
 };
 
 un_unread *un_new(void) { return calloc(1, sizeof(un_unread)); }
@@ -140,6 +157,7 @@ void un_free(un_unread *u) {
 		u->wirings = next;
 	}
 	free(u->records);
+	free(u->gone);
 	free(u);
 }
 
@@ -221,13 +239,33 @@ static void let_go(set *mine, const op_value *v, int top) {
 	for (size_t i = 0; i < v->count; i++) let_go(mine, v->items[i], 0);
 }
 
+// held, out of in, noted: its hold the note's
+static void note(un_unread *u, set *in, op_value *held) {
+	if (u->ngone == u->gone_capacity) {
+		u->gone_capacity = u->gone_capacity ? 2 * u->gone_capacity : 16;
+		u->gone = realloc(u->gone, u->gone_capacity * sizeof *u->gone);
+		if (u->gone == NULL) abort();
+	}
+	u->gone[u->ngone++] = (gone){in, held};
+}
+
+// v, in in, let go of; noting, noted (its hold kept)
+static void leave(un_unread *u, set *in, const op_value *v) {
+	if (!u->noting) {
+		del(in, v);
+		return;
+	}
+	op_value *held = out(in, v);
+	if (held != NULL) note(u, in, held);
+}
+
 // what is owned under v let go, v too: owned copies are connected from the root, so only those
 // are walked
 static void drop(un_unread *u, op_value *v) {
 	if (!container(v)) return;
 	set *in = pm_get(&u->owner, v);
 	if (in == NULL) return;
-	del(in, v);
+	leave(u, in, v);
 	if (v->type == OP_TYPED) return;
 	for (size_t i = 0; i < v->count; i++) drop(u, v->items[i]);
 }
@@ -260,7 +298,7 @@ static void let_all(un_unread *u, op_value *v, const given *g, set **seen) {
 		add(*seen, v);
 	}
 	set *in = pm_get(&u->owner, v);
-	if (in != NULL) del(in, v);
+	if (in != NULL) leave(u, in, v);
 	if (v->type == OP_TYPED) return;
 	for (size_t i = 0; i < v->count; i++) {
 		if (!container(v->items[i])) continue;
@@ -291,19 +329,40 @@ void un_kept(un_unread *u, const op_value *value, const op_value *const *handed,
 // known (no handed), all of the entry written
 static void before(un_unread *u, wiring *w, const nd_entry *entry) {
 	if (w->handed == NULL) {
-		un_read(u, entry);
+		// all of it noted (as un_read, its record kept)
+		record *r = find(u, entry);
+		if (r == NULL) return;
+		set *s = r->owned;
+		for (size_t i = 0; i < s->capacity; i++) {
+			if (s->slots[i] == NULL) continue;
+			pm_delete(s->owner, s->slots[i]);
+			note(u, s, s->slots[i]);
+		}
+		free(s->slots);
+		*s = (set){.owner = s->owner};
 		return;
 	}
 	for (size_t i = 0; i < w->nruns; i++) {
 		going *g = &w->runs[i];
 		if (!g->returned) continue;
-		for (size_t j = 0; j < g->n; j++) drop(u, g->given[j]), op_free(g->given[j]);
+		for (size_t j = 0; j < g->n; j++) drop(u, g->given[j]);
+	}
+}
+// once the write landed: what the runs' reads gave them, let go of, is not walked again
+static void given_up(wiring *w) {
+	if (w->handed == NULL) return;
+	for (size_t i = 0; i < w->nruns; i++) {
+		going *g = &w->runs[i];
+		if (!g->returned) continue;
+		for (size_t j = 0; j < g->n; j++) op_free(g->given[j]);
 		g->n = 0;
 	}
 }
 
 int un_update(un_unread *u, nd_entry *entry, const op_patch *patches, size_t n, ch_header header,
 	size_t *failed) {
+	// what is let go of before the op_apply is noted, and put back if it is refused
+	u->noting = true;
 	// a run past its body's return (un_keeping: its set) may hand on what it read: let go of first
 	for (wiring *w = u->wirings; w != NULL; w = w->next)
 		if (w->nreturned) before(u, w, entry);
@@ -333,13 +392,22 @@ int un_update(un_unread *u, nd_entry *entry, const op_patch *patches, size_t n, 
 	op_apply_options options = {.undo = &undo, .in_place = 1, .owned = owned, .data = &o};
 	op_value *after;
 	int code = op_apply(entry->value, patches, n, &options, &after, failed);
+	u->noting = false;
 	if (code != OP_OK) {
 		// the copies it made are no longer wanted: each let go of, now nothing holds it but the set
 		for (size_t j = 0; j < o.made.count; j++) del(o.mine, o.made.copies[j]);
 		free(o.made.copies);
+		// what it let go of first owned again, where it was
+		for (size_t j = 0; j < u->ngone; j++)
+			add(u->gone[j].in, u->gone[j].v), op_free(u->gone[j].v);
+		u->ngone = 0;
 		return code;
 	}
 	free(o.made.copies);
+	for (size_t j = 0; j < u->ngone; j++) op_free(u->gone[j].v);
+	u->ngone = 0;
+	for (wiring *w = u->wirings; w != NULL; w = w->next)
+		if (w->nreturned) given_up(w);
 	for (size_t k = 0; k < undo.n; k++)
 		if (undo.patches[k].has_value) let_go(o.mine, undo.patches[k].value, 1);
 	op_free(entry->value);

@@ -33,7 +33,8 @@
 		"./playground/sessions",
 		"./playground/trust",
 		"./experiments/software",
-		"./experiments/tippet"
+		"./experiments/tippet",
+		"./experiments/sources"
 	],
 	"tasks": {
 		"test": "deno test --allow-run --allow-read --allow-env && deno task conformance",

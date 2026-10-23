@@ -27,7 +27,7 @@
 		{
 			"op": "value",
 			"id": "T",
-			"value": "export function run(code, api) { say([\"run\", api.process.id, code]); return { stop: () => say([\"stop\", api.process.id]) } }",
+			"value": "export function start(code, ctx) { say([\"run\", ctx.process.id, code]); return { stop: () => say([\"stop\", ctx.process.id]) } }",
 			"expect": {}
 		},
 		{
@@ -129,7 +129,7 @@
 								"toy"
 							],
 							"attributes": "d15d53ab45bf0d69b049a6cbc68bfc100d593c4ee0e14f7fcca189f9e3f24b06",
-							"hash": "7889d48089a95b9f91ed0c64a561c90d2894807b8ccb8e639b53ed137486e677",
+							"hash": "9fc65bc43acae914c2ea14cae6454d9071bafa557ec3628adb929b57b5def008",
 							"by": [
 								{
 									"id": "JS",

@@ -25,7 +25,8 @@
 // never a patch's value (op puts it in as given: the caller's; an owned container in one, of any
 // entry, is let go first: a walk over every container in each patch's value), nor what a write
 // takes out (its undo holds it): the next write through those copies them. a write that throws
-// changes nothing, which container is where too
+// changes nothing, which container is where and what is owned too: what it lets go of first is
+// put back
 import type { ChangeHeader, Entry } from "@ermine/node/entry"
 import apply, { type Patch } from "@ermine/op/apply"
 import type { Scheduler } from "@ermine/scheduler"
@@ -58,6 +59,19 @@ export function createUnread(): Unread {
 	// a copy → the token it was made under: owned while that is its entry's token. one record
 	// per copy; a read gives the entry a new token, letting go of all of it at once
 	const owner = new WeakMap<object, object>()
+	// in a write, before it lands: what it let go of (each copy, then its token), put back if
+	// it throws, so ownership changes only once the write has
+	const gone: object[] = []
+	let noting = false
+
+	// v owned no longer (noting: noted); whether it was
+	const out = (v: object): boolean => {
+		if (!noting) return owner.delete(v)
+		const t = owner.get(v)
+		if (t === undefined) return false
+		gone.push(v, t)
+		return owner.delete(v)
+	}
 
 	// apply's owned: a container a write changes, owned, or its copy, owned from now
 	const take = (mine: object) => (v: object): object => {
@@ -79,22 +93,41 @@ export function createUnread(): Unread {
 
 	function update<V>(entry: Entry<V>, patches: Iterable<Patch>, change: ChangeHeader) {
 		const ps: readonly Patch[] = Array.isArray(patches) ? patches : [...patches]
-		// a run past its body's return (keeping: its set) may hand on what it read: let go of first
-		const ws = wired.get(unread)
-		if (ws !== undefined) { for (const g of ws) if (g.returned.size) before(g, entry) }
-		// what a patch puts is the caller's from now: nothing in it owned
-		for (const p of ps) {
-			if (p !== null && typeof p === "object" && "value" in p && container(p.value)) {
-				kept(p.value)
-			}
-		}
-		let mine = owns.get(entry)
-		if (mine === undefined) owns.set(entry, mine = {})
-		// one apply, in place where owned: what a patch changes that is not owned yet is copied as
-		// it lands, in the tree the patches before it left (one may move a subtree, or put a value
-		// in, that the next writes under). a throw changes nothing
+		// what is let go of before the apply is noted, and put back if it throws
+		const was = owns.get(entry)
+		noting = true
 		const undo: Patch[] = []
-		const after = apply(entry.value, ps, { undo, cow: false, owned: take(mine) })
+		let after: unknown
+		try {
+			// a run past its body's return (keeping: its set) may hand on what it read: let go of
+			// first
+			const ws = wired.get(unread)
+			if (ws !== undefined) { for (const g of ws) if (g.returned.size) before(g, entry) }
+			// what a patch puts is the caller's from now: nothing in it owned
+			for (const p of ps) {
+				if (p !== null && typeof p === "object" && "value" in p && container(p.value)) {
+					kept(p.value)
+				}
+			}
+			let mine = owns.get(entry)
+			if (mine === undefined) owns.set(entry, mine = {})
+			// one apply, in place where owned: what a patch changes that is not owned yet is copied
+			// as it lands, in the tree the patches before it left (one may move a subtree, or put a
+			// value in, that the next writes under). a throw changes nothing, what is owned too
+			after = apply(entry.value, ps, { undo, cow: false, owned: take(mine) })
+		} catch (e) {
+			for (let i = 0; i < gone.length; i += 2) owner.set(gone[i], gone[i + 1])
+			if (was === undefined) owns.delete(entry)
+			else owns.set(entry, was)
+			throw e
+		} finally {
+			noting = false
+			gone.length = 0
+		}
+		const mine = owns.get(entry)!
+		// what the runs' reads gave them is let go of: not again
+		const ws = wired.get(unread)
+		if (ws !== undefined) { for (const g of ws) if (g.returned.size) given(g) }
 		for (const u of undo) if ("value" in u) free(u.value, mine)
 		if (after === undefined) delete entry.value
 		else entry.value = after as V
@@ -104,7 +137,7 @@ export function createUnread(): Unread {
 	// what is owned under v let go, v too: owned copies are connected from the root, so only those
 	// are walked
 	function drop(v: unknown) {
-		if (!container(v) || !owner.delete(v) || typed(v)) return
+		if (!container(v) || !out(v) || typed(v)) return
 		if (Array.isArray(v)) { for (const x of v) drop(x) }
 		else for (const k in v) drop((v as Record<string, unknown>)[k])
 	}
@@ -119,7 +152,7 @@ export function createUnread(): Unread {
 			if (seen.has(v)) return
 			seen.add(v)
 		}
-		owner.delete(v)
+		out(v)
 		if (typed(v)) return
 		if (Array.isArray(v)) {
 			for (const x of v) if (container(x)) kept(x, handed, seen ??= new Set([v]))
@@ -135,11 +168,11 @@ export function createUnread(): Unread {
 	// known (no handed), all of the entry written
 	function before(g: Going, entry: Entry<unknown>) {
 		if (!g.handed) return void owns.delete(entry)
-		for (const c of g.returned) {
-			const given = g.runs.get(c)!
-			for (const x of given) drop(x)
-			given.length = 0
-		}
+		for (const c of g.returned) for (const x of g.runs.get(c)!) drop(x)
+	}
+	// once the write landed: what their reads gave them, let go of, is not walked again
+	function given(g: Going) {
+		if (g.handed) { for (const c of g.returned) g.runs.get(c)!.length = 0 }
 	}
 
 	const unread: Unread = {

@@ -27,7 +27,7 @@
 		{
 			"op": "value",
 			"id": "T",
-			"value": "export function run(code, api) { say([\"run A\", api.process.id, code]); return { stop: () => say([\"stop A\", api.process.id]) } }",
+			"value": "export function start(code, ctx) { say([\"run A\", ctx.process.id, code]); return { stop: () => say([\"stop A\", ctx.process.id]) } }",
 			"expect": {}
 		},
 		{
@@ -112,7 +112,7 @@
 		{
 			"op": "value",
 			"id": "T",
-			"value": "export function run(code, api) { say([\"run B\", api.process.id, code]); return { stop: () => say([\"stop B\", api.process.id]) } }",
+			"value": "export function start(code, ctx) { say([\"run B\", ctx.process.id, code]); return { stop: () => say([\"stop B\", ctx.process.id]) } }",
 			"expect": {}
 		},
 		{
@@ -184,7 +184,7 @@
 								"toy"
 							],
 							"attributes": "d15d53ab45bf0d69b049a6cbc68bfc100d593c4ee0e14f7fcca189f9e3f24b06",
-							"hash": "a5a2b7cac07c4706fa06dc2c0a0e16853f8821a75b5a36dfc4b0b56629755fab",
+							"hash": "8c78c1b2a7faa0fbd05a1b33f86aa03ce72b5522231ca5dfd415fd739f0e9129",
 							"by": [
 								{
 									"id": "JS",
@@ -226,7 +226,7 @@
 								"toy"
 							],
 							"attributes": "d15d53ab45bf0d69b049a6cbc68bfc100d593c4ee0e14f7fcca189f9e3f24b06",
-							"hash": "cc4ebc9bbe7f8f6f6b80323421d829be3bfe4516b19cbc82ada83d2c1badc446",
+							"hash": "c6cad070544f581eda4b40eefa5fe0aa66485631cd85581f9d3c87457d7f6072",
 							"by": [
 								{
 									"id": "JS",

@@ -1183,7 +1183,9 @@ export function createScheduler(): Scheduler {
 				}
 			}
 		}
-		p.then(
+		// through a promise of the language's own: a thenable is heard once, and a then that throws
+		// is a rejection
+		Promise.resolve(p).then(
 			(value) => settle({ value }),
 			(error) => settle(error === PENDING ? { value: PENDING } : { error }),
 		)

@@ -27,7 +27,7 @@
 		{
 			"op": "value",
 			"id": "T",
-			"value": "export function run(code, api) { say([\"run\", api.process.id, code]); return { stop: () => say([\"stop\", api.process.id]) } }",
+			"value": "export function start(code, ctx) { say([\"run\", ctx.process.id, code]); return { stop: () => say([\"stop\", ctx.process.id]) } }",
 			"expect": {}
 		},
 		{

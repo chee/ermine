@@ -25,6 +25,7 @@ static sq_value value_of(const op_value *v) {
 		sq_value l = sq_list((const void *const *)v->items, v->count);
 		return l.lone = lone(v), l;
 	}
+	if (v->type == OP_TYPED) return sq_typed((int)v->kind, op_size(v->kind), v->data, op_length(v));
 	sq_value a = sq_any(v);
 	return a.lone = lone(v), a;
 }
@@ -36,6 +37,11 @@ static void put_value(FILE *out, const sq_value *v) {
 	switch (v->kind) {
 	case SQ_STR:
 		s = op_str_n(v->data, v->size);
+		op_json_write(out, s);
+		op_free(s);
+		return;
+	case SQ_TYPED:
+		s = op_typed((op_elements)v->of, v->data, v->n);
 		op_json_write(out, s);
 		op_free(s);
 		return;
@@ -124,6 +130,7 @@ static sq_patch *patches_of(const op_value *a, size_t *n) {
 		if (ps[i].move) {
 			sq_path mp = path_of(op_get(ps[i].move, "path"));
 			ps[i].move_path = mp.keys, ps[i].move_depth = mp.depth;
+			ps[i].move_has_range = op_get(ps[i].move, "range") != NULL;
 		}
 	}
 	return ps;
@@ -155,10 +162,24 @@ static sq_columns columns_of(const op_value *o) {
 	return c;
 }
 
+static int is_list(const op_value *v) { return v && v->type == OP_LIST; }
+// columns with each of its fields a list
+static int columns_ok(const op_value *c) {
+	static const char *fields[] = {"paths", "path", "shape", "from", "size", "value", "move"};
+	if (!c || c->type != OP_MAP) return 0;
+	for (size_t i = 0; i < sizeof fields / sizeof *fields; i++)
+		if (!is_list(op_get(c, fields[i]))) return 0;
+	return 1;
+}
+
 void hh_answer(const op_value *r, FILE *out) {
 	const char *o = hh_str(r, "op");
 	size_t n;
-	if (o && !strcmp(o, "squish")) {
+	if (o && (!strcmp(o, "squish") || !strcmp(o, "encode")) && !is_list(op_get(r, "patches"))) {
+		hh_error(out, "patches: not a list");
+	} else if (o && !strcmp(o, "decode") && !columns_ok(op_get(r, "columns"))) {
+		hh_error(out, "columns: not a map of lists");
+	} else if (o && !strcmp(o, "squish")) {
 		sq_patch *ps = patches_of(op_get(r, "patches"), &n);
 		sq *s = sq_new();
 		for (size_t i = 0; i < n; i++) sq_push(s, &ps[i]);
