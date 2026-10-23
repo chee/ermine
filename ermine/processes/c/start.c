@@ -21,19 +21,12 @@ static void *xalloc(size_t n) {
 }
 static char *xdup(const char *s) { return strcpy(xalloc(strlen(s) + 1), s); }
 
-// "proc:" and 8-4-4-4-12 hex, from the system's random bytes
-static char *proc_id(void) {
-	static const char hex[] = "0123456789abcdef";
-	unsigned char b[16];
-	arc4random_buf(b, sizeof b);
-	char *id = xalloc(sizeof "proc:" + 36);
-	strcpy(id, "proc:");
-	size_t at = strlen(id);
-	for (size_t i = 0; i < 16; i++) {
-		if (i == 4 || i == 6 || i == 8 || i == 10) id[at++] = '-';
-		id[at++] = hex[b[i] >> 4];
-		id[at++] = hex[b[i] & 15];
-	}
+// "proc:<boot>-<n>": boot 16 hex, from the system's random bytes once per pr, n from 1
+static char *proc_id(const unsigned char boot[8], unsigned long n) {
+	char *id = xalloc(sizeof "proc:" + 16 + 1 + 20);
+	int at = sprintf(id, "proc:");
+	for (size_t i = 0; i < 8; i++) at += sprintf(id + at, "%02x", boot[i]);
+	sprintf(id + at, "-%lu", n);
 	return id;
 }
 
@@ -75,11 +68,15 @@ struct pr {
 	pr_process **all;
 	size_t n, cap;
 	int halted;
+	// the default ids: this pr's boot, and how many made
+	unsigned char boot[8];
+	unsigned long made;
 };
 
 pr *pr_new_at(const pr_setup *setup, const char *file, int line, const char *func) {
 	pr *s = xalloc(sizeof *s);
 	s->s = *setup;
+	arc4random_buf(s->boot, sizeof s->boot);
 	if (setup->owner != NULL) s->owner = setup->owner;
 	else {
 		s->owned = 1;
@@ -298,7 +295,7 @@ pr_process *pr_start_at(pr *s, pl *where, const char *const *steps, size_t nstep
 	p->nargs = o->nargs;
 	p->args = xalloc((o->nargs + 1) * sizeof *p->args);
 	for (size_t i = 0; i < o->nargs; i++) p->args[i] = xdup(o->args[i]);
-	p->id = proc_id();
+	p->id = s->s.id != NULL ? s->s.id(s->s.id_ctx) : proc_id(s->boot, ++s->made);
 	p->id_value = op_str(p->id);
 	p->info[0] = (sc_pair){"process", p->at_value};
 	p->info[1] = (sc_pair){PL_NODE, p->id_value};

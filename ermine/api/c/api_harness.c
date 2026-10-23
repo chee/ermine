@@ -421,7 +421,8 @@ static op_value *node_json(const api_node *n) {
 	op_set(o, "part", op_str(n->part));
 	return o;
 }
-// a node from its JSON; the part is one of the api's names
+// a node from its JSON, its path and its id as given (both: the api's to refuse); the part is one
+// of the api's names
 static int node_of(const op_value *v, api_node *out) {
 	if (v == NULL || v->type != OP_MAP) return 0;
 	const char *part = hh_str(v, "part");
@@ -432,9 +433,9 @@ static int node_of(const op_value *v, api_node *out) {
 		out->path = xalloc((p->count + 1) * sizeof *out->path);
 		out->npath = p->count;
 		for (size_t i = 0; i < p->count; i++) out->path[i] = xdup(p->items[i]->str);
-	} else if (hh_str(v, "id")) out->id = xdup(hh_str(v, "id"));
-	else return 0;
-	return 1;
+	}
+	if (hh_str(v, "id")) out->id = xdup(hh_str(v, "id"));
+	return out->path || out->id;
 }
 
 static op_key *keys_of(const op_value *list, size_t *n) {

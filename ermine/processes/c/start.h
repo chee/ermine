@@ -55,6 +55,10 @@ typedef struct {
 	// back, or no site: processes' own)
 	const ch_site *(*site)(void *ctx, ch_site *buf);
 	void *site_ctx;
+	// a new process's node id, the host's, malloc'd (unique for as long as its nodes are kept).
+	// NULL: "proc:<boot>-<n>", boot 16 hex random once per pr_new, n from 1
+	char *(*id)(void *ctx);
+	void *id_ctx;
 } pr_setup;
 
 // a start's own: args (has_args 0: none written); cwd, steps from the root as at's (has_cwd 0: the

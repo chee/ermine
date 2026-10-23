@@ -138,7 +138,7 @@ const char *api_why(const api *a);
 #define API_ATTRIBUTES "attributes"
 
 // a node: walked to by its path at each use, or its id (a node with no place); part: the table read
-// and written. path NULL and id set: no place
+// and written. path NULL and id set: no place; both set: nothing-there
 typedef struct {
 	char **path;
 	size_t npath;

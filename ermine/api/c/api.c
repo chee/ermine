@@ -341,13 +341,17 @@ static api_node node_copy(const api_node *n, const char *part) {
 	return c;
 }
 
-// a target as a node: borrowed if it is one, else made (tmp) from its string
+// a target as a node: borrowed if it is one, else made (tmp) from its string. a node with a path
+// and an id is nothing-there: the policy asks by the path, the read or write reaches the id
 typedef struct {
 	api_node tmp;
 	const api_node *n;
 } found;
 static int found_of(api *a, api_target x, found *f) {
 	*f = (found){0};
+	if (x.node && x.node->path && x.node->id) {
+		return fail(a, API_NOTHING_THERE, "a node with a path and an id");
+	}
 	if (x.node) return f->n = x.node, 0;
 	names p = {0};
 	int code = resolve(a, x.path, &p);
@@ -1538,11 +1542,17 @@ static op_value *method_value(size_t index) {
 	op_set(m, "method", op_num((double)index));
 	return op_stand(m);
 }
-static int method_index(const op_value *v, size_t *index) {
+// the method a stand-in is: a whole number from 0 below count, its range checked before the cast
+// (a cast of a negative, NaN, infinite or too large double to size_t is undefined)
+static int method_index(const op_value *v, size_t count, size_t *index) {
 	if (v == NULL || v->type != OP_STAND || v->count != 1 || v->items[0]->type != OP_MAP) return 0;
 	const op_value *i = op_get(v->items[0], "method");
 	if (i == NULL || i->type != OP_NUM) return 0;
-	*index = (size_t)i->num;
+	double d = i->num;
+	if (!(d >= 0 && d < (double)count)) return 0;
+	size_t k = (size_t)d;
+	if ((double)k != d) return 0;
+	*index = k;
 	return 1;
 }
 
@@ -1613,7 +1623,7 @@ int api_send_at(api *a, api_target x, const op_value *const *args, size_t nargs,
 	char *id = id_of(a, f.n);
 	const nd_entry *e = id ? tb_get(ap->s.table, tb_string(API_VALUE), tb_string(id)) : NULL;
 	size_t index;
-	if (e == NULL || !method_index(e->value, &index) || index >= ap->nmethods) {
+	if (e == NULL || !method_index(e->value, ap->nmethods, &index)) {
 		const char *where = f.n->path && f.n->npath ? f.n->path[f.n->npath - 1] : f.n->id;
 		code = fail(a, API_NOT_A_METHOD, where ? where : "");
 		free(id);
