@@ -246,6 +246,8 @@ static void line(void *arg) {
 						ok = frame_out(0x2, me.job.p + at + 4, n);
 						at += 4 + n;
 					}
+					extern int getenv_trace;
+					if (getenv_trace) printf("trace: ws wrote %u bytes at %lld\n", (unsigned)me.job.n, (long long)ms());
 					xSemaphoreTake(me.lock, portMAX_DELAY);
 					me.ready = 0;
 					xSemaphoreGive(me.lock);

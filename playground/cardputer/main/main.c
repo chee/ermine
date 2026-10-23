@@ -15,6 +15,7 @@
 #include "esp_random.h"
 #include "esp_system.h"
 #include "esp_timer.h"
+#include "esp_private/esp_clk.h"
 #include "fb.h"
 #include "flash.h"
 #include "freertos/FreeRTOS.h"
@@ -55,6 +56,8 @@
 
 // the last screen the shell drew, printed on the serial line after a line typed there
 static op_value *last;
+// the send path's times on the log (den.c)
+extern int getenv_trace;
 // 1: the den's framebuffer shows, keys go to /home/keys; 0: the shell's text rows
 static int dens_mode = 1;
 static int wifi;
@@ -74,6 +77,11 @@ void frame_again(void) {
 
 void den_random(uint8_t *out, size_t n) { esp_fill_random(out, n); }
 
+static void *mem_fn(void *ctx, void *p, size_t old, size_t size) {
+	(void)ctx, (void)old;
+	if (size == 0) return free(p), NULL;
+	return realloc(p, size);
+}
 static size_t free_now(void) { return heap_caps_get_free_size(MALLOC_CAP_8BIT); }
 static size_t least(void) { return heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT); }
 
@@ -209,6 +217,7 @@ static void pressed(api *keyboard_api, const char *k) {
 		keyboard_press(keyboard_api, k);
 		return;
 	}
+	if (getenv_trace) printf("trace: key %s at %lld\n", k, (long long)(esp_timer_get_time() / 1000));
 	if (strcmp(k, "backspace") == 0) things_key("del");
 	else if (strlen(k) == 1) things_key(k);
 }
@@ -265,6 +274,36 @@ void room_go(const char *code) {
 	}
 	fflush(stdout);
 	esp_restart();
+}
+
+// what the send path's parts cost here, said once at boot: the CPU's clock and the flash's mode
+// and speed, an ed25519 signature (of a 32-byte hash, as tippet signs a run), a run of one step
+// packed, and its hash
+static void bench(void) {
+	printf("bench: cpu %u MHz, flash %s at %s\n", (unsigned)(esp_clk_cpu_freq() / 1000000), CONFIG_ESPTOOLPY_FLASHMODE,
+		CONFIG_ESPTOOLPY_FLASHFREQ);
+	tp_key k;
+	tp_key_of(&k, den_seed());
+	uint8_t hash[32] = {1}, sig[64];
+	int64_t t = esp_timer_get_time();
+	for (int i = 0; i < 5; i++) tp_sign(&k, hash, 32, sig);
+	int64_t signed_us = (esp_timer_get_time() - t) / 5;
+	uint8_t step[1024];
+	long n = den_own_step(0, step, sizeof step);
+	int64_t packed_us = -1, hashed_us = -1;
+	if (n > 0 && (size_t)n <= sizeof step) {
+		tp_mem mem = {mem_fn, NULL};
+		tp_span one = {step, (size_t)n}, pack;
+		t = esp_timer_get_time();
+		for (int i = 0; i < 5; i++)
+			if (tp_pack(&mem, &one, 1, 1 << 16, &pack) == 0) tp_span_free(&mem, &pack);
+		packed_us = (esp_timer_get_time() - t) / 5;
+		t = esp_timer_get_time();
+		for (int i = 0; i < 5; i++) tp_step_hash(step, (size_t)n, hash);
+		hashed_us = (esp_timer_get_time() - t) / 5;
+	}
+	printf("bench: sign %lld us, pack one step (%ld bytes) %lld us, hash it %lld us\n", (long long)signed_us, n,
+		(long long)packed_us, (long long)hashed_us);
 }
 
 // the heap's least yet, said at a stage of the den's life
@@ -325,6 +364,7 @@ void app_main(void) {
 		}
 	}
 	printf("den: %s in room %s, up, %u bytes of heap\n", me.id, room, (unsigned)(before - free_now()));
+	bench();
 	stage("den up");
 	wifi = wifi_start(WEBSOCKET ? 0 : POLL_WORKERS);
 	// a network named, but WiFi not started: said, in words (it is the heap, mostly: a room whose
@@ -376,6 +416,19 @@ void app_main(void) {
 					dump();
 					continue;
 				}
+				// ctrl-t: the send path's times on the log, or not
+				if (typed[i] == 0x14) {
+					getenv_trace = !getenv_trace;
+					printf("trace: %s\n", getenv_trace ? "on" : "off");
+					continue;
+				}
+				// ctrl-y: the log's own sync lazy (3 s quiet) or a second after (to time both)
+				if (typed[i] == 0x19) {
+					extern int den_lazy;
+					den_lazy = !den_lazy;
+					printf("trace: the log's sync %s\n", den_lazy ? "when 3 s quiet" : "a second after");
+					continue;
+				}
 				// ctrl-g: G0, the menu
 				if (typed[i] == 0x07) {
 					menu_toggle();
@@ -392,6 +445,7 @@ void app_main(void) {
 				if ((k = serial_key(typed[i])) == NULL) continue;
 				// typed on the serial line: the shell's, and the den's keys' too
 				if (shell_on) keyboard_press(keyboard_api, k);
+				if (getenv_trace) printf("trace: key %s at %lld\n", k, (long long)(esp_timer_get_time() / 1000));
 				if (strlen(k) == 1) things_key(k);
 				else if (strcmp(k, "backspace") == 0) things_key("del");
 				host_settle();

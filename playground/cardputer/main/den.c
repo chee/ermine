@@ -382,14 +382,35 @@ static int trusts(const char *install) { return is_map(me.keys) && op_get(me.key
 
 // ---- tippet: the log's told, the history's kept and run, the sync's heard ----
 
-// the send path's times on the log (trace: lines), when 1
+// the send path's times on the log (trace: lines), when 1 (ctrl-t on the serial line)
 int getenv_trace = 0;
+// the store's calls, timed (ms) and counted: tippet's file store on FAT
+typedef struct {
+	int64_t sync, append, read;
+	int nsync, nappend, nread;
+} store_times;
+static store_times times;
 static void told(void *ctx, const uint8_t device[32], uint64_t from, size_t count) {
 	(void)ctx;
+	int own = memcmp(device, me.install.key, 32) == 0;
+	int64_t t0 = den_clock();
+	store_times was = times;
 	if (me.history) tp_history_told(me.history, device, from, count);
+	int64_t t1 = den_clock();
 	if (me.sync) tp_sync_told(me.sync, device, from, count);
-	if (memcmp(device, me.install.key, 32) == 0) {
-		if (getenv_trace) printf("trace: step %llu written at %lld\n", (unsigned long long)from, (long long)den_clock());
+	if (own && getenv_trace) {
+		// the push: tippet's sync of the store, the run closed (its steps read back, signed, packed,
+		// appended), its message read back and handed to the link. the store's parts timed here; the
+		// rest (sign, pack, the encodings) is tippet's own
+		int64_t t2 = den_clock();
+		printf("trace: step %llu written at %lld; pushed in %lld ms: sync %lld (%d), append %lld (%d), read %lld (%d), "
+		       "the rest (sign, pack) %lld\n",
+			(unsigned long long)from, (long long)t0, (long long)(t2 - t1), (long long)(times.sync - was.sync),
+			times.nsync - was.nsync, (long long)(times.append - was.append), times.nappend - was.nappend,
+			(long long)(times.read - was.read), times.nread - was.nread,
+			(long long)((t2 - t1) - (times.sync - was.sync) - (times.append - was.append) - (times.read - was.read)));
+	}
+	if (own) {
 		for (size_t i = 0; i < count; i++) keys_from(from + i);
 	} else learn(device);
 }
@@ -1307,9 +1328,33 @@ static int forgetting;
 // before any leave
 static int (*store_sync)(void *self);
 static int64_t sync_ms, syncs;
+static int (*store_append)(void *self, const uint8_t *record, size_t length, const tp_at *at);
+static long (*store_get)(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap);
+static long (*store_run)(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap, uint64_t *first,
+	uint64_t *last);
+static int timed_append(void *self, const uint8_t *record, size_t length, const tp_at *at) {
+	int64_t t = den_clock();
+	int why = store_append(self, record, length, at);
+	times.append += den_clock() - t, times.nappend++;
+	return why;
+}
+static long timed_get(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap) {
+	int64_t t = den_clock();
+	long got = store_get(self, device, n, out, cap);
+	times.read += den_clock() - t, times.nread++;
+	return got;
+}
+static long timed_run(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap, uint64_t *first,
+	uint64_t *last) {
+	int64_t t = den_clock();
+	long got = store_run(self, device, n, out, cap, first, last);
+	times.read += den_clock() - t, times.nread++;
+	return got;
+}
 static int timed_sync(void *self) {
 	int64_t t = den_clock();
 	int why = store_sync(self);
+	times.sync += den_clock() - t, times.nsync++;
 	sync_ms += den_clock() - t, syncs++;
 	if (getenv_trace) printf("trace: synced in %lld ms at %lld\n", (long long)(den_clock() - t), (long long)den_clock());
 	return why;
@@ -1344,6 +1389,9 @@ int den_boot(const inst_install *install, const char *code, const char *dir, int
 		static tp_store wrapped;
 		wrapped = *store, store_snapshot = store->snapshot, wrapped.snapshot = snapshot_in_place;
 		store_sync = store->sync, wrapped.sync = timed_sync;
+		store_append = store->append, wrapped.append = timed_append;
+		store_get = store->get, wrapped.get = timed_get;
+		store_run = store->run, wrapped.run = timed_run;
 		store = &wrapped;
 	}
 	me.store = store;
@@ -1438,6 +1486,9 @@ int den_boot(const inst_install *install, const char *code, const char *dir, int
 }
 
 // ---- each loop ----
+
+// 1: the log's own sync waits for 3 s with no steps; 0: a second after the first (as before)
+int den_lazy = 1;
 
 void den_net(const char *state) {
 	if (strcmp(me.net, state) == 0) return;
@@ -1541,9 +1592,12 @@ void den_tick(int64_t now) {
 		den_snapshot();
 		den_mark("snapshot kept");
 	}
-	// what the log took since the last sync (its own steps, and others'), on flash within a second
+	// what the log took since the last sync (its own steps, and others'), on flash once none have
+	// come for 3 s. tippet syncs this den's own steps itself before any leave (tp_log_run), so this
+	// one is for the rest (others' steps, its own runs closed): never in the way of typing
 	uint64_t steps = den_steps();
-	if (steps != me.synced && me.sync_at == 0) me.sync_at = now + 1000;
+	if (steps != me.synced && den_lazy) me.sync_at = now + 3000;
+	else if (steps != me.synced && me.sync_at == 0) me.sync_at = now + 1000;
 	if (me.sync_at && now >= me.sync_at && me.store->sync) {
 		me.sync_at = 0, me.synced = steps;
 		if (me.store->sync(me.store->self)) fprintf(stderr, "den: the log wasn't synced to flash\n");
@@ -1693,3 +1747,9 @@ void den_leave(void) {
 	}
 	if (me.store && me.store->sync && me.store->sync(me.store->self)) fprintf(stderr, "den: the log wasn't synced to flash\n");
 }
+
+long den_own_step(uint64_t n, uint8_t *out, size_t cap) {
+	if (n == 0) n = tp_log_count(me.log, me.install.key);
+	return n ? tp_log_step(me.log, me.install.key, n, out, cap) : -1;
+}
+const uint8_t *den_seed(void) { return me.install.secret; }
