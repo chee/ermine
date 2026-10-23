@@ -283,7 +283,7 @@ void menu_paint(void) {
 				fb_text(FB_W - 6 - fb_text_width(w, 1), y, w, on ? FB_LILAC : FB_GREY, 1);
 			}
 		}
-		hint(";/. move  enter pick  esc shut");
+		hint(";. move  enter pick  esc shut");
 	} else if (m.mode == JOINING) {
 		head("join a room");
 		fb_text(4, 17, "type its code:", FB_INK, 1);
