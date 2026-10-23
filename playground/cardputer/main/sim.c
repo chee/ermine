@@ -32,8 +32,10 @@ int64_t now_ms(void);
 #include "poll.h"
 #include "shell.h"
 #include "things.h"
+#include "menu.h"
 
 static int quiet;
+static char home[200];
 
 void show(const op_value *screen) {
 	if (quiet) return;
@@ -120,8 +122,12 @@ static void png(const char *path) {
 static int frames;
 static void (*shown)(void);
 
+static void draw(void (*paint)(void));
 void frame_show(void (*paint)(void)) {
 	shown = paint;
+	draw(menu_open() ? menu_paint : paint);
+}
+static void draw(void (*paint)(void)) {
 	for (int top = 0; top < FB_H; top += FB_STRIP) {
 		fb_strip(top);
 		paint();
@@ -140,7 +146,23 @@ void frame_show(void (*paint)(void)) {
 }
 
 void frame_again(void) {
-	if (shown) frame_show(shown);
+	if (shown || menu_open()) draw(menu_open() ? menu_paint : shown);
+}
+
+// the room, kept in SIM_HOME/room (the device's NVS); room_go: kept, then the sim run again in it
+static char **args;
+void room_go(const char *code) {
+	char path[256];
+	snprintf(path, sizeof path, "%s/room", home);
+	FILE *f = fopen(path, "w");
+	if (f) fputs(code, f), fclose(f);
+	den_leave();
+	printf("sim: to room %s: running again\n", code);
+	fflush(stdout);
+	unsetenv("SIM_ROOM");
+	execv(args[0], args);
+	perror("execv");
+	exit(1);
 }
 
 void den_random(uint8_t *out, size_t n) { arc4random_buf(out, n); }
@@ -247,7 +269,6 @@ static void workers_start(void) {
 
 // ---- the install, in files in SIM_HOME ----
 
-static char home[200];
 
 static bool file_read(void *ctx, const char *name, uint8_t *out, size_t cap, size_t *length) {
 	(void)ctx;
@@ -289,7 +310,15 @@ int main(int argc, char **argv) {
 	(void)argc, (void)argv;
 	const char *h = getenv("SIM_HOME"), *room = getenv("SIM_ROOM"), *server = getenv("SIM_SERVER");
 	snprintf(home, sizeof home, "%s", h ? h : "/tmp/cardputer-sim");
-	if (room == NULL || strlen(room) != 4) room = "ACDE";
+	args = argv;
+	static char kept[8];
+	if (room == NULL || strlen(room) != 4) {
+		char path[256];
+		snprintf(path, sizeof path, "%s/room", h ? h : "/tmp/cardputer-sim");
+		FILE *f = fopen(path, "r");
+		room = f && fgets(kept, sizeof kept, f) && strlen(kept) == 4 ? kept : "ACDE";
+		if (f) fclose(f);
+	}
 	if (server == NULL) server = "https://galaxy.observer";
 	mkdir(home, 0755);
 	setvbuf(stdout, NULL, _IOLBF, 0);
@@ -341,7 +370,18 @@ int main(int argc, char **argv) {
 			char *nl;
 			while ((nl = memchr(line, '\n', at)) != NULL) {
 				*nl = 0;
-				if (strcmp(line, "tab") == 0) den_pair_answer(1);
+				if (strcmp(line, "g0") == 0) menu_toggle();
+				else if (menu_open() && strcmp(line, "tab") != 0) {
+					// the menu's keys: a line a key's name (esc, enter, up, down, backspace), or letters
+					if (!strcmp(line, "esc") || !strcmp(line, "enter") || !strcmp(line, "up") || !strcmp(line, "down") ||
+						!strcmp(line, "backspace"))
+						menu_key(line);
+					else
+						for (char *c = line; *c; c++) {
+							char key[2] = {*c, 0};
+							menu_key(key);
+						}
+				} else if (strcmp(line, "tab") == 0) den_pair_answer(1);
 				else if (strcmp(line, "esc") == 0) den_pair_answer(0);
 				else if (strcmp(line, "print") == 0) den_print();
 				else if (strcmp(line, "quit") == 0) return 0;
