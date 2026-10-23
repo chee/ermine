@@ -1,5 +1,5 @@
 {
-	"title": "run refused, nothing made, the first that holds, in order: not-a-runner (nothing at the runner's path; a compiler there; a node whose ermine.type is not ermine.runner), not-there (no program node; a node with no value; by id: no value, or not the hash given; code given: not the hash given), wrong-form (a type not the runner's takes, by path, by id or carried; no type, or one not a string; a program's api the runner does not give, or the runner gives none; a takes not a string; each side's fields only when strings), not-a-runner (a runner's value no runner: none, a map with no start function, a string; only once the program passed, so a valueless runner with a program in another form is wrong-form, with no program not-there), then taken, processes' (at, under or above a process, the session's too), only once the rest passed: a taken path with no runner is not-a-runner, with a program in another form wrong-form. nothing runs; a program naming the runner's api runs",
+	"title": "run refused, nothing made, the first that holds, in order: not-a-runner (nothing at the runner's path; a compiler there; a node whose ermine.type is not ermine.runner), not-there (no program node; a node with no value; by id: no value, or not the hash given; code given: not the hash given), wrong-form (a type not the runner's takes, by path, by id or carried; no type, or one not a string; a program's api the runner does not give, or the runner gives none; a takes neither a string nor a list; the program's fields only when strings, the runner's takes as a list), not-a-runner (a runner's value no runner: none, a map with no start function, a string; only once the program passed, so a valueless runner with a program in another form is wrong-form, with no program not-there), then taken, processes' (at, under or above a process, the session's too), only once the rest passed: a taken path with no runner is not-a-runner, with a program in another form wrong-form. nothing runs; a program naming the runner's api runs",
 	"steps": [
 		{
 			"op": "kids",
@@ -116,7 +116,7 @@
 			"id": "ODD",
 			"value": {
 				"ermine.type": "ermine.runner",
-				"ermine.runner.takes": "com.netscape.javascript-source"
+				"ermine.programs.takes": "com.netscape.javascript-source"
 			},
 			"expect": {}
 		},
@@ -133,7 +133,7 @@
 			"id": "PLAIN",
 			"value": {
 				"ermine.type": "ermine.runner",
-				"ermine.runner.takes": "com.netscape.javascript-source"
+				"ermine.programs.takes": "com.netscape.javascript-source"
 			},
 			"expect": {}
 		},
@@ -148,7 +148,7 @@
 			"kind": "runners",
 			"name": "javascript",
 			"attrs": {
-				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.programs.takes": "com.netscape.javascript-source",
 				"ermine.runner.api": "ermine.api"
 			},
 			"live": "record",
@@ -167,7 +167,7 @@
 			"kind": "runners",
 			"name": "far",
 			"attrs": {
-				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.programs.takes": "com.netscape.javascript-source",
 				"ermine.runner.api": "ermine.api"
 			},
 			"expect": {
@@ -185,7 +185,7 @@
 			"kind": "runners",
 			"name": "noapi",
 			"attrs": {
-				"ermine.runner.takes": "com.netscape.javascript-source"
+				"ermine.programs.takes": "com.netscape.javascript-source"
 			},
 			"live": "record",
 			"expect": {
@@ -203,7 +203,7 @@
 			"kind": "runners",
 			"name": "badtakes",
 			"attrs": {
-				"ermine.runner.takes": 5,
+				"ermine.programs.takes": 5,
 				"ermine.runner.api": "ermine.api"
 			},
 			"live": "record",
@@ -222,7 +222,7 @@
 			"kind": "compilers",
 			"name": "clang",
 			"attrs": {
-				"ermine.compiler.takes": "public.c-source"
+				"ermine.programs.takes": "public.c-source"
 			},
 			"live": "record",
 			"expect": {
@@ -473,7 +473,9 @@
 					"type": "public.c-source"
 				},
 				"runner": {
-					"takes": "com.netscape.javascript-source",
+					"takes": [
+						"com.netscape.javascript-source"
+					],
 					"api": "ermine.api"
 				}
 			}
@@ -499,7 +501,9 @@
 				"refused": "wrong-form",
 				"program": {},
 				"runner": {
-					"takes": "com.netscape.javascript-source",
+					"takes": [
+						"com.netscape.javascript-source"
+					],
 					"api": "ermine.api"
 				}
 			}
@@ -525,7 +529,9 @@
 				"refused": "wrong-form",
 				"program": {},
 				"runner": {
-					"takes": "com.netscape.javascript-source",
+					"takes": [
+						"com.netscape.javascript-source"
+					],
 					"api": "ermine.api"
 				}
 			}
@@ -554,7 +560,9 @@
 					"api": "ermine.native"
 				},
 				"runner": {
-					"takes": "com.netscape.javascript-source",
+					"takes": [
+						"com.netscape.javascript-source"
+					],
 					"api": "ermine.api"
 				}
 			}
@@ -583,7 +591,9 @@
 					"api": "ermine.api"
 				},
 				"runner": {
-					"takes": "com.netscape.javascript-source"
+					"takes": [
+						"com.netscape.javascript-source"
+					]
 				}
 			}
 		},
@@ -636,7 +646,9 @@
 					"type": "public.c-source"
 				},
 				"runner": {
-					"takes": "com.netscape.javascript-source",
+					"takes": [
+						"com.netscape.javascript-source"
+					],
 					"api": "ermine.api"
 				}
 			}
@@ -665,7 +677,9 @@
 					"type": "public.c-source"
 				},
 				"runner": {
-					"takes": "com.netscape.javascript-source",
+					"takes": [
+						"com.netscape.javascript-source"
+					],
 					"api": "ermine.api"
 				}
 			}
@@ -691,7 +705,9 @@
 				"refused": "wrong-form",
 				"program": {},
 				"runner": {
-					"takes": "com.netscape.javascript-source",
+					"takes": [
+						"com.netscape.javascript-source"
+					],
 					"api": "ermine.api"
 				}
 			}
@@ -722,7 +738,9 @@
 					"api": "ermine.native"
 				},
 				"runner": {
-					"takes": "com.netscape.javascript-source",
+					"takes": [
+						"com.netscape.javascript-source"
+					],
 					"api": "ermine.api"
 				}
 			}
@@ -777,7 +795,9 @@
 					"type": "public.c-source"
 				},
 				"runner": {
-					"takes": "com.netscape.javascript-source",
+					"takes": [
+						"com.netscape.javascript-source"
+					],
 					"api": "ermine.api"
 				}
 			}
@@ -1076,7 +1096,9 @@
 					"type": "public.c-source"
 				},
 				"runner": {
-					"takes": "com.netscape.javascript-source",
+					"takes": [
+						"com.netscape.javascript-source"
+					],
 					"api": "ermine.api"
 				}
 			}

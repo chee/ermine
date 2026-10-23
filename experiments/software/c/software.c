@@ -87,7 +87,7 @@ op_value *sw_refusal_value(const sw_refusal *r) {
 		op_value *program = op_map(), *runner = op_map();
 		if (r->type != NULL) op_set(program, "type", op_str(r->type));
 		if (r->api != NULL) op_set(program, "api", op_str(r->api));
-		if (r->takes != NULL) op_set(runner, "takes", op_str(r->takes));
+		if (r->ntakes > 0) op_set(runner, "takes", sw_names_value(r->takes, r->ntakes));
 		if (r->runner_api != NULL) op_set(runner, "api", op_str(r->runner_api));
 		op_set(m, "program", program);
 		op_set(m, "runner", runner);
@@ -118,11 +118,17 @@ void sw_free(sw *s) {
 	// a process never stopped: its handle's stop (processes' pr_free calls its end)
 	pr_free(s->life);
 	// a load never let go: its close
-	for (size_t i = 0; i < s->nloaded; i++) {
-		sw_loaded *l = s->loaded[i];
-		if (!l->released && l->live.close != NULL) l->live.close(l->live.data);
+	for (size_t i = 0; i < s->nloads; i++) {
+		load *l = s->loads[i];
+		if (!l->gone && l->live.close != NULL) l->live.close(l->live.data);
+		free(l->key);
+		op_free(l->code);
+		free_values(l->values, 2);
 		free(l);
 	}
+	free(s->loads);
+	free(s->standing);
+	for (size_t i = 0; i < s->nloaded; i++) free(s->loaded[i]);
 	free(s->loaded);
 	for (size_t i = 0; i < s->nall; i++) {
 		owner *p = s->all[i];

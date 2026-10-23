@@ -139,13 +139,16 @@ int wifi_start(int workers) {
 	snprintf((char *)w.sta.ssid, sizeof w.sta.ssid, "%s", CONFIG_CARDPUTER_WIFI_SSID);
 	snprintf((char *)w.sta.password, sizeof w.sta.password, "%s", CONFIG_CARDPUTER_WIFI_PASSWORD);
 	w.sta.threshold.authmode = CONFIG_CARDPUTER_WIFI_PASSWORD[0] ? WIFI_AUTH_WPA2_PSK : WIFI_AUTH_OPEN;
+	// the network's name is never said on the log: ESP-IDF's wifi says it as it joins, so its info
+	// lines are left out
+	esp_log_level_set("wifi", ESP_LOG_WARN);
 	esp_wifi_set_mode(WIFI_MODE_STA);
 	esp_wifi_set_config(WIFI_IF_STA, &w);
 	esp_wifi_start();
 	// a TLS handshake (mbedtls on the worker's task) wants more stack than plain http
 	for (int i = 0; i < workers; i++)
 		xTaskCreate(worker, i ? "tippet send" : "tippet poll", WIFI_STACK, (void *)(intptr_t)i, 5, &tasks[i]);
-	ESP_LOGI(TAG, "wifi %s", CONFIG_CARDPUTER_WIFI_SSID);
+	ESP_LOGI(TAG, "wifi started");
 	return 1;
 }
 
@@ -153,7 +156,7 @@ const char *wifi_status(void) {
 	static char s[96];
 	char joining[24] = "joined";
 	if (!joined) snprintf(joining, sizeof joining, why ? "not joined (%d)" : "not joined", why);
-	snprintf(s, sizeof s, "wifi %s %s, workers' stack left %u %u", CONFIG_CARDPUTER_WIFI_SSID, joining,
+	snprintf(s, sizeof s, "wifi %s, workers' stack left %u %u", joining,
 		(unsigned)stack_left[0], (unsigned)stack_left[1]);
 	return s;
 }

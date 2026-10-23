@@ -36,7 +36,7 @@
 			"kind": "runners",
 			"name": "teller",
 			"attrs": {
-				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.programs.takes": "com.netscape.javascript-source",
 				"ermine.runner.api": "ermine.api"
 			},
 			"live": "teller",
@@ -55,7 +55,7 @@
 			"kind": "runners",
 			"name": "javascript",
 			"attrs": {
-				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.programs.takes": "com.netscape.javascript-source",
 				"ermine.runner.api": "ermine.api"
 			},
 			"live": "record",
@@ -200,7 +200,7 @@
 			"kind": "runners",
 			"name": "inner",
 			"attrs": {
-				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.programs.takes": "com.netscape.javascript-source",
 				"ermine.runner.api": "ermine.api"
 			},
 			"live": "teller",
@@ -307,7 +307,7 @@
 			"kind": "runners",
 			"name": "again",
 			"attrs": {
-				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.programs.takes": "com.netscape.javascript-source",
 				"ermine.runner.api": "ermine.api"
 			},
 			"live": "teller",

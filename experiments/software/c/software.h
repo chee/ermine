@@ -14,7 +14,8 @@
 //     at, 2, &(sw_options){..}, &no);                                  // NULL: refused
 //   sw_loaded *l = sw_load(s, &place, letter, 6, &(sw_program){.id = "e", .code = c, .type = t},
 //     NULL, &no);                                                      // NULL: refused
-//   sw_loaded_live(l)->run(...);  sw_release(s, l);                    // else at its owner's stop
+//   sw_loaded_live(l)->run(...);  sw_release(s, l);                    // one hold; else at its
+//                                                                      // owner's stop
 //   sw_stop(s, sw_process_id(x), reason);
 //   sw_halt(s);  /* before sc_free */  ...  sw_free(s);                // after tb_free, pl_free
 //
@@ -38,10 +39,14 @@
 // it with the rest of its scope, what runs on it stopped "runner-stopped".
 // sw_run refused, nothing made, the first that holds: not-a-runner (nothing at runner, or its
 // ermine.type is not ermine.runner); not-there (no program node, or no value; by id: none, or not
-// the hash given; code given: not the hash given); wrong-form (the program's ermine.type, code
-// given: type, is not the runner's ermine.runner.takes, both strings, exact; or it names an api,
-// ermine.program.api, code given: api, the runner's ermine.runner.api is not); not-a-runner (the
-// runner's value no runner hf_find knows); taken (processes'). else processes' start under a scope
+// the hash given; code given: not the hash given); wrong-form (the program's type does not fit the
+// runner's takes, SW_TAKES; or it names an api, ermine.program.api, code given: api, the runner's
+// ermine.runner.api is not); not-a-runner (the runner's value no runner hf_find knows); taken
+// (processes'). the program's type: by an address, ermine/types' ty_type_of (its ermine.type, else
+// its name's extension, by the nearest ermine/types from its folder); by id, its ermine.type; code
+// given, type. it fits when the takes (a list; a string, a list of one) holds it or a type it
+// conforms to (ty_conform), by the nearest ermine/types from the program's folder (none: from
+// where's root); read untracked. else processes' start under a scope
 // of its own (under the runner's offer's, when offered here; else setup.scope), with ermine.type
 // ermine.process, ermine.process.runner { id, at }, .program { id, at?, hash? } (hash: of its value;
 // none: a live value); the code read once now; at the first pulse, a one-shot effect, the process's
@@ -49,11 +54,16 @@
 // its stopper's teardown (landing after the stop: called then); an error, or a handle that lands
 // later failing (sw_wait): the status. a run made outside a run (sc_get_run NULL): a pulse asked for
 // (setup.schedule; NULL: none, the host pulses).
-// sw_load: the program made live on the runner with no process: the entry's load called with the
-// code, by's facts there to read (sw_loading), the scope open (none: by's). checked as sw_run is (no
-// path, so never taken); a runner with no load: not-a-runner. the load failing: refused "failed",
-// error its message. held by by, closed (hf_live.close) at sw_release or at by's scope's teardown,
-// after its handle's, newest first. made: a pulse asked for, as sw_run's.
+// sw_load: the program made live on the runner with no process, shared: one load per key, the
+// program's id, its value's hash (none: the value itself), the runner's id and function's name, and
+// the chain given (the keys of what else loads it, programs'). checked as sw_run is (no path, so
+// never taken); a runner with no load: not-a-runner. a key with no load standing: the entry's load
+// called with the code, by's facts there to read (sw_loading) and a scope of the load's own (under
+// setup.scope) open, its scope theirs; the load failing: refused "failed", error its message, the
+// scope gone. a sw_loaded: one hold by by, let go at sw_release or at by's scope's teardown (after
+// its handle's, newest first); the last hold let go, or setup.scope torn down: the load's scope
+// torn down, its live form closed (hf_live.close) before what its load made goes. made: a pulse
+// asked for, as sw_run's.
 // sw_stop: the reason told, then where it runs torn down, in the scheduler's order: its offers and
 // what runs on them ("runner-stopped"), its handle's stop(reason), then its own scope (what its
 // program made, its loads closed, the row out, the node gone). twice, or none run here: nothing. a
@@ -69,7 +79,7 @@
 // given to hf_run.stop_reason when set, else handle.stop. a promise of a handle (software.ts'
 // start giving one): sw_wait in its start, sw_land when it lands. a load is given the code alone
 // (hf_loader): its facts are sw_loading's, for the call.
-// memory: a process, owner, offer or load lives until sw_free; ids, paths, args copied; attributes,
+// memory: a process, owner, offer, load or hold lives until sw_free; ids, paths, args copied; attributes,
 // pins and codes held (op_ref); a sw_refusal's strings are the software's until its next call.
 // sw_free with the table and places gone: a process never stopped has its handle's stop called, a
 // load never let go its close, nothing written. out of memory aborts.
@@ -87,12 +97,15 @@
 #define SW_TYPE_RUNNER "ermine.runner"
 #define SW_TYPE_COMPILER "ermine.compiler"
 #define SW_TYPE_SURFACE "ermine.surface"
-// the attributes of an offer, as nodes carry them
-#define SW_TAKES "ermine.runner.takes"
+// the attributes of an offer, as nodes carry them. takes and gives are programs' names for now
+// (playground/programs' ATTRIBUTES), one set for both: a runner's and a compiler's takes, the UTIs
+// it takes (a list; one string: a list of one); a compiler's gives, the UTI it gives. each name
+// said here once
+#define SW_TAKES "ermine.programs.takes"
 #define SW_API "ermine.runner.api"
 #define SW_WHERE "ermine.runner.where"
-#define SW_COMPILER_TAKES "ermine.compiler.takes"
-#define SW_GIVES "ermine.compiler.gives"
+#define SW_COMPILER_TAKES "ermine.programs.takes"
+#define SW_GIVES "ermine.programs.gives"
 #define SW_KIND "ermine.surface.kind"
 #define SW_SIZE "ermine.surface.size"
 // a process's, as run writes them
@@ -197,6 +210,14 @@ typedef struct {
 	const op_value *pin;
 } sw_options;
 
+typedef struct {
+	// where the program is from; NULL: by's box
+	pl *box;
+	// the keys of what else loads it (programs' chain), part of the load's key; none: none
+	const char *const *chain;
+	size_t nchain;
+} sw_load_options;
+
 // refused: "not-a-runner" "not-there" "wrong-form" "taken", or "not-a-kind", "not-a-name" (offer:
 // a bad kind, a bad name), "nothing-there" (offer or load, by an owner whose scope is gone),
 // "failed" (a load's, error its message). the fields of the refusal given, the rest NULL or 0
@@ -210,8 +231,10 @@ typedef struct {
 	const char *const *program_at;
 	size_t nprogram_at;
 	int program_has_at;
-	// wrong-form: each NULL when not a string
-	const char *type, *api, *takes, *runner_api;
+	// wrong-form: each NULL when not a string; takes, the runner's strings (ntakes 0: none)
+	const char *type, *api, *runner_api;
+	const char *const *takes;
+	size_t ntakes;
 	// taken
 	const char *const *at;
 	size_t nat;
@@ -242,13 +265,14 @@ sw_process *sw_run_at(sw *s, const char *const *runner, size_t nrunner, const sw
 	const char *const *at, size_t nat, const sw_options *options, sw_refusal *refused,
 	const ch_site *site);
 #define sw_run(...) sw_run_at(__VA_ARGS__, CH_HERE)
-// by: its owner. box: where program is from (NULL: by's box). NULL: refused
+// by: its owner. options NULL: none. NULL: refused
 sw_loaded *sw_load_at(sw *s, const sw_place *by, const char *const *runner, size_t nrunner,
-	const sw_program *program, pl *box, sw_refusal *refused, const ch_site *site);
+	const sw_program *program, const sw_load_options *options, sw_refusal *refused,
+	const ch_site *site);
 #define sw_load(...) sw_load_at(__VA_ARGS__, CH_HERE)
 // its live form, the load's (hf_live)
 const hf_live *sw_loaded_live(const sw_loaded *l);
-// closed now (hf_live.close), out of its owner's; twice: nothing
+// the hold let go now, out of its owner's (the last: the load closed, hf_live.close); twice: nothing
 void sw_release_at(sw *s, sw_loaded *l, const ch_site *site);
 #define sw_release(...) sw_release_at(__VA_ARGS__, CH_HERE)
 // id: a process run here. reason borrowed for the call (NULL: none)

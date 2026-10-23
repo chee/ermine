@@ -568,7 +568,9 @@ type Frame = {
 	origin: Record<Group, number>
 	keyboard?: HTMLElement
 }
-// a den's things in slots: all but its speaker, which is on the card's edge
+// a den's things in slots: all but its speaker, which is stuck on in the card's bottom-left
+// corner; that corner (CORNER px up from the bottom) is kept clear of things
+const CORNER = 76
 const slotted = (v: View) => v.things.filter((t) => t.kind !== "speaker")
 const groupOf = (f: Frame, t: Thing): Group => !f.two ? "one" : SHOWS.has(t.kind) ? "top" : "bottom"
 const frames = new Map<string, Frame>()
@@ -610,10 +612,10 @@ for (const kind of ["button", "pad", "timer", "counter", "screen", "chart", "sou
 		v.device === "cardputer" ? `, "keys", "pigs"` : ""
 	}])
   software.offer(den, "runners", kind,
-    { "ermine.runner.takes": "thing." + kind }, run[kind])
+    { "ermine.programs.takes": "thing." + kind }, run[kind])
 // programs at /things/<kind>, ermine.type "thing.<kind>"
 // its inbox: a program it runs, the one place that decides who may
-software.offer(den, "runners", "inbox", { "ermine.runner.takes": "dens.inbox" }, inbox)
+software.offer(den, "runners", "inbox", { "ermine.programs.takes": "dens.inbox" }, inbox)
 software.run("/system/den/runners/inbox", "/programs/inbox", "/system/inbox")
 // the room ${room}: tippet's room "dens-${room}", its log on galaxy
 const log = createLog({ store, seed })   // the den's key
@@ -742,11 +744,8 @@ function slotOf(f: Frame, t: Thing, live: Set<string>): number {
 }
 
 // ---- things: one box each ----
-type Edge = "left" | "right" | "top" | "bottom"
 type Shown = {
 	box: Box
-	// a speaker's: the card's edge it is on
-	edge?: Edge
 	// the thing's node now: a rewire starts it again under a new id, at the same spot, in the same box
 	me: { id: string }
 	// where the page last put it (dragged elsewhere since: left there)
@@ -1163,7 +1162,7 @@ function makeShown(
 		// one picked played once here. a sound played: one small pulse. what it has to say is in
 		// its title, and in the caption when it matters. data-played, data-sound: what it played
 		const icon = h("button", "speakicon")
-		icon.append(picture("sound", 2))
+		icon.append(picture("sound", 3))
 		body.append(icon)
 		icon.onclick = (e) => {
 			e.stopPropagation()
@@ -1287,17 +1286,10 @@ function voicesFor(icon: HTMLElement, v: View, me: { id: string }) {
 		}
 		pop.append(b)
 	}
-	// it opens inward, into the card, from the edge the speaker is on
-	const edge = icon.closest<HTMLElement>(".box")?.dataset.edge ?? "left"
+	// it opens up and to the right, over the card, from the corner the speaker is in
 	const r = icon.getBoundingClientRect(), p = page.getBoundingClientRect()
 	page.append(pop)
-	const pw = pop.offsetWidth, ph = pop.offsetHeight
-	const x = edge === "left"
-		? r.right + 6
-		: edge === "right"
-		? r.left - 6 - pw
-		: r.left + r.width / 2 - pw / 2
-	const y = edge === "top" ? r.bottom + 6 : edge === "bottom" ? r.top - 6 - ph : r.top - 4
+	const x = r.right + 6, y = r.bottom - pop.offsetHeight
 	pop.style.left = `${x - p.left}px`
 	pop.style.top = `${y - p.top}px`
 	voicePop = pop
@@ -1695,12 +1687,12 @@ function render() {
 			live.add(spot)
 			const g = groupOf(f, t)
 			const slot = f.slots.get(`${g} ${t.at.join("/")}`)
-			// the speaker: on the card's left edge, low down; the rest in their slots
-			// the speaker: on its card's edge (placed below, once every card is); the rest in slots
+			// the speaker: stuck on in the card's bottom-left corner, its dot on the card's left edge
+			// (that corner kept clear: CORNER); the rest in their slots
 			let s = shown.get(spot)
-			const px = slot === undefined ? s?.placed.x ?? f.x - 30 : f.x + 20 + (slot % COLS) * SLOT.w
+			const px = slot === undefined ? f.x - 6 : f.x + 20 + (slot % COLS) * SLOT.w
 			const py = slot === undefined
-				? s?.placed.y ?? f.y + 70
+				? f.y + f.h - CORNER + 6
 				: f.y + f.origin[g] + Math.floor(slot / COLS) * SLOT.h
 			if (s) {
 				const p = s.box.pos()
@@ -1714,7 +1706,8 @@ function render() {
 					x0: t.kind === "speaker" ? f.x - 40 : f.x + 14,
 					y0: f.y + 58,
 					x1: f.x + f.w - 14,
-					y1: f.y + f.h - (f.keyboard ? 168 : 12),
+					// above the keyboard and the speaker's corner: nothing is dragged under them
+					y1: f.y + f.h - (f.keyboard ? 168 : CORNER),
 				}))
 				shown.set(spot, s)
 			}
@@ -1731,39 +1724,6 @@ function render() {
 			s.box.code(thingCode(v, t))
 			s.box.tone(!v.alive ? "dim" : s.box === picked ? "pick" : undefined)
 			lock(s.box, locked(v))
-		}
-	}
-	// each den's speaker on the edge of its card that faces the middle of the other cards (no
-	// others: the left), near the top of a side edge or the middle of the top or bottom one. moved
-	// only when that changes: as cards move, come or go
-	for (const v of vs) {
-		const t = v.things.find((x) => x.kind === "speaker")
-		const s = t && shown.get(spotOf(v, t)), f = frames.get(v.who)
-		if (!s || !f) continue
-		const rest = vs.filter((o) => o.who !== v.who).map((o) => frames.get(o.who)!)
-		let edge: Edge = "left"
-		if (rest.length) {
-			const dx = rest.reduce((a, o) => a + o.x + o.w / 2, 0) / rest.length - (f.x + f.w / 2)
-			const dy = rest.reduce((a, o) => a + o.y + o.h / 2, 0) / rest.length - (f.y + f.h / 2)
-			edge = Math.abs(dx) >= Math.abs(dy)
-				? (dx > 0 ? "right" : "left")
-				: (dy > 0 ? "bottom" : "top")
-		}
-		const w = s.box.el.offsetWidth || 50, ht = s.box.el.offsetHeight || 28
-		const at = edge === "left"
-			? { x: f.x - 30, y: f.y + 70 }
-			: edge === "right"
-			? { x: f.x + f.w + 30 - w, y: f.y + 70 }
-			: { x: f.x + f.w / 2 - w / 2, y: edge === "top" ? f.y - ht / 2 : f.y + f.h - ht / 2 }
-		if (s.edge !== edge) {
-			s.edge = edge
-			board.face(s.box.port("in"), edge === "right" ? "right" : "left")
-			s.box.el.dataset.edge = edge
-		}
-		const p = s.box.pos()
-		if (p.x !== at.x || p.y !== at.y) {
-			s.box.move(at.x, at.y)
-			s.placed = { ...at }
 		}
 	}
 	// a reader starting again keeps its box meanwhile (a stop answered before its start)

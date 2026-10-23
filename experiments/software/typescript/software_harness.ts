@@ -41,8 +41,9 @@
 //    runner, at: addresses; program: an address or { id, hash?, type?, api?, code? }; the process
 //    named name
 // { op: "stop", name, reason?, actor? }              -> {}   name: a process's name; "session"
-// { op: "load", name, runner, program, by?, box?, actor?, bare? } -> {} | refusal | { failed }
-//    the load named name; by as offer's; failed: what the load threw, its message
+// { op: "load", name, runner, program, by?, box?, chain?, actor?, bare? } -> {} | refusal | { failed }
+//    the load named name; by as offer's; chain: the keys given (strings); failed: what the load
+//    threw, its message
 // { op: "release", name }                            -> {}   the load named name let go
 // { op: "land", fail? }                              -> {}   the oldest late handle not landed:
 //    given (fail: rejected with Error("late")); then the promises settled
@@ -429,6 +430,7 @@ async function answer(r: Request): Promise<Json> {
 			const options = {
 				by: byOf(r.by),
 				...(r.box === undefined ? {} : { box: boxOf(r.box) }),
+				...(r.chain === undefined ? {} : { chain: r.chain as string[] }),
 			}
 			let made: Loaded | Refused
 			try {

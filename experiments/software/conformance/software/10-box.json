@@ -1,5 +1,5 @@
 {
-	"title": "a run in a box: the runner from places' root, the program and the path from the box's (W): with no box the program is not-there; the process at clock in the box, not at places' root; its cwd the box's \"/\", its program by its path in the box, its Start's box the box. a program above the box's folder: not-there (the box sees nothing above W). a load by a process run in a box finds its program from that box; by the session with no box given, not-there; with the box given, found",
+	"title": "a run in a box: the runner from places' root, the program and the path from the box's (W): with no box the program is not-there; the process at clock in the box, not at places' root; its cwd the box's \"/\", its program by its path in the box, its Start's box the box. a program above the box's folder: not-there (the box sees nothing above W). a load by a process run in a box finds its program from that box; by the session with no box given, not-there; with the box given (a's let go first, so it loads anew), found",
 	"steps": [
 		{
 			"op": "kids",
@@ -42,7 +42,7 @@
 			"kind": "runners",
 			"name": "javascript",
 			"attrs": {
-				"ermine.runner.takes": "com.netscape.javascript-source",
+				"ermine.programs.takes": "com.netscape.javascript-source",
 				"ermine.runner.api": "ermine.api"
 			},
 			"live": "record",
@@ -261,6 +261,11 @@
 			}
 		},
 		{
+			"op": "release",
+			"name": "l",
+			"expect": {}
+		},
+		{
 			"op": "load",
 			"name": "n",
 			"runner": [
@@ -284,7 +289,7 @@
 						"by": "proc:a",
 						"code": "hi",
 						"cwd": [],
-						"open": false
+						"open": true
 					},
 					{
 						"by": "session",
@@ -292,10 +297,15 @@
 						"cwd": [
 							"system"
 						],
-						"open": false
+						"open": true
 					}
 				],
-				"unloads": []
+				"unloads": [
+					{
+						"by": "proc:a",
+						"code": "hi"
+					}
+				]
 			}
 		}
 	]

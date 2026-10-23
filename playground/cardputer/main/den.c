@@ -1078,6 +1078,16 @@ static sc_out inbox_f(void *previous, void *data) {
 	return (sc_out){.kind = SC_VALUE, .value = v ? op_ref((op_value *)v) : op_null()};
 }
 
+static void menu_job(void *data) {
+	waiting *w = data;
+	const op_value *a = op_get(w->e, "ask"), *h = op_get(a, "handler");
+	op_value *r = menu_ask(op_get(a, "from")->str, op_get(a, "name")->str, is_map(h) ? h : NULL);
+	if (op_get(r, "refused") || op_get(r, "error")) printf("den: a menu item not put in again: %s\n", op_get(a, "name")->str);
+	op_free(r);
+	op_free(w->e);
+	free(w->ask), free(w);
+}
+
 // the menu items paired dens put in before this boot (their asks answered {}), in again: checked as
 // when they came (made out to here, from a den in keys, signed by its session)
 static void menu_again(const char *ask, const op_value *e) {
@@ -1094,16 +1104,41 @@ static void menu_again(const char *ask, const op_value *e) {
 		!is_str(session) || vouch == NULL || vouch->type != OP_BYTES || sig == NULL || sig->type != OP_BYTES ||
 		!trusts(from->str) || !signed_by(me.keys, from->str, a, session, vouch, sig))
 		return;
-	op_value *r = menu_ask(from->str, name->str, is_map(h) ? h : NULL);
-	op_free(r);
+	// put in after the pulse, as an answer is (its write lands in the folder)
+	waiting *w = xalloc(sizeof *w);
+	w->ask = xstrdup(ask), w->e = op_ref((op_value *)e);
+	me.w.schedule(NULL, menu_job, w);
+}
+
+// an ask id's clock and count ("<8 hex>-<ms, base 36>-<count>"), for the order asks were made in
+static const op_value *sorting;
+static void made_of(const char *id, uint64_t *ms, uint64_t *count) {
+	const char *a = strchr(id, '-'), *b = a ? strchr(a + 1, '-') : NULL;
+	*ms = a ? strtoull(a + 1, NULL, 36) : 0;
+	*count = b ? strtoull(b + 1, NULL, 10) : 0;
+}
+static int by_made(const void *x, const void *y) {
+	uint64_t ma, ca, mb, cb;
+	made_of(sorting->keys[*(const size_t *)x], &ma, &ca);
+	made_of(sorting->keys[*(const size_t *)y], &mb, &cb);
+	return ma != mb ? (ma < mb ? -1 : 1) : ca != cb ? (ca < cb ? -1 : 1) : 0;
 }
 
 static char *inbox_act(void *value, void *previous, void *data) {
 	(void)previous, (void)data;
 	const op_value *v = value;
+	// the menu asks answered before, in the order they were made (an item put in, then out)
+	size_t *order = xalloc((is_map(v) ? v->count : 0) * sizeof *order), n = 0;
+	for (size_t i = 0; is_map(v) && i < v->count; i++)
+		if (is_map(v->items[i]) && op_get(v->items[i], "answer") != NULL &&
+			str_is(op_get(op_get(v->items[i], "ask"), "op"), "menu"))
+			order[n++] = i;
+	sorting = v;
+	qsort(order, n, sizeof *order, by_made);
+	for (size_t k = 0; k < n; k++) menu_again(v->keys[order[k]], v->items[order[k]]);
+	free(order);
 	for (size_t i = 0; is_map(v) && i < v->count; i++) {
 		const op_value *e = v->items[i];
-		if (is_map(e) && op_get(e, "answer") != NULL) menu_again(v->keys[i], e);
 		if (!is_map(e) || op_get(e, "answer") != NULL) continue;
 		int seen = 0;
 		for (size_t k = 0; k < me.nanswered && !seen; k++) seen = strcmp(me.answered[k], v->keys[i]) == 0;

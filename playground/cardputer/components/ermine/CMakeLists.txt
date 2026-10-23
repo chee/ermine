@@ -25,6 +25,7 @@ idf_component_register(
 		${R}/playground/encoding/c/hash.c ${R}/ermine/encoding/c/blake3/blake3.c
 		${R}/ermine/encoding/c/blake3/blake3_dispatch.c ${R}/ermine/encoding/c/blake3/blake3_portable.c
 		${R}/ermine/ids/c/ids.c
+		${R}/ermine/types/c/types.c ${R}/ermine/types/c/utis.c
 		${R}/experiments/software/c/common.c ${R}/experiments/software/c/offers.c
 		${R}/experiments/software/c/run.c ${R}/experiments/software/c/software.c
 		${R}/core/ed25519/c/ed25519.c ${R}/core/ed25519/c/sha2.c

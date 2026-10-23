@@ -208,9 +208,9 @@ trust_src = $(filter-out playground/sessions/c/sessions_harness.c,$(sessions_src
 trust = playground/trust/c/trust-harness
 trust_suite = trust
 LIBS += trust
-# software (experiments/software): offers and run, with no den, policy or asks; processes of its own; the C api
-# (ermine/api), for its teller runner
-software_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/start.c ermine/processes/c/runs.c ermine/boxes/c/boxes.c ermine/sites/c/sites.c filesystem/protect/c/protect.c experiments/software/c/functions.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) filesystem/places/c/guard.c extensions/patch-nodes/c/patch.c ermine/api/c/api.c experiments/software/c/common.c experiments/software/c/offers.c experiments/software/c/run.c experiments/software/c/software.c experiments/software/c/software_harness.c
+# software (experiments/software): offers and run, with no den, policy or asks; processes of its own; ermine/types,
+# for matching by conformance; the C api (ermine/api), for its teller runner
+software_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/start.c ermine/processes/c/runs.c ermine/boxes/c/boxes.c ermine/sites/c/sites.c filesystem/protect/c/protect.c experiments/software/c/functions.c ermine/types/c/types.c ermine/types/c/utis.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) filesystem/places/c/guard.c extensions/patch-nodes/c/patch.c ermine/api/c/api.c experiments/software/c/common.c experiments/software/c/offers.c experiments/software/c/run.c experiments/software/c/software.c experiments/software/c/software_harness.c
 software = experiments/software/c/software-harness
 software_suite = software
 LIBS += software
