@@ -503,18 +503,21 @@ void pc_free(pc_cache *c) {
 	if (c == NULL) return;
 	sc_remove_listener(c->on_track);
 	sc_remove_listener(c->on_untrack);
+	// every key read given back: the index told no more, a spot's keep given back, let go if this
+	// cache took it and no run tracks it (one a run tracks goes at its untrack, as places' own)
+	while (c->readings != NULL) {
+		rd *r = c->readings;
+		c->readings = r->next;
+		sx_drop(c->index, r->key, &c->holder);
+		if (!ours(c, r->key) && pl_keep(c->places, r->key, -1) == 0) letgo(c, r->key);
+		pl_set_free(&r->set);
+		free(r);
+	}
 	free_dead(c);
 	while (c->all != NULL) {
 		entry *e = c->all;
 		c->all = e->next;
 		entry_free(e);
-	}
-	while (c->readings != NULL) {
-		rd *r = c->readings;
-		c->readings = r->next;
-		sx_drop(c->index, r->key, &c->holder);
-		pl_set_free(&r->set);
-		free(r);
 	}
 	tb_free(c->entries);
 	tb_free(c->readers);

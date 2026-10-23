@@ -80,8 +80,8 @@ gd_answer gd_move(const char *const *from, size_t nfrom, const char *const *to, 
 	gd_refusal *why);
 
 // the members of a list, each asked to be read (at: the path they are under, NULL: none): a
-// refused one in its place, its name kept and its id one gd_is_refused says. Any pending: GD_PENDING. *out is
-// the caller's, pl_members_free; the names are the list's
+// refused one in its place, its name and from kept and its id one gd_is_refused says. Any pending:
+// GD_PENDING. *out is the caller's, pl_members_free; the names are the list's
 gd_answer gd_members(gd *g, const pl_members *list, const char *const *at, size_t nat,
 	pl_members *out);
 

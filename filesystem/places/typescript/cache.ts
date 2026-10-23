@@ -3,6 +3,7 @@
 //
 //   const cache = createPathCache({ places, scheduler })
 //   cache.get(["work", "clock"])   // in a run: the run tracks one key for the path, nothing else
+//   cache.stop()                   // its listeners taken away, the spots it holds given back
 //
 // an entry: one question (at, list, members) about one path, its answer, its keys, what it read.
 // worked out when first asked (places' record), a path's entry reading its folder's. a read key
@@ -58,6 +59,8 @@ export type PathCache = {
 	members: (path: Path) => readonly Member[]
 	// what it keeps: entries, and the keys they read
 	kept: () => { entries: number; reads: number }
+	// its listeners gone and all it holds given back; it is told nothing more, and asked nothing more
+	stop: () => void
 }
 
 const none: readonly never[] = []
@@ -268,17 +271,35 @@ export function createPathCache(setup: {
 	}
 
 	// the other keys (spots): tracked by a run or not
-	s.onTrackingStart((k) => {
-		if (!ours(k)) tracked.add(k)
-	})
+	const offs = [
+		s.onTrackingStart((k) => {
+			if (!ours(k)) tracked.add(k)
+		}),
+		s.onTrackingEnd((k) => {
+			if (ours(k)) return
+			// no run tracks it now: if an entry reads it, its release was held back by us, so the
+			// spot is ours to let go
+			tracked.delete(k)
+			if (readers.has(k)) took.add(k)
+		}),
+	]
 
-	s.onTrackingEnd((k) => {
-		if (ours(k)) return
-		// no run tracks it now: if an entry reads it, its release was held back by us, so the
-		// spot is ours to let go
-		tracked.delete(k)
-		if (readers.has(k)) took.add(k)
-	})
+	// its listeners taken away, every key read given back: the index told no more, a spot's hold
+	// given back, let go if this cache took it and no run tracks it (one a run tracks goes at its
+	// untrack, as places' own). tells nothing
+	function stop() {
+		for (const off of offs) off()
+		clingy.stop()
+		for (const k of readers.keys()) {
+			index.drop(k, listener)
+			if (!ours(k) && places.hold(k, -1) === 0) letgo(k)
+		}
+		for (const e of entries.values()) e.live = false
+		entries.clear()
+		readers.clear()
+		tracked.clear()
+		took.clear()
+	}
 
 	// the answer at a path, its key told to the run open (outside one: the entry goes at once)
 	function read(kind: Kind, path: Path, which: number): unknown {
@@ -304,5 +325,6 @@ export function createPathCache(setup: {
 		list: (path) => read("list", path, 0) as readonly string[],
 		members: (path) => read("members", path, 0) as readonly Member[],
 		kept: () => ({ entries: entries.size, reads: readers.size }),
+		stop,
 	}
 }

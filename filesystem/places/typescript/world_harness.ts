@@ -16,6 +16,8 @@
 // { op: "cache" }                            → {}   the path cache made once (or by the first
 //    program asking for it); make it before anything reads
 // { op: "cacheKept" }                        → { entries, reads }   none made: both 0
+// { op: "cacheStop" }                        → {}   the path cache stopped (stop), none made after
+//    till asked again
 // writes; a PlacesError or ApplyError → { error: code }, an ApplyError also { patch: index }:
 // { op: "edit", part, id, patches }          → {}   none there: an entry made with them
 // { op: "place", at, name, id }              → {}   at: the parent's id
@@ -264,6 +266,10 @@ export function worldAnswer(r: Request): Json | undefined {
 			return {}
 		case "cacheKept":
 			return cache?.kept() ?? { entries: 0, reads: 0 }
+		case "cacheStop":
+			cache?.stop()
+			cache = undefined
+			return {}
 		case "watchPath": {
 			const told: Json[] = []
 			const stop = places.watchPath(r.path, (f) => {

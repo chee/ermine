@@ -246,6 +246,7 @@ static op_value *members_json(const pl_members *list, bool full) {
 		op_value *row = op_list();
 		op_push(row, op_str(shown(m->id)));
 		op_push(row, op_str(m->name));
+		if (m->from != NULL) op_push(row, op_str(m->from));
 		op_push(a, row);
 	}
 	return a;
@@ -272,6 +273,25 @@ static op_value *eval_members(const op_value *x, bool full, ctx *c) {
 	pl_members_free(&list);
 	if (!allowed(c, a, NULL)) return NULL;
 	op_value *out = members_json(&got, full);
+	pl_members_free(&got);
+	return out;
+}
+
+// members given, each [name, id, from?], asked as a list's (at: the path they are under; none: no
+// path): rows [id, name, from?]
+static op_value *eval_ask(const op_value *x, const op_value *at, ctx *c) {
+	size_t n = 0;
+	const char *const *path = at != NULL ? names_of(c, at, &n) : NULL;
+	pl_members list = {x->count, world_alloc((x->count + 1) * sizeof(pl_member))}, got;
+	for (size_t i = 0; i < x->count; i++) {
+		const op_value *row = x->items[i];
+		list.items[i] = (pl_member){world_text(row->items[0]), world_key(row->items[1]),
+			row->count > 2 ? world_text(row->items[2]) : NULL};
+	}
+	gd_answer a = gd_members(c->g, &list, path, n, &got);
+	pl_members_free(&list);
+	if (!allowed(c, a, NULL)) return NULL;
+	op_value *out = members_json(&got, true);
 	pl_members_free(&got);
 	return out;
 }
@@ -374,6 +394,7 @@ static op_value *eval(const op_value *e, ctx *c) {
 	if ((x = op_get(e, "members"))) {
 		return eval_members(x, op_get(e, "full") != NULL, c);
 	}
+	if ((x = op_get(e, "ask"))) return eval_ask(x, op_get(e, "at"), c);
 	if ((x = op_get(e, "read"))) return eval_read(x, c);
 	if ((x = op_get(e, "edit"))) return eval_edit(x, c);
 	if ((x = op_get(e, "place"))) return eval_place(x, c);

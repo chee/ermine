@@ -17,8 +17,9 @@
 //                                         { op, target: {part?, id?, field?, path?}, who, from? }
 //
 // programs: the world's plain forms (world_harness.ts), and
-//   {"get":path,"full"?:true}       the id there, asked; null none; full: [id, name]
-//   {"members":path,"full"?:true}   member ids there, asked (REFUSED if refused); full: [id, name]
+//   {"get":path,"full"?:true}       the id there, asked; null none; full: [id, name, from?]
+//   {"members":path,"full"?:true}   member ids there, asked (REFUSED if refused); full: [id, name, from?]
+//   {"ask":[[name,id,from?]],"at"?:path}  members given, asked as members asks them: [id, name, from?]
 //   {"read":[ts,part,path?]}        the value, asked; null none
 //   {"edit":[ts,part,patches]}      each patch asked by its path (and a move's), written; summed up
 //   {"place":[[ts,name],id]}        the slot asked, then id placed; null
@@ -96,7 +97,7 @@ const recording = (p: Policy): Policy => (ask, read) => {
 
 const guards = new Map<string, Guard>()
 const shown = (m: Member) => m.id === REFUSED ? "REFUSED" : String(m.id)
-const full = (m: Member) => [shown(m), m.name]
+const full = (m: Member) => m.from === undefined ? [shown(m), m.name] : [shown(m), m.name, m.from]
 
 type Ctx = { g: Guard; given?: Json }
 
@@ -129,6 +130,12 @@ function evaluate(e: Json, c: Ctx): Json {
 	if ("members" in p) {
 		const ms = g.members(members(places, p.members), p.members)
 		return p.full ? ms.map(full) : ms.map(shown)
+	}
+	if ("ask" in p) {
+		const given = (p.ask as string[][]).map(([name, x, from]): Member =>
+			from === undefined ? { name, id: id(x) } : { name, id: id(x), from }
+		)
+		return g.members(given, p.at).map(full)
 	}
 	if ("read" in p) {
 		const [ts, part, path] = p.read
