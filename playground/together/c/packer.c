@@ -437,8 +437,9 @@ pkr_code pkr_each(const uint8_t *bytes, size_t length, pkr_each_fn each, void *c
 	}
 	int64_t n64;
 	const Json *signatures = jsonGet(x, "signatures"), *ids = jsonGet(x, "ids");
-	// Number.isSafeInteger(n) && n >= 0
-	if (!safe_integer(jsonGet(x, "n"), &n64) || n64 < 0) return jsonFree(x), PKR_COUNT;
+	// Number.isSafeInteger(n) && n >= 0, and no more than the pack has bytes (each commit takes a
+	// byte of time at least): what is made for n is no bigger than the pack
+	if (!safe_integer(jsonGet(x, "n"), &n64) || n64 < 0 || (uint64_t)n64 > length) return jsonFree(x), PKR_COUNT;
 	size_t n = (size_t)n64;
 	bool listed = signatures != NULL && signatures->type == JSON_ARRAY;
 	for (int i = 0; listed && i < signatures->array.count; i++) listed = is_bytes(signatures->array.items[i]);

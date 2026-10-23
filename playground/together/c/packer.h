@@ -19,7 +19,7 @@
 typedef enum {
 	PKR_OK,
 	PKR_NOT_A_PACK,   // not CBOR, not a map, or a key that is no column (that column named)
-	PKR_COUNT,       // n not a whole number
+	PKR_COUNT,       // n not a whole number, or more than the pack has bytes
 	PKR_SIGNATURES,  // not a list of n byte strings
 	PKR_RUNS,        // a column of runs (table, actor, reader, external, metadata, signer, base, merge, headers, id): column named
 	PKR_DIFFERENCES, // a column of differences (time, nonce, lamport): column named
