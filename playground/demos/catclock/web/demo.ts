@@ -19,13 +19,14 @@ import { digest, keyOf, short, unit } from "./program.ts"
 import { type Answer, type Ask, included, objectOf, WASM_CLANG, wire } from "./clang.ts"
 import { installTypes, type Known } from "@ermine/types"
 import { ATTRIBUTES as A, satisfy } from "@ermine/programs"
-import { COMPILER, type Compiler, createBuilds } from "@ermine/build"
+import { COMPILER, type Compiler, createBuilds } from "@ermine/compilers"
 import { createPrograms, type Process, type Runner } from "@ermine/programs/start"
 import { box, createBox } from "@ermine/boxes"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import { createChangeHeader } from "@ermine/places/header"
 import * as lib from "@ermine/places/lib"
 import { PENDING } from "@ermine/scheduler"
+import { answer } from "../../devtools.ts"
 
 const $ = <T extends Element = HTMLElement>(q: string) => document.querySelector(q) as T
 const C = "public.c-source", H = "public.c-header", WASM = "public.wasm-executable"
@@ -727,3 +728,15 @@ function trouble(text: string | undefined, what = "runner error") {
 // colours.h, open in the editor from the start; the files start at the root; and the clock starts
 open([...SRC, "colours.h"], false)
 restart()
+
+// the devtools extension: this graph, through a process api at its root (playground/devtools)
+answer(
+	{
+		scheduler: world.s,
+		table: world.table,
+		places: world.places,
+		scope: world.host,
+		commit: world.commit,
+	},
+	{ name: "catclock", processes: () => proc ? [proc] : [] },
+)

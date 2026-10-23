@@ -8,7 +8,7 @@
 //   /loaders/clang              the host's compiler: a live function asking serve.ts's clang
 //   /loaders/canvas             the host's runner: a live function running a wasm on the canvas
 //   /loaders/canvas.js          the runner's code, text: canvas runs what this says
-//   /cache/<key>                each build (@ermine/build), by its key
+//   /cache/<key>                each build (@ermine/compilers), by its key
 import createEntry, { type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import produce from "@ermine/op/produce"

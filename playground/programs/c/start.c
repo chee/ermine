@@ -3,19 +3,19 @@
 
 #include <string.h>
 
-#include "../../build/c/mem.h"
+#include "../../compilers/c/mem.h"
 
 // a load (start.ts' Load): its key, and the value loaded (held, so a key naming it by its address
-// names no other); its live form once loaded, or its failure (malloc'd); how many processes hold it;
-// cached: in the programs' loads by key (a failure, or one let go: no more); closed: its live form
-// let go, as the last process holding it stopped
+// names no other); its live form once loaded (bd_loaded: closed, let go, as the last process
+// holding it stopped), or its failure (malloc'd); how many processes hold it; cached: in the
+// programs' loads by key (a failure, or one let go: no more)
 typedef struct {
 	char *key;
 	op_value *value;
-	hf_live live;
+	bd_loaded loaded;
 	char *error;
 	size_t holders;
-	int cached, closed;
+	int cached;
 } ps_load;
 
 // a step keyed at start (a loaded one, or a by of one): its key; a loaded one's value, read then
@@ -130,10 +130,10 @@ static op_value *pin_of(ps *s, const char *root, char *const *cwd, size_t ncwd, 
 
 // a load's live form let go, once
 static void close_load(ps_load *l) {
-	if (l->closed) return;
-	l->closed = 1;
+	if (l->loaded.closed) return;
+	l->loaded.closed = 1;
 	l->cached = 0;
-	if (l->error == NULL && l->live.close != NULL) l->live.close(l->live.data);
+	if (l->error == NULL && l->loaded.live.close != NULL) l->loaded.live.close(l->loaded.live.data);
 }
 
 // the loads p holds let go; one held by no process goes, its live form closed
@@ -305,65 +305,52 @@ static lived live_of(ps_process *p, const pg_step *st) {
 		PG_PUSH(s->loads, s->nloads, s->caploads, l);
 		hf_loaded out = by.live.load(code.value, by.live.data);
 		if (out.error != NULL) l->error = out.error, l->cached = 0;
-		else l->live = out.live;
+		else l->loaded.live = out.live;
 	}
 	if (held_by(p, key) == NULL) {
 		PG_PUSH(p->held, p->nheld, p->capheld, l);
 		l->holders++;
 	}
 	if (l->error != NULL) return not_live(K_FAILED, pg_dup(l->error));
-	return (lived){.kind = K_OK, .live = l->live, .load = l};
+	return (lived){.kind = K_OK, .live = l->loaded.live, .load = l};
 }
 
-// a loaded compiler's identity (start.ts'): its ermine.programs.compiler; none, { id, hash } of its
-// value as read at start; no encoding, its id
-static op_value *identity_of(ps_process *p, const pg_step *c) {
-	ps *s = p->owner;
-	const nd_entry *e = tb_get(s->s.table, tb_string("attributes"), tb_string(c->place.id));
-	const op_value *attrs = e != NULL ? e->value : NULL;
-	const op_value *named = attrs != NULL && attrs->type == OP_MAP ? op_get(attrs, BD_COMPILER) : NULL;
-	if (named != NULL) return op_ref((op_value *)named);
-	ps_keyed *k = keyed_of(p, c);
-	char hex[65];
-	if (k == NULL || k->value == NULL || !bd_hash_hex(k->value, hex)) return op_str(c->place.id);
-	op_value *m = op_map();
-	op_set(m, "id", op_str(c->place.id));
-	op_set(m, "hash", op_str(hex));
-	return m;
+// what folded hands bd_fold: the process, and the chain's steps
+typedef struct {
+	ps_process *p;
+	const pg_step *steps;
+} folding;
+
+// a live form's why-none-yet, as bd_fold takes it
+static bd_kind fold_kind(ps_kind k) {
+	return k == K_PENDING ? BD_PENDING : k == K_STOP ? BD_STOP : k == K_FAILED ? BD_FAILED : BD_VALUE;
 }
 
-// a loaded compiler's step run: its live form's compile, unless let go by now
-static hf_out compile_run(const op_value *code, void *data) {
-	ps_load *l = data;
-	if (l->closed) return (hf_out){.kind = HF_FAILED, .error = pg_dup("unloaded")};
-	return l->live.compile(code, l->live.data);
+// compiler i for bd_fold (start.ts' compilerOf): a host's, its id; a loaded one's, its load (its
+// live form with no compile: not-a-compiler) and its value as read at start
+static bd_compiler compiler_of(size_t i, void *data) {
+	folding *f = data;
+	const pg_step *c = &f->steps[i];
+	if (c->by.n == 0) return (bd_compiler){.kind = BD_VALUE, .id = c->place.id};
+	lived l = live_of(f->p, c);
+	if (l.kind != K_OK) return (bd_compiler){.kind = fold_kind(l.kind), .error = l.error};
+	if (l.live.compile == NULL) return (bd_compiler){.kind = BD_FAILED, .error = pg_dup("not-a-compiler")};
+	ps_keyed *k = keyed_of(f->p, c);
+	return (bd_compiler){.kind = BD_VALUE, .id = c->place.id, .load = &l.load->loaded,
+		.value = k != NULL ? k->value : NULL};
 }
 
-// the value through the compilers (start.ts' fold), each a host's (bd_compile) or loaded (bd_step
-// under its identity)
+// the value through the compilers (start.ts' folded): the compilers library's bd_fold
 static folded fold(ps_process *p, const pg_step *steps, size_t n, const op_value *v) {
 	ps *s = p->owner;
-	for (size_t i = 0; i < n; i++) {
-		const pg_step *c = &steps[i];
-		bd_result r;
-		if (c->by.n == 0) r = bd_compile(s->s.builds, c->place.id, v);
-		else {
-			lived l = live_of(p, c);
-			if (l.kind != K_OK) return (folded){.kind = l.kind, .error = l.error};
-			if (l.live.compile == NULL) return (folded){.kind = K_FAILED, .error = pg_dup("not-a-compiler")};
-			op_value *identity = identity_of(p, c);
-			r = bd_step(s->s.builds, identity, v, compile_run, l.load, 0);
-			op_free(identity);
-		}
-		switch (r.kind) {
-		case BD_STOP: return (folded){.kind = K_STOP};
-		case BD_PENDING: return (folded){.kind = K_PENDING};
-		case BD_REFUSED:
-		case BD_FAILED: return (folded){.kind = K_FAILED, .error = pg_dup(r.text)};
-		case BD_VALUE: v = r.value;
-		}
+	folding f = {p, steps};
+	bd_folded r = bd_fold(&(bd_folding){s->s.builds, s->s.table, compiler_of, &f}, n, v);
+	switch (r.kind) {
+	case BD_VALUE: return (folded){.kind = K_OK, .value = r.value};
+	case BD_PENDING: return (folded){.kind = K_PENDING};
+	case BD_STOP: return (folded){.kind = K_STOP};
+	default: return (folded){.kind = K_FAILED, .error = r.error};
 	}
-	return (folded){.kind = K_OK, .value = v};
 }
 
 // the build -------------------------------------------------------------------------------------------
@@ -438,7 +425,8 @@ static void run(ps_process *p, const pg_step *runner, const op_value *code) {
 	ps *s = p->owner;
 	running r = {.p = p, .code = code};
 	if (runner->by.n > 0) {
-		if (p->runner != NULL && !p->runner->closed) r.fn = p->runner->live.run, r.data = p->runner->live.data;
+		const bd_loaded *l = p->runner != NULL ? &p->runner->loaded : NULL;
+		if (l != NULL && !l->closed) r.fn = l->live.run, r.data = l->live.data;
 	} else {
 		const nd_entry *e = tb_get(s->s.table, tb_string("value"), tb_string(runner->place.id));
 		const hf_entry *fn = e != NULL ? hf_find(s->s.functions, e->value) : NULL;

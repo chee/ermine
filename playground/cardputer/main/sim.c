@@ -23,6 +23,7 @@
 #include <malloc/malloc.h>
 
 #include "core/ed25519/c/ed25519.h"
+int64_t now_ms(void);
 #include "core/op/c/json.h"
 #include "den.h"
 #include "drivers.h"
@@ -145,6 +146,7 @@ void frame_again(void) {
 void den_random(uint8_t *out, size_t n) { arc4random_buf(out, n); }
 
 size_t den_free(void) { return 1 << 20; }
+int64_t den_clock(void) { return now_ms(); }
 
 void den_mark(const char *what) {
 	// SIM_TRACE_LOAD (with libtrace): what the history's load holds, by who allocated it
@@ -277,7 +279,7 @@ static bool public_key_of(void *ctx, const uint8_t secret[32], uint8_t out[32]) 
 	return true;
 }
 
-static int64_t now_ms(void) {
+int64_t now_ms(void) {
 	struct timeval t;
 	gettimeofday(&t, NULL);
 	return (int64_t)t.tv_sec * 1000 + t.tv_usec / 1000;

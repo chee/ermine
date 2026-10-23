@@ -22,6 +22,21 @@ config CARDPUTER_SERVER
 		Where the room is: its long-poll at <server>/littlesync/tippet/dens-<code>/send and /recv
 		(experiments/tippet/WIRE.md). https: the certificate checked against ESP-IDF's bundle.
 
+choice CARDPUTER_CARRIER
+	prompt "Cardputer: how the den reaches galaxy"
+	default CARDPUTER_CARRIER_WEBSOCKET
+	help
+		The tippet carrier to the server: a websocket (main/ws.c: one TLS session, the path the
+		browsers use), or http long-poll (main/poll.c: send and recv requests).
+
+config CARDPUTER_CARRIER_WEBSOCKET
+	bool "websocket"
+
+config CARDPUTER_CARRIER_POLL
+	bool "http long-poll"
+
+endchoice
+
 config CARDPUTER_ROOM
 	string "the den's room (4 of ACDEFHJKMNPRTWXY; empty: the one it has)"
 	default ""

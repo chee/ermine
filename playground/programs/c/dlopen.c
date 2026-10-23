@@ -13,7 +13,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include "../../build/c/mem.h"
+#include "../../compilers/c/mem.h"
 #include "native.h"
 
 extern char **environ;

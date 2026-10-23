@@ -6,8 +6,8 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 CONFIG_COMPILER_OPTIMIZATION_PERF=y
-# the loop's stack: 10 KB (it used under 6.5 KB through an end to end)
-CONFIG_ESP_MAIN_TASK_STACK_SIZE=10240
+# the loop's stack: 12 KB (it used up to 7.4 KB through an end to end and a store mended)
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=12288
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 CONFIG_FREERTOS_HZ=1000
 # https (main/wifi.c): a server's certificate checked against ESP-IDF's common CAs (ISRG Root X1 for
@@ -58,3 +58,7 @@ CONFIG_FATFS_LFN_NONE=y
 CONFIG_FATFS_VOLUME_COUNT=1
 # the esp_timer task: 2.5 KB of stack (nothing of ours runs on it)
 CONFIG_ESP_TIMER_TASK_STACK_SIZE=2560
+# how the den reaches galaxy: the websocket (main/ws.c: one TLS session, the browsers' path). it
+# passed the whole end to end, with more heap than http long-poll's two connections (main/poll.c,
+# CONFIG_CARDPUTER_CARRIER_POLL)
+CONFIG_CARDPUTER_CARRIER_WEBSOCKET=y

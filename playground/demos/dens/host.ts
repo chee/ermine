@@ -23,8 +23,8 @@
 //   <node>                   attributes { "ermine.type": "ermine.den", "ermine.den.id": id,
 //                            "ermine.den.name": name, "ermine.den.device": "browser" | "cardputer" }
 //                            children { things: <node>/things, inbox: <node>/inbox,
-//                            authorized_keys: <node>/authorized_keys }, and runners: <node>/runners
-//                            (software's offers; nobody else reads them)
+//                            authorized_keys: <node>/authorized_keys, files: <node>/files }, and
+//                            runners: <node>/runners (software's offers; nobody else reads them)
 //   <node>/things            children { <process id>: <node>/things/<process id> }, one a thing
 //   <node>/things/<process>  attributes: the thing's process's, as it runs, and "thing.at"
 //                            "/home/<kind>-<4 hex>" (its path in its den). what another den reads:
@@ -37,6 +37,14 @@
 //                            and the rest software and processes write ("ermine.type"
 //                            "ermine.process", "ermine.process.program" { id, at?, hash? },
 //                            "ermine.process.cwd")
+//   <node>/files             children { <8 hex>: <node>/files/<8 hex> }: every node a person made
+//                            here (made.ts), placed or not
+//   <node>/files/<8 hex>     a made node. a folder: children { <name>: <node>/files/<8 hex> } and
+//                            attributes { "ermine.type": "dens.folder" }; else value: what was typed
+//                            (a number, true, false, text). one at the top or in /home has
+//                            attributes "file.at": its path ("/notes", "/home/notes"), and is placed
+//                            there in every den's tree; taken out (unplaced): file.at gone, or its
+//                            name gone from its folder's children
 //   <node>/authorized_keys   value { <node>: { name } }: the dens this den does asks for, its own
 //                            node among them from the start. only steps of the den's own count:
 //                            a step another device wrote there is not believed
@@ -117,6 +125,7 @@ import {
 } from "@ermine/software"
 import { RUNNERS } from "./things.ts"
 import { bytesOf, createWrites } from "./writes.ts"
+import { createMade, MADE, type Made, placements } from "./made.ts"
 
 export const ROOT = "root"
 
@@ -152,7 +161,7 @@ export const AT = "thing.at"
 export const TYPE = (kind: string) => `thing.${kind}`
 // the kinds you can add; the cardputer's hardware (keys, screen, pigs) runs on three more
 export const KINDS = ["button", "pad", "counter", "timer", "chart", "sound"] as const
-export type Kind = typeof KINDS[number] | "keys" | "screen" | "pigs"
+export type Kind = typeof KINDS[number] | "keys" | "screen" | "pigs" | "speaker"
 // how often a den says it is here, and how long until one not heard is grey
 export const BEAT = 2000, QUIET = 6000
 
@@ -319,6 +328,8 @@ export type Host = {
 	places: ReturnType<typeof createPlaces>
 	// what runs here: things, and the inbox
 	software: Software
+	// the nodes a person makes here, and takes out (made.ts)
+	made: Made
 	host: Scope
 	hosted: <T>(f: () => T) => T
 	// the things this den runs (its processes but the inbox), in start order; one by its id
@@ -377,6 +388,7 @@ export async function createHost(
 	const session = await startSession(install, ed25519)
 	const id = hex(install.key), node = install.id
 	const THINGS = `${node}/things`, INBOX_ = `${node}/inbox`, KEYS = `${node}/authorized_keys`
+	const FILES = `${node}/files`
 
 	const s = createScheduler()
 	let due = false
@@ -395,7 +407,12 @@ export async function createHost(
 		table,
 		paths,
 		scheduler: s,
-		contributors: [processes(ROOT), trie(AWAY, ROOT, "away"), children],
+		contributors: [
+			processes(ROOT),
+			trie(AWAY, ROOT, "away"),
+			trie(MADE, ROOT, "made"),
+			children,
+		],
 	})
 	s.onTrackingEnd((key) => places.release(key))
 	// whatever made something due (a write here, a step landing): a pulse soon
@@ -418,6 +435,8 @@ export async function createHost(
 		(n === THINGS && part === "children") ||
 		(n.startsWith(`${THINGS}/`) && part === "attributes") ||
 		(n === KEYS && part === "value") ||
+		(n === FILES && part === "children") ||
+		(n.startsWith(`${FILES}/`) && part !== "process") ||
 		(INBOX.test(n) && part === "value")
 	const history = createHistory({ log, table, places, run: hosted, kept })
 	await history.load()
@@ -497,7 +516,7 @@ export async function createHost(
 	})
 	for (const path of [HERE, [...DENS, id]]) commit(addProcess(table, ROOT, path, node, header()))
 	// its shared nodes, under it; it trusts itself from the start
-	for (const name of ["things", "inbox", "authorized_keys"]) {
+	for (const name of ["things", "inbox", "authorized_keys", "files"]) {
 		patch("children", node, [name], `${node}/${name}`)
 	}
 	if (table.get("value", INBOX_) === undefined) put("value", INBOX_, {})
@@ -611,6 +630,8 @@ export async function createHost(
 					const at = places.readValue("attributes", shared, [AT])
 					if (typeof at === "string") leaf(inside(at), shared)
 				}
+				// the nodes a person made there, at the top or in /home
+				for (const { path, id } of placements(places, `${n}/files`).values()) leaf(path, id)
 			}
 			return want
 		}, (want) => hosted(() => place(want)))
@@ -784,6 +805,21 @@ export async function createHost(
 		}
 		return { stop: () => void (inbox = undefined) }
 	}
+	// the nodes a person makes: this den's own, placed by their file.at
+	const made = createMade({
+		scheduler: s,
+		table,
+		places,
+		scope: host,
+		root: ROOT,
+		node,
+		owner: (n) => {
+			const d = denOf(n.split("/")[0])
+			return d === undefined ? undefined : nameOf(installOf(d))
+		},
+		running: (pid) => things().some((p) => p.id === pid),
+	})
+
 	// the inbox, started
 	const started = hosted(() =>
 		software.run(`/${HERE.join("/")}/runners/inbox`, "/programs/inbox", INBOX_AT)
@@ -860,6 +896,7 @@ export async function createHost(
 		table,
 		places,
 		software,
+		made,
 		host,
 		hosted,
 		things,

@@ -1,4 +1,4 @@
-// build (build.ts) on the line protocol: one JSON request per line in, one answer per line out, in
+// compilers (compilers.ts) on the line protocol: one JSON request per line in, one answer per line out, in
 // order. one world per process: a scheduler, table, paths and the host's places (root "R", children
 // alone), told the table's events. the host writes with its scope open, info {"actor":"test"};
 // builds are made with it open too
@@ -15,7 +15,7 @@
 // { op: "compiler", id, compiler }          → {}   value entry: the compiler named (live, unsaved)
 // { op: "upsert", part, id, path, value }   → {}   places' upsert at path: a patch, telling only
 //    the reads it touches
-// build:
+// compilers:
 // { op: "builds", cache }                   → {}   a fresh createBuilds over the same table, cache
 //    folder id cache; the last one's watches torn down first, then it stopped
 // { op: "watch", name, compilers, input?, node? } → {}   a computer in its own scope: each run, the
@@ -64,7 +64,7 @@ import {
 	type Found,
 	type Read,
 	TRACE,
-} from "./build.ts"
+} from "./compilers.ts"
 
 type Json = unknown
 

@@ -843,7 +843,7 @@ static void makeLoaders(Host *h) {
 	op_value *yes = op_bool(1);
 	attribute(h, at, n, PG_LOADERS, yes);
 	op_free(yes);
-	// the compiler: C source to a wasm module (loader.c), cached by build.c
+	// the compiler: C source to a wasm module (loader.c), cached by compilers.c
 	hf_add_compiler(h->functions, "clang", loaderCompile, h);
 	op_value *clang = hf_value("clang");
 	own(h, at, n, "clang", "os.loader.clang", clang);

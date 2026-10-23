@@ -2,7 +2,7 @@
 // program.ts. three extras, each for what the notebook needs and the api does not hand it (and
 // the world's scoped: a cell's memo in a scope of its own, to go when the cell goes):
 import { createWorld, type Tools } from "@ermine/slaygrounds/world"
-import { createBuilds } from "@ermine/build"
+import { createBuilds } from "@ermine/compilers"
 import type { API } from "@ermine/api"
 import { render } from "ermine-h"
 

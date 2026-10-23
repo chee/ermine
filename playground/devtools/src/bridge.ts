@@ -1,6 +1,8 @@
 // The panel's only way into the page: devtools' inspectedWindow.eval. Firefox
-// and Safari give `browser`, whose eval returns a promise; Chrome gives
-// `chrome`, whose eval takes a callback.
+// and Safari give `browser`, whose eval returns a promise of [result, thrown];
+// Chrome gives `chrome`, whose eval takes a callback. Chrome has `browser` too
+// now, its eval's promise the result alone: Chrome (told by userAgentData,
+// which Firefox and Safari lack) takes the callback.
 
 type Thrown = {
   isException?: boolean;
@@ -18,13 +20,14 @@ function fail(ex: Thrown): Error {
 }
 
 export function evaluate<T>(code: string): Promise<T> {
-  const ie = ext.devtools.inspectedWindow;
-  if (g.browser) {
+  if (g.browser && !g.navigator?.userAgentData) {
+    const ie = g.browser.devtools.inspectedWindow;
     return ie.eval(code).then(([result, ex]: [T, Thrown | undefined]) => {
       if (ex && (ex.isException || ex.isError)) throw fail(ex);
       return result;
     });
   }
+  const ie = (g.chrome ?? ext).devtools.inspectedWindow;
   return new Promise((resolve, reject) => {
     ie.eval(code, (result: T, ex?: Thrown) => {
       if (ex && (ex.isException || ex.isError)) reject(fail(ex));

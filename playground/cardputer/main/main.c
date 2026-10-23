@@ -13,6 +13,7 @@
 #include "drivers.h"
 #include "esp_heap_caps.h"
 #include "esp_random.h"
+#include "esp_system.h"
 #include "esp_timer.h"
 #include "fb.h"
 #include "flash.h"
@@ -28,6 +29,22 @@
 #include "shell.h"
 #include "things.h"
 #include "wifi.h"
+#include "ws.h"
+
+// the carrier to the server, menuconfig's: a websocket (ws.h) or http long-poll (poll.h)
+#ifdef CONFIG_CARDPUTER_CARRIER_WEBSOCKET
+#define WEBSOCKET 1
+#define carry_start ws_start
+#define carry_turn ws_turn
+#define carry_state ws_state
+#define carry_joined ws_joined
+#else
+#define WEBSOCKET 0
+#define carry_start poll_start
+#define carry_turn poll_turn
+#define carry_state poll_state
+#define carry_joined poll_joined
+#endif
 
 #define LEMON RGB(0xff, 0xf6, 0x8f)
 #define INK RGB(0x10, 0x10, 0x10)
@@ -58,6 +75,7 @@ static size_t free_now(void) { return heap_caps_get_free_size(MALLOC_CAP_8BIT); 
 static size_t least(void) { return heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT); }
 
 size_t den_free(void) { return free_now(); }
+int64_t den_clock(void) { return esp_timer_get_time() / 1000; }
 
 void den_mark(const char *what) {
 	printf("heap: %s: %u free, tippet %u\n", what, (unsigned)free_now(), (unsigned)den_heap(NULL));
@@ -70,9 +88,14 @@ static void print(void) {
 	den_print();
 	if (wifi) {
 		unsigned requests, failed, in, out;
+#if WEBSOCKET
+		ws_counts(&requests, &in, &out);
+		failed = 0;
+#else
 		poll_counts(&requests, &failed, &in, &out);
-		printf("%s; %s: requests %u failed %u, messages in %u out %u\n", wifi_status(), poll_state(), requests,
-			failed, in, out);
+#endif
+		printf("%s; %s: %s %u failed %u, messages in %u out %u\n", wifi_status(), carry_state(),
+			WEBSOCKET ? "links" : "requests", requests, failed, in, out);
 	}
 	printf("--- %u bytes free, %u least, stack %u left\n", (unsigned)free_now(), (unsigned)least(),
 		(unsigned)uxTaskGetStackHighWaterMark(NULL));
@@ -116,6 +139,27 @@ static void draw_text(const op_value *screen) {
 }
 
 static int shell_on;
+
+// a den that isn't up: why, in words, on the screen
+static char not_up[128];
+static void paint_not_up(void) {
+	fb_clear(FB_LEMON);
+	fb_rect(0, 0, FB_W, 12, FB_CHERRY);
+	fb_text(4, 2, "chee's cardputer", FB_WHITE, 1);
+	fb_text(4, 20, "the den isn't up:", FB_INK, 1);
+	// the words, 29 a row
+	char row[30];
+	const char *w = not_up;
+	for (int y = 34; *w && y + 8 <= FB_H - 24; y += 10) {
+		size_t n = strlen(w) < 29 ? strlen(w) : 29;
+		memcpy(row, w, n);
+		row[n] = 0;
+		fb_text(4, y, row, FB_CHERRY, 1);
+		w += n;
+	}
+	fb_text(4, FB_H - 20, "its log is kept as it is:", FB_GREY, 1);
+	fb_text(4, FB_H - 10, "nothing joins the room", FB_GREY, 1);
+}
 
 // a key from the keyboard: tab says yes to a pair ask waiting, esc no; esc else turns the mode
 // (with the shell on); else to the shell, or to /home/keys
@@ -193,6 +237,7 @@ void app_main(void) {
 	int code = flash_install(&me);
 	if (code != INST_OK) printf("install: %s\n", inst_error(code));
 	int mounted = flash_mount();
+	if (mounted) flash_sweep();
 	char room[5], dir[16];
 	room_code_of(room);
 	// t2: tippet's packed-run store (its files from before are another format: never read)
@@ -202,17 +247,31 @@ void app_main(void) {
 #endif
 	stage("before the den");
 	size_t before = free_now();
-	if (code != INST_OK || den_boot(&me, room, mounted ? dir : "/nowhere", esp_timer_get_time() / 1000)) {
-		printf("den: not up\n");
+	int up = code == INST_OK && den_boot(&me, room, mounted ? dir : "/nowhere", esp_timer_get_time() / 1000) == 0;
+	if (!up) {
+		// said on the screen, in words; nothing joins the room (no den, no sync)
+		snprintf(not_up, sizeof not_up, "%s", code != INST_OK ? inst_error(code)
+			: !mounted ? "the flash isn't mounted" : den_why()[0] ? den_why() : "it didn't start");
+		printf("den: not up: %s\n", not_up);
+		frame_show(paint_not_up);
+		if (den_again()) {
+			vTaskDelay(pdMS_TO_TICKS(4000));
+			esp_restart();
+		}
+		for (;;) {
+			char typed[64];
+			if (usb_serial_jtag_read_bytes(typed, sizeof typed, 0) > 0) printf("den: not up: %s\n", not_up);
+			vTaskDelay(pdMS_TO_TICKS(100));
+		}
 	}
 	printf("den: %s in room %s, up, %u bytes of heap\n", me.id, room, (unsigned)(before - free_now()));
 	stage("den up");
-	wifi = wifi_start();
+	wifi = wifi_start(WEBSOCKET ? 0 : POLL_WORKERS);
 	if (wifi) {
 		char url[160];
 		snprintf(url, sizeof url, "%s/littlesync/tippet/dens-%s", CONFIG_CARDPUTER_SERVER, room);
-		poll_start(den_sync(), url);
-		printf("poll: %s\n", url);
+		carry_start(den_sync(), url);
+		printf("%s: %s\n", WEBSOCKET ? "ws" : "poll", url);
 	}
 	printf("ermine: up, %u bytes free%s\n", (unsigned)free_now(), wifi ? ", and over WiFi" : ", no WiFi");
 	// the lowest the heap went (every task's: the workers' TLS too) in each stage of the den's life,
@@ -254,12 +313,12 @@ void app_main(void) {
 		}
 		int64_t now = esp_timer_get_time() / 1000;
 		if (wifi) {
-			poll_turn(now);
+			carry_turn(now);
 			host_settle();
-			den_net(poll_state());
+			den_net(carry_state());
 			if (poll_up() && !was_up) stage("wifi joined");
-			if (poll_joined() && !was_joined) stage("room joined"), quiet_since = now;
-			was_up = poll_up(), was_joined = poll_joined();
+			if (carry_joined() && !was_joined) stage("room joined"), quiet_since = now;
+			was_up = poll_up(), was_joined = carry_joined();
 		}
 		den_tick(now);
 		vTaskDelay(pdMS_TO_TICKS(10));

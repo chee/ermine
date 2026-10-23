@@ -10,7 +10,7 @@
 //   hf_add_runner(fs, "runner", run, ctx);         // a runner: code, api -> a stop
 //   op_value *v = hf_value("upper");               // the node's value: a function as data
 //
-// A function stand-in is no encodable value: build.c refuses one as an input, an identity or a result
+// A function stand-in is no encodable value: compilers.c refuses one as an input, an identity or a result
 // (uncacheable), as the reference refuses a function.
 //
 // A runner may also load (playground/programs' start.h's loading; start.ts' Runner.load):

@@ -3,7 +3,7 @@
 
 #include <string.h>
 
-#include "../../../playground/build/c/mem.h"
+#include "../../../playground/compilers/c/mem.h"
 
 typedef struct {
 	char *name;

@@ -9,7 +9,7 @@
 #include "../../../filesystem/places/c/world_harness.h"
 #include "../../../ermine/boxes/c/boxes.h"
 #include "../../../experiments/software/c/functions.h"
-#include "../../build/c/mem.h"
+#include "../../compilers/c/mem.h"
 #include "programs.h"
 #include "programs_json.h"
 #include "../../../ermine/types/c/types.h"

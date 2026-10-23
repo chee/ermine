@@ -6,8 +6,8 @@
 // the worker's stack: a TLS handshake runs on it (it used under 3.6 KB of 8)
 #define WIFI_STACK 6144
 
-// 1: started; 0: no network named
-int wifi_start(void);
+// 1: started, with poll.h's workers (0: none, another carrier); 0: no network named
+int wifi_start(int workers);
 // one line: the network, whether it is joined, the workers' stack left at the least
 const char *wifi_status(void);
 

@@ -33,13 +33,16 @@ export function createWrites(o: {
 	places: Pick<Places, "commit">
 	// the host's scope: every write here is made under it
 	scope: Scope
+	// files of the caller's own to pass over too, so the site is whoever called them (made.ts)
+	skip?: readonly string[]
 }) {
 	const { scheduler: s, table, places, scope } = o
+	const skip = [...ours, ...o.skip ?? []]
 	const hosted = <T>(f: () => T) => s.runWithScope(scope, f)
 	// a write's header, from the host's scope as if open, made before the scope is opened so no
 	// scheduler frame is under it: its site the first frame outside this file
 	const as = { getCurrentScope: () => scope, getRun: () => s.getRun() }
-	const header = () => createChangeHeader(as, undefined, ours)
+	const header = () => createChangeHeader(as, undefined, skip)
 	const commit = (changed: readonly Entry<unknown>[]) =>
 		changed.length > 0 && places.commit(changed)
 	// a whole value, written only when it is another (as its encoding)

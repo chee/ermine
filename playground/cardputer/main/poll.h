@@ -32,9 +32,10 @@ void poll_do(int worker, poll_request *r);
 int poll_up(void);
 
 // how many workers the platform runs: 1, recv and send take turns on one connection (one TLS
-// session's heap); 2, a recv waits on one while sends go on the other
+// session's heap, but a send waits for the recv out, up to the 2 s of a room's heartbeat); 2, a
+// recv waits on one while sends go on the other (about 9 KB more, worth it since packed runs)
 #ifndef POLL_WORKERS
-#define POLL_WORKERS 1
+#define POLL_WORKERS 2
 #endif
 // the most an answer carries (room=), and the most a send's body copies (one message at least)
 #define POLL_ROOM 8192

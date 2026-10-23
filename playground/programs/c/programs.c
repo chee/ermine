@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "../../../experiments/software/c/functions.h"
-#include "../../build/c/mem.h"
+#include "../../compilers/c/mem.h"
 
 // copies and frees -----------------------------------------------------------------------------
 

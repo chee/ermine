@@ -29,18 +29,19 @@ import {
 	PIGS,
 	SAYS,
 	type Source,
-	speaker as playing,
 	square,
 	STATE,
 	unparse,
+	voice,
 } from "./things.ts"
 import { picture } from "./pictures.ts"
 import { createFiles } from "./files.ts"
 import { createTerminal } from "./terminal.ts"
 import { createCode } from "./code.ts"
 import { get } from "@ermine/places/lib"
-import { sound } from "./sound.ts"
+import { isVoice, sound, type Voice, VOICES } from "./sound.ts"
 import { RUNNER } from "@ermine/software"
+import { answer } from "../devtools.ts"
 
 const $ = <T extends HTMLElement = HTMLElement>(q: string, root: ParentNode = document) =>
 	root.querySelector(q) as T
@@ -51,6 +52,8 @@ const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: s
 	return e
 }
 
+// where a den's speaker runs: the same spot in every den
+const SPEAKER = ["system", "speaker"]
 const hex4 = () =>
 	Array.from(crypto.getRandomValues(new Uint8Array(2)), (b) => b.toString(16).padStart(2, "0"))
 		.join("")
@@ -123,6 +126,14 @@ const room = roomOf("code" in me ? me.code : undefined)
 const host = await createHost({ ...me, room, seed: seed(), server })
 const { software, hosted, table, places } = host
 const id = host.id
+// the devtools extension: the den's graph, through a process api at its root (playground/devtools)
+answer({ scheduler: host.s, table, places, scope: host.host }, {
+	name: isCard ? me.name : `${me.name}'s den`,
+	processes: software.running,
+	stop: (p) => software.stop(p),
+})
+// every den's speaker, on its card: it plays what is wired into it, here
+hosted(() => software.run("/system/den/runners/speaker", "/things/speaker", SPEAKER))
 if (isCard) {
 	for (const k of ["keys", "screen", "pigs"]) {
 		hosted(() => software.run(`/system/den/runners/${k}`, `/things/${k}`, ["home", k]))
@@ -216,6 +227,7 @@ const whose = (v: View, t: Thing) => v.mine ? `your ${t.kind}` : `${label(v)}'s 
 
 function fmt(v: unknown): string {
 	if (v === undefined || v === null) return "nothing"
+	if (isMap(v) && isVoice(v.sound)) return `♪ ${v.sound}`
 	if (isPicture(v)) {
 		let n = 0
 		for (let y = 0; y < v.height; y++) {
@@ -271,10 +283,20 @@ if (!isCard) {
 // a hand-drawn wobble on the frames' shells and the wires (index.html's #boil), still: a seed
 // changed every 400 ms filtered every frame and every wire again each time, and kept a GPU busy
 
-// a sound thing's notes, through the page's sound (its mute)
-playing.play = (name, freq) => {
-	console.log(`note ${name} ${Math.round(freq)} Hz`)
-	sound.note(freq)
+// what a sound thing and this den's speaker play, through the page's sound (its mute, and its
+// wait for a first click, said once). the cardputer's speaker isn't driven yet: silent
+voice.silent = isCard
+let toldWaiting = false
+voice.play = (name: Voice) => {
+	const heard = sound.play(name)
+	if (heard === "waiting" && !toldWaiting) {
+		toldWaiting = true
+		say(
+			"A sound is waiting: browsers keep a page quiet until it's been clicked. Click anywhere.",
+			"hot",
+		)
+	}
+	return heard
 }
 
 // ---- asks, answered ----
@@ -546,6 +568,9 @@ type Frame = {
 	origin: Record<Group, number>
 	keyboard?: HTMLElement
 }
+// a den's things in slots: all but its speaker, which is on the card's edge
+const slotted = (v: View) => v.things.filter((t) => t.kind !== "speaker")
+const SPEAKER_W = 170
 const groupOf = (f: Frame, t: Thing): Group => !f.two ? "one" : SHOWS.has(t.kind) ? "top" : "bottom"
 const frames = new Map<string, Frame>()
 let menu: HTMLElement | undefined
@@ -599,7 +624,9 @@ sync.link(socket(new WebSocket(server + "/littlesync/tippet/dens-${room}")))
 // one's attributes, thing.out among them), its inbox and
 // its authorized_keys. here: a live every 2 s
 // an ask: into its inbox, signed; done if trusted().
-// pair: an ask anyone may make; a person says yes or no`
+// pair: an ask anyone may make; a person says yes or no
+// its speaker, on its card: plays what is wired into it
+software.run("/system/den/runners/speaker", "/things/speaker", "/system/speaker")`
 	return v.device === "cardputer"
 		? `${common}
 // at boot, its hardware as things:
@@ -881,6 +908,7 @@ const INPUTS: Record<string, string[]> = {
 	screen: ["in"],
 	chart: ["in"],
 	sound: ["in"],
+	speaker: ["in"],
 	pigs: [...PIGS, "say"],
 }
 
@@ -901,11 +929,12 @@ function makeShown(
 		x,
 		y,
 		bounds,
-		width: t.kind === "pigs" ? SLOT.w - 16 : SLOT.w - 50,
+		width: t.kind === "pigs" ? SLOT.w - 16 : t.kind === "speaker" ? SPEAKER_W : SLOT.w - 50,
 		title: t.kind,
 		kind: SHOWS.has(t.kind) || t.kind === "sound" ? "compute" : "key",
 		ins: (INPUTS[t.kind] ?? []).map((i) => [i, i] as [string, string]),
-		outs: [["out", "out"]],
+		// a speaker only takes in
+		outs: t.kind === "speaker" ? [] : [["out", "out"]],
 	})
 	box.el.tabIndex = 0
 	box.el.classList.add("pop", `thing-${t.kind}`)
@@ -918,7 +947,8 @@ function makeShown(
 		const tt = now?.things.find((q) => spotOf(now, q) === spot)
 		if (now && tt) remove(now, tt)
 	}
-	$(".box-head", box.el).append(x2)
+	// a den's speaker is part of its card: it stays
+	if (t.kind !== "speaker") $(".box-head", box.el).append(x2)
 	// its path, as this page's tree has it
 	$(".box-head", box.el).after(h("div", "box-path avoid"))
 	box.code(thingCode(v, t))
@@ -1087,16 +1117,45 @@ function makeShown(
 			const src = sourceWords(t)
 			note.textContent = src ? `${src}, over time` : "wire something into its in"
 		}
-	} else if (t.kind === "sound") {
-		const pic = picture("sound", 6)
+	} else if (t.kind === "sound" || t.kind === "speaker") {
+		// a sound: a big button, and a row of its voices to pick from. a speaker: what it played
+		// last, and a little picker for what it plays
+		const big = t.kind === "sound"
+		const play = h("button", "press playit", "play")
+		const pic = picture("sound", big ? 4 : 3)
 		pic.classList.add("speaker")
-		const name = h("div", "notename")
+		const name = h("span", "notename")
+		// the sound's voices as chips; the speaker's, a little menu
+		const pickers = h("div", "voices")
+		const chips = new Map<Voice, HTMLButtonElement>()
+		const menu = h("select", "voicepick")
+		menu.title = "what the speaker plays (a sound thing wired in plays its own)"
+		menu.disabled = !v.mine
+		for (const n of VOICES) {
+			if (big) {
+				const c = h("button", "voice", n)
+				c.disabled = !v.mine
+				c.onclick = () => controls.get(me.id)?.choose?.(n)
+				chips.set(n, c)
+				pickers.append(c)
+			} else menu.append(new Option(n, n))
+		}
+		menu.onchange = () => controls.get(me.id)?.choose?.(menu.value as Voice)
+		if (!big) pickers.append(menu)
+		play.disabled = !v.mine
+		if (!v.mine) play.title = `press it ${theirs}`
+		play.onclick = () => controls.get(me.id)?.press?.()
 		const row = h("div", "soundrow")
 		row.append(pic, name)
-		body.append(row, note)
+		if (big) body.append(play, row, pickers, note)
+		else body.append(row, pickers, note)
 		let last = ""
 		update = (t) => {
-			name.textContent = t.out ? String(t.out) : "—"
+			const o = isMap(t.out) ? t.out : {}
+			const st = isMap(t.state) && isVoice(t.state.sound) ? t.state.sound : undefined
+			for (const [n, c] of chips) c.setAttribute("aria-pressed", String(n === st))
+			if (st && menu.value !== st && document.activeElement !== menu) menu.value = st
+			name.textContent = isVoice(o.sound) ? `♪ ${o.sound}${o.n ? ` · ${o.n}` : ""}` : "—"
 			const now = JSON.stringify(t.out)
 			if (now !== last && last !== "") {
 				pic.classList.remove("ping")
@@ -1105,9 +1164,20 @@ function makeShown(
 			}
 			last = now
 			const src = sourceWords(t)
-			note.textContent = src
-				? `plays ${src} ${v.mine ? "here" : theirs}`
-				: "wire something into its in"
+			const card = v.device === "cardputer" && !big
+			note.textContent = card
+				? "the cardputer's speaker isn't on yet: what's wired in plays nothing on it"
+				: o.heard === "muted" && v.mine
+				? "sound is off here: the header's sound button turns it on"
+				: o.heard === "waiting" && v.mine
+				? "waiting for a click on the page before it can play"
+				: big
+				? src
+					? `plays each change of ${src}, and its button`
+					: `press play ${v.mine ? "" : theirs}`
+				: src
+				? `plays each change of ${src} ${v.mine ? "here" : theirs}`
+				: `wire anything into its in: it plays ${v.mine ? "here" : theirs}`
 		}
 	} else if (t.kind === "keys") {
 		const typed = h("div", "typed")
@@ -1259,6 +1329,8 @@ function argsWith(t: Thing, input: string, src?: Source): string[] {
 		? Object.fromEntries(Object.entries(t.out).map(([k, w]) => [k, String(w)]))
 		: t.kind === "pad" && kept instanceof Uint8Array
 		? { squares: Array.from(kept, (b) => b.toString(16).padStart(2, "0")).join("") }
+		: (t.kind === "sound" || t.kind === "speaker") && isMap(t.state) && isVoice(t.state.sound)
+		? { sound: t.state.sound }
 		: {}
 	return unparse(sources, settings)
 }
@@ -1369,6 +1441,11 @@ const files = createFiles(host, $(".files"), {
 		if (s) board.show(s.box)
 	},
 	isThing: (id) => [...shown.values()].some((x) => x.me.id === id),
+	// a thing taken out in the files: as its box's ×
+	remove: (id) => {
+		const f = find(id)
+		if (f) remove(f.v, f.t)
+	},
 	live: (name, fn) => code.live(name, fn),
 })
 createTerminal(host, $(".term"))
@@ -1473,15 +1550,15 @@ function render() {
 	const natural = new Map<string, { top: number }>()
 	for (const v of vs) {
 		const f = frameOf(v)
-		const keys = new Set(v.things.map((t) => `${groupOf(f, t)} ${t.at.join("/")}`))
-		for (const t of v.things) slotOf(f, t, keys)
+		const keys = new Set(slotted(v).map((t) => `${groupOf(f, t)} ${t.at.join("/")}`))
+		for (const t of slotted(v)) slotOf(f, t, keys)
 		const rows = (g: Group) =>
 			Math.max(
 				1,
 				Math.ceil(
 					Math.max(
 						0,
-						...v.things.filter((t) => groupOf(f, t) === g).map((t) =>
+						...slotted(v).filter((t) => groupOf(f, t) === g).map((t) =>
 							f.slots.get(`${g} ${t.at.join("/")}`)! + 1
 						),
 					) / COLS,
@@ -1524,7 +1601,7 @@ function render() {
 			height: `${f.h}px`,
 		})
 		f.el.classList.toggle("quiet", !v.alive)
-		f.el.classList.toggle("empty", v.things.length === 0)
+		f.el.classList.toggle("empty", slotted(v).length === 0)
 		$(".live", f.el).title = v.alive ? "here now" : "gone quiet"
 		$<HTMLButtonElement>(".add", f.el).disabled = !v.alive
 		// another den: paired or not (a pair button until it is, then unpair), and asked
@@ -1549,9 +1626,12 @@ function render() {
 			const spot = spotOf(v, t)
 			live.add(spot)
 			const g = groupOf(f, t)
-			const slot = f.slots.get(`${g} ${t.at.join("/")}`)!
-			const px = f.x + 20 + (slot % COLS) * SLOT.w
-			const py = f.y + f.origin[g] + Math.floor(slot / COLS) * SLOT.h
+			const slot = f.slots.get(`${g} ${t.at.join("/")}`)
+			// the speaker: on the card's left edge, low down; the rest in their slots
+			const px = slot === undefined ? f.x - SPEAKER_W + 34 : f.x + 20 + (slot % COLS) * SLOT.w
+			const py = slot === undefined
+				? f.y + f.h - 150
+				: f.y + f.origin[g] + Math.floor(slot / COLS) * SLOT.h
 			let s = shown.get(spot)
 			if (s) {
 				const p = s.box.pos()
@@ -1562,7 +1642,7 @@ function render() {
 			}
 			if (!s) {
 				s = makeShown(v, t, px, py, () => ({
-					x0: f.x + 14,
+					x0: t.kind === "speaker" ? f.x - SPEAKER_W : f.x + 14,
 					y0: f.y + 58,
 					x1: f.x + f.w - 14,
 					y1: f.y + f.h - (f.keyboard ? 168 : 12),
