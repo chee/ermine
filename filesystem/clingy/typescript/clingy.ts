@@ -1,6 +1,6 @@
 // clingy: keys of the caller's, each known tracked or not, the caller told when its last tracker
 // goes. a library for the two places that need it (the path cache, filesystem/places cache.ts;
-// build steps, playground/build build.ts). built on the scheduler's onTrackingStart and onTrackingEnd only
+// build steps, playground/compilers compilers.ts). built on the scheduler's onTrackingStart and onTrackingEnd only
 //
 //   const clingy = createClingy(scheduler, (key) => settle(key))
 //   clingy.add(key)       // a key made now: no run tracks it yet

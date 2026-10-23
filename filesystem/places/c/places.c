@@ -586,14 +586,23 @@ void pl_event(void *ctx, tb_key part, tb_key id) {
 		patch.has_value = 1;
 		patch.value = op_ref(entry->value);
 	}
-	// the value and change as they are now: a watch that writes the entry changes them
+	// the value and change as they are now: a watch that writes the entry changes them. taken out:
+	// a change made now from the scope open (none open: none), as a write's is
 	ch_header change = entry != NULL ? entry->change : (ch_header){0};
-	pl_fact fact = {part, id, &patch, 1, entry != NULL ? &change : NULL, entry};
+	pl_made *made = NULL;
+	int changed = entry != NULL;
+	if (entry == NULL) {
+		char *error = pl_header(l, NULL, 0, NULL, &change, &made);
+		if (error == NULL) changed = 1;
+		free(error);
+	}
+	pl_fact fact = {part, id, &patch, 1, changed ? &change : NULL, entry};
 	l->s->telling++;
 	tell_alls(l, &fact, 1);
 	tell_watches(l, &fact, 1);
 	l->s->telling--;
 	if (l->s->telling == 0) free_dead(l);
+	if (made != NULL) pl_made_free(made);
 	op_free((op_value *)patch.value);
 }
 
