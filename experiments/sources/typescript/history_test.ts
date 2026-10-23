@@ -5,6 +5,7 @@ import { createChangeHeader } from "@ermine/places/header"
 import { ORPHAN } from "./holder.ts"
 import { named } from "./write.ts"
 import { createWorld } from "./world.ts"
+import { readRecord, SKIPPED } from "./status.ts"
 
 Deno.test("each write as it lands is named, on top of the part's head: each on the one before", () => {
 	const w = createWorld("A")
@@ -113,7 +114,8 @@ Deno.test("an entry taken out is a write too: in a scope, its change; none open,
 Deno.test("what has no encoding is skipped, counted; drop lets go of a node's history, not its value", async () => {
 	const w = createWorld("A")
 	w.set("F", () => 1)
-	assertEquals(w.history.skipped(), 1)
+	// on the history's own node, which it never records
+	assertEquals(readRecord(w.places, w.history.id)[SKIPPED], 1)
 	assertEquals(w.history.writes(), [])
 	w.set("N", 1)
 	await w.history.drop("N")

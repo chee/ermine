@@ -7,11 +7,14 @@
 // { op: "memory", name, lists?, refuse? }       → {}   lists false: no since. refuse: a node it
 //    won't hold ("not-here")
 // { op: "file", name, file }                    → {}   a holder over the file named (made empty)
-// { op: "link", name, a, b, limit?, live? }     → {}   live: started, synced whenever poked
+// { op: "link", name, a, b, limit?, live? }     → {}   live: started, synced whenever poked. its
+//    node in the graph a (b when a is not a graph)
 // { op: "sync", link } | { op: "round", link }   → { ab, ba }   each: { sent, taken, passed,
 //    refused: [why], behind }; sync until nothing moves, round one batch each way
 // { op: "fetch", link, node }                   → { ab, ba }   asked by node, with get
-// { op: "status", link }                        → { known: { a, b }, refused: [why] }
+// { op: "status", link }                        → { state, known: { a, b }, refused: [why] }, as
+//    its process's node shows them: state { code, words, why? } its value, the rest attributes
+// { op: "status", mirror }                      → { state, file, node, unwritten }, the same
 // { op: "set", graph, node, value, path? }      → {}   a write in the graph, by its device
 // { op: "value", graph, node }                  → { value } | {}
 // { op: "heads", graph, node }                  → { count }   the value part's
@@ -19,13 +22,18 @@
 //    node's (get); nodes: the node of each, in order
 // { op: "drop", holder, node }                  → {}
 // { op: "forge", holder }                       → { outcome }   a write whose name is not its own
-// { op: "mirror", graph, node, file, actor }    → {}   the node's value mirrored to the file as
-//    text, by a device of its own
-// { op: "edit", file, text }                    → {}   another process writes the file
+// { op: "mirror", name?, graph, node, file, actor } → {} | { refused: "taken", at }   the node's
+//    value mirrored to the file as text, a process at /system/mirrors/<file>, under a device of
+//    its own; a write that throws tried again after 1 ms, then 2, 4, ...
+// { op: "edit", file, text, heard? }            → {}   another process writes the file. heard
+//    false: the watch is not told
+// { op: "remove", file }                        → {}   a person deletes the file
+// { op: "there", graph, path }                  → { there }   something at the path (names)
 // { op: "text", file }                          → { text } | {}
 // { op: "fail", file, on }                      → {}   on: the file's writes throw
 // { op: "settle" }                              → {}   every watch heard, every live link idle
 // { op: "same", graphs, node }                  → { same }   every graph's value at node alike
+import { get } from "@ermine/places/lib"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { createFakeFile, type FakeFile } from "./access.ts"
 import { openFile } from "./file.ts"
@@ -33,14 +41,15 @@ import type { Holder } from "./holder.ts"
 import { createLink, type Leg, type Link } from "./link.ts"
 import { createMemory } from "./memory.ts"
 import { type Mirror, openMirror, text } from "./mirror.ts"
+import { FILE, KNOWN, MIRRORS, readRecord, readState, REFUSED, UNWRITTEN } from "./status.ts"
 import { name, same } from "./write.ts"
 import { createWorld, type World } from "./world.ts"
 
 const graphs = new Map<string, World>()
 const holders = new Map<string, Holder>()
-const links = new Map<string, { link: Link; live: boolean }>()
+const links = new Map<string, { link: Link; live: boolean; graph: World }>()
 const files = new Map<string, FakeFile>()
-const mirrors: Mirror[] = []
+const mirrors = new Map<string, { mirror: Mirror; graph: World }>()
 
 function find<T>(map: Map<string, T>, key: unknown, what: string): T {
 	const got = map.get(String(key))
@@ -54,7 +63,7 @@ const holder = (key: unknown) =>
 const link = (key: unknown) => find(links, key, "link").link
 function file(key: unknown) {
 	let f = files.get(String(key))
-	if (f === undefined) files.set(String(key), f = createFakeFile())
+	if (f === undefined) files.set(String(key), f = createFakeFile(String(key)))
 	return f
 }
 
@@ -66,12 +75,13 @@ const leg = (l: Leg) => ({
 	behind: l.behind,
 })
 
-// a few turns, so every watch is heard and every live link and mirror has run
+// a few turns, so every watch is heard, every live link and mirror has run, and a write tried
+// again soon has been
 async function settle() {
 	for (let i = 0; i < 5; i++) {
-		await new Promise((r) => setTimeout(r, 0))
+		await new Promise((r) => setTimeout(r, 5))
 		for (const { link, live } of links.values()) if (live) await link.idle()
-		for (const m of mirrors) await m.idle()
+		for (const { mirror } of mirrors.values()) await mirror.idle()
 	}
 }
 
@@ -91,8 +101,9 @@ export async function answer(r: Request): Promise<Record<string, unknown>> {
 			holders.set(String(r.name), await openFile(file(r.file)))
 			return {}
 		case "link": {
-			const made = createLink(holder(r.a), holder(r.b), { limit: r.limit })
-			links.set(String(r.name), { link: made, live: r.live === true })
+			const on = graphs.get(String(r.a)) ?? graph(r.b)
+			const made = createLink(holder(r.a), holder(r.b), { graph: on, limit: r.limit })
+			links.set(String(r.name), { link: made, live: r.live === true, graph: on })
 			if (r.live) made.start()
 			return {}
 		}
@@ -106,8 +117,21 @@ export async function answer(r: Request): Promise<Record<string, unknown>> {
 			return { ab: leg(round.ab), ba: leg(round.ba) }
 		}
 		case "status": {
-			const s = link(r.link).status()
-			return { known: s.known, refused: s.refused.map((x) => x.why.split(":")[0]) }
+			if (r.mirror !== undefined) {
+				const { mirror, graph } = find(mirrors, r.mirror, "mirror")
+				const id = mirror.process.id
+				const s = readRecord(graph.places, id)
+				const state = readState(graph.places, id)
+				return { state, file: s[FILE], node: s[MIRRORS], unwritten: s[UNWRITTEN] }
+			}
+			const { link, graph } = find(links, r.link, "link")
+			const s = readRecord(graph.places, link.process.id)
+			const refused = s[REFUSED] as { why: string }[]
+			return {
+				state: readState(graph.places, link.process.id),
+				known: s[KNOWN],
+				refused: refused.map((x) => x.why.split(":")[0]),
+			}
 		}
 		case "set":
 			graph(r.graph).set(String(r.node), r.value, r.path)
@@ -140,19 +164,25 @@ export async function answer(r: Request): Promise<Record<string, unknown>> {
 		case "mirror": {
 			const g = graph(r.graph)
 			const scope = g.scheduler.createRootScope({ actor: r.actor })
-			mirrors.push(
-				await openMirror({
-					...g,
-					scope,
-					node: String(r.node),
-					file: file(r.file),
-					codec: text,
-				}),
-			)
+			const mirror = await openMirror({
+				...g,
+				scope,
+				node: String(r.node),
+				file: file(r.file),
+				codec: text,
+				retry: 1,
+			})
+			if ("refused" in mirror) return { refused: mirror.refused, at: mirror.at }
+			mirrors.set(String(r.name ?? mirrors.size), { mirror, graph: g })
 			return {}
 		}
 		case "edit":
-			file(r.file).edit(new TextEncoder().encode(String(r.text)))
+			file(r.file).edit(new TextEncoder().encode(String(r.text)), r.heard !== false)
+			return {}
+		case "there":
+			return { there: get(graph(r.graph).places, r.path as string[]) !== undefined }
+		case "remove":
+			file(r.file).remove()
 			return {}
 		case "text": {
 			const bytes = file(r.file).bytes

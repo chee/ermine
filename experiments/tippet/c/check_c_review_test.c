@@ -406,7 +406,7 @@ static void cut(const char *dir) {
 		size_t len = (size_t)all[at] << 24 | (size_t)all[at + 1] << 16 | (size_t)all[at + 2] << 8 | all[at + 3];
 		// a run: its steps (this log's are all runs, each step once)
 		tp_steps t = {0};
-		if (tp_is_run(all + at + 4, len) && !tp_unpack(&mem, (tp_span){all + at + 4 + TP_HEAD, len - TP_HEAD}, 1 << 20, &t))
+		if (tp_is_run(all + at + 4, len) && !tp_record_unpack(&mem, all + at + 4, len, 1 << 20, &t))
 			held += t.count;
 		tp_steps_free(&mem, &t);
 		at += 4 + len;

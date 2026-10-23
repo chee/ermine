@@ -6,7 +6,34 @@
 #include "wire.h"
 
 int tp_is_run(const uint8_t *r, size_t length) {
-	return length > TP_HEAD && !memcmp(r, "\x84\x63run\x58\x20", 7) && !memcmp(r + 39, "\x58\x40", 2);
+	return length > TP_HEAD && (*r == 0x84 || (*r == 0x85 && length > TP_HEAD + TP_PRIOR)) &&
+		!memcmp(r + 1, "\x63run\x58\x20", 6) && !memcmp(r + 39, "\x58\x40", 2);
+}
+
+static uint64_t get64(const uint8_t *p) {
+	uint64_t n = 0;
+	for (int i = 0; i < 8; i++) n = n << 8 | p[i];
+	return n;
+}
+
+void tp_record_pack(const uint8_t *r, size_t length, tp_span *pack, tp_prior *prior, int *has) {
+	*has = *r == 0x85;
+	*pack = (tp_span){r + TP_HEAD, length - TP_HEAD - (*has ? TP_PRIOR : 0)};
+	if (!*has) return;
+	const uint8_t *b = r + length - TP_PRIOR + 2;
+	uint64_t n;
+	int after;
+	memcpy(prior->device, r + 7, 32), memcpy(prior->hash, b, 32);
+	prior->lamport = get64(b + 32), prior->when = get64(b + 40);
+	prior->n = tp_pack_first(*pack, &n, &after) || !after ? 0 : n - 1;
+}
+
+int tp_record_unpack(const tp_mem *mem, const uint8_t *r, size_t length, size_t max, tp_steps *out) {
+	tp_span pack;
+	tp_prior prior;
+	int has;
+	tp_record_pack(r, length, &pack, &prior, &has);
+	return tp_unpack_after(mem, pack, max, has ? &prior : NULL, out);
 }
 
 int tp_index_hold(tp_index *x, const tp_at *at, uint64_t offset, uint64_t length, int run) {
@@ -75,8 +102,7 @@ long tp_index_step(tp_index *x, const uint8_t device[32], uint64_t n, const tp_h
 	if (r->run) {
 		if (!tp_index_read(x, device, n)) {
 			tp_steps_free(x->mem, &x->steps);
-			tp_span pack = {record + TP_HEAD, r->length - TP_HEAD};
-			if (tp_unpack(x->mem, pack, x->max, &x->steps)) return -1;
+			if (tp_record_unpack(x->mem, record, r->length, x->max, &x->steps)) return -1;
 			memcpy(x->device, device, 32), x->first = r->first;
 			if (!tp_index_read(x, device, n)) return -1;
 		}

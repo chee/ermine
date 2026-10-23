@@ -14,7 +14,9 @@ One kept write. Bytes: a cbor array.
 - device: bstr, 32 bytes. the writer's ed25519 public key
 - n: whole, from 1, per device, one more each step
 - before: bstr, 32 bytes, the hash of this device's step n - 1; null at n = 1
-- node: tstr. the node's id
+- node: tstr, the node's id; or [rest]: relative to the writer, the id `ermine:ed01` + device's hex
+  (ermine/ids: key) then rest, rest a tstr, empty or from `/`. a writer writes a node that is its
+  own id or under it so; read back to the same id. an old step's tstr stays as it was
 - part: tstr. `value`, `attributes`, `children`, …
 - patches: array of patch maps
 - lamport: whole. one past the highest the writer had seen
@@ -22,7 +24,7 @@ One kept write. Bytes: a cbor array.
 - who: tstr, only when there is one
 
 Anything else is not a step: another length, another kind in a place, a key or hash not 32 bytes, n
-of 0, a number not whole, a patch with another field.
+of 0, a number not whole, a patch with another field, a node array not one rest.
 
 patch: a map, only the fields it has.
 
@@ -78,24 +80,30 @@ A run's steps, small.
 
     [first, lamport, when, node, part, who, count, columns]
 
-- first: bstr, the first step's bytes, whole
-- the rest: one entry per step after the first, each a runs list `[value, count, value, count, …]`,
-  count whole and at least 1
+- first: whole n, from 2: step n is packed against step n - 1, like the rest; or bstr, the first
+  step's bytes, whole (at n = 1, and old runs)
+- the rest: one entry per step after step n - 1 (or after the whole first), each a runs list
+  `[value, count, value, count, …]`, count whole and at least 1
   - lamport, when: the step from the one before (when may be negative)
-  - node, part: tstr
+  - node: as in a step (tstr or [rest]); part: tstr
   - who: tstr, or null for none
   - count: how many patches the step has
 - columns: every later step's patches, in order, as below
 
-Unpack: for each step after the first, from the one before (prev):
+Unpack: for each step after step n - 1 (the receiver's) or the whole first, from the one before
+(prev):
 
     [prev.device, prev.n + 1, blake3(prev bytes), node, part, the next count patches,
      prev.lamport + lamport, prev.when + when (, who)]
 
 encoded canonically: the same bytes the writer made, so chain and sig check as ever.
 
-Refused before anything is made: not 8 elements, first not bstr, 4096 or more steps after the first,
-more than 65536 patches, a column of another length, counts not summing to the patches.
+Refused before anything is made: not 8 elements, first neither bstr nor whole from 2, 4096 or more
+steps in the columns (none, when first is n), more than 65536 patches, a column of another length,
+counts not summing to the patches.
+
+Step n - 1 not held: past what is held, a gap (answered with have); all steps held, passed over;
+else held but not to be read (forgotten), refused, never guessed.
 
 ## columns
 

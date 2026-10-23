@@ -1,78 +1,120 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sources Problems</title>
-<style>
-:root {
-	--bg: #fffbe0;
-	--ink: #111;
-	--soft: #555;
-	--line: #e6dd9a;
-	--cherry: #c8102e;
-	--card: #fff;
-}
-@media (prefers-color-scheme: dark) {
-	:root:not([data-theme="light"]) {
-		--bg: #111;
-		--ink: #f4efc9;
-		--soft: #a8a382;
-		--line: #333;
-		--cherry: #ff4d64;
-		--card: #1a1a1a;
-	}
-}
-:root[data-theme="dark"] {
-	--bg: #111;
-	--ink: #f4efc9;
-	--soft: #a8a382;
-	--line: #333;
-	--cherry: #ff4d64;
-	--card: #1a1a1a;
-}
-* { box-sizing: border-box; }
-body {
-	margin: 0;
-	padding: 16px;
-	background: var(--bg);
-	color: var(--ink);
-	font: 15px/1.45 ui-sans-serif, system-ui, -apple-system, sans-serif;
-}
-main { max-width: 760px; margin: 0 auto; }
-h1 { font-size: 20px; margin: 0 0 4px; }
-h2 { font-size: 15px; margin: 20px 0 6px; color: var(--cherry); text-transform: lowercase; letter-spacing: .02em; }
-p { margin: 4px 0; }
-.lede { color: var(--soft); margin-bottom: 12px; }
-code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; }
-ol { padding: 0; margin: 0; list-style: none; counter-reset: n; }
-ol > li {
-	counter-increment: n;
-	background: var(--card);
-	border: 1px solid var(--line);
-	border-left: 4px solid var(--cherry);
-	border-radius: 4px;
-	padding: 8px 10px;
-	margin: 4px 0;
-}
-ol > li > b::before { content: counter(n) ". "; color: var(--cherry); }
-.where, .would { color: var(--soft); font-size: 13px; }
-.where::before { content: "shows in: "; font-weight: 600; }
-.would::before { content: "what it might take: "; font-weight: 600; }
-ul.held { margin: 0; padding-left: 18px; }
-</style>
-</head>
-<body>
-<main>
-<h1>sources: what the first try found</h1>
-<p class="lede">The experiment in <code>experiments/sources</code> builds the sketch from
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>Sources Problems</title>
+		<style>
+		:root {
+			--bg: #fffbe0;
+			--ink: #111;
+			--soft: #555;
+			--line: #e6dd9a;
+			--cherry: #c8102e;
+			--card: #fff;
+		}
+		@media (prefers-color-scheme: dark) {
+			:root:not([data-theme="light"]) {
+				--bg: #111;
+				--ink: #f4efc9;
+				--soft: #a8a382;
+				--line: #333;
+				--cherry: #ff4d64;
+				--card: #1a1a1a;
+			}
+		}
+		:root[data-theme="dark"] {
+			--bg: #111;
+			--ink: #f4efc9;
+			--soft: #a8a382;
+			--line: #333;
+			--cherry: #ff4d64;
+			--card: #1a1a1a;
+		}
+		* {
+			box-sizing: border-box;
+		}
+		body {
+			margin: 0;
+			padding: 16px;
+			background: var(--bg);
+			color: var(--ink);
+			font: 15px/1.45 ui-sans-serif, system-ui, -apple-system, sans-serif;
+		}
+		main {
+			max-width: 760px;
+			margin: 0 auto;
+		}
+		h1 {
+			font-size: 20px;
+			margin: 0 0 4px;
+		}
+		h2 {
+			font-size: 15px;
+			margin: 20px 0 6px;
+			color: var(--cherry);
+			text-transform: lowercase;
+			letter-spacing: .02em;
+		}
+		p {
+			margin: 4px 0;
+		}
+		.lede {
+			color: var(--soft);
+			margin-bottom: 12px;
+		}
+		code {
+			font: 13px ui-monospace, SFMono-Regular, Menlo, monospace;
+		}
+		ol {
+			padding: 0;
+			margin: 0;
+			list-style: none;
+			counter-reset: n;
+		}
+		ol > li {
+			counter-increment: n;
+			background: var(--card);
+			border: 1px solid var(--line);
+			border-left: 4px solid var(--cherry);
+			border-radius: 4px;
+			padding: 8px 10px;
+			margin: 4px 0;
+		}
+		ol > li > b::before {
+			content: counter(n) ". ";
+			color: var(--cherry);
+		}
+		.where,
+		.would {
+			color: var(--soft);
+			font-size: 13px;
+		}
+		.where::before {
+			content: "shows in: ";
+			font-weight: 600;
+		}
+		.would::before {
+			content: "what it might take: ";
+			font-weight: 600;
+		}
+		ul.held {
+			margin: 0;
+			padding-left: 18px;
+		}
+		</style>
+	</head>
+	<body>
+		<main>
+			<h1>sources: what the first try found</h1>
+			<p class="lede">The experiment in <code>experiments/sources</code> builds the sketch from
 <code>ermine-plans/sources-2026-10-22.tex</code>: a holder, a link that syncs two holders, a value
 mirror, and the smallest history to name writes. Nothing here is decided. The picks it made are in
 <code>plan.org</code>. "What it might take" is the experiment's guess, not a choice.</p>
 
-<h2>in the graph</h2>
-<ol>
-<li><b>A removal has no change header.</b>
+			<h2>in the graph</h2>
+			<ol>
+				<li><b>A removal has no change header.</b>
 <p><code>table.del(part, id)</code> takes no header, so a removal leaves the graph with no actor,
 time or site, though every write from outside is meant to carry its site. The history makes one up:
 time now, actor null.</p>
@@ -80,30 +122,30 @@ time now, actor null.</p>
 <p class="would">done on main (10-23): places makes the header from the open scope when told of
 the removal, its site the caller of <code>table.del</code>, in TS and C</p></li>
 
-<li><b>History has to be there from the graph's first write.</b>
+				<li><b>History has to be there from the graph's first write.</b>
 <p>Merging writes made at once replays the part's whole history. The table can't list ids, so a
 history started on a graph that already has values has no base and can't build one.</p>
 <p class="where"><code>history.ts</code>; plan.org's "made before the graph's first write"</p>
 <p class="would">a base write for what's there when the history starts, or a way to list ids</p></li>
 
-<li><b>A fact's values change after it's told.</b>
+				<li><b>A fact's values change after it's told.</b>
 <p>Places writes children through <code>unread</code>, in place. A holder that held a fact's
 patches as given would see them change, and their names would stop matching. So the history copies
 when it names and when it lands, against "share, don't copy", for this one use.</p>
 <p class="where"><code>write.ts</code> (a named write is read back from its encoding)</p>
 <p class="would">nothing, if a copy at naming is fine; else facts that don't change once told</p></li>
 
-<li><b>Telling your own writes from others' is by guess.</b>
+				<li><b>Telling your own writes from others' is by guess.</b>
 <p>While a write lands, the history ignores every fact at that node and part as its own echo. A
 watcher that writes there in the meantime loses its write. Places gives no clean way to say "this
 fact came from my commit": the entry works for add and update, but not for del.</p>
 <p class="where"><code>history.ts</code> (echo); scenario 02</p>
 <p class="would">a mark on a fact saying which commit made it</p></li>
-</ol>
+			</ol>
 
-<h2>in holders and links</h2>
-<ol>
-<li><b><code>drop</code> and <code>since</code> don't fit together.</b>
+			<h2>in holders and links</h2>
+			<ol>
+				<li><b><code>drop</code> and <code>since</code> don't fit together.</b>
 <p>After a holder drops a node, the link still thinks that holder has those writes, so it never
 sends them again. Later writes on that node are refused for missing parents, and only a new link
 repairs it. When the history drops a node, its next local write has no parents, so the node gets a
@@ -111,60 +153,108 @@ second, unrelated history. The sketch doesn't say what the other side learns fro
 <p class="where">scenario 09</p>
 <p class="would">a drop the link is told of; history keeping its heads after a drop</p></li>
 
-<li><b>Refused is two different things.</b>
+				<li><b>Refused is two different things.</b>
 <p>Some refusals are for good (a misnamed write, the holder's own say). Others are for now (the
 disk is full, a parent was dropped). The link can only skip a refused write or stall; it skips, so a
 temporary failure is lost on that link.</p>
 <p class="where">scenarios 10, 11</p>
 <p class="would">a "not now" outcome beside "refused"</p></li>
 
-<li><b>An opaque cursor can't move partway.</b>
+				<li><b>An opaque cursor can't move partway.</b>
 <p>When some writes in a batch are refused, the cursor moves past all of them or none. The same
 opacity means the link's sets of known names can't be trimmed; they only grow.</p>
 <p class="where"><code>link.ts</code>; scenario 12</p>
 <p class="would">a cursor per write, or one a link can compare</p></li>
 
-<li><b>A holder that can't list has nothing to act on when poked.</b>
+				<li><b>A holder that can't list has nothing to act on when poked.</b>
 <p>A poke means "<code>since</code> would give something new", but this holder has no
 <code>since</code>. The link can only fetch nodes it already asks about.</p>
 <p class="where">scenario 13</p>
 <p class="would">a poke that names the node</p></li>
-</ol>
+			</ol>
 
-<h2>in files and the mirror</h2>
-<ol>
-<li><b>Two processes saving one file: the last save wins.</b>
+			<h2>in files and the mirror</h2>
+			<ol>
+				<li><b>Two processes saving one file: the last save wins.</b>
 <p>With only read, write and watch, two saves at once lose one. The holder reads the file again
 before each save, which narrows the window but doesn't close it. The sketch already makes two
 devices on one file the host's.</p>
 <p class="where"><code>file.ts</code>; scenario 04</p>
 <p class="would">a compare-and-swap (or etag) on <code>write</code></p></li>
 
-<li><b>The mirror writes the whole value.</b>
+				<li><b>The mirror writes the whole value.</b>
 <p>A hand edit and a write elsewhere made at once can't merge; one of them is lost whole. The
 mirror makes plain writes, so it could diff into string patches without that becoming protocol.</p>
 <p class="where"><code>mirror.ts</code>; scenarios 05, 06</p>
 <p class="would">a diff into patches</p></li>
-</ol>
 
-<h2>what held up</h2>
-<ul class="held">
-<li>The history is itself a holder, so the graph's side of a link is one more holder, with no
+				<li><b>The mirror wrote over a save it hadn't heard yet.</b>
+<p>A person saved the file, a graph write landed before the watch said so, and the mirror wrote
+over the save, which was then in no history. Now every write is checked: the file must still hold
+what the mirror last read or wrote. If not, nothing is written, the file is read in at once as a hand
+edit, and the mirror's node says "the file changed since I last looked: not written; read in". The
+same rule covers a file deleted or renamed by hand (nothing written while it is gone), a file that
+isn't UTF-8 (nothing written until it is), and a write that throws (tried again after a second,
+doubling to a minute, and on each new value).</p>
+<p class="where"><code>mirror.ts</code>, <code>access.ts</code>; scenarios 14, 15, 16</p>
+<p class="would">fixed, with a window left: a save landing between the last look and the rename
+(Deno) or close (web) is still written over. Closing it needs a lock an editor takes. Reading in on a
+refusal also means the save becomes the value; the graph's write is only in history.</p></li>
+
+				<li><b>Two mirrors on one file tie their nodes.</b>
+<p>A mirror is a process at <code>/system/mirrors/&lt;the file's name&gt;</code>, so a second
+mirror of the same file name is refused by <code>start</code> ("taken") and nothing is made. One
+file under two names (a symlink, a second path), a mirror put at another path, or a mirror in another
+process is still not seen: opening the second writes the file's value over its node, and after that
+the two nodes move together.</p>
+<p class="where"><code>mirror.ts</code>; <code>problems_test.ts</code>; scenario 17</p>
+<p class="would">a lock on the file, again</p></li>
+			</ol>
+
+			<h2>shown in the graph</h2>
+			<ol>
+				<li><b>Trouble, link status, refusals and the skipped count lived on JS objects.</b>
+<p>A mirror and a link are now processes (<code>ermine/processes</code>' <code>start</code>, with
+nothing changed there), at <code>/system/mirrors/…</code> and <code>/system/links/…</code>. Each gives
+a computer whose value is its state, a code and its words, such as
+<code>{ code: "changed-not-written", words: "the file changed since I last looked: not written;
+read in" }</code>. That value is the process node's value, and its status is that computer's, so
+PENDING goes at its first run. What it has (the file, the node mirrored, values not written, names
+known, refusals) is in the node's attributes. The history has no state that changes, so it keeps its
+one record (facts skipped) on a node of its own. A computer reading any of these runs again when
+they change. The host's rule leaves all of them, and the processes' rows, out of the history, so
+they are never sent.</p>
+<p class="where"><code>status.ts</code> (the codes, listed once); scenario 17</p>
+<p class="would">fixed. Left: the file holder's trouble reading its file is still on the
+object.</p></li>
+
+				<li><b>A process needs a computer to stop saying it is pending.</b>
+<p><code>start</code> writes <code>ermine.computer.status</code> PENDING on every process's node,
+and only a given computer's run ending takes it off. A mirror and a link give a computer of their
+state, so that fits. The history would only have a computer of a constant to give, which is why it
+is not a process.</p>
+<p class="where"><code>ermine/processes/typescript/start.ts</code>; <code>status.ts</code></p>
+<p class="would">nothing, while every process has a state worth computing</p></li>
+			</ol>
+
+			<h2>what held up</h2>
+			<ul class="held">
+				<li>The history is itself a holder, so the graph's side of a link is one more holder, with no
 special case.</li>
-<li>The mirror and the history record each other's writes, with no coordination between them, as
+				<li>The mirror and the history record each other's writes, with no coordination between them, as
 the sketch expected.</li>
-<li>The split into holder, link and mirror held. Writes did need to say their node and part, as the
+				<li>The split into holder, link and mirror held. Writes did need to say their node and part, as the
 reviewer said.</li>
-<li><code>put</code> never throwing was easy. The link also catches a <code>put</code> that throws
+				<li><code>put</code> never throwing was easy. The link also catches a <code>put</code> that throws
 and counts it as refused.</li>
-</ul>
+			</ul>
 
-<h2>where</h2>
-<p>On main in <code>experiments/sources</code> (10-23), uncommitted; first made in a worktree from
-main at <code>79a1f29</code>. Unit tests 61/61 (<code>deno test --allow-run --allow-read --allow-env
---allow-write experiments/sources</code>; 24 of them in <code>problems_test.ts</code>, each passing
-while its problem stands), suite 13/13 (<code>deno task conformance sources</code>). What was found on
+			<h2>where</h2>
+			<p>On main in <code>experiments/sources</code> (10-23), uncommitted; first made in a worktree from
+main at <code>79a1f29</code>. Unit tests 67/67 (<code>deno test --allow-run --allow-read --allow-env
+--allow-write experiments/sources</code>; 21 of them in <code>problems_test.ts</code>, each passing
+while its problem stands), suite 17/17 (<code>deno task conformance sources</code>). What was found on
 main is listed in plan.org.</p>
-</main>
-</body>
+		</main>
+	</body>
 </html>

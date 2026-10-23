@@ -2,7 +2,7 @@
 //
 // the screen thing gives its "in" on as it is, and draws it on the framebuffer, the whole 240x135:
 //   nothing wired in          the paper, and "wire something into its in"
-//   a string or a number      big, in the middle
+//   a string or a number      big, in the middle; text longer than a line wrapped, its end in view
 //   a drawing                 { lines: [[x0, y0, x1, y1, ...], ...], pigs: [{ name, x, y }, ...] }
 //                             in screen pixels (0..239, 0..134): each line its points joined, a
 //                             pen 2 wide; each pig stamp a pointer to a real pig, drawn at the
@@ -40,6 +40,8 @@ typedef struct {
 	const char *input;
 	char **path;
 	size_t npath;
+	// the attribute it reads there: its outlet's (thing.out, or thing.<name>)
+	char *outlet;
 	// the id last heard from (NULL: none yet)
 	char *was;
 	heard_fn heard;
@@ -55,8 +57,9 @@ struct thing {
 	source sources[5];
 	size_t nsources;
 	int stopped;
-	// keys
-	char text[19];
+	// keys: what it holds, and how many keys so far
+	char text[KEYS_LONGEST + 1];
+	int64_t typed;
 	// pigs
 	double weights[3];
 	unsigned turn;
@@ -133,12 +136,13 @@ static size_t steps(const char *at, char ***out) {
 	return n;
 }
 
-// the out of the node at path, tracked: { id, v } (none there: {})
-static op_value *out_at(pl *places, char *const *path, size_t n) {
+// an outlet of the node at path (its attribute: thing.out, or thing.<name>), tracked: { id, v }
+// (none there: {})
+static op_value *out_at(pl *places, char *const *path, size_t n, const char *outlet) {
 	op_value *got = op_map();
 	tb_key id;
 	if (!pl_get(places, (const char *const *)path, n, &id) || id.string == NULL) return got;
-	op_key k = {.type = OP_STR_KEY, .s = THING_OUT};
+	op_key k = {.type = OP_STR_KEY, .s = outlet};
 	const op_value *v = pl_read(places, tb_string("attributes"), id, &k, 1);
 	op_set(got, "id", op_str(id.string));
 	if (v != NULL) op_set(got, "v", op_ref((op_value *)v));
@@ -148,7 +152,7 @@ static op_value *out_at(pl *places, char *const *path, size_t n) {
 static sc_out source_f(void *previous, void *data) {
 	(void)previous;
 	source *src = data;
-	return (sc_out){.kind = SC_VALUE, .value = out_at(src->t->places, src->path, src->npath)};
+	return (sc_out){.kind = SC_VALUE, .value = out_at(src->t->places, src->path, src->npath, src->outlet)};
 }
 
 // the same node, the same value (as the page's: by identity)
@@ -180,6 +184,15 @@ static void make_effect(void *data) {
 		NULL, 0);
 }
 
+// the outlet the triple at args[i] reads: "=<name>" just after it, thing.<name>; else thing.out
+static char *outlet_of(thing *t, size_t i) {
+	const char *a = i + 3 < t->nargs ? t->args[i + 3] : NULL;
+	if (a == NULL || a[0] != '=' || a[1] == 0) return strdup(THING_OUT);
+	char *o = xalloc(strlen(a) + 6);
+	sprintf(o, "thing.%s", a + 1);
+	return o;
+}
+
 // what is wired into input heard: its first triple [input, den, path] in args
 static void reading(thing *t, const char *input, heard_fn heard) {
 	for (size_t i = 0; i + 2 < t->nargs; i++) {
@@ -194,6 +207,7 @@ static void reading(thing *t, const char *input, heard_fn heard) {
 		src->input = input;
 		src->heard = heard;
 		src->npath = steps(t->args[i + 2], &src->path);
+		src->outlet = outlet_of(t, i);
 		sc_run_with_scope(t->scope, make_effect, src);
 		return;
 	}
@@ -229,6 +243,7 @@ static char *let_go(void *data) {
 		for (size_t k = 0; k < t->sources[i].npath; k++) free(t->sources[i].path[k]);
 		free(t->sources[i].path);
 		free(t->sources[i].was);
+		free(t->sources[i].outlet);
 	}
 	for (size_t i = 0; i < t->nargs; i++) free(t->args[i]);
 	free(t->args);
@@ -261,12 +276,14 @@ static thing *thing_of(void *api) {
 
 static hf_run running(thing *t) { return (hf_run){.handle = {.stop = stopped, .ctx = t}}; }
 
-// keys: what was typed, the last 18 letters -------------------------------------------------------
+// keys: text, what it holds, the last 280 letters (its out); typed, each key as it is pressed,
+// { key, n }: the key, and how many so far (two a's in a row two values), null until the first ----
 
 static hf_run keys(const op_value *code, void *api, void *data) {
 	(void)code, (void)data;
 	thing *t = thing_of(api);
 	out(t, op_str(""));
+	put(t, THING_TYPED, op_null());
 	keys_running = t;
 	return running(t);
 }
@@ -278,10 +295,14 @@ void things_key(const char *key) {
 	if (strcmp(key, "del") == 0) {
 		if (n) t->text[n - 1] = 0;
 	} else if (strlen(key) == 1) {
-		if (n == 18) memmove(t->text, t->text + 1, n--);
+		if (n == KEYS_LONGEST) memmove(t->text, t->text + 1, n--);
 		t->text[n] = key[0], t->text[n + 1] = 0;
 	} else return;
 	out(t, op_str(t->text));
+	op_value *m = op_map();
+	op_set(m, "key", op_str(key));
+	op_set(m, "n", op_int(++t->typed));
+	put(t, THING_TYPED, m);
 }
 
 // pigs: { name: weight }; a change into a pig's input feeds it; "say" goes round the pigs ---------
@@ -350,20 +371,21 @@ static void give(thing *t, const op_value *v, int first, const char *input) {
 	out(t, op_ref((op_value *)v));
 }
 
-// what is drawn: the in's out, and this den's pigs', both tracked
+// what is drawn: the in's outlet, and this den's pigs' out, both tracked
 typedef struct {
 	thing *t;
 	char **in;
 	size_t nin;
+	char *outlet;
 } drawing;
 
 static sc_out draw_f(void *previous, void *data) {
 	(void)previous;
 	drawing *d = data;
 	op_value *both = op_map();
-	if (d->nin) op_set(both, "in", out_at(d->t->places, d->in, d->nin));
+	if (d->nin) op_set(both, "in", out_at(d->t->places, d->in, d->nin, d->outlet));
 	char *pigs_at[2] = {"home", "pigs"};
-	op_set(both, "pigs", out_at(d->t->places, pigs_at, 2));
+	op_set(both, "pigs", out_at(d->t->places, pigs_at, 2, THING_OUT));
 	return (sc_out){.kind = SC_VALUE, .value = both};
 }
 
@@ -433,10 +455,29 @@ static void draw_drawing(const op_value *v, const op_value *weights) {
 	}
 }
 
-static void draw_text(const char *s) {
+// text longer than a line: wrapped, 29 a row, under the room's code and over the band at the foot;
+// more rows than fit, the first left out (its end in view)
+static void draw_long(const char *s) {
 	fb_clear(FB_LEMON);
+	size_t n = strlen(s), rows = (n + 28) / 29, fit = 10;
+	if (rows > fit) s += (rows - fit) * 29;
+	char row[30];
+	for (int y = 14; *s; y += 10) {
+		size_t k = strlen(s) < 29 ? strlen(s) : 29;
+		memcpy(row, s, k);
+		row[k] = 0;
+		fb_text(4, y, row, FB_INK, 1);
+		s += k;
+	}
+}
+
+static void draw_text(const char *s) {
 	size_t n = strlen(s);
-	if (n > 29) s += n - 29, n = 29;
+	if (n > 29) {
+		draw_long(s);
+		return;
+	}
+	fb_clear(FB_LEMON);
 	if (n == 0) return;
 	int k = (int)(232 / (n * 8));
 	if (k > 6) k = 6;
@@ -565,6 +606,7 @@ static char *drawing_free(void *data) {
 	scene_let_go();
 	for (size_t i = 0; i < d->nin; i++) free(d->in[i]);
 	free(d->in);
+	free(d->outlet);
 	free(d);
 	return NULL;
 }
@@ -586,6 +628,7 @@ static hf_run screen(const op_value *code, void *api, void *data) {
 		if (strchr(t->args[i], '=') != NULL) continue;
 		if (strcmp(t->args[i], "in") == 0) {
 			d->nin = steps(t->args[i + 2], &d->in);
+			d->outlet = outlet_of(t, i);
 			break;
 		}
 		i += 2;

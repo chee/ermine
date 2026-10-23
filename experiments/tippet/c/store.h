@@ -36,11 +36,18 @@ typedef struct {
 	tp_buf open;
 } tp_index;
 
-// a run message's bytes, as a record: a fixed head (["run", device, sig, …]), then the pack
+// a run message's bytes, as a record: a fixed head (["run", device, sig, …]), then the pack; one
+// whose pack is against the step before has that step's prior after it (["run", device, sig, pack,
+// prior], prior a bstr of 48: its hash, lamport and when, 8 bytes each, big-endian), TP_PRIOR bytes
 #define TP_HEAD 105
 #define TP_SIG 41
-// 1: the record is a run message
+#define TP_PRIOR 50
+// 1: the record is a run message, or one with its prior
 int tp_is_run(const uint8_t *record, size_t length);
+// a run record's pack, and the prior it is packed against into *prior (*has 1) when it has one
+void tp_record_pack(const uint8_t *record, size_t length, tp_span *pack, tp_prior *prior, int *has);
+// a run record's steps, unpacked: 0 or a code
+int tp_record_unpack(const tp_mem *mem, const uint8_t *record, size_t length, size_t max, tp_steps *out);
 
 // a record's place: length bytes at offset, in place of those held that it covers
 int tp_index_hold(tp_index *x, const tp_at *at, uint64_t offset, uint64_t length, int run);

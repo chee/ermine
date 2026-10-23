@@ -12,11 +12,13 @@
 #define BYTES 2048
 #define JUMP (1ull << 20)
 
-// a device's steps held: how many, and the last one's hash
+// a device's steps held: how many, and the last one's hash, lamport and when (what a run after it
+// is packed against)
 typedef struct {
 	uint8_t device[32];
 	uint64_t count;
 	uint8_t last[32];
+	uint64_t lamport, when;
 } feed;
 
 struct tp_log {
@@ -153,27 +155,64 @@ static feed *fit(tp_log *log, const uint8_t device[32], size_t fresh, int *why) 
 	return *why ? NULL : f;
 }
 
-// checked steps counted, the last's hash last
-static void keep(tp_log *log, feed *f, size_t fresh, const uint8_t last[32], uint64_t high) {
+// checked steps counted, the last's (end) hash last
+static void keep(tp_log *log, feed *f, size_t fresh, const uint8_t last[32], uint64_t high, tp_span end) {
+	tp_step s;
 	f->count += fresh;
 	memcpy(f->last, last, 32);
+	if (!tp_step_decode(end.p, end.n, &s)) f->lamport = s.lamport, f->when = s.when;
 	if (high > log->lamport) log->lamport = high;
 }
 
-// a run message of k steps, packed, into b: ["run", device, sig, pack]. it is never much more
-// than the steps
+int tp_log_prior(const tp_log *log, const uint8_t device[32], uint64_t n, tp_prior *p) {
+	const feed *f = find(log, device);
+	if (!f || n < 1 || n > f->count) return TP_BEFORE;
+	if (n == f->count) {
+		memcpy(p->device, device, 32), memcpy(p->hash, f->last, 32);
+		p->n = n, p->lamport = f->lamport, p->when = f->when;
+		return 0;
+	}
+	long length = tp_log_step(log, device, n, NULL, 0);
+	uint8_t *b = length > 0 ? tp_alloc(&log->mem, (size_t)length) : NULL;
+	int why = !b || tp_log_step(log, device, n, b, (size_t)length) != length || tp_prior_of(b, (size_t)length, p)
+		? TP_BEFORE : 0;
+	if (b) tp_free(&log->mem, b, (size_t)length);
+	return why;
+}
+
+static void put64(tp_buf *b, uint64_t n) {
+	uint8_t x[8];
+	for (int i = 0; i < 8; i++) x[i] = (uint8_t)(n >> (56 - 8 * i));
+	tp_put(b, x, 8);
+}
+
+// a run message as a record into b, its prior after it when its pack is against the step before:
+// ["run", device, sig, pack(, prior)]. message: its bytes (["run", device, sig, pack])
+static void recorded(tp_buf *b, const uint8_t *message, size_t length, const tp_prior *prior) {
+	uint64_t n;
+	int after = 0;
+	tp_pack_first((tp_span){message + TP_HEAD, length - TP_HEAD}, &n, &after);
+	tp_put(b, after ? "\x85" : "\x84", 1), tp_put(b, message + 1, length - 1);
+	if (after) tp_put_head(b, 2, 48), tp_put(b, prior->hash, 32), put64(b, prior->lamport), put64(b, prior->when);
+}
+
+// a run record of k steps, packed (against prior, when given), into b. it is never much more than
+// the steps
 static int message(tp_log *log, const uint8_t device[32], const uint8_t sig[64], const tp_span *steps,
-	size_t k, tp_buf *b) {
+	size_t k, const tp_prior *prior, tp_buf *b) {
 	tp_span pack;
-	b->max = TP_HEAD + 1024;
-	for (size_t i = 0; i < k; i++) b->max += steps[i].n;
-	int why = tp_pack(&log->mem, steps, k, b->max, &pack);
+	tp_buf m = {NULL, 0, 0, TP_HEAD + 1024, &log->mem, 0};
+	for (size_t i = 0; i < k; i++) m.max += steps[i].n;
+	b->max = m.max + TP_PRIOR;
+	int why = tp_pack_after(&log->mem, prior, steps, k, m.max, &pack);
 	if (why) return why;
-	tp_put_head(b, 4, 4), tp_put_text(b, "run");
-	tp_put_head(b, 2, 32), tp_put(b, device, 32), tp_put_head(b, 2, 64), tp_put(b, sig, 64);
-	tp_put(b, pack.p, pack.n);
+	tp_put_head(&m, 4, 4), tp_put_text(&m, "run");
+	tp_put_head(&m, 2, 32), tp_put(&m, device, 32), tp_put_head(&m, 2, 64), tp_put(&m, sig, 64);
+	tp_put(&m, pack.p, pack.n);
 	tp_span_free(&log->mem, &pack);
-	return tp_buf_why(b);
+	if (!(why = tp_buf_why(&m))) recorded(b, m.p, m.len, prior), why = tp_buf_why(b);
+	tp_buf_free(&m);
+	return why;
 }
 
 // this device's steps first to last, one run: signed, appended as its record in place of the
@@ -194,7 +233,10 @@ static int close_run(tp_log *log, uint64_t first, uint64_t last) {
 	if (!why) {
 		tp_step_hash(spans[k - 1].p, spans[k - 1].n, hash);
 		tp_sign(&log->key, hash, 32, sig);
-		why = message(log, log->key.pub, sig, spans, k, &b);
+		// against the step before, when there is one to read
+		tp_prior prior;
+		int against = first > 1 && !tp_log_prior(log, log->key.pub, first - 1, &prior);
+		why = message(log, log->key.pub, sig, spans, k, against ? &prior : NULL, &b);
 	}
 	tp_at at = {log->key.pub, first, last};
 	if (!why && !(why = log->store->append(log->store->self, b.p, b.len, &at))) log->closed = last;
@@ -234,7 +276,7 @@ int tp_log_write(tp_log *log, const tp_write *w, uint64_t *n, uint64_t *lamport)
 	if (rest >= 0) s.relative = 1, s.node = (tp_span){w->node.p + w->node.n - (size_t)rest, (size_t)rest};
 	// written, then read as a step: one that isn't one is never kept
 	size_t length = tp_step_encode(&s, NULL, 0);
-	log->scratch.len = 0;
+	log->scratch.len = 0, log->scratch.bad = 0;
 	uint8_t *bytes = tp_reserve(&log->scratch, length);
 	if (!bytes) return tp_buf_why(&log->scratch);
 	tp_step_encode(&s, bytes, length);
@@ -247,6 +289,7 @@ int tp_log_write(tp_log *log, const tp_write *w, uint64_t *n, uint64_t *lamport)
 	if (why) return why;
 	f->count++;
 	tp_step_hash(bytes, length, f->last);
+	f->lamport = s.lamport, f->when = s.when;
 	log->lamport = s.lamport;
 	log->loose += length;
 	if (s.n - log->asked >= EVERY || log->loose >= BYTES) close_to(log, s.n);
@@ -277,7 +320,9 @@ long tp_log_message(tp_log *log, const uint8_t device[32], uint64_t from, uint8_
 	uint64_t first, last;
 	long n = st->run(st->self, device, from, head, sizeof head, &first, &last);
 	if (n < 0 || first != from || !tp_is_run(head, (size_t)n)) return -1;
-	if (out && (size_t)n <= cap) st->run(st->self, device, from, out, cap, &first, &last);
+	// a record with its prior: the message is all but that
+	if (*head == 0x85) n -= TP_PRIOR;
+	if (out && (size_t)n <= cap) st->run(st->self, device, from, out, (size_t)n, &first, &last), *out = 0x84;
 	return n;
 }
 
@@ -292,17 +337,25 @@ long tp_log_take(tp_log *log, const uint8_t device[32], const tp_span *steps, si
 	if (fresh <= 0) return fresh;
 	if (high > log->lamport + JUMP) return TP_LAMPORT;
 	if (!tp_verify(device, last, 32, sig)) return TP_SIGNATURE;
-	// as it came when every step is new, else what is new packed again. room, then the store, then
-	// the log: all of the run or none of it
+	// as it came when every step is new, else what is new packed again (against the step before
+	// it, when held); its prior after it when packed so. room, then the store, then the log: all of
+	// the run or none of it
 	int why;
 	feed *f = fit(log, device, (size_t)fresh, &why);
 	tp_buf b = {NULL, 0, 0, log->limits.step, &log->mem, 0};
-	if (f && ((size_t)fresh < n || !came.p)) why = message(log, device, sig, steps + n - fresh, (size_t)fresh, &b);
+	tp_prior prior;
+	int against = held && !tp_log_prior(log, device, held, &prior);
+	if (f && ((size_t)fresh < n || !came.p)) why = message(log, device, sig, steps + n - fresh, (size_t)fresh, against ? &prior : NULL, &b);
+	else if (f) {
+		b.max = came.n + TP_PRIOR, recorded(&b, came.p, came.n, &prior), why = tp_buf_why(&b);
+		// packed against the step before, which isn't held to be read: none of it
+		if (!why && *b.p == 0x85 && !against) why = TP_BEFORE;
+	}
 	tp_at at = {device, held + 1, held + (uint64_t)fresh};
-	if (!why) why = log->store->append(log->store->self, b.p ? b.p : came.p, b.p ? b.len : came.n, &at);
+	if (!why) why = log->store->append(log->store->self, b.p, b.len, &at);
 	tp_buf_free(&b);
 	if (why) return why;
-	keep(log, f, (size_t)fresh, last, high);
+	keep(log, f, (size_t)fresh, last, high, steps[n - 1]);
 	tell(log, device, held + 1, (size_t)fresh);
 	return fresh;
 }
@@ -355,8 +408,7 @@ static int loaded(void *ctx, const uint8_t *r, size_t length, tp_at *at) {
 	size_t k = 1;
 	int run = tp_is_run(r, length);
 	if (run) {
-		tp_span pack = {r + TP_HEAD, length - TP_HEAD};
-		if (tp_unpack(&log->mem, pack, log->limits.step, &steps)) return 0;
+		if (tp_record_unpack(&log->mem, r, length, log->limits.step, &steps)) return 0;
 		k = steps.count;
 		if (!(spans = tp_alloc(&log->mem, k * sizeof *spans))) return tp_steps_free(&log->mem, &steps), 0;
 		for (size_t i = 0; i < k; i++) {
@@ -371,7 +423,7 @@ static int loaded(void *ctx, const uint8_t *r, size_t length, tp_at *at) {
 	long fresh = ok ? chain(log, device, spans, k, last, &high) : -1;
 	int why = 0;
 	feed *f = fresh > 0 ? fit(log, device, (size_t)fresh, &why) : NULL;
-	if (f) keep(log, f, (size_t)fresh, last, high);
+	if (f) keep(log, f, (size_t)fresh, last, high, spans[k - 1]);
 	ok = (run ? fresh >= 0 : fresh > 0) && !why;
 	if (ok) {
 		at->device = device, at->first = s.n, at->last = s.n + k - 1;

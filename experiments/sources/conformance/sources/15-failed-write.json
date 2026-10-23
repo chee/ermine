@@ -1,0 +1,38 @@
+{
+	"title": "a mirror's write that throws: said on its node, the file as it was; tried again, written once the disk takes it",
+	"steps": [
+		{ "op": "graph", "name": "A" },
+		{ "op": "set", "graph": "A", "node": "NOTE", "value": "old" },
+		{
+			"op": "mirror",
+			"name": "M",
+			"graph": "A",
+			"node": "NOTE",
+			"file": "note.txt",
+			"actor": "laptop"
+		},
+		{ "op": "fail", "file": "note.txt", "on": true },
+		{ "op": "set", "graph": "A", "node": "NOTE", "value": "new" },
+		{ "op": "settle" },
+		{ "op": "text", "file": "note.txt", "expect": { "text": "old" } },
+		{
+			"op": "status",
+			"mirror": "M",
+			"skip": ["file", "node"],
+			"expect": {
+				"state": { "code": "cant-write", "words": "can't write", "why": "the disk said no" },
+				"unwritten": 0
+			}
+		},
+		{ "op": "fail", "file": "note.txt", "on": false },
+		{ "op": "settle" },
+		{ "op": "settle" },
+		{ "op": "text", "file": "note.txt", "expect": { "text": "new" } },
+		{
+			"op": "status",
+			"mirror": "M",
+			"skip": ["file", "node"],
+			"expect": { "state": { "code": "in-step", "words": "in step" }, "unwritten": 0 }
+		}
+	]
+}

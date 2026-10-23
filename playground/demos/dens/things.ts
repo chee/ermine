@@ -8,6 +8,8 @@
 // source started again is followed
 import { createChangeHeader } from "@ermine/places/header"
 import { upsert } from "@ermine/places/upsert"
+import update from "@ermine/node/update"
+import type { Entry } from "@ermine/node/entry"
 import { get } from "@ermine/places/lib"
 import { inside } from "@ermine/boxes"
 import type { Runner, Start } from "@ermine/software"
@@ -115,6 +117,19 @@ function writer(ctx: Context, name = OUT) {
 			))
 }
 
+// patches to its out (or another attribute of its node), written with its scope open: a splice
+// costs what it adds, not the whole value
+function patcher(ctx: Context, name = OUT) {
+	const s = ctx.scheduler
+	return (...ps: { range: [number, number]; value?: string }[]) =>
+		s.runWithScope(ctx.scope, () => {
+			const there = ctx.table.get("attributes", ctx.process.id) as Entry<unknown> | undefined
+			if (there === undefined) return
+			update(there, ps.map((p) => ({ path: [name], ...p })), createChangeHeader(s))
+			ctx.places.commit([there])
+		})
+}
+
 // the outlet wired into input, tracked (the path, then the node there): f told each value;
 // first: the first, or the first from a node now at that path (a source started again)
 function reading(ctx: Context, f: (v: unknown, first: boolean) => void, input = "in") {
@@ -204,14 +219,25 @@ const chart: Run = (_, api) => {
 export const LONGEST = 280
 const keys: Run = (_, api) => {
 	const ctx = ctxOf(api)
-	const out = writer(ctx), typed = writer(ctx, outlet("typed"))
-	let text = "", n = 0
-	out(text)
+	const out = writer(ctx), splice = patcher(ctx), typed = writer(ctx, outlet("typed"))
+	// what it holds, as letters (code points: a splice's range counts them)
+	const text: string[] = []
+	let n = 0
+	out("")
 	typed(null)
 	controls.set(String(ctx.process.id), {
 		type: (k) => {
-			text = k === "del" ? text.slice(0, -1) : (text + k).slice(-LONGEST)
-			out(text)
+			if (k === "del") {
+				if (text.length) splice({ range: [text.length - 1, text.length] }), text.pop()
+			} else {
+				const add = [...k]
+				const over = Math.max(0, text.length + add.length - LONGEST)
+				const ps: { range: [number, number]; value?: string }[] = []
+				if (over) ps.push({ range: [0, over] }), text.splice(0, over)
+				ps.push({ range: [text.length, text.length], value: k })
+				text.push(...add)
+				splice(...ps)
+			}
 			typed({ key: k, n: ++n })
 		},
 	})

@@ -51,21 +51,26 @@ typedef struct {
 	tp_patch p;
 	uint32_t path;
 } patched;
+// prior: the step before the first, which it is packed against (NULL: the first goes whole)
 typedef struct {
 	const tp_step *steps;
 	size_t n, patches;
 	const patched *ps;
+	const tp_prior *prior;
 } packing;
 
-// a column's i-th item (per step after the first, or per patch) in *x; 0: a patch without one.
+// a column's i-th item (per step in the columns, or per patch) in *x; 0: a patch without one.
 // last: the last ranged patch's from
 static int get(const packing *k, int column, size_t i, uint64_t *last, item *x) {
 	x->kind = NUM;
 	if (column <= COUNT) {
-		const tp_step *s = &k->steps[i + 1], *prev = &k->steps[i];
+		size_t at = k->prior ? i : i + 1;
+		const tp_step *s = &k->steps[at];
+		uint64_t lamport = at ? k->steps[at - 1].lamport : k->prior->lamport,
+			 when = at ? k->steps[at - 1].when : k->prior->when;
 		switch (column) {
-			case LAMPORT: x->num = (int64_t)s->lamport - (int64_t)prev->lamport; break;
-			case WHEN: x->num = (int64_t)s->when - (int64_t)prev->when; break;
+			case LAMPORT: x->num = (int64_t)s->lamport - (int64_t)lamport; break;
+			case WHEN: x->num = (int64_t)s->when - (int64_t)when; break;
 			case NODE: x->kind = s->relative ? NEAR : TEXT, x->span = s->node; break;
 			case PART: x->kind = TEXT, x->span = s->part; break;
 			case WHO: x->kind = s->who.p ? TEXT : NUL, x->span = s->who; break;
@@ -92,7 +97,9 @@ static int get(const packing *k, int column, size_t i, uint64_t *last, item *x) 
 }
 
 // how many items a column has room for
-static size_t length(const packing *k, int column) { return column <= COUNT ? k->n - 1 : k->patches; }
+static size_t length(const packing *k, int column) {
+	return column <= COUNT ? k->n - (k->prior ? 0 : 1) : k->patches;
+}
 
 // a column as runs: counted, then written
 static void runs(tp_buf *b, const packing *k, int column) {
@@ -129,7 +136,20 @@ static uint32_t fnv(tp_span s) {
 	return h;
 }
 
+int tp_prior_of(const uint8_t *bytes, size_t length, tp_prior *p) {
+	tp_step s;
+	if (tp_step_decode(bytes, length, &s)) return TP_NOTSTEP;
+	memcpy(p->device, s.device, 32), p->n = s.n, p->lamport = s.lamport, p->when = s.when;
+	tp_step_hash(bytes, length, p->hash);
+	return 0;
+}
+
 int tp_pack(const tp_mem *mem, const tp_span *bytes, size_t n, size_t max, tp_span *pack) {
+	return tp_pack_after(mem, NULL, bytes, n, max, pack);
+}
+
+int tp_pack_after(const tp_mem *mem, const tp_prior *prior, const tp_span *bytes, size_t n, size_t max,
+	tp_span *pack) {
 	int why = 0;
 	size_t patches = 0, npaths = 0, slots = 16, values = 0, moves = 0;
 	tp_step *steps = NULL;
@@ -145,7 +165,13 @@ int tp_pack(const tp_mem *mem, const tp_span *bytes, size_t n, size_t max, tp_sp
 			why = TP_NOTSTEP;
 			goto done;
 		}
-		if (i) patches += steps[i].count;
+		if (i || prior) patches += steps[i].count;
+	}
+	// the first at n = 1 goes whole; else the step before it, or none
+	if (steps[0].n == 1) prior = NULL;
+	if (prior && (prior->n + 1 != steps[0].n || memcmp(prior->device, steps[0].device, 32))) {
+		why = TP_NOTSTEP;
+		goto done;
 	}
 	if (patches > TP_PATCHES) {
 		why = TP_BOUND;
@@ -163,7 +189,7 @@ int tp_pack(const tp_mem *mem, const tp_span *bytes, size_t n, size_t max, tp_sp
 	}
 	memset(table, 0xff, slots * sizeof *table);
 	size_t id = 0;
-	for (size_t i = 1; i < n; i++) {
+	for (size_t i = prior ? 0 : 1; i < n; i++) {
 		tp_patch p;
 		for (size_t at = 0; !tp_patch_next(steps[i].patches, &at, &p); id++) {
 			tp_span path = p.path;
@@ -176,10 +202,10 @@ int tp_pack(const tp_mem *mem, const tp_span *bytes, size_t n, size_t max, tp_sp
 			values += p.value.p != NULL, moves += p.move.p != NULL;
 		}
 	}
-	packing k = {steps, n, patches, ps};
+	packing k = {steps, n, patches, ps, prior};
 	tp_put_head(&b, 4, 8);
-	tp_put_head(&b, 2, bytes[0].n);
-	tp_put(&b, bytes[0].p, bytes[0].n);
+	if (prior) tp_put_head(&b, 0, steps[0].n);
+	else tp_put_head(&b, 2, bytes[0].n), tp_put(&b, bytes[0].p, bytes[0].n);
 	for (int c = LAMPORT; c <= COUNT; c++) runs(&b, &k, c);
 	tp_put_head(&b, 5, 7);
 	tp_put_text(&b, "from"), runs(&b, &k, FROM);
@@ -291,14 +317,49 @@ static int add(uint64_t a, int64_t d, uint64_t *out) {
 	return 0;
 }
 
-int tp_unpack(const tp_mem *mem, tp_span pack, size_t max, tp_steps *out) {
+int tp_pack_first(tp_span pack, uint64_t *n, int *after) {
 	tp_in in = {pack.p, pack.p + pack.n};
-	tp_span first, col[6], map[7] = {{0}};
+	uint64_t k;
+	tp_span first;
+	tp_step s;
+	if (tp_array(&in, &k) || k != 8) return TP_NOTSTEP;
+	*after = in.p < in.end && *in.p >> 5 == 0;
+	if (*after) return tp_whole(&in, n) || *n < 2 ? TP_NOTSTEP : 0;
+	if (tp_bytes(&in, 0, &first) || tp_step_decode(first.p, first.n, &s)) return TP_NOTSTEP;
+	*n = s.n;
+	return 0;
+}
+
+size_t tp_pack_count(tp_span pack) {
+	tp_in in = {pack.p, pack.p + pack.n};
+	uint64_t k, n, count, all = 0;
+	int64_t v;
+	if (tp_array(&in, &k) || k != 8 || in.p >= in.end) return 0;
+	int after = *in.p >> 5 == 0;
+	if (tp_skip(&in, NULL) || tp_array(&in, &k) || k % 2) return 0;
+	for (uint64_t i = 0; i < k; i += 2) {
+		if (tp_int(&in, &v) || tp_whole(&in, &count)) return 0;
+		all += count;
+	}
+	n = all + !after;
+	return (size_t)n;
+}
+
+int tp_unpack(const tp_mem *mem, tp_span pack, size_t max, tp_steps *out) {
+	return tp_unpack_after(mem, pack, max, NULL, out);
+}
+
+int tp_unpack_after(const tp_mem *mem, tp_span pack, size_t max, const tp_prior *prior, tp_steps *out) {
+	tp_in in = {pack.p, pack.p + pack.n};
+	tp_span first = {0}, col[6], map[7] = {{0}};
+	uint64_t n0 = 0;
 	static const char *const names[7] = {"paths", "path", "shape", "from", "size", "value", "move"};
 	uint64_t k, steps, patches, n, sums[3] = {0}, counted[3] = {0};
 	memset(out, 0, sizeof *out);
 	if (!tp_canonical(pack.p, pack.n) || tp_array(&in, &k) || k != 8) return TP_NOTSTEP;
-	if (tp_bytes(&in, 0, &first)) return TP_NOTSTEP;
+	// first: the first step whole, or its n, packed against the step before (at n = 1, never)
+	int after = in.p < in.end && *in.p >> 5 == 0;
+	if (after ? tp_whole(&in, &n0) || n0 < 2 : tp_bytes(&in, 0, &first)) return TP_NOTSTEP;
 	for (int i = 0; i < 6; i++) tp_skip(&in, &col[i]);
 	if (tp_map(&in, &k)) return TP_NOTSTEP;
 	for (uint64_t i = 0; i < k; i++) {
@@ -330,15 +391,27 @@ int tp_unpack(const tp_mem *mem, tp_span pack, size_t max, tp_steps *out) {
 	if (column(map[3], K_INT, 0, counted[0], &n, NULL) || n != counted[0]) return TP_NOTSTEP;
 	if (column(map[4], K_INT, 0, counted[0], &n, NULL) || n != counted[0]) return TP_NOTSTEP;
 	if (nvalues != counted[1] || nmoves != counted[2]) return TP_NOTSTEP;
+	if (after && !steps) return TP_NOTSTEP;
+	// what each step is worked out from: the first whole, or the step before it
 	tp_step prev;
-	if (tp_step_decode(first.p, first.n, &prev)) return TP_NOTSTEP;
+	uint8_t device[32], hash[32];
+	uint64_t pn, plamport, pwhen;
+	if (after) {
+		if (!prior || prior->n + 1 != n0) return TP_BEFORE;
+		memcpy(device, prior->device, 32), memcpy(hash, prior->hash, 32);
+		pn = prior->n, plamport = prior->lamport, pwhen = prior->when;
+	} else {
+		if (tp_step_decode(first.p, first.n, &prev)) return TP_NOTSTEP;
+		memcpy(device, prev.device, 32), tp_step_hash(first.p, first.n, hash);
+		pn = prev.n, plamport = prev.lamport, pwhen = prev.when;
+	}
 
 	// each path's bytes, by index
 	int why = 0;
 	size_t room = (size_t)npaths ? (size_t)npaths : 1;
 	tp_span *path = tp_alloc(mem, room * sizeof *path);
 	tp_buf b = {NULL, 0, 0, max, mem, 0};
-	out->room = (size_t)steps + 2;
+	out->room = (size_t)steps + 2 - (size_t)after;
 	out->at = tp_alloc(mem, out->room * sizeof *out->at);
 	if (!path || !out->at) {
 		why = TP_NOMEM;
@@ -348,14 +421,13 @@ int tp_unpack(const tp_mem *mem, tp_span pack, size_t max, tp_steps *out) {
 	cursor lamport = at(col[0]), when = at(col[1]), node = at(col[2]), part = at(col[3]),
 	       who = at(col[4]), count = at(col[5]), pathed = at(map[1]), shape = at(map[2]),
 	       from = at(map[3]), size = at(map[4]);
-	tp_put(&b, first.p, first.n);
-	out->at[0] = 0, out->at[1] = b.len;
-	uint8_t device[32], hash[32];
+	// at[j]: where step j starts (the first whole: step 0)
+	size_t j = 0;
+	out->at[0] = 0;
+	if (!after) tp_put(&b, first.p, first.n), out->at[++j] = b.len;
 	uint64_t last = 0;
-	memcpy(device, prev.device, 32);
 	for (uint64_t i = 0; i < steps && !why; i++) {
-		tp_step_hash(prev.bytes.p, prev.bytes.n, hash);
-		uint64_t pn = prev.n, plamport = prev.lamport, pwhen = prev.when, l, w;
+		uint64_t l, w;
 		step(&lamport, 1), step(&when, 1), step(&node, 0), step(&part, 0), step(&who, 0);
 		step(&count, 1);
 		if (pn >= TP_WHOLE || add(plamport, lamport.num, &l) || add(pwhen, when.num, &w)) {
@@ -398,9 +470,13 @@ int tp_unpack(const tp_mem *mem, tp_span pack, size_t max, tp_steps *out) {
 		tp_put_head(&b, 0, l), tp_put_head(&b, 0, w);
 		if (named) tp_put(&b, who.span.p, who.span.n);
 		if (!why && !(why = tp_buf_why(&b))) {
-			out->at[i + 2] = b.len;
+			out->at[j + 1] = b.len;
 			// what it makes is a step, or the pack is none
-			if (tp_step_decode(b.p + out->at[i + 1], b.len - out->at[i + 1], &prev)) why = TP_NOTSTEP;
+			if (tp_step_decode(b.p + out->at[j], b.len - out->at[j], &prev)) why = TP_NOTSTEP;
+			else {
+				tp_step_hash(b.p + out->at[j], b.len - out->at[j], hash);
+				pn = prev.n, plamport = prev.lamport, pwhen = prev.when, j++;
+			}
 		}
 	}
 done:
@@ -411,6 +487,6 @@ done:
 		memset(out, 0, sizeof *out);
 		return why;
 	}
-	out->bytes = b.p, out->size = b.cap, out->count = (size_t)steps + 1;
+	out->bytes = b.p, out->size = b.cap, out->count = j;
 	return 0;
 }

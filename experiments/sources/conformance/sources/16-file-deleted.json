@@ -1,0 +1,45 @@
+{
+	"title": "a mirrored file deleted by hand: said on the mirror's node; the value stays, nothing written while it is gone; a file there again is read in",
+	"steps": [
+		{ "op": "graph", "name": "A" },
+		{ "op": "set", "graph": "A", "node": "NOTE", "value": "one" },
+		{
+			"op": "mirror",
+			"name": "M",
+			"graph": "A",
+			"node": "NOTE",
+			"file": "note.txt",
+			"actor": "laptop"
+		},
+		{ "op": "remove", "file": "note.txt" },
+		{ "op": "settle" },
+		{
+			"op": "status",
+			"mirror": "M",
+			"skip": ["file", "node"],
+			"expect": { "state": { "code": "gone", "words": "the file is gone" }, "unwritten": 0 }
+		},
+		{ "op": "value", "graph": "A", "node": "NOTE", "expect": { "value": "one" } },
+		{ "op": "set", "graph": "A", "node": "NOTE", "value": "two" },
+		{ "op": "settle" },
+		{ "op": "text", "file": "note.txt", "expect": {} },
+		{
+			"op": "status",
+			"mirror": "M",
+			"skip": ["file", "node"],
+			"expect": {
+				"state": { "code": "gone-not-written", "words": "the file is gone: not written" },
+				"unwritten": 1
+			}
+		},
+		{ "op": "edit", "file": "note.txt", "text": "back" },
+		{ "op": "settle" },
+		{ "op": "value", "graph": "A", "node": "NOTE", "expect": { "value": "back" } },
+		{
+			"op": "status",
+			"mirror": "M",
+			"skip": ["file", "node"],
+			"expect": { "state": { "code": "in-step", "words": "in step" }, "unwritten": 1 }
+		}
+	]
+}

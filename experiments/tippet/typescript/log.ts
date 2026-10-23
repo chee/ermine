@@ -12,7 +12,7 @@
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
 import { decodeStep, encodeStep, hashStep, hex, rest, same, type Step, unhex } from "./step.ts"
 import { createSigner, type Signer, verify } from "./sign.ts"
-import { pack, type Packed, unpack } from "./pack.ts"
+import { firstOf, pack, type Packed, type Prior, priorOf, stepsIn, unpack } from "./pack.ts"
 
 // a device's steps from some n on, to the end of their run, and its signature over the last.
 // message: the run message they are, as kept or as they came; sent and kept as it is
@@ -22,13 +22,55 @@ export type Run = { device: string; steps: Uint8Array[]; sig: Uint8Array; messag
 export type At = [device: string, first: number, last: number]
 
 // a run as a store keeps it: its run message (WIRE.md, messages), as it came or as it goes, so it
-// goes on as it is. this device's steps not yet in a closed run: open, each its bytes, beside the
-// records (a store with no open place: appended alone, as logs before it did)
-const record = (device: string, sig: Uint8Array, p: Packed) =>
-	encode(["run", unhex(device), sig, p] as Value)
-// a run's record: a message, an array of 4; a step's (open, or alone): an array of 8 or 9
-export const isRun = (record: Uint8Array) => record[0] === 0x84
-const opened = (record: Uint8Array) => decode(record) as [string, Uint8Array, Uint8Array, Packed]
+// goes on as it is; one whose pack is against the step before has that step's prior after it
+// (["run", device, sig, pack, prior], prior 48 bytes: its hash, lamport and when, 8 bytes each,
+// big-endian), so a step is read out of it with no other record. this device's steps not yet in a
+// closed run: open, each its bytes, beside the records (a store with no open place: appended
+// alone, as logs before it did)
+const PRIOR = 50
+function record(device: string, sig: Uint8Array, p: Packed, prior?: Prior) {
+	const parts: unknown[] = ["run", unhex(device), sig, p]
+	if (typeof p[0] === "number") {
+		if (!prior) throw new RangeError("the step before is not held")
+		const b = new Uint8Array(48), view = new DataView(b.buffer)
+		b.set(prior.hash),
+			view.setBigUint64(32, BigInt(prior.lamport)),
+			view.setBigUint64(40, BigInt(prior.when))
+		parts.push(b)
+	}
+	return encode(parts as Value)
+}
+// a run's record: a message, an array of 4, or 5 with its prior; a step's (open, or alone): an
+// array of 8 or 9
+export const isRun = (record: Uint8Array) => record[0] === 0x84 || record[0] === 0x85
+const opened = (record: Uint8Array) =>
+	decode(record) as [string, Uint8Array, Uint8Array, Packed, Uint8Array?]
+// a run record's steps: its pack, from its prior when it has one
+function stepsOf(record: Uint8Array): Uint8Array[] {
+	const [, device, , p, b] = opened(record)
+	if (!b) return unpack(p)
+	const view = new DataView(b.buffer, b.byteOffset, b.byteLength)
+	const prior: Prior = {
+		device: hex(device),
+		n: (p[0] as number) - 1,
+		hash: b.slice(0, 32),
+		lamport: Number(view.getBigUint64(32)),
+		when: Number(view.getBigUint64(40)),
+	}
+	return unpack(p, prior)
+}
+// a run message as a record: its prior after it, when its pack is against the step before
+function withPrior(message: Uint8Array, prior?: Prior) {
+	const [, device, sig, p] = decode(message) as [string, Uint8Array, Uint8Array, Packed]
+	return typeof p[0] === "number" ? record(hex(device), sig, p, prior) : message
+}
+// a run record as the message it is: its prior left off
+const messageOf = (record: Uint8Array) => {
+	if (record[0] === 0x84) return record
+	const m = record.slice(0, record.length - PRIOR)
+	m[0] = 0x84
+	return m
+}
 
 // where a log keeps itself: records appended in order, the steps among them got again by place,
 // one snapshot, replaced, and the key of the device that writes here
@@ -120,7 +162,7 @@ export function createIndex<W>(read: (where: W) => Uint8Array) {
 			if (!r) throw new RangeError(`step ${n} is not held`)
 			const record = read(r[2])
 			if (!isRun(record)) return record
-			last = { device, first: r[0], steps: unpack(opened(record)[3]) }
+			last = { device, first: r[0], steps: stepsOf(record) }
 			return last.steps[n - r[0]]
 		},
 		// forgetting: only where they are; their bytes stay
@@ -169,10 +211,13 @@ const EVERY = 32, BYTES = 2048
 // the most a batch's lamports may go past the highest held
 const JUMP = 2 ** 20
 
-// a device's: how many steps held, and the last one's hash
-type Feed = { count: number; last: Uint8Array | null }
+// a device's: how many steps held, and the last one's hash, lamport and when (what a run after it
+// is packed against)
+type Feed = { count: number; last: Uint8Array | null; lamport: number; when: number }
 // steps that go on from a feed's latest, and the last one's hash
 type Chained = { steps: Step[]; last: Uint8Array | null }
+// what a take did: the steps added, or why not
+export type Taken = { added: number } | { refused: string }
 // from: the link they came on; none: written here
 type Told = (device: string, steps: Step[], from?: unknown) => void
 
@@ -215,7 +260,13 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 	// checked steps, counted
 	function keep(device: string, c: Chained) {
 		if (!c.steps.length) return
-		feeds.set(device, { count: count(device) + c.steps.length, last: c.last })
+		const end = c.steps[c.steps.length - 1]
+		feeds.set(device, {
+			count: count(device) + c.steps.length,
+			last: c.last,
+			lamport: end.lamport,
+			when: end.when,
+		})
 		for (const s of c.steps) lamport = Math.max(lamport, s.lamport)
 	}
 	// checked steps: counted, their record in the store (open: this device's one step, open there
@@ -249,12 +300,56 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 					(_, i) => store.get(device, first + i),
 				)
 				const sig = await me!.sign(hashStep(steps[steps.length - 1]))
-				save(record(device, sig, pack(steps)), [device, first, last])
+				// against the step before, when there is one to read
+				const prior = prior_(device, first - 1)
+				save(record(device, sig, pack(steps, prior), prior), [device, first, last])
 				closed = last
 			}
 		})
 		signing = p.catch(() => {})
 		return p
+	}
+
+	// another's run: steps already held are passed over, the rest must go on from the latest
+	// held, and keep lamport near what is held. never this device's own: what it wrote is in its
+	// store. kept as it came when every step is new, else what is new packed again. the steps
+	// added, or why not
+	async function taken(b: Run, from?: unknown): Promise<Taken> {
+		if (b.device === me?.device) return { refused: "own" }
+		if (!b.steps.length) return { added: 0 }
+		// no feed is made for a device until its steps check out
+		const c = chain(b.device, b.steps)
+		if (typeof c === "string") return { refused: c }
+		if (c.steps.some((s) => s.lamport > lamport + JUMP)) return { refused: "lamport" }
+		if (!c.steps.length) return { added: 0 }
+		if (!(await verify(b.device, c.last!, b.sig))) return { refused: "signature" }
+		const fresh = b.steps.slice(b.steps.length - c.steps.length), held = count(b.device)
+		// the step before what is new, when there is one: what it is packed against
+		const prior = prior_(b.device, held)
+		const r = fresh.length === b.steps.length && b.message
+			? withPrior(b.message, prior)
+			: record(b.device, b.sig, pack(fresh, prior), prior)
+		add(b.device, r, c, from)
+		return { added: c.steps.length }
+	}
+	// one take after another
+	function serial(f: () => Taken | Promise<Taken>): Promise<Taken> {
+		const p = taking.then(f, f)
+		taking = p
+		return p
+	}
+
+	// what a step after device's step n is worked out from: the latest's from its feed, an earlier
+	// one's from the store; undefined: not held, or let go (forgetting)
+	function prior_(device: string, n: number): Prior | undefined {
+		const f = feeds.get(device)
+		if (!f || n < 1 || n > f.count) return
+		if (n === f.count) return { device, n, hash: f.last!, lamport: f.lamport, when: f.when }
+		try {
+			return priorOf(store.get(device, n))
+		} catch {
+			return
+		}
 	}
 
 	// forgetting (history.ts, a try-out): a record ["drop", device, n] says the store lets device's
@@ -282,6 +377,7 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 		count,
 		// a step's bytes, from the store
 		step: (device: string, n: number) => store.get(device, n),
+		prior: (device: string, n: number) => prior_(device, n),
 		// every step of a device's, from the store
 		steps: (device: string): Uint8Array[] =>
 			Array.from({ length: count(device) }, (_, i) => store.get(device, i + 1)),
@@ -333,33 +429,39 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 			}
 			const r = store.run(device, from)
 			if (!r || !isRun(r.record)) return undefined
-			const [, , sig, p] = opened(r.record)
-			const steps = unpack(p).slice(from - r.first)
-			return { device, steps, sig, ...(from === r.first && { message: r.record }) }
+			const sig = opened(r.record)[2]
+			const steps = stepsOf(r.record).slice(from - r.first)
+			return { device, steps, sig, ...(from === r.first && { message: messageOf(r.record) }) }
 		},
 
-		// another's run: steps already held are passed over, the rest must go on from the latest
-		// held, and keep lamport near what is held. never this device's own: what it wrote is in its
-		// store. kept as it came when every step is new, else what is new packed again. the steps
-		// added, or why not
-		take(b: Run, from?: unknown): Promise<{ added: number } | { refused: string }> {
-			const run = async () => {
-				if (b.device === me?.device) return { refused: "own" }
-				if (!b.steps.length) return { added: 0 }
-				// no feed is made for a device until its steps check out
-				const c = chain(b.device, b.steps)
-				if (typeof c === "string") return { refused: c }
-				if (c.steps.some((s) => s.lamport > lamport + JUMP)) return { refused: "lamport" }
-				if (!c.steps.length) return { added: 0 }
-				if (!(await verify(b.device, c.last!, b.sig))) return { refused: "signature" }
-				const fresh = b.steps.slice(b.steps.length - c.steps.length)
-				const kept = fresh.length === b.steps.length && b.message
-				add(b.device, kept || record(b.device, b.sig, pack(fresh)), c, from)
-				return { added: c.steps.length }
-			}
-			const p = taking.then(run, run)
-			taking = p
-			return p
+		// another's run (taken), in turn with the other takes
+		take(b: Run, from?: unknown): Promise<Taken> {
+			return serial(() => taken(b, from))
+		},
+		// another's run as a message brings it, its pack unpacked in turn with the other takes: one
+		// packed against the step before needs that step held (past what is held: a gap; held but let
+		// go: refused, "before"), never guessed. a pack that isn't one: refused, "pack"
+		takePack(
+			m: { device: string; sig: Uint8Array; pack: Packed; message?: Uint8Array },
+			from?: unknown,
+		): Promise<Taken> {
+			return serial(() => {
+				let steps
+				try {
+					const first = firstOf(m.pack)
+					// every step held already: passed over
+					if (first.prior && first.n + stepsIn(m.pack) - 1 <= count(m.device)) {
+						return { added: 0 }
+					}
+					if (first.prior && first.n - 1 > count(m.device)) return { refused: "gap" }
+					const prior = first.prior ? prior_(m.device, first.n - 1) : undefined
+					if (first.prior && !prior) return { refused: "before" }
+					steps = unpack(m.pack, prior)
+				} catch {
+					return { refused: "pack" }
+				}
+				return taken({ device: m.device, steps, sig: m.sig, message: m.message }, from)
+			})
 		},
 
 		// the key, and what the store holds, back in memory: each step's chain checked, signatures
@@ -375,7 +477,7 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 			const snapshot = await store.load((r): At | undefined => {
 				try {
 					if (dropped(r)) return
-					const steps = isRun(r) ? unpack(opened(r)[3]) : [r]
+					const steps = isRun(r) ? stepsOf(r) : [r]
 					const s = decodeStep(steps[0]), c = chain(s.device, steps)
 					if (
 						typeof c === "string" ||
