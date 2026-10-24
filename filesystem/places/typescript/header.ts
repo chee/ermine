@@ -2,10 +2,11 @@
 // the scope open, its parent, ... the root. actor: the first "actor" over all levels; reader: the
 // first "reader" holding a string. metadata: one new object, the levels merged, inner keys over
 // outer (extra over all), up to and with the first scope whose own info holds the NODE key; none:
-// every level. time: now, whole seconds. site: outside a run the call's own; in a run, captured at
-// its first write and shared by the rest. no scope open: unscoped, nothing written.
+// every level. time: now, whole seconds. site: the one given; none given, outside a run the call's
+// own, in a run none (a capture is ~50-70 µs: too dear per write in a run; a caller who knows the
+// running computer's own site gives it). no scope open: unscoped, nothing written.
 import type { ChangeHeader, Metadata } from "@ermine/node/entry"
-import { type Info, type Run, type Scheduler, SchedulerError, type Scope } from "@ermine/scheduler"
+import { type Info, type Scheduler, SchedulerError, type Scope } from "@ermine/scheduler"
 import { capture, type FileLocation } from "@ermine/util/stacktrace"
 
 // a change base: what a change is from the scope open alone (actor, reader, metadata), the header
@@ -17,9 +18,6 @@ export type ChangeBase = Omit<ChangeHeader, "time" | "external" | "op">
 export const NODE = "node"
 
 const ours = new Set([import.meta.url])
-
-// each run's site, once captured
-const sites = new WeakMap<Run, FileLocation | undefined>()
 
 // the change base the scope open makes, extra its innermost level. none open: undefined
 export function createChangeBase(
@@ -57,22 +55,23 @@ export function createChangeBase(
 // the header of a write made now
 // skip: files a library calls through on the way here (its own, and what it wraps calls in), so the
 // site is the first frame outside them too. from: the function whose caller is the site, where the
-// engine allows (a removal's header made inside table.del's event: del); none, this one
+// engine allows (a removal's header made inside table.del's event: del); none, this one. site: the
+// write's, as the caller knows it (in a run: the running computer's own); none: see above
 export function createChangeHeader(
 	scheduler: Pick<Scheduler, "getCurrentScope" | "getRun">,
 	extra?: Info,
 	skip?: Iterable<string>,
 	from?: unknown,
+	site?: FileLocation,
 ): ChangeHeader {
 	const w = createChangeBase(scheduler, extra)
 	if (w === undefined) throw new SchedulerError("unscoped", "a write with no scope open")
 	const h: ChangeHeader = { ...w, time: Math.floor(Date.now() / 1000) }
-	const site = siteOf(
-		scheduler.getRun(),
-		skip === undefined ? ours : new Set([...ours, ...skip]),
-		from ?? createChangeHeader,
-	)
-	if (site) h.external = [site]
+	const at = site ??
+		(scheduler.getRun() === undefined
+			? near(skip === undefined ? ours : new Set([...ours, ...skip]), from ?? createChangeHeader)
+			: undefined)
+	if (at) h.external = [at]
 	return h
 }
 
@@ -81,16 +80,3 @@ export function createChangeHeader(
 const near = (skip: ReadonlySet<string>, from: unknown) =>
 	capture(skip, from) ??
 		(from === createChangeHeader ? undefined : capture(skip, createChangeHeader))
-
-// outside a run, the call's own; in a run, the run's, captured at its first write
-function siteOf(
-	run: Run | undefined,
-	skip: ReadonlySet<string>,
-	from: unknown,
-): FileLocation | undefined {
-	if (run === undefined) return near(skip, from)
-	if (sites.has(run)) return sites.get(run)
-	const site = near(skip, from)
-	sites.set(run, site)
-	return site
-}

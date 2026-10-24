@@ -211,8 +211,10 @@ typedef struct tp_store {
 tp_store *tp_memory_store(const tp_mem *mem, size_t max);
 // on disk (POSIX), as typescript/store_file.ts: dir/log, frames (4 bytes big-endian length, then
 // the record), a frame cut short cut off when loaded; dir/open, the open steps as frames, written
-// by a sync; dir/snapshot, written beside it then renamed into place; dir/key, written once. a
-// record at most max bytes. NULL: no memory, or dir not made
+// by a sync; dir/snapshot, written beside it then renamed into place; dir/key, written once. and,
+// not typescript's, its index: dir/index and dir/i<k>, where each step is (store_file.c), made
+// again as it loads when not as the log is. a record at most max bytes. NULL: no memory, or dir not
+// made
 tp_store *tp_file_store(const tp_mem *mem, const char *dir, size_t max);
 
 // ---- log

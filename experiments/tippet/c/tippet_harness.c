@@ -6,6 +6,7 @@
 // the library's memory goes through one allocator here, counted: TIPPET_HEAP set, its peak and
 // what is left at the end go to stderr. the graph's is malloc's, as everywhere in core
 #define _POSIX_C_SOURCE 200809L
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -115,10 +116,14 @@ void hh_finish(void) {
 		}
 		for (size_t k = 0; k < d->nheard; k++) free((void *)d->heard[k].p);
 		if (d->dir) {
-			static const char *const files[] = {"log", "open", "key", "snapshot", "snapshot.new"};
+			// every file the store made (its index's among them), then the dir
+			DIR *in = opendir(d->dir);
+			struct dirent *e;
 			char path[4096];
-			for (size_t k = 0; k < sizeof files / sizeof *files; k++)
-				snprintf(path, sizeof path, "%s/%s", d->dir, files[k]), unlink(path);
+			while (in && (e = readdir(in))) {
+				if (e->d_name[0] != '.') snprintf(path, sizeof path, "%s/%s", d->dir, e->d_name), unlink(path);
+			}
+			if (in) closedir(in);
 			rmdir(d->dir);
 		}
 		free(d->heard), free(d->dir), free(d->name), free(d);

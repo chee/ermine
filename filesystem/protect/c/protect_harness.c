@@ -148,6 +148,13 @@ static void ask(const op_value *r, FILE *out) {
 		fputs(",\"reason\":", out);
 		op_json_string(out, a.reason);
 	}
+	if (a.grant.where != NULL) {
+		fputs(",\"grant\":{\"part\":", out);
+		print_key(out, a.grant.where->part);
+		fputs(",\"id\":", out);
+		print_key(out, a.grant.where->id.string);
+		fprintf(out, ",\"index\":%zu}", a.grant.index);
+	}
 	if (a.verdict == PR_PENDING && a.need != NULL) {
 		const pr_where *w = a.need;
 		fputs(",\"need\":[", out);

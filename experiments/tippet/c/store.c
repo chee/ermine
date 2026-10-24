@@ -58,13 +58,7 @@ int tp_index_hold(tp_index *x, const tp_at *at, uint64_t offset, uint64_t length
 		if (!q) return TP_NOMEM;
 		p->held = q, p->room = room;
 	}
-	// the open steps it holds let go
-	if (x->ocount && !memcmp(x->odevice, at->device, 32) && at->last >= x->ofirst) {
-		size_t k = 0, from = 0;
-		while (k < x->ocount && x->ofirst + k <= at->last) from += 4 + tp_get32(x->open.p + from), k++;
-		memmove(x->open.p, x->open.p + from, x->open.len - from);
-		x->open.len -= from, x->ocount -= k, x->ofirst += k;
-	}
+	tp_index_ran(x, at);
 	// those it covers, i up to j, out; it in their place
 	size_t i = p->count, j;
 	while (i > 0 && p->held[i - 1].first >= at->first) i--;
@@ -73,6 +67,14 @@ int tp_index_hold(tp_index *x, const tp_at *at, uint64_t offset, uint64_t length
 	p->count = p->count + 1 - (j - i);
 	p->held[i] = (tp_held){at->first, at->last, offset, (uint32_t)length, (uint32_t)!!run};
 	return 0;
+}
+
+void tp_index_ran(tp_index *x, const tp_at *at) {
+	if (!x->ocount || memcmp(x->odevice, at->device, 32) || at->last < x->ofirst) return;
+	size_t k = 0, from = 0;
+	while (k < x->ocount && x->ofirst + k <= at->last) from += 4 + tp_get32(x->open.p + from), k++;
+	memmove(x->open.p, x->open.p + from, x->open.len - from);
+	x->open.len -= from, x->ocount -= k, x->ofirst += k;
 }
 
 const tp_held *tp_index_find(const tp_index *x, const uint8_t device[32], uint64_t n) {

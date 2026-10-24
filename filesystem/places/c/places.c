@@ -587,12 +587,13 @@ void pl_event(void *ctx, tb_key part, tb_key id) {
 		patch.value = op_ref(entry->value);
 	}
 	// the value and change as they are now: a watch that writes the entry changes them. taken out:
-	// a change made now from the scope open (none open: none), as a write's is
+	// a change made now from the scope open (none open: none), as a write's is; its site is here,
+	// pl_event: the table's hook gives no caller of tb_del (places.ts has table.del's)
 	ch_header change = entry != NULL ? entry->change : (ch_header){0};
 	pl_made *made = NULL;
 	int changed = entry != NULL;
 	if (entry == NULL) {
-		char *error = pl_header(l, NULL, 0, NULL, &change, &made);
+		char *error = pl_header(l, NULL, 0, CH_HERE, &change, &made);
 		if (error == NULL) changed = 1;
 		free(error);
 	}

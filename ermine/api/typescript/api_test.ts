@@ -368,20 +368,26 @@ Deno.test("reads: the value read gives from its entry's change; with sync's valu
 	const seen: unknown[] = []
 	w.program("heads.js", (a) => {
 		api = a
-		const doc = a.open("./doc", { title: "pig", n: 1, m: { k: 1, j: 2 } })
+		const doc = a.open("./doc", { title: "pig", n: 1, m: { k: 1, j: 2 } }) // the doc's line
 		a.effect("all", () => a.reads(doc, ["title"]), (v) => void seen.push(v))
 	})
 	w.start("heads.js", ["heads"])
 	await tick()
 	const doc = w.inW("doc")
-	// the entry's change: who, when, where
+	// the entry's change: who, when, where (the program's line, not the api's), its node
 	const change = w.table.get("value", doc)!.change
 	const mine = {
 		who: change.actor,
 		when: change.time,
 		...change.external && { where: change.external },
+		node: change.metadata?.node,
 	}
 	assertEquals([mine.who, typeof mine.when, mine.where?.length], ["host", "number", 1])
+	const text = Deno.readTextFileSync(new URL(import.meta.url)).split("\n")
+	assertEquals(
+		[mine.where![0].file, mine.where![0].line],
+		[import.meta.url, text.findIndex((l) => l.endsWith("// the doc's line")) + 1],
+	)
 	assertEquals(api.reads("./doc"), [{
 		value: { title: "pig", n: 1, m: { k: 1, j: 2 } },
 		from: mine,

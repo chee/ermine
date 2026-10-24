@@ -54,8 +54,11 @@ static char *nothing_effect(void *value, void *previous, void *data) {
 	(void)value, (void)previous, (void)data;
 	return NULL;
 }
+// what every computer and effect reads
+static const char key = 0;
 static sc_out one(void *previous, void *data) {
 	(void)previous, (void)data;
+	sc_track(scheduler, &key);
 	return (sc_out){.kind = SC_VALUE};
 }
 
@@ -110,6 +113,12 @@ void hh_answer(const op_value *r, FILE *out) {
 		return;
 	}
 		keep(name, made);
+		fputs("{}", out);
+	} else if (strcmp(op, "rerun") == 0) {
+		sc_pulse(scheduler);
+		const void *keys[] = {&key};
+		sc_mark(scheduler, keys, 1, NULL);
+		sc_pulse(scheduler);
 		fputs("{}", out);
 	} else if (strcmp(op, "site") == 0) {
 		sc_scope *o = find(name);

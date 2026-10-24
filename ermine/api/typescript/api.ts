@@ -20,6 +20,8 @@
 // pulses: every write and promise settling asks for one in a microtask; pulse() runs one now.
 // a read after a write sees it at once; a memo gives its last result until the pulse.
 // writes: under the open scope (none: the process's own; stopped: throws); patches or a recipe.
+// a write's site: outside a run, the program's call into the api; in a run, no capture: the
+// running memo's or effect's own (setup.sites; none: none), its metadata naming its node and run.
 //
 //   open(p, value?)      the node at p; a value: made (with folders) if missing, else unchanged
 //   create(folder, v)    a new node in folder, named by its id
@@ -146,8 +148,11 @@ export type Setup = {
 	notice?: (made: Noticed) => void
 	// where the memos, effects and send's scopes are made, each noting its site (ermine/sites; its
 	// ours holding this file, start.ts and the scheduler's, as they are made in runWithScope): a
-	// memo's site is the program's line. none: the scheduler's, no sites
-	sites?: Pick<Sited, "createScope" | "createComputer" | "createEffect">
+	// memo's site is the program's line. its siteOf: a write in a run's site, the running memo's or
+	// effect's own. none: the scheduler's, no sites (a write in a run: none)
+	sites?:
+		& Pick<Sited, "createScope" | "createComputer" | "createEffect">
+		& Partial<Pick<Sited, "siteOf">>
 }
 
 // the attribute a memo's or effect's node holds its scope in: the NODE key's id of the nearest
@@ -208,13 +213,15 @@ export type Version = {
 }
 
 // the value read gives: the commit of the first item sync has there (who: actor, when: time,
-// where: external, head: its name), or none listed, its entry's change; a field not known left
-// out
+// where: external, head: its name), or none listed, its entry's change (and its metadata's node and
+// run: the memo or effect, and its run, that wrote it); a field not known left out
 export type Shown = {
 	readonly who?: unknown
 	readonly when?: number
 	readonly where?: ChangeHeader["external"]
 	readonly head?: string
+	readonly node?: unknown
+	readonly run?: unknown
 }
 
 // another value sync has at the path (a conflict): by, the sync engine (undefined for now: it
@@ -375,7 +382,29 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 	const newId = setup.id ?? uuidv7
 	s.onSettle(later)
 
-	const header = (extra?: Info) => createChangeHeader(s, extra)
+	// the public api function the program called, innermost: a write's site outside a run is its
+	// caller (this file skipped); in a run, the running computer's own (sites), no capture
+	let entry: unknown
+	const ours = [import.meta.url]
+	const header = (extra?: Info) => {
+		const run = s.getRun()
+		return run === undefined
+			? createChangeHeader(s, extra, ours, entry)
+			: createChangeHeader(s, extra, undefined, undefined, setup.sites?.siteOf?.(run.computer))
+	}
+	// f as a public api function: entry while it runs
+	const entered = <F extends (...args: any[]) => unknown>(f: F): F => {
+		const g = function (this: unknown, ...args: unknown[]) {
+			const was = entry
+			entry = g
+			try {
+				return f.apply(this, args)
+			} finally {
+				entry = was
+			}
+		}
+		return g as unknown as F
+	}
 
 	// what a part holds when nothing is there: attributes are a map, so {}; a value, nothing
 	const empty = (part: Key) => part === "attributes" ? {} : undefined
@@ -554,10 +583,13 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 				// nothing open there: what read gives, from its entry's change
 				if (shown === undefined) return []
 				const change = (table.get(n.part, id) as Entry<unknown> | undefined)?.change
+				const m = change?.metadata
 				const from: Shown = {
 					...change?.actor !== undefined && { who: change.actor },
 					...change?.time !== undefined && { when: change.time },
 					...change?.external !== undefined && { where: change.external },
+					...m?.[NODE] !== undefined && { node: m[NODE] },
+					...m?.run !== undefined && { run: m.run },
 				}
 				return [{ value: shown, from }]
 			}
@@ -982,14 +1014,14 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			later()
 			return {
 				box: b,
-				place: (p, y) => {
+				place: entered((p: string | Path, y: Target) => {
 					within(() => void boxInto(b, p, needId(nodeOf(y)), header()))
 					later()
-				},
-				unplace: (p) => {
+				}),
+				unplace: entered((p: string | Path) => {
 					within(() => void unbox(b, p, header()))
 					later()
-				},
+				}),
 			}
 		}
 
@@ -1028,32 +1060,33 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			return value === undefined ? [] : [{ value, from: "table" }]
 		}
 
+		// the writers entered: a write's site is the program's call into one
 		const api: API = {
-			open,
-			create,
+			open: entered(open),
+			create: entered(create),
 			read,
 			peep,
 			reads,
 			entries,
 			list,
 			info,
-			edit: (x: Target, change: Change) => edit(x, change),
-			edits,
+			edit: entered((x: Target, change: Change) => edit(x, change)),
+			edits: entered(edits),
 			watch,
-			place,
-			unplace,
-			move,
-			remove,
-			memo,
-			effect,
-			early,
-			method,
-			send,
+			place: entered(place),
+			unplace: entered(unplace),
+			move: entered(move),
+			remove: entered(remove),
+			memo: entered(memo),
+			effect: entered(effect),
+			early: entered(early),
+			method: entered(method),
+			send: entered(send),
 			teardown,
-			ref,
-			box,
-			patch,
-			land,
+			ref: entered(ref),
+			box: entered(box),
+			patch: entered(patch),
+			land: entered(land),
 			layers,
 			args: process.args,
 			pulse: () => s.pulse(),

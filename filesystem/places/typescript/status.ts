@@ -1,9 +1,12 @@
 // a computer's status, on its own node: never saved, at one place. the attribute
-// ermine.computer.status holds PENDING while a run is pending, an Error when one failed (a loop:
-// an Error "looping"), and is gone when a run is done. a run stopped (a newer one follows) leaves
-// it. written as each run ends (the scheduler's onRunEnd), with the computer's scope open and the
-// run open when the pulse began: from a pulse with none, from outside. a computer reading its own
-// status runs once more for each status written, then stops: the same status is not written again
+// ermine.computer.status holds PENDING while a run is pending, what a failed run threw, as thrown
+// (a loop: an Error "looping"), and is gone when a run is done. a run stopped (a newer one
+// follows) leaves it. an effect's act that throws writes what it threw the same way (told by
+// onEffect); a run done leaves that, until an act succeeds and takes it away (a thrown undefined
+// is an Error "undefined": none would read as done). written as each run ends (the scheduler's
+// onRunEnd), with the computer's scope open and the run open when the pulse began: from a pulse
+// with none, from outside. a computer reading its own status runs once more for each status
+// written, then stops: the same status is not written again
 import type { Id, Table, Tables } from "@ermine/table"
 import createEntry, { type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
@@ -19,7 +22,10 @@ export const PENDING: unique symbol = Symbol.for("ermine.pending") as never
 export type Setup = {
 	places: Pick<Places, "commit">
 	table: Pick<Table, "get" | "add">
-	scheduler: Pick<Scheduler, "runWithScope" | "getCurrentScope" | "getRun" | "onRunEnd">
+	scheduler: Pick<
+		Scheduler,
+		"runWithScope" | "getCurrentScope" | "getRun" | "onRunEnd" | "onEffect"
+	>
 }
 
 // listens to the scheduler's onRunEnd from here on
@@ -31,6 +37,8 @@ export function createStatus(setup: Setup): {
 } {
 	const { places, table, scheduler } = setup
 	const ids = new WeakMap<Computer, Id>()
+	// computers whose last act failed: their status is the act's
+	const acted = new WeakSet<Computer>()
 
 	// the status a run's end leaves; undefined: none; keep: as it was
 	const keep = Symbol("keep")
@@ -39,7 +47,7 @@ export function createStatus(setup: Setup): {
 			case "pending":
 				return PENDING
 			case "failed":
-				return error instanceof Error ? error : new Error(String(error))
+				return error === undefined ? new Error("undefined") : error
 			case "looping":
 				return new Error("looping")
 			case "done":
@@ -74,12 +82,28 @@ export function createStatus(setup: Setup): {
 		})
 	}
 
-	const stop = scheduler.onRunEnd((c, _n, ended, _reads, more) => {
+	const stopRuns = scheduler.onRunEnd((c, _n, ended, _reads, more) => {
 		const id = ids.get(c)
 		if (id === undefined) return
 		const status = of(ended, more.error)
-		if (status !== keep) write(c, id, status)
+		if (status === keep) return
+		// done leaves a failed act's; any other end is the status
+		if (status === undefined && acted.has(c)) return
+		acted.delete(c)
+		write(c, id, status)
 	})
+	const stopActs = scheduler.onEffect((c, _n, more) => {
+		const id = ids.get(c)
+		if (id === undefined) return
+		if ("error" in more) {
+			acted.add(c)
+			write(c, id, more.error === undefined ? new Error("undefined") : more.error)
+		} else if (acted.delete(c)) write(c, id, undefined)
+	})
+	const stop = () => {
+		stopRuns()
+		stopActs()
+	}
 
 	return { give: (c, id) => void ids.set(c, id), stop }
 }

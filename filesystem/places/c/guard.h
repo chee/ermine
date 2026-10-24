@@ -8,7 +8,7 @@
 // what the policy read, so a change to the rules reruns it, refused or not. A write is asked of the
 // table, told no one: a write makes no run depend on the rules. No policy: everything is allowed.
 //
-// ANSWERS. GD_OK; GD_REFUSED (a no: gd_refusal says what and why); GD_PENDING (a policy waits for
+// ANSWERS. GD_OK; GD_REFUSED (a no: gd_refusal says what, why, which grant decided and which target); GD_PENDING (a policy waits for
 // what it could not read); GD_FAILED (a read the policy told came back SC_STOP: the
 // run must end, as pl_status says, and nothing the guard gave is to be used). A list keeps a
 // refused member in its place: its id is the one gd_is_refused says.
@@ -30,6 +30,10 @@ typedef struct {
 	// what was asked, and why not: borrowed from the policy
 	const char *op;
 	const char *reason;
+	// the grant that decided, when the policy said (protect's grants): grant.where NULL: none
+	pr_grant grant;
+	// which of the targets given was the one refused (its index; 0 for one, and for a move)
+	size_t target;
 } gd_refusal;
 
 // whether an id is what a refused member's is, in a list: a stand-in, refused if asked

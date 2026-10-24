@@ -7,8 +7,9 @@
 // program starter's).
 //
 // world (first, or a plain one):
-// { op: "world", deny?, overlay?, uuid? } → {}   deny: [{ op, path }] refused;
-//    overlay: places over a patch overlay; uuid: uuidv7 ids
+// { op: "world", deny?, overlay?, uuid?, sites? } → {}   deny: [{ op, path }] refused;
+//    overlay: places over a patch overlay; uuid: uuidv7 ids; sites: memos, effects and sends made
+//    noting their sites (ermine/sites; ours: the api and the scheduler)
 // { op: "kids", id, value }                → {}   children entry replaced
 // { op: "put", part, id, value }           → {}   entry replaced
 // { op: "saved", part, id, path? }        → { value? }   at path (none: the whole value)
@@ -16,6 +17,11 @@
 //    its metadata; the header's own actor if it has one
 // { op: "metadata", part, id }             → { keys, node?, replaces? }   latest change's metadata:
 //    its keys, sorted, and the NODE key's and "replaces" key's values
+// { op: "site", part, id, among?, c? }   → { site, among? }   where the latest change's site (its
+//    external's first) points: "program" (a program's call into the api: this harness's line),
+//    "computer" (the line that made a memo or effect: this harness's define), "api" (the api's own
+//    file), "other", "none" (no site). among: a list, whether site is in it. c: what the C
+//    harness's must be (it fails else); not this one's
 // { op: "id", path }                       → { id? }   from "R"
 // { op: "uuids", paths }                   → { v7, ordered }   each a uuidv7, each after the last
 // processes:
@@ -58,10 +64,14 @@ import { createScopeNodes } from "@ermine/processes/scopes"
 import type { Process } from "@ermine/processes/start"
 import { no, type Policy, yes } from "@ermine/protect"
 import { createOverlay, type Overlay } from "@ermine/patch-nodes"
+import { createSites } from "@ermine/sites"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { type API, createProcessAPIs, type ProcessAPIs, SendError } from "./api.ts"
 
 type Env = Map<string, unknown>
+
+// the api's own file: a site in it is the api's, not the program's
+const API = new URL("./api.ts", import.meta.url).href
 type Running = { api: API; env: Env; process: Process }
 
 type Made = {
@@ -102,6 +112,9 @@ function make(o: Request = {}): Made {
 	const host = s.createRootScope({ actor: "test" })
 	const above = s.createScope({ role: "programs" }, host)
 	const later: (() => void)[] = []
+	const sites = o.sites
+		? createSites(s, { ours: [API, import.meta.resolve("@ermine/scheduler")] })
+		: undefined
 	const deny = (o.deny ?? []) as { op: string; path: string }[]
 	const may: Policy | undefined = o.deny
 		? (ask) =>
@@ -133,6 +146,7 @@ function make(o: Request = {}): Made {
 		overlay,
 		schedule: (f) => void later.push(f),
 		id: o.uuid ? undefined : () => `n${++n}`,
+		sites,
 	})
 	return {
 		s,
@@ -190,19 +204,10 @@ function expr(api: API, env: Env, e: unknown): unknown {
 
 function call(api: API, env: Env, [fn, ...raw]: [string, ...unknown[]]): unknown {
 	switch (fn) {
-		case "memo": {
-			const [name, options, e] = raw as [string, Record<string, unknown>, unknown]
-			const equal = options?.equal === "json" ? json : undefined
-			return api.memo(name, () => expr(api, env, e), { ...options, equal } as never)
-		}
-		case "effect": {
-			const [name, e, to] = raw as [string, unknown, string]
-			return api.effect(name, () => expr(api, env, e), (v) => log(to, v))
-		}
-		case "early": {
-			const [name, e, to] = raw as [string, unknown, string]
-			return api.early(name, () => expr(api, env, e), (v) => log(to, v))
-		}
+		case "memo":
+		case "effect":
+		case "early":
+			return define(api, env, fn, raw)
 		case "log": {
 			const v = expr(api, env, raw[1])
 			log(raw[0] as string, v)
@@ -231,6 +236,18 @@ function call(api: API, env: Env, [fn, ...raw]: [string, ...unknown[]]): unknown
 			return f(...raw.map((a) => arg(env, a)))
 		}
 	}
+}
+
+// a memo, effect or early made: the line a computer's site is ("computer" to site)
+function define(api: API, env: Env, fn: string, raw: unknown[]): unknown {
+	if (fn === "memo") {
+		const [name, options, e] = raw as [string, Record<string, unknown>, unknown]
+		const equal = options?.equal === "json" ? json : undefined
+		return api.memo(name, () => expr(api, env, e), { ...options, equal } as never)
+	}
+	const [name, e, to] = raw as [string, unknown, string]
+	const make = fn === "early" ? api.early : api.effect
+	return make(name, () => expr(api, env, e), (v) => log(to, v))
 }
 
 type Step = { do: [string, ...unknown[]]; as?: string }
@@ -304,6 +321,17 @@ function answer(r: Request): Record<string, unknown> {
 				...NODE in m && { node: m[NODE] },
 				..."replaces" in m && { replaces: m.replaces },
 			}
+		}
+		case "site": {
+			const at = world().table.get(r.part as Key, r.id)?.change?.external?.[0]
+			const site = at === undefined
+				? "none"
+				: at.file === import.meta.url
+				? at.function === "define" ? "computer" : "program"
+				: at.file === API
+				? "api"
+				: "other"
+			return Array.isArray(r.among) ? { site, among: r.among.includes(site) } : { site }
 		}
 		case "change": {
 			const c = world().table.get(r.part as Key, r.id)?.change

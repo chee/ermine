@@ -3,17 +3,19 @@
 // device's. the lander: every step from elsewhere (the log's told) written into the graph
 //
 // the merge: an entry's value is its steps' patches applied in order of lamport, then device, from
-// nothing. a step that sorts last is applied as it is; one that sorts before steps already there,
-// and the entry is worked out again from its steps, read back from the log's store. a step whose
-// patches don't apply there is passed over, and listed in failed until they do. the graph is the
-// last snapshot and the steps after it
+// nothing. an entry keeps only its frontier, the newest step of each device that wrote it. a step
+// that sorts last is applied as it is; one that sorts before steps already there, and the entry is
+// worked out again: its steps walked back through the log's store from its frontier to the newest
+// that puts the whole value, late or before it, and applied again from there (from the first, the
+// first time after a load). a step whose patches don't apply there is passed over, and listed in
+// failed until they do. the graph is the last snapshot and the steps after it
 //
 // forgets (a try-out, off unless asked for): not a history keeper, a small device. it keeps the
 // newest state per node it holds, not the runs: tp_history_forget, now and then where a host would
 // snapshot, snapshots and lets go every run in the snapshot that has passed on (tp_sync_passed: to
 // every link; this device's own, to a keeper). it serves no one what it let go: keepers (galaxy,
-// browsers) do. an entry keeps no list of its steps, only the newest: a step that comes late, older
-// than the newest, is passed over, not merged in. lofi, and that's fine
+// browsers) do. an entry's frontier is its newest step alone: a step that comes late, older than
+// the newest, is passed over, not merged in. lofi, and that's fine
 //
 // C11 (op's value.h is). history's own memory goes through tp_mem; what it writes into the graph
 // (values, patches, headers) is the graph's, malloc'd, as everything there is
@@ -55,8 +57,8 @@ void tp_history_told(void *ctx, const uint8_t device[32], uint64_t from, size_t 
 // landed, this device's too. 0, or a code (TP_NOTSTEP: a snapshot not as written, and no step
 // landed after it)
 int tp_history_load(tp_history *h);
-// each kept entry's value and its list of steps, and how many of each device's steps are in them,
-// into the store, in place of the snapshot before. 0, or a code. its bytes are held while written
+// each kept entry's value and its frontier, and how many of each device's steps are in them, into
+// the store, in place of the snapshot before. 0, or a code. its bytes are held while written
 int tp_history_snapshot(tp_history *h);
 
 // a step that didn't land (device its writer's), or a write here not kept (device NULL, n 0)

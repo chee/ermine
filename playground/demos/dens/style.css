@@ -206,7 +206,8 @@ header.bar #sound[aria-pressed="false"] {
 }
 .frame.cardputer .shell {
 	background: linear-gradient(170deg, #f1efea, #dedbd3);
-	border-radius: 16px;
+	border-radius: 0;
+	filter: none;
 	box-shadow: inset 0 2px 0 #fff, 0 0 0 1.5px var(--ink), 0 6px 0 #c9c5ba,
 		0 14px 30px rgba(0, 0, 0, 0.1);
 }
@@ -265,9 +266,8 @@ header.bar #sound[aria-pressed="false"] {
 	box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
 }
 .frame.cardputer .glass {
-	bottom: 162px;
 	background: #22262a;
-	border-radius: 8px;
+	border-radius: 0;
 	box-shadow: inset 0 0 0 4px #111, inset 0 0 0 5px #444;
 }
 .frame.cardputer .hinge {
@@ -800,46 +800,6 @@ button.feed {
 }
 ::selection {
 	background: var(--mint);
-}
-
-/* the cardputer's little keyboard */
-.keyboard {
-	position: absolute;
-	left: 22px;
-	right: 22px;
-	bottom: 16px;
-	height: 132px;
-	display: flex;
-	flex-direction: column;
-	gap: 5px;
-	pointer-events: auto;
-}
-.frame.cardputer:not(.mine) .keyboard {
-	opacity: 0.6;
-}
-.keyrow {
-	display: flex;
-	gap: 5px;
-	justify-content: center;
-}
-.key {
-	width: 40px;
-	height: 26px;
-	font: 12px var(--mono);
-	border: 1px solid #777;
-	border-radius: 6px;
-	background: linear-gradient(#fafafa, #d6d3cb);
-	box-shadow: 0 2px 0 #8a877f;
-	cursor: pointer;
-}
-.key.wide {
-	width: 120px;
-}
-.key:active,
-.key.down {
-	transform: translateY(2px);
-	box-shadow: none;
-	background: var(--sun);
 }
 
 .caption {
@@ -2469,4 +2429,20 @@ button.speakicon:active {
 	border-radius: 10px;
 	background: #fff;
 	box-shadow: 2px 2px 0 var(--ink);
+}
+
+/* the cardputer: hard corners, monospace */
+.frame.cardputer,
+.frame.cardputer .label,
+.frame.cardputer .hint {
+	font-family: var(--mono);
+}
+.frame.cardputer .label {
+	font-size: 1.05rem;
+}
+.frame.cardputer .hint {
+	font-style: normal;
+}
+.frame.cardputer .head button {
+	border-radius: 0;
 }

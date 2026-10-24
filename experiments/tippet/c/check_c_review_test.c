@@ -1,8 +1,9 @@
 // check_c_review_test: tries to break tippet's C. each check prints what it saw; a FAIL line is a
-// bug it found. ONLY=12345678rf picks checks; NOA=1 skips 6a; UNLINK=1 unlinks 7's link. build.sh
+// bug it found. ONLY=123456789rfl picks checks; NOA=1 skips 6a; UNLINK=1 unlinks 7's link. build.sh
 // builds it, with the sanitizers and the graph (8's history)
 //   ./tippet-review-test-check dir     dir: made, used, removed
 #define _POSIX_C_SOURCE 200809L
+#include <dirent.h>
 #include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -36,6 +37,18 @@ static int failed;
 	do { \
 		if (!(x)) printf("  FAIL %s:%d: %s\n", __FILE__, __LINE__, #x), failed++; \
 	} while (0)
+
+// every file in dir, then dir
+static void wipe(const char *dir) {
+	DIR *in = opendir(dir);
+	struct dirent *e;
+	char path[4096];
+	while (in && (e = readdir(in))) {
+		if (e->d_name[0] != '.') snprintf(path, sizeof path, "%s/%s", dir, e->d_name), unlink(path);
+	}
+	if (in) closedir(in);
+	rmdir(dir);
+}
 
 static double now(void) {
 	struct timespec t;
@@ -448,21 +461,13 @@ static void cut(const char *dir) {
 					cutat, why, (unsigned long long)count, wantsteps, after, want, wrote,
 					(unsigned long long)count2);
 		}
-		unlink(f);
-		snprintf(f, sizeof f, "%s/key", d);
-		unlink(f);
-		snprintf(f, sizeof f, "%s/open", d);
-		unlink(f);
-		rmdir(d);
+		wipe(d);
 	}
 	printf("  %zu cuts of a %zu-byte log (%zu frames): %d wrong\n", size + 1, size, nends, bad);
 	CHECK(!bad);
 	free(all);
 	snprintf(d, sizeof d, "%s/whole", dir);
-	snprintf(f, sizeof f, "%s/log", d), unlink(f);
-	snprintf(f, sizeof f, "%s/key", d), unlink(f);
-	snprintf(f, sizeof f, "%s/open", d), unlink(f);
-	rmdir(d);
+	wipe(d);
 }
 
 // ---- 5. 10,000 devices in one have
@@ -877,10 +882,7 @@ static void typescript(const char *dir) {
 		edit(log, x0, sizeof x0);
 		CHECK(!tp_log_run(log, tp_log_device(log), 1, &to, sig));
 		tp_log_free(log);
-		snprintf(path, sizeof path, "%s/synced/log", dir), unlink(path);
-		snprintf(path, sizeof path, "%s/synced/key", dir), unlink(path);
-		snprintf(path, sizeof path, "%s/synced/open", dir), unlink(path);
-		snprintf(path, sizeof path, "%s/synced", dir), rmdir(path);
+		snprintf(path, sizeof path, "%s/synced", dir), wipe(path);
 	}
 	// b. a run taken that this side held already: the sender holds that run, not all this side has
 	{
@@ -995,7 +997,7 @@ static tp_sync *sync_of(tp_log *log) {
 
 static void forgetting(const char *dir) {
 	printf("9. forgetting (a try-out)\n");
-	char d[512], f[600];
+	char d[512];
 	snprintf(d, sizeof d, "%s/forgets", dir);
 	uint64_t to, n, l;
 	uint8_t sig[64];
@@ -1036,9 +1038,7 @@ static void forgetting(const char *dir) {
 		part(e);
 		dev_free(&r);
 		tp_sync_free(b.sync), tp_log_free(w);
-		static const char *const files[4] = {"log", "snapshot", "key", "open"};
-		for (int i = 0; i < 4; i++) snprintf(f, sizeof f, "%s/%s", d, files[i]), unlink(f);
-		rmdir(d);
+		wipe(d);
 	}
 	// b. this device's own go only once a link to a keeper has said it holds them
 	{
@@ -1103,6 +1103,142 @@ static void forgetting(const char *dir) {
 	}
 }
 
+// ---- 10. a late step: each entry keeps its frontier, the rest walked back through the log
+
+// w's own steps that to lacks taken, a run at a time
+static void take_all(tp_log *to, tp_log *w) {
+	static run r;
+	const uint8_t *d = tp_log_device(w);
+	while (tp_log_count(to, d) < tp_log_count(w, d)) {
+		if (run_of(w, tp_log_count(to, d) + 1, &r)) break;
+		if (tp_log_take(to, r.device, r.spans, r.n, r.sig, (tp_span){NULL, 0}) <= 0) break;
+	}
+}
+// the i-th failed: device's, step n
+static int failed_is(dev *d, size_t i, tp_log *device, uint64_t n) {
+	tp_failed f;
+	return tp_history_failed(d->history, 0, &f) > i && (tp_history_failed(d->history, i, &f), 1) && f.device &&
+		!memcmp(f.device, tp_log_device(device), 32) && f.n == n;
+}
+// how many steps a snapshot lists for node's value
+static uint64_t listed(const uint8_t *b, size_t n, const char *node) {
+	tp_in in = {b, b + n};
+	tp_span t;
+	uint64_t k, entries, four, steps;
+	if (tp_map(&in, &k) || tp_text(&in, &t) || tp_skip(&in, NULL) || tp_text(&in, &t) || tp_array(&in, &entries))
+		return 0;
+	for (uint64_t i = 0; i < entries; i++) {
+		tp_span part, name;
+		if (tp_array(&in, &four) || tp_text(&in, &part) || tp_text(&in, &name) || tp_skip(&in, NULL) ||
+			tp_array(&in, &steps))
+			return 0;
+		if (tp_is(part, "value") && tp_is(name, node)) return steps;
+		for (uint64_t j = 0; j < steps; j++) tp_skip(&in, NULL);
+	}
+	return 0;
+}
+
+static void late(void) {
+	printf("10. a late step, walked back through the log; an old snapshot\n");
+	uint64_t n, l;
+	// a. one between two of another's, with 20 steps to another node between them: walked back to
+	// the whole put before it, those after it applied again
+	{
+		tp_log *a = writer(80, 0, NULL), *b = writer(81, 0, NULL);
+		edit(a, x0, sizeof x0);
+		take_all(b, a);
+		edit(b, y1, sizeof y1);
+		for (int i = 0; i < 20; i++) {
+			tp_write w = put(i);
+			tp_log_write(a, &w, &n, &l);
+		}
+		edit(a, x1, sizeof x1);
+		dev r;
+		dev_make(&r, tp_memory_store(&mem, 1 << 20), 82);
+		take_all(r.log, a), take_all(r.log, b);
+		printf("  a's 22 steps, then b's late one: doc {x: %lld, y: %lld}, %zu failed\n", (long long)field(&r, "x"),
+			(long long)field(&r, "y"), failures(&r));
+		CHECK(field(&r, "x") == 1 && field(&r, "y") == 1 && failures(&r) == 0);
+		dev_free(&r);
+		tp_log_free(a), tp_log_free(b);
+	}
+	// b. one with no whole put before it: walked back to the first step, where it fails
+	{
+		tp_log *a = writer(83, 1, NULL), *b = writer(84, 0, NULL);
+		edit(a, x0, sizeof x0), edit(b, y1, sizeof y1);
+		dev r;
+		dev_make(&r, tp_memory_store(&mem, 1 << 20), 85);
+		take_all(r.log, a), take_all(r.log, b);
+		printf("  before the only whole put: doc {x: %lld, y: %lld}, %zu failed\n", (long long)field(&r, "x"),
+			(long long)field(&r, "y"), failures(&r));
+		CHECK(field(&r, "x") == 0 && field(&r, "y") == -1 && failures(&r) == 1 && failed_is(&r, 0, b, 1));
+		dev_free(&r);
+		tp_log_free(a), tp_log_free(b);
+	}
+	// c. after a restart from a snapshot (and from an old one, every step listed): the first late
+	// step walks back to the first, so what failed before is listed again, as the whole list did
+	for (int old = 0; old < 2; old++) {
+		tp_log *a = writer((uint8_t)(86 + 3 * old), 0, NULL), *b = writer((uint8_t)(87 + 3 * old), 0, NULL);
+		edit(a, y1, sizeof y1), edit(a, x0, sizeof x0);
+		take_all(b, a);
+		tp_write w = put(0);
+		tp_log_write(a, &w, &n, &l);
+		edit(a, x1, sizeof x1), edit(b, y1, sizeof y1);
+		tp_store *st = tp_memory_store(&mem, 1 << 20);
+		void (*shut)(void *self) = st->close;
+		st->close = kept_open;
+		dev r;
+		dev_make(&r, st, (uint8_t)(88 + 3 * old));
+		take_all(r.log, a);
+		size_t before = failures(&r);
+		uint8_t snap[1024];
+		size_t length = 0;
+		if (!old) CHECK(!tp_history_snapshot(r.history));
+		else {
+			// {count, entries}: doc's every step, as a snapshot before frontiers listed them
+			char hex[64];
+			tp_hex(hex, tp_log_device(a), 32);
+			tp_buf o = {snap, 0, sizeof snap, sizeof snap, NULL, 0};
+			tp_put_head(&o, 5, 2), tp_put_text(&o, "count"), tp_put_head(&o, 5, 1);
+			tp_put_head(&o, 3, 64), tp_put(&o, hex, 64), tp_put_head(&o, 0, 4);
+			tp_put_text(&o, "entries"), tp_put_head(&o, 4, 2);
+			tp_put_head(&o, 4, 4), tp_put_text(&o, "value"), tp_put_text(&o, "doc");
+			tp_put(&o, "\xa1\x61x\x01", 4);
+			tp_put_head(&o, 4, 3);
+			for (uint64_t k = 1; k <= 4; k += 1 + (k == 2)) {
+				tp_put_head(&o, 4, 3), tp_put_head(&o, 0, k), tp_put_head(&o, 3, 64), tp_put(&o, hex, 64);
+				tp_put_head(&o, 0, k);
+			}
+			tp_put_head(&o, 4, 4), tp_put_text(&o, "value"), tp_put_text(&o, "pig"), tp_put_head(&o, 0, 0);
+			tp_put_head(&o, 4, 1), tp_put_head(&o, 4, 3), tp_put_head(&o, 0, 3), tp_put_head(&o, 3, 64);
+			tp_put(&o, hex, 64), tp_put_head(&o, 0, 3);
+			length = o.len;
+			CHECK(!tp_log_snapshot(r.log, snap, length));
+		}
+		dev_free(&r);
+		int why = dev_make(&r, st, (uint8_t)(88 + 3 * old));
+		size_t again = failures(&r);
+		take_all(r.log, b);
+		printf("  %s snapshot: loaded %s, failed %zu, %zu after the restart, %zu after b's late step; "
+			"doc {x: %lld, y: %lld}\n", old ? "an old" : "a", why ? tp_why(why) : "ok", before, again, failures(&r), (long long)field(&r, "x"),
+			(long long)field(&r, "y"));
+		CHECK(!why && before == 1 && again == 0 && failures(&r) == 1 && failed_is(&r, 0, a, 1));
+		CHECK(field(&r, "x") == 1 && field(&r, "y") == 1);
+		// the snapshot now: doc's frontier, a's newest and b's
+		CHECK(!tp_history_snapshot(r.history));
+		long got = tp_log_snapped(r.log, NULL, 0);
+		uint8_t *bytes = got > 0 ? malloc((size_t)got) : NULL;
+		if (bytes) tp_log_snapped(r.log, bytes, (size_t)got);
+		uint64_t steps = bytes ? listed(bytes, (size_t)got, "doc") : 0;
+		printf("    snapshot again: doc's steps listed %llu (of 4)\n", (unsigned long long)steps);
+		CHECK(steps == 2);
+		free(bytes);
+		dev_free(&r);
+		shut(st->self);
+		tp_log_free(a), tp_log_free(b);
+	}
+}
+
 int main(int argc, char **argv) {
 	if (argc != 2) return fprintf(stderr, "usage: check-c-review dir\n"), 2;
 	setvbuf(stdout, NULL, _IONBF, 0);
@@ -1119,6 +1255,7 @@ int main(int argc, char **argv) {
 	if (!only || strchr(only, '7')) links(), printf("  heap now %zu\n", H.now);
 	if (!only || strchr(only, '8')) typescript(argv[1]), printf("  heap now %zu\n", H.now);
 	if (!only || strchr(only, '9')) forgetting(argv[1]), printf("  heap now %zu\n", H.now);
+	if (!only || strchr(only, 'l')) late(), printf("  heap now %zu\n", H.now);
 	rmdir(argv[1]);
 	CHECK(H.now == 0);
 	printf("check-c-review: %s, %d failed\n", failed ? "FAIL" : "ok", failed);

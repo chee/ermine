@@ -14,13 +14,15 @@ static char *xdup(const char *s) { return strcpy(xalloc(strlen(s) + 1), s); }
 typedef struct {
 	sc_computer *c;
 	char *id;
+	// its last act failed: the status is the act's
+	int act_failed;
 } given;
 
 struct cst {
 	pl *places;
 	tb_table *table;
 	sc_scheduler *scheduler;
-	sc_listener *listener;
+	sc_listener *listener, *acts;
 	given *ids;
 	size_t nids, capids;
 	nd_entry **nodes;
@@ -128,15 +130,20 @@ static void write_in_scope(void *data) {
 	pl_commit(s->places, &changed);
 }
 
+static given *find(cst *s, const sc_computer *c) {
+	for (size_t i = 0; i < s->nids; i++) {
+		if (s->ids[i].c == c) return &s->ids[i];
+	}
+	return NULL;
+}
+
 static void run_end(sc_computer *c, unsigned n, sc_ended ended, const void *const *reads,
 	size_t nreads, const sc_more *more, void *data) {
 	(void)n, (void)reads, (void)nreads;
 	cst *s = data;
-	const char *id = NULL;
-	for (size_t i = 0; i < s->nids; i++) {
-		if (s->ids[i].c == c) id = s->ids[i].id;
-	}
-	if (id == NULL) return;
+	given *g = find(s, c);
+	if (g == NULL) return;
+	const char *id = g->id;
 	op_value *status;
 	switch (ended) {
 	case SC_PENDED: status = pending_value(); break;
@@ -145,7 +152,22 @@ static void run_end(sc_computer *c, unsigned n, sc_ended ended, const void *cons
 	case SC_DONE: status = NULL; break;
 	default: return;
 	}
+	// done leaves a failed act's; any other end is the status
+	if (status == NULL && g->act_failed) return;
+	g->act_failed = 0;
 	writing w = {s, id, status};
+	sc_run_with_scope(c, write_in_scope, &w);
+}
+
+// an effect's act ran (error: what it threw): a failure is the status; the next success takes it away
+static void acted(sc_computer *c, unsigned n, const char *error, void *data) {
+	(void)n;
+	cst *s = data;
+	given *g = find(s, c);
+	if (g == NULL) return;
+	if (error == NULL && !g->act_failed) return;
+	g->act_failed = error != NULL;
+	writing w = {s, g->id, error != NULL ? error_value(error) : NULL};
 	sc_run_with_scope(c, write_in_scope, &w);
 }
 
@@ -155,6 +177,7 @@ cst *cst_new(const cst_setup *setup) {
 	s->table = setup->table;
 	s->scheduler = setup->scheduler;
 	s->listener = sc_on_run_end(s->scheduler, run_end, s);
+	s->acts = sc_on_effect(s->scheduler, acted, s);
 	return s;
 }
 
@@ -171,13 +194,14 @@ void cst_give(cst *s, sc_computer *c, tb_key id) {
 		s->ids = realloc(s->ids, s->capids * sizeof *s->ids);
 		if (s->ids == NULL) abort();
 	}
-	s->ids[s->nids++] = (given){c, xdup(id.string)};
+	s->ids[s->nids++] = (given){.c = c, .id = xdup(id.string)};
 }
 
 void cst_stop(cst *s) {
 	if (s == NULL) return;
 	if (s->listener != NULL) sc_remove_listener(s->listener);
-	s->listener = NULL;
+	if (s->acts != NULL) sc_remove_listener(s->acts);
+	s->listener = s->acts = NULL;
 }
 
 void cst_free(cst *s) {

@@ -36,6 +36,35 @@ static int ask_guard(void *ctx, tb_key id, const char **op, const char **reason)
 	return a;
 }
 
+// an effect made by the effect request: its run counted, f and act programs
+typedef struct {
+	world_watch watch;
+	const op_value *f, *act;
+} effect_p;
+static effect_p **effects;
+static size_t neffects, capeffects;
+
+static sc_out effect_f(void *previous, void *data) {
+	(void)previous;
+	effect_p *p = data;
+	p->watch.runs++;
+	ph_eval c = {0};
+	op_value *v = ph_eval_of(p->f, &c);
+	if (c.error) return op_free(v), (sc_out){.kind = SC_FAILED, .error = c.error};
+	if (c.stopped) return op_free(v), (sc_out){.kind = SC_VALUE};
+	if (c.waited) return op_free(v), (sc_out){.kind = SC_PENDING};
+	return (sc_out){.kind = SC_VALUE, .value = v};
+}
+
+static char *effect_act(void *value, void *previous, void *data) {
+	(void)value, (void)previous;
+	effect_p *p = data;
+	ph_eval c = {0};
+	op_value *v = ph_eval_of(p->act, &c);
+	op_free(v);
+	return c.error;
+}
+
 // the actor of a change as runOf tells it: null for none
 static op_value *actor_of(const op_value *change) {
 	const op_value *a = change != NULL && change->type == OP_MAP ? op_get(change, "actor") : NULL;
@@ -82,6 +111,13 @@ static op_value *writes_json(const crn_run *run) {
 	return ws;
 }
 
+static op_value *act_json(const crn_run *run) {
+	op_value *a = op_map();
+	op_set(a, "end", op_str(run->act == CRN_ACT_DONE ? "done" : "failed"));
+	if (run->act == CRN_ACT_FAILED) op_set(a, "error", op_str(run->act_error));
+	return a;
+}
+
 // a run as runOf tells it (typescript/runs_harness.ts)
 static op_value *run_json(const crn_run *run) {
 	if (run == NULL) return op_null();
@@ -89,6 +125,7 @@ static op_value *run_json(const crn_run *run) {
 	op_set(o, "n", op_num((double)run->n));
 	op_set(o, "end", op_str(run->end));
 	if (run->error != NULL) op_set(o, "error", op_str(run->error));
+	if (run->act != CRN_ACT_NONE) op_set(o, "act", act_json(run));
 	op_set(o, "timed", op_bool(run->has_started && run->started <= run->ended));
 	op_set(o, "reads", reads_json(run));
 	op_set(o, "writes", writes_json(run));
@@ -102,6 +139,7 @@ static op_value *field_json(const crn_run *run, crn_field field) {
 	case CRN_N: return op_num((double)run->n);
 	case CRN_END: return op_str(run->end);
 	case CRN_ERROR: return run->error != NULL ? op_str(run->error) : op_null();
+	case CRN_ACT: return run->act != CRN_ACT_NONE ? act_json(run) : op_null();
 	case CRN_READS: return reads_json(run);
 	case CRN_WRITES: return writes_json(run);
 	default: return op_null();
@@ -109,8 +147,8 @@ static op_value *field_json(const crn_run *run, crn_field field) {
 }
 
 static int field_of(const char *name, crn_field *out) {
-	static const char *const names[] = {"n", "started", "ended", "end", "error", "reads", "writes"};
-	for (int i = 0; i < 7; i++) {
+	static const char *const names[] = {"n", "started", "ended", "end", "error", "act", "reads", "writes"};
+	for (int i = 0; i < 8; i++) {
 		if (strcmp(names[i], name) == 0) return *out = (crn_field)i, 1;
 	}
 	return 0;
@@ -151,6 +189,20 @@ static op_value *answer(const op_value *r) {
 			guard = gd_new(&(gd_setup){world_places, world_table, policy, NULL, 0});
 			ph_add_form(run_form);
 		}
+		return op_map();
+	}
+	if (strcmp(op, "effect") == 0) {
+		effect_p *p = world_alloc(sizeof *p);
+		p->f = op_get(r, "f"), p->act = op_get(r, "act");
+		if (neffects == capeffects) {
+			capeffects = capeffects ? capeffects * 2 : 8;
+			effects = realloc(effects, capeffects * sizeof *effects);
+			if (effects == NULL) abort();
+		}
+		effects[neffects++] = p;
+		char *bad = world_make(&p->watch, world_text(op_get(r, "name")), world_text(op_get(r, "scope")),
+			(sc_def){.f = effect_f, .effect = effect_act, .equal = world_equal, .data = p}, true);
+		if (bad) return world_error_take(bad);
 		return op_map();
 	}
 	if (strcmp(op, "giveRun") == 0) {
@@ -194,6 +246,10 @@ void hh_finish(void) {
 	if (guard != NULL) gd_free(guard);
 	crn_stop(runs);
 	ph_finish();
+	for (size_t i = 0; i < neffects; i++) free(effects[i]);
+	free(effects);
+	effects = NULL;
+	neffects = capeffects = 0;
 	crn_free(runs);
 	runs = NULL;
 	if (policy != NULL) pr_policy_free(policy);

@@ -62,10 +62,15 @@ static void grow(st_sites *t) {
 	free(old);
 }
 
-// the scope is torn down: its entry goes
+// the scope is torn down: its entry goes. a computer's teardowns are its runs' cleanups too: one
+// run as it runs again finds it alive, and is registered again for the next
 static char *forget(void *data) {
 	entry *e = data;
 	st_sites *t = e->t;
+	if (sc_scope_alive(e->scope)) {
+		sc_register_teardown(t->s, (sc_scope *)e->scope, forget, e);
+		return NULL;
+	}
 	for (entry **p = &t->buckets[slot(t, e->scope)]; *p != NULL; p = &(*p)->next)
 		if (*p == e) {
 			*p = e->next;

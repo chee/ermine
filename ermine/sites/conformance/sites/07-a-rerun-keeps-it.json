@@ -1,0 +1,15 @@
+{
+	"title": "a computer's and an effect's site lasts past their runs: each run again, twice, and still has its own, its chain whole",
+	"steps": [
+		{ "op": "root", "name": "r", "expect": {} },
+		{ "op": "computer", "name": "c", "parent": "r", "expect": {} },
+		{ "op": "effect", "name": "e", "parent": "r", "expect": {} },
+		{ "op": "rerun", "expect": {} },
+		{ "op": "site", "name": "c", "expect": { "site": true } },
+		{ "op": "site", "name": "e", "expect": { "site": true } },
+		{ "op": "rerun", "expect": {} },
+		{ "op": "site", "name": "c", "expect": { "site": true } },
+		{ "op": "site", "name": "e", "expect": { "site": true } },
+		{ "op": "chain", "name": "c", "expect": { "length": 2 } }
+	]
+}
