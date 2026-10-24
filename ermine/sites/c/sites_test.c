@@ -32,6 +32,18 @@ static void in_scope(void *data) {
 	line_of_computer = __LINE__ + 1;
 	made = st_create_computer(sites, ((sc_def){.f = one, .set = set}), NULL, 0);
 }
+// a computer reading key: it runs again at each mark of it
+static const char key = 0;
+static sc_scheduler *running_on;
+static sc_out reads(void *previous, void *data) {
+	(void)previous, (void)data;
+	sc_track(running_on, &key);
+	return (sc_out){.kind = SC_VALUE};
+}
+static void reader(void *data) {
+	(void)data;
+	made = st_create_computer(sites, ((sc_def){.f = reads, .set = set}), NULL, 0);
+}
 static void bare(void *data) {
 	(void)data;
 	made = sc_create_computer(st_scheduler(sites), (sc_def){.f = one, .set = set}, NULL, 0);
@@ -95,6 +107,19 @@ int main(void) {
 	for (int i = 0; i < 1000; i++) CHECK(st_create_scope(sites, info, 1, top) != NULL);
 	CHECK(st_count(sites) == 1001);
 	CHECK(sc_teardown(top) == NULL);
+	CHECK(st_count(sites) == 0);
+
+	// run again, twice: a computer's site stays (its teardowns are its runs' cleanups too); torn
+	// down, it goes
+	running_on = s;
+	sc_scope *again = st_create_root_scope(sites, info, 1);
+	CHECK(sc_run_with_scope(again, reader, NULL) == NULL);
+	sc_scope *rerun = made;
+	const void *keys[] = {&key};
+	sc_pulse(s);
+	for (int i = 0; i < 2; i++) sc_mark(s, keys, 1, NULL), sc_pulse(s);
+	CHECK(st_site_of(sites, rerun) != NULL && st_count(sites) == 2);
+	CHECK(sc_teardown(again) == NULL);
 	CHECK(st_count(sites) == 0);
 
 	// not torn down: st_free lets go

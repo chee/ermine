@@ -2,10 +2,12 @@
 // again; a relay's; a frame cut short by a crash cut off; a store with another key refused.
 //   ./tippet-test dir     dir: made, used, and removed again
 #define _POSIX_C_SOURCE 200809L
+#include <dirent.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "tippet.h"
@@ -34,6 +36,46 @@ static tp_log *open_log(const tp_mem *mem, const char *dir, const uint8_t *seed)
 	tp_log *log = tp_log_new(&o);
 	if (!log) return o.store->close(o.store->self), NULL;
 	return log;
+}
+
+// every file in dir, then dir
+static void wipe(const char *dir) {
+	DIR *in = opendir(dir);
+	struct dirent *e;
+	char path[4096];
+	while (in && (e = readdir(in))) {
+		if (e->d_name[0] != '.') snprintf(path, sizeof path, "%s/%s", dir, e->d_name), unlink(path);
+	}
+	if (in) closedir(in);
+	rmdir(dir);
+}
+
+// steps as they were written: STEPS of them, back to back
+#define STEPS 300
+static uint8_t kept[STEPS][128];
+static long lengths[STEPS];
+
+// how many of device's steps 1 to count are not as kept
+static int unlike(tp_log *log, const uint8_t device[32], uint64_t count) {
+	int bad = 0;
+	uint8_t b[128];
+	for (uint64_t n = 1; n <= count; n++) {
+		long l = tp_log_step(log, device, n, b, sizeof b);
+		bad += l != lengths[n - 1] || memcmp(b, kept[n - 1], (size_t)l);
+	}
+	return bad;
+}
+
+static void cut(const char *dir, const char *name, off_t to) {
+	char path[4096];
+	snprintf(path, sizeof path, "%s/%s", dir, name);
+	CHECK(!truncate(path, to));
+}
+static off_t size_of(const char *dir, const char *name) {
+	char path[4096];
+	struct stat st;
+	snprintf(path, sizeof path, "%s/%s", dir, name);
+	return stat(path, &st) ? -1 : st.st_size;
 }
 
 static long patches(uint8_t *out, int x) {
@@ -118,14 +160,61 @@ int main(int argc, char **argv) {
 	CHECK(a && tp_log_load(a) == TP_KEY);
 	tp_log_free(a);
 
+	// the index on disk: a run closed at each step (as each ask closes one), the heap no more at the
+	// end than early on; then the index let go (an old store), cut short and wrong (a reset in the
+	// middle of writing it), and longer than the log (the log's end cut off): each made right again
+	// as the log loads, every step found as written
+	char indexdir[4096];
+	snprintf(indexdir, sizeof indexdir, "%s/indexed", dir);
+	a = open_log(&mem, indexdir, other);
+	CHECK(a && !tp_log_load(a));
+	size_t early = 0;
+	for (int i = 1; i <= STEPS; i++) {
+		w.patches.n = (size_t)patches(ps, i % 24);
+		CHECK(!tp_log_write(a, &w, &n, &lamport) && n == (uint64_t)i);
+		CHECK(!tp_log_run(a, tp_log_device(a), n, &end, sig) && end == n);
+		lengths[i - 1] = tp_log_step(a, tp_log_device(a), n, kept[i - 1], sizeof kept[i - 1]);
+		if (i == 50) early = h.now;
+	}
+	printf("tippet-test: %d runs of a step each: heap %zu after 50, %zu after %d\n", STEPS, early, h.now, STEPS);
+	CHECK(h.now <= early);
+	memcpy(device, tp_log_device(a), 32);
+	tp_log_free(a);
+	CHECK(size_of(indexdir, "i0") == STEPS * 16 && size_of(indexdir, "index") == 32);
+	snprintf(path, sizeof path, "%s/index", indexdir), unlink(path);
+	snprintf(path, sizeof path, "%s/i0", indexdir), unlink(path);
+	a = open_log(&mem, indexdir, other);
+	CHECK(a && !tp_log_load(a) && tp_log_count(a, device) == STEPS && !unlike(a, device, STEPS));
+	tp_log_free(a);
+	CHECK(size_of(indexdir, "i0") == STEPS * 16 && size_of(indexdir, "index") == 32);
+	// cut in the middle of an entry, one entry wrong, the devices' keys cut in the middle of one
+	cut(indexdir, "i0", 150 * 16 + 7), cut(indexdir, "index", 20);
+	snprintf(path, sizeof path, "%s/i0", indexdir);
+	fd = open(path, O_WRONLY);
+	uint8_t junk[16];
+	memset(junk, 0xff, sizeof junk);
+	CHECK(fd >= 0 && pwrite(fd, junk, 16, 9 * 16) == 16);
+	close(fd);
+	a = open_log(&mem, indexdir, other);
+	CHECK(a && !tp_log_load(a) && tp_log_count(a, device) == STEPS && !unlike(a, device, STEPS));
+	CHECK(!tp_log_run(a, device, 10, &end, sig) && end == 10);
+	tp_log_free(a);
+	// the log's last frame cut off: the index says more than the log holds
+	cut(indexdir, "log", size_of(indexdir, "log") - 10);
+	a = open_log(&mem, indexdir, other);
+	CHECK(a && !tp_log_load(a) && tp_log_count(a, device) == STEPS - 1 && !unlike(a, device, STEPS - 1));
+	CHECK(tp_log_step(a, device, STEPS, NULL, 0) < 0);
+	w.patches.n = (size_t)patches(ps, 5);
+	CHECK(!tp_log_write(a, &w, &n, &lamport) && n == STEPS && !tp_log_run(a, device, n, &end, sig));
+	tp_log_free(a);
+	a = open_log(&mem, indexdir, other);
+	CHECK(a && !tp_log_load(a) && tp_log_count(a, device) == STEPS && !unlike(a, device, STEPS - 1));
+	CHECK(tp_log_step(a, device, STEPS, NULL, 0) > 0);
+	tp_log_free(a);
+	printf("tippet-test: the index let go, cut short, wrong, past the log: made again, every step found\n");
+
 	CHECK(h.now == 0);
-	snprintf(path, sizeof path, "%s/log", relaydir), unlink(path);
-	snprintf(path, sizeof path, "%s/open", relaydir), unlink(path);
-	rmdir(relaydir);
-	snprintf(path, sizeof path, "%s/log", dir), unlink(path);
-	snprintf(path, sizeof path, "%s/key", dir), unlink(path);
-	snprintf(path, sizeof path, "%s/open", dir), unlink(path);
-	rmdir(dir);
+	wipe(indexdir), wipe(relaydir), wipe(dir);
 	printf("tippet-test: %s, peak heap %zu bytes\n", failed ? "FAILED" : "ok", h.peak);
 	return failed ? 1 : 0;
 }

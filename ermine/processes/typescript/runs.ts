@@ -4,10 +4,14 @@
 //   n        the scheduler's run number
 //   started  and ended: ms since 1970, fractional
 //   end      done | pending | failed | looping (the scheduler's onRunEnd)
-//   error    failed: what it threw; looping: an Error "looping"
+//   error    failed: what it threw, as thrown (any value); looping: an Error "looping"
+//   act      an effect's, once its act has run after this run: { end: "done" } or { end: "failed",
+//            error } (what it threw, as thrown); none until then, and none for a run not acted
+//            on or of a compute. a newer run's record has none of its own again
 //   reads    first-read order, each once, as places' describe names it: { part, id, path, keys?,
-//            change }; change: the entry's header as the run ended, the same object (no copy).
-//            unnamed: { key }
+//            change }; change: the entry's header as the run first read the key (a run that
+//            reads a node and then writes it names the change before its write), the same object
+//            (no copy). unnamed: { key }
 //   writes   landing order, each time: { part, id, change } (taken out: no change); a write is the
 //            run's when it lands with the run open (its code, set, effect act, teardown)
 //
@@ -30,7 +34,7 @@ import type { Target } from "@ermine/protect"
 import type { Computer, Ended, More, Scheduler } from "@ermine/scheduler"
 import type { Id, Key, Table } from "@ermine/table"
 
-// a read, named: where, and the change there as the run ended
+// a read, named: where, and the change there as the run first read it
 export type Read = {
 	readonly part: Key
 	readonly id: Id
@@ -46,19 +50,34 @@ export type Write = {
 	readonly change: ChangeHeader | undefined
 }
 
+// an effect's act, after its run
+export type Act = { readonly end: "done" } | { readonly end: "failed"; readonly error: unknown }
+const ACT_DONE: Act = Object.freeze({ end: "done" })
+
 export type Run = {
 	readonly n: number
 	// none: given while it ran, its start not seen
 	readonly started?: number
 	readonly ended: number
 	readonly end: Exclude<Ended, "stopped">
-	readonly error?: Error
+	// as thrown: any value (looping: an Error)
+	readonly error?: unknown
+	readonly act?: Act
 	readonly reads: readonly Read[]
 	readonly writes: readonly Write[]
 }
 
 export type Field = keyof Run
-export const FIELDS: readonly Field[] = ["n", "started", "ended", "end", "error", "reads", "writes"]
+export const FIELDS: readonly Field[] = [
+	"n",
+	"started",
+	"ended",
+	"end",
+	"error",
+	"act",
+	"reads",
+	"writes",
+]
 
 // what asks the policy (places' guard): a no or a pending throws
 export type Asks = { read: (...targets: Target[]) => void }
@@ -68,7 +87,7 @@ export type Setup = {
 	table: Pick<Table, "get">
 	scheduler: Pick<
 		Scheduler,
-		"getRun" | "onRunStart" | "onRunEnd" | "onEffect" | "track" | "mark"
+		"getRun" | "onRunStart" | "onRunEnd" | "onEffect" | "onTrack" | "track" | "mark"
 	>
 }
 
@@ -91,7 +110,14 @@ export type Runs = {
 const now = () => performance.timeOrigin + performance.now()
 
 // a computer's run as it goes: its number, its start, its writes so far, how many the record holds
-type Going = { n: number; started?: number; writes: Write[]; written: number }
+// saw: the change at each key's first track in the run (made when the first is tracked)
+type Going = {
+	n: number
+	started?: number
+	writes: Write[]
+	written: number
+	saw?: Map<unknown, ChangeHeader | undefined>
+}
 
 // a record, and its keys: one a field, made the first time read
 type Held = { run: Run | undefined; keys: Partial<Record<Field, object>> }
@@ -133,7 +159,11 @@ export function createRuns(setup: Setup): Runs {
 	}
 
 	// the reads named, unless they are the ones there already (then those)
-	function named(keys: readonly unknown[], was: readonly Read[] | undefined): readonly Read[] {
+	function named(
+		keys: readonly unknown[],
+		was: readonly Read[] | undefined,
+		saw: Map<unknown, ChangeHeader | undefined> | undefined,
+	): readonly Read[] {
 		const old = was !== undefined && was.length === keys.length ? was : undefined
 		let same = old !== undefined
 		const out: Read[] = []
@@ -143,7 +173,9 @@ export function createRuns(setup: Setup): Runs {
 			let r: Read
 			if (w === undefined) r = { key: k }
 			else {
-				const change = table.get(w.part, w.id)?.change
+				const change = saw !== undefined && saw.has(k)
+					? saw.get(k)
+					: table.get(w.part, w.id)?.change
 				r = w.keys
 					? { part: w.part, id: w.id, path: w.path, keys: true, change }
 					: { part: w.part, id: w.id, path: w.path, change }
@@ -176,25 +208,33 @@ export function createRuns(setup: Setup): Runs {
 		more: More,
 	) {
 		const was = records.get(id)?.run
-		let error: Error | undefined
-		if (ended === "failed") {
-			error = more.error instanceof Error ? more.error : new Error(String(more.error))
-		} else if (ended === "looping") error = new Error("looping")
+		const failed = ended === "failed"
+		const error = failed ? more.error : ended === "looping" ? new Error("looping") : undefined
 		const run: Run = {
 			n: g.n,
 			...(g.started !== undefined ? { started: g.started } : {}),
 			ended: now(),
 			end: ended as Run["end"],
-			...(error !== undefined ? { error } : {}),
-			reads: named(once(reads), was?.reads),
+			...(failed || error !== undefined ? { error } : {}),
+			reads: named(once(reads), was?.reads, g.saw),
 			writes: sameWrites(was?.writes, g.writes) ? was!.writes : g.writes.slice(),
 		}
 		g.written = g.writes.length
+		g.saw = undefined
 		write(c, id, run)
 	}
 
 	const offs = [
 		places.watchAll(landed),
+		// the change a key has when the run first tracks it
+		s.onTrack((key, run) => {
+			const g = going.get(run.computer)
+			if (g === undefined || g.n !== run.n) return
+			const saw = g.saw ??= new Map()
+			if (saw.has(key)) return
+			const w = places.describe(key)
+			saw.set(key, w === undefined ? undefined : table.get(w.part, w.id)?.change)
+		}),
 		s.onRunStart((c, n) => {
 			if (ids.has(c)) going.set(c, { n, started: now(), writes: [], written: 0 })
 		}),
@@ -206,17 +246,18 @@ export function createRuns(setup: Setup): Runs {
 			if (g === undefined || g.n !== n) going.set(c, g = { n, writes: [], written: 0 })
 			record(c, id, g, ended, reads, more)
 		}),
-		// an effect's act wrote: the record's writes again
-		s.onEffect((c, n) => {
+		// an effect's act ran: its end, and what it wrote, in the record
+		s.onEffect((c, n, more) => {
 			const id = ids.get(c)
-			const g = going.get(c)
-			if (id === undefined || g === undefined || g.n !== n || g.writes.length === g.written) {
-				return
-			}
+			if (id === undefined) return
 			const was = records.get(id)?.run
 			if (was === undefined || was.n !== n || c.state !== "alive") return
-			g.written = g.writes.length
-			write(c, id, { ...was, writes: g.writes.slice() })
+			const act: Act = "error" in more ? { end: "failed", error: more.error } : ACT_DONE
+			const g = going.get(c)
+			const wrote = g !== undefined && g.n === n && g.writes.length !== g.written
+			if (!wrote && act === was.act) return
+			if (wrote) g.written = g.writes.length
+			write(c, id, { ...was, act, ...(wrote ? { writes: g.writes.slice() } : {}) })
 		}),
 	]
 

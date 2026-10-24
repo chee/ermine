@@ -1,5 +1,6 @@
-// what both stores keep in memory: where each record holding steps is, by device, one entry a
-// record; and the last run read, unpacked, so reading its steps in turn unpacks it once
+// what both stores keep in memory: the open steps, and the last run read, unpacked, so reading its
+// steps in turn unpacks it once; and the memory store's index, where each record holding steps is,
+// by device, one entry a record (the file store keeps its index on disk, store_file.c)
 #ifndef TIPPET_STORE_H
 #define TIPPET_STORE_H
 
@@ -49,8 +50,11 @@ void tp_record_pack(const uint8_t *record, size_t length, tp_span *pack, tp_prio
 // a run record's steps, unpacked: 0 or a code
 int tp_record_unpack(const tp_mem *mem, const uint8_t *record, size_t length, size_t max, tp_steps *out);
 
-// a record's place: length bytes at offset, in place of those held that it covers
+// a record's place: length bytes at offset, in place of those held that it covers (and
+// tp_index_ran)
 int tp_index_hold(tp_index *x, const tp_at *at, uint64_t offset, uint64_t length, int run);
+// a record holding at's steps appended: the open steps it holds let go
+void tp_index_ran(tp_index *x, const tp_at *at);
 // the record holding step n of device's, or NULL
 const tp_held *tp_index_find(const tp_index *x, const uint8_t device[32], uint64_t n);
 // 1: step n of device's is in the run last read

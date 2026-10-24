@@ -94,8 +94,8 @@ const op_value *pr_read_at(const pr_read *read, const char *part, tb_key id, con
 	return read->reader(read->ctx, part, id, path, read->at);
 }
 
-static const pr_answer YES = {PR_YES, NULL, NULL};
-static pr_answer no(const char *reason) { return (pr_answer){PR_NO, reason, NULL}; }
+static const pr_answer YES = {PR_YES, NULL, NULL, {0}};
+static pr_answer no(const char *reason) { return (pr_answer){PR_NO, reason, NULL, {0}}; }
 
 // values equal: scalars, lists in order, maps by keys (as protect.ts's same)
 int pr_same(const op_value *a, const op_value *b) {
@@ -172,7 +172,7 @@ static const char *malformed(const op_value *g) {
 
 static pr_answer grants(const pr_policy *p, const pr_ask *ask, const pr_read *read) {
 	const op_value *rules = pr_read_at(read, p->where.part, p->where.id, NULL);
-	if (rules == NULL) return (pr_answer){PR_PENDING, NULL, &p->where};
+	if (rules == NULL) return (pr_answer){PR_PENDING, NULL, &p->where, {0}};
 	if (rules->type != OP_LIST) return no("rules are not a list");
 	for (size_t i = 0; i < rules->count; i++) {
 		const op_value *g = rules->items[i];
@@ -185,21 +185,30 @@ static pr_answer grants(const pr_policy *p, const pr_ask *ask, const pr_read *re
 		}
 	}
 	int allowed = 0;
+	size_t first = 0;
 	for (size_t i = 0; i < rules->count; i++) {
 		const op_value *g = rules->items[i];
 		if (g->type != OP_MAP || !matches(g, ask)) continue;
 		const op_value *deny = op_get(g, "deny");
-		if (deny != NULL && deny->type == OP_BOOL && deny->bool_) return no("denied");
+		if (deny != NULL && deny->type == OP_BOOL && deny->bool_) {
+			pr_answer a = no("denied");
+			a.grant = (pr_grant){&p->where, i};
+			return a;
+		}
+		if (!allowed) first = i;
 		allowed = 1;
 	}
-	return allowed ? YES : no("no grant");
+	if (!allowed) return no("no grant");
+	pr_answer a = YES;
+	a.grant = (pr_grant){&p->where, first};
+	return a;
 }
 
 static pr_answer run(const pr_policy *p, const pr_ask *ask, const pr_read *read) {
 	switch (p->kind) {
 	case K_YES: return YES;
 	case K_NO: return no(p->reason);
-	case K_PENDING: return (pr_answer){PR_PENDING, NULL, NULL};
+	case K_PENDING: return (pr_answer){PR_PENDING, NULL, NULL, {0}};
 	case K_CALL: return p->call(p->ctx, ask, read);
 	case K_GRANTS: return grants(p, ask, read);
 	case K_ONLY:

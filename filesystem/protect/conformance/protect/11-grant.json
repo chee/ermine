@@ -1,0 +1,321 @@
+{
+	"title": "an answer from grants says which grant decided: a yes, the first allowing one that matched; a deny, that deny. all, any and only pass it through; no grant, bad grant: none",
+	"steps": [
+		{
+			"op": "load",
+			"part": "value",
+			"id": "rules",
+			"value": [
+				{
+					"actor": "juno"
+				},
+				{
+					"actor": "chee",
+					"op": "read"
+				},
+				{
+					"actor": "chee"
+				},
+				{
+					"actor": "chee",
+					"op": "edit",
+					"id": "A",
+					"deny": true
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "load",
+			"part": "value",
+			"id": "more",
+			"value": [
+				{
+					"actor": "juno"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"who": {
+				"actor": "juno"
+			},
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "yes",
+				"grant": {
+					"part": "value",
+					"id": "rules",
+					"index": 0
+				}
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"who": {
+				"actor": "chee"
+			},
+			"target": {
+				"id": "B"
+			},
+			"expect": {
+				"answer": "yes",
+				"grant": {
+					"part": "value",
+					"id": "rules",
+					"index": 1
+				}
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "edit",
+			"who": {
+				"actor": "chee"
+			},
+			"target": {
+				"id": "B"
+			},
+			"expect": {
+				"answer": "yes",
+				"grant": {
+					"part": "value",
+					"id": "rules",
+					"index": 2
+				}
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "edit",
+			"who": {
+				"actor": "chee"
+			},
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no",
+				"reason": "denied",
+				"grant": {
+					"part": "value",
+					"id": "rules",
+					"index": 3
+				}
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"all": [
+					{
+						"grants": [
+							"value",
+							"rules"
+						]
+					}
+				]
+			},
+			"what": "edit",
+			"who": {
+				"actor": "chee"
+			},
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no",
+				"reason": "denied",
+				"grant": {
+					"part": "value",
+					"id": "rules",
+					"index": 3
+				}
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"all": [
+					{
+						"grants": [
+							"value",
+							"more"
+						]
+					},
+					{
+						"grants": [
+							"value",
+							"rules"
+						]
+					}
+				]
+			},
+			"what": "edit",
+			"who": {
+				"actor": "chee"
+			},
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no",
+				"reason": "no grant"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"any": [
+					{
+						"grants": [
+							"value",
+							"more"
+						]
+					},
+					{
+						"grants": [
+							"value",
+							"rules"
+						]
+					}
+				]
+			},
+			"what": "edit",
+			"who": {
+				"actor": "chee"
+			},
+			"target": {
+				"id": "B"
+			},
+			"expect": {
+				"answer": "yes",
+				"grant": {
+					"part": "value",
+					"id": "rules",
+					"index": 2
+				}
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"any": [
+					{
+						"no": "closed"
+					},
+					{
+						"grants": [
+							"value",
+							"rules"
+						]
+					}
+				]
+			},
+			"what": "read",
+			"who": {
+				"actor": "juno"
+			},
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "yes",
+				"grant": {
+					"part": "value",
+					"id": "rules",
+					"index": 0
+				}
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"only": [
+					"edit"
+				],
+				"policy": {
+					"grants": [
+						"value",
+						"rules"
+					]
+				}
+			},
+			"what": "edit",
+			"who": {
+				"actor": "chee"
+			},
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no",
+				"reason": "denied",
+				"grant": {
+					"part": "value",
+					"id": "rules",
+					"index": 3
+				}
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"any": [
+					{
+						"grants": [
+							"value",
+							"more"
+						]
+					},
+					{
+						"grants": [
+							"value",
+							"more"
+						]
+					}
+				]
+			},
+			"what": "read",
+			"who": {
+				"actor": "chee"
+			},
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no",
+				"reason": "no grant"
+			}
+		}
+	]
+}

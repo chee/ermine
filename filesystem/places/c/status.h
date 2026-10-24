@@ -5,7 +5,9 @@
 // The attribute holds the pending stand-in while a run is pending, an error when one failed (a loop gives the
 // error "looping"), and is gone when a run is done. A stopped run leaves it as it was. It is
 // written from the scheduler's run end (sc_on_run_end), with the computer's scope open
-// (sc_run_with_scope). Nothing is written when the status is already so: pending again is not
+// (sc_run_with_scope). An effect's act that fails (sc_on_effect) writes its error the same way; a
+// run done leaves that, until an act succeeds and takes it away. What was thrown is a string in C
+// (the scheduler's), where status.ts keeps the thrown value itself. Nothing is written when the status is already so: pending again is not
 // written; an error always is, as in the reference an error is a new one each time.
 //
 // VALUES. C has no Error or Symbol, so the two are stand-ins (value.h): pending is the stand-in of
@@ -32,7 +34,7 @@ typedef struct {
 // the attribute
 #define CST_ATTRIBUTE "ermine.computer.status"
 
-// listens to the scheduler's run end from here on
+// listens to the scheduler's run end and effects from here on
 cst *cst_new(const cst_setup *setup);
 // the node a computer's status is written on; id copied
 void cst_give(cst *s, sc_computer *c, tb_key id);

@@ -99,7 +99,9 @@ static const op_value *quiet_reader(void *ctx, const char *part, tb_key id, cons
 // asking ----------------------------------------------------------------------------------------
 
 // one target asked: told (reads) or not (writes). *reason: why a no
-static gd_answer asked(gd *g, int told, const char *op, const gd_target *t, const char **reason) {
+static gd_answer asked(gd *g, int told, const char *op, const gd_target *t, const char **reason,
+	pr_grant *grant) {
+	*grant = (pr_grant){0};
 	// a stand-in is refused, never asked
 	if (gd_is_refused(t->thing.id)) return *reason = "refused", GD_REFUSED;
 	if (g->may == NULL) return GD_OK;
@@ -113,6 +115,7 @@ static gd_answer asked(gd *g, int told, const char *op, const gd_target *t, cons
 	// a read the policy told that said the run must end
 	if (pl_status(g->places) != SC_OK) return GD_FAILED;
 	*reason = a.reason;
+	*grant = a.grant;
 	return a.verdict == PR_YES ? GD_OK : a.verdict == PR_NO ? GD_REFUSED : GD_PENDING;
 }
 
@@ -121,9 +124,10 @@ static gd_answer demand(gd *g, int told, const char *op, const gd_target *target
 	int waiting = 0;
 	for (size_t i = 0; i < n; i++) {
 		const char *reason = NULL;
-		gd_answer a = asked(g, told, op, &targets[i], &reason);
+		pr_grant grant;
+		gd_answer a = asked(g, told, op, &targets[i], &reason, &grant);
 		if (a == GD_REFUSED) {
-			if (why != NULL) *why = (gd_refusal){op, reason};
+			if (why != NULL) *why = (gd_refusal){op, reason, grant, i};
 			return a;
 		}
 		if (a == GD_FAILED) return a;
@@ -144,7 +148,7 @@ gd_answer gd_move(const char *const *from, size_t nfrom, const char *const *to, 
 	if (nto <= nfrom) return GD_OK;
 	for (size_t i = 0; i < nfrom; i++)
 		if (strcmp(from[i], to[i]) != 0) return GD_OK;
-	if (why != NULL) *why = (gd_refusal){"move", "into-itself"};
+	if (why != NULL) *why = (gd_refusal){"move", "into-itself", {0}, 0};
 	return GD_REFUSED;
 }
 
@@ -163,7 +167,8 @@ gd_answer gd_members(gd *g, const pl_members *list, const char *const *at, size_
 		}
 		gd_target t = gd_target_of(thing, NULL, NULL);
 		const char *reason;
-		gd_answer a = asked(g, 1, "read", &t, &reason);
+		pr_grant grant;
+		gd_answer a = asked(g, 1, "read", &t, &reason, &grant);
 		if (a == GD_FAILED) return free(items), free(path), a;
 		if (a == GD_PENDING) waiting = 1;
 		items[i] = a == GD_OK ? list->items[i] : (pl_member){list->items[i].name, gd_refused(), list->items[i].from};

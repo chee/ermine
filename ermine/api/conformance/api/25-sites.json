@@ -1,0 +1,629 @@
+{
+	"title": "sites: a write's site (its change's external). site answers where it points: program (a program's call into the api), computer (the program's line that made the memo or effect), api (inside the api), other, none. outside a run: the program's call, never the api. in a run: never the api nor other (TypeScript: the running memo's or effect's own, 26-sites-in-run; C: the call's real line, its own write the line that made it, the C harness checking c). reads' from: the change's metadata node and run where it has them",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"w": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": [
+				"w",
+				"p"
+			],
+			"program": [
+				{
+					"do": [
+						"open",
+						"./doc",
+						{
+							"n": 1
+						}
+					],
+					"as": "doc"
+				},
+				{
+					"do": [
+						"open",
+						"./a",
+						{
+							"n": 0
+						}
+					],
+					"as": "a"
+				},
+				{
+					"do": [
+						"memo",
+						"./m",
+						{
+							"equal": "json"
+						},
+						[
+							"all",
+							[
+								"edit",
+								"$a",
+								[
+									{
+										"path": [
+											"n"
+										],
+										"value": 1
+									}
+								]
+							],
+							[
+								"read",
+								"$doc",
+								[
+									"n"
+								]
+							]
+						]
+					],
+					"as": "m"
+				}
+			],
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"w",
+				"doc"
+			],
+			"expect": {
+				"id": "n1"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"w",
+				"a"
+			],
+			"expect": {
+				"id": "n2"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"w",
+				"m"
+			],
+			"expect": {
+				"id": "n3"
+			}
+		},
+		{
+			"op": "site",
+			"part": "value",
+			"id": "n1",
+			"expect": {
+				"site": "program"
+			}
+		},
+		{
+			"op": "site",
+			"part": "value",
+			"id": "n2",
+			"among": [
+				"program",
+				"computer",
+				"none"
+			],
+			"c": "program",
+			"skip": [
+				"site"
+			],
+			"expect": {
+				"among": true
+			}
+		},
+		{
+			"op": "site",
+			"part": "value",
+			"id": "n3",
+			"among": [
+				"program",
+				"computer",
+				"none"
+			],
+			"c": "computer",
+			"skip": [
+				"site"
+			],
+			"expect": {
+				"among": true
+			}
+		},
+		{
+			"op": "world",
+			"sites": true,
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"w": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": [
+				"w",
+				"p"
+			],
+			"program": [
+				{
+					"do": [
+						"open",
+						"./doc",
+						{
+							"n": 1
+						}
+					],
+					"as": "doc"
+				},
+				{
+					"do": [
+						"open",
+						"./a",
+						{
+							"n": 0
+						}
+					],
+					"as": "a"
+				},
+				{
+					"do": [
+						"open",
+						"./b",
+						{
+							"n": 0
+						}
+					],
+					"as": "b"
+				},
+				{
+					"do": [
+						"memo",
+						"./m",
+						{
+							"equal": "json"
+						},
+						[
+							"all",
+							[
+								"edit",
+								"$a",
+								[
+									{
+										"path": [
+											"n"
+										],
+										"value": 1
+									}
+								]
+							],
+							[
+								"edit",
+								"$b",
+								[
+									{
+										"path": [
+											"n"
+										],
+										"value": 1
+									}
+								]
+							],
+							[
+								"read",
+								"$doc",
+								[
+									"n"
+								]
+							]
+						]
+					],
+					"as": "m"
+				},
+				{
+					"do": [
+						"method",
+						"on/bump",
+						[
+							{
+								"do": [
+									"edit",
+									"$doc",
+									[
+										{
+											"path": [
+												"n"
+											],
+											"value": 2
+										}
+									]
+								]
+							}
+						]
+					]
+				}
+			],
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"w",
+				"doc"
+			],
+			"expect": {
+				"id": "n1"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"w",
+				"a"
+			],
+			"expect": {
+				"id": "n2"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"w",
+				"b"
+			],
+			"expect": {
+				"id": "n3"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"w",
+				"m"
+			],
+			"expect": {
+				"id": "n4"
+			}
+		},
+		{
+			"op": "site",
+			"part": "value",
+			"id": "n1",
+			"expect": {
+				"site": "program"
+			}
+		},
+		{
+			"op": "site",
+			"part": "value",
+			"id": "n2",
+			"among": [
+				"program",
+				"computer"
+			],
+			"c": "program",
+			"skip": [
+				"site"
+			],
+			"expect": {
+				"among": true
+			}
+		},
+		{
+			"op": "site",
+			"part": "value",
+			"id": "n3",
+			"among": [
+				"program",
+				"computer"
+			],
+			"c": "program",
+			"skip": [
+				"site"
+			],
+			"expect": {
+				"among": true
+			}
+		},
+		{
+			"op": "site",
+			"part": "value",
+			"id": "n4",
+			"among": [
+				"program",
+				"computer"
+			],
+			"c": "computer",
+			"skip": [
+				"site"
+			],
+			"expect": {
+				"among": true
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"log",
+				"x",
+				[
+					"all",
+					[
+						"each",
+						[
+							"reads",
+							"$a",
+							[
+								"n"
+							]
+						],
+						[
+							"from",
+							"node"
+						]
+					],
+					[
+						"each",
+						[
+							"reads",
+							"$a",
+							[
+								"n"
+							]
+						],
+						[
+							"from",
+							"run"
+						]
+					],
+					[
+						"each",
+						[
+							"reads",
+							"$m"
+						],
+						[
+							"from",
+							"node"
+						]
+					],
+					[
+						"each",
+						[
+							"reads",
+							"$m"
+						],
+						[
+							"from",
+							"run"
+						]
+					],
+					[
+						"each",
+						[
+							"reads",
+							"$doc",
+							[
+								"n"
+							]
+						],
+						[
+							"from",
+							"node"
+						]
+					],
+					[
+						"each",
+						[
+							"reads",
+							"$doc",
+							[
+								"n"
+							]
+						],
+						[
+							"from",
+							"run"
+						]
+					]
+				]
+			],
+			"expect": {
+				"value": [
+					[
+						"n4"
+					],
+					[
+						1
+					],
+					[
+						"n4"
+					],
+					[
+						1
+					],
+					[
+						"proc:p"
+					],
+					[
+						null
+					]
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"send",
+				"on/bump"
+			],
+			"expect": {}
+		},
+		{
+			"op": "site",
+			"part": "value",
+			"id": "n1",
+			"expect": {
+				"site": "program"
+			}
+		},
+		{
+			"op": "site",
+			"part": "value",
+			"id": "n4",
+			"among": [
+				"program",
+				"computer"
+			],
+			"c": "computer",
+			"skip": [
+				"site"
+			],
+			"expect": {
+				"among": true
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"log",
+				"x",
+				[
+					"all",
+					[
+						"each",
+						[
+							"reads",
+							"$m"
+						],
+						[
+							"from",
+							"node"
+						]
+					],
+					[
+						"each",
+						[
+							"reads",
+							"$m"
+						],
+						[
+							"from",
+							"run"
+						]
+					]
+				]
+			],
+			"expect": {
+				"value": [
+					[
+						"n4"
+					],
+					[
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"edit",
+				"$a",
+				[
+					{
+						"path": [
+							"n"
+						],
+						"value": 5
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "site",
+			"part": "value",
+			"id": "n2",
+			"expect": {
+				"site": "program"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"log",
+				"x",
+				[
+					"all",
+					[
+						"each",
+						[
+							"reads",
+							"$a",
+							[
+								"n"
+							]
+						],
+						[
+							"from",
+							"node"
+						]
+					],
+					[
+						"each",
+						[
+							"reads",
+							"$a",
+							[
+								"n"
+							]
+						],
+						[
+							"from",
+							"run"
+						]
+					]
+				]
+			],
+			"expect": {
+				"value": [
+					[
+						"proc:p"
+					],
+					[
+						null
+					]
+				]
+			}
+		}
+	]
+}

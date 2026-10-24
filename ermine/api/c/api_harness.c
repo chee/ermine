@@ -140,6 +140,8 @@ typedef struct {
 	size_t nheld, capheld;
 	// the table events since last asked: [part, id, "put" | "gone"] each
 	op_value *events;
+	// where memos, effects and sends were made (a world asked with sites); NULL: none
+	st_sites *sites;
 } world;
 
 static world *w;
@@ -286,6 +288,8 @@ static world *make(const op_value *o) {
 		.overlay = m->overlay,
 		.schedule = schedule,
 		.schedule_ctx = m};
+	const op_value *sites = o ? op_get(o, "sites") : NULL;
+	if (sites && sites->type == OP_BOOL && sites->bool_) setup.sites = m->sites = st_new(m->s);
 	// uuid: no setup.id, new ids the api's own
 	const op_value *uuid = o ? op_get(o, "uuid") : NULL;
 	if (!(uuid && uuid->type == OP_BOOL && uuid->bool_)) setup.id = next_id, setup.id_ctx = m;
@@ -312,6 +316,8 @@ static void finish(world *m) {
 	api_context_free(m->context);
 	if (m->overlay) pn_free(m->overlay);
 	sn_free(m->scopes);
+	// no teardowns after this: sc_free runs none
+	if (m->sites) st_free(m->sites);
 	sc_free(m->s);
 	tb_free(m->table);
 	if (m->view != m->table) tb_free(m->view);
@@ -627,6 +633,8 @@ static op_value *versions_json(const api_versions *vs) {
 		if (f->has_when) op_set(from, "when", op_num((double)f->when));
 		if (f->conflict) op_set(from, "lamport", op_num((double)f->lamport));
 		if (f->where) op_set(from, "where", op_ref(f->where));
+		if (f->node) op_set(from, "node", op_ref(f->node));
+		if (f->run) op_set(from, "run", op_ref(f->run));
 		if (f->conflict) {
 			op_value *d = op_list();
 			for (size_t k = 0; k < f->ndiffers; k++) op_push(d, op_str(f->differs[k]));
@@ -640,6 +648,30 @@ static op_value *versions_json(const api_versions *vs) {
 	return l;
 }
 
+// a memo, effect or early made: the line a computer's site is ("computer" to site)
+static res define(api *a, env *e, const char *fn, const op_value *const *raw) {
+	api_node out = {0};
+	int code;
+	computing *m = closure(sizeof *m);
+	if (strcmp(fn, "memo") == 0) {
+		m->e = e, m->expr = held(raw[2]);
+		const op_value *o = raw[1];
+		api_options options = {0};
+		if (o && o->type == OP_MAP && hh_str(o, "equal") && strcmp(hh_str(o, "equal"), "json") == 0) {
+			options.equal = json_equal;
+		}
+		code = api_memo(a, raw[0]->str, compute_f, m, &options, &out);
+	} else {
+		m->e = e, m->expr = held(raw[1]), m->log = kept(raw[2]->str);
+		code = strcmp(fn, "early") == 0 ? api_early(a, raw[0]->str, compute_f, effect_act, m, NULL, &out)
+		                                : api_effect(a, raw[0]->str, compute_f, effect_act, m, NULL, &out);
+	}
+	if (code) return bad(a, code);
+	res r = ok(node_json(&out));
+	api_node_free(&out);
+	return r;
+}
+
 // an api function called as the program would: [fn, ...args]
 static res call(api *a, env *e, const op_value *c) {
 	if (c == NULL || c->type != OP_LIST || c->count == 0 || c->items[0]->type != OP_STR) {
@@ -650,28 +682,8 @@ static res call(api *a, env *e, const op_value *c) {
 	size_t nraw = c->count - 1;
 	api_node out = {0};
 	int code;
-	if (strcmp(fn, "memo") == 0) {
-		computing *m = closure(sizeof *m);
-		m->e = e, m->expr = held(raw[2]);
-		const op_value *o = raw[1];
-		api_options options = {0};
-		if (o && o->type == OP_MAP && hh_str(o, "equal") && strcmp(hh_str(o, "equal"), "json") == 0) {
-			options.equal = json_equal;
-		}
-		if ((code = api_memo(a, raw[0]->str, compute_f, m, &options, &out))) return bad(a, code);
-		res r = ok(node_json(&out));
-		api_node_free(&out);
-		return r;
-	}
-	if (strcmp(fn, "effect") == 0 || strcmp(fn, "early") == 0) {
-		computing *m = closure(sizeof *m);
-		m->e = e, m->expr = held(raw[1]), m->log = kept(raw[2]->str);
-		code = strcmp(fn, "early") == 0 ? api_early(a, raw[0]->str, compute_f, effect_act, m, NULL, &out)
-		                                : api_effect(a, raw[0]->str, compute_f, effect_act, m, NULL, &out);
-		if (code) return bad(a, code);
-		res r = ok(node_json(&out));
-		api_node_free(&out);
-		return r;
+	if (strcmp(fn, "memo") == 0 || strcmp(fn, "effect") == 0 || strcmp(fn, "early") == 0) {
+		return define(a, e, fn, raw);
 	}
 	if (strcmp(fn, "log") == 0) {
 		res r = expr(a, e, raw[1]);
@@ -988,6 +1000,37 @@ static op_value *answer(const op_value *r) {
 		op_set(o, "keys", keys);
 		if (node) op_set(o, "node", op_ref((op_value *)node));
 		if (replaces) op_set(o, "replaces", op_ref((op_value *)replaces));
+		return o;
+	}
+	if (strcmp(op, "site") == 0) {
+		const nd_entry *e = tb_get(m->table, tb_string(hh_str(r, "part")), tb_string(hh_str(r, "id")));
+		const ch_site *at = e && e->change.external_length ? &e->change.external[0] : NULL;
+		const char *site = "none";
+		if (at && at->file && strcmp(at->file, __FILE__) == 0) {
+			site = at->function && strcmp(at->function, "define") == 0 ? "computer" : "program";
+		} else if (at) {
+			size_t n = at->file ? strlen(at->file) : 0;
+			site = n >= 5 && strcmp(at->file + n - 5, "api.c") == 0 && (n == 5 || at->file[n - 6] == '/')
+				? "api"
+				: "other";
+		}
+		// c: what this harness's must be (the TS harness's may differ: C's in a run is the real line)
+		const char *must = hh_str(r, "c");
+		if (must && strcmp(must, site) != 0) {
+			char text[96];
+			snprintf(text, sizeof text, "site %s, not %s (c)", site, must);
+			return error_answer(API_FAILED, text);
+		}
+		op_value *o = op_map();
+		op_set(o, "site", op_str(site));
+		const op_value *among = op_get(r, "among");
+		if (among && among->type == OP_LIST) {
+			bool in = false;
+			for (size_t i = 0; i < among->count; i++) {
+				if (among->items[i]->type == OP_STR && strcmp(among->items[i]->str, site) == 0) in = true;
+			}
+			op_set(o, "among", op_bool(in));
+		}
 		return o;
 	}
 	if (strcmp(op, "change") == 0) {

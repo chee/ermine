@@ -9,7 +9,9 @@
 // ts (a start): an id, or {"at": path} asked through the guard (refused: REFUSED). from: a path
 //
 // { op: "guard", name, may?, from? }   → {}
-// { op: "eval", guard, scope?, e }      → { value } | { error: "refused", reason, op }
+// { op: "eval", guard, scope?, e, detail? } → { value } | { error: "refused", reason, op, grant?, field? }
+//   detail: true adds to a refusal grant?: {part, id, index}, the grant that decided, and field?:
+//   the field of the target refused
 //                                         | { error: "pending" } | { error: code }
 // { op: "watch", name, scope, guard, f, then?, effect? } → {}   a compute running f each run
 //    (world: state); then: run in its set, {"given":null} the value; effect: true, an effect + act
@@ -204,7 +206,14 @@ function answer(r: Request): Json | undefined {
 				return { value: r.scope === undefined ? run() : s.runWithScope(scope(r.scope), run) }
 			} catch (e) {
 				if (e instanceof Refusal) {
-					return { error: "refused", reason: e.answer.reason, op: e.ask.op }
+					const { grant } = e.answer, { field } = e.ask.target
+					return {
+						error: "refused",
+						reason: e.answer.reason,
+						op: e.ask.op,
+						...(r.detail === true && grant && { grant }),
+						...(r.detail === true && field && { field }),
+					}
 				}
 				if (e === PENDING) return { error: "pending" }
 				return { error: codeOf(e) }

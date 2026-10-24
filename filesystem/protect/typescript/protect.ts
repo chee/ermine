@@ -11,7 +11,9 @@
 //
 // a policy reads through the asker's own read, so a change to what it read asks again. a read of
 // what is not there is undefined. answers, always at once: yes | no with a reason | pending with
-// what it waits for (having read the node the answer will arrive in)
+// what it waits for (having read the node the answer will arrive in). a grants answer, a yes or a
+// "denied", also says which grant decided: grant { part, id, index }; all, any and only pass the
+// deciding answer through whole, so it survives composition
 import type { Key as Step } from "@ermine/op/apply"
 
 export type Key = string | symbol
@@ -28,9 +30,12 @@ export type Place = { path?: readonly string[]; route?: readonly Key[] }
 
 export type Ask = { who: unknown; op: string; target: Target; from?: Place; at?: unknown }
 
+// which grant decided: the rules node (part, id) and the grant's index in its list
+export type Grant = { part: string; id: Key; index: number }
+
 export type Answer =
-	| { answer: "yes" }
-	| { answer: "no"; reason: string }
+	| { answer: "yes"; grant?: Grant }
+	| { answer: "no"; reason: string; grant?: Grant }
 	| { answer: "pending"; need?: unknown }
 
 // what a policy reads through: the value at path in the node under (part, id)
@@ -108,7 +113,8 @@ export type Where = { part: string; id: Key }
 // a grant with any other field, or a field of the wrong kind (op, id: a string; path, from,
 // field: a list; deny: a boolean), makes the whole node answer no, naming it: a misspelt field
 // must never widen. entries that are not maps are skipped.
-// a match: yes; no match: no. the node not there: pending, waiting for [part, id]
+// a match: yes, grant the first allowing one that matched; a deny: no "denied", grant that deny; no
+// match: no "no grant", no grant. the node not there: pending, waiting for [part, id]
 export function grants(where: Where): Policy {
 	return (ask, read) => {
 		const rules = read(where.part, where.id)
@@ -118,13 +124,16 @@ export function grants(where: Where): Policy {
 			const bad = isMap(rules[i]) ? malformed(rules[i]) : undefined
 			if (bad !== undefined) return no(`bad grant ${i}: ${bad}`)
 		}
-		let allowed = false
-		for (const g of rules) {
+		let allowed: Grant | undefined
+		for (let i = 0; i < rules.length; i++) {
+			const g = rules[i]
 			if (!isMap(g) || !matches(g, ask)) continue
-			if (g.deny === true) return no("denied")
-			allowed = true
+			if (g.deny === true) {
+				return { ...no("denied"), grant: { part: where.part, id: where.id, index: i } }
+			}
+			allowed ??= { part: where.part, id: where.id, index: i }
 		}
-		return allowed ? yes : no("no grant")
+		return allowed ? { answer: "yes", grant: allowed } : no("no grant")
 	}
 }
 

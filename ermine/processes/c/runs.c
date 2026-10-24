@@ -22,10 +22,16 @@ static char *xdup(const char *s) { return s != NULL ? strcpy(xalloc(strlen(s) + 
 		(v)[(n)++] = (x); \
 	} while (0)
 
-#define FIELDS 7
+#define FIELDS 8
+
+// a key as the run first tracked it: the change there then (a ref; NULL: none, or not named)
+typedef struct {
+	const void *key;
+	op_value *change;
+} saw;
 
 // a computer given, and its run as it goes: its number, its start, its writes so far, how many
-// the record holds
+// the record holds, and the keys it first tracked so far (on while the run is open)
 typedef struct {
 	sc_computer *c;
 	char *id;
@@ -35,6 +41,10 @@ typedef struct {
 	double started;
 	crn_wrote *writes;
 	size_t nwrites, capwrites, written;
+	int saw_on;
+	saw *saws;
+	size_t nsaws, capsaws;
+	pl_set sawn;
 } given;
 
 // a record, and its keys: one a field (their addresses), told when read
@@ -50,7 +60,7 @@ struct crn {
 	pl *places;
 	tb_table *table;
 	sc_scheduler *scheduler;
-	sc_listener *starts, *ends, *effects;
+	sc_listener *starts, *ends, *effects, *tracks;
 	pl_watch *all;
 	// the computers given, by address, and in a list
 	tb_table *by;
@@ -188,8 +198,9 @@ static void writes_unref(const crn_writes *b) {
 	free(k);
 }
 
-// a read named: where, and the change there as the run ended; a key places can't name: unnamed
-static crn_saw name_read(crn *r, const void *key) {
+// a read named: where, and the change there as the run first read it (seen; NULL: as it ended); a
+// key places can't name: unnamed
+static crn_saw name_read(crn *r, const void *key, const saw *seen) {
 	crn_saw out = {0};
 	pl_where w;
 	if (!pl_spot(r->places, key, &w)) {
@@ -209,6 +220,10 @@ static crn_saw name_read(crn *r, const void *key) {
 		}
 	}
 	out.keys = w.keys;
+	if (seen != NULL) {
+		out.change = seen->change != NULL ? op_ref(seen->change) : NULL;
+		return out;
+	}
 	const nd_entry *there = tb_get(r->table, w.part, w.id);
 	if (there != NULL) out.change = change_value(r, &there->change);
 	return out;
@@ -232,17 +247,22 @@ static int same_read(const crn_saw *a, const crn_saw *b) {
 
 // the run's reads, each once in the order first read, named: a block, unless they are the ones
 // there already (then those, held again)
-static const crn_reads *reads_of(crn *r, const void *const *keys, size_t n, const crn_reads *was) {
+static const crn_reads *reads_of(crn *r, const void *const *keys, size_t n, const crn_reads *was,
+	const given *g) {
 	crn_saw *out = xalloc((n + 1) * sizeof *out);
 	size_t count = 0;
 	pl_set seen = {0};
+	// the keys first tracked come in the order the reads do: a cursor through them
+	size_t at = 0;
 	for (size_t i = 0; i < n; i++) {
 		if (n < 16) {
 			size_t j = 0;
 			while (j < i && keys[j] != keys[i]) j++;
 			if (j < i) continue;
 		} else if (!pl_set_add(&seen, keys[i])) continue;
-		out[count++] = name_read(r, keys[i]);
+		const saw *s = g != NULL && at < g->nsaws && g->saws[at].key == keys[i] ? &g->saws[at] : NULL;
+		if (s != NULL) at++;
+		out[count++] = name_read(r, keys[i], s);
 	}
 	pl_set_free(&seen);
 	if (was != NULL && was->n == count) {
@@ -291,7 +311,18 @@ static void run_free(crn_run *run) {
 	reads_unref(run->reads);
 	writes_unref(run->writes);
 	free(run->error);
+	free(run->act_error);
 	free(run);
+}
+
+// the keys first tracked, let go
+static void clear_saws(given *g) {
+	for (size_t i = 0; i < g->nsaws; i++) {
+		if (g->saws[i].change != NULL) op_free(g->saws[i].change);
+	}
+	g->nsaws = 0;
+	pl_set_free(&g->sawn);
+	g->sawn = (pl_set){0};
 }
 
 static void clear_writes(given *g) {
@@ -313,6 +344,8 @@ static int differs(const crn_run *was, const crn_run *run, int f, int same_error
 	case CRN_ENDED: return was->ended != run->ended;
 	case CRN_END: return was->end != run->end;
 	case CRN_ERROR: return !same_error && (was->error != NULL || run->error != NULL);
+	// done again is the same; a failed act is a new one each time
+	case CRN_ACT: return was->act != run->act || run->act == CRN_ACT_FAILED;
 	case CRN_READS: return was->reads != run->reads;
 	case CRN_WRITES: return was->writes != run->writes;
 	}
@@ -393,12 +426,29 @@ static void landed(const pl_fact *fact, void *ctx) {
 	PUSH(g->writes, g->nwrites, g->capwrites, w);
 }
 
+// a key tracked in a run of a computer given: the change there, if it is the run's first track of it
+static void tracked(const void *key, sc_run *run, void *ctx) {
+	crn *r = ctx;
+	given *g = find(r, sc_run_computer(run));
+	if (g == NULL || !g->saw_on || g->n != sc_run_n(run)) return;
+	if (!pl_set_add(&g->sawn, key)) return;
+	saw s = {key, NULL};
+	pl_where w;
+	if (pl_spot(r->places, key, &w)) {
+		const nd_entry *there = tb_get(r->table, w.part, w.id);
+		if (there != NULL) s.change = change_value(r, &there->change);
+	}
+	PUSH(g->saws, g->nsaws, g->capsaws, s);
+}
+
 static void run_start(sc_computer *c, unsigned n, int rank, void *data) {
 	(void)rank;
 	crn *r = data;
 	given *g = find(r, c);
 	if (g == NULL) return;
 	clear_writes(g);
+	clear_saws(g);
+	g->saw_on = 1;
 	g->going = 1;
 	g->n = n;
 	g->has_started = 1;
@@ -427,6 +477,8 @@ static void run_end(sc_computer *c, unsigned n, sc_ended ended, const void *cons
 	// given while it ran: its start not seen
 	if (!g->going || g->n != n) {
 		clear_writes(g);
+		clear_saws(g);
+		g->saw_on = 0;
 		g->going = 1;
 		g->n = n;
 		g->has_started = 0;
@@ -441,7 +493,9 @@ static void run_end(sc_computer *c, unsigned n, sc_ended ended, const void *cons
 	run->end = end;
 	if (ended == SC_FAIL) run->error = xdup(more->error != NULL ? more->error : "error");
 	if (ended == SC_LOOPING) run->error = xdup("looping");
-	run->reads = reads_of(r, reads, nreads, was != NULL ? was->reads : NULL);
+	run->reads = reads_of(r, reads, nreads, was != NULL ? was->reads : NULL, g);
+	g->saw_on = 0;
+	clear_saws(g);
 	if (was != NULL && writes_same(was->writes, g)) {
 		((crn_writes *)was->writes)->refs++;
 		run->writes = was->writes;
@@ -450,22 +504,27 @@ static void run_end(sc_computer *c, unsigned n, sc_ended ended, const void *cons
 	write_record(r, h, by, run, 0);
 }
 
-// an effect's act wrote: the record's writes again
+// an effect's act ran (error: what it threw): the record's act, and its writes again
 static void acted(sc_computer *c, unsigned n, const char *error, void *data) {
-	(void)error;
 	crn *r = data;
 	given *g = find(r, c);
-	if (g == NULL || !g->going || g->n != n || g->nwrites == g->written) return;
+	if (g == NULL) return;
 	held *h = find_held(r, g->id);
 	const crn_run *was = h != NULL ? h->run : NULL;
 	sc_run *by = sc_latest(c);
 	if (was == NULL || was->n != n || by == NULL) return;
-	g->written = g->nwrites;
+	int wrote = g->going && g->n == n && g->nwrites != g->written;
+	if (!wrote && error == NULL && was->act == CRN_ACT_DONE) return;
 	crn_run *run = xalloc(sizeof *run);
 	*run = *was;
 	run->error = xdup(was->error);
+	run->act = error != NULL ? CRN_ACT_FAILED : CRN_ACT_DONE;
+	run->act_error = error != NULL ? xdup(error) : NULL;
 	((crn_reads *)was->reads)->refs++;
-	run->writes = writes_of(g);
+	if (wrote) {
+		g->written = g->nwrites;
+		run->writes = writes_of(g);
+	} else ((crn_writes *)was->writes)->refs++;
 	write_record(r, h, by, run, 1);
 }
 
@@ -480,6 +539,7 @@ crn *crn_new(const crn_setup *setup) {
 	r->starts = sc_on_run_start(r->scheduler, run_start, r);
 	r->ends = sc_on_run_end(r->scheduler, run_end, r);
 	r->effects = sc_on_effect(r->scheduler, acted, r);
+	r->tracks = sc_on_track(r->scheduler, tracked, r);
 	return r;
 }
 
@@ -502,8 +562,9 @@ void crn_stop(crn *r) {
 	if (r->starts != NULL) sc_remove_listener(r->starts);
 	if (r->ends != NULL) sc_remove_listener(r->ends);
 	if (r->effects != NULL) sc_remove_listener(r->effects);
+	if (r->tracks != NULL) sc_remove_listener(r->tracks);
 	if (r->all != NULL) pl_stop(r->all);
-	r->starts = r->ends = r->effects = NULL;
+	r->starts = r->ends = r->effects = r->tracks = NULL;
 	r->all = NULL;
 }
 
@@ -517,6 +578,8 @@ void crn_free(crn *r) {
 	}
 	for (size_t i = 0; i < r->ngs; i++) {
 		clear_writes(r->gs[i]);
+		clear_saws(r->gs[i]);
+		free(r->gs[i]->saws);
 		free(r->gs[i]->writes);
 		free(r->gs[i]->id);
 		free(r->gs[i]);

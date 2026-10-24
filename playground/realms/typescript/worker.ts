@@ -30,6 +30,7 @@ import { children, type Contributor, createPlaces, type Fact, type Places } from
 import { NODE } from "@ermine/places/header"
 import { PROCESS, processes } from "@ermine/processes"
 import { createScheduler, type Info, PENDING, type Scope } from "@ermine/scheduler"
+import { createSites } from "@ermine/sites"
 import { isPromise } from "@ermine/scheduler/helpers"
 import { createPaths } from "@ermine/scheduler/paths"
 import type { Key } from "@ermine/table"
@@ -281,8 +282,19 @@ export function serve(port: Port): () => void {
 		s.onTrackingEnd((k) => places.release(k))
 		const root = s.createRootScope({ realm: "worker" })
 		const commit = (changed: Parameters<Places["commit"]>[0]) => places.commit(changed)
+		// a memo's or effect's site: the program's line (the apis and the scheduler are ours); a
+		// write in its run carries it to the page
+		const sites = createSites(s, {
+			ours: [
+				import.meta.url,
+				import.meta.resolve("@ermine/api"),
+				import.meta.resolve("@ermine/programs/api"),
+				import.meta.resolve("@ermine/scheduler"),
+			],
+		})
 		const apis = createProcessAPIs({
 			scheduler: s,
+			sites,
 			table: r.table,
 			commit,
 			host: { places, table: r.table, scheduler: s, commit },

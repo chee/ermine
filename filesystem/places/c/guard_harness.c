@@ -167,6 +167,8 @@ typedef struct {
 	bool stopped;
 	ended ended;
 	gd_refusal refusal;
+	// the field of the target refused (borrowed from the program), NULL: none
+	const op_value *refused_field;
 	char *code;
 	// the paths a start names, let go at the end
 	const char ***held;
@@ -182,10 +184,13 @@ static op_value *thrown_code(ctx *c, char *code) {
 	return NULL;
 }
 // what an answer of the guard does to the program: false when it must end
-static bool allowed(ctx *c, gd_answer a, const gd_refusal *why) {
+static bool allowed(ctx *c, gd_answer a, const gd_refusal *why, const gd_target *targets) {
 	if (a == GD_FAILED) c->stopped = true;
 	else if (a == GD_PENDING && c->ended == RAN) c->ended = PENDING;
-	else if (a == GD_REFUSED && c->ended == RAN) c->ended = REFUSED, c->refusal = *why;
+	else if (a == GD_REFUSED && c->ended == RAN) {
+		c->ended = REFUSED, c->refusal = *why;
+		c->refused_field = targets[why->target].field;
+	}
 	return a == GD_OK;
 }
 // whether the reads the program told let it go on
@@ -210,7 +215,7 @@ static bool guarded(ctx *c, const char *const *path, size_t n, pl_member *out) {
 	if (!found) return false;
 	pl_member one = {n ? path[n - 1] : "", id, NULL};
 	pl_members list = {1, &one}, got;
-	if (!allowed(c, gd_members(c->g, &list, path, n ? n - 1 : 0, &got), NULL)) return false;
+	if (!allowed(c, gd_members(c->g, &list, path, n ? n - 1 : 0, &got), NULL, NULL)) return false;
 	*out = got.items[0];
 	pl_members_free(&got);
 	return true;
@@ -271,7 +276,7 @@ static op_value *eval_members(const op_value *x, bool full, ctx *c) {
 	if (!alive(c)) return pl_members_free(&list), NULL;
 	gd_answer a = gd_members(c->g, &list, path, n, &got);
 	pl_members_free(&list);
-	if (!allowed(c, a, NULL)) return NULL;
+	if (!allowed(c, a, NULL, NULL)) return NULL;
 	op_value *out = members_json(&got, full);
 	pl_members_free(&got);
 	return out;
@@ -290,7 +295,7 @@ static op_value *eval_ask(const op_value *x, const op_value *at, ctx *c) {
 	}
 	gd_answer a = gd_members(c->g, &list, path, n, &got);
 	pl_members_free(&list);
-	if (!allowed(c, a, NULL)) return NULL;
+	if (!allowed(c, a, NULL, NULL)) return NULL;
 	op_value *out = members_json(&got, true);
 	pl_members_free(&got);
 	return out;
@@ -303,7 +308,7 @@ static op_value *eval_read(const op_value *x, ctx *c) {
 	const op_value *path = x->count > 2 ? x->items[2] : NULL;
 	gd_target t = gd_target_of(s, part, path);
 	gd_refusal why;
-	bool ok = allowed(c, gd_read(c->g, &t, 1, &why), &why);
+	bool ok = allowed(c, gd_read(c->g, &t, 1, &why), &why, &t);
 	if (!ok) return NULL;
 	size_t n;
 	op_key *keys = world_path(path, &n);
@@ -328,7 +333,7 @@ static op_value *eval_edit(const op_value *x, ctx *c) {
 		if (move) targets[n++] = gd_target_of(s, part, op_get(move, "path"));
 	}
 	gd_refusal why;
-	bool ok = allowed(c, gd_write(c->g, "edit", targets, n, &why), &why);
+	bool ok = allowed(c, gd_write(c->g, "edit", targets, n, &why), &why, targets);
 	free(targets);
 	if (!ok) return NULL;
 	nd_entry *node;
@@ -349,7 +354,7 @@ static op_value *eval_place(const op_value *x, ctx *c) {
 	op_value *field;
 	gd_target t = gd_slot(s, name, &field);
 	gd_refusal why;
-	bool ok = allowed(c, gd_write(c->g, "place", &t, 1, &why), &why);
+	bool ok = allowed(c, gd_write(c->g, "place", &t, 1, &why), &why, &t);
 	op_free(field);
 	if (!ok) return NULL;
 	op_value *r = op_map();
@@ -427,6 +432,7 @@ static void finish_ctx(ctx *c) {
 typedef struct {
 	const op_value *e;
 	gd *g;
+	bool detail;
 	op_value *out;
 } evaluating;
 static void in_eval(void *d) {
@@ -438,6 +444,15 @@ static void in_eval(void *d) {
 		ev->out = world_error("refused");
 		op_set(ev->out, "reason", op_str(c.refusal.reason));
 		op_set(ev->out, "op", op_str(c.refusal.op));
+		if (ev->detail && c.refusal.grant.where != NULL) {
+			const pr_grant *gr = &c.refusal.grant;
+			op_value *grant = op_map();
+			op_set(grant, "part", op_str(gr->where->part));
+			op_set(grant, "id", op_str(gr->where->id.string));
+			op_set(grant, "index", op_num((double)gr->index));
+			op_set(ev->out, "grant", grant);
+		}
+		if (ev->detail && c.refused_field != NULL) op_set(ev->out, "field", op_ref((op_value *)c.refused_field));
 	} else if (c.ended == PENDING) ev->out = world_error("pending");
 	else if (c.ended == CODE) ev->out = world_error(c.code);
 	else {
@@ -519,7 +534,8 @@ static op_value *answer(const op_value *r) {
 	if (strcmp(op, "eval") == 0) {
 		gd *g = guard_named(world_text(op_get(r, "guard")));
 		if (g == NULL) return world_error("no such guard");
-		evaluating ev = {.e = op_get(r, "e"), .g = g};
+		const op_value *detail = op_get(r, "detail");
+		evaluating ev = {.e = op_get(r, "e"), .g = g, .detail = detail != NULL && detail->type == OP_BOOL && detail->bool_};
 		const char *scope = world_text(op_get(r, "scope"));
 		if (scope == NULL) in_eval(&ev);
 		else {

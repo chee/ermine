@@ -595,7 +595,6 @@ type Frame = {
 	slots: Map<string, number>
 	// where each group's first slot is, from the frame's corner
 	origin: Record<Group, number>
-	keyboard?: HTMLElement
 }
 // a den's things in slots: all but its speaker, which is stuck on in the card's bottom-left
 // corner; that corner (CORNER px up from the bottom) is kept clear of things
@@ -690,8 +689,6 @@ software.run("/system/den/runners/pigs", "/things/pigs", "/home/pigs")`
 		: common
 }
 
-const KEYS = ["qwertyuiop", "asdfghjkl", "zxcvbnm"]
-
 function frameOf(v: View): Frame {
 	let f = frames.get(v.who)
 	if (f) return f
@@ -735,23 +732,6 @@ function frameOf(v: View): Frame {
 		back.hidden = !back.hidden
 		$(".flip", el).classList.toggle("on", !back.hidden)
 	}
-	if (v.device === "cardputer") {
-		const kb = h("div", "keyboard")
-		for (const row of [...KEYS, " "]) {
-			const r = h("div", "keyrow")
-			for (const k of row === " " ? ["space", "del"] : [...row]) {
-				const key = h("button", `key${k.length > 1 ? " wide" : ""}`, k)
-				key.onpointerdown = (e) => {
-					e.stopPropagation()
-					press(v, k === "space" ? " " : k)
-				}
-				r.append(key)
-			}
-			kb.append(r)
-		}
-		el.append(kb)
-		f.keyboard = kb
-	}
 	frames.set(v.who, f)
 	return f
 }
@@ -769,15 +749,8 @@ if (isCard) {
 		if ((e.target as HTMLElement).closest("input") || e.metaKey || e.ctrlKey) return
 		const k = e.key === "Backspace" ? "del" : e.key.length === 1 ? e.key.toLowerCase() : ""
 		if (!k) return
-		const v = views()[0]
-		const kb = frames.get(v.who)?.keyboard
-		const key = [...(kb?.querySelectorAll("button") ?? [])].find((b) =>
-			b.textContent === (k === " " ? "space" : k)
-		)
 		sound.key()
-		key?.classList.add("down")
-		setTimeout(() => key?.classList.remove("down"), 120)
-		press(v, k)
+		press(views()[0], k)
 	})
 }
 
@@ -1291,7 +1264,7 @@ function makeShown(
 		body.append(typed, note)
 		update = (t) => {
 			held.textContent = String(t.out ?? "")
-			note.textContent = v.mine ? "type on the keys below" : `typed ${theirs}`
+			note.textContent = v.mine ? "type on your keyboard" : `typed ${theirs}`
 		}
 	} else if (t.kind === "pigs") {
 		const canvas = h("canvas")
@@ -1838,8 +1811,8 @@ function render() {
 					x0: t.kind === "speaker" ? f.x - 40 : f.x + 14,
 					y0: f.y + 58,
 					x1: f.x + f.w - 14,
-					// above the keyboard and the speaker's corner: nothing is dragged under them
-					y1: f.y + f.h - (f.keyboard ? 168 : CORNER),
+					// above the speaker's corner: nothing is dragged under it
+					y1: f.y + f.h - CORNER,
 				}))
 				shown.set(spot, s)
 			}

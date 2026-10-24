@@ -1,0 +1,238 @@
+{
+	"title": "a refusal says which grant decided and which target was refused: a deny's grant, the failing patch's field among several; a no from no grant or another policy names none",
+	"steps": [
+		{
+			"op": "value",
+			"id": "A",
+			"value": {
+				"a": 1,
+				"b": 2
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "rules",
+			"value": [
+				{
+					"actor": "chee",
+					"op": "edit",
+					"field": [
+						"a"
+					]
+				},
+				{
+					"actor": "chee",
+					"op": "edit",
+					"field": [
+						"b"
+					],
+					"deny": true
+				},
+				{
+					"actor": "chee",
+					"op": "edit",
+					"field": [
+						"c"
+					]
+				},
+				{
+					"actor": "chee",
+					"op": "read",
+					"id": "A",
+					"deny": true
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "chee",
+			"info": {
+				"actor": "chee"
+			},
+			"expect": {}
+		},
+		{
+			"op": "guard",
+			"name": "g",
+			"may": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "guard",
+			"name": "plain",
+			"may": {
+				"no": "closed"
+			},
+			"expect": {}
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "chee",
+			"e": {
+				"edit": [
+					"A",
+					"value",
+					[
+						{
+							"path": [
+								"a"
+							],
+							"value": 5
+						},
+						{
+							"path": [
+								"b"
+							],
+							"value": 7
+						}
+					]
+				]
+			},
+			"expect": {
+				"error": "refused",
+				"reason": "denied",
+				"op": "edit",
+				"grant": {
+					"part": "value",
+					"id": "rules",
+					"index": 1
+				},
+				"field": [
+					"b"
+				]
+			},
+			"detail": true
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "chee",
+			"e": {
+				"edit": [
+					"A",
+					"value",
+					[
+						{
+							"path": [
+								"b"
+							],
+							"value": 7
+						},
+						{
+							"path": [
+								"a"
+							],
+							"value": 5
+						}
+					]
+				]
+			},
+			"expect": {
+				"error": "refused",
+				"reason": "denied",
+				"op": "edit",
+				"grant": {
+					"part": "value",
+					"id": "rules",
+					"index": 1
+				},
+				"field": [
+					"b"
+				]
+			},
+			"detail": true
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "chee",
+			"e": {
+				"edit": [
+					"A",
+					"value",
+					[
+						{
+							"path": [
+								"a"
+							],
+							"value": 5
+						},
+						{
+							"path": [
+								"d"
+							],
+							"value": 7
+						}
+					]
+				]
+			},
+			"expect": {
+				"error": "refused",
+				"reason": "no grant",
+				"op": "edit",
+				"field": [
+					"d"
+				]
+			},
+			"detail": true
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "chee",
+			"e": {
+				"read": [
+					"A",
+					"value"
+				]
+			},
+			"expect": {
+				"error": "refused",
+				"reason": "denied",
+				"op": "read",
+				"grant": {
+					"part": "value",
+					"id": "rules",
+					"index": 3
+				}
+			},
+			"detail": true
+		},
+		{
+			"op": "eval",
+			"guard": "plain",
+			"scope": "chee",
+			"e": {
+				"edit": [
+					"A",
+					"value",
+					[
+						{
+							"path": [
+								"a"
+							],
+							"value": 5
+						}
+					]
+				]
+			},
+			"expect": {
+				"error": "refused",
+				"reason": "closed",
+				"op": "edit",
+				"field": [
+					"a"
+				]
+			},
+			"detail": true
+		}
+	]
+}

@@ -28,17 +28,27 @@
 
 typedef enum { PR_YES, PR_NO, PR_PENDING } pr_verdict;
 typedef struct {
+	const char *part;
+	tb_key id;
+} pr_where;
+
+// which grant decided: the rules node and the grant's index in its list. where NULL: none
+typedef struct {
+	const pr_where *where;
+	size_t index;
+} pr_grant;
+
+typedef struct {
 	pr_verdict verdict;
 	// PR_NO: why. never NULL; a grants "bad grant" reason is kept only until the next one
 	const char *reason;
 	// PR_PENDING: what it waits for, opaque (a grants policy: its pr_where); may be NULL
 	const void *need;
+	// PR_YES or PR_NO from a grants policy: the grant that decided (a yes: the first allowing one
+	// that matched; a "denied": that deny). all, any and only pass it through. borrowed from the
+	// policy, as need is
+	pr_grant grant;
 } pr_answer;
-
-typedef struct {
-	const char *part;
-	tb_key id;
-} pr_where;
 
 // where something stands among places: path NULL, route NULL: not reached by names
 typedef struct {

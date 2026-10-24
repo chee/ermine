@@ -5,7 +5,9 @@
 // a read is asked through places, told: a run asking tracks what the policy read, so a change to
 // the rules reruns it, refused or not. a write is asked of the table, told no one: a write makes
 // no run depend on the rules. a no throws Refusal, a pending throws the scheduler's PENDING; a
-// list keeps a refused member in its place, its id REFUSED. no policy: everything is allowed
+// list keeps a refused member in its place, its id REFUSED. no policy: everything is allowed.
+// a Refusal's answer is protect's whole, so its grant (which grant decided) is kept; its ask
+// names the target refused
 import type { Key as Step } from "@ermine/op/apply"
 import {
 	type Answer,

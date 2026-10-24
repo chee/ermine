@@ -175,7 +175,7 @@ Deno.test("runs: a failed run, its error; looping too", () => {
 	const run = runs.read("C")!
 	assertEquals(run.end, "failed")
 	assertInstanceOf(run.error, Error)
-	assertEquals(run.error.message, "boom")
+	assertEquals((run.error as Error).message, "boom")
 	assertEquals(run.reads.map(where), [{ part: "value", id: "a", path: [] }])
 	// a compute setting what it reads: a loop through itself
 	const l = s.runWithScope(
@@ -191,7 +191,7 @@ Deno.test("runs: a failed run, its error; looping too", () => {
 	s.pulse()
 	const looped = runs.read("L")!
 	assertEquals(looped.end, "looping")
-	assertEquals(looped.error!.message, "looping")
+	assertEquals((looped.error as Error).message, "looping")
 })
 
 Deno.test("runs: writes, each with its change: the run's code, its set, an effect's act; a host's write in it is not", () => {
@@ -324,4 +324,72 @@ Deno.test("runs: drop takes the record out and tells its readers; a computer not
 	edit("a", [{ path: ["x"], value: 2 }])
 	s.pulse()
 	assertEquals(runs.read("C")!.n, 2)
+})
+
+Deno.test("runs: a throw that is not an Error is kept as thrown, in a run's error and an act's", () => {
+	const { s, places, runs, o } = world()
+	const thrown = { code: 7 }
+	const f = s.runWithScope(o, () =>
+		s.createComputer(() => {
+			places.readValue("value", "a")
+			throw thrown
+		}, () => {}))
+	runs.give(f, "F")
+	const g = s.runWithScope(
+		o,
+		() =>
+			s.createEffect(() => places.readValue("value", "b", ["x"]), () => {
+				throw "plain"
+			}),
+	)
+	runs.give(g, "G")
+	s.pulse()
+	assertStrictEquals(runs.read("F")!.error, thrown)
+	assertEquals(runs.read("G")!.act, { end: "failed", error: "plain" })
+})
+
+Deno.test("runs: an act that does not throw is done; one that throws is failed; none before it ran", () => {
+	const { s, places, runs, o, edit } = world()
+	let bad = false
+	const e = s.runWithScope(
+		o,
+		() =>
+			s.createEffect(() => places.readValue("value", "a", ["x"]), () => {
+				if (bad) throw new Error("act boom")
+			}),
+	)
+	runs.give(e, "E")
+	s.pulse()
+	assertEquals(runs.read("E")!.act, { end: "done" })
+	bad = true
+	edit("a", [{ path: ["x"], value: 1 }])
+	s.pulse()
+	const act = runs.read("E")!.act!
+	assertEquals(act.end, "failed")
+	assertEquals((act as { error: Error }).error.message, "act boom")
+	// a compute has none
+	const c = s.runWithScope(o, () => s.createComputer(() => 1, () => {}))
+	runs.give(c, "C")
+	s.pulse()
+	assertEquals(runs.read("C")!.act, undefined)
+})
+
+Deno.test("runs: a run that reads a node and then writes it names the change before its write", () => {
+	const { s, places, table, runs, o } = world()
+	const before = table.get("value", "a")!.change
+	const c = s.runWithScope(o, () =>
+		s.createComputer(() => {
+			places.readValue("value", "a", ["y"])
+			const e = table.get("value", "a")!
+			update(e, [{ path: ["x"], value: 5 }], createChangeHeader(s))
+			places.commit([e])
+			return 1
+		}, () => {}))
+	runs.give(c, "C")
+	s.pulse()
+	const run = runs.read("C")!
+	const read = run.reads[0] as { change: unknown }
+	assertStrictEquals(read.change, before)
+	assert(table.get("value", "a")!.change !== before)
+	assertEquals(run.writes.length, 1)
 })

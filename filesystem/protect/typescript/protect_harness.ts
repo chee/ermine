@@ -10,7 +10,8 @@
 // { op: "load", part, id, value?, at? }          → {}   the node there, for version at (none: for
 //    every version; one made for the version asked wins). loaded again: replaced
 // { op: "drop", part, id, at? }                  → {}   that node not there
-// { op: "ask", policy, who?, what, target, at? } → { answer, reason?, need?, reads }
+// { op: "ask", policy, who?, what, target, at? } → { answer, reason?, need?, grant?, reads }
+//    grant?: { part, id, index }, the grant that decided (a grants policy's yes or denied)
 //    from?: {path?, route?}, the place the asker is at
 //    who: a change header (a map with actor, reader, ...)
 //    target: {part?, id?, field?, path?, route?}, as protect.ts's Target (route: ids)

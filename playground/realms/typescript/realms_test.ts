@@ -205,9 +205,11 @@ Deno.test("an edit from the worker lands as its effect: the page's actor, the ef
 	assertEquals(change.metadata?.[NODE], watch)
 	assertEquals(w.attributes(watch)?.[SCOPE], p.id)
 	assert(!JSON.stringify(change.metadata).includes("realm"))
-	// the site: the realm's, not the page's realms.ts
+	// the site: the realm's, not the page's realms.ts: written in the effect's act (a run), the
+	// effect's own, its line in the program (the worker's sites)
 	assert(change.external?.length, "a site")
 	assert(!change.external![0].file.endsWith("realms.ts"), change.external![0].file)
+	assertEquals(change.external![0].line, 2, JSON.stringify(change.external))
 	assertEquals(p.at, ["editor"])
 	w.done()
 })

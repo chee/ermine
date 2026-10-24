@@ -763,8 +763,10 @@ static void in_header(void *data) {
 typedef struct {
 	char *name;
 	pl_watch *watch;
-	// the facts told since last asked: a list of {part, id, patches, actor?}
+	// the facts told since last asked: a list of {part, id, patches, actor?, sites?}
 	op_value *told;
+	// a fact says how many sites its change has
+	int sites;
 } told_watch;
 static told_watch **told_watches;
 static size_t ntold, captold;
@@ -783,6 +785,7 @@ static void told_fact(const pl_fact *f, void *ctx) {
 	op_set(o, "id", op_str(f->id.string));
 	op_set(o, "patches", world_patches(f->patches, f->patches_length));
 	if (f->change != NULL && f->change->actor != NULL) op_set(o, "actor", world_snap(f->change->actor));
+	if (w->sites) op_set(o, "sites", op_num(f->change != NULL ? (double)f->change->external_length : 0));
 	op_push(w->told, o);
 }
 
@@ -813,6 +816,8 @@ static op_value *watch_path(const op_value *r) {
 		old->told = op_list();
 		PUSH(told_watches, ntold, captold, old);
 	}
+	const op_value *sites = op_get(r, "sites");
+	old->sites = sites != NULL && sites->type == OP_BOOL && sites->bool_;
 	old->watch = pl_watch_path(world_places, path, n, told_fact, old, &options);
 	free(path);
 	free(at_keys);

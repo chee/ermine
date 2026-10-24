@@ -42,6 +42,8 @@
 // { op: "header", scope?, extra? }           → { actor, reader?, metadata?, timely, sites }
 //    the header places makes with scope open, extra its own info; timely: time is now (whole
 //    seconds); sites: its external's count. nothing open: { error: "unscoped" }
+// { op: "watchPath", name, path, part?, at?, sites? }  → {}   watched: each fact { part, id, patches,
+//    actor? }; sites: true adds sites, the count of its change's external (0: no change)
 // anything not understood: { error: text }
 import createEntry, { type ChangeHeader } from "@ermine/node/entry"
 import update from "@ermine/node/update"
@@ -57,6 +59,7 @@ import { createChangeHeader } from "./header.ts"
 import { getOrSet, upsert } from "./upsert.ts"
 import { createStatus, PENDING, status } from "./status.ts"
 import { createPathCache, type PathCache } from "./cache.ts"
+import { frames } from "@ermine/util/stacktrace"
 type Json = unknown
 
 let moments: Told[] = []
@@ -81,8 +84,12 @@ export const table = createTable((part, id) => places.onTableChange(part as Key,
 export const paths = createPaths<unknown>()
 export const places = createPlaces({ root: "R", table, paths, scheduler: s })
 export const host = s.createRootScope({ actor: "test" })
+// this harness's own line, as the C one's CH_HERE: a write in a run's site (header.ts captures
+// none in a run)
+const HERE = frames(new Error().stack ?? "")[0]
 // a write's header, made now
-export const header = (extra?: Info) => createChangeHeader(s, extra)
+export const header = (extra?: Info) =>
+	createChangeHeader(s, extra, undefined, undefined, s.getRun() === undefined ? undefined : HERE)
 
 // the moments, computations by name
 function moment(m: Told): Json {
@@ -275,6 +282,7 @@ export function worldAnswer(r: Request): Json | undefined {
 			const stop = places.watchPath(r.path, (f) => {
 				const fact: Record<string, Json> = { part: f.part, id: f.id, patches: f.patches }
 				if (f.change !== undefined) fact.actor = f.change.actor
+				if (r.sites === true) fact.sites = f.change?.external?.length ?? 0
 				told.push(fact)
 			}, { part: r.part, at: r.at })
 			watches.set(r.name, { told, stop })

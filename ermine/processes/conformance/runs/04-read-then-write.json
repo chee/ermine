@@ -1,0 +1,144 @@
+{
+	"title": "a run that reads a node and then writes it records the change it saw as its read (the earlier writer's), not its own write; its write is its own; the next run, reading the node as the first run left it, names the first run's write",
+	"steps": [
+		{
+			"op": "runs",
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "a",
+			"value": {
+				"x": 0,
+				"y": 0
+			},
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "o"
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "rw",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": [
+							"value",
+							"a",
+							[
+								"y"
+							]
+						]
+					},
+					{
+						"write": {
+							"op": "edit",
+							"part": "value",
+							"id": "a",
+							"patches": [
+								{
+									"path": [
+										"x"
+									],
+									"value": 1
+								}
+							]
+						}
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "giveRun",
+			"name": "rw",
+			"id": "RW",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runOf",
+			"id": "RW",
+			"expect": {
+				"run": {
+					"n": 1,
+					"end": "done",
+					"timed": true,
+					"reads": [
+						{
+							"part": "value",
+							"id": "a",
+							"path": [
+								"y"
+							],
+							"actor": "test"
+						}
+					],
+					"writes": [
+						{
+							"part": "value",
+							"id": "a",
+							"actor": "o"
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "a",
+			"patches": [
+				{
+					"path": [
+						"y"
+					],
+					"value": 1
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runOf",
+			"id": "RW",
+			"expect": {
+				"run": {
+					"n": 2,
+					"end": "done",
+					"timed": true,
+					"reads": [
+						{
+							"part": "value",
+							"id": "a",
+							"path": [
+								"y"
+							],
+							"actor": "test"
+						}
+					],
+					"writes": [
+						{
+							"part": "value",
+							"id": "a",
+							"actor": "o"
+						}
+					]
+				}
+			}
+		}
+	]
+}

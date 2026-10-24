@@ -5,7 +5,7 @@
 // of two stores, as a history keeper or forgetting (history.h)
 //
 //   memory: every record, as tp_memory_store keeps them
-//   file:   tp_file_store, in a directory made for it and taken away after: in memory, its index
+//   file:   tp_file_store, in a directory made for it and taken away after: its index on disk
 //   forgets: tp_history_forget every second run taken, and every 8 turns in the room; the writer
 //            a keeper
 //
@@ -308,8 +308,10 @@ static void bench(tp_log *w, const messages *m, int file, int forgets) {
 	op_free((op_value *)info.value);
 	if (file) {
 		char path[64];
-		static const char *const files[3] = {"log", "snapshot", "key"};
-		for (int i = 0; i < 3; i++) snprintf(path, sizeof path, "%s/%s", dir, files[i]), unlink(path);
+		static const char *const files[] = {"log", "snapshot", "key", "open", "index", "i0", "i1"};
+		for (size_t i = 0; i < sizeof files / sizeof *files; i++) {
+			snprintf(path, sizeof path, "%s/%s", dir, files[i]), unlink(path);
+		}
 		rmdir(dir);
 	}
 }

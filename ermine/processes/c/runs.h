@@ -4,9 +4,13 @@
 //
 // The record, a crn_run: n, started (none when it was given while it ran), ended (milliseconds
 // since 1970, fractional, CLOCK_REALTIME), end ("done", "pending", "failed", "looping"), error
-// (failed and looping: its message), reads, writes. A read named by pl_spot: {part, id, path
-// (spot: the change spot, no path), keys (a keys read), change}, change the change of the entry
-// there as the run ended (none there: NULL); a key places can't name: unnamed. A write: {part,
+// (failed and looping: its message; a string, as C's scheduler tells what was thrown, where the
+// TypeScript reference keeps the thrown value itself), act (an effect's, once its act ran after
+// this run: CRN_ACT_DONE, or CRN_ACT_FAILED with act_error, its message; none until then), reads,
+// writes. A read named by pl_spot: {part, id, path (spot: the change spot, no path), keys (a keys
+// read), change}, change the change of the entry there as the run first read the key (a run that
+// reads a node and then writes it names the change before its write; none there: NULL; a key
+// tracked before the run was given: as the run ended); a key places can't name: unnamed. A write: {part,
 // id, change} (a table event taking it out: no change). Written from the scheduler's run end, and
 // after an effect's act that wrote (sc_on_effect). A stopped run writes nothing. A write is the
 // run's when it lands (pl_watch_all) with the run open (sc_get_run).
@@ -88,11 +92,26 @@ typedef struct {
 	const char *end;
 	// NULL: none
 	char *error;
+	// CRN_ACT_NONE, CRN_ACT_DONE or CRN_ACT_FAILED (then act_error, never NULL)
+	int act;
+	char *act_error;
 	const crn_reads *reads;
 	const crn_writes *writes;
 } crn_run;
 
-typedef enum { CRN_N, CRN_STARTED, CRN_ENDED, CRN_END, CRN_ERROR, CRN_READS, CRN_WRITES, CRN_ALL } crn_field;
+enum { CRN_ACT_NONE, CRN_ACT_DONE, CRN_ACT_FAILED };
+
+typedef enum {
+	CRN_N,
+	CRN_STARTED,
+	CRN_ENDED,
+	CRN_END,
+	CRN_ERROR,
+	CRN_ACT,
+	CRN_READS,
+	CRN_WRITES,
+	CRN_ALL
+} crn_field;
 
 // listens to the scheduler's run start and end and effects, and to every write, from here on
 crn *crn_new(const crn_setup *setup);

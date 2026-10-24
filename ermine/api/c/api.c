@@ -93,6 +93,10 @@ struct api_context {
 	size_t nmethods, capmethods;
 	struct api_watching **watches;
 	size_t nwatches, capwatches;
+	// a write's site now (file NULL: none), innermost: the public call running (its caller's line,
+	// api.h's macros), or, while a memo's or effect's code runs (compute, set, act) and no call
+	// inside it is, the line that made it
+	ch_site at;
 };
 
 struct computer;
@@ -437,10 +441,22 @@ static void commit(api *a, const pl_changed *c) {
 	else pl_commit(a->x->s.places, c);
 }
 
+// a public call: its site (the caller's line, the macro's) kept while it runs, the outer one's back
+// after. in a function of a, file, line and func
+#define ENTERED(call) \
+	do { \
+		ch_site was_ = a->x->at; \
+		a->x->at = (ch_site){.file = file, .line = line, .function = func}; \
+		int code_ = (call); \
+		a->x->at = was_; \
+		return code_; \
+	} while (0)
+
 // a header made now, with a scope open; extra (n pairs): its innermost metadata (edits: what it
-// replaces)
+// replaces). its site: x's at, the real line, in a run too (C knows it for free)
 static int header_with(api *a, const sc_pair *extra, size_t n, ch_header *h, pl_made **made) {
-	char *bad = pl_header(a->x->s.places, extra, n, NULL, h, made);
+	api_context *x = a->x;
+	char *bad = pl_header(x->s.places, extra, n, x->at.file ? &x->at : NULL, h, made);
 	if (bad == NULL) return 0;
 	fail(a, API_FAILED, bad);
 	free(bad);
@@ -691,7 +707,7 @@ static int do_open(api *a, void *data) {
 	if (there) return free(there), 0;
 	return make(a, m->path, m->value, NULL);
 }
-int api_open(api *a, const char *at, const op_value *value, api_node *out) {
+static int open_(api *a, const char *at, const op_value *value, api_node *out) {
 	names p = {0};
 	int code = resolve(a, at, &p);
 	if (code) return code;
@@ -704,12 +720,16 @@ int api_open(api *a, const char *at, const op_value *value, api_node *out) {
 	*out = node_of(&p, API_VALUE);
 	return 0;
 }
+int api_open_at(api *a, const char *at, const op_value *value, api_node *out,
+	const char *file, int line, const char *func) {
+	ENTERED(open_(a, at, value, out));
+}
 
 static int do_create(api *a, void *data) {
 	making *m = data;
 	return make(a, m->path, m->value, m->id);
 }
-int api_create(api *a, const char *folder, const op_value *value, api_node *out) {
+static int create_(api *a, const char *folder, const op_value *value, api_node *out) {
 	names p = {0};
 	int code = resolve(a, folder, &p);
 	if (code) return code;
@@ -722,6 +742,10 @@ int api_create(api *a, const char *folder, const op_value *value, api_node *out)
 	later(a->x);
 	*out = node_of(&p, API_VALUE);
 	return 0;
+}
+int api_create_at(api *a, const char *folder, const op_value *value, api_node *out,
+	const char *file, int line, const char *func) {
+	ENTERED(create_(a, folder, value, out));
 }
 
 // reads ----------------------------------------------------------------------------------------
@@ -837,7 +861,7 @@ static api_from from_of(const op_value *h, const char *part, int conflict) {
 }
 static void from_free(api_from *f) {
 	free(f->head), free(f->by), free(f->signer);
-	op_free(f->who), op_free(f->where);
+	op_free(f->who), op_free(f->where), op_free(f->node), op_free(f->run);
 	for (size_t i = 0; i < f->ndiffers; i++) free(f->differs[i]);
 	free(f->differs);
 }
@@ -896,6 +920,12 @@ int api_reads(api *a, api_target x, const op_key *path, size_t n, api_versions *
 			if (e && e->change.has_time) from.has_when = 1, from.when = e->change.time;
 			if (e && e->change.external) {
 				from.where = sites_of(e->change.external, e->change.external_length);
+			}
+			for (size_t k = 0; e && k < e->change.metadata_length; k++) {
+				const ch_entry *m = &e->change.metadata[k];
+				if (m->value == NULL) continue;
+				if (strcmp(m->key, PL_NODE) == 0) from.node = op_ref((op_value *)m->value);
+				if (strcmp(m->key, "run") == 0) from.run = op_ref((op_value *)m->value);
 			}
 			out->items = xalloc(sizeof *out->items);
 			out->items[0] = (api_version){.value = value, .from = from};
@@ -1067,11 +1097,15 @@ static int do_edit(api *a, void *data) {
 	found_free(&f);
 	return code;
 }
-int api_edit(api *a, api_target x, const op_patch *patches, size_t n) {
+static int edit_(api *a, api_target x, const op_patch *patches, size_t n) {
 	editing e = {x, patches, n, NULL, 0};
 	int code = within(a, do_edit, &e);
 	if (!code) later(a->x);
 	return code;
+}
+int api_edit_at(api *a, api_target x, const op_patch *patches, size_t n,
+	const char *file, int line, const char *func) {
+	ENTERED(edit_(a, x, patches, n));
 }
 
 // the metadata key a write says what it replaces by, for sync: "all", or commit names (hex)
@@ -1080,7 +1114,7 @@ int api_edit(api *a, api_target x, const op_patch *patches, size_t n) {
 
 // api_edit's, telling sync what it replaces: every value at each path written, or the ones given
 // (by their heads)
-int api_edits(api *a, api_target x, const op_patch *patches, size_t n, const api_version *which,
+static int edits_(api *a, api_target x, const op_patch *patches, size_t n, const api_version *which,
 	size_t nwhich) {
 	op_value *said = which == NULL ? op_str("all") : op_list();
 	for (size_t i = 0; which != NULL && i < nwhich; i++) {
@@ -1092,6 +1126,10 @@ int api_edits(api *a, api_target x, const op_patch *patches, size_t n, const api
 	op_free(said);
 	if (!code) later(a->x);
 	return code;
+}
+int api_edits_at(api *a, api_target x, const op_patch *patches, size_t n, const api_version *which,
+	size_t nwhich, const char *file, int line, const char *func) {
+	ENTERED(edits_(a, x, patches, n, which, nwhich));
 }
 
 static void watch_told(const pl_fact *fact, void *ctx) {
@@ -1154,11 +1192,15 @@ static int do_place(api *a, void *data) {
 	names_free(&path);
 	return code;
 }
-int api_place(api *a, const char *at, api_target x) {
+static int place_(api *a, const char *at, api_target x) {
 	treeing t = {at, x, NULL};
 	int code = within(a, do_place, &t);
 	if (!code) later(a->x);
 	return code;
+}
+int api_place_at(api *a, const char *at, api_target x,
+	const char *file, int line, const char *func) {
+	ENTERED(place_(a, at, x));
 }
 
 // the name taken out of its folder's children
@@ -1192,11 +1234,15 @@ static int do_unplace(api *a, void *data) {
 	names_free(&path);
 	return code;
 }
-int api_unplace(api *a, const char *at) {
+static int unplace_(api *a, const char *at) {
 	treeing t = {at, {0}, NULL};
 	int code = within(a, do_unplace, &t);
 	if (!code) later(a->x);
 	return code;
+}
+int api_unplace_at(api *a, const char *at,
+	const char *file, int line, const char *func) {
+	ENTERED(unplace_(a, at));
 }
 
 static int do_move(api *a, void *data) {
@@ -1246,11 +1292,15 @@ static int do_move(api *a, void *data) {
 	names_free(&from), names_free(&to);
 	return code;
 }
-int api_move(api *a, const char *from, const char *to) {
+static int move_(api *a, const char *from, const char *to) {
 	treeing t = {from, {0}, to};
 	int code = within(a, do_move, &t);
 	if (!code) later(a->x);
 	return code;
+}
+int api_move_at(api *a, const char *from, const char *to,
+	const char *file, int line, const char *func) {
+	ENTERED(move_(a, from, to));
 }
 
 static int do_remove(api *a, void *data) {
@@ -1274,11 +1324,15 @@ static int do_remove(api *a, void *data) {
 	found_free(&f);
 	return code;
 }
-int api_remove(api *a, api_target x) {
+static int remove_(api *a, api_target x) {
 	treeing t = {NULL, x, NULL};
 	int code = within(a, do_remove, &t);
 	if (!code) later(a->x);
 	return code;
+}
+int api_remove_at(api *a, api_target x,
+	const char *file, int line, const char *func) {
+	ENTERED(remove_(a, x));
 }
 
 // computers ------------------------------------------------------------------------------------
@@ -1301,10 +1355,20 @@ typedef struct computer {
 	void *ctx;
 	api_options o;
 	sc_computer *c;
+	// the line that made it: its own writes' site (its result, as set or acted)
+	ch_site site;
 	// the cleanups on own asking after it (one per run that made it); its node gone once
 	unsigned holds;
 	int gone;
 } computer;
+
+// c's code running: x's at its line, the outer one's back after (ran)
+static ch_site running(computer *c) {
+	ch_site was = c->x->at;
+	c->x->at = c->site;
+	return was;
+}
+static void ran(api_context *x, ch_site was) { x->at = was; }
 
 static sc_out computer_f(void *previous, void *data) {
 	computer *c = data;
@@ -1314,7 +1378,11 @@ static sc_out computer_f(void *previous, void *data) {
 		cst_give(c->x->statuses, self, tb_string(c->id));
 		if (c->x->runs) crn_give(c->x->runs, self, tb_string(c->id));
 	}
-	return c->f(c->a, previous, c->ctx);
+	api_context *x = c->x;
+	ch_site was = running(c);
+	sc_out out = c->f(c->a, previous, c->ctx);
+	ran(x, was);
+	return out;
 }
 // equal as a script's Object.is has it: scalars by content, anything else by identity; or the host's
 static bool computer_equal(const void *p, const void *q, void *data) {
@@ -1339,13 +1407,22 @@ static char *computer_write(computer *c, const op_value *v) {
 	int code = write_whole(c->a, API_VALUE, c->id, v);
 	return code ? xdup(api_why(c->a)) : NULL;
 }
-static char *computer_set(void *value, void *data) { return computer_write(data, value); }
+static char *computer_set(void *value, void *data) {
+	computer *c = data;
+	api_context *x = c->x;
+	ch_site was = running(c);
+	char *bad = computer_write(c, value);
+	ran(x, was);
+	return bad;
+}
 static char *computer_act(void *value, void *previous, void *data) {
 	computer *c = data;
+	api_context *x = c->x;
+	ch_site was = running(c);
 	char *bad = computer_write(c, value);
-	if (bad) return bad;
-	if (c->act) c->act(c->a, value, previous, c->ctx);
-	return NULL;
+	if (!bad && c->act) c->act(c->a, value, previous, c->ctx);
+	ran(x, was);
+	return bad;
 }
 
 // a computer's node gone: unplaced from its name (if it is still there), its entries deleted
@@ -1490,6 +1567,7 @@ static int make_computer(api *a, int memo, int early, const char *name, api_comp
 	computer *c = xalloc(sizeof *c);
 	c->a = a, c->x = x, c->memo = memo, c->early = early, c->own = own;
 	c->f = f, c->act = act, c->ctx = ctx;
+	c->site = (ch_site){.file = file, .line = line, .function = func};
 	c->path = path;
 	if (options) c->o = *options;
 	// its id a new one, flat and opaque: the name only places it
@@ -1522,15 +1600,15 @@ static int make_computer(api *a, int memo, int early, const char *name, api_comp
 }
 int api_memo_at(api *a, const char *name, api_compute f, void *ctx, const api_options *options,
 	api_node *out, const char *file, int line, const char *func) {
-	return make_computer(a, 1, 0, name, f, NULL, ctx, options, out, file, line, func);
+	ENTERED(make_computer(a, 1, 0, name, f, NULL, ctx, options, out, file, line, func));
 }
 int api_effect_at(api *a, const char *name, api_compute f, api_act act, void *ctx,
 	const api_options *options, api_node *out, const char *file, int line, const char *func) {
-	return make_computer(a, 0, 0, name, f, act, ctx, options, out, file, line, func);
+	ENTERED(make_computer(a, 0, 0, name, f, act, ctx, options, out, file, line, func));
 }
 int api_early_at(api *a, const char *name, api_compute f, api_act act, void *ctx,
 	const api_options *options, api_node *out, const char *file, int line, const char *func) {
-	return make_computer(a, 0, 1, name, f, act, ctx, options, out, file, line, func);
+	ENTERED(make_computer(a, 0, 1, name, f, act, ctx, options, out, file, line, func));
 }
 
 // methods --------------------------------------------------------------------------------------
@@ -1570,7 +1648,7 @@ static int do_method(api *a, void *data) {
 	free(id);
 	return code;
 }
-int api_method(api *a, const char *at, api_method_fn fn, void *ctx, api_node *out) {
+static int method_(api *a, const char *at, api_method_fn fn, void *ctx, api_node *out) {
 	api_context *x = a->x;
 	method_rec rec = {fn, ctx, owner(a)};
 	PUSH(x->methods, x->nmethods, x->capmethods, rec);
@@ -1584,6 +1662,10 @@ int api_method(api *a, const char *at, api_method_fn fn, void *ctx, api_node *ou
 	later(x);
 	*out = node_of(&p, API_VALUE);
 	return 0;
+}
+int api_method_at(api *a, const char *at, api_method_fn fn, void *ctx, api_node *out,
+	const char *file, int line, const char *func) {
+	ENTERED(method_(a, at, fn, ctx, out));
 }
 
 typedef struct {
@@ -1719,7 +1801,7 @@ static int do_ref(api *a, void *data) {
 	op_free(v);
 	return code;
 }
-int api_ref(api *a, const char *at, op_value *(*make_)(void *ctx), void *ctx, api_node *out) {
+static int ref_(api *a, const char *at, op_value *(*make_)(void *ctx), void *ctx, api_node *out) {
 	names p = {0};
 	int code = resolve(a, at, &p);
 	if (code) return code;
@@ -1729,6 +1811,10 @@ int api_ref(api *a, const char *at, op_value *(*make_)(void *ctx), void *ctx, ap
 	later(a->x);
 	*out = node_of(&p, API_VALUE);
 	return 0;
+}
+int api_ref_at(api *a, const char *at, op_value *(*make_)(void *ctx), void *ctx, api_node *out,
+	const char *file, int line, const char *func) {
+	ENTERED(ref_(a, at, make_, ctx, out));
 }
 
 // patch nodes ------------------------------------------------------------------------------------
@@ -1767,7 +1853,7 @@ static int do_patch(api *a, void *data) {
 	found_free(&f);
 	return code;
 }
-int api_patch(api *a, const char *at, api_target over, const op_value *patches, api_node *out) {
+static int patch_(api *a, const char *at, api_target over, const op_value *patches, api_node *out) {
 	names p = {0};
 	int code = resolve(a, at, &p);
 	if (code) return code;
@@ -1777,6 +1863,10 @@ int api_patch(api *a, const char *at, api_target over, const op_value *patches, 
 	later(a->x);
 	*out = node_of(&p, API_VALUE);
 	return 0;
+}
+int api_patch_at(api *a, const char *at, api_target over, const op_value *patches, api_node *out,
+	const char *file, int line, const char *func) {
+	ENTERED(patch_(a, at, over, patches, out));
 }
 
 static int do_land(api *a, void *data) {
@@ -1821,10 +1911,14 @@ static int do_land(api *a, void *data) {
 	found_free(&f);
 	return code;
 }
-int api_land(api *a, api_target x) {
+static int land_(api *a, api_target x) {
 	int code = within(a, do_land, &x);
 	if (!code) later(a->x);
 	return code;
+}
+int api_land_at(api *a, api_target x,
+	const char *file, int line, const char *func) {
+	ENTERED(land_(a, x));
 }
 
 void api_layers_free(api_layers *layers) {

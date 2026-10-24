@@ -7,7 +7,10 @@
 // { op: "scope", name, parent?, wrapped? }    → {}   a scope under parent (none: the one open: none)
 // { op: "computer", name, parent, wrapped? }  → {}   a compute made with parent open
 // { op: "effect", name, parent, wrapped? }    → {}   an effect made with parent open
-//    wrapped: false makes it with the scheduler alone (default true: through the sites)
+//    wrapped: false makes it with the scheduler alone (default true: through the sites). each
+//    computer and effect reads one key, the same for all
+// { op: "rerun" }                             → {}   a pulse, the key marked, a pulse: each
+//    computer and effect runs again
 // { op: "site", name }                        → { site }   whether the scope has a site of its own
 // { op: "chain", name }                       → { length } how many sites its chain has
 import { createScheduler, type Scope } from "@ermine/scheduler"
@@ -18,6 +21,9 @@ const info = { owner: "test" }
 const scheduler = createScheduler()
 const sites = createSites(scheduler)
 const named = new Map<string, Scope>()
+// what every computer and effect reads
+const KEY = {}
+const read = () => (scheduler.track(KEY), 1)
 
 function find(name: unknown): Scope | undefined {
 	return typeof name === "string" ? named.get(name) : undefined
@@ -42,13 +48,18 @@ export function answer(r: Request): Record<string, unknown> {
 					parent,
 					() =>
 						r.op === "effect"
-							? via.createEffect(() => 1, () => {})
-							: via.createComputer(() => 1, () => {}),
+							? via.createEffect(read, () => {})
+							: via.createComputer(read, () => {}),
 				)
 			}
 			named.set(r.name, made)
 			return {}
 		}
+		case "rerun":
+			scheduler.pulse()
+			scheduler.mark([KEY])
+			scheduler.pulse()
+			return {}
 		case "site": {
 			const o = find(r.name)
 			if (o === undefined) throw new Error(`site: no scope ${r.name}`)

@@ -12,6 +12,10 @@
 // compute returns SC_PENDING), not-a-method, stop (return at once, result dropped), failed
 // (api_why says why, good until the next call).
 // api_node: a path or id, and a part. api_target: a path string or a node.
+// sites: each writing call is a macro over its _at, noting the caller's line (__FILE__, __LINE__,
+// __func__); a write's site (its change's external) is that line, in a run too, setup.sites or
+// not (api.ts, which pays ~50 µs a capture, gives the running memo's or effect's own in a run). a
+// memo's or effect's own write (its result): the line that made it.
 // memory: values given are held (op_ref) if kept, else the caller's; values given back are
 // borrowed until the node changes (api_items, api_layers hold their own). api_node: the caller's,
 // api_node_free. options.drop must be api_drop. patches borrowed for the call and copied.
@@ -159,9 +163,13 @@ static inline api_target api_of(const api_node *node) { return (api_target){NULL
 
 // the node at at: made if nothing is there, with a value (the first only), folders on the way; no
 // value (NULL): open only, nothing made
-int api_open(api *a, const char *at, const op_value *value, api_node *out);
+int api_open_at(api *a, const char *at, const op_value *value, api_node *out,
+	const char *file, int line, const char *func);
+#define api_open(...) api_open_at(__VA_ARGS__, __FILE__, __LINE__, __func__)
 // a new node in folder, named by its own id
-int api_create(api *a, const char *folder, const op_value *value, api_node *out);
+int api_create_at(api *a, const char *folder, const op_value *value, api_node *out,
+	const char *file, int line, const char *func);
+#define api_create(...) api_create_at(__VA_ARGS__, __FILE__, __LINE__, __func__)
 // its value at path, tracked; *out NULL: nothing there
 int api_read(api *a, api_target x, const op_key *path, size_t n, const op_value **out);
 // api_read, untracked (a write there reruns nothing); a pending memo: *out NULL, 0
@@ -180,6 +188,10 @@ typedef struct {
 	int64_t when;
 	// external: sites as values, [{file, line, column?, function?}]
 	op_value *where;
+	// an entry's change: its metadata's node (PL_NODE) and run, the memo or effect and its run that
+	// wrote it; NULL: not there
+	op_value *node;
+	op_value *run;
 	// a conflict's: by, the sync engine (NULL for now: the sync process's id once sync is one);
 	// signer hex; lamport; differs, the parts
 	char *by;
@@ -232,22 +244,34 @@ void api_names_free(api_names *names);
 int api_info(api *a, api_target x, api_node *out);
 // patches: one change on the part (none there: made). synced, it replaces what reads showed first
 // at each path it writes
-int api_edit(api *a, api_target x, const op_patch *patches, size_t n);
+int api_edit_at(api *a, api_target x, const op_patch *patches, size_t n,
+	const char *file, int line, const char *func);
+#define api_edit(...) api_edit_at(__VA_ARGS__, __FILE__, __LINE__, __func__)
 // api_edit's, its change saying what it replaces (metadata "replaces"): every value reads gives at
 // each path it writes (which NULL: "all"), or the ones given (their heads; none with one: [])
-int api_edits(api *a, api_target x, const op_patch *patches, size_t n, const api_version *which,
-	size_t nwhich);
+int api_edits_at(api *a, api_target x, const op_patch *patches, size_t n, const api_version *which,
+	size_t nwhich,
+	const char *file, int line, const char *func);
+#define api_edits(...) api_edits_at(__VA_ARGS__, __FILE__, __LINE__, __func__)
 
 typedef struct api_watching api_watching;
 // fn is told each write landing at x, as it lands; stopped by its scope's teardown
 int api_watch(api *a, api_target x, void (*fn)(const pl_fact *fact, void *ctx), void *ctx,
 	api_watching **out);
 
-int api_place(api *a, const char *at, api_target x);
-int api_unplace(api *a, const char *at);
-int api_move(api *a, const char *from, const char *to);
+int api_place_at(api *a, const char *at, api_target x,
+	const char *file, int line, const char *func);
+#define api_place(...) api_place_at(__VA_ARGS__, __FILE__, __LINE__, __func__)
+int api_unplace_at(api *a, const char *at,
+	const char *file, int line, const char *func);
+#define api_unplace(...) api_unplace_at(__VA_ARGS__, __FILE__, __LINE__, __func__)
+int api_move_at(api *a, const char *from, const char *to,
+	const char *file, int line, const char *func);
+#define api_move(...) api_move_at(__VA_ARGS__, __FILE__, __LINE__, __func__)
 // x unplaced, and its entries deleted
-int api_remove(api *a, api_target x);
+int api_remove_at(api *a, api_target x,
+	const char *file, int line, const char *func);
+#define api_remove(...) api_remove_at(__VA_ARGS__, __FILE__, __LINE__, __func__)
 
 // a compute: previous is its last result. returns SC_VALUE (the result, an op_value the
 // scheduler owns, NULL for none), SC_PENDING, or SC_FAILED; api_read's PENDING is SC_PENDING and
@@ -279,7 +303,9 @@ int api_early_at(api *a, const char *name, api_compute f, api_act act, void *ctx
 // a method: returns a code; *out its return (the caller's), maybe NULL
 typedef int (*api_method_fn)(api *a, const op_value *const *args, size_t nargs, op_value **out,
 	void *ctx);
-int api_method(api *a, const char *at, api_method_fn fn, void *ctx, api_node *out);
+int api_method_at(api *a, const char *at, api_method_fn fn, void *ctx, api_node *out,
+	const char *file, int line, const char *func);
+#define api_method(...) api_method_at(__VA_ARGS__, __FILE__, __LINE__, __func__)
 // the method at x called, in a scope under the one open when it was made, with the caller's id and
 // the host's info. *out its return (the caller's). a macro: the call scope's site is the caller's
 int api_send_at(api *a, api_target x, const op_value *const *args, size_t nargs, op_value **out,
@@ -292,11 +318,17 @@ typedef void (*api_teardown_fn)(const op_value *why, void *ctx);
 // with (api_stop's why), else ended
 int api_teardown(api *a, api_teardown_fn fn, void *ctx);
 // the node at at, make() its value if nothing is there (the caller's, which this lets go of)
-int api_ref(api *a, const char *at, op_value *(*make)(void *ctx), void *ctx, api_node *out);
+int api_ref_at(api *a, const char *at, op_value *(*make)(void *ctx), void *ctx, api_node *out,
+	const char *file, int line, const char *func);
+#define api_ref(...) api_ref_at(__VA_ARGS__, __FILE__, __LINE__, __func__)
 
 // patch nodes. patches: the JSON form (patch.h), a list
-int api_patch(api *a, const char *at, api_target over, const op_value *patches, api_node *out);
-int api_land(api *a, api_target x);
+int api_patch_at(api *a, const char *at, api_target over, const op_value *patches, api_node *out,
+	const char *file, int line, const char *func);
+#define api_patch(...) api_patch_at(__VA_ARGS__, __FILE__, __LINE__, __func__)
+int api_land_at(api *a, api_target x,
+	const char *file, int line, const char *func);
+#define api_land(...) api_land_at(__VA_ARGS__, __FILE__, __LINE__, __func__)
 typedef struct {
 	op_value *value;
 	char *from;
