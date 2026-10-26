@@ -213,7 +213,8 @@ export function transform(
 		JSON.stringify(options.module ?? SITE_MODULE)
 	};`
 	// before any call's opening at the same place
-	out.prependLeft(headAt(code, program), head)
+	const at = headAt(code, program)
+	out.prependLeft(at.at, at.before + head)
 	return {
 		code: out.toString(),
 		map: out.generateMap({ hires: true, source: id, includeContent: true }),
@@ -261,15 +262,20 @@ function pluginsFor(id: string): ("typescript" | "jsx")[] {
 	return ["jsx"]
 }
 
-// where the import goes: after a #! line and the directives, on their line
-function headAt(code: string, program: Node): number {
+// where the import goes, and what must come before it there: after the directives, on the last's
+// line (a semicolon first when it has none: "use strict"import is no directive); else at the start
+// of the line after a #! line (never inside it); else at the very start. lines never move
+function headAt(code: string, program: Node): { at: number; before: string } {
 	const directives = program.directives as Node[] | undefined
 	if (directives !== undefined && directives.length > 0) {
-		return directives[directives.length - 1].end
+		const end = directives[directives.length - 1].end as number
+		return { at: end, before: code[end - 1] === ";" ? "" : ";" }
 	}
-	const interpreter = program.interpreter as Node | undefined | null
-	if (interpreter) return interpreter.end
-	return code.startsWith("#!") ? code.indexOf("\n") + 1 || code.length : 0
+	if (program.interpreter || code.startsWith("#!")) {
+		const nl = code.indexOf("\n")
+		return nl === -1 ? { at: code.length, before: "\n" } : { at: nl + 1, before: "" }
+	}
+	return { at: 0, before: "" }
 }
 
 // the names a scope n opens declares (n opens none: undefined). function scopes: the params, its

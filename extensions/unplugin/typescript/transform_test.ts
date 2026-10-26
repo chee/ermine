@@ -1,6 +1,7 @@
 // the transform: rewrites by binding, refusals, nested arguments, aliasing, default and namespace
 // imports, where the import goes, and that evaluation runs in the order it did
 import { assert, assertEquals, assertThrows } from "@std/assert"
+import { parse } from "@babel/parser"
 import { Refused, transform } from "./transform.ts"
 
 const T = (code: string, id = "/src/p.ts", options = {}) =>
@@ -94,6 +95,12 @@ export const V = () => <div>{read("/x")}</div>
 })
 
 Deno.test("transform: the import goes after a #! line and directives, on their line; lines stay", () => {
+	// it parses as a module, its directive still one, the import first in the body, lines where they were
+	const parses = (code: string, directives: number) => {
+		const ast = parse(code, { sourceType: "module" }).program
+		assertEquals(ast.directives.length, directives)
+		assertEquals(ast.body[0].type, "ImportDeclaration")
+	}
 	const out = T(
 		`#!/usr/bin/env -S deno run
 "use strict"
@@ -104,10 +111,25 @@ patch(1)
 	)!
 	const lines = out.code.split("\n")
 	assertEquals(lines[0], "#!/usr/bin/env -S deno run")
-	assert(lines[1].startsWith(`"use strict"import { at as __ermine$at`))
+	assert(lines[1].startsWith(`"use strict";import { at as __ermine$at`))
 	assertEquals(lines[3], "__ermine$at(__ermine$s0, patch)(1)")
 	assertEquals(out.sites, [{ line: 4, column: 1 }])
 	assert(out.map.mappings.length > 0)
+	parses(out.code, 1)
+	// a directive with its semicolon: none added
+	const semi = T(`"use strict";\nimport { patch } from "@ermine/system"\npatch(1)\n`, "/src/q.js")!
+	assert(semi.code.startsWith(`"use strict";import {`))
+	parses(semi.code, 1)
+	// a #! line alone: the import on the next line, never inside the #! line
+	const bang = T(
+		`#!/usr/bin/env node\nimport { patch } from "@ermine/system"\npatch(1)\n`,
+		"/src/r.js",
+	)!
+	const b = bang.code.split("\n")
+	assertEquals(b[0], "#!/usr/bin/env node")
+	assert(b[1].startsWith("import { at as __ermine$at"))
+	assertEquals(b.length, 4)
+	parses(bang.code, 0)
 })
 
 Deno.test("transform: a source naming the site module, its entry, a file of it or a plugin local is refused", () => {
