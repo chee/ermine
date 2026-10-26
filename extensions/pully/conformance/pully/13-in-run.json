@@ -1,5 +1,5 @@
 {
-	"title": "named inside a run (a memo writing the attribute), the status is written once no run is open (the pulse's end), not in the run: its site, the program line whose call ran the pulse (the whole stack is kept [chee 10-26: \"we should just keep the whole stack\"]; a stack cut at 10 frames had none)",
+	"title": "named inside a run (a memo writing the attribute), the status is written once no run is open (the pulse's end), not in the run: its site, the program line whose call ran the pulse (found in the whole trace [chee 10-26: \"keep what we think is the original file and the whole text of the trace too\"]; in the nearest 10 frames there was none)",
 	"steps": [
 		{
 			"op": "ermine",

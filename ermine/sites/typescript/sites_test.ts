@@ -94,17 +94,18 @@ Deno.test("the WeakMap lets a torn-down scope go", async () => {
 	assertEquals(died, 2, "the scope or its computer was kept")
 })
 
-Deno.test("the whole stack is kept, read as often as asked; made without the wrapper: none", () => {
+Deno.test("a site given (a build's) is taken over the stack; none given, captured", () => {
 	const scheduler = createScheduler()
-	const sited = createSites(scheduler)
+	let given: { file: string; line: number; column: number } | undefined = {
+		file: "file:///program.ts",
+		line: 4,
+		column: 2,
+	}
+	const sited = createSites(scheduler, { given: () => given })
 	const root = sited.createRootScope(INFO)
-	const c = (function maker() {
-		return scheduler.runWithScope(root, () => sited.createComputer(() => 1, () => {}))
-	})()
-	sited.siteOf(c)
-	const frames = sited.stackOf(c)!
-	assert(frames.some((f) => (f.function ?? "").includes("maker")))
-	assertEquals(sited.stackOf(c)?.length, frames.length)
-	const bare = scheduler.runWithScope(root, () => scheduler.createComputer(() => 1, () => {}))
-	assertEquals(sited.stackOf(bare), undefined)
+	const c = scheduler.runWithScope(root, () => sited.createComputer(() => 1, () => {}))
+	assertEquals(sited.siteOf(c), { file: "file:///program.ts", line: 4, column: 2 })
+	given = undefined
+	const d = scheduler.runWithScope(root, () => sited.createComputer(() => 1, () => {}))
+	assertEquals(base(sited.siteOf(d)?.file), "sites_test.ts")
 })

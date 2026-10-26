@@ -18,6 +18,7 @@
 		"./playground/demos",
 		"./playground/libraries/pack-indexeddb",
 		"./extensions/pully",
+		"./extensions/unplugin",
 		"./playground/tools/files",
 		"./playground/installs",
 		"./playground/sessions",
@@ -59,7 +60,6 @@
 	],
 	"test": {
 		"exclude": [
-			"experiments/software",
 			"playground/demo-world",
 			"playground/demos",
 			"playground/devtools",
