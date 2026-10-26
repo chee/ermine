@@ -1,0 +1,285 @@
+{
+	"title": "the name taken out: sent sleep if awake, then asleep; readers after wake nothing. named again: woken, as its reader still reads",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				"pully"
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/cam",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/dev/cam",
+						{
+							"frame": 0
+						}
+					],
+					"as": "cam"
+				},
+				{
+					"do": [
+						"createAction",
+						"on/cam",
+						[
+							{
+								"do": [
+									"log",
+									"said",
+									[
+										"all",
+										"$0",
+										"$2"
+									]
+								]
+							}
+						],
+						[
+							"if",
+							[
+								"is",
+								"$0",
+								"check"
+							],
+							"fresh"
+						]
+					],
+					"as": "on"
+				},
+				{
+					"do": [
+						"provide",
+						"$cam",
+						"$on"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "cam",
+			"at": "/code/cam",
+			"expect": {
+				"id": "proc:cam"
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/r",
+			"program": [
+				{
+					"do": [
+						"getNode",
+						"/dev/cam"
+					],
+					"as": "cam"
+				},
+				{
+					"do": [
+						"ensureNode",
+						"on",
+						true
+					],
+					"as": "on"
+				},
+				{
+					"do": [
+						"createEffect",
+						"see",
+						[
+							"if",
+							[
+								"read",
+								"$on"
+							],
+							[
+								"all",
+								[
+									"read",
+									"$cam"
+								],
+								[
+									"each",
+									[
+										"all",
+										[
+											"getStatus",
+											"$cam"
+										]
+									],
+									[
+										"provider"
+									]
+								]
+							]
+						],
+						"seen-r"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "r",
+			"at": "/code/r",
+			"expect": {
+				"id": "proc:r"
+			}
+		},
+		{
+			"op": "do",
+			"process": "cam",
+			"call": [
+				"unprovide",
+				"$cam"
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "said",
+			"expect": {
+				"values": [
+					[
+						"wake",
+						"n10"
+					],
+					[
+						"sleep",
+						null
+					]
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"getStatus",
+				"/dev/cam"
+			],
+			"expect": {
+				"value": {
+					"state": "done",
+					"provider": "asleep"
+				}
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/s",
+			"program": [
+				{
+					"do": [
+						"getNode",
+						"/dev/cam"
+					],
+					"as": "cam"
+				},
+				{
+					"do": [
+						"ensureNode",
+						"on",
+						true
+					],
+					"as": "on"
+				},
+				{
+					"do": [
+						"createEffect",
+						"see",
+						[
+							"if",
+							[
+								"read",
+								"$on"
+							],
+							[
+								"all",
+								[
+									"read",
+									"$cam"
+								],
+								[
+									"each",
+									[
+										"all",
+										[
+											"getStatus",
+											"$cam"
+										]
+									],
+									[
+										"provider"
+									]
+								]
+							]
+						],
+						"seen-s"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "s",
+			"at": "/code/s",
+			"expect": {
+				"id": "proc:s"
+			}
+		},
+		{
+			"op": "log",
+			"name": "said",
+			"expect": {
+				"values": [
+					[
+						"wake",
+						"n10"
+					],
+					[
+						"sleep",
+						null
+					]
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "cam",
+			"call": [
+				"provide",
+				"$cam",
+				"$on"
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "said",
+			"expect": {
+				"values": [
+					[
+						"wake",
+						"n10"
+					],
+					[
+						"sleep",
+						null
+					],
+					[
+						"wake",
+						"n10"
+					]
+				]
+			}
+		}
+	]
+}

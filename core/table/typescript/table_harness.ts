@@ -45,7 +45,7 @@
 // next line is answered as ever.
 import { createTable, type Event, type Id, TableError } from "./table.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
-import type { Entry } from "@ermine/node/entry"
+import type { Entry } from "@ermine/core/node/entry"
 
 // the table checks no name and no shape: here, any key is a table name and any entry goes
 type Loose = {

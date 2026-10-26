@@ -17,14 +17,15 @@ import {
 	type PENDING,
 	type Scheduler,
 	type Scope,
-} from "@ermine/scheduler"
-import { type FileLocation, outside } from "@ermine/util/stacktrace"
+} from "@ermine/core/scheduler"
+import { type FileLocation, outside } from "@ermine/core/util/stacktrace"
 
 export type { FileLocation }
 
 export type SitesOptions = {
 	// files whose frames are skipped: libraries, the api. a site is the first frame in none of them.
-	// this file is always one
+	// this file is always one. a Set is kept as given, live (this file added to it): files added
+	// later are skipped too, from the next site read
 	ours?: Iterable<string>
 }
 
@@ -66,7 +67,10 @@ export function createSites(
 	scheduler: Scheduler,
 	options: SitesOptions = {},
 ): Sited {
-	const ours = new Set<string>([import.meta.url, ...(options.ours ?? [])])
+	const given = options.ours
+	const ours = given instanceof Set
+		? (given as Set<string>).add(import.meta.url)
+		: new Set<string>([import.meta.url, ...(given ?? [])])
 	const held = new WeakMap<Scope, Held>()
 
 	function note<S extends Scope>(scope: S, h: Held): S {

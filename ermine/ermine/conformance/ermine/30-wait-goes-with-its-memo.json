@@ -1,0 +1,128 @@
+{
+	"title": "a memo's wait goes with the memo: a memo made in another's run, sending to nothing, waits; its owner running again without making it, it goes, and its wait with it (not kept till the process ends)",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/on",
+				{
+					"on": true
+				}
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createMemo",
+						"outer",
+						{},
+						[
+							"all",
+							[
+								"if",
+								[
+									"read",
+									"/on",
+									[
+										"on"
+									]
+								],
+								[
+									"createMemo",
+									"inner",
+									{},
+									[
+										"executeAction",
+										"/nobody"
+									]
+								]
+							],
+							1
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p",
+				"inner"
+			],
+			"expect": {
+				"id": "n6"
+			}
+		},
+		{
+			"op": "waits",
+			"expect": {
+				"waits": [
+					{
+						"caller": "n6",
+						"path": [
+							"nobody"
+						],
+						"box": "R"
+					}
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/on",
+				[
+					{
+						"path": [
+							"on"
+						],
+						"value": false
+					}
+				]
+			]
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p",
+				"inner"
+			],
+			"expect": {}
+		},
+		{
+			"op": "waits",
+			"expect": {
+				"waits": []
+			}
+		},
+		{
+			"op": "status",
+			"name": "p",
+			"expect": {
+				"status": {
+					"state": "done"
+				}
+			}
+		}
+	]
+}

@@ -42,6 +42,7 @@
     "npm:mingo@6.4.15": "6.4.15",
     "npm:mustache@4.2.0": "4.2.0",
     "npm:prql-js@0.12.1": "0.12.1",
+    "npm:solid-js@*": "1.9.17",
     "npm:sucrase@3.35.0": "3.35.0",
     "npm:vega-lite@5.21.0": "5.21.0_vega@5.30.0",
     "npm:vega@5.30.0": "5.30.0",
@@ -687,6 +688,9 @@
     "cssom@0.5.0": {
       "integrity": "sha512-iKuQcq+NdHqlAcwUY0o/HL69XQrUaQdMjmStJ8JFmUaiiQErlhrmuigkg/CU4E2J0IyUKUrMAgl36TvN67MqTw=="
     },
+    "csstype@3.2.3": {
+      "integrity": "sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ=="
+    },
     "d3-array@3.2.4": {
       "integrity": "sha512-tdQAmyA18i4J7wprpYq8ClcxZy3SC31QMeByyCFyRt7BVHdREQZ5lpzoe5mFEYZUWe+oq8HBvk9JjpibyEV4Jg==",
       "dependencies": [
@@ -1271,6 +1275,15 @@
     "safer-buffer@2.1.2": {
       "integrity": "sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg=="
     },
+    "seroval-plugins@1.6.9_seroval@1.6.9": {
+      "integrity": "sha512-kiDK/Tb8IWZ61WEU8pA2PDmAuw37gKph9Y77OZlD56mg0Y2g0Bg7gZ1HeHhs5d40w+nRoUq/wj08V26ilbez9g==",
+      "dependencies": [
+        "seroval"
+      ]
+    },
+    "seroval@1.6.9": {
+      "integrity": "sha512-UeEzHwAK+yl0YLbsvROV1t5yMYEwZZ0CfKYxDvUgS2fO9Vxdf8djqVIB+OuVpuawRNPqw68LE1Du/GMsW2ZPqA=="
+    },
     "shebang-command@2.0.0": {
       "integrity": "sha512-kHxr2zZpYtdmrN1qDjrrX/Z1rR1kG8Dx+gkpK1G4eXmvXswmcE1hTWBWYUzlraYw1/yZp6YuDY77YtvbN0dmDA==",
       "dependencies": [
@@ -1282,6 +1295,14 @@
     },
     "signal-exit@4.1.0": {
       "integrity": "sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw=="
+    },
+    "solid-js@1.9.17": {
+      "integrity": "sha512-4GAmLOWPfNV8H9Jfn2LSFTpNEG6jiOKPiwd5lnLGQtehHaX6l3TOLzJqQ7mqwB/3k1Yy3zyumFVopmc/tm34ow==",
+      "dependencies": [
+        "csstype",
+        "seroval",
+        "seroval-plugins"
+      ]
     },
     "source-map-js@1.2.2": {
       "integrity": "sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw=="
@@ -1771,6 +1792,15 @@
         "yargs-parser"
       ]
     }
+  },
+  "redirects": {
+    "https://esm.sh/preact@latest": "https://esm.sh/preact@11.0.2"
+  },
+  "remote": {
+    "https://esm.sh/preact@10.20.2": "0d80729554991081893716b9e8f96f32afd37efdb501f1891e833d65287f2973",
+    "https://esm.sh/preact@10.20.2/denonext/preact.mjs": "d0cf847cf28f5a8e43c1fc6968c6b23479ab252c8e16308ec04697cbc52898d2",
+    "https://esm.sh/preact@11.0.2": "a25f9cd282f931293782f1ea49d7ce6fdd8f8b81fa707a824357fb954de1493c",
+    "https://esm.sh/preact@11.0.2/denonext/preact.mjs": "f59db15cfcb02162146a734517984a07c6da0e45c6a0ee98ef0a0b6ac33d24f2"
   },
   "workspace": {
     "dependencies": [

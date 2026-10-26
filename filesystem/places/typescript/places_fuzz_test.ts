@@ -3,12 +3,12 @@
 // paths walked straight through the table, values straight from it. at the end, every compute disposed:
 // no spot is kept (the scheduler's onTrackingEnd). a few dozen seeds (fuzz runs small)
 import { assert, assertEquals } from "@std/assert"
-import createEntry from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import { ApplyError, type Key as Step, type Patch } from "@ermine/op/apply"
-import { createScheduler } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key, TableError } from "@ermine/table"
+import createEntry from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import { ApplyError, type Key as Step, type Patch } from "@ermine/core/op/apply"
+import { createScheduler } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Id, type Key, TableError } from "@ermine/core/table"
 import { at, createPlaces, move, type Path, place, PlacesError, rename, unplace } from "./places.ts"
 import { get, list } from "./lib.ts"
 import { createChangeHeader } from "./header.ts"

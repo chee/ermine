@@ -13,7 +13,7 @@
 // it). a key added is untracked, whatever the scheduler knows: add a key before a run tracks it.
 // a read outside a run tracks nothing, so tells nothing: a caller keeping nothing then checks
 // tracked itself. every clingy hears every first track and untrack of its scheduler
-import type { Scheduler } from "@ermine/scheduler"
+import type { Scheduler } from "@ermine/core/scheduler"
 
 export type Clingy<K> = {
 	add: (key: K) => void

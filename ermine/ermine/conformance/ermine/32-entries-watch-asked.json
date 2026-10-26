@@ -1,0 +1,235 @@
+{
+	"title": "entries and watch ask protect read, as read does: a process names no node by id (not-a-handle, chee 10-25); entries by a path keeps a refused item (its id REFUSED, no value); watch is refused as it is made, and a write told to it later, once refused, is told refused (no patches, no value)",
+	"steps": [
+		{
+			"op": "ermine",
+			"deny": [
+				{
+					"op": "read",
+					"id": "n2"
+				},
+				{
+					"op": "read",
+					"id": "n3"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/secret",
+				{
+					"pin": 1
+				}
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/other",
+				{
+					"pin": 2
+				}
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/open",
+				{
+					"pin": 3
+				}
+			]
+		},
+		{
+			"op": "id",
+			"path": [
+				"secret"
+			],
+			"expect": {
+				"id": "n2"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"other"
+			],
+			"expect": {
+				"id": "n3"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"open"
+			],
+			"expect": {
+				"id": "n4"
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/spy",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "spy",
+			"at": "/code/spy",
+			"expect": {
+				"id": "proc:spy"
+			}
+		},
+		{
+			"op": "do",
+			"process": "spy",
+			"call": [
+				"read",
+				{
+					"id": "n2",
+					"part": "value"
+				}
+			],
+			"expect": {
+				"error": "not-a-handle"
+			}
+		},
+		{
+			"op": "do",
+			"process": "spy",
+			"call": [
+				"readEntries",
+				{
+					"id": "n2",
+					"part": "value"
+				}
+			],
+			"expect": {
+				"error": "not-a-handle"
+			}
+		},
+		{
+			"op": "do",
+			"process": "spy",
+			"call": [
+				"readEntries",
+				"/secret"
+			],
+			"expect": {
+				"value": [
+					{
+						"from": "children",
+						"refused": true
+					}
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "spy",
+			"call": [
+				"readEntries",
+				{
+					"id": "n4",
+					"part": "value"
+				}
+			],
+			"expect": {
+				"error": "not-a-handle"
+			}
+		},
+		{
+			"op": "do",
+			"process": "spy",
+			"call": [
+				"watch",
+				"/secret",
+				"w"
+			],
+			"fails": true,
+			"expect": {
+				"error": "refused"
+			}
+		},
+		{
+			"op": "do",
+			"process": "spy",
+			"call": [
+				"watch",
+				"/open",
+				"w"
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/open",
+				[
+					{
+						"path": [
+							"pin"
+						],
+						"value": 4
+					}
+				]
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"unplace",
+				"/open"
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"place",
+				"/open",
+				{
+					"id": "n3",
+					"part": "value"
+				}
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/open",
+				[
+					{
+						"path": [
+							"pin"
+						],
+						"value": 5
+					}
+				]
+			]
+		},
+		{
+			"op": "log",
+			"name": "w",
+			"expect": {
+				"values": [
+					[
+						{
+							"path": [
+								"pin"
+							],
+							"value": 4
+						}
+					],
+					"refused"
+				]
+			}
+		}
+	]
+}

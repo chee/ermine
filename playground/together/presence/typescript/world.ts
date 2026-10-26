@@ -1,8 +1,8 @@
 // a device for the tests and the example: its own table, places, scheduler, and a clock it owns
 import { createPlaces, type Id } from "@ermine/places"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createScheduler, type Scheduler } from "@ermine/scheduler"
-import { createTable, type Key } from "@ermine/table"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createScheduler, type Scheduler } from "@ermine/core/scheduler"
+import { createTable, type Key } from "@ermine/core/table"
 import type { World } from "./presence.ts"
 
 export type Device = World & { places: ReturnType<typeof createPlaces>; scheduler: Scheduler }

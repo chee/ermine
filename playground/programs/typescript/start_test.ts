@@ -2,10 +2,10 @@
 // (CAT, "hi") at clocks/, a host compiler UP (upper) at cc and a host runner RUN at run, boxed.
 // runners in @ermine/software's shape, each handed the start's facts
 import { assert, assertEquals, assertInstanceOf, assertStrictEquals } from "@std/assert"
-import createEntry, { type Entry } from "@ermine/node/entry"
-import { createScheduler, PENDING, type Scope } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/table"
+import createEntry, { type Entry } from "@ermine/core/node/entry"
+import { createScheduler, PENDING, type Scope } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Id, type Key } from "@ermine/core/table"
 import { createPlaces } from "@ermine/places"
 import { createChangeHeader, NODE } from "@ermine/places/header"
 import { STATUS } from "@ermine/places/status"

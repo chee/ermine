@@ -16,7 +16,7 @@
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import * as cbor from "@ermine/encoding/cbor"
 import { type Commit, decode, joinKey, name as nameOf, splitKey } from "@ermine/formats/commit"
-import { strict } from "@ermine/ed25519"
+import { strict } from "@ermine/core/ed25519"
 
 // key: the device's multikey; header: the varsig header its signatures begin with; sign: the raw
 // signature of the message, without the header

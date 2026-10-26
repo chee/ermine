@@ -10,7 +10,7 @@
 //
 // keys are opaque to the scheduler; one shaped like a places spot ({source, id, path}) is shown
 // by node and part, any other as itself.
-import type { Computer, Scheduler, Scope } from "@ermine/scheduler"
+import type { Computer, Scheduler, Scope } from "@ermine/core/scheduler"
 import { gestures } from "./views.ts"
 
 export type Mode = "values" | "keys" | "owners"

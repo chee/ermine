@@ -1,7 +1,7 @@
 import { assertEquals, assertMatch } from "@std/assert"
-import createEntry from "@ermine/node/entry"
-import { createScheduler } from "@ermine/scheduler"
-import { createTable } from "@ermine/table"
+import createEntry from "@ermine/core/node/entry"
+import { createScheduler } from "@ermine/core/scheduler"
+import { createTable } from "@ermine/core/table"
 import { createScopeNodes } from "./scopes.ts"
 
 function world() {

@@ -1,6 +1,6 @@
 // clingy (clingy.ts) on a real scheduler
 import { assertEquals } from "@std/assert"
-import { createScheduler } from "@ermine/scheduler"
+import { createScheduler } from "@ermine/core/scheduler"
 import { createClingy } from "./clingy.ts"
 
 function setup() {

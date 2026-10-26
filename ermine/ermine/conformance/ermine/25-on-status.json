@@ -1,0 +1,234 @@
+{
+	"title": "onStatus(x, status, next), the sixth hook: middleware around status(x), as the others. each feature's hook is given the node read (x: its node and id) and the status so far, calls next, and gives back what status(x) shows, fields of its own added. chain order: the first outermost, so its hook is called first; the base's status is what the innermost next gives. not called for a node not there (status: undefined). a hook's throw names the feature and the hook, and ermine.features lists it. a hook not calling next: what it gives back is shown, the hooks after it not asked. a process's status (start's status()) goes through it too",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				{
+					"name": "a",
+					"onStatus": "add"
+				},
+				{
+					"name": "b",
+					"onStatus": "add"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "features",
+			"expect": {
+				"features": [
+					{
+						"name": "a",
+						"needs": [],
+						"hooks": [
+							"onStatus"
+						]
+					},
+					{
+						"name": "b",
+						"needs": [],
+						"hooks": [
+							"onStatus"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/x",
+				1
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"x"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"getStatus",
+				"/x"
+			],
+			"expect": {
+				"value": {
+					"state": "done",
+					"a": true,
+					"b": true
+				}
+			}
+		},
+		{
+			"op": "log",
+			"name": "hooks",
+			"expect": {
+				"values": [
+					[
+						"a",
+						"onStatus",
+						"n2"
+					],
+					[
+						"b",
+						"onStatus",
+						"n2"
+					]
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"getStatus",
+				"/nothing"
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "hooks",
+			"expect": {
+				"values": [
+					[
+						"a",
+						"onStatus",
+						"n2"
+					],
+					[
+						"b",
+						"onStatus",
+						"n2"
+					]
+				]
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "status",
+			"name": "p",
+			"expect": {
+				"status": {
+					"state": "done",
+					"a": true,
+					"b": true
+				}
+			}
+		},
+		{
+			"op": "ermine",
+			"features": [
+				{
+					"name": "a",
+					"onStatus": "drop"
+				},
+				{
+					"name": "b",
+					"onStatus": "add"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/x",
+				1
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"x"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"getStatus",
+				"/x"
+			],
+			"expect": {
+				"value": {
+					"state": "done"
+				}
+			}
+		},
+		{
+			"op": "log",
+			"name": "hooks",
+			"expect": {
+				"values": [
+					[
+						"a",
+						"onStatus",
+						"n2"
+					]
+				]
+			}
+		},
+		{
+			"op": "ermine",
+			"features": [
+				{
+					"name": "t",
+					"onStatus": "throw"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/x",
+				1
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"x"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"getStatus",
+				"/x"
+			],
+			"fails": true,
+			"expect": {
+				"error": "feature",
+				"feature": "t",
+				"hook": "onStatus",
+				"cause": "t threw"
+			}
+		}
+	]
+}

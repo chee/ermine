@@ -44,9 +44,9 @@
 //   {"track":name}              a key of its own per name, tracked; null
 //   {"throw":message}           throws
 //   {"write":request}           the request, made with the run's scope open; null. {"eval":e}: e
-import type { Key as Step } from "@ermine/op/apply"
-import { type Computer, PENDING } from "@ermine/scheduler"
-import type { Key } from "@ermine/table"
+import type { Key as Step } from "@ermine/core/op/apply"
+import { type Computer, PENDING } from "@ermine/core/scheduler"
+import type { Key } from "@ermine/core/table"
 import { asId, at, children, type Contributor, none, type Places } from "./places.ts"
 import {
 	answered,

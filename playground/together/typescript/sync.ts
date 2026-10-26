@@ -19,7 +19,7 @@
 // change whose metadata has replaces ("all", or names in hex) replaces every item there, or those
 // named. settle(id) writes what shows at each open path, replacing every item. what is wrong with a
 // node's sync right now (commits waiting or refused, writes no commit could carry) is in the
-// "status" table at its id, none when nothing is.
+// "sync-status" table at its id, none when nothing is.
 // a merge rule (merge, one of merges): heads show merged; a write is then a merge commit (every
 // shown head its parents, the rule named). nothing merges by itself. use(rule) switches the rule or
 // merging off. a rule's name carries its version ("name/version"), known by the whole string.
@@ -35,9 +35,9 @@
 // or all merged by the rule; the stored state under is sync's own, listed in the "ephemeral"
 // table. stops standing at a later stored commit of that device, after ttl ms unheard, or on stop
 // (Sync.stop); resent every beat ms; then let go (device.forget). nothing ephemeral outlives sync.
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import apply, { type Patch } from "@ermine/op/apply"
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import apply, { type Patch } from "@ermine/core/op/apply"
 import * as cbor from "@ermine/encoding/cbor"
 import {
 	type Commit,
@@ -47,7 +47,7 @@ import {
 	encode,
 	name as nameOf,
 } from "@ermine/formats/commit"
-import type { Id, Key, Table, Tables as Rows } from "@ermine/table"
+import type { Id, Key, Table, Tables as Rows } from "@ermine/core/table"
 import type * as sd from "npm:@automerge/subduction@0.23.0"
 import { hex, unhex } from "./hex.ts"
 import { agreed, type History, type Judged, type Kept } from "./history.ts"
@@ -146,13 +146,13 @@ export type Status = {
 // by hand. an id is shared while it has a reason (hand, or any under)
 export type Shared = Record<string, { hand?: true; paused?: true; under?: Record<string, string> }>
 
-declare module "@ermine/table" {
+declare module "@ermine/core/table" {
 	interface Tables {
 		conflicts: Conflict[]
 		shown: Head
 		values: Values
 		ephemeral: Ephemeral
-		status: Status
+		"sync-status": Status
 	}
 }
 
@@ -852,7 +852,7 @@ export function createSync(options: Options): Sync {
 		if (home !== undefined && docs.includes(home)) reshare()
 	}
 
-	// the "status" table at the id: what the device holds back or refused there (the stored
+	// the "sync-status" table at the id: what the device holds back or refused there (the stored
 	// layer's), what its history waits on or refused, and the writes not sent. none when nothing
 	function status(doc: string) {
 		const t = device.taking(doc), history = device.history(doc)
@@ -882,7 +882,7 @@ export function createSync(options: Options): Sync {
 			else refused.push({ commit: r.name, code: r.refused })
 		}
 		const mine = unsent.get(doc) ?? []
-		const have = table.get("status", doc)
+		const have = table.get("sync-status", doc)
 		const still = paused.has(doc), lone = alone.has(doc), heard = device.turned(doc)
 		const offered = doc === home ? device.offered() : []
 		const holds = (holding.get(doc) ?? []).slice(0, LIST).map((k) => ({
@@ -893,7 +893,7 @@ export function createSync(options: Options): Sync {
 			!waiting.length && !refused.length && !mine.length && !still && !lone && !heard &&
 			!offered.length && !holds.length
 		) {
-			if (have !== undefined) table.del("status", doc)
+			if (have !== undefined) table.del("sync-status", doc)
 			return
 		}
 		const value: Status = {
@@ -910,8 +910,8 @@ export function createSync(options: Options): Sync {
 		const change = { time: Math.floor(Date.now() / 1000), actor: null }
 		if (have?.value === undefined) {
 			const entry = createEntry(value, change)
-			if (have) table.sub("status", doc, entry)
-			else table.add("status", doc, entry)
+			if (have) table.sub("sync-status", doc, entry)
+			else table.add("sync-status", doc, entry)
 			return
 		}
 		// each list and count that changed is a patch of its own, so a read of one is not rerun
@@ -934,7 +934,7 @@ export function createSync(options: Options): Sync {
 		if (!patches.length) return
 		const next = createEntry(was, have.change)
 		update(next, patches, change)
-		table.sub("status", doc, next)
+		table.sub("sync-status", doc, next)
 	}
 
 	// the writes no commit could carry at (id, table) are no longer so: what a send there carried
@@ -1180,7 +1180,9 @@ export function createSync(options: Options): Sync {
 		const was = applying
 		applying = true
 		try {
-			for (const part of [...tables, "values", "conflicts", "shown", "ephemeral", "status"]) {
+			for (
+				const part of [...tables, "values", "conflicts", "shown", "ephemeral", "sync-status"]
+			) {
 				if (table.get(part as Key, id) !== undefined) table.del(part as Key, id)
 			}
 		} finally {

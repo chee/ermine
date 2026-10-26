@@ -1,14 +1,14 @@
 // unread: in place while unread, copied after a read; what a reader holds, a patch's value, and
 // what an undo holds never change. the same values as node's update, at random
 import { assert, assertEquals, assertThrows } from "@std/assert"
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import apply, { ApplyError, type Patch } from "@ermine/op/apply"
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import apply, { ApplyError, type Patch } from "@ermine/core/op/apply"
 import { at as read, createPlaces, type Places } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
-import { createScheduler } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable } from "@ermine/table"
+import { createScheduler } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable } from "@ermine/core/table"
 import { createUnread, keeping, reading } from "./unread.ts"
 import { unread_conformance_hook_owned } from "./unread_conformance_hook.ts"
 

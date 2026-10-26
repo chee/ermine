@@ -26,7 +26,7 @@
 //   one in place and base changes: don't
 //   a draft used after produce returned throws
 import type { Key, Patch } from "./apply.ts"
-import { walk } from "@ermine/util/walk-string"
+import { walk } from "@ermine/core/util/walk-string"
 
 // returned by a recipe: the whole removed
 export const nothing = Symbol("nothing")

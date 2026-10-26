@@ -27,11 +27,11 @@
 //   error    { error }                           thrown after setup
 //   looked   { tree? }                           its graph from its root: each node's state (here,
 //            waiting, none), value, names. none: not started
-import type { Patch } from "@ermine/op/apply"
-import type { ChangeHeader, Metadata } from "@ermine/node/entry"
+import type { Patch } from "@ermine/core/op/apply"
+import type { ChangeHeader, Metadata } from "@ermine/core/node/entry"
 import { REFUSED } from "@ermine/places/guard"
-import { type Info, PENDING } from "@ermine/scheduler"
-import type { FileLocation } from "@ermine/util/stacktrace"
+import { type Info, PENDING } from "@ermine/core/scheduler"
+import type { FileLocation } from "@ermine/core/util/stacktrace"
 
 export type Path = readonly string[]
 

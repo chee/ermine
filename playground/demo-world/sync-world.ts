@@ -23,8 +23,8 @@
 //
 // globalThis.ermine (the inspector): table, places, s, header, statuses, moments (last 600), host,
 // sync, and the rest of the world's names, empty
-import createEntry from "@ermine/node/entry"
-import update from "@ermine/node/update"
+import createEntry from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
 import { createPlaces, place } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
 import * as lib from "@ermine/places/lib"
@@ -38,10 +38,10 @@ import {
 	startSweeper,
 	type World as Presence,
 } from "@ermine/together/presence"
-import { createScheduler, type Scope } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { trace } from "@ermine/scheduler/trace"
-import { createTable, type Key } from "@ermine/table"
+import { createScheduler, type Scope } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { trace } from "@ermine/core/scheduler/trace"
+import { createTable, type Key } from "@ermine/core/table"
 import { createChannel } from "@ermine/together/channel"
 import { createSigner } from "@ermine/together/seal"
 import { createSync, type Options as SyncOptions } from "@ermine/together/sync"

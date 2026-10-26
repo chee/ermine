@@ -12,6 +12,7 @@
 // { op: "share", value, keys: [[part, id]..] } → {}   one entry under all those keys (table.add)
 // { op: "del", part, id }                    → {} | { error: "nothing-there" }   table.del
 // { op: "node", part, id }                   → { value? }   the table's, told to no one
+// { op: "namesOf", id }                      → { names }   places' namesOf: each { folder, name }
 // { op: "kept" }                             → { keys, spots, steps }   what paths keeps
 // { op: "cache" }                            → {}   the path cache made once (or by the first
 //    program asking for it); make it before anything reads
@@ -45,13 +46,13 @@
 // { op: "watchPath", name, path, part?, at?, sites? }  → {}   watched: each fact { part, id, patches,
 //    actor? }; sites: true adds sites, the count of its change's external (0: no change)
 // anything not understood: { error: text }
-import createEntry, { type ChangeHeader } from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import { ApplyError, type Patch } from "@ermine/op/apply"
-import { type Computer, createScheduler, type Info, type Scope } from "@ermine/scheduler"
-import { type Told, trace } from "@ermine/scheduler/trace"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/table"
+import createEntry, { type ChangeHeader } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import { ApplyError, type Patch } from "@ermine/core/op/apply"
+import { type Computer, createScheduler, type Info, type Scope } from "@ermine/core/scheduler"
+import { type Told, trace } from "@ermine/core/scheduler/trace"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Id, type Key } from "@ermine/core/table"
 import { createPlaces, move, place, PlacesError, rename, unplace, type Where } from "./places.ts"
 
 import type { Answer, Request } from "../../../conformance/typescript/harness.ts"
@@ -59,7 +60,7 @@ import { createChangeHeader } from "./header.ts"
 import { getOrSet, upsert } from "./upsert.ts"
 import { createStatus, PENDING, status } from "./status.ts"
 import { createPathCache, type PathCache } from "./cache.ts"
-import { frames } from "@ermine/util/stacktrace"
+import { frames } from "@ermine/core/util/stacktrace"
 type Json = unknown
 
 let moments: Told[] = []
@@ -266,6 +267,8 @@ export function worldAnswer(r: Request): Json | undefined {
 			const n = table.get(r.part, r.id)
 			return n === undefined || n.value === undefined ? {} : { value: n.value }
 		}
+		case "namesOf":
+			return { names: places.namesOf(r.id).map((n) => ({ folder: n.folder, name: n.name })) }
 		case "kept":
 			return paths.kept()
 		case "cache":

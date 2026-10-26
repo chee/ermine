@@ -3,7 +3,7 @@ import type { API } from "@ermine/api"
 import { bind, handler } from "ermine-h"
 
 // piece-lazy: /dev/clock ticks only while someone reads it. its provider is the host's, through
-// @ermine/pullynode: any run reading the clock's value wakes it, the last one to stop puts it to
+// ./providers.ts: any run reading the clock's value wakes it, the last one to stop puts it to
 // sleep (host.ts). a reader woken late gets the last time at once, the clock's status saying how
 // fresh (ermine.provider.status: asleep, waking, awake).
 // each reader is a memo that reads the time only while its switch is on (the switch is ./<name>-on,

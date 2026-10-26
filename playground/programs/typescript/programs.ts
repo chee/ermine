@@ -52,7 +52,7 @@ import type { Id, Path, Places } from "@ermine/places"
 import { level } from "@ermine/places"
 import { get, lookup, members } from "@ermine/places/lib"
 import { parse, plan as resolve } from "@ermine/places/path"
-import { keyorder } from "@ermine/util/keyorder"
+import { keyorder } from "@ermine/core/util/keyorder"
 import {
 	ATTRIBUTE,
 	conformance,

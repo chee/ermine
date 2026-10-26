@@ -3,7 +3,7 @@ import type { API } from "@ermine/api"
 import { bind, handler } from "ermine-h"
 
 // piece-skin: my tweak over a shared thing. the card at /shared/card is everyone's; my tweak is a
-// patch node in my own tree at /me/tweaks/cherry, laid over the card's value (patch-nodes'
+// patch node in my own tree at /me/tweaks/cherry, laid over the card's value (patchy'
 // overlay). while it is loaded (its "patch" entry in the table) a read of the card gets my way;
 // unloaded, the card as it is. dragging with it on moves the card only in my tweak: the shared
 // spot stays where it was, a dashed ghost. a friend's edit lands under it and makes it stale (made

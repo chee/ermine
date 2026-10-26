@@ -7,10 +7,10 @@
 //   - the same value already there (deeply equal): nothing is written
 // write: what changes the entry (default node's update; places' unread.update to change it in place)
 // a path is names (strings); the levels it makes are maps
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import type { Patch } from "@ermine/op/apply"
-import type { Id, Key, Table } from "@ermine/table"
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import type { Patch } from "@ermine/core/op/apply"
+import type { Id, Key, Table } from "@ermine/core/table"
 
 const isMap = (v: unknown): v is Record<string, unknown> =>
 	typeof v === "object" && v !== null && !Array.isArray(v) && !ArrayBuffer.isView(v) &&

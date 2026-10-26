@@ -20,17 +20,17 @@
 // its site the call into record, or the computer's run. nothing here is synced or saved by itself:
 // a history records it only when its host's rule says so (world.ts leaves these nodes, and the
 // process rows, out: they are this device's, now)
-import createEntry, { type Entry } from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import type { Patch } from "@ermine/op/apply"
+import createEntry, { type Entry } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import type { Patch } from "@ermine/core/op/apply"
 import type { Box } from "@ermine/boxes"
 import type { Places } from "@ermine/places"
 import { createChangeHeader, NODE } from "@ermine/places/header"
 import { upsert } from "@ermine/places/upsert"
 import type { Options, Process, Processes } from "@ermine/processes/start"
 import type { ScopeNodes } from "@ermine/processes/scopes"
-import type { Info, Scheduler, Scope } from "@ermine/scheduler"
-import type { Id, Table, Tables } from "@ermine/table"
+import type { Info, Scheduler, Scope } from "@ermine/core/scheduler"
+import type { Id, Table, Tables } from "@ermine/core/table"
 import { same } from "./write.ts"
 
 // every state's code and its words: a program branches on the code, a person reads the words.

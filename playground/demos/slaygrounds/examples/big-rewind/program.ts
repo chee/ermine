@@ -1,7 +1,7 @@
 /** @jsxImportSource ermine-h */
 import type { API } from "@ermine/api"
 import type { Node } from "@ermine/api"
-import type { Patch } from "@ermine/op/apply"
+import type { Patch } from "@ermine/core/op/apply"
 import { bind, handler } from "ermine-h"
 
 // big-rewind: snake on a nokia 3210, and a time machine beside it. every tick the game makes is

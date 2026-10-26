@@ -5,11 +5,11 @@
 // wheel takes the whole farm back: the page applies the undos, newest first, as writes, and the
 // scheduler runs again what read them, so the flags, the sign and where the pigs stand go back too.
 // the strip is the page's own list of the day's changes, one card each.
-import { type Computer, createScheduler } from "@ermine/scheduler"
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import { createTable } from "@ermine/table"
-import type { Patch } from "@ermine/op/apply"
+import { type Computer, createScheduler } from "@ermine/core/scheduler"
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import { createTable } from "@ermine/core/table"
+import type { Patch } from "@ermine/core/op/apply"
 import { pondPage } from "../kit/page.ts"
 import type { Box, Wire } from "../kit/board.ts"
 import { createFarm, type FarmPig, pigScale } from "../kit/farm.ts"
@@ -36,7 +36,7 @@ const page = pondPage("rewind", {
 		<p><b>the programs:</b> nobody rewinds hungry, pen or the sign. The scheduler runs them again because what they read changed, and they work it all out from the old values.</p>
 		<p><b>a change while back:</b> this page's list drops the cards after where you are, as undo does. Ermine's sync keeps each node's commits as a graph with several heads, so a branch could be kept; this page keeps one line.</p>`,
 	real:
-		`Runs the real <code>@ermine/table</code> (createTable), <code>@ermine/node</code> (createEntry, update and the undo it keeps) and <code>@ermine/scheduler</code> (hungry, pen and sign are computers, the picture an effect; track, mark, pulse). The page's own: the list of the day's cards, the wheel, the clock times, and where in the field each pig is drawn.`,
+		`Runs the real <code>@ermine/core/table</code> (createTable), <code>@ermine/core/node</code> (createEntry, update and the undo it keeps) and <code>@ermine/core/scheduler</code> (hungry, pen and sign are computers, the picture an effect; track, mark, pulse). The page's own: the list of the day's cards, the wheel, the clock times, and where in the field each pig is drawn.`,
 })
 const { board } = page
 

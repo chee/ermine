@@ -27,11 +27,11 @@
 //   {"place":[[ts,name],id]}        the slot asked, then id placed; null
 //   {"try":e}                       e; refused: "refused"; pending: "pending"; error: its code
 //   {"given":null}                  in then: the value
-import { PENDING } from "@ermine/scheduler"
+import { PENDING } from "@ermine/core/scheduler"
 import { all, any, grants, no, only, pending, type Policy, yes } from "@ermine/protect"
 import type { Member, Path } from "./places.ts"
-import type { Patch } from "@ermine/op/apply"
-import type { Key } from "@ermine/table"
+import type { Patch } from "@ermine/core/op/apply"
+import type { Key } from "@ermine/core/table"
 import { createGuard, Refusal, REFUSED, slot, target, type Thing } from "./guard.ts"
 import {
 	answered,

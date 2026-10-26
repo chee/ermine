@@ -30,10 +30,10 @@
 //    {"lookup":[names,from]}, or a list of them
 // { op: "pulse" }                          → {}
 // { op: "state", name }                    → { runs, value }   runs so far; last result or null
-import createEntry from "@ermine/node/entry"
-import { type Computer, createScheduler, type Scope } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Key } from "@ermine/table"
+import createEntry from "@ermine/core/node/entry"
+import { type Computer, createScheduler, type Scope } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Key } from "@ermine/core/table"
 import { createPlaces, type Id, type Path, place, PlacesError } from "@ermine/places"
 import { createPathCache, type PathCache } from "@ermine/places/cache"
 import { get, gets, list, lookup, members } from "@ermine/places/lib"

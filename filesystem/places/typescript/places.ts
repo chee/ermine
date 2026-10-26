@@ -15,15 +15,17 @@
 // for a whole subtree, and is not asked again under there (that read is tracked, so something
 // arriving reruns the walk). describe(key): a held spot as a place, else undefined.
 // watchAll(fn): every fact as it lands (ermine/processes' runs.ts). a cache (cache.ts) records reads outside runs:
-// commit right after update.
-import type { ChangeHeader, Entry } from "@ermine/node/entry"
-import { createUnread } from "@ermine/unread"
-import type { Key as Step, Patch } from "@ermine/op/apply"
-import type { Scheduler } from "@ermine/scheduler"
+// commit right after update. namesOf(id): the names a node has now, every children entry's (the
+// reverse of children, kept up from table events and commits: an entry already in the table when
+// places is made is not in it).
+import type { ChangeHeader, Entry } from "@ermine/core/node/entry"
+import { createUnread } from "@ermine/core/unread"
+import type { Key as Step, Patch } from "@ermine/core/op/apply"
+import type { Scheduler } from "@ermine/core/scheduler"
 import { createChangeHeader } from "./header.ts"
-import { keyorder } from "@ermine/util/keyorder"
-import type { createPaths, Spot } from "@ermine/scheduler/paths"
-import type { Id, Key, Table } from "@ermine/table"
+import { keyorder } from "@ermine/core/util/keyorder"
+import type { createPaths, Spot } from "@ermine/core/scheduler/paths"
+import type { Id, Key, Table } from "@ermine/core/table"
 
 export type { Id }
 
@@ -88,6 +90,9 @@ export type Contributor = {
 	// it as if it were a folder (see places' walk). none: never
 	level?(here: Here, name: string, reads: Reads): boolean
 }
+
+// a name a node has: the folder whose children entry holds it, and the name there
+export type Slot = { readonly folder: Id; readonly name: string }
 
 // an answer at a path, and the contributor that gave it
 export type Answer = { readonly id: Id; readonly from: string }
@@ -299,8 +304,61 @@ export function createPlaces(setup: Setup): Places {
 		if (spots.length) scheduler.mark(spots, scheduler.getRun())
 	}
 
+	// the reverse of every children entry: each node's names (Slot), the latest placed last; and what
+	// was indexed of each folder (name → id), so a name put over or taken out is known after its
+	// entry changed in place
+	const indexed = new Map<Id, Map<string, Id>>()
+	const named = new Map<Id, Slot[]>()
+	function unindex(folder: Id, name: string) {
+		const k = indexed.get(folder)
+		const id = k?.get(name)
+		if (id === undefined) return
+		k!.delete(name)
+		if (k!.size === 0) indexed.delete(folder)
+		const list = named.get(id)!
+		list.splice(list.findIndex((n) => n.folder === folder && n.name === name), 1)
+		if (list.length === 0) named.delete(id)
+	}
+	function index(folder: Id, name: string, entry: Entry<unknown> | undefined) {
+		const now = child(entry, name)
+		if (indexed.get(folder)?.get(name) === now) return
+		unindex(folder, name)
+		if (now === undefined) return
+		let k = indexed.get(folder)
+		if (k === undefined) indexed.set(folder, k = new Map())
+		k.set(name, now)
+		let list = named.get(now)
+		if (list === undefined) named.set(now, list = [])
+		list.push({ folder, name })
+	}
+	// a folder's names indexed again: those given (none: every name it had or has)
+	function reindex(folder: Id, names?: Iterable<string>) {
+		const entry = table.get("children", folder) as Entry<unknown> | undefined
+		if (names !== undefined) {
+			for (const name of names) index(folder, name, entry)
+			return
+		}
+		const v = entry?.value
+		const all = new Set([...indexed.get(folder)?.keys() ?? [], ...isMap(v) ? Object.keys(v) : []])
+		for (const name of all) index(folder, name, entry)
+	}
+	// the names the patches on a children entry touched: none, the whole entry
+	function touched(patches: readonly Patch[]): string[] | undefined {
+		const out: string[] = []
+		for (const p of patches) {
+			if (p.path.length === 0 || (p.move !== undefined && p.move.path.length === 0)) {
+				return undefined
+			}
+			if (typeof p.path[0] === "string") out.push(p.path[0])
+			if (typeof p.move?.path[0] === "string") out.push(p.move.path[0])
+		}
+		return out
+	}
+	const namesOf = (id: Id): readonly Slot[] => named.get(id) ?? []
+
 	// the table's hook: a table event, every spot of its key; the watches told the value whole
 	function onTableChange(part: Key, id: Id) {
+		if (part === "children") reindex(id)
 		say(paths.event(first(part), id))
 		if (watches.size === 0 && alls.length === 0) return
 		const entry = table.get(part, id)
@@ -351,6 +409,7 @@ export function createPlaces(setup: Setup): Places {
 	// each watch told what landed at its node. a watch that writes commits in turn, in the same run
 	function commit(changed: readonly Entry<unknown>[]) {
 		const facts = [...eachEntryChange(changed)]
+		for (const f of facts) if (f.part === "children") reindex(f.id, touched(f.patches))
 		const out: unknown[] = []
 		for (const f of facts) out.push(...paths.mark(first(f.part), f.id, f.patches))
 		say(out)
@@ -666,6 +725,7 @@ export function createPlaces(setup: Setup): Places {
 			readValue,
 			readKeys,
 			readChange,
+			namesOf,
 			walk,
 			answers,
 			names,
@@ -707,6 +767,9 @@ export type Places = {
 	readValue: (part: Key, id: Id, path?: readonly Step[]) => unknown
 	readKeys: (part: Key, id: Id, path?: readonly Step[], ids?: boolean) => string[]
 	readChange: (part: Key, id: Id) => ChangeHeader | undefined
+	// the names a node has now in children entries (the folder, the name), the latest placed last:
+	// read untracked (who needs it to rerun reads the children entries on the way)
+	namesOf: (id: Id) => readonly Slot[]
 	// its return: the here it got to (gone carried); stopped short: undefined
 	walk: (path: Path, from?: Id | Here) => Generator<Member, Here | undefined>
 	// every contributor's answer at one step (a level, with no id, as one answer with the id level, when none has an id); every contributor's names under a place, each once. both skip here's gone
@@ -733,16 +796,54 @@ export const unread = createUnread()
 const bad = (name: string) => name === "" || name === "." || name === ".." || name === "/"
 
 // a name holding anything, an id or not: never written over
-const taken = (children: Entry<unknown>, name: string) =>
-	isMap(children.value) && Object.hasOwn(children.value, name)
+const taken = (children: Entry<unknown> | undefined, name: string) =>
+	isMap(children?.value) && Object.hasOwn(children!.value as object, name)
 
 // the patches that make sure the value is a map, first
-const base = (children: Entry<unknown>): Patch[] =>
-	isMap(children.value) ? [] : [{ path: [], value: {} }]
+const base = (children: Entry<unknown> | undefined): Patch[] =>
+	isMap(children?.value) ? [] : [{ path: [], value: {} }]
 
 function write(children: Entry<unknown>, patches: Patch[], header: ChangeHeader) {
 	unread.update(children, patches, header)
 	return [children]
+}
+
+// a write for whoever is given it to do: patches on (part, id) under header, done (or held back)
+// and said by the writer; an entry not there, made from nothing with them. what place, unplace,
+// rename and move would write, by placing, unplacing and moving, so a writer can do it instead
+export type Writer = (part: Key, id: Id, patches: readonly Patch[], header: ChangeHeader) => void
+
+// place's patches, checked as place checks: children may be none (made by them)
+export function placing(children: Entry<unknown> | undefined, name: string, id: Id): Patch[] {
+	if (bad(name)) throw new PlacesError("not-a-name", name)
+	if (taken(children, name)) throw new PlacesError("already-there", name)
+	return [...base(children), { path: [name], value: id }]
+}
+
+// unplace's patches, checked as unplace checks
+export function unplacing(children: Entry<unknown> | undefined, name: string): Patch[] {
+	if (child(children, name) === undefined) throw new PlacesError("nothing-there", name)
+	return [{ path: [name] }]
+}
+
+// move's patches, checked as move checks: each entry's, the one it goes into first; to the same
+// name: none
+export function moving(
+	[from, name]: readonly [Entry<unknown>, string],
+	[into, to]: readonly [Entry<unknown> | undefined, string],
+): { entry: "from" | "into"; patches: Patch[] }[] {
+	if (bad(to)) throw new PlacesError("not-a-name", to)
+	const id = child(from, name)
+	if (id === undefined) throw new PlacesError("nothing-there", name)
+	if (from === into) {
+		if (name === to) return []
+		if (taken(from, to)) throw new PlacesError("already-there", to)
+		return [{ entry: "from", patches: [{ path: [to], move: { path: [name] } }] }]
+	}
+	return [
+		{ entry: "into", patches: placing(into, to, id) },
+		{ entry: "from", patches: unplacing(from, name) },
+	]
 }
 
 // id placed under name, a name holding nothing: one change
@@ -752,9 +853,7 @@ export function place(
 	id: Id,
 	header: ChangeHeader,
 ): Entry<unknown>[] {
-	if (bad(name)) throw new PlacesError("not-a-name", name)
-	if (taken(children, name)) throw new PlacesError("already-there", name)
-	return write(children, [...base(children), { path: [name], value: id }], header)
+	return write(children, placing(children, name, id), header)
 }
 
 // the id under name taken out, and the name with it: one change
@@ -763,8 +862,7 @@ export function unplace(
 	name: string,
 	header: ChangeHeader,
 ): Entry<unknown>[] {
-	if (child(children, name) === undefined) throw new PlacesError("nothing-there", name)
-	return write(children, [{ path: [name] }], header)
+	return write(children, unplacing(children, name), header)
 }
 
 // the id under name moved to the name to: one change; to the same name: none
@@ -788,13 +886,7 @@ export function move(
 	[into, to]: readonly [Entry<unknown>, string],
 	header: ChangeHeader,
 ): Entry<unknown>[] {
-	if (bad(to)) throw new PlacesError("not-a-name", to)
-	const id = child(from, name)
-	if (id === undefined) throw new PlacesError("nothing-there", name)
-	if (from === into) {
-		if (name === to) return []
-		if (taken(from, to)) throw new PlacesError("already-there", to)
-		return write(from, [{ path: [to], move: { path: [name] } }], header)
-	}
-	return [...place(into, to, id, header), ...unplace(from, name, header)]
+	return moving([from, name], [into, to]).flatMap((m) =>
+		write(m.entry === "from" ? from : into, m.patches, header)
+	)
 }

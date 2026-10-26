@@ -33,16 +33,16 @@
 //                        path), the id found there and the place it was found in (parent), tracked. stop: the depth it ends at (1
 //                        leaves the root out); walk: the ids of the places visited pushed to it
 //   inspect(address)     that node picked in the page's graph tab
-import createEntry, { type ChangeHeader, type Metadata } from "@ermine/node/entry"
+import createEntry, { type ChangeHeader, type Metadata } from "@ermine/core/node/entry"
 import { children, createPlaces, move, place, type Places, rename, unplace } from "@ermine/places"
 import { createChangeBase, createChangeHeader } from "@ermine/places/header"
 import * as lib from "@ermine/places/lib"
 import { plan } from "@ermine/places/path"
 import { isPending } from "@ermine/places/status"
-import { type Computer, createScheduler, type Info, type Scope } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { trace } from "@ermine/scheduler/trace"
-import { createTable, type Id, type Key } from "@ermine/table"
+import { type Computer, createScheduler, type Info, type Scope } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { trace } from "@ermine/core/scheduler/trace"
+import { createTable, type Id, type Key } from "@ermine/core/table"
 import { processes as rows } from "@ermine/processes"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import { createBuilds } from "@ermine/compilers"
@@ -59,7 +59,7 @@ import { installTypes, type Known } from "@ermine/types"
 import type { Policy } from "@ermine/protect"
 import { startSweeper, type World as PresenceWorld } from "@ermine/together/presence"
 import { createSites } from "@ermine/sites"
-import { createOverlay, type Overlay } from "@ermine/patch-nodes"
+import { createOverlay, type Overlay } from "@ermine/patchy"
 
 const JS = "com.netscape.javascript-source"
 
@@ -95,7 +95,7 @@ export type Options = {
 	// presence (playground/together/presence): a presence world on the host's scope, swept each
 	// second, the world's presence: the host's, to hand programs as it likes (extend)
 	presence?: { sweep?: number }
-	// patch nodes (playground/patch-nodes): places over an overlay, so a patch node is read through
+	// patch nodes (extensions/patchy): places over an overlay, so a patch node is read through
 	overlay?: boolean
 	// the types (@ermine/types) at /ermine/types, before any seed: true, the well-known list; a list,
 	// those too, after it
@@ -139,7 +139,7 @@ export function createWorld(o: Options) {
 	}
 	const sites = createSites(s, {
 		ours: [
-			...["@ermine/api", "@ermine/scheduler", "@ermine/processes/start"].map(url),
+			...["@ermine/api", "@ermine/core/scheduler", "@ermine/processes/start"].map(url),
 			// programs' and software's own
 			...ours,
 		],

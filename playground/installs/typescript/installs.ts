@@ -3,7 +3,7 @@
 // machine may have many. it has one root. what it is called: its key, as an ermine id
 // ("ermine:ed01" + the key's hex), never chosen.
 //
-//   const install = await openInstall(store, publicKeyOf)   // @ermine/ed25519's, or the host's
+//   const install = await openInstall(store, publicKeyOf)   // @ermine/core/ed25519's, or the host's
 //   install.id      // "ermine:ed01…", the same every time this store is opened
 //   install.root    // "ermine:0010…", made the first time (or the root given then)
 //
@@ -23,7 +23,7 @@ export type Store = {
 	write: (name: string, bytes: Uint8Array) => void | Promise<void>
 }
 
-// how a secret's Ed25519 public key (32 bytes) is worked out: @ermine/ed25519's, or the host's own
+// how a secret's Ed25519 public key (32 bytes) is worked out: @ermine/core/ed25519's, or the host's own
 export type PublicKeyOf = (secret: Uint8Array) => Uint8Array | Promise<Uint8Array>
 
 export type Install = {

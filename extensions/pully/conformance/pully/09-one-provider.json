@@ -1,0 +1,259 @@
+{
+	"title": "one provider a node: one attribute. naming another handler replaces the first: the first, awake, is sent sleep, the second wake (it is read); the second's sends go as whoever named it",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				"pully"
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/cam",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/dev/cam",
+						{
+							"frame": 0
+						}
+					],
+					"as": "cam"
+				},
+				{
+					"do": [
+						"createAction",
+						"on/cam",
+						[
+							{
+								"do": [
+									"log",
+									"said",
+									[
+										"all",
+										"$0",
+										"$2"
+									]
+								]
+							}
+						],
+						[
+							"if",
+							[
+								"is",
+								"$0",
+								"check"
+							],
+							"fresh"
+						]
+					],
+					"as": "on"
+				},
+				{
+					"do": [
+						"provide",
+						"$cam",
+						"$on"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "cam",
+			"at": "/code/cam",
+			"expect": {
+				"id": "proc:cam"
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/r",
+			"program": [
+				{
+					"do": [
+						"getNode",
+						"/dev/cam"
+					],
+					"as": "cam"
+				},
+				{
+					"do": [
+						"ensureNode",
+						"on",
+						true
+					],
+					"as": "on"
+				},
+				{
+					"do": [
+						"createEffect",
+						"see",
+						[
+							"if",
+							[
+								"read",
+								"$on"
+							],
+							[
+								"all",
+								[
+									"read",
+									"$cam"
+								],
+								[
+									"each",
+									[
+										"all",
+										[
+											"getStatus",
+											"$cam"
+										]
+									],
+									[
+										"provider"
+									]
+								]
+							]
+						],
+						"seen-r"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "r",
+			"at": "/code/r",
+			"expect": {
+				"id": "proc:r"
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/two",
+			"program": [
+				{
+					"do": [
+						"getNode",
+						"/dev/cam"
+					],
+					"as": "cam"
+				},
+				{
+					"do": [
+						"createAction",
+						"on/two",
+						[
+							{
+								"do": [
+									"log",
+									"two",
+									[
+										"all",
+										"$0",
+										"$2"
+									]
+								]
+							}
+						]
+					],
+					"as": "on"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "two",
+			"at": "/code/two",
+			"expect": {
+				"id": "proc:two"
+			}
+		},
+		{
+			"op": "do",
+			"process": "two",
+			"call": [
+				"provide",
+				"$cam",
+				"$on"
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "said",
+			"expect": {
+				"values": [
+					[
+						"wake",
+						"n10"
+					],
+					[
+						"sleep",
+						null
+					]
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "two",
+			"expect": {
+				"values": [
+					[
+						"wake",
+						"n10"
+					]
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				{
+					"path": [
+						"dev",
+						"cam"
+					],
+					"part": "attributes"
+				}
+			],
+			"expect": {
+				"value": {
+					"ermine.provider": "n12",
+					"ermine.provider.status": "waking"
+				}
+			}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"id": "n12",
+			"expect": {
+				"record": {
+					"n": 3,
+					"caller": "proc:two",
+					"handler": "n12",
+					"args": [
+						"wake",
+						{
+							"id": "n4",
+							"part": "value"
+						},
+						"n10"
+					],
+					"end": "done",
+					"reads": [],
+					"writes": []
+				}
+			}
+		}
+	]
+}

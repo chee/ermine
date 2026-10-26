@@ -8,7 +8,7 @@
 // list keeps a refused member in its place, its id REFUSED. no policy: everything is allowed.
 // a Refusal's answer is protect's whole, so its grant (which grant decided) is kept; its ask
 // names the target refused
-import type { Key as Step } from "@ermine/op/apply"
+import type { Key as Step } from "@ermine/core/op/apply"
 import {
 	type Answer,
 	type Ask,
@@ -19,8 +19,8 @@ import {
 	type Target,
 	yes,
 } from "@ermine/protect"
-import { PENDING, type Scheduler } from "@ermine/scheduler"
-import type { Key, Table } from "@ermine/table"
+import { PENDING, type Scheduler } from "@ermine/core/scheduler"
+import type { Key, Table } from "@ermine/core/table"
 import { createChangeBase } from "./header.ts"
 import { at, type Id, type Member, type Path, type Places } from "./places.ts"
 

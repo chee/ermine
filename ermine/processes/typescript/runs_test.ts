@@ -5,16 +5,16 @@ import {
 	assertStrictEquals,
 	assertThrows,
 } from "@std/assert"
-import createEntry from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import type { Patch } from "@ermine/op/apply"
+import createEntry from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import type { Patch } from "@ermine/core/op/apply"
 import { createPlaces } from "@ermine/places"
 import { createGuard, Refusal } from "@ermine/places/guard"
 import { createChangeHeader } from "@ermine/places/header"
 import { no, yes } from "@ermine/protect"
-import { createTable, type Key } from "@ermine/table"
-import { createScheduler, PENDING } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
+import { createTable, type Key } from "@ermine/core/table"
+import { createScheduler, PENDING } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
 import { createRuns, type Read } from "./runs.ts"
 
 // a world: each computer given a node has its latest run in the runs' table as its runs end

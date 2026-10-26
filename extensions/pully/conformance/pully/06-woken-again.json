@@ -1,0 +1,294 @@
+{
+	"title": "woken again, a reader gets the value last written at once (asleep), then waking, then the new value, awake",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				"pully"
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/cam",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/dev/cam",
+						{
+							"frame": 0
+						}
+					],
+					"as": "cam"
+				},
+				{
+					"do": [
+						"createAction",
+						"on/cam",
+						[
+							{
+								"do": [
+									"log",
+									"said",
+									[
+										"all",
+										"$0",
+										"$2"
+									]
+								]
+							}
+						],
+						[
+							"if",
+							[
+								"is",
+								"$0",
+								"check"
+							],
+							"fresh"
+						]
+					],
+					"as": "on"
+				},
+				{
+					"do": [
+						"provide",
+						"$cam",
+						"$on"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "cam",
+			"at": "/code/cam",
+			"expect": {
+				"id": "proc:cam"
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/r",
+			"program": [
+				{
+					"do": [
+						"getNode",
+						"/dev/cam"
+					],
+					"as": "cam"
+				},
+				{
+					"do": [
+						"ensureNode",
+						"on",
+						true
+					],
+					"as": "on"
+				},
+				{
+					"do": [
+						"createEffect",
+						"see",
+						[
+							"if",
+							[
+								"read",
+								"$on"
+							],
+							[
+								"all",
+								[
+									"read",
+									"$cam"
+								],
+								[
+									"each",
+									[
+										"all",
+										[
+											"getStatus",
+											"$cam"
+										]
+									],
+									[
+										"provider"
+									]
+								]
+							]
+						],
+						"seen-r"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "r",
+			"at": "/code/r",
+			"expect": {
+				"id": "proc:r"
+			}
+		},
+		{
+			"op": "do",
+			"process": "cam",
+			"call": [
+				"patch",
+				"$cam",
+				[
+					{
+						"path": [],
+						"value": {
+							"frame": 1
+						}
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "r",
+			"call": [
+				"patch",
+				"$on",
+				[
+					{
+						"path": [],
+						"value": false
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "said",
+			"expect": {
+				"values": [
+					[
+						"wake",
+						"n10"
+					],
+					[
+						"sleep",
+						null
+					]
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "r",
+			"call": [
+				"patch",
+				"$on",
+				[
+					{
+						"path": [],
+						"value": true
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "said",
+			"expect": {
+				"values": [
+					[
+						"wake",
+						"n10"
+					],
+					[
+						"sleep",
+						null
+					],
+					[
+						"wake",
+						"n10"
+					]
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "cam",
+			"call": [
+				"patch",
+				"$cam",
+				[
+					{
+						"path": [],
+						"value": {
+							"frame": 2
+						}
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "seen-r",
+			"expect": {
+				"values": [
+					[
+						{
+							"frame": 0
+						},
+						[
+							"asleep"
+						]
+					],
+					[
+						{
+							"frame": 0
+						},
+						[
+							"waking"
+						]
+					],
+					[
+						{
+							"frame": 1
+						},
+						[
+							"awake"
+						]
+					],
+					null,
+					[
+						{
+							"frame": 1
+						},
+						[
+							"asleep"
+						]
+					],
+					[
+						{
+							"frame": 1
+						},
+						[
+							"waking"
+						]
+					],
+					[
+						{
+							"frame": 2
+						},
+						[
+							"awake"
+						]
+					]
+				]
+			}
+		}
+	]
+}

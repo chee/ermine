@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "@std/assert"
-import { createScheduler, type Scope } from "@ermine/scheduler"
+import { createScheduler, type Scope } from "@ermine/core/scheduler"
 import { createSites } from "./sites.ts"
 import { INFO, make } from "./sites_fixture.ts"
 

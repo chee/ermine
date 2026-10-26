@@ -1,0 +1,244 @@
+{
+	"title": "nothing open [chee 10-25: \"we are getting rid of setup(api) right? so we are moving to throw\"]: a process's function with nothing open throws nothing-open: a handler's write after an await (the call failed, the value as it was), a process's context written from outside (feature code opens it: within). a process doing it opened (the harness's do: within) writes as itself, no mark. the host's word or the host's context.write with nothing open: the host's own scope (process 0 loses nothing)",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./n",
+						0
+					],
+					"as": "n"
+				},
+				{
+					"do": [
+						"createAction",
+						"on/later",
+						[],
+						[
+							"later",
+							[
+								"patch",
+								"$n",
+								[
+									{
+										"path": [],
+										"value": 2
+									}
+								]
+							]
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"n"
+			],
+			"expect": {
+				"id": "n4"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"patch",
+				"$n",
+				[
+					{
+						"path": [],
+						"value": 1
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "metadata",
+			"part": "value",
+			"id": "n4",
+			"expect": {
+				"keys": [
+					"node",
+					"process"
+				],
+				"node": "proc:p"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"on/later"
+			],
+			"expect": {
+				"value": {}
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"id": "n5",
+			"expect": {
+				"record": {
+					"n": 1,
+					"caller": "proc:p",
+					"handler": "n5",
+					"args": [],
+					"end": "failed",
+					"error": "nothing-open: patch: nothing is open here (a module's top level, a timer, a listener, or after an await): call it from a setup, a memo, an effect or an action",
+					"reads": [],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "saved",
+			"part": "value",
+			"id": "n4",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "metadata",
+			"part": "value",
+			"id": "n4",
+			"expect": {
+				"keys": [
+					"node",
+					"process"
+				],
+				"node": "proc:p"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"explain",
+				"$n"
+			],
+			"expect": {
+				"value": {
+					"writer": "outside",
+					"site": "program"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/code/n",
+				[
+					{
+						"path": [],
+						"value": 3
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "metadata",
+			"part": "value",
+			"id": "n4",
+			"expect": {
+				"keys": [
+					"actor",
+					"node"
+				],
+				"node": "n1"
+			}
+		},
+		{
+			"op": "o",
+			"call": [
+				"write",
+				"value",
+				"n4",
+				[
+					{
+						"path": [],
+						"value": 4
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "metadata",
+			"part": "value",
+			"id": "n4",
+			"expect": {
+				"keys": [
+					"actor",
+					"node"
+				],
+				"node": "n1"
+			}
+		},
+		{
+			"op": "o",
+			"process": "p",
+			"call": [
+				"write",
+				"value",
+				{
+					"id": "n4",
+					"path": [
+						"code",
+						"n"
+					]
+				},
+				[
+					{
+						"path": [],
+						"value": 5
+					}
+				]
+			],
+			"expect": {
+				"error": "nothing-open"
+			}
+		},
+		{
+			"op": "metadata",
+			"part": "value",
+			"id": "n4",
+			"expect": {
+				"keys": [
+					"actor",
+					"node"
+				],
+				"node": "n1"
+			}
+		}
+	]
+}

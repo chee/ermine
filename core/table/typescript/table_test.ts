@@ -1,5 +1,5 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
-import createEntry, { type Entry } from "@ermine/node/entry"
+import createEntry, { type Entry } from "@ermine/core/node/entry"
 import { createTable, type Event, type Id, TableError } from "./table.ts"
 
 // the table checks no name and no shape: here, any key is a table name and any entry goes

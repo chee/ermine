@@ -1,5 +1,5 @@
 // the program on the board, all of it: a store, a pond computer, and one child computer per fish
-import type { Computer, Scheduler } from "@ermine/scheduler"
+import type { Computer, Scheduler } from "@ermine/core/scheduler"
 
 export function program(s: Scheduler, bubble: (name: string, run: number) => void) {
 	// the store: key → value. a read tracks the key; a write sets it and marks it

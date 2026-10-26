@@ -145,7 +145,8 @@
 			"name": "a",
 			"expect": {
 				"parts": [
-					"attributes"
+					"attributes",
+					"status"
 				],
 				"status": {
 					"failed": "no compile here"
@@ -243,7 +244,8 @@
 			"name": "b",
 			"expect": {
 				"parts": [
-					"attributes"
+					"attributes",
+					"status"
 				],
 				"status": {
 					"failed": "no compile here"
@@ -381,7 +383,8 @@
 			"name": "c",
 			"expect": {
 				"parts": [
-					"attributes"
+					"attributes",
+					"status"
 				],
 				"status": {
 					"failed": "not-a-compiler"

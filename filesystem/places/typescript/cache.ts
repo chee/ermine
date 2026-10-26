@@ -17,8 +17,8 @@
 // keys, selector.ts keyed). a reader whose path a write marks runs once before a due writer of a
 // spot under it, and again after.
 import { createClingy } from "@ermine/clingy"
-import type { Run, Scheduler } from "@ermine/scheduler"
-import { type Holder, keyed } from "@ermine/scheduler/selector"
+import type { Run, Scheduler } from "@ermine/core/scheduler"
+import { type Holder, keyed } from "@ermine/core/scheduler/selector"
 import {
 	type Answer,
 	type Answers,

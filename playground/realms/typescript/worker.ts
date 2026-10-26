@@ -22,18 +22,18 @@
 // back a promise of the page's answer
 //
 // what can't cross yet: realms.ts
-import createEntry, { type ChangeHeader } from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import apply, { type Patch } from "@ermine/op/apply"
+import createEntry, { type ChangeHeader } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import apply, { type Patch } from "@ermine/core/op/apply"
 import { createProcessAPIs } from "@ermine/programs/api"
 import { children, type Contributor, createPlaces, type Fact, type Places } from "@ermine/places"
 import { NODE } from "@ermine/places/header"
 import { PROCESS, processes } from "@ermine/processes"
-import { createScheduler, type Info, PENDING, type Scope } from "@ermine/scheduler"
+import { createScheduler, type Info, PENDING, type Scope } from "@ermine/core/scheduler"
 import { createSites } from "@ermine/sites"
-import { isPromise } from "@ermine/scheduler/helpers"
-import { createPaths } from "@ermine/scheduler/paths"
-import type { Key } from "@ermine/table"
+import { isPromise } from "@ermine/core/scheduler/helpers"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import type { Key } from "@ermine/core/table"
 import { createReplica, type Replica } from "./replica.ts"
 import {
 	decode,
@@ -289,7 +289,7 @@ export function serve(port: Port): () => void {
 				import.meta.url,
 				import.meta.resolve("@ermine/api"),
 				import.meta.resolve("@ermine/programs/api"),
-				import.meta.resolve("@ermine/scheduler"),
+				import.meta.resolve("@ermine/core/scheduler"),
 			],
 		})
 		const apis = createProcessAPIs({

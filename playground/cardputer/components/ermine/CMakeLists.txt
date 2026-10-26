@@ -20,7 +20,7 @@ idf_component_register(
 		${R}/ermine/sites/c/sites.c
 		${R}/ermine/api/c/api.c
 		${R}/playground/encoding/c/pack.c ${R}/ermine/encoding/c/json.c ${R}/ermine/encoding/c/cbor.c
-		${R}/extensions/patch-nodes/c/patch.c
+		${R}/extensions/patchy/c/patch.c
 		${R}/ermine/processes/c/start.c ${R}/ermine/boxes/c/boxes.c ${R}/experiments/software/c/functions.c
 		${R}/playground/encoding/c/hash.c ${R}/ermine/encoding/c/blake3/blake3.c
 		${R}/ermine/encoding/c/blake3/blake3_dispatch.c ${R}/ermine/encoding/c/blake3/blake3_portable.c

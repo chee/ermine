@@ -3,7 +3,7 @@
 // computers the real scheduler runs, wired in a chain from an outside "stock the pond" write. the
 // reader closes the circle by dragging grow's out onto fish; then grow's write comes back to lay,
 // and the scheduler ends a run "looping", its more.through the circle, lit cherry and numbered.
-import { type Computer, createScheduler, type Ended, type More } from "@ermine/scheduler"
+import { type Computer, createScheduler, type Ended, type More } from "@ermine/core/scheduler"
 import { pondPage } from "../kit/page.ts"
 import type { Box, Port } from "../kit/board.ts"
 import { chart, createPond, icon } from "../kit/sprites.ts"
@@ -33,7 +33,7 @@ const page = pondPage("loops", {
 		<p><b>from outside:</b> a write that names no run has no cause and teaches no writer. It is never a loop.</p>
 		<p><b>not shown here:</b> a flagged run that writes into its circle again is cut there: that mark makes nothing due, and it ends looping. A mark of a key held from an older run, not read in the latest, is a retry: it runs again, but it is no loop.</p>`,
 	real:
-		`Runs the real <code>@ermine/scheduler</code>: createScheduler, a root scope, createComputer, track, mark and pulse. The loop, its through list and each write's run come from its own listeners (onMark, onRunEnd); "waits" is the computer's own <code>looping</code>. The page keeps the keys in a Map, draws the pond and the chart after each pulse, and makes a computer again when you rewire it.`,
+		`Runs the real <code>@ermine/core/scheduler</code>: createScheduler, a root scope, createComputer, track, mark and pulse. The loop, its through list and each write's run come from its own listeners (onMark, onRunEnd); "waits" is the computer's own <code>looping</code>. The page keeps the keys in a Map, draws the pond and the chart after each pulse, and makes a computer again when you rewire it.`,
 })
 const { board } = page
 

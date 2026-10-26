@@ -1,0 +1,347 @@
+{
+	"title": "why(x), one step: the change at x and who made it. from outside any run or call: its site (the program's line); by a memo's run: the computer and the run, while its latest run's record holds the change; by a send: the handler and the call, likewise; a newer record not holding it: replaced, naming the writer's node. nothing there: none",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./a",
+						{
+							"n": 0
+						}
+					],
+					"as": "a"
+				},
+				{
+					"do": [
+						"ensureNode",
+						"./f",
+						{
+							"on": true
+						}
+					],
+					"as": "f"
+				},
+				{
+					"do": [
+						"ensureNode",
+						"./t",
+						0
+					],
+					"as": "t"
+				},
+				{
+					"do": [
+						"ensureNode",
+						"./u",
+						0
+					],
+					"as": "u"
+				},
+				{
+					"do": [
+						"createMemo",
+						"w",
+						{},
+						[
+							"if",
+							[
+								"read",
+								"$f",
+								[
+									"on"
+								]
+							],
+							[
+								"patch",
+								"$t",
+								[
+									{
+										"path": [],
+										"value": 1
+									}
+								]
+							]
+						]
+					],
+					"as": "w"
+				},
+				{
+					"do": [
+						"createAction",
+						"on/set",
+						[
+							{
+								"do": [
+									"patch",
+									"$a",
+									[
+										{
+											"path": [
+												"n"
+											],
+											"value": "$0"
+										}
+									]
+								]
+							}
+						]
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"on/put",
+						[
+							{
+								"do": [
+									"patch",
+									"$0",
+									[
+										{
+											"path": [],
+											"value": "$1"
+										}
+									]
+								]
+							}
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p",
+				"w"
+			],
+			"expect": {
+				"id": "n8"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"explain",
+				"$a"
+			],
+			"expect": {
+				"value": {
+					"writer": "outside",
+					"site": "program"
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"explain",
+				"$t"
+			],
+			"expect": {
+				"value": {
+					"writer": "computer",
+					"path": [
+						"code",
+						"p",
+						"w"
+					],
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"on/set",
+				5
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"explain",
+				"$a"
+			],
+			"expect": {
+				"value": {
+					"writer": "method",
+					"path": [
+						"code",
+						"p",
+						"on",
+						"set"
+					],
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "metadata",
+			"part": "value",
+			"id": "n4",
+			"expect": {
+				"keys": [
+					"call",
+					"caller",
+					"handler",
+					"node",
+					"process"
+				],
+				"node": "proc:p",
+				"call": 1,
+				"handler": "n9",
+				"caller": "proc:p"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"patch",
+				"$f",
+				[
+					{
+						"path": [
+							"on"
+						],
+						"value": false
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"explain",
+				"$t"
+			],
+			"expect": {
+				"value": {
+					"writer": "computer",
+					"path": [
+						"code",
+						"p",
+						"w"
+					]
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"on/put",
+				"$t",
+				2
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"explain",
+				"$t"
+			],
+			"expect": {
+				"value": {
+					"writer": "method",
+					"path": [
+						"code",
+						"p",
+						"on",
+						"put"
+					],
+					"n": 2
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"on/put",
+				"$u",
+				3
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"explain",
+				"$t"
+			],
+			"expect": {
+				"value": {
+					"writer": "method",
+					"path": [
+						"code",
+						"p",
+						"on",
+						"put"
+					]
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"explain",
+				"$u"
+			],
+			"expect": {
+				"value": {
+					"writer": "method",
+					"path": [
+						"code",
+						"p",
+						"on",
+						"put"
+					],
+					"n": 3
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"explain",
+				"./nothing"
+			],
+			"expect": {}
+		}
+	]
+}
