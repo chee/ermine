@@ -168,6 +168,8 @@ export function createCalls(setup: Setup): Calls {
 		const put = (c: Call) => {
 			if (!keep || gone) return
 			const h = held(id)
+			// the latest is the call begun last: an earlier call settling later is told, not held
+			if (h.call !== undefined && h.call.n > c.n) return
 			h.call = c
 			s.mark([h.key], s.getRun())
 		}

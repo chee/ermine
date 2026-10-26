@@ -1187,9 +1187,11 @@ static void keep_record(void *ctx, const es_recorded *r) {
 	keeping *k = ctx;
 	struct es_calls *x = k->x;
 	if (!x->keep || k->gone || r->call == NULL) return;
+	held *h = es_map_get(&x->records, r->id);
+	// the latest is the call begun last: an earlier call settling later is told, not held
+	if (h != NULL && h->call != NULL && h->call->n > r->call->n) return;
 	es_call *mine = r->call == k->owned ? k->owned : call_copy(r->call);
 	k->held = mine == k->owned;
-	held *h = es_map_get(&x->records, r->id);
 	if (h == NULL) {
 		h = es_alloc(sizeof *h);
 		es_map_set(&x->records, r->id, h);
