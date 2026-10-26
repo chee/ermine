@@ -47,7 +47,13 @@
 // since) | "awake", written by the host's context (bookkeeping, as a process's row is). status(x)
 // shows it as provider (onStatus), read from the attribute: one source. how stale an asleep value
 // is: its entry's change.time.
-import { executeAction, patchAttributes, readAttributes, readEntries } from "@ermine/system"
+import {
+	ErmineError,
+	executeAction,
+	patchAttributes,
+	readAttributes,
+	readEntries,
+} from "@ermine/system"
 import type { Feature, FeatureAPI, Node, NodeData, ProcessContext, Target } from "@ermine/system"
 import { NODE } from "@ermine/core/places/header"
 import { PENDING, type Scope } from "@ermine/core/scheduler"
@@ -89,7 +95,7 @@ const pully: Feature = {
 		// the namers whose scope's going is listened for
 		const heard = new WeakSet<Scope>()
 
-		installed.add(f)
+		installed.add(new WeakRef(f))
 		const host = () => f.getProcessContext()
 		// a node by its id (pully's power: minted from its id); its use asked as whoever uses it
 		const node = (id: Id, _as?: ProcessContext): Node => f.handleOf({ id, part: "value" })
@@ -294,12 +300,26 @@ function idByEntries(x: Target): Id | undefined {
 	return n === undefined ? undefined : featureOf(n).node.id
 }
 
-// every pully set up, one per ermine: a handle is known to its own ermine's only (dataOf)
-const installed = new Set<FeatureAPI>()
+// every pully set up, one per ermine, held weakly (its hooks hold it while its ermine is): a handle
+// is known to its own ermine's only (dataOf). one closed (its dataOf throws closed) or let go is
+// dropped as it is met
+const installed = new Set<WeakRef<FeatureAPI>>()
 function featureOf(h: Node): { f: FeatureAPI; node: NodeData } {
-	for (const f of installed) {
-		const d = f.dataOf(h)
-		if (d !== undefined) return { f, node: d.node }
+	for (const r of installed) {
+		const f = r.deref()
+		const d = known(f, h)
+		if (d === null) installed.delete(r)
+		else if (d !== undefined) return { f: f!, node: d.node }
 	}
 	throw new Error("a node no ermine with pully gave")
+}
+// what h reaches in f's ermine (none: undefined); f's ermine gone or closed: null
+function known(f: FeatureAPI | undefined, h: Node): { node: NodeData } | undefined | null {
+	if (f === undefined) return null
+	try {
+		return f.dataOf(h)
+	} catch (e) {
+		if (e instanceof ErmineError && e.code === "closed") return null
+		throw e
+	}
 }
