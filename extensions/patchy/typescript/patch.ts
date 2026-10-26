@@ -24,6 +24,7 @@
 // it again, land it, take it out) is the maker's
 // writes go to the table, never the overlay; never change what it makes. land puts a patch node's
 // patches on its target for real
+import { carryTrace } from "@ermine/core/places/header"
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
 import apply, { ApplyError, type Key as Step, type Patch } from "@ermine/core/op/apply"
@@ -267,7 +268,7 @@ export function createOverlay(
 	function header(base: Entry<unknown> | undefined, applied: Id[]): ChangeHeader {
 		if (base === undefined) return { time: 0, actor: undefined, metadata: { overlay: applied } }
 		const { op: _, ...change } = base.change
-		return { ...change, metadata: { ...change.metadata, overlay: applied } }
+		return carryTrace(change, { ...change, metadata: { ...change.metadata, overlay: applied } })
 	}
 
 	// the table's entry under (part, id), each patch node in ps applied over it in order: all their

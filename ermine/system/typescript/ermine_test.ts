@@ -1,6 +1,6 @@
 // what the suite (conformance/ermine) can't say on the line protocol: the base's own files, a
 // made-up context, close() with every teardown held, two onTable layers stacked
-import { addTeardown } from "@ermine/system"
+import { addTeardown, createAction, createBox, read } from "@ermine/system"
 import { assert, assertEquals, assertThrows } from "@std/assert"
 import { createScheduler, type Scheduler } from "@ermine/core/scheduler"
 import {
@@ -175,4 +175,94 @@ Deno.test("a feature's context(process) is undefined once the process stopped, a
 	const host: ProcessContext = api!.getProcessContext()
 	assert(host !== undefined)
 	e.close()
+})
+
+// how often the boxes' folders' names are looked up (up, system.ts), as reads walk paths
+function namesLooked(e: { places: { namesOf: (id: string) => unknown } }) {
+	const places = e.places as { namesOf: (id: string) => unknown }
+	const was = places.namesOf
+	let n = 0
+	places.namesOf = (id) => (n++, was(id))
+	return () => n
+}
+
+Deno.test("reads walk the boxes by an index: none of the boxes' names looked up again till a name changes", () => {
+	const e = createErmine({ schedule: () => {} })
+	e.ensureNode("/a/b/c/x", 1)
+	for (let i = 0; i < 200; i++) e.createBox(`/boxes/b${i}`)
+	const looked = namesLooked(e)
+	e.read("/a/b/c/x")
+	const once = looked()
+	for (let i = 0; i < 100; i++) e.read("/a/b/c/x"), e.read(e.getNode("/a/b/c/x"))
+	assertEquals(looked(), once, "a read walked every box")
+	// a name changed: walked again, once
+	e.ensureNode("/a/y", 2)
+	for (let i = 0; i < 100; i++) e.read("/a/b/c/x")
+	assert(looked() <= 2 * once + 10, `${looked() - once} looked up after one name changed`)
+	e.close()
+})
+
+Deno.test("createBox at one folder again and again is one box; a box nothing reaches, holding no rows, let go", () => {
+	const e = createErmine({ schedule: () => {} })
+	e.ensureNode("/x", 1)
+	e.start(() => void createAction("on/box", () => void createBox("./same")), "/code/p")
+	for (let i = 0; i < 100; i++) e.executeAction("/code/p/on/box")
+	const looked = namesLooked(e)
+	e.ensureNode("/y", 1)
+	e.read("/x")
+	// the root's box and one at /code/same: two folders' names, a few steps each
+	assert(looked() < 20, `${looked()} looked up: every createBox kept`)
+	e.unplace("/code/same")
+	e.read("/x")
+	const after = looked()
+	e.ensureNode("/z", 1)
+	e.read("/x")
+	// the one nothing reaches, let go: only the root's walked
+	assert(looked() - after <= 2, `${looked() - after} looked up: the unreachable box kept`)
+	e.close()
+})
+
+Deno.test("a read of a node not there, outside a setup or a run, keeps nothing: reads don't slow as they pile up", () => {
+	const e = createErmine({ schedule: () => {} })
+	e.start(() => void createAction("on/look", (p: string) => read(p)), "/code/p")
+	const missing = (from: string, n: number) => {
+		const t = performance.now()
+		for (let i = 0; i < n; i++) {
+			assertThrows(() => e.read(`/m/${from}${i}`))
+			assertThrows(() => e.executeAction("/code/p/on/look", `/m/${from}a${i}`))
+		}
+		return performance.now() - t
+	}
+	missing("w", 500)
+	const first = missing("f", 1000)
+	missing("pile", 20000)
+	const last = missing("l", 1000)
+	assert(last < first * 4, `1000 reads took ${first.toFixed(1)} ms, then ${last.toFixed(1)} ms`)
+	e.close()
+})
+
+Deno.test("trace: a write outside a run keeps its whole trace text, through later copies; trace: false, none", async () => {
+	const { traceOf } = await import("@ermine/core/places/header")
+	const changeAt = (e: ReturnType<typeof createErmine>, path: string[]) => {
+		let id = e.places.root as string
+		for (const n of path) id = (e.table.get("children", id)?.value as Record<string, string>)[n]
+		return e.table.get("value", id)!.change
+	}
+	const e = createErmine()
+	function deepInTheProgram() {
+		e.ensureNode("/x", 1)
+	}
+	deepInTheProgram()
+	const text = traceOf(changeAt(e, ["x"]))
+	assert(text !== undefined && text.includes("deepInTheProgram"))
+	e.patch("/x", [{ path: [], value: 2 }])
+	function another() {
+		e.patch("/x", [{ path: [], value: 3 }])
+	}
+	another()
+	assert(traceOf(changeAt(e, ["x"]))?.includes("another"))
+	const off = createErmine({ trace: false })
+	off.ensureNode("/y", 1)
+	assertEquals(traceOf(changeAt(off, ["y"])), undefined)
+	assertEquals(typeof changeAt(off, ["y"]).external?.[0]?.line, "number")
 })

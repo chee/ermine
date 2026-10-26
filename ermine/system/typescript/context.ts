@@ -1,24 +1,11 @@
-// the process context: where and as whom a thing is done. a scope, a box, a cwd, a path, its
-// args, and a process or none (the host's: process 0). the layer under the api: every function is made
-// from one; features reach it (onWrite is given it); programs never do.
+// the process context's making (its type, and what each of its functions does: @ermine/processes'
+// context.ts): a context from what every context of one ermine shares (Parts), and its own
+// beside it (Inner), what the functions reach and programs never do
 //
 //   const o = ermine.getProcessContext(process)   // none: the host's
 //   o.resolve("./notes")                          // ["work", "notes"]: the api's paths
 //   o.within(() => o.write("value", id, [{ path: ["n"], value: 2 }]))
-//
-// resolve(p)            bare: inside at; ./ and ../: from cwd; /: the box's root. a path going
-//                       above "/": nothing-there
-// within(f)             f with this context's scope open (explicit: for host and feature code)
-// write(part, at, patches)  one write at a node (its id, or { id, path }), asked "edit" on it
-//                       (by its path when given, so a policy by path decides): through onWrite, a
-//                       header (the open scope's, else this context's; site: the caller's line),
-//                       committed, a pulse asked for
-// remove(part, at)      the entry at a node's part taken out (not a value written undefined: no
-//                       entry there after), asked "edit" as write is. for now: revisit once tx
-//                       lands [chee 10-25: "note to revisit it after tx lands"]
-// ask(op, ...targets)   protect (the host's may; none: all allowed): a no throws a Refusal
-// queuePulse()          one pulse soon, however many ask
-// a write with nothing open: a process's throws nothing-open; the host's falls back to its own scope
+import { carryTrace } from "@ermine/core/places/header"
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
 import apply, { type Key as Step, type Patch } from "@ermine/core/op/apply"
@@ -34,10 +21,11 @@ import {
 import { parse, plan } from "@ermine/core/places/path"
 import { createGuard, target as targetOf } from "@ermine/core/places/guard"
 import type { Policy, Target as Asked } from "@ermine/core/protect"
-import { PROCESS } from "@ermine/processes"
+import { type At, PROCESS, type ProcessContext } from "@ermine/processes"
 import type { Process } from "@ermine/processes/start"
 import type { Computer, Scheduler, Scope } from "@ermine/core/scheduler"
 import { ErmineError } from "./features.ts"
+import { enterScheduler, leaveScheduler } from "./registry.ts"
 import type { Handle } from "./handles.ts"
 import type { Key, Table } from "@ermine/core/table"
 
@@ -49,10 +37,6 @@ export type NodeData =
 // a node, as a program holds it: an opaque handle (handles.ts)
 export type Node = Handle
 export type Target = Node | string | readonly string[]
-
-// a recipe (produce's), or patches
-// deno-lint-ignore no-explicit-any
-export type Change = readonly Patch[] | ((draft: any, helpers: any) => unknown)
 
 // why a scope goes, as its teardowns are told: its owner ran again, the process ended, or the
 // reason its stop was given
@@ -75,9 +59,6 @@ export type Write = {
 
 // the metadata key the base sets: a changed write's hooks (Write.features)
 export const FEATURES = "features"
-
-// what a write is aimed at: a node's id, and the path it was reached by when there is one
-export type At = Id | { readonly id: Id; readonly path?: Path }
 
 // one value a path holds, and where it is from: position 0 is read's, from its entry's change;
 // the rest, what features show (onRead), each naming its feature (from.feature). gone: a delete;
@@ -108,22 +89,8 @@ export type CreatedFunction = {
 	readonly process: Id
 }
 
-export type ProcessContext = {
-	readonly scope: Scope
-	readonly box: Box
-	readonly cwd: Path
-	// the host's: []
-	readonly at: Path
-	readonly args: readonly string[]
-	// the host's: none
-	readonly process?: Process
-	resolve: (p: string | Path) => Path
-	within: <T>(f: () => T) => T
-	write: (part: Key, at: At, patches: readonly Patch[]) => void
-	remove: (part: Key, at: At) => void
-	ask: (op: string, ...targets: Asked[]) => void
-	queuePulse: () => void
-}
+// the one context type is processes'; here for system's own files too
+export type { At, ProcessContext }
 
 // what every context of one ermine shares
 export type Parts = {
@@ -141,8 +108,9 @@ export type Parts = {
 	readonly onCreateFunction?: (made: CreatedFunction) => void
 	// throws once ermine is closed
 	readonly alive: () => void
-	// in an action's call, its caller's place (none: the host): asks there are asked as both (guard)
-	readonly caller?: () => { from?: Path } | undefined
+	// in an action's call, its caller's place and box (none: the host): asks there are asked as
+	// both (guard)
+	readonly caller?: () => { from?: Path; box?: Id } | undefined
 }
 
 // a process context's own, beside it: what the functions reach and programs never do
@@ -170,7 +138,7 @@ export function createProcessContext(
 	o: {
 		scope: Scope
 		box: Box
-		cwd: Path
+		folder: Path
 		at: Path
 		args: readonly string[]
 		process?: Process
@@ -186,6 +154,8 @@ export function createProcessContext(
 		table,
 		may: parts.may,
 		from: o.at,
+		// the box it is in, by its folder's id: the host's policy tells boxes apart (guard.ts)
+		box: o.box.root,
 		...parts.caller !== undefined && { caller: parts.caller },
 	})
 
@@ -211,7 +181,7 @@ export function createProcessContext(
 		parts.alive()
 		const steps = typeof p === "string" ? parse(p) : p
 		const first = steps[0]
-		const from = first === "/" ? [] : first === "." || first === ".." ? o.cwd : o.at
+		const from = first === "/" ? [] : first === "." || first === ".." ? o.folder : o.at
 		const names = plan(["/", ...from, ...steps])
 		if (names === undefined) throw new PlacesError("nothing-there", "..")
 		return names
@@ -241,7 +211,10 @@ export function createProcessContext(
 	function headerOf(w: Write): ChangeHeader {
 		const header = w.header ?? parts.header()
 		if (w.features === undefined) return header
-		return { ...header, metadata: { ...header.metadata, [FEATURES]: w.features } }
+		return carryTrace(header, {
+			...header,
+			metadata: { ...header.metadata, [FEATURES]: w.features },
+		})
 	}
 
 	const ask = (op: string, ...targets: Asked[]) => {
@@ -256,14 +229,19 @@ export function createProcessContext(
 	const context: ProcessContext = {
 		scope: o.scope,
 		box: o.box,
-		cwd: o.cwd,
+		folder: o.folder,
 		at: o.at,
 		args: o.args,
 		...o.process !== undefined && { process: o.process },
 		resolve,
 		within: <T>(f: () => T): T => {
 			parts.alive()
-			return s.runWithScope(o.scope, f)
+			enterScheduler(s)
+			try {
+				return s.runWithScope(o.scope, f)
+			} finally {
+				leaveScheduler()
+			}
 		},
 		write(part, at, patches) {
 			const t = typeof at === "object" ? at : { id: at }
@@ -298,6 +276,11 @@ export function createProcessContext(
 	const writer: Writer = (part, id, patches, header) => put({ part, id, patches, header })
 	return { context, places, node: o.node, guarded, guard, inside, put, writer }
 }
+
+// whether v is a promise, or anything with a then
+export const isThen = (v: unknown): v is PromiseLike<unknown> =>
+	(typeof v === "object" || typeof v === "function") && v !== null &&
+	typeof (v as PromiseLike<unknown>).then === "function"
 
 // a whole value as patches; undefined: taken out
 export const whole = (

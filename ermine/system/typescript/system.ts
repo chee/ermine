@@ -20,12 +20,12 @@
 //            readEntries (every node a path reaches)
 // names      place, unplace (patchChildren's rule, by a path), rename (one change over two
 //            folders, its cycle check), list
-// computing  createMemo, createEffect ({ early }), watch (until pipes)
+// computing  createMemo, createEffect ({ early }), pipe
 // actions    createAction, executeAction, getCaller
 // the rest   getStatus, addTeardown, createBox, getArgs, PENDING, REFUSED
 // the host's only: remove, pulse
 //
-// paths: a bare name inside the process's node (the host's: the root), gone at stop; ./ its cwd;
+// paths: a bare name inside the process's node (the host's: the root), gone at stop; ./ its folder;
 // ../ above; / its box's root. a node: a path (walked at each use) or a handle (handles.ts: the
 // node and the context that made it, resolved and asked as that context; the rest of a call stays
 // the caller's). no ids anywhere a process is given [chee 10-25]: paths as it sees them (seenIn),
@@ -37,15 +37,16 @@
 // write through onWrite. a write's site: outside a run, the program's call into the api; in a run,
 // the running memo's or effect's own line.
 //
-//   read(x, key?)        the value at key, tracked; none: undefined; a pending memo with no value
-//                        throws PENDING
+//   read(x, key?)        the value at key, tracked; a node there with none: undefined; a node not
+//                        there, or a pending memo with no value: throws PENDING
 //   readAll(x, key?)     every value at key, tracked: [{ value, from }]. position 0 read's, from:
 //                        { change } (a ChangeView: time, actor, site); then what features show
 //                        (onRead), each from naming its feature
 //   readEntries(x)       every node x's path reaches: [{ value, from, node?, refused? }], node a
 //                        handle; refused: no value, no node
-//   watch(x, fn)         fn at each write at x, with patches, change (a view) and value (refused:
-//                        refused, none of them); returns the stop
+//   pipe(from, fn)       fn at each write at from: { patches, change (a view), value } (refused:
+//                        refused, none of them); pipe(from, to, fnA?, fnB?): mirror, transform,
+//                        translate (pipe below); { timing: "pulse" | "write", name }; its node
 //   place(p, x)          x's node at a second name. unplace(p): the name out, the node stays.
 //                        remove(x), the host's only: unplaced and its entries deleted; a process
 //                        unplaces, and a node no name reaches no longer exists [chee 10-25]
@@ -72,7 +73,7 @@
 // a memo or effect made in an action's call goes with the call, and the call's record says so
 // (made). the call lasts as its record does: a promise's till it settles; then its teardowns are
 // told "ended". protect: reads ask "read" (refused: Refusal; readEntries keeps the item, refused);
-// watch is asked as it is made, and at each write told; patch "edit"; ensureNode, createNode,
+// pipe is asked as it is made (read of from, edit of to), and at each write told; patch "edit"; ensureNode, createNode,
 // place, unplace, rename "place" on the slot; remove "remove"; executeAction "execute"; a memo's
 // and effect's own writes not asked.
 // scope nodes: a write's metadata stops after the first scope whose own info holds the NODE key. a
@@ -90,7 +91,9 @@ import {
 	placing,
 	unplacing,
 } from "@ermine/core/places"
-import { parse, plan } from "@ermine/core/places/path"
+import { parse } from "@ermine/core/places/path"
+import { equal } from "@ermine/core/places/upsert"
+import applyPatches from "@ermine/core/op/apply"
 import { get, gets, list as listAt } from "@ermine/core/places/lib"
 import { NODE } from "@ermine/core/places/header"
 import {
@@ -101,19 +104,22 @@ import {
 	type Thing,
 } from "@ermine/core/places/guard"
 import { STATUS, TABLE as STATUS_TABLE } from "@ermine/core/places/status"
+import { PROCESS } from "@ermine/processes"
 import type { Run, Runs } from "@ermine/processes/runs"
 import { type Computer, type Equal, PENDING, type Scope } from "@ermine/core/scheduler"
 import type { Sited } from "@ermine/sites"
 import type { Key, Table } from "@ermine/core/table"
 import type { FileLocation } from "@ermine/core/util/stacktrace"
 import type { Call, Calls } from "./calls.ts"
-import type { Found } from "./registry.ts"
+import { type Found, hinting } from "./registry.ts"
+import { take } from "./site.ts"
+import { attach as attachHint } from "./hints.ts"
 import type { Target as Aimed } from "@ermine/core/protect"
 import { type Asked, ErmineError, type Reading } from "./features.ts"
 import { dataOf, type Handles, isHandle, mint } from "./handles.ts"
 import {
-	empty,
 	type Inner,
+	isThen,
 	type Node,
 	type NodeData,
 	type Parts,
@@ -180,6 +186,8 @@ export type Status = {
 	readonly waiting?: readonly Waiting[]
 	// a computer's latest run's: a value from an older run is stale
 	readonly n?: number
+	// what to do, where ermine has advice (hints.ts; createErmine's hints: false, none)
+	readonly hint?: string
 	// a feature's own fields (onStatus): pully's provider …
 	readonly [field: string]: unknown
 }
@@ -194,6 +202,7 @@ export type Writer =
 	| { readonly kind: "computer"; readonly path?: Path; readonly run?: RunView }
 	| { readonly kind: "method"; readonly path?: Path; readonly call?: CallView }
 	| { readonly kind: "outside"; readonly site?: FileLocation }
+	| { readonly kind: "pipe"; readonly path?: Path }
 // a record's read or write, as the process asking sees it
 export type Touched = { readonly part: Key; readonly path?: Path }
 // a run's record, as a process sees it (runs.ts' Run, its nodes by path)
@@ -275,14 +284,23 @@ export type Base = {
 	// a computer's node whose latest run gave a promise not settled yet
 	readonly awaiting: Set<Id>
 	// what each reader is waiting to be there: a read of a node not there (thrown PENDING), by the
-	// reader (a computer's node, in which run; else the context's node), the paths as it read them
-	readonly missing: Map<Id, { readonly n?: number; readonly paths: Path[] }>
+	// reader, the paths as it read them (and each once, by key). kept while what shows it does: a
+	// computer's (its node) for its latest run, gone with it; a process's setup's (its node) while
+	// the setup runs, then said in its status. a read anywhere else is shown nowhere: none kept
+	readonly missing: Map<
+		Id,
+		{ readonly n?: number; readonly paths: Path[]; readonly keys: Set<string> }
+	>
+	// the processes whose setup is running now, by node
+	readonly setting: Set<Id>
 	// each method placed, by its node: the function, and the scope open when it was placed (one
 	// function placed by two owners: each placement its own). gone with that scope
 	readonly methods: Map<Id, { readonly fn: unknown; readonly scope: Scope }>
 	// why a process is stopping (by its node), said by stop before its scope goes
 	readonly whys: Map<Id, Why>
 	readonly newId: () => string
+	// an ermine error a function threw given its advice (hints.ts), as it passes; hints: false, none
+	readonly hints: boolean
 	// every node handle the functions gave (handles.ts)
 	readonly handles: Handles
 	// each process's node: its box's folder, and where it runs in that box (its rows name it, not a
@@ -291,19 +309,37 @@ export type Base = {
 	// each change's view, and each view's change (ChangeView)
 	readonly views: WeakMap<ChangeHeader, ChangeView>
 	readonly changes: WeakMap<ChangeView, ChangeHeader>
+	// every pipe's node (getStatus: looping)
+	readonly pipes: Set<Id>
+	// what pipes heard, to be told at the next pulse, in order (base.pulse tells them first)
+	readonly piped: (() => void)[]
+	// how deep pipes told as writes land are now (a pipe's write telling a pipe)
+	pipeDepth: number
+	// a pulse: what pipes heard told first, then the scheduler's
+	readonly pulse: () => void
 	// what boxes are made over
 	readonly host: Host
 	// each box handle's box (the host's side)
 	readonly boxes: WeakMap<BoxNode, Box>
-	// every box, the root's first: where a handle's path from the root is walked (walkFrom)
-	readonly boxList: Box[]
+	// every box, by its folder's id, the root's first: where a path from the root is walked
+	// (walkFrom). createBox at a folder a box is at gives that box; a box whose folder nothing
+	// reaches and that holds no rows (the one thing its view shows beyond the host's) is let go as
+	// the boxes are walked, and comes back as a process starts in it or it is made again
+	readonly boxIndex: Map<Id, Box>
+	// counted up as names can change (a children fact, a process's node placed or gone): what the
+	// boxes' paths are kept against (walks)
+	names: number
+	// the boxes' folders' paths, and a trie of them, as of names (walks)
+	walked: Walked | undefined
 	// f as a public function: a write's site outside a run is its caller
 	readonly entered: <F extends (...args: never[]) => unknown>(f: F) => F
-	// f(inner, ...a) with the entry here: a write made in it has its site at the line that called in
+	// f(inner, ...a) with the entry here: a write made in it has its site at the line that called in;
+	// site, a build's (site.ts): that one, nothing captured
 	readonly enter: <A extends unknown[], T>(
 		f: (inner: Inner, ...a: A) => T,
 		inner: Inner,
 		a: A,
+		site?: FileLocation,
 	) => T
 	// the onRead hooks
 	readonly shown: (x: Reading, items: readonly Version[]) => readonly Version[]
@@ -382,10 +418,6 @@ export function pathIn(base: Base, reader: Inner, box: Id, path: Path): Path | u
 	const at = up(base, reader.places, reader.context.box.root, box)
 	return at === undefined ? undefined : [...at, ...path]
 }
-const isThen = (v: unknown): v is PromiseLike<unknown> =>
-	(typeof v === "object" || typeof v === "function") && v !== null &&
-	typeof (v as PromiseLike<unknown>).then === "function"
-
 // one context's setting, what every function below works from: its ermine's base, its own
 // (places, guard, scope, asks), and its state (a peep going; the memos, effects and earlies its
 // owners' runs made, by name). no api object per process [chee 10-25: ">Drop the objects. ye"]:
@@ -399,8 +431,14 @@ export function attach(base: Base, inner: Inner) {
 	bases.set(inner, base)
 	inners.set(inner.context, inner)
 }
-// a process context's inner side (the host's and features' code: the harness, ermine.api)
-export const innerOf = (context: ProcessContext): Inner | undefined => inners.get(context)
+// a process context's inner side (the host's and features' code: the harness); base given, only one
+// of that ermine's
+export function innerOf(context: ProcessContext, base?: Base): Inner | undefined {
+	const inner = inners.get(context)
+	return inner === undefined || (base !== undefined && bases.get(inner) !== base)
+		? undefined
+		: inner
+}
 function setting(inner: Inner) {
 	const base = bases.get(inner)
 	if (base === undefined) throw new ErmineError("not-yet", "a process context no ermine made")
@@ -426,7 +464,14 @@ function setting(inner: Inner) {
 		scope: context.scope,
 		resolve: context.resolve,
 		ask: context.ask,
-		state: { peeping: 0, named: new Map<string, Set<Made>>() },
+		state: {
+			peeping: 0,
+			named: new Map<string, Set<Made>>(),
+			// pipes by path, who made each (a computer, or a scope), and how many each run made
+			pipes: new Map<string, Piped>(),
+			pipeOwner: new WeakMap<Piped, unknown>(),
+			pipeOrder: new WeakMap<object, number>(),
+		},
 	}
 }
 function here(c: Inner): Setting {
@@ -454,25 +499,91 @@ const actorHere = (inner: Inner) => {
 }
 const thing = (id: Id, path?: Path): Thing => path === undefined ? { id } : { id, path }
 // the parent at path's folder, and the name: what placing there changes
-const slotAt = (inner: Inner, path: Path, parent: Id) =>
+const slotAt = (path: Path, parent: Id) =>
 	slotOf(thing(parent, path.slice(0, -1)), path[path.length - 1])
 
+// the boxes' folders by path from the root: a box at the end of a path's names
+type Trie = { box?: Box; readonly kids: Map<string, Trie> }
+// what the boxes are walked by, as of base.names: each folder's path (up its names, none: out of
+// the root's reach) and the trie of them
+export type Walked = {
+	readonly names: number
+	readonly at: Map<Id, Path | undefined>
+	readonly trie: Trie
+}
+// the boxes walked as names are now: made again only once a name may have changed. a box nothing
+// reaches and holding no rows let go (Base's boxIndex)
+function walks(base: Base): Walked {
+	const was = base.walked
+	if (was !== undefined && was.names === base.names) return was
+	const { places, table } = base.host
+	const at = new Map<Id, Path | undefined>()
+	const trie: Trie = { kids: new Map() }
+	for (const b of base.boxIndex.values()) {
+		const p = up(base, places, places.root, b.root)
+		at.set(b.root, p)
+		if (p === undefined) {
+			if (b.root !== places.root && !rowed(table.get(PROCESS, b.root)?.value)) {
+				base.boxIndex.delete(b.root)
+			}
+			continue
+		}
+		let t = trie
+		for (const name of p) {
+			let k = t.kids.get(name)
+			if (k === undefined) t.kids.set(name, k = { kids: new Map() })
+			t = k
+		}
+		t.box = b
+	}
+	return base.walked = { names: base.names, at, trie }
+}
+// whether a box's rows hold a process (a row under any name)
+const rowed = (v: unknown): boolean =>
+	typeof v === "string" ||
+	(typeof v === "object" && v !== null && Object.values(v).some(rowed))
+
 // a box's folder's path from the root now (up its names); the root's box: []
-const boxAt = (base: Base, box: Id): Path | undefined =>
-	up(base, base.host.places, base.host.places.root, box)
+function boxAt(base: Base, box: Id): Path | undefined {
+	const w = walks(base)
+	if (w.at.has(box)) return w.at.get(box)
+	const p = up(base, base.host.places, base.host.places.root, box)
+	w.at.set(box, p)
+	return p
+}
 
 // where a path from the root is walked: in the deepest box whose folder is on it (so a boxed
 // process's own nodes, named by its rows, are reached), the path in that box
 function walkFrom(base: Base, abs: Path): { places: Places; path: Path } {
-	let found = { places: base.host.places, path: abs }, depth = 0
-	for (const b of base.boxList) {
-		const at = boxAt(base, b.root)
-		if (at === undefined || at.length < depth || at.length > abs.length) continue
-		if (!at.every((n, i) => abs[i] === n)) continue
-		found = { places: b.places, path: abs.slice(at.length) }
-		depth = at.length
+	let t: Trie | undefined = walks(base).trie
+	let found = { places: t.box?.places ?? base.host.places, path: abs }
+	for (let i = 0; i < abs.length; i++) {
+		t = t.kids.get(abs[i])
+		if (t === undefined) break
+		if (t.box !== undefined) found = { places: t.box.places, path: abs.slice(i + 1) }
 	}
 	return found
+}
+
+// the boxes below inner's own whose folders are on its path (in its box): each one's places and the
+// path in it, outermost first. a walk reaching a box's folder reads that box's rows beneath it, as
+// the box's own view does
+function boxesOn(inner: Inner, path: Path): { places: Places; path: Path }[] {
+	const { base } = here(inner)
+	if (base.boxIndex.size < 2) return []
+	const at = boxAt(base, inner.context.box.root)
+	if (at === undefined) return []
+	const abs = [...at, ...path]
+	const out: { places: Places; path: Path }[] = []
+	let t: Trie | undefined = walks(base).trie
+	for (let i = 0; i < abs.length; i++) {
+		t = t.kids.get(abs[i])
+		if (t === undefined) break
+		if (i >= at.length && t.box !== undefined && t.box.places !== inner.places) {
+			out.push({ places: t.box.places, path: abs.slice(i + 1) })
+		}
+	}
+	return out
 }
 
 // what x reaches, as inner reaches it: a path (resolved here); a handle's place (its path from the
@@ -487,7 +598,7 @@ function nodeOf(inner: Inner, x: Target): NodeData {
 		// a box further down the path (a process started in a box, under one's own place): its own
 		// view holds its rows, so the node is found there, by id (the review's finding 11)
 		const at = boxAt(base, inner.context.box.root)
-		if (at !== undefined && base.boxList.length > 1) {
+		if (at !== undefined && base.boxIndex.size > 1) {
 			const w = walkFrom(base, [...at, ...path])
 			if (w.places !== inner.places) {
 				const id = get(w.places, w.path)
@@ -551,7 +662,7 @@ function askPlacing(inner: Inner, slot: Aimed, x: Target, id: Id) {
 // made when it has none
 function placeUnder(inner: Inner, parent: Id, name: string, id: Id, path?: Path) {
 	const { table, ask } = here(inner)
-	if (path !== undefined) ask("place", slotAt(inner, path, parent))
+	if (path !== undefined) ask("place", slotAt(path, parent))
 	const children = table.get("children", parent) as Entry<unknown> | undefined
 	inner.put({ part: "children", id: parent, patches: placing(children, name, id) })
 }
@@ -570,7 +681,7 @@ function build(inner: Inner, path: Path, value: unknown, given?: Id): Id {
 			parent = folder
 		}
 	}
-	ask("place", slotAt(inner, path, parent))
+	ask("place", slotAt(path, parent))
 	if (value !== undefined) inner.put({ part: "value", id, path, patches: whole(value) })
 	placeUnder(inner, parent, path[path.length - 1], id)
 	return id
@@ -616,11 +727,9 @@ function createNode(inner: Inner, folder: string | Path, value: unknown): Node {
 }
 
 function read(inner: Inner, x: Target, path: readonly Step[] = []): unknown {
-	const { calls, memos, state } = here(inner)
-	const t = inner
-	const { places, guard, guarded } = here(t)
-	const n = nodeOf(t, x)
-	const id = idOf(t, n)
+	const { calls, memos, state, places, guard, guarded } = here(inner)
+	const n = nodeOf(inner, x)
+	const id = idOf(inner, n)
 	// a node not there: pending, as a memo with no value is ("not there yet" one way) [chee 10-25:
 	// "i think a missing node should also throw pending"], the read tracked so its coming reruns it,
 	// and said where the reader waits [chee: "the read available in the graph so you can put
@@ -644,10 +753,9 @@ function read(inner: Inner, x: Target, path: readonly Step[] = []): unknown {
 // read's, from its entry's change; then what features show
 function versions(inner: Inner, x: Target, path: readonly Step[] = []): Version[] {
 	const { base, table, context } = here(inner)
-	const t = inner
-	const n = nodeOf(t, x)
+	const n = nodeOf(inner, x)
 	const shown = read(inner, x, path)
-	const id = idOf(t, n)
+	const id = idOf(inner, n)
 	if (id === undefined) return []
 	const items: Version[] = []
 	if (shown !== undefined) {
@@ -676,70 +784,77 @@ const refused = (inner: Inner, t: ReturnType<typeof targetOf>) => {
 }
 
 function readEntries(inner: Inner, x: Target): Item[] {
-	const { calls, table } = here(inner)
-	const t = inner
-	const { places, guard, guarded } = here(t)
-	const n = nodeOf(t, x)
+	const { calls, table, places, guard, guarded } = here(inner)
+	const n = nodeOf(inner, x)
 	if (n.path === undefined) {
 		if (n.id === undefined) return []
-		if (refused(t, targetOf(thing(n.id), n.part))) {
+		if (refused(inner, targetOf(thing(n.id), n.part))) {
 			return [{ value: undefined, from: "id", refused: true }]
 		}
 		calls.read(n.part, n.id, [])
 		// a node there by id, with or without a value (as by a path); nothing under that id: none
 		const value = places.readValue(n.part, n.id)
 		if (value === undefined && table.get(n.id).length === 0) return []
-		return [{ value, from: "id", node: byId(t, n.id, n.part) }]
+		return [{ value, from: "id", node: byId(inner, n.id, n.part) }]
 	}
 	const found = gets(places, n.path)
 	for (const a of found) calls.read(n.part, a.id, [])
-	if (!guarded || n.path.length === 0) {
-		return found.map((a) => ({
-			value: places.readValue(n.part, a.id),
-			from: a.from,
-			node: byId(t, a.id, n.part),
-		}))
+	const item = (a: (typeof found)[number]): Item => ({
+		value: places.readValue(n.part, a.id),
+		from: a.from,
+		node: byId(inner, a.id, n.part),
+	})
+	if (!guarded) return found.map(item)
+	// the box's "/": no name in a folder to ask by, so the node itself, as read asks
+	if (n.path.length === 0) {
+		return found.map((a) =>
+			refused(inner, targetOf(thing(a.id, n.path), n.part))
+				? { value: undefined, from: a.from, refused: true as const }
+				: item(a)
+		)
 	}
 	const name = n.path[n.path.length - 1]
 	const asked = guard.members(found.map((a) => ({ name, id: a.id })), n.path.slice(0, -1))
 	return found.map((a, i) =>
-		asked[i].id === REFUSED
-			? { value: undefined, from: a.from, refused: true as const }
-			: { value: places.readValue(n.part, a.id), from: a.from, node: byId(t, a.id, n.part) }
+		asked[i].id === REFUSED ? { value: undefined, from: a.from, refused: true as const } : item(a)
 	)
 }
 
 function list(inner: Inner, x: Target): string[] {
-	const { calls } = here(inner)
-	const t = inner
-	const { places, guard, guarded } = here(t)
-	const n = nodeOf(t, x)
-	const id = idOf(t, n)
+	const { calls, places, guard, guarded } = here(inner)
+	const n = nodeOf(inner, x)
+	const id = idOf(inner, n)
 	if (guarded && id !== undefined) guard.read(targetOf(thing(id, n.path), "children"))
 	if (id !== undefined) calls.read("children", id, [], true)
-	if (n.path !== undefined) return [...listAt(places, n.path)]
-	return n.id === undefined ? [] : places.readKeys("children", n.id)
+	if (n.path === undefined) return n.id === undefined ? [] : places.readKeys("children", n.id)
+	const names = [...listAt(places, n.path)]
+	// a box beneath on the path (a process started in it): its rows' names too, after
+	const more = boxesOn(inner, n.path)
+	if (more.length === 0) return names
+	const had = new Set(names)
+	for (const v of more) {
+		for (const name of listAt(v.places, v.path)) {
+			if (!had.has(name)) had.add(name), names.push(name)
+		}
+	}
+	return names
 }
 
 // x's attributes, as a node
-const attributesOf = (inner: Inner, x: Target): Node => {
-	const t = inner
-	return handle(t, { ...nodeOf(t, x), part: "attributes" })
-}
+const attributesOf = (inner: Inner, x: Target): Node =>
+	handle(inner, { ...nodeOf(inner, x), part: "attributes" })
 
 // x's part patched: patches only, never a recipe (the base is mechanical [chee 10-25: "the core
 // lib should actually not have proxies, and should be this kind of mechanical thing"])
 function patch(inner: Inner, x: Target, given: readonly Patch[]) {
 	const patches = patchesOnly(given)
-	const { queuePulse, inside } = here(inner)
-	const t = inner
-	const { ask } = here(t)
+	const { queuePulse, inside, ask } = here(inner)
 	inside(() => {
-		const n = nodeOf(t, x)
-		const id = needId(t, n)
+		const n = nodeOf(inner, x)
+		const id = needId(inner, n)
 		ask("edit", targetOf(thing(id, n.path), n.part))
 		if (patches.length) {
-			t.put({
+			inner.put({
 				part: n.part,
 				id,
 				...n.path !== undefined && { path: n.path },
@@ -750,34 +865,256 @@ function patch(inner: Inner, x: Target, given: readonly Patch[]) {
 	queuePulse()
 }
 
-// asked read as it is made (refused: a Refusal), and at each write told (refused: told so)
-function watch(inner: Inner, x: Target, fn: (w: Watched) => void): () => void {
-	const { base, s } = here(inner)
-	const t = inner
-	const { places, guard, guarded } = here(t)
-	const n = nodeOf(t, x)
-	if (n.path === undefined) throw new PlacesError("nothing-there", "a node with no place")
-	const path = n.path
-	if (guarded) {
-		const id = idOf(t, n)
-		guard.read(
-			id === undefined ? { path: [...path], part: n.part } : targetOf(thing(id, path), n.part),
-		)
+// pipe(from, fn) | pipe(from, to, fnA?, fnB?), options last [chee 10-26: "let's do `pipe(from,
+// to?, fnA?, fnB?)` where if the sec arg is str ifs a to, so it can replace watch, and also can be
+// mirror, and also can be transform, and also can be translate"]: a node of its own, in its own
+// scope (its writes its own, asked as its process), told each write at from: the write [chee:
+// "the write"]. fn: told it. to and no fnA: mirror (its patches at to). fnA: transform (fnA(write)
+// gives to's patches; none: nothing). fnB: translate (fnB(write at to) gives from's). never told
+// its own writes; a throw fails its own status, not the writer's. timing per pipe, the next pulse
+// by default [chee: "let's make this a per-pipe option, maybe revisit later, default to next
+// pulse"]: "pulse", told at the next pulse, in order; "write", as the write lands, a pipe told
+// more than LOOPING deep (pipes told by pipes' writes) looping, not told again. asked read of from
+// as it is made (and edit of to), and at each write told (refused: told so). the node: { name }, or
+// pipe-<n>, its order among the pipes its owner's run made; made again by a later run of its owner
+// (the same node, the new functions), as a memo is (decision-pipes-2026-10-26: the builder's picks)
+export type PipeOptions = { timing?: "pulse" | "write"; name?: string | Path }
+// deno-lint-ignore no-explicit-any
+type PipeFn = (w: Watched) => any
+type Piped = {
+	id: Id
+	scope: Scope
+	run: unknown
+	tell?: PipeFn
+	from: Target
+	to?: Target
+	there?: PipeFn
+	back?: PipeFn
+	timing: "pulse" | "write"
+	looping: boolean
+	// how many writes in a row it was told were pipes' (a cycle of pipes: past LOOPING, looping)
+	chain: number
+	stops: (() => void)[]
+}
+// how deep pipes told by pipes' writes go, as writes land, before the one told is looping
+const LOOPING = 64
+
+function pipe(inner: Inner, from: Target, ...rest: unknown[]): Node {
+	const { base, s, state, guard, guarded, queuePulse, resolve } = here(inner)
+	const last = rest[rest.length - 1]
+	const options: PipeOptions = rest.length > 1 && last !== null && typeof last === "object" &&
+			!Array.isArray(last) && !isHandle(last)
+		? rest.pop() as PipeOptions
+		: {}
+	const [second, fnA, fnB] = rest
+	if (
+		second === undefined || (typeof second !== "function" && fnA !== undefined &&
+			typeof fnA !== "function") ||
+		(fnB !== undefined && typeof fnB !== "function")
+	) {
+		throw new ErmineError("not-a-function", "pipe takes (from, fn) or (from, to, fnA?, fnB?)")
 	}
+	const n = nodeOf(inner, from)
+	if (n.path === undefined) throw new PlacesError("nothing-there", "a node with no place")
+	const fromPath = n.path
+	const to = typeof second === "function" ? undefined : second as Target
+	if (to !== undefined && (typeof to === "function" || to === null)) {
+		throw new ErmineError("not-a-function", "pipe takes (from, fn) or (from, to, fnA?, fnB?)")
+	}
+	const toData = to === undefined ? undefined : nodeOf(inner, to)
+	if (guarded) {
+		const id = idOf(inner, n)
+		guard.read(
+			id === undefined
+				? { path: [...fromPath], part: n.part }
+				: targetOf(thing(id, fromPath), n.part),
+		)
+		if (toData !== undefined) {
+			const tid = idOf(inner, toData)
+			guard.write(
+				"edit",
+				tid === undefined
+					? { path: [...toData.path!], part: toData.part }
+					: targetOf(thing(tid, toData.path), toData.part),
+			)
+		}
+	}
+	const own = owner(inner)
+	const run = s.getRun()
+	const order = run ?? own
+	const k = state.pipeOrder.get(order as object) ?? 0
+	state.pipeOrder.set(order as object, k + 1)
+	const path = resolve(options.name ?? `pipe-${k}`)
+	const key = keyOf(path)
+	const was = state.pipes.get(key)
+	const ownerOf = (o: Scope) => run?.computer ?? o
+	let p: Piped
+	if (
+		was !== undefined && was.scope.state === "alive" && state.pipeOwner.get(was) === ownerOf(own)
+	) {
+		if (was.run === run && run !== undefined) {
+			throw new PlacesError("already-there", path.join("/"))
+		}
+		p = was
+	} else {
+		const id = here(inner).newId()
+		here(inner).inside(() => build(inner, path, undefined, id))
+		p = {
+			id,
+			from,
+			scope: own,
+			run,
+			timing: "pulse",
+			looping: false,
+			chain: 0,
+			stops: [],
+		}
+		state.pipes.set(key, p)
+		state.pipeOwner.set(p, ownerOf(own))
+		base.pipes.add(id)
+		listen(inner, p, fromPath, n.part, false)
+		if (toData?.path !== undefined && fnB !== undefined) {
+			listen(inner, p, toData.path, toData.part, true)
+		}
+	}
+	// its scope: this run's (or the owner's), told its node, so its writes say so
+	const scope = s.createScope({ [NODE]: p.id, pipe: true }, own)
+	p.scope = scope
+	p.run = run
+	p.tell = typeof second === "function" ? second as PipeFn : undefined
+	p.from = from
+	p.to = to
+	p.there = fnA as PipeFn | undefined
+	p.back = fnB as PipeFn | undefined
+	p.timing = options.timing ?? "pulse"
+	// made again: told again
+	p.looping = false
+	p.chain = 0
+	s.registerTeardown(scope, () => {
+		if (p.scope !== scope) return
+		for (const stop of p.stops) stop()
+		p.stops = []
+		if (state.pipes.get(key) === p) state.pipes.delete(key)
+		base.pipes.delete(p.id)
+		gonePipe(inner, p, path)
+	})
+	queuePulse()
+	return handle(inner, { path, part: "value" })
+}
+
+// the pipe's node unplaced and its entries gone (its scope gone, not made again)
+function gonePipe(inner: Inner, p: Piped, path: Path) {
+	const { places, table } = here(inner)
+	try {
+		const [children, last] = slot(inner, path)
+		if ((children.value as Record<string, unknown>)?.[last] === p.id) {
+			const parent = get(places, path.slice(0, -1))!
+			inner.put({ part: "children", id: parent, patches: unplacing(children, last) })
+		}
+	} catch (e) {
+		if (!(e instanceof PlacesError)) throw e
+	}
+	for (const [part] of table.get(p.id)) inner.put({ part, id: p.id, patches: [], gone: true })
+}
+
+// p told each write at path (back: the translate's way back, to's writes)
+function listen(inner: Inner, p: Piped, path: Path, part: Key, back: boolean) {
+	const { base, places } = here(inner)
 	const stop = places.watchPath(
 		path,
-		(fact: Fact) =>
-			refused(t, targetOf(thing(fact.id, path), n.part))
-				? fn({ patches: [], change: undefined, value: undefined, refused: true })
-				: fn({
+		(fact: Fact) => {
+			const m = fact.change?.metadata as Record<string, unknown> | undefined
+			// never told its own writes
+			if (m?.[NODE] === p.id) return
+			const byPipe = m?.pipe !== undefined
+			const w: Watched = refused(inner, targetOf(thing(fact.id, path), part))
+				? { patches: [], change: undefined, value: undefined, refused: true }
+				: {
 					patches: fact.patches,
 					change: fact.change === undefined ? undefined : viewOf(base, fact.change),
 					value: fact.entry?.value,
-				}),
-		{ part: n.part },
+				}
+			if (p.timing === "write") told(inner, p, w, back, byPipe)
+			else {
+				base.piped.push(() => told(inner, p, w, back, byPipe))
+				here(inner).queuePulse()
+			}
+		},
+		{ part },
 	)
-	s.registerTeardown(owner(inner), stop)
-	return stop
+	p.stops.push(stop)
+}
+
+// p told w, in its own scope: its fn, or its patches written at to (back: at from); a throw fails
+// p's status, never the writer's
+function told(inner: Inner, p: Piped, w: Watched, back: boolean, byPipe: boolean) {
+	const { base, s, places } = here(inner)
+	if (p.scope.state !== "alive" || p.looping) return
+	p.chain = byPipe ? p.chain + 1 : 0
+	if (base.pipeDepth >= LOOPING || p.chain > LOOPING) {
+		p.looping = true
+		pipeStatus(
+			inner,
+			p,
+			new ErmineError("looping", `a pipe told pipes' writes more than ${LOOPING} in a row`),
+		)
+		return
+	}
+	base.pipeDepth++
+	try {
+		s.runWithScope(p.scope, () => {
+			if (p.tell !== undefined) return void p.tell(w)
+			if (w.refused) return
+			const f = back ? p.back : p.there
+			const patches = f === undefined ? w.patches : f(w)
+			if (patches === undefined || patches === null) return
+			if (!Array.isArray(patches)) {
+				throw new ErmineError(
+					"not-patches",
+					"a pipe's function gives patches: [{ path, value }]",
+				)
+			}
+			if (patches.length === 0) return
+			// back: from, by its path as the pipe heard it
+			const target = back ? p.from : p.to!
+			// a write that would change nothing is not made (so a mirror pair settles)
+			const aimed = nodeOf(inner, target)
+			const at = idOf(inner, aimed)
+			if (at !== undefined) {
+				const now = places.peep(() => places.readValue(aimed.part, at))
+				let next: unknown
+				try {
+					next = applyPatches(now, patches as Patch[])
+				} catch {
+					next = undefined
+				}
+				if (next !== undefined && equal(now, next)) return
+			}
+			patch(inner, target, patches)
+		})
+		if (!p.looping) pipeStatus(inner, p, undefined)
+	} catch (e) {
+		pipeStatus(inner, p, e)
+	} finally {
+		base.pipeDepth--
+	}
+}
+
+// a pipe's status, in the status table: failed (the error), or none (done)
+function pipeStatus(inner: Inner, p: Piped, error: unknown) {
+	const { table, s } = here(inner)
+	const had = table.get(STATUS_TABLE as Key, p.id)?.value as Record<string, unknown> | undefined
+	if (error === undefined && had?.[STATUS] === undefined) return
+	s.runWithScope(p.scope, () =>
+		inner.put({
+			part: STATUS_TABLE,
+			id: p.id,
+			patches: error === undefined
+				? [{ path: [STATUS] }]
+				: had === undefined
+				? [{ path: [], value: { [STATUS]: error } }]
+				: [{ path: [STATUS], value: error }],
+		}))
 }
 
 function place(inner: Inner, p: string | Path, x: Target) {
@@ -789,7 +1126,7 @@ function place(inner: Inner, p: string | Path, x: Target) {
 		if (parent === undefined || path.length === 0) {
 			throw new PlacesError("nothing-there", path.join("/"))
 		}
-		askPlacing(inner, slotAt(inner, path, parent), x, id)
+		askPlacing(inner, slotAt(path, parent), x, id)
 		placeUnder(inner, parent, path[path.length - 1], id)
 	})
 	queuePulse()
@@ -797,18 +1134,24 @@ function place(inner: Inner, p: string | Path, x: Target) {
 
 // x's children, each as a handle (reached by this process's path, so its own to hold)
 function readChildren(inner: Inner, x: Target): Record<string, Node> {
-	const t = inner
-	const { places } = here(t)
-	const n = nodeOf(t, x)
-	const id = idOf(t, n)
+	const { places } = here(inner)
+	const n = nodeOf(inner, x)
+	const id = idOf(inner, n)
 	const names = list(inner, x)
 	const kids = id === undefined
 		? {}
 		: places.readValue("children", id) as Record<string, Id> | undefined ?? {}
+	// the boxes beneath on the path, innermost first, then inner's own: a name's node as a path
+	// reaches it (nodeOf: the deepest box's)
+	const views = n.path === undefined
+		? []
+		: [...boxesOn(inner, n.path).reverse(), { places, path: n.path }]
 	const out: Record<string, Node> = {}
 	for (const name of names) {
-		const at = n.path === undefined ? kids[name] : get(places, [...n.path, name]) ?? kids[name]
-		if (at !== undefined) out[name] = byId(t, at, "value")
+		let at: Id | undefined
+		for (const v of views) if ((at = get(v.places, [...v.path, name])) !== undefined) break
+		at ??= kids[name]
+		if (at !== undefined) out[name] = byId(inner, at, "value")
 	}
 	return out
 }
@@ -820,10 +1163,9 @@ function allOf(
 	part: "value" | "attributes" | "children",
 	path: readonly Step[] = [],
 ): Version[] {
-	const t = inner
-	const all = versions(inner, handle(t, { ...nodeOf(t, x), part }), path)
+	const all = versions(inner, handle(inner, { ...nodeOf(inner, x), part }), path)
 	if (part !== "children") return all
-	return all.map((v) => ({ ...v, value: handlesFor(t, v.value) }))
+	return all.map((v) => ({ ...v, value: handlesFor(inner, v.value) }))
 }
 const handlesFor = (inner: Inner, v: unknown) =>
 	v === null || typeof v !== "object" ? v : Object.fromEntries(
@@ -832,21 +1174,17 @@ const handlesFor = (inner: Inner, v: unknown) =>
 			typeof id === "string" ? byId(inner, id, "value") : id,
 		]),
 	)
-const explainPart = (inner: Inner, x: Target, part: "value" | "attributes" | "children") => {
-	const t = inner
-	return explain(inner, handle(t, { ...nodeOf(t, x), part }))
-}
+const explainPart = (inner: Inner, x: Target, part: "value" | "attributes" | "children") =>
+	explain(inner, handle(inner, { ...nodeOf(inner, x), part }))
 
 // a folder's names patched: one name a patch, { path: [name], value: node } placing node there,
 // { path: [name] } unplacing it; anything else not-patches (a process never writes a children
 // entry whole: its ids). each name asked "place", as place asks
 function patchChildren(inner: Inner, x: Target, patches: readonly Patch[]) {
-	const { table, queuePulse, inside } = here(inner)
-	const t = inner
-	const { ask } = here(t)
+	const { table, queuePulse, inside, ask } = here(inner)
 	inside(() => {
-		const n = nodeOf(t, x)
-		const folder = needId(t, n)
+		const n = nodeOf(inner, x)
+		const folder = needId(inner, n)
 		for (const p of patches) {
 			const name = p.path[0]
 			if (p.path.length !== 1 || typeof name !== "string" || p.move !== undefined) {
@@ -860,11 +1198,11 @@ function patchChildren(inner: Inner, x: Target, patches: readonly Patch[]) {
 			if ("value" in p && p.value !== undefined) {
 				// a path in a patch: the caller's, resolved in its own box [the dormouse's finding 1]
 				const id = idThrough(inner, p.value as Target)
-				askPlacing(t, slot, p.value as Target, id)
-				t.put({ part: "children", id: folder, patches: placing(children, name, id) })
+				askPlacing(inner, slot, p.value as Target, id)
+				inner.put({ part: "children", id: folder, patches: placing(children, name, id) })
 			} else if (children !== undefined) {
 				ask("place", slot)
-				t.put({ part: "children", id: folder, patches: unplacing(children, name) })
+				inner.put({ part: "children", id: folder, patches: unplacing(children, name) })
 			}
 		}
 	})
@@ -880,21 +1218,24 @@ function asSeen(inner: Inner, abs: Path): Path | null {
 		: null
 }
 
-// path waited on by the reader now: a computer's (in its run now), else the context's node
+// path waited on by the reader now: a computer's (in its run now), else a setup's (the context's
+// node, its setup running); anyone else's is shown nowhere, so not kept (Base's missing)
 function waitFor(inner: Inner, path: Path) {
 	const { base, s, runs } = here(inner)
 	const run = s.getRun()
 	const computer = run?.computer.info[NODE] as Id | undefined
+	if (computer === undefined && !base.setting.has(inner.node)) return
 	const key = computer ?? inner.node
 	const n = computer === undefined ? undefined : (runs.read(computer)?.n ?? 0) + 1
-	const was = base.missing.get(key)
-	const paths = was !== undefined && was.n === n ? was.paths : []
+	let m = base.missing.get(key)
+	if (m === undefined || m.n !== n) {
+		m = n === undefined ? { paths: [], keys: new Set() } : { n, paths: [], keys: new Set() }
+		base.missing.set(key, m)
+	}
 	// kept from the root, shown to each asker as it sees it
 	const abs = [...boxAt(base, inner.context.box.root) ?? [], ...path]
-	if (!paths.some((p) => p.length === abs.length && p.every((x, i) => x === abs[i]))) {
-		paths.push(abs)
-	}
-	base.missing.set(key, n === undefined ? { paths } : { n, paths })
+	const k = keyOf(abs)
+	if (!m.keys.has(k)) m.keys.add(k), m.paths.push(abs)
 }
 
 function peep<T>(inner: Inner, f: () => T): T {
@@ -920,7 +1261,7 @@ function unplace(inner: Inner, p: string | Path) {
 		const path = resolve(p)
 		const [children, name] = slot(inner, path)
 		const parent = get(places, path.slice(0, -1))!
-		ask("place", slotAt(inner, path, parent))
+		ask("place", slotAt(path, parent))
 		inner.put({ part: "children", id: parent, patches: unplacing(children, name) })
 	})
 	queuePulse()
@@ -933,13 +1274,13 @@ function rename(inner: Inner, from: string | Path, to: string | Path) {
 		const source = slot(inner, fromPath)
 		const sourceParent = get(places, fromPath.slice(0, -1))!
 		guard.move(fromPath, resolve(to))
-		ask("place", slotAt(inner, fromPath, sourceParent))
+		ask("place", slotAt(fromPath, sourceParent))
 		const path = resolve(to)
 		const parent = get(places, path.slice(0, -1))
 		if (parent === undefined || path.length === 0) {
 			throw new PlacesError("nothing-there", path.join("/"))
 		}
-		ask("place", slotAt(inner, path, parent))
+		ask("place", slotAt(path, parent))
 		const into = table.get("children", parent) as Entry<unknown> | undefined
 		const moved = (source[0].value as Record<string, Id> | undefined)?.[source[1]]
 		for (const m of moving(source, [into, path[path.length - 1]])) {
@@ -954,15 +1295,13 @@ function rename(inner: Inner, from: string | Path, to: string | Path) {
 }
 
 function remove(inner: Inner, x: Target) {
-	const { base, runs, table, queuePulse, inside } = here(inner)
-	const t = inner
-	const { places, ask } = here(t)
+	const { base, calls, runs, table, queuePulse, inside, places, ask } = here(inner)
 	inside(() => {
-		const n = nodeOf(t, x)
-		const id = needId(t, n)
+		const n = nodeOf(inner, x)
+		const id = needId(inner, n)
 		ask("remove", targetOf(thing(id, n.path)))
 		if (n.path !== undefined && n.path.length) {
-			const [children, name] = slot(t, n.path)
+			const [children, name] = slot(inner, n.path)
 			const v = children.value as Record<string, unknown> | undefined
 			if (v !== undefined && v[name] === id) {
 				const parent = get(places, n.path.slice(0, -1))!
@@ -971,6 +1310,7 @@ function remove(inner: Inner, x: Target) {
 		}
 		for (const [part] of table.get(id)) inner.put({ part, id, patches: [], gone: true })
 		runs.drop(id)
+		calls.drop(id)
 		base.held.drop(id)
 	})
 	queuePulse()
@@ -1019,6 +1359,7 @@ function gone(inner: Inner, m: Made, path: Path) {
 		base.computers.delete(m.id)
 		base.contexts.delete(m.id)
 		base.awaiting.delete(m.id)
+		base.missing.delete(m.id)
 		try {
 			const [children, last] = slot(inner, path)
 			if ((children.value as Record<string, unknown>)?.[last] === m.id) {
@@ -1067,7 +1408,7 @@ function computerNode(
 	return m
 }
 
-const same = (inner: Inner, m: Made) => (a: unknown, b: unknown) =>
+const same = (m: Made) => (a: unknown, b: unknown) =>
 	m.code.equal ? m.code.equal(a, b) : Object.is(a, b)
 
 // m's code run: a promise given marks its node awaiting till it settles
@@ -1108,7 +1449,7 @@ function createMemo<T>(
 			base.sited.createComputer<T>(
 				(previous) => ran(inner, m, previous) as T,
 				set,
-				same(inner, m),
+				same(m),
 				undefined,
 				{ [NODE]: id },
 			),
@@ -1173,11 +1514,11 @@ function effectOf<T>(
 		own,
 		() =>
 			isEarly
-				? base.sited.createEffect<T>(run, then, same(inner, m), { early: true }, { [NODE]: id })
+				? base.sited.createEffect<T>(run, then, same(m), { early: true }, { [NODE]: id })
 				: base.sited.createEffect<T>(
 					(previous) => ran(inner, m, previous) as T,
 					then,
-					same(inner, m),
+					same(m),
 					undefined,
 					{ [NODE]: id },
 				),
@@ -1192,7 +1533,7 @@ function effectOf<T>(
 
 // deno-lint-ignore no-explicit-any
 function createAction(inner: Inner, p: string | Path, fn: (...args: any[]) => unknown): Node {
-	const { parts, methods, s, queuePulse, places, inside, resolve, ask } = here(inner)
+	const { calls, parts, methods, s, queuePulse, places, inside, resolve, ask } = here(inner)
 	const own = owner(inner)
 	const path = resolve(p)
 	const made = inside(() => {
@@ -1216,6 +1557,8 @@ function createAction(inner: Inner, p: string | Path, fn: (...args: any[]) => un
 			if (own.state === "alive") return s.registerTeardown(own, keep)
 			set.delete(made)
 			methods.delete(made)
+			// its record goes with it (calls.ts)
+			calls.drop(made)
 		}
 		s.registerTeardown(own, keep)
 	}
@@ -1226,11 +1569,9 @@ function createAction(inner: Inner, p: string | Path, fn: (...args: any[]) => un
 }
 
 function executeAction(inner: Inner, p: Target, ...args: unknown[]): unknown {
-	const { base, calls, methods, s, table, queuePulse, context, scope } = here(inner)
-	const t = inner
-	const { places, ask } = here(t)
-	const n = nodeOf(t, p)
-	const id = idOf(t, n)
+	const { base, calls, methods, s, table, queuePulse, context, scope, places, ask } = here(inner)
+	const n = nodeOf(inner, p)
+	const id = idOf(inner, n)
 	const at = n.path !== undefined ? { path: n.path } : { id: n.id }
 	// in a run, the computer waits; else whoever this context is
 	const run = s.getRun()
@@ -1238,8 +1579,8 @@ function executeAction(inner: Inner, p: Target, ...args: unknown[]): unknown {
 	// tracked in a run, so the handler coming reruns it
 	const fn = id === undefined ? undefined : places.readValue("value", id)
 	if (fn === undefined) {
-		// kept while the caller is: a computer's with it, else the context's. the path: in t's box
-		calls.wait(caller, at, t.context.box.root, run?.computer ?? scope)
+		// kept while the caller is: a computer's with it, else the context's. the path: in inner's box
+		calls.wait(caller, at, inner.context.box.root, run?.computer ?? scope)
 		throw PENDING
 	}
 	if (typeof fn !== "function") {
@@ -1327,8 +1668,10 @@ function createBox(inner: Inner, where: string | Path): BoxNode {
 	// its writes, this context's (through onWrite)
 	const host = { ...base.host, write: inner.writer }
 	const at = resolve(where)
-	const b = inside(() => makeBox(host, at, context.box, header(inner)))
-	base.boxList.push(b)
+	const made = inside(() => makeBox(host, at, context.box, header(inner)))
+	// a box at that folder already: that one (made again by a rerun, or by another)
+	const b = base.boxIndex.get(made.root) ?? made
+	if (!base.boxIndex.has(b.root)) base.boxIndex.set(b.root, b), base.names++
 	queuePulse()
 	const handle: BoxNode = {
 		at,
@@ -1354,11 +1697,10 @@ function createBox(inner: Inner, where: string | Path): BoxNode {
 // the base's, then what features show (onStatus)
 function getStatus(inner: Inner, x: Target): Status | undefined {
 	const { base } = here(inner)
-	const t = inner
-	const n = nodeOf(t, x)
-	const id = idOf(t, n)
+	const n = nodeOf(inner, x)
+	const id = idOf(inner, n)
 	if (id === undefined) return undefined
-	return base.statused({ node: n, id }, ownStatus(inner, t, n, id))
+	return base.statused({ node: n, id }, ownStatus(inner, n, id))
 }
 
 // a send's wait as this process sees it: where the send went (its path in the sender's box, or
@@ -1387,16 +1729,18 @@ const saidOf = (inner: Inner, w: unknown): Waiting => {
 	return w as Waiting
 }
 
-// asked and read as t (the node's side), told as inner sees it
-function ownStatus(inner: Inner, t: Inner, n: NodeData, id: Id): Status {
-	const { base, calls, runs } = here(inner)
-	const { places, guard, guarded } = here(t)
+// asked, read and told as inner sees it
+function ownStatus(inner: Inner, n: NodeData, id: Id): Status {
+	const { base, calls, runs, places, guard, guarded } = here(inner)
 	if (guarded) guard.read(targetOf(thing(id, n.path), STATUS_TABLE, [STATUS]))
 	const st = places.readValue(STATUS_TABLE, id, [STATUS])
 	const h = base.held.status(id) ?? base.held.row(id)
 	const held = h === undefined ? {} : { held: h }
 	if (!base.computers.has(id)) {
 		if (st === undefined) return { state: "done", ...held }
+		if (base.pipes.has(id) && st instanceof ErmineError && st.code === "looping") {
+			return { state: "looping", error: st, ...held }
+		}
 		if (st !== PENDING) return { state: "failed", error: st, ...held }
 		const said = places.readValue(STATUS_TABLE, id, [WAITING])
 		const live = calls.waits(id).map((w) => waitOf(inner, w))
@@ -1434,9 +1778,7 @@ function explain(
 	x: Target | ChangeView,
 	path: readonly Step[] = [],
 ): Explained | undefined {
-	const { base, table } = here(inner)
-	const t = inner
-	const { places, guard, guarded } = here(t)
+	const { base, table, places, guard, guarded } = here(inner)
 	// a change's view (a reads item's from.change, a watch's): its change. a view is known only
 	// by base.changes, so none can be forged into a record's lookup
 	const viewed = typeof x === "object" && !isHandle(x) && !Array.isArray(x)
@@ -1446,8 +1788,8 @@ function explain(
 	if (typeof x === "object" && !isHandle(x) && !Array.isArray(x)) {
 		throw new PlacesError("nothing-there", "not a change this ermine shows")
 	}
-	const n = nodeOf(t, x as Target)
-	const id = idOf(t, n)
+	const n = nodeOf(inner, x as Target)
+	const id = idOf(inner, n)
 	if (id === undefined) return undefined
 	if (guarded) guard.read(targetOf(thing(id, n.path), n.part, path))
 	places.readChange(n.part, id)
@@ -1483,8 +1825,8 @@ const runView = (inner: Inner, r: Run): RunView => ({
 function shown(inner: Inner, v: unknown, seenAlready = new Map<object, unknown>()): unknown {
 	if (isHandle(v)) {
 		const d = dataOf(here(inner).base.handles, v).node
-		const id = d.id ??
-			get(walkFrom(here(inner).base, d.path).places, walkFrom(here(inner).base, d.path).path)
+		const w = d.id === undefined ? walkFrom(here(inner).base, d.path) : undefined
+		const id = d.id ?? get(w!.places, w!.path)
 		return (id === undefined ? undefined : seen(inner, id)) ?? null
 	}
 	if (v === null || typeof v !== "object") return v
@@ -1557,6 +1899,9 @@ function writerOf(inner: Inner, change: ChangeHeader): Explained & { change: Cha
 		}
 		return { change: view, writer: { kind: "method", ...pathOf(inner, handler) } }
 	}
+	if (m.pipe !== undefined && m[NODE] !== undefined) {
+		return { change: view, writer: { kind: "pipe", ...pathOf(inner, m[NODE] as Id) } }
+	}
 	const site = change.external?.[0]
 	return {
 		change: view,
@@ -1615,7 +1960,17 @@ export type System = {
 		act: (value: T, before: T | undefined) => void,
 		options?: { equal?: Equal<T>; early?: boolean },
 	) => Node
-	watch: (x: Target, fn: (w: Watched) => void) => () => void
+	pipe: {
+		(from: Target, fn: (w: Watched) => unknown, options?: PipeOptions): Node
+		(
+			from: Target,
+			to: Target,
+			fnA?: (w: Watched) => readonly Patch[] | undefined,
+			fnB?: (w: Watched) => readonly Patch[] | undefined,
+			options?: PipeOptions,
+		): Node
+		(from: Target, to: Target, options: PipeOptions): Node
+	}
 	// deno-lint-ignore no-explicit-any
 	createAction: (path: string | Path, fn: (...args: any[]) => unknown) => Node
 	executeAction: (path: Target, ...args: unknown[]) => unknown
@@ -1652,12 +2007,25 @@ export function systemFrom(
 		f: (inner: Inner, ...a: A) => T,
 		...a: A
 	): T {
-		const found = at(name, x)
-		const inner = found.inner
-		if (found.within !== undefined) {
-			return found.within(() => writer ? here(inner).base.enter(f, inner, a) : f(inner, ...a))
+		// the call's build site, if one was set for it (site.ts): taken first, so nothing it runs gets it
+		const site = take()
+		let inner: Inner | undefined
+		try {
+			const found = at(name, x)
+			inner = found.inner
+			const i = inner
+			if (found.within !== undefined) {
+				return found.within(() => writer ? here(i).base.enter(f, i, a, site) : f(i, ...a))
+			}
+			return writer ? here(i).base.enter(f, i, a, site) : f(i, ...a)
+		} catch (e) {
+			// an ermine error given its advice as it passes (hints.ts); PENDING as it is. no context
+			// found (nothing-open): as the ermines open say
+			if (e !== PENDING && (inner === undefined ? hinting() : bases.get(inner)?.hints)) {
+				attachHint(e, { fn: name })
+			}
+			throw e
 		}
-		return writer ? here(inner).base.enter(f, inner, a) : f(inner, ...a)
 	}
 	const getArgs = (inner: Inner) => inner.context.args
 	const readAll = (inner: Inner, x: Target, key?: readonly Step[]) => allOf(inner, x, "value", key)
@@ -1705,7 +2073,7 @@ export function systemFrom(
 				act as never,
 				options as never,
 			),
-		watch: (x, fn) => go("watch", x, false, watch, x, fn),
+		pipe: (from, ...rest) => go("pipe", from, true, pipe, from, ...rest),
 		createAction: (path, fn) => go("createAction", undefined, true, createAction, path, fn),
 		executeAction: (path, ...args) =>
 			go("executeAction", path, true, executeAction, path, ...args),
@@ -1719,7 +2087,7 @@ export function systemFrom(
 	return {
 		...system,
 		remove: (x) => go("remove", x, true, remove, x),
-		pulse: () => go("pulse", undefined, false, (i) => here(i).s.pulse()),
+		pulse: () => go("pulse", undefined, false, (i) => here(i).base.pulse()),
 	}
 }
 

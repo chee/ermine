@@ -7,12 +7,23 @@
 //
 //   import { createMemo, ensureNode, read } from "@ermine/system"
 //   export default function setup() {
-//     ensureNode("./items", [])
-//     return createMemo("count", () => (read("./items") as unknown[]).length)
+//     ensureNode("items", [])        // a bare name: inside this process's own node
+//     return createMemo("count", () => (read("items") as unknown[]).length)
 //   }
+//
+// paths: where a name a process gives lands. a bare name and ./ are not the same place:
+//   items      a bare name: inside this process's node (its own; gone when it stops)
+//   ./items    beside this process: in the folder its node is in
+//   ../items   above that: in the folder that folder is in
+//   /items     from this process's root (its box's "/"; no box: the graph's root)
+// so ensureNode("./count") puts count next to the process, not in it; ensureNode("count") puts it
+// in. for the host (no process) the root is its node: a bare name and ./ both land in the root
 import { foundFor, type System, systemFrom } from "./typescript/system.ts"
+import { mark } from "./typescript/site.ts"
 
 const system = systemFrom(foundFor)
+// the functions a build site (@ermine/unplugin, typescript/site.ts) is set for: these
+mark(Object.values(system))
 
 export const getNode: System["getNode"] = system.getNode
 export const hasNode: System["hasNode"] = system.hasNode
@@ -39,7 +50,7 @@ export const rename: System["rename"] = system.rename
 export const list: System["list"] = system.list
 export const createMemo: System["createMemo"] = system.createMemo
 export const createEffect: System["createEffect"] = system.createEffect
-export const watch: System["watch"] = system.watch
+export const pipe: System["pipe"] = system.pipe
 export const createAction: System["createAction"] = system.createAction
 export const executeAction: System["executeAction"] = system.executeAction
 export const getCaller: System["getCaller"] = system.getCaller
@@ -50,5 +61,7 @@ export const getArgs: System["getArgs"] = system.getArgs
 export type { System } from "./typescript/system.ts"
 // the host's: createErmine, and the types hosts and features use
 export * from "./typescript/ermine.ts"
+// what to do about an error (ermine gives it by default; a dev tool or another api's shape calls it)
+export { bare, hint, type Seen } from "./typescript/hints.ts"
 export { PENDING } from "@ermine/core/scheduler"
 export { REFUSED } from "@ermine/core/places/guard"

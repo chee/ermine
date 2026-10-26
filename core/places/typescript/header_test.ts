@@ -2,7 +2,7 @@
 import { assertEquals } from "@std/assert"
 import type { ChangeHeader } from "@ermine/core/node/entry"
 import { createScheduler } from "@ermine/core/scheduler"
-import { createChangeHeader, stackOf } from "./header.ts"
+import { createChangeHeader } from "./header.ts"
 
 const given = { file: "program.js", line: 12 }
 
@@ -31,24 +31,4 @@ Deno.test("header: in a run, no capture: none, each write; a site given, that on
 		}, () => {}))
 	s.pulse()
 	assertEquals(made.map((h) => h.external), [undefined, undefined, [given]])
-})
-
-Deno.test("header: the whole stack kept beside the change, every frame to the caller's caller", () => {
-	const s = createScheduler()
-	const host = s.createRootScope({ actor: "host" })
-	const outer = () => s.runWithScope(host, () => createChangeHeader(s))
-	const h = (function deeper() {
-		return outer()
-	})()
-	const frames = stackOf(h)!
-	const names = frames.map((f) => f.function ?? "")
-	assertEquals(frames.every((f) => f.file !== undefined), true)
-	assertEquals(names.some((n) => n.includes("outer")), true)
-	assertEquals(names.some((n) => n.includes("deeper")), true)
-	// given its site: none captured
-	const told = s.runWithScope(
-		host,
-		() => createChangeHeader(s, undefined, undefined, undefined, given),
-	)
-	assertEquals(stackOf(told), undefined)
 })

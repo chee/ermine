@@ -6,7 +6,7 @@
 //   sited.siteOf(computer)         // createScope, createComputer, createEffect; the site is the
 //   sited.sitesOf(computer)        // first frame outside sites.ts and ours (libraries, the api)
 //
-// sitesOf: its own site, then each parent's. kept in a WeakMap by scope, so a site never keeps a
+// sitesOf: its own site, then each parent's. held in a WeakMap by scope, so a site never keeps a
 // scope alive; made without the wrapper: no site of its own (siteOf: undefined)
 // the stack is captured at create and parsed only when asked: create 5.6-12 µs, siteOf +~40 µs once
 // core candidate: the scheduler keeping the site on the scope (no wrapper, no WeakMap)
@@ -18,15 +18,18 @@ import {
 	type Scheduler,
 	type Scope,
 } from "@ermine/core/scheduler"
-import { type FileLocation, frames, outside } from "@ermine/core/util/stacktrace"
+import { type FileLocation, outside } from "@ermine/core/util/stacktrace"
 
 export type { FileLocation }
 
 export type SitesOptions = {
 	// files whose frames are skipped: libraries, the api. a site is the first frame in none of them.
-	// this file is always one. a Set is kept as given, live (this file added to it): files added
+	// this file is always one. a Set is used as given, live (this file added to it): files added
 	// later are skipped too, from the next site read
 	ours?: Iterable<string>
+	// the site known now without a stack (a build's, @ermine/unplugin): taken over a capture; none
+	// (or it gives undefined): captured
+	given?: () => FileLocation | undefined
 }
 
 export type Sited = {
@@ -38,9 +41,6 @@ export type Sited = {
 	siteOf: (scope: Scope) => FileLocation | undefined
 	// its own site if it has one, then each parent's that has one, up to the root
 	sitesOf: (scope: Scope) => FileLocation[]
-	// the whole stack it was made with, every frame (kept here, never in the graph) [chee 10-26:
-	// "we should just keep the whole stack"]; made without the wrapper: undefined
-	stackOf: (scope: Scope) => FileLocation[] | undefined
 }
 
 type Held = { stack?: string; site?: FileLocation | null }
@@ -55,7 +55,7 @@ export function hold(entry: unknown): Held {
 	const E = Error as unknown as V8Error
 	const holder: Held = {}
 	const limit = E.stackTraceLimit
-	if (typeof limit === "number" && limit < 64) E.stackTraceLimit = 64 // the whole stack (stackOf)
+	if (typeof limit === "number" && limit < 10) E.stackTraceLimit = 10
 	try {
 		if (typeof E.captureStackTrace === "function") {
 			E.captureStackTrace(holder, entry)
@@ -70,11 +70,17 @@ export function createSites(
 	scheduler: Scheduler,
 	options: SitesOptions = {},
 ): Sited {
-	const given = options.ours
-	const ours = given instanceof Set
-		? (given as Set<string>).add(import.meta.url)
-		: new Set<string>([import.meta.url, ...(given ?? [])])
+	const listed = options.ours
+	const ours = listed instanceof Set
+		? (listed as Set<string>).add(import.meta.url)
+		: new Set<string>([import.meta.url, ...(listed ?? [])])
 	const held = new WeakMap<Scope, Held>()
+	const given = options.given
+	// the site given now, or the stack above entry
+	const at = (entry: unknown): Held => {
+		const site = given?.()
+		return site === undefined ? hold(entry) : { site }
+	}
 
 	function note<S extends Scope>(scope: S, h: Held): S {
 		held.set(scope, h)
@@ -82,16 +88,16 @@ export function createSites(
 	}
 
 	const createRootScope: Sited["createRootScope"] = (info) =>
-		note(scheduler.createRootScope(info), hold(createRootScope))
+		note(scheduler.createRootScope(info), at(createRootScope))
 	const createScope: Sited["createScope"] = (info, parent) =>
-		note(scheduler.createScope(info, parent), hold(createScope))
+		note(scheduler.createScope(info, parent), at(createScope))
 	const createComputer = <T>(
 		f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
 		set: (value: T) => void,
 		equal?: Equal<T>,
 		key?: unknown,
 		info?: Info,
-	): Computer => note(scheduler.createComputer(f, set, equal, key, info), hold(createComputer))
+	): Computer => note(scheduler.createComputer(f, set, equal, key, info), at(createComputer))
 	const createEffect = <T>(
 		f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
 		effect: (value: T, previous: T | undefined) => void,
@@ -99,7 +105,7 @@ export function createSites(
 		options?: Parameters<Scheduler["createEffect"]>[3],
 		info?: Info,
 	): Computer => {
-		const site = hold(createEffect)
+		const site = at(createEffect)
 		return note(scheduler.createEffect(f, effect, equal, options, info), site)
 	}
 
@@ -108,13 +114,10 @@ export function createSites(
 		if (h === undefined) return undefined
 		if (h.site === undefined) {
 			h.site = typeof h.stack === "string" ? outside(h.stack, ours) ?? null : null
+			// read once: the frames are let go
+			delete h.stack
 		}
 		return h.site ?? undefined
-	}
-
-	function stackOf(scope: Scope): FileLocation[] | undefined {
-		const h = held.get(scope)
-		return typeof h?.stack === "string" ? frames(h.stack) : undefined
 	}
 
 	function sitesOf(scope: Scope): FileLocation[] {
@@ -133,6 +136,5 @@ export function createSites(
 		createEffect,
 		siteOf,
 		sitesOf,
-		stackOf,
 	}
 }
