@@ -381,7 +381,11 @@ void es_promise_reject(es_promise *p, const char *message) {
 void es_promise_then(es_promise *p,
 	void (*fn)(void *ctx, int ok, const op_value *value, const char *error), void *ctx) {
 	if (p->state != 0) {
+		// held while fn runs: fn letting go of the last other hold frees nothing it was handed
+		p->holds++;
 		fn(ctx, p->state == 1, p->value, p->error);
+		p->holds--;
+		promise_let_go(p);
 		return;
 	}
 	then_cb cb = {fn, ctx};
