@@ -62,11 +62,15 @@ export type Code =
 	| "setup-only"
 	| "not-yet"
 	| "nothing-open"
+	// a function found nothing open, but an ermine of a second copy of @ermine/system has
+	| "two-copies"
 	| "not-a-handle"
 	| "not-a-value"
 	| "not-patches"
 	| "not-a-function"
 	| "closed"
+	// a pipe told by pipes' writes, as they land, too deep: told no more
+	| "looping"
 
 export class ErmineError extends Error {
 	constructor(readonly code: Code, message: string) {

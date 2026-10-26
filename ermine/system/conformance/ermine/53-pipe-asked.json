@@ -1,0 +1,146 @@
+{
+	"title": "a pipe is asked as its process [chee 10-26: \"the 3 assumptions are ok yes\"]: made, read of from and edit of to (refused: pipe throws); its writes asked as any of its process's (refused: its status failed)",
+	"steps": [
+		{
+			"op": "ermine",
+			"deny": [
+				{
+					"op": "read",
+					"path": "secret",
+					"from": "code/q"
+				},
+				{
+					"op": "edit",
+					"path": "locked",
+					"from": "code/q"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/secret",
+				1
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/locked",
+				1
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/open",
+				1
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/q",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/code/q",
+			"expect": {
+				"id": "proc:q"
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"pipe",
+				"/secret",
+				"/open"
+			],
+			"expect": {
+				"error": "refused"
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"pipe",
+				"/open",
+				"/locked"
+			],
+			"expect": {
+				"error": "refused"
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/q2",
+			"program": [
+				{
+					"do": [
+						"pipe",
+						"/open",
+						{
+							"steps": [
+								{
+									"do": [
+										"patch",
+										"/locked",
+										[
+											"whole",
+											5
+										]
+									]
+								}
+							]
+						}
+					],
+					"as": "pp"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "q2",
+			"at": "/code/q2",
+			"expect": {
+				"id": "proc:q2"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/open",
+				[
+					{
+						"path": [],
+						"value": 2
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/locked"
+			],
+			"expect": {
+				"value": 1
+			}
+		}
+	]
+}
