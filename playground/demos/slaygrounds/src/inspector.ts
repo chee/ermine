@@ -601,7 +601,7 @@ export function createInspector(
 				(v) => (tag.hidden = !v),
 			)
 		}
-		// a computer's or a process's status, latest run, reads and writes, sites, args, cwd, pin
+		// a computer's or a process's status, latest run, reads and writes, sites, args, folder, pin
 		runSection(w, into.appendChild(h("div")), item.id, {
 			link,
 			pick: (id) => {

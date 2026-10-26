@@ -200,17 +200,17 @@
 						"process": "proc:a",
 						"code": "hi",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					}
@@ -597,17 +597,17 @@
 						"process": "proc:a",
 						"code": "hi",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -615,17 +615,17 @@
 						"process": "proc:c",
 						"code": "hi",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					}

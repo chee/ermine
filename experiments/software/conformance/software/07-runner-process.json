@@ -268,7 +268,7 @@
 						],
 						"hash": "ad6063499692cd937802b9b4e121336304722351982e7709e806e628d78d78c2"
 					},
-					"ermine.process.cwd": [
+					"ermine.process.folder": [
 						"work"
 					]
 				},
@@ -285,17 +285,17 @@
 						"process": "proc:lisp",
 						"code": "lisp",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -303,17 +303,17 @@
 						"process": "proc:q",
 						"code": "(hello)",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -321,17 +321,17 @@
 						"process": "proc:q2",
 						"code": "(hello)",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					}
@@ -353,17 +353,17 @@
 						"process": "proc:lisp",
 						"code": "lisp",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -371,17 +371,17 @@
 						"process": "proc:q",
 						"code": "(hello)",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -389,17 +389,17 @@
 						"process": "proc:q2",
 						"code": "(hello)",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					}
@@ -610,17 +610,17 @@
 						"process": "proc:lisp",
 						"code": "lisp",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -628,17 +628,17 @@
 						"process": "proc:q",
 						"code": "(hello)",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -646,17 +646,17 @@
 						"process": "proc:q2",
 						"code": "(hello)",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -664,17 +664,17 @@
 						"process": "proc:lisp2",
 						"code": "lisp",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -682,17 +682,17 @@
 						"process": "proc:r",
 						"code": "(hello)",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					}
@@ -849,17 +849,17 @@
 						"process": "proc:lisp",
 						"code": "lisp",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -867,17 +867,17 @@
 						"process": "proc:q",
 						"code": "(hello)",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -885,17 +885,17 @@
 						"process": "proc:q2",
 						"code": "(hello)",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -903,17 +903,17 @@
 						"process": "proc:lisp2",
 						"code": "lisp",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -921,17 +921,17 @@
 						"process": "proc:r",
 						"code": "(hello)",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -939,17 +939,17 @@
 						"process": "proc:t",
 						"code": "(hello)",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					}

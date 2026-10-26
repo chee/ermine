@@ -2,7 +2,7 @@
 // a computer's or a process's own story, for the detail column: its status
 // (ermine.computer.status), its latest run (the runs table: the process api's runs), what that run
 // read (each with the write it saw) and wrote, where it was made (the world's sites: ermine/sites)
-// and, for a process, its args, cwd and pin (ermine.process.*). live: the status and the rest are attributes
+// and, for a process, its args, folder and pin (ermine.process.*). live: the status and the rest are attributes
 // read through places, the record through the process api's runs, tracked by ermine (feed), so
 // each run's record redraws this
 import { createRenderEffect } from "@solidjs/signals"
@@ -15,7 +15,7 @@ type Any = any
 
 const STATUS = "ermine.computer.status"
 const ARGS = "ermine.process.args"
-const CWD = "ermine.process.cwd"
+const FOLDER = "ermine.process.folder"
 const PIN = "ermine.process.pin"
 const PENDING = Symbol.for("ermine.pending")
 
@@ -112,7 +112,7 @@ export function runSection(w: Any, into: HTMLElement, id: unknown, hooks: Hooks)
 		run: w.apis?.runs(id),
 		status: at(STATUS),
 		args: at(ARGS),
-		cwd: at(CWD),
+		folder: at(FOLDER),
 		pin: at(PIN),
 	}))
 	// which reads and writes are open: by their place in the list and what they name
@@ -187,13 +187,16 @@ export function runSection(w: Any, into: HTMLElement, id: unknown, hooks: Hooks)
 			)
 		}
 
-		// ---- a process: its args, working folder and pin ----
+		// ---- a process: its args, folder and pin ----
 		if (isProcess) {
 			box.append(h("h3", "", "process"))
 			const args = r.args as string[] | undefined
 			const ps: [string, Node | string][] = [
 				["args", args?.length ? shown([...args]) : h("span", "snone", "none")],
-				["cwd", Array.isArray(r.cwd) ? "/" + r.cwd.join("/") : h("span", "snone", "none")],
+				[
+					"folder",
+					Array.isArray(r.folder) ? "/" + r.folder.join("/") : h("span", "snone", "none"),
+				],
 			]
 			box.append(rows(ps))
 			if (r.pin) box.append(pin(r.pin, hooks))
@@ -264,7 +267,7 @@ function where(x: Any, hooks: Hooks): Node[] {
 	return part ? [node, h("span", "rpart", part)] : [node]
 }
 
-// the pin: the program, each step of its chain, the box and the cwd
+// the pin: the program, each step of its chain, the box and the folder
 function pin(p: Any, hooks: Hooks): HTMLElement {
 	const place = (s: Any) => {
 		const span = h("span", "sframes")
@@ -290,7 +293,7 @@ function pin(p: Any, hooks: Hooks): HTMLElement {
 	if (p.program) ps.push(["program", place(p.program)])
 	;((p.chain ?? []) as Any[]).forEach((s, i) => ps.push([`step ${i + 1}`, place(s)]))
 	if (p.box !== undefined) ps.push(["box", hooks.name(p.box)])
-	if (Array.isArray(p.cwd)) ps.push(["pin cwd", "/" + p.cwd.join("/")])
+	if (Array.isArray(p.folder)) ps.push(["pin folder", "/" + p.folder.join("/")])
 	const fold = h("details", "appatch")
 	fold.open = true
 	fold.append(h("summary", "", "pin"), rows(ps))

@@ -317,7 +317,7 @@ export function shell(api: API & Extra) {
 			for (const [name, app] of want) {
 				if (running.has(name)) continue
 				const p = start(`/apps/${app}`, `/desktop/${name}`, {
-					cwd: `/windows/${name}`,
+					folder: `/windows/${name}`,
 					args: [name],
 				})
 				if ("refused" in p) say(api, `✗ ${name}: ${p.refused}`)

@@ -10,9 +10,9 @@ const world = createWorld({
 	render,
 	processes: [
 		{ name: "card" },
-		{ name: "frog", export: "friend", cwd: ["friends", "frog"], args: ["frog"] },
-		{ name: "hedgehog", export: "friend", cwd: ["friends", "hedgehog"], args: ["hedgehog"] },
-		{ name: "snail", export: "friend", cwd: ["friends", "snail"], args: ["snail"] },
+		{ name: "frog", export: "friend", folder: ["friends", "frog"], args: ["frog"] },
+		{ name: "hedgehog", export: "friend", folder: ["friends", "hedgehog"], args: ["hedgehog"] },
+		{ name: "snail", export: "friend", folder: ["friends", "snail"], args: ["snail"] },
 	],
 })
 

@@ -247,7 +247,7 @@
 					{
 						"by": "proc:a",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -255,7 +255,7 @@
 					{
 						"by": "session",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"system"
 						],
 						"open": true
@@ -263,7 +263,7 @@
 					{
 						"by": "proc:a",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -271,7 +271,7 @@
 					{
 						"by": "proc:a",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -302,7 +302,7 @@
 					{
 						"by": "proc:a",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -310,7 +310,7 @@
 					{
 						"by": "session",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"system"
 						],
 						"open": true
@@ -318,7 +318,7 @@
 					{
 						"by": "proc:a",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -326,7 +326,7 @@
 					{
 						"by": "proc:a",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -353,7 +353,7 @@
 					{
 						"by": "proc:a",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -361,7 +361,7 @@
 					{
 						"by": "session",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"system"
 						],
 						"open": true
@@ -369,7 +369,7 @@
 					{
 						"by": "proc:a",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -377,7 +377,7 @@
 					{
 						"by": "proc:a",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -426,7 +426,7 @@
 					{
 						"by": "proc:a",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -434,7 +434,7 @@
 					{
 						"by": "session",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"system"
 						],
 						"open": true
@@ -442,7 +442,7 @@
 					{
 						"by": "proc:a",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -450,7 +450,7 @@
 					{
 						"by": "proc:a",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -458,7 +458,7 @@
 					{
 						"by": "session",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"system"
 						],
 						"open": true

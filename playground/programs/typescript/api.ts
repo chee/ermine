@@ -11,13 +11,13 @@
 // the process's teardowns, its starter stopping it
 //
 // what a program gets beside ermine/api's:
-//   start(program, at, { box?, args?, cwd?, onwhynot? })   program: a name or a way;
+//   start(program, at, { box?, args?, folder?, onwhynot? })   program: a name or a way;
 //                        stopped with this one; no way: refused no-way
 //   stop(p)              a process this one started
 //   openwith(x, { onwhynot }?)   every way to open x, nearest first (a generator)
 //
 // run: a runner in @ermine/software's shape, { start(code, ctx), api(ctx) }, ctx the start's facts
-// (software's Start, @ermine/processes/start's Context): a javascript program's value (or its
+// (software's Start, the process context's): a javascript program's value (or its
 // module's default) called with api(ctx), once, untracked; its return the process's value,
 // written to the process's node with its scope open.
 // runner({ show?, api? }): the same, show(value, api)'s return the process's value instead (a view
@@ -41,10 +41,10 @@ import { inside } from "@ermine/boxes"
 import { type Id, type Path, PlacesError } from "@ermine/core/places"
 import { get } from "@ermine/core/places/lib"
 import { createChangeHeader } from "@ermine/core/places/header"
-import type { Context, Process } from "@ermine/processes/start"
+import type { Process } from "@ermine/processes/start"
 import type { Scope } from "@ermine/core/scheduler"
 import { openwith as openwithIn, satisfy, type Way, type Whynot } from "./programs.ts"
-import type { Handle, Programs, Runner } from "./start.ts"
+import type { Handle, Programs, Runner, Start } from "./start.ts"
 
 export * from "@ermine/api"
 
@@ -58,7 +58,7 @@ export type API = Base & {
 		options?: {
 			box?: BoxNode
 			args?: readonly string[]
-			cwd?: string | Path
+			folder?: string | Path
 			onwhynot?: (why: Whynot) => void
 		},
 	) => Process | Refusal
@@ -77,12 +77,12 @@ export type Told = Handle & { readonly stop: (reason?: unknown) => void }
 
 // a runner (software's shape): start given the start's facts, the program given api(ctx)
 export type Run = Runner & {
-	readonly start: (code: unknown, ctx: Context) => Told
-	readonly api: (ctx: Context) => API
+	readonly start: (code: unknown, ctx: Start) => Told
+	readonly api: (ctx: Start) => API
 }
 
 export type ProcessAPIs = Omit<Bases, "createProcessAPI"> & {
-	createProcessAPI: (ctx: Context) => API
+	createProcessAPI: (ctx: Start) => API
 	// a runner for a javascript program: its value (or module's default) called with the api, once,
 	// untracked; its return the process's value
 	run: Run
@@ -90,7 +90,7 @@ export type ProcessAPIs = Omit<Bases, "createProcessAPI"> & {
 	// value (a view made real, say). api: what the program is given (none: createProcessAPI), a
 	// runner's own over this one ({ ...createProcessAPI(ctx), more })
 	runner: (
-		options?: { show?: (value: unknown, api: API) => unknown; api?: (ctx: Context) => API },
+		options?: { show?: (value: unknown, api: API) => unknown; api?: (ctx: Start) => API },
 	) => Run
 }
 
@@ -145,10 +145,10 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 		}
 	}
 
-	function createProcessAPI(ctx: Context): API {
+	function createProcessAPI(ctx: Start): API {
 		const base = apis.createProcessAPI(ctx)
-		const { box: home, places, process, scope } = ctx
-		const cwd = process.cwd
+		const { box: home, folder, scope } = ctx
+		const { places } = home
 
 		// f with a scope open: the one open, else the process's own
 		const within = <T>(f: () => T): T =>
@@ -173,23 +173,23 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			options: {
 				box?: BoxNode
 				args?: readonly string[]
-				cwd?: string | Path
+				folder?: string | Path
 				onwhynot?: (why: Whynot) => void
 			} = {},
 		): Process | Refusal {
 			const target = options.box?.box ?? home
 			const path = options.box ? inside(where) : resolve(where)
-			const dir = options.cwd === undefined
+			const dir = options.folder === undefined
 				? undefined
 				: options.box
-				? inside(options.cwd)
-				: resolve(options.cwd)
+				? inside(options.folder)
+				: resolve(options.folder)
 			let way: Way | undefined
 			const why: Whynot[] = []
 			if (typeof program !== "string") way = program
 			else {
 				const onwhynot = (w: Whynot) => (why.push(w), options.onwhynot?.(w))
-				const from = target === home ? cwd : []
+				const from = target === home ? folder : []
 				for (const w of satisfy(target.places, program, from, { onwhynot })) {
 					way = w
 					break
@@ -198,7 +198,7 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			if (way === undefined) return { refused: "no-way", why }
 			const more = {
 				...(options.args === undefined ? {} : { args: options.args }),
-				...(dir === undefined ? {} : { cwd: dir }),
+				...(dir === undefined ? {} : { folder: dir }),
 			}
 			const found = way
 			const p = within(() => programs().start(target, found, path, more))
@@ -212,7 +212,7 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			x: Target,
 			options: { onwhynot?: (why: Whynot) => void } = {},
 		): Generator<Way, void> {
-			return openwithIn(places, idOf(x), cwd, options)
+			return openwithIn(places, idOf(x), folder, options)
 		}
 
 		return { ...base, teardown, start, stop: (p) => stop(p, "ended"), openwith }
@@ -221,7 +221,7 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 	const runner: ProcessAPIs["runner"] = (options = {}) => {
 		const { show } = options
 		const api = options.api ?? createProcessAPI
-		const start = (code: unknown, ctx: Context): Told => {
+		const start = (code: unknown, ctx: Start): Told => {
 			const f = typeof code === "function"
 				? code
 				: (code as { default?: unknown } | null)?.default

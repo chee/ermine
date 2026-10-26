@@ -47,9 +47,10 @@ static op_value *ask_json(const pr_ask *ask) {
 	// a node, when one was given
 	if (n->part || n->id.string || n->field || n->path) op_set(o, "node", target_json(n));
 	if (ask->who) op_set(o, "who", world_snap(ask->who));
-	if (ask->from.path) {
+	if (ask->from.path || ask->from.box.string) {
 		op_value *from = op_map();
-		op_set(from, "path", strings_json(ask->from.path, ask->from.npath));
+		if (ask->from.path) op_set(from, "path", strings_json(ask->from.path, ask->from.npath));
+		if (ask->from.box.string) op_set(from, "box", op_str(ask->from.box.string));
 		op_set(o, "from", from);
 	}
 	return o;
@@ -573,7 +574,9 @@ static op_value *answer(const op_value *r) {
 		guard g = {.name = world_copy(world_text(op_get(r, "name")))};
 		size_t nfrom = 0;
 		const char **names = from ? world_address(from, &nfrom) : NULL;
-		g.g = gd_new(&(gd_setup){world_places, world_table, outer, names, nfrom});
+		const char *box = world_text(op_get(r, "box"));
+		g.g = gd_new(&(gd_setup){world_places, world_table, outer, names, nfrom,
+			.box = tb_string(box)});
 		free(names);
 		PUSH(guards, nguards, capguards, g);
 		return op_map();

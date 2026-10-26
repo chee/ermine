@@ -354,7 +354,7 @@ img.drag{position:fixed;z-index:9;pointer-events:none;opacity:.85;box-shadow:3px
 `
 
 // ---- a drawing process, one per place a thing sits, placed under the thing as "look:<folder>"
-// (/desk/<folder>/<thing>/look:<folder>), its working folder the thing. its program is the
+// (/desk/<folder>/<thing>/look:<folder>), its folder the thing. its program is the
 // renderer the desk found by walking up from the thing (see the supervisor in desk): the host's
 // runner for typed renderers hands it the renderer's source text, and the process's args say what
 // was found: type, the renderer's name and id, how many places up, whose folder holds it. the
@@ -514,11 +514,11 @@ export function desk(api: API & Extra) {
 	effect("procs", () => {
 		const want: Record<
 			string,
-			{ sig: string; at: string[]; cwd: string[]; w: any; args: string[] }
+			{ sig: string; at: string[]; folder: string[]; w: any; args: string[] }
 		> = {}
 		for (const f of FOLDERS) {
 			for (const { name } of things(f)) {
-				const cwd = ["/", "desk", f, name]
+				const folder = ["/", "desk", f, name]
 				const type = typeOf(f, name)
 				const found = way(`render/${type}`, ["desk", f, name])
 				const w = found ?? way("/missing", [])
@@ -529,15 +529,15 @@ export function desk(api: API & Extra) {
 				const args = [
 					String(type),
 					found ? libName(program.id) : "none",
-					String(found ? cwd.length - holderAt.length : -1),
+					String(found ? folder.length - holderAt.length : -1),
 					holderAt.at(-1) ?? "/",
 					found ? String(program.id) : "",
 					f,
 				]
 				want[`${f}/${name}`] = {
 					sig: JSON.stringify([program.id, program.at, read(asId(program.id))]),
-					at: [...cwd, "look:" + f],
-					cwd,
+					at: [...folder, "look:" + f],
+					folder,
 					w,
 					args,
 				}
@@ -552,7 +552,7 @@ export function desk(api: API & Extra) {
 		}
 		for (const [key, x] of Object.entries(want)) {
 			if (running.has(key)) continue
-			const p = start(x.w, x.at, { cwd: x.cwd, args: x.args })
+			const p = start(x.w, x.at, { folder: x.folder, args: x.args })
 			if ("refused" in p) console.error(`look ${key}: refused ${p.refused}`)
 			else running.set(key, { sig: x.sig, p })
 		}

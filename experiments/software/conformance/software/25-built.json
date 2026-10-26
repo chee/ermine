@@ -90,7 +90,7 @@
 					"ermine.process.program": {
 						"id": "CLOCK"
 					},
-					"ermine.process.cwd": [
+					"ermine.process.folder": [
 						"work"
 					]
 				},
@@ -141,17 +141,17 @@
 						"process": "proc:a",
 						"code": "(wasm)",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					}
@@ -190,17 +190,17 @@
 						"process": "proc:a",
 						"code": "(wasm)",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					}
@@ -305,17 +305,17 @@
 						"process": "proc:a",
 						"code": "(wasm)",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					}

@@ -223,7 +223,7 @@
 				],
 				"status": "pending",
 				"args": null,
-				"cwd": [],
+				"folder": [],
 				"pin": {
 					"program": {
 						"id": "CAT",
@@ -259,7 +259,7 @@
 						}
 					],
 					"box": "W2",
-					"cwd": []
+					"folder": []
 				}
 			}
 		},
@@ -279,7 +279,7 @@
 					"failed": "not-a-loader"
 				},
 				"args": null,
-				"cwd": [],
+				"folder": [],
 				"pin": {
 					"program": {
 						"id": "CAT",
@@ -315,7 +315,7 @@
 						}
 					],
 					"box": "W2",
-					"cwd": []
+					"folder": []
 				}
 			}
 		},

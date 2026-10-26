@@ -11,7 +11,7 @@
 // and the world's tools (below; extend may add a host's own); its return, a view or an element, is
 // made real in the process's box. code: /code/<export>, run by the runner at /code/run (a runner in
 // @ermine/software's shape, its api the world's createProcessAPI). a process runs at /<name>
-// with cwd the root: "./x" is /x, saved across reloads; a bare "x" is inside the process, gone at
+// with folder the root: "./x" is /x, saved across reloads; a bare "x" is inside the process, gone at
 // stop. a name under "./" must not be a process's name (a running process shadows it).
 // reload: code written again, each process stopped ("replaced") and started on the new code.
 // globalThis.ermine (the inspector): table, places, s, host, header, writes, parts, statusIds,
@@ -34,7 +34,15 @@
 //                        leaves the root out); walk: the ids of the places visited pushed to it
 //   inspect(address)     that node picked in the page's graph tab
 import createEntry, { type ChangeHeader, type Metadata } from "@ermine/core/node/entry"
-import { children, createPlaces, move, place, type Places, rename, unplace } from "@ermine/core/places"
+import {
+	children,
+	createPlaces,
+	move,
+	place,
+	type Places,
+	rename,
+	unplace,
+} from "@ermine/core/places"
 import { createChangeBase, createChangeHeader } from "@ermine/core/places/header"
 import * as lib from "@ermine/core/places/lib"
 import { plan } from "@ermine/core/places/path"
@@ -47,13 +55,7 @@ import { processes as rows } from "@ermine/processes"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import { createBuilds } from "@ermine/compilers"
 import { satisfy } from "@ermine/programs"
-import {
-	type Context,
-	createPrograms,
-	ours,
-	type Process,
-	type Runner,
-} from "@ermine/programs/start"
+import { createPrograms, ours, type Process, type Runner, type Start } from "@ermine/programs/start"
 import { type API, createProcessAPIs, type Node, type Noticed } from "@ermine/programs/api"
 import { installTypes, type Known } from "@ermine/types"
 import type { Policy } from "@ermine/core/protect"
@@ -63,13 +65,13 @@ import { createOverlay, type Overlay } from "@ermine/patchy"
 
 const JS = "com.netscape.javascript-source"
 
-// a process an example runs: its name, the export it runs, where (none: /<name>), its working
+// a process an example runs: its name, the export it runs, where (none: /<name>), its
 // folder (none: the root), its args
 export type Spec = {
 	readonly name: string
 	readonly export?: string
 	readonly at?: readonly string[]
-	readonly cwd?: readonly string[]
+	readonly folder?: readonly string[]
 	readonly args?: readonly string[]
 }
 
@@ -89,7 +91,7 @@ export type Options = {
 	actor?: string
 	// a host's own tools, added to what a process is given (its power: "the host has this power, to
 	// let the user create processes with a different api")
-	extend?: (api: API & Tools, ctx: Context) => Record<string, unknown>
+	extend?: (api: API & Tools, ctx: Start) => Record<string, unknown>
 	// protect: the policy every process is asked of (none: everything allowed)
 	may?: Policy
 	// presence (playground/together/presence): a presence world on the host's scope, swept each
@@ -198,7 +200,7 @@ export function createWorld(o: Options) {
 		}
 	})
 
-	const ctxs = new WeakMap<object, Context>()
+	const ctxs = new WeakMap<object, Start>()
 	const views = new Map<string, Element>()
 	let programs!: ReturnType<typeof createPrograms>
 	const apis = createProcessAPIs({
@@ -241,7 +243,7 @@ export function createWorld(o: Options) {
 		return walk("root", [])
 	}
 	const pathOf = (x: Item) => x.path ?? where(x.id)
-	function viewer(api: API, ctx: Context) {
+	function viewer(api: API, ctx: Start) {
 		const at = [...ctx.process.at]
 		// h's find: "/" or any "." ".." in it, steps from the root (or from from); else the names under
 		// the process's own node, and nowhere else: h asks it whether the process has a name, and
@@ -282,8 +284,8 @@ export function createWorld(o: Options) {
 		for (; o !== undefined; o = o.parent) if (key in o.info) return o.info[key]
 		return undefined
 	}
-	function tools(api: API, ctx: Context): Tools {
-		const { scheduler: s, places } = ctx
+	function tools(api: API, ctx: Start): Tools {
+		const { places } = ctx.box
 		if (ctx.process.at.length) named.set(ctx.process.id, ctx.process.at.join("/"))
 		// caller and trusted-event: given, or found; metadata as the change has it
 		const say = (actor: unknown, metadata: Metadata, caller: unknown, trust: unknown): Who => ({
@@ -343,7 +345,7 @@ export function createWorld(o: Options) {
 	}
 
 	// what a process is given: the api, the world's tools, and the host's own
-	function createProcessAPI(ctx: Context): API & Tools {
+	function createProcessAPI(ctx: Start): API & Tools {
 		const api = Object.assign(apis.createProcessAPI(ctx), {} as Tools)
 		ctxs.set(api, ctx)
 		Object.assign(api, tools(api, ctx))
@@ -364,13 +366,13 @@ export function createWorld(o: Options) {
 	}
 
 	// ---- programs: a runner for javascript at /code/run, each export a node in /code ----
-	const hostCtx: Context = {
-		box: { root: "root", places },
-		places,
-		process: { id: "host", at: [], args: [], cwd: [] },
-		scheduler: s,
-		table,
+	const hostCtx: Start = {
 		scope: host,
+		box: { root: "root", places },
+		folder: [],
+		at: [],
+		args: [],
+		process: { id: "host", at: [], folder: [], scope: host },
 	}
 	const hostAPI = Object.assign(apis.createProcessAPI(hostCtx), {} as Tools)
 	Object.assign(hostAPI, tools(hostAPI, hostCtx))
@@ -433,7 +435,7 @@ export function createWorld(o: Options) {
 					() =>
 						programs.start(places, way, [...(spec.at ?? [spec.name])], {
 							...(spec.args ? { args: spec.args } : {}),
-							cwd: [...(spec.cwd ?? [])],
+							folder: [...(spec.folder ?? [])],
 						}),
 				)
 				if ("refused" in p) console.error(`${spec.name}: refused ${p.refused}`)

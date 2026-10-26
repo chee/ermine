@@ -13,7 +13,7 @@
 //
 // refused, nothing made: no-runner (an empty chain), taken (software's: a process at, above or
 // under the path); another place's code: not-a-name.
-// pin: the program's and each step's id, place and hash, the root and cwd; written at start.
+// pin: the program's and each step's id, place and hash, the root and folder; written at start.
 // the run: sw_run_carried on the chain's runner, carried (a host runner is a node with no type, so
 // software would not take it by its path), and the program carried with a build: the chain's
 // compilers folded over the program's value (the compilers library's bd_fold), the value read once
@@ -34,7 +34,7 @@
 // then the loads held let go (their close at the last). outputs stay cached.
 // writes: software's (processes' start.h's).
 // memory: a process is the programs' until ps_free; stopped stays stopped. ps_free stops any never
-// stopped, then lets go of the loads (their close). a way's pieces are copied (at, args, cwd:
+// stopped, then lets go of the loads (their close). a way's pieces are copied (at, args, folder:
 // processes'); the places it runs in outlive it. out of memory aborts.
 #ifndef PROGRAMS_START_H
 #define PROGRAMS_START_H
@@ -80,15 +80,15 @@ typedef struct {
 	size_t nat;
 } ps_refusal;
 
-// a start's own: args (has_args 0: none written, the program given none); cwd, steps from the root
-// as at's (has_cwd 0: the folder at is in)
+// a start's own: args (has_args 0: none written, the program given none); folder, steps from the root
+// as at's (has_folder 0: the folder at is in)
 typedef struct {
 	const char *const *args;
 	size_t nargs;
 	int has_args;
-	const char *const *cwd;
-	size_t ncwd;
-	int has_cwd;
+	const char *const *folder;
+	size_t nfolder;
+	int has_folder;
 } ps_options;
 
 // with a scope open (its owner's parent). a macro: the site noted is the caller's
