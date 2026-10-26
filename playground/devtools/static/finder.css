@@ -1,0 +1,239 @@
+/* the finder's look, copied from ermine-mac's relay/public/next.html (ermine.love, tippi's), as it is:
+   its words (here on the finder's own box, not :root, so the rest of the panel keeps its own), a
+   window, the graph's area, and the finder's sections */
+.area-slot {
+	--y: #ffff00; --k: #000; --w: #fff; --pink: #ff2e93; --mint: #3df5b0; --grey: #555;
+	--mono: ui-monospace, "SF Mono", Menlo, monospace;
+	--geneva: Geneva, "Helvetica Neue", Arial, sans-serif;
+}
+.area-slot, .area-slot * { box-sizing: border-box; }
+.win { background: var(--w); border: 1px solid var(--k); box-shadow: 2px 2px 0 var(--k); font: 13px/1.35 var(--geneva); }
+/* graph: the explorer, all of the space */
+.area-graph { display: flex; flex-direction: column; background: var(--paper, #fcf7f2); }
+.area-slot { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.area-slot > .win { flex: 1; min-height: 0; border: 0; box-shadow: none; }
+.area-slot > .win > .title { display: none; }
+/* the graph: a finder, system 7. columns a level each, the one picked under them (finder.js) */
+.app-graph .body { padding: 0; }
+.app-graph button { font: inherit; color: inherit; }
+.app-graph code, .app-graph pre { font: 11px/1.35 Monaco, Menlo, var(--mono); }
+.app-graph .g-bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--k); min-width: 0; }
+.app-graph .g-btn { font: 700 11px var(--geneva); border: 1px solid var(--k); border-radius: 4px; background: var(--w); padding: 1px 7px; cursor: pointer; flex: none; }
+.app-graph .g-btn:active:not(:disabled) { background: var(--k); color: var(--w); }
+.app-graph .g-btn:disabled { color: #aaa; border-color: #aaa; cursor: default; }
+.app-graph .g-btn.g-small { padding: 0 6px; font-size: 10px; }
+.app-graph .g-crumbs { contain: inline-size; display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+.app-graph .g-crumb { border: 0; background: none; padding: 1px 4px; cursor: pointer; font-family: Monaco, Menlo, var(--mono); font-size: 11px; }
+.app-graph .g-crumb:hover { background: var(--k); color: var(--w); }
+.app-graph .g-crumb.last { font-weight: 700; }
+.app-graph .g-sep { font-size: 8px; color: var(--grey); }
+.app-graph .g-live { flex: none; font: 700 10px var(--geneva); text-transform: uppercase; letter-spacing: 0.06em; color: var(--grey); }
+.app-graph .g-live::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 4px; border: 1px solid var(--k); border-radius: 50%; background: var(--mint); vertical-align: 0; }
+.app-graph .g-cols { contain: inline-size; display: flex; height: 190px; overflow-x: auto; overflow-y: hidden; border-bottom: 1px solid var(--k); background: var(--w); }
+.app-graph .g-col { flex: none; width: 168px; overflow-y: auto; border-right: 1px solid var(--k); padding: 2px 0; }
+.app-graph .g-row { display: flex; align-items: center; gap: 5px; width: 100%; height: 19px; padding: 0 6px; border: 0; background: none; text-align: left; cursor: pointer; font-size: 12px; }
+.app-graph .g-row svg { flex: none; }
+.app-graph .g-row .g-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.app-graph .g-row .g-brief { margin-left: auto; padding-left: 6px; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--grey); font: 10px Monaco, Menlo, var(--mono); }
+.app-graph .g-row .g-more { margin-left: auto; font-size: 8px; }
+.app-graph .g-row.trail { background: #ccc; }
+.app-graph .g-row.sel, .app-graph .g-row:active { background: var(--k); color: var(--w); }
+.app-graph .g-row.sel .g-brief { color: #ccc; }
+.app-graph .g-row.fresh:not(.sel) { animation: g-lit 1.5s ease-out; }
+@keyframes g-lit { from { background: var(--y); } to { background: transparent; } }
+.app-graph .g-empty { padding: 4px 8px; color: var(--grey); font-style: italic; }
+.app-graph .g-info { padding: 8px 12px 10px; max-height: 70vh; overflow-y: auto; }
+.app-graph .g-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.app-graph .g-head > svg { transform: scale(2); transform-origin: left center; margin-right: 14px; }
+.app-graph .g-head > div { flex: 1; min-width: 0; }
+.app-graph .g-title { font-weight: 700; overflow-wrap: anywhere; }
+.app-graph .g-kind { color: var(--grey); font-size: 12px; }
+.app-graph .g-state { display: inline-block; font: 700 10px var(--geneva); text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid var(--k); border-radius: 3px; padding: 0 5px; }
+.app-graph .g-state.g-failed, .app-graph .g-state.g-looping { background: var(--pink); color: var(--w); border-color: var(--pink); }
+.app-graph .g-state.g-pending { background: #eee; font-style: italic; }
+.app-graph .g-state.g-awake { background: var(--mint); }
+.app-graph .g-state.g-asleep { color: #6f5f78; border-style: dashed; }
+.app-graph .g-state.g-waking { background: #ffff88; }
+.app-graph .g-dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; margin: 0 0 6px; font-size: 12px; }
+.app-graph .g-dl dt { text-align: right; font-weight: 700; white-space: nowrap; }
+.app-graph .g-dl dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.app-graph .g-sec { margin-top: 10px; border-top: 1px solid var(--k); padding-top: 4px; }
+.app-graph .g-sec h3 { margin: 0 0 4px; font: 700 11px var(--geneva); text-transform: uppercase; letter-spacing: 0.06em; }
+.app-graph .g-sec .g-sec { margin-top: 6px; border-top: 1px dotted var(--grey); }
+.app-graph .g-pre { contain: inline-size; margin: 0; padding: 6px 8px; border: 1px solid var(--k); background: #fafafa; max-height: 260px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.app-graph .g-pre.code { white-space: pre; }
+.app-graph .g-pre.g-small { max-height: 120px; padding: 2px 4px; }
+.app-graph .g-quiet { color: var(--grey); }
+.app-graph p.g-quiet { margin: 0 0 4px; font-size: 12px; }
+.app-graph .g-bad { color: var(--pink); }
+.app-graph .g-chip { border: 1px solid var(--k); border-radius: 8px; background: var(--w); padding: 0 6px; cursor: pointer; font: 11px Monaco, Menlo, var(--mono); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: baseline; }
+.app-graph .g-chip:hover { background: var(--k); color: var(--w); }
+.app-graph .g-site { background: var(--y); padding: 0 3px; margin-right: 4px; white-space: nowrap; }
+.app-graph .g-site .g-fn { color: var(--grey); }
+.app-graph .g-metas { display: flex; flex-wrap: wrap; gap: 2px 10px; }
+.app-graph .g-meta { white-space: nowrap; font-size: 11px; }
+.app-graph .g-when { color: var(--grey); font-size: 11px; white-space: nowrap; }
+.app-graph .g-trace { contain: inline-size; border: 1px solid var(--k); padding: 3px 0; font-size: 12px; overflow-x: auto; }
+.app-graph .g-step { display: flex; align-items: flex-start; gap: 4px; padding: 1px 8px 1px calc(4px + min(var(--level), 10) * 14px); line-height: 17px; }
+.app-graph .g-step:hover { background: #f0f0f0; }
+.app-graph .g-twist { flex: none; width: 12px; height: 17px; border: 0; background: none; padding: 0; font-size: 9px; line-height: 17px; cursor: pointer; }
+.app-graph .g-glyph { flex: none; width: 14px; text-align: center; }
+.app-graph .g-step-what { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.app-graph .g-step-go { cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.app-graph .g-step-go:hover { background: var(--k); color: var(--w); }
+.app-graph .g-step.g-run .g-glyph, .app-graph .g-step.g-call .g-glyph { color: var(--pink); }
+.app-graph .g-step.g-outside > .g-step-what > span:first-child, .app-graph .g-step.g-host .g-step-what { font-weight: 700; }
+.app-graph .g-step.g-stop { color: var(--grey); font-style: italic; }
+.app-graph .g-foot { display: flex; justify-content: space-between; gap: 10px; padding: 2px 8px; border-top: 1px solid var(--k); font-size: 11px; }
+.app-graph .g-foot.bad { color: var(--pink); }
+/* the finder in dens' and catclock's shape: places down the side, the list (or columns) in the
+   middle, the one picked on the right, a line along the bottom. soft paper, hairlines, mint for
+   what's picked, lemon for the segment that's on */
+.dk-holder:has(> .app-graph) { height: 100%; }
+.app-graph { --paper: #fcf7f2; --ink-2: #6f5f78; --ink-3: #a597ab; --hair: rgba(0, 0, 0, 0.1); --picked: #36f9c099; --lemon: #ffff88; display: flex; flex-direction: column; height: 100%; container-type: inline-size; background: var(--paper); }
+.app-graph > .body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0; }
+.app-graph .g-bar { gap: 10px; padding: 6px 10px; background: rgba(255, 255, 255, 0.7); }
+.app-graph .g-round { flex: none; display: grid; place-items: center; width: 28px; height: 26px; padding: 0; border: 1px solid var(--k); border-radius: 2px; background: var(--w); font: 18px/1 Jost, sans-serif; cursor: pointer; transition: transform 0.12s; }
+.app-graph .g-round:hover:not(:disabled) { transform: translateY(-2px); }
+.app-graph .g-round:disabled { opacity: 0.35; cursor: default; }
+.app-graph .g-crumb { font: 11.5px Monaco, Menlo, var(--mono); color: var(--ink-2); border-radius: 2px; padding: 3px 6px; }
+.app-graph .g-crumb.last { color: var(--k); }
+.app-graph .g-crumb:hover { background: rgba(0, 0, 0, 0.06); color: var(--k); }
+.app-graph .g-find { height: 26px; font: 12px Jost, sans-serif; border-radius: 2px; }
+.app-graph .g-new { flex: none; height: 26px; padding: 0 10px; border: 1px solid var(--k); border-radius: 2px; background: var(--w); font: 500 13px Jost, sans-serif; cursor: pointer; }
+.app-graph .g-new:active { background: var(--k); color: var(--w); }
+.app-graph .g-views { flex: none; display: flex; border: 1px solid var(--k); border-radius: 2px; background: var(--w); overflow: hidden; }
+.app-graph .g-views button { height: 24px; padding: 0 10px; border: 0; background: none; font: 500 12px Jost, sans-serif; color: var(--ink-2); cursor: pointer; }
+.app-graph .g-views button + button { border-left: 1px solid var(--k); }
+.app-graph .g-views button[aria-pressed="true"] { background: var(--lemon); color: var(--k); }
+.app-graph .g-panes { flex: 1; min-height: 0; display: grid; grid-template-columns: 184px minmax(0, 1fr) 300px; }
+.app-graph .g-side, .app-graph .g-main, .app-graph .g-info { min-height: 0; overflow: auto; }
+.app-graph .g-side { padding: 8px 8px 24px; border-right: 1px solid var(--k); background: rgba(255, 255, 255, 0.5); }
+.app-graph .g-group { margin: 10px 10px 4px; font: 600 12px Jost, sans-serif; color: var(--ink-3); }
+.app-graph .g-group:first-child { margin-top: 2px; }
+.app-graph .g-spot { display: flex; align-items: center; gap: 8px; width: 100%; padding: 3px 10px; border: 0; border-radius: 2px; background: none; font: 13.5px Jost, sans-serif; text-align: left; cursor: pointer; }
+.app-graph .g-spot > span:not(.g-ic) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-graph .g-spot em { margin-left: auto; font-style: normal; font-size: 11.5px; color: var(--ink-3); white-space: nowrap; }
+.app-graph .g-spot:hover { background: rgba(0, 0, 0, 0.05); }
+.app-graph .g-spot.on { background: var(--picked); }
+.app-graph .g-main { border-right: 1px solid var(--k); outline: 0; }
+.app-graph .g-main:focus-visible { box-shadow: inset 0 0 0 2px var(--pink); }
+.app-graph .g-ic { display: inline-grid; place-items: center; flex: none; }
+.app-graph .g-ic svg { width: 100%; height: 100%; overflow: visible; }
+.app-graph .g-ic-s { width: 18px; height: 18px; }
+.app-graph .g-ic-b { width: 64px; height: 64px; }
+/* the list */
+.app-graph .g-list { min-height: 100%; }
+.app-graph .g-lrow { display: grid; grid-template-columns: minmax(170px, 2.2fr) minmax(70px, 1fr) minmax(80px, 1.6fr) minmax(70px, 0.9fr); gap: 10px; align-items: center; height: 27px; padding: 0 14px 0 10px; font: 13.5px Jost, sans-serif; user-select: none; }
+.app-graph .g-lrow:nth-child(odd):not(.sel):not(.g-lhead) { background: rgba(0, 0, 0, 0.025); }
+.app-graph .g-lhead { position: sticky; top: 0; z-index: 1; height: 26px; font-size: 12px; color: var(--ink-3); background: var(--paper); border-bottom: 1px solid var(--hair); }
+.app-graph .g-lrow.sel { background: var(--picked); }
+.app-graph .g-lrow.drop { box-shadow: inset 0 0 0 2px var(--pink); }
+.app-graph .g-lrow.fresh:not(.sel) { animation: g-lit 1.5s ease-out; }
+.app-graph .g-lname { display: flex; align-items: center; gap: 6px; min-width: 0; padding-left: calc(var(--depth, 0) * 18px); }
+.app-graph .g-twisty { flex: none; width: 12px; padding: 0; border: 0; background: none; font-size: 9px; color: var(--ink-2); cursor: pointer; }
+.app-graph .g-lkind, .app-graph .g-lval, .app-graph .g-lwhen { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); font-size: 12.5px; }
+.app-graph .g-lval { font: 11px Monaco, Menlo, var(--mono); }
+.app-graph .g-list.drop { box-shadow: inset 0 0 0 2px var(--pink); }
+/* the map: cards and lines on paper; the picked card ringed; lines in and out of it lit */
+.app-graph .g-map { display: flex; flex-direction: column; min-height: 100%; }
+.app-graph .g-mapbar { position: sticky; top: 0; left: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 6px 10px; background: var(--paper); border-bottom: 1px solid var(--hair); font-size: 12px; }
+.app-graph .g-mapbox { flex: 1; overflow: auto; background-image: radial-gradient(rgba(0, 0, 0, 0.12) 1px, transparent 1px); background-size: 16px 16px; }
+.app-graph .g-mapdraw svg { display: block; }
+.app-graph .m-card { cursor: pointer; }
+.app-graph .m-card rect { stroke: var(--k); stroke-width: 1; }
+.app-graph .m-card.empty rect { stroke-dasharray: 3 3; }
+.app-graph .m-card text { font: 12.5px Jost, sans-serif; pointer-events: none; }
+.app-graph .m-card .m-glyph { font-size: 12px; }
+.app-graph .m-card:hover rect { stroke-width: 2; }
+.app-graph .m-card.picked rect { stroke-width: 2.5; filter: drop-shadow(2px 2px 0 var(--k)); }
+.app-graph .m-line { fill: none; stroke: rgba(0, 0, 0, 0.35); stroke-width: 1.2; }
+.app-graph .m-made { stroke-dasharray: 4 3; }
+.app-graph .m-host { stroke: rgba(0, 0, 0, 0.12); }
+.app-graph .m-read { stroke: #2269ff; stroke-opacity: 0.45; }
+.app-graph .m-wrote { stroke: var(--pink); stroke-opacity: 0.45; }
+.app-graph .m-line.in, .app-graph .m-line.out { stroke-width: 2.4; stroke-opacity: 1; }
+.app-graph .m-line.in.m-child, .app-graph .m-line.out.m-child, .app-graph .m-line.in.m-made, .app-graph .m-line.out.m-made, .app-graph .m-line.in.m-host, .app-graph .m-line.out.m-host { stroke: var(--k); }
+/* the columns, in the same voice */
+.app-graph .g-cols { height: 100%; border-bottom: 0; background: none; }
+.app-graph .g-col { width: 200px; border-right: 1px solid var(--hair); padding: 4px; }
+.app-graph .g-row { height: 25px; padding: 0 8px; gap: 7px; border-radius: 2px; font: 13.5px Jost, sans-serif; }
+.app-graph .g-row.sel, .app-graph .g-row:active { background: var(--picked); color: var(--k); }
+.app-graph .g-row.trail { background: rgba(54, 249, 192, 0.22); }
+.app-graph .g-row.sel .g-brief { color: var(--ink-2); }
+.app-graph .g-row .g-more { font-size: 14px; color: var(--ink-2); }
+/* the one picked */
+.app-graph .g-info { max-height: none; padding: 16px 16px 20px; }
+.app-graph .g-head { flex-direction: column; align-items: center; text-align: center; gap: 4px; margin-bottom: 12px; }
+.app-graph .g-head > .g-ic-b { margin-bottom: 6px; }
+.app-graph .g-head > div { flex: none; }
+.app-graph .g-head .g-title { font: 600 15px Jost, sans-serif; }
+.app-graph .g-head .g-kind { font-size: 12.5px; color: var(--ink-2); }
+.app-graph .g-dl dt { color: var(--ink-3); font-weight: 400; }
+.app-graph .g-sec { border-top: 1px solid var(--hair); }
+.app-graph .g-sec h3 { color: var(--ink-3); }
+.app-graph .g-pre { background: var(--w); border-color: var(--hair); }
+.app-graph .g-foot { padding: 4px 12px; font-size: 12px; background: rgba(255, 255, 255, 0.7); }
+@container (max-width: 880px) {
+	.app-graph .g-panes { grid-template-columns: minmax(0, 1fr) 280px; }
+	.app-graph .g-side { display: none; }
+}
+@container (max-width: 620px) {
+	.app-graph .g-panes { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1.1fr) minmax(0, 1fr); }
+	.app-graph .g-main { border-right: 0; border-bottom: 1px solid var(--k); }
+	.app-graph .g-lrow { grid-template-columns: minmax(140px, 2fr) minmax(60px, 1fr); }
+	.app-graph .g-lval, .app-graph .g-lwhen, .app-graph .g-lhead span:nth-child(n + 3) { display: none; }
+	.app-graph .g-live { display: none; }
+}
+/* finding: a field in the bar; its answers over the columns */
+.app-graph .g-find { flex: 0 1 150px; min-width: 60px; font: 11px var(--geneva); border: 1px solid var(--k); border-radius: 0; padding: 1px 5px; background: var(--w); }
+.app-graph .g-found { border-bottom: 1px solid var(--k); max-height: 220px; overflow-y: auto; background: var(--w); }
+.app-graph .g-found-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 3px 8px; font-size: 11px; color: var(--grey); border-bottom: 1px dotted var(--grey); position: sticky; top: 0; background: var(--w); }
+.app-graph .g-found .g-row .g-name { font: 11px Monaco, Menlo, var(--mono); }
+/* the columns take the keys: a ring while they have them */
+.app-graph .g-cols:focus-visible { outline: 2px solid var(--pink); outline-offset: -2px; }
+.app-graph .g-row { user-select: none; }
+.app-graph .g-namebox { display: flex; flex: 1 1 auto; min-width: 0; }
+.app-graph .g-row .g-brief, .app-graph .g-row .g-more { flex: none; }
+.app-graph .g-row.drop, .app-graph .g-col.drop { box-shadow: inset 0 0 0 2px var(--pink); }
+.app-graph .g-row.sel.drop { box-shadow: inset 0 0 0 2px var(--y); }
+/* renaming: the name a field, in place */
+.app-graph .g-rename { flex: 1; min-width: 0; height: 17px; font: 12px var(--geneva); border: 1px solid var(--k); padding: 0 3px; background: var(--w); color: var(--k); outline: 0; box-shadow: 1px 1px 0 var(--k); }
+/* the menu: system 7, a shadow, the keys on the right; the veil catches the click away */
+.g-veil { position: fixed; inset: 0; z-index: 20; }
+.g-veil.dim { background: rgba(255, 255, 0, 0.35); }
+.g-menu { position: fixed; z-index: 21; min-width: 196px; padding: 2px 0; background: var(--w); border: 1px solid var(--k); box-shadow: 2px 2px 0 var(--k); font: 12px var(--geneva); }
+.g-mi { display: flex; justify-content: space-between; gap: 24px; width: 100%; padding: 2px 14px 2px 16px; border: 0; background: none; text-align: left; cursor: default; font: inherit; color: var(--k); }
+.g-mi:hover:not(:disabled), .g-mi:focus-visible { background: var(--k); color: var(--w); outline: 0; }
+.g-mi:disabled { color: #aaa; }
+.g-key { color: var(--grey); }
+.g-mi:hover:not(:disabled) .g-key, .g-mi:focus-visible .g-key { color: #ccc; }
+.g-ml { height: 0; margin: 2px 0; border-top: 1px dotted var(--k); }
+/* the explorer of the page's own graph: why an item is off (src/next/finder.tsx) */
+.g-mnote { max-width: 200px; margin-top: 2px; padding: 3px 14px 3px 16px; border-top: 1px dotted var(--k); color: var(--grey); font-size: 11px; line-height: 1.3; }
+/* removing, asked: a system 7 alert, cancel the default (its double ring) */
+.g-alert { position: fixed; z-index: 21; left: 50%; top: 30%; transform: translateX(-50%); width: min(360px, calc(100vw - 32px)); padding: 14px 16px 12px; background: var(--w); border: 1px solid var(--k); box-shadow: 0 0 0 3px var(--w), 0 0 0 4px var(--k), 4px 4px 0 4px var(--k); font: 13px/1.4 var(--geneva); }
+.g-alert p { margin: 0 0 8px; }
+.g-alert-btns { display: flex; justify-content: flex-end; gap: 14px; margin-top: 12px; }
+.g-alert .g-default { box-shadow: 0 0 0 1px var(--w), 0 0 0 3px var(--k); }
+/* a value: its colour beside it; edited in place */
+.app-graph .g-picture { display: block; max-width: 100%; max-height: 320px; margin: 0 0 6px; border: 1px solid var(--k); background: repeating-conic-gradient(#eee 0 25%, #fff 0 50%) 0 0 / 12px 12px; image-rendering: auto; }
+.app-graph .g-swatchrow { display: flex; gap: 8px; align-items: flex-start; }
+.app-graph .g-swatchrow .g-pre { flex: 1; min-width: 0; }
+.app-graph .g-swatch { flex: none; width: 30px; height: 30px; border: 1px solid var(--k); }
+.app-graph .g-edit-row { display: flex; align-items: center; gap: 8px; margin: 6px 0 0; }
+.app-graph .g-edit-row .g-quiet { flex: 1; font-size: 11px; }
+.app-graph .g-edit textarea { display: block; width: 100%; resize: vertical; border-color: var(--pink); background: var(--w); color: var(--k); font: 11px/1.35 Monaco, Menlo, var(--mono); }
+.app-graph .g-edit textarea:focus { outline: 2px solid var(--pink); outline-offset: 0; }
+.app-graph .g-btn.g-go { background: var(--k); color: var(--w); }
+.app-graph .g-btn.g-go:disabled { background: var(--w); color: #aaa; }
+.app-graph .g-patches { margin-top: 4px; padding: 3px 6px; border: 1px dotted var(--k); font: 10px/1.4 Monaco, Menlo, var(--mono); max-height: 120px; overflow: auto; }
+.app-graph .g-patch { white-space: pre-wrap; overflow-wrap: anywhere; }
+.app-graph .g-patch.bad { color: var(--pink); }
+@media (max-width: 480px) {
+	.app-graph .g-col { width: 140px; }
+	.app-graph .g-cols { height: 170px; }
+	.app-graph .g-info { padding: 8px; }
+	.app-graph .g-step { padding-left: calc(2px + min(var(--level), 6) * 8px); }
+	.app-graph .g-step .g-when { display: none; }
+}
