@@ -1,13 +1,13 @@
 import { assertEquals } from "@std/assert"
-import { createScheduler } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Key } from "@ermine/table"
+import { createScheduler } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Key } from "@ermine/core/table"
 import { children, createPlaces } from "@ermine/places"
 import { createLog } from "./log.ts"
 import { createHistory } from "./history.ts"
 import { createSigner, type Signer } from "./sign.ts"
 import { encodeStep, hashStep, type Step } from "./step.ts"
-import type { Patch } from "@ermine/op/apply"
+import type { Patch } from "@ermine/core/op/apply"
 
 // a graph with a log and its history, nothing else
 async function receiver() {

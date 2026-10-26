@@ -1,0 +1,31 @@
+{
+	"name": "@ermine/core",
+	"version": "0.0.0",
+	"license": "AGPL-3.0-or-later",
+	"exports": {
+		"./blake3": "./blake3/typescript/blake3.ts",
+		"./ed25519": "./ed25519/typescript/ed25519.ts",
+		"./node": "./node/typescript/node.ts",
+		"./node/entry": "./node/typescript/entry.ts",
+		"./node/update": "./node/typescript/update.ts",
+		"./op/apply": "./op/typescript/apply.ts",
+		"./op/invert": "./op/typescript/invert.ts",
+		"./op/squish": "./op/typescript/squish.ts",
+		"./op/produce": "./op/typescript/produce.ts",
+		"./scheduler": "./scheduler/typescript/scheduler.ts",
+		"./scheduler/causes": "./scheduler/typescript/causes.ts",
+		"./scheduler/helpers": "./scheduler/typescript/helpers.ts",
+		"./scheduler/order": "./scheduler/typescript/order.ts",
+		"./scheduler/rank": "./scheduler/typescript/rank.ts",
+		"./scheduler/paths": "./scheduler/typescript/paths.ts",
+		"./scheduler/tracker": "./scheduler/typescript/tracker.ts",
+		"./scheduler/trace": "./scheduler/typescript/trace.ts",
+		"./scheduler/boundaries": "./scheduler/typescript/boundaries.ts",
+		"./scheduler/selector": "./scheduler/typescript/selector.ts",
+		"./table": "./table/typescript/table.ts",
+		"./unread": "./unread/typescript/unread.ts",
+		"./util/keyorder": "./util/typescript/keyorder.ts",
+		"./util/stacktrace": "./util/typescript/stacktrace.ts",
+		"./util/walk-string": "./util/typescript/walk-string.ts"
+	}
+}

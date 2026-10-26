@@ -12,7 +12,7 @@
 // lists show it beside what they show, so its tables are what its parents' are, composed. patches
 // apply as sync takes them (lists.ts applies: a key patch makes its missing parents)
 import { type Commit, decode } from "@ermine/formats/commit"
-import type { ChangeHeader, Entry } from "@ermine/node/entry"
+import type { ChangeHeader, Entry } from "@ermine/core/node/entry"
 import type { History, Kept } from "./history.ts"
 import { hex } from "./hex.ts"
 import { applies, state } from "./lists.ts"

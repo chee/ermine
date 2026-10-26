@@ -3,10 +3,10 @@
 // /apps/clock.js ("hi", javascript source), and a session: a process at /system/session the host
 // started with processes of its own, the owner of the host's offers
 import { assert, assertEquals, assertThrows } from "@std/assert"
-import createEntry from "@ermine/node/entry"
-import { createScheduler } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/table"
+import createEntry from "@ermine/core/node/entry"
+import { createScheduler } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Id, type Key } from "@ermine/core/table"
 import { children, createPlaces, PlacesError } from "@ermine/places"
 import { get } from "@ermine/places/lib"
 import { createChangeHeader } from "@ermine/places/header"

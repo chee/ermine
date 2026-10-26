@@ -5,11 +5,11 @@
 //
 // name: the blake3 of the write's canonical CBOR (node, part, parents, patches, change), as hex.
 // two holders holding one write hold the same name, so a union is a union of names
-import { blake3 } from "@ermine/blake3"
+import { blake3 } from "@ermine/core/blake3"
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
-import type { ChangeHeader } from "@ermine/node/entry"
-import type { Patch } from "@ermine/op/apply"
-import type { Key } from "@ermine/table"
+import type { ChangeHeader } from "@ermine/core/node/entry"
+import type { Patch } from "@ermine/core/op/apply"
+import type { Key } from "@ermine/core/table"
 
 // what of a change travels: the header without its op (the op is the patches, given beside it)
 export type Change = Omit<ChangeHeader, "op">

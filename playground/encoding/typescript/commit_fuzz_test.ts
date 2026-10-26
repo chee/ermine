@@ -9,7 +9,7 @@
 //   plain values), and bytes near a commit's (non-canonical rewrites, cut, grown, flipped)
 // a few dozen seeds (fuzz runs small; SEEDS for more). today's rules: see fuzz_values.ts
 import { assert, assertEquals } from "@std/assert"
-import { blake3 } from "@ermine/blake3"
+import { blake3 } from "@ermine/core/blake3"
 import * as cbor from "@ermine/encoding/cbor"
 import { type Commit, decode, encode, joinKey, joinName, name } from "./commit.ts"
 import { toJson } from "../../../conformance/typescript/form.ts"

@@ -261,7 +261,8 @@
 			"name": "a",
 			"expect": {
 				"parts": [
-					"attributes"
+					"attributes",
+					"status"
 				],
 				"status": null,
 				"args": [

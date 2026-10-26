@@ -55,7 +55,7 @@ import type { Id, Path } from "@ermine/places"
 import { get } from "@ermine/places/lib"
 import { conformance, typeOf, typesAt } from "@ermine/types"
 import type { Context, Inside, Process } from "@ermine/processes/start"
-import { isPromise } from "@ermine/scheduler/helpers"
+import { isPromise } from "@ermine/core/scheduler/helpers"
 import {
 	ATTRIBUTE,
 	type Ctx,

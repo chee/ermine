@@ -1,0 +1,114 @@
+{
+	"title": "a memo or effect that read a held row's status is told when the row goes, even when another row write at that root landed first and let the held write go (tippi's read of the held-row fix)",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				{
+					"name": "h",
+					"onWrite": "drop",
+					"parts": [
+						"process"
+					],
+					"takes": true,
+					"times": 1
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/w",
+			"program": [
+				{
+					"do": [
+						"createEffect",
+						"watch",
+						[
+							"getStatus",
+							"/code/p"
+						],
+						"seen"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "stop",
+			"name": "p",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "w",
+			"at": "/w",
+			"expect": {
+				"id": "proc:w"
+			}
+		},
+		{
+			"op": "log",
+			"name": "seen",
+			"expect": {
+				"values": [
+					{
+						"state": "done",
+						"held": {
+							"feature": "h",
+							"write": "row"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "o",
+			"call": [
+				"write",
+				"process",
+				"R",
+				[
+					{
+						"path": [
+							"code"
+						]
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "seen",
+			"expect": {
+				"values": [
+					{
+						"state": "done",
+						"held": {
+							"feature": "h",
+							"write": "row"
+						}
+					},
+					{
+						"state": "done"
+					}
+				]
+			}
+		}
+	]
+}

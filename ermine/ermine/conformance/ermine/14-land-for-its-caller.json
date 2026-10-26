@@ -1,0 +1,728 @@
+{
+	"title": "land acts for its caller: the patch node sent is found where the caller sent from (a path in its box), and land asks edit as the caller and as itself, landing only where both may (a pick). a land refused, or its write failing (a hook's throw) or held back (a hook not calling next: land gives false), keeps the patch node and leaves the target as it was",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				"patchy"
+			],
+			"expect": {}
+		},
+		{
+			"op": "service",
+			"what": "land",
+			"at": "/system/land",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"name": "b",
+			"at": "/boxes/b",
+			"expect": {}
+		},
+		{
+			"op": "boxplace",
+			"name": "b",
+			"at": "/system/land",
+			"path": "/system/land",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/boxes/b/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/face",
+						{
+							"accent": "red"
+						}
+					],
+					"as": "face"
+				},
+				{
+					"do": [
+						"createPatch",
+						"cherry",
+						"$face",
+						[
+							{
+								"path": [
+									"accent"
+								],
+								"value": "cherry"
+							}
+						]
+					],
+					"as": "skin"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"box": "b",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"log",
+				"x",
+				[
+					"each",
+					[
+						"readEntries",
+						"$skin"
+					],
+					[
+						"node"
+					]
+				]
+			],
+			"expect": {
+				"value": [
+					{
+						"id": "n7",
+						"part": "value"
+					}
+				]
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p",
+				"cherry"
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"/system/land",
+				"$skin"
+			],
+			"expect": {
+				"value": true
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"$face"
+			],
+			"expect": {
+				"value": {
+					"accent": "cherry"
+				}
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"boxes",
+				"b",
+				"face"
+			],
+			"expect": {
+				"id": "n6"
+			}
+		},
+		{
+			"op": "saved",
+			"part": "value",
+			"id": "n6",
+			"expect": {
+				"value": {
+					"accent": "cherry"
+				}
+			}
+		},
+		{
+			"op": "saved",
+			"part": "patch",
+			"id": "n7",
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"explain",
+				"$face"
+			],
+			"expect": {
+				"value": {
+					"writer": "method",
+					"path": [
+						"system",
+						"land"
+					],
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "ermine",
+			"features": [
+				"patchy"
+			],
+			"deny": [
+				{
+					"op": "edit",
+					"from": "code/p",
+					"id": "n6"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "service",
+			"what": "land",
+			"at": "/system/land",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./face",
+						{
+							"accent": "red"
+						}
+					],
+					"as": "face"
+				},
+				{
+					"do": [
+						"createPatch",
+						"cherry",
+						"$face",
+						[
+							{
+								"path": [
+									"accent"
+								],
+								"value": "cherry"
+							}
+						]
+					],
+					"as": "skin"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"face"
+			],
+			"expect": {
+				"id": "n6"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p",
+				"cherry"
+			],
+			"expect": {
+				"id": "n7"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"/system/land",
+				"$skin"
+			],
+			"fails": true,
+			"expect": {
+				"error": "refused"
+			}
+		},
+		{
+			"op": "saved",
+			"part": "value",
+			"id": "n6",
+			"expect": {
+				"value": {
+					"accent": "red"
+				}
+			}
+		},
+		{
+			"op": "saved",
+			"part": "patch",
+			"id": "n7",
+			"path": [
+				"on"
+			],
+			"expect": {
+				"value": "n6"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"$face"
+			],
+			"expect": {
+				"value": {
+					"accent": "cherry"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/system/land",
+				{
+					"id": "n7",
+					"part": "value"
+				}
+			],
+			"expect": {
+				"value": true
+			}
+		},
+		{
+			"op": "saved",
+			"part": "value",
+			"id": "n6",
+			"expect": {
+				"value": {
+					"accent": "cherry"
+				}
+			}
+		},
+		{
+			"op": "saved",
+			"part": "patch",
+			"id": "n7",
+			"expect": {}
+		},
+		{
+			"op": "ermine",
+			"features": [
+				"patchy"
+			],
+			"deny": [
+				{
+					"op": "edit",
+					"from": "",
+					"id": "n6"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "service",
+			"what": "land",
+			"at": "/system/land",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./face",
+						{
+							"accent": "red"
+						}
+					],
+					"as": "face"
+				},
+				{
+					"do": [
+						"createPatch",
+						"cherry",
+						"$face",
+						[
+							{
+								"path": [
+									"accent"
+								],
+								"value": "cherry"
+							}
+						]
+					],
+					"as": "skin"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"face"
+			],
+			"expect": {
+				"id": "n6"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p",
+				"cherry"
+			],
+			"expect": {
+				"id": "n7"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"/system/land",
+				"$skin"
+			],
+			"fails": true,
+			"expect": {
+				"error": "refused"
+			}
+		},
+		{
+			"op": "saved",
+			"part": "value",
+			"id": "n6",
+			"expect": {
+				"value": {
+					"accent": "red"
+				}
+			}
+		},
+		{
+			"op": "saved",
+			"part": "patch",
+			"id": "n7",
+			"path": [
+				"on"
+			],
+			"expect": {
+				"value": "n6"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"$face"
+			],
+			"expect": {
+				"value": {
+					"accent": "cherry"
+				}
+			}
+		},
+		{
+			"op": "ermine",
+			"features": [
+				"patchy",
+				{
+					"name": "w",
+					"onWrite": "throw",
+					"only": "host",
+					"ids": [
+						"n6"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "service",
+			"what": "land",
+			"at": "/system/land",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./face",
+						{
+							"accent": "red"
+						}
+					],
+					"as": "face"
+				},
+				{
+					"do": [
+						"createPatch",
+						"cherry",
+						"$face",
+						[
+							{
+								"path": [
+									"accent"
+								],
+								"value": "cherry"
+							}
+						]
+					],
+					"as": "skin"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"face"
+			],
+			"expect": {
+				"id": "n6"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p",
+				"cherry"
+			],
+			"expect": {
+				"id": "n7"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"/system/land",
+				"$skin"
+			],
+			"fails": true,
+			"expect": {
+				"error": "feature",
+				"feature": "w",
+				"hook": "onWrite",
+				"cause": "w threw"
+			}
+		},
+		{
+			"op": "saved",
+			"part": "value",
+			"id": "n6",
+			"expect": {
+				"value": {
+					"accent": "red"
+				}
+			}
+		},
+		{
+			"op": "saved",
+			"part": "patch",
+			"id": "n7",
+			"path": [
+				"on"
+			],
+			"expect": {
+				"value": "n6"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"$face"
+			],
+			"expect": {
+				"value": {
+					"accent": "cherry"
+				}
+			}
+		},
+		{
+			"op": "ermine",
+			"features": [
+				"patchy",
+				{
+					"name": "w",
+					"onWrite": "drop",
+					"only": "host",
+					"ids": [
+						"n6"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "service",
+			"what": "land",
+			"at": "/system/land",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./face",
+						{
+							"accent": "red"
+						}
+					],
+					"as": "face"
+				},
+				{
+					"do": [
+						"createPatch",
+						"cherry",
+						"$face",
+						[
+							{
+								"path": [
+									"accent"
+								],
+								"value": "cherry"
+							}
+						]
+					],
+					"as": "skin"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"face"
+			],
+			"expect": {
+				"id": "n6"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p",
+				"cherry"
+			],
+			"expect": {
+				"id": "n7"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"/system/land",
+				"$skin"
+			],
+			"expect": {
+				"value": false
+			}
+		},
+		{
+			"op": "saved",
+			"part": "value",
+			"id": "n6",
+			"expect": {
+				"value": {
+					"accent": "red"
+				}
+			}
+		},
+		{
+			"op": "saved",
+			"part": "patch",
+			"id": "n7",
+			"path": [
+				"on"
+			],
+			"expect": {
+				"value": "n6"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"$face"
+			],
+			"expect": {
+				"value": {
+					"accent": "cherry"
+				}
+			}
+		}
+	]
+}

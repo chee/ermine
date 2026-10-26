@@ -3,11 +3,11 @@
 // started in W's box. what it adds to ermine/api's: start, stop and openwith on each api, and the
 // runners
 import { assert, assertEquals, assertInstanceOf } from "@std/assert"
-import createEntry, { type Entry } from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import { createScheduler } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/table"
+import createEntry, { type Entry } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import { createScheduler } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Id, type Key } from "@ermine/core/table"
 import { createPlaces } from "@ermine/places"
 import { get } from "@ermine/places/lib"
 import { createChangeHeader } from "@ermine/places/header"
@@ -53,7 +53,7 @@ function world(
 				import.meta.resolve("@ermine/api"),
 				...ours,
 				import.meta.resolve("@ermine/processes/start"),
-				import.meta.resolve("@ermine/scheduler"),
+				import.meta.resolve("@ermine/core/scheduler"),
 			],
 		})
 		: undefined

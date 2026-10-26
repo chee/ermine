@@ -37,10 +37,10 @@
 // { op: "pulse" }                           → {}
 // { op: "state", name, only? }              → { runs, value }   run count; last result (null:
 //    none), as program and open answer; only: just the fields named (a refusal whole)
-import createEntry, { type Entry } from "@ermine/node/entry"
-import { type Computer, createScheduler, type Scope } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/table"
+import createEntry, { type Entry } from "@ermine/core/node/entry"
+import { type Computer, createScheduler, type Scope } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Id, type Key } from "@ermine/core/table"
 import { createPlaces, PlacesError } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
 import { upsert } from "@ermine/places/upsert"
@@ -50,7 +50,7 @@ import { openwith, type Refusal, satisfy, type Way, type Why } from "./programs.
 import { installTypes, typeOf } from "@ermine/types"
 import { level } from "@ermine/places"
 import { members } from "@ermine/places/lib"
-import { keyorder } from "@ermine/util/keyorder"
+import { keyorder } from "@ermine/core/util/keyorder"
 
 type Json = unknown
 

@@ -1,0 +1,87 @@
+{
+	"title": "a memo's or effect's node is placed as open places one: the slot asked \"place\" (a policy refusing places under /secret refuses memo(\"/secret/new\") as it refuses open(\"/secret/b\")); its own writes after, as ever, not asked (tippi's probe, 10-25)",
+	"steps": [
+		{
+			"op": "ermine",
+			"deny": [
+				{
+					"op": "place",
+					"path": "secret"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/secret",
+				{}
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createMemo",
+						"mine",
+						{},
+						1
+					],
+					"as": "mine"
+				},
+				{
+					"do": [
+						"createMemo",
+						"/secret/new",
+						{},
+						2
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "status",
+			"name": "p",
+			"expect": {
+				"status": {
+					"state": "failed",
+					"error": "place refused: denied"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"list",
+				"/secret"
+			],
+			"expect": {
+				"value": []
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"list",
+				"/code/p"
+			],
+			"expect": {
+				"value": [
+					"mine"
+				]
+			}
+		}
+	]
+}

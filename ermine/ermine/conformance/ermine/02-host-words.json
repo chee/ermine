@@ -1,0 +1,222 @@
+{
+	"title": "the host's words, on ermine, from the host's process context: at and cwd the root (bare names and ./ alike in the root), args the host's; each write as the host (its scope's actor, its node the metadata's node), its site the host's line; a send's caller the host's node; teardown(fn) at close, told ended; closed, the words and parts throw closed",
+	"steps": [
+		{
+			"op": "ermine",
+			"at": "/host",
+			"args": [
+				"a",
+				"b"
+			],
+			"expect": {}
+		},
+		{
+			"op": "context",
+			"expect": {
+				"at": [],
+				"cwd": [],
+				"args": [
+					"a",
+					"b"
+				],
+				"scope": "host"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"notes",
+				{
+					"n": 1
+				}
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"notes"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"getNode",
+				"./notes"
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"notes"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"notes"
+			],
+			"expect": {
+				"id": "n2"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/notes",
+				[
+					{
+						"path": [
+							"n"
+						],
+						"value": 2
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"notes",
+				[
+					"n"
+				]
+			],
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "metadata",
+			"part": "value",
+			"id": "n2",
+			"expect": {
+				"keys": [
+					"actor",
+					"node"
+				],
+				"node": "n1"
+			}
+		},
+		{
+			"op": "site",
+			"part": "value",
+			"id": "n2",
+			"expect": {
+				"site": "program"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"createAction",
+				"/svc/on/echo",
+				[],
+				"$0"
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"svc",
+						"on",
+						"echo"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/svc/on/echo",
+				"hey"
+			],
+			"expect": {
+				"value": "hey"
+			}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"path": [
+				"svc",
+				"on",
+				"echo"
+			],
+			"expect": {
+				"record": {
+					"n": 1,
+					"caller": "n1",
+					"handler": "n3",
+					"args": [
+						"hey"
+					],
+					"end": "done",
+					"returned": "hey",
+					"reads": [],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"addTeardown",
+				"bye"
+			],
+			"expect": {}
+		},
+		{
+			"op": "close",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "bye",
+			"expect": {
+				"values": [
+					"ended"
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/notes"
+			],
+			"fails": true,
+			"expect": {
+				"error": "closed"
+			}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/x",
+			"fails": true,
+			"expect": {
+				"error": "closed"
+			}
+		},
+		{
+			"op": "node",
+			"fails": true,
+			"expect": {
+				"error": "closed"
+			}
+		},
+		{
+			"op": "close",
+			"expect": {}
+		}
+	]
+}

@@ -1,7 +1,7 @@
 // unread's conformance hooks (unread_conformance_hook.c in C): what only the tests call. Not in the
 // package's exports (deno.json), so only a path inside the repo reaches them. createUnread hands each
 // unread's own owner lookup here as it makes it
-import type { Entry } from "@ermine/node/entry"
+import type { Entry } from "@ermine/core/node/entry"
 import type { Unread } from "./unread.ts"
 
 const owners = new WeakMap<Unread, (entry: Entry<unknown>) => object | undefined>()

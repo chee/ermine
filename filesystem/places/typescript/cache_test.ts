@@ -1,15 +1,15 @@
 // the path cache (cache.ts) on a real scheduler, table and places, children alone. the cache with a
 // second contributor (processes) is tested in ermine/processes. numbers are printed with -- -v
 import { assert, assertEquals } from "@std/assert"
-import createEntry from "@ermine/node/entry"
-import { type Computer, createScheduler, type Ended } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/table"
+import createEntry from "@ermine/core/node/entry"
+import { type Computer, createScheduler, type Ended } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Id, type Key } from "@ermine/core/table"
 import { type Contributor, createPlaces, place, rename } from "./places.ts"
 import { get, gets, list, members } from "./lib.ts"
 import { createChangeHeader } from "./header.ts"
 import { createPathCache } from "./cache.ts"
-import { keyed } from "@ermine/scheduler/selector"
+import { keyed } from "@ermine/core/scheduler/selector"
 
 const verbose = Deno.args.includes("-v")
 const say = (...a: unknown[]) => verbose && console.log(...a)

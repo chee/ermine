@@ -748,7 +748,10 @@ static op_value *answer(const op_value *r) {
 		const op_value *attrs = e != NULL && e->value != NULL && e->value->type == OP_MAP ? e->value : NULL;
 		op_value *o = op_map();
 		op_set(o, "parts", list);
-		op_set(o, "status", shown(attrs != NULL ? op_get(attrs, CST_ATTRIBUTE) : NULL));
+		// its status: the status table's (places' status.h), not its attributes
+		const nd_entry *se = tb_get(world_table, tb_string(CST_TABLE), tb_string(p->id));
+		const op_value *st = se != NULL && se->value != NULL && se->value->type == OP_MAP ? se->value : NULL;
+		op_set(o, "status", shown(st != NULL ? op_get(st, CST_ATTRIBUTE) : NULL));
 		op_set(o, "args", mask(attrs != NULL ? op_get(attrs, PR_ARGS) : NULL));
 		op_set(o, "cwd", mask(attrs != NULL ? op_get(attrs, PR_CWD) : NULL));
 		op_set(o, "pin", mask(attrs != NULL ? op_get(attrs, PR_PIN) : NULL));

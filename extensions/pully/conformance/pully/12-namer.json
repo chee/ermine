@@ -1,0 +1,331 @@
+{
+	"title": "nothing host-only: a process names a node's provider, as whoever may edit its attributes; a namer refused edit of them names nothing. the sends go as the namer (the record's caller), protect asked execute as it: a namer refused execute gets no wake, and the refusal comes out of the pulse",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				"pully"
+			],
+			"deny": [
+				{
+					"op": "edit",
+					"path": "dev/cam",
+					"from": "code/two"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/cam",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/dev/cam",
+						{
+							"frame": 0
+						}
+					],
+					"as": "cam"
+				},
+				{
+					"do": [
+						"createAction",
+						"on/cam",
+						[
+							{
+								"do": [
+									"log",
+									"said",
+									[
+										"all",
+										"$0",
+										"$2"
+									]
+								]
+							}
+						],
+						[
+							"if",
+							[
+								"is",
+								"$0",
+								"check"
+							],
+							"fresh"
+						]
+					],
+					"as": "on"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "cam",
+			"at": "/code/cam",
+			"expect": {
+				"id": "proc:cam"
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/two",
+			"program": [
+				{
+					"do": [
+						"getNode",
+						"/dev/cam"
+					],
+					"as": "cam"
+				},
+				{
+					"do": [
+						"getNode",
+						"/code/cam/on/cam"
+					],
+					"as": "on"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "two",
+			"at": "/code/two",
+			"expect": {
+				"id": "proc:two"
+			}
+		},
+		{
+			"op": "do",
+			"process": "two",
+			"call": [
+				"provide",
+				"$cam",
+				"$on"
+			],
+			"fails": true,
+			"expect": {
+				"error": "refused"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"getStatus",
+				"/dev/cam"
+			],
+			"expect": {
+				"value": {
+					"state": "done"
+				}
+			}
+		},
+		{
+			"op": "ermine",
+			"features": [
+				"pully"
+			],
+			"deny": [
+				{
+					"op": "execute",
+					"from": "code/two"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/cam",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/dev/cam",
+						{
+							"frame": 0
+						}
+					],
+					"as": "cam"
+				},
+				{
+					"do": [
+						"createAction",
+						"on/cam",
+						[
+							{
+								"do": [
+									"log",
+									"said",
+									[
+										"all",
+										"$0",
+										"$2"
+									]
+								]
+							}
+						],
+						[
+							"if",
+							[
+								"is",
+								"$0",
+								"check"
+							],
+							"fresh"
+						]
+					],
+					"as": "on"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "cam",
+			"at": "/code/cam",
+			"expect": {
+				"id": "proc:cam"
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/two",
+			"program": [
+				{
+					"do": [
+						"getNode",
+						"/dev/cam"
+					],
+					"as": "cam"
+				},
+				{
+					"do": [
+						"getNode",
+						"/code/cam/on/cam"
+					],
+					"as": "on"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "two",
+			"at": "/code/two",
+			"expect": {
+				"id": "proc:two"
+			}
+		},
+		{
+			"op": "do",
+			"process": "two",
+			"call": [
+				"provide",
+				"$cam",
+				"$on"
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"getStatus",
+				"/dev/cam"
+			],
+			"expect": {
+				"value": {
+					"state": "done",
+					"provider": "asleep"
+				}
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/r",
+			"program": [
+				{
+					"do": [
+						"getNode",
+						"/dev/cam"
+					],
+					"as": "cam"
+				},
+				{
+					"do": [
+						"ensureNode",
+						"on",
+						true
+					],
+					"as": "on"
+				},
+				{
+					"do": [
+						"createEffect",
+						"see",
+						[
+							"if",
+							[
+								"read",
+								"$on"
+							],
+							[
+								"all",
+								[
+									"read",
+									"$cam"
+								],
+								[
+									"each",
+									[
+										"all",
+										[
+											"getStatus",
+											"$cam"
+										]
+									],
+									[
+										"provider"
+									]
+								]
+							]
+						],
+						"seen-r"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "r",
+			"at": "/code/r",
+			"fails": true,
+			"expect": {
+				"error": "refused"
+			}
+		},
+		{
+			"op": "log",
+			"name": "said",
+			"expect": {
+				"values": []
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"getStatus",
+				"/dev/cam"
+			],
+			"expect": {
+				"value": {
+					"state": "done",
+					"provider": "waking"
+				}
+			}
+		}
+	]
+}

@@ -1,0 +1,169 @@
+{
+	"title": "getCaller(), in an action: who called it [chee 10-25: \"oh well, it should\"]: the actor its writes carry, and its process's node by path as the action sees it (none: outside the action's box; the host, as caller, none placed); outside an action: undefined. a boxed process is no node at its path from outside its box (its row is its box's), so an action outside sees it as none; one in the same box sees it by its path there",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/system/s",
+			"program": [
+				{
+					"do": [
+						"createAction",
+						"on/who",
+						[],
+						[
+							"getCaller"
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "s",
+			"at": "/system/s",
+			"expect": {
+				"id": "proc:s"
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/q",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/code/q",
+			"expect": {
+				"id": "proc:q"
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"executeAction",
+				"/system/s/on/who"
+			],
+			"expect": {
+				"value": {
+					"actor": "test",
+					"process": [
+						"code",
+						"q"
+					]
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/system/s/on/who"
+			],
+			"expect": {
+				"value": {
+					"actor": "test"
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "s",
+			"call": [
+				"getCaller"
+			],
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"name": "b",
+			"at": "/boxes/b",
+			"expect": {}
+		},
+		{
+			"op": "boxplace",
+			"name": "b",
+			"at": "/system/s",
+			"path": "/system/s",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/boxes/b/code/r",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "r",
+			"at": "/code/r",
+			"box": "b",
+			"expect": {
+				"id": "proc:r"
+			}
+		},
+		{
+			"op": "do",
+			"process": "r",
+			"call": [
+				"executeAction",
+				"/system/s/on/who"
+			],
+			"expect": {
+				"value": {
+					"actor": "test"
+				}
+			}
+		},
+		{
+			"op": "code",
+			"at": "/boxes/b/code/t",
+			"program": [
+				{
+					"do": [
+						"createAction",
+						"on/who",
+						[],
+						[
+							"getCaller"
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "t",
+			"at": "/code/t",
+			"box": "b",
+			"expect": {
+				"id": "proc:t"
+			}
+		},
+		{
+			"op": "do",
+			"process": "r",
+			"call": [
+				"executeAction",
+				"/code/t/on/who"
+			],
+			"expect": {
+				"value": {
+					"actor": "test",
+					"process": [
+						"code",
+						"r"
+					]
+				}
+			}
+		}
+	]
+}

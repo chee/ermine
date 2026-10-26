@@ -39,12 +39,12 @@
 //   await h.load()
 //   await h.snapshot()
 //   h.versions(node, "value")   // [{ value, from: { heads } }, …]
-import createEntry, { type ChangeHeader } from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import apply, { type Patch } from "@ermine/op/apply"
+import createEntry, { type ChangeHeader } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import apply, { type Patch } from "@ermine/core/op/apply"
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
 import type { Places } from "@ermine/places"
-import type { Key, Table } from "@ermine/table"
+import type { Key, Table } from "@ermine/core/table"
 import { decodeStep, type On, same, type Step } from "./step.ts"
 import type { Log } from "./log.ts"
 import type { Sync } from "./sync.ts"

@@ -7,9 +7,9 @@
 // copy-on-write apply gives; a folder's map is copied at most once per burst of writes, and only
 // when a run kept it since the last write. 1 to 10k names, a few dozen seeds each
 import { assert, assertEquals } from "@std/assert"
-import createEntry, { type Entry } from "@ermine/node/entry"
-import apply, { ApplyError, type Patch } from "@ermine/op/apply"
-import { createScheduler } from "@ermine/scheduler"
+import createEntry, { type Entry } from "@ermine/core/node/entry"
+import apply, { ApplyError, type Patch } from "@ermine/core/op/apply"
+import { createScheduler } from "@ermine/core/scheduler"
 import { rand } from "../../../conformance/typescript/rand.ts"
 import { show, sorted } from "./model_harness.ts"
 import { text } from "./random_harness.ts"

@@ -8,7 +8,7 @@
 //   values, and bytes near a blop's (non-canonical rewrites, cut, grown, flipped)
 // a few dozen seeds (fuzz runs small; SEEDS for more). today's rules: see fuzz_values.ts
 import { assert, assertEquals } from "@std/assert"
-import { blake3 } from "@ermine/blake3"
+import { blake3 } from "@ermine/core/blake3"
 import * as cbor from "@ermine/encoding/cbor"
 import { type Blop, decode, encode, name } from "./blop.ts"
 import { toJson } from "../../../conformance/typescript/form.ts"

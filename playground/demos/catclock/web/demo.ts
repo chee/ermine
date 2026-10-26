@@ -25,7 +25,7 @@ import { box, createBox } from "@ermine/boxes"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import { createChangeHeader } from "@ermine/places/header"
 import * as lib from "@ermine/places/lib"
-import { PENDING } from "@ermine/scheduler"
+import { PENDING } from "@ermine/core/scheduler"
 import { answer } from "../../devtools.ts"
 
 const $ = <T extends Element = HTMLElement>(q: string) => document.querySelector(q) as T

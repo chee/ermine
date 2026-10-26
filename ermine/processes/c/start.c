@@ -244,7 +244,8 @@ typedef struct {
 	const pr_options *o;
 } starting;
 
-// the node's one attributes entry: options.attributes' pairs, then processes' own over them
+// the node's one attributes entry: options.attributes' pairs, then processes' own over them; its
+// status its status table entry
 static void make_attributes(void *data) {
 	starting *c = data;
 	pr_process *p = c->p;
@@ -266,12 +267,27 @@ static void make_attributes(void *data) {
 	if (c->o->has_args) op_set(attrs, PR_ARGS, names_value(p->args, p->nargs));
 	op_set(attrs, PR_CWD, names_value(p->cwd, p->ncwd));
 	if (c->o->pin != NULL) op_set(attrs, PR_PIN, op_ref((op_value *)c->o->pin));
-	op_set(attrs, CST_ATTRIBUTE, op_stand(op_str(PENDING_NAME)));
 	nd_entry *node = nd_make_entry(attrs, &h);
 	op_free(attrs);
 	pl_own(s->s.places, node);
 	pl_hold(s->s.places, node, made, pl_made_free);
 	tb_add(s->s.table, tb_string("attributes"), tb_string(p->id), node);
+	// its status PENDING, in the status table, not its attributes (places' status.h): a header of
+	// its own, as the entry borrows it
+	ch_header sh;
+	pl_made *smade;
+	bad = pl_header(s->s.places, NULL, 0, p->site.file != NULL ? &p->site : NULL, &sh, &smade);
+	if (bad != NULL) {
+		free(bad);
+		return;
+	}
+	op_value *st = op_map();
+	op_set(st, CST_ATTRIBUTE, op_stand(op_str(PENDING_NAME)));
+	nd_entry *status = nd_make_entry(st, &sh);
+	op_free(st);
+	pl_own(s->s.places, status);
+	pl_hold(s->s.places, status, smade, pl_made_free);
+	tb_add(s->s.table, tb_string(CST_TABLE), tb_string(p->id), status);
 }
 
 static void call_body(void *data) {

@@ -2,12 +2,12 @@
 // phone: a world of its own (its table, places, scheduler), joined to the laptop's by a pair of
 // channels (and a BroadcastChannel, so this example open in another tab shows up here). both
 // devices' rows are this host's, handed over by extend: a program cannot make a world
-import createEntry from "@ermine/node/entry"
+import createEntry from "@ermine/core/node/entry"
 import { createPlaces } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
-import { createScheduler } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable } from "@ermine/table"
+import { createScheduler } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable } from "@ermine/core/table"
 import { createWorld } from "@ermine/slaygrounds/world"
 import {
 	clear,

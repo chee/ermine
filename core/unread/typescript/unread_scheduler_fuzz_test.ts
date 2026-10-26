@@ -11,9 +11,9 @@
 // await, written while it waits), a run that writes the entry after it read (its own write, in
 // place: what it returns is taken as it is at its return, so that write shows in it)
 import { assert } from "@std/assert"
-import createEntry, { type Entry } from "@ermine/node/entry"
-import apply, { ApplyError, type Key, type Patch } from "@ermine/op/apply"
-import { createScheduler } from "@ermine/scheduler"
+import createEntry, { type Entry } from "@ermine/core/node/entry"
+import apply, { ApplyError, type Key, type Patch } from "@ermine/core/op/apply"
+import { createScheduler } from "@ermine/core/scheduler"
 import { rand } from "../../../conformance/typescript/rand.ts"
 import { at, container, show, sorted } from "./model_harness.ts"
 import { made, patch, paths } from "./random_harness.ts"

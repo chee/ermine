@@ -2,10 +2,10 @@
 // none; a second contributor going by path (a map of rows in a value entry, a stand-in for
 // ermine/processes) answers first, and its names merge with children's
 import { assertEquals } from "@std/assert"
-import createEntry from "@ermine/node/entry"
-import { createScheduler } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/table"
+import createEntry from "@ermine/core/node/entry"
+import { createScheduler } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Id, type Key } from "@ermine/core/table"
 import { asId, children, type Contributor, createPlaces, none } from "./places.ts"
 import { get, gets, list, lookup, members } from "./lib.ts"
 import { createChangeHeader } from "./header.ts"

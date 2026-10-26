@@ -7,20 +7,20 @@
 //     under the sender's name. "gone" is until lapsing, never the transport
 //   - never saved, unless the host says so (save, below): saving is a side's choice
 import { decode, encode } from "@ermine/encoding/cbor"
-import createEntry from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import type { Patch } from "@ermine/op/apply"
+import createEntry from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import type { Patch } from "@ermine/core/op/apply"
 import { createChangeHeader } from "@ermine/places/header"
 import { upsert } from "@ermine/places/upsert"
 import type { Id, Places } from "@ermine/places"
-import type { Scheduler, Scope } from "@ermine/scheduler"
-import type { Table } from "@ermine/table"
+import type { Scheduler, Scope } from "@ermine/core/scheduler"
+import type { Table } from "@ermine/core/table"
 import type { Channel } from "./channel.ts"
 
 export type Row = { value: unknown; until: number }
 export type Live = { who: string; value: unknown; until: number }
 
-declare module "@ermine/table" {
+declare module "@ermine/core/table" {
 	interface Tables {
 		presence: Record<string, Row>
 	}

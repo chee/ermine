@@ -13,7 +13,7 @@
 //    computer and effect runs again
 // { op: "site", name }                        → { site }   whether the scope has a site of its own
 // { op: "chain", name }                       → { length } how many sites its chain has
-import { createScheduler, type Scope } from "@ermine/scheduler"
+import { createScheduler, type Scope } from "@ermine/core/scheduler"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { createSites } from "./sites.ts"
 

@@ -5,7 +5,7 @@
 // the install's signature over the two keys (vouch), so whoever trusts the install's key can trust
 // what the session signs. what is signed: "ermine/v1/session", the install's key, the session's key
 //
-//   const session = await startSession(install, ed25519)   // ed25519: @ermine/ed25519, or the
+//   const session = await startSession(install, ed25519)   // ed25519: @ermine/core/ed25519, or the
 //   // host's; { id, install, key, secret, vouch }
 //   await vouched(session, ed25519)                          // true: the install vouched for it
 //
@@ -23,16 +23,16 @@
 // a beat is not signed: it says a session is here, not proves it (a beat carried is the carrier's
 // to check, by the session's key)
 import { bytes, kind, text } from "@ermine/ids"
-import type { ChangeHeader, Entry } from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import type { Patch } from "@ermine/op/apply"
+import type { ChangeHeader, Entry } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import type { Patch } from "@ermine/core/op/apply"
 import type { Id, Places } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
 import { upsert } from "@ermine/places/upsert"
-import type { Scheduler, Scope } from "@ermine/scheduler"
-import type { Table } from "@ermine/table"
+import type { Scheduler, Scope } from "@ermine/core/scheduler"
+import type { Table } from "@ermine/core/table"
 
-declare module "@ermine/table" {
+declare module "@ermine/core/table" {
 	interface Tables {
 		online: Record<string, Beat>
 	}
@@ -48,7 +48,7 @@ export type Session = {
 	readonly secret: Uint8Array
 	readonly vouch: Uint8Array
 }
-// what a session needs of Ed25519 (@ermine/ed25519 is one)
+// what a session needs of Ed25519 (@ermine/core/ed25519 is one)
 export type Signing = {
 	publicKeyOf: (secret: Uint8Array) => Uint8Array | Promise<Uint8Array>
 	sign: (secret: Uint8Array, message: Uint8Array) => Uint8Array | Promise<Uint8Array>

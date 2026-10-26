@@ -1,0 +1,326 @@
+{
+	"title": "two readers, one wake; one stopping its read leaves it awake, the last stopping (in a run: sent as the pulse ends) puts it to sleep, asleep, its value kept",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				"pully"
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/cam",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/dev/cam",
+						{
+							"frame": 0
+						}
+					],
+					"as": "cam"
+				},
+				{
+					"do": [
+						"createAction",
+						"on/cam",
+						[
+							{
+								"do": [
+									"log",
+									"said",
+									[
+										"all",
+										"$0",
+										"$2"
+									]
+								]
+							}
+						],
+						[
+							"if",
+							[
+								"is",
+								"$0",
+								"check"
+							],
+							"fresh"
+						]
+					],
+					"as": "on"
+				},
+				{
+					"do": [
+						"provide",
+						"$cam",
+						"$on"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "cam",
+			"at": "/code/cam",
+			"expect": {
+				"id": "proc:cam"
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/a",
+			"program": [
+				{
+					"do": [
+						"getNode",
+						"/dev/cam"
+					],
+					"as": "cam"
+				},
+				{
+					"do": [
+						"ensureNode",
+						"on",
+						true
+					],
+					"as": "on"
+				},
+				{
+					"do": [
+						"createEffect",
+						"see",
+						[
+							"if",
+							[
+								"read",
+								"$on"
+							],
+							[
+								"all",
+								[
+									"read",
+									"$cam"
+								],
+								[
+									"each",
+									[
+										"all",
+										[
+											"getStatus",
+											"$cam"
+										]
+									],
+									[
+										"provider"
+									]
+								]
+							]
+						],
+						"seen-a"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/b",
+			"program": [
+				{
+					"do": [
+						"getNode",
+						"/dev/cam"
+					],
+					"as": "cam"
+				},
+				{
+					"do": [
+						"ensureNode",
+						"on",
+						true
+					],
+					"as": "on"
+				},
+				{
+					"do": [
+						"createEffect",
+						"see",
+						[
+							"if",
+							[
+								"read",
+								"$on"
+							],
+							[
+								"all",
+								[
+									"read",
+									"$cam"
+								],
+								[
+									"each",
+									[
+										"all",
+										[
+											"getStatus",
+											"$cam"
+										]
+									],
+									[
+										"provider"
+									]
+								]
+							]
+						],
+						"seen-b"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"at": "/code/a",
+			"expect": {
+				"id": "proc:a"
+			}
+		},
+		{
+			"op": "start",
+			"name": "b",
+			"at": "/code/b",
+			"expect": {
+				"id": "proc:b"
+			}
+		},
+		{
+			"op": "do",
+			"process": "cam",
+			"call": [
+				"patch",
+				"$cam",
+				[
+					{
+						"path": [],
+						"value": {
+							"frame": 1
+						}
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "said",
+			"expect": {
+				"values": [
+					[
+						"wake",
+						"n11"
+					]
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "a",
+			"call": [
+				"patch",
+				"$on",
+				[
+					{
+						"path": [],
+						"value": false
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "said",
+			"expect": {
+				"values": [
+					[
+						"wake",
+						"n11"
+					]
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"getStatus",
+				"/dev/cam"
+			],
+			"expect": {
+				"value": {
+					"state": "done",
+					"provider": "awake"
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "b",
+			"call": [
+				"patch",
+				"$on",
+				[
+					{
+						"path": [],
+						"value": false
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "said",
+			"expect": {
+				"values": [
+					[
+						"wake",
+						"n11"
+					],
+					[
+						"sleep",
+						null
+					]
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"getStatus",
+				"/dev/cam"
+			],
+			"expect": {
+				"value": {
+					"state": "done",
+					"provider": "asleep"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/dev/cam"
+			],
+			"expect": {
+				"value": {
+					"frame": 1
+				}
+			}
+		}
+	]
+}

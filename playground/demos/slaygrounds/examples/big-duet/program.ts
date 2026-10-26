@@ -1,6 +1,6 @@
 /** @jsxImportSource ermine-h */
 import type { API } from "@ermine/api"
-import { count } from "@ermine/util/walk-string"
+import { count } from "@ermine/core/util/walk-string"
 import { bind, handler } from "ermine-h"
 
 // big-duet: two people, one text. /text is one string node; duet owns it and its one handler,

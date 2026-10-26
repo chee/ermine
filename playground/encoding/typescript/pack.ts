@@ -26,9 +26,9 @@
 // once written): not a pack.
 import * as cbor from "@ermine/encoding/cbor"
 import { deflate, DeflateError, inflate } from "./deflate.ts"
-import createEntry, { type ChangeHeader, type Entry as NodeEntry } from "@ermine/node/entry"
-import type { Patch, Target } from "@ermine/op/apply"
-import type { FileLocation } from "@ermine/util/stacktrace"
+import createEntry, { type ChangeHeader, type Entry as NodeEntry } from "@ermine/core/node/entry"
+import type { Patch, Target } from "@ermine/core/op/apply"
+import type { FileLocation } from "@ermine/core/util/stacktrace"
 
 export type Key = string | symbol
 

@@ -1,10 +1,10 @@
 // processes at paths on a real scheduler, table and places given [processes(R), children]: read
 // through lib.ts, and through the path cache. numbers are printed with -- -v
 import { assert, assertEquals, assertThrows } from "@std/assert"
-import createEntry from "@ermine/node/entry"
-import { type Computer, createScheduler } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/table"
+import createEntry from "@ermine/core/node/entry"
+import { type Computer, createScheduler } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Id, type Key } from "@ermine/core/table"
 import { children, type Contributor, createPlaces, PlacesError, rename } from "@ermine/places"
 import { get, gets, list, lookup, members } from "@ermine/places/lib"
 import { createChangeHeader } from "@ermine/places/header"

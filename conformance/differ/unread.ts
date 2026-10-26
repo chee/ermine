@@ -9,7 +9,7 @@
 // nothing-written as nothing landed, the undo undoes.
 // wild: patches of no patch's shape, values that are no JSON form, an unwrite with nothing
 // written, odd paths for mark and keep. half the seeds have the keys made tricky (kit.ts)
-import apply, { ApplyError, type Patch } from "@ermine/op/apply"
+import apply, { ApplyError, type Patch } from "@ermine/core/op/apply"
 import { isMap, made, patch, paths } from "../../core/unread/typescript/random_harness.ts"
 import { wildPatches } from "./apply.ts"
 import {

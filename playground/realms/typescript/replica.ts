@@ -16,8 +16,8 @@
 //   r.point(root); r.loaded(root)
 //
 // bad: a part that won't cross: its stand-in's value, read, throws a plain Error saying why
-import { PENDING, type Scheduler } from "@ermine/scheduler"
-import { createTable, type Event, type Id, type Key, type Table } from "@ermine/table"
+import { PENDING, type Scheduler } from "@ermine/core/scheduler"
+import { createTable, type Event, type Id, type Key, type Table } from "@ermine/core/table"
 
 type State = "pointed" | "loading" | "loaded"
 

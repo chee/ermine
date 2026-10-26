@@ -20,7 +20,7 @@ import { PIN } from "@ermine/processes/start"
 import type { Box } from "@ermine/boxes"
 import * as lib from "@ermine/places/lib"
 import { STATUS } from "@ermine/places/status"
-import { PENDING } from "@ermine/scheduler"
+import { PENDING } from "@ermine/core/scheduler"
 
 type Id = string | symbol
 type Member = { readonly name: string; readonly id: Id; readonly from?: string }

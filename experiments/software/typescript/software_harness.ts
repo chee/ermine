@@ -68,14 +68,14 @@
 // { op: "loads" }                                    -> { loads, unloads }   in order
 // { op: "told" }                                     -> { told }   teller's teardowns, in order
 // { op: "order" }                                    -> { order }   every runner's event, in order
-import createEntry from "@ermine/node/entry"
-import { createScheduler, PENDING, type Scope } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/table"
+import createEntry from "@ermine/core/node/entry"
+import { createScheduler, PENDING, type Scope } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Id, type Key } from "@ermine/core/table"
 import { children, createPlaces, type Places, PlacesError } from "@ermine/places"
 import { get, list } from "@ermine/places/lib"
 import { createChangeHeader } from "@ermine/places/header"
-import { STATUS } from "@ermine/places/status"
+import { STATUS, TABLE as STATUS_TABLE } from "@ermine/places/status"
 import { type Address, type Box, createBox } from "@ermine/boxes"
 import { processes as trie } from "@ermine/processes"
 import { createProcesses, type Process } from "@ermine/processes/start"
@@ -505,12 +505,12 @@ async function answer(r: Request): Promise<Json> {
 			const id = take(String(r.id))
 			const parts = table.get(id).map(([k]) => k).sort()
 			const a = table.get("attributes", id)
-			let attributes: Json = null, state: Json = null
-			if (a !== undefined) {
-				const { [STATUS]: was, ...rest } = isMap(a.value) ? a.value : {}
-				attributes = plain(rest)
-				state = status(was)
-			}
+			// its status: the status table's (places' status.ts), not its attributes
+			const st = table.get(STATUS_TABLE, id)
+			const attributes: Json = a === undefined ? null : plain(isMap(a.value) ? a.value : {})
+			const state: Json = st === undefined
+				? null
+				: status(isMap(st.value) ? st.value[STATUS] : undefined)
 			const c = table.get("children", id)
 			return {
 				parts,

@@ -1,0 +1,112 @@
+{
+	"title": "box(at), a program's: what the word promises (a box: the folder at, seen from its own \"/\") and no more: its root's id, its path, and place and unplace. no places, so nothing that reads by any id, watches everything or commits unasked. the host's ermine.start takes the handle as the box",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createBox",
+						"./b"
+					],
+					"as": "b"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"keys",
+				"$b"
+			],
+			"expect": {
+				"value": [
+					"at",
+					"place",
+					"unplace"
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"log",
+				"b",
+				[
+					"each",
+					[
+						"all",
+						"$b"
+					],
+					[
+						"at"
+					]
+				]
+			],
+			"expect": {
+				"value": [
+					[
+						"code",
+						"b"
+					]
+				]
+			}
+		},
+		{
+			"op": "box",
+			"name": "q",
+			"at": "/boxes/q",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/boxes/q/code/r",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/x",
+						1
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "r",
+			"at": "/code/r",
+			"box": "q",
+			"expect": {
+				"id": "proc:r"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"boxes",
+				"q",
+				"x"
+			],
+			"expect": {
+				"id": "n6"
+			}
+		}
+	]
+}

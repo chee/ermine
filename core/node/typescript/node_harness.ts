@@ -27,8 +27,8 @@
 //    metadata that is not an object (a list, null, ...); a value whose JSON form stands
 //    for none (form.ts fromJson's refusals: bad base64 or padding, an element out of its kind's
 //    range, an unknown kind, a "/" map that is no form), at any depth, in any table: nothing made
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
-import createNode from "@ermine/node"
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
+import createNode from "@ermine/core/node"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"
 

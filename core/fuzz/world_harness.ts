@@ -2,8 +2,8 @@
 // it, random writes through places' write functions, and now and then a table event (a children
 // entry put in place of another, taken out, put back). places tells its reads and what changed to
 // the scheduler; here that is two hooks: told, each spot read; marked, each spot said changed
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
-import { createTable, type Id, type Tables } from "@ermine/table"
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
+import { createTable, type Id, type Tables } from "@ermine/core/table"
 import {
 	createPlaces,
 	move,
@@ -14,7 +14,7 @@ import {
 	rename,
 	unplace,
 } from "@ermine/places"
-import { createPaths, type Spot } from "@ermine/scheduler/paths"
+import { createPaths, type Spot } from "@ermine/core/scheduler/paths"
 import type { Pick } from "./gen_harness.ts"
 
 // any value goes in children here, on purpose: places takes what is not an id as taken

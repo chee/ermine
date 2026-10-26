@@ -1,0 +1,46 @@
+{
+	"title": "namesOf: every name a node has now, the latest placed last; a rename, an unplace, a name put over, an entry replaced or taken out all followed",
+	"steps": [
+		{ "op": "kids", "id": "R", "value": { "a": "A", "b": "B" }, "expect": {} },
+		{ "op": "kids", "id": "A", "value": { "x": "X" }, "expect": {} },
+		{ "op": "kids", "id": "B", "value": {}, "expect": {} },
+		{ "op": "namesOf", "id": "X", "expect": { "names": [{ "folder": "A", "name": "x" }] } },
+		{ "op": "namesOf", "id": "A", "expect": { "names": [{ "folder": "R", "name": "a" }] } },
+		{ "op": "place", "at": "B", "name": "copy", "id": "X", "expect": {} },
+		{
+			"op": "namesOf",
+			"id": "X",
+			"expect": { "names": [{ "folder": "A", "name": "x" }, { "folder": "B", "name": "copy" }] }
+		},
+		{ "op": "rename", "at": "A", "name": "x", "to": "y", "expect": {} },
+		{
+			"op": "namesOf",
+			"id": "X",
+			"expect": { "names": [{ "folder": "B", "name": "copy" }, { "folder": "A", "name": "y" }] }
+		},
+		{ "op": "move", "at": "B", "name": "copy", "to": { "at": "R", "name": "top" }, "expect": {} },
+		{
+			"op": "namesOf",
+			"id": "X",
+			"expect": { "names": [{ "folder": "A", "name": "y" }, { "folder": "R", "name": "top" }] }
+		},
+		{ "op": "unplace", "at": "A", "name": "y", "expect": {} },
+		{ "op": "namesOf", "id": "X", "expect": { "names": [{ "folder": "R", "name": "top" }] } },
+		{
+			"op": "edit",
+			"part": "children",
+			"id": "R",
+			"patches": [{ "path": ["top"], "value": "Z" }],
+			"expect": {}
+		},
+		{ "op": "namesOf", "id": "X", "expect": { "names": [] } },
+		{ "op": "namesOf", "id": "Z", "expect": { "names": [{ "folder": "R", "name": "top" }] } },
+		{ "op": "kids", "id": "R", "value": { "a": "A", "again": "X" }, "expect": {} },
+		{ "op": "namesOf", "id": "B", "expect": { "names": [] } },
+		{ "op": "namesOf", "id": "Z", "expect": { "names": [] } },
+		{ "op": "namesOf", "id": "X", "expect": { "names": [{ "folder": "R", "name": "again" }] } },
+		{ "op": "del", "part": "children", "id": "R", "expect": {} },
+		{ "op": "namesOf", "id": "X", "expect": { "names": [] } },
+		{ "op": "namesOf", "id": "A", "expect": { "names": [] } }
+	]
+}

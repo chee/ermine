@@ -2,7 +2,7 @@
 // not give a program: the path cache (a cache per path in front of the places) and a sync landing,
 // handed over by extend. a process running at a path answers there before what is saved: the
 // world's places already ask the process trie first
-import createEntry from "@ermine/node/entry"
+import createEntry from "@ermine/core/node/entry"
 import { createPathCache } from "@ermine/places/cache"
 import { createChangeHeader } from "@ermine/places/header"
 import { createWorld } from "@ermine/slaygrounds/world"

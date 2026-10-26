@@ -8,8 +8,8 @@
 // the scheduler knows no table, so the map is kept here, beside it.
 // core candidate: the scheduler's teardown could take a NODE key's entries, instead of a map and a
 // teardown registered from outside
-import type { Scheduler, Scope } from "@ermine/scheduler"
-import type { Id, Key, Table } from "@ermine/table"
+import type { Scheduler, Scope } from "@ermine/core/scheduler"
+import type { Id, Key, Table } from "@ermine/core/table"
 
 export type Setup = {
 	scheduler: Pick<Scheduler, "registerTeardown">

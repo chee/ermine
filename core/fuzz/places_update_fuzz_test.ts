@@ -8,9 +8,9 @@
 //     the names holding ids
 // a few dozen seeds (fuzz runs small)
 import { assert, assertEquals, assertStrictEquals } from "@std/assert"
-import apply from "@ermine/op/apply"
-import createEntry, { type Entry } from "@ermine/node/entry"
-import { createTable } from "@ermine/table"
+import apply from "@ermine/core/op/apply"
+import createEntry, { type Entry } from "@ermine/core/node/entry"
+import { createTable } from "@ermine/core/table"
 import { move, PlacesError } from "@ermine/places"
 import { differ, isMap, rand, snap } from "./gen_harness.ts"
 import { createWorld, show, type Wrote } from "./world_harness.ts"

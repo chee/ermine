@@ -10,8 +10,8 @@
 //   a write again where the last one wrote, with nothing read or kept since, makes none
 // a failing run shrinks to its fewest steps (and fewest patches in each). steps are data: a value
 // put is content (cloned as it is put) or a reference to something handed earlier (aliasing)
-import apply, { ApplyError, type Key, type Patch } from "@ermine/op/apply"
-import createEntry, { type Entry } from "@ermine/node/entry"
+import apply, { ApplyError, type Key, type Patch } from "@ermine/core/op/apply"
+import createEntry, { type Entry } from "@ermine/core/node/entry"
 import { createUnread, type Unread } from "./unread.ts"
 
 // a value put: content, something handed earlier (at a path in it), or the value the j-th patch

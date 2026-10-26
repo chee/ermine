@@ -39,14 +39,14 @@
 // { op: "dlopen", id }           -> {}  value: the dlopen runner (dlopen.ts), its api
 //    createProcessAPI's; native gets { ctx, write(ctx, bytes, n) }
 // { op: "native" }               -> { loads, compiles, files, signed, wrote }
-import createEntry, { type Entry } from "@ermine/node/entry"
-import { createScheduler, PENDING } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/table"
+import createEntry, { type Entry } from "@ermine/core/node/entry"
+import { createScheduler, PENDING } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Id, type Key } from "@ermine/core/table"
 import { children, createPlaces, type Places, PlacesError } from "@ermine/places"
 import { get, lookup } from "@ermine/places/lib"
 import { createChangeHeader } from "@ermine/places/header"
-import { STATUS } from "@ermine/places/status"
+import { STATUS, TABLE as STATUS_TABLE } from "@ermine/places/status"
 import { type Address, type Box, box, createBox, inside, unbox } from "@ermine/boxes"
 import { processes } from "@ermine/processes"
 import { createScopeNodes } from "@ermine/processes/scopes"
@@ -282,7 +282,7 @@ function processOf(name: unknown): Process {
 const settled = () => new Promise((r) => setTimeout(r, 0))
 // a process started is pending
 const busy = () =>
-	[...started.values()].some((p) => table.get("attributes", p.id)?.value?.[STATUS] === PENDING)
+	[...started.values()].some((p) => table.get(STATUS_TABLE, p.id)?.value?.[STATUS] === PENDING)
 
 // the search's own whynot as satisfy's or openwith's refusal was before they were generators
 function refused(r: Refusal, why: readonly Why[]): Json {
@@ -422,7 +422,7 @@ async function answer(r: Request): Promise<Json> {
 			const attrs = table.get("attributes", id)?.value ?? {}
 			return {
 				parts: table.get(id).map(([k]) => k).sort(),
-				status: shown(attrs[STATUS]),
+				status: shown(table.get(STATUS_TABLE, id)?.value?.[STATUS]),
 				args: plain(attrs[ARGS]),
 				cwd: plain(attrs[CWD]),
 				pin: plain(attrs[PIN]),

@@ -4,7 +4,7 @@
 // effect, the pond picture a plain one. each change is a pulse, recorded through the scheduler's
 // listeners, then replayed step by step on the board itself: who is due, who runs, who stops
 // because its result is equal, and which queue the pulse is in
-import { type Computer, createScheduler, type Ended } from "@ermine/scheduler"
+import { type Computer, createScheduler, type Ended } from "@ermine/core/scheduler"
 import { pondPage } from "../kit/page.ts"
 import type { Box, Tone, Wire } from "../kit/board.ts"
 import { chart, createPond, pixels } from "../kit/sprites.ts"
@@ -31,7 +31,7 @@ const page = pondPage("rounds", {
 		<p><b>Another round:</b> an act can write. The sign writes <code>anglers</code>, which the pond reads. The pond is due again, so it does not act on its old answer: it runs and draws in the next round.</p>
 		<p><b>Stopped:</b> a run that reads a key whose writer is due stops, stays due, and waits after that writer. You see it while things are being made, before any rank is known. An early effect runs the moment it is made.</p>`,
 	real:
-		`Runs the real <code>@ermine/scheduler</code>: createScheduler, a root scope, createComputer, createEffect, track, mark and pulse. The replay is recorded from its listeners (onMark, onRunStart, onRunReturn, onRunEnd, onEffect). The page keeps the store, draws the pictures, places the boxes in their rank columns, and names the lanes and rounds from the order things were told: a run after an act starts a new round; an act is early when its effect is.`,
+		`Runs the real <code>@ermine/core/scheduler</code>: createScheduler, a root scope, createComputer, createEffect, track, mark and pulse. The replay is recorded from its listeners (onMark, onRunStart, onRunReturn, onRunEnd, onEffect). The page keeps the store, draws the pictures, places the boxes in their rank columns, and names the lanes and rounds from the order things were told: a run after an act starts a new round; an act is early when its effect is.`,
 })
 const { board } = page
 

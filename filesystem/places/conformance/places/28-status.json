@@ -18,7 +18,9 @@
 		{
 			"op": "root",
 			"name": "o",
-			"info": { "actor": "o" },
+			"info": {
+				"actor": "o"
+			},
 			"expect": {}
 		},
 		{
@@ -159,7 +161,7 @@
 		},
 		{
 			"op": "node",
-			"part": "attributes",
+			"part": "status",
 			"id": "N",
 			"expect": {}
 		},

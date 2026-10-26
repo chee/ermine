@@ -2,11 +2,11 @@
 // entry under any number of keys. what a table name or an id means is a layer above's. one
 // listener, given at making, is told of every table event, after it landed: an entry added,
 // replaced or taken out at a key (the same entry again is nothing, and no event)
-import type { Entry } from "@ermine/node/entry"
+import type { Entry } from "@ermine/core/node/entry"
 
 // the tables, each a name and the shape of the value under it. open: a package adds its own by
 // declaration merging, as jsx's IntrinsicElements are added to:
-//   declare module "@ermine/table" { interface Tables { run: Run } }
+//   declare module "@ermine/core/table" { interface Tables { run: Run } }
 // the table checks no name and no shape
 export interface Tables {
 	value: unknown

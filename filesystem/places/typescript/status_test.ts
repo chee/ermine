@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertInstanceOf } from "@std/assert"
-import { createTable, type Key } from "@ermine/table"
-import { createScheduler, PENDING as WAIT } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
+import { createTable, type Key } from "@ermine/core/table"
+import { createScheduler, PENDING as WAIT } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
 import { createPlaces } from "./places.ts"
 import { createStatus, isPending, PENDING, status } from "./status.ts"
 
@@ -67,7 +67,7 @@ Deno.test("status: a computation returning the scheduler's PENDING is pending to
 	s.runWithScope(o, () => s.createComputer(() => WAIT, () => {}))
 	s.pulse()
 	assertEquals(status(places, "C"), PENDING)
-	// only C has attributes
-	assert(table.get("attributes", "C") !== undefined)
-	assertEquals([...table.get("C")].map(([part]) => part), ["attributes"])
+	// only C has a status, in the status table (not its attributes)
+	assert(table.get("status", "C") !== undefined)
+	assertEquals([...table.get("C")].map(([part]) => part), ["status"])
 })

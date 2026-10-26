@@ -18,9 +18,9 @@
 //
 // not across yet: start and stop, presence, patch nodes' overlay, live values, iframes
 // costs (measure.ts): startup 33–50 ms, a first read 3–7 ms, a rerun round trip ~0.7 ms
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import apply, { type Patch } from "@ermine/op/apply"
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import apply, { type Patch } from "@ermine/core/op/apply"
 import type { API } from "@ermine/api"
 import { type Path, unplace } from "@ermine/places"
 import { get } from "@ermine/places/lib"
@@ -30,8 +30,8 @@ import { STATUS } from "@ermine/places/status"
 import type { Context } from "@ermine/processes/start"
 import type { Handle, Runner } from "@ermine/software"
 import type { Policy } from "@ermine/protect"
-import { PENDING, type Scope } from "@ermine/scheduler"
-import type { Key } from "@ermine/table"
+import { PENDING, type Scope } from "@ermine/core/scheduler"
+import type { Key } from "@ermine/core/table"
 import { rebase } from "./rebase.ts"
 import {
 	decode,

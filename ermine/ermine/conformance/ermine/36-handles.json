@@ -1,0 +1,255 @@
+{
+	"title": "a node handle is a capability [chee 10-25: \"this is actually quite beautiful\"]: q, in a box, opens ./doc and sends its handle to an action outside its box; the action's edit through it reaches q's own node (resolved in q's box and cwd, as the handle carries them), not the action's ./doc, and is asked as q (a policy refusing q's edit refuses the action's edit through q's handle too)",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"name": "b",
+			"at": "/boxes/b",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/system/s",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./doc",
+						{
+							"saved": false
+						}
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"on/save",
+						[
+							{
+								"do": [
+									"patch",
+									"$0",
+									[
+										{
+											"path": [
+												"saved"
+											],
+											"value": true
+										}
+									]
+								]
+							}
+						],
+						"ok"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "s",
+			"at": "/system/s",
+			"expect": {
+				"id": "proc:s"
+			}
+		},
+		{
+			"op": "boxplace",
+			"name": "b",
+			"at": "/system/s",
+			"path": "/system/s",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/boxes/b/code/q",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./doc",
+						{
+							"saved": false
+						}
+					],
+					"as": "doc"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/code/q",
+			"box": "b",
+			"expect": {
+				"id": "proc:q"
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"executeAction",
+				"/system/s/on/save",
+				"$doc"
+			],
+			"expect": {
+				"value": "ok"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/boxes/b/code/doc"
+			],
+			"expect": {
+				"value": {
+					"saved": true
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/system/doc"
+			],
+			"expect": {
+				"value": {
+					"saved": false
+				}
+			}
+		},
+		{
+			"op": "ermine",
+			"deny": [
+				{
+					"op": "edit",
+					"path": "code/doc",
+					"from": "code/q"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"name": "b",
+			"at": "/boxes/b",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/system/s",
+			"program": [
+				{
+					"do": [
+						"createAction",
+						"on/save",
+						[
+							{
+								"do": [
+									"patch",
+									"$0",
+									[
+										{
+											"path": [
+												"saved"
+											],
+											"value": true
+										}
+									]
+								]
+							}
+						],
+						"ok"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "s",
+			"at": "/system/s",
+			"expect": {
+				"id": "proc:s"
+			}
+		},
+		{
+			"op": "boxplace",
+			"name": "b",
+			"at": "/system/s",
+			"path": "/system/s",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/boxes/b/code/q",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./doc",
+						{
+							"saved": false
+						}
+					],
+					"as": "doc"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/code/q",
+			"box": "b",
+			"expect": {
+				"id": "proc:q"
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"patch",
+				"$doc",
+				[]
+			],
+			"expect": {
+				"error": "refused"
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"executeAction",
+				"/system/s/on/save",
+				"$doc"
+			],
+			"expect": {
+				"error": "refused"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/boxes/b/code/doc"
+			],
+			"expect": {
+				"value": {
+					"saved": false
+				}
+			}
+		}
+	]
+}

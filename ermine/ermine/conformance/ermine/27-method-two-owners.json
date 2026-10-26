@@ -1,0 +1,125 @@
+{
+	"title": "one function placed as a method by two processes: each placement is its own, run under the scope open where it was placed (its process's), and stopping one leaves the other's working",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/a",
+			"program": [
+				{
+					"do": [
+						"share",
+						"/a/h",
+						"f"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/b",
+			"program": [
+				{
+					"do": [
+						"share",
+						"/b/h",
+						"f"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"at": "/code/a",
+			"expect": {
+				"id": "proc:a"
+			}
+		},
+		{
+			"op": "start",
+			"name": "b",
+			"at": "/code/b",
+			"expect": {
+				"id": "proc:b"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/a/h"
+			],
+			"expect": {
+				"value": "proc:a"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/b/h"
+			],
+			"expect": {
+				"value": "proc:b"
+			}
+		},
+		{
+			"op": "stop",
+			"name": "b",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/a/h"
+			],
+			"expect": {
+				"value": "proc:a"
+			}
+		},
+		{
+			"op": "stop",
+			"name": "a",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/c",
+			"program": [
+				{
+					"do": [
+						"share",
+						"/a/h",
+						"f"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "c",
+			"at": "/code/c",
+			"expect": {
+				"id": "proc:c"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/a/h"
+			],
+			"expect": {
+				"value": "proc:c"
+			}
+		}
+	]
+}

@@ -218,7 +218,8 @@
 			"name": "a",
 			"expect": {
 				"parts": [
-					"attributes"
+					"attributes",
+					"status"
 				],
 				"status": "pending",
 				"args": null,
@@ -271,7 +272,8 @@
 			"name": "a",
 			"expect": {
 				"parts": [
-					"attributes"
+					"attributes",
+					"status"
 				],
 				"status": {
 					"failed": "not-a-loader"

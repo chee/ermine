@@ -1,7 +1,7 @@
 /** @jsxImportSource ermine-h */
 import type { API } from "@ermine/api"
-import apply from "@ermine/op/apply"
-import invert from "@ermine/op/invert"
+import apply from "@ermine/core/op/apply"
+import invert from "@ermine/core/op/invert"
 import { bind, handler } from "ermine-h"
 
 // fancy-branches: time travel with branches. a small drawing (shapes on a sky) whose every change

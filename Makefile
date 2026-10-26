@@ -107,11 +107,11 @@ cbor-lines = ermine/encoding/c/cbor-harness
 cbor-lines_suite = cbor
 cbor-lines_tests = ermine/encoding/typescript/cbor_fuzz_test.ts
 LIBS += cbor-lines
-# patch nodes (playground/patch-nodes): the overlay and its harness, on the places harness's world
-patch_src = $(filter-out filesystem/places/c/places_harness.c,$(places_src)) extensions/patch-nodes/c/patch.c extensions/patch-nodes/c/patch_harness.c
-patch = extensions/patch-nodes/c/patch-harness
+# patch nodes (extensions/patchy): the overlay and its harness, on the places harness's world
+patch_src = $(filter-out filesystem/places/c/places_harness.c,$(places_src)) extensions/patchy/c/patch.c extensions/patchy/c/patch_harness.c
+patch = extensions/patchy/c/patch-harness
 patch_suite = patch
-patch_tests = $(wildcard extensions/patch-nodes/typescript/patch_harness_test.ts)
+patch_tests = $(wildcard extensions/patchy/typescript/patch_harness_test.ts)
 LIBS += patch
 # unread (core/unread): an entry's writes change in place what its own earlier writes copied, until it is read
 unread_src = $(harness_src) conformance/c/protocol_harness.c core/unread/c/unread.c core/unread/c/unread_harness.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
@@ -180,12 +180,6 @@ $(programs-start) $(programs-start)-check: $(native_fixtures)
 clean: clean-native
 clean-native:
 	rm -f $(native_fixtures)
-# the process api (ermine/api): its harness on places, processes, guard, status and patch nodes, on its own world
-api_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/runs.c filesystem/places/c/guard.c filesystem/protect/c/protect.c extensions/patch-nodes/c/patch.c ermine/api/c/api.c ermine/api/c/api_harness.c ermine/sites/c/sites.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
-api = ermine/api/c/api-harness
-api_suite = api
-api_tests = $(wildcard ermine/api/typescript/api_harness_test.ts)
-LIBS += api
 # runs (ermine/processes): each computer's latest run, on a table of its own; places' harness's world, programs and requests, and the runs'
 runs_src = $(places_src) filesystem/places/c/guard.c filesystem/protect/c/protect.c ermine/processes/c/runs.c ermine/processes/c/runs_harness.c
 runs = ermine/processes/c/runs-harness
@@ -193,12 +187,12 @@ runs_flags = -DPH_LIB
 runs_suite = runs
 runs_tests = $(wildcard ermine/processes/typescript/runs_harness_test.ts)
 LIBS += runs
-# pullynode (playground/pullynode): nodes made only while a run reads them; places' harness's world, programs and requests, and the providers'
-pullynode_src = $(places_src) playground/pullynode/c/pullynode.c playground/pullynode/c/pullynode_harness.c
-pullynode = playground/pullynode/c/pullynode-harness
+# pully (extensions/pully): the C is still the library pully was before it became a feature
+# (pul_); its rules are c/library-suite/, which the runner doesn't find. not ported yet: out of
+# LIBS, so make and test-c skip it. make extensions/pully/c/pullynode-harness builds it alone
+pullynode_src = $(places_src) extensions/pully/c/pullynode.c extensions/pully/c/pullynode_harness.c
+pullynode = extensions/pully/c/pullynode-harness
 pullynode_flags = -DPH_LIB
-pullynode_suite = pullynode
-LIBS += pullynode
 # installs (playground/installs): who an install is, over a store and a key handed in; the harness's key is the repo's Ed25519
 installs_src = $(harness_src) ermine/ids/c/ids.c $(blake3_src) playground/installs/c/installs.c playground/installs/c/installs_harness.c core/ed25519/c/ed25519.c core/ed25519/c/sha2.c
 installs = playground/installs/c/installs-harness
@@ -216,10 +210,11 @@ trust_suite = trust
 LIBS += trust
 # software (experiments/software): offers and run, with no den, policy or asks; processes of its own; ermine/types,
 # for matching by conformance; the C api (ermine/api), for its teller runner
-software_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/start.c ermine/processes/c/runs.c ermine/boxes/c/boxes.c ermine/sites/c/sites.c filesystem/protect/c/protect.c experiments/software/c/functions.c ermine/types/c/types.c ermine/types/c/utis.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) filesystem/places/c/guard.c extensions/patch-nodes/c/patch.c ermine/api/c/api.c experiments/software/c/common.c experiments/software/c/offers.c experiments/software/c/run.c experiments/software/c/software.c experiments/software/c/software_harness.c
+software_src = $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/start.c ermine/processes/c/runs.c ermine/boxes/c/boxes.c ermine/sites/c/sites.c filesystem/protect/c/protect.c experiments/software/c/functions.c ermine/types/c/types.c ermine/types/c/utis.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) filesystem/places/c/guard.c extensions/patchy/c/patch.c ermine/api/c/api.c experiments/software/c/common.c experiments/software/c/offers.c experiments/software/c/run.c experiments/software/c/software.c experiments/software/c/software_harness.c
 software = experiments/software/c/software-harness
 software_suite = software
-LIBS += software
+# out of LIBS while the old C api (ermine/api) is gone and the new C isn't written (chee 10-25)
+# LIBS += software
 # sync's pieces for the new commit shape (playground/encoding commit, playground/together): their own loop (lines_harness.c is conformance/c/harness.c
 # reading a symbol as a string no one can carry), against the suites in playground/encoding/conformance and playground/together/conformance.
 # commit_form_harness.c (a commit's forms on the line) and commits_harness.c (the commits a harness makes by label) are the harnesses', never
@@ -326,6 +321,8 @@ $($(1))-check: $($(1)_src)
 	$$(CC) $$(CHECKFLAGS) $$(BLAKE3FLAGS) $$($(1)_flags) -Isync/c -o $$@ $$(filter %.c,$$^) $$($(1)_libs) -lm
 endef
 $(foreach l,$(LIBS),$(eval $(call harness,$(l))))
+# pully's C, not in LIBS (its section above): a rule to build it alone
+$(eval $(call harness,pullynode))
 
 # headers: any change rebuilds what includes them
 $(HARNESSES) $(CHECKS): $(wildcard */*/c/*.h */*/stacks/*/c/*.h conformance/c/*.h)
@@ -419,7 +416,7 @@ test-check: $(addprefix test-check-,$(TESTED))
 test-leaks: $(addprefix test-leaks-,$(TESTED))
 
 # benches, -O2, not part of all
-BENCHES = playground/encoding/c/pack-bench core/scheduler/c/paths-bench core/op/c/squish-bench core/op/c/apply-bench extensions/patch-nodes/c/patch-bench core/unread/c/unread-bench
+BENCHES = playground/encoding/c/pack-bench core/scheduler/c/paths-bench core/op/c/squish-bench core/op/c/apply-bench extensions/patchy/c/patch-bench core/unread/c/unread-bench
 bench: $(BENCHES)
 playground/encoding/c/pack-bench: core/node/c/node.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c playground/encoding/c/pack.c playground/encoding/c/pack_bench.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
@@ -429,7 +426,7 @@ core/op/c/squish-bench: core/op/c/squish.c core/op/c/squish_bench.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
 core/op/c/apply-bench: core/op/c/apply.c core/op/c/value.c core/op/c/apply_bench.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
-extensions/patch-nodes/c/patch-bench: $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c filesystem/places/c/status.c conformance/c/harness.c conformance/c/protocol_harness.c core/op/c/json.c,$(places_src)) extensions/patch-nodes/c/patch.c extensions/patch-nodes/c/patch_bench.c
+extensions/patchy/c/patch-bench: $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world_harness.c filesystem/places/c/status.c conformance/c/harness.c conformance/c/protocol_harness.c core/op/c/json.c,$(places_src)) extensions/patchy/c/patch.c extensions/patchy/c/patch_bench.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
 core/unread/c/unread-bench: core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/unread/c/unread.c core/unread/c/unread_bench.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm

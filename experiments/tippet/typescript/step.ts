@@ -4,8 +4,8 @@
 //   const bytes = encodeStep({ device, n: 1, before: null, node, part, patches, lamport, when, on: [] })
 //   const step = decodeStep(bytes)
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
-import { blake3 } from "@ermine/blake3"
-import type { Patch } from "@ermine/op/apply"
+import { blake3 } from "@ermine/core/blake3"
+import type { Patch } from "@ermine/core/op/apply"
 
 export type Step = {
 	// the writer's key, hex here, its 32 bytes on the wire

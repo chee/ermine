@@ -1,13 +1,13 @@
 // compilers' compile on a real scheduler, table, paths and places (root R): catclock.c (CAT, "hi"),
 // compilers as nodes holding live functions, the cache folder R/cache (CACHE)
 import { assertEquals, assertInstanceOf, assertStrictEquals } from "@std/assert"
-import createEntry from "@ermine/node/entry"
-import { createScheduler, PENDING } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/table"
+import createEntry from "@ermine/core/node/entry"
+import { createScheduler, PENDING } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Id, type Key } from "@ermine/core/table"
 import { createPlaces } from "@ermine/places"
 import { createChangeHeader, NODE } from "@ermine/places/header"
-import { STATUS } from "@ermine/places/status"
+import { STATUS, TABLE as STATUS_TABLE } from "@ermine/places/status"
 import { upsert } from "@ermine/places/upsert"
 import type { Value } from "@ermine/encoding/cbor"
 import { hash } from "@ermine/formats/hash"
@@ -30,7 +30,7 @@ function world() {
 	// every id an attributes entry came or went at
 	const seen = new Set<Id>()
 	const table = createTable((part, id) => {
-		if (part === "attributes") seen.add(id)
+		if (part === STATUS_TABLE) seen.add(id)
 		places.onTableChange(part as Key, id)
 	})
 	const places = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler: s })
@@ -61,12 +61,12 @@ function world() {
 			Object.entries(v ?? {}).map(([k, id]) => [k, table.get("value", id)?.value]),
 		)
 	}
-	// the status on each node with an id so prefixed and an attributes entry
+	// the status on each node with an id so prefixed and a status entry
 	const statuses = (prefix: string) =>
 		[...seen].filter((id) =>
 			typeof id === "string" && id.startsWith(prefix) &&
-			table.get("attributes", id) !== undefined
-		).map((id) => (table.get("attributes", id)!.value as Record<string, unknown>)[STATUS])
+			table.get(STATUS_TABLE, id) !== undefined
+		).map((id) => (table.get(STATUS_TABLE, id)!.value as Record<string, unknown>)[STATUS])
 	put("children", "R", { cache: "CACHE", "catclock.c": "CAT" })
 	value("CAT", "hi")
 	return { s, table, places, hosted, value, attrs, patch, builds, watch, cached, statuses }

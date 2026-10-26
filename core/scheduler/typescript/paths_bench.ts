@@ -1,7 +1,7 @@
 // deno run core/scheduler/typescript/paths_bench.ts
 // what a change costs to find its readers: medians of 31 rounds, µs per mark call
 import { createPaths } from "./paths.ts"
-import type { Patch } from "@ermine/op/apply"
+import type { Patch } from "@ermine/core/op/apply"
 
 function median(f: () => void, calls: number): number {
 	for (let i = 0; i < calls; i++) f()

@@ -2,10 +2,10 @@
 // (R/work), or over a folder of their own with W's clocks and loaders boxed in, from the host's
 // places (root R, children alone); types installed at R/ermine/types
 import { assertEquals } from "@std/assert"
-import createEntry, { type Entry } from "@ermine/node/entry"
-import { createScheduler } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/table"
+import createEntry, { type Entry } from "@ermine/core/node/entry"
+import { createScheduler } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Id, type Key } from "@ermine/core/table"
 import { createPlaces } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
 import { upsert } from "@ermine/places/upsert"

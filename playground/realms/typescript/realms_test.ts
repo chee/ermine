@@ -1,11 +1,11 @@
 // realms on a real page: a scheduler, table, places, boxes and programs as ermine/api's tests make
 // them, javascript programs (source text) in a folder W, run in a worker by realms.run boxed at /run
 import { assert, assertEquals, assertThrows } from "@std/assert"
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import { createScheduler, PENDING } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/table"
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import { createScheduler, PENDING } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Id, type Key } from "@ermine/core/table"
 import { createPlaces } from "@ermine/places"
 import { get } from "@ermine/places/lib"
 import { createChangeHeader, NODE } from "@ermine/places/header"

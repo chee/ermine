@@ -1,8 +1,8 @@
 // deno test playground/pack-indexeddb/typescript/store_test.ts, against fake-indexeddb
 import { assertEquals, assertRejects, assertStrictEquals } from "@std/assert"
 import { IDBFactory } from "npm:fake-indexeddb@6"
-import createEntry from "@ermine/node/entry"
-import update from "@ermine/node/update"
+import createEntry from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
 import { PackError } from "@ermine/formats/pack"
 import { createStore, type Factory } from "./store.ts"
 

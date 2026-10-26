@@ -1,7 +1,7 @@
 // what the fuzz tests share: seeded numbers, random values and patches on them, and a comparison
 // that keeps lone surrogates and typed arrays (key order when asked). seeded and deterministic: a seed is a
 // run. a few dozen seeds per property (fuzz runs small)
-import apply, { ApplyError, type Key, type Patch } from "@ermine/op/apply"
+import apply, { ApplyError, type Key, type Patch } from "@ermine/core/op/apply"
 
 export type Pick = (n: number) => number
 

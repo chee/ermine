@@ -35,10 +35,10 @@ import type { Address, Box } from "@ermine/boxes"
 import type { Id, Path, Places } from "@ermine/places"
 import { type Context, pathsOf, type Process } from "@ermine/processes/start"
 import type { ScopeNodes } from "@ermine/processes/scopes"
-import { PENDING, type Scheduler } from "@ermine/scheduler"
-import { isPromise } from "@ermine/scheduler/helpers"
+import { PENDING, type Scheduler } from "@ermine/core/scheduler"
+import { isPromise } from "@ermine/core/scheduler/helpers"
 import type { Sited } from "@ermine/sites"
-import type { Table } from "@ermine/table"
+import type { Table } from "@ermine/core/table"
 import { type Builds, COMPILER, fold, type Live } from "@ermine/compilers"
 import {
 	createSoftware,

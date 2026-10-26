@@ -5,14 +5,14 @@
 import { assert, assertEquals, assertNotEquals } from "@std/assert"
 import type { Transport } from "npm:@automerge/subduction@0.23.0"
 import * as sd from "npm:@automerge/subduction@0.23.0"
-import createEntry from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import type { Patch } from "@ermine/op/apply"
+import createEntry from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import type { Patch } from "@ermine/core/op/apply"
 import { createPlaces } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
-import { createScheduler } from "@ermine/scheduler"
-import { createPaths, marks } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/table"
+import { createScheduler } from "@ermine/core/scheduler"
+import { createPaths, marks } from "@ermine/core/scheduler/paths"
+import { createTable, type Id, type Key } from "@ermine/core/table"
 import { decode } from "@ermine/formats/commit"
 import { hex } from "./hex.ts"
 import { createSigner } from "./seal.ts"
@@ -449,12 +449,12 @@ Deno.test({
 		// no value has an encoding for a symbol: the write is not sent, and noted
 		a.write("value", id, [{ path: ["n"], value: Symbol("s") }])
 		await quiet(a)
-		const first = a.table.get("status", id)!
+		const first = a.table.get("sync-status", id)!
 		assertEquals(first.value?.count, { waiting: 0, refused: 0, unsent: 1 })
 		a.write("attributes", id, [{ path: [], value: { k: 1 } }])
 		a.write("attributes", id, [{ path: ["k"], value: Symbol("t") }])
 		await quiet(a)
-		const next = a.table.get("status", id)!
+		const next = a.table.get("sync-status", id)!
 		assert(next !== first)
 		assertEquals(next.value?.count, { waiting: 0, refused: 0, unsent: 2 })
 		// only unsent and its count changed: a reader of refused or waiting is not marked

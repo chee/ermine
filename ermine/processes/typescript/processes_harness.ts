@@ -32,10 +32,10 @@
 //    {"lookup":[names,from]}, or a list of them
 // { op: "pulse" }                          → {}
 // { op: "state", name }                    → { runs, value }   run count; last result (null: none)
-import createEntry from "@ermine/node/entry"
-import { type Computer, createScheduler, type Scope } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Key } from "@ermine/table"
+import createEntry from "@ermine/core/node/entry"
+import { type Computer, createScheduler, type Scope } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Key } from "@ermine/core/table"
 import {
 	children,
 	type Contributor,

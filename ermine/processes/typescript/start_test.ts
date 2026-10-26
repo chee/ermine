@@ -1,10 +1,10 @@
 // a process's life (start.ts) on a real scheduler, table and paths: places rooted at R, asked the
 // processes' rows and children; the host's scope { actor: "host" }, the processes' owner under it
 import { assert, assertEquals, assertStrictEquals } from "@std/assert"
-import type { Entry } from "@ermine/node/entry"
-import { createScheduler, PENDING, type Scope } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Key } from "@ermine/table"
+import type { Entry } from "@ermine/core/node/entry"
+import { createScheduler, PENDING, type Scope } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Key } from "@ermine/core/table"
 import { children, createPlaces } from "@ermine/places"
 import { STATUS } from "@ermine/places/status"
 import { PROCESS, processes as rows } from "./processes.ts"
@@ -34,7 +34,9 @@ function world() {
 		return p
 	}
 	const attrs = (p: Process) => table.get("attributes", p.id)?.value as Record<string, unknown>
-	return { s, table, places, life, start, attrs, hosted }
+	// its status: the status table's, not its attributes (places' status.ts)
+	const status = (p: Process) => table.get("status", p.id)?.value as Record<string, unknown>
+	return { s, table, places, life, start, attrs, status, hosted }
 }
 
 Deno.test("start: the node's attributes, the row at the path, then body with the scope open; stop: body's stop, the row out, the scope gone", () => {
@@ -55,8 +57,8 @@ Deno.test("start: the node's attributes, the row at the path, then body with the
 		[ARGS]: ["a.txt"],
 		[CWD]: ["work"],
 		[PIN]: { chosen: 1 },
-		[STATUS]: PENDING,
 	})
+	assertEquals(w.status(p), { [STATUS]: PENDING })
 	assertEquals(w.table.get(PROCESS, "R")?.value, { work: { clock: p.id } })
 	assertStrictEquals(open, p.scope)
 	assertEquals([given?.id, given?.args, given?.box.root], [p.id, ["a.txt"], "R"])
@@ -90,16 +92,16 @@ Deno.test("give: a computer's status on the process's node; torn down from above
 	})
 	w.s.pulse()
 	assertEquals(w.attrs(p)[CWD], [])
-	assertEquals(w.attrs(p)[STATUS], PENDING)
+	assertEquals(w.status(p)[STATUS], PENDING)
 	release()
 	await new Promise((r) => setTimeout(r, 0))
 	w.s.pulse()
-	assertEquals(Object.hasOwn(w.attrs(p), STATUS), false)
+	assertEquals(Object.hasOwn(w.status(p), STATUS), false)
 	w.s.teardown(p.scope)
 	assertEquals([stops, w.table.get(PROCESS, "R")?.value, p.scope.state], [1, {}, "gone"])
 })
 
-Deno.test("start: options.attributes in the one entry, beside the cwd and the status", () => {
+Deno.test("start: options.attributes in the one entry, beside the cwd; the status in its own table", () => {
 	const w = world()
 	const p = w.start(w.places, "work/clock", {
 		attributes: { "ermine.type": "ermine.process", "ermine.den.id": "mac" },
@@ -108,18 +110,18 @@ Deno.test("start: options.attributes in the one entry, beside the cwd and the st
 		"ermine.type": "ermine.process",
 		"ermine.den.id": "mac",
 		[CWD]: ["work"],
-		[STATUS]: PENDING,
 	})
-	assertEquals(w.table.get(p.id).map(([part]) => part), ["attributes"])
+	assertEquals(w.table.get(p.id).map(([part]) => part), ["attributes", "status"])
 })
 
-Deno.test("start: a name options.attributes shares with processes' own is processes'", () => {
+Deno.test("start: a name options.attributes shares with processes' own is processes'; a status there is only an attribute", () => {
 	const w = world()
 	const p = w.start(w.places, "work/clock", {
 		args: ["a.txt"],
 		attributes: { [CWD]: ["elsewhere"], [ARGS]: ["b.txt"], [STATUS]: "mine", kept: 1 },
 	})
-	assertEquals(w.attrs(p), { [CWD]: ["work"], [ARGS]: ["a.txt"], [STATUS]: PENDING, kept: 1 })
+	assertEquals(w.attrs(p), { [CWD]: ["work"], [ARGS]: ["a.txt"], [STATUS]: "mine", kept: 1 })
+	assertEquals(w.status(p), { [STATUS]: PENDING })
 })
 
 Deno.test("start under a scope given: its scope under it; that scope torn down, the process goes (body's stop, the row out)", () => {

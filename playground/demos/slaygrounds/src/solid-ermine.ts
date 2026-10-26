@@ -11,7 +11,7 @@
 // half a pulse. early: set in the round's early queue, before ermine's other effects act. what
 // crosses back (write, act) pulses at once, so Solid's next flush has what ermine made of it too
 import { createMemo, createRoot, createSignal, getOwner, onCleanup } from "@solidjs/signals"
-import { PENDING } from "@ermine/scheduler"
+import { PENDING } from "@ermine/core/scheduler"
 
 // deno-lint-ignore no-explicit-any
 type Any = any

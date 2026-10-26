@@ -1,0 +1,211 @@
+{
+	"title": "createErmine and its options: the root at the root's id; the host's node, its id the first new one, placed where host.at says, its attributes the host's args, its machine, and the features (none); id: the ids every new node gets (uuid: uuidv7s); onCreateFunction told of each memo, effect and method made, with who made it; may: what the host's words are asked of too",
+	"steps": [
+		{
+			"op": "ermine",
+			"at": "/host",
+			"args": [
+				"--quiet"
+			],
+			"machine": {
+				"arch": "arm64",
+				"os": "macos"
+			},
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"id": "n1",
+				"attributes": {
+					"ermine.host.args": [
+						"--quiet"
+					],
+					"ermine.host.machine": {
+						"arch": "arm64",
+						"os": "macos"
+					},
+					"ermine.features": []
+				}
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"host"
+			],
+			"expect": {
+				"id": "n1"
+			}
+		},
+		{
+			"op": "id",
+			"path": [],
+			"expect": {
+				"id": "R"
+			}
+		},
+		{
+			"op": "features",
+			"expect": {
+				"features": []
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/a",
+				1
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"a"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"a"
+			],
+			"expect": {
+				"id": "n2"
+			}
+		},
+		{
+			"op": "saved",
+			"part": "value",
+			"id": "n2",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"createMemo",
+				"/m",
+				{},
+				[
+					"read",
+					"/a"
+				]
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"m"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "saved",
+			"part": "value",
+			"id": "n3",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"createAction",
+				"/on/hi",
+				[],
+				"hi"
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"on",
+						"hi"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "log",
+			"name": "onCreateFunction",
+			"expect": {
+				"values": [
+					[
+						"memo",
+						"n3",
+						"n1"
+					],
+					[
+						"method",
+						"n4",
+						"n1"
+					]
+				]
+			}
+		},
+		{
+			"op": "ermine",
+			"uuid": true,
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/b",
+				2
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"b"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "uuid",
+			"path": [
+				"b"
+			],
+			"expect": {
+				"v7": true
+			}
+		},
+		{
+			"op": "ermine",
+			"deny": [
+				{
+					"op": "place",
+					"path": ""
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/c",
+				1
+			],
+			"fails": true,
+			"expect": {
+				"error": "refused"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"c"
+			],
+			"expect": {}
+		}
+	]
+}

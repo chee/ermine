@@ -11,8 +11,8 @@
 //    is session's, with as: the install named as instead of its own, from: the vouch of the session
 //    named from instead of its own
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
-import { blake3 } from "@ermine/blake3"
-import * as ed25519 from "@ermine/ed25519"
+import { blake3 } from "@ermine/core/blake3"
+import * as ed25519 from "@ermine/core/ed25519"
 import { text } from "@ermine/ids"
 import { type Session, startSession } from "@ermine/sessions"
 import { trusted } from "./trust.ts"

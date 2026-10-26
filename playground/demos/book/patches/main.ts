@@ -2,8 +2,8 @@
 // where a write lands: the pond's value as a little tree you aim at, a note (a patch) you fill
 // and post, the real apply landing it and the real invert writing its undo note, and the pond
 // drawn from the value. what the note touched flashes in the tree and in the picture
-import apply, { ApplyError, type Code, type Key, type Patch, type Target } from "@ermine/op/apply"
-import invert from "@ermine/op/invert"
+import apply, { ApplyError, type Code, type Key, type Patch, type Target } from "@ermine/core/op/apply"
+import invert from "@ermine/core/op/invert"
 import { pondPage } from "../kit/page.ts"
 import type { Box } from "../kit/board.ts"
 import { createPond, icon, type SpriteName } from "../kit/sprites.ts"
@@ -30,7 +30,7 @@ const page = pondPage("patches", {
 		<p><b>undo:</b> every apply can build its undo. Applying it takes the change back. The undo has its own undo.</p>
 		<p><b>key order:</b> isn't part of a map. A key put back may land anywhere among the others.</p>`,
 	real:
-		`Runs the real <code>apply</code> (<code>@ermine/op/apply</code>) for every note posted, and <code>invert</code> (<code>@ermine/op/invert</code>) for every undo note. The page draws the tree, the note and the pond, reads what you write (JSON, else a string), pins a reason to each refusal code, and marks shared and new by checking each object against the value before.`,
+		`Runs the real <code>apply</code> (<code>@ermine/core/op/apply</code>) for every note posted, and <code>invert</code> (<code>@ermine/core/op/invert</code>) for every undo note. The page draws the tree, the note and the pond, reads what you write (JSON, else a string), pins a reason to each refusal code, and marks shared and new by checking each object against the value before.`,
 })
 const { board } = page
 
@@ -157,7 +157,7 @@ const applyBox = board.box({
 	ins: ["value", "note"],
 	outs: [["new", "new value"], ["undo", "undo"]],
 })
-applyBox.code(`import apply from "@ermine/op/apply"
+applyBox.code(`import apply from "@ermine/core/op/apply"
 
 // the note lands on the value:
 // a new value. what the note touched
@@ -195,7 +195,7 @@ const pileBox = board.box({
 	ins: [["in", ""]],
 	width: 340,
 })
-pileBox.code(`import invert from "@ermine/op/invert"
+pileBox.code(`import invert from "@ermine/core/op/invert"
 
 // the note's undo, before it lands
 const undo = invert(value, [note])

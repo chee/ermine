@@ -11,7 +11,7 @@ import {
 	type Ended,
 	PENDING,
 	type Scheduler,
-} from "@ermine/scheduler"
+} from "@ermine/core/scheduler"
 import type { Box, Wire } from "../kit/board.ts"
 import { pondPage } from "../kit/page.ts"
 import { createPond, pixels, SPRITES } from "../kit/sprites.ts"
@@ -46,7 +46,7 @@ const page = pondPage("waiting", {
 		<p><b>kept reads:</b> a run that ends any way but done keeps every key it read, and every key the run before read that it didn't reach (a dashed wire). A change to any of them runs it again.</p>
 		<p><b>await:</b> a run lasts until its first await. Only what it read by then is tracked: after an await, JavaScript can't say which run the code is part of. It's why <code>preventDefault()</code> does nothing after an await: the event is gone.</p>`,
 	real:
-		`Runs the real <code>@ermine/scheduler</code>, twice (the pond's, and a second one for before and after): createScheduler, PENDING, a root scope, createComputer, createEffect, track, mark, pulse, and its listeners onRunStart, onRunEnd, onSettle, onTrack, onEffect. Wires and chips come from those. The ducks are plain promises the page resolves or rejects. The store, and the rule that a pending computer makes its key pending, are the page's: turn the store over.`,
+		`Runs the real <code>@ermine/core/scheduler</code>, twice (the pond's, and a second one for before and after): createScheduler, PENDING, a root scope, createComputer, createEffect, track, mark, pulse, and its listeners onRunStart, onRunEnd, onSettle, onTrack, onEffect. Wires and chips come from those. The ducks are plain promises the page resolves or rejects. The store, and the rule that a pending computer makes its key pending, are the page's: turn the store over.`,
 })
 const { board } = page
 

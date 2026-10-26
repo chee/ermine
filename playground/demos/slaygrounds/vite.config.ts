@@ -1,6 +1,6 @@
 // deno task serve (vite's dev server), deno task build (into dist/), deno task preview (dist/ served)
 // the page, plus what the world's iframe imports by its import map: each export of each workspace
-// package (@ermine/table, @ermine/places/path, …) and ermine-h, the playground's own view
+// package (@ermine/core/table, @ermine/places/path, …) and ermine-h, the playground's own view
 // library. served from source while developing, each its own module in dist/ when built
 // - /importmap.json: specifier → url, the same urls vite gives these files inside its own
 //   imports, so a host, a program and the libraries share one instance of each module

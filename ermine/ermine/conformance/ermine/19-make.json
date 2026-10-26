@@ -1,0 +1,172 @@
+{
+	"title": "make(p): the node at p, made with nothing in it (no value) if missing, the nodes on the way made too, else as it is; asked place, as open is (a pick of a name: chee's to change)",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./empty"
+					],
+					"as": "e"
+				},
+				{
+					"do": [
+						"ensureNode",
+						"./deep/er"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"empty"
+			],
+			"expect": {
+				"id": "n4"
+			}
+		},
+		{
+			"op": "saved",
+			"part": "value",
+			"id": "n4",
+			"expect": {}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"deep",
+				"er"
+			],
+			"expect": {
+				"id": "n5"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"$e"
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"readAll",
+				"$e"
+			],
+			"expect": {
+				"value": []
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"patch",
+				"$e",
+				[
+					{
+						"path": [],
+						"value": 1
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"ensureNode",
+				"./empty"
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"code",
+						"empty"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"$e"
+			],
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "ermine",
+			"deny": [
+				{
+					"op": "place",
+					"path": "code",
+					"from": "code/p"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"ensureNode",
+				"./nope"
+			],
+			"fails": true,
+			"expect": {
+				"error": "refused"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"nope"
+			],
+			"expect": {}
+		}
+	]
+}

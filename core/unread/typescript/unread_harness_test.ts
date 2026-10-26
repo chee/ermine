@@ -2,7 +2,7 @@
 // answers an unknown op as an error and goes on. the harness asked is HARNESS, else the TypeScript
 // adapter (unread_harness.ts)
 import { assert, assertEquals } from "@std/assert"
-import type { Patch } from "@ermine/op/apply"
+import type { Patch } from "@ermine/core/op/apply"
 import { ask, command } from "../../../conformance/typescript/ask.ts"
 import { line, revive, toJson } from "../../../conformance/typescript/form.ts"
 import { rand } from "../../../conformance/typescript/rand.ts"

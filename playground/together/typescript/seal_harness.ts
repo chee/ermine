@@ -27,13 +27,7 @@ import * as cbor from "@ermine/encoding/cbor"
 import { encode } from "@ermine/formats/commit"
 import { revive } from "../../../conformance/typescript/form.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
-import {
-	commitOf,
-	hex,
-	jsonOf,
-	refusal,
-	unhex,
-} from "../../encoding/typescript/commit_harness.ts"
+import { commitOf, hex, jsonOf, refusal, unhex } from "../../encoding/typescript/commit_harness.ts"
 import {
 	createSigner,
 	ED25519,

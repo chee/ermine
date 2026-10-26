@@ -1,0 +1,368 @@
+{
+	"title": "features: needs and their order. a need not given: missing-feature; a name twice: feature-twice; needs going round: needs-loop. chain order: the list, each one's needs first; the first outermost, so its hook is called first. ermine.features: each one's name, needs and hooks, in chain order, and the same on the host's node (ermine.features)",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				{
+					"name": "a",
+					"needs": [
+						"b"
+					]
+				}
+			],
+			"fails": true,
+			"expect": {
+				"error": "missing-feature"
+			}
+		},
+		{
+			"op": "ermine",
+			"features": [
+				{
+					"name": "a"
+				},
+				{
+					"name": "a"
+				}
+			],
+			"fails": true,
+			"expect": {
+				"error": "feature-twice"
+			}
+		},
+		{
+			"op": "ermine",
+			"features": [
+				{
+					"name": "a",
+					"needs": [
+						"b"
+					]
+				},
+				{
+					"name": "b",
+					"needs": [
+						"a"
+					]
+				}
+			],
+			"fails": true,
+			"expect": {
+				"error": "needs-loop"
+			}
+		},
+		{
+			"op": "ermine",
+			"features": [
+				{
+					"name": "b",
+					"needs": [
+						"a"
+					],
+					"onWrite": "log",
+					"onRead": "log"
+				},
+				{
+					"name": "a",
+					"onWrite": "log"
+				},
+				{
+					"name": "c",
+					"onWrite": "log",
+					"onRead": "log",
+					"onTable": "log"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "features",
+			"expect": {
+				"features": [
+					{
+						"name": "a",
+						"needs": [],
+						"hooks": [
+							"onWrite"
+						]
+					},
+					{
+						"name": "b",
+						"needs": [
+							"a"
+						],
+						"hooks": [
+							"onRead",
+							"onWrite"
+						]
+					},
+					{
+						"name": "c",
+						"needs": [],
+						"hooks": [
+							"onTable",
+							"onRead",
+							"onWrite"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"id": "n1",
+				"attributes": {
+					"ermine.host.args": [],
+					"ermine.features": [
+						{
+							"name": "a",
+							"needs": [],
+							"hooks": [
+								"onWrite"
+							]
+						},
+						{
+							"name": "b",
+							"needs": [
+								"a"
+							],
+							"hooks": [
+								"onRead",
+								"onWrite"
+							]
+						},
+						{
+							"name": "c",
+							"needs": [],
+							"hooks": [
+								"onTable",
+								"onRead",
+								"onWrite"
+							]
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "log",
+			"name": "hooks",
+			"expect": {
+				"values": [
+					[
+						"c",
+						"onTable"
+					],
+					[
+						"a",
+						"onWrite",
+						"children",
+						"R"
+					],
+					[
+						"b",
+						"onWrite",
+						"children",
+						"R"
+					],
+					[
+						"c",
+						"onWrite",
+						"children",
+						"R"
+					],
+					[
+						"a",
+						"onWrite",
+						"attributes",
+						"n1"
+					],
+					[
+						"b",
+						"onWrite",
+						"attributes",
+						"n1"
+					],
+					[
+						"c",
+						"onWrite",
+						"attributes",
+						"n1"
+					]
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/x",
+				1
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"x"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"log",
+				"x",
+				[
+					"all",
+					[
+						"each",
+						[
+							"readAll",
+							"/x"
+						],
+						[
+							"value"
+						]
+					],
+					[
+						"each",
+						[
+							"readAll",
+							"/x"
+						],
+						[
+							"from",
+							"change",
+							"actor"
+						]
+					]
+				]
+			],
+			"expect": {
+				"value": [
+					[
+						1
+					],
+					[
+						"test"
+					]
+				]
+			}
+		},
+		{
+			"op": "site",
+			"part": "value",
+			"id": "n2",
+			"expect": {
+				"site": "program"
+			}
+		},
+		{
+			"op": "log",
+			"name": "hooks",
+			"expect": {
+				"values": [
+					[
+						"c",
+						"onTable"
+					],
+					[
+						"a",
+						"onWrite",
+						"children",
+						"R"
+					],
+					[
+						"b",
+						"onWrite",
+						"children",
+						"R"
+					],
+					[
+						"c",
+						"onWrite",
+						"children",
+						"R"
+					],
+					[
+						"a",
+						"onWrite",
+						"attributes",
+						"n1"
+					],
+					[
+						"b",
+						"onWrite",
+						"attributes",
+						"n1"
+					],
+					[
+						"c",
+						"onWrite",
+						"attributes",
+						"n1"
+					],
+					[
+						"a",
+						"onWrite",
+						"value",
+						"n2"
+					],
+					[
+						"b",
+						"onWrite",
+						"value",
+						"n2"
+					],
+					[
+						"c",
+						"onWrite",
+						"value",
+						"n2"
+					],
+					[
+						"a",
+						"onWrite",
+						"children",
+						"R"
+					],
+					[
+						"b",
+						"onWrite",
+						"children",
+						"R"
+					],
+					[
+						"c",
+						"onWrite",
+						"children",
+						"R"
+					],
+					[
+						"b",
+						"onRead",
+						"n2"
+					],
+					[
+						"c",
+						"onRead",
+						"n2"
+					],
+					[
+						"b",
+						"onRead",
+						"n2"
+					],
+					[
+						"c",
+						"onRead",
+						"n2"
+					]
+				]
+			}
+		}
+	]
+}

@@ -3,7 +3,7 @@
 // the scope tree as it stood when the scheduler told a listener something (a run going, a child
 // claimed or made, a run's end) or a cleanup ran, read off the real Scope objects. the board plays
 // the last thing you did step by step: each child a box under pond, each child a fish
-import { type Computer, createScheduler, type Scheduler, type Scope } from "@ermine/scheduler"
+import { type Computer, createScheduler, type Scheduler, type Scope } from "@ermine/core/scheduler"
 import { pondPage } from "../kit/page.ts"
 import type { Box, Tone, Wire } from "../kit/board.ts"
 import { createPond } from "../kit/sprites.ts"
@@ -43,7 +43,7 @@ const page = pondPage("scopes", {
 		given; as each run starts, <code>run</code> and <code>mark</code> are set in it.</p>
 		<p><b>effects:</b> the same, and one more: what an act made goes before the next act. No
 		effect here.</p>`,
-	real: `Runs the real <code>@ermine/scheduler</code>: createRootScope, createComputer, claim,
+	real: `Runs the real <code>@ermine/core/scheduler</code>: createRootScope, createComputer, claim,
 		registerTeardown, teardown, track, mark, pulse, and its onTrack, onMark and onRunEnd
 		listeners. Each step is read off the real Scope objects (state, old, runs, info, the
 		newest/older/before links) as a listener is told or a cleanup runs. The store, the map of

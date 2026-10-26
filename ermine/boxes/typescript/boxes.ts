@@ -12,7 +12,7 @@
 // (inside). writes through either places tell readers of both.
 // writes: saved children only; missing folders made, committed by the host. refused, nothing
 // changed: not-a-name, already-there (a name holding no id).
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
 import {
 	asId,
 	children,
@@ -21,14 +21,17 @@ import {
 	place,
 	type Places,
 	PlacesError,
+	placing,
 	unplace,
+	unplacing,
+	type Writer,
 } from "@ermine/places"
 import { createChangeBase } from "@ermine/places/header"
 import { parse } from "@ermine/places/path"
 import { processes } from "@ermine/processes"
-import { type Scheduler, SchedulerError } from "@ermine/scheduler"
-import type { Table } from "@ermine/table"
-import { capture } from "@ermine/util/stacktrace"
+import { type Scheduler, SchedulerError } from "@ermine/core/scheduler"
+import type { Table } from "@ermine/core/table"
+import { capture } from "@ermine/core/util/stacktrace"
 
 // what a box is made over: the host's places, and what its writes need
 export type Host = {
@@ -37,6 +40,9 @@ export type Host = {
 	scheduler: Pick<Scheduler, "getCurrentScope">
 	// where its writes are said written; none: places.commit
 	commit?: (changed: readonly Entry<unknown>[]) => void
+	// none: its writes made here and said by commit; given (places' Writer): each handed to it to
+	// do and say, and nothing given back as changed
+	write?: Writer
 }
 
 export type Box = {
@@ -127,7 +133,12 @@ export function unbox(somebox: Box, path: Address, header?: ChangeHeader): Entry
 	}
 	const kids = host.table.get("children", at) as Entry<unknown> | undefined
 	if (kids === undefined) throw new PlacesError("nothing-there", names[names.length - 1])
-	const changed = unplace(kids, names[names.length - 1], header ?? headerOf(host, unbox))
+	const h = header ?? headerOf(host, unbox)
+	if (host.write !== undefined) {
+		host.write("children", at, unplacing(kids, names[names.length - 1]), h)
+		return []
+	}
+	const changed = unplace(kids, names[names.length - 1], h)
 	said(host, changed)
 	return changed
 }
@@ -174,7 +185,8 @@ function land(
 	for (; k < names.length; k++) {
 		const id = leaf !== undefined && k === names.length - 1 ? leaf : crypto.randomUUID()
 		const kids = host.table.get("children", at) as Entry<unknown> | undefined
-		if (kids !== undefined) changed.push(...place(kids, names[k], id, h))
+		if (host.write !== undefined) host.write("children", at, placing(kids, names[k], id), h)
+		else if (kids !== undefined) changed.push(...place(kids, names[k], id, h))
 		else host.table.add("children", at, createEntry<unknown>({ [names[k]]: id }, h) as never)
 		at = id
 	}

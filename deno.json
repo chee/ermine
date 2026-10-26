@@ -1,14 +1,7 @@
 {
 	"workspace": [
-		"./core/op",
-		"./core/node",
+		"./core",
 		"./filesystem/places",
-		"./core/util",
-		"./core/table",
-		"./core/unread",
-		"./core/blake3",
-		"./core/ed25519",
-		"./core/scheduler",
 		"./filesystem/protect",
 		"./ermine/encoding",
 		"./playground/encoding",
@@ -16,18 +9,19 @@
 		"./ermine/boxes",
 		"./playground/compilers",
 		"./ermine/types",
-		"./ermine/api",
+		"./ermine/ermine",
+		"./ermine/system",
 		"./playground/realms",
 		"./playground/together",
 		"./ermine/sites",
 		"./ermine/ids",
 		"./filesystem/clingy",
 		"./playground/programs",
-		"./extensions/patch-nodes",
+		"./extensions/patchy",
 		"./playground/demo-world",
 		"./playground/demos",
 		"./playground/libraries/pack-indexeddb",
-		"./playground/pullynode",
+		"./extensions/pully",
 		"./playground/tools/files",
 		"./playground/installs",
 		"./playground/sessions",
@@ -66,5 +60,15 @@
 		"conformance/suites-aside",
 		".claude",
 		".agent-shell"
-	]
+	],
+	"test": {
+		"exclude": [
+			"experiments/software",
+			"playground/demo-world",
+			"playground/demos",
+			"playground/devtools",
+			"playground/programs",
+			"playground/realms"
+		]
+	}
 }

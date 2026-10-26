@@ -12,7 +12,7 @@
 // readers. the wiring holds a tracker node per spot (spot.owner); one with no readers left
 // (node.first === null) is held by no one. it releases those after untrack, and lazily: a spot
 // mark gives back with no readers is released, not run.
-import type { Key, Patch } from "@ermine/op/apply"
+import type { Key, Patch } from "@ermine/core/op/apply"
 
 export type { Key, Patch }
 

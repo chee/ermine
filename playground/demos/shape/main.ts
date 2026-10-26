@@ -19,7 +19,7 @@
 // save: what the graph reaches, packed (slaygrounds' save graph, a .ermine file). load: a .ermine
 // file's nodes put in under new ids, so it is a new graph, opened
 import { unpack } from "@ermine/formats/pack"
-import type { Entry } from "@ermine/node/entry"
+import type { Entry } from "@ermine/core/node/entry"
 import { createSigner } from "@ermine/together/seal"
 import { createSync, type Sync } from "@ermine/together/sync"
 import { save } from "../slaygrounds/src/graph-file.ts"

@@ -7,8 +7,8 @@
 // of objects never reused marks an index read (inside the list, before or after) exactly when
 // what is there changed.
 import { assert, assertEquals } from "@std/assert"
-import apply from "@ermine/op/apply"
-import type { Key, Patch } from "@ermine/op/apply"
+import apply from "@ermine/core/op/apply"
+import type { Key, Patch } from "@ermine/core/op/apply"
 import { ask as send, command, reference } from "../../../conformance/typescript/ask.ts"
 import { rand as seeded } from "../../../conformance/typescript/rand.ts"
 

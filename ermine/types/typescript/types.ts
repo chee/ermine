@@ -21,13 +21,13 @@
 //
 // utis.json: the well-known UTIs, Markus Felten's (arlac77) uti library (npm uti@8.11.3), with
 // thanks; 0BSD (utis.LICENSE). EXTRA adds what it lacks
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
-import update from "@ermine/node/update"
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
 import { asId, type Id, level, type Path, type Places } from "@ermine/places"
 import { get, lookup, members } from "@ermine/places/lib"
-import { keyorder } from "@ermine/util/keyorder"
-import type { Patch } from "@ermine/op/apply"
-import type { Table } from "@ermine/table"
+import { keyorder } from "@ermine/core/util/keyorder"
+import type { Patch } from "@ermine/core/op/apply"
+import type { Table } from "@ermine/core/table"
 import list from "./utis.json" with { type: "json" }
 
 // the types folder, from a root: the one place its path is said

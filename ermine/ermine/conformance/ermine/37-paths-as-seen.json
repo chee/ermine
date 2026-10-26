@@ -1,0 +1,209 @@
+{
+	"title": "what a process is told names nodes by their path as it sees them, never an id [chee 10-25]: explain's writer, status waits, a record's reads and writes. a writer outside the asker's box: null for it, its path for the host; a place given into the box (a box placement): that path. a change is shown as { time, actor, site }, and explain takes it back",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/shared/x",
+				{
+					"n": 0
+				}
+			]
+		},
+		{
+			"op": "code",
+			"at": "/system/s",
+			"program": [
+				{
+					"do": [
+						"createAction",
+						"on/put",
+						[
+							{
+								"do": [
+									"patch",
+									"/shared/x",
+									[
+										{
+											"path": [
+												"n"
+											],
+											"value": 1
+										}
+									]
+								]
+							}
+						],
+						"put"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "s",
+			"at": "/system/s",
+			"expect": {
+				"id": "proc:s"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/system/s/on/put"
+			],
+			"expect": {
+				"value": "put"
+			}
+		},
+		{
+			"op": "box",
+			"name": "b",
+			"at": "/boxes/b",
+			"expect": {}
+		},
+		{
+			"op": "boxplace",
+			"name": "b",
+			"at": "/shared",
+			"path": "/shared",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/boxes/b/code/q",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/code/q",
+			"box": "b",
+			"expect": {
+				"id": "proc:q"
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"read",
+				"/shared/x"
+			],
+			"expect": {
+				"value": {
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"explain",
+				"/shared/x"
+			],
+			"expect": {
+				"value": {
+					"writer": "method",
+					"path": null,
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"explain",
+				"/shared/x"
+			],
+			"expect": {
+				"value": {
+					"writer": "method",
+					"path": [
+						"system",
+						"s",
+						"on",
+						"put"
+					],
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"explainfrom",
+				"/shared/x"
+			],
+			"expect": {
+				"value": {
+					"writer": "method",
+					"path": null,
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"log",
+				"x",
+				[
+					"each",
+					[
+						"readAll",
+						"/shared/x"
+					],
+					[
+						"from",
+						"change",
+						"actor"
+					]
+				]
+			],
+			"expect": {
+				"value": [
+					"test"
+				]
+			}
+		},
+		{
+			"op": "boxplace",
+			"name": "b",
+			"at": "/system/s",
+			"path": "/system/s",
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"explain",
+				"/shared/x"
+			],
+			"expect": {
+				"value": {
+					"writer": "method",
+					"path": [
+						"system",
+						"s",
+						"on",
+						"put"
+					],
+					"n": 1
+				}
+			}
+		}
+	]
+}

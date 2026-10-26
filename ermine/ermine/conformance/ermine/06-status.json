@@ -1,0 +1,405 @@
+{
+	"title": "status(x), tracked: done; pending, waiting on a promise (\"a promise\") or on the pending memos it read (their nodes); failed with what it threw, in its run or in an effect's act (phase); looping; n the latest run's. a node nothing computes: done; nothing there: none. a process: its start's status",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./c",
+						{
+							"n": 0
+						}
+					],
+					"as": "c"
+				},
+				{
+					"do": [
+						"createMemo",
+						"slow",
+						{},
+						[
+							"later",
+							1
+						]
+					],
+					"as": "slow"
+				},
+				{
+					"do": [
+						"createMemo",
+						"waits",
+						{},
+						[
+							"read",
+							"$slow"
+						]
+					],
+					"as": "waits"
+				},
+				{
+					"do": [
+						"createMemo",
+						"bad",
+						{},
+						[
+							"throw",
+							"bad"
+						]
+					],
+					"as": "bad"
+				},
+				{
+					"do": [
+						"createEffect",
+						"act",
+						[
+							"read",
+							"$c",
+							[
+								"n"
+							]
+						],
+						"acted",
+						"throws"
+					],
+					"as": "act"
+				},
+				{
+					"do": [
+						"ensureNode",
+						"./l",
+						{
+							"n": 0
+						}
+					],
+					"as": "l"
+				},
+				{
+					"do": [
+						"createMemo",
+						"loop",
+						{},
+						[
+							"all",
+							[
+								"read",
+								"$l"
+							],
+							[
+								"patch",
+								"$l",
+								[
+									{
+										"path": [
+											"n"
+										],
+										"value": 1
+									}
+								]
+							]
+						]
+					],
+					"as": "loop"
+				},
+				{
+					"do": [
+						"createMemo",
+						"m",
+						{},
+						[
+							"read",
+							"$c",
+							[
+								"n"
+							]
+						]
+					],
+					"as": "m"
+				},
+				{
+					"do": [
+						"createEffect",
+						"watch",
+						[
+							"getStatus",
+							"$slow"
+						],
+						"seen"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "status",
+			"name": "p",
+			"expect": {
+				"status": {
+					"state": "done"
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$slow"
+			],
+			"expect": {
+				"value": {
+					"state": "pending",
+					"waiting": [
+						"a promise"
+					],
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$waits"
+			],
+			"expect": {
+				"value": {
+					"state": "pending",
+					"waiting": [
+						{
+							"node": [
+								"code",
+								"p",
+								"slow"
+							]
+						}
+					],
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$bad"
+			],
+			"expect": {
+				"value": {
+					"state": "failed",
+					"error": "bad",
+					"phase": "run",
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$act"
+			],
+			"expect": {
+				"value": {
+					"state": "failed",
+					"error": "act 0",
+					"phase": "act",
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$loop"
+			],
+			"expect": {
+				"value": {
+					"state": "looping",
+					"error": "looping",
+					"n": 2
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$m"
+			],
+			"expect": {
+				"value": {
+					"state": "done",
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$c"
+			],
+			"expect": {
+				"value": {
+					"state": "done"
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"./nothing"
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "seen",
+			"expect": {
+				"values": [
+					{
+						"state": "pending",
+						"waiting": [
+							"a promise"
+						],
+						"n": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$slow"
+			],
+			"expect": {
+				"value": {
+					"state": "done",
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$waits"
+			],
+			"expect": {
+				"value": {
+					"state": "done",
+					"n": 2
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"$waits"
+			],
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "log",
+			"name": "seen",
+			"expect": {
+				"values": [
+					{
+						"state": "pending",
+						"waiting": [
+							"a promise"
+						],
+						"n": 1
+					},
+					{
+						"state": "done",
+						"n": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"patch",
+				"$c",
+				[
+					{
+						"path": [
+							"n"
+						],
+						"value": 5
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$m"
+			],
+			"expect": {
+				"value": {
+					"state": "done",
+					"n": 2
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$act"
+			],
+			"expect": {
+				"value": {
+					"state": "failed",
+					"error": "act 5",
+					"phase": "act",
+					"n": 2
+				}
+			}
+		}
+	]
+}

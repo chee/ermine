@@ -12,7 +12,7 @@ type Any = any
 type Where = { id: unknown; part: string }
 
 // op's produce, loaded when first needed; update is the world's own (its iframe's import map)
-const lib = async () => ({ produce: (await import("@ermine/op/produce")).default })
+const lib = async () => ({ produce: (await import("@ermine/core/op/produce")).default })
 
 const container = (v: unknown) => typeof v === "object" && v !== null
 // JSON only: null, booleans, finite numbers, strings, lists, plain maps (another realm's too)
@@ -143,7 +143,7 @@ export function edit(
 	}
 	const write = async () => {
 		if (!patches?.length) return
-		const { default: update } = await importIn("@ermine/node/update")
+		const { default: update } = await importIn("@ermine/core/node/update")
 		writeTo(world, where, patches, update)
 		done()
 	}

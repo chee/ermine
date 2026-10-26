@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "@std/assert"
-import createEntry from "@ermine/node/entry"
+import createEntry from "@ermine/core/node/entry"
 import { place } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
 import { ORPHAN } from "./holder.ts"

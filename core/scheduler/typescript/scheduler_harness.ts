@@ -247,7 +247,7 @@ import {
 	type Run,
 	SchedulerError,
 	type Scope,
-} from "@ermine/scheduler"
+} from "@ermine/core/scheduler"
 import { type Told, trace } from "./trace.ts"
 import { serve } from "../../../conformance/typescript/harness.ts"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"

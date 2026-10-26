@@ -40,14 +40,14 @@
 import { CborError, encode, type Value } from "@ermine/encoding/cbor"
 import { hash } from "@ermine/formats/hash"
 import { createClingy } from "@ermine/clingy"
-import createEntry from "@ermine/node/entry"
+import createEntry from "@ermine/core/node/entry"
 import { asId, at, type Id, type Places } from "@ermine/places"
 import { createChangeHeader, NODE } from "@ermine/places/header"
-import { createStatus, status } from "@ermine/places/status"
+import { createStatus, status, TABLE as STATUS_TABLE } from "@ermine/places/status"
 import { upsert } from "@ermine/places/upsert"
-import { type Computer, type Ended, PENDING, type Scheduler } from "@ermine/scheduler"
-import { isPromise } from "@ermine/scheduler/helpers"
-import type { Key, Table } from "@ermine/table"
+import { type Computer, type Ended, PENDING, type Scheduler } from "@ermine/core/scheduler"
+import { isPromise } from "@ermine/core/scheduler/helpers"
+import type { Key, Table } from "@ermine/core/table"
 
 // the attribute: what a compiler is
 export const COMPILER = "ermine.programs.compiler"
@@ -326,6 +326,7 @@ export function createBuilds(setup: Setup): Builds {
 		if (tasks.get(t.key) === t) tasks.delete(t.key)
 		if (t.c !== undefined && t.c.state === "alive") s.teardown(t.c)
 		if (table.get("attributes", t.node) !== undefined) table.del("attributes", t.node)
+		if (table.get(STATUS_TABLE, t.node) !== undefined) table.del(STATUS_TABLE, t.node)
 	}
 
 	const drain = () => {

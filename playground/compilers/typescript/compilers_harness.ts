@@ -46,10 +46,10 @@
 // { op: "ran" }                             → { sum, pick, parity, label, wait, oops, tick }
 // { op: "entries", run, code }              → { entries }   newest first, each { name, reads,
 //    output }, reads as [part, id, path] (no hashes)
-import createEntry from "@ermine/node/entry"
-import { createScheduler, PENDING, type Scope } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/table"
+import createEntry from "@ermine/core/node/entry"
+import { createScheduler, PENDING, type Scope } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Id, type Key } from "@ermine/core/table"
 import { createPlaces, PlacesError } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
 import { upsert } from "@ermine/places/upsert"

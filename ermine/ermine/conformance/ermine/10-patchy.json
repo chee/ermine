@@ -1,0 +1,416 @@
+{
+	"title": "the shape's test: patch nodes out of the base, as a feature (onTable: the overlay in front of places' table; onRead: a patch node's layers in reads, front first, each naming the feature), a library (patch, layers: public words only; a patch node made by make, nothing in its value) and a service (land, placed by the host where it says, reached by send, with the host's power: the caller on its change). a patch node over a node: read through the overlay, the table's value unchanged; landed: its patches on the target for real, its patch entry gone. each layer's item carries its own change (from.change: the patch node's, the table's), explained as any change; a call's change names its caller, node and actor, apart from its own actor",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				"patchy"
+			],
+			"expect": {}
+		},
+		{
+			"op": "features",
+			"expect": {
+				"features": [
+					{
+						"name": "patchy",
+						"needs": [],
+						"hooks": [
+							"onTable",
+							"onRead"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "service",
+			"what": "land",
+			"at": "/system/land",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./face",
+						{
+							"accent": "red",
+							"n": 1
+						}
+					],
+					"as": "face"
+				},
+				{
+					"do": [
+						"createPatch",
+						"cherry",
+						"$face",
+						[
+							{
+								"path": [
+									"accent"
+								],
+								"value": "cherry"
+							}
+						]
+					],
+					"as": "skin"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"face"
+			],
+			"expect": {
+				"id": "n6"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p",
+				"cherry"
+			],
+			"expect": {
+				"id": "n7"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"$face"
+			],
+			"expect": {
+				"value": {
+					"accent": "cherry",
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "saved",
+			"part": "value",
+			"id": "n6",
+			"expect": {
+				"value": {
+					"accent": "red",
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "saved",
+			"part": "value",
+			"id": "n7",
+			"expect": {}
+		},
+		{
+			"op": "saved",
+			"part": "patch",
+			"id": "n7",
+			"path": [
+				"on"
+			],
+			"expect": {
+				"value": "n6"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"layers",
+				"$face",
+				[
+					"accent"
+				]
+			],
+			"expect": {
+				"value": [
+					{
+						"value": "cherry",
+						"from": [
+							"code",
+							"p",
+							"cherry"
+						]
+					},
+					{
+						"value": "red",
+						"from": "table"
+					}
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"log",
+				"x",
+				[
+					"all",
+					[
+						"each",
+						[
+							"readAll",
+							"$face",
+							[
+								"accent"
+							]
+						],
+						[
+							"value"
+						]
+					],
+					[
+						"each",
+						[
+							"readAll",
+							"$face",
+							[
+								"accent"
+							]
+						],
+						[
+							"from",
+							"feature"
+						]
+					],
+					[
+						"each",
+						[
+							"readAll",
+							"$face",
+							[
+								"accent"
+							]
+						],
+						[
+							"from",
+							"layer"
+						]
+					]
+				]
+			],
+			"expect": {
+				"value": [
+					[
+						"cherry",
+						"cherry",
+						"red"
+					],
+					[
+						null,
+						"patchy",
+						"patchy"
+					],
+					[
+						null,
+						[
+							"code",
+							"p",
+							"cherry"
+						],
+						"table"
+					]
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"explainfrom",
+				"$face",
+				1
+			],
+			"expect": {
+				"value": {
+					"writer": "outside",
+					"site": "program"
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"explainfrom",
+				"$face",
+				2
+			],
+			"expect": {
+				"value": {
+					"writer": "outside",
+					"site": "program"
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"/system/land",
+				"$skin"
+			],
+			"expect": {
+				"value": true
+			}
+		},
+		{
+			"op": "caller",
+			"part": "value",
+			"id": "n6",
+			"expect": {
+				"node": "proc:p",
+				"actor": "test"
+			}
+		},
+		{
+			"op": "saved",
+			"part": "value",
+			"id": "n6",
+			"expect": {
+				"value": {
+					"accent": "cherry",
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "saved",
+			"part": "patch",
+			"id": "n7",
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"$face"
+			],
+			"expect": {
+				"value": {
+					"accent": "cherry",
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"layers",
+				"$face"
+			],
+			"expect": {
+				"value": [
+					{
+						"value": {
+							"accent": "cherry",
+							"n": 1
+						},
+						"from": "table"
+					}
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"log",
+				"x",
+				[
+					"each",
+					[
+						"readAll",
+						"$face"
+					],
+					[
+						"value"
+					]
+				]
+			],
+			"expect": {
+				"value": [
+					{
+						"accent": "cherry",
+						"n": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"explain",
+				"$face"
+			],
+			"expect": {
+				"value": {
+					"writer": "method",
+					"path": [
+						"system",
+						"land"
+					],
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "metadata",
+			"part": "value",
+			"id": "n6",
+			"expect": {
+				"keys": [
+					"actor",
+					"call",
+					"caller",
+					"handler",
+					"node"
+				],
+				"node": "n1",
+				"call": 1,
+				"handler": "n2",
+				"caller": "proc:p"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"/system/land",
+				"$skin"
+			],
+			"fails": true,
+			"expect": {
+				"error": "Error: nothing-there (n7)"
+			}
+		}
+	]
+}

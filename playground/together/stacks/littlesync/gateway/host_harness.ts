@@ -1,14 +1,14 @@
 // a lab-pig-style TS device for tests: a table, places, a scheduler and sync.ts (@ermine/together)
 // over its own device, as lab-pig's sync world composes one; stored writes and ephemeral writes
 // (waves) of a node's value
-import createEntry from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import type { Patch } from "@ermine/op/apply"
+import createEntry from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import type { Patch } from "@ermine/core/op/apply"
 import { createPlaces } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
-import { createScheduler } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/table"
+import { createScheduler } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Id, type Key } from "@ermine/core/table"
 import { createSync } from "../../../typescript/sync.ts"
 import { createSigner } from "../../../typescript/seal.ts"
 

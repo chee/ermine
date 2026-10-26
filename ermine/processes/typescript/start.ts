@@ -16,8 +16,8 @@
 //   1. its node's id (setup.id's, else proc:<boot>-<n>), then a scope { process: at, [NODE]: id } (given the node,
 //      scopes.ts) under options.under (none: the owner), made through setup.sites when given
 //   2. the row: addProcess at the path, committed to the places given
-//   3. node attributes: options.attributes, then ermine.process.args, .cwd, .pin, and status
-//      PENDING (processes' own win)
+//   3. node attributes: options.attributes, then ermine.process.args, .cwd, .pin (processes' own
+//      win); its status PENDING, in the status table (places' status.ts)
 //   4. body, scope open, given give(computer, { run }): the computer's status (with run: its
 //      latest run) on the node. a function returned: called at stop
 // stop(p): body's return (scope open), the row out, the scope torn down, its run record out. its
@@ -26,21 +26,21 @@
 // writes: each with the process's scope open, its site the call into start or stop
 // open: pid("clock") not built (at is a plain path); args as strings; cwd always written, never
 // checked to be there
-import createEntry, { type ChangeHeader } from "@ermine/node/entry"
+import createEntry, { type ChangeHeader } from "@ermine/core/node/entry"
 import { type Address, type Box, inside } from "@ermine/boxes"
-import { type Id, type Path, type Places, PlacesError } from "@ermine/places"
+import { type Id, type Path, type Places, PlacesError, type Writer } from "@ermine/places"
 import { createChangeBase, NODE } from "@ermine/places/header"
-import { createStatus, STATUS } from "@ermine/places/status"
+import { createStatus, STATUS, TABLE } from "@ermine/places/status"
 import {
 	type Computer,
 	PENDING,
 	type Scheduler,
 	SchedulerError,
 	type Scope,
-} from "@ermine/scheduler"
+} from "@ermine/core/scheduler"
 import type { Sited } from "@ermine/sites"
-import type { Table } from "@ermine/table"
-import { capture } from "@ermine/util/stacktrace"
+import type { Table } from "@ermine/core/table"
+import { capture } from "@ermine/core/util/stacktrace"
 import { addProcess, removeProcess } from "./processes.ts"
 import { createRuns, type Runs } from "./runs.ts"
 import type { ScopeNodes } from "./scopes.ts"
@@ -115,6 +115,9 @@ export type Setup = {
 	owner?: Scope
 	// files a write's site skips beside this one: a starter's own, so the site is its caller's
 	ours?: Iterable<string>
+	// none: each write made here (places' commit, table.add); given (places' Writer): every write
+	// of a start or stop (the row, the node's attributes, statuses') handed to it to do and say
+	write?: Writer
 	// a new process's node id, the host's (unique for as long as its nodes are kept). none:
 	// "proc:<boot>-<n>", boot 16 hex random once per createProcesses, n from 1 (most of it the same
 	// each time, so it packs small)
@@ -154,7 +157,7 @@ export function createProcesses(setup: Setup): Processes {
 		.join("")
 	let made = 0
 	const makeId = setup.id ?? (() => `proc:${boot}-${++made}`)
-	const statuses = createStatus({ places, table, scheduler: s })
+	const statuses = createStatus({ places, table, scheduler: s, write: setup.write })
 	const { describe, watchAll } = places
 	const runs = describe && watchAll
 		? createRuns({ places: { describe, watchAll }, table, scheduler: s })
@@ -194,7 +197,8 @@ export function createProcesses(setup: Setup): Processes {
 		try {
 			s.runWithScope(
 				scope,
-				() => box.places.commit(addProcess(table, box.root, at, id, headerOf(start))),
+				() =>
+					box.places.commit(addProcess(table, box.root, at, id, headerOf(start), setup.write)),
 			)
 		} catch (e) {
 			s.teardown(scope)
@@ -211,11 +215,17 @@ export function createProcesses(setup: Setup): Processes {
 		if (options.args !== undefined) attrs[ARGS] = options.args
 		attrs[CWD] = cwd
 		if (options.pin !== undefined) attrs[PIN] = options.pin
-		attrs[STATUS] = PENDING
-		s.runWithScope(
-			scope,
-			() => table.add("attributes", id, createEntry(attrs, headerOf(start))),
-		)
+		// its status in the status table, not its attributes (places' status.ts)
+		const status = { [STATUS]: PENDING }
+		s.runWithScope(scope, () => {
+			if (setup.write) {
+				setup.write("attributes", id, [{ path: [], value: attrs }], headerOf(start))
+				setup.write(TABLE, id, [{ path: [], value: status }], headerOf(start))
+				return
+			}
+			table.add("attributes", id, createEntry(attrs, headerOf(start)))
+			table.add(TABLE, id, createEntry(status, headerOf(start)))
+		})
 		if (body === undefined) return process
 		const give = (c: Computer, o?: { run?: boolean }) => {
 			statuses.give(c, id)
@@ -250,7 +260,10 @@ export function createProcesses(setup: Setup): Processes {
 			try {
 				within(
 					p,
-					() => p.box.places.commit(removeProcess(table, p.box.root, p.at, headerOf(entry))),
+					() =>
+						p.box.places.commit(
+							removeProcess(table, p.box.root, p.at, headerOf(entry), setup.write),
+						),
 				)
 			} catch (e) {
 				if (!(e instanceof PlacesError && e.code === "nothing-there")) failed ??= { error: e }

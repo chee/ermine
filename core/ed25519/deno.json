@@ -1,8 +1,0 @@
-{
-	"name": "@ermine/ed25519",
-	"version": "0.0.0",
-	"license": "AGPL-3.0-or-later",
-	"exports": {
-		".": "./typescript/ed25519.ts"
-	}
-}

@@ -9,15 +9,15 @@
 //   /loaders/canvas             the host's runner: a live function running a wasm on the canvas
 //   /loaders/canvas.js          the runner's code, text: canvas runs what this says
 //   /cache/<key>                each build (@ermine/compilers), by its key
-import createEntry, { type Entry } from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import produce from "@ermine/op/produce"
+import createEntry, { type Entry } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import produce from "@ermine/core/op/produce"
 import { createPlaces, place, unplace } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
 import * as lib from "@ermine/places/lib"
-import { createScheduler, type Ended } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable } from "@ermine/table"
+import { createScheduler, type Ended } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable } from "@ermine/core/table"
 
 export type Path = readonly string[]
 

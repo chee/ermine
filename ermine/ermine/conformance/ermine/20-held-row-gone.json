@@ -1,0 +1,125 @@
+{
+	"title": "a held row is shown only while it is there (the ermine decision: show what's true now): once a later write takes the row out, the stopped process's status no longer says held, a start at the path goes ahead, and a start refused there afterwards, taken by a running process, names no held row",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				{
+					"name": "h",
+					"onWrite": "drop",
+					"parts": [
+						"process"
+					],
+					"takes": true,
+					"times": 1
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "stop",
+			"name": "p",
+			"expect": {}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p"
+			],
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "status",
+			"name": "p",
+			"expect": {
+				"status": {
+					"state": "done",
+					"held": {
+						"feature": "h",
+						"write": "row"
+					}
+				}
+			}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/code/p",
+			"expect": {
+				"refused": "taken",
+				"held": {
+					"process": "proc:p",
+					"feature": "h"
+				}
+			}
+		},
+		{
+			"op": "o",
+			"call": [
+				"write",
+				"process",
+				"R",
+				[
+					{
+						"path": [
+							"code"
+						]
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p"
+			],
+			"expect": {
+				"id": "n2"
+			}
+		},
+		{
+			"op": "status",
+			"name": "p",
+			"expect": {
+				"status": {
+					"state": "done"
+				}
+			}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:q"
+			}
+		},
+		{
+			"op": "start",
+			"name": "r",
+			"at": "/code/p",
+			"expect": {
+				"refused": "taken"
+			}
+		}
+	]
+}

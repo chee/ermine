@@ -82,12 +82,12 @@
 //
 // after each request every device is idle: no take or run going on
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
-import createEntry from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import type { Patch } from "@ermine/op/apply"
-import { createScheduler } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Key, type Table } from "@ermine/table"
+import createEntry from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import type { Patch } from "@ermine/core/op/apply"
+import { createScheduler } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Key, type Table } from "@ermine/core/table"
 import { children, createPlaces } from "@ermine/places"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"

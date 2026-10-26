@@ -133,7 +133,8 @@
 			"name": "a",
 			"expect": {
 				"parts": [
-					"attributes"
+					"attributes",
+					"status"
 				],
 				"status": "pending",
 				"args": [
@@ -199,7 +200,8 @@
 			"name": "a",
 			"expect": {
 				"parts": [
-					"attributes"
+					"attributes",
+					"status"
 				],
 				"status": null,
 				"args": [

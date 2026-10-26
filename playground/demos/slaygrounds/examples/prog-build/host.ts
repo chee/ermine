@@ -29,7 +29,7 @@ import { ATTRIBUTES as A, satisfy } from "@ermine/programs"
 import { COMPILER, createBuilds } from "@ermine/compilers"
 import type { Places } from "@ermine/places"
 import type { Process, Start } from "@ermine/programs/start"
-import { PENDING } from "@ermine/scheduler"
+import { PENDING } from "@ermine/core/scheduler"
 import { createWorld } from "@ermine/slaygrounds/world"
 import { render } from "ermine-h"
 

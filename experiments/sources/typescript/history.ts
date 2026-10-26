@@ -22,13 +22,13 @@
 // echo: a write landing here is told back by watchAll; facts at its node and part while it lands
 // are its own, never named again
 // deno-lint-ignore-file require-await -- the graph answers at once; async so it is a holder like any
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import apply, { type Patch } from "@ermine/op/apply"
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import apply, { type Patch } from "@ermine/core/op/apply"
 import type { Fact, Places } from "@ermine/places"
 import type { ScopeNodes } from "@ermine/processes/scopes"
-import type { Scheduler, Scope } from "@ermine/scheduler"
-import type { Key, Table } from "@ermine/table"
+import type { Scheduler, Scope } from "@ermine/core/scheduler"
+import type { Key, Table } from "@ermine/core/table"
 import type { Holder, Outcome } from "./holder.ts"
 import { createLog } from "./log.ts"
 import { type Graph, openRecord, SKIPPED } from "./status.ts"

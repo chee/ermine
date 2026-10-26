@@ -4,7 +4,7 @@
 // click a pig and the page walks back from her weight: the write that made it, the run that wrote
 // it and what that run read, and on, to the writes from outside, each with its file and line.
 // the records and the walk are store.ts's (the page's); who wrote what is the scheduler's word.
-import { type Computer, createScheduler } from "@ermine/scheduler"
+import { type Computer, createScheduler } from "@ermine/core/scheduler"
 import { pondPage } from "../kit/page.ts"
 import type { Box, Wire } from "../kit/board.ts"
 import { createFarm } from "../kit/farm.ts"
@@ -29,7 +29,7 @@ const page = pondPage("why", {
 		<p><b>the trail:</b> start at a value, find the write that made it, then the writes its run read, and on, until every branch ends outside.</p>
 		<p><b>same answer:</b> a run that works out the same value writes nothing, so the trail names the run that last <i>changed</i> it.</p>`,
 	real:
-		`Runs the real <code>@ermine/scheduler</code> (createComputer, createEffect, track, mark, getRun, onRunEnd) and <code>capture</code> from <code>@ermine/util/stacktrace</code>. There's no <code>why()</code> in ermine: the page keeps each key's last write and each run's reads (store.ts, on the store box's back) and walks the trail itself. "You" means the click was a real one (<code>isTrusted</code>).`,
+		`Runs the real <code>@ermine/core/scheduler</code> (createComputer, createEffect, track, mark, getRun, onRunEnd) and <code>capture</code> from <code>@ermine/core/util/stacktrace</code>. There's no <code>why()</code> in ermine: the page keeps each key's last write and each run's reads (store.ts, on the store box's back) and walks the trail itself. "You" means the click was a real one (<code>isTrusted</code>).`,
 })
 const { board } = page
 

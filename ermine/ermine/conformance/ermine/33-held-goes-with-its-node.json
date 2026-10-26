@@ -1,0 +1,246 @@
+{
+	"title": "a write a feature held back is shown at its node while the node is there; the node going (a memo not made again, a node removed, a process stopped), what was held at a part holding nothing goes with it: why of it says nothing after (show what's true now; not kept forever)",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				{
+					"name": "h",
+					"onWrite": "drop",
+					"parts": [
+						"attributes"
+					],
+					"ids": [
+						"n6",
+						"n7",
+						"proc:p"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/on",
+				{
+					"on": true
+				}
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createMemo",
+						"outer",
+						{},
+						[
+							"all",
+							[
+								"if",
+								[
+									"read",
+									"/on",
+									[
+										"on"
+									]
+								],
+								[
+									"createMemo",
+									"inner",
+									{},
+									[
+										"executeAction",
+										"/nobody"
+									]
+								]
+							],
+							1
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p",
+				"inner"
+			],
+			"expect": {
+				"id": "n6"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"explain",
+				{
+					"id": "n6",
+					"part": "attributes"
+				}
+			],
+			"expect": {
+				"value": {
+					"held": {
+						"feature": "h"
+					}
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"explain",
+				{
+					"id": "proc:p",
+					"part": "attributes"
+				}
+			],
+			"expect": {
+				"value": {
+					"held": {
+						"feature": "h"
+					}
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/on",
+				[
+					{
+						"path": [
+							"on"
+						],
+						"value": false
+					}
+				]
+			]
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p",
+				"inner"
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"explain",
+				{
+					"id": "n6",
+					"part": "attributes"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/x",
+				1
+			]
+		},
+		{
+			"op": "id",
+			"path": [
+				"x"
+			],
+			"expect": {
+				"id": "n7"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				{
+					"path": [
+						"x"
+					],
+					"part": "attributes"
+				},
+				[
+					{
+						"path": [
+							"a"
+						],
+						"value": 1
+					}
+				]
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"explain",
+				{
+					"id": "n7",
+					"part": "attributes"
+				}
+			],
+			"expect": {
+				"value": {
+					"held": {
+						"feature": "h"
+					}
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"remove",
+				"/x"
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"explain",
+				{
+					"id": "n7",
+					"part": "attributes"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "stop",
+			"name": "p",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"explain",
+				{
+					"id": "proc:p",
+					"part": "attributes"
+				}
+			],
+			"expect": {}
+		}
+	]
+}

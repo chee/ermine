@@ -17,14 +17,14 @@
 // and now and then (and at the end, everything delivered) a fresh host fed the history is where
 // the host is. a failure is shrunk (steps dropped while the same check still fails) and printed
 import * as sd from "npm:@automerge/subduction@0.23.0"
-import createEntry, { type ChangeHeader } from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import apply, { type Patch } from "@ermine/op/apply"
+import createEntry, { type ChangeHeader } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import apply, { type Patch } from "@ermine/core/op/apply"
 import { decode, name as nameOf } from "@ermine/formats/commit"
 import { createPlaces } from "@ermine/places"
-import { createScheduler } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Key, type Table } from "@ermine/table"
+import { createScheduler } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Key, type Table } from "@ermine/core/table"
 import { createSigner, seal, type Signer, stored } from "./seal.ts"
 import { envelope } from "../stacks/subduction/typescript/subduction.ts"
 import { createSync, type Ephemeral, type Sync } from "./sync.ts"
@@ -43,7 +43,7 @@ const TIME = 1_760_000_000
 const KEPT = ["value", "attributes", "children"] as const
 // a new kind of table: with comments on, h1 keeps it too and the other hosts are older ones that
 // don't know it (they keep the commits, but not the table)
-declare module "@ermine/table" {
+declare module "@ermine/core/table" {
 	interface Tables {
 		comments: Record<string, unknown>
 	}

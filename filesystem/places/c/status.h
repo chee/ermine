@@ -1,5 +1,6 @@
-// Status (typescript/status.ts), in C: a computer's status on its own node, in the attribute
-// ermine.computer.status. Same rules as status.ts, which the suite in
+// Status (typescript/status.ts), in C: a computer's status on its own node, in a table of its own
+// ("status", not the node's attributes), under the key ermine.computer.status. Same rules as
+// status.ts, which the suite in
 // filesystem/places/conformance/places/ (28-status.json) holds both to.
 //
 // The attribute holds the pending stand-in while a run is pending, an error when one failed (a loop gives the
@@ -31,7 +32,8 @@ typedef struct {
 	sc_scheduler *scheduler;
 } cst_setup;
 
-// the attribute
+// the table, and the key in its entry
+#define CST_TABLE "status"
 #define CST_ATTRIBUTE "ermine.computer.status"
 
 // listens to the scheduler's run end and effects from here on

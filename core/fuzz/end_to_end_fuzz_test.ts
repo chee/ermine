@@ -12,9 +12,9 @@
 import { assert, assertEquals } from "@std/assert"
 import { createPlaces, type Path, type Places, PlacesError } from "@ermine/places"
 import { get, list, lookup, members } from "@ermine/places/lib"
-import { createPaths } from "@ermine/scheduler/paths"
-import { type Computer, createScheduler, type Scope } from "@ermine/scheduler"
-import { createTable } from "@ermine/table"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { type Computer, createScheduler, type Scope } from "@ermine/core/scheduler"
+import { createTable } from "@ermine/core/table"
 import { rand } from "./gen_harness.ts"
 import { createWorld, show } from "./world_harness.ts"
 

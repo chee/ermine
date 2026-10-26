@@ -2,10 +2,10 @@
 // read through lib.ts and through a path cache on a box's places. the suite (conformance/boxes) holds
 // the rules; these hold what it cannot say: sites, the host's commit, the cache, a stand-in
 import { assert, assertEquals, assertThrows } from "@std/assert"
-import createEntry, { type Entry } from "@ermine/node/entry"
-import { type Computer, createScheduler } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/table"
+import createEntry, { type Entry } from "@ermine/core/node/entry"
+import { type Computer, createScheduler } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Id, type Key } from "@ermine/core/table"
 import { children, createPlaces, PlacesError } from "@ermine/places"
 import { createPathCache } from "@ermine/places/cache"
 import { get, list, lookup } from "@ermine/places/lib"

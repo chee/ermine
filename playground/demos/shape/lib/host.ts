@@ -14,10 +14,10 @@
 // a node: an id with "value", "children" and "attributes". an address: names from a place ("/"
 // the root, ".." up); a string is an id. a process: a scope under the host's, its node placed at
 // its address under its name. its reads are tracked in a compute, untracked elsewhere.
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
-import type { Node } from "@ermine/node"
-import update from "@ermine/node/update"
-import apply, { type Key as Step_, type Patch } from "@ermine/op/apply"
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
+import type { Node } from "@ermine/core/node"
+import update from "@ermine/core/node/update"
+import apply, { type Key as Step_, type Patch } from "@ermine/core/op/apply"
 import {
 	at,
 	createPlaces,
@@ -40,11 +40,11 @@ import {
 	PENDING,
 	type Scheduler,
 	type Scope,
-} from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { trace } from "@ermine/scheduler/trace"
-import { createTable, type Id as TableId, type Key, type Table } from "@ermine/table"
-import { type FileLocation, frames } from "@ermine/util/stacktrace"
+} from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { trace } from "@ermine/core/scheduler/trace"
+import { createTable, type Id as TableId, type Key, type Table } from "@ermine/core/table"
+import { type FileLocation, frames } from "@ermine/core/util/stacktrace"
 
 export { PENDING }
 export type { ChangeHeader, Ended, Node, Patch }

@@ -24,7 +24,7 @@ import { assert, assertEquals } from "@std/assert"
 import * as cbor from "@ermine/encoding/cbor"
 import { deflate, inflate } from "./deflate.ts"
 import { decode, encode, type Entry, pack, PackError, unpack } from "./pack.ts"
-import createEntry, { type Entry as NodeEntry } from "@ermine/node/entry"
+import createEntry, { type Entry as NodeEntry } from "@ermine/core/node/entry"
 import { line, toJson } from "../../../conformance/typescript/form.ts"
 import { ask } from "../../../conformance/typescript/ask.ts"
 

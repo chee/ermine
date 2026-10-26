@@ -1,8 +1,8 @@
 /** @jsxImportSource ermine-h */
 import type { API } from "@ermine/api"
 import { bind, handler } from "ermine-h"
-import apply from "@ermine/op/apply"
-import { count, unit } from "@ermine/util/walk-string"
+import apply from "@ermine/core/op/apply"
+import { count, unit } from "@ermine/core/util/walk-string"
 
 // piece-lens: one text in three kinds of place, kept in step by opstreams. a file or a folder on
 // your computer (the File System Access API), a patchwork doc (automerge, by its url), and inner
