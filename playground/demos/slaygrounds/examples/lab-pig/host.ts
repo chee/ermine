@@ -23,7 +23,7 @@
 //   /conflicts  each node given (node) with several versions: [{id, versions, values, children}],
 //               the value and children of each version not shown (undefined where they don't differ)
 // and whatever the program places (place), under its own names
-import { place, unplace } from "@ermine/places"
+import { place, unplace } from "@ermine/core/places"
 import type { Conflict } from "@ermine/together/sync"
 import createEntry from "@ermine/core/node/entry"
 import { createSyncWorld, put } from "@ermine/slaygrounds/sync-world"

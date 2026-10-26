@@ -32,8 +32,8 @@ import {
 	PlacesError,
 	unread,
 	type Writer,
-} from "@ermine/places"
-import { upsert } from "@ermine/places/upsert"
+} from "@ermine/core/places"
+import { upsert } from "@ermine/core/places/upsert"
 import type { Key, Table } from "@ermine/core/table"
 
 // the process part. not declared on the table's Tables: a prototype in playground/union-check

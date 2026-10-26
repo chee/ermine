@@ -24,8 +24,8 @@
 #ifndef COMPILERS_H
 #define COMPILERS_H
 
-#include "../../../filesystem/places/c/places.h"
-#include "../../../filesystem/places/c/status.h"
+#include "../../../core/places/c/places.h"
+#include "../../../core/places/c/status.h"
 #include "../../../experiments/software/c/functions.h"
 
 #define BD_COMPILER "ermine.programs.compiler"

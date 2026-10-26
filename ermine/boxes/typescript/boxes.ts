@@ -25,9 +25,9 @@ import {
 	unplace,
 	unplacing,
 	type Writer,
-} from "@ermine/places"
-import { createChangeBase } from "@ermine/places/header"
-import { parse } from "@ermine/places/path"
+} from "@ermine/core/places"
+import { createChangeBase } from "@ermine/core/places/header"
+import { parse } from "@ermine/core/places/path"
 import { processes } from "@ermine/processes"
 import { type Scheduler, SchedulerError } from "@ermine/core/scheduler"
 import type { Table } from "@ermine/core/table"

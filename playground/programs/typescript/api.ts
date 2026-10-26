@@ -38,9 +38,9 @@ import {
 	type Why,
 } from "@ermine/api"
 import { inside } from "@ermine/boxes"
-import { type Id, type Path, PlacesError } from "@ermine/places"
-import { get } from "@ermine/places/lib"
-import { createChangeHeader } from "@ermine/places/header"
+import { type Id, type Path, PlacesError } from "@ermine/core/places"
+import { get } from "@ermine/core/places/lib"
+import { createChangeHeader } from "@ermine/core/places/header"
 import type { Context, Process } from "@ermine/processes/start"
 import type { Scope } from "@ermine/core/scheduler"
 import { openwith as openwithIn, satisfy, type Way, type Whynot } from "./programs.ts"

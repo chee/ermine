@@ -15,7 +15,9 @@
 // ermine.process.args, .cwd, .pin, status pending: processes' own win), then options.body. pr_stop:
 // options.stop, row out, scope torn down, its run record out; its scope torn down from above: what
 // is under it first, then the same; twice: nothing.
-// writes: all with the process's scope open.
+// writes: all with the process's scope open. setup.write given (start.ts' write): the row, the
+// attributes and the status entry are each handed to it to do and say, and not made here nor committed
+// (setup.commit not asked); NULL: made here. statuses (status.h) get the same writer.
 // memory: a process lives until pr_free (which stops one never stopped). at, args, cwd, root are
 // copied; the pin and options.attributes' values are the attributes' (op_ref); the places must
 // outlive it. out of memory aborts.
@@ -34,6 +36,12 @@
 typedef struct pr pr;
 typedef struct pr_process pr_process;
 
+// a write handed over (places' Writer): patches on (part, id), with the header of the write; it does
+// the write, commits it and tells the places. patches and header are borrowed, good for the call
+// (a writer that holds one copies it); the header's block is held here on the node it landed on
+typedef void (*pr_writer)(void *ctx, const char *part, tb_key id, const op_patch *patches, size_t n,
+	const ch_header *header);
+
 typedef struct {
 	sc_scheduler *scheduler;
 	tb_table *table;
@@ -44,6 +52,10 @@ typedef struct {
 	// places
 	void (*commit)(void *ctx, const pl_changed *changed);
 	void *commit_ctx;
+	// every write of a start or stop (the row, the node's attributes, its status entry), handed to it
+	// with the scope open; NULL: each made here, and committed as above
+	pr_writer write;
+	void *write_ctx;
 	// where the scopes made here are noted (ermine/sites); NULL: not noted
 	st_sites *sites;
 	// 1: pr_give's run, a computer's latest run, on the runs' table (runs.h) by the process's id

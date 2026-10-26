@@ -15,9 +15,9 @@ done
 nc_sources="$nc/core/op/c/value.c $nc/core/op/c/apply.c $nc/core/op/c/invert.c $nc/core/op/c/json.c $nc/core/node/c/node.c $nc/core/node/c/update.c \
   $nc/core/table/c/table.c $nc/core/scheduler/c/scheduler.c $nc/core/scheduler/c/order.c $nc/core/scheduler/c/rank.c \
   $nc/core/scheduler/c/causes.c $nc/core/scheduler/c/ptrmap.c $nc/core/scheduler/c/tracker.c $nc/core/scheduler/c/paths.c \
-  $nc/core/scheduler/c/selector.c $nc/filesystem/places/c/places.c $nc/core/unread/c/unread.c $nc/filesystem/places/c/cache.c $nc/filesystem/places/c/status.c $nc/ermine/processes/c/runs.c \
+  $nc/core/scheduler/c/selector.c $nc/core/places/c/places.c $nc/core/unread/c/unread.c $nc/core/places/c/cache.c $nc/core/places/c/status.c $nc/ermine/processes/c/runs.c \
   $nc/ermine/processes/c/processes.c $nc/ermine/processes/c/scopes.c $nc/ermine/boxes/c/boxes.c \
-  $nc/experiments/software/c/functions.c $nc/playground/compilers/c/compilers.c $nc/filesystem/clingy/c/clingy.c $nc/ermine/types/c/types.c $nc/ermine/types/c/utis.c \
+  $nc/experiments/software/c/functions.c $nc/playground/compilers/c/compilers.c $nc/core/clingy/c/clingy.c $nc/ermine/types/c/types.c $nc/ermine/types/c/utis.c \
   $nc/ermine/processes/c/start.c $nc/ermine/sites/c/sites.c \
   $nc/experiments/software/c/common.c $nc/experiments/software/c/offers.c $nc/experiments/software/c/run.c $nc/experiments/software/c/software.c \
   $nc/playground/programs/c/programs.c $nc/playground/programs/c/programs_json.c $nc/playground/programs/c/start.c $nc/playground/programs/c/dlopen.c \

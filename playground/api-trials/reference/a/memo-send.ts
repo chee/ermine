@@ -1,8 +1,0 @@
-// @ts-nocheck: a program as a model would write it, untyped
-export default function (api) {
-	const { open, read, edit, memo, effect, method, send, show } = api
-	const text = open("./text", "hi")
-	const loud = memo("loud", () => send("/services/upper", read(text)))
-	effect("draw", () => read(loud), (v) => show(`loud: ${v}`))
-	method("./on/set", (t) => edit(text, () => t))
-}

@@ -32,8 +32,8 @@ import type { Patch } from "@ermine/core/op/apply"
 import createEntry, { type Entry } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
 import type { Info, Run, Scheduler, Scope } from "@ermine/core/scheduler"
-import type { Places } from "@ermine/places"
-import { createChangeHeader } from "@ermine/places/header"
+import type { Places } from "@ermine/core/places"
+import { createChangeHeader } from "@ermine/core/places/header"
 import type { Id, Key, Table, Tables } from "@ermine/core/table"
 
 // the attribute a provided node's status is on

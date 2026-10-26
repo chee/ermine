@@ -1,13 +1,13 @@
 // The C patch nodes (patch.h) on the line protocol of typescript/patch_harness.ts, which documents
 // it and the programs (conformance/c/harness.h has the loop). The scheduler, scopes, pulse, state
-// and header are the places harness's world (filesystem/places/c/world_harness.h): its table is the view
+// and header are the places harness's world (core/places/c/world_harness.h): its table is the view
 // places reads, and the table the writes go to is this harness's own.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "../../../conformance/c/protocol_harness.h"
-#include "../../../filesystem/places/c/world_harness.h"
+#include "../../../core/places/c/world_harness.h"
 #include "patch.h"
 
 static pn *overlay;

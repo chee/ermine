@@ -1,5 +1,5 @@
 // history in C (typescript/history.ts): a log and ermine's C graph (core/table/c,
-// filesystem/places/c), tied. the recorder: every kept write here (pl_watch_all) a step of this
+// core/places/c), tied. the recorder: every kept write here (pl_watch_all) a step of this
 // device's. the lander: every step from elsewhere (the log's told) written into the graph
 //
 // the merge: an entry's value is its steps' patches applied in order of lamport, then device, from
@@ -34,7 +34,7 @@
 #ifndef TIPPET_HISTORY_H
 #define TIPPET_HISTORY_H
 
-#include "../../../filesystem/places/c/places.h"
+#include "../../../core/places/c/places.h"
 #include "tippet.h"
 
 typedef struct tp_history tp_history;

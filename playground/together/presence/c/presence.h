@@ -24,7 +24,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "../../../../filesystem/places/c/places.h"
+#include "../../../../core/places/c/places.h"
 #include "channel.h"
 
 #define PRES_PART "presence"

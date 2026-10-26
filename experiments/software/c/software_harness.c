@@ -20,7 +20,7 @@
 #include <string.h>
 
 #include "../../../conformance/c/harness.h"
-#include "../../../filesystem/places/c/status.h"
+#include "../../../core/places/c/status.h"
 #include "../../../ermine/api/c/api.h"
 #include "../../../ermine/boxes/c/boxes.h"
 #include "../../../ermine/processes/c/processes.h"

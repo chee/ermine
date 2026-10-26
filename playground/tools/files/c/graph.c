@@ -6,8 +6,8 @@
 #include "../../../../core/node/c/update.h"
 #include "../../../../core/scheduler/c/paths.h"
 #include "../../../../core/table/c/table.h"
-#include "../../../../filesystem/places/c/guard.h"
-#include "../../../../filesystem/places/c/places.h"
+#include "../../../../core/places/c/guard.h"
+#include "../../../../core/places/c/places.h"
 
 #include <stdio.h>
 #include <stdlib.h>

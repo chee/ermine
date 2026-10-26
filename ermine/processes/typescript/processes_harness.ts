@@ -43,9 +43,9 @@ import {
 	place,
 	PlacesError,
 	rename,
-} from "@ermine/places"
-import { get, gets, list, lookup, members } from "@ermine/places/lib"
-import { createChangeHeader } from "@ermine/places/header"
+} from "@ermine/core/places"
+import { get, gets, list, lookup, members } from "@ermine/core/places/lib"
+import { createChangeHeader } from "@ermine/core/places/header"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { addProcess, PROCESS, processes, removeProcess } from "./processes.ts"
 import { createScopeNodes } from "./scopes.ts"

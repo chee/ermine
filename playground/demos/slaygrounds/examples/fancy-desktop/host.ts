@@ -7,8 +7,8 @@
 // what opens a thing with openwith, so what runs an app is /apps/run, the world's own runner
 import { createWorld, type Tools } from "@ermine/slaygrounds/world"
 import type { API } from "@ermine/api"
-import { get } from "@ermine/places/lib"
-import { plan as steps } from "@ermine/places/path"
+import { get } from "@ermine/core/places/lib"
+import { plan as steps } from "@ermine/core/places/path"
 import { ATTRIBUTES, openwith, type Way, type Why } from "@ermine/programs"
 import { render } from "ermine-h"
 

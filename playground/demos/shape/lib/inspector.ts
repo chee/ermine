@@ -11,7 +11,7 @@
 //
 // one id under a name (today's places): a path reaches it, and a node placed under two names shows
 // as the same node placed again
-import { STATUS } from "@ermine/places/status"
+import { STATUS } from "@ermine/core/places/status"
 import {
 	type ChangeHeader,
 	first,

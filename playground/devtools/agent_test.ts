@@ -7,7 +7,7 @@ import { assert, assertEquals } from "@std/assert";
 import { devtools } from "./answer.ts";
 import { make, put, val } from "../demos/shape/lib/host.ts";
 import { createWorld } from "@ermine/slaygrounds/world";
-import type { Policy } from "@ermine/protect";
+import type { Policy } from "@ermine/core/protect";
 
 // deno-lint-ignore no-explicit-any
 type Any = any;

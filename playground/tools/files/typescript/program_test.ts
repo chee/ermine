@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "@std/assert"
-import { no, type Policy, yes } from "@ermine/protect"
+import { no, type Policy, yes } from "@ermine/core/protect"
 import { createGraph } from "./graph.ts"
 import { type Files, files, patches } from "./program.ts"
 import { type Store, store } from "./store.ts"

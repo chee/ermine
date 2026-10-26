@@ -7,8 +7,8 @@
 // spots no walker holds any more are released, as the scheduler's forget would; what is kept is
 // what is held. a few dozen seeds (fuzz runs small)
 import { assert, assertEquals } from "@std/assert"
-import { PlacesError } from "@ermine/places"
-import { get, list, lookup, members } from "@ermine/places/lib"
+import { PlacesError } from "@ermine/core/places"
+import { get, list, lookup, members } from "@ermine/core/places/lib"
 import type { Spot } from "@ermine/core/scheduler/paths"
 import { isMap, rand } from "./gen_harness.ts"
 import { createWorld, show, type Wrote } from "./world_harness.ts"

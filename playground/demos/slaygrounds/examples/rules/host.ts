@@ -3,8 +3,8 @@
 // reads is tracked as the asker's reads are, so editing the rules reruns whatever asked
 import { createWorld } from "@ermine/slaygrounds/world"
 import { render } from "ermine-h"
-import { get } from "@ermine/places/lib"
-import { no, type Policy, yes } from "@ermine/protect"
+import { get } from "@ermine/core/places/lib"
+import { no, type Policy, yes } from "@ermine/core/protect"
 
 let world: ReturnType<typeof createWorld> | undefined
 const may: Policy = (ask, read) => {

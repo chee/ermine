@@ -60,6 +60,8 @@ struct crn {
 	pl *places;
 	tb_table *table;
 	sc_scheduler *scheduler;
+	crn_hold hold;
+	void *hold_ctx;
 	sc_listener *starts, *ends, *effects, *tracks;
 	pl_watch *all;
 	// the computers given, by address, and in a list
@@ -352,8 +354,8 @@ static int differs(const crn_run *was, const crn_run *run, int f, int same_error
 	return 0;
 }
 
-// the record written (taken): the fields that differ marked, the computer's latest run their writer
-static void write_record(crn *r, held *h, sc_run *by, crn_run *run, int same_error) {
+// the record held (taken): the fields that differ marked, the computer's latest run their writer
+static void put_record(crn *r, held *h, sc_run *by, crn_run *run, int same_error) {
 	crn_run *was = h->run;
 	const void *marked[FIELDS];
 	size_t n = 0;
@@ -363,6 +365,34 @@ static void write_record(crn *r, held *h, sc_run *by, crn_run *run, int same_err
 	h->run = run;
 	run_free(was);
 	if (n > 0) sc_mark(r->scheduler, marked, n, by);
+}
+
+// a record on its way through the hold hook: what keep puts
+typedef struct {
+	crn *r;
+	held *h;
+	sc_run *by;
+	crn_run *run;
+	int same_error;
+	int kept;
+} holding;
+
+static void keep_record(void *kept) {
+	holding *k = kept;
+	if (k->kept) return;
+	k->kept = 1;
+	put_record(k->r, k->h, k->by, k->run, k->same_error);
+}
+
+// the record written (taken), through the hold hook when given: not kept, let go
+static void write_record(crn *r, held *h, sc_run *by, crn_run *run, int same_error) {
+	if (r->hold == NULL) {
+		put_record(r, h, by, run, same_error);
+		return;
+	}
+	holding k = {r, h, by, run, same_error, 0};
+	r->hold(r->hold_ctx, tb_string(h->id), run, keep_record, &k);
+	if (!k.kept) run_free(run);
 }
 
 // the record read ------------------------------------------------------------------------------------
@@ -533,6 +563,8 @@ crn *crn_new(const crn_setup *setup) {
 	r->places = setup->places;
 	r->table = setup->table;
 	r->scheduler = setup->scheduler;
+	r->hold = setup->hold;
+	r->hold_ctx = setup->hold_ctx;
 	r->by = tb_new();
 	r->records = tb_new();
 	r->all = pl_watch_all(r->places, landed, r);

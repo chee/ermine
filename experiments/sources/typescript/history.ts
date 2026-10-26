@@ -25,7 +25,7 @@
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
 import apply, { type Patch } from "@ermine/core/op/apply"
-import type { Fact, Places } from "@ermine/places"
+import type { Fact, Places } from "@ermine/core/places"
 import type { ScopeNodes } from "@ermine/processes/scopes"
 import type { Scheduler, Scope } from "@ermine/core/scheduler"
 import type { Key, Table } from "@ermine/core/table"

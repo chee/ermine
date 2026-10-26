@@ -33,7 +33,7 @@
 // { op: "fail", file, on }                      → {}   on: the file's writes throw
 // { op: "settle" }                              → {}   every watch heard, every live link idle
 // { op: "same", graphs, node }                  → { same }   every graph's value at node alike
-import { get } from "@ermine/places/lib"
+import { get } from "@ermine/core/places/lib"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { createFakeFile, type FakeFile } from "./access.ts"
 import { openFile } from "./file.ts"

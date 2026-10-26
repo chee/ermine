@@ -1,0 +1,2035 @@
+// nodes (system.ts, context.ts, handles.ts), in C: contexts, handles, paths and seen, reads and writes
+// of nodes, the placement asks. A's job, function by function (ermine.h says each):
+//   contexts: es_context_new, es_context_free, es_resolve, es_within, es_inside, es_owner,
+//     es_context_write_at, es_context_remove_at, es_context_ask, es_context_put, es_context_writer.
+//     context.ts' createProcessContext: land, headerOf, the guard
+//   handles: es_mint, es_handle_lookup, es_handle_in, es_handle_make, es_handle_by_id,
+//     es_node_data_copy, es_node_data_free (handles.ts: opaque, data in the ermine's table)
+//   paths and seen: es_nodes_new, es_nodes_free, es_running_set, es_running_clear, es_seen_in,
+//     es_path_in, es_names_free (system.ts' up, seenIn, pathIn: up through the names, then a
+//     process's box and path)
+//   shared: es_node_of, es_id_of, es_id_through, es_ask_placing, es_place_under,
+//     es_build, es_folder_slot
+//   reads: es_get_node, es_has_node, es_read, es_read_attributes, es_read_children, es_read_all,
+//     es_read_all_attributes, es_read_all_children, es_read_entries, es_peep, es_list, es_watch,
+//     es_unwatch, es_get_args, es_children_free, es_versions_free, es_items_free
+//   writes: es_ensure_node_at, es_create_node_at, es_ref_at, es_patch_at, es_patch_attributes_at,
+//     es_patch_children_at, es_place_at, es_unplace_at, es_rename_at, es_remove_at
+//   the placement asks: place, then read and edit of the node (es_ask_placing)
+// a failure is a code and es_thrown(): a PlacesError's message is "code" or "code (at)", an
+// ErmineError's "code: message", a Refusal's "op refused: reason"
+#include "ermine.h"
+
+#include <stdio.h>
+
+// the arrays places' functions take
+#define CP(x) ((const char *const *)(x))
+
+// 0, or the code of an ermine closed
+#define ALIVE(c) \
+	do { \
+		int alive_ = es_alive((c)->ermine); \
+		if (alive_) return alive_; \
+	} while (0)
+#define TRY(call) \
+	do { \
+		int code_ = (call); \
+		if (code_) return code_; \
+	} while (0)
+
+// failures -------------------------------------------------------------------------------------------
+
+// a PlacesError: "nothing-there", or "nothing-there (n7)" with the name asked about
+static int places_fail(int code, const char *at) {
+	const char *name = es_code_name(code);
+	return at == NULL ? es_fail(code, "%s", name) : es_fail(code, "%s (%s)", name, at);
+}
+static int not_a_handle(void) {
+	return es_fail(ES_NOT_A_HANDLE,
+		"not-a-handle: a node is given by @ermine/system's functions (getNode, ensureNode, createMemo "
+		"…) or a path, never written as an object");
+}
+static int not_patches(void) {
+	return es_fail(ES_NOT_PATCHES,
+		"not-patches: patchChildren: one name a patch, { path: [name], value: node } or { path: [name] }");
+}
+
+// the reads told since the last ask said the run must end now
+static int check(es_context *c) {
+	return pl_status(c->places) == SC_OK ? 0 : es_fail(ES_STOP, "%s", "");
+}
+
+// names ------------------------------------------------------------------------------------------------
+
+static void names_init(es_names *p) {
+	p->names = es_alloc(sizeof(char *));
+	p->n = 0;
+}
+static void names_add(es_names *p, const char *s) {
+	p->names = realloc(p->names, (p->n + 2) * sizeof *p->names);
+	if (p->names == NULL) abort();
+	p->names[p->n++] = es_dup(s);
+	p->names[p->n] = NULL;
+}
+static void names_pop(es_names *p) {
+	free(p->names[--p->n]);
+	p->names[p->n] = NULL;
+}
+static es_names names_of(const char *const *src, size_t n) {
+	es_names out;
+	names_init(&out);
+	for (size_t i = 0; i < n; i++) names_add(&out, src[i]);
+	return out;
+}
+// the names joined by "/": the message's at
+static char *names_join(const char *const *names, size_t n) {
+	size_t len = 1;
+	for (size_t i = 0; i < n; i++) len += strlen(names[i]) + 1;
+	char *s = es_alloc(len), *o = s;
+	for (size_t i = 0; i < n; i++) {
+		if (i) *o++ = '/';
+		size_t k = strlen(names[i]);
+		memcpy(o, names[i], k);
+		o += k;
+	}
+	*o = 0;
+	return s;
+}
+static int places_fail_path(int code, const char *const *path, size_t n) {
+	char *at = names_join(path, n);
+	places_fail(code, at);
+	free(at);
+	return code;
+}
+
+void es_names_free(es_names *names) {
+	for (size_t i = 0; i < names->n; i++) free(names->names[i]);
+	free(names->names);
+	*names = (es_names){0};
+}
+
+// a string's steps (path.ts' parse): a leading "/" is the root, empty pieces are skipped
+static void parse(const char *s, es_names *out) {
+	if (s[0] == '/') names_add(out, "/");
+	while (*s) {
+		const char *e = strchr(s, '/');
+		size_t len = e ? (size_t)(e - s) : strlen(s);
+		if (len) {
+			char *piece = es_alloc(len + 1);
+			memcpy(piece, s, len);
+			names_add(out, piece);
+			free(piece);
+		}
+		if (!e) break;
+		s = e + 1;
+	}
+}
+// one step of path.ts' plan: "." skipped, ".." takes back a name (none left: 1), "/" starts again
+static int plan_step(es_names *r, const char *step) {
+	if (strcmp(step, ".") == 0) return 0;
+	if (strcmp(step, "/") == 0) {
+		while (r->n) names_pop(r);
+		return 0;
+	}
+	if (strcmp(step, "..") != 0) return names_add(r, step), 0;
+	if (r->n == 0) return 1;
+	names_pop(r);
+	return 0;
+}
+
+int es_resolve(es_context *c, es_at p, es_names *out) {
+	*out = (es_names){0};
+	ALIVE(c);
+	es_names steps;
+	names_init(&steps);
+	if (p.text != NULL) parse(p.text, &steps);
+	else for (size_t i = 0; i < p.nsteps; i++) names_add(&steps, p.steps[i]);
+	const char *first = steps.n ? steps.names[0] : NULL;
+	char **from = c->at;
+	size_t nfrom = c->nat;
+	if (first != NULL && strcmp(first, "/") == 0) from = NULL, nfrom = 0;
+	else if (first != NULL && (strcmp(first, ".") == 0 || strcmp(first, "..") == 0)) {
+		from = c->cwd, nfrom = c->ncwd;
+	}
+	es_names r;
+	names_init(&r);
+	int bad = 0;
+	for (size_t i = 0; i < nfrom && !bad; i++) bad = plan_step(&r, from[i]);
+	for (size_t i = 0; i < steps.n && !bad; i++) bad = plan_step(&r, steps.names[i]);
+	es_names_free(&steps);
+	if (bad) return es_names_free(&r), places_fail(ES_NOTHING_THERE, "..");
+	*out = r;
+	return 0;
+}
+
+// node data ---------------------------------------------------------------------------------------------
+
+es_node_data es_node_data_copy(const es_node_data *n) {
+	es_node_data c = {0};
+	c.has_path = n->has_path;
+	if (n->has_path) {
+		c.path = es_alloc((n->npath + 1) * sizeof *c.path);
+		c.npath = n->npath;
+		for (size_t i = 0; i < n->npath; i++) c.path[i] = es_dup(n->path[i]);
+	}
+	if (n->id != NULL) c.id = es_dup(n->id);
+	if (n->part != NULL) c.part = es_dup(n->part);
+	return c;
+}
+
+void es_node_data_free(es_node_data *n) {
+	for (size_t i = 0; i < n->npath; i++) free(n->path[i]);
+	free(n->path);
+	free(n->id);
+	free(n->part);
+	*n = (es_node_data){0};
+}
+
+// a node at a path (the names taken), or at an id
+static es_node_data node_at_path(es_names *names, const char *part) {
+	es_node_data d = {0};
+	d.has_path = 1;
+	d.path = names->names;
+	d.npath = names->n;
+	d.part = es_dup(part);
+	*names = (es_names){0};
+	return d;
+}
+static es_node_data node_at_id(const char *id, const char *part) {
+	es_node_data d = {0};
+	d.id = es_dup(id);
+	d.part = es_dup(part);
+	return d;
+}
+
+// the state ------------------------------------------------------------------------------------------------
+
+// a process's node, where it runs: its box's folder, and its path in it
+typedef struct {
+	char *box;
+	es_names at;
+} running_rec;
+
+struct es_handle {
+	es_handle_data d;
+};
+
+struct es_watching {
+	es_ermine *ermine;
+	es_context *side;
+	pl_watch *watch;
+	int stopped;
+	es_watch_fn fn;
+	void *ctx;
+	char *part;
+	es_names path;
+};
+
+struct es_nodes {
+	es_ermine *ermine;
+	es_map running;
+	// what each reader waits on, a node it read that was not there: es_missing, by reader
+	es_map missing;
+	es_context **contexts;
+	size_t ncontexts, capcontexts;
+	es_watching **watches;
+	size_t nwatches, capwatches;
+};
+
+struct es_nodes *es_nodes_new(es_ermine *e) {
+	if (e->nodes != NULL) return e->nodes;
+	e->nodes = es_alloc(sizeof *e->nodes);
+	e->nodes->ermine = e;
+	return e->nodes;
+}
+
+static struct es_nodes *state(es_ermine *e) { return es_nodes_new(e); }
+
+static void running_free(running_rec *r) {
+	free(r->box);
+	es_names_free(&r->at);
+	free(r);
+}
+
+static void missing_free(es_missing *m) {
+	for (size_t i = 0; i < m->npaths; i++) es_names_free(&m->paths[i]);
+	free(m->paths);
+	free(m);
+}
+
+void es_nodes_free(struct es_nodes *x) {
+	if (x == NULL) return;
+	for (size_t i = 0; i < x->running.n; i++) running_free(x->running.vals[i]);
+	es_map_free(&x->running);
+	for (size_t i = 0; i < x->missing.n; i++) missing_free(x->missing.vals[i]);
+	es_map_free(&x->missing);
+	for (size_t i = 0; i < x->nwatches; i++) {
+		es_names_free(&x->watches[i]->path);
+		free(x->watches[i]->part);
+		free(x->watches[i]);
+	}
+	free(x->watches);
+	// every handle, with the ermine
+	es_ermine *e = x->ermine;
+	for (size_t i = 0; i < e->handles.cap; i++) {
+		es_handle *h = (es_handle *)e->handles.keys[i];
+		if (h == NULL) continue;
+		es_node_data_free(&h->d.node);
+		free(h);
+	}
+	pm_clear(&e->handles);
+	// contexts not let go yet (es_context_free took the rest out)
+	e->nodes = NULL;
+	while (x->ncontexts) es_context_free(x->contexts[--x->ncontexts]);
+	free(x->contexts);
+	free(x);
+}
+
+// handles ------------------------------------------------------------------------------------------------
+
+es_handle *es_mint(es_ermine *e, const es_node_data *node) {
+	es_handle *h = es_alloc(sizeof *h);
+	h->d.node = es_node_data_copy(node);
+	pm_set(&e->handles, h, h);
+	return h;
+}
+
+const es_handle_data *es_handle_lookup(es_ermine *e, const void *h) {
+	if (h == NULL) return NULL;
+	const es_handle *found = pm_get(&e->handles, h);
+	return found == NULL ? NULL : &found->d;
+}
+
+es_handle *es_handle_in(es_ermine *e, const op_value *v) {
+	es_handle *h = es_live_of(v, "handle");
+	return h != NULL && pm_has(&e->handles, h) ? h : NULL;
+}
+
+// a handle for n: a path in c's box made a path from the root; an id as it is. no maker: a handle
+// names a place, whoever made it
+es_handle *es_handle_make(es_context *c, const es_node_data *n) {
+	if (!n->has_path) return es_mint(c->ermine, n);
+	es_names at = {0};
+	if (!es_box_at(c->ermine, c->box->root, &at)) names_init(&at);
+	es_node_data d = {.has_path = 1, .part = n->part};
+	d.npath = at.n + n->npath;
+	d.path = es_alloc((d.npath + 1) * sizeof *d.path);
+	for (size_t i = 0; i < at.n; i++) d.path[i] = at.names[i];
+	for (size_t i = 0; i < n->npath; i++) d.path[at.n + i] = n->path[i];
+	es_handle *h = es_mint(c->ermine, &d);
+	free(d.path);
+	es_names_free(&at);
+	return h;
+}
+
+es_handle *es_handle_by_id(es_context *c, const char *id, const char *part) {
+	es_node_data n = node_at_id(id, part);
+	es_handle *h = es_mint(c->ermine, &n);
+	es_node_data_free(&n);
+	return h;
+}
+
+// a handle for the names (taken), made by c
+static es_handle *handle_at(es_context *c, es_names *names, const char *part) {
+	es_node_data n = node_at_path(names, part);
+	es_handle *h = es_handle_make(c, &n);
+	es_node_data_free(&n);
+	return h;
+}
+
+// contexts ------------------------------------------------------------------------------------------------
+
+static char **dup_names(const char *const *src, size_t n) {
+	char **out = es_alloc((n + 1) * sizeof *out);
+	for (size_t i = 0; i < n; i++) out[i] = es_dup(src[i]);
+	return out;
+}
+static void free_names(char **names, size_t n) {
+	for (size_t i = 0; i < n; i++) free(names[i]);
+	free(names);
+}
+
+es_context *es_context_new(es_ermine *e, const es_context_options *o) {
+	es_context *c = es_alloc(sizeof *c);
+	c->ermine = e;
+	c->scope = o->scope;
+	c->box = o->box;
+	c->cwd = dup_names(o->cwd, o->ncwd);
+	c->ncwd = o->ncwd;
+	c->at = dup_names(o->at, o->nat);
+	c->nat = o->nat;
+	c->args = dup_names(o->args, o->nargs);
+	c->nargs = o->nargs;
+	c->process = o->process;
+	c->places = o->box->places;
+	c->node = es_dup(o->node);
+	c->guarded = e->may != NULL;
+	if (c->guarded) {
+		c->guard = gd_new(&(gd_setup){.places = c->places, .table = e->table, .may = e->may,
+			.from = CP(c->at), .nfrom = c->nat, .caller = es_caller_place, .caller_ctx = c});
+	}
+	struct es_nodes *x = state(e);
+	ES_PUSH(x->contexts, x->ncontexts, x->capcontexts, c);
+	return c;
+}
+
+void es_context_free(es_context *c) {
+	if (c == NULL) return;
+	es_ermine *e = c->ermine;
+	struct es_nodes *x = e->nodes;
+	if (x != NULL) {
+		for (size_t i = 0; i < x->ncontexts; i++) {
+			if (x->contexts[i] != c) continue;
+			x->contexts[i] = x->contexts[--x->ncontexts];
+			break;
+		}
+	}
+	es_computer_forget(c);
+	gd_free(c->guard);
+	free_names(c->cwd, c->ncwd);
+	free_names(c->at, c->nat);
+	free_names(c->args, c->nargs);
+	free(c->node);
+	free(c);
+}
+
+// f with a scope open ----------------------------------------------------------------------------------
+
+typedef struct {
+	es_thunk f;
+	void *ctx;
+	int code;
+} thunk;
+static void thunk_run(void *data) {
+	thunk *t = data;
+	t->code = t->f(t->ctx);
+}
+
+int es_within(es_context *c, es_thunk f, void *ctx) {
+	ALIVE(c);
+	thunk t = {f, ctx, 0};
+	const char *bad = sc_run_with_scope(c->scope, thunk_run, &t);
+	if (bad != NULL) return es_fail_text(bad);
+	return t.code;
+}
+
+// nothing open: a process's is nothing-open (its functions are called from its setup, runs, acts and
+// calls; after an await, a timer, a listener: nothing is open); the host's falls back to its own scope
+int es_inside(es_context *c, es_thunk f, void *ctx) {
+	ALIVE(c);
+	if (sc_get_current_scope(c->ermine->scheduler) != NULL) return f(ctx);
+	if (c->process != NULL) {
+		return es_fail(ES_NOTHING_OPEN,
+			"nothing-open: nothing is open here (after an await, a timer, a listener): write from a "
+			"setup, a memo, an effect or an action, or open the process (within)");
+	}
+	return es_within(c, f, ctx);
+}
+
+sc_scope *es_owner(es_context *c) {
+	sc_scope *o = sc_get_current_scope(c->ermine->scheduler);
+	return o != NULL ? o : c->scope;
+}
+
+// asking ---------------------------------------------------------------------------------------------------
+
+static int answered(gd_answer a, const gd_refusal *why) {
+	switch (a) {
+	case GD_OK: return 0;
+	case GD_REFUSED: return es_fail_refusal(why, NULL, NULL);
+	case GD_PENDING: return es_fail(ES_PENDING, "%s", "");
+	default: return es_fail(ES_STOP, "%s", "");
+	}
+}
+
+int es_context_ask(es_context *c, const char *op, const gd_target *targets, size_t n) {
+	if (!c->guarded) return 0;
+	gd_refusal why = {0};
+	return answered(gd_write(c->guard, op, targets, n, &why), &why);
+}
+static int ask(es_context *c, const char *op, gd_target t) { return es_context_ask(c, op, &t, 1); }
+static int ask_read(es_context *c, gd_target t) {
+	if (!c->guarded) return 0;
+	gd_refusal why = {0};
+	return answered(gd_read(c->guard, &t, 1, &why), &why);
+}
+// whether the policy refuses reading t (asked as read asks: a pending answer is PENDING)
+static int refused(es_context *c, gd_target t, int *no) {
+	*no = 0;
+	if (!c->guarded) return 0;
+	gd_refusal why = {0};
+	gd_answer a = gd_read(c->guard, &t, 1, &why);
+	if (a == GD_REFUSED) return *no = 1, 0;
+	return answered(a, &why);
+}
+
+static gd_thing thing_of(const char *id, const es_node_data *n) {
+	gd_thing t = {.id = tb_string(id)};
+	if (n != NULL && n->has_path) t.path = CP(n->path), t.npath = n->npath;
+	return t;
+}
+// steps as an op_value list, for a target's field
+static op_value *field_of(const op_key *path, size_t n) {
+	op_value *l = op_list();
+	for (size_t i = 0; i < n; i++) {
+		if (path[i].type == OP_STR_KEY) op_push(l, op_str(path[i].s));
+		else if (path[i].type == OP_NUM_KEY) op_push(l, op_num((double)path[i].n));
+	}
+	return l;
+}
+// the slot of the name last in path, in the folder parent: what placing there changes. *field: the
+// caller's, op_free
+static gd_target slot_at(const char *parent, const char *const *path, size_t npath,
+	op_value **field) {
+	gd_thing t = {.id = tb_string(parent), .path = path, .npath = npath - 1};
+	return gd_slot(t, path[npath - 1], field);
+}
+static int ask_slot(es_context *c, const char *parent, const char *const *path, size_t npath) {
+	if (!c->guarded) return 0;
+	op_value *field;
+	gd_target slot = slot_at(parent, path, npath, &field);
+	int code = ask(c, "place", slot);
+	op_free(field);
+	return code;
+}
+
+static int up_go(es_ermine *e, const pl *places, const char *root, const char *at, es_map *visited,
+	es_names *out);
+
+// ids and nodes ----------------------------------------------------------------------------------------------
+
+// the id at a path, tracked; *out NULL: nothing there. borrowed from the table
+static int get_id(es_context *c, const char *const *path, size_t n, const char **out) {
+	tb_key k;
+	*out = pl_get(c->places, path, n, &k) ? k.string : NULL;
+	return check(c);
+}
+
+int es_id_of(es_context *c, const es_node_data *n, const char **out) {
+	if (n->id != NULL) return *out = n->id, 1;
+	if (n->has_path) {
+		tb_key k;
+		if (pl_get(c->places, CP(n->path), n->npath, &k)) return *out = k.string, 1;
+	}
+	return *out = NULL, 0;
+}
+
+static int need_id(es_context *c, const es_node_data *n, const char **out) {
+	if (es_id_of(c, n, out)) return 0;
+	if (check(c)) return ES_STOP;
+	if (!n->has_path) return places_fail(ES_NOTHING_THERE, NULL);
+	return places_fail_path(ES_NOTHING_THERE, CP(n->path), n->npath);
+}
+
+// a box's folder's path from the root now (up its names); the root's box: no names. 1 and *out; 0:
+// out of the root's reach. read untracked
+int es_box_at(es_ermine *e, const char *box, es_names *out) {
+	es_map visited = {0};
+	int found = up_go(e, e->places, e->root, box, &visited, out);
+	es_map_free(&visited);
+	return found;
+}
+
+// where a path from the root is walked: in the deepest box whose folder is on it (so a boxed
+// process's own nodes, named by its rows, are reached), the path in that box (abs + *skip)
+static pl *walk_from(es_ermine *e, const char *const *abs, size_t n, size_t *skip) {
+	pl *places = e->places;
+	size_t depth = 0;
+	*skip = 0;
+	for (size_t i = 0, count = es_box_count(e); i < count; i++) {
+		const es_box *b = es_box_nth(e, i);
+		es_names at;
+		if (!es_box_at(e, b->root, &at)) continue;
+		int on = at.n >= depth && at.n <= n;
+		for (size_t k = 0; on && k < at.n; k++) on = strcmp(at.names[k], abs[k]) == 0;
+		if (on) places = b->places, depth = *skip = at.n;
+		es_names_free(&at);
+	}
+	return places;
+}
+
+// the id at path in places, tracked; NULL: nothing there
+static const char *id_in(pl *places, const char *const *path, size_t n) {
+	tb_key k;
+	return pl_get(places, path, n, &k) ? k.string : NULL;
+}
+
+int es_handle_id(es_ermine *e, const es_node_data *n, const char **out) {
+	if (n->id != NULL) return *out = n->id, 1;
+	size_t skip;
+	pl *places = walk_from(e, CP(n->path), n->npath, &skip);
+	return (*out = id_in(places, CP(n->path) + skip, n->npath - skip)) != NULL;
+}
+
+int es_path_seen(es_context *c, const char *const *abs, size_t n, es_names *out) {
+	es_names at;
+	if (!es_box_at(c->ermine, c->box->root, &at)) return 0;
+	int in = at.n <= n;
+	for (size_t i = 0; in && i < at.n; i++) in = strcmp(at.names[i], abs[i]) == 0;
+	if (in) *out = names_of(abs + at.n, n - at.n);
+	es_names_free(&at);
+	return in;
+}
+
+// the reads told in places, c's or a box's view, since the last ask said the run must end now
+static int check_in(es_context *c, pl *places) {
+	return places != c->places && pl_status(places) != SC_OK ? es_fail(ES_STOP, "%s", "") : check(c);
+}
+
+int es_node_of(es_context *c, es_target x, es_node_data *out) {
+	es_ermine *e = c->ermine;
+	*out = (es_node_data){0};
+	ALIVE(c);
+	es_names at = {0};
+	int in = es_box_count(e) > 0 && es_box_at(e, c->box->root, &at);
+	if (x.node == NULL) {
+		es_names path;
+		TRY(es_resolve(c, x.at, &path));
+		// a box further down the path (a process started in a box, under one's own place): its own
+		// view holds its rows, so the node is found there, by id (the review's finding 11)
+		if (in) {
+			es_names abs = names_of(CP(at.names), at.n);
+			for (size_t i = 0; i < path.n; i++) names_add(&abs, path.names[i]);
+			size_t skip;
+			pl *places = walk_from(e, CP(abs.names), abs.n, &skip);
+			if (places != c->places) {
+				const char *id = id_in(places, CP(abs.names) + skip, abs.n - skip);
+				const char *mine = id == NULL ? NULL : id_in(c->places, CP(path.names), path.n);
+				int code = check_in(c, places);
+				if (!code && id != NULL && (mine == NULL || strcmp(mine, id) != 0)) {
+					*out = node_at_id(id, "value");
+					es_names_free(&path);
+					es_names_free(&abs);
+					es_names_free(&at);
+					return 0;
+				}
+				if (code) {
+					es_names_free(&path);
+					es_names_free(&abs);
+					es_names_free(&at);
+					return code;
+				}
+			}
+			es_names_free(&abs);
+		}
+		es_names_free(&at);
+		*out = node_at_path(&path, "value");
+		return 0;
+	}
+	const es_handle_data *d = es_handle_lookup(e, x.node);
+	if (d == NULL) return es_names_free(&at), not_a_handle();
+	if (!d->node.has_path) return es_names_free(&at), *out = es_node_data_copy(&d->node), 0;
+	// in c's box and walked the same there: the path as c sees it (so asks and watches go by it);
+	// else the node at the place, by id
+	const es_node_data *h = &d->node;
+	size_t skip;
+	pl *places = walk_from(e, CP(h->path), h->npath, &skip);
+	const char *id = id_in(places, CP(h->path) + skip, h->npath - skip);
+	int code = check_in(c, places);
+	if (code) return es_names_free(&at), code;
+	int mine = 0;
+	if (in && at.n <= h->npath) {
+		mine = 1;
+		for (size_t i = 0; mine && i < at.n; i++) mine = strcmp(at.names[i], h->path[i]) == 0;
+	}
+	if (mine) {
+		const char *const *rest = CP(h->path) + at.n;
+		size_t nrest = h->npath - at.n;
+		const char *here = id == NULL ? NULL : id_in(c->places, rest, nrest);
+		code = check(c);
+		if (!code && (id == NULL || (here != NULL && strcmp(here, id) == 0))) {
+			es_names p = names_of(rest, nrest);
+			*out = node_at_path(&p, h->part);
+			es_names_free(&at);
+			return 0;
+		}
+	}
+	es_names_free(&at);
+	if (code) return code;
+	if (id == NULL) return places_fail(ES_NOTHING_THERE, NULL);
+	*out = node_at_id(id, h->part);
+	return 0;
+}
+
+int es_id_through(es_context *c, es_target x, char **out) {
+	*out = NULL;
+	es_node_data n;
+	TRY(es_node_of(c, x, &n));
+	const char *id;
+	int code = need_id(c, &n, &id);
+	if (!code) *out = es_dup(id);
+	es_node_data_free(&n);
+	return code;
+}
+
+// the placement asks ---------------------------------------------------------------------------------------
+
+int es_ask_placing(es_context *c, const gd_target *slot, es_target x, const char *id) {
+	if (!c->guarded) return 0;
+	es_node_data n;
+	TRY(es_node_of(c, x, &n));
+	gd_thing thing = thing_of(id, &n);
+	gd_target node = gd_target_of(thing, "value", NULL);
+	static const char *const plain[] = {"read", "edit"};
+	static const char *const action[] = {"read", "edit", "execute"};
+	int is_action = es_is_action(c->ermine, id);
+	gd_refusal why = {0};
+	gd_answer a = gd_place(c->guard, slot, &node, is_action ? action : plain, is_action ? 3 : 2,
+		&why);
+	es_node_data_free(&n);
+	return answered(a, &why);
+}
+
+// patches ------------------------------------------------------------------------------------------------------
+
+// the patches placing, unplacing and moving make, in stack room: built here, borrowed for the write
+typedef struct {
+	op_patch p[2];
+	op_key key[4];
+	op_value *own[2];
+	size_t n;
+} pset;
+static void pset_free(pset *s) {
+	for (size_t i = 0; i < 2; i++) op_free(s->own[i]);
+	*s = (pset){0};
+}
+// a patch at the path [name] (key k), with a value, or taking the name out
+static void pset_name(pset *s, size_t k, const char *name, op_value *value) {
+	s->key[k] = (op_key){.type = OP_STR_KEY, .s = name};
+	op_patch *p = &s->p[s->n++];
+	*p = (op_patch){.place = {.path = &s->key[k], .length = 1}};
+	if (value != NULL) {
+		p->has_value = 1;
+		p->value = value;
+		s->own[s->n - 1] = value;
+	}
+}
+
+// the entry's value is a map; a name in it
+static int is_map(const nd_entry *e) { return e != NULL && e->value != NULL && e->value->type == OP_MAP; }
+static const char *child_of(const nd_entry *children, const char *name) {
+	if (!is_map(children)) return NULL;
+	const op_value *v = op_get(children->value, name);
+	return v != NULL && v->type == OP_STR ? v->str : NULL;
+}
+
+// place's patches, checked as place checks: children may be none (made by them)
+static int placing(const nd_entry *children, const char *name, const char *id, pset *s) {
+	*s = (pset){0};
+	if (!pl_is_name(name)) return places_fail(ES_NOT_A_NAME, name);
+	if (is_map(children) && op_get(children->value, name) != NULL) {
+		return places_fail(ES_ALREADY_THERE, name);
+	}
+	if (!is_map(children)) {
+		s->p[0] = (op_patch){.has_value = 1, .value = s->own[0] = op_map()};
+		s->n = 1;
+	}
+	pset_name(s, 0, name, op_str(id));
+	return 0;
+}
+// unplace's patches, checked as unplace checks
+static int unplacing(const nd_entry *children, const char *name, pset *s) {
+	*s = (pset){0};
+	if (child_of(children, name) == NULL) return places_fail(ES_NOTHING_THERE, name);
+	pset_name(s, 0, name, NULL);
+	return 0;
+}
+
+// whole value as one patch
+static op_patch whole(const op_value *v) {
+	op_patch p = {0};
+	if (v != NULL) p.has_value = 1, p.value = v;
+	return p;
+}
+
+// writing ---------------------------------------------------------------------------------------------------------
+
+// patches a node's change refers to: copied, held till the node's next update
+typedef struct {
+	op_patch *patches;
+	size_t n;
+	op_key *keys;
+	char **strs;
+	size_t nstrs;
+	op_value **vals;
+} block;
+
+static void block_free(void *p) {
+	block *b = p;
+	for (size_t i = 0; i < b->nstrs; i++) free(b->strs[i]);
+	for (size_t i = 0; i < b->n; i++) op_free(b->vals[i]);
+	free(b->patches);
+	free(b->keys);
+	free(b->strs);
+	free(b->vals);
+	free(b);
+}
+static op_key *copy_keys(block *b, size_t *at, const op_key *src, size_t n) {
+	op_key *out = b->keys + *at;
+	for (size_t i = 0; i < n; i++) {
+		out[i] = src[i];
+		if (src[i].type == OP_STR_KEY) out[i].s = b->strs[b->nstrs++] = es_dup(src[i].s);
+	}
+	*at += n;
+	return out;
+}
+static block *block_new(const op_patch *src, size_t n) {
+	size_t total = 0;
+	for (size_t i = 0; i < n; i++) {
+		total += src[i].place.length + (src[i].has_move ? src[i].move.length : 0);
+	}
+	block *b = es_alloc(sizeof *b);
+	b->n = n;
+	b->patches = es_alloc(n * sizeof *b->patches);
+	b->keys = es_alloc(total * sizeof *b->keys);
+	b->strs = es_alloc(total * sizeof *b->strs);
+	b->vals = es_alloc(n * sizeof *b->vals);
+	size_t at = 0;
+	for (size_t i = 0; i < n; i++) {
+		b->patches[i] = src[i];
+		b->patches[i].place.path = copy_keys(b, &at, src[i].place.path, src[i].place.length);
+		if (src[i].has_move) {
+			b->patches[i].move.path = copy_keys(b, &at, src[i].move.path, src[i].move.length);
+		}
+		b->vals[i] = src[i].has_value ? op_ref((op_value *)src[i].value) : NULL;
+		b->patches[i].value = b->vals[i];
+	}
+	return b;
+}
+
+// a write a hook changed: the metadata with its hooks added (the header's own, with FEATURES put)
+typedef struct {
+	ch_entry *meta;
+	op_value *list;
+} featured;
+static void featured_free(void *p) {
+	featured *f = p;
+	free(f->meta);
+	op_free(f->list);
+	free(f);
+}
+
+// the change a write lands with: its writer's, or made now; a write a hook changed, that one's copy
+// naming the hooks. *made: the block of a header made now; *fx: the metadata made
+static int header_of(es_ermine *e, const es_write *w, ch_header *h, pl_made **made,
+	featured **fx) {
+	*made = NULL;
+	*fx = NULL;
+	if (w->header != NULL) *h = *w->header;
+	else TRY(es_header(e, h, made));
+	if (w->nfeatures == 0) return 0;
+	featured *f = es_alloc(sizeof *f);
+	f->meta = es_alloc((h->metadata_length + 1) * sizeof *f->meta);
+	size_t k = 0;
+	for (size_t i = 0; i < h->metadata_length; i++) {
+		if (strcmp(h->metadata[i].key, ES_FEATURES) != 0) f->meta[k++] = h->metadata[i];
+	}
+	f->list = op_list();
+	for (size_t i = 0; i < w->nfeatures; i++) op_push(f->list, op_str(w->features[i]));
+	f->meta[k++] = (ch_entry){ES_FEATURES, f->list};
+	h->metadata = f->meta;
+	h->metadata_length = k;
+	*fx = f;
+	return 0;
+}
+
+// the entries changed, said written: the first layer's commit, else places'
+static void commit(es_ermine *e, const pl_changed *changed) {
+	if (e->host.commit != NULL) e->host.commit(e->host.ctx, changed);
+	else pl_commit(e->places, changed);
+}
+
+// holds on a node's change: the first replaces the node's last, the rest are added
+static void hold(es_ermine *e, const nd_entry *entry, int *first, void *blk,
+	void (*release)(void *)) {
+	if (blk == NULL) return;
+	if (*first) pl_hold(e->places, entry, blk, release), *first = 0;
+	else pl_hold_also(e->places, entry, blk, release);
+}
+
+// what a part holds when nothing is there: attributes and a status are maps, so {}; a value, nothing
+static op_value *empty(const char *part) {
+	return strcmp(part, "attributes") == 0 || strcmp(part, CST_TABLE) == 0 ? op_map() : NULL;
+}
+
+static int apply_failed(int code, size_t failed) {
+	return es_fail(ES_FAILED, "%s (patch %zu)", op_code_name(code), failed);
+}
+
+// the write landed: the entry made when there is none (the table event tells its readers), else
+// updated and said. gone: the entry taken out
+static int land(void *ctx, const es_write *w) {
+	es_ermine *e = ctx;
+	tb_key part = tb_string(w->part), id = tb_string(w->id);
+	nd_entry *entry = tb_get(e->table, part, id);
+	// an action's node going, or written over: its record let go
+	void *held = entry != NULL && strcmp(w->part, "value") == 0
+		? es_action_held(e, entry->value) : NULL;
+	if (w->gone) {
+		if (entry != NULL) tb_del(e->table, part, id);
+		es_action_let_go(e, held, NULL);
+		return 0;
+	}
+	ch_header h;
+	pl_made *made;
+	featured *fx;
+	TRY(header_of(e, w, &h, &made, &fx));
+	int first = 1;
+	if (entry == NULL) {
+		op_value *base = empty(w->part), *v;
+		size_t failed = 0;
+		int bad = op_apply(base, w->patches, w->npatches, NULL, &v, &failed);
+		op_free(base);
+		if (bad != OP_OK) {
+			if (made != NULL) pl_made_free(made);
+			if (fx != NULL) featured_free(fx);
+			return apply_failed(bad, failed);
+		}
+		if (v == NULL) {
+			if (made != NULL) pl_made_free(made);
+			if (fx != NULL) featured_free(fx);
+			return 0;
+		}
+		nd_entry *fresh = nd_make_entry(v, &h);
+		op_free(v);
+		tb_add(e->table, part, id, fresh);
+		pl_own(e->places, fresh);
+		hold(e, fresh, &first, made, pl_made_free);
+		hold(e, fresh, &first, fx, featured_free);
+		return 0;
+	}
+	block *b = block_new(w->patches, w->npatches);
+	size_t failed = 0;
+	// children and process rows change as places changes them (readers keep what they read)
+	int bad = strcmp(w->part, "children") == 0 || strcmp(w->part, PR_PART) == 0
+		? un_update(pl_unread(e->places), entry, b->patches, b->n, h, &failed)
+		: nd_update(entry, b->patches, b->n, h, &failed);
+	if (bad != OP_OK) {
+		block_free(b);
+		if (made != NULL) pl_made_free(made);
+		if (fx != NULL) featured_free(fx);
+		return apply_failed(bad, failed);
+	}
+	pl_changed changed = {1, {entry}};
+	commit(e, &changed);
+	es_action_let_go(e, held, entry->value);
+	hold(e, entry, &first, made, pl_made_free);
+	hold(e, entry, &first, b, block_free);
+	hold(e, entry, &first, fx, featured_free);
+	return 0;
+}
+
+typedef struct {
+	es_context *c;
+	const es_write *w;
+} putting;
+// a write that changes nothing is not landed
+static int put_land(void *ctx, const es_write *x) {
+	if (!x->gone && x->npatches == 0) return 0;
+	return land(ctx, x);
+}
+static int put_in(void *p) {
+	putting *s = p;
+	return es_hook_write(s->c->ermine, s->c, s->w, put_land, s->c->ermine);
+}
+int es_context_put(es_context *c, const es_write *w) {
+	putting s = {c, w};
+	return es_inside(c, put_in, &s);
+}
+
+void es_context_writer(es_context *c, const char *part, tb_key id, const op_patch *patches,
+	size_t n, const ch_header *header) {
+	es_write w = {.part = part, .id = id.string, .patches = patches, .npatches = n, .header = header};
+	es_context_put(c, &w);
+}
+
+// one write at a node, asked "edit" first; remove: the entry taken out
+typedef struct {
+	es_context *c;
+	const char *part;
+	const es_aim *at;
+	const op_patch *patches;
+	size_t n;
+	int gone;
+} writing;
+static int write_in(void *p) {
+	writing *s = p;
+	gd_thing thing = {.id = tb_string(s->at->id)};
+	if (s->at->has_path) thing.path = s->at->path, thing.npath = s->at->npath;
+	TRY(ask(s->c, "edit", gd_target_of(thing, s->part, NULL)));
+	es_write w = {.part = s->part, .id = s->at->id, .has_path = s->at->has_path,
+		.path = s->at->path, .npath = s->at->npath, .patches = s->patches, .npatches = s->n,
+		.gone = s->gone};
+	return es_context_put(s->c, &w);
+}
+static int write_run(es_context *c, const char *part, const es_aim *at, const op_patch *patches,
+	size_t n, int gone, const ch_site *site) {
+	writing s = {c, part, at, patches, n, gone};
+	const ch_site *was = es_enter(c->ermine, site);
+	int code = es_inside(c, write_in, &s);
+	es_enter(c->ermine, was);
+	if (code) return code;
+	es_queue_pulse(c->ermine);
+	return 0;
+}
+int es_context_write_at(es_context *c, const char *part, const es_aim *at, const op_patch *patches,
+	size_t n, const ch_site *site) {
+	return write_run(c, part, at, patches, n, 0, site);
+}
+int es_context_remove_at(es_context *c, const char *part, const es_aim *at, const ch_site *site) {
+	return write_run(c, part, at, NULL, 0, 1, site);
+}
+
+// placing and building ----------------------------------------------------------------------------------------
+
+int es_place_under(es_context *c, const char *parent, const char *name, const char *id,
+	const char *const *path, size_t npath) {
+	es_ermine *e = c->ermine;
+	if (path != NULL) TRY(ask_slot(c, parent, path, npath));
+	nd_entry *children = tb_get(e->table, tb_string("children"), tb_string(parent));
+	pset ps;
+	TRY(placing(children, name, id, &ps));
+	es_write w = {.part = "children", .id = parent, .patches = ps.p, .npatches = ps.n};
+	int code = es_context_put(c, &w);
+	pset_free(&ps);
+	return code;
+}
+
+int es_build(es_context *c, const char *const *path, size_t npath, const op_value *value,
+	const char *given, char **out) {
+	es_ermine *e = c->ermine;
+	*out = NULL;
+	char *id = given != NULL ? es_dup(given) : es_new_id(e);
+	if (npath == 0) return free(id), places_fail(ES_ALREADY_THERE, "/");
+	char *parent = es_dup(pl_root(c->places).string);
+	int code = 0;
+	for (size_t i = 0; i + 1 < npath && !code; i++) {
+		const char *there;
+		code = get_id(c, path, i + 1, &there);
+		if (code) break;
+		if (there != NULL) {
+			free(parent);
+			parent = es_dup(there);
+			continue;
+		}
+		char *folder = es_new_id(e);
+		code = es_place_under(c, parent, path[i], folder, path, i + 1);
+		free(parent);
+		parent = folder;
+	}
+	if (!code) code = ask_slot(c, parent, path, npath);
+	if (!code && value != NULL) {
+		op_patch p = whole(value);
+		es_write w = {.part = "value", .id = id, .has_path = 1, .path = path, .npath = npath,
+			.patches = &p, .npatches = 1};
+		code = es_context_put(c, &w);
+	}
+	if (!code) code = es_place_under(c, parent, path[npath - 1], id, NULL, 0);
+	free(parent);
+	if (code) return free(id), code;
+	*out = id;
+	return 0;
+}
+
+int es_folder_slot(es_context *c, const char *const *path, size_t npath, nd_entry **children,
+	const char **name) {
+	if (npath == 0) return places_fail(ES_NOTHING_THERE, "");
+	const char *parent;
+	TRY(get_id(c, path, npath - 1, &parent));
+	nd_entry *entry = parent == NULL ? NULL
+		: tb_get(c->ermine->table, tb_string("children"), tb_string(parent));
+	if (entry == NULL) return places_fail_path(ES_NOTHING_THERE, path, npath);
+	*children = entry;
+	*name = path[npath - 1];
+	return 0;
+}
+
+// seen --------------------------------------------------------------------------------------------------------------
+
+void es_running_set(es_ermine *e, const char *process, const char *box, const char *const *at,
+	size_t nat) {
+	struct es_nodes *x = state(e);
+	running_rec *r = es_map_get(&x->running, process);
+	if (r != NULL) {
+		free(r->box);
+		es_names_free(&r->at);
+	} else {
+		r = es_alloc(sizeof *r);
+		es_map_set(&x->running, process, r);
+	}
+	r->box = es_dup(box);
+	r->at = names_of(at, nat);
+}
+
+void es_running_clear(es_ermine *e, const char *process) {
+	struct es_nodes *x = state(e);
+	running_rec *r = es_map_get(&x->running, process);
+	if (r == NULL) return;
+	es_map_del(&x->running, process);
+	running_free(r);
+}
+
+// the names from root down to id, up id's names now (places' names, the latest placed first at each
+// step; a process's node, named by its rows: up from its box's folder, then where it runs). 1 and
+// *out; 0: nothing reaches it from root. read untracked
+static int up_go(es_ermine *e, const pl *places, const char *root, const char *at, es_map *visited,
+	es_names *out) {
+	if (strcmp(at, root) == 0) return names_init(out), 1;
+	es_map_set(visited, at, NULL);
+	const running_rec *r = es_map_get(&state(e)->running, at);
+	if (r != NULL && !es_map_has(visited, r->box)) {
+		es_names above;
+		if (up_go(e, places, root, r->box, visited, &above)) {
+			for (size_t i = 0; i < r->at.n; i++) names_add(&above, r->at.names[i]);
+			return *out = above, 1;
+		}
+	}
+	size_t n;
+	const pl_slot *slots = pl_names_of(places, tb_string(at), &n);
+	for (size_t i = n; i-- > 0;) {
+		const char *folder = slots[i].folder.string;
+		if (folder == NULL || es_map_has(visited, folder)) continue;
+		es_names above;
+		if (up_go(e, places, root, folder, visited, &above)) {
+			names_add(&above, slots[i].name);
+			return *out = above, 1;
+		}
+	}
+	return 0;
+}
+
+int es_seen_in(es_ermine *e, es_context *reader, const char *id, es_names *out) {
+	es_map visited = {0};
+	es_names p;
+	int found = up_go(e, reader->places, reader->box->root, id, &visited, &p);
+	es_map_free(&visited);
+	if (!found) return 0;
+	tb_key k;
+	if (pl_get(reader->places, CP(p.names), p.n, &k) && strcmp(k.string, id) == 0) {
+		return *out = p, 1;
+	}
+	es_names_free(&p);
+	return 0;
+}
+
+int es_path_in(es_ermine *e, es_context *reader, const char *box, const char *const *path,
+	size_t n, es_names *out) {
+	es_map visited = {0};
+	es_names at;
+	int found = up_go(e, reader->places, reader->box->root, box, &visited, &at);
+	es_map_free(&visited);
+	if (!found) return 0;
+	for (size_t i = 0; i < n; i++) names_add(&at, path[i]);
+	return *out = at, 1;
+}
+
+// getNode, ensureNode, createNode, ref --------------------------------------------------------------------------
+
+int es_get_node(es_context *c, es_at p, es_handle **out) {
+	es_names path;
+	TRY(es_resolve(c, p, &path));
+	*out = handle_at(c, &path, "value");
+	es_names_free(&path);
+	return 0;
+}
+
+typedef struct {
+	es_context *c;
+	es_names path;
+	const op_value *value;
+	es_make make;
+	void *ctx;
+	int built;
+} ensuring;
+// the node at the path, made (with the folders on the way) if missing
+static int ensure_in(void *p) {
+	ensuring *s = p;
+	const char *there;
+	TRY(get_id(s->c, CP(s->path.names), s->path.n, &there));
+	if (there != NULL) return 0;
+	op_value *made = NULL;
+	const op_value *value = s->value;
+	if (s->make != NULL) value = made = s->make(s->ctx);
+	char *id;
+	int code = es_build(s->c, CP(s->path.names), s->path.n, value, NULL, &id);
+	op_free(made);
+	if (!code) free(id);
+	return code;
+}
+static int ensuring_at(es_context *c, es_at p, const op_value *value, es_make make, void *ctx,
+	es_handle **out, const ch_site *site) {
+	if (out != NULL) *out = NULL;
+	ensuring s = {.c = c, .value = value, .make = make, .ctx = ctx};
+	TRY(es_resolve(c, p, &s.path));
+	const ch_site *was = es_enter(c->ermine, site);
+	int code = es_inside(c, ensure_in, &s);
+	es_enter(c->ermine, was);
+	if (code) return es_names_free(&s.path), code;
+	es_queue_pulse(c->ermine);
+	if (out != NULL) *out = handle_at(c, &s.path, "value");
+	es_names_free(&s.path);
+	return 0;
+}
+
+int es_ensure_node_at(es_context *c, es_at p, const op_value *value, es_handle **out,
+	const ch_site *site) {
+	return ensuring_at(c, p, value, NULL, NULL, out, site);
+}
+
+int es_ref_at(es_context *c, es_at p, es_make make, void *ctx, es_handle **out,
+	const ch_site *site) {
+	return ensuring_at(c, p, NULL, make, ctx, out, site);
+}
+
+typedef struct {
+	es_context *c;
+	es_names path;
+	const op_value *value;
+	const char *id;
+} creating;
+static int create_in(void *p) {
+	creating *s = p;
+	char *id;
+	int code = es_build(s->c, CP(s->path.names), s->path.n, s->value, s->id, &id);
+	if (!code) free(id);
+	return code;
+}
+// a new node under folder, named by a fresh name of its own: drawn as an id is, but never its id
+// (a name is what list gives, and a process holds no ids)
+int es_create_node_at(es_context *c, es_at folder, const op_value *value, es_handle **out,
+	const ch_site *site) {
+	es_ermine *e = c->ermine;
+	if (out != NULL) *out = NULL;
+	char *id = es_new_id(e);
+	creating s = {.c = c, .value = value, .id = id};
+	int code = es_resolve(c, folder, &s.path);
+	if (code) return free(id), code;
+	char *name = es_new_id(e);
+	names_add(&s.path, name);
+	free(name);
+	const ch_site *was = es_enter(e, site);
+	code = es_inside(c, create_in, &s);
+	es_enter(e, was);
+	free(id);
+	if (code) return es_names_free(&s.path), code;
+	es_queue_pulse(e);
+	if (out != NULL) *out = handle_at(c, &s.path, "value");
+	es_names_free(&s.path);
+	return 0;
+}
+
+// reads ----------------------------------------------------------------------------------------------------------------
+
+// x's node as t resolves it, its part as given (NULL: its own)
+static int node_part(es_context *t, es_target x, const char *part, es_node_data *n) {
+	TRY(es_node_of(t, x, n));
+	if (part != NULL) {
+		free(n->part);
+		n->part = es_dup(part);
+	}
+	return 0;
+}
+
+// the computer's node whose run is open, else NULL
+static const char *computer_node(sc_computer *computer) {
+	const sc_info *info = sc_scope_info(computer);
+	for (size_t i = 0; info != NULL && i < info->n; i++) {
+		const op_value *v = info->pairs[i].value;
+		if (strcmp(info->pairs[i].key, PL_NODE) == 0 && v != NULL && v->type == OP_STR) return v->str;
+	}
+	return NULL;
+}
+
+// path (as c sees it) waited on by the reader now: a computer's (in its run now), else the context's
+// node. kept from the root, shown to each asker as it sees it
+static void wait_for(es_context *c, const char *const *path, size_t npath) {
+	es_ermine *e = c->ermine;
+	struct es_nodes *x = state(e);
+	sc_run *run = sc_get_run(e->scheduler);
+	const char *computer = run == NULL ? NULL : computer_node(sc_run_computer(run));
+	const char *key = computer != NULL ? computer : c->node;
+	int has_n = computer != NULL;
+	// the number this run will have: its computer's latest record's and one (that record read, tracked,
+	// as system.ts' waitFor reads it)
+	const crn_run *latest = NULL;
+	if (has_n) es_latest_run(e, computer, &latest);
+	unsigned n = has_n ? (latest != NULL ? latest->n : 0) + 1 : 0;
+	es_missing *m = es_map_get(&x->missing, key);
+	if (m == NULL) {
+		m = es_alloc(sizeof *m);
+		es_map_set(&x->missing, key, m);
+	} else if (m->has_n != has_n || m->n != n) {
+		for (size_t i = 0; i < m->npaths; i++) es_names_free(&m->paths[i]);
+		m->npaths = 0;
+	}
+	m->has_n = has_n;
+	m->n = n;
+	es_names abs = {0};
+	if (!es_box_at(e, c->box->root, &abs)) names_init(&abs);
+	for (size_t i = 0; i < npath; i++) names_add(&abs, path[i]);
+	for (size_t i = 0; i < m->npaths; i++) {
+		const es_names *p = &m->paths[i];
+		int same = p->n == abs.n;
+		for (size_t k = 0; same && k < abs.n; k++) same = strcmp(p->names[k], abs.names[k]) == 0;
+		if (same) {
+			es_names_free(&abs);
+			return;
+		}
+	}
+	m->paths = realloc(m->paths, (m->npaths + 1) * sizeof *m->paths);
+	if (m->paths == NULL) abort();
+	m->paths[m->npaths++] = abs;
+}
+
+const es_missing *es_missing_of(es_ermine *e, const char *id) {
+	return es_map_get(&state(e)->missing, id);
+}
+
+// the value at key of x's part, tracked; none: *out NULL; a pending memo with no value: PENDING
+static int read_part(es_context *c, es_target x, const char *part, const op_key *key, size_t nkey,
+	const op_value **out) {
+	es_ermine *e = c->ermine;
+	*out = NULL;
+	es_context *t = c;
+	es_node_data n;
+	TRY(node_part(t, x, part, &n));
+	const char *id;
+	if (!es_id_of(t, &n, &id)) {
+		// a node not there: pending, as a memo with no value is ("not there yet" one way) [chee 10-25:
+		// "i think a missing node should also throw pending"], the read tracked so its coming reruns
+		// it, and said where the reader waits
+		int code = check(t);
+		if (!code && n.has_path && c->peeping == 0) wait_for(c, CP(n.path), n.npath);
+		if (!code) code = es_fail(ES_PENDING, "%s", "");
+		es_node_data_free(&n);
+		return code;
+	}
+	int code = 0;
+	if (t->guarded) {
+		op_value *field = field_of(key, nkey);
+		code = ask_read(t, gd_target_of(thing_of(id, &n), n.part, nkey ? field : NULL));
+		op_free(field);
+	}
+	if (!code && c->peeping == 0) es_calls_read(e, n.part, id, key, nkey, 1, 0);
+	if (!code) {
+		const op_value *v = pl_read(t->places, tb_string(n.part), tb_string(id), key, nkey);
+		int pending = 0;
+		if (strcmp(n.part, "value") == 0 && es_is_memo(e, id)) {
+			pending = v == NULL && cst_pending(t->places, tb_string(id));
+		}
+		code = check(t);
+		if (!code && pending) code = es_fail(ES_PENDING, "%s", "");
+		if (!code) *out = v;
+	}
+	es_node_data_free(&n);
+	return code;
+}
+
+int es_read(es_context *c, es_target x, const op_key *key, size_t nkey, const op_value **out) {
+	return read_part(c, x, NULL, key, nkey, out);
+}
+int es_read_attributes(es_context *c, es_target x, const op_key *key, size_t nkey,
+	const op_value **out) {
+	return read_part(c, x, "attributes", key, nkey, out);
+}
+
+void es_versions_free(es_versions *v) {
+	for (size_t i = 0; i < v->n; i++) {
+		op_free(v->items[i].held);
+		op_free(v->items[i].from.more);
+	}
+	free(v->items);
+	*v = (es_versions){0};
+}
+
+// read's, from its entry's change; then what features show (onRead). each item's change as its view
+static int versions_part(es_context *c, es_target x, const char *part, const op_key *key,
+	size_t nkey, es_versions *out) {
+	es_ermine *e = c->ermine;
+	*out = (es_versions){0};
+	es_context *t = c;
+	es_node_data n;
+	TRY(node_part(t, x, part, &n));
+	const op_value *shown;
+	int code = read_part(c, x, part, key, nkey, &shown);
+	const char *id = NULL;
+	if (!code && !es_id_of(t, &n, &id)) {
+		es_node_data_free(&n);
+		return check(t);
+	}
+	if (code) return es_node_data_free(&n), code;
+	es_versions items = {0};
+	es_version first = {0};
+	if (shown != NULL) {
+		first.value = shown;
+		const nd_entry *entry = tb_get(e->table, tb_string(n.part), tb_string(id));
+		if (entry != NULL) {
+			first.from.change = pl_change_value(e->places, &entry->change);
+			if (first.from.change != NULL) first.from.view = es_change_view_of(e, first.from.change);
+		}
+		items.items = es_alloc(sizeof *items.items);
+		items.items[0] = first;
+		items.n = items.cap = 1;
+	}
+	es_reading rd = {.node = &n, .part = n.part, .id = id, .path = key, .npath = nkey, .context = c};
+	es_versions shown_out = {0};
+	code = es_hook_read(e, &rd, &items, &shown_out);
+	if (items.items != shown_out.items) free(items.items);
+	es_node_data_free(&n);
+	if (code) return es_versions_free(&shown_out), code;
+	// a feature's item with a change: its view
+	for (size_t i = 0; i < shown_out.n; i++) {
+		es_from *f = &shown_out.items[i].from;
+		if (f->change != NULL && f->view == NULL) f->view = es_change_view_of(e, f->change);
+	}
+	*out = shown_out;
+	return 0;
+}
+
+// children's ids turned handles (no ids given out): each version's value, a new map
+static int handles_for(es_context *t, es_versions *v) {
+	for (size_t i = 0; i < v->n; i++) {
+		es_version *it = &v->items[i];
+		if (it->value == NULL || it->value->type != OP_MAP) continue;
+		op_value *m = op_map();
+		for (size_t k = 0; k < it->value->count; k++) {
+			const op_value *x = it->value->items[k];
+			if (x->type == OP_STR) {
+				op_set(m, it->value->keys[k], es_handle_value(es_handle_by_id(t, x->str, "value")));
+			} else {
+				op_set(m, it->value->keys[k], op_ref((op_value *)x));
+			}
+		}
+		op_free(it->held);
+		it->held = m;
+		it->value = m;
+	}
+	return 0;
+}
+
+int es_read_all(es_context *c, es_target x, const op_key *key, size_t nkey, es_versions *out) {
+	return versions_part(c, x, NULL, key, nkey, out);
+}
+int es_read_all_attributes(es_context *c, es_target x, const op_key *key, size_t nkey,
+	es_versions *out) {
+	return versions_part(c, x, "attributes", key, nkey, out);
+}
+int es_read_all_children(es_context *c, es_target x, es_versions *out) {
+	TRY(versions_part(c, x, "children", NULL, 0, out));
+	handles_for(c, out);
+	return 0;
+}
+
+void es_items_free(es_items *i) {
+	free(i->items);
+	*i = (es_items){0};
+}
+static void items_push(es_items *l, const op_value *value, const char *from, es_handle *node,
+	int no) {
+	l->items = realloc(l->items, (l->n + 1) * sizeof *l->items);
+	if (l->items == NULL) abort();
+	l->items[l->n++] = (es_item){.value = value, .from = from, .node = node, .refused = no};
+}
+
+// every node x's path reaches. a refused one keeps its place, with no value and no node
+int es_read_entries(es_context *c, es_target x, es_items *out) {
+	es_ermine *e = c->ermine;
+	*out = (es_items){0};
+	es_context *t = c;
+	es_node_data n;
+	TRY(es_node_of(t, x, &n));
+	int code = 0;
+	if (!n.has_path) {
+		if (n.id != NULL) {
+			int no;
+			code = refused(t, gd_target_of(thing_of(n.id, NULL), n.part, NULL), &no);
+			if (!code && no) items_push(out, NULL, "id", NULL, 1);
+			else if (!code) {
+				es_calls_read(e, n.part, n.id, NULL, 0, 1, 0);
+				const op_value *v = pl_read(t->places, tb_string(n.part), tb_string(n.id), NULL, 0);
+				// a node there by id, with or without a value (as by a path); nothing under that id: none
+				size_t held;
+				tb_at(e->table, tb_string(n.id), &held);
+				if (v != NULL || held > 0) {
+					items_push(out, v, "id", es_handle_by_id(t, n.id, n.part), 0);
+				}
+			}
+		}
+		es_node_data_free(&n);
+		if (!code) code = check(t);
+		if (code) es_items_free(out);
+		return code;
+	}
+	pl_answers all = pl_gets(t->places, CP(n.path), n.npath);
+	for (size_t i = 0; i < all.n; i++) {
+		es_calls_read(e, n.part, all.items[i].id.string, NULL, 0, 1, 0);
+	}
+	if (!t->guarded || n.npath == 0) {
+		for (size_t i = 0; i < all.n; i++) {
+			const char *id = all.items[i].id.string;
+			items_push(out, pl_read(t->places, tb_string(n.part), tb_string(id), NULL, 0),
+				all.items[i].from, es_handle_by_id(t, id, n.part), 0);
+		}
+	} else {
+		pl_member *in = es_alloc((all.n + 1) * sizeof *in);
+		for (size_t i = 0; i < all.n; i++) {
+			in[i] = (pl_member){n.path[n.npath - 1], all.items[i].id, all.items[i].from};
+		}
+		pl_members list = {all.n, in}, asked;
+		gd_answer a = gd_members(t->guard, &list, CP(n.path), n.npath - 1, &asked);
+		free(in);
+		code = answered(a, &(gd_refusal){"read", "refused", {0}, 0});
+		if (!code) {
+			for (size_t i = 0; i < all.n; i++) {
+				const char *id = all.items[i].id.string;
+				if (gd_is_refused(asked.items[i].id)) {
+					items_push(out, NULL, all.items[i].from, NULL, 1);
+				} else {
+					items_push(out, pl_read(t->places, tb_string(n.part), tb_string(id), NULL, 0),
+						all.items[i].from, es_handle_by_id(t, id, n.part), 0);
+				}
+			}
+		}
+		pl_members_free(&asked);
+	}
+	pl_answers_free(&all);
+	es_node_data_free(&n);
+	if (!code) code = check(t);
+	if (code) es_items_free(out);
+	return code;
+}
+
+int es_has_node(es_context *c, es_target x, int *out) {
+	es_items items;
+	*out = 0;
+	TRY(es_read_entries(c, x, &items));
+	for (size_t i = 0; i < items.n; i++) {
+		if (!items.items[i].refused) {
+			*out = 1;
+			break;
+		}
+	}
+	es_items_free(&items);
+	return 0;
+}
+
+// f with nothing it reads tracked; a pending memo it reads ends it, as none
+typedef struct {
+	es_thunk f;
+	void *ctx;
+	int code;
+} peeping;
+static void peep_run(void *p) {
+	peeping *s = p;
+	s->code = s->f(s->ctx);
+	if (s->code == ES_PENDING) s->code = 0;
+}
+int es_peep(es_context *c, es_thunk f, void *ctx) {
+	peeping s = {f, ctx, 0};
+	c->peeping++;
+	pl_peep(c->places, peep_run, &s);
+	c->peeping--;
+	return s.code;
+}
+
+void es_children_free(es_children *c) {
+	for (size_t i = 0; i < c->n; i++) free(c->names[i]);
+	free(c->names);
+	free(c->nodes);
+	*c = (es_children){0};
+}
+
+int es_list(es_context *c, es_target x, es_names *out) {
+	es_ermine *e = c->ermine;
+	*out = (es_names){0};
+	es_context *t = c;
+	es_node_data n;
+	TRY(es_node_of(t, x, &n));
+	const char *id;
+	int has = es_id_of(t, &n, &id);
+	int code = 0;
+	if (t->guarded && has) code = ask_read(t, gd_target_of(thing_of(id, &n), "children", NULL));
+	if (!code && has) es_calls_read(e, "children", id, NULL, 0, 1, 1);
+	es_names got;
+	names_init(&got);
+	if (!code) {
+		if (n.has_path) {
+			pl_members m = pl_list(t->places, CP(n.path), n.npath);
+			for (size_t i = 0; i < m.n; i++) names_add(&got, m.items[i].name);
+			pl_members_free(&m);
+		} else if (n.id != NULL) {
+			pl_namelist nl = {0};
+			pl_keys(t->places, tb_string("children"), tb_string(n.id), NULL, 0, 0, &nl);
+			for (size_t i = 0; i < nl.n; i++) names_add(&got, nl.items[i]);
+			pl_namelist_free(&nl);
+		}
+		code = check(t);
+	}
+	es_node_data_free(&n);
+	if (code) return es_names_free(&got), code;
+	*out = got;
+	return 0;
+}
+
+// x's children, each as a handle (reached by this process's path, so its own to hold)
+int es_read_children(es_context *c, es_target x, es_children *out) {
+	*out = (es_children){0};
+	es_context *t = c;
+	es_node_data n;
+	TRY(es_node_of(t, x, &n));
+	const char *id;
+	es_id_of(t, &n, &id);
+	es_names names;
+	int code = es_list(c, x, &names);
+	if (code) return es_node_data_free(&n), code;
+	const op_value *kids = id != NULL
+		? pl_read(t->places, tb_string("children"), tb_string(id), NULL, 0) : NULL;
+	out->names = es_alloc((names.n + 1) * sizeof *out->names);
+	out->nodes = es_alloc((names.n + 1) * sizeof *out->nodes);
+	for (size_t i = 0; i < names.n; i++) {
+		const char *at = NULL;
+		const op_value *kid = kids != NULL && kids->type == OP_MAP ? op_get(kids, names.names[i]) : NULL;
+		if (n.has_path) {
+			es_names p = names_of(CP(n.path), n.npath);
+			names_add(&p, names.names[i]);
+			tb_key k;
+			if (pl_get(t->places, CP(p.names), p.n, &k)) at = k.string;
+			es_names_free(&p);
+		}
+		if (at == NULL && kid != NULL && kid->type == OP_STR) at = kid->str;
+		if (at == NULL) continue;
+		out->names[out->n] = es_dup(names.names[i]);
+		out->nodes[out->n++] = es_handle_by_id(t, at, "value");
+	}
+	es_names_free(&names);
+	es_node_data_free(&n);
+	code = check(t);
+	if (code) es_children_free(out);
+	return code;
+}
+
+// watch --------------------------------------------------------------------------------------------------------
+
+static void unwatch(es_watching *w) {
+	if (w->stopped) return;
+	w->stopped = 1;
+	pl_stop(w->watch);
+}
+void es_unwatch(es_watching *w) { unwatch(w); }
+static char *watch_teardown(void *data) {
+	unwatch(data);
+	return NULL;
+}
+// a write landing at the node: told as asked read (refused: told so)
+static void watch_told(const pl_fact *fact, void *ctx) {
+	es_watching *w = ctx;
+	es_ermine *e = w->ermine;
+	int no = 0;
+	gd_thing thing = {.id = fact->id, .path = CP(w->path.names), .npath = w->path.n};
+	if (refused(w->side, gd_target_of(thing, w->part, NULL), &no)) no = 0;
+	if (no) {
+		es_watched told = {.refused = 1};
+		w->fn(w->ctx, &told);
+		return;
+	}
+	es_watched told = {.patches = fact->patches, .npatches = fact->patches_length};
+	if (fact->change != NULL) {
+		const op_value *change = pl_change_value(e->places, fact->change);
+		if (change != NULL) told.change = es_change_view_of(e, change);
+	}
+	if (fact->entry != NULL) told.value = fact->entry->value;
+	w->fn(w->ctx, &told);
+}
+
+int es_watch(es_context *c, es_target x, es_watch_fn fn, void *ctx, es_watching **out) {
+	es_ermine *e = c->ermine;
+	*out = NULL;
+	es_context *t = c;
+	es_node_data n;
+	TRY(node_part(t, x, NULL, &n));
+	if (!n.has_path) {
+		es_node_data_free(&n);
+		return places_fail(ES_NOTHING_THERE, "a node with no place");
+	}
+	int code = 0;
+	if (t->guarded) {
+		const char *id;
+		if (es_id_of(t, &n, &id)) {
+			code = ask_read(t, gd_target_of(thing_of(id, &n), n.part, NULL));
+		} else {
+			gd_thing thing = {.path = CP(n.path), .npath = n.npath};
+			code = ask_read(t, gd_target_of(thing, n.part, NULL));
+		}
+	}
+	if (code) return es_node_data_free(&n), code;
+	es_watching *w = es_alloc(sizeof *w);
+	w->ermine = e;
+	w->side = t;
+	w->fn = fn;
+	w->ctx = ctx;
+	w->part = es_dup(n.part);
+	w->path = names_of(CP(n.path), n.npath);
+	pl_watching options = {.has_part = 1, .part = tb_string(w->part)};
+	w->watch = pl_watch_path(t->places, CP(w->path.names), w->path.n, watch_told, w, &options);
+	struct es_nodes *x_ = state(e);
+	ES_PUSH(x_->watches, x_->nwatches, x_->capwatches, w);
+	free(sc_register_teardown(e->scheduler, es_owner(c), watch_teardown, w));
+	es_node_data_free(&n);
+	*out = w;
+	return 0;
+}
+
+const char *const *es_get_args(es_context *c, size_t *n) {
+	*n = c->nargs;
+	return CP(c->args);
+}
+
+// patch ------------------------------------------------------------------------------------------------------------
+
+typedef struct {
+	es_context *c, *t;
+	es_target x;
+	const char *part;
+	const op_patch *patches;
+	size_t n;
+} patching;
+// the part patched: asked "edit" first, the write the node's side makes
+static int patch_in(void *p) {
+	patching *s = p;
+	es_node_data n;
+	TRY(node_part(s->t, s->x, s->part, &n));
+	const char *id;
+	int code = need_id(s->t, &n, &id);
+	if (!code) code = ask(s->t, "edit", gd_target_of(thing_of(id, &n), n.part, NULL));
+	if (!code && s->n) {
+		es_write w = {.part = n.part, .id = id, .has_path = n.has_path, .path = CP(n.path),
+			.npath = n.npath, .patches = s->patches, .npatches = s->n};
+		code = es_context_put(s->t, &w);
+	}
+	es_node_data_free(&n);
+	return code;
+}
+static int patch_part(es_context *c, es_target x, const char *part, const op_patch *patches,
+	size_t n, const ch_site *site) {
+	patching s = {c, c, x, part, patches, n};
+	const ch_site *was = es_enter(c->ermine, site);
+	int code = es_inside(c, patch_in, &s);
+	es_enter(c->ermine, was);
+	if (code) return code;
+	es_queue_pulse(c->ermine);
+	return 0;
+}
+
+int es_patch_at(es_context *c, es_target x, const op_patch *patches, size_t n,
+	const ch_site *site) {
+	return patch_part(c, x, NULL, patches, n, site);
+}
+int es_patch_attributes_at(es_context *c, es_target x, const op_patch *patches, size_t n,
+	const ch_site *site) {
+	return patch_part(c, x, "attributes", patches, n, site);
+}
+
+// patchChildren ------------------------------------------------------------------------------------------------------
+
+// a patch's value as a target: a handle, a string path, or a list of steps (anything else is no handle)
+static int target_of_value(es_context *c, const op_value *v, es_target *x, es_names *own) {
+	*own = (es_names){0};
+	es_handle *h = es_handle_in(c->ermine, v);
+	if (h != NULL) return *x = es_on_node(h), 0;
+	if (v->type == OP_STR) return *x = es_on_path(es_text(v->str)), 0;
+	if (v->type == OP_LIST) {
+		names_init(own);
+		for (size_t i = 0; i < v->count; i++) {
+			if (v->items[i]->type != OP_STR) return es_names_free(own), not_a_handle();
+			names_add(own, v->items[i]->str);
+		}
+		return *x = es_on_path(es_steps(CP(own->names), own->n)), 0;
+	}
+	// a stand-in that is no handle of this ermine's, or any other value
+	return not_a_handle();
+}
+
+typedef struct {
+	es_context *c, *t;
+	es_target x;
+	const op_patch *patches;
+	size_t n;
+} childing;
+static int children_in(void *p) {
+	childing *s = p;
+	es_ermine *e = s->c->ermine;
+	es_node_data n;
+	TRY(es_node_of(s->t, s->x, &n));
+	const char *folder;
+	int code = need_id(s->t, &n, &folder);
+	for (size_t i = 0; i < s->n && !code; i++) {
+		const op_patch *p = &s->patches[i];
+		if (p->place.length != 1 || p->place.path[0].type != OP_STR_KEY || p->has_move ||
+			p->place.has_range) {
+			code = not_patches();
+			break;
+		}
+		const char *name = p->place.path[0].s;
+		op_value *field;
+		gd_thing parent = thing_of(folder, &n);
+		gd_target slot = gd_slot(parent, name, &field);
+		nd_entry *children = tb_get(e->table, tb_string("children"), tb_string(folder));
+		pset ps;
+		if (p->has_value && p->value != NULL) {
+			// a path in a patch: the caller's, resolved in its own box
+			es_target v;
+			es_names own;
+			code = target_of_value(s->c, p->value, &v, &own);
+			char *id = NULL;
+			if (!code) code = es_id_through(s->c, v, &id);
+			if (!code) code = es_ask_placing(s->t, &slot, v, id);
+			if (!code) code = placing(children, name, id, &ps);
+			if (!code) {
+				es_write w = {.part = "children", .id = folder, .patches = ps.p, .npatches = ps.n};
+				code = es_context_put(s->t, &w);
+				pset_free(&ps);
+			}
+			es_names_free(&own);
+			free(id);
+		} else if (children != NULL) {
+			code = ask(s->t, "place", slot);
+			if (!code) code = unplacing(children, name, &ps);
+			if (!code) {
+				es_write w = {.part = "children", .id = folder, .patches = ps.p, .npatches = ps.n};
+				code = es_context_put(s->t, &w);
+				pset_free(&ps);
+			}
+		}
+		op_free(field);
+	}
+	es_node_data_free(&n);
+	return code;
+}
+int es_patch_children_at(es_context *c, es_target x, const op_patch *patches, size_t n,
+	const ch_site *site) {
+	childing s = {c, c, x, patches, n};
+	const ch_site *was = es_enter(c->ermine, site);
+	int code = es_inside(c, children_in, &s);
+	es_enter(c->ermine, was);
+	if (code) return code;
+	es_queue_pulse(c->ermine);
+	return 0;
+}
+
+// place, unplace, rename, remove ----------------------------------------------------------------------------------
+
+typedef struct {
+	es_context *c;
+	es_at p, to;
+	es_target x;
+} tree;
+
+static int place_in(void *v) {
+	tree *s = v;
+	es_context *c = s->c;
+	es_names path;
+	TRY(es_resolve(c, s->p, &path));
+	char *id = NULL;
+	int code = es_id_through(c, s->x, &id);
+	const char *parent = NULL;
+	if (!code && path.n) code = get_id(c, CP(path.names), path.n - 1, &parent);
+	if (!code && (parent == NULL || path.n == 0)) {
+		code = places_fail_path(ES_NOTHING_THERE, CP(path.names), path.n);
+	}
+	if (!code) {
+		op_value *field;
+		gd_target slot = slot_at(parent, CP(path.names), path.n, &field);
+		code = es_ask_placing(c, &slot, s->x, id);
+		op_free(field);
+	}
+	if (!code) code = es_place_under(c, parent, path.names[path.n - 1], id, NULL, 0);
+	free(id);
+	es_names_free(&path);
+	return code;
+}
+int es_place_at(es_context *c, es_at p, es_target x, const ch_site *site) {
+	tree s = {.c = c, .p = p, .x = x};
+	const ch_site *was = es_enter(c->ermine, site);
+	int code = es_inside(c, place_in, &s);
+	es_enter(c->ermine, was);
+	if (code) return code;
+	es_queue_pulse(c->ermine);
+	return 0;
+}
+
+static int unplace_in(void *v) {
+	tree *s = v;
+	es_context *c = s->c;
+	es_names path;
+	TRY(es_resolve(c, s->p, &path));
+	nd_entry *children;
+	const char *name, *parent;
+	int code = es_folder_slot(c, CP(path.names), path.n, &children, &name);
+	if (!code) code = get_id(c, CP(path.names), path.n - 1, &parent);
+	if (!code) code = ask_slot(c, parent, CP(path.names), path.n);
+	if (!code) {
+		pset ps;
+		code = unplacing(children, name, &ps);
+		if (!code) {
+			es_write w = {.part = "children", .id = parent, .patches = ps.p, .npatches = ps.n};
+			code = es_context_put(c, &w);
+			pset_free(&ps);
+		}
+	}
+	es_names_free(&path);
+	return code;
+}
+int es_unplace_at(es_context *c, es_at p, const ch_site *site) {
+	tree s = {.c = c, .p = p};
+	const ch_site *was = es_enter(c->ermine, site);
+	int code = es_inside(c, unplace_in, &s);
+	es_enter(c->ermine, was);
+	if (code) return code;
+	es_queue_pulse(c->ermine);
+	return 0;
+}
+
+// move's patches, checked as move checks: the one it goes into first; to the same name: none. each is
+// the entry (0 the source's, 1 the target's) and its patches
+typedef struct {
+	pset ps[2];
+	int entry[2];
+	size_t n;
+} moves;
+static void moves_free(moves *m) {
+	for (size_t i = 0; i < m->n; i++) pset_free(&m->ps[i]);
+	*m = (moves){0};
+}
+static int moving(const nd_entry *from, const char *name, const nd_entry *into, const char *to,
+	moves *m) {
+	*m = (moves){0};
+	if (!pl_is_name(to)) return places_fail(ES_NOT_A_NAME, to);
+	const char *id = child_of(from, name);
+	if (id == NULL) return places_fail(ES_NOTHING_THERE, name);
+	if (from == into) {
+		if (strcmp(name, to) == 0) return 0;
+		if (is_map(from) && op_get(from->value, to) != NULL) return places_fail(ES_ALREADY_THERE, to);
+		pset *s = &m->ps[0];
+		s->key[0] = (op_key){.type = OP_STR_KEY, .s = to};
+		s->key[1] = (op_key){.type = OP_STR_KEY, .s = name};
+		s->p[0] = (op_patch){.place = {.path = &s->key[0], .length = 1}, .has_move = 1,
+			.move = {.path = &s->key[1], .length = 1}};
+		s->n = 1;
+		m->entry[0] = 0;
+		m->n = 1;
+		return 0;
+	}
+	TRY(placing(into, to, id, &m->ps[0]));
+	m->entry[0] = 1;
+	m->n = 1;
+	int code = unplacing(from, name, &m->ps[1]);
+	if (code) return moves_free(m), code;
+	m->entry[1] = 0;
+	m->n = 2;
+	return 0;
+}
+
+static int rename_in(void *v) {
+	tree *s = v;
+	es_context *c = s->c;
+	es_ermine *e = c->ermine;
+	es_names from, to = {0};
+	TRY(es_resolve(c, s->p, &from));
+	nd_entry *source;
+	const char *name, *source_parent = NULL, *parent = NULL;
+	int code = es_folder_slot(c, CP(from.names), from.n, &source, &name);
+	if (!code) code = get_id(c, CP(from.names), from.n - 1, &source_parent);
+	if (!code) code = es_resolve(c, s->to, &to);
+	if (!code) {
+		gd_refusal why = {0};
+		code = answered(gd_move(CP(from.names), from.n, CP(to.names), to.n, &why), &why);
+	}
+	if (!code) code = ask_slot(c, source_parent, CP(from.names), from.n);
+	if (!code && to.n) code = get_id(c, CP(to.names), to.n - 1, &parent);
+	if (!code && (parent == NULL || to.n == 0)) {
+		code = places_fail_path(ES_NOTHING_THERE, CP(to.names), to.n);
+	}
+	if (!code) code = ask_slot(c, parent, CP(to.names), to.n);
+	if (!code) {
+		nd_entry *into = tb_get(e->table, tb_string("children"), tb_string(parent));
+		moves m;
+		code = moving(source, name, into, to.names[to.n - 1], &m);
+		for (size_t i = 0; i < m.n && !code; i++) {
+			es_write w = {.part = "children", .id = m.entry[i] == 0 ? source_parent : parent,
+				.patches = m.ps[i].p, .npatches = m.ps[i].n};
+			code = es_context_put(c, &w);
+		}
+		moves_free(&m);
+	}
+	es_names_free(&from);
+	es_names_free(&to);
+	return code;
+}
+int es_rename_at(es_context *c, es_at from, es_at to, const ch_site *site) {
+	tree s = {.c = c, .p = from, .to = to};
+	const ch_site *was = es_enter(c->ermine, site);
+	int code = es_inside(c, rename_in, &s);
+	es_enter(c->ermine, was);
+	if (code) return code;
+	es_queue_pulse(c->ermine);
+	return 0;
+}
+
+static int remove_in(void *v) {
+	tree *s = v;
+	es_context *c = s->c, *t = c;
+	es_ermine *e = c->ermine;
+	es_node_data n;
+	TRY(es_node_of(t, s->x, &n));
+	const char *found;
+	int code = need_id(t, &n, &found);
+	// the id outlives its entries: the table lets go of its key with the last
+	char *id = code ? NULL : es_dup(found);
+	if (!code) code = ask(t, "remove", gd_target_of(thing_of(id, &n), NULL, NULL));
+	if (!code && n.has_path && n.npath) {
+		nd_entry *children;
+		const char *name;
+		if (es_folder_slot(t, CP(n.path), n.npath, &children, &name) == 0) {
+			const char *there = child_of(children, name);
+			const char *parent;
+			if (there != NULL && strcmp(there, id) == 0 &&
+				get_id(t, CP(n.path), n.npath - 1, &parent) == 0 && parent != NULL) {
+				pset ps;
+				code = unplacing(children, name, &ps);
+				if (!code) {
+					es_write w = {.part = "children", .id = parent, .patches = ps.p, .npatches = ps.n};
+					code = es_context_put(c, &w);
+					pset_free(&ps);
+				}
+			}
+		} else es_clear_thrown();
+	}
+	if (!code) {
+		// every part the node has, taken out (the parts copied: each write changes the table)
+		size_t count;
+		const tb_entry *at = tb_at(e->table, tb_string(id), &count);
+		char **parts = es_alloc((count + 1) * sizeof *parts);
+		for (size_t i = 0; i < count; i++) parts[i] = es_dup(at[i].part.string);
+		for (size_t i = 0; i < count && !code; i++) {
+			es_write w = {.part = parts[i], .id = id, .gone = 1};
+			code = es_context_put(c, &w);
+		}
+		free_names(parts, count);
+	}
+	if (!code) {
+		crn_drop(e->runs, tb_string(id));
+		es_held_drop(e, id);
+	}
+	free(id);
+	es_node_data_free(&n);
+	return code;
+}
+int es_remove_at(es_context *c, es_target x, const ch_site *site) {
+	tree s = {.c = c, .x = x};
+	const ch_site *was = es_enter(c->ermine, site);
+	int code = es_inside(c, remove_in, &s);
+	es_enter(c->ermine, was);
+	if (code) return code;
+	es_queue_pulse(c->ermine);
+	return 0;
+}

@@ -1,14 +1,14 @@
 import createEntry from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
-import { createPlaces, place, unplace } from "@ermine/places"
-import { createChangeHeader } from "@ermine/places/header"
-import * as lib from "@ermine/places/lib"
+import { createPlaces, place, unplace } from "@ermine/core/places"
+import { createChangeHeader } from "@ermine/core/places/header"
+import * as lib from "@ermine/core/places/lib"
 import { createScheduler, PENDING } from "@ermine/core/scheduler"
 import { createPaths } from "@ermine/core/scheduler/paths"
 import { trace } from "@ermine/core/scheduler/trace"
 import { createTable } from "@ermine/core/table"
-import { createGuard, slot, target } from "@ermine/places/guard"
-import { plan } from "@ermine/places/path"
+import { createGuard, slot, target } from "@ermine/core/places/guard"
+import { plan } from "@ermine/core/places/path"
 
 // a handle: the id of a node, and its path from the root
 const ROOT = { id: "root", path: [] }

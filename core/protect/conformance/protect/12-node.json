@@ -1,0 +1,47 @@
+{
+	"title": "a placement's ask carries the node given the name (node), beside its target, the folder's slot: a policy may look at it [chee 10-26: \"right\"]; a grant matches on the target, as ever",
+	"steps": [
+		{
+			"op": "load",
+			"part": "value",
+			"id": "rules",
+			"value": [{ "op": "place", "id": "F" }],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": { "denynode": "S" },
+			"what": "place",
+			"target": { "id": "F", "part": "children", "field": ["copy"] },
+			"node": { "id": "S", "path": ["secret"] },
+			"expect": { "answer": "no", "reason": "denied node", "reads": [] }
+		},
+		{
+			"op": "ask",
+			"policy": { "denynode": "S" },
+			"what": "place",
+			"target": { "id": "F", "part": "children", "field": ["copy"] },
+			"node": { "id": "N" },
+			"expect": { "answer": "yes", "reads": [] }
+		},
+		{
+			"op": "ask",
+			"policy": { "denynode": "S" },
+			"what": "place",
+			"target": { "id": "F", "part": "children", "field": ["copy"] },
+			"expect": { "answer": "yes", "reads": [] }
+		},
+		{
+			"op": "ask",
+			"policy": { "grants": ["value", "rules"] },
+			"what": "place",
+			"target": { "id": "F", "part": "children", "field": ["copy"] },
+			"node": { "id": "S" },
+			"expect": {
+				"answer": "yes",
+				"grant": { "part": "value", "id": "rules", "index": 0 },
+				"reads": [["value", "rules"]]
+			}
+		}
+	]
+}

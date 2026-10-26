@@ -4,8 +4,8 @@
 import { createWorld } from "@ermine/slaygrounds/world"
 import type { API, Node } from "@ermine/api"
 import update from "@ermine/core/node/update"
-import { get } from "@ermine/places/lib"
-import { createChangeHeader } from "@ermine/places/header"
+import { get } from "@ermine/core/places/lib"
+import { createChangeHeader } from "@ermine/core/places/header"
 import { trace } from "@ermine/core/scheduler/trace"
 import { render } from "ermine-h"
 

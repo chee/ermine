@@ -1,12 +1,12 @@
 // The C processes (processes.h) on the line protocol of typescript/processes_harness.ts, which documents
 // it and the programs (conformance/c/harness.h has the loop). Its world is places' (the scheduler, the
-// table, the writes: filesystem/places/c/world_harness.h), made with the contributors [processes("R"),
+// table, the writes: core/places/c/world_harness.h), made with the contributors [processes("R"),
 // children]; programs are data, evaluated here as the reference does.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../../filesystem/places/c/world_harness.h"
+#include "../../../core/places/c/world_harness.h"
 #include "processes.h"
 #include "scopes.h"
 

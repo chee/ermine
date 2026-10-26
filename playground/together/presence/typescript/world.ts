@@ -1,5 +1,5 @@
 // a device for the tests and the example: its own table, places, scheduler, and a clock it owns
-import { createPlaces, type Id } from "@ermine/places"
+import { createPlaces, type Id } from "@ermine/core/places"
 import { createPaths } from "@ermine/core/scheduler/paths"
 import { createScheduler, type Scheduler } from "@ermine/core/scheduler"
 import { createTable, type Key } from "@ermine/core/table"

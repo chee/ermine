@@ -1,0 +1,57 @@
+{
+	"title": "a node given a name asks of the folder's slot \"place\", the node beside it, then of the node itself read and edit (an action: execute too), so a name can't widen what anyone may do with it [chee 10-26: \"we will do it the protected_hardlinks way for now, it's better to over- than under-\"]: q may read /pub but not edit it, so may not name it; may not read /secret, so may not name it, by place or patchChildren; may not execute s's action, so may not name it; names its own node; unplacing asks only the slot; the host, not refused, names /secret anywhere",
+	"steps": [
+		{
+			"op": "ermine",
+			"deny": [
+				{ "op": "read", "path": "secret", "from": "code/q" },
+				{ "op": "edit", "path": "pub", "from": "code/q" },
+				{ "op": "execute", "path": "system/s/on/go", "from": "code/q" }
+			],
+			"expect": {}
+		},
+		{ "op": "host", "call": ["ensureNode", "/secret", { "s": 1 }] },
+		{ "op": "host", "call": ["ensureNode", "/pub", { "p": 1 }] },
+		{ "op": "host", "call": ["ensureNode", "/mine/ok", { "o": 1 }] },
+		{
+			"op": "code",
+			"at": "/system/s",
+			"program": [{ "do": ["createAction", "on/go", [], "went"] }],
+			"expect": {}
+		},
+		{ "op": "start", "name": "s", "at": "/system/s", "expect": { "id": "proc:s" } },
+		{ "op": "code", "at": "/code/q", "program": [], "expect": {} },
+		{ "op": "start", "name": "q", "at": "/code/q", "expect": { "id": "proc:q" } },
+		{ "op": "do", "process": "q", "call": ["read", "/pub"], "expect": { "value": { "p": 1 } } },
+		{
+			"op": "do",
+			"process": "q",
+			"call": ["place", "/mine/copy", "/pub"],
+			"expect": { "error": "refused" }
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": ["place", "/mine/copy", "/secret"],
+			"expect": { "error": "refused" }
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": ["patchChildren", "/mine", [{ "path": ["copy"], "value": "/secret" }]],
+			"expect": { "error": "refused" }
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": ["place", "/mine/go", "/system/s/on/go"],
+			"expect": { "error": "refused" }
+		},
+		{ "op": "host", "call": ["list", "/mine"], "expect": { "value": ["ok"] } },
+		{ "op": "do", "process": "q", "call": ["place", "/mine/copy", "/mine/ok"] },
+		{ "op": "host", "call": ["read", "/mine/copy"], "expect": { "value": { "o": 1 } } },
+		{ "op": "do", "process": "q", "call": ["unplace", "/mine/copy"] },
+		{ "op": "host", "call": ["place", "/elsewhere", "/secret"] },
+		{ "op": "host", "call": ["read", "/elsewhere"], "expect": { "value": { "s": 1 } } }
+	]
+}

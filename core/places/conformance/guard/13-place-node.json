@@ -1,0 +1,262 @@
+{
+	"title": "a node given a name (the guard's place): \"place\" asked of the folder's slot with the node beside it, then read and edit of the node itself (and execute, when asked for): a node the asker can't read or edit can't be given a name, so a name can't widen what anyone may do with it [chee 10-26: \"we will do it the protected_hardlinks way for now\"]",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"mine": "M",
+				"secret": "S",
+				"doc": "D"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "M",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "q",
+			"info": {
+				"actor": "q"
+			},
+			"expect": {}
+		},
+		{
+			"op": "guard",
+			"name": "g",
+			"may": {
+				"denyid": "S"
+			},
+			"expect": {}
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "q",
+			"e": {
+				"try": {
+					"name": [
+						[
+							{
+								"at": [
+									"mine"
+								]
+							},
+							"copy"
+						],
+						"S"
+					]
+				}
+			},
+			"expect": {
+				"value": "refused"
+			}
+		},
+		{
+			"op": "asks",
+			"expect": {
+				"asks": [
+					{
+						"op": "read",
+						"target": {
+							"id": "M",
+							"path": [
+								"mine"
+							]
+						},
+						"who": {
+							"actor": "q",
+							"metadata": {
+								"actor": "q"
+							}
+						}
+					},
+					{
+						"op": "place",
+						"target": {
+							"id": "M",
+							"part": "children",
+							"field": [
+								"copy"
+							],
+							"path": [
+								"mine"
+							]
+						},
+						"who": {
+							"actor": "q",
+							"metadata": {
+								"actor": "q"
+							}
+						},
+						"node": {
+							"id": "S"
+						}
+					},
+					{
+						"op": "read",
+						"target": {
+							"id": "S"
+						},
+						"who": {
+							"actor": "q",
+							"metadata": {
+								"actor": "q"
+							}
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "q",
+			"e": {
+				"get": [
+					"mine",
+					"copy"
+				]
+			},
+			"expect": {
+				"value": null
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "q",
+			"e": {
+				"try": {
+					"name": [
+						[
+							{
+								"at": [
+									"mine"
+								]
+							},
+							"copy"
+						],
+						"D"
+					]
+				}
+			},
+			"expect": {
+				"value": null
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "q",
+			"e": {
+				"get": [
+					"mine",
+					"copy"
+				]
+			},
+			"expect": {
+				"value": "D"
+			}
+		},
+		{
+			"op": "guard",
+			"name": "n",
+			"may": {
+				"denynode": "D"
+			},
+			"expect": {}
+		},
+		{
+			"op": "eval",
+			"guard": "n",
+			"scope": "q",
+			"e": {
+				"try": {
+					"name": [
+						[
+							{
+								"at": [
+									"mine"
+								]
+							},
+							"again"
+						],
+						"D"
+					]
+				}
+			},
+			"expect": {
+				"value": "refused"
+			}
+		},
+		{
+			"op": "guard",
+			"name": "x",
+			"may": {
+				"only": [
+					"execute"
+				],
+				"policy": {
+					"denyid": "D"
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "eval",
+			"guard": "x",
+			"scope": "q",
+			"e": {
+				"try": {
+					"name": [
+						[
+							{
+								"at": [
+									"mine"
+								]
+							},
+							"plain"
+						],
+						"D"
+					]
+				}
+			},
+			"expect": {
+				"value": null
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "x",
+			"scope": "q",
+			"e": {
+				"try": {
+					"name": [
+						[
+							{
+								"at": [
+									"mine"
+								]
+							},
+							"run"
+						],
+						"D",
+						[
+							"read",
+							"edit",
+							"execute"
+						]
+					]
+				}
+			},
+			"expect": {
+				"value": "refused"
+			}
+		}
+	]
+}

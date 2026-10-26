@@ -33,7 +33,7 @@
 #include <stdint.h>
 
 #include "../../../ermine/ids/c/ids.h"
-#include "../../../filesystem/places/c/places.h"
+#include "../../../core/places/c/places.h"
 
 #define SESS_PART "online"
 

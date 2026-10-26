@@ -25,10 +25,10 @@
 // sync, and the rest of the world's names, empty
 import createEntry from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
-import { createPlaces, place } from "@ermine/places"
-import { createChangeHeader } from "@ermine/places/header"
-import * as lib from "@ermine/places/lib"
-import { createStatus } from "@ermine/places/status"
+import { createPlaces, place } from "@ermine/core/places"
+import { createChangeHeader } from "@ermine/core/places/header"
+import * as lib from "@ermine/core/places/lib"
+import { createStatus } from "@ermine/core/places/status"
 import {
 	clear,
 	connect,

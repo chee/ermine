@@ -1,7 +1,7 @@
 // patch nodes (patch.ts) on the line protocol: one JSON request per line in, one answer per line
 // out, in order. state lasts for the process: a table, the overlay in front of it, and places (root
 // "R") reading through it; the scheduler, scopes, pulse, state and header are world_harness.ts'
-// (filesystem/places/typescript), whose own table and places this leaves alone. other
+// (core/places/typescript), whose own table and places this leaves alone. other
 // implementations join by speaking this (HARNESS)
 // every write is the host's, outside, scope open. time: whole seconds, now when not given. ids are
 // strings, a part any string. patches: op's
@@ -43,9 +43,9 @@
 import createEntry from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
 import { ApplyError, type Key as Step, type Patch } from "@ermine/core/op/apply"
-import { createPlaces, unread } from "@ermine/places"
-import { createChangeHeader } from "@ermine/places/header"
-import { get } from "@ermine/places/lib"
+import { createPlaces, unread } from "@ermine/core/places"
+import { createChangeHeader } from "@ermine/core/places/header"
+import { get } from "@ermine/core/places/lib"
 import type { Info } from "@ermine/core/scheduler"
 import { createPaths } from "@ermine/core/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/core/table"
@@ -59,7 +59,7 @@ import {
 	json,
 	s,
 	scope,
-} from "../../../filesystem/places/typescript/world_harness.ts"
+} from "../../../core/places/typescript/world_harness.ts"
 import { createOverlay, entries, type Item, land, type Overlay, PatchError } from "./patch.ts"
 
 type Json = unknown

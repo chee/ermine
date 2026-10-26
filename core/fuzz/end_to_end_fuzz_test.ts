@@ -10,8 +10,8 @@
 //     paths keeps is what the live computers track
 // a few dozen seeds (fuzz runs small)
 import { assert, assertEquals } from "@std/assert"
-import { createPlaces, type Path, type Places, PlacesError } from "@ermine/places"
-import { get, list, lookup, members } from "@ermine/places/lib"
+import { createPlaces, type Path, type Places, PlacesError } from "@ermine/core/places"
+import { get, list, lookup, members } from "@ermine/core/places/lib"
 import { createPaths } from "@ermine/core/scheduler/paths"
 import { type Computer, createScheduler, type Scope } from "@ermine/core/scheduler"
 import { createTable } from "@ermine/core/table"

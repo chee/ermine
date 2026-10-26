@@ -1,12 +1,12 @@
 // The C runs (runs.h) on the line protocol of typescript/runs_harness.ts, which documents it and the
-// programs (conformance/c/harness.h has the loop). Built on places' harness (filesystem/places/c/places_harness.h,
+// programs (conformance/c/harness.h has the loop). Built on places' harness (core/places/c/places_harness.h,
 // compiled with PH_LIB): its world, its programs, its requests, and this one's besides.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../../filesystem/places/c/places_harness.h"
-#include "../../../filesystem/places/c/guard.h"
+#include "../../../core/places/c/places_harness.h"
+#include "../../../core/places/c/guard.h"
 #include "runs.h"
 
 // the runs listener, once it is asked for

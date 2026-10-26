@@ -25,7 +25,7 @@
 #include "../../../ermine/processes/c/processes.h"
 #include "../../../ermine/processes/c/scopes.h"
 #include "../../../ermine/sites/c/sites.h"
-#include "../../../filesystem/places/c/status.h"
+#include "../../../core/places/c/status.h"
 #include "fronts/fronts.h"
 #include "card/card.h"
 

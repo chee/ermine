@@ -1,7 +1,7 @@
 import { assert, assertEquals } from "@std/assert"
 import { createFakeFile } from "./access.ts"
 import { denoFile } from "./deno.ts"
-import { get } from "@ermine/places/lib"
+import { get } from "@ermine/core/places/lib"
 import { PROCESS } from "@ermine/processes"
 import { CWD } from "@ermine/processes/start"
 import { createLink } from "./link.ts"
