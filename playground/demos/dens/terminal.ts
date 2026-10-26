@@ -9,10 +9,10 @@
 // writes are the host's, in its scope, so each carries its site
 //
 //   createTerminal(host, el)
-import { level, type Path, PlacesError } from "@ermine/places"
-import { createChangeHeader } from "@ermine/places/header"
-import { members } from "@ermine/places/lib"
-import { upsert } from "@ermine/places/upsert"
+import { level, type Path, PlacesError } from "@ermine/core/places"
+import { createChangeHeader } from "@ermine/core/places/header"
+import { members } from "@ermine/core/places/lib"
+import { upsert } from "@ermine/core/places/upsert"
 import { RUNNER } from "@ermine/software"
 import { type Host, KINDS, NAME, OUT } from "./host.ts"
 import { FOLDER, MACHINERY, type Unplaced } from "./made.ts"

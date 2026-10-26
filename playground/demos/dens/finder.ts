@@ -7,8 +7,8 @@
 //
 //   const finder = createFinder(host, el, { pick: (path, id) => ..., drag: (path, id) => ... })
 //   finder.select(["home", "keys"])
-import { level, type Path } from "@ermine/places"
-import { get, list, members } from "@ermine/places/lib"
+import { level, type Path } from "@ermine/core/places"
+import { get, list, members } from "@ermine/core/places/lib"
 import { NAME } from "./host.ts"
 import { wires } from "./things.ts"
 import type { Host } from "./host.ts"
@@ -218,7 +218,7 @@ export function createFinder(
 			return dd
 		}
 		// a folder, as a path
-		if (k === "ermine.process.cwd" && isPath(v)) {
+		if (k === "ermine.process.folder" && isPath(v)) {
 			dd.append(chip(v))
 			return dd
 		}
