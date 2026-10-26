@@ -1,0 +1,188 @@
+{
+	"title": "a pipe made in a memo's run is made again by its next run: the same node at the same name (pipe-0 by its order in the run, inside the process's node as a bare name is), its new function; one pipe told, not one a run [tippi 10-26: a stable name, claimed again like a memo]; the memo gone, the pipe goes with it",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/src",
+				0
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/mode",
+				1
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createMemo",
+						"m",
+						{},
+						[
+							"pipe",
+							"/src",
+							{
+								"steps": [
+									{
+										"do": [
+											"log",
+											"told",
+											[
+												"all",
+												[
+													"read",
+													"/mode"
+												],
+												[
+													"pick",
+													"$0",
+													[
+														"value"
+													]
+												]
+											]
+										]
+									}
+								]
+							}
+						]
+					],
+					"as": "m"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p",
+				"pipe-0"
+			],
+			"expect": {
+				"id": "n7"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/mode",
+				[
+					{
+						"path": [],
+						"value": 2
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p",
+				"pipe-0"
+			],
+			"expect": {
+				"id": "n7"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/src",
+				[
+					{
+						"path": [],
+						"value": 5
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "told",
+			"expect": {
+				"values": [
+					[
+						2,
+						5
+					]
+				]
+			}
+		},
+		{
+			"op": "stop",
+			"name": "p",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/src",
+				[
+					{
+						"path": [],
+						"value": 6
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "told",
+			"expect": {
+				"values": [
+					[
+						2,
+						5
+					]
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/code/p/pipe-0"
+			],
+			"expect": {
+				"value": false
+			}
+		}
+	]
+}
