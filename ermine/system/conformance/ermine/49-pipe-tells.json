@@ -1,0 +1,269 @@
+{
+	"title": "pipe(from, fn) in place of watch [chee 10-26: \"let's do `pipe(from, to?, fnA?, fnB?)` where if the sec arg is str ifs a to, so it can replace watch\"]: fn is told each write at from, the write [chee: \"the write\"], at the next pulse by default, after the writer is done [chee: \"default to next pulse\"]; { timing: \"write\" } tells it as the write lands, inside the writer's patch. each write told, in order. a pipe is a node of its own: pipe-0 by its order in its owner's run, or { name }; its status done; it goes with its process's scope, and is told nothing more",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/src",
+				1
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"pipe",
+						"/src",
+						{
+							"steps": [
+								{
+									"do": [
+										"log",
+										"told",
+										[
+											"pick",
+											"$0",
+											[
+												"value"
+											]
+										]
+									]
+								}
+							]
+						}
+					],
+					"as": "pp"
+				},
+				{
+					"do": [
+						"createAction",
+						"bump",
+						[
+							{
+								"do": [
+									"patch",
+									"/src",
+									[
+										{
+											"path": [],
+											"value": 9
+										}
+									]
+								]
+							},
+							{
+								"do": [
+									"log",
+									"told",
+									"after the patch"
+								]
+							}
+						]
+					]
+				},
+				{
+					"do": [
+						"pipe",
+						"/src",
+						{
+							"steps": [
+								{
+									"do": [
+										"log",
+										"told",
+										[
+											"all",
+											"at once",
+											[
+												"pick",
+												"$0",
+												[
+													"value"
+												]
+											]
+										]
+									]
+								}
+							]
+						},
+						{
+							"timing": "write",
+							"name": "now"
+						}
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/code/p/pipe-0"
+			],
+			"expect": {
+				"value": true
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"/code/p/bump"
+			]
+		},
+		{
+			"op": "log",
+			"name": "told",
+			"expect": {
+				"values": [
+					[
+						"at once",
+						9
+					],
+					"after the patch",
+					9
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/src",
+				[
+					{
+						"path": [],
+						"value": 3
+					}
+				]
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/src",
+				[
+					{
+						"path": [],
+						"value": 4
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "told",
+			"expect": {
+				"values": [
+					[
+						"at once",
+						9
+					],
+					"after the patch",
+					9,
+					[
+						"at once",
+						3
+					],
+					3,
+					[
+						"at once",
+						4
+					],
+					4
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$pp"
+			],
+			"expect": {
+				"value": {
+					"state": "done"
+				}
+			}
+		},
+		{
+			"op": "stop",
+			"name": "p",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/src",
+				[
+					{
+						"path": [],
+						"value": 5
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "told",
+			"expect": {
+				"values": [
+					[
+						"at once",
+						9
+					],
+					"after the patch",
+					9,
+					[
+						"at once",
+						3
+					],
+					3,
+					[
+						"at once",
+						4
+					],
+					4
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/code/p/pipe-0"
+			],
+			"expect": {
+				"value": false
+			}
+		}
+	]
+}

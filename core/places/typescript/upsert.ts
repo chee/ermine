@@ -16,7 +16,8 @@ const isMap = (v: unknown): v is Record<string, unknown> =>
 	typeof v === "object" && v !== null && !Array.isArray(v) && !ArrayBuffer.isView(v) &&
 	Object.getPrototypeOf(v) === Object.prototype
 
-function equal(a: unknown, b: unknown): boolean {
+// deeply equal: maps by their keys (in any order), lists, typed arrays by their bytes
+export function equal(a: unknown, b: unknown): boolean {
 	if (a === b) return true
 	if (Array.isArray(a)) {
 		return Array.isArray(b) && a.length === b.length && a.every((x, i) => equal(x, b[i]))
