@@ -8,7 +8,7 @@ export type { Tools, Who } from "@ermine/slaygrounds/world"
 
 const world = createWorld({
 	render,
-	processes: [{ name: "dinner" }, { name: "post", export: "post", cwd: ["mail"] }],
+	processes: [{ name: "dinner" }, { name: "post", export: "post", folder: ["mail"] }],
 })
 
 export const reload = world.reload

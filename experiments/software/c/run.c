@@ -84,7 +84,7 @@ typedef struct {
 } calling;
 
 // an owner's facts, as its runner is handed them (software.ts' startOf): a process's from its life;
-// a place's box setup's places, its args none, its cwd its path's folder
+// a place's box setup's places, its args none, its folder its path's folder
 static sw_starting starting_of(owner *o) {
 	sw *s = o->sw;
 	sw_starting st = {.scheduler = s->s.scheduler, .table = s->s.table, .scope = o->scope,
@@ -96,12 +96,12 @@ static sw_starting starting_of(owner *o) {
 		st.places = pr_places(o->life);
 		st.root = pr_root(o->life);
 		st.process.nargs = pr_args(o->life, &st.process.args);
-		st.process.ncwd = pr_cwd(o->life, &st.process.cwd);
+		st.process.nfolder = pr_folder(o->life, &st.process.folder);
 	} else {
 		st.places = s->s.places;
 		st.root = pl_root(s->s.places).string;
-		st.process.cwd = (const char *const *)o->cwd;
-		st.process.ncwd = o->ncwd;
+		st.process.folder = (const char *const *)o->folder;
+		st.process.nfolder = o->nfolder;
 	}
 	return st;
 }
@@ -527,8 +527,8 @@ static sw_process *run_now(sw *s, const given *runner, const sw_program *program
 	if (s->s.sites != NULL && file != NULL) st_note(s->s.sites, p->under, file, line, func);
 	pr_refusal no;
 	pr_process *life = pr_start_at(s->life, where, at, nat,
-		&(pr_options){.args = o->args, .nargs = o->nargs, .has_args = o->has_args, .cwd = o->cwd,
-			.ncwd = o->ncwd, .has_cwd = o->has_cwd, .pin = o->pin, .body = process_body,
+		&(pr_options){.args = o->args, .nargs = o->nargs, .has_args = o->has_args, .folder = o->folder,
+			.nfolder = o->nfolder, .has_folder = o->has_folder, .pin = o->pin, .body = process_body,
 			.stop = process_end, .data = p, .attributes = attrs, .under = p->under},
 		&no, file, line, func);
 	op_free(attrs);

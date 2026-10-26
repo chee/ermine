@@ -42,8 +42,8 @@ owner *sw_owner_of(sw *s, const sw_place *by) {
 	o->stored = by->stored != 0;
 	o->scope = by->scope;
 	o->under = by->scope;
-	o->ncwd = by->nat > 0 ? by->nat - 1 : 0;
-	o->cwd = sw_copy_names(by->at, o->ncwd);
+	o->nfolder = by->nat > 0 ? by->nat - 1 : 0;
+	o->folder = sw_copy_names(by->at, o->nfolder);
 	PUSH(s->all, s->nall, s->capall, o);
 	PUSH(s->places, s->nplaces, s->capplaces, o);
 	sw_holder(s, o);
@@ -144,7 +144,7 @@ void sw_free(sw *s) {
 		free(p->offers);
 		free(p->id);
 		if (p->at != NULL) pr_names_free(p->at, p->nat);
-		if (p->cwd != NULL) pr_names_free(p->cwd, p->ncwd);
+		if (p->folder != NULL) pr_names_free(p->folder, p->nfolder);
 		op_free(p->code);
 		op_free(p->reason);
 		op_free(p->under_value);

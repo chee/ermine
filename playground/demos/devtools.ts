@@ -52,7 +52,7 @@ export function answer(
 		const api = apis.createProcessAPI({
 			box: { root: places.root, places },
 			places,
-			process: { id: "host", at: [], args: [], cwd: [] },
+			process: { id: "host", at: [], args: [], folder: [] },
 			scheduler: s,
 			table,
 			scope,

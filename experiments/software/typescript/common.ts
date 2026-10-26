@@ -38,15 +38,18 @@ const resolved = (name: string): string[] => {
 	}
 }
 // what software calls through on the way to a write
-export const through = [...resolved("@ermine/core/scheduler"), ...resolved("@ermine/processes/start")]
+export const through = [
+	...resolved("@ermine/core/scheduler"),
+	...resolved("@ermine/processes/start"),
+]
 
-// an owner's facts: its place, its box, its args and cwd (a process's), the folders of what it
+// an owner's facts: its place, its box, its args and folder (a process's), the folders of what it
 // offers, by kind, its offers in order, its holds on loads in order
 export type Owner = Place & {
 	readonly under: Scope
 	readonly box: Box
 	readonly args: readonly string[]
-	readonly cwd: Path
+	readonly folder: Path
 	readonly folders: Map<Kind, { readonly id: Id; readonly scope: Scope }>
 	readonly offers: Offer[]
 	readonly loads: Held[]

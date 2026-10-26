@@ -54,12 +54,15 @@ typedef struct {
 	pr_grant grant;
 } pr_answer;
 
-// where something stands among places: path NULL, route NULL: not reached by names
+// where something stands among places: path NULL, route NULL: not reached by names. box: the box
+// it stands in, its folder's id (path and route start there; NULL string and symbol: not said).
+// the builder's pick, why the id and not a path: protect.ts
 typedef struct {
 	const char *const *path;
 	size_t npath;
 	const tb_key *route;
 	size_t nroute;
+	tb_key box;
 } pr_place;
 
 typedef struct {

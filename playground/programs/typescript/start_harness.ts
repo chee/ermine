@@ -7,7 +7,7 @@
 // compilers, each counting calls: upper (uppercase), wrap ({ wasm: input }), slow (input, once
 // settled), boom (throws Error("boom")). the runner (@ermine/software's shape, its api the
 // harness's createProcessAPI) records code, args and api keys; its program looks each arg up from
-// the process's folder every run. createProcessAPI gives { places, process: { id, at, args, cwd },
+// the process's folder every run. createProcessAPI gives { places, process: { id, at, args, folder },
 // watch(name, seen) }. software's pulses asked for are never run: each pulse is a request's.
 //
 // { op: "kids" | "attrs" | "value", id, value }  -> {}   that entry replaced (value: JSON form)
@@ -17,14 +17,14 @@
 // { op: "box", box, path, node }                 -> {}
 // { op: "unbox", box, path }                     -> {}
 // { op: "programs", cache }                      -> {}   createBuilds then createPrograms
-// { op: "start", name, box?, program, from?, chain?, at, args?, cwd? } -> { id, at } | refusal
-// { op: "start", name, box?, file, from?, way?, at, args?, cwd? }      -> the same, via openwith
+// { op: "start", name, box?, program, from?, chain?, at, args?, folder? } -> { id, at } | refusal
+// { op: "start", name, box?, file, from?, way?, at, args?, folder? }      -> the same, via openwith
 //    nothing yielded: { refused: why, ...rest }
 // { op: "stop", name }                           -> {}
 // { op: "pulse" }                                -> {}
 // { op: "settle", fail? }                        -> {}   slow calls resolved (or rejected), pulse;
 //    again while a process is pending, up to 200 times
-// { op: "process", name }  -> { parts, status, args, cwd, pin }  status: "pending" | { failed } |
+// { op: "process", name }  -> { parts, status, args, folder, pin }  status: "pending" | { failed } |
 //    { refused } | null
 // { op: "here", box?, path }                     -> { id } | null
 // { op: "runs" }                                 -> { runs: [{ process, code, args, keys }],
@@ -43,7 +43,7 @@ import createEntry, { type Entry } from "@ermine/core/node/entry"
 import { createScheduler, PENDING } from "@ermine/core/scheduler"
 import { createPaths } from "@ermine/core/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/core/table"
-import { children, createPlaces, type Places, PlacesError } from "@ermine/core/places"
+import { children, createPlaces, type Path, type Places, PlacesError } from "@ermine/core/places"
 import { get, lookup } from "@ermine/core/places/lib"
 import { createChangeHeader } from "@ermine/core/places/header"
 import { STATUS, TABLE as STATUS_TABLE } from "@ermine/core/places/status"
@@ -57,14 +57,14 @@ import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { BuildError, type Compiler, createBuilds } from "@ermine/compilers"
 import { createDlopen, type Live } from "./dlopen.ts"
 import { openwith, type Refusal, satisfy, type Way, type Why } from "./programs.ts"
-import { ARGS, CWD, PIN } from "@ermine/processes/start"
+import { ARGS, FOLDER, PIN } from "@ermine/processes/start"
 import {
-	type Context,
 	createPrograms,
 	ours,
 	type Process,
 	type Programs,
 	type Runner,
+	type Start,
 } from "./start.ts"
 
 type Json = unknown
@@ -110,16 +110,17 @@ const compilers: Record<string, Compiler> = {
 // what the program is given
 type Api = {
 	places: Places
-	process: Context["process"]
+	process: { id: Id; at: Path; args: readonly string[]; folder: Path }
 	watch: (name: string, seen: (id: Id | null) => void) => void
 }
 
-const createProcessAPI = ({ places, process, scheduler }: Context): Api => ({
+// the box's places, the process's facts from the start; the scheduler the harness's own
+const createProcessAPI = ({ box: { places }, process, at, args, folder }: Start): Api => ({
 	places,
-	process,
+	process: { id: process.id, at, args, folder },
 	watch: (name, seen) =>
-		void scheduler.createComputer(() => {
-			const path = lookup(places, [name], process.cwd)
+		void s.createComputer(() => {
+			const path = lookup(places, [name], folder)
 			const id = path === undefined ? null : get(places, path) ?? null
 			seen(id)
 			return id
@@ -138,7 +139,7 @@ const ran: Json[] = []
 const stops: string[] = []
 const watching = new Map<string, { runs: number; found: Record<string, Json> }>()
 
-const runner = (code: unknown, ctx: Context) => {
+const runner = (code: unknown, ctx: Start) => {
 	const a = createProcessAPI(ctx)
 	const name = procs.get(a.process.id) ?? String(a.process.id)
 	ran.push({ process: name, code, args: a.process.args, keys: Object.keys(a).sort() })
@@ -230,7 +231,7 @@ function dlopenRunner(): Runner {
 		if (compile === undefined) return live
 		return { ...live, compile: (input: unknown) => (native.compiles++, compile(input)) }
 	}
-	const start = (code: unknown, ctx: Context) => (native.loads++, runner.start(code, ctx))
+	const start = (code: unknown, ctx: Start) => (native.loads++, runner.start(code, ctx))
 	return dlopen = { start, load, api: createProcessAPI }
 }
 
@@ -296,8 +297,8 @@ function start(r: Request): Json {
 	if (programs === undefined) throw new Error("no programs")
 	const where: Box | Places = r.box === undefined ? places : boxOf(r.box)
 	const p = "places" in where ? where.places : where
-	const cwd = inside(r.cwd ?? inside(r.at as Address).slice(0, -1))
-	const from = r.from ?? cwd
+	const folder = inside(r.folder ?? inside(r.at as Address).slice(0, -1))
+	const from = r.from ?? folder
 	// the way numbered n, the search going no further; nothing yielded: the search's own whynot
 	const why: Why[] = []
 	let refusal: Refusal | undefined
@@ -316,7 +317,7 @@ function start(r: Request): Json {
 	if (refusal !== undefined) return plain(refused(refusal, why))
 	if (way === undefined) throw new Error(`no way ${n}`)
 	const chosen = way
-	const options = { ...(r.args === undefined ? {} : { args: r.args }), cwd: r.cwd }
+	const options = { ...(r.args === undefined ? {} : { args: r.args }), folder: r.folder }
 	const made = hosted(() => programs!.start(where, chosen, r.at, options))
 	if ("refused" in made) return plain(made)
 	started.set(r.name, made)
@@ -424,7 +425,7 @@ async function answer(r: Request): Promise<Json> {
 				parts: table.get(id).map(([k]) => k).sort(),
 				status: shown(table.get(STATUS_TABLE, id)?.value?.[STATUS]),
 				args: plain(attrs[ARGS]),
-				cwd: plain(attrs[CWD]),
+				folder: plain(attrs[FOLDER]),
 				pin: plain(attrs[PIN]),
 			}
 		}

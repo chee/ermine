@@ -46,6 +46,8 @@ export function world(o: { may?: Policy } = {}) {
 	const workers: Worker[] = []
 	let heard = 0
 	const realms = createRealms({
+		scheduler: s,
+		table,
 		commit,
 		may: o.may,
 		createProcessAPI: (ctx) => apis.createProcessAPI(ctx),
@@ -126,12 +128,12 @@ export function world(o: { may?: Policy } = {}) {
 			: table.get("attributes", id)?.value as Record<string, unknown> | undefined
 	// the host's own api, at W's root
 	const hostAPI = apis.createProcessAPI({
-		box: b,
-		places: b.places,
-		process: { id: "host", at: [], args: [], cwd: [] },
-		scheduler: s,
-		table,
 		scope: host,
+		box: b,
+		folder: [],
+		at: [],
+		args: [],
+		process: { id: "host", at: [], folder: [], scope: host },
 	})
 	const done = () => {
 		for (const p of running) apis.stop(p)
@@ -388,15 +390,20 @@ Deno.test("run given a start's facts: the api made with setup.createProcessAPI f
 	const s = createScheduler()
 	const table = createTable(() => {})
 	const places = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler: s })
+	const scope = s.createRootScope({ process: ["a"] })
 	const start = {
+		scope,
 		box: { root: "R", places },
-		places,
-		process: { id: "proc:a", at: ["a"], args: [], cwd: [] },
+		folder: [],
+		at: ["a"],
+		args: [],
+		process: { id: "proc:a", at: ["a"], folder: [], scope },
+	}
+	const bare = createRealms({
 		scheduler: s,
 		table,
-		scope: s.createRootScope({ process: ["a"] }),
-	}
-	const bare = createRealms({ worker: () => assert(false, "no worker") as never })
+		worker: () => assert(false, "no worker") as never,
+	})
 	assertThrows(
 		() => bare.run.start("export default () => {}", start),
 		Error,
@@ -404,6 +411,8 @@ Deno.test("run given a start's facts: the api made with setup.createProcessAPI f
 	)
 	const given: unknown[] = []
 	const realms = createRealms({
+		scheduler: s,
+		table,
 		worker: () => assert(false, "no worker") as never,
 		createProcessAPI: (ctx) => {
 			given.push(ctx)

@@ -4,13 +4,13 @@
 //     graph · scheduler · places · protect         scheduler · places · ermine/api, the program
 //     the page's table                ◄── port ──► a partial replica of it, filled as it is read
 //
-//   const realms = createRealms({ commit, createProcessAPI: apis.createProcessAPI })
+//   const realms = createRealms({ scheduler, table, createProcessAPI: apis.createProcessAPI })
 //   put("value", "realm", realms.run)          // a host runner: takes javascript source text
 //   software.offer(session, "runners", "realm", attributes, realms.run)   // software's, the same
 //
 // realms.run is a runner in @ermine/software's shape: start(code, ctx), ctx the start's facts (its
-// Start, processes' Context), the page's side of the program's api made from it with
-// setup.createProcessAPI (its api)
+// Start, the process context's), the page's side of the program's api made from it with
+// setup.createProcessAPI (its api); the scheduler and table the page's, given in setup
 //
 // the page is the authority: a realm's writes are asked of the host's policy and written again
 // here; a write made on a stale value is rebased past the page's (rebase.ts). errors, and refused
@@ -27,11 +27,10 @@ import { get } from "@ermine/core/places/lib"
 import { createChangeHeader, NODE } from "@ermine/core/places/header"
 import { createGuard, slot, target, type Thing } from "@ermine/core/places/guard"
 import { STATUS } from "@ermine/core/places/status"
-import type { Context } from "@ermine/processes/start"
-import type { Handle, Runner } from "@ermine/software"
+import type { Handle, Runner, Start } from "@ermine/software"
 import type { Policy } from "@ermine/core/protect"
-import { PENDING, type Scope } from "@ermine/core/scheduler"
-import type { Key } from "@ermine/core/table"
+import { PENDING, type Scheduler, type Scope } from "@ermine/core/scheduler"
+import type { Key, Table } from "@ermine/core/table"
 import { rebase } from "./rebase.ts"
 import {
 	decode,
@@ -54,6 +53,9 @@ export type Realm = Port & {
 }
 
 export type Setup = {
+	// the page's: what the realm's program runs on, and where its writes land
+	scheduler: Scheduler
+	table: Table
 	// where the page's writes are said written (none: the process's places' commit)
 	commit?: (changed: readonly Entry<unknown>[]) => void
 	// the policy a realm's writes and loads are asked of, from where its process is (none: all
@@ -65,7 +67,7 @@ export type Setup = {
 	schedule?: (f: () => void) => void
 	// the page's side of a program's api, made from the start's facts: a host's createProcessAPI.
 	// none: a start throws
-	createProcessAPI?: (ctx: Context) => API
+	createProcessAPI?: (ctx: Start) => API
 }
 
 export type Realms = { run: Runner }
@@ -84,7 +86,7 @@ const strip = (c: ChangeHeader | undefined) => {
 
 const plain = (e: unknown) => e instanceof Error ? e.message : String(e)
 
-export function createRealms(setup: Setup = {}): Realms {
+export function createRealms(setup: Setup): Realms {
 	const make = setup.worker ??
 		(() =>
 			new Worker(new URL("./worker.ts", import.meta.url), {
@@ -92,7 +94,7 @@ export function createRealms(setup: Setup = {}): Realms {
 			}) as unknown as Realm)
 
 	// a program's source run in a realm of its own, the page's side of its api made from the start
-	function start(code: unknown, ctx: Context): Promise<Handle> {
+	function start(code: unknown, ctx: Start): Promise<Handle> {
 		const createProcessAPI = setup.createProcessAPI
 		if (createProcessAPI === undefined) {
 			throw new Error(
@@ -117,8 +119,9 @@ export function createRealms(setup: Setup = {}): Realms {
 		...(setup.createProcessAPI === undefined ? {} : { api: setup.createProcessAPI }),
 	}
 
-	function open(code: string | { url: string }, api: API, ctx: Context): Promise<Handle> {
-		const { scheduler: s, table, places, process, scope } = ctx
+	function open(code: string | { url: string }, api: API, ctx: Start): Promise<Handle> {
+		const { scheduler: s, table } = setup
+		const { box: { places }, process, at, folder, args, scope } = ctx
 		const commit = setup.commit ?? places.commit
 		const schedule = setup.schedule ?? queueMicrotask
 		const worker = make()
@@ -159,7 +162,7 @@ export function createRealms(setup: Setup = {}): Realms {
 
 		const guard = setup.may === undefined
 			? undefined
-			: createGuard({ places, scheduler: s, table, may: setup.may, from: process.at })
+			: createGuard({ places, scheduler: s, table, may: setup.may, from: at })
 
 		let queued = false
 		function later() {
@@ -570,10 +573,10 @@ export function createRealms(setup: Setup = {}): Realms {
 		})
 		s.registerTeardown(scope, stop)
 
-		// what it is handed: the root, the folders on the way to at and cwd, the process
+		// what it is handed: the root, the folders on the way to at and folder, the process
 		const ids: string[] = [root]
 		paths.set(root, [])
-		for (const route of [process.at, process.cwd]) {
+		for (const route of [at, folder]) {
 			const names: string[] = []
 			for (const step of places.walk(route)) {
 				names.push(step.name)
@@ -590,9 +593,9 @@ export function createRealms(setup: Setup = {}): Realms {
 			code,
 			process: {
 				id: String(process.id),
-				at: [...process.at],
-				args: [...process.args],
-				cwd: [...process.cwd],
+				at: [...at],
+				args: [...args],
+				folder: [...folder],
 			},
 			root,
 			contributors: (places.contributors ?? []).map((c) => c.from),

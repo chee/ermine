@@ -341,15 +341,15 @@
 						"process": "proc:a",
 						"code": "clock",
 						"args": [],
-						"cwd": [],
+						"folder": [],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -357,15 +357,15 @@
 						"process": "proc:b",
 						"code": "main",
 						"args": [],
-						"cwd": [],
+						"folder": [],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					}
@@ -380,7 +380,7 @@
 					{
 						"by": "session",
 						"code": "main",
-						"cwd": [
+						"folder": [
 							"system"
 						],
 						"open": true

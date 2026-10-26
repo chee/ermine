@@ -103,7 +103,7 @@
 				],
 				"status": "pending",
 				"args": null,
-				"cwd": [],
+				"folder": [],
 				"pin": {
 					"program": {
 						"id": "P",
@@ -132,7 +132,7 @@
 						}
 					],
 					"box": "W",
-					"cwd": []
+					"folder": []
 				}
 			}
 		},
@@ -150,7 +150,7 @@
 				],
 				"status": null,
 				"args": null,
-				"cwd": [],
+				"folder": [],
 				"pin": {
 					"program": {
 						"id": "P",
@@ -179,7 +179,7 @@
 						}
 					],
 					"box": "W",
-					"cwd": []
+					"folder": []
 				}
 			}
 		},

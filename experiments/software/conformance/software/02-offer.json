@@ -82,7 +82,7 @@
 					"children"
 				],
 				"attributes": {
-					"ermine.process.cwd": [
+					"ermine.process.folder": [
 						"system"
 					]
 				},

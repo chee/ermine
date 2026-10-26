@@ -6,10 +6,11 @@
 //   op      any string (read, edit, execute, relay, share, place, ...); protect knows none
 //   target  a node or a field: { part?, id, field?, path?, route? }; route[i] the id at each path
 //           step, route[0] the start (length path.length + 1)
-//   from    the asker's place (path, route); none: the host, outside any process
+//   from    the asker's place (path, route) and its box (box: the id of the box's folder, where
+//           its path and route start); none: the host, outside any process
 //   node    a placement's (op place): the node being given the name (its id, the path it came by),
 //           beside the target, the folder's slot. a rule may look at either or both: the node's
-//           own, where it goes, or the two together [chee 10-26: "right"]
+//           own, where it goes, or the two together
 //   at      the version, opaque, passed to the policy and its every read; none: now
 //
 // a policy reads through the asker's own read, so a change to what it read asks again. a read of
@@ -17,6 +18,15 @@
 // what it waits for (having read the node the answer will arrive in). a grants answer, a yes or a
 // "denied", also says which grant decided: grant { part, id, index }; all, any and only pass the
 // deciding answer through whole, so it survives composition
+//
+// from.box, the builder's pick, not chee's (asked for [chee 10-26: "protect should know about the
+// box the question came from"]): the box as its folder's id, not its path from the root. a path is box-
+// relative, so two processes at code/q in two boxes ask with the same from.path; the box's id tells
+// them apart. why the id: a box is its folder (boxes.ts), and the id names that folder whatever
+// names it has, one or many or none (a box made from an id); a path from the root changes with
+// every rename above it and needs a walk up to find; a host that wants the path keeps its own map.
+// the policy is the host's: from.box is for it, told no process (guard.ts keeps it out of a
+// Refusal). a rule by path stays about the name: path and from match names, as before
 import type { Key as Step } from "@ermine/core/op/apply"
 
 export type Key = string | symbol
@@ -28,8 +38,9 @@ export type Target = {
 	route?: readonly Key[]
 }
 
-// where something stands among places: none given: it was not reached by names (by id alone)
-export type Place = { path?: readonly string[]; route?: readonly Key[] }
+// where something stands among places: none given: it was not reached by names (by id alone).
+// box: the box it stands in, its folder's id (path and route start there); none: not said
+export type Place = { path?: readonly string[]; route?: readonly Key[]; box?: Key }
 
 export type Ask = {
 	who: unknown
@@ -118,9 +129,10 @@ export type Where = { part: string; id: Key }
 //   id: the target's id
 //   path: a start of the target's path (it, or something under it)
 //   from: a start of the asker's place's path
+//   box: equal to the asker's box (from.box), its folder's id
 //   field: a start of the target's field
 //   deny: true: a match is a no, and beats any yes
-// a grant with any other field, or a field of the wrong kind (op, id: a string; path, from,
+// a grant with any other field, or a field of the wrong kind (op, id, box: a string; path, from,
 // field: a list; deny: a boolean), makes the whole node answer no, naming it: a misspelt field
 // must never widen. entries that are not maps are skipped.
 // a match: yes, grant the first allowing one that matched; a deny: no "denied", grant that deny; no
@@ -156,6 +168,7 @@ function malformed(g: Record<string, unknown>): string | undefined {
 				break
 			case "op":
 			case "id":
+			case "box":
 				if (typeof v !== "string") return k
 				break
 			case "path":
@@ -181,6 +194,7 @@ function matches(g: Record<string, unknown>, ask: Ask): boolean {
 	if (Object.hasOwn(g, "id") && g.id !== target.id) return false
 	if (Object.hasOwn(g, "path") && !starts(g.path, target.path)) return false
 	if (Object.hasOwn(g, "from") && !starts(g.from, ask.from?.path)) return false
+	if (Object.hasOwn(g, "box") && g.box !== ask.from?.box) return false
 	if (Object.hasOwn(g, "field") && !starts(g.field, target.field)) return false
 	return true
 }

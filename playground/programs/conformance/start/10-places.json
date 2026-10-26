@@ -1,5 +1,5 @@
 {
-	"title": "we're not always inside a box: started in the host's places (root R, asked [processes(R), children]), at a string path from the root; the process at work/clock there, its cwd the folder it is in (work), its args looked up from the cwd, its pin's box the root R; taken refused the same; stop takes it out",
+	"title": "we're not always inside a box: started in the host's places (root R, asked [processes(R), children]), at a string path from the root; the process at work/clock there, its folder the one it is in (work), its args looked up from the folder, its pin's box the root R; taken refused the same; stop takes it out",
 	"steps": [
 		{
 			"op": "kids",
@@ -124,7 +124,7 @@
 				"args": [
 					"note"
 				],
-				"cwd": [
+				"folder": [
 					"work"
 				],
 				"pin": {
@@ -159,7 +159,7 @@
 						}
 					],
 					"box": "R",
-					"cwd": [
+					"folder": [
 						"work"
 					]
 				}
@@ -242,7 +242,7 @@
 				"parts": [],
 				"status": null,
 				"args": null,
-				"cwd": null,
+				"folder": null,
 				"pin": null
 			}
 		}

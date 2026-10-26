@@ -1,0 +1,284 @@
+{
+	"title": "protect knows the box an ask came from [chee 10-26: \"protect should know about the box the question came from\"]: two processes at code/q, one in box a, one in box b, ask with the same path; a deny on code/q's edits in box a refuses a's patch and lets b's through. a deny by path alone stays about the name: both refused",
+	"steps": [
+		{
+			"op": "ermine",
+			"deny": [
+				{
+					"op": "edit",
+					"from": "code/q",
+					"box": "a"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"name": "a",
+			"at": "/boxes/a",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"name": "b",
+			"at": "/boxes/b",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/boxes/a/code/note",
+				{
+					"n": 0
+				}
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"boxes",
+						"a",
+						"code",
+						"note"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/boxes/b/code/note",
+				{
+					"n": 0
+				}
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"boxes",
+						"b",
+						"code",
+						"note"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "code",
+			"at": "/progs/q",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "qa",
+			"at": "/code/q",
+			"program": "/progs/q",
+			"box": "a",
+			"expect": {
+				"id": "proc:qa"
+			}
+		},
+		{
+			"op": "start",
+			"name": "qb",
+			"at": "/code/q",
+			"program": "/progs/q",
+			"box": "b",
+			"expect": {
+				"id": "proc:qb"
+			}
+		},
+		{
+			"op": "do",
+			"process": "qa",
+			"call": [
+				"patch",
+				"./note",
+				[
+					{
+						"path": [
+							"n"
+						],
+						"value": 1
+					}
+				]
+			],
+			"expect": {
+				"error": "refused"
+			}
+		},
+		{
+			"op": "do",
+			"process": "qb",
+			"call": [
+				"patch",
+				"./note",
+				[
+					{
+						"path": [
+							"n"
+						],
+						"value": 1
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/boxes/a/code/note"
+			],
+			"expect": {
+				"value": {
+					"n": 0
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/boxes/b/code/note"
+			],
+			"expect": {
+				"value": {
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "ermine",
+			"deny": [
+				{
+					"op": "edit",
+					"from": "code/q"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"name": "a",
+			"at": "/boxes/a",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"name": "b",
+			"at": "/boxes/b",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/boxes/a/code/note",
+				{
+					"n": 0
+				}
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"boxes",
+						"a",
+						"code",
+						"note"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/boxes/b/code/note",
+				{
+					"n": 0
+				}
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"boxes",
+						"b",
+						"code",
+						"note"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "code",
+			"at": "/progs/q",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "qa",
+			"at": "/code/q",
+			"program": "/progs/q",
+			"box": "a",
+			"expect": {
+				"id": "proc:qa"
+			}
+		},
+		{
+			"op": "start",
+			"name": "qb",
+			"at": "/code/q",
+			"program": "/progs/q",
+			"box": "b",
+			"expect": {
+				"id": "proc:qb"
+			}
+		},
+		{
+			"op": "do",
+			"process": "qa",
+			"call": [
+				"patch",
+				"./note",
+				[
+					{
+						"path": [
+							"n"
+						],
+						"value": 1
+					}
+				]
+			],
+			"expect": {
+				"error": "refused"
+			}
+		},
+		{
+			"op": "do",
+			"process": "qb",
+			"call": [
+				"patch",
+				"./note",
+				[
+					{
+						"path": [
+							"n"
+						],
+						"value": 1
+					}
+				]
+			],
+			"expect": {
+				"error": "refused"
+			}
+		}
+	]
+}

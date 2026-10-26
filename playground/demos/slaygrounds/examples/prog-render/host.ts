@@ -3,7 +3,7 @@
 // processes; the renderers library (@ermine/slaygrounds/renderers, a proposal) the hosts, the
 // mirror and the renderers' nodes. this file holds only what is this demo's: a canvas's pixels,
 // the page, the screens (/screens/<name>: its runner, its own renderers; its mirror process runs
-// with its cwd there, so its own renderers are nearer than /renderers) and the wiring
+// with its folder there, so its own renderers are nearer than /renderers) and the wiring
 import type { API } from "@ermine/api"
 import {
 	charHost,
@@ -91,7 +91,7 @@ const spec = (name: string) => ({
 	name,
 	export: name,
 	at: ["screens", name, "mirror"],
-	cwd: ["screens", name],
+	folder: ["screens", name],
 })
 const world = createWorld({
 	render,

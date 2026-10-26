@@ -277,7 +277,7 @@ export function boss(api: API) {
 	const hire = (name: string) => {
 		// the worker program is a node the host writes (/code/worker). it runs at /crew/<name>: under
 		// /boss would be refused as taken
-		const p = start("/code/worker", `/crew/${name}`, { args: [name], cwd: `/state/${name}` })
+		const p = start("/code/worker", `/crew/${name}`, { args: [name], folder: `/state/${name}` })
 		if ("refused" in p) console.error(`boss: ${p.refused}`)
 		else crew.set(name, p)
 	}

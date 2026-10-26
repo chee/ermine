@@ -2,12 +2,13 @@
 // form, its hash), then the process: run at a path, loaded live with no process, stopped, and the
 // reasons it is stopped with. which question: how a program runs on a runner
 //
-// what a runner is handed is a Start: @ermine/processes/start's Context ({ box, places, process:
-// { id, at, args, cwd }, scheduler, table, scope }). what the program gets is the runner's: this
-// makes no api; a runner over ermine/api builds it from apis.createProcessAPI(start)
-// (@ermine/programs/api's; api? saying how). its limits are the
+// what a runner is handed is a Start: the process context's facts (@ermine/processes'
+// ProcessContext: { scope, box, folder, at, args, process }), not its functions (its host's to make);
+// the scheduler and table are the runner's own, from whoever made it. what the program gets is
+// the runner's: this makes no api; a runner over ermine/api builds it from
+// apis.createProcessAPI(start) (@ermine/programs/api's; api? saying how). its limits are the
 // runner's too: nothing here counts
-// run(runner, program, at, { args, cwd, box, pin }): runner from places' root, or carried ({ id,
+// run(runner, program, at, { args, folder, box, pin }): runner from places' root, or carried ({ id,
 // live }: its live form in hand, nothing of its node read); program an address from where's root
 // (where: box, else places) or { id, hash?, type?, api?, code?, build? }. refused, nothing made,
 // the first that holds:
@@ -54,7 +55,8 @@ import { type Address, type Box, inside } from "@ermine/boxes"
 import type { Id, Path } from "@ermine/core/places"
 import { get } from "@ermine/core/places/lib"
 import { conformance, typeOf, typesAt } from "@ermine/types"
-import type { Context, Inside, Process } from "@ermine/processes/start"
+import type { ProcessContext } from "@ermine/processes"
+import type { Inside, Process } from "@ermine/processes/start"
 import { isPromise } from "@ermine/core/scheduler/helpers"
 import {
 	ATTRIBUTE,
@@ -84,8 +86,11 @@ export const REASONS = { withdrawn: "withdrawn", runner: "runner-stopped" } as c
 
 // what a runner gives back; @ermine/programs/start's Handle is one
 export type Handle = { readonly stop: (reason?: unknown) => unknown }
-// what a runner is handed: the run's facts, processes' Context (a load's: its by's)
-export type Start = Context
+// what a runner is handed: the process context's facts, its process always there (a load's: its
+// by's, its scope the load's own)
+export type Start = Pick<ProcessContext, "scope" | "box" | "folder" | "at" | "args"> & {
+	readonly process: Process
+}
 // a live runner: start a process's program; load, a program live with no process; api, what its
 // programs get
 export type Runner = {
@@ -124,7 +129,7 @@ export type Refused =
 	}
 export type Options = {
 	args?: readonly string[]
-	cwd?: Address
+	folder?: Address
 	// where it runs, and where program and at are from; none: places
 	box?: Box
 	// ermine.process.pin, as processes' start writes it
@@ -186,14 +191,16 @@ export function createRun(c: Ctx) {
 		return isMap(v) ? v : {}
 	}
 
-	// what an owner's runner is handed: its facts, and the scope open for the call (none: its own)
+	// what an owner's runner is handed: its facts, and the scope open for the call (none: its own).
+	// its process: the one run made; none yet, or a place's: its facts as one
 	const startOf = (o: Owner, scope = o.scope): Start => ({
-		box: o.box,
-		places: o.box.places,
-		process: { id: o.id, at: o.at, args: o.args, cwd: o.cwd },
-		scheduler: s,
-		table,
 		scope,
+		box: o.box,
+		folder: o.folder,
+		at: o.at,
+		args: o.args,
+		process: (o as Partial<Running>).process ??
+			{ id: o.id, at: o.at, folder: o.folder, scope: o.scope },
 	})
 
 	// a program's type at its place in where: its ermine.type, else its name's (@ermine/types'
@@ -326,7 +333,13 @@ export function createRun(c: Ctx) {
 			made = processes.start(
 				where,
 				address,
-				{ args: options.args, cwd: options.cwd, pin: options.pin, attributes: attrs, under },
+				{
+					args: options.args,
+					folder: options.folder,
+					pin: options.pin,
+					attributes: attrs,
+					under,
+				},
 				(inner) => {
 					// its handle's stop: the teardown of a scope beside its own, newer, so it goes
 					// before it (what its program made told the reason) and after what it offers
@@ -340,7 +353,7 @@ export function createRun(c: Ctx) {
 						stopper,
 						box: inner.box,
 						args: inner.args,
-						cwd: inner.cwd,
+						folder: inner.folder,
 						folders: new Map(),
 						offers: [],
 						loads: [],

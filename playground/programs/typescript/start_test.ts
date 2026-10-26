@@ -107,7 +107,7 @@ function recording() {
 	return { runner, calls, stops: () => stops }
 }
 
-Deno.test("a runner is handed the start's facts (software's Start), the host's own things: what its program gets is the runner's to make", () => {
+Deno.test("a runner is handed the start's facts (software's Start): what its program gets is the runner's to make", () => {
 	const r = recording()
 	const w = world(r.runner)
 	const p = w.start(["clock"])
@@ -115,11 +115,10 @@ Deno.test("a runner is handed the start's facts (software's Start), the host's o
 	assertEquals(r.calls.length, 1)
 	assertEquals(r.calls[0].code, "HI")
 	const given = r.calls[0].start
-	assertStrictEquals(given.scheduler, w.s)
 	assertStrictEquals(given.scope, p.scope)
-	assertStrictEquals(given.places, w.b.places)
-	assertEquals(given.process, { id: p.id, at: ["clock"], args: [], cwd: [] })
 	assertStrictEquals(given.box, w.b)
+	assertEquals([given.at, given.args, given.folder], [["clock"], [], []])
+	assertStrictEquals(given.process, p)
 })
 
 Deno.test("the build's latest run by the process's node id, what it read", () => {
@@ -206,9 +205,9 @@ Deno.test("a scope above torn down: the runner stopped, the row out, the node's 
 	let runs = 0
 	let stops = 0
 	const made: Scope[] = []
-	// a runner making a computer for its program, in the process's scope
-	const w = world((_code, start) => {
-		made.push(start.scheduler.createComputer(() => runs++, () => {}))
+	// a runner making a computer for its program, in the process's scope (the scheduler its own)
+	const w = world(() => {
+		made.push(w.s.createComputer(() => runs++, () => {}))
 		return { stop: () => void stops++ }
 	})
 	const a = w.start(["clock"])

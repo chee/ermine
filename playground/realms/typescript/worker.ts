@@ -7,7 +7,7 @@
 //
 //   serve(port)       // a worker's own global: served as it loads
 //
-// what a realm has: the root, the folders on the way to its process and its cwd, and the process,
+// what a realm has: the root, the folders on the way to its process and its folder, and the process,
 // handed at start; anything else as a read reaches it. the page sends every later change at an id
 // it has (or wrote). a change landing from the page is written here with the page's header, told as
 // any write is, and never sent back
@@ -26,7 +26,13 @@ import createEntry, { type ChangeHeader } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
 import apply, { type Patch } from "@ermine/core/op/apply"
 import { createProcessAPIs } from "@ermine/programs/api"
-import { children, type Contributor, createPlaces, type Fact, type Places } from "@ermine/core/places"
+import {
+	children,
+	type Contributor,
+	createPlaces,
+	type Fact,
+	type Places,
+} from "@ermine/core/places"
 import { NODE } from "@ermine/core/places/header"
 import { PROCESS, processes } from "@ermine/processes"
 import { createScheduler, type Info, PENDING, type Scope } from "@ermine/core/scheduler"
@@ -362,17 +368,17 @@ export function serve(port: Port): () => void {
 			tell({ t: "ready", error })
 			return
 		}
-		const { id, at, args, cwd } = m.process
+		const { id, at, args, folder } = m.process
 		for (;;) {
 			const scope = s.createScope({ process: [...at], [NODE]: id }, w!.root)
 			w!.scope = scope
 			const ctx = {
-				box: { root: m.root, places },
-				places,
-				process: { id, at, args, cwd },
-				scheduler: s,
-				table: w!.r.table,
 				scope,
+				box: { root: m.root, places },
+				folder,
+				at,
+				args,
+				process: { id, at, folder, scope },
 			}
 			try {
 				s.runWithScope(scope, () => apis.run.start(mod, ctx))

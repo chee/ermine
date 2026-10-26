@@ -8,14 +8,15 @@
 // { op: "ermine", features?, deny?, uuid?, calls?, at?, args?, machine? } → {}   features: names
 //    ("patchy": the real one; "inline": one written in this file, listing no files; another
 //    harness adds its own: named, below) or
-//    test features (below); deny: [{ op, path?, id?, from? }] refused (every field given matching;
-//    from: the asker's place);
+//    test features (below); deny: [{ op, path?, id?, from?, box? }] refused (every field given
+//    matching; from: the asker's place; box: the box the asker is in, by its name, a "box" step's:
+//    that box's folder's id the ask's from.box);
 //    uuid: uuidv7 ids; calls: "never". deny: by path, or { op, id } by id; at, args, machine: the host's node's
 // { op: "features" }                       → { features }   ermine.features
 // { op: "late", feature }                  → {}   a test feature adding a hook now (late: true)
 // { op: "uuid", path }                     → { v7 }   whether the id there is a uuidv7
 // { op: "node" }                           → { id, attributes }   the host's node
-// { op: "context", process? }               → { at, cwd, args, process?, scope }   ermine.getProcessContext's;
+// { op: "context", process? }               → { at, folder, args, process?, scope }   ermine.getProcessContext's;
 //    scope: whether it is the process's scope ("process") or the host's ("host")
 // { op: "o", process?, within?, call }    → { value? }   the context's (none: the host's): ["resolve",
 //    p], ["write", part, id or { id, path }, patches], ["remove", part, id or { id, path }], ["ask", op, id, part],
@@ -76,11 +77,14 @@
 //   ["explain", target, key?]                 explain(target, key), shown
 //   ["peep", expr]                            peep(() => expr): read untracked
 //   ["ref", path, value]                      ref(path, () => value)
-//   ["watch", x, log]                         watch(x): each write's patches logged ("refused")
+//   ["watch", x, log]                         pipe(x, fn, { timing: "write" }): each write's
+//                                             patches logged ("refused")
+//   ["pipe", from, to | fn, fnA?, fnB?, o?]   pipe(...): a function { steps, gives? }, the write
+//                                             as $0; o: { timing, name }
 //   ["log", log, expr]                        expr's value logged and given back
 //   ["later", expr]                           a promise of expr's value, settled at "settle"
 //   ["if", test, then, else?], ["throw", text], ["each", expr, path], ["pick", expr, path] (the
-//                                             value at path in expr's), ["is", a, b], ["keys", expr]
+//                                             value at path in expr's), ["is", a, b], ["keys", expr], ["inc", n] (n + 1)
 //   ["explaincall", target, key?]             the keys of explain's writer.call, sorted (none: null)
 //   ["explainargs", target]                   explain's writer.call: { args, returned } (a handle
 //                                             in them: "a handle"; none a call: null)
@@ -90,7 +94,8 @@
 //                                             nearest scope above the one open as it runs
 //   ["createPatch", at, over, change], ["layers", target, key?]   patchy's library
 //   any library function another harness adds (libraries, below)
-// expr: [fn, ...args], ["all", expr, …], "$x", or any other value as it is
+// expr: [fn, ...args], ["all", expr, …], ["whole", expr] ([{ path: [], value }]), "$x", or any other
+// value as it is
 // shown: status { state, error?: its message, phase?, waiting?, n?, held? }; explain { writer?: "computer" |
 // "method" | "outside", computer?, method?, n? (its record still holding it), site?, fallback?, held? }; a call's record { n,
 // caller, handler, args, end, returned?, error?, reads: [[part, id]], writes: [[part, id]], made?:
@@ -102,6 +107,7 @@
 import createEntry from "@ermine/core/node/entry"
 import { at } from "@ermine/core/places"
 import { PlacesError } from "@ermine/core/places"
+import { inside } from "@ermine/boxes"
 import { get } from "@ermine/core/places/lib"
 import { createChangeHeader, NODE } from "@ermine/core/places/header"
 import { Refusal } from "@ermine/core/places/guard"
@@ -126,6 +132,7 @@ import {
 import * as system from "@ermine/system"
 import { type HostOnly, innerOf, type System, systemFrom } from "./system.ts"
 import { isHandle } from "./handles.ts"
+import { bare } from "./hints.ts"
 import type { Run } from "@ermine/processes/runs"
 import { testFeature } from "./features_fixture.ts"
 
@@ -147,6 +154,8 @@ type Made = {
 	held: (() => void)[]
 	slots: Map<string, (o: ProcessContext | undefined) => unknown>
 	boxes: Map<string, BoxNode>
+	// each box's folder's id, by its name
+	boxIds: Map<string, Id>
 	// the programs code steps made, by the path they were written at (from the root)
 	programs: Map<string, () => unknown>
 	host: Env
@@ -171,14 +180,22 @@ function make(o: Request = {}): Made {
 	let n = 0
 	const later: (() => void)[] = []
 	const slots: Made["slots"] = new Map()
-	const deny = (o.deny ?? []) as { op: string; path?: string; id?: string; from?: string }[]
+	const deny = (o.deny ?? []) as {
+		op: string
+		path?: string
+		id?: string
+		from?: string
+		box?: string
+	}[]
 	const may: Policy | undefined = o.deny
 		? (ask) =>
 			deny.some((d) =>
 					d.op === ask.op &&
 					(d.id === undefined || d.id === ask.target.id) &&
 					(d.path === undefined || d.path === ask.target.path?.join("/")) &&
-					(d.from === undefined || d.from === ask.from?.path?.join("/"))
+					(d.from === undefined || d.from === ask.from?.path?.join("/")) &&
+					(d.box === undefined ||
+						(made.boxIds.has(d.box) && made.boxIds.get(d.box) === ask.from?.box))
 				)
 				? no("denied")
 				: yes
@@ -198,6 +215,7 @@ function make(o: Request = {}): Made {
 		held: [],
 		slots,
 		boxes: new Map(),
+		boxIds: new Map(),
 		programs: new Map(),
 		host: new Map(),
 		shared: new Map(),
@@ -271,6 +289,8 @@ function expr(api: Sys, env: Env, e: unknown): unknown {
 	if (typeof e === "string" || !Array.isArray(e)) return arg(env, e)
 	const [fn, ...args] = e as [string, ...unknown[]]
 	if (fn === "all") return args.map((x) => expr(api, env, x))
+	// a whole value's patches, the value expr's
+	if (fn === "whole") return [{ path: [], value: expr(api, env, args[0]) }]
 	if (fn === "if") {
 		if (expr(api, env, args[0]) === true) return expr(api, env, args[1])
 		return args.length > 2 ? expr(api, env, args[2]) : undefined
@@ -322,11 +342,35 @@ function call(api: Sys, env: Env, [fn, ...raw]: [string, ...unknown[]]): unknown
 			return api.addTeardown((why) =>
 				log(raw[0] as string, raw[1] === undefined ? why : `${raw[1]}:${why}`)
 			)
+		// a pipe told as each write lands, logging its patches (the form watch had)
 		case "watch":
-			return api.watch(
+			return api.pipe(
 				arg(env, raw[0]) as never,
 				(x) => log(raw[1] as string, x.refused ? "refused" : x.patches),
+				{ timing: "write" },
 			)
+		// pipe(from, to | fn, fnA?, fnB?, options?): a function is { steps, gives? }, run with the
+		// write as $0 ({ patches, value, refused? }); gives: what it gives back (a transform's patches)
+		case "pipe": {
+			const [from, ...rest] = raw as unknown[]
+			const isFn = (x: unknown) =>
+				x !== null && typeof x === "object" && !Array.isArray(x) && "steps" in x
+			const fn = (f: unknown) => {
+				const { steps, gives } = f as { steps: Step[]; gives?: unknown }
+				return (w: { patches: unknown; value: unknown; refused?: true }) => {
+					const inner: Env = new Map(env)
+					inner.set("0", {
+						patches: w.patches,
+						value: w.value,
+						...w.refused && { refused: true },
+					})
+					run(api, inner, steps)
+					return gives === undefined ? undefined : expr(api, inner, gives)
+				}
+			}
+			const args = rest.map((x, i) => isFn(x) ? fn(x) : i === 0 ? arg(env, x) : x)
+			return api.pipe(arg(env, from) as never, ...args as [never])
+		}
 		case "share": {
 			const shared = world().shared
 			const name = raw[1] as string
@@ -361,6 +405,8 @@ function call(api: Sys, env: Env, [fn, ...raw]: [string, ...unknown[]]): unknown
 		// peep(f): its expression read untracked
 		case "peep":
 			return api.peep(() => expr(api, env, raw[0]))
+		case "inc":
+			return (expr(api, env, raw[0]) as number) + 1
 		case "is":
 			return Object.is(expr(api, env, raw[0]), expr(api, env, raw[1]))
 		case "keys": {
@@ -439,9 +485,9 @@ function run(api: Sys, env: Env, steps: readonly Step[]) {
 	}
 }
 
-// shown: plain, for an answer
-const message = (e: unknown) =>
-	e === PENDING ? "PENDING" : e instanceof Error ? e.message : String(e)
+// shown: plain, for an answer. an error's text as the base gives it (its hint left out: the C gives
+// none)
+const message = (e: unknown) => e === PENDING ? "PENDING" : e instanceof Error ? bare(e) : String(e)
 function plain(v: unknown): unknown {
 	// a handle: what it reaches, as the host sees it (the harness's eyes; programs can't)
 	if (isHandle(v)) return plain(w?.ermine.dataOf(v)?.node ?? "a handle of no ermine")
@@ -459,8 +505,9 @@ function plain(v: unknown): unknown {
 }
 function status(st: ReturnType<System["getStatus"]>) {
 	if (st === undefined) return undefined
+	const { hint: _, ...bareStatus } = st
 	return plain({
-		...st,
+		...bareStatus,
 		...st.error !== undefined && { error: message(st.error) },
 		...st.waiting && {
 			waiting: st.waiting.map((x) =>
@@ -482,6 +529,7 @@ function shownWriter(w: NonNullable<NonNullable<ReturnType<System["explain"]>>["
 	if (w.kind === "method") {
 		return { writer: w.kind, path: w.path ?? null, ...w.call && { n: w.call.n } }
 	}
+	if (w.kind === "pipe") return { writer: w.kind, path: w.path ?? null }
 	return { writer: w.kind, site: siteOf(w.site) }
 }
 const pairs = (list: readonly object[]) =>
@@ -601,7 +649,7 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 			if (o === undefined) return {}
 			return {
 				at: o.at,
-				cwd: o.cwd,
+				folder: o.folder,
 				args: o.args,
 				...o.process && { process: o.process.id },
 				scope: o.scope.info[NODE] === e.node ? "host" : o.process ? "process" : "other",
@@ -651,6 +699,7 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 			return {}
 		case "box":
 			m.boxes.set(r.name, e.createBox(r.at))
+			m.boxIds.set(r.name, get(e.places, inside(r.at)) as Id)
 			return {}
 		case "boxplace": {
 			const b = m.boxes.get(r.name)!

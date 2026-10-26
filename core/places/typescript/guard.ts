@@ -1,6 +1,7 @@
 // guard: a policy's answers (protect's), made into what a run does with them. who asks: the scope
-// open (header.ts' createChangeBase); from: where the asker is placed, a path, given; the policy, given. it asks,
-// and wraps nothing: whoever calls places asks first, or after for a list.
+// open (header.ts' createChangeBase); from: where the asker is placed, a path, and the box it is
+// in, its folder's id, both given; the policy, given. it asks, and wraps nothing: whoever calls
+// places asks first, or after for a list.
 //
 // a read is asked through places, told: a run asking tracks what the policy read, so a change to
 // the rules reruns it, refused or not. a write is asked of the table, told no one: a write makes
@@ -8,6 +9,14 @@
 // list keeps a refused member in its place, its id REFUSED. no policy: everything is allowed.
 // a Refusal's answer is protect's whole, so its grant (which grant decided) is kept; its ask
 // names the target refused
+//
+// the box, the builder's pick, not chee's (asked for [chee 10-26: "protect should know about the
+// box the question came from"]): every ask's from carries box, the box's folder's id (why the id:
+// protect.ts), and an action's caller's place its own box, so the second ask is from where the
+// caller is; asked once only when both path and box are the caller's. the policy is the host's,
+// so the box is the policy's alone: a Refusal's ask is the ask without from.box, since a Refusal
+// reaches the process refused, and nothing it reads may say where its box sits (its message names
+// only the op and the reason)
 import type { Key as Step } from "@ermine/core/op/apply"
 import {
 	type Answer,
@@ -42,10 +51,12 @@ export type Setup = {
 	may?: Policy
 	// where the asker is placed: a path; none: at none (the host)
 	from?: Path
-	// while an action's call is open, the caller: every ask is made again from its place (none: the
-	// host), both to allow [chee 10-25: "so it should run as both"; "1. both"]. no call open (or
-	// none given): undefined
-	caller?: () => { from?: Path } | undefined
+	// the box the asker is in: its folder's id; none: not said
+	box?: Id
+	// while an action's call is open, the caller: every ask is made again from its place and its
+	// box (none: the host), both to allow [chee 10-25: "so it should run as both"; "1. both"]. no
+	// call open (or none given): undefined
+	caller?: () => { from?: Path; box?: Id } | undefined
 }
 
 // what is asked about: an id, and the path it was asked by when there was one
@@ -60,6 +71,20 @@ export const slot = (parent: Thing, name: string): Target => target(parent, "chi
 
 const everything: Policy = () => yes
 
+// a place: a path and a box, when either is given
+const placeOf = (path?: Path, box?: Id): Place | undefined =>
+	path === undefined && box === undefined
+		? undefined
+		: { ...path !== undefined && { path: [...path] }, ...box !== undefined && { box } }
+
+// an ask as a Refusal carries it: without from.box, the policy's alone
+function shown(a: Ask): Ask {
+	if (a.from?.box === undefined) return a
+	const { box: _, ...place } = a.from
+	const { from: _from, ...rest } = a
+	return place.path === undefined && place.route === undefined ? rest : { ...rest, from: place }
+}
+
 export function createGuard(setup: Setup): {
 	read: (...targets: Target[]) => void
 	write: (op: string, ...targets: Target[]) => void
@@ -69,7 +94,7 @@ export function createGuard(setup: Setup): {
 } {
 	const { places, table, scheduler } = setup
 	const policy = setup.may ?? everything
-	const from: Place | undefined = setup.from === undefined ? undefined : { path: [...setup.from] }
+	const from = placeOf(setup.from, setup.box)
 	// the policy asked: a read's reads told, a write's told no one
 	const told = may(policy, (part, id, field) => places.readValue(part as Key, id, field))
 	const quiet = may(
@@ -83,8 +108,14 @@ export function createGuard(setup: Setup): {
 		const first = ask(a)
 		const c = setup.caller?.()
 		if (c === undefined || first.answer === "no") return [a, first]
+		// already asked from the caller's place (an execute is asked as the caller): once is enough
+		const same = (x?: readonly unknown[], y?: readonly unknown[]) =>
+			x === undefined ? y === undefined : y !== undefined && x.length === y.length &&
+				x.every((n, i) => n === y[i])
+		if (same(a.from?.path, c.from) && a.from?.box === c.box) return [a, first]
 		const { from: _, ...rest } = a
-		const b: Ask = c.from === undefined ? rest : { ...rest, from: { path: [...c.from] } }
+		const place = placeOf(c.from, c.box)
+		const b: Ask = place === undefined ? rest : { ...rest, from: place }
 		const second = ask(b)
 		if (second.answer === "no" || (first.answer === "yes" && second.answer === "pending")) {
 			return [b, second]
@@ -104,7 +135,7 @@ export function createGuard(setup: Setup): {
 		let waiting = false
 		for (const t of targets) {
 			const [a, answer] = asked(ask, op, t)
-			if (answer.answer === "no") throw new Refusal(answer, a)
+			if (answer.answer === "no") throw new Refusal(answer, shown(a))
 			if (answer.answer === "pending") waiting = true
 		}
 		if (waiting) throw PENDING
@@ -136,7 +167,7 @@ export function createGuard(setup: Setup): {
 			target: { path: [...source] },
 			from,
 		}
-		throw new Refusal(no("into-itself"), a)
+		throw new Refusal(no("into-itself"), shown(a))
 	}
 
 	// a node given a name: "place" asked of the slot with the node beside it (where it goes, what it
@@ -154,11 +185,11 @@ export function createGuard(setup: Setup): {
 		const [a, answer] = slot.id === REFUSED || node.id === REFUSED
 			? [placing, no("refused")]
 			: both(quiet, placing)
-		if (answer.answer === "no") throw new Refusal(answer, a)
+		if (answer.answer === "no") throw new Refusal(answer, shown(a))
 		let waiting = answer.answer === "pending"
 		for (const op of ops) {
 			const [b, got] = asked(quiet, op, node)
-			if (got.answer === "no") throw new Refusal(got, b)
+			if (got.answer === "no") throw new Refusal(got, shown(b))
 			if (got.answer === "pending") waiting = true
 		}
 		if (waiting) throw PENDING

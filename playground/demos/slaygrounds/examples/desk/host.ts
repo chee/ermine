@@ -34,11 +34,11 @@ const world = createWorld({
 	actor: "desk@browser",
 	extend: (_api, ctx): Omit<Extra, keyof Tools> => ({
 		way(name, from) {
-			for (const w of satisfy(ctx.places, name, from)) return w
+			for (const w of satisfy(ctx.box.places, name, from)) return w
 		},
 		about(x) {
-			const id = x.id ?? get(ctx.places, x.path!)
-			const change = id === undefined ? undefined : ctx.table.get("value", id)?.change
+			const id = x.id ?? get(ctx.box.places, x.path!)
+			const change = id === undefined ? undefined : world.world.table.get("value", id)?.change
 			let rec
 			for (const r of world.world.parts.values()) if (r.entry.id === id) rec = r
 			const computer = [...world.world.parts].find(([, r]) => r === rec)?.[0] as any

@@ -9,7 +9,7 @@
 //   	runner(h, "/screens/dom/run", hosts.dom, ["dom", "canvas"])
 //   	renderers(h, "/renderers", mod.renderers)
 //   })
-//   // in a process whose cwd is /screens/dom:
+//   // in a process whose folder is /screens/dom:
 //   export const dom = (api) => mirror(api, hosts.dom, "/app/ui")
 //
 // renderers are openers, found by programs' openwith:
@@ -18,7 +18,7 @@
 //   a node to draw says what it is: its ermine.type (there is no guessing from the value)
 //   a key (canvas, chars) is what a screen's runner provides (runner()). an opener needing a key
 //     has a way only where a runner on its walk provides it: otherwise the whynot says "needs"
-//   the mirror process's cwd decides the walk: a screen's own renderers, nearer, win over farther
+//   the mirror process's folder decides the walk: a screen's own renderers, nearer, win over farther
 //   "the nearest that fits" is openwith's order (nearest level, then shortest chain); the other
 //     ways fit but are farther; the misses are the ones a missing key stopped
 // what it does not do: compose (a list drawn as text drawn as view): one step only, and no renderer

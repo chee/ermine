@@ -1,5 +1,5 @@
 {
-	"title": "load: a program made live on a runner with no process, held by its owner (by: a process run here, a place; none: the session). its runner's load called once with the code (by its path, by id, or carried) and the owner's facts (a place's cwd: its path's folder), a scope of the load's own open; no process made, no runner's start. checked as run is: refused not-a-runner (nothing there; a runner with no load, only once the program passed), not-there, wrong-form; a load that throws: failed, its message; a map's own load is a runner's load. each load here a program of its own (sharing: 23-shared-load). a release lets go of it at once (its live form's dispose), twice nothing; what is still held goes at its owner's stop, after its handle's, newest first; at a place's scope's teardown, or the session's. a stopped process, or a place whose scope is gone, loads no more: nothing-there",
+	"title": "load: a program made live on a runner with no process, held by its owner (by: a process run here, a place; none: the session). its runner's load called once with the code (by its path, by id, or carried) and the owner's facts (a place's folder: its path's folder), a scope of the load's own open; no process made, no runner's start. checked as run is: refused not-a-runner (nothing there; a runner with no load, only once the program passed), not-there, wrong-form; a load that throws: failed, its message; a map's own load is a runner's load. each load here a program of its own (sharing: 23-shared-load). a release lets go of it at once (its live form's dispose), twice nothing; what is still held goes at its owner's stop, after its handle's, newest first; at a place's scope's teardown, or the session's. a stopped process, or a place whose scope is gone, loads no more: nothing-there",
 	"steps": [
 		{
 			"op": "kids",
@@ -236,7 +236,7 @@
 					{
 						"by": "proc:a",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -244,7 +244,7 @@
 					{
 						"by": "proc:a",
 						"code": "move",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -252,7 +252,7 @@
 					{
 						"by": "proc:a",
 						"code": "three",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -260,7 +260,7 @@
 					{
 						"by": "session",
 						"code": "tick",
-						"cwd": [
+						"folder": [
 							"system"
 						],
 						"open": true
@@ -296,17 +296,17 @@
 						"process": "proc:a",
 						"code": "hi",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					}
@@ -331,7 +331,7 @@
 					{
 						"by": "proc:a",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -339,7 +339,7 @@
 					{
 						"by": "proc:a",
 						"code": "move",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -347,7 +347,7 @@
 					{
 						"by": "proc:a",
 						"code": "three",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -355,7 +355,7 @@
 					{
 						"by": "session",
 						"code": "tick",
-						"cwd": [
+						"folder": [
 							"system"
 						],
 						"open": true
@@ -535,7 +535,7 @@
 					{
 						"by": "proc:a",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -543,7 +543,7 @@
 					{
 						"by": "proc:a",
 						"code": "move",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -551,7 +551,7 @@
 					{
 						"by": "proc:a",
 						"code": "three",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -559,7 +559,7 @@
 					{
 						"by": "session",
 						"code": "tick",
-						"cwd": [
+						"folder": [
 							"system"
 						],
 						"open": true
@@ -567,7 +567,7 @@
 					{
 						"by": "proc:a",
 						"code": "obj",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -655,7 +655,7 @@
 					{
 						"by": "proc:a",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -663,7 +663,7 @@
 					{
 						"by": "proc:a",
 						"code": "move",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -671,7 +671,7 @@
 					{
 						"by": "proc:a",
 						"code": "three",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -679,7 +679,7 @@
 					{
 						"by": "session",
 						"code": "tick",
-						"cwd": [
+						"folder": [
 							"system"
 						],
 						"open": true
@@ -687,7 +687,7 @@
 					{
 						"by": "proc:a",
 						"code": "obj",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -765,7 +765,7 @@
 					{
 						"by": "proc:a",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -773,7 +773,7 @@
 					{
 						"by": "proc:a",
 						"code": "move",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -781,7 +781,7 @@
 					{
 						"by": "proc:a",
 						"code": "three",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -789,7 +789,7 @@
 					{
 						"by": "session",
 						"code": "tick",
-						"cwd": [
+						"folder": [
 							"system"
 						],
 						"open": true
@@ -797,7 +797,7 @@
 					{
 						"by": "proc:a",
 						"code": "obj",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -805,7 +805,7 @@
 					{
 						"by": "desk",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"home"
 						],
 						"open": true
@@ -865,7 +865,7 @@
 					{
 						"by": "proc:a",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -873,7 +873,7 @@
 					{
 						"by": "proc:a",
 						"code": "move",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -881,7 +881,7 @@
 					{
 						"by": "proc:a",
 						"code": "three",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -889,7 +889,7 @@
 					{
 						"by": "session",
 						"code": "tick",
-						"cwd": [
+						"folder": [
 							"system"
 						],
 						"open": true
@@ -897,7 +897,7 @@
 					{
 						"by": "proc:a",
 						"code": "obj",
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"open": true
@@ -905,7 +905,7 @@
 					{
 						"by": "desk",
 						"code": "hi",
-						"cwd": [
+						"folder": [
 							"home"
 						],
 						"open": true

@@ -66,7 +66,7 @@ const world = createWorld({
 	processes: SECTIONS.flatMap(([, ...names]) => names).map((name) => ({
 		name,
 		export: name,
-		cwd: ["state", name],
+		folder: ["state", name],
 		args: [name],
 	})),
 })

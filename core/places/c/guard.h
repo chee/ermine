@@ -3,10 +3,11 @@
 // for a list. Same rules as guard.ts, which the suite in core/places/conformance/guard/ holds
 // both to.
 //
-// An ask: who is the scope open (pl_change_base: an op_value map built from its pairs), from where the asker
-// is placed (a path), the policy given. A read is asked through places, told: a run asking tracks
-// what the policy read, so a change to the rules reruns it, refused or not. A write is asked of the
-// table, told no one: a write makes no run depend on the rules. No policy: everything is allowed.
+// An ask: who is the scope open (pl_change_base: an op_value map built from its pairs), from where
+// the asker is placed (a path) and the box it is in (its folder's id: why the id, guard.ts), the
+// policy given. A read is asked through places, told: a run asking tracks what the policy read, so
+// a change to the rules reruns it, refused or not. A write is asked of the table, told no one: a
+// write makes no run depend on the rules. No policy: everything is allowed.
 //
 // ANSWERS. GD_OK; GD_REFUSED (a no: gd_refusal says what, why, which grant decided and which target); GD_PENDING (a policy waits for
 // what it could not read); GD_FAILED (a read the policy told came back SC_STOP: the
@@ -14,8 +15,8 @@
 // refused member in its place: its id is the one gd_is_refused says.
 //
 // MEMORY. A guard keeps its policy, its places and its table as given, and a copy of the path it is
-// placed at, for as long as it lives. Names and paths given are borrowed for the call. Out of
-// memory aborts.
+// placed at and of its box's id, for as long as it lives. Names and paths given are borrowed for
+// the call. Out of memory aborts.
 #ifndef GUARD_H
 #define GUARD_H
 
@@ -68,12 +69,15 @@ typedef struct {
 	// where the asker is placed: a path; NULL: at none (the host)
 	const char *const *from;
 	size_t nfrom;
-	// while an action's call is open, the caller: every ask is made again from its place, both to
-	// allow (the first no wins; else a pending; else the first answer). Returns 0: no call open;
-	// else 1, and *from, *nfrom its place (*from NULL: the host, at no place). The path is
-	// borrowed, good till the next ask. NULL: none, as today
-	int (*caller)(void *ctx, const char *const **from, size_t *nfrom);
+	// while an action's call is open, the caller: every ask is made again from its place and its
+	// box, both to allow (the first no wins; else a pending; else the first answer). Returns 0: no
+	// call open; else 1, and *from, *nfrom its place (*from NULL: the host, at no place), *box its
+	// box's folder's id (none: left as it is given, all NULL). The path and the id are borrowed,
+	// good till the next ask. NULL: none, as today
+	int (*caller)(void *ctx, const char *const **from, size_t *nfrom, tb_key *box);
 	void *caller_ctx;
+	// the box the asker is in: its folder's id (a string; NULL: not said). every ask's from.box
+	tb_key box;
 } gd_setup;
 
 typedef struct gd gd;

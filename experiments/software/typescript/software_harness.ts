@@ -9,10 +9,10 @@
 // are taken back too, so a path inside one is written as a string ("/system/session/..."), never
 // a list holding "session". a PlacesError: { error: code }
 // live runners, each given the start's facts:
-//   record   a function, its start: its run { process, code, args, cwd, root, keys, open } (code a
+//   record   a function, its start: its run { process, code, args, folder, root, keys, open } (code a
 //            function: { live: true }; root: its box's root; keys: the start's, sorted; open: its
 //            scope the one open); its stop { process, reason } (reason null: none); its load
-//            { by, code, cwd, open } (by: the start's process id), its live form's dispose
+//            { by, code, folder, open } (by: the start's process id), its live form's dispose
 //            { by, code }
 //   object   record's start and load as a map's own { start, load }, not a function
 //   boom     throws Error("boom"), its load too
@@ -37,7 +37,7 @@
 // { op: "offer", kind, name, attrs?, live?, by? }    -> { id, at } | { refused, at }
 //    by: a place's name, a process's name; none: the session
 // { op: "withdraw", id }                             -> {}
-// { op: "run", name, runner, program, at, args?, cwd?, box?, pin?, actor? } -> { id, at } | refusal
+// { op: "run", name, runner, program, at, args?, folder?, box?, pin?, actor? } -> { id, at } | refusal
 //    runner: an address, or carried { id, live } (live: a runner's name, else its JSON value as
 //    it is); at: an address; program: an address or { id, hash?, type?, api?, code?, build? }
 //    (build { from }: the code is the value at from, read tracked: none, PENDING; { fail }, an
@@ -214,8 +214,8 @@ function noted(code: unknown, start: Start) {
 	ran.push({
 		process: process.id,
 		code: typeof code === "function" ? { live: true } : code,
-		args: process.args,
-		cwd: process.cwd,
+		args: start.args,
+		folder: start.folder,
 		root: start.box.root,
 		keys: Object.keys(start).sort(),
 		open: s.getCurrentScope() === start.scope,
@@ -237,7 +237,7 @@ function recordStart(code: unknown, start: Start): Handle {
 }
 function recordLoad(code: unknown, start: Start) {
 	const by = start.process.id
-	loads.push({ by, code, cwd: start.process.cwd, open: s.getCurrentScope() === start.scope })
+	loads.push({ by, code, folder: start.folder, open: s.getCurrentScope() === start.scope })
 	order.push(["loaded", by, code])
 	return {
 		[Symbol.dispose]: () => {
@@ -432,7 +432,7 @@ async function answer(r: Request): Promise<Json> {
 		case "run": {
 			const options = {
 				...(r.args === undefined ? {} : { args: r.args }),
-				...(r.cwd === undefined ? {} : { cwd: r.cwd }),
+				...(r.folder === undefined ? {} : { folder: r.folder }),
 				...(r.box === undefined ? {} : { box: boxOf(r.box) }),
 				...(r.pin === undefined ? {} : { pin: back(r.pin) }),
 			}

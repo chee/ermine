@@ -1,5 +1,5 @@
 {
-	"title": "run: the runner by its path from places' root, the program by its path (a list or a string), a process at work/clock (proc:a). on its node at once: ermine.type ermine.process, ermine.process.runner (the offer's id and path), ermine.process.program (its id, its path, the hash of its value), its args and cwd (none given: at's folder), status pending; running() lists it. the code read once, at the run: a change before the first pulse is not what runs. nothing runs until the first pulse: then the runner's start called once, its process's scope open, with the code and the Start (box, places, process { id, at, args, cwd }, scheduler, table, scope), the status gone; another pulse calls it no more. cwd and pin given: ermine.process.cwd and .pin as given (a NaN and a big integer too). a program by id: no path, the hash of its value; carried code: the id given, the hash of the code; a program whose value is live: no hash",
+	"title": "run: the runner by its path from places' root, the program by its path (a list or a string), a process at work/clock (proc:a). on its node at once: ermine.type ermine.process, ermine.process.runner (the offer's id and path), ermine.process.program (its id, its path, the hash of its value), its args and folder (none given: at's folder), status pending; running() lists it. the code read once, at the run: a change before the first pulse is not what runs. nothing runs until the first pulse: then the runner's start called once, its process's scope open, with the code and the Start (scope, box, folder, at, args, process), the status gone; another pulse calls it no more. folder and pin given: ermine.process.folder and .pin as given (a NaN and a big integer too). a program by id: no path, the hash of its value; carried code: the id given, the hash of the code; a program whose value is live: no hash",
 	"steps": [
 		{
 			"op": "kids",
@@ -128,7 +128,7 @@
 					"ermine.process.args": [
 						"a.txt"
 					],
-					"ermine.process.cwd": [
+					"ermine.process.folder": [
 						"work"
 					]
 				},
@@ -182,17 +182,17 @@
 						"args": [
 							"a.txt"
 						],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					}
@@ -227,17 +227,17 @@
 						"args": [
 							"a.txt"
 						],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					}
@@ -251,7 +251,7 @@
 			"runner": "/system/session/runners/javascript",
 			"program": "/apps/clock.js",
 			"at": "/work/b",
-			"cwd": [
+			"folder": [
 				"apps"
 			],
 			"pin": {
@@ -291,7 +291,7 @@
 						],
 						"hash": "5ee6baea8386fb69bc73355a726aa9fc48cbbbc3a6113d116c6632f73db8177c"
 					},
-					"ermine.process.cwd": [
+					"ermine.process.folder": [
 						"apps"
 					],
 					"ermine.process.pin": {
@@ -370,7 +370,7 @@
 						],
 						"hash": "5ee6baea8386fb69bc73355a726aa9fc48cbbbc3a6113d116c6632f73db8177c"
 					},
-					"ermine.process.cwd": [
+					"ermine.process.folder": [
 						"work"
 					],
 					"ermine.process.pin": [
@@ -438,7 +438,7 @@
 						"id": "CLOCK",
 						"hash": "5ee6baea8386fb69bc73355a726aa9fc48cbbbc3a6113d116c6632f73db8177c"
 					},
-					"ermine.process.cwd": [
+					"ermine.process.folder": [
 						"work"
 					]
 				}
@@ -520,7 +520,7 @@
 						"id": "carried",
 						"hash": "5972c310ef830f93a51f5956ba17a6acd6ee222b393bb7535c4ae183fdb599d3"
 					},
-					"ermine.process.cwd": [
+					"ermine.process.folder": [
 						"work"
 					]
 				}
@@ -579,7 +579,7 @@
 							"live.js"
 						]
 					},
-					"ermine.process.cwd": [
+					"ermine.process.folder": [
 						"work"
 					]
 				}
@@ -599,17 +599,17 @@
 						"args": [
 							"a.txt"
 						],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -617,17 +617,17 @@
 						"process": "proc:b",
 						"code": "changed",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"apps"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -635,17 +635,17 @@
 						"process": "proc:c",
 						"code": "changed",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -653,17 +653,17 @@
 						"process": "proc:d",
 						"code": "changed",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -671,17 +671,17 @@
 						"process": "proc:e",
 						"code": "changed",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -689,17 +689,17 @@
 						"process": "proc:f",
 						"code": "move",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -709,17 +709,17 @@
 							"live": true
 						},
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					}

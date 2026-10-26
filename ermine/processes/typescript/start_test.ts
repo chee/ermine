@@ -9,7 +9,7 @@ import { children, createPlaces } from "@ermine/core/places"
 import { STATUS } from "@ermine/core/places/status"
 import { PROCESS, processes as rows } from "./processes.ts"
 import { createScopeNodes } from "./scopes.ts"
-import { ARGS, createProcesses, CWD, type Inside, PIN, type Process } from "./start.ts"
+import { ARGS, createProcesses, FOLDER, type Inside, PIN, type Process } from "./start.ts"
 
 function world() {
 	const s = createScheduler()
@@ -52,10 +52,10 @@ Deno.test("start: the node's attributes, the row at the path, then body with the
 			log.push(`stop ${JSON.stringify(w.table.get(PROCESS, "R")?.value)}`)
 		}
 	})
-	assertEquals([p.at, p.cwd], [["work", "clock"], ["work"]])
+	assertEquals([p.at, p.folder], [["work", "clock"], ["work"]])
 	assertEquals(w.attrs(p), {
 		[ARGS]: ["a.txt"],
-		[CWD]: ["work"],
+		[FOLDER]: ["work"],
 		[PIN]: { chosen: 1 },
 	})
 	assertEquals(w.status(p), { [STATUS]: PENDING })
@@ -85,13 +85,13 @@ Deno.test("give: a computer's status on the process's node; torn down from above
 	const w = world()
 	let stops = 0
 	let release!: () => void
-	const p = w.start(w.places, "clock", { cwd: "/" }, (inside) => {
+	const p = w.start(w.places, "clock", { folder: "/" }, (inside) => {
 		const c = w.s.createComputer(() => new Promise<number>((r) => release = () => r(1)), () => {})
 		inside.give(c)
 		return () => void stops++
 	})
 	w.s.pulse()
-	assertEquals(w.attrs(p)[CWD], [])
+	assertEquals(w.attrs(p)[FOLDER], [])
 	assertEquals(w.status(p)[STATUS], PENDING)
 	release()
 	await new Promise((r) => setTimeout(r, 0))
@@ -101,7 +101,7 @@ Deno.test("give: a computer's status on the process's node; torn down from above
 	assertEquals([stops, w.table.get(PROCESS, "R")?.value, p.scope.state], [1, {}, "gone"])
 })
 
-Deno.test("start: options.attributes in the one entry, beside the cwd; the status in its own table", () => {
+Deno.test("start: options.attributes in the one entry, beside the folder; the status in its own table", () => {
 	const w = world()
 	const p = w.start(w.places, "work/clock", {
 		attributes: { "ermine.type": "ermine.process", "ermine.den.id": "mac" },
@@ -109,7 +109,7 @@ Deno.test("start: options.attributes in the one entry, beside the cwd; the statu
 	assertEquals(w.attrs(p), {
 		"ermine.type": "ermine.process",
 		"ermine.den.id": "mac",
-		[CWD]: ["work"],
+		[FOLDER]: ["work"],
 	})
 	assertEquals(w.table.get(p.id).map(([part]) => part), ["attributes", "status"])
 })
@@ -118,9 +118,9 @@ Deno.test("start: a name options.attributes shares with processes' own is proces
 	const w = world()
 	const p = w.start(w.places, "work/clock", {
 		args: ["a.txt"],
-		attributes: { [CWD]: ["elsewhere"], [ARGS]: ["b.txt"], [STATUS]: "mine", kept: 1 },
+		attributes: { [FOLDER]: ["elsewhere"], [ARGS]: ["b.txt"], [STATUS]: "mine", kept: 1 },
 	})
-	assertEquals(w.attrs(p), { [CWD]: ["work"], [ARGS]: ["a.txt"], [STATUS]: "mine", kept: 1 })
+	assertEquals(w.attrs(p), { [FOLDER]: ["work"], [ARGS]: ["a.txt"], [STATUS]: "mine", kept: 1 })
 	assertEquals(w.status(p), { [STATUS]: PENDING })
 })
 

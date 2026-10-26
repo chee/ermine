@@ -123,7 +123,7 @@ static op_value *pin_step(ps *s, const pg_step *st) {
 	return step;
 }
 
-static op_value *pin_of(ps *s, const char *root, char *const *cwd, size_t ncwd, const pg_way *way,
+static op_value *pin_of(ps *s, const char *root, char *const *folder, size_t nfolder, const pg_way *way,
 	const op_value *value) {
 	op_value *pin = op_map();
 	op_value *program = place_value(&way->program);
@@ -134,7 +134,7 @@ static op_value *pin_of(ps *s, const char *root, char *const *cwd, size_t ncwd, 
 	for (size_t i = 0; i < way->chain.n; i++) op_push(chain, pin_step(s, &way->chain.steps[i]));
 	op_set(pin, "chain", chain);
 	op_set(pin, "box", op_str(root));
-	op_set(pin, "cwd", names_value(cwd, ncwd));
+	op_set(pin, "folder", names_value(folder, nfolder));
 	return pin;
 }
 
@@ -445,11 +445,11 @@ ps_process *ps_start_at(ps *s, pl *where, const pg_way *way, const char *const *
 	p->value = e != NULL && e->value != NULL ? op_ref(e->value) : NULL;
 	pg_chain_copy(&p->chain, &way->chain);
 	key_chain(p);
-	// the pin, from the path and cwd as processes' start resolves them
-	size_t nat, ncwd;
+	// the pin, from the path and folder as processes' start resolves them
+	size_t nat, nfolder;
 	char **at = pr_names(steps, nsteps, &nat);
-	char **cwd = pr_cwd_of((const char *const *)at, nat, o->cwd, o->ncwd, o->has_cwd, &ncwd);
-	op_value *pin = pin_of(s, pl_root(where).string, cwd, ncwd, way, p->value);
+	char **folder = pr_folder_of((const char *const *)at, nat, o->folder, o->nfolder, o->has_folder, &nfolder);
+	op_value *pin = pin_of(s, pl_root(where).string, folder, nfolder, way, p->value);
 	// the runner as the build finds it, started by software; the program built
 	hf_entry live = {.runner = start_f, .data = p};
 	const pg_step *runner = &p->chain.steps[p->chain.n - 1];
@@ -457,11 +457,11 @@ ps_process *ps_start_at(ps *s, pl *where, const pg_way *way, const char *const *
 	p->process = sw_run_carried_at(s->software, &(sw_carried){runner->place.id, &live},
 		&(sw_program){.id = way->program.id, .build = build_f, .build_data = p}, steps, nsteps,
 		&(sw_options){.args = o->args, .nargs = o->nargs, .has_args = o->has_args,
-			.cwd = (const char *const *)cwd, .ncwd = ncwd, .has_cwd = 1, .box = where, .pin = pin},
+			.folder = (const char *const *)folder, .nfolder = nfolder, .has_folder = 1, .box = where, .pin = pin},
 		&no, &(ch_site){file, line, 0, func, 0});
 	op_free(pin);
 	pr_names_free(at, nat);
-	pr_names_free(cwd, ncwd);
+	pr_names_free(folder, nfolder);
 	if (p->process == NULL) {
 		// refused: made no more (its pieces freed at ps_free)
 		p->gone = 1;

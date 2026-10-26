@@ -1,5 +1,5 @@
 {
-	"title": "a cwd other than the root: boxing /work and starting at /docs/mouse/clock, the cwd is docs/mouse (the folder at is in): satisfy's from is the cwd when none is given (clocks/catclock.c found going up from it), the args are looked up from it nearest first, up to the box's \"/\" and never above (outside, at R, is not found); written as ermine.process.cwd and in the pin. a cwd given (docs) differs from at's folder; \"..\" at the root stays there. a name nearer the cwd unboxed: the next one up is found",
+	"title": "a folder other than the root: boxing /work and starting at /docs/mouse/clock, the folder is docs/mouse (the folder at is in): satisfy's from is the folder when none is given (clocks/catclock.c found going up from it), the args are looked up from it nearest first, up to the box's \"/\" and never above (outside, at R, is not found); written as ermine.process.folder and in the pin. a folder given (docs) differs from at's folder; \"..\" at the root stays there. a name nearer the folder unboxed: the next one up is found",
 	"steps": [
 		{
 			"op": "kids",
@@ -152,7 +152,7 @@
 					"note",
 					"outside"
 				],
-				"cwd": [
+				"folder": [
 					"docs",
 					"mouse"
 				],
@@ -185,7 +185,7 @@
 						}
 					],
 					"box": "W",
-					"cwd": [
+					"folder": [
 						"docs",
 						"mouse"
 					]
@@ -201,7 +201,7 @@
 				"clocks"
 			],
 			"at": "/clock2",
-			"cwd": "docs",
+			"folder": "docs",
 			"args": [
 				"note"
 			],
@@ -223,7 +223,7 @@
 			"at": [
 				"clock3"
 			],
-			"cwd": "../../..",
+			"folder": "../../..",
 			"args": [
 				"note",
 				"outside"
@@ -295,7 +295,7 @@
 				"args": [
 					"note"
 				],
-				"cwd": [
+				"folder": [
 					"docs"
 				],
 				"pin": {
@@ -327,7 +327,7 @@
 						}
 					],
 					"box": "W",
-					"cwd": [
+					"folder": [
 						"docs"
 					]
 				}
@@ -346,7 +346,7 @@
 					"note",
 					"outside"
 				],
-				"cwd": [],
+				"folder": [],
 				"pin": {
 					"program": {
 						"id": "CAT",
@@ -376,7 +376,7 @@
 						}
 					],
 					"box": "W",
-					"cwd": []
+					"folder": []
 				}
 			}
 		},

@@ -35,7 +35,9 @@ struct gd {
 	int from_given;
 	const char **from;
 	size_t nfrom;
-	int (*caller)(void *ctx, const char *const **from, size_t *nfrom);
+	// the box it is in: its folder's id, copied (NULL: not said)
+	char *box;
+	int (*caller)(void *ctx, const char *const **from, size_t *nfrom, tb_key *box);
 	void *caller_ctx;
 	// a typed array's element a reader returns, a number made each time
 	op_value scratch;
@@ -48,6 +50,10 @@ gd *gd_new(const gd_setup *setup) {
 	g->may = setup->may;
 	g->caller = setup->caller;
 	g->caller_ctx = setup->caller_ctx;
+	if (setup->box.string != NULL) {
+		size_t n = strlen(setup->box.string) + 1;
+		g->box = memcpy(xalloc(n), setup->box.string, n);
+	}
 	if (setup->from == NULL) return g;
 	g->from_given = 1;
 	g->nfrom = setup->nfrom;
@@ -59,6 +65,7 @@ gd *gd_new(const gd_setup *setup) {
 void gd_free(gd *g) {
 	if (g == NULL) return;
 	free(g->from);
+	free(g->box);
 	free(g);
 }
 
@@ -108,10 +115,10 @@ static pr_target target_of(const gd_target *t) {
 	return target;
 }
 
-// one target asked from a place (from_given 0: at none), told (reads) or not (writes), a placement's
-// node beside it (NULL: none). *reason: why a no
+// one target asked from a place (from_given 0: at none) in a box (all NULL: not said), told (reads)
+// or not (writes), a placement's node beside it (NULL: none). *reason: why a no
 static gd_answer asked_from(gd *g, int told, const char *op, const gd_target *t,
-	const gd_target *node, int from_given, const char *const *from, size_t nfrom,
+	const gd_target *node, int from_given, const char *const *from, size_t nfrom, tb_key box,
 	const char **reason, pr_grant *grant) {
 	*grant = (pr_grant){0};
 	if (g->may == NULL) return GD_OK;
@@ -119,6 +126,7 @@ static gd_answer asked_from(gd *g, int told, const char *op, const gd_target *t,
 	pr_ask ask = {.who = who, .op = op, .target = target_of(t)};
 	if (node != NULL) ask.node = target_of(node);
 	if (from_given) ask.from.path = from, ask.from.npath = nfrom;
+	ask.from.box = box;
 	pr_answer a = pr_ask_of(g->may, &ask, told ? told_reader : quiet_reader, g);
 	op_free(who);
 	// a read the policy told that said the run must end
@@ -137,17 +145,18 @@ static gd_answer asked(gd *g, int told, const char *op, const gd_target *t, cons
 	if (gd_is_refused(t->thing.id) || (node != NULL && gd_is_refused(node->thing.id))) {
 		return *reason = "refused", GD_REFUSED;
 	}
-	gd_answer first = asked_from(g, told, op, t, node, g->from_given, g->from, g->nfrom, reason,
-		grant);
+	gd_answer first = asked_from(g, told, op, t, node, g->from_given, g->from, g->nfrom,
+		tb_string(g->box), reason, grant);
 	const char *const *from;
 	size_t nfrom;
+	tb_key box = {0};
 	if (first == GD_REFUSED || first == GD_FAILED || g->caller == NULL ||
-		!g->caller(g->caller_ctx, &from, &nfrom)) {
+		!g->caller(g->caller_ctx, &from, &nfrom, &box)) {
 		return first;
 	}
 	const char *reason2 = NULL;
 	pr_grant grant2;
-	gd_answer second = asked_from(g, told, op, t, node, from != NULL, from, nfrom, &reason2,
+	gd_answer second = asked_from(g, told, op, t, node, from != NULL, from, nfrom, box, &reason2,
 		&grant2);
 	if (second == GD_REFUSED || second == GD_FAILED ||
 		(first == GD_OK && second == GD_PENDING)) {

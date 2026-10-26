@@ -7,7 +7,7 @@
 //
 // the page's (seq: its count of what changed the realm's table, in order):
 //   start    { code, process, root, contributors, loads, seq }   the program, where it runs; loads:
-//            the root, the folders on the way to at and cwd, the process
+//            the root, the folders on the way to at and folder, the process
 //   loaded   { load, seq }                       an id's entries, every part (none: nothing there)
 //   fact     { part, id, patches | gone | bad, change?, reset?, seq }   a change at a loaded id;
 //            reset: the page's entry whole, in place of the realm's
@@ -39,7 +39,7 @@ export type Path = readonly string[]
 export type Part = { part: string; value?: unknown; change?: ChangeHeader; bad?: string }
 export type Load = { id: string; parts: Part[] }
 
-export type Process = { id: string; at: Path; args: readonly string[]; cwd: Path }
+export type Process = { id: string; at: Path; args: readonly string[]; folder: Path }
 
 export type PageMessage =
 	| {

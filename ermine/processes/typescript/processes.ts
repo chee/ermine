@@ -179,3 +179,6 @@ export function removeLeaf(
 	unread.update(entry, [{ path: path.slice(0, d + 1) }], header)
 	return [entry]
 }
+
+// the process context: where and as whom a thing is done (context.ts)
+export type { At, ProcessContext } from "./context.ts"

@@ -152,7 +152,7 @@
 					"failed": "no compile here"
 				},
 				"args": null,
-				"cwd": [],
+				"folder": [],
 				"pin": {
 					"program": {
 						"id": "CAT",
@@ -189,7 +189,7 @@
 						}
 					],
 					"box": "W",
-					"cwd": []
+					"folder": []
 				}
 			}
 		},
@@ -251,7 +251,7 @@
 					"failed": "no compile here"
 				},
 				"args": null,
-				"cwd": [],
+				"folder": [],
 				"pin": {
 					"program": {
 						"id": "CAT",
@@ -288,7 +288,7 @@
 						}
 					],
 					"box": "W",
-					"cwd": []
+					"folder": []
 				}
 			}
 		},
@@ -326,7 +326,7 @@
 				"parts": [],
 				"status": null,
 				"args": null,
-				"cwd": null,
+				"folder": null,
 				"pin": null
 			}
 		},
@@ -390,7 +390,7 @@
 					"failed": "not-a-compiler"
 				},
 				"args": null,
-				"cwd": [],
+				"folder": [],
 				"pin": {
 					"program": {
 						"id": "CAT",
@@ -427,7 +427,7 @@
 						}
 					],
 					"box": "W",
-					"cwd": []
+					"folder": []
 				}
 			}
 		},

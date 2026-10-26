@@ -189,8 +189,8 @@ typedef struct {
 	size_t nat;
 	const char *const *args;
 	size_t nargs;
-	const char *const *cwd;
-	size_t ncwd;
+	const char *const *folder;
+	size_t nfolder;
 } api;
 
 typedef struct {
@@ -254,26 +254,26 @@ static api *create_api(const sw_starting *c) {
 	a->nat = c->process.nat;
 	a->args = c->process.args;
 	a->nargs = c->process.nargs;
-	a->cwd = c->process.cwd;
-	a->ncwd = c->process.ncwd;
+	a->folder = c->process.folder;
+	a->nfolder = c->process.nfolder;
 	PG_PUSH(apis, napis, capapis, a);
 	return a;
 }
 
-// looks the arg up from the process's cwd each run (nearest first, up to its root), keeping what it
+// looks the arg up from the process's folder each run (nearest first, up to its root), keeping what it
 // finds
 static sc_out watch_f(void *previous, void *data) {
 	(void)previous;
 	argwatch *w = data;
 	api *a = w->api;
-	size_t nfrom = a->ncwd;
+	size_t nfrom = a->nfolder;
 	const char *names[] = {w->name};
 	size_t *depths = pg_alloc((nfrom + 1) * sizeof *depths);
 	tb_key id = {0};
 	int found = 0;
-	if (pl_lookup(a->places, names, 1, a->cwd, nfrom, 0, depths) > 0) {
+	if (pl_lookup(a->places, names, 1, a->folder, nfrom, 0, depths) > 0) {
 		const char **path = pg_alloc((depths[0] + 2) * sizeof *path);
-		for (size_t i = 0; i < depths[0]; i++) path[i] = a->cwd[i];
+		for (size_t i = 0; i < depths[0]; i++) path[i] = a->folder[i];
 		path[depths[0]] = w->name;
 		found = pl_get(a->places, path, depths[0] + 1, &id) && id.symbol == NULL;
 		free(path);
@@ -545,14 +545,14 @@ static void do_start(void *data) {
 	const op_value *r = s->request;
 	size_t nargs = 0;
 	steps at = steps_of(op_get(r, "at"));
-	steps cwd = steps_of(op_get(r, "cwd"));
+	steps folder = steps_of(op_get(r, "folder"));
 	const op_value *list = op_get(r, "args");
 	const char **args = list != NULL ? world_address(list, &nargs) : NULL;
-	ps_options o = {args, nargs, list != NULL, (const char *const *)cwd.v, cwd.n, op_get(r, "cwd") != NULL};
+	ps_options o = {args, nargs, list != NULL, (const char *const *)folder.v, folder.n, op_get(r, "folder") != NULL};
 	s->process = ps_start(programs, s->places, s->way, (const char *const *)at.v, at.n, &o, &s->refusal);
 	free(args);
 	steps_free(&at);
-	steps_free(&cwd);
+	steps_free(&folder);
 }
 
 // requests -------------------------------------------------------------------------------------------------
@@ -584,17 +584,17 @@ static op_value *start_op(const op_value *r) {
 		return world_error("no such box");
 	}
 	pl *places = b != NULL ? bx_places(b) : world_places;
-	// from: given, else the cwd (given, else the folder at is in), as names borrowed from addr
+	// from: given, else the folder (given, else the folder at is in), as names borrowed from addr
 	steps addr = {0};
 	size_t nfrom;
 	const char **from;
 	if (op_get(r, "from") != NULL) from = world_address(op_get(r, "from"), &nfrom);
 	else {
-		int has_cwd = op_get(r, "cwd") != NULL;
-		addr = steps_of(op_get(r, has_cwd ? "cwd" : "at"));
+		int has_folder = op_get(r, "folder") != NULL;
+		addr = steps_of(op_get(r, has_folder ? "folder" : "at"));
 		from = pg_alloc((addr.n + 1) * sizeof *from);
 		nfrom = bx_inside((const char *const *)addr.v, addr.n, NULL, 0, from);
-		if (!has_cwd && nfrom > 0) nfrom--;
+		if (!has_folder && nfrom > 0) nfrom--;
 	}
 	pg_found *found = NULL;
 	pg_opened *opened = NULL;
@@ -753,7 +753,7 @@ static op_value *answer(const op_value *r) {
 		const op_value *st = se != NULL && se->value != NULL && se->value->type == OP_MAP ? se->value : NULL;
 		op_set(o, "status", shown(st != NULL ? op_get(st, CST_ATTRIBUTE) : NULL));
 		op_set(o, "args", mask(attrs != NULL ? op_get(attrs, PR_ARGS) : NULL));
-		op_set(o, "cwd", mask(attrs != NULL ? op_get(attrs, PR_CWD) : NULL));
+		op_set(o, "folder", mask(attrs != NULL ? op_get(attrs, PR_FOLDER) : NULL));
 		op_set(o, "pin", mask(attrs != NULL ? op_get(attrs, PR_PIN) : NULL));
 		return o;
 	}

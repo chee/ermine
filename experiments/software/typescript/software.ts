@@ -164,7 +164,7 @@ export function createSoftware(setup: Setup): Software {
 				under: by.scope,
 				box: c.home,
 				args: [],
-				cwd: by.at.slice(0, -1),
+				folder: by.at.slice(0, -1),
 				folders: new Map(),
 				offers: [],
 				loads: [],

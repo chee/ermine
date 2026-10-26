@@ -3,7 +3,7 @@ import { createFakeFile } from "./access.ts"
 import { denoFile } from "./deno.ts"
 import { get } from "@ermine/core/places/lib"
 import { PROCESS } from "@ermine/processes"
-import { CWD } from "@ermine/processes/start"
+import { FOLDER } from "@ermine/processes/start"
 import { createLink } from "./link.ts"
 import { cbor, type Mirror, type MirrorSetup, openMirror, text } from "./mirror.ts"
 import { FILE, MIRRORS, readRecord, readState, STATES, UNWRITTEN } from "./status.ts"
@@ -123,7 +123,7 @@ Deno.test("status: a process at /system/mirrors/<file>; its state its computer's
 		[FILE]: "notes/today.txt",
 		[MIRRORS]: "NOTE",
 		[UNWRITTEN]: 0,
-		[CWD]: ["system", "mirrors"],
+		[FOLDER]: ["system", "mirrors"],
 	})
 	// a card: a computer reading the node's state
 	const seen: unknown[] = []
