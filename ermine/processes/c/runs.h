@@ -37,16 +37,9 @@
 #ifndef PROCESSES_RUNS_H
 #define PROCESSES_RUNS_H
 
-#include "../../../filesystem/places/c/places.h"
+#include "../../../core/places/c/places.h"
 
 typedef struct crn crn;
-
-typedef struct {
-	pl *places;
-	// where a read's change is looked up
-	tb_table *table;
-	sc_scheduler *scheduler;
-} crn_setup;
 
 // a read, named
 typedef struct {
@@ -112,6 +105,22 @@ typedef enum {
 	CRN_WRITES,
 	CRN_ALL
 } crn_field;
+
+// a record on its way to being held, by the computer's node id (runs.ts's hold): keep(kept) holds
+// run, as given or as the hook changed its fields in place; not called, not held (the record is
+// let go after the hook returns). keep is good only during the call
+typedef void (*crn_keep)(void *kept);
+typedef void (*crn_hold)(void *ctx, tb_key id, crn_run *run, crn_keep keep, void *kept);
+
+typedef struct {
+	pl *places;
+	// where a read's change is looked up
+	tb_table *table;
+	sc_scheduler *scheduler;
+	// NULL: every record held. the hook is given hold_ctx
+	crn_hold hold;
+	void *hold_ctx;
+} crn_setup;
 
 // listens to the scheduler's run start and end and effects, and to every write, from here on
 crn *crn_new(const crn_setup *setup);

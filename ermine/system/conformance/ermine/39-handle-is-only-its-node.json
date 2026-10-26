@@ -1,0 +1,290 @@
+{
+	"title": "through a handle another process made, only the handle is its maker's [chee 10-25: \">Drop the objects. ye\": handles hold the maker's context; the dormouse's finding 1]: s, given q's folder, names its own ./note into it (a path in a patch: the caller's, resolved in its own box); s explains q's node and is told paths as s sees them (q's action, under q's row in its box: none for s; q itself: its own); r executing an action through s's handle is the caller, not s",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"name": "b",
+			"at": "/boxes/b",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/system/s",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/system/note",
+						{
+							"from": "s"
+						}
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"on/file",
+						[
+							{
+								"do": [
+									"patchChildren",
+									"$0",
+									[
+										{
+											"path": [
+												"note"
+											],
+											"value": "/system/note"
+										}
+									]
+								]
+							}
+						],
+						"filed"
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"on/why",
+						[],
+						[
+							"explain",
+							"$0"
+						]
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"on/who",
+						[],
+						[
+							"getCaller"
+						]
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"on/give",
+						[],
+						[
+							"getNode",
+							"on/who"
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "s",
+			"at": "/system/s",
+			"expect": {
+				"id": "proc:s"
+			}
+		},
+		{
+			"op": "boxplace",
+			"name": "b",
+			"at": "/system/s",
+			"path": "/system/s",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/boxes/b/system/note",
+				{
+					"from": "q"
+				}
+			]
+		},
+		{
+			"op": "code",
+			"at": "/boxes/b/code/q",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./shelf",
+						{}
+					],
+					"as": "shelf"
+				},
+				{
+					"do": [
+						"ensureNode",
+						"./doc",
+						{
+							"n": 0
+						}
+					],
+					"as": "doc"
+				},
+				{
+					"do": [
+						"createAction",
+						"on/touch",
+						[
+							{
+								"do": [
+									"patch",
+									"$doc",
+									[
+										{
+											"path": [
+												"n"
+											],
+											"value": 1
+										}
+									]
+								]
+							}
+						],
+						"touched"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/code/q",
+			"box": "b",
+			"expect": {
+				"id": "proc:q"
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"executeAction",
+				"/system/s/on/file",
+				"$shelf"
+			],
+			"expect": {
+				"value": "filed"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/boxes/b/code/shelf/note"
+			],
+			"expect": {
+				"value": {
+					"from": "s"
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"executeAction",
+				"/code/q/on/touch"
+			],
+			"expect": {
+				"value": "touched"
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"executeAction",
+				"/system/s/on/why",
+				"$doc"
+			],
+			"expect": {
+				"value": {
+					"writer": "method",
+					"path": null,
+					"n": 2
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"explain",
+				"$doc"
+			],
+			"expect": {
+				"value": {
+					"writer": "method",
+					"path": [
+						"code",
+						"q",
+						"on",
+						"touch"
+					],
+					"n": 2
+				}
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/r",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "r",
+			"at": "/code/r",
+			"expect": {
+				"id": "proc:r"
+			}
+		},
+		{
+			"op": "do",
+			"process": "r",
+			"call": [
+				"executeAction",
+				"/system/s/on/give"
+			],
+			"as": "who",
+			"expect": {
+				"value": {
+					"path": [
+						"system",
+						"s",
+						"on",
+						"who"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "r",
+			"call": [
+				"executeAction",
+				"$who"
+			],
+			"expect": {
+				"value": {
+					"actor": "test",
+					"process": [
+						"code",
+						"r"
+					]
+				}
+			}
+		}
+	]
+}

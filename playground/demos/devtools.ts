@@ -9,8 +9,8 @@
 // processes: the ones the demo runs, so devtools marks them and can stop them (with stop)
 import { createProcessAPIs, type ProcessAPIs } from "@ermine/api"
 import type { Entry } from "@ermine/core/node/entry"
-import type { Places } from "@ermine/places"
-import type { Policy } from "@ermine/protect"
+import type { Places } from "@ermine/core/places"
+import type { Policy } from "@ermine/core/protect"
 import type { Process } from "@ermine/processes/start"
 import type { Scheduler, Scope } from "@ermine/core/scheduler"
 import type { Table } from "@ermine/core/table"

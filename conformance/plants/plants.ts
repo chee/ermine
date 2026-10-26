@@ -18,7 +18,7 @@ const fuzzUnread = { fuzz: `core/unread/${T}/unread_fuzz_test.ts` }
 const fuzzEnd = { fuzz: `core/fuzz/end_to_end_fuzz_test.ts` }
 const fuzzPlacesPaths = { fuzz: `core/fuzz/places_paths_fuzz_test.ts` }
 const fuzzPlacesUpdate = { fuzz: `core/fuzz/places_update_fuzz_test.ts` }
-const fuzzPlaces = { fuzz: `filesystem/places/${T}/places_fuzz_test.ts` }
+const fuzzPlaces = { fuzz: `core/places/${T}/places_fuzz_test.ts` }
 
 export const plants: Plant[] = [
 	// scheduler
@@ -200,28 +200,28 @@ export const plants: Plant[] = [
 	// places
 	{
 		name: "places: a table event tells no spot",
-		file: `filesystem/places/${T}/places.ts`,
+		file: `core/places/${T}/places.ts`,
 		find: "say(paths.event(first(part), id))",
 		replace: "say([])",
 		catcher: fuzzEnd,
 	},
 	{
 		name: "places: a landed write tells no spot (skipped notify)",
-		file: `filesystem/places/${T}/places.ts`,
+		file: `core/places/${T}/places.ts`,
 		find: "\t\tsay(out)\n\t\ttellAll(facts)",
 		replace: "\t\ttellAll(facts)",
 		catcher: fuzzPlacesPaths,
 	},
 	{
 		name: "places: a released spot is never released from paths (leak)",
-		file: `filesystem/places/${T}/places.ts`,
+		file: `core/places/${T}/places.ts`,
 		find: "\t\tpaths.release(key)\n\t\tkey.owner = undefined",
 		replace: "\t\tkey.owner = undefined",
 		catcher: fuzzPlaces,
 	},
 	{
 		name: "path: .. at the root is the root, not above it",
-		file: `filesystem/places/${T}/path.ts`,
+		file: `core/places/${T}/path.ts`,
 		find: "else if (names.length) names.pop()",
 		replace: "else if (names.length > 1) names.pop()",
 		catcher: fuzzPlaces,

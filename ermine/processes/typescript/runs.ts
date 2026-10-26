@@ -28,9 +28,9 @@
 // a computer gone: drop(id), its record out, its readers marked.
 import type { ChangeHeader } from "@ermine/core/node/entry"
 import type { Key as Step } from "@ermine/core/op/apply"
-import type { Fact, Places } from "@ermine/places"
-import { target } from "@ermine/places/guard"
-import type { Target } from "@ermine/protect"
+import type { Fact, Places } from "@ermine/core/places"
+import { target } from "@ermine/core/places/guard"
+import type { Target } from "@ermine/core/protect"
 import type { Computer, Ended, More, Scheduler } from "@ermine/core/scheduler"
 import type { Id, Key, Table } from "@ermine/core/table"
 

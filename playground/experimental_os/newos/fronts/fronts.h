@@ -21,7 +21,7 @@
 #ifndef NEWOS_FRONTS_H
 #define NEWOS_FRONTS_H
 
-#include "../../../../filesystem/places/c/places.h"
+#include "../../../../core/places/c/places.h"
 
 // the part the fronts are kept on
 #define FR_PART "front"

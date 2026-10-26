@@ -6,9 +6,9 @@ import createEntry, { type Entry } from "@ermine/core/node/entry"
 import { createScheduler } from "@ermine/core/scheduler"
 import { createPaths } from "@ermine/core/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/core/table"
-import { createPlaces } from "@ermine/places"
-import { createChangeHeader } from "@ermine/places/header"
-import { upsert } from "@ermine/places/upsert"
+import { createPlaces } from "@ermine/core/places"
+import { createChangeHeader } from "@ermine/core/places/header"
+import { upsert } from "@ermine/core/places/upsert"
 import { box, createBox, type Host, unbox } from "@ermine/boxes"
 import {
 	ATTRIBUTES as A,

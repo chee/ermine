@@ -2,7 +2,7 @@ import { assert, assertEquals } from "@std/assert"
 import type { Holder } from "./holder.ts"
 import { createLink } from "./link.ts"
 import { createMemory } from "./memory.ts"
-import { get } from "@ermine/places/lib"
+import { get } from "@ermine/core/places/lib"
 import { KNOWN, readRecord, readState, REFUSED } from "./status.ts"
 import { createWorld } from "./world.ts"
 

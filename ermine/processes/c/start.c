@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "runs.h"
-#include "../../../filesystem/places/c/status.h"
+#include "../../../core/places/c/status.h"
 #include "processes.h"
 
 #define PENDING_NAME "ermine.pending"
@@ -84,8 +84,12 @@ pr *pr_new_at(const pr_setup *setup, const char *file, int line, const char *fun
 		s->owner = sc_create_scope(setup->scheduler, &s->owner_info, 1, NULL);
 		if (setup->sites != NULL) st_note(setup->sites, s->owner, file, line, func);
 	}
-	s->statuses = cst_new(&(cst_setup){setup->places, setup->table, setup->scheduler});
-	if (setup->runs) s->runs = crn_new(&(crn_setup){setup->places, setup->table, setup->scheduler});
+	s->statuses = cst_new(&(cst_setup){.places = setup->places, .table = setup->table,
+		.scheduler = setup->scheduler, .write = setup->write, .write_ctx = setup->write_ctx});
+	if (setup->runs) {
+		s->runs = crn_new(&(crn_setup){
+			.places = setup->places, .table = setup->table, .scheduler = setup->scheduler});
+	}
 	return s;
 }
 
@@ -152,12 +156,100 @@ static void commit_changed(pr *s, const pl_changed *changed) {
 	else pl_commit(s->s.places, changed);
 }
 
+// one write handed to setup.write; its header's block held on the node it landed on (none there: a
+// writer that held it back), holder's, as the writes made here hold theirs
+static void handed(pr *s, pl *holder, const char *part, const char *id, const op_patch *patches,
+	size_t n, const ch_header *h, pl_made *made) {
+	s->s.write(s->s.write_ctx, part, tb_string(id), patches, n, h);
+	const nd_entry *there = tb_get(s->s.table, tb_string(part), tb_string(id));
+	if (there != NULL) pl_hold_also(holder, there, pl_made_ref(made), pl_made_free);
+	pl_made_free(made);
+}
+
 // the row ----------------------------------------------------------------------------------------------
 
 typedef struct {
 	pr_process *p;
 	int code;
 } rowing;
+
+// names[from..n) nested round leaf: {a: {b: leaf}}
+static op_value *nested(char *const *names, size_t from, size_t n, op_value *leaf) {
+	for (size_t i = n; i-- > from;) {
+		op_value *m = op_map();
+		op_set(m, names[i], leaf);
+		leaf = m;
+	}
+	return leaf;
+}
+
+// add_row as the writer has it: the patch pr_add makes (processes.c), refused the same way, handed
+// over instead of made. 0, or the code
+static int hand_row(pr_process *p, const ch_header *h, pl_made *made) {
+	pr *s = p->owner;
+	if (p->nat == 0) return PL_NOT_A_NAME;
+	for (size_t i = 0; i < p->nat; i++) {
+		if (!pl_is_name(p->at[i])) return PL_NOT_A_NAME;
+	}
+	const nd_entry *there = tb_get(s->s.table, tb_string(PR_PART), tb_string(p->root));
+	// the first level the part has no map for or no key at: the rest goes there
+	size_t at = 0;
+	if (there != NULL) {
+		at = p->nat;
+		const op_value *v = there->value;
+		for (size_t i = 0; i < p->nat; i++) {
+			if (v == NULL || v->type != OP_MAP) {
+				at = i;
+				break;
+			}
+			v = op_get(v, p->at[i]);
+			if (v == NULL) {
+				at = i + 1;
+				break;
+			}
+			if (v->type == OP_STR) return PL_ALREADY_THERE;
+		}
+		if (at == p->nat && v != NULL && v->type == OP_MAP && v->count > 0) return PL_ALREADY_THERE;
+	}
+	op_key *keys = xalloc((at + 1) * sizeof *keys);
+	for (size_t i = 0; i < at; i++) keys[i] = (op_key){.type = OP_STR_KEY, .s = p->at[i]};
+	op_value *value = nested(p->at, at, p->nat, op_str(p->id));
+	op_patch patch = {.place = {.path = keys, .length = at}, .has_value = 1, .value = value};
+	handed(s, p->places, PR_PART, p->root, &patch, 1, h, made);
+	op_free(value);
+	free(keys);
+	return 0;
+}
+
+// remove_row as the writer has it: pr_remove's patch (the highest level left empty), handed over
+static int hand_unrow(pr_process *p, const ch_header *h, pl_made *made) {
+	pr *s = p->owner;
+	const nd_entry *there = tb_get(s->s.table, tb_string(PR_PART), tb_string(p->root));
+	if (there == NULL || p->nat == 0) return PL_NOTHING_THERE;
+	size_t *counts = xalloc(p->nat * sizeof *counts);
+	const op_value *v = there->value;
+	for (size_t i = 0; i < p->nat; i++) {
+		if (v == NULL || v->type != OP_MAP || op_get(v, p->at[i]) == NULL) {
+			free(counts);
+			return PL_NOTHING_THERE;
+		}
+		counts[i] = v->count;
+		v = op_get(v, p->at[i]);
+	}
+	if (v == NULL || v->type != OP_STR) {
+		free(counts);
+		return PL_NOTHING_THERE;
+	}
+	size_t d = p->nat - 1;
+	while (d > 0 && counts[d] == 1) d--;
+	free(counts);
+	op_key *keys = xalloc((d + 1) * sizeof *keys);
+	for (size_t i = 0; i <= d; i++) keys[i] = (op_key){.type = OP_STR_KEY, .s = p->at[i]};
+	op_patch patch = {.place = {.path = keys, .length = d + 1}};
+	handed(s, p->places, PR_PART, p->root, &patch, 1, h, made);
+	free(keys);
+	return 0;
+}
 
 static void add_row(void *data) {
 	rowing *r = data;
@@ -169,6 +261,11 @@ static void add_row(void *data) {
 	if (bad != NULL) {
 		free(bad);
 		r->code = -1;
+		return;
+	}
+	if (s->s.write != NULL) {
+		r->code = hand_row(p, &h, made);
+		if (r->code != 0) pl_made_free(made);
 		return;
 	}
 	pl *holder = p->places;
@@ -194,6 +291,11 @@ static void remove_row(void *data) {
 	char *bad = pl_header(s->s.places, NULL, 0, at != NULL ? at : CH_HERE, &h, &made);
 	if (bad != NULL) {
 		free(bad);
+		return;
+	}
+	if (s->s.write != NULL) {
+		r->code = hand_unrow(p, &h, made);
+		if (r->code != 0) pl_made_free(made);
 		return;
 	}
 	pl *holder = p->places;
@@ -267,11 +369,17 @@ static void make_attributes(void *data) {
 	if (c->o->has_args) op_set(attrs, PR_ARGS, names_value(p->args, p->nargs));
 	op_set(attrs, PR_CWD, names_value(p->cwd, p->ncwd));
 	if (c->o->pin != NULL) op_set(attrs, PR_PIN, op_ref((op_value *)c->o->pin));
-	nd_entry *node = nd_make_entry(attrs, &h);
-	op_free(attrs);
-	pl_own(s->s.places, node);
-	pl_hold(s->s.places, node, made, pl_made_free);
-	tb_add(s->s.table, tb_string("attributes"), tb_string(p->id), node);
+	if (s->s.write != NULL) {
+		op_patch whole = {.has_value = 1, .value = attrs};
+		handed(s, s->s.places, "attributes", p->id, &whole, 1, &h, made);
+		op_free(attrs);
+	} else {
+		nd_entry *node = nd_make_entry(attrs, &h);
+		op_free(attrs);
+		pl_own(s->s.places, node);
+		pl_hold(s->s.places, node, made, pl_made_free);
+		tb_add(s->s.table, tb_string("attributes"), tb_string(p->id), node);
+	}
 	// its status PENDING, in the status table, not its attributes (places' status.h): a header of
 	// its own, as the entry borrows it
 	ch_header sh;
@@ -283,6 +391,12 @@ static void make_attributes(void *data) {
 	}
 	op_value *st = op_map();
 	op_set(st, CST_ATTRIBUTE, op_stand(op_str(PENDING_NAME)));
+	if (s->s.write != NULL) {
+		op_patch whole = {.has_value = 1, .value = st};
+		handed(s, s->s.places, CST_TABLE, p->id, &whole, 1, &sh, smade);
+		op_free(st);
+		return;
+	}
 	nd_entry *status = nd_make_entry(st, &sh);
 	op_free(st);
 	pl_own(s->s.places, status);

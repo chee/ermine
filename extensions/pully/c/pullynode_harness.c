@@ -1,9 +1,9 @@
 // The C pullynode (pullynode.h) on the line protocol of the library's TypeScript harness (gone with
 // the library; its comment kept below), which documents it and the program forms
 // (conformance/c/harness.h has the loop). Its scenarios: library-suite/pullynode/. Built on
-// places' harness (filesystem/places/c/places_harness.h, compiled with PH_LIB): its world, its
+// places' harness (core/places/c/places_harness.h, compiled with PH_LIB): its world, its
 // programs, its requests, and this one's besides.
-// | pullynode harness: places' harness (filesystem/places/typescript/places_harness.ts: its world,
+// | pullynode harness: places' harness (core/places/typescript/places_harness.ts: its world,
 // | its computes by name, its programs, its requests) and the providers (pullynode.ts), on the line
 // | protocol. a reader is a watch whose program reads the node; it stops reading when its program
 // | stops (an if on a switch) or it is disposed. a status is read with places' read: { op: "read",
@@ -33,7 +33,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../../filesystem/places/c/places_harness.h"
+#include "../../../core/places/c/places_harness.h"
 #include "pullynode.h"
 
 #define PUSH(v, n, cap, x) \

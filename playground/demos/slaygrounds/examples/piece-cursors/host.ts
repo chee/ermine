@@ -3,8 +3,8 @@
 // channels (and a BroadcastChannel, so this example open in another tab shows up here). both
 // devices' rows are this host's, handed over by extend: a program cannot make a world
 import createEntry from "@ermine/core/node/entry"
-import { createPlaces } from "@ermine/places"
-import { createChangeHeader } from "@ermine/places/header"
+import { createPlaces } from "@ermine/core/places"
+import { createChangeHeader } from "@ermine/core/places/header"
 import { createScheduler } from "@ermine/core/scheduler"
 import { createPaths } from "@ermine/core/scheduler/paths"
 import { createTable } from "@ermine/core/table"

@@ -3,9 +3,9 @@
 // and changes one colour of N, without writing on N
 import createEntry from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
-import { createPlaces, type Places } from "@ermine/places"
-import { createChangeHeader } from "@ermine/places/header"
-import { get } from "@ermine/places/lib"
+import { createPlaces, type Places } from "@ermine/core/places"
+import { createChangeHeader } from "@ermine/core/places/header"
+import { get } from "@ermine/core/places/lib"
 import { createScheduler } from "@ermine/core/scheduler"
 import { createPaths } from "@ermine/core/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/core/table"

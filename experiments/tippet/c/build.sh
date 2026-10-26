@@ -20,7 +20,7 @@ own="wire step pack sign log store store_file sync http"
 graph="history"
 reused="core/ed25519/c/ed25519 core/ed25519/c/sha2 ermine/encoding/c/cbor ermine/encoding/c/json ermine/encoding/c/blake3/blake3 ermine/encoding/c/blake3/blake3_dispatch ermine/encoding/c/blake3/blake3_portable"
 # the graph: table, node, op, places, scheduler (the root Makefile's places_src, but its harnesses)
-places="filesystem/places/c/places core/unread/c/unread filesystem/places/c/cache filesystem/clingy/c/clingy core/scheduler/c/selector filesystem/places/c/status core/table/c/table core/node/c/node core/node/c/update core/op/c/value core/op/c/apply core/op/c/invert core/scheduler/c/paths core/scheduler/c/scheduler core/scheduler/c/order core/scheduler/c/rank core/scheduler/c/causes core/scheduler/c/ptrmap core/scheduler/c/tracker"
+places="core/places/c/places core/unread/c/unread core/places/c/cache core/clingy/c/clingy core/scheduler/c/selector core/places/c/status core/table/c/table core/node/c/node core/node/c/update core/op/c/value core/op/c/apply core/op/c/invert core/scheduler/c/paths core/scheduler/c/scheduler core/scheduler/c/order core/scheduler/c/rank core/scheduler/c/causes core/scheduler/c/ptrmap core/scheduler/c/tracker"
 harness="conformance/c/harness conformance/c/protocol_harness core/op/c/json"
 STRICT="-std=c99 -Wall -Wextra -Wpedantic -Werror"
 LOOSE="-std=c11 -Wall -Wextra -Wpedantic"

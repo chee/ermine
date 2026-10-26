@@ -48,10 +48,10 @@
 // reads only, all through places: iterate inside a computer's run to be tracked
 // open: the model; the search bound by iteration; pins on the program only, not on openers; a
 // compiler's own needs; host runners unextended; onwhynot as a callback
-import type { Id, Path, Places } from "@ermine/places"
-import { level } from "@ermine/places"
-import { get, lookup, members } from "@ermine/places/lib"
-import { parse, plan as resolve } from "@ermine/places/path"
+import type { Id, Path, Places } from "@ermine/core/places"
+import { level } from "@ermine/core/places"
+import { get, lookup, members } from "@ermine/core/places/lib"
+import { parse, plan as resolve } from "@ermine/core/places/path"
 import { keyorder } from "@ermine/core/util/keyorder"
 import {
 	ATTRIBUTE,

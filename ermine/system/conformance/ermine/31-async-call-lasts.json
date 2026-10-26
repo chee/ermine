@@ -1,0 +1,268 @@
+{
+	"title": "a call's scope lasts as its record does: a handler returning a promise keeps its call open till the promise settles, so a memo made in it runs and is read meanwhile; then the call goes, with why ended (the call ended: nothing replaced it), and what was made in it with it. a handler returning at once: its call goes then, why ended too. a process stopped while a call is out: the call goes with it, told the stop's reason",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/svc",
+			"program": [
+				{
+					"do": [
+						"createAction",
+						"/svc/slow",
+						[
+							{
+								"do": [
+									"addTeardown",
+									"td"
+								]
+							},
+							{
+								"do": [
+									"createMemo",
+									"/made",
+									{},
+									42
+								]
+							}
+						],
+						[
+							"later",
+							"$0"
+						]
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"/svc/quick",
+						[
+							{
+								"do": [
+									"addTeardown",
+									"tq"
+								]
+							}
+						],
+						"$0"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "svc",
+			"at": "/code/svc",
+			"expect": {
+				"id": "proc:svc"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"svc",
+				"slow"
+			],
+			"expect": {
+				"id": "n4"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/svc/slow",
+				1
+			]
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"id": "n4",
+			"expect": {
+				"record": {
+					"n": 1,
+					"caller": "n1",
+					"handler": "n4",
+					"args": [
+						1
+					],
+					"end": "pending",
+					"reads": [],
+					"writes": [
+						[
+							"children",
+							"R"
+						],
+						[
+							"attributes",
+							"n7"
+						]
+					],
+					"made": [
+						[
+							"memo",
+							"n7"
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/made"
+			],
+			"expect": {
+				"value": 42
+			}
+		},
+		{
+			"op": "log",
+			"name": "td",
+			"expect": {
+				"values": []
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"id": "n4",
+			"expect": {
+				"record": {
+					"n": 1,
+					"caller": "n1",
+					"handler": "n4",
+					"args": [
+						1
+					],
+					"end": "done",
+					"returned": 1,
+					"reads": [],
+					"writes": [
+						[
+							"children",
+							"R"
+						],
+						[
+							"attributes",
+							"n7"
+						]
+					],
+					"made": [
+						[
+							"memo",
+							"n7"
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "log",
+			"name": "td",
+			"expect": {
+				"values": [
+					"ended"
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/made"
+			],
+			"expect": {
+				"value": false
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/svc/quick",
+				2
+			],
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "log",
+			"name": "tq",
+			"expect": {
+				"values": [
+					"ended"
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/svc/slow",
+				3
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/made"
+			],
+			"expect": {
+				"value": 42
+			}
+		},
+		{
+			"op": "stop",
+			"name": "svc",
+			"why": "bye",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "td",
+			"expect": {
+				"values": [
+					"ended",
+					"bye"
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/made"
+			],
+			"expect": {
+				"value": false
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "td",
+			"expect": {
+				"values": [
+					"ended",
+					"bye"
+				]
+			}
+		}
+	]
+}

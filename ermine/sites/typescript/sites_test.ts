@@ -93,3 +93,18 @@ Deno.test("the WeakMap lets a torn-down scope go", async () => {
 	}
 	assertEquals(died, 2, "the scope or its computer was kept")
 })
+
+Deno.test("the whole stack is kept, read as often as asked; made without the wrapper: none", () => {
+	const scheduler = createScheduler()
+	const sited = createSites(scheduler)
+	const root = sited.createRootScope(INFO)
+	const c = (function maker() {
+		return scheduler.runWithScope(root, () => sited.createComputer(() => 1, () => {}))
+	})()
+	sited.siteOf(c)
+	const frames = sited.stackOf(c)!
+	assert(frames.some((f) => (f.function ?? "").includes("maker")))
+	assertEquals(sited.stackOf(c)?.length, frames.length)
+	const bare = scheduler.runWithScope(root, () => scheduler.createComputer(() => 1, () => {}))
+	assertEquals(sited.stackOf(bare), undefined)
+})

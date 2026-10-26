@@ -1,4 +1,4 @@
-// runs harness: places' harness (filesystem/places/typescript/places_harness.ts: its world, its
+// runs harness: places' harness (core/places/typescript/places_harness.ts: its world, its
 // computes by name, its programs) and the runs (runs.ts), on the line protocol.
 // { op: "runs" }                            → {}   the runs listener, made once
 // { op: "giveRun", name, id }               → {}   the compute's runs written by node id
@@ -17,9 +17,9 @@
 // program e, besides places' harness's:
 //   {"run":[id, field?]}        the record as runOf tells it, or that field of it; tracked
 import { type Computer, PENDING } from "@ermine/core/scheduler"
-import { status } from "../../../filesystem/places/typescript/status.ts"
-import { createGuard, Refusal } from "@ermine/places/guard"
-import { no, yes } from "@ermine/protect"
+import { status } from "../../../core/places/typescript/status.ts"
+import { createGuard, Refusal } from "@ermine/core/places/guard"
+import { no, yes } from "@ermine/core/protect"
 import {
 	answered,
 	enroll,
@@ -27,11 +27,11 @@ import {
 	s,
 	scope,
 	table,
-} from "../../../filesystem/places/typescript/world_harness.ts"
+} from "../../../core/places/typescript/world_harness.ts"
 import {
 	answer as placesAnswer,
 	forms,
-} from "../../../filesystem/places/typescript/places_harness.ts"
+} from "../../../core/places/typescript/places_harness.ts"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { type Act, createRuns, type Field, type Run } from "./runs.ts"
 

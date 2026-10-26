@@ -11,10 +11,10 @@ import { assert, assertEquals, assertStrictEquals } from "@std/assert"
 import apply from "@ermine/core/op/apply"
 import createEntry, { type Entry } from "@ermine/core/node/entry"
 import { createTable } from "@ermine/core/table"
-import { move, PlacesError } from "@ermine/places"
+import { move, PlacesError } from "@ermine/core/places"
 import { differ, isMap, rand, snap } from "./gen_harness.ts"
 import { createWorld, show, type Wrote } from "./world_harness.ts"
-import { get, list, lookup } from "@ermine/places/lib"
+import { get, list, lookup } from "@ermine/core/places/lib"
 
 const SEEDS = 40
 const STEPS = 60

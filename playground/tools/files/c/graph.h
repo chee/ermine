@@ -22,7 +22,7 @@
 #include "../../../../core/scheduler/c/scheduler.h"
 #include "../../../../core/table/c/table.h"
 #include "../../../../ermine/encoding/c/json.h"
-#include "../../../../filesystem/protect/c/protect.h"
+#include "../../../../core/protect/c/protect.h"
 #include "saved.h"
 
 #include <stdbool.h>

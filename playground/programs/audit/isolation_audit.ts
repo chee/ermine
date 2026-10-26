@@ -21,9 +21,9 @@ import createEntry, { type Entry } from "@ermine/core/node/entry"
 import { createScheduler } from "@ermine/core/scheduler"
 import { createPaths } from "@ermine/core/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/core/table"
-import { children, createPlaces } from "@ermine/places"
-import { get, gets, list, lookup, members } from "@ermine/places/lib"
-import { createChangeHeader } from "@ermine/places/header"
+import { children, createPlaces } from "@ermine/core/places"
+import { get, gets, list, lookup, members } from "@ermine/core/places/lib"
+import { createChangeHeader } from "@ermine/core/places/header"
 import { addProcess } from "@ermine/processes"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import { ATTRIBUTES as A, openwith, satisfy, type Way } from "../typescript/programs.ts"
@@ -362,7 +362,7 @@ Deno.test("HELD: a box does not see a process started at the host root beside it
 })
 
 // =================================================================================================
-// C: the same shape (filesystem/places/c pl_view, pl_read/pl_walk by id; ermine/boxes/c
+// C: the same shape (core/places/c pl_view, pl_read/pl_walk by id; ermine/boxes/c
 // bx_create_id with no containment) is in the C code and cannot be driven through the boxes harness
 // (it only offers path-scoped ops). What the harness CAN show — the path-level promise — is checked
 // here against the prebuilt binary; the structural C findings are in REPORT.md by inspection.

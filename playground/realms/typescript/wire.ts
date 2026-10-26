@@ -29,7 +29,7 @@
 //            waiting, none), value, names. none: not started
 import type { Patch } from "@ermine/core/op/apply"
 import type { ChangeHeader, Metadata } from "@ermine/core/node/entry"
-import { REFUSED } from "@ermine/places/guard"
+import { REFUSED } from "@ermine/core/places/guard"
 import { type Info, PENDING } from "@ermine/core/scheduler"
 import type { FileLocation } from "@ermine/core/util/stacktrace"
 

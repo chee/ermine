@@ -1,0 +1,100 @@
+{
+	"title": "a handle follows its place: the node at its path replaced, the handle reaches the new one; its path reaching nothing, nothing-there, naming the path as the user sees it (a boxed process is never told where its box sits)",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"name": "b",
+			"at": "/boxes/b",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/boxes/b/code/q",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./doc",
+						1
+					],
+					"as": "doc"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/code/q",
+			"box": "b",
+			"expect": {
+				"id": "proc:q"
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"read",
+				"$doc"
+			],
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"unplace",
+				"/boxes/b/code/doc"
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/boxes/b/code/doc",
+				2
+			]
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"read",
+				"$doc"
+			],
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"unplace",
+				"/boxes/b/code/doc"
+			]
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"patch",
+				"$doc",
+				[
+					{
+						"path": [],
+						"value": 3
+					}
+				]
+			],
+			"expect": {
+				"error": "nothing-there"
+			}
+		}
+	]
+}

@@ -26,6 +26,16 @@
 		"./unread": "./unread/typescript/unread.ts",
 		"./util/keyorder": "./util/typescript/keyorder.ts",
 		"./util/stacktrace": "./util/typescript/stacktrace.ts",
-		"./util/walk-string": "./util/typescript/walk-string.ts"
+		"./util/walk-string": "./util/typescript/walk-string.ts",
+		"./places": "./places/typescript/places.ts",
+		"./places/lib": "./places/typescript/lib.ts",
+		"./places/cache": "./places/typescript/cache.ts",
+		"./places/header": "./places/typescript/header.ts",
+		"./places/guard": "./places/typescript/guard.ts",
+		"./places/path": "./places/typescript/path.ts",
+		"./places/status": "./places/typescript/status.ts",
+		"./places/upsert": "./places/typescript/upsert.ts",
+		"./protect": "./protect/typescript/protect.ts",
+		"./clingy": "./clingy/typescript/clingy.ts"
 	}
 }
