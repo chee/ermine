@@ -7,8 +7,8 @@
 //     api), host, code, start, box, boxplace, stop, status, close, service (land), record, waits,
 //     slot, do, settle, log, pulse, saved, id, metadata, caller, site
 //   programs as data steps: { do: [fn, ...args], as? }, "$x" in an arg, the forms (createMemo,
-//     createEffect, createAction, addTeardown, getStatus, explain, peep, ref, watch, log, later, if,
-//     throw, each, pick, is, keys, explaincall, explainargs, explainfrom, share), and every es_
+//     createEffect, createAction, addTeardown, getStatus, explain, peep, ref, watch, pipe, log, later, if,
+//     throw, each, pick, is, keys, whole, inc, explaincall, explainargs, explainfrom, share), and every es_
 //     function called as it is. a program is an es_program whose ctx holds its steps; a memo's
 //     function an es_compute whose ctx holds its expression; an action's an es_action whose ctx
 //     holds its steps. a program's calls find their context with es_found (the imported
@@ -22,7 +22,7 @@
 // it, so the lines are let go of at hh_finish. an environment lives as long as anything that captured
 // it, and what a step made for a memo, action, process or feature as long as the ermine: both the
 // world's, freed with it (world_free, when a new ermine replaces it, and at hh_finish), after es_free.
-// values kept are op_ref'd. a site is the line that made it: a memo's or effect's is define's (the "computer" site),
+// values held are op_ref'd. a site is the line that made it: a memo's or effect's is define's (the "computer" site),
 // any other write here a "program" one. not written: a recipe for createPatch (patches only).
 #define _POSIX_C_SOURCE 200809L
 #include "../../../conformance/c/protocol_harness.h"
@@ -85,7 +85,7 @@ typedef struct {
 
 // a deny entry of the request: every field given must match
 typedef struct {
-	char *op, *path, *id, *from;
+	char *op, *path, *id, *from, *box;
 } deny_t;
 
 // a test feature: its spec, and what its hooks keep
@@ -95,7 +95,7 @@ typedef struct {
 	es_feature_api *api;
 	es_slot *slot;
 	long matched;
-	op_value *kept;
+	op_value *held;
 } tf_t;
 
 // something the world holds on to: let go with free, else dtor
@@ -192,7 +192,6 @@ static op_value *names_value(const es_names *names) {
 }
 
 static int is_str(const op_value *v) { return v != NULL && v->type == OP_STR; }
-static int is_stand(const op_value *v, const char *what) { return es_live_of(v, what) != NULL; }
 
 // a value a field holds in a request map, else NULL
 static const op_value *field(const op_value *map, const char *key) {
@@ -309,7 +308,7 @@ static op_value *plain(const op_value *v) {
 			}
 			return op_str("a handle of no ermine");
 		}
-		if (is_stand(v, "promise")) return op_map();
+		if (W->e != NULL && es_promise_of(W->e, v) != NULL) return op_map();
 		// a status node's PENDING, and an Error it holds (its message)
 		if (cst_is_pending(v)) return op_str("PENDING");
 		if (cst_error(v) != NULL) return op_str(cst_error(v));
@@ -319,7 +318,9 @@ static op_value *plain(const op_value *v) {
 			op_free(x);
 			return out;
 		}
-		return op_str("function");
+		// a function placed; any other stand-in is data
+		if (es_live_of(v, "function") != NULL) return op_str("function");
+		return op_ref((op_value *)v);
 	}
 	if (v->type == OP_LIST) {
 		op_value *list = op_list();
@@ -619,6 +620,10 @@ static op_value *explained_value(const es_explained *x) {
 			op_set(m, "path", path_value(w->has_path, w->path, w->npath));
 			if (w->call != NULL) op_set(m, "n", op_int(w->call->n));
 			break;
+		case ES_WRITER_PIPE:
+			op_set(m, "writer", op_str("pipe"));
+			op_set(m, "path", path_value(w->has_path, w->path, w->npath));
+			break;
 		case ES_WRITER_OUTSIDE:
 			op_set(m, "writer", op_str("outside"));
 			op_set(m, "site", op_str(site_of(w->has_site ? &w->site : NULL)));
@@ -848,18 +853,74 @@ static void td_run(void *ctx, const char *why) {
 	log_push(k->log, op_str_take(s, strlen(s)));
 }
 
+// a pipe's function: its steps, run with the write as $0 ({ patches, value, refused? }), and what it
+// gives back; one pipe's functions, or (a watch) the log its patches go to
+typedef struct {
+	sys_t sys;
+	env_t *env;
+	const op_value *steps, *gives;
+} pf_t;
 typedef struct {
 	const char *log;
-} watch_t;
-static void watch_run(void *ctx, const es_watched *w) {
-	watch_t *k = ctx;
-	if (w->refused) {
-		log_push(k->log, op_str("refused"));
-		return;
-	}
+	pf_t *tell, *there, *back;
+} pk_t;
+static int pf_call(const pf_t *f, const es_watched *w, op_value **out) {
+	*out = NULL;
+	env_t *inner = env_new(f->env);
+	op_value *m = op_map();
 	op_value *list = op_list();
 	for (size_t i = 0; i < w->npatches; i++) op_push(list, patch_value(&w->patches[i]));
-	log_push(k->log, list);
+	op_set(m, "patches", list);
+	if (w->value != NULL) op_set(m, "value", op_ref((op_value *)w->value));
+	if (w->refused) op_set(m, "refused", op_bool(1));
+	env_set(inner, "0", m);
+	TRY(run_steps(f->sys, inner, f->steps));
+	if (f->gives == NULL) return 0;
+	return expr(f->sys, inner, f->gives, out);
+}
+static int pk_tell(es_context *c, void *ctx, const es_watched *w) {
+	(void)c;
+	pk_t *k = ctx;
+	if (k->log != NULL) {
+		if (w->refused) {
+			log_push(k->log, op_str("refused"));
+			return 0;
+		}
+		op_value *list = op_list();
+		for (size_t i = 0; i < w->npatches; i++) op_push(list, patch_value(&w->patches[i]));
+		log_push(k->log, list);
+		return 0;
+	}
+	op_value *v;
+	int code = pf_call(k->tell, w, &v);
+	op_free(v);
+	return code;
+}
+static int pk_map(const pf_t *f, const es_watched *w, es_pipe_gave *out) {
+	op_value *v;
+	TRY(pf_call(f, w, &v));
+	if (v == NULL || v->type == OP_NULL) {
+		op_free(v);
+		return 0;
+	}
+	const op_patch *ps;
+	size_t n;
+	int code = v->type == OP_LIST ? patches_of(v, &ps, &n)
+		: es_fail(ES_NOT_PATCHES, "not-patches: a pipe's function gives patches: [{ path, value }]");
+	if (code) return op_free(v), code;
+	out->given = 1;
+	out->patches = ps;
+	out->n = n;
+	out->own = v;
+	return 0;
+}
+static int pk_there(es_context *c, void *ctx, const es_watched *w, es_pipe_gave *out) {
+	(void)c;
+	return pk_map(((pk_t *)ctx)->there, w, out);
+}
+static int pk_back(es_context *c, void *ctx, const es_watched *w, es_pipe_gave *out) {
+	(void)c;
+	return pk_map(((pk_t *)ctx)->back, w, out);
 }
 
 // ref's maker: the value given
@@ -1255,20 +1316,76 @@ static op_value *keys_value(const op_value *v) {
 	return list;
 }
 
-// a step watching, adding a teardown, getting a status: the forms that take a target or a log name
+// a function a pipe's argument is: a map with steps
+static int is_fn(const op_value *x) { return x != NULL && x->type == OP_MAP && field(x, "steps") != NULL; }
+static pf_t *pf_new(sys_t sys, env_t *env, const op_value *x) {
+	pf_t *f = owned_alloc(sizeof *f);
+	*f = (pf_t){sys, env, field(x, "steps"), field(x, "gives")};
+	return f;
+}
+// a step watching: a pipe told as each write lands, logging its patches (the form watch had)
 static int form_watch(sys_t sys, env_t *env, const op_value *const *raw, size_t nraw, op_value **out) {
 	CTX("watch");
 	es_target x;
-	es_watching *w;
+	es_handle *h;
 	op_value *t = arg(env, nraw > 0 ? raw[0] : NULL);
 	int code = target_of(t, &x);
 	if (code == 0) {
-		watch_t *k = owned_alloc(sizeof *k);
+		pk_t *k = owned_alloc(sizeof *k);
 		k->log = nraw > 1 && is_str(raw[1]) ? raw[1]->str : "";
-		code = es_watch(c, x, watch_run, k, &w);
-		if (code == 0) *out = es_live("unwatch", w);
+		es_pipe_options o = {.tell = pk_tell, .ctx = k, .write = 1};
+		code = es_pipe(c, x, &o, &h);
+		if (code == 0) *out = es_handle_value(h);
 	}
 	op_free(t);
+	return code;
+}
+// pipe(from, to | fn, fnA?, fnB?, options?): a function is { steps, gives? }; options { timing, name }
+static int form_pipe(sys_t sys, env_t *env, const op_value *const *raw, size_t nraw, op_value **out) {
+	CTX("pipe");
+	es_target from;
+	es_handle *h;
+	op_value *f = arg(env, nraw > 0 ? raw[0] : NULL);
+	int code = target_of(f, &from);
+	op_free(f);
+	if (code) return code;
+	const op_value *const *rest = raw + 1;
+	size_t n = nraw > 0 ? nraw - 1 : 0;
+	const op_value *options = NULL;
+	if (n > 1 && rest[n - 1] != NULL && rest[n - 1]->type == OP_MAP && !is_fn(rest[n - 1])) {
+		options = rest[--n];
+	}
+	es_pipe_options o = {0};
+	pk_t *k = owned_alloc(sizeof *k);
+	o.ctx = k;
+	o.write = options != NULL && text(options, "timing") != NULL && strcmp(text(options, "timing"), "write") == 0;
+	if (options != NULL && field(options, "name") != NULL) TRY(at_of(field(options, "name"), &o.name));
+	op_value *to = NULL;
+	if (n > 0 && is_fn(rest[0])) {
+		k->tell = pf_new(sys, env, rest[0]);
+		o.tell = pk_tell;
+	} else if (n > 0) {
+		to = arg(env, rest[0]);
+		code = target_of(to, &o.to);
+		o.has_to = 1;
+		for (size_t i = 1; i < n && i < 3 && code == 0; i++) {
+			if (!is_fn(rest[i])) {
+				code = es_fail(ES_NOT_A_FUNCTION,
+					"not-a-function: pipe takes (from, fn) or (from, to, fnA?, fnB?)");
+			} else if (i == 1) {
+				k->there = pf_new(sys, env, rest[i]);
+				o.there = pk_there;
+			} else {
+				k->back = pf_new(sys, env, rest[i]);
+				o.back = pk_back;
+			}
+		}
+	}
+	if (code == 0) {
+		code = es_pipe(c, from, &o, &h);
+		if (code == 0) *out = es_handle_value(h);
+	}
+	op_free(to);
 	return code;
 }
 static int form_status(sys_t sys, env_t *env, const op_value *const *raw, size_t nraw, op_value **out) {
@@ -1336,6 +1453,7 @@ static int call_form(sys_t sys, env_t *env, const op_value *form, op_value **out
 		return es_add_teardown(c, td_run, k);
 	}
 	if (strcmp(fn, "watch") == 0) return form_watch(sys, env, raw, nraw, out);
+	if (strcmp(fn, "pipe") == 0) return form_pipe(sys, env, raw, nraw, out);
 	if (strcmp(fn, "ref") == 0) {
 		CTX(fn);
 		es_at at;
@@ -1419,6 +1537,25 @@ static int expr(sys_t sys, env_t *env, const op_value *e, op_value **out) {
 			op_push(list, x != NULL ? x : op_null());
 		}
 		*out = list;
+		return 0;
+	}
+	// a whole value's patches, the value expr's
+	if (strcmp(fn, "whole") == 0) {
+		op_value *v = NULL;
+		TRY(expr(sys, env, X(0), &v));
+		op_value *patch = op_map();
+		op_set(patch, "path", op_list());
+		op_set(patch, "value", v != NULL ? v : op_null());
+		op_value *list = op_list();
+		op_push(list, patch);
+		*out = list;
+		return 0;
+	}
+	if (strcmp(fn, "inc") == 0) {
+		op_value *v = NULL;
+		TRY(expr(sys, env, X(0), &v));
+		*out = op_num(v != NULL && v->type == OP_NUM ? v->num + 1 : NAN);
+		op_free(v);
 		return 0;
 	}
 	if (strcmp(fn, "if") == 0) {
@@ -1519,6 +1656,13 @@ static pr_answer deny_run(void *ctx, const pr_ask *ask, const pr_read *read) {
 		}
 		if (d->path != NULL && !path_is(ask->target.path, ask->target.npath, d->path)) continue;
 		if (d->from != NULL && !path_is(ask->from.path, ask->from.npath, d->from)) continue;
+		if (d->box != NULL) {
+			// by its name: that box's folder's id, the ask's from.box
+			const es_box *b = es_map_get(&W->boxes, d->box);
+			if (b == NULL || ask->from.box.string == NULL || strcmp(b->root, ask->from.box.string) != 0) {
+				continue;
+			}
+		}
 		return (pr_answer){.verdict = PR_NO, .reason = "denied"};
 	}
 	return (pr_answer){.verdict = PR_YES};
@@ -1645,8 +1789,8 @@ static int tf_status(void *ctx, const es_asked *x, const es_status *st, es_statu
 			}
 		}
 		op_set(more, t->name, op_bool(1));
-		op_free(t->kept);
-		t->kept = more;
+		op_free(t->held);
+		t->held = more;
 		out->more = more;
 	}
 	return 0;
@@ -1706,7 +1850,7 @@ static const es_feature inline_feature = {.name = "inline", .setup = inline_setu
 static void tf_free(void *p) {
 	tf_t *t = p;
 	free(t->name);
-	op_free(t->kept);
+	op_free(t->held);
 	free(t);
 }
 
@@ -2002,7 +2146,7 @@ static int lib_run(void *ctx) {
 // maker's box, a path in the caller's), edit asked on the target (by its id) and on the patch node
 // (by the path it was sent by, else its id) as the caller and as the service, written with the
 // service's power in the call; the patch entry taken out once the write has landed. a write that
-// fails throws, one an onWrite hook holds back gives false: either way the patch node is kept
+// fails throws, one an onWrite hook holds back gives false: either way the patch node stays
 static int land_do(const op_value *p, int *landed) {
 	es_ermine *e = W->e;
 	es_context *own = es_host_context(e);
@@ -2123,6 +2267,7 @@ static int make(const op_value *r) {
 			if (text(d, "path") != NULL) x->path = es_dup(text(d, "path"));
 			if (text(d, "id") != NULL) x->id = es_dup(text(d, "id"));
 			if (text(d, "from") != NULL) x->from = es_dup(text(d, "from"));
+			if (text(d, "box") != NULL) x->box = es_dup(text(d, "box"));
 		}
 		w->policy = pr_call(deny_run, NULL);
 	}
@@ -2161,6 +2306,7 @@ static void world_free(world_t *w) {
 		free(w->deny[i].path);
 		free(w->deny[i].id);
 		free(w->deny[i].from);
+		free(w->deny[i].box);
 	}
 	if (w->policy != NULL) pr_policy_free(w->policy);
 	free(w->envs);
@@ -2728,7 +2874,7 @@ static int answer(const op_value *r, op_value **res) {
 		*res = op_map();
 		if (c == NULL) return 0;
 		op_set(*res, "at", strs(c->nat, (const char *const *)c->at));
-		op_set(*res, "cwd", strs(c->ncwd, (const char *const *)c->cwd));
+		op_set(*res, "folder", strs(c->nfolder, (const char *const *)c->folder));
 		op_set(*res, "args", strs(c->nargs, (const char *const *)c->args));
 		if (c->process != NULL) op_set(*res, "process", op_str(pr_id(c->process)));
 		op_set(*res, "scope", op_str(c == e->host_context ? "host" : c->process != NULL ? "process" : "other"));
@@ -2742,7 +2888,7 @@ static int answer(const op_value *r, op_value **res) {
 		sys_t sys = {es_host_context(e), 1};
 		op_value *call = NULL, *v = NULL;
 		TRY(minted(field(r, "call"), &call));
-		// the call's pieces are kept (a memo's expression points into it): the line's
+		// the call's pieces are held (a memo's expression points into it): the line's
 		hh_hold(call);
 		int code = call_form(sys, W->host, call, &v);
 		if (code != 0) return code;

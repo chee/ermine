@@ -32,8 +32,8 @@
 // that computer's next record is written, or it is dropped.
 //
 // MEMORY. Keeps the places, table and scheduler as given, a copy of each id given, the records and
-// their keys, and each computer's writes so far. Computers are kept by address. Out of memory
-// aborts.
+// their keys, and each computer's writes so far. Computers are held by address till the scheduler
+// frees one (sc_on_free): then forgotten. Out of memory aborts.
 #ifndef PROCESSES_RUNS_H
 #define PROCESSES_RUNS_H
 
@@ -106,11 +106,11 @@ typedef enum {
 	CRN_ALL
 } crn_field;
 
-// a record on its way to being held, by the computer's node id (runs.ts's hold): keep(kept) holds
+// a record on its way to being held, by the computer's node id (runs.ts's hold): take(taking) holds
 // run, as given or as the hook changed its fields in place; not called, not held (the record is
-// let go after the hook returns). keep is good only during the call
-typedef void (*crn_keep)(void *kept);
-typedef void (*crn_hold)(void *ctx, tb_key id, crn_run *run, crn_keep keep, void *kept);
+// let go after the hook returns). take is good only during the call
+typedef void (*crn_take)(void *taking);
+typedef void (*crn_hold)(void *ctx, tb_key id, crn_run *run, crn_take take, void *taking);
 
 typedef struct {
 	pl *places;

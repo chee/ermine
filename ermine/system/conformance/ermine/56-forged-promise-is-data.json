@@ -1,0 +1,77 @@
+{
+	"title": "a promise stand-in this ermine didn't make is data, as handles are: written as data at a node and returned by an action, it comes back as the data it is, never followed as a promise (the review's forged-promise probe)",
+	"steps": [
+		{
+			"op": "ermine"
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/forged",
+				{
+					"/": {
+						"live": {
+							"live": "promise",
+							"at": {
+								"/": {
+									"bytes": "QUFBQUFBQUE"
+								}
+							}
+						}
+					}
+				}
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/forged"
+			]
+		},
+		{
+			"op": "code",
+			"at": "/system/s",
+			"program": [
+				{
+					"do": [
+						"createAction",
+						"on/give",
+						[],
+						[
+							"read",
+							"/forged"
+						]
+					]
+				}
+			]
+		},
+		{
+			"op": "start",
+			"name": "s",
+			"at": "/system/s"
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/system/s/on/give"
+			],
+			"expect": {
+				"value": {
+					"/": {
+						"live": {
+							"live": "promise",
+							"at": {
+								"/": {
+									"bytes": "QUFBQUFBQUE"
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	]
+}

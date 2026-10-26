@@ -23,7 +23,7 @@
 //
 // MEMORY. A status keeps the places, table and scheduler as given, a copy of each id given, and
 // the nodes it made (let go of at cst_free; free it after the table, as nodes are). The computers
-// given are kept by address: a computer gone and its address reused would be given the same node.
+// given are kept by address till the scheduler frees one (sc_on_free): then it is forgotten.
 // Out of memory aborts.
 #ifndef PLACES_STATUS_H
 #define PLACES_STATUS_H

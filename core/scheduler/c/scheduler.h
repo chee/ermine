@@ -79,11 +79,17 @@
 //
 // memory: values a run gives (its result, a promise's value) are the scheduler's until it lets
 // go of them with options.drop (replaced as last, equal, failed, torn down, or at sc_free).
-// set and act are lent them for the call. scopes and computers are the scheduler's until
-// sc_free, torn down or not (a host may keep a torn-down scope's pointer). a scope's info is
-// the scheduler's: the pairs given are copied, but each key and value is borrowed, the caller
-// keeps them alive as long as the scope. an info lasts to sc_free; a computer's changes in place
-// as each run starts. free promises first.
+// set and act are lent them for the call. a scope or computer lives while something holds it, as
+// a WeakMap's key does in the reference [chee 10-26: "the C should "garbage collect" via
+// something like a weakmap"]: its maker (the one hold sc_create_* gives, let go with sc_release),
+// each sc_retain, each scope under it, each of its runs (sc_run_ref, a promise's, a queued act's),
+// a loop that names it, and, alive, the tree. torn down and held by nothing, it is freed: a plain
+// scope at once, a computer as the pulse ends (the pulse it went in, else the next: a pulse's
+// causes and order name it till then), the free listeners told first (sc_on_free). a maker that
+// never lets go keeps it till sc_free, as before. a scope's info is the scheduler's: the pairs
+// given are copied, but each key and value is borrowed, the caller keeps them alive as long as
+// the scope (let go as it is freed). a computer's info changes in place as each run starts. free
+// promises and held runs first.
 // single threaded.
 #ifndef SCHEDULER_H
 #define SCHEDULER_H
@@ -229,12 +235,20 @@ sc_listener *sc_on_after_pulse(sc_scheduler *s, sc_after_pulse_fn f, void *data)
 // it again, or it was torn down (a sweep now and then catches any other)
 typedef void (*sc_tracking_end_fn)(const void *key, void *data);
 sc_listener *sc_on_tracking_end(sc_scheduler *s, sc_tracking_end_fn f, void *data);
+// a scope or computer freed: torn down, held by nothing. told as it goes, its info, parent and user
+// still there to read; never held again. what is kept by it (a WeakMap's entry) goes here
+typedef void (*sc_free_fn)(sc_scope *o, void *data);
+sc_listener *sc_on_free(sc_scheduler *s, sc_free_fn f, void *data);
 void sc_remove_listener(sc_listener *l);
 
 // scopes: n pairs of info, copied (not their keys or values). a new one with no parent. NULL: n 0
 sc_scope *sc_create_root_scope(sc_scheduler *s, const sc_pair *info, size_t n);
 // a new one under parent, else under the one open. NULL: none open, the parent is gone, or n 0
 sc_scope *sc_create_scope(sc_scheduler *s, const sc_pair *info, size_t n, sc_scope *parent);
+// one hold more on o, and one let go (memory, above). the maker's hold is let go with sc_release
+// too; a scope gone and held by nothing is freed
+sc_scope *sc_retain(sc_scope *o);
+void sc_release(sc_scope *o);
 // the host's own pointer on a scope or computer
 void sc_scope_set(sc_scope *o, void *user);
 void *sc_scope_user(const sc_scope *o);

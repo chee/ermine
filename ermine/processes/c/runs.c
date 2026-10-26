@@ -35,6 +35,8 @@ typedef struct {
 typedef struct {
 	sc_computer *c;
 	char *id;
+	// where it is in gs
+	size_t at;
 	int going;
 	unsigned n;
 	int has_started;
@@ -62,7 +64,7 @@ struct crn {
 	sc_scheduler *scheduler;
 	crn_hold hold;
 	void *hold_ctx;
-	sc_listener *starts, *ends, *effects, *tracks;
+	sc_listener *starts, *ends, *effects, *tracks, *freed;
 	pl_watch *all;
 	// the computers given, by address, and in a list
 	tb_table *by;
@@ -367,32 +369,32 @@ static void put_record(crn *r, held *h, sc_run *by, crn_run *run, int same_error
 	if (n > 0) sc_mark(r->scheduler, marked, n, by);
 }
 
-// a record on its way through the hold hook: what keep puts
+// a record on its way through the hold hook: what take puts
 typedef struct {
 	crn *r;
 	held *h;
 	sc_run *by;
 	crn_run *run;
 	int same_error;
-	int kept;
+	int taken;
 } holding;
 
-static void keep_record(void *kept) {
-	holding *k = kept;
-	if (k->kept) return;
-	k->kept = 1;
+static void take_record(void *taking) {
+	holding *k = taking;
+	if (k->taken) return;
+	k->taken = 1;
 	put_record(k->r, k->h, k->by, k->run, k->same_error);
 }
 
-// the record written (taken), through the hold hook when given: not kept, let go
+// the record written (taken), through the hold hook when given: not taken, let go
 static void write_record(crn *r, held *h, sc_run *by, crn_run *run, int same_error) {
 	if (r->hold == NULL) {
 		put_record(r, h, by, run, same_error);
 		return;
 	}
 	holding k = {r, h, by, run, same_error, 0};
-	r->hold(r->hold_ctx, tb_string(h->id), run, keep_record, &k);
-	if (!k.kept) run_free(run);
+	r->hold(r->hold_ctx, tb_string(h->id), run, take_record, &k);
+	if (!k.taken) run_free(run);
 }
 
 // the record read ------------------------------------------------------------------------------------
@@ -558,6 +560,27 @@ static void acted(sc_computer *c, unsigned n, const char *error, void *data) {
 	write_record(r, h, by, run, 1);
 }
 
+static void given_free(given *g) {
+	clear_writes(g);
+	clear_saws(g);
+	free(g->saws);
+	free(g->writes);
+	free(g->id);
+	free(g);
+}
+
+// a computer freed: what was kept of it goes (the reference's WeakMaps by computer)
+static void computer_freed(sc_scope *o, void *data) {
+	crn *r = data;
+	given *g = find(r, o);
+	if (g == NULL) return;
+	tb_del(r->by, tb_symbol(&tag), tb_symbol(o));
+	given *last = r->gs[--r->ngs];
+	r->gs[g->at] = last;
+	last->at = g->at;
+	given_free(g);
+}
+
 crn *crn_new(const crn_setup *setup) {
 	crn *r = xalloc(sizeof *r);
 	r->places = setup->places;
@@ -572,6 +595,7 @@ crn *crn_new(const crn_setup *setup) {
 	r->ends = sc_on_run_end(r->scheduler, run_end, r);
 	r->effects = sc_on_effect(r->scheduler, acted, r);
 	r->tracks = sc_on_track(r->scheduler, tracked, r);
+	r->freed = sc_on_free(r->scheduler, computer_freed, r);
 	return r;
 }
 
@@ -585,6 +609,7 @@ void crn_give(crn *r, sc_computer *c, tb_key id) {
 	g = xalloc(sizeof *g);
 	g->c = c;
 	g->id = xdup(id.string);
+	g->at = r->ngs;
 	PUSH(r->gs, r->ngs, r->capgs, g);
 	tb_add(r->by, tb_symbol(&tag), tb_symbol(c), g);
 }
@@ -595,8 +620,9 @@ void crn_stop(crn *r) {
 	if (r->ends != NULL) sc_remove_listener(r->ends);
 	if (r->effects != NULL) sc_remove_listener(r->effects);
 	if (r->tracks != NULL) sc_remove_listener(r->tracks);
+	if (r->freed != NULL) sc_remove_listener(r->freed);
 	if (r->all != NULL) pl_stop(r->all);
-	r->starts = r->ends = r->effects = r->tracks = NULL;
+	r->starts = r->ends = r->effects = r->tracks = r->freed = NULL;
 	r->all = NULL;
 }
 
@@ -608,14 +634,7 @@ void crn_free(crn *r) {
 		free(r->hs[i]->id);
 		free(r->hs[i]);
 	}
-	for (size_t i = 0; i < r->ngs; i++) {
-		clear_writes(r->gs[i]);
-		clear_saws(r->gs[i]);
-		free(r->gs[i]->saws);
-		free(r->gs[i]->writes);
-		free(r->gs[i]->id);
-		free(r->gs[i]);
-	}
+	for (size_t i = 0; i < r->ngs; i++) given_free(r->gs[i]);
 	tb_free(r->by);
 	tb_free(r->records);
 	free(r->hs);

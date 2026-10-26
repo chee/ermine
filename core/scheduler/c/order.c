@@ -375,6 +375,19 @@ void od_started(order *o, od_item *p) {
 
 void od_sees(order *o, od_item *p, pm *next) {
 	if (p->values == next) return;
+	// one gone is after nothing (no edge): not held, so it can be freed
+	if (next) {
+		od_item *gone[8];
+		size_t ngone;
+		do {
+			ngone = 0;
+			for (size_t i = 0; i < next->cap && ngone < 8; i++) {
+				od_item *q = (od_item *)next->keys[i];
+				if (q != NULL && !q->alive) gone[ngone++] = q;
+			}
+			for (size_t i = 0; i < ngone; i++) pm_delete(next, gone[i]);
+		} while (ngone == 8);
+	}
 	bool changed = false;
 	if (p->values)
 		for (size_t i = 0; i < p->values->cap; i++) {
@@ -402,6 +415,7 @@ void od_sees(order *o, od_item *p, pm *next) {
 }
 
 void od_waits(order *o, od_item *p, od_item *q) {
+	if (q != NULL && !q->alive) q = NULL;
 	if (p->after == q) return;
 	bool changed = false;
 	if (p->after) {
@@ -443,6 +457,15 @@ void od_gone(order *o, od_item *p) {
 		local(o, o->work, o->nwork);
 		o->nwork = 0;
 	}
+	// what was after it is after it no more (no edge to one gone): nothing names it, so it can be
+	// freed; nor does the heap, made again
+	for (size_t i = 0; i < p->rev.cap; i++) {
+		od_item *x = (od_item *)p->rev.keys[i];
+		if (x == NULL) continue;
+		if (x->values) pm_delete(x->values, p);
+		if (x->after == p) x->after = NULL;
+	}
+	if (o->nheap > 0) o->heap_stale = true;
 	pm_clear(&p->rev);
 	// out of the live list
 	if (p->slot < o->nlive && o->live[p->slot] == p) {

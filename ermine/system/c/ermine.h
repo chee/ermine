@@ -28,11 +28,12 @@
 //     shared: es_node_of es_id_of es_id_through es_ask_placing es_place_under es_build
 //       es_folder_slot: what the reads and writes, and B and D, are made from
 //     reads: es_get_node es_has_node es_read es_read_attributes es_read_children es_read_all
-//       es_read_all_attributes es_read_all_children es_read_entries es_peep es_list es_watch
-//       es_unwatch es_get_args es_children_free es_versions_free es_items_free
+//       es_read_all_attributes es_read_all_children es_read_entries es_peep es_list
+//       es_get_args es_children_free es_versions_free es_items_free
 //     writes: es_ensure_node_at es_create_node_at es_ref_at es_patch_at es_patch_attributes_at
 //       es_patch_children_at es_place_at es_unplace_at es_rename_at es_remove_at, and the placement
 //       asks (place on the slot, then read and edit of the node)
+//     pipes (system.ts' pipe): es_pipe_at es_pipes_told es_pipe_looped
 //
 //   B computers.c  memos, effects, their nodes and names, status, runs
 //     state: es_computers_new es_computers_free es_computer_forget
@@ -52,14 +53,15 @@
 //       handles shown as paths
 //     call records (calls.ts): es_calls_new es_calls_free es_calls_next es_calls_begin es_calls_end
 //       es_calls_going es_calls_calling es_calls_open es_calls_read es_calls_made es_calls_latest
-//       es_calls_wait es_calls_answered es_calls_waits es_waits_free es_calls_stop
-//     promises: es_promise_new es_promise_resolve es_promise_reject es_promise_then
+//       es_calls_drop es_calls_wait es_calls_answered es_calls_waits es_waits_free es_calls_stop
+//     promises: es_promise_new es_promise_release es_promise_value es_promise_resolve
+//       es_promise_reject es_promise_then
 //
 //   D host.c  createErmine and everything the host has
 //     errors: es_fail es_fail_refusal es_fail_feature es_fail_text es_thrown es_clear_thrown
 //       es_not_yet es_code_name es_out_code (written: what every stub returns)
 //     lifecycle: es_create (in ermine.ts' order) es_close es_start es_refused_free es_stop
-//       es_started_status es_pulse
+//       es_started_status es_started_free es_pulse
 //     the host's side: es_host_context es_get_process_context es_handle_of es_data_of
 //       es_records_run es_records_run_held es_records_call es_records_waits es_calling es_features
 //       es_create_box_at es_box_place_at es_box_unplace_at
@@ -107,9 +109,13 @@
 //
 // MEMORY. values given are borrowed for the call, and held (op_ref) by a callee that holds on to
 // them. values given back are borrowed from the table, good until the node changes, unless the
-// struct says they are its own (op_free them with it: es_*_free). handles, contexts, boxes,
-// functions and promises are the ermine's until es_close. strings in result structs are malloc'd,
-// freed with the struct. out of memory aborts (es_alloc).
+// struct says they are its own (op_free them with it: es_*_free); a change's view too. what the
+// reference keeps in WeakMaps goes, here, with what it is kept by [chee 10-26: "the C should
+// "garbage collect" via something like a weakmap"]: a scope's info, records and pipes as the
+// scheduler frees the scope (sc_on_free), a process's context with its scope, a view with its
+// change, a promise once settled and let go of, an entry out of the table after the pulse. handles
+// (one a name), boxes and functions are the ermine's until es_close. strings in result structs are
+// malloc'd, freed with the struct. out of memory aborts (es_alloc).
 #ifndef ERMINE_SYSTEM_H
 #define ERMINE_SYSTEM_H
 
@@ -426,8 +432,11 @@ static inline es_function *es_function_of(const op_value *v) { return es_live_of
 // that gives one ends pending, and its settling is its result (B for computes, C for calls and
 // processes' setups)
 typedef struct es_promise es_promise;
-static inline op_value *es_promise_value(const es_promise *p) { return es_live("promise", p); }
-static inline es_promise *es_promise_of(const op_value *v) { return es_live_of(v, "promise"); }
+// its stand-in: es_live's, and the promise's serial (a stand-in of one freed names no other)
+op_value *es_promise_value(const es_promise *p);
+// the promise a value is the stand-in of, when this ermine made it (es_promise_new); NULL: v is none,
+// or a stand-in it did not make, which is data, as a handle it did not make is
+es_promise *es_promise_of(es_ermine *e, const op_value *v);
 
 // --- writes and contexts -------------------------------------------------------------------------------
 
@@ -477,15 +486,17 @@ typedef struct es_box {
 
 // a process context (ProcessContext) with its inner side (Inner): where and as whom a thing is done.
 // the public fields first (features are given it: onWrite); the inner side is the functions'. one per
-// process, one for the host (process 0); they last till es_close. made by es_context_new
+// process, one for the host (process 0). a process's lasts while its scope does: freed with it
+// (torn down, held by nothing: es_started_free, and no record or box of it); the host's, and any
+// not freed by es_close, till es_free. made by es_context_new
 struct es_context {
 	es_ermine *ermine;
 	// public ----------------------------------------------------------------------------------
 	sc_scope *scope;
 	const es_box *box;
-	// the process's cwd (the folder it is in), its path in its box (the host's: none), its args
-	char **cwd;
-	size_t ncwd;
+	// the folder the process is in, its path in its box (the host's: none), its args
+	char **folder;
+	size_t nfolder;
 	char **at;
 	size_t nat;
 	char **args;
@@ -508,8 +519,8 @@ struct es_context {
 typedef struct {
 	sc_scope *scope;
 	const es_box *box;
-	const char *const *cwd;
-	size_t ncwd;
+	const char *const *folder;
+	size_t nfolder;
 	const char *const *at;
 	size_t nat;
 	const char *const *args;
@@ -576,7 +587,7 @@ typedef struct {
 	size_t n;
 } es_children;
 
-// a write landing at a watched node (Watched); refused: no patches, no change, no value
+// a write landing at a node a pipe listens to (Watched); refused: no patches, no change, no value
 typedef struct {
 	const op_patch *patches;
 	size_t npatches;
@@ -584,8 +595,29 @@ typedef struct {
 	const op_value *value;
 	int refused;
 } es_watched;
-typedef void (*es_watch_fn)(void *ctx, const es_watched *w);
-typedef struct es_watching es_watching;
+// a pipe's functions, given the context that made it (it acts as that one): tell is told the write,
+// 0 or a code (it threw: the pipe's status is failed). there and back give the patches to write: given
+// 0 and n 0 both are none; own, if given, is let go of after they are written
+typedef int (*es_pipe_tell)(es_context *c, void *ctx, const es_watched *w);
+typedef struct {
+	const op_patch *patches;
+	size_t n;
+	int given;
+	op_value *own;
+} es_pipe_gave;
+typedef int (*es_pipe_map)(es_context *c, void *ctx, const es_watched *w, es_pipe_gave *out);
+// pipe(from, fn): tell. pipe(from, to, fnA?, fnB?): has_to, there (NULL: the write's patches, a mirror)
+// and back (NULL: no way back). write: timing "write", else "pulse". name: none when it has neither text
+// nor steps (then pipe-<n>, by its order in its owner's run)
+typedef struct {
+	es_pipe_tell tell;
+	int has_to;
+	es_target to;
+	es_pipe_map there, back;
+	void *ctx;
+	int write;
+	es_at name;
+} es_pipe_options;
 
 // what a pending one waits on (Waiting): a memo it read that is pending (its node by path, none: outside),
 // a send to nothing (path, none: outside; since), a process's code not at its path yet (path), a
@@ -664,8 +696,8 @@ typedef struct {
 	size_t nmade;
 } es_call_view;
 
-// what made a change, one step (Writer). the protocol's names: "computer", "method", "outside"
-typedef enum { ES_WRITER_COMPUTER, ES_WRITER_ACTION, ES_WRITER_OUTSIDE } es_writer_kind;
+// what made a change, one step (Writer). the protocol's names: "computer", "method", "pipe", "outside"
+typedef enum { ES_WRITER_COMPUTER, ES_WRITER_ACTION, ES_WRITER_PIPE, ES_WRITER_OUTSIDE } es_writer_kind;
 typedef struct {
 	es_writer_kind kind;
 	int has_path;
@@ -971,7 +1003,8 @@ struct es_ermine {
 	void *on_create_function_ctx;
 	// the site of the call in progress (es_enter), for a write's header outside a run
 	const ch_site *site;
-	// every handle, by address → its es_handle_data (A's); handles last till es_close
+	// every handle, by address → its es_handle_data (A's); handles last till es_close, one a name
+	// (es_mint)
 	pm handles;
 	// why a process is stopping, by its node's id (strings), said by stop before its scope goes
 	es_map whys;
@@ -1019,7 +1052,7 @@ void es_nodes_free(struct es_nodes *x);
 // a context made. its scope, box and paths copied; the guard made when the ermine has a policy
 es_context *es_context_new(es_ermine *e, const es_context_options *o);
 void es_context_free(es_context *c);
-// p resolved: bare, inside at; ./ and ../ from cwd; / the box's root; above "/": ES_NOTHING_THERE
+// p resolved: bare, inside at; ./ and ../ from folder; / the box's root; above "/": ES_NOTHING_THERE
 int es_resolve(es_context *c, es_at p, es_names *out);
 void es_names_free(es_names *names);
 // f with c's scope open (explicit: for the host's and features' code); f's code
@@ -1103,19 +1136,26 @@ int es_folder_slot(es_context *c, const char *const *path, size_t npath, nd_entr
 
 // what a reader waits on, the nodes it read that were not there (base.missing): by the reader (a
 // computer's node, in which run: n; else the context's node), the paths from the root. a read of a node
-// not there is ES_PENDING, tracked, with this kept; a status shows each as the reader's path
+// not there is ES_PENDING, tracked, with this held; a status shows each as the reader's path
 typedef struct {
 	int has_n;
 	unsigned n;
 	es_names *paths;
 	size_t npaths;
+	// the paths as text, each once (a set of keys; the values are not used)
+	es_map keys;
 } es_missing;
-// the reader's, borrowed; NULL: none
+// the reader's, borrowed; NULL: none. held only where it is shown: a computer's, for its latest run
+// (gone with it: es_missing_drop), and a process's while its setup runs (es_setting); a read anywhere
+// else holds nothing
 const es_missing *es_missing_of(es_ermine *e, const char *id);
+void es_missing_drop(es_ermine *e, const char *id);
+// process's setup is running (1) or has ended (0, its entry let go)
+void es_setting(es_ermine *e, const char *process, int running);
 // abs, a path from the root, as c sees it: in c's box, the rest; 1 and *out, 0: outside it
 int es_path_seen(es_context *c, const char *const *abs, size_t n, es_names *out);
 
-// reads. paths: a bare name inside the process's node (the host's: the root), ./ its cwd, ../ above, /
+// reads. paths: a bare name inside the process's node (the host's: the root), ./ its folder, ../ above, /
 // its box's root. a pending memo with no value: ES_PENDING
 int es_get_node(es_context *c, es_at p, es_handle **out);
 int es_has_node(es_context *c, es_target x, int *out);
@@ -1131,10 +1171,6 @@ int es_read_entries(es_context *c, es_target x, es_items *out);
 // f with nothing it reads tracked; a pending memo it reads is none, not ES_PENDING
 int es_peep(es_context *c, es_thunk f, void *ctx);
 int es_list(es_context *c, es_target x, es_names *out);
-// fn told each write landing at x (asked read as it is made), stopped by the owner's teardown or by
-// es_unwatch
-int es_watch(es_context *c, es_target x, es_watch_fn fn, void *ctx, es_watching **out);
-void es_unwatch(es_watching *w);
 const char *const *es_get_args(es_context *c, size_t *n);
 void es_children_free(es_children *c);
 void es_versions_free(es_versions *v);
@@ -1159,6 +1195,19 @@ int es_unplace_at(es_context *c, es_at p, const ch_site *site);
 int es_rename_at(es_context *c, es_at from, es_at to, const ch_site *site);
 // the host's only: x unplaced and its entries deleted
 int es_remove_at(es_context *c, es_target x, const ch_site *site);
+// a node of its own at o->name, told each write at from (and at to, with a way back): asked read of
+// from and edit of to as it is made, and read of from at each write told. its writes are its own, asked
+// as c. "pulse" timing: told at the next pulse (es_pipes_told), "write": as the write lands. a write
+// that would change nothing is not made; a pipe told more than 64 pipes' writes in a row, or that deep,
+// is looping, told no more. a throw fails its own status. made again by a later run of its owner: the
+// same node, the new functions. gone with its scope. out: its node's handle
+int es_pipe_at(es_context *c, es_target from, const es_pipe_options *o, es_handle **out,
+	const ch_site *site);
+#define es_pipe(...) es_pipe_at(__VA_ARGS__, CH_HERE)
+// the writes pipes heard, told: before the scheduler's pulse
+void es_pipes_told(es_ermine *e);
+// whether the node is a pipe whose status says looping
+int es_pipe_looped(es_ermine *e, const char *id);
 #define es_ensure_node(...) es_ensure_node_at(__VA_ARGS__, CH_HERE)
 #define es_create_node(...) es_create_node_at(__VA_ARGS__, CH_HERE)
 #define es_ref(...) es_ref_at(__VA_ARGS__, CH_HERE)
@@ -1233,9 +1282,10 @@ int es_execute_action_at(es_context *c, es_target x, const op_value *const *args
 // in an action: who called it. 1 and *out, 0: not in one
 int es_get_caller(es_context *c, es_caller *out);
 // where the open call's caller is placed, as guard's caller hook has it (ctx: the context asking): the
-// nearest call scope's caller node, a process's at, the host's none. 1 and *from, *nfrom (*from NULL:
-// the host); 0: no call open. the path is the caller's context's own
-int es_caller_place(void *ctx, const char *const **from, size_t *nfrom);
+// nearest call scope's caller node, a process's at and box (its folder's id), the host's none. 1 and
+// *from, *nfrom (*from NULL: the host), *box (the host: left as given); 0: no call open. the path and
+// the id are the caller's context's own
+int es_caller_place(void *ctx, const char *const **from, size_t *nfrom, tb_key *box);
 void es_caller_free(es_caller *c);
 // fn as the scope open goes (through onTeardown): why "replaced" (the owner ran again), "ended", or the
 // reason a stop was given
@@ -1246,7 +1296,7 @@ int es_add_teardown(es_context *c, es_teardown fn, void *ctx);
 int es_explain(es_context *c, es_target x, const op_key *key, size_t nkey, es_explained **out);
 int es_explain_attributes(es_context *c, es_target x, es_explained **out);
 int es_explain_children(es_context *c, es_target x, es_explained **out);
-// the same, for a change a program was shown (a read's from.view, a watch's)
+// the same, for a change a program was shown (a read's from.view, a pipe's)
 int es_explain_view(es_context *c, const es_change_view *v, es_explained **out);
 void es_explained_free(es_explained *x);
 // a change's view, made once (held, so explain can take it back); and its change
@@ -1263,7 +1313,12 @@ op_value *es_show(es_context *c, const op_value *v);
 
 // promises. settling a second time: nothing. then: fn(ctx, ok, value, error) at once if settled, else as it
 // settles (value borrowed for the call; error a message)
+// a promise is held by its maker (from es_promise_new) and by each then not told yet: settled and
+// held by nothing, it is freed, and a stand-in of it is data. es_promise_release lets go of the
+// maker's hold (never let go: kept till es_close) [builder's pick, 10-26: the reference's promise
+// goes with its last reference]
 es_promise *es_promise_new(es_ermine *e);
+void es_promise_release(es_promise *p);
 void es_promise_resolve(es_promise *p, op_value *value);
 void es_promise_reject(es_promise *p, const char *message);
 void es_promise_then(es_promise *p,
@@ -1291,6 +1346,9 @@ void es_calls_made(es_ermine *e, sc_scope *scope, const char *kind, const char *
 	const char *const *path, size_t npath);
 // the handler's latest call, tracked; NULL: none. borrowed till the next record there
 const es_call *es_calls_latest(es_ermine *e, const char *id);
+// a handler gone (its placement's scope gone, or its node removed): its record let go, its readers
+// marked; a call of it still going holds none as it ends
+void es_calls_drop(es_ermine *e, const char *id);
 // a send to nothing: waiting from caller (a computer's node, in its run) at the target (at: its path,
 // or its id with has_path 0), looked up in the box (its root's id), till scope goes. answered: a send
 // from caller there answered, its wait gone
@@ -1336,7 +1394,7 @@ int es_close(es_ermine *e);
 void es_free(es_ermine *e);
 es_context *es_host_context(es_ermine *e);
 // a process at at (in box, NULL: the root) running fn, its setup, given c, with the process's scope
-// open. its cwd: the folder it is in. setup giving PENDING: the process pending, what it waits on in
+// open. its folder: the one it is in. setup giving PENDING: the process pending, what it waits on in
 // ES_WAITING; failing: its error in the status, the process still there; a promise: pending till it
 // settles. refused (taken, or a name code): ES_TAKEN, and *refused says which
 int es_start(es_ermine *e, es_program fn, void *ctx, es_at at, const es_start_options *o,
@@ -1345,6 +1403,10 @@ void es_refused_free(es_refused *r);
 // stop (why NULL: "ended"); status: getStatus of its node
 int es_stop(es_started *s, const char *why);
 int es_started_status(es_started *s, es_status *out);
+// the host lets go of a process it started (the TypeScript's Process, gone with its last
+// reference): stopped first if it runs ("ended"). its memory goes once nothing waits on it (its
+// setup's promise settled); never let go: at es_free
+void es_started_free(es_started *s);
 // one pulse now
 int es_pulse(es_context *c);
 // a running process's context (NULL: the host's); NULL: stopped, or not this ermine's
@@ -1369,9 +1431,20 @@ const es_shown *es_features(es_ermine *e, size_t *n);
 int es_create_box_at(es_context *c, es_at where, es_box **out, const ch_site *site);
 int es_box_place_at(es_box *b, es_at at, es_target x, const ch_site *site);
 int es_box_unplace_at(es_box *b, es_at at, const ch_site *site);
-// the boxes a program made (createBox), in the order made
+// the boxes walked by path (the index: boxIndex without the root's), in the order made. one box a
+// folder: createBox at a folder a box is at gives that box. a box whose folder nothing reaches and that
+// holds no process rows is let go from the index as the boxes are walked (es_box_drop), still the
+// program's; it comes back as a process starts in it or createBox makes it again
 size_t es_box_count(es_ermine *e);
 const es_box *es_box_nth(es_ermine *e, size_t i);
+// whether b's rows hold a process (a row under any name)
+int es_box_rowed(es_ermine *e, const es_box *b);
+void es_box_drop(es_ermine *e, const es_box *b);
+// names may have changed: the boxes' paths are walked again (a children fact, a process's node placed
+// or gone, a box joining the index)
+void es_names_changed(es_ermine *e);
+// the watch on the children facts stopped (es_close)
+void es_nodes_stop(es_ermine *e);
 #define es_create_box(...) es_create_box_at(__VA_ARGS__, CH_HERE)
 #define es_box_place(...) es_box_place_at(__VA_ARGS__, CH_HERE)
 #define es_box_unplace(...) es_box_unplace_at(__VA_ARGS__, CH_HERE)

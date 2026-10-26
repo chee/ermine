@@ -70,11 +70,15 @@ struct sc_scope {
 	teardown_fn *teardowns;
 	void *user;
 	unsigned nteardowns, capteardowns;
+	// its holds (its maker's, sc_retain's, what is under it, its runs): gone and none left, freed.
+	// at: where it is in all
+	size_t refs, at;
 	unsigned char state;
 	unsigned char kind;
 	// old: made by an earlier run of its computer, not made again by the run going on yet (claim),
-	// alive till that run is done. deed: made in its effect's act, gone before the next act
-	bool old, deed;
+	// alive till that run is done. deed: made in its effect's act, gone before the next act.
+	// listed: in unheld, to be freed as the pulse ends
+	bool old, deed, listed;
 	// computers only, from here
 	od_item od;
 	cs_item cs;
@@ -166,7 +170,7 @@ typedef struct queue {
 	size_t n, head, cap, live;
 } queue;
 
-typedef enum { ON_TRACK, ON_MARK, ON_START, ON_RETURN, ON_END, ON_EFFECT, ON_SETTLE, ON_UNTRACK, ON_FIRST, ON_PULSED, ON_KINDS } listening;
+typedef enum { ON_TRACK, ON_MARK, ON_START, ON_RETURN, ON_END, ON_EFFECT, ON_SETTLE, ON_UNTRACK, ON_FIRST, ON_PULSED, ON_FREE, ON_KINDS } listening;
 
 struct sc_listener {
 	sc_scheduler *s;
@@ -181,6 +185,7 @@ struct sc_listener {
 		sc_settle_fn settle;
 		sc_tracking_end_fn untrack;
 		sc_after_pulse_fn pulsed;
+		sc_free_fn freed;
 	} f;
 	void *data;
 };
@@ -197,8 +202,12 @@ struct sc_scheduler {
 	order *order;
 	causes *causes;
 	size_t nlive;
+	// every scope not freed yet; the computers gone and held by nothing, to free as the pulse ends
+	// (what a pulse's causes and order name stays good through it)
 	sc_scope **all;
 	size_t nall, capall;
+	sc_scope **unheld;
+	size_t nunheld, capunheld;
 	// the effects to act, the early ones apart
 	queue acts, earlies;
 	// settled promises, for the next pulse
@@ -209,6 +218,8 @@ struct sc_scheduler {
 	size_t nqueued, capqueued;
 	uint64_t made;
 	uint64_t tick;
+	// sc_free going: nothing is let go one by one
+	bool freeing;
 	// pulses ended: the one going on, or next
 	uint64_t pulses;
 	bool pulsing;
@@ -317,6 +328,9 @@ sc_listener *sc_on_tracking_end(sc_scheduler *s, sc_tracking_end_fn f, void *dat
 sc_listener *sc_on_after_pulse(sc_scheduler *s, sc_after_pulse_fn f, void *data) {
 	return listen(s, ON_PULSED, (sc_listener){.f.pulsed = f, .data = data});
 }
+sc_listener *sc_on_free(sc_scheduler *s, sc_free_fn f, void *data) {
+	return listen(s, ON_FREE, (sc_listener){.f.freed = f, .data = data});
+}
 
 #define EACH(s, K, member, ...) \
 	for (size_t i_ = 0; i_ < (s)->nlisteners[K]; i_++) \
@@ -328,6 +342,46 @@ static void drop_value(sc_scheduler *s, void *v) {
 
 static bool same(const sc_scope *c, const void *a, const void *b) {
 	return c->def.equal ? c->def.equal(a, b, c->def.data) : a == b;
+}
+
+// holds
+
+static void free_scope(sc_scope *o);
+
+// gone and held by nothing: freed, a plain scope now, a computer as the pulse ends
+static void let_go(sc_scope *o) {
+	if (o->state != GONE || o->refs > 0 || o->listed) return;
+	sc_scheduler *s = o->s;
+	if (o->kind == PLAIN) {
+		free_scope(o);
+		return;
+	}
+	o->listed = true;
+	VEC_PUSH(s->unheld, s->nunheld, s->capunheld, o);
+}
+
+static void unhold(sc_scope *o) {
+	if (o->s->freeing) return;
+	o->refs--;
+	let_go(o);
+}
+
+sc_scope *sc_retain(sc_scope *o) {
+	o->refs++;
+	return o;
+}
+void sc_release(sc_scope *o) { unhold(o); }
+
+// a loop's computers (due, a run's, cuts), held while it is: it is said past their pulse (sc_more's
+// through), and they may go in it
+static sc_scope **loop_hold(sc_scope **v, size_t n) {
+	for (size_t i = 0; i < n; i++) v[i]->refs++;
+	return v;
+}
+static void loop_drop(sc_scheduler *s, sc_scope **v, size_t n) {
+	if (!s->freeing)
+		for (size_t i = 0; i < n; i++) unhold(v[i]);
+	free(v);
 }
 
 // runs
@@ -346,9 +400,13 @@ static void ran_release(sc_run *r) {
 		pm_clear(r->values);
 		free(r->values);
 	}
-	free(r->loop);
+	loop_drop(r->s, r->loop, r->nloop);
 	free(r->reads);
+	// a run holds its computer
+	sc_scope *c = r->c;
+	sc_scheduler *s = r->s;
 	free(r);
+	if (!s->freeing) unhold(c);
 }
 
 // an emptied set of writers, kept on the computation for its next run
@@ -371,7 +429,7 @@ static void run_reset(sc_run *r) {
 	if (!r->adopted && r->values) retire(r->c, r->values);
 	r->values = NULL;
 	r->adopted = false;
-	free(r->loop);
+	loop_drop(r->s, r->loop, r->nloop);
 	r->loop = NULL;
 	r->nloop = 0;
 	r->nreads = 0;
@@ -428,7 +486,10 @@ static sc_scope *make_scope(sc_scheduler *s, kind_t kind, sc_scope *parent, cons
 	sc_scope *o = xalloc(kind == PLAIN ? PLAIN_SIZE : sizeof *o);
 	o->s = s;
 	o->n = ++s->made;
+	// its maker's hold; what is under a scope holds it
+	o->refs = 1;
 	o->parent = parent;
+	if (parent) parent->refs++;
 	if (kind == PLAIN) {
 		info_block *b = block_new(n);
 		for (size_t i = 0; i < n; i++) b->pairs[i] = info[i];
@@ -451,6 +512,7 @@ static sc_scope *make_scope(sc_scheduler *s, kind_t kind, sc_scope *parent, cons
 		if (o->older) o->older->newer = o;
 		parent->newest = o;
 	}
+	o->at = s->nall;
 	VEC_PUSH(s->all, s->nall, s->capall, o);
 	return o;
 }
@@ -683,9 +745,12 @@ static char *dispose(sc_scope *o) {
 			o->queuedCleanups = o->aside = o->deeds = NULL;
 			o->nqueuedCleanups = o->capqueuedCleanups = o->naside = o->capaside = o->ndeeds = o->capdeeds = 0;
 		}
-		free(o->cuts);
+		loop_drop(s, o->cuts, o->ncuts);
 		o->cuts = NULL;
 		o->ncuts = 0;
+		loop_drop(s, o->loop, o->nloop);
+		o->loop = NULL;
+		o->nloop = 0;
 	}
 	size_t nkids;
 	sc_scope **kids = cut(o, &nkids);
@@ -695,10 +760,12 @@ static char *dispose(sc_scope *o) {
 	o->state = GONE;
 	// gone: by it names no run
 	if (o->kind != PLAIN && o->ran) {
-		ran_release(o->ran);
+		sc_run *r = o->ran;
 		o->ran = NULL;
+		ran_release(r);
 	}
 	unlink_scope(o);
+	let_go(o);
 	return failed;
 }
 
@@ -752,10 +819,11 @@ static void dropUnclaimedChildren(sc_scheduler *s, sc_scope *c, sc_run *r) {
 		c->aside = NULL;
 		c->naside = c->capaside = 0;
 		if (r->nloop > 0) {
-			free(c->cuts);
+			loop_drop(s, c->cuts, c->ncuts);
 			c->cuts = xalloc(r->nloop * sizeof *c->cuts);
 			memcpy(c->cuts, r->loop, r->nloop * sizeof *c->cuts);
 			c->ncuts = r->nloop;
+			loop_hold(c->cuts, c->ncuts);
 		}
 	}
 }
@@ -800,7 +868,7 @@ static char *runQueuedCleanups(sc_scheduler *s) {
 			ran_release(r);
 		}
 		free(fs);
-		free(cuts);
+		loop_drop(s, cuts, ncuts);
 	}
 	s->nqueued = 0;
 	s->reading = was;
@@ -851,25 +919,26 @@ static bool due(sc_scheduler *s, sc_scope *c, uint64_t t, sc_run *writer, bool o
 		loop = xalloc(n * sizeof *loop);
 		for (size_t i = 0; i < n; i++) loop[i] = of_cs(items[i]);
 		free(items);
+		loop_hold(loop, n);
 	}
 	// its own cleanups before an act write what it reads: one rerun, no loop (a second in a row is)
 	if (loop && writer && writer->c == c && c->cleaning && !c->cleaned) {
-		free(loop);
+		loop_drop(s, loop, n);
 		loop = NULL;
 	}
 	// a loop mark from a run known to loop: the loop is cut there, and the run ends looping
 	if (loop && writer->nloop > 0) {
 		if (!old) writer->cut = true;
-		free(loop);
+		loop_drop(s, loop, n);
 		return false;
 	}
 	bool on = loop != NULL;
 	if (!old) {
-		free(c->loop);
+		loop_drop(s, c->loop, c->nloop);
 		c->loop = loop;
 		c->nloop = loop ? n : 0;
-	} else {
-		free(loop);
+	} else if (loop) {
+		loop_drop(s, loop, n);
 	}
 	// a looping computer is due again only by a change from outside the loop
 	if (c->looping) {
@@ -1021,7 +1090,7 @@ static void finish(sc_scheduler *s, sc_run *r, sc_ended ended, int equal, char *
 	free(error);
 	// ended, unless awaited: no longer a run known to loop
 	if (ended != SC_PENDED) {
-		free(r->loop);
+		loop_drop(s, r->loop, r->nloop);
 		r->loop = NULL;
 		r->nloop = 0;
 	}
@@ -1173,6 +1242,7 @@ static void begin(sc_scheduler *s, sc_scope *c, int rank) {
 		r = xalloc(sizeof *r);
 		r->s = s;
 		r->c = c;
+		c->refs++;
 	}
 	r->refs = 1;
 	r->n = n;
@@ -1242,7 +1312,7 @@ static void begin(sc_scheduler *s, sc_scope *c, int rank) {
 		discard(s, out);
 		// no mark reached it in the stopped run: it runs again as flagged as it was
 		if (!od_has(s->order, &c->od)) {
-			free(c->loop);
+			loop_drop(s, c->loop, c->nloop);
 			c->loop = r->loop;
 			c->nloop = r->nloop;
 			r->loop = NULL;
@@ -1365,6 +1435,58 @@ static char *take(sc_scheduler *s, queue *q) {
 	return unbracket(s, outer);
 }
 
+// freeing
+
+// a computer's own memory (its scope's is free_scope's), at sc_free or as it is freed
+static void computer_free(sc_scheduler *s, sc_scope *o) {
+	tg_node_free(o->node);
+	pm_clear(&o->wrote);
+	cs_forget(&o->cs);
+	pm_clear(&o->cs.kept);
+	if (o->od.values) {
+		pm_clear(o->od.values);
+		free(o->od.values);
+	}
+	if (o->spare) {
+		pm_clear(o->spare);
+		free(o->spare);
+	}
+	pm_clear(&o->od.rev);
+	free(o->aside);
+	free(o->queuedCleanups);
+	free(o->deeds);
+	loop_drop(s, o->cuts, o->ncuts);
+	loop_drop(s, o->loop, o->nloop);
+	if (o->ran) ran_release(o->ran);
+	if (o->has_last) drop_value(s, o->last);
+}
+
+// gone and held by nothing: told, out of all, its memory let go, and its hold on its parent
+static void free_scope(sc_scope *o) {
+	sc_scheduler *s = o->s;
+	EACH(s, ON_FREE, freed, o);
+	sc_scope *last = s->all[--s->nall];
+	s->all[o->at] = last;
+	last->at = o->at;
+	sc_scope *parent = o->parent;
+	free(o->teardowns);
+	free(o->info);
+	if (o->kind != PLAIN) computer_free(s, o);
+	free(o);
+	if (parent) unhold(parent);
+}
+
+// the computers gone and held by nothing, freed as the pulse ends: none is named by its causes or
+// order now. freeing one may let go of its parent, freed here too
+static void free_unheld(sc_scheduler *s) {
+	for (size_t i = 0; i < s->nunheld; i++) {
+		sc_scope *o = s->unheld[i];
+		o->listed = false;
+		if (o->state == GONE && o->refs == 0) free_scope(o);
+	}
+	s->nunheld = 0;
+}
+
 // pulses
 
 // keys nobody reads, forgotten now and then: any the ends and disposals left
@@ -1412,6 +1534,7 @@ void sc_pulse(sc_scheduler *s) {
 	cs_end(s->causes);
 	s->pulses++;
 	sweep(s);
+	free_unheld(s);
 	// over: told, unless it was left early. what they throw is held, as any listener's; a pulse
 	// called there is a new one
 	if (!failed) {
@@ -1577,6 +1700,7 @@ void sc_promise_free(sc_promise *p) {
 // the end
 
 void sc_free(sc_scheduler *s) {
+	s->freeing = true;
 	cs_end(s->causes);
 	for (size_t i = 0; i < s->nall; i++)
 		if (s->all[i]->kind != PLAIN) tg_untrack(s->all[i]->node, NULL);
@@ -1597,28 +1721,7 @@ void sc_free(sc_scheduler *s) {
 		sc_scope *o = s->all[i];
 		free(o->teardowns);
 		free(o->info);
-		if (o->kind != PLAIN) {
-			tg_node_free(o->node);
-			pm_clear(&o->wrote);
-			cs_forget(&o->cs);
-			pm_clear(&o->cs.kept);
-			if (o->od.values) {
-				pm_clear(o->od.values);
-				free(o->od.values);
-			}
-			if (o->spare) {
-				pm_clear(o->spare);
-				free(o->spare);
-			}
-			pm_clear(&o->od.rev);
-			free(o->aside);
-			free(o->queuedCleanups);
-			free(o->deeds);
-			free(o->cuts);
-			free(o->loop);
-			if (o->ran) ran_release(o->ran);
-			if (o->has_last) drop_value(s, o->last);
-		}
+		if (o->kind != PLAIN) computer_free(s, o);
 		free(o);
 	}
 	for (size_t i = 0; i < s->nodes.cap; i++)
@@ -1632,6 +1735,7 @@ void sc_free(sc_scheduler *s) {
 		free(s->listeners[k]);
 	}
 	free(s->all);
+	free(s->unheld);
 	free(s->acts.v);
 	free(s->earlies.v);
 	free(s->landed);
