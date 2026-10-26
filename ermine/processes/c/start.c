@@ -7,6 +7,7 @@
 
 #include "runs.h"
 #include "../../../core/places/c/status.h"
+#include "../../../core/scheduler/c/ptrmap.h"
 #include "processes.h"
 
 #define PENDING_NAME "ermine.pending"
@@ -38,8 +39,8 @@ struct pr_process {
 	char **args;
 	size_t nargs;
 	op_value *at_value;
-	char **cwd;
-	size_t ncwd;
+	char **folder;
+	size_t nfolder;
 	// its scope's: ["process", at], [PL_NODE, id]
 	sc_pair info[2];
 	op_value *id_value;
@@ -51,6 +52,9 @@ struct pr_process {
 	void (*stop)(pr_process *p, void *data);
 	void *data;
 	int ended, rowed;
+	// let go of by its holder (pr_drop): freed as its scope is. slot: where it is in all
+	int dropped;
+	size_t slot;
 	// the sites of its writes: its start's caller's (file NULL: none); its stop's caller's (file
 	// NULL: torn down from above, processes' own)
 	ch_site site, stop_site;
@@ -68,10 +72,36 @@ struct pr {
 	pr_process **all;
 	size_t n, cap;
 	int halted;
+	// a dropped process's scope freed: the process goes. the dropped, by their scope
+	sc_listener *freed;
+	pm dropped;
 	// the default ids: this pr's boot, and how many made
 	unsigned char boot[8];
 	unsigned long made;
 };
+
+static void process_free(pr_process *p) {
+	free(p->id);
+	pr_names_free(p->at, p->nat);
+	pr_names_free(p->folder, p->nfolder);
+	pr_names_free(p->args, p->nargs);
+	free(p->root);
+	op_free(p->at_value);
+	op_free(p->id_value);
+	free(p);
+}
+
+// a scope freed: a dropped process whose it was goes (its info borrowed its at and id till now)
+static void scope_freed(sc_scope *o, void *data) {
+	pr *s = data;
+	pr_process *p = pm_get(&s->dropped, o);
+	if (p == NULL) return;
+	pm_delete(&s->dropped, o);
+	pr_process *last = s->all[--s->n];
+	s->all[p->slot] = last;
+	last->slot = p->slot;
+	process_free(p);
+}
 
 pr *pr_new_at(const pr_setup *setup, const char *file, int line, const char *func) {
 	pr *s = xalloc(sizeof *s);
@@ -90,6 +120,7 @@ pr *pr_new_at(const pr_setup *setup, const char *file, int line, const char *fun
 		s->runs = crn_new(&(crn_setup){
 			.places = setup->places, .table = setup->table, .scheduler = setup->scheduler});
 	}
+	s->freed = sc_on_free(setup->scheduler, scope_freed, s);
 	return s;
 }
 
@@ -101,9 +132,9 @@ size_t pr_at(const pr_process *p, const char *const **out) {
 	*out = (const char *const *)p->at;
 	return p->nat;
 }
-size_t pr_cwd(const pr_process *p, const char *const **out) {
-	*out = (const char *const *)p->cwd;
-	return p->ncwd;
+size_t pr_folder(const pr_process *p, const char *const **out) {
+	*out = (const char *const *)p->folder;
+	return p->nfolder;
 }
 size_t pr_args(const pr_process *p, const char *const **out) {
 	*out = (const char *const *)p->args;
@@ -125,9 +156,9 @@ char **pr_names(const char *const *steps, size_t n, size_t *out) {
 	return copy;
 }
 
-char **pr_cwd_of(const char *const *at, size_t nat, const char *const *cwd, size_t ncwd,
-	int has_cwd, size_t *out) {
-	if (has_cwd) return pr_names(cwd, ncwd, out);
+char **pr_folder_of(const char *const *at, size_t nat, const char *const *folder, size_t nfolder,
+	int has_folder, size_t *out) {
+	if (has_folder) return pr_names(folder, nfolder, out);
 	*out = nat > 0 ? nat - 1 : 0;
 	char **copy = xalloc((*out + 1) * sizeof *copy);
 	for (size_t i = 0; i < *out; i++) copy[i] = xdup(at[i]);
@@ -367,7 +398,7 @@ static void make_attributes(void *data) {
 		}
 	}
 	if (c->o->has_args) op_set(attrs, PR_ARGS, names_value(p->args, p->nargs));
-	op_set(attrs, PR_CWD, names_value(p->cwd, p->ncwd));
+	op_set(attrs, PR_FOLDER, names_value(p->folder, p->nfolder));
 	if (c->o->pin != NULL) op_set(attrs, PR_PIN, op_ref((op_value *)c->o->pin));
 	if (s->s.write != NULL) {
 		op_patch whole = {.has_value = 1, .value = attrs};
@@ -421,7 +452,8 @@ pr_process *pr_start_at(pr *s, pl *where, const char *const *steps, size_t nstep
 	p->root = xdup(pl_root(where).string);
 	p->at = pr_names(steps, nsteps, &p->nat);
 	p->at_value = names_value(p->at, p->nat);
-	p->cwd = pr_cwd_of((const char *const *)p->at, p->nat, o->cwd, o->ncwd, o->has_cwd, &p->ncwd);
+	p->folder = pr_folder_of((const char *const *)p->at, p->nat, o->folder, o->nfolder, o->has_folder,
+		&p->nfolder);
 	p->nargs = o->nargs;
 	p->args = xalloc((o->nargs + 1) * sizeof *p->args);
 	for (size_t i = 0; i < o->nargs; i++) p->args[i] = xdup(o->args[i]);
@@ -437,6 +469,7 @@ pr_process *pr_start_at(pr *s, pl *where, const char *const *steps, size_t nstep
 		s->all = realloc(s->all, s->cap * sizeof *s->all);
 		if (s->all == NULL) abort();
 	}
+	p->slot = s->n;
 	s->all[s->n++] = p;
 	rowing row = {p, 0};
 	sc_run_with_scope(p->scope, add_row, &row);
@@ -466,9 +499,20 @@ void pr_stop_at(pr *s, pr_process *p, const char *file, int line, const char *fu
 	free(sc_teardown(p->scope));
 }
 
+void pr_drop(pr *s, pr_process *p) {
+	if (p->dropped) return;
+	if (!p->ended || sc_scope_alive(p->scope)) pr_stop(s, p);
+	p->dropped = 1;
+	pm_set(&s->dropped, p->scope, p);
+	// the maker's hold: the scope freed once nothing else holds it, and p with it
+	sc_release(p->scope);
+}
+
 void pr_halt(pr *s) {
 	if (s == NULL || s->halted) return;
 	s->halted = 1;
+	if (s->freed != NULL) sc_remove_listener(s->freed);
+	s->freed = NULL;
 	cst_stop(s->statuses);
 	crn_stop(s->runs);
 }
@@ -484,17 +528,8 @@ void pr_free(pr *s) {
 		p->ended = 1;
 		if (p->stop != NULL) call_stop(p);
 	}
-	for (size_t i = 0; i < s->n; i++) {
-		pr_process *p = s->all[i];
-		free(p->id);
-		pr_names_free(p->at, p->nat);
-		pr_names_free(p->cwd, p->ncwd);
-		pr_names_free(p->args, p->nargs);
-		free(p->root);
-		op_free(p->at_value);
-		op_free(p->id_value);
-		free(p);
-	}
+	for (size_t i = 0; i < s->n; i++) process_free(s->all[i]);
+	pm_clear(&s->dropped);
 	free(s->all);
 	if (s->owned) op_free((op_value *)s->owner_info.value);
 	free(s);

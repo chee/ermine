@@ -77,12 +77,12 @@ struct es_computers {
 	// every one not let go of yet
 	made **all;
 	size_t nall, capall;
-	// the id values scopes were made with: the scheduler keeps their info to sc_free
-	op_value **ids;
-	size_t nids, capids;
+	// the id values computers were made with, by the computer, once its made is let go of: the
+	// scheduler borrows its info, so each goes as its computer is freed
+	pm ids;
 	bridge **bridges;
 	size_t nbridges, capbridges;
-	sc_listener *after;
+	sc_listener *after, *freed;
 };
 
 // state ----------------------------------------------------------------------------------------------
@@ -105,10 +105,22 @@ static void sweep(struct es_computers *x) {
 
 static void after_pulse(void *data) { sweep(data); }
 
+// a computer freed: the id value its info borrowed goes
+static void computer_freed(sc_scope *o, void *data) {
+	struct es_computers *x = data;
+	op_value *id = pm_get(&x->ids, o);
+	if (id == NULL) return;
+	pm_delete(&x->ids, o);
+	op_free(id);
+}
+
 struct es_computers *es_computers_new(es_ermine *e) {
 	struct es_computers *x = es_alloc(sizeof *x);
 	x->e = e;
-	if (e->scheduler != NULL) x->after = sc_on_after_pulse(e->scheduler, after_pulse, x);
+	if (e->scheduler != NULL) {
+		x->after = sc_on_after_pulse(e->scheduler, after_pulse, x);
+		x->freed = sc_on_free(e->scheduler, computer_freed, x);
+	}
 	return x;
 }
 
@@ -121,7 +133,13 @@ static void free_made(made *m) {
 	if (es_map_get(&x->by_id, m->id) == m) es_map_del(&x->by_id, m->id);
 	x->all[m->at] = x->all[--x->nall];
 	x->all[m->at]->at = m->at;
-	ES_PUSH(x->ids, x->nids, x->capids, m->id_value);
+	// its computer let go (the maker's hold), its id value kept till that is freed
+	if (m->c != NULL) {
+		pm_set(&x->ids, m->c, m->id_value);
+		sc_release(m->c);
+	} else {
+		op_free(m->id_value);
+	}
 	for (size_t i = 0; i < m->npath; i++) free(m->path[i]);
 	free(m->path);
 	free(m->key);
@@ -136,6 +154,7 @@ static void release(made *m) {
 void es_computers_free(struct es_computers *x) {
 	if (x == NULL) return;
 	if (x->after != NULL) sc_remove_listener(x->after);
+	if (x->freed != NULL) sc_remove_listener(x->freed);
 	for (size_t i = 0; i < x->nbridges; i++) {
 		sc_promise_free(x->bridges[i]->sp);
 		free(x->bridges[i]->id);
@@ -147,8 +166,10 @@ void es_computers_free(struct es_computers *x) {
 		m->holds = 1;
 		release(m);
 	}
-	for (size_t i = 0; i < x->nids; i++) op_free(x->ids[i]);
-	free(x->ids);
+	// what is left is the scheduler's still, freed with it (no info is read after)
+	for (size_t i = 0; i < x->ids.cap; i++)
+		if (x->ids.keys[i] != NULL) op_free(x->ids.vals[i]);
+	pm_clear(&x->ids);
 	free(x->all);
 	es_map_free(&x->by_id);
 	free(x);
@@ -298,7 +319,7 @@ static sc_out ran(made *m, es_out r) {
 	if (r.kind == ES_OUT_FAILED) {
 		return (sc_out){.kind = SC_FAILED, .error = r.error != NULL ? r.error : es_dup("error")};
 	}
-	es_promise *p = es_promise_of(r.value);
+	es_promise *p = es_promise_of(m->x->e, r.value);
 	if (p == NULL) {
 		m->awaiting = 0;
 		return (sc_out){.kind = SC_VALUE, .value = r.value};
@@ -369,6 +390,7 @@ static char *drop(made *m) {
 	es_ermine *e = x->e;
 	char *bad = NULL;
 	named_del(m);
+	es_missing_drop(e, m->id);
 	if (es_map_get(&x->by_id, m->id) == m) es_map_del(&x->by_id, m->id);
 	es_context *c = m->cx;
 	if (c != NULL && m->npath > 0) {
@@ -772,7 +794,7 @@ static int plain_status(es_context *c, es_context *t, const char *id, const op_v
 		return 0;
 	}
 	if (!cst_is_pending(v)) {
-		st->state = "failed";
+		st->state = es_pipe_looped(e, id) ? "looping" : "failed";
 		st->error = error_text(v);
 		return 0;
 	}

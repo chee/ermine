@@ -64,6 +64,12 @@ struct pl_watch {
 	size_t epoch;
 };
 
+// an entry the places owns, and the table it is let go of out of (NULL: at pl_free only)
+typedef struct {
+	nd_entry *node;
+	tb_table *in;
+} owned_t;
+
 // what every view of a places shares: the table, paths and scheduler, the spots, the holds and keeps,
 // the record, the watches and what it owns. let go with the last of the places and views over it
 typedef struct {
@@ -75,6 +81,10 @@ typedef struct {
 	pair *all;
 	// the spots this places made, by the spot. forget finds its own in it
 	pm mine;
+	// tracking told (setup.tracking): the spots read outside any run that no run has tracked since,
+	// let go of as a write reaches them
+	int loosening;
+	pm loose;
 	// a typed array's element read by pl_read: the one number, remade by each
 	op_value scratch;
 	// the first answer that was not SC_OK to the reads told
@@ -93,9 +103,11 @@ typedef struct {
 	size_t seqs, epochs;
 	// the one unread children's writes go through (pl_unread)
 	un_unread *unread;
-	// the entries pl_upsert made: the places', let go of at pl_free
-	nd_entry **owned;
-	size_t nowned, capowned;
+	// the entries pl_upsert made, and those pl_own was given: the places', let go of at pl_free;
+	// one pl_own_in was given (in its table) as pl_sweep finds it out of that table. swept: how
+	// many were left by the last sweep
+	owned_t *owned;
+	size_t nowned, capowned, swept;
 	// where reads go while pl_record runs; none: the scheduler
 	pl_set *into;
 	// the spots it made (none of this places' before); none: not asked
@@ -195,6 +207,7 @@ void pl_connect(pl *l, const pl_setup *setup) {
 	l->s->table = setup->table;
 	l->s->paths = setup->paths;
 	l->s->scheduler = setup->scheduler;
+	l->s->loosening = setup->tracking;
 	ask(l, setup->contributors, setup->ncontributors);
 }
 
@@ -252,10 +265,11 @@ void pl_free(pl *l) {
 	while (s->watches != NULL) pl_stop(s->watches);
 	while (s->alls != NULL) pl_stop(s->alls);
 	free_dead(l);
-	for (size_t i = 0; i < s->nowned; i++) nd_free_entry(s->owned[i]);
+	for (size_t i = 0; i < s->nowned; i++) nd_free_entry(s->owned[i].node);
 	free(s->owned);
 	un_free(s->unread);
 	pm_clear(&s->holds);
+	pm_clear(&s->loose);
 	// blocks still held elsewhere outlive the places: they forget it
 	for (struct pl_made *m = s->mades; m != NULL; m = m->next) m->s = NULL;
 	pm_clear(&s->made_by);
@@ -318,6 +332,8 @@ sc_track_status pl_status(pl *l) {
 static void tell(pl *l, pt_spot *s) {
 	int known = pm_get(&l->s->mine, s) != NULL;
 	if (!known) pm_set(&l->s->mine, s, s);
+	// new, and no record going: loose till a run tracks it (pl_tracking, told in sc_track)
+	if (!known && l->s->loosening && l->s->into == NULL) pm_set(&l->s->loose, s, s);
 	if (l->s->into != NULL) {
 		pl_set_add(l->s->into, s);
 		if (!known && l->s->made != NULL) pl_set_add(l->s->made, s);
@@ -341,7 +357,14 @@ void pl_forget(const void *key, void *ctx) {
 	pt_spot *s = pm_get(&l->s->mine, key);
 	if (s == NULL || tb_get(l->s->kept, tb_symbol(&spots), tb_symbol(key)) != NULL) return;
 	pm_delete(&l->s->mine, key);
+	pm_delete(&l->s->loose, key);
 	pt_release(l->s->paths, s);
+}
+
+void pl_tracking(const void *key, sc_run *run, void *ctx) {
+	(void)run;
+	pl *l = ctx;
+	pm_delete(&l->s->loose, key);
 }
 
 // sets, records and keeps ----------------------------------------------------------------------
@@ -566,8 +589,21 @@ static void add_spots(spots_vec *out, pt_spot *const *spots, size_t n) {
 }
 
 // spots said changed, in one call, by the run open; none: nothing said
-static void say(pl *l, const spots_vec *spots) {
-	if (spots->n > 0) sc_mark(l->s->scheduler, spots->v, spots->n, sc_get_run(l->s->scheduler));
+// the spots marked; a loose one (read outside any run, tracked by none) let go of after, as paths.ts
+// says: no reader holds it, so nothing would run from it
+static void say(pl *l, const spots_vec *marked) {
+	if (marked->n > 0) sc_mark(l->s->scheduler, marked->v, marked->n, sc_get_run(l->s->scheduler));
+	if (l->s->loose.count == 0) return;
+	for (size_t i = 0; i < marked->n; i++) {
+		const void *key = marked->v[i];
+		if (!pm_has(&l->s->loose, key)) continue;
+		pm_delete(&l->s->loose, key);
+		if (tb_get(l->s->kept, tb_symbol(&spots), tb_symbol(key)) != NULL) continue;
+		pt_spot *s = pm_get(&l->s->mine, key);
+		if (s == NULL) continue;
+		pm_delete(&l->s->mine, key);
+		pt_release(l->s->paths, s);
+	}
 }
 
 static int same_key(tb_key a, tb_key b) {
@@ -1783,13 +1819,39 @@ static void write_one(pl *l, nd_entry *entry, ublock *b, ch_header header, pl_ch
 	changed->entries[changed->n++] = entry;
 }
 
-void pl_own(pl *l, nd_entry *node) {
+void pl_own_in(pl *l, nd_entry *node, tb_table *in) {
 	if (l->s->nowned == l->s->capowned) {
 		l->s->capowned = l->s->capowned ? l->s->capowned * 2 : 8;
 		l->s->owned = realloc(l->s->owned, l->s->capowned * sizeof *l->s->owned);
 		if (l->s->owned == NULL) abort();
 	}
-	l->s->owned[l->s->nowned++] = node;
+	l->s->owned[l->s->nowned++] = (owned_t){node, in};
+}
+
+void pl_own(pl *l, nd_entry *node) { pl_own_in(l, node, NULL); }
+
+void pl_sweep(pl *l) {
+	shared *s = l->s;
+	if (s->telling > 0 || s->nowned < 2 * s->swept + 64) return;
+	size_t k = 0;
+	for (size_t i = 0; i < s->nowned; i++) {
+		owned_t o = s->owned[i];
+		size_t n = 1;
+		if (o.in != NULL) tb_who(o.in, o.node, &n);
+		if (n > 0) {
+			s->owned[k++] = o;
+			continue;
+		}
+		// out of its table: its holds, what unread copied of it, and it, let go
+		hold *h = pm_get(&s->holds, o.node);
+		if (h != NULL) {
+			pm_delete(&s->holds, o.node);
+			unhold_chain(l, h);
+		}
+		un_read(s->unread, o.node);
+		nd_free_entry(o.node);
+	}
+	s->nowned = s->swept = k;
 }
 
 static int upsert(pl *l, tb_key part, tb_key id, const char *const *path, size_t n,

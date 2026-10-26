@@ -24,7 +24,7 @@ struct cst {
 	sc_scheduler *scheduler;
 	cst_write_fn write;
 	void *write_ctx;
-	sc_listener *listener, *acts;
+	sc_listener *listener, *acts, *freed;
 	given *ids;
 	size_t nids, capids;
 	nd_entry **nodes;
@@ -195,6 +195,18 @@ static void acted(sc_computer *c, unsigned n, const char *error, void *data) {
 	sc_run_with_scope(c, write_in_scope, &w);
 }
 
+// a computer freed: its node forgotten (the reference's WeakMap by computer), so a new one at its
+// address is given none
+static void computer_freed(sc_scope *o, void *data) {
+	cst *s = data;
+	for (size_t i = 0; i < s->nids; i++) {
+		if (s->ids[i].c != o) continue;
+		free(s->ids[i].id);
+		s->ids[i] = s->ids[--s->nids];
+		return;
+	}
+}
+
 cst *cst_new(const cst_setup *setup) {
 	cst *s = xalloc(sizeof *s);
 	s->places = setup->places;
@@ -204,6 +216,7 @@ cst *cst_new(const cst_setup *setup) {
 	s->write_ctx = setup->write_ctx;
 	s->listener = sc_on_run_end(s->scheduler, run_end, s);
 	s->acts = sc_on_effect(s->scheduler, acted, s);
+	s->freed = sc_on_free(s->scheduler, computer_freed, s);
 	return s;
 }
 
@@ -227,7 +240,8 @@ void cst_stop(cst *s) {
 	if (s == NULL) return;
 	if (s->listener != NULL) sc_remove_listener(s->listener);
 	if (s->acts != NULL) sc_remove_listener(s->acts);
-	s->listener = s->acts = NULL;
+	if (s->freed != NULL) sc_remove_listener(s->freed);
+	s->listener = s->acts = s->freed = NULL;
 }
 
 void cst_free(cst *s) {
