@@ -1,5 +1,5 @@
 {
-	"title": "the host's words, on ermine, from the host's process context: at and cwd the root (bare names and ./ alike in the root), args the host's; each write as the host (its scope's actor, its node the metadata's node), its site the host's line; a send's caller the host's node; teardown(fn) at close, told ended; closed, the words and parts throw closed",
+	"title": "the host's functions, on ermine, from the host's process context: at and folder the root (bare names and ./ alike in the root), args the host's; each write as the host (its scope's actor, its node the metadata's node), its site the host's line; a send's caller the host's node; teardown(fn) at close, told ended; closed, the functions and parts throw closed",
 	"steps": [
 		{
 			"op": "ermine",
@@ -14,7 +14,7 @@
 			"op": "context",
 			"expect": {
 				"at": [],
-				"cwd": [],
+				"folder": [],
 				"args": [
 					"a",
 					"b"
