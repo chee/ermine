@@ -332,6 +332,19 @@ endef
 $(foreach l,$(LIBS),$(eval $(call harness,$(l))))
 # pully's C, not in LIBS (its section above): a rule to build it alone
 $(eval $(call harness,pullynode))
+# promises (ermine/system/c/promise_test.c): a then on a settled promise, its callback letting go
+# of the maker's hold. make test-promise-system, test-check-promise-system (the sanitizers)
+system-promise_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c ermine/system/c/ermine_harness.c,$(system_src)) ermine/system/c/promise_test.c
+system-promise = ermine/system/c/promise-test
+$(eval $(call harness,system-promise))
+$(system-promise): $(wildcard */*/c/*.h)
+test-promise-system: $(system-promise)
+	@echo "== system (promise)"
+	@$(system-promise)
+test-check-promise-system: $(system-promise)-check
+	@echo "== system (promise, sanitizers)"
+	@$(system-promise)-check
+
 # steady use (ermine/system/c/steady_test.c): each thing a program does, again and again, held
 # memory levelling off (leaks sees only what is lost at close). not in LIBS: its counts are the
 # allocator's, no sanitizer's. make test-steady-system
@@ -472,5 +485,6 @@ clean:
 	rm -rf playground/tools/files/c/files playground/tools/files/c/files-check playground/tools/files/c/files-check.dSYM
 	rm -rf $(HARNESSES) $(CHECKS) $(BENCHES) $(addsuffix .dSYM,$(HARNESSES) $(CHECKS))
 	rm -rf $(system-steady) $(system-steady)-check $(system-steady).dSYM
+	rm -rf $(system-promise) $(system-promise)-check $(system-promise).dSYM
 
 .PHONY: all bench check test test-c test-check test-steady-system clean $(addprefix test-c-,$(LIBS)) $(addprefix test-check-,$(LIBS))
