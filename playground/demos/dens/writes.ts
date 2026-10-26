@@ -4,13 +4,13 @@
 //   const { header, commit, put, patch } = createWrites({ scheduler, table, places, scope })
 //   put("value", "sync", v)          // its site: this line, not writes.ts
 //   drop("value", keys, [who])        // one key taken out
-import createEntry, { type Entry } from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import type { Scheduler, Scope } from "@ermine/scheduler"
-import type { Id, Key, Table } from "@ermine/table"
-import type { Places } from "@ermine/places"
-import { createChangeHeader } from "@ermine/places/header"
-import { upsert } from "@ermine/places/upsert"
+import createEntry, { type Entry } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import type { Scheduler, Scope } from "@ermine/core/scheduler"
+import type { Id, Key, Table } from "@ermine/core/table"
+import type { Places } from "@ermine/core/places"
+import { createChangeHeader } from "@ermine/core/places/header"
+import { upsert } from "@ermine/core/places/upsert"
 import { encode, type Value } from "@ermine/encoding/cbor"
 
 const ours = [import.meta.url]

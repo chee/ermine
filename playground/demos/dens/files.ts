@@ -19,9 +19,9 @@
 //
 //   const files = createFiles(host, el, { pick: (path, id) => ..., isThing: (id) => ... })
 //   files.select(["home", "counter-1a2b"])
-import type { ChangeHeader } from "@ermine/node/entry"
-import { level, type Path } from "@ermine/places"
-import { members } from "@ermine/places/lib"
+import type { ChangeHeader } from "@ermine/core/node/entry"
+import { level, type Path } from "@ermine/core/places"
+import { members } from "@ermine/core/places/lib"
 import { RUNNER, TAKES } from "@ermine/software"
 import { codeLink, linesHtml, onMaps, origin, siteHtml } from "./code.ts"
 import type { Host } from "./host.ts"
@@ -746,7 +746,7 @@ export function createFiles(
 		// a pointer to a node: { id, at, hash? }
 		if (isMap(v) && isPath(v.at)) return chip(v.at)
 		// a folder, as a path
-		if (k === "ermine.process.cwd" && isPath(v)) return chip(v)
+		if (k === "ermine.process.folder" && isPath(v)) return chip(v)
 		// a wire: [input, den, path] triples (each maybe "=<outlet>" after), each "input ← path"
 		const wired = k === "ermine.process.args" && isPath(v) ? wires(v) : undefined
 		if (wired) {
