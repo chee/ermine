@@ -1,0 +1,15 @@
+{
+	"name": "@ermine/unplugin",
+	"version": "0.0.0",
+	"license": "AGPL-3.0-or-later",
+	"exports": {
+		".": "./typescript/unplugin.ts",
+		"./transform": "./typescript/transform.ts"
+	},
+	"imports": {
+		"@babel/parser": "npm:@babel/parser@8.0.6",
+		"esbuild": "npm:esbuild@0.25.12",
+		"magic-string": "npm:magic-string@0.30.21",
+		"unplugin": "npm:unplugin@3.4.0"
+	}
+}

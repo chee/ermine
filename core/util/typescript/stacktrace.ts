@@ -32,28 +32,22 @@ type V8Error = {
 	stackTraceLimit?: number
 }
 
-// the whole stack now, above entry (where the engine allows): up to depth frames, held unread (an
-// engine writes it out only once .stack is read: framesOf reads it). kept whole so nothing a bundle
-// or a library hides is lost [chee 10-26: "we should just keep the whole stack"]
-export type Stack = { readonly stack?: string }
-export function captureStack(entry?: unknown, depth = 64): Stack {
+// the whole trace now, above entry (where the engine allows), as the engine writes it out: every
+// frame. written out at once (an engine's trace held unwritten holds every object on the stack)
+export function trace(entry?: unknown): string | undefined {
 	const E = Error as unknown as V8Error
 	const limit = E.stackTraceLimit
-	if (typeof limit === "number" && limit < depth) E.stackTraceLimit = depth
+	E.stackTraceLimit = Infinity
 	try {
 		const holder: { stack?: string } = {}
 		if (typeof E.captureStackTrace === "function" && typeof entry === "function") {
 			E.captureStackTrace(holder, entry)
 		} else holder.stack = new Error().stack
-		return holder
+		return typeof holder.stack === "string" ? holder.stack : undefined
 	} finally {
-		if (typeof limit === "number") E.stackTraceLimit = limit
+		E.stackTraceLimit = limit
 	}
 }
-
-// a held stack's frames (written out on the first read, then the engine's string is read again)
-export const framesOf = (s: Stack): FileLocation[] =>
-	typeof s.stack === "string" ? frames(s.stack) : []
 
 // the site of the call into entry: the first frame now on the stack outside ours.
 // entry, where the engine allows, cuts the frames above it

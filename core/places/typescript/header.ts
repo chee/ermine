@@ -7,14 +7,7 @@
 // running computer's own site gives it). no scope open: unscoped, nothing written.
 import type { ChangeHeader, Metadata } from "@ermine/core/node/entry"
 import { type Info, type Scheduler, SchedulerError, type Scope } from "@ermine/core/scheduler"
-import {
-	capture,
-	captureStack,
-	type FileLocation,
-	framesOf,
-	outside,
-	type Stack,
-} from "@ermine/core/util/stacktrace"
+import { capture, type FileLocation, outside, trace } from "@ermine/core/util/stacktrace"
 
 // a change base: what a change is from the scope open alone (actor, reader, metadata), the header
 // without its time, site and op
@@ -70,6 +63,9 @@ export function createChangeHeader(
 	skip?: Iterable<string>,
 	from?: unknown,
 	site?: FileLocation,
+	// the whole trace text kept beside the change too (traceOf), its site found in it (no frame
+	// limit): one capture, written out at once (~40 µs on a shallow stack, ~230 µs 40 deep)
+	whole?: boolean,
 ): ChangeHeader {
 	const w = createChangeBase(scheduler, extra)
 	if (w === undefined) throw new SchedulerError("unscoped", "a write with no scope open")
@@ -80,15 +76,37 @@ export function createChangeHeader(
 	}
 	if (scheduler.getRun() !== undefined) return h
 	const all = skip === undefined ? ours : new Set([...ours, ...skip])
-	// the whole stack kept beside the change, unread till stackOf asks (~2 µs)
-	const whole = captureStack(createChangeHeader)
-	stacks.set(h, whole)
-	// the site: from the nearest 10 frames (cheap); none there outside ours, from the whole stack
-	// (read out then, ~100 µs: only when a library's frames fill the 10)
-	const at = near(all, from ?? createChangeHeader) ??
-		(typeof whole.stack === "string" ? outside(whole.stack, all) : undefined)
+	if (whole === true) {
+		const text = trace(from ?? createChangeHeader) ?? trace(createChangeHeader)
+		const at = text === undefined ? undefined : outside(text, all)
+		if (at) h.external = [at]
+		if (text !== undefined && h.metadata !== undefined) traces.set(h.metadata, text)
+		return h
+	}
+	const at = near(all, from ?? createChangeHeader)
 	if (at) h.external = [at]
 	return h
+}
+
+// each change's whole trace text [chee 10-26: "keep what we think is the original file and the whole
+// text of the trace too"], held beside the change by its metadata (a header's copies share it), never
+// in the change: never encoded, stored or synced (where: the builder's pick)
+const traces = new WeakMap<object, string>()
+
+// the whole trace text the change was made with; none held (made in a run, given its site, or the
+// trace not asked for): undefined
+export function traceOf(header: Pick<ChangeHeader, "metadata">): string | undefined {
+	return header.metadata === undefined ? undefined : traces.get(header.metadata)
+}
+
+// to, a copy of from with new metadata, given from's trace: to
+export function carryTrace<H extends Pick<ChangeHeader, "metadata">>(
+	from: Pick<ChangeHeader, "metadata">,
+	to: H,
+): H {
+	const t = traceOf(from)
+	if (t !== undefined && to.metadata !== undefined) traces.set(to.metadata, t)
+	return to
 }
 
 // the caller of from; from not on the stack (an engine cuts everything then): the caller of
@@ -96,15 +114,3 @@ export function createChangeHeader(
 const near = (skip: ReadonlySet<string>, from: unknown) =>
 	capture(skip, from) ??
 		(from === createChangeHeader ? undefined : capture(skip, createChangeHeader))
-
-// each change's whole stack, as it was made (outside a run), kept here beside the change, never in
-// it: nothing more is stored or synced [chee 10-26: "we should just keep the whole stack"; where it
-// is kept: the builder's pick]
-const stacks = new WeakMap<ChangeHeader, Stack>()
-
-// the whole stack a change was made with, each frame (the engine's, ermine's and the program's);
-// none kept (made in a run, or given its site): undefined
-export function stackOf(header: ChangeHeader): FileLocation[] | undefined {
-	const s = stacks.get(header)
-	return s === undefined ? undefined : framesOf(s)
-}
