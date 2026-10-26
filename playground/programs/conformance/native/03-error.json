@@ -112,7 +112,7 @@
 					"failed": "dlopen failed"
 				},
 				"args": null,
-				"cwd": []
+				"folder": []
 			},
 			"skip": [
 				"pin"
@@ -160,7 +160,7 @@
 					"failed": "dlopen failed"
 				},
 				"args": null,
-				"cwd": []
+				"folder": []
 			},
 			"skip": [
 				"pin"
