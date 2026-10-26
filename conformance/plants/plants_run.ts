@@ -17,9 +17,9 @@ const JOBS = Number(arg("--jobs") ?? 4)
 const ONLY = arg("--only")
 const TIMEOUT = 180_000
 
-// the tree a catcher imports: core, filesystem, conformance, and the two ermine packages they
-// use; no node_modules, no c binaries outside core (the differ's c impl runs core's)
-const copied = ["core", "filesystem", "conformance", "ermine/encoding"]
+// the tree a catcher imports: core, conformance, and the ermine package it
+// uses; no node_modules, no c binaries outside core (the differ's c impl runs core's)
+const copied = ["core", "conformance", "ermine/encoding"]
 const only = (dir: string) => dir.startsWith("ermine/") ? ["--exclude", "c"] : []
 
 async function sh(cmd: string[], cwd?: string, timeout = TIMEOUT) {
@@ -62,7 +62,7 @@ async function makeTree(): Promise<string> {
 	// the workspace: only what was copied
 	const deno = JSON.parse(await Deno.readTextFile(`${root}deno.json`))
 	deno.workspace = deno.workspace.filter((w: string) =>
-		/^\.\/(core|filesystem|ermine\/encoding|ermine\/clingy)(\/|$)/.test(w)
+		/^\.\/(core|ermine\/encoding)(\/|$)/.test(w)
 	)
 	await Deno.writeTextFile(`${dir}/deno.json`, JSON.stringify(deno))
 	await Deno.copyFile(`${root}deno.lock`, `${dir}/deno.lock`).catch(() => {})

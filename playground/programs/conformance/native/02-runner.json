@@ -97,11 +97,12 @@
 			"name": "a",
 			"expect": {
 				"parts": [
-					"attributes"
+					"attributes",
+					"status"
 				],
 				"status": "pending",
 				"args": null,
-				"cwd": []
+				"folder": []
 			},
 			"skip": [
 				"pin"
@@ -116,11 +117,12 @@
 			"name": "a",
 			"expect": {
 				"parts": [
-					"attributes"
+					"attributes",
+					"status"
 				],
 				"status": null,
 				"args": null,
-				"cwd": []
+				"folder": []
 			},
 			"skip": [
 				"pin"
