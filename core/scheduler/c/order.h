@@ -26,7 +26,7 @@ struct od_item {
 	void *owner;
 	// the order made
 	uint64_t n;
-	// the writers its last run read: a set of od_item, NULL when empty
+	// the writers its last run read: a set of od_item, NULL or empty when none; one gone is in none
 	pm *values;
 	od_item *after;
 	// set by the scheduler: not alive after it starts to go
@@ -69,7 +69,9 @@ void od_started(order *o, od_item *p);
 void od_sees(order *o, od_item *p, pm *next);
 // p waits after q (NULL: nothing)
 void od_waits(order *o, od_item *p, od_item *q);
-// p goes: not due, out of the ranks, after nothing
+// p goes: not due, out of the ranks, after nothing, and nothing is after it (what was after it is
+// after it no more): order names it no more, so its memory may go. od_sees and od_waits take no
+// edge to one gone
 void od_gone(order *o, od_item *p);
 
 #endif

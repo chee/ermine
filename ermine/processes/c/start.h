@@ -12,13 +12,13 @@
 // pr_start refused, nothing made: "taken" (a process at, above or under the path) or a name code.
 // else: its node's id proc:<uuid>, a scope [["process", at], [PL_NODE, id]] (sn_give) under
 // options.under (NULL: the owner), the row, attributes (options.attributes, then
-// ermine.process.args, .cwd, .pin, status pending: processes' own win), then options.body. pr_stop:
+// ermine.process.args, .folder, .pin, status pending: processes' own win), then options.body. pr_stop:
 // options.stop, row out, scope torn down, its run record out; its scope torn down from above: what
 // is under it first, then the same; twice: nothing.
 // writes: all with the process's scope open. setup.write given (start.ts' write): the row, the
 // attributes and the status entry are each handed to it to do and say, and not made here nor committed
 // (setup.commit not asked); NULL: made here. statuses (status.h) get the same writer.
-// memory: a process lives until pr_free (which stops one never stopped). at, args, cwd, root are
+// memory: a process lives until pr_drop's scope is freed, or pr_free (which stops one never stopped). at, args, folder, root are
 // copied; the pin and options.attributes' values are the attributes' (op_ref); the places must
 // outlive it. out of memory aborts.
 #ifndef PROCESSES_START_H
@@ -30,7 +30,7 @@
 
 // the attributes written on a process's node
 #define PR_ARGS "ermine.process.args"
-#define PR_CWD "ermine.process.cwd"
+#define PR_FOLDER "ermine.process.folder"
 #define PR_PIN "ermine.process.pin"
 
 typedef struct pr pr;
@@ -73,8 +73,8 @@ typedef struct {
 	void *id_ctx;
 } pr_setup;
 
-// a start's own: args (has_args 0: none written); cwd, steps from the root as at's (has_cwd 0: the
-// folder at is in); pin, written as ermine.process.pin (NULL: none; borrowed). body, called once
+// a start's own: args (has_args 0: none written); folder, steps from the root as at's (has_folder
+// 0: the folder at is in); pin, written as ermine.process.pin (NULL: none; borrowed). body, called once
 // its node and row are there, and stop, called at its stop, each with the scope open and data
 // (NULL: nothing). attributes: a map (NULL: none; borrowed), its pairs written first, in the same
 // entry: a name processes' own write too is theirs. under: the scope its scope is made under (torn
@@ -83,9 +83,9 @@ typedef struct {
 	const char *const *args;
 	size_t nargs;
 	int has_args;
-	const char *const *cwd;
-	size_t ncwd;
-	int has_cwd;
+	const char *const *folder;
+	size_t nfolder;
+	int has_folder;
 	const op_value *pin;
 	void (*body)(pr_process *p, void *data);
 	void (*stop)(pr_process *p, void *data);
@@ -118,23 +118,27 @@ sc_scope *pr_scope(const pr_process *p);
 const char *pr_id(const pr_process *p);
 pl *pr_places(const pr_process *p);
 const char *pr_root(const pr_process *p);
-// its path from its root, its cwd, its args: how many, *out borrowed (the life's until pr_free)
+// its path from its root, its folder, its args: how many, *out borrowed (the life's until pr_free)
 size_t pr_at(const pr_process *p, const char *const **out);
-size_t pr_cwd(const pr_process *p, const char *const **out);
+size_t pr_folder(const pr_process *p, const char *const **out);
 size_t pr_args(const pr_process *p, const char *const **out);
 // options.stop called, the row taken out, the scope torn down; twice: nothing. a macro: the site of
 // the row's going is the caller's (file NULL: processes' own)
 void pr_stop_at(pr *s, pr_process *p, const char *file, int line, const char *func);
 #define pr_stop(...) pr_stop_at(__VA_ARGS__, __FILE__, __LINE__, __func__)
+// the holder lets go of p (stopped first if it is not): its scope's maker's hold let go, and p
+// freed as that scope is (torn down, held by nothing: what is under it, a record, a box). its
+// pointer is no good after
+void pr_drop(pr *s, pr_process *p);
 // listeners away, with the scheduler alive
 void pr_halt(pr *s);
 void pr_free(pr *s);
 
-// a process's path and its working folder (has_cwd 0: the folder at is in), as pr_start resolves
+// a process's path and its folder (has_folder 0: the one at is in), as pr_start resolves
 // them: names, copied (pr_names_free)
 char **pr_names(const char *const *steps, size_t n, size_t *out);
-char **pr_cwd_of(const char *const *at, size_t nat, const char *const *cwd, size_t ncwd,
-	int has_cwd, size_t *out);
+char **pr_folder_of(const char *const *at, size_t nat, const char *const *folder, size_t nfolder,
+	int has_folder, size_t *out);
 void pr_names_free(char **names, size_t n);
 
 #endif

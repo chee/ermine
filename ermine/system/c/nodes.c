@@ -11,10 +11,12 @@
 //   shared: es_node_of, es_id_of, es_id_through, es_ask_placing, es_place_under,
 //     es_build, es_folder_slot
 //   reads: es_get_node, es_has_node, es_read, es_read_attributes, es_read_children, es_read_all,
-//     es_read_all_attributes, es_read_all_children, es_read_entries, es_peep, es_list, es_watch,
-//     es_unwatch, es_get_args, es_children_free, es_versions_free, es_items_free
+//     es_read_all_attributes, es_read_all_children, es_read_entries, es_peep, es_list, es_get_args,
+//     es_children_free, es_versions_free, es_items_free
 //   writes: es_ensure_node_at, es_create_node_at, es_ref_at, es_patch_at, es_patch_attributes_at,
 //     es_patch_children_at, es_place_at, es_unplace_at, es_rename_at, es_remove_at
+//   pipes (system.ts' pipe, listen, told, pipeStatus, gonePipe): es_pipe_at, es_pipes_told,
+//     es_pipe_looped. a pipe is a node of its own in its own scope, told the writes at its from
 //   the placement asks: place, then read and edit of the node (es_ask_placing)
 // a failure is a code and es_thrown(): a PlacesError's message is "code" or "code (at)", an
 // ErmineError's "code: message", a Refusal's "op refused: reason"
@@ -149,7 +151,7 @@ int es_resolve(es_context *c, es_at p, es_names *out) {
 	size_t nfrom = c->nat;
 	if (first != NULL && strcmp(first, "/") == 0) from = NULL, nfrom = 0;
 	else if (first != NULL && (strcmp(first, ".") == 0 || strcmp(first, "..") == 0)) {
-		from = c->cwd, nfrom = c->ncwd;
+		from = c->folder, nfrom = c->nfolder;
 	}
 	es_names r;
 	names_init(&r);
@@ -214,36 +216,147 @@ struct es_handle {
 	es_handle_data d;
 };
 
-struct es_watching {
-	es_ermine *ermine;
-	es_context *side;
+// pipes (see the section) ------------------------------------------------------------------------------
+typedef struct pipe pipe_t;
+// a write heard at a node a pipe listens to
+typedef struct {
+	pipe_t *p;
+	// the way back: a write at the pipe's to
+	int back;
 	pl_watch *watch;
 	int stopped;
-	es_watch_fn fn;
-	void *ctx;
-	char *part;
 	es_names path;
+	char *part;
+} listening;
+struct pipe {
+	es_ermine *e;
+	// the context that made it: the writes it makes are asked as this one
+	es_context *cx;
+	char *id;
+	// its scope's info: the node, and that it is a pipe (a scope borrows its info)
+	op_value *id_value, *flag;
+	sc_scope *scope;
+	// who made it: the computer whose run made it, else the scope open then; and the run (n 0: none)
+	const void *owner;
+	sc_computer *run_computer;
+	unsigned run_n;
+	char *key;
+	es_names path;
+	const es_handle *from, *to;
+	es_pipe_tell tell;
+	es_pipe_map there, back;
+	void *ctx;
+	int write;
+	// told no more
+	int looping;
+	// its status says so
+	int looped;
+	// how many writes in a row it was told were pipes'
+	unsigned chain;
+	listening **listens;
+	size_t nlistens, caplistens;
+	int gone;
+	// where it is in all_pipes
+	size_t at;
 };
+// a write a pipe heard, to be told at the next pulse; its patches copied (block, below)
+typedef struct block block;
+typedef struct {
+	pipe_t *p;
+	int back, by_pipe, refused;
+	block *patches;
+	op_value *value;
+	// the view, and its change held (a view lasts while its change does)
+	const es_change_view *change;
+	op_value *held;
+} heard_t;
+// how many pipes an owner's run has made, by the owner (a computer, with its run's n; else a scope)
+typedef struct {
+	const void *owner;
+	unsigned run_n, count;
+} order_t;
+// a teardown registered on a pipe's scope: freed as it runs. at: where it is in regs
+typedef struct {
+	pipe_t *p;
+	sc_scope *scope;
+	size_t at;
+} pipe_reg;
+
+// the boxes' folders by path from the root: a box at the end of a path's names
+typedef struct trie {
+	const es_box *box;
+	// name → trie
+	es_map kids;
+} trie_t;
+// what the boxes are walked by, as of the names counter: each folder's path (es_names, by the folder's id;
+// NULL: out of the root's reach) and the trie of them
+typedef struct {
+	unsigned long names;
+	es_map at;
+	trie_t trie;
+} walked_t;
 
 struct es_nodes {
 	es_ermine *ermine;
 	es_map running;
-	// what each reader waits on, a node it read that was not there: es_missing, by reader
+	// what each reader waits on, a node it read that was not there: es_missing, by reader. only a
+	// computer's, for its latest run, and a process's while its setup runs (setting)
 	es_map missing;
+	// the processes whose setup is running now, by node
+	es_map setting;
+	// counted up as names can change (a children fact, a process's node placed or gone, a box joining
+	// the index): what the boxes' paths are held against
+	unsigned long names;
+	walked_t *walked;
+	pl_watch *watch;
 	es_context **contexts;
 	size_t ncontexts, capcontexts;
-	es_watching **watches;
-	size_t nwatches, capwatches;
+	// the pipes: by their node's path (a key), by their id; every one not freed. a pipe holds its
+	// scope (the maker's hold): made again, the old one let go. gone (its scope torn down, not
+	// made again): freed as no telling is going on (telling: how deep), what it heard dropped
+	es_map pipes, pipe_ids;
+	pipe_t **all_pipes;
+	size_t nall_pipes, capall_pipes;
+	pipe_t **gone_pipes;
+	size_t ngone_pipes, capgone_pipes;
+	unsigned telling;
+	heard_t *piped;
+	size_t npiped, cappiped;
+	order_t **orders;
+	size_t norders, caporders;
+	pipe_reg **regs;
+	size_t nregs, capregs;
+	// how deep pipes told as writes land are now (a pipe's write telling a pipe)
+	unsigned pipe_depth;
+	// every handle by what it names (handle_name): one a name
+	es_map named;
 };
+
+static struct es_nodes *state(es_ermine *e) { return es_nodes_new(e); }
+
+// a children fact: names may have changed
+static void names_fact(const pl_fact *fact, void *ctx) {
+	struct es_nodes *x = ctx;
+	if (fact->part.string != NULL && strcmp(fact->part.string, "children") == 0) x->names++;
+}
 
 struct es_nodes *es_nodes_new(es_ermine *e) {
 	if (e->nodes != NULL) return e->nodes;
 	e->nodes = es_alloc(sizeof *e->nodes);
 	e->nodes->ermine = e;
+	if (e->places != NULL) e->nodes->watch = pl_watch_all(e->places, names_fact, e->nodes);
 	return e->nodes;
 }
 
-static struct es_nodes *state(es_ermine *e) { return es_nodes_new(e); }
+void es_names_changed(es_ermine *e) { state(e)->names++; }
+
+void es_nodes_stop(es_ermine *e) {
+	struct es_nodes *x = e->nodes;
+	if (x == NULL || x->watch == NULL) return;
+	pl_stop(x->watch);
+	x->watch = NULL;
+}
+
 
 static void running_free(running_rec *r) {
 	free(r->box);
@@ -254,22 +367,42 @@ static void running_free(running_rec *r) {
 static void missing_free(es_missing *m) {
 	for (size_t i = 0; i < m->npaths; i++) es_names_free(&m->paths[i]);
 	free(m->paths);
+	es_map_free(&m->keys);
 	free(m);
 }
 
+static void trie_free(trie_t *t) {
+	for (size_t i = 0; i < t->kids.n; i++) {
+		trie_free(t->kids.vals[i]);
+		free(t->kids.vals[i]);
+	}
+	es_map_free(&t->kids);
+}
+static void walked_free(walked_t *w) {
+	if (w == NULL) return;
+	for (size_t i = 0; i < w->at.n; i++) {
+		es_names *p = w->at.vals[i];
+		if (p != NULL) es_names_free(p);
+		free(p);
+	}
+	es_map_free(&w->at);
+	trie_free(&w->trie);
+	free(w);
+}
+
+static void pipes_free(struct es_nodes *x);
 void es_nodes_free(struct es_nodes *x) {
 	if (x == NULL) return;
 	for (size_t i = 0; i < x->running.n; i++) running_free(x->running.vals[i]);
 	es_map_free(&x->running);
 	for (size_t i = 0; i < x->missing.n; i++) missing_free(x->missing.vals[i]);
 	es_map_free(&x->missing);
-	for (size_t i = 0; i < x->nwatches; i++) {
-		es_names_free(&x->watches[i]->path);
-		free(x->watches[i]->part);
-		free(x->watches[i]);
-	}
-	free(x->watches);
+	es_map_free(&x->setting);
+	walked_free(x->walked);
+	if (x->watch != NULL) pl_stop(x->watch);
+	pipes_free(x);
 	// every handle, with the ermine
+	es_map_free(&x->named);
 	es_ermine *e = x->ermine;
 	for (size_t i = 0; i < e->handles.cap; i++) {
 		es_handle *h = (es_handle *)e->handles.keys[i];
@@ -287,10 +420,37 @@ void es_nodes_free(struct es_nodes *x) {
 
 // handles ------------------------------------------------------------------------------------------------
 
+// what a handle names, as one string: its part, then its path's names or its id, each its length
+// first (a name may hold any byte but NUL)
+static char *handle_name(const es_node_data *n) {
+	const char *part = n->part != NULL ? n->part : "";
+	size_t len = strlen(part) + 32;
+	if (n->has_path)
+		for (size_t i = 0; i < n->npath; i++) len += strlen(n->path[i]) + 24;
+	if (n->id != NULL) len += strlen(n->id) + 24;
+	char *s = es_alloc(len), *o = s;
+	o += snprintf(o, len, "%zu:%s%c", strlen(part), part, n->has_path ? 'p' : 'i');
+	if (n->has_path)
+		for (size_t i = 0; i < n->npath; i++) o += snprintf(o, len - (size_t)(o - s), "%zu:%s", strlen(n->path[i]), n->path[i]);
+	if (n->id != NULL) snprintf(o, len - (size_t)(o - s), "%zu:%s", strlen(n->id), n->id);
+	return s;
+}
+
+// one handle a name: a handle is what it names and nothing else (a name, not power), so the same
+// name is the same handle, made once and kept till close. the reference's are new each time, kept
+// while referenced (a WeakMap); in C a program's pointer is not seen, so they are never let go, and
+// steady use names the same nodes, not more [builder's pick, 10-26]
 es_handle *es_mint(es_ermine *e, const es_node_data *node) {
-	es_handle *h = es_alloc(sizeof *h);
-	h->d.node = es_node_data_copy(node);
-	pm_set(&e->handles, h, h);
+	struct es_nodes *x = state(e);
+	char *name = handle_name(node);
+	es_handle *h = es_map_get(&x->named, name);
+	if (h == NULL) {
+		h = es_alloc(sizeof *h);
+		h->d.node = es_node_data_copy(node);
+		pm_set(&e->handles, h, h);
+		es_map_set(&x->named, name, h);
+	}
+	free(name);
 	return h;
 }
 
@@ -354,8 +514,8 @@ es_context *es_context_new(es_ermine *e, const es_context_options *o) {
 	c->ermine = e;
 	c->scope = o->scope;
 	c->box = o->box;
-	c->cwd = dup_names(o->cwd, o->ncwd);
-	c->ncwd = o->ncwd;
+	c->folder = dup_names(o->folder, o->nfolder);
+	c->nfolder = o->nfolder;
 	c->at = dup_names(o->at, o->nat);
 	c->nat = o->nat;
 	c->args = dup_names(o->args, o->nargs);
@@ -366,7 +526,9 @@ es_context *es_context_new(es_ermine *e, const es_context_options *o) {
 	c->guarded = e->may != NULL;
 	if (c->guarded) {
 		c->guard = gd_new(&(gd_setup){.places = c->places, .table = e->table, .may = e->may,
-			.from = CP(c->at), .nfrom = c->nat, .caller = es_caller_place, .caller_ctx = c});
+			.from = CP(c->at), .nfrom = c->nat, .caller = es_caller_place, .caller_ctx = c,
+			// the box it is in, by its folder's id: the host's policy tells boxes apart (guard.ts)
+			.box = tb_string(c->box->root)});
 	}
 	struct es_nodes *x = state(e);
 	ES_PUSH(x->contexts, x->ncontexts, x->capcontexts, c);
@@ -386,7 +548,7 @@ void es_context_free(es_context *c) {
 	}
 	es_computer_forget(c);
 	gd_free(c->guard);
-	free_names(c->cwd, c->ncwd);
+	free_names(c->folder, c->nfolder);
 	free_names(c->at, c->nat);
 	free_names(c->args, c->nargs);
 	free(c->node);
@@ -521,29 +683,84 @@ static int need_id(es_context *c, const es_node_data *n, const char **out) {
 	return places_fail_path(ES_NOTHING_THERE, CP(n->path), n->npath);
 }
 
-// a box's folder's path from the root now (up its names); the root's box: no names. 1 and *out; 0:
-// out of the root's reach. read untracked
-int es_box_at(es_ermine *e, const char *box, es_names *out) {
+// a box's folder's path from the root now (up its names), none: out of the root's reach. read
+// untracked, not held
+static int box_up(es_ermine *e, const char *box, es_names *out) {
 	es_map visited = {0};
 	int found = up_go(e, e->places, e->root, box, &visited, out);
 	es_map_free(&visited);
 	return found;
 }
 
+// the boxes walked as names are now: made again only once a name may have changed. a box nothing
+// reaches and holding no rows is let go from the index (es_box_drop)
+static walked_t *walks(es_ermine *e) {
+	struct es_nodes *x = state(e);
+	if (x->walked != NULL && x->walked->names == x->names) return x->walked;
+	walked_free(x->walked);
+	walked_t *w = es_alloc(sizeof *w);
+	w->names = x->names;
+	x->walked = w;
+	for (size_t i = 0; i < es_box_count(e);) {
+		const es_box *b = es_box_nth(e, i);
+		es_names p;
+		if (!box_up(e, b->root, &p)) {
+			es_map_set(&w->at, b->root, NULL);
+			if (strcmp(b->root, e->root) != 0 && !es_box_rowed(e, b)) {
+				// the next one is now at i
+				es_box_drop(e, b);
+				continue;
+			}
+			i++;
+			continue;
+		}
+		es_names *held = es_alloc(sizeof *held);
+		*held = p;
+		es_map_set(&w->at, b->root, held);
+		trie_t *t = &w->trie;
+		for (size_t k = 0; k < p.n; k++) {
+			trie_t *kid = es_map_get(&t->kids, p.names[k]);
+			if (kid == NULL) {
+				kid = es_alloc(sizeof *kid);
+				es_map_set(&t->kids, p.names[k], kid);
+			}
+			t = kid;
+		}
+		t->box = b;
+		i++;
+	}
+	return w;
+}
+
+// a box's folder's path from the root now (up its names); the root's box: no names. 1 and *out; 0:
+// out of the root's reach. read untracked
+int es_box_at(es_ermine *e, const char *box, es_names *out) {
+	walked_t *w = walks(e);
+	if (!es_map_has(&w->at, box)) {
+		es_names p;
+		es_names *held = NULL;
+		if (box_up(e, box, &p)) {
+			held = es_alloc(sizeof *held);
+			*held = p;
+		}
+		es_map_set(&w->at, box, held);
+	}
+	const es_names *held = es_map_get(&w->at, box);
+	if (held == NULL) return 0;
+	*out = names_of(CP(held->names), held->n);
+	return 1;
+}
+
 // where a path from the root is walked: in the deepest box whose folder is on it (so a boxed
 // process's own nodes, named by its rows, are reached), the path in that box (abs + *skip)
 static pl *walk_from(es_ermine *e, const char *const *abs, size_t n, size_t *skip) {
-	pl *places = e->places;
-	size_t depth = 0;
+	const trie_t *t = &walks(e)->trie;
+	pl *places = t->box != NULL ? t->box->places : e->places;
 	*skip = 0;
-	for (size_t i = 0, count = es_box_count(e); i < count; i++) {
-		const es_box *b = es_box_nth(e, i);
-		es_names at;
-		if (!es_box_at(e, b->root, &at)) continue;
-		int on = at.n >= depth && at.n <= n;
-		for (size_t k = 0; on && k < at.n; k++) on = strcmp(at.names[k], abs[k]) == 0;
-		if (on) places = b->places, depth = *skip = at.n;
-		es_names_free(&at);
+	for (size_t i = 0; i < n; i++) {
+		t = es_map_get(&t->kids, abs[i]);
+		if (t == NULL) break;
+		if (t->box != NULL) places = t->box->places, *skip = i + 1;
 	}
 	return places;
 }
@@ -745,14 +962,14 @@ static op_patch whole(const op_value *v) {
 // writing ---------------------------------------------------------------------------------------------------------
 
 // patches a node's change refers to: copied, held till the node's next update
-typedef struct {
+struct block {
 	op_patch *patches;
 	size_t n;
 	op_key *keys;
 	char **strs;
 	size_t nstrs;
 	op_value **vals;
-} block;
+};
 
 static void block_free(void *p) {
 	block *b = p;
@@ -893,7 +1110,9 @@ static int land(void *ctx, const es_write *w) {
 		nd_entry *fresh = nd_make_entry(v, &h);
 		op_free(v);
 		tb_add(e->table, part, id, fresh);
-		pl_own(e->places, fresh);
+		// the places' till it is out of the table (taken out, or written over whole): then let go
+		// of after a pulse (pl_sweep)
+		pl_own_in(e->places, fresh, e->table);
 		hold(e, fresh, &first, made, pl_made_free);
 		hold(e, fresh, &first, fx, featured_free);
 		return 0;
@@ -1059,6 +1278,7 @@ void es_running_set(es_ermine *e, const char *process, const char *box, const ch
 	}
 	r->box = es_dup(box);
 	r->at = names_of(at, nat);
+	x->names++;
 }
 
 void es_running_clear(es_ermine *e, const char *process) {
@@ -1067,6 +1287,7 @@ void es_running_clear(es_ermine *e, const char *process) {
 	if (r == NULL) return;
 	es_map_del(&x->running, process);
 	running_free(r);
+	x->names++;
 }
 
 // the names from root down to id, up id's names now (places' names, the latest placed first at each
@@ -1240,14 +1461,25 @@ static const char *computer_node(sc_computer *computer) {
 	return NULL;
 }
 
-// path (as c sees it) waited on by the reader now: a computer's (in its run now), else the context's
-// node. kept from the root, shown to each asker as it sees it
+// the names as one text, each once: every name with its length before it
+static char *names_key(const char *const *names, size_t n) {
+	size_t len = 1;
+	for (size_t i = 0; i < n; i++) len += strlen(names[i]) + 21;
+	char *s = es_alloc(len), *o = s;
+	for (size_t i = 0; i < n; i++) o += sprintf(o, "%zu:%s", strlen(names[i]), names[i]);
+	return s;
+}
+
+// path (as c sees it) waited on by the reader now: a computer's (in its run now), else a setup's (the
+// context's node, its setup running); anyone else's is shown nowhere, so not held. held from the root,
+// shown to each asker as it sees it
 static void wait_for(es_context *c, const char *const *path, size_t npath) {
 	es_ermine *e = c->ermine;
 	struct es_nodes *x = state(e);
 	sc_run *run = sc_get_run(e->scheduler);
 	const char *computer = run == NULL ? NULL : computer_node(sc_run_computer(run));
 	const char *key = computer != NULL ? computer : c->node;
+	if (computer == NULL && !es_map_has(&x->setting, c->node)) return;
 	int has_n = computer != NULL;
 	// the number this run will have: its computer's latest record's and one (that record read, tracked,
 	// as system.ts' waitFor reads it)
@@ -1261,21 +1493,22 @@ static void wait_for(es_context *c, const char *const *path, size_t npath) {
 	} else if (m->has_n != has_n || m->n != n) {
 		for (size_t i = 0; i < m->npaths; i++) es_names_free(&m->paths[i]);
 		m->npaths = 0;
+		es_map_free(&m->keys);
+		m->keys = (es_map){0};
 	}
 	m->has_n = has_n;
 	m->n = n;
 	es_names abs = {0};
 	if (!es_box_at(e, c->box->root, &abs)) names_init(&abs);
 	for (size_t i = 0; i < npath; i++) names_add(&abs, path[i]);
-	for (size_t i = 0; i < m->npaths; i++) {
-		const es_names *p = &m->paths[i];
-		int same = p->n == abs.n;
-		for (size_t k = 0; same && k < abs.n; k++) same = strcmp(p->names[k], abs.names[k]) == 0;
-		if (same) {
-			es_names_free(&abs);
-			return;
-		}
+	char *k = names_key(CP(abs.names), abs.n);
+	if (es_map_has(&m->keys, k)) {
+		free(k);
+		es_names_free(&abs);
+		return;
 	}
+	es_map_set(&m->keys, k, NULL);
+	free(k);
 	m->paths = realloc(m->paths, (m->npaths + 1) * sizeof *m->paths);
 	if (m->paths == NULL) abort();
 	m->paths[m->npaths++] = abs;
@@ -1283,6 +1516,23 @@ static void wait_for(es_context *c, const char *const *path, size_t npath) {
 
 const es_missing *es_missing_of(es_ermine *e, const char *id) {
 	return es_map_get(&state(e)->missing, id);
+}
+
+void es_missing_drop(es_ermine *e, const char *id) {
+	struct es_nodes *x = state(e);
+	es_missing *m = es_map_get(&x->missing, id);
+	if (m == NULL) return;
+	es_map_del(&x->missing, id);
+	missing_free(m);
+}
+
+void es_setting(es_ermine *e, const char *process, int running) {
+	struct es_nodes *x = state(e);
+	if (running) es_map_set(&x->setting, process, NULL);
+	else {
+		es_map_del(&x->setting, process);
+		es_missing_drop(e, process);
+	}
 }
 
 // the value at key of x's part, tracked; none: *out NULL; a pending memo with no value: PENDING
@@ -1464,11 +1714,24 @@ int es_read_entries(es_context *c, es_target x, es_items *out) {
 	for (size_t i = 0; i < all.n; i++) {
 		es_calls_read(e, n.part, all.items[i].id.string, NULL, 0, 1, 0);
 	}
-	if (!t->guarded || n.npath == 0) {
+	if (!t->guarded) {
 		for (size_t i = 0; i < all.n; i++) {
 			const char *id = all.items[i].id.string;
 			items_push(out, pl_read(t->places, tb_string(n.part), tb_string(id), NULL, 0),
 				all.items[i].from, es_handle_by_id(t, id, n.part), 0);
+		}
+	} else if (n.npath == 0) {
+		// the box's "/": no name in a folder to ask by, so the node itself, as read asks
+		for (size_t i = 0; i < all.n && !code; i++) {
+			const char *id = all.items[i].id.string;
+			int no;
+			code = refused(t, gd_target_of(thing_of(id, &n), n.part, NULL), &no);
+			if (code) break;
+			if (no) items_push(out, NULL, all.items[i].from, NULL, 1);
+			else {
+				items_push(out, pl_read(t->places, tb_string(n.part), tb_string(id), NULL, 0),
+					all.items[i].from, es_handle_by_id(t, id, n.part), 0);
+			}
 		}
 	} else {
 		pl_member *in = es_alloc((all.n + 1) * sizeof *in);
@@ -1539,6 +1802,46 @@ void es_children_free(es_children *c) {
 	*c = (es_children){0};
 }
 
+// a box below c's own whose folder is on a path (in c's box): its places, and how many of the path's
+// names from the root are its folder's
+typedef struct {
+	pl *places;
+	size_t skip;
+} box_on;
+
+// the boxes below c's own whose folders are on path (in c's box), outermost first, and the path from
+// the root (*abs): a walk reaching a box's folder reads that box's rows beneath it, as the box's own
+// view does. none: 0
+static size_t boxes_on(es_context *c, const char *const *path, size_t npath, es_names *abs,
+	box_on **out) {
+	es_ermine *e = c->ermine;
+	*out = NULL;
+	*abs = (es_names){0};
+	es_names at;
+	if (es_box_count(e) == 0 || !es_box_at(e, c->box->root, &at)) return 0;
+	*abs = names_of(CP(at.names), at.n);
+	for (size_t i = 0; i < npath; i++) names_add(abs, path[i]);
+	size_t n = 0;
+	// outermost first: down the trie, the boxes at the ends of the names
+	const trie_t *t = &walks(e)->trie;
+	for (size_t i = 0; i < abs->n; i++) {
+		t = es_map_get(&t->kids, abs->names[i]);
+		if (t == NULL) break;
+		if (i >= at.n && t->box != NULL && t->box->places != c->places) {
+			*out = realloc(*out, (n + 1) * sizeof **out);
+			if (*out == NULL) abort();
+			(*out)[n++] = (box_on){t->box->places, i + 1};
+		}
+	}
+	es_names_free(&at);
+	return n;
+}
+
+static int names_has(const es_names *names, const char *name) {
+	for (size_t i = 0; i < names->n; i++) if (strcmp(names->names[i], name) == 0) return 1;
+	return 0;
+}
+
 int es_list(es_context *c, es_target x, es_names *out) {
 	es_ermine *e = c->ermine;
 	*out = (es_names){0};
@@ -1557,13 +1860,27 @@ int es_list(es_context *c, es_target x, es_names *out) {
 			pl_members m = pl_list(t->places, CP(n.path), n.npath);
 			for (size_t i = 0; i < m.n; i++) names_add(&got, m.items[i].name);
 			pl_members_free(&m);
+			// a box beneath on the path (a process started in it): its rows' names too, after
+			es_names abs;
+			box_on *on;
+			size_t non = boxes_on(t, CP(n.path), n.npath, &abs, &on);
+			for (size_t k = 0; k < non && !code; k++) {
+				pl_members bm = pl_list(on[k].places, CP(abs.names) + on[k].skip, abs.n - on[k].skip);
+				for (size_t i = 0; i < bm.n; i++) {
+					if (!names_has(&got, bm.items[i].name)) names_add(&got, bm.items[i].name);
+				}
+				pl_members_free(&bm);
+				code = check_in(t, on[k].places);
+			}
+			free(on);
+			es_names_free(&abs);
 		} else if (n.id != NULL) {
 			pl_namelist nl = {0};
 			pl_keys(t->places, tb_string("children"), tb_string(n.id), NULL, 0, 0, &nl);
 			for (size_t i = 0; i < nl.n; i++) names_add(&got, nl.items[i]);
 			pl_namelist_free(&nl);
 		}
-		code = check(t);
+		if (!code) code = check(t);
 	}
 	es_node_data_free(&n);
 	if (code) return es_names_free(&got), code;
@@ -1586,10 +1903,22 @@ int es_read_children(es_context *c, es_target x, es_children *out) {
 		? pl_read(t->places, tb_string("children"), tb_string(id), NULL, 0) : NULL;
 	out->names = es_alloc((names.n + 1) * sizeof *out->names);
 	out->nodes = es_alloc((names.n + 1) * sizeof *out->nodes);
-	for (size_t i = 0; i < names.n; i++) {
+	// the boxes beneath on the path, innermost first, then c's own: a name's node as a path reaches it
+	// (es_node_of: the deepest box's)
+	es_names abs = {0};
+	box_on *on = NULL;
+	size_t non = n.has_path ? boxes_on(t, CP(n.path), n.npath, &abs, &on) : 0;
+	for (size_t i = 0; i < names.n && !code; i++) {
 		const char *at = NULL;
 		const op_value *kid = kids != NULL && kids->type == OP_MAP ? op_get(kids, names.names[i]) : NULL;
-		if (n.has_path) {
+		for (size_t k = non; k > 0 && at == NULL && !code; k--) {
+			es_names p = names_of(CP(abs.names) + on[k - 1].skip, abs.n - on[k - 1].skip);
+			names_add(&p, names.names[i]);
+			at = id_in(on[k - 1].places, CP(p.names), p.n);
+			es_names_free(&p);
+			code = check_in(t, on[k - 1].places);
+		}
+		if (n.has_path && at == NULL) {
 			es_names p = names_of(CP(n.path), n.npath);
 			names_add(&p, names.names[i]);
 			tb_key k;
@@ -1601,82 +1930,601 @@ int es_read_children(es_context *c, es_target x, es_children *out) {
 		out->names[out->n] = es_dup(names.names[i]);
 		out->nodes[out->n++] = es_handle_by_id(t, at, "value");
 	}
+	free(on);
+	es_names_free(&abs);
 	es_names_free(&names);
 	es_node_data_free(&n);
-	code = check(t);
+	if (!code) code = check(t);
 	if (code) es_children_free(out);
 	return code;
 }
 
-// watch --------------------------------------------------------------------------------------------------------
+// pipes -----------------------------------------------------------------------------------------------------
+// pipe(from, fn) | pipe(from, to, fnA?, fnB?) (system.ts: the comment above pipe says it all): a node of
+// its own, in its own scope { node, pipe }, told each write at from (and, with a way back, at to). its
+// writes are its own, asked as the context that made it; it is never told its own. "pulse" timing:
+// told at the next pulse (es_pipes_told, before the scheduler's); "write": as the write lands. a pipe
+// told more than PIPE_LOOPING pipes' writes in a row, or that deep, is looping and told no more
 
-static void unwatch(es_watching *w) {
-	if (w->stopped) return;
-	w->stopped = 1;
-	pl_stop(w->watch);
+#define PIPE_LOOPING 64
+
+static void pipe_stop(pipe_t *p) {
+	for (size_t i = 0; i < p->nlistens; i++) {
+		listening *l = p->listens[i];
+		if (l->stopped) continue;
+		l->stopped = 1;
+		pl_stop(l->watch);
+	}
 }
-void es_unwatch(es_watching *w) { unwatch(w); }
-static char *watch_teardown(void *data) {
-	unwatch(data);
+
+static void heard_free(heard_t *h) {
+	if (h->patches != NULL) block_free(h->patches);
+	op_free(h->value);
+	op_free(h->held);
+}
+
+static void pipe_free(pipe_t *p) {
+	for (size_t j = 0; j < p->nlistens; j++) {
+		es_names_free(&p->listens[j]->path);
+		free(p->listens[j]->part);
+		free(p->listens[j]);
+	}
+	free(p->listens);
+	es_names_free(&p->path);
+	free(p->key);
+	free(p->id);
+	op_free(p->id_value);
+	op_free(p->flag);
+	free(p);
+}
+
+// the pipes gone, freed: what they heard and is not told yet dropped, out of all_pipes, their scope
+// let go. not while telling (a write told may be another's, gone in it)
+static void pipes_gone(struct es_nodes *x) {
+	if (x->telling > 0 || x->ngone_pipes == 0) return;
+	size_t k = 0;
+	for (size_t i = 0; i < x->npiped; i++) {
+		if (x->piped[i].p->gone) heard_free(&x->piped[i]);
+		else x->piped[k++] = x->piped[i];
+	}
+	x->npiped = k;
+	for (size_t i = 0; i < x->ngone_pipes; i++) {
+		pipe_t *p = x->gone_pipes[i];
+		pipe_t *last = x->all_pipes[--x->nall_pipes];
+		x->all_pipes[p->at] = last;
+		last->at = p->at;
+		sc_release(p->scope);
+		pipe_free(p);
+	}
+	x->ngone_pipes = 0;
+}
+
+static void pipes_free(struct es_nodes *x) {
+	for (size_t i = 0; i < x->npiped; i++) heard_free(&x->piped[i]);
+	free(x->piped);
+	// the scheduler is gone by now (es_close): the pipes' holds go with it
+	for (size_t i = 0; i < x->nall_pipes; i++) pipe_free(x->all_pipes[i]);
+	free(x->all_pipes);
+	free(x->gone_pipes);
+	es_map_free(&x->pipes);
+	es_map_free(&x->pipe_ids);
+	for (size_t i = 0; i < x->norders; i++) free(x->orders[i]);
+	free(x->orders);
+	for (size_t i = 0; i < x->nregs; i++) free(x->regs[i]);
+	free(x->regs);
+}
+
+int es_pipe_looped(es_ermine *e, const char *id) {
+	pipe_t *p = e->nodes == NULL ? NULL : es_map_get(&e->nodes->pipe_ids, id);
+	return p != NULL && p->looped;
+}
+
+// a path as a key that two paths share only if they are the same: each name by its length
+static char *pipe_key(char *const *path, size_t n) {
+	size_t len = 1;
+	for (size_t i = 0; i < n; i++) len += strlen(path[i]) + 24;
+	char *s = es_alloc(len), *o = s;
+	for (size_t i = 0; i < n; i++) o += snprintf(o, len - (size_t)(o - s), "%zu:%s", strlen(path[i]), path[i]);
+	return s;
+}
+
+// a deep equal: maps by their keys (in any order), lists, bytes and typed arrays by their bytes
+static int values_equal(const op_value *a, const op_value *b) {
+	if (a == b) return 1;
+	if (a == NULL || b == NULL || a->type != b->type) return 0;
+	switch (a->type) {
+	case OP_NULL: return 1;
+	case OP_BOOL: return !a->bool_ == !b->bool_;
+	case OP_NUM: return op_same_num(a, b) != 0;
+	case OP_STR: return a->bytes == b->bytes && memcmp(a->str, b->str, a->bytes) == 0;
+	case OP_TYPED:
+		if (a->kind != b->kind) return 0;
+		// fall through
+	case OP_BYTES: return a->bytes == b->bytes && (a->bytes == 0 || memcmp(a->data, b->data, a->bytes) == 0);
+	case OP_STAND: return a->count == b->count && values_equal(a->items[0], b->items[0]);
+	case OP_LIST:
+		if (a->count != b->count) return 0;
+		for (size_t i = 0; i < a->count; i++) {
+			if (!values_equal(a->items[i], b->items[i])) return 0;
+		}
+		return 1;
+	case OP_MAP:
+		if (a->count != b->count) return 0;
+		for (size_t i = 0; i < a->count; i++) {
+			if (!values_equal(a->items[i], op_get(b, a->keys[i]))) return 0;
+		}
+		return 1;
+	}
+	return 0;
+}
+
+// an Error as a status holds it (status.h's)
+static op_value *pipe_error(const char *message) {
+	op_value *m = op_map();
+	op_set(m, "name", op_str("Error"));
+	op_set(m, "message", op_str(message));
+	return op_stand(m);
+}
+
+// the message of what was thrown last
+static char *pipe_failure(int code) {
+	const es_error *t = es_thrown();
+	return es_dup(t->message != NULL ? t->message : es_code_name(code));
+}
+
+// a pipe's status, in the status table: failed (the error), or none (done)
+typedef struct {
+	pipe_t *p;
+	const char *error;
+} pipe_stating;
+static void pipe_status_run(void *data) {
+	pipe_stating *s = data;
+	pipe_t *p = s->p;
+	const nd_entry *at = tb_get(p->e->table, tb_string(CST_TABLE), tb_string(p->id));
+	const op_value *had = at != NULL && at->value != NULL && at->value->type == OP_MAP
+		? op_get(at->value, CST_ATTRIBUTE)
+		: NULL;
+	if (s->error == NULL && had == NULL) return;
+	op_key key = {.type = OP_STR_KEY, .s = CST_ATTRIBUTE};
+	op_patch patch = {0};
+	op_value *own = NULL;
+	if (s->error == NULL) {
+		patch.place = (op_target){.path = &key, .length = 1};
+	} else if (had == NULL) {
+		own = op_map();
+		op_set(own, CST_ATTRIBUTE, pipe_error(s->error));
+		patch.has_value = 1;
+		patch.value = own;
+	} else {
+		own = pipe_error(s->error);
+		patch.place = (op_target){.path = &key, .length = 1};
+		patch.has_value = 1;
+		patch.value = own;
+	}
+	es_write w = {.part = CST_TABLE, .id = p->id, .patches = &patch, .npatches = 1};
+	if (es_context_put(p->cx, &w)) es_clear_thrown();
+	op_free(own);
+}
+static void pipe_status(pipe_t *p, const char *error, int looped) {
+	pipe_stating s = {p, error};
+	p->looped = looped;
+	sc_run_with_scope(p->scope, pipe_status_run, &s);
+}
+
+// the pipe's node unplaced and its entries gone (its scope gone, not made again)
+static void pipe_gone_node(pipe_t *p) {
+	es_ermine *e = p->e;
+	es_context *c = p->cx;
+	nd_entry *children;
+	const char *last;
+	if (es_folder_slot(c, CP(p->path.names), p->path.n, &children, &last) == 0) {
+		const op_value *held = children->value != NULL && children->value->type == OP_MAP
+			? op_get(children->value, last)
+			: NULL;
+		tb_key parent = {0};
+		int ours = held != NULL && held->type == OP_STR && strcmp(held->str, p->id) == 0;
+		if (ours && p->path.n == 1) parent = pl_root(c->places);
+		else if (ours && !pl_get(c->places, CP(p->path.names), p->path.n - 1, &parent)) ours = 0;
+		if (ours) {
+			op_key step = {.type = OP_STR_KEY, .s = last};
+			op_patch out = {.place = {.path = &step, .length = 1}};
+			es_write w = {.part = "children", .id = parent.string, .patches = &out, .npatches = 1};
+			if (es_context_put(c, &w)) es_clear_thrown();
+		}
+	} else {
+		es_clear_thrown();
+	}
+	// every part at the node (the table's scratch is changed by each delete: names copied first)
+	size_t n = 0;
+	const tb_entry *at = tb_at(e->table, tb_string(p->id), &n);
+	char **parts = es_alloc((n + 1) * sizeof *parts);
+	size_t np = 0;
+	for (size_t i = 0; i < n; i++) {
+		if (at[i].part.string != NULL) parts[np++] = es_dup(at[i].part.string);
+	}
+	for (size_t i = 0; i < np; i++) {
+		es_write w = {.part = parts[i], .id = p->id, .gone = 1};
+		if (es_context_put(c, &w)) es_clear_thrown();
+		free(parts[i]);
+	}
+	free(parts);
+	es_held_drop(e, p->id);
+}
+
+static char *pipe_teardown(void *data) {
+	pipe_reg *r = data;
+	pipe_t *p = r->p;
+	struct es_nodes *x = state(p->e);
+	pipe_reg *last = x->regs[--x->nregs];
+	x->regs[r->at] = last;
+	last->at = r->at;
+	int current = p->scope == r->scope;
+	free(r);
+	if (!current) return NULL;
+	pipe_stop(p);
+	if (es_map_get(&x->pipes, p->key) == p) es_map_del(&x->pipes, p->key);
+	if (es_map_get(&x->pipe_ids, p->id) == p) es_map_del(&x->pipe_ids, p->id);
+	p->gone = 1;
+	pipe_gone_node(p);
+	ES_PUSH(x->gone_pipes, x->ngone_pipes, x->capgone_pipes, p);
+	pipes_gone(x);
 	return NULL;
 }
-// a write landing at the node: told as asked read (refused: told so)
-static void watch_told(const pl_fact *fact, void *ctx) {
-	es_watching *w = ctx;
-	es_ermine *e = w->ermine;
-	int no = 0;
-	gd_thing thing = {.id = fact->id, .path = CP(w->path.names), .npath = w->path.n};
-	if (refused(w->side, gd_target_of(thing, w->part, NULL), &no)) no = 0;
-	if (no) {
-		es_watched told = {.refused = 1};
-		w->fn(w->ctx, &told);
-		return;
-	}
-	es_watched told = {.patches = fact->patches, .npatches = fact->patches_length};
-	if (fact->change != NULL) {
-		const op_value *change = pl_change_value(e->places, fact->change);
-		if (change != NULL) told.change = es_change_view_of(e, change);
-	}
-	if (fact->entry != NULL) told.value = fact->entry->value;
-	w->fn(w->ctx, &told);
+
+// p told w, in its own scope: its fn, or its patches written at to (back: at from)
+typedef struct {
+	pipe_t *p;
+	const es_watched *w;
+	int back, code;
+} pipe_telling;
+
+typedef struct {
+	es_context *c;
+	const char *id, *part;
+	const op_value *now;
+} pipe_peeking;
+static void pipe_peek(void *data) {
+	pipe_peeking *k = data;
+	k->now = pl_read(k->c->places, tb_string(k->part), tb_string(k->id), NULL, 0);
 }
 
-int es_watch(es_context *c, es_target x, es_watch_fn fn, void *ctx, es_watching **out) {
-	es_ermine *e = c->ermine;
-	*out = NULL;
-	es_context *t = c;
-	es_node_data n;
-	TRY(node_part(t, x, NULL, &n));
-	if (!n.has_path) {
-		es_node_data_free(&n);
-		return places_fail(ES_NOTHING_THERE, "a node with no place");
+static void pipe_told_run(void *data) {
+	pipe_telling *t = data;
+	pipe_t *p = t->p;
+	es_context *c = p->cx;
+	const es_watched *w = t->w;
+	if (p->tell != NULL) {
+		t->code = p->tell(c, p->ctx, w);
+		return;
 	}
-	int code = 0;
-	if (t->guarded) {
+	if (w->refused) return;
+	es_pipe_gave g = {0};
+	es_pipe_map f = t->back ? p->back : p->there;
+	if (f != NULL) {
+		t->code = f(c, p->ctx, w, &g);
+		if (t->code) return;
+	} else {
+		g.given = 1;
+		g.patches = w->patches;
+		g.n = w->npatches;
+	}
+	if (!g.given || g.n == 0) {
+		op_free(g.own);
+		return;
+	}
+	es_target target = es_on_node(t->back ? p->from : p->to);
+	// a write that would change nothing is not made (so a mirror pair settles)
+	es_node_data nd;
+	int code = es_node_of(c, target, &nd);
+	if (code == 0) {
 		const char *id;
-		if (es_id_of(t, &n, &id)) {
-			code = ask_read(t, gd_target_of(thing_of(id, &n), n.part, NULL));
-		} else {
-			gd_thing thing = {.path = CP(n.path), .npath = n.npath};
-			code = ask_read(t, gd_target_of(thing, n.part, NULL));
+		if (es_id_of(c, &nd, &id)) {
+			pipe_peeking k = {c, id, nd.part, NULL};
+			pl_peep(c->places, pipe_peek, &k);
+			op_value *next = NULL;
+			size_t failed;
+			if (op_apply(k.now, g.patches, g.n, NULL, &next, &failed) == OP_OK && next != NULL &&
+				values_equal(k.now, next)) {
+				op_free(next);
+				es_node_data_free(&nd);
+				op_free(g.own);
+				return;
+			}
+			op_free(next);
+		}
+		es_node_data_free(&nd);
+		code = es_patch(c, target, g.patches, g.n);
+	}
+	op_free(g.own);
+	t->code = code;
+}
+
+static void pipe_told(pipe_t *p, const es_watched *w, int back, int by_pipe) {
+	struct es_nodes *x = state(p->e);
+	if (!sc_scope_alive(p->scope) || p->looping) return;
+	p->chain = by_pipe ? p->chain + 1 : 0;
+	if (x->pipe_depth >= PIPE_LOOPING || p->chain > PIPE_LOOPING) {
+		p->looping = 1;
+		pipe_status(p, "looping: a pipe told pipes' writes more than 64 in a row", 1);
+		return;
+	}
+	x->pipe_depth++;
+	// p, or one it tells, gone while it is told: freed after (pipes_gone)
+	x->telling++;
+	pipe_telling t = {p, w, back, 0};
+	const char *bad = sc_run_with_scope(p->scope, pipe_told_run, &t);
+	if (bad != NULL) {
+		// its scope went as it was told: nothing to say
+		if (strcmp(bad, SC_DISPOSED) != 0) {
+			es_fail_text(bad);
+			t.code = ES_FAILED;
 		}
 	}
-	if (code) return es_node_data_free(&n), code;
-	es_watching *w = es_alloc(sizeof *w);
-	w->ermine = e;
-	w->side = t;
-	w->fn = fn;
-	w->ctx = ctx;
-	w->part = es_dup(n.part);
-	w->path = names_of(CP(n.path), n.npath);
-	pl_watching options = {.has_part = 1, .part = tb_string(w->part)};
-	w->watch = pl_watch_path(t->places, CP(w->path.names), w->path.n, watch_told, w, &options);
-	struct es_nodes *x_ = state(e);
-	ES_PUSH(x_->watches, x_->nwatches, x_->capwatches, w);
-	free(sc_register_teardown(e->scheduler, es_owner(c), watch_teardown, w));
+	if (t.code) {
+		char *message = pipe_failure(t.code);
+		es_clear_thrown();
+		pipe_status(p, message, 0);
+		free(message);
+	} else if (!p->looping) {
+		pipe_status(p, NULL, 0);
+	}
+	x->pipe_depth--;
+	x->telling--;
+	pipes_gone(x);
+}
+
+// the pipes' heard writes told, before the scheduler's pulse (those heard while telling: the pulse after)
+void es_pipes_told(es_ermine *e) {
+	struct es_nodes *x = e->nodes;
+	if (x == NULL) return;
+	pipes_gone(x);
+	if (x->npiped == 0) return;
+	heard_t *now = x->piped;
+	size_t n = x->npiped;
+	x->piped = NULL;
+	x->npiped = x->cappiped = 0;
+	x->telling++;
+	for (size_t i = 0; i < n; i++) {
+		heard_t *h = &now[i];
+		es_watched w = {.refused = h->refused, .value = h->value, .change = h->change};
+		if (h->patches != NULL) w.patches = h->patches->patches, w.npatches = h->patches->n;
+		if (!h->p->gone) pipe_told(h->p, &w, h->back, h->by_pipe);
+		heard_free(h);
+	}
+	x->telling--;
+	free(now);
+	pipes_gone(x);
+}
+
+// a write landing at a node a pipe listens to: told now, or held for the next pulse
+static void pipe_heard(const pl_fact *fact, void *ctx) {
+	listening *l = ctx;
+	pipe_t *p = l->p;
+	es_ermine *e = p->e;
+	int by_pipe = 0;
+	const ch_header *h = fact->change;
+	for (size_t i = 0; h != NULL && i < h->metadata_length; i++) {
+		const ch_entry *m = &h->metadata[i];
+		const op_value *v = m->value;
+		// never told its own writes
+		if (strcmp(m->key, PL_NODE) == 0 && v != NULL && v->type == OP_STR && strcmp(v->str, p->id) == 0) {
+			return;
+		}
+		if (strcmp(m->key, "pipe") == 0) by_pipe = 1;
+	}
+	int no = 0;
+	gd_thing thing = {.id = fact->id, .path = CP(l->path.names), .npath = l->path.n};
+	if (refused(p->cx, gd_target_of(thing, l->part, NULL), &no)) no = 0;
+	es_watched w = {.refused = no};
+	if (!no) {
+		w.patches = fact->patches;
+		w.npatches = fact->patches_length;
+		if (fact->change != NULL) {
+			const op_value *change = pl_change_value(e->places, fact->change);
+			if (change != NULL) w.change = es_change_view_of(e, change);
+		}
+		if (fact->entry != NULL) w.value = fact->entry->value;
+	}
+	if (p->write) {
+		pipe_told(p, &w, l->back, by_pipe);
+		return;
+	}
+	struct es_nodes *x = state(e);
+	heard_t later = {.p = p, .back = l->back, .by_pipe = by_pipe, .refused = no, .change = w.change};
+	if (w.change != NULL) later.held = op_ref((op_value *)w.change->change);
+	if (!no) {
+		if (w.npatches > 0) later.patches = block_new(w.patches, w.npatches);
+		later.value = w.value == NULL ? NULL : op_ref((op_value *)w.value);
+	}
+	ES_PUSH(x->piped, x->npiped, x->cappiped, later);
+	es_queue_pulse(e);
+}
+
+static void listen(pipe_t *p, const es_node_data *n, int back) {
+	listening *l = es_alloc(sizeof *l);
+	l->p = p;
+	l->back = back;
+	l->part = es_dup(n->part);
+	l->path = names_of(CP(n->path), n->npath);
+	pl_watching options = {.has_part = 1, .part = tb_string(l->part)};
+	l->watch = pl_watch_path(p->cx->places, CP(l->path.names), l->path.n, pipe_heard, l, &options);
+	ES_PUSH(p->listens, p->nlistens, p->caplistens, l);
+}
+
+// how many pipes the owner's run has made so far, and one more counted: pipe-<n>
+static void order_gone(order_t *o) { o->owner = NULL; }
+static char *order_teardown(void *data) {
+	order_gone(data);
+	return NULL;
+}
+static unsigned pipe_order(es_ermine *e, const void *owner, unsigned run_n) {
+	struct es_nodes *x = state(e);
+	order_t *o = NULL;
+	for (size_t i = 0; i < x->norders && o == NULL; i++) {
+		if (x->orders[i]->owner == owner) o = x->orders[i];
+	}
+	if (o == NULL) {
+		for (size_t i = 0; i < x->norders && o == NULL; i++) {
+			if (x->orders[i]->owner == NULL) o = x->orders[i];
+		}
+		if (o == NULL) {
+			o = es_alloc(sizeof *o);
+			ES_PUSH(x->orders, x->norders, x->caporders, o);
+		}
+		*o = (order_t){owner, run_n, 0};
+		free(sc_register_teardown(e->scheduler, (sc_scope *)owner, order_teardown, o));
+	}
+	if (o->run_n != run_n) o->run_n = run_n, o->count = 0;
+	return o->count++;
+}
+
+typedef struct {
+	es_context *c;
+	char *const *path;
+	size_t npath;
+	char *id;
+} pipe_building;
+static int pipe_build(void *data) {
+	pipe_building *b = data;
+	char *id;
+	int code = es_build(b->c, CP(b->path), b->npath, NULL, b->id, &id);
+	if (code == 0) free(id);
+	return code;
+}
+
+// the handle a target is: its own, else one minted for the node it reached
+static const es_handle *pipe_handle(es_context *c, es_target x, const es_node_data *n) {
+	return x.node != NULL ? x.node : es_handle_make(c, n);
+}
+
+static int pipe_ask(es_context *c, const es_node_data *n, int edit) {
+	if (!c->guarded) return 0;
+	const char *id;
+	gd_thing thing;
+	if (es_id_of(c, n, &id)) thing = thing_of(id, n);
+	else thing = (gd_thing){.path = CP(n->path), .npath = n->npath};
+	gd_target target = gd_target_of(thing, n->part, NULL);
+	return edit ? ask(c, "edit", target) : ask_read(c, target);
+}
+
+static int make_pipe(es_context *c, es_target from, const es_pipe_options *o, es_handle **out) {
+	es_ermine *e = c->ermine;
+	struct es_nodes *x = state(e);
+	ALIVE(c);
+	if (o->tell == NULL && !o->has_to) {
+		return es_fail(ES_NOT_A_FUNCTION,
+			"not-a-function: pipe takes (from, fn) or (from, to, fnA?, fnB?)");
+	}
+	es_node_data n, tn = {0};
+	TRY(node_part(c, from, NULL, &n));
+	int code = 0;
+	if (!n.has_path) code = places_fail(ES_NOTHING_THERE, "a node with no place");
+	if (!code && o->has_to) code = node_part(c, o->to, NULL, &tn);
+	if (!code) code = pipe_ask(c, &n, 0);
+	if (!code && o->has_to) code = pipe_ask(c, &tn, 1);
+	if (code) {
+		es_node_data_free(&n);
+		es_node_data_free(&tn);
+		return code;
+	}
+	sc_scope *own = es_owner(c);
+	sc_run *run = sc_get_run(e->scheduler);
+	sc_computer *computer = run == NULL ? NULL : sc_run_computer(run);
+	unsigned run_n = run == NULL ? 0 : sc_run_n(run);
+	const void *owner = computer != NULL ? (const void *)computer : (const void *)own;
+	unsigned k = pipe_order(e, owner, run_n);
+	char numbered[40];
+	snprintf(numbered, sizeof numbered, "pipe-%u", k);
+	es_names path;
+	code = es_resolve(c, o->name.text != NULL || o->name.steps != NULL ? o->name : es_text(numbered), &path);
+	if (code) {
+		es_node_data_free(&n);
+		es_node_data_free(&tn);
+		return code;
+	}
+	char *key = pipe_key(path.names, path.n);
+	pipe_t *p = es_map_get(&x->pipes, key);
+	if (p != NULL && p->owner == owner && sc_scope_alive(p->scope)) {
+		if (computer != NULL && p->run_computer == computer && p->run_n == run_n) {
+			char *at = names_join(CP(path.names), path.n);
+			code = places_fail(ES_ALREADY_THERE, at);
+			free(at);
+		}
+	} else {
+		pipe_building b = {c, path.names, path.n, es_new_id(e)};
+		code = es_inside(c, pipe_build, &b);
+		if (code) {
+			free(b.id);
+		} else {
+			p = es_alloc(sizeof *p);
+			p->e = e;
+			p->cx = c;
+			p->id = b.id;
+			p->id_value = op_str(p->id);
+			p->flag = op_bool(1);
+			p->owner = owner;
+			p->key = es_dup(key);
+			p->path = names_of(CP(path.names), path.n);
+			p->at = x->nall_pipes;
+			ES_PUSH(x->all_pipes, x->nall_pipes, x->capall_pipes, p);
+			es_map_set(&x->pipes, key, p);
+			es_map_set(&x->pipe_ids, p->id, p);
+			listen(p, &n, 0);
+			if (o->has_to && o->back != NULL && tn.has_path) listen(p, &tn, 1);
+		}
+	}
+	free(key);
+	if (code) {
+		es_node_data_free(&n);
+		es_node_data_free(&tn);
+		es_names_free(&path);
+		return code;
+	}
+	p->from = pipe_handle(c, from, &n);
+	p->to = o->has_to ? pipe_handle(c, o->to, &tn) : NULL;
 	es_node_data_free(&n);
-	*out = w;
+	es_node_data_free(&tn);
+	// made again: the new functions, told again. its scope: this run's (or the owner's), told its node
+	p->tell = o->tell;
+	p->there = o->there;
+	p->back = o->back;
+	p->ctx = o->ctx;
+	p->write = o->write;
+	p->looping = 0;
+	p->chain = 0;
+	p->run_computer = computer;
+	p->run_n = run_n;
+	sc_pair info[2] = {{PL_NODE, p->id_value}, {"pipe", p->flag}};
+	sc_scope *scope = sc_create_scope(e->scheduler, info, 2, own);
+	if (scope == NULL) {
+		es_names_free(&path);
+		return es_fail_text(SC_DISPOSED);
+	}
+	// made again: the scope it had (old, going as its owner's run ends) let go
+	if (p->scope != NULL) sc_release(p->scope);
+	p->scope = scope;
+	pipe_reg *reg = es_alloc(sizeof *reg);
+	reg->p = p;
+	reg->scope = scope;
+	reg->at = x->nregs;
+	ES_PUSH(x->regs, x->nregs, x->capregs, reg);
+	free(sc_register_teardown(e->scheduler, scope, pipe_teardown, reg));
+	es_queue_pulse(e);
+	if (out != NULL) {
+		es_node_data nd = {.has_path = 1, .path = path.names, .npath = path.n, .part = (char *)"value"};
+		*out = es_handle_make(c, &nd);
+	}
+	es_names_free(&path);
 	return 0;
+}
+
+int es_pipe_at(es_context *c, es_target from, const es_pipe_options *o, es_handle **out,
+	const ch_site *site) {
+	if (out != NULL) *out = NULL;
+	const ch_site *was = es_enter(c->ermine, site);
+	int code = make_pipe(c, from, o, out);
+	es_enter(c->ermine, was);
+	return code;
 }
 
 const char *const *es_get_args(es_context *c, size_t *n) {
@@ -2018,6 +2866,7 @@ static int remove_in(void *v) {
 	}
 	if (!code) {
 		crn_drop(e->runs, tb_string(id));
+		es_calls_drop(e, id);
 		es_held_drop(e, id);
 	}
 	free(id);

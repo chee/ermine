@@ -117,6 +117,10 @@ typedef struct {
 	// none: children alone
 	const pl_contributor *const *contributors;
 	size_t ncontributors;
+	// 1: pl_tracking is the scheduler's tracking-start listener (sc_on_tracking_start), so a spot read
+	// outside any run, which no run has tracked since, is let go of as a write reaches it (paths.ts:
+	// lazily, a spot a mark gives back with no readers). 0: such a spot is kept, as before
+	int tracking;
 } pl_setup;
 // once: before anything is read or written
 void pl_connect(pl *p, const pl_setup *setup);
@@ -139,6 +143,9 @@ void pl_event(void *ctx, tb_key part, tb_key id);
 // the scheduler's untrack listener (sc_on_tracking_end): a key that is one of this places' spots is released; any other is left alone.
 // A spot kept (pl_keep) is not released: whoever keeps it calls this once its last keep is given back
 void pl_forget(const void *key, void *ctx);
+// the scheduler's tracking-start listener (sc_on_tracking_start), with setup.tracking: one of this
+// places' spots is tracked by a run, so not loose
+void pl_tracking(const void *key, sc_run *run, void *ctx);
 
 // the first answer that was not SC_OK to the reads told since this was last asked; then SC_OK
 sc_track_status pl_status(pl *p);
@@ -199,6 +206,15 @@ const op_value *pl_get_or_set(pl *p, tb_key part, tb_key id, const char *const *
 // an entry the caller made and added to the table, which the places lets go of at pl_free (as the ones
 // pl_upsert makes)
 void pl_own(pl *p, nd_entry *node);
+// the same, let go of sooner: once table holds it no more (taken out, or another put in its
+// place), pl_sweep frees it, and its holds, as the reference's table lets go of an entry taken
+// out (one nothing references) [chee 10-26: the C should "garbage collect" via something like a
+// weakmap]. a value read of it is borrowed till the node changes, so a sweep comes after the
+// pulse
+void pl_own_in(pl *p, nd_entry *node, tb_table *table);
+// the entries pl_own_in gave that their table holds no more, let go of; at most once as many are
+// owned again as the last sweep left (and 64 more). for a pulse's end: nothing may hold one then
+void pl_sweep(pl *p);
 
 // what landed at one key: the patches a write put there (a table event: one at the root, the value
 // whole; taken out, one at the root with no value), the change, and the entry now. change and entry

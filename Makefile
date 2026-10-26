@@ -144,6 +144,10 @@ ids_src = $(harness_src) ermine/ids/c/ids.c ermine/ids/c/ids_harness.c $(blake3_
 ids = ermine/ids/c/ids-harness
 ids_suite = ids
 LIBS += ids
+# the scheduler's frees (core/scheduler/c/free_test.c): what holds a scope, and when it goes; no suite
+scheduler-free-test_src = core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c core/scheduler/c/free_test.c
+scheduler-free-test = core/scheduler/c/free-test
+LIBS += scheduler-free-test
 # clingy (core/clingy): keys known tracked or not, told when their last tracker goes; no suite
 clingy-test_src = core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c core/clingy/c/clingy.c core/clingy/c/clingy_test.c
 clingy-test = core/clingy/c/clingy-test
@@ -328,6 +332,16 @@ endef
 $(foreach l,$(LIBS),$(eval $(call harness,$(l))))
 # pully's C, not in LIBS (its section above): a rule to build it alone
 $(eval $(call harness,pullynode))
+# steady use (ermine/system/c/steady_test.c): each thing a program does, again and again, held
+# memory levelling off (leaks sees only what is lost at close). not in LIBS: its counts are the
+# allocator's, no sanitizer's. make test-steady-system
+system-steady_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c ermine/system/c/ermine_harness.c,$(system_src)) ermine/system/c/steady_test.c
+system-steady = ermine/system/c/steady-test
+$(eval $(call harness,system-steady))
+$(system-steady): $(wildcard */*/c/*.h)
+test-steady-system: $(system-steady)
+	@echo "== system (steady)"
+	@$(system-steady)
 
 # headers: any change rebuilds what includes them
 $(HARNESSES) $(CHECKS): $(wildcard */*/c/*.h */*/stacks/*/c/*.h conformance/c/*.h)
@@ -457,5 +471,6 @@ playground/tools/files/c/files-check: $(files_src) $(wildcard */*/c/*.h */*/stac
 clean:
 	rm -rf playground/tools/files/c/files playground/tools/files/c/files-check playground/tools/files/c/files-check.dSYM
 	rm -rf $(HARNESSES) $(CHECKS) $(BENCHES) $(addsuffix .dSYM,$(HARNESSES) $(CHECKS))
+	rm -rf $(system-steady) $(system-steady)-check $(system-steady).dSYM
 
-.PHONY: all bench check test test-c test-check clean $(addprefix test-c-,$(LIBS)) $(addprefix test-check-,$(LIBS))
+.PHONY: all bench check test test-c test-check test-steady-system clean $(addprefix test-c-,$(LIBS)) $(addprefix test-check-,$(LIBS))
