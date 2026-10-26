@@ -3,8 +3,8 @@
 // handed over by extend. a process running at a path answers there before what is saved: the
 // world's places already ask the process trie first
 import createEntry from "@ermine/core/node/entry"
-import { createPathCache } from "@ermine/places/cache"
-import { createChangeHeader } from "@ermine/places/header"
+import { createPathCache } from "@ermine/core/places/cache"
+import { createChangeHeader } from "@ermine/core/places/header"
 import { createWorld } from "@ermine/slaygrounds/world"
 import { render } from "ermine-h"
 

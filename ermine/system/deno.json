@@ -3,6 +3,9 @@
 	"version": "0.0.0",
 	"license": "AGPL-3.0-or-later",
 	"exports": {
-		".": "./mod.ts"
+		".": "./mod.ts",
+		"./context": "./typescript/context.ts",
+		"./features": "./typescript/features.ts",
+		"./calls": "./typescript/calls.ts"
 	}
 }

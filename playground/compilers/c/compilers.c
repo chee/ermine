@@ -7,7 +7,7 @@
 #include "../../../core/scheduler/c/ptrmap.h"
 #include "../../../ermine/encoding/c/cbor.h"
 #include "../../../ermine/encoding/c/blake3/blake3.h"
-#include "../../../filesystem/clingy/c/clingy.h"
+#include "../../../core/clingy/c/clingy.h"
 #include "../../encoding/c/pack.h"
 #include "mem.h"
 

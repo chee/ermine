@@ -27,7 +27,7 @@
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
 import apply, { ApplyError, type Key as Step, type Patch } from "@ermine/core/op/apply"
-import { at, type Places, unread } from "@ermine/places"
+import { at, type Places, unread } from "@ermine/core/places"
 import type { Id, Key, Table } from "@ermine/core/table"
 
 declare module "@ermine/core/table" {

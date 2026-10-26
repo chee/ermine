@@ -17,7 +17,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#include "../../../filesystem/places/c/places.h"
+#include "../../../core/places/c/places.h"
 
 // a type as the lists give it: each field a NULL-terminated list of strings, or NULL: none
 typedef struct {

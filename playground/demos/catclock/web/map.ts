@@ -18,8 +18,8 @@ import { ATTRIBUTES as A, satisfy, type Way, type Why } from "@ermine/programs"
 import { COMPILER } from "@ermine/compilers"
 import { PIN } from "@ermine/processes/start"
 import type { Box } from "@ermine/boxes"
-import * as lib from "@ermine/places/lib"
-import { STATUS } from "@ermine/places/status"
+import * as lib from "@ermine/core/places/lib"
+import { STATUS } from "@ermine/core/places/status"
 import { PENDING } from "@ermine/core/scheduler"
 
 type Id = string | symbol

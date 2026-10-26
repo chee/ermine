@@ -41,6 +41,7 @@
     "npm:linkedom@0.18.12": "0.18.12",
     "npm:mingo@6.4.15": "6.4.15",
     "npm:mustache@4.2.0": "4.2.0",
+    "npm:playwright@1": "1.64.0",
     "npm:prql-js@0.12.1": "0.12.1",
     "npm:solid-js@*": "1.9.17",
     "npm:sucrase@3.35.0": "3.35.0",
@@ -1211,6 +1212,17 @@
     },
     "pirates@4.0.7": {
       "integrity": "sha512-TfySrs/5nm8fQJDcBDuUng3VOUKsd7S+zqvbOTiGXHfxX4wK31ard+hoNuvkicM/2YFzlpDgABOevKSsB4G/FA=="
+    },
+    "playwright-core@1.64.0": {
+      "integrity": "sha512-T9r+MZkTECl2+oUcZ26YgZzTrYidTsIhYYkJix+6iDOymOb1FB2RLLSOxRGnZGv5DStt+aduIVbt+E8WygXYpg==",
+      "bin": true
+    },
+    "playwright@1.64.0": {
+      "integrity": "sha512-kVzTnYFYEyQ9RGzBjNCd2+yEqWmVbxl3AHPynv3qQ6JTjv4a+kwRcnqQwIpuP3NnrnIrE/Q6wWAIAvMfIE2/Yg==",
+      "dependencies": [
+        "playwright-core"
+      ],
+      "bin": true
     },
     "postcss@8.5.30": {
       "integrity": "sha512-zkd+e9S1AQHhmaBKye9zlFHWjOwVgqXl1q3ECYy8561K7qxR2cREf/STLskulBFd78k6AOFeA+ff1TtEzk9bAA==",

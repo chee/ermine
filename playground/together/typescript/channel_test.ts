@@ -1,6 +1,6 @@
 import { assertEquals } from "@std/assert"
 import type { Transport } from "npm:@automerge/subduction@0.23.0"
-import { createPlaces } from "@ermine/places"
+import { createPlaces } from "@ermine/core/places"
 import { createPaths } from "@ermine/core/scheduler/paths"
 import { createScheduler } from "@ermine/core/scheduler"
 import { createTable, type Key } from "@ermine/core/table"

@@ -57,7 +57,7 @@ export function suites(): Suite[] {
 		}
 	}
 	for (
-		const group of ["core", "filesystem", "ermine", "extensions", "playground", "experiments"]
+		const group of ["core", "ermine", "extensions", "playground", "experiments"]
 	) {
 		for (const p of Deno.readDirSync(`${root}${group}`)) {
 			if (!p.isDirectory) continue

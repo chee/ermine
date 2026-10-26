@@ -27,11 +27,11 @@ import {
 	type Places,
 	rename,
 	unplace,
-} from "@ermine/places"
-import { createChangeBase, createChangeHeader } from "@ermine/places/header"
-import { plan } from "@ermine/places/path"
-import { createStatus, STATUS } from "@ermine/places/status"
-import type { Answer, Policy, Target } from "@ermine/protect"
+} from "@ermine/core/places"
+import { createChangeBase, createChangeHeader } from "@ermine/core/places/header"
+import { plan } from "@ermine/core/places/path"
+import { createStatus, STATUS } from "@ermine/core/places/status"
+import type { Answer, Policy, Target } from "@ermine/core/protect"
 import {
 	type Computer,
 	createScheduler,

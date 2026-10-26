@@ -6,7 +6,7 @@
 //   rerun        a write on the page to the act of a worker effect reading it and its write landing
 //                on the page again: two crossings, two pulses, three writes (the effect's value, its
 //                run record, the echo)
-import { get } from "@ermine/places/lib"
+import { get } from "@ermine/core/places/lib"
 import { until, world } from "./realms_test.ts"
 
 const ms = (x: number) => `${x.toFixed(2)} ms`

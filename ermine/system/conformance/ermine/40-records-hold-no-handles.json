@@ -1,0 +1,44 @@
+{
+	"title": "a call's record holds no handles [the dormouse's finding 2]: the host hands an action a handle to /secret; a boxed process explaining what the action wrote is shown the call's args and what it returned with each handle as the path it reaches as that process sees it (outside its box: null), never the handle, so no reader gets the host's power through a record",
+	"steps": [
+		{ "op": "ermine", "expect": {} },
+		{ "op": "host", "call": ["ensureNode", "/secret", { "s": 1 }] },
+		{ "op": "host", "call": ["ensureNode", "/shared/log", { "n": 0 }] },
+		{
+			"op": "code",
+			"at": "/system/s",
+			"program": [
+				{
+					"do": [
+						"createAction",
+						"on/log",
+						[{ "do": ["patch", "/shared/log", [{ "path": ["n"], "value": 1 }]] }],
+						"$0"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{ "op": "start", "name": "s", "at": "/system/s", "expect": { "id": "proc:s" } },
+		{
+			"op": "host",
+			"call": ["executeAction", "/system/s/on/log", { "path": ["secret"], "part": "value" }],
+			"expect": { "value": { "path": ["secret"], "part": "value" } }
+		},
+		{ "op": "box", "name": "b", "at": "/boxes/b", "expect": {} },
+		{ "op": "boxplace", "name": "b", "at": "/shared", "path": "/shared", "expect": {} },
+		{ "op": "code", "at": "/boxes/b/code/q", "program": [], "expect": {} },
+		{ "op": "start", "name": "q", "at": "/code/q", "box": "b", "expect": { "id": "proc:q" } },
+		{
+			"op": "do",
+			"process": "q",
+			"call": ["explainargs", "/shared/log"],
+			"expect": { "value": { "args": [null], "returned": null } }
+		},
+		{
+			"op": "host",
+			"call": ["explainargs", "/shared/log"],
+			"expect": { "value": { "args": [["secret"]], "returned": ["secret"] } }
+		}
+	]
+}

@@ -39,8 +39,8 @@
 // { op: "keep", dev?, part, save? }          → { keep }   keep: the device's, or { save } given
 import { decode } from "@ermine/encoding/cbor"
 import createEntry from "@ermine/core/node/entry"
-import { place } from "@ermine/places"
-import { createChangeHeader } from "@ermine/places/header"
+import { place } from "@ermine/core/places"
+import { createChangeHeader } from "@ermine/core/places/header"
 import { createPair } from "./channel.ts"
 import { type Device, device } from "./world.ts"
 import {

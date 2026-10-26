@@ -18,7 +18,7 @@
 // moment: as SCHEDULER.tex's, reads without items, errors as codes.
 // error: {"error": code} (normal.ts); the harness goes on.
 import createNode from "@ermine/core/node"
-import { rules } from "@ermine/protect"
+import { rules } from "@ermine/core/protect"
 import {
 	type Api,
 	createScheduler as reference,

@@ -1,6 +1,0 @@
-// @ts-nocheck: a program as a model would write it, untyped
-export default function (api) {
-	const { open, effect, show } = api
-	const slow = open("/slow/value")
-	effect("draw", () => slow.read(), (v) => show(v === undefined ? "waiting" : `got: ${v}`))
-}

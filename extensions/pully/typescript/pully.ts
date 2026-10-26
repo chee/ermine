@@ -2,23 +2,23 @@
 // as a feature (chee 10-24: "Feature only"). providing is written in the graph: a node's attribute
 // ermine.provider names a handler, a method node, by its id. the first run to read the node's
 // value wakes it, the last to stop reading puts it to sleep: pully sends the handler "wake" or
-// "sleep", once no run is open. the handler writes the value with its own api, as any service does,
-// so its writes go through onWrite, protect, records and sites
+// "sleep", once no run is open. the handler writes the value with @ermine/system's functions, as
+// any action does, so its writes go through onWrite, protect, records and sites
 //
 //   import pully, { check, provide } from "@ermine/pully"
 //   const ermine = createErmine({ features: [pully] })
 //   // a program providing:
-//   const clock = open("/dev/clock", { time: "--:--:--" })
+//   const clock = ensureNode("/dev/clock", { time: "--:--:--" })
 //   let timer
-//   const on = method("on/clock", (what, node) => {
-//     if (what === "wake") timer = setInterval(() => edit(node, [{ path: ["time"], value: now() }]), 1000)
+//   const on = createAction("on/clock", (what, node) => {
+//     if (what === "wake") timer = setInterval(() => patch(node, [{ path: ["time"], value: now() }]), 1000)
 //     if (what === "sleep") clearInterval(timer)
 //     if (what === "check") return now()
 //   })
-//   provide(api, clock, on)
-//   // a program reading: the last value at once, and how fresh (status(x).provider)
-//   effect("show", () => [read(clock), status(clock).provider], ([c, s]) => draw(c, s))
-//   check(api, clock)                      // the handler's answer to "check", nothing woken
+//   provide(clock, on)
+//   // a program reading: the last value at once, and how fresh (getStatus(x).provider)
+//   createEffect("show", () => [read(clock), getStatus(clock).provider], ([c, s]) => draw(c, s))
+//   check(clock)                           // the handler's answer to "check", nothing woken
 //
 // naming: the attribute ermine.provider holds the handler's node id (provide writes it). whoever may
 // edit the node's attributes names it (asked "edit", as any attribute write): nothing host-only.
@@ -38,7 +38,7 @@
 //   send({ id: handler }, "wake", node, reader)   node: { id, part: "value" }; reader: the node of the
 //                                                 computer whose read woke it
 //   send({ id: handler }, "sleep", node)
-//   check: no word of pully's. anyone reaching the handler sends it "check" (the library's check):
+//   check: no function of pully's. anyone reaching the handler sends it "check" (the library's check):
 //   its answer is the handler's
 // a send that throws PENDING (no handler there yet): its wait is recorded, the status stays waking.
 // any other throw comes out of the pulse (the first, once every node due is settled), and is on
@@ -47,16 +47,9 @@
 // since) | "awake", written by the host's context (bookkeeping, as a process's row is). status(x)
 // shows it as provider (onStatus), read from the attribute: one source. how stale an asleep value
 // is: its entry's change.time.
-import type {
-	API,
-	Feature,
-	FeatureAPI,
-	Node,
-	NodeData,
-	ProcessContext,
-	Target,
-} from "@ermine/ermine"
-import { NODE } from "@ermine/places/header"
+import { executeAction, patchAttributes, readAttributes, readEntries } from "@ermine/system"
+import type { Feature, FeatureAPI, Node, NodeData, ProcessContext, Target } from "@ermine/system"
+import { NODE } from "@ermine/core/places/header"
 import { PENDING, type Scope } from "@ermine/core/scheduler"
 import type { Id } from "@ermine/core/table"
 
@@ -98,8 +91,8 @@ const pully: Feature = {
 
 		installed.add(f)
 		const host = () => f.getProcessContext()
-		// a node, as the namer's handle (pully's power: minted from its id)
-		const node = (id: Id, as: ProcessContext): Node => f.handleOf({ id, part: "value" }, as)
+		// a node by its id (pully's power: minted from its id); its use asked as whoever uses it
+		const node = (id: Id, _as?: ProcessContext): Node => f.handleOf({ id, part: "value" })
 		const said = (id: Id): unknown => {
 			const v = f.table.get("attributes", id)?.value
 			return isMap(v) ? v[STATUS] : undefined
@@ -124,8 +117,8 @@ const pully: Feature = {
 			try {
 				const at = node(id, p.namer)
 				const args = what === "wake" ? [what, at, reader] : [what, at]
-				// as the namer: its scope opened (a flush runs with nothing open)
-				p.namer.within(() => f.api(p.namer).send(node(p.handler, p.namer), ...args))
+				// as the namer: its scope opened (a flush runs with nothing open), executeAction finding it
+				p.namer.within(() => executeAction(node(p.handler, p.namer), ...args))
 			} catch (e) {
 				// no handler there yet: its wait is recorded
 				if (e !== PENDING) thrown ??= { e }
@@ -264,48 +257,49 @@ const pully: Feature = {
 }
 export default pully
 
-// a library of public words: x's provider named handler (a method node), by its id
-export function provide(api: API, x: Target, handler: Target) {
-	const h = idOf(api, handler)
+// a library on @ermine/system's functions, as the process calling it: x's provider named handler
+// (an action node), by its id
+export function provide(x: Target, handler: Target) {
+	const h = idOf(handler)
 	if (h === undefined) throw new Error("nothing-there: the handler")
-	api.edit(api.info(x), [{ path: [PROVIDER], value: h }])
+	patchAttributes(x, [{ path: [PROVIDER], value: h }])
 }
 
 // x's provider's name taken out
-export function unprovide(api: API, x: Target) {
-	api.edit(api.info(x), [{ path: [PROVIDER] }])
+export function unprovide(x: Target) {
+	patchAttributes(x, [{ path: [PROVIDER] }])
 }
 
 // x's handler sent "check": its answer (the value now, as the handler gives it); none named:
 // undefined
-export function check(api: API, x: Target): unknown {
-	const attrs = api.info(x)
-	const h = api.read(attrs, [PROVIDER])
-	const { f, node: d, context } = featureOf(attrs)
-	const id = d.id ?? idByEntries(api, x)
-	if (typeof h !== "string" || id === undefined) return undefined
-	// the handler and the node by their ids: handles minted as the caller (pully's power)
-	const at = (i: Id) => f.handleOf({ id: i, part: "value" }, context)
-	return api.send(at(h), "check", at(id))
+export function check(x: Target): unknown {
+	const h = readAttributes(x, [PROVIDER])
+	const n = readEntries(x)[0]?.node
+	if (typeof h !== "string" || n === undefined) return undefined
+	const { f, node: d } = featureOf(n)
+	if (d.id === undefined) return undefined
+	// the handler and the node by their ids (pully's power: minted from ids), used as the caller
+	const at = (i: Id) => f.handleOf({ id: i, part: "value" })
+	return executeAction(at(h), "check", at(d.id))
 }
 
-// x's id: a handle's own (one minted from an id), else the node its path reaches (entries)
-const idOf = (api: API, x: Target): Id | undefined =>
+// x's id: a handle's own (one minted from an id), else the node its path reaches (readEntries)
+const idOf = (x: Target): Id | undefined =>
 	(typeof x === "string" || Array.isArray(x) ? undefined : featureOf(x as Node).node.id) ??
-		idByEntries(api, x)
+		idByEntries(x)
 
-// the node a path reaches, by the handle entries gives (pully's power: dataOf)
-function idByEntries(api: API, x: Target): Id | undefined {
-	const n = api.entries(x)[0]?.node
+// the node a path reaches, by the handle readEntries gives (pully's power: dataOf)
+function idByEntries(x: Target): Id | undefined {
+	const n = readEntries(x)[0]?.node
 	return n === undefined ? undefined : featureOf(n).node.id
 }
 
 // every pully set up, one per ermine: a handle is known to its own ermine's only (dataOf)
 const installed = new Set<FeatureAPI>()
-function featureOf(h: Node): { f: FeatureAPI; node: NodeData; context: ProcessContext } {
+function featureOf(h: Node): { f: FeatureAPI; node: NodeData } {
 	for (const f of installed) {
 		const d = f.dataOf(h)
-		if (d !== undefined) return { f, node: d.node, context: d.context }
+		if (d !== undefined) return { f, node: d.node }
 	}
 	throw new Error("a node no ermine with pully gave")
 }

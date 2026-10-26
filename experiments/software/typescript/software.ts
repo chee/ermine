@@ -20,8 +20,8 @@
 // writes: with the caller's scope open, or the owner's; each one's site the first call outside
 // these files
 import type { Address, Box } from "@ermine/boxes"
-import { type Id, type Path, type Places, PlacesError } from "@ermine/places"
-import { createChangeHeader } from "@ermine/places/header"
+import { type Id, type Path, type Places, PlacesError } from "@ermine/core/places"
+import { createChangeHeader } from "@ermine/core/places/header"
 import { createProcesses, type Process, type Processes } from "@ermine/processes/start"
 import type { ScopeNodes } from "@ermine/processes/scopes"
 import type { Scheduler, Scope } from "@ermine/core/scheduler"

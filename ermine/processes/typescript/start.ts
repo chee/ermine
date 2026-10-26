@@ -28,9 +28,9 @@
 // checked to be there
 import createEntry, { type ChangeHeader } from "@ermine/core/node/entry"
 import { type Address, type Box, inside } from "@ermine/boxes"
-import { type Id, type Path, type Places, PlacesError, type Writer } from "@ermine/places"
-import { createChangeBase, NODE } from "@ermine/places/header"
-import { createStatus, STATUS, TABLE } from "@ermine/places/status"
+import { type Id, type Path, type Places, PlacesError, type Writer } from "@ermine/core/places"
+import { createChangeBase, NODE } from "@ermine/core/places/header"
+import { createStatus, STATUS, TABLE } from "@ermine/core/places/status"
 import {
 	type Computer,
 	PENDING,
@@ -46,6 +46,10 @@ import { createRuns, type Runs } from "./runs.ts"
 import type { ScopeNodes } from "./scopes.ts"
 
 // the attributes written on a process's node
+// this module's own file, by its URL: for whoever finds a write's site by skipping library frames
+// (ermine's sites), so no one resolves a name to find it
+export const FILES: readonly string[] = [import.meta.url]
+
 export const ARGS = "ermine.process.args"
 export const CWD = "ermine.process.cwd"
 export const PIN = "ermine.process.pin"

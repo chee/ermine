@@ -1,0 +1,274 @@
+{
+	"title": "a node is named to a reader by the path it has now, up its names (places' namesOf, the latest placed first), never a record of where it once was [the dormouse's findings 12, 13]: a handle in a call's args shown as its path through a folder above renamed, a second name placed later, that name taken out, a name given through a readChildren handle (by id)",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/docs/note",
+				{
+					"n": 0
+				}
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/log",
+				{
+					"n": 0
+				}
+			]
+		},
+		{
+			"op": "id",
+			"path": [
+				"docs",
+				"note"
+			],
+			"expect": {
+				"id": "n2"
+			}
+		},
+		{
+			"op": "code",
+			"at": "/system/s",
+			"program": [
+				{
+					"do": [
+						"createAction",
+						"on/log",
+						[
+							{
+								"do": [
+									"patch",
+									"/log",
+									[
+										{
+											"path": [
+												"n"
+											],
+											"value": 1
+										}
+									]
+								]
+							}
+						],
+						"logged"
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"on/pin",
+						[
+							{
+								"do": [
+									"readChildren",
+									"/papers"
+								],
+								"as": "kids"
+							},
+							{
+								"do": [
+									"log",
+									"picked",
+									[
+										"pick",
+										"$kids",
+										[
+											"note"
+										]
+									]
+								],
+								"as": "note"
+							},
+							{
+								"do": [
+									"place",
+									"/shelf/x",
+									"$note"
+								]
+							}
+						],
+						"pinned"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "s",
+			"at": "/system/s",
+			"expect": {
+				"id": "proc:s"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/system/s/on/log",
+				{
+					"id": "n2",
+					"part": "value"
+				}
+			],
+			"expect": {
+				"value": "logged"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"explainargs",
+				"/log"
+			],
+			"expect": {
+				"value": {
+					"args": [
+						[
+							"docs",
+							"note"
+						]
+					],
+					"returned": "logged"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"rename",
+				"/docs",
+				"/papers"
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"explainargs",
+				"/log"
+			],
+			"expect": {
+				"value": {
+					"args": [
+						[
+							"papers",
+							"note"
+						]
+					],
+					"returned": "logged"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/pinned",
+				{}
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"place",
+				"/pinned/n",
+				"/papers/note"
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"explainargs",
+				"/log"
+			],
+			"expect": {
+				"value": {
+					"args": [
+						[
+							"pinned",
+							"n"
+						]
+					],
+					"returned": "logged"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"unplace",
+				"/pinned/n"
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"explainargs",
+				"/log"
+			],
+			"expect": {
+				"value": {
+					"args": [
+						[
+							"papers",
+							"note"
+						]
+					],
+					"returned": "logged"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/shelf",
+				{}
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/system/s/on/pin"
+			],
+			"expect": {
+				"value": "pinned"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"unplace",
+				"/papers/note"
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"explainargs",
+				"/log"
+			],
+			"expect": {
+				"value": {
+					"args": [
+						[
+							"shelf",
+							"x"
+						]
+					],
+					"returned": "logged"
+				}
+			}
+		}
+	]
+}

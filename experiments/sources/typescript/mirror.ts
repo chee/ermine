@@ -32,8 +32,8 @@
 //   - a file that doesn't decode (not UTF-8, for text): cant-decode; nothing written until it is
 //     edited into one that does (cant-decode-not-written), which is read in
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
-import { createChangeHeader } from "@ermine/places/header"
-import { upsert } from "@ermine/places/upsert"
+import { createChangeHeader } from "@ermine/core/places/header"
+import { upsert } from "@ermine/core/places/upsert"
 import type { Process } from "@ermine/processes/start"
 import { alike, type FileAccess } from "./access.ts"
 import {

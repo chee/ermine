@@ -6,7 +6,7 @@
 // node holding source text, run by the runner seeded here
 import { createWorld, type Tools } from "@ermine/slaygrounds/world"
 import type { Node } from "@ermine/api"
-import { get } from "@ermine/places/lib"
+import { get } from "@ermine/core/places/lib"
 import { satisfy, type Way } from "@ermine/programs"
 import type { Start } from "@ermine/programs/start"
 import { render } from "ermine-h"

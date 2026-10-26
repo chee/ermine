@@ -13,7 +13,7 @@ import {
 	PlacesError,
 	rename,
 	unplace,
-} from "@ermine/places"
+} from "@ermine/core/places"
 import { createPaths, type Spot } from "@ermine/core/scheduler/paths"
 import type { Pick } from "./gen_harness.ts"
 

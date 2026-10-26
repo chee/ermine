@@ -1,0 +1,206 @@
+{
+	"title": "an action is let go when its node's value stops being its stand-in (taken out, written over) or its scope goes [chee 10-25, on tippi's method-record fix: \"Carry it\"]: an execute then reaches no action: taken out or its process stopped, nothing is there, so the call waits (pending); written over, the node is there and isn't an action (not-a-method); made again at the same place, it is called again. the C frees each action's record when it is let go, not at close",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createAction",
+						"a",
+						[
+							{
+								"do": [
+									"log",
+									"called",
+									[
+										"all",
+										"a",
+										"$0"
+									]
+								]
+							}
+						]
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"b",
+						[
+							{
+								"do": [
+									"log",
+									"called",
+									[
+										"all",
+										"b",
+										"$0"
+									]
+								]
+							}
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/code/p/a",
+				1
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"remove",
+				"/code/p/a"
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/code/p/a",
+				2
+			],
+			"expect": {
+				"error": "pending"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"createAction",
+				"a",
+				[
+					{
+						"do": [
+							"log",
+							"called",
+							[
+								"all",
+								"a again",
+								"$0"
+							]
+						]
+					}
+				]
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/code/p/a",
+				4
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/code/p/b",
+				[
+					{
+						"path": [],
+						"value": 7
+					}
+				]
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/code/p/b",
+				5
+			],
+			"expect": {
+				"error": "not-a-method"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"createAction",
+				"b",
+				[
+					{
+						"do": [
+							"log",
+							"called",
+							[
+								"all",
+								"b again",
+								"$0"
+							]
+						]
+					}
+				]
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/code/p/b",
+				6
+			]
+		},
+		{
+			"op": "stop",
+			"name": "p",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/code/p/b",
+				7
+			],
+			"expect": {
+				"error": "pending"
+			}
+		},
+		{
+			"op": "log",
+			"name": "called",
+			"expect": {
+				"values": [
+					[
+						"a",
+						1
+					],
+					[
+						"a again",
+						4
+					],
+					[
+						"b again",
+						6
+					]
+				]
+			}
+		}
+	]
+}

@@ -1,0 +1,156 @@
+{
+	"title": "a read of a node that isn't there is pending, as a memo with no value is: \"not there yet\" one way [chee 10-25: \"i think a missing node should also throw pending\"], the read tracked so the node's coming reruns it, and the reader's status saying where it waits [chee: \"the read available in the graph so you can put something somewhere somebody wants it\"]: a memo reading /later is pending, waiting on it, till it's made; a setup reading it is pending, waiting on it; the host's read of it throws pending; peep gives nothing",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createMemo",
+						"m",
+						{},
+						[
+							"read",
+							"/later"
+						]
+					],
+					"as": "m"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$m"
+			],
+			"expect": {
+				"value": {
+					"state": "pending",
+					"waiting": [
+						{
+							"node": [
+								"later"
+							]
+						}
+					],
+					"n": 2
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/later"
+			],
+			"expect": {
+				"error": "pending"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"peep",
+				[
+					"read",
+					"/later"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/later",
+				5
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"$m"
+			],
+			"expect": {
+				"value": 5
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$m"
+			],
+			"expect": {
+				"value": {
+					"state": "done",
+					"n": 3
+				}
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/q",
+			"program": [
+				{
+					"do": [
+						"read",
+						"/never"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/code/q",
+			"expect": {
+				"id": "proc:q"
+			}
+		},
+		{
+			"op": "status",
+			"name": "q",
+			"expect": {
+				"status": {
+					"state": "pending",
+					"waiting": [
+						{
+							"node": [
+								"never"
+							]
+						}
+					]
+				}
+			}
+		}
+	]
+}

@@ -2,7 +2,7 @@
 // context the parts are given, and the small helpers they use. no question of its own
 import type { ChangeHeader, Entry } from "@ermine/core/node/entry"
 import type { Box } from "@ermine/boxes"
-import type { Id, Path } from "@ermine/places"
+import type { Id, Path } from "@ermine/core/places"
 import type { Process, Processes } from "@ermine/processes/start"
 import type { ScopeNodes } from "@ermine/processes/scopes"
 import type { Scheduler, Scope } from "@ermine/core/scheduler"

@@ -1,7 +1,7 @@
 import { assert, assertEquals } from "@std/assert"
 import { decode } from "@ermine/encoding/cbor"
 import createEntry from "@ermine/core/node/entry"
-import { place } from "@ermine/places"
+import { place } from "@ermine/core/places"
 import { createPair } from "./channel.ts"
 import { type Device, device } from "./world.ts"
 import {

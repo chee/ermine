@@ -1,0 +1,95 @@
+{
+	"title": "an action runs as both [chee 10-25: \"an action should run as you... like a script on a computer\"; \"so it should run as both\"; \"1. both\"]: every ask inside its call is made as its owner and again from its caller's place, and both must allow. s's action writes /shared/x and reads /secret: q, refused editing /shared/x, is refused the call's write; r is not; the host is not; q, refused reading /secret, is refused the call's read; s's own denial refuses everyone",
+	"steps": [
+		{
+			"op": "ermine",
+			"deny": [
+				{ "op": "edit", "path": "shared/x", "from": "code/q" },
+				{ "op": "read", "path": "secret", "from": "code/q" }
+			],
+			"expect": {}
+		},
+		{ "op": "host", "call": ["ensureNode", "/shared/x", { "n": 0 }] },
+		{ "op": "host", "call": ["ensureNode", "/secret", { "s": 1 }] },
+		{
+			"op": "code",
+			"at": "/system/s",
+			"program": [
+				{
+					"do": [
+						"createAction",
+						"on/bump",
+						[{ "do": ["patch", "/shared/x", [{ "path": ["n"], "value": 1 }]] }],
+						"bumped"
+					]
+				},
+				{ "do": ["createAction", "on/peek", [], ["read", "/secret"]] }
+			],
+			"expect": {}
+		},
+		{ "op": "start", "name": "s", "at": "/system/s", "expect": { "id": "proc:s" } },
+		{ "op": "code", "at": "/code/q", "program": [], "expect": {} },
+		{ "op": "start", "name": "q", "at": "/code/q", "expect": { "id": "proc:q" } },
+		{ "op": "code", "at": "/code/r", "program": [], "expect": {} },
+		{ "op": "start", "name": "r", "at": "/code/r", "expect": { "id": "proc:r" } },
+		{
+			"op": "do",
+			"process": "q",
+			"call": ["executeAction", "/system/s/on/bump"],
+			"expect": { "error": "refused" }
+		},
+		{ "op": "host", "call": ["read", "/shared/x"], "expect": { "value": { "n": 0 } } },
+		{
+			"op": "do",
+			"process": "r",
+			"call": ["executeAction", "/system/s/on/bump"],
+			"expect": { "value": "bumped" }
+		},
+		{ "op": "host", "call": ["read", "/shared/x"], "expect": { "value": { "n": 1 } } },
+		{
+			"op": "do",
+			"process": "q",
+			"call": ["executeAction", "/system/s/on/peek"],
+			"expect": { "error": "refused" }
+		},
+		{
+			"op": "do",
+			"process": "r",
+			"call": ["executeAction", "/system/s/on/peek"],
+			"expect": { "value": { "s": 1 } }
+		},
+		{
+			"op": "host",
+			"call": ["executeAction", "/system/s/on/peek"],
+			"expect": { "value": { "s": 1 } }
+		},
+		{
+			"op": "ermine",
+			"deny": [{ "op": "edit", "path": "shared/x", "from": "system/s" }],
+			"expect": {}
+		},
+		{ "op": "host", "call": ["ensureNode", "/shared/x", { "n": 0 }] },
+		{
+			"op": "code",
+			"at": "/system/s",
+			"program": [
+				{
+					"do": [
+						"createAction",
+						"on/bump",
+						[{ "do": ["patch", "/shared/x", [{ "path": ["n"], "value": 1 }]] }],
+						"bumped"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{ "op": "start", "name": "s", "at": "/system/s", "expect": { "id": "proc:s" } },
+		{
+			"op": "host",
+			"call": ["executeAction", "/system/s/on/bump"],
+			"expect": { "error": "refused" }
+		},
+		{ "op": "host", "call": ["read", "/shared/x"], "expect": { "value": { "n": 0 } } }
+	]
+}

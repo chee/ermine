@@ -8,9 +8,9 @@ import update from "@ermine/core/node/update"
 import { createTable, type Key } from "@ermine/core/table"
 import { createScheduler } from "@ermine/core/scheduler"
 import { createPaths } from "@ermine/core/scheduler/paths"
-import { createPlaces } from "@ermine/places"
+import { createPlaces } from "@ermine/core/places"
 import { createRuns } from "./runs.ts"
-import { createStatus } from "@ermine/places/status"
+import { createStatus } from "@ermine/core/places/status"
 
 type Shape = "none" | "status" | "runs" | "both"
 

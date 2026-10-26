@@ -16,7 +16,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "../../../filesystem/places/c/world_harness.h"
+#include "../../../core/places/c/world_harness.h"
 #include "../../../ermine/boxes/c/boxes.h"
 #include "../../../ermine/processes/c/processes.h"
 #include "../../../ermine/processes/c/scopes.h"

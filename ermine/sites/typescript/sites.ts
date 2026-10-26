@@ -18,7 +18,7 @@ import {
 	type Scheduler,
 	type Scope,
 } from "@ermine/core/scheduler"
-import { type FileLocation, outside } from "@ermine/core/util/stacktrace"
+import { type FileLocation, frames, outside } from "@ermine/core/util/stacktrace"
 
 export type { FileLocation }
 
@@ -38,6 +38,9 @@ export type Sited = {
 	siteOf: (scope: Scope) => FileLocation | undefined
 	// its own site if it has one, then each parent's that has one, up to the root
 	sitesOf: (scope: Scope) => FileLocation[]
+	// the whole stack it was made with, every frame (kept here, never in the graph) [chee 10-26:
+	// "we should just keep the whole stack"]; made without the wrapper: undefined
+	stackOf: (scope: Scope) => FileLocation[] | undefined
 }
 
 type Held = { stack?: string; site?: FileLocation | null }
@@ -52,7 +55,7 @@ export function hold(entry: unknown): Held {
 	const E = Error as unknown as V8Error
 	const holder: Held = {}
 	const limit = E.stackTraceLimit
-	if (typeof limit === "number" && limit < 10) E.stackTraceLimit = 10
+	if (typeof limit === "number" && limit < 64) E.stackTraceLimit = 64 // the whole stack (stackOf)
 	try {
 		if (typeof E.captureStackTrace === "function") {
 			E.captureStackTrace(holder, entry)
@@ -105,10 +108,13 @@ export function createSites(
 		if (h === undefined) return undefined
 		if (h.site === undefined) {
 			h.site = typeof h.stack === "string" ? outside(h.stack, ours) ?? null : null
-			// read once: the frames are let go
-			delete h.stack
 		}
 		return h.site ?? undefined
+	}
+
+	function stackOf(scope: Scope): FileLocation[] | undefined {
+		const h = held.get(scope)
+		return typeof h?.stack === "string" ? frames(h.stack) : undefined
 	}
 
 	function sitesOf(scope: Scope): FileLocation[] {
@@ -127,5 +133,6 @@ export function createSites(
 		createEffect,
 		siteOf,
 		sitesOf,
+		stackOf,
 	}
 }
