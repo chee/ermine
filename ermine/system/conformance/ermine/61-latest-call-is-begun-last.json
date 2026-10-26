@@ -1,0 +1,98 @@
+{
+	"title": "a handler's latest call is the one begun last: an earlier call that settles after it (its promise) is told through onRecord, but the record held stays the later one's (a review found the one settling last held)",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/svc",
+			"program": [
+				{
+					"do": [
+						"createAction",
+						"on/go",
+						[],
+						[
+							"if",
+							[
+								"is",
+								"$0",
+								1
+							],
+							[
+								"later",
+								"first"
+							],
+							"second"
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "svc",
+			"at": "/code/svc",
+			"expect": {
+				"id": "proc:svc"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"svc",
+				"on",
+				"go"
+			],
+			"expect": {
+				"id": "n4"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/code/svc/on/go",
+				1
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/code/svc/on/go",
+				2
+			],
+			"expect": {
+				"value": "second"
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"id": "n4",
+			"expect": {
+				"record": {
+					"n": 2,
+					"caller": "n1",
+					"handler": "n4",
+					"args": [
+						2
+					],
+					"end": "done",
+					"returned": "second",
+					"reads": [],
+					"writes": []
+				}
+			}
+		}
+	]
+}
