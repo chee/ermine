@@ -3,10 +3,10 @@
 // children), all at one id. the tables are boxes on the board, one row per id; the pond is drawn
 // from them. pick a fish (in the pond or a row) and its row lights in every table, and the node
 // box shows table.get(id): the whole row, which is all a node is.
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
-import createNode from "@ermine/node"
-import update from "@ermine/node/update"
-import { createTable, type Key } from "@ermine/table"
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
+import createNode from "@ermine/core/node"
+import update from "@ermine/core/node/update"
+import { createTable, type Key } from "@ermine/core/table"
 import { pondPage } from "../kit/page.ts"
 import type { Box, Wire } from "../kit/board.ts"
 import { createPond, recolour, SPRITES } from "../kit/sprites.ts"
@@ -36,7 +36,7 @@ const page = pondPage("node", {
 		<p><b>children:</b> a folder is just a children entry: names to ids. An egg is placed by one update on its parent's children.</p>
 		<p><b>one entry, many cells:</b> the same entry can sit at two ids. <code>who(entry)</code> lists where.</p>`,
 	real:
-		`Runs the real <code>@ermine/table</code> (createTable: add, get, who) and <code>@ermine/node</code> (createNode, createEntry, update). The page keeps a list of the ids it added (a table can't list its ids), draws the boxes and the pond, and names entries e1, e2… so you can tell them apart.`,
+		`Runs the real <code>@ermine/core/table</code> (createTable: add, get, who) and <code>@ermine/core/node</code> (createNode, createEntry, update). The page keeps a list of the ids it added (a table can't list its ids), draws the boxes and the pond, and names entries e1, e2… so you can tell them apart.`,
 })
 const { board } = page
 

@@ -12,16 +12,16 @@
 // get and intro turn between this and the shape the store saves (saved.ts): a version of a value
 // is the entry's value and change, a slot's one list is its ids, an info name's one version is the
 // attributes entry's name. Nothing here is the store's or the program's rule.
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import type { Patch } from "@ermine/op/apply"
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import type { Patch } from "@ermine/core/op/apply"
 import { createGuard, type Setup as GuardSetup, slot as slotTarget } from "@ermine/places/guard"
 import { createChangeHeader } from "@ermine/places/header"
 import { createPlaces, type Places } from "@ermine/places"
 import type { Policy } from "@ermine/protect"
-import { createScheduler, type Info, type Scheduler, type Scope } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Key, type Table } from "@ermine/table"
+import { createScheduler, type Info, type Scheduler, type Scope } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Key, type Table } from "@ermine/core/table"
 import createNode, { type Node as Saved, type Side } from "./saved.ts"
 
 /** What the program does to the graph, each write a change by whoever the api is as. */

@@ -25,7 +25,7 @@
 // and whatever the program places (place), under its own names
 import { place, unplace } from "@ermine/places"
 import type { Conflict } from "@ermine/together/sync"
-import createEntry from "@ermine/node/entry"
+import createEntry from "@ermine/core/node/entry"
 import { createSyncWorld, put } from "@ermine/slaygrounds/sync-world"
 import { render } from "ermine-h"
 

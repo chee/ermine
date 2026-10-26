@@ -13,10 +13,10 @@
 //
 // 2026-10-15 (A18 Pro, deno 2.9.7, busy machine), first way, µs: depth 1 18, 16 83, 256 4810;
 // breadth 10 27 (all: 11.2 s, ~e·k! ways); crowded 100 14; openwith 100 132. in and out alike
-import createEntry from "@ermine/node/entry"
-import { createScheduler } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/table"
+import createEntry from "@ermine/core/node/entry"
+import { createScheduler } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Id, type Key } from "@ermine/core/table"
 import { createPlaces } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
 import { ATTRIBUTES as A, openwith, satisfy } from "./programs.ts"

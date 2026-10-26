@@ -1,0 +1,122 @@
+{
+	"title": "named inside a run (a memo writing the attribute), the status is written once no run is open (the pulse's end), not in the run",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				"pully"
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/cam",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/dev/cam",
+						{
+							"frame": 0
+						}
+					],
+					"as": "cam"
+				},
+				{
+					"do": [
+						"createAction",
+						"on/cam",
+						[
+							{
+								"do": [
+									"log",
+									"said",
+									[
+										"all",
+										"$0",
+										"$2"
+									]
+								]
+							}
+						],
+						[
+							"if",
+							[
+								"is",
+								"$0",
+								"check"
+							],
+							"fresh"
+						]
+					],
+					"as": "on"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "cam",
+			"at": "/code/cam",
+			"expect": {
+				"id": "proc:cam"
+			}
+		},
+		{
+			"op": "do",
+			"process": "cam",
+			"call": [
+				"createMemo",
+				"namer",
+				{},
+				[
+					"provide",
+					"$cam",
+					"$on"
+				]
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"code",
+						"cam",
+						"namer"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"getStatus",
+				"/dev/cam"
+			],
+			"expect": {
+				"value": {
+					"state": "done",
+					"provider": "asleep"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"explain",
+				{
+					"path": [
+						"dev",
+						"cam"
+					],
+					"part": "attributes"
+				}
+			],
+			"expect": {
+				"value": {
+					"writer": "outside",
+					"site": "none"
+				}
+			}
+		}
+	]
+}

@@ -1,10 +1,10 @@
 // lazy's host: the world (@ermine/slaygrounds/world), /dev/clock and /provider seeded, and the
-// clock's provider (@ermine/pullynode): awake only while a run reads the clock. pullynode hears the
-// scheduler (onTrackingStart: a key gained its first tracker; onTrackingEnd: it lost its last) and
-// starts or stops the provider once no run is open. the provider is the host's: a program only
-// reads the time
+// clock's provider (./providers.ts, what @ermine/pully was before it became a feature): awake only
+// while a run reads the clock. it hears the scheduler (onTrackingStart: a key gained its first
+// tracker; onTrackingEnd: it lost its last) and starts or stops the provider once no run is open.
+// the provider is the host's: a program only reads the time
 import { createWorld } from "@ermine/slaygrounds/world"
-import { createProviders } from "@ermine/pullynode"
+import { createProviders } from "./providers.ts"
 import { render } from "ermine-h"
 
 const world = createWorld({ render, processes: [{ name: "lazy" }] })
@@ -33,7 +33,7 @@ function say(what: string, awake: boolean) {
 	})
 }
 
-// the clock's own writes are under its own scope (actor /dev/clock): pullynode's
+// the clock's own writes are under its own scope (actor /dev/clock): the providers'
 const providers = createProviders({ scheduler: s, places, table })
 providers.provide(api.entries("/dev/clock")[0].id, {
 	start(write) {

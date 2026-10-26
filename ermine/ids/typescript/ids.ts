@@ -8,7 +8,7 @@
 // the tree id Subduction files a node under is the Subduction stack's own (treeOf), made from the id's
 // text, not here.
 // an id given to kind and bytes: its bytes or its text
-import { blake3 } from "@ermine/blake3"
+import { blake3 } from "@ermine/core/blake3"
 
 export type Id = Uint8Array
 export type Kind = "fresh" | "hashed" | "key"

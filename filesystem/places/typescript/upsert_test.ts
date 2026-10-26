@@ -1,6 +1,6 @@
 import { assertEquals } from "@std/assert"
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
-import { createTable } from "@ermine/table"
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
+import { createTable } from "@ermine/core/table"
 import { getOrSet, upsert } from "./upsert.ts"
 
 const h: ChangeHeader = { actor: "t", time: 0 }

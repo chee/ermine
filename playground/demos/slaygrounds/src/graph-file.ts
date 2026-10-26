@@ -9,8 +9,8 @@
 // children it was in, and it is not reached
 import { type Entry, pack } from "@ermine/formats/pack"
 import { Stand } from "@ermine/encoding/cbor"
-import type { ChangeHeader, Entry as Node } from "@ermine/node/entry"
-import type { Id, Key, Table } from "@ermine/table"
+import type { ChangeHeader, Entry as Node } from "@ermine/core/node/entry"
+import type { Id, Key, Table } from "@ermine/core/table"
 
 export type Saved = {
 	bytes: Uint8Array

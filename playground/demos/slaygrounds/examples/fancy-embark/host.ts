@@ -1,5 +1,5 @@
 import { createWorld } from "@ermine/slaygrounds/world"
-import { trace } from "@ermine/scheduler/trace"
+import { trace } from "@ermine/core/scheduler/trace"
 import { render } from "ermine-h"
 
 // fancy-embark's host: the world (@ermine/slaygrounds/world), one process, embark, and what only a

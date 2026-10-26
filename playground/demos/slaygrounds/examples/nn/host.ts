@@ -3,10 +3,10 @@
 // adds what the demo measures and the api does not give (extend, below)
 import { createWorld } from "@ermine/slaygrounds/world"
 import type { API, Node } from "@ermine/api"
-import update from "@ermine/node/update"
+import update from "@ermine/core/node/update"
 import { get } from "@ermine/places/lib"
 import { createChangeHeader } from "@ermine/places/header"
-import { trace } from "@ermine/scheduler/trace"
+import { trace } from "@ermine/core/scheduler/trace"
 import { render } from "ermine-h"
 
 // what the page measures: the writes made, the headers they cost, the runs and acts of the

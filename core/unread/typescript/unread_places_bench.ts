@@ -5,9 +5,9 @@
 // (unread's read): none (a burst), before every write, every 10 writes. µs per write after the
 // first (fastest of 15 rounds); the first write (the caller's map: copied, fastest round); the
 // slowest write after the first in any round (a copy after a read, and the collector's pauses)
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import apply, { type Patch } from "@ermine/op/apply"
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import apply, { type Patch } from "@ermine/core/op/apply"
 import { createUnread } from "./unread.ts"
 
 const h: ChangeHeader = { time: 1, actor: "bench" }

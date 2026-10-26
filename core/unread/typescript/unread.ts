@@ -27,10 +27,10 @@
 // takes out (its undo holds it): the next write through those copies them. a write that throws
 // changes nothing, which container is where and what is owned too: what it lets go of first is
 // put back
-import type { ChangeHeader, Entry } from "@ermine/node/entry"
-import apply, { type Patch } from "@ermine/op/apply"
-import type { Scheduler } from "@ermine/scheduler"
-import type { Id, Table } from "@ermine/table"
+import type { ChangeHeader, Entry } from "@ermine/core/node/entry"
+import apply, { type Patch } from "@ermine/core/op/apply"
+import type { Scheduler } from "@ermine/core/scheduler"
+import type { Id, Table } from "@ermine/core/table"
 import { keep } from "./unread_conformance_hook.ts"
 
 export type Unread = {

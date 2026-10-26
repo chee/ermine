@@ -121,8 +121,8 @@ a { color: var(--blue); }
 // layers, top to bottom: what builds on what. each package: where it lives, what it is (from its
 // own header comment), and the packages its source imports (tests and benches left out)
 const LAYERS = [
-	{ id: "extensions", note: "sync, presence, builds, programs, patch-nodes", fill: "#ece2ff",
-		rows: ["sync subduction presence patch-nodes programs build"] },
+	{ id: "extensions", note: "sync, presence, builds, programs, patchy", fill: "#ece2ff",
+		rows: ["sync subduction presence patchy programs build"] },
 	{ id: "ermine", note: "what makes the graph a place programs live in", fill: "#ccf5e8",
 		rows: ["realms api processes boxes types sites encoding"] },
 	{ id: "filesystem", note: "paths over the table: who is where, who may", fill: "#ffdcea",
@@ -149,7 +149,7 @@ const PKG = {
 	sites: ["ermine", "every write from outside captures where in code it came from, held unread until asked"],
 	types: ["ermine", "UTIs as nodes: what a loader takes and gives, with conformance"],
 	build: ["extensions", "steps cached with verifying traces (build systems à la carte); compile is a step"],
-	"patch-nodes": ["extensions", "precise telling: a change says what it touched"],
+	"patchy": ["extensions", "precise telling: a change says what it touched"],
 	presence: ["extensions", "an ephemeral channel: bytes on a topic, saved nowhere; gone comes from rows' until"],
 	programs: ["extensions", "loaders and runners: code from the graph run as a program, including native via dlopen"],
 	subduction: ["extensions", "histories of blops, worked out into what an object holds; signed"],
@@ -158,12 +158,12 @@ const PKG = {
 const USES = {
 	blake3: "", node: "op util", op: "util", scheduler: "op", table: "node", unread: "node op scheduler table", util: "",
 	places: "clingy node op protect scheduler table util", protect: "op",
-	api: "boxes node op patch-nodes places presence programs protect scheduler sites table",
+	api: "boxes node op patchy places presence programs protect scheduler sites table",
 	boxes: "node places processes scheduler table util", clingy: "scheduler", encoding: "blake3 node op util",
 	processes: "boxes node places scheduler sites table util",
 	realms: "api node op places processes programs protect scheduler table util", sites: "scheduler util",
 	types: "node op places table util",
-	build: "clingy encoding node places scheduler table", "patch-nodes": "node op places scheduler table",
+	build: "clingy encoding node places scheduler table", "patchy": "node op places scheduler table",
 	presence: "encoding node op places scheduler table",
 	programs: "boxes build encoding places processes scheduler sites table types",
 	subduction: "blake3 encoding node op places presence scheduler table util",

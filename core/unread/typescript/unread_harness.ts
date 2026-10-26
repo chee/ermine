@@ -54,11 +54,11 @@
 // whole number into a list; into anything else, or a key not there: nothing there. a name given
 // again (hold, mark) is replaced. a map's key order is not part of its value (op's apply.ts):
 // answers are compared by content
-import createEntry, { type Entry } from "@ermine/node/entry"
-import { ApplyError, type Key, type Patch } from "@ermine/op/apply"
+import createEntry, { type Entry } from "@ermine/core/node/entry"
+import { ApplyError, type Key, type Patch } from "@ermine/core/op/apply"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
-import { createScheduler } from "@ermine/scheduler"
+import { createScheduler } from "@ermine/core/scheduler"
 import { createUnread, keeping } from "./unread.ts"
 
 const change = () => ({ time: 1, actor: "test" })

@@ -1,9 +1,9 @@
 // one change to one object of a node, with its patches, as one item in the canonical encoding
 // (cbor.ts), and back (BLOP.tex). the shape only: no hashing but its name, no signing, no
 // parents looked up
-import { blake3 } from "@ermine/blake3"
+import { blake3 } from "@ermine/core/blake3"
 import * as cbor from "@ermine/encoding/cbor"
-import type { FileLocation } from "@ermine/util/stacktrace"
+import type { FileLocation } from "@ermine/core/util/stacktrace"
 
 export type Which = "value" | readonly ["info", string] | readonly ["children", string]
 export type Key = string | number

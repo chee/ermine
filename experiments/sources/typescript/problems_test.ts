@@ -1,14 +1,14 @@
 // the problems found (plan.org, "found"), each shown as it is now: a test here passes while its
 // problem stands, and fails once something changes it. nothing here is a rule
 import { assert, assertEquals, assertNotEquals } from "@std/assert"
-import { createScheduler } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Key } from "@ermine/table"
+import { createScheduler } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Key } from "@ermine/core/table"
 import { createPlaces, type Fact, place } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
 import { upsert } from "@ermine/places/upsert"
 import { createScopeNodes } from "@ermine/processes/scopes"
-import createEntry from "@ermine/node/entry"
+import createEntry from "@ermine/core/node/entry"
 import { createFakeFile, type FileAccess } from "./access.ts"
 import { denoFile } from "./deno.ts"
 import { openFile, UNWRITABLE } from "./file.ts"

@@ -19,12 +19,12 @@
 // its scope, what runs on it stopped "runner-stopped"
 // a runner (a runner node's value): { start(code, start) → handle, load?(code, start) → live,
 // api?(start) → api }, or a function, its start (its own load and api too, if it has them)
-import createEntry, { type Entry } from "@ermine/node/entry"
-import update from "@ermine/node/update"
+import createEntry, { type Entry } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
 import { type Id, type Path, PlacesError } from "@ermine/places"
 import { NODE } from "@ermine/places/header"
 import { upsert } from "@ermine/places/upsert"
-import type { Scope } from "@ermine/scheduler"
+import type { Scope } from "@ermine/core/scheduler"
 import { ATTRIBUTE, bad, type Ctx, isMap, type Offer, ours, type Place, TYPE } from "./common.ts"
 import { REASONS, type Runner } from "./run.ts"
 

@@ -3,7 +3,7 @@
 // middle that the real scheduler runs, and the pond, drawn by an effect, on the right. a computer
 // grows an in-port for each key its last run read, and a wire from that key; what it stopped
 // reading loses its port and its wire. a key nobody reads goes dim.
-import { type Computer, createScheduler } from "@ermine/scheduler"
+import { type Computer, createScheduler } from "@ermine/core/scheduler"
 import { pondPage } from "../kit/page.ts"
 import type { Box, Port, Wire } from "../kit/board.ts"
 import { createPond, sprite } from "../kit/sprites.ts"
@@ -31,7 +31,7 @@ const page = pondPage("tracking", {
 		<p><b>nobody reads it:</b> when the last reader stops, the scheduler says so (<code>onTrackingEnd</code>). A key someone starts reading again: <code>onTrackingStart</code>.</p>
 		<p><b>same result:</b> a result equal to the last one isn't passed on. The pond picture only redraws when what it read changed.</p>`,
 	real:
-		`Runs the real <code>@ermine/scheduler</code>: createScheduler, a root scope, createComputer, createEffect, track, mark and pulse. The wires come from its own listeners (onTrack, onRunEnd, onMark, onTrackingStart, onTrackingEnd); the page draws them, it doesn't guess. The keys live in a Map the page keeps; turn the "store" box over to see all of it.`,
+		`Runs the real <code>@ermine/core/scheduler</code>: createScheduler, a root scope, createComputer, createEffect, track, mark and pulse. The wires come from its own listeners (onTrack, onRunEnd, onMark, onTrackingStart, onTrackingEnd); the page draws them, it doesn't guess. The keys live in a Map the page keeps; turn the "store" box over to see all of it.`,
 })
 const { board } = page
 

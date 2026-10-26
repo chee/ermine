@@ -3,7 +3,7 @@
 // weight and the apples; its rule is on its box, and you edit it while everything runs. rules, the
 // computer that made hungry, reads hungry's code: each change is a run of rules that claims hungry
 // with the new function. same computer, its runs carrying on; wander and the picture never notice
-import { type Computer, createScheduler } from "@ermine/scheduler"
+import { type Computer, createScheduler } from "@ermine/core/scheduler"
 import { pondPage } from "../kit/page.ts"
 import { createFarm } from "../kit/farm.ts"
 
@@ -29,7 +29,7 @@ const page = pondPage("live", {
 		<p><b>throw:</b> a rule that throws is hungry's own failed run: it sets nothing, so the moods it last gave stay.</p>
 		<p><b>the rest:</b> <b>wander</b> and the picture weren't made by rules. Nothing here touches them.</p>`,
 	real:
-		`Runs the real <code>@ermine/scheduler</code>: createRootScope, createComputer, createEffect, claim, track, mark and pulse; run numbers and errors come from its onRunEnd. The page's own: turning your rule into a function (<code>new Function</code> on its text), the store, the clock, how wander steps, the chips and the farm picture.`,
+		`Runs the real <code>@ermine/core/scheduler</code>: createRootScope, createComputer, createEffect, claim, track, mark and pulse; run numbers and errors come from its onRunEnd. The page's own: turning your rule into a function (<code>new Function</code> on its text), the store, the clock, how wander steps, the chips and the farm picture.`,
 })
 const { board } = page
 

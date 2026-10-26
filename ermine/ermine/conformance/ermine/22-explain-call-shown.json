@@ -1,0 +1,132 @@
+{
+	"title": "why(x)'s by.call, as a program sees it: the send's record describing the caller by its id (caller), with args, returned and the rest as before, and no process context: a program's api holds no process context, so it never gets the sender's write, writes or within. ermine.records.call (the host's side) is unchanged",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./a",
+						{
+							"n": 0
+						}
+					],
+					"as": "a"
+				},
+				{
+					"do": [
+						"createAction",
+						"on/set",
+						[
+							{
+								"do": [
+									"patch",
+									"$a",
+									[
+										{
+											"path": [
+												"n"
+											],
+											"value": "$0"
+										}
+									]
+								]
+							}
+						],
+						"set"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/code/p/on/set",
+				1
+			],
+			"expect": {
+				"value": "set"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"explain",
+				"$a"
+			],
+			"expect": {
+				"value": {
+					"writer": "method",
+					"path": [
+						"code",
+						"p",
+						"on",
+						"set"
+					],
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"explaincall",
+				"$a"
+			],
+			"expect": {
+				"value": [
+					"args",
+					"end",
+					"ended",
+					"n",
+					"reads",
+					"returned",
+					"started",
+					"writes"
+				]
+			}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"id": "n5",
+			"expect": {
+				"record": {
+					"n": 1,
+					"caller": "n1",
+					"handler": "n5",
+					"args": [
+						1
+					],
+					"end": "done",
+					"returned": "set",
+					"reads": [],
+					"writes": [
+						[
+							"value",
+							"n4"
+						]
+					]
+				}
+			}
+		}
+	]
+}

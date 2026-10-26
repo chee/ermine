@@ -17,10 +17,10 @@
 // an id that is guessed, leaked, or well-known (memory: the root is a device-id document). That the
 // boundary rests on id-secrecy rather than structure is itself the finding.
 import { assert, assertEquals, assertNotEquals } from "@std/assert"
-import createEntry, { type Entry } from "@ermine/node/entry"
-import { createScheduler } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/table"
+import createEntry, { type Entry } from "@ermine/core/node/entry"
+import { createScheduler } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Id, type Key } from "@ermine/core/table"
 import { children, createPlaces } from "@ermine/places"
 import { get, gets, list, lookup, members } from "@ermine/places/lib"
 import { createChangeHeader } from "@ermine/places/header"

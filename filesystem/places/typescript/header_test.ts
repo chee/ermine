@@ -1,7 +1,7 @@
 // header.ts' site: the one given; none given, outside a run the call's own, in a run none
 import { assertEquals } from "@std/assert"
-import type { ChangeHeader } from "@ermine/node/entry"
-import { createScheduler } from "@ermine/scheduler"
+import type { ChangeHeader } from "@ermine/core/node/entry"
+import { createScheduler } from "@ermine/core/scheduler"
 import { createChangeHeader } from "./header.ts"
 
 const given = { file: "program.js", line: 12 }

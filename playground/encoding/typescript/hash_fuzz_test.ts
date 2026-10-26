@@ -1,7 +1,7 @@
 // the hash fuzz: values of every kind (ermine/encoding's fuzz values), each and a copy with its
 // keys in another order named by BLAKE3 of the value's encoding. a few dozen seeds (SEEDS for more)
 import { assertEquals } from "@std/assert"
-import { blake3 } from "@ermine/blake3"
+import { blake3 } from "@ermine/core/blake3"
 import { encode } from "@ermine/encoding/cbor"
 import { hash } from "./hash.ts"
 import {

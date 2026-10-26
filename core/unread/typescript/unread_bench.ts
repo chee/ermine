@@ -2,14 +2,14 @@
 // µs per write, fastest of 31 rounds (the machine may be busy): node's update copying on write
 // ("copy"), in place (op's apply with cow: false: "in place"), and unread.
 // a burst: writes with no read between; read between: unread is told of a read before each write
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import apply, { type Patch } from "@ermine/op/apply"
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import apply, { type Patch } from "@ermine/core/op/apply"
 import { createPlaces, type Places } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
-import { createScheduler } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable } from "@ermine/table"
+import { createScheduler } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable } from "@ermine/core/table"
 import { createUnread, keeping, reading } from "./unread.ts"
 
 const only = Deno.args

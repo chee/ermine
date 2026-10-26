@@ -1,0 +1,195 @@
+{
+	"title": "a setup sending to a service not there yet is pending, loudly, and stays so: setup is untracked and runs once [chee 10-25: \"setup is untracked, runs once. like solid.\"]. what it waited on arriving runs nothing again; its status still says what setup waited on; its teardown is told at stop. to wait, send from a memo or effect. the send setup stopped on stays listed as a wait (unanswered) till the process stops (a pick)",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"log",
+						"ran",
+						"p"
+					]
+				},
+				{
+					"do": [
+						"addTeardown",
+						"td"
+					]
+				},
+				{
+					"do": [
+						"createMemo",
+						"m",
+						{},
+						1
+					],
+					"as": "m"
+				},
+				{
+					"do": [
+						"executeAction",
+						"/svc/hello"
+					],
+					"as": "hi"
+				},
+				{
+					"do": [
+						"executeAction",
+						"/svc/later"
+					],
+					"as": "bye"
+				}
+			],
+			"back": [
+				"all",
+				"$hi",
+				"$bye"
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "status",
+			"name": "p",
+			"expect": {
+				"status": {
+					"state": "pending",
+					"waiting": [
+						{
+							"send": [
+								"svc",
+								"hello"
+							]
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "waits",
+			"expect": {
+				"waits": [
+					{
+						"caller": "proc:p",
+						"path": [
+							"svc",
+							"hello"
+						],
+						"box": "R"
+					}
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/code/p/m"
+			],
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p",
+				"m"
+			],
+			"expect": {
+				"id": "n4"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"createAction",
+				"/svc/hello",
+				[],
+				"hi"
+			]
+		},
+		{
+			"op": "log",
+			"name": "ran",
+			"expect": {
+				"values": [
+					"p"
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "td",
+			"expect": {
+				"values": []
+			}
+		},
+		{
+			"op": "status",
+			"name": "p",
+			"expect": {
+				"status": {
+					"state": "pending",
+					"waiting": [
+						{
+							"send": [
+								"svc",
+								"hello"
+							]
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "waits",
+			"expect": {
+				"waits": [
+					{
+						"caller": "proc:p",
+						"path": [
+							"svc",
+							"hello"
+						],
+						"box": "R"
+					}
+				]
+			}
+		},
+		{
+			"op": "stop",
+			"name": "p",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "td",
+			"expect": {
+				"values": [
+					"ended"
+				]
+			}
+		},
+		{
+			"op": "waits",
+			"expect": {
+				"waits": []
+			}
+		}
+	]
+}

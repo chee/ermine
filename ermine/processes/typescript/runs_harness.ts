@@ -16,7 +16,7 @@
 //    (statusOf tells only an Error's message): null | "pending" | { error } | { thrown }
 // program e, besides places' harness's:
 //   {"run":[id, field?]}        the record as runOf tells it, or that field of it; tracked
-import { type Computer, PENDING } from "@ermine/scheduler"
+import { type Computer, PENDING } from "@ermine/core/scheduler"
 import { status } from "../../../filesystem/places/typescript/status.ts"
 import { createGuard, Refusal } from "@ermine/places/guard"
 import { no, yes } from "@ermine/protect"

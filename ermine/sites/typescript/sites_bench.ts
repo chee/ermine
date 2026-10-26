@@ -1,7 +1,7 @@
 // what a site costs at the create: nothing recorded, the stack held unread (what sites.ts does),
 // and the stack parsed at once (util's capture). deno bench ermine/sites
-import { createScheduler } from "@ermine/scheduler"
-import { capture } from "@ermine/util/stacktrace"
+import { createScheduler } from "@ermine/core/scheduler"
+import { capture } from "@ermine/core/util/stacktrace"
 import { createSites } from "./sites.ts"
 import { INFO } from "./sites_fixture.ts"
 

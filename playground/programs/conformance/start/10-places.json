@@ -117,7 +117,8 @@
 			"op": "process",
 			"expect": {
 				"parts": [
-					"attributes"
+					"attributes",
+					"status"
 				],
 				"status": "pending",
 				"args": [

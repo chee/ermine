@@ -2,7 +2,7 @@
 // patches are GRAPH.tex's: this reads them, never applies them, and never needs the content
 // squishing keeps the end result and drops the in-between: only an edit's end is ever seen
 import type { Key, Patch, Span } from "./apply.ts"
-import { count, near } from "@ermine/util/walk-string"
+import { count, near } from "@ermine/core/util/walk-string"
 
 type Ranged = Patch & { range: Span }
 

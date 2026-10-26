@@ -38,7 +38,7 @@
 // { op: "save", dev, save }                  → {}   whether the device keeps presence in a save
 // { op: "keep", dev?, part, save? }          → { keep }   keep: the device's, or { save } given
 import { decode } from "@ermine/encoding/cbor"
-import createEntry from "@ermine/node/entry"
+import createEntry from "@ermine/core/node/entry"
 import { place } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
 import { createPair } from "./channel.ts"

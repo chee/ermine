@@ -1,6 +1,6 @@
 import { assertEquals } from "jsr:@std/assert@1"
-import apply, { type Patch } from "@ermine/op/apply"
-import produce from "@ermine/op/produce"
+import apply, { type Patch } from "@ermine/core/op/apply"
+import produce from "@ermine/core/op/produce"
 import { rebase } from "./rebase.ts"
 
 // the page's patches landed, then the realm's (made on the value before them), rebased

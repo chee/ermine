@@ -1,0 +1,214 @@
+{
+	"title": "start with no function at its path: the process is there, pending, waiting on the path's code. the saved node there (under the process's row) is read till it holds a function: written into a node already there, or a node placed there; then setup runs, once, and the process is done. code written there after is not run again",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/code/a",
+				null
+			]
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"a"
+			],
+			"expect": {
+				"id": "n2"
+			}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"at": "/code/a",
+			"expect": {
+				"id": "proc:a"
+			}
+		},
+		{
+			"op": "status",
+			"name": "a",
+			"expect": {
+				"status": {
+					"state": "pending",
+					"waiting": [
+						{
+							"code": [
+								"code",
+								"a"
+							]
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/code/a"
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"id": "n2",
+			"program": [
+				{
+					"do": [
+						"log",
+						"ran",
+						"a"
+					]
+				}
+			],
+			"back": "a's value",
+			"expect": {}
+		},
+		{
+			"op": "status",
+			"name": "a",
+			"expect": {
+				"status": {
+					"state": "done"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/code/a"
+			],
+			"expect": {
+				"value": "a's value"
+			}
+		},
+		{
+			"op": "log",
+			"name": "ran",
+			"expect": {
+				"values": [
+					"a"
+				]
+			}
+		},
+		{
+			"op": "code",
+			"id": "n2",
+			"program": [
+				{
+					"do": [
+						"log",
+						"ran",
+						"again"
+					]
+				}
+			],
+			"back": "again",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "ran",
+			"expect": {
+				"values": [
+					"a"
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/code/a"
+			],
+			"expect": {
+				"value": "a's value"
+			}
+		},
+		{
+			"op": "start",
+			"name": "b",
+			"at": "/code/b",
+			"expect": {
+				"id": "proc:b"
+			}
+		},
+		{
+			"op": "status",
+			"name": "b",
+			"expect": {
+				"status": {
+					"state": "pending",
+					"waiting": [
+						{
+							"code": [
+								"code",
+								"b"
+							]
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "code",
+			"at": "/elsewhere/b",
+			"program": [
+				{
+					"do": [
+						"log",
+						"ran",
+						"b"
+					]
+				}
+			],
+			"back": "b's value",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"place",
+				"/code/b",
+				"/elsewhere/b"
+			]
+		},
+		{
+			"op": "status",
+			"name": "b",
+			"expect": {
+				"status": {
+					"state": "done"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/code/b"
+			],
+			"expect": {
+				"value": "b's value"
+			}
+		},
+		{
+			"op": "log",
+			"name": "ran",
+			"expect": {
+				"values": [
+					"a",
+					"b"
+				]
+			}
+		}
+	]
+}

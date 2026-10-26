@@ -25,8 +25,8 @@
 // this one ({ ...createProcessAPI(ctx), more }). its handle's stop(reason): the process's
 // teardowns told reason (the starter's stop is under way: it is what calls the handle's)
 // a start, and a write of a process's value, asks for one pulse soon (setup.schedule, as the api's)
-import createEntry, { type Entry } from "@ermine/node/entry"
-import update from "@ermine/node/update"
+import createEntry, { type Entry } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
 import {
 	type API as Base,
 	type BoxNode,
@@ -42,7 +42,7 @@ import { type Id, type Path, PlacesError } from "@ermine/places"
 import { get } from "@ermine/places/lib"
 import { createChangeHeader } from "@ermine/places/header"
 import type { Context, Process } from "@ermine/processes/start"
-import type { Scope } from "@ermine/scheduler"
+import type { Scope } from "@ermine/core/scheduler"
 import { openwith as openwithIn, satisfy, type Way, type Whynot } from "./programs.ts"
 import type { Handle, Programs, Runner } from "./start.ts"
 

@@ -4,9 +4,9 @@
 // those as records: each key's latest write (its value, the run that wrote it or the site of the
 // outside call, the time), and each run's reads (the very writes it got). a trail is walked from
 // those records back to the outside writes. none of the keeping or walking is ermine's: it is the
-// page's, built on the scheduler's listeners and @ermine/util/stacktrace's capture.
-import type { Computer, Scheduler } from "@ermine/scheduler"
-import { capture, type FileLocation } from "@ermine/util/stacktrace"
+// page's, built on the scheduler's listeners and @ermine/core/util/stacktrace's capture.
+import type { Computer, Scheduler } from "@ermine/core/scheduler"
+import { capture, type FileLocation } from "@ermine/core/util/stacktrace"
 
 // one write: by a run, or from outside (with the site of the code that called write)
 export type Written = {

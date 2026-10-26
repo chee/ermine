@@ -14,7 +14,7 @@
 // what it waits for (having read the node the answer will arrive in). a grants answer, a yes or a
 // "denied", also says which grant decided: grant { part, id, index }; all, any and only pass the
 // deciding answer through whole, so it survives composition
-import type { Key as Step } from "@ermine/op/apply"
+import type { Key as Step } from "@ermine/core/op/apply"
 
 export type Key = string | symbol
 export type Target = {

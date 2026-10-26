@@ -29,7 +29,7 @@ const page = pondPage("together", {
 		<p><b>settle:</b> a merge commit that keeps what shows. One head again, the list empty. The other edit is still in the history.</p>
 		<p><b>eg-walker:</b> a merge rule a computer can turn on. Heads show merged: edits to different fields both stand; on the same field, the one later in its replay order wins (more changes behind it, then commit name).</p>`,
 	real:
-		`Runs two real hosts in this tab: each a <code>@ermine/scheduler</code>, <code>@ermine/table</code> and <code>@ermine/places</code>, with <code>@ermine/together</code>'s createSync over its own Subduction device (wasm), stored in memory. The cable is the sync tests' pipe; the page delays, counts, draws and cuts it. Both computers live in this one tab: the Cardputer drawn here isn't the real one. The pictures, the frames and the names are the page's.`,
+		`Runs two real hosts in this tab: each a <code>@ermine/core/scheduler</code>, <code>@ermine/core/table</code> and <code>@ermine/places</code>, with <code>@ermine/together</code>'s createSync over its own Subduction device (wasm), stored in memory. The cable is the sync tests' pipe; the page delays, counts, draws and cuts it. Both computers live in this one tab: the Cardputer drawn here isn't the real one. The pictures, the frames and the names are the page's.`,
 })
 const { board } = page
 

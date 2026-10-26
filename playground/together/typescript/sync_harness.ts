@@ -54,7 +54,7 @@
 //                                                           items: [{ value? | gone? | held?,
 //                                                           inside?, at?, from: head (as shown's) }]
 //                                                           }] }
-// { op: "status", host, id }            → { status } | {}   the status table's (sync.ts Status)
+// { op: "status", host, id }            → { status } | {}   the sync-status table's (sync.ts Status)
 // { op: "events", host, id, table? }    → { events }        the table's events at (table, id)
 //                                                           since last asked, how many
 // { op: "heads", host, id, layer? }     → { heads }         agreed order; stored (default) |
@@ -74,13 +74,13 @@
 // commit in an answer: its label, else hex name. id: a minted label, else the string as given
 import * as sd from "npm:@automerge/subduction@0.23.0"
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
-import createEntry, { type ChangeHeader } from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import type { Patch } from "@ermine/op/apply"
+import createEntry, { type ChangeHeader } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import type { Patch } from "@ermine/core/op/apply"
 import { createPlaces, type Places } from "@ermine/places"
-import { createScheduler } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Key, type Table } from "@ermine/table"
+import { createScheduler } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Key, type Table } from "@ermine/core/table"
 import { decode } from "@ermine/formats/commit"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
@@ -474,7 +474,7 @@ async function answer(r: Request): Promise<Answer> {
 			return { values: out }
 		}
 		case "status": {
-			const e = of(r.host).table.get("status", idOf(r.id))
+			const e = of(r.host).table.get("sync-status", idOf(r.id))
 			if (e === undefined || e.value === undefined) return {}
 			const v = e.value as Status
 			const named = <T extends object>(x: T) =>

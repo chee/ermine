@@ -105,7 +105,8 @@
 			"name": "a",
 			"expect": {
 				"parts": [
-					"attributes"
+					"attributes",
+					"status"
 				],
 				"status": {
 					"failed": "dlopen failed"
@@ -152,7 +153,8 @@
 			"name": "b",
 			"expect": {
 				"parts": [
-					"attributes"
+					"attributes",
+					"status"
 				],
 				"status": {
 					"failed": "dlopen failed"

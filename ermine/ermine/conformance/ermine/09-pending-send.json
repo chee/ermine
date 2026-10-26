@@ -1,0 +1,306 @@
+{
+	"title": "a send to nothing (no node there, or one holding no value) is pending, loudly: PENDING thrown, and a wait recorded (the caller, the path, the box it was looked up in) while it waits. a memo sending: pending, waiting on the send, run again when the handler comes and then done, its wait gone. a send from outside: its wait kept till a send from it there is answered. a setup sending: the process pending, waiting on it. a node holding a value that is no function: not-a-method",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createMemo",
+						"asks",
+						{},
+						[
+							"executeAction",
+							"/svc/on/x",
+							1
+						]
+					],
+					"as": "asks"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p",
+				"asks"
+			],
+			"expect": {
+				"id": "n4"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$asks"
+			],
+			"expect": {
+				"value": {
+					"state": "pending",
+					"waiting": [
+						{
+							"send": [
+								"svc",
+								"on",
+								"x"
+							]
+						}
+					],
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "waits",
+			"expect": {
+				"waits": [
+					{
+						"caller": "n4",
+						"path": [
+							"svc",
+							"on",
+							"x"
+						],
+						"box": "R"
+					}
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"/svc/on/x",
+				2
+			],
+			"fails": true,
+			"expect": {
+				"error": "pending"
+			}
+		},
+		{
+			"op": "waits",
+			"expect": {
+				"waits": [
+					{
+						"caller": "n4",
+						"path": [
+							"svc",
+							"on",
+							"x"
+						],
+						"box": "R"
+					},
+					{
+						"caller": "proc:p",
+						"path": [
+							"svc",
+							"on",
+							"x"
+						],
+						"box": "R"
+					}
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"createAction",
+				"/svc/on/x",
+				[],
+				"$0"
+			]
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$asks"
+			],
+			"expect": {
+				"value": {
+					"state": "done",
+					"n": 2
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"$asks"
+			],
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "waits",
+			"expect": {
+				"waits": [
+					{
+						"caller": "proc:p",
+						"path": [
+							"svc",
+							"on",
+							"x"
+						],
+						"box": "R"
+					}
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"/svc/on/x",
+				2
+			],
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "waits",
+			"expect": {
+				"waits": []
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/plain",
+				1
+			]
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"/plain"
+			],
+			"fails": true,
+			"expect": {
+				"error": "not-a-method"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"/svc"
+			],
+			"fails": true,
+			"expect": {
+				"error": "pending"
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/q",
+			"program": [
+				{
+					"do": [
+						"executeAction",
+						"/none/on/y"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/code/q",
+			"expect": {
+				"id": "proc:q"
+			}
+		},
+		{
+			"op": "status",
+			"name": "q",
+			"expect": {
+				"status": {
+					"state": "pending",
+					"waiting": [
+						{
+							"send": [
+								"none",
+								"on",
+								"y"
+							]
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "waits",
+			"expect": {
+				"waits": [
+					{
+						"caller": "proc:p",
+						"path": [
+							"svc"
+						],
+						"box": "R"
+					},
+					{
+						"caller": "proc:q",
+						"path": [
+							"none",
+							"on",
+							"y"
+						],
+						"box": "R"
+					}
+				]
+			}
+		},
+		{
+			"op": "stop",
+			"name": "q",
+			"expect": {}
+		},
+		{
+			"op": "waits",
+			"expect": {
+				"waits": [
+					{
+						"caller": "proc:p",
+						"path": [
+							"svc"
+						],
+						"box": "R"
+					}
+				]
+			}
+		}
+	]
+}

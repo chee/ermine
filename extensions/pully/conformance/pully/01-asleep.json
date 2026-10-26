@@ -1,0 +1,149 @@
+{
+	"title": "named, a node is asleep and nothing wakes it while nothing reads it. the name is an attribute, ermine.provider: the handler's node id (provide writes it); the status another, ermine.provider.status, which status(x) shows as provider (onStatus). ermine.features shows pully's hooks",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				"pully"
+			],
+			"expect": {}
+		},
+		{
+			"op": "features",
+			"expect": {
+				"features": [
+					{
+						"name": "pully",
+						"needs": [],
+						"hooks": [
+							"onWrite",
+							"onStatus"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/cam",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/dev/cam",
+						{
+							"frame": 0
+						}
+					],
+					"as": "cam"
+				},
+				{
+					"do": [
+						"createAction",
+						"on/cam",
+						[
+							{
+								"do": [
+									"log",
+									"said",
+									[
+										"all",
+										"$0",
+										"$2"
+									]
+								]
+							}
+						],
+						[
+							"if",
+							[
+								"is",
+								"$0",
+								"check"
+							],
+							"fresh"
+						]
+					],
+					"as": "on"
+				},
+				{
+					"do": [
+						"provide",
+						"$cam",
+						"$on"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "cam",
+			"at": "/code/cam",
+			"expect": {
+				"id": "proc:cam"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"dev",
+				"cam"
+			],
+			"expect": {
+				"id": "n4"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"cam",
+				"on",
+				"cam"
+			],
+			"expect": {
+				"id": "n6"
+			}
+		},
+		{
+			"op": "log",
+			"name": "said",
+			"expect": {
+				"values": []
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"getStatus",
+				"/dev/cam"
+			],
+			"expect": {
+				"value": {
+					"state": "done",
+					"provider": "asleep"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				{
+					"path": [
+						"dev",
+						"cam"
+					],
+					"part": "attributes"
+				}
+			],
+			"expect": {
+				"value": {
+					"ermine.provider": "n6",
+					"ermine.provider.status": "asleep"
+				}
+			}
+		}
+	]
+}

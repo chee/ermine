@@ -26,13 +26,13 @@
 // records (a record's reader whose own record its writer reads) is the scheduler's to see
 // (causes), as any other. no table event, no header, no places commit.
 // a computer gone: drop(id), its record out, its readers marked.
-import type { ChangeHeader } from "@ermine/node/entry"
-import type { Key as Step } from "@ermine/op/apply"
+import type { ChangeHeader } from "@ermine/core/node/entry"
+import type { Key as Step } from "@ermine/core/op/apply"
 import type { Fact, Places } from "@ermine/places"
 import { target } from "@ermine/places/guard"
 import type { Target } from "@ermine/protect"
-import type { Computer, Ended, More, Scheduler } from "@ermine/scheduler"
-import type { Id, Key, Table } from "@ermine/table"
+import type { Computer, Ended, More, Scheduler } from "@ermine/core/scheduler"
+import type { Id, Key, Table } from "@ermine/core/table"
 
 // a read, named: where, and the change there as the run first read it
 export type Read = {
@@ -89,6 +89,9 @@ export type Setup = {
 		Scheduler,
 		"getRun" | "onRunStart" | "onRunEnd" | "onEffect" | "onTrack" | "track" | "mark"
 	>
+	// a record on its way to being held, by the computer's node id: keep(run) holds it, as given or
+	// changed; not called, not held (a feature's onRecord). none: held
+	hold?: (id: Id, run: Run, keep: (run: Run) => void) => void
 }
 
 export type Runs = {
@@ -186,8 +189,13 @@ export function createRuns(setup: Setup): Runs {
 		return same ? old! : out
 	}
 
-	// the record written: the fields that differ marked, the computer their writer
+	// the record written, through hold when given
 	function write(c: Computer, id: Id, run: Run) {
+		if (setup.hold) setup.hold(id, run, (r) => put(c, id, r))
+		else put(c, id, run)
+	}
+	// the record held: the fields that differ marked, the computer their writer
+	function put(c: Computer, id: Id, run: Run) {
 		const h = held(id)
 		const was = h.run
 		h.run = run

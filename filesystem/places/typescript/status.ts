@@ -1,5 +1,6 @@
-// a computer's status, on its own node: never saved, at one place. the attribute
-// ermine.computer.status holds PENDING while a run is pending, what a failed run threw, as thrown
+// a computer's status, on its own node: never saved, at one place, in a table of its own ("status",
+// not the node's attributes: a program that writes attributes can't forge a status [chee 10-25:
+// "status should be a table yes"]). the entry's key ermine.computer.status holds PENDING while a run is pending, what a failed run threw, as thrown
 // (a loop: an Error "looping"), and is gone when a run is done. a run stopped (a newer one
 // follows) leaves it. an effect's act that throws writes what it threw the same way (told by
 // onEffect); a run done leaves that, until an act succeeds and takes it away (a thrown undefined
@@ -7,19 +8,29 @@
 // onRunEnd), with the computer's scope open and the run open when the pulse began: from a pulse
 // with none, from outside. a computer reading its own status runs once more for each status
 // written, then stops: the same status is not written again
-import type { Id, Table, Tables } from "@ermine/table"
-import createEntry, { type Entry } from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import type { Patch } from "@ermine/op/apply"
-import type { Computer, Ended, Scheduler } from "@ermine/scheduler"
+import type { Id, Table, Tables } from "@ermine/core/table"
+import createEntry, { type Entry } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import type { Patch } from "@ermine/core/op/apply"
+import type { Computer, Ended, Scheduler } from "@ermine/core/scheduler"
 import { createChangeHeader } from "./header.ts"
-import type { Places } from "./places.ts"
+import type { Places, Writer } from "./places.ts"
 
-// the attribute, and what it holds while a run is pending
+declare module "@ermine/core/table" {
+	interface Tables {
+		status: Record<string, unknown>
+	}
+}
+
+// the table, the key in its entry, and what it holds while a run is pending
+export const TABLE = "status"
 export const STATUS = "ermine.computer.status"
 export const PENDING: unique symbol = Symbol.for("ermine.pending") as never
 
 export type Setup = {
+	// none: written here (table.add, or update and commit); given: each status write handed to it
+	// to do, as patches (places' Writer)
+	write?: Writer
 	places: Pick<Places, "commit">
 	table: Pick<Table, "get" | "add">
 	scheduler: Pick<
@@ -60,16 +71,24 @@ export function createStatus(setup: Setup): {
 	// the status written, with c open: nothing when it is already so
 	function write(c: Computer, id: Id, status: unknown) {
 		scheduler.runWithScope(c, () => {
-			const there = table.get("attributes", id) as Entry<unknown> | undefined
+			const there = table.get(TABLE, id) as Entry<unknown> | undefined
 			const v = there?.value as Record<string, unknown> | undefined
 			const had = v !== undefined && v !== null && typeof v === "object" &&
 				Object.hasOwn(v, STATUS)
 			if (status === undefined ? !had : had && v![STATUS] === status) return
 			// made only for a write: its site is a stack read
 			const header = createChangeHeader(scheduler)
+			if (setup.write !== undefined) {
+				const patches: Patch[] = there === undefined ||
+						v === undefined || v === null || typeof v !== "object"
+					? [{ path: [], value: { ...status === undefined ? {} : { [STATUS]: status } } }]
+					: [status === undefined ? { path: [STATUS] } : { path: [STATUS], value: status }]
+				setup.write(TABLE, id, patches, header)
+				return
+			}
 			if (there === undefined) {
 				const made = createEntry<Record<string, unknown>>({ [STATUS]: status }, header)
-				table.add("attributes", id, made as Entry<Tables["attributes"]>)
+				table.add(TABLE, id, made as Entry<Tables[typeof TABLE]>)
 				return
 			}
 			const patches: Patch[] = []
@@ -110,7 +129,7 @@ export function createStatus(setup: Setup): {
 
 // a computer's status, by its node's id, the read told: PENDING, an Error, or undefined
 export const status = (places: Pick<Places, "readValue">, id: Id): unknown =>
-	places.readValue("attributes", id, [STATUS])
+	places.readValue(TABLE, id, [STATUS])
 
 // whether a computer's run is pending, by its node's id, the read told
 export const isPending = (places: Pick<Places, "readValue">, id: Id): boolean =>

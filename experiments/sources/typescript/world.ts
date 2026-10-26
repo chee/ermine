@@ -4,9 +4,9 @@
 // device's, { actor }, which every write here is made in. the processes' rows and nodes, and the
 // history's own node, are this device's, now: the host's rule leaves them out of the history, so
 // they are never sent anywhere
-import { createScheduler } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/table"
+import { createScheduler } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Id, type Key } from "@ermine/core/table"
 import { children, createPlaces } from "@ermine/places"
 import { PROCESS, processes as rows } from "@ermine/processes"
 import { createProcesses } from "@ermine/processes/start"

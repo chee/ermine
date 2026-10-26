@@ -10,7 +10,7 @@
 // place gives what it gives in one (the same value; refused: the same code, its
 // index counted in the half it fell in)
 // deno-lint-ignore-file no-explicit-any
-import apply, { type Patch } from "@ermine/op/apply"
+import apply, { type Patch } from "@ermine/core/op/apply"
 import { batch, KEYS, start } from "../../core/fuzz/gen_harness.ts"
 import {
 	type Answer,

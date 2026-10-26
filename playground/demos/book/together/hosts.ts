@@ -2,14 +2,14 @@
 // Subduction), as playground/together/typescript/sync_test.ts makes them; and a cable between
 // them: the test's in-memory pipe, wrapped so the page can see each message, hold it a moment,
 // and cut it
-import createEntry from "@ermine/node/entry"
-import update from "@ermine/node/update"
-import type { Patch } from "@ermine/op/apply"
+import createEntry from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import type { Patch } from "@ermine/core/op/apply"
 import { createPlaces } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
-import { createScheduler } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/table"
+import { createScheduler } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Id, type Key } from "@ermine/core/table"
 import { createSigner } from "@ermine/together/seal"
 import { createSync, type Sync } from "@ermine/together/sync"
 import { egwalker } from "@ermine/egwalker"

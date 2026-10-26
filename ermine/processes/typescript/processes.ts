@@ -22,7 +22,7 @@
 // writes: plain functions on the table, as places' place is, each giving back the entries it
 // changed for places' commit: a patch at the path, so a start or a stop marks its own path and the
 // names above it, nothing beside. refused: a PlacesError, nothing changed
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
 import {
 	asId,
 	type Contributor,
@@ -31,9 +31,10 @@ import {
 	type Path,
 	PlacesError,
 	unread,
+	type Writer,
 } from "@ermine/places"
 import { upsert } from "@ermine/places/upsert"
-import type { Key, Table } from "@ermine/table"
+import type { Key, Table } from "@ermine/core/table"
 
 // the process part. not declared on the table's Tables: a prototype in playground/union-check
 // declares "process" another way
@@ -88,13 +89,16 @@ export function trie(part: Key, root: Id, from: string): Contributor {
 // the first row under root makes the part's entry (a table event tells readers): nothing given
 // back. the entry is written through places' unread, as children are (a copy a start made 300
 // starts take 0.4 s)
+// write: none, written here; given (places' Writer), handed the patches to do and say, and nothing
+// given back
 export const addProcess = (
 	table: Pick<Table, "get" | "add">,
 	root: Id,
 	path: Path,
 	id: Id,
 	header: ChangeHeader,
-): Entry<unknown>[] => addLeaf(table, PROCESS, root, path, id, header)
+	write?: Writer,
+): Entry<unknown>[] => addLeaf(table, PROCESS, root, path, id, header, write)
 
 // addProcess on any part: id at path in root's trie there, by the same rules
 export function addLeaf(
@@ -104,13 +108,15 @@ export function addLeaf(
 	path: Path,
 	id: Id,
 	header: ChangeHeader,
+	write?: Writer,
 ): Entry<unknown>[] {
 	if (path.length === 0) throw new PlacesError("not-a-name")
 	for (const name of path) if (bad(name)) throw new PlacesError("not-a-name", name)
 	const there = table.get(part, root)
 	if (there === undefined) {
 		const trie = path.reduceRight<unknown>((v, k) => ({ [k]: v }), id)
-		table.add(part, root, createEntry(trie, header) as never)
+		if (write !== undefined) write(part, root, [{ path: [], value: trie }], header)
+		else table.add(part, root, createEntry(trie, header) as never)
 		return []
 	}
 	let v: unknown = there.value
@@ -121,7 +127,17 @@ export function addLeaf(
 	if (isMap(v) && Object.keys(v).length) {
 		throw new PlacesError("already-there", path[path.length - 1])
 	}
-	return upsert(table, part, root, path, id, header, unread.update)
+	if (write === undefined) return upsert(table, part, root, path, id, header, unread.update)
+	upsert(
+		table,
+		part,
+		root,
+		path,
+		id,
+		header,
+		(_e, patches, h) => void write(part, root, [...patches], h),
+	)
+	return []
 }
 
 // the process at path under root taken out, and with it every level left empty: one patch, at the
@@ -131,7 +147,8 @@ export const removeProcess = (
 	root: Id,
 	path: Path,
 	header: ChangeHeader,
-): Entry<unknown>[] => removeLeaf(table, PROCESS, root, path, header)
+	write?: Writer,
+): Entry<unknown>[] => removeLeaf(table, PROCESS, root, path, header, write)
 
 // removeProcess on any part: the leaf at path in root's trie there, by the same rules
 export function removeLeaf(
@@ -140,6 +157,7 @@ export function removeLeaf(
 	root: Id,
 	path: Path,
 	header: ChangeHeader,
+	write?: Writer,
 ): Entry<unknown>[] {
 	const entry = table.get(part, root) as Entry<unknown> | undefined
 	const levels: Record<string, unknown>[] = []
@@ -154,6 +172,10 @@ export function removeLeaf(
 	}
 	let d = path.length - 1
 	while (d > 0 && Object.keys(levels[d]).length === 1) d--
+	if (write !== undefined) {
+		write(part, root, [{ path: path.slice(0, d + 1) }], header)
+		return []
+	}
 	unread.update(entry, [{ path: path.slice(0, d + 1) }], header)
 	return [entry]
 }

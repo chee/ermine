@@ -21,15 +21,15 @@
 // { op: "pulse" }                     -> { seen }   a pulse; what the watch saw at each of its
 //    runs since the last pulse (by session name)
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
-import { blake3 } from "@ermine/blake3"
-import * as ed25519 from "@ermine/ed25519"
+import { blake3 } from "@ermine/core/blake3"
+import * as ed25519 from "@ermine/core/ed25519"
 import { kind, text } from "@ermine/ids"
 import { createPlaces } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
 import { upsert } from "@ermine/places/upsert"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createScheduler } from "@ermine/scheduler"
-import { createTable, type Key } from "@ermine/table"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createScheduler } from "@ermine/core/scheduler"
+import { createTable, type Key } from "@ermine/core/table"
 import {
 	beat,
 	leave,

@@ -9,7 +9,7 @@
 //
 // a map's key order is not part of its value: a map is its keys and what is at each. nothing owes
 // an order (a key put may come back anywhere among the others); maps are compared by content
-import { count, type Hint, joins, near, walk } from "@ermine/util/walk-string"
+import { count, type Hint, joins, near, walk } from "@ermine/core/util/walk-string"
 
 export type Key = string | number
 export type Span = readonly [number, number]

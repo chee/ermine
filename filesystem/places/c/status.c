@@ -51,7 +51,7 @@ const char *cst_error(const op_value *v) {
 
 const op_value *cst_status(pl *p, tb_key id) {
 	op_key key = {.type = OP_STR_KEY, .s = CST_ATTRIBUTE};
-	return pl_read(p, tb_string("attributes"), id, &key, 1);
+	return pl_read(p, tb_string(CST_TABLE), id, &key, 1);
 }
 int cst_pending(pl *p, tb_key id) { return cst_is_pending(cst_status(p, id)); }
 
@@ -81,7 +81,7 @@ static void write_in_scope(void *data) {
 	writing *w = data;
 	cst *s = w->s;
 	tb_key id = tb_string(w->id);
-	nd_entry *there = tb_get(s->table, tb_string("attributes"), id);
+	nd_entry *there = tb_get(s->table, tb_string(CST_TABLE), id);
 	const op_value *v = there != NULL ? there->value : NULL;
 	int map = v != NULL && v->type == OP_MAP;
 	const op_value *had = map ? op_get(v, CST_ATTRIBUTE) : NULL;
@@ -109,7 +109,7 @@ static void write_in_scope(void *data) {
 		}
 		s->nodes[s->nnodes++] = node;
 		pl_hold(s->places, node, made, pl_made_free);
-		tb_add(s->table, tb_string("attributes"), id, node);
+		tb_add(s->table, tb_string(CST_TABLE), id, node);
 		return;
 	}
 	block *b = xalloc(sizeof *b);

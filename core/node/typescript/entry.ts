@@ -1,5 +1,5 @@
-import type { Patch } from "@ermine/op/apply"
-import type { FileLocation } from "@ermine/util/stacktrace"
+import type { Patch } from "@ermine/core/op/apply"
+import type { FileLocation } from "@ermine/core/util/stacktrace"
 
 // a change's metadata: a plain object, any keys; the keys some layer reads by name typed here.
 // node: the id of the node whose computer made it (table's Id: string | symbol). run, mark: that

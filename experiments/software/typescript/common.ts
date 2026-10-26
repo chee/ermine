@@ -1,12 +1,12 @@
 // common: what offers and run share. the owner of offers, an offer, a process run here, the
 // context the parts are given, and the small helpers they use. no question of its own
-import type { ChangeHeader, Entry } from "@ermine/node/entry"
+import type { ChangeHeader, Entry } from "@ermine/core/node/entry"
 import type { Box } from "@ermine/boxes"
 import type { Id, Path } from "@ermine/places"
 import type { Process, Processes } from "@ermine/processes/start"
 import type { ScopeNodes } from "@ermine/processes/scopes"
-import type { Scheduler, Scope } from "@ermine/scheduler"
-import type { Table } from "@ermine/table"
+import type { Scheduler, Scope } from "@ermine/core/scheduler"
+import type { Table } from "@ermine/core/table"
 import type { Kind, Offered } from "./offers.ts"
 import type { Handle } from "./run.ts"
 
@@ -38,7 +38,7 @@ const resolved = (name: string): string[] => {
 	}
 }
 // what software calls through on the way to a write
-export const through = [...resolved("@ermine/scheduler"), ...resolved("@ermine/processes/start")]
+export const through = [...resolved("@ermine/core/scheduler"), ...resolved("@ermine/processes/start")]
 
 // an owner's facts: its place, its box, its args and cwd (a process's), the folders of what it
 // offers, by kind, its offers in order, its holds on loads in order

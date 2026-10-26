@@ -1,6 +1,6 @@
 // what the harness can't say: a claim whose ids are no key ids
 import { assertEquals } from "@std/assert"
-import * as ed25519 from "@ermine/ed25519"
+import * as ed25519 from "@ermine/core/ed25519"
 import { text } from "@ermine/ids"
 import { startSession } from "@ermine/sessions"
 import { trusted } from "./trust.ts"

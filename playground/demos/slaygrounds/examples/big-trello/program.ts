@@ -1,5 +1,5 @@
 import type { API, Node } from "@ermine/api"
-import apply, { type Patch } from "@ermine/op/apply"
+import apply, { type Patch } from "@ermine/core/op/apply"
 
 // big-trello: a board. lists are nodes under board/lists, cards nodes under each list's cards,
 // each named by its own id; the order is a value of its own: board/lists and every cards node

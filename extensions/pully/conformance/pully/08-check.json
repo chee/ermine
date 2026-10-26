@@ -1,0 +1,132 @@
+{
+	"title": "check: no word of pully's. the library's check(api, x) sends x's handler \"check\" (anyone reaching it may), and gives its answer; nothing woken, the status kept. none named: undefined",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				"pully"
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/cam",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/dev/cam",
+						{
+							"frame": 0
+						}
+					],
+					"as": "cam"
+				},
+				{
+					"do": [
+						"createAction",
+						"on/cam",
+						[
+							{
+								"do": [
+									"log",
+									"said",
+									[
+										"all",
+										"$0",
+										"$2"
+									]
+								]
+							}
+						],
+						[
+							"if",
+							[
+								"is",
+								"$0",
+								"check"
+							],
+							"fresh"
+						]
+					],
+					"as": "on"
+				},
+				{
+					"do": [
+						"provide",
+						"$cam",
+						"$on"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "cam",
+			"at": "/code/cam",
+			"expect": {
+				"id": "proc:cam"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"check",
+				"/dev/cam"
+			],
+			"expect": {
+				"value": "fresh"
+			}
+		},
+		{
+			"op": "log",
+			"name": "said",
+			"expect": {
+				"values": [
+					[
+						"check",
+						null
+					]
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"getStatus",
+				"/dev/cam"
+			],
+			"expect": {
+				"value": {
+					"state": "done",
+					"provider": "asleep"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/plain",
+				1
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"plain"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"check",
+				"/plain"
+			],
+			"expect": {}
+		}
+	]
+}

@@ -8,12 +8,12 @@
 //
 // processes: the ones the demo runs, so devtools marks them and can stop them (with stop)
 import { createProcessAPIs, type ProcessAPIs } from "@ermine/api"
-import type { Entry } from "@ermine/node/entry"
+import type { Entry } from "@ermine/core/node/entry"
 import type { Places } from "@ermine/places"
 import type { Policy } from "@ermine/protect"
 import type { Process } from "@ermine/processes/start"
-import type { Scheduler, Scope } from "@ermine/scheduler"
-import type { Table } from "@ermine/table"
+import type { Scheduler, Scope } from "@ermine/core/scheduler"
+import type { Table } from "@ermine/core/table"
 import { devtools, type Travel } from "../devtools/answer.ts"
 
 export type Graph = {

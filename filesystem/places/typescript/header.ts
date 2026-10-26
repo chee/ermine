@@ -5,9 +5,9 @@
 // every level. time: now, whole seconds. site: the one given; none given, outside a run the call's
 // own, in a run none (a capture is ~50-70 µs: too dear per write in a run; a caller who knows the
 // running computer's own site gives it). no scope open: unscoped, nothing written.
-import type { ChangeHeader, Metadata } from "@ermine/node/entry"
-import { type Info, type Scheduler, SchedulerError, type Scope } from "@ermine/scheduler"
-import { capture, type FileLocation } from "@ermine/util/stacktrace"
+import type { ChangeHeader, Metadata } from "@ermine/core/node/entry"
+import { type Info, type Scheduler, SchedulerError, type Scope } from "@ermine/core/scheduler"
+import { capture, type FileLocation } from "@ermine/core/util/stacktrace"
 
 // a change base: what a change is from the scope open alone (actor, reader, metadata), the header
 // without its time, site and op

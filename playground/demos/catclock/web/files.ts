@@ -9,7 +9,7 @@
 // and onRunEnd tell (the scheduler keeps no names: world.ts does). A run waiting on a promise is
 // pending; the nodes it read wait with it, and show so. The map view draws the whole graph as a
 // tree, and a pending run (or the one picked) beside it, a line to each node it read.
-import type { ChangeHeader } from "@ermine/node/entry"
+import type { ChangeHeader } from "@ermine/core/node/entry"
 import type { Run, World } from "./world.ts"
 import { BUILD, LOADERS, SRC } from "./map.ts"
 

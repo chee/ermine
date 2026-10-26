@@ -1,0 +1,354 @@
+{
+	"title": "the lifecycle: start runs the function at a node as a process there (its cwd given, else the folder), its setup given its api; its value what setup returns, shown at its path while it runs; a second at the same path refused taken. status(): done, failed with setup's throw (the process still there to read), pending on a promise till it settles, pending on its code with no function there (13-code-arrives). stop(why) tells its teardowns why. ermine.getProcessContext(process): its at, cwd, args and scope. close(): every process stopped, newest first, ended, then the host's scope",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/clock",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./notes",
+						{
+							"a": 1
+						}
+					],
+					"as": "notes"
+				},
+				{
+					"do": [
+						"createMemo",
+						"a",
+						{},
+						[
+							"read",
+							"$notes",
+							[
+								"a"
+							]
+						]
+					],
+					"as": "a"
+				},
+				{
+					"do": [
+						"addTeardown",
+						"order",
+						"clock"
+					]
+				}
+			],
+			"back": "clock value",
+			"expect": {}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"clock"
+			],
+			"expect": {
+				"id": "n2"
+			}
+		},
+		{
+			"op": "start",
+			"name": "clock",
+			"at": "/code/clock",
+			"cwd": "/work",
+			"args": [
+				"--fast"
+			],
+			"expect": {
+				"id": "proc:clock"
+			}
+		},
+		{
+			"op": "status",
+			"name": "clock",
+			"expect": {
+				"status": {
+					"state": "done"
+				}
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"clock"
+			],
+			"expect": {
+				"id": "proc:clock"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/code/clock"
+			],
+			"expect": {
+				"value": "clock value"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/work/notes"
+			],
+			"expect": {
+				"value": {
+					"a": 1
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/code/clock/a"
+			],
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "context",
+			"process": "clock",
+			"expect": {
+				"at": [
+					"code",
+					"clock"
+				],
+				"cwd": [
+					"work"
+				],
+				"args": [
+					"--fast"
+				],
+				"process": "proc:clock",
+				"scope": "process"
+			}
+		},
+		{
+			"op": "start",
+			"name": "again",
+			"at": "/code/clock",
+			"expect": {
+				"refused": "taken"
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/bad",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./left",
+						1
+					]
+				}
+			],
+			"throws": "nope",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "bad",
+			"at": "/code/bad",
+			"expect": {
+				"id": "proc:bad"
+			}
+		},
+		{
+			"op": "status",
+			"name": "bad",
+			"expect": {
+				"status": {
+					"state": "failed",
+					"error": "nope"
+				}
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"bad"
+			],
+			"expect": {
+				"id": "proc:bad"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/code/left"
+			],
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "start",
+			"name": "none",
+			"at": "/nothing",
+			"expect": {
+				"id": "proc:none"
+			}
+		},
+		{
+			"op": "status",
+			"name": "none",
+			"expect": {
+				"status": {
+					"state": "pending",
+					"waiting": [
+						{
+							"code": [
+								"nothing"
+							]
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/soon",
+			"program": [
+				{
+					"do": [
+						"addTeardown",
+						"order",
+						"soon"
+					]
+				}
+			],
+			"back": "soon",
+			"promise": true,
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "soon",
+			"at": "/code/soon",
+			"expect": {
+				"id": "proc:soon"
+			}
+		},
+		{
+			"op": "status",
+			"name": "soon",
+			"expect": {
+				"status": {
+					"state": "pending",
+					"waiting": [
+						"a promise"
+					]
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/code/soon"
+			],
+			"expect": {}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "status",
+			"name": "soon",
+			"expect": {
+				"status": {
+					"state": "done"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/code/soon"
+			],
+			"expect": {
+				"value": "soon"
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/a",
+			"program": [
+				{
+					"do": [
+						"addTeardown",
+						"order",
+						"a"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"at": "/code/a",
+			"expect": {
+				"id": "proc:a"
+			}
+		},
+		{
+			"op": "stop",
+			"name": "a",
+			"why": "replaced",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "order",
+			"expect": {
+				"values": [
+					"a:replaced"
+				]
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"a"
+			],
+			"expect": {
+				"id": "n10"
+			}
+		},
+		{
+			"op": "close",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "order",
+			"expect": {
+				"values": [
+					"a:replaced",
+					"soon:ended",
+					"clock:ended"
+				]
+			}
+		}
+	]
+}

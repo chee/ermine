@@ -1,0 +1,291 @@
+// the process context: where and as whom a thing is done. a scope, a box, a cwd, a path, its
+// args, and a process or none (the host's: process 0). the layer under the api: every word is made
+// from one; features reach it (onWrite is given it); programs never do.
+//
+//   const o = ermine.getProcessContext(process)   // none: the host's
+//   o.resolve("./notes")                          // ["work", "notes"]: the api's paths
+//   o.within(() => o.write("value", id, [{ path: ["n"], value: 2 }]))
+//
+// resolve(p)            bare: inside at; ./ and ../: from cwd; /: the box's root. a path going
+//                       above "/": nothing-there
+// within(f)             f with this context's scope open (explicit: for host and feature code)
+// write(part, at, patches)  one write at a node (its id, or { id, path }), asked "edit" on it
+//                       (by its path when given, so a policy by path decides): through onWrite, a
+//                       header (the open scope's, else this context's; site: the caller's line),
+//                       committed, a pulse asked for
+// remove(part, at)      the entry at a node's part taken out (not a value written undefined: no
+//                       entry there after), asked "edit" as write is. for now: revisit once tx
+//                       lands [chee 10-25: "note to revisit it after tx lands"]
+// ask(op, ...targets)   protect (the host's may; none: all allowed): a no throws a Refusal
+// queuePulse()          one pulse soon, however many ask
+// a write with nothing open: a process's throws nothing-open; the host's falls back to its own scope
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
+import update from "@ermine/core/node/update"
+import apply, { type Key as Step, type Patch } from "@ermine/core/op/apply"
+import type { Box } from "@ermine/boxes"
+import { type Id, type Path, type Places, PlacesError, unread, type Writer } from "@ermine/places"
+import { parse, plan } from "@ermine/places/path"
+import { createGuard, target as targetOf } from "@ermine/places/guard"
+import type { Policy, Target as Asked } from "@ermine/protect"
+import { PROCESS } from "@ermine/processes"
+import type { Process } from "@ermine/processes/start"
+import type { Computer, Scheduler, Scope } from "@ermine/core/scheduler"
+import { ErmineError } from "./features.ts"
+import type { Handle } from "./handles.ts"
+import type { Key, Table } from "@ermine/core/table"
+
+// what a node handle reaches (handles.ts; the host's and features' side): walked to by its path at
+// each use, or its id (a node with no place); never both
+export type NodeData =
+	| { readonly path: Path; readonly id?: undefined; readonly part: Key }
+	| { readonly id: Id; readonly path?: undefined; readonly part: Key }
+// a node, as a program holds it: an opaque handle (handles.ts)
+export type Node = Handle
+export type Target = Node | string | readonly string[]
+
+// a recipe (produce's), or patches
+// deno-lint-ignore no-explicit-any
+export type Change = readonly Patch[] | ((draft: any, helpers: any) => unknown)
+
+// why a scope goes, as its teardowns are told: its owner ran again, the process ended, or the
+// reason its stop was given
+export type Why = "ended" | "replaced" | (string & Record<never, never>)
+
+// one write, every table write: patches on (part, id), the path it was reached by when known
+// (protect asks by it). header: the change as its writer made it (its site, its metadata); none:
+// made from the scope open as it lands. gone: the entry taken out (no patches). features and
+// fallback: the base's own, set by it (a hook's own are let go)
+export type Write = {
+	readonly part: Key
+	readonly id: Id
+	readonly path?: Path
+	readonly patches: readonly Patch[]
+	readonly header?: ChangeHeader
+	readonly gone?: true
+	// the onWrite hooks that changed it, outermost first: its change's metadata FEATURES says so
+	readonly features?: readonly string[]
+}
+
+// the metadata key the base sets: a changed write's hooks (Write.features)
+export const FEATURES = "features"
+
+// what a write is aimed at: a node's id, and the path it was reached by when there is one
+export type At = Id | { readonly id: Id; readonly path?: Path }
+
+// one value a path holds, and where it is from: position 0 is read's, from its entry's change;
+// the rest, what features show (onRead), each naming its feature (from.feature). gone: a delete;
+// inside: a write under it is not its own
+export type Version = {
+	readonly value: unknown
+	readonly from: From
+	readonly gone?: true
+	readonly inside?: true
+}
+
+// where a value is from: the change it came from, by reference (its actor, time, site; explain
+// gives its writer), and for a feature's item what the feature says (kind, and its name)
+export type From = {
+	readonly change?: ChangeHeader
+	readonly kind?: string
+	readonly feature?: string
+	readonly [more: string]: unknown
+}
+
+// what onCreateFunction is told: the computer (none for a method), its node, and who made it (the
+// process's id, or the host's node's)
+export type CreatedFunction = {
+	readonly kind: "memo" | "effect" | "method"
+	readonly computer?: Computer
+	readonly node: NodeData
+	readonly id: Id
+	readonly process: Id
+}
+
+export type ProcessContext = {
+	readonly scope: Scope
+	readonly box: Box
+	readonly cwd: Path
+	// the host's: []
+	readonly at: Path
+	readonly args: readonly string[]
+	// the host's: none
+	readonly process?: Process
+	resolve: (p: string | Path) => Path
+	within: <T>(f: () => T) => T
+	write: (part: Key, at: At, patches: readonly Patch[]) => void
+	remove: (part: Key, at: At) => void
+	ask: (op: string, ...targets: Asked[]) => void
+	queuePulse: () => void
+}
+
+// what every context of one ermine shares
+export type Parts = {
+	readonly scheduler: Scheduler
+	// the table, and where a write to it is said (the first layer's commit)
+	readonly table: Table
+	readonly commit: (changed: readonly Entry<unknown>[]) => void
+	readonly may?: Policy
+	// a write's header now: the open scope's; its site the caller's line outside a run, the running
+	// computer's own in one
+	readonly header: () => ChangeHeader
+	// the onWrite hooks, around land
+	readonly put: (context: ProcessContext, write: Write, land: (write: Write) => void) => void
+	readonly queuePulse: () => void
+	readonly onCreateFunction?: (made: CreatedFunction) => void
+	// throws once ermine is closed
+	readonly alive: () => void
+}
+
+// a process context's own, beside it: what the words reach and programs never do
+export type Inner = {
+	readonly context: ProcessContext
+	readonly places: Places
+	// who it acts as: the process's node, or the host's
+	readonly node: Id
+	readonly guarded: boolean
+	readonly guard: ReturnType<typeof createGuard>
+	// f with a scope open: the one open, else the fallen scope (a process's) or the context's (the
+	// host's)
+	inside: <T>(f: () => T) => T
+	// one write, unasked (a memo's own, a method's after its ask), through onWrite
+	put: (write: Write) => void
+	// put as places' Writer: for the libraries that write for this context (boxes, status)
+	writer: Writer
+}
+
+// what a part holds when nothing is there: attributes and a status are maps, so {}; a value, nothing
+export const empty = (part: Key) => part === "attributes" || part === "status" ? {} : undefined
+
+export function createProcessContext(
+	parts: Parts,
+	o: {
+		scope: Scope
+		box: Box
+		cwd: Path
+		at: Path
+		args: readonly string[]
+		process?: Process
+		node: Id
+	},
+): Inner {
+	const { scheduler: s, table, commit } = parts
+	const places = o.box.places
+	const guarded = parts.may !== undefined
+	const guard = createGuard({ places, scheduler: s, table, may: parts.may, from: o.at })
+
+	// nothing open: a process's throws nothing-open (its words are called from its setup, runs, acts
+	// and calls; after an await, a timer, a listener: nothing is open [chee 10-25: "we are getting
+	// rid of setup(api) right? so we are moving to throw"]; feature code acting as a process opens
+	// it: within). the host's falls back to its own scope: process 0's writes from host code lose
+	// nothing
+	const inside = <T>(f: () => T): T => {
+		parts.alive()
+		if (s.getCurrentScope() !== undefined) return f()
+		if (o.process !== undefined) {
+			throw new ErmineError(
+				"nothing-open",
+				"nothing is open here (after an await, a timer, a listener): write from a setup, a memo, " +
+					"an effect or an action, or open the process (within)",
+			)
+		}
+		return s.runWithScope(o.scope, f)
+	}
+
+	function resolve(p: string | Path): Path {
+		parts.alive()
+		const steps = typeof p === "string" ? parse(p) : p
+		const first = steps[0]
+		const from = first === "/" ? [] : first === "." || first === ".." ? o.cwd : o.at
+		const names = plan(["/", ...from, ...steps])
+		if (names === undefined) throw new PlacesError("nothing-there", "..")
+		return names
+	}
+
+	// the write landed: the entry made when there is none (the table event tells its readers),
+	// else updated and said
+	function land(w: Write) {
+		const entry = table.get(w.part, w.id) as Entry<unknown> | undefined
+		if (w.gone) {
+			if (entry !== undefined) table.del(w.part, w.id)
+			return
+		}
+		const header = headerOf(w)
+		if (entry === undefined) {
+			const v = apply(empty(w.part), w.patches)
+			if (v !== undefined) table.add(w.part, w.id, createEntry(v, header) as never)
+			return
+		}
+		// children and process rows change as places changes them (readers keep what they read)
+		if (w.part === "children" || w.part === PROCESS) unread.update(entry, w.patches, header)
+		else update(entry, w.patches, header)
+		commit([entry])
+	}
+	// the change a write lands with: its writer's, or made now; a write a hook changed, that one's
+	// copy naming the hooks
+	function headerOf(w: Write): ChangeHeader {
+		const header = w.header ?? parts.header()
+		if (w.features === undefined) return header
+		return { ...header, metadata: { ...header.metadata, [FEATURES]: w.features } }
+	}
+
+	const ask = (op: string, ...targets: Asked[]) => {
+		if (guarded) guard.write(op, ...targets)
+	}
+	const aimed = (w: { id: Id; path?: Path }, part: Key) =>
+		targetOf(w.path === undefined ? { id: w.id } : { id: w.id, path: w.path }, part)
+
+	const put = (w: Write) =>
+		inside(() => parts.put(context, w, (x) => (x.gone || x.patches.length) && land(x)))
+
+	const context: ProcessContext = {
+		scope: o.scope,
+		box: o.box,
+		cwd: o.cwd,
+		at: o.at,
+		args: o.args,
+		...o.process !== undefined && { process: o.process },
+		resolve,
+		within: <T>(f: () => T): T => {
+			parts.alive()
+			return s.runWithScope(o.scope, f)
+		},
+		write(part, at, patches) {
+			const t = typeof at === "object" ? at : { id: at }
+			inside(() => {
+				ask("edit", aimed(t, part))
+				put({
+					part,
+					id: t.id,
+					...t.path !== undefined && { path: t.path },
+					patches,
+				})
+			})
+			parts.queuePulse()
+		},
+		remove(part, at) {
+			const t = typeof at === "object" ? at : { id: at }
+			inside(() => {
+				ask("edit", aimed(t, part))
+				put({
+					part,
+					id: t.id,
+					...t.path !== undefined && { path: t.path },
+					patches: [],
+					gone: true,
+				})
+			})
+			parts.queuePulse()
+		},
+		ask,
+		queuePulse: parts.queuePulse,
+	}
+	const writer: Writer = (part, id, patches, header) => put({ part, id, patches, header })
+	return { context, places, node: o.node, guarded, guard, inside, put, writer }
+}
+
+// a whole value as patches; undefined: taken out
+export const whole = (
+	v: unknown,
+): Patch[] => [v === undefined ? { path: [] } : { path: [], value: v }]
+
+export type { Step }
