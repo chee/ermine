@@ -470,7 +470,7 @@ static bool is(const char *op, const char *name) { return strcmp(op, name) == 0;
 static op_value *answer(const op_value *r) {
 	const char *op = world_text(op_get(r, "op"));
 	if (op == NULL) return world_error("no op");
-	host = (bx_host){world_places, world_table, NULL, NULL};
+	host = (bx_host){world_places, world_table, NULL, NULL, NULL};
 	const op_value *name = op_get(r, "box");
 	naming *b = box_named(world_text(name));
 	if (name != NULL && b == NULL) return world_error("no such box");

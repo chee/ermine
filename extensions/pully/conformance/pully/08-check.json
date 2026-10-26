@@ -1,5 +1,5 @@
 {
-	"title": "check: no word of pully's. the library's check(api, x) sends x's handler \"check\" (anyone reaching it may), and gives its answer; nothing woken, the status kept. none named: undefined",
+	"title": "check: no function of pully's. the library's check(api, x) sends x's handler \"check\" (anyone reaching it may), and gives its answer; nothing woken, the status kept. none named: undefined",
 	"steps": [
 		{
 			"op": "ermine",

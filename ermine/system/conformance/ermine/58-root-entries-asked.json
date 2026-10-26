@@ -1,0 +1,83 @@
+{
+	"title": "readEntries and hasNode of a box's \"/\" ask protect read of the node itself, as read(\"/\") does (no name in a folder to ask by): refused, the item kept, refused, and hasNode false; the root's \"/\" and a box's folder alike; one the policy lets read still reaches it",
+	"steps": [
+		{
+			"op": "ermine",
+			"deny": [
+				{ "op": "read", "path": "", "from": "code/spy" },
+				{ "op": "read", "path": "", "from": "code/q" }
+			],
+			"expect": {}
+		},
+		{ "op": "host", "call": ["ensureNode", "/sandbox", "private"] },
+		{ "op": "box", "name": "b", "at": "/sandbox", "expect": {} },
+		{ "op": "code", "at": "/progs/p", "program": [], "expect": {} },
+		{
+			"op": "start",
+			"name": "spy",
+			"at": "/code/spy",
+			"program": "/progs/p",
+			"expect": { "id": "proc:spy" }
+		},
+		{
+			"op": "start",
+			"name": "o",
+			"at": "/code/o",
+			"program": "/progs/p",
+			"expect": { "id": "proc:o" }
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/code/q",
+			"program": "/progs/p",
+			"box": "b",
+			"expect": { "id": "proc:q" }
+		},
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "do",
+			"process": "spy",
+			"call": ["read", "/"],
+			"fails": true,
+			"expect": { "error": "refused" }
+		},
+		{
+			"op": "do",
+			"process": "spy",
+			"call": ["readEntries", "/"],
+			"expect": { "value": [{ "from": "root", "refused": true }] }
+		},
+		{ "op": "do", "process": "spy", "call": ["hasNode", "/"], "expect": { "value": false } },
+		{
+			"op": "do",
+			"process": "q",
+			"call": ["read", "/"],
+			"fails": true,
+			"expect": { "error": "refused" }
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": ["readEntries", "/"],
+			"expect": { "value": [{ "from": "root", "refused": true }] }
+		},
+		{ "op": "do", "process": "q", "call": ["hasNode", "/"], "expect": { "value": false } },
+		{ "op": "do", "process": "q", "call": ["read", "/code/q"], "expect": {} },
+		{ "op": "do", "process": "o", "call": ["hasNode", "/"], "expect": { "value": true } },
+		{
+			"op": "do",
+			"process": "o",
+			"call": ["readEntries", "/sandbox"],
+			"expect": {
+				"value": [
+					{
+						"from": "children",
+						"value": "private",
+						"node": { "id": "n2", "part": "value" }
+					}
+				]
+			}
+		}
+	]
+}

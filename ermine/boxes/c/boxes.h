@@ -28,6 +28,8 @@ typedef struct {
 	// where its writes are said written, ctx its own; NULL: pl_commit on places
 	void (*commit)(void *ctx, const pl_changed *changed);
 	void *ctx;
+	// a new folder's id, malloc'd, ctx its own; NULL: a uuid
+	char *(*id)(void *ctx);
 } bx_host;
 
 typedef struct bx bx;

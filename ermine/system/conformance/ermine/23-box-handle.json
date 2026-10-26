@@ -1,5 +1,5 @@
 {
-	"title": "box(at), a program's: what the word promises (a box: the folder at, seen from its own \"/\") and no more: its root's id, its path, and place and unplace. no places, so nothing that reads by any id, watches everything or commits unasked. the host's ermine.start takes the handle as the box",
+	"title": "box(at), a program's: what the function promises (a box: the folder at, seen from its own \"/\") and no more: its root's id, its path, and place and unplace. no places, so nothing that reads by any id, watches everything or commits unasked. the host's ermine.start takes the handle as the box",
 	"steps": [
 		{
 			"op": "ermine",
@@ -105,7 +105,7 @@
 				"x"
 			],
 			"expect": {
-				"id": "n6"
+				"id": "n9"
 			}
 		}
 	]

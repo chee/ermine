@@ -26,18 +26,19 @@ import {
 	unplacing,
 	type Writer,
 } from "@ermine/core/places"
-import { createChangeBase } from "@ermine/core/places/header"
+import { createChangeHeader } from "@ermine/core/places/header"
 import { parse } from "@ermine/core/places/path"
 import { processes } from "@ermine/processes"
-import { type Scheduler, SchedulerError } from "@ermine/core/scheduler"
+import type { Scheduler } from "@ermine/core/scheduler"
 import type { Table } from "@ermine/core/table"
-import { capture } from "@ermine/core/util/stacktrace"
 
 // what a box is made over: the host's places, and what its writes need
 export type Host = {
 	places: Places
 	table: Pick<Table, "get" | "add">
-	scheduler: Pick<Scheduler, "getCurrentScope">
+	scheduler: Pick<Scheduler, "getCurrentScope" | "getRun">
+	// a new folder's id; none: a uuid
+	id?: () => string
 	// where its writes are said written; none: places.commit
 	commit?: (changed: readonly Entry<unknown>[]) => void
 	// none: its writes made here and said by commit; given (places' Writer): each handed to it to
@@ -183,7 +184,7 @@ function land(
 	for (const name of names.slice(k)) if (bad(name)) throw new PlacesError("not-a-name", name)
 	const h = header ?? headerOf(host, entry)
 	for (; k < names.length; k++) {
-		const id = leaf !== undefined && k === names.length - 1 ? leaf : crypto.randomUUID()
+		const id = leaf !== undefined && k === names.length - 1 ? leaf : (host.id ?? uuid)()
 		const kids = host.table.get("children", at) as Entry<unknown> | undefined
 		if (host.write !== undefined) host.write("children", at, placing(kids, names[k], id), h)
 		else if (kids !== undefined) changed.push(...place(kids, names[k], id, h))
@@ -198,16 +199,10 @@ function said(host: Host, changed: readonly Entry<unknown>[]) {
 	if (changed.length) (host.commit ?? host.places.commit)(changed)
 }
 
-// the header of a write made now, as places' createChangeHeader makes it, its site the call into
-// entry (createBox, box or unbox): the caller's own, never this file
-// core candidate (places' header.ts): createChangeHeader taking the function called, so a site
-// is the caller's of a wrapper like this one
-const ours = new Set([import.meta.url])
-function headerOf(host: Host, entry: unknown): ChangeHeader {
-	const who = createChangeBase(host.scheduler)
-	if (who === undefined) throw new SchedulerError("unscoped", "a write with no scope open")
-	const h: ChangeHeader = { ...who, time: Math.floor(Date.now() / 1000) }
-	const site = capture(ours, entry)
-	if (site) h.external = [site]
-	return h
-}
+const uuid = () => crypto.randomUUID()
+
+// the header of a write made now (places' createChangeHeader), its site the call into entry
+// (createBox, box or unbox): the caller's own, never this file
+const ours = [import.meta.url]
+const headerOf = (host: Host, entry: unknown): ChangeHeader =>
+	createChangeHeader(host.scheduler, undefined, ours, entry)

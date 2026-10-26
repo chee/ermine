@@ -1,0 +1,158 @@
+{
+	"title": "a handler's latest call record goes with the handler: its placement's scope gone (its process stopped), the record is let go, its args and its caller's context with it; a call of it still going (a promise) holds no record as it settles. while the handler is there, its record stands",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/progs/p",
+			"program": [
+				{
+					"do": [
+						"createAction",
+						"on/take",
+						[],
+						1
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"on/wait",
+						[],
+						[
+							"later",
+							2
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"program": "/progs/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p",
+				"on",
+				"take"
+			],
+			"expect": {
+				"id": "n4"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p",
+				"on",
+				"wait"
+			],
+			"expect": {
+				"id": "n7"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/code/p/on/take",
+				"big"
+			],
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/code/p/on/wait"
+			]
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"path": [
+				"code",
+				"p",
+				"on",
+				"take"
+			],
+			"expect": {
+				"record": {
+					"n": 1,
+					"caller": "n1",
+					"handler": "n4",
+					"args": [
+						"big"
+					],
+					"end": "done",
+					"returned": 1,
+					"reads": [],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"path": [
+				"code",
+				"p",
+				"on",
+				"wait"
+			],
+			"expect": {
+				"record": {
+					"n": 2,
+					"caller": "n1",
+					"handler": "n7",
+					"args": [],
+					"end": "pending",
+					"reads": [],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "stop",
+			"name": "p",
+			"expect": {}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"id": "n4",
+			"expect": {}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"id": "n7",
+			"expect": {}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"id": "n7",
+			"expect": {}
+		}
+	]
+}

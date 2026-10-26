@@ -127,7 +127,7 @@ static int land(const bx_host *h, const char *from, const char *const *names, si
 	// the last id made, ours
 	char *made = NULL;
 	for (; k < n; k++) {
-		char *fresh = leaf != NULL && k == n - 1 ? xdup(leaf) : uuid();
+		char *fresh = leaf != NULL && k == n - 1 ? xdup(leaf) : h->id != NULL ? h->id(h->ctx) : uuid();
 		op_value *value = op_str(fresh);
 		pl_changed one;
 		nd_entry *node;

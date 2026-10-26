@@ -233,6 +233,39 @@ Deno.test("@ermine/system: two ermines in one realm, each process its own ermine
 	two.close()
 })
 
+Deno.test("@ermine/system: one ermine's handler run inside another's action finds its own: the innermost entered", () => {
+	const a = createErmine({ schedule: () => {} })
+	const b = createErmine({ schedule: () => {} })
+	b.start(() => void createAction("on/note", () => ensureNode("./b-note", "b's")), "/code/b")
+	a.start(() => void createAction("go", () => b.executeAction("/code/b/on/note")), "/code/a")
+	a.executeAction("/code/a/go")
+	assertEquals(a.list("/code"), ["a"])
+	assertEquals(b.list("/code"), ["b", "b-note"])
+	// and back: a's action, sent from inside b's, writes in a
+	a.start(() => void createAction("on/mark", () => ensureNode("./a-mark", 1)), "/code/m")
+	b.start(() => void createAction("go", () => a.executeAction("/code/m/on/mark")), "/code/c")
+	a.getProcessContext()!.within(() => b.executeAction("/code/c/go"))
+	assertEquals(a.read("/code/a-mark"), 1)
+	assertEquals(b.hasNode("/code/a-mark"), false)
+	a.close()
+	b.close()
+})
+
+Deno.test("@ermine/system: nothing open here, but a second physical copy's ermine is: two-copies, naming both", () => {
+	const copies = (globalThis as Record<symbol, { url: string; open: () => boolean }[]>)[
+		Symbol.for("party.chee.ermine.system.copies")
+	]
+	const other = { url: "file:///vendored/ermine/system/typescript/registry.ts", open: () => true }
+	copies.push(other)
+	try {
+		assertThrows(() => read("/x"), ErmineError, "two copies of @ermine/system are loaded")
+		other.open = () => false
+		assertThrows(() => read("/x"), ErmineError, "nothing-open")
+	} finally {
+		copies.splice(copies.indexOf(other), 1)
+	}
+})
+
 Deno.test("@ermine/system: host code acting as a context opens it (within); args by getArgs", () => {
 	const e = createErmine({ schedule: () => {} })
 	e.getProcessContext()!.within(() => ensureNode("/h", 5))

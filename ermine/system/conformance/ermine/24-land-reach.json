@@ -1,5 +1,5 @@
 {
-	"title": "a process names no node by id: an id or a raw { path, part } given to a word is not-a-handle, and to land not a node handle [chee 10-25: \"i'm not sure the process api should be able to do anything by id\", replacing 10-24's \"holding an id has to be the permission\"]. land reaches the patch node by the handle it is sent (its maker's box: the handle carries it) or a path in the caller's box; protect is asked as the caller and as land, the target by its id, the patch node by the path it was made at, else its id. open (10-25): a policy by path on the target (deny edit secret from p) doesn't stop land, which asks the target by the id its patch names, though p's own edit(\"/secret\") is refused: land is looser than the caller's own words there",
+	"title": "a process names no node by id: an id or a raw { path, part } given to a function is not-a-handle, and to land not a node handle [chee 10-25: \"i'm not sure the process api should be able to do anything by id\"]. land reaches the patch node by the handle it is sent (its maker's box: the handle carries it) or a path in the caller's box; protect is asked as the caller and as land, the target by its id, the patch node by the path it was made at, else its id. open (10-25): a policy by path on the target (deny edit secret from p) doesn't stop land, which asks the target by the id its patch names, though p's own edit(\"/secret\") is refused: land is looser than the caller's own functions there",
 	"steps": [
 		{
 			"op": "ermine",
@@ -308,7 +308,7 @@
 				"$e"
 			],
 			"expect": {
-				"error": "Error: nothing-there (n7)"
+				"error": "Error: nothing-there (n10)"
 			}
 		},
 		{

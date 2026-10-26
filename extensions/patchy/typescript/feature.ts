@@ -31,7 +31,7 @@
 // throws, one an onWrite hook holds back gives false: either way the patch node is kept. landed:
 // true
 import type { Ermine, Feature, FeatureAPI, Node, NodeData, Target, Version } from "@ermine/system"
-import { ensureNode, getNode, patch, readAll, readEntries } from "@ermine/system"
+import { ensureNode, ErmineError, getNode, patch, readAll, readEntries } from "@ermine/system"
 import type { Key as Step, Patch } from "@ermine/core/op/apply"
 import produce from "@ermine/core/op/produce"
 import { get } from "@ermine/core/places/lib"
@@ -55,7 +55,7 @@ const patchy: Feature = {
 	name: "patchy",
 	files: [import.meta.url],
 	setup(f) {
-		installed.add(f)
+		installed.add(new WeakRef(f))
 		let overlay: Overlay | undefined
 		// what the overlay is in front of: each layer's change is read there
 		let under: Pick<Table, "get"> | undefined
@@ -97,14 +97,28 @@ const asVersion = (
 const isPath = (x: unknown): x is string | readonly string[] =>
 	typeof x === "string" || Array.isArray(x)
 
-// every patchy set up, one per ermine: a handle is known to its own ermine's only (dataOf)
-const installed = new Set<FeatureAPI>()
+// every patchy set up, one per ermine, held weakly (its hooks hold it while its ermine is): a
+// handle is known to its own ermine's only (dataOf). one closed (its dataOf throws closed) or let go
+// is dropped as it is met
+const installed = new Set<WeakRef<FeatureAPI>>()
 function featureOf(h: Node): { f: FeatureAPI; node: NodeData } {
-	for (const f of installed) {
-		const d = f.dataOf(h)
-		if (d !== undefined) return { f, node: d.node }
+	for (const r of installed) {
+		const f = r.deref()
+		const d = known(f, h)
+		if (d === null) installed.delete(r)
+		else if (d !== undefined) return { f: f!, node: d.node }
 	}
 	throw new PatchError("nothing-there", "a node no ermine with patchy gave")
+}
+// what h reaches in f's ermine (none: undefined); f's ermine gone or closed: null
+function known(f: FeatureAPI | undefined, h: Node): { node: NodeData } | undefined | null {
+	if (f === undefined) return null
+	try {
+		return f.dataOf(h)
+	} catch (e) {
+		if (e instanceof ErmineError && e.code === "closed") return null
+		throw e
+	}
 }
 
 // patches, or a recipe over the saved value (produce: core/op's draft)

@@ -1,5 +1,5 @@
 {
-	"title": "nothing open [chee 10-25: \"we are getting rid of setup(api) right? so we are moving to throw\"]: a process's function with nothing open throws nothing-open: a handler's write after an await (the call failed, the value as it was), a process's context written from outside (feature code opens it: within). a process doing it opened (the harness's do: within) writes as itself, no mark. the host's word or the host's context.write with nothing open: the host's own scope (process 0 loses nothing)",
+	"title": "nothing open [chee 10-25: \"we are getting rid of setup(api) right? so we are moving to throw\"]: a process's function with nothing open throws nothing-open: a handler's write after an await (the call failed, the value as it was), a process's context written from outside (feature code opens it: within). a process doing it opened (the harness's do: within) writes as itself, no mark. the host's function or the host's context.write with nothing open: the host's own scope (process 0 loses nothing)",
 	"steps": [
 		{
 			"op": "ermine",
