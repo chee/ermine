@@ -12,7 +12,7 @@
 //   code.open("host.ts", 157)
 //   code.live("the counter runner", fn)
 //   siteHtml({ file, line, column })   // a link, or plain text
-import type { FileLocation } from "@ermine/util/stacktrace"
+import type { FileLocation } from "@ermine/core/util/stacktrace"
 // @ts-ignore: vite's ?raw, a file as text
 import hostText from "./host.ts?raw"
 // @ts-ignore: vite's ?raw

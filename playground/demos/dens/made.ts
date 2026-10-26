@@ -16,13 +16,13 @@
 // { thing }, its process for the caller to stop (main.ts' ×). refused, in words: another den's
 // ("not yours: <name>'s"), the den's machinery (/system, /things, /programs, /sync: "the den needs
 // this"), the root, and what isn't a folder made here
-import { type Id, type Path, PlacesError } from "@ermine/places"
-import { get, members } from "@ermine/places/lib"
+import { type Id, type Path, PlacesError } from "@ermine/core/places"
+import { get, members } from "@ermine/core/places/lib"
 import { addLeaf, removeLeaf } from "@ermine/processes"
 import { inside } from "@ermine/boxes"
-import type { Scheduler, Scope } from "@ermine/scheduler"
-import type { Key, Table } from "@ermine/table"
-import type { Places } from "@ermine/places"
+import type { Scheduler, Scope } from "@ermine/core/scheduler"
+import type { Key, Table } from "@ermine/core/table"
+import type { Places } from "@ermine/core/places"
 import { createWrites } from "./writes.ts"
 
 // a made folder's type, and where a made node at the top is placed

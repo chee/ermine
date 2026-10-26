@@ -6,21 +6,32 @@
 // away places another den's process), each followed by "=<outlet>" when it reads an outlet other
 // than the first, and any settings as "name=value" (the pigs' weights to start at). by path, so a
 // source started again is followed
-import { createChangeHeader } from "@ermine/places/header"
-import { upsert } from "@ermine/places/upsert"
-import update from "@ermine/node/update"
-import type { Entry } from "@ermine/node/entry"
-import { get } from "@ermine/places/lib"
+import { createChangeHeader } from "@ermine/core/places/header"
+import { upsert } from "@ermine/core/places/upsert"
+import update from "@ermine/core/node/update"
+import type { Entry } from "@ermine/core/node/entry"
+import { get } from "@ermine/core/places/lib"
 import { inside } from "@ermine/boxes"
+import type { Scheduler } from "@ermine/core/scheduler"
+import type { Table } from "@ermine/core/table"
 import type { Runner, Start } from "@ermine/software"
 import { isVoice, type Voice } from "./sound.ts"
 
 const isMap = (v: unknown): v is Record<string, unknown> =>
 	typeof v === "object" && v !== null && !Array.isArray(v) && !ArrayBuffer.isView(v)
 
-// a runner here is its start alone: (code, start)
-type Run = Runner["start"]
-type Context = Start
+// what a thing is run with: its start, and the den's scheduler, table and its box's places (the
+// host gives them: withDen)
+type Context = Start & {
+	readonly scheduler: Scheduler
+	readonly table: Table
+	readonly places: Start["box"]["places"]
+}
+type Run = (code: unknown, ctx: Context) => ReturnType<Runner["start"]>
+// a thing's run as software's runner takes it: the den's scheduler and table added to its start
+export const withDen =
+	(run: Run, den: { scheduler: Scheduler; table: Table }): Runner["start"] => (code, start) =>
+		run(code, { ...start, ...den, places: start.box.places })
 
 const OUT = "thing.out"
 // a timer's every and paused, beside its out
@@ -133,7 +144,7 @@ function patcher(ctx: Context, name = OUT) {
 // the outlet wired into input, tracked (the path, then the node there): f told each value;
 // first: the first, or the first from a node now at that path (a source started again)
 function reading(ctx: Context, f: (v: unknown, first: boolean) => void, input = "in") {
-	const src = parse(ctx.process.args).sources.find((s) => s.input === input)
+	const src = parse(ctx.args).sources.find((s) => s.input === input)
 	if (src === undefined) return
 	const path = inside(src.at), name = outlet(src.from)
 	let was: unknown = undefined
@@ -251,7 +262,7 @@ export const PIGS = ["babe", "peppa", "wilbur"]
 const pigs: Run = (_, api) => {
 	const ctx = ctxOf(api)
 	const out = writer(ctx)
-	const { settings } = parse(ctx.process.args)
+	const { settings } = parse(ctx.args)
 	const weights: Record<string, number> = { babe: 9, peppa: 6, wilbur: 12 }
 	for (const p of PIGS) if (Number(settings[p]) > 0) weights[p] = Number(settings[p])
 	out({ ...weights })
@@ -281,7 +292,7 @@ const pigs: Run = (_, api) => {
 const sound: Run = (_, api) => {
 	const ctx = ctxOf(api)
 	const out = writer(ctx), state = writer(ctx, STATE)
-	const kept = parse(ctx.process.args).settings.sound
+	const kept = parse(ctx.args).settings.sound
 	let chosen: Voice = isVoice(kept) ? kept : "ding", n = 0
 	out(null)
 	state({ sound: chosen })
@@ -304,7 +315,7 @@ const sound: Run = (_, api) => {
 const speaker: Run = (_, api) => {
 	const ctx = ctxOf(api)
 	const out = writer(ctx), state = writer(ctx, STATE)
-	const kept = parse(ctx.process.args).settings.sound
+	const kept = parse(ctx.args).settings.sound
 	let chosen: Voice = isVoice(kept) ? kept : "blip", n = 0
 	out(null)
 	state({ sound: chosen })
@@ -356,7 +367,7 @@ const pad: Run = (_, api) => {
 	const out = writer(ctx), state = writer(ctx, STATE)
 	const mine = new Uint8Array(Math.ceil((PAD.width * PAD.height) / 8))
 	// its own squares, as hex, when it was started again (a rewire): kept, as the pigs keep weights
-	const kept = parse(ctx.process.args).settings.squares ?? ""
+	const kept = parse(ctx.args).settings.squares ?? ""
 	for (let i = 0; i < mine.length && 2 * i + 2 <= kept.length; i++) {
 		mine[i] = parseInt(kept.slice(2 * i, 2 * i + 2), 16) || 0
 	}

@@ -48,7 +48,7 @@
 //                              "ermine.computer.status": "pending" | { failed: words }, when so
 //                            and the rest software and processes write ("ermine.type"
 //                            "ermine.process", "ermine.process.program" { id, at?, hash? },
-//                            "ermine.process.cwd")
+//                            "ermine.process.folder")
 //   <node>/files             children { <8 hex>: <node>/files/<8 hex> }: every node a person made
 //                            here (made.ts), placed or not
 //   <node>/files/<8 hex>     a made node. a folder: children { <name>: <node>/files/<8 hex> } and
@@ -115,20 +115,20 @@
 //
 // never kept: the page's own nodes (the root, the programs at /things and /programs, /sync), and a
 // process's own node (its status, PENDING, is no value a step can hold)
-import { createScheduler, PENDING, type Scope } from "@ermine/scheduler"
-import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/table"
-import { children, createPlaces, type Path, PlacesError } from "@ermine/places"
-import { get } from "@ermine/places/lib"
-import { STATUS } from "@ermine/places/status"
+import { createScheduler, PENDING, type Scope } from "@ermine/core/scheduler"
+import { createPaths } from "@ermine/core/scheduler/paths"
+import { createTable, type Id, type Key } from "@ermine/core/table"
+import { children, createPlaces, type Path, PlacesError } from "@ermine/core/places"
+import { get } from "@ermine/core/places/lib"
+import { STATUS } from "@ermine/core/places/status"
 import { addLeaf, addProcess, PROCESS, processes, removeLeaf, trie } from "@ermine/processes"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import type { Process } from "@ermine/processes/start"
 import { type Address, inside } from "@ermine/boxes"
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
-import apply, { type Patch } from "@ermine/op/apply"
-import { blake3 } from "@ermine/blake3"
-import * as ed25519 from "@ermine/ed25519"
+import apply, { type Patch } from "@ermine/core/op/apply"
+import { blake3 } from "@ermine/core/blake3"
+import * as ed25519 from "@ermine/core/ed25519"
 import { openInstall } from "@ermine/installs"
 import { startSession } from "@ermine/sessions"
 import { trusted } from "@ermine/trust"
@@ -150,7 +150,7 @@ import {
 	type Software,
 	TAKES,
 } from "@ermine/software"
-import { RUNNERS } from "./things.ts"
+import { RUNNERS, withDen } from "./things.ts"
 import { bytesOf, createWrites } from "./writes.ts"
 import { createMade, MADE, type Made, placements } from "./made.ts"
 
@@ -572,7 +572,15 @@ export async function createHost(
 	})
 	const owner: Place = { id: node, at: HERE, scope: host, stored: true }
 	hosted(() => {
-		for (const k of all) software.offer(owner, "runners", k, { [TAKES]: TYPE(k) }, RUNNERS[k].run)
+		for (const k of all) {
+			software.offer(
+				owner,
+				"runners",
+				k,
+				{ [TAKES]: TYPE(k) },
+				withDen(RUNNERS[k].run, { scheduler: s, table }),
+			)
+		}
 		software.offer(owner, "runners", "inbox", { [TAKES]: INBOX_TYPE }, inboxRun)
 	})
 	const isInbox = (p: Process) => p.at.join("/") === INBOX_AT.join("/")
