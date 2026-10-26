@@ -4,7 +4,7 @@
 //
 //   n         the call's number, from 1, one ermine's
 //   caller    the sending process's id; the host's node's for the host's sends
-//   context    the caller's context, as a value: where and as whom it sent (process, box, cwd, at):
+//   context    the caller's context, as a value: where and as whom it sent (process, box, folder, at):
 //             what a service acting for its caller resolves paths in and asks protect as
 //   handler   { id, change }: the handler's node, and its value's change as called (which code ran)
 //   args      as given, by reference (a big value lives as long as its record)
@@ -22,6 +22,8 @@
 //
 // written through hold (createErmine's: onRecord around it), then held as the latest per handler,
 // or not at all (keep: false). read(id) tracked: what reads it reruns when a newer one is held.
+// a handler gone (drop(id): its placement's scope gone, or its node removed): its record goes with
+// it, its args and its caller's context too, and a call of it still going holds none as it ends
 // a wait: a send to a node holding nothing (none there, or no value): { caller, path or id, box,
 // since }, one per caller and target, kept while it waits: a computer's till its next run ends
 // not waiting there, or it goes; another's till a send from it there is answered, or its scope
@@ -33,7 +35,7 @@ import type { Read, Write } from "@ermine/processes/runs"
 import { NODE } from "@ermine/core/places/header"
 import type { Scheduler, Scope } from "@ermine/core/scheduler"
 import type { Key, Table } from "@ermine/core/table"
-import type { ProcessContext } from "./context.ts"
+import { isThen, type ProcessContext } from "./context.ts"
 
 export type Made = {
 	readonly kind: "memo" | "effect" | "early"
@@ -90,6 +92,8 @@ export type Going = {
 	readonly seen: Set<string>
 	readonly writes: Write[]
 	readonly made: Made[]
+	// its handler gone while it went: told hold as it ends, never held
+	gone?: true
 }
 
 export type Calls = {
@@ -116,20 +120,20 @@ export type Calls = {
 	answered: (caller: Id, at: { path?: Path; id?: Id }) => void
 	// every wait, or caller's; tracked
 	waits: (caller?: Id) => Wait[]
+	// a handler gone: its record out, its readers marked
+	drop: (id: Id) => void
 	stop: () => void
 }
 
 const now = () => performance.timeOrigin + performance.now()
-const isThen = (v: unknown): v is PromiseLike<unknown> =>
-	(typeof v === "object" || typeof v === "function") && v !== null &&
-	typeof (v as PromiseLike<unknown>).then === "function"
-
 export function createCalls(setup: Setup): Calls {
 	const { scheduler: s, places, table } = setup
 	const keep = setup.keep ?? true
 	let n = 0
 	const stack: Going[] = []
 	const scopes = new WeakMap<Scope, Going>()
+	// the calls begun and not ended yet (a promise's till it settles)
+	const live = new Set<Going>()
 	// the records' table: a handler → its latest, and its key
 	const records = new Map<Id, { call: Call | undefined; key: object }>()
 	const held = (id: Id) => {
@@ -160,9 +164,9 @@ export function createCalls(setup: Setup): Calls {
 	const targetKey = (at: { path?: Path; id?: Id }) =>
 		at.path !== undefined ? JSON.stringify(at.path) : `#${String(at.id)}`
 
-	function write(id: Id, call: Call) {
+	function write(id: Id, call: Call, gone?: true) {
 		const put = (c: Call) => {
-			if (!keep) return
+			if (!keep || gone) return
 			const h = held(id)
 			h.call = c
 			s.mark([h.key], s.getRun())
@@ -172,6 +176,7 @@ export function createCalls(setup: Setup): Calls {
 	}
 
 	function record(g: Going, end: Call["end"], more: Partial<Call>) {
+		if (end !== "pending" || "ended" in more) live.delete(g)
 		write(g.base.handler.id, {
 			...g.base,
 			end,
@@ -179,7 +184,7 @@ export function createCalls(setup: Setup): Calls {
 			reads: g.reads.slice(),
 			writes: g.writes.slice(),
 			...g.made.length ? { made: g.made.slice() } : {},
-		})
+		}, g.gone)
 	}
 
 	// the innermost call, when what runs now is its: no run begun inside it since
@@ -223,6 +228,7 @@ export function createCalls(setup: Setup): Calls {
 			}
 			stack.push(g)
 			scopes.set(scope, g)
+			live.add(g)
 			return g
 		},
 		end(g, out) {
@@ -296,6 +302,13 @@ export function createCalls(setup: Setup): Calls {
 				return [...waiting.get(caller)?.values() ?? []].map((w) => w.wait)
 			}
 			return [...waiting.values()].flatMap((m) => [...m.values()].map((w) => w.wait))
+		},
+		drop(id) {
+			for (const g of live) if (g.base.handler.id === id) g.gone = true
+			const h = records.get(id)
+			if (h === undefined) return
+			records.delete(id)
+			s.mark([h.key])
 		},
 		stop: () => {
 			for (const off of offs) off()

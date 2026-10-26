@@ -140,17 +140,17 @@
 						"process": "proc:a",
 						"code": "hi",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					}
@@ -228,17 +228,17 @@
 						"process": "proc:a",
 						"code": "hi",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -246,17 +246,17 @@
 						"process": "proc:b",
 						"code": "hi",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -264,17 +264,17 @@
 						"process": "proc:c",
 						"code": "hi",
 						"args": [],
-						"cwd": [
+						"folder": [
 							"work"
 						],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					}
@@ -457,7 +457,7 @@
 						],
 						"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
 					},
-					"ermine.process.cwd": [
+					"ermine.process.folder": [
 						"work"
 					]
 				},

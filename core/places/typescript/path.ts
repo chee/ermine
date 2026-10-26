@@ -1,5 +1,5 @@
 // addresses as strings: "/notes/today" is ["/", "notes", "today"]. a string is split at each "/";
-// a leading "/" is the root; empty pieces are skipped, as in unix ("a//b" is a, b): no name is "".
+// a leading "/" is the root; empty pieces are skipped ("a//b" is a, b): no name is "".
 // a name that holds a "/" needs the array form, or the tag: in path`/notes/${title}`, whatever is
 // put in is always one name, never split, and "" is refused
 import { PlacesError } from "./places.ts"

@@ -268,7 +268,7 @@
 				"args": [
 					"hehe.txt"
 				],
-				"cwd": [],
+				"folder": [],
 				"pin": {
 					"program": {
 						"id": "VIEW",
@@ -287,7 +287,7 @@
 						}
 					],
 					"box": "W",
-					"cwd": []
+					"folder": []
 				}
 			}
 		}

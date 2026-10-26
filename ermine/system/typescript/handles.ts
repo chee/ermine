@@ -3,14 +3,24 @@
 // host and features know (ermine.handleOf, FeatureAPI.handleOf). its data is in its ermine's WeakMap,
 // so an object of the same shape isn't one, and one from another ermine is no handle here. it names
 // a place, its path from the ermine's root (or a node by id), and nothing else: whoever uses it is
-// resolved and asked as themselves [chee 10-26: "take the maker out now"; "maybe it should be an
-// absolute path? nothing can read it, right?"]. "handles are capabilities" (10-25) is retired by
-// that. not data: it won't serialize (toJSON and turning it into a value throw)
+// resolved and asked as themselves. a builder's pick (decision-1.3), after chee 10-26: "take the
+// maker out now", and her question "maybe it should be an absolute path? nothing can read it,
+// right?". with the maker out, a handle holds no power, so "handles are capabilities" (a 10-25
+// draft) no longer holds. not data: it won't serialize (toJSON and turning it into a value throw)
 import type { NodeData } from "./context.ts"
 import { ErmineError } from "./features.ts"
+import { attach } from "./hints.ts"
+import { hinting } from "./registry.ts"
 
-const notData = () =>
-	new ErmineError("not-a-value", "a node handle is not data: read its value (read(node))")
+// thrown by the handle itself (JSON, a string), in no function: given its advice as the ermines
+// open say (hints.ts)
+const notData = () => {
+	const e = new ErmineError(
+		"not-a-value",
+		"a node handle is not data: read its value (read(node))",
+	)
+	return hinting() ? attach(e) : e
+}
 
 export class Handle {
 	toJSON(): never {

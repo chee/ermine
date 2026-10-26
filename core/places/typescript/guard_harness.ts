@@ -9,7 +9,7 @@
 //   | {whois: [actor, reader]}  yes for that actor and reader, else no "whois"
 // ts (a start): an id, or {"at": path} asked through the guard (refused: REFUSED). from: a path
 //
-// { op: "guard", name, may?, from? }   → {}
+// { op: "guard", name, may?, from?, box? }   → {}   box: the box the asker is in (its folder's id)
 // { op: "eval", guard, scope?, e, detail? } → { value } | { error: "refused", reason, op, grant?, field? }
 //   detail: true adds to a refusal grant?: {part, id, index}, the grant that decided, and field?:
 //   the field of the target refused
@@ -17,7 +17,8 @@
 // { op: "watch", name, scope, guard, f, then?, effect? } → {}   a compute running f each run
 //    (world: state); then: run in its set, {"given":null} the value; effect: true, an effect + act
 // { op: "asks" }                        → { asks }   every policy ask since last asked, whole:
-//                                         { op, target: {part?, id?, field?, path?}, who, from? }
+//                                         { op, target: {part?, id?, field?, path?}, who,
+//                                         from?: {path?, box?} }
 //
 // programs: the world's plain forms (world_harness.ts), and
 //   {"get":path,"full"?:true}       the id there, asked; null none; full: [id, name, from?]
@@ -207,6 +208,7 @@ function answer(r: Request): Json | undefined {
 					scheduler: s,
 					table,
 					from: r.from,
+					...r.box !== undefined && { box: r.box },
 					may: r.may === undefined ? undefined : recording(policy(r.may)),
 				}),
 			)

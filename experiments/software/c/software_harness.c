@@ -240,7 +240,7 @@ static void ordered(const char *what, const char *id, const op_value *x, int has
 	op_push(order, e);
 }
 
-// a run recorded: its process, code (a function's: { live: true }), args, cwd, its box's root, the
+// a run recorded: its process, code (a function's: { live: true }), args, folder, its box's root, the
 // keys of its start, whether its scope is the one open
 static void noted(const op_value *code, const sw_starting *st) {
 	op_value *m = op_map();
@@ -249,7 +249,7 @@ static void noted(const op_value *code, const sw_starting *st) {
 	                  : code != NULL                        ? op_ref((op_value *)code)
 	                                                        : op_null());
 	op_set(m, "args", names_json(st->process.args, st->process.nargs));
-	op_set(m, "cwd", names_json(st->process.cwd, st->process.ncwd));
+	op_set(m, "folder", names_json(st->process.folder, st->process.nfolder));
 	op_set(m, "root", op_str(st->root));
 	static const char *const keys[6] = {"box", "places", "process", "scheduler", "scope", "table"};
 	op_set(m, "keys", names_json(keys, 6));
@@ -311,7 +311,7 @@ static hf_loaded record_load(const op_value *code, void *data) {
 	op_value *m = op_map();
 	op_set(m, "by", op_str(st->process.id));
 	op_set(m, "code", op_ref(c));
-	op_set(m, "cwd", names_json(st->process.cwd, st->process.ncwd));
+	op_set(m, "folder", names_json(st->process.folder, st->process.nfolder));
 	op_set(m, "open", op_bool(sc_get_current_scope(s) == st->scope));
 	op_push(loads, m);
 	ordered("loaded", st->process.id, c, 1);
@@ -479,7 +479,7 @@ static hf_run teller(const op_value *code, void *api_, void *data) {
 	telling *t = xalloc(sizeof *t);
 	t->id = xdup(st->process.id);
 	t->process = (api_process){.id = t->id, .at = st->process.at, .nat = st->process.nat,
-		.cwd = st->process.cwd, .ncwd = st->process.ncwd, .args = st->process.args,
+		.folder = st->process.folder, .nfolder = st->process.nfolder, .args = st->process.args,
 		.nargs = st->process.nargs, .scope = st->scope};
 	t->a = api_new(context, &(api_starting){.process = t->process, .places = st->places});
 	api_teardown(t->a, told_f, t);
@@ -681,7 +681,7 @@ static void create_box(void *data) {
 	}
 	char *id = take(folder);
 	bx *b;
-	int code = bx_create_id(&(bx_host){places, table, NULL, NULL}, id, NULL, &b);
+	int code = bx_create_id(&(bx_host){places, table, NULL, NULL, NULL}, id, NULL, &b);
 	free(id);
 	if (code != 0) {
 		j->out = error(pl_code_name(code));
@@ -781,7 +781,7 @@ static void run(void *data) {
 	job *j = data;
 	const op_value *r = j->r;
 	steps runner = {0}, at = steps_of(get(r, "at"));
-	steps cwd = steps_of(get(r, "cwd")), args = steps_of(get(r, "args")), path = {0};
+	steps folder = steps_of(get(r, "folder")), args = steps_of(get(r, "args")), path = {0};
 	char *id = NULL, *rid = NULL;
 	sw_carried carried;
 	int is_carried = runner_of(get(r, "runner"), &runner, &carried, &rid);
@@ -792,8 +792,8 @@ static void run(void *data) {
 	} else {
 		op_value *pin = back_or_null(get(r, "pin"));
 		sw_options o = {.args = (const char *const *)args.v, .nargs = args.n,
-			.has_args = get(r, "args") != NULL, .cwd = (const char *const *)cwd.v, .ncwd = cwd.n,
-			.has_cwd = get(r, "cwd") != NULL, .box = b != NULL ? bx_places(b) : NULL, .pin = pin};
+			.has_args = get(r, "args") != NULL, .folder = (const char *const *)folder.v, .nfolder = folder.n,
+			.has_folder = get(r, "folder") != NULL, .box = b != NULL ? bx_places(b) : NULL, .pin = pin};
 		sw_refusal no;
 		sw_process *p = is_carried ? sw_run_carried(software, &carried, &program, STEPS(at), &o, &no)
 		                           : sw_run(software, STEPS(runner), &program, STEPS(at), &o, &no);
@@ -810,7 +810,7 @@ static void run(void *data) {
 		}
 	}
 	free(id), free(rid);
-	steps_free(&runner), steps_free(&at), steps_free(&cwd), steps_free(&args), steps_free(&path);
+	steps_free(&runner), steps_free(&at), steps_free(&folder), steps_free(&args), steps_free(&path);
 }
 
 // a stop by name ("session": the session's, which software does not run)

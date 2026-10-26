@@ -131,7 +131,7 @@ typedef struct sw_late sw_late;
 typedef enum { SW_RUNNERS, SW_COMPILERS, SW_SURFACES } sw_kind;
 
 // what a runner is handed as its api (software.ts' Start), a load's facts (its owner's): the box it
-// runs in (its places and their root), the process (its node, path, args, cwd), the scheduler,
+// runs in (its places and their root), the process (its node, path, args, folder), the scheduler,
 // table and its scope; and the software, for sw_wait
 typedef struct {
 	pl *places;
@@ -142,8 +142,8 @@ typedef struct {
 		size_t nat;
 		const char *const *args;
 		size_t nargs;
-		const char *const *cwd;
-		size_t ncwd;
+		const char *const *folder;
+		size_t nfolder;
 	} process;
 	sc_scheduler *scheduler;
 	tb_table *table;
@@ -230,9 +230,9 @@ typedef struct {
 	const char *const *args;
 	size_t nargs;
 	int has_args;
-	const char *const *cwd;
-	size_t ncwd;
-	int has_cwd;
+	const char *const *folder;
+	size_t nfolder;
+	int has_folder;
 	// where it runs, and where program and at are from; NULL: setup's places
 	pl *box;
 	// ermine.process.pin; NULL: none

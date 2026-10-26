@@ -14,7 +14,7 @@ const PROGRAMS = ["ticker", "lamp", "bunny", "mirror"]
 
 const world = createWorld({
 	render,
-	processes: [{ name: "shell", at: ["shell"], cwd: ["var", "shell"] }],
+	processes: [{ name: "shell", at: ["shell"], folder: ["var", "shell"] }],
 	// the types: what a node says it is is matched against what a loader takes
 	types: true,
 	// the shell's own tools, what the api and the world have not (stat, whoami and inspect are the

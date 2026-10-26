@@ -56,7 +56,7 @@ typedef struct offer offer;
 
 // an owner (software.ts' Owner): a place's, or a process run here (run, software.ts' Running). its
 // node, its path, stored (a place's: what it offers stays when its scope goes), its scope and the
-// scope its offers' folders go under (a place's: its scope); its cwd (a place's: its path's folder;
+// scope its offers' folders go under (a place's: its scope); its folder (a place's: its path's folder;
 // a process's are its life's); the folders of what it offers (in the order made) and its offers (in
 // the order offered, while they stand); its holds on loads (in the order made, let go at its
 // scope's teardown). a process's: where it runs, the offer it runs on (NULL: a runner node offered by none
@@ -74,8 +74,8 @@ struct sw_process {
 	int stored;
 	sc_scope *scope;
 	sc_scope *under;
-	char **cwd;
-	size_t ncwd;
+	char **folder;
+	size_t nfolder;
 	folder folders[3];
 	size_t nfolders;
 	offer **offers;

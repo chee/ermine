@@ -5,18 +5,19 @@
 //   const programs = createPrograms({ scheduler, table, places, builds, scopes })
 //   const [way] = satisfy(b.places, "catclock.c", ["clocks"])   // the first; none: undefined
 //   const p = programs.start(b, way, "/clock")              // b: a box, or places
-//   // { id: "proc:<uuid>", at: ["clock"], cwd: [], scope }, or { refused: "taken", at: ["clock"] }
+//   // { id: "proc:<uuid>", at: ["clock"], folder: [], scope }, or { refused: "taken", at: ["clock"] }
 //   programs.stop(p)
 //
 // refused, nothing made: no-runner (an empty chain), taken (software's: the path has a process).
-// pin: the program's and each step's id, place and hash, the root and cwd; written at start.
+// pin: the program's and each step's id, place and hash, the root and folder; written at start.
 // the run: software.run on the chain's runner, carried ({ id, live }: a host runner is a node with
 // no type, so software would not take it by its path), and the program carried with a build: the
 // chain's compilers folded over the program's value (@ermine/compilers' fold), the value read once
 // at start, the fold in the process's first run; status PENDING while building, the Error on
 // failure. then the runner's start(code, start), once, the process's scope open: start is
-// software's Start (processes' Context), and the program's api is the runner's to make (api.ts'
-// runner: its api option, else createProcessAPI). a throw or a promise: that outcome is the status.
+// software's Start (the process context's facts), and the program's api is the runner's to make
+// (api.ts' runner: its api option, else createProcessAPI). a throw or a promise: that outcome is
+// the status.
 // a step a host holds (by empty): its node's value, live (a runner: software's shape, { start,
 // load?, api? } or a function, its start). a loaded step (by not empty): software.load on its by's
 // runner, carried, given the step's value through its by's compilers, held by the process. shared
@@ -33,7 +34,7 @@ import { CborError, type Value } from "@ermine/encoding/cbor"
 import { hash } from "@ermine/formats/hash"
 import type { Address, Box } from "@ermine/boxes"
 import type { Id, Path, Places } from "@ermine/core/places"
-import { type Context, pathsOf, type Process } from "@ermine/processes/start"
+import { pathsOf, type Process } from "@ermine/processes/start"
 import type { ScopeNodes } from "@ermine/processes/scopes"
 import { PENDING, type Scheduler } from "@ermine/core/scheduler"
 import { isPromise } from "@ermine/core/scheduler/helpers"
@@ -53,9 +54,9 @@ import {
 } from "@ermine/software"
 import type { Chain, Place, Step, Way } from "./programs.ts"
 
-// a process: processes'; what a runner is handed: software's Start (processes' Context); a runner
-// and its handle: software's
-export type { Context, Handle, Process, Runnable, Runner, Start }
+// a process: processes'; what a runner is handed: software's Start (the process context's facts);
+// a runner and its handle: software's
+export type { Handle, Process, Runnable, Runner, Start }
 
 // the files of programs and software, for a host's sites (@ermine/sites' ours): a scope's site is
 // past them, at the call into start
@@ -93,7 +94,7 @@ export type Pin = {
 	readonly program: Place & { readonly hash?: string }
 	readonly chain: readonly Pinned[]
 	readonly box: Id
-	readonly cwd: Path
+	readonly folder: Path
 }
 
 export type Programs = {
@@ -101,7 +102,7 @@ export type Programs = {
 		where: Box | Places,
 		way: Way,
 		at: Address,
-		options?: { args?: readonly string[]; cwd?: Address },
+		options?: { args?: readonly string[]; folder?: Address },
 	) => Process | Refused
 	// its handle's stop told reason (none: none)
 	stop: (p: Process, reason?: unknown) => void
@@ -227,7 +228,7 @@ export function createPrograms(setup: Setup): Programs {
 	}
 
 	// what was chosen, read untracked now
-	function pinOf(root: Id, way: Way, value: unknown, values: Map<Id, unknown>, cwd: Path): Pin {
+	function pinOf(root: Id, way: Way, value: unknown, values: Map<Id, unknown>, folder: Path): Pin {
 		const step = ({ id, at, by }: Step): Pinned => {
 			const attrs = table.get("attributes", id)?.value
 			const identity = isMap(attrs) ? attrs[COMPILER] : undefined
@@ -247,7 +248,7 @@ export function createPrograms(setup: Setup): Programs {
 			program: h === undefined ? { id, at } : { id, at, hash: h },
 			chain: way.chain.map(step),
 			box: root,
-			cwd,
+			folder,
 		}
 	}
 
@@ -255,15 +256,15 @@ export function createPrograms(setup: Setup): Programs {
 		where: Box | Places,
 		way: Way,
 		address: Address,
-		options: { args?: readonly string[]; cwd?: Address } = {},
+		options: { args?: readonly string[]; folder?: Address } = {},
 	): Process | Refused {
 		const { program, chain } = way
 		if (chain.length === 0) return { refused: "no-runner", program }
 		const box: Box = "places" in where ? where : { root: where.root, places: where }
-		const { cwd } = pathsOf(address, options.cwd)
+		const { folder } = pathsOf(address, options.folder)
 		const { values, keys } = keyed(way)
 		const value = table.get("value", program.id)?.value
-		const pin = pinOf(where.root, way, value, values, cwd)
+		const pin = pinOf(where.root, way, value, values, folder)
 		const runner = chain[chain.length - 1]
 		const p: State = { values, keys, slots: new Map() }
 		// the runner as the build found it, started by software
@@ -272,7 +273,7 @@ export function createPrograms(setup: Setup): Programs {
 			{ id: runner.id, live },
 			{ id: program.id, build: () => built(p, way, value) },
 			address,
-			{ box, args: options.args, cwd: options.cwd, pin },
+			{ box, args: options.args, folder: options.folder, pin },
 		)
 		if ("refused" in made) return made
 		p.process = made

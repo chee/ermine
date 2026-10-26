@@ -146,7 +146,7 @@
 				],
 				"status": "pending",
 				"args": null,
-				"cwd": [],
+				"folder": [],
 				"pin": {
 					"program": {
 						"id": "CAT",
@@ -183,7 +183,7 @@
 						}
 					],
 					"box": "W",
-					"cwd": []
+					"folder": []
 				}
 			}
 		},
@@ -201,7 +201,7 @@
 				],
 				"status": null,
 				"args": null,
-				"cwd": [],
+				"folder": [],
 				"pin": {
 					"program": {
 						"id": "CAT",
@@ -238,7 +238,7 @@
 						}
 					],
 					"box": "W",
-					"cwd": []
+					"folder": []
 				}
 			}
 		},

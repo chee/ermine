@@ -13,7 +13,7 @@
 // { op: "drop", part, id, at? }                  → {}   that node not there
 // { op: "ask", policy, who?, what, target, at? } → { answer, reason?, need?, grant?, reads }
 //    grant?: { part, id, index }, the grant that decided (a grants policy's yes or denied)
-//    from?: {path?, route?}, the place the asker is at
+//    from?: {path?, route?, box?}, the place the asker is at (box: its box's folder's id)
 //    who: a change header (a map with actor, reader, ...)
 //    target: {part?, id?, field?, path?, route?}, as protect.ts's Target (route: ids)
 //    node?: a Target too: a placement's, the node given the name (the target its folder's slot)

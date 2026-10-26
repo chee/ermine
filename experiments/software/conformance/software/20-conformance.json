@@ -420,15 +420,15 @@
 						"process": "proc:a",
 						"code": "main",
 						"args": [],
-						"cwd": [],
+						"folder": [],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -436,15 +436,15 @@
 						"process": "proc:b",
 						"code": "lib",
 						"args": [],
-						"cwd": [],
+						"folder": [],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -452,15 +452,15 @@
 						"process": "proc:c",
 						"code": "lib",
 						"args": [],
-						"cwd": [],
+						"folder": [],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					},
@@ -468,15 +468,15 @@
 						"process": "proc:d",
 						"code": "carried",
 						"args": [],
-						"cwd": [],
+						"folder": [],
 						"root": "R",
 						"keys": [
+							"args",
+							"at",
 							"box",
-							"places",
+							"folder",
 							"process",
-							"scheduler",
-							"scope",
-							"table"
+							"scope"
 						],
 						"open": true
 					}
@@ -531,7 +531,7 @@
 					{
 						"by": "session",
 						"code": "main",
-						"cwd": [
+						"folder": [
 							"system"
 						],
 						"open": true
