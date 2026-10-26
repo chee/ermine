@@ -251,7 +251,7 @@ static void noted(const op_value *code, const sw_starting *st) {
 	op_set(m, "args", names_json(st->process.args, st->process.nargs));
 	op_set(m, "folder", names_json(st->process.folder, st->process.nfolder));
 	op_set(m, "root", op_str(st->root));
-	static const char *const keys[6] = {"box", "places", "process", "scheduler", "scope", "table"};
+	static const char *const keys[6] = {"args", "at", "box", "folder", "process", "scope"};
 	op_set(m, "keys", names_json(keys, 6));
 	op_set(m, "open", op_bool(sc_get_current_scope(s) == st->scope));
 	op_push(runs, m);
