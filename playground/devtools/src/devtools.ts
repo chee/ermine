@@ -1,5 +1,5 @@
-// The devtools page: it only adds the panel.
+// The devtools page: it adds the panel, and in Safari answers the panel's evals (bridge.ts).
 
-import { ext } from "./bridge.ts";
+import { ext, panelPage } from "./bridge.ts";
 
-ext.devtools.panels.create("ermine", "icon-32.png", "panel.html");
+ext.devtools.panels.create("ermine", "icon-32.png", panelPage());

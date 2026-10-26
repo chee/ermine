@@ -63,7 +63,7 @@ static tp_write put(int x) {
 	// [{path: [], value: x}]
 	uint8_t p[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x80, 0x65, 'v', 'a', 'l', 'u', 'e', (uint8_t)(x % 24)};
 	memcpy(ps, p, sizeof p);
-	tp_write w = {{(const uint8_t *)"pig", 3}, {(const uint8_t *)"value", 5}, {ps, sizeof p}, {NULL, 0}, 1760000000};
+	tp_write w = {{(const uint8_t *)"pig", 3}, {(const uint8_t *)"value", 5}, {ps, sizeof p}, {NULL, 0}, 1760000000, {NULL, 0}};
 	return w;
 }
 
@@ -704,7 +704,7 @@ static void links(void) {
 	uint64_t n, lam;
 	for (int i = 0; i < 1500; i++) {
 		big[17] = (uint8_t)('a' + i % 26);
-		tp_write w = {{(const uint8_t *)"pig", 3}, {(const uint8_t *)"value", 5}, {big, k}, {NULL, 0}, 1};
+		tp_write w = {{(const uint8_t *)"pig", 3}, {(const uint8_t *)"value", 5}, {big, k}, {NULL, 0}, 1, {NULL, 0}};
 		CHECK(!tp_log_write(log, &w, &n, &lam));
 	}
 	so.log = log;
@@ -840,7 +840,7 @@ static const uint8_t x0[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x80, 0x65, '
 static const uint8_t x1[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x81, 0x61, 'x', 0x65, 'v', 'a', 'l', 'u', 'e', 1};
 static const uint8_t y1[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x81, 0x61, 'y', 0x65, 'v', 'a', 'l', 'u', 'e', 1};
 static void edit(tp_log *log, const uint8_t *p, size_t n) {
-	tp_write w = {{(const uint8_t *)"doc", 3}, {(const uint8_t *)"value", 5}, {p, n}, {NULL, 0}, 1};
+	tp_write w = {{(const uint8_t *)"doc", 3}, {(const uint8_t *)"value", 5}, {p, n}, {NULL, 0}, 1, {NULL, 0}};
 	uint64_t s, l;
 	tp_log_write(log, &w, &s, &l);
 }
@@ -1239,6 +1239,56 @@ static void late(void) {
 	}
 }
 
+// ---- h. heads, through a snapshot (history.h)
+
+// a whole doc {x: v}, on nothing
+static void apart(tp_log *log, uint8_t v) {
+	uint8_t p[sizeof x0];
+	memcpy(p, x0, sizeof p), p[sizeof p - 1] = v;
+	tp_write w = {{(const uint8_t *)"doc", 3}, {(const uint8_t *)"value", 5}, {p, sizeof p}, {NULL, 0}, 1,
+		{(const uint8_t *)"\x80", 1}};
+	uint64_t s, l;
+	tp_log_write(log, &w, &s, &l);
+}
+// doc's versions' x, -1 gone, in order: how many
+static size_t xs(dev *d, int64_t out[TP_VERSIONS]) {
+	tp_version v[TP_VERSIONS];
+	size_t n = tp_history_versions(d->history, "doc", "value", v);
+	for (size_t i = 0; i < n; i++) {
+		out[i] = -1;
+		if (v[i].value && op_get(v[i].value, "x")) op_as_int64(op_get(v[i].value, "x"), &out[i]);
+		op_free(v[i].value);
+	}
+	return n;
+}
+
+static void heads(void) {
+	printf("h. heads through a snapshot\n");
+	run ra, rb;
+	tp_log *a = writer(60, 0, NULL), *b = writer(61, 0, NULL);
+	apart(a, 1), run_of(a, 1, &ra);
+	apart(b, 2), run_of(b, 1, &rb);
+	tp_store *st = tp_memory_store(&mem, 1 << 20);
+	void (*shut)(void *self) = st->close;
+	st->close = kept_open;
+	dev r;
+	dev_make(&r, st, 62);
+	tp_log_take(r.log, ra.device, ra.spans, ra.n, ra.sig, (tp_span){NULL, 0});
+	tp_log_take(r.log, rb.device, rb.spans, rb.n, rb.sig, (tp_span){NULL, 0});
+	int64_t was[TP_VERSIONS], now[TP_VERSIONS];
+	size_t n = xs(&r, was);
+	CHECK(!tp_history_snapshot(r.history));
+	dev_free(&r);
+	int why = dev_make(&r, st, 62);
+	size_t m = xs(&r, now);
+	printf("  versions %zu (x %lld, %lld), loaded again %zu (x %lld, %lld)\n", n, (long long)was[0],
+		(long long)was[1], m, (long long)now[0], (long long)now[1]);
+	CHECK(!why && n == 2 && m == 2 && was[0] == now[0] && was[1] == now[1] && was[0] != was[1]);
+	dev_free(&r);
+	shut(st->self);
+	tp_log_free(a), tp_log_free(b);
+}
+
 int main(int argc, char **argv) {
 	if (argc != 2) return fprintf(stderr, "usage: check-c-review dir\n"), 2;
 	setvbuf(stdout, NULL, _IONBF, 0);
@@ -1256,6 +1306,7 @@ int main(int argc, char **argv) {
 	if (!only || strchr(only, '8')) typescript(argv[1]), printf("  heap now %zu\n", H.now);
 	if (!only || strchr(only, '9')) forgetting(argv[1]), printf("  heap now %zu\n", H.now);
 	if (!only || strchr(only, 'l')) late(), printf("  heap now %zu\n", H.now);
+	if (!only || strchr(only, 'h')) heads(), printf("  heap now %zu\n", H.now);
 	rmdir(argv[1]);
 	CHECK(H.now == 0);
 	printf("check-c-review: %s, %d failed\n", failed ? "FAIL" : "ok", failed);

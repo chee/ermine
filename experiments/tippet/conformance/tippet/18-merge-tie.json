@@ -1,5 +1,5 @@
 {
-	"title": "two writes made apart at one lamport: the greater device's shows, whichever came first",
+	"title": "two writes made apart at one lamport: both stay, as versions: the merge first (the greater device's, whichever came first), then the other as it wrote it; a write that saw both replaces both",
 	"steps": [
 		{
 			"op": "device",
@@ -120,6 +120,68 @@
 			}
 		},
 		{
+			"op": "versions",
+			"device": "c",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": "a",
+						"from": [
+							[
+								"a",
+								1
+							],
+							[
+								"b",
+								1
+							]
+						]
+					},
+					{
+						"value": "b",
+						"from": [
+							[
+								"b",
+								1
+							]
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "versions",
+			"device": "d",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": "a",
+						"from": [
+							[
+								"a",
+								1
+							],
+							[
+								"b",
+								1
+							]
+						]
+					},
+					{
+						"value": "b",
+						"from": [
+							[
+								"b",
+								1
+							]
+						]
+					}
+				]
+			}
+		},
+		{
 			"op": "pass",
 			"from": "a",
 			"to": "b",
@@ -153,6 +215,188 @@
 			"node": "pig",
 			"expect": {
 				"value": "a"
+			}
+		},
+		{
+			"op": "versions",
+			"device": "a",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": "a",
+						"from": [
+							[
+								"a",
+								1
+							],
+							[
+								"b",
+								1
+							]
+						]
+					},
+					{
+						"value": "b",
+						"from": [
+							[
+								"b",
+								1
+							]
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "versions",
+			"device": "b",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": "a",
+						"from": [
+							[
+								"a",
+								1
+							],
+							[
+								"b",
+								1
+							]
+						]
+					},
+					{
+						"value": "b",
+						"from": [
+							[
+								"b",
+								1
+							]
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": "c"
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "versions",
+			"device": "a",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": "c",
+						"from": [
+							[
+								"a",
+								2
+							]
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 2,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "c",
+			"of": "a",
+			"at": 2,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "versions",
+			"device": "b",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": "c",
+						"from": [
+							[
+								"a",
+								2
+							]
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "versions",
+			"device": "c",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": "c",
+						"from": [
+							[
+								"a",
+								2
+							]
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "versions",
+			"device": "d",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": "a",
+						"from": [
+							[
+								"a",
+								1
+							],
+							[
+								"b",
+								1
+							]
+						]
+					},
+					{
+						"value": "b",
+						"from": [
+							[
+								"b",
+								1
+							]
+						]
+					}
+				]
 			}
 		}
 	]

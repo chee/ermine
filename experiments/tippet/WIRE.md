@@ -8,8 +8,10 @@ header says (vectors in `ermine/encoding/conformance/cbor`). Whole numbers below
 
 One kept write. Bytes: a cbor array.
 
-    [device, n, before, node, part, patches, lamport, when]
-    [device, n, before, node, part, patches, lamport, when, who]
+    [device, n, before, node, part, patches, lamport, when, on]
+    [device, n, before, node, part, patches, lamport, when, on, who]
+    [device, n, before, node, part, patches, lamport, when]          an old step
+    [device, n, before, node, part, patches, lamport, when, who]     an old step
 
 - device: bstr, 32 bytes. the writer's ed25519 public key
 - n: whole, from 1, per device, one more each step
@@ -21,10 +23,25 @@ One kept write. Bytes: a cbor array.
 - patches: array of patch maps
 - lamport: whole. one past the highest the writer had seen
 - when: whole. seconds since 1970, the writer's clock
+- on: array. what it was written on: its entry's (node and part) heads at the writer, each a step:
+  - k, whole from 1, k < n: this device's own step n - k
+  - [device, n]: another device's step n; device bstr 32, not this step's; n whole from 1
+
+  a writer with a graph says it always ([]: it held none). an old step, from before steps said, has
+  none: it is read as on every step of its entry before it, in order of lamport, then device. what
+  is made of it: `typescript/history.ts`, heads and versions
 - who: tstr, only when there is one
 
 Anything else is not a step: another length, another kind in a place, a key or hash not 32 bytes, n
-of 0, a number not whole, a patch with another field, a node array not one rest.
+of 0, a number not whole, a patch with another field, a node array not one rest, an on item not as
+above (k of 0 or of n or more, a pair naming the step's own device, of another length or kind).
+
+A peer from before on refuses a step that carries it (not a step): a run with one doesn't pass it.
+
+on's shape is mink's pick (10-26), not decided: after when, so an old step reads as it did; heads by
+device and n, as the log finds a step (its chain binds n to its bytes), not by hash; this device's
+own as how far back, 1 or 2 bytes, and runs in a pack; an old step read as on all before it, so old
+logs read as they did.
 
 patch: a map, only the fields it has.
 
@@ -79,6 +96,7 @@ Each a cbor array. Anything else is dropped, silently.
 A run's steps, small.
 
     [first, lamport, when, node, part, who, count, columns]
+    [first, lamport, when, node, part, who, count, columns, on]
 
 - first: whole n, from 2: step n is packed against step n - 1, like the rest; or bstr, the first
   step's bytes, whole (at n = 1, and old runs)
@@ -88,19 +106,24 @@ A run's steps, small.
   - node: as in a step (tstr or [rest]); part: tstr
   - who: tstr, or null for none
   - count: how many patches the step has
+  - on: the step's on, or null for none; another device's n as the difference from the last n this
+    column gave that device (from 0, may be negative), so typing by turns makes runs (mink's pick:
+    two typing by turns, 38 bytes a step packed without it, 4 with). the column only when a step in
+    it says on
 - columns: every later step's patches, in order, as below
 
 Unpack: for each step after step n - 1 (the receiver's) or the whole first, from the one before
 (prev):
 
     [prev.device, prev.n + 1, blake3(prev bytes), node, part, the next count patches,
-     prev.lamport + lamport, prev.when + when (, who)]
+     prev.lamport + lamport, prev.when + when (, on, each difference added back) (, who)]
 
 encoded canonically: the same bytes the writer made, so chain and sig check as ever.
 
-Refused before anything is made: not 8 elements, first neither bstr nor whole from 2, 4096 or more
-steps in the columns (none, when first is n), more than 65536 patches, a column of another length,
-counts not summing to the patches.
+Refused before anything is made: not 8 or 9 elements, first neither bstr nor whole from 2, 4096 or
+more steps in the columns (none, when first is n), more than 65536 patches, a column of another
+length, counts not summing to the patches, an on neither null nor an array. A step it makes that
+isn't one (an n added back to below 1, say): refused.
 
 Step n - 1 not held: past what is held, a gap (answered with have); all steps held, passed over;
 else held but not to be read (forgotten), refused, never guessed.

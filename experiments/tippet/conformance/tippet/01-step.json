@@ -1,5 +1,5 @@
 {
-	"title": "a step's bytes: a canonical cbor array of eight, or nine with who; read back the same",
+	"title": "a step's bytes: a canonical cbor array of eight, then on and who when there are (an old step without on, as these); read back the same",
 	"steps": [
 		{
 			"op": "encode",

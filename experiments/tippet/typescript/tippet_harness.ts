@@ -11,8 +11,9 @@
 // vectors
 // { op: "encode", step }               → { bytes }    step: { device, n, before, node,
 //                                                      relative?, part, patches, lamport, when,
-//                                                      who? }, before hex or null; relative: true,
-//                                                      node written relative to the device
+//                                                      on?, who? }, before hex or null; relative:
+//                                                      true, node written relative to the device;
+//                                                      on: [[device, n], …], none an old step's
 // { op: "decode", bytes }              → { step } | { refused: true }
 // { op: "hash", bytes }                → { hash }     blake3
 // { op: "sign", seed, bytes }          → { sig }      ed25519 over the bytes
@@ -48,6 +49,9 @@
 //                                                      ["other"]; bytes: { log, open }, the sizes
 // { op: "value", device, node, part? } → { value } | {}   history.ts's merge: every step's patches
 //                                                      in order of lamport, then device
+// { op: "versions", device, node, part? } → { versions }   history.ts's: each { value } or
+//                                                      { gone: true }, and from: [[device, n], …],
+//                                                      the heads it is
 // { op: "have", device }               → { have }     { device: n }, log.have()
 // { op: "count", device, of }          → { count }    steps held, signed or not
 // { op: "steps", device, of }          → { steps }    every step held, hex
@@ -130,6 +134,7 @@ type Device = {
 	store?: Store
 	graph?: {
 		table: Table
+		history: ReturnType<typeof createHistory>
 		write: (node: string, part: string, patches: Patch[], when: number, who?: string) => void
 	}
 	heard: Uint8Array[]
@@ -182,6 +187,7 @@ async function createDevice(seed: Uint8Array): Promise<Device> {
 	const d = made(log, false, await createSigner(seed))
 	d.graph = {
 		table,
+		history,
 		write(node, part, patches, when, who) {
 			const change = { time: when, actor: who ?? null }, unkept = history.unkept.length
 			run(() => {
@@ -261,6 +267,9 @@ function stepIn(s: Request, device?: string, before?: Uint8Array | null): Step {
 		lamport: s.lamport,
 		when: s.when,
 	}
+	if (s.on !== undefined) {
+		out.on = (s.on as [string, number][]).map(([d, n]) => ({ device: keyOf(d), n }))
+	}
 	if (s.who !== undefined) out.who = s.who
 	return out
 }
@@ -275,6 +284,7 @@ function stepOut(s: Step) {
 		patches: patchesOut(s.patches),
 		lamport: s.lamport,
 		when: s.when,
+		...(s.on !== undefined && { on: s.on.map((o) => [o.device, o.n]) }),
 		...(s.who !== undefined && { who: s.who }),
 	}
 }
@@ -492,6 +502,16 @@ async function one(r: Request): Promise<Answer> {
 		case "value": {
 			const e = device(r.device).graph?.table.get((r.part ?? "value") as Key, r.node)
 			return e?.value === undefined ? {} : { value: toJson(e.value) }
+		}
+		case "versions": {
+			const h = device(r.device).graph?.history
+			if (!h) throw new Error(`${r.device} has no graph`)
+			return {
+				versions: h.versions(r.node, r.part ?? "value").map((v) => ({
+					...(v.gone ? { gone: true } : { value: toJson(v.value) }),
+					from: v.from.heads.map(([d, n]) => [nameOf(d), n]),
+				})),
+			}
 		}
 		case "have":
 			return { have: haveOut(device(r.device).log.have()) }

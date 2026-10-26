@@ -270,7 +270,7 @@ int tp_log_write(tp_log *log, const tp_write *w, uint64_t *n, uint64_t *lamport)
 	if (!f) return unmade(log);
 	if (f->count >= log->limits.steps) return TP_BOUND;
 	tp_step s = {{0}, log->key.pub, f->count + 1, f->count ? f->last : NULL,
-		w->node, w->part, w->patches, w->who, 0, log->lamport + 1, w->when, 0};
+		w->node, w->part, w->patches, w->who, 0, log->lamport + 1, w->when, 0, w->on};
 	// a node that is this device's own id, or under it: written relative to it
 	long rest = tp_step_rest(log->key.pub, w->node);
 	if (rest >= 0) s.relative = 1, s.node = (tp_span){w->node.p + w->node.n - (size_t)rest, (size_t)rest};

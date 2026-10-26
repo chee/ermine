@@ -5,8 +5,9 @@
 
 #include "wire.h"
 
-// the columns, in the order they are written
-enum { LAMPORT, WHEN, NODE, PART, WHO, COUNT, PATH, SHAPE, FROM, SIZE, VALUE, MOVE };
+// the columns, in the order they are written (ON last, after the patches' map, only when a step
+// says one)
+enum { LAMPORT, WHEN, NODE, PART, WHO, COUNT, ON, PATH, SHAPE, FROM, SIZE, VALUE, MOVE };
 
 // an item of a column: a number, text, null, an item's bytes as they are, or a node relative to the
 // device ([text])
@@ -51,19 +52,21 @@ typedef struct {
 	tp_patch p;
 	uint32_t path;
 } patched;
-// prior: the step before the first, which it is packed against (NULL: the first goes whole)
+// prior: the step before the first, which it is packed against (NULL: the first goes whole). ons:
+// each later step's on as the column holds it, back to back (NULL: none said)
 typedef struct {
 	const tp_step *steps;
 	size_t n, patches;
 	const patched *ps;
 	const tp_prior *prior;
+	const tp_span *ons;
 } packing;
 
 // a column's i-th item (per step in the columns, or per patch) in *x; 0: a patch without one.
 // last: the last ranged patch's from
 static int get(const packing *k, int column, size_t i, uint64_t *last, item *x) {
 	x->kind = NUM;
-	if (column <= COUNT) {
+	if (column <= ON) {
 		size_t at = k->prior ? i : i + 1;
 		const tp_step *s = &k->steps[at];
 		uint64_t lamport = at ? k->steps[at - 1].lamport : k->prior->lamport,
@@ -74,6 +77,7 @@ static int get(const packing *k, int column, size_t i, uint64_t *last, item *x) 
 			case NODE: x->kind = s->relative ? NEAR : TEXT, x->span = s->node; break;
 			case PART: x->kind = TEXT, x->span = s->part; break;
 			case WHO: x->kind = s->who.p ? TEXT : NUL, x->span = s->who; break;
+			case ON: x->kind = s->on.p ? RAW : NUL, x->span = k->ons[i]; break;
 			default: x->num = (int64_t)s->count;
 		}
 		return 1;
@@ -98,7 +102,7 @@ static int get(const packing *k, int column, size_t i, uint64_t *last, item *x) 
 
 // how many items a column has room for
 static size_t length(const packing *k, int column) {
-	return column <= COUNT ? k->n - (k->prior ? 0 : 1) : k->patches;
+	return column <= ON ? k->n - (k->prior ? 0 : 1) : k->patches;
 }
 
 // a column as runs: counted, then written
@@ -144,6 +148,49 @@ int tp_prior_of(const uint8_t *bytes, size_t length, tp_prior *p) {
 	return 0;
 }
 
+// another device's n in an on column: from the last the column gave it (0 at first), so typing by
+// turns makes runs. last: each device's, count of them (at most one per pair in the column)
+typedef struct {
+	const uint8_t *device;
+	uint64_t n;
+} seen;
+static uint64_t *last_of(seen *last, size_t *count, const uint8_t *device) {
+	for (size_t i = 0; i < *count; i++) {
+		if (!memcmp(last[i].device, device, 32)) return &last[i].n;
+	}
+	last[*count] = (seen){device, 0};
+	return &last[(*count)++].n;
+}
+
+// on as the column holds it (back: 0) or as the step does (back: 1). 0, or -1 (not an on, or an n
+// past a whole)
+static int on_column(tp_buf *b, tp_span on, seen *last, size_t *count, int back) {
+	tp_in in = {on.p, on.p + on.n};
+	uint64_t k, two, n;
+	int64_t d;
+	tp_span key;
+	if (tp_array(&in, &k)) return -1;
+	tp_put_head(b, 4, k);
+	for (uint64_t i = 0; i < k; i++) {
+		if (in.p < in.end && *in.p >> 5 == 0) {
+			if (tp_whole(&in, &n)) return -1;
+			tp_put_head(b, 0, n);
+			continue;
+		}
+		if (tp_array(&in, &two) || two != 2 || tp_bytes(&in, 32, &key)) return -1;
+		uint64_t *was = last_of(last, count, key.p);
+		if (back ? tp_int(&in, &d) : tp_whole(&in, &n)) return -1;
+		if (back && (d < 0 ? (uint64_t)-d > *was : (uint64_t)d > TP_WHOLE - *was)) return -1;
+		if (back) n = d < 0 ? *was - (uint64_t)-d : *was + (uint64_t)d;
+		else d = (int64_t)n - (int64_t)*was;
+		*was = n;
+		tp_put_head(b, 4, 2), tp_put_head(b, 2, 32), tp_put(b, key.p, 32);
+		if (back) tp_put_head(b, 0, n);
+		else tp_put_int(b, d);
+	}
+	return in.p == in.end ? 0 : -1;
+}
+
 int tp_pack(const tp_mem *mem, const tp_span *bytes, size_t n, size_t max, tp_span *pack) {
 	return tp_pack_after(mem, NULL, bytes, n, max, pack);
 }
@@ -155,8 +202,10 @@ int tp_pack_after(const tp_mem *mem, const tp_prior *prior, const tp_span *bytes
 	tp_step *steps = NULL;
 	patched *ps = NULL;
 	uint32_t *table = NULL;
-	tp_span *paths = NULL;
-	tp_buf b = {NULL, 0, 0, max, mem, 0};
+	tp_span *paths = NULL, *ons = NULL;
+	seen *last = NULL;
+	size_t pairs = 0, nlast = 0, *starts = NULL;
+	tp_buf b = {NULL, 0, 0, max, mem, 0}, onb = {NULL, 0, 0, max, mem, 0};
 	pack->p = NULL, pack->n = 0;
 	if (n < 1 || n - 1 >= TP_STEPS) return TP_BOUND;
 	if (!(steps = tp_alloc(mem, n * sizeof *steps))) return TP_NOMEM;
@@ -189,7 +238,9 @@ int tp_pack_after(const tp_mem *mem, const tp_prior *prior, const tp_span *bytes
 	}
 	memset(table, 0xff, slots * sizeof *table);
 	size_t id = 0;
+	int said = 0;
 	for (size_t i = prior ? 0 : 1; i < n; i++) {
+		said |= steps[i].on.p != NULL;
 		tp_patch p;
 		for (size_t at = 0; !tp_patch_next(steps[i].patches, &at, &p); id++) {
 			tp_span path = p.path;
@@ -202,8 +253,30 @@ int tp_pack_after(const tp_mem *mem, const tp_prior *prior, const tp_span *bytes
 			values += p.value.p != NULL, moves += p.move.p != NULL;
 		}
 	}
-	packing k = {steps, n, patches, ps, prior};
-	tp_put_head(&b, 4, 8);
+	// the on column's items, made once: each step's, back to back (where each starts: starts), then
+	// spans of them
+	if (said) {
+		for (size_t i = prior ? 0 : 1; i < n; i++) pairs += steps[i].on.n / 34;
+		ons = tp_alloc(mem, n * sizeof *ons), starts = tp_alloc(mem, (n + 1) * sizeof *starts);
+		last = tp_alloc(mem, (pairs ? pairs : 1) * sizeof *last);
+		if (!ons || !starts || !last) {
+			why = TP_NOMEM;
+			goto done;
+		}
+		size_t j = 0;
+		for (size_t i = prior ? 0 : 1; i < n; i++, j++) {
+			starts[j] = onb.len;
+			if (steps[i].on.p && on_column(&onb, steps[i].on, last, &nlast, 0)) {
+				why = TP_NOTSTEP;
+				goto done;
+			}
+		}
+		starts[j] = onb.len;
+		if ((why = tp_buf_why(&onb))) goto done;
+		for (size_t i = 0; i < j; i++) ons[i] = (tp_span){onb.p + starts[i], starts[i + 1] - starts[i]};
+	}
+	packing k = {steps, n, patches, ps, prior, ons};
+	tp_put_head(&b, 4, 8 + (size_t)said);
 	if (prior) tp_put_head(&b, 0, steps[0].n);
 	else tp_put_head(&b, 2, bytes[0].n), tp_put(&b, bytes[0].p, bytes[0].n);
 	for (int c = LAMPORT; c <= COUNT; c++) runs(&b, &k, c);
@@ -216,12 +289,16 @@ int tp_pack_after(const tp_mem *mem, const tp_prior *prior, const tp_span *bytes
 	for (size_t i = 0; i < npaths; i++) tp_put(&b, paths[i].p, paths[i].n);
 	tp_put_text(&b, "shape"), runs(&b, &k, SHAPE);
 	tp_put_text(&b, "value"), items(&b, &k, VALUE, values);
+	if (said) runs(&b, &k, ON);
 	why = tp_buf_why(&b);
 done:
 	tp_free(mem, steps, n * sizeof *steps);
 	tp_free(mem, ps, (patches ? patches : 1) * sizeof *ps);
 	tp_free(mem, paths, (patches ? patches : 1) * sizeof *paths);
 	tp_free(mem, table, slots * sizeof *table);
+	tp_free(mem, ons, n * sizeof *ons), tp_free(mem, starts, (n + 1) * sizeof *starts);
+	tp_free(mem, last, (pairs ? pairs : 1) * sizeof *last);
+	tp_buf_free(&onb);
 	if (why) {
 		tp_buf_free(&b);
 		return why;
@@ -239,8 +316,8 @@ done:
 // ---- unpack
 
 // what a column's values are: whole or negative, text, text or null, whole, a shape (0 to 7), an
-// index into paths, text or [text] (a node)
-enum { K_INT, K_TEXT, K_WHO, K_WHOLE, K_SHAPE, K_INDEX, K_NODE };
+// index into paths, text or [text] (a node), an array or null (an on: a step made of it checks it)
+enum { K_INT, K_TEXT, K_WHO, K_WHOLE, K_SHAPE, K_INDEX, K_NODE, K_ON };
 
 // a column of runs, each value of its kind, each count from 1: how many items it makes (no more
 // than most); for shape, the patches with a range, a value, a move; for count, their sum (no more
@@ -260,6 +337,7 @@ static int column(tp_span c, int kind, uint64_t limit, uint64_t most, uint64_t *
 			: kind == K_WHO  ? !tp_null(&in) && tp_text(&in, &s)
 			: kind == K_NODE ? (in.p < in.end && *in.p == 0x81 ? tp_array(&in, &one) || tp_text(&in, &s)
 									   : tp_text(&in, &s))
+			: kind == K_ON ? !tp_null(&in) && (in.p >= in.end || *in.p >> 5 != 4 || tp_skip(&in, &s))
 					 : tp_int(&in, &v);
 		if (bad || tp_whole(&in, &count) || count < 1 || count > most - *total) return -1;
 		*total += count;
@@ -322,7 +400,7 @@ int tp_pack_first(tp_span pack, uint64_t *n, int *after) {
 	uint64_t k;
 	tp_span first;
 	tp_step s;
-	if (tp_array(&in, &k) || k != 8) return TP_NOTSTEP;
+	if (tp_array(&in, &k) || (k != 8 && k != 9)) return TP_NOTSTEP;
 	*after = in.p < in.end && *in.p >> 5 == 0;
 	if (*after) return tp_whole(&in, n) || *n < 2 ? TP_NOTSTEP : 0;
 	if (tp_bytes(&in, 0, &first) || tp_step_decode(first.p, first.n, &s)) return TP_NOTSTEP;
@@ -334,7 +412,7 @@ size_t tp_pack_count(tp_span pack) {
 	tp_in in = {pack.p, pack.p + pack.n};
 	uint64_t k, n, count, all = 0;
 	int64_t v;
-	if (tp_array(&in, &k) || k != 8 || in.p >= in.end) return 0;
+	if (tp_array(&in, &k) || (k != 8 && k != 9) || in.p >= in.end) return 0;
 	int after = *in.p >> 5 == 0;
 	if (tp_skip(&in, NULL) || tp_array(&in, &k) || k % 2) return 0;
 	for (uint64_t i = 0; i < k; i += 2) {
@@ -351,12 +429,13 @@ int tp_unpack(const tp_mem *mem, tp_span pack, size_t max, tp_steps *out) {
 
 int tp_unpack_after(const tp_mem *mem, tp_span pack, size_t max, const tp_prior *prior, tp_steps *out) {
 	tp_in in = {pack.p, pack.p + pack.n};
-	tp_span first = {0}, col[6], map[7] = {{0}};
+	tp_span first = {0}, col[6], map[7] = {{0}}, ons = {0};
 	uint64_t n0 = 0;
 	static const char *const names[7] = {"paths", "path", "shape", "from", "size", "value", "move"};
 	uint64_t k, steps, patches, n, sums[3] = {0}, counted[3] = {0};
 	memset(out, 0, sizeof *out);
-	if (!tp_canonical(pack.p, pack.n) || tp_array(&in, &k) || k != 8) return TP_NOTSTEP;
+	if (!tp_canonical(pack.p, pack.n) || tp_array(&in, &k) || (k != 8 && k != 9)) return TP_NOTSTEP;
+	int said = k == 9;
 	// first: the first step whole, or its n, packed against the step before (at n = 1, never)
 	int after = in.p < in.end && *in.p >> 5 == 0;
 	if (after ? tp_whole(&in, &n0) || n0 < 2 : tp_bytes(&in, 0, &first)) return TP_NOTSTEP;
@@ -372,6 +451,7 @@ int tp_unpack_after(const tp_mem *mem, tp_span pack, size_t max, const tp_prior 
 	for (int j = 0; j < 7; j++) {
 		if (!map[j].p) return TP_NOTSTEP;
 	}
+	if (said && tp_skip(&in, &ons)) return TP_NOTSTEP;
 	// paths, value and move: arrays; how many paths (each a patch's, at most)
 	tp_in paths = {map[0].p, map[0].p + map[0].n}, values = {map[5].p, map[5].p + map[5].n},
 	      moves = {map[6].p, map[6].p + map[6].n};
@@ -385,6 +465,7 @@ int tp_unpack_after(const tp_mem *mem, tp_span pack, size_t max, const tp_prior 
 	for (int i = 1; i < 6; i++) {
 		if (column(col[i], kinds[i], 0, steps, &n, sums) || n != steps) return TP_NOTSTEP;
 	}
+	if (said && (column(ons, K_ON, 0, steps, &n, NULL) || n != steps)) return TP_NOTSTEP;
 	if (column(map[2], K_SHAPE, 0, TP_PATCHES, &patches, counted)) return TP_NOTSTEP;
 	if (sums[0] != patches || column(map[1], K_INDEX, npaths, patches, &n, NULL) || n != patches)
 		return TP_NOTSTEP;
@@ -410,17 +491,20 @@ int tp_unpack_after(const tp_mem *mem, tp_span pack, size_t max, const tp_prior 
 	int why = 0;
 	size_t room = (size_t)npaths ? (size_t)npaths : 1;
 	tp_span *path = tp_alloc(mem, room * sizeof *path);
+	// each device's last n in the on column (pack's on_column), at most one per 34 bytes of it
+	size_t nlast = 0, most = ons.n / 34 + 1;
+	seen *lasts = said ? tp_alloc(mem, most * sizeof *lasts) : NULL;
 	tp_buf b = {NULL, 0, 0, max, mem, 0};
 	out->room = (size_t)steps + 2 - (size_t)after;
 	out->at = tp_alloc(mem, out->room * sizeof *out->at);
-	if (!path || !out->at) {
+	if (!path || !out->at || (said && !lasts)) {
 		why = TP_NOMEM;
 		goto done;
 	}
 	for (uint64_t i = 0; i < npaths; i++) path[i] = one(&paths);
 	cursor lamport = at(col[0]), when = at(col[1]), node = at(col[2]), part = at(col[3]),
 	       who = at(col[4]), count = at(col[5]), pathed = at(map[1]), shape = at(map[2]),
-	       from = at(map[3]), size = at(map[4]);
+	       from = at(map[3]), size = at(map[4]), on = said ? at(ons) : (cursor){{NULL, NULL}, 0, 0, {0}};
 	// at[j]: where step j starts (the first whole: step 0)
 	size_t j = 0;
 	out->at[0] = 0;
@@ -430,12 +514,14 @@ int tp_unpack_after(const tp_mem *mem, tp_span pack, size_t max, const tp_prior 
 		uint64_t l, w;
 		step(&lamport, 1), step(&when, 1), step(&node, 0), step(&part, 0), step(&who, 0);
 		step(&count, 1);
+		if (said) step(&on, 0);
+		int onto = said && *on.span.p != 0xf6;
 		if (pn >= TP_WHOLE || add(plamport, lamport.num, &l) || add(pwhen, when.num, &w)) {
 			why = TP_NOTSTEP;
 			break;
 		}
 		int named = *who.span.p != 0xf6;
-		tp_put_head(&b, 4, named ? 9 : 8);
+		tp_put_head(&b, 4, 8 + (uint64_t)onto + (uint64_t)named);
 		tp_put_head(&b, 2, 32), tp_put(&b, device, 32);
 		tp_put_head(&b, 0, pn + 1);
 		tp_put_head(&b, 2, 32), tp_put(&b, hash, 32);
@@ -468,6 +554,10 @@ int tp_unpack_after(const tp_mem *mem, tp_span pack, size_t max, const tp_prior 
 			}
 		}
 		tp_put_head(&b, 0, l), tp_put_head(&b, 0, w);
+		if (onto && on_column(&b, on.span, lasts, &nlast, 1)) {
+			why = TP_NOTSTEP;
+			break;
+		}
 		if (named) tp_put(&b, who.span.p, who.span.n);
 		if (!why && !(why = tp_buf_why(&b))) {
 			out->at[j + 1] = b.len;
@@ -481,6 +571,7 @@ int tp_unpack_after(const tp_mem *mem, tp_span pack, size_t max, const tp_prior 
 	}
 done:
 	tp_free(mem, path, room * sizeof *path);
+	if (said) tp_free(mem, lasts, most * sizeof *lasts);
 	if (why) {
 		tp_buf_free(&b);
 		tp_free(mem, out->at, out->room * sizeof *out->at);

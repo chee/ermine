@@ -1,5 +1,5 @@
 {
-	"title": "a write made after seeing another's shows over it, whichever device is greater",
+	"title": "a write made after seeing another's replaces it, whichever device is greater: one version, the later; before the one it saw comes, nothing",
 	"steps": [
 		{
 			"op": "device",
@@ -96,6 +96,14 @@
 			"expect": {}
 		},
 		{
+			"op": "versions",
+			"device": "c",
+			"node": "pig",
+			"expect": {
+				"versions": []
+			}
+		},
+		{
 			"op": "pass",
 			"from": "a",
 			"to": "c",
@@ -133,6 +141,66 @@
 				"value": {
 					"x": 1
 				}
+			}
+		},
+		{
+			"op": "versions",
+			"device": "a",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": {
+							"x": 1
+						},
+						"from": [
+							[
+								"b",
+								1
+							]
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "versions",
+			"device": "b",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": {
+							"x": 1
+						},
+						"from": [
+							[
+								"b",
+								1
+							]
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "versions",
+			"device": "c",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": {
+							"x": 1
+						},
+						"from": [
+							[
+								"b",
+								1
+							]
+						]
+					}
+				]
 			}
 		}
 	]

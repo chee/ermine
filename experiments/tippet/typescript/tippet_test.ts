@@ -81,7 +81,7 @@ Deno.test("a write here is a step there", async () => {
 	closeAll()
 })
 
-Deno.test("two writes made apart: both sides end the same, the later one showing", async () => {
+Deno.test("two writes made apart: both sides end the same, both writes kept as versions", async () => {
 	const a = await device(), b = await device()
 	a.put("pig", { x: 1 })
 	b.put("pig", { x: 2 })
@@ -89,7 +89,31 @@ Deno.test("two writes made apart: both sides end the same, the later one showing
 	await until(() => a.log.have()[b.log.device!] === 1 && b.log.have()[a.log.device!] === 1)
 	await until(() => JSON.stringify(a.value("pig")) === JSON.stringify(b.value("pig")))
 	assertEquals(a.history.failed.length + b.history.failed.length, 0)
+	const values = (d: typeof a) => d.history.versions("pig", "value").map((v) => v.value)
+	assertEquals(values(a), values(b))
+	assertEquals(values(a).map((v) => JSON.stringify(v)).sort(), ['{"x":1}', '{"x":2}'])
+	// a write that saw both: one version again, on both
+	a.edit("pig", [{ path: ["y"], value: 0 }])
+	await until(() => b.history.versions("pig", "value").length === 1)
+	assertEquals(values(b), [{ ...a.value("pig") as object }])
 	closeAll()
+})
+
+Deno.test("a restart keeps an entry's heads: the same versions after it", async () => {
+	const store = createMemoryStore()
+	const a = await device({ store }), b = await device()
+	a.put("pig", { x: 1 })
+	b.put("pig", { x: 2 })
+	join(a, b)
+	await until(() => a.log.have()[b.log.device!] === 1)
+	closeAll()
+	const before = a.history.versions("pig", "value")
+	assertEquals(before.length, 2)
+	await a.history.snapshot()
+	await a.log.saved()
+	a.history.stop()
+	const again = await device({ store })
+	assertEquals(again.history.versions("pig", "value"), before)
 })
 
 Deno.test("writes to different keys both stand", async () => {
@@ -103,6 +127,9 @@ Deno.test("writes to different keys both stand", async () => {
 	join(a, b)
 	await until(() => JSON.stringify(a.value("pig")) === JSON.stringify(b.value("pig")))
 	assertEquals(a.value("pig"), { x: 1, y: 1 })
+	// two heads, one version: the merge
+	assertEquals(a.history.versions("pig", "value").length, 1)
+	assertEquals(a.history.versions("pig", "value")[0].from.heads.length, 2)
 	closeAll()
 })
 

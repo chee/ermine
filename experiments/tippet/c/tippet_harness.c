@@ -283,10 +283,31 @@ static size_t stepin(const op_value *s, const uint8_t *device, const uint8_t *be
 	op_push(a, op_bytes(key, 32));
 	op_push(a, op_ref(op_get(s, "n")));
 	op_push(a, b ? op_bytes(bb, strlen(b) / 2) : bv || !before ? op_null() : op_bytes(before, 32));
-	const char *fields[] = {"node", "part", "patches", "lamport", "when", "who"};
+	const char *fields[] = {"node", "part", "patches", "lamport", "when", "on", "who"};
 	const op_value *rel = op_get(s, "relative");
-	for (int i = 0; i < 6; i++) {
+	for (int i = 0; i < 7; i++) {
 		op_value *v = op_get(s, fields[i]);
+		if (i == 5) {
+			// on: [[device, n], …], each whole; written this device's own as how far back from n
+			int64_t n, m;
+			if (!v) continue;
+			if (v->type != OP_LIST || !whole(op_get(s, "n"), &n)) return op_free(a), 0;
+			op_value *on = op_list();
+			for (size_t j = 0; j < v->count; j++) {
+				const op_value *x = v->items[j];
+				const uint8_t *k = x->type == OP_LIST && x->count == 2 && x->items[0]->type == OP_STR
+					? keyof(x->items[0]->str) : NULL;
+				if (!k || !whole(x->items[1], &m)) return op_free(on), op_free(a), 0;
+				if (!memcmp(k, key, 32)) op_push(on, op_int(n - m));
+				else {
+					op_value *pair = op_list();
+					op_push(pair, op_bytes(k, 32)), op_push(pair, op_int(m));
+					op_push(on, pair);
+				}
+			}
+			op_push(a, on);
+			continue;
+		}
 		if (!i && v && v->type == OP_STR && rel && rel->type == OP_BOOL && rel->bool_) {
 			// relative: [the rest after the device's own id]
 			long rest = tp_step_rest(key, (tp_span){(const uint8_t *)v->str, v->bytes});
@@ -669,6 +690,33 @@ static void written(const op_value *r, FILE *out) {
 	fprintf(out, "{\"n\":%llu,\"lamport\":%llu}", (unsigned long long)s.n, (unsigned long long)s.lamport);
 }
 
+// history's versions: each { value } or { gone: true }, from the heads it is
+static void versions(const op_value *r, FILE *out) {
+	device *d = which(r, "device", out);
+	const char *node = hh_str(r, "node"), *part = hh_str(r, "part") ? hh_str(r, "part") : "value";
+	if (!d) return;
+	if (!d->history || !node) { hh_error(out, "no graph"); return; }
+	tp_version v[TP_VERSIONS];
+	size_t n = tp_history_versions(d->history, node, part, v);
+	fputs("{\"versions\":[", out);
+	for (size_t i = 0; i < n; i++) {
+		if (i) fputc(',', out);
+		if (v[i].value) fputs("{\"value\":", out), op_json_write(out, v[i].value);
+		else fputs("{\"gone\":true", out);
+		fputs(",\"from\":[", out);
+		const uint8_t *key;
+		uint64_t m;
+		if (v[i].device) fputc('[', out), nameof(out, v[i].device), fprintf(out, ",%llu]", (unsigned long long)v[i].n);
+		for (size_t k = 0; !v[i].device && k < TP_VERSIONS - 1 &&
+			k < tp_history_heads(d->history, node, part, k, &key, &m); k++) {
+			fputs(k ? ",[" : "[", out), nameof(out, key), fprintf(out, ",%llu]", (unsigned long long)m);
+		}
+		fputs("]}", out);
+		if (v[i].value) op_free(v[i].value);
+	}
+	fputs("]}", out);
+}
+
 static void value(const op_value *r, FILE *out) {
 	device *d = which(r, "device", out);
 	const char *node = hh_str(r, "node"), *part = hh_str(r, "part") ? hh_str(r, "part") : "value";
@@ -992,7 +1040,7 @@ static void write_disk(device *d, const op_value *r, FILE *out) {
 	const char *node = hh_str(r, "node"), *part = hh_str(r, "part") ? hh_str(r, "part") : "value";
 	tp_write x = {{(const uint8_t *)node, strlen(node)}, {(const uint8_t *)part, strlen(part)}, {ps, np},
 		{who && who->type == OP_STR ? (const uint8_t *)who->str : NULL, who && who->type == OP_STR ? who->bytes : 0},
-		(uint64_t)when};
+		(uint64_t)when, {NULL, 0}};
 	uint64_t n, lamport;
 	int why = tp_log_write(d->log, &x, &n, &lamport);
 	if (why) { hh_error(out, "%s", tp_why(why)); return; }
@@ -1023,8 +1071,20 @@ void hh_answer(const op_value *r, FILE *out) {
 		fputs(",\"before\":", out);
 		if (s.before) hex(out, s.before, 32);
 		else fputs("null", out);
-		const char *fields[] = {"", "", "", "node", "part", "patches", "lamport", "when", "who"};
+		const char *fields[] = {"", "", "", "node", "part", "patches", "lamport", "when", "who", "who"};
 		for (size_t i = 3; i < a->count; i++) {
+			if (i == 8 && s.on.p) {
+				// on, each step whole
+				size_t at = 0, k = 0;
+				const uint8_t *d;
+				uint64_t m;
+				fputs(",\"on\":[", out);
+				while (!tp_on_next(&s, &at, &d, &m)) {
+					fputs(k++ ? ",[" : "[", out), hex(out, d, 32), fprintf(out, ",%llu]", (unsigned long long)m);
+				}
+				fputc(']', out);
+				continue;
+			}
 			fprintf(out, ",\"%s\":", fields[i]);
 			if (i != 3 || !s.relative) { op_json_write(out, a->items[i]); continue; }
 			size_t k = tp_step_node(&s, NULL, 0);
@@ -1102,6 +1162,8 @@ void hh_answer(const op_value *r, FILE *out) {
 		written(r, out);
 	} else if (!strcmp(op, "value")) {
 		value(r, out);
+	} else if (!strcmp(op, "versions")) {
+		versions(r, out);
 	} else if (!strcmp(op, "link")) {
 		join(r, out);
 	} else if (!strcmp(op, "unlink")) {

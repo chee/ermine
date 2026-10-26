@@ -1,0 +1,227 @@
+{
+	"title": "a method is let go when its node's value stops being its stand-in (taken out, written over) or its scope goes: a send to it then is not-a-method; slots are used again (c_live, c_held: C's own count)",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"w": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": [
+				"w",
+				"p"
+			],
+			"program": [
+				{
+					"do": [
+						"method",
+						"./a",
+						[
+							{
+								"do": [
+									"log",
+									"called",
+									[
+										"all",
+										"a",
+										"$0"
+									]
+								]
+							}
+						]
+					]
+				},
+				{
+					"do": [
+						"method",
+						"./b",
+						[
+							{
+								"do": [
+									"log",
+									"called",
+									[
+										"all",
+										"b",
+										"$0"
+									]
+								]
+							}
+						]
+					]
+				}
+			],
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "methods",
+			"c_live": 2,
+			"c_held": 2,
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"send",
+				"./a",
+				1
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"remove",
+				"./a"
+			],
+			"expect": {}
+		},
+		{
+			"op": "methods",
+			"c_live": 1,
+			"c_held": 2,
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"send",
+				"./a",
+				2
+			],
+			"fails": true,
+			"expect": {
+				"error": "not-a-method"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"method",
+				"./a",
+				[
+					{
+						"do": [
+							"log",
+							"called",
+							[
+								"all",
+								"a again",
+								"$0"
+							]
+						]
+					}
+				]
+			],
+			"expect": {},
+			"skip": [
+				"value"
+			]
+		},
+		{
+			"op": "methods",
+			"c_live": 2,
+			"c_held": 2,
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"send",
+				"./a",
+				4
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"method",
+				"./b",
+				[
+					{
+						"do": [
+							"log",
+							"called",
+							[
+								"all",
+								"b again",
+								"$0"
+							]
+						]
+					}
+				]
+			],
+			"expect": {},
+			"skip": [
+				"value"
+			]
+		},
+		{
+			"op": "methods",
+			"c_live": 2,
+			"c_held": 3,
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"send",
+				"./b",
+				5
+			],
+			"expect": {}
+		},
+		{
+			"op": "stop",
+			"name": "p",
+			"expect": {}
+		},
+		{
+			"op": "methods",
+			"c_live": 0,
+			"c_held": 3,
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "called",
+			"expect": {
+				"values": [
+					[
+						"a",
+						1
+					],
+					[
+						"a again",
+						4
+					],
+					[
+						"b again",
+						5
+					]
+				]
+			}
+		}
+	]
+}

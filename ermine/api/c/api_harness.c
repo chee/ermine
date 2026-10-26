@@ -1002,6 +1002,19 @@ static op_value *answer(const op_value *r) {
 		if (replaces) op_set(o, "replaces", op_ref((op_value *)replaces));
 		return o;
 	}
+	// methods: the context's method records, c_live made and not let go, c_held slots live or dead
+	// (the TS harness has none to count)
+	if (strcmp(op, "methods") == 0) {
+		const op_value *live = op_get(r, "c_live"), *held = op_get(r, "c_held");
+		size_t nl = api_methods_live(m->context), nh = api_methods_held(m->context);
+		if ((live && live->type == OP_NUM && (double)nl != live->num) ||
+			(held && held->type == OP_NUM && (double)nh != held->num)) {
+			char text[96];
+			snprintf(text, sizeof text, "methods live %zu held %zu (c)", nl, nh);
+			return error_answer(API_FAILED, text);
+		}
+		return op_map();
+	}
 	if (strcmp(op, "site") == 0) {
 		const nd_entry *e = tb_get(m->table, tb_string(hh_str(r, "part")), tb_string(hh_str(r, "id")));
 		const ch_site *at = e && e->change.external_length ? &e->change.external[0] : NULL;
