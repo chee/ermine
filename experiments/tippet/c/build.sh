@@ -67,7 +67,7 @@ link() {
 	case "$main" in
 		*harness*) $CC $opt -o "$here/$bin" $objs "$mainobj" ;;
 		catchup* | check_c_review*) $CC $opt -o "$here/$bin" $(echo "$objs" | tr ' ' '\n' | grep -v -e conformance_c_) "$mainobj" ;;
-		*) $CC $opt -o "$here/$bin" $(echo "$objs" | tr ' ' '\n' | grep -vE 'conformance_c_|/core_(op|node|table|scheduler|unread)_|filesystem_|history') "$mainobj" ;;
+		*) $CC $opt -o "$here/$bin" $(echo "$objs" | tr ' ' '\n' | grep -vE 'conformance_c_|/core_(op|node|table|scheduler|unread|places|protect|clingy)_|history') "$mainobj" ;;
 	esac
 }
 
