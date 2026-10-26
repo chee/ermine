@@ -1,5 +1,5 @@
 {
-	"title": "small steps: a run closed at 2048 bytes (21 steps of 101 bytes, before 32); the rest, still open, closed when asked for, at the latest",
+	"title": "small steps: a run closed at 2048 bytes (21 steps of 103 bytes, before 32); the rest, still open, closed when asked for, at the latest",
 	"steps": [
 		{
 			"op": "device",
@@ -617,7 +617,7 @@
 			"expect": {
 				"from": 1,
 				"to": 21,
-				"sig": "40022f7e31374729d897b28bb55e38686688afd2f7a8105a0552dc777b49c3e6cc76adcb8ea98ae5c95fdf390f811341e86964bfb3432953bffb5dc689470d09"
+				"sig": "4d4d17036f397fbb2c1c9d5f7b24c156872075e066fe5928f60faf6f13e858283cd01c45bd9fed0e375531efbff3f841ecd143b66ec214b42534678ba0e3ab05"
 			}
 		},
 		{
@@ -628,7 +628,7 @@
 			"expect": {
 				"from": 32,
 				"to": 40,
-				"sig": "f5592dffcab312f7469efd62e5af7d74409f5b5d812d22de92ed1392e359970b1e8cf09aa1647c9fc0f023493c2ff890c8cc92515d2a611d050bbcea6f61960a"
+				"sig": "29d932beecfba0ecafa177967abec571ec8e6e5b98a388705cb82d6876ee52f00674bad06aca37ee67d4191920f0170da71f00281d0050a45839aa2d3263dc06"
 			}
 		},
 		{
@@ -639,7 +639,7 @@
 			"expect": {
 				"from": 33,
 				"to": 40,
-				"sig": "f5592dffcab312f7469efd62e5af7d74409f5b5d812d22de92ed1392e359970b1e8cf09aa1647c9fc0f023493c2ff890c8cc92515d2a611d050bbcea6f61960a"
+				"sig": "29d932beecfba0ecafa177967abec571ec8e6e5b98a388705cb82d6876ee52f00674bad06aca37ee67d4191920f0170da71f00281d0050a45839aa2d3263dc06"
 			}
 		},
 		{

@@ -1,5 +1,5 @@
 {
-	"title": "a whole value and a deeper write after it, the deeper arriving first: one value both ways",
+	"title": "a whole value and a deeper write made on it, the deeper arriving first: one value both ways, one version, the deeper",
 	"steps": [
 		{
 			"op": "device",
@@ -115,6 +115,14 @@
 			"expect": {}
 		},
 		{
+			"op": "versions",
+			"device": "d",
+			"node": "pig",
+			"expect": {
+				"versions": []
+			}
+		},
+		{
 			"op": "pass",
 			"from": "a",
 			"to": "d",
@@ -144,6 +152,48 @@
 					"x": 5,
 					"y": 9
 				}
+			}
+		},
+		{
+			"op": "versions",
+			"device": "c",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": {
+							"x": 5,
+							"y": 9
+						},
+						"from": [
+							[
+								"b",
+								1
+							]
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "versions",
+			"device": "d",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": {
+							"x": 5,
+							"y": 9
+						},
+						"from": [
+							[
+								"b",
+								1
+							]
+						]
+					}
+				]
 			}
 		}
 	]

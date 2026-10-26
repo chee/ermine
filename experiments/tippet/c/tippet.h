@@ -59,9 +59,9 @@ const char *tp_why(int code);
 
 // ---- step
 
-// one kept write: [device, n, before, node, part, patches, lamport, when, who?]. its fields point
-// into its bytes: node, part and who as the text's bytes (UTF-8), patches as the array's whole
-// encoding (count of them)
+// one kept write: [device, n, before, node, part, patches, lamport, when, on?, who?]. its fields
+// point into its bytes: node, part and who as the text's bytes (UTF-8), patches as the array's whole
+// encoding (count of them), on too (tp_on_next)
 typedef struct {
 	tp_span bytes;
 	const uint8_t *device; // 32
@@ -72,6 +72,9 @@ typedef struct {
 	uint64_t lamport, when;
 	// node is written relative to the device: node is the rest after its own id (tp_step_node)
 	int relative;
+	// what it was written on: its entry's heads at the writer (history.h). p NULL: none said (an old
+	// step)
+	tp_span on;
 } tp_step;
 
 // a device's own id as text, ermine:ed01 and its key's hex (ermine/ids): how long
@@ -101,6 +104,9 @@ typedef struct {
 // patches is a step's; each call gives the next of them, *at where it is (0 to begin). 0: one in
 // *p; 1: none left
 int tp_patch_next(tp_span patches, size_t *at, tp_patch *p);
+// s's on: each call gives the next step it names, whole (*device into s's bytes), *at where it is
+// (0 to begin). 0: one; 1: none left (or none said)
+int tp_on_next(const tp_step *s, size_t *at, const uint8_t **device, uint64_t *n);
 
 // ---- pack
 
@@ -255,10 +261,12 @@ uint64_t tp_log_lamport(const tp_log *log);
 // its limits, the defaults filled in
 tp_limits tp_log_limits(const tp_log *log);
 
-// a write: node, part, patches (an array, encoded), when, who (p NULL: none)
+// a write: node, part, patches (an array, encoded), when, who (p NULL: none), on (an array,
+// encoded as the step holds it, its own steps as how far back from the step's n; p NULL: none said)
 typedef struct {
 	tp_span node, part, patches, who;
 	uint64_t when;
+	tp_span on;
 } tp_write;
 // a step of this device's, lamport one past the highest seen: its n and lamport. open in the store
 // until its run closes, at 32 steps or 2048 bytes since the last close

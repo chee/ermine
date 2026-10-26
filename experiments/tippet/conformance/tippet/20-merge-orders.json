@@ -1,5 +1,5 @@
 {
-	"title": "three devices' steps in every order they can come in: one value",
+	"title": "three devices' steps in every order they can come in: the same versions, the merge first, then each head as its side wrote it (c's with b's y, a's own x and y); a write that saw both heads replaces both",
 	"steps": [
 		{
 			"op": "device",
@@ -482,6 +482,369 @@
 					"x": 3,
 					"y": 1
 				}
+			}
+		},
+		{
+			"op": "versions",
+			"device": "r1",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": {
+							"x": 3,
+							"y": 1
+						},
+						"from": [
+							[
+								"c",
+								1
+							],
+							[
+								"a",
+								2
+							]
+						]
+					},
+					{
+						"value": {
+							"x": 3,
+							"y": 2
+						},
+						"from": [
+							[
+								"c",
+								1
+							]
+						]
+					},
+					{
+						"value": {
+							"x": 1,
+							"y": 1
+						},
+						"from": [
+							[
+								"a",
+								2
+							]
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "versions",
+			"device": "r2",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": {
+							"x": 3,
+							"y": 1
+						},
+						"from": [
+							[
+								"c",
+								1
+							],
+							[
+								"a",
+								2
+							]
+						]
+					},
+					{
+						"value": {
+							"x": 3,
+							"y": 2
+						},
+						"from": [
+							[
+								"c",
+								1
+							]
+						]
+					},
+					{
+						"value": {
+							"x": 1,
+							"y": 1
+						},
+						"from": [
+							[
+								"a",
+								2
+							]
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "versions",
+			"device": "r3",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": {
+							"x": 3,
+							"y": 1
+						},
+						"from": [
+							[
+								"c",
+								1
+							],
+							[
+								"a",
+								2
+							]
+						]
+					},
+					{
+						"value": {
+							"x": 3,
+							"y": 2
+						},
+						"from": [
+							[
+								"c",
+								1
+							]
+						]
+					},
+					{
+						"value": {
+							"x": 1,
+							"y": 1
+						},
+						"from": [
+							[
+								"a",
+								2
+							]
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "versions",
+			"device": "r4",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": {
+							"x": 3,
+							"y": 1
+						},
+						"from": [
+							[
+								"c",
+								1
+							],
+							[
+								"a",
+								2
+							]
+						]
+					},
+					{
+						"value": {
+							"x": 3,
+							"y": 2
+						},
+						"from": [
+							[
+								"c",
+								1
+							]
+						]
+					},
+					{
+						"value": {
+							"x": 1,
+							"y": 1
+						},
+						"from": [
+							[
+								"a",
+								2
+							]
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "versions",
+			"device": "r5",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": {
+							"x": 3,
+							"y": 1
+						},
+						"from": [
+							[
+								"c",
+								1
+							],
+							[
+								"a",
+								2
+							]
+						]
+					},
+					{
+						"value": {
+							"x": 3,
+							"y": 2
+						},
+						"from": [
+							[
+								"c",
+								1
+							]
+						]
+					},
+					{
+						"value": {
+							"x": 1,
+							"y": 1
+						},
+						"from": [
+							[
+								"a",
+								2
+							]
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "versions",
+			"device": "r6",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": {
+							"x": 3,
+							"y": 1
+						},
+						"from": [
+							[
+								"c",
+								1
+							],
+							[
+								"a",
+								2
+							]
+						]
+					},
+					{
+						"value": {
+							"x": 3,
+							"y": 2
+						},
+						"from": [
+							[
+								"c",
+								1
+							]
+						]
+					},
+					{
+						"value": {
+							"x": 1,
+							"y": 1
+						},
+						"from": [
+							[
+								"a",
+								2
+							]
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"device": "r1",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [
+						"x"
+					],
+					"value": 7
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 4
+			}
+		},
+		{
+			"op": "versions",
+			"device": "r1",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": {
+							"x": 7,
+							"y": 1
+						},
+						"from": [
+							[
+								"r1",
+								1
+							]
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "pass",
+			"from": "r1",
+			"to": "r4",
+			"of": "r1",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "versions",
+			"device": "r4",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": {
+							"x": 7,
+							"y": 1
+						},
+						"from": [
+							[
+								"r1",
+								1
+							]
+						]
+					}
+				]
 			}
 		}
 	]

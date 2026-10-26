@@ -98,7 +98,7 @@ int main(int argc, char **argv) {
 	// a writer: 40 steps of 101 bytes, a run closed at 2048 bytes (21), the rest when asked for
 	tp_log *a = open_log(&mem, dir, seed);
 	CHECK(a && !tp_log_load(a));
-	tp_write w = {{(const uint8_t *)"pig", 3}, {(const uint8_t *)"value", 5}, {ps, 0}, {NULL, 0}, 1760000000};
+	tp_write w = {{(const uint8_t *)"pig", 3}, {(const uint8_t *)"value", 5}, {ps, 0}, {NULL, 0}, 1760000000, {NULL, 0}};
 	for (int i = 1; i <= 40; i++) {
 		w.patches.n = (size_t)patches(ps, i % 24);
 		CHECK(!tp_log_write(a, &w, &n, &lamport) && n == (uint64_t)i && lamport == (uint64_t)i);

@@ -303,6 +303,11 @@ int api_early_at(api *a, const char *name, api_compute f, api_act act, void *ctx
 // a method: returns a code; *out its return (the caller's), maybe NULL
 typedef int (*api_method_fn)(api *a, const op_value *const *args, size_t nargs, op_value **out,
 	void *ctx);
+// methods made and not let go (api_methods_live), and slots held, live or dead (api_methods_held):
+// a method is let go when its node's value stops being its stand-in or its scope goes; a dead slot
+// is used again
+size_t api_methods_live(const api_context *x);
+size_t api_methods_held(const api_context *x);
 int api_method_at(api *a, const char *at, api_method_fn fn, void *ctx, api_node *out,
 	const char *file, int line, const char *func);
 #define api_method(...) api_method_at(__VA_ARGS__, __FILE__, __LINE__, __func__)

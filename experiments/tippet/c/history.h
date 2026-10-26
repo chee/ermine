@@ -10,6 +10,13 @@
 // first time after a load). a step whose patches don't apply there is passed over, and listed in
 // failed until they do. the graph is the last snapshot and the steps after it
 //
+// heads and versions, as history.ts's (its header says the rule): a step says what it was written
+// on (tp_step on), the recorder writes each on its entry's heads, and an entry's heads are among
+// its frontier, a flag each (no byte more: the ref's padding). tp_history_versions works them out
+// when asked, walking the entry's steps from its first (the walk above), only when it has two heads
+// or more: what that holds while it runs, a ref (24 bytes) and 4 more per step of the entry, and the
+// paths each head's side wrote
+//
 // forgets (a try-out, off unless asked for): not a history keeper, a small device. it keeps the
 // newest state per node it holds, not the runs: tp_history_forget, now and then where a host would
 // snapshot, snapshots and lets go every run in the snapshot that has passed on (tp_sync_passed: to
@@ -57,8 +64,9 @@ void tp_history_told(void *ctx, const uint8_t device[32], uint64_t from, size_t 
 // landed, this device's too. 0, or a code (TP_NOTSTEP: a snapshot not as written, and no step
 // landed after it)
 int tp_history_load(tp_history *h);
-// each kept entry's value and its frontier, and how many of each device's steps are in them, into
-// the store, in place of the snapshot before. 0, or a code. its bytes are held while written
+// each kept entry's value, its frontier and which of it are heads, and how many of each device's
+// steps are in them, into the store, in place of the snapshot before. 0, or a code. its bytes are
+// held while written
 int tp_history_snapshot(tp_history *h);
 
 // a step that didn't land (device its writer's), or a write here not kept (device NULL, n 0)
@@ -74,5 +82,20 @@ size_t tp_history_unkept(const tp_history *h, size_t i, tp_failed *out);
 // forgets: a snapshot, then every run in it that has passed on let go (above). 0, or a code
 // (TP_BOUND: this history keeps every run)
 int tp_history_forget(tp_history *h, const tp_sync *s);
+
+// one of an entry's values: value the caller's (op_free it), NULL gone; from the head device's n,
+// or device NULL: every head (the merge, the first)
+typedef struct {
+	op_value *value;
+	const uint8_t *device;
+	uint64_t n;
+} tp_version;
+// at most: the merge, and the 16 newest heads'
+#define TP_VERSIONS 17
+// an entry's versions (history.ts): how many, in out. none known (no entry, or gone alone): 0
+size_t tp_history_versions(tp_history *h, const char *node, const char *part, tp_version out[TP_VERSIONS]);
+// an entry's heads, newest first: how many; the i-th's device and n
+size_t tp_history_heads(const tp_history *h, const char *node, const char *part, size_t i,
+	const uint8_t **device, uint64_t *n);
 
 #endif

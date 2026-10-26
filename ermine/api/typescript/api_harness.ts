@@ -322,6 +322,10 @@ function answer(r: Request): Record<string, unknown> {
 				..."replaces" in m && { replaces: m.replaces },
 			}
 		}
+		// methods: C's count of method records (c_live, c_held, checked there); nothing here, where a
+		// method is a function value and goes with its node
+		case "methods":
+			return {}
 		case "site": {
 			const at = world().table.get(r.part as Key, r.id)?.change?.external?.[0]
 			const site = at === undefined

@@ -57,11 +57,23 @@ typedef struct {
 	char *id;
 	op_value *why;
 } stopping;
+// a method made: let go when its node's value stops being its stand-in (removed, written over) or
+// when the scope it was made in goes; then dead, its slot used again. gen goes up as it is let go,
+// so a stand-in kept elsewhere (copied, placed) names an older one and is not a method
+struct method_end;
 typedef struct {
 	api_method_fn fn;
 	void *ctx;
 	sc_scope *scope;
+	uint32_t gen;
+	int live;
+	// the teardown registered on scope, still to run (NULL: run, or none): there is no taking one
+	// back, so a dead slot keeps it, and a method made later outside a run in the same scope takes
+	// the slot and the teardown over
+	struct method_end *end;
 } method_rec;
+// below, with the methods: a value at an id going, its method let go
+static void method_replaced(api_context *x, const op_value *was, const op_value *now);
 
 struct api_watching {
 	pl_watch *w;
@@ -156,6 +168,9 @@ void api_context_free(api_context *x) {
 	op_free(x->replaced);
 	for (size_t i = 0; i < x->nmemos; i++) free(x->memos[i].id);
 	free(x->memos);
+	// every scope goes before this (api.h's order), so its teardown ran and its end is NULL; one
+	// left (a scope never torn down) is let go here
+	for (size_t i = 0; i < x->nmethods; i++) free(x->methods[i].end);
 	free(x->methods);
 	for (size_t i = 0; i < x->nwatches; i++) free(x->watches[i]);
 	free(x->watches);
@@ -558,12 +573,15 @@ static int write_with(api *a, const char *part, const char *id, const op_patch *
 		pl_made_free(made);
 		return bad == OP_OK ? 0 : fail(a, API_FAILED, op_code_name(bad));
 	}
+	op_value *was = strcmp(part, API_VALUE) == 0 && e->value ? op_ref(e->value) : NULL;
 	int bad = nd_update(e, b->patches, n, h, &failed);
 	if (bad != OP_OK) {
+		op_free(was);
 		block_free(b);
 		pl_made_free(made);
 		return fail(a, API_FAILED, op_code_name(bad));
 	}
+	if (was) method_replaced(x, was, e->value), op_free(was);
 	pl_changed changed = {1, {e}};
 	commit(a, &changed);
 	pl_hold(x->s.places, e, made, pl_made_free);
@@ -684,6 +702,8 @@ static int slot(api *a, char *const *path, size_t n, nd_entry **children, const 
 
 // every entry of an id taken out of the table, and its run record out
 static void del_all(api *a, const char *id) {
+	const nd_entry *v = tb_get(a->x->s.table, tb_string(API_VALUE), tb_string(id));
+	if (v) method_replaced(a->x, v->value, NULL);
 	size_t n;
 	const tb_entry *at = tb_at(a->x->s.table, tb_string(id), &n);
 	char **parts = xalloc((n + 1) * sizeof *parts);
@@ -1613,25 +1633,63 @@ int api_early_at(api *a, const char *name, api_compute f, api_act act, void *ctx
 
 // methods --------------------------------------------------------------------------------------
 
-// a function as a value: a stand-in of {name: "Function", method: its number}
-static op_value *method_value(size_t index) {
+// a function as a value: a stand-in of {name: "Function", method: its number, gen: its slot's gen}
+static op_value *method_value(size_t index, uint32_t gen) {
 	op_value *m = op_map();
 	op_set(m, "name", op_str("Function"));
 	op_set(m, "method", op_num((double)index));
+	op_set(m, "gen", op_num((double)gen));
 	return op_stand(m);
 }
-// the method a stand-in is: a whole number from 0 below count, its range checked before the cast
-// (a cast of a negative, NaN, infinite or too large double to size_t is undefined)
-static int method_index(const op_value *v, size_t count, size_t *index) {
-	if (v == NULL || v->type != OP_STAND || v->count != 1 || v->items[0]->type != OP_MAP) return 0;
-	const op_value *i = op_get(v->items[0], "method");
+// a whole number from 0 below limit, its range checked before the cast (a cast of a negative, NaN,
+// infinite or too large double to size_t is undefined)
+static int whole_below(const op_value *i, double limit, size_t *out) {
 	if (i == NULL || i->type != OP_NUM) return 0;
 	double d = i->num;
-	if (!(d >= 0 && d < (double)count)) return 0;
+	if (!(d >= 0 && d < limit)) return 0;
 	size_t k = (size_t)d;
 	if ((double)k != d) return 0;
+	*out = k;
+	return 1;
+}
+// the live method a stand-in is: its number a slot, its gen that slot's now
+static int method_index(const op_value *v, const api_context *x, size_t *index) {
+	if (v == NULL || v->type != OP_STAND || v->count != 1 || v->items[0]->type != OP_MAP) return 0;
+	size_t k, gen;
+	if (!whole_below(op_get(v->items[0], "method"), (double)x->nmethods, &k)) return 0;
+	if (!whole_below(op_get(v->items[0], "gen"), 4294967296.0, &gen)) return 0;
+	if (!x->methods[k].live || x->methods[k].gen != (uint32_t)gen) return 0;
 	*index = k;
 	return 1;
+}
+// a method let go: dead, its gen up, its slot free once its teardown has run
+static void forget_method(api_context *x, size_t index) {
+	method_rec *r = &x->methods[index];
+	if (!r->live) return;
+	r->live = 0, r->fn = NULL, r->ctx = NULL, r->gen++;
+}
+typedef struct method_end {
+	api_context *x;
+	size_t index;
+} method_end;
+// the scope a method was made in gone: the method with it
+static char *method_gone(void *data) {
+	method_end *t = data;
+	method_rec *r = &t->x->methods[t->index];
+	if (r->end == t) {
+		forget_method(t->x, t->index);
+		r->end = NULL, r->scope = NULL;
+	}
+	free(t);
+	return NULL;
+}
+// a value at id going (written over or taken out): its method, if it was one, let go unless the new
+// value is the same stand-in
+static void method_replaced(api_context *x, const op_value *was, const op_value *now) {
+	size_t k, j;
+	if (!method_index(was, x, &k)) return;
+	if (now != NULL && method_index(now, x, &j) && j == k) return;
+	forget_method(x, k);
 }
 
 typedef struct {
@@ -1648,17 +1706,50 @@ static int do_method(api *a, void *data) {
 	free(id);
 	return code;
 }
+// a slot for a method made in scope: a dead one whose scope's teardown is still to run, when that
+// scope is this one and no run is open (a computer's cleanup is its run's: it would take a method
+// its next run made); else a dead one with none; else a new one, its teardown registered
+static int method_slot(api *a, sc_scope *scope, size_t *index) {
+	api_context *x = a->x;
+	int in_run = sc_get_run(x->s.scheduler) != NULL;
+	size_t k = x->nmethods;
+	for (size_t i = 0; i < x->nmethods && k == x->nmethods; i++) {
+		const method_rec *r = &x->methods[i];
+		if (!r->live && r->end != NULL && r->scope == scope && !in_run) k = i;
+	}
+	for (size_t i = 0; i < x->nmethods && k == x->nmethods; i++) {
+		if (!x->methods[i].live && x->methods[i].end == NULL) k = i;
+	}
+	if (k == x->nmethods) {
+		method_rec fresh = {0};
+		PUSH(x->methods, x->nmethods, x->capmethods, fresh);
+	}
+	method_rec *r = &x->methods[k];
+	if (r->end == NULL) {
+		method_end *t = xalloc(sizeof *t);
+		t->x = x, t->index = k;
+		r->end = t, r->scope = scope;
+		// the scope gone already: method_gone runs now, and the slot is free again
+		free(sc_register_teardown(x->s.scheduler, scope, method_gone, t));
+		if (r->end != t) return fail(a, API_FAILED, SC_DISPOSED);
+	}
+	r->live = 1;
+	*index = k;
+	return 0;
+}
 static int method_(api *a, const char *at, api_method_fn fn, void *ctx, api_node *out) {
 	api_context *x = a->x;
-	method_rec rec = {fn, ctx, owner(a)};
-	PUSH(x->methods, x->nmethods, x->capmethods, rec);
 	names p = {0};
 	int code = resolve(a, at, &p);
 	if (code) return code;
-	methoding m = {&p, method_value(x->nmethods - 1)};
+	size_t k;
+	code = method_slot(a, owner(a), &k);
+	if (code) return names_free(&p), code;
+	x->methods[k].fn = fn, x->methods[k].ctx = ctx;
+	methoding m = {&p, method_value(k, x->methods[k].gen)};
 	code = within(a, do_method, &m);
 	op_free(m.fn);
-	if (code) return names_free(&p), code;
+	if (code) return forget_method(x, k), names_free(&p), code;
 	later(x);
 	*out = node_of(&p, API_VALUE);
 	return 0;
@@ -1705,7 +1796,7 @@ int api_send_at(api *a, api_target x, const op_value *const *args, size_t nargs,
 	char *id = id_of(a, f.n);
 	const nd_entry *e = id ? tb_get(ap->s.table, tb_string(API_VALUE), tb_string(id)) : NULL;
 	size_t index;
-	if (e == NULL || !method_index(e->value, ap->nmethods, &index)) {
+	if (e == NULL || !method_index(e->value, ap, &index)) {
 		const char *where = f.n->path && f.n->npath ? f.n->path[f.n->npath - 1] : f.n->id;
 		code = fail(a, API_NOT_A_METHOD, where ? where : "");
 		free(id);
@@ -1743,6 +1834,15 @@ int api_send_at(api *a, api_target x, const op_value *const *args, size_t nargs,
 	if (code) op_free(s.out);
 	else *out = s.out;
 	return code;
+}
+
+size_t api_methods_live(const api_context *x) {
+	size_t n = 0;
+	for (size_t i = 0; i < x->nmethods; i++) n += x->methods[i].live != 0;
+	return n;
+}
+size_t api_methods_held(const api_context *x) {
+	return x->nmethods;
 }
 
 // teardown, ref ------------------------------------------------------------------------------

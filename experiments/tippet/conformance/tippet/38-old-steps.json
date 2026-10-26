@@ -1,0 +1,235 @@
+{
+	"title": "old steps, saying nothing of what they were written on: each read as on every step of its entry before it in order (the old rule). one late and older is no head; a write on them names the newest; one made apart that sorts before that write stays beside it, a version",
+	"steps": [
+		{
+			"op": "disk",
+			"name": "o",
+			"seed": "0505050505050505050505050505050505050505050505050505050505050505",
+			"expect": {
+				"key": "6e7a1cdd29b0b78fd13af4c5598feff4ef2a97166e3ca6f2e4fbfccd80505bf1"
+			}
+		},
+		{
+			"op": "disk",
+			"name": "p",
+			"seed": "0606060606060606060606060606060606060606060606060606060606060606",
+			"expect": {
+				"key": "8a875fff1eb38451577acd5afee405456568dd7c89e090863a0557bc7af49f17"
+			}
+		},
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "write",
+			"device": "o",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "o",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "o",
+			"to": "a",
+			"of": "o",
+			"at": 1,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "versions",
+			"device": "a",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": 2,
+						"from": [
+							[
+								"o",
+								2
+							]
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 3
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "versions",
+			"device": "a",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": 3,
+						"from": [
+							[
+								"a",
+								1
+							]
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"device": "p",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 9
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "p",
+			"to": "a",
+			"of": "p",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "a",
+			"node": "pig",
+			"expect": {
+				"value": 3
+			}
+		},
+		{
+			"op": "versions",
+			"device": "a",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": 3,
+						"from": [
+							[
+								"a",
+								1
+							]
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"device": "o",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": 4
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "o",
+			"to": "a",
+			"of": "o",
+			"at": 3,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "a",
+			"node": "pig",
+			"expect": {
+				"value": 3
+			}
+		},
+		{
+			"op": "versions",
+			"device": "a",
+			"node": "pig",
+			"expect": {
+				"versions": [
+					{
+						"value": 3,
+						"from": [
+							[
+								"a",
+								1
+							],
+							[
+								"o",
+								3
+							]
+						]
+					},
+					{
+						"value": 4,
+						"from": [
+							[
+								"o",
+								3
+							]
+						]
+					}
+				]
+			}
+		}
+	]
+}
