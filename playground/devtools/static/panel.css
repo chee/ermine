@@ -788,3 +788,24 @@ path.faint {
 	font: 11px var(--mono);
 	word-break: break-all;
 }
+
+/* the finder: tippi's, all of the space left of the inspector */
+.finderbox {
+	flex: 1;
+	min-height: 0;
+	flex-direction: column;
+}
+.finderbox > .area-slot {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+.nofinder {
+	padding: 4px 8px;
+	color: var(--cherry);
+	border-bottom: 1px solid var(--shade);
+}
+.right.inspect {
+	flex: 0 1 280px;
+}

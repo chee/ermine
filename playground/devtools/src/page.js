@@ -23,7 +23,7 @@
 // on the page wherever an element says it (light). Only the data-ermine-* attributes are read.
 
 (() => {
-	const VERSION = 4;
+	const VERSION = 5;
 	const AGENT = "__ermine_devtools";
 	const EVENT = "ermine:devtools";
 	const STATUS = "ermine.computer.status";
@@ -461,6 +461,55 @@
 		};
 	}
 
+	// an ermine (@ermine/system's createErmine), answered as the layer or held by it as .ermine: the
+	// finder reads it (pagegraph.ts); the tree, the map and the scheduler read it through the process
+	// api it is said in here, as ermine.love's own answer says it
+	const isErmine = (x) =>
+		typeof x?.readEntries === "function" && typeof x?.handleOf === "function" &&
+		typeof x?.peep === "function";
+	const ermineOf = (layer) =>
+		isErmine(layer) ? layer : isErmine(layer?.ermine) ? layer.ermine : undefined;
+	function processAPIOf(ermine) {
+		const target = (x) =>
+			x.path !== undefined ? [...x.path] : ermine.handleOf({ id: x.id, part: "value" });
+		const attributes = (x) => x.part === "attributes";
+		const quiet = (f, or) => {
+			try {
+				return ermine.peep(f);
+			} catch {
+				return or;
+			}
+		};
+		return {
+			entries: (x) =>
+				quiet(() =>
+					ermine.readEntries(target(x)).map((it) => ({
+						value: it.value,
+						from: it.from,
+						...(it.refused ? { refused: true } : {}),
+						id: it.node ? ermine.dataOf(it.node)?.node?.id : undefined,
+					})), []),
+			list: (x) => quiet(() => ermine.list(target(x)), []),
+			peep: (x) =>
+				quiet(
+					() => (attributes(x) ? ermine.readAttributes(target(x)) : ermine.read(target(x))),
+					undefined,
+				),
+			reads: (x) =>
+				quiet(
+					() => (attributes(x)
+						? ermine.readAllAttributes(target(x))
+						: ermine.readAll(target(x))),
+					[],
+				),
+			edit: (x, patches) =>
+				attributes(x)
+					? ermine.patchAttributes(target(x), patches)
+					: ermine.patch(target(x), patches),
+			send: (x, ...args) => ermine.executeAction(target(x), ...args),
+		};
+	}
+
 	function faceOf(layer) {
 		if (typeof layer?.content === "function" && typeof layer?.look === "function") {
 			return hostFace(layer);
@@ -469,8 +518,12 @@
 			return apiFace(layer, undefined);
 		}
 		if (typeof layer?.api?.entries === "function") return apiFace(layer.api, layer);
+		const ermine = ermineOf(layer);
+		if (ermine) {
+			return apiFace(processAPIOf(ermine), { s: ermine.scheduler, places: ermine.places });
+		}
 		throw new Error(
-			"ermine devtools: answer with a host (look, content) or a process api (entries, list), or a world holding one as .api",
+			"ermine devtools: answer with a host (look, content), a process api (entries, list), a world holding one as .api, or an ermine (@ermine/system)",
 		);
 	}
 
@@ -1507,6 +1560,7 @@
 				best ??= "bare";
 				continue;
 			}
+			if (lit.path === undefined) continue;
 			const p = "/" + at.split("/").filter(Boolean).join("/");
 			if (p === lit.path && id === undefined && lit.k === 0) return "here";
 			if (lit.path === "/" ? p !== "/" : p.startsWith(lit.path + "/")) best = "inside";
@@ -1723,13 +1777,44 @@
 			return { none: true };
 		}
 		look.lit = {
-			path: "/" + picked.path.join("/"),
+			path: picked.path ? "/" + picked.path.join("/") : undefined,
 			k: picked.k ?? 0,
 			id: String(picked.id),
 		};
 		listen();
 		draw();
 		return look.count ?? { here: 0, inside: 0, bare: 0 };
+	}
+
+	// ---- the finder's asks (finder.tsx's, in graph.ts' words), answered by pageGraph ----
+
+	/** why the page's answer holds no ermine the finder can read: what it has, and what was missing */
+	function noErmine(layer) {
+		const want = ["readEntries", "handleOf", "peep"];
+		const has = (x) => want.filter((k) => typeof x?.[k] !== "function");
+		const keys = layer && typeof layer === "object"
+			? Object.keys(layer).join(", ")
+			: typeof layer;
+		const said = layer?.ermine === undefined
+			? `its answer has no ermine (it has: ${keys || "nothing"})`
+			: `its answer's ermine has no ${has(layer.ermine).join(", ")}`;
+		return `the finder reads an ermine (@ermine/system) and this page gives none: ${said}. a page ` +
+			"answers with its ermine, or { ...layer, ermine } (reload the page if it was made before it " +
+			"did); the tree, map and scheduler read what it answered";
+	}
+	function finder(g, op, m) {
+		const said = (error) => ({ do: m?.do, ask: m?.ask, path: m?.path, error });
+		const ermine = ermineOf(g.layer);
+		if (!ermine) return said(noErmine(g.layer));
+		if (typeof agent.pageGraph !== "function") return said("the finder's page side is not here");
+		g.finder ??= agent.pageGraph(ermine);
+		const r = op === "change" ? g.finder.change(m) : g.finder.ask(m);
+		const text = json(r);
+		try {
+			return JSON.parse(text);
+		} catch {
+			return said(text);
+		}
 	}
 
 	const agent = {
@@ -1774,6 +1859,13 @@
 		inspect: (on) => picking(on),
 		inspected: (name) => named(name, (g) => inspected(g)),
 		light: (picked) => light(picked),
+		// the finder: does the page's answer hold an ermine; an ask or a change of the finder's
+		finds: (name) =>
+			named(
+				name,
+				(g) => (ermineOf(g.layer) ? { ok: true } : { ok: false, why: noErmine(g.layer) }),
+			),
+		finder: (name, op, m) => named(name, (g) => finder(g, op, m)),
 		stop() {
 			quiet();
 			for (const g of [...graphs.values()]) g.forget();

@@ -158,11 +158,11 @@ const failed = (r: unknown): r is Failed =>
 
 // ---- state: what the panel keeps itself, and the signals the view draws from ----
 
-type View = "tree" | "map" | "scheduler";
+type View = "finder" | "tree" | "map" | "scheduler";
 const ui = {
 	graph: undefined as string | undefined,
 	gen: 0,
-	view: "tree" as View,
+	view: "finder" as View,
 	mode: "values",
 	open: new Set<string>(),
 	folded: new Set<string>(),
@@ -177,13 +177,16 @@ const ui = {
 	paused: false,
 	/** the agent's count of elements picked on the page; -1 till the first status */
 	inspected: -1,
+	/** the place last lit from the finder, and when */
+	lit: undefined as string | undefined,
+	litAt: 0,
 	lights: true,
 };
 
 const [status, setStatus] = createSignal<Status | undefined>();
 const [problem, setProblem] = createSignal<string | undefined>();
 const [graph, setGraph] = createSignal<string | undefined>();
-const [view, setView] = createSignal<View>("tree");
+const [view, setView] = createSignal<View>("finder");
 const [mode, setMode] = createSignal("values");
 const [tree, setTree] = createSignal<Tree | undefined>();
 const [model, setModel] = createSignal<MapModel | undefined>();
@@ -213,7 +216,12 @@ const isPicked = (x: { path: Path; k: number; id: string }) => {
 // ---- talking to the page ----
 
 let source: Promise<string> | undefined;
-const agentSource = () => (source ??= fetch("page.js").then((r) => r.text()));
+/** the agent this panel brings: page.js' VERSION */
+const AGENT = 5;
+// the agent, and the finder's page side after it (pagegraph.js: graphs.ts' pageGraph)
+const agentSource = () => (source ??= Promise.all(
+	["page.js", "pagegraph.js"].map((f) => fetch(f).then((r) => r.text())),
+).then((parts) => parts.join("\n;\n")));
 let lastPoll = 0;
 let lastTimes = 0;
 
@@ -221,8 +229,8 @@ async function poll() {
 	let wait = POLL;
 	try {
 		let s = await call<Status | undefined>("status");
-		// none, or one from before inspect: this panel's agent
-		if (!s?.inspect) {
+		// none, or another build's (an older one stays in a page till it is replaced): this panel's
+		if (s?.v !== AGENT) {
 			await evaluate(await agentSource());
 			s = await call<Status>("status");
 			ui.asked = 0;
@@ -248,6 +256,10 @@ async function poll() {
 		else if (n !== ui.inspected) {
 			ui.inspected = n;
 			if (g) await inspected(g);
+		}
+		if (g) finderFor(g);
+		if (g && ui.view === "finder" && (finderAt() !== ui.lit || now - ui.litAt > 1000)) {
+			await light();
 		}
 		if (g && !ui.paused) {
 			const v = g.version ?? -2;
@@ -292,16 +304,60 @@ async function inspected(g: Graph) {
 	setElement(r);
 	if (!panes().detail) setPanes({ ...panes(), detail: true });
 	if (!r.at) return;
+	if (ui.view === "finder") return void finder?.go("/" + r.at.path.join("/"));
 	for (const key of r.opens ?? []) (ui.folded.delete(key), ui.open.add(key));
 	if (ui.view === "scheduler") setViewTo("tree");
 	pick(r.at);
 }
-/** the picked node outlined on the page, where elements say it */
+/** the picked node outlined on the page, where elements say it: the finder's place, or the tree's
+ * or map's pick */
 async function light() {
-	const want = ui.lights ? ui.picked ?? null : null;
+	const place = ui.view === "finder" ? finderAt() : undefined;
+	ui.lit = place;
+	ui.litAt = Date.now();
+	const picked = ui.view === "finder"
+		? place === undefined
+			? null
+			: place.startsWith("#")
+			? { id: place.slice(1), k: 0 }
+			: { path: place.split("/").filter(Boolean), k: 0, id: "" }
+		: ui.picked ?? null;
+	const want = ui.lights ? picked : null;
 	const r = await call<Lit | Failed>("light", want);
 	setLit(failed(r) ? undefined : r);
 }
+
+// ---- the finder: tippi's, from ermine-mac, as it is (finder.js), reading the page through the agent ----
+
+type Finder = {
+	showing(on: boolean): void;
+	at(): string | undefined;
+	go(place: string): unknown;
+	stop(): void;
+};
+// deno-lint-ignore no-explicit-any
+const finderLib = (globalThis as any).ermineFinder as
+	| { mount(into: Element, ask: (op: string, m: unknown) => Promise<unknown>): Finder }
+	| undefined;
+let finderBox: HTMLDivElement | undefined;
+let finder: Finder | undefined;
+let finderGraph: string | undefined;
+const [finds, setFinds] = createSignal<{ ok: boolean; why?: string } | undefined>();
+/** the finder for the graph shown: one of its own for each graph */
+function finderFor(g: Graph) {
+	// one for each graph as it answered: the page reloaded (a new answer), a fresh finder
+	const key = `${g.name}#${g.gen}`;
+	if (!finderLib || !finderBox || finderGraph === key) return;
+	finder?.stop();
+	finderGraph = key;
+	const name = g.name;
+	finder = finderLib.mount(finderBox, (op, m) => call("finder", name, op, m));
+	finder.showing(ui.view === "finder");
+	call<{ ok: boolean; why?: string } | Failed>("finds", name).then((r) =>
+		setFinds(failed(r) ? undefined : r)
+	);
+}
+const finderAt = () => finder?.at();
 
 function choose(name: string | undefined) {
 	const g = status()?.graphs.find((x) => x.name === name);
@@ -425,6 +481,7 @@ function toggle(key: string, folded: boolean) {
 function setViewTo(v: View) {
 	ui.view = v;
 	setView(v);
+	finder?.showing(v === "finder");
 	again();
 }
 
@@ -1400,7 +1457,7 @@ function App() {
 				</Show>
 				<Show when={current()}>
 					<span class="tabs">
-						<For each={["tree", "map", "scheduler"] as View[]}>
+						<For each={["finder", "tree", "map", "scheduler"] as View[]}>
 							{(v) => (
 								<Show when={v !== "scheduler" || current()?.can.scheduler}>
 									<button
@@ -1434,7 +1491,7 @@ function App() {
 					>
 						on page
 					</button>
-					<Show when={view() !== "scheduler"}>
+					<Show when={view() === "tree" || view() === "map"}>
 						<input
 							id="find"
 							placeholder="find a name or id…"
@@ -1459,7 +1516,7 @@ function App() {
 							⚙ only
 						</button>
 					</Show>
-					<Show when={view() !== "scheduler"}>
+					<Show when={view() === "tree" || view() === "map"}>
 						<button
 							type="button"
 							title="back to the first folding"
@@ -1472,7 +1529,7 @@ function App() {
 							fold
 						</button>
 					</Show>
-					<Show when={view() !== "scheduler"}>
+					<Show when={view() === "tree" || view() === "map"}>
 						<span class="key">
 							<b class="kr">reads</b>
 							<b class="kb">read by</b>
@@ -1528,6 +1585,17 @@ const stop = devtools(host, { name: "app" })`}
 				</Show>
 				<main>
 					<section class="left">
+						<Show when={view() === "finder" && finds() && !finds()!.ok}>
+							<div class="nofinder">{finds()!.why}</div>
+						</Show>
+						<div
+							class="finderbox"
+							ref={(el: HTMLDivElement) => (finderBox = el)}
+							style={{ display: view() === "finder" ? "flex" : "none" }}
+						/>
+						<Show when={view() === "finder" && !finderLib}>
+							<div class="nofinder">the finder (finder.js) did not load</div>
+						</Show>
 						<Show when={view() === "tree"}>
 							<TreeView />
 						</Show>
@@ -1538,9 +1606,17 @@ const stop = devtools(host, { name: "app" })`}
 							<ShapeView />
 						</Show>
 					</section>
-					<Show when={panes().detail}>
+					<Show when={panes().detail && view() !== "finder"}>
 						<section class="right">
 							<DetailPane />
+						</section>
+					</Show>
+					<Show when={view() === "finder" && (element() || litLine())}>
+						<section class="right inspect">
+							<div class="detail">
+								<ElementBox />
+								<Show when={litLine()}>{(t) => <div class="dim">{t()}</div>}</Show>
+							</div>
 						</section>
 					</Show>
 				</main>
