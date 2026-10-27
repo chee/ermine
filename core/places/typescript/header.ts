@@ -77,8 +77,13 @@ export function createChangeHeader(
 	if (scheduler.getRun() !== undefined) return h
 	const all = skip === undefined ? ours : new Set([...ours, ...skip])
 	if (whole === true) {
-		const text = trace(from ?? createChangeHeader) ?? trace(createChangeHeader)
-		const at = text === undefined ? undefined : outside(text, all)
+		// from not on the stack: V8 gives "Error" with no frames, so fall back when none is outside
+		let text = trace(from ?? createChangeHeader)
+		let at = text === undefined ? undefined : outside(text, all)
+		if (at === undefined && from !== undefined) {
+			text = trace(createChangeHeader)
+			at = text === undefined ? undefined : outside(text, all)
+		}
 		if (at) h.external = [at]
 		if (text !== undefined && h.metadata !== undefined) traces.set(h.metadata, text)
 		return h

@@ -509,9 +509,9 @@ export function make(o: Options = {}): Host {
 	function versions(r: Reader, id: Id, name?: string): Version[] {
 		const out: Version[] = []
 		if (name === undefined) {
-			const status = r.value("attributes", id, [STATUS])
+			const status = r.value("status", id, [STATUS])
 			if (status !== undefined) {
-				const change = table.get("attributes", id)!.change
+				const change = table.get("status", id)!.change
 				out.push({ content: shown(status), change, because: { place: "status" } })
 			}
 			const v = r.value("value", id)
@@ -1050,9 +1050,9 @@ export function make(o: Options = {}): Host {
 		const error = more.error instanceof Error ? more.error : new Error(String(more.error))
 		s.runWithScope(c, () => {
 			const h = header({}, true)
-			const e = table.get("attributes", a.p.id) as Entry<unknown> | undefined
+			const e = table.get("status", a.p.id) as Entry<unknown> | undefined
 			if (!e) {
-				return table.add("attributes", a.p.id, createEntry({ [STATUS]: error }, h) as never)
+				return table.add("status", a.p.id, createEntry({ [STATUS]: error }, h) as never)
 			}
 			const ps: Patch[] = isMap(e.value) ? [] : [{ path: [], value: {} }]
 			update(e, [...ps, { path: [STATUS], value: error }], h)

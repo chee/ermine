@@ -1,6 +1,7 @@
 // what the suite (conformance/ermine) can't say on the line protocol: the base's own files, a
 // made-up context, close() with every teardown held, two onTable layers stacked
 import { addTeardown, createAction, createBox, read } from "@ermine/system"
+import { registrations } from "./registry.ts"
 import { assert, assertEquals, assertThrows } from "@std/assert"
 import { createScheduler, type Scheduler } from "@ermine/core/scheduler"
 import {
@@ -265,4 +266,30 @@ Deno.test("trace: a write outside a run keeps its whole trace text, through late
 	off.ensureNode("/y", 1)
 	assertEquals(traceOf(changeAt(off, ["y"])), undefined)
 	assertEquals(typeof changeAt(off, ["y"]).external?.[0]?.line, "number")
+})
+
+Deno.test("close() runs every step when one throws, throws the first error at the end, and is closed", () => {
+	const real = createScheduler()
+	let boom = false
+	const scheduler: Scheduler = {
+		...real,
+		teardown: (scope) => {
+			if (boom) throw new Error("boom")
+			return real.teardown(scope)
+		},
+	}
+	const e = createErmine({ scheduler, schedule: () => {} })
+	assertEquals(registrations(scheduler), 1)
+	boom = true
+	assertThrows(() => e.close(), Error, "boom")
+	// every step ran: unregistered, and closed (a second close is nothing)
+	assertEquals(registrations(scheduler), 0)
+	assertThrows(() => e.read("/"), ErmineError, "closed")
+	e.close()
+})
+
+Deno.test("createErmine throwing after it registered its scheduler undoes the registration", () => {
+	const scheduler = createScheduler()
+	assertThrows(() => createErmine({ scheduler, host: { at: "" }, schedule: () => {} }))
+	assertEquals(registrations(scheduler), 0)
 })

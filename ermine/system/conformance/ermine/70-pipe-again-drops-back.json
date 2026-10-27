@@ -1,0 +1,273 @@
+{
+	"title": "a pipe made again without fnB: the back listener from the earlier run is gone; a write at to is carried back no more, one at from is still carried there",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/a",
+				0
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/b",
+				0
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/dst",
+				0
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/mode",
+				1
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createMemo",
+						"m",
+						{},
+						[
+							"if",
+							[
+								"is",
+								[
+									"read",
+									"/mode"
+								],
+								1
+							],
+							[
+								"pipe",
+								"/a",
+								"/dst",
+								{
+									"steps": [
+										{
+											"do": [
+												"log",
+												"there",
+												[
+													"pick",
+													"$0",
+													[
+														"value"
+													]
+												]
+											]
+										}
+									],
+									"gives": [
+										"whole",
+										[
+											"pick",
+											"$0",
+											[
+												"value"
+											]
+										]
+									]
+								},
+								{
+									"steps": [
+										{
+											"do": [
+												"log",
+												"back",
+												[
+													"pick",
+													"$0",
+													[
+														"value"
+													]
+												]
+											]
+										}
+									],
+									"gives": [
+										"whole",
+										[
+											"pick",
+											"$0",
+											[
+												"value"
+											]
+										]
+									]
+								}
+							],
+							[
+								"pipe",
+								"/a",
+								"/dst",
+								{
+									"steps": [
+										{
+											"do": [
+												"log",
+												"there",
+												[
+													"pick",
+													"$0",
+													[
+														"value"
+													]
+												]
+											]
+										}
+									],
+									"gives": [
+										"whole",
+										[
+											"pick",
+											"$0",
+											[
+												"value"
+											]
+										]
+									]
+								}
+							]
+						]
+					],
+					"as": "m"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/dst",
+				[
+					{
+						"path": [],
+						"value": 5
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "back",
+			"expect": {
+				"values": [
+					5
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/mode",
+				[
+					{
+						"path": [],
+						"value": 2
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/dst",
+				[
+					{
+						"path": [],
+						"value": 6
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "back",
+			"expect": {
+				"values": [
+					5
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/a",
+				[
+					{
+						"path": [],
+						"value": 7
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "there",
+			"expect": {
+				"values": [
+					7
+				]
+			}
+		}
+	]
+}

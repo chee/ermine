@@ -108,7 +108,7 @@ export type Answers = Answer[] & { readonly gone: number }
 // none), for a walk of each name from there
 export type Names = Named[] & { readonly gone: number }
 
-// where a spot reads: the entry under (part, id), and the path in its value (kept by paths, never
+// where a spot reads: the entry under (part, id), and the path in its value (held by paths, never
 // change it); null: the change spot, reads of the change itself. keys: a read of which names
 // there are at path, not what is under them (readKeys)
 export type Where = {
@@ -273,7 +273,7 @@ export function createPlaces(setup: Setup): Places {
 
 	// a hold on one of this places' spots taken (n 1) or given back (n -1): the holds left. a held
 	// spot is not let go by release; the holder calls release once its last hold is given back and
-	// no run tracks the spot. anything else: 0, nothing kept
+	// no run tracks the spot. anything else: 0, nothing held
 	function hold(key: unknown, n: number): number {
 		if (!held(key)) return 0
 		const left = (holds.get(key) ?? 0) + n
@@ -283,7 +283,7 @@ export function createPlaces(setup: Setup): Places {
 	}
 
 	// a key the scheduler stopped tracking: one of this places' spots is released, and is not
-	// this places' any more. a spot held: kept
+	// this places' any more. a spot held: stays
 	function release(key: unknown) {
 		if (!held(key) || (holds.size && holds.has(key))) return
 		paths.release(key)
@@ -555,7 +555,7 @@ export function createPlaces(setup: Setup): Places {
 		for (const w of moved) if (w.live) refind(w)
 	}
 
-	// what is at path in the value of the entry under (part, id), the read told. path: kept by
+	// what is at path in the value of the entry under (part, id), the read told. path: held by
 	// paths, never change it
 	function readValue(part: Key, id: Id, path: readonly Step[] = []): unknown {
 		if (!peeping) tell(paths.spot(first(part), id, path))

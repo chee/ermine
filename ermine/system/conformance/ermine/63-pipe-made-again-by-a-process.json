@@ -1,0 +1,107 @@
+{
+	"title": "a pipe made again under the same name by an owner that is no computer (a process's setup) is one pipe; the process stopped, the earlier make's scope goes after the pipe is let go, and touches nothing freed (a review found the old registration pointing at the freed pipe)",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/src",
+				0
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"pipe",
+						"/src",
+						{
+							"steps": [
+								{
+									"do": [
+										"log",
+										"told",
+										1
+									]
+								}
+							]
+						},
+						{
+							"name": "x"
+						}
+					]
+				},
+				{
+					"do": [
+						"pipe",
+						"/src",
+						{
+							"steps": [
+								{
+									"do": [
+										"log",
+										"told",
+										2
+									]
+								}
+							]
+						},
+						{
+							"name": "x"
+						}
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/src",
+				[
+					{
+						"path": [],
+						"value": 5
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "told",
+			"expect": {
+				"values": [
+					2
+				]
+			}
+		},
+		{
+			"op": "stop",
+			"name": "p",
+			"expect": {}
+		},
+		{
+			"op": "close",
+			"expect": {}
+		}
+	]
+}

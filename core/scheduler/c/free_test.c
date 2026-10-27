@@ -120,8 +120,15 @@ int main(void) {
 	sc_pulse(s);
 	CHECK(nfreed == 0 && !sc_scope_alive(kept));
 
+	// a run held past sc_free is still good to let go
+	own = sc_create_scope(s, info, 1, root);
+	CHECK(sc_run_with_scope(own, make_computer, NULL) == NULL);
+	sc_pulse(s);
+	sc_run *late = sc_run_ref(sc_latest(made));
+
 	free(sc_teardown(root));
 	sc_free(s);
+	sc_run_unref(late);
 	puts("ok");
 	return 0;
 }

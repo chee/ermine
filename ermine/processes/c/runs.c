@@ -3,7 +3,8 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
+
+#include "platform.h"
 
 static void *xalloc(size_t n) {
 	void *p = calloc(1, n ? n : 1);
@@ -97,11 +98,7 @@ static held *held_of(crn *r, const char *id) {
 }
 
 // milliseconds since 1970, fractional
-static double now(void) {
-	struct timespec t;
-	clock_gettime(CLOCK_REALTIME, &t);
-	return (double)t.tv_sec * 1e3 + (double)t.tv_nsec / 1e6;
-}
+static double now(void) { return PF_NOW_MS(); }
 
 // values -------------------------------------------------------------------------------------------
 

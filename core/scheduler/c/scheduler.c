@@ -120,8 +120,16 @@ struct sc_scope {
 };
 
 // pulse: the pulse its cause is of (cause_of). cut: a loop mark it made was dropped
+// whether the scheduler is still there, shared with its runs: one with a run held past sc_free lets
+// go of nothing the scheduler owned, and the last of them frees this
+typedef struct life {
+	bool gone;
+	size_t refs;
+} life;
+
 struct sc_run {
 	sc_scheduler *s;
+	life *life;
 	sc_scope *c;
 	unsigned n;
 	uint64_t mark;
@@ -220,6 +228,7 @@ struct sc_scheduler {
 	uint64_t tick;
 	// sc_free going: nothing is let go one by one
 	bool freeing;
+	life *life;
 	// pulses ended: the one going on, or next
 	uint64_t pulses;
 	bool pulsing;
@@ -400,13 +409,16 @@ static void ran_release(sc_run *r) {
 		pm_clear(r->values);
 		free(r->values);
 	}
-	loop_drop(r->s, r->loop, r->nloop);
 	free(r->reads);
-	// a run holds its computer
+	// a run holds its computer, and what its loop names; all gone with the scheduler
 	sc_scope *c = r->c;
 	sc_scheduler *s = r->s;
+	life *l = r->life;
+	if (!l->gone) loop_drop(r->s, r->loop, r->nloop);
+	else free(r->loop);
 	free(r);
-	if (!s->freeing) unhold(c);
+	if (!l->gone && !s->freeing) unhold(c);
+	if (--l->refs == 0) free(l);
 }
 
 // an emptied set of writers, kept on the computation for its next run
@@ -522,6 +534,8 @@ sc_scheduler *sc_new(sc_options options) {
 	s->opt = options;
 	s->order = od_new();
 	s->causes = cs_new();
+	s->life = xalloc(sizeof *s->life);
+	s->life->refs = 1;
 	return s;
 }
 
@@ -1241,6 +1255,8 @@ static void begin(sc_scheduler *s, sc_scope *c, int rank) {
 	} else {
 		r = xalloc(sizeof *r);
 		r->s = s;
+		r->life = s->life;
+		s->life->refs++;
 		r->c = c;
 		c->refs++;
 	}
@@ -1742,5 +1758,7 @@ void sc_free(sc_scheduler *s) {
 	free(s->queued);
 	free(s->thrown);
 	free(s->escaped);
+	s->life->gone = true;
+	if (--s->life->refs == 0) free(s->life);
 	free(s);
 }

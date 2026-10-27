@@ -253,9 +253,7 @@ export function createMap(
 			paths,
 			compilers,
 			members: lib.members(state.box.places, []),
-			status: proc === undefined
-				? undefined
-				: world.places.readValue("attributes", proc, [STATUS]),
+			status: proc === undefined ? undefined : world.places.readValue("status", proc, [STATUS]),
 			pin: proc === undefined
 				? undefined
 				: world.places.readValue("attributes", proc, [PIN]) as Model["pin"],

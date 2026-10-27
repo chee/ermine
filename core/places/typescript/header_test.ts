@@ -32,3 +32,16 @@ Deno.test("header: in a run, no capture: none, each write; a site given, that on
 	s.pulse()
 	assertEquals(made.map((h) => h.external), [undefined, undefined, [given]])
 })
+
+Deno.test("header: whole trace, from not on the stack: falls back to the call's own site", () => {
+	const s = createScheduler()
+	const host = s.createRootScope({ actor: "host" })
+	const h = s.runWithScope(
+		host,
+		() =>
+			createChangeHeader(s, undefined, undefined, function notOnTheStack() {}, undefined, true), // the fallback's line
+	)
+	const text = Deno.readTextFileSync(new URL(import.meta.url)).split("\n")
+	const line = text.findIndex((l) => l.endsWith("// the fallback's line")) + 1
+	assertEquals(h.external?.map((x) => [x.file, x.line]), [[import.meta.url, line]])
+})
