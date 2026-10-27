@@ -475,7 +475,8 @@ static op_value *current(void) {
 	op_set(out, "scope", name ? op_str(name) : op_null());
 	op_set(out, "info", object_of(sc_get_info(sch)));
 	sc_run *writer = sc_get_run(sch);
-	if (writer) op_set(out, "writer", op_str(sc_scope_user(sc_run_computer(writer))));
+	const char *by = writer ? sc_scope_user(sc_run_computer(writer)) : NULL;
+	if (by) op_set(out, "writer", op_str(by));
 	return out;
 }
 

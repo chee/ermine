@@ -1,0 +1,16 @@
+{
+	"title": "current in an early effect's first run, made and run before it is named: the scope open is the effect, unnamed, and its run's writer is no name, so none is given",
+	"steps": [
+		{ "op": "root", "name": "o", "info": { "actor": "test" }, "expect": {} },
+		{
+			"op": "effect",
+			"name": "e",
+			"scope": "o",
+			"f": { "do": [{ "log": { "current": null } }, 1] },
+			"act": null,
+			"early": true,
+			"expect": {}
+		},
+		{ "op": "log", "expect": { "log": [{ "scope": null, "info": { "run": 1, "mark": 1 } }] } }
+	]
+}
