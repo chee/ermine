@@ -1,0 +1,106 @@
+{
+	"title": "getArgs gives the arguments the host or the process was started with, as a list of text: the host's from the ermine's options, a process's from its start; none: empty",
+	"steps": [
+		{
+			"op": "ermine",
+			"args": [
+				"h1",
+				"h2"
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"getArgs"
+			],
+			"expect": {
+				"value": [
+					"h1",
+					"h2"
+				]
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"getArgs"
+					],
+					"as": "a"
+				},
+				{
+					"do": [
+						"log",
+						"args",
+						"$a"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"args": [
+				"x",
+				"y"
+			],
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "log",
+			"name": "args",
+			"expect": {
+				"values": [
+					[
+						"x",
+						"y"
+					]
+				]
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/q",
+			"program": [
+				{
+					"do": [
+						"getArgs"
+					],
+					"as": "a"
+				},
+				{
+					"do": [
+						"log",
+						"none",
+						"$a"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/code/q",
+			"expect": {
+				"id": "proc:q"
+			}
+		},
+		{
+			"op": "log",
+			"name": "none",
+			"expect": {
+				"values": [
+					[]
+				]
+			}
+		}
+	]
+}

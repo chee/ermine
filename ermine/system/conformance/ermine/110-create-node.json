@@ -1,0 +1,92 @@
+{
+	"title": "createNode(folder, value) makes a node under the folder, named by a fresh name of its own (drawn as an id is, never its id): each call another, the folder listing them, the handle the node at that name",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/dir",
+				{}
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"dir"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"createNode",
+				"/dir",
+				5
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"dir",
+						"n4"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"createNode",
+				"/dir",
+				6
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"dir",
+						"n6"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"list",
+				"/dir"
+			],
+			"expect": {
+				"value": [
+					"n4",
+					"n6"
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/dir/n4"
+			],
+			"expect": {
+				"value": 5
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/dir/n6"
+			],
+			"expect": {
+				"value": 6
+			}
+		}
+	]
+}

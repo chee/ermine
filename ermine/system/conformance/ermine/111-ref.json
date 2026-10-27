@@ -1,0 +1,61 @@
+{
+	"title": "ref(path, value) makes the node once: the first value stays, a later ref at the same path gives the handle and leaves the value alone",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/dir",
+				{}
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ref",
+				"/dir/r",
+				7
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"dir",
+						"r"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ref",
+				"/dir/r",
+				8
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"dir",
+						"r"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/dir/r"
+			],
+			"expect": {
+				"value": 7
+			}
+		}
+	]
+}
