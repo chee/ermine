@@ -8,7 +8,7 @@
 //   realms.start(source, "/work/clock")        // a process of ermine's, its program in a worker
 //   software.offer(session, "runners", "realm", attributes, realms.run)   // software's, the same
 //
-// realms.start(code, at, { args?, box? }) is ermine.start with the program in a realm: the process
+// realms.start(code, at, { args? }) is ermine.start with the program in a realm: the process
 // is the page's (its setup is the wait for the realm's), and its status is pending till the realm
 // has run its setup, failed if that threw. realms.run is a runner in @ermine/software's shape:
 // start(code, ctx), ctx the start's facts (its Start, the process context's). the program is given
@@ -142,7 +142,6 @@ export function createRealms(setup: Setup): Realms {
 				const folder = path.slice(0, -1)
 				const ctx = {
 					scope,
-					box: { root: ermine.places.root, places: ermine.places },
 					folder,
 					at: path,
 					args,
@@ -158,11 +157,12 @@ export function createRealms(setup: Setup): Realms {
 	function open(code: string | { url: string }, ctx: Start): Promise<Handle> {
 		const { ermine } = setup
 		const { scheduler: s, table } = ermine
-		const { box: { places }, process, at, folder, args, scope } = ctx
+		const { places } = ermine
+		const { process, at, folder, args, scope } = ctx
 		const commit = setup.commit ?? places.commit
 		const schedule = setup.schedule ?? queueMicrotask
 		const worker = make()
-		const root = String(ctx.box.root)
+		const root = String(places.root)
 
 		let seq = 0
 		let dead = false

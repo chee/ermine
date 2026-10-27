@@ -48,7 +48,6 @@ import { installTypes, type Known } from "@ermine/types"
 import type { Policy } from "@ermine/core/protect"
 import { startSweeper, type World as PresenceWorld } from "@ermine/together/presence"
 import patchy from "@ermine/patchy/feature"
-import * as sys from "@ermine/system"
 import { use } from "@ermine/slaygrounds/tools"
 
 const JS = "com.netscape.javascript-source"

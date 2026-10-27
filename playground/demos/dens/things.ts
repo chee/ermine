@@ -1,4 +1,4 @@
-// the things: one runner each, given the den's Start (the box, places, process, scheduler...). a thing
+// the things: one runner each, given the den's Start (process, folder, scheduler...). a thing
 // writes what it gives on its own process node: its first outlet at attributes["thing.out"], any
 // other at attributes["thing.<name>"] (OUTLETS). it reads its sources the same way: their nodes'
 // attributes, here or mirrored from away. its args say what it reads, as triples [input, den id,
@@ -11,7 +11,8 @@ import { upsert } from "@ermine/core/places/upsert"
 import update from "@ermine/core/changeable/update"
 import type { Entry } from "@ermine/core/node/entry"
 import { get } from "@ermine/core/places/lib"
-import { inside } from "@ermine/boxes"
+import { inside } from "@ermine/processes/start"
+import type { Places } from "@ermine/core/places"
 import type { Scheduler } from "@ermine/core/scheduler"
 import type { Table } from "@ermine/core/table"
 import type { Runner, Start } from "@ermine/software"
@@ -20,18 +21,18 @@ import { isVoice, type Voice } from "./sound.ts"
 const isMap = (v: unknown): v is Record<string, unknown> =>
 	typeof v === "object" && v !== null && !Array.isArray(v) && !ArrayBuffer.isView(v)
 
-// what a thing is run with: its start, and the den's scheduler, table and its box's places (the
+// what a thing is run with: its start, and the den's scheduler, table and the den's places (the
 // host gives them: withDen)
 type Context = Start & {
 	readonly scheduler: Scheduler
 	readonly table: Table
-	readonly places: Start["box"]["places"]
+	readonly places: Places
 }
 type Run = (code: unknown, ctx: Context) => ReturnType<Runner["start"]>
 // a thing's run as software's runner takes it: the den's scheduler and table added to its start
 export const withDen =
-	(run: Run, den: { scheduler: Scheduler; table: Table }): Runner["start"] => (code, start) =>
-		run(code, { ...start, ...den, places: start.box.places })
+	(run: Run, den: { scheduler: Scheduler; table: Table; places: Places }): Runner["start"] =>
+	(code, start) => run(code, { ...start, ...den })
 
 const OUT = "thing.out"
 // a timer's every and paused, beside its out

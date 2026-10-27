@@ -84,7 +84,7 @@ world.seed(() => {
 	}
 
 	// the actions a program runs. each is async: what lands after an await is written as the
-	// host (the host's functions fall back to its own scope), and pulses
+	// host (through `as`, ermine.within), and pulses
 	createAction("/host/on/save", async (options: { op?: boolean } = {}) => {
 		const entries = reached(DATA)
 		try {

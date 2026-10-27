@@ -9,7 +9,16 @@ import { get } from "@ermine/core/places/lib"
 import { NODE } from "@ermine/core/places/header"
 import { STATUS, TABLE as STATUS_TABLE } from "@ermine/core/places/status"
 import { no, type Policy, yes } from "@ermine/core/protect"
-import { createErmine, SCOPE, type Started } from "@ermine/system"
+import {
+	createAction,
+	createErmine,
+	ensureNode,
+	executeAction,
+	patch,
+	pulse,
+	SCOPE,
+	type Started,
+} from "@ermine/system"
 import { createRealms, type Realm } from "./realms.ts"
 
 // f true, waited for: a few ms at a time
@@ -38,10 +47,10 @@ export function world(o: { may?: Policy } = {}) {
 			return w as unknown as Realm
 		},
 	})
-	ermine.ensureNode("/work", null)
+	ermine.within(() => ensureNode("/work", null))
 	// a node in /work at name, holding v: its id
 	const node = (name: string, v: unknown): Id => {
-		ermine.ensureNode(`/work/${name}`, v)
+		ermine.within(() => ensureNode(`/work/${name}`, v))
 		return get(places, ["work", name])!
 	}
 	// a program's source at name
@@ -54,13 +63,13 @@ export function world(o: { may?: Policy } = {}) {
 		const p = realms.start(source, ["work", ...at])
 		if ("refused" in p) throw new Error(p.refused)
 		running.push(p)
-		ermine.pulse()
+		ermine.within(() => pulse())
 		return p
 	}
 	// a write from outside: the host's
 	const write = (id: Id, v: unknown) => {
-		ermine.patch(ermine.handleOf({ id, part: "value" }), [{ path: [], value: v }])
-		ermine.pulse()
+		ermine.within(() => patch(ermine.handleOf({ id, part: "value" }), [{ path: [], value: v }]))
+		ermine.within(() => pulse())
 	}
 	const value = (path: string[]) => {
 		const id = get(places, ["work", ...path])
@@ -186,7 +195,7 @@ Deno.test("a memo in the worker: its result node on the page (its run record sta
 Deno.test("an action called from the page, the caller on its writes; and a call from the worker to one on the page", async () => {
 	const w = world()
 	w.node("last", "nobody")
-	w.ermine.createAction("/echo", (x: string) => `echo ${x}`)
+	w.ermine.within(() => createAction("/echo", (x: string) => `echo ${x}`))
 	w.program(
 		"greeter.js",
 		`import { createAction, createEffect, createMemo, ensureNode, executeAction, patch, read } from "@ermine/system"
@@ -204,11 +213,11 @@ Deno.test("an action called from the page, the caller on its writes; and a call 
 	)
 	w.start("greeter.js", ["greeter"])
 	await until(() => w.value(["greeter", "on", "greet"]) !== undefined)
-	const back = await w.ermine.executeAction("/work/greeter/on/greet", "frog")
+	const back = await w.ermine.within(() => executeAction("/work/greeter/on/greet", "frog"))
 	assertEquals(back, "hi frog")
 	await until(() => w.value(["last"]) === "frog")
 	const change = w.table.get("value", get(w.places, ["work", "last"])!)!.change
-	assertEquals((change.metadata?.caller as { node: unknown }).node, w.ermine.node)
+	assertEquals((change.metadata?.caller as { node: unknown }).node, w.ermine.id)
 	await until(() => w.value(["answer"]) === "echo owl")
 	w.done()
 })
@@ -310,7 +319,7 @@ Deno.test("protect: the page asks its policy; a refused write is put back in the
 	)
 	const p = w.start("sneak.js", ["sneak"])
 	await until(() => (w.value(["seen"]) as number[] | undefined)?.length === 1)
-	await w.ermine.executeAction("/work/sneak/on/sneak")
+	await w.ermine.within(() => executeAction("/work/sneak/on/sneak"))
 	await until(() => w.status(p.process.id) instanceof Error)
 	assert((w.status(p.process.id) as Error).message.includes("not yours"))
 	assertEquals(w.value(["secret"]), 1)
@@ -337,7 +346,7 @@ Deno.test("a write on each side at once, to one node: both end the same, in the 
 	w.start("racer.js", ["racer"])
 	await until(() => (w.value(["seen"]) as unknown[] | undefined)?.length === 1)
 	// the call crosses first, the page's write after it: the realm writes before it lands the page's
-	const call = w.ermine.executeAction("/work/racer/on/race") as Promise<unknown>
+	const call = w.ermine.within(() => executeAction("/work/racer/on/race")) as Promise<unknown>
 	w.write(x, "page")
 	await call
 	await until(() => (w.value(["seen"]) as unknown[]).at(-1) === w.value(["x"]))
@@ -357,7 +366,6 @@ Deno.test("run takes source text or { url }: a function won't cross; nothing els
 	const scope = ermine.scheduler.createRootScope({ process: ["a"] })
 	const start = {
 		scope,
-		box: { root: ermine.places.root, places: ermine.places },
 		folder: [],
 		at: ["a"],
 		args: [],

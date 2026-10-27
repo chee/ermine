@@ -5,9 +5,8 @@
 // what a runner is handed is a Start: the process context's facts (@ermine/processes'
 // ProcessContext: { scope, folder, at, args, process }), not its functions (its host's to make);
 // the scheduler and table are the runner's own, from whoever made it. what the program gets is
-// the runner's: this makes no api; a runner over ermine/api builds it from
-// apis.createProcessAPI(start) (@ermine/programs/api's; api? saying how). its limits are the
-// runner's too: nothing here counts
+// the runner's: this makes no api (api? says which one it wants). its limits are the runner's too:
+// nothing here counts
 // run(runner, program, at, { args, folder, places, pin }): runner from places' root, or carried ({ id,
 // live }: its live form in hand, nothing of its node read); program an address from where's root
 // (where: places, else the home) or { id, hash?, type?, api?, code?, build? }. refused, nothing made,
@@ -18,7 +17,7 @@
 //   wrong-form     the program's type does not fit the runner's takes (TAKES); or it names an
 //                  api (ermine.program.api; code given: api) the runner's ermine.runner.api is not
 //   not-a-runner   the runner's value (carried: its live) is no runner here (no start)
-//   taken          a process at, above or under at (processes')
+//   taken          a process exactly at at (processes')
 // a carried runner is run as the caller holds it: its form is the caller's to have matched
 // (programs' satisfy), so only not-there, not-a-runner and taken are asked
 // the program's type: by an address, @ermine/types' typeOf (its ermine.type, else its name's
