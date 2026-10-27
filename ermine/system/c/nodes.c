@@ -1036,6 +1036,16 @@ void es_running_set(es_ermine *e, const char *process, const char *const *at, si
 	r->at = names_of(at, nat);
 }
 
+// whether a process runs at path, its node id
+static int running_at(es_ermine *e, const char *id, char *const *path, size_t n) {
+	if (id == NULL) return 0;
+	running_rec *r = es_map_get(&state(e)->running, id);
+	if (r == NULL || r->at.n != n) return 0;
+	for (size_t i = 0; i < n; i++)
+		if (strcmp(r->at.names[i], path[i]) != 0) return 0;
+	return 1;
+}
+
 void es_running_clear(es_ermine *e, const char *process) {
 	struct es_nodes *x = state(e);
 	running_rec *r = es_map_get(&x->running, process);
@@ -2408,11 +2418,30 @@ int es_place_at(es_context *c, es_at p, es_target x, const ch_site *site) {
 	return 0;
 }
 
+// a name out of its folder; a process's node there (named by its row): the process stopped, which
+// takes the row, and so the name (unplace, system.ts)
 static int unplace_in(void *v) {
 	tree *s = v;
 	es_context *c = s->c;
 	es_names path;
 	TRY(es_resolve(c, s->p, &path));
+	const char *at, *folder;
+	if (path.n && get_id(c, CP(path.names), path.n, &at) == 0 &&
+		running_at(c->ermine, at, path.names, path.n)) {
+		// asked as placing there is: the folder's slot, or (a folder only its rows name) the node
+		char *id = es_dup(at);
+		int code = get_id(c, CP(path.names), path.n - 1, &folder);
+		if (!code) {
+			code = folder != NULL ? ask_slot(c, folder, CP(path.names), path.n)
+				: ask(c, "place", gd_target_of((gd_thing){.id = tb_string(id), .path = CP(path.names),
+					.npath = path.n}, NULL, NULL));
+		}
+		if (!code) es_stop_node(c->ermine, id);
+		free(id);
+		es_names_free(&path);
+		return code;
+	}
+	es_clear_thrown();
 	nd_entry *children;
 	const char *name, *parent;
 	int code = es_folder_slot(c, CP(path.names), path.n, &children, &name);
@@ -2537,7 +2566,9 @@ static int remove_in(void *v) {
 	// the id outlives its entries: the table lets go of its key with the last
 	char *id = code ? NULL : es_dup(found);
 	if (!code) code = ask(t, "remove", gd_target_of(thing_of(id, &n), NULL, NULL));
-	if (!code && n.has_path && n.npath) {
+	// a running process's node: the process stopped first (its row out), then its entries gone
+	if (!code && es_map_get(&state(e)->running, id) != NULL) es_stop_node(e, id);
+	else if (!code && n.has_path && n.npath) {
 		nd_entry *children;
 		const char *name;
 		if (es_folder_slot(t, CP(n.path), n.npath, &children, &name) == 0) {
