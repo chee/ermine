@@ -267,7 +267,8 @@ export function post<M>(port: Pick<Port, "postMessage">, m: M, marked: (m: M) =>
 }
 
 // the ids an entry of a part points to by name: a children map's, a process trie's leaves (places'
-// children, ermine/processes' rows). what a realm can reach, and nothing else
+// children, ermine/processes' rows; a level's own process is under its key "": a value like a leaf).
+// what a realm can reach, and nothing else
 export function pointed(part: string, v: unknown, out: string[] = []): string[] {
 	if (part !== "children" && part !== "process") return out
 	if (typeof v === "string") out.push(v)
@@ -293,7 +294,12 @@ export function named(
 			if (path.length) out.push([path, v])
 		} else if (v !== null && typeof v === "object" && !Array.isArray(v)) {
 			if (part === "children" && path.length > at.length) return
-			for (const [k, x] of Object.entries(v)) walk([...path, k], x)
+			for (const [k, x] of Object.entries(v)) {
+				// a process row's level holds its own process under "": at the level's path, not under a name
+				if (part === "process" && k === "" && typeof x === "string") {
+					if (path.length) out.push([path, x])
+				} else walk([...path, k], x)
+			}
 		}
 	}
 	if (part !== "children" && part !== "process") return out

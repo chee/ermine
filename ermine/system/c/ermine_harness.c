@@ -91,7 +91,7 @@ typedef struct {
 
 // a deny entry of the request: every field given must match
 typedef struct {
-	char *op, *path, *id, *from;
+	char *op, *path, *id, *from, *box;
 } deny_t;
 
 // a test feature: its spec, and what its hooks keep
@@ -2016,6 +2016,10 @@ static pr_answer deny_run(void *ctx, const pr_ask *ask, const pr_read *read) {
 		}
 		if (d->path != NULL && !path_is(ask->target.path, ask->target.npath, d->path)) continue;
 		if (d->from != NULL && !path_is(ask->from.path, ask->from.npath, d->from)) continue;
+		if (d->box != NULL &&
+			(ask->from.box.string == NULL || strcmp(d->box, ask->from.box.string) != 0)) {
+			continue;
+		}
 		return (pr_answer){.verdict = PR_NO, .reason = "denied"};
 	}
 	return (pr_answer){.verdict = PR_YES};
@@ -2620,6 +2624,7 @@ static int make(const op_value *r) {
 			if (text(d, "path") != NULL) x->path = es_dup(text(d, "path"));
 			if (text(d, "id") != NULL) x->id = es_dup(text(d, "id"));
 			if (text(d, "from") != NULL) x->from = es_dup(text(d, "from"));
+			if (text(d, "box") != NULL) x->box = es_dup(text(d, "box"));
 		}
 		w->policy = pr_call(deny_run, NULL);
 	}
@@ -2659,6 +2664,7 @@ static void world_free(world_t *w) {
 		free(w->deny[i].path);
 		free(w->deny[i].id);
 		free(w->deny[i].from);
+		free(w->deny[i].box);
 	}
 	if (w->policy != NULL) pr_policy_free(w->policy);
 	free(w->envs);

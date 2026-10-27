@@ -658,6 +658,8 @@ export async function createHost(
 		for (let i = 0; i < path.length && isMap(v); i++) {
 			v = Object.hasOwn(v, path[i]) ? v[path[i]] : undefined
 			if (typeof v === "string") return true
+			// a process above with processes under it: its id is under "" in its level
+			if (isMap(v) && i < path.length - 1 && Object.hasOwn(v, "")) return true
 		}
 		return isMap(v) && Object.keys(v).length > 0
 	}

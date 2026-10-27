@@ -733,11 +733,20 @@ static void waiting_path(es_waiting *w, int found, es_names *names) {
 	es_names_free(names);
 }
 
+// whether a path the waiter at owner recorded is from another root than c's: it is shown to c as none
+static int other_world(es_context *c, const char *owner) {
+	es_context *o = es_computer_context(c->ermine, owner);
+	if (o == NULL) o = es_process_context_of(c->ermine, owner);
+	return o != NULL && strcmp(pl_root(o->places).string, pl_root(c->places).string) != 0;
+}
+
 // a send's wait as c sees it: where the send went (its path from the root, or the node it named)
-static void wait_of(es_context *c, const es_wait *w, es_waiting *out) {
+static void wait_of(es_context *c, const char *owner, const es_wait *w, es_waiting *out) {
 	es_names names = {0};
 	*out = (es_waiting){.kind = ES_WAIT_SEND, .since = w->since};
-	if (w->has_path) waiting_path_of(out, (const char *const *)w->path, w->npath);
+	if (w->has_path) {
+		if (!other_world(c, owner)) waiting_path_of(out, (const char *const *)w->path, w->npath);
+	}
 	else waiting_path(out, es_seen_in(c->ermine, c, w->id, &names), &names);
 }
 
@@ -755,7 +764,7 @@ static int list_names(const op_value *list, char ***out, size_t *n) {
 }
 
 // a wait a process's status says (written as start goes pending): a send's as wait_of, the rest as it is
-static void said_of(es_context *c, const op_value *w, es_waiting *out) {
+static void said_of(es_context *c, const char *owner, const op_value *w, es_waiting *out) {
 	*out = (es_waiting){.kind = ES_WAIT_PENDING};
 	if (w == NULL) return;
 	if (w->type == OP_STR) {
@@ -771,7 +780,7 @@ static void said_of(es_context *c, const op_value *w, es_waiting *out) {
 		if (since != NULL) op_as_double(since, &wait.since);
 		if (send->type == OP_LIST) wait.has_path = list_names(send, &wait.path, &wait.npath);
 		else if (send->type == OP_STR) wait.id = send->str;
-		wait_of(c, &wait, out);
+		wait_of(c, owner, &wait, out);
 		if (wait.has_path) {
 			for (size_t i = 0; i < wait.npath; i++) free(wait.path[i]);
 			free(wait.path);
@@ -788,7 +797,7 @@ static void said_of(es_context *c, const op_value *w, es_waiting *out) {
 		char **abs;
 		size_t nabs;
 		if (list_names(missing, &abs, &nabs)) {
-			waiting_path_of(out, (const char *const *)abs, nabs);
+			if (!other_world(c, owner)) waiting_path_of(out, (const char *const *)abs, nabs);
 			for (size_t i = 0; i < nabs; i++) free(abs[i]);
 			free(abs);
 		}
@@ -823,14 +832,14 @@ static int plain_status(es_context *c, es_context *t, const char *id, const op_v
 	st->state = "pending";
 	if (said != NULL && said->type == OP_LIST && said->count > 0) {
 		st->waiting = es_alloc(said->count * sizeof *st->waiting);
-		for (size_t i = 0; i < said->count; i++) said_of(c, said->items[i], &st->waiting[i]);
+		for (size_t i = 0; i < said->count; i++) said_of(c, id, said->items[i], &st->waiting[i]);
 		st->nwaiting = said->count;
 		return 0;
 	}
 	size_t n = 0;
 	es_wait *waits = es_calls_waits(e, id, &n);
 	st->waiting = es_alloc((n + 1) * sizeof *st->waiting);
-	for (size_t i = 0; i < n; i++) wait_of(c, &waits[i], &st->waiting[i]);
+	for (size_t i = 0; i < n; i++) wait_of(c, id, &waits[i], &st->waiting[i]);
 	st->nwaiting = n;
 	es_waits_free(waits, n);
 	if (st->nwaiting == 0) st->waiting[st->nwaiting++] = (es_waiting){.kind = ES_WAIT_PENDING};
@@ -888,7 +897,7 @@ static int computer_status(es_context *c, es_context *t, const char *id, const o
 	es_wait *waits = es_calls_waits(e, id, &n);
 	for (size_t i = 0; i < n; i++) {
 		es_waiting item;
-		wait_of(c, &waits[i], &item);
+		wait_of(c, id, &waits[i], &item);
 		ES_PUSH(waiting, nwaiting, cap, item);
 	}
 	es_waits_free(waits, n);
@@ -897,7 +906,9 @@ static int computer_status(es_context *c, es_context *t, const char *id, const o
 	if (missing != NULL && r != NULL && missing->has_n && missing->n == r->n) {
 		for (size_t i = 0; i < missing->npaths; i++) {
 			es_waiting item = {.kind = ES_WAIT_NODE};
-			waiting_path_of(&item, (const char *const *)missing->paths[i].names, missing->paths[i].n);
+			if (!other_world(c, id)) {
+				waiting_path_of(&item, (const char *const *)missing->paths[i].names, missing->paths[i].n);
+			}
 			ES_PUSH(waiting, nwaiting, cap, item);
 		}
 	}

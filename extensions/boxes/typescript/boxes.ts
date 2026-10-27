@@ -33,9 +33,10 @@
 //     box.places stays a view (the folder's own children are not the box's). the box's fresh root
 //     (no folder given) is left: an id nothing names
 //
-// put refused, nothing changed: something there already (a binding, a saved child or a process, at
-// the path, above it holding a node, or under it): already-there; no name: not-a-name. take of a
-// path with no binding: nothing-there
+// put refused, nothing changed: something there already: anything the box sees at the path (a
+// binding, a saved child, a process), or a binding above it or under it: already-there. a put under
+// a saved child or under a running process is fine (the binding is a name of its own, shadowing
+// nothing there). no name: not-a-name. take of a path with no binding: nothing-there
 import { createChangeHeader } from "@ermine/core/places/header"
 import { get } from "@ermine/core/places/lib"
 import { type Id, type Path, type Places, PlacesError } from "@ermine/core/places"
@@ -43,7 +44,7 @@ import { children } from "@ermine/core/places"
 import type { Key } from "@ermine/core/table"
 import { addLeaf, processes, removeLeaf, trie } from "@ermine/processes"
 import { inside } from "@ermine/processes/start"
-import { type Ermine, ErmineError, type StartOptions } from "@ermine/system"
+import { addTeardown, type Ermine, ErmineError, type StartOptions } from "@ermine/system"
 
 // the part the bindings are rows of
 export const BINDING = "binding" as string as Key
@@ -89,7 +90,8 @@ export function createBox(ermine: Ermine, at?: Address | { readonly id: Id }): B
 	])
 	// what is put and not taken (by names), and what is started and not stopped
 	const bound = new Map<string, readonly string[]>()
-	const running = new Set<Started>()
+	// a process leaves it as it ends (its teardown), however it ends
+	const running = new Set<{ started?: Started }>()
 	let closed = false
 	const alive = () => {
 		if (closed) throw new ErmineError("gone", "gone: this box was closed")
@@ -120,14 +122,40 @@ export function createBox(ermine: Ermine, at?: Address | { readonly id: Id }): B
 		},
 		start(fn, to, options?: StartOptions) {
 			alive()
-			const made = ermine.start(fn, to, { ...options, places })
-			if (!("refused" in made)) running.add(made)
+			const mine: { started?: Started } = {}
+			running.add(mine)
+			let made: ReturnType<Ermine["start"]>
+			try {
+				made = ermine.start(
+					() => {
+						addTeardown(() => {
+							running.delete(mine)
+						})
+						return fn()
+					},
+					to,
+					{ ...options, places },
+				)
+			} catch (e) {
+				running.delete(mine)
+				throw e
+			}
+			if ("refused" in made) running.delete(mine)
+			else mine.started = made
 			return made
 		},
 		close() {
 			if (closed) return
 			closed = true
-			for (const s of running) s.stop("box closed")
+			// every process and every binding, whatever an earlier one threw; the first error after
+			let first: { error: unknown } | undefined
+			for (const mine of [...running]) {
+				try {
+					mine.started?.stop("box closed")
+				} catch (e) {
+					first ??= { error: e }
+				}
+			}
 			running.clear()
 			ermine.within(() => {
 				for (const names of bound.values()) {
@@ -135,11 +163,14 @@ export function createBox(ermine: Ermine, at?: Address | { readonly id: Id }): B
 					try {
 						ermine.places.commit(removeLeaf(ermine.table, BINDING, key, names, header))
 					} catch (e) {
-						if (!(e instanceof PlacesError && e.code === "nothing-there")) throw e
+						if (!(e instanceof PlacesError && e.code === "nothing-there")) {
+							first ??= { error: e }
+						}
 					}
 				}
 			})
 			bound.clear()
+			if (first !== undefined) throw first.error
 		},
 	}
 }

@@ -383,6 +383,19 @@ test-check-marks-system: $(system-marks)-check
 	@echo "== system (marks, sanitizers)"
 	@$(system-marks)-check
 
+# what a review of boxes proved (extensions/boxes/c/boxes_test.c): the box keeps no pointer the caller may free.
+# make test-boxes-marks, test-check-boxes-marks (the sanitizers)
+boxes-test_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c ermine/system/c/ermine_harness.c,$(system_src)) extensions/boxes/c/boxes_test.c
+boxes-test = extensions/boxes/c/boxes-test
+$(eval $(call harness,boxes-test))
+$(boxes-test): $(wildcard */*/c/*.h)
+test-boxes-marks: $(boxes-test)
+	@echo "== boxes"
+	@$(boxes-test)
+test-check-boxes-marks: $(boxes-test)-check
+	@echo "== boxes (sanitizers)"
+	@$(boxes-test)-check
+
 # steady use (ermine/system/c/steady_test.c): each thing a program does, again and again, held
 # memory levelling off (leaks sees only what is lost at close). not in LIBS: its counts are the
 # allocator's, no sanitizer's. make test-steady-system

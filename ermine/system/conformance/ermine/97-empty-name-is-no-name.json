@@ -1,0 +1,102 @@
+{
+	"title": "\"\" is the key a level of process rows holds its own process under, not a name: a path with \"\" in it is nothing (the process at /w/a is not at /w/a/\"\"), list shows the names under it, and a node cannot be made at a path with \"\" in it",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"at": "/w/a",
+			"program": "/code/p",
+			"expect": {
+				"id": "proc:a"
+			}
+		},
+		{
+			"op": "start",
+			"name": "b",
+			"at": "/w/a/b",
+			"program": "/code/p",
+			"expect": {
+				"id": "proc:b"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"w",
+				"a"
+			],
+			"expect": {
+				"id": "proc:a"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"w",
+				"a",
+				""
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				[
+					"w",
+					"a",
+					""
+				]
+			],
+			"expect": {
+				"value": false
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"list",
+				"/w/a"
+			],
+			"expect": {
+				"value": [
+					"b"
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				[
+					"f",
+					""
+				],
+				1
+			],
+			"expect": {
+				"error": "not-a-name"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"list",
+				"/f"
+			],
+			"expect": {
+				"value": []
+			}
+		}
+	]
+}

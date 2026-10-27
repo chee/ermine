@@ -334,6 +334,9 @@ export type Base = {
 	// each process's node: where it runs, from the root (its row names it, not a children entry, so
 	// places' namesOf has it not): seen's
 	readonly running: Map<Id, Path>
+	// each process's node: the root of the places it runs in (its "/"), as the paths it recorded are
+	// from (a wait's): shown to a reader of another root as none
+	readonly roots: Map<Id, Id>
 	// each change's view, and each view's change (ChangeView)
 	readonly views: WeakMap<ChangeHeader, ChangeView>
 	readonly changes: WeakMap<ChangeView, ChangeHeader>
@@ -1170,8 +1173,19 @@ const runningAt = (base: Base, path: Path, id: Id | undefined) => {
 	return at !== undefined && at.length === path.length && at.every((n, i) => path[i] === n)
 }
 
+// a saved child of a folder that something else shadows at its path (a box's binding): not the
+// process's to move or take out, and left as it is. nothing-there, the code for a name the folder's
+// own slot does not give this path
+function notShadowed(inner: Inner, path: Path, children: Entry<unknown>, name: string) {
+	const saved = (children.value as Record<string, Id> | undefined)?.[name]
+	if (saved !== undefined && saved !== get(here(inner).places, path)) {
+		throw new PlacesError("nothing-there", path.join("/"))
+	}
+}
+
 // a name out of its folder; a process's node there (named by its row): the process stopped, which
-// takes the row, and so the name [chee 10-27: "that should probably kill the process yes"]
+// takes the row, and so the name [chee 10-27: "that should probably kill the process yes"]. a name a
+// box's binding gives is not the folder's to take out: nothing-there, the saved child it shadows left
 function unplace(inner: Inner, p: string | Path) {
 	const { base, queuePulse, places, inside, resolve, ask } = here(inner)
 	inside(() => {
@@ -1184,6 +1198,7 @@ function unplace(inner: Inner, p: string | Path) {
 			return base.stop(id!)
 		}
 		const [children, name] = slot(inner, path)
+		notShadowed(inner, path, children, name)
 		const parent = get(places, path.slice(0, -1))!
 		ask("place", slotAt(path, parent))
 		inner.put({ part: "children", id: parent, patches: unplacing(children, name) })
@@ -1196,6 +1211,7 @@ function rename(inner: Inner, from: string | Path, to: string | Path) {
 	inside(() => {
 		const fromPath = resolve(from)
 		const source = slot(inner, fromPath)
+		notShadowed(inner, fromPath, source[0], source[1])
 		const sourceParent = get(places, fromPath.slice(0, -1))!
 		guard.move(fromPath, resolve(to))
 		ask("place", slotAt(fromPath, sourceParent))
@@ -1857,21 +1873,37 @@ function getStatus(inner: Inner, x: Target): Status | undefined {
 	return base.statused({ node: n, id, computer: base.computers.has(id) }, ownStatus(inner, n, id))
 }
 
+// a path the waiter at owner recorded, as inner sees it: the path itself when both look from one
+// root (the owner's world is its places' root: a computer's context's, a process's), else none
+const recordedBy = (inner: Inner, owner: Id, p: Path): Path | null => {
+	const { base } = here(inner)
+	const root = base.contexts.get(owner)?.places.root ?? base.roots.get(owner)
+	return root === undefined || root === inner.places.root ? p : null
+}
+
 // a send's wait as this process sees it: where the send went (its path from the root, or the node
 // it named: its path, none: null)
-const waitOf = (inner: Inner, w: { path?: Path; id?: Id; since: number }): Waiting => ({
-	send: (w.path ?? seen(inner, w.id!)) ?? null,
+const waitOf = (
+	inner: Inner,
+	owner: Id,
+	w: { path?: Path; id?: Id; since: number },
+): Waiting => ({
+	send: (w.path !== undefined ? recordedBy(inner, owner, w.path) : seen(inner, w.id!)) ?? null,
 	since: w.since,
 })
 // a wait a process's status says (written as start goes pending): a send's as waitOf, the rest as
 // it is
-const saidOf = (inner: Inner, w: unknown): Waiting => {
+const saidOf = (inner: Inner, owner: Id, w: unknown): Waiting => {
 	if (w !== null && typeof w === "object" && "missing" in w) {
-		return { node: (w as { missing: Path }).missing }
+		return { node: recordedBy(inner, owner, (w as { missing: Path }).missing) }
 	}
 	if (w !== null && typeof w === "object" && "send" in w) {
 		const { send, since } = w as { send: Path | Id; since: number }
-		return waitOf(inner, Array.isArray(send) ? { path: send, since } : { id: send as Id, since })
+		return waitOf(
+			inner,
+			owner,
+			Array.isArray(send) ? { path: send, since } : { id: send as Id, since },
+		)
 	}
 	return w as Waiting
 }
@@ -1890,8 +1922,10 @@ function ownStatus(inner: Inner, n: NodeData, id: Id): Status {
 		}
 		if (st !== PENDING) return { state: "failed", error: st, ...held }
 		const said = places.readValue(STATUS_TABLE, id, [WAITING])
-		const live = calls.waits(id).map((w) => waitOf(inner, w))
-		const waiting = Array.isArray(said) && said.length ? said.map((w) => saidOf(inner, w)) : live
+		const live = calls.waits(id).map((w) => waitOf(inner, id, w))
+		const waiting = Array.isArray(said) && said.length
+			? said.map((w) => saidOf(inner, id, w))
+			: live
 		return { state: "pending", waiting: waiting.length ? waiting : ["PENDING"], ...held }
 	}
 	const r = runs.read(id)
@@ -1910,10 +1944,10 @@ function ownStatus(inner: Inner, n: NodeData, id: Id): Status {
 			waiting.push({ node: seen(inner, w.id) ?? null })
 		}
 	}
-	for (const w of calls.waits(id)) waiting.push(waitOf(inner, w))
+	for (const w of calls.waits(id)) waiting.push(waitOf(inner, id, w))
 	const m = base.missing.get(id)
 	if (m !== undefined && r !== undefined && m.n === r.n) {
-		for (const p of m.paths) waiting.push({ node: p })
+		for (const p of m.paths) waiting.push({ node: recordedBy(inner, id, p) })
 	}
 	if (base.awaiting.has(id)) waiting.push("a promise")
 	if (waiting.length === 0) waiting.push("PENDING")

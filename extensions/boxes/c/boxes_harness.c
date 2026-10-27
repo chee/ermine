@@ -17,8 +17,10 @@ typedef struct {
 static named_t *boxes;
 static size_t nboxes, capboxes;
 
+// the newest of a name: a name made again (a new ermine's) is the new box, never the first one's, which
+// belongs to an ermine that is gone (it is let go at exit)
 static bx_box *box_named(const char *name) {
-	for (size_t i = 0; name != NULL && i < nboxes; i++) {
+	for (size_t i = nboxes; name != NULL && i-- > 0;) {
 		if (strcmp(boxes[i].name, name) == 0) return boxes[i].box;
 	}
 	return NULL;
@@ -156,7 +158,7 @@ static void note_why(void *ctx, const char *why) {
 }
 static es_out told_program(es_context *c, void *ctx) {
 	int code = es_add_teardown(c, note_why, ctx);
-	return code != 0 ? es_out_code(code) : es_out_of(op_null());
+	return code != 0 ? es_out_code(code) : es_out_of(NULL);
 }
 
 static int op_boxstart(const op_value *r, es_ermine *e, op_value **res) {

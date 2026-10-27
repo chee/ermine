@@ -502,6 +502,9 @@ struct es_context {
 	// inner -----------------------------------------------------------------------------------
 	// the host's places; who it acts as: the process's node, or the host's; the policy is asked of it
 	pl *places;
+	// the box it is in: its places' root, when that is not the ermine's (NULL: the ermine's own); what
+	// an ask from it says (from.box)
+	char *box;
 	char *node;
 	int guarded;
 	gd *guard;
@@ -1442,6 +1445,8 @@ int es_child_status(es_context *c, const char *id, es_status *out);
 int es_stop(es_started *s, const char *why);
 // a running process stopped by its node's id (unplace and remove of its path: nodes.c)
 void es_stop_node(es_ermine *e, const char *id);
+// the same, told why (NULL: "ended"); none running there, or the ermine closed: nothing
+void es_stop_id(es_ermine *e, const char *id, const char *why);
 int es_started_status(es_started *s, es_status *out);
 // the host lets go of a process it started (the TypeScript's Process, gone with its last
 // reference): stopped first if it runs ("ended"). its memory goes once nothing waits on it (its

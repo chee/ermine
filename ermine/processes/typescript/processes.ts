@@ -57,6 +57,35 @@ function filled(v: unknown): boolean {
 
 const bad = (name: string) => name === "" || name === "." || name === ".." || name === "/"
 
+// the id of the process at path in a rows value (what the process part holds at a root): a leaf's,
+// or a level's own under "". none: no process at exactly that path. for whoever reads the part raw
+export function idAt(rows: unknown, path: Path): Id | undefined {
+	let v: unknown = rows
+	for (const name of path) {
+		if (name === SELF || !isMap(v) || !Object.hasOwn(v, name)) return undefined
+		v = v[name]
+	}
+	return asId(isMap(v) ? v[SELF] : v)
+}
+
+// each name directly under path that a process is at, with its id (a leaf's, or a level's own); a
+// level with no process of its own is left out. for whoever reads the part raw
+export function idsUnder(rows: unknown, path: Path): [string, Id][] {
+	let v: unknown = rows
+	for (const name of path) {
+		if (name === SELF || !isMap(v) || !Object.hasOwn(v, name)) return []
+		v = v[name]
+	}
+	const out: [string, Id][] = []
+	if (!isMap(v)) return out
+	for (const [name, x] of Object.entries(v)) {
+		if (name === SELF) continue
+		const id = asId(isMap(x) ? x[SELF] : x)
+		if (id !== undefined) out.push([name, id])
+	}
+	return out
+}
+
 // the processes running under root, by path: the leaf at here's path + the name. a walk from an id
 // alone, its path not known: nothing. names: every name directly under here's path, a leaf or a
 // level (processes deeper, no id: places' walk goes through it, list and members show it)
@@ -74,7 +103,8 @@ export function trie(part: Key, root: Id, from: string): Contributor {
 	return {
 		from,
 		step: ({ path }, name, r) => {
-			if (path === undefined) return none
+			// "" is the key a level holds its own process under, never a name
+			if (path === undefined || name === SELF) return none
 			const v = r.read(part, root, [...path, name])
 			if (isMap(v) && Object.hasOwn(v, SELF)) return asId(v[SELF]) ?? none
 			return asId(v) ?? (filled(v) ? undefined : none)
@@ -86,7 +116,7 @@ export function trie(part: Key, root: Id, from: string): Contributor {
 		},
 		// a level of the trie (leaves deeper, no id of its own): a walk goes on through it
 		level: ({ path }, name, r) =>
-			path !== undefined && isMap(r.read(part, root, [...path, name])),
+			path !== undefined && name !== SELF && isMap(r.read(part, root, [...path, name])),
 	}
 }
 

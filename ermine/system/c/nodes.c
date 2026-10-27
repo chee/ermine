@@ -450,10 +450,15 @@ es_context *es_context_new(es_ermine *e, const es_context_options *o) {
 	c->process = o->process;
 	c->places = o->places;
 	c->node = es_dup(o->node);
+	{
+		const char *top = pl_root(c->places).string;
+		c->box = top != NULL && e->root != NULL && strcmp(top, e->root) != 0 ? es_dup(top) : NULL;
+	}
 	c->guarded = e->may != NULL;
 	if (c->guarded) {
 		c->guard = gd_new(&(gd_setup){.places = c->places, .table = e->table, .may = e->may,
-			.from = CP(c->at), .nfrom = c->nat, .caller = es_caller_place, .caller_ctx = c});
+			.from = CP(c->at), .nfrom = c->nat, .caller = es_caller_place, .caller_ctx = c,
+			.box = c->box != NULL ? tb_string(c->box) : (tb_key){0}});
 	}
 	struct es_nodes *x = state(e);
 	ES_PUSH(x->contexts, x->ncontexts, x->capcontexts, c);
@@ -477,6 +482,7 @@ void es_context_free(es_context *c) {
 	free_names(c->at, c->nat);
 	free_names(c->args, c->nargs);
 	free(c->node);
+	free(c->box);
 	free(c);
 }
 
@@ -1085,7 +1091,7 @@ static int up_go(es_ermine *e, const pl *places, const char *root, const char *a
 int es_seen_in(es_ermine *e, es_context *reader, const char *id, es_names *out) {
 	es_map visited = {0};
 	es_names p;
-	int found = up_go(e, reader->places, e->root, id, &visited, &p);
+	int found = up_go(e, reader->places, pl_root(reader->places).string, id, &visited, &p);
 	es_map_free(&visited);
 	if (!found) return 0;
 	tb_key k;
@@ -2424,6 +2430,18 @@ int es_place_at(es_context *c, es_at p, es_target x, const ch_site *site) {
 	return 0;
 }
 
+// a saved child of a folder that something else shadows at its path (a box's binding) is not the
+// process's to move or take out: nothing-there (system.ts' notShadowed)
+static int not_shadowed(es_context *c, const es_names *path, const nd_entry *children, const char *name) {
+	const char *saved = child_of(children, name), *there;
+	if (saved == NULL) return 0;
+	TRY(get_id(c, CP(path->names), path->n, &there));
+	if (there == NULL || strcmp(saved, there) != 0) {
+		return places_fail_path(ES_NOTHING_THERE, CP(path->names), path->n);
+	}
+	return 0;
+}
+
 // a name out of its folder; a process's node there (named by its row): the process stopped, which
 // takes the row, and so the name (unplace, system.ts)
 static int unplace_in(void *v) {
@@ -2451,6 +2469,7 @@ static int unplace_in(void *v) {
 	nd_entry *children;
 	const char *name, *parent;
 	int code = es_folder_slot(c, CP(path.names), path.n, &children, &name);
+	if (!code) code = not_shadowed(c, &path, children, name);
 	if (!code) code = get_id(c, CP(path.names), path.n - 1, &parent);
 	if (!code) code = ask_slot(c, parent, CP(path.names), path.n);
 	if (!code) {
@@ -2524,6 +2543,7 @@ static int rename_in(void *v) {
 	nd_entry *source;
 	const char *name, *source_parent = NULL, *parent = NULL;
 	int code = es_folder_slot(c, CP(from.names), from.n, &source, &name);
+	if (!code) code = not_shadowed(c, &from, source, name);
 	if (!code) code = get_id(c, CP(from.names), from.n - 1, &source_parent);
 	if (!code) code = es_resolve(c, s->to, &to);
 	if (!code) {

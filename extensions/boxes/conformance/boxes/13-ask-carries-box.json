@@ -1,0 +1,113 @@
+{
+	"title": "an ask from a process started in a box says whose \"/\" its path is from: from.box, the box's root id, beside from.path. a policy refusing the process at admin in box B1 refuses the boxed one at its own /admin, and not the host's process at /admin, nor another boxed process",
+	"steps": [
+		{
+			"op": "ermine",
+			"deny": [
+				{
+					"op": "place",
+					"from": "admin",
+					"box": "B1"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"name": "b",
+			"id": "B1",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"caught",
+						"e",
+						[
+							{
+								"do": [
+									"ensureNode",
+									"/out",
+									1
+								]
+							}
+						]
+					]
+				},
+				{
+					"do": [
+						"log",
+						"made",
+						[
+							"hasNode",
+							"/out"
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "x",
+			"at": "/admin",
+			"program": "/code/p",
+			"in": "b",
+			"expect": {
+				"id": "proc:x"
+			}
+		},
+		{
+			"op": "log",
+			"name": "made",
+			"expect": {
+				"values": [
+					false
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "y",
+			"at": "/other",
+			"program": "/code/p",
+			"in": "b",
+			"expect": {
+				"id": "proc:y"
+			}
+		},
+		{
+			"op": "log",
+			"name": "made",
+			"expect": {
+				"values": [
+					false,
+					true
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "h",
+			"at": "/admin",
+			"program": "/code/p",
+			"expect": {
+				"id": "proc:h"
+			}
+		},
+		{
+			"op": "log",
+			"name": "made",
+			"expect": {
+				"values": [
+					false,
+					true,
+					true
+				]
+			}
+		}
+	]
+}
