@@ -1,0 +1,39 @@
+{
+	"title": "an actor that is bytes matches a grant for the same bytes, and only those; a deny on them fires",
+	"steps": [
+		{
+			"op": "load",
+			"part": "value",
+			"id": "rules",
+			"value": [
+				{ "actor": { "/": { "bytes": "AQID" } }, "op": "edit", "deny": true },
+				{ "actor": { "/": { "bytes": "AQID" } } }
+			],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": { "grants": ["value", "rules"] },
+			"what": "read",
+			"who": { "actor": { "/": { "bytes": "AQID" } } },
+			"target": { "id": "A" },
+			"expect": { "answer": "yes", "grant": { "part": "value", "id": "rules", "index": 1 } }
+		},
+		{
+			"op": "ask",
+			"policy": { "grants": ["value", "rules"] },
+			"what": "edit",
+			"who": { "actor": { "/": { "bytes": "AQID" } } },
+			"target": { "id": "A" },
+			"expect": { "answer": "no", "grant": { "part": "value", "id": "rules", "index": 0 } }
+		},
+		{
+			"op": "ask",
+			"policy": { "grants": ["value", "rules"] },
+			"what": "read",
+			"who": { "actor": { "/": { "bytes": "AQIE" } } },
+			"target": { "id": "A" },
+			"expect": { "answer": "no" }
+		}
+	]
+}
