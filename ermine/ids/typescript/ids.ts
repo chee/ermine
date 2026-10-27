@@ -39,9 +39,16 @@ function varint(n: number): number[] {
 // bytes, so no two lists of pieces join alike
 function digest(domain: string, inputs: (Uint8Array | string)[]): Uint8Array {
 	const parts = [utf8(domain), ...inputs.map((x) => typeof x === "string" ? utf8(x) : x)]
-	const all: number[] = []
-	for (const p of parts) all.push(...varint(p.length), ...p)
-	return blake3(Uint8Array.from(all))
+	const heads = parts.map((p) => varint(p.length))
+	const all = new Uint8Array(parts.reduce((n, p, i) => n + heads[i].length + p.length, 0))
+	let at = 0
+	parts.forEach((p, i) => {
+		all.set(heads[i], at)
+		at += heads[i].length
+		all.set(p, at)
+		at += p.length
+	})
+	return blake3(all)
 }
 
 export function fresh(): Id {
