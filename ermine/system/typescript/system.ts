@@ -1015,10 +1015,15 @@ function told(inner: Inner, p: Piped, w: Watched, back: boolean, byPipe: boolean
 	base.pipeDepth++
 	try {
 		s.runWithScope(p.scope, () => {
-			if (p.tell !== undefined) return void p.tell(w)
+			// a promise given: its rejection fails the pipe's status (else unobserved)
+			const observed = <T>(r: T): T => {
+				if (isThen(r)) r.then(undefined, (e: unknown) => pipeStatus(inner, p, e))
+				return r
+			}
+			if (p.tell !== undefined) return void observed(p.tell(w))
 			if (w.refused) return
 			const f = back ? p.back : p.there
-			const patches = f === undefined ? w.patches : f(w)
+			const patches = f === undefined ? w.patches : observed(f(w))
 			if (patches === undefined || patches === null) return
 			if (!Array.isArray(patches)) {
 				throw new ErmineError(
