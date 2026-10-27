@@ -17,6 +17,7 @@ import {
 	read as readNode,
 	readAttributes,
 	readEntries,
+	remove,
 	unplace,
 } from "@ermine/system"
 import { host, inspect, up } from "@ermine/slaygrounds/tools"
@@ -337,6 +338,23 @@ export function shell() {
 	// /apps
 	const views = ensureNode("./views", {} as Record<string, unknown>)
 	const lastSeen = new Map<string, string>()
+	const viewOf = new Map<string, unknown>()
+	// an act makes nothing, so the making is an action made here: called from the act, it makes the
+	// app for the shell (the scope that placed it), and gives its view
+	createAction("make", (name: string, app: string) => {
+		const run = peep(() => read(`/apps/${app}`)) as ((name: string) => unknown) | undefined
+		if (typeof run !== "function") throw new Error(`no app ${app} at /apps`)
+		ensureNode(name)
+		return run(name)
+	})
+	// a window gone: its node and all under it removed (deepest first). the memos and effects made
+	// there still run after remove (a core finding), so this clears the nodes, not the computing
+	const removeAll = (at: string) => {
+		if (!hasNode(at)) return
+		for (const kid of list(at)) removeAll(`${at}/${kid}`)
+		remove(at)
+	}
+	createAction("unmake", (name: string) => removeAll(name))
 	createEffect(
 		"windows",
 		() =>
@@ -348,11 +366,13 @@ export function shell() {
 			const made: Record<string, unknown> = {}
 			for (const [name, app] of want) {
 				try {
-					const run = peep(() => read(`/apps/${app}`)) as
-						| ((name: string) => unknown)
-						| undefined
-					if (typeof run !== "function") throw new Error(`no app ${app} at /apps`)
-					made[name] = run(name)
+					// an app made stays (it is the shell's, not this act's): only a new window is made
+					if (lastSeen.get(name) === app && viewOf.has(name)) {
+						made[name] = viewOf.get(name)
+						continue
+					}
+					made[name] = executeAction("make", name, app)
+					viewOf.set(name, made[name])
 					lastSeen.set(name, app)
 				} catch (e) {
 					if (e === PENDING) throw e
@@ -363,6 +383,8 @@ export function shell() {
 			for (const [name, app] of [...lastSeen]) {
 				if (want.has(name)) continue
 				lastSeen.delete(name)
+				viewOf.delete(name)
+				executeAction("unmake", name)
 				canvases.delete(name)
 				say(`${name}: cleanup ran, ${FAREWELL[app] ?? "it let go"}`)
 			}

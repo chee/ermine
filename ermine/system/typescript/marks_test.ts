@@ -97,6 +97,28 @@ Deno.test("marks: each write through a writer has its own line, not createWriter
 	e.close()
 })
 
+Deno.test("marks: a write through a writer in a timer has the program's own line as its site", async () => {
+	let withWriter: ReturnType<typeof createWriter> | undefined
+	const { e } = started(() => {
+		ensureNode("/t", 0)
+		withWriter = createWriter()
+	})
+	let line = 0
+	await new Promise<void>((done) =>
+		setTimeout(() => {
+			withWriter!(() => {
+				line = new Error().stack!.split("\n")[1].match(/:(\d+):\d+\)?$/)!.map(Number)[1] + 1
+				patch("/t", [{ path: [], value: 1 }])
+			})
+			done()
+		}, 5)
+	)
+	const site = e.within(() => explain("/t"))?.change?.site
+	assert(site?.file.endsWith("marks_test.ts"))
+	assertEquals(site?.line, line)
+	e.close()
+})
+
 Deno.test("marks: an action called from an act makes things for its own parent; the act itself makes nothing", () => {
 	const e = createErmine({ features: [manual] })
 	e.within(() =>

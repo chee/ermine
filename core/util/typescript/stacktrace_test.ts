@@ -39,6 +39,13 @@ Deno.test("frames: JavaScriptCore", () => {
 	])
 })
 
+Deno.test("outside: a ?t= stamp or hash on a frame's url does not make ours foreign", () => {
+	const stack = "Error\n    at a (file:///lib.ts?t=17:1:1)\n    at b (file:///app.ts:2:2)"
+	assertEquals(outside(stack, new Set(["file:///lib.ts"]))?.file, "file:///app.ts")
+	const hashed = "Error\n    at a (file:///lib.ts#x:1:1)\n    at b (file:///app.ts:2:2)"
+	assertEquals(outside(hashed, new Set(["file:///lib.ts"]))?.file, "file:///app.ts")
+})
+
 Deno.test("outside: first frame not ours", () => {
 	const stack = "Error\n    at a (file:///lib.ts:1:1)\n    at b (file:///app.ts:2:2)"
 	assertEquals(outside(stack, new Set(["file:///lib.ts"])), {
