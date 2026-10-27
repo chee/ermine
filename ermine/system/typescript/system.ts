@@ -276,10 +276,6 @@ export type Explained =
 		readonly held: { readonly feature: string }
 	}
 
-// a send's record as a program sees it (explain's writer.call): the caller by its id, no context (a
-// program's api holds no context: the caller's is the host's and features' side, ermine.calling)
-export type Sent = Omit<Call, "context">
-
 export class SendError extends Error {
 	constructor(readonly code: "not-a-method", readonly at: string) {
 		super(`${code} (${at})`)
@@ -355,8 +351,6 @@ export type Base = {
 	pipeDepth: number
 	// a pulse: what pipes heard told first, then the scheduler's
 	readonly pulse: () => void
-	// f as a public function: a write's site outside a run is its caller
-	readonly entered: <F extends (...args: never[]) => unknown>(f: F) => F
 	// f(inner, ...a) with the entry here: a write made in it has its site at the line that called in;
 	// site, a build's (site.ts): that one, nothing captured
 	readonly enter: <A extends unknown[], T>(
@@ -1269,7 +1263,6 @@ function rename(inner: Inner, from: string | Path, to: string | Path) {
 		}
 		ask("place", slotAt(path, parent))
 		const into = table.get("children", parent) as Entry<unknown> | undefined
-		const moved = (source[0].value as Record<string, Id> | undefined)?.[source[1]]
 		for (const m of moving(source, [into, path[path.length - 1]])) {
 			inner.put({
 				part: "children",
@@ -2361,5 +2354,4 @@ export {
 	unplace,
 }
 
-export { foundFor } from "./registry.ts"
 export type { Table }

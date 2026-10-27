@@ -51,16 +51,6 @@ function contextAt(scope: Scope | undefined): Inner | undefined {
 	return undefined
 }
 
-// what a function is given: the context it acts as, and, when that context's scope is to be opened
-// round it, the opening (host and feature code acting as a context)
-export type Found = { readonly inner: Inner; readonly within?: <T>(f: () => T) => T }
-
-// the context for name: the scope open now's; nothing open: nothing-open, a handle given or not
-// [chee 10-26: "let's just make it throw for now, i would like to come back to this later"]
-export function foundFor(name: string): Found {
-	return { inner: found(name) }
-}
-
 // the ermines entered now, by scheduler, the innermost last: an ermine's host functions, start,
 // close, pulse and a context's within enter it as they run and leave it as they return, so code of
 // one ermine run inside another's (b.executeAction in an action of a) finds its own

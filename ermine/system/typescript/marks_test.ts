@@ -352,7 +352,7 @@ Deno.test("marks: createWriter and start are not-here in a pipe's function, as i
 			pipe(
 				"/from",
 				"/to",
-				(v: unknown) => {
+				() => {
 					for (const f of [() => createWriter(), () => start(() => {}, "/work/x")]) {
 						try {
 							f()

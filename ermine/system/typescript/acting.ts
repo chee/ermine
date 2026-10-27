@@ -2,7 +2,7 @@
 // the host's, process 0's: registry.ts), its implementation (system.ts) run as it
 import { PENDING } from "@ermine/core/scheduler"
 import type { Inner } from "./context.ts"
-import { foundFor, unfound } from "./registry.ts"
+import { found, unfound } from "./registry.ts"
 import { take } from "./site.ts"
 import { here } from "./system.ts"
 
@@ -18,12 +18,7 @@ export function go<A extends unknown[], T>(
 	const site = take()
 	let inner: Inner | undefined
 	try {
-		const found = foundFor(name)
-		inner = found.inner
-		const i = inner
-		if (found.within !== undefined) {
-			return found.within(() => writer ? here(i).base.enter(f, i, a, site) : f(i, ...a))
-		}
+		const i = inner = found(name)
 		return writer ? here(i).base.enter(f, i, a, site) : f(i, ...a)
 	} catch (e) {
 		// through the ermine's onError hooks (hints.ts adds advice); PENDING as it is. no context

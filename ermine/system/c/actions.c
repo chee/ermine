@@ -9,7 +9,7 @@
 //   explain: es_explain, es_explain_attributes, es_explain_children, es_explain_view, es_explained_free;
 //     the views: es_change_view_of, es_view_change, es_run_view_of, es_call_view_of, es_run_view_free,
 //     es_call_view_free, es_show (handles shown as paths), es_caller_free
-//   calls.ts: es_calls_new, es_calls_free, es_calls_next, es_calls_begin, es_calls_end, es_calls_going,
+//   calls.ts: es_calls_new, es_calls_free, es_calls_next, es_calls_begin, es_calls_end,
 //     es_calls_calling, es_calls_open, es_calls_read, es_calls_made, es_calls_latest, es_calls_wait,
 //     es_calls_answered, es_calls_waits, es_waits_free, es_calls_stop
 //   promises: es_promise_new, es_promise_release, es_promise_value, es_promise_resolve,
@@ -1218,8 +1218,6 @@ es_going *es_calls_begin(es_ermine *e, unsigned n, sc_scope *scope, const es_cal
 	free(sc_register_teardown(e->scheduler, scope, going_gone, g));
 	return g;
 }
-
-es_going *es_calls_going(es_ermine *e, sc_scope *scope) { return pm_get(&e->calls->scopes, scope); }
 
 int es_calls_calling(es_ermine *e, sc_scope *scope, es_calling_view *out) {
 	for (sc_scope *o = scope; o != NULL; o = sc_scope_parent(o)) {

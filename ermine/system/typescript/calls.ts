@@ -80,7 +80,6 @@ export type Setup = {
 // a call going: its record so far
 export type Going = {
 	readonly n: number
-	readonly scope: Scope
 	// the run open as it began (a send from a memo or effect): what is done in it is the call's
 	readonly run: { readonly computer: unknown; readonly n: number } | undefined
 	readonly base: Omit<Call, "end" | "reads" | "writes" | "made" | "ended">
@@ -102,8 +101,6 @@ export type Calls = {
 	// f run as call g's: it is the open call while f runs (a generator action's steps after the first
 	// are not inside the call that began it); a call already ended pending is held again after
 	during: <T>(g: Going, f: () => T) => T
-	// a call scope's going call; none: undefined
-	going: (scope: Scope) => Going | undefined
 	// the call scope at or nearest above scope: the call being answered there, its record so far
 	calling: (scope: Scope | undefined) => Going["base"] | undefined
 	// the call open now: the innermost, no run begun inside it
@@ -220,7 +217,6 @@ export function createCalls(setup: Setup): Calls {
 			const r = s.getRun()
 			const g: Going = {
 				n: k,
-				scope,
 				run: r === undefined ? undefined : { computer: r.computer, n: r.n },
 				base: { ...base, n: k, started: now() } as Going["base"],
 				reads: [],
@@ -257,7 +253,6 @@ export function createCalls(setup: Setup): Calls {
 				if (pending.has(g) && live.has(g)) record(g, "pending", {})
 			}
 		},
-		going: (scope) => scopes.get(scope),
 		calling(scope) {
 			for (let o = scope; o !== undefined; o = o.parent) {
 				const g = scopes.get(o)

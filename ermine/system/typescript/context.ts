@@ -9,14 +9,7 @@ import { carryTrace } from "@ermine/core/places/header"
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
 import update from "@ermine/core/changeable/update"
 import apply, { type Key as Step, type Patch } from "@ermine/core/changeable/apply"
-import {
-	type Id,
-	type Path,
-	type Places,
-	PlacesError,
-	unread,
-	type Writer,
-} from "@ermine/core/places"
+import { type Id, type Path, type Places, unread, type Writer } from "@ermine/core/places"
 import { parse } from "@ermine/core/places/path"
 import { createGuard, target as targetOf } from "@ermine/core/places/guard"
 import type { Policy, Target as Asked } from "@ermine/core/protect"
