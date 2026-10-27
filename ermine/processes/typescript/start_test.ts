@@ -70,15 +70,19 @@ Deno.test("start: the node's attributes, the row at the path, then body with the
 	assertEquals(log.length, 2)
 })
 
-Deno.test("start: a process at the path, above it or under it: taken, nothing made, body not called", () => {
+Deno.test("start: a process at exactly the path: taken, nothing made, body not called; above or under it is fine", () => {
 	const w = world()
 	w.start(w.places, ["work", "clock"])
 	let called = false
-	for (const at of [["work", "clock"], ["work"], ["work", "clock", "hand"]]) {
-		const r = w.hosted(() => w.life.start(w.places, at, {}, () => void (called = true)))
-		assertEquals(r, { refused: "taken", at })
-	}
+	const at = ["work", "clock"]
+	const r = w.hosted(() => w.life.start(w.places, at, {}, () => void (called = true)))
+	assertEquals(r, { refused: "taken", at })
 	assert(!called)
+	const above = w.start(w.places, ["work"])
+	const under = w.start(w.places, ["work", "clock", "hand"])
+	assert("id" in above && "id" in under)
+	w.hosted(() => w.life.stop(above))
+	w.hosted(() => w.life.stop(under))
 })
 
 Deno.test("give: a computer's status on the process's node; torn down from above: body's stop, the row out", async () => {

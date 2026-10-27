@@ -1,5 +1,5 @@
 {
-	"title": "process rows: a trie on the root's process part, a level a map, a leaf a process's id. a start puts one patch at its path (the levels missing made at the first missing one), a stop takes its leaf and every level left empty; a start at, above or under a running process is refused, and a stop where none runs",
+	"title": "process rows: a trie on the root's process part, a level a map, a leaf a process's id. a start puts one patch at its path (the levels missing made at the first missing one), a stop takes its leaf and every level left empty; a start at a running process's own path is refused, and a stop where none runs",
 	"steps": [
 		{
 			"op": "kids",
@@ -134,28 +134,6 @@
 			"path": [
 				"work",
 				"clock"
-			],
-			"id": "Q",
-			"expect": {
-				"error": "already-there"
-			}
-		},
-		{
-			"op": "start",
-			"path": [
-				"work",
-				"clock",
-				"x"
-			],
-			"id": "Q",
-			"expect": {
-				"error": "already-there"
-			}
-		},
-		{
-			"op": "start",
-			"path": [
-				"work"
 			],
 			"id": "Q",
 			"expect": {

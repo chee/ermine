@@ -1,0 +1,167 @@
+{
+	"title": "a process starts a child at a bare name, which lands inside its own node [chee 10-27: \"a process can start a child anywhere it is allowed to by protect\"]: p at /code/p starts c at kid, so c runs at /code/p/kid, a process at a path with another process under it; taken means only a process already at exactly that path. c runs, and stops when p does. a start at c's exact path is taken, one under c's is fine",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/c",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/c-out",
+						0
+					],
+					"as": "o"
+				},
+				{
+					"do": [
+						"patch",
+						"$o",
+						[
+							{
+								"path": [],
+								"value": 1
+							}
+						]
+					]
+				},
+				{
+					"do": [
+						"addTeardown",
+						"child-down"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"start",
+						"c",
+						"kid",
+						"/code/c"
+					],
+					"as": "started"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "status",
+			"name": "c",
+			"expect": {
+				"status": {
+					"state": "done"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/c-out"
+			],
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"log",
+				"at",
+				[
+					"pick",
+					"$started",
+					[
+						"process",
+						"at"
+					]
+				]
+			]
+		},
+		{
+			"op": "log",
+			"name": "at",
+			"expect": {
+				"values": [
+					[
+						"code",
+						"p",
+						"kid"
+					]
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/code/p/kid"
+			],
+			"expect": {
+				"value": true
+			}
+		},
+		{
+			"op": "start",
+			"name": "k2",
+			"at": "/code/p/kid",
+			"program": "/code/c",
+			"expect": {
+				"refused": "taken"
+			}
+		},
+		{
+			"op": "start",
+			"name": "k3",
+			"at": "/code/p/kid/deep",
+			"program": "/code/c",
+			"expect": {
+				"id": "proc:k3"
+			}
+		},
+		{
+			"op": "stop",
+			"name": "p",
+			"why": "bye",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "child-down",
+			"expect": {
+				"values": [
+					"ended"
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/code/p/kid"
+			],
+			"expect": {
+				"value": false
+			}
+		}
+	]
+}

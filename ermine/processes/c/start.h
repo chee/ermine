@@ -8,7 +8,7 @@
 //   pr_stop(s, p);
 //   pr_halt(s);  /* before sc_free */  ...  pr_free(s);     // after tb_free and pl_free
 //
-// pr_start refused, nothing made: "taken" (a process at, above or under the path) or a name code.
+// pr_start refused, nothing made: "taken" (a process already at exactly the path; above or under it is fine, whether it may is protect's) or a name code.
 // else: its node's id proc:<uuid>, a scope [["process", at], [PL_NODE, id]] (sn_give) under
 // options.under (NULL: the owner), the row, attributes (options.attributes, then
 // ermine.process.args, .folder, .pin, status pending: processes' own win), then options.body. pr_stop:

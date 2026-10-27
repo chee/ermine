@@ -11,7 +11,8 @@
 //   pr_add(p, table, root, path, n, id, header, &changed, &made);
 //   pl_commit(p, &changed);
 //
-// a level is a map, a leaf a process id; nothing under a leaf. walked by path; a running process
+// a level is a map, a leaf a process id; a process with processes under it is a level holding its id
+// under the key "" (no name is ""). walked by path; a running process
 // shadows what is saved there. rows are never saved: what runs now, on this device.
 // writes: return changed entries for pl_commit. refused, nothing changed: PL_NOT_A_NAME,
 // PL_NOTHING_THERE, PL_ALREADY_THERE. memory: entries hold patches (pl_hold); the caller holds the
@@ -48,14 +49,15 @@ void pr_processes_init(pr_processes *p, tb_key root);
 void pr_trie_init(pr_processes *p, const char *part, tb_key root, const char *from);
 
 // id running at path under root: its leaf put in, the levels on the way made. refused: no name, or a
-// name that is not one (PL_NOT_A_NAME); a process at the path, above it or under it
-// (PL_ALREADY_THERE: a leaf holds no levels, a level is no leaf). a saved thing at the path is fine:
+// name that is not one (PL_NOT_A_NAME); a process at exactly the path (PL_ALREADY_THERE; above or
+// under it is fine: a leaf above becomes a level holding its id under ""). a saved thing at the path is fine:
 // the row shadows it. the first row under root makes the part's entry (a table event tells readers):
 // *changed nothing, *made the entry (the places' own), for the caller to hold the header's block on;
 // else *made NULL. The entry is written through places' unread (pl_unread), as children are. made may be NULL. 0, or the code
 int pr_add(pl *l, tb_table *table, tb_key root, const char *const *path, size_t n, tb_key id,
 	ch_header header, pl_changed *changed, nd_entry **made);
-// pr_add on any part: id at path in root's trie there, by the same rules
+// pr_add on any part: id at path in root's trie there, by the rules of a trie of one thing at a path:
+// refused too (PL_ALREADY_THERE) where a leaf is above the path or a level under it
 int pr_add_in(pl *l, tb_table *table, const char *part, tb_key root, const char *const *path,
 	size_t n, tb_key id, ch_header header, pl_changed *changed, nd_entry **made);
 

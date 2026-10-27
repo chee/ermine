@@ -1,5 +1,5 @@
 {
-	"title": "a process started in a box is a row on the box's root: at its path in the box, not in the host's graph (the host can start another at the same path), taken in the box when the path is or the path is above or under it, and stopped by stop: its teardowns are told, it and what it started are gone from the box, and the path is free again. what a boxed process starts is in the box too",
+	"title": "a process started in a box is a row on the box's root: at its path in the box, not in the host's graph (the host can start another at the same path), taken in the box when a process is at that very path (above or under it is fine), and stopped by stop: its teardowns are told, it and what it started are gone from the box, and the path is free again. what a boxed process starts is in the box too",
 	"steps": [
 		{
 			"op": "ermine",
@@ -116,7 +116,7 @@
 		{
 			"op": "start",
 			"name": "p3",
-			"at": "/work",
+			"at": "/work/kid",
 			"program": "/code/p",
 			"in": "b",
 			"expect": {
@@ -209,6 +209,55 @@
 			"in": "b",
 			"expect": {
 				"there": true
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/q",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "up",
+			"at": "/work",
+			"program": "/code/q",
+			"in": "b",
+			"expect": {
+				"id": "proc:up"
+			}
+		},
+		{
+			"op": "names",
+			"path": "/work",
+			"expect": {
+				"names": [
+					"kid"
+				]
+			},
+			"in": "b"
+		},
+		{
+			"op": "look",
+			"path": "/work",
+			"in": "b",
+			"expect": {
+				"there": true
+			}
+		},
+		{
+			"op": "look",
+			"path": "/work/kid",
+			"in": "b",
+			"expect": {
+				"there": true
+			}
+		},
+		{
+			"op": "look",
+			"path": "/work",
+			"expect": {
+				"there": false
 			}
 		}
 	]

@@ -136,19 +136,40 @@ Deno.test("./on/reset under a process: the process's own children, inside its no
 	assertEquals([...list(w.places, ["work", "timer"])], ["on"])
 })
 
-Deno.test("a second start where one runs is refused; above or under one too; a stop where none runs", () => {
+Deno.test("a second start where one runs is refused, above or under one is not; a stop where none runs", () => {
 	const w = world()
 	w.tree()
 	w.start(["work", "clock"], "P")
 	refused(() => w.start(["work", "clock"], "Q"), "already-there")
-	refused(() => w.start(["work", "clock", "x"], "Q"), "already-there")
-	refused(() => w.start(["work"], "Q"), "already-there")
 	refused(() => w.start([], "Q"), "not-a-name")
 	refused(() => w.start(["work", ".."], "Q"), "not-a-name")
 	refused(() => w.stop(["work", "timer"]), "nothing-there")
 	refused(() => w.stop(["work"]), "nothing-there")
 	assertEquals(w.rows(), { work: { clock: "P" } })
 	assertEquals(get(w.places, ["work", "clock"]), "P")
+})
+
+Deno.test("a process at /work and one at /work/clock: listed, walked, stopped one at a time", () => {
+	const w = world()
+	w.tree()
+	w.start(["work", "clock"], "P")
+	w.start(["work"], "W")
+	w.start(["work", "clock", "x"], "X")
+	assertEquals(w.rows(), { work: { "": "W", clock: { "": "P", x: "X" } } })
+	assertEquals(get(w.places, ["work"]), "W")
+	assertEquals(get(w.places, ["work", "clock"]), "P")
+	assertEquals(get(w.places, ["work", "clock", "x"]), "X")
+	assertEquals([...list(w.places, ["work"])].sort(), ["clock", "notes"])
+	refused(() => w.start(["work"], "Q"), "already-there")
+	w.stop(["work"])
+	assertEquals(w.rows(), { work: { clock: { "": "P", x: "X" } } })
+	assertEquals(get(w.places, ["work", "clock", "x"]), "X")
+	w.stop(["work", "clock", "x"])
+	w.stop(["work", "clock"])
+	assertEquals(w.rows(), {})
+	w.start(["work", "a", "b"], "B")
+	w.start(["work", "a"], "A")
+	assertEquals(w.rows(), { work: { a: { "": "A", b: "B" } } })
 })
 
 Deno.test("rows: a start puts one patch at its path, a stop takes the levels it leaves empty", () => {

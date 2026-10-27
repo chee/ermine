@@ -11,7 +11,7 @@
 //   processes.stop(p)
 //
 // start(places, at, opts, body): at, folder: paths from the places' root, names or a string ("." here, ".." back one); folder default: at's folder. refused "taken",
-// nothing made: a process at, above or under the path. else, in order:
+// nothing made: a process already at exactly the path (above or under it is fine; whether it may is protect's). else, in order:
 //   1. its node's id (setup.id's, else proc:<boot>-<n>), then a scope { process: at, [NODE]: id } (given the node,
 //      scopes.ts) under options.under (none: the owner), made through setup.sites when given
 //   2. the row: addProcess at the path, committed to the places given
