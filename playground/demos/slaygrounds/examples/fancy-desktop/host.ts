@@ -234,5 +234,4 @@ export const reload = (mod: Record<string, unknown>) => {
 let beats = 0
 setInterval(() => {
 	world.ermine.patch("/beat", [{ path: [], value: ++beats }])
-	world.ermine.pulse()
 }, 50)

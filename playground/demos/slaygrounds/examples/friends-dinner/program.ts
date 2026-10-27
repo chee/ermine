@@ -5,11 +5,11 @@ import {
 	createMemo,
 	ensureNode,
 	executeAction,
+	getCaller,
 	patch,
 	peep,
 	read,
 } from "@ermine/system"
-import { who } from "@ermine/slaygrounds/tools"
 import { bind, handler, under } from "ermine-h"
 
 // friends-dinner: dinner at mine, friday. say if you're coming, pick what you'll bring, send the
@@ -167,10 +167,10 @@ export default function dinner() {
 	})
 
 	// an answer: yours from the buttons (this process calling, a person clicking), a friend's only
-	// from the post. the name in the arguments counts only when the post is the caller (who names a
-	// process by where it runs: the post runs at mail/post)
+	// from the post. the name in the arguments counts only when the post is the caller (a caller's
+	// process is named by where it runs: the post runs at mail/post)
 	createAction("on/answer", (name: string, answer: Answer, dish?: string) => {
-		const person = who().caller === "mail/post" ? name : "you"
+		const person = getCaller()?.process?.join("/") === "mail/post" ? name : "you"
 		const g = get<Guest>(guest[person])
 		const at = g.answer === answer ? g.at : Date.now()
 		patch(guest[person], [
