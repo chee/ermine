@@ -160,7 +160,6 @@ export type {
 	Held,
 	Item,
 	RunView,
-	Sent,
 	Status,
 	System,
 	Touched,
@@ -436,21 +435,6 @@ export function createErmine(options: Options = {}): Ermine {
 			entry = was
 			built = had
 		}
-	}
-	const entered = <F extends (...args: never[]) => unknown>(f: F): F => {
-		const g = function (this: unknown, ...args: unknown[]) {
-			const was = entry
-			const had = built
-			entry = g
-			built = undefined
-			try {
-				return (f as unknown as (...a: unknown[]) => unknown).apply(this, args)
-			} finally {
-				entry = was
-				built = had
-			}
-		}
-		return g as unknown as F
 	}
 
 	// the hooks: onWrite around each write, onRead around reads' items, onTeardown around each
@@ -742,7 +726,6 @@ export function createErmine(options: Options = {}): Ermine {
 		roots,
 		views: new WeakMap(),
 		changes: new WeakMap(),
-		entered,
 		enter,
 		shown,
 		torn,

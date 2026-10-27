@@ -53,7 +53,7 @@
 //       es_run_view_free es_call_view_free es_show: the writer, the run view, the call view with
 //       handles shown as paths
 //     call records (calls.ts): es_calls_new es_calls_free es_calls_next es_calls_begin es_calls_end
-//       es_calls_going es_calls_calling es_calls_open es_calls_read es_calls_made es_calls_latest
+//       es_calls_calling es_calls_open es_calls_read es_calls_made es_calls_latest
 //       es_calls_drop es_calls_wait es_calls_answered es_calls_waits es_waits_free es_calls_stop
 //     marks and writers (system.ts marks, createWriter): es_mark es_is_mark es_create_writer es_with_writer es_drop_writer es_cleanup
 //     promises: es_promise_new es_promise_release es_promise_value es_promise_resolve
@@ -1358,7 +1358,6 @@ unsigned es_calls_next(es_ermine *e);
 es_going *es_calls_begin(es_ermine *e, unsigned n, sc_scope *scope, const es_calling_view *base);
 // it returned (a promise: pending till it settles), threw, or threw PENDING
 void es_calls_end(es_ermine *e, es_going *g, const es_out *out);
-es_going *es_calls_going(es_ermine *e, sc_scope *scope);
 // the call being answered at scope (or the nearest above), its record so far; NULL: none
 int es_calls_calling(es_ermine *e, sc_scope *scope, es_calling_view *out);
 // the call open now: the innermost, no run begun inside it
