@@ -4,7 +4,7 @@
 // no spot is held (the scheduler's onTrackingEnd). a few dozen seeds (fuzz runs small)
 import { assert, assertEquals } from "@std/assert"
 import createEntry from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import { ApplyError, type Key as Step, type Patch } from "@ermine/core/changeable/apply"
 import { createScheduler } from "@ermine/core/scheduler"
 import { createPaths } from "@ermine/core/scheduler/paths"

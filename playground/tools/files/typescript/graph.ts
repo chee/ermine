@@ -13,7 +13,7 @@
 // is the entry's value and change, a slot's one list is its ids, an info name's one version is the
 // attributes entry's name. Nothing here is the store's or the program's rule.
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import type { Patch } from "@ermine/core/changeable/apply"
 import { createGuard, type Setup as GuardSetup, slot as slotTarget } from "@ermine/core/places/guard"
 import { createChangeHeader } from "@ermine/core/places/header"

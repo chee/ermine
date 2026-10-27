@@ -22,7 +22,7 @@
 #endif
 
 #include "../../../conformance/c/protocol_harness.h"
-#include "../../../core/node/c/update.h"
+#include "../../../core/changeable/c/update.h"
 #include "../../../playground/encoding/c/commit_form_harness.h"
 
 #include <stdlib.h>

@@ -25,7 +25,7 @@
 //
 // what can't cross yet: realms.ts
 import createEntry, { type ChangeHeader } from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import apply, { type Patch } from "@ermine/core/changeable/apply"
 import type { Fact, Places } from "@ermine/core/places"
 import { PROCESS } from "@ermine/processes"

@@ -12,7 +12,7 @@
 // reference's answers, and the one change must end where the reference's patches one by one did.
 import { assert, assertEquals } from "@std/assert"
 import createEntry from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import apply, { ApplyError, type Patch } from "@ermine/core/changeable/apply"
 import { ask, command, reference, suite } from "../../../conformance/typescript/ask.ts"
 import { line, revive, toJson } from "../../../conformance/typescript/form.ts"

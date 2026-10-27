@@ -24,7 +24,7 @@
 // globalThis.ermine (the inspector): table, places, s, header, statuses, moments (last 600), host,
 // sync, and the rest of the world's names, empty
 import createEntry from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import { createPlaces, place } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"
 import * as lib from "@ermine/core/places/lib"

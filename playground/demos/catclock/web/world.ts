@@ -10,8 +10,8 @@
 //   /loaders/canvas.js          the runner's code, text: canvas runs what this says
 //   /cache/<key>                each build (@ermine/compilers), by its key
 import createEntry, { type Entry } from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
-import produce from "@ermine/core/changeable/produce"
+import update from "@ermine/core/changeable/update"
+import edit from "@ermine/core/changeable/edit"
 import { createPlaces, place, unplace } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"
 import * as lib from "@ermine/core/places/lib"
@@ -118,7 +118,7 @@ export function createWorld() {
 		})
 	}
 
-	// text at path changed to text: the patches produce makes for the span that changed (in code
+	// text at path changed to text: the patches edit makes for the span that changed (in code
 	// points, as apply counts them), not the whole
 	function edit(path: Path, text: string) {
 		writing(() => {
@@ -134,7 +134,7 @@ export function createWorld() {
 				before[before.length - 1 - end] === after[after.length - 1 - end]
 			) end++
 			const insert = after.slice(start, after.length - end).join("")
-			const patches = produce(String(n.value ?? ""), (draft, { splice }) => {
+			const patches = edit(String(n.value ?? ""), (draft, { splice }) => {
 				splice(draft as string, start, before.length - start - end, insert)
 			})
 			if (!patches.length) return

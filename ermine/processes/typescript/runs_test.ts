@@ -6,7 +6,7 @@ import {
 	assertThrows,
 } from "@std/assert"
 import createEntry from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import type { Patch } from "@ermine/core/changeable/apply"
 import { createPlaces } from "@ermine/core/places"
 import { createGuard, Refusal } from "@ermine/core/places/guard"

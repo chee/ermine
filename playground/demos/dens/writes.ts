@@ -5,7 +5,7 @@
 //   put("value", "sync", v)          // its site: this line, not writes.ts
 //   drop("value", keys, [who])        // one key taken out
 import createEntry, { type Entry } from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import type { Scheduler, Scope } from "@ermine/core/scheduler"
 import type { Id, Key, Table } from "@ermine/core/table"
 import type { Places } from "@ermine/core/places"

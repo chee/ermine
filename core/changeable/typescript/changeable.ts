@@ -1,6 +1,7 @@
 // changeable: a value and its latest change, the datatype anything patched is (a table's entry is
-// one: node/entry). what changes it is this library's: apply's patches, invert's undo, squish,
-// produce; who keeps one is a layer above's
+// one: node/entry). what changes it is this library's: update (its value patched in place, its
+// change with the patches and their undo), apply, invert, squish, edit (a recipe's patches); who
+// keeps one is a layer above's
 import type { Patch } from "./apply.ts"
 import type { FileLocation } from "@ermine/core/util/stacktrace"
 

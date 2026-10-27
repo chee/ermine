@@ -2,7 +2,7 @@
 // over its own device, as lab-pig's sync world composes one; stored writes and ephemeral writes
 // (waves) of a node's value
 import createEntry from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import type { Patch } from "@ermine/core/changeable/apply"
 import { createPlaces } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"

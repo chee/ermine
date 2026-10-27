@@ -1,7 +1,7 @@
 /// <reference lib="dom" />
 // edit a node's value (or attributes) as JSON in the graph view. what is typed is diffed against
-// the value into patches by op's produce (nothing of our own but the recipe that walks the new
-// value onto the draft, and a string's common prefix and suffix for produce's splice), shown,
+// the value into patches by changeable's edit (nothing of our own but the recipe that walks the new
+// value onto the draft, and a string's common prefix and suffix for editValue's splice), shown,
 // then written as an ordinary change through the world: a scope under the host's, update with
 // header, places.commit, a pulse
 import { h } from "./values.ts"
@@ -11,8 +11,8 @@ import { write as writeTo } from "./solid-ermine.ts"
 type Any = any
 type Where = { id: unknown; part: string }
 
-// op's produce, loaded when first needed; update is the world's own (its iframe's import map)
-const lib = async () => ({ produce: (await import("@ermine/core/changeable/produce")).default })
+// changeable's edit, loaded when first needed; update is the world's own (its iframe's import map)
+const lib = async () => ({ editValue: (await import("@ermine/core/changeable/edit")).default })
 
 const container = (v: unknown) => typeof v === "object" && v !== null
 // JSON only: null, booleans, finite numbers, strings, lists, plain maps (another realm's too)
@@ -69,8 +69,8 @@ function onto(parent: Any, key: string | number, b: Any, splice: Any) {
 
 // the patches that turn current into next
 export async function diff(current: unknown, next: unknown) {
-	const { produce } = await lib()
-	return produce(current as Any, (draft: Any, { splice }: Any) => {
+	const { editValue } = await lib()
+	return editValue(current as Any, (draft: Any, { splice }: Any) => {
 		if (typeof current === "string" && typeof next === "string") {
 			const [start, remove, insert] = span(current, next)
 			if (start + remove > 0 || insert !== undefined) splice(current, start, remove, insert)
@@ -117,7 +117,7 @@ export function edit(
 		const mine = ++seq
 		try {
 			const next = JSON.parse(box.value)
-			// a copy made here: the program's objects are another realm's, which produce will not draft
+			// a copy made here: the program's objects are another realm's, which editValue will not draft
 			const out = await diff(JSON.parse(JSON.stringify(node.value)), next)
 			if (mine !== seq) return
 			patches = out
@@ -143,7 +143,7 @@ export function edit(
 	}
 	const write = async () => {
 		if (!patches?.length) return
-		const { default: update } = await importIn("@ermine/core/node/update")
+		const { default: update } = await importIn("@ermine/core/changeable/update")
 		writeTo(world, where, patches, update)
 		done()
 	}

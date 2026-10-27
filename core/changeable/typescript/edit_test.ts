@@ -1,12 +1,11 @@
-// produce: each mutation as the patches it should be, and the oracle: apply(base, produce(base,
+// edit: each mutation as the patches it should be, and the oracle: apply(base, edit(base,
 // recipe)) is what the recipe makes of a clone of base, base is untouched, and the undo restores it.
 // a few dozen seeds (fuzz runs small)
 import { assertEquals, assertNotStrictEquals, assertStrictEquals, assertThrows } from "@std/assert"
 import apply, { type Patch } from "./apply.ts"
-import produce, { type Helpers, nothing } from "./produce.ts"
+import edit, { type Helpers, nothing } from "./edit.ts"
 
-const run = (base: unknown, recipe: (d: any, h: Helpers) => unknown) =>
-	produce(base, recipe as never)
+const run = (base: unknown, recipe: (d: any, h: Helpers) => unknown) => edit(base, recipe as never)
 const after = (base: unknown, recipe: (d: any, h: Helpers) => unknown) =>
 	apply(base, run(base, recipe))
 
@@ -327,7 +326,7 @@ Deno.test("what is never touched is shared; the base is never changed", () => {
 	assertNotStrictEquals(next.a, base.a)
 })
 
-Deno.test("a draft used after produce returned throws", () => {
+Deno.test("a draft used after edit returned throws", () => {
 	let kept: any
 	run({ a: { x: 1 } }, (d) => void (kept = d.a))
 	assertThrows(() => kept.x, TypeError)
@@ -522,7 +521,7 @@ function respan(t: any, k: string | number, r: Rng, h?: Helpers) {
 }
 
 const SEEDS = 40
-Deno.test(`produce oracle: ${SEEDS} seeds, apply(produce) is the recipe on a clone`, () => {
+Deno.test(`edit oracle: ${SEEDS} seeds, apply(edit) is the recipe on a clone`, () => {
 	for (let seed = 1; seed <= SEEDS; seed++) {
 		let base = make(rng(seed), 0)
 		for (let tries = 0; !container(base); tries++) base = make(rng(seed * 1000 + tries), 0)
@@ -534,7 +533,7 @@ Deno.test(`produce oracle: ${SEEDS} seeds, apply(produce) is the recipe on a clo
 		}
 		const direct = structuredClone(base)
 		recipe(direct, false)
-		const patches: Patch[] = produce(
+		const patches: Patch[] = edit(
 			base as never,
 			(d: any, h: Helpers) => void recipe(d, true, h),
 		)

@@ -6,7 +6,7 @@
 // first (fastest of 15 rounds); the first write (the caller's map: copied, fastest round); the
 // slowest write after the first in any round (a copy after a read, and the collector's pauses)
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import apply, { type Patch } from "@ermine/core/changeable/apply"
 import { createUnread } from "./unread.ts"
 

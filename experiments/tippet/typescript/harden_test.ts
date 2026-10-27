@@ -3,7 +3,7 @@
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert"
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
 import createEntry from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import type { Patch } from "@ermine/core/changeable/apply"
 import { createScheduler } from "@ermine/core/scheduler"
 import { createPaths } from "@ermine/core/scheduler/paths"

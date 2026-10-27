@@ -6,7 +6,7 @@
 // changed was left untold); the layers end where the value does. a few dozen seeds
 import { assertEquals } from "@std/assert"
 import createEntry, { type Entry } from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import apply, { type Patch } from "@ermine/core/changeable/apply"
 import { at, createPlaces, type Places, unread } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"

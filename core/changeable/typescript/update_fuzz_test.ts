@@ -5,7 +5,7 @@
 // seeds (fuzz runs small)
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
 import apply, { ApplyError, type Patch } from "@ermine/core/changeable/apply"
-import createEntry, { type ChangeHeader, type Entry } from "./entry.ts"
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
 import update from "./update.ts"
 import { differ, patch, rand, show, snap, start } from "../../fuzz/gen_harness.ts"
 

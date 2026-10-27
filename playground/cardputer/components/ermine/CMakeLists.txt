@@ -7,7 +7,7 @@ idf_component_register(
 	SRCS
 		${R}/core/changeable/c/value.c ${R}/core/changeable/c/json.c ${R}/core/changeable/c/apply.c ${R}/core/changeable/c/invert.c
 		${R}/core/table/c/table.c
-		${R}/core/node/c/node.c ${R}/core/node/c/update.c
+		${R}/core/node/c/node.c ${R}/core/changeable/c/update.c
 		${R}/core/scheduler/c/scheduler.c ${R}/core/scheduler/c/order.c ${R}/core/scheduler/c/rank.c
 		${R}/core/scheduler/c/causes.c ${R}/core/scheduler/c/ptrmap.c ${R}/core/scheduler/c/tracker.c
 		${R}/core/scheduler/c/paths.c ${R}/core/scheduler/c/selector.c

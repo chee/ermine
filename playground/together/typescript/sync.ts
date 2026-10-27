@@ -36,7 +36,7 @@
 // table. stops standing at a later stored commit of that device, after ttl ms unheard, or on stop
 // (Sync.stop); resent every beat ms; then let go (device.forget). nothing ephemeral outlives sync.
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import apply, { type Patch } from "@ermine/core/changeable/apply"
 import * as cbor from "@ermine/encoding/cbor"
 import {

@@ -16,7 +16,7 @@
 // its address under its name. its reads are tracked in a compute, untracked elsewhere.
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
 import type { Node } from "@ermine/core/node"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import apply, { type Key as Step_, type Patch } from "@ermine/core/changeable/apply"
 import {
 	at,

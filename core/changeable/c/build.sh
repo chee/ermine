@@ -1,8 +1,8 @@
 #!/bin/sh
-# builds op's C harnesses (squish, apply) with the root Makefile; CHECK=1: the harness-checks, with the
+# builds changeable's C harnesses (squish, apply, update) with the root Makefile; CHECK=1: the harness-checks, with the
 # address and undefined-behaviour sanitizers
 set -e
 cd "$(dirname "$0")/../../.."
-bins="core/changeable/c/squish-harness core/changeable/c/apply-harness"
+bins="core/changeable/c/squish-harness core/changeable/c/apply-harness core/changeable/c/update-harness"
 [ "$CHECK" = 1 ] && bins=$(for b in $bins; do printf '%s-check ' "$b"; done)
 make -s $bins

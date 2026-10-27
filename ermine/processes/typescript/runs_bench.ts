@@ -4,7 +4,7 @@
 // rounds: µs per pulse, and per run where the pulse runs many. the host's write each pulse is
 // made with a header of its own (no site captured), so it costs the same in every shape
 import createEntry, { type ChangeHeader } from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import { createTable, type Key } from "@ermine/core/table"
 import { createScheduler } from "@ermine/core/scheduler"
 import { createPaths } from "@ermine/core/scheduler/paths"

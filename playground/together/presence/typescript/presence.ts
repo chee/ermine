@@ -8,7 +8,7 @@
 //   - never saved, unless the host says so (save, below): saving is a side's choice
 import { decode, encode } from "@ermine/encoding/cbor"
 import createEntry from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import type { Patch } from "@ermine/core/changeable/apply"
 import { createChangeHeader } from "@ermine/core/places/header"
 import { upsert } from "@ermine/core/places/upsert"

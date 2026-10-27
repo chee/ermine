@@ -8,7 +8,7 @@
 // source started again is followed
 import { createChangeHeader } from "@ermine/core/places/header"
 import { upsert } from "@ermine/core/places/upsert"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import type { Entry } from "@ermine/core/node/entry"
 import { get } from "@ermine/core/places/lib"
 import { inside } from "@ermine/boxes"

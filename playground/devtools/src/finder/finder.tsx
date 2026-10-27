@@ -30,7 +30,7 @@ import {
 	peep,
 	read,
 } from "@ermine/system"
-import produce from "@ermine/core/changeable/produce"
+import edit from "@ermine/core/changeable/edit"
 import { enc, kid } from "../paths.ts"
 import {
 	changeable,
@@ -328,7 +328,7 @@ const KINDS: Record<string, string> = {
 	nothing: "empty",
 }
 const EDITS_AS_JSON = new Set(["number", "boolean", "null", "list", "record"])
-// what was typed, diffed against the value into patches (op's produce, as slaygrounds' editor
+// what was typed, diffed against the value into patches (changeable's edit, as slaygrounds' editor
 // does): a string's one splice between the ends it shares; a record's or list's keys set, deleted,
 // lengths; anything else put whole. these patches are what the graph is sent
 const holder = (v: unknown) => typeof v === "object" && v !== null
@@ -367,7 +367,7 @@ function onto(parent: Any, key: string | number, b: Any, splice: Any) {
 	else parent[key] = b
 }
 export function diff(current: unknown, next: unknown): Any[] {
-	return produce(current as Any, (draft: Any, { splice }: Any) => {
+	return edit(current as Any, (draft: Any, { splice }: Any) => {
 		if (typeof current === "string" && typeof next === "string") {
 			const [start, remove, insert] = span(current, next)
 			if (start + remove > 0 || insert !== undefined) splice(current, start, remove, insert)

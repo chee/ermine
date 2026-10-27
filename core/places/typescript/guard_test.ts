@@ -3,7 +3,7 @@
 // the table itself, with a scope open
 import { assertEquals, assertInstanceOf, assertThrows } from "@std/assert"
 import createEntry from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import type { Patch } from "@ermine/core/changeable/apply"
 import { all, grants, no, pending, type Policy, yes } from "@ermine/core/protect"
 import { createScheduler, PENDING, type Scope } from "@ermine/core/scheduler"

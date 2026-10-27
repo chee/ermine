@@ -28,11 +28,11 @@ transport_libs = $(subduction_lib) $(filter-out -lm,$(shell tr -d '\033' < playg
 squish_src = $(harness_src) core/changeable/c/squish.c core/changeable/c/squish_harness.c
 changeable-apply_src = $(harness_src) conformance/c/protocol_harness.c core/changeable/c/apply_harness.c core/changeable/c/apply.c core/changeable/c/invert.c core/node/c/node.c
 paths_src = $(harness_src) conformance/c/protocol_harness.c core/scheduler/c/paths_harness.c core/scheduler/c/paths.c core/node/c/node.c core/changeable/c/apply.c core/changeable/c/invert.c
-places_src = $(harness_src) core/places/c/places_harness.c conformance/c/protocol_harness.c core/places/c/places.c core/unread/c/unread.c core/places/c/cache.c core/clingy/c/clingy.c core/scheduler/c/selector.c core/places/c/status.c core/places/c/world_harness.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/changeable/c/value.c core/changeable/c/apply.c core/changeable/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
+places_src = $(harness_src) core/places/c/places_harness.c conformance/c/protocol_harness.c core/places/c/places.c core/unread/c/unread.c core/places/c/cache.c core/clingy/c/clingy.c core/scheduler/c/selector.c core/places/c/status.c core/places/c/world_harness.c core/table/c/table.c core/node/c/node.c core/changeable/c/update.c core/changeable/c/value.c core/changeable/c/apply.c core/changeable/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
 processes_src = $(filter-out core/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes_harness.c ermine/processes/c/processes.c ermine/processes/c/scopes.c
 protect_src = core/protect/c/protect.c core/protect/c/protect_harness.c $(harness_src)
-update_src = $(harness_src) conformance/c/protocol_harness.c core/node/c/update_harness.c core/node/c/update.c core/node/c/node.c core/changeable/c/apply.c core/changeable/c/invert.c
-guard_src = $(harness_src) core/places/c/guard_harness.c core/places/c/guard.c core/protect/c/protect.c conformance/c/protocol_harness.c core/places/c/places.c core/unread/c/unread.c core/places/c/cache.c core/clingy/c/clingy.c core/scheduler/c/selector.c core/places/c/status.c core/places/c/world_harness.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/changeable/c/value.c core/changeable/c/apply.c core/changeable/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
+update_src = $(harness_src) conformance/c/protocol_harness.c core/changeable/c/update_harness.c core/changeable/c/update.c core/node/c/node.c core/changeable/c/apply.c core/changeable/c/invert.c
+guard_src = $(harness_src) core/places/c/guard_harness.c core/places/c/guard.c core/protect/c/protect.c conformance/c/protocol_harness.c core/places/c/places.c core/unread/c/unread.c core/places/c/cache.c core/clingy/c/clingy.c core/scheduler/c/selector.c core/places/c/status.c core/places/c/world_harness.c core/table/c/table.c core/node/c/node.c core/changeable/c/update.c core/changeable/c/value.c core/changeable/c/apply.c core/changeable/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
 scheduler_src = $(harness_src) core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c core/scheduler/c/scheduler_harness.c
 names_src = playground/tools/files/c/names.c playground/tools/files/c/names_harness.c ermine/encoding/c/json.c
 diag_src = playground/tools/files/c/diag.c playground/tools/files/c/diag_harness.c ermine/encoding/c/json.c
@@ -41,7 +41,7 @@ store_src = playground/tools/files/c/store.c playground/tools/files/c/store_harn
 	playground/tools/files/c/external.c playground/tools/files/c/foundation.c \
 	playground/tools/files/c/saved.c playground/tools/files/c/saved_shown_harness.c playground/tools/files/c/saved_pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src)
 # the files graph (playground/tools/files/c/graph.c): core's table, places and guard under a scheduler, and the policy they ask
-graph_src = core/places/c/places.c core/unread/c/unread.c core/places/c/guard.c core/protect/c/protect.c core/table/c/table.c core/node/c/node.c core/node/c/update.c \
+graph_src = core/places/c/places.c core/unread/c/unread.c core/places/c/guard.c core/protect/c/protect.c core/table/c/table.c core/node/c/node.c core/changeable/c/update.c \
 	core/changeable/c/value.c core/changeable/c/apply.c core/changeable/c/invert.c core/changeable/c/json.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
 # the files program: its watcher and harness, on the C store and the C scheduler (and the graph under it)
 # sys.c's Trash against homes of its own, no suite
@@ -69,7 +69,7 @@ paths = core/scheduler/c/paths-harness
 places = core/places/c/places-harness
 processes = ermine/processes/c/processes-harness
 protect = core/protect/c/protect-harness
-update = core/node/c/update-harness
+update = core/changeable/c/update-harness
 guard = core/places/c/guard-harness
 scheduler = core/scheduler/c/scheduler-harness
 names = playground/tools/files/c/names-harness
@@ -81,7 +81,7 @@ program = playground/tools/files/c/program-harness
 sys = playground/tools/files/c/sys-harness
 
 # presence (playground/together/presence): its harness on places, the table and the scheduler (the C harness has no BroadcastChannel)
-presence_src = $(harness_src) playground/together/presence/c/presence_harness.c playground/together/presence/c/presence.c playground/together/presence/c/channel.c core/places/c/places.c core/unread/c/unread.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/changeable/c/value.c core/changeable/c/apply.c core/changeable/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
+presence_src = $(harness_src) playground/together/presence/c/presence_harness.c playground/together/presence/c/presence.c playground/together/presence/c/channel.c core/places/c/places.c core/unread/c/unread.c core/table/c/table.c core/node/c/node.c core/changeable/c/update.c core/changeable/c/value.c core/changeable/c/apply.c core/changeable/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
 presence = playground/together/presence/c/presence-harness
 presence_suite = presence
 presence_tests = $(wildcard playground/together/presence/typescript/presence_harness_test.ts)
@@ -273,7 +273,7 @@ together-lock_flags = $(subduction_rename) -DCONFORMANCE_HOOK -DTRANSPORT_LIBRAR
 together-lock_libs = $(transport_libs)
 LIBS += together-lock
 together_sync_src = $(together_harness_src) $(together_commits_src) conformance/c/protocol_harness.c playground/together/c/sync_harness.c playground/together/c/sync.c playground/together/c/wires_harness.c \
-	playground/together/stacks/subduction/c/subduction/store_memory.c core/table/c/table.c core/node/c/update.c $(together_transport_src) $(subduction_lib)
+	playground/together/stacks/subduction/c/subduction/store_memory.c core/table/c/table.c core/changeable/c/update.c $(together_transport_src) $(subduction_lib)
 together-sync_src = $(together_sync_src) playground/together/c/rules_harness.c
 together-sync = playground/together/c/sync-harness
 together-sync_suite = sync
@@ -301,7 +301,7 @@ egwalker-sync_libs = $(transport_libs)
 LIBS += egwalker-sync
 # two hosts typing into one text, merging by eg-walker (merge_bench.ts in C): merge-bench [keys] [pure]; no suite
 egwalker-merge-bench_src = playground/egwalker/c/merge_bench.c playground/together/c/sync.c playground/egwalker/c/egwalker.c playground/together/c/wires_harness.c \
-	core/changeable/c/value.c core/changeable/c/json.c playground/together/stacks/subduction/c/subduction/store_memory.c core/table/c/table.c core/node/c/update.c \
+	core/changeable/c/value.c core/changeable/c/json.c playground/together/stacks/subduction/c/subduction/store_memory.c core/table/c/table.c core/changeable/c/update.c \
 	$(together_transport_src) $(subduction_lib)
 egwalker-merge-bench = playground/egwalker/c/merge-bench
 egwalker-merge-bench_flags = $(subduction_rename)
@@ -391,7 +391,7 @@ table_tests = $(wildcard core/table/typescript/table_harness_test.ts)
 node_suite = node
 node_tests = $(wildcard core/node/typescript/node_harness_test.ts)
 update_suite = update
-update_tests = $(wildcard core/node/typescript/update_harness_test.ts)
+update_tests = $(wildcard core/changeable/typescript/update_harness_test.ts)
 squish_suite = squish
 squish_tests = $(wildcard core/changeable/typescript/squish_harness_test.ts)
 changeable-apply_suite = apply
@@ -479,7 +479,7 @@ core/changeable/c/apply-bench: core/changeable/c/apply.c core/changeable/c/value
 	$(CC) $(CFLAGS) -o $@ $^ -lm
 extensions/patchy/c/patch-bench: $(filter-out core/places/c/places_harness.c core/places/c/world_harness.c core/places/c/status.c conformance/c/harness.c conformance/c/protocol_harness.c core/changeable/c/json.c,$(places_src)) extensions/patchy/c/patch.c extensions/patchy/c/patch_bench.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
-core/unread/c/unread-bench: core/node/c/node.c core/node/c/update.c core/changeable/c/value.c core/changeable/c/apply.c core/changeable/c/invert.c core/unread/c/unread.c core/unread/c/unread_bench.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
+core/unread/c/unread-bench: core/node/c/node.c core/changeable/c/update.c core/changeable/c/value.c core/changeable/c/apply.c core/changeable/c/invert.c core/unread/c/unread.c core/unread/c/unread_bench.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
 
 # the files tool: a command line over the C store (playground/tools/files/c/files.c). Its synced document (host.c: the files program and

@@ -4,7 +4,7 @@
 // written to the table (core/table/c/table.h). same rules as sync.ts.
 //
 // what a path holds is a list (lists.h): the table shows the first item at each path, composed. a
-// commit on the one head shown, naming nothing it replaces: applied by update (core/node/c/update.h);
+// commit on the one head shown, naming nothing it replaces: applied by update (core/changeable/c/update.h);
 // any other: checked on a replay of its base (key patches alone never refused by what is there), then
 // the table becomes the lists' composed, each table told only when it changes. a node with an open
 // path has the "values" table at its id ({[table]: [{path, items: [{value? | gone?, inside?, at?,

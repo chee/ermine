@@ -1,12 +1,12 @@
 import { assertEquals } from "jsr:@std/assert@1"
 import apply, { type Patch } from "@ermine/core/changeable/apply"
-import produce from "@ermine/core/changeable/produce"
+import edit from "@ermine/core/changeable/edit"
 import { rebase } from "./rebase.ts"
 
 // the page's patches landed, then the realm's (made on the value before them), rebased
 const both = <T>(v: T, theirs: Patch[], ours: Patch[]) =>
 	apply(apply(v, theirs), rebase(theirs, ours))
-const recipe = <T>(v: T, f: (d: any, h: any) => unknown) => produce(v, f as never)
+const recipe = <T>(v: T, f: (d: any, h: any) => unknown) => edit(v, f as never)
 
 Deno.test("text: an insert at the end stays at the end past an insert at the start", () => {
 	const v = "hello world"

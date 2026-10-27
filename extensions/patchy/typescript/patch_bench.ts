@@ -4,7 +4,7 @@
 // theme.accent. "bare": no overlay, places reads the table itself. a write's header is made once
 // (a site's capture is not what this measures). names given: only the rows whose name holds one
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import { createPlaces, type Places } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"
 import { createScheduler } from "@ermine/core/scheduler"

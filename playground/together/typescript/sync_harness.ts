@@ -75,7 +75,7 @@
 import * as sd from "npm:@automerge/subduction@0.23.0"
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import createEntry, { type ChangeHeader } from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import type { Patch } from "@ermine/core/changeable/apply"
 import { createPlaces, type Places } from "@ermine/core/places"
 import { createScheduler } from "@ermine/core/scheduler"
