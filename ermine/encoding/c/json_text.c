@@ -753,9 +753,10 @@ static void putScalar(Bytes *bytes, const Json *value) {
 		case JSON_NUMBER: {
 			// a whole number past 2^53 - 1: its digits, in the bigint form
 			bool negative;
-			unsigned char m[128];
+			unsigned char scratch[128];
+			const unsigned char *m;
 			size_t n;
-			if (fabs(value->number) > 9007199254740991.0 && jsonMagnitude(value, &negative, m, &n)) {
+			if (fabs(value->number) > 9007199254740991.0 && jsonMagnitude(value, &negative, &m, &n, scratch)) {
 				char *digits = allocate(3 * n + 3);
 				whole_decimal(negative, m, n, digits);
 				putText(bytes, "{\"/\":{\"bigint\":\"");

@@ -162,8 +162,9 @@ void cborPutBytes(CborOut *o, const void *data, size_t length) {
 /** a whole number: major type 0 or 1 in the shortest head, a bignum (tag 2 or 3 over its bytes) past 64 bits */
 static void putWhole(CborOut *o, bool negative, const unsigned char *m, size_t n) {
 	// a negative's argument is its magnitude less one: -1 - n
-	unsigned char less[129];
+	unsigned char *less = NULL;
 	if (negative) {
+		less = allocate(n + 1);
 		memcpy(less, m, n);
 		for (size_t i = n; i-- > 0;) {
 			if (less[i]--) break;
@@ -174,10 +175,11 @@ static void putWhole(CborOut *o, bool negative, const unsigned char *m, size_t n
 	uint64_t argument;
 	if (whole_u64(m, n, &argument)) {
 		cborPutHead(o, negative ? 1 : 0, argument);
-		return;
+	} else {
+		putByte(o, negative ? 0xc3 : 0xc2);
+		cborPutBytes(o, m, n);
 	}
-	putByte(o, negative ? 0xc3 : 0xc2);
-	cborPutBytes(o, m, n);
+	free(less);
 }
 
 /** a number that is no whole one: the shortest float that holds it exactly, the one NaN */
@@ -201,9 +203,10 @@ static void putFloat(CborOut *o, double d) {
 
 static void putNumber(CborOut *o, const Json *value) {
 	bool negative;
-	unsigned char m[128];
+	unsigned char scratch[128];
+	const unsigned char *m;
 	size_t n;
-	if (jsonMagnitude(value, &negative, m, &n)) putWhole(o, negative, m, n);
+	if (jsonMagnitude(value, &negative, &m, &n, scratch)) putWhole(o, negative, m, n);
 	else putFloat(o, value->number);
 }
 
@@ -219,8 +222,8 @@ void cborPutInteger(CborOut *o, int64_t value) {
 
 void cborPutWhole(CborOut *o, bool negative, const unsigned char *magnitude, size_t length) {
 	while (length && !*magnitude) magnitude++, length--;
-	// as jsonWhole holds it: a double when one holds it exactly, past 128 bytes the double nearest
-	if (whole_exact(magnitude, length) || length > 128) cborPutNumber(o, whole_near(negative, magnitude, length));
+	// as jsonWhole holds it: a double when one holds it exactly
+	if (whole_exact(magnitude, length)) cborPutNumber(o, whole_near(negative, magnitude, length));
 	else putWhole(o, negative, magnitude, length);
 }
 

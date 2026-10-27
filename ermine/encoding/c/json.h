@@ -148,8 +148,11 @@ bool jsonIsWhole(const Json *value, int64_t *out);
 bool jsonInt64(const Json *value, int64_t *out);
 /** a number as a double into *out (a big whole one: the double nearest it); false when not a number */
 bool jsonDouble(const Json *value, double *out);
-/** a whole number's sign and magnitude (big-endian, no leading zero; out has 128 bytes of room); false when not a whole number */
-bool jsonMagnitude(const Json *value, bool *negative, unsigned char out[128], size_t *length);
+/**
+ * a whole number's sign and magnitude (big-endian, no leading zero), of any size: a big one's own
+ * bytes, else written to scratch (128 bytes is room for any double's); false when not a whole number
+ */
+bool jsonMagnitude(const Json *value, bool *negative, const unsigned char **magnitude, size_t *length, unsigned char scratch[128]);
 /**
  * Value equality: of the same kind with equal parts. Numbers by value, NaN
  * equal to NaN (no -0 is made: 0 and -0 are equal, as are whole numbers by value);

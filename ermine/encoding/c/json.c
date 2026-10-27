@@ -347,10 +347,11 @@ bool jsonIsWhole(const Json *value, int64_t *out) {
 
 bool jsonInt64(const Json *value, int64_t *out) {
 	bool negative;
-	unsigned char m[128];
+	unsigned char scratch[128];
+	const unsigned char *m;
 	size_t n;
 	uint64_t u;
-	if (!jsonMagnitude(value, &negative, m, &n) || !whole_u64(m, n, &u)) return false;
+	if (!jsonMagnitude(value, &negative, &m, &n, scratch) || !whole_u64(m, n, &u)) return false;
 	if (negative ? u > (uint64_t)INT64_MAX + 1 : u > (uint64_t)INT64_MAX) return false;
 	*out = negative ? (int64_t)(0 - u) : (int64_t)u;
 	return true;
@@ -362,11 +363,10 @@ bool jsonDouble(const Json *value, double *out) {
 	return true;
 }
 
-bool jsonMagnitude(const Json *value, bool *negative, unsigned char out[128], size_t *length) {
+bool jsonMagnitude(const Json *value, bool *negative, const unsigned char **magnitude, size_t *length, unsigned char scratch[128]) {
 	if (!jsonIsNumber(value)) return false;
 	if (value->big) {
-		if (value->bigLength > 128) return false;
-		memcpy(out, value->big, value->bigLength);
+		*magnitude = value->big;
 		*length = value->bigLength;
 		*negative = value->bigNegative;
 		return true;
@@ -374,7 +374,8 @@ bool jsonMagnitude(const Json *value, bool *negative, unsigned char out[128], si
 	double d = value->number;
 	if (!isfinite(d) || floor(d) != d) return false;
 	*negative = d < 0;
-	*length = whole_of_double(d, out);
+	*length = whole_of_double(d, scratch);
+	*magnitude = scratch;
 	return true;
 }
 
