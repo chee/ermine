@@ -1602,6 +1602,20 @@ static char *placed_gone(void *data) {
 	return NULL;
 }
 
+// an action stopped by its node: its placement let go (the node's value is the caller's to take
+// out first), its call record with it; its function's record with it unless the slot was used again
+int es_stop_action(es_ermine *e, const char *id) {
+	struct es_actions *x = e->actions;
+	placed *p = es_map_get(&x->methods, id);
+	if (p == NULL) return 0;
+	es_map_del(&x->methods, id);
+	es_calls_drop(e, id);
+	fnslot *slot = (fnslot *)p->fn;
+	if (slot->gen == p->gen) fn_forget(x, slot);
+	free(p);
+	return 1;
+}
+
 typedef struct {
 	es_context *c;
 	const es_names *path;

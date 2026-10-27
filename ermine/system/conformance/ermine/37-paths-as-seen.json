@@ -1,5 +1,5 @@
 {
-	"title": "what a process is told names nodes by their path from the root, never an id [chee 10-25]: explain's writer, status waits, a record's reads and writes; the same path the host is told. a writer nothing reaches any more (its node unplaced): null. a change is shown as { time, actor, site }, and explain takes it back",
+	"title": "what a process is told names nodes by their path from the root, never an id [chee 10-25]: explain's writer, status waits, a record's reads and writes; the same path the host is told. a writer nothing reaches any more (its node unplaced: the action stopped, its call record let go with it): null. a change is shown as { time, actor, site }, and explain takes it back",
 	"steps": [
 		{
 			"op": "ermine",
@@ -191,8 +191,7 @@
 			"expect": {
 				"value": {
 					"writer": "method",
-					"path": null,
-					"n": 1
+					"path": null
 				}
 			}
 		}

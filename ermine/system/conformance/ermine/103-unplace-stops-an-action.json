@@ -1,0 +1,76 @@
+{
+	"title": "unplacing the last name of a node stops an action made under it as remove does: a send to it after is pending; the process that placed it runs on",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"d",
+						{}
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"d/on",
+						[],
+						7
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/code/p/d/on"
+			],
+			"expect": {
+				"value": 7
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"unplace",
+				"/code/p/d"
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/code/p/d/on"
+			],
+			"fails": true,
+			"expect": {
+				"error": "pending"
+			}
+		},
+		{
+			"op": "status",
+			"name": "p",
+			"expect": {
+				"status": {
+					"state": "done"
+				}
+			}
+		}
+	]
+}

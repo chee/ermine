@@ -1,0 +1,87 @@
+{
+	"title": "removing a node stops an action made at it or under it: its handler is gone, so a send to it after is pending as a send to a missing handler is; the process that placed it runs on",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"d",
+						{}
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"d/on",
+						[
+							{
+								"do": [
+									"log",
+									"ran",
+									[
+										"whole",
+										1
+									]
+								]
+							}
+						],
+						7
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/code/p/d/on"
+			],
+			"expect": {
+				"value": 7
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"remove",
+				"/code/p/d"
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/code/p/d/on"
+			],
+			"fails": true,
+			"expect": {
+				"error": "pending"
+			}
+		},
+		{
+			"op": "status",
+			"name": "p",
+			"expect": {
+				"status": {
+					"state": "done"
+				}
+			}
+		}
+	]
+}

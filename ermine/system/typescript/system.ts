@@ -50,7 +50,14 @@
 //   place(p, x)          x's node at a second name. unplace(p): the name out, the node stays.
 //                        remove(x): unplaced and its entries deleted, asked "remove" [chee 10-27:
 //                        "why wouldn't we just export remove and pulse too? protect remove"]; a
-//                        node no name reaches no longer exists [chee 10-25]
+//                        node no name reaches no longer exists [chee 10-25]. unplace and remove
+//                        stop what is made at the node and under it [chee 10-27: "yes removing a
+//                        node should stop what's at it"]: each memo and effect's scope torn down,
+//                        its teardowns told "ended", its node and name gone; each action's handler
+//                        gone (a send to it after is a send to a missing handler: pending); the
+//                        process that made them runs on. remove stops them always (the node itself)
+//                        and what is under it unless a name still reaches it; unplace stops what no
+//                        name reaches now. rename stops nothing
 //   createMemo(name, f, o?)   a compute at its own node at name: its result, status and latest
 //                        run; made again by its owner's next run (same node, new f); a name not
 //                        made again goes after the run. a second at a name in one run: already-there
@@ -1201,7 +1208,11 @@ function unplace(inner: Inner, p: string | Path) {
 		notShadowed(inner, path, children, name)
 		const parent = get(places, path.slice(0, -1))!
 		ask("place", slotAt(path, parent))
+		const was = (children.value as Record<string, Id> | undefined)?.[name]
+		const below = was === undefined ? [] : under(inner, was)
 		inner.put({ part: "children", id: parent, patches: unplacing(children, name) })
+		// gone is what no name reaches from the root now: one reached by another name stays
+		stopMade(inner, below.filter((i) => up(base, places, places.root, i) === undefined))
 	})
 	queuePulse()
 }
@@ -1240,6 +1251,7 @@ function remove(inner: Inner, x: Target) {
 		const n = nodeOf(inner, x)
 		const id = needId(inner, n)
 		ask("remove", targetOf(thing(id, n.path)))
+		const below = under(inner, id)
 		// a running process's node: the process stopped first (its row out), then its entries gone
 		if (base.running.has(id)) base.stop(id)
 		else if (n.path !== undefined && n.path.length) {
@@ -1254,6 +1266,12 @@ function remove(inner: Inner, x: Target) {
 		runs.drop(id)
 		calls.drop(id)
 		base.held.drop(id)
+		// what was made at it and under it stops (the node itself always; what is under it, unless a
+		// name still reaches it)
+		stopMade(
+			inner,
+			below.filter((i) => i === id || up(base, places, places.root, i) === undefined),
+		)
 	})
 	queuePulse()
 }
@@ -1292,31 +1310,117 @@ function again(inner: Inner, own: Scope, path: Path, code: Code): Made | undefin
 // it (a cleanup of that run: run once the next run is done, it finds the computer claimed,
 // alive, and leaves it), and as the owner goes (what is under it first)
 function gone(inner: Inner, m: Made, path: Path) {
-	const { base, runs, memos, s, table, places, state } = here(inner)
-	s.registerTeardown(m.own, () => {
-		if (m.c?.state === "alive") return
-		const there = state.named.get(keyOf(path))
-		if (there?.delete(m) && there.size === 0) state.named.delete(keyOf(path))
-		memos.delete(m.id)
-		base.computers.delete(m.id)
-		base.contexts.delete(m.id)
-		base.awaiting.delete(m.id)
-		base.missing.delete(m.id)
-		try {
-			const [children, last] = slot(inner, path)
-			if ((children.value as Record<string, unknown>)?.[last] === m.id) {
-				const parent = get(places, path.slice(0, -1))!
-				inner.put({ part: "children", id: parent, patches: unplacing(children, last) })
+	const { base, s } = here(inner)
+	let made = madeAt.get(base)
+	if (made === undefined) madeAt.set(base, made = new Map())
+	let entry = made.get(m.id)
+	if (entry === undefined) made.set(m.id, entry = { m, path, inner })
+	let bin = bins.get(m.own)
+	if (bin === undefined) bins.set(m.own, bin = { armed: false, members: new Set() })
+	bin.members.add(entry)
+	arm(s, m.own, bin)
+}
+
+// what an owner made and has not let go: one teardown on the owner asks after them all, again as it
+// runs (a cleanup of that run, run once the next run is done: it finds a computer claimed, alive,
+// and leaves it) and as it goes (what is under it first). one stopped is out of its bin at once
+type Bin = { armed: boolean; members: Set<{ m: Made; path: Path; inner: Inner }> }
+const bins = new WeakMap<Scope, Bin>()
+function arm(s: Setting["s"], own: Scope, bin: Bin) {
+	if (bin.armed) return
+	bin.armed = true
+	s.registerTeardown(own, () => {
+		bin.armed = false
+		const alive = own.state === "alive"
+		for (const e of [...bin.members].reverse()) {
+			if (e.m.c?.state === "alive") {
+				if (!alive) bin.members.delete(e)
+				continue
 			}
-		} catch (e) {
-			if (!(e instanceof PlacesError)) throw e
+			bin.members.delete(e)
+			forget(e.inner, e.m, e.path)
 		}
-		for (const [part] of table.get(m.id)) {
-			inner.put({ part, id: m.id, patches: [], gone: true })
-		}
-		runs.drop(m.id)
-		base.held.drop(m.id)
+		if (alive && bin.members.size > 0) arm(s, own, bin)
 	})
+}
+
+// m's node and name taken out now: its computer is not alive
+function forget(inner: Inner, m: Made, path: Path) {
+	const { base, runs, memos, table, places, state } = here(inner)
+	const entry = madeAt.get(base)?.get(m.id)
+	if (entry !== undefined) {
+		madeAt.get(base)!.delete(m.id)
+		bins.get(m.own)?.members.delete(entry)
+	}
+	const there = state.named.get(keyOf(path))
+	if (there?.delete(m) && there.size === 0) state.named.delete(keyOf(path))
+	memos.delete(m.id)
+	base.computers.delete(m.id)
+	base.contexts.delete(m.id)
+	base.awaiting.delete(m.id)
+	base.missing.delete(m.id)
+	// every name holding it, as its folder is now (not by a path: a folder removed above it no longer
+	// gives one)
+	for (const { folder, name } of [...places.namesOf(m.id)]) {
+		const children = table.get("children", folder) as Entry<unknown> | undefined
+		if (children !== undefined && (children.value as Record<string, unknown>)?.[name] === m.id) {
+			inner.put({ part: "children", id: folder, patches: unplacing(children, name) })
+		}
+	}
+	for (const [part] of table.get(m.id)) {
+		inner.put({ part, id: m.id, patches: [], gone: true })
+	}
+	runs.drop(m.id)
+	base.held.drop(m.id)
+}
+
+// each memo's and effect's node, by id: its Made, its path, the context that made it
+const madeAt = new WeakMap<Base, Map<Id, { m: Made; path: Path; inner: Inner }>>()
+
+// every memo, effect and action made at the node ids given (the node and what is under it, which a
+// remove or unplace took out): the computers' scopes torn down, their teardowns told "ended", and
+// their nodes and names gone; the actions out of the methods, their nodes' values gone with them.
+// whoever made them: the process that did keeps running. a call already going finishes (its record
+// is let go, calls.drop)
+function stopMade(inner: Inner, ids: readonly Id[]) {
+	const { base, s, table, calls } = here(inner)
+	for (const id of ids) {
+		const c = madeAt.get(base)?.get(id)
+		if (c !== undefined) {
+			const { m, path, inner: maker } = c
+			if (m.c?.state === "alive") {
+				// the maker's process lives on: its teardowns are told ended, not replaced
+				const key = maker.node
+				const had = base.whys.get(key)
+				base.whys.set(key, "ended")
+				try {
+					s.teardown(m.c)
+				} finally {
+					if (had === undefined) base.whys.delete(key)
+					else base.whys.set(key, had)
+				}
+			}
+			forget(maker, m, path)
+		}
+		if (base.methods.delete(id)) {
+			calls.drop(id)
+			for (const [part] of table.get(id)) inner.put({ part, id, patches: [], gone: true })
+		}
+	}
+}
+
+// id and every node under it (by the children parts), each once
+function under(inner: Inner, id: Id): Id[] {
+	const { table } = here(inner)
+	const seen = new Set<Id>()
+	const go = (at: Id) => {
+		if (seen.has(at)) return
+		seen.add(at)
+		const kids = table.get("children", at)?.value as Record<string, Id> | undefined
+		for (const k of Object.values(kids ?? {})) if (typeof k === "string") go(k)
+	}
+	go(id)
+	return [...seen]
 }
 
 // a computer's node: a new id, placed at path, its scope written (own's NODE key, or the

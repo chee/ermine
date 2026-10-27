@@ -1445,6 +1445,16 @@ int es_child_status(es_context *c, const char *id, es_status *out);
 int es_stop(es_started *s, const char *why);
 // a running process stopped by its node's id (unplace and remove of its path: nodes.c)
 void es_stop_node(es_ermine *e, const char *id);
+// a memo or effect stopped by its node (unplace and remove: nodes.c): its scope torn down, its
+// teardowns told "ended" (whoever made it: its maker's process keeps running), its node and name gone.
+// none there: nothing
+void es_stop_computer(es_ermine *e, const char *id);
+// every name holding id taken out of its folder, as the folder is now: the first failure's text (freed
+// by the caller), else NULL
+char *es_unplace_names(es_context *c, const char *id);
+// an action stopped by its node: its placement let go, its call record with it. 1 if it was one (its
+// node's parts are the caller's to take out), else 0
+int es_stop_action(es_ermine *e, const char *id);
 // the same, told why (NULL: "ended"); none running there, or the ermine closed: nothing
 void es_stop_id(es_ermine *e, const char *id, const char *why);
 int es_started_status(es_started *s, es_status *out);

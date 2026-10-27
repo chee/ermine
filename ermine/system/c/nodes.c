@@ -2442,6 +2442,99 @@ static int not_shadowed(es_context *c, const es_names *path, const nd_entry *chi
 	return 0;
 }
 
+// every name that holds id taken out of its folder, as the folder is now (not by a path, which a
+// removed folder no longer gives): a computer's node going (computers.c). errors: the first
+char *es_unplace_names(es_context *c, const char *id) {
+	size_t n;
+	const pl_slot *slots = pl_names_of(c->places, tb_string(id), &n);
+	char **folders = es_alloc((n + 1) * sizeof *folders), **names = es_alloc((n + 1) * sizeof *names);
+	size_t k = 0;
+	for (size_t i = 0; i < n; i++) {
+		if (slots[i].folder.string == NULL) continue;
+		folders[k] = es_dup(slots[i].folder.string);
+		names[k++] = es_dup(slots[i].name);
+	}
+	char *bad = NULL;
+	for (size_t i = 0; i < k; i++) {
+		nd_entry *children = tb_get(c->ermine->table, tb_string("children"), tb_string(folders[i]));
+		const char *there = child_of(children, names[i]);
+		pset ps;
+		if (there == NULL || strcmp(there, id) != 0 || unplacing(children, names[i], &ps)) continue;
+		es_write w = {.part = "children", .id = folders[i], .patches = ps.p, .npatches = ps.n};
+		int code = es_context_put(c, &w);
+		pset_free(&ps);
+		if (code && code != ES_CLOSED && bad == NULL) {
+			const es_error *thrown = es_thrown();
+			bad = es_dup(thrown->message != NULL ? thrown->message : es_code_name(code));
+		}
+	}
+	free_names(folders, k);
+	free_names(names, k);
+	return bad;
+}
+
+// every memo, effect and action made at a node and under it: each id given stopped (system.ts'
+// stopMade). a computer's scope torn down, teardowns told ended, its node and name gone; an action's
+// node value taken out, then its placement let go. the process that made them keeps running
+static void stop_made(es_context *c, char *const *ids, size_t n) {
+	es_ermine *e = c->ermine;
+	for (size_t i = 0; i < n; i++) {
+		es_stop_computer(e, ids[i]);
+		if (!es_is_action(e, ids[i])) continue;
+		size_t count;
+		const tb_entry *at = tb_at(e->table, tb_string(ids[i]), &count);
+		char **parts = es_alloc((count + 1) * sizeof *parts);
+		for (size_t k = 0; k < count; k++) parts[k] = es_dup(at[k].part.string);
+		for (size_t k = 0; k < count; k++) {
+			es_write w = {.part = parts[k], .id = ids[i], .gone = 1};
+			es_context_put(c, &w);
+		}
+		free_names(parts, count);
+		es_stop_action(e, ids[i]);
+	}
+}
+
+// id and every node under it (by the children parts), each once, in a list
+typedef struct {
+	char **v;
+	size_t n, cap;
+	es_map seen;
+} idlist;
+static void under_go(es_ermine *e, const char *id, idlist *l) {
+	if (es_map_has(&l->seen, id)) return;
+	es_map_set(&l->seen, id, NULL);
+	ES_PUSH(l->v, l->n, l->cap, es_dup(id));
+	nd_entry *kids = tb_get(e->table, tb_string("children"), tb_string(id));
+	if (!is_map(kids)) return;
+	for (size_t i = 0; i < kids->value->count; i++) {
+		const op_value *x = kids->value->items[i];
+		if (x->type == OP_STR) under_go(e, x->str, l);
+	}
+}
+static void under(es_ermine *e, const char *id, idlist *l) {
+	*l = (idlist){0};
+	under_go(e, id, l);
+}
+static void idlist_free(idlist *l) {
+	free_names(l->v, l->n);
+	es_map_free(&l->seen);
+}
+// those of l no name reaches from the root now (keep: this one always), stopped
+static void stop_unreached(es_context *c, idlist *l, const char *keep) {
+	char **stop = es_alloc((l->n + 1) * sizeof *stop);
+	size_t k = 0;
+	for (size_t i = 0; i < l->n; i++) {
+		es_names p;
+		if ((keep == NULL || strcmp(l->v[i], keep) != 0) && es_seen_in(c->ermine, c, l->v[i], &p)) {
+			es_names_free(&p);
+			continue;
+		}
+		stop[k++] = l->v[i];
+	}
+	stop_made(c, stop, k);
+	free(stop);
+}
+
 // a name out of its folder; a process's node there (named by its row): the process stopped, which
 // takes the row, and so the name (unplace, system.ts)
 static int unplace_in(void *v) {
@@ -2474,12 +2567,18 @@ static int unplace_in(void *v) {
 	if (!code) code = ask_slot(c, parent, CP(path.names), path.n);
 	if (!code) {
 		pset ps;
+		const char *was = child_of(children, name);
+		idlist below = {0};
+		if (was != NULL) under(c->ermine, was, &below);
 		code = unplacing(children, name, &ps);
 		if (!code) {
 			es_write w = {.part = "children", .id = parent, .patches = ps.p, .npatches = ps.n};
 			code = es_context_put(c, &w);
 			pset_free(&ps);
 		}
+		// gone is what no name reaches from the root now: one reached by another name stays
+		if (!code) stop_unreached(c, &below, NULL);
+		idlist_free(&below);
 	}
 	es_names_free(&path);
 	return code;
@@ -2592,6 +2691,8 @@ static int remove_in(void *v) {
 	// the id outlives its entries: the table lets go of its key with the last
 	char *id = code ? NULL : es_dup(found);
 	if (!code) code = ask(t, "remove", gd_target_of(thing_of(id, &n), NULL, NULL));
+	idlist below = {0};
+	if (!code) under(e, id, &below);
 	// a running process's node: the process stopped first (its row out), then its entries gone
 	if (!code && es_map_get(&state(e)->running, id) != NULL) es_stop_node(e, id);
 	else if (!code && n.has_path && n.npath) {
@@ -2628,7 +2729,11 @@ static int remove_in(void *v) {
 		crn_drop(e->runs, tb_string(id));
 		es_calls_drop(e, id);
 		es_held_drop(e, id);
+		// what was made at it and under it stops (the node itself always; what is under it, unless a
+		// name still reaches it)
+		stop_unreached(c, &below, id);
 	}
+	idlist_free(&below);
 	free(id);
 	es_node_data_free(&n);
 	return code;
