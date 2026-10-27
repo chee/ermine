@@ -905,7 +905,7 @@ static void peek(void *ctx) {
 }
 
 // a process's (or any node nothing computes) status
-static int plain_status(es_context *c, es_context *t, const char *id, const op_value *v, es_status *st) {
+static int plain_status(es_context *c, const char *id, const op_value *v, es_status *st) {
 	es_ermine *e = c->ermine;
 	if (v == NULL) {
 		st->state = "done";
@@ -916,8 +916,8 @@ static int plain_status(es_context *c, es_context *t, const char *id, const op_v
 		st->error = error_text(v);
 		return 0;
 	}
-	const op_value *said = status_field(t->places, id, ES_WAITING);
-	if (pl_status(t->places) == SC_STOP) return ES_STOP;
+	const op_value *said = status_field(c->places, id, ES_WAITING);
+	if (pl_status(c->places) == SC_STOP) return ES_STOP;
 	st->state = "pending";
 	if (said != NULL && said->type == OP_LIST && said->count > 0) {
 		st->waiting = es_alloc(said->count * sizeof *st->waiting);
@@ -936,7 +936,7 @@ static int plain_status(es_context *c, es_context *t, const char *id, const op_v
 }
 
 // a memo's or effect's status, from its latest run
-static int computer_status(es_context *c, es_context *t, const char *id, const op_value *v,
+static int computer_status(es_context *c, const char *id, const op_value *v,
 	es_status *st) {
 	es_ermine *e = c->ermine;
 	const crn_run *r = NULL;
@@ -974,8 +974,8 @@ static int computer_status(es_context *c, es_context *t, const char *id, const o
 			strcmp(w->path[0].s, CST_ATTRIBUTE) != 0) {
 			continue;
 		}
-		peeking p = {t->places, w->id, 0};
-		pl_peep(t->places, peek, &p);
+		peeking p = {c->places, w->id, 0};
+		pl_peep(c->places, peek, &p);
 		if (!p.pending) continue;
 		es_names names = {0};
 		es_waiting item = {.kind = ES_WAIT_NODE};
@@ -1014,39 +1014,38 @@ static int computer_status(es_context *c, es_context *t, const char *id, const o
 	return 0;
 }
 
-// the base's status, read and asked as t (the node's side), told as c sees it
-static int own_status(es_context *c, es_context *t, const es_node_data *n, const char *id,
+// the base's status, read and asked as c
+static int own_status(es_context *c, const es_node_data *n, const char *id,
 	es_status *st) {
 	es_ermine *e = c->ermine;
-	int code = ask_status(t, id, n);
+	int code = ask_status(c, id, n);
 	if (code) return code;
-	const op_value *v = cst_status(t->places, tb_string(id));
-	if (pl_status(t->places) == SC_STOP) return ES_STOP;
+	const op_value *v = cst_status(c->places, tb_string(id));
+	if (pl_status(c->places) == SC_STOP) return ES_STOP;
 	es_held h;
 	if (es_held_status(e, id, &h) || es_held_row(e, id, &h)) {
 		st->has_held = 1;
 		st->held_feature = es_dup(h.feature);
 		st->held_write = h.write;
 	}
-	if (!es_is_computer(e, id)) return plain_status(c, t, id, v, st);
-	return computer_status(c, t, id, v, st);
+	if (!es_is_computer(e, id)) return plain_status(c, id, v, st);
+	return computer_status(c, id, v, st);
 }
 
 // the base's, then what features show (onStatus)
 int es_get_status(es_context *c, es_target x, es_status *out) {
 	*out = (es_status){0};
-	es_context *t = c;
 	es_node_data n = {0};
-	int code = es_node_of(t, x, &n);
+	int code = es_node_of(c, x, &n);
 	if (code) return code;
 	const char *at;
-	if (!es_id_of(t, &n, &at)) {
+	if (!es_id_of(c, &n, &at)) {
 		es_node_data_free(&n);
 		return 0;
 	}
 	char *id = es_dup(at);
 	es_status st = {0};
-	code = own_status(c, t, &n, id, &st);
+	code = own_status(c, &n, id, &st);
 	if (code == 0) {
 		es_asked asked = {&n, id};
 		es_status shown = {0};
