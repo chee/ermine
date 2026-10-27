@@ -305,7 +305,7 @@ int pl_set_del(pl_set *set, const void *item);
 void pl_set_free(pl_set *set);
 
 // f(ctx), with every read it makes (a spot, or a contributor's pl_track) put into reads and told to
-// no one: what a cache works out outside any run. inside another record, apart from it. fresh (or
+// no one: what a cache works out outside any run. inside another record or a peep, apart from it. fresh (or
 // NULL): the spots f read that were not this places' before, so nothing else tracks or keeps them
 void pl_record(pl *p, void (*f)(void *ctx), void *ctx, pl_set *reads, pl_set *fresh);
 // f(ctx), with every read it makes untracked: no spot made, nothing told or recorded (a contributor's

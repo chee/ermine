@@ -480,11 +480,14 @@ void pl_set_free(pl_set *s) {
 
 void pl_record(pl *l, void (*f)(void *ctx), void *ctx, pl_set *reads, pl_set *fresh) {
 	pl_set *was = l->s->into, *was_made = l->s->made;
+	int was_peeping = l->s->peeping;
 	l->s->into = reads;
 	l->s->made = fresh;
+	l->s->peeping = 0;
 	f(ctx);
 	l->s->into = was;
 	l->s->made = was_made;
+	l->s->peeping = was_peeping;
 }
 
 void pl_peep(pl *l, void (*f)(void *ctx), void *ctx) {

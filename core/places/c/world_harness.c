@@ -1008,13 +1008,30 @@ static void world_start(void) {
 	world_host = sc_create_root_scope(world_scheduler, &host_info, 1);
 }
 
+// a request answered by the harness's, else the world's
+typedef struct {
+	const op_value *r;
+	op_value *(*answer)(const op_value *request);
+	op_value *out;
+} asking;
+static void ask(void *data) {
+	asking *c = data;
+	c->out = c->answer(c->r);
+	if (c->out == NULL) c->out = world_answer(c->r);
+}
+
 void world_line(const op_value *r, FILE *out, op_value *(*answer)(const op_value *request)) {
 	if (world_places == NULL) world_start();
 	// the line is kept: what the world holds refers into it
 	hh_line *line = hh_retain();
 	if (nlines == 0 || lines[nlines - 1] != line) PUSH(lines, nlines, caplines, line);
-	op_value *a = answer(r);
-	if (a == NULL) a = world_answer(r);
+	asking c = {r, answer, NULL};
+	const char *op = world_text(op_get(r, "op"));
+	if (op != NULL && strcmp(op, "peep") == 0 && op_get(r, "request") != NULL) {
+		c.r = op_get(r, "request");
+		pl_peep(world_places, ask, &c);
+	} else ask(&c);
+	op_value *a = c.out;
 	if (a == NULL) {
 		hh_unknown(out, r);
 		return;
