@@ -1,0 +1,49 @@
+{
+	"title": "columns whose shape counts are far more than the other columns hold are an error, answered without allocating for them",
+	"steps": [
+		{
+			"op": "decode",
+			"columns": {
+				"paths": [],
+				"path": [],
+				"shape": [1, 1125899906842624],
+				"from": [],
+				"size": [],
+				"value": [],
+				"move": []
+			},
+			"fails": true
+		},
+		{
+			"op": "decode",
+			"columns": {
+				"paths": [["t"]],
+				"path": [0, 3],
+				"shape": [0, 1125899906842624],
+				"from": [],
+				"size": [],
+				"value": [],
+				"move": []
+			},
+			"fails": true
+		},
+		{
+			"op": "decode",
+			"columns": {
+				"paths": [["t"]],
+				"path": [0, 1125899906842624],
+				"shape": [2, 1125899906842624],
+				"from": [],
+				"size": [],
+				"value": [],
+				"move": []
+			},
+			"fails": true
+		},
+		{
+			"op": "squish",
+			"patches": [{ "path": ["t"], "range": [0, 0], "value": "a" }],
+			"expect": { "patches": [{ "path": ["t"], "range": [0, 0], "value": "a" }] }
+		}
+	]
+}
