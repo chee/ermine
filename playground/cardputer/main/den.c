@@ -687,7 +687,7 @@ static part *part_find(const char *id) {
 	return NULL;
 }
 
-static void part_stop_now(void *data) { pr_stop(life, ((part *)data)->p); }
+static void part_stop_now(void *data) { free(pr_stop(life, ((part *)data)->p)); }
 static void part_end(part *x) {
 	sc_run_with_scope(me.w.host, part_stop_now, x);
 	host_settle();
