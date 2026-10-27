@@ -83,13 +83,13 @@
 // a WeakMap's key does in the reference [chee 10-26: "the C should "garbage collect" via
 // something like a weakmap"]: its maker (the one hold sc_create_* gives, let go with sc_release),
 // each sc_retain, sc_run_with_scope while it is open, each scope under it, each of its runs
-// (sc_run_ref, a promise's, a queued act's), a loop that names it, and, alive, the tree. torn down and held by nothing, it is freed: a plain
-// scope at once, a computer as the pulse ends (the pulse it went in, else the next: a pulse's
-// causes and order name it till then), the free listeners told first (sc_on_free). a maker that
-// never lets go keeps it till sc_free, as before. a scope's info is the scheduler's: the pairs
-// given are copied, but each key and value is borrowed, the caller keeps them alive as long as
-// the scope (let go as it is freed). a computer's info changes in place as each run starts. free
-// promises and held runs first.
+// (sc_run_ref, a promise's, a queued act's), a loop that names it, and, alive, the tree. torn
+// down and held by nothing, it is freed: a plain scope at once, a computer as the pulse ends (the
+// pulse it went in, else the next: a pulse's causes and order name it till then), the free
+// listeners told first (sc_on_free). a maker that never lets go keeps it till sc_free, as
+// before. a scope's info is the scheduler's: the pairs given are copied, but each key and value is
+// borrowed, the caller keeps them alive as long as the scope (let go as it is freed). a computer's
+// info changes in place as each run starts. free promises and held runs first.
 // single threaded.
 #ifndef SCHEDULER_H
 #define SCHEDULER_H
@@ -188,6 +188,10 @@ typedef struct sc_more {
 typedef struct sc_options {
 	// lets go of a value the scheduler was given
 	void (*drop)(void *value, void *data);
+	// one hold more on a value the scheduler was given: a promise's, for each run it lands at.
+	// NULL: the first run it lands at takes the promise's hold, any other the same value unheld
+	// (a host that drops values and awaits a promise twice gives keep)
+	void (*keep)(void *value, void *data);
 	void *data;
 } sc_options;
 
@@ -327,8 +331,9 @@ char *sc_escaped(sc_scheduler *s);
 
 // promises. one is the host's until sc_promise_free
 sc_promise *sc_promise_new(sc_scheduler *s);
-// settles it, once; the value is the scheduler's. unless its run was run again or is gone, the
-// result lands at the next pulse (and the settle listeners are told)
+// settles it, once; the value is the scheduler's. at each run awaiting it, unless run again or
+// gone, the result lands at the next pulse (and the settle listeners are told); a run awaiting it
+// once settled, the same
 void sc_resolve(sc_promise *p, void *value);
 // settles it to pending
 void sc_resolve_pending(sc_promise *p);

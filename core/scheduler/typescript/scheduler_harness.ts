@@ -217,6 +217,8 @@
 //                       throw there rejects it, PENDING lands pending. after an await nothing is
 //                       open: a scope, a cleanup on the scope open, an effect or a within there is
 //                       unscoped
+//   {"await":p}         the promise a {"wait":[p]} made, settled or not, as it is: awaited again,
+//                       by this run too. none: "no promise p"
 //   {"run":e}           e in run(the computation): untracked
 //   {"in":[s,e]}        e in run(s): untracked
 //   {"scope":[s,info,p?]}  s made under p, else under the one open; null
@@ -272,6 +274,8 @@ let started: unknown[] = []
 const named = new Map<string, Scope>()
 const names = new Map<Scope, string>()
 const promises = new Map<string, { resolve: (v: unknown) => void; reject: (e: unknown) => void }>()
+// each name's latest promise, settled or not (await)
+const made = new Map<string, Promise<unknown>>()
 
 const errorOf = (e: unknown): string =>
 	e instanceof SchedulerError
@@ -516,7 +520,14 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 		case "wait": {
 			const p = evaluate(a[0], ctx) as string
 			const promise = new Promise((resolve, reject) => promises.set(p, { resolve, reject }))
+			made.set(p, promise)
 			return a.length > 1 ? promise.then(() => evaluate(a[1], ctx)) : promise
+		}
+		case "await": {
+			const p = evaluate(arg, ctx) as string
+			const promise = made.get(p)
+			if (promise === undefined) throw new Error(`no promise ${p}`)
+			return promise
 		}
 		case "run":
 			return s.runWithScope(ctx.self!, () => evaluate(arg, { ...ctx, run: undefined }))
