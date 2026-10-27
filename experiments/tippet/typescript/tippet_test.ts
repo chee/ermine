@@ -202,3 +202,28 @@ Deno.test("a batch of typing packs small and unpacks to the same bytes", async (
 	const raw = steps.reduce((n, b) => n + b.length, 0), small = encode(packed as never).length
 	assert(small * 20 < raw, `${small} packed, ${raw} raw`)
 })
+
+Deno.test("a store that refuses an append doesn't crash: saved() says it, no run is sent, writes stop", async () => {
+	const base = createMemoryStore()
+	const store: Store = {
+		...base,
+		open: undefined,
+		append: () => Promise.reject(new Error("ENOSPC")),
+	}
+	const log = createLog({ store, writes: true })
+	await log.load()
+	const s = log.write({ node: "x", part: "value", patches: [], when: 1, on: [] })
+	assertEquals(s.n, 1)
+	await new Promise((r) => setTimeout(r, 10))
+	let said = ""
+	await log.saved().catch((e) => said = e.message)
+	assertEquals(said, "ENOSPC")
+	assertEquals(await log.run(log.device!, 1), undefined)
+	let threw = ""
+	try {
+		log.write({ node: "x", part: "value", patches: [], when: 2, on: [] })
+	} catch (e) {
+		threw = (e as Error).message
+	}
+	assertEquals(threw, "the store failed")
+})
