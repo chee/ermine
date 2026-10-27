@@ -22,9 +22,12 @@ export function frames(stack: string): FileLocation[] {
 	return out
 }
 
-// the first frame whose file is not one of ours
+// a url without its query and hash (a dev server stamps modules: x.ts?t=123)
+const bare = (file: string) => file.replace(/[?#].*$/, "")
+
+// the first frame whose file is not one of ours (a query or hash on a frame's url is ignored)
 export function outside(stack: string, ours: ReadonlySet<string>): FileLocation | undefined {
-	return frames(stack).find((f) => !ours.has(f.file))
+	return frames(stack).find((f) => !ours.has(f.file) && !ours.has(bare(f.file)))
 }
 
 type V8Error = {
