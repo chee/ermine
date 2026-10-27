@@ -1,9 +1,9 @@
 /// <reference lib="dom" />
 // a computer's or a process's own story, for the detail column: its status
-// (ermine.computer.status), its latest run (the runs table: the process api's runs), what that run
-// read (each with the write it saw) and wrote, where it was made (the world's sites: ermine/sites)
+// (ermine.computer.status), its latest run (ermine.records.run, world.runs), what that run
+// read (each with the write it saw) and wrote, where it was made (the world's sites, when it has them)
 // and, for a process, its args, folder and pin (ermine.process.*). live: the status and the rest are attributes
-// read through places, the record through the process api's runs, tracked by ermine (feed), so
+// read through places, the record through world.runs, tracked by ermine (feed), so
 // each run's record redraws this
 import { createRenderEffect } from "@solidjs/signals"
 import { h, patch } from "./values.ts"
@@ -109,7 +109,7 @@ export function runSection(w: Any, into: HTMLElement, id: unknown, hooks: Hooks)
 	const box = into.appendChild(h("div", "runs"))
 	const at = (k: string) => w.places.readValue("attributes", id, [k])
 	const read = feed(w, () => ({
-		run: w.apis?.runs(id),
+		run: w.runs?.(id),
 		status: at(STATUS),
 		args: at(ARGS),
 		folder: at(FOLDER),
