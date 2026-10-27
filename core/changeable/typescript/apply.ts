@@ -399,15 +399,20 @@ function createWork(
 	function undoer() {
 		// v and what of it was made here: never changed here again, the undo holds it
 		function keep(v: unknown) {
-			if (v === null || typeof v !== "object" || own === undefined) return
-			if (Array.isArray(own)) {
-				const i = own.indexOf(v)
-				if (i < 0) return
-				own[i] = own[own.length - 1]
-				own.pop()
-			} else if (!own.delete(v)) return
-			if (isList(v)) { for (const x of v) keep(x) }
-			else for (const k in v) keep((v as Record<string, unknown>)[k])
+			// by a stack, not recursion: a value may be nested deeper than the call stack holds
+			const todo = [v]
+			for (let x; todo.length;) {
+				x = todo.pop()
+				if (x === null || typeof x !== "object" || own === undefined) continue
+				if (Array.isArray(own)) {
+					const i = own.indexOf(x)
+					if (i < 0) continue
+					own[i] = own[own.length - 1]
+					own.pop()
+				} else if (!own.delete(x)) continue
+				if (isList(x)) { for (const y of x) todo.push(y) }
+				else for (const k in x) todo.push((x as Record<string, unknown>)[k])
+			}
 		}
 		// each patch's undo as it lands (null: nothing); the undo of all is read off it last patch
 		// first
@@ -521,15 +526,27 @@ const define = (o: object, k: string, value: unknown) =>
 
 // lists, maps and typed arrays copied all the way down; the rest (strings, numbers, bytes) as is
 function clone(v: unknown): unknown {
-	if (isList(v)) return v.map(clone)
-	if (isMap(v)) {
-		const o: Record<string, unknown> = {}
-		for (const k of Object.keys(v)) {
-			define(o, k, clone(v[k]))
+	const leaf = (x: unknown) => isList(x) ? [] : isMap(x) ? {} : typed(x) ? x.slice() : x
+	const out = leaf(v)
+	// by a stack, not recursion: a value may be nested deeper than the call stack holds
+	const todo: [unknown, any][] = [[v, out]]
+	for (let t; (t = todo.pop());) {
+		const [from, to] = t
+		if (isList(from)) {
+			for (let i = 0; i < from.length; i++) {
+				const c = leaf(from[i])
+				to.push(c)
+				if (isList(from[i]) || isMap(from[i])) todo.push([from[i], c])
+			}
+		} else if (isMap(from)) {
+			for (const k of Object.keys(from)) {
+				const c = leaf(from[k])
+				define(to, k, c)
+				if (isList(from[k]) || isMap(from[k])) todo.push([from[k], c])
+			}
 		}
-		return o
 	}
-	return typed(v) ? v.slice() : v
+	return out
 }
 
 // b is a, or under it

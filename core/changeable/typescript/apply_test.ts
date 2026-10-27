@@ -271,3 +271,19 @@ Deno.test("apply: a span of any length goes in and moves, past what a call's arg
 		assertEquals([moved.a.length, moved.b.length, moved.b[299999]], [0, 300000, 299999])
 	}
 })
+
+Deno.test("apply: a value nested far deeper than the call stack moves in place and comes back by its undo", () => {
+	let deep: unknown = null
+	for (let i = 0; i < 200000; i++) deep = { a: deep }
+	const depth = (v: any) => {
+		let n = 0
+		for (; v !== null; v = v.a) n++
+		return n
+	}
+	const v: any = { x: deep, y: 1 }
+	const undo: Patch[] = []
+	const out = apply(v, [{ path: ["z"], move: { path: ["x"] } }], { cow: false, undo }) as any
+	assertEquals([depth(out.z), "x" in out], [200000, false])
+	const back = apply(out, undo, { cow: false }) as any
+	assertEquals([depth(back.x), "z" in back], [200000, false])
+})
