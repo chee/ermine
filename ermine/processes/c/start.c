@@ -9,6 +9,7 @@
 #include "../../../core/places/c/status.h"
 #include "../../../core/scheduler/c/ptrmap.h"
 #include "processes.h"
+#include "platform.h"
 
 #define PENDING_NAME "ermine.pending"
 
@@ -75,6 +76,8 @@ struct pr {
 	// a dropped process's scope freed: the process goes. the dropped, by their scope
 	sc_listener *freed;
 	pm dropped;
+	// the last start refused: its path is the refusal's, till the next start (or pr_free)
+	pr_process *refused;
 	// the default ids: this pr's boot, and how many made
 	unsigned char boot[8];
 	unsigned long made;
@@ -91,22 +94,27 @@ static void process_free(pr_process *p) {
 	free(p);
 }
 
-// a scope freed: a dropped process whose it was goes (its info borrowed its at and id till now)
-static void scope_freed(sc_scope *o, void *data) {
-	pr *s = data;
-	pr_process *p = pm_get(&s->dropped, o);
-	if (p == NULL) return;
-	pm_delete(&s->dropped, o);
+// out of all, and freed
+static void process_gone(pr *s, pr_process *p) {
 	pr_process *last = s->all[--s->n];
 	s->all[p->slot] = last;
 	last->slot = p->slot;
 	process_free(p);
 }
 
+// a scope freed: a dropped process whose it was goes (its info borrowed its at and id till now)
+static void scope_freed(sc_scope *o, void *data) {
+	pr *s = data;
+	pr_process *p = pm_get(&s->dropped, o);
+	if (p == NULL) return;
+	pm_delete(&s->dropped, o);
+	process_gone(s, p);
+}
+
 pr *pr_new_at(const pr_setup *setup, const char *file, int line, const char *func) {
 	pr *s = xalloc(sizeof *s);
 	s->s = *setup;
-	arc4random_buf(s->boot, sizeof s->boot);
+	PF_RANDOM(s->boot, sizeof s->boot);
 	if (setup->owner != NULL) s->owner = setup->owner;
 	else {
 		s->owned = 1;
@@ -443,6 +451,8 @@ static void call_body(void *data) {
 pr_process *pr_start_at(pr *s, pl *where, const char *const *steps, size_t nsteps,
 	const pr_options *options, pr_refusal *refused, const char *file, int line, const char *func) {
 	*refused = (pr_refusal){0};
+	if (s->refused != NULL) process_gone(s, s->refused);
+	s->refused = NULL;
 	pr_options none = {0};
 	const pr_options *o = options != NULL ? options : &none;
 	pr_process *p = xalloc(sizeof *p);
@@ -474,11 +484,14 @@ pr_process *pr_start_at(pr *s, pl *where, const char *const *steps, size_t nstep
 	rowing row = {p, 0};
 	sc_run_with_scope(p->scope, add_row, &row);
 	if (row.code != 0) {
-		// refused: the scope torn down, the process made no more (its pieces freed at pr_free)
+		// refused: the scope torn down and the maker's hold let go (the scope freed), the process
+		// made no more (its pieces, which the scope's info and the refusal borrow, freed at the next start)
 		free(sc_teardown(p->scope));
+		sc_release(p->scope);
 		p->ended = 1;
 		refused->refused = row.code == PL_ALREADY_THERE ? "taken" : pl_code_name(row.code);
 		refused->at = (const char *const *)p->at, refused->nat = p->nat;
+		s->refused = p;
 		return NULL;
 	}
 	p->rowed = 1;

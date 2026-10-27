@@ -1,0 +1,217 @@
+{
+	"title": "a pipe made again with another from: the old listener is stopped, the new one started; a write at the first from is told no more, one at the new from is",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/a",
+				0
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/b",
+				0
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/dst",
+				0
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/mode",
+				1
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createMemo",
+						"m",
+						{},
+						[
+							"if",
+							[
+								"is",
+								[
+									"read",
+									"/mode"
+								],
+								1
+							],
+							[
+								"pipe",
+								"/a",
+								{
+									"steps": [
+										{
+											"do": [
+												"log",
+												"told",
+												[
+													"pick",
+													"$0",
+													[
+														"value"
+													]
+												]
+											]
+										}
+									]
+								}
+							],
+							[
+								"pipe",
+								"/b",
+								{
+									"steps": [
+										{
+											"do": [
+												"log",
+												"told",
+												[
+													"pick",
+													"$0",
+													[
+														"value"
+													]
+												]
+											]
+										}
+									]
+								}
+							]
+						]
+					],
+					"as": "m"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/a",
+				[
+					{
+						"path": [],
+						"value": 1
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "told",
+			"expect": {
+				"values": [
+					1
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/mode",
+				[
+					{
+						"path": [],
+						"value": 2
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/a",
+				[
+					{
+						"path": [],
+						"value": 2
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "told",
+			"expect": {
+				"values": [
+					1
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/b",
+				[
+					{
+						"path": [],
+						"value": 3
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "told",
+			"expect": {
+				"values": [
+					1,
+					3
+				]
+			}
+		}
+	]
+}

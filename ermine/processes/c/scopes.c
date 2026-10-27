@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "../../../core/scheduler/c/ptrmap.h"
+#include "platform.h"
 
 static void *xalloc(size_t n) {
 	void *p = calloc(1, n ? n : 1);
@@ -72,7 +73,7 @@ static char *random_id(void) {
 	char *id = xalloc(sizeof "scope:" + 32);
 	memcpy(id, "scope:", 6);
 	unsigned char bytes[16];
-	arc4random_buf(bytes, sizeof bytes);
+	PF_RANDOM(bytes, sizeof bytes);
 	for (size_t i = 0; i < sizeof bytes; i++) {
 		id[6 + 2 * i] = hex[bytes[i] >> 4];
 		id[7 + 2 * i] = hex[bytes[i] & 15];

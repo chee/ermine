@@ -125,3 +125,21 @@ Deno.test("build: a program naming the site module, its entry, a file of it or a
 Deno.test("build: teardown", async () => {
 	await esbuild.stop()
 })
+
+Deno.test("build: external false: @ermine/system's own files are neither transformed nor refused", async () => {
+	const plugin = ermine.raw({ external: false }, { framework: "rollup" }) as unknown as {
+		resolveId: (spec: string, importer?: string) => unknown
+		transformInclude: (id: string) => boolean
+	}
+	const system = fromFileUrl(new URL("../../../ermine/system/", import.meta.url))
+	for (const f of ["mod.ts", "typescript/system.ts", "site.ts"]) {
+		const id = join(system, f)
+		assertEquals(plugin.transformInclude(id), false, `${f} is not transformed`)
+		const text = await Deno.readTextFile(id)
+		for (const [, spec] of text.matchAll(/from "(\.[^"]*site[^"]*)"/g)) {
+			assertEquals(plugin.resolveId(spec, id), null, `${f} imports ${spec}`)
+		}
+	}
+	// a program's file, as ever
+	assertEquals(plugin.transformInclude(join(here, "program.ts")), true)
+})

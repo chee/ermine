@@ -218,9 +218,9 @@ typedef struct {
 } es_map;
 
 static inline size_t es_hash(const char *s) {
-	size_t h = 14695981039346656037u;
+	uint64_t h = 14695981039346656037u;
 	for (; *s; s++) h = (h ^ (unsigned char)*s) * 1099511628211u;
-	return h;
+	return (size_t)h;
 }
 static inline void es_map_index(es_map *m) {
 	free(m->slots);

@@ -895,6 +895,9 @@ type Piped = {
 	// how many writes in a row it was told were pipes' (a cycle of pipes: past LOOPING, looping)
 	chain: number
 	stops: (() => void)[]
+	// what the listeners watch now (from's path and part, to's when fnB is there): made again with
+	// another, the old are stopped and new started
+	watching?: string
 }
 // how deep pipes told by pipes' writes go, as writes land, before the one told is looping
 const LOOPING = 64
@@ -972,10 +975,6 @@ function pipe(inner: Inner, from: Target, ...rest: unknown[]): Node {
 		state.pipes.set(key, p)
 		state.pipeOwner.set(p, ownerOf(own))
 		base.pipes.add(id)
-		listen(inner, p, fromPath, n.part, false)
-		if (toData?.path !== undefined && fnB !== undefined) {
-			listen(inner, p, toData.path, toData.part, true)
-		}
 	}
 	// its scope: this run's (or the owner's), told its node, so its writes say so
 	const scope = s.createScope({ [NODE]: p.id, pipe: true }, own)
@@ -987,6 +986,19 @@ function pipe(inner: Inner, from: Target, ...rest: unknown[]): Node {
 	p.there = fnA as PipeFn | undefined
 	p.back = fnB as PipeFn | undefined
 	p.timing = options.timing ?? "pulse"
+	const backAt = toData?.path !== undefined && fnB !== undefined ? toData : undefined
+	const watching = JSON.stringify([
+		fromPath,
+		n.part,
+		backAt === undefined ? null : [backAt.path, backAt.part],
+	])
+	if (p.watching !== watching) {
+		for (const stop of p.stops) stop()
+		p.stops = []
+		p.watching = watching
+		listen(inner, p, fromPath, n.part, false)
+		if (backAt !== undefined) listen(inner, p, backAt.path!, backAt.part, true)
+	}
 	// made again: told again
 	p.looping = false
 	p.chain = 0

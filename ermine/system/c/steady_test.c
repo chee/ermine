@@ -180,6 +180,7 @@ typedef enum {
 	ROW_ENSURE_REMOVE_HOST,
 	ROW_RESTART,
 	ROW_SCOPE,
+	ROW_REFUSED_START,
 	ROWS,
 } row;
 
@@ -200,6 +201,7 @@ static const struct {
 	[ROW_ENSURE_REMOVE_HOST] = {"ensureNode + remove (host)", IN_NOTHING},
 	[ROW_RESTART] = {"stop + start", IN_NOTHING},
 	[ROW_SCOPE] = {"scheduler: scope made, torn down", IN_NOTHING},
+	[ROW_REFUSED_START] = {"start refused (taken)", IN_NOTHING},
 };
 
 // every part at id taken out, as the host
@@ -264,6 +266,14 @@ static void round_of(world *w, row r, long i) {
 		free(sc_teardown(o));
 		sc_release(o);
 		op_free(v);
+		break;
+	}
+	case ROW_REFUSED_START: {
+		// its path taken by the process running: refused, its record let go
+		es_started *again = NULL;
+		es_refused no = {0};
+		CHECK(es_start(w->e, setup, w, es_text("/code/p"), NULL, &again, &no) == ES_TAKEN);
+		es_refused_free(&no);
 		break;
 	}
 	default: write_a(w, i); break;

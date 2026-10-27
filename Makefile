@@ -345,6 +345,31 @@ test-check-promise-system: $(system-promise)-check
 	@echo "== system (promise, sanitizers)"
 	@$(system-promise)-check
 
+# refused starts (ermine/system/c/refuse_test.c): the scope a refused start made is freed. make test-refuse-system, test-check-refuse-system (the sanitizers)
+system-refuse_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c ermine/system/c/ermine_harness.c,$(system_src)) ermine/system/c/refuse_test.c
+system-refuse = ermine/system/c/refuse-test
+$(eval $(call harness,system-refuse))
+$(system-refuse): $(wildcard */*/c/*.h)
+test-refuse-system: $(system-refuse)
+	@echo "== system (refuse)"
+	@$(system-refuse)
+test-check-refuse-system: $(system-refuse)-check
+	@echo "== system (refuse, sanitizers)"
+	@$(system-refuse)-check
+# what a review found that the harness cannot show (ermine/system/c/review_test.c): a wait made as its
+# scope goes, a hook calling next twice, a handler failing with no text, a policy answering pending.
+# make test-review-system, test-check-review-system (the sanitizers)
+system-review_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c ermine/system/c/ermine_harness.c,$(system_src)) ermine/system/c/review_test.c
+system-review = ermine/system/c/review-test
+$(eval $(call harness,system-review))
+$(system-review): $(wildcard */*/c/*.h)
+test-review-system: $(system-review)
+	@echo "== system (review)"
+	@$(system-review)
+test-check-review-system: $(system-review)-check
+	@echo "== system (review, sanitizers)"
+	@$(system-review)-check
+
 # steady use (ermine/system/c/steady_test.c): each thing a program does, again and again, held
 # memory levelling off (leaks sees only what is lost at close). not in LIBS: its counts are the
 # allocator's, no sanitizer's. make test-steady-system
@@ -485,6 +510,8 @@ clean:
 	rm -rf playground/tools/files/c/files playground/tools/files/c/files-check playground/tools/files/c/files-check.dSYM
 	rm -rf $(HARNESSES) $(CHECKS) $(BENCHES) $(addsuffix .dSYM,$(HARNESSES) $(CHECKS))
 	rm -rf $(system-steady) $(system-steady)-check $(system-steady).dSYM
+	rm -rf $(system-review) $(system-review)-check $(system-review).dSYM
 	rm -rf $(system-promise) $(system-promise)-check $(system-promise).dSYM
+	rm -rf $(system-refuse) $(system-refuse)-check $(system-refuse).dSYM
 
 .PHONY: all bench check test test-c test-check test-steady-system clean $(addprefix test-c-,$(LIBS)) $(addprefix test-check-,$(LIBS))

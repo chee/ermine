@@ -24,14 +24,11 @@
 #include "ermine.h"
 
 #include <stdio.h>
-#include <time.h>
+
+#include "../../processes/c/platform.h"
 
 // milliseconds since 1970, fractional
-static double now(void) {
-	struct timespec t;
-	clock_gettime(CLOCK_REALTIME, &t);
-	return (double)t.tv_sec * 1e3 + (double)t.tv_nsec / 1e6;
-}
+static double now(void) { return PF_NOW_MS(); }
 
 // a pair of a scope's info; NULL: none
 static const void *pair_of(const sc_scope *o, const char *key) {
@@ -1194,14 +1191,19 @@ static void keep_record(void *ctx, const es_recorded *r) {
 	held *h = es_map_get(&x->records, r->id);
 	// the latest is the call begun last: an earlier call settling later is told, not held
 	if (h != NULL && h->call != NULL && h->call->n > r->call->n) return;
+	// next called again with the record held: held already
+	if (h != NULL && h->call == r->call) return;
 	es_call *mine = r->call == k->owned ? k->owned : call_copy(r->call);
 	k->held = mine == k->owned;
 	if (h == NULL) {
 		h = es_alloc(sizeof *h);
 		es_map_set(&x->records, r->id, h);
 	}
+	// the one held was the record's own, a changed record's next replacing it: let go of here
+	if (h->call != NULL && h->call == k->owned) k->owned = NULL, k->held = 0;
 	call_free(h->call);
 	h->call = mine;
+	k->held = mine == k->owned;
 	const void *keys[1] = {h};
 	sc_mark(x->e->scheduler, keys, 1, sc_get_run(x->e->scheduler));
 }
@@ -1438,12 +1440,12 @@ void es_calls_wait(es_ermine *e, const char *caller, const es_aim *at, const cha
 	sc_run *r = sc_get_run(e->scheduler);
 	int has_run = r != NULL;
 	unsigned run = has_run ? sc_run_n(r) : 0;
-	arm(x, scope, caller, has_run, run);
 	for (size_t i = 0; i < w->n; i++) {
 		if (strcmp(w->items[i].key, key) != 0) continue;
 		w->items[i].has_run = has_run;
 		w->items[i].run = run;
 		free(key);
+		arm(x, scope, caller, has_run, run);
 		return;
 	}
 	target t = {{0}, key, has_run, run};
@@ -1459,6 +1461,8 @@ void es_calls_wait(es_ermine *e, const char *caller, const es_aim *at, const cha
 	t.wait.since = now();
 	ES_PUSH(w->items, w->n, w->cap, t);
 	mark_list(x);
+	// last: a scope going takes the wait out at once, the waiter with it
+	arm(x, scope, caller, has_run, run);
 }
 
 void es_calls_answered(es_ermine *e, const char *caller, const es_aim *at) {
@@ -1773,7 +1777,7 @@ static int call_action(es_context *c, es_context *t, const es_node_data *n, cons
 	if (r.out.kind == ES_OUT_FAILED) {
 		// what was thrown, if it still is (a Refusal keeps its class through the call)
 		const es_error *thrown = es_thrown();
-		int thrown_code = thrown->code != 0 && thrown->message != NULL &&
+		int thrown_code = thrown->code != 0 && thrown->message != NULL && r.out.error != NULL &&
 			strcmp(thrown->message, r.out.error) == 0 ? thrown->code : 0;
 		end_call(e, g, &r.out);
 		call_gone(call);

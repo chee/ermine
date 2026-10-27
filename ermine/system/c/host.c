@@ -27,7 +27,8 @@
 #include "ermine.h"
 
 #include <stdio.h>
-#include <time.h>
+
+#include "../../processes/c/platform.h"
 
 // errors -------------------------------------------------------------------------------------------
 
@@ -439,10 +440,8 @@ char *es_uuidv7(void) {
 	static uint64_t last;
 	static unsigned count;
 	unsigned char b[16];
-	arc4random_buf(b, sizeof b);
-	struct timespec t;
-	timespec_get(&t, TIME_UTC);
-	uint64_t now = (uint64_t)t.tv_sec * 1000 + (uint64_t)t.tv_nsec / 1000000;
+	PF_RANDOM(b, sizeof b);
+	uint64_t now = (uint64_t)PF_NOW_MS();
 	if (now > last) {
 		last = now;
 		count = ((unsigned)b[6] << 8 | b[7]) & 0x7ff;
@@ -2004,7 +2003,8 @@ int es_start(es_ermine *e, es_program fn, void *ctx, es_at at, const es_start_op
 	pr_refusal no;
 	pr_process *made = pr_start(e->processes, box->places, steps, nsteps, &po, &no);
 	if (made == NULL) {
-		rec->running = 0;
+		// refused: no process, its record out of procs
+		rec_free(rec);
 		if (refused != NULL) {
 			refused->refused = no.refused;
 			refused->nat = no.nat;

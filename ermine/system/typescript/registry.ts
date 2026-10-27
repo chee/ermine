@@ -38,6 +38,9 @@ export function registerScheduler(s: Scheduler, hints = true): () => void {
 	}
 }
 
+// how many ermines now hold s registered (tests ask)
+export const registrations = (s: Scheduler): number => schedulers.get(s) ?? 0
+
 // the context scope (or one above it) is found by; none: undefined
 function contextAt(scope: Scope | undefined): Inner | undefined {
 	for (let o = scope; o !== undefined; o = o.parent) {

@@ -97,7 +97,7 @@ typedef struct {
 typedef struct {
 	// "taken", or another code's name
 	const char *refused;
-	// the path, names from the root (the life's until pr_free)
+	// the path, names from the root (borrowed till the next pr_start or pr_free)
 	const char *const *at;
 	size_t nat;
 } pr_refusal;
