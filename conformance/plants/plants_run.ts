@@ -116,7 +116,7 @@ async function control(dir: string): Promise<boolean> {
 		const r = await run(c, dir)
 		// a differ finding exits non-zero; its text says so
 		const bad = r.code !== 0 ||
-			("differ" in c && !/all agree/.test(r.out) && !/0 signatures/.test(r.out))
+			("differ" in c && !/: all agree$/m.test(r.out) && !/^0 signatures;/m.test(r.out))
 		console.log(`control ${bad ? "FAIL" : "pass"}  ${name}`)
 		if (bad) {
 			ok = false
@@ -147,7 +147,7 @@ async function plant(p: Plant, template: string): Promise<Result> {
 		await Deno.writeTextFile(path, text.replace(p.find, () => p.replace))
 		const r = await run(p.catcher, dir)
 		const failed = r.code !== 0 ||
-			("differ" in p.catcher && !/all agree|0 signatures/.test(r.out))
+			("differ" in p.catcher && !/(: all agree$|^0 signatures;)/m.test(r.out))
 		if (!failed) return { plant: p, verdict: "survived", note: label(p.catcher) }
 		if (broken.test(r.out)) {
 			return {
