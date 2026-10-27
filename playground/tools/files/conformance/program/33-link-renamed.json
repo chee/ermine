@@ -1,5 +1,6 @@
 {
 	"title": "a link renamed moves its id: the slot its new name gives",
+	"on": ["darwin-aarch64", "darwin-x86_64"],
 	"steps": [
 		{
 			"op": "open",

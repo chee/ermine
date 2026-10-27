@@ -25,6 +25,7 @@
 //   harness     another suite's harness (invert speaks apply's)
 //   typescript  TypeScript harness only
 //   allow       extra deno flags for the TypeScript harness (native: --allow-ffi)
+//   noLinkAttrs operating systems whose links hold no extended attribute: an expected link entry's attrs and id are left out
 //   make        targets built (make -s, from the repository's root) before the suite runs
 import { assert, assertEquals } from "@std/assert"
 import { ask, command, type Options, type Suite, suites } from "./typescript/ask.ts"
@@ -76,6 +77,7 @@ function differs(
 	got: unknown,
 	o: Options,
 	window: [number, number],
+	key = "",
 ): string | undefined {
 	if (want === "now" && o.now) {
 		const ok = Number.isInteger(got) && (got as number) >= window[0] - 1 &&
@@ -94,11 +96,17 @@ function differs(
 	}
 	if (isMap(want)) {
 		if (!isMap(got)) return `${show(got)}, not ${show(want)}`
-		const keys = Object.keys(want)
+		// a link as the disk has it (an entry, or a difference's now) holds no attribute here, so no id
+		const entry = want.kind === "link" && o.noLinkAttrs?.includes(Deno.build.os)
+			? Object.fromEntries(
+				Object.entries(want).filter(([k]) => k !== "attrs" && (k !== "id" || key !== "now")),
+			)
+			: want
+		const keys = Object.keys(entry)
 		if (Object.keys(got).length !== keys.length) return `${show(got)}, not ${show(want)}`
 		for (const k of keys) {
 			if (!Object.hasOwn(got, k)) return `${show(got)}, not ${show(want)}`
-			const d = differs(want[k], got[k], o, window)
+			const d = differs(entry[k], got[k], o, window, k)
 			if (d) return `${k}: ${d}`
 		}
 		return

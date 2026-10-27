@@ -41,6 +41,8 @@ export type Options = {
 	// requests that change nothing, asked around every refused step: the same before and after
 	// (conformance/run.ts)
 	reads?: Record<string, unknown>[]
+	// operating systems where a link holds no extended attribute (Linux): an expected link entry's attrs and id are left out
+	noLinkAttrs?: string[]
 	// what make builds before the suite runs, from the repository's root (native: its fixtures)
 	make?: string[]
 }
