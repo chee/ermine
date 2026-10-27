@@ -233,3 +233,25 @@ Deno.test("a listener that throws: every other boundary's listeners are told all
 	s.pulse()
 	assertEquals(told, 2)
 })
+
+Deno.test("a computation failing again and again is watched by one teardown, not one per run", () => {
+	const { s, write, o, compute } = setup()
+	let teardowns = 0
+	const registerTeardown = s.registerTeardown
+	const counted = createBoundaries({
+		...s,
+		registerTeardown: (
+			...a: Parameters<typeof registerTeardown>
+		) => (teardowns++, registerTeardown(...a)),
+	})
+	counted.errored(o)
+	write("k", "fail")
+	compute(o, "k")
+	s.pulse()
+	const once = teardowns
+	for (let i = 0; i < 10; i++) {
+		write("k", "fail")
+		s.pulse()
+	}
+	assertEquals(teardowns, once)
+})
