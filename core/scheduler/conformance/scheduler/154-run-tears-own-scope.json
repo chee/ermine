@@ -1,0 +1,23 @@
+{
+	"title": "run(x) whose code tears x down, its maker's hold let go: x stays open, gone, till the run is done, so a scope made there after is disposed (the C holds the scope open)",
+	"steps": [
+		{ "op": "root", "name": "o", "info": { "actor": "test" }, "expect": {} },
+		{ "op": "scope", "name": "x", "parent": "o", "info": { "why": "x" }, "expect": {} },
+		{ "op": "cleanup", "scope": "x", "do": { "log": "x" }, "expect": {} },
+		{ "op": "release", "scope": "x", "expect": {} },
+		{
+			"op": "run",
+			"scope": "x",
+			"do": {
+				"do": [
+					{ "dispose": "x" },
+					{ "log": { "current": null } },
+					{ "scope": ["n", { "why": "n" }] }
+				]
+			},
+			"expect": { "error": "disposed" }
+		},
+		{ "op": "log", "expect": { "log": ["x", { "scope": "x", "info": { "why": "x" } }] } },
+		{ "op": "current", "expect": { "value": null } }
+	]
+}

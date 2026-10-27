@@ -901,10 +901,12 @@ const char *sc_run_with_scope(sc_scope *o, void (*f)(void *), void *data) {
 	sc_run *was = s->reading;
 	sc_scope *wasopen = s->open;
 	s->reading = NULL;
-	s->open = o;
+	// held while open: f may tear it down
+	s->open = sc_retain(o);
 	f(data);
 	s->reading = was;
 	s->open = wasopen;
+	unhold(o);
 	return NULL;
 }
 

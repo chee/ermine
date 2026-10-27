@@ -82,8 +82,8 @@
 // set and act are lent them for the call. a scope or computer lives while something holds it, as
 // a WeakMap's key does in the reference [chee 10-26: "the C should "garbage collect" via
 // something like a weakmap"]: its maker (the one hold sc_create_* gives, let go with sc_release),
-// each sc_retain, each scope under it, each of its runs (sc_run_ref, a promise's, a queued act's),
-// a loop that names it, and, alive, the tree. torn down and held by nothing, it is freed: a plain
+// each sc_retain, sc_run_with_scope while it is open, each scope under it, each of its runs
+// (sc_run_ref, a promise's, a queued act's), a loop that names it, and, alive, the tree. torn down and held by nothing, it is freed: a plain
 // scope at once, a computer as the pulse ends (the pulse it went in, else the next: a pulse's
 // causes and order name it till then), the free listeners told first (sc_on_free). a maker that
 // never lets go keeps it till sc_free, as before. a scope's info is the scheduler's: the pairs
