@@ -1055,6 +1055,8 @@ function told(inner: Inner, p: Piped, w: Watched, back: boolean, byPipe: boolean
 // a pipe's status, in the status table: failed (the error), or none (done)
 function pipeStatus(inner: Inner, p: Piped, error: unknown) {
 	const { table, s } = here(inner)
+	// its scope gone (its process stopped it as it was told): nothing to say
+	if (p.scope.state !== "alive") return
 	const had = table.get(STATUS_TABLE as Key, p.id)?.value as Record<string, unknown> | undefined
 	if (error === undefined && had?.[STATUS] === undefined) return
 	s.runWithScope(p.scope, () =>
