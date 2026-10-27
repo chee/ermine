@@ -97,7 +97,7 @@ const op_value *pr_read_at(const pr_read *read, const char *part, tb_key id, con
 static const pr_answer YES = {PR_YES, NULL, NULL, {0}};
 static pr_answer no(const char *reason) { return (pr_answer){PR_NO, reason, NULL, {0}}; }
 
-// values equal: scalars, lists in order, maps by keys (as protect.ts's same)
+// values equal: scalars, lists in order, maps by keys, bytes and typed arrays by content (as protect.ts's same)
 int pr_same(const op_value *a, const op_value *b) {
 	if (a == NULL || b == NULL) return a == b;
 	if (a->type != b->type) return 0;
@@ -117,6 +117,10 @@ int pr_same(const op_value *a, const op_value *b) {
 			if (x == NULL || !pr_same(a->items[i], x)) return 0;
 		}
 		return 1;
+	case OP_BYTES: return a->bytes == b->bytes && memcmp(a->data, b->data, a->bytes) == 0;
+	case OP_TYPED:
+		return a->kind == b->kind && op_length(a) == op_length(b) &&
+		       memcmp(a->data, b->data, op_length(a) * op_size(a->kind)) == 0;
 	default: return 0;
 	}
 }

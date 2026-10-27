@@ -215,9 +215,16 @@ function isMap(v: unknown): v is Record<string, unknown> {
 	return v !== null && typeof v === "object" && !Array.isArray(v) && !ArrayBuffer.isView(v)
 }
 
-// values equal: scalars as ===, lists in order, maps by keys
+// values equal: scalars as ===, lists in order, maps by keys, bytes and typed arrays by content
 export function same(a: unknown, b: unknown): boolean {
 	if (Object.is(a, b)) return true
+	if (ArrayBuffer.isView(a)) {
+		return ArrayBuffer.isView(b) && a.constructor === b.constructor &&
+			a.byteLength === b.byteLength &&
+			new Uint8Array(a.buffer, a.byteOffset, a.byteLength).every((x, i) =>
+				x === new Uint8Array(b.buffer, b.byteOffset, b.byteLength)[i]
+			)
+	}
 	if (Array.isArray(a)) {
 		return Array.isArray(b) && a.length === b.length && a.every((x, i) => same(x, b[i]))
 	}
