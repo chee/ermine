@@ -1289,6 +1289,33 @@ static void heads(void) {
 	tp_log_free(a), tp_log_free(b);
 }
 
+// ---- a run longer than one step's limit comes back
+
+static void long_run(const char *dir) {
+	printf("a run longer than one step's limit comes back after a restart\n");
+	char d[512];
+	uint8_t seed[32];
+	memset(seed, 7, 32);
+	snprintf(d, sizeof d, "%s/long", dir);
+	tp_log_options o = {mem, tp_file_store(&mem, d, 1 << 20), seed, 1, {0, 0, 1000}, NULL, NULL};
+	tp_log *log = tp_log_new(&o);
+	CHECK(!tp_log_load(log));
+	uint64_t n, l, to;
+	uint8_t sig[64];
+	for (int i = 0; i < 20; i++) {
+		tp_write w = put(i);
+		CHECK(!tp_log_write(log, &w, &n, &l));
+	}
+	CHECK(!tp_log_run(log, tp_log_device(log), 1, &to, sig) && to == 20);
+	tp_log_free(log);
+	o.store = tp_file_store(&mem, d, 1 << 20);
+	log = tp_log_new(&o);
+	CHECK(!tp_log_load(log));
+	CHECK(tp_log_count(log, tp_log_device(log)) == 20);
+	tp_log_free(log);
+	wipe(d);
+}
+
 int main(int argc, char **argv) {
 	if (argc != 2) return fprintf(stderr, "usage: check-c-review dir\n"), 2;
 	setvbuf(stdout, NULL, _IONBF, 0);
@@ -1307,6 +1334,7 @@ int main(int argc, char **argv) {
 	if (!only || strchr(only, '9')) forgetting(argv[1]), printf("  heap now %zu\n", H.now);
 	if (!only || strchr(only, 'l')) late(), printf("  heap now %zu\n", H.now);
 	if (!only || strchr(only, 'h')) heads(), printf("  heap now %zu\n", H.now);
+	if (!only || strchr(only, 'm')) long_run(argv[1]), printf("  heap now %zu\n", H.now);
 	rmdir(argv[1]);
 	CHECK(H.now == 0);
 	printf("check-c-review: %s, %d failed\n", failed ? "FAIL" : "ok", failed);
