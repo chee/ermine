@@ -1,5 +1,5 @@
 {
-	"title": "big list indices (up to 999999999999) are numbers like any other: kept in index order, reached by ranges and shifts",
+	"title": "big list indices (up to 999999999999) are numbers like any other: held in index order, reached by ranges and shifts",
 	"steps": [
 		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 999999999999], "expect": {} },
 		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 5], "expect": {} },

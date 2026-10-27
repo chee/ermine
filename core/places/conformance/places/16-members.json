@@ -36,7 +36,7 @@
 		},
 		{
 			"op": "watch",
-			"name": "kept",
+			"name": "held",
 			"scope": "o",
 			"f": {
 				"join": {
@@ -61,7 +61,7 @@
 		},
 		{
 			"op": "state",
-			"name": "kept",
+			"name": "held",
 			"expect": {
 				"runs": 1,
 				"value": "X"
@@ -88,7 +88,7 @@
 		},
 		{
 			"op": "state",
-			"name": "kept",
+			"name": "held",
 			"expect": {
 				"runs": 2,
 				"value": "X,Y"
@@ -115,7 +115,7 @@
 		},
 		{
 			"op": "state",
-			"name": "kept",
+			"name": "held",
 			"expect": {
 				"runs": 3,
 				"value": "X,Y,Z"

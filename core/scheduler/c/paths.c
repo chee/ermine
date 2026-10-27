@@ -115,7 +115,7 @@ struct pt_root {
 };
 struct pt_paths {
 	map roots, steps;
-	pt_kept kept;
+	pt_held held;
 	// every mark call takes the next tick
 	uint64_t tick;
 	// what the last call marked
@@ -141,8 +141,8 @@ static pt_root *root(pt_paths *p, pt_key source, pt_key id, int make) {
 	pt_root *r = grab(sizeof *r);
 	*r = (pt_root){.link.hash = h, .source = keep(source), .id = keep(id)};
 	add(&p->roots, &r->link);
-	p->kept.keys++;
-	p->kept.steps++;
+	p->held.keys++;
+	p->held.steps++;
 	return r;
 }
 
@@ -193,7 +193,7 @@ static pt_step *make_kid(pt_paths *p, pt_step *up, const op_key *k) {
 		up->nums[i] = s;
 		up->count++;
 	}
-	p->kept.steps++;
+	p->held.steps++;
 	return s;
 }
 
@@ -204,7 +204,7 @@ static pt_spot *made(pt_paths *p, pt_root *r, pt_step *at, size_t length, int ke
 	op_key *path = grab(length * sizeof *path);
 	for (pt_step *x = at; x != NULL && x->up != NULL; x = x->up) path[--length] = x->key;
 	s->path = path;
-	p->kept.spots++;
+	p->held.spots++;
 	return s;
 }
 
@@ -361,15 +361,15 @@ pt_spot *const *pt_event(pt_paths *p, pt_key source, pt_key id, size_t *length) 
 static void free_spot(pt_paths *p, pt_spot *s) {
 	free((void *)s->path);
 	free(s);
-	p->kept.spots--;
+	p->held.spots--;
 }
 static void free_root(pt_paths *p, pt_root *r) {
 	if (r->source.symbol == NULL) free((void *)r->source.string);
 	if (r->id.symbol == NULL) free((void *)r->id.string);
 	free(r->top.nums);
 	free(r);
-	p->kept.keys--;
-	p->kept.steps--;
+	p->held.keys--;
+	p->held.steps--;
 }
 
 void pt_release(pt_paths *p, pt_spot *s) {
@@ -397,7 +397,7 @@ void pt_release(pt_paths *p, pt_spot *s) {
 			del(&p->steps, &at->link);
 			free(at->nums);
 			free(at);
-			p->kept.steps--;
+			p->held.steps--;
 			at = up;
 		}
 	}
@@ -408,7 +408,7 @@ void pt_release(pt_paths *p, pt_spot *s) {
 	free_root(p, r);
 }
 
-pt_kept pt_kept_of(const pt_paths *p) { return p->kept; }
+pt_held pt_held_of(const pt_paths *p) { return p->held; }
 
 static void free_steps(pt_paths *p, pt_step *at) {
 	for (pt_step *k = at->first, *next; k != NULL; k = next) {

@@ -167,7 +167,7 @@ function seeded(seed: number, reach: Reach) {
 			assertEquals(now !== was, due, `${at}: ${m.name} acted`)
 			if (now !== was) reach.acts++
 		}
-		// spots no computer tracks: let go. what is kept is what the live computers track
+		// spots no computer tracks: let go. what is held is what the live computers track
 		const read = new Set<unknown>()
 		for (const m of made) {
 			if (!alive(m)) continue
@@ -175,7 +175,7 @@ function seeded(seed: number, reach: Reach) {
 				if (typeof l.to.owner === "object") read.add(l.to.owner)
 			}
 		}
-		assertEquals(w.paths.kept().spots, read.size, `${at}: what paths keeps`)
+		assertEquals(w.paths.held().spots, read.size, `${at}: what paths holds`)
 	}
 
 	pulse(`seed ${seed}: the first pulse`)

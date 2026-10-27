@@ -297,9 +297,9 @@ Deno.test("places: a spot nobody reads is let go: when its reader goes, or a run
 			() => {},
 		))
 	s.pulse()
-	assertEquals(paths.kept().spots, 2)
+	assertEquals(paths.held().spots, 2)
 	s.teardown(c)
-	assertEquals(paths.kept(), { keys: 0, spots: 0, steps: 0 })
+	assertEquals(paths.held(), { keys: 0, spots: 0, steps: 0 })
 	// each run reads the next path, after what it read changed: the old spot goes
 	let i = 0
 	const w = watch(() => l.readValue("value", "doc", [`f${i}`]))
@@ -308,7 +308,7 @@ Deno.test("places: a spot nobody reads is let go: when its reader goes, or a run
 		hosted(() => edit("value", "doc", [{ path: [`f${i - 1}`], value: i }]))
 		s.pulse()
 	}
-	assertEquals(paths.kept().spots, 1)
+	assertEquals(paths.held().spots, 1)
 	// what is still read is still told
 	i = 299
 	hosted(() => edit("value", "doc", [{ path: ["f299"], value: "last" }]))

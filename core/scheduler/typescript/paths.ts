@@ -1,11 +1,11 @@
 // tracked paths: which reads a patch reaches (core/scheduler/fine-grained.md, the rule).
 // a spot is (source, id, path): a read of path in the value at that key, deep (the reader was
 // handed all under path). a keys spot is a read of which keys there are at path, not what is
-// under them (see keyed). spots are kept by address, so a read of something not made yet has
+// under them (see keyed). spots are held by address, so a read of something not made yet has
 // one, and shared by everyone who reads the same path. each key has a trie of path steps; a
 // patch walks its own path, then marks what lies under it: O(|path| + marked).
 //
-// a list's number kids are also kept in order, by key: a range finds those from a on with one
+// a list's number kids are also held in order, by key: a range finds those from a on with one
 // binary search, and the ones before it cost nothing. a read in index order adds at the end.
 //
 // pruning: release(spot) lets a spot go, with the steps left empty above it. this file knows no
@@ -16,7 +16,7 @@ import type { Key, Patch } from "@ermine/core/op/apply"
 
 export type { Key, Patch }
 
-// owner: the caller's, never read here. path: never changed once given (it is kept, not
+// owner: the caller's, never read here. path: never changed once given (it is held, not
 // copied); null: the change spot, reads of the change itself (time, actor, metadata)
 export type Spot<O> = {
 	source: unknown
@@ -27,7 +27,7 @@ export type Spot<O> = {
 	owner: O | undefined
 	// the mark call that last gave it, so a call gives it once
 	seen: number
-	// where it is kept: its step, or its key's root for the change spot
+	// where it is held: its step, or its key's root for the change spot
 	step: Step<O> | null
 	root: Root<O>
 }
@@ -123,7 +123,7 @@ export function createPaths<O>(): {
 	mark: (source: unknown, id: unknown, patches: Iterable<Patch>) => Spot<O>[]
 	event: (source: unknown, id: unknown) => Spot<O>[]
 	release: (s: Spot<O>) => void
-	kept: () => { keys: number; spots: number; steps: number }
+	held: () => { keys: number; spots: number; steps: number }
 } {
 	type S = Spot<O>
 	type T = Step<O>
@@ -283,9 +283,9 @@ export function createPaths<O>(): {
 		counts.steps--
 	}
 
-	// what is kept: keys with a spot, spots, and trie steps (a kept key's [] and every other
-	// prefix of a kept spot's path)
-	const kept = () => ({ ...counts })
+	// what is held: keys with a spot, spots, and trie steps (a held key's [] and every other
+	// prefix of a held spot's path)
+	const held = () => ({ ...counts })
 
-	return { spot, change, mark, event, release, kept }
+	return { spot, change, mark, event, release, held }
 }

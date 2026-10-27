@@ -1,5 +1,5 @@
 {
-	"title": "an effect's run's cleanups are the run's: set aside by its next run (acted on or not: equal), run once that run is done and the round's runs are, newest first, before the acts; the one that throws ends the rest (kept is not run) and its error comes out of the pulse before the acts, so the act waits for the next pulse. an act does not run them",
+	"title": "an effect's run's cleanups are the run's: set aside by its next run (acted on or not: equal), run once that run is done and the round's runs are, newest first, before the acts; the one that throws ends the rest (an older cleanup is not run) and its error comes out of the pulse before the acts, so the act waits for the next pulse. an act does not run them",
 	"steps": [
 		{
 			"op": "root",
@@ -27,7 +27,7 @@
 							"e",
 							{
 								"log": [
-									"kept",
+									"cleanup",
 									{
 										"read": "x"
 									}
@@ -147,7 +147,7 @@
 			"expect": {
 				"log": [
 					[
-						"kept",
+						"cleanup",
 						3
 					]
 				]

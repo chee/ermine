@@ -39,8 +39,8 @@
 			"expect": { "spots": [[]] }
 		},
 		{ "op": "event", "source": { "symbol": "w" }, "id": "n", "expect": { "spots": [] } },
-		{ "op": "kept", "expect": { "keys": 4, "spots": 4, "steps": 9 } },
+		{ "op": "held", "expect": { "keys": 4, "spots": 4, "steps": 9 } },
 		{ "op": "release", "source": { "symbol": "v" }, "id": "n", "path": ["x"], "expect": {} },
-		{ "op": "kept", "expect": { "keys": 3, "spots": 3, "steps": 7 } }
+		{ "op": "held", "expect": { "keys": 3, "spots": 3, "steps": 7 } }
 	]
 }

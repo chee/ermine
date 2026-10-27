@@ -917,8 +917,8 @@ static op_value *world_answer(const op_value *r) {
 		op_set(o, "reads", op_num((double)k.reads));
 		return o;
 	}
-	if (strcmp(op, "kept") == 0) {
-		pt_kept k = pt_kept_of(world_paths);
+	if (strcmp(op, "held") == 0) {
+		pt_held k = pt_held_of(world_paths);
 		op_value *o = op_map();
 		op_set(o, "keys", op_num((double)((int64_t)k.keys)));
 		op_set(o, "spots", op_num((double)((int64_t)k.spots)));

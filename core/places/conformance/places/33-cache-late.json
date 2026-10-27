@@ -1,5 +1,5 @@
 {
-	"title": "a cache made after a run tracks a spot lets go only what it took itself: its entry going leaves the run's spot kept, and a write there still reruns the run",
+	"title": "a cache made after a run tracks a spot lets go only what it took itself: its entry going leaves the run's spot held, and a write there still reruns the run",
 	"steps": [
 		{
 			"op": "kids",
@@ -57,7 +57,7 @@
 			}
 		},
 		{
-			"op": "kept",
+			"op": "held",
 			"expect": {
 				"keys": 2,
 				"spots": 2,
@@ -89,7 +89,7 @@
 			"expect": {}
 		},
 		{
-			"op": "kept",
+			"op": "held",
 			"expect": {
 				"keys": 0,
 				"spots": 0,

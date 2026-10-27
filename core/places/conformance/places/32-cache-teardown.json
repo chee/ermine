@@ -1,5 +1,5 @@
 {
-	"title": "teardown leaves nothing: an entry per step of a path is kept while a run tracks it (and the spots it reads), and when the runs go, no entry, no key read and no spot is left",
+	"title": "teardown leaves nothing: an entry per step of a path is held while a run tracks it (and the spots it reads), and when the runs go, no entry, no key read and no spot is left",
 	"steps": [
 		{
 			"op": "kids",
@@ -105,7 +105,7 @@
 			}
 		},
 		{
-			"op": "kept",
+			"op": "held",
 			"expect": {
 				"keys": 4,
 				"spots": 6,
@@ -130,7 +130,7 @@
 			}
 		},
 		{
-			"op": "kept",
+			"op": "held",
 			"expect": {
 				"keys": 0,
 				"spots": 0,

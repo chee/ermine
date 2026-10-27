@@ -10,7 +10,7 @@
 		{"op":"spot","source":"v","id":"n","path":["𐀀"],"expect":{}},
 		{"op":"spot","source":"v","id":"n","path":[""],"expect":{}},
 		{"op":"spot","source":"v","id":"n","path":["__proto__"],"expect":{}},
-		{"op":"kept","expect":{"keys":1,"spots":9,"steps":11}},
+		{"op":"held","expect":{"keys":1,"spots":9,"steps":11}},
 		{"op":"mark","source":"v","id":"n","patches":[{"path":[0,"x"],"value":1}],"expect":{"spots":[[0,"x"]]}},
 		{"op":"mark","source":"v","id":"n","patches":[{"path":[0]}],"expect":{"spots":[[0,"x"]]}},
 		{"op":"marks","patch":{"path":[0]},"paths":[[0],[1],["0"],[]],"expect":{"marks":[true,true,false,true]}},
@@ -30,6 +30,6 @@
 		{"op":"event","source":"\ud800","id":"\udc00","expect":{"spots":[[]]}},
 		{"op":"spot","source":"","id":"","path":["k"],"expect":{}},
 		{"op":"event","source":"","id":"","expect":{"spots":[["k"]]}},
-		{"op":"kept","expect":{"keys":4,"spots":12,"steps":15}}
+		{"op":"held","expect":{"keys":4,"spots":12,"steps":15}}
 	]
 }

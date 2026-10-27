@@ -4,7 +4,7 @@
 //   - include a spot of every walker whose result changed
 //   - include every spot whose children entry, or whose value at the spot's path, is not the same
 //     reference as before (the oracle: values are copy-on-write)
-// spots no walker holds any more are released, as the scheduler's forget would; what is kept is
+// spots no walker holds any more are released, as the scheduler's forget would; what is held is
 // what is held. a few dozen seeds (fuzz runs small)
 import { assert, assertEquals } from "@std/assert"
 import { PlacesError } from "@ermine/core/places"
@@ -102,7 +102,7 @@ function seeded(seed: number, reach: Reach) {
 			paths.release(s)
 			made.delete(s)
 		}
-		assertEquals(paths.kept().spots, held.size, `${at}: what is kept`)
+		assertEquals(paths.held().spots, held.size, `${at}: what is held`)
 	}
 }
 
