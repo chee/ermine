@@ -26,6 +26,10 @@
 //   {"op":"cleanup","scope":s,"do":e}                e when s is cleaned up    → {}
 //   {"op":"dispose","scope":s}  disposed already: nothing                            → {}
 //        every cleanup runs; one that threw: the first error, after them all (the scope is gone)
+//   {"op":"retain","scope":s}  {"op":"release","scope":s}   one hold more on s, one let go (the
+//        maker's first, never more than it has): here nothing (a WeakMap's key), the C's holds
+//        (scheduler.h, memory). a plain scope let go by all, and gone, is freed there: not named
+//        again. a computer the harness holds too, to the end                    → {}
 //   {"op":"run","scope":s,"do":e}                    e in run(s): untracked    → {"value":v}
 //        what e throws is the answer's error; PENDING or a promise: no value, {}
 //   {"op":"write","values":{k:v...}}    each kept at its key, then changed(keys) → {"tick":t}
@@ -690,6 +694,10 @@ async function run(r: Request): Promise<Json> {
 		}
 		case "dispose":
 			s.teardown(scope(r.scope))
+			return {}
+		case "retain":
+		case "release":
+			scope(r.scope)
 			return {}
 		case "run": {
 			const o = scope(r.scope)

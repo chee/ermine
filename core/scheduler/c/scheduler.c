@@ -693,13 +693,16 @@ static void first_error(char **failed, char *e) {
 
 // kids (n of them), newest first, then fs (nfs), newest first, every one with o open (under a
 // computer, written by it): the first cleanup error. what a listener throws in a kid's teardown is
-// held (the bracket around), never a cleanup's error
+// held (the bracket around), never a cleanup's error. each kid held while the walk goes: one a
+// teardown here tears down first is passed by, gone, not freed under it
 static char *down(sc_scope *o, sc_scope **kids, size_t n, const teardown_fn *fs, size_t nfs) {
 	char *failed = NULL;
 	if (n > 0) {
 		opened was = opens(o);
+		for (size_t i = 0; i < n; i++) kids[i]->refs++;
 		for (size_t i = 0; i < n; i++) first_error(&failed, dispose(kids[i]));
 		reopen(o->s, was);
+		for (size_t i = 0; i < n; i++) unhold(kids[i]);
 	}
 	for (size_t i = nfs; i > 0; i--) first_error(&failed, call_teardown(o, fs[i - 1]));
 	return failed;
