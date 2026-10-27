@@ -363,12 +363,39 @@ static uint8_t *frame_bytes(Disk *d, Json *records, const char *folder, size_t *
 }
 
 static int copy_all(const char *from, const char *to) {
+#ifdef __linux__
+	// Linux's cp keeps attributes only when told to
+	char *argv[] = {"cp", "-Rp", "--preserve=xattr", (char *)from, (char *)to, NULL};
+#else
 	char *argv[] = {"cp", "-Rp", (char *)from, (char *)to, NULL};
+#endif
 	pid_t pid;
 	if (posix_spawnp(&pid, "cp", NULL, NULL, argv, environ) != 0) return -1;
 	int status;
 	if (waitpid(pid, &status, 0) < 0) return -1;
 	return WIFEXITED(status) && WEXITSTATUS(status) == 0 ? 0 : -1;
+}
+
+// scenarios say party.chee.ermine.x, and com.apple.x for another app's; the platform's own names (Linux: user.ermine.x and
+// user.com.apple.x) are swapped in and out. The result is fresh
+static char *local_name(const char *name) {
+	const char *own = "party.chee.ermine.";
+	size_t n = strlen(own);
+	if (strncmp(name, own, n) == 0) return formatString("%s%s", SYS_OWN, name + n);
+#ifdef __linux__
+	return formatString("user.%s", name);
+#else
+	return copyString(name);
+#endif
+}
+
+static char *canon_name(const char *name) {
+	size_t n = strlen(SYS_OWN);
+	if (strncmp(name, SYS_OWN, n) == 0) return formatString("party.chee.ermine.%s", name + n);
+#ifdef __linux__
+	if (strncmp(name, "user.", 5) == 0) return copyString(name + 5);
+#endif
+	return copyString(name);
 }
 
 int disk_edit(Disk *d, const Json *e, const char *folder, char *why, size_t size) {
@@ -403,9 +430,14 @@ int disk_edit(Disk *d, const Json *e, const char *folder, char *why, size_t size
 	else if (strcmp(kind, "copy") == 0 && from && to) r = copy_all(from, to);
 	else if (strcmp(kind, "attr") == 0 && path && jsonText(jsonGet(e, "name"))) {
 		b = bytes_of(e, &n);
-		r = sys_set(path, jsonText(jsonGet(e, "name")), b, n);
-	} else if (strcmp(kind, "unattr") == 0 && path && jsonText(jsonGet(e, "name"))) r = sys_unset(path, jsonText(jsonGet(e, "name")));
-	else if (strcmp(kind, "id") == 0 && path && jsonText(jsonGet(e, "of"))) {
+		char *name = local_name(jsonText(jsonGet(e, "name")));
+		r = sys_set(path, name, b, n);
+		free(name);
+	} else if (strcmp(kind, "unattr") == 0 && path && jsonText(jsonGet(e, "name"))) {
+		char *name = local_name(jsonText(jsonGet(e, "name")));
+		r = sys_unset(path, name);
+		free(name);
+	} else if (strcmp(kind, "id") == 0 && path && jsonText(jsonGet(e, "of"))) {
 		const char *raw = disk_raw(d, jsonText(jsonGet(e, "of")));
 		r = sys_set(path, SYS_ID, (const uint8_t *)raw, strlen(raw));
 	} else if (strcmp(kind, "cut") == 0 && path && jsonIsNumber(jsonGet(e, "by"))) {
@@ -557,7 +589,9 @@ static Json *entry_attrs(Walker *w, const char *abs) {
 		}
 		free(text);
 		free(b);
-		jsonAdd(out, n, v);
+		char *shown = canon_name(n);
+		jsonAdd(out, shown, v);
+		free(shown);
 	}
 	names_free_all(names, count);
 	return out;
@@ -829,7 +863,7 @@ Json *disk_store_snapshot(Disk *d, const char *folder, Json *listed, const Json 
 	const Json *attrs = jsonGet(look, "attrs"), *at = jsonGet(look, "at");
 	size_t extra_count = jsonIsArray(attrs) ? (size_t)attrs->array.count : 0;
 	const char **extra = allocate((extra_count + 1) * sizeof *extra);
-	for (size_t i = 0; i < extra_count; i++) extra[i] = jsonText(attrs->array.items[i]);
+	for (size_t i = 0; i < extra_count; i++) extra[i] = local_name(jsonText(attrs->array.items[i]));
 	size_t more = jsonIsArray(at) ? (size_t)at->array.count : 0;
 	const char **labels = allocate((more + 1) * sizeof *labels);
 	char **abs = allocate((more + 1) * sizeof *abs);
@@ -889,7 +923,9 @@ Json *disk_store_snapshot(Disk *d, const char *folder, Json *listed, const Json 
 	inos_free(&inos);
 	walk_free(&inside), walk_free(&bin);
 	for (size_t i = 0; i < more; i++) walk_free(&elsewhere[i]), free(abs[i]);
-	free(elsewhere), free(has), free(abs), free(labels), free(extra);
+	free(elsewhere), free(has), free(abs), free(labels);
+	for (size_t i = 0; i < extra_count; i++) free((char *)extra[i]);
+	free(extra);
 	return out;
 }
 

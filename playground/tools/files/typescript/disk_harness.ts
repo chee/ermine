@@ -128,14 +128,17 @@ export class Disk {
 			case "link":
 				return await Deno.symlink(e.target as string, at(e.path))
 			case "copy": {
-				const r = await new Deno.Command("cp", { args: ["-Rp", at(e.from), at(e.to)] }).output()
+				// Linux's cp keeps attributes only when told to
+				const keep = linux ? ["-Rp", "--preserve=xattr"] : ["-Rp"]
+				const r = await new Deno.Command("cp", { args: [...keep, at(e.from), at(e.to)] })
+					.output()
 				if (!r.success) throw new Error("cp failed")
 				return
 			}
 			case "attr":
-				return await sys.set(at(e.path), e.name as string, bytesOf(e))
+				return await sys.set(at(e.path), local(e.name as string), bytesOf(e))
 			case "unattr":
-				return await sys.unset(at(e.path), e.name as string)
+				return await sys.unset(at(e.path), local(e.name as string))
 			case "id":
 				return await sys.set(at(e.path), attr.id, utf8.encode(this.raw(e.of as string)))
 			case "cut": {
@@ -218,6 +221,19 @@ function frame(records: Record<string, unknown>, at: (path: string) => string): 
 
 type Shown = Record<string, unknown> & { path: string; kind: string }
 
+// scenarios say party.chee.ermine.x, and com.apple.x for another app's; the platform's own names (Linux: user.ermine.x and user.com.apple.x)
+// are swapped in and out
+const OWN = "party.chee.ermine."
+const linux = Deno.build.os === "linux"
+const local = (n: string) =>
+	n.startsWith(OWN) ? attr.own + n.slice(OWN.length) : linux ? "user." + n : n
+const canon = (n: string) =>
+	n.startsWith(attr.own)
+		? OWN + n.slice(attr.own.length)
+		: linux && n.startsWith("user.")
+		? n.slice(5)
+		: n
+
 async function storeAttrs(path: string, extra: readonly string[], d: Disk) {
 	const out: Record<string, unknown> = {}
 	const all = (await sys.names(path)).filter((n) => n.startsWith(attr.own) || extra.includes(n))
@@ -231,7 +247,7 @@ async function storeAttrs(path: string, extra: readonly string[], d: Disk) {
 			v = { hex: hex(b) }
 		}
 		if (n === attr.store && typeof v === "string" && UUID.test(v)) v = d.label(v)
-		out[n] = v
+		out[canon(n)] = v
 	}
 	return out
 }
@@ -348,7 +364,7 @@ export async function storeSnapshot(
 	listed: unknown,
 	look: { attrs?: string[]; at?: string[] },
 ) {
-	const extra = look.attrs ?? []
+	const extra = (look.attrs ?? []).map(local)
 	const more = (look.at ?? []).map((p) => ({ label: p, abs: d.path(p, d.store) }))
 	// the uuids of the folders shown come first in the labels, in order
 	for (const abs of [folder, ...more.map((m) => m.abs)]) {
@@ -437,7 +453,7 @@ async function programAttrs(path: string) {
 				v = { hex: hex(b) }
 			}
 		}
-		out[n] = v
+		out[canon(n)] = v
 	}
 	return out
 }
