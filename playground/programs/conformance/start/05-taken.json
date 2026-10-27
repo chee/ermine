@@ -1,5 +1,5 @@
 {
-	"title": "a path taken: starting where a process runs is refused taken, and under it too (a process holds no levels); nothing is made for a refusal. after stop the path is free: b starts there, its build a hit in the cache (upper called once)",
+	"title": "a path taken: starting where a process runs is refused taken; under it is fine (c at clock/x runs beside a; processes' start); nothing is made for a refusal. after stop the path is free: b starts there, its build a hit in the cache (upper called once)",
 	"steps": [
 		{
 			"op": "kids",
@@ -149,7 +149,7 @@
 				"x"
 			],
 			"expect": {
-				"refused": "taken",
+				"id": "proc:c",
 				"at": [
 					"clock",
 					"x"
@@ -166,6 +166,16 @@
 				"runs": [
 					{
 						"process": "a",
+						"code": "HI",
+						"args": [],
+						"keys": [
+							"places",
+							"process",
+							"watch"
+						]
+					},
+					{
+						"process": "c",
 						"code": "HI",
 						"args": [],
 						"keys": [
@@ -231,6 +241,16 @@
 				"runs": [
 					{
 						"process": "a",
+						"code": "HI",
+						"args": [],
+						"keys": [
+							"places",
+							"process",
+							"watch"
+						]
+					},
+					{
+						"process": "c",
 						"code": "HI",
 						"args": [],
 						"keys": [

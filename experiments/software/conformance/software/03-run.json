@@ -104,7 +104,8 @@
 			"id": "proc:a",
 			"expect": {
 				"parts": [
-					"attributes"
+					"attributes",
+					"status"
 				],
 				"attributes": {
 					"ermine.type": "ermine.process",
@@ -189,7 +190,6 @@
 						"keys": [
 							"args",
 							"at",
-							"box",
 							"folder",
 							"process",
 							"scope"
@@ -234,7 +234,6 @@
 						"keys": [
 							"args",
 							"at",
-							"box",
 							"folder",
 							"process",
 							"scope"
@@ -270,7 +269,8 @@
 			"id": "proc:b",
 			"expect": {
 				"parts": [
-					"attributes"
+					"attributes",
+					"status"
 				],
 				"attributes": {
 					"ermine.type": "ermine.process",
@@ -606,7 +606,6 @@
 						"keys": [
 							"args",
 							"at",
-							"box",
 							"folder",
 							"process",
 							"scope"
@@ -624,7 +623,6 @@
 						"keys": [
 							"args",
 							"at",
-							"box",
 							"folder",
 							"process",
 							"scope"
@@ -642,7 +640,6 @@
 						"keys": [
 							"args",
 							"at",
-							"box",
 							"folder",
 							"process",
 							"scope"
@@ -660,7 +657,6 @@
 						"keys": [
 							"args",
 							"at",
-							"box",
 							"folder",
 							"process",
 							"scope"
@@ -678,7 +674,6 @@
 						"keys": [
 							"args",
 							"at",
-							"box",
 							"folder",
 							"process",
 							"scope"
@@ -696,7 +691,6 @@
 						"keys": [
 							"args",
 							"at",
-							"box",
 							"folder",
 							"process",
 							"scope"
@@ -716,7 +710,6 @@
 						"keys": [
 							"args",
 							"at",
-							"box",
 							"folder",
 							"process",
 							"scope"

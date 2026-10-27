@@ -32,9 +32,9 @@
 // exists; the pin's box as its root's id; a compiler's identity changing mid-build
 import { CborError, type Value } from "@ermine/encoding/cbor"
 import { hash } from "@ermine/formats/hash"
-import type { Address, Box } from "@ermine/boxes"
+import type { Box } from "@ermine/boxes"
 import type { Id, Path, Places } from "@ermine/core/places"
-import { pathsOf, type Process } from "@ermine/processes/start"
+import { type Address, pathsOf, type Process } from "@ermine/processes/start"
 import type { ScopeNodes } from "@ermine/processes/scopes"
 import { PENDING, type Scheduler } from "@ermine/core/scheduler"
 import { isPromise } from "@ermine/core/scheduler/helpers"
@@ -260,7 +260,9 @@ export function createPrograms(setup: Setup): Programs {
 	): Process | Refused {
 		const { program, chain } = way
 		if (chain.length === 0) return { refused: "no-runner", program }
-		const box: Box = "places" in where ? where : { root: where.root, places: where }
+		const box: Pick<Box, "root" | "places"> = "places" in where
+			? where
+			: { root: where.root, places: where }
 		const { folder } = pathsOf(address, options.folder)
 		const { values, keys } = keyed(way)
 		const value = table.get("value", program.id)?.value
@@ -273,7 +275,7 @@ export function createPrograms(setup: Setup): Programs {
 			{ id: runner.id, live },
 			{ id: program.id, build: () => built(p, way, value) },
 			address,
-			{ box, args: options.args, folder: options.folder, pin },
+			{ places: box.places, args: options.args, folder: options.folder, pin },
 		)
 		if ("refused" in made) return made
 		p.process = made

@@ -1,6 +1,7 @@
 // world.ts: the demo's graph, as the slaygrounds' hosts make theirs: a table of entries, places
-// naming them, the scheduler running what reads them. A box (@ermine/boxes) is a plain folder in
-// it, its places a view of these. Every write is the host's, in its scope, told to the places.
+// naming them, the scheduler running what reads them: one createErmine, the demo its host. A box
+// (@ermine/boxes) is another namespace over it, its places a view of these. Every write is the
+// host's, in its scope, told to the places.
 //
 //   /ermine/types/<uti>         the types (@ermine/types)
 //   /catclock/src/<file>        the C, text; ermine.type public.c-source (.c), public.c-header (.h)
@@ -11,29 +12,27 @@
 //   /cache/<key>                each build (@ermine/compilers), by its key
 import createEntry, { type Entry } from "@ermine/core/node/entry"
 import update from "@ermine/core/changeable/update"
-import edit from "@ermine/core/changeable/edit"
-import { createPlaces, place, unplace } from "@ermine/core/places"
+import produce from "@ermine/core/changeable/edit"
+import { place, unplace } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"
 import * as lib from "@ermine/core/places/lib"
 import { createScheduler, type Ended } from "@ermine/core/scheduler"
-import { createPaths } from "@ermine/core/scheduler/paths"
-import { createTable } from "@ermine/core/table"
+import { createErmine } from "@ermine/system"
 
 export type Path = readonly string[]
 
 export function createWorld() {
-	// deno-lint-ignore prefer-const
-	let places: ReturnType<typeof createPlaces>
-	const table = createTable((part, id) => places.onTableChange(part, id))
 	const s = createScheduler()
-	s.onTrackingEnd((key) => places.release(key))
-	// a settled promise (a build) waits for the next pulse
-	s.onSettle(() => queueMicrotask(() => s.pulse()))
-	const paths = createPaths()
-	places = createPlaces({ root: "root", table, paths, scheduler: s })
+	// the ermine pulses when a promise settles (a build waits for it), and makes the root node
+	const ermine = createErmine({
+		scheduler: s,
+		root: "root",
+		info: { actor: "catclock demo", "trusted-event": true },
+	})
+	const { table, places } = ermine
 	// a write landed: told to the places (a box's are a view of them: told too)
 	const commit = (changed: readonly Entry<unknown>[]) => places.commit(changed)
-	const host = s.createRootScope({ actor: "catclock demo", "trusted-event": true })
+	const host = ermine.within(() => s.getCurrentScope()!)
 	const header = () => createChangeHeader(s)
 	// writes inside writes: one pulse, once the outermost is done (several files changed as one)
 	let depth = 0
@@ -45,11 +44,6 @@ export function createWorld() {
 			if (--depth === 0) s.pulse()
 		}
 	}
-
-	writing(() => {
-		table.add("value", "root", createEntry(undefined, header()))
-		table.add("children", "root", createEntry({}, header()))
-	})
 
 	// tracked reads: the id at a path, its value, its attributes, the names under it
 	const id = (path: Path) => lib.get(places, path)
@@ -134,7 +128,7 @@ export function createWorld() {
 				before[before.length - 1 - end] === after[after.length - 1 - end]
 			) end++
 			const insert = after.slice(start, after.length - end).join("")
-			const patches = edit(String(n.value ?? ""), (draft, { splice }) => {
+			const patches = produce(String(n.value ?? ""), (draft, { splice }) => {
 				splice(draft as string, start, before.length - start - end, insert)
 			})
 			if (!patches.length) return
@@ -197,6 +191,7 @@ export function createWorld() {
 	const peek = <T>(f: () => T): T => s.runWithScope(host, f)
 
 	return {
+		ermine,
 		table,
 		places,
 		commit,

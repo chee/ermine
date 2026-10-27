@@ -10,7 +10,8 @@
 // a list holding "session". a PlacesError: { error: code }
 // live runners, each given the start's facts:
 //   record   a function, its start: its run { process, code, args, folder, root, keys, open } (code a
-//            function: { live: true }; root: its box's root; keys: the start's, sorted; open: its
+//            function: { live: true }; root: the root of the places it was started in (R, or its
+//            box's: the harness notes it, the start has none); keys: the start's, sorted; open: its
 //            scope the one open); its stop { process, reason } (reason null: none); its load
 //            { by, code, folder, open } (by: the start's process id), its live form's dispose
 //            { by, code }
@@ -20,8 +21,8 @@
 //   late     its run recorded as record's; gives back a promise of record's handle, settled by land
 //   spawn    its run recorded as record's, then, with the code a map { name, runner, program, at },
 //            run(runner, program, at), its process named name; record's handle
-//   teller   @ermine/programs/api's run over the world's apis, a program whose teardown records
-//            { process, why }; no load
+//   teller   its stop(reason) records { process, why } (none given: "ended", as a process's
+//            teardowns are told); no load
 // every runner's event, besides, in one list (order): ["ran", process], ["stopped", process,
 // reason], ["loaded", by, code], ["unloaded", by, code], ["told", process, why]
 //
@@ -70,17 +71,15 @@
 // { op: "order" }                                    -> { order }   every runner's event, in order
 import createEntry from "@ermine/core/node/entry"
 import { createScheduler, PENDING, type Scope } from "@ermine/core/scheduler"
-import { createPaths } from "@ermine/core/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/core/table"
-import { children, createPlaces, type Places, PlacesError } from "@ermine/core/places"
+import type { Id, Key } from "@ermine/core/table"
+import { type Places, PlacesError } from "@ermine/core/places"
 import { get, list } from "@ermine/core/places/lib"
 import { createChangeHeader } from "@ermine/core/places/header"
 import { STATUS, TABLE as STATUS_TABLE } from "@ermine/core/places/status"
-import { type Address, type Box, createBox } from "@ermine/boxes"
-import { processes as trie } from "@ermine/processes"
-import { createProcesses, type Process } from "@ermine/processes/start"
+import { type Box, createBox } from "@ermine/boxes"
+import { createErmine } from "@ermine/system"
+import { type Address, createProcesses, type Process } from "@ermine/processes/start"
 import { createScopeNodes } from "@ermine/processes/scopes"
-import { type API, createProcessAPIs, type ProcessAPIs } from "@ermine/programs/api"
 import { fromJson, toJson } from "../../../conformance/typescript/form.ts"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import {
@@ -99,17 +98,10 @@ type Json = unknown
 
 // the world
 const s = createScheduler()
-const table = createTable((part, id) => places.onTableChange(part as Key, id))
-const places = createPlaces({
-	root: "R",
-	table,
-	paths: createPaths<unknown>(),
-	scheduler: s,
-	contributors: [trie("R"), children],
-})
-s.onTrackingEnd((key) => places.release(key))
+const ermine = createErmine({ scheduler: s, root: "R", info: { actor: "host" } })
+const { table, places } = ermine
 const scopes = createScopeNodes({ scheduler: s, table })
-const host = s.createRootScope({ actor: "host" })
+const host = ermine.within(() => s.getCurrentScope()!)
 const hostProcesses = createProcesses({ scheduler: s, table, places, scopes, owner: host })
 const made = s.runWithScope(
 	host,
@@ -129,6 +121,8 @@ const software = createSoftware({
 })
 
 const boxes = new Map<string, Box>()
+// the root of the places each process was started in, by its id (none: R)
+const roots = new Map<Id, Id>()
 const placed = new Map<string, Place>()
 const procs = new Map<string, Process>()
 const held = new Map<string, Loaded>()
@@ -216,7 +210,7 @@ function noted(code: unknown, start: Start) {
 		code: typeof code === "function" ? { live: true } : code,
 		args: start.args,
 		folder: start.folder,
-		root: start.box.root,
+		root: roots.get(process.id) ?? "R",
 		keys: Object.keys(start).sort(),
 		open: s.getCurrentScope() === start.scope,
 	})
@@ -282,23 +276,14 @@ const spawn: Runnable = (code, start) => {
 	return handle(start)
 }
 
-// @ermine/programs/api's run, the program one whose teardown is recorded
-let apis: ProcessAPIs | undefined
-const teller: Runnable = (_code, start) => {
-	apis ??= createProcessAPIs({
-		scheduler: s,
-		table,
-		commit: (changed) => places.commit(changed),
-		host: { places, table, scheduler: s },
-		schedule: () => {},
-	})
-	const program = (api: API) =>
-		void api.teardown((why) => {
-			told.push({ process: start.process.id, why })
-			order.push(["told", start.process.id, why])
-		})
-	return apis.run.start(program, start)
-}
+// the program one whose stop(reason) is told, as a process's teardowns are: none given, ended
+const teller: Runnable = (_code, start): Handle => ({
+	stop: (reason?: unknown) => {
+		const why = reason ?? "ended"
+		told.push({ process: start.process.id, why })
+		order.push(["told", start.process.id, why])
+	},
+})
 
 const runners: Record<string, unknown> = { record, object, boom, quiet, late, spawn, teller }
 function live(kind: unknown): unknown {
@@ -401,7 +386,7 @@ async function answer(r: Request): Promise<Json> {
 		case "value":
 			return entry("value", r)
 		case "create": {
-			const b = hosted(() => createBox({ places, table, scheduler: s }, { id: take(r.folder) }))
+			const b = hosted(() => createBox(ermine, { id: take(r.folder) }))
 			boxes.set(r.name, b)
 			return {}
 		}
@@ -433,7 +418,7 @@ async function answer(r: Request): Promise<Json> {
 			const options = {
 				...(r.args === undefined ? {} : { args: r.args }),
 				...(r.folder === undefined ? {} : { folder: r.folder }),
-				...(r.box === undefined ? {} : { box: boxOf(r.box) }),
+				...(r.box === undefined ? {} : { places: boxOf(r.box).places }),
 				...(r.pin === undefined ? {} : { pin: back(r.pin) }),
 			}
 			const made = hosted(
@@ -441,6 +426,7 @@ async function answer(r: Request): Promise<Json> {
 				r.actor,
 			)
 			if ("refused" in made) return plain(made)
+			if (r.box !== undefined) roots.set(made.id, boxOf(r.box).root)
 			named(made, r.name)
 			return plain({ id: made.id, at: made.at })
 		}
@@ -453,7 +439,7 @@ async function answer(r: Request): Promise<Json> {
 		case "load": {
 			const options = {
 				by: byOf(r.by),
-				...(r.box === undefined ? {} : { box: boxOf(r.box) }),
+				...(r.box === undefined ? {} : { places: boxOf(r.box).places }),
 				...(r.chain === undefined ? {} : { chain: r.chain as string[] }),
 			}
 			let made: Loaded | Refused

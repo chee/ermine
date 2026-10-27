@@ -1,5 +1,5 @@
 // prog-build's host: programs at paths, found by @ermine/programs' satisfy, each compile cached by
-// @ermine/programs/build, each process started in a box (@ermine/boxes) by ermine.start.
+// @ermine/programs/build, each process started in a box (@ermine/boxes) by box.start.
 // the world (@ermine/slaygrounds/world) runs the shell (program.ts); this file holds what is this
 // demo's: a supervisor that keeps the programs running, the page's own loaders, and the keys.
 //
@@ -9,13 +9,13 @@
 //   a build      builds.compile: keyed by the compiler's identity and the input's hash. a comment
 //                edit is a miss whose bytes equal the last: the supervisor sees the same build and
 //                restarts nothing (a cutoff). a revert is a hit
-//   a box        a plain folder, the process's "/". a key is a node placed in it (keys/print): a
-//                grant is a placement, and a program sees only what its folder holds. escape.c in
-//                /boxes/escape holds print; started from /c/vault, a folder that also holds
-//                keys/secret, it gets secret
-//   a process    ermine.start(program, "main", { box }), at <box>/main; its own state is bare nodes
-//                inside it (out, shown); /value is its exports, the node placed from /value/<name>,
-//                so a program that uses another has /uses/<name> placed in its box from there. the
+//   a box        a folder, the process's "/". a key is a node put in it (keys/print): a grant is a
+//                put, seen by that box alone, and a program sees only what its folder holds and
+//                what was put in. escape.c in /boxes/escape gets print; started from /c/vault, a
+//                folder that also holds keys/secret, it gets secret
+//   a process    box.start(program, "main"), at <box>/main; its own state is bare nodes inside it
+//                (out, shown); /value is its exports, the node put from /value/<name>, so a
+//                program that uses another has /uses/<name> put in its box from there. the
 //                page's runners make the program (a function) from the built code, and the
 //                supervisor starts it: a program starts nothing, and is given nothing: it imports
 //                @ermine/system
@@ -28,7 +28,24 @@ import { hash } from "@ermine/formats/hash"
 import * as lib from "@ermine/core/places/lib"
 import { ATTRIBUTES as A, satisfy } from "@ermine/programs"
 import { COMPILER, createBuilds } from "@ermine/compilers"
-import { ensureNode, list, patch, peep, PENDING, read, type Started } from "@ermine/system"
+import {
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	list,
+	patch,
+	patchAttributes,
+	peep,
+	PENDING,
+	place,
+	read,
+	readAttributes,
+	readEntries,
+	remove,
+	type Started,
+} from "@ermine/system"
+import { type Box, createBox } from "@ermine/boxes"
 import { createWorld } from "@ermine/slaygrounds/world"
 import { render } from "ermine-h"
 
@@ -77,7 +94,9 @@ const world = createWorld({
 			typing.set(
 				path,
 				setTimeout(() => {
-					if (peek(path) !== text) h.patch(path, [{ path: [], value: text }])
+					h.within(() => {
+						if (peek(path) !== text) patch(path, [{ path: [], value: text }])
+					})
 				}, 350),
 			)
 		},
@@ -90,7 +109,7 @@ const typing = new Map<string, ReturnType<typeof setTimeout>>()
 // a node's value as the host reads it, none (or not there): undefined. tracked in a run
 const peek = (path: string) => {
 	try {
-		return h.read(path)
+		return read(path)
 	} catch (e) {
 		if (e === PENDING) return undefined
 		throw e
@@ -116,7 +135,7 @@ function planOf(path: string) {
 	}
 	const program = ways[0]?.program ?? { id: refused.id, at: refused.at }
 	const type = places.readValue("attributes", program.id, [A.type])
-	const named = new Map<unknown, string>([[program.id, program.at.at(-1)]])
+	const named = new Map<unknown, string>([[program.id, program.at.at(-1)!]])
 	for (const x of whys) named.set(x.id, x.at.at(-1))
 	const said = (st: any): any => {
 		named.set(st.id, st.at.at(-1))
@@ -336,7 +355,7 @@ function log(e: Record<string, unknown> & { kind: string }) {
 	tally.recent = [{ ...e, time: new Date().toLocaleTimeString() }, ...tally.recent].slice(0, 40)
 	const copy = { ...tally }
 	// seen inside a run: the write waits until it is over
-	queueMicrotask(() => h.patch("/state/log", [{ path: [], value: copy }]))
+	queueMicrotask(() => h.within(() => patch("/state/log", [{ path: [], value: copy }])))
 }
 
 // ---- the supervisor: one entry per process. its build is an effect: the chain found, each
@@ -350,6 +369,9 @@ type Entry = {
 	uses: string[]
 	pinned: boolean
 	proc?: Started
+	// its box (made when it first starts), and the paths put in it
+	boxed?: Box
+	granted: Set<string>
 	// the count of starts begun: one that finds a later one has begun does not start
 	begun?: number
 	// the source of the last ready build seen
@@ -388,10 +410,10 @@ type Build =
 const entries = new Map<string, Entry>()
 const state = new Map<string, Record<string, any>>()
 // a write to /state/<name>, merged
-function set(name: string, patch: Record<string, unknown>) {
-	const v = { ...state.get(name), ...patch }
+function set(name: string, more: Record<string, unknown>) {
+	const v = { ...state.get(name), ...more }
 	state.set(name, v)
-	h.patch(`/state/${name}`, [{ path: [], value: v }])
+	h.within(() => patch(`/state/${name}`, [{ path: [], value: v }]))
 }
 
 // the effect's read: tracked. the chain, the compilers through the cache, the used programs
@@ -406,7 +428,7 @@ function build(e: Entry): Build {
 	for (const [i, step] of way.chain.slice(0, -1).entries()) {
 		compiled = true
 		const from = digest(input)
-		const k = `${step.id} ${from}`
+		const k = `${String(step.id)} ${from}`
 		const out = builds.compile(step.id, input)
 		const said = { step: step.at.at(-1), program: view.file, from }
 		if (out === PENDING) {
@@ -500,12 +522,39 @@ function act(e: Entry, b: Build) {
 	else set(e.name, { building: false, why: b.why })
 }
 
-// a grant is a placement: the keys and the used programs' values placed in the process's folder
-function grant(box: ReturnType<typeof h.createBox>, at: string, from: string) {
-	try {
-		box.unplace(at)
-	} catch { /* not there */ }
-	box.place(at, from)
+// a grant is a put: the keys and the used programs' values put in the process's box, which alone
+// sees them. the box is made over its folder the first time, and kept: a restart puts again what
+// changed, and takes what is no longer granted
+function boxOf(e: Entry): Box {
+	return e.boxed ??= h.within(() => {
+		ensureNode(e.box, null)
+		return createBox(h, names(e.box))
+	})
+}
+const idAt = (path: string): string => {
+	const id = places.peep(() => lib.get(places, names(path)))
+	if (id === undefined) throw new Error(`nothing at ${path}`)
+	return id as string
+}
+function grant(e: Entry, box: Box) {
+	const want = new Map<string, string>()
+	for (const k of e.keys) want.set(`keys/${k}`, `/keys/${k}`)
+	for (const u of e.uses) want.set(`uses/${u}`, `/value/${u}`)
+	want.set("value", `/value/${e.name}`)
+	for (const at of [...e.granted]) {
+		if (want.has(at)) continue
+		try {
+			box.take(at)
+		} catch { /* not there */ }
+		e.granted.delete(at)
+	}
+	for (const [at, from] of want) {
+		try {
+			box.take(at)
+		} catch { /* not there */ }
+		box.put(at, idAt(from))
+		e.granted.add(at)
+	}
 }
 
 // the process started (or started again) in its folder on this build: the chain's runner makes the
@@ -529,19 +578,16 @@ async function begin(e: Entry, b: Ready) {
 	}
 	// a newer start while this one waited: that one runs
 	if (e.begun !== mine) return
-	const box = h.createBox(e.box)
-	for (const k of h.list(`${e.box}/keys`)) if (!e.keys.includes(k)) box.unplace(`keys/${k}`)
-	for (const k of e.keys) grant(box, `keys/${k}`, `/keys/${k}`)
-	for (const u of e.uses) grant(box, `uses/${u}`, `/value/${u}`)
-	grant(box, "value", `/value/${e.name}`)
-	const p = h.start(program, "main", { box })
+	const box = boxOf(e)
+	grant(e, box)
+	const p = box.start(program, "main")
 	if ("refused" in p) {
 		set(e.name, { failed: `refused: ${p.refused}` })
 		return
 	}
 	e.proc = p
 	e.running = b
-	e.saw = new Map(e.uses.map((u) => [u, peek(`/value/${u}`)]))
+	e.saw = h.within(() => new Map(e.uses.map((u) => [u, peek(`/value/${u}`)])))
 	set(e.name, {
 		failed: null,
 		record: {
@@ -563,6 +609,7 @@ function track(name: string, path: string, o: Partial<Entry> = {}) {
 		name,
 		path,
 		box: `/boxes/${name}`,
+		granted: new Set(),
 		keys: ["print"],
 		uses: [],
 		pinned: false,
@@ -574,16 +621,16 @@ function track(name: string, path: string, o: Partial<Entry> = {}) {
 		...o,
 	}
 	entries.set(name, e)
-	h.ensureNode(`/state/${name}`, { pinned: e.pinned, path })
+	ensureNode(`/state/${name}`, { pinned: e.pinned, path })
 	state.set(name, { pinned: e.pinned, path })
-	h.ensureNode(`/value/${name}`, null)
-	const names = h.peep(() => h.read("/state/names")) as string[]
-	h.patch("/state/names", [{ path: [], range: [names.length, names.length], value: [name] }])
+	ensureNode(`/value/${name}`, null)
+	const live = peep(() => read("/state/names")) as string[]
+	patch("/state/names", [{ path: [], range: [live.length, live.length], value: [name] }])
 	// the build, in a scope of its own so stopping the program takes it away
 	const scope = w.s.createScope({ supervisor: name }, w.host)
 	e.scope = scope
 	w.s.runWithScope(scope, () => {
-		h.createEffect(`build-${name}`, () => build(e), (b) => act(e, b as Build), {
+		createEffect(`build-${name}`, () => build(e), (b) => act(e, b as Build), {
 			equal: sameBuild(e) as never,
 		})
 	})
@@ -597,10 +644,10 @@ function untrack(name: string) {
 	state.delete(name)
 	w.s.teardown(e.scope as never)
 	e.proc?.stop("ended")
-	h.patch(`/value/${name}`, [{ path: [], value: null }])
-	const names = h.peep(() => h.read("/state/names")) as string[]
-	h.patch("/state/names", [{ path: [], value: names.filter((n) => n !== name) }])
-	h.remove(`/state/${name}`)
+	patch(`/value/${name}`, [{ path: [], value: null }])
+	const live = peep(() => read("/state/names")) as string[]
+	patch("/state/names", [{ path: [], value: live.filter((n) => n !== name) }])
+	remove(`/state/${name}`)
 }
 
 // the programs the demo starts, and what each is given
@@ -622,7 +669,7 @@ function rows() {
 		if (!e) return []
 		// what is inside the process: its own nodes, read through its box's view (the host's own
 		// places does not reach into a box)
-		const view = e.proc && h.getProcessContext(e.proc.process)?.box.places
+		const view = e.proc && e.boxed?.places
 		const inner = (name: string): unknown => {
 			const id = view && lib.get(view, ["main", name])
 			return id === undefined || !view ? undefined : view.readValue("value", id)
@@ -664,7 +711,7 @@ function rows() {
 			run: rec?.run,
 			chain: rec ? rec.steps.map((x: any) => `${x.name} ${short(x.hash)}`) : [],
 			keys: rec?.keys ?? [],
-			granted: h.list(`${e.box}/keys`),
+			granted: e.boxed ? [...lib.list(e.boxed.places, ["keys"])] : [],
 			uses: (rec?.uses ?? []).map((u: string) => entries.get(u)?.path ?? u),
 			error: runtime,
 			missing: runtime ? missingKey(runtime, rec?.keys ?? []) : undefined,
@@ -709,28 +756,25 @@ const attr = (a: Record<string, unknown>) =>
 	Object.fromEntries(Object.entries(a).map(([k, v]) => [(A as Record<string, string>)[k] ?? k, v]))
 function mountFiles(files: Record<string, Record<string, unknown>>) {
 	const wrote: string[] = []
-	world.seed((host) => {
+	world.seed(() => {
 		for (const [path, entry] of Object.entries(files)) {
 			const text = JSON.stringify(entry)
 			if (disk.get(path) === text) continue
 			const { code: was, ...wasAttrs } = disk.has(path) ? JSON.parse(disk.get(path)!) : {} as any
 			const { code, ...attributes } = entry
-			const node = host.ensureNode(path)
-			const had = host.peep(() => host.readEntries(node)[0]?.value)
-			if (had === undefined) host.patch(node, [{ path: [], value: code ?? null }])
-			else if (code !== was) host.patch(node, [{ path: [], value: code ?? null }])
-			if (
-				!sameJSON(attributes, wasAttrs) ||
-				host.peep(() => host.readAttributes(node)) === undefined
-			) {
-				host.patchAttributes(node, [{ path: [], value: attr(attributes) }])
+			const node = ensureNode(path)
+			const had = peep(() => readEntries(node)[0]?.value)
+			if (had === undefined) patch(node, [{ path: [], value: code ?? null }])
+			else if (code !== was) patch(node, [{ path: [], value: code ?? null }])
+			if (!sameJSON(attributes, wasAttrs) || peep(() => readAttributes(node)) === undefined) {
+				patchAttributes(node, [{ path: [], value: attr(attributes) }])
 			}
 			disk.set(path, text)
 			wrote.push(path)
 		}
 		for (const path of [...disk.keys()]) {
 			if (path in files) continue
-			host.remove(path)
+			remove(path)
 			disk.delete(path)
 			wrote.push(path + " (gone)")
 		}
@@ -742,7 +786,7 @@ function mountFiles(files: Record<string, Record<string, unknown>>) {
 
 // ---- the world's own folders: the page's loaders, the keys, the cache (the types are the world's)
 let builds!: ReturnType<typeof createBuilds>
-world.seed((host) => {
+world.seed(() => {
 	// the builds' scope is made under the host's (a seed has none open of its own)
 	builds = w.s.runWithScope(w.host, () =>
 		createBuilds({
@@ -752,21 +796,21 @@ world.seed((host) => {
 			// the world's own builds share it: a compile made here is a hit when a process starts
 			cache: "cache",
 		}))
-	host.place("/cache", host.handleOf({ id: "cache", part: "value" }))
+	place("/cache", h.handleOf({ id: "cache", part: "value" }))
 	const folder = (at: string) => {
-		host.ensureNode(at, null)
-		host.patchAttributes(at, [{ path: [], value: { [A.loaders]: true } }])
+		ensureNode(at, null)
+		patchAttributes(at, [{ path: [], value: { [A.loaders]: true } }])
 	}
 	const loader = (at: string, fn: unknown, attributes: Record<string, unknown>) => {
-		host.ensureNode(at, fn)
-		host.patchAttributes(at, [{ path: [], value: attributes }])
+		ensureNode(at, fn)
+		patchAttributes(at, [{ path: [], value: attributes }])
 	}
 	// js and wasm run what they take; cc, clang on this machine, compiles c to wasm. what it is (its
 	// identity) is what the cache is keyed by, not the node
 	folder("/loaders")
 	loader("/loaders/js", js, { [A.takes]: [JS] })
 	loader("/loaders/wasm", wasm, { [A.takes]: [WASM] })
-	host.ensureNode("/c", null)
+	ensureNode("/c", null)
 	folder("/c/loaders")
 	loader("/c/loaders/cc", compileC, {
 		[A.takes]: [C],
@@ -777,34 +821,34 @@ world.seed((host) => {
 			flags: ["-O2", "-nostdlib", "-nostdinc", "-fvisibility=default"],
 		},
 	})
-	for (const [k, make] of Object.entries(keys)) host.ensureNode(`/keys/${k}`, make)
-	host.ensureNode("/boxes", null)
-	host.ensureNode("/state/names", [])
-	host.ensureNode("/state/log", { ...tally })
-	h.createMemo("/state/procs", rows, { equal: sameJSON as never })
+	for (const [k, make] of Object.entries(keys)) ensureNode(`/keys/${k}`, make)
+	ensureNode("/boxes", null)
+	ensureNode("/state/names", [])
+	ensureNode("/state/log", { ...tally })
+	createMemo("/state/procs", rows, { equal: sameJSON as never })
 	// what the shell asks of the supervisor: the buttons
-	h.createAction("/ctl/on/pin", (name: string) => {
+	createAction("/ctl/on/pin", (name: string) => {
 		const e = entries.get(name)
 		if (!e) return
 		e.pinned = !e.pinned
 		set(name, { pinned: e.pinned })
 		if (!e.pinned && e.ready && !(e.running && sameReady(e.running, e.ready))) begin(e, e.ready)
 	})
-	h.createAction("/ctl/on/pickup", (name: string) => {
+	createAction("/ctl/on/pickup", (name: string) => {
 		const e = entries.get(name)
 		if (e?.ready) begin(e, e.ready)
 	})
-	h.createAction("/ctl/on/stop", (name: string) => untrack(name))
-	h.createAction("/ctl/on/start", (path: string) => {
+	createAction("/ctl/on/stop", (name: string) => untrack(name))
+	createAction("/ctl/on/start", (path: string) => {
 		if ([...entries.values()].some((e) => e.path === path && !e.box.startsWith("/c/"))) return
 		const r = rosterOf(path)
 		track((path.split("/").pop() ?? "p").replace(/\.\w+$/, ""), path, r?.[2] ?? {})
 	})
 	// escape.c again, with secret: the same node placed in /c/vault, a folder that holds keys/secret
-	h.createAction("/ctl/on/vault", () => {
-		h.ensureNode("/c/vault", null)
+	createAction("/ctl/on/vault", () => {
+		ensureNode("/c/vault", null)
 		try {
-			h.place("/c/vault/escape.c", "/c/sandbox/escape.c")
+			place("/c/vault/escape.c", "/c/sandbox/escape.c")
 		} catch { /* placed already */ }
 		if (entries.has("escape-vault")) return
 		track("escape-vault", "/c/vault/escape.c", { box: "/c/vault", keys: ["print", "secret"] })
@@ -827,9 +871,9 @@ export function reload(mod: Record<string, any>) {
 
 ;(globalThis as any).progbuild = {
 	edit(path: string, code: string) {
-		h.patch(path, [{ path: [], value: code }])
+		h.within(() => patch(path, [{ path: [], value: code }]))
 	},
-	code: (path: string) => peek(path),
+	code: (path: string) => h.within(() => peek(path)),
 	api: h,
 	entries,
 	state,

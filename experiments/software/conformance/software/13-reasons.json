@@ -1,5 +1,5 @@
 {
-	"title": "a stop's reason reaches the program: teller runs an ermine/api program (its api made from the Start) whose teardown is recorded, its handle's stop telling ermine/api the reason. a stop given one: told it; none: ended; what runs on a runner offered by a process that stops: runner-stopped; on a runner withdrawn: withdrawn; on its owner's offers when the owner's scope goes (the session's torn down): runner-stopped, the newest offer's first, every process and offer gone",
+	"title": "a stop's reason reaches the program: teller records the reason its handle's stop is given (a process's teardowns are told it). a stop given one: told it; none: ended; what runs on a runner offered by a process that stops: runner-stopped; on a runner withdrawn: withdrawn; on its owner's offers when the owner's scope goes (the session's torn down): runner-stopped, the newest offer's first, every process and offer gone",
 	"steps": [
 		{
 			"op": "kids",
@@ -421,7 +421,6 @@
 						"keys": [
 							"args",
 							"at",
-							"box",
 							"folder",
 							"process",
 							"scope"
@@ -439,7 +438,6 @@
 						"keys": [
 							"args",
 							"at",
-							"box",
 							"folder",
 							"process",
 							"scope"

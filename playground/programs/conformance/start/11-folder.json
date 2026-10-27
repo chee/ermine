@@ -1,5 +1,5 @@
 {
-	"title": "a folder other than the root: boxing /work and starting at /docs/mouse/clock, the folder is docs/mouse (the folder at is in): satisfy's from is the folder when none is given (clocks/catclock.c found going up from it), the args are looked up from it nearest first, up to the box's \"/\" and never above (outside, at R, is not found); written as ermine.process.folder and in the pin. a folder given (docs) differs from at's folder; \"..\" at the root stays there. a name nearer the folder unboxed: the next one up is found",
+	"title": "a folder other than the root: boxing /work and starting at /docs/mouse/clock, the folder is docs/mouse (the folder at is in): satisfy's from is the folder when none is given (clocks/catclock.c found going up from it), the args are looked up from it nearest first, up to the box's \"/\" and never above (outside, at R, is not found); written as ermine.process.folder and in the pin. a folder given (docs) differs from at's folder; \"..\" at the root stays there. a name nearer the folder removed from its folder (the host writes it; a box takes out only what was put in): the next one up is found (the whole of M's children are written, so both of a's lookups run again: 4 runs)",
 	"steps": [
 		{
 			"op": "kids",
@@ -381,9 +381,9 @@
 			}
 		},
 		{
-			"op": "unbox",
-			"box": "b",
-			"path": "docs/mouse/note",
+			"op": "kids",
+			"id": "M",
+			"value": {},
 			"expect": {}
 		},
 		{
@@ -394,7 +394,7 @@
 			"op": "found",
 			"name": "a",
 			"expect": {
-				"runs": 3,
+				"runs": 4,
 				"found": {
 					"note": "NOTE_D",
 					"outside": null

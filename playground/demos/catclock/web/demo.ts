@@ -1,7 +1,7 @@
 /// <reference lib="dom" />
 // demo.ts: the catclock demo, on ermine's programs. The cat's C, the types, the loaders and the
 // cache are nodes in a graph (world.ts); a map draws them (map.ts), an editor opens them
-// (editor.ts). He runs in a box made from /catclock, the loaders and the types boxed in. satisfy
+// (editor.ts). He runs in a box made from /catclock, the loaders and the types put in. satisfy
 // finds what runs catclock.c there: a compiler, then canvas, the page's runner (a live function
 // running the wasm on the canvas, with canvas.js's code). The compilers are live functions too:
 // wasm-clang (clang as wasm, in the page's worker: clang.worker.ts), and with serve.ts, clang
@@ -21,7 +21,7 @@ import { installTypes, type Known } from "@ermine/types"
 import { ATTRIBUTES as A, satisfy } from "@ermine/programs"
 import { COMPILER, type Compiler, createBuilds } from "@ermine/compilers"
 import { createPrograms, type Process, type Runner } from "@ermine/programs/start"
-import { box, createBox } from "@ermine/boxes"
+import { createBox } from "@ermine/boxes"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import { createChangeHeader } from "@ermine/core/places/header"
 import * as lib from "@ermine/core/places/lib"
@@ -204,17 +204,14 @@ const COMPILERS = new Map(
 const RUNNER = at([...LOADERS, "canvas.js"])
 const CACHED = at(CACHE)
 
-// ---- the clock's box: /catclock, a plain folder; the loaders, the types and the cache placed in
-// it too ----
-const cat = createBox(
-	{ places: world.places, table: world.table, scheduler: world.s },
-	{ id: at(["catclock"]) },
-)
+// ---- the clock's box: /catclock, a plain folder; the loaders, the types and the cache put in it
+// (only the box sees them) ----
+const cat = world.peek(() => createBox(world.ermine, ["catclock"]))
 world.writing(() => {
-	box(cat, LOADERS, at(LOADERS))
-	box(cat, TYPES, at(TYPES))
-	// the builds, boxed in to be found: a cached output is typed (its compiler's gives)
-	box(cat, CACHE, at(CACHE))
+	cat.put(LOADERS, at(LOADERS))
+	cat.put(TYPES, at(TYPES))
+	// the builds, put in to be found: a cached output is typed (its compiler's gives)
+	cat.put(CACHE, at(CACHE))
 })
 
 // ---- the builds and the processes. start is given the builds through steps: the C's input made

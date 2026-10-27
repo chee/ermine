@@ -56,7 +56,7 @@ export type MapState = {
 	box: Box // the clock's box
 	program: string // what satisfy looks up in it, and where from
 	from: string[]
-	outside: Map<Id, string> // the box's folder, and nodes placed in it from elsewhere: where, by id
+	outside: Map<Id, string> // the box's folder, and nodes put in it from elsewhere: where, by id
 }
 
 export type Card = { path: string[]; name: string; x: number; y: number; w: number; h: number }
@@ -668,16 +668,20 @@ export function createMap(
 		}
 		y += 16
 
-		// the box: a plain folder; its names, each where it is outside (a node placed there too:
-		// its own place), and the process started in it
+		// the box: a folder; its names, each where it is outside (a node put in it: its own place),
+		// and the process started in it
 		const rows: [string, string, string, string?][] = []
 		const outside = (id: Id) => state.outside.get(id)
 		const folder = outside(state.box.root) ?? String(state.box.root)
 		rows.push(["/", folder, "folder"])
 		for (const it of m.members) {
-			if (it.from !== "children") continue
+			if (it.from !== "children" && it.from !== "box") continue
 			const there = outside(it.id)
-			rows.push([it.name, there ?? `${folder}/${it.name}`, there ? "placed" : "child"])
+			rows.push([
+				it.name,
+				there ?? `${folder}/${it.name}`,
+				it.from === "box" ? "put" : there ? "placed" : "child",
+			])
 		}
 		for (const it of m.members) {
 			if (it.from !== "process") continue
