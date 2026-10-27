@@ -116,8 +116,9 @@ op_value *op_map_copy(const op_value *from);
 op_value *op_get(const op_value *map, const char *key);
 // where the key is in the map's items, or -1
 long op_find(const op_value *map, const char *key);
-// takes out the entry at position i (not its value: the caller has it); the later ones move down,
-// the lookup table is kept
+// takes out the entry at position i (not its value: the caller has it). a map of 16 keys or fewer
+// with no lookup table: the later ones move down. a bigger one, or with a table: the last key
+// moves into i's place (key order is no part of a value); the lookup table is kept
 void op_unset(op_value *map, size_t i);
 // to: a map with the same keys in the same order as from (the keys its own): from's lookup table,
 // if it has one, copied to it, not made again
