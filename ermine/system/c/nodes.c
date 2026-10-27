@@ -24,7 +24,6 @@
 #include <stdio.h>
 
 // the arrays places' functions take
-#define CP(x) ((const char *const *)(x))
 
 // 0, or the code of an ermine closed
 #define ALIVE(c) \
@@ -82,22 +81,8 @@ static es_names names_of(const char *const *src, size_t n) {
 	for (size_t i = 0; i < n; i++) names_add(&out, src[i]);
 	return out;
 }
-// the names joined by "/": the message's at
-static char *names_join(const char *const *names, size_t n) {
-	size_t len = 1;
-	for (size_t i = 0; i < n; i++) len += strlen(names[i]) + 1;
-	char *s = es_alloc(len), *o = s;
-	for (size_t i = 0; i < n; i++) {
-		if (i) *o++ = '/';
-		size_t k = strlen(names[i]);
-		memcpy(o, names[i], k);
-		o += k;
-	}
-	*o = 0;
-	return s;
-}
 static int places_fail_path(int code, const char *const *path, size_t n) {
-	char *at = names_join(path, n);
+	char *at = es_join(path, n);
 	places_fail(code, at);
 	free(at);
 	return code;
@@ -111,19 +96,10 @@ void es_names_free(es_names *names) {
 
 // a string's steps (path.ts' parse): a leading "/" is the root, empty pieces are skipped
 static void parse(const char *s, es_names *out) {
-	if (s[0] == '/') names_add(out, "/");
-	while (*s) {
-		const char *e = strchr(s, '/');
-		size_t len = e ? (size_t)(e - s) : strlen(s);
-		if (len) {
-			char *piece = es_alloc(len + 1);
-			memcpy(piece, s, len);
-			names_add(out, piece);
-			free(piece);
-		}
-		if (!e) break;
-		s = e + 1;
-	}
+	size_t k;
+	char **steps = es_parse_steps(s, &k);
+	for (size_t i = 0; i < k; i++) names_add(out, steps[i]);
+	pr_names_free(steps, k);
 }
 // one step of processes' inside: "." skipped, ".." takes back a name (none left: stays at "/"), "/" starts again
 static void plan_step(es_names *r, const char *step) {
@@ -427,21 +403,16 @@ static es_handle *handle_at(es_context *c, es_names *names, const char *part) {
 
 // contexts ------------------------------------------------------------------------------------------------
 
-static char **dup_names(const char *const *src, size_t n) {
-	char **out = es_alloc((n + 1) * sizeof *out);
-	for (size_t i = 0; i < n; i++) out[i] = es_dup(src[i]);
-	return out;
-}
 
 es_context *es_context_new(es_ermine *e, const es_context_options *o) {
 	es_context *c = es_alloc(sizeof *c);
 	c->ermine = e;
 	c->scope = o->scope;
-	c->folder = dup_names(o->folder, o->nfolder);
+	c->folder = es_dup_names(o->folder, o->nfolder);
 	c->nfolder = o->nfolder;
-	c->at = dup_names(o->at, o->nat);
+	c->at = es_dup_names(o->at, o->nat);
 	c->nat = o->nat;
-	c->args = dup_names(o->args, o->nargs);
+	c->args = es_dup_names(o->args, o->nargs);
 	c->nargs = o->nargs;
 	c->process = o->process;
 	c->places = o->places;
@@ -558,7 +529,7 @@ static int refused(es_context *c, gd_target t, int *no) {
 	return answered(a, &why);
 }
 
-static gd_thing thing_of(const char *id, const es_node_data *n) {
+gd_thing es_thing_of(const char *id, const es_node_data *n) {
 	gd_thing t = {.id = tb_string(id)};
 	if (n != NULL && n->has_path) t.path = CP(n->path), t.npath = n->npath;
 	return t;
@@ -657,7 +628,7 @@ int es_ask_placing(es_context *c, const gd_target *slot, es_target x, const char
 	if (!c->guarded) return 0;
 	es_node_data n;
 	TRY(es_node_of(c, x, &n));
-	gd_thing thing = thing_of(id, &n);
+	gd_thing thing = es_thing_of(id, &n);
 	gd_target node = gd_target_of(thing, "value", NULL);
 	static const char *const plain[] = {"read", "edit"};
 	static const char *const action[] = {"read", "edit", "execute"};
@@ -1306,7 +1277,7 @@ static int read_part(es_context *c, es_target x, const char *part, const op_key 
 	int code = 0;
 	if (c->guarded) {
 		op_value *field = field_of(key, nkey);
-		code = ask_read(c, gd_target_of(thing_of(id, &n), n.part, nkey ? field : NULL));
+		code = ask_read(c, gd_target_of(es_thing_of(id, &n), n.part, nkey ? field : NULL));
 		op_free(field);
 	}
 	if (!code && c->peeping == 0) es_calls_read(e, n.part, id, key, nkey, 1, 0);
@@ -1439,7 +1410,7 @@ int es_read_entries(es_context *c, es_target x, es_items *out) {
 	if (!n.has_path) {
 		if (n.id != NULL) {
 			int no;
-			code = refused(c, gd_target_of(thing_of(n.id, NULL), n.part, NULL), &no);
+			code = refused(c, gd_target_of(es_thing_of(n.id, NULL), n.part, NULL), &no);
 			if (!code && no) items_push(out, NULL, "id", NULL, 1);
 			else if (!code) {
 				if (c->peeping == 0) es_calls_read(e, n.part, n.id, NULL, 0, 1, 0);
@@ -1472,7 +1443,7 @@ int es_read_entries(es_context *c, es_target x, es_items *out) {
 		for (size_t i = 0; i < all.n && !code; i++) {
 			const char *id = all.items[i].id.string;
 			int no;
-			code = refused(c, gd_target_of(thing_of(id, &n), n.part, NULL), &no);
+			code = refused(c, gd_target_of(es_thing_of(id, &n), n.part, NULL), &no);
 			if (code) break;
 			if (no) items_push(out, NULL, all.items[i].from, NULL, 1);
 			else {
@@ -1557,7 +1528,7 @@ int es_list(es_context *c, es_target x, es_names *out) {
 	const char *id;
 	int has = es_id_of(c, &n, &id);
 	int code = 0;
-	if (c->guarded && has) code = ask_read(c, gd_target_of(thing_of(id, &n), "children", NULL));
+	if (c->guarded && has) code = ask_read(c, gd_target_of(es_thing_of(id, &n), "children", NULL));
 	if (!code && has && c->peeping == 0) es_calls_read(e, "children", id, NULL, 0, 1, 1);
 	es_names got;
 	names_init(&got);
@@ -1698,14 +1669,6 @@ int es_pipe_looped(es_ermine *e, const char *id) {
 	return p != NULL && p->looped;
 }
 
-// a path as a key that two paths share only if they are the same: each name by its length
-static char *pipe_key(char *const *path, size_t n) {
-	size_t len = 1;
-	for (size_t i = 0; i < n; i++) len += strlen(path[i]) + 24;
-	char *s = es_alloc(len), *o = s;
-	for (size_t i = 0; i < n; i++) o += snprintf(o, len - (size_t)(o - s), "%zu:%s", strlen(path[i]), path[i]);
-	return s;
-}
 
 // a deep equal: maps by their keys (in any order), lists, bytes and typed arrays by their bytes
 static int values_equal(const op_value *a, const op_value *b) {
@@ -1737,13 +1700,6 @@ static int values_equal(const op_value *a, const op_value *b) {
 	return 0;
 }
 
-// an Error as a status holds it (status.h's)
-static op_value *pipe_error(const char *message) {
-	op_value *m = op_map();
-	op_set(m, "name", op_str("Error"));
-	op_set(m, "message", op_str(message));
-	return op_stand(m);
-}
 
 // the message of what was thrown last
 static char *pipe_failure(int code) {
@@ -1773,7 +1729,7 @@ static void pipe_status_run(void *data) {
 	op_value *own = NULL;
 	op_value *error = s->error == NULL ? NULL
 		: s->error == pipe_pending ? op_stand(op_str(PENDING_NAME))
-		: pipe_error(s->error);
+		: es_error_value(s->error);
 	if (s->error == NULL) {
 		patch.place = (op_target){.path = &key, .length = 1};
 	} else if (had == NULL) {
@@ -2097,7 +2053,7 @@ static int pipe_ask(es_context *c, const es_node_data *n, int edit) {
 	if (!c->guarded) return 0;
 	const char *id;
 	gd_thing thing;
-	if (es_id_of(c, n, &id)) thing = thing_of(id, n);
+	if (es_id_of(c, n, &id)) thing = es_thing_of(id, n);
 	else thing = (gd_thing){.path = CP(n->path), .npath = n->npath};
 	gd_target target = gd_target_of(thing, n->part, NULL);
 	return edit ? ask(c, "edit", target) : ask_read(c, target);
@@ -2139,11 +2095,11 @@ static int make_pipe(es_context *c, es_target from, const es_pipe_options *o, es
 		es_node_data_free(&tn);
 		return code;
 	}
-	char *key = pipe_key(path.names, path.n);
+	char *key = es_path_key(CP(path.names), path.n);
 	pipe_t *p = es_map_get(&x->pipes, key);
 	if (p != NULL && p->owner == owner && sc_scope_alive(p->scope)) {
 		if (computer != NULL && p->run_computer == computer && p->run_n == run_n) {
-			char *at = names_join(CP(path.names), path.n);
+			char *at = es_join(CP(path.names), path.n);
 			code = places_fail(ES_ALREADY_THERE, at);
 			free(at);
 		}
@@ -2177,8 +2133,8 @@ static int make_pipe(es_context *c, es_target from, const es_pipe_options *o, es
 	}
 	// made again: listened at again if what it listens at changed
 	int back = o->has_to && o->back != NULL && tn.has_path;
-	char *from_at = names_join(CP(n.path), n.npath);
-	char *to_at = back ? names_join(CP(tn.path), tn.npath) : NULL;
+	char *from_at = es_join(CP(n.path), n.npath);
+	char *to_at = back ? es_join(CP(tn.path), tn.npath) : NULL;
 	size_t size = strlen(from_at) + strlen(n.part) + (to_at != NULL ? strlen(to_at) + strlen(tn.part) : 0) + 8;
 	char *watching = es_alloc(size);
 	snprintf(watching, size, "%s\x1f%s\x1f%s\x1f%s", from_at, n.part, to_at != NULL ? to_at : "",
@@ -2269,7 +2225,7 @@ static int patch_in(void *p) {
 	TRY(node_part(s->c, s->x, s->part, &n));
 	const char *id;
 	int code = need_id(s->c, &n, &id);
-	if (!code) code = ask(s->c, "edit", gd_target_of(thing_of(id, &n), n.part, NULL));
+	if (!code) code = ask(s->c, "edit", gd_target_of(es_thing_of(id, &n), n.part, NULL));
 	if (!code && s->n) {
 		es_write w = {.part = n.part, .id = id, .has_path = n.has_path, .path = CP(n.path),
 			.npath = n.npath, .patches = s->patches, .npatches = s->n};
@@ -2478,7 +2434,7 @@ static int children_in(void *p) {
 		}
 		const char *name = p->place.path[0].s;
 		op_value *field;
-		gd_thing parent = thing_of(folder, &n);
+		gd_thing parent = es_thing_of(folder, &n);
 		gd_target slot = gd_slot(parent, name, &field);
 		nd_entry *children = tb_get(e->table, tb_string("children"), tb_string(folder));
 		pset ps;
@@ -2689,7 +2645,7 @@ static int remove_in(void *v) {
 	int code = need_id(c, &n, &found);
 	// the id outlives its entries: the table lets go of its key with the last
 	char *id = code ? NULL : es_dup(found);
-	if (!code) code = ask(c, "remove", gd_target_of(thing_of(id, &n), NULL, NULL));
+	if (!code) code = ask(c, "remove", gd_target_of(es_thing_of(id, &n), NULL, NULL));
 	idlist below = {0};
 	if (!code) under(e, id, &below);
 	// a running process's node: the process stopped first (its row out), then its entries gone

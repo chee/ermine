@@ -226,28 +226,7 @@ void es_computer_forget(es_context *c) {
 	c->named = NULL;
 }
 
-// a path as one string, for a message
-static char *join(char *const *path, size_t n) {
-	size_t len = 1;
-	for (size_t i = 0; i < n; i++) len += strlen(path[i]) + 1;
-	char *s = es_alloc(len), *p = s;
-	for (size_t i = 0; i < n; i++) {
-		if (i > 0) *p++ = '/';
-		size_t k = strlen(path[i]);
-		memcpy(p, path[i], k);
-		p += k;
-	}
-	return s;
-}
 
-// a path as a key that two paths share only if they are the same: each name by its length
-static char *key_of(char *const *path, size_t n) {
-	size_t len = 1;
-	for (size_t i = 0; i < n; i++) len += strlen(path[i]) + 24;
-	char *s = es_alloc(len), *p = s;
-	for (size_t i = 0; i < n; i++) p += snprintf(p, len - (size_t)(p - s), "%zu:%s", strlen(path[i]), path[i]);
-	return s;
-}
 
 // the one made at key under own, still alive: the first
 static made *made_at(es_context *c, const char *key, sc_scope *own) {
@@ -599,7 +578,7 @@ static int place_node(void *data) {
 	if (p->npath == 1) parent = pl_root(c->places);
 	else found = pl_get(c->places, (const char *const *)p->path, p->npath - 1, &parent) != 0;
 	if (!found) {
-		char *at = join(p->path, p->npath);
+		char *at = es_join(CP(p->path), p->npath);
 		int code = es_fail(ES_NOTHING_THERE, "nothing-there (%s)", at);
 		free(at);
 		return code;
@@ -711,7 +690,7 @@ static int make(es_context *c, int memo, es_at name, es_compute f, es_act act, v
 	es_names path = {0};
 	code = es_resolve(c, name, &path);
 	if (code) return code;
-	char *key = key_of(path.names, path.n);
+	char *key = es_path_key(CP(path.names), path.n);
 	es_node_data nd = {.has_path = 1, .path = path.names, .npath = path.n, .part = (char *)"value"};
 	made *m = made_at(c, key, own);
 	if (m == NULL) {
@@ -720,7 +699,7 @@ static int make(es_context *c, int memo, es_at name, es_compute f, es_act act, v
 		// made at this path under own before: claimed, given the new code (a parent's rerun does not
 		// destroy its children). as own's run starts, what its earlier runs made is old (the
 		// scheduler's); one not old was made in this run, or own has had no run since: already-there
-		char *at = join(path.names, path.n);
+		char *at = es_join(CP(path.names), path.n);
 		code = es_fail(ES_ALREADY_THERE, "already-there (%s)", at);
 		free(at);
 	} else {
@@ -782,8 +761,7 @@ static int ask_status(es_context *t, const char *id, const es_node_data *n) {
 	if (!t->guarded) return 0;
 	op_value *field = op_list();
 	op_push(field, op_str(CST_ATTRIBUTE));
-	gd_thing thing = {tb_string(id), n->has_path ? (const char *const *)n->path : NULL,
-		n->has_path ? n->npath : 0};
+	gd_thing thing = es_thing_of(id, n);
 	gd_target target = gd_target_of(thing, CST_TABLE, field);
 	gd_refusal why = {0};
 	gd_answer a = gd_read(t->guard, &target, 1, &why);
