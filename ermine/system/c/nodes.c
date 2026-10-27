@@ -1451,7 +1451,7 @@ int es_read_entries(es_context *c, es_target x, es_items *out) {
 			code = refused(t, gd_target_of(thing_of(n.id, NULL), n.part, NULL), &no);
 			if (!code && no) items_push(out, NULL, "id", NULL, 1);
 			else if (!code) {
-				es_calls_read(e, n.part, n.id, NULL, 0, 1, 0);
+				if (t->peeping == 0) es_calls_read(e, n.part, n.id, NULL, 0, 1, 0);
 				const op_value *v = pl_read(t->places, tb_string(n.part), tb_string(n.id), NULL, 0);
 				// a node there by id, with or without a value (as by a path); nothing under that id: none
 				size_t held;
@@ -1467,7 +1467,7 @@ int es_read_entries(es_context *c, es_target x, es_items *out) {
 		return code;
 	}
 	pl_answers all = pl_gets(t->places, CP(n.path), n.npath);
-	for (size_t i = 0; i < all.n; i++) {
+	for (size_t i = 0; i < all.n && t->peeping == 0; i++) {
 		es_calls_read(e, n.part, all.items[i].id.string, NULL, 0, 1, 0);
 	}
 	if (!t->guarded) {
@@ -1568,7 +1568,7 @@ int es_list(es_context *c, es_target x, es_names *out) {
 	int has = es_id_of(t, &n, &id);
 	int code = 0;
 	if (t->guarded && has) code = ask_read(t, gd_target_of(thing_of(id, &n), "children", NULL));
-	if (!code && has) es_calls_read(e, "children", id, NULL, 0, 1, 1);
+	if (!code && has && t->peeping == 0) es_calls_read(e, "children", id, NULL, 0, 1, 1);
 	es_names got;
 	names_init(&got);
 	if (!code) {

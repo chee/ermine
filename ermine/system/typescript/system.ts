@@ -716,21 +716,21 @@ const refused = (inner: Inner, t: ReturnType<typeof targetOf>) => {
 }
 
 function readEntries(inner: Inner, x: Target): Item[] {
-	const { calls, table, places, guard, guarded } = here(inner)
+	const { calls, table, places, guard, guarded, state } = here(inner)
 	const n = nodeOf(inner, x)
 	if (n.path === undefined) {
 		if (n.id === undefined) return []
 		if (refused(inner, targetOf(thing(n.id), n.part))) {
 			return [{ value: undefined, from: "id", refused: true }]
 		}
-		calls.read(n.part, n.id, [])
+		if (state.peeping === 0) calls.read(n.part, n.id, [])
 		// a node there by id, with or without a value (as by a path); nothing under that id: none
 		const value = places.readValue(n.part, n.id)
 		if (value === undefined && table.get(n.id).length === 0) return []
 		return [{ value, from: "id", node: byId(inner, n.id, n.part) }]
 	}
 	const found = gets(places, n.path)
-	for (const a of found) calls.read(n.part, a.id, [])
+	if (state.peeping === 0) { for (const a of found) calls.read(n.part, a.id, []) }
 	const item = (a: (typeof found)[number]): Item => ({
 		value: places.readValue(n.part, a.id),
 		from: a.from,
@@ -753,11 +753,11 @@ function readEntries(inner: Inner, x: Target): Item[] {
 }
 
 function list(inner: Inner, x: Target): string[] {
-	const { calls, places, guard, guarded } = here(inner)
+	const { calls, places, guard, guarded, state } = here(inner)
 	const n = nodeOf(inner, x)
 	const id = idOf(inner, n)
 	if (guarded && id !== undefined) guard.read(targetOf(thing(id, n.path), "children"))
-	if (id !== undefined) calls.read("children", id, [], true)
+	if (id !== undefined && state.peeping === 0) calls.read("children", id, [], true)
 	if (n.path === undefined) return n.id === undefined ? [] : places.readKeys("children", n.id)
 	return [...listAt(places, n.path)]
 }
