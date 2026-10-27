@@ -19,13 +19,6 @@
 //              host's args, the machine it publishes, and its setup: run once, untracked, in the
 //              host's scope as createErmine ends (a throw: ermine closed, the error thrown)
 //   info       the host's scope's info (actor, …), beside its node
-//   hints      false: errors and statuses bare; none: an ermine error a function throws carries
-//              what to do (hints.ts: a hint field, and after the code's text in its message), and a
-//              status that will not end on its own (a setup pending, looping) a hint field
-//   trace      false: a write outside a run keeps its site only (found in the nearest 10 frames);
-//              none: the whole trace text too, beside the change (traceOf), the site found in it;
-//              a call given a build site (@ermine/unplugin, site.ts) captures nothing, keeping that
-//              site only; "always": the whole trace text kept beside it too, as with none
 // made inside, in order: the scheduler; sites (skipping ermine's files and every feature's files,
 // a live list); the table, each feature's setup, then onTable's layers; places over the front layer, with
 // processes' rows, released at each tracking end; the root node and the host's node, written as
@@ -64,7 +57,6 @@ import { place } from "./names.ts"
 import { getStatus } from "./process.ts"
 import { enterScheduler, leaveScheduler, registerScheduler, registerScope } from "./registry.ts"
 import { isHandle, mint } from "./handles.ts"
-import { attach as attachHint, hintStatus } from "./hints.ts"
 import { createChangeHeader, NODE } from "@ermine/core/places/header"
 import type { FileLocation } from "@ermine/core/util/stacktrace"
 import { createStatus, STATUS, TABLE as STATUS_TABLE } from "@ermine/core/places/status"
@@ -106,6 +98,7 @@ import {
 	type Reading,
 	type Recorded,
 	type Shown,
+	type Trace,
 } from "./features.ts"
 import {
 	type CreatedFunction,
@@ -196,11 +189,6 @@ export type Options = {
 		setup?: () => unknown
 	}
 	info?: Info
-	hints?: false
-	// false: a write outside a run keeps only its site (the first frame outside ermine, in the nearest
-	// 10), not the whole trace text beside it (traceOf, @ermine/core/places/header). a build site
-	// given (site.ts): that site, nothing captured; "always": its whole trace text kept too
-	trace?: false | "always"
 }
 
 // a process's folder: the one it is in (its path but the last name) [chee 10-26: "im not sure if
@@ -289,10 +277,9 @@ export function uuidv7(): string {
 
 export function createErmine(options: Options = {}): Ermine {
 	let closed = false
-	// ermine's own errors outside a function (start's, closed) given their advice (hints.ts), as a
-	// function's are
-	const hinted = (e: ErmineError, fn?: string) =>
-		options.hints === false ? e : attachHint(e, fn === undefined ? {} : { fn })
+	// ermine's own errors outside a function (start's, closed) through the onError hooks, as a
+	// function's are (errored: made once the features are set up)
+	const hinted = (e: ErmineError, fn?: string) => errored(e, fn)
 	const alive = () => {
 		if (closed) throw hinted(new ErmineError("closed", "ermine is closed"))
 	}
@@ -365,6 +352,10 @@ export function createErmine(options: Options = {}): Ermine {
 		(kind) => kind === "process" ? processId() : uuidv7(),
 	)
 	const newId = () => idFor("node")
+	// what a write outside a run keeps, through onTrace: the base's its site only
+	const traced = chain<[Trace], Trace>(hooks.onTrace, "onTrace", (t) => t)
+	// each error ermine throws through onError: the base's as it is
+	const errored = chain<[unknown, string | undefined], unknown>(hooks.onError, "onError", (e) => e)
 	const toPlaces: Ahead = {
 		onTableChange: (part, id) => places!.onTableChange(part, id),
 		commit: (changed) => places!.commit(changed),
@@ -411,21 +402,21 @@ export function createErmine(options: Options = {}): Ermine {
 	}
 	const offSettle = s.onSettle(queuePulse)
 
-	// a write's site: outside a run, the caller of the public function called innermost (entry); in a
-	// run, the running computer's own
-	// run, the running computer's own. a build site given (built): that one, nothing captured (trace
-	// "always": captured too, for the text)
+	// a write's site: in a run, the running computer's own; outside one, a build site given (built),
+	// nothing captured, else the caller of the public function called innermost (entry), found in
+	// the nearest 10 frames. what onTrace gives: the whole trace text kept beside it too (text)
 	let entry: unknown
 	const header = (): ChangeHeader => {
 		const run = s.getRun()
 		if (run !== undefined) {
 			return createChangeHeader(s, undefined, undefined, undefined, sites.siteOf(run.computer))
 		}
-		if (built !== undefined && options.trace !== "always") {
-			return createChangeHeader(s, undefined, undefined, undefined, built)
+		const t = traced({ text: false, ...built !== undefined && { built } })
+		if (t.built !== undefined && !t.text) {
+			return createChangeHeader(s, undefined, undefined, undefined, t.built)
 		}
-		const h = createChangeHeader(s, undefined, ours, entry, undefined, options.trace !== false)
-		if (built !== undefined) h.external = [built]
+		const h = createChangeHeader(s, undefined, ours, entry, undefined, t.text)
+		if (t.built !== undefined) h.external = [t.built]
 		return h
 	}
 	// f(inner, ...a) with enter as the entry: a write's site is found from enter's caller on, or is
@@ -750,7 +741,7 @@ export function createErmine(options: Options = {}): Ermine {
 		methods: new Map(),
 		whys,
 		newId,
-		hints: options.hints !== false,
+		errored,
 		handles: new WeakMap(),
 		running,
 		views: new WeakMap(),
@@ -764,9 +755,7 @@ export function createErmine(options: Options = {}): Ermine {
 		enter,
 		shown,
 		torn,
-		statused: options.hints === false
-			? statused
-			: (x, st) => hintStatus(statused(x, st), base.computers.has(x.id)),
+		statused,
 		held: {
 			at: heldAt,
 			status: (id) => {
@@ -791,7 +780,7 @@ export function createErmine(options: Options = {}): Ermine {
 	const contexts = new Map<Id, Inner>()
 	attach(base, hostInner)
 	// @ermine/system's functions find the host's context by its scope, a process's by its
-	const unregister = registerScheduler(s, options.hints !== false)
+	const unregister = registerScheduler(s, hooks.onError.length ? errored : undefined)
 	try {
 		registerScope(hostScope, hostInner)
 		features.done()

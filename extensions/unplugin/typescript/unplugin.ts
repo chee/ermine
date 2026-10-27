@@ -40,8 +40,8 @@
 // - the runtime: go (system.ts) takes the site first thing, for every function, so nothing the
 //   function runs (peep's f, a nested call) gets it; enter (ermine.ts) holds it beside its entry,
 //   entered (a box handle's place, unplace) clears it. a write's header with one: that site,
-//   nothing captured, no trace text; createErmine({ trace: "always" }): the trace text kept too.
-//   a computer made in the call (createMemo, createEffect) takes it too (@ermine/sites' given),
+//   nothing captured, no trace text; the traceAlways feature (@ermine/system/trace): the trace
+//   text kept too. a computer made in the call (createMemo, createEffect) takes it too (@ermine/sites' given),
 //   so its runs' writes have it. a removal places makes (core/places, table.del) still captures
 // - one site module per module rewritten, numbered in the order the build reaches them
 // - built and run here with esbuild only; Vite, Rollup, webpack and Rspack go through the same

@@ -1,13 +1,14 @@
-// a write outside a run, per write: its site from the trace (whole text, the default; the site
-// only, trace: false) or given at build (at(s, patch), as the plugin writes it), shallow and 40
+// a write outside a run, per write: its site from the trace (whole text, the trace feature; the
+// site only, none) or given at build (at(s, patch), as the plugin writes it), shallow and 40
 // frames deep
 import { createErmine, ensureNode, patch, read } from "@ermine/system"
 import { at, site } from "@ermine/system/site"
+import { trace } from "@ermine/system/trace"
 import { manual } from "../../../ermine/system/typescript/manual_fixture.ts"
 
 const S = site("file:///program.ts", 1, 1)
-const make = (trace?: false) => {
-	const e = createErmine({ features: [manual], trace })
+const make = (whole = true) => {
+	const e = createErmine({ features: whole ? [manual, trace] : [manual] })
 	e.within(() => ensureNode("/x", 0))
 	return e.getProcessContext()!
 }

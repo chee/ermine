@@ -2,10 +2,9 @@
 // the host's, process 0's: registry.ts), its implementation (system.ts) run as it
 import { PENDING } from "@ermine/core/scheduler"
 import type { Inner } from "./context.ts"
-import { foundFor, hinting } from "./registry.ts"
-import { attach as attachHint } from "./hints.ts"
+import { foundFor, unfound } from "./registry.ts"
 import { take } from "./site.ts"
-import { here, hintsOn } from "./system.ts"
+import { here } from "./system.ts"
 
 // name's implementation run as the context found (a writer: entered, so its writes' site is the
 // line calling in; few frames between: a site is found in the stack's first ten)
@@ -27,11 +26,9 @@ export function go<A extends unknown[], T>(
 		}
 		return writer ? here(i).base.enter(f, i, a, site) : f(i, ...a)
 	} catch (e) {
-		// an ermine error given its advice as it passes (hints.ts); PENDING as it is. no context
-		// found (nothing-open): as the ermines open say
-		if (e !== PENDING && (inner === undefined ? hinting() : hintsOn(inner))) {
-			attachHint(e, { fn: name })
-		}
-		throw e
+		// through the ermine's onError hooks (hints.ts adds advice); PENDING as it is. no context
+		// found (nothing-open): through the first ermine open with any
+		if (e === PENDING) throw e
+		throw inner === undefined ? unfound(e, name) : here(inner).base.errored(e, name)
 	}
 }

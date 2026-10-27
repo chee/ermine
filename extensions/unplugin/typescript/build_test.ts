@@ -5,7 +5,8 @@ import { assert, assertEquals, assertRejects } from "@std/assert"
 import * as esbuild from "esbuild"
 import { join } from "node:path"
 import { fileURLToPath as fromFileUrl, pathToFileURL } from "node:url"
-import { createErmine, read } from "@ermine/system"
+import { createErmine, type Feature, read } from "@ermine/system"
+import { trace, traceAlways } from "@ermine/system/trace"
 import { traceOf } from "@ermine/core/places/header"
 import type { ChangeHeader } from "@ermine/core/node/entry"
 import ermine, { type Options } from "./unplugin.ts"
@@ -56,9 +57,9 @@ const changeAt = (e: E, name: string): ChangeHeader => {
 	return e.table.get("value", kids[name])!.change as ChangeHeader
 }
 
-async function run(out: string, options?: Parameters<typeof createErmine>[0]) {
+async function run(out: string, features: Feature[] = []) {
 	const program = (await import(toFileUrl(out).href)).default as () => unknown
-	const e = createErmine({ features: [manual], ...options })
+	const e = createErmine({ features: [manual, ...features] })
 	e.start(program, "/work/p")
 	return e
 }
@@ -77,8 +78,8 @@ Deno.test("build: (b) each write's site is written in at build: the program's fi
 		assertEquals(traceOf(x), undefined, "no trace text: nothing captured")
 		assertEquals(e.within(() => read("/x")), 2)
 		e.close()
-		// trace "always": the text captured too, the site still the build's
-		const always = await run(out, { trace: "always" })
+		// traceAlways: the text captured too, the site still the build's
+		const always = await run(out, [traceAlways])
 		assertEquals(changeAt(always, "y").external, [{ file, line: 7, column: 2 }])
 		assert(traceOf(changeAt(always, "y"))?.includes("setup"))
 		always.close()
@@ -92,7 +93,7 @@ Deno.test("build: (a) nothing rewritten: the trace finds the program's line, erm
 		assert(!code.includes("ermine:site") && !code.includes("@ermine/system/site"))
 		assert(code.includes("sourceMappingURL=program.js.map"), "source maps on")
 		const file = toFileUrl(join(dir, "program.ts")).href
-		const e = await run(out)
+		const e = await run(out, [trace])
 		const [x] = changeAt(e, "x").external!
 		const [y] = changeAt(e, "y").external!
 		assertEquals([x.file, x.line], [file, 6])

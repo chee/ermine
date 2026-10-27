@@ -6,7 +6,8 @@
 //
 // the ermine:
 // { op: "ermine", features?, deny?, uuid?, calls?, at?, args?, machine? } → {}   features: names
-//    ("patchy": the real one; "inline": one written in this file, listing no files; another
+//    ("patchy": the real one; "trace", "hints": the real ones; "inline": one written in this
+//    file, listing no files; another
 //    harness adds its own: named, below) or
 //    test features (below); deny: [{ op, path?, id?, from?, box? }] refused (every field given
 //    matching; from: the asker's place; box: the box the asker is in, by its name, a "box" step's:
@@ -116,6 +117,7 @@ import { no, type Policy, yes } from "@ermine/core/protect"
 import { PENDING } from "@ermine/core/scheduler"
 import type { Id, Key } from "@ermine/core/table"
 import patchy, { createPatch, land, layers } from "@ermine/patchy/feature"
+import { trace } from "./trace.ts"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import {
 	type BoxNode,
@@ -133,7 +135,7 @@ import {
 import * as system from "@ermine/system"
 import type { System } from "./system.ts"
 import { isHandle } from "./handles.ts"
-import { bare } from "./hints.ts"
+import { bare, hints } from "./hints.ts"
 import type { Run } from "@ermine/processes/runs"
 import { testFeature } from "./features_fixture.ts"
 
@@ -859,6 +861,8 @@ const noCalls: Feature = {
 
 named.set("patchy", patchy)
 named.set("inline", inline)
+named.set("trace", trace)
+named.set("hints", hints)
 libraries.set(
 	"createPatch",
 	(env, raw) =>

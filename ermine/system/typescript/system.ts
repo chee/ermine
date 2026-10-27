@@ -112,11 +112,10 @@ import type { Sited } from "@ermine/sites"
 import type { Key, Table } from "@ermine/core/table"
 import type { FileLocation } from "@ermine/core/util/stacktrace"
 import type { Call, Calls } from "./calls.ts"
-import { type Found, hinting } from "./registry.ts"
+import type { Found } from "./registry.ts"
 import { take } from "./site.ts"
-import { attach as attachHint } from "./hints.ts"
 import type { Target as Aimed } from "@ermine/core/protect"
-import { type Asked, ErmineError, type Reading } from "./features.ts"
+import { type Asked, ErmineError, type Errored, type Reading } from "./features.ts"
 import { dataOf, type Handles, isHandle, mint } from "./handles.ts"
 import {
 	type Inner,
@@ -187,7 +186,7 @@ export type Status = {
 	readonly waiting?: readonly Waiting[]
 	// a computer's latest run's: a value from an older run is stale
 	readonly n?: number
-	// what to do, where ermine has advice (hints.ts; createErmine's hints: false, none)
+	// what to do, where ermine has advice (the hints feature, hints.ts)
 	readonly hint?: string
 	// a feature's own fields (onStatus): pully's provider …
 	readonly [field: string]: unknown
@@ -297,8 +296,8 @@ export type Base = {
 	// why a process is stopping (by its node), said by stop before its scope goes
 	readonly whys: Map<Id, Why>
 	readonly newId: () => string
-	// an ermine error a function threw given its advice (hints.ts), as it passes; hints: false, none
-	readonly hints: boolean
+	// an error a function threw, through the onError hooks: what is thrown
+	readonly errored: Errored
 	// every node handle the functions gave (handles.ts)
 	readonly handles: Handles
 	// each process's node: its box's folder, and where it runs in that box (its rows name it, not a
@@ -1710,7 +1709,7 @@ function getStatus(inner: Inner, x: Target): Status | undefined {
 	const n = nodeOf(inner, x)
 	const id = idOf(inner, n)
 	if (id === undefined) return undefined
-	return base.statused({ node: n, id }, ownStatus(inner, n, id))
+	return base.statused({ node: n, id, computer: base.computers.has(id) }, ownStatus(inner, n, id))
 }
 
 // a send's wait as this process sees it: where the send went (its path in the sender's box, or
@@ -2035,8 +2034,6 @@ export {
 	rename,
 	unplace,
 }
-// whether inner's ermine gives hints (createErmine's hints)
-export const hintsOn = (inner: Inner): boolean | undefined => bases.get(inner)?.hints
 
 export { foundFor } from "./registry.ts"
 export type { Table }

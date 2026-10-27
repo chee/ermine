@@ -1,9 +1,14 @@
-// hints: errors that say what to do [chee 10-25, asked where the advice lives: "#2, included and
-// used by default"; 10-26: "bring back on by default"]. the base stays mechanical: its codes and
-// their text as they are; this library turns a code, plus what the erring program could see, into
-// one or two sentences in @ermine/system's functions. ermine uses it by default (createErmine's
-// hints: false turns it off); a dev tool, an inspector, or another api's shape calls it as well.
+// hints: errors that say what to do. the base stays mechanical: its codes and their text as they
+// are; this library turns a code, plus what the erring program could see, into one or two
+// sentences in @ermine/system's functions. a feature the host adds [chee 10-27: "hints and trace,
+// user imports and includes them as features"; before: on by default]; a dev tool, an inspector,
+// or another api's shape calls it as well.
 //
+//   import { hints } from "@ermine/system/hints"
+//   createErmine({ features: [hints] })
+//
+//   hints            the feature: each error ermine throws given its advice (onError), and a
+//                    status that will not end on its own a hint field (onStatus)
 //   hint(e, seen?)   advice for e, a thrown error or PENDING; none: nothing to say
 //   bare(e)          e's message without the advice ermine added
 //   attach(e, fn)    the advice on e: a hint field, and after the code's text in its message
@@ -30,7 +35,7 @@
 import { PlacesError } from "@ermine/core/places"
 import { Refusal } from "@ermine/core/places/guard"
 import { PENDING, SchedulerError } from "@ermine/core/scheduler"
-import { ErmineError, FeatureError } from "./features.ts"
+import { ErmineError, type Feature, FeatureError } from "./features.ts"
 import type { Status, Waiting } from "./system.ts"
 
 // what the erring program could see, beside the error: the function it called, the status of
@@ -303,4 +308,12 @@ export function hintStatus(st: Status, computer: boolean): Status {
 	if (st.state !== "pending" || computer) return st
 	if (st.waiting?.length === 1 && st.waiting[0] === "a promise") return st
 	return { ...st, hint: pending({ status: st, setup: true }) }
+}
+
+export const hints: Feature = {
+	name: "hints",
+	setup(f) {
+		f.onError((e, fn, next) => attach(next(e, fn), fn === undefined ? {} : { fn }))
+		f.onStatus((x, st, next) => hintStatus(next(x, st), x.computer))
+	},
 }

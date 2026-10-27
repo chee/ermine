@@ -7,6 +7,8 @@
 		"./context": "./typescript/context.ts",
 		"./features": "./typescript/features.ts",
 		"./calls": "./typescript/calls.ts",
-		"./site": "./site.ts"
+		"./site": "./site.ts",
+		"./hints": "./typescript/hints.ts",
+		"./trace": "./typescript/trace.ts"
 	}
 }
