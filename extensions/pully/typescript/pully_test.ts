@@ -1,7 +1,13 @@
 // pully's and patchy's module state: every ermine set up with them, held weakly. one closed is no
 // longer asked (its functions throw closed), and one let go is collected
 import { assert, assertEquals } from "@std/assert"
-import { createAction, createErmine, ensureNode, readAttributes } from "@ermine/system"
+import {
+	createAction,
+	createErmine,
+	ensureNode,
+	executeAction,
+	readAttributes,
+} from "@ermine/system"
 import pully, { provide, PROVIDER } from "@ermine/pully"
 import patchy, { createPatch } from "@ermine/patchy/feature"
 
@@ -18,7 +24,7 @@ function use() {
 			return typeof (readAttributes(x) as Record<string, unknown>)[PROVIDER]
 		})
 	}, "/code/p")
-	const got = e.executeAction("/code/p/go")
+	const got = e.within(() => executeAction("/code/p/go"))
 	e.close()
 	return got
 }

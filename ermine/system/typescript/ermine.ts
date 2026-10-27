@@ -1,10 +1,11 @@
-// ermine: what a host makes, once. the host's handle: @ermine/system's functions as the host
-// (process 0), and what only the host has
+// ermine: what a host makes, once. the host is process 0: its code runs in its own scope (its setup,
+// or within), where @ermine/system's functions act as it; the ermine object is the rest
 //
 //   import { createErmine } from "@ermine/system"
 //   import patches from "@ermine/patchy/feature"
 //
-//   const ermine = createErmine({ features: [patches], host: { at: "/host", args } })
+//   const ermine = createErmine({ features: [patches], host: { at: "/host", args, setup } })
+//   ermine.within(() => ensureNode("/work/n", 1))          // host code, as the host
 //   const running = ermine.start(clock, "/work/clock")    // { process, stop(), status() }
 //   running.status()                                       // a setup that threw shows here
 //   ermine.close()                                         // every process, then the host's
@@ -19,7 +20,8 @@
 //              told of each memo, effect and method made, for an inspector
 //   root       the root's id; none: a new one
 //   host       the host's node: where it is placed (none: nowhere, reached by ermine.node), the
-//              host's args, the machine it publishes
+//              host's args, the machine it publishes, and its setup: run once, untracked, in the
+//              host's scope as createErmine ends (a throw: ermine closed, the error thrown)
 //   info       the host's scope's info (actor, …), beside its node
 //   calls      sends' records held: "latest" per handler (none), or "never" (onRecord still told)
 //   hints      false: errors and statuses bare; none: an ermine error a function throws carries
@@ -34,11 +36,10 @@
 // processes' rows, released at each tracking end; the root node and the host's node, written as
 // the host; scope nodes, processes, statuses, runs and calls; the host's context (context.ts): the
 // host's scope at the root, no process.
-// the host's functions: @ermine/system's (system.ts), given the host's context (asked whether the
-// ermine object becomes @ermine/system's functions, bound to the host, plus what only the host
-// has, chee 10-25: "i believe so yes"): bare names in the root, folder the root, args the host's, an action's
-// caller the host's node, addTeardown(fn) at close; nothing open: the host's scope. beside them,
-// the host's only: remove, pulse.
+// the host's code: @ermine/system's functions, imported, in the host's scope (its setup, or
+// ermine.within) [chee 10-27: the host is process 0; picked "ermine.within(fn)" and "host setup"
+// over the functions on the ermine object]: bare names in the root, folder the root, args the
+// host's, an action's caller the host's node, addTeardown(fn) at close.
 // the host's node: one plain node, not a process (no row, nothing to stop). its id: a send's
 // caller from the host, and its scope's NODE. its attributes: ermine.host.args,
 // ermine.host.machine, ermine.features (what ermine.features shows).
@@ -65,6 +66,8 @@
 import type { ChangeHeader } from "@ermine/core/node/entry"
 import { type Box, type Host, madeOver } from "@ermine/boxes"
 import { children, createPlaces, type Id, type Path, type Places } from "@ermine/core/places"
+import { place } from "./names.ts"
+import { getStatus } from "./process.ts"
 import { enterScheduler, leaveScheduler, registerScheduler, registerScope } from "./registry.ts"
 import { isHandle, mint } from "./handles.ts"
 import { attach as attachHint, hintStatus } from "./hints.ts"
@@ -126,12 +129,10 @@ import {
 	type Base,
 	type BoxNode,
 	type Held,
-	type HostOnly,
 	innerOf,
 	seenIn,
 	type Status,
 	type System,
-	systemFrom,
 	WAITING,
 } from "./system.ts"
 
@@ -168,7 +169,6 @@ export type {
 	ChangeView,
 	Explained,
 	Held,
-	HostOnly,
 	Item,
 	RunView,
 	Sent,
@@ -194,7 +194,12 @@ export type Options = {
 	schedule?: (f: () => void) => void
 	onCreateFunction?: (made: CreatedFunction) => void
 	root?: Id
-	host?: { at?: string | Path; args?: readonly string[]; machine?: unknown }
+	host?: {
+		at?: string | Path
+		args?: readonly string[]
+		machine?: unknown
+		setup?: () => unknown
+	}
 	info?: Info
 	calls?: "latest" | "never"
 	hints?: false
@@ -218,7 +223,9 @@ export type Started = {
 	status: () => ReturnType<System["getStatus"]>
 }
 
-export type Ermine = System & HostOnly & {
+export type Ermine = {
+	// f run in the host's scope (process 0's): @ermine/system's functions in it act as the host
+	within: <T>(f: () => T) => T
 	// refused: taken, and when by a stopped process whose row's removal a feature held back, which
 	start: (
 		fn: () => unknown,
@@ -258,6 +265,15 @@ const OURS = [
 	"registry.ts",
 	"handles.ts",
 	"system.ts",
+	"acting.ts",
+	"nodes.ts",
+	"reading.ts",
+	"patching.ts",
+	"explaining.ts",
+	"names.ts",
+	"computing.ts",
+	"actions.ts",
+	"process.ts",
 ].map((f) => new URL(`./${f}`, import.meta.url).href)
 
 // a uuidv7 (rfc 9562): 48 bits of ms, then a 12-bit count within the ms (started random), then
@@ -772,8 +788,6 @@ export function createErmine(options: Options = {}): Ermine {
 	// each running process's context, by its node's id
 	const contexts = new Map<Id, Inner>()
 	attach(base, hostInner)
-	// the host's functions: @ermine/system's, given the host's context (process 0's)
-	const own = systemFrom(() => ({ inner: hostInner }), { host: true })
 	// @ermine/system's functions find the host's context by its scope, a process's by its
 	const unregister = registerScheduler(s, options.hints !== false)
 	try {
@@ -782,7 +796,8 @@ export function createErmine(options: Options = {}): Ermine {
 
 		// the host's node placed where the host says
 		if (options.host?.at !== undefined) {
-			own.place(options.host.at, mint(base.handles, { id: node, part: "value" }))
+			const at = options.host.at
+			hostInner.context.within(() => place(at, mint(base.handles, { id: node, part: "value" })))
 		}
 
 		// the processes ermine started, oldest first, and each one's box's root
@@ -964,7 +979,10 @@ export function createErmine(options: Options = {}): Ermine {
 						leaveScheduler()
 					}
 				},
-				status: () => own.getStatus(mint(base.handles, { id: made.id, part: "value" })),
+				status: () =>
+					hostInner.context.within(() =>
+						getStatus(mint(base.handles, { id: made.id, part: "value" }))
+					),
 			}
 		}
 
@@ -998,24 +1016,12 @@ export function createErmine(options: Options = {}): Ermine {
 			if (first) throw first.e
 		}
 
-		// the host's functions: closed, they throw
-		const hostFunctions = {} as Record<string, unknown>
-		for (const [k, v] of Object.entries(own)) {
-			hostFunctions[k] = (...a: unknown[]) => {
-				alive()
-				enterScheduler(s)
-				try {
-					return (v as (...a: unknown[]) => unknown)(...a)
-				} finally {
-					leaveScheduler()
-				}
-			}
-		}
 		const part = <T>(v: T) => () => {
 			alive()
 			return v
 		}
-		const ermine = Object.defineProperties(hostFunctions, {
+		const ermine = Object.defineProperties({}, {
+			within: { value: <T>(f: () => T): T => hostInner.context.within(f) },
 			start: { value: start },
 			close: { value: close },
 			getProcessContext: {
@@ -1065,6 +1071,17 @@ export function createErmine(options: Options = {}): Ermine {
 				const inner = innerOf(context, base)
 				return inner === undefined ? undefined : seenIn(base, inner, id)
 			},
+		}
+		// the host's setup: run once, untracked, in the host's scope; a throw closes ermine and is
+		// thrown here (no process status to show it in), what it returns not kept
+		const setup = options.host?.setup
+		if (setup !== undefined) {
+			try {
+				hostInner.context.within(setup)
+			} catch (e) {
+				close()
+				throw e
+			}
 		}
 		return ermine
 	} catch (e) {

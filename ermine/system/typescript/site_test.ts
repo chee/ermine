@@ -1,7 +1,7 @@
 // build sites (site.ts): a call given one keeps it, captures nothing; anything else, the trace
 import { assert, assertEquals } from "@std/assert"
 import { createErmine } from "./ermine.ts"
-import { createEffect, ensureNode, patch, peep, read } from "@ermine/system"
+import { createEffect, ensureNode, patch, peep, pulse, read } from "@ermine/system"
 import { at, site } from "@ermine/system/site"
 import { traceOf } from "@ermine/core/places/header"
 import type { ChangeHeader } from "@ermine/core/node/entry"
@@ -64,8 +64,8 @@ Deno.test("site: a computer made through a call given a build site has that site
 		ensureNode("/m", 0)
 		at(S, createEffect)("copy", () => read("/n"), (n) => patch("/m", [{ path: [], value: n }]))
 	}, "/p")
-	e.pulse()
-	assertEquals(e.read("/m"), 1)
+	e.within(() => pulse())
+	assertEquals(e.within(() => read("/m")), 1)
 	assertEquals(changeAt(e, "m").external, [{ file: "file:///program.ts", line: 8, column: 2 }])
 	e.close()
 })

@@ -56,3 +56,8 @@ export function take(): FileLocation | undefined {
 	pending = undefined
 	return p
 }
+// f, marked as one of @ermine/system's functions (functions.ts, each as it is made)
+export function marked<F>(f: F): F {
+	mark([f])
+	return f
+}

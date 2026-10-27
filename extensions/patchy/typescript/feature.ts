@@ -170,7 +170,7 @@ export function layers(x: Target, path: readonly Step[] = []): Layer[] {
 }
 
 export function land(
-	ermine: Pick<Ermine, "table" | "getProcessContext" | "calling" | "dataOf" | "readEntries">,
+	ermine: Pick<Ermine, "table" | "getProcessContext" | "calling" | "dataOf" | "within">,
 ) {
 	return (p: Target): boolean => {
 		// the service's own context (the host's, who placed it), and the caller's (where and as whom
@@ -185,7 +185,7 @@ export function land(
 		const n: NodeData = d?.node ?? { path: from.resolve(p as string), part: "value" }
 		// a handle's place: the node the host reaches there, by id (readEntries gives it)
 		const reached = d !== undefined && n.path !== undefined
-			? ermine.readEntries(p)[0]?.node
+			? ermine.within(() => readEntries(p))[0]?.node
 			: undefined
 		const id = reached !== undefined
 			? ermine.dataOf(reached)?.node.id

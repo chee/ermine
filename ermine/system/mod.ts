@@ -18,46 +18,14 @@
 //   /items     from this process's root (its box's "/"; no box: the graph's root)
 // so ensureNode("./count") puts count next to the process, not in it; ensureNode("count") puts it
 // in. for the host (no process) the root is its node: a bare name and ./ both land in the root
-import { foundFor, type System, systemFrom } from "./typescript/system.ts"
-import { mark } from "./typescript/site.ts"
-
-const system = systemFrom(foundFor)
-// the functions a build site (@ermine/unplugin, typescript/site.ts) is set for: these
-mark(Object.values(system))
-
-export const getNode: System["getNode"] = system.getNode
-export const hasNode: System["hasNode"] = system.hasNode
-export const ensureNode: System["ensureNode"] = system.ensureNode
-export const createNode: System["createNode"] = system.createNode
-export const ref: System["ref"] = system.ref
-export const read: System["read"] = system.read
-export const readAttributes: System["readAttributes"] = system.readAttributes
-export const readChildren: System["readChildren"] = system.readChildren
-export const readAll: System["readAll"] = system.readAll
-export const readAllAttributes: System["readAllAttributes"] = system.readAllAttributes
-export const readAllChildren: System["readAllChildren"] = system.readAllChildren
-export const readEntries: System["readEntries"] = system.readEntries
-export const peep: System["peep"] = system.peep
-export const patch: System["patch"] = system.patch
-export const patchAttributes: System["patchAttributes"] = system.patchAttributes
-export const patchChildren: System["patchChildren"] = system.patchChildren
-export const explain: System["explain"] = system.explain
-export const explainAttributes: System["explainAttributes"] = system.explainAttributes
-export const explainChildren: System["explainChildren"] = system.explainChildren
-export const place: System["place"] = system.place
-export const unplace: System["unplace"] = system.unplace
-export const rename: System["rename"] = system.rename
-export const list: System["list"] = system.list
-export const createMemo: System["createMemo"] = system.createMemo
-export const createEffect: System["createEffect"] = system.createEffect
-export const pipe: System["pipe"] = system.pipe
-export const createAction: System["createAction"] = system.createAction
-export const executeAction: System["executeAction"] = system.executeAction
-export const getCaller: System["getCaller"] = system.getCaller
-export const getStatus: System["getStatus"] = system.getStatus
-export const addTeardown: System["addTeardown"] = system.addTeardown
-export const createBox: System["createBox"] = system.createBox
-export const getArgs: System["getArgs"] = system.getArgs
+export * from "./typescript/nodes.ts"
+export * from "./typescript/reading.ts"
+export * from "./typescript/patching.ts"
+export * from "./typescript/explaining.ts"
+export * from "./typescript/names.ts"
+export * from "./typescript/computing.ts"
+export * from "./typescript/actions.ts"
+export * from "./typescript/process.ts"
 export type { System } from "./typescript/system.ts"
 // the host's: createErmine, and the types hosts and features use
 export * from "./typescript/ermine.ts"

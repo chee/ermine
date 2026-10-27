@@ -1,6 +1,17 @@
 // what the suite (conformance/ermine) can't say on the line protocol: the base's own files, a
 // made-up context, close() with every teardown held, two onTable layers stacked
-import { addTeardown, createAction, createBox, read } from "@ermine/system"
+import {
+	addTeardown,
+	createAction,
+	createBox,
+	ensureNode,
+	executeAction,
+	getNode,
+	patch,
+	read,
+	remove,
+	unplace,
+} from "@ermine/system"
 import { registrations } from "./registry.ts"
 import { assert, assertEquals, assertThrows } from "@std/assert"
 import { createScheduler, type Scheduler } from "@ermine/core/scheduler"
@@ -16,7 +27,8 @@ import {
 const BASE = ["ermine.ts", "system.ts", "context.ts", "calls.ts", "features.ts"]
 
 // the program a test wrote at a node (ensureNode), as start takes it: its function
-const programAt = (e: { read: (x: string) => unknown }, at: string) => e.read(at) as () => unknown
+const programAt = (e: { within: <T>(f: () => T) => T }, at: string) =>
+	e.within(() => read(at)) as () => unknown
 
 Deno.test("the base holds nothing of patch nodes' or sync's", async () => {
 	for (const f of BASE) {
@@ -35,15 +47,15 @@ Deno.test("close() finishes when a feature holds every teardown back", () => {
 	}
 	const told: string[] = []
 	const e = createErmine({ features: [hold], schedule: () => {} })
-	e.ensureNode("/code/p", () => addTeardown((why) => told.push(why)))
+	e.within(() => ensureNode("/code/p", () => addTeardown((why) => told.push(why))))
 	const p = e.start(programAt(e, "/code/p"), "/code/p")
 	assert(!("refused" in p))
-	e.addTeardown((why) => told.push(why))
+	e.within(() => addTeardown((why) => told.push(why)))
 	e.close()
 	assertEquals(told, [])
 	assertEquals(held, ["ended", "ended"])
 	assertEquals(p.process.scope.state, "gone")
-	assertThrows(() => e.read("/"), ErmineError, "closed")
+	assertThrows(() => e.within(() => read("/")), ErmineError, "closed")
 })
 
 Deno.test("two onTable layers stack: table events and commits go through both, inner first", () => {
@@ -70,9 +82,9 @@ Deno.test("two onTable layers stack: table events and commits go through both, i
 	})
 	const e = createErmine({ features: [counting("outer"), counting("inner")], schedule: () => {} })
 	seen.length = 0
-	e.ensureNode("/x", { n: 1 })
-	e.patch("/x", [{ path: ["n"], value: 2 }])
-	assertEquals(e.read("/x", ["n"]), 2)
+	e.within(() => ensureNode("/x", { n: 1 }))
+	e.within(() => patch("/x", [{ path: ["n"], value: 2 }]))
+	assertEquals(e.within(() => read("/x", ["n"])), 2)
 	assert(seen.length > 0)
 	for (let i = 0; i < seen.length; i += 2) {
 		assertEquals(seen[i].split(" ")[0], "inner")
@@ -98,12 +110,12 @@ Deno.test("a caller's waits made and answered again and again register one teard
 	const host = e.getProcessContext()!.scope
 	const before = on.get(host) ?? 0
 	for (let i = 0; i < 20; i++) {
-		assertThrows(() => e.executeAction("/svc"))
+		assertThrows(() => e.within(() => executeAction("/svc")))
 		assertEquals(e.records.waits().length, 1)
-		e.ensureNode("/svc", () => i)
-		assertEquals(e.executeAction("/svc"), i)
+		e.within(() => ensureNode("/svc", () => i))
+		assertEquals(e.within(() => executeAction("/svc")), i)
 		assertEquals(e.records.waits().length, 0)
-		e.remove("/svc")
+		e.within(() => remove("/svc"))
 	}
 	assert((on.get(host) ?? 0) - before <= 1, `${(on.get(host) ?? 0) - before} registered`)
 	e.close()
@@ -114,8 +126,8 @@ Deno.test("one method placed again and again registers one teardown", () => {
 	const e = createErmine({ scheduler, schedule: () => {} })
 	const host = e.getProcessContext()!.scope
 	const before = on.get(host) ?? 0
-	for (let i = 0; i < 20; i++) e.createAction("/svc", () => i)
-	assertEquals(e.executeAction("/svc"), 19)
+	for (let i = 0; i < 20; i++) e.within(() => createAction("/svc", () => i))
+	assertEquals(e.within(() => executeAction("/svc")), 19)
 	assert((on.get(host) ?? 0) - before <= 1, `${(on.get(host) ?? 0) - before} registered`)
 	e.close()
 })
@@ -165,7 +177,7 @@ Deno.test("a feature's context(process) is undefined once the process stopped, a
 	let api: FeatureAPI | undefined
 	const keep: Feature = { name: "keep", setup: (f) => void (api = f) }
 	const e = createErmine({ features: [keep], schedule: () => {} })
-	e.ensureNode("/code/p", () => 1)
+	e.within(() => ensureNode("/code/p", () => 1))
 	const p = e.start(programAt(e, "/code/p"), "/code/p")
 	assert(!("refused" in p))
 	assert(api!.getProcessContext(p.process) !== undefined)
@@ -189,35 +201,37 @@ function namesLooked(e: { places: { namesOf: (id: string) => unknown } }) {
 
 Deno.test("reads walk the boxes by an index: none of the boxes' names looked up again till a name changes", () => {
 	const e = createErmine({ schedule: () => {} })
-	e.ensureNode("/a/b/c/x", 1)
-	for (let i = 0; i < 200; i++) e.createBox(`/boxes/b${i}`)
+	e.within(() => ensureNode("/a/b/c/x", 1))
+	for (let i = 0; i < 200; i++) e.within(() => createBox(`/boxes/b${i}`))
 	const looked = namesLooked(e)
-	e.read("/a/b/c/x")
+	e.within(() => read("/a/b/c/x"))
 	const once = looked()
-	for (let i = 0; i < 100; i++) e.read("/a/b/c/x"), e.read(e.getNode("/a/b/c/x"))
+	for (let i = 0; i < 100; i++) {
+		e.within(() => read("/a/b/c/x")), e.within(() => read(e.within(() => getNode("/a/b/c/x"))))
+	}
 	assertEquals(looked(), once, "a read walked every box")
 	// a name changed: walked again, once
-	e.ensureNode("/a/y", 2)
-	for (let i = 0; i < 100; i++) e.read("/a/b/c/x")
+	e.within(() => ensureNode("/a/y", 2))
+	for (let i = 0; i < 100; i++) e.within(() => read("/a/b/c/x"))
 	assert(looked() <= 2 * once + 10, `${looked() - once} looked up after one name changed`)
 	e.close()
 })
 
 Deno.test("createBox at one folder again and again is one box; a box nothing reaches, holding no rows, let go", () => {
 	const e = createErmine({ schedule: () => {} })
-	e.ensureNode("/x", 1)
+	e.within(() => ensureNode("/x", 1))
 	e.start(() => void createAction("on/box", () => void createBox("./same")), "/code/p")
-	for (let i = 0; i < 100; i++) e.executeAction("/code/p/on/box")
+	for (let i = 0; i < 100; i++) e.within(() => executeAction("/code/p/on/box"))
 	const looked = namesLooked(e)
-	e.ensureNode("/y", 1)
-	e.read("/x")
+	e.within(() => ensureNode("/y", 1))
+	e.within(() => read("/x"))
 	// the root's box and one at /code/same: two folders' names, a few steps each
 	assert(looked() < 20, `${looked()} looked up: every createBox kept`)
-	e.unplace("/code/same")
-	e.read("/x")
+	e.within(() => unplace("/code/same"))
+	e.within(() => read("/x"))
 	const after = looked()
-	e.ensureNode("/z", 1)
-	e.read("/x")
+	e.within(() => ensureNode("/z", 1))
+	e.within(() => read("/x"))
 	// the one nothing reaches, let go: only the root's walked
 	assert(looked() - after <= 2, `${looked() - after} looked up: the unreachable box kept`)
 	e.close()
@@ -229,8 +243,8 @@ Deno.test("a read of a node not there, outside a setup or a run, keeps nothing: 
 	const missing = (from: string, n: number) => {
 		const t = performance.now()
 		for (let i = 0; i < n; i++) {
-			assertThrows(() => e.read(`/m/${from}${i}`))
-			assertThrows(() => e.executeAction("/code/p/on/look", `/m/${from}a${i}`))
+			assertThrows(() => e.within(() => read(`/m/${from}${i}`)))
+			assertThrows(() => e.within(() => executeAction("/code/p/on/look", `/m/${from}a${i}`)))
 		}
 		return performance.now() - t
 	}
@@ -251,19 +265,19 @@ Deno.test("trace: a write outside a run keeps its whole trace text, through late
 	}
 	const e = createErmine()
 	function deepInTheProgram() {
-		e.ensureNode("/x", 1)
+		e.within(() => ensureNode("/x", 1))
 	}
 	deepInTheProgram()
 	const text = traceOf(changeAt(e, ["x"]))
 	assert(text !== undefined && text.includes("deepInTheProgram"))
-	e.patch("/x", [{ path: [], value: 2 }])
+	e.within(() => patch("/x", [{ path: [], value: 2 }]))
 	function another() {
-		e.patch("/x", [{ path: [], value: 3 }])
+		e.within(() => patch("/x", [{ path: [], value: 3 }]))
 	}
 	another()
 	assert(traceOf(changeAt(e, ["x"]))?.includes("another"))
 	const off = createErmine({ trace: false })
-	off.ensureNode("/y", 1)
+	off.within(() => ensureNode("/y", 1))
 	assertEquals(traceOf(changeAt(off, ["y"])), undefined)
 	assertEquals(typeof changeAt(off, ["y"]).external?.[0]?.line, "number")
 })
@@ -284,7 +298,7 @@ Deno.test("close() runs every step when one throws, throws the first error at th
 	assertThrows(() => e.close(), Error, "boom")
 	// every step ran: unregistered, and closed (a second close is nothing)
 	assertEquals(registrations(scheduler), 0)
-	assertThrows(() => e.read("/"), ErmineError, "closed")
+	assertThrows(() => e.within(() => read("/")), ErmineError, "closed")
 	e.close()
 })
 
