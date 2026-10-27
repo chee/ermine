@@ -65,7 +65,7 @@ static ssize_t xlist(const char *path, char *buffer, size_t size) {
 bool sys_known(int e) {
 	switch (e) {
 	case EPERM: case ENOENT: case EACCES: case EBUSY: case EEXIST: case EXDEV: case ENOTDIR: case EISDIR:
-	case EINVAL: case ENOSPC: case EROFS: case ENOTSUP: case ELOOP: case ENAMETOOLONG: case ENOTEMPTY:
+	case EINVAL: case ENOSPC: case EROFS: case ENOTSUP: case ELOOP: case ENAMETOOLONG: case ENOTEMPTY: case ERANGE:
 		return true;
 	default:
 		return false;
