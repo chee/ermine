@@ -1,9 +1,8 @@
 // start and stop (start.h) on the line protocol of typescript/start_harness.ts, which documents it, the
 // compilers, the runner (software's shape: its api createProcessAPI of the start's facts) and
-// createProcessAPI (conformance/c/harness.h has the loop). software's pulses: none asked. Its world is places'
-// (world_harness.h), made here before the first line: the host's places at R asked [processes(R), children]
-// (the outermost box), the table telling them alone (a box's places is a view of them); scope nodes,
-// builds and programs are made by the programs request. An address given as a string is split as
+// createProcessAPI (conformance/c/harness.h has the loop). software's pulses: none asked. Its world is pw.h's,
+// made at the first line: an ermine, its places the host's, and boxes (extensions/boxes) over it; scope nodes
+// and sites beside, builds and programs made by the programs request. An address given as a string is split as
 // path.ts' parse splits it. Not here: the js and wasm loads, nor the loads and said requests:
 // conformance/load, on this protocol, is the TypeScript's only. Here: the dlopen runner (dlopen.h) and
 // the native requests (conformance/native), the fixtures read from PG_FIXTURES (the Makefile's).
@@ -16,8 +15,8 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "../../../core/places/c/world_harness.h"
-#include "../../../ermine/boxes/c/boxes.h"
+#include "pw.h"
+#include "../../../extensions/boxes/c/boxes.h"
 #include "../../../ermine/processes/c/processes.h"
 #include "../../../ermine/processes/c/scopes.h"
 #include "../../compilers/c/compilers.h"
@@ -27,10 +26,7 @@
 #include "programs_json.h"
 #include "start.h"
 
-static pr_processes root_rows;
-static const pl_contributor *root_walk[2];
 static sn *scope_nodes;
-static sc_pair host_info;
 static hf *functions;
 static bd *builds;
 static ps *programs;
@@ -45,7 +41,7 @@ static char *cache;
 
 typedef struct {
 	char *name;
-	bx *box;
+	bx_box *box;
 } naming;
 static naming *named;
 static size_t nnamed, capnamed;
@@ -58,7 +54,7 @@ typedef struct {
 static started *procs;
 static size_t nprocs, capprocs;
 
-static bx *box_named(const char *name) {
+static bx_box *box_named(const char *name) {
 	for (size_t i = 0; name != NULL && i < nnamed; i++) {
 		if (strcmp(named[i].name, name) == 0) return named[i].box;
 	}
@@ -74,7 +70,7 @@ static started *proc_named(const char *name) {
 
 static void commit_host(void *ctx, const pl_changed *changed) {
 	(void)ctx;
-	pl_commit(world_places, changed);
+	pl_commit(pw_places, changed);
 }
 
 // a uuid's form: a folder a box made
@@ -87,6 +83,19 @@ static int is_uuid(const char *s) {
 	return 1;
 }
 
+// the names an address comes to from the root (processes' inside): "." here, ".." back one (at the root: stays
+// there), "/" back to the root. out holds n names, borrowed
+static size_t inside(const char *const *steps, size_t n, const char **out) {
+	size_t k = 0;
+	for (size_t i = 0; i < n; i++) {
+		if (strcmp(steps[i], ".") == 0) continue;
+		if (strcmp(steps[i], "/") == 0) k = 0;
+		else if (strcmp(steps[i], "..") == 0) k -= k > 0;
+		else out[k++] = steps[i];
+	}
+	return k;
+}
+
 // an address's steps, the strings copied: a string split as path.ts' parse does (a leading "/" is
 // "/", empty pieces skipped), a list as it is (a piece that is no string: "")
 typedef struct {
@@ -96,7 +105,7 @@ typedef struct {
 
 static steps steps_of(const op_value *a) {
 	steps s = {0};
-	if (world_is(a, OP_STR)) {
+	if (pw_is(a, OP_STR)) {
 		const char *p = a->str;
 		if (*p == '/') PG_PUSH(s.v, s.n, s.cap, pg_dup("/"));
 		while (*p) {
@@ -110,9 +119,9 @@ static steps steps_of(const op_value *a) {
 			p += len;
 			if (*p == '/') p++;
 		}
-	} else if (world_is(a, OP_LIST)) {
+	} else if (pw_is(a, OP_LIST)) {
 		for (size_t i = 0; i < a->count; i++) {
-			const char *t = world_text(a->items[i]);
+			const char *t = pw_text(a->items[i]);
 			PG_PUSH(s.v, s.n, s.cap, pg_dup(t != NULL ? t : ""));
 		}
 	}
@@ -165,7 +174,7 @@ static hf_out wrap(const op_value *input, const hf_context *ctx, void *data) {
 static hf_out slow(const op_value *input, const hf_context *ctx, void *data) {
 	(void)ctx, (void)data;
 	calls_slow++;
-	waiter w = {sc_promise_new(world_scheduler), input != NULL ? op_ref((op_value *)input) : op_null(), 0};
+	waiter w = {sc_promise_new(pw_scheduler), input != NULL ? op_ref((op_value *)input) : op_null(), 0};
 	PG_PUSH(waiting, nwaiting, capwaiting, w);
 	return (hf_out){.kind = HF_AWAIT, .promise = w.promise};
 }
@@ -315,7 +324,7 @@ static hf_run runner(const op_value *code, void *start, void *data) {
 		argwatch *w = pg_alloc(sizeof *w);
 		w->record = r, w->arg = i, w->api = a, w->name = r->names[i];
 		PG_PUSH(argwatches, nargwatches, capargwatches, w);
-		sc_create_computer(world_scheduler, (sc_def){.f = watch_f, .set = no_set, .data = w}, NULL, 0);
+		sc_create_computer(pw_scheduler, (sc_def){.f = watch_f, .set = no_set, .data = w}, NULL, 0);
 	}
 	return (hf_run){.handle = {stop_runner, r->process}};
 }
@@ -377,7 +386,7 @@ static void native_note(const char *what, const char *detail, void *ctx) {
 static void native_runner(void) {
 	if (native != NULL) return;
 	const char *tmp = getenv("TMPDIR");
-	char *dir = world_format("%s/ermine-native-XXXXXX", tmp != NULL && *tmp ? tmp : "/tmp");
+	char *dir = pw_format("%s/ermine-native-XXXXXX", tmp != NULL && *tmp ? tmp : "/tmp");
 	if (mkdtemp(dir) == NULL) {
 		free(dir);
 		dir = NULL;
@@ -402,7 +411,7 @@ static size_t native_files(void) {
 // a fixture's bytes; NULL: none there
 static op_value *fixture(const char *name) {
 	if (name == NULL || strchr(name, '/') != NULL) return NULL;
-	char *path = world_format("%s%s.so", PG_FIXTURES, name);
+	char *path = pw_format("%s%s.so", PG_FIXTURES, name);
 	FILE *f = fopen(path, "rb");
 	free(path);
 	if (f == NULL) return NULL;
@@ -430,14 +439,14 @@ static op_value *mask(const op_value *v) {
 	if (v->type == OP_STR) {
 		for (size_t i = 0; i < nnamed; i++) {
 			if (!is_uuid(v->str) || strcmp(bx_root(named[i].box), v->str) != 0) continue;
-			char *s = world_format("box:%s", named[i].name);
+			char *s = pw_format("box:%s", named[i].name);
 			op_value *o = op_str(s);
 			free(s);
 			return o;
 		}
 		for (size_t i = 0; i < nprocs; i++) {
 			if (strcmp(procs[i].id, v->str) != 0) continue;
-			char *s = world_format("proc:%s", procs[i].name);
+			char *s = pw_format("proc:%s", procs[i].name);
 			op_value *o = op_str(s);
 			free(s);
 			return o;
@@ -473,61 +482,40 @@ typedef struct {
 
 static void enter(void *data) {
 	entering *e = data;
-	ch_header h;
-	pl_made *made;
-	char *bad = pl_header(world_places, NULL, 0, CH_HERE, &h, &made);
-	if (bad) {
-		free(bad);
-		return;
-	}
-	nd_entry *node = nd_make_entry((op_value *)e->value, &h);
-	pl_hold(world_places, node, made, pl_made_free);
-	world_keep_node(node);
-	tb_sub(world_table, tb_string(e->part), e->id, node);
+	pw_put_entry(e->part, e->id, e->value);
 }
 
 typedef struct {
 	const op_value *request;
 	const char *op;
-	bx *box;
+	bx_box *box;
 	int code;
 	const char *why;
 	// create: the box made
-	bx *made;
+	bx_box *made;
 } call;
 
 static void boxing(void *data) {
 	call *c = data;
 	const op_value *r = c->request;
-	ch_header h;
-	pl_made *made;
-	char *bad = pl_header(world_places, NULL, 0, CH_HERE, &h, &made);
-	if (bad) {
-		free(bad);
-		c->code = -1, c->why = SC_UNSCOPED;
-		return;
-	}
-	pl_changed changed = {0};
 	steps addr = steps_of(op_get(r, c->op[0] == 'c' ? "at" : "path"));
 	const char *const *path = (const char *const *)addr.v;
 	if (strcmp(c->op, "create") == 0) {
-		bx_host host = {world_places, world_table, commit_host, NULL};
-		c->code = bx_create(&host, path, addr.n, NULL, h, made, &c->made);
+		c->code = op_get(r, "at") != NULL ? bx_create_at(pw_ermine, path, addr.n, &c->made) : bx_create(pw_ermine, &c->made);
 	} else if (strcmp(c->op, "box") == 0) {
-		c->code = bx_box(c->box, path, addr.n, world_key(op_get(r, "node")), h, made, &changed);
+		c->code = bx_put(c->box, path, addr.n, pw_text(op_get(r, "node")));
 	} else {
-		c->code = bx_unbox(c->box, path, addr.n, h, made, &changed);
+		c->code = bx_take(c->box, path, addr.n);
 	}
 	steps_free(&addr);
-	pl_made_free(made);
-	if (c->code > 0) c->why = pl_code_name(c->code);
+	if (c->code != 0) c->why = es_code_name(c->code);
 }
 
 static void make_programs(void *data) {
 	(void)data;
-	builds = bd_new(&(bd_setup){.places = world_places, .table = world_table, .scheduler = world_scheduler,
+	builds = bd_new(&(bd_setup){.places = pw_places, .table = pw_table, .scheduler = pw_scheduler,
 		.cache = cache, .functions = functions, .commit = commit_host});
-	programs = ps_new(&(ps_setup){.scheduler = world_scheduler, .table = world_table, .places = world_places,
+	programs = ps_new(&(ps_setup){.scheduler = pw_scheduler, .table = pw_table, .places = pw_places,
 		.builds = builds, .scopes = scope_nodes, .functions = functions, .commit = commit_host,
 		.sites = sites});
 }
@@ -547,7 +535,7 @@ static void do_start(void *data) {
 	steps at = steps_of(op_get(r, "at"));
 	steps folder = steps_of(op_get(r, "folder"));
 	const op_value *list = op_get(r, "args");
-	const char **args = list != NULL ? world_address(list, &nargs) : NULL;
+	const char **args = list != NULL ? pw_address(list, &nargs) : NULL;
 	ps_options o = {args, nargs, list != NULL, (const char *const *)folder.v, folder.n, op_get(r, "folder") != NULL};
 	s->process = ps_start(programs, s->places, s->way, (const char *const *)at.v, at.n, &o, &s->refusal);
 	free(args);
@@ -578,22 +566,22 @@ static op_value *shown(const op_value *v) {
 static int cmp(const void *a, const void *b) { return strcmp(*(char *const *)a, *(char *const *)b); }
 
 static op_value *start_op(const op_value *r) {
-	if (programs == NULL) return world_error("no programs");
-	bx *b = NULL;
-	if (op_get(r, "box") != NULL && (b = box_named(world_text(op_get(r, "box")))) == NULL) {
-		return world_error("no such box");
+	if (programs == NULL) return pw_error("no programs");
+	bx_box *b = NULL;
+	if (op_get(r, "box") != NULL && (b = box_named(pw_text(op_get(r, "box")))) == NULL) {
+		return pw_error("no such box");
 	}
-	pl *places = b != NULL ? bx_places(b) : world_places;
+	pl *places = b != NULL ? bx_places(b) : pw_places;
 	// from: given, else the folder (given, else the folder at is in), as names borrowed from addr
 	steps addr = {0};
 	size_t nfrom;
 	const char **from;
-	if (op_get(r, "from") != NULL) from = world_address(op_get(r, "from"), &nfrom);
+	if (op_get(r, "from") != NULL) from = pw_address(op_get(r, "from"), &nfrom);
 	else {
 		int has_folder = op_get(r, "folder") != NULL;
 		addr = steps_of(op_get(r, has_folder ? "folder" : "at"));
 		from = pg_alloc((addr.n + 1) * sizeof *from);
-		nfrom = bx_inside((const char *const *)addr.v, addr.n, NULL, 0, from);
+		nfrom = inside((const char *const *)addr.v, addr.n, from);
 		if (!has_folder && nfrom > 0) nfrom--;
 	}
 	pg_found *found = NULL;
@@ -601,14 +589,14 @@ static op_value *start_op(const op_value *r) {
 	pg_way way;
 	op_value *out = NULL;
 	if (op_get(r, "file") == NULL) {
-		found = pg_satisfy(places, world_text(op_get(r, "program")), from, nfrom);
+		found = pg_satisfy(places, pw_text(op_get(r, "program")), from, nfrom);
 		if (found->refused != NULL) out = mask_take(pg_found_json(found));
 		else {
 			int k = op_get(r, "chain") != NULL ? (int)op_get(r, "chain")->num : 0;
 			way = (pg_way){found->program, found->chains.items[k]};
 		}
 	} else {
-		opened = pg_open_with(places, world_text(op_get(r, "file")), from, nfrom);
+		opened = pg_open_with(places, pw_text(op_get(r, "file")), from, nfrom);
 		if (opened->refused != NULL) out = mask_take(pg_opened_json(opened));
 		else {
 			int k = op_get(r, "way") != NULL ? (int)op_get(r, "way")->num : 0;
@@ -619,7 +607,7 @@ static op_value *start_op(const op_value *r) {
 	steps_free(&addr);
 	if (out == NULL) {
 		starting s = {.places = places, .way = &way, .request = r};
-		world_hosted(do_start, &s);
+		pw_hosted(do_start, &s);
 		if (s.process == NULL) {
 			out = op_map();
 			op_set(out, "refused", op_str(s.refusal.refused));
@@ -627,10 +615,10 @@ static op_value *start_op(const op_value *r) {
 			else if (strcmp(s.refusal.refused, "taken") == 0) op_set(out, "at", names_json(s.refusal.at, s.refusal.nat));
 			else {
 				op_free(out);
-				out = world_error(s.refusal.refused);
+				out = pw_error(s.refusal.refused);
 			}
 		} else {
-			started p = {pg_dup(world_text(op_get(r, "name"))), s.process, pg_dup(ps_id(s.process))};
+			started p = {pg_dup(pw_text(op_get(r, "name"))), s.process, pg_dup(ps_id(s.process))};
 			PG_PUSH(procs, nprocs, capprocs, p);
 			out = op_map();
 			op_set(out, "id", mask_take(op_str(p.id)));
@@ -645,30 +633,30 @@ static op_value *start_op(const op_value *r) {
 }
 
 static op_value *answer(const op_value *r) {
-	const char *op = world_text(op_get(r, "op"));
-	if (op == NULL) return world_error("no op");
+	const char *op = pw_text(op_get(r, "op"));
+	if (op == NULL) return pw_error("no op");
 	if (strcmp(op, "attrs") == 0 || strcmp(op, "compiler") == 0 || strcmp(op, "runner") == 0) {
 		op_value *fn = NULL;
-		entering e = {"attributes", world_key(op_get(r, "id")), op_get(r, "value")};
+		entering e = {"attributes", pw_key(op_get(r, "id")), op_get(r, "value")};
 		if (op[0] != 'a') {
-			fn = hf_value(op[0] == 'c' ? world_text(op_get(r, "compiler")) : "runner");
+			fn = hf_value(op[0] == 'c' ? pw_text(op_get(r, "compiler")) : "runner");
 			e.part = "value", e.value = fn;
 		}
-		world_hosted(enter, &e);
+		pw_hosted(enter, &e);
 		op_free(fn);
 		return op_map();
 	}
 	if (strcmp(op, "fixture") == 0 || strcmp(op, "dlopen") == 0) {
 		op_value *v;
 		if (op[0] == 'f') {
-			v = fixture(world_text(op_get(r, "name")));
-			if (v == NULL) return world_error_take(world_format("no fixture %s: make builds it", world_text(op_get(r, "name"))));
+			v = fixture(pw_text(op_get(r, "name")));
+			if (v == NULL) return pw_error_take(pw_format("no fixture %s: make builds it", pw_text(op_get(r, "name"))));
 		} else {
 			native_runner();
 			v = hf_value("dlopen");
 		}
-		entering e = {"value", world_key(op_get(r, "id")), v};
-		world_hosted(enter, &e);
+		entering e = {"value", pw_key(op_get(r, "id")), v};
+		pw_hosted(enter, &e);
 		op_free(v);
 		return op_map();
 	}
@@ -690,66 +678,65 @@ static op_value *answer(const op_value *r) {
 	}
 	if (strcmp(op, "create") == 0) {
 		call c = {.request = r, .op = op};
-		const char *folder = world_text(op_get(r, "folder"));
+		const char *folder = pw_text(op_get(r, "folder"));
 		if (folder != NULL) {
-			bx_host host = {world_places, world_table, commit_host, NULL};
-			c.code = bx_create_id(&host, folder, NULL, &c.made);
-		} else world_hosted(boxing, &c);
-		if (c.code) return world_error(c.why != NULL ? c.why : pl_code_name(c.code));
-		naming n = {world_copy(world_text(op_get(r, "name"))), c.made};
+			c.code = bx_create_id(pw_ermine, folder, &c.made);
+		} else pw_hosted(boxing, &c);
+		if (c.code) return pw_error(c.why != NULL ? c.why : es_code_name(c.code));
+		naming n = {pw_copy(pw_text(op_get(r, "name"))), c.made};
 		PG_PUSH(named, nnamed, capnamed, n);
 		return op_map();
 	}
 	if (strcmp(op, "box") == 0 || strcmp(op, "unbox") == 0) {
-		bx *b = box_named(world_text(op_get(r, "box")));
-		if (b == NULL) return world_error("no such box");
+		bx_box *b = box_named(pw_text(op_get(r, "box")));
+		if (b == NULL) return pw_error("no such box");
 		call c = {.request = r, .op = op, .box = b};
-		world_hosted(boxing, &c);
-		return c.code ? world_error(c.why) : op_map();
+		pw_hosted(boxing, &c);
+		return c.code ? pw_error(c.why) : op_map();
 	}
 	if (strcmp(op, "programs") == 0) {
 		free(cache);
-		cache = world_copy(world_text(op_get(r, "cache")));
+		cache = pw_copy(pw_text(op_get(r, "cache")));
 		if (programs != NULL) ps_halt(programs);
 		if (builds != NULL) bd_stop(builds);
-		world_hosted(make_programs, NULL);
+		pw_hosted(make_programs, NULL);
 		return op_map();
 	}
 	if (strcmp(op, "start") == 0) return start_op(r);
 	if (strcmp(op, "stop") == 0) {
-		started *p = proc_named(world_text(op_get(r, "name")));
-		if (p == NULL) return world_error("no such process");
+		started *p = proc_named(pw_text(op_get(r, "name")));
+		if (p == NULL) return pw_error("no such process");
 		ps_stop(programs, p->process, NULL);
 		return op_map();
 	}
 	if (strcmp(op, "settle") == 0) {
-		const char *fail = world_text(op_get(r, "fail"));
+		const char *fail = pw_text(op_get(r, "fail"));
 		for (size_t i = 0; i < nwaiting; i++) {
 			if (waiting[i].settled) continue;
 			waiting[i].settled = 1;
 			if (fail == NULL) sc_resolve(waiting[i].promise, op_ref(waiting[i].input));
 			else sc_reject(waiting[i].promise, pg_dup(fail));
 		}
-		sc_pulse(world_scheduler);
+		sc_pulse(pw_scheduler);
 		return op_map();
 	}
 	if (strcmp(op, "process") == 0) {
-		started *p = proc_named(world_text(op_get(r, "name")));
-		if (p == NULL) return world_error("no such process");
+		started *p = proc_named(pw_text(op_get(r, "name")));
+		if (p == NULL) return pw_error("no such process");
 		size_t n;
-		const tb_entry *at = tb_at(world_table, tb_string(p->id), &n);
+		const tb_entry *at = tb_at(pw_table, tb_string(p->id), &n);
 		char **parts = pg_alloc((n + 1) * sizeof *parts);
 		for (size_t i = 0; i < n; i++) parts[i] = pg_dup(at[i].part.string);
 		qsort(parts, n, sizeof *parts, cmp);
 		op_value *list = op_list();
 		for (size_t i = 0; i < n; i++) op_push(list, op_str(parts[i])), free(parts[i]);
 		free(parts);
-		const nd_entry *e = tb_get(world_table, tb_string("attributes"), tb_string(p->id));
+		const nd_entry *e = tb_get(pw_table, tb_string("attributes"), tb_string(p->id));
 		const op_value *attrs = e != NULL && e->value != NULL && e->value->type == OP_MAP ? e->value : NULL;
 		op_value *o = op_map();
 		op_set(o, "parts", list);
 		// its status: the status table's (places' status.h), not its attributes
-		const nd_entry *se = tb_get(world_table, tb_string(CST_TABLE), tb_string(p->id));
+		const nd_entry *se = tb_get(pw_table, tb_string(CST_TABLE), tb_string(p->id));
 		const op_value *st = se != NULL && se->value != NULL && se->value->type == OP_MAP ? se->value : NULL;
 		op_set(o, "status", shown(st != NULL ? op_get(st, CST_ATTRIBUTE) : NULL));
 		op_set(o, "args", mask(attrs != NULL ? op_get(attrs, PR_ARGS) : NULL));
@@ -758,14 +745,14 @@ static op_value *answer(const op_value *r) {
 		return o;
 	}
 	if (strcmp(op, "here") == 0) {
-		bx *b = NULL;
-		if (op_get(r, "box") != NULL && (b = box_named(world_text(op_get(r, "box")))) == NULL) {
-			return world_error("no such box");
+		bx_box *b = NULL;
+		if (op_get(r, "box") != NULL && (b = box_named(pw_text(op_get(r, "box")))) == NULL) {
+			return pw_error("no such box");
 		}
 		size_t n;
-		const char **path = world_address(op_get(r, "path"), &n);
+		const char **path = pw_address(op_get(r, "path"), &n);
 		tb_key id;
-		pl *places = b != NULL ? bx_places(b) : world_places;
+		pl *places = b != NULL ? bx_places(b) : pw_places;
 		op_value *v = pl_get(places, path, n, &id) ? mask_take(op_str(id.string)) : op_null();
 		free(path);
 		return with("id", v);
@@ -792,7 +779,7 @@ static op_value *answer(const op_value *r) {
 		return o;
 	}
 	if (strcmp(op, "found") == 0) {
-		const char *name = world_text(op_get(r, "name"));
+		const char *name = pw_text(op_get(r, "name"));
 		for (size_t i = 0; i < nran; i++) {
 			if (strcmp(ran_list[i]->process, name) != 0) continue;
 			op_value *f = op_map();
@@ -805,11 +792,11 @@ static op_value *answer(const op_value *r) {
 			op_set(o, "found", f);
 			return o;
 		}
-		return world_error("no program ran");
+		return pw_error("no program ran");
 	}
 	if (strcmp(op, "sites") == 0) {
-		started *p = proc_named(world_text(op_get(r, "name")));
-		if (p == NULL) return world_error("no such process");
+		started *p = proc_named(pw_text(op_get(r, "name")));
+		if (p == NULL) return pw_error("no such process");
 		const st_site *chain[16];
 		size_t n = st_sites_of(sites, ps_scope(p->process), chain, 16);
 		op_value *list = op_list();
@@ -835,30 +822,18 @@ static op_value *answer(const op_value *r) {
 		return o;
 	}
 	if (strcmp(op, "cache") == 0) {
-		if (cache == NULL) return world_error("no programs");
-		const nd_entry *e = tb_get(world_table, tb_string("children"), tb_string(cache));
+		if (cache == NULL) return pw_error("no programs");
+		const nd_entry *e = tb_get(pw_table, tb_string("children"), tb_string(cache));
 		return with("size", op_num(e != NULL && e->value != NULL && e->value->type == OP_MAP ? (double)e->value->count : 0));
 	}
 	return NULL;
 }
 
 void hh_answer(const op_value *request, FILE *out) {
-	if (world_places == NULL) {
-		world_places = pl_new();
-		world_scheduler = sc_new((sc_options){.drop = world_drop});
-		sc_on_tracking_end(world_scheduler, pl_forget, world_places);
-		world_table = tb_make(pl_event, world_places);
-		world_paths = pt_new();
-		pr_processes_init(&root_rows, tb_string("R"));
-		root_walk[0] = &root_rows.contributor;
-		root_walk[1] = &pl_children;
-		pl_connect(world_places, &(pl_setup){.root = tb_string("R"), .table = world_table,
-			.paths = world_paths, .scheduler = world_scheduler, .contributors = root_walk,
-			.ncontributors = 2});
-		host_info = (sc_pair){"actor", op_str("test")};
-		world_host = sc_create_root_scope(world_scheduler, &host_info, 1);
-		scope_nodes = sn_new(world_scheduler, world_table);
-		sites = st_new(world_scheduler);
+	if (pw_ermine == NULL) {
+		pw_start();
+		scope_nodes = sn_new(pw_scheduler, pw_table);
+		sites = st_new(pw_scheduler);
 		functions = hf_new();
 		hf_add_compiler(functions, "upper", upper, NULL);
 		hf_add_compiler(functions, "wrap", wrap, NULL);
@@ -866,14 +841,14 @@ void hh_answer(const op_value *request, FILE *out) {
 		hf_add_compiler(functions, "boom", boom, NULL);
 		hf_add_runner(functions, "runner", runner, NULL);
 	}
-	world_line(request, out, answer);
+	pw_line(request, out, answer);
 }
 
 void hh_finish(void) {
 	if (programs != NULL) ps_halt(programs);
 	if (builds != NULL) bd_stop(builds);
 	for (size_t i = 0; i < nwaiting; i++) sc_promise_free(waiting[i].promise);
-	world_finish();
+	pw_close();
 	// the scopes are done: their sites go
 	st_free(sites);
 	sites = NULL;
@@ -883,12 +858,12 @@ void hh_finish(void) {
 	bd_free(builds);
 	sn_free(scope_nodes);
 	hf_free(functions);
+	pw_free();
 	dlr_free(native);
 	if (native_dir != NULL) remove(native_dir);
 	free(native_dir);
 	for (size_t i = 0; i < nwrote; i++) free(wrote[i].process), free(wrote[i].text);
 	free(wrote);
-	op_free((op_value *)host_info.value);
 	for (size_t i = 0; i < nwaiting; i++) op_free(waiting[i].input);
 	free(waiting);
 	for (size_t i = 0; i < nran; i++) {

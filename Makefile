@@ -169,8 +169,11 @@ places-test_src = $(filter-out conformance/c/harness.c core/changeable/c/json.c 
 places-test = core/places/c/places-test
 LIBS += places-test
 # programs (playground/programs): satisfy and open (programs) and start, over ermine/types, experiments/software (its processes ermine/processes' start) and
-# the compilers library and host functions; compilers (playground/compilers) on its own. on the places harness's world
-programs_base = $(filter-out core/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) experiments/software/c/functions.c
+# the compilers library and host functions; compilers (playground/compilers) on its own.
+# compilers (no boxes) keeps places' own world (world_harness.h); programs and start run on the ermine (ermine/system) and boxes (extensions/boxes),
+# their world playground/programs/c/pw.c
+compilers_base = $(filter-out core/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) experiments/software/c/functions.c
+programs_base = $(filter-out ermine/system/c/ermine_harness.c,$(system_src)) playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) experiments/software/c/functions.c extensions/boxes/c/boxes.c playground/programs/c/pw.c
 programs_lib = ermine/types/c/types.c ermine/types/c/utis.c playground/programs/c/programs.c playground/programs/c/programs_json.c
 # software's own files (experiments/software): start runs its processes on it
 software_lib = experiments/software/c/common.c experiments/software/c/offers.c experiments/software/c/run.c experiments/software/c/software.c
@@ -178,10 +181,10 @@ programs_src = $(programs_base) $(programs_lib) playground/programs/c/programs_h
 programs = playground/programs/c/programs-harness
 programs_suite = programs
 programs_tests = $(wildcard playground/programs/typescript/programs_harness_test.ts)
-compilers_src = $(programs_base) playground/compilers/c/compilers.c playground/compilers/c/compilers_harness.c
+compilers_src = $(compilers_base) playground/compilers/c/compilers.c playground/compilers/c/compilers_harness.c
 compilers = playground/compilers/c/compilers-harness
 compilers_suite = compilers
-programs-start_src = $(programs_base) $(programs_lib) playground/compilers/c/compilers.c ermine/processes/c/start.c ermine/processes/c/runs.c $(software_lib) playground/programs/c/start.c playground/programs/c/start_harness.c ermine/processes/c/scopes.c ermine/sites/c/sites.c playground/programs/c/dlopen.c
+programs-start_src = $(programs_base) $(programs_lib) playground/compilers/c/compilers.c $(software_lib) playground/programs/c/start.c playground/programs/c/start_harness.c playground/programs/c/dlopen.c
 programs-start = playground/programs/c/start-harness
 programs-start_suite = start
 programs-start_flags = -DPG_FIXTURES='"$(CURDIR)/playground/programs/c/fixtures/"'
