@@ -1,5 +1,5 @@
 {
-	"title": "a path is checked: an index is a whole number 0 <= n < 1e15; anything else, or no path, is an error that keeps nothing",
+	"title": "a path is checked: an index is a whole number 0 <= n < 1e15; anything else, or no path, is an error that changes nothing",
 	"steps": [
 		{ "op": "spot", "source": "v", "id": "n", "path": [-1], "fails": true },
 		{ "op": "spot", "source": "v", "id": "n", "path": [1.5], "fails": true },
@@ -7,7 +7,7 @@
 		{ "op": "spot", "source": "v", "id": "n", "path": "ab", "fails": true },
 		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 1e15], "fails": true },
 		{ "op": "spot", "source": "v", "id": "n", "fails": true },
-		{ "op": "kept", "expect": { "keys": 0, "spots": 0, "steps": 0 } },
+		{ "op": "held", "expect": { "keys": 0, "spots": 0, "steps": 0 } },
 		{ "op": "marks", "patch": { "path": ["a"] }, "paths": [[-1]], "fails": true }
 	]
 }

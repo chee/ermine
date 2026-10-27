@@ -12,7 +12,7 @@
 
 static pt_paths *paths;
 
-// symbols: one token per name, kept to the end
+// symbols: one token per name, held to the end
 static char **names;
 static size_t count, capacity;
 
@@ -50,6 +50,26 @@ static op_key *path_of(const op_value *x, size_t *n) {
 	return keys;
 }
 
+// a place of a patch: a map with a path, and a range of two whole numbers when it has one
+static int place_ok(const op_value *x) {
+	if (x == NULL || x->type != OP_MAP) return 0;
+	size_t n;
+	if (path_of(op_get(x, "path"), &n) == NULL) return 0;
+	const op_value *r = op_get(x, "range");
+	if (r == NULL) return 1;
+	if (r->type != OP_LIST || r->count != 2) return 0;
+	for (size_t i = 0; i < 2; i++) {
+		const op_value *k = r->items[i];
+		if (k->type != OP_NUM || !isfinite(k->num) || k->num != floor(k->num)) return 0;
+	}
+	return 1;
+}
+static int patch_ok(const op_value *x) {
+	if (!place_ok(x)) return 0;
+	const op_value *mv = op_get(x, "move");
+	return mv == NULL || place_ok(mv);
+}
+
 static void put_spot(FILE *out, const pt_spot *s) {
 	if (s->change) {
 		fputs("\"change\"", out);
@@ -85,14 +105,15 @@ void hh_start(void) { paths = pt_new(); }
 void hh_answer(const op_value *r, FILE *out) {
 	const char *op = hh_str(r, "op");
 	if (op == NULL) { hh_error(out, "no op"); return; }
-	if (strcmp(op, "kept") == 0) {
-		pt_kept k = pt_kept_of(paths);
+	if (strcmp(op, "held") == 0) {
+		pt_held k = pt_held_of(paths);
 		fprintf(out, "{\"keys\":%zu,\"spots\":%zu,\"steps\":%zu}", k.keys, k.spots, k.steps);
 		return;
 	}
 	if (strcmp(op, "marks") == 0) {
 		const op_value *ps = op_get(r, "paths"), *p = op_get(r, "patch");
 		if (p == NULL || ps == NULL || ps->type != OP_LIST) { hh_error(out, "bad patch or paths"); return; }
+		if (!patch_ok(p)) { hh_error(out, "bad patch"); return; }
 		op_patch patch;
 		hh_patch(p, &patch);
 		int keys = flag(r, "keys");
@@ -127,6 +148,9 @@ void hh_answer(const op_value *r, FILE *out) {
 		const op_value *ps = op_get(r, "patches");
 		if (ps == NULL || ps->type != OP_LIST) { hh_error(out, "no patches"); return; }
 		op_patch *patches = hh_take((ps->count + 1) * sizeof *patches);
+		for (size_t i = 0; i < ps->count; i++) {
+			if (!patch_ok(ps->items[i])) { hh_error(out, "bad patch"); return; }
+		}
 		for (size_t i = 0; i < ps->count; i++) hh_patch(ps->items[i], &patches[i]);
 		pt_spot *const *spots = pt_mark(paths, source, id, patches, ps->count, &n);
 		put_spots(out, spots, n);

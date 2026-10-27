@@ -1,14 +1,14 @@
 // paths' streams: for a few keys, a random value's paths (and some made up) spotted, plain or keys
 // reads, the change spot, the key's event now and then, then a batch of patches apply takes
-// marked; the rule asked of each patch (marks); events, releases and kept between
+// marked; the rule asked of each patch (marks); events, releases and held between
 // (paths_harness_test.ts's values and patches, copied). sources and ids strings and symbols.
 // wild: -0 and 1e15 as indices, a path not a list, keys of the wrong kind, malformed patches, a
 // mark with no patches. half the seeds have the keys made tricky (kit.ts)
 // deno-lint-ignore-file no-explicit-any
 // the properties, each implementation on its own: a change under a read marks it (marks: a place
 // at or under a plain read's path, the read's path or one key more unranged for a keys read; mark:
-// every spot at or above a place, the change spot first); event and kept are a model's of the
-// spots kept (model, below): event the change spot, then each step's spot, its keys spot, then
+// every spot at or above a place, the change spot first); event and held are a model's of the
+// spots held (model, below): event the change spot, then each step's spot, its keys spot, then
 // its kids, in the order the kid steps were made (a step let go and made again last)
 import apply from "@ermine/core/op/apply"
 import type { Key, Patch } from "@ermine/core/op/apply"
@@ -139,7 +139,7 @@ const generator: Generator = {
 			}
 			if (r.pick(4)) out.push({ op: "change", source, id })
 			if (r.pick(2)) out.push({ op: "event", source, id })
-			if (r.pick(3) === 0) out.push({ op: "kept" })
+			if (r.pick(3) === 0) out.push({ op: "held" })
 			out.push({ op: "mark", source, id, patches: batch.map(sent) })
 			for (const p of batch) {
 				out.push({ op: "marks", patch: sent(p), paths, ...(r.pick(2) ? { keys: true } : {}) })
@@ -153,7 +153,7 @@ const generator: Generator = {
 				)
 			}
 			if (r.pick(2)) out.push({ op: "event", source: r.one(SOURCES), id: `n${r.pick(3)}` })
-			out.push({ op: "kept" })
+			out.push({ op: "held" })
 			if (o.wild) {
 				out.push(
 					r.one<Request>([
@@ -169,7 +169,7 @@ const generator: Generator = {
 						{ op: "marks", paths: [[]] },
 						{ op: "marks", patch: { path: [0] }, paths: [[-0], ["a"]] },
 					]),
-					{ op: "kept" },
+					{ op: "held" },
 				)
 			}
 		}
@@ -213,7 +213,7 @@ const generator: Generator = {
 				const spots = a.spots as unknown[]
 				const has = new Set(spots.map(show))
 				const need = want.spots.filter((s: unknown) => !has.has(show(s)))
-				const extra = spots.filter((s) => !want.kept.has(show(s)))
+				const extra = spots.filter((s) => !want.held.has(show(s)))
 				if (spots.length !== has.size) no("mark gives a spot twice", i, show(spots))
 				if (want.change && spots[0] !== "change") {
 					no("mark gives the change spot not first", i, show(spots))
@@ -222,7 +222,7 @@ const generator: Generator = {
 					no(
 						"a change under a spot does not mark it",
 						i,
-						`${show(spots)}: missing ${show(need)}, not kept ${show(extra)}`,
+						`${show(spots)}: missing ${show(need)}, not held ${show(extra)}`,
 					)
 				}
 			} else if (differs(a, want)) {
@@ -253,9 +253,9 @@ function places(p: any): { path: unknown[]; ranged: boolean }[] {
 	return [own]
 }
 
-// the spots kept, per key a trie of steps: a step kept while a spot is at or under it, its kids
+// the spots held, per key a trie of steps: a step held while a spot is at or under it, its kids
 // in the order made. given an answered request (no error), what the model says of it: the answer
-// for event and kept; for mark, what it must give; undefined: not compared
+// for event and held; for mark, what it must give; undefined: not compared
 function model(): (r: Request) => any {
 	type Step = { path: unknown[]; spot: boolean; keys: boolean; kids: Map<string, Step> }
 	type Root = { change: boolean; top: Step }
@@ -329,11 +329,11 @@ function model(): (r: Request) => any {
 				return { spots: spots(roots.get(name(r))) }
 			case "mark": {
 				const at = roots.get(name(r))
-				const kept = new Set(spots(at).map(show))
+				const held = new Set(spots(at).map(show))
 				const want: unknown[] = at?.change ? ["change"] : []
 				for (const p of Array.isArray(r.patches) ? r.patches : []) {
 					for (const q of places(p)) {
-						// the place's step and those above it, as far as they are kept
+						// the place's step and those above it, as far as they are held
 						let s: Step | undefined = at?.top
 						for (const k of [...q.path, null]) {
 							if (!s) break
@@ -342,9 +342,9 @@ function model(): (r: Request) => any {
 						}
 					}
 				}
-				return { spots: want, kept, change: at?.change === true }
+				return { spots: want, held, change: at?.change === true }
 			}
-			case "kept": {
+			case "held": {
 				let spotsN = 0, steps = 0
 				const count = (s: Step) => {
 					steps++

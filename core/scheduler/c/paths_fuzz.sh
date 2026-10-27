@@ -1,7 +1,7 @@
 #!/bin/sh
 # coverage-guided fuzzing of tracked paths (paths_fuzz.c) with libFuzzer (Homebrew LLVM: Apple's
 # clang has no libFuzzer). Runs for FUZZ_SECONDS (default 60); finds land in crash-* here; the corpus is
-# kept in paths-corpus/. Leaks are checked (macOS leaves that off by default). Arguments go to
+# held in paths-corpus/. Leaks are checked (macOS leaves that off by default). Arguments go to
 # libFuzzer.
 set -e
 cd "$(dirname "$0")"

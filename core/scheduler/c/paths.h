@@ -3,9 +3,9 @@
 // here returns it.
 //
 // A spot is (source, id, path): a read of path, deep, in the value at that key. A keys spot reads
-// which keys there are at path, not what is under them (see pt_marks). Spots are kept by
+// which keys there are at path, not what is under them (see pt_marks). Spots are held by
 // address, shared by everyone who reads the same path, in a trie per key; a list's number kids
-// are also kept in order, so a range finds those from its start with one binary search.
+// are also held in order, so a range finds those from its start with one binary search.
 // Pruning: pt_release lets a spot go; the wiring calls it once no reader holds the spot (its
 // tracker node, in owner, has no readers: first == NULL), after untrack, or when pt_mark gives a
 // spot no one reads.
@@ -31,7 +31,7 @@ typedef struct pt_paths pt_paths;
 typedef struct pt_step pt_step;
 typedef struct pt_root pt_root;
 
-// source, id: the key's, kept here. path: its keys (numbers and strings), kept here.
+// source, id: the key's, held here. path: its keys (numbers and strings), held here.
 // change: the change spot, reads of the change itself (time, actor, metadata); no path.
 // owner: the caller's, never read here
 typedef struct {
@@ -44,7 +44,7 @@ typedef struct {
 	void *owner;
 	// the mark call that last gave it, so a call gives it once
 	uint64_t seen;
-	// where it is kept: its step, or only its key's root for the change spot
+	// where it is held: its step, or only its key's root for the change spot
 	pt_step *step;
 	pt_root *root;
 } pt_spot;
@@ -78,11 +78,11 @@ void pt_release(pt_paths *p, pt_spot *s);
 // a key's value, it is not
 int pt_marks(const op_patch *patch, const op_key *path, size_t length, int keys);
 
-// what is kept: keys with a spot, spots, trie steps (a kept key's [] and every other prefix of a
-// kept spot's path)
+// what is held: keys with a spot, spots, trie steps (a held key's [] and every other prefix of a
+// held spot's path)
 typedef struct {
 	size_t keys, spots, steps;
-} pt_kept;
-pt_kept pt_kept_of(const pt_paths *p);
+} pt_held;
+pt_held pt_held_of(const pt_paths *p);
 
 #endif

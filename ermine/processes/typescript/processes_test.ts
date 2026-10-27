@@ -68,7 +68,7 @@ function world(cached = true) {
 	const rows = () => table.get(PROCESS, "R")?.value
 	const count = () => ({
 		...(cache?.kept() ?? { entries: 0, reads: 0 }),
-		spots: paths.kept().spots,
+		spots: paths.held().spots,
 	})
 	return {
 		s,

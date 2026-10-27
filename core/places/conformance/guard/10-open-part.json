@@ -1,5 +1,5 @@
 {
-	"title": "any name is a part: a read and a write of run are asked with run as the target's part; rules kept at run are tracked",
+	"title": "any name is a part: a read and a write of run are asked with run as the target's part; rules stored at run are tracked",
 	"steps": [
 		{
 			"op": "root",

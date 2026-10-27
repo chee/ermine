@@ -1,15 +1,15 @@
 {
 	"title": "pruning: a released spot goes, with the steps left empty, then its key",
 	"steps": [
-		{ "op": "kept", "expect": { "keys": 0, "spots": 0, "steps": 0 } },
+		{ "op": "held", "expect": { "keys": 0, "spots": 0, "steps": 0 } },
 		{ "op": "spot", "source": "v", "id": "n", "path": ["a", "b", "c"], "expect": {} },
 		{ "op": "spot", "source": "v", "id": "n", "path": ["a", "x"], "expect": {} },
 		{ "op": "spot", "source": "v", "id": "n", "path": ["a", "x"], "expect": {} },
-		{ "op": "kept", "expect": { "keys": 1, "spots": 2, "steps": 5 } },
+		{ "op": "held", "expect": { "keys": 1, "spots": 2, "steps": 5 } },
 		{ "op": "spot", "source": "v", "id": "n", "path": ["a"], "expect": {} },
-		{ "op": "kept", "expect": { "keys": 1, "spots": 3, "steps": 5 } },
+		{ "op": "held", "expect": { "keys": 1, "spots": 3, "steps": 5 } },
 		{ "op": "release", "source": "v", "id": "n", "path": ["a"], "expect": {} },
-		{ "op": "kept", "expect": { "keys": 1, "spots": 2, "steps": 5 } },
+		{ "op": "held", "expect": { "keys": 1, "spots": 2, "steps": 5 } },
 		{
 			"op": "mark",
 			"source": "v",
@@ -18,10 +18,10 @@
 			"expect": { "spots": [["a", "b", "c"], ["a", "x"]] }
 		},
 		{ "op": "release", "source": "v", "id": "n", "path": ["a", "b", "c"], "expect": {} },
-		{ "op": "kept", "expect": { "keys": 1, "spots": 1, "steps": 3 } },
+		{ "op": "held", "expect": { "keys": 1, "spots": 1, "steps": 3 } },
 		{ "op": "release", "source": "v", "id": "n", "path": ["a", "b", "c"], "expect": {} },
 		{ "op": "release", "source": "v", "id": "n", "path": ["never", "made"], "expect": {} },
-		{ "op": "kept", "expect": { "keys": 1, "spots": 1, "steps": 3 } },
+		{ "op": "held", "expect": { "keys": 1, "spots": 1, "steps": 3 } },
 		{
 			"op": "mark",
 			"source": "v",
@@ -31,9 +31,9 @@
 		},
 		{ "op": "change", "source": "v", "id": "n", "expect": {} },
 		{ "op": "release", "source": "v", "id": "n", "path": ["a", "x"], "expect": {} },
-		{ "op": "kept", "expect": { "keys": 1, "spots": 1, "steps": 1 } },
+		{ "op": "held", "expect": { "keys": 1, "spots": 1, "steps": 1 } },
 		{ "op": "release", "source": "v", "id": "n", "expect": {} },
-		{ "op": "kept", "expect": { "keys": 0, "spots": 0, "steps": 0 } },
+		{ "op": "held", "expect": { "keys": 0, "spots": 0, "steps": 0 } },
 		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 3], "expect": {} },
 		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 1], "expect": {} },
 		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 2], "expect": {} },
@@ -45,14 +45,14 @@
 			"patches": [{ "path": ["l"], "range": [0, 0], "value": [0] }],
 			"expect": { "spots": [["l", 2], ["l", 3]] }
 		},
-		{ "op": "kept", "expect": { "keys": 1, "spots": 2, "steps": 4 } },
+		{ "op": "held", "expect": { "keys": 1, "spots": 2, "steps": 4 } },
 		{ "op": "release", "source": "v", "id": "n", "path": ["l", 2], "expect": {} },
 		{ "op": "release", "source": "v", "id": "n", "path": ["l", 3], "expect": {} },
-		{ "op": "kept", "expect": { "keys": 0, "spots": 0, "steps": 0 } },
+		{ "op": "held", "expect": { "keys": 0, "spots": 0, "steps": 0 } },
 		{ "op": "spot", "source": "v", "id": "n", "path": [], "expect": {} },
 		{ "op": "event", "source": "v", "id": "n", "expect": { "spots": [[]] } },
 		{ "op": "release", "source": "v", "id": "n", "path": [], "expect": {} },
 		{ "op": "event", "source": "v", "id": "n", "expect": { "spots": [] } },
-		{ "op": "kept", "expect": { "keys": 0, "spots": 0, "steps": 0 } }
+		{ "op": "held", "expect": { "keys": 0, "spots": 0, "steps": 0 } }
 	]
 }

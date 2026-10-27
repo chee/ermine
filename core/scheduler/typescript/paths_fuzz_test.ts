@@ -178,13 +178,13 @@ Deno.test(`paths fuzz: ${SEEDS} seeds × ${CASES} batches of nested lists: what 
 				new Set(got.filter((s) => !gone.has(s))),
 				`${at}: after release`,
 			)
-			// an event: every spot still kept
-			const kept = [...spots.keys()].filter((s) => !gone.has(s))
-			assertEquals(new Set(paths.event("v", id)), new Set([change, ...kept]), `${at}: event`)
-			for (const s of kept) paths.release(s)
+			// an event: every spot still held
+			const still = [...spots.keys()].filter((s) => !gone.has(s))
+			assertEquals(new Set(paths.event("v", id)), new Set([change, ...still]), `${at}: event`)
+			for (const s of still) paths.release(s)
 			paths.release(change)
 		}
-		assertEquals(paths.kept(), { keys: 0, spots: 0, steps: 0 }, `seed ${seed}: all released`)
+		assertEquals(paths.held(), { keys: 0, spots: 0, steps: 0 }, `seed ${seed}: all released`)
 	}
 	assert(
 		changed > 1000 && marked > changed,

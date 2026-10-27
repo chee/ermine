@@ -13,7 +13,7 @@
 // { op: "del", part, id }                    → {} | { error: "nothing-there" }   table.del
 // { op: "node", part, id }                   → { value? }   the table's, told to no one
 // { op: "namesOf", id }                      → { names }   places' namesOf: each { folder, name }
-// { op: "kept" }                             → { keys, spots, steps }   what paths keeps
+// { op: "held" }                             → { keys, spots, steps }   what paths holds
 // { op: "cache" }                            → {}   the path cache made once (or by the first
 //    program asking for it); make it before anything reads
 // { op: "cacheKept" }                        → { entries, reads }   none made: both 0
@@ -269,8 +269,8 @@ export function worldAnswer(r: Request): Json | undefined {
 		}
 		case "namesOf":
 			return { names: places.namesOf(r.id).map((n) => ({ folder: n.folder, name: n.name })) }
-		case "kept":
-			return paths.kept()
+		case "held":
+			return paths.held()
 		case "cache":
 			cached()
 			return {}

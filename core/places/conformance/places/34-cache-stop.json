@@ -157,7 +157,7 @@
 			"expect": {}
 		},
 		{
-			"op": "kept",
+			"op": "held",
 			"expect": {
 				"keys": 0,
 				"spots": 0,

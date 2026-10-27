@@ -1,5 +1,5 @@
 {
-	"title": "anything wrong is an error: no op, an unknown op, a source or id neither a string nor a symbol, no path, no patches, no paths or patch; an error changes nothing kept",
+	"title": "anything wrong is an error: no op, an unknown op, a source or id neither a string nor a symbol, no path, no patches, no paths or patch; an error changes nothing held",
 	"steps": [
 		{ "op": "spot", "source": "v", "id": "n", "path": ["x"], "expect": {} },
 		{ "fails": true },
@@ -16,7 +16,7 @@
 		{ "op": "marks", "patch": { "path": ["a"] }, "fails": true },
 		{ "op": "marks", "paths": [["a"]], "fails": true },
 		{ "op": "marks", "patch": { "path": ["a"] }, "paths": 1, "fails": true },
-		{ "op": "kept", "expect": { "keys": 1, "spots": 1, "steps": 2 } },
+		{ "op": "held", "expect": { "keys": 1, "spots": 1, "steps": 2 } },
 		{ "op": "event", "source": "v", "id": "n", "expect": { "spots": [["x"]] } },
 		{ "op": "spot", "source": "v", "id": "n", "fails": true },
 		{ "op": "spot", "source": "v", "id": "n", "path": null, "fails": true },

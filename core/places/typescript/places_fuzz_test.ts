@@ -1,7 +1,7 @@
 // the slice fuzzed: random places writes, value edits, children edits and table events, the
 // host's, a pulse after each. then every compute's value is the graph read again from scratch:
 // paths walked straight through the table, values straight from it. at the end, every compute disposed:
-// no spot is kept (the scheduler's onTrackingEnd). a few dozen seeds (fuzz runs small)
+// no spot is held (the scheduler's onTrackingEnd). a few dozen seeds (fuzz runs small)
 import { assert, assertEquals } from "@std/assert"
 import createEntry from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
@@ -267,7 +267,7 @@ function seeded(seed: number, reach: Reach) {
 		}
 	}
 	s.teardown(o)
-	assertEquals(paths.kept(), { keys: 0, spots: 0, steps: 0 }, `seed ${seed}: spots kept`)
+	assertEquals(paths.held(), { keys: 0, spots: 0, steps: 0 }, `seed ${seed}: spots held`)
 }
 
 Deno.test("link fuzz: every compute is the graph read from scratch after each pulse", () => {
