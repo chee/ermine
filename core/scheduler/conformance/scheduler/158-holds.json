@@ -1,0 +1,37 @@
+{
+	"title": "holds (the C's; the reference's WeakMap has none to see): a scope let go by its maker lives on in the tree; one held past its teardown is still there, gone; scopes and computers let go go with what is above them",
+	"steps": [
+		{ "op": "root", "name": "o", "info": { "actor": "test" }, "expect": {} },
+		{ "op": "scope", "name": "a", "parent": "o", "info": { "why": "a" }, "expect": {} },
+		{ "op": "retain", "scope": "a", "expect": {} },
+		{ "op": "release", "scope": "a", "expect": {} },
+		{ "op": "release", "scope": "a", "expect": {} },
+		{
+			"op": "run",
+			"scope": "a",
+			"do": { "current": null },
+			"expect": { "value": { "scope": "a", "info": { "why": "a" } } }
+		},
+		{ "op": "scope", "name": "b", "parent": "o", "info": { "why": "b" }, "expect": {} },
+		{ "op": "retain", "scope": "b", "expect": {} },
+		{ "op": "cleanup", "scope": "b", "do": { "log": "b" }, "expect": {} },
+		{ "op": "dispose", "scope": "b", "expect": {} },
+		{ "op": "run", "scope": "b", "do": 1, "expect": { "error": "disposed" } },
+		{ "op": "release", "scope": "b", "expect": {} },
+		{ "op": "release", "scope": "b", "expect": {} },
+		{ "op": "scope", "name": "p", "parent": "o", "info": { "why": "p" }, "expect": {} },
+		{ "op": "scope", "name": "q", "parent": "p", "info": { "why": "q" }, "expect": {} },
+		{ "op": "cleanup", "scope": "q", "do": { "log": "q" }, "expect": {} },
+		{ "op": "compute", "name": "c", "scope": "p", "f": { "read": "x" }, "to": "c", "expect": {} },
+		{ "op": "cleanup", "scope": "c", "do": { "log": "c" }, "expect": {} },
+		{ "op": "release", "scope": "q", "expect": {} },
+		{ "op": "release", "scope": "p", "expect": {} },
+		{ "op": "release", "scope": "c", "expect": {} },
+		{ "op": "write", "values": { "x": 1 }, "expect": { "tick": 2 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "get", "key": "c", "expect": { "value": 1 } },
+		{ "op": "dispose", "scope": "o", "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": ["b", "c", "q"] } }
+	]
+}
