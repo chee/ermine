@@ -23,7 +23,6 @@
 //              host's args, the machine it publishes, and its setup: run once, untracked, in the
 //              host's scope as createErmine ends (a throw: ermine closed, the error thrown)
 //   info       the host's scope's info (actor, …), beside its node
-//   calls      sends' records held: "latest" per handler (none), or "never" (onRecord still told)
 //   hints      false: errors and statuses bare; none: an ermine error a function throws carries
 //              what to do (hints.ts: a hint field, and after the code's text in its message), and a
 //              status that will not end on its own (a setup pending, looping) a hint field
@@ -202,7 +201,6 @@ export type Options = {
 		setup?: () => unknown
 	}
 	info?: Info
-	calls?: "latest" | "never"
 	hints?: false
 	// false: a write outside a run keeps only its site (the first frame outside ermine, in the nearest
 	// 10), not the whole trace text beside it (traceOf, @ermine/core/places/header). a build site
@@ -711,7 +709,6 @@ export function createErmine(options: Options = {}): Ermine {
 		scheduler: s,
 		places: p,
 		table,
-		keep: options.calls !== "never",
 		hold: (id, call, keep) =>
 			recorded({ id, call }, (r) => {
 				if (r.call !== undefined) keep(r.call)

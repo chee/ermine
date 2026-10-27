@@ -20,8 +20,8 @@
 //             run begun inside it
 //   made      the memos, effects and earlies made in the call (they go with it): { kind, id, path }
 //
-// written through hold (createErmine's: onRecord around it), then held as the latest per handler,
-// or not at all (keep: false). read(id) tracked: what reads it reruns when a newer one is held.
+// written through hold (createErmine's: onRecord around it; a hook not calling next: not held),
+// then held as the latest per handler. read(id) tracked: what reads it reruns when a newer one is held.
 // a handler gone (drop(id): its placement's scope gone, or its node removed): its record goes with
 // it, its args and its caller's context too, and a call of it still going holds none as it ends
 // a wait: a send to a node holding nothing (none there, or no value): { caller, path or id, box,
@@ -77,8 +77,6 @@ export type Setup = {
 	table: Pick<Table, "get">
 	// a record on its way to being held: keep(call) holds it (not called: not held)
 	hold?: (id: Id, call: Call, keep: (call: Call) => void) => void
-	// none: latest per handler; false: none held (hold is still told)
-	keep?: boolean
 }
 
 // a call going: its record so far
@@ -128,7 +126,6 @@ export type Calls = {
 const now = () => performance.timeOrigin + performance.now()
 export function createCalls(setup: Setup): Calls {
 	const { scheduler: s, places, table } = setup
-	const keep = setup.keep ?? true
 	let n = 0
 	const stack: Going[] = []
 	const scopes = new WeakMap<Scope, Going>()
@@ -166,7 +163,7 @@ export function createCalls(setup: Setup): Calls {
 
 	function write(id: Id, call: Call, gone?: true) {
 		const put = (c: Call) => {
-			if (!keep || gone) return
+			if (gone) return
 			const h = held(id)
 			// the latest is the call begun last: an earlier call settling later is told, not held
 			if (h.call !== undefined && h.call.n > c.n) return

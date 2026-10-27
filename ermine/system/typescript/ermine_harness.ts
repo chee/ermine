@@ -11,7 +11,7 @@
 //    test features (below); deny: [{ op, path?, id?, from?, box? }] refused (every field given
 //    matching; from: the asker's place; box: the box the asker is in, by its name, a "box" step's:
 //    that box's folder's id the ask's from.box);
-//    uuid: uuidv7 ids; calls: "never". deny: by path, or { op, id } by id; at, args, machine: the host's node's
+//    uuid: uuidv7 ids; calls: "never" (a feature holding no call records, onRecord). deny: by path, or { op, id } by id; at, args, machine: the host's node's
 // { op: "features" }                       → { features }   ermine.features
 // { op: "late", feature }                  → {}   a test feature adding a hook now (late: true)
 // { op: "uuid", path }                     → { v7 }   whether the id there is a uuidv7
@@ -207,6 +207,8 @@ function make(o: Request = {}): Made {
 			})()
 			: testFeature(f as Record<string, unknown>, { log, slots, late })
 	)
+	// calls: "never": no call record held, by a hook not passing them on
+	if (o.calls === "never") features.push(noCalls)
 	const made: Made = {
 		ermine: undefined as never,
 		running: new Map(),
@@ -236,7 +238,6 @@ function make(o: Request = {}): Made {
 				return next ?? `n${++n}`
 			},
 		},
-		...o.calls !== undefined && { calls: o.calls },
 		host: {
 			...o.at !== undefined && { at: o.at },
 			...o.args !== undefined && { args: o.args },
@@ -827,6 +828,11 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 		default:
 			throw new Error(`no op ${r.op}`)
 	}
+}
+
+const noCalls: Feature = {
+	name: "no-calls",
+	setup: (f) => f.onRecord((r, next) => r.call === undefined && next(r)),
 }
 
 named.set("patchy", patchy)
