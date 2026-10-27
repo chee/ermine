@@ -60,8 +60,8 @@
 // calling(): the send being answered now, its record so far, with the caller's context.
 // getProcessContext(process?): a running process's process context (host and feature code acting
 // as a process: context.within(() => executeAction(…)), @ermine/system's functions finding it)
-// (none: the host's). scheduler, table, places, processes: the whole thing, for the host and
-// features. features: each one's name, needs and hooks, in chain order. records: run(id) a
+// (none: the host's). scheduler, table, places: the whole thing, for the host and features
+// (features also get processes, FeatureAPI). features: each one's name, needs and hooks, in chain order. records: run(id) a
 // computer's latest run, call(id) a handler's latest send, waits() every send waiting; tracked.
 import type { ChangeHeader } from "@ermine/core/node/entry"
 import { type Box, type Host, madeOver } from "@ermine/boxes"
@@ -241,7 +241,6 @@ export type Ermine = {
 	readonly scheduler: Scheduler
 	readonly table: Table
 	readonly places: Places
-	readonly processes: Processes
 	readonly features: readonly Shown[]
 	// the host's node's id
 	readonly node: Id
@@ -1033,7 +1032,6 @@ export function createErmine(options: Options = {}): Ermine {
 			scheduler: { get: part(s) },
 			table: { get: part(table) },
 			places: { get: part(p) },
-			processes: { get: part(processes) },
 			features: { get: part(features.shown) },
 			node: { get: part(node) },
 			calling: {
