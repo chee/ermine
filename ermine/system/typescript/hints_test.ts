@@ -71,11 +71,10 @@ Deno.test("hints: nothing-there for a memo in a folder not there names the folde
 	hinted(caught, "nothing-there (work/p/nofolder/x)", "/work/p/nofolder", "createMemo")
 })
 
-Deno.test("hints: nothing-there for a path above the root", () => {
+Deno.test("hints: a path above the root stays at the root, nothing thrown", () => {
 	const e = createErmine({ features: [manual, hints] })
-	const caught = thrown(() => e.within(() => getNode("../..")))
+	e.within(() => assertEquals(getNode("../.."), getNode("/")))
 	e.close()
-	hinted(caught, "nothing-there (..)", `too many ".."`)
 })
 
 Deno.test("hints: already-there for two memos of one name in one setup", () => {

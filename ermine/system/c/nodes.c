@@ -125,17 +125,15 @@ static void parse(const char *s, es_names *out) {
 		s = e + 1;
 	}
 }
-// one step of path.ts' plan: "." skipped, ".." takes back a name (none left: 1), "/" starts again
-static int plan_step(es_names *r, const char *step) {
-	if (strcmp(step, ".") == 0) return 0;
+// one step of processes' inside: "." skipped, ".." takes back a name (none left: stays at "/"), "/" starts again
+static void plan_step(es_names *r, const char *step) {
+	if (strcmp(step, ".") == 0) return;
 	if (strcmp(step, "/") == 0) {
 		while (r->n) names_pop(r);
-		return 0;
+		return;
 	}
-	if (strcmp(step, "..") != 0) return names_add(r, step), 0;
-	if (r->n == 0) return 1;
-	names_pop(r);
-	return 0;
+	if (strcmp(step, "..") != 0) names_add(r, step);
+	else if (r->n) names_pop(r);
 }
 
 int es_resolve(es_context *c, es_at p, es_names *out) {
@@ -154,11 +152,9 @@ int es_resolve(es_context *c, es_at p, es_names *out) {
 	}
 	es_names r;
 	names_init(&r);
-	int bad = 0;
-	for (size_t i = 0; i < nfrom && !bad; i++) bad = plan_step(&r, from[i]);
-	for (size_t i = 0; i < steps.n && !bad; i++) bad = plan_step(&r, steps.names[i]);
+	for (size_t i = 0; i < nfrom; i++) plan_step(&r, from[i]);
+	for (size_t i = 0; i < steps.n; i++) plan_step(&r, steps.names[i]);
 	es_names_free(&steps);
-	if (bad) return es_names_free(&r), places_fail(ES_NOTHING_THERE, "..");
 	*out = r;
 	return 0;
 }
