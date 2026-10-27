@@ -1,5 +1,5 @@
 {
-	"title": "a call's mark lasts as its record does [marks 10-27], but owns nothing: a handler returning a promise keeps its record pending till it settles; the memo it made, and a teardown it added, belong to the scope that placed the action, so they are still there when the promise settles and the call ends, and go when that scope does (told the stop's reason). a handler returning at once: nothing goes at the call's end either. a second call that makes the same memo again: already-there (it is the scope's, made once), its teardown added before that still told",
+	"title": "a call's mark lasts as its record does [marks 10-27], but owns nothing: a handler returning a promise keeps its record pending till it settles; the memo it made belongs to the scope that placed the action, so it is still there when the promise settles and the call ends, and goes when that scope does. a handler returning at once: nothing goes at the call's end either. a second call that makes the same memo again: already-there (it is the scope's, made once). (a teardown added in an action throws: scenario 95)",
 	"steps": [
 		{
 			"op": "ermine",
@@ -14,12 +14,6 @@
 						"createAction",
 						"/svc/slow",
 						[
-							{
-								"do": [
-									"addTeardown",
-									"td"
-								]
-							},
 							{
 								"do": [
 									"createMemo",
@@ -39,14 +33,7 @@
 					"do": [
 						"createAction",
 						"/svc/quick",
-						[
-							{
-								"do": [
-									"addTeardown",
-									"tq"
-								]
-							}
-						],
+						[],
 						"$0"
 					]
 				}
@@ -123,13 +110,6 @@
 			}
 		},
 		{
-			"op": "log",
-			"name": "td",
-			"expect": {
-				"values": []
-			}
-		},
-		{
 			"op": "settle",
 			"expect": {}
 		},
@@ -168,13 +148,6 @@
 			}
 		},
 		{
-			"op": "log",
-			"name": "td",
-			"expect": {
-				"values": []
-			}
-		},
-		{
 			"op": "host",
 			"call": [
 				"hasNode",
@@ -193,13 +166,6 @@
 			],
 			"expect": {
 				"value": 2
-			}
-		},
-		{
-			"op": "log",
-			"name": "tq",
-			"expect": {
-				"values": []
 			}
 		},
 		{
@@ -231,16 +197,6 @@
 			"expect": {}
 		},
 		{
-			"op": "log",
-			"name": "td",
-			"expect": {
-				"values": [
-					"bye",
-					"bye"
-				]
-			}
-		},
-		{
 			"op": "host",
 			"call": [
 				"hasNode",
@@ -253,16 +209,6 @@
 		{
 			"op": "settle",
 			"expect": {}
-		},
-		{
-			"op": "log",
-			"name": "td",
-			"expect": {
-				"values": [
-					"bye",
-					"bye"
-				]
-			}
 		}
 	]
 }

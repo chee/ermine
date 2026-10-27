@@ -128,7 +128,7 @@ typedef struct {
 	sc_pair info;
 	char **args;
 	size_t nargs;
-	// what the host says of the person's event: 1 a trusted event is being dispatched
+	// what the host says of the person's event: 1 a person just interacted with the page
 	int event;
 	// patchy, when the ermine has it
 	struct py *patchy;
@@ -628,7 +628,7 @@ static op_value *explained_value(const es_explained *x) {
 			break;
 		}
 	}
-	if (x->change != NULL && x->change->during_user_event) op_set(m, "duringUserEvent", op_bool(1));
+	if (x->change != NULL && x->change->user_activated) op_set(m, "userActivated", op_bool(1));
 	if (x->has_held) {
 		op_value *h = op_map();
 		op_set(h, "feature", op_str(x->held_feature));
@@ -1957,7 +1957,7 @@ static char *world_id(void *ctx) {
 	snprintf(id, sizeof id, "n%ld", ++W->counter);
 	return es_dup(id);
 }
-static int world_user_event(void *ctx) {
+static int world_user_activated(void *ctx) {
 	(void)ctx;
 	return W->event;
 }
@@ -2622,7 +2622,7 @@ static int make(const op_value *r) {
 	es_options o = {.features = list, .nfeatures = nfeatures, .may = w->policy,
 		.schedule = world_schedule, .on_create_function = world_created, .root = "R",
 		.info = &w->info, .ninfo = 1, .calls_never = strcmp(str_or(r, "calls"), "never") == 0,
-		.user_event = world_user_event};
+		.user_activated = world_user_activated};
 	if (!flag(r, "uuid")) o.id = world_id;
 	if (text(r, "at") != NULL) o.host.at = text(r, "at");
 	const op_value *args = field(r, "args");
@@ -3325,8 +3325,8 @@ static int answer(const op_value *r, op_value **res) {
 		*res = op_map();
 		return 0;
 	}
-	if (strcmp(op, "event") == 0) {
-		W->event = flag(r, "trusted") && field(r, "trusted")->type == OP_BOOL;
+	if (strcmp(op, "activation") == 0) {
+		W->event = flag(r, "active") && field(r, "active")->type == OP_BOOL;
 		*res = op_map();
 		return 0;
 	}

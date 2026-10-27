@@ -1661,8 +1661,8 @@ int es_create(const es_options *given, es_ermine **out) {
 	e->may = o->may;
 	e->on_create_function = o->on_create_function;
 	e->on_create_function_ctx = o->on_create_function_ctx;
-	e->user_event = o->user_event;
-	e->user_event_ctx = o->user_event_ctx;
+	e->user_activated = o->user_activated;
+	e->user_activated_ctx = o->user_activated_ctx;
 	h->adding = 1;
 	h->schedule = o->schedule;
 	h->schedule_ctx = o->schedule_ctx;

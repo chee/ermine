@@ -1,5 +1,5 @@
 {
-	"title": "a change made through a writer while the browser is dispatching a trusted event says so: duringUserEvent: true on the ChangeView explain gives [chee 10-27: \"duringUserEvent is good yeah do that\"]. an untrusted event, or none: absent. a write made directly is never marked. the event is read through the native getter kept when the module loaded, so a program replacing window.event gains nothing (tested in marks_test.ts); here the harness's stand-in is defined before the module loads",
+	"title": "a change made through a writer while the page is user-activated (navigator.userActivation.isActive: a person just interacted with it) says so: userActivated: true on the ChangeView explain gives [chee 10-27]. no activation: absent. a write made directly is never marked. what it promises is that a person had just interacted with the page when this was written, no more. the activation is read through the getter and object kept when the module loaded, so a program replacing them gains nothing (tested in marks_test.ts); here the harness stands in for them before the module loads",
 	"steps": [
 		{
 			"op": "ermine",
@@ -43,8 +43,8 @@
 			}
 		},
 		{
-			"op": "event",
-			"trusted": true,
+			"op": "activation",
+			"active": true,
 			"expect": {}
 		},
 		{
@@ -78,13 +78,13 @@
 				"value": {
 					"writer": "outside",
 					"site": "program",
-					"duringUserEvent": true
+					"userActivated": true
 				}
 			}
 		},
 		{
-			"op": "event",
-			"trusted": false,
+			"op": "activation",
+			"active": false,
 			"expect": {}
 		},
 		{
@@ -122,8 +122,8 @@
 			}
 		},
 		{
-			"op": "event",
-			"trusted": true,
+			"op": "activation",
+			"active": true,
 			"expect": {}
 		},
 		{
@@ -156,8 +156,8 @@
 			}
 		},
 		{
-			"op": "event",
-			"trusted": null,
+			"op": "activation",
+			"active": false,
 			"expect": {}
 		},
 		{

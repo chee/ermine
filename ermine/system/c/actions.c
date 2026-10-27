@@ -438,8 +438,8 @@ const es_change_view *es_change_view_of(es_ermine *e, const op_value *change) {
 	if (t != NULL && op_as_int64(t, &time)) v->time = time;
 	v->actor = op_get(change, "actor");
 	const op_value *meta = op_get(change, "metadata");
-	const op_value *during = meta == NULL ? NULL : op_get(meta, "duringUserEvent");
-	v->during_user_event = during != NULL && during->type == OP_BOOL && during->bool_;
+	const op_value *during = meta == NULL ? NULL : op_get(meta, "userActivated");
+	v->user_activated = during != NULL && during->type == OP_BOOL && during->bool_;
 	const op_value *external = op_get(change, "external");
 	if (external != NULL && external->type == OP_LIST && external->count > 0) {
 		const op_value *s = external->items[0];
@@ -2020,6 +2020,13 @@ int es_add_teardown(es_context *c, es_teardown fn, void *ctx) {
 	sc_scope *own = es_owner(c);
 	code = es_not_in_act(e, own, "addTeardown");
 	if (code) return code;
+	// in an action: a call's mark is open between the scope open and own
+	for (sc_scope *o = sc_get_current_scope(e->scheduler); o != NULL && o != own; o = sc_scope_parent(o)) {
+		if (es_is_mark(e, o) && pair_of(o, "call") != NULL) {
+			return es_fail_ermine(ES_NOT_HERE,
+				"addTeardown in an action: add it in setup, or keep what the call started and stop it from setup's teardown");
+		}
+	}
 	return teardown_on(c, own, fn, ctx);
 }
 
@@ -2161,12 +2168,12 @@ int es_with_writer(es_ermine *e, const op_value *writer, es_thunk f, void *ctx) 
 	if (b == NULL || !sc_scope_alive(b->parent) || !sc_scope_alive(b->c->scope)) {
 		return es_fail_ermine(ES_GONE, "gone: what this writer was created in has ended");
 	}
-	int during = e->user_event != NULL && e->user_event(e->user_event_ctx);
+	int during = e->user_activated != NULL && e->user_activated(e->user_activated_ctx);
 	sc_scope *at = b->parent;
 	// f may free b (it lets its writer go, or stops what it was created in): nothing of b is read after it
 	int own_mark = b->nmark > 0 || during;
 	if (own_mark) {
-		// a mark of its own for this run: the writer's info, and duringUserEvent
+		// a mark of its own for this run: the writer's info, and userActivated
 		struct es_calls *y = e->calls;
 		call_info *info = es_alloc(sizeof *info);
 		sc_pair pairs[4];
@@ -2177,7 +2184,7 @@ int es_with_writer(es_ermine *e, const op_value *writer, es_thunk f, void *ctx) 
 		}
 		if (during) {
 			info->values[info->n++] = op_bool(1);
-			pairs[n++] = (sc_pair){"duringUserEvent", info->values[info->n - 1]};
+			pairs[n++] = (sc_pair){"userActivated", info->values[info->n - 1]};
 		}
 		at = sc_create_scope(e->scheduler, pairs, n, b->parent);
 		if (at == NULL) {

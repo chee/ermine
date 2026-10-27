@@ -40,7 +40,7 @@
 // { op: "do", process, call, as? }         → { value }   call [fn, ...args] from outside
 // { op: "withWriter", process, name, steps?, back? } → { value? }   the writer the process's env holds
 //    at name, given a function (steps, then back's value), called with nothing open
-// { op: "event", trusted }                  → {}   window.event is a trusted event, an untrusted one
+// { op: "activation", active }             → {}   whether the page is user-activated now
 //    (false), none (null) from now on
 // a call (host, do) that gave a promise: how it settled is logged to "promised"
 // { op: "settle" }                         → {}   every promise the harness made settled, then
@@ -74,10 +74,9 @@
 //                                             { early })
 //   ["createAction", path, steps, expr?]      createAction(path, (...args) => steps; expr given
 //                                             back)
-//   ["createAction", path, steps, expr?, "gen" | "async"]   a generator action (sync, or async): steps
-//                                             run in order; {do:["yield", expr]} yields expr's value
-//                                             ("as": what comes back), in "async" {do:["await", expr]}
-//                                             awaits it
+//   ["createAction", path, steps, expr?, "gen"]   a generator action: steps run in order;
+//                                             {do:["yield", expr]} yields expr's value ("as": what
+//                                             comes back)
 //   ["caught", log, steps]                    steps run; an error they throw logged as its code
 //   ["addTeardown", log, tag?]                addTeardown((why) => log why, or "<tag>:<why>")
 //   ["getStatus", target]                     getStatus(target), shown
@@ -117,7 +116,7 @@
 // errors: PlacesError { error: code }, Refusal "refused" (a hook's: { error, feature, hook }), SendError "not-a-method", PENDING
 // "pending", ErmineError its code, FeatureError { error: "feature", feature, hook, cause }, else
 // { error: text }
-import { dispatching } from "./event_fixture.ts"
+import { userActivation } from "./event_fixture.ts"
 import createEntry from "@ermine/core/node/entry"
 import { at } from "@ermine/core/places"
 import { PlacesError } from "@ermine/core/places"
@@ -350,10 +349,9 @@ function call(api: Sys, env: Env, [fn, ...raw]: [string, ...unknown[]]): unknown
 			return v
 		}
 		case "createAction": {
-			const [path, steps, back, kind] = raw as [string, Step[], unknown, ("gen" | "async")?]
+			const [path, steps, back, kind] = raw as [string, Step[], unknown, "gen"?]
 			// a generator action: steps run in order; ["yield", expr] yields expr's value (a
-			// promise is waited for) and takes what comes back as its value; in an async one,
-			// ["await", expr] awaits it (a plain await: nothing is open after it)
+			// promise is waited for) and takes what comes back as its value
 			if (kind !== undefined) {
 				const body = (args: unknown[]) => {
 					const inner: Env = new Map(env)
@@ -376,19 +374,6 @@ function call(api: Sys, env: Env, [fn, ...raw]: [string, ...unknown[]]): unknown
 						return back === undefined ? undefined : expr(api, inner, back)
 					})
 				}
-				return api.createAction(path, async function* (...args: unknown[]) {
-					const inner = body(args)
-					for (const step of steps) {
-						if (step.do[0] === "yield") {
-							const v: unknown = yield expr(api, inner, step.do[1])
-							if (step.as !== undefined) inner.set(step.as, v)
-						} else if (step.do[0] === "await") {
-							const v = await expr(api, inner, step.do[1])
-							if (step.as !== undefined) inner.set(step.as, v)
-						} else one(inner, step)
-					}
-					return back === undefined ? undefined : expr(api, inner, back)
-				})
 			}
 			return api.createAction(path, (...args: unknown[]) => {
 				const inner: Env = new Map(env)
@@ -672,7 +657,7 @@ function explained(b: ReturnType<System["explain"]>) {
 	if (b.writer === undefined) return held
 	return {
 		...shownWriter(b.writer),
-		...b.change?.duringUserEvent && { duringUserEvent: true },
+		...b.change?.userActivated && { userActivated: true },
 		...held,
 	}
 }
@@ -924,9 +909,9 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 			const v = call(imported, p.env, ["withWriter", `$${r.name}`, r.steps ?? [], r.back])
 			return v === undefined ? {} : { value: plain(v) }
 		}
-		// what the browser says is being dispatched: a trusted event, an untrusted one, none
-		case "event":
-			dispatching.current = r.trusted === null ? undefined : { isTrusted: r.trusted === true }
+		// whether a person just interacted with the page
+		case "activation":
+			userActivation.active = r.active === true
 			return {}
 		case "settle": {
 			while (m.held.length) {

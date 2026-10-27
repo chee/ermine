@@ -1,0 +1,107 @@
+{
+	"title": "addTeardown in an action throws not-here [chee 10-27]: a teardown added there would pile onto the scope that placed the action, a closure a call, till the process ends. the call goes on (caught), nothing is added; a teardown added in setup is told as ever, once, at the stop. (an effect's act: in-act, 77)",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/svc",
+			"program": [
+				{
+					"do": [
+						"addTeardown",
+						"td"
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"/svc/act",
+						[
+							{
+								"do": [
+									"caught",
+									"caught",
+									[
+										{
+											"do": [
+												"addTeardown",
+												"tx"
+											]
+										}
+									]
+								]
+							}
+						],
+						"$0"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "svc",
+			"at": "/code/svc",
+			"expect": {
+				"id": "proc:svc"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/svc/act",
+				1
+			],
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/svc/act",
+				2
+			],
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "log",
+			"name": "caught",
+			"expect": {
+				"values": [
+					"not-here",
+					"not-here"
+				]
+			}
+		},
+		{
+			"op": "stop",
+			"name": "svc",
+			"why": "bye",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "td",
+			"expect": {
+				"values": [
+					"bye"
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "tx",
+			"expect": {
+				"values": []
+			}
+		}
+	]
+}
