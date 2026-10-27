@@ -261,7 +261,7 @@ export function moments(world: World) {
 				feed(world, (): Reads => {
 					const out: Reads = new Map()
 					for (const [comp, part] of world.parts as Map<Any, Any>) {
-						const read = world.apis.runs(part.entry.id, "reads") as Any[] | undefined
+						const read = world.runs(part.entry.id, "reads") as Any[] | undefined
 						if (!read) continue
 						const seen = new Set<string>()
 						const reads: Where[] = []

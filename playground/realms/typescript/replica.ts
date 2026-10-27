@@ -11,21 +11,19 @@
 // open: an id met only inside a value, never under a name, is never pointed to, so it reads
 // as nothing there
 //
-//   const r = createReplica({ scheduler, want: (id) => port.postMessage({ t: "load", id }) })
-//   createPlaces({ root, table: r.table, ... })   // r.raw: the table under it, no hook
-//   r.point(root); r.loaded(root)
+//   // an ermine feature's onTable (worker.ts): under is the table below it, r.get what places reads
+//   const r = createReplica({ scheduler, under, want: (id) => port.postMessage({ t: "load", id }) })
+//   r.point(root); r.loaded(root)               // what lands is put in the ermine's own table
 //
 // bad: a part that won't cross: its stand-in's value, read, throws a plain Error saying why
 import { PENDING, type Scheduler } from "@ermine/core/scheduler"
-import { createTable, type Event, type Id, type Key, type Table } from "@ermine/core/table"
+import type { Id, Key, Table } from "@ermine/core/table"
 
 type State = "pointed" | "loading" | "loaded"
 
 export type Replica = {
-	// the hooked table: for places and the api
-	table: Table
-	// the table under it: what lands is put here, no hook asked
-	raw: Table
+	// the table's get with the hook: for places to read through
+	get: Table["get"]
 	// ids pointed to: not loaded, a get there pending. an id with a state already: as it is
 	point: (ids: Iterable<Id>) => void
 	// an id's entries landed (put in raw first): its readers marked
@@ -38,11 +36,12 @@ export type Replica = {
 
 export function createReplica(setup: {
 	scheduler: Pick<Scheduler, "track" | "mark">
+	// the table under the hook: what lands is put there, so a get there asks nothing
+	under: Pick<Table, "get">
 	want: (id: Id) => void
-	event?: Event
 }): Replica {
 	const { scheduler } = setup
-	const raw = createTable(setup.event)
+	const raw = setup.under
 	const states = new Map<Id, State>()
 	// the key a pending get tracks, by id: a plain object (a run's record names it as it is)
 	const keys = new Map<Id, { loading: Id }>()
@@ -91,11 +90,8 @@ export function createReplica(setup: {
 		return raw.get(a as Key, b as Id)
 	}
 
-	const table = { ...raw, get } as Table
-
 	return {
-		table,
-		raw,
+		get: get as Table["get"],
 		point(ids) {
 			for (const id of ids) if (!states.has(id)) states.set(id, "pointed")
 		},
