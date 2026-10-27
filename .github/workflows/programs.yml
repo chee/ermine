@@ -1,0 +1,48 @@
+# programs' suites on every push: finding and running programs (programs, start, types, open, load)
+# and the native libraries the dlopen runner loads (native), against the TypeScript harnesses, the C
+# harnesses and their sanitizer builds, on Linux and macOS. native's fixtures are built by its
+# suite.json's make; its unsigned case runs on darwin-aarch64 only (macos-14 is arm64).
+
+name: programs
+
+on:
+  push:
+  workflow_dispatch:
+
+env:
+  SUITES: programs start native types open load
+
+jobs:
+  typescript:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Conformance, TypeScript
+        run: deno task conformance $SUITES
+
+  c:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Build the harnesses
+        run: |
+          bins="playground/programs/c/programs-harness playground/programs/c/start-harness"
+          make -s $bins $(for b in $bins; do printf '%s-check ' "$b"; done)
+      - name: Conformance, C
+        run: deno task conformance $SUITES --c
+      - name: Conformance, C with sanitizers
+        run: deno task conformance $SUITES --check
