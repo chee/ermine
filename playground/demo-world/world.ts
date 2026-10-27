@@ -22,7 +22,7 @@
 // parts, statusIds, pending, moments (last 4000), call, defined, binds, runs, processes, stop,
 // ermine (the host's object)
 //
-// the world's tools are imported (tools.ts: who, change, as, scoped, up, inspect, capture, host);
+// the world's tools are imported (tools.ts: who, change, up, inspect, host);
 // extend gives a process what its host has of its own, read there by host()
 import { createChangeHeader, NODE } from "@ermine/core/places/header"
 import { move, type Path, place, type Places, rename, unplace } from "@ermine/core/places"
