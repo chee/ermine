@@ -76,3 +76,46 @@ Deno.test("use switches", () => {
 	assertEquals(a, b)
 	assertEquals(a, js(data))
 })
+
+// a copy of the module of its own: nothing instantiated yet
+const fresh = (n: string) => import(`./blake3.ts?${n}`) as Promise<typeof import("./blake3.ts")>
+
+Deno.test("blake3: no wasm to be had, the js one answers", async () => {
+	const { blake3 } = await fresh("no-wasm")
+	const was = WebAssembly.Module // deno-lint-ignore no-explicit-any
+	;(WebAssembly as any).Module = function () {
+		throw new WebAssembly.CompileError("refused")
+	}
+	try {
+		assertEquals(hex(blake3(input(1))), known[1])
+	} finally {
+		// deno-lint-ignore no-explicit-any
+		;(WebAssembly as any).Module = was
+	}
+})
+
+Deno.test("blake3: a failure of the wasm hash itself is not hidden by the js one", async () => {
+	const { blake3 } = await fresh("broken-hash")
+	const was = WebAssembly.Instance // deno-lint-ignore no-explicit-any
+	;(WebAssembly as any).Instance = function () {
+		return {
+			exports: {
+				room() {
+					throw new RangeError("boom")
+				},
+			},
+		}
+	}
+	try {
+		let thrown: unknown
+		try {
+			blake3(input(1))
+		} catch (e) {
+			thrown = e
+		}
+		assertEquals((thrown as Error)?.message, "boom")
+	} finally {
+		// deno-lint-ignore no-explicit-any
+		;(WebAssembly as any).Instance = was
+	}
+})

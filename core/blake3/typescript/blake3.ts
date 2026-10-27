@@ -15,9 +15,14 @@ export function js(bytes: Uint8Array): Uint8Array {
 	return noble(bytes)
 }
 
-// instantiated synchronously on first use
+// instantiated synchronously on first use; throws when there is no wasm to be had
+function load(): Exports {
+	return lib ??= new WebAssembly.Instance(new WebAssembly.Module(bytes))
+		.exports as unknown as Exports
+}
+
 export function wasm(input: Uint8Array): Uint8Array {
-	lib ??= new WebAssembly.Instance(new WebAssembly.Module(bytes)).exports as unknown as Exports
+	const lib = load()
 	const at = lib.room(input.length)
 	// memory may have grown, so look it up after room
 	new Uint8Array(lib.memory.buffer, at, input.length).set(input)
@@ -29,13 +34,15 @@ export function use(choice: "wasm" | "js"): void {
 	which = choice
 }
 
+// the js one only when wasm is not to be had (no WebAssembly, or a host that refuses to compile
+// it); a failure of the hash itself is not hidden
 export function blake3(bytes: Uint8Array): Uint8Array {
 	if (which === "wasm") {
 		try {
-			return wasm(bytes)
+			load()
 		} catch {
 			which = "js"
 		}
 	}
-	return js(bytes)
+	return which === "wasm" ? wasm(bytes) : js(bytes)
 }
