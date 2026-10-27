@@ -1177,7 +1177,7 @@ static void tell_watches(pl *l, const pl_fact *facts, size_t n) {
 			hits[nh++] = (hit){w, f};
 		}
 	}
-	qsort(hits, nh, sizeof *hits, by_seq);
+	if (nh > 1) qsort(hits, nh, sizeof *hits, by_seq);
 	l->s->telling++;
 	for (size_t i = 0; i < nh; i++) {
 		pl_watch *w = hits[i].w;
@@ -1546,7 +1546,7 @@ pl_nameds pl_names(pl *l, const pl_here *here) {
 	}
 	tb_free(seen);
 	// several contributors: in keyorder (core/util keyorder.ts)
-	if (l->nasked > 1) qsort(out.items, out.n, sizeof *out.items, key_order);
+	if (l->nasked > 1 && out.n > 1) qsort(out.items, out.n, sizeof *out.items, key_order);
 	return out;
 }
 
@@ -1771,9 +1771,9 @@ static int same(const op_value *a, const op_value *b) {
 	case OP_BOOL: return !a->bool_ == !b->bool_;
 	case OP_NUM: return op_same_num(a, b);
 	case OP_STR: return a->bytes == b->bytes && memcmp(a->str, b->str, a->bytes) == 0;
-	case OP_BYTES: return a->bytes == b->bytes && memcmp(a->data, b->data, a->bytes) == 0;
+	case OP_BYTES: return a->bytes == b->bytes && (!a->bytes || memcmp(a->data, b->data, a->bytes) == 0);
 	case OP_TYPED:
-		return a->kind == b->kind && a->bytes == b->bytes && memcmp(a->data, b->data, a->bytes) == 0;
+		return a->kind == b->kind && a->bytes == b->bytes && (!a->bytes || memcmp(a->data, b->data, a->bytes) == 0);
 	case OP_LIST:
 	case OP_STAND:
 		if (a->count != b->count) return 0;
