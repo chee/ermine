@@ -23,13 +23,14 @@ import {
 	readChildren,
 } from "@ermine/system"
 import { countOf } from "./system_fixture.ts"
+import { manual } from "./manual_fixture.ts"
 
 // the program a test wrote at a node (ensureNode), as start takes it: its function
 const programAt = (e: { within: <T>(f: () => T) => T }, at: string) =>
 	e.within(() => read(at)) as () => unknown
 
 Deno.test("@ermine/system: getNode makes nothing, ensureNode makes once, hasNode says which", () => {
-	const e = createErmine({ schedule: () => {} })
+	const e = createErmine({ features: [manual] })
 	const seen: unknown[] = []
 	e.within(() =>
 		ensureNode("/code/p", () => {
@@ -48,7 +49,7 @@ Deno.test("@ermine/system: getNode makes nothing, ensureNode makes once, hasNode
 })
 
 Deno.test("@ermine/system: patch takes patches only; a node not there: nothing-there; attributes by their own pair", () => {
-	const e = createErmine({ schedule: () => {} })
+	const e = createErmine({ features: [manual] })
 	const errors: unknown[] = []
 	e.within(() =>
 		ensureNode("/code/p", () => {
@@ -77,7 +78,7 @@ Deno.test("@ermine/system: patch takes patches only; a node not there: nothing-t
 })
 
 Deno.test("@ermine/system: createMemo and createEffect, early by an option; nothing open: nothing-open", () => {
-	const e = createErmine({ schedule: () => {} })
+	const e = createErmine({ features: [manual] })
 	const acted: [string, unknown][] = []
 	e.within(() =>
 		ensureNode("/code/p", () => {
@@ -98,7 +99,7 @@ Deno.test("@ermine/system: createMemo and createEffect, early by an option; noth
 })
 
 Deno.test("@ermine/system: the three parts alike: readChildren (handles), patchChildren (a name a patch), explainChildren, readAllChildren (no ids), explainAttributes", () => {
-	const e = createErmine({ schedule: () => {} })
+	const e = createErmine({ features: [manual] })
 	const seen: Record<string, unknown> = {}
 	e.within(() =>
 		ensureNode("/code/p", () => {
@@ -139,7 +140,7 @@ Deno.test("@ermine/system: the three parts alike: readChildren (handles), patchC
 })
 
 Deno.test("@ermine/system: peep(f) reads untracked: a memo reading through peep isn't rerun by it", () => {
-	const e = createErmine({ schedule: () => {} })
+	const e = createErmine({ features: [manual] })
 	let runs = 0
 	e.within(() =>
 		ensureNode("/code/p", () => {
@@ -158,7 +159,7 @@ Deno.test("@ermine/system: peep(f) reads untracked: a memo reading through peep 
 })
 
 Deno.test("@ermine/system: with nothing open (a listener, a timer), a handle throws nothing-open as a path does; the host reaches the action", async () => {
-	const e = createErmine({ schedule: () => {} })
+	const e = createErmine({ features: [manual] })
 	let count: ReturnType<typeof ensureNode> | undefined
 	let bump: ReturnType<typeof createAction> | undefined
 	e.within(() =>
@@ -196,7 +197,7 @@ Deno.test("@ermine/system: with nothing open (a listener, a timer), a handle thr
 })
 
 Deno.test("@ermine/system: a setup given nothing finds its process; a helper in another file too", () => {
-	const e = createErmine({ schedule: () => {} })
+	const e = createErmine({ features: [manual] })
 	e.within(() =>
 		ensureNode("/code/p", () => {
 			ensureNode("./items", { a: 1, b: 2 })
@@ -216,7 +217,7 @@ Deno.test("@ermine/system: a setup given nothing finds its process; a helper in 
 })
 
 Deno.test("@ermine/system: nothing open throws nothing-open, naming the function; after an await too", async () => {
-	const e = createErmine({ schedule: () => {} })
+	const e = createErmine({ features: [manual] })
 	assertThrows(() => read("/x"), ErmineError, "read: nothing is open here")
 	let caught: unknown
 	let done!: () => void
@@ -241,8 +242,8 @@ Deno.test("@ermine/system: nothing open throws nothing-open, naming the function
 })
 
 Deno.test("@ermine/system: two ermines in one realm, each process its own ermine's", () => {
-	const one = createErmine({ schedule: () => {} })
-	const two = createErmine({ schedule: () => {} })
+	const one = createErmine({ features: [manual] })
+	const two = createErmine({ features: [manual] })
 	one.within(() => ensureNode("/code/p", () => void ensureNode("./v", "one")))
 	two.within(() => ensureNode("/code/p", () => void ensureNode("./v", "two")))
 	one.start(programAt(one, "/code/p"), "/code/p")
@@ -254,8 +255,8 @@ Deno.test("@ermine/system: two ermines in one realm, each process its own ermine
 })
 
 Deno.test("@ermine/system: one ermine's handler run inside another's action finds its own: the innermost entered", () => {
-	const a = createErmine({ schedule: () => {} })
-	const b = createErmine({ schedule: () => {} })
+	const a = createErmine({ features: [manual] })
+	const b = createErmine({ features: [manual] })
 	b.start(() => void createAction("on/note", () => ensureNode("./b-note", "b's")), "/code/b")
 	a.start(
 		() => void createAction("go", () => b.within(() => executeAction("/code/b/on/note"))),
@@ -293,7 +294,7 @@ Deno.test("@ermine/system: nothing open here, but a second physical copy's ermin
 })
 
 Deno.test("@ermine/system: host code acting as a context opens it (within); args by getArgs", () => {
-	const e = createErmine({ schedule: () => {} })
+	const e = createErmine({ features: [manual] })
 	e.getProcessContext()!.within(() => ensureNode("/h", 5))
 	assertEquals(e.within(() => read("/h")), 5)
 	let args: readonly string[] = []
@@ -304,7 +305,7 @@ Deno.test("@ermine/system: host code acting as a context opens it (within); args
 })
 
 Deno.test("@ermine/system: a closed ermine is let go: nothing of it found", () => {
-	const e = createErmine({ schedule: () => {} })
+	const e = createErmine({ features: [manual] })
 	const host = e.getProcessContext()!
 	e.close()
 	assertThrows(() => host.within(() => read("/x")), ErmineError, "closed")
@@ -314,7 +315,7 @@ Deno.test("@ermine/system: a second copy of its module (another URL) finds the s
 	const url = new URL("./nodes.ts", import.meta.url).href
 	const copy = await import(`${url}?copy=${Math.random()}`) as typeof import("./nodes.ts")
 	assert(copy.ensureNode !== ensureNode)
-	const e = createErmine({ schedule: () => {} })
+	const e = createErmine({ features: [manual] })
 	e.within(() => ensureNode("/code/p", () => void copy.ensureNode("./v", "from the copy")))
 	e.start(programAt(e, "/code/p"), "/code/p")
 	assertEquals(e.within(() => read("/code/v")), "from the copy")

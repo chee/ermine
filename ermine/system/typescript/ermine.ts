@@ -13,11 +13,7 @@
 // options, each with a default:
 //   features   none (features.ts)
 //   scheduler  a new one
-//   id         a new node's id, processes' too; none: uuidv7 (nodes), proc:<boot>-<n> (processes)
 //   may        the policy every read and write is asked of; none: all allowed
-//   schedule   how a pulse is asked for: f run soon, once; none: a microtask
-//   onCreateFunction
-//              told of each memo, effect and method made, for an inspector
 //   root       the root's id; none: a new one
 //   host       the host's node: where it is placed (none: nowhere, reached by ermine.node), the
 //              host's args, the machine it publishes, and its setup: run once, untracked, in the
@@ -82,6 +78,7 @@ import {
 	pathsOf,
 	type Process,
 	type Processes,
+	processIds,
 	type Refused,
 } from "@ermine/processes/start"
 import {
@@ -103,6 +100,7 @@ import {
 	chain,
 	ErmineError,
 	type Feature,
+	type IdKind,
 	install,
 	layer,
 	type Reading,
@@ -189,10 +187,7 @@ export const FEATURES = "ermine.features"
 export type Options = {
 	features?: readonly Feature[]
 	scheduler?: Scheduler
-	id?: () => string
 	may?: Policy
-	schedule?: (f: () => void) => void
-	onCreateFunction?: (made: CreatedFunction) => void
 	root?: Id
 	host?: {
 		at?: string | Path
@@ -304,7 +299,6 @@ export function createErmine(options: Options = {}): Ermine {
 
 	// 1. the scheduler
 	const s = options.scheduler ?? createScheduler()
-	const newId = options.id ?? uuidv7
 
 	// 2. sites: skipping ermine's files, the scheduler's and processes' start, and (added as the
 	// features are set up: the skip list is live) every feature's files
@@ -363,6 +357,14 @@ export function createErmine(options: Options = {}): Ermine {
 		calling: () => made?.calling,
 	})
 	const { hooks } = features
+	// each new id through onId: the base's a uuidv7 (a node's), proc:<boot>-<n> (a process's)
+	const processId = processIds()
+	const idFor = chain<[IdKind], string>(
+		hooks.onId,
+		"onId",
+		(kind) => kind === "process" ? processId() : uuidv7(),
+	)
+	const newId = () => idFor("node")
 	const toPlaces: Ahead = {
 		onTableChange: (part, id) => places!.onTableChange(part, id),
 		commit: (changed) => places!.commit(changed),
@@ -391,7 +393,8 @@ export function createErmine(options: Options = {}): Ermine {
 
 	// pulses: one soon, however many ask
 	let queued = false
-	const schedule = options.schedule ?? queueMicrotask
+	// a pulse asked for through onSchedule: the base's in a microtask
+	const schedule = chain<[() => void], void>(hooks.onSchedule, "onSchedule", queueMicrotask)
 	function queuePulse() {
 		if (queued || closed) return
 		queued = true
@@ -596,7 +599,11 @@ export function createErmine(options: Options = {}): Ermine {
 			}
 		},
 		queuePulse,
-		onCreateFunction: options.onCreateFunction,
+		onCreateFunction: chain<[CreatedFunction], void>(
+			hooks.onCreateFunction,
+			"onCreateFunction",
+			() => {},
+		),
 		alive,
 	}
 	const tag = (feature: string, item: Version): Version =>
@@ -684,7 +691,7 @@ export function createErmine(options: Options = {}): Ermine {
 		owner,
 		ours,
 		write: hostInner.writer,
-		...options.id !== undefined && { id: options.id },
+		id: () => idFor("process"),
 	})
 	const statuses = createStatus({
 		places: { commit },

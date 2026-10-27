@@ -5,6 +5,7 @@ import { createEffect, ensureNode, patch, peep, pulse, read } from "@ermine/syst
 import { at, site } from "@ermine/system/site"
 import { traceOf } from "@ermine/core/places/header"
 import type { ChangeHeader } from "@ermine/core/node/entry"
+import { manual } from "./manual_fixture.ts"
 
 type E = ReturnType<typeof createErmine>
 const changeAt = (e: E, name: string): ChangeHeader => {
@@ -14,7 +15,7 @@ const changeAt = (e: E, name: string): ChangeHeader => {
 const here = new URL(import.meta.url).href
 
 Deno.test("site: a call given a build site keeps it, nothing captured; a call in its arguments, the trace", () => {
-	const e = createErmine({ schedule: () => {} })
+	const e = createErmine({ features: [manual] })
 	const S = site("file:///program.ts", 12, 3)
 	e.start(() => {
 		at(S, ensureNode)("/x", (ensureNode("/y", 1), 1))
@@ -26,7 +27,7 @@ Deno.test("site: a call given a build site keeps it, nothing captured; a call in
 })
 
 Deno.test("site: a token not minted, or a function not @ermine/system's, gives nothing", () => {
-	const e = createErmine({ schedule: () => {} })
+	const e = createErmine({ features: [manual] })
 	const mine = () => 1
 	assert(at(site("file:///a.ts", 1, 1), mine) === mine)
 	assert(at({} as never, patch) === patch)
@@ -38,7 +39,7 @@ Deno.test("site: a token not minted, or a function not @ermine/system's, gives n
 })
 
 Deno.test("site: what the function runs never gets it (taken as it starts)", () => {
-	const e = createErmine({ schedule: () => {} })
+	const e = createErmine({ features: [manual] })
 	const S = site("file:///program.ts", 3, 1)
 	e.start(() => {
 		at(S, peep)(() => ensureNode("/z", 1))
@@ -48,7 +49,7 @@ Deno.test("site: what the function runs never gets it (taken as it starts)", () 
 })
 
 Deno.test("site: trace always keeps the text beside a build site", () => {
-	const e = createErmine({ schedule: () => {}, trace: "always" })
+	const e = createErmine({ features: [manual], trace: "always" })
 	const S = site("file:///program.ts", 5, 1)
 	e.start(() => void at(S, ensureNode)("/x", 1), "/p")
 	assertEquals(changeAt(e, "x").external, [{ file: "file:///program.ts", line: 5, column: 1 }])
@@ -57,7 +58,7 @@ Deno.test("site: trace always keeps the text beside a build site", () => {
 })
 
 Deno.test("site: a computer made through a call given a build site has that site; its run's writes too", () => {
-	const e = createErmine({ schedule: () => {} })
+	const e = createErmine({ features: [manual] })
 	const S = site("file:///program.ts", 8, 2)
 	e.start(() => {
 		ensureNode("/n", 1)

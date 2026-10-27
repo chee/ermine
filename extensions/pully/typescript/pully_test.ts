@@ -10,8 +10,9 @@ import {
 } from "@ermine/system"
 import pully, { provide, PROVIDER } from "@ermine/pully"
 import patchy, { createPatch } from "@ermine/patchy/feature"
+import { manual } from "../../../ermine/system/typescript/manual_fixture.ts"
 
-const quiet = { schedule: () => {} }
+const quiet = { features: [manual] }
 
 // in a fresh ermine: provide and createPatch, as a program
 function use() {

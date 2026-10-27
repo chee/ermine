@@ -30,6 +30,11 @@
 //                                   base's so far; next gives the inner hooks' (the base's last).
 //                                   a field it adds is the feature's to name (pully's provider).
 //                                   not called for a node not there
+//   onId(kind, next)                each new id: kind "node" (a node's, the root's, the host's) or
+//                                   "process"; next gives the base's (uuidv7; proc:<boot>-<n>)
+//   onSchedule(pulse, next)         each ask for a pulse soon (one at a time): next(pulse) runs it
+//                                   in a microtask; not called: pulse is the hook's to run, or not
+//   onCreateFunction(made, next)    each memo, effect and action made (an inspector's)
 //   reserveSlot()                   per-process state only this feature reaches, by context
 // and, in a hook (made after setup; before: not-yet), what a feature acts with: context(process?)
 // a running process's context (none: the host's); to act as one, context.within(() => …) round
@@ -51,7 +56,15 @@ import type { Run } from "@ermine/processes/runs"
 import { PENDING, type Scheduler, type Scope } from "@ermine/core/scheduler"
 import type { Key, Table } from "@ermine/core/table"
 import { Refusal } from "@ermine/core/places/guard"
-import type { Node, NodeData, ProcessContext, Version, Why, Write } from "./context.ts"
+import type {
+	CreatedFunction,
+	Node,
+	NodeData,
+	ProcessContext,
+	Version,
+	Why,
+	Write,
+} from "./context.ts"
 import type { Status } from "./system.ts"
 
 // what createErmine and its parts throw, by code
@@ -138,7 +151,12 @@ export type Hooks = {
 	onTeardown: (scope: Scope, why: Why, next: (scope: Scope, why: Why) => void) => void
 	onRecord: (record: Recorded, next: (record: Recorded) => void) => void
 	onStatus: (x: Asked, status: Status, next: (x: Asked, status: Status) => Status) => Status
+	onId: (kind: IdKind, next: (kind: IdKind) => string) => string
+	onSchedule: (pulse: () => void, next: (pulse: () => void) => void) => void
+	onCreateFunction: (made: CreatedFunction, next: (made: CreatedFunction) => void) => void
 }
+// what a new id is for
+export type IdKind = "node" | "process"
 export type Hook = keyof Hooks
 export const HOOKS: readonly Hook[] = [
 	"onTable",
@@ -147,6 +165,9 @@ export const HOOKS: readonly Hook[] = [
 	"onTeardown",
 	"onRecord",
 	"onStatus",
+	"onId",
+	"onSchedule",
+	"onCreateFunction",
 ]
 
 // per-process state, by context: only who holds the slot reaches it
@@ -167,6 +188,9 @@ export type FeatureAPI = {
 	onTeardown: (hook: Hooks["onTeardown"]) => void
 	onRecord: (hook: Hooks["onRecord"]) => void
 	onStatus: (hook: Hooks["onStatus"]) => void
+	onId: (hook: Hooks["onId"]) => void
+	onSchedule: (hook: Hooks["onSchedule"]) => void
+	onCreateFunction: (hook: Hooks["onCreateFunction"]) => void
 	reserveSlot: <T>() => Slot<T>
 	// in a hook (before: not-yet): the host's process context; a process's while it runs (stopped,
 	// or not this ermine's: undefined). acting as one: context.within(() => …), @ermine/system's
@@ -272,6 +296,9 @@ export function install(
 		onTeardown: [],
 		onRecord: [],
 		onStatus: [],
+		onId: [],
+		onSchedule: [],
+		onCreateFunction: [],
 	} as {
 		[H in Hook]: Hooked<H>[]
 	}
@@ -316,6 +343,9 @@ export function install(
 			onTeardown: adder("onTeardown"),
 			onRecord: adder("onRecord"),
 			onStatus: adder("onStatus"),
+			onId: adder("onId"),
+			onSchedule: adder("onSchedule"),
+			onCreateFunction: adder("onCreateFunction"),
 			getProcessContext: ((process?: Process) =>
 				got("getProcessContext", parts.getProcessContext)(process)) as FeatureAPI[
 					"getProcessContext"
