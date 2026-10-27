@@ -324,6 +324,45 @@ Deno.test("@ermine/system: a second copy of its module (another URL) finds the s
 	e.close()
 })
 
+Deno.test("@ermine/system: a memo's earlier promise settling late leaves it awaiting the latest's", async () => {
+	const e = createErmine({ features: [manual] })
+	const settle: ((v: number) => void)[] = []
+	let memo: unknown
+	e.within(() => ensureNode("/k", 0))
+	e.start(() => {
+		memo = createMemo("m", () => {
+			read("/k")
+			return new Promise<number>((r) => settle.push(r))
+		})
+		// kept running by an effect reading it
+		createEffect("e", () => {
+			try {
+				read("./m")
+			} catch { /* pending */ }
+		}, () => {})
+	}, "/code/p")
+	for (const i of [1, 2]) {
+		e.within(() => patch("/k", [{ path: [], value: i }]))
+		e.within(() => pulse())
+		await new Promise((r) => setTimeout(r))
+	}
+	assertEquals(settle.length, 2)
+	const state = () => e.within(() => getStatus(memo as never))?.state
+	const waiting = () =>
+		e.within(() => getStatus(memo as never) as { waiting?: unknown[] })?.waiting
+	assertEquals(state(), "pending")
+	assertEquals(waiting(), ["a promise"])
+	settle[0](1)
+	await new Promise((r) => setTimeout(r))
+	assertEquals(state(), "pending")
+	assertEquals(waiting(), ["a promise"])
+	settle[1](2)
+	await new Promise((r) => setTimeout(r))
+	e.within(() => pulse())
+	assertEquals(state(), "done")
+	e.close()
+})
+
 Deno.test("@ermine/system: a pipe that stops its own process, then throws, is not the pulse's error", () => {
 	const e = createErmine({ features: [manual] })
 	e.within(() => ensureNode("/src", 1))

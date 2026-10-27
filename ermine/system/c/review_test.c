@@ -171,6 +171,81 @@ static void pipe_heard_with(int verdict) {
 	pr_policy_free(may);
 }
 
+// a memo giving a promise on each run: an earlier one settling late leaves it awaiting the latest's
+static es_promise *given[4];
+static size_t ngiven;
+static es_out gives_a_promise(es_context *c, void *ctx, const op_value *previous) {
+	(void)ctx, (void)previous;
+	const op_value *v;
+	int code = es_read(c, es_on_path(es_text("/k")), NULL, 0, &v);
+	if (code) return es_out_code(code);
+	es_promise *p = es_promise_new(c->ermine);
+	given[ngiven++] = p;
+	return es_out_of(es_promise_value(p));
+}
+// kept running by an effect reading the memo
+static es_out reads_the_memo(es_context *c, void *ctx, const op_value *previous) {
+	(void)ctx, (void)previous;
+	const op_value *v;
+	int code = es_read(c, es_on_path(es_text("m")), NULL, 0, &v);
+	if (code == ES_PENDING) return es_out_of(NULL);
+	if (code) return es_out_code(code);
+	return es_out_of(v == NULL ? NULL : op_ref((op_value *)v));
+}
+static int does_nothing(es_context *c, void *ctx, const op_value *value, const op_value *before) {
+	(void)c, (void)ctx, (void)value, (void)before;
+	return 0;
+}
+static es_handle *the_memo;
+static es_out makes_a_memo(es_context *c, void *ctx) {
+	(void)ctx;
+	es_handle *h;
+	int code = es_create_memo(c, es_text("m"), gives_a_promise, NULL, NULL, &the_memo);
+	CHECK(code == 0 || code == ES_PENDING);
+	code = es_create_effect(c, es_text("e"), reads_the_memo, does_nothing, NULL, NULL, &h);
+	CHECK(code == 0 || code == ES_PENDING);
+	return es_out_of(NULL);
+}
+static int waits_on_a_promise(es_ermine *e) {
+	es_status st = {0};
+	CHECK(es_get_status(e->host_context, es_on_node(the_memo), &st) == 0);
+	int yes = st.nwaiting == 1 && st.waiting[0].kind == ES_WAIT_PROMISE;
+	es_status_free(&st);
+	return yes;
+}
+static void stale_promise_settling(void) {
+	es_ermine *e = NULL;
+	CHECK(es_create(&(es_options){0}, &e) == 0);
+	es_handle *h;
+	op_value *zero = op_num(0);
+	CHECK(es_ensure_node(e->host_context, es_text("/k"), zero, &h) == 0);
+	ngiven = 0;
+	es_started *started = NULL;
+	es_refused no = {0};
+	CHECK(es_start(e, makes_a_memo, NULL, es_text("/code/p"), NULL, &started, &no) == 0);
+	for (int i = 1; i <= 2; i++) {
+		op_value *v = op_num(i);
+		op_patch p = {.has_value = 1, .value = v};
+		CHECK(es_patch(e->host_context, es_on_path(es_text("/k")), &p, 1) == 0);
+		CHECK(es_pulse(e->host_context) == 0);
+		op_free(v);
+	}
+	CHECK(ngiven == 3);
+	CHECK(waits_on_a_promise(e));
+	es_promise_resolve(given[1], op_num(1));
+	CHECK(es_pulse(e->host_context) == 0);
+	CHECK(waits_on_a_promise(e));
+	es_promise_resolve(given[2], op_num(2));
+	CHECK(es_pulse(e->host_context) == 0);
+	CHECK(!waits_on_a_promise(e));
+	for (size_t i = 0; i < ngiven; i++) es_promise_release(given[i]);
+	es_stop(started, NULL);
+	es_started_free(started);
+	op_free(zero);
+	CHECK(es_close(e) == 0);
+	es_free(e);
+}
+
 // a finding's name given: that one alone
 int main(int argc, char **argv) {
 	const char *only = argc > 1 ? argv[1] : NULL;
@@ -181,6 +256,7 @@ int main(int argc, char **argv) {
 	RUN("next-changed", next_called_twice(1));
 	RUN("no-text", failing_with_no_text());
 	RUN("pipe-pending", pipe_heard_with(PR_PENDING));
+	RUN("stale-promise", stale_promise_settling());
 	if (!failed) puts("review: ok");
 	return failed;
 }
