@@ -69,6 +69,9 @@ export function suites(): Suite[] {
 			}
 		}
 	}
+	const claimed: Record<string, Record<string, string>> = JSON.parse(
+		Deno.readTextFileSync(`${root}conformance/implementations.json`),
+	)
 	for (const path of packages) {
 		const dir = `${root}${path}/conformance`
 		let names: Deno.DirEntry[]
@@ -80,15 +83,31 @@ export function suites(): Suite[] {
 		for (const d of names) {
 			const fixtures = `${dir}/${d.name}/`
 			let options: Options = {}
+			const file = `${fixtures}suite.json`
+			let text: string | undefined
 			try {
-				options = JSON.parse(Deno.readTextFileSync(`${fixtures}suite.json`))
-			} catch { /* none */ }
+				text = Deno.readTextFileSync(file)
+			} catch (e) {
+				if (!(e instanceof Deno.errors.NotFound)) throw e
+			}
+			// no suite.json is no options; a broken one is an error
+			if (text !== undefined) {
+				try {
+					options = JSON.parse(text)
+				} catch (e) {
+					throw new Error(`${file}: ${e}`)
+				}
+			}
 			const pkg = `${root}${path}`
 			const shared = options.harness ?? d.name
 			const typescript = `${pkg}/typescript/${shared}_harness.ts`
 			try {
 				Deno.statSync(typescript)
 			} catch {
+				// a suite implementations.json gives a TypeScript harness must have it; others have none yet
+				if (claimed.typescript?.[d.name] !== undefined) {
+					throw new Error(`suite ${d.name}: no TypeScript harness at ${typescript}`)
+				}
 				continue
 			}
 			found.push({
