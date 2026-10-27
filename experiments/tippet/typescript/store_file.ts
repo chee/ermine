@@ -38,6 +38,12 @@ const frames = (bytes: Uint8Array) => {
 	return { frames: out, end: at }
 }
 
+// a file's bytes on disk
+async function synced(path: string) {
+	const f = await Deno.open(path, { write: true })
+	await f.syncData().finally(() => f.close())
+}
+
 export function fileStore(dir: string): Store {
 	const records = `${dir}/log`, snap = `${dir}/snapshot`, keyfile = `${dir}/key`
 	const opens = `${dir}/open`
@@ -123,12 +129,14 @@ export function fileStore(dir: string): Store {
 		async snapshot(bytes) {
 			await ready()
 			await Deno.writeFile(`${snap}.new`, bytes)
+			await synced(`${snap}.new`)
 			await Deno.rename(`${snap}.new`, snap)
 		},
 		async key(seed) {
 			await ready()
 			try {
 				await Deno.writeFile(keyfile, seed, { createNew: true, mode: 0o600 })
+				await synced(keyfile)
 				return seed
 			} catch (e) {
 				if (!(e instanceof Deno.errors.AlreadyExists)) throw e
