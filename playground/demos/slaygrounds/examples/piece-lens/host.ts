@@ -3,6 +3,7 @@
 // CodeMirror. what the person types is the host's to tell: an editor's listener has nothing open to
 // write in, so the host runs the process's on/typed with each change (executeAction, as the host)
 import { createWorld } from "@ermine/slaygrounds/world"
+import { executeAction } from "@ermine/system"
 import { render } from "ermine-h"
 
 const cm = await import(
@@ -19,7 +20,9 @@ const world = createWorld({
 			const editor = cm.createTextEditor()
 			editor.onedit = (changes: unknown, before: string) => {
 				try {
-					world.ermine.executeAction(`/${at.join("/")}/on/typed`, changes, before)
+					world.ermine.within(() =>
+						executeAction(`/${at.join("/")}/on/typed`, changes, before)
+					)
 				} catch { /* the process is not up (replaced): nothing to tell */ }
 			}
 			return editor

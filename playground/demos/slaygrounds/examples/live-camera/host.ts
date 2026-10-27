@@ -7,6 +7,7 @@
 // source's on/frame, each second every process's on/stats, and the editor's typing (debounced) the
 // transform's on/edit, all run as the host (executeAction)
 import { createWorld } from "@ermine/slaygrounds/world"
+import { executeAction, peep, read } from "@ermine/system"
 import { render } from "ermine-h"
 
 const cm = await import(
@@ -111,13 +112,13 @@ const e = world.ermine
 function act(process: string, name: string, ...args: unknown[]) {
 	if (!world.world.processes.has(process)) return
 	try {
-		e.executeAction(`/${process}/on/${name}`, ...args)
+		e.within(() => executeAction(`/${process}/on/${name}`, ...args))
 	} catch { /* the process is not up yet */ }
 }
 // a node's value as the host reads it, none: undefined
 const peek = (path: string) => {
 	try {
-		return e.peep(() => e.read(path))
+		return e.within(() => peep(() => read(path)))
 	} catch {
 		return undefined
 	}

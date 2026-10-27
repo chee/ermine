@@ -78,7 +78,7 @@ function callerName(c: unknown): string {
 	const node = typeof c === "object" && c !== null && "node" in c
 		? (c as { node: unknown }).node
 		: c
-	if (node === ermine.node) return "host"
+	if (node === ermine.id || (node as { id?: unknown } | null)?.id === ermine.id) return "host"
 	return named.get(node) ?? String(node)
 }
 
@@ -110,8 +110,6 @@ export function change(x: Parameters<typeof getNode>[0] | object): ChangeHeader 
 	return id === undefined ? undefined : places.readChange(d.part ?? "value", id)
 }
 
-
-
 export function up(
 	address: readonly string[],
 	from: readonly string[] = at() ?? [],
@@ -131,7 +129,6 @@ export function up(
 export function inspect(address: readonly string[]) {
 	need().inspect(address)
 }
-
 
 export function host<T = Record<string, unknown>>(): T {
 	const { extras } = need()

@@ -1,4 +1,5 @@
 import { createWorld } from "@ermine/slaygrounds/world"
+import { ensureNode, executeAction, hasNode, list, patch, read, remove } from "@ermine/system"
 import { trace } from "@ermine/core/scheduler/trace"
 import * as lib from "@ermine/core/places/lib"
 import { render } from "ermine-h"
@@ -129,14 +130,15 @@ const world = createWorld({
 				// after the run that ended is over: an action is a write
 				queueMicrotask(() => {
 					try {
-						world.ermine.executeAction(action, run)
+						as(() => executeAction(action, run))
 					} catch { /* the program has stopped */ }
 				})
 			})
 		},
 	}),
 })
-const host = world.ermine
+// the host acts as the host (process 0): its calls run inside ermine.within
+const as = <T>(f: () => T) => world.ermine.within(f)
 const folders = new Map<string, string>() // api -> the id of /cache/<api>
 // the names from the root to a node, by its id: up through the names it has (places' namesOf), the
 // first each time (the program reaches nodes by path, the host's table by id)
@@ -152,20 +154,20 @@ function pathOfId(id: unknown): string[] | undefined {
 		at = slot.folder as never
 	}
 }
-world.seed((h) => {
-	h.ensureNode("/cache", "every lookup, by the hash of its url")
-	for (const api of APIS) h.ensureNode(`/cache/${api}`)
-	h.ensureNode("/net", stats)
+world.seed(() => {
+	ensureNode("/cache", "every lookup, by the hash of its url")
+	for (const api of APIS) ensureNode(`/cache/${api}`)
+	ensureNode("/net", stats)
 	for (const [from, all] of [["seed", seedFile], ["saved", saved()]] as const) {
 		for (const [k, entry] of Object.entries(all)) {
 			const [api, key] = k.split("/")
 			if (!APIS.includes(api) || entry?.error !== undefined) continue
-			if (from === "saved" && h.hasNode(`/cache/${api}/${key}`)) continue
-			h.ensureNode(`/cache/${api}/${key}`, { ...entry, from })
+			if (from === "saved" && hasNode(`/cache/${api}/${key}`)) continue
+			ensureNode(`/cache/${api}/${key}`, { ...entry, from })
 			stats.kept[from]++
 		}
 	}
-	h.patch("/net", [{ path: [], value: structuredClone(stats) }])
+	patch("/net", [{ path: [], value: structuredClone(stats) }])
 	for (const api of APIS) folders.set(api, String(lib.get(world.ermine.places, ["cache", api])))
 })
 
@@ -178,7 +180,7 @@ function tell(change: (n: typeof stats) => void) {
 	telling = true
 	setTimeout(() => {
 		telling = false
-		host.patch("/net", [{ path: [], value: structuredClone(stats) }])
+		as(() => patch("/net", [{ path: [], value: structuredClone(stats) }]))
 	}, 250)
 }
 const said = (e: unknown) => String((e as Error)?.message ?? e)
@@ -188,7 +190,7 @@ const said = (e: unknown) => String((e as Error)?.message ?? e)
 function ask(api: string, url: string): string {
 	const key = hash(url)
 	if (!APIS.includes(api)) return key
-	if (host.hasNode(`/cache/${api}/${key}`)) tell((n) => n.hits++)
+	if (as(() => hasNode(`/cache/${api}/${key}`))) tell((n) => n.hits++)
 	else enqueue(api, url, key)
 	return key
 }
@@ -233,8 +235,8 @@ function enqueue(api: string, url: string, key: string) {
 		inflight.delete(api + "/" + key)
 		// an answer (or a failure) as the node at /cache/<api>/<key>: a new one, or the one there
 		const at = `/cache/${api}/${key}`
-		if (host.hasNode(at)) host.patch(at, [{ path: [], value: entry }])
-		else host.ensureNode(at, entry)
+		if (as(() => hasNode(at))) as(() => patch(at, [{ path: [], value: entry }]))
+		else as(() => ensureNode(at, entry))
 		tell((n) => {
 			n.waiting[server] = Math.max(0, (n.waiting[server] ?? 1) - 1)
 			if (entry.error) n.failed++
@@ -265,9 +267,9 @@ function pump(server: string) {
 // failures taken out, so whoever read them asks again (all, or one api's)
 function retry(api?: string) {
 	for (const a of api ? [api] : APIS) {
-		for (const name of host.list(`/cache/${a}`)) {
+		for (const name of as(() => list(`/cache/${a}`))) {
 			const at = `/cache/${a}/${name}`
-			if ((host.read(at) as Entry | undefined)?.error !== undefined) host.remove(at)
+			if ((as(() => read(at)) as Entry | undefined)?.error !== undefined) as(() => remove(at))
 		}
 	}
 }
@@ -277,8 +279,8 @@ addEventListener("online", () => retry())
 function dump() {
 	const out: Record<string, unknown> = {}
 	for (const api of APIS) {
-		for (const name of host.list(`/cache/${api}`)) {
-			const v = host.read(`/cache/${api}/${name}`) as Entry | undefined
+		for (const name of as(() => list(`/cache/${api}`))) {
+			const v = as(() => read(`/cache/${api}/${name}`)) as Entry | undefined
 			if (v?.result !== undefined) {
 				out[`${api}/${name}`] = { api, url: v.url, at: v.at, ms: v.ms, result: v.result }
 			}

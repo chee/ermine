@@ -3,20 +3,23 @@
 // live values as stand-ins) has its nodes put in the table, and its root placed under /loaded
 import { unpack } from "@ermine/formats/pack"
 import { createWorld } from "@ermine/slaygrounds/world"
+import { createAction, ensureNode, list, patch, place } from "@ermine/system"
 import { render } from "ermine-h"
 
 const world = createWorld({ render, processes: [{ name: "loader" }] })
 
-world.seed((host) => {
-	const said = host.open("/host/said", "nothing loaded yet")
-	host.open("/loaded", null)
-	const say = (text: string) => host.edit(said, () => text)
+world.seed(() => {
+	// after an await the action is no longer inside the host: its calls run as the host again
+	const as = <T>(f: () => T) => world.ermine.within(f)
+	const said = ensureNode("/host/said", "nothing loaded yet")
+	ensureNode("/loaded", null)
+	const say = (text: string) => as(() => patch(said, [{ path: [], value: text }]))
 	const { table, s } = world.world
 
 	// a free name under /loaded: the file's name without .ermine, then "name 2", "name 3"…
 	function free(file: string) {
 		const base = file.replace(/\.ermine$/, "").replace(/^\.*$/, "") || "graph"
-		const taken = host.list("/loaded")
+		const taken = as(() => list("/loaded"))
 		let name = base
 		for (let n = 2; taken.includes(name); n++) name = `${base} ${n}`
 		return name
@@ -27,7 +30,7 @@ world.seed((host) => {
 	// the saved root is keyed "root", as this world's own is: it is given a fresh id, and a children
 	// entry naming it names that. every other id is kept: one already in this table is the same
 	// node, and what is here stays (a file dropped twice: a second root, over the same nodes)
-	host.method("/host/on/load", async (file: File) => {
+	createAction("/host/on/load", async (file: File) => {
 		let entries: ReturnType<typeof unpack>
 		try {
 			entries = unpack(new Uint8Array(await file.arrayBuffer()))
@@ -52,13 +55,13 @@ world.seed((host) => {
 			else table.add(part as "value", at, n as never)
 		}
 		const name = free(file.name)
-		host.place(`/loaded/${name}`, { id: fresh, part: "value" })
+		as(() => place(`/loaded/${name}`, { id: fresh, part: "value" }))
 		s.pulse()
 		say(
 			`${file.name} → /loaded/${name}: ${file.size} bytes, ${ids.size} ids, ${nodes.size} nodes` +
 				(here ? `, ${here} already here (kept as they were)` : ""),
 		)
-		host.inspect(["loaded", name]) // the graph tab, at what was placed
+		;(window.parent as any)?.__pick?.(["loaded", name]) // the graph tab, at what was placed
 	})
 })
 

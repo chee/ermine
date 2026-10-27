@@ -6,6 +6,7 @@
 //               colour and shape (cube, sphere, line, none). every other name under it is a child
 //   /spin       its target is a mount, placed here; "spin this" places another object there
 import { createWorld } from "@ermine/slaygrounds/world"
+import { ensureNode, place } from "@ermine/system"
 import { render } from "ermine-h"
 
 const world = createWorld({
@@ -13,18 +14,18 @@ const world = createWorld({
 	processes: [{ name: "view", export: "view" }, { name: "spinner", export: "spin" }],
 })
 
-world.seed((host) => {
+world.seed(() => {
 	const object = (
 		at: string,
 		o: { shape?: string; colour?: string; p?: number[]; r?: number[]; s?: number[] } = {},
 	) => {
-		host.ensureNode(`${at}/transform`, {
+		ensureNode(`${at}/transform`, {
 			p: o.p ?? [0, 0, 0],
 			r: o.r ?? [0, 0, 0],
 			s: o.s ?? [1, 1, 1],
 		})
-		host.ensureNode(`${at}/colour`, o.colour ?? "#ffffff")
-		host.ensureNode(`${at}/shape`, o.shape ?? "none")
+		ensureNode(`${at}/colour`, o.colour ?? "#ffffff")
+		ensureNode(`${at}/shape`, o.shape ?? "none")
 	}
 	object("/scene/floor", { shape: "cube", colour: "#ffff88", p: [0, -0.06, 0], s: [7, 0.12, 7] })
 	const c = "/scene/carousel"
@@ -60,15 +61,15 @@ world.seed((host) => {
 		p: [0, 0.12, -0.5],
 		s: [0.16, 0.16, 0.16],
 	})
-	host.place(`${c}/arm-b/pony`, pony)
+	place(`${c}/arm-b/pony`, pony)
 	// arm-c: a ball to sit on, not an instance
 	const ball = `${c}/arm-c/ball`
 	object(ball, { p: [1.3, 1.25, 0] })
 	object(`${ball}/rod`, { shape: "line", colour: "#000000", s: [1, 1.75, 1] })
 	object(`${ball}/seat`, { shape: "sphere", colour: "#2269ff", s: [0.62, 0.62, 0.62] })
 	// what the spinner turns: the carousel, placed again at /spin/target (a mount)
-	host.ensureNode("/spin/speed", 45)
-	host.place("/spin/target", c)
+	ensureNode("/spin/speed", 45)
+	place("/spin/target", c)
 })
 
 export const reload = world.reload

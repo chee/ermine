@@ -14,9 +14,9 @@ const e = world.ermine
 
 type Said = { starts: number; stops: number; log: unknown[] }
 
-world.seed((h) => {
-	h.ensureNode("/dev/clock", { time: "--:--:--", ticks: 0 })
-	h.ensureNode("/provider", { awake: false, ticks: 0, starts: 0, stops: 0, log: [] })
+world.seed(() => {
+	ensureNode("/dev/clock", { time: "--:--:--", ticks: 0 })
+	ensureNode("/provider", { awake: false, ticks: 0, starts: 0, stops: 0, log: [] })
 })
 
 let ticks = 0
@@ -45,11 +45,13 @@ const started = e.start(() => {
 				const tick = () => {
 					ticks++
 					// from a timer, nothing is open: the host writes, as it does the beat
-					e.patch("/dev/clock", [
-						{ path: ["time"], value: hhmmss() },
-						{ path: ["ticks"], value: ticks },
-					])
-					e.patch("/provider", [{ path: ["ticks"], value: ticks }])
+					e.within(() => {
+						patch("/dev/clock", [
+							{ path: ["time"], value: hhmmss() },
+							{ path: ["ticks"], value: ticks },
+						])
+						patch("/provider", [{ path: ["ticks"], value: ticks }])
+					})
 				}
 				tick()
 				timer = setInterval(tick, 1000)

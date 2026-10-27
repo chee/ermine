@@ -4,11 +4,11 @@
 //   import { createWorld } from "@ermine/slaygrounds/world"
 //   import { render } from "ermine-h"
 //   const world = createWorld({ render, processes: [{ name: "counter" }] })
-//   world.seed((host) => host.ensureNode("/data/n", 21))
+//   world.seed(() => ensureNode("/data/n", 21))
 //   export const reload = world.reload
 //
-// a world is one createErmine (the host's object, world.ermine: @ermine/system's functions bound to
-// the host, so a bare name or "/" is the root), and what the page needs beside it: boxes in the
+// a world is one createErmine (the host's object, world.ermine; the host calls @ermine/system's functions inside
+// ermine.within, which seed does), and what the page needs beside it: boxes in the
 // page, ermine-h's view of a process, the inspector's names. a program is a module; each process
 // runs one export (default "default"), given nothing: it imports @ermine/system's functions and
 // the world's tools (tools.ts) and calls them while it runs. its return, a view or an element, is
@@ -36,14 +36,19 @@ import type { Process } from "@ermine/processes/start"
 import {
 	type CreatedFunction,
 	createErmine,
+	ensureNode,
 	type Ermine,
 	executeAction,
+	type Feature,
+	patch,
+	patchAttributes,
 	type Started,
 } from "@ermine/system"
 import { installTypes, type Known } from "@ermine/types"
 import type { Policy } from "@ermine/core/protect"
 import { startSweeper, type World as PresenceWorld } from "@ermine/together/presence"
 import patchy from "@ermine/patchy/feature"
+import * as sys from "@ermine/system"
 import { use } from "@ermine/slaygrounds/tools"
 
 const JS = "com.netscape.javascript-source"
@@ -82,6 +87,8 @@ export type Options = {
 	presence?: { sweep?: number }
 	// patch nodes (extensions/patchy): the feature, so a patch node is read through
 	overlay?: boolean
+	// features beyond patchy's (extensions/pully, ...), given to createErmine as they are
+	features?: readonly Feature[]
 	// the types (@ermine/types) at /ermine/types, before any seed: true, the well-known list; a list,
 	// those too, after it
 	types?: true | readonly Known[]
@@ -122,10 +129,16 @@ export function createWorld(o: Options) {
 
 	const ermine: Ermine = createErmine({
 		scheduler: s,
-		features: o.overlay ? [patchy] : [],
+		features: [
+			...(o.overlay ? [patchy] : []),
+			...(o.features ?? []),
+			{
+				name: "demo-world",
+				setup: (f) => f.onCreateFunction((m, next) => (notice(m), next(m))),
+			},
+		],
 		may: o.may,
 		info: { actor: o.actor ?? "chee@laptop" },
-		onCreateFunction: notice,
 	})
 	const { places, table } = ermine
 	const hostScope = ermine.getProcessContext()!.scope
@@ -242,10 +255,11 @@ export function createWorld(o: Options) {
 	// a program's code at /code/<name>: a live function, typed javascript (reload writes the exports
 	// its processes run; a host, any other)
 	function code(name: string, fn: unknown) {
-		const node = ermine.ensureNode(`/code/${name}`)
-		ermine.patch(node, [{ path: [], value: fn }])
-		ermine.patchAttributes(node, [{ path: [], value: { "ermine.type": JS } }])
-		ermine.pulse()
+		ermine.within(() => {
+			const node = ensureNode(`/code/${name}`)
+			patch(node, [{ path: [], value: fn }])
+			patchAttributes(node, [{ path: [], value: { "ermine.type": JS } }])
+		})
 	}
 
 	// a program made a process's setup: its view made real in its box, any other return its value; a
@@ -296,13 +310,11 @@ export function createWorld(o: Options) {
 				processes.set(spec.name, started.process)
 			}
 		}
-		ermine.pulse()
 	}
 
 	// host writes before any program runs: the host's own functions, at the root
-	function seed(f: (host: Ermine) => void) {
-		f(ermine)
-		ermine.pulse()
+	function seed(f: (ermine: Ermine) => void) {
+		ermine.within(() => f(ermine))
 	}
 
 	// a process stopped by its name
@@ -325,7 +337,7 @@ export function createWorld(o: Options) {
 		pending: (id: Id) => isPending(places, id),
 		moments,
 		call: (address: string[], args: unknown[]) =>
-			ermine.executeAction("/" + address.join("/"), ...args),
+			ermine.within(() => executeAction("/" + address.join("/"), ...args)),
 		defined,
 		binds,
 		// the latest run of a memo's or effect's node (ermine.records): its record, or one field of it

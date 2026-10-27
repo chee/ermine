@@ -2,6 +2,7 @@
 // program.ts: the clock counts /time, the view reads it. the host is the timer: it writes /beat each
 // second (a program has no timer that can write)
 import { createWorld } from "@ermine/slaygrounds/world"
+import { ensureNode, patch } from "@ermine/system"
 import { render } from "ermine-h"
 
 const world = createWorld({
@@ -12,10 +13,10 @@ const world = createWorld({
 	extend: () => ({ kill: (name: string) => world.world.stop(name) }),
 })
 
-world.seed((host) => void host.ensureNode("/beat", 0))
+world.seed(() => void ensureNode("/beat", 0))
 let beats = 0
 setInterval(() => {
-	world.ermine.patch("/beat", [{ path: [], value: ++beats }])
+	world.ermine.within(() => patch("/beat", [{ path: [], value: ++beats }]))
 }, 1000)
 
 export const reload = world.reload
