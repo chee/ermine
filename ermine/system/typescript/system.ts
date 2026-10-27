@@ -129,9 +129,15 @@ import {
 	target as targetOf,
 	type Thing,
 } from "@ermine/core/places/guard"
-import { STATUS, TABLE as STATUS_TABLE } from "@ermine/core/places/status"
+import {
+	isPending,
+	STATUS,
+	status as statusOf,
+	TABLE as STATUS_TABLE,
+} from "@ermine/core/places/status"
 import type { Run, Runs } from "@ermine/processes/runs"
 import { type Computer, type Equal, PENDING, type Scope } from "@ermine/core/scheduler"
+import { isPromise } from "@ermine/core/scheduler/helpers"
 import type { Sited } from "@ermine/sites"
 import type { Key, Table } from "@ermine/core/table"
 import type { FileLocation } from "@ermine/core/util/stacktrace"
@@ -143,7 +149,6 @@ import { type Asked, ErmineError, type Errored, type Reading } from "./features.
 import { dataOf, type Handles, isHandle, mint } from "./handles.ts"
 import {
 	type Inner,
-	isThen,
 	type Node,
 	type NodeData,
 	type Parts,
@@ -668,7 +673,7 @@ function read(inner: Inner, x: Target, path: readonly Step[] = []): unknown {
 	if (state.peeping === 0) calls.read(n.part, id, path)
 	if (n.part === "value" && memos.has(id)) {
 		const v = places.readValue("value", id, path)
-		if (v === undefined && places.readValue(STATUS_TABLE, id, [STATUS]) === PENDING) {
+		if (v === undefined && isPending(places, id)) {
 			throw PENDING
 		}
 		return v
@@ -1011,7 +1016,7 @@ function told(inner: Inner, p: Piped, w: Watched, back: boolean, byPipe: boolean
 		s.runWithScope(p.scope, () => {
 			// a promise given: its rejection fails the pipe's status (else unobserved)
 			const observed = <T>(r: T): T => {
-				if (isThen(r)) r.then(undefined, (e: unknown) => pipeStatus(inner, p, e))
+				if (isPromise(r)) r.then(undefined, (e: unknown) => pipeStatus(inner, p, e))
 				return r
 			}
 			if (p.tell !== undefined) return void observed(p.tell(w))
@@ -1494,7 +1499,7 @@ const ran = (inner: Inner, m: Made, previous: unknown) => {
 	const { base } = here(inner)
 	const r = m.code.f(previous)
 	given.set(m, r)
-	if (isThen(r)) {
+	if (isPromise(r)) {
 		base.awaiting.add(m.id)
 		// an earlier run's promise settling late leaves the node awaiting the latest's
 		const done = () => void (given.get(m) === r && base.awaiting.delete(m.id))
@@ -1730,7 +1735,7 @@ function stepped(inner: Inner, call: Scope, g: Going, make: () => Steps): Promis
 		const run = (r: IteratorResult<unknown>) => {
 			if (finished) return
 			if (r.done) return ok(r.value)
-			if (isThen(r.value)) {
+			if (isPromise(r.value)) {
 				return void r.value.then((v) => step(v), (e) => step(e, true))
 			}
 			step(r.value)
@@ -1796,7 +1801,7 @@ function executeAction(inner: Inner, p: Target, ...args: unknown[]): unknown {
 		queuePulse()
 		throw e
 	}
-	if (isThen(out)) {
+	if (isPromise(out)) {
 		const ended = () => {
 			s.teardown(call)
 			queuePulse()
@@ -2050,7 +2055,7 @@ const saidOf = (inner: Inner, owner: Id, w: unknown): Waiting => {
 function ownStatus(inner: Inner, n: NodeData, id: Id): Status {
 	const { base, calls, runs, places, guard, guarded } = here(inner)
 	if (guarded) guard.read(targetOf(thing(id, n.path), STATUS_TABLE, [STATUS]))
-	const st = places.readValue(STATUS_TABLE, id, [STATUS])
+	const st = statusOf(places, id)
 	const h = base.held.status(id) ?? base.held.row(id)
 	const held = h === undefined ? {} : { held: h }
 	if (!base.computers.has(id)) {
@@ -2078,7 +2083,7 @@ function ownStatus(inner: Inner, n: NodeData, id: Id): Status {
 	for (const w of r?.reads ?? []) {
 		if (!("part" in w) || w.part !== STATUS_TABLE || w.id === id) continue
 		if (w.path?.length !== 1 || w.path[0] !== STATUS) continue
-		if (places.peep(() => places.readValue(STATUS_TABLE, w.id, [STATUS])) === PENDING) {
+		if (places.peep(() => isPending(places, w.id))) {
 			waiting.push({ node: seen(inner, w.id) ?? null })
 		}
 	}

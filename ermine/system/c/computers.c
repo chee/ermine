@@ -901,7 +901,7 @@ typedef struct {
 
 static void peek(void *ctx) {
 	peeking *p = ctx;
-	p->pending = cst_is_pending(status_field(p->places, p->id, CST_ATTRIBUTE));
+	p->pending = cst_pending(p->places, tb_string(p->id));
 }
 
 // a process's (or any node nothing computes) status
@@ -1020,7 +1020,7 @@ static int own_status(es_context *c, es_context *t, const es_node_data *n, const
 	es_ermine *e = c->ermine;
 	int code = ask_status(t, id, n);
 	if (code) return code;
-	const op_value *v = status_field(t->places, id, CST_ATTRIBUTE);
+	const op_value *v = cst_status(t->places, tb_string(id));
 	if (pl_status(t->places) == SC_STOP) return ES_STOP;
 	es_held h;
 	if (es_held_status(e, id, &h) || es_held_row(e, id, &h)) {

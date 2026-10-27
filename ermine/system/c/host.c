@@ -132,17 +132,6 @@ es_out es_out_code(int code) {
 }
 
 // an ErmineError's message: "code: message"
-static int ermine_fail(int code, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
-static int ermine_fail(int code, const char *fmt, ...) {
-	va_list args;
-	va_start(args, fmt);
-	char *body = format(fmt, args);
-	va_end(args);
-	es_fail(code, "%s: %s", es_code_name(code), body);
-	free(body);
-	return code;
-}
-
 int es_fail_ermine(int code, const char *fmt, ...) {
 	va_list args;
 	va_start(args, fmt);
@@ -191,11 +180,6 @@ static char **parse_steps(const char *text, size_t *n) {
 		p = q + 1;
 	}
 	return v;
-}
-
-static void free_names(char **names, size_t n) {
-	for (size_t i = 0; i < n; i++) free(names[i]);
-	free(names);
 }
 
 static op_value *names_value(const char *const *names, size_t n) {
@@ -448,7 +432,7 @@ es_context *es_found(const char *name) {
 		es_context *c = es_context_at(sc_get_current_scope(scheds[i].s));
 		if (c != NULL) return c;
 	}
-	ermine_fail(ES_NOTHING_OPEN,
+	es_fail_ermine(ES_NOTHING_OPEN,
 		"%s: nothing is open here (a module's top level, a timer, a listener, or after an await): "
 		"call it from a setup, a memo, an effect or an action",
 		name);
@@ -493,7 +477,7 @@ void es_drop(void *value, void *data) {
 }
 
 int es_alive(es_ermine *e) {
-	return e->closed ? ermine_fail(ES_CLOSED, "ermine is closed") : 0;
+	return e->closed ? es_fail_ermine(ES_CLOSED, "ermine is closed") : 0;
 }
 
 const char *es_why_of(es_ermine *e, const char *process) { return es_map_get(&e->whys, process); }
@@ -524,7 +508,7 @@ int es_header(es_ermine *e, ch_header *out, pl_made **made) {
 	char *bad = pl_header(e->places, NULL, 0, site, out, &block);
 	if (bad != NULL) {
 		int code = strcmp(bad, SC_UNSCOPED) == 0
-			? ermine_fail(ES_NOTHING_OPEN, "a write needs a scope open")
+			? es_fail_ermine(ES_NOTHING_OPEN, "a write needs a scope open")
 			: es_fail_text(bad);
 		free(bad);
 		return code;
@@ -693,7 +677,7 @@ static const char *row_at(es_ermine *e, const char *root, char *const *at, size_
 }
 static void row_free(row_rec *r) {
 	free(r->root);
-	free_names(r->at, r->nat);
+	pr_names_free(r->at, r->nat);
 	free(r);
 }
 static row_rec *row_held(es_ermine *e, const char *id) {
@@ -1148,7 +1132,7 @@ static int add_hook(es_feature_api *f, es_hook kind, hook_rec rec) {
 	fapi *a = f->private_;
 	hosting *h = host_of(a->e);
 	if (!h->adding) {
-		return ermine_fail(ES_SETUP_ONLY, "%s's %s: add the feature to createErmine", a->name,
+		return es_fail_ermine(ES_SETUP_ONLY, "%s's %s: add the feature to createErmine", a->name,
 			HOOK_NAMES[kind]);
 	}
 	rec.feature = a->name;
@@ -1201,7 +1185,7 @@ int es_listened(es_feature_api *f, sc_listener *l) {
 // what is made after setup: a feature asking before gets not-yet
 static int after_setup(const char *what, int ready) {
 	if (ready) return 0;
-	return ermine_fail(ES_NOT_YET, "%s is made after setup: use it in a hook", what);
+	return es_fail_ermine(ES_NOT_YET, "%s is made after setup: use it in a hook", what);
 }
 
 int es_api_places(es_feature_api *f, pl **out) {
@@ -1263,7 +1247,7 @@ int es_api_seen(es_feature_api *f, const char *id, es_context *context, es_names
 int es_reserve_slot(es_feature_api *f, es_slot **out) {
 	fapi *a = f->private_;
 	hosting *h = host_of(a->e);
-	if (!h->adding) return ermine_fail(ES_SETUP_ONLY, "%s's reserveSlot", a->name);
+	if (!h->adding) return es_fail_ermine(ES_SETUP_ONLY, "%s's reserveSlot", a->name);
 	es_slot *s = es_alloc(sizeof *s);
 	s->next = h->slots;
 	h->slots = s;
@@ -1318,7 +1302,7 @@ static int order_visit(ordering *o, const es_feature *f) {
 			strcat(text, " \xe2\x86\x92 ");
 		}
 		strcat(text, f->name);
-		ermine_fail(ES_NEEDS_LOOP, "%s", text);
+		es_fail_ermine(ES_NEEDS_LOOP, "%s", text);
 		free(text);
 		return ES_NEEDS_LOOP;
 	}
@@ -1326,7 +1310,7 @@ static int order_visit(ordering *o, const es_feature *f) {
 	for (size_t i = 0; i < f->nneeds; i++) {
 		const es_feature *g = feature_named(o, f->needs[i]);
 		if (g == NULL) {
-			return ermine_fail(ES_MISSING_FEATURE, "%s needs %s", f->name, f->needs[i]);
+			return es_fail_ermine(ES_MISSING_FEATURE, "%s needs %s", f->name, f->needs[i]);
 		}
 		ES_PUSH(o->way, o->nway, o->capway, f->name);
 		int code = order_visit(o, g);
@@ -1352,7 +1336,7 @@ static int install(es_ermine *e, const es_options *options) {
 	int code = 0;
 	for (size_t i = 0; i < o.n && code == 0; i++) {
 		if (es_map_has(&o.named, o.features[i]->name)) {
-			code = ermine_fail(ES_FEATURE_TWICE, "%s", o.features[i]->name);
+			code = es_fail_ermine(ES_FEATURE_TWICE, "%s", o.features[i]->name);
 		} else {
 			es_map_set(&o.named, o.features[i]->name, (void *)(uintptr_t)(i + 1));
 		}
@@ -1504,7 +1488,7 @@ static void release(es_ermine *e) {
 	for (size_t k = 0; k < ES_HOOKS; k++) h->hooks[k].n = 0;
 	for (size_t i = 0; i < h->nshown; i++) {
 		free(h->shown[i].name);
-		free_names(h->shown[i].needs, h->shown[i].nneeds);
+		pr_names_free(h->shown[i].needs, h->shown[i].nneeds);
 		free(h->shown[i].hooks);
 	}
 	h->nshown = 0;
@@ -2047,7 +2031,7 @@ static int start_under(es_ermine *e, es_program fn, void *ctx, const char *const
 				break;
 			}
 		}
-		return ermine_fail(ES_TAKEN, "taken");
+		return es_fail_ermine(ES_TAKEN, "taken");
 	}
 	if (child) {
 		// the starter's: nobody holds it, it is freed as its scope is. what the starter is told is read
@@ -2071,13 +2055,13 @@ int es_start(es_ermine *e, es_program fn, void *ctx, es_at at, const es_start_op
 	TRY(es_alive(e));
 	if (refused != NULL) *refused = (es_refused){0};
 	if (fn == NULL) {
-		return ermine_fail(ES_NOT_A_FUNCTION, "start takes the program: its function");
+		return es_fail_ermine(ES_NOT_A_FUNCTION, "start takes the program: its function");
 	}
 	char **owned;
 	size_t nsteps;
 	const char *const *steps = steps_of(at, &nsteps, &owned);
 	int code = start_under(e, fn, ctx, steps, nsteps, o, NULL, NULL, NULL, out, refused);
-	free_names(owned, owned != NULL ? nsteps : 0);
+	pr_names_free(owned, owned != NULL ? nsteps : 0);
 	return code;
 }
 
@@ -2109,15 +2093,15 @@ int es_start_in(es_context *c, es_program fn, void *ctx, es_at at, const es_star
 	TRY(es_alive(e));
 	sc_scope *own = es_owner(c);
 	if (own == NULL || !sc_scope_alive(own)) {
-		return ermine_fail(ES_GONE, "gone: what this was started in has ended");
+		return es_fail_ermine(ES_GONE, "gone: what this was started in has ended");
 	}
 	const op_value *node = pair_in(own, PL_NODE);
 	if ((node != NULL && node->type == OP_STR && es_is_computer(e, node->str)) ||
 		pair_in(own, "pipe") != NULL) {
-		return ermine_fail(ES_NOT_HERE,
+		return es_fail_ermine(ES_NOT_HERE,
 			"start in a memo, effect or pipe: start a process in setup or an action");
 	}
-	if (fn == NULL) return ermine_fail(ES_NOT_A_FUNCTION, "start takes the program: its function");
+	if (fn == NULL) return es_fail_ermine(ES_NOT_A_FUNCTION, "start takes the program: its function");
 	es_names path;
 	TRY(es_resolve(c, at, &path));
 	int code = ask_starting(c, CP(path.names), path.n);
@@ -2144,7 +2128,7 @@ void es_child_free(es_child *k) {
 
 void es_refused_free(es_refused *r) {
 	if (r == NULL) return;
-	free_names(r->at, r->nat);
+	pr_names_free(r->at, r->nat);
 	free(r->held_process);
 	free(r->held_feature);
 	*r = (es_refused){0};
@@ -2247,7 +2231,7 @@ static proc_rec *process_rec(es_ermine *e, const char *id) {
 // a process this did not start: ES_NOT_HERE, as a compute is refused start (the closest the TypeScript
 // has: it has no such call, a process's stop and status are held by the one that started it)
 static int not_started_here(void) {
-	return ermine_fail(ES_NOT_HERE, "stop and status are for a process this started");
+	return es_fail_ermine(ES_NOT_HERE, "stop and status are for a process this started");
 }
 
 // the stop's ask, run in the starter's scope: the policy sees the starter, whoever calls the stop
@@ -2272,7 +2256,7 @@ int es_child_stop(es_context *c, const char *id, const char *why) {
 	const char *const *names;
 	size_t n = pr_at(rec->started.process, &names);
 	stop_ask a = {c, names, n, 0};
-	if (!sc_scope_alive(c->scope)) return ermine_fail(ES_GONE, "gone: what this was started in has ended");
+	if (!sc_scope_alive(c->scope)) return es_fail_ermine(ES_GONE, "gone: what this was started in has ended");
 	const char *bad = sc_run_with_scope(c->scope, stop_ask_run, &a);
 	if (bad != NULL) return es_fail_text(bad);
 	TRY(a.code);

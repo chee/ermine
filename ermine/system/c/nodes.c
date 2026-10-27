@@ -432,10 +432,6 @@ static char **dup_names(const char *const *src, size_t n) {
 	for (size_t i = 0; i < n; i++) out[i] = es_dup(src[i]);
 	return out;
 }
-static void free_names(char **names, size_t n) {
-	for (size_t i = 0; i < n; i++) free(names[i]);
-	free(names);
-}
 
 es_context *es_context_new(es_ermine *e, const es_context_options *o) {
 	es_context *c = es_alloc(sizeof *c);
@@ -478,9 +474,9 @@ void es_context_free(es_context *c) {
 	}
 	es_computer_forget(c);
 	gd_free(c->guard);
-	free_names(c->folder, c->nfolder);
-	free_names(c->at, c->nat);
-	free_names(c->args, c->nargs);
+	pr_names_free(c->folder, c->nfolder);
+	pr_names_free(c->at, c->nat);
+	pr_names_free(c->args, c->nargs);
 	free(c->node);
 	free(c->box);
 	free(c);
@@ -2408,8 +2404,8 @@ char *es_unplace_names(es_context *c, const char *id) {
 			bad = es_dup(thrown->message != NULL ? thrown->message : es_code_name(code));
 		}
 	}
-	free_names(folders, k);
-	free_names(names, k);
+	pr_names_free(folders, k);
+	pr_names_free(names, k);
 	return bad;
 }
 
@@ -2431,7 +2427,7 @@ static void stop_made(es_context *c, char *const *ids, size_t n) {
 			es_write w = {.part = parts[k], .id = ids[i], .gone = 1};
 			es_context_put(c, &w);
 		}
-		free_names(parts, count);
+		pr_names_free(parts, count);
 		es_stop_action(e, ids[i]);
 	}
 }
@@ -2458,7 +2454,7 @@ static void under(es_ermine *e, const char *id, idlist *l) {
 	under_go(e, id, l);
 }
 static void idlist_free(idlist *l) {
-	free_names(l->v, l->n);
+	pr_names_free(l->v, l->n);
 	es_map_free(&l->seen);
 }
 // those of l no name reaches from the root now (keep: this one always), stopped
@@ -2758,7 +2754,7 @@ static int remove_in(void *v) {
 			es_write w = {.part = parts[i], .id = id, .gone = 1};
 			code = es_context_put(c, &w);
 		}
-		free_names(parts, count);
+		pr_names_free(parts, count);
 	}
 	if (!code) {
 		crn_drop(e->runs, tb_string(id));
