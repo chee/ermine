@@ -1,0 +1,228 @@
+{
+	"title": "a writer called while any scope or run is open throws already-inside [chee: \"i think that's right\"]: from a setup, an action, a memo, an effect's act, or through the host's within; its function does not run. with nothing open it runs",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/k",
+				0
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createWriter"
+					],
+					"as": "runner"
+				},
+				{
+					"do": [
+						"createAction",
+						"on/call",
+						[
+							{
+								"do": [
+									"log",
+									"ran",
+									1
+								]
+							}
+						],
+						[
+							"withWriter",
+							"$runner",
+							[
+								{
+									"do": [
+										"patch",
+										"/k",
+										[
+											{
+												"path": [],
+												"value": 1
+											}
+										]
+									]
+								}
+							]
+						]
+					]
+				},
+				{
+					"do": [
+						"createMemo",
+						"m",
+						{},
+						[
+							"withWriter",
+							"$runner",
+							[
+								{
+									"do": [
+										"log",
+										"ran",
+										2
+									]
+								}
+							]
+						]
+					],
+					"as": "m"
+				},
+				{
+					"do": [
+						"createEffect",
+						"e",
+						[
+							"read",
+							"/k"
+						],
+						"acts",
+						null,
+						{
+							"act": [
+								{
+									"do": [
+										"withWriter",
+										"$runner",
+										[
+											{
+												"do": [
+													"log",
+													"ran",
+													3
+												]
+											}
+										]
+									]
+								}
+							],
+							"caught": "caught"
+						}
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$m"
+			],
+			"expect": {
+				"value": {
+					"state": "failed",
+					"error": "already-inside: already inside a run: call it directly (a writer is for code that runs with nothing open)",
+					"phase": "run",
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"on/call"
+			],
+			"expect": {
+				"error": "already-inside"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"withWriter",
+				"$runner",
+				[
+					{
+						"do": [
+							"log",
+							"ran",
+							4
+						]
+					}
+				]
+			],
+			"expect": {
+				"error": "already-inside"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/k",
+				[
+					{
+						"path": [],
+						"value": 5
+					}
+				]
+			]
+		},
+		{
+			"op": "log",
+			"name": "caught",
+			"expect": {
+				"values": [
+					"already-inside",
+					"already-inside"
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "ran",
+			"expect": {
+				"values": [
+					1
+				]
+			}
+		},
+		{
+			"op": "withWriter",
+			"process": "p",
+			"name": "runner",
+			"steps": [
+				{
+					"do": [
+						"log",
+						"ran",
+						5
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "ran",
+			"expect": {
+				"values": [
+					1,
+					5
+				]
+			}
+		}
+	]
+}

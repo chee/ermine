@@ -1,0 +1,308 @@
+{
+	"title": "a writer has no power its parent lacks: it asks protect as the parent. createWriter in setup, it writes as the process: refused editing /shared/x, it is refused there; createWriter in an action, as the action's owner and again from its caller's place (an action runs as both): the owner or the caller refused, it is refused; neither, it writes",
+	"steps": [
+		{
+			"op": "ermine",
+			"deny": [
+				{
+					"op": "edit",
+					"path": "shared/x",
+					"from": "code/p"
+				},
+				{
+					"op": "edit",
+					"path": "shared/y",
+					"from": "code/q"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/shared/x",
+				0
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/shared/y",
+				0
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/shared/z",
+				0
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createWriter"
+					],
+					"as": "runner"
+				},
+				{
+					"do": [
+						"createAction",
+						"on/bind",
+						[],
+						[
+							"createWriter"
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/q",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/r",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/code/q",
+			"expect": {
+				"id": "proc:q"
+			}
+		},
+		{
+			"op": "start",
+			"name": "r",
+			"at": "/code/r",
+			"expect": {
+				"id": "proc:r"
+			}
+		},
+		{
+			"op": "withWriter",
+			"process": "p",
+			"name": "runner",
+			"steps": [
+				{
+					"do": [
+						"patch",
+						"/shared/x",
+						[
+							{
+								"path": [],
+								"value": 1
+							}
+						]
+					]
+				}
+			],
+			"expect": {
+				"error": "refused"
+			}
+		},
+		{
+			"op": "withWriter",
+			"process": "p",
+			"name": "runner",
+			"steps": [
+				{
+					"do": [
+						"patch",
+						"/shared/y",
+						[
+							{
+								"path": [],
+								"value": 1
+							}
+						]
+					]
+				},
+				{
+					"do": [
+						"patch",
+						"/shared/z",
+						[
+							{
+								"path": [],
+								"value": 1
+							}
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/shared/x"
+			],
+			"expect": {
+				"value": 0
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/shared/y"
+			],
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"executeAction",
+				"./p/on/bind"
+			],
+			"as": "runner",
+			"expect": {
+				"value": "function"
+			}
+		},
+		{
+			"op": "do",
+			"process": "r",
+			"call": [
+				"executeAction",
+				"./p/on/bind"
+			],
+			"as": "runner",
+			"expect": {
+				"value": "function"
+			}
+		},
+		{
+			"op": "withWriter",
+			"process": "q",
+			"name": "runner",
+			"steps": [
+				{
+					"do": [
+						"patch",
+						"/shared/y",
+						[
+							{
+								"path": [],
+								"value": 5
+							}
+						]
+					]
+				}
+			],
+			"expect": {
+				"error": "refused"
+			}
+		},
+		{
+			"op": "withWriter",
+			"process": "q",
+			"name": "runner",
+			"steps": [
+				{
+					"do": [
+						"patch",
+						"/shared/x",
+						[
+							{
+								"path": [],
+								"value": 5
+							}
+						]
+					]
+				}
+			],
+			"expect": {
+				"error": "refused"
+			}
+		},
+		{
+			"op": "withWriter",
+			"process": "r",
+			"name": "runner",
+			"steps": [
+				{
+					"do": [
+						"patch",
+						"/shared/y",
+						[
+							{
+								"path": [],
+								"value": 6
+							}
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "withWriter",
+			"process": "r",
+			"name": "runner",
+			"steps": [
+				{
+					"do": [
+						"patch",
+						"/shared/x",
+						[
+							{
+								"path": [],
+								"value": 6
+							}
+						]
+					]
+				}
+			],
+			"expect": {
+				"error": "refused"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/shared/y"
+			],
+			"expect": {
+				"value": 6
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/shared/x"
+			],
+			"expect": {
+				"value": 0
+			}
+		}
+	]
+}

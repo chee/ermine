@@ -1,5 +1,5 @@
 {
-	"title": "a call's scope lasts as its record does: a handler returning a promise keeps its call open till the promise settles, so a memo made in it runs and is read meanwhile; then the call goes, with why ended (the call ended: nothing replaced it), and what was made in it with it. a handler returning at once: its call goes then, why ended too. a process stopped while a call is out: the call goes with it, told the stop's reason",
+	"title": "a call's mark lasts as its record does [marks 10-27], but owns nothing: a handler returning a promise keeps its record pending till it settles; the memo it made, and a teardown it added, belong to the scope that placed the action, so they are still there when the promise settles and the call ends, and go when that scope does (told the stop's reason). a handler returning at once: nothing goes at the call's end either. a second call that makes the same memo again: already-there (it is the scope's, made once), its teardown added before that still told",
 	"steps": [
 		{
 			"op": "ermine",
@@ -171,9 +171,7 @@
 			"op": "log",
 			"name": "td",
 			"expect": {
-				"values": [
-					"ended"
-				]
+				"values": []
 			}
 		},
 		{
@@ -183,7 +181,7 @@
 				"/made"
 			],
 			"expect": {
-				"value": false
+				"value": true
 			}
 		},
 		{
@@ -201,9 +199,7 @@
 			"op": "log",
 			"name": "tq",
 			"expect": {
-				"values": [
-					"ended"
-				]
+				"values": []
 			}
 		},
 		{
@@ -212,7 +208,11 @@
 				"executeAction",
 				"/svc/slow",
 				3
-			]
+			],
+			"expect": {
+				"error": "already-there"
+			},
+			"fails": false
 		},
 		{
 			"op": "host",
@@ -235,7 +235,7 @@
 			"name": "td",
 			"expect": {
 				"values": [
-					"ended",
+					"bye",
 					"bye"
 				]
 			}
@@ -259,7 +259,7 @@
 			"name": "td",
 			"expect": {
 				"values": [
-					"ended",
+					"bye",
 					"bye"
 				]
 			}

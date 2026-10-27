@@ -38,6 +38,11 @@
 // { op: "waits" }                          → { waits }   [{ caller, path?, id? }]
 // { op: "slot", feature, process }         → { value? }   a test feature's slot at the process
 // { op: "do", process, call, as? }         → { value }   call [fn, ...args] from outside
+// { op: "withWriter", process, name, steps?, back? } → { value? }   the writer the process's env holds
+//    at name, given a function (steps, then back's value), called with nothing open
+// { op: "event", trusted }                  → {}   window.event is a trusted event, an untrusted one
+//    (false), none (null) from now on
+// a call (host, do) that gave a promise: how it settled is logged to "promised"
 // { op: "settle" }                         → {}   every promise the harness made settled, then
 //    whatever settles after them
 // { op: "log", name } → { values }; { op: "pulse" }; { op: "kids", id, value }; { op: "put", part,
@@ -69,6 +74,11 @@
 //                                             { early })
 //   ["createAction", path, steps, expr?]      createAction(path, (...args) => steps; expr given
 //                                             back)
+//   ["createAction", path, steps, expr?, "gen" | "async"]   a generator action (sync, or async): steps
+//                                             run in order; {do:["yield", expr]} yields expr's value
+//                                             ("as": what comes back), in "async" {do:["await", expr]}
+//                                             awaits it
+//   ["caught", log, steps]                    steps run; an error they throw logged as its code
 //   ["addTeardown", log, tag?]                addTeardown((why) => log why, or "<tag>:<why>")
 //   ["getStatus", target]                     getStatus(target), shown
 //   ["explain", target, key?]                 explain(target, key), shown
@@ -79,6 +89,12 @@
 //   ["pipe", from, to | fn, fnA?, fnB?, o?]   pipe(...): a function { steps, gives? }, the write
 //                                             as $0; o: { timing, name }
 //   ["log", log, expr]                        expr's value logged and given back
+//   ["start", name, at, program?, options?]  start(program, at, options): name its name here, program
+//                                             the node holding it (default at)
+//   ["stopped", started, why?]                started's stop(why)
+//   ["withWriter", runner, steps, expr?]           a writer (createWriter's) given a function: steps, then
+//                                             expr's value
+//   ["laterThrow", text]                      a promise rejected with text, at "settle"
 //   ["later", expr]                           a promise of expr's value, settled at "settle"
 //   ["if", test, then, else?], ["throw", text], ["each", expr, path], ["pick", expr, path] (the
 //                                             value at path in expr's), ["is", a, b], ["keys", expr], ["inc", n] (n + 1)
@@ -101,6 +117,7 @@
 // errors: PlacesError { error: code }, Refusal "refused" (a hook's: { error, feature, hook }), SendError "not-a-method", PENDING
 // "pending", ErmineError its code, FeatureError { error: "feature", feature, hook, cause }, else
 // { error: text }
+import { dispatching } from "./event_fixture.ts"
 import createEntry from "@ermine/core/node/entry"
 import { at } from "@ermine/core/places"
 import { PlacesError } from "@ermine/core/places"
@@ -302,6 +319,13 @@ function expr(api: Sys, env: Env, e: unknown): unknown {
 	return call(api, env, [fn, ...args])
 }
 
+// a promise a call gave: how it settled is logged to "promised" ([value], or ["rejected", message])
+function watched(v: unknown) {
+	if (v instanceof Promise) {
+		v.then((x) => log("promised", [x]), (x) => log("promised", ["rejected", message(x)]))
+	}
+}
+
 // a promise of f's value, settled at the next "settle"
 function promised(f: () => unknown): Promise<unknown> {
 	return new Promise((resolve, reject) =>
@@ -326,7 +350,46 @@ function call(api: Sys, env: Env, [fn, ...raw]: [string, ...unknown[]]): unknown
 			return v
 		}
 		case "createAction": {
-			const [path, steps, back] = raw as [string, Step[], unknown]
+			const [path, steps, back, kind] = raw as [string, Step[], unknown, ("gen" | "async")?]
+			// a generator action: steps run in order; ["yield", expr] yields expr's value (a
+			// promise is waited for) and takes what comes back as its value; in an async one,
+			// ["await", expr] awaits it (a plain await: nothing is open after it)
+			if (kind !== undefined) {
+				const body = (args: unknown[]) => {
+					const inner: Env = new Map(env)
+					args.forEach((a, i) => inner.set(String(i), a))
+					return inner
+				}
+				const one = (inner: Env, step: Step) => {
+					const v = call(api, inner, step.do)
+					if (step.as !== undefined) inner.set(step.as, v)
+				}
+				if (kind === "gen") {
+					return api.createAction(path, function* (...args: unknown[]) {
+						const inner = body(args)
+						for (const step of steps) {
+							if (step.do[0] === "yield") {
+								const v: unknown = yield expr(api, inner, step.do[1])
+								if (step.as !== undefined) inner.set(step.as, v)
+							} else one(inner, step)
+						}
+						return back === undefined ? undefined : expr(api, inner, back)
+					})
+				}
+				return api.createAction(path, async function* (...args: unknown[]) {
+					const inner = body(args)
+					for (const step of steps) {
+						if (step.do[0] === "yield") {
+							const v: unknown = yield expr(api, inner, step.do[1])
+							if (step.as !== undefined) inner.set(step.as, v)
+						} else if (step.do[0] === "await") {
+							const v = await expr(api, inner, step.do[1])
+							if (step.as !== undefined) inner.set(step.as, v)
+						} else one(inner, step)
+					}
+					return back === undefined ? undefined : expr(api, inner, back)
+				})
+			}
 			return api.createAction(path, (...args: unknown[]) => {
 				const inner: Env = new Map(env)
 				args.forEach((a, i) => inner.set(String(i), a))
@@ -396,6 +459,69 @@ function call(api: Sys, env: Env, [fn, ...raw]: [string, ...unknown[]]): unknown
 			const c = items[(arg(env, raw[1]) as number | undefined) ?? 0]?.from.change
 			return c === undefined ? undefined : explained(api.explain(c as never))
 		}
+		// start(program, at, options?) as a program: name is the new process's name here (id
+		// proc:<name>), program the node holding its program (default at); gives start's result
+		case "start": {
+			const [name, at, program, opts] = raw.map((a) => arg(env, a)) as [
+				string,
+				string,
+				string?,
+				{ args?: string[] }?,
+			]
+			const m = world()
+			const fn = m.programs.get(rooted(program ?? at))
+			if (fn === undefined) throw new Error(`no program made at ${rooted(program ?? at)}`)
+			const [was, pending] = [m.next, m.pending]
+			m.next = `proc:${name}`
+			m.pending = name
+			m.running.set(name, { started: undefined as never, env: new Map() })
+			try {
+				const out = api.start(fn, at, opts)
+				if ("refused" in out) {
+					m.running.delete(name)
+					return out
+				}
+				m.running.get(name)!.started = {
+					process: { id: `proc:${name}` },
+					stop: out.stop,
+					status: out.status,
+				} as never
+				return out
+			} catch (e) {
+				m.running.delete(name)
+				throw e
+			} finally {
+				m.next = was
+				m.pending = pending
+			}
+		}
+		// steps run, an error they throw logged to log as its code (else its message)
+		case "caught": {
+			try {
+				run(api, new Map(env), raw[1] as Step[])
+			} catch (err) {
+				log(raw[0] as string, (err as { code?: string }).code ?? message(err))
+			}
+			return undefined
+		}
+		// the stop of what start gave, called with why
+		case "stopped":
+			return (arg(env, raw[0]) as { stop: (why?: string) => void }).stop(
+				arg(env, raw[1]) as string,
+			)
+		// a writer (createWriter's) given a function: steps, then expr's value
+		case "withWriter": {
+			const later = arg(env, raw[0]) as (f: () => unknown) => unknown
+			return later(() => {
+				const inner: Env = new Map(env)
+				run(api, inner, raw[1] as Step[])
+				return raw[2] === undefined ? undefined : expr(api, inner, raw[2])
+			})
+		}
+		case "laterThrow":
+			return promised(() => {
+				throw new Error(raw[0] as string)
+			})
 		case "later":
 			return promised(() => expr(api, env, raw[0]))
 		// peep(f): its expression read untracked
@@ -451,7 +577,10 @@ const opened = (within: <T>(f: () => T) => T): Sys => {
 	return out as Sys
 }
 // a program's: the imported ones (setup is given nothing), found from the scope open
-const imported: Sys = { ...(system as unknown as System), within: (f) => f() }
+const imported: Sys = {
+	...(system as unknown as System),
+	within: (f) => f(),
+} as Sys
 // the host's: in its scope
 const hostSystem = (e: Ermine): Sys => opened(e.within)
 
@@ -473,17 +602,29 @@ function define(api: Sys, env: Env, fn: string, raw: unknown[]): unknown {
 		const equal = options?.equal === "json" ? json : undefined
 		return api.createMemo(name, () => expr(api, env, e), { ...options, equal } as never)
 	}
-	// createEffect's fifth: its options ({ early })
+	// createEffect's fifth: its options: early; act: steps run in the act, an error they throw
+	// logged to caught as its code (else its message); cleanup: the act returns a function logging
+	// [cleanup, v]; returns: the act returns that value as it is
 	const [name, e, to, throws, options] = raw as [
 		string,
 		unknown,
 		string,
 		unknown,
-		{ early?: boolean } | undefined,
+		| { early?: boolean; act?: Step[]; caught?: string; cleanup?: string; returns?: unknown }
+		| undefined,
 	]
 	return api.createEffect(name, () => expr(api, env, e), (v) => {
 		log(to, v)
 		if (throws === "throws") throw new Error(`act ${JSON.stringify(v)}`)
+		if (options?.act !== undefined) {
+			try {
+				run(api, new Map(env), options.act)
+			} catch (err) {
+				log(options.caught ?? "caught", (err as { code?: string }).code ?? message(err))
+			}
+		}
+		if (options?.cleanup !== undefined) return () => log(options.cleanup!, v)
+		if (options !== undefined && "returns" in options) return options.returns as never
 	}, options?.early ? { early: true } : undefined)
 }
 
@@ -529,7 +670,11 @@ function explained(b: ReturnType<System["explain"]>) {
 	if (b === undefined) return undefined
 	const held = b.held === undefined ? {} : { held: b.held }
 	if (b.writer === undefined) return held
-	return { ...shownWriter(b.writer), ...held }
+	return {
+		...shownWriter(b.writer),
+		...b.change?.duringUserEvent && { duringUserEvent: true },
+		...held,
+	}
 }
 function shownWriter(w: NonNullable<NonNullable<ReturnType<System["explain"]>>["writer"]>) {
 	if (w.kind === "computer") {
@@ -707,6 +852,7 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 		}
 		case "host": {
 			const v = call(m.hostSys, m.host, minted(e, r.call) as [string, ...unknown[]])
+			watched(v)
 			if (r.as !== undefined) m.host.set(r.as, v)
 			return v === undefined ? {} : { value: plain(v) }
 		}
@@ -766,9 +912,22 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 			const context = e.getProcessContext(p.started.process)
 			if (context === undefined) throw new Error(`process ${r.process} stopped`)
 			const v = context.within(() => call(p.api!, p.env, r.call))
+			watched(v)
 			if (r.as !== undefined) p.env.set(r.as, v)
 			return v === undefined ? {} : { value: plain(v) }
 		}
+		// a writer called with nothing open, as a timer or a listener would: call [withWriter,
+		// name, steps, expr?] as the process's env has it
+		case "withWriter": {
+			const p = m.running.get(r.process)
+			if (p === undefined) throw new Error(`no process ${r.process}`)
+			const v = call(imported, p.env, ["withWriter", `$${r.name}`, r.steps ?? [], r.back])
+			return v === undefined ? {} : { value: plain(v) }
+		}
+		// what the browser says is being dispatched: a trusted event, an untrusted one, none
+		case "event":
+			dispatching.current = r.trusted === null ? undefined : { isTrusted: r.trusted === true }
+			return {}
 		case "settle": {
 			while (m.held.length) {
 				for (const f of m.held.splice(0)) f()

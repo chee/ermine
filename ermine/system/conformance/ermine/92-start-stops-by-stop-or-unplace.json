@@ -1,0 +1,218 @@
+{
+	"title": "a started process stops by the stop() start gave, or by unplacing its node (scenario 71), asked as the one doing it (place on the folder): q, refused there, can't unplace it; p, who started it, can, by unplace or by its stop(why): its teardowns are told (stop's reason, or ended), its row is gone, and a process may start there again",
+	"steps": [
+		{
+			"op": "ermine",
+			"deny": [
+				{
+					"op": "place",
+					"path": "work",
+					"from": "code/q"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/c",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/c-out",
+						0
+					],
+					"as": "o"
+				},
+				{
+					"do": [
+						"patch",
+						"$o",
+						[
+							{
+								"path": [],
+								"value": 1
+							}
+						]
+					]
+				},
+				{
+					"do": [
+						"addTeardown",
+						"child-down"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/work",
+				0
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"start",
+						"c",
+						"/work/c",
+						"/code/c"
+					],
+					"as": "c"
+				},
+				{
+					"do": [
+						"start",
+						"b",
+						"/work/b",
+						"/code/c"
+					],
+					"as": "b"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/q",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/code/q",
+			"expect": {
+				"id": "proc:q"
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"unplace",
+				"/work/b"
+			],
+			"expect": {
+				"error": "refused"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/work/b"
+			],
+			"expect": {
+				"value": true
+			}
+		},
+		{
+			"op": "log",
+			"name": "child-down",
+			"expect": {
+				"values": []
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"unplace",
+				"/work/c"
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "child-down",
+			"expect": {
+				"values": [
+					"ended"
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/work/c"
+			],
+			"expect": {
+				"value": false
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"start",
+				"c2",
+				"/work/c",
+				"/code/c"
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/work/c"
+			],
+			"expect": {
+				"value": true
+			}
+		},
+		{
+			"op": "status",
+			"name": "c2",
+			"expect": {
+				"status": {
+					"state": "done"
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"stopped",
+				"$b",
+				"bye"
+			]
+		},
+		{
+			"op": "log",
+			"name": "child-down",
+			"expect": {
+				"values": [
+					"ended",
+					"bye"
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/work/b"
+			],
+			"expect": {
+				"value": false
+			}
+		}
+	]
+}

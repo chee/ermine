@@ -1,0 +1,173 @@
+{
+	"title": "a writer dies with its parent: called after the process createWriter was called in stopped, it throws gone, and f does not run. one made in an action dies with the scope that placed the action, not with the call (the call returning leaves it alive)",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/k",
+				0
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createWriter"
+					],
+					"as": "runner"
+				},
+				{
+					"do": [
+						"createAction",
+						"on/bind",
+						[],
+						[
+							"createWriter"
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/q",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/code/q",
+			"expect": {
+				"id": "proc:q"
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"executeAction",
+				"./p/on/bind"
+			],
+			"as": "viaAction",
+			"expect": {
+				"value": "function"
+			}
+		},
+		{
+			"op": "withWriter",
+			"process": "q",
+			"name": "viaAction",
+			"steps": [
+				{
+					"do": [
+						"patch",
+						"/k",
+						[
+							{
+								"path": [],
+								"value": 1
+							}
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "withWriter",
+			"process": "p",
+			"name": "runner",
+			"steps": [
+				{
+					"do": [
+						"patch",
+						"/k",
+						[
+							{
+								"path": [],
+								"value": 2
+							}
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "stop",
+			"name": "p",
+			"expect": {}
+		},
+		{
+			"op": "withWriter",
+			"process": "p",
+			"name": "runner",
+			"steps": [
+				{
+					"do": [
+						"patch",
+						"/k",
+						[
+							{
+								"path": [],
+								"value": 3
+							}
+						]
+					]
+				}
+			],
+			"expect": {
+				"error": "gone"
+			}
+		},
+		{
+			"op": "withWriter",
+			"process": "q",
+			"name": "viaAction",
+			"steps": [
+				{
+					"do": [
+						"patch",
+						"/k",
+						[
+							{
+								"path": [],
+								"value": 4
+							}
+						]
+					]
+				}
+			],
+			"expect": {
+				"error": "gone"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/k"
+			],
+			"expect": {
+				"value": 2
+			}
+		}
+	]
+}

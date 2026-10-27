@@ -18,7 +18,7 @@
 //             begun inside it. a send from inside a run: the call's own, beside the run's
 //   writes    landing order: { part, id, change } (runs.ts' Write), with the call open, none in a
 //             run begun inside it
-//   made      the memos, effects and earlies made in the call (they go with it): { kind, id, path }
+//   made      the memos, effects and earlies made in the call (made by it, owned by the scope above: they stay): { kind, id, path }
 //
 // written through hold (createErmine's: onRecord around it; a hook not calling next: not held),
 // then held as the latest per handler. read(id) tracked: what reads it reruns when a newer one is held.
@@ -99,6 +99,9 @@ export type Calls = {
 	begin: (n: number, scope: Scope, base: Omit<Going["base"], "n" | "started">) => Going
 	// it returned (a thenable: pending till it settles), threw, or threw PENDING
 	end: (g: Going, out: { returned: unknown } | { error: unknown } | { pending: true }) => void
+	// f run as call g's: it is the open call while f runs (a generator action's steps after the first
+	// are not inside the call that began it); a call already ended pending is held again after
+	during: <T>(g: Going, f: () => T) => T
 	// a call scope's going call; none: undefined
 	going: (scope: Scope) => Going | undefined
 	// the call scope at or nearest above scope: the call being answered there, its record so far
@@ -129,6 +132,8 @@ export function createCalls(setup: Setup): Calls {
 	const scopes = new WeakMap<Scope, Going>()
 	// the calls begun and not ended yet (a promise's till it settles)
 	const live = new Set<Going>()
+	// the calls ended pending (a promise out): their record is held again as their steps write
+	const pending = new WeakSet<Going>()
 	// the records' table: a handler → its latest, and its key
 	const records = new Map<Id, { call: Call | undefined; key: object }>()
 	const held = (id: Id) => {
@@ -236,10 +241,21 @@ export function createCalls(setup: Setup): Calls {
 			const r = out.returned
 			if (!isThen(r)) return record(g, "done", { returned: r, ended: now() })
 			record(g, "pending", {})
+			pending.add(g)
 			r.then(
 				(v) => record(g, "done", { returned: v, ended: now() }),
 				(e) => record(g, "failed", { error: e, ended: now() }),
 			)
+		},
+		during(g, f) {
+			stack.push(g)
+			try {
+				return f()
+			} finally {
+				const i = stack.lastIndexOf(g)
+				if (i !== -1) stack.splice(i, 1)
+				if (pending.has(g) && live.has(g)) record(g, "pending", {})
+			}
 		},
 		going: (scope) => scopes.get(scope),
 		calling(scope) {

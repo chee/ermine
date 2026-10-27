@@ -54,14 +54,34 @@
 //   createMemo(name, f, o?)   a compute at its own node at name: its result, status and latest
 //                        run; made again by its owner's next run (same node, new f); a name not
 //                        made again goes after the run. a second at a name in one run: already-there
-//   createAction(p, fn)  fn as the node's value, run by executeAction in a scope under the open one
-//   executeAction(p, ...args)  the action at p, in a call scope { caller: { node, actor },
-//                        handler, call }; its return. its record (calls.ts) held as the handler's
-//                        latest. nothing there: pending, loudly (a wait recorded, PENDING thrown,
+//   createAction(p, fn)  fn as the node's value, run by executeAction as the scope that placed it
+//   executeAction(p, ...args)  the action at p, run as the scope that placed it, under a mark
+//                        { caller: { node, actor }, handler, call } that owns nothing (what the
+//                        action makes is the placing scope's, and lasts as it does); its return.
+//                        a generator action (sync or async) is stepped by the system, each step
+//                        under the mark; the call gives a promise of its return. its record (calls.ts) is
+//                        held as the handler's latest, and open till the generator finishes (a plain
+//                        action's: when it returns, or its promise settles). nothing there: pending, loudly (a wait recorded, PENDING thrown,
 //                        so a memo or effect running it reruns when the action comes). a value no
 //                        function: not-a-method
-//   addTeardown(fn)      fn(why) as the open scope goes, through onTeardown: "replaced", "ended",
-//                        or a stop's reason
+//   addTeardown(fn)      fn(why) as the owner goes (the scope open, past a call's mark), through
+//                        onTeardown: "replaced", "ended", or a stop's reason. not in an effect's
+//                        act: return a cleanup from the act instead (it runs before the next act
+//                        and as the effect goes; a returned non-function throws)
+//   createWriter()       in setup or an action (not a compute, a pipe's function or an act): a writer,
+//                        `const withWriter = createWriter()`, then withWriter(() => patch(...)) runs
+//                        the function as the scope createWriter was called in, with nothing open, its
+//                        writes carrying the mark it was made under (an action's call), each at its own
+//                        line; duringUserEvent on their change while a trusted event is dispatched (the
+//                        mark kept never carries it: only a run during an event does). a write through
+//                        a writer made in an action explains as that call (its view, while it is the
+//                        handler's latest), but is not added to the call's record "writes": the record
+//                        closes when the call finishes. not data, and hidden as a handle is wherever a
+//                        record or view shows values; gone with its parent; inside a scope or run:
+//                        already-inside
+//   start(fn, at, o?)    a process, asked as the starter ("place"), belonging to the scope that
+//                        started it; setup, an action, a writer (not a compute, a pipe's function or
+//                        an act). its stop() is asked as the starter too. taken: { refused: "taken", at }
 //   getStatus(x)         tracked: { state, error?, phase?, waiting?, n? }; not there: undefined.
 //                        waiting names nodes by path as this process sees them (null: outside)
 //   explain(x, key?)     tracked: a change and its writer, one step. x a change's view: that one;
@@ -69,9 +89,9 @@
 //                        name nodes by path from the root (null: none reaches it)
 //   getCaller()          in an action: { actor, process? }; elsewhere: undefined
 //
-// a memo or effect made in an action's call goes with the call, and the call's record says so
-// (made). the call lasts as its record does: a promise's till it settles; then its teardowns are
-// told "ended". protect: reads ask "read" (refused: Refusal; readEntries keeps the item, refused);
+// a memo or effect made in an action is the scope's that placed the action, and the call's record
+// says so (made). the call's mark lasts as its record does: a promise's till it settles; it owns
+// nothing, so nothing goes with it. an effect's act makes nothing. protect: reads ask "read" (refused: Refusal; readEntries keeps the item, refused);
 // pipe is asked as it is made (read of from, edit of to), and at each write told; patch "edit"; ensureNode, createNode,
 // place, unplace, rename "place" on the slot; remove "remove"; executeAction "execute"; a memo's
 // and effect's own writes not asked.
@@ -106,7 +126,9 @@ import { type Computer, type Equal, PENDING, type Scope } from "@ermine/core/sch
 import type { Sited } from "@ermine/sites"
 import type { Key, Table } from "@ermine/core/table"
 import type { FileLocation } from "@ermine/core/util/stacktrace"
-import type { Call, Calls } from "./calls.ts"
+import type { Call, Calls, Going } from "./calls.ts"
+import { duringUserEvent } from "./userevent.ts"
+import { enterScheduler, leaveScheduler } from "./registry.ts"
 import type { Target as Aimed } from "@ermine/core/protect"
 import { type Asked, ErmineError, type Errored, type Reading } from "./features.ts"
 import { dataOf, type Handles, isHandle, mint } from "./handles.ts"
@@ -122,6 +144,10 @@ import {
 	whole,
 	type Why,
 } from "./context.ts"
+
+// the metadata key a write made through a writer has while a trusted event is dispatched
+// (a ChangeView's duringUserEvent)
+const USER_EVENT = "duringUserEvent"
 
 // the attribute a memo's or effect's node holds its scope in: the NODE key's id of the nearest
 // scope above it with one, written once as the node is made (beside status.ts')
@@ -177,7 +203,7 @@ export type Status = {
 }
 
 // what made a change, one step: a computer (a memo or effect; run: its latest record, when that
-// still holds the change), a method (call: likewise), or code outside any (site: its first;
+// still holds the change), a method (call: its record while it is the handler's latest, whether or not it holds the write), or code outside any (site: its first;
 // fallback: a process's write with nothing open)
 // nodes named by their path from the root (seen; none: moved,
 // or placed by no functions): no ids [chee 10-25: "i'm not sure the process api should be able to do
@@ -223,6 +249,9 @@ export type ChangeView = {
 	readonly time: number
 	readonly actor: unknown
 	readonly site?: FileLocation
+	// made through a writer (createWriter) that ran while the browser was dispatching a trusted event
+	// (userevent.ts): a person's event was going on, not that a person made this change
+	readonly duringUserEvent?: true
 }
 // a change explained: it and its writer. held (a node's only): the latest write there a feature
 // held back, since the change (no change: only that)
@@ -281,11 +310,25 @@ export type Base = {
 	readonly whys: Map<Id, Why>
 	// a running process stopped, by its node's id (ermine's start sets it): unplace's and remove's
 	stop: (id: Id) => void
+	// a process started by a program (start below): fn at path, its scope under the starter's owner
+	// (ermine's start sets it)
+	start: (
+		fn: () => unknown,
+		at: Path,
+		options: { args?: readonly string[] },
+		under: Scope,
+	) => { process: { id: Id; at: Path; folder: Path }; stop: (why?: Why) => void } | {
+		refused: "taken"
+		at: Path
+		held?: { process: Id; feature: string }
+	}
 	readonly newId: () => string
 	// an error a function threw, through the onError hooks: what is thrown
 	readonly errored: Errored
 	// every node handle the functions gave (handles.ts)
 	readonly handles: Handles
+	// every writer createWriter gave, and what it runs as
+	readonly writers: WeakMap<object, WriterAs>
 	// each process's node: where it runs, from the root (its row names it, not a children entry, so
 	// places' namesOf has it not): seen's
 	readonly running: Map<Id, Path>
@@ -342,7 +385,12 @@ export function viewOf(base: Base, h: ChangeHeader): ChangeView {
 	let v = base.views.get(h)
 	if (v === undefined) {
 		const site = h.external?.[0]
-		v = Object.freeze({ time: h.time, actor: h.actor, ...site !== undefined && { site } })
+		v = Object.freeze({
+			time: h.time,
+			actor: h.actor,
+			...site !== undefined && { site },
+			...h.metadata?.[USER_EVENT] === true && { duringUserEvent: true as const },
+		})
 		base.views.set(h, v)
 		base.changes.set(v, h)
 	}
@@ -439,14 +487,34 @@ function here(c: Inner): Setting {
 	return h
 }
 
+// the scopes that are marks (a call's: executeAction): they own nothing, so what is made while
+// one is open belongs to the scope above it; their info still rides on the writes made in them
+const marks = new WeakSet<Scope>()
+// the computers' scopes whose act is running now: an act makes nothing [marks-2026-10-27]
+const acting = new Set<Scope>()
+// refused in an act: what it would make would be the effect's, and go at its next act, where
+// nobody can see it. fn names the function called
+function notInAct(own: Scope, fn: string) {
+	if (!acting.has(own)) return
+	throw new ErmineError(
+		"in-act",
+		fn === "addTeardown"
+			? "addTeardown in an effect's act: return a cleanup function from the act instead"
+			: `${fn} in an effect's act: an act makes nothing`,
+	)
+}
+// the scope what is made now belongs to: the scope open, past any marks; none open: the context's
 const owner = (inner: Inner) => {
 	const { s, scope } = here(inner)
-	return s.getCurrentScope() ?? scope
+	let o = s.getCurrentScope()
+	while (o !== undefined && marks.has(o)) o = o.parent
+	return o ?? scope
 }
 // the actor a write made now would carry: the first the open scope (none: the context's) or one
 // above it gives
 const actorHere = (inner: Inner) => {
-	for (let o: Scope | undefined = owner(inner); o !== undefined; o = o.parent) {
+	const { s, scope } = here(inner)
+	for (let o: Scope | undefined = s.getCurrentScope() ?? scope; o !== undefined; o = o.parent) {
 		if ("actor" in o.info) return o.info.actor
 	}
 	return undefined
@@ -732,6 +800,7 @@ const LOOPING = 64
 
 function pipe(inner: Inner, from: Target, ...rest: unknown[]): Node {
 	const { base, s, state, guard, guarded, queuePulse, resolve } = here(inner)
+	notInAct(owner(inner), "pipe")
 	const last = rest[rest.length - 1]
 	const options: PipeOptions = rest.length > 1 && last !== null && typeof last === "object" &&
 			!Array.isArray(last) && !isHandle(last)
@@ -1162,7 +1231,7 @@ type Code = {
 	// deno-lint-ignore no-explicit-any
 	f: (previous: any) => unknown
 	// deno-lint-ignore no-explicit-any
-	act?: (value: any, before: any) => void
+	act?: (value: any, before: any) => unknown
 	// deno-lint-ignore no-explicit-any
 	equal?: Equal<any>
 }
@@ -1245,7 +1314,7 @@ function computerNode(
 	gone(inner, m, path)
 	base.computers.add(id)
 	base.contexts.set(id, inner)
-	calls.going(own)?.made.push({ kind, id, path })
+	calls.open()?.made.push({ kind, id, path })
 	return m
 }
 
@@ -1272,6 +1341,7 @@ function createMemo<T>(
 ): Node {
 	const { base, parts, runs, memos, s, table, queuePulse, resolve } = here(inner)
 	const own = owner(inner)
+	notInAct(own, "createMemo")
 	const path = resolve(name)
 	const n: NodeData = { path, part: "value" }
 	const code: Code = { f, equal: options.equal }
@@ -1309,7 +1379,7 @@ function createEffect<T>(
 	inner: Inner,
 	name: string | Path,
 	f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
-	act: (value: T, before: T | undefined) => void,
+	act: (value: T, before: T | undefined) => void | (() => unknown),
 	options: { equal?: Equal<T>; early?: boolean } = {},
 ): Node {
 	const { early, ...o } = options
@@ -1324,11 +1394,12 @@ function effectOf<T>(
 	isEarly: boolean,
 	name: string | Path,
 	f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
-	act: (value: T, before: T | undefined) => void,
+	act: (value: T, before: T | undefined) => void | (() => unknown),
 	options: { equal?: Equal<T> },
 ): Node {
 	const { base, parts, runs, s, table, queuePulse, resolve } = here(inner)
 	const own = owner(inner)
+	notInAct(own, "createEffect")
 	const path = resolve(name)
 	const n: NodeData = { path, part: "value" }
 	const code: Code = { f, act, equal: options.equal }
@@ -1349,7 +1420,24 @@ function effectOf<T>(
 		if (v !== undefined || table.get("value", id) !== undefined) {
 			inner.put({ part: "value", id, patches: whole(v) })
 		}
-		m.code.act!(v, before)
+		// an act makes nothing, and may return its cleanup: run before the next act, and as the
+		// effect goes. anything else returned is refused, as Solid does
+		const sc = s.getCurrentScope()
+		if (sc !== undefined) acting.add(sc)
+		let cleanup: unknown
+		try {
+			cleanup = m.code.act!(v, before)
+		} finally {
+			if (sc !== undefined) acting.delete(sc)
+		}
+		if (cleanup === undefined || sc === undefined) return
+		if (typeof cleanup !== "function") {
+			throw new ErmineError(
+				"bad-cleanup",
+				`an effect's act returned ${typeof cleanup}: return a function (its cleanup), or nothing`,
+			)
+		}
+		teardown(inner, sc, () => (cleanup as () => unknown)())
 	}
 	const c = s.runWithScope(
 		own,
@@ -1376,6 +1464,7 @@ function effectOf<T>(
 function createAction(inner: Inner, p: string | Path, fn: (...args: any[]) => unknown): Node {
 	const { calls, parts, methods, s, queuePulse, places, inside, resolve, ask } = here(inner)
 	const own = owner(inner)
+	notInAct(own, "createAction")
 	const path = resolve(p)
 	const made = inside(() => {
 		const id = get(places, path)
@@ -1409,6 +1498,75 @@ function createAction(inner: Inner, p: string | Path, fn: (...args: any[]) => un
 	return handle(inner, n)
 }
 
+// a generator action (sync or async) is stepped by the system [Solid 2.0's action]: each step
+// runs with the call's mark, so a write after a `yield` carries it and is allowed; `yield promise`
+// waits for the promise (a throw comes back in at the yield). a plain `await` in an async
+// generator is not a step: what follows it runs with nothing open. the call gives a promise of
+// the generator's return
+type Steps = Iterator<unknown, unknown, unknown> | AsyncIterator<unknown, unknown, unknown>
+const isGenerator = (fn: unknown) => {
+	const t = Object.prototype.toString.call(fn)
+	return t === "[object GeneratorFunction]" || t === "[object AsyncGeneratorFunction]"
+}
+// the parent going while it waits at a yield: the generator is returned (its finally blocks run,
+// with nothing open: a write there fails as it does after any end), and the promise rejects: gone.
+// each step is the call's (open as the record's) till the generator finishes
+function stepped(inner: Inner, call: Scope, g: Going, make: () => Steps): Promise<unknown> {
+	const { s, calls } = here(inner)
+	return new Promise((resolve, reject) => {
+		let it: Steps | undefined
+		let finished = false
+		const done = <A extends unknown[]>(f: (...a: A) => void) => (...a: A) => {
+			if (finished) return
+			finished = true
+			f(...a)
+		}
+		const ok = done(resolve)
+		const fail = done(reject)
+		s.registerTeardown(call, () => {
+			if (finished) return
+			finished = true
+			const gone = new ErmineError("gone", "gone: what this action ran in has ended")
+			// after the teardown, with nothing open: a write in a finally block fails as after any end
+			queueMicrotask(() => {
+				try {
+					const r = it?.return?.(undefined)
+					if (isThen(r)) return void r.then(() => reject(gone), () => reject(gone))
+				} catch { /* a finally block's own throw: the call is gone */ }
+				reject(gone)
+			})
+		})
+		const step = (v?: unknown, thrown?: boolean) => {
+			if (finished) return
+			let r: IteratorResult<unknown> | PromiseLike<IteratorResult<unknown>>
+			enterScheduler(s)
+			try {
+				// the first step makes the iterator (in the call's scope too)
+				r = calls.during(g, () =>
+					s.runWithScope(call, () => {
+						it ??= make()
+						return thrown ? it.throw!(v) : it.next(v)
+					}))
+			} catch (e) {
+				return fail(e)
+			} finally {
+				leaveScheduler()
+			}
+			if (isThen(r)) return void r.then(run, fail)
+			run(r)
+		}
+		const run = (r: IteratorResult<unknown>) => {
+			if (finished) return
+			if (r.done) return ok(r.value)
+			if (isThen(r.value)) {
+				return void r.value.then((v) => step(v), (e) => step(e, true))
+			}
+			step(r.value)
+		}
+		step()
+	})
+}
+
 function executeAction(inner: Inner, p: Target, ...args: unknown[]): unknown {
 	const { base, calls, methods, s, table, queuePulse, context, scope, places, ask } = here(inner)
 	const n = nodeOf(inner, p)
@@ -1432,12 +1590,14 @@ function executeAction(inner: Inner, p: Target, ...args: unknown[]): unknown {
 	// the placement's scope while the node still holds what was placed; else (its owner gone, or
 	// a function written there by edit) the sender's, as any function value
 	const placed = methods.get(id!)
-	// the caller on the call's changes, its own field: its node, and the actor its writes carry
-	// (the handler's writes are the handler's: their actor its own)
+	// the call's mark: the caller on the call's changes, its own field: its node, and the actor its
+	// writes carry (the handler's writes are the handler's: their actor its own). it owns nothing
+	// [marks-2026-10-27]: what the action makes belongs to the scope above it
 	const call = base.sited.createScope(
 		{ caller: { node: inner.node, actor: actorHere(inner) }, handler: id, call: k },
 		placed !== undefined && placed.fn === fn ? placed.scope : scope,
 	)
+	marks.add(call)
 	try {
 		s.runWithScope(call, () => ask("execute", targetOf(thing(id!, n.path), "value")))
 	} catch (e) {
@@ -1450,11 +1610,13 @@ function executeAction(inner: Inner, p: Target, ...args: unknown[]): unknown {
 		handler: { id: id!, change: table.get("value", id!)?.change },
 		args,
 	})
-	// the call scope lasts as the record does: a promise's till it settles (the record ended
-	// first), else till the handler returns or throws
+	// the mark lasts as the record does: a promise's till it settles (the record ended first), else
+	// till the handler returns or throws
 	let out: unknown
 	try {
-		out = s.runWithScope(call, () => fn(...args))
+		out = isGenerator(fn)
+			? stepped(inner, call, g, () => s.runWithScope(call, () => fn(...args) as Steps))
+			: s.runWithScope(call, () => fn(...args))
 		calls.end(g, { returned: out })
 	} catch (e) {
 		calls.end(g, e === PENDING ? { pending: true } : { error: e })
@@ -1473,25 +1635,188 @@ function executeAction(inner: Inner, p: Target, ...args: unknown[]): unknown {
 	return out
 }
 
-// why a teardown's scope goes: a stop's reason; a call ending (the scope a call's, or under
-// one): ended; else, the process still there, its owner ran again (replaced), or ended
-const inCall = (inner: Inner, own: Scope) => {
-	const { calls, scope } = here(inner)
-	for (let o: Scope | undefined = own; o !== undefined && o !== scope; o = o.parent) {
-		if (calls.going(o) !== undefined) return true
-	}
-	return false
-}
+// why a teardown's scope goes: a stop's reason; else, the process still there, its owner ran
+// again (replaced), or ended
 function addTeardown(inner: Inner, fn: (why: Why) => unknown) {
-	const { base, s, scope } = here(inner)
 	const own = owner(inner)
+	notInAct(own, "addTeardown")
+	teardown(inner, own, fn)
+}
+// fn(why) as scope goes, through onTeardown
+function teardown(inner: Inner, own: Scope, fn: (why: Why) => unknown) {
+	const { base, s, scope } = here(inner)
 	s.registerTeardown(own, () => {
-		const why = base.whys.get(inner.node) ??
-			(scope.state !== "alive" || (own.state !== "alive" && inCall(inner, own))
-				? "ended"
-				: "replaced")
+		const why = base.whys.get(inner.node) ?? (scope.state !== "alive" ? "ended" : "replaced")
 		base.torn(own, why, fn)
 	})
+}
+
+// what a writer runs as: where it was made, and the mark it was made under (an action's call: its
+// info, never the user-event flag; setup: none, the scope's own). no site: each write in it has
+// its own line
+export type WriterAs = {
+	readonly inner: Inner
+	// what f's makings and asks belong to: the scope createWriter was called in (past any mark)
+	readonly parent: Scope
+	readonly mark: Scope["info"] | undefined
+}
+// a writer: withWriter(f) runs f as the parent createWriter was called in, its writes carrying the
+// mark it was made under, each at its own line [marks-2026-10-27]
+export type WithWriter = <T>(f: () => T) => T
+
+const notData = () => new ErmineError("not-a-value", "a writer is not data: it won't serialize")
+
+// where a memo, effect or pipe's function runs: createWriter and start are not here (a compute
+// runs again, so its writer would die at each rerun or start a process every run; a pipe's
+// function is told by writes, as a compute is; an act makes nothing)
+// message: as the scenarios pin it (the C side says the same)
+function notHere(base: Base, own: Scope, message: string) {
+	const node = own.info[NODE] as Id | undefined
+	if ((node !== undefined && base.computers.has(node)) || own.info.pipe === true) {
+		throw new ErmineError("not-here", message)
+	}
+}
+
+// the mark a scope open under own gives what is made now: the nearest call's info, without the
+// user-event flag (only a run that happens during an event has it)
+function markOf(inner: Inner, own: Scope): Scope["info"] | undefined {
+	const { s } = here(inner)
+	for (let o = s.getCurrentScope(); o !== undefined && o !== own; o = o.parent) {
+		if (marks.has(o)) {
+			const { [USER_EVENT]: _, ...rest } = o.info
+			return Object.keys(rest).length === 0 ? undefined : rest
+		}
+	}
+	return undefined
+}
+
+// f run as parent under mark, with nothing else of the caller's: its writes carry the mark (and the
+// user-event flag, when asked)
+function runAs<T>(
+	inner: Inner,
+	parent: Scope,
+	mark: Scope["info"] | undefined,
+	f: () => T,
+	during = false,
+): T {
+	const { s } = here(inner)
+	const info = during ? { ...mark, [USER_EVENT]: true } : mark
+	const at = info === undefined ? parent : s.createScope(info, parent)
+	if (at !== parent) marks.add(at)
+	enterScheduler(s)
+	try {
+		return s.runWithScope(at, f)
+	} finally {
+		leaveScheduler()
+		if (at !== parent) s.teardown(at)
+	}
+}
+
+// createWriter(): in setup or an action
+function createWriter(inner: Inner): WithWriter {
+	const { base } = here(inner)
+	const own = owner(inner)
+	notHere(
+		base,
+		own,
+		"createWriter in a memo, effect or pipe: create it in setup or an action, and use the writer there",
+	)
+	const mark = markOf(inner, own)
+	const later = function (f: () => unknown) {
+		const data = base.writers.get(later)!
+		const { inner, parent } = data
+		const { s, parts, scope } = here(inner)
+		try {
+			parts.alive()
+			if (typeof f !== "function") {
+				throw new ErmineError("not-a-function", "a writer takes a function")
+			}
+			if (s.getCurrentScope() !== undefined || s.getRun() !== undefined) {
+				throw new ErmineError(
+					"already-inside",
+					"already inside a run: call it directly (a writer is for code that runs with nothing open)",
+				)
+			}
+			if (parent.state !== "alive" || scope.state !== "alive") {
+				throw new ErmineError("gone", "gone: what this writer was created in has ended")
+			}
+		} catch (e) {
+			throw base.errored(e, "createWriter")
+		}
+		return runAs(inner, parent, data.mark, f, duringUserEvent())
+	} as unknown as WithWriter & { toJSON: () => never }
+	Object.defineProperties(later, {
+		toJSON: {
+			value: () => {
+				throw base.errored(notData(), "createWriter")
+			},
+		},
+		[Symbol.toPrimitive]: {
+			value: () => {
+				throw base.errored(notData(), "createWriter")
+			},
+		},
+		[Symbol.for("Deno.customInspect")]: { value: () => "[writer]" },
+	})
+	Object.freeze(later)
+	base.writers.set(later, { inner, parent: own, mark })
+	return later
+}
+
+// what start gives a program: where the process is, its stop and its status; or taken
+export type Starting = {
+	readonly process: { readonly at: Path; readonly folder: Path }
+	readonly stop: (why?: Why) => void
+	readonly status: () => Status | undefined
+}
+export type Taken = { readonly refused: "taken"; readonly at: Path }
+
+// start(fn, at, { args }): a process running fn at at [chee 10-27: "processes should be able to start
+// and stop processes"]. asked as the starter, as placing at is ("place" on the folder). it belongs to
+// the scope that started it (setup's: the starter's; an action's: the scope that placed it; a writer's:
+// its parent): it stops as that ends. it is told nothing of its parent. not in a compute, a pipe's
+// function or an act (a compute would start it every run; an act makes nothing). stop() is asked as
+// the starter is, wherever it is called. taken: { refused: "taken", at } only: whose it is (a
+// stopped process held by a feature) is for the host's start [holding an id is the permission]
+function start(
+	inner: Inner,
+	fn: () => unknown,
+	at: string | Path,
+	options: { args?: readonly string[] } = {},
+): Starting | Taken {
+	const { base, queuePulse, places, resolve, ask, context } = here(inner)
+	const own = owner(inner)
+	notHere(base, own, "start in a memo, effect or pipe: start a process in setup or an action")
+	if (typeof fn !== "function") {
+		throw new ErmineError("not-a-function", "start takes the program: its function")
+	}
+	const path = resolve(at)
+	// the folder it is placed in, or the nearest one above that is there (the rest are made)
+	const asked = () => {
+		for (let n = path.length - 1; n >= 0; n--) {
+			const folder = get(places, path.slice(0, n))
+			if (folder !== undefined) return ask("place", slotAt(path.slice(0, n + 1), folder))
+		}
+	}
+	// stop() is asked as the starter is, wherever it is called from
+	const mark = markOf(inner, own)
+	const asStarter = () => runAs(inner, own, mark, asked)
+	asked()
+	const made = base.start(fn, path, { args: options.args }, own)
+	queuePulse()
+	// a program gets where the path is held, never whose it is (an id is the permission)
+	if ("refused" in made) return { refused: "taken", at: made.at }
+	const id = made.process.id
+	return {
+		process: { at: made.process.at, folder: made.process.folder },
+		// the node unplaced, as unplace asks it
+		stop: (why) => {
+			if (!base.running.has(id)) return
+			asStarter()
+			made.stop(why)
+		},
+		status: () => context.within(() => getStatus(inner, byId(inner, id, "value"))),
+	}
 }
 
 function ref<T>(inner: Inner, p: string | Path, made: () => T): Node {
@@ -1631,6 +1956,8 @@ function shown(inner: Inner, v: unknown, seenAlready = new Map<object, unknown>(
 		const id = d.id ?? get(here(inner).places, d.path!)
 		return (id === undefined ? undefined : seen(inner, id)) ?? null
 	}
+	// a writer is a power, never data: shown as a marker, as a handle is shown as its path
+	if (typeof v === "function" && here(inner).base.writers.has(v)) return "[writer]"
 	if (v === null || typeof v !== "object") return v
 	const proto = Object.getPrototypeOf(v)
 	if (!Array.isArray(v) && proto !== Object.prototype && proto !== null) return v
@@ -1653,7 +1980,7 @@ const callView = (inner: Inner, c: Call): CallView => ({
 	args: shown(inner, c.args) as unknown[],
 	end: c.end,
 	..."returned" in c && { returned: shown(inner, c.returned) },
-	..."error" in c && { error: c.error },
+	..."error" in c && { error: shown(inner, c.error) },
 	started: c.started,
 	...c.ended !== undefined && { ended: c.ended },
 	reads: c.reads.flatMap((x) => "part" in x ? [touched(inner, x)] : []),
@@ -1664,7 +1991,8 @@ const callView = (inner: Inner, c: Call): CallView => ({
 
 // the call open now: its scope's info names its caller (send's call scope)
 function getCaller(inner: Inner): Caller | undefined {
-	for (let o: Scope | undefined = owner(inner); o !== undefined; o = o.parent) {
+	const { s, scope } = here(inner)
+	for (let o: Scope | undefined = s.getCurrentScope() ?? scope; o !== undefined; o = o.parent) {
 		if (o.info.call === undefined || o.info.handler === undefined) continue
 		const c = o.info.caller as { node?: Id; actor?: unknown } | undefined
 		const p = c?.node === undefined ? undefined : seen(inner, c.node)
@@ -1693,7 +2021,8 @@ function writerOf(inner: Inner, change: ChangeHeader): Explained & { change: Cha
 	if (m.call !== undefined && m.handler !== undefined) {
 		const handler = m.handler as Id
 		const call = calls.latest(handler)
-		if (call !== undefined && call.n === m.call && holds(call.writes)) {
+		// any write carrying the call's mark: the call's view, while it is the handler's latest
+		if (call !== undefined && call.n === m.call) {
 			return {
 				change: view,
 				writer: { kind: "method", ...pathOf(inner, handler), call: callView(inner, call) },
@@ -1759,7 +2088,7 @@ export type System = {
 	createEffect: <T>(
 		name: string | Path,
 		f: Computed<T>,
-		act: (value: T, before: T | undefined) => void,
+		act: (value: T, before: T | undefined) => void | (() => unknown),
 		options?: { equal?: Equal<T>; early?: boolean },
 	) => Node
 	pipe: {
@@ -1780,6 +2109,12 @@ export type System = {
 	getStatus: (x: Target) => Status | undefined
 	addTeardown: (fn: (why: Why) => unknown) => void
 	getArgs: () => readonly string[]
+	createWriter: () => WithWriter
+	start: (
+		fn: () => unknown,
+		at: string | Path,
+		options?: { args?: readonly string[] },
+	) => Starting | Taken
 	remove: (x: Target) => void
 	pulse: () => void
 }
@@ -1802,6 +2137,7 @@ export {
 	createEffect,
 	createMemo,
 	createNode,
+	createWriter,
 	ensureNode,
 	executeAction,
 	explain,
@@ -1823,6 +2159,7 @@ export {
 	ref,
 	remove,
 	rename,
+	start,
 	unplace,
 }
 

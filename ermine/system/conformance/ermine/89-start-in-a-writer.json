@@ -1,0 +1,110 @@
+{
+	"title": "start in a writer: the process belongs to the writer's parent, so it outlasts the timer or listener that called it and stops when the parent does",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/c",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/c-out",
+						0
+					],
+					"as": "o"
+				},
+				{
+					"do": [
+						"patch",
+						"$o",
+						[
+							{
+								"path": [],
+								"value": 1
+							}
+						]
+					]
+				},
+				{
+					"do": [
+						"addTeardown",
+						"child-down"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createWriter"
+					],
+					"as": "runner"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "withWriter",
+			"process": "p",
+			"name": "runner",
+			"steps": [
+				{
+					"do": [
+						"start",
+						"c",
+						"/work/c",
+						"/code/c"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/c-out"
+			],
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "log",
+			"name": "child-down",
+			"expect": {
+				"values": []
+			}
+		},
+		{
+			"op": "stop",
+			"name": "p",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "child-down",
+			"expect": {
+				"values": [
+					"ended"
+				]
+			}
+		}
+	]
+}

@@ -1,0 +1,198 @@
+{
+	"title": "a change made through a writer while the browser is dispatching a trusted event says so: duringUserEvent: true on the ChangeView explain gives [chee 10-27: \"duringUserEvent is good yeah do that\"]. an untrusted event, or none: absent. a write made directly is never marked. the event is read through the native getter kept when the module loaded, so a program replacing window.event gains nothing (tested in marks_test.ts); here the harness's stand-in is defined before the module loads",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/k",
+						0
+					],
+					"as": "k"
+				},
+				{
+					"do": [
+						"ensureNode",
+						"/j",
+						0
+					],
+					"as": "j"
+				},
+				{
+					"do": [
+						"createWriter"
+					],
+					"as": "runner"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "event",
+			"trusted": true,
+			"expect": {}
+		},
+		{
+			"op": "withWriter",
+			"process": "p",
+			"name": "runner",
+			"steps": [
+				{
+					"do": [
+						"patch",
+						"$k",
+						[
+							{
+								"path": [],
+								"value": 1
+							}
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"explain",
+				"$k"
+			],
+			"expect": {
+				"value": {
+					"writer": "outside",
+					"site": "program",
+					"duringUserEvent": true
+				}
+			}
+		},
+		{
+			"op": "event",
+			"trusted": false,
+			"expect": {}
+		},
+		{
+			"op": "withWriter",
+			"process": "p",
+			"name": "runner",
+			"steps": [
+				{
+					"do": [
+						"patch",
+						"$k",
+						[
+							{
+								"path": [],
+								"value": 2
+							}
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"explain",
+				"$k"
+			],
+			"expect": {
+				"value": {
+					"writer": "outside",
+					"site": "program"
+				}
+			}
+		},
+		{
+			"op": "event",
+			"trusted": true,
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"patch",
+				"$j",
+				[
+					{
+						"path": [],
+						"value": 1
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"explain",
+				"$j"
+			],
+			"expect": {
+				"value": {
+					"writer": "outside",
+					"site": "program"
+				}
+			}
+		},
+		{
+			"op": "event",
+			"trusted": null,
+			"expect": {}
+		},
+		{
+			"op": "withWriter",
+			"process": "p",
+			"name": "runner",
+			"steps": [
+				{
+					"do": [
+						"patch",
+						"$k",
+						[
+							{
+								"path": [],
+								"value": 3
+							}
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"explain",
+				"$k"
+			],
+			"expect": {
+				"value": {
+					"writer": "outside",
+					"site": "program"
+				}
+			}
+		}
+	]
+}

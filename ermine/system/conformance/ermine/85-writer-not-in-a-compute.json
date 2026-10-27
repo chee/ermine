@@ -1,0 +1,134 @@
+{
+	"title": "createWriter is for setup and actions: in a memo, or in an effect's act, it throws not-here (a memo runs again, an act makes nothing). an action a memo calls may call createWriter: the action runs as its parent, not as the memo",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/k",
+				0
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createAction",
+						"on/bind",
+						[],
+						[
+							"createWriter"
+						]
+					]
+				},
+				{
+					"do": [
+						"createMemo",
+						"bad",
+						{},
+						[
+							"createWriter"
+						]
+					],
+					"as": "bad"
+				},
+				{
+					"do": [
+						"createMemo",
+						"good",
+						{},
+						[
+							"if",
+							[
+								"is",
+								1,
+								1
+							],
+							[
+								"executeAction",
+								"on/bind"
+							]
+						]
+					],
+					"as": "good"
+				},
+				{
+					"do": [
+						"createEffect",
+						"e",
+						[
+							"read",
+							"/k"
+						],
+						"acts",
+						null,
+						{
+							"act": [
+								{
+									"do": [
+										"createWriter"
+									]
+								}
+							],
+							"caught": "caught"
+						}
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$bad"
+			],
+			"expect": {
+				"value": {
+					"state": "failed",
+					"error": "not-here: createWriter in a memo, effect or pipe: create it in setup or an action, and use the writer there",
+					"phase": "run",
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$good"
+			],
+			"expect": {
+				"value": {
+					"state": "done",
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "log",
+			"name": "caught",
+			"expect": {
+				"values": [
+					"not-here"
+				]
+			}
+		}
+	]
+}

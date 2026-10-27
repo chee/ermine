@@ -1,0 +1,96 @@
+{
+	"title": "an effect's act makes nothing [marks 10-27; Solid 2.0 refuses it too: PRIMITIVE_IN_FORBIDDEN_SCOPE]: addTeardown inside an act throws in-act (a plain message, and with hints a hint saying where to make it instead); the act's own other work goes on, and nothing was made: the teardown is refused, the act returns a cleanup instead",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/k",
+						0
+					],
+					"as": "k"
+				},
+				{
+					"do": [
+						"createEffect",
+						"e",
+						[
+							"read",
+							"$k"
+						],
+						"acts",
+						null,
+						{
+							"act": [
+								{
+									"do": [
+										"addTeardown",
+										"t"
+									]
+								}
+							],
+							"caught": "caught"
+						}
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/k",
+				[
+					{
+						"path": [],
+						"value": 1
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "caught",
+			"expect": {
+				"values": [
+					"in-act",
+					"in-act"
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/code/p/x"
+			],
+			"expect": {
+				"value": false
+			}
+		}
+	]
+}

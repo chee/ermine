@@ -1,0 +1,174 @@
+{
+	"title": "start asks protect as the starter, as placing there is (place on the folder): refused for p at /work/c, p's start throws refused and nothing runs; another folder is fine; the host's own start is unchanged. a name taken gives { refused: taken, at }",
+	"steps": [
+		{
+			"op": "ermine",
+			"deny": [
+				{
+					"op": "place",
+					"path": "work",
+					"from": "code/p"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/c",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/c-out",
+						0
+					],
+					"as": "o"
+				},
+				{
+					"do": [
+						"patch",
+						"$o",
+						[
+							{
+								"path": [],
+								"value": 1
+							}
+						]
+					]
+				},
+				{
+					"do": [
+						"addTeardown",
+						"child-down"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/work",
+				0
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/free",
+				0
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createAction",
+						"on/at",
+						[],
+						[
+							"start",
+							"c",
+							"$0",
+							"/code/c"
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"on/at",
+				"/work/c"
+			],
+			"expect": {
+				"error": "refused"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/work/c"
+			],
+			"expect": {
+				"value": false
+			}
+		},
+		{
+			"op": "log",
+			"name": "child-down",
+			"expect": {
+				"values": []
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"on/at",
+				"/free/d"
+			],
+			"expect": {
+				"value": {
+					"process": {
+						"at": [
+							"free",
+							"d"
+						],
+						"folder": [
+							"free"
+						]
+					},
+					"stop": "function",
+					"status": "function"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/free/d"
+			],
+			"expect": {
+				"value": true
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"on/at",
+				"/free/d"
+			],
+			"expect": {
+				"value": {
+					"refused": "taken",
+					"at": [
+						"free",
+						"d"
+					]
+				}
+			}
+		}
+	]
+}

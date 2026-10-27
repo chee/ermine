@@ -90,6 +90,16 @@ export type Code =
 	| "closed"
 	// a pipe told by pipes' writes, as they land, too deep: told no more
 	| "looping"
+	// something made, or a teardown added, in an effect's act (an act makes nothing)
+	| "in-act"
+	// an act returned something that is no function (its cleanup)
+	| "bad-cleanup"
+	// createWriter or start called where a process can't (a compute, an act)
+	| "not-here"
+	// a writer called after its parent ended
+	| "gone"
+	// a writer called while a scope or run is open
+	| "already-inside"
 
 export class ErmineError extends Error {
 	constructor(readonly code: Code, message: string) {

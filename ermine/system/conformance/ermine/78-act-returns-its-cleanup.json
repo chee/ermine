@@ -1,0 +1,146 @@
+{
+	"title": "an effect's act may return a cleanup function [marks 10-27; Solid 2.0: cleanup by return value]: it runs before the next act, and when the effect goes (its process stopped); a returned value that is no function is refused (bad-cleanup, as Solid throws) and nothing is run for it; returning nothing is fine",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/k",
+						0
+					],
+					"as": "k"
+				},
+				{
+					"do": [
+						"createEffect",
+						"e",
+						[
+							"read",
+							"$k"
+						],
+						"acts",
+						null,
+						{
+							"cleanup": "cleaned"
+						}
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "acts",
+			"expect": {
+				"values": [
+					0
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "cleaned",
+			"expect": {
+				"values": []
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/k",
+				[
+					{
+						"path": [],
+						"value": 1
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "acts",
+			"expect": {
+				"values": [
+					0,
+					1
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "cleaned",
+			"expect": {
+				"values": [
+					0
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/k",
+				[
+					{
+						"path": [],
+						"value": 2
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "cleaned",
+			"expect": {
+				"values": [
+					0,
+					1
+				]
+			}
+		},
+		{
+			"op": "stop",
+			"name": "p",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "cleaned",
+			"expect": {
+				"values": [
+					0,
+					1,
+					2
+				]
+			}
+		}
+	]
+}

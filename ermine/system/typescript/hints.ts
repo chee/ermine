@@ -180,6 +180,29 @@ function ermineError(e: ErmineError, seen: Seen | undefined): string | undefined
 				`{ timing: "pulse" } (the default), so each hop waits a pulse.`
 		case "not-yet":
 			return `that is made after the features are set up: use it in a hook, not in setup.`
+		case "in-act":
+			return fn === "addTeardown"
+				? `an effect's act makes nothing: return the cleanup from the act instead, ` +
+					`createEffect(name, () => …, (v) => { …; return () => cleanup() }): it runs before the ` +
+					`next act and when the effect goes.`
+				: `an effect's act makes nothing: it only does the side effect. make the ${
+					fn.replace(/^create/, "").toLowerCase()
+				} in setup, an action, or a createMemo (an owner that is run), and have the effect ` +
+					`read it.`
+		case "bad-cleanup":
+			return `an act returns a function (its cleanup, run before the next act and when the ` +
+				`effect goes) or nothing: a returned value isn't used, so don't return it.`
+		case "not-here":
+			return `${fn} is for setup, an action, or a writer (createWriter): a memo reruns, and an ` +
+				`effect's act makes nothing, so what it made would be made again or lost. do it in ` +
+				`setup, or in an action the memo or effect calls.`
+		case "gone":
+			return `the writer was made by a setup or action whose process (or owner) has ended: ` +
+				`createWriter again where it still runs, or stop whatever kept the writer (a timer, a listener) ` +
+				`in addTeardown.`
+		case "already-inside":
+			return `a writer is for code that runs with nothing open (a timer, a listener, ` +
+				`after an await). inside a run, an action or setup, do what it holds directly.`
 		case "closed":
 			return `this ermine is closed (close() ran) and something went on: stop timers and ` +
 				`listeners in addTeardown.`
