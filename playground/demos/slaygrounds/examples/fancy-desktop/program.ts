@@ -666,7 +666,9 @@ function paint(name: string) {
 	createEffect(
 		`${name}/draw`,
 		() => ({ img: read(doc), pal: read(pal) }),
-		(v) => pixels(canvas, v.img as Picture, v.pal as string[]),
+		(v) => {
+			pixels(canvas, v.img as Picture, v.pal as string[])
+		},
 	)
 	twins(name)
 	createAction(`${name}/on/dab`, (i: number) => {
@@ -933,7 +935,9 @@ function catclock(name: string) {
 				.split(":").map(Number)
 			return { x, h, m, bow }
 		},
-		(v) => kitcat(canvas, v),
+		(v) => {
+			kitcat(canvas, v)
+		},
 	)
 	twins(name)
 	const where = `${(peep(() => read(`${f}/info`)) as { doc?: string } | undefined)?.doc ?? ""}/cat`

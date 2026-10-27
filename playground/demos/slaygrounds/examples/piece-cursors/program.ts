@@ -70,7 +70,9 @@ export default function program() {
 	})
 	// the heartbeat's timer has nothing open to read in: an effect keeps what it needs
 	let beating: Record<string, boolean> = { laptop: true, phone: true }
-	createEffect("beating", () => read(beat) as Record<string, boolean>, (b) => (beating = b))
+	createEffect("beating", () => read(beat) as Record<string, boolean>, (b) => {
+		beating = b
+	})
 	const info = crossed()
 
 	// each device's pane: a pad and its rows, drawn by an effect from the rows its own world reads.
