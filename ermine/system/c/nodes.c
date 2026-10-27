@@ -1292,34 +1292,33 @@ static int read_part(es_context *c, es_target x, const char *part, const op_key 
 	const op_value **out) {
 	es_ermine *e = c->ermine;
 	*out = NULL;
-	es_context *t = c;
 	es_node_data n;
-	TRY(node_part(t, x, part, &n));
+	TRY(node_part(c, x, part, &n));
 	const char *id;
-	if (!es_id_of(t, &n, &id)) {
+	if (!es_id_of(c, &n, &id)) {
 		// a node not there: pending, as a memo with no value is ("not there yet" one way) [chee 10-25:
 		// "i think a missing node should also throw pending"], the read tracked so its coming reruns
 		// it, and said where the reader waits
-		int code = check(t);
+		int code = check(c);
 		if (!code && n.has_path && c->peeping == 0) wait_for(c, CP(n.path), n.npath);
 		if (!code) code = es_fail(ES_PENDING, "%s", "");
 		es_node_data_free(&n);
 		return code;
 	}
 	int code = 0;
-	if (t->guarded) {
+	if (c->guarded) {
 		op_value *field = field_of(key, nkey);
-		code = ask_read(t, gd_target_of(thing_of(id, &n), n.part, nkey ? field : NULL));
+		code = ask_read(c, gd_target_of(thing_of(id, &n), n.part, nkey ? field : NULL));
 		op_free(field);
 	}
 	if (!code && c->peeping == 0) es_calls_read(e, n.part, id, key, nkey, 1, 0);
 	if (!code) {
-		const op_value *v = pl_read(t->places, tb_string(n.part), tb_string(id), key, nkey);
+		const op_value *v = pl_read(c->places, tb_string(n.part), tb_string(id), key, nkey);
 		int pending = 0;
 		if (strcmp(n.part, "value") == 0 && es_is_memo(e, id)) {
-			pending = v == NULL && cst_pending(t->places, tb_string(id));
+			pending = v == NULL && cst_pending(c->places, tb_string(id));
 		}
-		code = check(t);
+		code = check(c);
 		if (!code && pending) code = es_fail(ES_PENDING, "%s", "");
 		if (!code) *out = v;
 	}
@@ -1349,15 +1348,14 @@ static int versions_part(es_context *c, es_target x, const char *part, const op_
 	size_t nkey, es_versions *out) {
 	es_ermine *e = c->ermine;
 	*out = (es_versions){0};
-	es_context *t = c;
 	es_node_data n;
-	TRY(node_part(t, x, part, &n));
+	TRY(node_part(c, x, part, &n));
 	const op_value *shown;
 	int code = read_part(c, x, part, key, nkey, &shown);
 	const char *id = NULL;
-	if (!code && !es_id_of(t, &n, &id)) {
+	if (!code && !es_id_of(c, &n, &id)) {
 		es_node_data_free(&n);
-		return check(t);
+		return check(c);
 	}
 	if (code) return es_node_data_free(&n), code;
 	es_versions items = {0};
@@ -1437,52 +1435,51 @@ static void items_push(es_items *l, const op_value *value, const char *from, es_
 int es_read_entries(es_context *c, es_target x, es_items *out) {
 	es_ermine *e = c->ermine;
 	*out = (es_items){0};
-	es_context *t = c;
 	es_node_data n;
-	TRY(es_node_of(t, x, &n));
+	TRY(es_node_of(c, x, &n));
 	int code = 0;
 	if (!n.has_path) {
 		if (n.id != NULL) {
 			int no;
-			code = refused(t, gd_target_of(thing_of(n.id, NULL), n.part, NULL), &no);
+			code = refused(c, gd_target_of(thing_of(n.id, NULL), n.part, NULL), &no);
 			if (!code && no) items_push(out, NULL, "id", NULL, 1);
 			else if (!code) {
-				if (t->peeping == 0) es_calls_read(e, n.part, n.id, NULL, 0, 1, 0);
-				const op_value *v = pl_read(t->places, tb_string(n.part), tb_string(n.id), NULL, 0);
+				if (c->peeping == 0) es_calls_read(e, n.part, n.id, NULL, 0, 1, 0);
+				const op_value *v = pl_read(c->places, tb_string(n.part), tb_string(n.id), NULL, 0);
 				// a node there by id, with or without a value (as by a path); nothing under that id: none
 				size_t held;
 				tb_at(e->table, tb_string(n.id), &held);
 				if (v != NULL || held > 0) {
-					items_push(out, v, "id", es_handle_by_id(t, n.id, n.part), 0);
+					items_push(out, v, "id", es_handle_by_id(c, n.id, n.part), 0);
 				}
 			}
 		}
 		es_node_data_free(&n);
-		if (!code) code = check(t);
+		if (!code) code = check(c);
 		if (code) es_items_free(out);
 		return code;
 	}
-	pl_answers all = pl_gets(t->places, CP(n.path), n.npath);
-	for (size_t i = 0; i < all.n && t->peeping == 0; i++) {
+	pl_answers all = pl_gets(c->places, CP(n.path), n.npath);
+	for (size_t i = 0; i < all.n && c->peeping == 0; i++) {
 		es_calls_read(e, n.part, all.items[i].id.string, NULL, 0, 1, 0);
 	}
-	if (!t->guarded) {
+	if (!c->guarded) {
 		for (size_t i = 0; i < all.n; i++) {
 			const char *id = all.items[i].id.string;
-			items_push(out, pl_read(t->places, tb_string(n.part), tb_string(id), NULL, 0),
-				all.items[i].from, es_handle_by_id(t, id, n.part), 0);
+			items_push(out, pl_read(c->places, tb_string(n.part), tb_string(id), NULL, 0),
+				all.items[i].from, es_handle_by_id(c, id, n.part), 0);
 		}
 	} else if (n.npath == 0) {
 		// the root: no name in a folder to ask by, so the node itself, as read asks
 		for (size_t i = 0; i < all.n && !code; i++) {
 			const char *id = all.items[i].id.string;
 			int no;
-			code = refused(t, gd_target_of(thing_of(id, &n), n.part, NULL), &no);
+			code = refused(c, gd_target_of(thing_of(id, &n), n.part, NULL), &no);
 			if (code) break;
 			if (no) items_push(out, NULL, all.items[i].from, NULL, 1);
 			else {
-				items_push(out, pl_read(t->places, tb_string(n.part), tb_string(id), NULL, 0),
-					all.items[i].from, es_handle_by_id(t, id, n.part), 0);
+				items_push(out, pl_read(c->places, tb_string(n.part), tb_string(id), NULL, 0),
+					all.items[i].from, es_handle_by_id(c, id, n.part), 0);
 			}
 		}
 	} else {
@@ -1491,7 +1488,7 @@ int es_read_entries(es_context *c, es_target x, es_items *out) {
 			in[i] = (pl_member){n.path[n.npath - 1], all.items[i].id, all.items[i].from};
 		}
 		pl_members list = {all.n, in}, asked;
-		gd_answer a = gd_members(t->guard, &list, CP(n.path), n.npath - 1, &asked);
+		gd_answer a = gd_members(c->guard, &list, CP(n.path), n.npath - 1, &asked);
 		free(in);
 		code = answered(a, &(gd_refusal){"read", "refused", {0}, 0});
 		if (!code) {
@@ -1500,8 +1497,8 @@ int es_read_entries(es_context *c, es_target x, es_items *out) {
 				if (gd_is_refused(asked.items[i].id)) {
 					items_push(out, NULL, all.items[i].from, NULL, 1);
 				} else {
-					items_push(out, pl_read(t->places, tb_string(n.part), tb_string(id), NULL, 0),
-						all.items[i].from, es_handle_by_id(t, id, n.part), 0);
+					items_push(out, pl_read(c->places, tb_string(n.part), tb_string(id), NULL, 0),
+						all.items[i].from, es_handle_by_id(c, id, n.part), 0);
 				}
 			}
 		}
@@ -1509,7 +1506,7 @@ int es_read_entries(es_context *c, es_target x, es_items *out) {
 	}
 	pl_answers_free(&all);
 	es_node_data_free(&n);
-	if (!code) code = check(t);
+	if (!code) code = check(c);
 	if (code) es_items_free(out);
 	return code;
 }
@@ -1557,28 +1554,27 @@ void es_children_free(es_children *c) {
 int es_list(es_context *c, es_target x, es_names *out) {
 	es_ermine *e = c->ermine;
 	*out = (es_names){0};
-	es_context *t = c;
 	es_node_data n;
-	TRY(es_node_of(t, x, &n));
+	TRY(es_node_of(c, x, &n));
 	const char *id;
-	int has = es_id_of(t, &n, &id);
+	int has = es_id_of(c, &n, &id);
 	int code = 0;
-	if (t->guarded && has) code = ask_read(t, gd_target_of(thing_of(id, &n), "children", NULL));
-	if (!code && has && t->peeping == 0) es_calls_read(e, "children", id, NULL, 0, 1, 1);
+	if (c->guarded && has) code = ask_read(c, gd_target_of(thing_of(id, &n), "children", NULL));
+	if (!code && has && c->peeping == 0) es_calls_read(e, "children", id, NULL, 0, 1, 1);
 	es_names got;
 	names_init(&got);
 	if (!code) {
 		if (n.has_path) {
-			pl_members m = pl_list(t->places, CP(n.path), n.npath);
+			pl_members m = pl_list(c->places, CP(n.path), n.npath);
 			for (size_t i = 0; i < m.n; i++) names_add(&got, m.items[i].name);
 			pl_members_free(&m);
 		} else if (n.id != NULL) {
 			pl_namelist nl = {0};
-			pl_keys(t->places, tb_string("children"), tb_string(n.id), NULL, 0, 0, &nl);
+			pl_keys(c->places, tb_string("children"), tb_string(n.id), NULL, 0, 0, &nl);
 			for (size_t i = 0; i < nl.n; i++) names_add(&got, nl.items[i]);
 			pl_namelist_free(&nl);
 		}
-		if (!code) code = check(t);
+		if (!code) code = check(c);
 	}
 	es_node_data_free(&n);
 	if (code) return es_names_free(&got), code;
@@ -1589,16 +1585,15 @@ int es_list(es_context *c, es_target x, es_names *out) {
 // x's children, each as a handle (reached by this process's path, so its own to hold)
 int es_read_children(es_context *c, es_target x, es_children *out) {
 	*out = (es_children){0};
-	es_context *t = c;
 	es_node_data n;
-	TRY(es_node_of(t, x, &n));
+	TRY(es_node_of(c, x, &n));
 	const char *id;
-	es_id_of(t, &n, &id);
+	es_id_of(c, &n, &id);
 	es_names names;
 	int code = es_list(c, x, &names);
 	if (code) return es_node_data_free(&n), code;
 	const op_value *kids = id != NULL
-		? pl_read(t->places, tb_string("children"), tb_string(id), NULL, 0) : NULL;
+		? pl_read(c->places, tb_string("children"), tb_string(id), NULL, 0) : NULL;
 	out->names = es_alloc((names.n + 1) * sizeof *out->names);
 	out->nodes = es_alloc((names.n + 1) * sizeof *out->nodes);
 	for (size_t i = 0; i < names.n && !code; i++) {
@@ -1609,17 +1604,17 @@ int es_read_children(es_context *c, es_target x, es_children *out) {
 			es_names p = names_of(CP(n.path), n.npath);
 			names_add(&p, names.names[i]);
 			tb_key k;
-			if (pl_get(t->places, CP(p.names), p.n, &k)) at = k.string;
+			if (pl_get(c->places, CP(p.names), p.n, &k)) at = k.string;
 			es_names_free(&p);
 		}
 		if (at == NULL && kid != NULL && kid->type == OP_STR) at = kid->str;
 		if (at == NULL) continue;
 		out->names[out->n] = es_dup(names.names[i]);
-		out->nodes[out->n++] = es_handle_by_id(t, at, "value");
+		out->nodes[out->n++] = es_handle_by_id(c, at, "value");
 	}
 	es_names_free(&names);
 	es_node_data_free(&n);
-	if (!code) code = check(t);
+	if (!code) code = check(c);
 	if (code) es_children_free(out);
 	return code;
 }

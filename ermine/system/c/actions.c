@@ -736,17 +736,17 @@ static int ask_read(es_context *t, const char *id, const es_node_data *n, const 
 	return code;
 }
 
-// the node n of side t explained, as c: its entry's change, and a write held there
-static int explain_node(es_context *c, es_context *t, const es_node_data *n, const op_key *key,
+// the node n explained: its entry's change, and a write held there
+static int explain_node(es_context *c, const es_node_data *n, const op_key *key,
 	size_t nkey, es_explained **out) {
 	es_ermine *e = c->ermine;
 	*out = NULL;
 	const char *id;
-	if (!es_id_of(t, n, &id)) return 0;
-	int code = ask_read(t, id, n, key, nkey);
+	if (!es_id_of(c, n, &id)) return 0;
+	int code = ask_read(c, id, n, key, nkey);
 	if (code) return code;
-	pl_change(t->places, tb_string(n->part), tb_string(id));
-	if (pl_status(t->places) != SC_OK) return ES_STOP;
+	pl_change(c->places, tb_string(n->part), tb_string(id));
+	if (pl_status(c->places) != SC_OK) return ES_STOP;
 	op_value *change = change_at(e, n->part, id);
 	es_explained *x = es_alloc(sizeof *x);
 	es_held h;
@@ -773,11 +773,10 @@ int es_explain(es_context *c, es_target x, const op_key *key, size_t nkey, es_ex
 	*out = NULL;
 	int code = es_alive(c->ermine);
 	if (code) return code;
-	es_context *t = c;
 	es_node_data n;
-	code = es_node_of(t, x, &n);
+	code = es_node_of(c, x, &n);
 	if (code) return code;
-	code = explain_node(c, t, &n, key, nkey, out);
+	code = explain_node(c, &n, key, nkey, out);
 	es_node_data_free(&n);
 	return code;
 }
@@ -787,13 +786,12 @@ static int explain_part(es_context *c, es_target x, const char *part, es_explain
 	*out = NULL;
 	int code = es_alive(c->ermine);
 	if (code) return code;
-	es_context *t = c;
 	es_node_data n;
-	code = es_node_of(t, x, &n);
+	code = es_node_of(c, x, &n);
 	if (code) return code;
 	free(n.part);
 	n.part = es_dup(part);
-	code = explain_node(c, t, &n, NULL, 0, out);
+	code = explain_node(c, &n, NULL, 0, out);
 	es_node_data_free(&n);
 	return code;
 }
@@ -1732,7 +1730,7 @@ int es_create_action_at(es_context *c, es_at p, es_action fn, void *ctx, es_hand
 
 // the execute ask, run in the call scope
 typedef struct {
-	es_context *t;
+	es_context *c;
 	const char *id;
 	const es_node_data *n;
 	int code;
@@ -1743,7 +1741,7 @@ static void do_ask(void *ctx) {
 	gd_thing thing = {tb_string(a->id), a->n->has_path ? (const char *const *)a->n->path : NULL,
 		a->n->has_path ? a->n->npath : 0};
 	gd_target target = gd_target_of(thing, "value", NULL);
-	a->code = es_context_ask(a->t, "execute", &target, 1);
+	a->code = es_context_ask(a->c, "execute", &target, 1);
 }
 
 // the action's function, run in the call scope
@@ -1824,7 +1822,7 @@ static sc_scope *call_scope(es_context *c, const char *id, unsigned k, sc_scope 
 }
 
 // the action f found at n (id): asked "execute" in a call scope, run there, its record held
-static int call_action(es_context *c, es_context *t, const es_node_data *n, const char *id,
+static int call_action(es_context *c, const es_node_data *n, const char *id,
 	es_function *f, const op_value *const *args, size_t nargs, op_value **out, const ch_site *site) {
 	es_ermine *e = c->ermine;
 	// the placement's scope while the node still holds what was placed; else (its owner gone, or a
@@ -1834,7 +1832,7 @@ static int call_action(es_context *c, es_context *t, const es_node_data *n, cons
 	unsigned k = es_calls_next(e);
 	sc_scope *call = call_scope(c, id, k, mine ? p->scope : c->scope, site);
 	if (call == NULL) return es_fail_text(SC_DISPOSED);
-	asking a = {t, id, n, 0};
+	asking a = {c, id, n, 0};
 	const char *bad = sc_run_with_scope(call, do_ask, &a);
 	int code = bad != NULL ? es_fail_text(bad) : a.code;
 	if (code) {
@@ -1910,12 +1908,11 @@ static int execute_action(es_context *c, es_target x, const op_value *const *arg
 	int code = es_alive(e);
 	if (code) return code;
 	// the action: resolved and asked as c, the caller
-	es_context *t = c;
 	es_node_data n;
-	code = es_node_of(t, x, &n);
+	code = es_node_of(c, x, &n);
 	if (code) return code;
 	const char *found;
-	char *id = es_id_of(t, &n, &found) ? es_dup(found) : NULL;
+	char *id = es_id_of(c, &n, &found) ? es_dup(found) : NULL;
 	es_aim at = {n.has_path ? NULL : n.id, n.has_path, (const char *const *)n.path, n.npath};
 	// in a run, the computer waits; else whoever this context is
 	sc_run *run = sc_get_run(e->scheduler);
@@ -1924,8 +1921,8 @@ static int execute_action(es_context *c, es_target x, const op_value *const *arg
 	const char *caller = by != NULL ? by->str : c->node;
 	// tracked in a run, so the handler coming reruns it
 	const op_value *value =
-		id != NULL ? pl_read(t->places, tb_string("value"), tb_string(id), NULL, 0) : NULL;
-	if (pl_status(t->places) != SC_OK) {
+		id != NULL ? pl_read(c->places, tb_string("value"), tb_string(id), NULL, 0) : NULL;
+	if (pl_status(c->places) != SC_OK) {
 		code = ES_STOP;
 	} else if (value == NULL) {
 		// lasting while the caller does: a computer's with it, else the context's. the path: from the root
@@ -1939,7 +1936,7 @@ static int execute_action(es_context *c, es_target x, const op_value *const *arg
 	} else {
 		es_function *f = &fn_of(e->actions, value)->f;
 		es_calls_answered(e, caller, &at);
-		code = call_action(c, t, &n, id, f, args, nargs, out, site);
+		code = call_action(c, &n, id, f, args, nargs, out, site);
 	}
 	free(id);
 	es_node_data_free(&n);
