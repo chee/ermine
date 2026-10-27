@@ -126,6 +126,33 @@ Deno.test("live: started, it syncs whenever either side is poked; stopped, it do
 	assertEquals(readState(a.places, link.process.id)?.code, "in-step")
 })
 
+Deno.test("live: a poke just as a sync ends is not lost, however many ticks after it", async () => {
+	for (let ticks = 0; ticks < 12; ticks++) {
+		const a = createWorld("A"), b = createWorld("B")
+		let writes = 0
+		// a write made `ticks` microtasks after each time the link reads b's side, at most 3
+		const later: Holder = {
+			...b.history,
+			since: async (...args) => {
+				const r = await b.history.since!(...args)
+				let p = Promise.resolve()
+				for (let i = 0; i < ticks; i++) p = p.then(() => {})
+				void p.then(() => {
+					if (writes < 3) a.set("N", ++writes)
+				})
+				return r
+			},
+		}
+		const link = createLink(a.history, later, { graph: a })
+		link.start()
+		await link.idle()
+		await new Promise((r) => setTimeout(r, 0))
+		await link.idle()
+		assertEquals(b.value("N"), a.value("N"), `${ticks} ticks`)
+		link.close()
+	}
+})
+
 Deno.test("a holder that can't list: nothing pulled from it by since; fetch asks it by node", async () => {
 	const a = createWorld("A"), b = createWorld("B")
 	const hidden = createMemory({ lists: false })

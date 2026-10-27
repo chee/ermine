@@ -201,7 +201,9 @@ export function createLink(a: Holder, b: Holder, options: LinkOptions): Link {
 				// what it threw is on the node
 				await sync().catch(() => {})
 			} while (again)
-		})().finally(() => running = undefined)
+			// cleared here, in the tick the loop ended: a poke after it starts the next sync
+			running = undefined
+		})()
 	}
 	let stops: (() => void)[] = []
 	function stop() {
