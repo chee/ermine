@@ -1,0 +1,153 @@
+{
+	"title": "candidates in a level are tried in canonical key order, a U+0000 counting as one byte: two compilers that both take the wrong type are told in that order, \"\\u0000\\u0000\" (2 bytes) before abc (3)",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"work": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "types",
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"clocks": "CL"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "CL",
+			"value": {
+				"clock.js": "CLOCK"
+			},
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CLOCK",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"id": "A",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "A",
+			"value": {
+				"ermine.programs.takes": [
+					"public.wasm-executable"
+				],
+				"ermine.programs.gives": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"id": "Z",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "Z",
+			"value": {
+				"ermine.programs.takes": [
+					"public.wasm-executable"
+				],
+				"ermine.programs.gives": "com.netscape.javascript-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"name": "b",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "b",
+			"path": [
+				"clocks"
+			],
+			"node": "CL",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "b",
+			"path": [
+				"ermine",
+				"types"
+			],
+			"node": "ermine/types",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "b",
+			"path": [
+				"abc"
+			],
+			"node": "A",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "b",
+			"path": [
+				"\u0000\u0000"
+			],
+			"node": "Z",
+			"expect": {}
+		},
+		{
+			"op": "program",
+			"box": "b",
+			"program": "clock.js",
+			"from": [
+				"clocks"
+			],
+			"expect": {
+				"refused": "no-chain",
+				"program": {
+					"id": "CLOCK",
+					"at": [
+						"clocks",
+						"clock.js"
+					]
+				},
+				"why": [
+					{
+						"id": "Z",
+						"at": [
+							"\u0000\u0000"
+						],
+						"for": "CLOCK",
+						"type": "com.netscape.javascript-source",
+						"why": "wrong-type"
+					},
+					{
+						"id": "A",
+						"at": [
+							"abc"
+						],
+						"for": "CLOCK",
+						"type": "com.netscape.javascript-source",
+						"why": "wrong-type"
+					}
+				]
+			}
+		}
+	]
+}
