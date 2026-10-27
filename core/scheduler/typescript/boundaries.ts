@@ -47,8 +47,9 @@ export function createBoundaries(
 	}
 	const boundaries = { loading: new Map<Scope, B>(), errored: new Map<Scope, B>() }
 	// each computation ever caught: the boundary holding it now, if any, and where in its items. one
-	// slot each, never deleted (a Map losing and gaining the same key slows as it grows, in V8)
-	type Slot = { b: B | undefined; i: number }
+	// slot each, never deleted (a Map losing and gaining the same key slows as it grows, in V8).
+	// watched: a teardown of it is registered and has not run yet
+	type Slot = { b: B | undefined; i: number; watched: boolean }
 	const held = new WeakMap<Computer, Slot>()
 
 	// the nearest boundary of a kind above c, not c itself
@@ -107,7 +108,7 @@ export function createBoundaries(
 		if (slot?.b !== undefined && slot.b !== b) release(c)
 		if (b === undefined) return
 		const item: Caught = kind === "errored" ? { computer: c, run, error } : { computer: c, run }
-		if (slot === undefined) held.set(c, slot = { b: undefined, i: 0 })
+		if (slot === undefined) held.set(c, slot = { b: undefined, i: 0, watched: false })
 		if (slot.b === b) b.items[slot.i] = item
 		else {
 			slot.b = b
@@ -115,11 +116,16 @@ export function createBoundaries(
 			b.items.push(item)
 		}
 		b.list = undefined
-		// a teardown of c runs at its next run's start, too: there it is still alive, and that run's
-		// end says what it is
-		s.registerTeardown(c, () => {
-			if (c.state !== "alive") release(c)
-		})
+		// a teardown of c runs once a later run of it is done, too: there it is still alive, and that
+		// run's end says what it is. one at a time: a run ending any other way keeps it
+		if (!slot.watched) {
+			slot.watched = true
+			const watch = slot
+			s.registerTeardown(c, () => {
+				watch.watched = false
+				if (c.state !== "alive") release(c)
+			})
+		}
 		tell(b)
 	}
 
