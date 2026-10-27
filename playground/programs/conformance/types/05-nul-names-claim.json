@@ -1,0 +1,49 @@
+{
+	"title": "two types claim .qq: the first by canonical key order wins, and a name with U+0000 counts it as one byte, so two NULs (2 bytes) come before abc (3), where the C's C0 80 would have counted four",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"work": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "types",
+			"list": [
+				{ "name": "abc", "fileNameExtension": ".qq" },
+				{ "name": "\u0000\u0000", "fileNameExtension": ".qq" }
+			],
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"clocks": "CL"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "CL",
+			"value": {
+				"x.qq": "X"
+			},
+			"expect": {}
+		},
+		{
+			"op": "type",
+			"folder": [
+				"work",
+				"clocks"
+			],
+			"expect": {
+				"types": {
+					"x.qq": "\u0000\u0000"
+				}
+			}
+		}
+	]
+}
