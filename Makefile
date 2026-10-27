@@ -9,7 +9,11 @@
 
 CC ?= cc
 CFLAGS = -std=c11 -O2 -Wall -Wextra -Wpedantic
-CHECKFLAGS = -std=c11 -g -O1 -Wall -Wextra -Wpedantic -fsanitize=address,undefined -fno-omit-frame-pointer
+# glibc declares arc4random_buf, clock_gettime and open_memstream only in its default set, which
+# -std=c11 turns off (ermine/processes/c/platform.h: what a platform supplies)
+SOURCE = $(if $(filter Linux,$(shell uname -s)),-D_DEFAULT_SOURCE,)
+CFLAGS += $(SOURCE)
+CHECKFLAGS = -std=c11 -g -O1 -Wall -Wextra -Wpedantic -fsanitize=address,undefined -fno-omit-frame-pointer $(SOURCE)
 DENO = deno test --quiet --allow-run --allow-read --allow-env
 
 # the shared loop of every harness on the one runner: it and changeable's value and JSON
