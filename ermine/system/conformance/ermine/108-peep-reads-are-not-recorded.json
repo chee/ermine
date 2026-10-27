@@ -1,0 +1,167 @@
+{
+	"title": "a read inside peep is not tracked and not recorded in the call, whichever read it is: read, readEntries and list alike (peep = untracked); the same reads outside peep are recorded",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/a",
+				1
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/dir",
+				{}
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/dir/k",
+				1
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createAction",
+						"on/peeped",
+						[
+							{
+								"do": [
+									"peep",
+									[
+										"all",
+										[
+											"read",
+											"/a"
+										],
+										[
+											"readEntries",
+											"/a"
+										],
+										[
+											"list",
+											"/dir"
+										]
+									]
+								]
+							}
+						]
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"on/tracked",
+						[
+							{
+								"do": [
+									"read",
+									"/a"
+								]
+							},
+							{
+								"do": [
+									"readEntries",
+									"/a"
+								]
+							},
+							{
+								"do": [
+									"list",
+									"/dir"
+								]
+							}
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/code/p/on/peeped"
+			]
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"path": [
+				"code",
+				"p",
+				"on",
+				"peeped"
+			],
+			"expect": {
+				"record": {
+					"n": 1,
+					"caller": "n1",
+					"handler": "n7",
+					"args": [],
+					"end": "done",
+					"reads": [],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/code/p/on/tracked"
+			]
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"path": [
+				"code",
+				"p",
+				"on",
+				"tracked"
+			],
+			"expect": {
+				"record": {
+					"n": 2,
+					"caller": "n1",
+					"handler": "n9",
+					"args": [],
+					"end": "done",
+					"reads": [
+						[
+							"value",
+							"n2"
+						],
+						[
+							"children",
+							"n3"
+						]
+					],
+					"writes": []
+				}
+			}
+		}
+	]
+}
