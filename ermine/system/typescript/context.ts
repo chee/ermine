@@ -9,7 +9,6 @@ import { carryTrace } from "@ermine/core/places/header"
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
 import apply, { type Key as Step, type Patch } from "@ermine/core/op/apply"
-import type { Box } from "@ermine/boxes"
 import {
 	type Id,
 	type Path,
@@ -108,9 +107,8 @@ export type Parts = {
 	readonly onCreateFunction?: (made: CreatedFunction) => void
 	// throws once ermine is closed
 	readonly alive: () => void
-	// in an action's call, its caller's place and box (none: the host): asks there are asked as
-	// both (guard)
-	readonly caller?: () => { from?: Path; box?: Id } | undefined
+	// in an action's call, its caller's place (none: the host): asks there are asked as both (guard)
+	readonly caller?: () => { from?: Path } | undefined
 }
 
 // a process context's own, beside it: what the functions reach and programs never do
@@ -126,7 +124,7 @@ export type Inner = {
 	inside: <T>(f: () => T) => T
 	// one write, unasked (a memo's own, a method's after its ask), through onWrite
 	put: (write: Write) => void
-	// put as places' Writer: for the libraries that write for this context (boxes, status)
+	// put as places' Writer: for the libraries that write for this context (status)
 	writer: Writer
 }
 
@@ -137,7 +135,7 @@ export function createProcessContext(
 	parts: Parts,
 	o: {
 		scope: Scope
-		box: Box
+		places: Places
 		folder: Path
 		at: Path
 		args: readonly string[]
@@ -146,7 +144,7 @@ export function createProcessContext(
 	},
 ): Inner {
 	const { scheduler: s, table, commit } = parts
-	const places = o.box.places
+	const { places } = o
 	const guarded = parts.may !== undefined
 	const guard = createGuard({
 		places,
@@ -154,8 +152,6 @@ export function createProcessContext(
 		table,
 		may: parts.may,
 		from: o.at,
-		// the box it is in, by its folder's id: the host's policy tells boxes apart (guard.ts)
-		box: o.box.root,
 		...parts.caller !== undefined && { caller: parts.caller },
 	})
 
@@ -228,7 +224,6 @@ export function createProcessContext(
 
 	const context: ProcessContext = {
 		scope: o.scope,
-		box: o.box,
 		folder: o.folder,
 		at: o.at,
 		args: o.args,

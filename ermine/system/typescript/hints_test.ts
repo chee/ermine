@@ -1,6 +1,5 @@
 import { assert, assertEquals, assertStrictEquals } from "@std/assert"
 import { PlacesError } from "@ermine/core/places"
-import { get } from "@ermine/core/places/lib"
 import { Refusal } from "@ermine/core/places/guard"
 import { no, yes } from "@ermine/core/protect"
 import { PENDING, SchedulerError } from "@ermine/core/scheduler"
@@ -8,7 +7,6 @@ import { createErmine, ErmineError, FeatureError, type Status } from "./ermine.t
 import { bare, hint, hintStatus } from "./hints.ts"
 import {
 	createAction,
-	createBox,
 	createMemo,
 	ensureNode,
 	executeAction,
@@ -139,13 +137,11 @@ Deno.test("hints: not-a-handle, not-a-value, not-patches", () => {
 	hinted(kids, bare(kids), "one name a patch")
 })
 
-Deno.test("hints: start's not-a-function and not-yet", () => {
+Deno.test("hints: start's not-a-function", () => {
 	const e = createErmine({ features: [manual, hints] })
 	const fn = thrown(() => e.start("/code/p" as never, "/p"))
-	const box = thrown(() => e.start(() => {}, "/p", { box: { at: [] } as never }))
 	e.close()
 	hinted(fn, bare(fn), "start(program")
-	hinted(box, bare(box), "createBox")
 })
 
 Deno.test("hints: closed", () => {
@@ -164,39 +160,6 @@ Deno.test("hints: a refusal says what and whose, by the program's path", () => {
 	}, { may: (ask) => ask.op === "edit" ? no("not yours") : yes })
 	assert(caught instanceof Refusal)
 	hinted(caught, "edit refused: not yours", "host's policy", "/shared", "a node of its own")
-})
-
-Deno.test("a boxed process's refusal says nothing of where its box sits; the policy sees the box", () => {
-	const boxes: unknown[] = []
-	const e = createErmine({
-		features: [manual, hints],
-		may: (ask) => {
-			if (ask.op !== "edit") return yes
-			boxes.push(ask.from?.box)
-			return no("not here")
-		},
-	})
-	const box = e.within(() => createBox("/far/away/b"))
-	let caught: unknown
-	const s = e.start(
-		() => {
-			ensureNode("./doc", 1)
-			caught = thrown(() => patch("./doc", [{ path: [], value: 2 }]))
-			throw caught
-		},
-		"/code/q",
-		{ box },
-	)
-	assert("status" in s)
-	const st = s.status()
-	const folder = get(e.places, ["far", "away", "b"])
-	e.close()
-	assertEquals(boxes, [folder])
-	assert(caught instanceof Refusal)
-	assertEquals(caught.ask.from, { path: ["code", "q"] })
-	for (const text of [caught.message, (caught as { hint?: string }).hint, st?.hint]) {
-		assert(!String(text).includes("far") && !String(text).includes(String(folder)), text)
-	}
 })
 
 Deno.test("hints: a failed status's error is the thrown one, hinted", () => {

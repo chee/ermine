@@ -4,7 +4,7 @@
 //
 //   n         the call's number, from 1, one ermine's
 //   caller    the sending process's id; the host's node's for the host's sends
-//   context    the caller's context, as a value: where and as whom it sent (process, box, folder, at):
+//   context    the caller's context, as a value: where and as whom it sent (process, folder, at):
 //             what a service acting for its caller resolves paths in and asks protect as
 //   handler   { id, change }: the handler's node, and its value's change as called (which code ran)
 //   args      as given, by reference (a big value lives as long as its record)
@@ -24,7 +24,7 @@
 // then held as the latest per handler. read(id) tracked: what reads it reruns when a newer one is held.
 // a handler gone (drop(id): its placement's scope gone, or its node removed): its record goes with
 // it, its args and its caller's context too, and a call of it still going holds none as it ends
-// a wait: a send to a node holding nothing (none there, or no value): { caller, path or id, box,
+// a wait: a send to a node holding nothing (none there, or no value): { caller, path or id,
 // since }, one per caller and target, kept while it waits: a computer's till its next run ends
 // not waiting there, or it goes; another's till a send from it there is answered, or its scope
 // goes. waits() tracked.
@@ -63,8 +63,6 @@ export type Wait = {
 	readonly caller: Id
 	readonly path?: Path
 	readonly id?: Id
-	// the box it was looked up in: its root
-	readonly box: Id
 	readonly since: number
 }
 
@@ -113,7 +111,7 @@ export type Calls = {
 	latest: (id: Id) => Call | undefined
 	// a send to nothing: waiting from caller (a computer's node: in its run) at the target, till
 	// scope goes (the computer's own, in a run; else the caller's context's)
-	wait: (caller: Id, at: { path?: Path; id?: Id }, box: Id, scope: Scope) => Wait
+	wait: (caller: Id, at: { path?: Path; id?: Id }, scope: Scope) => Wait
 	// a send from caller there answered: its wait gone
 	answered: (caller: Id, at: { path?: Path; id?: Id }) => void
 	// every wait, or caller's; tracked
@@ -268,7 +266,7 @@ export function createCalls(setup: Setup): Calls {
 			s.track(h.key)
 			return h.call
 		},
-		wait(caller, at, box, scope) {
+		wait(caller, at, scope) {
 			let mine = waiting.get(caller)
 			if (mine === undefined) waiting.set(caller, mine = new Map())
 			const k = targetKey(at)
@@ -282,7 +280,6 @@ export function createCalls(setup: Setup): Calls {
 			const wait: Wait = {
 				caller,
 				...at.path !== undefined ? { path: at.path } : { id: at.id },
-				box,
 				since: now(),
 			}
 			mine.set(k, { wait, run })

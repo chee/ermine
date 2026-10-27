@@ -9,9 +9,8 @@
 //    ("patchy": the real one; "trace", "hints": the real ones; "inline": one written in this
 //    file, listing no files; another
 //    harness adds its own: named, below) or
-//    test features (below); deny: [{ op, path?, id?, from?, box? }] refused (every field given
-//    matching; from: the asker's place; box: the box the asker is in, by its name, a "box" step's:
-//    that box's folder's id the ask's from.box);
+//    test features (below); deny: [{ op, path?, id?, from? }] refused (every field given
+//    matching; from: the asker's place);
 //    uuid: uuidv7 ids; calls: "never" (a feature holding no call records, onRecord). deny: by path, or { op, id } by id; at, args, machine: the host's node's
 // { op: "features" }                       → { features }   ermine.features
 // { op: "late", feature }                  → {}   a test feature adding a hook now (late: true)
@@ -29,17 +28,14 @@
 //    it too), a setup running
 //    program's steps with its api: its value back's (an expr), or it throws text, or (promise) a
 //    promise of back's, settled at the next "settle"
-// { op: "start", name, at, program?, args?, box? } → { id } | { refused, held? }   ermine.start(fn,
-//    at, …): fn the program a code step made at program (none: at, from the root through box's
-//    folder); box: a box's name
-// { op: "box", name, at }                  → {}   the host's box(at), named
-// { op: "boxplace", name, at, id | path }  → {}   that box's place: a node placed in it
+// { op: "start", name, at, program?, args? } → { id } | { refused, held? }   ermine.start(fn,
+//    at, …): fn the program a code step made at program (none: at)
 // { op: "stop", name, why? }               → {}
 // { op: "status", name }                   → { status }   the start's handle's status()
 // { op: "close" }                          → {}
 // { op: "service", what: "land", at }      → {}   the host places patchy' land at at
 // { op: "record", kind: "run" | "call", id } → { record? }   the latest, shown (below)
-// { op: "waits" }                          → { waits }   [{ caller, path?, id?, box }]
+// { op: "waits" }                          → { waits }   [{ caller, path?, id? }]
 // { op: "slot", feature, process }         → { value? }   a test feature's slot at the process
 // { op: "do", process, call, as? }         → { value }   call [fn, ...args] from outside
 // { op: "settle" }                         → {}   every promise the harness made settled, then
@@ -108,7 +104,6 @@
 import createEntry from "@ermine/core/node/entry"
 import { at } from "@ermine/core/places"
 import { PlacesError } from "@ermine/core/places"
-import { inside } from "@ermine/boxes"
 import { get } from "@ermine/core/places/lib"
 import { createChangeHeader, NODE } from "@ermine/core/places/header"
 import { Refusal } from "@ermine/core/places/guard"
@@ -120,7 +115,6 @@ import patchy, { createPatch, land, layers } from "@ermine/patchy/feature"
 import { trace } from "./trace.ts"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import {
-	type BoxNode,
 	type Call,
 	createErmine,
 	type Ermine,
@@ -156,9 +150,6 @@ type Made = {
 	// the promises the harness made, to settle
 	held: (() => void)[]
 	slots: Map<string, (o: ProcessContext | undefined) => unknown>
-	boxes: Map<string, BoxNode>
-	// each box's folder's id, by its name
-	boxIds: Map<string, Id>
 	// the programs code steps made, by the path they were written at (from the root)
 	programs: Map<string, () => unknown>
 	host: Env
@@ -188,7 +179,6 @@ function make(o: Request = {}): Made {
 		path?: string
 		id?: string
 		from?: string
-		box?: string
 	}[]
 	const may: Policy | undefined = o.deny
 		? (ask) =>
@@ -196,9 +186,7 @@ function make(o: Request = {}): Made {
 					d.op === ask.op &&
 					(d.id === undefined || d.id === ask.target.id) &&
 					(d.path === undefined || d.path === ask.target.path?.join("/")) &&
-					(d.from === undefined || d.from === ask.from?.path?.join("/")) &&
-					(d.box === undefined ||
-						(made.boxIds.has(d.box) && made.boxIds.get(d.box) === ask.from?.box))
+					(d.from === undefined || d.from === ask.from?.path?.join("/"))
 				)
 				? no("denied")
 				: yes
@@ -219,8 +207,6 @@ function make(o: Request = {}): Made {
 		later,
 		held: [],
 		slots,
-		boxes: new Map(),
-		boxIds: new Map(),
 		programs: new Map(),
 		host: new Map(),
 		shared: new Map(),
@@ -626,12 +612,10 @@ function start(r: Request): Record<string, unknown> {
 	m.pending = r.name
 	m.running.set(r.name, { started: undefined as never, env: new Map() })
 	try {
-		const box = r.box === undefined ? undefined : m.boxes.get(r.box)!
-		const where = r.program ?? [...box?.at ?? [], ...String(r.at).split("/")]
+		const where = r.program ?? String(r.at).split("/")
 		const program = m.programs.get(rooted(where))
 		if (program === undefined) throw new Error(`no program made at ${rooted(where)}`)
 		const s = m.ermine.start(program, r.at, {
-			...box !== undefined && { box },
 			...r.args !== undefined && { args: r.args },
 		})
 		if ("refused" in s) {
@@ -733,15 +717,6 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 				m.hostSys.ensureNode(r.at, program)
 			}
 			return {}
-		case "box":
-			m.boxes.set(r.name, m.hostSys.createBox(r.at))
-			m.boxIds.set(r.name, get(e.places, inside(r.at)) as Id)
-			return {}
-		case "boxplace": {
-			const b = m.boxes.get(r.name)!
-			b.place(r.at, r.id !== undefined ? e.handleOf({ id: r.id, part: "value" }) : r.path)
-			return {}
-		}
 		case "start":
 			return start(r)
 		case "stop": {
@@ -777,7 +752,6 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 					caller: x.caller,
 					...x.path && { path: x.path },
 					...x.id !== undefined && { id: x.id },
-					box: x.box,
 				})),
 			}
 		case "slot": {

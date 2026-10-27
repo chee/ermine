@@ -3,14 +3,11 @@
 import {
 	addTeardown,
 	createAction,
-	createBox,
 	ensureNode,
 	executeAction,
-	getNode,
 	patch,
 	read,
 	remove,
-	unplace,
 } from "@ermine/system"
 import { registrations } from "./registry.ts"
 import { assert, assertEquals, assertThrows } from "@std/assert"
@@ -195,53 +192,6 @@ Deno.test("a feature's context(process) is undefined once the process stopped, a
 	e.close()
 })
 
-// how often the boxes' folders' names are looked up (up, system.ts), as reads walk paths
-function namesLooked(e: { places: { namesOf: (id: string) => unknown } }) {
-	const places = e.places as { namesOf: (id: string) => unknown }
-	const was = places.namesOf
-	let n = 0
-	places.namesOf = (id) => (n++, was(id))
-	return () => n
-}
-
-Deno.test("reads walk the boxes by an index: none of the boxes' names looked up again till a name changes", () => {
-	const e = createErmine({ features: [manual] })
-	e.within(() => ensureNode("/a/b/c/x", 1))
-	for (let i = 0; i < 200; i++) e.within(() => createBox(`/boxes/b${i}`))
-	const looked = namesLooked(e)
-	e.within(() => read("/a/b/c/x"))
-	const once = looked()
-	for (let i = 0; i < 100; i++) {
-		e.within(() => read("/a/b/c/x")), e.within(() => read(e.within(() => getNode("/a/b/c/x"))))
-	}
-	assertEquals(looked(), once, "a read walked every box")
-	// a name changed: walked again, once
-	e.within(() => ensureNode("/a/y", 2))
-	for (let i = 0; i < 100; i++) e.within(() => read("/a/b/c/x"))
-	assert(looked() <= 2 * once + 10, `${looked() - once} looked up after one name changed`)
-	e.close()
-})
-
-Deno.test("createBox at one folder again and again is one box; a box nothing reaches, holding no rows, let go", () => {
-	const e = createErmine({ features: [manual] })
-	e.within(() => ensureNode("/x", 1))
-	e.start(() => void createAction("on/box", () => void createBox("./same")), "/code/p")
-	for (let i = 0; i < 100; i++) e.within(() => executeAction("/code/p/on/box"))
-	const looked = namesLooked(e)
-	e.within(() => ensureNode("/y", 1))
-	e.within(() => read("/x"))
-	// the root's box and one at /code/same: two folders' names, a few steps each
-	assert(looked() < 20, `${looked()} looked up: every createBox kept`)
-	e.within(() => unplace("/code/same"))
-	e.within(() => read("/x"))
-	const after = looked()
-	e.within(() => ensureNode("/z", 1))
-	e.within(() => read("/x"))
-	// the one nothing reaches, let go: only the root's walked
-	assert(looked() - after <= 2, `${looked() - after} looked up: the unreachable box kept`)
-	e.close()
-})
-
 Deno.test("a read of a node not there, outside a setup or a run, keeps nothing: reads don't slow as they pile up", () => {
 	const e = createErmine({ features: [manual] })
 	e.start(() => void createAction("on/look", (p: string) => read(p)), "/code/p")
@@ -311,33 +261,4 @@ Deno.test("createErmine throwing after it registered its scheduler undoes the re
 	const scheduler = createScheduler()
 	assertThrows(() => createErmine({ features: [manual], scheduler, host: { at: "" } }))
 	assertEquals(registrations(scheduler), 0)
-})
-
-Deno.test("start's box: one this ermine made, by object, never by shape", () => {
-	const e = createErmine()
-	const other = createErmine()
-	const err = (f: () => unknown) => {
-		try {
-			f()
-		} catch (x) {
-			return (x as { code?: string }).code
-		}
-		return "none"
-	}
-	// an object with a box's fields is no box
-	const fake = { root: e.places.root, places: e.places }
-	assertEquals(err(() => e.start(() => {}, "/p", { box: fake as never })), "not-yet")
-	// a box another ermine made is not this one's
-	e.ensureNode("/b", null)
-	other.ensureNode("/b", null)
-	let theirs: unknown
-	other.getProcessContext()!.within(() => theirs = createBox("/b"))
-	assertEquals(err(() => e.start(() => {}, "/q", { box: theirs as never })), "not-yet")
-	// this ermine's own box handle starts a process in it
-	let mine: unknown
-	e.getProcessContext()!.within(() => mine = createBox("/b"))
-	const started = e.start(() => {}, "/r", { box: mine as never })
-	assert("status" in started)
-	e.close()
-	other.close()
 })

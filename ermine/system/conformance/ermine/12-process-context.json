@@ -1,5 +1,5 @@
 {
-	"title": "the process context, under the api: resolve as the api's paths (bare inside at, ./ from folder, / the box's root); within(f) f with its scope open; write one write at a node (its id, or its id and the path it was reached by), asked edit (by the path when given, so a policy by path decides), through onWrite, its change made from the open scope; none open: a process's throws nothing-open (feature code opens it: within), the host's falls back to its own scope; remove the entry at a node's part taken out, asked as write is; ask protect's; ermine.api(process context) an api from it",
+	"title": "the process context, under the api: resolve as the api's paths (bare inside at, ./ from folder, / the root); within(f) f with its scope open; write one write at a node (its id, or its id and the path it was reached by), asked edit (by the path when given, so a policy by path decides), through onWrite, its change made from the open scope; none open: a process's throws nothing-open (feature code opens it: within), the host's falls back to its own scope; remove the entry at a node's part taken out, asked as write is; ask protect's; ermine.api(process context) an api from it",
 	"steps": [
 		{
 			"op": "ermine",

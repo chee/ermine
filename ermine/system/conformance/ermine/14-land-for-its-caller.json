@@ -1,5 +1,5 @@
 {
-	"title": "land acts for its caller: the patch node sent is found where the caller sent from (a path in its box), and land asks edit as the caller and as itself, landing only where both may (a pick). a land refused, or its write failing (a hook's throw) or held back (a hook not calling next: land gives false), keeps the patch node and leaves the target as it was",
+	"title": "land acts for its caller: the patch node sent is found where the caller sent from (a path from the root), and land asks edit as the caller and as itself, landing only where both may (a pick). a land refused, or its write failing (a hook's throw) or held back (a hook not calling next: land gives false), keeps the patch node and leaves the target as it was",
 	"steps": [
 		{
 			"op": "ermine",
@@ -15,26 +15,13 @@
 			"expect": {}
 		},
 		{
-			"op": "box",
-			"name": "b",
-			"at": "/boxes/b",
-			"expect": {}
-		},
-		{
-			"op": "boxplace",
-			"name": "b",
-			"at": "/system/land",
-			"path": "/system/land",
-			"expect": {}
-		},
-		{
 			"op": "code",
-			"at": "/boxes/b/code/p",
+			"at": "/code/p",
 			"program": [
 				{
 					"do": [
 						"ensureNode",
-						"/face",
+						"./face",
 						{
 							"accent": "red"
 						}
@@ -64,7 +51,6 @@
 			"op": "start",
 			"name": "p",
 			"at": "/code/p",
-			"box": "b",
 			"expect": {
 				"id": "proc:p"
 			}
@@ -89,7 +75,7 @@
 			"expect": {
 				"value": [
 					{
-						"id": "n10",
+						"id": "n7",
 						"part": "value"
 					}
 				]
@@ -102,7 +88,9 @@
 				"p",
 				"cherry"
 			],
-			"expect": {}
+			"expect": {
+				"id": "n7"
+			}
 		},
 		{
 			"op": "do",
@@ -132,18 +120,17 @@
 		{
 			"op": "id",
 			"path": [
-				"boxes",
-				"b",
+				"code",
 				"face"
 			],
 			"expect": {
-				"id": "n9"
+				"id": "n6"
 			}
 		},
 		{
 			"op": "saved",
 			"part": "value",
-			"id": "n9",
+			"id": "n6",
 			"expect": {
 				"value": {
 					"accent": "cherry"
@@ -153,7 +140,7 @@
 		{
 			"op": "saved",
 			"part": "patch",
-			"id": "n10",
+			"id": "n7",
 			"expect": {}
 		},
 		{

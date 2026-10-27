@@ -1,5 +1,5 @@
 {
-	"title": "what a process is told names nodes by their path as it sees them, never an id [chee 10-25]: explain's writer, status waits, a record's reads and writes. a writer outside the asker's box: null for it, its path for the host; a place given into the box (a box placement): that path. a change is shown as { time, actor, site }, and explain takes it back",
+	"title": "what a process is told names nodes by their path from the root, never an id [chee 10-25]: explain's writer, status waits, a record's reads and writes; the same path the host is told. a writer nothing reaches any more (its node unplaced): null. a change is shown as { time, actor, site }, and explain takes it back",
 	"steps": [
 		{
 			"op": "ermine",
@@ -64,21 +64,8 @@
 			}
 		},
 		{
-			"op": "box",
-			"name": "b",
-			"at": "/boxes/b",
-			"expect": {}
-		},
-		{
-			"op": "boxplace",
-			"name": "b",
-			"at": "/shared",
-			"path": "/shared",
-			"expect": {}
-		},
-		{
 			"op": "code",
-			"at": "/boxes/b/code/q",
+			"at": "/code/q",
 			"program": [],
 			"expect": {}
 		},
@@ -86,7 +73,6 @@
 			"op": "start",
 			"name": "q",
 			"at": "/code/q",
-			"box": "b",
 			"expect": {
 				"id": "proc:q"
 			}
@@ -114,7 +100,12 @@
 			"expect": {
 				"value": {
 					"writer": "method",
-					"path": null,
+					"path": [
+						"system",
+						"s",
+						"on",
+						"put"
+					],
 					"n": 1
 				}
 			}
@@ -148,7 +139,12 @@
 			"expect": {
 				"value": {
 					"writer": "method",
-					"path": null,
+					"path": [
+						"system",
+						"s",
+						"on",
+						"put"
+					],
 					"n": 1
 				}
 			}
@@ -179,11 +175,11 @@
 			}
 		},
 		{
-			"op": "boxplace",
-			"name": "b",
-			"at": "/system/s",
-			"path": "/system/s",
-			"expect": {}
+			"op": "host",
+			"call": [
+				"unplace",
+				"/system/s/on/put"
+			]
 		},
 		{
 			"op": "do",
@@ -195,12 +191,7 @@
 			"expect": {
 				"value": {
 					"writer": "method",
-					"path": [
-						"system",
-						"s",
-						"on",
-						"put"
-					],
+					"path": null,
 					"n": 1
 				}
 			}

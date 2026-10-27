@@ -22,8 +22,8 @@
 // layers(x, path?): readAll's layers, front first, as the overlay's Item; none over x: the table's
 // alone (read's), or none.
 // land(ermine): the service's handler, acting with patchy's FeatureAPI on that ermine: the patch node sent landed. no stricter and no looser than
-// its caller's own functions (chee 10-24: holding an id is the permission; boxes limit paths only): a
-// path is resolved in the caller's box (the feature's calling()'s context), an id is reached as it is, as
+// its caller's own functions (chee 10-24: holding an id is the permission): a path is resolved as
+// the caller resolves it (the feature's calling()'s context), an id is reached as it is, as
 // is the id the patch names (on). asked "edit" on the target (by its id) and on the patch node (by
 // the path it was sent by, else its id) as the caller and as the service, as the caller's own edit
 // would be asked (it lands only where both may), written with the service's power in the call (the
@@ -156,7 +156,7 @@ export function createPatch(at: string | readonly string[], over: Target, change
 }
 
 // a layer as layers gives it: its value, and the patch node by its path as the caller sees it
-// (the table's own: TABLE; outside its box: null)
+// (the table's own: TABLE; nothing reaches it: null)
 export type Layer = {
 	readonly value: unknown
 	readonly from: readonly string[] | typeof TABLE | null
@@ -185,7 +185,7 @@ export function land(ermine: Pick<Ermine, "table">) {
 		// it sent; none: the host called it)
 		const own = f.getProcessContext()
 		// the patch node as the caller's own edit would reach it: a handle, its place from the root
-		// (or its id); a path, in the caller's box
+		// (or its id); a path, as the caller resolves it
 		const d = isPath(p) ? undefined : f.dataOf(p)
 		if (!isPath(p) && d === undefined) throw new PatchError("nothing-there", "not a node handle")
 		// asked as the caller (it acts for its caller), whether sent a handle or a path
@@ -195,9 +195,7 @@ export function land(ermine: Pick<Ermine, "table">) {
 		const reached = d !== undefined && n.path !== undefined
 			? own.within(() => readEntries(p))[0]?.node
 			: undefined
-		const id = reached !== undefined
-			? f.dataOf(reached)?.node.id
-			: n.id ?? get(from.box.places, n.path!)
+		const id = reached !== undefined ? f.dataOf(reached)?.node.id : n.id ?? get(f.places, n.path!)
 		const v = id === undefined
 			? undefined
 			: f.table.get("patch", id)?.value as PatchNode | undefined

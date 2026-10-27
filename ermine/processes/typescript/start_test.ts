@@ -61,7 +61,7 @@ Deno.test("start: the node's attributes, the row at the path, then body with the
 	assertEquals(w.status(p), { [STATUS]: PENDING })
 	assertEquals(w.table.get(PROCESS, "R")?.value, { work: { clock: p.id } })
 	assertStrictEquals(open, p.scope)
-	assertEquals([given?.id, given?.args, given?.box.root], [p.id, ["a.txt"], "R"])
+	assertEquals([given?.id, given?.args], [p.id, ["a.txt"]])
 	w.hosted(() => w.life.stop(p))
 	assertEquals(log, ["body", `stop {"work":{"clock":"${String(p.id)}"}}`])
 	assertEquals(w.table.get(PROCESS, "R")?.value, {})
