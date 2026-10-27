@@ -1318,7 +1318,7 @@ pk_code pk_unpack(const uint8_t *bytes, size_t length, const pk_reading *reading
 	nd_entry **made = NULL;
 	pk_entry *entries = NULL;
 	size_t nn = 0, kn = 0;
-	size_t limit = reading != NULL && reading->limit ? reading->limit : (size_t)1 << 30;
+	size_t limit = reading != NULL && reading->has_limit ? reading->limit : (size_t)1 << 30;
 	int ok = op_get(x, "columns") != NULL && only(a, x, KEYS("columns"), KEYS("columns"))
 		? read_columns(a, x, limit, &entries, &kn, &made, &nn)
 		: read_first(a, x, &entries, &kn, &made, &nn);

@@ -226,7 +226,7 @@ static uint8_t *inner(const pk_bytes *b, size_t *n) {
 
 static void unpacked(const uint8_t *in, size_t n, int loosy, size_t limit, const uint8_t *columns,
 	size_t cn) {
-	pk_reading reading = {.loosy = loosy, .limit = limit};
+	pk_reading reading = {.loosy = loosy, .has_limit = limit != 0, .limit = limit};
 	pk_read r;
 	pk_code code = pk_unpack(in, n, &reading, &r);
 	if (code != PK_OK) {
@@ -236,7 +236,7 @@ static void unpacked(const uint8_t *in, size_t n, int loosy, size_t limit, const
 		return;
 	}
 	if (!loosy) {
-		pk_reading loose = {.loosy = 1, .limit = limit};
+		pk_reading loose = {.loosy = 1, .has_limit = limit != 0, .limit = limit};
 		pk_read l;
 		if (pk_unpack(in, n, &loose, &l) != PK_OK) die("taken strictly, refused loosy");
 		if (!same(&r, &l)) die("loosy reads it otherwise");
@@ -263,7 +263,7 @@ static void unpacked(const uint8_t *in, size_t n, int loosy, size_t limit, const
 }
 
 static void decoded(const uint8_t *in, size_t n, int loosy, size_t limit) {
-	pk_reading reading = {.loosy = loosy, .limit = limit};
+	pk_reading reading = {.loosy = loosy, .has_limit = limit != 0, .limit = limit};
 	pk_read r;
 	pk_code code = pk_decode(in, n, &reading, &r);
 	if (code != PK_OK) {
@@ -282,7 +282,7 @@ static void decoded(const uint8_t *in, size_t n, int loosy, size_t limit) {
 		free(again.data);
 		pk_free(&back);
 	} else {
-		pk_reading loose = {.loosy = 1, .limit = limit};
+		pk_reading loose = {.loosy = 1, .has_limit = limit != 0, .limit = limit};
 		pk_read l;
 		if (pk_decode(in, n, &loose, &l) != PK_OK) die("decoded strictly, refused loosy");
 		pk_bytes x = encoded(l.nodes[0]);

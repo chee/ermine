@@ -60,7 +60,9 @@ typedef struct {
 	// in every map a key not known is passed over, not refused; none of it reaches a node. All else
 	// stays strict
 	int loosy;
-	// the most bytes the columns may inflate to; more: PK_NOT_A_PACK. 0: the default, 1 GiB
+	// the most bytes the columns may inflate to; more: PK_NOT_A_PACK. Used as given, 0 included,
+	// when has_limit; else 1 GiB
+	int has_limit;
 	size_t limit;
 } pk_reading;
 

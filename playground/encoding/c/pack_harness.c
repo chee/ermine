@@ -310,6 +310,7 @@ static pk_options options_of(Json *r) {
 static pk_reading reading_of(Json *r) {
 	Json **o = at(r, "reading"), **l = o ? at(*o, "loosyGoosy") : NULL, **n = o ? at(*o, "limit") : NULL;
 	return (pk_reading){.loosy = l != NULL && (*l)->type == JSON_BOOLEAN && (*l)->boolean,
+		.has_limit = n != NULL && jsonIsNumber(*n),
 		.limit = n != NULL && jsonIsNumber(*n) ? (size_t)(*n)->number : 0};
 }
 
