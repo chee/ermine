@@ -117,11 +117,13 @@ Deno.test("build: a program naming the site module, its entry, a file of it or a
 		})
 	}
 	// by path: ermine's own file, relative
-	await inDir(async (dir) => {
-		const rel = "../../../../ermine/system/site.ts"
-		const source = `import { site } from ${JSON.stringify(rel)}\nexport default site`
-		await assertRejects(() => built(dir, source), Error, "only @ermine/unplugin writes it")
-	})
+	// the extension left off, as the bundler resolves it
+	for (const rel of ["../../../../ermine/system/site.ts", "../../../../ermine/system/site"]) {
+		await inDir(async (dir) => {
+			const source = `import { site } from ${JSON.stringify(rel)}\nexport default site`
+			await assertRejects(() => built(dir, source), Error, "only @ermine/unplugin writes it")
+		})
+	}
 })
 
 Deno.test("build: teardown", async () => {
