@@ -113,7 +113,7 @@ function sequence(seed: number): Request[] {
 		} else out.push({ op: "get", path: path() })
 		out.push({ op: "pulse" })
 		for (let w = 0; w < WATCHES; w++) out.push({ op: "state", name: `w${w}` })
-		out.push({ op: "kept" })
+		out.push({ op: "held" })
 	}
 	return out
 }

@@ -44,7 +44,7 @@ function world(contributors?: Contributor[], cached = true) {
 	}
 	const count = () => ({
 		...(cache?.kept() ?? { entries: 0, reads: 0 }),
-		spots: paths.kept().spots,
+		spots: paths.held().spots,
 	})
 	function tree() {
 		kids("R", { work: "W" })
@@ -237,7 +237,7 @@ Deno.test("cache: a cache made after runs track a spot lets go only what it took
 	const spots = w.count().spots
 	assert(spots > 0)
 	const cache = createPathCache({ places: w.places, scheduler: w.s })
-	// its entry made, read outside any run, and gone: the runs' spots are still kept
+	// its entry made, read outside any run, and gone: the runs' spots are still held
 	assertEquals(cache.get(["work", "clock"]), "C0")
 	assertEquals(cache.kept(), { entries: 0, reads: 0 })
 	assertEquals(w.count().spots, spots)

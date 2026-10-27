@@ -7,7 +7,7 @@
 //   string's code point or a typed array's element);
 // - pt_mark gives each spot once: the key's change spot, and exactly the spots of the key that
 //   some patch marks by pt_marks; pt_event gives every spot of the key;
-// - pt_kept_of counts the keys, spots and steps the model has.
+// - pt_held_of counts the keys, spots and steps the model has.
 #include "paths.h"
 #include "../../op/c/fuzz_values.h"
 
@@ -87,16 +87,16 @@ static size_t steps_of(int key) {
 	return n;
 }
 
-static void check_kept(pt_paths *p, int round) {
-	pt_kept want = {0};
+static void check_held(pt_paths *p, int round) {
+	pt_held want = {0};
 	for (int k = 0; k < 2; k++) {
 		int any = 0;
 		for (int i = 0; i < nspots; i++)
 			if (spots[i].alive && spots[i].key == k) any = 1, want.spots++;
 		if (any) want.keys++, want.steps += steps_of(k);
 	}
-	pt_kept got = pt_kept_of(p);
-	if (got.keys != want.keys || got.spots != want.spots || got.steps != want.steps) die("kept is not the model's", round);
+	pt_held got = pt_held_of(p);
+	if (got.keys != want.keys || got.spots != want.spots || got.steps != want.steps) die("held is not the model's", round);
 }
 
 // the marked list: each once; key 0's change spot, and exactly the spots `marked` says
@@ -149,7 +149,7 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 			for (int i = 0; i < nspots; i++) again |= spots[i].alive && spots[i].s == m.s;
 			if (!again) spots[nspots++] = m;
 		}
-		check_kept(p, round);
+		check_held(p, round);
 
 		// patches at key 0, one at a time on copies: what each changed must be marked by it
 		fz_patches ps;

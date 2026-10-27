@@ -286,7 +286,7 @@ Deno.test(`fuzz: ${SEEDS} seeds, a list of new objects: an index read is marked 
 	}
 })
 
-// pruning against a model: the spots kept, and what an event at a key gives
+// pruning against a model: the spots held, and what an event at a key gives
 Deno.test(`fuzz: ${SEEDS} seeds, spot and release against a model`, async () => {
 	const SOURCES: unknown[] = ["v", { symbol: "v" }]
 	const IDS = ["n", "m"]
@@ -315,7 +315,7 @@ Deno.test(`fuzz: ${SEEDS} seeds, spot and release against a model`, async () => 
 			expected.push(null)
 			requests.push({ op: "event", source, id })
 			expected.push([...was].sort())
-			requests.push({ op: "kept" })
+			requests.push({ op: "held" })
 			let keys = 0, spots = 0, steps = 0
 			for (const set of model.values()) {
 				if (set.size === 0) continue
