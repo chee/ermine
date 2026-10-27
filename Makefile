@@ -332,6 +332,17 @@ endef
 $(foreach l,$(LIBS),$(eval $(call harness,$(l))))
 # pully's C, not in LIBS (its section above): a rule to build it alone
 $(eval $(call harness,pullynode))
+# start's stop (ermine/processes/c/start_test.c): what its scope's teardown threw is given back. make test-start-processes, test-check-start-processes (the sanitizers)
+processes-start_src = $(filter-out core/places/c/places_harness.c conformance/c/harness.c conformance/c/protocol_harness.c core/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/start.c ermine/processes/c/runs.c ermine/sites/c/sites.c ermine/processes/c/start_test.c
+processes-start = ermine/processes/c/start-test
+$(eval $(call harness,processes-start))
+$(processes-start): $(wildcard */*/c/*.h)
+test-start-processes: $(processes-start)
+	@echo "== processes (start)"
+	@$(processes-start)
+test-check-start-processes: $(processes-start)-check
+	@echo "== processes (start, sanitizers)"
+	@$(processes-start)-check
 # promises (ermine/system/c/promise_test.c): a then on a settled promise, its callback letting go
 # of the maker's hold. make test-promise-system, test-check-promise-system (the sanitizers)
 system-promise_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c ermine/system/c/ermine_harness.c,$(system_src)) ermine/system/c/promise_test.c
@@ -538,6 +549,6 @@ clean:
 	rm -rf $(system-steady) $(system-steady)-check $(system-steady).dSYM
 	rm -rf $(system-review) $(system-review)-check $(system-review).dSYM
 	rm -rf $(system-promise) $(system-promise)-check $(system-promise).dSYM
-	rm -rf $(system-refuse) $(system-refuse)-check $(system-refuse).dSYM
+	rm -rf $(processes-start) $(processes-start)-check $(processes-start).dSYM $(system-refuse) $(system-refuse)-check $(system-refuse).dSYM
 
 .PHONY: all bench check test test-c test-check test-steady-system clean $(addprefix test-c-,$(LIBS)) $(addprefix test-check-,$(LIBS))

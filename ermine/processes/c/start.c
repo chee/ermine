@@ -545,11 +545,11 @@ pr_process *pr_start_at(pr *s, pl *where, const char *const *steps, size_t nstep
 	return p;
 }
 
-void pr_stop_at(pr *s, pr_process *p, const char *file, int line, const char *func) {
+char *pr_stop_at(pr *s, pr_process *p, const char *file, int line, const char *func) {
 	p->stop_site = (ch_site){file, line, 0, func, 0};
 	(void)s;
 	end(p);
-	free(sc_teardown(p->scope));
+	return sc_teardown(p->scope);
 }
 
 void pr_let_go(pr *s, pr_process *p) {
