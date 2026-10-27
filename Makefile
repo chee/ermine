@@ -112,12 +112,11 @@ deflate_src = $(harness_src) playground/encoding/c/deflate_harness.c playground/
 deflate = playground/encoding/c/deflate-harness
 deflate_suite = deflate
 LIBS += deflate
-# cbor on the line protocol (ermine/encoding/c/cbor_harness.c): its scenarios (conformance/cbor/NN-*.json) and the fuzz against the
-# TypeScript (cbor_fuzz_test.ts, HARNESS)
+# cbor on the line protocol (ermine/encoding/c/cbor_harness.c): its vectors (conformance/cbor/encoding_test.ts; the
+# cbor suite has no scenarios of its own) and the fuzz against the TypeScript (cbor_fuzz_test.ts), both through HARNESS
 cbor-lines_src = ermine/encoding/c/cbor_harness.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c ermine/encoding/c/json_text.c
 cbor-lines = ermine/encoding/c/cbor-harness
-cbor-lines_suite = cbor
-cbor-lines_tests = ermine/encoding/typescript/cbor_fuzz_test.ts
+cbor-lines_test = HARNESS ermine/encoding/typescript/cbor_fuzz_test.ts conformance/cbor/encoding_test.ts
 LIBS += cbor-lines
 # patch nodes (extensions/patchy): the overlay and its harness, on the places harness's world
 patch_src = $(filter-out core/places/c/places_harness.c,$(places_src)) extensions/patchy/c/patch.c extensions/patchy/c/patch_harness.c
