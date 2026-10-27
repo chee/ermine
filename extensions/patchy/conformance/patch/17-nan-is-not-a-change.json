@@ -1,0 +1,96 @@
+{
+	"title": "a NaN under a patch node is the same NaN after a write elsewhere: its reader is not told",
+	"steps": [
+		{
+			"op": "value",
+			"id": "N",
+			"value": {
+				"a": 1,
+				"t": "x"
+			},
+			"time": 100,
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "w",
+			"scope": "o",
+			"f": {
+				"read": [
+					"N",
+					[
+						"a"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "patch",
+			"id": "P",
+			"on": "N",
+			"at": 100,
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"value": {
+						"/": {
+							"number": "NaN"
+						}
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1
+			},
+			"skip": [
+				"value"
+			]
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "N",
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"value": "y"
+				}
+			],
+			"time": 120,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1
+			},
+			"skip": [
+				"value"
+			]
+		}
+	]
+}
