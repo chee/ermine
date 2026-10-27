@@ -42,7 +42,7 @@ function world(contributors?: Contributor[]) {
 		s.pulse()
 		return reads[0]
 	}
-	return { s, places, put, tracked }
+	return { s, places, paths, put, tracked }
 }
 
 Deno.test("contributors: children given alone answers and reads as places given none", () => {
@@ -137,4 +137,16 @@ Deno.test("contributors: pruning, the walk's return is the here it got to, with 
 	// names saying none: gone in what names gives back
 	assertEquals(w.places.names({ id: "C0", path: ["work", "clock"] }).gone, 1)
 	assertEquals(w.places.names({ id: "W", path: ["work"] }).gone, 0)
+})
+
+Deno.test("contributors: a watchPath finds its path through them and leaves no spot behind", () => {
+	const w = world([rows, children])
+	const before = w.paths.held().spots
+	const stop = w.places.watchPath(["work", "clock"], () => {})
+	assertEquals(w.paths.held().spots, before)
+	// a write on its route finds the path again: still none left
+	w.put("children", "W", { clock: "C1", notes: "N" })
+	assertEquals(w.paths.held().spots, before)
+	stop()
+	assertEquals(w.paths.held().spots, before)
 })

@@ -992,8 +992,9 @@ static void refind(pl *l, pl_watch *w) {
 		}
 	} else {
 		// as pl_get finds it, through the contributors, the reads told to no one
-		pl_set told = {0}, *was = l->s->into;
+		pl_set told = {0}, fresh = {0}, *was = l->s->into, *was_made = l->s->made;
 		l->s->into = &told;
+		l->s->made = &fresh;
 		pl_here here = {.id = l->root, .has_path = 1, .path = (const char *const *)w->path, .length = 0};
 		for (size_t i = 0; i < w->n; i++) {
 			if (!same_key(here.id, pl_level())) w->route[w->nroute++] = key_own(here.id);
@@ -1008,6 +1009,10 @@ static void refind(pl *l, pl_watch *w) {
 			here.gone = under;
 		}
 		l->s->into = was;
+		l->s->made = was_made;
+		// the spots they made go again, nothing tracks them
+		for (size_t i = 0; i < fresh.n; i++) pl_forget(fresh.items[i], l);
+		pl_set_free(&fresh);
 		pl_set_free(&told);
 		if (found && same_key(at, pl_level())) found = 0;
 	}

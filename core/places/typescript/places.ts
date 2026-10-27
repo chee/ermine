@@ -467,20 +467,27 @@ export function createPlaces(setup: Setup): Places {
 				if (at === undefined) break
 			}
 		} else {
-			// as get finds it, through the contributors, the reads told to no one
-			record(() => {
-				let here: Here = { id: root, path: [] }
-				for (const name of w.path) {
-					if (here.id !== level) route.push(here.id)
-					const m = go(here, name)
-					if (m === undefined) {
-						at = undefined
-						break
+			// as get finds it, through the contributors, the reads told to no one: the spots they
+			// made go again, nothing tracks them
+			const fresh = new Set<unknown>()
+			record(
+				() => {
+					let here: Here = { id: root, path: [] }
+					for (const name of w.path) {
+						if (here.id !== level) route.push(here.id)
+						const m = go(here, name)
+						if (m === undefined) {
+							at = undefined
+							break
+						}
+						at = m.id
+						here = { id: m.id, path: [...here.path!, name], gone: gone() }
 					}
-					at = m.id
-					here = { id: m.id, path: [...here.path!, name], gone: gone() }
-				}
-			}, new Set())
+				},
+				new Set(),
+				fresh,
+			)
+			for (const k of fresh) release(k)
 			if (at === level) at = undefined
 		}
 		w.id = at
