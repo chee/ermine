@@ -2655,6 +2655,7 @@ static void world_free(world_t *w) {
 	if (w == NULL) return;
 	world_t *was = W;
 	W = w;
+	for (size_t i = 0; i < w->nheld; i++) es_promise_release(w->held[i].promise);
 	if (w->e != NULL) es_free(w->e);
 	for (size_t i = 0; i < w->nenvs; i++) {
 		env_t *e = w->envs[i];
@@ -2787,6 +2788,7 @@ static void settle_all(void) {
 			} else {
 				es_promise_resolve(batch[i].promise, v);
 			}
+			es_promise_release(batch[i].promise);
 		}
 		free(batch);
 		drain();
