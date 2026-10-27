@@ -58,3 +58,15 @@ Deno.test("getOrSet: the value there, else make() put there and given back", () 
 	assertEquals(made, 1)
 	assertEquals(value("a"), { m: { n: "first", o: 5 } })
 })
+
+Deno.test("upsert: a map with no prototype is a map: written inside and equal to a plain one", () => {
+	const { table, value } = world()
+	const bare = Object.assign(Object.create(null), { y: 1 })
+	table.add("value", "a", createEntry<unknown>({ x: bare }, h) as Entry<never>)
+	// the same value there: nothing written
+	assertEquals(upsert(table, "value", "a", ["x"], { y: 1 }, h), [])
+	// a level that is a bare map is written inside, not put over
+	const e = upsert(table, "value", "a", ["x", "z"], 2, h)
+	assertEquals(e[0].change.op?.patches, [{ path: ["x", "z"], value: 2 }])
+	assertEquals(value("a"), { x: { y: 1, z: 2 } })
+})

@@ -12,9 +12,14 @@ import update from "@ermine/core/changeable/update"
 import type { Patch } from "@ermine/core/changeable/apply"
 import type { Id, Key, Table } from "@ermine/core/table"
 
-const isMap = (v: unknown): v is Record<string, unknown> =>
-	typeof v === "object" && v !== null && !Array.isArray(v) && !ArrayBuffer.isView(v) &&
-	Object.getPrototypeOf(v) === Object.prototype
+// a map as apply.ts has it: plain, or with no prototype
+const isMap = (v: unknown): v is Record<string, unknown> => {
+	if (typeof v !== "object" || v === null || Array.isArray(v) || ArrayBuffer.isView(v)) {
+		return false
+	}
+	const p = Object.getPrototypeOf(v)
+	return p === Object.prototype || p === null
+}
 
 // deeply equal: maps by their keys (in any order), lists, typed arrays by their bytes
 export function equal(a: unknown, b: unknown): boolean {
