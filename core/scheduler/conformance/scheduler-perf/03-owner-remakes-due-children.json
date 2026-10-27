@@ -3,7 +3,7 @@
 	"sizes": [60, 240, 960],
 	"bound": "n",
 	"template": [
-		{ "op": "root", "name": "o", "info": [["actor", "t"]] },
+		{ "op": "root", "name": "o", "info": { "actor": "t" } },
 		{
 			"op": "effect",
 			"name": "owner",

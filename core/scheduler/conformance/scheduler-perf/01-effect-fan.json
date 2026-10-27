@@ -3,7 +3,7 @@
 	"sizes": [150, 600, 2400],
 	"bound": "n",
 	"template": [
-		{ "op": "root", "name": "o", "info": [["actor", "t"]] },
+		{ "op": "root", "name": "o", "info": { "actor": "t" } },
 		{
 			"for": "i",
 			"to": "n",

@@ -1,6 +1,7 @@
 // the C unread (unread.h) on the line protocol of typescript/unread_harness.ts, which documents
 // it (conformance/c/harness.h has the loop). one entry and its unread last for the process, and
 // what was held and marked: each kept alive (op_ref) and compared by pointer
+#define _POSIX_C_SOURCE 200809L // strdup
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

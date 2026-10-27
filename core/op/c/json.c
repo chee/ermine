@@ -1,4 +1,5 @@
 // op's value in JSON (json.h), in C.
+#define _POSIX_C_SOURCE 200809L // open_memstream
 #include "json.h"
 #include "whole.h"
 
