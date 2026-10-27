@@ -231,3 +231,25 @@ Deno.test("unread: through places, a reader's value never changes under it, and 
 	s.pulse()
 	assertEquals(held, [{ a: "A" }, { a: "A", b: "B", c: "C", d: "D" }])
 })
+
+Deno.test("unread: keeping: a stop given twice takes away no other keeper's wiring", () => {
+	const u = createUnread()
+	const s = createScheduler()
+	const stop = keeping(s, u)
+	keeping(s, u)
+	stop()
+	stop()
+	const e = createEntry<unknown>({ a: { x: 0 } }, h())
+	u.update(e, [{ path: ["a", "x"], value: 1 }], h())
+	const o = s.createRootScope({ actor: "r" })
+	let held: unknown
+	// writes where the run read, in its set: past its body's return, so what it read is let go first
+	s.runWithScope(o, () =>
+		s.createComputer(() => (s.track("e"), doc(e).a), (v) => {
+			held = v
+			u.update(e, [{ path: ["a", "x"], value: 2 }], h())
+		}))
+	s.pulse()
+	assertEquals(held, { x: 1 })
+	assertEquals(e.value, { a: { x: 2 } })
+})
