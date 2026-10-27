@@ -1,29 +1,31 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import { createAction, ensureNode, patch, peep, read, unplace } from "@ermine/system"
 import { bind, handler } from "ermine-h"
 
-// program.ts: todos are nodes under ./todos/items, their order a list of ids in ./todos/order. open
+// program.ts: todos are nodes under ./todos/items, their order a list of ids in ./todos/order. ensureNode
 // makes each only the first time, so a reload finds them as they were. the list is bound to the
 // order and each li keyed by its id: a reload and a reorder move only what must move. edits are
-// recipes: a push, a splice, each one patch on the order
-export default function program({ open, read, edit, remove, method }: API) {
-	open("./todos/items/a", "write the spec")
-	open("./todos/items/b", "make a demo")
-	open("./todos/items/c", "show chee")
-	const order = open("./todos/order", ["a", "b", "c"])
+// patches: the new list as one patch on the order
+export default function program() {
+	ensureNode("./todos/items/a", "write the spec")
+	ensureNode("./todos/items/b", "make a demo")
+	ensureNode("./todos/items/c", "show chee")
+	const order = ensureNode("./todos/order", ["a", "b", "c"])
+	const list = () => peep(() => read(order)) as string[]
+	const set = (d: string[]) => patch(order, [{ path: [], value: d }])
 
-	method("on/add", (text: string) => {
+	createAction("on/add", (text: string) => {
 		const id = crypto.randomUUID().slice(0, 4)
-		open(`./todos/items/${id}`, text)
-		edit(order, (d: string[]) => void d.push(id))
+		ensureNode(`./todos/items/${id}`, text)
+		set([...list(), id])
 	})
-	method("on/remove", (id: string) => {
-		edit(order, (d: string[]) => void d.splice(d.indexOf(id), 1))
-		remove(`./todos/items/${id}`)
+	createAction("on/remove", (id: string) => {
+		set(list().filter((x) => x !== id))
+		unplace(`./todos/items/${id}`)
 	})
-	method("on/up", (id: string) => {
-		const i = (read(order) as string[]).indexOf(id)
-		if (i > 0) edit(order, (d: string[]) => void d.splice(i - 1, 0, ...d.splice(i, 1)))
+	createAction("on/up", (id: string) => {
+		const d = list(), i = d.indexOf(id)
+		if (i > 0) set([...d.slice(0, i - 1), id, d[i - 1], ...d.slice(i + 1)])
 	})
 
 	// the text typed, taken out of the input: none, no send

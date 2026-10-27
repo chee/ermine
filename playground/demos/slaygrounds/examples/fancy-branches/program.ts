@@ -1,7 +1,19 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
 import apply from "@ermine/core/op/apply"
 import invert from "@ermine/core/op/invert"
+import {
+	addTeardown,
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	executeAction,
+	patch,
+	peep,
+	read as readNode,
+	ref,
+	unplace,
+} from "@ermine/system"
 import { bind, handler } from "ermine-h"
 
 // fancy-branches: time travel with branches. a small drawing (shapes on a sky) whose every change
@@ -243,14 +255,19 @@ const css = `
 .fb .hint{font-size:12.5px;opacity:.65;margin:6px 0 0}
 `
 
-export default function program(
-	{ open, read, edit, remove, memo, effect, method, send, ref, teardown }: API,
-) {
+export default function program() {
+	// what a node holds, as the program takes it (any: its values are its own); the actions run
+	// untracked (peep)
+	// deno-lint-ignore no-explicit-any
+	const read = (x: Parameters<typeof readNode>[0]): any => readNode(x)
+	const method = (name: string, f: (...a: any[]) => unknown) =>
+		createAction(name, (...a: unknown[]) => peep(() => f(...a)))
 	// a live thing (a canvas), made once and kept at ./name: a reload finds it again
-	const keep = <T,>(name: string, make: () => T) => read(ref(`./${name}`, make)) as T
+	const keep = <T,>(name: string, make: () => T) =>
+		peep(() => readNode(ref(`./${name}`, make))) as T
 	// a whole put: what a recipe would return
-	const put = (x: ReturnType<typeof open>, v: unknown) => edit(x, [{ path: [], value: v }])
-	const doc = open("./doc", start())
+	const put = (x: ReturnType<typeof ensureNode>, v: unknown) => patch(x, [{ path: [], value: v }])
+	const doc = ensureNode("./doc", start())
 	const first: Step = {
 		id: "s0",
 		n: 0,
@@ -261,20 +278,20 @@ export default function program(
 		undo: [],
 		doc: start(),
 	}
-	open("./steps/s0", first)
-	const order = open("./order", ["s0"])
-	const tips = open("./tips", [{ name: "main", tip: "s0" }])
-	const at = open("./at", "s0")
-	const branch = open("./branch", "main") // the branch whose tip we are at; "" when we are in a past
-	const lean = open("./lean", "main") // the branch last on: where forward goes
-	const serial = open("./serial", 0)
-	const hover = open("./hover", "")
-	const jumped = open("./jumped", null)
-	const notice = open("./notice", null)
-	const cmp = open("./cmp", { a: "", b: "" })
-	const mode = open("./mode", "add")
-	const kind = open("./kind", "star")
-	const ink = open("./ink", inks[1])
+	ensureNode("./steps/s0", first)
+	const order = ensureNode("./order", ["s0"])
+	const tips = ensureNode("./tips", [{ name: "main", tip: "s0" }])
+	const at = ensureNode("./at", "s0")
+	const branch = ensureNode("./branch", "main") // the branch whose tip we are at; "" when we are in a past
+	const lean = ensureNode("./lean", "main") // the branch last on: where forward goes
+	const serial = ensureNode("./serial", 0)
+	const hover = ensureNode("./hover", "")
+	const jumped = ensureNode("./jumped", null)
+	const notice = ensureNode("./notice", null)
+	const cmp = ensureNode("./cmp", { a: "", b: "" })
+	const mode = ensureNode("./mode", "add")
+	const kind = ensureNode("./kind", "star")
+	const ink = ensureNode("./ink", inks[1])
 
 	// ---- reading ----
 	const steps = () => {
@@ -298,8 +315,8 @@ export default function program(
 	}
 
 	// ---- derived ----
-	const layoutE = memo("layout", () => layout(steps()))
-	memo("rows", () => {
+	const layoutE = createMemo("layout", () => layout(steps()))
+	createMemo("rows", () => {
 		const S = steps(), L = layout(S), now = read(branch) as string, c = read(cmp) as any
 		const lane = Object.fromEntries(L.nodes.map((n) => [n.id, n.lane]))
 		return list().map((b) => ({
@@ -312,14 +329,14 @@ export default function program(
 			b: b.name === c.b,
 		}))
 	})
-	memo("where", () => {
+	createMemo("where", () => {
 		const S = steps(), id = read(at) as string, now = read(branch) as string
 		const n = S[id]?.n ?? 0
 		return now
 			? { text: `on branch`, name: now, n, label: S[id]?.label }
 			: { text: `back at step ${n}, in the past of`, name: read(lean), n, label: S[id]?.label }
 	})
-	memo("focus", () => {
+	createMemo("focus", () => {
 		const S = steps(), id = (read(hover) as string) || (read(at) as string)
 		const s = S[id]
 		return s
@@ -331,7 +348,7 @@ export default function program(
 			}
 			: null
 	})
-	const compareE = memo("compare", () => {
+	const compareE = createMemo("compare", () => {
 		const S = steps(),
 			bs = list(),
 			c = read(cmp) as { a: string; b: string },
@@ -361,7 +378,7 @@ export default function program(
 	const record = (patches: Patch[], label: string, glyph: string, from?: string) => {
 		const here = read(at) as string
 		const undo = invert(read(doc), patches) as Patch[]
-		edit(doc, patches)
+		patch(doc, patches)
 		const n = next(), id = `s${n}`
 		const step: Step = {
 			id,
@@ -373,7 +390,7 @@ export default function program(
 			undo,
 			...(from ? { from } : {}),
 		}
-		open(`./steps/${id}`, step)
+		ensureNode(`./steps/${id}`, step)
 		put(order, [...(read(order) as string[]), id])
 		const bs = list(), now = read(branch) as string
 		if (now && bs.find((b) => b.name === now)?.tip === here) {
@@ -404,8 +421,8 @@ export default function program(
 		const inB = new Set(B)
 		const fork = A.find((x) => inB.has(x))!
 		const down = A.slice(0, A.indexOf(fork)), up = B.slice(0, B.indexOf(fork)).reverse()
-		for (const id of down) edit(doc, S[id].undo)
-		for (const id of up) edit(doc, S[id].patches)
+		for (const id of down) patch(doc, S[id].undo)
+		for (const id of up) patch(doc, S[id].patches)
 		const bs = list(), now = read(branch) as string
 		const there = bs.filter((b) => b.tip === target).map((b) => b.name)
 		const pick = prefer && there.includes(prefer)
@@ -424,7 +441,7 @@ export default function program(
 		const S = steps(), keep = new Set<string>(chain(S, read(at) as string))
 		for (const b of list()) for (const x of chain(S, b.tip)) keep.add(x)
 		const ids = (read(order) as string[]).filter((id) => keep.has(id))
-		for (const id of Object.keys(S)) if (!keep.has(id)) remove(`./steps/${id}`)
+		for (const id of Object.keys(S)) if (!keep.has(id)) unplace(`./steps/${id}`)
 		put(order, ids)
 	}
 
@@ -622,6 +639,7 @@ export default function program(
 		return Object.assign(document.createElement("canvas"), { width: W * k, height: H * k })
 	})
 	const K = pad.width / W
+	let modeNow = "add"
 	let lastDoc: Doc = start(),
 		drag: { id: string; x: number; y: number; dx: number; dy: number; moved: boolean } | null =
 			null
@@ -639,14 +657,18 @@ export default function program(
 		const r = pad.getBoundingClientRect()
 		return [((e.clientX - r.left) / r.width) * W, ((e.clientY - r.top) / r.height) * H]
 	}
-	const call = (name: string, args: unknown[]) => send(`on/${name}`, ...args)
-	pad.onpointerdown = (e: PointerEvent) => {
-		const [x, y] = point(e), d = read(doc) as Doc, m = read(mode) as string
+	// the pad and the tree are canvases with no handler of their own, and nothing is open in a plain
+	// listener to call an action from: their events are heard on a jsx element round each, and each
+	// says the call it makes (on/do: name, ...args), or none. what the pointer is on is read from
+	// what the draw effects last drew (lastDoc, modeNow)
+	createAction("on/do", (name: string, ...args: unknown[]) => executeAction(`on/${name}`, ...args))
+	const onDown = (e: PointerEvent) => {
+		const [x, y] = point(e), d = lastDoc, m = modeNow
 		const id = hit(d, x, y)
-		if (m === "add") call("add", [x, y])
+		if (m === "add") return ["add", x, y]
 		else if (!id) return
-		else if (m === "paint") call("paint", [id])
-		else if (m === "erase") call("erase", [id])
+		else if (m === "paint") return ["paint", id]
+		else if (m === "erase") return ["erase", id]
 		else if (m === "move") {
 			pad.setPointerCapture(e.pointerId)
 			drag = {
@@ -659,24 +681,30 @@ export default function program(
 			}
 		}
 	}
-	pad.onpointermove = (e: PointerEvent) => {
+	const onDrag = (e: PointerEvent) => {
 		if (!drag) return
 		const [x, y] = point(e)
 		drag.x = Math.max(0, Math.min(W, x - drag.dx)), drag.y = Math.max(0, Math.min(H, y - drag.dy))
 		drag.moved = true
 		paintPad()
 	}
-	pad.onpointerup = pad.onpointercancel = () => {
+	const onUp = () => {
 		const d = drag
 		drag = null
-		if (d?.moved) call("move", [d.id, d.x, d.y])
+		if (d?.moved) return ["move", d.id, d.x, d.y]
 		else paintPad()
 	}
-	effect("draw-doc", () => [read(doc), read(mode)], ([d, m]: [Doc, string]) => {
-		lastDoc = d
-		pad.className = m === "move" ? "move" : m === "add" ? "add" : ""
-		paintPad()
-	})
+	const onStage = (f: (e: any) => unknown[] | undefined | void) => handler("on/do", f as never)
+	createEffect(
+		"draw-doc",
+		() => [read(doc), read(mode)] as [Doc, string],
+		([d, m]: [Doc, string]) => {
+			lastDoc = d
+			modeNow = m
+			pad.className = m === "move" ? "move" : m === "add" ? "add" : ""
+			paintPad()
+		},
+	)
 
 	// ---- the comparison ----
 	const canvasFor = (name: string) =>
@@ -685,7 +713,7 @@ export default function program(
 			return Object.assign(document.createElement("canvas"), { width: W * k, height: H * k })
 		})
 	const cvA = canvasFor("cmp-a"), cvB = canvasFor("cmp-b")
-	effect("draw-compare", () => read(compareE), (c: any) => {
+	createEffect("draw-compare", () => read(compareE), (c: any) => {
 		if (!c) return
 		for (
 			const [cv, mine, other, theirs] of [[cvA, c.docA, c.docB, "a"], [
@@ -880,19 +908,19 @@ export default function program(
 	const hovering = (id: string) => {
 		if (id === over) return
 		over = id
-		call("hover", [id])
+		return ["hover", id]
 	}
-	tree.onpointermove = (e: PointerEvent) => {
+	const treeMove = (e: PointerEvent) => {
 		const id = nodeAt(e) ?? ""
 		tree.style.cursor = id ? "pointer" : "default"
-		hovering(id)
+		return hovering(id)
 	}
-	tree.onpointerleave = () => hovering("")
-	tree.onclick = (e: MouseEvent) => {
+	const treeLeave = () => hovering("")
+	const treeClick = (e: MouseEvent) => {
 		const id = nodeAt(e as PointerEvent)
-		if (id) call("jump", [id])
+		if (id) return ["jump", id]
 	}
-	effect(
+	createEffect(
 		"draw-tree",
 		() => ({
 			L: read(layoutE),
@@ -911,7 +939,7 @@ export default function program(
 		},
 	)
 	// the animation stops with the run
-	teardown(() => cancelAnimationFrame(anim))
+	addTeardown(() => cancelAnimationFrame(anim))
 
 	const tool = (m: string, text: string) => (
 		<button class={bind("mode", (v) => (v === m ? "on" : ""))} onClick={handler("on/mode", [m])}>
@@ -934,7 +962,15 @@ export default function program(
 			</p>
 			<div class="top">
 				<section class="card doc">
-					{pad}
+					<div
+						class="stage"
+						onPointerDown={onStage(onDown)}
+						onPointerMove={onStage(onDrag)}
+						onPointerUp={onStage(onUp)}
+						onPointerCancel={onStage(onUp)}
+					>
+						{pad}
+					</div>
 					<div class="row">
 						<span class="lab">tool</span>
 						{tool("add", "add")}
@@ -1067,7 +1103,13 @@ export default function program(
 							</div>
 						)
 						: null)}
-				{wrap}
+				<div
+					onPointerMove={onStage(treeMove)}
+					onPointerLeave={onStage(treeLeave)}
+					onClick={onStage(treeClick)}
+				>
+					{wrap}
+				</div>
 				<p class="jumped">
 					{bind("jumped", (j: any) =>
 						!j

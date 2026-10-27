@@ -1,6 +1,18 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
-import type { Tools, Who } from "./host.ts"
+import {
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	executeAction,
+	getArgs,
+	list,
+	patch,
+	peep,
+	read,
+	unplace,
+} from "@ermine/system"
+import { change, type Who, who } from "@ermine/slaygrounds/tools"
 import { bind, handler, under } from "ermine-h"
 
 // friends-card: a birthday card going round. sign it, or pass it to a friend: the frog, the hedgehog
@@ -39,23 +51,27 @@ type Friend = keyof typeof FRIENDS
 type Sig = { text: string; tilt: number }
 
 // a signature's colour and label, from who wrote it: you (a person's click in the card), a
-// friend (its own process), or a script (the card, but no person did it)
+// friend (its own process: the caller is named by where it runs, friends/<name>/<name>), or the
+// card. a person's click is "trusted-event" on the change, but a write made inside an action the
+// click called does not carry it (the call's scope holds only its caller), so the card's own
+// writes say "the card" and the change does not say whether a person clicked
+const friendOf = (w: Who) => w.caller.split("/").pop() as string
 const ink = (w?: Who) =>
 	!w
 		? "#999"
-		: w.caller in FRIENDS
-		? FRIENDS[w.caller as Friend].ink
+		: friendOf(w) in FRIENDS
+		? FRIENDS[friendOf(w) as Friend].ink
 		: w["trusted-event"]
 		? "#ff2284"
 		: "#888"
 const label = (w?: Who) =>
 	!w
 		? "…"
-		: w.caller in FRIENDS
-		? `${FRIENDS[w.caller as Friend].face} ${w.caller} · from a timer`
+		: friendOf(w) in FRIENDS
+		? `${FRIENDS[friendOf(w) as Friend].face} ${friendOf(w)} · from a timer`
 		: w["trusted-event"]
 		? "you ✋"
-		: "a script 🤖 (no person did this)"
+		: "the card · a click or a script, the change does not say"
 
 // the same name always lands in the same spot: a number from its letters
 const hash = (s: string) => [...s].reduce((h, c) => (h * 31 + c.codePointAt(0)!) >>> 0, 7)
@@ -142,28 +158,26 @@ const crawl = (e: HTMLElement, since: number) => {
 	})
 }
 
-export default function card(
-	{ open, remove, list, memo, method, who, change }: API & Tools,
-) {
-	open("./names")
+export default function card() {
+	ensureNode("./names")
 
 	// a signature: only its words and a tilt. who wrote it is the change's to say
-	method("on/sign", (text: string) => {
+	createAction("on/sign", (text: string) => {
 		// a letter first: a name that looks like a number ("773888") jumps to the front of under
 		const id = "n" + crypto.randomUUID().slice(0, 5)
-		open(`./names/${id}`, { text, tilt: (hash(id) % 9) - 4 } satisfies Sig)
+		ensureNode(`./names/${id}`, { text, tilt: (hash(id) % 9) - 4 } satisfies Sig)
 	})
-	method("on/clear", () => {
-		for (const name of list("./names")) remove(`./names/${name}`)
+	createAction("on/clear", () => {
+		for (const name of peep(() => list("./names"))) unplace(`./names/${name}`)
 	})
 
 	// who wrote each signature: the caller and trusted of the change that made it
-	memo("who", () => {
+	createMemo("who", () => {
 		const out: Record<string, Who> = {}
 		for (const name of list("./names")) out[name] = who(change(`./names/${name}`))
 		return out
 	})
-	memo("count", () => list("./names").length)
+	createMemo("count", () => list("./names").length)
 
 	// the words typed, taken out of the input: none, no call
 	let input: HTMLInputElement
@@ -267,7 +281,7 @@ export default function card(
 				<span class="pass">pass it to</span>
 				{(Object.keys(FRIENDS) as Friend[]).map((f) => (
 					<button
-						onClick={handler(`/${f}/on/pass`)}
+						onClick={handler(`/friends/${f}/${f}/on/pass`)}
 						disabled={bind(`/friends/${f}/holding`, (v) => !!v)}
 						title={`${f} signs from a timer of its own`}
 					>
@@ -284,28 +298,29 @@ export default function card(
 // a friend: holds the card for a while, then signs it. the timer is not in the graph, so when the
 // card was passed is (./holding, in the friend's own folder): a reload (the timer gone with the old
 // run) starts one for what is left. its name is its argument
-export function friend({ open, read, edit, method, send, teardown, args }: API) {
-	const me = FRIENDS[args[0] as Friend]
-	const holding = open("./holding", null) // when it was passed, or null
-	const signed = open("./signed", 0)
-	let timer: ReturnType<typeof setTimeout> | undefined
-	// from the timer: no person is clicking now, so the card's change will say trusted false
-	const done = () => {
-		const n = read(signed) as number
-		send("/card/on/sign", me.words[n % me.words.length])
-		edit(signed, () => n + 1)
-		edit(holding, () => null)
-	}
-	const wait = (ms: number) => {
-		clearTimeout(timer)
-		timer = setTimeout(done, ms)
-	}
-	method("on/pass", () => {
-		if (read(holding)) return
-		edit(holding, () => Date.now())
-		wait(me.wait)
+export function friend() {
+	const me = FRIENDS[getArgs()[0] as Friend]
+	const holding = ensureNode("./holding", null) // when it was passed, or null
+	const signed = ensureNode("./signed", 0)
+	// the wait is a promise a memo returns (nothing is open after a timer to write with): it
+	// settles with the time the card was passed, and the effect's act signs. a reload runs the memo
+	// again from ./holding, so the wait is what is left
+	createMemo("arrival", () => {
+		const since = read(holding) as number | null
+		if (!since) return null
+		const left = Math.max(0, me.wait - (Date.now() - since))
+		return new Promise<number>((done) => setTimeout(() => done(since), left))
 	})
-	const since = read(holding) as number | null
-	if (since) wait(Math.max(0, me.wait - (Date.now() - since)))
-	teardown(() => clearTimeout(timer))
+	// the act runs after the timer, in the effect's own scope: it can call the card and write here
+	createEffect("sign", () => read("arrival"), (since) => {
+		if (!since) return
+		const n = peep(() => read(signed)) as number
+		executeAction("/card/on/sign", me.words[n % me.words.length])
+		patch(signed, [{ path: [], value: n + 1 }])
+		patch(holding, [{ path: [], value: null }])
+	})
+	createAction("on/pass", () => {
+		if (peep(() => read(holding))) return
+		patch(holding, [{ path: [], value: Date.now() }])
+	})
 }

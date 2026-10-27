@@ -1,5 +1,20 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import {
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	hasNode,
+	list,
+	patch,
+	peep,
+	place,
+	read,
+	ref,
+	rename,
+	unplace,
+} from "@ermine/system"
+import { up } from "@ermine/slaygrounds/tools"
 import { bind, handler, under } from "ermine-h"
 
 // fancy-sequencer: a song of four bars, each holding a pattern; a pattern holds a folder per step
@@ -8,11 +23,13 @@ import { bind, handler, under } from "ermine-h"
 // so a note's step is where it is placed (dragging it sideways is places' move), and its pitch is
 // its value. a pattern can be in two bars at once: ⧉ mounts the same node in the next bar, so an
 // edit in one is the edit in both. ✂ gives a bar its own copy.
-// three processes, at /run/<name> (so /clock, /song, /player are saved folders of their own): the
-// clock is the playhead (it writes /clock/next ahead of time, on the audio clock, and /clock/at
-// when the step is heard); the roll is the editor; the player reads the
-// notes at each step, through the bar's route, and plays them. its "explain" panel says what it
-// read, and by which route
+// three processes, at /run/<name> (so /clock, /song, /player are saved folders of their own, named
+// from the root: ./ is /run): the clock is the playhead (it writes /clock/next ahead of time, on
+// the audio clock, and /clock/at when the step is heard); the roll is the editor; the player reads
+// the notes at each step, through the bar's route, and plays them. its "explain" panel says what
+// it read, and by which route. nothing is open after a timer, so the clock's loop is not one: it
+// is an element in the clock's view whose css animation cycles every 20ms (while playing), and
+// each cycle's animationiteration calls on/beat through a handler
 const BARS = ["bar1", "bar2", "bar3", "bar4"]
 const STEPS = Array.from({ length: 16 }, (_, i) => i)
 const TOP = 72 // C5: the roll's first row; 25 notes down to C3, then the two drums
@@ -37,73 +54,68 @@ const valueFor = (row: number, old?: Note): Note => {
 }
 const pct = (v: number) => Math.round(v * 100) + "%"
 // a name's children, none when there is no such folder (a step nobody has put a note in)
-const kids = (list: API["list"], p: string) => {
-	try {
-		return list(p)
-	} catch {
-		return []
-	}
-}
-const put = (edit: API["edit"], x: Parameters<API["edit"]>[0], v: unknown) =>
-	edit(x, [{ path: [], value: v }])
+const kids = (p: string) => (hasNode(p) ? list(p) : [])
+// a node's value now, from an action (nothing tracked)
+const get = <T,>(x: Parameters<typeof read>[0]) => peep(() => read(x)) as T
+const put = (x: Parameters<typeof read>[0], v: unknown) => patch(x, [{ path: [], value: v }])
+// the id of the node at a path (names from the root), told by up, tracked
+const idOf = (p: string) => up(p.split("/").filter(Boolean), [])?.found
 
 // ---- the clock: the playhead. tempo and swing are nodes ----
-export function clock({ open, read, edit, method, ref, teardown }: API) {
-	const tempo = open("./clock/tempo", 104)
-	const swing = open("./clock/swing", 0.18)
-	const playing = open("./clock/playing", false)
+export function clock() {
+	const tempo = ensureNode("/clock/tempo", 104)
+	const swing = ensureNode("/clock/swing", 0.18)
+	const playing = ensureNode("/clock/playing", false)
 	// next: the step about to be heard, written LOOKAHEAD early, with its time on the audio clock.
 	// at: the step being heard now (written when it is heard, for eyes)
-	const next = open("./clock/next", null)
-	const at = open("./clock/at", { bar: "bar1", step: 0 })
+	const next = ensureNode("/clock/next", null)
+	const at = ensureNode("/clock/at", { bar: "bar1", step: 0 })
 	// the playhead's count and base time: kept across reloads, it is a live thing
-	const state = read(ref("./clock/state", () => ({ n: 0, base: 0 }))) as {
+	const state = peep(() => read(ref("/clock/state", () => ({ n: 0, base: 0 })))) as {
 		n: number
 		base: number
 	}
 
-	method("on/play", () => {
+	createAction("on/play", () => {
 		// the audio context is made inside the click: audio needs a person's gesture
-		const ctx = read(ref("./audio", () => new AudioContext({ latencyHint: "interactive" })))
-		const now = !read(playing)
+		const ctx = peep(() =>
+			read(ref("/audio", () => new AudioContext({ latencyHint: "interactive" })))
+		)
+		const now = !get(playing)
 		if (now) {
 			;(ctx as AudioContext).resume()
 			Object.assign(state, { n: 0, base: (ctx as AudioContext).currentTime + 0.08 })
+			due.length = 0
 		}
-		put(edit, playing, now)
+		put(playing, now)
 	})
-	method("on/tempo", (v: number) => put(edit, tempo, Math.round(v)))
-	method("on/swing", (v: number) => put(edit, swing, Number(v.toFixed(2))))
+	createAction("on/tempo", (v: number) => put(tempo, Math.round(v)))
+	createAction("on/swing", (v: number) => put(swing, Number(v.toFixed(2))))
 
-	// the loop: every 20ms, write the steps due in the next LOOKAHEAD seconds. an odd step is late
-	// by the swing. its "heard" is a timer for the moment it sounds. a timer writes as the process,
-	// and reads untracked: what it reads now is what it uses now
-	const timers = new Set<number>()
-	const every = setInterval(() => {
-		const ctx = read("./audio") as AudioContext | undefined
-		if (read(playing) !== true || !(ctx instanceof AudioContext) || ctx.state !== "running") {
+	// the loop, every 20ms (on/beat): write the steps due in the next LOOKAHEAD seconds. an odd step
+	// is late by the swing. a step is "heard" when its time comes: due holds each, and a beat writes
+	// /clock/at for the ones whose time has passed (no timer writes it). it reads what is there now
+	const due: { when: number; bar: string; step: number }[] = []
+	createAction("on/beat", () => {
+		const ctx = hasNode("/audio") ? get<AudioContext>("/audio") : undefined
+		if (get(playing) !== true || !(ctx instanceof AudioContext) || ctx.state !== "running") {
 			return
 		}
-		const bpm = Number(read(tempo)) || 104
-		const late = Math.min(0.7, Math.max(0, Number(read(swing)) || 0))
+		const bpm = Number(get(tempo)) || 104
+		const late = Math.min(0.7, Math.max(0, Number(get(swing)) || 0))
 		const d = 60 / bpm / 4
 		if (state.base < ctx.currentTime - 0.2) state.base = ctx.currentTime + 0.05
 		while (state.base < ctx.currentTime + LOOKAHEAD) {
 			const n = state.n++
 			const step = n % 16, bar = BARS[Math.floor(n / 16) % BARS.length]
 			const when = state.base + (n % 2 ? late * d : 0)
-			put(edit, next, { n, bar, step, at: when, dur: d })
-			const timer = setTimeout(() => {
-				timers.delete(timer)
-				put(edit, at, { bar, step })
-			}, Math.max(0, (when - ctx.currentTime) * 1000))
-			timers.add(timer)
+			put(next, { n, bar, step, at: when, dur: d })
+			due.push({ when, bar, step })
 			state.base += d
 		}
-	}, 20)
-	teardown(() => {
-		clearInterval(every)
-		for (const timer of timers) clearTimeout(timer)
+		let heard: (typeof due)[number] | undefined
+		while (due.length && due[0].when <= ctx.currentTime) heard = due.shift()
+		if (heard) put(at, { bar: heard.bar, step: heard.step })
 	})
 
 	return (
@@ -143,6 +155,11 @@ export function clock({ open, read, edit, method, ref, teardown }: API) {
 			<span class="pos" title="/clock/at: the step being heard">
 				{bind("clock/at", (a) => `${a.bar} · ${String(a.step + 1).padStart(2, "0")}/16`)}
 			</span>
+			<i
+				class="beat"
+				style={bind("clock/playing", (p) => `animation-play-state:${p ? "running" : "paused"}`)}
+				onAnimationIteration={handler("on/beat")}
+			/>
 		</div>
 	)
 }
@@ -186,103 +203,102 @@ const BEAT: [number, Note][] = [
 	...[7, 15].map((s): [number, Note] => [s, { drum: "hat", vel: 0.25 }]),
 ]
 
-export function roll(
-	{ open, read, edit, remove, entries, list, place, unplace, move, memo, effect, method, ref }:
-		API,
-) {
+export function roll() {
 	const id = () => "n" + crypto.randomUUID().slice(0, 5)
 	// the first time only: A in bar 1, mounted in bar 2; B in bar 3, mounted in bar 4
-	if (kids(list, "/song").length === 0) {
+	if (kids("/song").length === 0) {
 		for (const [name, bar, again] of [["A", "bar1", "bar2"], ["B", "bar3", "bar4"]]) {
 			const p = `/song/${bar}`
-			open(p, { name, ink: INKS[name === "A" ? 0 : 1] })
+			ensureNode(p, { name, ink: INKS[name === "A" ? 0 : 1] })
 			for (const [step, note] of [...SEED[name], ...BEAT]) {
-				open(`${p}/s${step}/${id()}`, { len: 1, vel: 0.8, ...note })
+				ensureNode(`${p}/s${step}/${id()}`, { len: 1, vel: 0.8, ...note })
 			}
 			place(`/song/${again}`, p)
 		}
 	}
-	const bar = open("./roll/bar", "bar1")
+	const bar = ensureNode("/roll/bar", "bar1")
 	const pattern = (b: string) => `/song/${b}`
-	const idOf = (p: string) => entries(p)[0]?.id
-	const nameOf = (b: string) => (read(pattern(b)) as Any)?.name
+	const nameOf = (b: string) => (hasNode(pattern(b)) ? get<Any>(pattern(b))?.name : undefined)
 	const fresh_name = () => "ABCDEFGHIJ".split("").find((c) => !BARS.map(nameOf).includes(c))!
 	const notesOf = (p: string) =>
 		STEPS.flatMap((k) =>
-			kids(list, `${p}/s${k}`).map((n) => ({ k, ...(read(`${p}/s${k}/${n}`) as Note) }))
+			kids(`${p}/s${k}`).map((n) => ({ k, ...(read(`${p}/s${k}/${n}`) as Note) }))
 		)
 
 	// which bars hold the same pattern node: "bar2 = bar1"
-	memo("shares", () => {
+	createMemo("shares", () => {
 		const ids = BARS.map((b) => idOf(pattern(b)))
 		return Object.fromEntries(
 			BARS.map((b, i) => [b, BARS.filter((o, j) => j !== i && ids[j] && ids[j] === ids[i])]),
 		)
 	})
 	// the playhead, when the bar being heard is the pattern on the roll (the same node)
-	memo("playhead", () => {
+	createMemo("playhead", () => {
 		const a = read("/clock/at") as Any
 		const heard = a && idOf(pattern(a.bar)), shown = idOf(pattern(read(bar) as string))
 		return { step: a?.step ?? 0, here: !!heard && heard === shown }
 	})
 
-	method("on/select", (b: string) => put(edit, bar, b))
+	createAction("on/select", (b: string) => put(bar, b))
 	// a note drawn: in the step's folder (made the first time), unless that row has one
-	method("on/draw", (step: number, row: number) => {
-		const p = pattern(read(bar) as string)
-		if (idOf(p) === undefined) return
+	createAction("on/draw", (step: number, row: number) => {
+		const p = pattern(get<string>(bar))
+		if (!hasNode(p)) return
 		const folder = `${p}/s${step}`
-		const there = kids(list, folder).some((n) => rowOf(read(`${folder}/${n}`) as Note) === row)
-		if (!there) open(`${folder}/${id()}`, valueFor(row))
+		const there = peep(() => kids(folder)).some((n) => rowOf(get<Note>(`${folder}/${n}`)) === row)
+		if (!there) ensureNode(`${folder}/${id()}`, valueFor(row))
 	})
 	// a note let go of, moved by (steps, rows): not moved, it is taken out; moved, it goes there
-	// (its step by places' move, its row by its value)
-	method("on/drop", (name: string, from: number, steps: number, rows: number) => {
-		const p = pattern(read(bar) as string)
-		const v = read(`${p}/s${from}/${name}`) as Note | undefined
-		if (!v) return
-		if (!steps && !rows) return remove(`${p}/s${from}/${name}`)
+	// (its step by a rename, its row by its value)
+	createAction("on/drop", (name: string, from: number, steps: number, rows: number) => {
+		const p = pattern(get<string>(bar))
+		if (!hasNode(`${p}/s${from}/${name}`)) return
+		const v = get<Note>(`${p}/s${from}/${name}`)
+		if (!steps && !rows) return unplace(`${p}/s${from}/${name}`)
 		const to = Math.min(15, Math.max(0, from + steps))
 		const row = Math.min(ROWS.length - 1, Math.max(0, rowOf(v) + rows))
 		if (from !== to) {
-			open(`${p}/s${to}`, null)
-			move(`${p}/s${from}/${name}`, `${p}/s${to}/${name}`)
+			ensureNode(`${p}/s${to}`, null)
+			rename(`${p}/s${from}/${name}`, `${p}/s${to}/${name}`)
 		}
-		if (rowOf(v) !== row) put(edit, `${p}/s${to}/${name}`, valueFor(row, v))
+		if (rowOf(v) !== row) put(`${p}/s${to}/${name}`, valueFor(row, v))
 	})
 	// ⧉: this bar's pattern mounted in the next bar too (what was there is unplaced, not deleted)
-	method("on/mount", (b: string) => {
+	createAction("on/mount", (b: string) => {
 		const into = BARS[(BARS.indexOf(b) + 1) % BARS.length]
-		if (idOf(pattern(b)) === undefined || idOf(pattern(into)) === idOf(pattern(b))) return
+		const here = peep(() => idOf(pattern(b)))
+		if (here === undefined || peep(() => idOf(pattern(into))) === here) return
 		unplace(pattern(into))
 		place(pattern(into), pattern(b))
 	})
 	// ✂: this bar gets a pattern of its own, a copy (new nodes, new name)
-	method("on/unlink", (b: string) => {
-		if (idOf(pattern(b)) === undefined) return
+	createAction("on/unlink", (b: string) => {
+		if (!hasNode(pattern(b))) return
 		const name = fresh_name()
-		const notes = notesOf(pattern(b))
+		const notes = peep(() => notesOf(pattern(b)))
 		unplace(pattern(b))
-		open(pattern(b), { name, ink: INKS["ABCDEFGHIJ".indexOf(name) % INKS.length] })
-		for (const { k, ...note } of notes) open(`${pattern(b)}/s${k}/${id()}`, note)
+		ensureNode(pattern(b), { name, ink: INKS["ABCDEFGHIJ".indexOf(name) % INKS.length] })
+		for (const { k, ...note } of notes) ensureNode(`${pattern(b)}/s${k}/${id()}`, note)
 	})
 	// ∅: an empty pattern of its own
-	method("on/empty", (b: string) => {
+	createAction("on/empty", (b: string) => {
 		const name = fresh_name()
-		unplace(pattern(b))
-		open(pattern(b), { name, ink: INKS["ABCDEFGHIJ".indexOf(name) % INKS.length] })
+		if (hasNode(pattern(b))) unplace(pattern(b))
+		ensureNode(pattern(b), { name, ink: INKS["ABCDEFGHIJ".indexOf(name) % INKS.length] })
 	})
 
 	// a mini roll per bar, drawn from its pattern's notes
 	const minis = BARS.map((b) => {
-		const c = read(
-			ref(
-				`./roll/mini-${b}`,
-				() => Object.assign(document.createElement("canvas"), { width: 256, height: 72 }),
-			),
+		const c = peep(() =>
+			read(
+				ref(
+					`/roll/mini-${b}`,
+					() => Object.assign(document.createElement("canvas"), { width: 256, height: 72 }),
+				),
+			)
 		) as HTMLCanvasElement
 		c.className = "mini"
-		effect(
+		createEffect(
 			`mini-${b}`,
 			() =>
 				idOf(pattern(b)) === undefined
@@ -474,30 +490,30 @@ function drawMini(c: HTMLCanvasElement, v?: { ink: string; notes: (Note & { k: n
 }
 
 // ---- the player: at each step, the notes there, read through the bar's route; then sound ----
-export function player({ open, read, edit, entries, list, memo, effect, method, ref }: API) {
-	const tone = open("./player/tone", 0.55)
-	const echo = open("./player/echo", 0.32)
-	const trace = open("./player/trace", [])
-	method("on/tone", (v: number) => put(edit, tone, v))
-	method("on/echo", (v: number) => put(edit, echo, v))
+export function player() {
+	const tone = ensureNode("/player/tone", 0.55)
+	const echo = ensureNode("/player/echo", 0.32)
+	const trace = ensureNode("/player/trace", [])
+	createAction("on/tone", (v: number) => put(tone, v))
+	createAction("on/echo", (v: number) => put(echo, v))
 
 	// heard: what this step reads, and how. the bar's pattern, its step folder, each note in it;
 	// a note's route is the way it was reached (/song/bar2/… for a mount of bar1's pattern).
 	// also which bars hold the same pattern node
-	const heard = memo("./player/heard", () => {
+	const heard = createMemo("/player/heard", () => {
 		const next = read("/clock/next") as Next | null | undefined
 		if (!next) return { n: -1, ids: [], notes: [] }
-		const p = `/song/${next.bar}`, pid = entries(p)[0]?.id
+		const p = `/song/${next.bar}`, pid = idOf(p)
 		const folder = `${p}/s${next.step}`
-		const notes = (pid === undefined ? [] : kids(list, folder))
+		const notes = (pid === undefined ? [] : kids(folder))
 			.map((n) => ({
-				id: entries(`${folder}/${n}`)[0]?.id,
+				id: idOf(`${folder}/${n}`),
 				route: `${folder}/${n}`,
 				...(read(`${folder}/${n}`) as Note),
 			}))
 		const same = pid === undefined
 			? []
-			: BARS.filter((b) => b !== next.bar && entries(`/song/${b}`)[0]?.id === pid)
+			: BARS.filter((b) => b !== next.bar && idOf(`/song/${b}`) === pid)
 		return {
 			...next,
 			folder,
@@ -509,15 +525,17 @@ export function player({ open, read, edit, entries, list, memo, effect, method, 
 	})
 
 	// the sound: a chain made once per audio context (kept on reload, so it keeps ringing)
-	const live = read(ref("./player/live", () => ({ chain: undefined as Any, last: -1 }))) as {
+	const live = peep(() =>
+		read(ref("/player/live", () => ({ chain: undefined as Any, last: -1 })))
+	) as {
 		chain: Any
 		last: number
 	}
-	effect("player-chain", () => read("./audio"), (ctx) => {
+	createEffect("player-chain", () => read("/audio"), (ctx) => {
 		if (!(ctx instanceof AudioContext) || live.chain?.ctx === ctx) return
 		live.chain = chain(ctx)
 	})
-	effect(
+	createEffect(
 		"player-knobs",
 		() => [read(tone), read(echo), read("/clock/tempo")] as const,
 		([tn, ec, bpm]) => {
@@ -534,7 +552,7 @@ export function player({ open, read, edit, entries, list, memo, effect, method, 
 		},
 	)
 	// each new step once: the notes scheduled at its time, and a line in the trace
-	effect("player-plays", () => read(heard) as Any, (h) => {
+	createEffect("player-plays", () => read(heard) as Any, (h) => {
 		if (!h || h.n < 0 || h.n === live.last) return
 		live.last = h.n
 		const c = live.chain
@@ -556,10 +574,7 @@ export function player({ open, read, edit, entries, list, memo, effect, method, 
 			same: h.same,
 			notes: h.notes.map((n: Any) => ({ route: n.route, name: noteName(n) })),
 		}
-		edit(trace, (d: Any[]) => {
-			d.push(line)
-			if (d.length > 8) d.splice(0, d.length - 8)
-		})
+		put(trace, [...get<Any[]>(trace), line].slice(-8))
 	})
 
 	return (
@@ -733,6 +748,8 @@ const STRIPES = BLACK.map((b, i) =>
 // ---- the look: lemon page, black lines, white cards with a pink glow, cherry, mint, blue ----
 const LOOK = `
 @import url("https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600&display=swap");
+@keyframes beat { to { opacity: 0 } }
+.beat { position: fixed; width: 0; height: 0; pointer-events: none; animation: beat 20ms linear infinite }
 * { box-sizing: border-box }
 body { background: #ffff88; margin: 10px; font-family: Jost, system-ui, sans-serif; color: #000;
 	display: flex; flex-direction: column; gap: 10px; width: max-content; max-width: 640px }

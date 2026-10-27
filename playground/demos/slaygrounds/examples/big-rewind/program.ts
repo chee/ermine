@@ -1,8 +1,26 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
-import type { Node } from "@ermine/api"
 import type { Patch } from "@ermine/core/op/apply"
+import {
+	addTeardown,
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	executeAction,
+	patch,
+	peep,
+	pipe,
+	read as readNode,
+	ref,
+} from "@ermine/system"
+import { change } from "@ermine/slaygrounds/tools"
 import { bind, handler } from "ermine-h"
+
+// the handle of a node: what ensureNode gives
+type Node = ReturnType<typeof ensureNode>
+// what a node holds, as the game takes it (any: its values are its own)
+// deno-lint-ignore no-explicit-any
+const read = (x: Node | string): any => readNode(x)
 
 // big-rewind: snake on a nokia 3210, and a time machine beside it. every tick the game makes is
 // kept on a tape, and the tape is a node (/snake/tape: { at, steps }), each step every write the
@@ -259,10 +277,11 @@ const LEVER = { rew: -56, stop: -19, play: 19, ff: 56 }
 const fresh = () => [[6, 5], [5, 5], [4, 5]]
 const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i])
 
-export default function game(api: API) {
-	const { open, read, edit, ref, method, send, watch, effect, teardown } = api
+export default function game() {
+	// what a node holds now, untracked: the actions and the code they call read so
+	const got = (x: Node | string) => peep(() => read(x))
 	// a live thing kept across reloads: saved under ./snake/ui, made the first time only
-	const keep = <T,>(name: string, make: () => T): T => read(ref(`./snake/ui/${name}`, make)) as T
+	const keep = <T,>(name: string, make: () => T): T => got(ref(`./snake/ui/${name}`, make)) as T
 	const style = keep("style", () => document.head.appendChild(document.createElement("style")))
 	style.textContent = LOOK
 	keep("font", () =>
@@ -271,24 +290,23 @@ export default function game(api: API) {
 			href: "https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&display=swap",
 		})))
 	// a whole put
-	const put = (x: Node, v: unknown) => edit(x, () => v)
+	const put = (x: Node, v: unknown) => patch(x, [{ path: [], value: v }])
 
 	// the game is these nodes (./snake: saved, there across a reload); the tape keeps how each tick
 	// changed them
-	const body = open("./snake/body", fresh())
-	const dir = open("./snake/dir", "right")
-	const want = open("./snake/want", "right")
-	const food = open("./snake/food", [14, 5])
-	const score = open("./snake/score", 0)
-	const grow = open("./snake/grow", 0)
-	const alive = open("./snake/alive", true)
+	const body = ensureNode("./snake/body", fresh())
+	const dir = ensureNode("./snake/dir", "right")
+	const want = ensureNode("./snake/want", "right")
+	const food = ensureNode("./snake/food", [14, 5])
+	const score = ensureNode("./snake/score", 0)
+	const grow = ensureNode("./snake/grow", 0)
+	const alive = ensureNode("./snake/alive", true)
 	// not on the tape: the lever (stop, play, rew, ff), the beat, the best, the cover
-	const lever = open("./snake/lever", "stop")
-	const speed = open("./snake/speed", 140)
-	const best = open("./snake/best", 0)
-	const cover = open("./snake/cover", "orange")
-	const tape = open("./snake/tape", { at: 0, steps: [] as Step[] })
-	const got = (x: Node) => read(x)
+	const lever = ensureNode("./snake/lever", "stop")
+	const speed = ensureNode("./snake/speed", 140)
+	const best = ensureNode("./snake/best", 0)
+	const cover = ensureNode("./snake/cover", "orange")
+	const tape = ensureNode("./snake/tape", { at: 0, steps: [] as Step[] })
 
 	// the tape. record(what, f): every write f makes to a tracked node is one step (its patches and
 	// their inverse, as the change says them: op.undo), appended at `at`, the steps after it cut.
@@ -297,11 +315,13 @@ export default function game(api: API) {
 	const MOST = 2000
 	let recording: Write[] | undefined
 	for (const [name, node] of Object.entries({ body, food, score, grow, dir, alive })) {
-		watch(node, ({ change }) => {
-			if (recording && change?.op) {
-				recording.push({ name, undo: change.op.undo, redo: change.op.patches })
-			}
-		})
+		// told as each write lands ({ timing: "write" }), so a tick's writes are in `recording` as it
+		// ends; the inverse is in the node's own change (the world's change(x): its op.undo), the
+		// patches are what the pipe is told
+		pipe(node, (w) => {
+			const op = (change(node) as { op?: { undo: readonly Patch[] } } | undefined)?.op
+			if (recording && op) recording.push({ name, undo: op.undo, redo: w.patches })
+		}, { timing: "write", name: `tape-${name}` })
 	}
 	const nodes: Record<string, Node> = { body, food, score, grow, dir, alive }
 	function record(what: string, f: () => void) {
@@ -323,7 +343,7 @@ export default function game(api: API) {
 				let next = at + 1
 				if (next > MOST) (ps.push({ path: ["steps"], range: [0, next - MOST] }), next = MOST)
 				ps.push({ path: ["at"], value: next })
-				edit(tape, ps)
+				patch(tape, ps)
 			}
 		}
 	}
@@ -333,38 +353,39 @@ export default function game(api: API) {
 		let i = at
 		while (i > to) {
 			const { writes } = steps[--i]
-			for (let k = writes.length - 1; k >= 0; k--) edit(nodes[writes[k].name], writes[k].undo)
+			for (let k = writes.length - 1; k >= 0; k--) patch(nodes[writes[k].name], writes[k].undo)
 		}
-		while (i < to) for (const w of steps[i++].writes) edit(nodes[w.name], w.redo)
-		if (to !== at) edit(tape, [{ path: ["at"], value: to }])
+		while (i < to) for (const w of steps[i++].writes) patch(nodes[w.name], w.redo)
+		if (to !== at) patch(tape, [{ path: ["at"], value: to }])
 	}
 
 	// one tick: everything it writes is one step of the tape
 	function step() {
-		const b = read(body)
-		const was = read(dir)
-		let d = read(want)
+		const b = got(body)
+		const was = got(dir)
+		let d = got(want)
 		if (d === OPPOSITE[was]) d = was
 		if (d !== was) put(dir, d)
 		let [x, y] = b[0]
 		x += MOVES[d][0]
 		y += MOVES[d][1]
 		if (WRAP) (x = (x + W) % W, y = (y + H) % H)
-		const growing = read(grow) > 0
+		const growing = got(grow) > 0
 		const hit = x < 0 || y < 0 || x >= W || y >= H ||
 			b.some(([bx, by], i) => bx === x && by === y && (growing || i < b.length - 1))
 		if (hit) return put(alive, false)
-		const [fx, fy] = read(food)
+		const [fx, fy] = got(food)
 		const ate = fx === x && fy === y
-		edit(body, (draft) => {
-			draft.unshift([x, y])
-			if (!growing && !ate) draft.pop()
-		})
-		if (growing) put(grow, read(grow) - 1)
+		// the head in front, the tail off the back unless it grows: two patches, not a new body
+		patch(body, [
+			{ path: [], range: [0, 0], value: [[x, y]] },
+			...(!growing && !ate ? [{ path: [], range: [b.length, b.length + 1] } as Patch] : []),
+		])
+		if (growing) put(grow, got(grow) - 1)
 		if (ate) {
-			put(score, read(score) + 1)
-			put(grow, read(grow) + GROW - 1)
-			put(food, place(read(body)))
+			put(score, got(score) + 1)
+			put(grow, got(grow) + GROW - 1)
+			put(food, place(got(body)))
 		}
 	}
 	function begin() {
@@ -380,44 +401,53 @@ export default function game(api: API) {
 		put(lever, "play")
 	}
 
-	method("on/tick", () => {
-		if (!read(alive) || read(lever) !== "play") return
+	createAction("on/tick", () => {
+		if (!got(alive) || got(lever) !== "play") return
 		record("tick", step)
 		// not on the tape: going back over a crash keeps the best, and does not play
-		if (!read(alive)) {
+		if (!got(alive)) {
 			put(lever, "stop")
-			if (read(score) > read(best)) put(best, read(score))
+			if (got(score) > got(best)) put(best, got(score))
 		}
 	})
-	method("on/turn", (d) => put(want, d))
+	createAction("on/turn", (d) => put(want, d))
 	// the navi key: play and pause; after a crash, a new game
-	method("on/navi", () => {
-		if (!read(alive)) return begin()
-		put(lever, read(lever) === "play" ? "stop" : "play")
+	createAction("on/navi", () => {
+		if (!got(alive)) return begin()
+		put(lever, got(lever) === "play" ? "stop" : "play")
 	})
 	// the lever: a crashed game does not play (crank back first, or navi for a new one)
-	method("on/lever", (to) => {
-		if (to === "play" && !read(alive)) return
+	createAction("on/lever", (to) => {
+		if (to === "play" && !got(alive)) return
 		put(lever, to)
-		put(want, read(dir))
+		put(want, got(dir))
 	})
 	// a step of winding (the clock, while the lever is at rew or ff): the end of the tape stops it
-	method("on/wind", (by) => {
-		const { at, steps } = read(tape)
+	createAction("on/wind", (by) => {
+		const { at, steps } = got(tape)
 		const to = at + by
 		if (to < 0 || to > steps.length) return put(lever, "stop")
 		travel(to)
-		put(want, read(dir))
+		put(want, got(dir))
 		if (to === 0 || to === steps.length) put(lever, "stop")
 	})
-	method("on/travel", (to) => {
-		if (read(lever) !== "stop") put(lever, "stop")
+	createAction("on/travel", (to) => {
+		if (got(lever) !== "stop") put(lever, "stop")
 		travel(to)
-		put(want, read(dir))
+		put(want, got(dir))
 	})
-	method("on/new", begin)
-	method("on/cover", (name) => put(cover, name))
-	const call = (name: string, args: unknown[], _e?: unknown) => send(`on/${name}`, ...args)
+	createAction("on/new", () => begin())
+	createAction("on/cover", (name) => put(cover, name))
+	// the phone and the machine are hand-drawn elements with no handler of their own, and nothing
+	// is open in a plain listener to call an action from: one jsx event on the stage, the same
+	// action for all of them (name, ...args: the action it runs), whatever the event hit
+	createAction("on/do", (name: string, ...args: unknown[]) => executeAction(`on/${name}`, ...args))
+	// the crank, a click a tick or a wheel notch: the move is bounded by the tape as it is now
+	createAction("on/nudge", (by: number) => {
+		const { at, steps } = got(tape) as Tape
+		const to = Math.max(0, Math.min(steps.length, at + by))
+		if (to !== at) (executeAction("on/travel", to), click(audio, 1))
+	})
 
 	// ---- sound: made on the first press (a page may only make sound after one)
 	const audio = keep("audio", () => ({ ctx: undefined as AudioContext | undefined }))
@@ -474,34 +504,17 @@ export default function game(api: API) {
 		key.classList.add("down")
 		setTimeout(() => key.classList.remove("down"), 140)
 	}
-	const nudge = (by, e) => {
-		const { at, steps } = read(tape)
-		const to = Math.max(0, Math.min(steps.length, at + by))
-		if (to !== at) (call("travel", [to], e), click(audio, 1))
-	}
-	const press = (k, e) => {
+	// a press: the call it makes (name, ...args for on/do), none for a key with no use
+	const press = (k: string): [string, ...unknown[]] | undefined => {
 		hear()
 		flash(k)
-		if (TURN[k]) call("turn", [TURN[k]], e)
-		else if (k === "navi") call("navi", [], e)
-		else if (k === "c" || k === "down") nudge(-1, e)
-		else if (k === "up") nudge(1, e)
+		if (TURN[k]) return ["turn", TURN[k]]
+		if (k === "navi") return ["navi"]
+		if (k === "c" || k === "down") return ["nudge", -1]
+		if (k === "up") return ["nudge", 1]
 	}
 	// a press keeps the focus off the svg (no outline), but in this page: the keyboard goes on working
 	phone.tabIndex = -1
-	for (const key of phone.querySelectorAll(".key")) {
-		;(key as HTMLElement).onpointerdown = (e) => {
-			e.preventDefault()
-			phone.focus({ preventScroll: true })
-			press((key as HTMLElement).dataset.key, e)
-		}
-	}
-	document.onkeydown = (e) => {
-		const k = KEYS[e.key] ?? (/^[0-9*#]$/.test(e.key) ? e.key : undefined)
-		if (!k || e.metaKey || e.ctrlKey) return
-		e.preventDefault()
-		press(k, e)
-	}
 
 	// the screen: 84 by 48 dots. an effect makes the picture; a frame loop fades each dot toward
 	// it, the way that screen was slow to change
@@ -517,8 +530,8 @@ export default function game(api: API) {
 		paint(lcd, g, ghost)
 		raf = requestAnimationFrame(loop)
 	})
-	teardown(() => cancelAnimationFrame(raf))
-	effect("screen", () => {
+	addTeardown(() => cancelAnimationFrame(raf))
+	createEffect("screen", () => {
 		const { at, steps } = read(tape) as Tape
 		return [
 			[...(read(body) as number[][])],
@@ -531,12 +544,12 @@ export default function game(api: API) {
 			steps.length,
 		]
 	}, (now, was) => {
-		lcd.target.set(picture(now))
+		lcd.target.set(picture(now as Parameters<typeof picture>[0]))
 		// a crash buzzes: playing into it, or cranking over it
 		if (was && was[3] && !now[3]) buzz(phone, audio)
 		if (was && now[4] > was[4] && now[5] === "play") beep(audio)
 	}, { equal: same })
-	effect("look", () => read(cover), (name, was) => {
+	createEffect("look", () => read(cover), (name, was) => {
 		const c = COVERS[name] ?? COVERS.orange
 		for (const k of ["body", "edge", "panel", "keys", "ink", "logo"]) {
 			phone.style.setProperty(`--${k}`, c[k])
@@ -560,54 +573,88 @@ export default function game(api: API) {
 	const ticket = $(".ticket") as HTMLElement
 	const columns = new WeakMap()
 
-	// the crank: a turn of 15 degrees is a tick of the tape; it will not wind past either end
 	const crank = $(".crank") as SVGElement
-	crank.onpointerdown = (down) => {
-		hear()
-		const r = crank.getBoundingClientRect()
-		const cx = r.left + r.width / 2, cy = r.top + r.height / 2
-		const angle = (e) => (Math.atan2(e.clientY - cy, e.clientX - cx) * 180) / Math.PI
-		let last = angle(down), turned = 0
-		crank.setPointerCapture(down.pointerId)
-		crank.onpointermove = (e) => {
-			let d = angle(e) - last
-			if (d > 180) d -= 360
-			if (d < -180) d += 360
-			last = angle(e)
-			turned += d
-			const n = Math.trunc(turned / 15)
-			if (!n) return
-			turned -= n * 15
-			nudge(n, e)
-		}
-		crank.onpointerup = crank.onpointercancel = () => (crank.onpointermove = null)
-	}
-	crank.onwheel = (e) => (e.preventDefault(), hear(), nudge(e.deltaY > 0 ? 1 : -1, e))
-
-	// the lever: click or drag it to a position
 	const leverEl = $(".lever") as SVGElement
 	const arm = $(".lever .arm") as SVGElement
-	const nearest = (e) => {
+	const nearest = (e: PointerEvent) => {
 		const r = leverEl.getBoundingClientRect()
 		const px = r.left + r.width / 2, py = r.top + r.height * (152 / 170)
 		const a = (Math.atan2(e.clientX - px, py - e.clientY) * 180) / Math.PI
 		return Object.entries(LEVER).sort((x, y) => Math.abs(x[1] - a) - Math.abs(y[1] - a))[0][0]
 	}
-	leverEl.onpointerdown = (down) => {
-		hear()
-		leverEl.setPointerCapture(down.pointerId)
-		leverEl.onpointermove = (e) => (arm.style.transform = `rotate(${LEVER[nearest(e)]}deg)`)
-		leverEl.onpointerup = (e) => {
-			leverEl.onpointermove = leverEl.onpointerup = null
-			const to = nearest(e)
-			call("lever", [to], e)
-			arm.style.transform = `rotate(${LEVER[read(lever)]}deg)`
+	// where the lever is drawn once the game says so (the machine effect sets it)
+	let shown = "stop"
+
+	// the events of the phone and the machine, all heard on the stage (nothing is open in a plain
+	// listener to call an action from): each gives the call it makes, or none. the crank: a turn of
+	// 15 degrees is a tick of the tape, and it will not wind past either end (the action bounds it).
+	// the lever: click or drag it to a position
+	let turning: { cx: number; cy: number; last: number; turned: number } | undefined
+	let leaning = false
+	const angle = (e: PointerEvent) => {
+		if (!turning) return 0
+		return (Math.atan2(e.clientY - turning.cy, e.clientX - turning.cx) * 180) / Math.PI
+	}
+	const onDown = (e: PointerEvent) => {
+		const t = e.target as Element
+		phone.focus({ preventScroll: true })
+		const key = t.closest(".key") as HTMLElement | null
+		if (key && phone.contains(key)) {
+			e.preventDefault()
+			return press(key.dataset.key!)
+		}
+		if (t.closest(".crank")) {
+			hear()
+			const r = crank.getBoundingClientRect()
+			turning = { cx: r.left + r.width / 2, cy: r.top + r.height / 2, last: 0, turned: 0 }
+			turning.last = angle(e)
+			crank.setPointerCapture(e.pointerId)
+		} else if (t.closest(".lever")) {
+			hear()
+			leaning = true
+			leverEl.setPointerCapture(e.pointerId)
 		}
 	}
+	const onMove = (e: PointerEvent) => {
+		if (turning) {
+			let d = angle(e) - turning.last
+			if (d > 180) d -= 360
+			if (d < -180) d += 360
+			turning.last = angle(e)
+			turning.turned += d
+			const n = Math.trunc(turning.turned / 15)
+			if (!n) return
+			turning.turned -= n * 15
+			return ["nudge", n]
+		}
+		if (leaning) arm.style.transform = `rotate(${LEVER[nearest(e)]}deg)`
+	}
+	const onUp = (e: PointerEvent) => {
+		turning = undefined
+		if (!leaning) return
+		leaning = false
+		// a lever the game would not move goes back where it was drawn
+		setTimeout(() => (arm.style.transform = `rotate(${LEVER[shown] ?? LEVER.stop}deg)`), 60)
+		return ["lever", nearest(e)]
+	}
+	const onKey = (e: KeyboardEvent) => {
+		const k = KEYS[e.key] ?? (/^[0-9*#]$/.test(e.key) ? e.key : undefined)
+		if (!k || e.metaKey || e.ctrlKey) return
+		e.preventDefault()
+		return press(k)
+	}
+	const onWheel = (e: WheelEvent) => {
+		if (!(e.target as Element).closest(".crank")) return
+		e.preventDefault()
+		hear()
+		return ["nudge", e.deltaY > 0 ? 1 : -1]
+	}
+	// the stage's events call the action with (name, ...args), or nothing
+	const onStage = (f: (e: any) => unknown[] | undefined | void) => handler("on/do", f as never)
 
 	// everything on the machine is the tape node, the lever and the beat
 	// (the tape is changed in place: what it was is read out here, at, its steps and the last one)
-	effect(
+	createEffect(
 		"machine",
 		() => {
 			const tp = read(tape) as Tape
@@ -629,6 +676,7 @@ export default function game(api: API) {
 			const needle = Math.max(-70, Math.min(70, 70 - ((ms - 40) / 360) * 140))
 			;($(".gauge .needle") as SVGElement).style.transform = `rotate(${needle}deg)`
 			$(".gauge .ms").textContent = `${ms} MS`
+			shown = lv
 			arm.style.transform = `rotate(${LEVER[lv] ?? LEVER.stop}deg)`
 			// the gears and the crank turn a tooth a tick; the reels with the paper on them
 			const turn = at * 15
@@ -663,7 +711,7 @@ export default function game(api: API) {
 		}px)`
 		reader.style.width = `${at * STEP}px`
 		const lo = Math.max(0, at - 24), hi = Math.min(steps.length, at + 24)
-		const keep = new Set()
+		const keep = new Set<Element>()
 		for (let i = lo; i < hi; i++) {
 			let col = columns.get(steps[i])
 			if (!col) columns.set(steps[i], col = punch(steps[i]))
@@ -716,16 +764,20 @@ export default function game(api: API) {
 	return (
 		<div
 			class="fit"
+			tabIndex={-1}
 			ref={(e) => {
 				fitted.view = e
 				fit()
+				e.focus({ preventScroll: true })
 			}}
+			onPointerDown={onStage(onDown)}
+			onPointerMove={onStage(onMove)}
+			onPointerUp={onStage(onUp)}
+			onPointerCancel={onStage(onUp)}
+			onKeyDown={onStage(onKey)}
+			onWheel={onStage(onWheel)}
 		>
-			<div
-				class="stage"
-				ref={(e) => (fitted.stage = e)}
-				onPointerDown={() => phone.focus({ preventScroll: true })}
-			>
+			<div class="stage" ref={(e) => (fitted.stage = e)}>
 				<div>
 					{phone}
 					{covers}
@@ -738,25 +790,26 @@ export default function game(api: API) {
 
 // the clock: ticks the game while the lever is at play; winds the tape while it is at rew or ff,
 // three times as quick. a second process, reading the game's nodes: a new lever or a new beat, and
-// its timer is made again
-export function clock({ read, effect, send, teardown }: API) {
-	let every: number | undefined
-	effect("beat", () => {
+// the interval it says is written at its own every (/clock/every). a timer cannot call into the graph, so the host's
+// timer (host.ts) is the metronome: it runs /clock/on/beat at that interval, and the beat does the
+// ticking or the winding
+export function clock() {
+	const every = ensureNode("every", 0)
+	createEffect("beat", () => {
 		const lv = read("/snake/lever")
 		const ms = read("/snake/speed")
-		return [lv ?? "stop", ms ? Math.max(40, Number(ms) || 140) : 140]
+		return [lv ?? "stop", ms ? Math.max(40, Number(ms) || 140) : 140] as [string, number]
 	}, ([lv, ms]) => {
-		clearInterval(every)
-		every = undefined
-		if (lv === "play") every = setInterval(() => send("/game/on/tick"), ms)
-		if (lv === "rew" || lv === "ff") {
-			every = setInterval(
-				() => send("/game/on/wind", lv === "rew" ? -1 : 1),
-				Math.max(35, ms / 3),
-			)
-		}
+		patch(every, [{
+			path: [],
+			value: lv === "play" ? ms : lv === "rew" || lv === "ff" ? Math.max(35, ms / 3) : 0,
+		}])
 	}, { equal: same })
-	teardown(() => clearInterval(every))
+	createAction("on/beat", () => {
+		const lv = peep(() => read("/snake/lever"))
+		if (lv === "play") executeAction("/game/on/tick")
+		if (lv === "rew" || lv === "ff") executeAction("/game/on/wind", lv === "rew" ? -1 : 1)
+	})
 }
 
 // ---- the screen ----
@@ -840,7 +893,7 @@ function ghosts() {
 	const c = document.createElement("canvas")
 	c.width = 84 * 6
 	c.height = 48 * 6
-	const g = c.getContext("2d")
+	const g = c.getContext("2d")!
 	g.fillStyle = "rgba(28, 44, 20, 0.085)"
 	for (let y = 0; y < 48; y++) for (let x = 0; x < 84; x++) g.fillRect(x * 6, y * 6, 5, 5)
 	return c

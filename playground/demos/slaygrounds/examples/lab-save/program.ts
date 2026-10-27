@@ -1,22 +1,23 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import { createAction, ensureNode, patch, peep, read, unplace } from "@ermine/system"
 import { bind, handler } from "ermine-h"
 
 // program.ts: a notebook. its notes live in /data, a folder the host seeded, away from this
 // process's own nodes: a view and its buttons are live values, which a pack cannot carry. the host
 // saves /data into IndexedDB (💾), puts it back (⤺), and a 🍒 Restart starts from what was saved.
-// the save, load and forget buttons send to the host's own methods, at /host/on
-export default function program({ open, edit, remove, method }: API) {
-	const order = open("/data/order", [])
+// the save, load and forget buttons run the host's own actions, at /host/on
+export default function program() {
+	const order = ensureNode("/data/order", [])
+	const listed = () => peep(() => read(order)) as string[]
 
-	method("on/add", (text: string) => {
+	createAction("on/add", (text: string) => {
 		const id = crypto.randomUUID().slice(0, 4)
-		open(`/data/notes/${id}`, text)
-		edit(order, (d: string[]) => void d.push(id))
+		ensureNode(`/data/notes/${id}`, text)
+		patch(order, [{ path: [], value: [...listed(), id] }])
 	})
-	method("on/remove", (id: string) => {
-		edit(order, (d: string[]) => void d.splice(d.indexOf(id), 1))
-		remove(`/data/notes/${id}`)
+	createAction("on/remove", (id: string) => {
+		patch(order, [{ path: [], value: listed().filter((x) => x !== id) }])
+		unplace(`/data/notes/${id}`)
 	})
 
 	// the text typed, taken out of the input: none, no send

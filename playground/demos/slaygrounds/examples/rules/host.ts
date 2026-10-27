@@ -20,10 +20,10 @@ const may: Policy = (ask, read) => {
 
 world = createWorld({ render, processes: [{ name: "reader" }], may })
 world.seed((host) => {
-	host.open("/notes/a", "buy milk")
-	host.open("/notes/b", "a secret")
-	host.open("/notes/c", "call mum")
-	host.open("/rules", { hidden: ["b"] })
+	host.ensureNode("/notes/a", "buy milk")
+	host.ensureNode("/notes/b", "a secret")
+	host.ensureNode("/notes/c", "call mum")
+	host.ensureNode("/rules", { hidden: ["b"] })
 })
 
 export const reload = world.reload

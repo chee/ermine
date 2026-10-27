@@ -5,6 +5,7 @@
 import createEntry from "@ermine/core/node/entry"
 import { createPlaces } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"
+import { get } from "@ermine/core/places/lib"
 import { createScheduler } from "@ermine/core/scheduler"
 import { createPaths } from "@ermine/core/scheduler/paths"
 import { createTable } from "@ermine/core/table"
@@ -27,19 +28,13 @@ const world = createWorld({
 	render,
 	processes: [{ name: "cursors" }],
 	presence: { sweep: 300 },
-	extend: (api) => ({
-		crossed,
-		laptop: here,
-		phone: {
-			...phone,
-			effect: (read: () => unknown, act: (v: any) => void) =>
-				phone.effect(read, act, api.teardown),
-		},
-	}),
+	extend: () => ({ crossed, laptop: here, phone }),
 })
-world.seed((host) => void host.open("/pad", "a pad to point at"))
-const { s, presence: laptop } = world.world
-const pad = world.hostAPI.entries("/pad")[0].id
+world.seed((host) => void host.ensureNode("/pad", "a pad to point at"))
+const { s, places, presence: laptop } = world.world
+// the pad's id: what the channels anchor the presence rows to
+const padAt = world.ermine.dataOf(world.ermine.getNode("/pad"))!.node
+const pad = padAt.id ?? get(places, padAt.path!)!
 
 // the phone: its own world, the pad at its own /pad (an id of its own)
 function device(actor: string) {
@@ -57,9 +52,15 @@ function device(actor: string) {
 }
 const far = device("chee@phone") // the phone's world
 
+// what arrives over a channel lands from outside, in a world that is not told: a pulse after it
+const pulsed = (c: Channel, pulse: () => void): Channel => ({
+	name: c.name,
+	send: c.send,
+	on: (topic, fn) => c.on(topic, (from, bytes) => (fn(from, bytes), pulse())),
+})
 const pair = createPair("laptop", "phone")
-connect(laptop!, pair.a, { topic: TOPIC, anchor: pad })
-connect(far, pair.b, { topic: TOPIC, anchor: "pad" })
+connect(laptop!, pulsed(pair.a, () => s.pulse()), { topic: TOPIC, anchor: pad })
+connect(far, pulsed(pair.b, () => far.scheduler.pulse()), { topic: TOPIC, anchor: "pad" })
 const tab = "tab-" + crypto.randomUUID().slice(0, 4)
 const bc = createBroadcast(tab, "ermine-slaygrounds-cursors")
 let heard = 0
@@ -90,7 +91,8 @@ const here = {
 }
 
 // the phone as a program holds it: its rows at the pad (tracked in its own world), its row set,
-// renewed and cleared, and an effect in its own scheduler that goes with the process (api.teardown)
+// renewed and cleared, and an effect in its own scheduler that goes with the process (the program
+// hands its addTeardown in)
 const phone = {
 	who: "phone",
 	rows: () => readPresence(far, "pad"),

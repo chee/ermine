@@ -1,6 +1,18 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
 import { count } from "@ermine/core/util/walk-string"
+import {
+	addTeardown,
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	executeAction,
+	getArgs,
+	patch,
+	peep,
+	read,
+} from "@ermine/system"
+import { change, who } from "@ermine/slaygrounds/tools"
 import { bind, handler } from "ermine-h"
 
 // big-duet: two people, one text. /text is one string node; duet owns it and its one handler,
@@ -8,8 +20,8 @@ import { bind, handler } from "ermine-h"
 // each a pane: a keystroke is a call to duet (the change says who called), a caret is the person's
 // own node (/caret-cherry: an anchor and a head, so a selection keeps its direction), and each pane
 // draws the others' selections and carets where they are. a remote edit moves your anchor and head
-// through its patch; your own never puts anything back. invite the poet: a third process typing into the same text on a
-// timer, wherever its caret is. the list at the bottom is every change, as its patch.
+// through its patch; your own never puts anything back. invite the poet: a third process typing into the same text at each
+// beat of the host's timer (a program cannot write from a timer), wherever its caret is. the list at the bottom is every change, as its patch.
 // the views are jsx: what is a node is bound (the counts, the poet's button, each pane's other
 // carets, the panes themselves: the people's node values); the textarea and the marks behind it
 // are the program's own, driven by its effects, and ermine-h never writes into them
@@ -72,42 +84,34 @@ button.on { background: #2269ff; color: #fff }
 .edits .p { color: #0009 }
 `
 
-// what a process is given besides the api: the world's change(x), x's latest change (its header),
-// and who(change), who wrote it (caller: a process's name)
-type Duet = API & {
-	change: (x: unknown) => { op?: { patches: readonly any[] } } | undefined
-	who: (change: unknown) => { caller: string }
-}
 // the last change of x's value as this program wants it: its patches and who called, by name
-const lastOf = (change: Duet["change"], who: Duet["who"]) => (x: unknown) => {
-	const c = change(x)
-	return c && { patches: [...(c.op?.patches ?? [])], caller: who(c).caller }
+// (the world's change(x), x's latest change, and who(change), who wrote it)
+const lastOf = (x: unknown) => {
+	const c = change(x as string) as { op?: { patches: readonly any[] } } | undefined
+	return c && { patches: [...(c.op?.patches ?? [])], caller: who(c as never).caller }
 }
 
 // the text's owner: the one node (./text, saved, so a reload keeps the poem), and the one way to
 // change it
-export default function duet(
-	{ open, read, edit, method, memo, effect, teardown, change: latest, who }: Duet,
-) {
-	const change = lastOf(latest, who)
+export default function duet() {
 	const style = document.head.appendChild(document.createElement("style"))
 	style.textContent = LOOK
 	const font = document.head.appendChild(Object.assign(document.createElement("link"), {
 		rel: "stylesheet",
 		href: "https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600&display=swap",
 	}))
-	teardown(() => (style.remove(), font.remove()))
-	const text = open("./text", START)
-	method(
+	addTeardown(() => (style.remove(), font.remove()))
+	const text = ensureNode("./text", START)
+	createAction(
 		"on/type",
-		(a: number, b: number, s: string) => edit(text, [{ path: [], range: [a, b], value: s }]),
+		(a: number, b: number, s: string) => patch(text, [{ path: [], range: [a, b], value: s }]),
 	)
-	memo("words", () => (read(text) as string).split(/\s+/).filter(Boolean).length)
+	createMemo("words", () => (read(text) as string).split(/\s+/).filter(Boolean).length)
 
 	// every change to the text, as it lands: who called, and its patch. a log the program draws
 	// itself (a binding shows a node's value, and this is each change's header)
 	const edits = el("div", "edits")
-	effect("log", () => change(text), (c, before) => {
+	createEffect("log", () => lastOf(text), (c, before) => {
 		if (before === undefined || !c?.patches.length) return
 		const who = c.caller || "?"
 		const row = el("div")
@@ -147,31 +151,35 @@ export default function duet(
 }
 
 // a person: a pane on the text, a caret of their own
-export function person(
-	{ open, read: get, edit, method, memo, effect, args, change: latest, who }: Duet,
-) {
-	const change = lastOf(latest, who)
-	const name = args[0]
+export function person() {
+	const name = getArgs()[0]
 	const me = WHO[name]
 	// a selection is an anchor (where it started) and a head (where the caret is): its direction
 	// kept. ./caret-<name>: saved, so a reload finds the caret where it was
-	const caret = open(`./caret-${name}`, { anchor: count(START), head: count(START) })
-	const put = (c: { anchor: number; head: number }) => edit(caret, [{ path: [], value: c }])
-	method("on/caret", (anchor: number, head: number) => {
-		const c = ends(get(caret))
+	const caret = ensureNode(`./caret-${name}`, { anchor: count(START), head: count(START) })
+	const put = (c: { anchor: number; head: number }) => patch(caret, [{ path: [], value: c }])
+	const mine = () => ends(peep(() => read(caret)))
+	createAction("on/caret", (anchor: number, head: number) => {
+		const c = mine()
 		if (c.anchor !== anchor || c.head !== head) put({ anchor, head })
 	})
+	// a keystroke: the textarea's value as the event saw it, against the text as it is now, as one
+	// splice: the one call to the owner, which says who made it (this process)
+	createAction("on/input", (now: string) => {
+		const [a, b, s] = splice(peep(() => read(textItem)) as string, now)
+		executeAction("/duet/on/type", a, b, s)
+	})
 	const textItem = "/text"
-	const read = () => get(textItem) as string
+	const text = () => read(textItem) as string
 	// the others' selections, as this pane draws them: a node of its own, so the graph shows it
-	const others = memo(
+	const others = createMemo(
 		"others",
 		() =>
 			Object.keys(WHO).filter((n) => n !== name).flatMap((n) => {
-				const c = get(`/caret-${n}`)
+				const c = read(`/caret-${n}`)
 				if (!c) return []
 				// the poet's caret only while it writes
-				if (n === "poet" && !get("/writing")) return []
+				if (n === "poet" && !read("/writing")) return []
 				return [{ n, ...ends(c) }]
 			}),
 	)
@@ -181,10 +189,8 @@ export function person(
 	let area: HTMLTextAreaElement
 	let back: HTMLElement
 
-	// a keystroke: what changed between the text and the textarea, as one splice, in code points
-	const splice = () => {
-		const was = read()
-		const now = area.value
+	// what changed between the text and the textarea, as one splice, in code points
+	const splice = (was: string, now: string): [number, number, string] => {
 		let p = 0
 		while (p < was.length && p < now.length && was[p] === now[p]) p++
 		if (p > 0 && low(was.charCodeAt(p))) p--
@@ -216,17 +222,17 @@ export function person(
 		)
 	}
 	// the caret told once the browser has moved it (a key, selectionchange, a click, a drag), as it
-	// is then: never set back from here. unmoved: no call
-	const moved = () => {
-		const now = selection(), was = ends(get(caret))
-		return now.anchor !== was.anchor || now.head !== was.head ? [now.anchor, now.head] : undefined
-	}
-	const tell = handler("on/caret", moved)
+	// is then: never set back from here. the action drops it when it has not moved (nothing is open
+	// as the event is read, so the node cannot be read here)
+	const tell = handler("on/caret", () => {
+		const now = selection()
+		return [now.anchor, now.head]
+	})
 
 	// the text changed. my own change is in the textarea already: nothing is put back. someone
 	// else's: its patches put in place, and my selection, as the textarea has it now, moved through
 	// them (anchor and head each), so a key going on keeps going
-	effect("sync", () => [read(), change(textItem)] as const, ([v, c]) => {
+	createEffect("sync", () => [text(), lastOf(textItem)] as const, ([v, c]) => {
 		if (area.value === v) return
 		// where the reader is: kept, or kept at the bottom if they were there (as a chat log is)
 		const { scrollTop, scrollLeft } = area
@@ -257,18 +263,18 @@ export function person(
 				const now = selection()
 				if (now.anchor !== anchor || now.head !== head) select({ anchor, head })
 				stay()
-				const was = ends(get(caret))
+				const was = mine()
 				if (was.anchor !== anchor || was.head !== head) put({ anchor, head })
 				return
 			}
 		}
 		// out of step (a reload, the first draw): the whole text, and my caret from my node
 		area.value = v
-		select(ends(get(caret)))
+		select(mine())
 		stay()
 	})
 	// the others' selections and carets, drawn behind the text where they are
-	effect("marks", () => [read(), get(others) ?? []] as const, ([v, them]) => {
+	createEffect("marks", () => [text(), read(others) ?? []] as const, ([v, them]) => {
 		back.innerHTML = draw(v, them)
 		back.scrollTop = area.scrollTop
 	})
@@ -286,7 +292,7 @@ export function person(
 				<textarea
 					spellcheck={false}
 					ref={(e) => (area = e)}
-					onInput={handler("/duet/on/type", splice)}
+					onInput={handler("on/input", () => [area.value])}
 					onSelectionchange={tell}
 					onKeyUp={tell}
 					onMouseUp={tell}
@@ -300,49 +306,48 @@ export function person(
 	)
 }
 
-// the poet: types its poem a letter at a time, at its caret, while it is on
-export function poet(
-	{ open, read, edit, method, send, effect, teardown, change: latest, who }: Duet,
-) {
-	const change = lastOf(latest, who)
+// the poet: types its poem a letter at a time, at its caret, while it is on. a timer cannot call
+// into the graph, so the host's timer (host.ts) writes /beat and each beat is a letter
+export function poet() {
 	// the flag and the caret are saved (./writing: the person's view reads it as /writing); the
 	// poem's place is inside, and starts again at a reload
-	const writing = open("./writing", false)
-	const caret = open("./caret-poet", { anchor: 0, head: 0 })
-	const line = open("line", 0)
-	const left = open("left", "")
-	const put = (c: { anchor: number; head: number }) => edit(caret, [{ path: [], value: c }])
-	method("on/toggle", () => {
-		const going = !read(writing)
+	const writing = ensureNode("./writing", false)
+	const caret = ensureNode("./caret-poet", { anchor: 0, head: 0 })
+	const line = ensureNode("line", 0)
+	const left = ensureNode("left", "")
+	const put = (c: { anchor: number; head: number }) => patch(caret, [{ path: [], value: c }])
+	createAction("on/toggle", () => {
+		const going = !peep(() => read(writing))
 		// starting: at the end of the text
 		if (going) {
-			const end = count(read("/text") as string)
+			const end = count(peep(() => read("/text")) as string)
 			put({ anchor: end, head: end })
 		}
-		edit(writing, [{ path: [], value: going }])
+		patch(writing, [{ path: [], value: going }])
 	})
-	method("on/tick", () => {
-		if (!read(writing)) return
-		let rest = read(left) as string
+	createAction("on/tick", () => {
+		if (!peep(() => read(writing))) return
+		let rest = peep(() => read(left)) as string
 		if (!rest) {
-			const n = read(line) as number
+			const n = peep(() => read(line)) as number
 			rest = POEM[n % POEM.length] + "\n"
-			edit(line, [{ path: [], value: n + 1 }])
+			patch(line, [{ path: [], value: n + 1 }])
 		}
 		const ch = [...rest][0]
-		const { head } = ends(read(caret))
-		send("/duet/on/type", head, head, ch)
+		const { head } = ends(peep(() => read(caret)))
+		executeAction("/duet/on/type", head, head, ch)
 		put({ anchor: head + 1, head: head + 1 })
-		edit(left, [{ path: [], value: [...rest].slice(1).join("") }])
+		patch(left, [{ path: [], value: [...rest].slice(1).join("") }])
 	})
-	// a timer writes as the process: the tick is a method only to show up in the graph
-	const every = setInterval(() => send("on/tick"), 120)
-	teardown(() => clearInterval(every))
+	// each beat of the host's timer: the tick, as an action only to show up in the graph
+	createEffect("beat", () => read("/beat"), (_beat, before) => {
+		if (before !== undefined) executeAction("on/tick")
+	})
 	// someone else's edit moves the poet's caret too
-	effect("follow", () => change("/text"), (c, before) => {
+	createEffect("follow", () => lastOf("/text"), (c, before) => {
 		// the first act is a change from before this run (its caller a process that is gone)
 		if (before === undefined || !c || c.caller === "poet") return
-		const { head } = ends(read(caret))
+		const { head } = ends(peep(() => read(caret)))
 		let a = head
 		for (const p of c.patches) a = shift(a, p)
 		if (a !== head) put({ anchor: a, head: a })

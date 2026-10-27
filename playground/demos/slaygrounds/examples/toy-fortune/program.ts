@@ -1,5 +1,13 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import {
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	patch,
+	peep,
+	read,
+} from "@ermine/system"
 import { bind, handler } from "ermine-h"
 
 // toy-fortune: ask a yes/no question, shake the ball. the answer is an async compute: it reads the
@@ -30,10 +38,10 @@ const css = `
 type Ask = { q: string; n: number }
 type Said = { q: string; a: string; n?: number }
 
-export default function program({ open, read, edit, memo, effect, method }: API) {
-	const diary = open("./diary", [{ q: "will this demo be cute?", a: "yes, obviously" }])
-	const shakes = open("./shakes", 0)
-	const asking = open("./asking", null) // the question being thought about: { q, n }
+export default function program() {
+	const diary = ensureNode("./diary", [{ q: "will this demo be cute?", a: "yes, obviously" }])
+	const shakes = ensureNode("./shakes", 0)
+	const asking = ensureNode("./asking", null) // the question being thought about: { q, n }
 	// the nodes' values, as what they hold
 	const said = () => read(diary) as Said[]
 	const asked = () => read(asking) as Ask | null
@@ -41,7 +49,7 @@ export default function program({ open, read, edit, memo, effect, method }: API)
 
 	// the ball thinks: read what it needs first (reads after an await count for nothing), then wait.
 	// pending in its place meanwhile, and what is bound to it says so
-	const answer = memo("answer", () => {
+	const answer = createMemo("answer", () => {
 		const ask = asked()
 		if (!ask) return null
 		// the same question gets a different answer every shake: it is a hash of the shake count
@@ -55,26 +63,28 @@ export default function program({ open, read, edit, memo, effect, method }: API)
 		)
 	})
 	// thinking: asked something it has not answered yet
-	const thinking = memo("thinking", () => {
+	const thinking = createMemo("thinking", () => {
 		const ask = asked()
 		return !!ask && answered()?.n !== ask.n
 	})
-	memo(
+	createMemo(
 		"window",
 		() => read(thinking) ? "…thinking…" : answered()?.a ?? said().at(-1)?.a ?? "ask something",
 	)
-	memo("tally", () => `${said().length} answers given`)
+	createMemo("tally", () => `${said().length} answers given`)
 	// each new answer goes in the diary, once
-	effect("remember", answered, (v) => {
-		if (v) edit(diary, (d: Said[]) => void (d.some((x) => x.n === v.n) || d.push(v)))
+	createEffect("remember", answered, (v) => {
+		if (!v) return
+		const d = peep(() => read(diary)) as Said[]
+		if (!d.some((x) => x.n === v.n)) patch(diary, [{ path: [], value: [...d, v] }])
 	})
 
-	method("on/shake", (q: string) => {
-		const n = (read(shakes) as number) + 1
-		edit(shakes, () => n)
-		edit(asking, () => ({ q, n }))
+	createAction("on/shake", (q: string) => {
+		const n = (peep(() => read(shakes)) as number) + 1
+		patch(shakes, [{ path: [], value: n }])
+		patch(asking, [{ path: [], value: { q, n } }])
 	})
-	method("on/forget", () => edit(diary, (d: Said[]) => void d.splice(0)))
+	createAction("on/forget", () => patch(diary, [{ path: [], value: [] }]))
 
 	// the ball and the input: the elements the jsx made, handed back by ref (a shake wobbles one,
 	// reads and clears the other)

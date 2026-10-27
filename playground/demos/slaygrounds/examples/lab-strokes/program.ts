@@ -1,13 +1,25 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import {
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	patch,
+	peep,
+	read,
+	ref,
+	unplace,
+} from "@ermine/system"
 import { bind, handler } from "ermine-h"
 
 // program.ts: a drawing whose strokes are nodes. strokes/s<id> holds {color, width, points};
 // strokes/order is the list of ids; pen is the colour and width of the next one. a point is added
-// by a patch (produce), not by writing the stroke again. the big canvas and the small one are two
+// by a patch, not by writing the stroke again. the big canvas and the small one are two
 // views of the same nodes; edit this file (reload) and the drawing is still there, because it
 // was never in the program. the strokes can be edited in the graph tab too (change a colour).
 // the canvases are drawn by hand and held with ref; the pen's buttons and the tally are jsx, bound to nodes
+// the pointer is jsx too: a listener of the program's own would have nothing open to write in, so the
+// canvas's events are handlers (on/begin, on/grow, on/end), whose actions write
 const LOOK = `
 body { background: #ffff88; margin: 8px; font-family: Jost, system-ui, sans-serif }
 .lab { display: flex; flex-direction: column; gap: 8px; width: 584px }
@@ -26,16 +38,19 @@ button.on { outline: 2px solid #000; outline-offset: 2px }
 const W = 560, H = 360
 const COLORS = ["#000000", "#ff2284", "#40dcba", "#2269ff"]
 
-export default function program({ open, read, edit, remove, method, effect, memo, ref }: API) {
+export default function program() {
 	// saved under ./, so a reload finds the drawing as it was
-	const order = open("./order", ["seed"])
-	const pen = open("./pen", { color: "#ff2284", width: 4 })
+	const order = ensureNode("./order", ["seed"])
+	const pen = ensureNode("./pen", { color: "#ff2284", width: 4 })
+	// the ids, tracked (for a memo or an effect), and as they are now (an action)
 	const ids = () => read(order) as string[]
+	const now = () => peep(ids)
 	const slot = (id: string) => `./strokes/s${id}`
+	const put = (x: ReturnType<typeof ensureNode>, v: unknown) => patch(x, [{ path: [], value: v }])
 
 	// the first time only: a little flower, so there is something to see
-	if (ids().includes("seed")) {
-		open(slot("seed"), {
+	if (now().includes("seed")) {
+		ensureNode(slot("seed"), {
 			color: "#40dcba",
 			width: 6,
 			points: Array.from({ length: 41 }, (_, i) => {
@@ -48,19 +63,35 @@ export default function program({ open, read, edit, remove, method, effect, memo
 		})
 	}
 
-	// ---- methods: undo, clear, pen. a stroke begins and grows from the pointer's listeners, which
-	// edit directly ----
-	method("on/undo", () => {
-		const last = ids().at(-1)
+	// ---- actions: undo, clear, pen, and the pointer's: a stroke begins, grows and ends ----
+	createAction("on/undo", () => {
+		const last = now().at(-1)
 		if (last === undefined) return
-		edit(order, (d: string[]) => void d.pop())
-		remove(slot(last))
+		put(order, now().slice(0, -1))
+		unplace(slot(last))
 	})
-	method("on/clear", () => {
-		for (const id of ids()) remove(slot(id))
-		edit(order, (d: string[]) => void d.splice(0))
+	createAction("on/clear", () => {
+		for (const id of now()) unplace(slot(id))
+		put(order, [])
 	})
-	method("on/pen", (key: string, value: unknown) => edit(pen, (d: any) => void (d[key] = value)))
+	createAction("on/pen", (key: string, value: unknown) => patch(pen, [{ path: [key], value }]))
+	let live: string | undefined
+	createAction("on/begin", (x: number, y: number) => {
+		const id = crypto.randomUUID().slice(0, 6)
+		ensureNode(slot(id), { ...(peep(() => read(pen)) as object), points: [[x, y]] })
+		put(order, [...now(), id])
+		live = id
+	})
+	createAction("on/grow", (x: number, y: number) => {
+		if (!live) return
+		const points = peep(() => read(slot(live!), ["points"])) as number[][]
+		patch(slot(live), [{
+			path: ["points"],
+			range: [points.length, points.length],
+			value: [[x, y]],
+		}])
+	})
+	createAction("on/end", () => void (live = undefined))
 
 	// ---- the paint: one effect reads the order and each stroke; its act draws both canvases ----
 	const canvas = read(ref(
@@ -91,44 +122,41 @@ export default function program({ open, read, edit, remove, method, effect, memo
 	}
 	// one stroke's value by its id (read, so whoever calls this reruns when it changes)
 	const stroke = (id: string) => read(slot(id))
-	effect("paint", () => ids().map(stroke), (all) => {
+	createEffect("paint", () => ids().map(stroke), (all) => {
 		paint(canvas.getContext("2d")!, all, 1)
 		paint(mini.getContext("2d")!, all, 140 / W)
 	})
 	// the tally: how many strokes and points, a node of its own (bound below)
-	memo("tally", () => {
+	createMemo("tally", () => {
 		const all = ids().map(stroke)
 		const points = all.reduce((n: number, s: any) => n + (s?.points.length ?? 0), 0)
 		return `${all.length} strokes, ${points} points`
 	})
 
-	// ---- the pointer ----
-	let live: string | undefined
+	// ---- the pointer: the canvas's events bubble to the pad, whose handlers run the actions above.
+	// a move not in a stroke sends nothing (no args) ----
 	const at = (e: PointerEvent) => {
 		const r = canvas.getBoundingClientRect()
 		return [Math.round(e.clientX - r.left), Math.round(e.clientY - r.top)]
 	}
-	canvas.onpointerdown = (e) => {
-		canvas.setPointerCapture(e.pointerId)
-		const [x, y] = at(e)
-		const id = crypto.randomUUID().slice(0, 6)
-		open(slot(id), { ...(read(pen) as object), points: [[x, y]] })
-		edit(order, (d: string[]) => void d.push(id))
-		live = id
-	}
-	canvas.onpointermove = (e) => {
-		if (!live) return
-		const [x, y] = at(e)
-		edit(slot(live), (d: any) => void d.points.push([x, y]))
-	}
-	canvas.onpointerup = canvas.onpointercancel = () => (live = undefined)
 
 	// ---- the tools: the pen is a node, so its buttons follow it (bound) ----
 	const lit = (yes: boolean, cls = "") => (yes ? `${cls} on` : cls).trim()
 	return (
 		<div class="lab">
 			<style>{LOOK}</style>
-			<div class="card">{canvas}</div>
+			<div
+				class="card"
+				onPointerDown={handler("on/begin", (e: PointerEvent) => {
+					canvas.setPointerCapture(e.pointerId)
+					return at(e)
+				})}
+				onPointerMove={handler("on/grow", (e: PointerEvent) => live ? at(e) : undefined)}
+				onPointerUp={handler("on/end")}
+				onPointerCancel={handler("on/end")}
+			>
+				{canvas}
+			</div>
 			<div class="row card">
 				{COLORS.map((c) => (
 					<button

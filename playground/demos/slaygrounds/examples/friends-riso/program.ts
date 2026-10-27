@@ -1,5 +1,14 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import {
+	createAction,
+	createMemo,
+	ensureNode,
+	list,
+	patch,
+	peep,
+	read,
+	unplace,
+} from "@ermine/system"
 import { bind, type Bound, type Child, handler, under } from "ermine-h"
 
 // friends-riso: a riso poster for the picnic. type the words, press print. three drums (yellow,
@@ -136,43 +145,50 @@ body { background: #ffff88; margin: 10px }
 .rp .empty { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; color: #0008 }
 `
 
-export default function program({ open, read, edit, remove, list, memo, method }: API) {
-	const words = open("./words", "picnic!")
+// a node's value now, from an action (nothing tracked)
+const get = <T,>(x: Parameters<typeof read>[0]) => peep(() => read(x)) as T
+const put = (x: Parameters<typeof read>[0], value: unknown) => patch(x, [{ path: [], value }])
+
+export default function program() {
+	const words = ensureNode("./words", "picnic!")
 	const drum = Object.fromEntries(
 		DRUMS.map((
 			n,
-		) => [n, open(`./drums/${n}`, { on: true, dx: 0, dy: 0, ink: 100 } satisfies Drum)]),
-	) as Record<Ink, ReturnType<typeof open>>
-	open("./prints")
+		) => [n, ensureNode(`./drums/${n}`, { on: true, dx: 0, dy: 0, ink: 100 } satisfies Drum)]),
+	) as Record<Ink, ReturnType<typeof ensureNode>>
+	ensureNode("./prints")
 	const prints = () => list("./prints")
-	memo("count", () => prints().length)
-
+	createMemo("count", () => prints().length)
 	const wobble = () => Math.round((Math.random() - 0.5) * 12)
-	method("on/words", (w: string) => edit(words, () => w))
+
+	createAction("on/words", (w: string) => put(words, w))
 	// a copy: each drum that is on lays its ink down somewhere a little new, and uses some up
-	method("on/print", () => {
+	createAction("on/print", () => {
 		const layers: Layer[] = []
 		for (const name of DRUMS) {
-			const d = read(drum[name]) as Drum
+			const d = get<Drum>(drum[name])
 			if (!d.on) continue
 			const { colour, cost } = INKS[name]
 			const dx = wobble(), dy = wobble(), ink = Math.max(0, d.ink - cost)
-			edit(drum[name], (x: Drum) => {
-				x.dx = dx
-				x.dy = dy
-				x.ink = ink
-			})
+			patch(drum[name], [
+				{ path: ["dx"], value: dx },
+				{ path: ["dy"], value: dy },
+				{ path: ["ink"], value: ink },
+			])
 			layers.push({ name, colour, dx, dy, strength: d.ink / cost })
 		}
 		// named in order, so the stack is too
-		const n = String(prints().length + 1).padStart(4, "0")
+		const n = String(peep(() => prints().length) + 1).padStart(4, "0")
 		const tilt = Math.round((Math.random() - 0.5) * 14)
-		open(`./prints/copy${n}`, { words: read(words) as string, layers, tilt } satisfies Copy)
+		ensureNode(`./prints/copy${n}`, { words: get<string>(words), layers, tilt } satisfies Copy)
 	})
-	method("on/toggle", (name: Ink) => edit(drum[name], (d: Drum) => void (d.on = !d.on)))
-	method("on/refill", (name: Ink) => edit(drum[name], (d: Drum) => void (d.ink = 100)))
-	method("on/recycle", () => {
-		for (const name of prints()) remove(`./prints/${name}`)
+	createAction(
+		"on/toggle",
+		(name: Ink) => patch(drum[name], [{ path: ["on"], value: !get<Drum>(drum[name]).on }]),
+	)
+	createAction("on/refill", (name: Ink) => patch(drum[name], [{ path: ["ink"], value: 100 }]))
+	createAction("on/recycle", () => {
+		for (const name of peep(() => prints())) unplace(`./prints/${name}`)
 	})
 
 	// the proof: the sheet as the drums are now (where the last copy landed, the ink left)

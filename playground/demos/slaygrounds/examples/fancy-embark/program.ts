@@ -1,5 +1,22 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import {
+	addTeardown,
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	executeAction,
+	hasNode,
+	patch,
+	peep,
+	PENDING,
+	place,
+	read as readNode,
+	readChildren,
+	rename,
+	unplace,
+} from "@ermine/system"
+import { host } from "@ermine/slaygrounds/tools"
 import { bind, each, handler, under } from "ermine-h"
 
 // fancy-embark: a trip plan as a dynamic document, after Ink & Switch's Embark essay. you write an
@@ -24,6 +41,13 @@ import { bind, each, handler, under } from "ermine-h"
 //   /embark/ui/…           focus, hover, the open menu, the card: nodes, so every view reads them
 //   /cache/<api>/<hash>    every lookup's answer, by the hash of its url (the host's)
 // 💡 explain shows what each element is bound to; hover a result to see what its last run read
+// ids: a program names a node by its path, so an item's id is its own name (a random one: the
+// name of its node in its parent's items folder, kept with its path in `known`, which a move
+// updates), a place's is "place:<label>", a date's "date:<label>"; the places' own names are paths
+// (id → path, idFor: path → id). a removal is an unplace. the map and the drags are heard on the
+// outline's root (a plain listener has nothing open to call an action from); the timers (the menu's
+// search settling, the editor's blur, the map's camera) are a memo returning a promise and an
+// effect, or are written at once
 
 // ---- the default trip (seeded once; a reload keeps what you changed) ----
 // where a new place is looked for first: a box around the trip's base (Edinburgh)
@@ -114,7 +138,7 @@ const FNS: Record<string, Fn> = {
 
 // ---- small types ----
 type Id = string
-type E = { readonly id: string; readonly part: "value" }
+type E = { readonly id: string }
 type H = { readonly id: string; readonly path?: string[] }
 type Cam = { lat: number; lon: number; z: number }
 type Geo = {
@@ -144,15 +168,13 @@ type Run = {
 	ended: string
 	error?: string
 	ms?: number
-	values: string[]
+	values: string[][]
 	keys: string[]
 }
 type Host = {
-	lookup: (api: string, url: string) => unknown
-	peek: (api: string, url: string) => any
+	ask: (api: string, url: string) => string
 	retry: (api?: string) => void
-	scoped: <T>(f: () => T) => { value: T; stop: () => void }
-	ended: (fn: (run: Run) => void) => void
+	ended: (action: string) => () => void
 }
 
 // a value's bytes: its JSON. a memo's result is the same when its bytes are (early cutoff)
@@ -166,28 +188,18 @@ const bytes = (v: unknown) => {
 }
 const same = (a: unknown, b: unknown) => a === b || bytes(a) === bytes(b)
 
-export default function program(api: API & Host) {
-	const {
-		open,
-		create,
-		read,
-		entries,
-		edit,
-		remove,
-		unplace,
-		move,
-		memo,
-		effect,
-		method,
-		send,
-		teardown,
-		PENDING,
-		lookup,
-		peek,
-		retry,
-		scoped,
-		ended,
-	} = api
+export default function program() {
+	const { ask, retry, ended } = host<Host>()
+	// what a node holds, as the program takes it (any: its values are its own). what an action reads
+	// is for now: each runs inside peep
+	// deno-lint-ignore no-explicit-any
+	const read = (x: any, key?: readonly (string | number)[]): any => readNode(tg(x), key)
+	const method = (name: string, f: (...a: any[]) => unknown) =>
+		createAction(name, (...a: unknown[]) => peep(() => f(...a)))
+	// the page's events are heard on elements round what is built by hand and call by name
+	// (on/do: name, ...args)
+	createAction("on/do", (name: string, ...args: unknown[]) => executeAction(`on/${name}`, ...args))
+	const onStage = (f: (e: any) => unknown[] | undefined | void) => handler("on/do", f as never)
 	if (!document.getElementById("embark-font")) {
 		document.head.appendChild(Object.assign(document.createElement("link"), {
 			id: "embark-font",
@@ -200,22 +212,45 @@ export default function program(api: API & Host) {
 	// the trip is saved under ./trip (a reload finds it as it was): doc, places, dates, ui. what is
 	// worked out is inside this process (gone at its stop, made again at the next start): index,
 	// menu, suggest, lit, and a result, geo or data memo per formula, place or view
-	// a node by id, for the api; and for h, the same with its names from the root where they are
-	// known (h reads them to say what a binding is of, and asking the graph for them is a walk).
-	// known is kept up as the outline changes: forest() sets it for everything, insert for what it
-	// makes
+	// an id is a name for a path: an item's own name (its node is <parent>/items/<id>), a place's
+	// "place:<label>", a date's "date:<label>", any other node its path joined. known is kept up as
+	// the outline changes: forest() sets it for everything, insert for what it makes
 	const known = new Map<Id, string[]>()
-	const S = (id: Id): E => ({ id, part: "value" })
-	const H = (id: Id): H => ({ id, path: known.get(id) })
 	const pathOf = (id: Id): string[] => {
+		if (id.startsWith("place:")) return ["trip", "places", id.slice(6)]
+		if (id.startsWith("date:")) return ["trip", "dates", id.slice(5)]
 		const p = known.get(id)
 		if (!p) throw new Error(`no path known for ${id}`)
 		return p
 	}
+	// the id of the node at names
+	function idFor(p: string[]): Id {
+		const parent = p[p.length - 2], last = p[p.length - 1]
+		if (parent === "items" || parent === "views") return (known.set(last, p), last)
+		if (p[0] === "trip" && p.length === 3 && p[1] === "places") return `place:${last}`
+		if (p[0] === "trip" && p.length === 3 && p[1] === "dates") return `date:${last}`
+		if (parent === "mentions") {
+			return peep(() => hasNode(["/", "trip", "places", last]))
+				? `place:${last}`
+				: `date:${last}`
+		}
+		const id = p.join("/")
+		known.set(id, p)
+		return id
+	}
+	// a node, as every function here takes it: by its path
+	// deno-lint-ignore no-explicit-any
+	const tg = (x: any): any =>
+		typeof x === "object" && x !== null && !Array.isArray(x) && "id" in x ? abs(pathOf(x.id)) : x
+	// the node for an id, as a target (a path from the root)
+	const S = (id: Id): E => ({ id })
+	// the same, for h: the path to bind
+	const H = (id: Id): string => "/" + pathOf(id).join("/")
 	const abs = (names: string[]) => ["/", ...names]
-	// the node at names, made with value if there is none, as a handle
+	// the node at names, made with value if there is none, as an id
 	function mk(names: string[], value: unknown): E {
-		const id = entries(open(abs(names), value))[0].id as Id
+		ensureNode(abs(names), value)
+		const id = idFor(names)
 		known.set(id, names)
 		return S(id)
 	}
@@ -231,30 +266,65 @@ export default function program(api: API & Host) {
 	const threadsE = mk(["trip", "ui", "threads"], true)
 	const helpE = mk(["trip", "ui", "help"], false)
 	const flowE = mk(["trip", "flow"], {})
+	// the search a menu waits on, settled: { id, q }; the editor that lost the caret: { id, n }
+	const settledE = mk(["trip", "ui", "settled"], null)
+	const blurE = mk(["trip", "ui", "blur"], null)
 	// the memos' folders (inside this process), and the handlers'
-	for (const name of ["result", "geo", "data", "map"]) open(name, null)
+	for (const name of ["result", "geo", "data", "map"]) ensureNode(name)
 	// the memos, by name: the ones the views bind (the process is at /embark)
 	const IX = "/embark/index"
 	const memoAt = (kind: "result" | "geo" | "data", id: Id) => `/embark/${kind}/${id}`
 
+	// ---- a lookup: the answer to a url is the node at /cache/<api>/<key> (the host's). not there
+	// yet: the host is asked (it queues the request) and the run waits (PENDING, which read throws
+	// for a node that is not there: the run had read the place, so it runs again when the answer
+	// lands). a failure lands as a node too ----
+	type Entry = { result?: unknown; error?: string; from?: string; at?: string; ms?: number }
+	function peek(api: string, url: string):
+		| { result: unknown; from?: string; at?: string; ms?: number }
+		| { waiting: true }
+		| { error: string; at?: string } {
+		const key = ask(api, url)
+		// a read of a node that is not there waits, and says so in the graph (a wait recorded): a peek
+		// never waits, so it asks whether the node is there first (a tracked check)
+		const at = `/cache/${api}/${key}`
+		if (!hasNode(at)) return { waiting: true }
+		const v: Entry | undefined = read(at)
+		if (v?.error !== undefined) return { error: v.error, at: v.at }
+		return { result: v?.result, from: v?.from, at: v?.at, ms: v?.ms }
+	}
+	function lookup(api: string, url: string) {
+		const out = peek(api, url)
+		if ("error" in out) throw new Error(out.error)
+		if ("waiting" in out) throw PENDING
+		return out.result
+	}
+
 	// ---- reading the outline (tracked inside a run) ----
 	const get = (x: { id: Id }): any => read(S(x.id))
 	// what a memo holds: its value, or nothing yet (it is out), never PENDING thrown
-	const val = (names: string[]): any => entries(names)[0]?.value
+	const val = (names: string[]): any => {
+		try {
+			return readNode(names.join("/"))
+		} catch (e) {
+			if (e === PENDING) return undefined
+			throw e
+		}
+	}
 	const textOf = (id: Id): string => {
 		const v = get({ id })
 		return typeof v?.text === "string" ? v.text : ""
 	}
 	// the id under a name in a node, and every name in it
 	const kidAt = (id: Id, name: string): Id | undefined => {
-		const k = read({ id, part: "children" }, [name])
-		return typeof k === "string" ? k : undefined
+		const p = pathOf(id)
+		return name in readChildren(["/", ...p]) ? idFor([...p, name]) : undefined
 	}
 	const membersOf = (id: Id): { name: string; id: Id }[] => {
-		const v = read({ id, part: "children" }) as Record<string, unknown> | undefined
-		return Object.entries(v ?? {}).filter(([, k]) => typeof k === "string").map(([name, k]) => ({
+		const p = pathOf(id)
+		return Object.keys(readChildren(["/", ...p])).map((name) => ({
 			name,
-			id: k as Id,
+			id: idFor([...p, name]),
 		}))
 	}
 	// an item's items: a folder at <item>/items holding each one at its own id; places keeps no
@@ -294,9 +364,19 @@ export default function program(api: API & Host) {
 		}
 	}
 	// writing the outline (in methods): a new item, a move, a take-away, keeping the order
-	const put = (x: { id: Id }, value: unknown) => edit(S(x.id), [{ path: [], value }])
+	const put = (x: { id: Id }, value: unknown) => patch(tg(x), [{ path: [], value }])
 	const setAt = (x: { id: Id }, path: string[], value: unknown) =>
-		edit(S(x.id), [value === undefined ? { path } : { path, value }])
+		patch(tg(x), [value === undefined ? { path } as never : { path, value }])
+	// an order's patches: one id in at index, out, or moved to another place in it
+	const orderIn = (x: { id: Id }, id: Id, index?: number) => {
+		const n = (read(x) as Id[]).length
+		const at = index === undefined ? n : Math.max(0, Math.min(index, n))
+		patch(tg(x), [{ path: [], range: [at, at], value: [id] }])
+	}
+	const orderOut = (x: { id: Id }, id: Id) => {
+		const at = (read(x) as Id[]).indexOf(id)
+		if (at >= 0) patch(tg(x), [{ path: [], range: [at, at + 1] } as never])
+	}
 	function folder(id: Id, name: string): E {
 		const there = kidAt(id, name)
 		if (there) return (known.set(there, [...pathOf(id), name]), S(there))
@@ -304,40 +384,47 @@ export default function program(api: API & Host) {
 	}
 	function insert(parent: Id, name: string, value: unknown, index?: number): Id {
 		const f = folder(parent, name)
-		const made = create(abs(pathOf(f.id)), value).path!
-		const id = made[made.length - 1]
+		const id = crypto.randomUUID()
+		const made = [...pathOf(f.id), id]
+		ensureNode(abs(made), value)
 		known.set(id, made)
-		edit(f, (order: Id[]) => void order.splice(index ?? order.length, 0, id))
+		orderIn(f, id, index)
 		return id
 	}
 	const clamp = (n: number, len: number) => Math.max(0, Math.min(n, len))
 	function shift(id: Id, from: Id, to: Id, index: number) {
 		const src = folder(from, "items")
 		if (from === to) {
-			return edit(src, (order: Id[]) => {
-				order.splice(order.indexOf(id), 1)
-				order.splice(clamp(index, order.length), 0, id)
-			})
+			const order = read(src) as Id[]
+			const was = order.indexOf(id)
+			if (was < 0) return
+			// the item out, back in at index counted without it: one move
+			const at = clamp(index, order.length - 1)
+			return patch(tg(src), [{
+				path: [],
+				range: [at, at],
+				move: { path: [], range: [was, was + 1] },
+			}])
 		}
 		const into = folder(to, "items")
-		move(abs([...pathOf(src.id), id]), abs([...pathOf(into.id), id]))
-		edit(src, (order: Id[]) => void order.splice(order.indexOf(id), 1))
-		edit(into, (order: Id[]) => void order.splice(clamp(index, order.length), 0, id))
+		rename(abs([...pathOf(src.id), id]), abs([...pathOf(into.id), id]))
+		orderOut(src, id)
+		orderIn(into, id, index)
 		forest() // its subtree is somewhere else now
 	}
 	function cut(parent: Id, name: string, id: Id) {
 		const f = folder(parent, name)
-		edit(f, (order: Id[]) => void order.splice(order.indexOf(id), 1))
+		orderOut(f, id)
 		gone(id, [...pathOf(f.id), id])
 	}
 	// a node and everything under it taken out (unplaced from where it is, then deleted). a mentions
 	// folder holds placements of nodes that live elsewhere: it goes, what is in it stays
 	function gone(id: Id, names?: string[]) {
 		for (const k of membersOf(id)) {
-			if (k.name === "mentions") remove({ id: k.id, part: "value" })
+			if (k.name === "mentions") unplace(abs(pathOf(k.id)))
 			else gone(k.id)
 		}
-		remove(names ? abs(names) : { id, part: "value" })
+		unplace(abs(names ?? pathOf(id)))
 		known.delete(id)
 	}
 	// the whole forest: the document and every place's own items. parent and children of each
@@ -367,7 +454,7 @@ export default function program(api: API & Host) {
 	forest()
 
 	// ---- seed, the first time only ----
-	if (read("/trip/seeded") === undefined) {
+	if (!hasNode("/trip/seeded")) {
 		for (const [name, p] of Object.entries(PLACES)) {
 			mk(["trip", "places", name], { name, query: p.query, near: NEAR, pick: p.pick })
 		}
@@ -383,7 +470,7 @@ export default function program(api: API & Host) {
 		for (const id of forest().root.keys()) {
 			if (parseLine(textOf(id)).formula !== undefined) remember(id)
 		}
-		open("/trip/seeded", new Date().toISOString())
+		ensureNode("/trip/seeded", new Date().toISOString())
 	}
 
 	// ---- mentions: a token @[label] is the node at places/<label> (or dates/<label>), mounted
@@ -408,13 +495,13 @@ export default function program(api: API & Host) {
 		}
 		const have = new Set(membersOf(f.id).map((m) => m.name))
 		for (const [label, node] of want) {
-			if (!have.has(label)) api.place(abs([...pathOf(f.id), label]), S(node))
+			if (!have.has(label)) place(abs([...pathOf(f.id), label]), abs(pathOf(node)))
 		}
 	}
 
 	// ---- the index: one walk of the forest. colour and icon resolve up the tree (a day's colour
 	// is its items'), who mentions which place and date, the formulas, the views ----
-	memo("index", () =>
+	createMemo("index", () =>
 		attempt(() => {
 			const f = forest()
 			const out = {
@@ -839,29 +926,10 @@ export default function program(api: API & Host) {
 	}
 
 	// ---- the parts the outline needs, made and taken away as it changes ----
-	// a memo per formula (result/<id>), place (geo/<id>) and view (data/<id>), each made in a scope of
-	// its own (scoped) so one can go without the rest; a map view also has an effect drawing it
-	const live = {
-		formulas: new Map<Id, () => void>(),
-		places: new Map<Id, () => void>(),
-		views: new Map<Id, { stop: () => void; kind: string }>(),
-	}
-	// a memo's node id -> what it is of, for the threads (what a run read, named)
-	const owners = new Map<string, { kind: "result" | "geo" | "data"; of: Id }>()
-	const nodeId = (n: unknown) => String(entries(n as never)[0]?.id)
-	function dropView(view: Id) {
-		live.views.get(view)?.stop()
-		live.views.delete(view)
-	}
-	function dropFormula(id: Id) {
-		live.formulas.get(id)?.()
-		live.formulas.delete(id)
-	}
-	function dropPlace(id: Id) {
-		live.places.get(id)?.()
-		live.places.delete(id)
-	}
-	effect(
+	// a memo per formula (result/<id>), place (geo/<id>) and view (data/<id>), made by this effect: it
+	// makes each one the outline wants, again at each run (the same node, its function made again),
+	// and one it no longer makes is gone with the run; a map view also has an effect drawing it
+	createEffect(
 		"running",
 		() => {
 			const x = ix()
@@ -873,57 +941,29 @@ export default function program(api: API & Host) {
 		},
 		(want) => {
 			for (const id of want.formulas) {
-				if (live.formulas.has(id)) continue
-				const { value: made, stop } = scoped(() =>
-					memo(["result", id], () => attempt(() => runFormula(id)), { equal: same })
-				)
-				owners.set(nodeId(made), { kind: "result", of: id })
-				live.formulas.set(id, stop)
-			}
-			for (const id of [...live.formulas.keys()]) {
-				if (!want.formulas.includes(id)) dropFormula(id)
+				createMemo(["result", id], () => attempt(() => runFormula(id)), { equal: same })
 			}
 			for (const id of want.places) {
-				if (live.places.has(id)) continue
-				const { value: made, stop } = scoped(() =>
-					memo(["geo", id], () => attempt(() => runGeo(id)), { equal: same })
-				)
-				owners.set(nodeId(made), { kind: "geo", of: id })
-				live.places.set(id, stop)
+				createMemo(["geo", id], () => attempt(() => runGeo(id)), { equal: same })
 			}
-			for (const id of [...live.places.keys()]) {
-				if (!want.places.includes(id)) dropPlace(id)
-			}
-			const views = new Set(want.views.map(([v]) => v))
 			for (const [view, item, kind] of want.views) {
-				const was = live.views.get(view)
-				if (was?.kind === kind) continue
-				if (was) dropView(view)
-				const { value: made, stop } = scoped(() => {
-					const data = memo(["data", view], () => attempt(() => viewData(kind, item)), {
-						equal: same,
-					})
-					// a drawing: what it reads is stashed, and the value it keeps is a count (a map's
-					// data is not worth writing again for each hover)
+				createMemo(["data", view], () => attempt(() => viewData(kind, item)), { equal: same })
+				// a drawing: what it reads is stashed, and the value it keeps is a count (a map's
+				// data is not worth writing again for each hover)
+				if (kind === "map") {
 					let stash: unknown, count = 0
-					if (kind === "map") {
-						effect(
-							["map", view],
-							() => (stash = {
-								data: val(["data", view]),
-								lit: val(["lit"]),
-								view: read(S(view)),
-							},
-								++count),
-							() => mapFor(view).set(stash),
-						)
-					}
-					return data
-				})
-				owners.set(nodeId(made), { kind: "data", of: view })
-				live.views.set(view, { stop, kind })
+					createEffect(
+						["map", view],
+						() => (stash = {
+							data: val(["data", view]),
+							lit: val(["lit"]),
+							view: read(S(view)),
+						},
+							++count),
+						() => mapFor(view).set(stash),
+					)
+				}
 			}
-			for (const view of [...live.views.keys()]) if (!views.has(view)) dropView(view)
 		},
 		{ equal: same },
 	)
@@ -1096,7 +1136,7 @@ export default function program(api: API & Host) {
 	}
 
 	// ---- the menus: what @ and / offer, with previews (a compute: previews look things up) ----
-	memo("menulist", () =>
+	createMemo("menulist", () =>
 		attempt(() => {
 			const m = read(menuE) as any
 			if (!m) return null
@@ -1134,7 +1174,8 @@ export default function program(api: API & Host) {
 				})
 			}
 		}
-		const settled = String(m.settled ?? "").trim()
+		const s = read(settledE) as { id: Id; q: string } | null
+		const settled = String(s && s.id === m.id ? s.q : "").trim()
 		if (settled.length >= 3) {
 			const where = near()
 			const found = peek("geocode", nominatim(settled, where)) as any
@@ -1317,7 +1358,7 @@ export default function program(api: API & Host) {
 		const have = new Set(nearby.map((k) => parseLine(textOf(k)).formula?.replace(/\s+/g, "")))
 		return out.filter((x) => !have.has(x.text.slice(1).replace(/\s+/g, "")))
 	}
-	memo("suggest", () =>
+	createMemo("suggest", () =>
 		attempt(() => {
 			const focus = read(focusE) as any
 			if (!focus?.id) return null
@@ -1385,7 +1426,7 @@ export default function program(api: API & Host) {
 		const rels = relationsOf(fid, f).map((r) => ({ ...r, tok: toks[r.i] }))
 		if (!rels.some((r) => r.rel !== "fixed") || G === undefined) return []
 		const fn = /^\s*([A-Z]\w*)\s*\(/.exec(line.formula)?.[1]
-		const out: { parent: Id; index: number; text: string; label: string }[] = []
+		const out: { parent: Id; index: number; text: string; label: string; made?: any }[] = []
 		for (const C of f.kids.get(G) ?? []) {
 			if (C === P || parseLine(textOf(C)).name) continue
 			let formula = line.formula
@@ -1419,29 +1460,39 @@ export default function program(api: API & Host) {
 		return out
 	}
 
-	// ---- what each part's last run read (the host's ended, the scheduler's ends moment) ----
-	ended((r) => {
-		if (!["result", "geo", "data"].includes(r.name)) return
-		const of = r.of as Id
-		const values = new Set(r.values)
-		values.delete(of)
-		const was = (read(flowE) ?? {}) as Record<string, any>
-		const now = {
-			run: r.run,
-			ended: r.ended,
-			ms: r.ms,
-			values: [...values],
-			keys: r.keys,
-			error: r.error,
-		}
-		const unchanged = was[of] &&
-			JSON.stringify({ ...was[of], run: 0, ms: 0 }) === JSON.stringify({ ...now, run: 0, ms: 0 })
-		if (!unchanged) edit(flowE, [{ path: [of], value: now }])
-	})
+	// ---- what each part's last run read (the host's ended, the scheduler's ends moment): the host
+	// runs on/ran with each memo's run that ends, its reads as paths, so this names them (a part's
+	// own memo by what it is of; any other node by its id) ----
+	createAction("on/ran", (r: Run) =>
+		peep(() => {
+			if (!["result", "geo", "data"].includes(r.name)) return
+			const of = r.of as Id
+			const ids = new Set<string>()
+			for (const p of r.values) {
+				if (p[0] === "embark" && ["result", "geo", "data"].includes(p[1])) {
+					if (p[1] !== "data") ids.add(p[2])
+				} else if (p[0] === "trip") ids.add(idFor(p))
+			}
+			ids.delete(of)
+			const was = (read(flowE) ?? {}) as Record<string, any>
+			const now = {
+				run: r.run,
+				ended: r.ended,
+				ms: r.ms,
+				values: [...ids],
+				keys: r.keys,
+				error: r.error,
+			}
+			const unchanged = was[of] &&
+				JSON.stringify({ ...was[of], run: 0, ms: 0 }) ===
+					JSON.stringify({ ...now, run: 0, ms: 0 })
+			if (!unchanged) patch(tg(flowE), [{ path: [of], value: now }])
+		}))
+	addTeardown(ended("/embark/on/ran"))
 
 	// ---- lit: what a hover touches, in every view: an item and its places, a place and the items
 	// mentioning it, a formula and everything its last run read ----
-	memo("lit", () =>
+	createMemo("lit", () =>
 		attempt(() => {
 			const h = (read(hoverE) ?? {}) as any
 			const x = ix()
@@ -1462,10 +1513,7 @@ export default function program(api: API & Host) {
 				routes.add(h.formula)
 				const flow = (read(flowE) as any)?.[h.formula]
 				for (const v of flow?.values ?? []) {
-					const o = owners.get(v)
-					if (o?.kind === "result") items.add(o.of)
-					else if (o?.kind === "geo") places.add(o.of)
-					else if (x.kinds?.[v]) places.add(v)
+					if (v.startsWith("place:") || v.startsWith("date:") || x.kinds?.[v]) places.add(v)
 					else items.add(v)
 				}
 			}
@@ -1517,8 +1565,6 @@ export default function program(api: API & Host) {
 		const where = locate(id)
 		if (!where) return
 		for (const x of subtree(where.f, id)) {
-			dropFormula(x)
-			for (const v of ix().views ?? []) if (v.item === x) dropView(v.view)
 		}
 		cut(where.parent, "items", id)
 	}
@@ -1535,7 +1581,6 @@ export default function program(api: API & Host) {
 		if ((read(S(parent)) as any)?.open === false) setAt(S(parent), ["open"], true)
 	}
 	// the menu for what is just before the caret: @query or /query
-	let settleTimer = 0
 	function menuFor(id: Id, text: string, caret: number) {
 		const before = text.slice(0, caret)
 		const was = read(menuE) as any
@@ -1547,17 +1592,25 @@ export default function program(api: API & Host) {
 			m = { kind: "/", id, from: sl.index + sl[1].length, to: caret, query: sl[2], sel: 0 }
 		}
 		if (m && was?.kind === m.kind && was.id === id && was.from === m.from) {
-			m.settled = was.settled
 			m.sel = was.query === m.query ? was.sel : 0
 		}
 		if (JSON.stringify(m) !== JSON.stringify(was)) put(menuE, m)
-		if (m?.kind === "@" && m.query !== was?.query) {
-			clearTimeout(settleTimer)
-			const q = m.query
-			// a search waits until typing stops (Nominatim: one request a second at most)
-			settleTimer = setTimeout(() => send("on/settle", id, q), 650)
-		}
 	}
+	// a search waits until typing stops (Nominatim: one request a second at most): a memo gives the
+	// query 650ms after it last changed (a promise; the memo runs again with each keystroke), and
+	// an effect writes it where the menu looks (settledE)
+	createMemo("asked", () => {
+		const m = read(menuE) as any
+		return m?.kind === "@" ? { id: m.id, q: String(m.query ?? "") } : null
+	}, { equal: same })
+	const settling = createMemo("settling", () => {
+		const m = val(["asked"])
+		if (!m) return null
+		return new Promise<{ id: Id; q: string }>((done) => setTimeout(() => done(m), 650))
+	})
+	createEffect("settle", () => read(settling), (v) => {
+		if (v) put(settledE, v)
+	})
 	function pick(m, e) {
 		if (!e || e.kind === "wait") return
 		const text = textOf(m.id)
@@ -1628,10 +1681,6 @@ export default function program(api: API & Host) {
 	method("on/text", (id: Id, text: string, caret: number) => {
 		setText(id, text)
 		menuFor(id, text, caret)
-	})
-	method("on/settle", (id: Id, q: string) => {
-		const m = read(menuE) as any
-		if (m?.kind === "@" && m.id === id && m.query === q) setAt(menuE, ["settled"], q)
 	})
 	method("on/focus", (id: Id, at?: number) => {
 		const m = read(menuE) as any
@@ -1788,7 +1837,6 @@ export default function program(api: API & Host) {
 	method("on/unview", (view: Id) => {
 		const v = (ix().views ?? []).find((x) => x.view === view)
 		if (!v) return
-		dropView(view)
 		cut(v.item, "views", view)
 	})
 	method("on/camera", (view: Id, cam: Cam | null) => setAt(S(view), ["camera"], cam))
@@ -1823,6 +1871,11 @@ export default function program(api: API & Host) {
 			row?.animate(GLOW, 1100)
 		})
 	})
+	// a click on a place of a map: its card, and its first item selected
+	method("on/pin", (place: Id, x: number, y: number, item?: Id) => {
+		put(cardE, { place, x, y })
+		if (item) executeAction("on/select", item)
+	})
 	method("on/retry", (api?: string) => retry(api))
 	method("on/threads", () => put(threadsE, !read(threadsE)))
 	method("on/help", () => put(helpE, !read(helpE)))
@@ -1846,7 +1899,6 @@ export default function program(api: API & Host) {
 		}
 		const p = placeList().find((x) => x.id === place)
 		if (!p) return
-		dropPlace(place)
 		gone(place, ["trip", "places", p.name])
 		put(cardE, null)
 	})
@@ -1854,7 +1906,7 @@ export default function program(api: API & Host) {
 	// ---- the outline's marks: which row is being edited, what is lit, the caret, the threads.
 	// an effect drawing on the page (no node of its own) ----
 	let lastN = -1
-	effect(
+	createEffect(
 		"marks",
 		() => ({ focus: read(focusE), lit: val(["lit"]), threads: read(threadsE) }),
 		(v: any) => queueMicrotask(() => marks(v)),
@@ -1885,11 +1937,11 @@ export default function program(api: API & Host) {
 				ta.closest(".row")?.scrollIntoView({ block: "nearest" })
 			}
 		}
-		place()
+		trayAt()
 		threads(v)
 	}
 	// the tray sits in the outline's margin beside the item being edited
-	function place() {
+	function trayAt() {
 		const tray = document.querySelector<HTMLElement>(".tray")
 		const id = tray?.dataset.for
 		const row = id ? document.querySelector<HTMLElement>(`li.it[data-id="${id}"] > .row`) : null
@@ -1931,13 +1983,13 @@ export default function program(api: API & Host) {
 		svg.innerHTML = paths ? paths + `<path class="head" d="M22 ${end} l-7 -4 v8 z"/>` : ""
 	}
 	const relay = () => {
-		place()
+		trayAt()
 		threads({ lit: lastLit, threads: true })
 	}
 	let lastLit: any
-	effect("threads", () => val(["lit"]), (v) => (lastLit = v), { equal: same })
+	createEffect("threads", () => val(["lit"]), (v) => (lastLit = v), { equal: same })
 	addEventListener("resize", relay)
-	teardown(() => removeEventListener("resize", relay))
+	addTeardown(() => removeEventListener("resize", relay))
 
 	// ---- the views ----
 	// a row's text, shown: properties, a formula's result, a time, mentions as chips. each piece
@@ -2011,9 +2063,9 @@ export default function program(api: API & Host) {
 	function Mention({ label, end }: { label: string; end: number }) {
 		return (
 			<span class="m" data-at={end} data-label={label}>
-				{each([H(placesE.id), label], (it) => <PlaceChip item={it} label={label} />)}
+				{each(`${H(placesE.id)}/${label}`, () => <PlaceChip label={label} />)}
 				{each(
-					[H(datesE.id), label],
+					`${H(datesE.id)}/${label}`,
 					() => (
 						<span class="chip date" title="a date: its node is /embark/dates">
 							📅 {label}
@@ -2031,8 +2083,8 @@ export default function program(api: API & Host) {
 			</span>
 		)
 	}
-	function PlaceChip({ item, label }: { item: any; label: string }) {
-		const id = item.id as Id
+	function PlaceChip({ label }: { label: string }) {
+		const id = `place:${label}` as Id
 		return (
 			<span
 				class="chip place"
@@ -2129,8 +2181,7 @@ export default function program(api: API & Host) {
 	}
 
 	// one outline item: its row (shown, or edited), its inline views, its items
-	function Item({ item }: { item: any }) {
-		const id = item.id as Id
+	function Item({ id }: { id: Id }) {
 		const e = H(id)
 		return (
 			<li
@@ -2150,8 +2201,8 @@ export default function program(api: API & Host) {
 		return (
 			<ul class="kids">
 				{bind(
-					[H(id), "items"],
-					(order) => (Array.isArray(order) ? order : []).map((k) => <Item item={H(k)} />),
+					`${H(id)}/items`,
+					(order) => (Array.isArray(order) ? order : []).map((k) => <Item key={k} id={k} />),
 				)}
 			</ul>
 		)
@@ -2160,7 +2211,7 @@ export default function program(api: API & Host) {
 	function Views({ id }: { id: Id }) {
 		return (
 			<div class="views">
-				{bind([H(id), "views"], (order) =>
+				{bind(`${H(id)}/views`, (order) =>
 					(Array.isArray(order) ? order : []).map((v) => (
 						<div key={v}>
 							{bind(H(v), (spec) => (!spec || spec.where === "side"
@@ -2211,8 +2262,7 @@ export default function program(api: API & Host) {
 									? [id, ev.target.value, ev.target.selectionStart]
 									: undefined),
 							)}
-							onBlur={() =>
-								blurred(id)}
+							onBlur={handler("on/blurred", [id])}
 						/>
 					</div>
 				</div>
@@ -2259,22 +2309,36 @@ export default function program(api: API & Host) {
 			</div>
 		)
 	}
+	// the menu as the effect last saw it: the editor's keys are read with nothing open, so no node is
+	let menuNow: any = null
+	createEffect("menu-copy", () => read(menuE), (m) => void (menuNow = m))
+	let cardNow: any = null
+	createEffect("card-copy", () => read(cardE), (c) => void (cardNow = c))
 	// the editor lost the caret: a moment later, unless an editor for the same item has it again (a
-	// move or an indent draws the row anew: the old textarea goes, and the browser says blur)
-	function blurred(id: Id) {
-		setTimeout(() => {
-			const ta = document.querySelector(`textarea[data-ed="${id}"]`)
-			if (ta && document.activeElement === ta) return
-			if (document.activeElement?.closest?.(".menu, .tray, .card")) return
-			if ((read(focusE) as any)?.id === id) send("on/blur", id)
-		}, 150)
-	}
+	// move or an indent draws the row anew: the old textarea goes, and the browser says blur). the
+	// blur is a node, a memo gives it 150ms later (a promise), and an effect checks the page
+	let blurN = 0
+	method("on/blurred", (id: Id) => put(blurE, { id, n: ++blurN }))
+	const blurring = createMemo("blurring", () => {
+		const b = read(blurE) as { id: Id; n: number } | null
+		return b ? new Promise<{ id: Id; n: number }>((done) => setTimeout(() => done(b), 150)) : null
+	})
+	createEffect("blurred", () => read(blurring), (b) => {
+		if (!b) return
+		const id = b.id
+		const ta = document.querySelector(`textarea[data-ed="${id}"]`)
+		if (ta && document.activeElement === ta) return
+		if (document.activeElement?.closest?.(".menu, .tray, .card")) return
+		peep(() => {
+			if ((read(focusE) as any)?.id === id) (put(focusE, null), put(menuE, null))
+		})
+	})
 	// a key in the editor: the ones the outline takes (the default prevented), else none
 	function keys(ev: KeyboardEvent, id: Id) {
 		const ta = ev.target as HTMLTextAreaElement
 		const at = ta.selectionStart, end = ta.selectionEnd, text = ta.value
 		const take = (...args: unknown[]) => (ev.preventDefault(), [id, ...args])
-		if ((read(menuE) as any)?.id === id) {
+		if ((menuNow as any)?.id === id) {
 			if (ev.key === "ArrowDown") return take("menu-down")
 			if (ev.key === "ArrowUp") return take("menu-up")
 			if (ev.key === "Enter" || ev.key === "Tab") return take("menu-pick")
@@ -2313,6 +2377,20 @@ export default function program(api: API & Host) {
 	}
 
 	// ---- drag a bullet: a line shows where it goes (after a row, at a depth by the pointer) ----
+	// a drag goes on past the element it started on: the outline's root keeps the pointer (capture)
+	// and says each move and the end (a plain listener has nothing open to call an action from)
+	type Gesture = {
+		move?: (e: PointerEvent) => void
+		up: (e: PointerEvent) => unknown[] | undefined
+	}
+	let gesture: Gesture | undefined
+	let root: HTMLElement | undefined
+	const hold = (down: PointerEvent, g: Gesture) => {
+		gesture = g
+		try {
+			root?.setPointerCapture(down.pointerId)
+		} catch { /* a script's pointer */ }
+	}
 	let dragging: { id: Id; line: HTMLElement; target?: { parent: Id; index: number } } | undefined
 	function drag(down: PointerEvent, id: Id) {
 		down.preventDefault()
@@ -2372,16 +2450,13 @@ export default function program(api: API & Host) {
 			line.style.left = `${left - box.left}px`
 		}
 		const up = () => {
-			removeEventListener("pointermove", move)
-			removeEventListener("pointerup", up)
 			li.classList.remove("dragged")
 			line.remove()
 			const target = dragging?.target
 			dragging = undefined
-			if (target) send("on/move", id, target.parent, target.index)
+			if (target) return ["move", id, target.parent, target.index]
 		}
-		addEventListener("pointermove", move)
-		addEventListener("pointerup", up)
+		hold(down, { move, up })
 	}
 
 	// ---- a view: its header, then the map, calendar or table drawn from its data node ----
@@ -2421,7 +2496,18 @@ export default function program(api: API & Host) {
 							class="mapbox"
 							data-markers={bind(data, (d) => String(d?.markers?.length ?? 0))}
 						>
-							{mapFor(view).wrap}
+							<div
+								class="mapevents"
+								onPointerDown={onStage(mapFor(view).down)}
+								onPointerMove={onStage(mapFor(view).move)}
+								onPointerLeave={onStage(mapFor(view).leave)}
+								onPointerUp={onStage(mapFor(view).up)}
+								onWheel={onStage(mapFor(view).wheel)}
+								onDblClick={onStage(mapFor(view).dblclick)}
+								onClick={onStage(mapFor(view).click)}
+							>
+								{mapFor(view).wrap}
+							</div>
 						</div>
 					)
 					: spec.kind === "calendar"
@@ -2519,20 +2605,17 @@ export default function program(api: API & Host) {
 			el.classList.add("moving")
 		}
 		const up = () => {
-			removeEventListener("pointermove", move)
-			removeEventListener("pointerup", up)
 			el.classList.remove("moving")
 			if (by) {
-				send(
-					"on/time",
+				return [
+					"time",
 					e.id,
 					Math.max(0, e.start + by),
 					e.open ? undefined : Math.min(24 * 60, e.end + by),
-				)
+				]
 			}
 		}
-		addEventListener("pointermove", move)
-		addEventListener("pointerup", up)
+		hold(down, { move, up })
 	}
 	function tableView(d: any) {
 		if (!d) return null
@@ -2588,7 +2671,7 @@ export default function program(api: API & Host) {
 	// ---- the map: a canvas per map view, drawn from its data, OpenStreetMap's tiles under it ----
 	const tiles = new Map<string, { img: HTMLImageElement; ok?: boolean; bad?: boolean }>()
 	const maps = new Map<Id, ReturnType<typeof makeMap>>()
-	teardown(() => maps.forEach((m) => m.stop()))
+	addTeardown(() => maps.forEach((m) => m.stop()))
 	function mapFor(view: Id) {
 		if (!maps.has(view)) maps.set(view, makeMap(view))
 		return maps.get(view)!
@@ -2614,20 +2697,16 @@ export default function program(api: API & Host) {
 			cancelAnimationFrame(frame)
 			frame = requestAnimationFrame(draw)
 		}
-		const button = (label: string, title: string, f: () => void) => {
+		// the buttons are heard with the rest of the map's events (below): each says what it is
+		const button = (label: string, title: string, act: string) => {
 			const b = ctl.appendChild(document.createElement("button"))
 			b.textContent = label
 			b.title = title
-			b.onclick = f
+			b.dataset.act = act
 		}
-		button("+", "zoom in", () => zoom(1))
-		button("−", "zoom out", () => zoom(-1))
-		button("⤢", "fit everything (forget where you moved it)", () => {
-			user = false
-			cam = undefined
-			send("on/camera", view, null)
-			redraw()
-		})
+		button("+", "zoom in", "in")
+		button("−", "zoom out", "out")
+		button("⤢", "fit everything (forget where you moved it)", "fit")
 		const size = () => [canvas.clientWidth, canvas.clientHeight] as const
 		function fit(): Cam {
 			const pts: [number, number][] = [
@@ -2674,13 +2753,9 @@ export default function program(api: API & Host) {
 			void k
 			user = true
 			redraw()
-			keepCamera()
 		}
-		let keepTimer = 0
-		const keepCamera = () => {
-			clearTimeout(keepTimer)
-			keepTimer = setTimeout(() => send("on/camera", view, cam), 500)
-		}
+		// the camera is kept at once (it was after half a second without a move: a timer cannot call)
+		const keepCamera = () => ["camera", view, cam]
 		function tile(z: number, x: number, y: number) {
 			const k = `${z}/${x}/${y}`
 			let it = tiles.get(k)
@@ -2688,10 +2763,10 @@ export default function program(api: API & Host) {
 				const img = new Image()
 				it = { img }
 				tiles.set(k, it)
-				img.onload = () => ((it.ok = true), maps.forEach((m) => m.redraw()))
-				img.onerror = () => ((it.bad = true), maps.forEach((m) => m.redraw()))
+				img.onload = () => ((it!.ok = true), maps.forEach((m) => m.redraw()))
+				img.onerror = () => ((it!.bad = true), maps.forEach((m) => m.redraw()))
 				img.src = `https://tile.openstreetmap.org/${k}.png`
-				if (tiles.size > 600) tiles.delete(tiles.keys().next().value)
+				if (tiles.size > 600) tiles.delete(tiles.keys().next().value!)
 			}
 			return it
 		}
@@ -2833,11 +2908,14 @@ export default function program(api: API & Host) {
 			}
 			return {}
 		}
-		canvas.addEventListener("pointerdown", (ev) => {
+		// the map's events are heard on the element round it (nothing is open in a plain listener to
+		// call an action from): each says the call it makes, or none
+		const down = (ev: PointerEvent) => {
+			if (ev.target !== canvas) return
 			canvas.setPointerCapture(ev.pointerId)
 			pan = { x: ev.clientX, y: ev.clientY, cam: { ...camera() }, moved: false }
-		})
-		canvas.addEventListener("pointermove", (ev) => {
+		}
+		const move = (ev: PointerEvent) => {
 			if (pan) {
 				const dx = ev.clientX - pan.x, dy = ev.clientY - pan.y
 				if (Math.abs(dx) + Math.abs(dy) > 3) pan.moved = true
@@ -2845,50 +2923,78 @@ export default function program(api: API & Host) {
 				const z = pan.cam.z
 				cam = { z, lon: ux(mx(pan.cam.lon, z) - dx, z), lat: uy(my(pan.cam.lat, z) - dy, z) }
 				user = true
-				return redraw()
+				return void redraw()
 			}
+			if (ev.target !== canvas) return
 			const h = hit(ev)
 			if (h.place === hover.place && h.route === hover.route) return
 			hover = h
 			canvas.style.cursor = h.place || h.route ? "pointer" : "grab"
 			redraw()
-			if (h.place) send("on/hover", "place", h.place, "map")
-			else if (h.route) send("on/hover", "formula", h.route, "map")
-			else send("on/hover", null)
-		})
-		canvas.addEventListener("pointerleave", () => {
+			if (h.place) return ["hover", "place", h.place, "map"]
+			else if (h.route) return ["hover", "formula", h.route, "map"]
+			return ["hover", null]
+		}
+		const leave = () => {
 			if (!hover.place && !hover.route) return
 			hover = {}
 			redraw()
-			send("on/hover", null)
-		})
-		canvas.addEventListener("pointerup", (ev) => {
+			return ["hover", null]
+		}
+		const up = (ev: PointerEvent) => {
 			const was = pan
 			pan = undefined
 			if (was?.moved) return keepCamera()
+			if (ev.target !== canvas) return
 			const h = hit(ev)
 			if (h.place) {
-				const r = canvas.getBoundingClientRect(),
-					app = document.querySelector(".embark")!.getBoundingClientRect()
-				send("on/card", h.place, ev.clientX - app.left + 8, ev.clientY - app.top + 8)
-				if (h.items?.[0]) send("on/select", h.items[0])
-				void r
-			} else if (h.route) send("on/select", h.route)
-		})
-		canvas.addEventListener("wheel", (ev) => {
+				const app = document.querySelector(".embark")!.getBoundingClientRect()
+				return [
+					"pin",
+					h.place,
+					ev.clientX - app.left + 8,
+					ev.clientY - app.top + 8,
+					h.items?.[0],
+				]
+			} else if (h.route) return ["select", h.route]
+		}
+		const wheel = (ev: WheelEvent) => {
+			if (ev.target !== canvas) return
 			ev.preventDefault()
 			const r = canvas.getBoundingClientRect()
 			zoom(-Math.sign(ev.deltaY) * 0.5, [ev.clientX - r.left, ev.clientY - r.top])
-		}, { passive: false })
-		canvas.addEventListener("dblclick", (ev) => {
+			return keepCamera()
+		}
+		const dblclick = (ev: MouseEvent) => {
+			if (ev.target !== canvas) return
 			const r = canvas.getBoundingClientRect()
 			zoom(1, [ev.clientX - r.left, ev.clientY - r.top])
-		})
+			return keepCamera()
+		}
+		const click = (ev: MouseEvent) => {
+			const b = (ev.target as HTMLElement).closest("button")
+			if (!b || !ctl.contains(b)) return
+			if (b.dataset.act === "fit") {
+				user = false
+				cam = undefined
+				redraw()
+				return ["camera", view, null]
+			}
+			zoom(b.dataset.act === "in" ? 1 : -1)
+			return keepCamera()
+		}
 		const sizes = new ResizeObserver(() => redraw())
 		sizes.observe(canvas)
 		return {
 			wrap,
 			redraw,
+			down,
+			move,
+			leave,
+			up,
+			wheel,
+			dblclick,
+			click,
 			// new data, lit or camera: the camera fits again, unless someone moved it
 			set(v: any) {
 				const before = state.data
@@ -2943,7 +3049,7 @@ export default function program(api: API & Host) {
 		)
 	}
 	function PlaceRow({ item }: { item: any }) {
-		const id = item.id as Id
+		const id = `place:${item.name}` as Id
 		return (
 			<li
 				class="prow"
@@ -2952,7 +3058,7 @@ export default function program(api: API & Host) {
 				onPointerLeave={handler("on/hover", [null])}
 			>
 				<div class="ptop">
-					<PlaceChip item={item} label={item.name} />
+					<PlaceChip label={item.name} />
 					<button
 						class="addprop"
 						title="a property of this place (icon: the map draws it)"
@@ -3015,7 +3121,7 @@ export default function program(api: API & Host) {
 						)
 						: null}
 					{waiting.map(([server, k]) => (
-						<span class="tag wait">◌ {k} waiting for {server}</span>
+						<span class="tag wait">◌ {String(k)} waiting for {server}</span>
 					))}
 				</div>
 				<ol class="recent">
@@ -3205,12 +3311,21 @@ export default function program(api: API & Host) {
 	return (
 		<div
 			class="embark"
-			onMouseDown={(ev) => {
-				if (!(ev.target as HTMLElement).closest(".card, .chip")) {
-					const c = read(cardE)
-					if (c) send("on/card", null)
-				}
-			}}
+			ref={(e) => (root = e as HTMLElement)}
+			onMouseDown={handler("on/card", (ev: MouseEvent) => {
+				if (!(ev.target as HTMLElement).closest(".card, .chip") && cardNow) return [null]
+			})}
+			onPointerMove={onStage((e) => gesture?.move?.(e))}
+			onPointerUp={onStage((e) => {
+				const g = gesture
+				gesture = undefined
+				return g?.up(e)
+			})}
+			onPointerCancel={onStage((e) => {
+				const g = gesture
+				gesture = undefined
+				return g?.up(e)
+			})}
 		>
 			<style>{LOOK}</style>
 			<header class="bar">

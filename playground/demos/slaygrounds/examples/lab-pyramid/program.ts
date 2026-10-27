@@ -1,16 +1,31 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
-import type { Tools } from "./host.ts"
+import {
+	addTeardown,
+	createAction,
+	createEffect,
+	ensureNode,
+	patch,
+	peep,
+	read,
+	ref,
+	unplace,
+} from "@ermine/system"
+import { host } from "@ermine/slaygrounds/tools"
+import type { Meter, Tools } from "./host.ts"
 import { bind, handler } from "ermine-h"
 
 // program.ts: the pyramid stress test. a sierpinski triangle of dots, each showing a number that
 // lives in a graph node. an effect per dot reads its node and writes the text: only the dots whose
 // number changed run. the whole triangle breathes (scale) while the numbers count.
-//   spread: each frame the host writes a few random dots' nodes (fine-grained: only those update)
+//   spread: each frame a few random dots' nodes are written (fine-grained: only those update)
 //   clock:  once a second one node changes and every dot reads it (a fan-out: all dots update)
 // the readout is plain DOM, not the graph: measuring through the thing measured would change it.
 // the controls are jsx (each select bound to its key of the config node); the triangle's dots are
 // made by hand inside an element held with ref
+// the clocks are the host's (host.ts): nothing is open in a requestAnimationFrame or a timer, so a
+// program cannot write from one. the host calls on/frame each frame and on/second each second, and
+// runs the measure (/host/on/bench). what they share with the program is the meter, a live object at
+// ./meter inside this process (config as built, last build, counts), read by the host
 const LOOK = `
 body { background: #ffff88; margin: 8px; font-family: Jost, system-ui, sans-serif }
 .lab { display: flex; flex-direction: column; gap: 8px }
@@ -48,90 +63,106 @@ function layout(depth: number) {
 	return out
 }
 
-type Config = { depth: number; kind: string; mode: string; spread: number; scale: string }
+type Config = Meter["conf"]
 const FIRST: Config = { depth: 5, kind: "parts", mode: "spread", spread: 8, scale: "graph" }
 
 // kind: "parts" makes each dot's effect named (placed in the process at p<i>), "bare" leaves it
 // unnamed (a node with no place). both write their node at each act
-export default function program(
-	{ open, read, edit, remove, effect, method, pulse, teardown, ref, stats }: API & Tools,
-) {
-	const cfg = open("./config", FIRST)
-	const seconds = open("./seconds", 0)
-	const scale = open("./scale", 1)
-	const put = (x: ReturnType<typeof open>, v: unknown) => edit(x, () => v)
+export default function program() {
+	const { stats } = host<Tools>()
+	const cfg = ensureNode("./config", FIRST)
+	const seconds = ensureNode("./seconds", 0)
+	const scale = ensureNode("./scale", 1)
+	const put = (x: ReturnType<typeof ensureNode>, v: unknown) => patch(x, [{ path: [], value: v }])
+	const bump = (x: ReturnType<typeof ensureNode>) => put(x, (peep(() => read(x)) as number) + 1)
 
-	// a recipe: a key of the config
-	const set = (k: string, v: unknown) => edit(cfg, (d: any) => void (d[k] = v))
-	method("on/set", set)
-	// one frame: the scale, and a few dots' own counters. conf and hits are the last built
-	let conf: Config = FIRST
-	let hits: ReturnType<typeof open>[] = []
-	let body = 0 // ms in the frames' writes
-	function frame(now: number) {
+	// a key of the config
+	const set = (k: string, v: unknown) => patch(cfg, [{ path: [k], value: v }])
+	createAction("on/set", set)
+
+	// the meter: conf and hits are the last built, body the ms in the frames' writes, frameCount the
+	// animation frames seen. a live object, shared with the host's clock and measure
+	const meter = read(
+		ref("meter", (): Meter => ({
+			conf: FIRST,
+			last: { build: 0, dots: 0 },
+			frames: 0,
+			body: 0,
+			frameCount: 0,
+			builds: [],
+			rows: [],
+		})),
+	) as Meter
+	let hits: ReturnType<typeof ensureNode>[] = []
+
+	// one frame, called by the host each frame: the scale, and a few dots' own counters
+	createAction("on/frame", (now: number) => {
 		const t0 = performance.now()
+		const conf = meter.conf
+		if (conf.scale === "graph" || (conf.mode === "spread" && conf.spread > 0)) meter.frames++
+		else return
 		if (conf.scale === "graph") put(scale, wobble(now))
 		if (conf.mode === "spread" && hits.length) {
-			for (let k = 0; k < conf.spread; k++) {
-				const d = hits[(Math.random() * hits.length) | 0]
-				edit(d, (n: number) => n + 1)
-			}
+			for (let k = 0; k < conf.spread; k++) bump(hits[(Math.random() * hits.length) | 0])
 		}
-		body += performance.now() - t0
-	}
+		meter.body += performance.now() - t0
+	})
+	// one second, called by the host each second
+	createAction("on/second", () => bump(seconds))
 
 	// ---- the view: the triangle is held with ref, its dots made by the build effect below ----
 	const tri = read(ref("tri", () => document.createElement("div"))) as HTMLElement
 	tri.className = "tri"
-	let run: HTMLButtonElement | undefined
-	let results: HTMLElement | undefined
 
 	// the config the loop reads (the selects are bound to it below)
-	effect("conf", () => read(cfg) as Config, (c) => (conf = c))
+	createEffect("conf", () => read(cfg) as Config, (c) => (meter.conf = c))
 
 	// ---- the scale: one node, one effect ----
-	effect("zoom", () => read(scale) as number, (v) => {
+	createEffect("zoom", () => read(scale) as number, (v) => {
 		tri.style.transform = `scale(${v})`
 	})
 
 	// ---- the dots: rebuilt when depth or kind change (read by path, so spread, mode and
 	// scale edits do not wake it). what the act makes is under the effect, gone before its next act
-	let last = { build: 0, dots: 0 }
-	effect("dots", () => read(cfg, ["depth"]) + ":" + read(cfg, ["kind"]), (key: string) => {
-		const t0 = performance.now()
-		const [depth, kind] = key.split(":")
-		const spots = layout(+depth)
-		// the old ones out: their numbers. the effects, named or not, went with the act that made them
-		const old = hits.length
-		for (let i = 0; i < old; i++) {
-			remove(`./dots/d${i}`)
-		}
-		hits = []
-		const els: HTMLElement[] = []
-		spots.forEach((p, i) => {
-			const hit = open(`./dots/d${i}`, 0)
-			hits.push(hit)
-			const el = document.createElement("div")
-			el.className = "dot"
-			el.style.cssText =
-				`left:${p.x}px;top:${p.y}px;width:${p.size}px;height:${p.size}px;font-size:${
-					p.size * 0.55
-				}px`
-			els.push(el)
-			const f = () =>
-				read(cfg, ["mode"]) === "clock" ? read(seconds) as number : read(hit) as number
-			const act = (v: number) => {
-				el.textContent = String(v)
-				el.classList.toggle("odd", v % 2 === 1)
+	createEffect(
+		"dots",
+		() => read(cfg, ["depth"]) + ":" + read(cfg, ["kind"]),
+		(key: string) => {
+			const t0 = performance.now()
+			const [depth, kind] = key.split(":")
+			const spots = layout(+depth)
+			// the old ones out: their numbers. the effects, named or not, went with the act that made them
+			const old = hits.length
+			for (let i = 0; i < old; i++) {
+				unplace(`./dots/d${i}`)
 			}
-			effect(`p${i}`, f, act)
-		})
-		tri.replaceChildren(...els)
-		last = { build: performance.now() - t0, dots: spots.length }
-	})
+			hits = []
+			const els: HTMLElement[] = []
+			spots.forEach((p, i) => {
+				const hit = ensureNode(`./dots/d${i}`, 0)
+				hits.push(hit)
+				const el = document.createElement("div")
+				el.className = "dot"
+				el.style.cssText =
+					`left:${p.x}px;top:${p.y}px;width:${p.size}px;height:${p.size}px;font-size:${
+						p.size * 0.55
+					}px`
+				els.push(el)
+				const f = () =>
+					read(cfg, ["mode"]) === "clock" ? read(seconds) as number : read(hit) as number
+				const act = (v: number) => {
+					el.textContent = String(v)
+					el.classList.toggle("odd", v % 2 === 1)
+				}
+				createEffect(`p${i}`, f, act)
+			})
+			tri.replaceChildren(...els)
+			meter.last = { build: performance.now() - t0, dots: spots.length }
+		},
+	)
 
-	// ---- the loop: a frame writes, a second writes, straight from their timers. the readout
-	// counts both ----
+	// ---- the readout: the frames counted by the page's own loop (no writes in it), the graph's
+	// counts from the host's stats ----
 	const win = { t: performance.now(), frames: 0, worst: 0, prev: performance.now() }
 	// the readout's tags: plain text written by hand, into the elements the jsx gives back
 	const tags = new Map<string, HTMLElement>()
@@ -147,117 +178,42 @@ export default function program(
 		"dots",
 	]
 	const was = { acts: 0, writes: 0, frames: 0, body: 0, pulse: 0 }
-	let frames = 0
 	const sample = () => {
 		const st = stats
 		const now = performance.now()
 		const dt = (now - win.t) / 1000
-		const calls = frames - was.frames || 1
+		const calls = meter.frames - was.frames || 1
 		const show = (name: string, v: string) => (tag(name).innerHTML = `${name} <b>${v}</b>`)
 		show("fps", (win.frames / dt).toFixed(0))
 		show("frame ms", ((dt * 1000) / Math.max(win.frames, 1)).toFixed(1))
 		show("worst ms", win.worst.toFixed(0))
 		show("updates/s", ((st.acts - was.acts) / dt).toFixed(0))
 		show("writes/s", ((st.writes - was.writes) / dt).toFixed(0))
-		show("body ms", ((body - was.body) / calls).toFixed(2))
+		show("body ms", ((meter.body - was.body) / calls).toFixed(2))
 		show("pulse ms", ((st.pulseMs - was.pulse) / calls).toFixed(2))
-		show("dots", String(last.dots))
-		Object.assign(was, { acts: st.acts, writes: st.writes, frames, body, pulse: st.pulseMs })
+		show("dots", String(meter.last.dots))
+		Object.assign(was, {
+			acts: st.acts,
+			writes: st.writes,
+			frames: meter.frames,
+			body: meter.body,
+			pulse: st.pulseMs,
+		})
 		Object.assign(win, { t: now, frames: 0, worst: 0 })
 	}
+	// the page's own frame loop: the readout's frames, and the css scale (no graph, so no write)
 	let raf = 0
 	const loop = (now: number) => {
 		raf = requestAnimationFrame(loop)
 		win.frames++
+		meter.frameCount++
 		win.worst = Math.max(win.worst, now - win.prev)
 		win.prev = now
-		if (conf.scale === "css") tri.style.transform = `scale(${wobble(now)})`
-		if (conf.scale === "graph" || (conf.mode === "spread" && conf.spread > 0)) {
-			frames++
-			frame(now)
-		}
+		if (meter.conf.scale === "css") tri.style.transform = `scale(${wobble(now)})`
 	}
 	raf = requestAnimationFrame(loop)
-	const every = setInterval(() => edit(seconds, (n: number) => n + 1), 1000)
 	const shown = setInterval(sample, 500)
-	teardown(() => (cancelAnimationFrame(raf), clearInterval(every), clearInterval(shown)))
-
-	// ---- measure: a table of settings, each run for 2.5 s after 0.7 s to settle ----
-	const rows: Record<string, unknown>[] = []
-	async function bench() {
-		if (run) run.disabled = true
-		rows.length = 0
-		const plan: Config[] = [
-			{ depth: 1, kind: "bare", mode: "spread", spread: 0, scale: "graph" },
-			{ depth: 1, kind: "bare", mode: "spread", spread: 0, scale: "css" },
-			{ depth: 5, kind: "parts", mode: "spread", spread: 8, scale: "graph" },
-			{ depth: 5, kind: "bare", mode: "spread", spread: 8, scale: "graph" },
-			{ depth: 5, kind: "bare", mode: "spread", spread: 64, scale: "graph" },
-			{ depth: 5, kind: "parts", mode: "clock", spread: 0, scale: "graph" },
-			{ depth: 5, kind: "bare", mode: "clock", spread: 0, scale: "graph" },
-			{ depth: 6, kind: "bare", mode: "spread", spread: 8, scale: "graph" },
-			{ depth: 6, kind: "bare", mode: "clock", spread: 0, scale: "graph" },
-			{ depth: 7, kind: "bare", mode: "spread", spread: 8, scale: "graph" },
-			{ depth: 7, kind: "bare", mode: "clock", spread: 0, scale: "graph" },
-		]
-		for (const p of plan) {
-			for (const [k, v] of Object.entries(p)) change(k, v)
-			await sleep(700)
-			const a = { ...stats }
-			const f0 = frameCount, b0 = body, n0 = frames
-			stats.maxMs = 0
-			const t0 = performance.now()
-			await sleep(4500)
-			const dt = (performance.now() - t0) / 1000
-			const calls = frames - n0 || 1
-			rows.push({
-				...p,
-				dots: last.dots,
-				fps: +((frameCount - f0) / dt).toFixed(1),
-				"updates/s": Math.round((stats.acts - a.acts) / dt),
-				"writes/s": Math.round((stats.writes - a.writes) / dt),
-				"runs/s": Math.round((stats.runs - a.runs) / dt),
-				"body ms/frame": +((body - b0) / calls).toFixed(2),
-				"pulse ms/frame": +((stats.pulseMs - a.pulseMs) / calls).toFixed(2),
-				"max pulse ms": +stats.maxMs.toFixed(1),
-			})
-			table()
-		}
-		console.log("bench", JSON.stringify(rows))
-		console.log("build", JSON.stringify(builds))
-		if (run) run.disabled = false
-	}
-	let frameCount = 0
-	const count = () => (frameCount++, (counter = requestAnimationFrame(count)))
-	let counter = requestAnimationFrame(count)
-	teardown(() => cancelAnimationFrame(counter))
-	const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-	// a config key set, a rebuild (depth, kind) pulsed now so its time is told
-	const change = (k: string, v: unknown) => {
-		if ((conf as Record<string, unknown>)[k] === v) return
-		const t0 = performance.now()
-		set(k, v)
-		if (k === "depth" || k === "kind") {
-			pulse()
-			builds.push({
-				depth: conf.depth,
-				kind: conf.kind,
-				ms: +last.build.toFixed(1),
-				total: +(performance.now() - t0).toFixed(1),
-				dots: last.dots,
-			})
-		}
-	}
-	const builds: Record<string, unknown>[] = []
-	function table() {
-		const keys = Object.keys(rows[0])
-		const html = `<table><tr>${keys.map((k) => `<th>${k}</th>`).join("")}</tr>${
-			rows.map((r) => `<tr>${keys.map((k) => `<td>${r[k]}</td>`).join("")}</tr>`).join("")
-		}</table>`
-		if (results) results.innerHTML = html
-	}
-	;(globalThis as any).__bench = bench
-	;(globalThis as any).__rows = rows
+	addTeardown(() => (cancelAnimationFrame(raf), clearInterval(shown)))
 
 	// ---- the controls: a select per key of the config, bound to it; a change sends to on/set ----
 	const control = (key: string, label: string, options: (string | number)[]) => (
@@ -283,13 +239,15 @@ export default function program(
 				{control("mode", "numbers", ["spread", "clock"])}
 				{control("spread", "per frame", [0, 1, 8, 64])}
 				{control("scale", "scale by", ["graph", "css"])}
-				<button ref={(e) => (run = e)} onClick={() => bench()}>measure</button>
+				<button ref={(e) => (meter.run = e)} onClick={handler("/host/on/bench")}>
+					measure
+				</button>
 			</div>
 			<div class="read">
 				{order.map((name) => <span class="tag" ref={(e) => tags.set(name, e)} />)}
 			</div>
 			<div class="stage">{tri}</div>
-			<div ref={(e) => (results = e)} />
+			<div ref={(e) => (meter.results = e)} />
 		</div>
 	)
 }

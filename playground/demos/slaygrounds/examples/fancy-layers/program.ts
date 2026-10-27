@@ -1,5 +1,18 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import {
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	executeAction,
+	hasNode,
+	patch,
+	peep,
+	read as readNode,
+	ref,
+	unplace,
+} from "@ermine/system"
+import { createPatch, layers } from "@ermine/patchy/feature"
 import { bind, handler } from "ermine-h"
 
 // fancy-layers: a pixel editor on patch nodes. the picture is a node, ./picture, an array of 256
@@ -13,7 +26,10 @@ import { bind, handler } from "ermine-h"
 //
 // pending (a slow blur is out) is not a node: it is the stage's busy note, in front of the stack.
 // the order is the order they came; a draft made while a preview is out takes the preview out and
-// puts it back, so the preview stays in front. the pad is a canvas, kept across reloads (./pad)
+// puts it back, so the preview stays in front. the pad is a canvas, kept across reloads (./pad).
+// a program holds no patch entry (a node's "patch" part is the feature's): each stroke is kept in
+// ./strokes too, and the draft is made again from them (createPatch). land is the host's service,
+// /system/land: a commit sends it the draft
 
 const N = 16
 const palette = [
@@ -119,7 +135,7 @@ const says: Record<string, string> = {
 	draft: "your strokes. null where nothing is drawn",
 	stored: "the picture. a commit writes here",
 }
-const short = (id: unknown) => String(id).slice(0, 6)
+const short = (path: unknown) => (Array.isArray(path) ? "/" + path.join("/") : String(path))
 
 const css = `
 .fx{font-family:Jost,system-ui,sans-serif;color:#000;max-width:760px;margin:0 auto;padding:6px 4px 20px}
@@ -179,30 +195,55 @@ type Layer = { value: unknown; from: unknown }
 const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 const put = (v: unknown) => [{ path: [], value: v }]
 
-export default function program(
-	{ open, read, edit, remove, memo, effect, method, send, patch, land, layers, entries, ref }: API,
-) {
-	const picture = open("./picture", sprite())
-	const ink = open("./ink", palette[4])
-	const filter = open("./filter", "")
-	const lens = open("./lens", true)
-	const request = open("./request", null)
-	const serial = open("./serial", 0)
-	const landed = open("./landed", 0)
+export default function program() {
+	// what a node holds, as the editor takes it (any: its values are its own); the actions run
+	// untracked (peep)
+	// deno-lint-ignore no-explicit-any
+	const read = (x: Parameters<typeof readNode>[0], key?: readonly string[]): any =>
+		readNode(x, key)
+	const method = (name: string, f: (...a: any[]) => unknown) =>
+		createAction(name, (...a: unknown[]) => peep(() => f(...a)))
+	const picture = ensureNode("./picture", sprite())
+	const ink = ensureNode("./ink", palette[4])
+	const filter = ensureNode("./filter", "")
+	const lens = ensureNode("./lens", true)
+	const request = ensureNode("./request", null)
+	const serial = ensureNode("./serial", 0)
+	const landed = ensureNode("./landed", 0)
+	// the draft's strokes, and the preview's whole patch, as this program wrote them
+	const drawn = ensureNode("./strokes", [] as Stroke[])
 	const draftAt = "./picture/draft", previewAt = "./picture/preview"
-	// a layer's patch entry: the patch node's own value (what it is over, and its patches)
-	const entry = (at: string) => ({ ...open(at), part: "patch" as const })
-	const idOf = (at: string) => entries(at)[0]?.id
-	const strokes = (at: string) => read(entry(at), ["patches"]) as Stroke[] | undefined
+	const exists = (at: string) => hasNode(at)
+	// a patch node taken out: unplaced, but a layer is the node's patch entry, which no program can
+	// delete (the overlay goes on laying it over the picture). so it is emptied first, and what is
+	// left, unplaced, is a layer of nothing (named null by layers, left out of the stack)
+	const drop = (at: string) => {
+		if (!exists(at)) return
+		createPatch(at, picture, [])
+		unplace(at)
+	}
+	const strokes = () => read(drawn) as Stroke[]
+	// the draft, made again from its strokes (the patch node is the feature's: createPatch writes it)
+	const draft = (list: Stroke[]) => {
+		patch(drawn, put(list))
+		createPatch(draftAt, picture, list as never)
+	}
 
 	// the layers of the picture, front first, with the stored one last: what layers() gives, each
-	// named by the patch node it came from
+	// named by the patch node it came from (its path)
 	const named = (): (Layer & { name: string })[] => {
-		const draft = idOf(draftAt), preview = idOf(previewAt)
-		return layers(picture).map((l: Layer) => ({
-			...l,
-			name: l.from === preview ? "preview" : l.from === draft ? "draft" : "stored",
-		}))
+		const at = (p: string) => "/" + ["picture", p].join("/")
+		return layers(picture).filter((l) => l.from !== null).map((l) => {
+			const from = Array.isArray(l.from) ? "/" + l.from.join("/") : undefined
+			return {
+				...l,
+				name: from?.endsWith(at("preview"))
+					? "preview"
+					: from?.endsWith(at("draft"))
+					? "draft"
+					: "stored",
+			}
+		})
 	}
 	// what is under the preview: the layer behind it (all of them, if there is no preview)
 	const under = () => {
@@ -211,19 +252,19 @@ export default function program(
 	}
 
 	// ---- derived, as memos: a node each in the graph ----
-	const busy = memo("busy", () => {
+	const busy = createMemo("busy", () => {
 		const job = read(request) as { n: number } | null
 		return job !== null && job.n > (read(landed) as number)
 	})
-	const stack = memo("stack", () => {
+	const stack = createMemo("stack", () => {
 		const l = named()
 		const out = []
 		if (read(busy)) out.push({ name: "pending", id: "", url: "", size: "" })
 		for (const x of l) {
-			const touched = x.name === "draft" ? strokes(draftAt) : undefined
+			const touched = x.name === "draft" ? (read(drawn) as Stroke[]) : undefined
 			out.push({
 				name: x.name,
-				id: x.name === "stored" ? short(idOf("./picture")) : short(x.from),
+				id: x.name === "stored" ? short(["picture"]) : short(x.from),
 				url: thumb(x.value),
 				size: x.name === "draft"
 					? touched?.some((p) => p.path.length === 0)
@@ -236,111 +277,126 @@ export default function program(
 		}
 		return out
 	})
-	memo("front", () => (read(stack) as { name: string }[])[0]?.name)
-	memo("count", () => (read(stack) as unknown[]).length)
-	memo("drafted", () => idOf(draftAt) !== undefined)
+	createMemo("front", () => (read(stack) as { name: string }[])[0]?.name)
+	createMemo("count", () => (read(stack) as unknown[]).length)
+	createMemo("drafted", () => exists(draftAt))
 	// the picture a read gives, and which layer decided each pixel
-	const shown = memo("shown", () => {
+	const shown = createMemo("shown", () => {
 		const px = read(picture) as string[]
-		const preview = idOf(previewAt) !== undefined
-		const drawn = new Set<number>()
+		const preview = exists(previewAt)
+		const set = new Set<number>()
 		let all = false
-		for (const p of strokes(draftAt) ?? []) p.path.length ? drawn.add(p.path[0]) : (all = true)
-		const from = px.map((_, i) => preview ? "preview" : all || drawn.has(i) ? "draft" : "stored")
+		for (const p of read(drawn) as Stroke[]) p.path.length ? set.add(p.path[0]) : (all = true)
+		const from = px.map((_, i) => preview ? "preview" : all || set.has(i) ? "draft" : "stored")
 		return { px, from } as Flat
 	}, { equal: sameJson })
 
 	// a draft: made when first wanted, and in front of nothing but the preview
 	function ensure() {
-		if (idOf(draftAt) !== undefined) return
-		const was = idOf(previewAt) !== undefined ? strokes(previewAt) : undefined
-		if (was) remove(previewAt)
-		patch(draftAt, picture, [])
-		if (was) patch(previewAt, picture, was as never)
+		if (exists(draftAt)) return
+		const was = exists(previewAt) ? (read(previewing) as Stroke[] | null) : null
+		if (was) drop(previewAt)
+		draft([])
+		if (was) createPatch(previewAt, picture, was as never)
 	}
 	const take = () => {
-		if (idOf(draftAt) !== undefined) remove(draftAt)
+		drop(draftAt)
+		patch(drawn, put([]))
 	}
 
 	// the preview follows the filter and what is under it: made, rewritten, taken out. it reads the
-	// layers it is one of, so its own write comes back as the same result: equal cuts it off there
-	effect("previewing", () => {
+	// layers it is one of, so its own write comes back as the same result: equal cuts it off there.
+	// ./previewing holds the patch it wrote
+	const previewing = ensureNode("./previewing", null)
+	createEffect("previewing", () => {
 		const f = filters[read(filter) as string]
 		return f ? f(under()) : null
 	}, (result: string[] | null) => {
 		if (!result) {
-			if (idOf(previewAt) !== undefined) remove(previewAt)
-		} else patch(previewAt, picture, put(result) as never)
+			drop(previewAt)
+			patch(previewing, put(null))
+		} else {
+			patch(previewing, put(put(result)))
+			createPatch(previewAt, picture, put(result) as never)
+		}
 	}, { equal: sameJson })
 
 	// the slow filter: a compute that awaits. while it is out the stage says so; when it lands the
 	// result goes in the draft. landing writes only ./landed, which blurred does not read
-	const blurred = memo("blurred", () => {
+	const blurred = createMemo("blurred", () => {
 		const job = read(request) as { n: number; pixels: string[] } | null
 		return job ? slowBlur(job) : null
 	})
-	effect("landing", () => {
+	createEffect("landing", () => {
 		const v = read(blurred) as { n: number; pixels: string[] } | null
 		return v && typeof v === "object" ? v : null
 	}, (v: { n: number; pixels: string[] } | null) => {
 		if (!v) return
-		ensure()
-		edit(entry(draftAt), (d: { patches: Stroke[] }) => void (d.patches = put(v.pixels) as never))
-		edit(landed, put(v.n))
+		peep(() => {
+			ensure()
+			draft(put(v.pixels) as Stroke[])
+			patch(landed, put(v.n))
+		})
 	})
 
 	// ---- methods ----
 	method("on/paint", (i: number) => {
 		const c = read(ink) as string
 		ensure()
-		edit(entry(draftAt), (d: { patches: Stroke[] }) => {
-			// the last patch that touches pixel i: one of its own is set, else a new one goes on
-			let k = d.patches.length - 1
-			while (k >= 0 && d.patches[k].path.length && d.patches[k].path[0] !== i) k--
-			if (k >= 0 && d.patches[k].path.length) d.patches[k].value = c
-			else d.patches.push({ path: [i], value: c })
-		})
+		// the last patch that touches pixel i: one of its own is set, else a new one goes on
+		const list = strokes().map((p) => ({ ...p }))
+		let k = list.length - 1
+		while (k >= 0 && list[k].path.length && list[k].path[0] !== i) k--
+		if (k >= 0 && list[k].path.length) list[k].value = c
+		else list.push({ path: [i], value: c })
+		draft(list)
 	})
-	method("on/ink", (c: string) => edit(ink, put(c)))
-	method("on/filter", (name: string) => edit(filter, put(read(filter) === name ? "" : name)))
+	method("on/ink", (c: string) => patch(ink, put(c)))
+	method("on/filter", (name: string) => patch(filter, put(read(filter) === name ? "" : name)))
 	method("on/apply", () => {
-		if (idOf(previewAt) === undefined) return
-		const result = (read(entry(previewAt), ["patches"]) as Stroke[])[0].value
+		if (!exists(previewAt)) return
+		const result = (read(previewing) as Stroke[])[0].value
 		ensure()
-		edit(entry(draftAt), (d: { patches: Stroke[] }) => void (d.patches = put(result) as never))
-		edit(filter, put(""))
+		draft(put(result) as Stroke[])
+		patch(filter, put(""))
 	})
 	method("on/blur", () => {
 		const n = (read(serial) as number) + 1
-		edit(serial, put(n))
-		edit(request, put({ n, pixels: under() }))
+		patch(serial, put(n))
+		patch(request, put({ n, pixels: under() }))
 	})
 	method("on/commit", () => {
-		if (idOf(draftAt) === undefined) return
-		land(draftAt)
-		take()
-		edit(request, put(null))
+		if (!exists(draftAt)) return
+		executeAction("/system/land", draftAt)
+		unplace(draftAt)
+		patch(drawn, put([]))
+		patch(request, put(null))
 	})
 	// discard also calls off a blur in flight: it would land in a draft that is gone
 	method("on/discard", () => {
-		edit(request, put(null))
+		patch(request, put(null))
 		take()
 	})
 	method("on/reset", () => {
-		edit(request, put(null))
+		patch(request, put(null))
 		take()
-		edit(filter, put(""))
-		edit(picture, put(sprite()))
+		patch(filter, put(""))
+		patch(picture, put(sprite()))
 	})
-	method("on/lens", () => edit(lens, put(!read(lens))))
+	method("on/lens", () => patch(lens, put(!read(lens))))
 
 	// ---- the pad: a canvas, made once and kept (./pad), drawn from the shown picture ----
-	const pad = read(
-		ref(
-			"./pad",
-			() => Object.assign(document.createElement("canvas"), { width: N * 20, height: N * 20 }),
-		),
+	const pad = peep(() =>
+		readNode(
+			ref(
+				"./pad",
+				() =>
+					Object.assign(document.createElement("canvas"), { width: N * 20, height: N * 20 }),
+			),
+		)
 	) as HTMLCanvasElement
+	// the pointer is heard on the stage (nothing is open in a plain listener to call an action
+	// from): a pixel the pointer is on, while it is down, is a paint call
 	let down = false, last = -1
 	const hit = (e: PointerEvent) => {
 		const r = pad.getBoundingClientRect()
@@ -349,40 +405,44 @@ export default function program(
 		const i = y * N + x
 		if (x < 0 || y < 0 || x >= N || y >= N || i === last) return
 		last = i
-		send("on/paint", i)
+		return [i]
 	}
-	pad.onpointerdown = (e: PointerEvent) => {
+	const onDown = (e: PointerEvent) => {
 		pad.setPointerCapture(e.pointerId)
 		down = true, last = -1
-		hit(e)
+		return hit(e)
 	}
-	pad.onpointermove = (e: PointerEvent) => down && hit(e)
-	pad.onpointerup = pad.onpointercancel = () => (down = false)
+	const onMove = (e: PointerEvent) => down ? hit(e) : undefined
+	const onUp = () => void (down = false)
 
-	effect("draw", () => [read(shown), read(lens)], ([flat, who]: [Flat, boolean]) => {
-		if (!flat?.px) return
-		const g = pad.getContext("2d")!, k = 20
-		flat.px.forEach((c, i) => {
-			const x = (i % N) * k, y = Math.floor(i / N) * k
-			g.fillStyle = c
-			g.fillRect(x, y, k, k)
-			if (who && flat.from[i] === "draft") {
-				g.fillStyle = "#ff228430", g.fillRect(x, y, k, k)
-				g.fillStyle = "#ff2284", g.fillRect(x, y, 6, 6)
-			} else if (who && flat.from[i] === "preview") {
-				g.fillStyle = "#40dcba40", g.fillRect(x, y, k, k)
-				g.fillStyle = "#40dcba", g.fillRect(x, y, 6, 6)
+	createEffect(
+		"draw",
+		() => [read(shown), read(lens)] as [Flat, boolean],
+		([flat, who]: [Flat, boolean]) => {
+			if (!flat?.px) return
+			const g = pad.getContext("2d")!, k = 20
+			flat.px.forEach((c, i) => {
+				const x = (i % N) * k, y = Math.floor(i / N) * k
+				g.fillStyle = c
+				g.fillRect(x, y, k, k)
+				if (who && flat.from[i] === "draft") {
+					g.fillStyle = "#ff228430", g.fillRect(x, y, k, k)
+					g.fillStyle = "#ff2284", g.fillRect(x, y, 6, 6)
+				} else if (who && flat.from[i] === "preview") {
+					g.fillStyle = "#40dcba40", g.fillRect(x, y, k, k)
+					g.fillStyle = "#40dcba", g.fillRect(x, y, 6, 6)
+				}
+			})
+			g.strokeStyle = "#0000001a"
+			g.lineWidth = 1
+			g.beginPath()
+			for (let i = 1; i < N; i++) {
+				g.moveTo(i * k + 0.5, 0), g.lineTo(i * k + 0.5, N * k)
+				g.moveTo(0, i * k + 0.5), g.lineTo(N * k, i * k + 0.5)
 			}
-		})
-		g.strokeStyle = "#0000001a"
-		g.lineWidth = 1
-		g.beginPath()
-		for (let i = 1; i < N; i++) {
-			g.moveTo(i * k + 0.5, 0), g.lineTo(i * k + 0.5, N * k)
-			g.moveTo(0, i * k + 0.5), g.lineTo(N * k, i * k + 0.5)
-		}
-		g.stroke()
-	})
+			g.stroke()
+		},
+	)
 
 	const chip = (name: string) => (
 		<button
@@ -405,7 +465,16 @@ export default function program(
 			</p>
 			<div class="cols">
 				<section class="card left">
-					<div class="stage" data-busy={bind("busy", (b) => (b ? "yes" : "no"))}>{pad}</div>
+					<div
+						class="stage"
+						data-busy={bind("busy", (b) => (b ? "yes" : "no"))}
+						onPointerDown={handler("on/paint", onDown)}
+						onPointerMove={handler("on/paint", onMove)}
+						onPointerUp={handler("on/paint", onUp)}
+						onPointerCancel={handler("on/paint", onUp)}
+					>
+						{pad}
+					</div>
 					<div class="pal">
 						{palette.map((c) => (
 							<b

@@ -4,8 +4,6 @@
 import { createWorld } from "@ermine/slaygrounds/world"
 import { render } from "ermine-h"
 
-export type { Tools as Extra } from "@ermine/slaygrounds/world"
-
 const world = createWorld({ render, processes: [{ name: "lisp" }], actor: "you@laptop" })
 
 export const reload = world.reload

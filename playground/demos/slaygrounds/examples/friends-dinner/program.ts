@@ -1,6 +1,15 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
-import type { Tools } from "./host.ts"
+import {
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	executeAction,
+	patch,
+	peep,
+	read,
+} from "@ermine/system"
+import { who } from "@ermine/slaygrounds/tools"
 import { bind, handler, under } from "ermine-h"
 
 // friends-dinner: dinner at mine, friday. say if you're coming, pick what you'll bring, send the
@@ -133,47 +142,52 @@ body { background: #ffff88; margin: 10px }
 @keyframes pop3 { from { transform: skew(-8deg) scale(.5) } }
 `
 
-export default function dinner({ open, read, edit, memo, method, send, who }: API & Tools) {
+// a node's value now, from an action (nothing tracked)
+const get = <T,>(x: Parameters<typeof read>[0]) => peep(() => read(x)) as T
+
+export default function dinner() {
 	const names = ["you", ...Object.keys(FRIENDS)]
 	const guest = Object.fromEntries(
 		names.map((
 			n,
-		) => [n, open(`./guests/${n}`, { answer: null, dish: null, at: 0 } satisfies Guest)]),
-	) as Record<string, ReturnType<typeof open>>
+		) => [n, ensureNode(`./guests/${n}`, { answer: null, dish: null, at: 0 } satisfies Guest)]),
+	) as Record<string, ReturnType<typeof ensureNode>>
 	const all = () => names.map((n) => [n, read(guest[n]) as Guest] as [string, Guest])
 
-	memo("seats", () => seat(all()))
-	memo("tally", () => {
+	createMemo("seats", () => seat(all()))
+	createMemo("tally", () => {
 		const n = (a: Answer | null) => all().filter(([, g]) => g.answer === a).length
 		return `${n("yes")} coming · ${n("maybe")} maybe · ${n("no")} can't · ${
 			n(null)
 		} still deciding`
 	})
-	memo("menu", () => {
+	createMemo("menu", () => {
 		const dishes = all().filter(([, g]) => g.answer === "yes" && g.dish).map(([, g]) => g.dish!)
 		return { dishes, pudding: dishes.some((d) => PUDDING.includes(d)), any: dishes.length > 0 }
 	})
 
-	// an answer: yours from the buttons (this process sending, a person clicking), a friend's only
-	// from the post. the name in the arguments counts only when the post is the caller
-	method("on/answer", (name: string, answer: Answer, dish?: string) => {
-		const person = who().caller === "post" ? name : "you"
-		const g = read(guest[person]) as Guest
+	// an answer: yours from the buttons (this process calling, a person clicking), a friend's only
+	// from the post. the name in the arguments counts only when the post is the caller (who names a
+	// process by where it runs: the post runs at mail/post)
+	createAction("on/answer", (name: string, answer: Answer, dish?: string) => {
+		const person = who().caller === "mail/post" ? name : "you"
+		const g = get<Guest>(guest[person])
 		const at = g.answer === answer ? g.at : Date.now()
-		edit(guest[person], (x: Guest) => {
-			x.answer = answer
-			x.dish = dish ?? g.dish
-			x.at = at
-		})
+		patch(guest[person], [
+			{ path: ["answer"], value: answer },
+			{ path: ["dish"], value: dish ?? g.dish },
+			{ path: ["at"], value: at },
+		])
 	})
-	method(
-		"on/bring",
-		(dish: string) =>
-			edit(guest.you, (g: Guest) => void (g.dish = g.dish === dish ? null : dish)),
-	)
-	method("on/again", () => {
-		for (const n of names) edit(guest[n], () => ({ answer: null, dish: null, at: 0 }))
-		send("/post/on/reset")
+	createAction("on/bring", (dish: string) => {
+		const g = get<Guest>(guest.you)
+		patch(guest.you, [{ path: ["dish"], value: g.dish === dish ? null : dish }])
+	})
+	createAction("on/again", () => {
+		for (const n of names) {
+			patch(guest[n], [{ path: [], value: { answer: null, dish: null, at: 0 } }])
+		}
+		executeAction("/mail/post/on/reset")
 	})
 
 	return (
@@ -189,7 +203,7 @@ export default function dinner({ open, read, edit, memo, method, send, who }: AP
 				<span class="fill" />
 				<button
 					class="go"
-					onClick={handler("/post/on/send")}
+					onClick={handler("/mail/post/on/send")}
 					disabled={bind("/mail/sent", (s) => !!s)}
 				>
 					{bind("/mail/sent", (s) => (s ? "✉️ invites sent" : "✉️ send the invites"))}
@@ -292,44 +306,39 @@ export default function dinner({ open, read, edit, memo, method, send, who }: AP
 	)
 }
 
-// the post: brings each reply when its time comes. the timers are not in the graph; when the
-// invites went out and how many replies are through are (./sent and ./delivered, in the post's own
-// folder), so a reload sets up what is left
-export function post({ open, read, edit, method, send, teardown }: API) {
-	const sent = open("./sent", null)
-	const delivered = open("./delivered", 0)
+// the post: brings each reply when its time comes. nothing is open after a timer, so each reply's
+// wait is a promise a memo returns (settled when its time has come), and an effect's act delivers
+// it. when the invites went out and how many replies are through are nodes (./sent and ./delivered,
+// in the post's own folder), so a reload waits only for the replies not through. a memo reads
+// ./delivered untracked: the act writes it, and a memo reading what its own effect writes loops
+export function post() {
+	const sent = ensureNode("./sent", null)
+	const delivered = ensureNode("./delivered", 0)
 	const replies = Object.entries(FRIENDS)
 		.flatMap(([name, f]) => f.says.map(([ms, answer, dish]) => ({ name, ms, answer, dish })))
 		.sort((a, b) => a.ms - b.ms)
-	let timers: ReturnType<typeof setTimeout>[] = []
-	const stop = () => (timers.forEach(clearTimeout), (timers = []))
-	// the next reply, in order: the dinner hears it with the post as the caller
-	const deliver = () => {
-		const i = read(delivered) as number
-		const r = replies[i]
-		if (!r) return
-		send("/dinner/on/answer", r.name, r.answer, r.dish)
-		edit(delivered, () => i + 1)
-	}
-	const schedule = () => {
-		stop()
-		const since = read(sent) as number | null
-		if (!since) return
-		for (const r of replies.slice(read(delivered) as number)) {
-			timers.push(setTimeout(deliver, Math.max(0, r.ms - (Date.now() - since))))
-		}
-	}
-	method("on/send", () => {
-		if (read(sent)) return
-		edit(sent, () => Date.now())
-		edit(delivered, () => 0)
-		schedule()
+	replies.forEach((r, i) => {
+		createMemo(`due${i}`, () => {
+			const since = read(sent) as number | null
+			if (!since || i < get<number>(delivered)) return null
+			return new Promise<number>((done) =>
+				setTimeout(() => done(since), Math.max(0, r.ms - (Date.now() - since)))
+			)
+		})
+		// the dinner hears it with the post as the caller
+		createEffect(`deliver${i}`, () => read(`due${i}`), (since) => {
+			if (!since) return
+			executeAction("/dinner/on/answer", r.name, r.answer, r.dish)
+			patch(delivered, [{ path: [], value: i + 1 }])
+		})
 	})
-	method("on/reset", () => {
-		stop()
-		edit(sent, () => null)
-		edit(delivered, () => 0)
+	createAction("on/send", () => {
+		if (get(sent)) return
+		patch(sent, [{ path: [], value: Date.now() }])
+		patch(delivered, [{ path: [], value: 0 }])
 	})
-	schedule()
-	teardown(stop)
+	createAction("on/reset", () => {
+		patch(sent, [{ path: [], value: null }])
+		patch(delivered, [{ path: [], value: 0 }])
+	})
 }

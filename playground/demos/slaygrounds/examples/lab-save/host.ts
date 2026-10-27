@@ -1,5 +1,5 @@
 // lab-save's host: the world (@ermine/slaygrounds/world), one process, notebook, and the host's own
-// methods /host/on/save, load, forget. /data is packed (ermine/encoding's pack) and kept in
+// actions /host/on/save, load, forget. /data is packed (ermine/encoding's pack) and kept in
 // IndexedDB (playground/pack-indexeddb, experimental). a restart starts from what was saved
 import type { Entry } from "@ermine/formats/pack"
 import createEntry from "@ermine/core/node/entry"
@@ -43,8 +43,8 @@ const world = createWorld({ render, processes: [{ name: "notebook" }] })
 
 world.seed((host) => {
 	const { table, s } = world.world
-	const said = host.open("/host/saved", words(kept, saved ?? [], "loaded, saved"))
-	const say = (text: string) => host.edit(said, () => text)
+	const said = host.ensureNode("/host/saved", words(kept, saved ?? [], "loaded, saved"))
+	const say = (text: string) => host.patch(said, [{ path: [], value: text }])
 
 	// /data has a known id, so a save and a load find it: what was saved is put back whole, else a
 	// folder of that id is made, with three notes
@@ -56,12 +56,12 @@ world.seed((host) => {
 			table.add("children", DATA, createEntry<Record<string, unknown>>({}, world.world.header()))
 		})
 	}
-	host.place("/data", { id: DATA, part: "value" })
+	host.place("/data", host.handleOf({ id: DATA, part: "value" }))
 	if (!saved) {
-		host.open("/data/order", ["a", "b", "c"])
-		host.open("/data/notes/a", "pack the table")
-		host.open("/data/notes/b", "keep it in IndexedDB")
-		host.open("/data/notes/c", "restart, and it is still here")
+		host.ensureNode("/data/order", ["a", "b", "c"])
+		host.ensureNode("/data/notes/a", "pack the table")
+		host.ensureNode("/data/notes/b", "keep it in IndexedDB")
+		host.ensureNode("/data/notes/c", "restart, and it is still here")
 	}
 
 	// every stored node /data reaches, each part there: pack's entries
@@ -80,9 +80,9 @@ world.seed((host) => {
 		return out
 	}
 
-	// the methods a program sends to. each is async: what lands after an await is written as the
-	// host, and pulsed
-	host.method("/host/on/save", async (options: { op?: boolean } = {}) => {
+	// the actions a program runs. each is async: what lands after an await is written as the
+	// host (the host's functions fall back to its own scope), and pulses
+	host.createAction("/host/on/save", async (options: { op?: boolean } = {}) => {
 		const entries = reached(DATA)
 		try {
 			await packs.save(NAME, entries as never, options)
@@ -91,7 +91,7 @@ world.seed((host) => {
 			say("not saved: " + (e as Error).message)
 		}
 	})
-	host.method("/host/on/load", async () => {
+	host.createAction("/host/on/load", async () => {
 		const entries = await packs.load(NAME).then((e) => e && modern(e))
 		if (!entries) return say("nothing saved yet")
 		// each node put back in place of what is there: its readers run again
@@ -101,7 +101,7 @@ world.seed((host) => {
 		s.pulse()
 		say(words(await packs.saved(NAME), entries, "loaded, saved"))
 	})
-	host.method("/host/on/forget", async () => {
+	host.createAction("/host/on/forget", async () => {
 		await packs.remove(NAME)
 		say("forgotten: a restart starts fresh")
 	})
