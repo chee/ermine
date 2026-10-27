@@ -1,11 +1,11 @@
 // the path cache (cache.ts) on a real scheduler, table and places, children alone. the cache with a
 // second contributor (processes) is tested in ermine/processes. numbers are printed with -- -v
-import { assert, assertEquals } from "@std/assert"
+import { assert, assertEquals, assertThrows } from "@std/assert"
 import createEntry from "@ermine/core/node/entry"
 import { type Computer, createScheduler, type Ended } from "@ermine/core/scheduler"
 import { createPaths } from "@ermine/core/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/core/table"
-import { type Contributor, createPlaces, place, rename } from "./places.ts"
+import { children, type Contributor, createPlaces, none, place, rename } from "./places.ts"
 import { get, gets, list, members } from "./lib.ts"
 import { createChangeHeader } from "./header.ts"
 import { createPathCache } from "./cache.ts"
@@ -391,4 +391,22 @@ Deno.test("cache: an entry worked out under a peep still records its reads", () 
 	w2.rename("W", "clock", "X")
 	w2.s.pulse()
 	assertEquals(r2.values, ["C0", undefined])
+})
+
+Deno.test("cache: an entry that cannot be worked out is made no more than before, and asked again it works", () => {
+	let broken = true
+	const w = world([children, {
+		from: "odd",
+		step: () => {
+			if (broken) throw new Error("odd")
+			return undefined
+		},
+		names: () => none,
+	}])
+	w.tree()
+	assertThrows(() => w.cache.get(["work", "clock"]), Error, "odd")
+	assertEquals(w.count().entries, 0)
+	broken = false
+	assertEquals(w.cache.get(["work", "clock"]), "C0")
+	assertEquals(w.count().entries, 0)
 })

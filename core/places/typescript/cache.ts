@@ -183,8 +183,9 @@ export function createPathCache(setup: {
 		}
 		const key = (pick: Mark["pick"]): Mark => ({ owner: me, entry: e, pick })
 		e.keys.push(...(kind === "at" ? [key(firstOf), key(whole), key(goneOf)] : [key(whole)]))
-		for (const k of e.keys) clingy.add(k)
+		// worked out first: a throw leaves no key added
 		const [answer, reads] = work(e)
+		for (const k of e.keys) clingy.add(k)
 		e.answer = answer
 		e.reads = reads
 		entries.set(name, e)
