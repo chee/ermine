@@ -91,6 +91,10 @@ LIBS += presence
 squish-test_src = core/changeable/c/squish.c core/changeable/c/squish_test.c
 squish-test = core/changeable/c/squish-test
 LIBS += squish-test
+# the JSON writer (changeable's json.c) on a value far deeper than the C stack holds by recursion
+json-test_src = core/changeable/c/json.c core/changeable/c/value.c core/changeable/c/json_test.c
+json-test = core/changeable/c/json-test
+LIBS += json-test
 # hash (playground/encoding): a value's name, BLAKE3 of its canonical CBOR, against conformance/hash/vectors.json
 hash_src = playground/encoding/c/hash_test.c playground/encoding/c/hash.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src)
 hash = playground/encoding/c/hash-test
