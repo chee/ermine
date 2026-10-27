@@ -2,9 +2,12 @@
 # a C harness run under macOS's leaks, for its suite: the harness's answers on stdout as it writes
 # them, leaks' report cut off after them. anything leaked: the report added to $LEAKS_LOG
 # (default: stderr), and the exit 1. usage: leaks.sh harness [args]
+# the harness's own failing exit is kept
 # (the sanitizer builds find bad reads and writes; on macOS they find no leaks, so this does)
 err=$(mktemp) || exit 2
-leaks --atExit -- "$@" 2>"$err" | awk -v file="${LEAKS_LOG:-/dev/stderr}" -v name="$1" '
+st=$(mktemp) || exit 2
+# the pipeline's status is awk's: leaks' own (the harness's, passed on) goes by a file
+{ leaks --atExit -- "$@" 2>"$err"; echo $? >"$st"; } | awk -v file="${LEAKS_LOG:-/dev/stderr}" -v name="$1" '
 	# the report starts at its first "Process:" line, after everything the harness wrote
 	!report && /^Process: / { report = 1 }
 	!report { print; fflush(); next }
@@ -15,7 +18,9 @@ leaks --atExit -- "$@" 2>"$err" | awk -v file="${LEAKS_LOG:-/dev/stderr}" -v nam
 		if (!report) { printf "== %s: no report from leaks\n", name >> file; exit 2 }
 	}'
 code=$?
+# the report's verdict first; else the harness's own exit
+[ $code -eq 0 ] && code=$(cat "$st")
 # the harness's own errors pass through; leaks' and malloc's notes do not
 grep -v -e "is not debuggable" -e "MallocStackLogging:" -e "^$" "$err" >&2
-rm -f "$err"
+rm -f "$err" "$st"
 exit $code
