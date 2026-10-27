@@ -937,6 +937,15 @@ typedef struct {
 	size_t n;
 	int gone;
 } writing;
+// f run inside c with site as the write's site, then a pulse queued unless it failed
+static int in_pulse(es_context *c, es_thunk f, void *ctx, const ch_site *site) {
+	const ch_site *was = es_enter(c->ermine, site);
+	int code = es_inside(c, f, ctx);
+	es_enter(c->ermine, was);
+	if (!code) es_queue_pulse(c->ermine);
+	return code;
+}
+
 static int write_in(void *p) {
 	writing *s = p;
 	gd_thing thing = {.id = tb_string(s->at->id)};
@@ -950,12 +959,7 @@ static int write_in(void *p) {
 static int write_run(es_context *c, const char *part, const es_aim *at, const op_patch *patches,
 	size_t n, int gone, const ch_site *site) {
 	writing s = {c, part, at, patches, n, gone};
-	const ch_site *was = es_enter(c->ermine, site);
-	int code = es_inside(c, write_in, &s);
-	es_enter(c->ermine, was);
-	if (code) return code;
-	es_queue_pulse(c->ermine);
-	return 0;
+	return in_pulse(c, write_in, &s, site);
 }
 int es_context_write_at(es_context *c, const char *part, const es_aim *at, const op_patch *patches,
 	size_t n, const ch_site *site) {
@@ -1136,11 +1140,8 @@ static int ensuring_at(es_context *c, es_at p, const op_value *value, es_make ma
 	if (out != NULL) *out = NULL;
 	ensuring s = {.c = c, .value = value, .make = make, .ctx = ctx};
 	TRY(es_resolve(c, p, &s.path));
-	const ch_site *was = es_enter(c->ermine, site);
-	int code = es_inside(c, ensure_in, &s);
-	es_enter(c->ermine, was);
+	int code = in_pulse(c, ensure_in, &s, site);
 	if (code) return es_names_free(&s.path), code;
-	es_queue_pulse(c->ermine);
 	if (out != NULL) *out = handle_at(c, &s.path, "value");
 	es_names_free(&s.path);
 	return 0;
@@ -1182,12 +1183,9 @@ int es_create_node_at(es_context *c, es_at folder, const op_value *value, es_han
 	char *name = es_new_id(e);
 	names_add(&s.path, name);
 	free(name);
-	const ch_site *was = es_enter(e, site);
-	code = es_inside(c, create_in, &s);
-	es_enter(e, was);
+	code = in_pulse(c, create_in, &s, site);
 	free(id);
 	if (code) return es_names_free(&s.path), code;
-	es_queue_pulse(e);
 	if (out != NULL) *out = handle_at(c, &s.path, "value");
 	es_names_free(&s.path);
 	return 0;
@@ -2258,7 +2256,7 @@ const char *const *es_get_args(es_context *c, size_t *n) {
 // patch ------------------------------------------------------------------------------------------------------------
 
 typedef struct {
-	es_context *c, *t;
+	es_context *c;
 	es_target x;
 	const char *part;
 	const op_patch *patches;
@@ -2268,27 +2266,22 @@ typedef struct {
 static int patch_in(void *p) {
 	patching *s = p;
 	es_node_data n;
-	TRY(node_part(s->t, s->x, s->part, &n));
+	TRY(node_part(s->c, s->x, s->part, &n));
 	const char *id;
-	int code = need_id(s->t, &n, &id);
-	if (!code) code = ask(s->t, "edit", gd_target_of(thing_of(id, &n), n.part, NULL));
+	int code = need_id(s->c, &n, &id);
+	if (!code) code = ask(s->c, "edit", gd_target_of(thing_of(id, &n), n.part, NULL));
 	if (!code && s->n) {
 		es_write w = {.part = n.part, .id = id, .has_path = n.has_path, .path = CP(n.path),
 			.npath = n.npath, .patches = s->patches, .npatches = s->n};
-		code = es_context_put(s->t, &w);
+		code = es_context_put(s->c, &w);
 	}
 	es_node_data_free(&n);
 	return code;
 }
 static int patch_part(es_context *c, es_target x, const char *part, const op_patch *patches,
 	size_t n, const ch_site *site) {
-	patching s = {c, c, x, part, patches, n};
-	const ch_site *was = es_enter(c->ermine, site);
-	int code = es_inside(c, patch_in, &s);
-	es_enter(c->ermine, was);
-	if (code) return code;
-	es_queue_pulse(c->ermine);
-	return 0;
+	patching s = {c, x, part, patches, n};
+	return in_pulse(c, patch_in, &s, site);
 }
 
 int es_patch_at(es_context *c, es_target x, const op_patch *patches, size_t n,
@@ -2353,12 +2346,7 @@ static int place_in(void *v) {
 }
 int es_place_at(es_context *c, es_at p, es_target x, const ch_site *site) {
 	tree s = {.c = c, .p = p, .x = x};
-	const ch_site *was = es_enter(c->ermine, site);
-	int code = es_inside(c, place_in, &s);
-	es_enter(c->ermine, was);
-	if (code) return code;
-	es_queue_pulse(c->ermine);
-	return 0;
+	return in_pulse(c, place_in, &s, site);
 }
 
 // a saved child of a folder that something else shadows at its path (a box's binding) is not the
@@ -2469,7 +2457,7 @@ static void stop_unreached(es_context *c, idlist *l, const char *keep) {
 }
 
 typedef struct {
-	es_context *c, *t;
+	es_context *c;
 	es_target x;
 	const op_patch *patches;
 	size_t n;
@@ -2478,9 +2466,9 @@ static int children_in(void *p) {
 	childing *s = p;
 	es_ermine *e = s->c->ermine;
 	es_node_data n;
-	TRY(es_node_of(s->t, s->x, &n));
+	TRY(es_node_of(s->c, s->x, &n));
 	const char *folder;
-	int code = need_id(s->t, &n, &folder);
+	int code = need_id(s->c, &n, &folder);
 	for (size_t i = 0; i < s->n && !code; i++) {
 		const op_patch *p = &s->patches[i];
 		if (p->place.length != 1 || p->place.path[0].type != OP_STR_KEY || p->has_move ||
@@ -2501,11 +2489,11 @@ static int children_in(void *p) {
 			code = target_of_value(s->c, p->value, &v, &own);
 			char *id = NULL;
 			if (!code) code = es_id_through(s->c, v, &id);
-			if (!code) code = es_ask_placing(s->t, &slot, v, id);
+			if (!code) code = es_ask_placing(s->c, &slot, v, id);
 			if (!code) code = placing(children, name, id, &ps);
 			if (!code) {
 				es_write w = {.part = "children", .id = folder, .patches = ps.p, .npatches = ps.n};
-				code = es_context_put(s->t, &w);
+				code = es_context_put(s->c, &w);
 				pset_free(&ps);
 			}
 			es_names_free(&own);
@@ -2519,28 +2507,28 @@ static int children_in(void *p) {
 				names = es_alloc((n.npath + 1) * sizeof *names);
 				for (size_t k = 0; k < n.npath; k++) names[k] = n.path[k];
 				names[n.npath] = (char *)name;
-				running = get_id(s->t, CP(names), n.npath + 1, &at) == 0 &&
+				running = get_id(s->c, CP(names), n.npath + 1, &at) == 0 &&
 					running_at(e, at, names, n.npath + 1);
 				if (!running) es_clear_thrown();
 			}
 			if (running) {
 				char *id = es_dup(at);
-				code = ask(s->t, "place", slot);
+				code = ask(s->c, "place", slot);
 				if (!code) code = es_stop_node(e, id);
 				free(id);
 			} else if (children != NULL) {
-				code = ask(s->t, "place", slot);
+				code = ask(s->c, "place", slot);
 				const char *was = child_of(children, name);
 				idlist below = {0};
 				if (!code && was != NULL) under(e, was, &below);
 				if (!code) code = unplacing(children, name, &ps);
 				if (!code) {
 					es_write w = {.part = "children", .id = folder, .patches = ps.p, .npatches = ps.n};
-					code = es_context_put(s->t, &w);
+					code = es_context_put(s->c, &w);
 					pset_free(&ps);
 				}
 				// gone is what no name reaches from the root now: one reached by another name stays
-				if (!code) stop_unreached(s->t, &below, NULL);
+				if (!code) stop_unreached(s->c, &below, NULL);
 				idlist_free(&below);
 			}
 			free(names);
@@ -2552,13 +2540,8 @@ static int children_in(void *p) {
 }
 int es_patch_children_at(es_context *c, es_target x, const op_patch *patches, size_t n,
 	const ch_site *site) {
-	childing s = {c, c, x, patches, n};
-	const ch_site *was = es_enter(c->ermine, site);
-	int code = es_inside(c, children_in, &s);
-	es_enter(c->ermine, was);
-	if (code) return code;
-	es_queue_pulse(c->ermine);
-	return 0;
+	childing s = {c, x, patches, n};
+	return in_pulse(c, children_in, &s, site);
 }
 
 // a name out of its folder; a process's node there (named by its row): the process stopped, which
@@ -2611,12 +2594,7 @@ static int unplace_in(void *v) {
 }
 int es_unplace_at(es_context *c, es_at p, const ch_site *site) {
 	tree s = {.c = c, .p = p};
-	const ch_site *was = es_enter(c->ermine, site);
-	int code = es_inside(c, unplace_in, &s);
-	es_enter(c->ermine, was);
-	if (code) return code;
-	es_queue_pulse(c->ermine);
-	return 0;
+	return in_pulse(c, unplace_in, &s, site);
 }
 
 // move's patches, checked as move checks: the one it goes into first; to the same name: none. each is
@@ -2698,25 +2676,20 @@ static int rename_in(void *v) {
 }
 int es_rename_at(es_context *c, es_at from, es_at to, const ch_site *site) {
 	tree s = {.c = c, .p = from, .to = to};
-	const ch_site *was = es_enter(c->ermine, site);
-	int code = es_inside(c, rename_in, &s);
-	es_enter(c->ermine, was);
-	if (code) return code;
-	es_queue_pulse(c->ermine);
-	return 0;
+	return in_pulse(c, rename_in, &s, site);
 }
 
 static int remove_in(void *v) {
 	tree *s = v;
-	es_context *c = s->c, *t = c;
+	es_context *c = s->c;
 	es_ermine *e = c->ermine;
 	es_node_data n;
-	TRY(es_node_of(t, s->x, &n));
+	TRY(es_node_of(c, s->x, &n));
 	const char *found;
-	int code = need_id(t, &n, &found);
+	int code = need_id(c, &n, &found);
 	// the id outlives its entries: the table lets go of its key with the last
 	char *id = code ? NULL : es_dup(found);
-	if (!code) code = ask(t, "remove", gd_target_of(thing_of(id, &n), NULL, NULL));
+	if (!code) code = ask(c, "remove", gd_target_of(thing_of(id, &n), NULL, NULL));
 	idlist below = {0};
 	if (!code) under(e, id, &below);
 	// a running process's node: the process stopped first (its row out), then its entries gone
@@ -2724,11 +2697,11 @@ static int remove_in(void *v) {
 	else if (!code && n.has_path && n.npath) {
 		nd_entry *children;
 		const char *name;
-		if (es_folder_slot(t, CP(n.path), n.npath, &children, &name) == 0) {
+		if (es_folder_slot(c, CP(n.path), n.npath, &children, &name) == 0) {
 			const char *there = child_of(children, name);
 			const char *parent;
 			if (there != NULL && strcmp(there, id) == 0 &&
-				get_id(t, CP(n.path), n.npath - 1, &parent) == 0 && parent != NULL) {
+				get_id(c, CP(n.path), n.npath - 1, &parent) == 0 && parent != NULL) {
 				pset ps;
 				code = unplacing(children, name, &ps);
 				if (!code) {
@@ -2766,10 +2739,5 @@ static int remove_in(void *v) {
 }
 int es_remove_at(es_context *c, es_target x, const ch_site *site) {
 	tree s = {.c = c, .x = x};
-	const ch_site *was = es_enter(c->ermine, site);
-	int code = es_inside(c, remove_in, &s);
-	es_enter(c->ermine, was);
-	if (code) return code;
-	es_queue_pulse(c->ermine);
-	return 0;
+	return in_pulse(c, remove_in, &s, site);
 }
