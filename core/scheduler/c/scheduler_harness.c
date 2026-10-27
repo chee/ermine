@@ -174,6 +174,23 @@ static char *name_it(sc_scope *o, const char *name) {
 	sput(&names, n, o);
 	return NULL;
 }
+// a scope freed (a plain one let go by every holder: the release op): its name forgotten, the
+// string kept to the end (the names map may still point at it). computers are held by the harness
+// too (their moments name them), so never freed before the end
+static char **unnamed;
+static size_t nunnamed, capunnamed;
+static void freed(sc_scope *o, void *data) {
+	(void)data;
+	char *n = sc_scope_user(o);
+	if (n == NULL) return;
+	if (scope_named(n) == o) sput(&names, n, NULL);
+	for (size_t i = 0; i < nnamed; i++)
+		if (named[i] == o) {
+			named[i] = named[--nnamed];
+			break;
+		}
+	PUSH(unnamed, nunnamed, capunnamed, n);
+}
 
 static op_value **logged;
 static size_t nlogged, caplogged;
@@ -934,6 +951,7 @@ static op_value *make_computer(const op_value *r, bool effect) {
 	if (why) return answer_error(copyString(why));
 	sc_computer *c = m.c;
 	if (c == NULL) return answer_error(copyString(SC_DISPOSED));
+	sc_retain(c);
 	p->self = c;
 	bad = name_it(c, name);
 	if (bad) return answer_error(bad);
@@ -1005,6 +1023,7 @@ static val made_in(const char *form, const op_value *a0, const op_value *a1, con
 	sc_computer *c = effect ? sc_create_effect(sch, def, NULL, 0) : sc_create_computer(sch, def, NULL, 0);
 	nnaming--;
 	if (c == NULL) return thrown(unmade(NULL));
+	sc_retain(c);
 	p->self = c;
 	char *bad = name_it(c, name);
 	if (bad) return thrown(bad);
@@ -1081,6 +1100,13 @@ static op_value *answer(const op_value *r) {
 		op_value *out = op_map();
 		op_set(out, "value", in.v.j ? in.v.j : op_null());
 		return out;
+	}
+	if (strcmp(op, "retain") == 0 || strcmp(op, "release") == 0) {
+		sc_scope *o = need_scope(op_get(r, "scope"), &bad);
+		if (!o) return answer_error(bad);
+		if (op[2] == 't') sc_retain(o);
+		else sc_release(o);
+		return op_map();
 	}
 	if (strcmp(op, "dispose") == 0) {
 		sc_scope *o = need_scope(op_get(r, "scope"), &bad);
@@ -1199,6 +1225,7 @@ void hh_answer(const op_value *r, FILE *out) {
 		sc_on_settle(sch, settled, NULL);
 		sc_on_after_pulse(sch, pulsed, NULL);
 		sc_on_mark(sch, marked, NULL);
+		sc_on_free(sch, freed, NULL);
 	}
 	PUSH(lines, nlines, caplines, hh_retain());
 	op_value *a = answer(r);
@@ -1216,6 +1243,8 @@ void hh_finish(void) {
 	for (size_t i = 0; i < nwaits; i++) wait_free(waits[i]);
 	for (size_t i = 0; i < nold; i++) wait_free(old[i]);
 	for (size_t i = 0; i < nnamed; i++) free(sc_scope_user(named[i]));
+	for (size_t i = 0; i < nunnamed; i++) free(unnamed[i]);
+	free(unnamed);
 	sc_free(sch);
 	for (size_t i = 0; i < nmoments; i++) {
 		free(moments[i].error);

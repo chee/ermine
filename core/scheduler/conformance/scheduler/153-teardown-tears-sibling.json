@@ -1,0 +1,21 @@
+{
+	"title": "a teardown that tears down an older sibling, every maker's hold let go: the sibling goes once, there and then; the walk passes it by, gone (the C holds what the walk visits)",
+	"steps": [
+		{ "op": "root", "name": "o", "info": { "actor": "test" }, "expect": {} },
+		{ "op": "scope", "name": "p", "parent": "o", "info": { "why": "p" }, "expect": {} },
+		{ "op": "scope", "name": "sib", "parent": "p", "info": { "why": "sib" }, "expect": {} },
+		{ "op": "scope", "name": "k2", "parent": "p", "info": { "why": "k2" }, "expect": {} },
+		{ "op": "cleanup", "scope": "sib", "do": { "log": "sib" }, "expect": {} },
+		{
+			"op": "cleanup",
+			"scope": "k2",
+			"do": { "do": [{ "log": "k2" }, { "dispose": "sib" }, { "log": "k2 after" }] },
+			"expect": {}
+		},
+		{ "op": "release", "scope": "sib", "expect": {} },
+		{ "op": "release", "scope": "k2", "expect": {} },
+		{ "op": "dispose", "scope": "p", "expect": {} },
+		{ "op": "log", "expect": { "log": ["k2", "sib", "k2 after"] } },
+		{ "op": "run", "scope": "p", "do": 1, "expect": { "error": "disposed" } }
+	]
+}
