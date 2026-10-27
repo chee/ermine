@@ -423,7 +423,9 @@ function fromJson(x: unknown): Value {
 		if (!T) throw new Error(`no value for ${tag}`)
 		const big = tag === "int64" || tag === "uint64"
 		return new T(
-			(body as unknown[]).map((e) => big ? BigInt(e as string) : special(e)) as never[],
+			(body as unknown[]).map((e) =>
+				big ? BigInt(/^-?[0-9]+$/.test(e as string) ? e as string : NaN) : special(e)
+			) as never[],
 		) as Value
 	}
 	return Object.fromEntries(Object.entries(x).map(([k, v]) => [k, fromJson(v)]))

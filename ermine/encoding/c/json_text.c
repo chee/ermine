@@ -72,7 +72,7 @@ static bool numberWord(const Json *word, double *out) {
 static bool elementOf(int kind, const Json *e, char *at) {
 	if (kind == JSON_INT64 || kind == JSON_UINT64) {
 		const char *text = jsonText(e);
-		if (!text || !*text || isspace((unsigned char)*text)) return false;
+		if (!text || (*text != '-' && !isdigit((unsigned char)*text))) return false;
 		char *end;
 		errno = 0;
 		if (kind == JSON_INT64) *(int64_t *)at = strtoll(text, &end, 10);
