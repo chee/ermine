@@ -1015,11 +1015,14 @@ struct es_ermine {
 	struct es_hosting *hosting;
 };
 
-// start's options (StartOptions): args (has_args 0: none)
+// start's options (StartOptions): args (has_args 0: none); places: the places the process lives in, a view
+// of this ermine's (pl_view): its "/" and its rows are that view's root, and what it starts is in it
+// too (NULL: the ermine's own)
 typedef struct {
 	const char *const *args;
 	size_t nargs;
 	int has_args;
+	pl *places;
 } es_start_options;
 // a process started
 typedef struct {

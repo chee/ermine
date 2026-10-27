@@ -1,0 +1,215 @@
+{
+	"title": "a process started in a box is a row on the box's root: at its path in the box, not in the host's graph (the host can start another at the same path), taken in the box when the path is or the path is above or under it, and stopped by stop: its teardowns are told, it and what it started are gone from the box, and the path is free again. what a boxed process starts is in the box too",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"name": "b",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/kid",
+			"program": [
+				{
+					"do": [
+						"log",
+						"kid",
+						[
+							"hasNode",
+							"/clock"
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"start",
+						"kid",
+						"/work/kid",
+						"/code/kid"
+					]
+				},
+				{
+					"do": [
+						"addTeardown",
+						"ended"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/clock",
+			"program": "/code/p",
+			"in": "b",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "names",
+			"path": "/",
+			"expect": {
+				"names": [
+					"clock",
+					"work"
+				]
+			},
+			"in": "b"
+		},
+		{
+			"op": "names",
+			"path": "/work",
+			"expect": {
+				"names": [
+					"kid"
+				]
+			},
+			"in": "b"
+		},
+		{
+			"op": "look",
+			"path": "/clock",
+			"in": "b",
+			"expect": {
+				"there": true
+			}
+		},
+		{
+			"op": "look",
+			"path": "/clock",
+			"expect": {
+				"there": false
+			}
+		},
+		{
+			"op": "names",
+			"path": "/",
+			"expect": {
+				"names": [
+					"code"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "p2",
+			"at": "/clock",
+			"program": "/code/p",
+			"in": "b",
+			"expect": {
+				"refused": "taken"
+			}
+		},
+		{
+			"op": "start",
+			"name": "p3",
+			"at": "/work",
+			"program": "/code/p",
+			"in": "b",
+			"expect": {
+				"refused": "taken"
+			}
+		},
+		{
+			"op": "log",
+			"name": "kid",
+			"expect": {
+				"values": [
+					true
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "h",
+			"at": "/clock",
+			"program": "/code/p",
+			"expect": {
+				"id": "proc:h"
+			}
+		},
+		{
+			"op": "names",
+			"path": "/",
+			"expect": {
+				"names": [
+					"clock",
+					"code",
+					"work"
+				]
+			}
+		},
+		{
+			"op": "stop",
+			"name": "p",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "ended",
+			"expect": {
+				"values": [
+					"ended"
+				]
+			}
+		},
+		{
+			"op": "names",
+			"path": "/",
+			"expect": {
+				"names": [
+					"clock",
+					"code",
+					"work"
+				]
+			}
+		},
+		{
+			"op": "look",
+			"path": "/clock",
+			"in": "b",
+			"expect": {
+				"there": false
+			}
+		},
+		{
+			"op": "names",
+			"path": "/",
+			"expect": {
+				"names": []
+			},
+			"in": "b"
+		},
+		{
+			"op": "start",
+			"name": "p4",
+			"at": "/clock",
+			"program": "/code/p",
+			"in": "b",
+			"expect": {
+				"id": "proc:p4"
+			}
+		},
+		{
+			"op": "look",
+			"path": "/clock",
+			"in": "b",
+			"expect": {
+				"there": true
+			}
+		}
+	]
+}

@@ -125,6 +125,12 @@ system_src = $(filter-out core/places/c/places_harness.c core/places/c/world_har
 system = ermine/system/c/ermine-harness
 system_suite = ermine
 LIBS += system
+# boxes (extensions/boxes): another namespace over the same store. the ermine harness (ermine_harness.c, whose hooks the constructor in
+# boxes_harness.c fills) with boxes' ops beside, and the library
+boxes_src = $(system_src) extensions/boxes/c/boxes.c extensions/boxes/c/boxes_harness.c
+boxes = extensions/boxes/c/boxes-harness
+boxes_suite = boxes
+LIBS += boxes
 # sites (ermine/sites): where a scope, computer or effect was made, noted by a macro on the create call; the scheduler alone under it
 sites_src = $(harness_src) core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c ermine/sites/c/sites.c ermine/sites/c/sites_harness.c
 sites = ermine/sites/c/sites-harness

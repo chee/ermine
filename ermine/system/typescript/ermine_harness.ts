@@ -28,8 +28,9 @@
 //    it too), a setup running
 //    program's steps with its api: its value back's (an expr), or it throws text, or (promise) a
 //    promise of back's, settled at the next "settle"
-// { op: "start", name, at, program?, args? } → { id } | { refused, held? }   ermine.start(fn,
-//    at, …): fn the program a code step made at program (none: at)
+// { op: "start", name, at, program?, args?, in? } → { id } | { refused, held? }   ermine.start(fn,
+//    at, …): fn the program a code step made at program (none: at); in: a name in placed (below):
+//    the places it lives in
 // { op: "stop", name, why? }               → {}
 // { op: "status", name }                   → { status }   the start's handle's status()
 // { op: "close" }                          → {}
@@ -147,6 +148,7 @@ import type { System } from "./system.ts"
 import { isHandle } from "./handles.ts"
 import { bare, hints } from "./hints.ts"
 import type { Run } from "@ermine/processes/runs"
+import type { Places } from "@ermine/core/places"
 import { testFeature } from "./features_fixture.ts"
 
 type Env = Map<string, unknown>
@@ -273,6 +275,21 @@ export type Library = (
 	h: { arg: typeof arg; expr: typeof expr },
 ) => unknown
 export const libraries = new Map<string, Library>()
+
+// what another harness adds beside the ops above: extra ops (a request of its own, the ermine
+// given, an answer back), and places a start may be asked to live in, by name (the "start" op's
+// "in"; what a program starts lives where it does) [boxes: box, put, take, look, names]
+export const ops = new Map<
+	string,
+	(r: Request, ermine: Ermine) => Record<string, unknown>
+>()
+export const placed = new Map<string, Places>()
+const placesOf = (name: unknown): { places?: Places } => {
+	if (name === undefined) return {}
+	const places = placed.get(name as string)
+	if (places === undefined) throw new Error(`no places ${name}`)
+	return { places }
+}
 
 // a feature written here, beside the programs, listing no files: their lines keep their sites
 const inline: Feature = {
@@ -747,6 +764,7 @@ function start(r: Request): Record<string, unknown> {
 		if (program === undefined) throw new Error(`no program made at ${rooted(where)}`)
 		const s = m.ermine.start(program, r.at, {
 			...r.args !== undefined && { args: r.args },
+			...placesOf(r.in),
 		})
 		if ("refused" in s) {
 			m.running.delete(r.name)
@@ -965,8 +983,11 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 		}
 		case "site":
 			return { site: siteOf(e.table.get(r.part as Key, r.id)?.change?.external?.[0]) }
-		default:
-			throw new Error(`no op ${r.op}`)
+		default: {
+			const extra = ops.get(r.op)
+			if (extra === undefined) throw new Error(`no op ${r.op}`)
+			return extra(r, e)
+		}
 	}
 }
 

@@ -1,0 +1,198 @@
+{
+	"title": "put refused changes nothing: something there already (a binding; a saved child of the folder; a process; at the path itself, a binding above it, or one under it) is already-there; no name is not-a-name; a node that is not there is nothing-there. what was refused is not there after",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/catclock/face",
+				"face-value"
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/store/loaders",
+				"loaders-v1"
+			]
+		},
+		{
+			"op": "box",
+			"name": "b",
+			"at": "/catclock",
+			"expect": {}
+		},
+		{
+			"op": "boxput",
+			"box": "b",
+			"path": "loaders",
+			"node": "/store/loaders",
+			"expect": {}
+		},
+		{
+			"op": "boxput",
+			"box": "b",
+			"path": "loaders",
+			"node": "/store/loaders",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "boxput",
+			"box": "b",
+			"path": "face",
+			"node": "/store/loaders",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "boxput",
+			"box": "b",
+			"path": "loaders/inner",
+			"node": "/store/loaders",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "boxput",
+			"box": "b",
+			"path": "lib/deep/loaders",
+			"node": "/store/loaders",
+			"expect": {}
+		},
+		{
+			"op": "boxput",
+			"box": "b",
+			"path": "lib",
+			"node": "/store/loaders",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "boxput",
+			"box": "b",
+			"path": "lib/deep",
+			"node": "/store/loaders",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "boxput",
+			"box": "b",
+			"path": "lib/deep/loaders",
+			"node": "/store/loaders",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "boxput",
+			"box": "b",
+			"path": "",
+			"node": "/store/loaders",
+			"expect": {
+				"error": "not-a-name"
+			}
+		},
+		{
+			"op": "boxput",
+			"box": "b",
+			"path": "/",
+			"node": "/store/loaders",
+			"expect": {
+				"error": "not-a-name"
+			}
+		},
+		{
+			"op": "boxput",
+			"box": "b",
+			"path": "nothing",
+			"node": "/store/not-there",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/clock",
+			"program": "/code/p",
+			"in": "b",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "boxput",
+			"box": "b",
+			"path": "clock",
+			"node": "/store/loaders",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "look",
+			"path": "/face",
+			"in": "b",
+			"expect": {
+				"there": true,
+				"value": "face-value"
+			}
+		},
+		{
+			"op": "look",
+			"path": "/loaders",
+			"in": "b",
+			"expect": {
+				"there": true,
+				"value": "loaders-v1"
+			}
+		},
+		{
+			"op": "look",
+			"path": "/nothing",
+			"in": "b",
+			"expect": {
+				"there": false
+			}
+		},
+		{
+			"op": "names",
+			"path": "/",
+			"expect": {
+				"names": [
+					"clock",
+					"face",
+					"lib",
+					"loaders"
+				]
+			},
+			"in": "b"
+		},
+		{
+			"op": "box",
+			"name": "gone",
+			"at": "/not/a/folder",
+			"expect": {
+				"error": "nothing-there"
+			}
+		}
+	]
+}

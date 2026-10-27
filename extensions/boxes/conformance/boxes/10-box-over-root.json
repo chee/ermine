@@ -1,0 +1,83 @@
+{
+	"title": "a box made over a folder by id: the id of the ermine's root, so the box is the whole graph with its own bindings. the host's names are seen in it, its bindings not by the host",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/work/a",
+				"a"
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/store/loaders",
+				"loaders-v1"
+			]
+		},
+		{
+			"op": "box",
+			"name": "b",
+			"id": "R",
+			"expect": {}
+		},
+		{
+			"op": "boxput",
+			"box": "b",
+			"path": "work/extra",
+			"node": "/store/loaders",
+			"expect": {}
+		},
+		{
+			"op": "look",
+			"path": "/work/a",
+			"in": "b",
+			"expect": {
+				"there": true,
+				"value": "a"
+			}
+		},
+		{
+			"op": "look",
+			"path": "/work/extra",
+			"in": "b",
+			"expect": {
+				"there": true,
+				"value": "loaders-v1"
+			}
+		},
+		{
+			"op": "look",
+			"path": "/work/extra",
+			"expect": {
+				"there": false
+			}
+		},
+		{
+			"op": "names",
+			"path": "/work",
+			"expect": {
+				"names": [
+					"a",
+					"extra"
+				]
+			},
+			"in": "b"
+		},
+		{
+			"op": "names",
+			"path": "/work",
+			"expect": {
+				"names": [
+					"a"
+				]
+			}
+		}
+	]
+}

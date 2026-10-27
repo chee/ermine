@@ -28,6 +28,7 @@
 #include "../../../conformance/c/protocol_harness.h"
 #include "../../../extensions/patchy/c/patch.h"
 #include "ermine.h"
+#include "ermine_harness.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -38,6 +39,9 @@
 		int code_ = (call); \
 		if (code_ != 0) return code_; \
 	} while (0)
+
+int (*hx_op)(const op_value *request, es_ermine *e, op_value **res);
+pl *(*hx_places)(const char *name);
 
 // --- the world -----------------------------------------------------------------------------------
 
@@ -2982,6 +2986,16 @@ static int op_start(const op_value *r, op_value **res) {
 		so.nargs = args->count;
 		so.has_args = 1;
 	}
+	if (text(r, "in") != NULL) {
+		so.places = hx_places != NULL ? hx_places(text(r, "in")) : NULL;
+		if (so.places == NULL) {
+			int code = fail("no places %s", text(r, "in"));
+			free(W->next);
+			W->next = NULL;
+			W->pending = NULL;
+			return code;
+		}
+	}
 	es_started *started = NULL;
 	es_refused refused = {0};
 	int code = es_start(W->e, program_run, program, es_text(at), &so, &started, &refused);
@@ -3381,6 +3395,10 @@ static int answer(const op_value *r, op_value **res) {
 		const ch_site *site = entry != NULL && entry->change.external_length > 0 ? &entry->change.external[0] : NULL;
 		op_set(*res, "site", op_str(site_of(site)));
 		return 0;
+	}
+	if (hx_op != NULL) {
+		int code = hx_op(r, e, res);
+		if (code != HX_NOT_MINE) return code;
 	}
 	return fail("no op %s", op);
 }

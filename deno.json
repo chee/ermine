@@ -17,6 +17,7 @@
 		"./playground/demos",
 		"./playground/libraries/pack-indexeddb",
 		"./extensions/pully",
+		"./extensions/boxes",
 		"./extensions/unplugin",
 		"./playground/tools/files",
 		"./playground/installs",
