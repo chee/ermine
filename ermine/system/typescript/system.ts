@@ -317,7 +317,7 @@ export type Base = {
 	start: (
 		fn: () => unknown,
 		at: Path,
-		options: { args?: readonly string[] },
+		options: { args?: readonly string[]; places?: Places },
 		under: Scope,
 	) => { process: { id: Id; at: Path; folder: Path }; stop: (why?: Why) => void } | {
 		refused: "taken"
@@ -1821,7 +1821,7 @@ function start(
 	const mark = markOf(inner, own)
 	const asStarter = () => runAs(inner, own, mark, asked)
 	asked()
-	const made = base.start(fn, path, { args: options.args }, own)
+	const made = base.start(fn, path, { args: options.args, places }, own)
 	queuePulse()
 	// a program gets where the path is held, never whose it is (an id is the permission)
 	if ("refused" in made) return { refused: "taken", at: made.at }

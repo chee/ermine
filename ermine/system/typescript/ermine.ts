@@ -35,7 +35,8 @@
 //   start(fn, at, { args })   a process at at running fn, its
 //                        setup, given nothing, the process's scope open [chee 10-26: "so let's do
 //                        ermine.start(fn, path, {args?, box?})": the program given, not looked up
-//                        at a path]. its folder: the one it is in. → { process, stop(why?),
+//                        at a path]. its folder: the one it is in. places (a view of the ermine's
+//                        own): its "/" and its rows are that view's, and what it starts is in it too. → { process, stop(why?),
 //                        status() }, or { refused: "taken", at }. what setup returns: the
 //                        process's value (a promise: pending till it settles); setup throwing: its
 //                        error in status(process), the process still there; throwing PENDING (a
@@ -192,6 +193,9 @@ export type Options = {
 // the cwd being a separate thing is a good idea": none given]
 export type StartOptions = {
 	args?: readonly string[]
+	// the places the process lives in: its "/" is their root, its rows are on that root (a view of
+	// this ermine's places, such as @ermine/boxes makes). none: the ermine's own
+	places?: Places
 }
 
 export type Started = {
@@ -820,18 +824,19 @@ export function createErmine(options: Options = {}): Ermine {
 				)
 			}
 			const paths = pathsOf(at)
+			const here = o.places ?? p
 			enterScheduler(s)
 			let made: ReturnType<Processes["start"]>
 			try {
 				made = processes!.start(
-					p,
+					here,
 					paths.at,
 					{ args: o.args, folder: paths.folder, ...under !== undefined && { under } },
 					(inside) => {
 						const pid = inside.id
 						const inner = createProcessContext(parts, {
 							scope: inside.scope,
-							places: p,
+							places: here,
 							folder: inside.folder,
 							at: inside.at,
 							args: inside.args,

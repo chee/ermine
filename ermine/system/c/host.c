@@ -1950,7 +1950,7 @@ static void start_body(pr_process *p, void *data) {
 	rec->id = es_dup(pr_id(p));
 	const char *const *at, *const *folder, *const *args;
 	size_t nat = pr_at(p, &at), nfolder = pr_folder(p, &folder), nargs = pr_args(p, &args);
-	es_context_options co = {.scope = pr_scope(p), .places = e->places, .folder = folder, .nfolder = nfolder,
+	es_context_options co = {.scope = pr_scope(p), .places = pr_places(p), .folder = folder, .nfolder = nfolder,
 		.at = at, .nat = nat, .args = args, .nargs = nargs, .process = p, .node = rec->id};
 	rec->context = es_context_new(e, &co);
 	remember_context(e, rec->context);
@@ -2005,7 +2005,9 @@ static int start_under(es_ermine *e, es_program fn, void *ctx, const char *const
 		po.has_args = 1;
 	}
 	pr_refusal no;
-	pr_process *made = pr_start(e->processes, e->places, steps, nsteps, &po, &no);
+	// a child lives where its starter does; the host's start may name the places
+	pl *where = starter != NULL ? starter->places : o != NULL && o->places != NULL ? o->places : e->places;
+	pr_process *made = pr_start(e->processes, where, steps, nsteps, &po, &no);
 	if (made == NULL) {
 		// refused: no process, its record out of procs
 		rec_free(rec);

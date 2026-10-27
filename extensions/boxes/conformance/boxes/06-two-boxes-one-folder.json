@@ -1,0 +1,245 @@
+{
+	"title": "two boxes over one folder each have their own bindings: the same name put in each is a different node, taking it from one leaves the other's, a process in one sees only its box's. both see the folder's children. their process rows are not: rows are on the folder (a process is unique, so a path in it is taken in both), so each box lists the processes of the other",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/catclock/face",
+				"face-value"
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/store/one",
+				"one"
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/store/two",
+				"two"
+			]
+		},
+		{
+			"op": "box",
+			"name": "a",
+			"at": "/catclock",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"name": "b",
+			"at": "/catclock",
+			"expect": {}
+		},
+		{
+			"op": "boxput",
+			"box": "a",
+			"path": "tool",
+			"node": "/store/one",
+			"expect": {}
+		},
+		{
+			"op": "boxput",
+			"box": "b",
+			"path": "tool",
+			"node": "/store/two",
+			"expect": {}
+		},
+		{
+			"op": "boxput",
+			"box": "a",
+			"path": "only-a",
+			"node": "/store/one",
+			"expect": {}
+		},
+		{
+			"op": "look",
+			"path": "/tool",
+			"in": "a",
+			"expect": {
+				"there": true,
+				"value": "one"
+			}
+		},
+		{
+			"op": "look",
+			"path": "/tool",
+			"in": "b",
+			"expect": {
+				"there": true,
+				"value": "two"
+			}
+		},
+		{
+			"op": "look",
+			"path": "/only-a",
+			"in": "a",
+			"expect": {
+				"there": true,
+				"value": "one"
+			}
+		},
+		{
+			"op": "look",
+			"path": "/only-a",
+			"in": "b",
+			"expect": {
+				"there": false
+			}
+		},
+		{
+			"op": "look",
+			"path": "/face",
+			"in": "a",
+			"expect": {
+				"there": true,
+				"value": "face-value"
+			}
+		},
+		{
+			"op": "look",
+			"path": "/face",
+			"in": "b",
+			"expect": {
+				"there": true,
+				"value": "face-value"
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"log",
+						"tool",
+						[
+							"read",
+							"/tool"
+						]
+					]
+				},
+				{
+					"do": [
+						"log",
+						"only",
+						[
+							"hasNode",
+							"/only-a"
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "pa",
+			"at": "/pa",
+			"program": "/code/p",
+			"in": "a",
+			"expect": {
+				"id": "proc:pa"
+			}
+		},
+		{
+			"op": "start",
+			"name": "pb",
+			"at": "/pb",
+			"program": "/code/p",
+			"in": "b",
+			"expect": {
+				"id": "proc:pb"
+			}
+		},
+		{
+			"op": "log",
+			"name": "tool",
+			"expect": {
+				"values": [
+					"one",
+					"two"
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "only",
+			"expect": {
+				"values": [
+					true,
+					false
+				]
+			}
+		},
+		{
+			"op": "boxtake",
+			"box": "a",
+			"path": "tool",
+			"expect": {}
+		},
+		{
+			"op": "look",
+			"path": "/tool",
+			"in": "a",
+			"expect": {
+				"there": false
+			}
+		},
+		{
+			"op": "look",
+			"path": "/tool",
+			"in": "b",
+			"expect": {
+				"there": true,
+				"value": "two"
+			}
+		},
+		{
+			"op": "names",
+			"path": "/",
+			"expect": {
+				"names": [
+					"face",
+					"only-a",
+					"pa",
+					"pb"
+				]
+			},
+			"in": "a"
+		},
+		{
+			"op": "names",
+			"path": "/",
+			"expect": {
+				"names": [
+					"face",
+					"pa",
+					"pb",
+					"tool"
+				]
+			},
+			"in": "b"
+		},
+		{
+			"op": "start",
+			"name": "pc",
+			"at": "/pa",
+			"program": "/code/p",
+			"in": "b",
+			"expect": {
+				"refused": "taken"
+			}
+		}
+	]
+}

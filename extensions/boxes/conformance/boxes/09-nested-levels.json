@@ -1,0 +1,258 @@
+{
+	"title": "a bound path of several names is a level, walked through as a folder: put lib/a/x and lib/a/y, and lib and lib/a list their names and a process reads through them; taking one leaves the other, taking both leaves no lib",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/store/x",
+				"x"
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/store/y",
+				"y"
+			]
+		},
+		{
+			"op": "box",
+			"name": "b",
+			"expect": {}
+		},
+		{
+			"op": "boxput",
+			"box": "b",
+			"path": "lib/a/x",
+			"node": "/store/x",
+			"expect": {}
+		},
+		{
+			"op": "boxput",
+			"box": "b",
+			"path": "lib/a/y",
+			"node": "/store/y",
+			"expect": {}
+		},
+		{
+			"op": "boxput",
+			"box": "b",
+			"path": "lib/y",
+			"node": "/store/y",
+			"expect": {}
+		},
+		{
+			"op": "names",
+			"path": "/",
+			"expect": {
+				"names": [
+					"lib"
+				]
+			},
+			"in": "b"
+		},
+		{
+			"op": "names",
+			"path": "/lib",
+			"expect": {
+				"names": [
+					"a",
+					"y"
+				]
+			},
+			"in": "b"
+		},
+		{
+			"op": "names",
+			"path": "/lib/a",
+			"expect": {
+				"names": [
+					"x",
+					"y"
+				]
+			},
+			"in": "b"
+		},
+		{
+			"op": "look",
+			"path": "/lib/a/x",
+			"in": "b",
+			"expect": {
+				"there": true,
+				"value": "x"
+			}
+		},
+		{
+			"op": "look",
+			"path": "/lib/a",
+			"in": "b",
+			"expect": {
+				"there": false
+			}
+		},
+		{
+			"op": "look",
+			"path": "/lib",
+			"in": "b",
+			"expect": {
+				"there": false
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"log",
+						"x",
+						[
+							"read",
+							"/lib/a/x"
+						]
+					]
+				},
+				{
+					"do": [
+						"log",
+						"y",
+						[
+							"read",
+							"/lib/a/y"
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/p",
+			"program": "/code/p",
+			"in": "b",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "log",
+			"name": "x",
+			"expect": {
+				"values": [
+					"x"
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "y",
+			"expect": {
+				"values": [
+					"y"
+				]
+			}
+		},
+		{
+			"op": "boxtake",
+			"box": "b",
+			"path": "lib/a/x",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/q",
+			"program": [
+				{
+					"do": [
+						"log",
+						"only",
+						[
+							"list",
+							"/lib/a"
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/q",
+			"program": "/code/q",
+			"in": "b",
+			"expect": {
+				"id": "proc:q"
+			}
+		},
+		{
+			"op": "log",
+			"name": "only",
+			"expect": {
+				"values": [
+					[
+						"y"
+					]
+				]
+			}
+		},
+		{
+			"op": "names",
+			"path": "/lib/a",
+			"expect": {
+				"names": [
+					"y"
+				]
+			},
+			"in": "b"
+		},
+		{
+			"op": "boxtake",
+			"box": "b",
+			"path": "lib/a/y",
+			"expect": {}
+		},
+		{
+			"op": "names",
+			"path": "/lib",
+			"expect": {
+				"names": [
+					"y"
+				]
+			},
+			"in": "b"
+		},
+		{
+			"op": "boxtake",
+			"box": "b",
+			"path": "lib/y",
+			"expect": {}
+		},
+		{
+			"op": "names",
+			"path": "/",
+			"expect": {
+				"names": [
+					"p",
+					"q"
+				]
+			},
+			"in": "b"
+		},
+		{
+			"op": "boxtake",
+			"box": "b",
+			"path": "lib",
+			"expect": {
+				"error": "nothing-there"
+			}
+		}
+	]
+}
