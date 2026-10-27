@@ -686,9 +686,8 @@ export function createErmine(options: Options = {}): Ermine {
 				if (r.call !== undefined) keep(r.call)
 			}),
 	})
-	// each process's node: where it runs (system.ts seenIn)
-	const running = new Map<Id, Path>()
-	const roots = new Map<Id, Id>()
+	// each running process's context, by its node's id (its places, where it runs: system.ts seenIn)
+	const contexts = new Map<Id, Inner>()
 	const whys = new Map<Id, Why>()
 	const base: Base = {
 		parts,
@@ -697,7 +696,6 @@ export function createErmine(options: Options = {}): Ermine {
 		runs,
 		calls,
 		memos: new Set(),
-		computers: new Set(),
 		contexts: computerContexts,
 		awaiting: new Set(),
 		missing: new Map(),
@@ -722,8 +720,7 @@ export function createErmine(options: Options = {}): Ermine {
 		errored,
 		handles: new WeakMap(),
 		writers: new WeakMap(),
-		running,
-		roots,
+		processes: contexts,
 		views: new WeakMap(),
 		changes: new WeakMap(),
 		enter,
@@ -745,8 +742,6 @@ export function createErmine(options: Options = {}): Ermine {
 		},
 	}
 
-	// each running process's context, by its node's id
-	const contexts = new Map<Id, Inner>()
 	attach(base, hostInner)
 	// @ermine/system's functions find the host's context by its scope, a process's by its
 	const unregister = registerScheduler(s, hooks.onError.length ? errored : undefined)
@@ -765,7 +760,7 @@ export function createErmine(options: Options = {}): Ermine {
 
 		function stop(process: Process, why: Why = "ended") {
 			// the root its row is on: the process's own places' (a box's), known till it is torn down
-			const world = roots.get(process.id) ?? root
+			const world = contexts.get(process.id)?.places.root ?? root
 			whys.set(process.id, why)
 			try {
 				processes!.stop(process)
@@ -832,9 +827,6 @@ export function createErmine(options: Options = {}): Ermine {
 							...here.root !== root && { box: here.root },
 						})
 						contexts.set(pid, inner)
-						// its node's place, for seen (its rows name it: no children entry has it)
-						running.set(pid, inside.at)
-						roots.set(pid, here.root)
 						// its context, found by its scope (system.ts): no api object [chee 10-25: ">Drop the
 						// objects. ye"]; setup is given nothing [chee 10-25: "we are getting rid of setup(api)
 						// right?"]
@@ -842,8 +834,6 @@ export function createErmine(options: Options = {}): Ermine {
 						registerScope(inside.scope, inner)
 						s.registerTeardown(inside.scope, () => {
 							contexts.delete(pid)
-							running.delete(pid)
-							roots.delete(pid)
 						})
 						// the process's status and value, written as it settles (its status in the status table)
 						const attrs = (patches: Write["patches"]) =>
