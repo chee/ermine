@@ -321,7 +321,11 @@ function* varints(b: Uint8Array): Generator<bigint> {
 			if (at >= b.length || shift > 63n) throw new PackError("not-a-pack")
 			const byte = b[at++]
 			x |= BigInt(byte & 127) << shift
-			if (byte < 128) break
+			if (byte < 128) {
+				// the shortest: no high byte of 0 after another
+				if (byte === 0 && shift > 0n) throw new PackError("not-a-pack")
+				break
+			}
 			shift += 7n
 		}
 		yield x
@@ -486,24 +490,30 @@ function columns(z: unknown, r: Reader, limit: number): Entry[] {
 	if (!isFields(c) || !r.only(c, [], COLUMNS)) throw no()
 	const listOf = (k: string): unknown[] => {
 		const v = k in c ? c[k] : []
-		if (!Array.isArray(v)) throw no()
+		// an empty column is left out
+		if (!Array.isArray(v) || (k in c && v.length === 0)) throw no()
 		return v
 	}
 	const numbers = (k: string): bigint[] => {
 		const v = k in c ? c[k] : new Uint8Array(0)
-		if (!(v instanceof Uint8Array)) throw no()
+		if (!(v instanceof Uint8Array) || (k in c && v.length === 0)) throw no()
 		return [...varints(v)]
 	}
 	// runs spread out: each [it, how many], how many whole and at least 1; more than bound
 	// altogether (the keys or nodes the columns count, as pack.c has it) is no pack, and is refused
-	// before it is spread
+	// before it is spread; a run of what the one before is no pack either, pack writes them as one
 	const spread = (k: string, bound: number): unknown[] => {
 		const runs = listOf(k)
 		let total = 0
-		for (const run of runs) {
+		for (const [i, run] of runs.entries()) {
 			if (!Array.isArray(run) || run.length !== 2 || !whole(run[1]) || run[1] < 1) throw no()
 			total += run[1] as number
 			if (total > bound) throw no()
+			const before = runs[i - 1] as unknown[] | undefined
+			if (
+				before &&
+				compare(cbor.encode(before[0] as cbor.Value), cbor.encode(run[0] as cbor.Value)) === 0
+			) throw no()
 		}
 		const out: unknown[] = []
 		for (const [it, many] of runs as [unknown, number][]) {

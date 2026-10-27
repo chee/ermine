@@ -1109,7 +1109,8 @@ static int items_of(const op_value *c, const char *name, op_value *const **items
 	const op_value *v = op_get(c, name);
 	*items = NULL, *n = 0;
 	if (v == NULL) return 1;
-	if (!array(v)) return 0;
+	// an empty column is left out
+	if (!array(v) || v->count == 0) return 0;
 	*items = v->items, *n = v->count;
 	return 1;
 }
@@ -1121,7 +1122,7 @@ static int numbers_of(const op_value *c, const char *name, pile *tmp, uint64_t *
 	const op_value *v = op_get(c, name);
 	*out = NULL, *n = 0;
 	if (v == NULL) return 1;
-	if (v->type != OP_BYTES) return 0;
+	if (v->type != OP_BYTES || v->bytes == 0) return 0;
 	uint64_t *xs = scratch(tmp, (v->bytes + 1) * sizeof *xs);
 	size_t count = 0;
 	for (size_t at = 0; at < v->bytes;) {
@@ -1130,6 +1131,8 @@ static int numbers_of(const op_value *c, const char *name, pile *tmp, uint64_t *
 			if (at >= v->bytes || shift > 63) return 0;
 			unsigned char byte = v->data[at++];
 			if (shift == 63 && (byte & 127) > 1) return 0;
+			// the shortest: no high byte of 0 after another
+			if (byte == 0 && shift > 0) return 0;
 			x |= (uint64_t)(byte & 127) << shift;
 			if (byte < 128) break;
 		}
@@ -1139,7 +1142,16 @@ static int numbers_of(const op_value *c, const char *name, pile *tmp, uint64_t *
 	return 1;
 }
 
-// runs [[it, how many], ...] spread out, each how many whole and at least 1; more than bound
+// two values the same, by their encodings
+static int same_value(const op_value *a, const op_value *b) {
+	CborOut x = {NULL, 0, 0, true}, y = {NULL, 0, 0, true};
+	int same = pk_put(&x, a) && pk_put(&y, b) && x.length == y.length && memcmp(x.data, y.data, x.length) == 0;
+	free(x.data), free(y.data);
+	return same;
+}
+
+// runs [[it, how many], ...] spread out, each how many whole and at least 1, none of what the one
+// before is; more than bound
 // altogether: 0, as no pack has more
 static int spread(const op_value *c, const char *name, pile *tmp, size_t bound, const op_value ***out, size_t *n) {
 	op_value *const *runs;
@@ -1149,6 +1161,8 @@ static int spread(const op_value *c, const char *name, pile *tmp, size_t bound, 
 	for (size_t i = 0; i < nr; i++) {
 		long m;
 		if (!array(runs[i]) || runs[i]->count != 2 || !whole(runs[i]->items[1], &m) || m < 1) return 0;
+		// a run of what the one before is: pack writes them as one
+		if (i > 0 && same_value(runs[i - 1]->items[0], runs[i]->items[0])) return 0;
 		if ((size_t)m > bound - total) return 0;
 		total += (size_t)m;
 	}
