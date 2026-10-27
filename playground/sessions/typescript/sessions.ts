@@ -25,7 +25,7 @@
 import { bytes, kind, text } from "@ermine/ids"
 import type { ChangeHeader, Entry } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
-import type { Patch } from "@ermine/core/op/apply"
+import type { Patch } from "@ermine/core/changeable/apply"
 import type { Id, Places } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"
 import { upsert } from "@ermine/core/places/upsert"

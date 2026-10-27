@@ -1,6 +1,6 @@
 // op's patches on plain values (maps, lists, strings), a plain second apply for the squish fuzzer
 // to check against. Shares what it does not touch.
-import type { Key, Patch, Target as Place } from "@ermine/core/op/apply"
+import type { Key, Patch, Target as Place } from "@ermine/core/changeable/apply"
 
 export type V = unknown
 

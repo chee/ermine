@@ -12,7 +12,7 @@ rename=""
 for s in compress_in_place compress_in_place_portable compress_subtree_wide compress_xof compress_xof_portable hash_many hash_many_portable hasher_finalize hasher_finalize_seek hasher_init hasher_init_derive_key hasher_init_derive_key_raw hasher_reset hasher_update simd_degree version xof_many; do
 	rename="$rename -Dblake3_$s=ermc_blake3_$s"
 done
-nc_sources="$nc/core/op/c/value.c $nc/core/op/c/apply.c $nc/core/op/c/invert.c $nc/core/op/c/json.c $nc/core/node/c/node.c $nc/core/node/c/update.c \
+nc_sources="$nc/core/changeable/c/value.c $nc/core/changeable/c/apply.c $nc/core/changeable/c/invert.c $nc/core/changeable/c/json.c $nc/core/node/c/node.c $nc/core/node/c/update.c \
   $nc/core/table/c/table.c $nc/core/scheduler/c/scheduler.c $nc/core/scheduler/c/order.c $nc/core/scheduler/c/rank.c \
   $nc/core/scheduler/c/causes.c $nc/core/scheduler/c/ptrmap.c $nc/core/scheduler/c/tracker.c $nc/core/scheduler/c/paths.c \
   $nc/core/scheduler/c/selector.c $nc/core/places/c/places.c $nc/core/unread/c/unread.c $nc/core/places/c/cache.c $nc/core/places/c/status.c $nc/ermine/processes/c/runs.c \
@@ -51,7 +51,7 @@ nc_runner() {
 }
 
 # --- compiling only what changed
-# nc_object src: the object's name for a source, by its grandparent folder and name, so core/op/c/value.c
+# nc_object src: the object's name for a source, by its grandparent folder and name, so core/changeable/c/value.c
 # is nc_op_value.o and newos/card/card.c nc_newos_card.o (no two sources share one)
 nc_object() {
 	echo "nc_$(basename "$(dirname "$(dirname "$1")")")_$(basename "$1" .c).o"

@@ -29,7 +29,7 @@
 // not waiting there, or it goes; another's till a send from it there is answered, or its scope
 // goes. waits() tracked.
 import type { ChangeHeader } from "@ermine/core/node/entry"
-import type { Key as Step } from "@ermine/core/op/apply"
+import type { Key as Step } from "@ermine/core/changeable/apply"
 import type { Fact, Id, Path, Places } from "@ermine/core/places"
 import type { Read, Write } from "@ermine/processes/runs"
 import { NODE } from "@ermine/core/places/header"

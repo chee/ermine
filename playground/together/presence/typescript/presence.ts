@@ -9,7 +9,7 @@
 import { decode, encode } from "@ermine/encoding/cbor"
 import createEntry from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
-import type { Patch } from "@ermine/core/op/apply"
+import type { Patch } from "@ermine/core/changeable/apply"
 import { createChangeHeader } from "@ermine/core/places/header"
 import { upsert } from "@ermine/core/places/upsert"
 import type { Id, Places } from "@ermine/core/places"

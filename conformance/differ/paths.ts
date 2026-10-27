@@ -10,8 +10,8 @@
 // every spot at or above a place, the change spot first); event and held are a model's of the
 // spots held (model, below): event the change spot, then each step's spot, its keys spot, then
 // its kids, in the order the kid steps were made (a step let go and made again last)
-import apply from "@ermine/core/op/apply"
-import type { Key, Patch } from "@ermine/core/op/apply"
+import apply from "@ermine/core/changeable/apply"
+import type { Key, Patch } from "@ermine/core/changeable/apply"
 import {
 	differs,
 	firsts,

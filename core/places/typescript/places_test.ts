@@ -4,7 +4,7 @@
 import { assert, assertEquals, assertThrows } from "@std/assert"
 import createEntry, { type ChangeHeader } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
-import type { Patch } from "@ermine/core/op/apply"
+import type { Patch } from "@ermine/core/changeable/apply"
 import { type Computer, createScheduler, SchedulerError } from "@ermine/core/scheduler"
 import { type Told, trace } from "@ermine/core/scheduler/trace"
 import { createPaths } from "@ermine/core/scheduler/paths"

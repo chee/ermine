@@ -30,7 +30,7 @@ import {
 	peep,
 	read,
 } from "@ermine/system"
-import produce from "@ermine/core/op/produce"
+import produce from "@ermine/core/changeable/produce"
 import { enc, kid } from "../paths.ts"
 import {
 	changeable,

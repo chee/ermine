@@ -10,7 +10,7 @@
 // wild: patches of no patch's shape, odd numbers, updates with no patches or patches not a list,
 // values that are no JSON form. half the seeds have the keys made tricky (kit.ts)
 // deno-lint-ignore-file no-explicit-any
-import apply, { ApplyError, type Patch } from "@ermine/core/op/apply"
+import apply, { ApplyError, type Patch } from "@ermine/core/changeable/apply"
 import { KEYS, patch, start } from "../../core/fuzz/gen_harness.ts"
 import { wildPatches } from "./apply.ts"
 import {

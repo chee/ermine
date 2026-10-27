@@ -5,7 +5,7 @@ set(R ${CMAKE_CURRENT_LIST_DIR}/../../../..)
 set(TIPPET ${R}/experiments/tippet/c)
 idf_component_register(
 	SRCS
-		${R}/core/op/c/value.c ${R}/core/op/c/json.c ${R}/core/op/c/apply.c ${R}/core/op/c/invert.c
+		${R}/core/changeable/c/value.c ${R}/core/changeable/c/json.c ${R}/core/changeable/c/apply.c ${R}/core/changeable/c/invert.c
 		${R}/core/table/c/table.c
 		${R}/core/node/c/node.c ${R}/core/node/c/update.c
 		${R}/core/scheduler/c/scheduler.c ${R}/core/scheduler/c/order.c ${R}/core/scheduler/c/rank.c

@@ -37,7 +37,7 @@
 // (Sync.stop); resent every beat ms; then let go (device.forget). nothing ephemeral outlives sync.
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
-import apply, { type Patch } from "@ermine/core/op/apply"
+import apply, { type Patch } from "@ermine/core/changeable/apply"
 import * as cbor from "@ermine/encoding/cbor"
 import {
 	type Commit,

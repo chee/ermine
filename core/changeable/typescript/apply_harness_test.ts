@@ -6,7 +6,7 @@
 // patches in one call give what one call each gives (one call walks a string from where the last
 // patch left off; one call each never does).
 import { assert, assertEquals } from "@std/assert"
-import apply, { ApplyError, type Patch } from "@ermine/core/op/apply"
+import apply, { ApplyError, type Patch } from "@ermine/core/changeable/apply"
 import { ask, command } from "../../../conformance/typescript/ask.ts"
 import { line, toJson } from "../../../conformance/typescript/form.ts"
 import type { Request } from "../../../conformance/typescript/harness.ts"

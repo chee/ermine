@@ -15,7 +15,7 @@ import {
 } from "@ermine/system"
 import { host } from "@ermine/slaygrounds/tools"
 import { bind, handler } from "ermine-h"
-import apply from "@ermine/core/op/apply"
+import apply from "@ermine/core/changeable/apply"
 import { count, unit } from "@ermine/core/util/walk-string"
 
 // piece-lens: one text in three kinds of place, kept in step by opstreams. a file or a folder on

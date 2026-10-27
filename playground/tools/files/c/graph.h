@@ -16,8 +16,8 @@
 #ifndef FILES_GRAPH_H
 #define FILES_GRAPH_H
 
-#include "../../../../core/op/c/apply.h"
-#include "../../../../core/op/c/value.h"
+#include "../../../../core/changeable/c/apply.h"
+#include "../../../../core/changeable/c/value.h"
 #include "../../../../core/node/c/node.h"
 #include "../../../../core/scheduler/c/scheduler.h"
 #include "../../../../core/table/c/table.h"

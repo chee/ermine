@@ -5,7 +5,7 @@
 //
 //   const packed = pack(steps, priorOf(stepBefore)); const steps = unpack(packed, prior)
 import type { Value } from "@ermine/encoding/cbor"
-import { type Columns, decode as patchesOf, encode as columns } from "@ermine/core/op/squish"
+import { type Columns, decode as patchesOf, encode as columns } from "@ermine/core/changeable/squish"
 import { encode } from "@ermine/encoding/cbor"
 import {
 	decodeStep,

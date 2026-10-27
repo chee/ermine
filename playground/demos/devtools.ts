@@ -12,7 +12,7 @@
 // processes: the ones the demo runs, so devtools marks them and can stop them (with stop)
 import createEntry, { type Entry } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
-import type { Patch } from "@ermine/core/op/apply"
+import type { Patch } from "@ermine/core/changeable/apply"
 import type { Id, Path, Places } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"
 import { createGuard, REFUSED, target, type Thing } from "@ermine/core/places/guard"

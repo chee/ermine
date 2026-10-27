@@ -12,7 +12,7 @@ type Any = any
 type Where = { id: unknown; part: string }
 
 // op's produce, loaded when first needed; update is the world's own (its iframe's import map)
-const lib = async () => ({ produce: (await import("@ermine/core/op/produce")).default })
+const lib = async () => ({ produce: (await import("@ermine/core/changeable/produce")).default })
 
 const container = (v: unknown) => typeof v === "object" && v !== null
 // JSON only: null, booleans, finite numbers, strings, lists, plain maps (another realm's too)

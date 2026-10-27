@@ -125,8 +125,8 @@
 #include <string.h>
 
 #include "../../../core/node/c/node.h"
-#include "../../../core/op/c/apply.h"
-#include "../../../core/op/c/value.h"
+#include "../../../core/changeable/c/apply.h"
+#include "../../../core/changeable/c/value.h"
 #include "../../../core/places/c/guard.h"
 #include "../../../core/places/c/places.h"
 #include "../../../core/places/c/status.h"

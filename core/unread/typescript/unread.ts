@@ -28,7 +28,7 @@
 // changes nothing, which container is where and what is owned too: what it lets go of first is
 // put back
 import type { ChangeHeader, Entry } from "@ermine/core/node/entry"
-import apply, { type Patch } from "@ermine/core/op/apply"
+import apply, { type Patch } from "@ermine/core/changeable/apply"
 import type { Scheduler } from "@ermine/core/scheduler"
 import type { Id, Table } from "@ermine/core/table"
 import { keep } from "./unread_conformance_hook.ts"

@@ -27,7 +27,7 @@
 // (causes), as any other. no table event, no header, no places commit.
 // a computer gone: drop(id), its record out, its readers marked.
 import type { ChangeHeader } from "@ermine/core/node/entry"
-import type { Key as Step } from "@ermine/core/op/apply"
+import type { Key as Step } from "@ermine/core/changeable/apply"
 import type { Fact, Places } from "@ermine/core/places"
 import { target } from "@ermine/core/places/guard"
 import type { Target } from "@ermine/core/protect"

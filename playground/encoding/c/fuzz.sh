@@ -14,7 +14,7 @@ enc=$root/ermine/encoding/c
 cbor="$enc/cbor.c $enc/json.c"
 blake3="$enc/blake3/blake3.c $enc/blake3/blake3_dispatch.c $enc/blake3/blake3_portable.c"
 blake3flags="-DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512 -DBLAKE3_USE_NEON=0"
-graph="$root/core/node/c/node.c $root/core/op/c/value.c $root/core/op/c/apply.c $root/core/op/c/invert.c"
+graph="$root/core/node/c/node.c $root/core/changeable/c/value.c $root/core/changeable/c/apply.c $root/core/changeable/c/invert.c"
 target=$1
 [ -n "$target" ] || { echo "fuzz.sh <target>: hash commit blop pack deflate" >&2; exit 2; }
 shift

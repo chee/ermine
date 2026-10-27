@@ -3,7 +3,7 @@
 #ifndef PROGRAMS_JSON_H
 #define PROGRAMS_JSON_H
 
-#include "../../../core/op/c/value.h"
+#include "../../../core/changeable/c/value.h"
 #include "programs.h"
 
 op_value *pg_place_json(const pg_place *p);

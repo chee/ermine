@@ -3,8 +3,8 @@
 // taken out or moved) is a real patch, a slip, dropped on the "as typed" pile. the real squish
 // takes the pile and gives fewer, bigger slips; the real apply checks both piles end the same.
 // the time slider goes back through the keystrokes, and the pond goes back with it
-import apply, { type Patch } from "@ermine/core/op/apply"
-import createSquish, { encode, type Squish } from "@ermine/core/op/squish"
+import apply, { type Patch } from "@ermine/core/changeable/apply"
+import createSquish, { encode, type Squish } from "@ermine/core/changeable/squish"
 import { pondPage } from "../kit/page.ts"
 import type { Port, Wire } from "../kit/board.ts"
 import { createPond, icon } from "../kit/sprites.ts"
@@ -30,7 +30,7 @@ const page = pondPage("squish", {
 		<p><b>Ranges:</b> <code>2–5</code> means from place 2 up to place 5. <code>4–4</code> is a gap: nothing is covered.</p>
 		<p><b>Columns:</b> turn the squish box over to see the squished slips stored sideways, one list per field, repeats written once.</p>`,
 	real:
-		`Runs the real <code>@ermine/core/op/squish</code> (createSquish, encode) and <code>@ermine/core/op/apply</code>. The page writes each slip itself, by comparing the sign before and after your keystroke. Squish doesn't say which slips went into which: the page works it out by watching what squish gives back after each push.`,
+		`Runs the real <code>@ermine/core/changeable/squish</code> (createSquish, encode) and <code>@ermine/core/changeable/apply</code>. The page writes each slip itself, by comparing the sign before and after your keystroke. Squish doesn't say which slips went into which: the page works it out by watching what squish gives back after each push.`,
 })
 const { board } = page
 

@@ -1,4 +1,4 @@
-// val.h: a value as the graph holds it (op_value, core/op) and as the OS
+// val.h: a value as the graph holds it (op_value, core/changeable) and as the OS
 // builds and prints it (Json, json.h), each into the other. The two hold
 // the same kinds (ENCODING.tex); a live function (api.h's ap_live) is a
 // stand-in either way.
@@ -7,7 +7,7 @@
 #define ERMOS_VAL_H
 
 #include "../../../ermine/encoding/c/json.h"
-#include "../../../core/op/c/apply.h"
+#include "../../../core/changeable/c/apply.h"
 
 /** the graph's value of a Json: fresh. NULL: null */
 op_value *valOf(const Json *json);

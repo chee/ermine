@@ -27,7 +27,7 @@
 #include "experiments/software/c/software.h"
 #include "ermine/processes/c/start.h"
 #include "playground/installs/c/installs.h"
-#include "core/op/c/value.h"
+#include "core/changeable/c/value.h"
 
 // a room's code: 4 of these, read off a screen and typed (none that look like another); its tippet
 // room "dens-" + the code

@@ -10,9 +10,9 @@
 #include <time.h>
 #endif
 
-#include "../../op/c/apply.h"
-#include "../../op/c/invert.h"
-#include "../../op/c/value.h"
+#include "../../changeable/c/apply.h"
+#include "../../changeable/c/invert.h"
+#include "../../changeable/c/value.h"
 
 // where in code: column only when has_column, function NULL when not known
 typedef struct {

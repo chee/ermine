@@ -11,7 +11,7 @@
 import type { Id, Table, Tables } from "@ermine/core/table"
 import createEntry, { type Entry } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
-import type { Patch } from "@ermine/core/op/apply"
+import type { Patch } from "@ermine/core/changeable/apply"
 import type { Computer, Ended, Scheduler } from "@ermine/core/scheduler"
 import { createChangeHeader } from "./header.ts"
 import type { Places, Writer } from "./places.ts"

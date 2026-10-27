@@ -55,7 +55,7 @@
 // again (hold, mark) is replaced. a map's key order is not part of its value (op's apply.ts):
 // answers are compared by content
 import createEntry, { type Entry } from "@ermine/core/node/entry"
-import { ApplyError, type Key, type Patch } from "@ermine/core/op/apply"
+import { ApplyError, type Key, type Patch } from "@ermine/core/changeable/apply"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { createScheduler } from "@ermine/core/scheduler"

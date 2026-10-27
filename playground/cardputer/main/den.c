@@ -10,8 +10,8 @@
 #include <unistd.h>
 
 #include "core/ed25519/c/ed25519.h"
-#include "core/op/c/apply.h"
-#include "core/op/c/json.h"
+#include "core/changeable/c/apply.h"
+#include "core/changeable/c/json.h"
 #include "ermine/encoding/c/cbor.h"
 #include "ermine/processes/c/processes.h"
 #include "ermine/encoding/c/blake3/blake3.h"

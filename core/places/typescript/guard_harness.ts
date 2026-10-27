@@ -35,7 +35,7 @@
 import { PENDING } from "@ermine/core/scheduler"
 import { all, any, grants, no, only, pending, type Policy, yes } from "@ermine/core/protect"
 import type { Member, Path } from "./places.ts"
-import type { Patch } from "@ermine/core/op/apply"
+import type { Patch } from "@ermine/core/changeable/apply"
 import type { Key } from "@ermine/core/table"
 import { createGuard, Refusal, REFUSED, slot, target, type Thing } from "./guard.ts"
 import {

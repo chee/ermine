@@ -1,4 +1,4 @@
-// The C squish library on the line protocol of core/op/typescript/squish_harness.ts. List
+// The C squish library on the line protocol of core/changeable/typescript/squish_harness.ts. List
 // elements, moves and other values are the request's own op_values, which squish never reads.
 #define _POSIX_C_SOURCE 200809L
 #include <limits.h>

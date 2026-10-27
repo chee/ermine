@@ -1,6 +1,6 @@
 /** @jsxImportSource ermine-h */
-import apply from "@ermine/core/op/apply"
-import invert from "@ermine/core/op/invert"
+import apply from "@ermine/core/changeable/apply"
+import invert from "@ermine/core/changeable/invert"
 import {
 	addTeardown,
 	createAction,

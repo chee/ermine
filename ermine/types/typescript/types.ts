@@ -26,7 +26,7 @@ import update from "@ermine/core/node/update"
 import { asId, type Id, level, type Path, type Places } from "@ermine/core/places"
 import { get, lookup, members } from "@ermine/core/places/lib"
 import { keyorder } from "@ermine/core/util/keyorder"
-import type { Patch } from "@ermine/core/op/apply"
+import type { Patch } from "@ermine/core/changeable/apply"
 import type { Table } from "@ermine/core/table"
 import list from "./utis.json" with { type: "json" }
 

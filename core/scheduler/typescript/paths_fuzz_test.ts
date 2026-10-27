@@ -6,7 +6,7 @@
 // patch; a released spot is no longer given, the rest are; an event gives every spot of the key.
 // a few dozen seeds (fuzz runs small)
 import { assert, assertEquals } from "@std/assert"
-import apply, { ApplyError, type Key, type Patch } from "@ermine/core/op/apply"
+import apply, { ApplyError, type Key, type Patch } from "@ermine/core/changeable/apply"
 import { createPaths, marks, type Spot } from "./paths.ts"
 import { isMap, rand, show } from "../../fuzz/gen_harness.ts"
 

@@ -54,7 +54,7 @@
 // hooks are setup-only: one added after createErmine has returned throws.
 import type { Entry } from "@ermine/core/node/entry"
 import type { FileLocation } from "@ermine/core/util/stacktrace"
-import type { Key as Step } from "@ermine/core/op/apply"
+import type { Key as Step } from "@ermine/core/changeable/apply"
 import type { Id, Path, Places } from "@ermine/core/places"
 import type { Process, Processes } from "@ermine/processes/start"
 import type { Call } from "./calls.ts"

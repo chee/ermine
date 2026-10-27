@@ -8,7 +8,7 @@
 #include "../../../../../playground/encoding/c/commit.h"
 #include "../../../../../ermine/encoding/c/json.h"
 #include "../../../../../playground/encoding/c/pack.h"
-#include "../../../../../core/op/c/json.h"
+#include "../../../../../core/changeable/c/json.h"
 #include "../../../../../core/ed25519/c/ed25519.h"
 #include "../../../../../playground/together/c/seal.h"
 

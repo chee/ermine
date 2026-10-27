@@ -41,7 +41,7 @@
 #include "../../../../ermine/ids/c/ids.h"
 #include "../../../together/stacks/subduction/c/subduction/platform.h"
 #include "../../../together/stacks/subduction/c/subduction/store.h"
-#include "../../../../core/op/c/apply.h"
+#include "../../../../core/changeable/c/apply.h"
 
 #include <errno.h>
 #include <fcntl.h>

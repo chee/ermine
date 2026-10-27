@@ -1,7 +1,7 @@
 // cbor.c: values in deterministic CBOR and back. See cbor.h for every choice.
 
 #include "cbor.h"
-#include "../../../core/op/c/whole.h"
+#include "../../../core/changeable/c/whole.h"
 
 #include <float.h>
 #include <limits.h>

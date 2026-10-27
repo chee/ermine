@@ -32,8 +32,8 @@
 // true
 import type { Ermine, Feature, FeatureAPI, Node, NodeData, Target, Version } from "@ermine/system"
 import { ensureNode, ErmineError, getNode, patch, readAll, readEntries } from "@ermine/system"
-import type { Key as Step, Patch } from "@ermine/core/op/apply"
-import produce from "@ermine/core/op/produce"
+import type { Key as Step, Patch } from "@ermine/core/changeable/apply"
+import produce from "@ermine/core/changeable/produce"
 import { get } from "@ermine/core/places/lib"
 import { target } from "@ermine/core/places/guard"
 import type { ChangeHeader } from "@ermine/core/node/entry"
@@ -130,7 +130,7 @@ function known(f: FeatureAPI | undefined, h: Node): { node: NodeData } | undefin
 	}
 }
 
-// patches, or a recipe over the saved value (produce: core/op's draft)
+// patches, or a recipe over the saved value (produce: core/changeable's draft)
 // deno-lint-ignore no-explicit-any
 export type Change = readonly Patch[] | ((draft: any) => unknown)
 

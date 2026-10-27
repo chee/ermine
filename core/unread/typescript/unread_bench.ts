@@ -4,7 +4,7 @@
 // a burst: writes with no read between; read between: unread is told of a read before each write
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
-import apply, { type Patch } from "@ermine/core/op/apply"
+import apply, { type Patch } from "@ermine/core/changeable/apply"
 import { createPlaces, type Places } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"
 import { createScheduler } from "@ermine/core/scheduler"

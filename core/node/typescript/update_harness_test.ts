@@ -13,7 +13,7 @@
 import { assert, assertEquals } from "@std/assert"
 import createEntry from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
-import apply, { ApplyError, type Patch } from "@ermine/core/op/apply"
+import apply, { ApplyError, type Patch } from "@ermine/core/changeable/apply"
 import { ask, command, reference, suite } from "../../../conformance/typescript/ask.ts"
 import { line, revive, toJson } from "../../../conformance/typescript/form.ts"
 import { rand } from "../../../conformance/typescript/rand.ts"

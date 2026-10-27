@@ -9,8 +9,8 @@
 // TypeScript harness (no HARNESS) are what calling invert.ts gives, exactly. Another harness's
 // undos may differ: for them the walking back, here and in the suite, is all that is asked.
 import { assert, assertEquals } from "@std/assert"
-import apply, { ApplyError, type Key, type Patch } from "@ermine/core/op/apply"
-import invert from "@ermine/core/op/invert"
+import apply, { ApplyError, type Key, type Patch } from "@ermine/core/changeable/apply"
+import invert from "@ermine/core/changeable/invert"
 import { ask, command, suite } from "../../../conformance/typescript/ask.ts"
 import { line, revive, toJson } from "../../../conformance/typescript/form.ts"
 import type { Request } from "../../../conformance/typescript/harness.ts"

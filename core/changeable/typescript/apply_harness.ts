@@ -1,6 +1,6 @@
 // apply (apply.ts) and invert (invert.ts) on the line protocol (conformance/typescript/harness.ts).
 // Nothing lasts between lines. Another implementation joins by speaking this (HARNESS). A first
-// argument: another module's apply to test instead (core/op/typescript/optim/*.ts). The suites
+// argument: another module's apply to test instead (core/changeable/typescript/optim/*.ts). The suites
 // apply and invert are both asked of it.
 //
 // { op: "apply", value?, patches, cow? }
@@ -94,17 +94,17 @@
 // Anything not understood (an unknown op, patches missing or not a list, a value not in the JSON
 // form, a line not JSON), or that broken: { error: why }, a string, its words free; the next line
 // is answered as ever.
-import { ApplyError as Refused, type Patch } from "@ermine/core/op/apply"
-import invert from "@ermine/core/op/invert"
+import { ApplyError as Refused, type Patch } from "@ermine/core/changeable/apply"
+import invert from "@ermine/core/changeable/invert"
 import { line, revive, toJson } from "../../../conformance/typescript/form.ts"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 
-// the apply to test: @ermine/core/op/apply, or a module given as the first argument (a path from the
-// working directory), such as core/op/typescript/optim/final.ts
+// the apply to test: @ermine/core/changeable/apply, or a module given as the first argument (a path from the
+// working directory), such as core/changeable/typescript/optim/final.ts
 const { default: apply, ApplyError } =
-	(Deno.args[0] === undefined ? await import("@ermine/core/op/apply") : await import(
+	(Deno.args[0] === undefined ? await import("@ermine/core/changeable/apply") : await import(
 		new URL(Deno.args[0], `file://${Deno.cwd()}/`).href
-	)) as typeof import("@ermine/core/op/apply")
+	)) as typeof import("@ermine/core/changeable/apply")
 
 const isMap = (x: unknown): x is Record<string, unknown> =>
 	x !== null && typeof x === "object" && !Array.isArray(x)

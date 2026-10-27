@@ -28,7 +28,7 @@
 #include <stddef.h>
 
 #include "../../../core/table/c/table.h"
-#include "../../../core/op/c/value.h"
+#include "../../../core/changeable/c/value.h"
 
 typedef enum { PR_YES, PR_NO, PR_PENDING } pr_verdict;
 typedef struct {

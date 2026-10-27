@@ -78,7 +78,7 @@
 // scope nodes: a write's metadata stops after the first scope whose own info holds the NODE key. a
 // process's scope holds its node's; each memo and effect is made with { [NODE]: its node's id }.
 import type { ChangeHeader, Entry } from "@ermine/core/node/entry"
-import type { Key as Step, Patch } from "@ermine/core/op/apply"
+import type { Key as Step, Patch } from "@ermine/core/changeable/apply"
 import {
 	type Fact,
 	type Id,
@@ -90,7 +90,7 @@ import {
 	unplacing,
 } from "@ermine/core/places"
 import { equal } from "@ermine/core/places/upsert"
-import applyPatches from "@ermine/core/op/apply"
+import applyPatches from "@ermine/core/changeable/apply"
 import { get, gets, list as listAt } from "@ermine/core/places/lib"
 import { NODE } from "@ermine/core/places/header"
 import {

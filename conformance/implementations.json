@@ -1,8 +1,8 @@
 {
 	"typescript": {
-		"apply": "deno run --quiet --allow-read core/op/typescript/apply_harness.ts",
-		"invert": "deno run --quiet --allow-read core/op/typescript/apply_harness.ts",
-		"squish": "deno run --quiet --allow-read core/op/typescript/squish_harness.ts",
+		"apply": "deno run --quiet --allow-read core/changeable/typescript/apply_harness.ts",
+		"invert": "deno run --quiet --allow-read core/changeable/typescript/apply_harness.ts",
+		"squish": "deno run --quiet --allow-read core/changeable/typescript/squish_harness.ts",
 		"node": "deno run --quiet --allow-read core/node/typescript/node_harness.ts",
 		"update": "deno run --quiet --allow-read core/node/typescript/update_harness.ts",
 		"table": "deno run --quiet --allow-read core/table/typescript/table_harness.ts",
@@ -12,9 +12,9 @@
 		"scheduler": "deno run --quiet --allow-read core/scheduler/typescript/scheduler_harness.ts"
 	},
 	"c": {
-		"apply": "core/op/c/apply-harness",
-		"invert": "core/op/c/apply-harness",
-		"squish": "core/op/c/squish-harness",
+		"apply": "core/changeable/c/apply-harness",
+		"invert": "core/changeable/c/apply-harness",
+		"squish": "core/changeable/c/squish-harness",
 		"node": "core/node/c/node-harness",
 		"update": "core/node/c/update-harness",
 		"table": "core/table/c/table-harness",
@@ -24,9 +24,9 @@
 		"scheduler": "core/scheduler/c/scheduler-harness"
 	},
 	"c-check": {
-		"apply": "core/op/c/apply-harness-check",
-		"invert": "core/op/c/apply-harness-check",
-		"squish": "core/op/c/squish-harness-check",
+		"apply": "core/changeable/c/apply-harness-check",
+		"invert": "core/changeable/c/apply-harness-check",
+		"squish": "core/changeable/c/squish-harness-check",
 		"node": "core/node/c/node-harness-check",
 		"update": "core/node/c/update-harness-check",
 		"table": "core/table/c/table-harness-check",

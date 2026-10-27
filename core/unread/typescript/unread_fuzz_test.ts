@@ -10,7 +10,7 @@
 import { assert, assertEquals, assertStrictEquals } from "@std/assert"
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
-import apply, { ApplyError, type Patch } from "@ermine/core/op/apply"
+import apply, { ApplyError, type Patch } from "@ermine/core/changeable/apply"
 import { at as read, createPlaces, type Places } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"
 import { createScheduler } from "@ermine/core/scheduler"

@@ -5,7 +5,7 @@
 import { assert, assertEquals } from "@std/assert"
 import createEntry from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
-import { ApplyError, type Key as Step, type Patch } from "@ermine/core/op/apply"
+import { ApplyError, type Key as Step, type Patch } from "@ermine/core/changeable/apply"
 import { createScheduler } from "@ermine/core/scheduler"
 import { createPaths } from "@ermine/core/scheduler/paths"
 import { createTable, type Id, type Key, TableError } from "@ermine/core/table"

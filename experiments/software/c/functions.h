@@ -32,7 +32,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#include "../../../core/op/c/value.h"
+#include "../../../core/changeable/c/value.h"
 #include "../../../core/scheduler/c/scheduler.h"
 
 // what a compiler is handed beside its input: its key (hex), its node's id, its identity (the

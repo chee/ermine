@@ -1,4 +1,4 @@
-// values in their JSON form, as the C codec (core/op/c/json.c) writes them: JSON for what JSON
+// values in their JSON form, as the C codec (core/changeable/c/json.c) writes them: JSON for what JSON
 // holds; {"/": {"bytes": b64}} for bytes, a Uint8Array (no uint8 kind),
 // {"/": {"number": "NaN" | "Infinity" | "-Infinity"}}, {"/": {"bigint": "-123…"}} for a whole
 // number past 2^53 - 1 either way (decimal, no leading zero; never a safe one: plain digits are
@@ -194,7 +194,7 @@ export function line(x: unknown, also: (v: unknown) => unknown = (v) => v, minus
 }
 
 // a value from its JSON form, as fromJson has it, but a string or a key may hold lone surrogates:
-// op counts each as a position, and the C codec (core/op/c/json.c) takes them
+// op counts each as a position, and the C codec (core/changeable/c/json.c) takes them
 const isMap = (x: unknown): x is Record<string, unknown> =>
 	x !== null && typeof x === "object" && !Array.isArray(x)
 export function revive(x: unknown): unknown {

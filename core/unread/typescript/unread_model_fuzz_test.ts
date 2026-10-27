@@ -8,7 +8,7 @@
 //   deno run --allow-env --allow-read core/unread/typescript/unread_model_fuzz_test.ts [shape…]
 //     [--all]   as a program: what fails, by property, shortest first; --all: nothing let by.
 //     shapes: the ones here and "spans" (29's shape, often: fails until 29 passes). SEEDS=n
-import type { Key } from "@ermine/core/op/apply"
+import type { Key } from "@ermine/core/changeable/apply"
 import { assert } from "@std/assert"
 import { rand } from "../../../conformance/typescript/rand.ts"
 import {

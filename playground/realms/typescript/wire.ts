@@ -27,7 +27,7 @@
 //   error    { error }                           thrown after setup
 //   looked   { tree? }                           its graph from its root: each node's state (here,
 //            waiting, none), value, names. none: not started
-import type { Patch } from "@ermine/core/op/apply"
+import type { Patch } from "@ermine/core/changeable/apply"
 import type { ChangeHeader, Metadata } from "@ermine/core/node/entry"
 import { REFUSED } from "@ermine/core/places/guard"
 import { type Info, PENDING } from "@ermine/core/scheduler"

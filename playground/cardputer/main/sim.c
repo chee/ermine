@@ -26,7 +26,7 @@
 
 #include "core/ed25519/c/ed25519.h"
 int64_t now_ms(void);
-#include "core/op/c/json.h"
+#include "core/changeable/c/json.h"
 #include "den.h"
 #include "drivers.h"
 #include "fb.h"

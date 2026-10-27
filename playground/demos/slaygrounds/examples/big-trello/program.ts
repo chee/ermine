@@ -1,5 +1,5 @@
 /** @jsxImportSource ermine-h */
-import apply, { type Patch } from "@ermine/core/op/apply"
+import apply, { type Patch } from "@ermine/core/changeable/apply"
 import {
 	addTeardown,
 	createAction,

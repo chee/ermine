@@ -13,7 +13,7 @@ const sched = `core/scheduler/${T}/scheduler.ts`
 const fuzzSched = { fuzz: `core/scheduler/${T}/scheduler_fuzz_test.ts` }
 const fuzzPaths = { fuzz: `core/scheduler/${T}/paths_fuzz_test.ts` }
 const fuzzUpdate = { fuzz: `core/node/${T}/update_fuzz_test.ts` }
-const fuzzApply = { fuzz: `core/op/${T}/apply_fuzz_test.ts` }
+const fuzzApply = { fuzz: `core/changeable/${T}/apply_fuzz_test.ts` }
 const fuzzUnread = { fuzz: `core/unread/${T}/unread_fuzz_test.ts` }
 const fuzzEnd = { fuzz: `core/fuzz/end_to_end_fuzz_test.ts` }
 const fuzzPlacesPaths = { fuzz: `core/fuzz/places_paths_fuzz_test.ts` }
@@ -135,42 +135,42 @@ export const plants: Plant[] = [
 	// op
 	{
 		name: "apply: the last patch's undo is dropped from the undo",
-		file: `core/op/${T}/apply.ts`,
+		file: `core/changeable/${T}/apply.ts`,
 		find: "for (let j = marks.length - 1, end = undone.length;",
 		replace: "for (let j = marks.length - 2, end = marks[marks.length - 1] ?? 0;",
 		catcher: fuzzApply,
 	},
 	{
 		name: "apply: a refused patch in place leaves the value changed",
-		file: `core/op/${T}/apply.ts`,
+		file: `core/changeable/${T}/apply.ts`,
 		find: "\t\tif (!cow) {\n\t\t\tconst back: Patch[] = []",
 		replace: "\t\tif (false) {\n\t\t\tconst back: Patch[] = []",
 		catcher: fuzzApply,
 	},
 	{
 		name: "invert: the undo comes back in the wrong order",
-		file: `core/op/${T}/invert.ts`,
+		file: `core/changeable/${T}/invert.ts`,
 		find: "\treturn undo\n",
 		replace: "\treturn undo.reverse()\n",
 		catcher: { differ: "invert", impls: T },
 	},
 	{
 		name: "squish: a later edit inside the earlier insert may end one short",
-		file: `core/op/${T}/squish.ts`,
+		file: `core/changeable/${T}/squish.ts`,
 		find: "if (a <= c && d <= a + n) {",
 		replace: "if (a <= c && d < a + n) {",
 		catcher: { differ: "squish" },
 	},
 	{
 		name: "squish: a removal reaching the earlier one's start no longer joins",
-		file: `core/op/${T}/squish.ts`,
+		file: `core/changeable/${T}/squish.ts`,
 		find: "if (c <= a && a <= d) return { path, range: [c, b + (d - a)] }",
 		replace: "if (c <= a && a < d) return { path, range: [c, b + (d - a)] }",
 		catcher: { differ: "squish" },
 	},
 	{
 		name: "squish: a put no longer kills the patches under it",
-		file: `core/op/${T}/squish.ts`,
+		file: `core/changeable/${T}/squish.ts`,
 		find: "\t\tunder(prev.path, next.path) &&\n",
 		replace: "\t\tfalse &&\n",
 		catcher: { differ: "squish" },
