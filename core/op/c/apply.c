@@ -728,7 +728,11 @@ static int splice(work *w, const op_key *path, size_t n, int64_t a, int64_t b, o
 		if (w->inplace && w->size * z == y - x) {
 			// the length stays: the elements change where they are
 			op_value *holder, *was = s;
-			if (w->owned != NULL) s = own(w, place(w, path, n, &holder), holder);
+			if (w->owned != NULL) {
+				// place sets holder: not read in the same call
+				op_value **at = place(w, path, n, &holder);
+				s = own(w, at, holder);
+			}
 			if (s != was) note(w, s, was, path, n, 0, 1);
 			if (v) memcpy(s->data + x, v->data, v->bytes);
 		} else {
@@ -746,14 +750,19 @@ static int splice(work *w, const op_key *path, size_t n, int64_t a, int64_t b, o
 		if ((uint64_t)b > s->count) fail(w, OP_RANGE);
 		if (v != NULL && v->type != OP_LIST) fail(w, OP_WRONG_KIND);
 		op_value *holder;
-		out = w->inplace && w->owned == NULL ? s : own(w, place(w, path, n, &holder), holder);
+		if (w->inplace && w->owned == NULL) out = s;
+		else {
+			// place sets holder: not read in the same call
+			op_value **at = place(w, path, n, &holder);
+			out = own(w, at, holder);
+		}
 		if (w->rolling) may_hold(w, out);
 		else if (w->inplace && out != s) note(w, out, s, path, n, 0, 1);
 		int kept = real(w, out);
 		size_t gone = (size_t)(b - a);
 		if (taken) {
 			back = w->taken = made_list(w, gone);
-			memcpy(back->items, out->items + a, gone * sizeof *out->items);
+			if (gone) memcpy(back->items, out->items + a, gone * sizeof *out->items);
 			back->count = gone;
 		} else if (!kept) {
 			for (size_t i = 0; i < gone; i++) drop(w, out->items[a + i]);
