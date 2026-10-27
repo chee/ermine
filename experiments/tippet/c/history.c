@@ -306,7 +306,9 @@ static block *block_of(const uint8_t *bytes, size_t length) {
 	tp_hex(hex, s->items[0]->data, 32);
 	hex[64] = 0;
 	b->device = op_str(hex);
-	b->actor = op_ref(s->count == 9 ? s->items[8] : b->device);
+	// who: the last item, when a string past the eighth (an on is an array)
+	op_value *last = s->items[s->count - 1];
+	b->actor = op_ref(s->count > 8 && last->type == OP_STR ? last : b->device);
 	b->metadata[0] = (ch_entry){"device", b->device};
 	b->metadata[1] = (ch_entry){"n", s->items[1]};
 	b->metadata[2] = (ch_entry){"lamport", s->items[6]};

@@ -1289,6 +1289,43 @@ static void heads(void) {
 	tp_log_free(a), tp_log_free(b);
 }
 
+// ---- a landed step's actor: its who, else its device
+
+static char actors[2][80];
+static int acted;
+static void actor_seen(const pl_fact *f, void *ctx) {
+	(void)ctx;
+	const op_value *a = f->change ? f->change->actor : NULL;
+	if (acted < 2) snprintf(actors[acted++], sizeof actors[0], "%s", a && a->type == OP_STR ? a->str : "(not a string)");
+}
+
+static void actor(void) {
+	printf("a. a landed step's actor\n");
+	tp_log *a = writer(70, 0, NULL);
+	uint8_t p[sizeof x0];
+	memcpy(p, x0, sizeof p);
+	// an on and no who; then an on and a who
+	tp_write w = {{(const uint8_t *)"doc", 3}, {(const uint8_t *)"value", 5}, {p, sizeof p}, {NULL, 0}, 1, {(const uint8_t *)"\x80", 1}};
+	uint64_t n, l;
+	tp_log_write(a, &w, &n, &l);
+	w.who = (tp_span){(const uint8_t *)"juno", 4};
+	tp_log_write(a, &w, &n, &l);
+	run run_a;
+	run_of(a, 1, &run_a);
+	dev r;
+	dev_make(&r, tp_memory_store(&mem, 1 << 20), 71);
+	pl_watch *watch = pl_watch_all(r.places, actor_seen, NULL);
+	acted = 0;
+	tp_log_take(r.log, run_a.device, run_a.spans, run_a.n, run_a.sig, (tp_span){NULL, 0});
+	char hex[65];
+	tp_hex(hex, run_a.device, 32), hex[64] = 0;
+	printf("  actors: %s, %s\n", actors[0], actors[1]);
+	CHECK(acted == 2 && !strcmp(actors[0], hex) && !strcmp(actors[1], "juno"));
+	pl_stop(watch);
+	dev_free(&r);
+	tp_log_free(a);
+}
+
 // ---- a run longer than one step's limit comes back
 
 static void long_run(const char *dir) {
@@ -1334,6 +1371,7 @@ int main(int argc, char **argv) {
 	if (!only || strchr(only, '9')) forgetting(argv[1]), printf("  heap now %zu\n", H.now);
 	if (!only || strchr(only, 'l')) late(), printf("  heap now %zu\n", H.now);
 	if (!only || strchr(only, 'h')) heads(), printf("  heap now %zu\n", H.now);
+	if (!only || strchr(only, 'a')) actor(), printf("  heap now %zu\n", H.now);
 	if (!only || strchr(only, 'm')) long_run(argv[1]), printf("  heap now %zu\n", H.now);
 	rmdir(argv[1]);
 	CHECK(H.now == 0);
