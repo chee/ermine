@@ -41,6 +41,8 @@ export type Options = {
 	// requests that change nothing, asked around every refused step: the same before and after
 	// (conformance/run.ts)
 	reads?: Record<string, unknown>[]
+	// what make builds before the suite runs, from the repository's root (native: its fixtures)
+	make?: string[]
 }
 
 // every suite there is: a folder in <package>/conformance/ with an adapter in <package>/typescript/

@@ -9,8 +9,9 @@
 // numbers exactly (digits alone past 2^53 - 1: a bigint), doubles; "/" forms: form.ts.
 // key order is kept on the way out, ignored when comparing (maps by content).
 //
-// scenario <package>/conformance/<suite>/NN-name.json: { title, typescript?, steps }; typescript:
-// the TypeScript harness only (another implementation's comes later), as the suite option
+// scenario <package>/conformance/<suite>/NN-name.json: { title, typescript?, on?, steps }; typescript:
+// the TypeScript harness only (another implementation's comes later), as the suite option; on: the
+// platforms it runs on, as "<os>-<arch>" (Deno.build's: "darwin-aarch64"), else every one
 //   expect: answer fields, deep-equal; no others   fails: true: answer is { error }
 //   skip: fields not compared                      no expect: not compared
 // <suite>/suite.json:
@@ -24,6 +25,7 @@
 //   harness     another suite's harness (invert speaks apply's)
 //   typescript  TypeScript harness only
 //   allow       extra deno flags for the TypeScript harness (native: --allow-ffi)
+//   make        targets built (make -s, from the repository's root) before the suite runs
 import { assert, assertEquals } from "@std/assert"
 import { ask, command, type Options, type Suite, suites } from "./typescript/ask.ts"
 import { line } from "./typescript/form.ts"
@@ -46,6 +48,7 @@ for (const [i, s] of chosen.entries()) if (!s) throw new Error(`no suite ${names
 // true is not run on it
 const native = flags.some((f) => f === "--c" || f === "--check" || f === "--leaks")
 const other = native || Deno.env.get("HARNESS") !== undefined
+const platform = `${Deno.build.os}-${Deno.build.arch}`
 
 function harness(s: Suite): string[] {
 	if (Deno.env.get("HARNESS")) return command(s.name)
@@ -245,6 +248,17 @@ for (const s of chosen) {
 		if (names.length) throw new Error(`suite ${s.name}: no scenarios in ${s.fixtures}`)
 		continue
 	}
+	if (s.options.make?.length) {
+		const made = new Deno.Command("make", { args: ["-s", ...s.options.make], cwd: `${here}..` })
+			.outputSync()
+		if (!made.success) {
+			throw new Error(
+				`suite ${s.name}: make ${s.options.make.join(" ")}:\n${
+					new TextDecoder().decode(made.stderr)
+				}`,
+			)
+		}
+	}
 	const runs = [{ name: "", change: (r: Record<string, unknown>) => r }]
 	const again = s.options.again
 	if (again) {
@@ -257,15 +271,17 @@ for (const s of chosen) {
 		})
 	}
 	for (const file of files) {
-		const { title, typescript, steps } = read(Deno.readTextFileSync(s.fixtures + file)) as {
+		const { title, typescript, on, steps } = read(Deno.readTextFileSync(s.fixtures + file)) as {
 			title: string
 			typescript?: boolean
+			on?: string[]
 			steps: Step[]
 		}
 		for (const run of runs) {
 			Deno.test({
 				name: `${s.name}/${file}: ${title}${run.name}`,
-				ignore: s.options.typescript === true && native || typescript === true && other,
+				ignore: s.options.typescript === true && native || typescript === true && other ||
+					on !== undefined && !on.includes(platform),
 			}, async () => {
 				const from = Math.floor(Date.now() / 1000)
 				// the steps, the reads around each refused one: where each step's answer is
