@@ -297,9 +297,8 @@ export type Base = {
 	readonly calls: Calls
 	// the memos' nodes: a read of one pending with no value throws PENDING
 	readonly memos: Set<Id>
-	// every memo's and effect's node: status reads its run
-	readonly computers: Set<Id>
-	// a memo's or effect's node → the context that made it (its status written as that context's)
+	// a memo's or effect's node → the context that made it (its status written as that context's;
+	// its keys are every memo's and effect's node: status reads its run)
 	readonly contexts: Map<Id, Inner>
 	// a computer's node whose latest run gave a promise not settled yet
 	readonly awaiting: Set<Id>
@@ -339,12 +338,11 @@ export type Base = {
 	readonly handles: Handles
 	// every writer createWriter gave, and what it runs as
 	readonly writers: WeakMap<object, WriterAs>
-	// each process's node: where it runs, from the root (its row names it, not a children entry, so
-	// places' namesOf has it not): seen's
-	readonly running: Map<Id, Path>
-	// each process's node: the root of the places it runs in (its "/"), as the paths it recorded are
-	// from (a wait's): shown to a reader of another root as none
-	readonly roots: Map<Id, Id>
+	// each running process's context, by its node: where it runs, from the root (its row names it,
+	// not a children entry, so places' namesOf has it not: seen's), and the root of the places it
+	// runs in (its "/"), as the paths it recorded are from (a wait's): shown to a reader of another
+	// root as none
+	readonly processes: Map<Id, Inner>
 	// each change's view, and each view's change (ChangeView)
 	readonly views: WeakMap<ChangeHeader, ChangeView>
 	readonly changes: WeakMap<ChangeView, ChangeHeader>
@@ -416,7 +414,7 @@ function up(base: Base, places: Places, root: Id, id: Id): Path | undefined {
 	const go = (at: Id): Path | undefined => {
 		if (at === root) return []
 		visited.add(at)
-		const running = base.running.get(at)
+		const running = base.processes.get(at)?.context.at
 		if (running !== undefined) return [...running]
 		const names = places.namesOf(at)
 		for (let i = names.length - 1; i >= 0; i--) {
@@ -1205,7 +1203,7 @@ function peep<T>(inner: Inner, f: () => T): T {
 
 // a process running at path, by its node's id: its row names it there, no children entry
 const runningAt = (base: Base, path: Path, id: Id | undefined) => {
-	const at = id === undefined ? undefined : base.running.get(id)
+	const at = id === undefined ? undefined : base.processes.get(id)?.context.at
 	return at !== undefined && at.length === path.length && at.every((n, i) => path[i] === n)
 }
 
@@ -1281,7 +1279,7 @@ function remove(inner: Inner, x: Target) {
 		ask("remove", targetOf(thing(id, n.path)))
 		const below = under(inner, id)
 		// a running process's node: the process stopped first (its row out), then its entries gone
-		if (base.running.has(id)) base.stop(id)
+		if (base.processes.has(id)) base.stop(id)
 		else if (n.path !== undefined && n.path.length) {
 			const [children, name] = slot(inner, n.path)
 			const v = children.value as Record<string, unknown> | undefined
@@ -1383,7 +1381,6 @@ function forget(inner: Inner, m: Made, path: Path) {
 	const there = state.named.get(keyOf(path))
 	if (there?.delete(m) && there.size === 0) state.named.delete(keyOf(path))
 	memos.delete(m.id)
-	base.computers.delete(m.id)
 	base.contexts.delete(m.id)
 	base.awaiting.delete(m.id)
 	base.missing.delete(m.id)
@@ -1478,7 +1475,6 @@ function computerNode(
 	const at = keyOf(path)
 	state.named.set(at, (state.named.get(at) ?? new Set()).add(m))
 	gone(inner, m, path)
-	base.computers.add(id)
 	base.contexts.set(id, inner)
 	calls.open()?.made.push({ kind, id, path })
 	return m
@@ -1834,7 +1830,7 @@ const notData = () => new ErmineError("not-a-value", "a writer is not data: it w
 // message: as the scenarios pin it (the C side says the same)
 function notHere(base: Base, own: Scope, message: string) {
 	const node = own.info[NODE] as Id | undefined
-	if ((node !== undefined && base.computers.has(node)) || own.info.pipe === true) {
+	if ((node !== undefined && base.contexts.has(node)) || own.info.pipe === true) {
 		throw new ErmineError("not-here", message)
 	}
 }
@@ -1973,7 +1969,7 @@ function start(
 		process: { at: made.process.at, folder: made.process.folder },
 		// the node unplaced, as unplace asks it
 		stop: (why) => {
-			if (!base.running.has(id)) return
+			if (!base.processes.has(id)) return
 			asStarter()
 			made.stop(why)
 		},
@@ -1997,14 +1993,14 @@ function getStatus(inner: Inner, x: Target): Status | undefined {
 	const n = nodeOf(inner, x)
 	const id = idOf(inner, n)
 	if (id === undefined) return undefined
-	return base.statused({ node: n, id, computer: base.computers.has(id) }, ownStatus(inner, n, id))
+	return base.statused({ node: n, id, computer: base.contexts.has(id) }, ownStatus(inner, n, id))
 }
 
 // a path the waiter at owner recorded, as inner sees it: the path itself when both look from one
 // root (the owner's world is its places' root: a computer's context's, a process's), else none
 const recordedBy = (inner: Inner, owner: Id, p: Path): Path | null => {
 	const { base } = here(inner)
-	const root = base.contexts.get(owner)?.places.root ?? base.roots.get(owner)
+	const root = base.contexts.get(owner)?.places.root ?? base.processes.get(owner)?.places.root
 	return root === undefined || root === inner.places.root ? p : null
 }
 
@@ -2042,7 +2038,7 @@ function ownStatus(inner: Inner, n: NodeData, id: Id): Status {
 	const st = statusOf(places, id)
 	const h = base.held.status(id) ?? base.held.row(id)
 	const held = h === undefined ? {} : { held: h }
-	if (!base.computers.has(id)) {
+	if (!base.contexts.has(id)) {
 		if (st === undefined) return { state: "done", ...held }
 		if (base.pipes.has(id) && st instanceof ErmineError && st.code === "looping") {
 			return { state: "looping", error: st, ...held }
