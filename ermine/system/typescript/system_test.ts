@@ -338,3 +338,16 @@ Deno.test("@ermine/system: a pipe that stops its own process, then throws, is no
 	e.close()
 })
 
+Deno.test("@ermine/system: a pipe's function that rejects fails the pipe's status (observed)", async () => {
+	const e = createErmine({ features: [manual] })
+	e.within(() => ensureNode("/src", 1))
+	let made: unknown
+	e.start(() => {
+		made = pipe("/src", () => Promise.reject(new Error("later no")), { timing: "write" })
+	}, "/code/p")
+	e.within(() => patch("/src", [{ path: [], value: 2 }]))
+	await new Promise((r) => setTimeout(r))
+	const status = e.within(() => getStatus(made as never)) as { state: string; error?: Error }
+	assertEquals([status.state, status.error?.message], ["failed", "later no"])
+	e.close()
+})
