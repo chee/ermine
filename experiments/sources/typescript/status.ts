@@ -23,7 +23,6 @@
 import createEntry, { type Entry } from "@ermine/core/node/entry"
 import update from "@ermine/core/changeable/update"
 import type { Patch } from "@ermine/core/changeable/apply"
-import type { Box } from "@ermine/boxes"
 import type { Places } from "@ermine/core/places"
 import { createChangeHeader, NODE } from "@ermine/core/places/header"
 import { upsert } from "@ermine/core/places/upsert"
@@ -145,8 +144,7 @@ export function startShown(
 	const { scheduler: s, table, places, processes } = graph
 	const options: Options = { attributes, under: graph.scope }
 	let shown: Shown | undefined
-	const box: Box = { root: places.root, places }
-	const p = processes.start(box, [...at], options, (inside) => {
+	const p = processes.start(places, [...at], options, (inside) => {
 		const key = {}
 		let current = stateOf("opening")
 		const write = (v: State) =>

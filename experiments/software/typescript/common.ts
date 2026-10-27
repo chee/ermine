@@ -1,8 +1,7 @@
 // common: what offers and run share. the owner of offers, an offer, a process run here, the
 // context the parts are given, and the small helpers they use. no question of its own
 import type { ChangeHeader, Entry } from "@ermine/core/node/entry"
-import type { Box } from "@ermine/boxes"
-import type { Id, Path } from "@ermine/core/places"
+import type { Id, Path, Places } from "@ermine/core/places"
 import type { Process, Processes } from "@ermine/processes/start"
 import type { ScopeNodes } from "@ermine/processes/scopes"
 import type { Scheduler, Scope } from "@ermine/core/scheduler"
@@ -43,11 +42,11 @@ export const through = [
 	...resolved("@ermine/processes/start"),
 ]
 
-// an owner's facts: its place, its box, its args and folder (a process's), the folders of what it
+// an owner's facts: its place, its places, its args and folder (a process's), the folders of what it
 // offers, by kind, its offers in order, its holds on loads in order
 export type Owner = Place & {
 	readonly under: Scope
-	readonly box: Box
+	readonly places: Places
 	readonly args: readonly string[]
 	readonly folder: Path
 	readonly folders: Map<Kind, { readonly id: Id; readonly scope: Scope }>
@@ -88,7 +87,7 @@ export type Running = Owner & {
 export type Ctx = {
 	readonly s: Scheduler
 	readonly table: Table
-	readonly home: Box
+	readonly home: Places
 	readonly scopes: Pick<ScopeNodes, "give">
 	readonly processes: Processes
 	readonly scope: Scope

@@ -19,10 +19,14 @@
 // live values go, as an install's does across sessions). made the first time it is named
 // writes: with the caller's scope open, or the owner's; each one's site the first call outside
 // these files
-import type { Address, Box } from "@ermine/boxes"
 import { type Id, type Path, type Places, PlacesError } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"
-import { createProcesses, type Process, type Processes } from "@ermine/processes/start"
+import {
+	type Address,
+	createProcesses,
+	type Process,
+	type Processes,
+} from "@ermine/processes/start"
 import type { ScopeNodes } from "@ermine/processes/scopes"
 import type { Scheduler, Scope } from "@ermine/core/scheduler"
 import type { Sited } from "@ermine/sites"
@@ -64,7 +68,7 @@ export type { Runnable, Runner, Start } from "./run.ts"
 export type Setup = {
 	scheduler: Scheduler
 	table: Table
-	// where runners and programs are found from (and processes run, unless a box is given)
+	// where runners and programs are found from (and processes run, unless places are given)
 	places: Places
 	scopes: Pick<ScopeNodes, "give">
 	// what runs goes under it (on a runner offered here, under its offer, under its owner's scope
@@ -118,7 +122,7 @@ export function createSoftware(setup: Setup): Software {
 	const c: Ctx = {
 		s,
 		table,
-		home: { root: places.root, places } as Box,
+		home: places,
 		scopes: setup.scopes,
 		// its own processes, so a write's site skips these files too
 		processes: createProcesses({
@@ -162,7 +166,7 @@ export function createSoftware(setup: Setup): Software {
 			o = {
 				...by,
 				under: by.scope,
-				box: c.home,
+				places: c.home,
 				args: [],
 				folder: by.at.slice(0, -1),
 				folders: new Map(),
