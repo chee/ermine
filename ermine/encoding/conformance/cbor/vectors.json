@@ -86,6 +86,9 @@
 		"refused": "tag 64: no uint8 kind, bytes are that (the designer, 10-12)"
 	},
 	{ "form": { "/": { "uint8": [1, 255] } }, "refused": "no uint8 kind: no value" },
+	{ "form": { "/": { "int64": ["+5"] } }, "refused": "a plus sign: not decimal digits" },
+	{ "form": { "/": { "int64": [" 5"] } }, "refused": "a leading space: not decimal digits" },
+	{ "form": { "/": { "uint64": ["+5"] } }, "refused": "a plus sign: not decimal digits" },
 	{ "value": { "/": { "uint16": [1, 256] } }, "cbor": "d8454401000001" },
 	{ "value": { "/": { "uint32": [1] } }, "cbor": "d8464401000000" },
 	{ "value": { "/": { "uint64": ["18446744073709551615"] } }, "cbor": "d84748ffffffffffffffff" },
