@@ -119,3 +119,17 @@ Deno.test({
 		}
 	},
 })
+
+Deno.test("a file written through denoFile keeps its mode", async () => {
+	const dir = await Deno.makeTempDir()
+	try {
+		const path = `${dir}/f`
+		await Deno.writeFile(path, new Uint8Array([1]), { mode: 0o600 })
+		await Deno.chmod(path, 0o600)
+		assert(await denoFile(path).write(new Uint8Array([2])))
+		assertEquals((await Deno.stat(path)).mode! & 0o777, 0o600)
+		assertEquals(await Deno.readFile(path), new Uint8Array([2]))
+	} finally {
+		await Deno.remove(dir, { recursive: true })
+	}
+})

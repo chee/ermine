@@ -1,5 +1,5 @@
 // a file on disk through Deno, as access.ts's functions. a write goes to a file beside it first,
-// then is renamed over it, so a reader never sees half a write; one that fails takes the file
+// (its mode kept, its bytes synced) then is renamed over it, so a reader never sees half a write; one that fails takes the file
 // beside away. a checked write looks at the file after the one beside is written, just before the
 // rename: a save landing between that look and the rename is still written over (no lock an
 // editor takes). the watch is of the folder (a rename takes the file's place, so a watch of the
@@ -24,7 +24,12 @@ export function denoFile(path: string): FileAccess {
 		async write(bytes, check) {
 			const beside = `${folder}/.${base}.${crypto.randomUUID()}`
 			try {
+				// the file's own mode kept, and its bytes on disk before it takes the file's place
+				const mode = await Deno.stat(path).then((s) => s.mode, () => null)
 				await Deno.writeFile(beside, bytes)
+				if (mode !== null) await Deno.chmod(beside, mode & 0o7777)
+				const f = await Deno.open(beside, { write: true })
+				await f.syncData().finally(() => f.close())
 				if (check && !alike(await read(), check.holds)) {
 					await Deno.remove(beside)
 					return false
