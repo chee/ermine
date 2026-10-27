@@ -5,6 +5,7 @@
 #include "ermine.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static int failed;
@@ -270,6 +271,32 @@ static void seen_by_a_foreign_context(void) {
 }
 
 // a finding's name given: that one alone
+// a process whose teardown throws: its stop and the ermine's close say so, as stop and close throw
+static char *throws_boom(void *data) {
+	(void)data;
+	return strdup("boom");
+}
+static es_out tears_down_badly(es_context *c, void *ctx) {
+	(void)ctx;
+	free(sc_register_teardown(c->ermine->scheduler, c->scope, throws_boom, NULL));
+	return es_out_of(NULL);
+}
+static void teardown_thrown(int closing) {
+	es_ermine *e = NULL;
+	CHECK(es_create(&(es_options){0}, &e) == 0);
+	es_started *started = NULL;
+	es_refused no = {0};
+	CHECK(es_start(e, tears_down_badly, NULL, es_text("/code/p"), NULL, &started, &no) == 0);
+	CHECK(es_pulse(e->host_context) == 0);
+	int code = closing ? es_close(e) : es_stop(started, NULL);
+	CHECK(code == ES_FAILED);
+	CHECK(code && strcmp(es_thrown()->message, "boom") == 0);
+	es_clear_thrown();
+	es_started_free(started);
+	if (!closing) CHECK(es_close(e) == 0);
+	es_free(e);
+}
+
 int main(int argc, char **argv) {
 	const char *only = argc > 1 ? argv[1] : NULL;
 #define RUN(name, call) \
@@ -281,6 +308,8 @@ int main(int argc, char **argv) {
 	RUN("pipe-pending", pipe_heard_with(PR_PENDING));
 	RUN("stale-promise", stale_promise_settling());
 	RUN("foreign-seen", seen_by_a_foreign_context());
+	RUN("stop-thrown", teardown_thrown(0));
+	RUN("close-thrown", teardown_thrown(1));
 	if (!failed) puts("review: ok");
 	return failed;
 }
