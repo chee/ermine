@@ -41,6 +41,16 @@ const world = createWorld({
 	}),
 })
 
+<<<<<<< Updated upstream
+=======
+// the beat the programs that move count (a program has no timer that can call in): /beat, every 320ms
+world.seed((h) => void h.ensureNode("/beat", 0))
+let beats = 0
+setInterval(() => {
+	world.ermine.patch("/beat", [{ path: [], value: ++beats }])
+}, 320)
+
+>>>>>>> Stashed changes
 // a little filesystem
 world.seed(() => {
 	const text = (path: string, v: string) => {

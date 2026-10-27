@@ -11,4 +11,13 @@ const world = createWorld({
 	extend: () => ({ kill: (name: string) => world.world.stop(name) }),
 })
 
+<<<<<<< Updated upstream
+=======
+world.seed((host) => void host.ensureNode("/beat", 0))
+let beats = 0
+setInterval(() => {
+	world.ermine.patch("/beat", [{ path: [], value: ++beats }])
+}, 1000)
+
+>>>>>>> Stashed changes
 export const reload = world.reload
