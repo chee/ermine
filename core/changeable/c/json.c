@@ -448,7 +448,8 @@ static void put_elements(FILE *out, const op_value *v) {
 	putc(']', out);
 }
 
-void op_json_write(FILE *out, const op_value *v) {
+// a value that holds none: written whole
+static void write_leaf(FILE *out, const op_value *v) {
 	switch (v->type) {
 	case OP_NULL: fputs("null", out); break;
 	case OP_BOOL: fputs(v->bool_ ? "true" : "false", out); break;
@@ -465,34 +466,6 @@ void op_json_write(FILE *out, const op_value *v) {
 		} else put_number(out, v->num == 0 ? 0 : v->num, "{\"/\":{\"number\":\"", "\"}}"); // -0 is 0
 		break;
 	case OP_STR: op_json_string(out, v->str); break;
-	case OP_LIST:
-		putc('[', out);
-		for (size_t i = 0; i < v->count; i++) {
-			if (i) putc(',', out);
-			op_json_write(out, v->items[i]);
-		}
-		putc(']', out);
-		break;
-	case OP_MAP: {
-		// a map whose one key is "/" is data, not a form: it is escaped
-		int escaped = is_form(v);
-		if (escaped) fputs("{\"/\":{\"map\":", out);
-		putc('{', out);
-		for (size_t i = 0; i < v->count; i++) {
-			if (i) putc(',', out);
-			op_json_string(out, v->keys[i]);
-			putc(':', out);
-			op_json_write(out, v->items[i]);
-		}
-		putc('}', out);
-		if (escaped) fputs("}}", out);
-		break;
-	}
-	case OP_STAND:
-		fputs("{\"/\":{\"live\":", out);
-		op_json_write(out, v->items[0]);
-		fputs("}}", out);
-		break;
 	case OP_BYTES:
 		fputs("{\"/\":{\"bytes\":\"", out);
 		for (size_t i = 0; i < v->bytes; i += 3) {
@@ -509,6 +482,65 @@ void op_json_write(FILE *out, const op_value *v) {
 		put_elements(out, v);
 		fputs("}}", out);
 		break;
+	case OP_LIST:
+	case OP_MAP:
+	case OP_STAND: break;
+	}
+}
+
+// a list, a map or a stand-in being written: how far along, and whether a map is escaped as data
+typedef struct {
+	const op_value *v;
+	size_t i;
+	int escaped;
+} frame;
+
+// as deep as the value goes: a stack of frames that grows, not the C stack
+void op_json_write(FILE *out, const op_value *root) {
+	frame first[64], *stack = first;
+	size_t depth = 0, cap = 64;
+	const op_value *v = root;
+	for (;;) {
+		if (v->type == OP_LIST || v->type == OP_MAP || v->type == OP_STAND) {
+			if (depth == cap) {
+				cap *= 2;
+				frame *grown = grab(cap * sizeof *grown);
+				memcpy(grown, stack, depth * sizeof *grown);
+				if (stack != first) free(stack);
+				stack = grown;
+			}
+			// a map whose one key is "/" is data, not a form: it is escaped
+			int escaped = v->type == OP_MAP && is_form(v);
+			if (v->type == OP_LIST) putc('[', out);
+			else if (v->type == OP_STAND) fputs("{\"/\":{\"live\":", out);
+			else {
+				if (escaped) fputs("{\"/\":{\"map\":", out);
+				putc('{', out);
+			}
+			stack[depth++] = (frame){v, 0, escaped};
+		} else write_leaf(out, v);
+		// on to the next value to write, closing what is used up
+		for (;;) {
+			if (depth == 0) {
+				if (stack != first) free(stack);
+				return;
+			}
+			frame *f = &stack[depth - 1];
+			size_t count = f->v->type == OP_STAND ? 1 : f->v->count;
+			if (f->i < count) {
+				if (f->i && f->v->type != OP_STAND) putc(',', out);
+				if (f->v->type == OP_MAP) {
+					op_json_string(out, f->v->keys[f->i]);
+					putc(':', out);
+				}
+				v = f->v->items[f->i++];
+				break;
+			}
+			if (f->v->type == OP_LIST) putc(']', out);
+			else if (f->v->type == OP_STAND) fputs("}}", out);
+			else fputs(f->escaped ? "}}}" : "}", out);
+			depth--;
+		}
 	}
 }
 
