@@ -228,8 +228,10 @@ export function keeping(
 		unread.kept(more.kept, given)
 	})
 	return () => {
+		const at = ws.indexOf(g)
+		if (at < 0) return
 		start(), returns(), track(), end()
-		ws.splice(ws.indexOf(g), 1)
+		ws.splice(at, 1)
 	}
 }
 
