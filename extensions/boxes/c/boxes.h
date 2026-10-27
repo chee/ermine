@@ -7,6 +7,7 @@
 //   bx_put(b, names, n, "n12");                      // only this box sees it
 //   es_started *s;  bx_start(b, setup, ctx, es_text("/clock"), NULL, &s, &no);
 //   bx_take(b, names, n);
+//   bx_close(b);                                     // its bindings gone, its processes stopped
 //   ...  es_free(e);  bx_free(b);                    // after the ermine
 //
 // a box: the folder its "/" is, and the ermine's places viewed from it (pl_view) asked
@@ -49,6 +50,12 @@ int bx_take(bx_box *b, const char *const *path, size_t n);
 // es_start in the box: its "/" is the box's, its row is on the box's root, what it starts is in it too
 int bx_start(bx_box *b, es_program fn, void *ctx, es_at at, const es_start_options *o,
 	es_started **out, es_refused *refused);
+
+// close: every binding the box put gone (as bx_take does, a running reader is told), every process
+// started through bx_start stopped ("box closed"; call it before any es_started_free of those). after
+// it bx_put, bx_take and bx_start are ES_GONE; again: nothing. bx_places stays a view; the fresh root
+// of bx_create is left. memory is bx_free's
+int bx_close(bx_box *b);
 
 void bx_free(bx_box *b);
 

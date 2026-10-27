@@ -4,11 +4,15 @@
 //   { op: "box", name, at?, id? }       → {}   createBox(ermine, at | { id }): none: a new empty node
 //   { op: "boxput", box, path, node }      → {}   box.put(path, the node at the host's path node)
 //   { op: "boxtake", box, path }           → {}
+//   { op: "boxclose", box }                → {}   box.close()
+//   { op: "boxstart", box, name, at }      → {} | { refused }   box.start(a program that only adds a
+//      teardown noting its why, at); started under box.start itself, which the "start" op's in: is not
+//   { op: "boxwhy", name }                 → { whys }   the whys the teardowns of boxstart's name were told
 //   { op: "look", in?, path }           → { there, value? }   the node at path as a box's places (in:
 //      its name; none: the host's) see it: whether it is there, and its value
 //   { op: "names", in?, path }          → { names }   the names under path there, sorted
 // and the "start" op takes in: a box's name: box.start(…) in place of ermine.start(…)
-import type { Ermine } from "@ermine/system"
+import { addTeardown, type Ermine } from "@ermine/system"
 import { get, list } from "@ermine/core/places/lib"
 import { type Id, type Places, PlacesError } from "@ermine/core/places"
 import { type Box, createBox } from "./boxes.ts"
@@ -48,6 +52,22 @@ ops.set("boxtake", (r) => {
 	boxOf(r.box).take(names(r.path))
 	return {}
 })
+ops.set("boxclose", (r) => {
+	boxOf(r.box).close()
+	return {}
+})
+const whys = new Map<string, string[]>()
+ops.set("boxstart", (r) => {
+	const told: string[] = []
+	whys.set(r.name, told)
+	const made = boxOf(r.box).start(() => {
+		addTeardown((why) => {
+			told.push(why)
+		})
+	}, names(r.at))
+	return "refused" in made ? { refused: made.refused } : {}
+})
+ops.set("boxwhy", (r) => ({ whys: whys.get(r.name) ?? [] }))
 ops.set("look", (r, e) => {
 	const places = placesOf(e, r.in)
 	const id = get(places, names(r.path))
