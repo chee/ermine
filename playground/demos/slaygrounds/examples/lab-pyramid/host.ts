@@ -1,8 +1,7 @@
 // lab-pyramid's host: the world (@ermine/slaygrounds/world), one process, pyramid, running
 // program.ts, and what the host does that a program cannot: it counts (stats, handed to the program
-// by extend) and it keeps the clocks. nothing is open in a requestAnimationFrame or a timer, so a
-// program cannot write from one: the host runs the program's on/frame each frame and on/second each
-// second (executeAction, as the host), and the measure (/host/on/bench), which is async
+// by extend) and it runs the measure (/host/on/bench), which is async. the clocks (a frame, a
+// second) are the program's own
 import { createWorld } from "@ermine/slaygrounds/world"
 import { createAction, executeAction, peep, read } from "@ermine/system"
 import { render } from "ermine-h"
@@ -67,25 +66,9 @@ const meter = () => {
 		return undefined
 	}
 }
-const call = (action: string, ...args: unknown[]) => {
-	if (world.world.processes.has("pyramid")) {
-		try {
-			e.within(() => executeAction(`/pyramid/on/${action}`, ...args))
-		} catch { /* the program is not up yet */ }
-	}
-}
 
-// the clocks: a frame, a second. one set to a page: a host.ts run again stops the last
+// the page the bench is reached from
 const page = globalThis as Record<string, unknown>
-;(page.__pyramidClock as (() => void) | undefined)?.()
-let raf = 0
-const frame = (now: number) => {
-	raf = requestAnimationFrame(frame)
-	call("frame", now)
-}
-raf = requestAnimationFrame(frame)
-const every = setInterval(() => call("second"), 1000)
-page.__pyramidClock = () => (cancelAnimationFrame(raf), clearInterval(every))
 
 // ---- measure: a table of settings, each run for 2.5 s after 0.7 s to settle ----
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))

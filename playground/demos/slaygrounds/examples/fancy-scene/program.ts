@@ -583,8 +583,7 @@ export function view() {
 	// the drawing: an effect, so it acts once a round, after the world and the camera settled
 	const r = createRenderer(canvas)
 	let layer: HTMLElement | undefined
-	// the canvas's size is not a node: an observer can write nothing (nothing is open in its
-	// callback), so the act takes it off the canvas as it draws, and the observer draws the last
+	// the canvas's size is not a node: an observer writes nothing here (no writer is made for it), so the act takes it off the canvas as it draws, and the observer draws the last
 	// frame again when the box changes
 	let frame: Omit<Frame, "size"> | undefined
 	const drawn = () => {

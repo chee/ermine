@@ -1,7 +1,7 @@
 // nn's host: the world (@ermine/slaygrounds/world), one process, nn, running program.ts. a
 // program.ts edit reloads: nn stopped ("replaced"), then started again on the new code. the host
-// adds what the demo measures and the api does not give (extend, below), and it keeps the clock:
-// nothing is open in an animation frame, so a program cannot step or paint from one. each frame the
+// adds what the demo measures and the api does not give (extend, below), and it keeps the clock,
+// because it times what it runs (the pulse after each step is the scheduler's): each frame the
 // host runs nn's on/step while it is playing (a pulse after each: the forward pass the next step
 // reads), then on/frame, which paints. measure (/host/on/measure) is the host's too: it is async
 import { createWorld } from "@ermine/slaygrounds/world"

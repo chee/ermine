@@ -1,8 +1,6 @@
 // clock's host: the world (@ermine/slaygrounds/world) and two processes, each running an export of
-// program.ts: the clock counts /time, the view reads it. the host is the timer: it writes /beat each
-// second (a program has no timer that can write)
+// program.ts: the clock counts /time, the view reads it
 import { createWorld } from "@ermine/slaygrounds/world"
-import { ensureNode, patch } from "@ermine/system"
 import { render } from "ermine-h"
 
 const world = createWorld({
@@ -12,11 +10,5 @@ const world = createWorld({
 	// only the host started them), so the view, which did not start the clock, asks the host
 	extend: () => ({ kill: (name: string) => world.world.stop(name) }),
 })
-
-world.seed(() => void ensureNode("/beat", 0))
-let beats = 0
-setInterval(() => {
-	world.ermine.within(() => patch("/beat", [{ path: [], value: ++beats }]))
-}, 1000)
 
 export const reload = world.reload

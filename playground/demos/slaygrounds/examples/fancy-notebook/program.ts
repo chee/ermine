@@ -169,7 +169,7 @@ export default function program() {
 
 	// ---- what a run found, and its end: a step says (onStep) what its lookup found, and the run
 	// then ends; both are told here, and written to ./flow as the run ends (a run reads its own cell
-	// and others', never the flow; nothing is open after a microtask, so it is not written later) ----
+	// and others', never the flow; the end writes it, in the run) ----
 	const found = new Map<string, Found>()
 	const off = builds.onStep((f) => found.set(f.name as string, f))
 	addTeardown(off)

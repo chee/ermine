@@ -1,8 +1,10 @@
 /** @jsxImportSource ermine-h */
 import {
+	addTeardown,
 	createAction,
 	createEffect,
 	createMemo,
+	createWriter,
 	ensureNode,
 	executeAction,
 	hasNode,
@@ -233,6 +235,13 @@ export function shell() {
 	// the windows: a record each in /windows (what it shows, where it sits), an app each made
 	// below
 	const pos = (name: string) => `/windows/${name}/pos`
+	// the beat the clocks count: /beat, every 50ms, written by the shell's own timer (an app is made
+	// in an effect's act, where a writer cannot be, so the shell owns the one timer they share)
+	const beat = ensureNode("/beat", 0)
+	const withWriter = createWriter()
+	let beats = 0
+	const timer = setInterval(() => withWriter(() => put(beat, ++beats)), 50)
+	addTeardown(() => clearInterval(timer))
 	// the window in front: the highest z (read at z only: a drag does not rerun this)
 	const front = createMemo("front", () => {
 		let front = "", top = -Infinity
@@ -862,8 +871,7 @@ function peek(v: unknown): string {
 	return `{${Object.keys(v as object).slice(0, 3).join(", ")}}`
 }
 
-// clock → window: the host's beat (/beat, every 50ms: a timer cannot call into the graph) writes
-// its now node each second
+// clock → window: the shell's beat (/beat, every 50ms) writes its now node each second
 function clock(name: string) {
 	const doc = `${folder(name)}/doc`
 	const now = ensureNode(`${name}/now`, Date.now())
@@ -905,7 +913,7 @@ function clock(name: string) {
 }
 
 // clock → window, as a Kit-Cat Klock: a black cat with a clock on its belly, a tail that swings as
-// a pendulum and eyes that follow it. the host's beat (every 50ms) writes where the tail is (its
+// a pendulum and eyes that follow it. the shell's beat (every 50ms) writes where the tail is (its
 // swing node); how fast it swings and its bow tie are a node on the thing (doc/cat), not the
 // window: two cats on one clock swing together, and an edit there changes both
 type Cat = { swing: number; bow: string }

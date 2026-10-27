@@ -3,11 +3,10 @@
 // per process (the process's view is rendered into the card's body), a wire per `in` node, a drag
 // writing the card's `pos` through the process's own on/move. the one extra tool is the code editor
 // (CodeMirror, bundled beside this by vite as cm.js: the frame's import map has only @ermine/*).
-// the host keeps the clocks, since nothing is open in a frame callback or a timer: each frame the
-// source's on/frame, each second every process's on/stats, and the editor's typing (debounced) the
-// transform's on/edit, all run as the host (executeAction)
+// the clocks (the source's frames, every process's stats) are the processes' own; the host's editor
+// debounces the typing and hands the text to the transform
 import { createWorld } from "@ermine/slaygrounds/world"
-import { executeAction, peep, read } from "@ermine/system"
+import { peep, read } from "@ermine/system"
 import { render } from "ermine-h"
 
 const cm = await import(
@@ -90,13 +89,13 @@ const world = createWorld({
 		return render(into, view, process)
 	},
 	processes: names.map((name) => ({ name, export: name })),
-	extend: ({ at }) => ({
-		// what is typed runs the process's on/edit, 120ms after the last key
-		editor: (parent: HTMLElement, doc: string) => {
+	extend: () => ({
+		// what is typed is handed to changed, 120ms after the last key
+		editor: (parent: HTMLElement, doc: string, changed: (text: string) => void) => {
 			let timer: ReturnType<typeof setTimeout> | undefined
 			const view = cm.createEditor(parent, doc, (text: string) => {
 				clearTimeout(timer)
-				timer = setTimeout(() => act(at.join("/"), "edit", text), 120)
+				timer = setTimeout(() => changed(text), 120)
 			})
 			// the view, its destroy clearing the timer too
 			const destroy = view.destroy.bind(view)
@@ -108,13 +107,6 @@ const world = createWorld({
 })
 const e = world.ermine
 
-// an action of a process run as the host; none there (not started, or stopped): nothing
-function act(process: string, name: string, ...args: unknown[]) {
-	if (!world.world.processes.has(process)) return
-	try {
-		e.within(() => executeAction(`/${process}/on/${name}`, ...args))
-	} catch { /* the process is not up yet */ }
-}
 // a node's value as the host reads it, none: undefined
 const peek = (path: string) => {
 	try {
@@ -123,29 +115,6 @@ const peek = (path: string) => {
 		return undefined
 	}
 }
-
-// ---- the clocks ----
-// the source's frame loop: at 30 a frame at most every 30ms, 60 at the display's rate, 0 as fast as
-// the page lets it (a message, not a frame)
-const channel = new MessageChannel()
-let last = 0, raf = 0
-function tick(now: number) {
-	const r = peek("/board/source/rate")
-	if (!(r === 30 && now - last < 30)) {
-		last = now
-		act("source", "frame")
-	}
-	next()
-}
-function next() {
-	if (peek("/board/source/rate") === 0 && world.world.processes.has("source")) {
-		channel.port2.postMessage(0)
-	} else raf = requestAnimationFrame(tick)
-}
-channel.port1.onmessage = () => tick(performance.now())
-next()
-// and a second: each process's line of numbers
-setInterval(() => names.forEach((name) => act(name, "stats")), 1000)
 
 // a wire per `in` node: the node holds the address it reads, the line goes from the card that owns
 // the address (its first name) to the card with the `in`

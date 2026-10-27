@@ -3,7 +3,9 @@ import {
 	createAction,
 	createEffect,
 	createMemo,
+	createWriter,
 	ensureNode,
+	executeAction,
 	hasNode,
 	list,
 	patch,
@@ -27,9 +29,8 @@ import { bind, handler, under } from "ermine-h"
 // from the root: ./ is /run): the clock is the playhead (it writes /clock/next ahead of time, on
 // the audio clock, and /clock/at when the step is heard); the roll is the editor; the player reads
 // the notes at each step, through the bar's route, and plays them. its "explain" panel says what
-// it read, and by which route. nothing is open after a timer, so the clock's loop is not one: it
-// is an element in the clock's view whose css animation cycles every 20ms (while playing), and
-// each cycle's animationiteration calls on/beat through a handler
+// it read, and by which route. the clock's loop is a timer: an effect runs a setInterval every 20ms
+// while playing, and each tick calls on/beat through a writer made in setup
 const BARS = ["bar1", "bar2", "bar3", "bar4"]
 const STEPS = Array.from({ length: 16 }, (_, i) => i)
 const TOP = 72 // C5: the roll's first row; 25 notes down to C3, then the two drums
@@ -94,7 +95,7 @@ export function clock() {
 
 	// the loop, every 20ms (on/beat): write the steps due in the next LOOKAHEAD seconds. an odd step
 	// is late by the swing. a step is "heard" when its time comes: due holds each, and a beat writes
-	// /clock/at for the ones whose time has passed (no timer writes it). it reads what is there now
+	// /clock/at for the ones whose time has passed. it reads what is there now
 	const due: { when: number; bar: string; step: number }[] = []
 	createAction("on/beat", () => {
 		const ctx = hasNode("/audio") ? get<AudioContext>("/audio") : undefined
@@ -116,6 +117,13 @@ export function clock() {
 		let heard: (typeof due)[number] | undefined
 		while (due.length && due[0].when <= ctx.currentTime) heard = due.shift()
 		if (heard) put(at, { bar: heard.bar, step: heard.step })
+	})
+
+	const withWriter = createWriter()
+	createEffect("beat", () => read(playing) === true, (on) => {
+		if (!on) return
+		const t = setInterval(() => withWriter(() => executeAction("on/beat")), 20)
+		return () => clearInterval(t)
 	})
 
 	return (
@@ -155,11 +163,6 @@ export function clock() {
 			<span class="pos" title="/clock/at: the step being heard">
 				{bind("clock/at", (a) => `${a.bar} · ${String(a.step + 1).padStart(2, "0")}/16`)}
 			</span>
-			<i
-				class="beat"
-				style={bind("clock/playing", (p) => `animation-play-state:${p ? "running" : "paused"}`)}
-				onAnimationIteration={handler("on/beat")}
-			/>
 		</div>
 	)
 }
@@ -750,8 +753,6 @@ const STRIPES = BLACK.map((b, i) =>
 // ---- the look: lemon page, black lines, white cards with a pink glow, cherry, mint, blue ----
 const LOOK = `
 @import url("https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600&display=swap");
-@keyframes beat { to { opacity: 0 } }
-.beat { position: fixed; width: 0; height: 0; pointer-events: none; animation: beat 20ms linear infinite }
 * { box-sizing: border-box }
 body { background: #ffff88; margin: 10px; font-family: Jost, system-ui, sans-serif; color: #000;
 	display: flex; flex-direction: column; gap: 10px; width: max-content; max-width: 640px }

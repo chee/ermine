@@ -306,7 +306,7 @@ export default function dinner() {
 	)
 }
 
-// the post: brings each reply when its time comes. nothing is open after a timer, so each reply's
+// the post: brings each reply when its time comes. each reply's
 // wait is a promise a memo returns (settled when its time has come), and an effect's act delivers
 // it. when the invites went out and how many replies are through are nodes (./sent and ./delivered,
 // in the post's own folder), so a reload waits only for the replies not through. a memo reads

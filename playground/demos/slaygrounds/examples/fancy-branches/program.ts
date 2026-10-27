@@ -657,8 +657,8 @@ export default function program() {
 		const r = pad.getBoundingClientRect()
 		return [((e.clientX - r.left) / r.width) * W, ((e.clientY - r.top) / r.height) * H]
 	}
-	// the pad and the tree are canvases with no handler of their own, and nothing is open in a plain
-	// listener to call an action from: their events are heard on a jsx element round each, and each
+	// the pad and the tree are canvases with no handler of their own, and a plain
+	// listener has nothing open (no writer is made here): their events are heard on a jsx element round each, and each
 	// says the call it makes (on/do: name, ...args), or none. what the pointer is on is read from
 	// what the draw effects last drew (lastDoc, modeNow)
 	createAction("on/do", (name: string, ...args: unknown[]) => executeAction(`on/${name}`, ...args))

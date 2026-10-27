@@ -3,7 +3,9 @@ import {
 	addTeardown,
 	createAction,
 	createEffect,
+	createWriter,
 	ensureNode,
+	executeAction,
 	getArgs,
 	hasNode,
 	list,
@@ -25,8 +27,7 @@ import { bind, handler, under } from "ermine-h"
 // "mixer.out"}. an input's wiring is an effect reading its cable's node and the two jacks, so
 // re-patching reruns that one input's wiring, and a module rebuilt (edit its build below) is
 // rewired by everyone reading its jacks. power on the out module: audio needs a click.
-// nothing is open after a timer or a frame: the clock's loop is an element whose css animation
-// cycles every 20ms, each cycle's animationiteration calling on/beat through a handler
+// the clock's loop is a timer every 20ms, calling on/beat through a writer made in setup
 const HP = 13 // px per eurorack unit
 const LOOKAHEAD = 0.1 // s: how far ahead the clock writes its gates (the graph runs ahead of the speaker)
 const COLORS = ["#ff2284", "#40dcba", "#2269ff", "#ffff88", "#000000"]
@@ -128,7 +129,7 @@ const CLOCK: Spec = {
 	// a gate is written ahead of time, on the audio clock: whoever reads it schedules at its at
 	setup(m) {
 		const state = m.keep("state", () => ({ n: 0, next: 0 }))
-		// a beat (every 20ms, from the clock's face): what it reads now is what it uses now
+		// a beat (every 20ms, from the clock's timer): what it reads now is what it uses now
 		createAction("on/beat", () => {
 			const ctx = peep(() => m.ctx())
 			if (!ctx || ctx.state !== "running") return
@@ -139,6 +140,9 @@ const CLOCK: Spec = {
 				state.next += step
 			}
 		})
+		const withWriter = createWriter()
+		const timer = setInterval(() => withWriter(() => executeAction("on/beat")), 20)
+		addTeardown(() => clearInterval(timer))
 	},
 	face: (m) => (
 		<div class="face">
@@ -147,7 +151,6 @@ const CLOCK: Spec = {
 				data-flash={bind(m.own("jacks/gate"), (g: Gate) => (g.n % 2 ? "a" : "b"))}
 			/>
 			<small>bpm, in 8ths</small>
-			<i class="beat" onAnimationIteration={handler("on/beat")} />
 		</div>
 	),
 }
@@ -1146,8 +1149,6 @@ function drawCables(canvas: HTMLCanvasElement, { cables, held }: Any) {
 // ---- the look: lemon page, black lines, white cards with a pink glow, cherry, mint, blue ----
 const LOOK = `
 @import url("https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600&display=swap");
-@keyframes beat { to { opacity: 0 } }
-.beat { position: fixed; width: 0; height: 0; pointer-events: none; animation: beat 20ms linear infinite }
 * { box-sizing: border-box }
 body { background: #ffff88; margin: 10px; font-family: Jost, system-ui, sans-serif; color: #000 }
 .world { position: relative; width: max-content; display: flex; flex-direction: column; gap: 10px; padding-bottom: 30px }

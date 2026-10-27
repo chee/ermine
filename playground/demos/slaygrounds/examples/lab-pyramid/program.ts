@@ -3,7 +3,9 @@ import {
 	addTeardown,
 	createAction,
 	createEffect,
+	createWriter,
 	ensureNode,
+	executeAction,
 	patch,
 	peep,
 	read,
@@ -22,9 +24,9 @@ import { bind, handler } from "ermine-h"
 // the readout is plain DOM, not the graph: measuring through the thing measured would change it.
 // the controls are jsx (each select bound to its key of the config node); the triangle's dots are
 // made by hand inside an element held with ref
-// the clocks are the host's (host.ts): nothing is open in a requestAnimationFrame or a timer, so a
-// program cannot write from one. the host calls on/frame each frame and on/second each second, and
-// runs the measure (/host/on/bench). what they share with the program is the meter, a live object at
+// the clocks are the program's own: a requestAnimationFrame loop and a one-second timer call
+// on/frame and on/second through a writer made in setup. the host runs the measure
+// (/host/on/bench). what they share with the program is the meter, a live object at
 // ./meter inside this process (config as built, last build, counts), read by the host
 const LOOK = `
 body { background: #ffff88; margin: 8px; font-family: Jost, system-ui, sans-serif }
@@ -70,6 +72,7 @@ const FIRST: Config = { depth: 5, kind: "parts", mode: "spread", spread: 8, scal
 // unnamed (a node with no place). both write their node at each act
 export default function program() {
 	const { stats } = host<Tools>()
+	const withWriter = createWriter()
 	const cfg = ensureNode("./config", FIRST)
 	const seconds = ensureNode("./seconds", 0)
 	const scale = ensureNode("./scale", 1)
@@ -81,7 +84,7 @@ export default function program() {
 	createAction("on/set", set)
 
 	// the meter: conf and hits are the last built, body the ms in the frames' writes, frameCount the
-	// animation frames seen. a live object, shared with the host's clock and measure
+	// animation frames seen. a live object, shared with the host's measure
 	const meter = read(
 		ref("meter", (): Meter => ({
 			conf: FIRST,
@@ -95,7 +98,7 @@ export default function program() {
 	) as Meter
 	let hits: ReturnType<typeof ensureNode>[] = []
 
-	// one frame, called by the host each frame: the scale, and a few dots' own counters
+	// one frame, called by the program's loop each frame: the scale, and a few dots' own counters
 	createAction("on/frame", (now: number) => {
 		const t0 = performance.now()
 		const conf = meter.conf
@@ -107,7 +110,7 @@ export default function program() {
 		}
 		meter.body += performance.now() - t0
 	})
-	// one second, called by the host each second
+	// one second, called by the program's timer each second
 	createAction("on/second", () => bump(seconds))
 
 	// ---- the view: the triangle is held with ref, its dots made by the build effect below ----
@@ -203,7 +206,8 @@ export default function program() {
 		})
 		Object.assign(win, { t: now, frames: 0, worst: 0 })
 	}
-	// the page's own frame loop: the readout's frames, and the css scale (no graph, so no write)
+	// the page's own frame loop: the readout's frames, the css scale (no graph, so no write), and
+	// the frame's writes
 	let raf = 0
 	const loop = (now: number) => {
 		raf = requestAnimationFrame(loop)
@@ -212,10 +216,12 @@ export default function program() {
 		win.worst = Math.max(win.worst, now - win.prev)
 		win.prev = now
 		if (meter.conf.scale === "css") tri.style.transform = `scale(${wobble(now)})`
+		withWriter(() => executeAction("on/frame", now))
 	}
 	raf = requestAnimationFrame(loop)
 	const shown = setInterval(sample, 500)
-	addTeardown(() => (cancelAnimationFrame(raf), clearInterval(shown)))
+	const second = setInterval(() => withWriter(() => executeAction("on/second")), 1000)
+	addTeardown(() => (cancelAnimationFrame(raf), clearInterval(shown), clearInterval(second)))
 
 	// ---- the controls: a select per key of the config, bound to it; a change sends to on/set ----
 	const control = (key: string, label: string, options: (string | number)[]) => (

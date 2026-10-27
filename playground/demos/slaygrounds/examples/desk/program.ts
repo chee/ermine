@@ -31,8 +31,8 @@ import { bind, handler, type Item, under } from "ermine-h"
 // an edit of this file reloads; the graph (and what it holds) is kept. the desk's view is jsx: each
 // window lists its folder's members (under), each canvas says which renderer drew it (bound to its
 // ops node), and "who drew this pixel?" is bound to the answer node; the canvases are painted by
-// the effects. the pointer is heard on the desk's root (nothing is open in a plain listener to
-// call an action from), which says the call each event makes
+// the effects. the pointer is heard on the desk's root (a plain listener has nothing open, so no
+// writer is made here), which says the call each event makes
 
 // the type of a renderer node: the host has a runner taking it (host.ts)
 const RENDERER = "party.chee.ermine.renderer"

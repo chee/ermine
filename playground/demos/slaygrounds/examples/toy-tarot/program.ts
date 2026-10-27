@@ -285,7 +285,7 @@ export default function program() {
 	const spread = ensureNode("./spread", "three")
 	const flipped = ensureNode("./flipped", []) // positions turned face up, in order
 	const rereads = ensureNode("./rereads", 0)
-	// turn them all, staggered: the turns wait their place in the order (css), as a timer cannot call
+	// turn them all, staggered: the turns wait their place in the order (css)
 	const wave = ensureNode("./wave", false)
 
 	// a summary of the samples, so the graph shows the shape without every number
@@ -393,7 +393,7 @@ export default function program() {
 		put(flipped, [])
 	})
 	// the same seed again: the deck is a function of it, so the same cards come back. they settle
-	// face down; turning them again is up to whoever reads (a timer cannot call on/next)
+	// face down; turning them again is up to whoever reads
 	createAction("on/reread", () => {
 		put(flipped, [])
 		put(rereads, now(rereads) + 1)

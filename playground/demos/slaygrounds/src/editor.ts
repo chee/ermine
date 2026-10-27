@@ -156,7 +156,15 @@ Object.defineProperty(globalThis, "ermine", {
 })
 `
 
-// the program's module: types stripped, a blob url of its own each time. a file saying
+// what a module's code is called in a stack, a site: the same each reload (a blob url changes
+// every time). program.ts's functions are written at /code/<export> by the world, so its module
+// is /code/program.ts; host.ts runs in the frame and is /host/host.ts
+const called = (
+	name: File,
+) => (name === "program.ts" ? "ermine:/code/program.ts" : "ermine:/host/host.ts")
+
+// the program's module: types stripped, a blob url of its own each time, named by a sourceURL
+// comment so a stack frame says what it is, not the blob. a file saying
 // @jsxImportSource has its jsx made calls to that runtime (sucrase reads no pragma: it is read
 // here); the dev runtime, so each element knows its line
 function moduleUrl(name: File) {
@@ -174,8 +182,10 @@ function moduleUrl(name: File) {
 			}
 			: { transforms: ["typescript"] },
 	).code
-	const url = URL.createObjectURL(new Blob([code], { type: "text/javascript" }))
-	ran.set(url, name)
+	const url = URL.createObjectURL(
+		new Blob([`${code}\n//# sourceURL=${called(name)}\n`], { type: "text/javascript" }),
+	)
+	ran.set(called(name), name)
 	return url
 }
 

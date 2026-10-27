@@ -5,6 +5,7 @@ import {
 	createAction,
 	createEffect,
 	createMemo,
+	createWriter,
 	ensureNode,
 	executeAction,
 	patch,
@@ -585,8 +586,8 @@ export default function game() {
 	// where the lever is drawn once the game says so (the machine effect sets it)
 	let shown = "stop"
 
-	// the events of the phone and the machine, all heard on the stage (nothing is open in a plain
-	// listener to call an action from): each gives the call it makes, or none. the crank: a turn of
+	// the events of the phone and the machine, all heard on the stage (a plain listener has nothing open, so
+	// no writer is made here): each gives the call it makes, or none. the crank: a turn of
 	// 15 degrees is a tick of the tape, and it will not wind past either end (the action bounds it).
 	// the lever: click or drag it to a position
 	let turning: { cx: number; cy: number; last: number; turned: number } | undefined
@@ -790,9 +791,9 @@ export default function game() {
 
 // the clock: ticks the game while the lever is at play; winds the tape while it is at rew or ff,
 // three times as quick. a second process, reading the game's nodes: a new lever or a new beat, and
-// the interval it says is written at its own every (/clock/every). a timer cannot call into the graph, so the host's
-// timer (host.ts) is the metronome: it runs /clock/on/beat at that interval, and the beat does the
-// ticking or the winding
+// the interval it says is written at its own every (/clock/every). the clock's own timer is the
+// metronome (an effect over every, its writer made in setup): it runs on/beat at that interval, and
+// the beat does the ticking or the winding
 export function clock() {
 	const every = ensureNode("every", 0)
 	createEffect("beat", () => {
@@ -805,6 +806,12 @@ export function clock() {
 			value: lv === "play" ? ms : lv === "rew" || lv === "ff" ? Math.max(35, ms / 3) : 0,
 		}])
 	}, { equal: same })
+	const withWriter = createWriter()
+	createEffect("metronome", () => read(every), (ms) => {
+		if (typeof ms !== "number" || ms <= 0) return
+		const t = setInterval(() => withWriter(() => executeAction("on/beat")), ms)
+		return () => clearInterval(t)
+	})
 	createAction("on/beat", () => {
 		const lv = peep(() => read("/snake/lever"))
 		if (lv === "play") executeAction("/game/on/tick")

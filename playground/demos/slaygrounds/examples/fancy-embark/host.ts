@@ -14,8 +14,8 @@ import { render } from "ermine-h"
 //                  (or the browser being online again) takes it out
 //   retry          the failure nodes taken out, so whoever read them asks again
 //   ended          told how each memo ended a run, what it read named (paths: nodes, and /cache keys):
-//                  the host runs an action of the program's with it (a program has no listener to
-//                  give: nothing is open in one)
+//                  the host runs an action of the program's with it (the host runs it: the program
+//                  gives a path, not a function)
 // the request is the host's: a browser can not set User-Agent, so each fetch says where it is from
 // with its referrer (Nominatim asks for one naming the application)
 // before the program runs, /cache is filled from seed.json (committed beside this file: the default
@@ -90,8 +90,7 @@ const world = createWorld({
 	extend: () => ({
 		ask,
 		retry,
-		// action: the path of an action of the program's (a program is not given a function to call
-		// from here: nothing is open in one). it is run with { name, of, run, ended, error, ms,
+		// action: the path of an action of the program's (the program gives a path, not a function). it is run with { name, of, run, ended, error, ms,
 		// values, keys } each time a memo of this process ends a run: name and of are the last two
 		// names of the memo's place (result/<id>), values the paths of the nodes it read, keys the
 		// /cache keys ("geocode/<hash>"). gives back the stop

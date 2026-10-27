@@ -3,6 +3,7 @@ import {
 	createAction,
 	createEffect,
 	createMemo,
+	createWriter,
 	ensureNode,
 	executeAction,
 	patch,
@@ -267,27 +268,19 @@ export default function sill() {
 	)
 }
 
-// the clock: a day every DAY ms. a timer can write nothing (nothing is open after it), so the
-// beat is the browser's: an element in the clock's own view whose css animation runs one cycle
-// a day, and each cycle's animationiteration event calls on/beat through a handler. a pause
-// holds the animation (running is the clock's own node)
+// the clock: a day every DAY ms. an effect runs a setInterval while running (the clock's own
+// node) is on, and each tick calls on/beat through a writer made in setup. a pause clears the
+// timer
 export function clock() {
 	const running = ensureNode("./running", true)
 	createAction("on/toggle", () => put(running, !get<boolean>(running)))
 	createAction("on/beat", () => executeAction("/sill/on/day"))
-	return (
-		<div class="beat-box">
-			<style>
-				{`@keyframes beat { to { opacity: 0 } }
-.beat { position: fixed; width: 0; height: 0; opacity: 1; pointer-events: none; animation: beat ${DAY}ms linear infinite }`}
-			</style>
-			<i
-				class="beat"
-				style={bind("running", (r) => `animation-play-state:${r ? "running" : "paused"}`)}
-				onAnimationIteration={handler("on/beat")}
-			/>
-		</div>
-	)
+	const withWriter = createWriter()
+	createEffect("beat", () => read(running), (on) => {
+		if (!on) return
+		const t = setInterval(() => withWriter(() => executeAction("on/beat")), DAY)
+		return () => clearInterval(t)
+	})
 }
 
 // a housemate on duty: told by the duty memo, not knocked on. the first duty seen is the one it

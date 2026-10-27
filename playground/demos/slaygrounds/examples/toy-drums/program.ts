@@ -1,9 +1,12 @@
 /** @jsxImportSource ermine-h */
 import {
+	addTeardown,
 	createAction,
 	createEffect,
 	createMemo,
+	createWriter,
 	ensureNode,
+	executeAction,
 	patch,
 	peep,
 	read,
@@ -15,8 +18,8 @@ import { bind, handler } from "ermine-h"
 // playhead is another. the grid and the little text pattern under it are two views of those nodes.
 // change a drum sound or a label below and save: the beat keeps going, the pattern stays. each
 // cell is bound to the pattern; the playhead is one bar over the grid, bound to its own node.
-// the beat cannot keep itself: a timer cannot write now (nothing is open after it), so ▶ plays
-// and a step button moves the playhead one place
+// the beat keeps itself: ▶ plays, and a timer made in setup (its own writer) moves the playhead a
+// step every 170ms while playing; the step button moves it one place by hand
 const drums = ["kick", "snare", "hat"]
 const css = `
 .drums{background:#fff;border:1px solid #000;border-radius:2px;box-shadow:0 4px 24px #ff228433;padding:14px;max-width:420px;margin:0 auto;font-family:Jost,system-ui,sans-serif}
@@ -62,9 +65,14 @@ export default function program() {
 			Array.from({ length: 8 }, () => Math.random() < p ? "x" : ".").join("")
 		put(pattern, [r(0.3), r(0.2), r(0.6)])
 	})
-	// the playhead moves one step: six presses a second was the old beat's timer, which wrote as the
-	// process; a timer has no call open now, so a press moves it (and plays the step's sounds)
+	// the playhead moves one step (and plays the step's sounds): by the timer while playing, or by a press
 	createAction("on/step", () => put(step, (now<number>(step) + 1) % 8))
+	const withWriter = createWriter()
+	const timer = setInterval(
+		() => withWriter(() => now<boolean>(playing) && executeAction("on/step")),
+		170,
+	)
+	addTeardown(() => clearInterval(timer))
 
 	// the sounds: a tiny synth, made on first press (a browser wants a click before it speaks)
 	// a live thing, so a ref: it is there till the process stops
@@ -148,7 +156,9 @@ export default function program() {
 				<button onClick={handler("on/surprise")}>🎲 surprise</button>
 			</div>
 			<pre>{bind("ascii")}</pre>
-			<small>no timer can write now: the playhead moves a step when you press ⏭</small>
+			<small>
+				the playhead moves a step six times a second while playing, or when you press ⏭
+			</small>
 		</div>
 	)
 }

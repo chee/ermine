@@ -302,7 +302,7 @@ export function friend() {
 	const me = FRIENDS[getArgs()[0] as Friend]
 	const holding = ensureNode("./holding", null) // when it was passed, or null
 	const signed = ensureNode("./signed", 0)
-	// the wait is a promise a memo returns (nothing is open after a timer to write with): it
+	// the wait is a promise a memo returns (the memo's own, not a timer's write): it
 	// settles with the time the card was passed, and the effect's act signs. a reload runs the memo
 	// again from ./holding, so the wait is what is left
 	createMemo("arrival", () => {

@@ -22,7 +22,7 @@ import { count, unit } from "@ermine/core/util/walk-string"
 // your computer (the File System Access API), a patchwork doc (automerge, by its url), and inner
 // nodes that live only in this graph. this port has the inner nodes, the pipes and the editor; the
 // disk and the docs are not in it (see the note in the view): each writes the graph from a picker's
-// promise, a file's change or a doc's change, where nothing is open. the opstream on a text is ermine's splice, a patch:
+// promise, a file's change or a doc's change, which would write through a writer. the opstream on a text is ermine's splice, a patch:
 // { path: [], range: [a, b], value }: positions a to b (code points) become value. one editor
 // (CodeMirror) edits whichever node you pick.
 //   the disk   has no ops, only texts: what it has now is diffed against what it had (lines matched,
@@ -917,8 +917,8 @@ export default function program() {
 				<button onClick={handler("on/inner")}>○ new inner node</button>
 				<span class="note">
 					not in this port: a file or folder on your computer, a patchwork doc. each writes the
-					graph from a picker's promise, a file's change or a doc's change, and nothing is open
-					there
+					graph from a picker's promise, a file's change or a doc's change, through a writer
+					made in setup
 				</span>
 				{bind("state", (st: Record<string, string>) =>
 					st?.oops ? <em class="warn">{st.oops}</em> : null)}

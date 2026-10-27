@@ -4,7 +4,15 @@
 // stops. the clock is awake only while it is read. the provider is the host's: a program only reads
 // the time
 import { createWorld } from "@ermine/slaygrounds/world"
-import { createAction, ensureNode, patch, peep, read } from "@ermine/system"
+import {
+	addTeardown,
+	createAction,
+	createWriter,
+	ensureNode,
+	patch,
+	peep,
+	read,
+} from "@ermine/system"
 import pully, { provide } from "@ermine/pully"
 import { render } from "ermine-h"
 
@@ -37,6 +45,9 @@ const started = e.start(() => {
 		])
 	}
 	let timer: ReturnType<typeof setInterval> | undefined
+	// the ticks come from a timer: written through a writer made here, in setup
+	const withWriter = createWriter()
+	addTeardown(() => clearInterval(timer))
 	provide(
 		clock,
 		createAction("on/clock", (what: string) => {
@@ -44,17 +55,14 @@ const started = e.start(() => {
 				say("a reader came: ticking", true)
 				const tick = () => {
 					ticks++
-					// from a timer, nothing is open: the host writes, as it does the beat
-					e.within(() => {
-						patch("/dev/clock", [
-							{ path: ["time"], value: hhmmss() },
-							{ path: ["ticks"], value: ticks },
-						])
-						patch("/provider", [{ path: ["ticks"], value: ticks }])
-					})
+					patch("/dev/clock", [
+						{ path: ["time"], value: hhmmss() },
+						{ path: ["ticks"], value: ticks },
+					])
+					patch("/provider", [{ path: ["ticks"], value: ticks }])
 				}
 				tick()
-				timer = setInterval(tick, 1000)
+				timer = setInterval(() => withWriter(tick), 1000)
 			} else if (what === "sleep") {
 				clearInterval(timer)
 				timer = undefined

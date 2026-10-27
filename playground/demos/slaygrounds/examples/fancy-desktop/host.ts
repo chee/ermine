@@ -160,8 +160,6 @@ world.seed(() => {
 	typed("/system", null, FOLDER)
 	ensureNode("/system/palette", PALETTE)
 	ensureNode("/system/log", ["✿ the desktop woke up"])
-	// the beat the clocks count: /beat, every 50ms (a program has no timer that can call in)
-	ensureNode("/beat", 0)
 	typed("/home", null, FOLDER)
 	typed(
 		"/home/hello",
@@ -230,8 +228,3 @@ export const reload = (mod: Record<string, unknown>) => {
 	})
 	world.reload(mod)
 }
-
-let beats = 0
-setInterval(() => {
-	world.ermine.within(() => patch("/beat", [{ path: [], value: ++beats }]))
-}, 50)
