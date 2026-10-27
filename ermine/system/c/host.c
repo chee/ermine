@@ -2150,8 +2150,9 @@ void es_refused_free(es_refused *r) {
 	*r = (es_refused){0};
 }
 
-// stop why (NULL: "ended"): its teardowns are told it, its row goes
-static void stop_process(proc_rec *rec, const char *why) {
+// stop why (NULL: "ended"): its teardowns are told it, its row goes. what its teardown threw:
+// malloc'd for the caller (NULL: none)
+static char *stop_process(proc_rec *rec, const char *why) {
 	es_ermine *e = rec->e;
 	hosting *h = host_of(e);
 	// a child is freed as its scope is: held till this is done with it
@@ -2162,7 +2163,7 @@ static void stop_process(proc_rec *rec, const char *why) {
 	char *world = es_dup(own != NULL ? pl_root(own->places).string : e->root);
 	char *why_ = es_dup(why != NULL ? why : "ended");
 	es_map_set(&e->whys, rec->id, why_);
-	pr_stop(e->processes, rec->started.process);
+	char *bad = pr_stop(e->processes, rec->started.process);
 	es_map_del(&e->whys, rec->id);
 	free(why_);
 	es_held_drop(e, rec->id);
@@ -2188,22 +2189,30 @@ static void stop_process(proc_rec *rec, const char *why) {
 	}
 	free(world);
 	if (hold != NULL) sc_release(hold);
+	return bad;
+}
+
+static int failed_with(char *bad) {
+	if (bad == NULL) return 0;
+	int code = es_fail_text(bad);
+	free(bad);
+	return code;
 }
 
 // a running process stopped by its node, told why (NULL: "ended"); none running there: nothing
-void es_stop_id(es_ermine *e, const char *id, const char *why) {
+int es_stop_id(es_ermine *e, const char *id, const char *why) {
 	hosting *h = host_of(e);
-	if (e->closed) return;
+	if (e->closed) return 0;
 	for (size_t i = 0; i < h->nprocs; i++) {
 		proc_rec *rec = h->procs[i];
 		if (rec->running && strcmp(rec->id, id) == 0) {
-			stop_process(rec, why);
-			return;
+			return failed_with(stop_process(rec, why));
 		}
 	}
+	return 0;
 }
 // (unplace, remove: nodes.c)
-void es_stop_node(es_ermine *e, const char *id) { es_stop_id(e, id, NULL); }
+int es_stop_node(es_ermine *e, const char *id) { return es_stop_id(e, id, NULL); }
 
 // the process running at id, if it runs (its context is still known)
 static proc_rec *running_rec(es_ermine *e, const char *id) {
@@ -2267,8 +2276,7 @@ int es_child_stop(es_context *c, const char *id, const char *why) {
 	const char *bad = sc_run_with_scope(c->scope, stop_ask_run, &a);
 	if (bad != NULL) return es_fail_text(bad);
 	TRY(a.code);
-	stop_process(rec, why);
-	return 0;
+	return failed_with(stop_process(rec, why));
 }
 
 int es_child_status(es_context *c, const char *id, es_status *out) {
@@ -2284,8 +2292,7 @@ int es_stop(es_started *s, const char *why) {
 	es_ermine *e = s->ermine;
 	if (e->closed) return 0;
 	proc_rec *rec = (proc_rec *)s;
-	stop_process(rec, why);
-	return 0;
+	return failed_with(stop_process(rec, why));
 }
 
 // a record let go of: out of procs, its process dropped (freed with its scope)
@@ -2296,7 +2303,7 @@ static void rec_free(proc_rec *rec) {
 	h->procs[rec->at] = last;
 	last->at = rec->at;
 	if (!rec->child && !e->closed && e->processes != NULL && rec->started.process != NULL) {
-		pr_drop(e->processes, rec->started.process);
+		free(pr_drop(e->processes, rec->started.process));
 	}
 	free(rec->id);
 	op_free(rec->at_value);
@@ -2307,7 +2314,7 @@ void es_started_free(es_started *s) {
 	if (s == NULL) return;
 	proc_rec *rec = (proc_rec *)s;
 	if (rec->dropped) return;
-	if (!rec->e->closed && rec->running) stop_process(rec, NULL);
+	if (!rec->e->closed && rec->running) free(stop_process(rec, NULL));
 	rec->dropped = 1;
 	// its setup's promise still out: freed as it settles
 	if (rec->awaiting && !rec->e->closed) return;
@@ -2325,6 +2332,7 @@ int es_started_status(es_started *s, es_status *out) {
 int es_close(es_ermine *e) {
 	hosting *h = host_of(e);
 	if (e->closed) return 0;
+	char *first = NULL;
 	// stopping a parent ends its children and frees their records (out of procs): scan again each time
 	for (;;) {
 		proc_rec *rec = NULL;
@@ -2335,9 +2343,15 @@ int es_close(es_ermine *e) {
 			}
 		}
 		if (rec == NULL) break;
-		stop_process(rec, "ended");
+		char *stopped = stop_process(rec, "ended");
+		if (first == NULL) first = stopped;
+		else free(stopped);
 	}
 	char *bad = sc_teardown(e->host_scope);
+	if (first != NULL) {
+		free(bad);
+		bad = first;
+	}
 	if (e->statuses != NULL) cst_stop(e->statuses);
 	if (e->runs != NULL) crn_stop(e->runs);
 	es_calls_stop(e);

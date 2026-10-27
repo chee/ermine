@@ -2535,7 +2535,7 @@ static int children_in(void *p) {
 			if (running) {
 				char *id = es_dup(at);
 				code = ask(s->t, "place", slot);
-				if (!code) es_stop_node(e, id);
+				if (!code) code = es_stop_node(e, id);
 				free(id);
 			} else if (children != NULL) {
 				code = ask(s->t, "place", slot);
@@ -2588,7 +2588,7 @@ static int unplace_in(void *v) {
 				: ask(c, "place", gd_target_of((gd_thing){.id = tb_string(id), .path = CP(path.names),
 					.npath = path.n}, NULL, NULL));
 		}
-		if (!code) es_stop_node(c->ermine, id);
+		if (!code) code = es_stop_node(c->ermine, id);
 		free(id);
 		es_names_free(&path);
 		return code;
@@ -2729,7 +2729,7 @@ static int remove_in(void *v) {
 	idlist below = {0};
 	if (!code) under(e, id, &below);
 	// a running process's node: the process stopped first (its row out), then its entries gone
-	if (!code && es_map_get(&state(e)->running, id) != NULL) es_stop_node(e, id);
+	if (!code && es_map_get(&state(e)->running, id) != NULL) code = es_stop_node(e, id);
 	else if (!code && n.has_path && n.npath) {
 		nd_entry *children;
 		const char *name;

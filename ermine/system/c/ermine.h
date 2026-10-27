@@ -1441,10 +1441,11 @@ void es_child_free(es_child *k);
 // the child's stop(why), asked as c (the starter); none running there: nothing. its status as c reads it
 int es_child_stop(es_context *c, const char *id, const char *why);
 int es_child_status(es_context *c, const char *id, es_status *out);
-// stop (why NULL: "ended"); status: getStatus of its node
+// stop (why NULL: "ended"); status: getStatus of its node. its teardown's throw: ES_FAILED, its
+// message (stop rethrows it), as es_child_stop, es_stop_id and es_close too
 int es_stop(es_started *s, const char *why);
 // a running process stopped by its node's id (unplace and remove of its path: nodes.c)
-void es_stop_node(es_ermine *e, const char *id);
+int es_stop_node(es_ermine *e, const char *id);
 // a memo or effect stopped by its node (unplace and remove: nodes.c): its scope torn down, its
 // teardowns told "ended" (whoever made it: its maker's process keeps running), its node and name gone.
 // none there: nothing
@@ -1456,7 +1457,7 @@ char *es_unplace_names(es_context *c, const char *id);
 // node's parts are the caller's to take out), else 0
 int es_stop_action(es_ermine *e, const char *id);
 // the same, told why (NULL: "ended"); none running there, or the ermine closed: nothing
-void es_stop_id(es_ermine *e, const char *id, const char *why);
+int es_stop_id(es_ermine *e, const char *id, const char *why);
 int es_started_status(es_started *s, es_status *out);
 // the host lets go of a process it started (the TypeScript's Process, gone with its last
 // reference): stopped first if it runs ("ended"). its memory goes once nothing waits on it (its
