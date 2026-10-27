@@ -1254,7 +1254,8 @@ int es_api_seen(es_feature_api *f, const char *id, es_context *context, es_names
 	es_ermine *e = a->e;
 	TRY(after_setup("seen", host_of(e)->made));
 	*out = (es_names){0};
-	if (context->ermine != e) return 0;
+	// another ermine's context sees nothing here (the TypeScript's: none), not the root
+	if (context->ermine != e) return es_fail(ES_NOTHING_THERE, "nothing-there");
 	if (es_seen_in(e, context, id, out)) return 0;
 	return es_fail(ES_NOTHING_THERE, "nothing-there");
 }

@@ -246,6 +246,29 @@ static void stale_promise_settling(void) {
 	es_free(e);
 }
 
+// seen by another ermine's context: nothing, not the root
+static es_feature_api *kept_api;
+static int keeps_api(void *ctx, es_feature_api *f) {
+	(void)ctx;
+	kept_api = f;
+	return 0;
+}
+static void seen_by_a_foreign_context(void) {
+	es_feature f = {.name = "seen", .setup = keeps_api};
+	const es_feature *list[1] = {&f};
+	es_options o = {.features = list, .nfeatures = 1};
+	es_ermine *e = NULL, *other = NULL;
+	CHECK(es_create(&o, &e) == 0);
+	CHECK(es_create(&(es_options){0}, &other) == 0);
+	es_names seen = {0};
+	CHECK(es_api_seen(kept_api, e->node, other->host_context, &seen) == ES_NOTHING_THERE);
+	es_clear_thrown();
+	CHECK(es_close(other) == 0);
+	es_free(other);
+	CHECK(es_close(e) == 0);
+	es_free(e);
+}
+
 // a finding's name given: that one alone
 int main(int argc, char **argv) {
 	const char *only = argc > 1 ? argv[1] : NULL;
@@ -257,6 +280,7 @@ int main(int argc, char **argv) {
 	RUN("no-text", failing_with_no_text());
 	RUN("pipe-pending", pipe_heard_with(PR_PENDING));
 	RUN("stale-promise", stale_promise_settling());
+	RUN("foreign-seen", seen_by_a_foreign_context());
 	if (!failed) puts("review: ok");
 	return failed;
 }
