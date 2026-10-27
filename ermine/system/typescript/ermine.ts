@@ -731,9 +731,13 @@ export function createErmine(options: Options = {}): Ermine {
 		whys,
 		// set once start's stop is made (below)
 		stop: () => {},
+		start: () => {
+			throw new ErmineError("closed", "not started")
+		},
 		newId,
 		errored,
 		handles: new WeakMap(),
+		writers: new WeakMap(),
 		running,
 		views: new WeakMap(),
 		changes: new WeakMap(),
@@ -793,6 +797,9 @@ export function createErmine(options: Options = {}): Ermine {
 			}
 		}
 
+		// a process a program started: under the scope that started it
+		base.start = (fn, at, o, under) => start(fn, at, o, under)
+
 		// a running process stopped by its node (unplace, remove: system.ts)
 		base.stop = (id) => {
 			const process = started.find((p) => p.id === id)
@@ -803,6 +810,7 @@ export function createErmine(options: Options = {}): Ermine {
 			fn: () => unknown,
 			at: string | Path,
 			o: StartOptions = {},
+			under?: Scope,
 		): Started | (Refused & { held?: { process: Id; feature: string } }) {
 			alive()
 			if (typeof fn !== "function") {
@@ -818,7 +826,7 @@ export function createErmine(options: Options = {}): Ermine {
 				made = processes!.start(
 					p,
 					paths.at,
-					{ args: o.args, folder: paths.folder },
+					{ args: o.args, folder: paths.folder, ...under !== undefined && { under } },
 					(inside) => {
 						const pid = inside.id
 						const inner = createProcessContext(parts, {
@@ -926,6 +934,11 @@ export function createErmine(options: Options = {}): Ermine {
 				return made
 			}
 			started.push(made)
+			// stopped from above (the scope it was started under going): out of the list
+			s.registerTeardown(made.scope, () => {
+				const i = started.indexOf(made)
+				if (i !== -1) started.splice(i, 1)
+			})
 			return {
 				process: made,
 				stop: (why?: Why) => {
@@ -978,7 +991,9 @@ export function createErmine(options: Options = {}): Ermine {
 		}
 		const ermine = Object.defineProperties({}, {
 			within: { value: <T>(f: () => T): T => hostInner.context.within(f) },
-			start: { value: start },
+			start: {
+				value: (fn: () => unknown, at: string | Path, o?: StartOptions) => start(fn, at, o),
+			},
 			close: { value: close },
 			getProcessContext: {
 				value: (process?: Process): ProcessContext | undefined => {

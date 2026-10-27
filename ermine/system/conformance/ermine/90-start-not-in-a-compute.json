@@ -1,0 +1,201 @@
+{
+	"title": "start in a memo, or in an effect's act, throws not-here: a memo would start it every run, an act makes nothing. an action a memo calls may start (it runs as its parent, not as the memo)",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/c",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/c-out",
+						0
+					],
+					"as": "o"
+				},
+				{
+					"do": [
+						"patch",
+						"$o",
+						[
+							{
+								"path": [],
+								"value": 1
+							}
+						]
+					]
+				},
+				{
+					"do": [
+						"addTeardown",
+						"child-down"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/k",
+				0
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createAction",
+						"on/go",
+						[
+							{
+								"do": [
+									"start",
+									"c",
+									"/work/c",
+									"/code/c"
+								]
+							}
+						]
+					]
+				},
+				{
+					"do": [
+						"createMemo",
+						"bad",
+						{},
+						[
+							"start",
+							"b",
+							"/work/b",
+							"/code/c"
+						]
+					],
+					"as": "bad"
+				},
+				{
+					"do": [
+						"createMemo",
+						"good",
+						{},
+						[
+							"executeAction",
+							"on/go"
+						]
+					],
+					"as": "good"
+				},
+				{
+					"do": [
+						"createEffect",
+						"e",
+						[
+							"read",
+							"/k"
+						],
+						"acts",
+						null,
+						{
+							"act": [
+								{
+									"do": [
+										"start",
+										"d",
+										"/work/d",
+										"/code/c"
+									]
+								}
+							],
+							"caught": "caught"
+						}
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$bad"
+			],
+			"expect": {
+				"value": {
+					"state": "failed",
+					"error": "not-here: start in a memo, effect or pipe: start a process in setup or an action",
+					"phase": "run",
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$good"
+			],
+			"expect": {
+				"value": {
+					"state": "done",
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "log",
+			"name": "caught",
+			"expect": {
+				"values": [
+					"not-here"
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/work/b"
+			],
+			"expect": {
+				"value": false
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/work/d"
+			],
+			"expect": {
+				"value": false
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/work/c"
+			],
+			"expect": {
+				"value": true
+			}
+		}
+	]
+}

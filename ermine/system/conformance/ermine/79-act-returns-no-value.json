@@ -1,0 +1,73 @@
+{
+	"title": "an act that returns something that is no function throws bad-cleanup [marks 10-27; Solid 2.0 throws on it]: the effect's status is failed in its act, with the error; the same effect returning nothing is fine (78)",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/k",
+						0
+					],
+					"as": "k"
+				},
+				{
+					"do": [
+						"createEffect",
+						"e",
+						[
+							"read",
+							"$k"
+						],
+						"acts",
+						null,
+						{
+							"returns": 5
+						}
+					],
+					"as": "e"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$e"
+			],
+			"expect": {
+				"value": {
+					"state": "failed",
+					"error": "bad-cleanup: an effect's act returned number: return a function (its cleanup), or nothing",
+					"phase": "act",
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "log",
+			"name": "acts",
+			"expect": {
+				"values": [
+					0
+				]
+			}
+		}
+	]
+}

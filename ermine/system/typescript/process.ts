@@ -15,3 +15,11 @@ export const addTeardown: System["addTeardown"] = /* @__PURE__ */ marked((fn) =>
 export const getArgs: System["getArgs"] = /* @__PURE__ */ marked(() =>
 	go("getArgs", false, impl.getArgs)
 )
+// a writer: runs a function later as this one, with nothing open: createWriter in setup or an action
+export const createWriter: System["createWriter"] = /* @__PURE__ */ marked(() =>
+	go("createWriter", true, impl.createWriter)
+)
+// a process running fn at at, belonging to the scope that started it: setup, an action, a writer
+export const start: System["start"] = /* @__PURE__ */ marked((fn, at, options) =>
+	go("start", true, impl.start, fn, at, options)
+)

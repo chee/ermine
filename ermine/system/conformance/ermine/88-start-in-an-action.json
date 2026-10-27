@@ -1,0 +1,148 @@
+{
+	"title": "start in an action: the process belongs to the scope that placed the action (the starter process), not to the call: it keeps running when the call returns, and stops when the process that placed the action does",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/c",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/c-out",
+						0
+					],
+					"as": "o"
+				},
+				{
+					"do": [
+						"patch",
+						"$o",
+						[
+							{
+								"path": [],
+								"value": 1
+							}
+						]
+					]
+				},
+				{
+					"do": [
+						"addTeardown",
+						"child-down"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createAction",
+						"on/go",
+						[
+							{
+								"do": [
+									"start",
+									"c",
+									"/work/c",
+									"/code/c"
+								]
+							}
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/q",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/code/q",
+			"expect": {
+				"id": "proc:q"
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"executeAction",
+				"./p/on/go"
+			],
+			"expect": {}
+		},
+		{
+			"op": "status",
+			"name": "c",
+			"expect": {
+				"status": {
+					"state": "done"
+				}
+			}
+		},
+		{
+			"op": "log",
+			"name": "child-down",
+			"expect": {
+				"values": []
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/work/c"
+			],
+			"expect": {
+				"value": true
+			}
+		},
+		{
+			"op": "stop",
+			"name": "q",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "child-down",
+			"expect": {
+				"values": []
+			}
+		},
+		{
+			"op": "stop",
+			"name": "p",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "child-down",
+			"expect": {
+				"values": [
+					"ended"
+				]
+			}
+		}
+	]
+}

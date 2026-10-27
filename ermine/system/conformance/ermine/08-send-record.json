@@ -1,5 +1,5 @@
 {
-	"title": "a send's record, the latest per handler: its number, the caller (the sending process; the host's node for the host), the handler, its args and what it returned, by reference; end done, failed with what it threw, or pending on a promise till it settles; the reads and writes made in the call; the memos made in it, which go with it. calls never: none held",
+	"title": "a send's record, the latest per handler: its number, the caller (the sending process; the host's node for the host), the handler, its args and what it returned, by reference; end done, failed with what it threw, or pending on a promise till it settles; the reads and writes made in the call; the memos made in it (they belong to the scope that placed the action, and stay: the record says made, not owned). calls never: none held",
 	"steps": [
 		{
 			"op": "ermine",
@@ -422,7 +422,9 @@
 				"p",
 				"inner"
 			],
-			"expect": {}
+			"expect": {
+				"id": "n12"
+			}
 		},
 		{
 			"op": "host",
