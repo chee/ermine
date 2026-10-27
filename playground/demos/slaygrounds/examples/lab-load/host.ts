@@ -55,7 +55,8 @@ world.seed(() => {
 			else table.add(part as "value", at, n as never)
 		}
 		const name = free(file.name)
-		as(() => place(`/loaded/${name}`, { id: fresh, part: "value" }))
+		// a handle by id: what the host makes of an id it just put in the table
+		as(() => place(`/loaded/${name}`, world.ermine.handleOf({ id: fresh, part: "value" })))
 		s.pulse()
 		say(
 			`${file.name} → /loaded/${name}: ${file.size} bytes, ${ids.size} ids, ${nodes.size} nodes` +

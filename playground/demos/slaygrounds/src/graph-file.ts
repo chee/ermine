@@ -40,6 +40,8 @@ const TYPED: Record<string, new (from: ArrayLike<never>) => ArrayBufferView> = {
 const isMap = (x: unknown): x is Record<string, unknown> =>
 	typeof x === "object" && x !== null && !Array.isArray(x)
 
+// root: the world's root id (places.root, a fresh id per world). it is written as "root", so a file
+// says which node is its root whatever the id was
 export function save(table: Pick<Table, "get">, root: Id = "root"): Saved {
 	const stands = new Map<string, number>()
 	let symbols = 0
@@ -94,7 +96,7 @@ export function save(table: Pick<Table, "get">, root: Id = "root"): Saved {
 		const out: Record<string, unknown> = {}
 		for (const [name, id] of Object.entries(v)) {
 			if (typeof id === "symbol") symbols++
-			else if (id !== undefined) out[name] = carry(id)
+			else if (id !== undefined) out[name] = carry(id === root ? "root" : id)
 		}
 		return out
 	}
@@ -118,7 +120,7 @@ export function save(table: Pick<Table, "get">, root: Id = "root"): Saved {
 	const ids: Id[] = [root], seen = new Set<Id>(ids)
 	for (let i = 0; i < ids.length; i++) {
 		for (const [part, n] of table.get(ids[i])) {
-			out.push([part, ids[i], copy(n, part)])
+			out.push([part, ids[i] === root ? "root" : ids[i], copy(n, part)])
 			if (part !== "children" || !isMap(n.value)) continue
 			for (const id of Object.values(n.value)) {
 				if (typeof id === "string" && !seen.has(id)) seen.add(id), ids.push(id)

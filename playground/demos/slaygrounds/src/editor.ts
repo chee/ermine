@@ -431,11 +431,13 @@ $("run").onclick = restart
 // ---- save graph: the running world's graph, packed (graph-file.ts), downloaded as
 // <example>.ermine; what could not be carried is said in the console ----
 $("save").onclick = () => {
-	const w = win() as (Window & { ermine?: { table: Parameters<typeof save>[0] } }) | null
+	const w = win() as
+		| (Window & { ermine?: { table: Parameters<typeof save>[0]; places: { root: string } } })
+		| null
 	if (!w?.ermine) return line("error", "save graph: nothing is running")
 	const name = `${location.hash.slice(1) || "graph"}.ermine`
 	try {
-		const saved = save(w.ermine.table)
+		const saved = save(w.ermine.table, w.ermine.places.root)
 		const a = document.createElement("a")
 		a.href = URL.createObjectURL(new Blob([saved.bytes], { type: "application/cbor" }))
 		a.download = name
