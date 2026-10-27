@@ -1,5 +1,6 @@
 {
 	"title": "an unsigned library (macOS: arm64 code must be signed): toy holds the bytes of runner linked with no ad hoc signature. dlopen refuses it for its missing code signature, so the runner signs the file ad hoc (codesign -s -), says so, and opens it again: it runs as 02's does",
+	"on": ["darwin-aarch64"],
 	"steps": [
 		{
 			"op": "kids",
