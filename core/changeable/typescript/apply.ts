@@ -237,8 +237,13 @@ function createWork(
 		} else if (isList(v)) {
 			if (b > v.length) fail("range")
 			if (w !== undefined && !isList(w)) fail("wrong-kind")
-			const l = copy(v)
-			taken = back = mine(l.splice(a, b - a, ...(w as unknown[] ?? [])))
+			let l = copy(v)
+			const put = (w ?? []) as unknown[]
+			// spread past ~100k arguments overflows the stack: rebuild
+			if (put.length > 10000) {
+				taken = back = mine(l.slice(a, b))
+				l = mine(l.slice(0, a).concat(put, l.slice(b)))
+			} else taken = back = mine(l.splice(a, b - a, ...put))
 			size = w ? (w as unknown[]).length : 0
 			joined = false
 			set(path, l)
