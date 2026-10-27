@@ -218,6 +218,22 @@ export function createProcessContext(
 	const put = (w: Write) =>
 		inside(() => parts.put(context, w, (x) => (x.gone || x.patches.length) && land(x)))
 
+	// a write at a node, asked edit first (gone: taken out)
+	const change = (part: Key, at: At, patches: readonly Patch[], gone?: true) => {
+		const t = typeof at === "object" ? at : { id: at }
+		inside(() => {
+			ask("edit", aimed(t, part))
+			put({
+				part,
+				id: t.id,
+				...t.path !== undefined && { path: t.path },
+				patches,
+				...gone && { gone },
+			})
+		})
+		parts.queuePulse()
+	}
+
 	const context: ProcessContext = {
 		scope: o.scope,
 		folder: o.folder,
@@ -234,33 +250,8 @@ export function createProcessContext(
 				leaveScheduler()
 			}
 		},
-		write(part, at, patches) {
-			const t = typeof at === "object" ? at : { id: at }
-			inside(() => {
-				ask("edit", aimed(t, part))
-				put({
-					part,
-					id: t.id,
-					...t.path !== undefined && { path: t.path },
-					patches,
-				})
-			})
-			parts.queuePulse()
-		},
-		remove(part, at) {
-			const t = typeof at === "object" ? at : { id: at }
-			inside(() => {
-				ask("edit", aimed(t, part))
-				put({
-					part,
-					id: t.id,
-					...t.path !== undefined && { path: t.path },
-					patches: [],
-					gone: true,
-				})
-			})
-			parts.queuePulse()
-		},
+		write: (part, at, patches) => change(part, at, patches),
+		remove: (part, at) => change(part, at, [], true),
 		ask,
 		queuePulse: parts.queuePulse,
 	}

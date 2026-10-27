@@ -637,13 +637,7 @@ function getNode(inner: Inner, p: string | Path): Node {
 // the node at p, made (with the folders on the way) if missing: holding value, or nothing (no
 // value); there already: as it is
 function ensureNode(inner: Inner, p: string | Path, value?: unknown): Node {
-	const { queuePulse, places, inside, resolve } = here(inner)
-	const path = resolve(p)
-	inside(() => {
-		if (get(places, path) === undefined) build(inner, path, value)
-	})
-	queuePulse()
-	return handle(inner, { path, part: "value" })
+	return ref(inner, p, () => value)
 }
 
 // a new node under folder, named by a fresh name of its own: drawn as an id is, but never its id
@@ -1508,44 +1502,16 @@ const ran = (inner: Inner, m: Made, previous: unknown) => {
 	return r
 }
 
+type Compute<T> = (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING
+type Act<T> = (value: T, before: T | undefined) => void | (() => unknown)
+
 function createMemo<T>(
 	inner: Inner,
 	name: string | Path,
-	f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
+	f: Compute<T>,
 	options: { equal?: Equal<T> } = {},
 ): Node {
-	const { base, parts, runs, memos, s, table, queuePulse, resolve } = here(inner)
-	const own = owner(inner)
-	notInAct(own, "createMemo")
-	const path = resolve(name)
-	const n: NodeData = { path, part: "value" }
-	const code: Code = { f, equal: options.equal }
-	if (again(inner, own, path, code)) return handle(inner, n)
-	const m = computerNode(inner, own, path, code, "memo")
-	const id = m.id
-	memos.add(id)
-	const set = (v: T) => {
-		if (v !== undefined || table.get("value", id) !== undefined) {
-			inner.put({ part: "value", id, patches: whole(v) })
-		}
-	}
-	const c = s.runWithScope(
-		own,
-		() =>
-			base.sited.createComputer<T>(
-				(previous) => ran(inner, m, previous) as T,
-				set,
-				same(m),
-				undefined,
-				{ [NODE]: id },
-			),
-	)
-	m.c = c
-	base.statuses.give(c, id)
-	runs.give(c, id)
-	parts.onCreateFunction?.({ kind: "memo", computer: c, node: n, id, process: inner.node })
-	queuePulse()
-	return handle(inner, n)
+	return makeComputer(inner, "memo", name, f, undefined, options)
 }
 
 // an effect at its own node at name: f tracked, act(value, before) after the round; early: run and
@@ -1553,48 +1519,42 @@ function createMemo<T>(
 function createEffect<T>(
 	inner: Inner,
 	name: string | Path,
-	f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
-	act: (value: T, before: T | undefined) => void | (() => unknown),
+	f: Compute<T>,
+	act: Act<T>,
 	options: { equal?: Equal<T>; early?: boolean } = {},
 ): Node {
 	const { early, ...o } = options
-	return effectOf(inner, early === true, name, f, act, o)
+	return makeComputer(inner, early === true ? "early" : "effect", name, f, act, o)
 }
 
-// an effect, early or not. an early one runs, and acts, inside createEffect: before its
-// computer is given back, so its first run gives the status and the run record its node, from
+// a memo, an effect or an early effect. an early one runs, and acts, inside createEffect: before
+// its computer is given back, so its first run gives the status and the run record its node, from
 // inside it (runs.ts: a run given while it ran)
-function effectOf<T>(
+function makeComputer<T>(
 	inner: Inner,
-	isEarly: boolean,
+	kind: "memo" | "effect" | "early",
 	name: string | Path,
-	f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
-	act: (value: T, before: T | undefined) => void | (() => unknown),
+	f: Compute<T>,
+	act: Act<T> | undefined,
 	options: { equal?: Equal<T> },
 ): Node {
-	const { base, parts, runs, s, table, queuePulse, resolve } = here(inner)
+	const { base, parts, runs, memos, s, table, queuePulse, resolve } = here(inner)
 	const own = owner(inner)
-	notInAct(own, "createEffect")
+	notInAct(own, act === undefined ? "createMemo" : "createEffect")
 	const path = resolve(name)
 	const n: NodeData = { path, part: "value" }
-	const code: Code = { f, act, equal: options.equal }
+	const code: Code = { f, ...act !== undefined && { act }, equal: options.equal }
 	if (again(inner, own, path, code)) return handle(inner, n)
-	const m = computerNode(inner, own, path, code, isEarly ? "early" : "effect")
+	const m = computerNode(inner, own, path, code, kind)
 	const id = m.id
-	let given = false
-	const run = (previous: T | undefined) => {
-		if (!given) {
-			given = true
-			const c = s.getRun()!.computer
-			base.statuses.give(c, id)
-			runs.give(c, id)
-		}
-		return ran(inner, m, previous) as T
-	}
-	const then = (v: T, before: T | undefined) => {
+	if (act === undefined) memos.add(id)
+	const set = (v: T) => {
 		if (v !== undefined || table.get("value", id) !== undefined) {
 			inner.put({ part: "value", id, patches: whole(v) })
 		}
+	}
+	const then = (v: T, before: T | undefined) => {
+		set(v)
 		// an act makes nothing, and may return its cleanup: run before the next act, and as the
 		// effect goes. anything else returned is refused, as Solid does
 		const sc = s.getCurrentScope()
@@ -1614,11 +1574,29 @@ function effectOf<T>(
 		}
 		teardown(inner, sc, () => (cleanup as () => unknown)())
 	}
+	let given = false
+	const run = (previous: T | undefined) => {
+		if (!given) {
+			given = true
+			const c = s.getRun()!.computer
+			base.statuses.give(c, id)
+			runs.give(c, id)
+		}
+		return ran(inner, m, previous) as T
+	}
 	const c = s.runWithScope(
 		own,
 		() =>
-			isEarly
+			kind === "early"
 				? base.sited.createEffect<T>(run, then, same(m), { early: true }, { [NODE]: id })
+				: act === undefined
+				? base.sited.createComputer<T>(
+					(previous) => ran(inner, m, previous) as T,
+					set,
+					same(m),
+					undefined,
+					{ [NODE]: id },
+				)
 				: base.sited.createEffect<T>(
 					(previous) => ran(inner, m, previous) as T,
 					then,
@@ -1630,7 +1608,13 @@ function effectOf<T>(
 	m.c = c
 	base.statuses.give(c, id)
 	runs.give(c, id)
-	parts.onCreateFunction?.({ kind: "effect", computer: c, node: n, id, process: inner.node })
+	parts.onCreateFunction?.({
+		kind: act === undefined ? "memo" : "effect",
+		computer: c,
+		node: n,
+		id,
+		process: inner.node,
+	})
 	queuePulse()
 	return handle(inner, n)
 }
