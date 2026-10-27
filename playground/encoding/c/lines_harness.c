@@ -5,7 +5,7 @@
 // compactly, and that is the spelling looked for. A harness of the sync group links this in place
 // of conformance/c/harness.c
 #define _POSIX_C_SOURCE 200809L
-#include "../../../core/op/c/json.h"
+#include "../../../core/changeable/c/json.h"
 
 #include <stdlib.h>
 #include <string.h>

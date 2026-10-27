@@ -84,7 +84,7 @@
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
 import createEntry from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
-import type { Patch } from "@ermine/core/op/apply"
+import type { Patch } from "@ermine/core/changeable/apply"
 import { createScheduler } from "@ermine/core/scheduler"
 import { createPaths } from "@ermine/core/scheduler/paths"
 import { createTable, type Key, type Table } from "@ermine/core/table"

@@ -13,7 +13,7 @@
 //
 // open: lone surrogates not counted in code points; ours inside what theirs replaced whole left as
 // is; a move of ours that splits or loses its source or landing is dropped
-import type { Key, Patch, Span, Target } from "@ermine/core/op/apply"
+import type { Key, Patch, Span, Target } from "@ermine/core/changeable/apply"
 
 type Path = readonly Key[]
 // one change to positions: a span replaced by n, or a put at a path (removed: taken out)

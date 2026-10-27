@@ -2,7 +2,7 @@
 
 #include "diag.h"
 
-#include "../../../../core/op/c/whole.h"
+#include "../../../../core/changeable/c/whole.h"
 
 #include <math.h>
 #include <stdint.h>

@@ -30,7 +30,7 @@
 // form stands for none, in a start or an update.
 import createEntry, { type Entry } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
-import { ApplyError, type Patch } from "@ermine/core/op/apply"
+import { ApplyError, type Patch } from "@ermine/core/changeable/apply"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"
 

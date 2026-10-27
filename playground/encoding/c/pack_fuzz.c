@@ -21,7 +21,7 @@
 //   (fuzz_values.h); once, CBOR_DEPTH and CBOR_DEPTH + 1 lists deep.
 #include "pack.h"
 #include "deflate.h"
-#include "../../../core/op/c/fuzz_values.h"
+#include "../../../core/changeable/c/fuzz_values.h"
 
 #include <stdio.h>
 #include <stdlib.h>

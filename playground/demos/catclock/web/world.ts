@@ -11,7 +11,7 @@
 //   /cache/<key>                each build (@ermine/compilers), by its key
 import createEntry, { type Entry } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
-import produce from "@ermine/core/op/produce"
+import produce from "@ermine/core/changeable/produce"
 import { createPlaces, place, unplace } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"
 import * as lib from "@ermine/core/places/lib"

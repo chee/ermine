@@ -1,4 +1,4 @@
-import apply, { type Patch } from "@ermine/core/op/apply"
+import apply, { type Patch } from "@ermine/core/changeable/apply"
 import type { ChangeHeader, Entry } from "./entry.ts"
 
 export default function update<V>(

@@ -8,7 +8,7 @@
 //     the names holding ids
 // a few dozen seeds (fuzz runs small)
 import { assert, assertEquals, assertStrictEquals } from "@std/assert"
-import apply from "@ermine/core/op/apply"
+import apply from "@ermine/core/changeable/apply"
 import createEntry, { type Entry } from "@ermine/core/node/entry"
 import { createTable } from "@ermine/core/table"
 import { move, PlacesError } from "@ermine/core/places"

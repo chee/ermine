@@ -7,7 +7,7 @@ import {
 } from "@std/assert"
 import createEntry from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
-import type { Patch } from "@ermine/core/op/apply"
+import type { Patch } from "@ermine/core/changeable/apply"
 import { createPlaces } from "@ermine/core/places"
 import { createGuard, Refusal } from "@ermine/core/places/guard"
 import { createChangeHeader } from "@ermine/core/places/header"

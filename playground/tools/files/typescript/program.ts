@@ -12,7 +12,7 @@
 // trash, to lay again
 // a move across folders: the one place it renames on disk itself (the other half brought beside)
 
-import type { Patch } from "@ermine/core/op/apply"
+import type { Patch } from "@ermine/core/changeable/apply"
 import type { Scheduler, Scope } from "@ermine/core/scheduler"
 import type { Api, Graph } from "./graph.ts"
 import { dir, disk } from "./layout.ts"

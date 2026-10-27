@@ -1,4 +1,4 @@
-// The undo of patches (core/op/typescript/invert.ts), in C, on op_values (value.h): the patches
+// The undo of patches (core/changeable/typescript/invert.ts), in C, on op_values (value.h): the patches
 // that take what op_apply makes of a value back to the value. Same rules, the same undo, patch for
 // patch, as invert.ts:
 //   op_apply(op_apply(value, patches), undo) is value

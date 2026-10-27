@@ -24,7 +24,7 @@
 //
 // the node is the first item at each path, composed shallow to deep: a deep write's missing parents
 // made as maps (sync only: core's apply stays strict); one under a value that is not a map, left out.
-import apply, { type Patch } from "@ermine/core/op/apply"
+import apply, { type Patch } from "@ermine/core/changeable/apply"
 import { type Commit, compare, decode } from "@ermine/formats/commit"
 import type { Entry } from "@ermine/core/node/entry"
 import { agreed, type History, type Kept } from "./history.ts"

@@ -3,7 +3,7 @@
 // patches mostly where something is: sets, takings out, ranges, moves, ranged moves (lists and
 // strings), a move into the item after it, and once in a while somewhere made up. pick: rand's
 // (conformance)
-import type { Key, Patch } from "@ermine/core/op/apply"
+import type { Key, Patch } from "@ermine/core/changeable/apply"
 
 const KEYS = ["a", "b", "c", "d"]
 // string parts: ASCII, BMP, pairs, a pair and a modifier, lone halves, U+0000

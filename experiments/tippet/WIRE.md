@@ -130,7 +130,7 @@ else held but not to be read (forgotten), refused, never guessed.
 
 ## columns
 
-squish's (`core/op/typescript/squish.ts`): a map.
+squish's (`core/changeable/typescript/squish.ts`): a map.
 
 - paths: array, each distinct path once, in first-seen order
 - path: runs: per patch, its index in paths

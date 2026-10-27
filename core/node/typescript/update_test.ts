@@ -1,5 +1,5 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
-import apply, { ApplyError, type Patch } from "@ermine/core/op/apply"
+import apply, { ApplyError, type Patch } from "@ermine/core/changeable/apply"
 import createEntry, { type ChangeHeader, type Entry } from "./entry.ts"
 import update from "./update.ts"
 

@@ -47,8 +47,8 @@
 //     patch with no range leaves it be. size: per ranged patch, to - from
 //   value, move: each patch's that has one, in order, as given (not runs)
 // columns that do not cover their shape, and patches or columns missing or not lists: an error
-import { type Columns, decode, encode, squish } from "@ermine/core/op/squish"
-import type { Patch } from "@ermine/core/op/apply"
+import { type Columns, decode, encode, squish } from "@ermine/core/changeable/squish"
+import type { Patch } from "@ermine/core/changeable/apply"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 

@@ -1,5 +1,5 @@
 // libFuzzer target: the input bytes are an entry's value, then rounds of a header and patches
-// (../../op/c/fuzz_values.h) given to nd_update. Checked each round:
+// (../../changeable/c/fuzz_values.h) given to nd_update. Checked each round:
 // - done: the value is op_apply's on a copy of the one before; the change is the header given,
 //   with has_op, the very patches given and the entry's own undo; that undo applied to the value
 //   gives the one before back (maps by content);
@@ -9,7 +9,7 @@
 // - at the end, nd_free_entry lets go of everything: no patch's value is held past the caller (and the
 //   leak checker sees nothing left).
 #include "update.h"
-#include "../../op/c/fuzz_values.h"
+#include "../../changeable/c/fuzz_values.h"
 
 #include <stdio.h>
 

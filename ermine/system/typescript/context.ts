@@ -8,7 +8,7 @@
 import { carryTrace } from "@ermine/core/places/header"
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
-import apply, { type Key as Step, type Patch } from "@ermine/core/op/apply"
+import apply, { type Key as Step, type Patch } from "@ermine/core/changeable/apply"
 import {
 	type Id,
 	type Path,

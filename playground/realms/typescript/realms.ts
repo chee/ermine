@@ -23,7 +23,7 @@
 // costs (measure.ts): startup 33–50 ms, a first read 3–7 ms, a rerun round trip ~0.7 ms
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
-import apply, { type Patch } from "@ermine/core/op/apply"
+import apply, { type Patch } from "@ermine/core/changeable/apply"
 import { type Path, unplace } from "@ermine/core/places"
 import { get } from "@ermine/core/places/lib"
 import { createChangeHeader, NODE } from "@ermine/core/places/header"

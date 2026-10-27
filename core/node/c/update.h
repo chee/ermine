@@ -1,5 +1,5 @@
 // Patches applied to an entry's value (core/node/typescript/update.ts), in C: op's apply
-// (core/op/c/apply.h) on the value, and the change given with the patches and their undo (apply's
+// (core/changeable/c/apply.h) on the value, and the change given with the patches and their undo (apply's
 // undo option, invert.h's). Same rules as update.ts.
 //
 // Memory: as apply.h. The new value is the entry's: it takes the hold apply made, and lets go of

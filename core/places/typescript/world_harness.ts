@@ -48,7 +48,7 @@
 // anything not understood: { error: text }
 import createEntry, { type ChangeHeader } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
-import { ApplyError, type Patch } from "@ermine/core/op/apply"
+import { ApplyError, type Patch } from "@ermine/core/changeable/apply"
 import { type Computer, createScheduler, type Info, type Scope } from "@ermine/core/scheduler"
 import { type Told, trace } from "@ermine/core/scheduler/trace"
 import { createPaths } from "@ermine/core/scheduler/paths"

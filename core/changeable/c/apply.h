@@ -1,4 +1,4 @@
-// Patches applied to one value (core/op/typescript/apply.ts), in C, on op_values (value.h).
+// Patches applied to one value (core/changeable/typescript/apply.ts), in C, on op_values (value.h).
 // Same rules as apply.ts. Also op's other types: the keys of a path, a target, a patch.
 //
 // Strings count code points (as apply.ts); the unit may change, so position -> byte offset is one

@@ -20,7 +20,7 @@
 // places is made is not in it).
 import type { ChangeHeader, Entry } from "@ermine/core/node/entry"
 import { createUnread } from "@ermine/core/unread"
-import type { Key as Step, Patch } from "@ermine/core/op/apply"
+import type { Key as Step, Patch } from "@ermine/core/changeable/apply"
 import type { Scheduler } from "@ermine/core/scheduler"
 import { createChangeHeader } from "./header.ts"
 import { keyorder } from "@ermine/core/util/keyorder"

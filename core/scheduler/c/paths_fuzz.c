@@ -1,5 +1,5 @@
 // libFuzzer target: the input bytes are a value, then rounds of reads (spots made at two keys, or
-// let go of) and patches on the value (../../op/c/fuzz_values.h), the patches that op_apply lands
+// let go of) and patches on the value (../../changeable/c/fuzz_values.h), the patches that op_apply lands
 // given to pt_mark. Checked each round:
 // - a spot asked for again is the same spot, with its key and path; a new one is new;
 // - every read whose value a patch changed is marked by it (op_apply on copies, one patch at a
@@ -9,7 +9,7 @@
 //   some patch marks by pt_marks; pt_event gives every spot of the key;
 // - pt_held_of counts the keys, spots and steps the model has.
 #include "paths.h"
-#include "../../op/c/fuzz_values.h"
+#include "../../changeable/c/fuzz_values.h"
 
 #include <stdio.h>
 

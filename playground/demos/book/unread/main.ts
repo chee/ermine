@@ -6,7 +6,7 @@
 // objects; the painter keeps one fish past its run (unread.kept). the page never looks inside
 // unread: it sees only object identity
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
-import type { Patch } from "@ermine/core/op/apply"
+import type { Patch } from "@ermine/core/changeable/apply"
 import { createUnread } from "@ermine/core/unread"
 import { pondPage } from "../kit/page.ts"
 import type { Box, Wire } from "../kit/board.ts"
@@ -40,7 +40,7 @@ const page = pondPage("unread", {
 		<p><b>never owned:</b> the value the entry started with, and a patch's value: those are the caller's. So the very first write copies. Nor what a write takes out: its undo holds it.</p>
 		<p><b>kept:</b> for a computer's result held past its run. It lets go of the owned containers in just that value.</p>`,
 	real:
-		`Runs the real <code>@ermine/core/unread</code> (createUnread: update, read, kept) on an entry from <code>@ermine/core/node/entry</code>'s createEntry; <code>@ermine/core/op/apply</code> runs inside update. The tags (a WeakMap from object to number), the pictures, the patch each touch makes and the reasons in the caption are the page's own, worked out from its record of photos, paintings and patches; it never looks inside unread. Drawing the live pond is not a read: it looks and lets go.`,
+		`Runs the real <code>@ermine/core/unread</code> (createUnread: update, read, kept) on an entry from <code>@ermine/core/node/entry</code>'s createEntry; <code>@ermine/core/changeable/apply</code> runs inside update. The tags (a WeakMap from object to number), the pictures, the patch each touch makes and the reasons in the caption are the page's own, worked out from its record of photos, paintings and patches; it never looks inside unread. Drawing the live pond is not a read: it looks and lets go.`,
 })
 const { board } = page
 

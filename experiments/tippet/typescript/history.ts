@@ -41,7 +41,7 @@
 //   h.versions(node, "value")   // [{ value, from: { heads } }, …]
 import createEntry, { type ChangeHeader } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
-import apply, { type Patch } from "@ermine/core/op/apply"
+import apply, { type Patch } from "@ermine/core/changeable/apply"
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
 import type { Places } from "@ermine/core/places"
 import type { Key, Table } from "@ermine/core/table"

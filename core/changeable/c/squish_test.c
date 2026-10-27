@@ -4,7 +4,7 @@
 // the first thing that is not so. make test-c-squish-test (test-check-, test-leaks-); or under the
 // sanitizers, recovering from none:
 //   cc -std=c11 -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all \
-//     -o /tmp/squish-test core/op/c/squish.c core/op/c/squish_test.c && /tmp/squish-test
+//     -o /tmp/squish-test core/changeable/c/squish.c core/changeable/c/squish_test.c && /tmp/squish-test
 #include <stdio.h>
 #include <stdlib.h>
 

@@ -17,7 +17,7 @@
 // so the box is the policy's alone: a Refusal's ask is the ask without from.box, since a Refusal
 // reaches the process refused, and nothing it reads may say where its box sits (its message names
 // only the op and the reason)
-import type { Key as Step } from "@ermine/core/op/apply"
+import type { Key as Step } from "@ermine/core/changeable/apply"
 import {
 	type Answer,
 	type Ask,

@@ -25,11 +25,11 @@ BUILD = build
 # ours: the stack; and what it stands on, in its repo places. The first group (value, json, cbor, pack)
 # is already in the Cardputer's ermine component; the second is what this adds
 ours = littlesync.c frame.c store_file.c
-base = $(R)/core/op/c/value.c $(R)/ermine/encoding/c/json.c $(R)/ermine/encoding/c/cbor.c $(R)/playground/encoding/c/pack.c
+base = $(R)/core/changeable/c/value.c $(R)/ermine/encoding/c/json.c $(R)/ermine/encoding/c/cbor.c $(R)/playground/encoding/c/pack.c
 shared = $(R)/playground/encoding/c/commit.c $(R)/ermine/encoding/c/blake3/blake3.c $(R)/ermine/encoding/c/blake3/blake3_dispatch.c \
 	$(R)/ermine/encoding/c/blake3/blake3_portable.c $(R)/core/ed25519/c/ed25519.c $(R)/core/ed25519/c/sha2.c
 # pack.c reads whole nodes: the op json it uses, and node.c's entry maker
-more = $(R)/core/op/c/json.c $(R)/core/node/c/node.c $(R)/core/op/c/apply.c $(R)/core/op/c/invert.c
+more = $(R)/core/changeable/c/json.c $(R)/core/node/c/node.c $(R)/core/changeable/c/apply.c $(R)/core/changeable/c/invert.c
 seal_ref = $(R)/playground/together/c/seal.c
 # the tests' values: lab-pig's pigs (a user of the library)
 PIGS = $(R)/playground/demos/pigs/littlesync

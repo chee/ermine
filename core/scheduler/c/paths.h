@@ -1,5 +1,5 @@
 // Tracked paths (core/scheduler/typescript/paths.ts), in C: which reads a patch reaches. Same rule
-// and shape as paths.ts; the patches are op's (core/op/c/apply.h). Out of memory aborts: nothing
+// and shape as paths.ts; the patches are op's (core/changeable/c/apply.h). Out of memory aborts: nothing
 // here returns it.
 //
 // A spot is (source, id, path): a read of path, deep, in the value at that key. A keys spot reads
@@ -15,7 +15,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "../../op/c/apply.h"
+#include "../../changeable/c/apply.h"
 
 // a source or an id: a string (equal by content; copied), or a symbol (symbol non-NULL: the
 // string is not read; the caller's token, equal by address)

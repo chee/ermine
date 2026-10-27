@@ -22,7 +22,7 @@
 // process rows, out: they are this device's, now)
 import createEntry, { type Entry } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
-import type { Patch } from "@ermine/core/op/apply"
+import type { Patch } from "@ermine/core/changeable/apply"
 import type { Box } from "@ermine/boxes"
 import type { Places } from "@ermine/core/places"
 import { createChangeHeader, NODE } from "@ermine/core/places/header"

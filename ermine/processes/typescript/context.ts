@@ -16,7 +16,7 @@
 // ask(op, ...targets)   protect (the host's may; none: all allowed): a no throws a Refusal
 // queuePulse()          one pulse soon, however many ask
 // a write with nothing open: a process's throws nothing-open; the host's falls back to its own scope
-import type { Patch } from "@ermine/core/op/apply"
+import type { Patch } from "@ermine/core/changeable/apply"
 import type { Id, Path } from "@ermine/core/places"
 import type { Target as Asked } from "@ermine/core/protect"
 import type { Scope } from "@ermine/core/scheduler"

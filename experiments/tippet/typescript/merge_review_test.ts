@@ -7,7 +7,7 @@ import { createLog } from "./log.ts"
 import { createHistory } from "./history.ts"
 import { createSigner, type Signer } from "./sign.ts"
 import { encodeStep, hashStep, type Step } from "./step.ts"
-import type { Patch } from "@ermine/core/op/apply"
+import type { Patch } from "@ermine/core/changeable/apply"
 
 // a graph with a log and its history, nothing else
 async function receiver() {

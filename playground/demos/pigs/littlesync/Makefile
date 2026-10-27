@@ -13,10 +13,10 @@ BUILD = build
 
 # littlesync, with a file store and HTTP over sockets, and what it stands on (its Makefile has the same lists)
 littlesync = $(L)/littlesync.c $(L)/frame.c $(L)/store_file.c $(L)/http.c $(L)/http_posix.c
-under = $(R)/core/op/c/value.c $(R)/ermine/encoding/c/json.c $(R)/ermine/encoding/c/cbor.c $(R)/playground/encoding/c/pack.c \
+under = $(R)/core/changeable/c/value.c $(R)/ermine/encoding/c/json.c $(R)/ermine/encoding/c/cbor.c $(R)/playground/encoding/c/pack.c \
 	$(R)/playground/encoding/c/commit.c $(R)/ermine/encoding/c/blake3/blake3.c $(R)/ermine/encoding/c/blake3/blake3_dispatch.c \
 	$(R)/ermine/encoding/c/blake3/blake3_portable.c $(R)/core/ed25519/c/ed25519.c $(R)/core/ed25519/c/sha2.c \
-	$(R)/core/op/c/json.c $(R)/core/node/c/node.c $(R)/core/op/c/apply.c $(R)/core/op/c/invert.c
+	$(R)/core/changeable/c/json.c $(R)/core/node/c/node.c $(R)/core/changeable/c/apply.c $(R)/core/changeable/c/invert.c
 ours = peer.c pigs.c
 # https (http_posix.c through libcurl): macOS ships it; elsewhere when pkg-config finds it. CURL= turns it off
 CURL ?= $(shell if [ "$$(uname)" = Darwin ] || pkg-config --exists libcurl 2>/dev/null; then echo 1; fi)

@@ -8,7 +8,7 @@
 import { blake3 } from "@ermine/core/blake3"
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
 import type { ChangeHeader } from "@ermine/core/node/entry"
-import type { Patch } from "@ermine/core/op/apply"
+import type { Patch } from "@ermine/core/changeable/apply"
 import type { Key } from "@ermine/core/table"
 
 // what of a change travels: the header without its op (the op is the patches, given beside it)

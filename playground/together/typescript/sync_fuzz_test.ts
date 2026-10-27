@@ -19,7 +19,7 @@
 import * as sd from "npm:@automerge/subduction@0.23.0"
 import createEntry, { type ChangeHeader } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
-import apply, { type Patch } from "@ermine/core/op/apply"
+import apply, { type Patch } from "@ermine/core/changeable/apply"
 import { decode, name as nameOf } from "@ermine/formats/commit"
 import { createPlaces } from "@ermine/core/places"
 import { createScheduler } from "@ermine/core/scheduler"
@@ -1058,7 +1058,7 @@ Deno.test({
 		], { ...LOOSE, conflicts: true }),
 })
 
-// BUG (core/node update with core/op apply, cow: false; places makes children and attributes
+// BUG (core/node update with core/changeable apply, cow: false; places makes children and attributes
 // entries so): a patch's value is put in the entry as is, and a later patch of the same write
 // changes it in place, so entry.change.op.patches no longer say what happened. readers are told
 // [{path:[],value:{b:X}}, {path:["b"],move:{path:["d"]}}] for a write of {d:X} then the move, which

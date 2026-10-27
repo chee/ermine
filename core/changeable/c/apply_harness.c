@@ -1,5 +1,5 @@
 // The C apply (apply.h) and invert (invert.h) on the line protocol of
-// core/op/typescript/apply_harness.ts: a value's "/" forms are read by op's codec, so a string
+// core/changeable/typescript/apply_harness.ts: a value's "/" forms are read by op's codec, so a string
 // anywhere may hold lone surrogates, as apply counts them. The suites apply and invert both speak
 // it, and this is the binary of both.
 //

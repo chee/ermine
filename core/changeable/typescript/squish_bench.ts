@@ -1,7 +1,7 @@
 // deno bench newcore/opstreams/ts/squish_bench.ts
 // the same workloads as squish/c/bench.c: N patches each, made once
 import { decode, encode, squish } from "./squish.ts"
-import type { Patch } from "@ermine/core/op/apply"
+import type { Patch } from "@ermine/core/changeable/apply"
 
 const N = 10_000
 const rnd = (() => {

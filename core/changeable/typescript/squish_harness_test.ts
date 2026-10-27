@@ -7,7 +7,7 @@
 // the library.
 import { assert, assertEquals } from "@std/assert"
 import { apply, at, type V } from "./squish_model.ts"
-import type { Key, Patch } from "@ermine/core/op/apply"
+import type { Key, Patch } from "@ermine/core/changeable/apply"
 import { ask as send, command, reference } from "../../../conformance/typescript/ask.ts"
 import { rand } from "../../../conformance/typescript/rand.ts"
 

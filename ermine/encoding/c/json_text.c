@@ -2,7 +2,7 @@
 // printer. Apart from json.c, so what never reads or writes text links none of it.
 
 #include "json_text.h"
-#include "../../../core/op/c/whole.h"
+#include "../../../core/changeable/c/whole.h"
 
 #include <ctype.h>
 #include <errno.h>

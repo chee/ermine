@@ -27,7 +27,7 @@
 // every rename above it and needs a walk up to find; a host that wants the path keeps its own map.
 // the policy is the host's: from.box is for it, told no process (guard.ts keeps it out of a
 // Refusal). a rule by path stays about the name: path and from match names, as before
-import type { Key as Step } from "@ermine/core/op/apply"
+import type { Key as Step } from "@ermine/core/changeable/apply"
 
 export type Key = string | symbol
 export type Target = {
