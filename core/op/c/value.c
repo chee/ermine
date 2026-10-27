@@ -167,42 +167,16 @@ static size_t hash(const char *s) {
 	for (; *s; s++) h = h * 33 + (unsigned char)*s;
 	return h;
 }
-// the index holds coordinates: an item's position, as it was when the table was made or the item
-// added, plus one. Removals since leave gaps (gaps[0] of them, sorted, then the coordinates taken
-// out); an item's position is its coordinate less the gaps below it, so a removal does not touch
-// the table. Coordinates in use are 0 .. count + gaps - 1
-#define GAPS 256
-// the gaps array holds gaps_room(n) coordinates (after gaps[0]) when n are in use: 4, then twice
-// that each time it is full
-static size_t gaps_room(size_t n) {
-	size_t room = 4;
-	while (room < n) room *= 2;
-	return room;
-}
-static size_t gaps_below(const op_value *m, size_t e) {
-	if (m->gaps == NULL) return 0;
-	size_t lo = 0, hi = m->gaps[0];
-	while (lo < hi) {
-		size_t mid = (lo + hi) / 2;
-		if (m->gaps[1 + mid] < e) lo = mid + 1;
-		else hi = mid;
-	}
-	return lo;
-}
-static size_t at_of(const op_value *m, size_t entry) {
-	size_t e = entry - 1;
-	return e - gaps_below(m, e);
-}
+// the index holds positions plus one. A removal puts the last key in the removed one's place, so a
+// removal costs the same however many keys there are (key order is not part of a map's value)
 static void slot(op_value *m, size_t e) {
-	size_t h = hash(m->keys[at_of(m, e + 1)]) & (m->slots - 1);
+	size_t h = hash(m->keys[e]) & (m->slots - 1);
 	while (m->index[h]) h = (h + 1) & (m->slots - 1);
 	m->index[h] = e + 1;
 }
 static void unindex(op_value *m) {
 	free(m->index);
-	free(m->gaps);
 	m->index = NULL;
-	m->gaps = NULL;
 }
 // a map with many keys is found by hash
 static op_value *lookup(const op_value *map, const char *key, size_t *at) {
@@ -224,7 +198,7 @@ static op_value *lookup(const op_value *map, const char *key, size_t *at) {
 		for (size_t i = 0; i < m->count; i++) slot(m, i);
 	}
 	for (size_t h = hash(key) & (m->slots - 1); m->index[h]; h = (h + 1) & (m->slots - 1)) {
-		size_t i = at_of(m, m->index[h]);
+		size_t i = m->index[h] - 1;
 		if (strcmp(m->keys[i], key) == 0) {
 			if (at) *at = i;
 			return m->items[i];
@@ -242,40 +216,35 @@ long op_find(const op_value *map, const char *key) {
 	return (long)at;
 }
 void op_unset(op_value *map, size_t i) {
+	size_t last = map->count - 1;
 	if (map->index != NULL) {
-		// the key's slot is emptied and the cluster after it closed up; its coordinate is a gap
+		// the key's slot is emptied and the cluster after it closed up
 		size_t mask = map->slots - 1, h = hash(map->keys[i]) & mask;
-		while (!map->index[h] || at_of(map, map->index[h]) != i) h = (h + 1) & mask;
-		size_t e = map->index[h] - 1;
+		while (!map->index[h] || map->index[h] - 1 != i) h = (h + 1) & mask;
 		for (size_t j = h;;) {
 			j = (j + 1) & mask;
 			if (!map->index[j]) break;
-			size_t k = hash(map->keys[at_of(map, map->index[j])]) & mask;
+			size_t k = hash(map->keys[map->index[j] - 1]) & mask;
 			if (h <= j ? (h < k && k <= j) : (h < k || k <= j)) continue;
 			map->index[h] = map->index[j];
 			h = j;
 		}
 		map->index[h] = 0;
-		if (map->gaps == NULL) {
-			map->gaps = xrealloc(NULL, (gaps_room(0) + 1) * sizeof *map->gaps);
-			map->gaps[0] = 0;
-		} else if (map->gaps[0] == gaps_room(map->gaps[0])) {
-			map->gaps = xrealloc(map->gaps, (2 * map->gaps[0] + 1) * sizeof *map->gaps);
-		}
-		size_t n = gaps_below(map, e);
-		memmove(map->gaps + 2 + n, map->gaps + 1 + n, (map->gaps[0] - n) * sizeof *map->gaps);
-		map->gaps[1 + n] = e;
-		map->gaps[0]++;
-		if (map->gaps[0] == GAPS) {
-			// the gaps closed: each coordinate is its position again
-			for (size_t s = 0; s < map->slots; s++)
-				if (map->index[s]) map->index[s] = at_of(map, map->index[s]) + 1;
-			map->gaps[0] = 0;
+		if (i != last) {
+			// the last key is about to be at i
+			h = hash(map->keys[last]) & mask;
+			while (map->index[h] != last + 1) h = (h + 1) & mask;
+			map->index[h] = i + 1;
 		}
 	}
 	op_name_free(map->keys[i]);
-	memmove(map->keys + i, map->keys + i + 1, (map->count - i - 1) * sizeof *map->keys);
-	memmove(map->items + i, map->items + i + 1, (map->count - i - 1) * sizeof *map->items);
+	if (i != last && (map->index != NULL || map->count > 16)) {
+		map->keys[i] = map->keys[last];
+		map->items[i] = map->items[last];
+	} else {
+		memmove(map->keys + i, map->keys + i + 1, (last - i) * sizeof *map->keys);
+		memmove(map->items + i, map->items + i + 1, (last - i) * sizeof *map->items);
+	}
 	map->count--;
 }
 // the key a name already (shared: given), or a string to make one of
@@ -294,8 +263,7 @@ static void put(op_value *map, const char *key, char *shared, op_value *v) {
 	map->keys[map->count] = shared != NULL ? op_name_ref(shared) : op_name(key);
 	map->items[map->count++] = v;
 	if (map->index != NULL) {
-		size_t gaps = map->gaps ? map->gaps[0] : 0;
-		if (map->slots >= 2 * map->count) slot(map, map->count - 1 + gaps);
+		if (map->slots >= 2 * map->count) slot(map, map->count - 1);
 		else unindex(map);
 	}
 }
@@ -317,10 +285,6 @@ void op_map_table_copy(op_value *to, const op_value *from) {
 	to->slots = from->slots;
 	to->index = xrealloc(NULL, from->slots * sizeof *from->index);
 	memcpy(to->index, from->index, from->slots * sizeof *from->index);
-	if (from->gaps != NULL) {
-		to->gaps = xrealloc(NULL, (gaps_room(from->gaps[0]) + 1) * sizeof *from->gaps);
-		memcpy(to->gaps, from->gaps, (from->gaps[0] + 1) * sizeof *from->gaps);
-	}
 }
 op_value *op_ref(op_value *v) {
 	if (v != NULL) v->refs++;
@@ -346,7 +310,6 @@ void op_free(op_value *v) {
 			free(v->items);
 			free(v->keys);
 			free(v->index);
-			free(v->gaps);
 		} else if (v->type == OP_STR || v->type == OP_BYTES || v->type == OP_TYPED) free(v->str);
 		else if (v->type == OP_NUM) free(v->big);
 		free(v);
