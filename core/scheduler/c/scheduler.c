@@ -271,11 +271,11 @@ static char *unbracket(sc_scheduler *s, char *outer) {
 	s->thrown = outer;
 	return t;
 }
-// out of a public call, for sc_escaped
+// out of a public call, for sc_escaped: the first till it is read, the rest let go
 static void escape(sc_scheduler *s, char *e) {
 	if (e == NULL) return;
-	free(s->escaped);
-	s->escaped = e;
+	if (s->escaped == NULL) s->escaped = e;
+	else free(e);
 }
 
 void sc_throw(sc_scheduler *s, char *error) { hold(s, error); }
