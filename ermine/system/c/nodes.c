@@ -2414,12 +2414,14 @@ char *es_unplace_names(es_context *c, const char *id) {
 }
 
 // every memo, effect and action made at a node and under it: each id given stopped (system.ts'
-// stopMade). a computer's scope torn down, teardowns told ended, its node and name gone; an action's
+// stopMade). a computer's or pipe's scope torn down, teardowns told ended, its node and name gone; an action's
 // node value taken out, then its placement let go. the process that made them keeps running
 static void stop_made(es_context *c, char *const *ids, size_t n) {
 	es_ermine *e = c->ermine;
 	for (size_t i = 0; i < n; i++) {
 		es_stop_computer(e, ids[i]);
+		pipe_t *pipe = es_map_get(&state(e)->pipe_ids, ids[i]);
+		if (pipe != NULL) free(sc_teardown(pipe->scope));
 		if (!es_is_action(e, ids[i])) continue;
 		size_t count;
 		const tb_entry *at = tb_at(e->table, tb_string(ids[i]), &count);

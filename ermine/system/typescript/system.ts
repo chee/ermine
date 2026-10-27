@@ -897,6 +897,9 @@ function pipe(inner: Inner, from: Target, ...rest: unknown[]): Node {
 			stops: [],
 		}
 		state.pipes.set(key, p)
+		let at = pipedAt.get(base)
+		if (at === undefined) pipedAt.set(base, at = new Map())
+		at.set(id, p)
 		state.pipeOwner.set(p, ownerOf(own))
 		base.pipes.add(id)
 	}
@@ -932,11 +935,15 @@ function pipe(inner: Inner, from: Target, ...rest: unknown[]): Node {
 		p.stops = []
 		if (state.pipes.get(key) === p) state.pipes.delete(key)
 		base.pipes.delete(p.id)
+		pipedAt.get(base)?.delete(p.id)
 		gonePipe(inner, p, path)
 	})
 	queuePulse()
 	return handle(inner, { path, part: "value" })
 }
+
+// each pipe, by its node's id (the pipes' state is each context's: stopMade finds one by its node)
+const pipedAt = new WeakMap<Base, Map<Id, Piped>>()
 
 // the pipe's node unplaced and its entries gone (its scope gone, not made again)
 function gonePipe(inner: Inner, p: Piped, path: Path) {
@@ -1399,7 +1406,7 @@ function forget(inner: Inner, m: Made, path: Path) {
 // each memo's and effect's node, by id: its Made, its path, the context that made it
 const madeAt = new WeakMap<Base, Map<Id, { m: Made; path: Path; inner: Inner }>>()
 
-// every memo, effect and action made at the node ids given (the node and what is under it, which a
+// every memo, effect, action and pipe made at the node ids given (the node and what is under it, which a
 // remove or unplace took out): the computers' scopes torn down, their teardowns told "ended", and
 // their nodes and names gone; the actions out of the methods, their nodes' values gone with them.
 // whoever made them: the process that did keeps running. a call already going finishes (its record
@@ -1407,6 +1414,8 @@ const madeAt = new WeakMap<Base, Map<Id, { m: Made; path: Path; inner: Inner }>>
 function stopMade(inner: Inner, ids: readonly Id[]) {
 	const { base, s, table, calls } = here(inner)
 	for (const id of ids) {
+		const piped = pipedAt.get(base)?.get(id)
+		if (piped !== undefined) s.teardown(piped.scope)
 		const c = madeAt.get(base)?.get(id)
 		if (c !== undefined) {
 			const { m, path, inner: maker } = c

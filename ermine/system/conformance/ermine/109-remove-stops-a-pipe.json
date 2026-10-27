@@ -1,0 +1,166 @@
+{
+	"title": "removing a node stops a pipe at it, as it stops a memo, effect or action: the pipe is told no more writes and its scope is torn down, the process that made it running on",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/src",
+				1
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"pipe",
+						"/src",
+						{
+							"steps": [
+								{
+									"do": [
+										"log",
+										"told",
+										[
+											"pick",
+											"$0",
+											[
+												"value"
+											]
+										]
+									]
+								}
+							]
+						}
+					],
+					"as": "pp"
+				},
+				{
+					"do": [
+						"createEffect",
+						"c",
+						[
+							"read",
+							"/src"
+						],
+						"ctl"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/src",
+				[
+					{
+						"path": [],
+						"value": 2
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "told",
+			"expect": {
+				"values": [
+					2
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/code/p/pipe-0"
+			],
+			"expect": {
+				"value": true
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"remove",
+				"/code/p/pipe-0"
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/code/p/pipe-0"
+			],
+			"expect": {
+				"value": false
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/src",
+				[
+					{
+						"path": [],
+						"value": 3
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "told",
+			"expect": {
+				"values": [
+					2
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "ctl",
+			"expect": {
+				"values": [
+					1,
+					2,
+					3
+				]
+			}
+		},
+		{
+			"op": "status",
+			"name": "p",
+			"expect": {
+				"status": {
+					"state": "done"
+				}
+			}
+		}
+	]
+}
