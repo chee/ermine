@@ -15,7 +15,7 @@
 //   scheduler  a new one
 //   may        the policy every read and write is asked of; none: all allowed
 //   root       the root's id; none: a new one
-//   host       the host's node: where it is placed (none: nowhere, reached by ermine.node), the
+//   host       the host's node: where it is placed (none: nowhere, reached by ermine.id), the
 //              host's args, the machine it publishes, and its setup: run once, untracked, in the
 //              host's scope as createErmine ends (a throw: ermine closed, the error thrown)
 //   info       the host's scope's info (actor, …), beside its node
@@ -225,7 +225,7 @@ export type Ermine = {
 	readonly places: Places
 	readonly features: readonly Shown[]
 	// the host's node's id
-	readonly node: Id
+	readonly id: Id
 	readonly records: {
 		run: (id: Id) => Run | undefined
 		call: (id: Id) => Call | undefined
@@ -1025,7 +1025,7 @@ export function createErmine(options: Options = {}): Ermine {
 			table: { get: part(table) },
 			places: { get: part(p) },
 			features: { get: part(features.shown) },
-			node: { get: part(node) },
+			id: { get: part(node) },
 			handleOf: {
 				value: (node: NodeData): Node => {
 					alive()
