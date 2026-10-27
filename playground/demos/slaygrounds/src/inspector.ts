@@ -36,9 +36,9 @@ const bind = <T>(read: () => T, apply: (v: T) => void) => {
 const REFUSED = Symbol.for("ermine.refused")
 // the id at names from the root, the table read untouched (nothing here is tracked)
 function peek(w: Any, names: string[]): unknown {
-	let id: unknown = "root"
+	let id: unknown = w.places.root
 	// a process running at a path is there in place of what is saved (the root's process rows)
-	let rows = w.table.get("process", "root")?.value
+	let rows = w.table.get("process", w.places.root)?.value
 	for (const name of names) {
 		const v = w.table.get("children", id)?.value
 		rows = rows && typeof rows === "object" && Object.hasOwn(rows, name) ? rows[name] : undefined

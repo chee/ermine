@@ -101,7 +101,7 @@ function members(world: World, id: unknown, path?: string[]): { name: string; id
 			if (typeof k === "string" || typeof k === "symbol") out.push({ name, id: k })
 		}
 	}
-	const rows = path ? world.places.readValue("process", "root", path) : undefined
+	const rows = path ? world.places.readValue("process", world.places.root, path) : undefined
 	if (rows === null || typeof rows !== "object" || Array.isArray(rows)) return out
 	for (const [name, x] of Object.entries(rows as Record<string, unknown>)) {
 		// a process with processes under it is a level holding its own id under "" (never a name)
@@ -120,7 +120,7 @@ function members(world: World, id: unknown, path?: string[]): { name: string; id
 // the item at names from the root: its id, name and path; none there: undefined. an item is what
 // the inspector holds of a node, never the node itself
 function itemAt(world: World, names: string[]): Item | undefined {
-	let id: unknown = "root"
+	let id: unknown = world.places.root
 	for (const [i, name] of names.entries()) {
 		const k = members(world, id, names.slice(0, i)).find((m) => m.name === name)
 		if (!k) return undefined
@@ -234,7 +234,7 @@ export function tree(world: World, limit = 800) {
 			}
 			return card
 		}
-		walk({ id: "root", name: undefined, path: [] }, "root", 0)
+		walk({ id: places.root, name: undefined, path: [] }, "root", 0)
 		return { cards, edges, cut }
 	}, { frame: true })
 }

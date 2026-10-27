@@ -178,7 +178,7 @@ export function createExplain(opts: {
 			}
 		}
 		try {
-			walk("root", "/", 0)
+			walk(world.places.root, "/", 0)
 		} catch { /* a world going: what was found is enough */ }
 		return out
 	}
