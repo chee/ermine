@@ -227,8 +227,11 @@ export function createProcesses(setup: Setup): Processes {
 			statuses.give(c, id)
 			if (o?.run) runs?.give(c, id)
 		}
+		const inside: Inside = { ...process, args, give }
+		// stop given it, as it is given the process
+		states.set(inside, p)
 		try {
-			const done = s.runWithScope(scope, () => body({ ...process, args, give }))
+			const done = s.runWithScope(scope, () => body(inside))
 			if (typeof done === "function") p.done = done
 		} catch (e) {
 			stop(process)
