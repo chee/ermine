@@ -74,8 +74,10 @@ export function refusedSpecifier(
 	if (/^@ermine\/system\/(typescript\/)?site(\.ts)?([?#].*)?$/.test(spec)) return true
 	if (guarded.length === 0 || resolve === undefined) return false
 	const file = resolve(spec)
-	return file !== undefined && guarded.includes(file)
+	// as the bundler resolves it: an extensionless import, or a folder's index, is the file
+	return file !== undefined && guarded.some((g) => bare(g) === bare(file))
 }
+const bare = (path: string) => path.replace(/\/index(?=\.|$)/, "").replace(/\.[cm]?[jt]sx?$/, "")
 
 // a module that may need either: it names @ermine/system, a guarded name, or a file named site
 export const mayNeed = (code: string) =>
@@ -147,7 +149,8 @@ export function transform(
 	}
 	// offset's line and column, from 1
 	const starts = [0]
-	for (let i = code.indexOf("\n"); i !== -1; i = code.indexOf("\n", i + 1)) starts.push(i + 1)
+	// as the engine ends a line: \n, \r\n, \r, U+2028, U+2029
+	for (const m of code.matchAll(/\r\n|[\n\r\u2028\u2029]/g)) starts.push(m.index + m[0].length)
 	const position = (offset: number) => {
 		let lo = 0
 		let hi = starts.length - 1
@@ -255,11 +258,11 @@ const literal = (n: unknown): string | undefined => {
 	return undefined
 }
 
-function pluginsFor(id: string): ("typescript" | "jsx")[] {
+function pluginsFor(id: string): ("typescript" | "jsx" | "decorators")[] {
 	const file = id.replace(/[?#].*$/, "")
-	if (/\.[cm]?ts$/.test(file)) return ["typescript"]
-	if (/\.tsx$/.test(file)) return ["typescript", "jsx"]
-	return ["jsx"]
+	if (/\.[cm]?ts$/.test(file)) return ["typescript", "decorators"]
+	if (/\.tsx$/.test(file)) return ["typescript", "jsx", "decorators"]
+	return ["jsx", "decorators"]
 }
 
 // where the import goes, and what must come before it there: after the directives, on the last's

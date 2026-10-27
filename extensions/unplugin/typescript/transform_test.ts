@@ -190,3 +190,30 @@ export const at = (s, f) => (...a) => (globalThis.__log("call " + s), f(...a))`)
 	await import(`data:text/javascript,${encodeURIComponent(code)}`)
 	assertEquals(log, ["a", "b", "call s1", "patch b", "c", "call s0", "patch a patch b c"])
 })
+
+Deno.test("transform: a decorator in a module that names site parses", () => {
+	assertEquals(T("@dec class A {}\n// site\n"), undefined)
+})
+
+Deno.test("transform: a specifier to a guarded file is refused with or without its extension", () => {
+	const guarded = ["/x/ermine/system/typescript/site.ts"]
+	for (const spec of ["site.ts", "site", "site.js", "../typescript/site"]) {
+		assertThrows(
+			() =>
+				T(`import "${spec}"`, "/x/ermine/system/typescript/a.ts", {
+					guarded,
+					resolve: (s: string) =>
+						`/x/ermine/system/typescript/${s.replace(/^\.\.\/typescript\//, "")}`,
+				}),
+			Refused,
+		)
+	}
+})
+
+Deno.test("transform: lines count \\r\\n, \\r and U+2028 as the engine does", () => {
+	// V8 counts \n, \r, \r\n, U+2028 and U+2029 as line ends
+	for (const eol of ["\n", "\r\n", "\r", " ", " "]) {
+		const out = T(`import { patch } from "@ermine/system"${eol}${eol}patch(1)`)!
+		assertEquals(out.sites, [{ line: 3, column: 1 }], JSON.stringify(eol))
+	}
+})
