@@ -40,11 +40,8 @@ import {
 	type Ermine,
 	executeAction,
 	type Feature,
-<<<<<<< Updated upstream
 	patch,
 	patchAttributes,
-=======
->>>>>>> Stashed changes
 	type Started,
 } from "@ermine/system"
 import { installTypes, type Known } from "@ermine/types"
@@ -131,7 +128,6 @@ export function createWorld(o: Options) {
 
 	const ermine: Ermine = createErmine({
 		scheduler: s,
-<<<<<<< Updated upstream
 		features: [
 			...(o.overlay ? [patchy] : []),
 			...(o.features ?? []),
@@ -140,9 +136,6 @@ export function createWorld(o: Options) {
 				setup: (f) => f.onCreateFunction((m, next) => (notice(m), next(m))),
 			},
 		],
-=======
-		features: [...(o.overlay ? [patchy] : []), ...(o.features ?? [])],
->>>>>>> Stashed changes
 		may: o.may,
 		info: { actor: o.actor ?? "chee@laptop" },
 	})

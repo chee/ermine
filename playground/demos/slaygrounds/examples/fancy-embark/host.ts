@@ -179,11 +179,7 @@ function tell(change: (n: typeof stats) => void) {
 	telling = true
 	setTimeout(() => {
 		telling = false
-<<<<<<< Updated upstream
 		as(() => patch("/net", [{ path: [], value: structuredClone(stats) }]))
-=======
-		host.patch("/net", [{ path: [], value: structuredClone(stats) }])
->>>>>>> Stashed changes
 	}, 250)
 }
 const said = (e: unknown) => String((e as Error)?.message ?? e)
@@ -238,13 +234,8 @@ function enqueue(api: string, url: string, key: string) {
 		inflight.delete(api + "/" + key)
 		// an answer (or a failure) as the node at /cache/<api>/<key>: a new one, or the one there
 		const at = `/cache/${api}/${key}`
-<<<<<<< Updated upstream
 		if (as(() => hasNode(at))) as(() => patch(at, [{ path: [], value: entry }]))
 		else as(() => ensureNode(at, entry))
-=======
-		if (host.hasNode(at)) host.patch(at, [{ path: [], value: entry }])
-		else host.ensureNode(at, entry)
->>>>>>> Stashed changes
 		tell((n) => {
 			n.waiting[server] = Math.max(0, (n.waiting[server] ?? 1) - 1)
 			if (entry.error) n.failed++
