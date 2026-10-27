@@ -94,6 +94,8 @@ static void put_runs(FILE *out, const char *name, const sq_runs *r) {
 
 static int64_t num(const op_value *v) {
 	if (!v || v->type != OP_NUM) return 0;
+	int64_t exact;
+	if (op_as_int64(v, &exact)) return exact;
 	return v->num >= 9e18 ? INT64_MAX : v->num <= -9e18 ? INT64_MIN : (int64_t)v->num;
 }
 // a key's number: past what a long holds, the nearest it does

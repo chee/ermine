@@ -12,6 +12,28 @@ const plain = (p: Patch) => p.move === undefined && !("value" in p)
 // what joins and cuts: a string, a list, a typed array
 const sequence = (v: unknown) => typeof v === "string" || isList(v) || typed(v)
 
+// a range end past 2^53 - 1 is a bigint (cbor.ts): sums and steps stay exact, and are a number
+// again whenever one holds them
+type Pos = number | bigint
+const norm = (x: bigint): Pos => x >= -9007199254740991n && x <= 9007199254740991n ? Number(x) : x
+// a number sum or difference no number holds exactly (nor a whole one): redone in bigints
+const sound = (r: number, x: number, y: number) =>
+	Number.isSafeInteger(r) || !Number.isInteger(x) || !Number.isInteger(y)
+function add(x: Pos, y: Pos): Pos {
+	if (typeof x === "number" && typeof y === "number") {
+		const r = x + y
+		if (sound(r, x, y)) return r
+	}
+	return norm(BigInt(x) + BigInt(y))
+}
+function sub(x: Pos, y: Pos): Pos {
+	if (typeof x === "number" && typeof y === "number") {
+		const r = x - y
+		if (sound(r, x, y)) return r
+	}
+	return norm(BigInt(x) - BigInt(y))
+}
+
 // strings count code points: walk.ts
 function len(v: unknown): number {
 	if (typeof v === "string") return count(v)
@@ -102,7 +124,7 @@ function splice(t: Tail, v: unknown, x: number, y: number, w: unknown): unknown 
 function merge(t: Tail, prev: Patch, next: Patch): Patch | null {
 	if (!ranged(prev) || !ranged(next) || prev.move || next.move) return null
 	if (!same(prev.path, next.path)) return null
-	const [a, b] = prev.range, [c, d] = next.range
+	const [a, b] = prev.range as readonly Pos[], [c, d] = next.range as readonly Pos[]
 	const path = prev.path
 	const w = "value" in next ? next.value : undefined
 	if ("value" in prev) {
@@ -112,25 +134,25 @@ function merge(t: Tail, prev: Patch, next: Patch): Patch | null {
 		}
 		// the span prev made is [a, a + n)
 		const n = t.n
-		let value: unknown, range: Span
-		if (a <= c && d <= a + n) {
-			value = splice(t, prev.value, c - a, d - a, w), range = [a, b]
-		} else if (c === a + n && d > c) {
+		let value: unknown, range: readonly Pos[]
+		if (a <= c && d <= add(a, n)) {
+			value = splice(t, prev.value, sub(c, a) as number, sub(d, a) as number, w), range = [a, b]
+		} else if (c === add(a, n) && d > c) {
 			value = w === undefined ? prev.value : splice(t, prev.value, n, n, w)
-			range = [a, b + (d - c)]
+			range = [a, add(b, sub(d, c))]
 		} else return null
 		if (value === undefined) return null
-		return { path, range, value }
+		return { path, range: range as Span, value }
 	}
 	if (!plain(prev)) return null
 	// prev removed [a, b)
 	if (w === undefined) {
-		if (c <= a && a <= d) return { path, range: [c, b + (d - a)] }
+		if (c <= a && a <= d) return { path, range: [c, add(b, sub(d, a))] as unknown as Span }
 		return null
 	}
 	// a removal and an insert of something that is no sequence stay apart
 	if (c === a && d === a && sequence(w)) {
-		return Object.assign(t, fresh()), { path, range: [a, b], value: w }
+		return Object.assign(t, fresh()), { path, range: [a, b] as unknown as Span, value: w }
 	}
 	return null
 }
@@ -139,13 +161,13 @@ function merge(t: Tail, prev: Patch, next: Patch): Patch | null {
 // tail; its length not counted yet, the UTF-16 length is as long or longer
 function could(t: Tail, prev: Patch, next: Patch): boolean {
 	if (!ranged(prev) || !ranged(next)) return false
-	const a = prev.range[0], [c, d] = next.range
+	const a = prev.range[0] as Pos, [c, d] = next.range as readonly Pos[]
 	if (!("value" in prev)) {
 		return "value" in next ? c === a && d === a && sequence(next.value) : c <= a && a <= d
 	}
-	if (t.n >= 0) return (a <= c && d <= a + t.n) || (c === a + t.n && d > c)
+	if (t.n >= 0) return (a <= c && d <= add(a, t.n)) || (c === add(a, t.n) && d > c)
 	const v = prev.value
-	return sequence(v) && a <= c && c <= a + (v as string | unknown[] | Typed).length
+	return sequence(v) && a <= c && c <= add(a, (v as string | unknown[] | Typed).length)
 }
 
 // a lone surrogate anywhere in v
@@ -281,7 +303,7 @@ export function encode(patches: Iterable<Patch>): Columns {
 	const seen = new Map<string, number>()
 	const path: number[] = [], shape: number[] = [], from: number[] = [], size: number[] = []
 	const value: unknown[] = [], move: Columns["move"] = []
-	let last = 0
+	let last: Pos = 0
 	for (const p of patches) {
 		const id = JSON.stringify(p.path)
 		let i = seen.get(id)
@@ -289,8 +311,8 @@ export function encode(patches: Iterable<Patch>): Columns {
 		path.push(i)
 		shape.push((p.range ? 1 : 0) | ("value" in p ? 2 : 0) | (p.move ? 4 : 0))
 		if (p.range) {
-			from.push(p.range[0] - last)
-			size.push(p.range[1] - p.range[0])
+			from.push(sub(p.range[0], last) as number)
+			size.push(sub(p.range[1], p.range[0]) as number)
 			last = p.range[0]
 		}
 		if ("value" in p) value.push(p.value)
@@ -320,14 +342,14 @@ export function decode(c: Columns): Patch[] {
 		return r.value
 	}
 	const out: Patch[] = []
-	let last = 0, v = 0, m = 0
+	let last: Pos = 0, v = 0, m = 0
 	for (const s of shape) {
 		const x = take(path, "path")
 		if (!(x >= 0 && x < c.paths.length)) throw short("paths")
 		const p: Patch = { path: c.paths[x] }
 		if (s & 1) {
-			last += take(from, "from")
-			p.range = [last, last + take(size, "size")]
+			last = add(last, take(from, "from"))
+			p.range = [last, add(last, take(size, "size"))] as unknown as Span
 		}
 		if (s & 2) {
 			if (v >= c.value.length) throw short("value")
