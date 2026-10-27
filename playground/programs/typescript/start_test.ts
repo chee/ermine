@@ -4,12 +4,11 @@
 import { assert, assertEquals, assertInstanceOf, assertStrictEquals } from "@std/assert"
 import createEntry, { type Entry } from "@ermine/core/node/entry"
 import { createScheduler, PENDING, type Scope } from "@ermine/core/scheduler"
-import { createPaths } from "@ermine/core/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/core/table"
-import { createPlaces } from "@ermine/core/places"
+import type { Id, Key } from "@ermine/core/table"
 import { createChangeHeader, NODE } from "@ermine/core/places/header"
-import { STATUS } from "@ermine/core/places/status"
-import { box, createBox } from "@ermine/boxes"
+import { STATUS, TABLE as STATUS_TABLE } from "@ermine/core/places/status"
+import { createBox } from "@ermine/boxes"
+import { createErmine } from "@ermine/system"
 import { PROCESS } from "@ermine/processes"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import type { Value } from "@ermine/encoding/cbor"
@@ -33,15 +32,13 @@ const WASM = "public.wasm-executable"
 // ours. software's pulses asked for are never run: each test pulses
 function world(runner: Runnable, sited = false) {
 	const s = createScheduler()
-	const table = createTable((part, id) => places.onTableChange(part as Key, id))
-	const paths = createPaths<unknown>()
-	const places = createPlaces({ root: "R", table, paths, scheduler: s })
-	s.onTrackingEnd((key) => places.release(key))
+	const ermine = createErmine({ scheduler: s, root: "R", info: { actor: "host" } })
+	const { table, places } = ermine
 	const scopes = createScopeNodes({ scheduler: s, table })
-	const host = s.createRootScope({ actor: "host" })
+	const hosted = ermine.within
+	const host = hosted(() => s.getCurrentScope()!)
 	// the programs' scope: a scope of the host's own, so it can be torn down
 	const above = s.createScope({ test: "above" }, host)
-	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 	const header = () => createChangeHeader(s)
 	const commit = (changed: readonly Entry<unknown>[]) => places.commit(changed)
 	const put = (part: Key, id: Id, v: unknown) =>
@@ -59,8 +56,8 @@ function world(runner: Runnable, sited = false) {
 	put("attributes", "SLOW", { "ermine.programs.takes": [C], "ermine.programs.gives": WASM })
 	put("value", "RUN", runner)
 	put("attributes", "RUN", { "ermine.programs.takes": [WASM] })
-	const b = hosted(() => createBox({ places, table, scheduler: s, commit }, { id: "W" }))
-	hosted(() => (box(b, ["cc"], "UP"), box(b, ["run"], "RUN")))
+	const b = hosted(() => createBox(ermine, { id: "W" }))
+	hosted(() => (b.put(["cc"], "UP"), b.put(["run"], "RUN")))
 	const writes = { readValue: places.readValue, commit }
 	const sites = sited
 		? createSites(s, { ours: [...ours, import.meta.resolve("@ermine/processes/start")] })
@@ -87,7 +84,7 @@ function world(runner: Runnable, sited = false) {
 		if ("refused" in p) throw new Error(p.refused)
 		return p
 	}
-	const status = (p: Process) => table.get("attributes", p.id)?.value?.[STATUS]
+	const status = (p: Process) => table.get(STATUS_TABLE, p.id)?.value?.[STATUS]
 	const settle = async () => {
 		for (const r of waiting.splice(0)) r()
 		await new Promise((r) => setTimeout(r, 0))
@@ -116,7 +113,6 @@ Deno.test("a runner is handed the start's facts (software's Start): what its pro
 	assertEquals(r.calls[0].code, "HI")
 	const given = r.calls[0].start
 	assertStrictEquals(given.scope, p.scope)
-	assertStrictEquals(given.box, w.b)
 	assertEquals([given.at, given.args, given.folder], [["clock"], [], []])
 	assertStrictEquals(given.process, p)
 })
@@ -190,7 +186,7 @@ Deno.test("an edit while the build is pending: what was read at start is built",
 	const r = recording()
 	const w = world(r.runner)
 	w.put("attributes", "UP", {})
-	w.hosted(() => box(w.b, ["slow"], "SLOW"))
+	w.hosted(() => w.b.put(["slow"], "SLOW"))
 	const before = w.way()
 	assertEquals(before.chain.map((s) => s.id), ["SLOW", "RUN"])
 	w.start(["a"], before)

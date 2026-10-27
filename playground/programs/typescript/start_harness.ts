@@ -41,14 +41,13 @@
 // { op: "native" }               -> { loads, compiles, files, signed, wrote }
 import createEntry, { type Entry } from "@ermine/core/node/entry"
 import { createScheduler, PENDING } from "@ermine/core/scheduler"
-import { createPaths } from "@ermine/core/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/core/table"
-import { children, createPlaces, type Path, type Places, PlacesError } from "@ermine/core/places"
+import type { Id } from "@ermine/core/table"
+import { type Path, type Places, PlacesError } from "@ermine/core/places"
 import { get, lookup } from "@ermine/core/places/lib"
 import { createChangeHeader } from "@ermine/core/places/header"
 import { STATUS, TABLE as STATUS_TABLE } from "@ermine/core/places/status"
-import { type Address, type Box, box, createBox, inside, unbox } from "@ermine/boxes"
-import { processes } from "@ermine/processes"
+import { type Address, type Box, createBox } from "@ermine/boxes"
+import { createErmine } from "@ermine/system"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import { createSites } from "@ermine/sites"
 import type { Value } from "@ermine/encoding/cbor"
@@ -57,7 +56,7 @@ import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { BuildError, type Compiler, createBuilds } from "@ermine/compilers"
 import { createDlopen, type Live } from "./dlopen.ts"
 import { openwith, type Refusal, satisfy, type Way, type Why } from "./programs.ts"
-import { ARGS, FOLDER, PIN } from "@ermine/processes/start"
+import { ARGS, FOLDER, inside, PIN } from "@ermine/processes/start"
 import {
 	createPrograms,
 	ours,
@@ -70,22 +69,13 @@ import {
 type Json = unknown
 
 const s = createScheduler()
-const table = createTable((part, id) => places.onTableChange(part as Key, id))
-const paths = createPaths<unknown>()
-const places = createPlaces({
-	root: "R",
-	table,
-	paths,
-	scheduler: s,
-	contributors: [processes("R"), children],
-})
-s.onTrackingEnd((key) => places.release(key))
+const ermine = createErmine({ scheduler: s, root: "R", info: { actor: "test" } })
+const { table, places } = ermine
 const scopes = createScopeNodes({ scheduler: s, table })
 // where scopes are made: programs' and software's files and processes' are ours, so a process's
 // site is where start was called
 const sites = createSites(s, { ours: [...ours, import.meta.resolve("@ermine/processes/start")] })
-const host = s.createRootScope({ actor: "test" })
-const hosted = <T>(f: () => T) => s.runWithScope(host, f)
+const hosted = ermine.within
 const header = () => createChangeHeader(s)
 const commit = (changed: readonly Entry<unknown>[]) => places.commit(changed)
 
@@ -114,21 +104,21 @@ type Api = {
 	watch: (name: string, seen: (id: Id | null) => void) => void
 }
 
-// the box's places, the process's facts from the start; the scheduler the harness's own
-const createProcessAPI = ({ box: { places }, process, at, args, folder }: Start): Api => ({
-	places,
+// the places the process was started in (a box's, or the host's), the process's facts from the
+// start; the scheduler the harness's own
+const homes = new Map<Id, Places>()
+const createProcessAPI = ({ process, at, args, folder }: Start): Api => ({
+	places: homes.get(process.id) ?? places,
 	process: { id: process.id, at, args, folder },
 	watch: (name, seen) =>
 		void s.createComputer(() => {
-			const path = lookup(places, [name], folder)
-			const id = path === undefined ? null : get(places, path) ?? null
+			const home = homes.get(process.id) ?? places
+			const path = lookup(home, [name], folder)
+			const id = path === undefined ? null : get(home, path) ?? null
 			seen(id)
 			return id
 		}, () => {}),
 })
-
-// a folder a box made: a uuid
-const FRESH = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 // the processes by name, and back
 const started = new Map<string, Process>()
@@ -320,6 +310,7 @@ function start(r: Request): Json {
 	const options = { ...(r.args === undefined ? {} : { args: r.args }), folder: r.folder }
 	const made = hosted(() => programs!.start(where, chosen, r.at, options))
 	if ("refused" in made) return plain(made)
+	homes.set(made.id, p)
 	started.set(r.name, made)
 	procs.set(made.id, r.name)
 	return plain({ id: made.id, at: made.at })
@@ -370,16 +361,18 @@ async function answer(r: Request): Promise<Json> {
 			return { ...native, files: files(), wrote: [...wrote] }
 		case "create": {
 			const at = r.folder !== undefined ? { id: r.folder } : r.at as Address
-			const b = hosted(() => createBox({ places, table, scheduler: s }, at))
+			const b = hosted(() => createBox(ermine, at))
 			named.set(r.name, b)
-			if (FRESH.test(String(b.root))) roots.set(b.root, r.name)
+			if (r.folder === undefined && !Array.isArray(r.at) && r.at === undefined) {
+				roots.set(b.root, r.name)
+			}
 			return {}
 		}
 		case "box":
-			hosted(() => box(boxOf(r.box), r.path, r.node))
+			hosted(() => boxOf(r.box).put(r.path, r.node))
 			return {}
 		case "unbox":
-			hosted(() => unbox(boxOf(r.box), r.path))
+			hosted(() => boxOf(r.box).take(r.path))
 			return {}
 		case "programs": {
 			cache = r.cache

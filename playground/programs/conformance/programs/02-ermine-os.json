@@ -1,5 +1,5 @@
 {
-	"title": "the same catclock.c in an ermineOS box over the same folder: the native clang (an arm64 executable giving one) run by the OS's exec host runner, which takes it: one chain; the browser box beside it keeps its two",
+	"title": "the same catclock.c in an ermineOS box over the same folder: the native clang (an arm64 executable giving one) run by the OS's exec host runner, which takes it: one chain; the browser box beside it keeps its two. the native clang is written into the loaders folder (L2) by the host: a node put in a box has nothing put under it",
 	"steps": [
 		{
 			"op": "kids",
@@ -156,7 +156,6 @@
 		{
 			"op": "create",
 			"name": "os",
-			"at": "os",
 			"expect": {}
 		},
 		{
@@ -189,13 +188,11 @@
 			"expect": {}
 		},
 		{
-			"op": "box",
-			"box": "os",
-			"path": [
-				"loaders",
-				"clang"
-			],
-			"node": "NCLANG",
+			"op": "kids",
+			"id": "L2",
+			"value": {
+				"clang": "NCLANG"
+			},
 			"expect": {}
 		},
 		{

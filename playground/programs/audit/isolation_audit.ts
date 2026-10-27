@@ -1,9 +1,9 @@
-// AUDIT (defensive, our own code): the isolation promise of ermine/boxes.
+// AUDIT (defensive, our own code): the isolation promise of extensions/boxes.
 //
-// Boxing something in a shared folder is a choice made on purpose; what is boxed must not see above
-// that folder, but may look and place in it. So code given a
-// box may read and write at or below the box's folder, and must not read or change anything above
-// or beside it. Whatever was deliberately boxed in is fine.
+// Putting something in a box is a choice made on purpose; the box must not see above its folder,
+// and sees only what is saved there and what was put in it. So code given a box may read and
+// write at or below the box's folder, and must not read or change anything above or beside it.
+// Whatever was deliberately put in is fine.
 //
 // Each test asserts the promise HOLDS, so a test FAILS while a gap is open. The file name is outside
 // deno test's default pattern, so others' runs are unaffected. Run it with:
@@ -19,16 +19,16 @@
 import { assert, assertEquals, assertNotEquals } from "@std/assert"
 import createEntry, { type Entry } from "@ermine/core/node/entry"
 import { createScheduler } from "@ermine/core/scheduler"
-import { createPaths } from "@ermine/core/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/core/table"
-import { children, createPlaces } from "@ermine/core/places"
+import type { Id, Key } from "@ermine/core/table"
+import { children } from "@ermine/core/places"
 import { get, gets, list, lookup, members } from "@ermine/core/places/lib"
 import { createChangeHeader } from "@ermine/core/places/header"
 import { addProcess } from "@ermine/processes"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import { ATTRIBUTES as A, openwith, satisfy, type Way } from "../typescript/programs.ts"
 import { createPrograms } from "../typescript/start.ts"
-import { type Box, box, createBox, type Host, inside, unbox } from "@ermine/boxes"
+import { createBox } from "@ermine/boxes"
+import { createErmine } from "@ermine/system"
 
 // ----- the world: R holds work (the box), tools and secret beside it -----------------------------
 //   R.children = { work: W, tools: T, secret: S }
@@ -36,13 +36,9 @@ import { type Box, box, createBox, type Host, inside, unbox } from "@ermine/boxe
 //   values: T, S, F0, PAD, R each a marker. S is "the secret" above/beside the box.
 function world() {
 	const s = createScheduler()
-	const table = createTable((part, id) => places.onTableChange(part as Key, id))
-	const paths = createPaths<unknown>()
-	const places = createPlaces({ root: "R", table, paths, scheduler: s })
-	s.onTrackingEnd((key) => places.release(key))
-	const host: Host = { places, table, scheduler: s }
-	const scope = s.createRootScope({ actor: "host" })
-	const hosted = <T>(f: () => T) => s.runWithScope(scope, f)
+	const host = createErmine({ scheduler: s, root: "R", info: { actor: "host" } })
+	const { table, places } = host
+	const hosted = host.within
 	const header = () => createChangeHeader(s)
 	const put = (part: Key, id: Id, v: unknown) =>
 		hosted(() => table.sub(part, id, createEntry(v, header())))
@@ -159,25 +155,9 @@ Deno.test("start must not read/run a program whose id is outside the box (crafte
 		)
 	)
 	const scopes = createScopeNodes({ scheduler: s, table })
-	// NOTE (in-flight): start.ts currently calls s.createScope() with no info for its process owner
-	// (another agent is changing start). The live scheduler rejects missing/empty info, so this
-	// transparent wrapper substitutes a single neutral owner pair ONLY when start passes nothing; the
-	// real process scope's info ([["process", at]]) passes through untouched. It wraps the same
-	// scheduler state, so pulses, effects and reads are unaffected. Recheck/remove once start settles
-	// how it opens its owner scope; this is the only reason start can be exercised here at all.
-	const sched = {
-		...s,
-		createScope: (info?: Iterable<unknown>, parent?: unknown) => {
-			const pairs = info === undefined ? [] : [...(info as Iterable<unknown>)]
-			return (s.createScope as (i: unknown, p?: unknown) => unknown)(
-				pairs.length ? pairs : [["owner", "programs"]],
-				parent,
-			)
-		},
-	}
 	const programs = hosted(() =>
 		createPrograms({
-			scheduler: sched as unknown as typeof s,
+			scheduler: s,
 			table,
 			places,
 			builds: {
@@ -262,45 +242,46 @@ Deno.test("satisfy's ways must stay bounded when many interchangeable loaders sh
 // HELD: the promises the box DOES keep. These pass today; they pin the behaviour so a later change
 // that breaks it shows up here too.
 // =================================================================================================
-Deno.test("HELD: box() and unbox() clamp inside the folder; '..' and '/' never escape", () => {
+Deno.test("HELD: put and take clamp inside the box; '..' and '/' never escape", () => {
 	const { places, b, hosted } = world()
-	// "../../tools" resolves to a fresh "tools" under W, the host's tools untouched
-	hosted(() => box(b, "../../tools", "X"))
+	// "../../tools" resolves to "tools" in the box, the host's tools untouched (and, a put being
+	// the box's own, the host's work/tools is not made)
+	hosted(() => b.put("../../tools", "X"))
 	assertEquals(get(b.places, ["tools"]), "X")
-	assertEquals(get(places, ["tools"]), "T", "box() wrote over the host's sibling")
-	assertEquals(get(places, ["work", "tools"]), "X")
-	// "/secret" resolves to a fresh "secret" under W, the host's secret untouched
-	hosted(() => box(b, "/secret", "Y"))
-	assertEquals(get(places, ["secret"]), "S", "box() wrote over the host's secret")
+	assertEquals(get(places, ["tools"]), "T", "put wrote over the host's sibling")
+	assertEquals(get(places, ["work", "tools"]), undefined, "put was saved where the host sees it")
+	// "/secret" resolves to "secret" in the box, the host's secret untouched
+	hosted(() => b.put("/secret", "Y"))
+	assertEquals(get(places, ["secret"]), "S", "put wrote over the host's secret")
 	assertEquals(get(b.places, ["secret"]), "Y")
-	// unbox of a clamped path only removes inside
-	hosted(() => unbox(b, "/../tools"))
+	// take of a clamped path only removes inside
+	hosted(() => b.take("/../tools"))
 	assertEquals(get(b.places, ["tools"]), undefined)
-	assertEquals(get(places, ["tools"]), "T", "unbox() removed the host's sibling")
+	assertEquals(get(places, ["tools"]), "T", "take removed the host's sibling")
 })
 
-Deno.test("HELD: a nested box stays narrower and cannot climb back to the outer box", () => {
-	const { host, hosted, b } = world()
-	const inner = hosted(() => createBox(host, "deep", b)) // W/deep
-	assertNotEquals(inner.root, "W")
-	assertNotEquals(inner.root, "R")
-	// the inner box does not see W's own children (above it, inside the outer box)
+// boxes do not nest: createBox takes the ermine and a path from its root (or an id, or none), so
+// there is no box made inside a box to climb back out of. what nested boxes held, a box over
+// "deep" narrower than the one over its parent, is the folder's own: a box over it sees what is
+// below it and nothing above
+Deno.test("HELD: a box over a folder below another sees only what is below it", () => {
+	const { host, hosted } = world()
+	const inner = hosted(() => createBox(host, "work/notes"))
+	assertEquals(inner.root, "N")
 	assertEquals(get(inner.places, ["fetch"]), undefined)
 	assertEquals(lookup(inner.places, ["fetch"], []), undefined)
-	// a box made at ".." from the inner box stays at the inner root, it does not become the outer box
-	const climbed = hosted(() => createBox(host, "..", inner))
-	assertEquals(climbed.root, inner.root, "a nested box climbed to its parent via '..'")
+	assertEquals(get(inner.places, ["pad"]), "PAD")
+	// ".." at its "/" stays at "/": the inner box does not become the outer
+	assertEquals(get(inner.places, ["..", "fetch"]), undefined)
 })
 
-Deno.test("HELD: createBox by {id} with a parent is refused (a box in another is only narrower)", () => {
-	const { host, hosted, b } = world()
-	let threw = false
-	try {
-		hosted(() => createBox(host, { id: "S" }, b))
-	} catch {
-		threw = true
-	}
-	assert(threw, "createBox({id}, parent) was allowed to point a nested box at an arbitrary id")
+Deno.test("HELD: what is put in one box is not seen by the host, nor by another box over the folder", () => {
+	const { host, places, hosted, b } = world()
+	const other = hosted(() => createBox(host, "work"))
+	hosted(() => b.put("mine", "S"))
+	assertEquals(get(b.places, ["mine"]), "S")
+	assertEquals(get(other.places, ["mine"]), undefined, "a put was seen by another box")
+	assertEquals(get(places, ["work", "mine"]), undefined, "a put was seen by the host")
 })
 
 Deno.test("HELD: a box watch is not told of a write beside/above it", () => {
@@ -362,13 +343,13 @@ Deno.test("HELD: a box does not see a process started at the host root beside it
 })
 
 // =================================================================================================
-// C: the same shape (core/places/c pl_view, pl_read/pl_walk by id; ermine/boxes/c
+// C: the same shape (core/places/c pl_view, pl_read/pl_walk by id; extensions/boxes/c
 // bx_create_id with no containment) is in the C code and cannot be driven through the boxes harness
 // (it only offers path-scoped ops). What the harness CAN show — the path-level promise — is checked
 // here against the prebuilt binary; the structural C findings are in REPORT.md by inspection.
 // =================================================================================================
 Deno.test("C: the boxes harness keeps the path-level promise (box path reads see no sibling)", async () => {
-	const bin = new URL("../c/boxes-harness", import.meta.url).pathname
+	const bin = new URL("../../../extensions/boxes/c/boxes-harness", import.meta.url).pathname
 	let stat: Deno.FileInfo | undefined
 	try {
 		stat = await Deno.stat(bin)
@@ -378,12 +359,13 @@ Deno.test("C: the boxes harness keeps the path-level promise (box path reads see
 	}
 	if (stat === undefined) return
 	const lines = [
-		{ op: "kids", id: "R", value: { tools: "T", work: "W" } },
-		{ op: "kids", id: "W", value: { fetch: "F0" } },
-		{ op: "create", name: "b", at: "work" },
-		{ op: "get", box: "b", path: ["tools"] }, // a sibling: must be nothing
-		{ op: "get", box: "b", path: ["fetch"] }, // inside: F0
-		{ op: "get", path: ["tools"] }, // the host: T
+		{ op: "ermine" },
+		{ op: "host", call: ["ensureNode", "/work/fetch", "F0"] },
+		{ op: "host", call: ["ensureNode", "/tools", "T"] },
+		{ op: "box", name: "b", at: "/work" },
+		{ op: "look", in: "b", path: "/tools" }, // a sibling: must be nothing
+		{ op: "look", in: "b", path: "/fetch" }, // inside: F0
+		{ op: "look", path: "/tools" }, // the host: T
 	]
 	const cmd = new Deno.Command(bin, { stdin: "piped", stdout: "piped", stderr: "piped" })
 	const child = cmd.spawn()
@@ -392,7 +374,7 @@ Deno.test("C: the boxes harness keeps the path-level promise (box path reads see
 	await w.close()
 	const { stdout } = await child.output()
 	const out = new TextDecoder().decode(stdout).trim().split("\n").map((l) => JSON.parse(l))
-	assertEquals(out[3], {}, "C box saw a sibling by path")
-	assertEquals(out[4], { id: "F0" }, "C box could not read inside")
-	assertEquals(out[5], { id: "T" }, "C host sanity")
+	assertEquals(out[4], { there: false }, "C box saw a sibling by path")
+	assertEquals(out[5], { there: true, value: "F0" }, "C box could not read inside")
+	assertEquals(out[6], { there: true, value: "T" }, "C host sanity")
 })

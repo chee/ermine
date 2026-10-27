@@ -205,7 +205,6 @@
 		{
 			"op": "create",
 			"name": "loop",
-			"at": "loop",
 			"expect": {}
 		},
 		{

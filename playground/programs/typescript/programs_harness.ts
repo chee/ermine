@@ -39,12 +39,12 @@
 //    none), as program and open answer; only: just the fields named (a refusal whole)
 import createEntry, { type Entry } from "@ermine/core/node/entry"
 import { type Computer, createScheduler, type Scope } from "@ermine/core/scheduler"
-import { createPaths } from "@ermine/core/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/core/table"
-import { createPlaces, PlacesError } from "@ermine/core/places"
+import type { Id } from "@ermine/core/table"
+import { PlacesError } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"
 import { upsert } from "@ermine/core/places/upsert"
-import { type Address, type Box, box, createBox, unbox } from "@ermine/boxes"
+import { type Address, type Box, createBox } from "@ermine/boxes"
+import { createErmine } from "@ermine/system"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { openwith, type Refusal, satisfy, type Way, type Why } from "./programs.ts"
 import { installTypes, typeOf } from "@ermine/types"
@@ -55,12 +55,9 @@ import { keyorder } from "@ermine/core/util/keyorder"
 type Json = unknown
 
 const s = createScheduler()
-const table = createTable((part, id) => places.onTableChange(part as Key, id))
-const paths = createPaths<unknown>()
-const places = createPlaces({ root: "R", table, paths, scheduler: s })
-s.onTrackingEnd((key) => places.release(key))
-const host = s.createRootScope({ actor: "test" })
-const hosted = <T>(f: () => T) => s.runWithScope(host, f)
+const ermine = createErmine({ scheduler: s, root: "R", info: { actor: "test" } })
+const { table, places } = ermine
+const hosted = ermine.within
 const header = () => createChangeHeader(s)
 const commit = (changed: Entry<unknown>[]) => places.commit(changed)
 
@@ -70,9 +67,6 @@ const named = new Map<string, Box>()
 const names = new Map<Id, string>()
 
 const json = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
-
-// a folder a box made: a uuid
-const FRESH = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 // an answer as JSON, every folder a box made as "box:<name>"
 function plain(x: unknown): Json {
@@ -155,16 +149,16 @@ function answer(r: Request): Json {
 			return {}
 		case "create": {
 			const at = r.folder !== undefined ? { id: r.folder } : r.at as Address
-			const b = hosted(() => createBox({ places, table, scheduler: s }, at))
+			const b = hosted(() => createBox(ermine, at))
 			named.set(r.name, b)
-			if (FRESH.test(String(b.root))) names.set(b.root, r.name)
+			if (at === undefined) names.set(b.root, r.name)
 			return {}
 		}
 		case "box":
-			hosted(() => box(boxOf(r.box), r.path, r.node))
+			hosted(() => boxOf(r.box).put(r.path, r.node))
 			return {}
 		case "unbox":
-			hosted(() => unbox(boxOf(r.box), r.path))
+			hosted(() => boxOf(r.box).take(r.path))
 			return {}
 		case "program":
 			return look({ ...r, file: undefined })

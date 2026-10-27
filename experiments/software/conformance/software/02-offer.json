@@ -79,7 +79,8 @@
 			"expect": {
 				"parts": [
 					"attributes",
-					"children"
+					"children",
+					"status"
 				],
 				"attributes": {
 					"ermine.process.folder": [

@@ -1,15 +1,14 @@
 // satisfy and openwith on a real scheduler, table and paths, in boxes made over a folder W
-// (R/work), or over a folder of their own with W's clocks and loaders boxed in, from the host's
+// (R/work), or over a new node of their own with W's clocks and loaders boxed in, from the host's
 // places (root R, children alone); types installed at R/ermine/types
 import { assertEquals } from "@std/assert"
 import createEntry, { type Entry } from "@ermine/core/node/entry"
 import { createScheduler } from "@ermine/core/scheduler"
-import { createPaths } from "@ermine/core/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/core/table"
-import { createPlaces } from "@ermine/core/places"
+import type { Id, Key } from "@ermine/core/table"
 import { createChangeHeader } from "@ermine/core/places/header"
 import { upsert } from "@ermine/core/places/upsert"
-import { box, createBox, type Host, unbox } from "@ermine/boxes"
+import { createBox } from "@ermine/boxes"
+import { createErmine } from "@ermine/system"
 import {
 	ATTRIBUTES as A,
 	type Chain,
@@ -42,16 +41,12 @@ type Loader = {
 
 function world() {
 	const s = createScheduler()
-	const table = createTable((part, id) => places.onTableChange(part as Key, id))
-	const paths = createPaths<unknown>()
-	const places = createPlaces({ root: "R", table, paths, scheduler: s })
-	s.onTrackingEnd((key) => places.release(key))
-	const host = s.createRootScope({ actor: "host" })
+	const over = createErmine({ scheduler: s, root: "R", info: { actor: "host" } })
+	const { table, places } = over
 	const watcher = s.createRootScope({ actor: "watcher" })
-	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
+	const hosted = over.within
 	const header = () => createChangeHeader(s)
 	const commit = (changed: readonly Entry<unknown>[]) => places.commit(changed)
-	const over: Host = { places, table, scheduler: s, commit }
 	const kids = (id: Id, v: Record<string, unknown>) =>
 		hosted(() => table.sub("children", id, createEntry(v, header())))
 	const attrs = (id: Id, v: Record<string, unknown>) =>
@@ -92,14 +87,14 @@ function world() {
 		says("WASMRUN", { type: JS, takes: [WASM], provides: ["wasm32"], needs: ["javascript"] })
 		hostRunner("PAGE", { takes: [JS], provides: ["javascript", "dom", "fetch"] })
 	}
-	// a box from W (own: a folder of its own at R/own, W's clocks and loaders boxed in), the types
+	// a box from W (own: a new empty node, W's clocks and loaders boxed in), the types
 	// boxed in, and the things given boxed at their paths
-	function web(items: Record<string, Id>, own?: string) {
-		const b = hosted(() => createBox(over, own ?? { id: "W" }))
-		if (own !== undefined) hosted(() => (box(b, ["clocks"], "CL"), box(b, ["loaders"], "L")))
+	function web(items: Record<string, Id>, own = false) {
+		const b = hosted(() => createBox(over, own ? undefined : { id: "W" }))
+		if (own) hosted(() => (b.put(["clocks"], "CL"), b.put(["loaders"], "L")))
 		hosted(() => {
-			box(b, TYPES, TYPES.join("/"))
-			for (const [path, id] of Object.entries(items)) box(b, path.split("/"), id)
+			b.put(TYPES, TYPES.join("/"))
+			for (const [path, id] of Object.entries(items)) b.put(path.split("/"), id)
 		})
 		return b
 	}
@@ -403,7 +398,7 @@ Deno.test("no node twice: a runner that would run itself, and compilers that wou
 	// js to wasm to js to ...: each once in a chain, no runner: no chain
 	w.hostRunner("J2W", { takes: [JS], gives: WASM })
 	w.hostRunner("W2J", { takes: [WASM], gives: JS })
-	const loop = w.web({ j2w: "J2W", w2j: "W2J" }, "loop")
+	const loop = w.web({ j2w: "J2W", w2j: "W2J" }, true)
 	assertEquals(whole((o) => satisfy(loop.places, "clock.js", ["clocks"], o)), {
 		ways: [],
 		why: [
@@ -522,11 +517,11 @@ Deno.test("tracked: a nearer loader boxed reorders the chains; only writes satis
 	w.s.pulse()
 	assertEquals(ran.runs, 1)
 	// the server clang boxed nearer: first
-	w.hosted(() => box(b, ["clocks", "clang"], "SCLANG"))
+	w.hosted(() => b.put(["clocks", "clang"], "SCLANG"))
 	w.s.pulse()
 	assertEquals(ran.runs, 2)
 	assertEquals(last(), [[server, wasm], [wclang, wasm]])
-	w.hosted(() => unbox(b, ["clocks", "clang"]))
+	w.hosted(() => b.take(["clocks", "clang"]))
 	w.s.pulse()
 	assertEquals(ran.runs, 3)
 	assertEquals(last(), [[wclang, wasm], [far, wasm]])
@@ -554,12 +549,12 @@ Deno.test("lazy: the first way taken, the search goes no further; a level it nev
 	assertEquals(first.values, [[cc]])
 	assertEquals(all.values, [[[cc]]])
 	// another runner at "/": a level only the whole search read
-	w.hosted(() => box(b, ["tcc"], "TCC"))
+	w.hosted(() => b.put(["tcc"], "TCC"))
 	w.s.pulse()
 	assertEquals([first.runs, all.runs, none.runs], [1, 2, 1])
 	assertEquals(all.values[1], [[cc], [step("TCC", "tcc")]])
 	// the first's runner unboxed: it reruns, now reading "/"
-	w.hosted(() => unbox(b, ["clocks", "cc"]))
+	w.hosted(() => b.take(["clocks", "cc"]))
 	w.s.pulse()
 	assertEquals([first.runs, all.runs, none.runs], [2, 3, 1])
 	assertEquals(first.values[1], [step("TCC", "tcc")])
