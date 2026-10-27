@@ -1,25 +1,10 @@
 {
-	"title": "KNOWN PROBLEM, not fixed on purpose: reading.limit 0 is the default 1 GiB (pack.h; a pick from the docs): TS reads it as 0 bytes and refuses, C reads the pack (chee 10-17)",
+	"title": "reading.limit 0 is 0 bytes, not the default: nothing inflates, so refused (chee 10-27: \"0 means 0\")",
 	"bytes": "a167636f6c756d6e7358471dc7db0d8030080550eb268ec22848af8144ad29f5f14ba7714c13cfdf7945d96912cb1eccb9d9061ac1d24a8dce4fc25e329c061c5c9b47c7c5eb89845b4d9486e5afc7acf601",
 	"reading": {
 		"limit": 0
 	},
 	"expect": {
-		"entries": [
-			[
-				"value",
-				"a",
-				0
-			]
-		],
-		"nodes": [
-			{
-				"value": "hi",
-				"change": {
-					"time": 1,
-					"actor": "x"
-				}
-			}
-		]
+		"code": "not-a-pack"
 	}
 }

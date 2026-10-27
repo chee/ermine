@@ -43,7 +43,7 @@ export type Options = {
 export type Reading = {
 	// a key no map of a pack has is passed over, in every map, not refused. default false
 	loosyGoosy?: boolean
-	// the most bytes the columns may inflate to; more: not-a-pack. default 1 GiB
+	// the most bytes the columns may inflate to; more: not-a-pack. 0 is 0 bytes. default 1 GiB
 	limit?: number
 }
 
