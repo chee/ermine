@@ -10,12 +10,14 @@ import {
 	explainChildren,
 	getArgs,
 	getNode,
+	getStatus,
 	hasNode,
 	list,
 	patch,
 	patchAttributes,
 	patchChildren,
 	peep,
+	pipe,
 	pulse,
 	read,
 	readAllChildren,
@@ -321,3 +323,18 @@ Deno.test("@ermine/system: a second copy of its module (another URL) finds the s
 	assertEquals(e.within(() => read("/code/v")), "from the copy")
 	e.close()
 })
+
+Deno.test("@ermine/system: a pipe that stops its own process, then throws, is not the pulse's error", () => {
+	const e = createErmine({ features: [manual] })
+	e.within(() => ensureNode("/src", 1))
+	const running = e.start(() => {
+		pipe("/src", () => {
+			;(running as { stop(): void }).stop()
+			throw new Error("after stop")
+		})
+	}, "/work/p")
+	e.within(() => patch("/src", [{ path: [], value: 2 }]))
+	e.within(() => pulse())
+	e.close()
+})
+
