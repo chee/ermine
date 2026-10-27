@@ -1,5 +1,5 @@
-# ermine's C, built from where it lives in the repo: the process api and what it stands on
-# (the Makefile's api_src without the harnesses), software (experiments/software/c),
+# ermine's C, built from where it lives in the repo: the process api (ermine/system/c) and what it
+# stands on (the Makefile's system_src without the harness), software (experiments/software/c),
 # tippet (experiments/tippet/c), and trust, installs and sessions
 set(R ${CMAKE_CURRENT_LIST_DIR}/../../../..)
 set(TIPPET ${R}/experiments/tippet/c)
@@ -11,14 +11,14 @@ idf_component_register(
 		${R}/core/scheduler/c/scheduler.c ${R}/core/scheduler/c/order.c ${R}/core/scheduler/c/rank.c
 		${R}/core/scheduler/c/causes.c ${R}/core/scheduler/c/ptrmap.c ${R}/core/scheduler/c/tracker.c
 		${R}/core/scheduler/c/paths.c ${R}/core/scheduler/c/selector.c
-		${R}/filesystem/places/c/places.c ${R}/filesystem/places/c/cache.c ${R}/filesystem/places/c/status.c
+		${R}/core/places/c/places.c ${R}/core/places/c/cache.c ${R}/core/places/c/status.c
 		${R}/core/unread/c/unread.c
-		${R}/ermine/processes/c/runs.c ${R}/filesystem/places/c/guard.c
-		${R}/filesystem/protect/c/protect.c
-		${R}/filesystem/clingy/c/clingy.c
+		${R}/ermine/processes/c/runs.c ${R}/core/places/c/guard.c
+		${R}/core/protect/c/protect.c
+		${R}/core/clingy/c/clingy.c
 		${R}/ermine/processes/c/processes.c ${R}/ermine/processes/c/scopes.c
 		${R}/ermine/sites/c/sites.c
-		${R}/ermine/api/c/api.c
+		${R}/ermine/system/c/nodes.c ${R}/ermine/system/c/computers.c ${R}/ermine/system/c/actions.c ${R}/ermine/system/c/host.c
 		${R}/playground/encoding/c/pack.c ${R}/ermine/encoding/c/json.c ${R}/ermine/encoding/c/cbor.c
 		${R}/extensions/patchy/c/patch.c
 		${R}/ermine/processes/c/start.c ${R}/ermine/boxes/c/boxes.c ${R}/experiments/software/c/functions.c

@@ -592,10 +592,10 @@ static void part_body(pr_process *p, void *data) {
 	part *x = data;
 	x->p = p;
 	x->id = xstrdup(pr_id(p));
-	const char *const *at, *const *args, *const *cwd;
-	size_t nat = pr_at(p, &at), nargs = pr_args(p, &args), ncwd = pr_cwd(p, &cwd);
+	const char *const *at, *const *args, *const *folder;
+	size_t nat = pr_at(p, &at), nargs = pr_args(p, &args), nfolder = pr_folder(p, &folder);
 	sw_starting st = {.places = pr_places(p), .root = pr_root(p),
-		.process = {.id = x->id, .at = at, .nat = nat, .args = args, .nargs = nargs, .cwd = cwd, .ncwd = ncwd},
+		.process = {.id = x->id, .at = at, .nat = nat, .args = args, .nargs = nargs, .folder = folder, .nfolder = nfolder},
 		.scheduler = me.w.s, .table = me.w.table, .scope = pr_scope(p)};
 	x->run = things_runner(KINDS[x->kind])(NULL, &st, NULL);
 	free(x->run.error);

@@ -383,8 +383,8 @@ int main(int argc, char **argv) {
 	setvbuf(stdout, NULL, _IOLBF, 0);
 	quiet = getenv("SIM_SHELL") == NULL;
 	host_init();
-	api *keys = host_start("keyboard", keyboard);
-	if (!quiet) host_start("shell", shell), host_start("display", display);
+	es_context *keys = host_start("keyboard", keyboard, NULL);
+	if (!quiet) host_start("shell", shell, NULL), host_start("display", display, NULL);
 	inst_install me;
 	uint8_t random[INST_RANDOM];
 	arc4random_buf(random, sizeof random);

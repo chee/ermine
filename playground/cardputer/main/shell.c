@@ -1,4 +1,4 @@
-// the shell: a program on the process api only. it reads /keyboard (the keyboard's last key, a map
+// the shell: a program on the process api (es_*) only. it reads /keyboard (the keyboard's last key, a map
 // {key, n}), keeps what is typed in ./line, says how the last command went in ./said, adds up the
 // numbers at the root in ./sum, and makes ./screen: what the screen shows, {lines, prompt}, the
 // tree from / with each value.
@@ -67,25 +67,30 @@ static op_value *parsed(const char *s) {
 	return op_str(s);
 }
 
-static void put(api *a, const char *at, op_value *v) {
+static int edit(es_context *c, const char *at, const op_patch *p) {
+	return es_patch(c, es_on_path(es_text(at)), p, 1);
+}
+
+static void put(es_context *c, const char *at, op_value *v) {
 	op_patch p = {.place = {NULL, 0}, .has_value = 1, .value = v};
-	api_edit(a, api_at(at), &p, 1);
+	edit(c, at, &p);
 	op_free(v);
 }
 
-static void say(api *a, int code, const char *what) {
+static void say(es_context *c, int code, const char *what) {
 	char s[96];
-	if (code) snprintf(s, sizeof s, "%s: %s %s", what, api_code_name(code), api_why(a));
+	if (code) snprintf(s, sizeof s, "%s: %s %s", what, es_code_name(code), es_thrown()->message);
 	else snprintf(s, sizeof s, "%s", what);
-	put(a, "said", op_str(s));
+	put(c, "said", op_str(s));
 }
 
-static void command(api *a, const char *line) {
+static void command(es_context *c, const char *line) {
 	char *eq = strchr(line, '=');
 	if (strncmp(line, "rm ", 3) == 0) {
 		char *name = trimmed(line + 3, strlen(line + 3));
 		char *at = rooted(name);
-		say(a, api_remove(a, api_at(at)), "rm");
+		// the console is the host's: a process only unplaces, the host takes the node out
+		say(c, es_remove(es_host_context(c->ermine), es_on_path(es_text(at))), "rm");
 		free(at), free(name);
 	} else if (eq) {
 		char *name = trimmed(line, eq - line), *text = trimmed(eq + 1, strlen(eq + 1));
@@ -99,84 +104,95 @@ static void command(api *a, const char *line) {
 		if (dot) {
 			op_key k = {.type = OP_STR_KEY, .s = dot};
 			op_patch p = {.place = {&k, 1}, .has_value = 1, .value = v};
-			code = api_edit(a, api_at(at), &p, 1);
+			code = edit(c, at, &p);
 		} else {
 			op_patch p = {.place = {NULL, 0}, .has_value = 1, .value = v};
-			code = api_edit(a, api_at(at), &p, 1);
-			if (code == API_NOTHING_THERE) {
-				api_node n;
-				code = api_open(a, at, v, &n);
-				if (code == API_OK) api_node_free(&n);
+			code = edit(c, at, &p);
+			if (code == ES_NOTHING_THERE) {
+				es_handle *n;
+				code = es_ensure_node(c, es_text(at), v, &n);
 			}
 		}
-		say(a, code, at);
+		say(c, code, at);
 		op_free(v);
 		free(at), free(name), free(text);
-	} else if (line[0]) put(a, "said", op_str("name = value, or rm name"));
+	} else if (line[0]) put(c, "said", op_str("name = value, or rm name"));
 }
 
 // keys ---------------------------------------------------------------------------------------
 
 // the newest key, tracked, and the line as it is, peeped (the act writes the line: tracking it
 // would run this again for its own write)
-static sc_out key(api *a, const op_value *previous, void *ctx) {
+typedef struct {
+	es_context *c;
+	const op_value *line;
+} peeped;
+
+static int peep_line(void *data) {
+	peeped *x = data;
+	return es_read(x->c, es_on_path(es_text("line")), NULL, 0, &x->line);
+}
+
+static es_out key(es_context *c, void *ctx, const op_value *previous) {
 	(void)previous, (void)ctx;
-	const op_value *v, *line;
-	int code = api_read(a, api_at("/keyboard"), NULL, 0, &v);
-	if (code == API_PENDING) return (sc_out){.kind = SC_PENDING};
-	if (v == NULL || v->type != OP_MAP) return (sc_out){.kind = SC_VALUE, .value = NULL};
-	api_peep(a, api_at("line"), NULL, 0, &line);
+	const op_value *v;
+	int code = es_read(c, es_on_path(es_text("/keyboard")), NULL, 0, &v);
+	if (code) return es_out_code(code);
+	if (v == NULL || v->type != OP_MAP) return es_out_of(NULL);
+	peeped p = {c, NULL};
+	es_peep(c, peep_line, &p);
+	const op_value *line = p.line;
 	op_value *o = op_map();
 	const op_value *k = op_get(v, "key"), *n = op_get(v, "n");
 	if (k) op_set(o, "key", op_ref((op_value *)k));
 	if (n) op_set(o, "n", op_ref((op_value *)n));
 	op_set(o, "line", line && line->type == OP_STR ? op_ref((op_value *)line) : op_str(""));
-	return (sc_out){.kind = SC_VALUE, .value = o};
+	return es_out_of(o);
 }
 
-static void typed(api *a, const op_value *value, const op_value *before, void *ctx) {
+static int typed(es_context *c, void *ctx, const op_value *value, const op_value *before) {
 	(void)before, (void)ctx;
 	const op_value *k = value && value->type == OP_MAP ? op_get(value, "key") : NULL;
-	if (k == NULL || k->type != OP_STR) return;
+	if (k == NULL || k->type != OP_STR) return 0;
 	const op_value *v = op_get(value, "line");
 	const char *line = v && v->type == OP_STR ? v->str : "";
 	size_t n = strlen(line);
 	if (strcmp(k->str, "enter") == 0) {
 		char *cmd = trimmed(line, n);
-		put(a, "line", op_str(""));
-		command(a, cmd);
+		put(c, "line", op_str(""));
+		command(c, cmd);
 		free(cmd);
 	} else if (strcmp(k->str, "backspace") == 0) {
-		if (n) put(a, "line", op_str_n(line, n - 1));
+		if (n) put(c, "line", op_str_n(line, n - 1));
 	} else if (strcmp(k->str, "esc") == 0) {
-		put(a, "line", op_str(""));
+		put(c, "line", op_str(""));
 	} else if (strlen(k->str) == 1) {
 		char *s = malloc(n + 2);
 		memcpy(s, line, n);
 		s[n] = k->str[0], s[n + 1] = 0;
-		put(a, "line", op_str(s));
+		put(c, "line", op_str(s));
 		free(s);
 	}
+	return 0;
 }
 
 // sum ----------------------------------------------------------------------------------------
 
-static sc_out sum(api *a, const op_value *previous, void *ctx) {
+static es_out sum(es_context *c, void *ctx, const op_value *previous) {
 	(void)previous, (void)ctx;
-	api_names names;
-	int code = api_list(a, api_at("/"), &names);
-	if (code == API_PENDING) return (sc_out){.kind = SC_PENDING};
+	es_names names;
+	int code = es_list(c, es_on_path(es_text("/")), &names);
+	if (code == ES_PENDING) return es_out_pending();
 	double total = 0;
-	for (size_t i = 0; code == API_OK && i < names.n; i++) {
-		char *at = joined("", names.items[i]);
+	for (size_t i = 0; code == 0 && i < names.n; i++) {
+		char *at = joined("", names.names[i]);
 		const op_value *v;
-		int c = api_read(a, api_at(at), NULL, 0, &v);
+		int r = es_read(c, es_on_path(es_text(at)), NULL, 0, &v);
 		free(at);
-		if (c == API_PENDING) return api_names_free(&names), (sc_out){.kind = SC_PENDING};
-		if (c == API_OK && v && v->type == OP_NUM) total += v->num;
+		if (r == 0 && v && v->type == OP_NUM) total += v->num;
 	}
-	if (code == API_OK) api_names_free(&names);
-	return (sc_out){.kind = SC_VALUE, .value = op_num(total)};
+	if (code == 0) es_names_free(&names);
+	return es_out_of(op_num(total));
 }
 
 // screen -------------------------------------------------------------------------------------
@@ -197,68 +213,65 @@ static void shown(const op_value *v, char *out, size_t cap) {
 static int by_name(const void *x, const void *y) { return strcmp(*(char *const *)x, *(char *const *)y); }
 
 // the lines of the tree under at, depth deep; 0, or pending
-static int tree(api *a, const char *at, int depth, op_value *lines) {
-	api_names names;
-	int code = api_list(a, api_at(at[0] ? at : "/"), &names);
-	if (code == API_PENDING) return API_PENDING;
-	if (code) return API_OK;
-	qsort(names.items, names.n, sizeof *names.items, by_name);
+static int tree(es_context *c, const char *at, int depth, op_value *lines) {
+	es_names names;
+	int code = es_list(c, es_on_path(es_text(at[0] ? at : "/")), &names);
+	if (code == ES_PENDING) return ES_PENDING;
+	if (code) return 0;
+	qsort(names.names, names.n, sizeof *names.names, by_name);
 	for (size_t i = 0; i < names.n && lines->count < ROWS; i++) {
-		char *path = joined(at, names.items[i]);
+		char *path = joined(at, names.names[i]);
 		char value[64] = "";
 		if (!unread(path)) {
 			const op_value *v;
-			int c = api_read(a, api_at(path), NULL, 0, &v);
-			if (c == API_PENDING) code = API_PENDING;
-			else if (c == API_OK) shown(v, value, sizeof value);
+			int r = es_read(c, es_on_path(es_text(path)), NULL, 0, &v);
+			// a pending read has no value to show (a folder the rows name has no node: /home); the read is
+			// tracked, so its coming shows
+			if (r == 0) shown(v, value, sizeof value);
 		}
 		char text[WIDTH * 4];
-		snprintf(text, sizeof text, "%*s%s %s", depth * 2, "", names.items[i], value);
+		snprintf(text, sizeof text, "%*s%s %s", depth * 2, "", names.names[i], value);
 		op_push(lines, op_str(text));
-		if (code == API_OK && depth < DEEPEST) code = tree(a, path, depth + 1, lines);
+		if (code == 0 && depth < DEEPEST) code = tree(c, path, depth + 1, lines);
 		free(path);
-		if (code == API_PENDING) break;
+		if (code == ES_PENDING) break;
 	}
-	api_names_free(&names);
+	es_names_free(&names);
 	return code;
 }
 
-static sc_out screen(api *a, const op_value *previous, void *ctx) {
+static es_out screen(es_context *c, void *ctx, const op_value *previous) {
 	(void)previous, (void)ctx;
 	op_value *lines = op_list();
-	if (tree(a, "", 0, lines) == API_PENDING) return op_free(lines), (sc_out){.kind = SC_PENDING};
+	if (tree(c, "", 0, lines) == ES_PENDING) return op_free(lines), es_out_pending();
 	const op_value *v;
-	if (api_read(a, api_at("line"), NULL, 0, &v) == API_PENDING) return op_free(lines), (sc_out){.kind = SC_PENDING};
+	if (es_read(c, es_on_path(es_text("line")), NULL, 0, &v) == ES_PENDING) return op_free(lines), es_out_pending();
 	op_value *o = op_map();
 	op_set(o, "lines", lines);
 	op_set(o, "prompt", v && v->type == OP_STR ? op_ref((op_value *)v) : op_str(""));
-	return (sc_out){.kind = SC_VALUE, .value = o};
+	return es_out_of(o);
 }
 
-int shell(api *a) {
-	api_node n;
+es_out shell(es_context *c, void *ctx) {
+	(void)ctx;
+	es_handle *n;
 	op_value *v = op_str("");
-	int code = api_open(a, "line", v, &n);
+	int code = es_ensure_node(c, es_text("line"), v, &n);
 	op_free(v);
-	if (code) return code;
-	// the screen is beside the line
+	if (code) return es_out_code(code);
+	// the screen is beside the line: in the process's own node
 	self[0] = 0;
-	for (size_t i = 0; i + 1 < n.npath; i++) {
+	for (size_t i = 0; i < c->nat; i++) {
 		strncat(self, "/", sizeof self - strlen(self) - 1);
-		strncat(self, n.path[i], sizeof self - strlen(self) - 1);
+		strncat(self, c->at[i], sizeof self - strlen(self) - 1);
 	}
 	strncat(self, "/screen", sizeof self - strlen(self) - 1);
-	api_node_free(&n);
 	v = op_str("type: name = value");
-	code = api_open(a, "said", v, &n);
+	code = es_ensure_node(c, es_text("said"), v, &n);
 	op_free(v);
-	if (code) return code;
-	api_node_free(&n);
-	if ((code = api_memo(a, "sum", sum, NULL, NULL, &n))) return code;
-	api_node_free(&n);
-	if ((code = api_memo(a, "screen", screen, NULL, NULL, &n))) return code;
-	api_node_free(&n);
-	if ((code = api_effect(a, "keys", key, typed, NULL, NULL, &n))) return code;
-	api_node_free(&n);
-	return API_OK;
+	if (code) return es_out_code(code);
+	if ((code = es_create_memo(c, es_text("sum"), sum, NULL, NULL, &n))) return es_out_code(code);
+	if ((code = es_create_memo(c, es_text("screen"), screen, NULL, NULL, &n))) return es_out_code(code);
+	if ((code = es_create_effect(c, es_text("keys"), key, typed, NULL, NULL, &n))) return es_out_code(code);
+	return es_out_of(NULL);
 }

@@ -11,14 +11,14 @@
 #ifndef ROOM_H
 #define ROOM_H
 
-#include "ermine/api/c/api.h"
+#include "ermine/system/c/ermine.h"
 #include "littlesync.h"
 
 // the device the driver follows its nodes on; before the program starts
 void room_device(ls_dev *dev);
-int room(api *a);
+es_out room(es_context *c, void *ctx);
 // littlesync's nodes into the graph, where they changed; after each ls_tick / ls_feed
-void room_mirror(api *a);
+void room_mirror(es_context *c);
 // the pig that changed last (NULL: none yet), for showing what it costs (ls_cost_of)
 const ls_node *room_last(void);
 

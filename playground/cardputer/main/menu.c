@@ -27,7 +27,8 @@ typedef struct item {
 } item;
 
 static struct {
-	api *a;
+	// the menu process's context
+	es_context *c;
 	int open;
 	// what shows: the list; a code being typed; a new room's code; going to a room; the rooms kept
 	// here; a room to delete, asked
@@ -45,13 +46,12 @@ static struct {
 
 static void again(void) { frame_again(); }
 
-// ---- the handlers: methods at /system/menu/<name> ----
+// ---- the handlers: actions at /system/menu/<name> ----
 
-static int join(api *a, const op_value *const *args, size_t nargs, op_value **out, void *ctx) {
-	(void)a, (void)args, (void)nargs, (void)ctx;
+static es_out join(es_context *c, void *ctx, const op_value *const *args, size_t nargs) {
+	(void)c, (void)args, (void)nargs, (void)ctx;
 	m.mode = JOINING, m.typed[0] = 0;
-	*out = NULL;
-	return 0;
+	return es_out_of(NULL);
 }
 
 // a code: four of DEN_LETTERS at random, not the room's now
@@ -64,13 +64,12 @@ static void code_new(char out[5]) {
 	} while (strcmp(out, den_room()) == 0);
 }
 
-static int fresh(api *a, const op_value *const *args, size_t nargs, op_value **out, void *ctx) {
-	(void)a, (void)args, (void)nargs, (void)ctx;
+static es_out fresh(es_context *c, void *ctx, const op_value *const *args, size_t nargs) {
+	(void)c, (void)args, (void)nargs, (void)ctx;
 	code_new(m.made);
 	m.mode = MADE;
 	printf("menu: new room %s\n", m.made);
-	*out = NULL;
-	return 0;
+	return es_out_of(NULL);
 }
 
 // every room kept here, by code
@@ -81,33 +80,32 @@ static void rooms_again(void) {
 	if (m.rat >= m.nrooms) m.rat = m.nrooms ? m.nrooms - 1 : 0;
 }
 
-static int rooms(api *a, const op_value *const *args, size_t nargs, op_value **out, void *ctx) {
-	(void)a, (void)args, (void)nargs, (void)ctx;
+static es_out rooms(es_context *c, void *ctx, const op_value *const *args, size_t nargs) {
+	(void)c, (void)args, (void)nargs, (void)ctx;
 	m.mode = ROOMING, m.rat = m.rtop = 0;
 	rooms_again();
-	*out = NULL;
-	return 0;
+	return es_out_of(NULL);
 }
 
 // a paired den's: its ask done as if asked now (den.c checks it is still paired)
-static int theirs(api *a, const op_value *const *args, size_t nargs, op_value **out, void *ctx) {
-	(void)a, (void)args, (void)nargs;
+static es_out theirs(es_context *c, void *ctx, const op_value *const *args, size_t nargs) {
+	(void)c, (void)args, (void)nargs;
 	item *it = ctx;
-	*out = den_do(it->from, it->name, it->handler);
+	op_value *answer = den_do(it->from, it->name, it->handler);
 	m.open = 0;
-	return 0;
+	return es_out_of(answer);
 }
 
-static int menu_program(api *a) {
-	api_node n;
-	int code = api_method(a, JOIN, join, NULL, &n);
-	if (!code) api_node_free(&n), code = api_method(a, NEW, fresh, NULL, &n);
-	if (!code) api_node_free(&n), code = api_method(a, ROOMS, rooms, NULL, &n);
-	if (!code) api_node_free(&n);
-	return code;
+static es_out menu_program(es_context *c, void *ctx) {
+	(void)ctx;
+	es_handle *n;
+	int code = es_create_action(c, es_text(JOIN), join, NULL, &n);
+	if (!code) code = es_create_action(c, es_text(NEW), fresh, NULL, &n);
+	if (!code) code = es_create_action(c, es_text(ROOMS), rooms, NULL, &n);
+	return code ? es_out_code(code) : es_out_of(NULL);
 }
 
-void menu_start(void) { m.a = host_start_at("menu", "system", menu_program); }
+void menu_start(void) { m.c = host_start_at("menu", "system", menu_program, NULL); }
 
 // ---- what it holds, from the folder ----
 
@@ -115,17 +113,23 @@ static int by_name(const void *x, const void *y) { return strcmp(x, y); }
 
 static int own(const char *name) { return !strcmp(name, JOIN) || !strcmp(name, NEW) || !strcmp(name, ROOMS); }
 
+// the menu's folder's names, as the host sees it (no run: nothing tracked)
+static void es_peep_list(es_names *out) {
+	if (es_list(host_get().context, es_on_path(es_text("/system/menu")), out)) *out = (es_names){0};
+}
+
 // the folder's names: the den's three first, the rest by name
 static void list(void) {
 	m.n = 0;
-	const nd_entry *e = tb_get(host_get().table, tb_string("children"), tb_string("proc:menu"));
-	const op_value *kids = e ? e->value : NULL;
+	es_names kids = {0};
+	es_peep_list(&kids);
 	strcpy(m.names[m.n++], JOIN), strcpy(m.names[m.n++], NEW), strcpy(m.names[m.n++], ROOMS);
 	int rest = m.n;
-	for (size_t i = 0; kids && kids->type == OP_MAP && i < kids->count && m.n < 16; i++) {
-		if (kids->items[i] == NULL || own(kids->keys[i])) continue;
-		snprintf(m.names[m.n++], LONGEST + 1, "%s", kids->keys[i]);
+	for (size_t i = 0; i < kids.n && m.n < 16; i++) {
+		if (own(kids.names[i])) continue;
+		snprintf(m.names[m.n++], LONGEST + 1, "%s", kids.names[i]);
 	}
+	es_names_free(&kids);
 	qsort(m.names[rest], (size_t)(m.n - rest), sizeof m.names[0], by_name);
 	if (m.at >= m.n) m.at = m.n - 1;
 }
@@ -146,16 +150,43 @@ void menu_toggle(void) {
 	again();
 }
 
+// es_* from outside a run: with the menu's process open
+typedef struct {
+	const char *path;
+	op_value *out;
+	const char *name;
+	es_action action;
+	void *ctx;
+	es_handle *node;
+} call;
+
+static int within(int (*f)(void *), call *x) { return es_within(m.c, f, x); }
+
+static int execute(void *data) {
+	call *x = data;
+	return es_execute_action(m.c, es_on_path(es_text(x->path)), NULL, 0, &x->out);
+}
+
+static int take_out(void *data) {
+	call *x = data;
+	return es_remove(host_get().context, es_on_path(es_text(x->path)));
+}
+
+static int make(void *data) {
+	call *x = data;
+	return es_create_action(m.c, es_text(x->name), x->action, x->ctx, &x->node);
+}
+
 static void pick(void) {
 	char path[64];
 	snprintf(path, sizeof path, "/system/menu/%s", m.names[m.at]);
-	op_value *out = NULL;
-	int code = api_send(m.a, api_at(path), NULL, 0, &out);
-	if (out) op_free(out);
+	call x = {.path = path};
+	int code = within(execute, &x);
+	if (x.out) op_free(x.out);
 	host_settle();
 	if (code) {
 		char why[64];
-		snprintf(why, sizeof why, "%s: %s", api_code_name(code), api_why(m.a));
+		snprintf(why, sizeof why, "%s: %s", es_code_name(code), es_thrown()->message);
 		den_say(1, "that item didn't run:", why);
 	}
 }
@@ -262,8 +293,9 @@ op_value *menu_ask(const char *from, const char *name, const op_value *handler) 
 		if (it) {
 			char path[64];
 			snprintf(path, sizeof path, "/system/menu/%s", name);
-			int code = api_remove(m.a, api_at(path));
-			if (code) fprintf(stderr, "menu: %s not taken out: %s\n", name, api_code_name(code));
+			call x = {.path = path};
+			int code = es_within(host_get().context, take_out, &x);
+			if (code) fprintf(stderr, "menu: %s not taken out: %s\n", name, es_code_name(code));
 			item **p = &m.items;
 			while (*p != it) p = &(*p)->next;
 			*p = it->next;
@@ -279,19 +311,18 @@ op_value *menu_ask(const char *from, const char *name, const op_value *handler) 
 		snprintf(it->name, sizeof it->name, "%s", name);
 		snprintf(it->from, sizeof it->from, "%s", from);
 		it->handler = op_ref((op_value *)handler);
-		api_node node;
-		int code = api_method(m.a, name, theirs, it, &node);
+		call x = {.name = name, .action = theirs, .ctx = it};
+		int code = within(make, &x);
 		if (code) {
 			op_free(it->handler);
 			free(it);
 			op_free(r);
 			char why[64];
-			snprintf(why, sizeof why, "not added: %s", api_code_name(code));
+			snprintf(why, sizeof why, "not added: %s", es_code_name(code));
 			r = op_map();
 			op_set(r, "error", op_str(why));
 			return r;
 		}
-		api_node_free(&node);
 		it->next = m.items, m.items = it;
 	}
 	host_settle();
