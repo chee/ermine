@@ -50,7 +50,6 @@ struct fw {
 #ifdef __linux__
 	int fd;
 	pthread_t thread;
-	bool running;
 	int *wds;
 	char **wpaths;
 	size_t wlength, wcapacity;
