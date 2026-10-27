@@ -408,7 +408,7 @@ static int loaded(void *ctx, const uint8_t *r, size_t length, tp_at *at) {
 	size_t k = 1;
 	int run = tp_is_run(r, length);
 	if (run) {
-		if (tp_record_unpack(&log->mem, r, length, log->limits.step, &steps)) return 0;
+		if (tp_record_unpack(&log->mem, r, length, EVERY * log->limits.step, &steps)) return 0;
 		k = steps.count;
 		if (!(spans = tp_alloc(&log->mem, k * sizeof *spans))) return tp_steps_free(&log->mem, &steps), 0;
 		for (size_t i = 0; i < k; i++) {
