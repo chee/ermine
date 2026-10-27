@@ -1,25 +1,37 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import {
+	createAction,
+	createMemo,
+	ensureNode,
+	executeAction,
+	patch,
+	peep,
+	read,
+	unplace,
+} from "@ermine/system"
+import { createPatch, layers } from "@ermine/patchy/feature"
+import { change } from "@ermine/slaygrounds/tools"
 import { bind, handler } from "ermine-h"
 
 // piece-skin: my tweak over a shared thing. the card at /shared/card is everyone's; my tweak is a
-// patch node in my own tree at /me/tweaks/cherry, laid over the card's value (patchy'
+// patch node in my own tree at /me/tweaks/cherry, laid over the card's value (patchy's
 // overlay). while it is loaded (its "patch" entry in the table) a read of the card gets my way;
 // unloaded, the card as it is. dragging with it on moves the card only in my tweak: the shared
 // spot stays where it was, a dashed ghost. a friend's edit lands under it and makes it stale (made
-// against an older card), still applied. land puts it on the card for real. the api has it: patch
-// makes the node, layers reads every layer, land lands it. put it on the shelf and it is taken out
-// of the tree (remove), its patches kept; load it and it is made again (patch)
+// against an older card), still applied. land puts it on the card for real. patchy has it:
+// createPatch makes the node, layers reads every layer, the host's /system/land lands it. put it
+// on the shelf and it is taken out of the tree (the host's /system/unload: a program's unplace leaves
+// the patch entry, still read through), its patches kept; load it and it is made
+// again (createPatch). a program holds no patch entry (a node's "patch" part is the feature's), so
+// what the tweak says (its patches, the card's time it was made against) is a node of its own,
+// /me/tweak, written with each createPatch. the pointer is jsx (handlers), a listener of the
+// program's own having nothing open to write in. an actor is the host's: the friend's edit is
+// written as the host is, and /me/by says who made it
 
 type Patch = { path: (string | number)[]; value?: unknown }
 type Tweak = { on: unknown; part: string; at: number; patches: Patch[] }
 type Card = { title: string; body: string; x: number; y: number; accent: string; sticker: string }
 type Item = { value: unknown; from: unknown; stale?: true; error?: unknown }
-// what the host's extend adds (host.ts): the card's latest change, and a write as another actor
-type Host = {
-	change: (x: string) => { time: number; actor?: string } | undefined
-	as: <T>(actor: string, f: () => T) => T
-}
 type Seen = {
 	front: Card
 	table: Card
@@ -29,6 +41,7 @@ type Seen = {
 	placed: boolean
 	time?: number
 	actor?: string
+	by?: string
 }
 
 const W = 340, H = 230, CW = 150, CH = 92
@@ -53,87 +66,95 @@ const mine: Patch[] = [
 const CARD = "/shared/card"
 const CHERRY = "/me/tweaks/cherry"
 
-export default function program(
-	{ open, read, edit, entries, memo, method, send, patch, land, layers, remove, change, as }:
-		& API
-		& Host,
-) {
-	// the tweak's "patch" entry (what it is over, the card's time it was made at, its patches): a
-	// part of the node there, loaded while it is in the table
-	const patchNode = { path: ["me", "tweaks", "cherry"], part: "patch" as const }
-	const tweakNow = () => read(patchNode) as Tweak | undefined
-	// the tweak while it is on the shelf: out of the tree, read by nobody
-	const shelf = open("/me/shelf", null)
-	const put = (x: typeof shelf, value: unknown) => edit(x, [{ path: [], value }])
-	const turn = open("turn", 0)
+export default function program() {
+	// what my tweak says (its patches, the card's time it was made against): a node of my own, none
+	// while there is no tweak. loaded: a patch node is at /me/tweaks/cherry; else on the shelf
+	const rec = ensureNode("/me/tweak", null)
+	const by = ensureNode("/me/by", "")
+	const turn = ensureNode("turn", 0)
+	const now = <T,>(f: () => T) => peep(f)
+	const put = (x: typeof rec, value: unknown) => patch(x, [{ path: [], value }])
+	const tweakNow = () => now(() => read(rec)) as Tweak | null
+	// the card's time now: what a patch node made now is made against
+	const cardTime = () => now(() => change(CARD))?.time ?? 0
+	// the tweak made (again) against the card as it is now: its patch node, and what I say of it
+	const make = (patches: Patch[]) => {
+		createPatch(CHERRY, CARD, patches)
+		put(rec, { on: CARD, part: "value", at: cardTime(), patches } satisfies Tweak)
+	}
+	const loaded = () => now(() => layers(CARD)).some((l) => l.from !== "table")
+	// the first time only: my tweak, made against the card
+	const seeded = ensureNode("/me/seeded", false)
+	if (!now(() => read(seeded))) {
+		make(mine)
+		put(seeded, true)
+	}
 
 	// what the view shows: the card a read gets (front), the table's own, every layer front first
-	memo("seen", (): Seen => {
-		const all = layers(CARD) as Item[]
-		const tweak = tweakNow()
+	createMemo("seen", (): Seen => {
+		const all = layers(CARD)
+		const there = all.some((l) => l.from !== "table")
+		const tweak = read(rec) as Tweak | null
 		const latest = change(CARD)
-		const shelved = read(shelf) !== null
+		const said = read(by) as string
 		return {
 			front: all[0]?.value as Card,
 			table: all[all.length - 1]?.value as Card,
 			layers: all.map((l) => ({
-				from: l.from === "table" ? "table" : String(l.from),
+				from: l.from === "table" ? "table" : String(l.from?.join("/")),
 				stale: !!l.stale,
 				error: l.error ? String(l.error) : undefined,
 			})),
-			tweak,
-			shelved,
-			placed: !!tweak || shelved,
+			tweak: there ? tweak ?? undefined : undefined,
+			shelved: !there && tweak !== null,
+			placed: tweak !== null,
 			time: latest?.time,
-			actor: latest?.actor,
+			actor: latest?.actor === undefined ? undefined : String(latest.actor),
+			by: said || undefined,
 		}
 	})
 
 	// a drag: my tweak loaded, the place goes into its patches (never the card); else a real write
-	method("on/drag", (x: number, y: number) => {
+	createAction("on/drag", (x: number, y: number) => {
 		const tweak = tweakNow()
-		if (tweak) {
+		if (tweak && loaded()) {
 			const rest = tweak.patches.filter((p) => p.path[0] !== "x" && p.path[0] !== "y")
-			const patches = [...rest, { path: ["x"], value: x }, { path: ["y"], value: y }]
-			edit(patchNode, [{ path: ["patches"], value: patches }])
-		} else edit(CARD, [{ path: ["x"], value: x }, { path: ["y"], value: y }])
+			make([...rest, { path: ["x"], value: x }, { path: ["y"], value: y }])
+		} else patch(CARD, [{ path: ["x"], value: x }, { path: ["y"], value: y }])
 	})
-	method("on/toggle", () => {
+	createAction("on/toggle", () => {
 		const tweak = tweakNow()
-		const shelved = read(shelf) as Tweak | null
-		if (tweak) {
-			put(shelf, tweak)
-			remove(CHERRY)
-		} else if (shelved) {
-			patch(CHERRY, CARD, shelved.patches)
-			put(shelf, null)
-		}
+		if (!tweak) return
+		if (loaded()) executeAction("/system/unload", CHERRY)
+		else make(tweak.patches)
 	})
-	method("on/friend", () => {
-		const n = read(turn) as number
+	createAction("on/friend", () => {
+		const n = now(() => read(turn)) as number
 		put(turn, n + 1)
 		const what = edits[n % edits.length]
-		as(
-			"friend@phone",
-			() => edit(CARD, Object.entries(what).map(([k, value]) => ({ path: [k], value }))),
-		)
+		put(by, "friend@phone")
+		patch(CARD, Object.entries(what).map(([k, value]) => ({ path: [k], value })))
 	})
 	// made again against the card as it is now: no longer stale
-	method("on/again", () => {
+	createAction("on/again", () => {
 		const tweak = tweakNow()
-		if (tweak) patch(CHERRY, CARD, tweak.patches)
+		if (tweak) make(tweak.patches)
 	})
-	method("on/land", () => {
-		if (!tweakNow()) return
-		land(CHERRY)
-		remove(CHERRY)
+	createAction("on/land", () => {
+		const tweak = tweakNow()
+		if (!tweak || !loaded()) return
+		executeAction("/system/land", CHERRY)
+		unplace(CHERRY)
+		put(rec, null)
+		put(by, "chee@laptop")
 	})
-	method("on/new", () => {
-		if (tweakNow() || read(shelf) !== null) return
-		patch(CHERRY, CARD, mine)
+	createAction("on/new", () => {
+		if (tweakNow()) return
+		make(mine)
 	})
 
 	// ---- the desk: the card where a read puts it, the shared spot as a ghost under it ----
+	// a grab is DOM only; each move is a handler's args, the action it runs writes
 	let grab: { dx: number; dy: number } | undefined
 	const desk = (e: PointerEvent) => (e.currentTarget as HTMLElement).parentElement!
 	const down = (e: PointerEvent) => {
@@ -149,7 +170,7 @@ export default function program(
 		const r = desk(e).getBoundingClientRect()
 		const x = Math.round(Math.max(0, Math.min(W - CW, e.clientX - r.left - grab.dx)))
 		const y = Math.round(Math.max(0, Math.min(H - CH, e.clientY - r.top - grab.dy)))
-		send("on/drag", x, y)
+		return [x, y]
 	}
 	const up = () => (grab = undefined)
 
@@ -207,7 +228,7 @@ export default function program(
 								(v: Seen) => ({ left: v.front.x + "px", top: v.front.y + "px" }),
 							)}
 							onPointerDown={down}
-							onPointerMove={move}
+							onPointerMove={handler("on/drag", move)}
 							onPointerUp={up}
 							onPointerCancel={up}
 						>
@@ -269,7 +290,7 @@ export default function program(
 											<div class="line">
 												<b class="tag">📄 the table</b>
 												<span>
-													last change {clock(v.time)} by {v.actor}
+													last change {clock(v.time)} by {v.by ?? v.actor}
 												</span>
 												{i === 0 ? <em class="first">a read takes this</em> : null}
 											</div>
@@ -280,7 +301,7 @@ export default function program(
 										<div class={`layer tweak${l.stale ? " stale" : ""}`} key={l.from}>
 											<div class="line">
 												<b class="tag cherry">🍒 /me/tweaks/cherry</b>
-												<code>{l.from.slice(0, 6)}</code>
+												<code>{l.from}</code>
 												{i === 0
 													? <em class="first">front: a read takes this</em>
 													: null}

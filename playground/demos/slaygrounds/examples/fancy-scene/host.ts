@@ -18,13 +18,13 @@ world.seed((host) => {
 		at: string,
 		o: { shape?: string; colour?: string; p?: number[]; r?: number[]; s?: number[] } = {},
 	) => {
-		host.open(`${at}/transform`, {
+		host.ensureNode(`${at}/transform`, {
 			p: o.p ?? [0, 0, 0],
 			r: o.r ?? [0, 0, 0],
 			s: o.s ?? [1, 1, 1],
 		})
-		host.open(`${at}/colour`, o.colour ?? "#ffffff")
-		host.open(`${at}/shape`, o.shape ?? "none")
+		host.ensureNode(`${at}/colour`, o.colour ?? "#ffffff")
+		host.ensureNode(`${at}/shape`, o.shape ?? "none")
 	}
 	object("/scene/floor", { shape: "cube", colour: "#ffff88", p: [0, -0.06, 0], s: [7, 0.12, 7] })
 	const c = "/scene/carousel"
@@ -67,7 +67,7 @@ world.seed((host) => {
 	object(`${ball}/rod`, { shape: "line", colour: "#000000", s: [1, 1.75, 1] })
 	object(`${ball}/seat`, { shape: "sphere", colour: "#2269ff", s: [0.62, 0.62, 0.62] })
 	// what the spinner turns: the carousel, placed again at /spin/target (a mount)
-	host.open("/spin/speed", 45)
+	host.ensureNode("/spin/speed", 45)
 	host.place("/spin/target", c)
 })
 

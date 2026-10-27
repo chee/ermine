@@ -1,6 +1,18 @@
 /** @jsxImportSource ermine-h */
-import type { API, Node } from "@ermine/api"
-import type { Extra } from "./host.ts"
+import {
+	addTeardown,
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	hasNode,
+	list as childrenOf,
+	patch,
+	peep,
+	read,
+	unplace,
+} from "@ermine/system"
+import { up } from "@ermine/slaygrounds/tools"
 import { bind, handler, under } from "ermine-h"
 
 // fancy-lisp: a small lisp where environments are places. every frame is a folder node: base
@@ -12,7 +24,9 @@ import { bind, handler, under } from "ermine-h"
 // under that frame, not under the caller's. define places a node, set! edits one, so a watch (a
 // part reading through the same lookup, tracked) runs again when it changes. tail calls drop the
 // caller's frame before the callee's comes. after each evaluation, frames no closure can reach
-// are collected
+// are collected. nothing is open after a timer, so the steps are not a timer's: an element in the
+// header runs a css animation as long as one step takes (the speed's), and each cycle's
+// animationiteration calls on/beat through a handler, which takes the next step(s)
 
 const EXAMPLES: [label: string, src: string][] = [
 	[
@@ -90,9 +104,6 @@ const isClosure = (v): v is Closure => typeof v === "object" && v !== null && "l
 const isBuiltin = (v): v is Builtin => typeof v === "object" && v !== null && "builtin" in v
 const isFrame = (v) => typeof v === "object" && v !== null && "frame" in v
 const isMem = (e: Env): e is Mem => "mem" in e
-// reads the host makes untracked (a tool's quiet flag)
-const quiet = true
-
 // a symbol's place name: places reads "/", "." and ".." as steps, h splits paths at "/" and
 // cuts them at "#": those are written %2F, %2E, %23 (and % itself %25)
 const slot = (s: string) => {
@@ -105,13 +116,15 @@ const unslot = (s: string) =>
 		"%",
 	)
 
-export default function program(api: API & Extra) {
-	const { open, read, edit, entries, list, remove, memo, effect, method, teardown, up } = api
+export default function program() {
 	// a whole value put on a node
-	const put = (x: Node, value: unknown) => edit(x, [{ path: [], value }])
+	type To = Parameters<typeof read>[0]
+	const put = (x: To, value: unknown) => patch(x, [{ path: [], value }])
 	// one value at a path in a node's value, the rest left as it is (undefined: taken out)
-	const set = (x: Node, path: string[], value?: unknown) =>
-		edit(x, [value === undefined ? { path } : { path, value }])
+	const set = (x: To, path: string[], value?: unknown) =>
+		patch(x, [value === undefined ? { path } : { path, value }])
+	// a node's value now, from an action (nothing tracked)
+	const get = <T,>(x: To) => peep(() => read(x)) as T
 
 	// the page's font, once
 	if (!document.head.querySelector("link[data-lisp-font]")) {
@@ -123,37 +136,40 @@ export default function program(api: API & Extra) {
 	}
 
 	// ---- the frames: base holds the builtins and global, saved under ./ (a reload finds them) ----
-	// a frame's address is its names from base; the graph's own path is base's, then those
-	const abs = (path: string[]) => ["/", "base", ...path]
-	const base = open("./base", { frame: "base", label: "base", path: [] })
-	for (const name of Object.keys(BUILTINS)) open(abs([slot(name)]), { builtin: name })
-	open(abs(["global"]), { frame: "global", label: "global", path: ["global"] })
-	const log = open("./log", [])
-	const now = open("./now", { kind: "idle", text: "" })
-	const speed = open("./speed", "run")
-	const watches = open("./watches", [])
-	open("./watching", null) // the watches' values: a memo each, placed under it
+	// a frame's address is its names from base; the graph's own path is base's, then those. a node
+	// is written by its path from the root: abs gives it, where gives a path the walk found
+	const abs = (path: string[]) => "/" + ["base", ...path].join("/")
+	const where = (path: readonly string[]) => "/" + path.join("/")
+	ensureNode("./base", { frame: "base", label: "base", path: [] })
+	for (const name of Object.keys(BUILTINS)) ensureNode(abs([slot(name)]), { builtin: name })
+	ensureNode(abs(["global"]), { frame: "global", label: "global", path: ["global"] })
+	const log = ensureNode("./log", [])
+	const now = ensureNode("./now", { kind: "idle", text: "" })
+	const speed = ensureNode("./speed", "run")
+	const watches = ensureNode("./watches", [])
+	ensureNode("./watching", null) // the watches' values: a memo each, placed under it
 
-	// the node (and its value) at a frame's address from base, told to whoever runs this (a run
+	// the id of a node by its address from the root (told by up, tracked in a run): what the view
+	// matches a row of the tree with
+	const idAt = (path: string[]) => up(path, [])?.found
+	// the node (its id and value) at a frame's address from base, told to whoever runs this (a run
 	// tracks it; a call does not)
-	const at = (path: string[]) => entries(abs(path))[0] as { id: string; value: any } | undefined
+	const at = (path: string[]) => {
+		const id = idAt(["base", ...path])
+		return id === undefined ? undefined : { id, value: read(abs(path)) as any }
+	}
 	// every node under an address, in order: its name, id and value
 	const members = (path: string[]) =>
-		list(abs(path)).flatMap((name) => {
+		(hasNode(abs(path)) ? childrenOf(abs(path)) : []).flatMap((name) => {
 			const m = at([...path, name])
 			return m ? [{ name, id: m.id, value: m.value }] : []
 		})
-	// a node and all under it taken out (remove takes one)
+	// a node and all under it taken out (a node no name reaches is gone)
 	function wipe(path: string[]) {
-		for (const name of [...list(abs(path))]) wipe([...path, name])
-		remove(abs(path))
+		for (const name of [...childrenOf(abs(path))]) wipe([...path, name])
+		unplace(abs(path))
 	}
-	const baseId = String(entries(base)[0].id)
-	const nodeOf = (path: string[], id: string): Node => ({
-		id,
-		path: abs(path).slice(1),
-		part: "value",
-	})
+	const baseId = String(idAt(["base"]))
 
 	// frames are named <closure>·<n>: n goes on from the largest there
 	let made = 0
@@ -180,8 +196,13 @@ export default function program(api: API & Extra) {
 			kept: path.length <= 1 || it.value?.kept === true,
 		}
 	}
-	const labelOf = (id: string) =>
-		id === baseId ? "base" : String(read({ id, part: "value" }, ["label"]) ?? "?")
+	// a frame's label by its address from base ([]: base itself)
+	const labelAt = (path: string[]) =>
+		path.length === 0
+			? "base"
+			: hasNode(abs(path))
+			? String(read(abs(path), ["label"]) ?? "?")
+			: "?"
 
 	// a name looked up from env: the host's walk up (up: the frames it visited told to an array,
 	// the walk, or its reads tracked, a watch's). it stops at base: above it is not the program's
@@ -193,12 +214,13 @@ export default function program(api: API & Extra) {
 			e = e.parent
 		}
 		const walk: string[] = []
-		const hit = up([slot(name)], abs(e.path).slice(1), {
+		const hit = up([slot(name)], ["base", ...e.path], {
 			stop: 1,
 			walk: cx.watch ? undefined : walk,
 		})
 		if (!cx.watch) {
-			const labels = walk.map(labelOf)
+			// the walk's ids go up from e's frame to base: each one's label by its address
+			const labels = walk.map((_, i) => labelAt(e.path.slice(0, e.path.length - i)))
 			for (let k = 1; k <= walk.length; k++) {
 				const last = k === walk.length
 				const trail = labels.slice(0, k).map((l, i) =>
@@ -221,7 +243,7 @@ export default function program(api: API & Extra) {
 	}
 	function* look(name: string, env: Env, cx: Cx) {
 		const r = yield* find(name, env, cx)
-		return "mem" in r ? r.mem.get(name) : read(r.item)
+		return "mem" in r ? r.mem.get(name) : read(where(r.item.path))
 	}
 
 	// a name placed in a frame (a node), or written again when it is there
@@ -231,10 +253,11 @@ export default function program(api: API & Extra) {
 		const path = [...env.path, slot(name)]
 		const there = at(path)
 		if (there) {
-			put(nodeOf(path, there.id), value)
+			put(abs(path), value)
 			return String(there.id)
 		}
-		return String(entries(open(abs(path), value))[0].id)
+		ensureNode(abs(path), value)
+		return String(idAt(["base", ...path]))
 	}
 
 	// a closure keeps its frame: that frame (and the ones around it) stay after their call
@@ -242,7 +265,7 @@ export default function program(api: API & Extra) {
 		for (let e: Frame | undefined = env as Frame; e && !isMem(e); e = e.up) {
 			if (e.kept) break
 			e.kept = true
-			if (e.kind !== "global") set(nodeOf(e.path, e.id), ["kept"], true)
+			if (e.kind !== "global") set(abs(e.path), ["kept"], true)
 		}
 	}
 	function closure(name: string, params, body: unknown[], env: Env, cx: Cx): Closure {
@@ -270,10 +293,10 @@ export default function program(api: API & Extra) {
 		if (++cx.depth > 250) throw new LispError("too deep: 250 frames at once")
 		const name = `${slot(short)}·${++made}`
 		const path = [...parent.path, name]
-		const entry = open(abs(path), { frame: kind, label, n: made, path, active: true })
-		for (const [k, v] of binds) open(abs([...path, slot(k)]), v)
+		ensureNode(abs(path), { frame: kind, label, n: made, path, active: true })
+		for (const [k, v] of binds) ensureNode(abs([...path, slot(k)]), v)
 		const f: Frame = {
-			id: String(entries(entry)[0].id),
+			id: String(idAt(["base", ...path])),
 			path,
 			name,
 			parent: parent.id,
@@ -296,11 +319,9 @@ export default function program(api: API & Extra) {
 		const i = cx.stack.lastIndexOf(f.label)
 		if (i >= 0) cx.stack.splice(i, 1)
 		if (f.kept) {
-			const there = at(f.path)
-			if (there) {
-				const n = nodeOf(f.path, there.id)
-				set(n, ["active"], false)
-				set(n, ["returned"])
+			if (hasNode(abs(f.path))) {
+				set(abs(f.path), ["active"], false)
+				set(abs(f.path), ["returned"])
 			}
 			return
 		}
@@ -309,8 +330,8 @@ export default function program(api: API & Extra) {
 	function* leave(owned: Frame[], v, cx: Cx) {
 		if (!owned.length || cx.watch) return
 		const f = owned[0]
-		for (const o of owned) set(nodeOf(o.path, o.id), ["active"], false)
-		set(nodeOf(f.path, f.id), ["returned"], short(v))
+		for (const o of owned) set(abs(o.path), ["active"], false)
+		set(abs(f.path), ["returned"], short(v))
 		yield { kind: "leave", text: `${f.label} returns ${print(v)}`, frame: f.id, at: f.id } as Step
 	}
 
@@ -378,13 +399,13 @@ export default function program(api: API & Extra) {
 						const r = yield* find(args[0].sym, env, cx)
 						if ("mem" in r) r.mem.set(args[0].sym, value)
 						else {
-							put(r.item, value)
+							put(where(r.item.path), value)
 							yield {
 								kind: "set",
-								text: `${args[0].sym} in ${labelOf(String(r.item.parent))} is now ${
+								text: `${args[0].sym} in ${labelAt(r.item.path.slice(1, -1))} is now ${
 									print(value)
 								}`,
-								var: String(r.item.id),
+								var: String(r.item.found),
 								at: String(r.item.parent),
 							} as Step
 						}
@@ -505,11 +526,10 @@ export default function program(api: API & Extra) {
 		return isGenerator(out) ? yield* out : out
 	}
 
-	// ---- the REPL: jobs, one at a time, stepped by a timer (each tick a call) ----
+	// ---- the REPL: jobs, one at a time, stepped by the header's beat (each beat a call) ----
 	type Job = { n: number; gen: Generator<Step, unknown>; cx: Cx; yields: number; last?: Step }
 	let job: Job | undefined
 	const queue: { n: number; form: unknown }[] = []
-	let timer = 0
 	const fresh = (watch: boolean): Cx => ({
 		watch,
 		steps: 0,
@@ -519,9 +539,19 @@ export default function program(api: API & Extra) {
 		printed: [],
 		watches: [],
 	})
-	const logged = () => (read(log) ?? []) as any[]
+	const logged = () => (get<any[]>(log) ?? []) as any[]
 	const write = (n: number, change) =>
 		put(log, logged().map((e) => (e.n === n ? { ...e, ...change } : e)))
+
+	// the log's sources, for ↑ and ↓ in the input (a keydown has nothing open to read the log with)
+	let history: string[] = []
+	createEffect(
+		"history",
+		() => ((read(log) ?? []) as any[]).map((x) => x.src as string),
+		(srcs) => {
+			history = srcs
+		},
+	)
 
 	function next() {
 		if (job || !queue.length) return
@@ -550,11 +580,10 @@ export default function program(api: API & Extra) {
 	function finish(v, error?) {
 		const j = job!
 		job = undefined
-		clearTimeout(timer)
 		for (const src of j.cx.watches) {
-			const list = (read(watches) ?? []) as any[]
-			if (!list.some((w) => w.src === src)) {
-				put(watches, [...list, { id: `w${Date.now().toString(36)}${list.length}`, src }])
+			const ws = (get<any[]>(watches) ?? []) as any[]
+			if (!ws.some((w) => w.src === src)) {
+				put(watches, [...ws, { id: `w${Date.now().toString(36)}${ws.length}`, src }])
 			}
 		}
 		const gone = collect()
@@ -577,23 +606,19 @@ export default function program(api: API & Extra) {
 		})
 		next()
 	}
-	// the timer: a tick writes as the process, with no method in between
-	function tick() {
-		const s = SPEEDS[String(read(speed))] ?? SPEEDS.run
-		advance(s.per)
-		go()
-	}
-	function go() {
-		clearTimeout(timer)
+	// the beat: one cycle of the header's animation, a step's time. on/beat takes the next step(s)
+	createAction("on/beat", () => {
 		if (!job) return
-		const s = SPEEDS[String(read(speed))] ?? SPEEDS.run
-		if (s.per === Infinity) return advance(Infinity)
-		if (!s.ms) return
-		timer = setTimeout(tick, s.ms)
+		advance((SPEEDS[String(get(speed))] ?? SPEEDS.run).per)
+	})
+	// a job started or sped up: instant runs it to its end at once; the others wait for the beat
+	// (step: for on/step)
+	function go() {
+		if (!job) return
+		if ((SPEEDS[String(get(speed))] ?? SPEEDS.run).per === Infinity) advance(Infinity)
 	}
 	// a reload (or the end) while a job runs: it is stopped, its frames dropped
-	teardown(() => {
-		clearTimeout(timer)
+	addTeardown(() => {
 		if (job) stop()
 	})
 
@@ -624,7 +649,7 @@ export default function program(api: API & Extra) {
 		return gone
 	}
 
-	method("on/eval", (src: string) => {
+	createAction("on/eval", (src: string) => {
 		const list = logged()
 		const n = (list[list.length - 1]?.n ?? 0) + 1
 		let forms: unknown[]
@@ -643,7 +668,7 @@ export default function program(api: API & Extra) {
 		forms.forEach((form, i) => queue.push({ n: n + i, form }))
 		next()
 	})
-	method("on/step", () => advance(1))
+	createAction("on/step", () => advance(1))
 	function stop() {
 		queue.length = 0
 		if (!job) return
@@ -652,21 +677,22 @@ export default function program(api: API & Extra) {
 		} catch { /* a drop that failed: the frame stays */ }
 		finish(undefined, new LispError("stopped"))
 	}
-	method("on/stop", stop)
-	method("on/speed", (s: string) => {
+	createAction("on/stop", stop)
+	createAction("on/speed", (s: string) => {
 		put(speed, s)
 		go()
 	})
-	method("on/clear", () => put(log, []))
-	method(
+	createAction("on/clear", () => put(log, []))
+	createAction(
 		"on/unwatch",
-		(id: string) => put(watches, ((read(watches) ?? []) as any[]).filter((w) => w.id !== id)),
+		(id: string) =>
+			put(watches, ((get<any[]>(watches) ?? []) as any[]).filter((w) => w.id !== id)),
 	)
 
 	// ---- watches: a memo each, evaluating with the walk up tracked. what an effect's act makes goes
 	// when it acts again, so the list's change makes them all again, each at ./watching/<id> ----
-	effect("watchers", () => read(watches), (list: any[]) => {
-		for (const w of list ?? []) memo(`./watching/${w.id}`, () => watch(w.src))
+	createEffect("watchers", () => read(watches) as any[], (ws) => {
+		for (const w of ws ?? []) createMemo(`./watching/${w.id}`, () => watch(w.src))
 	})
 	function watch(src: string) {
 		try {
@@ -689,7 +715,7 @@ export default function program(api: API & Extra) {
 	const keys = (e: KeyboardEvent) => {
 		const el = e.target as HTMLTextAreaElement
 		if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !el.value.includes("\n")) {
-			const srcs = logged().map((x) => x.src)
+			const srcs = history
 			back = Math.max(0, Math.min(srcs.length, back + (e.key === "ArrowUp" ? 1 : -1)))
 			el.value = back ? srcs[srcs.length - back] : ""
 			grow(el)
@@ -900,6 +926,16 @@ export default function program(api: API & Extra) {
 							</button>
 						)))}
 				</span>
+				<i
+					class="beat"
+					style={bind("speed", (k) => {
+						const ms = (SPEEDS[k] ?? SPEEDS.run).ms
+						return `animation-duration:${ms || 1000}ms;animation-play-state:${
+							ms ? "running" : "paused"
+						}`
+					})}
+					onAnimationIteration={handler("on/beat")}
+				/>
 				<button title="one step" onClick={handler("on/step")}>▸ step</button>
 				<button class="stop" title="stop what is running" onClick={handler("on/stop")}>
 					■
@@ -941,7 +977,7 @@ export default function program(api: API & Extra) {
 				<section class="world" ref={(e) => (world = e)}>
 					{bind("now", nowLine)}
 					{bind("now", stack)}
-					<div class="tree">{bind("base", (v) => frameBox([], String(base.id), v))}</div>
+					<div class="tree">{bind("base", (v) => frameBox([], baseId, v))}</div>
 					<div class="watches">
 						<b class="tag mint">watching</b>
 						{bind("watches", (list: any[]) =>
@@ -1199,6 +1235,8 @@ const BUILTINS: Record<string, (a: unknown[], use: Use) => unknown> = {
 
 // ---- the look: lemon paper, black lines, white frames glowing pink ----
 const LOOK = `
+@keyframes beat { to { opacity: 0 } }
+.beat { position: fixed; width: 0; height: 0; pointer-events: none; animation: beat 1000ms linear infinite }
 [hidden] { display: none !important }
 body { margin: 0; background: #ffff88; font: 15px/1.4 Jost, system-ui, sans-serif; color: #000 }
 .lisp { display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; padding: 10px 12px 12px }

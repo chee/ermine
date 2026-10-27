@@ -1,5 +1,14 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import {
+	addTeardown,
+	createAction,
+	createEffect,
+	ensureNode,
+	patch,
+	peep,
+	read,
+} from "@ermine/system"
+import { host } from "@ermine/slaygrounds/tools"
 import { bind, handler } from "ermine-h"
 
 // piece-cursors: presence, two devices in one page. the laptop and the phone each have their own
@@ -22,7 +31,11 @@ type Host = {
 		set: (v: unknown) => void
 		renew: () => void
 		clear: () => void
-		effect: (read: () => Live[], act: (live: Live[]) => void) => void
+		effect: (
+			read: () => Live[],
+			act: (live: Live[]) => void,
+			teardown: (f: () => void) => void,
+		) => void
 	}
 	crossed: () => { pair: number; tabs: number; tab: string; ttl: number; topic: string }
 }
@@ -48,15 +61,16 @@ function cursor(who: string, me: boolean) {
 	return el
 }
 
-export default function program(
-	{ open, read, edit, method, effect, teardown, ...host }: API & Host,
-) {
-	const { laptop, phone, crossed } = host
-	const beat = open("./beat", { laptop: true, phone: true })
-	method(
-		"on/beat",
-		(who: string) => edit(beat, (b: Record<string, boolean>) => void (b[who] = !b[who])),
-	)
+export default function program() {
+	const { laptop, phone, crossed } = host<Host>()
+	const beat = ensureNode("./beat", { laptop: true, phone: true })
+	createAction("on/beat", (who: string) => {
+		const was = peep(() => read(beat)) as Record<string, boolean>
+		patch(beat, [{ path: [who], value: !was[who] }])
+	})
+	// the heartbeat's timer has nothing open to read in: an effect keeps what it needs
+	let beating: Record<string, boolean> = { laptop: true, phone: true }
+	createEffect("beating", () => read(beat) as Record<string, boolean>, (b) => (beating = b))
 	const info = crossed()
 
 	// each device's pane: a pad and its rows, drawn by an effect from the rows its own world reads.
@@ -113,15 +127,20 @@ export default function program(
 		laptop.rows,
 		laptop.set,
 		laptop.clear,
-		(read, act) => effect("pointers", read, act),
+		(read, act) => createEffect("pointers", read, act),
 	)
-	device("phone", phone.rows, phone.set, phone.clear, phone.effect)
+	device(
+		"phone",
+		phone.rows,
+		phone.set,
+		phone.clear,
+		(read, act) => phone.effect(read, act, addTeardown),
+	)
 
 	// the heartbeat: each device with it on renews its row (only one that is there) every second
 	const hb = setInterval(() => {
-		const b = read(beat) as Record<string, boolean>
-		if (b.laptop) laptop.renew()
-		if (b.phone) phone.renew()
+		if (beating.laptop) laptop.renew()
+		if (beating.phone) phone.renew()
 	}, 1000)
 	// not the graph's: how long each row has left, drawn ten times a second
 	const counter = document.createElement("span")
@@ -139,7 +158,7 @@ export default function program(
 		counter.textContent = `${c.pair} messages over the pair, ${c.tabs} heard from other tabs`
 	}
 	const ticker = setInterval(tick, 100)
-	teardown(() => (clearInterval(hb), clearInterval(ticker)))
+	addTeardown(() => (clearInterval(hb), clearInterval(ticker)))
 
 	const pane = (name: string, icon: string, wide: boolean) => {
 		const { pad, rows } = panes.get(name)!

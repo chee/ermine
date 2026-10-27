@@ -1,15 +1,24 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import {
+	createAction,
+	createMemo,
+	ensureNode,
+	getStatus,
+	patch,
+	peep,
+	pipe,
+	read,
+	readEntries,
+} from "@ermine/system"
 import { bind, handler } from "ermine-h"
 
 // piece-oven: each oven is a compute that awaits a bake. while the promise is out its run is
 // pending; a bake too hot rejects, and the run failed. neither is in the oven's own value: they are
-// the computer's node (places' status.ts), in its attribute ermine.computer.status: PENDING, the
-// Error, or nothing once a run is done. info(memo) is that node's attributes, read tracked, so the
-// doors below rerun as it changes.
-// the settings are one node, { cherry: { heat, minutes, batch }, … }, changed with recipes: one
-// patch at the key that changed, none when the value is already that. watch tells each write's
-// patches, for the receipts. the fig oven is made by a recipe only when there is none
+// the computer's status (its own table, not the node's attributes): pending, failed with the Error,
+// or done. getStatus(memo) is that, read tracked, so the doors below rerun as it changes.
+// the settings are one node, { cherry: { heat, minutes, batch }, … }, changed by patches: one
+// patch at the key that changed, none when the value is already that. pipe tells each write's
+// patches, for the receipts. the fig oven is made by a patch only when there is none
 
 type Setting = { heat: number; minutes: number; batch: number }
 type Baked = { dish: string; batch: number; heat: number }
@@ -30,7 +39,6 @@ const ovens = [
 	{ name: "fig", dish: "fig roll", emoji: "🌰" },
 ]
 const TOO_HOT = 220
-const STATUS = "ermine.computer.status"
 
 // a bake: minutes are seconds here; too hot and it comes out burnt
 const bake = (dish: string, s: Setting) =>
@@ -44,54 +52,52 @@ const bake = (dish: string, s: Setting) =>
 		)
 	)
 
-// what the attributes hold, said plainly
-function said(attributes: unknown, pending: symbol): string {
-	const a = attributes as Record<string, unknown> | undefined
-	if (!a || !Object.hasOwn(a, "ermine.computer.status")) return "{ } (nothing: the run is done)"
-	const v = a["ermine.computer.status"]
-	const shown = v === pending
-		? "Symbol(ermine.pending)"
-		: v instanceof Error
-		? `Error("${v.message}")`
-		: String(v)
-	return `{ "ermine.computer.status": ${shown} }`
+// what the status holds, said plainly
+function said(status: ReturnType<typeof getStatus>): string {
+	if (!status) return "{ } (no oven node)"
+	const shown = status.state === "failed" && status.error instanceof Error
+		? `failed, Error("${status.error.message}")`
+		: status.state
+	return `{ state: ${shown}${status.n === undefined ? "" : `, n: ${status.n}`} }`
 }
 
 const showPatch = (p: { path: (string | number)[]; value?: unknown }) =>
 	`[${p.path.join(", ")}]${"value" in p ? " = " + JSON.stringify(p.value) : " taken out"}`
 
-export default function program(
-	{ open, read, edit, info, entries, memo, method, watch, PENDING }: API,
-) {
-	const settings = open("./oven/settings", {
+export default function program() {
+	const settings = ensureNode("./oven/settings", {
 		cherry: { heat: 180, minutes: 1.2, batch: 1 },
 		lemon: { heat: 200, minutes: 2.6, batch: 1 },
 		plum: { heat: 240, minutes: 0.8, batch: 1 },
 	} as Record<string, Setting>)
-	const receipts = open("./oven/receipts", [] as Receipt[])
+	const receipts = ensureNode("./oven/receipts", [] as Receipt[])
 
 	// an oven: a compute that reads its own settings (only them: a patch at another oven's path
 	// does not rebake it) and awaits the bake. no settings yet: nothing to bake
 	const bakes = Object.fromEntries(ovens.map((o) => [
 		o.name,
-		memo(`bake-${o.name}`, () => {
+		createMemo(`bake-${o.name}`, () => {
 			const s = read(settings, [o.name]) as Setting | undefined
 			return s ? bake(o.dish, s) : null
 		}),
 	]))
 
 	// the doors: each oven's status read off its computer's node, tracked
-	memo("doors", () =>
+	createMemo("doors", () =>
 		Object.fromEntries(ovens.map((o) => {
 			const b = bakes[o.name]
-			const attributes = read(info(b))
-			const st = read(info(b), [STATUS])
+			const status = getStatus(b)
 			// not read(b): a memo pending with no value throws PENDING
-			const last = entries(b)[0]?.value as Baked | null | undefined
-			const door: Door = st === PENDING
+			const last = readEntries(b)[0]?.value as Baked | null | undefined
+			const door: Door = status?.state === "pending"
 				? { state: "pending", says: "⏳ baking… (pending)", pending: true, raw: "" }
-				: st instanceof Error
-				? { state: "burnt", says: `💥 ${st.message}`, pending: false, raw: "" }
+				: status?.state === "failed"
+				? {
+					state: "burnt",
+					says: `💥 ${(status.error as Error)?.message}`,
+					pending: false,
+					raw: "",
+				}
 				: last
 				? {
 					state: "done",
@@ -101,49 +107,62 @@ export default function program(
 				}
 				: { state: "empty", says: "no oven here yet", pending: false, raw: "" }
 			door.last = last ?? undefined
-			door.sid = String(entries(b)[0]?.id ?? "")
-			door.raw = said(attributes, PENDING)
+			door.sid = `bake-${o.name}`
+			door.raw = said(status)
 			return [o.name, door]
 		})))
 
-	// each write to the settings is told its patches (a write that changes nothing is not told)
+	// each write to the settings is told its patches (a write that changes nothing is not made)
 	let wrote: readonly { path: (string | number)[]; value?: unknown }[] = []
-	watch(settings, (w) => (wrote = w.patches as typeof wrote))
-	// a change to the settings, and a receipt for it, the last four kept
-	const change = (how: string, path: string[], recipe: (d: Record<string, Setting>) => void) => {
+	pipe(settings, (w) => (wrote = w.patches as typeof wrote), { timing: "write", name: "wrote" })
+	const was = () => peep(() => read(settings)) as Record<string, Setting>
+	// a change to the settings, and a receipt for it, the last four kept. patches: none when the
+	// settings already say it
+	const change = (
+		how: string,
+		path: string[],
+		patches: { path: (string | number)[]; value: unknown }[],
+	) => {
 		wrote = []
-		edit(settings, recipe)
-		const was = read(receipts) as Receipt[]
-		const gave = how === "make" ? read(settings, path) : undefined
+		if (patches.length) patch(settings, patches)
+		const before = peep(() => read(receipts)) as Receipt[]
+		const gave = how === "make" ? peep(() => read(settings, path)) : undefined
 		const r: Receipt = {
-			n: (was[0]?.n ?? 0) + 1,
+			n: (before[0]?.n ?? 0) + 1,
 			how,
 			path: "[" + path.join(", ") + "]",
 			patches: wrote.map(showPatch),
 			gave: gave === undefined ? undefined : JSON.stringify(gave),
 		}
-		edit(receipts, (d: Receipt[]) => (d.unshift(r), void d.splice(4)))
+		patch(receipts, [{ path: [], value: [r, ...before].slice(0, 4) }])
 	}
-	const setting = (oven: string) =>
-		(read(settings) as Record<string, Setting>)[oven] as Setting | undefined
+	const setting = (oven: string) => was()[oven] as Setting | undefined
+	// a key of one oven: a patch at it, or a whole oven (none there yet), or nothing when it is so
+	const put = (oven: string, key: keyof Setting, value: number) => {
+		const s = setting(oven)
+		if (s === undefined) return [{ path: [oven], value: { [key]: value } }]
+		return s[key] === value ? [] : [{ path: [oven, key], value }]
+	}
 
-	method(
+	createAction(
 		"on/set",
 		(oven: string, key: keyof Setting, value: number) =>
-			change("set", [oven, key], (d) => void ((d[oven] ??= {} as Setting)[key] = value)),
+			change("set", [oven, key], put(oven, key, value)),
 	)
-	method("on/again", (oven: string) => {
+	createAction("on/again", (oven: string) => {
 		const batch = (setting(oven)?.batch ?? 0) + 1
-		change("set", [oven, "batch"], (d) => void ((d[oven] ??= {} as Setting).batch = batch))
+		change("set", [oven, "batch"], put(oven, "batch", batch))
 	})
-	method("on/same", (oven: string) => {
+	createAction("on/same", (oven: string) => {
 		const heat = setting(oven)?.heat as number
-		change("set", [oven, "heat"], (d) => void ((d[oven] ??= {} as Setting).heat = heat))
+		change("set", [oven, "heat"], put(oven, "heat", heat))
 	})
-	method("on/add", () =>
-		change("make", ["fig"], (d) => {
-			d.fig ??= { heat: 170, minutes: 1.6, batch: 1 }
-		}))
+	createAction("on/add", () =>
+		change(
+			"make",
+			["fig"],
+			setting("fig") ? [] : [{ path: ["fig"], value: { heat: 170, minutes: 1.6, batch: 1 } }],
+		))
 
 	const num = (e: Event) => Number((e.target as HTMLInputElement).value)
 
@@ -227,12 +246,12 @@ export default function program(
 		<div class="po">
 			<style>{css}</style>
 			<h1>
-				oven<span>pending and errors, on a computer's own node</span>
+				oven<span>pending and errors, in a computer's status</span>
 			</h1>
 			<p class="lede">
 				each oven is a compute awaiting a bake. while it bakes its run is pending; too hot and
-				it fails. neither goes in the oven's value: both sit in its node's attributes, which the
-				doors read. the settings are one node, changed at a path by recipes.
+				it fails. neither goes in the oven's value: both are its status, which the doors read.
+				the settings are one node, changed at a path by patches.
 			</p>
 			<div class="ovens">{ovens.map(oven)}</div>
 			<section class="till">

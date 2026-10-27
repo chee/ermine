@@ -1,9 +1,9 @@
 // prog-build's host: programs at paths, found by @ermine/programs' satisfy, each compile cached by
-// @ermine/programs/build, each process started in a box (@ermine/boxes) through the process api.
+// @ermine/programs/build, each process started in a box (@ermine/boxes) by ermine.start.
 // the world (@ermine/slaygrounds/world) runs the shell (program.ts); this file holds what is this
 // demo's: a supervisor that keeps the programs running, the page's own loaders, and the keys.
 //
-// what the api now gives, that the first version of this host did by hand:
+// what the graph now gives, that the first version of this host did by hand:
 //   a chain      satisfy: every way to run a program, nearest first, each candidate not taken with
 //                its why (onwhynot). the walk and chain cards are drawn from it
 //   a build      builds.compile: keyed by the compiler's identity and the input's hash. a comment
@@ -13,23 +13,22 @@
 //                grant is a placement, and a program sees only what its folder holds. escape.c in
 //                /boxes/escape holds print; started from /c/vault, a folder that also holds
 //                keys/secret, it gets secret
-//   a process    start(way, "main", { box }), at <box>/main; its own state is bare nodes inside it
-//                (out, shown); /value is its exports, the node placed from /value/<name>, so a
-//                program that uses another has /uses/<name> placed in its box from there
+//   a process    ermine.start(program, "main", { box }), at <box>/main; its own state is bare nodes
+//                inside it (out, shown); /value is its exports, the node placed from /value/<name>,
+//                so a program that uses another has /uses/<name> placed in its box from there. the
+//                page's runners make the program (a function) from the built code, and the
+//                supervisor starts it: a program starts nothing, and is given nothing: it imports
+//                @ermine/system
 //
 // the supervisor (below) is the host's: it watches each program's build and restarts the process
 // when it changes (hot), or keeps the run it has and says what differs (pinned). it is an effect
-// on the host's own api, so it lives across program.ts reloads; a reload only mounts the files
+// of the host's own ermine, so it lives across program.ts reloads; a reload only mounts the files
 // and restarts the shell
 import { hash } from "@ermine/formats/hash"
-import type { API } from "@ermine/api"
 import * as lib from "@ermine/core/places/lib"
-import { status as statusOf } from "@ermine/core/places/status"
 import { ATTRIBUTES as A, satisfy } from "@ermine/programs"
 import { COMPILER, createBuilds } from "@ermine/compilers"
-import type { Places } from "@ermine/core/places"
-import type { Process, Start } from "@ermine/programs/start"
-import { PENDING } from "@ermine/core/scheduler"
+import { ensureNode, list, patch, peep, PENDING, read, type Started } from "@ermine/system"
 import { createWorld } from "@ermine/slaygrounds/world"
 import { render } from "ermine-h"
 
@@ -53,7 +52,7 @@ const nick = (uti: string) => (typeof uti === "string" ? uti.split(".").pop() : 
 const sameJSON = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 const names = (path: string) => path.split("/").filter(Boolean)
 
-// ---- what the shell is given beyond the api (written in the head of each) ----
+// ---- what the shell is given beyond @ermine/system (written in the head of each) ----
 export type Extra = {
 	// the plan for a program: satisfy's answer as data, for the walk and chain cards. read in a
 	// memo, so tracked: a loader on the way up, a type installed, an edit, a move, and it is planned
@@ -61,8 +60,10 @@ export type Extra = {
 	plan: (path: string) => any
 	// every program in the tree: a node with a type that is no loader, and what is running
 	programs: () => { path: string; type: string; name: string }[]
+	// the node at path made to hold text: written a moment after the last call (an editor's keys
+	// go out together, and a build is not made for each)
+	write: (path: string, text: string) => void
 }
-export type Tools = API & Extra
 
 const world = createWorld({
 	render,
@@ -71,11 +72,30 @@ const world = createWorld({
 	extend: (): Extra => ({
 		plan: (path) => planOf(path).view,
 		programs,
+		write(path, text) {
+			clearTimeout(typing.get(path))
+			typing.set(
+				path,
+				setTimeout(() => {
+					if (peek(path) !== text) h.patch(path, [{ path: [], value: text }])
+				}, 350),
+			)
+		},
 	}),
 })
 const w = world.world
-const h = world.hostAPI
+const h = world.ermine
 const places = w.places
+const typing = new Map<string, ReturnType<typeof setTimeout>>()
+// a node's value as the host reads it, none (or not there): undefined. tracked in a run
+const peek = (path: string) => {
+	try {
+		return h.read(path)
+	} catch (e) {
+		if (e === PENDING) return undefined
+		throw e
+	}
+}
 
 // ---- the plan: satisfy taken whole. its ways and every whynot; nothing yielded: the search's own
 // whynot. the way is for the supervisor, the view for the cards ----
@@ -235,16 +255,14 @@ function programs() {
 // ---- the page's own: live values the host puts in the graph, never saved. satisfy's search ends
 // at them (a node with no type whose value is live, a function or a runner: the host runs it) ----
 
-// the page's runners are in @ermine/software's shape: start(code, start), start the start's facts,
-// the program's api the world's, made from them (runner)
-const runner = (run: (code: unknown, api: API) => Promise<{ stop(): void }>) => ({
-	start: (code: unknown, start: Start) => run(code, w.createProcessAPI(start)),
-	api: w.createProcessAPI,
-})
+// the page's runners make a program from built code: a function the host starts as a process
+// (ermine.start). it runs in the process's scope, given nothing: it imports @ermine/system, and
+// what it returns is the process's value. a promise (the module imported, the wasm compiled) is
+// the host's to wait for, before the process starts: nothing is open after an await
 
-// javascript source, imported as a module (once per code), its default export called with the api
-// the process is given. what it returns is the process's /value
-const modules = new Map<string, Promise<(api: API) => unknown>>()
+// javascript source, imported as a module (once per code), its default export the program. what it
+// returns is the process's /value
+const modules = new Map<string, Promise<() => unknown>>()
 function importCode(code: string) {
 	const d = digest(code)!
 	if (!modules.has(d)) {
@@ -253,30 +271,32 @@ function importCode(code: string) {
 	}
 	return modules.get(d)!
 }
-const js = async (code: unknown, api: API) => {
+const js = async (code: unknown) => {
 	const f = await importCode(String(code))
-	const value = f(api)
-	if (value !== undefined) api.edit("/value", [{ path: [], value }])
-	return { stop() {} }
+	return () => {
+		const value = f()
+		if (value !== undefined) patch("/value", [{ path: [], value }])
+	}
 }
 
 // wasm: compiled, then instantiated with the keys in the process's box (its /keys) and nothing
 // else. an import not handed is not linked: the engine itself refuses (a LinkError, the process's
 // status). main runs once; the exports are the process's /value
-const wasm = async (bytes: unknown, api: API) => {
+const wasm = async (bytes: unknown) => {
 	const module = await WebAssembly.compile(bytes as BufferSource)
-	const handed = api.list("/keys")
-	const env: Record<string, unknown> = {}
-	for (const i of WebAssembly.Module.imports(module)) {
-		if (i.module === "env" && handed.includes(i.name)) {
-			env[i.name] = (api.read(`/keys/${i.name}`) as (api: API) => unknown)(api)
+	return () => {
+		const handed = list("/keys")
+		const env: WebAssembly.ModuleImports = {}
+		for (const i of WebAssembly.Module.imports(module)) {
+			if (i.module === "env" && handed.includes(i.name)) {
+				env[i.name] = (read(`/keys/${i.name}`) as () => WebAssembly.ImportValue)()
+			}
 		}
+		ensureNode("out", [])
+		const { exports } = new WebAssembly.Instance(module, { env })
+		;(exports.main as (() => void) | undefined)?.()
+		patch("/value", [{ path: [], value: exports }])
 	}
-	api.open("out", [])
-	const { exports } = new WebAssembly.Instance(module, { env })
-	;(exports.main as (() => void) | undefined)?.()
-	api.edit("/value", [{ path: [], value: exports }])
-	return { stop() {} }
 }
 
 // C to wasm on this machine, through the dev server (compile.ts). a 501 says there is no wasm-ld
@@ -294,10 +314,14 @@ async function compileC(source: unknown) {
 	return new Uint8Array(await r.arrayBuffer())
 }
 
-// a key's value makes the import for whoever it is handed to: (api) => fn
-const keys: Record<string, (api: API) => unknown> = {
+// a key's value makes the import for whoever it is handed to: () => fn. the import is called by
+// the program, in its process: print's line goes on that process's own out
+const keys: Record<string, () => unknown> = {
 	// a line on the process's own out
-	print: (api) => (n: unknown) => api.edit("out", (d: string[]) => void d.push(String(n))),
+	print: () => (n: unknown) => {
+		const was = (peep(() => read("out")) as string[]).length
+		patch("out", [{ path: [], range: [was, was], value: [String(n)] }])
+	},
 	// what only the vault's folder holds
 	secret: () => () => 42,
 }
@@ -312,7 +336,7 @@ function log(e: Record<string, unknown> & { kind: string }) {
 	tally.recent = [{ ...e, time: new Date().toLocaleTimeString() }, ...tally.recent].slice(0, 40)
 	const copy = { ...tally }
 	// seen inside a run: the write waits until it is over
-	queueMicrotask(() => h.edit("/state/log", [{ path: [], value: copy }]))
+	queueMicrotask(() => h.patch("/state/log", [{ path: [], value: copy }]))
 }
 
 // ---- the supervisor: one entry per process. its build is an effect: the chain found, each
@@ -325,9 +349,9 @@ type Entry = {
 	keys: string[]
 	uses: string[]
 	pinned: boolean
-	proc?: Process
-	// its folder, seen from inside: the host's own places does not show a process started in a box
-	view?: Places
+	proc?: Started
+	// the count of starts begun: one that finds a later one has begun does not start
+	begun?: number
 	// the source of the last ready build seen
 	src?: string | null
 	// the build running, and the newest ready one
@@ -349,6 +373,8 @@ type Ready = {
 	steps: { name: string; path: string; hash: string | null }[]
 	src: string | null
 	built: string | null
+	// what the chain's compilers made: what the runner is given
+	input: unknown
 	deps: unknown[]
 	compiled: boolean
 }
@@ -365,7 +391,7 @@ const state = new Map<string, Record<string, any>>()
 function set(name: string, patch: Record<string, unknown>) {
 	const v = { ...state.get(name), ...patch }
 	state.set(name, v)
-	h.edit(`/state/${name}`, [{ path: [], value: v }])
+	h.patch(`/state/${name}`, [{ path: [], value: v }])
 }
 
 // the effect's read: tracked. the chain, the compilers through the cache, the used programs
@@ -406,7 +432,7 @@ function build(e: Entry): Build {
 	}
 	const blocked: string[] = []
 	const deps = e.uses.map((u) => {
-		const v = h.read(`/value/${u}`)
+		const v = peek(`/value/${u}`)
 		if (v === null || v === undefined) blocked.push(u)
 		return v
 	})
@@ -418,6 +444,7 @@ function build(e: Entry): Build {
 		steps: (view.steps ?? []).map((x: any) => ({ name: x.name, path: x.path, hash: x.hash })),
 		src,
 		built: digest(input),
+		input,
 		deps,
 		compiled,
 	}
@@ -474,33 +501,47 @@ function act(e: Entry, b: Build) {
 }
 
 // a grant is a placement: the keys and the used programs' values placed in the process's folder
-function grant(box: ReturnType<API["box"]>, at: string, from: string) {
+function grant(box: ReturnType<typeof h.createBox>, at: string, from: string) {
 	try {
 		box.unplace(at)
 	} catch { /* not there */ }
 	box.place(at, from)
 }
 
-// the process started (or started again) in its folder on this build
-function begin(e: Entry, b: Ready) {
+// the process started (or started again) in its folder on this build: the chain's runner makes the
+// program from the built code (waited for: the host's own await), then the host starts it
+async function begin(e: Entry, b: Ready) {
+	const mine = (e.begun = (e.begun ?? 0) + 1)
 	if (e.proc) {
-		h.stop(e.proc)
+		e.proc.stop("replaced")
 		e.proc = undefined
 	}
-	const box = h.box(e.box)
-	e.view = box.box.places
+	// the runner: the page's live function at the end of the chain
+	const runner = places.readValue("value", b.way.chain.at(-1).id) as
+		| ((code: unknown) => Promise<() => unknown>)
+		| undefined
+	if (typeof runner !== "function") return void set(e.name, { failed: "no runner" })
+	let program: () => unknown
+	try {
+		program = await runner(b.input)
+	} catch (x) {
+		return void set(e.name, { failed: message(x) })
+	}
+	// a newer start while this one waited: that one runs
+	if (e.begun !== mine) return
+	const box = h.createBox(e.box)
 	for (const k of h.list(`${e.box}/keys`)) if (!e.keys.includes(k)) box.unplace(`keys/${k}`)
 	for (const k of e.keys) grant(box, `keys/${k}`, `/keys/${k}`)
 	for (const u of e.uses) grant(box, `uses/${u}`, `/value/${u}`)
 	grant(box, "value", `/value/${e.name}`)
-	const p = h.start(b.way, "main", { box })
+	const p = h.start(program, "main", { box })
 	if ("refused" in p) {
 		set(e.name, { failed: `refused: ${p.refused}` })
 		return
 	}
 	e.proc = p
 	e.running = b
-	e.saw = new Map(e.uses.map((u) => [u, h.read(`/value/${u}`)]))
+	e.saw = new Map(e.uses.map((u) => [u, peek(`/value/${u}`)]))
 	set(e.name, {
 		failed: null,
 		record: {
@@ -533,15 +574,16 @@ function track(name: string, path: string, o: Partial<Entry> = {}) {
 		...o,
 	}
 	entries.set(name, e)
-	h.open(`/state/${name}`, { pinned: e.pinned, path })
+	h.ensureNode(`/state/${name}`, { pinned: e.pinned, path })
 	state.set(name, { pinned: e.pinned, path })
-	h.open(`/value/${name}`, null)
-	h.edit("/state/names", (d: string[]) => void d.push(name))
+	h.ensureNode(`/value/${name}`, null)
+	const names = h.peep(() => h.read("/state/names")) as string[]
+	h.patch("/state/names", [{ path: [], range: [names.length, names.length], value: [name] }])
 	// the build, in a scope of its own so stopping the program takes it away
 	const scope = w.s.createScope({ supervisor: name }, w.host)
 	e.scope = scope
 	w.s.runWithScope(scope, () => {
-		h.effect(`build-${name}`, () => build(e), (b) => act(e, b as Build), {
+		h.createEffect(`build-${name}`, () => build(e), (b) => act(e, b as Build), {
 			equal: sameBuild(e) as never,
 		})
 	})
@@ -554,9 +596,10 @@ function untrack(name: string) {
 	entries.delete(name)
 	state.delete(name)
 	w.s.teardown(e.scope as never)
-	if (e.proc) h.stop(e.proc)
-	h.edit(`/value/${name}`, [{ path: [], value: null }])
-	h.edit("/state/names", (d: string[]) => void d.splice(d.indexOf(name), 1))
+	e.proc?.stop("ended")
+	h.patch(`/value/${name}`, [{ path: [], value: null }])
+	const names = h.peep(() => h.read("/state/names")) as string[]
+	h.patch("/state/names", [{ path: [], value: names.filter((n) => n !== name) }])
 	h.remove(`/state/${name}`)
 }
 
@@ -572,27 +615,27 @@ const rosterOf = (path: string) => roster.find((r) => r[1] === path)
 
 // ---- what the shell reads: one row per process, a memo at /state/procs ----
 function rows() {
-	const live = (h.read("/state/names") ?? []) as string[]
+	const live = (peek("/state/names") ?? []) as string[]
 	return live.flatMap((name) => {
 		const e = entries.get(name)
-		const st = (h.read(`/state/${name}`) ?? {}) as Record<string, any>
+		const st = (peek(`/state/${name}`) ?? {}) as Record<string, any>
 		if (!e) return []
-		// what is inside the process: read through the folder's own view
-		const view = e.view
-		const inner = (name: string) => {
+		// what is inside the process: its own nodes, read through its box's view (the host's own
+		// places does not reach into a box)
+		const view = e.proc && h.getProcessContext(e.proc.process)?.box.places
+		const inner = (name: string): unknown => {
 			const id = view && lib.get(view, ["main", name])
 			return id === undefined || !view ? undefined : view.readValue("value", id)
 		}
-		const pid = view && lib.get(view, ["main"])
-		const status = pid === undefined || !view ? undefined : statusOf(view, pid)
+		const status = e.proc?.status()
 		const rec = st.record
-		const runtime = status instanceof Error ? message(status) : undefined
+		const runtime = status?.state === "failed" ? message(status.error) : undefined
 		const shown = inner("shown")
 		const out = (inner("out") ?? []) as string[]
 		const stale: string[] = []
 		if (rec) {
 			for (const u of rec.uses as string[]) {
-				if (h.read(`/value/${u}`) !== e.saw.get(u)) {
+				if (peek(`/value/${u}`) !== e.saw.get(u)) {
 					stale.push(`uses ${entries.get(u)?.path ?? u}: it ran again since`)
 				}
 			}
@@ -612,7 +655,7 @@ function rows() {
 				} else stale.push(...differs)
 			}
 		}
-		const value = h.read(`/value/${name}`)
+		const value = peek(`/value/${name}`)
 		return [{
 			name,
 			path: e.path,
@@ -626,7 +669,7 @@ function rows() {
 			error: runtime,
 			missing: runtime ? missingKey(runtime, rec?.keys ?? []) : undefined,
 			stale,
-			building: !!st.building || status === PENDING,
+			building: !!st.building || status?.state === "pending",
 			failed: st.failed ?? undefined,
 			waiting: st.waiting ?? undefined,
 			why: st.why ?? undefined,
@@ -672,11 +715,15 @@ function mountFiles(files: Record<string, Record<string, unknown>>) {
 			if (disk.get(path) === text) continue
 			const { code: was, ...wasAttrs } = disk.has(path) ? JSON.parse(disk.get(path)!) : {} as any
 			const { code, ...attributes } = entry
-			const node = host.open(path)
-			if (host.read(node) === undefined) host.open(path, code ?? null)
-			else if (code !== was) host.edit(node, [{ path: [], value: code ?? null }])
-			if (!sameJSON(attributes, wasAttrs) || host.read(host.info(node)) === undefined) {
-				host.edit(host.info(node), [{ path: [], value: attr(attributes) }])
+			const node = host.ensureNode(path)
+			const had = host.peep(() => host.readEntries(node)[0]?.value)
+			if (had === undefined) host.patch(node, [{ path: [], value: code ?? null }])
+			else if (code !== was) host.patch(node, [{ path: [], value: code ?? null }])
+			if (
+				!sameJSON(attributes, wasAttrs) ||
+				host.peep(() => host.readAttributes(node)) === undefined
+			) {
+				host.patchAttributes(node, [{ path: [], value: attr(attributes) }])
 			}
 			disk.set(path, text)
 			wrote.push(path)
@@ -696,28 +743,30 @@ function mountFiles(files: Record<string, Record<string, unknown>>) {
 // ---- the world's own folders: the page's loaders, the keys, the cache (the types are the world's)
 let builds!: ReturnType<typeof createBuilds>
 world.seed((host) => {
-	builds = createBuilds({
-		scheduler: w.s,
-		table: w.table,
-		places: { readValue: places.readValue, commit: places.commit },
-		// the world's own builds share it: a compile made here is a hit when a process starts
-		cache: "cache",
-	})
-	host.place("/cache", { id: "cache", part: "value" })
+	// the builds' scope is made under the host's (a seed has none open of its own)
+	builds = w.s.runWithScope(w.host, () =>
+		createBuilds({
+			scheduler: w.s,
+			table: w.table,
+			places: { readValue: places.readValue, commit: places.commit },
+			// the world's own builds share it: a compile made here is a hit when a process starts
+			cache: "cache",
+		}))
+	host.place("/cache", host.handleOf({ id: "cache", part: "value" }))
 	const folder = (at: string) => {
-		host.open(at, null)
-		host.edit(host.info(at), [{ path: [], value: { [A.loaders]: true } }])
+		host.ensureNode(at, null)
+		host.patchAttributes(at, [{ path: [], value: { [A.loaders]: true } }])
 	}
 	const loader = (at: string, fn: unknown, attributes: Record<string, unknown>) => {
-		host.open(at, fn)
-		host.edit(host.info(at), [{ path: [], value: attributes }])
+		host.ensureNode(at, fn)
+		host.patchAttributes(at, [{ path: [], value: attributes }])
 	}
 	// js and wasm run what they take; cc, clang on this machine, compiles c to wasm. what it is (its
 	// identity) is what the cache is keyed by, not the node
 	folder("/loaders")
-	loader("/loaders/js", runner(js), { [A.takes]: [JS] })
-	loader("/loaders/wasm", runner(wasm), { [A.takes]: [WASM] })
-	host.open("/c", null)
+	loader("/loaders/js", js, { [A.takes]: [JS] })
+	loader("/loaders/wasm", wasm, { [A.takes]: [WASM] })
+	host.ensureNode("/c", null)
 	folder("/c/loaders")
 	loader("/c/loaders/cc", compileC, {
 		[A.takes]: [C],
@@ -728,32 +777,32 @@ world.seed((host) => {
 			flags: ["-O2", "-nostdlib", "-nostdinc", "-fvisibility=default"],
 		},
 	})
-	for (const [k, make] of Object.entries(keys)) host.open(`/keys/${k}`, make)
-	host.open("/boxes", null)
-	host.open("/state/names", [])
-	host.open("/state/log", { ...tally })
-	h.memo("/state/procs", rows, { equal: sameJSON as never })
+	for (const [k, make] of Object.entries(keys)) host.ensureNode(`/keys/${k}`, make)
+	host.ensureNode("/boxes", null)
+	host.ensureNode("/state/names", [])
+	host.ensureNode("/state/log", { ...tally })
+	h.createMemo("/state/procs", rows, { equal: sameJSON as never })
 	// what the shell asks of the supervisor: the buttons
-	h.method("/ctl/on/pin", (name: string) => {
+	h.createAction("/ctl/on/pin", (name: string) => {
 		const e = entries.get(name)
 		if (!e) return
 		e.pinned = !e.pinned
 		set(name, { pinned: e.pinned })
 		if (!e.pinned && e.ready && !(e.running && sameReady(e.running, e.ready))) begin(e, e.ready)
 	})
-	h.method("/ctl/on/pickup", (name: string) => {
+	h.createAction("/ctl/on/pickup", (name: string) => {
 		const e = entries.get(name)
 		if (e?.ready) begin(e, e.ready)
 	})
-	h.method("/ctl/on/stop", (name: string) => untrack(name))
-	h.method("/ctl/on/start", (path: string) => {
+	h.createAction("/ctl/on/stop", (name: string) => untrack(name))
+	h.createAction("/ctl/on/start", (path: string) => {
 		if ([...entries.values()].some((e) => e.path === path && !e.box.startsWith("/c/"))) return
 		const r = rosterOf(path)
 		track((path.split("/").pop() ?? "p").replace(/\.\w+$/, ""), path, r?.[2] ?? {})
 	})
 	// escape.c again, with secret: the same node placed in /c/vault, a folder that holds keys/secret
-	h.method("/ctl/on/vault", () => {
-		h.open("/c/vault", null)
+	h.createAction("/ctl/on/vault", () => {
+		h.ensureNode("/c/vault", null)
 		try {
 			h.place("/c/vault/escape.c", "/c/sandbox/escape.c")
 		} catch { /* placed already */ }
@@ -778,9 +827,9 @@ export function reload(mod: Record<string, any>) {
 
 ;(globalThis as any).progbuild = {
 	edit(path: string, code: string) {
-		h.edit(path, [{ path: [], value: code }])
+		h.patch(path, [{ path: [], value: code }])
 	},
-	code: (path: string) => h.read(path),
+	code: (path: string) => peek(path),
 	api: h,
 	entries,
 	state,

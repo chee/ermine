@@ -1,11 +1,31 @@
-import type { API, Node } from "@ermine/api"
+/** @jsxImportSource ermine-h */
 import apply, { type Patch } from "@ermine/core/op/apply"
+import {
+	addTeardown,
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	executeAction,
+	hasNode,
+	list,
+	patch,
+	peep,
+	place,
+	read as readNode,
+	ref,
+	rename,
+	unplace,
+} from "@ermine/system"
+import { change, who } from "@ermine/slaygrounds/tools"
+import { handler } from "ermine-h"
 
 // big-trello: a board. lists are nodes under board/lists, cards nodes under each list's cards,
 // each named by its own id; the order is a value of its own: board/lists and every cards node
-// hold the array of their children's ids. a drag is places' own move (a card to another list; in
-// one list only the order changes), so a card keeps its node and its id wherever it goes. while
-// you drag, the drop spot is in the graph too: the card's id placed in the list it hovers under
+// hold the array of their children's ids. a drag is a rename (a card to another list; in one
+// list only the order changes), so a card keeps its node and its name wherever it goes. a
+// removal is a rename into board/trash: no function reaches a node nothing names, so what is
+// removed is kept there, and an undo moves it back. while you drag, the drop spot is in the graph too: the card's id placed in the list it hovers under
 // the name "drag:<id>", and that name in the list's order (watch the
 // graph tab mid-drag). every call that says what it did is one undo step: ⌘Z / ⇧⌘Z, from the
 // inverse patches. 🕘 on a list or a card opens its history: undo just one change from the middle,
@@ -124,13 +144,12 @@ button:disabled { opacity: .35; cursor: default; transform: none; box-shadow: 2p
 @keyframes fly { to { transform: translate(var(--dx), var(--dy)) rotate(var(--r)); opacity: 0 } }
 `
 
-// the latest of these steps that took an entry with this id out of a list
-const remover = (steps, id) =>
+// the latest of these steps that took this key's node out of the board (into the trash)
+const remover = (steps: Stp[], key: string) =>
 	[...steps].reverse().find((s) =>
-		s.writes.some((w) =>
-			w.undo.some((x) => x.value === id || (Array.isArray(x.value) && x.value.includes(id)))
-		)
+		s.writes.some((w) => w.kind === "moved" && w.key === key && inTrash(w.to!))
 	)
+const inTrash = (p: readonly string[]) => p[0] === TRASH[0] && p[1] === TRASH[1]
 
 // the entries a rebased patch would take out or move are the ones its step put in or moved
 function meant(list, x, w) {
@@ -247,13 +266,16 @@ function carry(p, through) {
 const same = (a: unknown[], b: unknown[]) => a.length === b.length && a.every((x, i) => x === b[i])
 const ghosted = (k: string) => k.startsWith("drag:")
 
-// a write the history keeps: the node (its table id, and which part), the patches and their inverse
+// a write the history keeps: a value written to what a key names (its patches and their
+// inverse), or a node moved from a path to another
 type Write = {
-	part: "value" | "children"
-	id: string
-	undo: readonly Patch[]
-	redo: readonly Patch[]
+	kind: "value" | "moved"
+	key: string
+	undo?: readonly Patch[]
+	redo?: readonly Patch[]
 	moved?: unknown
+	from?: Names
+	to?: Names
 }
 type Stp = {
 	n: number
@@ -271,13 +293,13 @@ type Who = { caller: string; "trusted-event": boolean }
 
 // the board is saved under ./board, its live elements under ./ui; the process is "trello" (a name
 // of its own: a process shadows what is saved at its path). a folder is a node whose value is the
-// order of its children's ids and whose children are named by those ids: lists under board/lists,
-// a list's cards under its cards. a created node is named by its own id, so a node is read by id
-// whether it is placed or not (a removed card is only unplaced)
+// order of its children's names and whose children are named by those names: lists under
+// board/lists, a list's cards under its cards. a created node is named by its own id; a removed one
+// is moved to board/trash, where it stays
 const LISTS: Names = ["board", "lists"]
+const TRASH: Names = ["board", "trash"]
 const cardsOf = (list: string): Names => [...LISTS, list, "cards"]
 const str = (p: Names) => "/" + p.join("/")
-const nodeId = (id: string): Node => ({ id, part: "value" })
 
 // the view's reconcile: take out only what is no longer wanted, move only what is out of place
 function mount(parent: Element, next: Element[]) {
@@ -291,12 +313,15 @@ function mount(parent: Element, next: Element[]) {
 	}
 }
 
-export default function program(api: API & { who: () => Who }) {
-	const { open, create, read, edit, entries, list, memo, effect, method, send, watch } = api
-	const { place, unplace, move, ref, teardown, pulse, who } = api
+export default function program() {
+	// what a node holds, as the board takes it (any: its values are its own). what the actions read
+	// is untracked: each runs inside peep
+	// deno-lint-ignore no-explicit-any
+	const read = (x: Parameters<typeof readNode>[0]): any => readNode(x)
 
 	// a live thing kept across reloads: saved under ./ui, made the first time only
-	const keep = <T>(name: string, make: () => T): T => read(ref(`./ui/${name}`, make)) as T
+	const keep = <T,>(name: string, make: () => T): T =>
+		peep(() => readNode(ref(`./ui/${name}`, make))) as T
 	// the look: a style element kept across reloads, its text set by every setup
 	const style = keep("style", () => document.head.appendChild(document.createElement("style")))
 	style.textContent = LOOK
@@ -307,26 +332,61 @@ export default function program(api: API & { who: () => Who }) {
 		})))
 
 	// ---- the board
-	const idAt = (p: Names) => entries(str(p))[0]?.id as string | undefined
-	// a folder: its order, and its children made here, so a first child is a change like any other
-	function folder(p: Names) {
-		open(str(p), [])
-		const kids = { path: p, part: "children" } as const
-		if (read(kids) === undefined) edit(kids, [{ path: [], value: {} }])
-	}
-	const fresh = entries(str(LISTS)).length === 0
+	const here = (p: Names) => hasNode(str(p))
+	// a folder: a node whose value is the order of its children's names
+	const folder = (p: Names) => ensureNode(str(p), [])
+	const fresh = !here(LISTS)
 	folder(LISTS)
-	const history = open("./board/history", { steps: [], at: 0, count: 0 })
+	folder(TRASH)
+	const history = ensureNode("./board/history", { steps: [], at: 0, count: 0 })
 	// whose history is open: the board, a list or a card
-	const drawing = open("./board/drawer", null)
+	const drawing = ensureNode("./board/drawer", null)
+	// the undo-just-one plan the drawer shows: { n, plan }
+	const planned = ensureNode("./board/plan", null)
+
+	// ---- where a thing is. a node is its path, so one that moves has another: a card is found by its
+	// name in the lists, in the trash, or in a list that is in the trash. a key names what a write
+	// was to, wherever it is now: "lists" (its order), "list:<id>" (its title), "cards:<id>" (that
+	// list's order), "card:<id>" (a card)
+	const order = (f: Names) => (here(f) ? read(str(f)) as string[] | undefined : undefined) ?? []
+	const idsIn = (f: Names) => order(f).filter((k) => !ghosted(k))
+	function listPath(l: string): Names | undefined {
+		for (const p of [[...LISTS, l], [...TRASH, l]]) if (here(p)) return p
+	}
+	function cardPath(c: string): Names | undefined {
+		for (const l of idsIn(LISTS)) {
+			const p = [...cardsOf(l), c]
+			if (here(p)) return p
+		}
+		if (here([...TRASH, c])) return [...TRASH, c]
+		for (const l of peep(() => list(str(TRASH)))) {
+			const p = [...TRASH, l, "cards", c]
+			if (here(p)) return p
+		}
+	}
+	function pathOf(key: string): Names | undefined {
+		const [kind, id] = key.split(":")
+		if (key === "lists") return LISTS
+		if (kind === "list") return listPath(id)
+		if (kind === "cards") {
+			const p = listPath(id)
+			return p && [...p, "cards"]
+		}
+		return cardPath(id)
+	}
+	const keyOfFolder = (f: Names) => str(f) === str(LISTS) ? "lists" : `cards:${f[2]}`
 
 	// ---- what the graph says: a memo lands at stats
-	const order = (f: Names) => (read(str(f)) as string[] | undefined) ?? []
-	const idsIn = (f: Names) => order(f).filter((k) => !ghosted(k))
-	const nameOf = (list: string) => read(nodeId(list)) as string
-	const textOf = (card: string) => (read(nodeId(card)) as { text: string } | undefined)?.text
+	const nameOf = (list: string) => {
+		const p = listPath(list)
+		return p && (read(str(p)) as string)
+	}
+	const textOf = (card: string) => {
+		const p = cardPath(card)
+		return p && (read(str(p)) as { text: string } | undefined)?.text
+	}
 	const listOf = (card: string) => idsIn(LISTS).find((l) => idsIn(cardsOf(l)).includes(card))
-	const stats = memo("stats", () => {
+	const stats = createMemo("stats", () => {
 		const lists = idsIn(LISTS)
 		let cards = 0
 		for (const l of lists) cards += idsIn(cardsOf(l)).length
@@ -334,72 +394,68 @@ export default function program(api: API & { who: () => Who }) {
 	})
 
 	// ---- the undo history. every call that says what it did is a step: the writes it made to the
-	// board, each with the change's patches and their inverse (op.undo)
+	// board, each a value written (its patches and their inverse: the change's op.undo, read as the
+	// write lands) or a node moved from a path to another (a card to another list, a removal to the
+	// trash, an add from it)
 	let step: { writes: Write[]; words?: string; about?: string[]; undid?: number } | undefined
-	// f, with what lands at a node (its value, or its children) kept for the step going on
-	function track(node: { path: Names; part: "value" | "children" }, f: () => void) {
-		if (!step) return f()
-		const id = idAt(node.path)
-		const mine = step
-		const stop = watch(node as Node, ({ change, value }) => {
-			const op = change?.op
-			if (!op || id === undefined) return
-			const w: Write = { part: node.part, id, undo: op.undo, redo: op.patches }
-			const m = op.patches.find((x) => x.move)
-			if (m && Array.isArray(value)) w.moved = value[m.range[0]]
-			mine.writes.push(w)
-		})
-		try {
-			f()
-		} finally {
-			stop()
-		}
+	// patches to what a key names, kept for the step going on
+	function write(key: string, patches: Patch[]) {
+		const p = pathOf(key)
+		if (!p) throw new Error(`nothing at ${key}`)
+		patch(str(p), patches)
+		if (!step) return
+		const op = (change(str(p)) as { op?: { patches: readonly Patch[]; undo: readonly Patch[] } })
+			?.op
+		if (!op) return
+		const w: Write = { kind: "value", key, undo: op.undo, redo: op.patches }
+		const m = op.patches.find((x) => x.move)
+		const v = read(str(p))
+		if (m && Array.isArray(v)) w.moved = v[m.range![0]]
+		step.writes.push(w)
 	}
-	const val = (p: Names) => ({ path: p, part: "value" } as const)
-	const kids = (p: Names) => ({ path: p, part: "children" } as const)
+	// a node to another path (rename: one change over the two folders), kept for the step
+	function relocate(key: string, from: Names, to: Names) {
+		rename(str(from), str(to))
+		step?.writes.push({ kind: "moved", key, from, to })
+	}
 	// the id in at index of a folder's order, or out
 	function put(f: Names, id: string, index?: number) {
 		const at = Math.min(index ?? order(f).length, order(f).length)
-		track(val(f), () => edit(str(f), [{ path: [], range: [at, at], value: [id] }]))
+		write(keyOfFolder(f), [{ path: [], range: [at, at], value: [id] }])
 	}
 	function cut(f: Names, id: string) {
 		const at = order(f).indexOf(id)
-		if (at >= 0) track(val(f), () => edit(str(f), [{ path: [], range: [at, at + 1] }]))
+		if (at >= 0) write(keyOfFolder(f), [{ path: [], range: [at, at + 1] } as Patch])
 	}
-	// a new node under the folder, named by its own id, its id in the order at index (the end)
-	function add(f: Names, value: unknown, index?: number): string {
-		let id!: string
-		track(kids(f), () => void (id = create(str(f), value).path![f.length]))
+	// a new node, named by its own id: made in the trash and moved into the folder, its id in the
+	// order at index (the end), so an add is a move like any other and its undo puts it back
+	function add(f: Names, kind: "card" | "list", value: unknown, index?: number): string {
+		const id = crypto.randomUUID()
+		ensureNode(str([...TRASH, id]), value)
+		relocate(`${kind}:${id}`, [...TRASH, id], [...f, id])
 		put(f, id, index)
 		return id
 	}
-	// the child out of the folder and out of its order; its node stays, unplaced
-	function take(f: Names, id: string) {
-		track(kids(f), () => unplace(`${str(f)}/${id}`))
+	// the child out of the folder and out of its order: moved to the trash, its node and what is
+	// under it kept there
+	function take(f: Names, kind: "card" | "list", id: string) {
+		relocate(`${kind}:${id}`, [...f, id], [...TRASH, id])
 		cut(f, id)
 	}
 	// the child out of the folder from, into the folder to at index k (counted without it): in the
-	// same folder only its place in the order changes; else places' own move, so the node, and its
-	// id, stay the same
-	function shove(from: Names, id: string, to: Names, k: number) {
+	// same folder only its place in the order changes; else the node moves, and keeps its name
+	function shove(from: Names, kind: "card" | "list", id: string, to: Names, k: number) {
 		if (str(from) === str(to)) {
 			const f = order(from).indexOf(id)
 			if (f < 0 || f === k) return
-			track(
-				val(from),
-				() =>
-					edit(str(from), [{
-						path: [],
-						range: [k, k],
-						move: { path: [], range: [f, f + 1] },
-					}]),
-			)
+			write(keyOfFolder(from), [{
+				path: [],
+				range: [k, k],
+				move: { path: [], range: [f, f + 1] },
+			}])
 			return
 		}
-		track(
-			kids(from),
-			() => track(kids(to), () => move(`${str(from)}/${id}`, `${str(to)}/${id}`)),
-		)
+		relocate(`${kind}:${id}`, [...from, id], [...to, id])
 		cut(from, id)
 		put(to, id, k)
 	}
@@ -419,30 +475,15 @@ export default function program(api: API & { who: () => Who }) {
 		const name = "drag:" + g.id
 		unplace(`${str(g.folder)}/${name}`)
 		const at = order(g.folder).indexOf(name)
-		if (at >= 0) edit(str(g.folder), [{ path: [], range: [at, at + 1] }])
+		if (at >= 0) patch(str(g.folder), [{ path: [], range: [at, at + 1] } as Patch])
 	}
 	function ghostAt(f: Names, id: string, index: number) {
 		unghost()
-		place(`${str(f)}/drag:${id}`, nodeId(id))
-		const at = Math.min(index, order(f).length)
-		edit(str(f), [{ path: [], range: [at, at], value: ["drag:" + id] }])
+		const at = pathOf(str(f) === str(LISTS) ? `list:${id}` : `card:${id}`)!
+		place(`${str(f)}/drag:${id}`, str(at))
+		const i = Math.min(index, order(f).length)
+		patch(str(f), [{ path: [], range: [i, i], value: ["drag:" + id] }])
 		ghost = { folder: f, id }
-	}
-
-	// every node on the board now (placed, ghosts apart), table id -> its names from the root
-	function reachable() {
-		const here = new Map<string, Names>()
-		const visit = (p: Names) => {
-			const id = idAt(p)
-			if (id !== undefined) here.set(id, p)
-		}
-		visit(LISTS)
-		for (const l of idsIn(LISTS)) {
-			visit([...LISTS, l])
-			visit(cardsOf(l))
-			for (const c of idsIn(cardsOf(l))) visit([...cardsOf(l), c])
-		}
-		return here
 	}
 
 	// a step recorded: what came after the step it is at goes
@@ -458,62 +499,84 @@ export default function program(api: API & { who: () => Who }) {
 			time: Date.now(),
 			writes: s.writes,
 		}
-		edit(history, [
+		patch(history, [
 			{ path: ["steps"], range: [at, steps.length], value: [entry] },
 			{ path: ["at"], value: at + 1 },
 			{ path: ["count"], value: count + 1 },
 		])
 	}
-	// undo, redo: a step's inverses applied newest first, or its patches again oldest first
+	// undo, redo: a step's inverses applied newest first, or its patches again oldest first; a move
+	// the other way, or again
 	function travel(by: number) {
 		const { steps, at } = read(history) as History
 		const s = by < 0 ? steps[at - 1] : steps[at]
 		if (!s) return
 		const writes = by < 0 ? [...s.writes].reverse() : s.writes
-		for (const w of writes) edit({ id: w.id, part: w.part }, by < 0 ? w.undo : w.redo)
-		edit(history, [{ path: ["at"], value: at + by }])
+		for (const w of writes) {
+			if (w.kind === "moved") {
+				if (by < 0) rename(str(w.to!), str(w.from!))
+				else rename(str(w.from!), str(w.to!))
+			} else patch(str(pathOf(w.key)!), [...(by < 0 ? w.undo! : w.redo!)])
+		}
+		patch(history, [{ path: ["at"], value: at + by }])
 	}
 
 	// undo just step n: what it would do (nothing written), as per node patches carried through
 	// every later change to it; or why it can't: gone (the node is not on the board now), again (a
 	// later change set the same thing), overlap, inside (a later change touched the same items or
 	// words), lost; by: that later step
+	// deno-lint-ignore no-explicit-any
 	function plan(n: number): any {
 		const { steps, at } = read(history) as History
 		const k = steps.findIndex((x) => x.n === n)
 		if (k < 0 || k >= at) return { ok: false, why: "undone" }
 		const s = steps[k], later = steps.slice(k + 1, at)
-		const here = reachable()
+		// deno-lint-ignore no-explicit-any
 		const out: any[] = []
 		for (let i = s.writes.length - 1; i >= 0; i--) {
 			const w = s.writes[i]
-			const mine = (x: Write) => x.part === w.part && x.id === w.id
 			const no = (why: string, by?: Stp) => ({
 				ok: false,
 				why,
-				id: w.id,
-				part: w.part,
+				key: w.key,
+				kind: w.kind,
 				step: s,
 				by,
 			})
-			if (!here.has(w.id)) return no("gone", remover(later, w.id))
+			if (w.kind === "moved") {
+				// a move undone puts the node back where it came from: it has to be where the move left it,
+				// and no later change moved or removed it
+				for (const l of later) {
+					if (l.writes.some((x) => x.kind === "moved" && x.key === w.key)) {
+						return no("overlap", l)
+					}
+				}
+				if (!here(w.to!)) return no("gone", remover(later, w.key))
+				out.push({ kind: "moved", key: w.key, from: w.to, to: w.from, later: 0 })
+				continue
+			}
+			const mine = (x: Write) => x.kind === "value" && x.key === w.key
+			const p = pathOf(w.key)
+			if (!p || inTrash(p)) return no("gone", remover(later, w.key))
 			// everything that changed this node after w, in order: the rest of its step, the steps
 			// after it, and the inverses already worked out here
 			const through: (readonly Patch[])[] = [], whose: Stp[] = []
-			for (const x of s.writes.slice(i + 1)) if (mine(x)) (through.push(x.redo), whose.push(s))
+			for (const x of s.writes.slice(i + 1)) if (mine(x)) (through.push(x.redo!), whose.push(s))
 			for (const l of later) {
-				for (const x of l.writes) if (mine(x)) (through.push(x.redo), whose.push(l))
+				for (const x of l.writes) if (mine(x)) (through.push(x.redo!), whose.push(l))
 			}
-			for (const o of out) if (mine(o)) (through.push(o.patches), whose.push(s))
+			for (const o of out) {
+				if (o.kind === "value" && o.key === w.key) (through.push(o.patches), whose.push(s))
+			}
 			let rebased: Patch[]
 			try {
-				rebased = rebase(w.undo, through)
+				rebased = rebase(w.undo!, through)
 			} catch (e) {
 				if (e instanceof Conflict) return no(e.why, whose[e.at])
 				throw e
 			}
 			// on the value as it is now: the entries it takes out or moves must be the ones it means
-			const before = read({ id: w.id, part: w.part })
+			const before = read(str(p))
 			let v = before
 			const patches: Patch[] = []
 			try {
@@ -527,8 +590,8 @@ export default function program(api: API & { who: () => Who }) {
 			}
 			const moved = JSON.stringify(rebased) !== JSON.stringify(w.undo)
 			out.push({
-				part: w.part,
-				id: w.id,
+				kind: "value",
+				key: w.key,
 				patches,
 				before,
 				after: v,
@@ -540,80 +603,80 @@ export default function program(api: API & { who: () => Who }) {
 	}
 
 	// ---- handlers: every write is a call (a click has no scope open), every call that says what it
-	// did an undo step. act: a method that keeps its writes for the step, and puts it on the history
-	// when it said (say) what it did
+	// did an undo step. act: an action that keeps its writes for the step, and puts it on the history
+	// when it said (say) what it did. each runs untracked (peep: its reads are for now)
 	const say = (words: string, ...about: (string | undefined)[]) => {
 		if (step) (step.words = words, step.about = about.filter(Boolean) as string[])
 	}
 	function act(name: string, fn: (...a: any[]) => unknown, steps = true) {
-		method(`on/${name}`, (...a: unknown[]) => {
-			const was = step
-			if (steps) step = { writes: [] }
-			try {
-				return fn(...a)
-			} finally {
-				const done = step
-				step = was
-				if (steps && done?.words && done.writes.length) remember(done, who())
-			}
-		})
+		createAction(`on/${name}`, (...a: unknown[]) =>
+			peep(() => {
+				const was = step
+				if (steps) step = { writes: [] }
+				try {
+					return fn(...a)
+				} finally {
+					const done = step
+					step = was
+					if (steps && done?.words && done.writes.length) remember(done, who())
+				}
+			}))
 	}
+	// the page calls an action by name: nothing is open in a plain listener (the elements here are
+	// built by hand), so the board's events are heard once, on its root, and each says its call
+	createAction("on/do", (name: string, ...args: unknown[]) => executeAction(`on/${name}`, ...args))
 	act("add-card", (list: string, text: string) => {
-		const card = add(cardsOf(list), { text, tint: "none" })
+		const card = add(cardsOf(list), "card", { text, tint: "none" })
 		say(`added ${em(text)} to ${em(nameOf(list))}`, list, card)
 	})
 	// an edit is a splice: only the words that changed
 	act("edit-card", (card: string, text: string) => {
 		const was = textOf(card)!
-		const [at, out, put] = differ(was, text)
-		const list = listOf(card)!
-		track(val([...cardsOf(list), card]), () =>
-			edit(
-				nodeId(card),
-				(d: any, { splice }: any) => void splice(d, "text", at, out, put || undefined),
-			))
-		say(`changed ${em(was)} to ${em(text)}`, card, list)
+		const [at, out, put] = differ(was, text) as [number, number, string]
+		write(`card:${card}`, [
+			put ? { path: ["text"], range: [at, at + out], value: put } : {
+				path: ["text"],
+				range: [at, at + out],
+			} as Patch,
+		])
+		say(`changed ${em(was)} to ${em(text)}`, card, listOf(card))
 	})
 	act("tint", (card: string) => {
-		let next = ""
-		const list = listOf(card)!
-		track(val([...cardsOf(list), card]), () =>
-			edit(nodeId(card), (d: any) => {
-				d.tint = next = TINTS[(TINTS.indexOf(d.tint) + 1) % TINTS.length]
-			}))
+		const p = cardPath(card)!
+		const was = (read(str(p)) as { tint: string }).tint
+		const next = TINTS[(TINTS.indexOf(was) + 1) % TINTS.length]
+		write(`card:${card}`, [{ path: ["tint"], value: next }])
 		say(
 			next === "none"
 				? `took the colour off ${em(textOf(card))}`
 				: `coloured ${em(textOf(card))} ${next}`,
 			card,
-			list,
+			listOf(card),
 		)
 	})
 	act("remove-card", (list: string, card: string) => {
-		take(cardsOf(list), card)
+		take(cardsOf(list), "card", card)
 		say(`removed ${em(textOf(card))} from ${em(nameOf(list))}`, card, list)
 	})
 	act("add-list", (text: string) => {
-		const list = add(LISTS, text)
+		const list = add(LISTS, "list", text)
 		folder(cardsOf(list))
 		say(`added the list ${em(text)}`, list)
 	})
 	act("rename-list", (list: string, text: string) => {
-		const was = nameOf(list)
-		const [at, out, put] = differ(was, text)
-		track(
-			val([...LISTS, list]),
-			() =>
-				edit(
-					nodeId(list),
-					(d: any, { splice }: any) => void splice(d, at, out, put || undefined),
-				),
-		)
+		const was = nameOf(list)!
+		const [at, out, put] = differ(was, text) as [number, number, string]
+		write(`list:${list}`, [
+			put ? { path: [], range: [at, at + out], value: put } : {
+				path: [],
+				range: [at, at + out],
+			} as Patch,
+		])
 		say(`renamed the list ${em(was)} to ${em(text)}`, list)
 	})
 	// a list goes with its cards still under it: undo places it back whole
 	act("remove-list", (list: string) => {
-		take(LISTS, list)
+		take(LISTS, "list", list)
 		say(`removed the list ${em(nameOf(list))}`, list)
 	})
 	// the drag layer: the drop spot for what is dragged, k places in among the others
@@ -624,7 +687,7 @@ export default function program(api: API & { who: () => Who }) {
 		const others = all.filter((x) => x !== id)
 		ghostAt(f, id, k < others.length ? all.indexOf(others[k]) : all.length)
 	})
-	act("move", (kind: string, from: string, id: string) => {
+	act("move", (kind: "card" | "list", from: string, id: string) => {
 		const g = where()
 		if (!g) return
 		// the place among the others: what the ghost had before it, the dragged one not counted
@@ -632,7 +695,7 @@ export default function program(api: API & { who: () => Who }) {
 		unghost()
 		const source = kind === "card" ? cardsOf(from) : LISTS
 		const i = idsIn(source).indexOf(id)
-		shove(source, id, g.folder, k)
+		shove(source, kind, id, g.folder, k)
 		if (kind === "list") {
 			return say(`moved the list ${em(nameOf(id))} from place ${i + 1} to ${k + 1}`, id)
 		}
@@ -646,42 +709,43 @@ export default function program(api: API & { who: () => Who }) {
 			into,
 		)
 	})
+	// what undoing just step n would do, for the drawer to show: worked out, or why not (nothing is
+	// written but this)
+	act(
+		"plan",
+		(n: number | null) =>
+			patch(planned, [{ path: [], value: n === null ? null : { n, plan: plan(n) } }]),
+		false,
+	)
 	// undo just step n: worked out, or why not; done, it is a step of its own, which says it undid
 	act("revert", (n: number) => {
 		unghost()
 		const r = plan(n)
-		if (!r.ok) return r
-		const here = reachable()
+		if (!r.ok) return patch(planned, [{ path: [], value: { n, plan: r } }])
 		for (const w of r.writes) {
-			const at = here.get(w.id)!
-			track({ path: at, part: w.part }, () => edit({ id: w.id, part: w.part }, w.patches))
+			if (w.kind === "moved") relocate(w.key, w.from, w.to)
+			else write(w.key, w.patches)
 		}
 		if (step) step.undid = n
 		say(`undid #${n}: ${r.step.words}`, ...r.step.about)
-		return r
+		patch(planned, [{ path: [], value: null }])
 	})
 	act(
 		"open",
 		(kind: string | null, id: string) =>
-			edit(drawing, [{ path: [], value: kind ? { kind, id } : null }]),
+			patch(drawing, [{ path: [], value: kind ? { kind, id } : null }]),
 		false,
 	)
 	act("cancel", () => unghost(), false)
 	act("undo", () => (unghost(), travel(-1)), false)
 	act("redo", () => (unghost(), travel(1)), false)
-	// a call from the page: pulsed at once (the drop reads the lists it made)
-	const call = (name: string, args: unknown[], _e?: unknown) => {
-		const r = send(`on/${name}`, ...args)
-		pulse()
-		return r
-	}
 
 	// the first time only: the board seeded
 	if (fresh) {
 		for (const [title, cards] of SEED) {
-			const list = add(LISTS, title)
+			const list = add(LISTS, "list", title)
 			folder(cardsOf(list))
-			for (const [text, tint] of cards) add(cardsOf(list), { text, tint })
+			for (const [text, tint] of cards) add(cardsOf(list), "card", { text, tint })
 		}
 	}
 
@@ -703,22 +767,27 @@ export default function program(api: API & { who: () => Who }) {
 		"stats",
 		() => Object.assign(document.createElement("span"), { className: "tag stats" }),
 	)
-	effect("summary", () => read(stats), (v) => (tag.textContent = v == null ? "" : String(v)))
+	createEffect("summary", () => read(stats), (v) => (tag.textContent = v == null ? "" : String(v)))
 	const undo = keep("undo", () => document.createElement("button"))
 	const redo = keep("redo", () => document.createElement("button"))
-	undo.onclick = (e) => call("undo", [], e)
-	redo.onclick = (e) => call("redo", [], e)
+	undo.dataset.do = "undo"
+	redo.dataset.do = "redo"
 	const fill = keep(
 		"fill",
 		() => Object.assign(document.createElement("span"), { className: "fill" }),
 	)
 	const all = keep("all", () => document.createElement("button"))
 	all.textContent = "🕘 history"
-	all.onclick = (e) => call("open", ["board", "board"], e)
+	all.dataset.do = "open-board"
 	mount(top, [title, tag, fill, all, undo, redo])
-	effect("buttons", () => {
+	createEffect("buttons", () => {
 		const { steps, at } = read(history) as History
-		return [at, steps.length, steps[at - 1]?.words ?? "", steps[at]?.words ?? ""] as const
+		return [at, steps.length, steps[at - 1]?.words ?? "", steps[at]?.words ?? ""] as [
+			number,
+			number,
+			string,
+			string,
+		]
 	}, ([at, n, back, forth]) => {
 		const short = (w: string) =>
 			(w = w.replaceAll("*", "")).length > 26 ? w.slice(0, 25) + "…" : w
@@ -729,26 +798,15 @@ export default function program(api: API & { who: () => Who }) {
 		undo.disabled = at === 0
 		redo.disabled = at >= n
 	}, { equal: same })
-	document.onkeydown = (e) => {
-		if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return
-		if (
-			(e.target as HTMLElement).isContentEditable ||
-			(e.target as HTMLElement).tagName === "TEXTAREA"
-		) return
-		e.preventDefault()
-		call(e.shiftKey ? "redo" : "undo", [], e)
-	}
-
 	const lists = keep(
 		"columns-box",
 		() => Object.assign(document.createElement("div"), { className: "lists" }),
 	)
 	const newlist: any = keep("newlist", () => adder("+ add a list", "list title"))
 	newlist.classList.add("newlist")
-	newlist.submit = (text: string, e: unknown) => call("add-list", [text], e)
 
 	// the columns: one per id in board/lists' order, a ghost column where a dragged list would go
-	effect("columns", () => [...order(LISTS)], (keys) => {
+	createEffect("columns", () => [...order(LISTS)], (keys) => {
 		mount(lists, [...keys.map((k) => column(k)), newlist])
 	}, { equal: same })
 
@@ -759,7 +817,7 @@ export default function program(api: API & { who: () => Who }) {
 				"ghostlist",
 				() => Object.assign(document.createElement("div"), { className: "list ghost" }),
 			)
-			g.textContent = read(nodeId(id)) as string
+			g.textContent = nameOf(id) ?? ""
 			return g
 		}
 		const col = keep("list-" + id, () => {
@@ -773,16 +831,12 @@ export default function program(api: API & { who: () => Who }) {
 		const name = col.querySelector(".name") as HTMLElement
 		const count = col.querySelector(".count") as HTMLElement
 		const cards = col.querySelector(".cards") as HTMLElement
-		;(col.querySelector(".x") as HTMLElement).onclick = (e) => call("remove-list", [id], e)
-		;(col.querySelector(".h") as HTMLElement).onclick = (e) => call("open", ["list", id], e)
-		;(col.querySelector(".add") as any).submit = (text: string, e: unknown) =>
-			call("add-card", [id, text], e)
-		editable(name, () => nameOf(id), (text, e) => call("rename-list", [id, text], e))
-		draggable(col.querySelector("header") as HTMLElement, col, "list", () => null, id)
-		effect(`title-${id}`, () => read(nodeId(id)) as string, (v) => {
+		editable(name)
+		createEffect(`title-${id}`, () => read(str([...LISTS, id])) as string, (v) => {
+			name.dataset.was = v
 			if (document.activeElement !== name) name.textContent = v
 		})
-		effect(`size-${id}`, () => [...order(cardsOf(id))], (keys) => {
+		createEffect(`size-${id}`, () => [...order(cardsOf(id))], (keys) => {
 			count.textContent = String(keys.filter((k) => !ghosted(k)).length)
 			mount(cards, keys.map((k) => card(k, id)))
 		}, { equal: same })
@@ -808,19 +862,22 @@ export default function program(api: API & { who: () => Who }) {
 		el.dataset.card = id
 		el.dataset.list = list
 		const text = el.querySelector(".text") as HTMLElement
-		;(el.querySelector(".x") as HTMLElement).onclick = (e) =>
-			call("remove-card", [el.dataset.list, id], e)
-		;(el.querySelector(".dot") as HTMLElement).onclick = (e) => call("tint", [id], e)
-		;(el.querySelector(".h") as HTMLElement).onclick = (e) => call("open", ["card", id], e)
 
-		editable(text, () => textOf(id)!, (v, e) => call("edit-card", [id, v], e), el)
-		draggable(el, el, "card", () => el.dataset.list!, id)
-		effect(`draw-${id}`, () => read(nodeId(id)) as { text: string; tint: string }, (v) => {
-			if (document.activeElement !== text) text.textContent = v.text
-			el.dataset.tint = v.tint
-			const next = TINTS[(TINTS.indexOf(v.tint) + 1) % TINTS.length]
-			el.style.setProperty("--next", next === "none" ? "#fff" : `var(--${next}, ${tint(next)})`)
-		})
+		editable(text)
+		createEffect(
+			`draw-${id}`,
+			() => read(str([...cardsOf(list), id])) as { text: string; tint: string },
+			(v) => {
+				text.dataset.was = v.text
+				if (document.activeElement !== text) text.textContent = v.text
+				el.dataset.tint = v.tint
+				const next = TINTS[(TINTS.indexOf(v.tint) + 1) % TINTS.length]
+				el.style.setProperty(
+					"--next",
+					next === "none" ? "#fff" : `var(--${next}, ${tint(next)})`,
+				)
+			},
+		)
 		return el
 	}
 
@@ -830,7 +887,7 @@ export default function program(api: API & { who: () => Who }) {
 		"drawer",
 		() => Object.assign(document.createElement("aside"), { className: "drawer" }),
 	)
-	effect("panel", () => {
+	createEffect("panel", () => {
 		const o = read(drawing) as { kind: string; id: string } | null
 		if (!o) return null
 		const { steps, at } = read(history) as History
@@ -841,12 +898,12 @@ export default function program(api: API & { who: () => Who }) {
 			: o.kind === "list"
 			? nameOf(o.id)
 			: textOf(o.id)
-		const folderId = o.kind === "list" ? idAt(cardsOf(o.id)) : undefined
 		const rows = applied.filter((x) =>
-			o.kind === "board" || x.about?.includes(o.id) || x.writes.some((w) => w.id === o.id) ||
-			(folderId !== undefined && x.writes.some((w) => w.id === folderId))
+			o.kind === "board" || x.about?.includes(o.id) ||
+			x.writes.some((w) => w.key === `${o.kind}:${o.id}`) ||
+			(o.kind === "list" && x.writes.some((w) => w.key === `cards:${o.id}`))
 		).reverse()
-		return { o, name, rows, undone }
+		return { o, name, rows, undone, shown: read(planned) as { n: number; plan: any } | null }
 	}, (v) => {
 		drawer.hidden = !v
 		view.classList.toggle("drawn", !!v)
@@ -859,14 +916,18 @@ export default function program(api: API & { who: () => Who }) {
 				esc(v.name ?? "")
 			}</b><button class="close" title="close">×</button></header>` +
 			(v.rows.length ? "" : `<p class="none">nothing has happened to it yet</p>`)
-		;(drawer.querySelector(".close") as HTMLElement).onclick = (e) => call("open", [null], e)
-		for (const x of v.rows) drawer.append(row(x, v.undone.has(x.n)))
+		for (const x of v.rows) {
+			drawer.append(row(x, v.undone.has(x.n), v.shown?.n === x.n ? v.shown.plan : undefined))
+		}
 	})
 
-	function row(x: Stp, done: boolean) {
+	// a step of the history: its words, and the plan for undoing just it when it was asked for (the
+	// buttons are heard on the root: undo just this, never mind, undo it)
+	function row(x: Stp, done: boolean, plan_?: any) {
 		const r = Object.assign(document.createElement("div"), {
 			className: "step" + (done ? " done" : ""),
 		})
+		r.dataset.step = String(x.n)
 		const when = new Date(x.time).toLocaleTimeString()
 		r.innerHTML = `<div class="line"><span class="no">#${x.n}</span><span>${
 			x.trusted ? "you" : esc(x.caller) + " (a script)"
@@ -875,48 +936,37 @@ export default function program(api: API & { who: () => Who }) {
 		}</div><div class="acts"><button class="one">undo just this</button></div><div class="pre" hidden></div>`
 		const pre = r.querySelector(".pre") as HTMLElement
 		const one = r.querySelector(".one") as HTMLElement
-		one.onclick = () => {
-			const plan_ = plan(x.n)
-			pre.hidden = false
-			one.hidden = true
-			if (!plan_.ok) {
-				pre.className = "pre nope"
-				pre.innerHTML = `can't undo ${words(x.words)}: ${
-					why(plan_)
-				}<div class="acts"><button class="nm">ok</button></div>`
-			} else {
-				pre.className = "pre yes"
-				const later = Math.max(...plan_.writes.map((w: any) => w.later))
-				const moved = plan_.writes.some((w: any) => w.moved)
-				pre.innerHTML = `<b>it would:</b>` + plan_.writes.map(change).join("") +
-					`<p class="how">${
-						later
-							? `carried through ${later} later change${later > 1 ? "s" : ""}${
-								moved ? ": its places moved" : ""
-							}`
-							: "nothing changed it since"
-					}</p><div class="acts"><button class="go">undo it</button><button class="nm">never mind</button></div>`
-				;(pre.querySelector(".go") as HTMLElement).onclick = (e) => {
-					const done = call("revert", [x.n], e) as any
-					if (done && !done.ok) {
-						pre.className = "pre nope"
-						pre.innerHTML = `can't undo ${words(x.words)}: ${why(done)}`
-					}
-				}
-			}
-			;(pre.querySelector(".nm") as HTMLElement).onclick =
-				() => (pre.hidden = true, one.hidden = false)
+		if (!plan_) return r
+		pre.hidden = false
+		one.hidden = true
+		if (!plan_.ok) {
+			pre.className = "pre nope"
+			pre.innerHTML = `can't undo ${words(x.words)}: ${
+				why(plan_)
+			}<div class="acts"><button class="nm">ok</button></div>`
+		} else {
+			pre.className = "pre yes"
+			const later = Math.max(...plan_.writes.map((w: any) => w.later))
+			const moved = plan_.writes.some((w: any) => w.moved)
+			pre.innerHTML = `<b>it would:</b>` + plan_.writes.map(change_).join("") +
+				`<p class="how">${
+					later
+						? `carried through ${later} later change${later > 1 ? "s" : ""}${
+							moved ? ": its places moved" : ""
+						}`
+						: "nothing changed it since"
+				}</p><div class="acts"><button class="go">undo it</button><button class="nm">never mind</button></div>`
 		}
 		return r
 	}
 
 	// a node's value now and after, in words: a list's cards in order, a card's words and colour,
 	// a list's title
-	function change(w: any) {
-		// the names placed or taken out are in the order too: the order is what is shown
-		if (w.part === "children") return ""
+	function change_(w: any) {
+		// a node moved is shown by the orders it changed
+		if (w.kind === "moved") return ""
 		if (Array.isArray(w.after)) {
-			const board = w.id === idAt(LISTS)
+			const board = w.key === "lists"
 			const names = (v: string[] | undefined) => (v ?? []).filter((k) => !ghosted(k))
 			const name = (id: string) => esc((board ? nameOf(id) : textOf(id)) ?? "?")
 			// the ids its patches put in, take out or move: those are marked
@@ -932,9 +982,7 @@ export default function program(api: API & { who: () => Who }) {
 			const mark = (ids: string[]) =>
 				ids.map((id) => touched.has(id) ? `<mark>${name(id)}</mark>` : name(id)).join(", ") ||
 				"<i>none</i>"
-			const owner = board
-				? "the lists"
-				: nameOf(idsIn(LISTS).find((l) => idAt(cardsOf(l)) === w.id)!) ?? "a list"
+			const owner = board ? "the lists" : nameOf(w.key.slice("cards:".length)) ?? "a list"
 			return `<p><em>${board ? owner : esc(owner)}</em>: ${mark(names(w.before))} → ${
 				mark(names(w.after))
 			}</p>`
@@ -957,20 +1005,21 @@ export default function program(api: API & { who: () => Who }) {
 				words(plan.by.words)
 			}, #${plan.by.n})`
 			: ""
-		const v = plan.part === "value" ? read(nodeId(plan.id)) : undefined
-		const card = v !== undefined && typeof v !== "string" && !Array.isArray(v)
-		const order = Array.isArray(v)
+		const kind = String(plan.key).split(":")[0]
+		const id = String(plan.key).split(":")[1]
+		const card = kind === "card"
+		const order = kind === "lists" || kind === "cards"
 		if (plan.why === "undone") return "it is not on the history now"
 		if (plan.why === "gone") {
 			return card
-				? `<em>${esc(textOf(plan.id) ?? "")}</em> was removed after${then}`
+				? `<em>${esc(textOf(id) ?? "")}</em> was removed after${then}`
 				: order
 				? `the list was removed after${then}`
-				: `the list <em>${esc(nameOf(plan.id))}</em> was removed after${then}`
+				: `the list <em>${esc(nameOf(id) ?? "")}</em> was removed after${then}`
 		}
 		if (plan.why === "again") return `it was changed again after${then}`
 		if (plan.why === "overlap" || plan.why === "inside") {
-			return order || plan.part === "children"
+			return order || plan.kind === "moved"
 				? `a later change moved or removed the same card${then}`
 				: `a later change edited the same words${then}`
 		}
@@ -978,66 +1027,157 @@ export default function program(api: API & { who: () => Who }) {
 	}
 
 	mount(view, [top, lists, drawer])
-	teardown((why) => why === "ended" && view.remove())
-	return view
+	addTeardown((why) => why === "ended" && view.remove())
 
-	// ---- by hand: the DOM side of a drag. a float follows the pointer (DOM only); the drop spot is
-	// the graph's (a hover call places the ghost), so the lists draw it like any entry. the
-	// listeners are the document's: a mount moving the dragged element would drop a capture
-	function draggable(handle, el, kind, from, id) {
-		handle.onpointerdown = (down) => {
-			if (
-				down.button !== 0 ||
-				(down.target as HTMLElement).closest("button,[contenteditable=true]")
-			) return
-			const box = el.getBoundingClientRect()
-			const dx = down.clientX - box.left, dy = down.clientY - box.top
-			let float, last = ""
-			const source = from()
-			const move = (e) => {
-				if (!float) {
-					if (Math.hypot(e.clientX - down.clientX, e.clientY - down.clientY) < 5) return
-					float = el.cloneNode(true)
-					float.classList.add("float")
-					float.style.width = box.width + "px"
-					document.body.append(float)
-					el.classList.add("lifted")
-				}
-				float.style.left = e.clientX - dx + "px"
-				float.style.top = e.clientY - dy + "px"
-				const spot = spotAt(kind, e.clientX, e.clientY, id)
-				if (spot && spot.join() !== last) {
-					last = spot.join()
-					call("hover", [kind, spot[0], spot[1], id], e)
-				}
-			}
-			const finish = (e, drop) => {
-				document.removeEventListener("pointermove", move)
-				document.removeEventListener("pointerup", up)
-				document.removeEventListener("pointercancel", cancel)
-				document.removeEventListener("keydown", escape)
-				if (!float) return
-				float.remove()
-				el.classList.remove("lifted")
-				if (!drop) return call("cancel", [], e)
-				call("move", [kind, source, id], e)
-				const into = lists.querySelector(`[data-card="${id}"]`)?.closest(".list")
-				if (kind === "card" && /done/i.test(into?.querySelector(".name")?.textContent ?? "")) {
-					if (into.dataset.list !== source) burst(e.clientX, e.clientY)
-				}
-			}
-			const up = (e) => finish(e, true)
-			const cancel = (e) => finish(e, false)
-			const escape = (e) => e.key === "Escape" && finish(e, false)
-			document.addEventListener("pointermove", move)
-			document.addEventListener("pointerup", up)
-			document.addEventListener("pointercancel", cancel)
-			document.addEventListener("keydown", escape)
+	// ---- the events. the board's elements are built by hand and nothing is open in a plain listener to
+	// call an action from, so the board is one jsx root, and every event that calls is heard there
+	// (bubbling, or the pointer kept by capture while one is dragged): each reads what it hit and
+	// says the call it makes (on/do: name, ...args), or none. what only moves the page (opening an
+	// adder, starting an edit) keeps its own listener
+	let root!: HTMLElement
+	const nearest = (e: Event, q: string) =>
+		(e.target as HTMLElement).closest(q) as HTMLElement | null
+
+	// "+ add a card": the text in the adder's textarea, cleared, as the call for that adder (a card
+	// in its list, or a list)
+	function added(box: HTMLElement) {
+		const area = box.querySelector("textarea") as HTMLTextAreaElement
+		const text = area.value.trim()
+		area.value = ""
+		area.focus()
+		if (!text) return
+		const col = box.closest(".list[data-list]") as HTMLElement | null
+		return col ? ["add-card", col.dataset.list, text] : ["add-list", text]
+	}
+	const onClick = (e: MouseEvent) => {
+		const b = nearest(e, "button")
+		if (!b) return
+		const col = b.closest(".list[data-list]") as HTMLElement | null
+		const card = b.closest(".card") as HTMLElement | null
+		const step = b.closest(".step") as HTMLElement | null
+		const box = b.closest(".add") as HTMLElement | null
+		if (b.dataset.do === "undo" || b.dataset.do === "redo") return [b.dataset.do]
+		if (b.dataset.do === "open-board") return ["open", "board", "board"]
+		if (box) return b.classList.contains("go") ? added(box) : undefined
+		if (card) {
+			const id = card.dataset.card
+			if (b.classList.contains("x")) return ["remove-card", card.dataset.list, id]
+			if (b.classList.contains("dot")) return ["tint", id]
+			if (b.classList.contains("h")) return ["open", "card", id]
+		} else if (col && b.closest("header")) {
+			if (b.classList.contains("x")) return ["remove-list", col.dataset.list]
+			if (b.classList.contains("h")) return ["open", "list", col.dataset.list]
 		}
+		if (b.classList.contains("close")) return ["open", null]
+		if (step) {
+			const n = Number(step.dataset.step)
+			if (b.classList.contains("one")) return ["plan", n]
+			if (b.classList.contains("nm")) return ["plan", null]
+			if (b.classList.contains("go")) return ["revert", n]
+		}
+	}
+	// enter in an adder adds; ⌘Z and ⇧⌘Z undo and redo; escape lets go of a drag
+	const onKey = (e: KeyboardEvent) => {
+		const t = e.target as HTMLElement
+		if (e.key === "Enter" && !e.shiftKey && t.tagName === "TEXTAREA") {
+			const box = t.closest(".add") as HTMLElement | null
+			if (box) return (e.preventDefault(), added(box))
+		}
+		if (e.key === "Escape" && drag?.float) return finish(e, false)
+		if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return
+		if (t.isContentEditable || t.tagName === "TEXTAREA") return
+		e.preventDefault()
+		return [e.shiftKey ? "redo" : "undo"]
+	}
+	// an edit in place ends when it loses the focus: kept if it changed and is not empty, else put back
+	const onOut = (e: FocusEvent) => {
+		const t = e.target as HTMLElement
+		if (t.contentEditable !== "true") return
+		t.contentEditable = "false"
+		const card = t.closest(".card") as HTMLElement | null
+		;(card ?? t).classList.remove("editing")
+		const v = (t.textContent ?? "").trim()
+		const was = t.dataset.was ?? ""
+		if (!v || v === was) return void (t.textContent = was)
+		return card
+			? ["edit-card", card.dataset.card, v]
+			: ["rename-list", (t.closest(".list[data-list]") as HTMLElement).dataset.list, v]
+	}
+
+	// the DOM side of a drag: a float follows the pointer; the drop spot is the graph's (a hover call
+	// places the ghost), so the lists draw it like any entry
+	type Drag = {
+		kind: "card" | "list"
+		el: HTMLElement
+		source: string | null
+		id: string
+		down: PointerEvent
+		box: DOMRect
+		float?: HTMLElement
+		last: string
+		into?: string | null
+	}
+	let drag: Drag | undefined
+	const onDown = (e: PointerEvent) => {
+		if (e.button !== 0 || nearest(e, "button,[contenteditable=true],textarea")) return
+		const head = nearest(e, ".list > header")
+		const card = nearest(e, ".card")
+		const el = head ? head.parentElement! : card
+		if (!el || el.classList.contains("ghost")) return
+		drag = {
+			kind: head ? "list" : "card",
+			el,
+			source: head ? null : el.dataset.list!,
+			id: head ? el.dataset.list! : el.dataset.card!,
+			down: e,
+			box: el.getBoundingClientRect(),
+			last: "",
+		}
+	}
+	const onMove = (e: PointerEvent) => {
+		const d = drag
+		if (!d) return
+		if (!d.float) {
+			if (Math.hypot(e.clientX - d.down.clientX, e.clientY - d.down.clientY) < 5) return
+			d.float = d.el.cloneNode(true) as HTMLElement
+			d.float.classList.add("float")
+			d.float.style.width = d.box.width + "px"
+			document.body.append(d.float)
+			d.el.classList.add("lifted")
+			// from here the pointer is the root's, wherever it goes (a mount moving the dragged element
+			// would otherwise drop it)
+			root.setPointerCapture(d.down.pointerId)
+		}
+		d.float.style.left = e.clientX - (d.down.clientX - d.box.left) + "px"
+		d.float.style.top = e.clientY - (d.down.clientY - d.box.top) + "px"
+		const spot = spotAt(d.kind, e.clientX, e.clientY, d.id)
+		if (spot && spot.join() !== d.last) {
+			d.last = spot.join()
+			d.into = spot[0] as string | null
+			return ["hover", d.kind, spot[0], spot[1], d.id]
+		}
+	}
+	const finish = (e: PointerEvent | KeyboardEvent, drop: boolean) => {
+		const d = drag
+		drag = undefined
+		if (!d?.float) return
+		d.float.remove()
+		d.el.classList.remove("lifted")
+		if (!drop) return ["cancel"]
+		// a card dropped into the list called done, from another: a burst (DOM only)
+		const into = d.into ? lists.querySelector(`[data-list="${d.into}"]`) : undefined
+		if (
+			d.kind === "card" && d.into !== d.source &&
+			/done/i.test(into?.querySelector(".name")?.textContent ?? "")
+		) {
+			const at = e as PointerEvent
+			burst(at.clientX, at.clientY)
+		}
+		return ["move", d.kind, d.source, d.id]
 	}
 
 	// where a drop would land: [list id, place among the others], or [null, place] for a list
-	function spotAt(kind, x, y, id) {
+	function spotAt(kind: string, x: number, y: number, id: string) {
 		if (kind === "list") {
 			const cols = [...lists.querySelectorAll(":scope > .list:not(.ghost):not(.lifted)")]
 			return [
@@ -1062,30 +1202,26 @@ export default function program(api: API & { who: () => Who }) {
 		]
 	}
 
-	// double-click to edit in place: enter keeps it, escape puts it back
-	function editable(el, now, save, frame = el) {
+	// double-click to edit in place: enter keeps it, escape puts it back (what it was is the
+	// element's data-was; the root hears it lose the focus and says the call)
+	function editable(el: HTMLElement) {
+		const frame = el.classList.contains("text") ? el.closest(".card") as HTMLElement : el
 		frame.ondblclick = () => {
 			el.contentEditable = "true"
 			frame.classList.add("editing")
 			el.focus()
-			getSelection().selectAllChildren(el)
+			getSelection()!.selectAllChildren(el)
 		}
 		el.onkeydown = (e) => {
 			if (e.key === "Enter" && !e.shiftKey) (e.preventDefault(), el.blur())
-			if (e.key === "Escape") (el.textContent = now(), el.blur())
-		}
-		el.onblur = (e) => {
-			el.contentEditable = "false"
-			frame.classList.remove("editing")
-			const v = el.textContent.trim()
-			if (v && v !== now()) save(v, e)
-			else el.textContent = now()
+			if (e.key === "Escape") (el.textContent = el.dataset.was ?? "", el.blur())
 		}
 	}
 
-	// "+ add a card": a button that opens into a textarea; enter adds and stays open
-	function adder(label, hint) {
-		const el = Object.assign(document.createElement("div"), { className: "add" }) as any
+	// "+ add a card": a button that opens into a textarea; enter or add (the root hears them) adds
+	// and stays open
+	function adder(label: string, hint: string) {
+		const el = Object.assign(document.createElement("div"), { className: "add" }) as HTMLElement
 		const open = Object.assign(document.createElement("button"), {
 			className: "open",
 			textContent: label,
@@ -1098,28 +1234,41 @@ export default function program(api: API & { who: () => Who }) {
 		})
 		const no = Object.assign(document.createElement("button"), { textContent: "×" })
 		row.append(go, no)
-		const show = (on) => {
+		const show = (on: boolean) => {
 			open.hidden = on
 			area.hidden = row.hidden = !on
 			if (on) area.focus()
 		}
-		const add = (e) => {
-			const text = area.value.trim()
-			if (text) el.submit(text, e)
-			area.value = ""
-			area.focus()
-		}
 		open.onclick = () => show(true)
 		no.onclick = () => show(false)
-		go.onclick = add
 		area.onkeydown = (e) => {
-			if (e.key === "Enter" && !e.shiftKey) (e.preventDefault(), add(e))
 			if (e.key === "Escape") show(false)
 		}
 		el.append(open, area, row)
 		show(false)
 		return el
 	}
+
+	const onStage = (f: (e: any) => unknown[] | undefined | void) => handler("on/do", f as never)
+	return (
+		<div
+			class="root"
+			tabIndex={-1}
+			ref={(e) => {
+				root = e as HTMLElement
+				root.focus({ preventScroll: true })
+			}}
+			onClick={onStage(onClick)}
+			onKeyDown={onStage(onKey)}
+			onFocusOut={onStage(onOut)}
+			onPointerDown={onStage(onDown)}
+			onPointerMove={onStage(onMove)}
+			onPointerUp={onStage((e) => finish(e, true))}
+			onPointerCancel={onStage((e) => finish(e, false))}
+		>
+			{view}
+		</div>
+	)
 }
 
 // a name in words: *like this*
