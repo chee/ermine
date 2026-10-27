@@ -206,16 +206,18 @@ function fixes(
 		)
 	const out: (readonly Step[])[] = []
 	// a list of the same length, or a map of the same names: what differs in it, one step down
+	// ===, but NaN is NaN
+	const ident = (a: unknown, b: unknown) => a === b || (a !== a && b !== b)
 	function diff(a: unknown, b: unknown, s: readonly Step[]) {
-		if (a === b) return
+		if (ident(a, b)) return
 		if (Array.isArray(a) && Array.isArray(b) && a.length === b.length) {
-			for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) out.push([...s, i])
+			for (let i = 0; i < a.length; i++) if (!ident(a[i], b[i])) out.push([...s, i])
 			return
 		}
 		if (isMap(a) && isMap(b)) {
 			const names = Object.keys(a)
 			if (names.length === Object.keys(b).length && names.every((k) => Object.hasOwn(b, k))) {
-				for (const k of names) if (a[k] !== b[k]) out.push([...s, k])
+				for (const k of names) if (!ident(a[k], b[k])) out.push([...s, k])
 				return
 			}
 		}
