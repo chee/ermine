@@ -182,19 +182,21 @@ export type Errored = (error: unknown, fn: string | undefined) => unknown
 // what a new id is for
 export type IdKind = "node" | "process"
 export type Hook = keyof Hooks
-export const HOOKS: readonly Hook[] = [
-	"onTable",
-	"onRead",
-	"onWrite",
-	"onTeardown",
-	"onRecord",
-	"onStatus",
-	"onId",
-	"onSchedule",
-	"onCreateFunction",
-	"onError",
-	"onTrace",
-]
+// every hook, written once: a hook added to Hooks is missed here as a type error
+const HOOK_KEYS: Record<Hook, true> = {
+	onTable: true,
+	onRead: true,
+	onWrite: true,
+	onTeardown: true,
+	onRecord: true,
+	onStatus: true,
+	onId: true,
+	onSchedule: true,
+	onCreateFunction: true,
+	onError: true,
+	onTrace: true,
+}
+export const HOOKS = Object.keys(HOOK_KEYS) as readonly Hook[]
 
 // per-process state, by context: only who holds the slot reaches it
 export type Slot<T> = {
@@ -317,19 +319,7 @@ export function install(
 		calling: () => (() => Calling | undefined) | undefined
 	},
 ): Installed {
-	const hooks = {
-		onTable: [],
-		onRead: [],
-		onWrite: [],
-		onTeardown: [],
-		onRecord: [],
-		onStatus: [],
-		onId: [],
-		onSchedule: [],
-		onCreateFunction: [],
-		onError: [],
-		onTrace: [],
-	} as {
+	const hooks = Object.fromEntries(HOOKS.map((h) => [h, []])) as unknown as {
 		[H in Hook]: Hooked<H>[]
 	}
 	const shown: Shown[] = []
@@ -367,17 +357,7 @@ export function install(
 			get processes() {
 				return got("processes", parts.processes)
 			},
-			onTable: adder("onTable"),
-			onRead: adder("onRead"),
-			onWrite: adder("onWrite"),
-			onTeardown: adder("onTeardown"),
-			onRecord: adder("onRecord"),
-			onStatus: adder("onStatus"),
-			onId: adder("onId"),
-			onSchedule: adder("onSchedule"),
-			onCreateFunction: adder("onCreateFunction"),
-			onError: adder("onError"),
-			onTrace: adder("onTrace"),
+			...Object.fromEntries(HOOKS.map((h) => [h, adder(h)])) as Pick<FeatureAPI, Hook>,
 			getProcessContext: ((process?: Process) =>
 				got("getProcessContext", parts.getProcessContext)(process)) as FeatureAPI[
 					"getProcessContext"
