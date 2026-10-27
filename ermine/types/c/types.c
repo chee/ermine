@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../../processes/c/platform.h"
+
 // calloc and strdup that abort, a growing array, a random id: out of memory aborts
 static void *ty_alloc(size_t n) {
 	void *p = calloc(1, n ? n : 1);
@@ -30,7 +32,7 @@ static char *ty_dup(const char *s) { return strcpy(ty_alloc(strlen(s) + 1), s); 
 static char *ty_uuid(void) {
 	static const char hex[] = "0123456789abcdef";
 	unsigned char b[16];
-	arc4random_buf(b, sizeof b);
+	PF_RANDOM(b, sizeof b);
 	char *id = ty_alloc(37);
 	size_t at = 0;
 	for (size_t i = 0; i < 16; i++) {

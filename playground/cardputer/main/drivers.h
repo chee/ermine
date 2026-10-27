@@ -3,13 +3,14 @@
 #ifndef DRIVERS_H
 #define DRIVERS_H
 
-#include "ermine/api/c/api.h"
+#include "ermine/system/c/ermine.h"
 
-int keyboard(api *a);
-// a key pressed: "a", "A", "enter", "backspace", "esc", "up", ...
-void keyboard_press(api *a, const char *key);
+// setups (host_start's): the keyboard makes /keyboard, the display's effect draws
+es_out keyboard(es_context *c, void *ctx);
+// a key pressed, as the keyboard's process: "a", "A", "enter", "backspace", "esc", "up", ...
+void keyboard_press(es_context *keyboard, const char *key);
 
-int display(api *a);
+es_out display(es_context *c, void *ctx);
 // the platform's: draw a screen value, {lines, prompt}
 void show(const op_value *screen);
 

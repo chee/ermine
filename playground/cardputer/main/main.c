@@ -204,7 +204,7 @@ static void paint_not_up(void) {
 
 // a key from the keyboard: tab says yes to a pair ask waiting, esc no; esc else turns the mode
 // (with the shell on); else to the shell, or to /home/keys
-static void pressed(api *keyboard_api, const char *k) {
+static void pressed(es_context *keyboard_api, const char *k) {
 	// the menu, open, takes the keys (not tab: a pair ask's yes)
 	if (dens_mode && menu_key(k)) return;
 	if (strcmp(k, "tab") == 0) {
@@ -377,12 +377,12 @@ void app_main(void) {
 	gpio_config(&g0);
 	host_init();
 	// the keyboard's process (/keyboard) is the shell's only: with WiFi, keys go to the den's keys thing
-	api *keyboard_api = shell_on ? host_start("keyboard", keyboard) : NULL;
+	es_context *keyboard_api = shell_on ? host_start("keyboard", keyboard, NULL) : NULL;
 	// the shell and its display (a memo of the whole tree as text, made again at every change) only
 	// without WiFi: with it, the den, WiFi and a TLS handshake need all the heap there is
 	if (shell_on) {
-		host_start("shell", shell);
-		host_start("display", display);
+		host_start("shell", shell, NULL);
+		host_start("display", display, NULL);
 	}
 	if (nvs_flash_init() != ESP_OK) nvs_flash_erase(), nvs_flash_init();
 	inst_install me;

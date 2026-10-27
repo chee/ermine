@@ -2,8 +2,8 @@
 #ifndef SHELL_H
 #define SHELL_H
 
-#include "ermine/api/c/api.h"
+#include "ermine/system/c/ermine.h"
 
-int shell(api *a);
+es_out shell(es_context *c, void *ctx);
 
 #endif

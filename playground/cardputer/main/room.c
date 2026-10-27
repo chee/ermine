@@ -51,17 +51,17 @@ static void follow(const char *id) {
 }
 
 // the value at path made, or set: when the graph does not have it already
-static void put(api *a, const char *path, const op_value *v) {
+static void put(es_context *c, const char *path, const op_value *v) {
 	const op_value *there = NULL;
-	api_read(a, api_at(path), NULL, 0, &there);
+	es_read(c, es_on_path(es_text(path)), NULL, 0, &there);
 	if (same(there, v)) return;
 	op_value *value = v ? op_ref((op_value *)v) : op_null();
 	if (there == NULL) {
-		api_node n;
-		if (api_open(a, path, value, &n) == API_OK) api_node_free(&n);
+		es_handle *n;
+		es_ensure_node(c, es_text(path), value, &n);
 	} else {
 		op_patch p = {.place = {NULL, 0}, .has_value = 1, .value = value};
-		api_edit(a, api_at(path), &p, 1);
+		es_patch(c, es_on_path(es_text(path)), &p, 1);
 	}
 	op_free(value);
 }
@@ -91,8 +91,9 @@ static op_value *pointers(const ls_node *room) {
 	return out;
 }
 
-void room_mirror(api *a) {
-	if (dev == NULL) return;
+static int mirror(void *data) {
+	es_context *c = data;
+	if (dev == NULL) return 0;
 	// the room's pigs followed: each placed in its children
 	const op_value *room = ls_children(followed[0].node);
 	for (size_t i = 0; i < pig_room_count(room); i++) follow(pig_room_at(room, i));
@@ -100,10 +101,10 @@ void room_mirror(api *a) {
 		ls_node *n = followed[i].node;
 		if (followed[i].mirrored && ls_version(n) == followed[i].seen) continue;
 		followed[i].seen = ls_version(n), followed[i].mirrored = 1;
-		put(a, followed[i].path, ls_value(n));
+		put(c, followed[i].path, ls_value(n));
 		if (i == 0) {
 			op_value *ps = pointers(n);
-			put(a, "/pigs/room/pointers", ps);
+			put(c, "/pigs/room/pointers", ps);
 			op_free(ps);
 			continue;
 		}
@@ -112,44 +113,49 @@ void room_mirror(api *a) {
 		snprintf(held, sizeof held, "%s/held", followed[i].path);
 		const op_value *h = NULL;
 		for (size_t k = 0; k < ls_helds(n) && h == NULL; k++) h = ls_held_at(n, k)->value;
-		put(a, held, h);
+		put(c, held, h);
 		// a clash (two devices dropped it at once): the other drop, the pig drawn again
 		ls_item items[2];
 		snprintf(held, sizeof held, "%s/also", followed[i].path);
-		put(a, held, ls_values(n, NULL, 0, items, 2) > 1 ? items[1].value : NULL);
+		put(c, held, ls_values(n, NULL, 0, items, 2) > 1 ? items[1].value : NULL);
 	}
+	return 0;
 }
+
+// outside a run: with the room's process open
+void room_mirror(es_context *c) { es_within(c, mirror, c); }
 
 // graph to littlesync: each followed node's value in the graph, tracked; acted on when littlesync
 // does not have it
-static sc_out values(api *a, const op_value *previous, void *ctx) {
+static es_out values(es_context *c, void *ctx, const op_value *previous) {
 	(void)previous, (void)ctx;
 	op_value *out = op_list();
 	for (int i = 0; i < nfollowed; i++) {
 		const op_value *v = NULL;
-		if (api_read(a, api_at(followed[i].path), NULL, 0, &v) == API_PENDING)
-			return op_free(out), (sc_out){.kind = SC_PENDING};
+		if (es_read(c, es_on_path(es_text(followed[i].path)), NULL, 0, &v) == ES_PENDING)
+			return op_free(out), es_out_pending();
 		op_push(out, v ? op_ref((op_value *)v) : op_null());
 	}
-	return (sc_out){.kind = SC_VALUE, .value = out};
+	return es_out_of(out);
 }
 
-static void push(api *a, const op_value *value, const op_value *before, void *ctx) {
-	(void)a, (void)before, (void)ctx;
+static int push(es_context *c, void *ctx, const op_value *value, const op_value *before) {
+	(void)c, (void)before, (void)ctx;
 	for (size_t i = 0; value && i < value->count && i < (size_t)nfollowed; i++) {
 		const op_value *v = value->items[i];
 		if (v->type == OP_NULL || same(v, ls_value(followed[i].node))) continue;
 		// a person's edit: this is the value, every item replaced (a clash ends)
 		ls_pick(followed[i].node, v);
 	}
+	return 0;
 }
 
-int room(api *a) {
-	if (dev == NULL) return API_OK;
+es_out room(es_context *c, void *ctx) {
+	(void)ctx;
+	if (dev == NULL) return es_out_of(NULL);
 	follow(PIGS_ROOM);
-	room_mirror(a);
-	api_node n;
-	int code = api_effect(a, "push", values, push, NULL, NULL, &n);
-	if (code == API_OK) api_node_free(&n);
-	return code;
+	room_mirror(c);
+	es_handle *n;
+	int code = es_create_effect(c, es_text("push"), values, push, NULL, NULL, &n);
+	return code ? es_out_code(code) : es_out_of(NULL);
 }

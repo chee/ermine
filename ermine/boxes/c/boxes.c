@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../../processes/c/platform.h"
+
 static void *xalloc(size_t n) {
 	void *p = calloc(1, n ? n : 1);
 	if (p == NULL) {
@@ -84,7 +86,7 @@ static int saved(tb_table *table, tb_key at, const char *name, tb_key *out) {
 static char *uuid(void) {
 	static const char hex[] = "0123456789abcdef";
 	unsigned char bytes[16];
-	arc4random_buf(bytes, sizeof bytes);
+	PF_RANDOM(bytes, sizeof bytes);
 	bytes[6] = (bytes[6] & 0x0f) | 0x40;
 	bytes[8] = (bytes[8] & 0x3f) | 0x80;
 	char *id = xalloc(37);

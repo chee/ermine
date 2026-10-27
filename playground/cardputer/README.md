@@ -41,8 +41,8 @@ history is kept at each boot and again once 16 steps have come and none for 5 s,
 tippet's forgetting: each snapshot lets go of the runs galaxy has.
 
 **G0** (the BOOT button, or ctrl-g on the serial line) opens the menu, `/system/menu`, a folder in
-the den's graph: each child an item, its value a handler (a method, the process api's `api_method`),
-run with `api_send` when picked (enter, or its number; `;` `.` move, esc shuts). "join a room": four
+the den's graph: each child an item, its value a handler (an action, the process api's `es_create_action`),
+run with `es_execute_action` when picked (enter, or its number; `;` `.` move, esc shuts). "join a room": four
 of ACDEFHJKMNPRTWXY, enter. "new room": a code picked and shown big; enter goes there. The room is
 kept in NVS (`dens`/`room`; menuconfig's `CONFIG_CARDPUTER_ROOM` only when NVS has none), and going
 to one says bye, syncs the log and restarts the den in it; its code is always at the screen's top
