@@ -181,7 +181,6 @@ static void shell_free(op_value *v) {
 		free(v->items);
 		free(v->keys);
 		free(v->index);
-		free(v->gaps);
 	} else if (v->type == OP_STR || v->type == OP_BYTES || v->type == OP_TYPED) free(v->str);
 	free(v);
 }

@@ -44,11 +44,9 @@ struct op_value {
 		struct {
 			op_value **items;
 			char **keys;
-			// a big map's lookup table, made when first asked
+			// a big map's lookup table (positions plus one), made when first asked
 			size_t *index;
 			size_t slots;
-			// removals since the table was made: how many, then where (see value.c)
-			size_t *gaps;
 		};
 		struct {
 			// a string's: its bytes, and whether they are all ASCII (then a byte is a code point).
