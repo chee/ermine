@@ -1,0 +1,24 @@
+{
+	"title": "at steps into an int64 or uint64 typed array past 2^53 exactly, the element a whole number as it is. known: C's pl_at gives a double, rounding it, so this runs on TypeScript only till its elements are read whole",
+	"typescript": true,
+	"steps": [
+		{
+			"op": "at",
+			"value": { "W": { "/": { "int64": ["9007199254740993", "-9007199254740993"] } } },
+			"path": ["W", 0],
+			"expect": { "value": 9007199254740993 }
+		},
+		{
+			"op": "at",
+			"value": { "W": { "/": { "int64": ["9007199254740993", "-9007199254740993"] } } },
+			"path": ["W", 1],
+			"expect": { "value": -9007199254740993 }
+		},
+		{
+			"op": "at",
+			"value": { "W": { "/": { "uint64": ["18446744073709551615"] } } },
+			"path": ["W", 0],
+			"expect": { "value": 18446744073709551615 }
+		}
+	]
+}
