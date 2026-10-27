@@ -517,8 +517,14 @@ int es_inside(es_context *c, es_thunk f, void *ctx) {
 	return es_within(c, f, ctx);
 }
 
+sc_scope *es_open(es_context *c) {
+	sc_scope *o = sc_get_current_scope(c->ermine->scheduler);
+	return o != NULL ? o : c->scope;
+}
+
 sc_scope *es_owner(es_context *c) {
 	sc_scope *o = sc_get_current_scope(c->ermine->scheduler);
+	while (o != NULL && es_is_mark(c->ermine, o)) o = sc_scope_parent(o);
 	return o != NULL ? o : c->scope;
 }
 
@@ -582,6 +588,9 @@ static int ask_slot(es_context *c, const char *parent, const char *const *path, 
 	int code = ask(c, "place", slot);
 	op_free(field);
 	return code;
+}
+int es_ask_slot(es_context *c, const char *parent, const char *const *path, size_t npath) {
+	return ask_slot(c, parent, path, npath);
 }
 
 static int up_go(es_ermine *e, const pl *places, const char *root, const char *at, es_map *visited,
@@ -2100,6 +2109,7 @@ static int make_pipe(es_context *c, es_target from, const es_pipe_options *o, es
 	es_ermine *e = c->ermine;
 	struct es_nodes *x = state(e);
 	ALIVE(c);
+	TRY(es_not_in_act(e, es_owner(c), "pipe"));
 	if (o->tell == NULL && !o->has_to) {
 		return es_fail(ES_NOT_A_FUNCTION,
 			"not-a-function: pipe takes (from, fn) or (from, to, fnA?, fnB?)");

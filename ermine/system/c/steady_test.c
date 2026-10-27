@@ -72,6 +72,8 @@ typedef struct {
 	es_context *host;
 	es_started *started;
 	in_memo memo;
+	// the node id of the process the last kid action started
+	char *kid;
 } world;
 
 static void noop_teardown(void *ctx, const char *why) { (void)ctx, (void)why; }
@@ -127,11 +129,44 @@ static es_out act_fn(es_context *c, void *ctx, const op_value *const *args, size
 	return es_out_of(op_num(1));
 }
 
+// an action that makes a writer and gives it
+static es_out writer_fn(es_context *c, void *ctx, const op_value *const *args, size_t n) {
+	(void)ctx, (void)args, (void)n;
+	op_value *runner;
+	int code = es_create_writer(c, &runner);
+	if (code) return es_out_code(code);
+	return es_out_of(runner);
+}
+
+static es_out kid_setup(es_context *c, void *ctx) {
+	(void)c, (void)ctx;
+	return es_out_of(NULL);
+}
+
+// an action that starts a process and stops it
+static es_out kid_fn(es_context *c, void *ctx, const op_value *const *args, size_t n) {
+	(void)args, (void)n;
+	world *w = ctx;
+	es_child kid;
+	es_refused no = {0};
+	int code = es_start_in(c, kid_setup, NULL, es_text("/kid"), NULL, &kid, &no);
+	if (code) return es_out_code(code);
+	CHECK(kid.id != NULL);
+	free(w->kid);
+	w->kid = es_dup(kid.id);
+	code = es_child_stop(c, kid.id, NULL);
+	es_child_free(&kid);
+	if (code) return es_out_code(code);
+	return es_out_of(NULL);
+}
+
 static es_out setup(es_context *c, void *ctx) {
 	es_handle *h;
 	int code = es_create_memo(c, es_text("m"), memo_fn, ctx, NULL, &h);
 	CHECK(code == 0 || code == ES_PENDING);
 	CHECK(es_create_action(c, es_text("act"), act_fn, NULL, &h) == 0);
+	CHECK(es_create_action(c, es_text("bind"), writer_fn, NULL, &h) == 0);
+	CHECK(es_create_action(c, es_text("kid"), kid_fn, ctx, &h) == 0);
 	return es_out_of(NULL);
 }
 
@@ -181,6 +216,8 @@ typedef enum {
 	ROW_RESTART,
 	ROW_SCOPE,
 	ROW_REFUSED_START,
+	ROW_BIND_LATER,
+	ROW_START_CHILD,
 	ROWS,
 } row;
 
@@ -202,6 +239,8 @@ static const struct {
 	[ROW_RESTART] = {"stop + start", IN_NOTHING},
 	[ROW_SCOPE] = {"scheduler: scope made, torn down", IN_NOTHING},
 	[ROW_REFUSED_START] = {"start refused (taken)", IN_NOTHING},
+	[ROW_BIND_LATER] = {"writer in an action, used, dropped", IN_NOTHING},
+	[ROW_START_CHILD] = {"start in an action, stop", IN_NOTHING},
 };
 
 // every part at id taken out, as the host
@@ -216,6 +255,11 @@ static void remove_node(world *w, const char *id) {
 		free(parts[i]);
 	}
 	free(parts);
+}
+
+static int nothing(void *ctx) {
+	(void)ctx;
+	return 0;
 }
 
 static void round_of(world *w, row r, long i) {
@@ -252,6 +296,8 @@ static void round_of(world *w, row r, long i) {
 		// so what is left is what the C holds of its own
 		char *id = es_dup(pr_id(w->started->process));
 		CHECK(es_remove(w->host, es_on_path(es_text("/code/p/act"))) == 0);
+		CHECK(es_remove(w->host, es_on_path(es_text("/code/p/bind"))) == 0);
+		CHECK(es_remove(w->host, es_on_path(es_text("/code/p/kid"))) == 0);
 		CHECK(es_stop(w->started, NULL) == 0);
 		es_started_free(w->started);
 		remove_node(w, id);
@@ -274,6 +320,24 @@ static void round_of(world *w, row r, long i) {
 		es_refused no = {0};
 		CHECK(es_start(w->e, setup, w, es_text("/code/p"), NULL, &again, &no) == ES_TAKEN);
 		es_refused_free(&no);
+		break;
+	}
+	case ROW_BIND_LATER: {
+		op_value *runner = NULL;
+		CHECK(es_execute_action(w->host, es_on_path(es_text("/code/p/bind")), NULL, 0, &runner) == 0);
+		CHECK(es_with_writer(w->e, runner, nothing, NULL) == 0);
+		es_drop_writer(w->e, runner);
+		op_free(runner);
+		break;
+	}
+	case ROW_START_CHILD: {
+		op_value *out = NULL;
+		CHECK(es_execute_action(w->host, es_on_path(es_text("/code/p/kid")), NULL, 0, &out) == 0);
+		op_free(out);
+		// the stopped process's node is data the host keeps, as with a restart: taken out by id
+		char *id = es_dup(w->kid);
+		remove_node(w, id);
+		free(id);
 		break;
 	}
 	default: write_a(w, i); break;
@@ -314,6 +378,7 @@ int main(int argc, char **argv) {
 		failed |= grows;
 		CHECK(es_close(w.e) == 0);
 		es_free(w.e);
+		free(w.kid);
 	}
 	return failed;
 }

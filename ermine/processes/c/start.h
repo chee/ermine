@@ -129,6 +129,9 @@ void pr_stop_at(pr *s, pr_process *p, const char *file, int line, const char *fu
 // freed as that scope is (torn down, held by nothing: what is under it, a record). its
 // pointer is no good after
 void pr_drop(pr *s, pr_process *p);
+// the same, but p goes on running: its holder only lets go, and it is freed as its scope is (its
+// starter's ending, or its stop). for a process something else owns
+void pr_let_go(pr *s, pr_process *p);
 // listeners away, with the scheduler alive
 void pr_halt(pr *s);
 void pr_free(pr *s);

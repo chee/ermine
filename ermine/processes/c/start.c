@@ -519,13 +519,18 @@ void pr_stop_at(pr *s, pr_process *p, const char *file, int line, const char *fu
 	free(sc_teardown(p->scope));
 }
 
-void pr_drop(pr *s, pr_process *p) {
+void pr_let_go(pr *s, pr_process *p) {
 	if (p->dropped) return;
-	if (!p->ended || sc_scope_alive(p->scope)) pr_stop(s, p);
 	p->dropped = 1;
 	pm_set(&s->dropped, p->scope, p);
 	// the maker's hold: the scope freed once nothing else holds it, and p with it
 	sc_release(p->scope);
+}
+
+void pr_drop(pr *s, pr_process *p) {
+	if (p->dropped) return;
+	if (!p->ended || sc_scope_alive(p->scope)) pr_stop(s, p);
+	pr_let_go(s, p);
 }
 
 void pr_halt(pr *s) {

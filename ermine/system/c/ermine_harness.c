@@ -58,6 +58,8 @@ struct env {
 // a process the harness started: its start, and the environment its setup ended with
 typedef struct {
 	es_started *started;
+	// its node's id; started is NULL for one a program started (its record is freed with its scope)
+	char *id;
 	env_t *env;
 	int has_api;
 } running_t;
@@ -126,6 +128,8 @@ typedef struct {
 	sc_pair info;
 	char **args;
 	size_t nargs;
+	// what the host says of the person's event: 1 a trusted event is being dispatched
+	int event;
 	// patchy, when the ermine has it
 	struct py *patchy;
 	// what the world made and holds on to, let go with it
@@ -309,6 +313,11 @@ static op_value *plain(const op_value *v) {
 		}
 		// a function placed; any other stand-in is data
 		if (es_live_of(v, "function") != NULL) return op_str("function");
+		// a writer, and what start gave to stop and ask the status: functions to the program
+		if (es_live_of(v, "runner") != NULL || es_live_of(v, "stop") != NULL ||
+			es_live_of(v, "status") != NULL) {
+			return op_str("function");
+		}
 		return op_ref((op_value *)v);
 	}
 	if (v->type == OP_LIST) {
@@ -619,6 +628,7 @@ static op_value *explained_value(const es_explained *x) {
 			break;
 		}
 	}
+	if (x->change != NULL && x->change->during_user_event) op_set(m, "duringUserEvent", op_bool(1));
 	if (x->has_held) {
 		op_value *h = op_map();
 		op_set(h, "feature", op_str(x->held_feature));
@@ -668,6 +678,7 @@ static int lib_run(void *ctx);
 static es_out land_run(es_context *c, void *ctx, const op_value *const *args, size_t nargs);
 static int expr(sys_t sys, env_t *env, const op_value *e, op_value **out);
 static int call_form(sys_t sys, env_t *env, const op_value *form, op_value **out);
+static es_out program_run(es_context *c, void *ctx);
 
 static es_context *sys_ctx(sys_t sys, const char *name) {
 	return sys.fixed != NULL ? sys.fixed : es_found(name);
@@ -699,6 +710,11 @@ typedef struct {
 	const op_value *expr;
 	const char *to;
 	int throws;
+	// an effect's act: steps to run in it (an error they throw logged to caught), a cleanup it gives
+	// (logs [cleanup, v]), a value it returns as it is
+	const op_value *act, *returns;
+	const char *caught, *cleanup;
+	int has_returns;
 } comp_t;
 
 static es_out comp_compute(es_context *c, void *ctx, const op_value *previous) {
@@ -718,8 +734,41 @@ static int comp_equal(void *ctx, const op_value *a, const op_value *b) {
 	free(y);
 	return same;
 }
+// a cleanup an act gave: logs its name, with the value the act was given
+typedef struct {
+	const char *log;
+	op_value *value;
+} cleanup_t;
+static void cleanup_run(void *ctx, const char *why) {
+	(void)why;
+	cleanup_t *k = ctx;
+	log_push(k->log, op_ref(k->value));
+}
+static void cleanup_free(void *p) {
+	cleanup_t *k = p;
+	op_free(k->value);
+	free(k);
+}
+
+// what an error is logged as: its code, else its message
+static op_value *code_text(int code) {
+	const es_error *t = es_thrown();
+	if (code == ES_FAILED) return op_str(t->message != NULL ? t->message : "");
+	return op_str(es_code_name(code));
+}
+
+// what typeof says of a value
+static const char *type_of(const op_value *v) {
+	if (v == NULL) return "undefined";
+	switch (v->type) {
+	case OP_BOOL: return "boolean";
+	case OP_NUM: return "number";
+	case OP_STR: return "string";
+	default: return "object";
+	}
+}
+
 static int comp_act(es_context *c, void *ctx, const op_value *value, const op_value *before) {
-	(void)c;
 	(void)before;
 	comp_t *k = ctx;
 	log_push(k->to, op_ref((op_value *)value));
@@ -728,6 +777,27 @@ static int comp_act(es_context *c, void *ctx, const op_value *value, const op_va
 		int code = fail("act %s", j);
 		free(j);
 		return code;
+	}
+	if (k->act != NULL) {
+		int code = run_steps(k->sys, env_new(k->env), k->act);
+		if (code != 0) {
+			log_push(k->caught != NULL ? k->caught : "caught", code_text(code));
+			es_clear_thrown();
+		}
+	}
+	if (k->cleanup != NULL) {
+		cleanup_t *cl = es_alloc(sizeof *cl);
+		cl->log = k->cleanup;
+		cl->value = op_ref((op_value *)value);
+		own_with(cl, cleanup_free);
+		TRY(es_cleanup(c, cleanup_run, cl));
+	}
+	// C's act gives no value: the one an interpreted act is to return is checked here, as the
+	// TypeScript checks what it returned
+	if (k->has_returns) {
+		return es_fail_ermine(ES_BAD_CLEANUP,
+			"an effect's act returned %s: return a function (its cleanup), or nothing",
+			type_of(k->returns));
 	}
 	return 0;
 }
@@ -754,6 +824,11 @@ static int define(sys_t sys, env_t *env, const char *fn, const op_value *const *
 		k->to = n > 2 && is_str(raw[2]) ? raw[2]->str : "";
 		k->throws = n > 3 && is_str(raw[3]) && strcmp(raw[3]->str, "throws") == 0;
 		es_computed_options o = {.early = flag(options, "early")};
+		k->act = field(options, "act");
+		k->caught = text(options, "caught");
+		k->cleanup = text(options, "cleanup");
+		k->returns = field(options, "returns");
+		k->has_returns = field(options, "returns") != NULL;
 		TRY(es_create_effect(c, name, comp_compute, comp_act, k, &o, &h));
 	}
 	*out = es_handle_value(h);
@@ -766,15 +841,19 @@ typedef struct {
 	env_t *env;
 	const op_value *steps, *back;
 } act_t;
-static es_out act_run(es_context *c, void *ctx, const op_value *const *args, size_t nargs) {
-	(void)c;
-	act_t *k = ctx;
+static env_t *act_env(const act_t *k, const op_value *const *args, size_t nargs) {
 	env_t *inner = env_new(k->env);
 	for (size_t i = 0; i < nargs; i++) {
 		char name[24];
 		snprintf(name, sizeof name, "%zu", i);
 		env_set(inner, name, op_ref((op_value *)args[i]));
 	}
+	return inner;
+}
+static es_out act_run(es_context *c, void *ctx, const op_value *const *args, size_t nargs) {
+	(void)c;
+	act_t *k = ctx;
+	env_t *inner = act_env(k, args, nargs);
 	int code = run_steps(k->sys, inner, k->steps);
 	if (code != 0) return es_out_code(code);
 	if (k->back == NULL) return es_out_of(NULL);
@@ -782,6 +861,149 @@ static es_out act_run(es_context *c, void *ctx, const op_value *const *args, siz
 	code = expr(k->sys, inner, k->back, &v);
 	if (code != 0) return es_out_code(code);
 	return es_out_of(v);
+}
+
+// a generator action: C has no generators, so the system does not step one. its steps run in order, a
+// {do: ["yield", expr]} waiting for the promise expr gives, and the rest of it runs through the runner
+// the action bound, so it is under the call's mark as the TypeScript's stepped steps are. the call
+// gives a promise of its return
+typedef struct {
+	act_t *a;
+	env_t *inner;
+	size_t at;
+	// where the value a yield waited for goes
+	const char *as;
+	es_promise *result;
+	op_value *runner;
+	// the promise a yield waited for, how it settled
+	int ok;
+	op_value *value;
+	char *error;
+	// the end: how the result is to be settled
+	int finished, failed;
+	op_value *returned;
+	char *failure;
+} gen_t;
+
+static int gen_steps(gen_t *g);
+static int gen_resume(void *ctx);
+
+static void gen_resumed(void *ctx, int ok, const op_value *value, const char *error) {
+	gen_t *g = ctx;
+	g->ok = ok;
+	op_free(g->value);
+	g->value = ok ? op_ref((op_value *)value) : NULL;
+	free(g->error);
+	g->error = ok ? NULL : es_dup(error != NULL ? error : "error");
+	// nothing is open as a promise settles: the writer brings the rest back under the mark
+	int code = es_with_writer(W->e, g->runner, gen_resume, g);
+	if (code != 0 && !g->finished) {
+		g->finished = g->failed = 1;
+		const es_error *t = es_thrown();
+		g->failure = es_dup(t->message != NULL ? t->message : es_code_name(code));
+	}
+	if (!g->finished) return;
+	es_drop_writer(W->e, g->runner);
+	if (g->failed) es_promise_reject(g->result, g->failure);
+	else es_promise_resolve(g->result, g->returned);
+	g->returned = NULL;
+}
+
+// a yield's value is back (or its throw: the generator has no catch, so it ends with it)
+static int gen_resume(void *ctx) {
+	gen_t *g = ctx;
+	if (!g->ok) {
+		g->finished = g->failed = 1;
+		g->failure = es_dup(g->error);
+		return 0;
+	}
+	if (g->as != NULL) env_set(g->inner, g->as, g->value);
+	else op_free(g->value);
+	g->value = NULL;
+	return gen_steps(g);
+}
+
+// from the step at, to the next yield that waits, or the end
+static int gen_steps(gen_t *g) {
+	act_t *k = g->a;
+	while (k->steps != NULL && g->at < k->steps->count) {
+		const op_value *step = k->steps->items[g->at++];
+		const op_value *form = field(step, "do");
+		const char *as = text(step, "as");
+		if (form != NULL && form->type == OP_LIST && form->count > 1 && is_str(form->items[0]) &&
+			strcmp(form->items[0]->str, "yield") == 0) {
+			op_value *v = NULL;
+			int code = expr(k->sys, g->inner, form->items[1], &v);
+			if (code != 0) {
+				const es_error *t = es_thrown();
+				g->finished = g->failed = 1;
+				g->failure = es_dup(t->message != NULL ? t->message : es_code_name(code));
+				return 0;
+			}
+			es_promise *p = v == NULL ? NULL : es_promise_of(W->e, v);
+			if (p != NULL) {
+				g->as = as;
+				es_promise_then(p, gen_resumed, g);
+				op_free(v);
+				return 0;
+			}
+			if (as != NULL) env_set(g->inner, as, v);
+			else op_free(v);
+			continue;
+		}
+		op_value *v = NULL;
+		int code = call_form(k->sys, g->inner, form, &v);
+		if (code != 0) {
+			const es_error *t = es_thrown();
+			g->finished = g->failed = 1;
+			g->failure = es_dup(t->message != NULL ? t->message : es_code_name(code));
+			return 0;
+		}
+		if (as != NULL) env_set(g->inner, as, v);
+		else op_free(v);
+	}
+	g->finished = 1;
+	if (k->back == NULL) return 0;
+	int code = expr(k->sys, g->inner, k->back, &g->returned);
+	if (code != 0) {
+		const es_error *t = es_thrown();
+		g->failed = 1;
+		g->failure = es_dup(t->message != NULL ? t->message : es_code_name(code));
+	}
+	return 0;
+}
+
+static void gen_free(void *p) {
+	gen_t *g = p;
+	op_free(g->runner);
+	op_free(g->value);
+	op_free(g->returned);
+	free(g->error);
+	free(g->failure);
+	free(g);
+}
+
+static es_out gen_run(es_context *c, void *ctx, const op_value *const *args, size_t nargs) {
+	act_t *k = ctx;
+	gen_t *g = es_alloc(sizeof *g);
+	own_with(g, gen_free);
+	g->a = k;
+	g->inner = act_env(k, args, nargs);
+	g->result = es_promise_new(W->e);
+	int code = es_create_writer(c, &g->runner);
+	if (code != 0) return es_out_code(code);
+	gen_steps(g);
+	op_value *p = es_promise_value(g->result);
+	if (g->finished) {
+		// settled at once: kept (a settled promise let go of is data), the world's
+		es_drop_writer(W->e, g->runner);
+		if (g->failed) es_promise_reject(g->result, g->failure);
+		else es_promise_resolve(g->result, g->returned);
+		g->returned = NULL;
+	} else {
+		es_promise_release(g->result);
+	}
+	return es_out_of(p);
 }
 
 // "share": one function per name, giving the node of the nearest scope above the one open
@@ -806,6 +1028,23 @@ static op_value *promised(sys_t sys, env_t *env, const op_value *e) {
 	held_t h = {es_promise_new(W->e), sys, env, e};
 	ES_PUSH(W->held, W->nheld, W->capheld, h);
 	return es_promise_value(h.promise);
+}
+
+// a promise a call gave: how it settled is logged to "promised" ([value], or ["rejected", message])
+static void watched_run(void *ctx, int ok, const op_value *value, const char *error) {
+	(void)ctx;
+	op_value *row = op_list();
+	if (ok) {
+		op_push(row, value != NULL ? op_ref((op_value *)value) : op_null());
+	} else {
+		op_push(row, op_str("rejected"));
+		op_push(row, op_str(error != NULL ? error : "error"));
+	}
+	log_push("promised", row);
+}
+static void watched(const op_value *v) {
+	es_promise *p = v == NULL ? NULL : es_promise_of(W->e, v);
+	if (p != NULL) es_promise_then(p, watched_run, NULL);
 }
 
 // a library function's call: its raw arguments, its environment, and what it gives
@@ -1382,6 +1621,124 @@ static int form_status(sys_t sys, env_t *env, const op_value *const *raw, size_t
 }
 
 // [fn, ...args]: the forms, then the process api. new value in *out (NULL: undefined)
+// a writer given a function: steps, then expr's value
+typedef struct {
+	sys_t sys;
+	env_t *env;
+	const op_value *steps, *back;
+	op_value *out;
+} bound_t;
+static int bound_run(void *ctx) {
+	bound_t *k = ctx;
+	env_t *inner = env_new(k->env);
+	TRY(run_steps(k->sys, inner, k->steps));
+	if (k->back == NULL) return 0;
+	return expr(k->sys, inner, k->back, &k->out);
+}
+static int form_bound(sys_t sys, env_t *env, const op_value *const *raw, size_t nraw, op_value **out) {
+	op_value *runner = arg(env, nraw > 0 ? raw[0] : NULL);
+	bound_t k = {sys, env, nraw > 1 ? raw[1] : NULL, nraw > 2 ? raw[2] : NULL, NULL};
+	int code = es_with_writer(W->e, runner, bound_run, &k);
+	op_free(runner);
+	if (code != 0) {
+		op_free(k.out);
+		return code;
+	}
+	*out = k.out;
+	return 0;
+}
+
+// what start gave, for stop and status: the process by its id
+typedef struct {
+	char *id;
+} child_t;
+static void child_free(void *p) {
+	child_t *k = p;
+	free(k->id);
+	free(k);
+}
+
+// start(program, at, options?) as a program: name is the new process's name here (its id proc:<name>),
+// program the node holding its program (default at); gives start's result
+static int form_start(sys_t sys, env_t *env, const op_value *const *raw, size_t nraw, op_value **out) {
+	CTX("start");
+	op_value *v[4] = {NULL, NULL, NULL, NULL};
+	for (size_t i = 0; i < 4 && i < nraw; i++) v[i] = arg(env, raw[i]);
+	const char *name = is_str(v[0]) ? v[0]->str : "", *at = is_str(v[1]) ? v[1]->str : "";
+	char *key = rooted(is_str(v[2]) ? v[2]->str : at);
+	program_t *program = es_map_get(&W->programs, key);
+	int code = 0;
+	if (program == NULL) code = fail("no program made at %s", key);
+	free(key);
+	es_start_options so = {0};
+	const op_value *args = field(v[3], "args");
+	if (code == 0 && args != NULL && args->type == OP_LIST) {
+		const char **list = hh_take((args->count + 1) * sizeof *list);
+		for (size_t i = 0; i < args->count; i++) list[i] = is_str(args->items[i]) ? args->items[i]->str : "";
+		so.args = list;
+		so.nargs = args->count;
+		so.has_args = 1;
+	}
+	es_child child;
+	es_refused refused;
+	if (code == 0) {
+		// the next process is this one: its id, and the name its program finds itself by
+		char *was_next = W->next, *was_pending = W->pending;
+		char *mine = es_alloc(strlen(name) + 6);
+		sprintf(mine, "proc:%s", name);
+		char *pending = es_dup(name);
+		W->next = mine;
+		W->pending = pending;
+		running_t *me = owned_alloc(sizeof *me);
+		me->env = env_new(NULL);
+		es_map_set(&W->running, name, me);
+		code = es_start_in(c, program_run, program, es_text(at), &so, &child, &refused);
+		if (W->next == mine) free(mine);
+		W->next = was_next;
+		W->pending = was_pending;
+		free(pending);
+		if (code == 0 && refused.refused != NULL) {
+			es_map_del(&W->running, name);
+			op_value *m = op_map();
+			op_set(m, "refused", op_str(refused.refused));
+			op_set(m, "at", strs(refused.nat, (const char *const *)refused.at));
+			es_refused_free(&refused);
+			*out = m;
+		} else if (code == 0) {
+			me->id = own(es_dup(child.id));
+			child_t *k = es_alloc(sizeof *k);
+			k->id = es_dup(child.id);
+			own_with(k, child_free);
+			op_value *process = op_map();
+			op_set(process, "at", strs(child.at.n, (const char *const *)child.at.names));
+			op_set(process, "folder", strs(child.folder.n, (const char *const *)child.folder.names));
+			es_child_free(&child);
+			op_value *m = op_map();
+			op_set(m, "process", process);
+			op_set(m, "stop", es_live("stop", k));
+			op_set(m, "status", es_live("status", k));
+			*out = m;
+		} else {
+			es_map_del(&W->running, name);
+		}
+	}
+	for (size_t i = 0; i < 4; i++) op_free(v[i]);
+	return code;
+}
+
+// the stop of what start gave, called with why
+static int form_stopped(sys_t sys, env_t *env, const op_value *const *raw, size_t nraw, op_value **out) {
+	(void)out;
+	CTX("stop");
+	op_value *started = arg(env, nraw > 0 ? raw[0] : NULL), *why = arg(env, nraw > 1 ? raw[1] : NULL);
+	const op_value *stop = field(started, "stop");
+	child_t *k = es_live_of(stop, "stop");
+	int code = k == NULL ? fail("not a started process") : es_child_stop(c, k->id, is_str(why) ? why->str : NULL);
+	op_free(started);
+	op_free(why);
+	return code;
+}
+
 static int call_form(sys_t sys, env_t *env, const op_value *form, op_value **out) {
 	*out = NULL;
 	if (form == NULL || form->type != OP_LIST || form->count == 0 || !is_str(form->items[0])) {
@@ -1419,7 +1776,8 @@ static int call_form(sys_t sys, env_t *env, const op_value *form, op_value **out
 		} else {
 			act_t *k = owned_alloc(sizeof *k);
 			*k = (act_t){sys, env, R(1), nraw > 2 ? R(2) : NULL};
-			TRY(es_create_action(c, at, act_run, k, &h));
+			int gen = nraw > 3 && is_str(R(3)) && strcmp(R(3)->str, "gen") == 0;
+			TRY(es_create_action(c, at, gen ? gen_run : act_run, k, &h));
 		}
 		*out = es_handle_value(h);
 		return 0;
@@ -1430,6 +1788,21 @@ static int call_form(sys_t sys, env_t *env, const op_value *form, op_value **out
 		k->log = is_str(R(0)) ? R(0)->str : "";
 		k->tag = R(1) != NULL ? (is_str(R(1)) ? R(1)->str : "undefined") : NULL;
 		return es_add_teardown(c, td_run, k);
+	}
+	if (strcmp(fn, "createWriter") == 0) {
+		CTX(fn);
+		return es_create_writer(c, out);
+	}
+	if (strcmp(fn, "withWriter") == 0) return form_bound(sys, env, raw, nraw, out);
+	if (strcmp(fn, "start") == 0) return form_start(sys, env, raw, nraw, out);
+	if (strcmp(fn, "stopped") == 0) return form_stopped(sys, env, raw, nraw, out);
+	if (strcmp(fn, "caught") == 0) {
+		int code = run_steps(sys, env_new(env), R(1));
+		if (code != 0) {
+			log_push(is_str(R(0)) ? R(0)->str : "", code_text(code));
+			es_clear_thrown();
+		}
+		return 0;
 	}
 	if (strcmp(fn, "watch") == 0) return form_watch(sys, env, raw, nraw, out);
 	if (strcmp(fn, "pipe") == 0) return form_pipe(sys, env, raw, nraw, out);
@@ -1583,6 +1956,10 @@ static char *world_id(void *ctx) {
 	char id[32];
 	snprintf(id, sizeof id, "n%ld", ++W->counter);
 	return es_dup(id);
+}
+static int world_user_event(void *ctx) {
+	(void)ctx;
+	return W->event;
 }
 static void world_schedule(void *ctx, void (*f)(void *data), void *data) {
 	(void)ctx;
@@ -2244,7 +2621,8 @@ static int make(const op_value *r) {
 	}
 	es_options o = {.features = list, .nfeatures = nfeatures, .may = w->policy,
 		.schedule = world_schedule, .on_create_function = world_created, .root = "R",
-		.info = &w->info, .ninfo = 1, .calls_never = strcmp(str_or(r, "calls"), "never") == 0};
+		.info = &w->info, .ninfo = 1, .calls_never = strcmp(str_or(r, "calls"), "never") == 0,
+		.user_event = world_user_event};
 	if (!flag(r, "uuid")) o.id = world_id;
 	if (text(r, "at") != NULL) o.host.at = text(r, "at");
 	const op_value *args = field(r, "args");
@@ -2309,8 +2687,8 @@ static es_context *context_of(const op_value *r) {
 	const char *name = text(r, "process");
 	if (name == NULL) return es_get_process_context(W->e, NULL);
 	running_t *p = running_named(name);
-	if (p == NULL || p->started == NULL) return NULL;
-	return es_get_process_context(W->e, p->started->process);
+	if (p == NULL || p->id == NULL) return NULL;
+	return es_process_context_of(W->e, p->id);
 }
 
 // a node written as { id?, path?, part } in a host's step is minted a handle, as the host may
@@ -2626,6 +3004,7 @@ static int op_start(const op_value *r, op_value **res) {
 	}
 	if (code != 0) return code;
 	me->started = started;
+	me->id = own(es_dup(pr_id(started->process)));
 	*res = op_map();
 	op_set(*res, "id", op_str(pr_id(started->process)));
 	return 0;
@@ -2746,10 +3125,11 @@ static int op_do(const op_value *r, op_value **res) {
 	TRY(es_alive(W->e));
 	running_t *p = running_named(text(r, "process"));
 	if (p == NULL || !p->has_api) return fail("no process %s", str_or(r, "process"));
-	es_context *c = es_get_process_context(W->e, p->started->process);
+	es_context *c = es_process_context_of(W->e, p->id);
 	if (c == NULL) return fail("process %s stopped", str_or(r, "process"));
 	do_t k = {{NULL, 0}, p->env, field(r, "call"), NULL};
 	TRY(es_within(c, do_run, &k));
+	watched(k.out);
 	if (text(r, "as") != NULL) env_set(p->env, text(r, "as"), op_ref(k.out));
 	op_value *shown = plain(k.out);
 	op_free(k.out);
@@ -2851,6 +3231,7 @@ static int answer(const op_value *r, op_value **res) {
 		hh_hold(call);
 		int code = call_form(sys, W->host, call, &v);
 		if (code != 0) return code;
+		watched(v);
 		if (text(r, "as") != NULL) env_set(W->host, text(r, "as"), op_ref(v));
 		op_value *shown = plain(v);
 		op_free(v);
@@ -2878,16 +3259,23 @@ static int answer(const op_value *r, op_value **res) {
 	if (strcmp(op, "start") == 0) return op_start(r, res);
 	if (strcmp(op, "stop") == 0) {
 		running_t *p = running_named(text(r, "name"));
-		if (p == NULL || p->started == NULL) return fail("no process %s", str_or(r, "name"));
-		TRY(es_stop(p->started, text(r, "why")));
+		if (p == NULL || p->id == NULL) return fail("no process %s", str_or(r, "name"));
+		// the host, not the starter, stops a child here: as its node is unplaced (a child's own stop is
+		// the starter's, es_child_stop)
+		if (p->started == NULL) es_stop_node(e, p->id);
+		else TRY(es_stop(p->started, text(r, "why")));
 		*res = op_map();
 		return 0;
 	}
 	if (strcmp(op, "status") == 0) {
 		running_t *p = running_named(text(r, "name"));
-		if (p == NULL || p->started == NULL) return fail("no process %s", str_or(r, "name"));
+		if (p == NULL || p->id == NULL) return fail("no process %s", str_or(r, "name"));
 		es_status st;
-		TRY(es_started_status(p->started, &st));
+		if (p->started == NULL) {
+			es_node_data node = {.id = p->id, .part = (char *)"value"};
+			TRY(es_get_status(es_host_context(e), es_on_node(es_handle_of(e, &node)), &st));
+		}
+		else TRY(es_started_status(p->started, &st));
 		*res = op_map();
 		if (st.state != NULL) op_set(*res, "status", status_value(&st));
 		es_status_free(&st);
@@ -2910,7 +3298,7 @@ static int answer(const op_value *r, op_value **res) {
 	if (strcmp(op, "slot") == 0) {
 		TRY(es_alive(e));
 		running_t *p = running_named(text(r, "process"));
-		es_context *c = p != NULL && p->started != NULL ? es_get_process_context(e, p->started->process) : NULL;
+		es_context *c = p != NULL && p->id != NULL ? es_process_context_of(e, p->id) : NULL;
 		tf_t *t = es_map_get(&W->slots, str_or(r, "feature"));
 		long count;
 		*res = op_map();
@@ -2935,6 +3323,27 @@ static int answer(const op_value *r, op_value **res) {
 		TRY(es_alive(e));
 		TRY(es_pulse(es_host_context(e)));
 		*res = op_map();
+		return 0;
+	}
+	if (strcmp(op, "event") == 0) {
+		W->event = flag(r, "trusted") && field(r, "trusted")->type == OP_BOOL;
+		*res = op_map();
+		return 0;
+	}
+	if (strcmp(op, "withWriter") == 0) {
+		TRY(es_alive(e));
+		running_t *p = running_named(text(r, "process"));
+		if (p == NULL || !p->has_api) return fail("no process %s", str_or(r, "process"));
+		op_value *runner = env_get(p->env, str_or(r, "name"));
+		bound_t k = {{NULL, 0}, p->env, field(r, "steps"), field(r, "back"), NULL};
+		int code = es_with_writer(e, runner, bound_run, &k);
+		if (code != 0) {
+			op_free(k.out);
+			return code;
+		}
+		op_value *shown = plain(k.out);
+		op_free(k.out);
+		*res = with_value(shown);
 		return 0;
 	}
 	if (strcmp(op, "kids") == 0 || strcmp(op, "put") == 0) {

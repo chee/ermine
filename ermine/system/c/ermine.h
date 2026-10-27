@@ -39,6 +39,7 @@
 //     state: es_computers_new es_computers_free es_computer_forget
 //     computers: es_create_memo_at es_create_effect_at ({ early }): the node at its name, claimed
 //       again by its owner's next run, gone when not made again
+//       an act makes nothing (es_not_in_act es_acting): its cleanup is es_cleanup's
 //     known: es_is_computer es_is_memo es_computer_context es_awaiting
 //     status and runs: es_get_status es_status_free es_latest_run: the base's status, then
 //       features' (onStatus)
@@ -54,13 +55,15 @@
 //     call records (calls.ts): es_calls_new es_calls_free es_calls_next es_calls_begin es_calls_end
 //       es_calls_going es_calls_calling es_calls_open es_calls_read es_calls_made es_calls_latest
 //       es_calls_drop es_calls_wait es_calls_answered es_calls_waits es_waits_free es_calls_stop
+//     marks and writers (system.ts marks, createWriter): es_mark es_is_mark es_create_writer es_with_writer es_drop_writer es_cleanup
 //     promises: es_promise_new es_promise_release es_promise_value es_promise_resolve
 //       es_promise_reject es_promise_then
 //
 //   D host.c  createErmine and everything the host has
 //     errors: es_fail es_fail_refusal es_fail_feature es_fail_text es_thrown es_clear_thrown
 //       es_not_yet es_code_name es_out_code (written: what every stub returns)
-//     lifecycle: es_create (in ermine.ts' order) es_close es_start es_refused_free es_stop
+//     lifecycle: es_create (in ermine.ts' order) es_close es_start es_start_in es_child_stop
+//       es_child_status es_child_free es_refused_free es_stop
 //       es_started_status es_started_free es_pulse
 //     the host's side: es_host_context es_get_process_context es_handle_of es_data_of
 //       es_records_run es_records_run_held es_records_call es_records_waits es_calling es_features
@@ -169,6 +172,16 @@ typedef enum {
 	ES_NOT_PATCHES,
 	ES_NOT_A_FUNCTION,
 	ES_CLOSED,
+	// something made, or a teardown added, in an effect's act (an act makes nothing)
+	ES_IN_ACT,
+	// an act gave back something that is no cleanup (C's acts give none: a harness's interpreted one can)
+	ES_BAD_CLEANUP,
+	// createWriter or start called where a process can't (a compute, an act)
+	ES_NOT_HERE,
+	// a writer called after its parent ended
+	ES_GONE,
+	// a writer called while a scope or run is open
+	ES_ALREADY_INSIDE,
 } es_code;
 
 // what was thrown last, by the function that last returned a code (one slot, single threaded).
@@ -524,6 +537,8 @@ typedef struct es_change_view {
 	const op_value *actor;
 	int has_site;
 	ch_site site;
+	// made through a writer that ran while the host said a person's event was going on
+	int during_user_event;
 } es_change_view;
 
 // where a value is from (From): the change it came from, by reference (change: places' value of it, as
@@ -952,6 +967,10 @@ typedef struct {
 	size_t ninfo;
 	// 1: call records not held (onRecord is still told)
 	int calls_never;
+	// whether a person's event is being dispatched now (a writer asks as it runs: its changes
+	// say duringUserEvent). NULL: never. the host says; the ermine does not look
+	int (*user_event)(void *ctx);
+	void *user_event_ctx;
 } es_options;
 
 // the base: everything one ermine's contexts share (Base and Parts, and createErmine's closure). made
@@ -979,6 +998,8 @@ struct es_ermine {
 	void *id_ctx;
 	void (*on_create_function)(void *ctx, const es_created *made);
 	void *on_create_function_ctx;
+	int (*user_event)(void *ctx);
+	void *user_event_ctx;
 	// the site of the call in progress (es_enter), for a write's header outside a run
 	const ch_site *site;
 	// every handle, by address → its es_handle_data (A's); handles last till es_close, one a name
@@ -1037,8 +1058,13 @@ int es_within(es_context *c, es_thunk f, void *ctx);
 // f with a scope open: the one open, else the fallen scope (a process's: ES_NOTHING_OPEN; the host's:
 // its own scope)
 int es_inside(es_context *c, es_thunk f, void *ctx);
-// the scope open now, else the context's: where a computer or call is owned
+// the scope what is made now belongs to: the scope open, past any marks (a call's, a writer's:
+// they own nothing); else the context's
 sc_scope *es_owner(es_context *c);
+// the scope open now, marks too, else the context's: the info a write carries is found from it
+sc_scope *es_open(es_context *c);
+// asked as c "place" on the slot of the name last in path (npath names), in the folder parent
+int es_ask_slot(es_context *c, const char *parent, const char *const *path, size_t npath);
 // one write at a node (its id, and the path it was reached by), asked "edit" on it, through onWrite,
 // committed, a pulse asked for. remove: the entry taken out, asked "edit" as write is
 int es_context_write_at(es_context *c, const char *part, const es_aim *at, const op_patch *patches,
@@ -1208,6 +1234,11 @@ int es_create_effect_at(es_context *c, es_at name, es_compute f, es_act act, voi
 	const es_computed_options *o, es_handle **out, const ch_site *site);
 #define es_create_memo(...) es_create_memo_at(__VA_ARGS__, CH_HERE)
 #define es_create_effect(...) es_create_effect_at(__VA_ARGS__, CH_HERE)
+// an effect's act makes nothing: ES_IN_ACT when own is the scope an act is running in. fn names what was
+// called (createMemo, createEffect, createAction, pipe, addTeardown)
+int es_not_in_act(es_ermine *e, sc_scope *own, const char *fn);
+// the scope an effect's act is running in now; NULL: none
+sc_scope *es_acting(es_ermine *e);
 // what is known of a node: a memo or effect's; a memo's (a read of one pending with no value is ES_PENDING);
 // the context that made a computer; its latest run gave a promise not settled yet
 int es_is_computer(es_ermine *e, const char *id);
@@ -1255,6 +1286,29 @@ void es_caller_free(es_caller *c);
 // fn as the scope open goes (through onTeardown): why "replaced" (the owner ran again), "ended", or the
 // reason a stop was given
 int es_add_teardown(es_context *c, es_teardown fn, void *ctx);
+// in an effect's act: fn(why) as the effect goes, and before its next act (the TypeScript's act returns
+// its cleanup; C's calls this). ES_NOT_HERE out of an act
+int es_cleanup(es_context *c, es_teardown fn, void *ctx);
+
+// marks: scopes that own nothing (a call's, a writer's call): what is made while one is open
+// belongs to the scope above it, and their info still rides on the writes made in them
+void es_mark(es_ermine *e, sc_scope *scope);
+int es_is_mark(es_ermine *e, sc_scope *scope);
+
+// createWriter: in setup or an action (not a memo, an effect or an act: ES_NOT_HERE), a writer for code that
+// runs with nothing open (a timer, a listener, a promise settling). *writer is a stand-in (a value,
+// never data), the caller's to op_free; it is good while c's owner is alive, then es_with_writer says
+// ES_GONE. what it runs is the owner's: it asks as it, makes what it makes the owner's, and its writes
+// carry the mark es_create_writer was called under (an action's call: call, handler, caller). during a user event
+// (options.user_event) they say so
+int es_create_writer(es_context *c, op_value **writer);
+// f as the writer's owner, with nothing open, each write at its own line. ES_ALREADY_INSIDE with a scope or
+// run open; ES_GONE after the owner ended; f's code
+int es_with_writer(es_ermine *e, const op_value *writer, es_thunk f, void *ctx);
+// the program is done with a writer (a timer that fired, a listener taken off): its memory goes now, not
+// when its owner does. a writer made once in setup need not be; one made in an action called again
+// and again should be. a stand-in of one let go of is gone
+void es_drop_writer(es_ermine *e, const op_value *writer);
 
 // who made the change at x (a node's part), one step: tracked. 0 with *out NULL: nothing there.
 // key is the field read
@@ -1306,9 +1360,10 @@ es_going *es_calls_open(es_ermine *e);
 // a read function called: the open call's read (recorded once each)
 void es_calls_read(es_ermine *e, const char *part, const char *id, const op_key *path, size_t npath,
 	int has_path, int keys);
-// a memo, effect or early made in the call going at scope: the call's record says so
-void es_calls_made(es_ermine *e, sc_scope *scope, const char *kind, const char *id,
-	const char *const *path, size_t npath);
+// a memo, effect or early made in the call open: the call's record says so (made by it, owned by the
+// scope above)
+void es_calls_made(es_ermine *e, const char *kind, const char *id, const char *const *path,
+	size_t npath);
 // the handler's latest call, tracked; NULL: none. borrowed till the next record there
 const es_call *es_calls_latest(es_ermine *e, const char *id);
 // a handler gone (its placement's scope gone, or its node removed): its record let go, its readers
@@ -1326,6 +1381,8 @@ void es_calls_stop(es_ermine *e);
 
 // --- D: host.c ----------------------------------------------------------------------------------------------------------------------
 
+// an ErmineError: code and message "<code>: <message>"
+int es_fail_ermine(int code, const char *format, ...) __attribute__((format(printf, 2, 3)));
 // errors: the code returned and es_thrown() set. message as printf has it
 int es_fail(int code, const char *format, ...) __attribute__((format(printf, 2, 3)));
 // ES_REFUSED, from the policy's refusal; feature and hook NULL unless a hook threw it
@@ -1364,6 +1421,20 @@ es_context *es_host_context(es_ermine *e);
 int es_start(es_ermine *e, es_program fn, void *ctx, es_at at, const es_start_options *o,
 	es_started **out, es_refused *refused);
 void es_refused_free(es_refused *r);
+// a process started by a program (system.ts' start): asked as c "place", belonging to the scope that
+// started it (c's owner: setup's, the scope that placed an action, a writer's parent). it stops as
+// that ends (told "ended"), or by es_child_stop; its record is freed with its own scope. not in a memo or
+// an effect's act: ES_NOT_HERE. taken (or a name code): 0, *out empty and *refused says which
+typedef struct {
+	char *id;
+	es_names at, folder;
+} es_child;
+int es_start_in(es_context *c, es_program fn, void *ctx, es_at at, const es_start_options *o,
+	es_child *out, es_refused *refused);
+void es_child_free(es_child *k);
+// the child's stop(why), asked as c (the starter); none running there: nothing. its status as c reads it
+int es_child_stop(es_context *c, const char *id, const char *why);
+int es_child_status(es_context *c, const char *id, es_status *out);
 // stop (why NULL: "ended"); status: getStatus of its node
 int es_stop(es_started *s, const char *why);
 // a running process stopped by its node's id (unplace and remove of its path: nodes.c)

@@ -83,6 +83,8 @@ struct es_computers {
 	bridge **bridges;
 	size_t nbridges, capbridges;
 	sc_listener *after, *freed;
+	// the scope an effect's act is running in now (an act makes nothing)
+	sc_scope *acting;
 };
 
 // state ----------------------------------------------------------------------------------------------
@@ -378,8 +380,24 @@ static char *computer_act(void *value, void *previous, void *data) {
 	char *bad = write_value(m, value);
 	if (bad != NULL) return bad;
 	if (m->act == NULL || m->cx == NULL) return NULL;
+	// an act makes nothing: the scope open is the effect's, and it cleans up with es_cleanup
+	struct es_computers *x = m->x;
+	sc_scope *was = x->acting;
+	x->acting = sc_get_current_scope(x->e->scheduler);
 	int code = m->act(m->cx, m->ctx, value, previous);
+	x->acting = was;
 	return code ? failure(code) : NULL;
+}
+
+sc_scope *es_acting(es_ermine *e) { return e->computers == NULL ? NULL : e->computers->acting; }
+
+int es_not_in_act(es_ermine *e, sc_scope *own, const char *fn) {
+	if (own == NULL || es_acting(e) != own) return 0;
+	if (strcmp(fn, "addTeardown") == 0) {
+		return es_fail_ermine(ES_IN_ACT,
+			"addTeardown in an effect's act: return a cleanup function from the act instead");
+	}
+	return es_fail_ermine(ES_IN_ACT, "%s in an effect's act: an act makes nothing", fn);
 }
 
 // its node and name gone ------------------------------------------------------------------------------------
@@ -570,8 +588,8 @@ static int create(es_context *c, int memo, es_names *path, char **key, es_comput
 	// the creating call's hold, and the first cleanup on its owner
 	m->holds = 1;
 	hold(m);
-	es_calls_made(e, own, memo ? "memo" : m->early ? "early" : "effect", id,
-		(const char *const *)m->path, m->npath);
+	es_calls_made(e, memo ? "memo" : m->early ? "early" : "effect", id, (const char *const *)m->path,
+		m->npath);
 	creating k = {.m = m, .effect = !memo};
 	k.def = (sc_def){.f = computer_f, .equal = computer_equal, .data = m, .early = m->early};
 	if (memo) k.def.set = computer_set;
@@ -599,8 +617,10 @@ static int make(es_context *c, int memo, es_at name, es_compute f, es_act act, v
 	const es_computed_options *o, es_handle **out, const ch_site *site) {
 	es_ermine *e = c->ermine;
 	sc_scope *own = es_owner(c);
+	int code = es_not_in_act(e, own, memo ? "createMemo" : "createEffect");
+	if (code) return code;
 	es_names path = {0};
-	int code = es_resolve(c, name, &path);
+	code = es_resolve(c, name, &path);
 	if (code) return code;
 	char *key = key_of(path.names, path.n);
 	es_node_data nd = {.has_path = 1, .path = path.names, .npath = path.n, .part = (char *)"value"};
