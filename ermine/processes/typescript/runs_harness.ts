@@ -11,7 +11,9 @@
 // { op: "effect", name, scope, f, act }     → {}   an effect (the name, as watch's) running f (a
 //    list of {"read":[part,id,path?]}, its value the values read) and acting with act: a program of
 //    this harness: a value, {"read":[part,id,path?]}, {"if":[c,a,b]}, {"throw":message} (an
-//    Error), {"throwRaw":v} (v thrown as it is; typescript only)
+//    Error), {"throwRaw":v} (v thrown as it is; typescript only). wait: p, the effect returns a
+//    promise named p, its run pending until settled
+// { op: "settle", promise }                 → {}   the promise made settles (done), landing at the next pulse
 // { op: "statusValue", id }                 → { value }   typescript only: the node's status as it is
 //    (statusOf tells only an Error's message): null | "pending" | { error } | { thrown }
 // program e, besides places' harness's:
@@ -36,6 +38,7 @@ type Json = unknown
 
 let runs: ReturnType<typeof createRuns> | undefined
 const denied = new Set<string>()
+const waits = new Map<string, () => void>()
 const guard = createGuard({
 	places,
 	table,
@@ -118,11 +121,24 @@ function answer(r: Request): Json | undefined {
 				scope(r.scope),
 				() =>
 					s.createEffect(
-						() => (w.runs++, evaluate(r.f)),
+						() => {
+							w.runs++
+							const v = evaluate(r.f)
+							return r.wait === undefined
+								? v
+								: new Promise<Json>((done) => waits.set(r.wait, () => done(v)))
+						},
 						() => void evaluate(r.act),
 					),
 			)
 			enroll(r.name, c, w)
+			return {}
+		}
+		case "settle": {
+			const done = waits.get(r.promise)
+			if (done === undefined) throw new Error(`no promise ${r.promise}`)
+			waits.delete(r.promise)
+			done()
 			return {}
 		}
 		case "statusValue": {
