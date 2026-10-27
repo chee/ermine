@@ -325,8 +325,8 @@ void sc_pulse(sc_scheduler *s);
 // a listener's throw: held while what was going on finishes, then out (above). error is the
 // scheduler's
 void sc_throw(sc_scheduler *s, char *error);
-// what was thrown out of the last call that leaves it here, taken (the caller frees it); NULL:
-// none
+// what was thrown out of the calls that leave it here since it was last taken: the first (the
+// rest let go), taken (the caller frees it); NULL: none
 char *sc_escaped(sc_scheduler *s);
 
 // promises. one is the host's until sc_promise_free

@@ -156,6 +156,10 @@ LIBS += ids
 scheduler-free-test_src = core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c core/scheduler/c/free_test.c
 scheduler-free-test = core/scheduler/c/free-test
 LIBS += scheduler-free-test
+# what comes out for sc_escaped, two before it is read (core/scheduler/c/escaped_test.c): the first; no suite
+scheduler-escaped-test_src = core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c core/scheduler/c/escaped_test.c
+scheduler-escaped-test = core/scheduler/c/escaped-test
+LIBS += scheduler-escaped-test
 # clingy (core/clingy): keys known tracked or not, told when their last tracker goes; no suite
 clingy-test_src = core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c core/clingy/c/clingy.c core/clingy/c/clingy_test.c
 clingy-test = core/clingy/c/clingy-test
