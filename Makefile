@@ -95,6 +95,10 @@ LIBS += squish-test
 json-test_src = core/changeable/c/json.c core/changeable/c/value.c core/changeable/c/json_test.c
 json-test = core/changeable/c/json-test
 LIBS += json-test
+# Ed25519 (core/ed25519): RFC 8032's first test vector and what a strict check refuses
+ed25519-test_src = core/ed25519/c/ed25519.c core/ed25519/c/sha2.c core/ed25519/c/ed25519_test.c
+ed25519-test = core/ed25519/c/ed25519-test
+LIBS += ed25519-test
 # hash (playground/encoding): a value's name, BLAKE3 of its canonical CBOR, against conformance/hash/vectors.json
 hash_src = playground/encoding/c/hash_test.c playground/encoding/c/hash.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src)
 hash = playground/encoding/c/hash-test
