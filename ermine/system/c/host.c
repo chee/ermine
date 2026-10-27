@@ -150,7 +150,6 @@ int es_fail_ermine(int code, const char *fmt, ...) {
 		if (code_) return code_; \
 	} while (0)
 
-#define CP(x) ((const char *const *)(x))
 
 static const char *const HOOK_NAMES[ES_HOOKS] = {
 	"onTable", "onRead", "onWrite", "onTeardown", "onRecord", "onStatus",
@@ -162,7 +161,7 @@ static const char PART_ATTRIBUTES[] = "attributes";
 static const char PART_VALUE[] = "value";
 
 // steps of a path as text: a leading "/" is the root, empty pieces are skipped (path.ts' parse)
-static char **parse_steps(const char *text, size_t *n) {
+char **es_parse_steps(const char *text, size_t *n) {
 	char **v = NULL;
 	size_t cap = 0;
 	*n = 0;
@@ -189,7 +188,7 @@ static op_value *names_value(const char *const *names, size_t n) {
 }
 
 // an Error as a status holds it (status.h's)
-static op_value *error_value(const char *message) {
+op_value *es_error_value(const char *message) {
 	op_value *m = op_map();
 	op_set(m, "name", op_str("Error"));
 	op_set(m, "message", op_str(message));
@@ -1825,7 +1824,7 @@ static int settle_thunk(void *data) {
 		return status_put(rec, unset, 2);
 	}
 	if (s->kind == SETTLE_FAILED) {
-		op_value *error = error_value(s->error);
+		op_value *error = es_error_value(s->error);
 		op_patch p[2] = {patch_set(&KEY_STATUS, error), patch_unset(&KEY_WAITING)};
 		int code = status_put(rec, p, 2);
 		op_free(error);
@@ -1950,10 +1949,34 @@ static void start_body(pr_process *p, void *data) {
 	run_setup(rec);
 }
 
-static char **dup_steps(char *const *src, size_t n) {
+char **es_dup_names(const char *const *src, size_t n) {
 	char **out = es_alloc((n + 1) * sizeof *out);
 	for (size_t i = 0; i < n; i++) out[i] = es_dup(src[i]);
 	return out;
+}
+
+// a path as a key that two paths share only if they are the same: each name by its length
+char *es_path_key(const char *const *path, size_t n) {
+	size_t len = 1;
+	for (size_t i = 0; i < n; i++) len += strlen(path[i]) + 24;
+	char *s = es_alloc(len), *o = s;
+	for (size_t i = 0; i < n; i++) o += snprintf(o, len - (size_t)(o - s), "%zu:%s", strlen(path[i]), path[i]);
+	return s;
+}
+
+// the names joined by "/": a message's at
+char *es_join(const char *const *names, size_t n) {
+	size_t len = 1;
+	for (size_t i = 0; i < n; i++) len += strlen(names[i]) + 1;
+	char *s = es_alloc(len), *o = s;
+	for (size_t i = 0; i < n; i++) {
+		if (i) *o++ = '/';
+		size_t k = strlen(names[i]);
+		memcpy(o, names[i], k);
+		o += k;
+	}
+	*o = 0;
+	return s;
 }
 
 // path text or steps, as the steps pr_start takes (owned: free them)
@@ -1963,7 +1986,7 @@ static const char *const *steps_of(es_at at, size_t *n, char ***owned) {
 		*n = at.nsteps;
 		return at.steps;
 	}
-	*owned = parse_steps(at.text, n);
+	*owned = es_parse_steps(at.text, n);
 	return CP(*owned);
 }
 
@@ -2039,9 +2062,9 @@ static int start_under(es_ermine *e, es_program fn, void *ctx, const char *const
 		const char *const *names;
 		size_t n = pr_at(made, &names);
 		kid->id = es_dup(pr_id(made));
-		kid->at = (es_names){dup_steps((char *const *)names, n), n};
+		kid->at = (es_names){es_dup_names(CP(names), n), n};
 		n = pr_folder(made, &names);
-		kid->folder = (es_names){dup_steps((char *const *)names, n), n};
+		kid->folder = (es_names){es_dup_names(CP(names), n), n};
 		pm_set(&h->children, pr_scope(made), rec);
 		pr_let_go(e->processes, made);
 	} else {
@@ -2077,7 +2100,7 @@ static int ask_starting(es_context *c, const char *const *path, size_t n) {
 	return 0;
 }
 
-static const op_value *pair_in(const sc_scope *o, const char *key) {
+const void *es_pair_of(const sc_scope *o, const char *key) {
 	const sc_info *info = sc_scope_info(o);
 	for (size_t i = 0; info != NULL && i < info->n; i++) {
 		if (strcmp(info->pairs[i].key, key) == 0) return info->pairs[i].value;
@@ -2095,9 +2118,9 @@ int es_start_in(es_context *c, es_program fn, void *ctx, es_at at, const es_star
 	if (own == NULL || !sc_scope_alive(own)) {
 		return es_fail_ermine(ES_GONE, "gone: what this was started in has ended");
 	}
-	const op_value *node = pair_in(own, PL_NODE);
+	const op_value *node = es_pair_of(own, PL_NODE);
 	if ((node != NULL && node->type == OP_STR && es_is_computer(e, node->str)) ||
-		pair_in(own, "pipe") != NULL) {
+		es_pair_of(own, "pipe") != NULL) {
 		return es_fail_ermine(ES_NOT_HERE,
 			"start in a memo, effect or pipe: start a process in setup or an action");
 	}

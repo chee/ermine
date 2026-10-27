@@ -30,19 +30,10 @@
 // milliseconds since 1970, fractional
 static double now(void) { return PF_NOW_MS(); }
 
-// a pair of a scope's info; NULL: none
-static const void *pair_of(const sc_scope *o, const char *key) {
-	const sc_info *info = sc_scope_info(o);
-	if (info == NULL) return NULL;
-	for (size_t i = 0; i < info->n; i++) {
-		if (strcmp(info->pairs[i].key, key) == 0) return info->pairs[i].value;
-	}
-	return NULL;
-}
 
 // a pair of the info that is an op_value of this type
 static const op_value *value_of(const sc_scope *o, const char *key, op_type type) {
-	const op_value *v = pair_of(o, key);
+	const op_value *v = es_pair_of(o, key);
 	return v != NULL && v->type == type ? v : NULL;
 }
 
@@ -50,7 +41,7 @@ static const op_value *value_of(const sc_scope *o, const char *key, op_type type
 // it gives
 static const op_value *actor_here(es_context *c) {
 	for (sc_scope *o = es_open(c); o != NULL; o = sc_scope_parent(o)) {
-		const op_value *a = pair_of(o, "actor");
+		const op_value *a = es_pair_of(o, "actor");
 		if (a != NULL) return a;
 	}
 	return NULL;
@@ -59,17 +50,6 @@ static const op_value *actor_here(es_context *c) {
 static char *opt_dup(const char *s) { return s == NULL ? NULL : es_dup(s); }
 static char *text(tb_key k) { return es_dup(k.string != NULL ? k.string : ""); }
 
-// the names of a path as one string, "a/b/c"
-static char *joined(const char *const *names, size_t n) {
-	size_t len = 1;
-	for (size_t i = 0; i < n; i++) len += strlen(names[i]) + 1;
-	char *s = es_alloc(len);
-	for (size_t i = 0; i < n; i++) {
-		if (i > 0) strcat(s, "/");
-		strcat(s, names[i]);
-	}
-	return s;
-}
 
 // --- keys, changes ---------------------------------------------------------------------------------------
 
@@ -723,8 +703,7 @@ static int ask_read(es_context *t, const char *id, const es_node_data *n, const 
 	size_t nkey) {
 	if (!t->guarded) return 0;
 	op_value *field = nkey > 0 ? keys_value(key, nkey) : NULL;
-	gd_thing thing = {tb_string(id), n->has_path ? (const char *const *)n->path : NULL,
-		n->has_path ? n->npath : 0};
+	gd_thing thing = es_thing_of(id, n);
 	gd_target target = gd_target_of(thing, n->part, field);
 	gd_refusal why;
 	gd_answer answer = gd_read(t->guard, &target, 1, &why);
@@ -1738,8 +1717,7 @@ typedef struct {
 
 static void do_ask(void *ctx) {
 	asking *a = ctx;
-	gd_thing thing = {tb_string(a->id), a->n->has_path ? (const char *const *)a->n->path : NULL,
-		a->n->has_path ? a->n->npath : 0};
+	gd_thing thing = es_thing_of(a->id, a->n);
 	gd_target target = gd_target_of(thing, "value", NULL);
 	a->code = es_context_ask(a->c, "execute", &target, 1);
 }
@@ -1929,7 +1907,7 @@ static int execute_action(es_context *c, es_target x, const op_value *const *arg
 		es_calls_wait(e, caller, &at, computer != NULL ? computer : c->scope);
 		code = ES_PENDING;
 	} else if (fn_of(e->actions, value) == NULL) {
-		char *where = n.has_path ? joined((const char *const *)n.path, n.npath) : NULL;
+		char *where = n.has_path ? es_join(CP(n.path), n.npath) : NULL;
 		code = es_fail(ES_NOT_A_METHOD, "not-a-method (%s)",
 			where != NULL ? where : "a node it was handed");
 		free(where);
@@ -1957,7 +1935,7 @@ int es_get_caller(es_context *c, es_caller *out) {
 	es_ermine *e = c->ermine;
 	*out = (es_caller){0};
 	for (sc_scope *o = es_open(c); o != NULL; o = sc_scope_parent(o)) {
-		if (pair_of(o, "call") == NULL || pair_of(o, "handler") == NULL) continue;
+		if (es_pair_of(o, "call") == NULL || es_pair_of(o, "handler") == NULL) continue;
 		const op_value *caller = value_of(o, "caller", OP_MAP);
 		const op_value *node = caller == NULL ? NULL : op_get(caller, "node");
 		out->actor = caller == NULL ? NULL : op_get(caller, "actor");
@@ -1973,7 +1951,7 @@ int es_caller_place(void *ctx, const char *const **from, size_t *nfrom, tb_key *
 	es_context *c = ctx;
 	es_ermine *e = c->ermine;
 	for (sc_scope *o = sc_get_current_scope(e->scheduler); o != NULL; o = sc_scope_parent(o)) {
-		if (pair_of(o, "call") == NULL || pair_of(o, "handler") == NULL) continue;
+		if (es_pair_of(o, "call") == NULL || es_pair_of(o, "handler") == NULL) continue;
 		const op_value *caller = value_of(o, "caller", OP_MAP);
 		const op_value *node = caller == NULL ? NULL : op_get(caller, "node");
 		*from = NULL;
@@ -2047,7 +2025,7 @@ int es_add_teardown(es_context *c, es_teardown fn, void *ctx) {
 	if (code) return code;
 	// in an action: a call's mark is open between the scope open and own
 	for (sc_scope *o = sc_get_current_scope(e->scheduler); o != NULL && o != own; o = sc_scope_parent(o)) {
-		if (es_is_mark(e, o) && pair_of(o, "call") != NULL) {
+		if (es_is_mark(e, o) && es_pair_of(o, "call") != NULL) {
 			return es_fail_ermine(ES_NOT_HERE,
 				"addTeardown in an action: add it in setup, or keep what the call started and stop it from setup's teardown");
 		}
@@ -2100,7 +2078,7 @@ int es_create_writer(es_context *c, op_value **writer) {
 		return es_fail_ermine(ES_GONE, "gone: what this writer was created in has ended");
 	}
 	const op_value *node = value_of(own, PL_NODE, OP_STR);
-	if ((node != NULL && es_is_computer(e, node->str)) || pair_of(own, "pipe") != NULL) {
+	if ((node != NULL && es_is_computer(e, node->str)) || es_pair_of(own, "pipe") != NULL) {
 		return es_fail_ermine(ES_NOT_HERE,
 			"createWriter in a memo, effect or pipe: create it in setup or an action, and use the writer there");
 	}
@@ -2113,7 +2091,7 @@ int es_create_writer(es_context *c, op_value **writer) {
 	for (sc_scope *o = sc_get_current_scope(e->scheduler); o != NULL && o != own; o = sc_scope_parent(o)) {
 		if (!es_is_mark(e, o)) continue;
 		for (size_t i = 0; i < 3; i++) {
-			const op_value *v = pair_of(o, MARK_KEYS[i]);
+			const op_value *v = es_pair_of(o, MARK_KEYS[i]);
 			if (v != NULL) b->mark[b->nmark++] = op_ref((op_value *)v);
 		}
 		break;

@@ -1526,4 +1526,21 @@ void es_register_scope(sc_scope *scope, es_context *c);
 es_context *es_context_at(sc_scope *scope);
 es_context *es_found(const char *name);
 
+// small things shared by the files (host.c; es_thing_of: nodes.c)
+#define CP(x) ((const char *const *)(x))
+// a path's steps as text: a leading "/" is the root, empty pieces are skipped (path.ts' parse)
+char **es_parse_steps(const char *text, size_t *n);
+// names copied, NULL after the last (pr_names_free frees them)
+char **es_dup_names(const char *const *src, size_t n);
+// the names joined by "/", for a message
+char *es_join(const char *const *names, size_t n);
+// the names as a key two paths share only if they are the same
+char *es_path_key(const char *const *path, size_t n);
+// an Error as a status holds it
+op_value *es_error_value(const char *message);
+// a pair of a scope's info; NULL: none
+const void *es_pair_of(const sc_scope *o, const char *key);
+// the id (and path of n, if it has one) as the policy is asked of it
+gd_thing es_thing_of(const char *id, const es_node_data *n);
+
 #endif
