@@ -12,8 +12,7 @@
 // none), object (record's start and load: C has no map of functions, so it is record by another
 // name), boom (hf_run.error "boom", its load's error too), quiet (its run recorded, no handle),
 // late (its run recorded, sw_wait: landed by land), spawn (its run recorded, then sw_run of the map
-// its code is, its process named), teller (the C api over one api_context, api_new from the facts,
-// its teardown recorded; its stop_reason api_stop's why). A run's keys: the TypeScript Start's,
+// its code is, its process named), teller (its stop recorded, none given "ended"). A run's keys: the TypeScript Start's,
 // sorted (sw_starting holds them, as places and root for the box).
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,8 +20,8 @@
 
 #include "../../../conformance/c/harness.h"
 #include "../../../core/places/c/status.h"
-#include "../../../ermine/api/c/api.h"
-#include "../../../ermine/boxes/c/boxes.h"
+#include "../../../extensions/boxes/c/boxes.h"
+#include "../../../ermine/system/c/ermine.h"
 #include "../../../ermine/processes/c/processes.h"
 #include "../../../ermine/processes/c/start.h"
 #include "software.h"
@@ -72,7 +71,7 @@ static op_value *with(const char *key, op_value *v) {
 // a box by its name
 typedef struct {
 	char *name;
-	bx *box;
+	bx_box *box;
 } boxed;
 
 // a place by its name: its node, path, scope and whether stored
@@ -114,10 +113,8 @@ struct telling;
 static int made;
 static sc_scheduler *s;
 static tb_table *table;
-static pt_paths *paths;
 static pl *places;
-static pr_processes rows;
-static const pl_contributor *walk[2];
+static es_ermine *ermine;
 static sn *scopes;
 static hf *functions;
 static sc_scope *host;
@@ -138,14 +135,9 @@ static asking *asked;
 static size_t nasked, capasked;
 static landing *landings;
 static size_t nlandings, caplandings, landed;
-static api_context *context;
 static struct telling **tellings;
 static size_t ntellings, captellings;
 
-static void drop(void *value, void *data) {
-	(void)data;
-	op_free(value);
-}
 
 // names: an id as answers show it, and back -----------------------------------------------------------
 
@@ -251,8 +243,8 @@ static void noted(const op_value *code, const sw_starting *st) {
 	op_set(m, "args", names_json(st->process.args, st->process.nargs));
 	op_set(m, "folder", names_json(st->process.folder, st->process.nfolder));
 	op_set(m, "root", op_str(st->root));
-	static const char *const keys[6] = {"args", "at", "box", "folder", "process", "scope"};
-	op_set(m, "keys", names_json(keys, 6));
+	static const char *const keys[5] = {"args", "at", "folder", "process", "scope"};
+	op_set(m, "keys", names_json(keys, 5));
 	op_set(m, "open", op_bool(sc_get_current_scope(s) == st->scope));
 	op_push(runs, m);
 	ordered("ran", st->process.id, NULL, 0);
@@ -448,41 +440,27 @@ static hf_run spawn(const op_value *code, void *api_, void *data) {
 	return handle(st->process.id);
 }
 
-// teller: an api made from the facts, its teardown recorded; its stop's reason api_stop's why
+// teller: its stop(reason) records { process, why } (none given: "ended", as a process's teardowns
+// are told); no load
 typedef struct telling {
 	char *id;
-	api_process process;
-	api *a;
 } telling;
-static void told_f(const op_value *why, void *ctx) {
-	telling *t = ctx;
-	op_value *m = op_map();
-	op_set(m, "process", op_str(t->id));
-	op_set(m, "why", why != NULL ? op_ref((op_value *)why) : op_null());
-	op_push(told, m);
-	ordered("told", t->id, why, 1);
-}
 static void teller_stop(void *ctx, const op_value *reason) {
 	telling *t = ctx;
-	api_stop(context, &t->process, reason);
+	op_value *why = reason != NULL ? op_ref((op_value *)reason) : op_str("ended");
+	op_value *m = op_map();
+	op_set(m, "process", op_str(t->id));
+	op_set(m, "why", op_ref(why));
+	op_push(told, m);
+	ordered("told", t->id, why, 1);
+	op_free(why);
 }
 static void teller_stop_plain(void *ctx) { teller_stop(ctx, NULL); }
-// the api's own pulses: none asked (the harness pulses)
-static void no_schedule(void *ctx, void (*f)(void *data), void *data) { (void)ctx, (void)f, (void)data; }
 static hf_run teller(const op_value *code, void *api_, void *data) {
 	(void)code, (void)data;
 	const sw_starting *st = api_;
-	if (context == NULL) {
-		context = api_context_new(&(api_setup){.scheduler = s, .table = table, .places = places,
-			.schedule = no_schedule});
-	}
 	telling *t = xalloc(sizeof *t);
 	t->id = xdup(st->process.id);
-	t->process = (api_process){.id = t->id, .at = st->process.at, .nat = st->process.nat,
-		.folder = st->process.folder, .nfolder = st->process.nfolder, .args = st->process.args,
-		.nargs = st->process.nargs, .scope = st->scope};
-	t->a = api_new(context, &(api_starting){.process = t->process, .places = st->places});
-	api_teardown(t->a, told_f, t);
 	PUSH(tellings, ntellings, captellings, t);
 	return (hf_run){.handle = {teller_stop_plain, t}, .stop_reason = teller_stop};
 }
@@ -515,18 +493,13 @@ static void asking_f(void *ctx, void (*f)(void *data), void *data) {
 // the world, made at the first line
 static void make(void) {
 	made = 1;
-	places = pl_new();
-	s = sc_new((sc_options){.drop = drop});
-	sc_on_tracking_end(s, pl_forget, places);
-	table = tb_make(pl_event, places);
-	paths = pt_new();
-	pr_processes_init(&rows, tb_string("R"));
-	walk[0] = &rows.contributor;
-	walk[1] = &pl_children;
-	pl_connect(places, &(pl_setup){.root = tb_string("R"), .table = table, .paths = paths,
-		.scheduler = s, .contributors = walk, .ncontributors = 2});
 	host_info = (sc_pair){"actor", op_str("host")};
-	host = sc_create_root_scope(s, &host_info, 1);
+	if (es_create(&(es_options){.root = "R", .info = &host_info, .ninfo = 1}, &ermine) != 0) {
+		fputs("no ermine\n", stderr);
+		abort();
+	}
+	s = ermine->scheduler, table = ermine->table, places = ermine->places;
+	host = ermine->host_scope;
 	scopes = sn_new(s, table);
 	functions = hf_new();
 	hf_add_loader(functions, "record", record, record_load, NULL);
@@ -570,7 +543,7 @@ static void hosted(void (*f)(void *data), void *data, const char *actor, int bar
 	op_free(v);
 }
 
-static bx *box_of(const char *n) {
+static bx_box *box_of(const char *n) {
 	for (size_t i = nboxes; n != NULL && i-- > 0;) {
 		if (strcmp(boxes[i].name, n) == 0) return boxes[i].box;
 	}
@@ -680,8 +653,8 @@ static void create_box(void *data) {
 		return;
 	}
 	char *id = take(folder);
-	bx *b;
-	int code = bx_create_id(&(bx_host){places, table, NULL, NULL, NULL}, id, NULL, &b);
+	bx_box *b;
+	int code = bx_create_id(ermine, id, &b);
 	free(id);
 	if (code != 0) {
 		j->out = error(pl_code_name(code));
@@ -786,7 +759,7 @@ static void run(void *data) {
 	sw_carried carried;
 	int is_carried = runner_of(get(r, "runner"), &runner, &carried, &rid);
 	sw_program program = program_of(get(r, "program"), &path, &id);
-	bx *b = NULL;
+	bx_box *b = NULL;
 	if (get(r, "box") != NULL && (b = box_of(text(get(r, "box")))) == NULL) {
 		j->out = error("no such box");
 	} else {
@@ -842,7 +815,7 @@ static void load(void *data) {
 		j->out = error("no such owner");
 		return;
 	}
-	bx *b = NULL;
+	bx_box *b = NULL;
 	if (get(r, "box") != NULL && (b = box_of(text(get(r, "box")))) == NULL) {
 		j->out = error("no such box");
 		return;
@@ -948,15 +921,19 @@ static op_value *node_json(const op_value *r) {
 	const nd_entry *a = tb_get(table, tb_string("attributes"), tb_string(id));
 	op_value *attributes = op_null(), *state = op_null();
 	if (a != NULL) {
-		op_free(attributes), op_free(state);
+		op_free(attributes);
 		attributes = op_map();
 		const op_value *v = a->value != NULL && a->value->type == OP_MAP ? a->value : NULL;
-		const op_value *was = v != NULL ? op_get(v, CST_ATTRIBUTE) : NULL;
 		for (size_t i = 0; v != NULL && i < v->count; i++) {
-			if (strcmp(v->keys[i], CST_ATTRIBUTE) == 0) continue;
 			op_set_name(attributes, v->keys[i], plain(v->items[i]));
 		}
-		state = status_json(was);
+	}
+	// its status: the status table's, not its attributes
+	const nd_entry *st = tb_get(table, tb_string(CST_TABLE), tb_string(id));
+	if (st != NULL) {
+		const op_value *v = st->value != NULL && st->value->type == OP_MAP ? st->value : NULL;
+		op_free(state);
+		state = status_json(v != NULL ? op_get(v, CST_ATTRIBUTE) : NULL);
 	}
 	op_set(o, "attributes", attributes);
 	op_set(o, "status", state);
@@ -1051,7 +1028,7 @@ static op_value *answer(const op_value *r) {
 		return op_map();
 	}
 	if (strcmp(op, "here") == 0 || strcmp(op, "list") == 0) {
-		bx *b = NULL;
+		bx_box *b = NULL;
 		if (get(r, "box") != NULL && (b = box_of(hh_str(r, "box"))) == NULL) return error("no such box");
 		pl *p = b != NULL ? bx_places(b) : places;
 		if (op[0] == 'h') return with("id", plain_take(read_at(p, get(r, "path"), get_id)));
@@ -1087,28 +1064,22 @@ void hh_answer(const op_value *request, FILE *out) {
 
 void hh_finish(void) {
 	if (!made) return;
-	// everything run here goes with the host's scope; then teller's apis, then their context
-	free(sc_teardown(host));
-	free(sc_escaped(s));
+	// everything run here goes with the host's scope; then teller's records
 	for (size_t i = 0; i < ntellings; i++) {
-		api_free(tellings[i]->a);
 		free(tellings[i]->id);
 		free(tellings[i]);
 	}
 	free(tellings);
-	api_context_free(context);
 	sw_halt(software);
 	pr_halt(host_processes);
-	sc_free(s);
-	tb_free(table);
-	pt_free(paths);
-	pl_free(places);
+	es_close(ermine);
 	sw_free(software);
 	pr_free(host_processes);
-	for (size_t i = 0; i < nboxes; i++) bx_free(boxes[i].box), free(boxes[i].name);
-	free(boxes);
 	sn_free(scopes);
 	hf_free(functions);
+	es_free(ermine);
+	for (size_t i = 0; i < nboxes; i++) bx_free(boxes[i].box), free(boxes[i].name);
+	free(boxes);
 	op_free((op_value *)host_info.value);
 	for (size_t i = 0; i < nplaced; i++) {
 		placed *x = &places_named[i];

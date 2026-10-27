@@ -218,12 +218,11 @@ trust = playground/trust/c/trust-harness
 trust_suite = trust
 LIBS += trust
 # software (experiments/software): offers and run, with no den, policy or asks; processes of its own; ermine/types,
-# for matching by conformance; the C api (ermine/api), for its teller runner
-software_src = $(filter-out core/places/c/places_harness.c core/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/start.c ermine/processes/c/runs.c ermine/sites/c/sites.c core/protect/c/protect.c experiments/software/c/functions.c ermine/types/c/types.c ermine/types/c/utis.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) core/places/c/guard.c extensions/patchy/c/patch.c ermine/api/c/api.c experiments/software/c/common.c experiments/software/c/offers.c experiments/software/c/run.c experiments/software/c/software.c experiments/software/c/software_harness.c
+# for matching by conformance; the ermine (ermine/system) the world is, and boxes (extensions/boxes), for its box runs
+software_src = $(filter-out ermine/system/c/ermine_harness.c,$(system_src)) experiments/software/c/functions.c ermine/types/c/types.c ermine/types/c/utis.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) extensions/boxes/c/boxes.c experiments/software/c/common.c experiments/software/c/offers.c experiments/software/c/run.c experiments/software/c/software.c experiments/software/c/software_harness.c
 software = experiments/software/c/software-harness
 software_suite = software
-# out of LIBS while the old C api (ermine/api) is gone and the new C isn't written (chee 10-25)
-# LIBS += software
+LIBS += software
 # sync's pieces for the new commit shape (playground/encoding commit, playground/together): their own loop (lines_harness.c is conformance/c/harness.c
 # reading a symbol as a string no one can carry), against the suites in playground/encoding/conformance and playground/together/conformance.
 # commit_form_harness.c (a commit's forms on the line) and commits_harness.c (the commits a harness makes by label) are the harnesses', never
