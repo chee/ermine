@@ -239,6 +239,12 @@ for (const s of chosen) {
 		/^\d.*\.json$/.test(n)
 	)
 		.sort()
+	// a suite asked for by name that runs nothing is not a pass (the all run leaves out the ones
+	// another runner checks: cbor's vectors)
+	if (files.length === 0) {
+		if (names.length) throw new Error(`suite ${s.name}: no scenarios in ${s.fixtures}`)
+		continue
+	}
 	const runs = [{ name: "", change: (r: Record<string, unknown>) => r }]
 	const again = s.options.again
 	if (again) {
