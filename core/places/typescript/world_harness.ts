@@ -57,6 +57,7 @@ import { createTable, type Id, type Key } from "@ermine/core/table"
 import { createPlaces, move, place, PlacesError, rename, unplace, type Where } from "./places.ts"
 
 import type { Answer, Request } from "../../../conformance/typescript/harness.ts"
+import { toJson } from "../../../conformance/typescript/form.ts"
 import { createChangeHeader } from "./header.ts"
 import { getOrSet, upsert } from "./upsert.ts"
 import { createStatus, PENDING, status } from "./status.ts"
@@ -266,7 +267,7 @@ export function worldAnswer(r: Request): Json | undefined {
 			return {}
 		case "node": {
 			const n = table.get(r.part, r.id)
-			return n === undefined || n.value === undefined ? {} : { value: n.value }
+			return n === undefined || n.value === undefined ? {} : { value: toJson(n.value) }
 		}
 		case "namesOf":
 			return { names: places.namesOf(r.id).map((n) => ({ folder: n.folder, name: n.name })) }
@@ -322,7 +323,7 @@ export function worldAnswer(r: Request): Json | undefined {
 						header(),
 					)
 					places.commit(got.changed)
-					return got.value
+					return toJson(got.value)
 				}),
 			}
 		case "status":
@@ -351,7 +352,7 @@ export function worldAnswer(r: Request): Json | undefined {
 			return {}
 		case "state": {
 			const w = watched.get(r.name)!
-			return { runs: w.runs, value: w.value }
+			return { runs: w.runs, value: toJson(w.value) }
 		}
 		case "moments": {
 			const out = moments.map(moment)
