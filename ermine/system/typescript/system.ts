@@ -940,7 +940,7 @@ function pipe(inner: Inner, from: Target, ...rest: unknown[]): Node {
 
 // the pipe's node unplaced and its entries gone (its scope gone, not made again)
 function gonePipe(inner: Inner, p: Piped, path: Path) {
-	const { places, table } = here(inner)
+	const { base, places, table } = here(inner)
 	try {
 		const [children, last] = slot(inner, path)
 		if ((children.value as Record<string, unknown>)?.[last] === p.id) {
@@ -951,6 +951,7 @@ function gonePipe(inner: Inner, p: Piped, path: Path) {
 		if (!(e instanceof PlacesError)) throw e
 	}
 	for (const [part] of table.get(p.id)) inner.put({ part, id: p.id, patches: [], gone: true })
+	base.held.drop(p.id)
 }
 
 // p told each write at path (back: the translate's way back, to's writes)
