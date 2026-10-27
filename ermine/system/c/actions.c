@@ -155,7 +155,8 @@ struct es_promise {
 	then_cb *cbs;
 	size_t n, cap;
 	// its holds: its maker's (es_promise_release), and each then not told yet. settled and none
-	// left: freed. serial: its stand-in's, so one left of a freed promise names no other
+	// left: freed. serial: its stand-in's, so one left of a freed promise names no other. x NULL: the
+	// ermine closed; held by its maker still, it settles nothing and is freed as the maker lets go
 	size_t holds;
 	uint64_t serial;
 	size_t at;
@@ -258,7 +259,16 @@ void es_actions_free(struct es_actions *x) {
 	free(x->allviews);
 	pm_clear(&x->views);
 	pm_clear(&x->viewed);
-	for (size_t i = 0; i < x->npromises; i++) promise_free(x->promises[i]);
+	for (size_t i = 0; i < x->npromises; i++) {
+		es_promise *p = x->promises[i];
+		// the thens not told are dropped; the maker's hold keeps the promise till it lets go
+		p->holds -= p->n;
+		free(p->cbs);
+		p->cbs = NULL;
+		p->n = p->cap = 0;
+		p->x = NULL;
+		if (p->holds == 0) promise_free(p);
+	}
 	free(x->promises);
 	pm_clear(&x->made);
 	for (size_t i = 0; i < x->owners.cap; i++) {
@@ -350,7 +360,7 @@ op_value *es_promise_value(const es_promise *p) {
 
 es_promise *es_promise_of(es_ermine *e, const op_value *v) {
 	es_promise *p = es_live_of(v, "promise");
-	if (p == NULL || !pm_has(&e->actions->made, p)) return NULL;
+	if (p == NULL || e->actions == NULL || !pm_has(&e->actions->made, p)) return NULL;
 	const op_value *n = op_get(v->items[0], "n");
 	return n != NULL && n->type == OP_NUM && n->num == (double)p->serial ? p : NULL;
 }
@@ -364,6 +374,10 @@ static void promise_free(es_promise *p) {
 
 // settled and held by nothing: out of the made, freed
 static void promise_let_go(es_promise *p) {
+	if (p->x == NULL) {
+		if (p->holds == 0) promise_free(p);
+		return;
+	}
 	if (p->state == 0 || p->holds > 0) return;
 	struct es_actions *x = p->x;
 	pm_delete(&x->made, p);
@@ -393,7 +407,7 @@ static void settled(es_promise *p) {
 }
 
 void es_promise_resolve(es_promise *p, op_value *value) {
-	if (p->state != 0) {
+	if (p->state != 0 || p->x == NULL) {
 		op_free(value);
 		return;
 	}
@@ -403,7 +417,7 @@ void es_promise_resolve(es_promise *p, op_value *value) {
 }
 
 void es_promise_reject(es_promise *p, const char *message) {
-	if (p->state != 0) return;
+	if (p->state != 0 || p->x == NULL) return;
 	p->state = 2;
 	p->error = es_dup(message);
 	settled(p);
@@ -419,6 +433,7 @@ void es_promise_then(es_promise *p,
 		promise_let_go(p);
 		return;
 	}
+	if (p->x == NULL) return;
 	then_cb cb = {fn, ctx};
 	ES_PUSH(p->cbs, p->n, p->cap, cb);
 	p->holds++;

@@ -48,7 +48,16 @@ int main(void) {
 	es_promise_resolve(b.p, op_str("done"));
 	es_promise_then(b.p, lets_go, &b);
 	CHECK(b.told == 1 && b.ok == 1 && strcmp(b.value, "done") == 0);
+	// a maker's promise outlives the close: settling it then is nothing, a then is never told, and
+	// letting go frees it (AddressSanitizer: no use after free)
+	told_t c = {0};
+	c.p = es_promise_new(e);
+	es_promise_then(c.p, lets_go, &c);
 	CHECK(es_close(e) == 0);
+	es_promise_resolve(c.p, op_str("late"));
+	es_promise_then(c.p, lets_go, &c);
+	CHECK(c.told == 0);
+	es_promise_release(c.p);
 	es_free(e);
 	if (!failed) puts("promise: ok");
 	return failed;
