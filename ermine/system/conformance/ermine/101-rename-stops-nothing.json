@@ -1,0 +1,210 @@
+{
+	"title": "renaming a node stops nothing made at it or under it: the node is still there, its memo and effect run on and no teardown is told ended",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/k",
+						0
+					],
+					"as": "k"
+				},
+				{
+					"do": [
+						"ensureNode",
+						"d",
+						{}
+					]
+				},
+				{
+					"do": [
+						"ensureNode",
+						"d/s",
+						{}
+					]
+				},
+				{
+					"do": [
+						"createMemo",
+						"d/m",
+						{},
+						[
+							"all",
+							[
+								"addTeardown",
+								"tm"
+							],
+							[
+								"read",
+								"$k"
+							]
+						]
+					]
+				},
+				{
+					"do": [
+						"createEffect",
+						"d/s/e",
+						[
+							"all",
+							[
+								"addTeardown",
+								"te"
+							],
+							[
+								"read",
+								"$k"
+							]
+						],
+						"fires"
+					]
+				},
+				{
+					"do": [
+						"createEffect",
+						"c",
+						[
+							"read",
+							"$k"
+						],
+						"ctl"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/k",
+				[
+					{
+						"path": [],
+						"value": 1
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"rename",
+				"/code/p/d",
+				"/code/p/e"
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/code/p/e/m"
+			],
+			"expect": {
+				"value": true
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/code/p/e/s/e"
+			],
+			"expect": {
+				"value": true
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/k",
+				[
+					{
+						"path": [],
+						"value": 2
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "fires",
+			"expect": {
+				"values": [
+					[
+						null,
+						0
+					],
+					[
+						null,
+						1
+					],
+					[
+						null,
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "tm",
+			"expect": {
+				"values": [
+					"replaced",
+					"replaced"
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "te",
+			"expect": {
+				"values": [
+					"replaced",
+					"replaced"
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "ctl",
+			"expect": {
+				"values": [
+					0,
+					1,
+					2
+				]
+			}
+		}
+	]
+}

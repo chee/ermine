@@ -347,8 +347,8 @@ export function shell() {
 		ensureNode(name)
 		return run(name)
 	})
-	// a window gone: its node and all under it removed (deepest first). the memos and effects made
-	// there still run after remove (a core finding), so this clears the nodes, not the computing
+	// a window gone: its node and all under it removed (deepest first). removing a node stops the
+	// memos, effects and actions made at it or under it, so the window's computing stops with it
 	const removeAll = (at: string) => {
 		if (!hasNode(at)) return
 		for (const kid of list(at)) removeAll(`${at}/${kid}`)
@@ -671,7 +671,9 @@ function viewer(name: string) {
 	createEffect(
 		`${name}/draw`,
 		() => ({ img: read(`${f}/doc`), pal: read(`${f}/keys/palette`) }),
-		(v) => pixels(canvas, v.img as Picture, v.pal as string[]),
+		(v) => {
+			pixels(canvas, v.img as Picture, v.pal as string[])
+		},
 	)
 	twins(name)
 	return (

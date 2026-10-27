@@ -1,0 +1,260 @@
+{
+	"title": "unplacing a node no other name reaches stops what is made at it and under it as remove does: teardowns told ended, nodes gone, the maker running on",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/k",
+						0
+					],
+					"as": "k"
+				},
+				{
+					"do": [
+						"ensureNode",
+						"d",
+						{}
+					]
+				},
+				{
+					"do": [
+						"ensureNode",
+						"d/s",
+						{}
+					]
+				},
+				{
+					"do": [
+						"createMemo",
+						"d/m",
+						{},
+						[
+							"all",
+							[
+								"addTeardown",
+								"tm"
+							],
+							[
+								"read",
+								"$k"
+							]
+						]
+					]
+				},
+				{
+					"do": [
+						"createEffect",
+						"d/s/e",
+						[
+							"all",
+							[
+								"addTeardown",
+								"te"
+							],
+							[
+								"read",
+								"$k"
+							]
+						],
+						"fires"
+					]
+				},
+				{
+					"do": [
+						"createEffect",
+						"c",
+						[
+							"read",
+							"$k"
+						],
+						"ctl"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/code/p/d/m"
+			],
+			"expect": {
+				"value": true
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/code/p/d/s/e"
+			],
+			"expect": {
+				"value": true
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/k",
+				[
+					{
+						"path": [],
+						"value": 1
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "fires",
+			"expect": {
+				"values": [
+					[
+						null,
+						0
+					],
+					[
+						null,
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "ctl",
+			"expect": {
+				"values": [
+					0,
+					1
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"unplace",
+				"/code/p/d"
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/code/p/d/m"
+			],
+			"expect": {
+				"value": false
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/code/p/d/s/e"
+			],
+			"expect": {
+				"value": false
+			}
+		},
+		{
+			"op": "log",
+			"name": "tm",
+			"expect": {
+				"values": [
+					"replaced",
+					"ended"
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "te",
+			"expect": {
+				"values": [
+					"replaced",
+					"ended"
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/k",
+				[
+					{
+						"path": [],
+						"value": 2
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "fires",
+			"expect": {
+				"values": [
+					[
+						null,
+						0
+					],
+					[
+						null,
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "ctl",
+			"expect": {
+				"values": [
+					0,
+					1,
+					2
+				]
+			}
+		},
+		{
+			"op": "status",
+			"name": "p",
+			"expect": {
+				"status": {
+					"state": "done"
+				}
+			}
+		}
+	]
+}

@@ -138,6 +138,16 @@ static es_out writer_fn(es_context *c, void *ctx, const op_value *const *args, s
 	return es_out_of(runner);
 }
 
+// an action that makes a node and a memo under it
+static es_out mk_fn(es_context *c, void *ctx, const op_value *const *args, size_t n) {
+	(void)args, (void)n;
+	es_handle *h;
+	CHECK(es_ensure_node(c, es_text("dm"), NULL, &h) == 0);
+	int code = es_create_memo(c, es_text("dm/m"), memo_fn, ctx, NULL, &h);
+	CHECK(code == 0 || code == ES_PENDING);
+	return es_out_of(NULL);
+}
+
 static es_out kid_setup(es_context *c, void *ctx) {
 	(void)c, (void)ctx;
 	return es_out_of(NULL);
@@ -167,6 +177,7 @@ static es_out setup(es_context *c, void *ctx) {
 	CHECK(es_create_action(c, es_text("act"), act_fn, NULL, &h) == 0);
 	CHECK(es_create_action(c, es_text("bind"), writer_fn, NULL, &h) == 0);
 	CHECK(es_create_action(c, es_text("kid"), kid_fn, ctx, &h) == 0);
+	CHECK(es_create_action(c, es_text("mk"), mk_fn, ctx, &h) == 0);
 	return es_out_of(NULL);
 }
 
@@ -218,6 +229,7 @@ typedef enum {
 	ROW_REFUSED_START,
 	ROW_BIND_LATER,
 	ROW_START_CHILD,
+	ROW_MAKE_REMOVE,
 	ROWS,
 } row;
 
@@ -241,6 +253,7 @@ static const struct {
 	[ROW_REFUSED_START] = {"start refused (taken)", IN_NOTHING},
 	[ROW_BIND_LATER] = {"writer in an action, used, dropped", IN_NOTHING},
 	[ROW_START_CHILD] = {"start in an action, stop", IN_NOTHING},
+	[ROW_MAKE_REMOVE] = {"memos made at a node, node removed", IN_NOTHING},
 };
 
 // every part at id taken out, as the host
@@ -298,6 +311,7 @@ static void round_of(world *w, row r, long i) {
 		CHECK(es_remove(w->host, es_on_path(es_text("/code/p/act"))) == 0);
 		CHECK(es_remove(w->host, es_on_path(es_text("/code/p/bind"))) == 0);
 		CHECK(es_remove(w->host, es_on_path(es_text("/code/p/kid"))) == 0);
+		CHECK(es_remove(w->host, es_on_path(es_text("/code/p/mk"))) == 0);
 		CHECK(es_stop(w->started, NULL) == 0);
 		es_started_free(w->started);
 		remove_node(w, id);
@@ -338,6 +352,14 @@ static void round_of(world *w, row r, long i) {
 		char *id = es_dup(w->kid);
 		remove_node(w, id);
 		free(id);
+		break;
+	}
+	case ROW_MAKE_REMOVE: {
+		op_value *out = NULL;
+		CHECK(es_execute_action(w->host, es_on_path(es_text("/code/p/mk")), NULL, 0, &out) == 0);
+		op_free(out);
+		// removing the node stops the memos at it and under it
+		CHECK(es_remove(w->host, es_on_path(es_text("/code/p/dm"))) == 0);
 		break;
 	}
 	default: write_a(w, i); break;

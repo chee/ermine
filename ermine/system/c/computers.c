@@ -60,6 +60,8 @@ struct made {
 	ch_site site;
 	unsigned holds;
 	int gone, given, awaiting;
+	// in its owner's bin (a hold of its own)
+	int binned;
 	// its place in x->all
 	size_t at;
 };
@@ -70,8 +72,22 @@ typedef struct {
 	size_t n, cap;
 } madelist;
 
+// what an owner made and has not let go: one teardown on the owner asks after them all, again as
+// it runs (a cleanup of that run, run once the next run is done: it finds a computer claimed,
+// alive, and leaves it; one not made again is dead, and its node and name go), and as the owner
+// goes (what is under it first). a memo or effect stopped is out of its owner's bin at once
+typedef struct {
+	struct es_computers *x;
+	sc_scope *own;
+	made **v;
+	size_t n, cap;
+	int armed;
+} bin;
+
 struct es_computers {
 	es_ermine *e;
+	// the bins, by owner
+	pm bins;
 	// every one made and not gone, by its node's id
 	es_map by_id;
 	// every one not let go of yet
@@ -128,8 +144,11 @@ struct es_computers *es_computers_new(es_ermine *e) {
 
 static void named_del(made *m);
 
+static void bin_leave(made *m);
+
 static void free_made(made *m) {
 	struct es_computers *x = m->x;
+	bin_leave(m);
 	// a context let go of after this (close) must not find it
 	named_del(m);
 	if (es_map_get(&x->by_id, m->id) == m) es_map_del(&x->by_id, m->id);
@@ -163,6 +182,14 @@ void es_computers_free(struct es_computers *x) {
 		free(x->bridges[i]);
 	}
 	free(x->bridges);
+	for (size_t i = 0; i < x->bins.cap; i++) {
+		if (x->bins.keys[i] == NULL) continue;
+		bin *b = x->bins.vals[i];
+		for (size_t k = 0; k < b->n; k++) b->v[k]->binned = 0;
+		free(b->v);
+		free(b);
+	}
+	pm_clear(&x->bins);
 	while (x->nall > 0) {
 		made *m = x->all[x->nall - 1];
 		m->holds = 1;
@@ -411,29 +438,7 @@ static char *drop(made *m) {
 	es_missing_drop(e, m->id);
 	if (es_map_get(&x->by_id, m->id) == m) es_map_del(&x->by_id, m->id);
 	es_context *c = m->cx;
-	if (c != NULL && m->npath > 0) {
-		nd_entry *children;
-		const char *last;
-		int code = es_folder_slot(c, (const char *const *)m->path, m->npath, &children, &last);
-		if (code == 0) {
-			const op_value *held = children->value != NULL && children->value->type == OP_MAP
-				? op_get(children->value, last)
-				: NULL;
-			tb_key parent = {0};
-			bool ours = held != NULL && held->type == OP_STR && strcmp(held->str, m->id) == 0;
-			if (ours && m->npath == 1) parent = pl_root(c->places);
-			else if (ours && !pl_get(c->places, (const char *const *)m->path, m->npath - 1, &parent)) {
-				ours = false;
-			}
-			if (ours) {
-				op_key step = {.type = OP_STR_KEY, .s = last};
-				op_patch out = {.place = {.path = &step, .length = 1}};
-				es_write w = {.part = "children", .id = parent.string, .patches = &out, .npatches = 1};
-				code = es_context_put(c, &w);
-				if (code && code != ES_CLOSED) bad = failure(code);
-			}
-		}
-	}
+	if (c != NULL) bad = es_unplace_names(c, m->id);
 	if (c != NULL) {
 		// every part at the node (the table's scratch is changed by each delete: names copied first)
 		size_t n = 0;
@@ -456,24 +461,104 @@ static char *drop(made *m) {
 	return bad;
 }
 
-// m's node and name go once its computer has. asked again in each run of its owner that makes it (a
-// cleanup of that run, run once the next run is done: it finds the computer claimed, alive, and leaves
-// it), and as the owner goes (what is under it first)
-static char *cleanup(void *data) {
-	made *m = data;
-	char *bad = NULL;
+// m's node and name go once its computer has
+static char *settle(made *m) {
 	if (!(m->c != NULL && sc_scope_alive(m->c)) && !m->gone) {
 		m->gone = 1;
-		bad = drop(m);
+		return drop(m);
 	}
-	release(m);
+	return NULL;
+}
+
+// m out of its owner's bin (its hold there is the caller's to let go of)
+static void bin_leave(made *m) {
+	if (!m->binned) return;
+	bin *b = pm_get(&m->x->bins, m->own);
+	m->binned = 0;
+	if (b == NULL) return;
+	for (size_t i = 0; i < b->n; i++) {
+		if (b->v[i] != m) continue;
+		memmove(b->v + i, b->v + i + 1, (b->n - i - 1) * sizeof *b->v);
+		b->n--;
+		return;
+	}
+}
+
+static char *bin_run(void *data) {
+	bin *b = data;
+	b->armed = 0;
+	char *bad = NULL;
+	int alive = sc_scope_alive(b->own);
+	// newest first
+	for (size_t i = b->n; i-- > 0;) {
+		made *m = b->v[i];
+		char *err = settle(m);
+		if (err != NULL && bad == NULL) bad = err;
+		else free(err);
+		if (m->gone || !alive) {
+			m->binned = 0;
+			memmove(b->v + i, b->v + i + 1, (b->n - i - 1) * sizeof *b->v);
+			b->n--;
+			release(m);
+		}
+	}
+	if (alive) {
+		if (b->n > 0) {
+			b->armed = 1;
+			free(sc_register_teardown(b->x->e->scheduler, b->own, bin_run, b));
+		}
+	} else {
+		pm_delete(&b->x->bins, b->own);
+		free(b->v);
+		free(b);
+	}
 	return bad;
 }
 
-// one more cleanup on its owner, asking after it
+// m's computer's scope torn down now, its teardowns told "ended" (the maker's process lives on: they
+// would be told "replaced"), its node and name gone. asked by remove and unplace (nodes.c)
+void es_stop_computer(es_ermine *e, const char *id) {
+	made *m = live(e, id);
+	if (m == NULL) return;
+	if (m->c != NULL && sc_scope_alive(m->c)) {
+		const char *key = m->cx != NULL ? m->cx->node : NULL;
+		char *had = key != NULL ? (char *)es_why_of(e, key) : NULL;
+		if (key != NULL) es_map_set(&e->whys, key, (void *)"ended");
+		free(sc_teardown(m->c));
+		if (key != NULL) {
+			if (had != NULL) es_map_set(&e->whys, key, had);
+			else es_map_del(&e->whys, key);
+		}
+	}
+	if (!m->gone) {
+		m->gone = 1;
+		free(drop(m));
+	}
+	// out of its owner's bin now: the owner keeps nothing of it
+	if (m->binned) {
+		bin_leave(m);
+		release(m);
+	}
+}
+
+// m asked after when its owner runs again and as it goes: in its owner's bin, once
 static void hold(made *m) {
-	m->holds++;
-	free(sc_register_teardown(m->x->e->scheduler, m->own, cleanup, m));
+	struct es_computers *x = m->x;
+	bin *b = pm_get(&x->bins, m->own);
+	if (b == NULL) {
+		b = es_alloc(sizeof *b);
+		*b = (bin){.x = x, .own = m->own};
+		pm_set(&x->bins, m->own, b);
+	}
+	if (!m->binned) {
+		m->binned = 1;
+		m->holds++;
+		ES_PUSH(b->v, b->n, b->cap, m);
+	}
+	if (!b->armed) {
+		b->armed = 1;
+		free(sc_register_teardown(x->e->scheduler, m->own, bin_run, b));
+	}
 }
 
 // making one --------------------------------------------------------------------------------------------------
