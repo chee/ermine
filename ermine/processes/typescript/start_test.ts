@@ -157,3 +157,17 @@ Deno.test("start: attributes that throw as they are written: the row rolled back
 	const p = w.start(w.places, "a/b")
 	assertEquals(p.at, ["a", "b"])
 })
+
+Deno.test("stop: from inside body, with the process body was given: the row out, the scope gone", () => {
+	const w = world()
+	const log: string[] = []
+	const p = w.start(w.places, "a", {}, (inside) => {
+		w.life.stop(inside)
+		log.push("stopped")
+		return () => void log.push("done")
+	})
+	assertEquals(log, ["stopped"])
+	assertEquals(p.scope.state === "alive", false)
+	// its path is free
+	assertEquals(w.start(w.places, "a").at, ["a"])
+})
