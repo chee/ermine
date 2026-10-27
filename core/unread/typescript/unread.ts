@@ -188,7 +188,7 @@ export function createUnread(): Unread {
 // (handed: none known, an empty list); returned, those whose body returned (in their set)
 type Going = { runs: Map<unknown, unknown[]>; returned: Set<unknown>; handed: boolean }
 // an unread → its wirings: its writes read them
-const wired = new WeakMap<object, Going[]>()
+const wired = /* @__PURE__ */ new WeakMap<object, Going[]>()
 
 // a scheduler's run ends wired to unread: what a computation keeps past its run is held (kept).
 // a plain result holds nothing. handed: the value a key the run tracked gave it (with places,

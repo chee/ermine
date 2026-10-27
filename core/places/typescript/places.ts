@@ -50,11 +50,11 @@ export type Setup = {
 
 // the id a walk is at on a level (a contributor's level, with no id of its own): not an id of any
 // entry, so it is never given as an answer (lib's get: nothing there)
-export const level: Id = Symbol("level")
+export const level: Id = /* @__PURE__ */ Symbol("level")
 
 // a contributor's answer: nothing at here + name, nor anywhere under it (step); no names under
 // here, nor anywhere deeper (names). a symbol, as level is, so it is one return and costs nothing
-export const none: unique symbol = Symbol("none")
+export const none: unique symbol = /* @__PURE__ */ Symbol("none")
 
 // where a walk has got to: the id it is at, its path (the names from the root to it), and gone:
 // the contributors that said none at it or above, never asked under it: a bit each, by its place in

@@ -1,7 +1,7 @@
 // how a map's keys are ordered: by length in UTF-8 bytes, shorter first, then bytewise. the order
 // of their CBOR encodings, which is canonical CBOR's (encoding's cbor.ts), without the encoding
 const utf8 = /* @__PURE__ */ new TextEncoder()
-const bytes = new Map<string, Uint8Array>()
+const bytes = /* @__PURE__ */ new Map<string, Uint8Array>()
 function of(k: string): Uint8Array {
 	let b = bytes.get(k)
 	if (b === undefined) {

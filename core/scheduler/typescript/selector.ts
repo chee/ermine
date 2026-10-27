@@ -32,7 +32,7 @@ export type Keyed = {
 	deliveries: () => number
 }
 
-const indexes = new WeakMap<object, Keyed>()
+const indexes = /* @__PURE__ */ new WeakMap<object, Keyed>()
 
 // the index of a scheduler, made once
 export function keyed(s: Pick<Scheduler, "onMark" | "onTrackingEnd">): Keyed {

@@ -25,7 +25,7 @@ declare module "@ermine/core/table" {
 // the table, the key in its entry, and what it holds while a run is pending
 export const TABLE = "status"
 export const STATUS = "ermine.computer.status"
-export const PENDING: unique symbol = Symbol.for("ermine.pending") as never
+export const PENDING: unique symbol = /* @__PURE__ */ Symbol.for("ermine.pending") as never
 
 export type Setup = {
 	// none: written here (table.add, or update and commit); given: each status write handed to it

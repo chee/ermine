@@ -4,7 +4,7 @@
 import type { Entry } from "@ermine/core/node/entry"
 import type { Unread } from "./unread.ts"
 
-const owners = new WeakMap<Unread, (entry: Entry<unknown>) => object | undefined>()
+const owners = /* @__PURE__ */ new WeakMap<Unread, (entry: Entry<unknown>) => object | undefined>()
 
 // for createUnread only
 export function keep(unread: Unread, owner: (entry: Entry<unknown>) => object | undefined) {

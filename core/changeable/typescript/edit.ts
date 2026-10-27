@@ -29,7 +29,7 @@ import type { Key, Patch } from "./apply.ts"
 import { walk } from "@ermine/core/util/walk-string"
 
 // returned by a recipe: the whole removed
-export const nothing = Symbol("nothing")
+export const nothing = /* @__PURE__ */ Symbol("nothing")
 
 type Kind = "map" | "list" | "typed"
 // top: the value at the root, when it is a string (not a draft: a string has none)
@@ -64,7 +64,7 @@ function kind(v: unknown): Kind | undefined {
 }
 
 // draft -> its node
-const nodes = new WeakMap<object, Node>()
+const nodes = /* @__PURE__ */ new WeakMap<object, Node>()
 const node = (v: unknown) => typeof v === "object" && v !== null ? nodes.get(v) : undefined
 
 const state = (n: Node) => n.copy ?? n.base
@@ -239,7 +239,7 @@ function ascending(a: number[]): Set<number> {
 	for (let j = tails.length ? tails[tails.length - 1] : -1; j >= 0; j = before[j]) run.add(a[j])
 	return run
 }
-const zero = Symbol("-0")
+const zero = /* @__PURE__ */ Symbol("-0")
 
 // work holds the elements of old in another order: the moves from one to the other, few: what is
 // in the longest run already in order stays, each other element is taken (a range of one) and put
@@ -300,7 +300,7 @@ const from = (x: unknown, len: number) => {
 	const i = toint(x)
 	return i < 0 ? Math.max(len + i, 0) : Math.min(i, len)
 }
-const lists = new Map<string, (n: Node, ...a: any[]) => unknown>([
+const lists = /* @__PURE__ */ new Map<string, (n: Node, ...a: any[]) => unknown>([
 	["push", (n, ...xs) => {
 		splice(n, state(n).length, 0, xs.map(value))
 		return state(n).length
@@ -329,7 +329,7 @@ const lists = new Map<string, (n: Node, ...a: any[]) => unknown>([
 	}],
 	["copyWithin", (n, ...a) => (rewrite(n, (w) => w.copyWithin(...a)), n.proxy)],
 ])
-const typeds = new Set(["sort", "reverse", "fill", "copyWithin", "set"])
+const typeds = /* @__PURE__ */ new Set(["sort", "reverse", "fill", "copyWithin", "set"])
 
 function mapTraps(n: Node): ProxyHandler<any> {
 	return {
