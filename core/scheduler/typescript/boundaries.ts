@@ -67,13 +67,22 @@ export function createBoundaries(
 		b.changed = true
 		changed.push(b)
 	}
+	// every listener told; what the first threw comes out after ("finish, then rethrow")
 	s.onAfterPulse(() => {
 		const bs = changed
 		changed = []
+		let failed: { error: unknown } | undefined
 		for (const b of bs) {
 			b.changed = false
-			for (const f of b.fs) f()
+			for (const f of b.fs) {
+				try {
+					f()
+				} catch (error) {
+					failed ??= { error }
+				}
+			}
 		}
+		if (failed) throw failed.error
 	})
 
 	function release(c: Computer) {

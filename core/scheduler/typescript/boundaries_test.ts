@@ -1,6 +1,6 @@
 // boundaries over the scheduler: what each kind catches, the nearest only, what passes through,
 // letting go, a computation going, a boundary going, and what no boundary catches
-import { assertEquals, assertStrictEquals } from "@std/assert"
+import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
 import { createBoundaries } from "./boundaries.ts"
 import { type Computer, createScheduler, PENDING, type Scope } from "./scheduler.ts"
 
@@ -212,6 +212,24 @@ Deno.test("listeners are told once after a pulse, however much changed in it; be
 	// torn down between pulses: what it holds changes at once, told after the next pulse
 	s.teardown(part)
 	assertEquals([told, loading.caught().length], [1, 0])
+	s.pulse()
+	assertEquals(told, 2)
+})
+
+Deno.test("a listener that throws: every other boundary's listeners are told all the same, then it comes out of the pulse", () => {
+	const { s, b, write, o, scope, compute } = setup()
+	const one = scope(o), two = scope(o)
+	b.loading(one).on(() => {
+		throw new Error("boom")
+	})
+	let told = 0
+	b.loading(two).on(() => void told++)
+	write("k", "wait")
+	compute(one, "k")
+	compute(two, "k")
+	assertThrows(() => s.pulse(), Error, "boom")
+	assertEquals(told, 1)
+	compute(two, "k")
 	s.pulse()
 	assertEquals(told, 2)
 })
