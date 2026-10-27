@@ -1,3 +1,11 @@
 {
-	"allow": ["--allow-write", "--allow-ffi", "--allow-run", "--allow-env"]
+	"allow": [
+		"--allow-write",
+		"--allow-ffi",
+		"--allow-run",
+		"--allow-env"
+	],
+	"noLinkAttrs": [
+		"linux"
+	]
 }

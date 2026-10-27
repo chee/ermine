@@ -537,31 +537,36 @@ Deno.test("the watcher: events, a quiet time, one pass", () =>
 		await w.idle()
 	}))
 
-Deno.test("a link renamed moves its id; an alias, by the host's seam, is a link", () =>
-	within(async (dir) => {
-		const h = await example(dir)
-		await Deno.rename(h.p("pinned.txt"), h.p("starred.txt"))
-		await h.pass([""])
-		assertEquals(h.ids(h.root, "pinned"), [])
-		assertEquals(h.ids(h.root, "starred"), [h.d1])
-		assertEquals(await Deno.readLink(h.p("starred.txt")), "docs/1.txt")
-		// a Finder alias: the host resolves it; the store replaces it with a link
-		h.put("clock alias", "an alias's bookmark data")
-		const w = watcher({
-			store: h.t,
-			events: false,
-			save: h.save,
-			actor: "tester",
-			alias: (p) => (p.endsWith("/clock alias") ? h.p("apps/clock.txt") : undefined),
-		})
-		w.start({ edit: (d, actor) => h.running()!.edit(d, actor) })
-		await w.pass([""])
-		w.stop()
-		assertEquals(h.ids(h.root, "clock alias"), [h.c])
-		assertEquals((await Deno.lstat(h.p("clock alias.txt"))).isSymlink, true)
-		assertEquals(await exists(h.p("clock alias")), false)
-		assertEquals(await h.t.differences(), [])
-	}))
+// Linux holds no id on a link
+Deno.test({
+	name: "a link renamed moves its id; an alias, by the host's seam, is a link",
+	ignore: Deno.build.os !== "darwin",
+	fn: () =>
+		within(async (dir) => {
+			const h = await example(dir)
+			await Deno.rename(h.p("pinned.txt"), h.p("starred.txt"))
+			await h.pass([""])
+			assertEquals(h.ids(h.root, "pinned"), [])
+			assertEquals(h.ids(h.root, "starred"), [h.d1])
+			assertEquals(await Deno.readLink(h.p("starred.txt")), "docs/1.txt")
+			// a Finder alias: the host resolves it; the store replaces it with a link
+			h.put("clock alias", "an alias's bookmark data")
+			const w = watcher({
+				store: h.t,
+				events: false,
+				save: h.save,
+				actor: "tester",
+				alias: (p) => (p.endsWith("/clock alias") ? h.p("apps/clock.txt") : undefined),
+			})
+			w.start({ edit: (d, actor) => h.running()!.edit(d, actor) })
+			await w.pass([""])
+			w.stop()
+			assertEquals(h.ids(h.root, "clock alias"), [h.c])
+			assertEquals((await Deno.lstat(h.p("clock alias.txt"))).isSymlink, true)
+			assertEquals(await exists(h.p("clock alias")), false)
+			assertEquals(await h.t.differences(), [])
+		}),
+})
 
 Deno.test("random edits, a few dozen seeds: each pass leaves the folder as the layout says", async () => {
 	for (let seed = 1; seed <= 24; seed++) {
