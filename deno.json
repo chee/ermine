@@ -4,7 +4,6 @@
 		"./ermine/encoding",
 		"./playground/encoding",
 		"./ermine/processes",
-		"./ermine/boxes",
 		"./playground/compilers",
 		"./ermine/types",
 		"./ermine/system",

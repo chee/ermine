@@ -1,9 +1,0 @@
-{
-	"again": {
-		"name": "cached",
-		"has": "box",
-		"set": {
-			"cached": true
-		}
-	}
-}

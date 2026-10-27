@@ -1,13 +1,12 @@
 // the host (ermine.ts, features.ts, registry.ts), in C: createErmine, features and hooks, slots, start,
-// stop, close, getProcessContext, handleOf, dataOf, records, calling, createBox, the registry,
+// stop, close, getProcessContext, handleOf, dataOf, records, calling, the registry,
 // nothing-open. D's job, function by function (ermine.h says each):
 //   errors: es_fail, es_fail_refusal, es_fail_feature, es_fail_text, es_thrown, es_clear_thrown,
 //     es_not_yet, es_code_name, es_out_code
 //   lifecycle: es_create (the order ermine.ts makes things in), es_close, es_free, es_start, es_stop,
 //     es_started_status, es_started_free, es_refused_free, es_pulse
 //   the host: es_host_context, es_get_process_context, es_handle_of, es_data_of, es_records_run,
-//     es_records_call, es_records_waits, es_calling, es_features, es_create_box_at, es_box_place_at,
-//     es_box_unplace_at
+//     es_records_call, es_records_waits, es_calling, es_features
 //   features: es_on_table … es_on_status, es_api_*, es_reserve_slot, es_slot_get, es_slot_set,
 //     es_listened, es_next_*: installed in order (needs first), setup-only, the chains with next
 //   what the others call: es_hook_write, es_hook_read, es_hook_teardown, es_hook_status,
@@ -22,7 +21,7 @@
 // onTable: next gives the layer the hooks after it made. a closed ermine: every function here that gives
 // a pointer or a 1/0 gives NULL/0 with es_thrown() ES_CLOSED; none (nothing there) leaves nothing thrown.
 //
-// what is not here, and why: the scope nodes going and boxes' writes are done by libraries with no
+// what is not here, and why: the scope nodes going is done by libraries with no
 // write hook, so onWrite does not see them and cannot hold them back.
 #include "ermine.h"
 
@@ -279,7 +278,6 @@ typedef struct proc_rec {
 	es_program fn;
 	void *ctx;
 	es_context *context;
-	const es_box *box;
 	char *id;
 	op_value *at_value;
 	sc_pair info[1];
@@ -324,10 +322,6 @@ struct es_hosting {
 	size_t nprocs, capprocs;
 	es_context **all;
 	size_t nall, capall;
-	es_box **boxes;
-	size_t nboxes, capboxes;
-	// every box by its folder's id (one a folder), and those in the index (es_box_count)
-	es_map roots, live;
 	sc_scope **scopes;
 	size_t nscopes, capscopes;
 	// a scope freed: its context goes (a process's), and the values its info borrowed (with)
@@ -463,8 +457,6 @@ char *es_uuidv7(void) {
 }
 
 char *es_new_id(es_ermine *e) { return e->id != NULL ? e->id(e->id_ctx) : es_uuidv7(); }
-// a box's new folder's id: the ermine's
-static char *host_id(void *ctx) { return es_new_id(ctx); }
 
 void es_drop(void *value, void *data) {
 	(void)data;
@@ -743,10 +735,10 @@ static void table_event(void *ctx, tb_key part, tb_key id) {
 	es_ermine *e = ctx;
 	dispatch_event(e, host_of(e)->innermost, part, id);
 }
-static void commit_changed(void *ctx, const pl_changed *changed) {
-	es_ermine *e = ctx;
+void es_commit_changed(es_ermine *e, const pl_changed *changed) {
 	dispatch_commit(e, host_of(e)->innermost, changed);
 }
+static void commit_changed(void *ctx, const pl_changed *changed) { es_commit_changed(ctx, changed); }
 // what is in front of a layer a hook gave, asked by the hook (places, until it has given one)
 static void ahead_event(void *ctx, tb_key part, tb_key id) {
 	layer_rec *r = ctx;
@@ -1518,7 +1510,6 @@ static void free_hosting(es_ermine *e);
 // made so far, let go of: createErmine threw
 static void abandon(es_ermine *e) {
 	if (e->host_scope != NULL) free(sc_teardown(e->host_scope));
-	es_nodes_stop(e);
 	if (e->statuses != NULL) cst_stop(e->statuses);
 	if (e->runs != NULL) crn_stop(e->runs);
 	es_calls_stop(e);
@@ -1543,15 +1534,6 @@ static void free_hosting(es_ermine *e) {
 	for (size_t i = 0; i < h->with.cap; i++)
 		if (h->with.keys[i] != NULL && h->owns) op_free(h->with.vals[i]);
 	pm_clear(&h->with);
-	for (size_t i = 0; i < h->nboxes; i++) {
-		if (h->boxes[i]->box != NULL) bx_free(h->boxes[i]->box);
-		free(h->boxes[i]->root);
-		free_names(h->boxes[i]->at, h->boxes[i]->nat);
-		free(h->boxes[i]);
-	}
-	free(h->boxes);
-	es_map_free(&h->roots);
-	es_map_free(&h->live);
 	for (es_slot *sl = h->slots; sl != NULL;) {
 		es_slot *next = sl->next;
 		for (size_t i = 0; i < sl->held.cap; i++) {
@@ -1702,9 +1684,8 @@ int es_create(const es_options *given, es_ermine **out) {
 	e->nodes = es_nodes_new(e);
 	e->computers = es_computers_new(e);
 	e->actions = es_actions_new(e);
-	e->root_box = (es_box){.root = e->root, .places = e->places};
 	{
-		es_context_options co = {.scope = e->host_scope, .box = &e->root_box, .args = o->host.args,
+		es_context_options co = {.scope = e->host_scope, .places = e->places, .args = o->host.args,
 			.nargs = o->host.nargs, .node = e->node};
 		e->host_context = es_context_new(e, &co);
 		remember_context(e, e->host_context);
@@ -1731,8 +1712,6 @@ int es_create(const es_options *given, es_ermine **out) {
 	e->runs = crn_new(&(crn_setup){.places = e->places, .table = e->table, .scheduler = e->scheduler,
 		.hold = run_hold, .hold_ctx = e});
 	e->calls = es_calls_new(e, !o->calls_never);
-	e->host = (bx_host){
-		.places = e->places, .table = e->table, .commit = commit_changed, .ctx = e, .id = host_id};
 
 	// the registry; hooks are setup-only from here
 	sched_add(e->scheduler);
@@ -1777,12 +1756,11 @@ static op_value *waits_value(es_ermine *e, const char *pid) {
 		op_value *m = op_map();
 		if (waits[i].has_path) op_set(m, "send", names_value(CP(waits[i].path), waits[i].npath));
 		else op_set(m, "send", op_str(waits[i].id));
-		op_set(m, "box", op_str(waits[i].box));
 		op_set(m, "since", op_num(waits[i].since));
 		op_push(list, m);
 	}
 	es_waits_free(waits, n);
-	// the nodes it read that weren't there (paths from the root, shown as each sees them)
+	// the nodes it read that weren't there (paths from the root)
 	const es_missing *missing = es_missing_of(e, pid);
 	for (size_t i = 0; missing != NULL && i < missing->npaths; i++) {
 		op_value *m = op_map();
@@ -1938,23 +1916,17 @@ static void start_body(pr_process *p, void *data) {
 	rec->id = es_dup(pr_id(p));
 	const char *const *at, *const *folder, *const *args;
 	size_t nat = pr_at(p, &at), nfolder = pr_folder(p, &folder), nargs = pr_args(p, &args);
-	es_context_options co = {.scope = pr_scope(p), .box = rec->box, .folder = folder, .nfolder = nfolder,
+	es_context_options co = {.scope = pr_scope(p), .places = e->places, .folder = folder, .nfolder = nfolder,
 		.at = at, .nat = nat, .args = args, .nargs = nargs, .process = p, .node = rec->id};
 	rec->context = es_context_new(e, &co);
 	remember_context(e, rec->context);
 	es_map_set(&h->contexts, rec->id, rec->context);
-	es_running_set(e, rec->id, rec->box->root, at, nat);
+	es_running_set(e, rec->id, at, nat);
 	es_register_scope(pr_scope(p), rec->context);
 	sc_register_teardown(e->scheduler, pr_scope(p), process_gone, rec);
 	rec->at_value = names_value(at, nat);
 	rec->info[0] = (sc_pair){"process", rec->at_value};
 	run_setup(rec);
-}
-
-static void box_live(es_ermine *e, es_box *b);
-static int known_box(hosting *h, es_ermine *e, const es_box *box) {
-	if (box == &e->root_box) return 1;
-	return es_map_get(&h->roots, box->root) == box;
 }
 
 // path text or steps, as the steps pr_start takes (owned: free them)
@@ -1976,10 +1948,6 @@ int es_start(es_ermine *e, es_program fn, void *ctx, es_at at, const es_start_op
 	if (fn == NULL) {
 		return ermine_fail(ES_NOT_A_FUNCTION, "start takes the program: its function");
 	}
-	const es_box *box = o != NULL && o->box != NULL ? o->box : &e->root_box;
-	if (!known_box(h, e, box)) return ermine_fail(ES_NOT_YET, "a box this ermine did not make");
-	// a box let go from the index (nothing reached it, no rows): walked again
-	if (box != &e->root_box) box_live(e, (es_box *)(void *)box);
 	char **owned;
 	size_t nsteps;
 	const char *const *steps = steps_of(at, &nsteps, &owned);
@@ -1988,7 +1956,6 @@ int es_start(es_ermine *e, es_program fn, void *ctx, es_at at, const es_start_op
 	rec->e = e;
 	rec->fn = fn;
 	rec->ctx = ctx;
-	rec->box = box;
 	rec->started.ermine = e;
 	rec->running = 1;
 	rec->at = h->nprocs;
@@ -2001,7 +1968,7 @@ int es_start(es_ermine *e, es_program fn, void *ctx, es_at at, const es_start_op
 		po.has_args = 1;
 	}
 	pr_refusal no;
-	pr_process *made = pr_start(e->processes, box->places, steps, nsteps, &po, &no);
+	pr_process *made = pr_start(e->processes, e->places, steps, nsteps, &po, &no);
 	if (made == NULL) {
 		// refused: no process, its record out of procs
 		rec_free(rec);
@@ -2027,7 +1994,7 @@ int es_start(es_ermine *e, es_program fn, void *ctx, es_at at, const es_start_op
 				size_t common = r->nat < no.nat ? r->nat : no.nat;
 				size_t i = 0;
 				while (i < common && strcmp(r->at[i], no.at[i]) == 0) i++;
-				if (strcmp(r->root, box->root) != 0 || i != common) {
+				if (i != common) {
 					free(pid);
 					continue;
 				}
@@ -2065,15 +2032,15 @@ static void stop_process(proc_rec *rec, const char *why) {
 	es_held_drop(e, rec->id);
 	rec->running = 0;
 	// its row still there: its removal was held back, and the path says so
-	held_rec *held = held_of(h, PART_PROCESS, rec->box->root);
+	held_rec *held = held_of(h, PART_PROCESS, e->root);
 	const char *at;
 	const char *const *names;
 	size_t n = pr_at(rec->started.process, &names);
-	at = row_at(e, rec->box->root, (char *const *)names, n);
+	at = row_at(e, e->root, (char *const *)names, n);
 	if (at != NULL && strcmp(at, rec->id) == 0 && held != NULL) {
 		row_rec *r = es_alloc(sizeof *r);
 		r->feature = held->feature;
-		r->root = es_dup(rec->box->root);
+		r->root = es_dup(e->root);
 		r->nat = n;
 		r->at = es_alloc((n + 1) * sizeof *r->at);
 		for (size_t i = 0; i < n; i++) r->at[i] = es_dup(names[i]);
@@ -2133,15 +2100,11 @@ int es_close(es_ermine *e) {
 		if (h->procs[i]->running) stop_process(h->procs[i], "ended");
 	}
 	char *bad = sc_teardown(e->host_scope);
-	es_nodes_stop(e);
 	if (e->statuses != NULL) cst_stop(e->statuses);
 	if (e->runs != NULL) crn_stop(e->runs);
 	es_calls_stop(e);
 	if (e->processes != NULL) pr_halt(e->processes);
 	unlisten(e);
-	// the boxes' holds on their makers, let go (the contexts stay till es_free)
-	for (size_t i = 0; i < h->nboxes; i++)
-		if (h->boxes[i]->maker != NULL && h->boxes[i]->maker->process != NULL) sc_release(h->boxes[i]->maker->scope);
 	e->closed = 1;
 	release(e);
 	h->next_closed = closed_ermines;
@@ -2217,171 +2180,4 @@ int es_calling(es_ermine *e, es_calling_view *out) {
 	if (es_alive(e)) return 0;
 	es_clear_thrown();
 	return es_calls_calling(e, sc_get_current_scope(e->scheduler), out);
-}
-
-// boxes ---------------------------------------------------------------------------------------------------------------------------------------
-
-// b in the index: walked by path again
-static void box_live(es_ermine *e, es_box *b) {
-	hosting *h = host_of(e);
-	if (es_map_has(&h->live, b->root)) return;
-	es_map_set(&h->live, b->root, b);
-	es_names_changed(e);
-}
-
-typedef struct {
-	es_context *c;
-	const char *const *names;
-	size_t n;
-	bx *made;
-	int code;
-} box_make;
-
-static int box_make_thunk(void *data) {
-	box_make *m = data;
-	es_ermine *e = m->c->ermine;
-	ch_header header;
-	pl_made *block;
-	TRY(es_header(e, &header, &block));
-	m->code = bx_create(&e->host, m->names, m->n, m->c->box->box, header, block, &m->made);
-	pl_made_free(block);
-	if (m->code != 0) return es_fail(m->code, "%s", pl_code_name(m->code));
-	return 0;
-}
-
-int es_create_box_at(es_context *c, es_at where, es_box **out, const ch_site *site) {
-	es_ermine *e = c->ermine;
-	hosting *h = host_of(e);
-	TRY(es_alive(e));
-	const ch_site *was = es_enter(e, site);
-	es_names at;
-	int code = es_resolve(c, where, &at);
-	if (code == 0) {
-		box_make m = {c, CP(at.names), at.n, NULL, 0};
-		code = es_inside(c, box_make_thunk, &m);
-		if (code == 0) {
-			// a box at that folder already: that one (made again by a rerun, or by another)
-			es_box *b = es_map_get(&h->roots, bx_root(m.made));
-			if (b != NULL) {
-				bx_free(m.made);
-			} else {
-				b = es_alloc(sizeof *b);
-				b->box = m.made;
-				b->root = es_dup(bx_root(m.made));
-				b->places = bx_places(m.made);
-				b->at = at.names;
-				b->nat = at.n;
-				b->maker = c;
-				// a box holds its maker (its places and unplaces are as it): its scope held, so its
-				// context lasts as the box does
-				if (c->process != NULL) sc_retain(c->scope);
-				at = (es_names){0};
-				ES_PUSH(h->boxes, h->nboxes, h->capboxes, b);
-				es_map_set(&h->roots, b->root, b);
-			}
-			box_live(e, b);
-			*out = b;
-		}
-		es_names_free(&at);
-	}
-	es_enter(e, was);
-	if (code == 0) es_queue_pulse(e);
-	return code;
-}
-
-typedef struct {
-	es_box *b;
-	char **steps;
-	size_t n;
-	es_target x;
-	const char *id;
-	int unplace;
-} box_move;
-
-static int box_place_thunk(void *data) {
-	box_move *m = data;
-	es_context *c = m->b->maker;
-	es_ermine *e = c->ermine;
-	// the slot: the box's folder's children, at the path in it
-	op_value *field = names_value(CP(m->steps), m->n);
-	gd_target slot = gd_target_of((gd_thing){tb_string(m->b->root), NULL, 0}, PART_CHILDREN, field);
-	int code = es_ask_placing(c, &slot, m->x, m->id);
-	op_free(field);
-	if (code != 0) return code;
-	ch_header header;
-	pl_made *block;
-	TRY(es_header(e, &header, &block));
-	pl_changed changed;
-	code = bx_box(m->b->box, CP(m->steps), m->n, tb_string(m->id), header, block, &changed);
-	pl_made_free(block);
-	if (code != 0) return es_fail(code, "%s", pl_code_name(code));
-	return 0;
-}
-
-static int box_unplace_thunk(void *data) {
-	box_move *m = data;
-	es_ermine *e = m->b->maker->ermine;
-	ch_header header;
-	pl_made *block;
-	TRY(es_header(e, &header, &block));
-	pl_changed changed;
-	int code = bx_unbox(m->b->box, CP(m->steps), m->n, header, block, &changed);
-	pl_made_free(block);
-	if (code != 0) return es_fail(code, "%s", pl_code_name(code));
-	return 0;
-}
-
-int es_box_place_at(es_box *b, es_at at, es_target x, const ch_site *site) {
-	es_context *c = b->maker;
-	es_ermine *e = c->ermine;
-	TRY(es_alive(e));
-	const ch_site *was = es_enter(e, site);
-	char *id = NULL;
-	int code = es_id_through(c, x, &id);
-	if (code == 0) {
-		char **owned;
-		box_move m = {b, NULL, 0, x, id, 0};
-		const char *const *steps = steps_of(at, &m.n, &owned);
-		m.steps = (char **)(void *)steps;
-		code = es_inside(c, box_place_thunk, &m);
-		free_names(owned, owned != NULL ? m.n : 0);
-	}
-	free(id);
-	es_enter(e, was);
-	if (code == 0) es_queue_pulse(e);
-	return code;
-}
-
-size_t es_box_count(es_ermine *e) { return host_of(e)->live.n; }
-const es_box *es_box_nth(es_ermine *e, size_t i) { return host_of(e)->live.vals[i]; }
-void es_box_drop(es_ermine *e, const es_box *b) { es_map_del(&host_of(e)->live, b->root); }
-
-static int rowed(const op_value *v) {
-	if (v == NULL) return 0;
-	if (v->type == OP_STR) return 1;
-	if (v->type != OP_MAP) return 0;
-	for (size_t i = 0; i < v->count; i++) {
-		if (rowed(v->items[i])) return 1;
-	}
-	return 0;
-}
-int es_box_rowed(es_ermine *e, const es_box *b) {
-	nd_entry *entry = tb_get(e->table, tb_string(PART_PROCESS), tb_string(b->root));
-	return entry != NULL && rowed(entry->value);
-}
-
-int es_box_unplace_at(es_box *b, es_at at, const ch_site *site) {
-	es_context *c = b->maker;
-	es_ermine *e = c->ermine;
-	TRY(es_alive(e));
-	const ch_site *was = es_enter(e, site);
-	char **owned;
-	box_move m = {b, NULL, 0, es_on_path(at), NULL, 1};
-	const char *const *steps = steps_of(at, &m.n, &owned);
-	m.steps = (char **)(void *)steps;
-	int code = es_inside(c, box_unplace_thunk, &m);
-	free_names(owned, owned != NULL ? m.n : 0);
-	es_enter(e, was);
-	if (code == 0) es_queue_pulse(e);
-	return code;
 }

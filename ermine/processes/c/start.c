@@ -154,10 +154,17 @@ void pr_give(pr *s, pr_process *p, sc_computer *c, int run) {
 	if (run && s->runs != NULL) crn_give(s->runs, c, tb_string(p->id));
 }
 
-// names steps come to inside the root (bx_inside), copied
+// names steps come to from the root: "." here, ".." back one (at the root: stays), "/" the root; copied
 char **pr_names(const char *const *steps, size_t n, size_t *out) {
 	const char **names = xalloc((n + 1) * sizeof *names);
-	*out = bx_inside(steps, n, NULL, 0, names);
+	size_t k = 0;
+	for (size_t i = 0; i < n; i++) {
+		if (strcmp(steps[i], ".") == 0) continue;
+		if (strcmp(steps[i], "/") == 0) k = 0;
+		else if (strcmp(steps[i], "..") == 0) k -= k > 0;
+		else names[k++] = steps[i];
+	}
+	*out = k;
 	char **copy = xalloc((*out + 1) * sizeof *copy);
 	for (size_t i = 0; i < *out; i++) copy[i] = xdup(names[i]);
 	free(names);

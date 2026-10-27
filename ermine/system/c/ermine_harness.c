@@ -4,7 +4,7 @@
 //     scope { actor: "test" }, new ids "n1", "n2", … in order, a process's id "proc:<name>"; a
 //     schedule that queues, run after every request till none is asked for
 //   every op: ermine, features, late, uuid, node, context, o (resolve, write, remove, ask, within,
-//     api), host, code, start, box, boxplace, stop, status, close, service (land), record, waits,
+//     api), host, code, start, stop, status, close, service (land), record, waits,
 //     slot, do, settle, log, pulse, saved, id, metadata, caller, site
 //   programs as data steps: { do: [fn, ...args], as? }, "$x" in an arg, the forms (createMemo,
 //     createEffect, createAction, addTeardown, getStatus, explain, peep, ref, watch, pipe, log, later, if,
@@ -85,7 +85,7 @@ typedef struct {
 
 // a deny entry of the request: every field given must match
 typedef struct {
-	char *op, *path, *id, *from, *box;
+	char *op, *path, *id, *from;
 } deny_t;
 
 // a test feature: its spec, and what its hooks keep
@@ -109,7 +109,6 @@ typedef struct {
 	es_map running;
 	es_map logs;
 	es_map slots;
-	es_map boxes;
 	es_map programs;
 	es_map shared;
 	es_map late;
@@ -276,25 +275,15 @@ static op_value *node_value(const es_node_data *n) {
 	op_set(m, "part", op_str(n->part));
 	return m;
 }
-static op_value *box_value(const es_box *b) {
-	op_value *m = op_map();
-	op_set(m, "at", strs(b->nat, (const char *const *)b->at));
-	op_set(m, "place", op_str("function"));
-	op_set(m, "unplace", op_str("function"));
-	return m;
-}
-
-// a stand-in a program may look into, as the object it is: a change view, a box. new; NULL: none
+// a stand-in a program may look into, as the object it is: a change view. new; NULL: none
 static op_value *expand(const op_value *v) {
 	const es_change_view *view = es_live_of(v, "view");
 	if (view != NULL) return view_value(view);
-	const es_box *box = es_live_of(v, "box");
-	if (box != NULL) return box_value(box);
 	return NULL;
 }
 
 // v as an answer shows it: a handle what it reaches, a promise {}, a function "function", a view
-// or box as its fields, a list and a map through. new
+// as its fields, a list and a map through. new
 static op_value *plain(const op_value *v) {
 	if (v == NULL) return NULL;
 	if (v->type == OP_STAND) {
@@ -378,7 +367,7 @@ static int same_value(const op_value *a, const op_value *b) {
 	case OP_NUM: return op_same_num(a, b);
 	case OP_STR: return strcmp(a->str, b->str) == 0;
 	case OP_STAND: {
-		static const char *const kinds[] = {"handle", "promise", "function", "program", "view", "box"};
+		static const char *const kinds[] = {"handle", "promise", "function", "program", "view"};
 		for (size_t i = 0; i < sizeof kinds / sizeof *kinds; i++) {
 			const void *x = es_live_of(a, kinds[i]);
 			if (x != NULL) return x == es_live_of(b, kinds[i]);
@@ -1169,15 +1158,6 @@ static int api_get_args(sys_t sys, op_value *const *a, size_t n, op_value **out)
 	*out = strs(count, args);
 	return 0;
 }
-static int api_create_box(sys_t sys, op_value *const *a, size_t n, op_value **out) {
-	CTX("createBox");
-	es_at at;
-	es_box *box;
-	TRY(at_of(A(0), &at));
-	TRY(es_create_box(c, at, &box));
-	*out = es_live("box", box);
-	return 0;
-}
 static int api_remove(sys_t sys, op_value *const *a, size_t n, op_value **out) {
 	(void)out;
 	CTX("remove");
@@ -1223,7 +1203,6 @@ static const struct {
 	{"executeAction", api_execute_action, 0},
 	{"getCaller", api_get_caller, 0},
 	{"getArgs", api_get_args, 0},
-	{"createBox", api_create_box, 0},
 	{"remove", api_remove, 1},
 	{"pulse", api_pulse, 1},
 };
@@ -1656,13 +1635,6 @@ static pr_answer deny_run(void *ctx, const pr_ask *ask, const pr_read *read) {
 		}
 		if (d->path != NULL && !path_is(ask->target.path, ask->target.npath, d->path)) continue;
 		if (d->from != NULL && !path_is(ask->from.path, ask->from.npath, d->from)) continue;
-		if (d->box != NULL) {
-			// by its name: that box's folder's id, the ask's from.box
-			const es_box *b = es_map_get(&W->boxes, d->box);
-			if (b == NULL || ask->from.box.string == NULL || strcmp(b->root, ask->from.box.string) != 0) {
-				continue;
-			}
-		}
 		return (pr_answer){.verdict = PR_NO, .reason = "denied"};
 	}
 	return (pr_answer){.verdict = PR_YES};
@@ -2142,8 +2114,8 @@ static int lib_run(void *ctx) {
 #undef L
 
 // land(ermine): the service's handler: the patch node sent landed. no stricter and no looser than its
-// caller's own functions: the patch node reached as the caller's own edit would (a handle in its
-// maker's box, a path in the caller's), edit asked on the target (by its id) and on the patch node
+// caller's own functions: the patch node reached as the caller's own edit would (a handle's place or
+// a path in the caller's), edit asked on the target (by its id) and on the patch node
 // (by the path it was sent by, else its id) as the caller and as the service, written with the
 // service's power in the call; the patch entry taken out once the write has landed. a write that
 // fails throws, one an onWrite hook holds back gives false: either way the patch node stays
@@ -2192,7 +2164,7 @@ static int land_do(const op_value *p, int *landed) {
 	}
 	if (code == 0 && id == NULL) {
 		tb_key key;
-		if (pl_get(from->box->places, path, npath, &key)) id = es_dup(key.string);
+		if (pl_get(from->places, path, npath, &key)) id = es_dup(key.string);
 	}
 	const nd_entry *patch_node = id != NULL ? tb_get(e->table, tb_string("patch"), tb_string(id)) : NULL;
 	if (code == 0 && (id == NULL || patch_node == NULL || patch_node->value == NULL)) {
@@ -2267,7 +2239,6 @@ static int make(const op_value *r) {
 			if (text(d, "path") != NULL) x->path = es_dup(text(d, "path"));
 			if (text(d, "id") != NULL) x->id = es_dup(text(d, "id"));
 			if (text(d, "from") != NULL) x->from = es_dup(text(d, "from"));
-			if (text(d, "box") != NULL) x->box = es_dup(text(d, "box"));
 		}
 		w->policy = pr_call(deny_run, NULL);
 	}
@@ -2306,7 +2277,6 @@ static void world_free(world_t *w) {
 		free(w->deny[i].path);
 		free(w->deny[i].id);
 		free(w->deny[i].from);
-		free(w->deny[i].box);
 	}
 	if (w->policy != NULL) pr_policy_free(w->policy);
 	free(w->envs);
@@ -2319,7 +2289,6 @@ static void world_free(world_t *w) {
 	es_map_free(&w->logs);
 	es_map_free(&w->running);
 	es_map_free(&w->slots);
-	es_map_free(&w->boxes);
 	es_map_free(&w->programs);
 	es_map_free(&w->shared);
 	es_map_free(&w->late);
@@ -2599,28 +2568,19 @@ static int op_o(const op_value *r, op_value **res) {
 static int op_start(const op_value *r, op_value **res) {
 	const char *name = text(r, "name");
 	if (name == NULL) return fail("start needs a name");
-	const es_box *box = NULL;
-	if (text(r, "box") != NULL) box = es_map_get(&W->boxes, text(r, "box"));
-	if (text(r, "box") != NULL && box == NULL) return fail("no box %s", text(r, "box"));
 	W->next = es_alloc(strlen(name) + 6);
 	sprintf(W->next, "proc:%s", name);
 	W->pending = (char *)name;
 	running_t *me = owned_alloc(sizeof *me);
 	me->env = env_new(NULL);
 	es_map_set(&W->running, name, me);
-	// where its program was made: given, else the box's folder and its path
+	// where its program was made: given, else at
 	const char *at = str_or(r, "at");
-	size_t cap = strlen(at) + 8;
-	for (size_t i = 0; box != NULL && i < box->nat; i++) cap += strlen(box->at[i]) + 1;
-	char *where = es_alloc(cap + strlen(str_or(r, "program")));
+	char *where = es_alloc(strlen(at) + strlen(str_or(r, "program")) + 8);
 	if (text(r, "program") != NULL) {
 		strcpy(where, text(r, "program"));
 	} else {
-		for (size_t i = 0; box != NULL && i < box->nat; i++) {
-			strcat(where, "/");
-			strcat(where, box->at[i]);
-		}
-		strcat(where, "/");
+		strcpy(where, "/");
 		strcat(where, at);
 	}
 	char *key = rooted(where);
@@ -2635,7 +2595,7 @@ static int op_start(const op_value *r, op_value **res) {
 		return code;
 	}
 	free(key);
-	es_start_options so = {.box = box};
+	es_start_options so = {0};
 	const op_value *args = field(r, "args");
 	if (args != NULL && args->type == OP_LIST) {
 		const char **list = hh_take((args->count + 1) * sizeof *list);
@@ -2774,7 +2734,6 @@ static int op_waits(op_value **res) {
 		op_set(m, "caller", op_str(waits[i].caller));
 		if (waits[i].has_path) op_set(m, "path", strs(waits[i].npath, (const char *const *)waits[i].path));
 		if (waits[i].id != NULL) op_set(m, "id", op_str(waits[i].id));
-		op_set(m, "box", op_str(waits[i].box));
 		op_push(list, m);
 	}
 	es_waits_free(waits, n);
@@ -2913,29 +2872,6 @@ static int answer(const op_value *r, op_value **res) {
 		int code = es_ensure_node(es_host_context(e), es_text(at), live, &h);
 		op_free(live);
 		TRY(code);
-		*res = op_map();
-		return 0;
-	}
-	if (strcmp(op, "box") == 0) {
-		es_box *box;
-		TRY(es_create_box(es_host_context(e), es_text(str_or(r, "at")), &box));
-		es_map_set(&W->boxes, str_or(r, "name"), box);
-		*res = op_map();
-		return 0;
-	}
-	if (strcmp(op, "boxplace") == 0) {
-		es_box *box = es_map_get(&W->boxes, str_or(r, "name"));
-		if (box == NULL) return fail("no box %s", str_or(r, "name"));
-		es_target x;
-		if (text(r, "id") != NULL) {
-			es_node_data d = {.id = (char *)text(r, "id"), .part = (char *)"value"};
-			es_handle *h = es_handle_of(e, &d);
-			if (h == NULL) return es_thrown()->code;
-			x = es_on_node(h);
-		} else {
-			x = es_on_path(es_text(str_or(r, "path")));
-		}
-		TRY(es_box_place(box, es_text(str_or(r, "at")), x));
 		*res = op_map();
 		return 0;
 	}

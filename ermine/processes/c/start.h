@@ -1,10 +1,9 @@
-// start (typescript/start.ts) in C: a process's life at a path in a box or plain places, and its
-// stop. same rules as start.ts. knows no programs or loaders; a box here is its places
-// (bx_places).
+// start (typescript/start.ts) in C: a process's life at a path in places, and its stop. same rules
+// as start.ts. knows no programs or loaders.
 //
 //   pr *s = pr_new(&setup);                                   // with a scope open
 //   pr_refusal no;
-//   pr_process *p = pr_start(s, bx_places(b), at, nat, &(pr_options){..}, &no);   // NULL: refused
+//   pr_process *p = pr_start(s, places, at, nat, &(pr_options){..}, &no);   // NULL: refused
 //   pr_give(s, p, computer, 0);                               // its status on the process's node
 //   pr_stop(s, p);
 //   pr_halt(s);  /* before sc_free */  ...  pr_free(s);     // after tb_free and pl_free
@@ -24,7 +23,7 @@
 #ifndef PROCESSES_START_H
 #define PROCESSES_START_H
 
-#include "../../boxes/c/boxes.h"
+#include "processes.h"
 #include "../../sites/c/sites.h"
 #include "scopes.h"
 
@@ -48,7 +47,7 @@ typedef struct {
 	// where status.h's writes are committed, and what makes headers
 	pl *places;
 	sn *scopes;
-	// told every write's changed entries (the host's places, a box's shares it); NULL: pl_commit on
+	// told every write's changed entries (the host's places); NULL: pl_commit on
 	// places
 	void (*commit)(void *ctx, const pl_changed *changed);
 	void *commit_ctx;
@@ -105,8 +104,8 @@ typedef struct {
 // with a scope open. a macro: the site noted is the caller's
 pr *pr_new_at(const pr_setup *setup, const char *file, int line, const char *func);
 #define pr_new(...) pr_new_at(__VA_ARGS__, __FILE__, __LINE__, __func__)
-// where: the places it runs in (a box's, or plain places). at: nat steps from its root (a name, ".",
-// "..", "/": bx_inside, ".." at the root staying there). options may be NULL. a macro: the site
+// where: the places it runs in. at: nat steps from its root (a name, ".", "..", "/": ".." at the
+// root staying there). options may be NULL. a macro: the site
 // noted is the caller's, and its writes' (the row, the node; file NULL: none)
 pr_process *pr_start_at(pr *s, pl *where, const char *const *at, size_t nat,
 	const pr_options *options, pr_refusal *refused, const char *file, int line, const char *func);
@@ -127,7 +126,7 @@ size_t pr_args(const pr_process *p, const char *const **out);
 void pr_stop_at(pr *s, pr_process *p, const char *file, int line, const char *func);
 #define pr_stop(...) pr_stop_at(__VA_ARGS__, __FILE__, __LINE__, __func__)
 // the holder lets go of p (stopped first if it is not): its scope's maker's hold let go, and p
-// freed as that scope is (torn down, held by nothing: what is under it, a record, a box). its
+// freed as that scope is (torn down, held by nothing: what is under it, a record). its
 // pointer is no good after
 void pr_drop(pr *s, pr_process *p);
 // listeners away, with the scheduler alive
