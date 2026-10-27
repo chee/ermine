@@ -3,7 +3,7 @@
 // syncs, file ids and the Trash. On macOS system() makes them through FFI
 // into libSystem, and trashes by asking Finder over Apple Events, falling
 // back to moving the entry into ~/.Trash under a free name. On Linux it
-// makes what plain Deno calls can, and refuses the rest. A test gives its
+// makes them through FFI into glibc, and trashes by the freedesktop.org spec. A test gives its
 // own trash, never the real one.
 //
 // Every FFI call is made on the main thread, so errno, read right after it,
@@ -88,8 +88,13 @@ const F_FULLFSYNC = 51
 const EEXIST = 17
 const EXDEV = 18
 const ERANGE = 34
-const ENOTSUP = 45
-const ENOATTR = 93
+const linuxOS = Deno.build.os === "linux"
+// <asm-generic/errno.h> on Linux
+const ENOTSUP = linuxOS ? 95 : 45
+const ENOATTR = linuxOS ? 61 : 93
+const RENAME_NOREPLACE = 1
+const RENAME_EXCHANGE = 2
+const AT_FDCWD = -100
 
 const symbols = {
 	getxattr: { parameters: ["buffer", "buffer", "buffer", "usize", "u32", "i32"], result: "isize" },
@@ -109,39 +114,86 @@ const symbols = {
 
 let lib: Deno.DynamicLibrary<typeof symbols>["symbols"] | undefined
 
+// glibc's, for Linux: the l- calls never follow a link, and renameat2 does the swap and the exclusive rename
+const linuxSymbols = {
+	getxattr: {
+		parameters: ["buffer", "buffer", "buffer", "usize"],
+		result: "isize",
+		name: "lgetxattr",
+	},
+	setxattr: {
+		parameters: ["buffer", "buffer", "buffer", "usize", "i32"],
+		result: "i32",
+		name: "lsetxattr",
+	},
+	removexattr: { parameters: ["buffer", "buffer"], result: "i32", name: "lremovexattr" },
+	listxattr: { parameters: ["buffer", "buffer", "usize"], result: "isize", name: "llistxattr" },
+	renameat2: { parameters: ["i32", "buffer", "i32", "buffer", "u32"], result: "i32" },
+	__error: { parameters: [], result: "pointer", name: "__errno_location" },
+	strerror: { parameters: ["i32"], result: "pointer" },
+} as const
+
+let glibc: Deno.DynamicLibrary<typeof linuxSymbols>["symbols"] | undefined
+
+/** glibc, opened once, when first needed. */
+function libc6() {
+	return glibc ??= Deno.dlopen("libc.so.6", linuxSymbols).symbols
+}
+
 /** libSystem, opened once, when first needed. */
 function libc() {
 	return lib ??= Deno.dlopen("/usr/lib/libSystem.B.dylib", symbols).symbols
 }
 
 /** errno's codes, and the class Deno gives each, on macOS. */
-const errors: { [n: number]: [code: string, kind?: new (message: string) => Error] } = {
-	1: ["EPERM", Deno.errors.PermissionDenied],
-	2: ["ENOENT", Deno.errors.NotFound],
-	13: ["EACCES", Deno.errors.PermissionDenied],
-	16: ["EBUSY", Deno.errors.Busy],
-	17: ["EEXIST", Deno.errors.AlreadyExists],
-	18: ["EXDEV"],
-	20: ["ENOTDIR", Deno.errors.NotADirectory],
-	21: ["EISDIR", Deno.errors.IsADirectory],
-	22: ["EINVAL"],
-	28: ["ENOSPC"],
-	30: ["EROFS"],
-	45: ["ENOTSUP", Deno.errors.NotSupported],
-	62: ["ELOOP", Deno.errors.FilesystemLoop],
-	63: ["ENAMETOOLONG"],
-	66: ["ENOTEMPTY"],
-}
+const errors: { [n: number]: [code: string, kind?: new (message: string) => Error] } = linuxOS
+	? {
+		1: ["EPERM", Deno.errors.PermissionDenied],
+		2: ["ENOENT", Deno.errors.NotFound],
+		13: ["EACCES", Deno.errors.PermissionDenied],
+		16: ["EBUSY", Deno.errors.Busy],
+		17: ["EEXIST", Deno.errors.AlreadyExists],
+		18: ["EXDEV"],
+		20: ["ENOTDIR", Deno.errors.NotADirectory],
+		21: ["EISDIR", Deno.errors.IsADirectory],
+		22: ["EINVAL"],
+		28: ["ENOSPC"],
+		34: ["ERANGE"],
+		30: ["EROFS"],
+		95: ["ENOTSUP", Deno.errors.NotSupported],
+		40: ["ELOOP", Deno.errors.FilesystemLoop],
+		36: ["ENAMETOOLONG"],
+		39: ["ENOTEMPTY"],
+	}
+	: {
+		1: ["EPERM", Deno.errors.PermissionDenied],
+		2: ["ENOENT", Deno.errors.NotFound],
+		13: ["EACCES", Deno.errors.PermissionDenied],
+		16: ["EBUSY", Deno.errors.Busy],
+		17: ["EEXIST", Deno.errors.AlreadyExists],
+		18: ["EXDEV"],
+		20: ["ENOTDIR", Deno.errors.NotADirectory],
+		21: ["EISDIR", Deno.errors.IsADirectory],
+		22: ["EINVAL"],
+		28: ["ENOSPC"],
+		34: ["ERANGE"],
+		30: ["EROFS"],
+		45: ["ENOTSUP", Deno.errors.NotSupported],
+		62: ["ELOOP", Deno.errors.FilesystemLoop],
+		63: ["ENAMETOOLONG"],
+		66: ["ENOTEMPTY"],
+	}
 
 /** errno, as the call just made left it. */
 function errno(): number {
-	return new Deno.UnsafePointerView(libc().__error()!).getInt32()
+	const c = linuxOS ? libc6() : libc()
+	return new Deno.UnsafePointerView(c.__error()!).getInt32()
 }
 
 /** The error of the call just made, as Deno gives its own: its class, code and message. */
 function failure(what: string, n = errno()): Error {
 	const [code, Kind = Error] = errors[n] ?? []
-	const text = Deno.UnsafePointerView.getCString(libc().strerror(n)!)
+	const text = Deno.UnsafePointerView.getCString((linuxOS ? libc6() : libc()).strerror(n)!)
 	const e = new Kind(`${text} (os error ${n}): ${what}`)
 	if (code) Object.assign(e, { code })
 	return e
@@ -266,15 +318,75 @@ function now<T>(fn: () => T): Promise<T> {
 }
 
 function linux(home?: string): Sys {
-	const none = (call: string) => () =>
-		Promise.reject(new Deno.errors.NotSupported(`${call} is not built for Linux`))
+	const c = libc6()
+
+	const rename = (from: string, to: string) =>
+		now((): "done" | "taken" => {
+			if (
+				c.renameat2(AT_FDCWD, bytes(from), AT_FDCWD, bytes(to), RENAME_NOREPLACE) === 0
+			) return "done"
+			const n = errno()
+			if (n === EEXIST) return "taken"
+			throw failure(`renameat2 '${from}' -> '${to}'`, n)
+		})
+
 	return {
-		get: none("lgetxattr"),
-		set: none("lsetxattr"),
-		unset: none("lremovexattr"),
-		names: none("llistxattr"),
-		swap: none("renameat2 with RENAME_EXCHANGE"),
-		rename: exclusive,
+		get: (path, name) =>
+			now(() => {
+				const p = bytes(path), k = bytes(name)
+				for (;;) {
+					const size = Number(c.getxattr(p, k, null, 0n))
+					if (size >= 0) {
+						const out = new Uint8Array(size)
+						const got = Number(c.getxattr(p, k, out, BigInt(size)))
+						if (got >= 0) return got === size ? out : out.slice(0, got)
+					}
+					const n = errno()
+					if (n === ENOATTR) return null
+					// it grew between the two calls
+					if (n === ERANGE) continue
+					throw failure(`getxattr '${path}' ${name}`, n)
+				}
+			}),
+		set: (path, name, value) =>
+			now(() => {
+				if (c.setxattr(bytes(path), bytes(name), value, BigInt(value.length), 0) === 0) return
+				let n = errno()
+				// Linux allows no user attribute on a link
+				if (n === 1 && Deno.lstatSync(path).isSymlink) n = ENOTSUP
+				throw failure(`setxattr '${path}' ${name}`, n)
+			}),
+		unset: (path, name) =>
+			now(() => {
+				if (c.removexattr(bytes(path), bytes(name)) === 0) return
+				const n = errno()
+				if (n !== ENOATTR) throw failure(`removexattr '${path}' ${name}`, n)
+			}),
+		names: (path) =>
+			now(() => {
+				const p = bytes(path)
+				for (;;) {
+					const size = Number(c.listxattr(p, null, 0n))
+					if (size >= 0) {
+						const out = new Uint8Array(size)
+						const got = Number(c.listxattr(p, out, BigInt(size)))
+						if (got >= 0) {
+							// each name ends in NUL
+							return new TextDecoder().decode(out.subarray(0, got)).split("\0").slice(0, -1)
+						}
+					}
+					const n = errno()
+					if (n === ERANGE) continue
+					throw failure(`listxattr '${path}'`, n)
+				}
+			}),
+		swap: (a, b) =>
+			now(() => {
+				if (c.renameat2(AT_FDCWD, bytes(a), AT_FDCWD, bytes(b), RENAME_EXCHANGE) !== 0) {
+					throw failure(`renameat2 swap '${a}' <-> '${b}'`)
+				}
+			}),
+		rename,
 		async clone(from, to) {
 			// to is made only if free, then copied over by copy_file_range, which may share blocks
 			await Deno.writeFile(to, new Uint8Array(), { createNew: true })
