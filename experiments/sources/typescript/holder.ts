@@ -29,6 +29,7 @@ export type Holder = {
 }
 
 // the refusals every holder makes the same way (log.ts): the name is not the content's, or a parent
-// is not held here (every holder holds a write's parents before it, so since can give parents first)
+// is not held here, at the write's own node and part (every holder holds a write's parents before it,
+// so since can give parents first)
 export const MISNAMED = "misnamed"
 export const ORPHAN = "missing-parents"
