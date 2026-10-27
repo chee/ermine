@@ -283,6 +283,18 @@ function told<A extends unknown[]>() {
 			if (!t.fs.includes(f)) t.fs = [...t.fs, f]
 			return () => void (t.fs = t.fs.filter((g) => g !== f))
 		},
+		// every one told; the first error thrown, as {error}, else undefined
+		tell: (...a: A) => {
+			let failed: { error: unknown } | undefined
+			for (const f of t.fs) {
+				try {
+					f(...a)
+				} catch (e) {
+					failed ??= { error: e }
+				}
+			}
+			return failed
+		},
 	}
 	return t
 }
@@ -369,6 +381,7 @@ export function createScheduler(): Scheduler {
 	// finishes, then it comes out ("finish, then rethrow"); each of those a bracket of its own
 	let thrown: { error: unknown } | undefined
 	const hold = (e: unknown) => void (thrown ??= { error: e })
+	const holdFirst = (failed: typeof thrown) => void (thrown ??= failed)
 	// the first error held where nothing can throw it (mine): a promise settling (no caller) and a
 	// computer made (createComputer, createEffect give it back, so cannot throw too). it comes out
 	// of a pulse, the one going on, else the next, once that pulse is done, before its own
@@ -553,13 +566,7 @@ export function createScheduler(): Scheduler {
 		const now = due(c, t, running) ? [c] : none
 		const outer = thrown
 		thrown = undefined
-		for (const f of marks.fs) {
-			try {
-				f([], running?.own, now, t)
-			} catch (e) {
-				hold(e)
-			}
-		}
+		holdFirst(marks.tell([], running?.own, now, t))
 		rethrow(outer)
 		return true
 	}
@@ -729,13 +736,7 @@ export function createScheduler(): Scheduler {
 			nodes = kept
 			untracked = 0
 		}
-		for (const f of untracks.fs) {
-			try {
-				f(node.owner)
-			} catch (e) {
-				hold(e)
-			}
-		}
+		holdFirst(untracks.tell(node.owner))
 	}
 
 	// a run done, its latest: the tracker drops the links after its cursor, what the run did not
@@ -813,13 +814,7 @@ export function createScheduler(): Scheduler {
 		const now = due(c, t, running) ? [c] : []
 		const outer = thrown
 		thrown = undefined
-		for (const f of marks.fs) {
-			try {
-				f([], running?.own, now, t)
-			} catch (e) {
-				hold(e)
-			}
-		}
+		holdFirst(marks.tell([], running?.own, now, t))
 		// early: its first run now, and its act
 		if (c.early && now.length) {
 			try {
@@ -902,13 +897,7 @@ export function createScheduler(): Scheduler {
 		}
 		// every listener told; the first error after
 		let failed: { error: unknown } | undefined
-		for (const f of marks.fs) {
-			try {
-				f(keys, r?.own, now, t)
-			} catch (e) {
-				failed ??= { error: e }
-			}
-		}
+		failed ??= marks.tell(keys, r?.own, now, t)
 		if (failed) throw failed.error
 		return t
 	}
@@ -939,13 +928,7 @@ export function createScheduler(): Scheduler {
 		// every listener told; what one threw comes out after the read is all done
 		let failed: { error: unknown } | undefined
 		if (first) {
-			for (const f of firstTracks.fs) {
-				try {
-					f(key)
-				} catch (e) {
-					failed ??= { error: e }
-				}
-			}
+			failed ??= firstTracks.tell(key)
 		}
 		if (ends.fs.length) {
 			if (r.reads === none) r.reads = []
@@ -1180,13 +1163,7 @@ export function createScheduler(): Scheduler {
 			if (r.c.state !== "alive" || r.c.runs !== r.n) return
 			landed.push({ r, out })
 			// every listener told; nobody to throw to: what one threw waits for a pulse
-			for (const f of settles.fs) {
-				try {
-					f()
-				} catch (e) {
-					escaped ??= { error: e }
-				}
-			}
+			escaped ??= settles.tell()
 		}
 		// through a promise of the language's own: a thenable is heard once, and a then that throws
 		// is a rejection
@@ -1308,13 +1285,7 @@ export function createScheduler(): Scheduler {
 			running = wasRunning
 		}
 		c.last = { value: a.value }
-		for (const f of effects.fs) {
-			try {
-				f(c, a.r.n, failed ?? {})
-			} catch (e) {
-				hold(e)
-			}
-		}
+		holdFirst(effects.tell(c, a.r.n, failed ?? {}))
 	}
 
 	// pulses
@@ -1362,13 +1333,7 @@ export function createScheduler(): Scheduler {
 			sweep()
 		}
 		if (failed === undefined) {
-			for (const f of afterPulses.fs) {
-				try {
-					f()
-				} catch (e) {
-					hold(e)
-				}
-			}
+			holdFirst(afterPulses.tell())
 		}
 		// what was held for a pulse (a settling's, a making's) first, then the pulse's own
 		thrown = escaped ?? failed ?? thrown
