@@ -122,8 +122,9 @@ size_t pr_at(const pr_process *p, const char *const **out);
 size_t pr_folder(const pr_process *p, const char *const **out);
 size_t pr_args(const pr_process *p, const char *const **out);
 // options.stop called, the row taken out, the scope torn down; twice: nothing. a macro: the site of
-// the row's going is the caller's (file NULL: processes' own)
-void pr_stop_at(pr *s, pr_process *p, const char *file, int line, const char *func);
+// the row's going is the caller's (file NULL: processes' own). what the scope's teardown threw: its
+// first error, malloc'd for the caller to free (NULL: none), as start.ts' stop rethrows it
+char *pr_stop_at(pr *s, pr_process *p, const char *file, int line, const char *func);
 #define pr_stop(...) pr_stop_at(__VA_ARGS__, __FILE__, __LINE__, __func__)
 // the holder lets go of p (stopped first if it is not): its scope's maker's hold let go, and p
 // freed as that scope is (torn down, held by nothing: what is under it, a record). its
