@@ -1,0 +1,90 @@
+{
+	"title": "patchAttributes patches a node's attributes by their own pair: a value there, a name taken out, the node's own value untouched",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/x",
+				1
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"patchAttributes",
+				"/x",
+				[
+					{
+						"path": [
+							"a"
+						],
+						"value": 1
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"readAttributes",
+				"/x"
+			],
+			"expect": {
+				"value": {
+					"a": 1
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/x"
+			],
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patchAttributes",
+				"/x",
+				[
+					{
+						"path": [
+							"a"
+						]
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"readAttributes",
+				"/x"
+			],
+			"expect": {
+				"value": {}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/x"
+			],
+			"expect": {
+				"value": 1
+			}
+		}
+	]
+}
