@@ -59,6 +59,12 @@ export type Address = string | Path
 // each box's host: kept out of the box, so whoever is handed one reaches nothing above its folder
 const hosts = new WeakMap<Box, Host>()
 
+// whether b is a box this library made over host (by object, never by shape: an object with a box's
+// fields is no box)
+export function madeOver(b: unknown, host: Host): b is Box {
+	return typeof b === "object" && b !== null && hosts.get(b as Box) === host
+}
+
 function hostOf(b: Box): Host {
 	const h = hosts.get(b)
 	if (h === undefined) throw new PlacesError("nothing-there", String(b.root))

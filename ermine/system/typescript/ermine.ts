@@ -63,7 +63,7 @@
 // features. features: each one's name, needs and hooks, in chain order. records: run(id) a
 // computer's latest run, call(id) a handler's latest send, waits() every send waiting; tracked.
 import type { ChangeHeader } from "@ermine/core/node/entry"
-import type { Box, Host } from "@ermine/boxes"
+import { type Box, type Host, madeOver } from "@ermine/boxes"
 import { children, createPlaces, type Id, type Path, type Places } from "@ermine/core/places"
 import { enterScheduler, leaveScheduler, registerScheduler, registerScope } from "./registry.ts"
 import { isHandle, mint } from "./handles.ts"
@@ -821,8 +821,12 @@ export function createErmine(options: Options = {}): Ermine {
 					"start",
 				)
 			}
-			const given = o.box === undefined ? undefined : boxes.get(o.box as BoxNode) ?? o.box
-			if (given !== undefined && !("places" in given)) {
+			// a box handle createBox gave, or a box @ermine/boxes made over this ermine's host: by
+			// object, never by shape (from a red-team pass: an object with a places field was
+			// taken as a box)
+			const handed = o.box === undefined ? undefined : boxes.get(o.box as BoxNode)
+			const given = handed ?? (madeOver(o.box, base.host) ? o.box : undefined)
+			if (o.box !== undefined && given === undefined) {
 				throw hinted(new ErmineError("not-yet", "a box this ermine did not make"), "start")
 			}
 			const box = (given as Box | undefined) ?? rootBox
