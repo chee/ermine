@@ -33,7 +33,7 @@ static op_value *sorted(const op_value *v) {
 	if (v->type != OP_MAP) return op_ref((op_value *)v);
 	char **keys = malloc((v->count + 1) * sizeof *keys);
 	if (keys == NULL) hh_fail("out of memory");
-	memcpy(keys, v->keys, v->count * sizeof *keys);
+	if (v->count) memcpy(keys, v->keys, v->count * sizeof *keys);
 	qsort(keys, v->count, sizeof *keys, by_key);
 	op_value *map = op_map();
 	for (size_t i = 0; i < v->count; i++) op_set(map, keys[i], sorted(op_get(v, keys[i])));
