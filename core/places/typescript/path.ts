@@ -1,7 +1,8 @@
 // addresses as strings: "/notes/today" is ["/", "notes", "today"]. a string is split at each "/";
 // a leading "/" is the root; empty pieces are skipped ("a//b" is a, b): no name is "".
 // a name that holds a "/" needs the array form, or the tag: in path`/notes/${title}`, whatever is
-// put in is always one name, never split, and "" is refused
+// put in is always one name, never split, and "", ".", ".." and "/" are refused (plan takes them
+// for steps)
 import { PlacesError } from "./places.ts"
 
 // steps from "/" (the root), in order: a name, "." here, ".." back one, "/" back to "/"
@@ -41,7 +42,9 @@ export function path(strings: TemplateStringsArray, ...names: unknown[]): string
 		out.push(...steps)
 		if (i < names.length) {
 			const name = String(names[i])
-			if (name === "") throw new PlacesError("not-a-name", name)
+			if (name === "" || name === "." || name === ".." || name === "/") {
+				throw new PlacesError("not-a-name", name)
+			}
 			out.push(name)
 		}
 	}

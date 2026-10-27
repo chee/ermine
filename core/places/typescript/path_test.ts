@@ -22,6 +22,13 @@ Deno.test("path: an empty name is refused", () => {
 	assertThrows(() => path`/a/${""}/b`, PlacesError, "not-a-name")
 })
 
+Deno.test("path: a value that plan takes for a step is refused", () => {
+	for (const v of [".", "..", "/"]) {
+		assertThrows(() => path`/a/${v}/b`, PlacesError, "not-a-name")
+	}
+	assertEquals(path`/a/${"..."}/${"./x"}`, ["/", "a", "...", "./x"])
+})
+
 Deno.test("path: what is put in is one name, never split", () => {
 	const title = "re/set"
 	assertEquals(path`/notes/${title}/comments`, ["/", "notes", "re/set", "comments"])
