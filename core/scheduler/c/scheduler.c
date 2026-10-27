@@ -1403,10 +1403,11 @@ static void do_act(sc_scheduler *s, act *a) {
 			failed = NULL;
 		}
 	}
+	// torn down by a cleanup: no act, and what a cleanup threw comes out
 	if (!acts) {
 		s->reading = was;
 		s->running = wasRunning;
-		free(failed);
+		hold(s, failed);
 		drop_value(s, a->value);
 		ran_release(a->r);
 		free(a);

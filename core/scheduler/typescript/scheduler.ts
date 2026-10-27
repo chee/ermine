@@ -54,10 +54,11 @@
 // held while what was going on finishes (every listener told; the run, act, mark, read or
 // teardown all done), then it is thrown: the first. a pulse is left there; what is still due, or
 // to act, waits for the next. a teardown's: what a listener threw, else a cleanup's; before an
-// act, a cleanup's (its own, or one under it) is the act's error, a listener's comes out after
-// the act. where nothing can throw it (mine): a promise settling has no caller, and
-// createComputer and createEffect give back the computer; what a listener threw then comes out of
-// a pulse, the one going on or else the next, once it is done, before the pulse's own error.
+// act, a cleanup's (its own, or one under it) is the act's error (no act, the effect torn down
+// by one: it is thrown), a listener's comes out after the act. where nothing can throw it
+// (mine): a promise settling has no caller, and createComputer and createEffect give back the
+// computer; what a listener threw then comes out of a pulse, the one going on or else the next,
+// once it is done, before the pulse's own error.
 //
 // what a run read stays tracked till a run is done (chee 10-18: "_any_ throw is pending is kind
 // of beautiful i like it"): links a run does not read again are old; a run that ends done, its
@@ -1259,9 +1260,11 @@ export function createScheduler(): Scheduler {
 		c.cleaning = true
 		let failed = down(c, deeds, fs)
 		c.cleaning = false
+		// torn down by a cleanup: no act, and what a cleanup threw comes out
 		if (c.state !== "alive") {
 			reading = was
 			running = wasRunning
+			if (failed) hold(failed.error)
 			return
 		}
 		// a cleanup wrote what it reads: due again, it does not act on the old value, its run does

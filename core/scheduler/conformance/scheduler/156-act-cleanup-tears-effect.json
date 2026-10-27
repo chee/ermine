@@ -1,0 +1,38 @@
+{
+	"title": "a cleanup made in an act that tears its own effect down and throws: before the next act it runs, the effect is gone and does not act, and the error comes out of the pulse",
+	"steps": [
+		{ "op": "root", "name": "o", "info": { "actor": "test" }, "expect": {} },
+		{ "op": "write", "values": { "k": 1 }, "expect": { "tick": 1 } },
+		{
+			"op": "effect",
+			"name": "e",
+			"scope": "o",
+			"f": { "read": "k" },
+			"act": {
+				"do": [
+					{ "log": ["act", { "given": "value" }] },
+					{
+						"cleanup": [
+							null,
+							{
+								"do": [
+									{ "log": "cleanup" },
+									{ "dispose": "e" },
+									{ "throw": "cleanup threw" }
+								]
+							}
+						]
+					}
+				]
+			},
+			"expect": {}
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "write", "values": { "k": 2 }, "expect": { "tick": 3 } },
+		{ "op": "pulse", "expect": { "error": "cleanup threw" } },
+		{ "op": "log", "expect": { "log": [["act", 1], "cleanup"] } },
+		{ "op": "write", "values": { "k": 3 }, "expect": { "tick": 4 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [] } }
+	]
+}
