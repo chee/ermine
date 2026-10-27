@@ -560,10 +560,11 @@ void pr_let_go(pr *s, pr_process *p) {
 	sc_release(p->scope);
 }
 
-void pr_drop(pr *s, pr_process *p) {
-	if (p->dropped) return;
-	if (!p->ended || sc_scope_alive(p->scope)) pr_stop(s, p);
+char *pr_drop(pr *s, pr_process *p) {
+	if (p->dropped) return NULL;
+	char *error = !p->ended || sc_scope_alive(p->scope) ? pr_stop(s, p) : NULL;
 	pr_let_go(s, p);
+	return error;
 }
 
 void pr_halt(pr *s) {
