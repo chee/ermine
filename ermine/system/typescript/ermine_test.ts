@@ -163,13 +163,17 @@ Deno.test("a feature's scheduler works in every member, the on… ones and the r
 	assert(inside !== undefined)
 })
 
-Deno.test("closed, records, calling and node throw closed as the other parts do", () => {
-	const e = createErmine({ schedule: () => {} })
+Deno.test("closed, records, a feature's calling and node throw closed as the other parts do", () => {
+	let api: FeatureAPI | undefined
+	const e = createErmine({
+		schedule: () => {},
+		features: [{ name: "keep", setup: (f) => void (api = f) }],
+	})
 	e.close()
 	assertThrows(() => e.records.call("x"), ErmineError, "closed")
 	assertThrows(() => e.records.run("x"), ErmineError, "closed")
 	assertThrows(() => e.records.waits(), ErmineError, "closed")
-	assertThrows(() => e.calling(), ErmineError, "closed")
+	assertThrows(() => api!.calling(), ErmineError, "closed")
 	assertThrows(() => e.node, ErmineError, "closed")
 })
 
