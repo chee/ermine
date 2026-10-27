@@ -10,7 +10,7 @@
 //    file, listing no files; another
 //    harness adds its own: named, below) or
 //    test features (below); deny: [{ op, path?, id?, from? }] refused (every field given
-//    matching; from: the asker's place);
+//    matching; from: the asker's place; box: the box it is in, its root's id);
 //    uuid: uuidv7 ids; calls: "never" (a feature holding no call records, onRecord). deny: by path, or { op, id } by id; at, args, machine: the host's node's
 // { op: "features" }                       → { features }   ermine.features
 // { op: "late", feature }                  → {}   a test feature adding a hook now (late: true)
@@ -197,6 +197,7 @@ function make(o: Request = {}): Made {
 		path?: string
 		id?: string
 		from?: string
+		box?: string
 	}[]
 	const may: Policy | undefined = o.deny
 		? (ask) =>
@@ -204,7 +205,8 @@ function make(o: Request = {}): Made {
 					d.op === ask.op &&
 					(d.id === undefined || d.id === ask.target.id) &&
 					(d.path === undefined || d.path === ask.target.path?.join("/")) &&
-					(d.from === undefined || d.from === ask.from?.path?.join("/"))
+					(d.from === undefined || d.from === ask.from?.path?.join("/")) &&
+					(d.box === undefined || d.box === ask.from?.box)
 				)
 				? no("denied")
 				: yes

@@ -108,13 +108,15 @@ export type Parts = {
 	// throws once ermine is closed
 	readonly alive: () => void
 	// in an action's call, its caller's place (none: the host): asks there are asked as both (guard)
-	readonly caller?: () => { from?: Path } | undefined
+	readonly caller?: () => { from?: Path; box?: Id } | undefined
 }
 
 // a process context's own, beside it: what the functions reach and programs never do
 export type Inner = {
 	readonly context: ProcessContext
 	readonly places: Places
+	// the box it is in: its places' root, when that is not the ermine's (none: the ermine's own)
+	readonly box?: Id
 	// who it acts as: the process's node, or the host's
 	readonly node: Id
 	readonly guarded: boolean
@@ -141,6 +143,7 @@ export function createProcessContext(
 		args: readonly string[]
 		process?: Process
 		node: Id
+		box?: Id
 	},
 ): Inner {
 	const { scheduler: s, table, commit } = parts
@@ -152,6 +155,7 @@ export function createProcessContext(
 		table,
 		may: parts.may,
 		from: o.at,
+		...o.box !== undefined && { box: o.box },
 		...parts.caller !== undefined && { caller: parts.caller },
 	})
 
@@ -268,7 +272,17 @@ export function createProcessContext(
 		queuePulse: parts.queuePulse,
 	}
 	const writer: Writer = (part, id, patches, header) => put({ part, id, patches, header })
-	return { context, places, node: o.node, guarded, guard, inside, put, writer }
+	return {
+		context,
+		places,
+		...o.box !== undefined && { box: o.box },
+		node: o.node,
+		guarded,
+		guard,
+		inside,
+		put,
+		writer,
+	}
 }
 
 // whether v is a promise, or anything with a then

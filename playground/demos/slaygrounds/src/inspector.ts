@@ -42,7 +42,13 @@ function peek(w: Any, names: string[]): unknown {
 	for (const name of names) {
 		const v = w.table.get("children", id)?.value
 		rows = rows && typeof rows === "object" && Object.hasOwn(rows, name) ? rows[name] : undefined
-		const k = typeof rows === "string" ? rows : v && Object.hasOwn(v, name) ? v[name] : undefined
+		// the process at this path: a leaf, or a level's own under "" (a process with processes under it)
+		const own = typeof rows === "string"
+			? rows
+			: rows && typeof rows === "object" && typeof rows[""] === "string"
+			? rows[""]
+			: undefined
+		const k = own ?? (v && Object.hasOwn(v, name) ? v[name] : undefined)
 		if (typeof k !== "string" && typeof k !== "symbol") return undefined
 		id = k
 	}

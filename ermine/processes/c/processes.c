@@ -32,7 +32,8 @@ static op_key *keys_of(const char *const *path, size_t n, const char *extra) {
 // the walk asks it nothing more under there (a walk from an id alone: at once, it has no path)
 static int step(void *ctx, const pl_here *here, const char *name, pl *l, tb_key *out) {
 	const pr_processes *p = ctx;
-	if (!here->has_path) return PL_NONE;
+	// "" is the key a level holds its own process under, never a name
+	if (!here->has_path || strcmp(name, SELF) == 0) return PL_NONE;
 	op_key *keys = keys_of(here->path, here->length, name);
 	const op_value *v = pl_read(l, tb_string(p->part), p->root, keys, here->length + 1);
 	free(keys);
@@ -65,7 +66,7 @@ static void names(void *ctx, const pl_here *here, pl *l, pl_namelist *out) {
 // a level of the trie (processes deeper, no id of its own): a walk goes on through it
 static int level(void *ctx, const pl_here *here, const char *name, pl *l) {
 	const pr_processes *p = ctx;
-	if (!here->has_path) return 0;
+	if (!here->has_path || strcmp(name, SELF) == 0) return 0;
 	op_key *keys = keys_of(here->path, here->length, name);
 	const op_value *v = pl_read(l, tb_string(p->part), p->root, keys, here->length + 1);
 	free(keys);

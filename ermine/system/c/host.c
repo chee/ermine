@@ -687,6 +687,8 @@ static const char *row_at(es_ermine *e, const char *root, char *const *at, size_
 	for (size_t i = 0; i < nat; i++) {
 		v = v != NULL && v->type == OP_MAP ? op_get(v, at[i]) : NULL;
 	}
+	// a process with processes under it: its id is under "" in its level
+	if (v != NULL && v->type == OP_MAP) v = op_get(v, "");
 	return v != NULL && v->type == OP_STR ? v->str : NULL;
 }
 static void row_free(row_rec *r) {
@@ -2154,6 +2156,9 @@ static void stop_process(proc_rec *rec, const char *why) {
 	// a child is freed as its scope is: held till this is done with it
 	sc_scope *hold = rec->child ? pr_scope(rec->started.process) : NULL;
 	if (hold != NULL) sc_retain(hold);
+	// the root its row is on: the process's own places' (a box's), known till it is torn down
+	es_context *own = es_map_get(&h->contexts, rec->id);
+	char *world = es_dup(own != NULL ? pl_root(own->places).string : e->root);
 	char *why_ = es_dup(why != NULL ? why : "ended");
 	es_map_set(&e->whys, rec->id, why_);
 	pr_stop(e->processes, rec->started.process);
@@ -2162,15 +2167,16 @@ static void stop_process(proc_rec *rec, const char *why) {
 	es_held_drop(e, rec->id);
 	rec->running = 0;
 	// its row still there: its removal was held back, and the path says so
-	held_rec *held = held_of(h, PART_PROCESS, e->root);
+	held_rec *held = held_of(h, PART_PROCESS, world);
 	const char *at;
 	const char *const *names;
 	size_t n = pr_at(rec->started.process, &names);
-	at = row_at(e, e->root, (char *const *)names, n);
+	at = row_at(e, world, (char *const *)names, n);
 	if (at != NULL && strcmp(at, rec->id) == 0 && held != NULL) {
 		row_rec *r = es_alloc(sizeof *r);
 		r->feature = held->feature;
-		r->root = es_dup(e->root);
+		r->root = world;
+		world = NULL;
 		r->nat = n;
 		r->at = es_alloc((n + 1) * sizeof *r->at);
 		for (size_t i = 0; i < n; i++) r->at[i] = es_dup(names[i]);
@@ -2179,17 +2185,24 @@ static void stop_process(proc_rec *rec, const char *why) {
 		es_map_set(&h->rows, rec->id, r);
 		mark_held(e);
 	}
+	free(world);
 	if (hold != NULL) sc_release(hold);
 }
 
-// a running process stopped by its node (unplace, remove: nodes.c); none running there: nothing
-void es_stop_node(es_ermine *e, const char *id) {
+// a running process stopped by its node, told why (NULL: "ended"); none running there: nothing
+void es_stop_id(es_ermine *e, const char *id, const char *why) {
 	hosting *h = host_of(e);
+	if (e->closed) return;
 	for (size_t i = 0; i < h->nprocs; i++) {
 		proc_rec *rec = h->procs[i];
-		if (rec->running && strcmp(rec->id, id) == 0) return stop_process(rec, NULL);
+		if (rec->running && strcmp(rec->id, id) == 0) {
+			stop_process(rec, why);
+			return;
+		}
 	}
 }
+// (unplace, remove: nodes.c)
+void es_stop_node(es_ermine *e, const char *id) { es_stop_id(e, id, NULL); }
 
 // the process running at id, if it runs (its context is still known)
 static proc_rec *running_rec(es_ermine *e, const char *id) {

@@ -21,14 +21,24 @@ struct bx_box {
 	pr_processes bindings, rows;
 	const pl_contributor *walk[3];
 	pl *places;
-	// what is put and not taken, and what is started (es_started are the ermine's, till es_free or
-	// the caller's es_started_free)
+	// what is put and not taken, and what is started and not ended: by id, never by the es_started the
+	// caller holds (it may stop and free that)
 	bound_t *bound;
 	size_t nbound, capbound;
-	es_started **running;
+	struct bx_run **running;
 	size_t nrunning, caprunning;
 	int closed;
 };
+
+// a process started through the box, till it ends: its teardown forgets it. b NULL: the box let it
+// go (close or free), and the teardown only frees this
+typedef struct bx_run {
+	bx_box *b;
+	char *id;
+	es_program fn;
+	void *ctx;
+	int armed, ended, refs;
+} bx_run;
 
 // the names an address comes to inside a root (processes' inside): "." here, ".." back one (at the
 // root: stays there), "/" back to the root. copied, to bx_names_free
@@ -227,13 +237,52 @@ int bx_take(bx_box *b, const char *const *path, size_t n) {
 	return code;
 }
 
+static void run_unlist(bx_run *r) {
+	bx_box *b = r->b;
+	if (b == NULL) return;
+	for (size_t i = 0; i < b->nrunning; i++) {
+		if (b->running[i] != r) continue;
+		b->running[i] = b->running[--b->nrunning];
+		break;
+	}
+	r->b = NULL;
+}
+static void run_unref(bx_run *r) {
+	if (--r->refs > 0) return;
+	free(r->id);
+	free(r);
+}
+static void run_ended(void *ctx, const char *why) {
+	(void)why;
+	bx_run *r = ctx;
+	run_unlist(r);
+	r->ended = 1;
+	run_unref(r);
+}
+static es_out run_setup(es_context *c, void *ctx) {
+	bx_run *r = ctx;
+	if (es_add_teardown(c, run_ended, r) == 0) {
+		r->armed = 1;
+		r->refs++;
+	}
+	return r->fn(c, r->ctx);
+}
+
 int bx_start(bx_box *b, es_program fn, void *ctx, es_at at, const es_start_options *o,
 	es_started **out, es_refused *refused) {
 	if (b->closed) return gone();
 	es_start_options so = o != NULL ? *o : (es_start_options){0};
 	so.places = b->places;
-	int code = es_start(b->e, fn, ctx, at, &so, out, refused);
-	if (code == 0 && *out != NULL) ES_PUSH(b->running, b->nrunning, b->caprunning, *out);
+	bx_run *r = es_alloc(sizeof *r);
+	*r = (bx_run){.b = b, .fn = fn, .ctx = ctx, .refs = 1};
+	ES_PUSH(b->running, b->nrunning, b->caprunning, r);
+	es_started *made = NULL;
+	int code = es_start(b->e, run_setup, r, at, &so, &made, refused);
+	if (code == 0 && made != NULL && r->armed && !r->ended) r->id = es_dup(pr_id(made->process));
+	// refused, or its setup never ran (no teardown to come): not listed
+	if (!r->armed) run_unlist(r);
+	run_unref(r);
+	if (out != NULL) *out = made;
 	return code;
 }
 
@@ -277,8 +326,14 @@ static int close_run(void *data) {
 int bx_close(bx_box *b) {
 	if (b->closed) return 0;
 	b->closed = 1;
-	for (size_t i = 0; i < b->nrunning; i++) es_stop(b->running[i], "box closed");
-	b->nrunning = 0;
+	while (b->nrunning > 0) {
+		bx_run *r = b->running[b->nrunning - 1];
+		char *id = es_dup(r->id != NULL ? r->id : "");
+		es_stop_id(b->e, id, "box closed");
+		free(id);
+		// stopped: its teardown forgot it. else (it was not running) it is let go of here
+		if (b->nrunning > 0 && b->running[b->nrunning - 1] == r) run_unlist(r);
+	}
 	closing c = {b, 0};
 	return es_within(es_host_context(b->e), close_run, &c);
 }
@@ -288,6 +343,7 @@ void bx_free(bx_box *b) {
 	pl_free(b->places);
 	for (size_t i = 0; i < b->nbound; i++) names_free(b->bound[i].names, b->bound[i].n);
 	free(b->bound);
+	for (size_t i = 0; i < b->nrunning; i++) b->running[i]->b = NULL;
 	free(b->running);
 	free(b->root);
 	free(b->key);

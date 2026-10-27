@@ -572,7 +572,7 @@ op_value *es_show(es_context *c, const op_value *v) {
 		const es_handle_data *d = es_handle_lookup(e, h);
 		const char *id;
 		es_names names;
-		if (d != NULL && es_handle_id(e, &d->node, &id) && es_seen_in(e, c, id, &names)) {
+		if (d != NULL && es_id_of(c, &d->node, &id) && es_seen_in(e, c, id, &names)) {
 			op_value *list = op_list();
 			for (size_t i = 0; i < names.n; i++) op_push(list, op_str(names.names[i]));
 			es_names_free(&names);
@@ -1944,8 +1944,7 @@ int es_get_caller(es_context *c, es_caller *out) {
 	return 0;
 }
 
-int es_caller_place(void *ctx, const char *const **from, size_t *nfrom, tb_key *box_unused) {
-	(void)box_unused;
+int es_caller_place(void *ctx, const char *const **from, size_t *nfrom, tb_key *box) {
 	es_context *c = ctx;
 	es_ermine *e = c->ermine;
 	for (sc_scope *o = sc_get_current_scope(e->scheduler); o != NULL; o = sc_scope_parent(o)) {
@@ -1958,6 +1957,7 @@ int es_caller_place(void *ctx, const char *const **from, size_t *nfrom, tb_key *
 		es_context *by = es_process_context_of(e, node->str);
 		if (by != NULL && by->process != NULL) {
 			*from = (const char *const *)by->at, *nfrom = by->nat;
+			if (by->box != NULL) *box = tb_string(by->box);
 		}
 		return 1;
 	}

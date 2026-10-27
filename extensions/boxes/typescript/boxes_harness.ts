@@ -7,6 +7,7 @@
 //   { op: "boxclose", box }                → {}   box.close()
 //   { op: "boxstart", box, name, at }      → {} | { refused }   box.start(a program that only adds a
 //      teardown noting its why, at); started under box.start itself, which the "start" op's in: is not
+//      throws: true: the teardown notes its why, then throws "teardown threw" (the TypeScript harness only)
 //   { op: "boxwhy", name }                 → { whys }   the whys the teardowns of boxstart's name were told
 //   { op: "look", in?, path }           → { there, value? }   the node at path as a box's places (in:
 //      its name; none: the host's) see it: whether it is there, and its value
@@ -63,6 +64,7 @@ ops.set("boxstart", (r) => {
 	const made = boxOf(r.box).start(() => {
 		addTeardown((why) => {
 			told.push(why)
+			if (r.throws) throw new Error("teardown threw")
 		})
 	}, names(r.at))
 	return "refused" in made ? { refused: made.refused } : {}

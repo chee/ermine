@@ -61,7 +61,7 @@ import { createChangeHeader, NODE } from "@ermine/core/places/header"
 import type { FileLocation } from "@ermine/core/util/stacktrace"
 import { createStatus, STATUS, TABLE as STATUS_TABLE } from "@ermine/core/places/status"
 import type { Policy } from "@ermine/core/protect"
-import { PROCESS, processes as rows } from "@ermine/processes"
+import { idAt, PROCESS, processes as rows } from "@ermine/processes"
 import { createRuns, type Run } from "@ermine/processes/runs"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import {
@@ -500,13 +500,7 @@ export function createErmine(options: Options = {}): Ermine {
 	// (kept while the row is: read through rowHeld, which lets an entry go once its row has)
 	const heldRows = new Map<Id, { feature: string; root: Id; at: Path }>()
 	// the id the row at at under root holds; none: undefined
-	const rowAt = (root: Id, at: Path): unknown => {
-		let v: unknown = table.get(PROCESS, root)?.value
-		for (const name of at) {
-			v = typeof v === "object" && v !== null ? (v as Record<string, unknown>)[name] : undefined
-		}
-		return v
-	}
+	const rowAt = (root: Id, at: Path): Id | undefined => idAt(table.get(PROCESS, root)?.value, at)
 	// a stopped process's held row, as it is now: its row gone (a later write took it out), the
 	// entry goes and nothing is said (show what's true now)
 	const rowHeld = (id: Id) => {
@@ -544,13 +538,14 @@ export function createErmine(options: Options = {}): Ermine {
 	)
 	// the open call's caller (the nearest call scope's), as a place: a process's at, a computer's its
 	// process's, the host none; no call open: undefined [chee 10-25: "so it should run as both"]
-	const caller = (): { from?: Path } | undefined => {
+	const caller = (): { from?: Path; box?: Id } | undefined => {
 		for (let o = s.getCurrentScope(); o !== undefined; o = o.parent) {
 			if (o.info.call === undefined || o.info.handler === undefined) continue
 			const by = (o.info.caller as { node?: Id } | undefined)?.node
 			if (by === undefined || by === node) return {}
 			const ctx = contexts.get(by) ?? computerContexts.get(by)
-			return ctx?.context.process === undefined ? {} : { from: ctx.context.at }
+			if (ctx?.context.process === undefined) return {}
+			return { from: ctx.context.at, ...ctx.box !== undefined && { box: ctx.box } }
 		}
 		return undefined
 	}
@@ -709,6 +704,7 @@ export function createErmine(options: Options = {}): Ermine {
 	})
 	// each process's node: where it runs (system.ts seenIn)
 	const running = new Map<Id, Path>()
+	const roots = new Map<Id, Id>()
 	const whys = new Map<Id, Why>()
 	const base: Base = {
 		parts,
@@ -743,6 +739,7 @@ export function createErmine(options: Options = {}): Ermine {
 		handles: new WeakMap(),
 		writers: new WeakMap(),
 		running,
+		roots,
 		views: new WeakMap(),
 		changes: new WeakMap(),
 		entered,
@@ -784,6 +781,8 @@ export function createErmine(options: Options = {}): Ermine {
 		const started: Process[] = []
 
 		function stop(process: Process, why: Why = "ended") {
+			// the root its row is on: the process's own places' (a box's), known till it is torn down
+			const world = roots.get(process.id) ?? root
 			whys.set(process.id, why)
 			try {
 				processes!.stop(process)
@@ -794,9 +793,9 @@ export function createErmine(options: Options = {}): Ermine {
 				if (i !== -1) started.splice(i, 1)
 			}
 			// its row still there: its removal was held back, and the path says so [chee: "Held, and shown"]
-			const h = heldOf(PROCESS, root)
-			if (rowAt(root, process.at) === process.id && h !== undefined) {
-				heldRows.set(process.id, { feature: h.feature, root, at: process.at })
+			const h = heldOf(PROCESS, world)
+			if (rowAt(world, process.at) === process.id && h !== undefined) {
+				heldRows.set(process.id, { feature: h.feature, root: world, at: process.at })
 				s.mark([heldKey])
 			}
 		}
@@ -847,10 +846,12 @@ export function createErmine(options: Options = {}): Ermine {
 								scope: inside.scope,
 							},
 							node: pid,
+							...here.root !== root && { box: here.root },
 						})
 						contexts.set(pid, inner)
 						// its node's place, for seen (its rows name it: no children entry has it)
 						running.set(pid, inside.at)
+						roots.set(pid, here.root)
 						// its context, found by its scope (system.ts): no api object [chee 10-25: ">Drop the
 						// objects. ye"]; setup is given nothing [chee 10-25: "we are getting rid of setup(api)
 						// right?"]
@@ -859,6 +860,7 @@ export function createErmine(options: Options = {}): Ermine {
 						s.registerTeardown(inside.scope, () => {
 							contexts.delete(pid)
 							running.delete(pid)
+							roots.delete(pid)
 						})
 						// the process's status and value, written as it settles (its status in the status table)
 						const attrs = (patches: Write["patches"]) =>

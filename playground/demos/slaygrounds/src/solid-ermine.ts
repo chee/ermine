@@ -103,7 +103,12 @@ function members(world: World, id: unknown, path?: string[]): { name: string; id
 	}
 	const rows = path ? world.places.readValue("process", "root", path) : undefined
 	if (rows === null || typeof rows !== "object" || Array.isArray(rows)) return out
-	for (const [name, k] of Object.entries(rows as Record<string, unknown>)) {
+	for (const [name, x] of Object.entries(rows as Record<string, unknown>)) {
+		// a process with processes under it is a level holding its own id under "" (never a name)
+		if (name === "") continue
+		const k = x !== null && typeof x === "object" && !Array.isArray(x)
+			? (x as Record<string, unknown>)[""]
+			: x
 		if (typeof k !== "string") continue
 		const at = out.findIndex((m) => m.name === name)
 		if (at === -1) out.push({ name, id: k })

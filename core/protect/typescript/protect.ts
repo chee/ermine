@@ -27,6 +27,12 @@
 // every rename above it and needs a walk up to find; a host that wants the path keeps its own map.
 // the policy is the host's: from.box is for it, told no process (guard.ts keeps it out of a
 // Refusal). a rule by path stays about the name: path and from match names, as before
+//
+// reading it: every path in an ask (target.path, from.path, route) is as the asker sees it, from its
+// own "/"; from.box says whose "/" that is. none: the ermine's own (the host's, and what it started
+// outside any box). so a rule meaning "the process at admin" is from.path admin with no from.box: a
+// boxed process at its own box's admin has from.box set, and is another process. the ermine sets it
+// for every ask of a process started in a box (its places' root, when that is not the ermine's)
 import type { Key as Step } from "@ermine/core/changeable/apply"
 
 export type Key = string | symbol

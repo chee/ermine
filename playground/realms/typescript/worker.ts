@@ -28,7 +28,7 @@ import createEntry, { type ChangeHeader } from "@ermine/core/node/entry"
 import update from "@ermine/core/changeable/update"
 import apply, { type Patch } from "@ermine/core/changeable/apply"
 import type { Fact, Places } from "@ermine/core/places"
-import { PROCESS } from "@ermine/processes"
+import { idsUnder, PROCESS } from "@ermine/processes"
 import { createScheduler, type Info, PENDING, type Scope } from "@ermine/core/scheduler"
 import { isPromise } from "@ermine/core/scheduler/helpers"
 import type { Key, Table } from "@ermine/core/table"
@@ -438,15 +438,12 @@ export function serve(port: Port): () => void {
 			if (v !== undefined) out.shown = show(v.value)
 			if (seen.has(id)) return out
 			seen.add(id)
-			let level: unknown = rows
-			for (const p of path) level = isMap(level) ? level[p] : undefined
+			// the processes under this path: a leaf's id, or a level's own (its key "": never a name)
 			const named = new Set<string>()
-			if (isMap(level)) {
-				for (const [n, x] of Object.entries(level)) {
-					if (typeof x !== "string") continue
-					named.add(n)
-					out.kids.push(node(x, n, [...path, n], "process"))
-				}
+			for (const [n, x] of idsUnder(rows, path)) {
+				if (typeof x !== "string") continue
+				named.add(n)
+				out.kids.push(node(x, n, [...path, n], "process"))
 			}
 			const kids = table.get("children", id)?.value
 			if (isMap(kids)) {

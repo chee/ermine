@@ -52,7 +52,9 @@ int bx_start(bx_box *b, es_program fn, void *ctx, es_at at, const es_start_optio
 	es_started **out, es_refused *refused);
 
 // close: every binding the box put gone (as bx_take does, a running reader is told), every process
-// started through bx_start stopped ("box closed"; call it before any es_started_free of those). after
+// started through bx_start and still running stopped ("box closed"). the box keeps their ids, not the
+// es_started the caller holds: stop and free those whenever, before or after. a process that ends
+// leaves the box's list. after
 // it bx_put, bx_take and bx_start are ES_GONE; again: nothing. bx_places stays a view; the fresh root
 // of bx_create is left. memory is bx_free's
 int bx_close(bx_box *b);
