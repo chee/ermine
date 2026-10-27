@@ -10,6 +10,7 @@
 // int8 (one of old.json's, two forms in one map, uint16), or refused
 import { assertEquals } from "@std/assert"
 import { line } from "../pack/form.ts"
+import { ask } from "../typescript/ask.ts"
 
 const TYPED = /"(u?int(8|16|32|64)|float(32|64))":/
 const expected = (v: Vector) =>
@@ -26,21 +27,6 @@ const read = async (f: string): Promise<Vector[]> =>
 // lists.json: old.json's typed arrays made again as lists of their elements, all to agree
 const old = await read("old.json"), lists = await read("lists.json")
 const vectors = [...old, ...lists]
-
-async function ask(command: string[], requests: object[]): Promise<Record<string, unknown>[]> {
-	const child = new Deno.Command(command[0], {
-		args: command.slice(1),
-		stdin: "piped",
-		stdout: "piped",
-		signal: AbortSignal.timeout(30_000),
-	}).spawn()
-	const output = child.output()
-	const w = child.stdin.getWriter()
-	await w.write(new TextEncoder().encode(requests.map((r) => line(r)).join("\n") + "\n"))
-	await w.close()
-	const { stdout } = await output
-	return new TextDecoder().decode(stdout).trim().split("\n").map((l) => JSON.parse(l))
-}
 
 // a map's keys in any order are the same map; -0 is not 0
 const stable = (x: unknown) =>

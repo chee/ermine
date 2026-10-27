@@ -8,6 +8,7 @@
 // Not covered: cannot-carry. It needs a live value, which the JSON form cannot write
 // (BLOP.tex, errors, step 4), so it is left to the implementation's own tests.
 import { assertEquals } from "@std/assert"
+import { ask } from "../typescript/ask.ts"
 
 const here = new URL(".", import.meta.url).pathname
 const reference = `deno run --quiet --allow-env ${here}harness.ts`
@@ -16,25 +17,6 @@ const subject = (Deno.env.get("BLOP_HARNESS") ?? reference).split(" ")
 type Expect = { bytes?: string; name?: string; code?: string; field?: string }
 type Scenario = { title: string; blop?: unknown; bytes?: string; expect: Expect }
 type Answer = Record<string, unknown>
-
-async function ask(command: string[], requests: Record<string, unknown>[]): Promise<Answer[]> {
-	if (requests.length === 0) return []
-	const child = new Deno.Command(command[0], {
-		args: command.slice(1),
-		stdin: "piped",
-		stdout: "piped",
-		// a harness that loops fails, not hangs
-		signal: AbortSignal.timeout(30_000),
-	}).spawn()
-	const output = child.output()
-	const w = child.stdin.getWriter()
-	await w.write(new TextEncoder().encode(requests.map((r) => JSON.stringify(r)).join("\n") + "\n"))
-	await w.close()
-	const { stdout } = await output
-	const answers = new TextDecoder().decode(stdout).trim().split("\n").map((l) => JSON.parse(l))
-	assertEquals(answers.length, requests.length, "an answer per request")
-	return answers
-}
 
 const dir = `${here}../suites-aside/ermine/encoding/conformance/blop`
 const files: { name: string; s: Scenario }[] = []
