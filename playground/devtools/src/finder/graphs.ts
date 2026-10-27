@@ -13,8 +13,7 @@
 //   /host/graphs/<graph>/inbox/<name>   the answers not yet taken, in order: [{ n, m }]
 //   /host/graphs/tick                   Date.now(), each second while an explorer shows
 //   /host/graphs/now                    Date.now(), every 15 s (the "ago"s), likewise
-import type { Ermine } from "@ermine/system"
-import { PENDING } from "@ermine/core/scheduler"
+import { type Ermine, PENDING } from "@ermine/system"
 import { SHOWING, shows } from "./places.ts"
 
 export type GraphName = "page" | "mac"

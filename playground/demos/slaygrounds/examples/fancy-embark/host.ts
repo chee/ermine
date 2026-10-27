@@ -179,7 +179,6 @@ function tell(change: (n: typeof stats) => void) {
 	setTimeout(() => {
 		telling = false
 		host.patch("/net", [{ path: [], value: structuredClone(stats) }])
-		host.pulse()
 	}, 250)
 }
 const said = (e: unknown) => String((e as Error)?.message ?? e)
@@ -236,7 +235,6 @@ function enqueue(api: string, url: string, key: string) {
 		const at = `/cache/${api}/${key}`
 		if (host.hasNode(at)) host.patch(at, [{ path: [], value: entry }])
 		else host.ensureNode(at, entry)
-		host.pulse()
 		tell((n) => {
 			n.waiting[server] = Math.max(0, (n.waiting[server] ?? 1) - 1)
 			if (entry.error) n.failed++

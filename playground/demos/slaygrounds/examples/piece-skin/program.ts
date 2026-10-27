@@ -4,13 +4,13 @@ import {
 	createMemo,
 	ensureNode,
 	executeAction,
+	explain,
 	patch,
 	peep,
 	read,
 	unplace,
 } from "@ermine/system"
 import { createPatch, layers } from "@ermine/patchy/feature"
-import { change } from "@ermine/slaygrounds/tools"
 import { bind, handler } from "ermine-h"
 
 // piece-skin: my tweak over a shared thing. the card at /shared/card is everyone's; my tweak is a
@@ -76,7 +76,7 @@ export default function program() {
 	const put = (x: typeof rec, value: unknown) => patch(x, [{ path: [], value }])
 	const tweakNow = () => now(() => read(rec)) as Tweak | null
 	// the card's time now: what a patch node made now is made against
-	const cardTime = () => now(() => change(CARD))?.time ?? 0
+	const cardTime = () => now(() => explain(CARD))?.change?.time ?? 0
 	// the tweak made (again) against the card as it is now: its patch node, and what I say of it
 	const make = (patches: Patch[]) => {
 		createPatch(CHERRY, CARD, patches)
@@ -95,7 +95,7 @@ export default function program() {
 		const all = layers(CARD)
 		const there = all.some((l) => l.from !== "table")
 		const tweak = read(rec) as Tweak | null
-		const latest = change(CARD)
+		const latest = explain(CARD)?.change
 		const said = read(by) as string
 		return {
 			front: all[0]?.value as Card,

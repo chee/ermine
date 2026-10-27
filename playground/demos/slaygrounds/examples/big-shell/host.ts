@@ -45,7 +45,6 @@ world.seed((h) => void h.ensureNode("/beat", 0))
 let beats = 0
 setInterval(() => {
 	world.ermine.patch("/beat", [{ path: [], value: ++beats }])
-	world.ermine.pulse()
 }, 320)
 
 // a little filesystem

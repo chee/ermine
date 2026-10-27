@@ -14,7 +14,7 @@ let beat: ReturnType<typeof setInterval> | undefined
 world.ermine.createEffect("metronome", () => world.ermine.read("/clock/every"), (ms) => {
 	clearInterval(beat)
 	beat = typeof ms === "number" && ms > 0
-		? setInterval(() => (world.ermine.executeAction("/clock/on/beat"), world.ermine.pulse()), ms)
+		? setInterval(() => world.ermine.executeAction("/clock/on/beat"), ms)
 		: undefined
 })
 
