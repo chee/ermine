@@ -1,0 +1,123 @@
+{
+	"title": "unplacing a running process's node stops the process [chee 10-27: \"that should probably kill the process yes\"]: its teardowns told ended, its row gone, so nothing is at its path and a process may start there again; remove the same, its entries gone after",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"addTeardown",
+						"order",
+						"p"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/work/q",
+			"program": "/code/p",
+			"expect": {
+				"id": "proc:q"
+			}
+		},
+		{
+			"op": "start",
+			"name": "r",
+			"at": "/work/r",
+			"program": "/code/p",
+			"expect": {
+				"id": "proc:r"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/work/q"
+			],
+			"expect": {
+				"value": true
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"unplace",
+				"/work/q"
+			]
+		},
+		{
+			"op": "log",
+			"name": "order",
+			"expect": {
+				"values": [
+					"p:ended"
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/work/q"
+			],
+			"expect": {
+				"value": false
+			}
+		},
+		{
+			"op": "start",
+			"name": "q2",
+			"at": "/work/q",
+			"program": "/code/p",
+			"expect": {
+				"id": "proc:q2"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"remove",
+				"/work/r"
+			]
+		},
+		{
+			"op": "log",
+			"name": "order",
+			"expect": {
+				"values": [
+					"p:ended",
+					"p:ended"
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/work/r"
+			],
+			"expect": {
+				"value": false
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/work/q"
+			],
+			"expect": {
+				"value": true
+			}
+		}
+	]
+}

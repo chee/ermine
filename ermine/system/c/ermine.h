@@ -1366,6 +1366,8 @@ int es_start(es_ermine *e, es_program fn, void *ctx, es_at at, const es_start_op
 void es_refused_free(es_refused *r);
 // stop (why NULL: "ended"); status: getStatus of its node
 int es_stop(es_started *s, const char *why);
+// a running process stopped by its node's id (unplace and remove of its path: nodes.c)
+void es_stop_node(es_ermine *e, const char *id);
 int es_started_status(es_started *s, es_status *out);
 // the host lets go of a process it started (the TypeScript's Process, gone with its last
 // reference): stopped first if it runs ("ended"). its memory goes once nothing waits on it (its

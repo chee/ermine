@@ -729,6 +729,8 @@ export function createErmine(options: Options = {}): Ermine {
 		},
 		methods: new Map(),
 		whys,
+		// set once start's stop is made (below)
+		stop: () => {},
 		newId,
 		errored,
 		handles: new WeakMap(),
@@ -789,6 +791,12 @@ export function createErmine(options: Options = {}): Ermine {
 				heldRows.set(process.id, { feature: h.feature, root, at: process.at })
 				s.mark([heldKey])
 			}
+		}
+
+		// a running process stopped by its node (unplace, remove: system.ts)
+		base.stop = (id) => {
+			const process = started.find((p) => p.id === id)
+			if (process !== undefined) stop(process)
 		}
 
 		function start(

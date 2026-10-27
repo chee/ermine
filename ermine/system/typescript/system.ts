@@ -279,6 +279,8 @@ export type Base = {
 	readonly methods: Map<Id, { readonly fn: unknown; readonly scope: Scope }>
 	// why a process is stopping (by its node), said by stop before its scope goes
 	readonly whys: Map<Id, Why>
+	// a running process stopped, by its node's id (ermine's start sets it): unplace's and remove's
+	stop: (id: Id) => void
 	readonly newId: () => string
 	// an error a function threw, through the onError hooks: what is thrown
 	readonly errored: Errored
@@ -1077,10 +1079,25 @@ function peep<T>(inner: Inner, f: () => T): T {
 	}
 }
 
+// a process running at path, by its node's id: its row names it there, no children entry
+const runningAt = (base: Base, path: Path, id: Id | undefined) => {
+	const at = id === undefined ? undefined : base.running.get(id)
+	return at !== undefined && at.length === path.length && at.every((n, i) => path[i] === n)
+}
+
+// a name out of its folder; a process's node there (named by its row): the process stopped, which
+// takes the row, and so the name [chee 10-27: "that should probably kill the process yes"]
 function unplace(inner: Inner, p: string | Path) {
-	const { queuePulse, places, inside, resolve, ask } = here(inner)
+	const { base, queuePulse, places, inside, resolve, ask } = here(inner)
 	inside(() => {
 		const path = resolve(p)
+		const id = get(places, path)
+		if (runningAt(base, path, id)) {
+			// asked as placing there is: the folder's slot, or (a folder only its rows name) the node
+			const folder = get(places, path.slice(0, -1))
+			ask("place", folder === undefined ? targetOf(thing(id!, path)) : slotAt(path, folder))
+			return base.stop(id!)
+		}
 		const [children, name] = slot(inner, path)
 		const parent = get(places, path.slice(0, -1))!
 		ask("place", slotAt(path, parent))
@@ -1122,7 +1139,9 @@ function remove(inner: Inner, x: Target) {
 		const n = nodeOf(inner, x)
 		const id = needId(inner, n)
 		ask("remove", targetOf(thing(id, n.path)))
-		if (n.path !== undefined && n.path.length) {
+		// a running process's node: the process stopped first (its row out), then its entries gone
+		if (base.running.has(id)) base.stop(id)
+		else if (n.path !== undefined && n.path.length) {
 			const [children, name] = slot(inner, n.path)
 			const v = children.value as Record<string, unknown> | undefined
 			if (v !== undefined && v[name] === id) {

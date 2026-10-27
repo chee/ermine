@@ -2051,6 +2051,15 @@ static void stop_process(proc_rec *rec, const char *why) {
 	}
 }
 
+// a running process stopped by its node (unplace, remove: nodes.c); none running there: nothing
+void es_stop_node(es_ermine *e, const char *id) {
+	hosting *h = host_of(e);
+	for (size_t i = 0; i < h->nprocs; i++) {
+		proc_rec *rec = h->procs[i];
+		if (rec->running && strcmp(rec->id, id) == 0) return stop_process(rec, NULL);
+	}
+}
+
 int es_stop(es_started *s, const char *why) {
 	es_ermine *e = s->ermine;
 	if (e->closed) return 0;
