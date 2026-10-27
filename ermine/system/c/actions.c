@@ -1423,13 +1423,14 @@ void es_calls_drop(es_ermine *e, const char *id) {
 		es_going *g = x->live.keys[i] != NULL ? x->live.vals[i] : NULL;
 		if (g != NULL && strcmp(g->handler, id) == 0) g->gone = 1;
 	}
-	// the slot stays (its address is what readers track), the record in it let go
+	// the slot goes with its record (its address is what readers track: told once more, then gone)
 	held *h = es_map_get(&x->records, id);
 	if (h == NULL) return;
-	call_free(h->call);
-	h->call = NULL;
 	const void *keys[1] = {h};
 	sc_mark(e->scheduler, keys, 1, sc_get_run(e->scheduler));
+	es_map_del(&x->records, id);
+	call_free(h->call);
+	free(h);
 }
 
 // a wait's target as one string: its path, or its id

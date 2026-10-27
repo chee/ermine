@@ -308,6 +308,10 @@ static void round_of(world *w, row r, long i) {
 		// reference's table does: taken out here (by id: a handle a new name each round would be kept),
 		// so what is left is what the C holds of its own
 		char *id = es_dup(pr_id(w->started->process));
+		// its action called once, so a call record is held for it
+		op_value *called = NULL;
+		CHECK(es_execute_action(w->host, es_on_path(es_text("/code/p/act")), NULL, 0, &called) == 0);
+		op_free(called);
 		CHECK(es_remove(w->host, es_on_path(es_text("/code/p/act"))) == 0);
 		CHECK(es_remove(w->host, es_on_path(es_text("/code/p/bind"))) == 0);
 		CHECK(es_remove(w->host, es_on_path(es_text("/code/p/kid"))) == 0);
