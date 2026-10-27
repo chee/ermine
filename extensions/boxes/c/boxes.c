@@ -8,6 +8,11 @@
 
 #define BX_PART "binding"
 
+typedef struct {
+	char **names;
+	size_t n;
+} bound_t;
+
 struct bx_box {
 	es_ermine *e;
 	char *root;
@@ -16,6 +21,13 @@ struct bx_box {
 	pr_processes bindings, rows;
 	const pl_contributor *walk[3];
 	pl *places;
+	// what is put and not taken, and what is started (es_started are the ermine's, till es_free or
+	// the caller's es_started_free)
+	bound_t *bound;
+	size_t nbound, capbound;
+	es_started **running;
+	size_t nrunning, caprunning;
+	int closed;
 };
 
 // the names an address comes to inside a root (processes' inside): "." here, ".." back one (at the
@@ -162,7 +174,25 @@ static void look_run(void *data) {
 	l->there = pl_get(l->p, l->names, l->n, &id);
 }
 
+static int gone(void) { return es_fail(ES_GONE, "gone: this box was closed"); }
+
+// a path in the bound list: its index, or -1
+static long bound_at(const bx_box *b, char **names, size_t k) {
+	for (size_t i = 0; i < b->nbound; i++) {
+		if (b->bound[i].n != k) continue;
+		size_t j = 0;
+		while (j < k && strcmp(b->bound[i].names[j], names[j]) == 0) j++;
+		if (j == k) return (long)i;
+	}
+	return -1;
+}
+static void bound_drop(bx_box *b, size_t i) {
+	names_free(b->bound[i].names, b->bound[i].n);
+	b->bound[i] = b->bound[--b->nbound];
+}
+
 int bx_put(bx_box *b, const char *const *path, size_t n, const char *node) {
+	if (b->closed) return gone();
 	size_t k;
 	char **names = names_of(path, n, &k);
 	writing w = {b, names, k, node, 1, 0};
@@ -173,29 +203,92 @@ int bx_put(bx_box *b, const char *const *path, size_t n, const char *node) {
 		if (l.there) code = place_fail(ES_ALREADY_THERE, names[k - 1]);
 	}
 	if (!code) code = es_within(es_host_context(b->e), write_run, &w);
-	names_free(names, k);
-	return code;
+	if (code || bound_at(b, names, k) >= 0) {
+		names_free(names, k);
+		return code;
+	}
+	// kept, to close: names is the list's now
+	bound_t kept = {names, k};
+	ES_PUSH(b->bound, b->nbound, b->capbound, kept);
+	return 0;
 }
 
 int bx_take(bx_box *b, const char *const *path, size_t n) {
+	if (b->closed) return gone();
 	size_t k;
 	char **names = names_of(path, n, &k);
 	writing w = {b, names, k, NULL, 0, 0};
 	int code = es_within(es_host_context(b->e), write_run, &w);
+	if (!code) {
+		long i = bound_at(b, names, k);
+		if (i >= 0) bound_drop(b, (size_t)i);
+	}
 	names_free(names, k);
 	return code;
 }
 
 int bx_start(bx_box *b, es_program fn, void *ctx, es_at at, const es_start_options *o,
 	es_started **out, es_refused *refused) {
+	if (b->closed) return gone();
 	es_start_options so = o != NULL ? *o : (es_start_options){0};
 	so.places = b->places;
-	return es_start(b->e, fn, ctx, at, &so, out, refused);
+	int code = es_start(b->e, fn, ctx, at, &so, out, refused);
+	if (code == 0 && *out != NULL) ES_PUSH(b->running, b->nrunning, b->caprunning, *out);
+	return code;
+}
+
+typedef struct {
+	bx_box *b;
+	int code;
+} closing;
+static int close_run(void *data) {
+	closing *c = data;
+	bx_box *b = c->b;
+	es_ermine *e = b->e;
+	while (b->nbound > 0) {
+		bound_t *last = &b->bound[b->nbound - 1];
+		ch_header h;
+		pl_made *made;
+		char *bad = pl_header(e->places, NULL, 0, CH_HERE, &h, &made);
+		if (bad != NULL) {
+			c->code = es_fail(ES_FAILED, "%s", bad);
+			free(bad);
+			return c->code;
+		}
+		pl_changed changed;
+		int code = pr_remove_in(e->places, e->table, BX_PART, tb_string(b->key),
+			(const char *const *)last->names, last->n, h, &changed);
+		if (code == 0) {
+			es_commit_changed(e, &changed);
+			for (size_t i = 0; i < changed.n; i++) {
+				pl_hold_also(e->places, changed.entries[i], pl_made_ref(made), pl_made_free);
+			}
+		} else if (code != ES_NOTHING_THERE) {
+			pl_made_free(made);
+			c->code = place_fail(code, NULL);
+			return c->code;
+		}
+		pl_made_free(made);
+		bound_drop(b, b->nbound - 1);
+	}
+	return 0;
+}
+
+int bx_close(bx_box *b) {
+	if (b->closed) return 0;
+	b->closed = 1;
+	for (size_t i = 0; i < b->nrunning; i++) es_stop(b->running[i], "box closed");
+	b->nrunning = 0;
+	closing c = {b, 0};
+	return es_within(es_host_context(b->e), close_run, &c);
 }
 
 void bx_free(bx_box *b) {
 	if (b == NULL) return;
 	pl_free(b->places);
+	for (size_t i = 0; i < b->nbound; i++) names_free(b->bound[i].names, b->bound[i].n);
+	free(b->bound);
+	free(b->running);
 	free(b->root);
 	free(b->key);
 	free(b);

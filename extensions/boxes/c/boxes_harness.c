@@ -1,7 +1,7 @@
 // boxes' ops beside the ermine harness (ermine/system/c/ermine_harness.c, which documents the
 // protocol and the programs; typescript/boxes_harness.ts documents these ops). linked with it: the
 // ops are installed by a constructor, through ermine_harness.h's hooks.
-//   box, boxput, boxtake, look, names; the "start" op's "in" names a box
+//   box, boxput, boxtake, boxclose, boxstart, boxwhy, look, names; the "start" op's "in" names a box
 // a box lives till the process exits (after the ermine, which hh_finish frees)
 #include "../../../ermine/system/c/ermine_harness.h"
 #include "../../../conformance/c/harness.h"
@@ -125,6 +125,72 @@ static int op_take(const op_value *r, es_ermine *e, op_value **res) {
 	return 0;
 }
 
+static int op_close(const op_value *r, es_ermine *e, op_value **res) {
+	(void)e;
+	bx_box *b = box_named(text(r, "box"));
+	if (b == NULL) return not_found("box", text(r, "box"));
+	int code = bx_close(b);
+	if (code != 0) return code;
+	*res = op_map();
+	return 0;
+}
+
+// boxstart's programs: setup adds a teardown noting its why. a record stays till the process exits
+typedef struct {
+	char *name;
+	char **whys;
+	size_t n, cap;
+} told_t;
+static told_t **toldr;
+static size_t ntold, captold;
+static told_t *told_named(const char *name) {
+	for (size_t i = 0; name != NULL && i < ntold; i++) {
+		if (strcmp(toldr[i]->name, name) == 0) return toldr[i];
+	}
+	return NULL;
+}
+static void note_why(void *ctx, const char *why) {
+	told_t *t = ctx;
+	char *w = es_dup(why);
+	ES_PUSH(t->whys, t->n, t->cap, w);
+}
+static es_out told_program(es_context *c, void *ctx) {
+	int code = es_add_teardown(c, note_why, ctx);
+	return code != 0 ? es_out_code(code) : es_out_of(op_null());
+}
+
+static int op_boxstart(const op_value *r, es_ermine *e, op_value **res) {
+	(void)e;
+	bx_box *b = box_named(text(r, "box"));
+	if (b == NULL) return not_found("box", text(r, "box"));
+	if (text(r, "name") == NULL || text(r, "at") == NULL) return es_fail(ES_FAILED, "boxstart needs a name and an at");
+	told_t *t = es_alloc(sizeof *t);
+	*t = (told_t){es_dup(text(r, "name")), NULL, 0, 0};
+	ES_PUSH(toldr, ntold, captold, t);
+	es_started *started = NULL;
+	es_refused refused = {0};
+	int code = bx_start(b, told_program, t, es_text(text(r, "at")), NULL, &started, &refused);
+	if (code == ES_TAKEN) {
+		*res = op_map();
+		op_set(*res, "refused", op_str(refused.refused));
+		es_refused_free(&refused);
+		return 0;
+	}
+	if (code != 0) return code;
+	*res = op_map();
+	return 0;
+}
+
+static int op_boxwhy(const op_value *r, es_ermine *e, op_value **res) {
+	(void)e;
+	told_t *t = told_named(text(r, "name"));
+	op_value *list = op_list();
+	for (size_t i = 0; t != NULL && i < t->n; i++) op_push(list, op_str(t->whys[i]));
+	*res = op_map();
+	op_set(*res, "whys", list);
+	return 0;
+}
+
 // the places of a request's "in" (a box's), else the ermine's
 static int places_of(const op_value *r, es_ermine *e, pl **out) {
 	if (text(r, "in") == NULL) {
@@ -177,6 +243,9 @@ static int boxes_op(const op_value *r, es_ermine *e, op_value **res) {
 	if (strcmp(op, "box") == 0) return op_box(r, e, res);
 	if (strcmp(op, "boxput") == 0) return op_put(r, e, res);
 	if (strcmp(op, "boxtake") == 0) return op_take(r, e, res);
+	if (strcmp(op, "boxclose") == 0) return op_close(r, e, res);
+	if (strcmp(op, "boxstart") == 0) return op_boxstart(r, e, res);
+	if (strcmp(op, "boxwhy") == 0) return op_boxwhy(r, e, res);
 	if (strcmp(op, "look") == 0) return op_look(r, e, res);
 	if (strcmp(op, "names") == 0) return op_names(r, e, res);
 	return HX_NOT_MINE;

@@ -27,7 +27,11 @@
 //   - the host, and features, make boxes; programs do not
 //   - process rows are on the box's root, so two boxes over one folder share them: a path a process
 //     runs at is taken in both, and each lists the other's processes (their bindings stay apart)
-//   - a box has no close: its binding rows stay in the table (not saved) until the ermine goes
+//   - close: every binding the box put goes (as take does, a running reader is told) and every process
+//     started through box.start is stopped ("box closed"). what those started belong to their
+//     starters and go with them. after it put, take and start throw gone; close again does nothing.
+//     box.places stays a view (the folder's own children are not the box's). the box's fresh root
+//     (no folder given) is left: an id nothing names
 //
 // put refused, nothing changed: something there already (a binding, a saved child or a process, at
 // the path, above it holding a node, or under it): already-there; no name: not-a-name. take of a
@@ -39,10 +43,13 @@ import { children } from "@ermine/core/places"
 import type { Key } from "@ermine/core/table"
 import { addLeaf, processes, removeLeaf, trie } from "@ermine/processes"
 import { inside } from "@ermine/processes/start"
-import type { Ermine, StartOptions } from "@ermine/system"
+import { type Ermine, ErmineError, type StartOptions } from "@ermine/system"
 
 // the part the bindings are rows of
 export const BINDING = "binding" as string as Key
+
+// what Ermine["start"] gives when it started
+type Started = Extract<ReturnType<Ermine["start"]>, { stop: unknown }>
 
 // a path: a string ("a/b", "/c") or its names
 export type Address = string | Path
@@ -58,6 +65,8 @@ export type Box = {
 	take: (path: Address) => void
 	// ermine.start(fn, at, …) with at in the box: its "/" is the box's, its row on the box's root
 	start: Ermine["start"]
+	// its bindings gone, its processes stopped ("box closed"); then put, take and start are gone
+	close: () => void
 }
 
 // a box over the folder at a path from the ermine's root (nothing there: nothing-there), or the
@@ -78,10 +87,18 @@ export function createBox(ermine: Ermine, at?: Address | { readonly id: Id }): B
 		processes(root),
 		children,
 	])
+	// what is put and not taken (by names), and what is started and not stopped
+	const bound = new Map<string, readonly string[]>()
+	const running = new Set<Started>()
+	let closed = false
+	const alive = () => {
+		if (closed) throw new ErmineError("gone", "gone: this box was closed")
+	}
 	return {
 		root,
 		places,
 		put(path, node) {
+			alive()
 			const names = inside(path)
 			if (names.length > 0 && places.peep(() => get(places, names)) !== undefined) {
 				throw new PlacesError("already-there", names[names.length - 1])
@@ -90,14 +107,39 @@ export function createBox(ermine: Ermine, at?: Address | { readonly id: Id }): B
 				const header = createChangeHeader(ermine.scheduler)
 				ermine.places.commit(addLeaf(ermine.table, BINDING, key, names, node, header))
 			})
+			bound.set(JSON.stringify(names), names)
 		},
 		take(path) {
+			alive()
 			const names = inside(path)
 			ermine.within(() => {
 				const header = createChangeHeader(ermine.scheduler)
 				ermine.places.commit(removeLeaf(ermine.table, BINDING, key, names, header))
 			})
+			bound.delete(JSON.stringify(names))
 		},
-		start: (fn, to, options?: StartOptions) => ermine.start(fn, to, { ...options, places }),
+		start(fn, to, options?: StartOptions) {
+			alive()
+			const made = ermine.start(fn, to, { ...options, places })
+			if (!("refused" in made)) running.add(made)
+			return made
+		},
+		close() {
+			if (closed) return
+			closed = true
+			for (const s of running) s.stop("box closed")
+			running.clear()
+			ermine.within(() => {
+				for (const names of bound.values()) {
+					const header = createChangeHeader(ermine.scheduler)
+					try {
+						ermine.places.commit(removeLeaf(ermine.table, BINDING, key, names, header))
+					} catch (e) {
+						if (!(e instanceof PlacesError && e.code === "nothing-there")) throw e
+					}
+				}
+			})
+			bound.clear()
+		},
 	}
 }
