@@ -30,7 +30,12 @@ export function createLog(): Log {
 	function check(write: Write): Outcome | undefined {
 		if (names.has(write.name)) return "passed"
 		if (!named(write)) return { refused: MISNAMED }
-		if (!write.parents.every((p) => names.has(p))) return { refused: ORPHAN }
+		// a parent is held, and of this write's own node and part
+		const there = (p: string) => {
+			const h = names.get(p)?.write
+			return h !== undefined && h.node === write.node && h.part === write.part
+		}
+		if (!write.parents.every(there)) return { refused: ORPHAN }
 	}
 
 	function add(write: Write) {

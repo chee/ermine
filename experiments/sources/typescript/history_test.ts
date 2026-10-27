@@ -3,7 +3,7 @@ import createEntry from "@ermine/core/node/entry"
 import { place } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"
 import { ORPHAN } from "./holder.ts"
-import { named } from "./write.ts"
+import { name, named } from "./write.ts"
 import { createWorld } from "./world.ts"
 import { readRecord, SKIPPED } from "./status.ts"
 
@@ -47,6 +47,22 @@ Deno.test("a write without its parents is refused", async () => {
 	a.set("N", 2)
 	assertEquals(await b.history.put(a.history.writes().slice(1)), [{ refused: ORPHAN }])
 	assertEquals(b.value("N"), undefined)
+})
+
+Deno.test("a write whose parent is another node's is refused, not played", async () => {
+	const a = createWorld("A"), b = createWorld("B")
+	a.set("N1", 1)
+	const [w1] = a.history.writes()
+	const w2 = name({
+		node: "N2",
+		part: "value",
+		parents: [w1.name],
+		patches: [{ path: [], value: 5 }],
+		change: w1.change,
+	})
+	assertEquals(await b.history.put([w1]), ["taken"])
+	assertEquals(await b.history.put([w2]), [{ refused: ORPHAN }])
+	assertEquals(b.value("N2"), undefined)
 })
 
 Deno.test("writes made at once: every graph holding them holds one value, whatever order they came in", async () => {
