@@ -666,12 +666,12 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 		}
 		case "node": {
 			// the harness's own feature not shown, as in features
-			const attrs = e.table.get("attributes", e.node)?.value as
+			const attrs = e.table.get("attributes", e.id)?.value as
 				| Record<string, unknown>
 				| undefined
 			const shown = attrs?.[FEATURES] as { name: string }[] | undefined
 			return {
-				id: e.node,
+				id: e.id,
 				attributes: plain(
 					shown === undefined
 						? attrs
@@ -688,7 +688,7 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 				folder: o.folder,
 				args: o.args,
 				...o.process && { process: o.process.id },
-				scope: o.scope.info[NODE] === e.node ? "host" : o.process ? "process" : "other",
+				scope: o.scope.info[NODE] === e.id ? "host" : o.process ? "process" : "other",
 			}
 		}
 		case "o": {

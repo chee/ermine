@@ -534,7 +534,7 @@ export function pageGraph(ermine: Ermine) {
 	}
 	function mapOf(by: string) {
 		type Card = { id: string; at: string; name: string; kind: string; type: string }
-		const HOST = String(ermine.node)
+		const HOST = String(ermine.id)
 		const all = walk(500)
 		const more = all.size >= 500
 		const cards = new Map<string, Card>()
