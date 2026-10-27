@@ -3,14 +3,14 @@
 // reasons it is stopped with. which question: how a program runs on a runner
 //
 // what a runner is handed is a Start: the process context's facts (@ermine/processes'
-// ProcessContext: { scope, box, folder, at, args, process }), not its functions (its host's to make);
+// ProcessContext: { scope, folder, at, args, process }), not its functions (its host's to make);
 // the scheduler and table are the runner's own, from whoever made it. what the program gets is
 // the runner's: this makes no api; a runner over ermine/api builds it from
 // apis.createProcessAPI(start) (@ermine/programs/api's; api? saying how). its limits are the
 // runner's too: nothing here counts
-// run(runner, program, at, { args, folder, box, pin }): runner from places' root, or carried ({ id,
+// run(runner, program, at, { args, folder, places, pin }): runner from places' root, or carried ({ id,
 // live }: its live form in hand, nothing of its node read); program an address from where's root
-// (where: box, else places) or { id, hash?, type?, api?, code?, build? }. refused, nothing made,
+// (where: places, else the home) or { id, hash?, type?, api?, code?, build? }. refused, nothing made,
 // the first that holds:
 //   not-a-runner   nothing at runner, or its ermine.type is not ermine.runner
 //   not-there      no program node, or no value; by id: none, or not the hash given; code given:
@@ -34,7 +34,7 @@
 // gives one. a handle: held, its stop its stopper's teardown (landing after the stop: called
 // then); a throw, a rejected promise: the status. a run made outside a pulse asks for one
 // (setup.schedule)
-// load(runner, program, { by, box?, chain? }): the program made live on the runner with no
+// load(runner, program, { by, places?, chain? }): the program made live on the runner with no
 // process, shared: one load per key, the program's id, its value's hash (none: the value itself),
 // the runner's id and live value, and chain (the keys of what else loads it, programs'; none:
 // none). checked as run is (no path, so never taken; a program's build is run's alone, not read
@@ -51,12 +51,11 @@
 // (none: "runner-stopped"); else none
 import { CborError, type Value } from "@ermine/encoding/cbor"
 import { hash } from "@ermine/formats/hash"
-import { type Address, type Box, inside } from "@ermine/boxes"
-import type { Id, Path } from "@ermine/core/places"
+import type { Id, Path, Places } from "@ermine/core/places"
 import { get } from "@ermine/core/places/lib"
 import { conformance, typeOf, typesAt } from "@ermine/types"
 import type { ProcessContext } from "@ermine/processes"
-import type { Inside, Process } from "@ermine/processes/start"
+import { type Address, type Inside, inside, type Process } from "@ermine/processes/start"
 import { isPromise } from "@ermine/core/scheduler/helpers"
 import {
 	ATTRIBUTE,
@@ -88,7 +87,7 @@ export const REASONS = { withdrawn: "withdrawn", runner: "runner-stopped" } as c
 export type Handle = { readonly stop: (reason?: unknown) => unknown }
 // what a runner is handed: the process context's facts, its process always there (a load's: its
 // by's, its scope the load's own)
-export type Start = Pick<ProcessContext, "scope" | "box" | "folder" | "at" | "args"> & {
+export type Start = Pick<ProcessContext, "scope" | "folder" | "at" | "args"> & {
 	readonly process: Process
 }
 // a live runner: start a process's program; load, a program live with no process; api, what its
@@ -131,15 +130,15 @@ export type Options = {
 	args?: readonly string[]
 	folder?: Address
 	// where it runs, and where program and at are from; none: places
-	box?: Box
+	places?: Places
 	// ermine.process.pin, as processes' start writes it
 	pin?: unknown
 }
 export type LoadOptions = {
 	// who holds it
 	by: Place
-	// where the program is from; none: by's box
-	box?: Box
+	// where the program is from; none: by's places
+	places?: Places
 	// the keys of what else loads it (programs' chain), part of the load's key
 	chain?: readonly string[]
 }
@@ -180,10 +179,10 @@ function strings<K extends string>(o: Record<K, unknown>): Partial<Record<K, str
 export function createRun(c: Ctx) {
 	const { s, table, home, processes, changed, later } = c
 
-	// the node at an address from a box's root, untracked
-	const resolve = (where: Box, address: Address): { path: Path; id: Id | undefined } => {
+	// the node at an address from where's root, untracked
+	const resolve = (where: Places, address: Address): { path: Path; id: Id | undefined } => {
 		const path = inside(address)
-		return { path, id: where.places.peep(() => get(where.places, path)) }
+		return { path, id: where.peep(() => get(where, path)) }
 	}
 
 	const attributesOf = (id: Id) => {
@@ -195,7 +194,6 @@ export function createRun(c: Ctx) {
 	// its process: the one run made; none yet, or a place's: its facts as one
 	const startOf = (o: Owner, scope = o.scope): Start => ({
 		scope,
-		box: o.box,
 		folder: o.folder,
 		at: o.at,
 		args: o.args,
@@ -205,14 +203,13 @@ export function createRun(c: Ctx) {
 
 	// a program's type at its place in where: its ermine.type, else its name's (@ermine/types'
 	// typeOf), untracked
-	const typeAt = (where: Box, id: Id, at: Path) =>
-		where.places.peep(() => typeOf(where.places, { id, at }))
+	const typeAt = (where: Places, id: Id, at: Path) => where.peep(() => typeOf(where, { id, at }))
 
 	// whether a type fits what a runner takes: one is it, or one it conforms to, by the nearest
 	// ermine/types from a folder in where, untracked
-	function fits(where: Box, from: Path, type: string, takes: readonly string[]): boolean {
+	function fits(where: Places, from: Path, type: string, takes: readonly string[]): boolean {
 		if (takes.includes(type)) return true
-		const { places } = where
+		const places = where
 		return places.peep(() => conformance(places, typesAt(places, from), type).all)
 			.some((t) => takes.includes(t))
 	}
@@ -231,7 +228,7 @@ export function createRun(c: Ctx) {
 	function check(
 		runner: Address | Carried,
 		program: Address | Program,
-		where: Box,
+		where: Places,
 		load: boolean,
 	): Checked | Refused {
 		// the runner: its node, looked up and typed; carried, its id alone
@@ -312,7 +309,7 @@ export function createRun(c: Ctx) {
 		address: Address,
 		options: Options = {},
 	): Process | Refused {
-		const where = options.box ?? home
+		const where = options.places ?? home
 		const ck = check(runner, program, where, false)
 		if ("refused" in ck) return ck
 		const { live, code, digest, build } = ck
@@ -351,7 +348,7 @@ export function createRun(c: Ctx) {
 						scope: inner.scope,
 						under,
 						stopper,
-						box: inner.box,
+						places: where,
 						args: inner.args,
 						folder: inner.folder,
 						folders: new Map(),
@@ -462,7 +459,7 @@ export function createRun(c: Ctx) {
 		options: LoadOptions,
 	): Loaded | Refused {
 		const by = c.ownerOf(options.by)
-		const ck = check(runner, program, options.box ?? by.box, true)
+		const ck = check(runner, program, options.places ?? by.places, true)
 		if ("refused" in ck) return ck
 		const key = JSON.stringify([
 			String(ck.program.id),
