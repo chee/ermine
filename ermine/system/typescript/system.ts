@@ -1495,13 +1495,16 @@ function computerNode(
 const same = (m: Made) => (a: unknown, b: unknown) =>
 	m.code.equal ? m.code.equal(a, b) : Object.is(a, b)
 
-// m's code run: a promise given marks its node awaiting till it settles
+// m's code run: a promise given marks its node awaiting till it settles; what each last gave
+const given = new WeakMap<Made, unknown>()
 const ran = (inner: Inner, m: Made, previous: unknown) => {
 	const { base } = here(inner)
 	const r = m.code.f(previous)
+	given.set(m, r)
 	if (isThen(r)) {
 		base.awaiting.add(m.id)
-		const done = () => void base.awaiting.delete(m.id)
+		// an earlier run's promise settling late leaves the node awaiting the latest's
+		const done = () => void (given.get(m) === r && base.awaiting.delete(m.id))
 		r.then(done, done)
 	} else base.awaiting.delete(m.id)
 	return r

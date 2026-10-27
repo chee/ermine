@@ -60,6 +60,8 @@ struct made {
 	ch_site site;
 	unsigned holds;
 	int gone, given, awaiting;
+	// the bridge of the latest promise it gave: an earlier one settling late leaves awaiting alone
+	void *awaiting_for;
 	// in its owner's bin (a hold of its own)
 	int binned;
 	// its place in x->all
@@ -335,7 +337,7 @@ static bool computer_equal(const void *p, const void *q, void *data) {
 static void settled(void *ctx, int ok, const op_value *value, const char *error) {
 	bridge *b = ctx;
 	made *m = es_map_get(&b->x->by_id, b->id);
-	if (m != NULL) m->awaiting = 0;
+	if (m != NULL && m->awaiting_for == b) m->awaiting = 0;
 	b->settled = 1;
 	if (ok) sc_resolve(b->sp, op_ref((op_value *)value));
 	else sc_reject(b->sp, es_dup(error != NULL ? error : "error"));
@@ -351,6 +353,7 @@ static sc_out ran(made *m, es_out r) {
 	es_promise *p = es_promise_of(m->x->e, r.value);
 	if (p == NULL) {
 		m->awaiting = 0;
+		m->awaiting_for = NULL;
 		return (sc_out){.kind = SC_VALUE, .value = r.value};
 	}
 	op_free(r.value);
@@ -361,6 +364,7 @@ static sc_out ran(made *m, es_out r) {
 	b->sp = sc_promise_new(x->e->scheduler);
 	ES_PUSH(x->bridges, x->nbridges, x->capbridges, b);
 	m->awaiting = 1;
+	m->awaiting_for = b;
 	es_promise_then(p, settled, b);
 	return (sc_out){.kind = SC_AWAIT, .promise = b->sp};
 }
