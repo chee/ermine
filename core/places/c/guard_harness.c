@@ -172,6 +172,7 @@ static int caller_at(void *ctx, const char *const **from, size_t *nfrom, tb_key 
 typedef struct {
 	char *name;
 	gd *g;
+	caller *caller;
 } guard;
 static guard *guards;
 static size_t nguards, capguards;
@@ -597,6 +598,7 @@ static op_value *answer(const op_value *r) {
 		}
 		g.g = gd_new(&(gd_setup){world_places, world_table, outer, names, nfrom,
 			.box = tb_string(box), .caller = c ? caller_at : NULL, .caller_ctx = c});
+		g.caller = c;
 		free(names);
 		PUSH(guards, nguards, capguards, g);
 		return op_map();
@@ -647,6 +649,8 @@ void hh_finish(void) {
 	for (size_t i = 0; i < nguards; i++) {
 		gd_free(guards[i].g);
 		free(guards[i].name);
+		if (guards[i].caller) free(guards[i].caller->from);
+		free(guards[i].caller);
 	}
 	world_finish();
 	for (size_t i = 0; i < npolicies; i++) pr_policy_free(policies[i]);
