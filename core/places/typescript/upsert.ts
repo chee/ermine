@@ -94,6 +94,10 @@ export function getOrSet<V>(
 ): { value: V; changed: Entry<unknown>[] } {
 	const there = table.get(part, id) as Entry<unknown> | undefined
 	let v = there?.value
+	if (there === undefined) {
+		const value = make()
+		return { value, changed: upsert(table, part, id, path, value, header) }
+	}
 	for (const k of path) {
 		if (!isMap(v) || !Object.hasOwn(v, k)) {
 			const value = make()
