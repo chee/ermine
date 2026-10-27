@@ -219,8 +219,13 @@ const pully: Feature = {
 			if (marking) return
 			// held back by a hook after this one, or nothing changed: nothing to do
 			if (f.table.get(w.part, w.id)?.change === before) return
-			if (w.part === "attributes") named(o, w.id)
-			else if (w.part === "value") {
+			// only a write touching the provider names (any other attribute's write is not a naming,
+			// whoever writes it and whatever is let go)
+			if (w.part === "attributes") {
+				if (w.gone || w.patches.some((x) => x.path.length === 0 || x.path[0] === PROVIDER)) {
+					named(o, w.id)
+				}
+			} else if (w.part === "value") {
 				const p = provided.get(w.id)
 				if (p?.woken && !p.fresh) {
 					p.fresh = true

@@ -33,7 +33,7 @@ typedef struct cs_cause {
 } cs_cause;
 
 causes *cs_new(void);
-// causes still held (a run kept past sc_free) stay good: c goes with the last of them let go
+// causes still held (by a run held past sc_free) stay good: c goes with the last of them let go
 void cs_free(causes *c);
 
 cs_cause *cs_ref(cs_cause *c);

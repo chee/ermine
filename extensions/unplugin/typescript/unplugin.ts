@@ -61,7 +61,7 @@
 // (import() of a computed string, eval), as it can already override Error.prepareStackTrace and
 // give the trace a site; and a program run unbuilt, which the plugin never saw
 import { createUnplugin, type UnpluginInstance } from "unplugin"
-import { dirname, isAbsolute, resolve as resolvePath } from "node:path"
+import { dirname, isAbsolute, resolve as resolvePath, sep } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import {
 	mayNeed,
@@ -94,6 +94,17 @@ function guardedFiles(): string[] {
 	}
 }
 
+// @ermine/system's own folder, as a path prefix (the site entry's folder): never transformed or
+// refused, with external false or not. not found from here: none
+function ownFolder(): string | undefined {
+	try {
+		const entry = import.meta.resolve(SITE_ENTRY)
+		return entry.startsWith("file:") ? dirname(fileURLToPath(entry)) + sep : undefined
+	} catch {
+		return undefined
+	}
+}
+
 // specifier's file from importer, if it names one by path
 function fileFrom(importer: string | undefined) {
 	return (spec: string): string | undefined => {
@@ -114,6 +125,12 @@ export const unplugin: UnpluginInstance<Options | undefined, false> = createUnpl
 	options: Options | undefined = {},
 ) => {
 	const guarded = guardedFiles()
+	const folder = ownFolder()
+	const isOwn = (id: string | undefined) => {
+		if (id === undefined || folder === undefined) return false
+		const at = clean(id)
+		return isAbsolute(at) && at.startsWith(folder)
+	}
 	const external = options.external !== false
 	// each module rewritten: the site module written into it; and each site module's sites
 	const written = new Map<string, string>()
@@ -126,6 +143,10 @@ export const unplugin: UnpluginInstance<Options | undefined, false> = createUnpl
 		name: "ermine",
 		enforce: "pre",
 		resolveId(spec, importer) {
+			// @ermine/system's own files import what they guard: not refused
+			if (isOwn(importer)) {
+				return external && spec.startsWith("@ermine/") ? { id: spec, external: true } : null
+			}
 			if (spec.includes(SITE_MODULE)) {
 				if (importer === undefined || written.get(clean(importer)) !== spec) {
 					throw new Refused(
@@ -164,7 +185,8 @@ export const unplugin: UnpluginInstance<Options | undefined, false> = createUnpl
 				"",
 			].join("\n")
 		},
-		transformInclude: (id) => !isSiteModule(id) && /\.[cm]?[jt]sx?$/.test(clean(id)),
+		transformInclude: (id) =>
+			!isSiteModule(id) && !isOwn(id) && /\.[cm]?[jt]sx?$/.test(clean(id)),
 		transform(code, id) {
 			if (!mayNeed(code)) return null
 			const key = clean(id)

@@ -255,6 +255,9 @@ struct pipe {
 	unsigned chain;
 	listening **listens;
 	size_t nlistens, caplistens;
+	// what it listens at (from's path and part, and to's with a way back): made again, listened at again
+	// only when this changes
+	char *watching;
 	int gone;
 	// where it is in all_pipes
 	size_t at;
@@ -277,6 +280,7 @@ typedef struct {
 } order_t;
 // a teardown registered on a pipe's scope: freed as it runs. at: where it is in regs
 typedef struct {
+	es_ermine *e;
 	pipe_t *p;
 	sc_scope *scope;
 	size_t at;
@@ -1970,6 +1974,7 @@ static void pipe_free(pipe_t *p) {
 		free(p->listens[j]);
 	}
 	free(p->listens);
+	free(p->watching);
 	es_names_free(&p->path);
 	free(p->key);
 	free(p->id);
@@ -2154,11 +2159,12 @@ static void pipe_gone_node(pipe_t *p) {
 static char *pipe_teardown(void *data) {
 	pipe_reg *r = data;
 	pipe_t *p = r->p;
-	struct es_nodes *x = state(p->e);
+	struct es_nodes *x = state(r->e);
 	pipe_reg *last = x->regs[--x->nregs];
 	x->regs[r->at] = last;
 	last->at = r->at;
-	int current = p->scope == r->scope;
+	// p NULL: the pipe was made again, this scope an earlier make's (the pipe may be freed by now)
+	int current = p != NULL && p->scope == r->scope;
 	free(r);
 	if (!current) return NULL;
 	pipe_stop(p);
@@ -2314,7 +2320,16 @@ static void pipe_heard(const pl_fact *fact, void *ctx) {
 	}
 	int no = 0;
 	gd_thing thing = {.id = fact->id, .path = CP(l->path.names), .npath = l->path.n};
-	if (refused(p->cx, gd_target_of(thing, l->part, NULL), &no)) no = 0;
+	int code = refused(p->cx, gd_target_of(thing, l->part, NULL), &no);
+	if (code) {
+		// pending or failed is no yes: it is not told, as a thrown answer tells nothing (the
+		// reference's rethrows it to the writer, which a listener here cannot). the pipe's status says
+		char *message = pipe_failure(code);
+		es_clear_thrown();
+		pipe_status(p, message, 0);
+		free(message);
+		return;
+	}
 	es_watched w = {.refused = no};
 	if (!no) {
 		w.patches = fact->patches;
@@ -2469,8 +2484,6 @@ static int make_pipe(es_context *c, es_target from, const es_pipe_options *o, es
 			ES_PUSH(x->all_pipes, x->nall_pipes, x->capall_pipes, p);
 			es_map_set(&x->pipes, key, p);
 			es_map_set(&x->pipe_ids, p->id, p);
-			listen(p, &n, 0);
-			if (o->has_to && o->back != NULL && tn.has_path) listen(p, &tn, 1);
 		}
 	}
 	free(key);
@@ -2479,6 +2492,25 @@ static int make_pipe(es_context *c, es_target from, const es_pipe_options *o, es
 		es_node_data_free(&tn);
 		es_names_free(&path);
 		return code;
+	}
+	// made again: listened at again if what it listens at changed
+	int back = o->has_to && o->back != NULL && tn.has_path;
+	char *from_at = names_join(CP(n.path), n.npath);
+	char *to_at = back ? names_join(CP(tn.path), tn.npath) : NULL;
+	size_t size = strlen(from_at) + strlen(n.part) + (to_at != NULL ? strlen(to_at) + strlen(tn.part) : 0) + 8;
+	char *watching = es_alloc(size);
+	snprintf(watching, size, "%s\x1f%s\x1f%s\x1f%s", from_at, n.part, to_at != NULL ? to_at : "",
+		to_at != NULL ? tn.part : "");
+	free(from_at);
+	free(to_at);
+	if (p->watching == NULL || strcmp(p->watching, watching) != 0) {
+		pipe_stop(p);
+		free(p->watching);
+		p->watching = watching;
+		listen(p, &n, 0);
+		if (back) listen(p, &tn, 1);
+	} else {
+		free(watching);
 	}
 	p->from = pipe_handle(c, from, &n);
 	p->to = o->has_to ? pipe_handle(c, o->to, &tn) : NULL;
@@ -2501,9 +2533,16 @@ static int make_pipe(es_context *c, es_target from, const es_pipe_options *o, es
 		return es_fail_text(SC_DISPOSED);
 	}
 	// made again: the scope it had (old, going as its owner's run ends) let go
-	if (p->scope != NULL) sc_release(p->scope);
+	// its registration stays till that scope goes, no longer the pipe's (which may be freed first)
+	if (p->scope != NULL) {
+		for (size_t i = 0; i < x->nregs; i++) {
+			if (x->regs[i]->scope == p->scope) x->regs[i]->p = NULL;
+		}
+		sc_release(p->scope);
+	}
 	p->scope = scope;
 	pipe_reg *reg = es_alloc(sizeof *reg);
+	reg->e = e;
 	reg->p = p;
 	reg->scope = scope;
 	reg->at = x->nregs;
