@@ -52,13 +52,16 @@ static void reader(const pl_fact *fact, void *ctx) {
 	if (last->has_value && last->value->type == OP_NUM) number = last->value->num;
 }
 
+static const pl_contributor *const given[] = {&pl_children};
+static int given_contributors;
 static void setup(void *ctx, sc_scheduler **s, pt_paths **paths) {
 	p = pl_new();
 	*s = sc_new((sc_options){0});
 	sc_on_tracking_end(*s, pl_forget, p);
 	table = tb_make(pl_event, p);
 	*paths = pt_new();
-	pl_connect(p, &(pl_setup){.root = tb_string("R"), .table = table, .paths = *paths, .scheduler = *s});
+	pl_connect(p, &(pl_setup){.root = tb_string("R"), .table = table, .paths = *paths, .scheduler = *s,
+		.contributors = given_contributors ? given : NULL, .ncontributors = given_contributors});
 	kids = nd_make_entry(NULL, NULL);
 	pl_own(p, kids);
 	tb_add(table, tb_string("children"), tb_string("R"), kids);
@@ -100,6 +103,21 @@ int main(void) {
 	tb_add(table, tb_string("value"), tb_string("T"), thing);
 	CHECK(writes == 2 && told == 2);
 	CHECK(number == 1);
+	teardown(s, paths);
+
+	// a watchPath with contributors given finds its path through them: the spots that reads made are
+	// let go, nothing tracks them
+	given_contributors = 1;
+	setup(NULL, &s, &paths);
+	writes = 1;
+	CHECK(pl_place(p, kids, "a", tb_string("A"), (ch_header){0}, &changed) == 0);
+	pl_commit(p, &changed);
+	size_t spots = pt_held_of(paths).spots;
+	const char *names[] = {"a"};
+	pl_watch *w = pl_watch_path(p, names, 1, reader, NULL, NULL);
+	CHECK(pt_held_of(paths).spots == spots);
+	pl_stop(w);
+	CHECK(pt_held_of(paths).spots == spots);
 	teardown(s, paths);
 	return 0;
 }
