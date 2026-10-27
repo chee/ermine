@@ -1762,6 +1762,10 @@ static char *pipe_failure(int code) {
 	return es_dup(t->message != NULL ? t->message : es_code_name(code));
 }
 
+// the status of a pipe told PENDING: the pending stand-in (status.h's), not an error
+static const char pipe_pending[] = "pending";
+#define PENDING_NAME "ermine.pending"
+
 // a pipe's status, in the status table: failed (the error), or none (done)
 typedef struct {
 	pipe_t *p;
@@ -1778,15 +1782,18 @@ static void pipe_status_run(void *data) {
 	op_key key = {.type = OP_STR_KEY, .s = CST_ATTRIBUTE};
 	op_patch patch = {0};
 	op_value *own = NULL;
+	op_value *error = s->error == NULL ? NULL
+		: s->error == pipe_pending ? op_stand(op_str(PENDING_NAME))
+		: pipe_error(s->error);
 	if (s->error == NULL) {
 		patch.place = (op_target){.path = &key, .length = 1};
 	} else if (had == NULL) {
 		own = op_map();
-		op_set(own, CST_ATTRIBUTE, pipe_error(s->error));
+		op_set(own, CST_ATTRIBUTE, error);
 		patch.has_value = 1;
 		patch.value = own;
 	} else {
-		own = pipe_error(s->error);
+		own = error;
 		patch.place = (op_target){.path = &key, .length = 1};
 		patch.has_value = 1;
 		patch.value = own;
@@ -1799,6 +1806,13 @@ static void pipe_status(pipe_t *p, const char *error, int looped) {
 	pipe_stating s = {p, error};
 	p->looped = looped;
 	sc_run_with_scope(p->scope, pipe_status_run, &s);
+}
+// what was thrown last (code) as p's status: failed, or pending for PENDING
+static void pipe_failed(pipe_t *p, int code) {
+	char *message = pipe_failure(code);
+	es_clear_thrown();
+	pipe_status(p, code == ES_PENDING ? pipe_pending : message, 0);
+	free(message);
 }
 
 // the pipe's node unplaced and its entries gone (its scope gone, not made again)
@@ -1952,10 +1966,7 @@ static void pipe_told(pipe_t *p, const es_watched *w, int back, int by_pipe) {
 		}
 	}
 	if (t.code) {
-		char *message = pipe_failure(t.code);
-		es_clear_thrown();
-		pipe_status(p, message, 0);
-		free(message);
+		pipe_failed(p, t.code);
 	} else if (!p->looping) {
 		pipe_status(p, NULL, 0);
 	}
@@ -2007,12 +2018,8 @@ static void pipe_heard(const pl_fact *fact, void *ctx) {
 	gd_thing thing = {.id = fact->id, .path = CP(l->path.names), .npath = l->path.n};
 	int code = refused(p->cx, gd_target_of(thing, l->part, NULL), &no);
 	if (code) {
-		// pending or failed is no yes: it is not told, as a thrown answer tells nothing (the
-		// reference's rethrows it to the writer, which a listener here cannot). the pipe's status says
-		char *message = pipe_failure(code);
-		es_clear_thrown();
-		pipe_status(p, message, 0);
-		free(message);
+		// pending or failed is no yes: it is not told, and the writer unaffected. the pipe's status says
+		pipe_failed(p, code);
 		return;
 	}
 	es_watched w = {.refused = no};
