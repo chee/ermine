@@ -767,7 +767,9 @@ export default function program() {
 		"stats",
 		() => Object.assign(document.createElement("span"), { className: "tag stats" }),
 	)
-	createEffect("summary", () => read(stats), (v) => (tag.textContent = v == null ? "" : String(v)))
+	createEffect("summary", () => read(stats), (v) => {
+		tag.textContent = v == null ? "" : String(v)
+	})
 	const undo = keep("undo", () => document.createElement("button"))
 	const redo = keep("redo", () => document.createElement("button"))
 	undo.dataset.do = "undo"

@@ -304,7 +304,9 @@ export function roll() {
 				idOf(pattern(b)) === undefined
 					? undefined
 					: { ink: (read(pattern(b)) as Any)?.ink, notes: notesOf(pattern(b)) },
-			(v) => drawMini(c, v),
+			(v) => {
+				drawMini(c, v)
+			},
 		)
 		return c
 	})

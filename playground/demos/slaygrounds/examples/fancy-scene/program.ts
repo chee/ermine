@@ -602,7 +602,9 @@ export function view() {
 		cam: read(camera),
 		picked: read(picked),
 		tags: read(tagged),
-	}), (v) => paint(frame = v as Omit<Frame, "size">))
+	}), (v) => {
+		paint(frame = v as Omit<Frame, "size">)
+	})
 	addTeardown(() => r.drop())
 	// each tag where its object's origin is on the screen
 	function tagsAt(into: HTMLElement, v: Frame) {

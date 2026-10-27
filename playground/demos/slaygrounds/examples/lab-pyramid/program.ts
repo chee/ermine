@@ -115,7 +115,9 @@ export default function program() {
 	tri.className = "tri"
 
 	// the config the loop reads (the selects are bound to it below)
-	createEffect("conf", () => read(cfg) as Config, (c) => (meter.conf = c))
+	createEffect("conf", () => read(cfg) as Config, (c) => {
+		meter.conf = c
+	})
 
 	// ---- the scale: one node, one effect ----
 	createEffect("zoom", () => read(scale) as number, (v) => {

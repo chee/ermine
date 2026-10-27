@@ -447,7 +447,9 @@ const ENV: Spec = {
 		createEffect(
 			"shape",
 			() => ["a", "d", "s", "r"].map((k) => Number(read(m.knob[k]))),
-			([a, d, s, r]) => drawShape(canvas, a, d, s, r),
+			([a, d, s, r]) => {
+				drawShape(canvas, a, d, s, r)
+			},
 		)
 	},
 	face: (m) => (

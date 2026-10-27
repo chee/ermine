@@ -76,7 +76,9 @@ export default function program() {
 			b.push({ x: Math.random() * W, y: Math.random() * H, vx: Math.cos(a), vy: Math.sin(a) })
 		}
 	})
-	createEffect("pointed", () => read(pointer), (p) => (pointed = p as typeof pointed))
+	createEffect("pointed", () => read(pointer), (p) => {
+		pointed = p as typeof pointed
+	})
 
 	// ---- the canvas: the pointer a node, written by the card's handlers (below) ----
 	const canvas = peep(() =>

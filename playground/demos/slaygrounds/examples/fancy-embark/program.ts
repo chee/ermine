@@ -960,7 +960,9 @@ export default function program() {
 							view: read(S(view)),
 						},
 							++count),
-						() => mapFor(view).set(stash),
+						() => {
+							mapFor(view).set(stash)
+						},
 					)
 				}
 			}
@@ -1909,7 +1911,9 @@ export default function program() {
 	createEffect(
 		"marks",
 		() => ({ focus: read(focusE), lit: val(["lit"]), threads: read(threadsE) }),
-		(v: any) => queueMicrotask(() => marks(v)),
+		(v: any) => {
+			queueMicrotask(() => marks(v))
+		},
 		{ equal: same },
 	)
 	function marks(v: any) {
@@ -1987,7 +1991,9 @@ export default function program() {
 		threads({ lit: lastLit, threads: true })
 	}
 	let lastLit: any
-	createEffect("threads", () => val(["lit"]), (v) => (lastLit = v), { equal: same })
+	createEffect("threads", () => val(["lit"]), (v) => {
+		lastLit = v
+	}, { equal: same })
 	addEventListener("resize", relay)
 	addTeardown(() => removeEventListener("resize", relay))
 
