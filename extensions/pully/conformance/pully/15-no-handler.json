@@ -130,8 +130,7 @@
 				"waits": [
 					{
 						"caller": "proc:cam",
-						"id": "nowhere",
-						"box": "R"
+						"id": "nowhere"
 					}
 				]
 			}

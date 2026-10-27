@@ -23,10 +23,10 @@
 // computing  createMemo, createEffect ({ early }), pipe, pulse (the pending pulse now; in one:
 //            nothing)
 // actions    createAction, executeAction, getCaller
-// the rest   getStatus, addTeardown, createBox, getArgs, PENDING, REFUSED
+// the rest   getStatus, addTeardown, getArgs, PENDING, REFUSED
 //
 // paths: a bare name inside the process's node (the host's: the root), gone at stop; ./ its folder;
-// ../ above; / its box's root. a node: a path (walked at each use) or a handle (handles.ts: the
+// ../ above; / the root. a node: a path (walked at each use) or a handle (handles.ts: the
 // node and the context that made it, resolved and asked as that context; the rest of a call stays
 // the caller's). no ids anywhere a process is given [chee 10-25]: paths as it sees them (seenIn),
 // handles for what it reached, changes as views.
@@ -62,13 +62,11 @@
 //                        function: not-a-method
 //   addTeardown(fn)      fn(why) as the open scope goes, through onTeardown: "replaced", "ended",
 //                        or a stop's reason
-//   createBox(at)        a box: the folder at, seen from its own "/" (ermine/boxes), as a handle:
-//                        { at, place, unplace }
 //   getStatus(x)         tracked: { state, error?, phase?, waiting?, n? }; not there: undefined.
 //                        waiting names nodes by path as this process sees them (null: outside)
 //   explain(x, key?)     tracked: a change and its writer, one step. x a change's view: that one;
 //                        a node: its entry's, and a write held there. the writer and its record
-//                        name nodes by path as this process sees them (null: outside its box)
+//                        name nodes by path from the root (null: none reaches it)
 //   getCaller()          in an action: { actor, process? }; elsewhere: undefined
 //
 // a memo or effect made in an action's call goes with the call, and the call's record says so
@@ -81,7 +79,6 @@
 // process's scope holds its node's; each memo and effect is made with { [NODE]: its node's id }.
 import type { ChangeHeader, Entry } from "@ermine/core/node/entry"
 import type { Key as Step, Patch } from "@ermine/core/op/apply"
-import { type Box, box as boxInto, createBox as makeBox, type Host, unbox } from "@ermine/boxes"
 import {
 	type Fact,
 	type Id,
@@ -92,7 +89,6 @@ import {
 	placing,
 	unplacing,
 } from "@ermine/core/places"
-import { parse } from "@ermine/core/places/path"
 import { equal } from "@ermine/core/places/upsert"
 import applyPatches from "@ermine/core/op/apply"
 import { get, gets, list as listAt } from "@ermine/core/places/lib"
@@ -105,15 +101,12 @@ import {
 	type Thing,
 } from "@ermine/core/places/guard"
 import { STATUS, TABLE as STATUS_TABLE } from "@ermine/core/places/status"
-import { PROCESS } from "@ermine/processes"
 import type { Run, Runs } from "@ermine/processes/runs"
 import { type Computer, type Equal, PENDING, type Scope } from "@ermine/core/scheduler"
 import type { Sited } from "@ermine/sites"
 import type { Key, Table } from "@ermine/core/table"
 import type { FileLocation } from "@ermine/core/util/stacktrace"
 import type { Call, Calls } from "./calls.ts"
-import type { Found } from "./registry.ts"
-import { take } from "./site.ts"
 import type { Target as Aimed } from "@ermine/core/protect"
 import { type Asked, ErmineError, type Errored, type Reading } from "./features.ts"
 import { dataOf, type Handles, isHandle, mint } from "./handles.ts"
@@ -154,15 +147,6 @@ export type Item = {
 	readonly refused?: true
 }
 
-// a box, as box(at) gives it: its folder's id and path, and placing in it. a handle: the box itself
-// (its places, a view of the host's) stays on the host's side (Base's boxes), so a program holding
-// one reads nothing by it and commits nothing unasked; ermine.start takes the handle
-export type BoxNode = {
-	readonly at: Path
-	place: (at: string | Path, x: Target) => void
-	unplace: (at: string | Path) => void
-}
-
 // what a pending one waits on: a memo it read that is pending (its node), a send to nothing, a
 // process's code not at its path yet, a promise, or nothing it says (it gave PENDING itself)
 export type Waiting =
@@ -195,7 +179,7 @@ export type Status = {
 // what made a change, one step: a computer (a memo or effect; run: its latest record, when that
 // still holds the change), a method (call: likewise), or code outside any (site: its first;
 // fallback: a process's write with nothing open)
-// nodes named by their path as the process asking sees them (seen; none: outside its box, moved,
+// nodes named by their path from the root (seen; none: moved,
 // or placed by no functions): no ids [chee 10-25: "i'm not sure the process api should be able to do
 // anything by id"; "not quite true when there is sync"]
 export type Writer =
@@ -230,7 +214,7 @@ export type CallView = {
 	readonly made?: readonly { readonly kind: "memo" | "effect" | "early"; readonly path?: Path }[]
 }
 // who called the action running now [chee 10-25: "oh well, it should"]: the actor its writes carry,
-// and its process's node by path as the action sees it (none: outside its box)
+// and its process's node by path (none: nothing reaches it)
 export type Caller = { readonly actor: unknown; readonly process?: Path }
 
 // a change as a process sees it: when, who, and the line that made it; explain takes it back to its
@@ -300,9 +284,9 @@ export type Base = {
 	readonly errored: Errored
 	// every node handle the functions gave (handles.ts)
 	readonly handles: Handles
-	// each process's node: its box's folder, and where it runs in that box (its rows name it, not a
-	// children entry, so places' namesOf has it not): seen's
-	readonly running: Map<Id, { readonly box: Id; readonly at: Path }>
+	// each process's node: where it runs, from the root (its row names it, not a children entry, so
+	// places' namesOf has it not): seen's
+	readonly running: Map<Id, Path>
 	// each change's view, and each view's change (ChangeView)
 	readonly views: WeakMap<ChangeHeader, ChangeView>
 	readonly changes: WeakMap<ChangeView, ChangeHeader>
@@ -314,20 +298,6 @@ export type Base = {
 	pipeDepth: number
 	// a pulse: what pipes heard told first, then the scheduler's
 	readonly pulse: () => void
-	// what boxes are made over
-	readonly host: Host
-	// each box handle's box (the host's side)
-	readonly boxes: WeakMap<BoxNode, Box>
-	// every box, by its folder's id, the root's first: where a path from the root is walked
-	// (walkFrom). createBox at a folder a box is at gives that box; a box whose folder nothing
-	// reaches and that holds no rows (the one thing its view shows beyond the host's) is let go as
-	// the boxes are walked, and comes back as a process starts in it or it is made again
-	readonly boxIndex: Map<Id, Box>
-	// counted up as names can change (a children fact, a process's node placed or gone): what the
-	// boxes' paths are kept against (walks)
-	names: number
-	// the boxes' folders' paths, and a trie of them, as of names (walks)
-	walked: Walked | undefined
 	// f as a public function: a write's site outside a run is its caller
 	readonly entered: <F extends (...args: never[]) => unknown>(f: F) => F
 	// f(inner, ...a) with the entry here: a write made in it has its site at the line that called in;
@@ -378,7 +348,7 @@ export function viewOf(base: Base, h: ChangeHeader): ChangeView {
 }
 
 // the names from root down to id, up id's names now (places' namesOf, the latest placed first at
-// each step; a process's node, named by its rows: up from its box's folder, then where it runs);
+// each step; a process's node, named by its row: where it runs);
 // none: nothing reaches it from root. read untracked
 function up(base: Base, places: Places, root: Id, id: Id): Path | undefined {
 	const visited = new Set<Id>()
@@ -386,10 +356,7 @@ function up(base: Base, places: Places, root: Id, id: Id): Path | undefined {
 		if (at === root) return []
 		visited.add(at)
 		const running = base.running.get(at)
-		if (running !== undefined && !visited.has(running.box)) {
-			const above = go(running.box)
-			if (above !== undefined) return [...above, ...running.at]
-		}
+		if (running !== undefined) return [...running]
 		const names = places.namesOf(at)
 		for (let i = names.length - 1; i >= 0; i--) {
 			if (visited.has(names[i].folder)) continue
@@ -401,20 +368,13 @@ function up(base: Base, places: Places, root: Id, id: Id): Path | undefined {
 	return go(id)
 }
 
-// id's path as reader sees it: up its names to the reader's box's folder, then walked down in the
-// reader's box (tracked: a rename on the way reruns who asked). none: nothing in reader's box
-// reaches it
+// id's path from the root: up its names, then walked down (tracked: a rename on the way reruns who
+// asked). none: nothing reaches it
 export function seenIn(base: Base, reader: Inner, id: Id): Path | undefined {
-	const p = up(base, reader.places, reader.context.box.root, id)
+	const p = up(base, reader.places, reader.places.root, id)
 	return p !== undefined && get(reader.places, p) === id ? p : undefined
 }
 
-// a path in a box (by its folder's id) as reader sees it, whether anything is there or not; the
-// box's folder out of reader's box: none
-export function pathIn(base: Base, reader: Inner, box: Id, path: Path): Path | undefined {
-	const at = up(base, reader.places, reader.context.box.root, box)
-	return at === undefined ? undefined : [...at, ...path]
-}
 // one context's setting, what every function below works from: its ermine's base, its own
 // (places, guard, scope, asks), and its state (a peep going; the memos, effects and earlies its
 // owners' runs made, by name). no api object per process [chee 10-25: ">Drop the objects. ye"]:
@@ -477,11 +437,6 @@ function here(c: Inner): Setting {
 	return h
 }
 
-const header = (inner: Inner) => {
-	const { parts } = here(inner)
-	return parts.header()
-}
-
 const owner = (inner: Inner) => {
 	const { s, scope } = here(inner)
 	return s.getCurrentScope() ?? scope
@@ -499,135 +454,19 @@ const thing = (id: Id, path?: Path): Thing => path === undefined ? { id } : { id
 const slotAt = (path: Path, parent: Id) =>
 	slotOf(thing(parent, path.slice(0, -1)), path[path.length - 1])
 
-// the boxes' folders by path from the root: a box at the end of a path's names
-type Trie = { box?: Box; readonly kids: Map<string, Trie> }
-// what the boxes are walked by, as of base.names: each folder's path (up its names, none: out of
-// the root's reach) and the trie of them
-export type Walked = {
-	readonly names: number
-	readonly at: Map<Id, Path | undefined>
-	readonly trie: Trie
-}
-// the boxes walked as names are now: made again only once a name may have changed. a box nothing
-// reaches and holding no rows let go (Base's boxIndex)
-function walks(base: Base): Walked {
-	const was = base.walked
-	if (was !== undefined && was.names === base.names) return was
-	const { places, table } = base.host
-	const at = new Map<Id, Path | undefined>()
-	const trie: Trie = { kids: new Map() }
-	for (const b of base.boxIndex.values()) {
-		const p = up(base, places, places.root, b.root)
-		at.set(b.root, p)
-		if (p === undefined) {
-			if (b.root !== places.root && !rowed(table.get(PROCESS, b.root)?.value)) {
-				base.boxIndex.delete(b.root)
-			}
-			continue
-		}
-		let t = trie
-		for (const name of p) {
-			let k = t.kids.get(name)
-			if (k === undefined) t.kids.set(name, k = { kids: new Map() })
-			t = k
-		}
-		t.box = b
-	}
-	return base.walked = { names: base.names, at, trie }
-}
-// whether a box's rows hold a process (a row under any name)
-const rowed = (v: unknown): boolean =>
-	typeof v === "string" ||
-	(typeof v === "object" && v !== null && Object.values(v).some(rowed))
-
-// a box's folder's path from the root now (up its names); the root's box: []
-function boxAt(base: Base, box: Id): Path | undefined {
-	const w = walks(base)
-	if (w.at.has(box)) return w.at.get(box)
-	const p = up(base, base.host.places, base.host.places.root, box)
-	w.at.set(box, p)
-	return p
-}
-
-// where a path from the root is walked: in the deepest box whose folder is on it (so a boxed
-// process's own nodes, named by its rows, are reached), the path in that box
-function walkFrom(base: Base, abs: Path): { places: Places; path: Path } {
-	let t: Trie | undefined = walks(base).trie
-	let found = { places: t.box?.places ?? base.host.places, path: abs }
-	for (let i = 0; i < abs.length; i++) {
-		t = t.kids.get(abs[i])
-		if (t === undefined) break
-		if (t.box !== undefined) found = { places: t.box.places, path: abs.slice(i + 1) }
-	}
-	return found
-}
-
-// the boxes below inner's own whose folders are on its path (in its box): each one's places and the
-// path in it, outermost first. a walk reaching a box's folder reads that box's rows beneath it, as
-// the box's own view does
-function boxesOn(inner: Inner, path: Path): { places: Places; path: Path }[] {
-	const { base } = here(inner)
-	if (base.boxIndex.size < 2) return []
-	const at = boxAt(base, inner.context.box.root)
-	if (at === undefined) return []
-	const abs = [...at, ...path]
-	const out: { places: Places; path: Path }[] = []
-	let t: Trie | undefined = walks(base).trie
-	for (let i = 0; i < abs.length; i++) {
-		t = t.kids.get(abs[i])
-		if (t === undefined) break
-		if (i >= at.length && t.box !== undefined && t.box.places !== inner.places) {
-			out.push({ places: t.box.places, path: abs.slice(i + 1) })
-		}
-	}
-	return out
-}
-
 // what x reaches, as inner reaches it: a path (resolved here); a handle's place (its path from the
-// root: in inner's box, the path as inner sees it; outside it, the node there by id, and nothing
-// there: nothing-there, naming no path, so a process is never told where something outside its
-// box sits); a handle by id, that node. an object that is no handle: not-a-handle
+// root); a handle by id, that node. an object that is no handle: not-a-handle
 function nodeOf(inner: Inner, x: Target): NodeData {
 	const { base, parts, resolve } = here(inner)
 	parts.alive()
-	if (typeof x === "string" || Array.isArray(x)) {
-		const path = resolve(x)
-		// a box further down the path (a process started in a box, under one's own place): its own
-		// view holds its rows, so the node is found there, by id (the review's finding 11)
-		const at = boxAt(base, inner.context.box.root)
-		if (at !== undefined && base.boxIndex.size > 1) {
-			const w = walkFrom(base, [...at, ...path])
-			if (w.places !== inner.places) {
-				const id = get(w.places, w.path)
-				if (id !== undefined && get(inner.places, path) !== id) return { id, part: "value" }
-			}
-		}
-		return { path, part: "value" }
-	}
-	const d = dataOf(base.handles, x).node
-	if (d.path === undefined) return d
-	// in inner's box and walked the same there: the path as inner sees it (so asks and watches go by
-	// it); else the node at the place, by id
-	const at = boxAt(base, inner.context.box.root)
-	const w = walkFrom(base, d.path)
-	const id = get(w.places, w.path)
-	if (at !== undefined && at.every((n, i) => d.path[i] === n)) {
-		const mine = d.path.slice(at.length)
-		if (id === undefined || get(inner.places, mine) === id) return { path: mine, part: d.part }
-	}
-	if (id === undefined) throw new PlacesError("nothing-there")
-	return { id, part: d.part }
+	if (typeof x === "string" || Array.isArray(x)) return { path: resolve(x), part: "value" }
+	return dataOf(base.handles, x).node
 }
-// a handle for n: a path in inner's box made a path from the root; an id as it is. no maker: a
-// handle names a place, whoever made it
-const handle = (inner: Inner, n: NodeData): Node => {
-	const { base } = here(inner)
-	if (n.path === undefined) return mint(base.handles, n)
-	const at = boxAt(base, inner.context.box.root) ?? []
-	return mint(base.handles, { path: [...at, ...n.path], part: n.part })
-}
+// a handle for n: a place (its path from the root) or a node by id. no maker: a handle names a
+// place, whoever made it
+const handle = (inner: Inner, n: NodeData): Node => mint(here(inner).base.handles, n)
 const byId = (inner: Inner, id: Id, part: Key): Node => handle(inner, { id, part })
-// id's path as this process sees it (seenIn; none: outside its box)
+// id's path from the root (seenIn; none: nothing reaches it)
 const seen = (inner: Inner, id: Id) => {
 	const { base } = here(inner)
 	return seenIn(base, inner, id)
@@ -802,7 +641,7 @@ function readEntries(inner: Inner, x: Target): Item[] {
 		node: byId(inner, a.id, n.part),
 	})
 	if (!guarded) return found.map(item)
-	// the box's "/": no name in a folder to ask by, so the node itself, as read asks
+	// the root: no name in a folder to ask by, so the node itself, as read asks
 	if (n.path.length === 0) {
 		return found.map((a) =>
 			refused(inner, targetOf(thing(a.id, n.path), n.part))
@@ -824,17 +663,7 @@ function list(inner: Inner, x: Target): string[] {
 	if (guarded && id !== undefined) guard.read(targetOf(thing(id, n.path), "children"))
 	if (id !== undefined) calls.read("children", id, [], true)
 	if (n.path === undefined) return n.id === undefined ? [] : places.readKeys("children", n.id)
-	const names = [...listAt(places, n.path)]
-	// a box beneath on the path (a process started in it): its rows' names too, after
-	const more = boxesOn(inner, n.path)
-	if (more.length === 0) return names
-	const had = new Set(names)
-	for (const v of more) {
-		for (const name of listAt(v.places, v.path)) {
-			if (!had.has(name)) had.add(name), names.push(name)
-		}
-	}
-	return names
+	return [...listAt(places, n.path)]
 }
 
 // x's attributes, as a node
@@ -1150,16 +979,10 @@ function readChildren(inner: Inner, x: Target): Record<string, Node> {
 	const kids = id === undefined
 		? {}
 		: places.readValue("children", id) as Record<string, Id> | undefined ?? {}
-	// the boxes beneath on the path, innermost first, then inner's own: a name's node as a path
-	// reaches it (nodeOf: the deepest box's)
-	const views = n.path === undefined
-		? []
-		: [...boxesOn(inner, n.path).reverse(), { places, path: n.path }]
 	const out: Record<string, Node> = {}
 	for (const name of names) {
-		let at: Id | undefined
-		for (const v of views) if ((at = get(v.places, [...v.path, name])) !== undefined) break
-		at ??= kids[name]
+		// a name's node as its path reaches it (a process's node, named by its row), else the entry's
+		const at = (n.path === undefined ? undefined : get(places, [...n.path, name])) ?? kids[name]
 		if (at !== undefined) out[name] = byId(inner, at, "value")
 	}
 	return out
@@ -1205,7 +1028,7 @@ function patchChildren(inner: Inner, x: Target, patches: readonly Patch[]) {
 			const slot = slotOf(thing(folder, n.path), name)
 			const children = table.get("children", folder) as Entry<unknown> | undefined
 			if ("value" in p && p.value !== undefined) {
-				// a path in a patch: the caller's, resolved in its own box [the dormouse's finding 1]
+				// a path in a patch: the caller's, resolved as the caller resolves it [the dormouse's finding 1]
 				const id = idThrough(inner, p.value as Target)
 				askPlacing(inner, slot, p.value as Target, id)
 				inner.put({ part: "children", id: folder, patches: placing(children, name, id) })
@@ -1219,14 +1042,6 @@ function patchChildren(inner: Inner, x: Target, patches: readonly Patch[]) {
 }
 
 // f with nothing it reads tracked (a read of a pending memo: undefined, as peep's)
-// a path from the root as inner sees it: in its box, the rest; else none (null)
-function asSeen(inner: Inner, abs: Path): Path | null {
-	const at = boxAt(here(inner).base, inner.context.box.root)
-	return at !== undefined && at.length <= abs.length && at.every((n, i) => abs[i] === n)
-		? abs.slice(at.length)
-		: null
-}
-
 // path waited on by the reader now: a computer's (in its run now), else a setup's (the context's
 // node, its setup running); anyone else's is shown nowhere, so not kept (Base's missing)
 function waitFor(inner: Inner, path: Path) {
@@ -1241,10 +1056,8 @@ function waitFor(inner: Inner, path: Path) {
 		m = n === undefined ? { paths: [], keys: new Set() } : { n, paths: [], keys: new Set() }
 		base.missing.set(key, m)
 	}
-	// kept from the root, shown to each asker as it sees it
-	const abs = [...boxAt(base, inner.context.box.root) ?? [], ...path]
-	const k = keyOf(abs)
-	if (!m.keys.has(k)) m.keys.add(k), m.paths.push(abs)
+	const k = keyOf(path)
+	if (!m.keys.has(k)) m.keys.add(k), m.paths.push(path)
 }
 
 function peep<T>(inner: Inner, f: () => T): T {
@@ -1588,8 +1401,8 @@ function executeAction(inner: Inner, p: Target, ...args: unknown[]): unknown {
 	// tracked in a run, so the handler coming reruns it
 	const fn = id === undefined ? undefined : places.readValue("value", id)
 	if (fn === undefined) {
-		// kept while the caller is: a computer's with it, else the context's. the path: in inner's box
-		calls.wait(caller, at, inner.context.box.root, run?.computer ?? scope)
+		// kept while the caller is: a computer's with it, else the context's. the path: from the root
+		calls.wait(caller, at, run?.computer ?? scope)
 		throw PENDING
 	}
 	if (typeof fn !== "function") {
@@ -1672,37 +1485,6 @@ function ref<T>(inner: Inner, p: string | Path, made: () => T): Node {
 	return handle(inner, { path, part: "value" })
 }
 
-function createBox(inner: Inner, where: string | Path): BoxNode {
-	const { base, queuePulse, context, inside, resolve } = here(inner)
-	// its writes, this context's (through onWrite)
-	const host = { ...base.host, write: inner.writer }
-	const at = resolve(where)
-	const made = inside(() => makeBox(host, at, context.box, header(inner)))
-	// a box at that folder already: that one (made again by a rerun, or by another)
-	const b = base.boxIndex.get(made.root) ?? made
-	if (!base.boxIndex.has(b.root)) base.boxIndex.set(b.root, b), base.names++
-	queuePulse()
-	const handle: BoxNode = {
-		at,
-		place: base.entered((p: string | Path, y: Target) => {
-			const id = idThrough(inner, y)
-			inside(() => {
-				// the slot: the box's folder's children, at the path in it
-				const at = typeof p === "string" ? parse(p) : p
-				askPlacing(inner, { id: b.root, part: "children", field: [...at] }, y, id)
-				boxInto(b, p, id, header(inner))
-			})
-			queuePulse()
-		}),
-		unplace: base.entered((p: string | Path) => {
-			inside(() => void unbox(b, p, header(inner)))
-			queuePulse()
-		}),
-	}
-	base.boxes.set(handle, b)
-	return handle
-}
-
 // the base's, then what features show (onStatus)
 function getStatus(inner: Inner, x: Target): Status | undefined {
 	const { base } = here(inner)
@@ -1712,28 +1494,21 @@ function getStatus(inner: Inner, x: Target): Status | undefined {
 	return base.statused({ node: n, id, computer: base.computers.has(id) }, ownStatus(inner, n, id))
 }
 
-// a send's wait as this process sees it: where the send went (its path in the sender's box, or
-// the node it named), none outside this box
-const waitOf = (inner: Inner, w: { path?: Path; id?: Id; box: Id; since: number }): Waiting => {
-	const { base } = here(inner)
-	return {
-		send: (w.path !== undefined ? pathIn(base, inner, w.box, w.path) : seen(inner, w.id!)) ??
-			null,
-		since: w.since,
-	}
-}
+// a send's wait as this process sees it: where the send went (its path from the root, or the node
+// it named: its path, none: null)
+const waitOf = (inner: Inner, w: { path?: Path; id?: Id; since: number }): Waiting => ({
+	send: (w.path ?? seen(inner, w.id!)) ?? null,
+	since: w.since,
+})
 // a wait a process's status says (written as start goes pending): a send's as waitOf, the rest as
 // it is
 const saidOf = (inner: Inner, w: unknown): Waiting => {
 	if (w !== null && typeof w === "object" && "missing" in w) {
-		return { node: asSeen(inner, (w as { missing: Path }).missing) }
+		return { node: (w as { missing: Path }).missing }
 	}
 	if (w !== null && typeof w === "object" && "send" in w) {
-		const { send, box, since } = w as { send: Path | Id; box: Id; since: number }
-		return waitOf(
-			inner,
-			Array.isArray(send) ? { path: send, box, since } : { id: send as Id, box, since },
-		)
+		const { send, since } = w as { send: Path | Id; since: number }
+		return waitOf(inner, Array.isArray(send) ? { path: send, since } : { id: send as Id, since })
 	}
 	return w as Waiting
 }
@@ -1775,7 +1550,7 @@ function ownStatus(inner: Inner, n: NodeData, id: Id): Status {
 	for (const w of calls.waits(id)) waiting.push(waitOf(inner, w))
 	const m = base.missing.get(id)
 	if (m !== undefined && r !== undefined && m.n === r.n) {
-		for (const p of m.paths) waiting.push({ node: asSeen(inner, p) })
+		for (const p of m.paths) waiting.push({ node: p })
 	}
 	if (base.awaiting.has(id)) waiting.push("a promise")
 	if (waiting.length === 0) waiting.push("PENDING")
@@ -1834,8 +1609,7 @@ const runView = (inner: Inner, r: Run): RunView => ({
 function shown(inner: Inner, v: unknown, seenAlready = new Map<object, unknown>()): unknown {
 	if (isHandle(v)) {
 		const d = dataOf(here(inner).base.handles, v).node
-		const w = d.id === undefined ? walkFrom(here(inner).base, d.path) : undefined
-		const id = d.id ?? get(w!.places, w!.path)
+		const id = d.id ?? get(here(inner).places, d.path!)
 		return (id === undefined ? undefined : seen(inner, id)) ?? null
 	}
 	if (v === null || typeof v !== "object") return v
@@ -1986,7 +1760,6 @@ export type System = {
 	getCaller: () => Caller | undefined
 	getStatus: (x: Target) => Status | undefined
 	addTeardown: (fn: (why: Why) => unknown) => void
-	createBox: (path: string | Path) => BoxNode
 	getArgs: () => readonly string[]
 	remove: (x: Target) => void
 	pulse: () => void
@@ -2007,7 +1780,6 @@ export const pulse = (inner: Inner) => here(inner).base.pulse()
 export {
 	addTeardown,
 	createAction,
-	createBox,
 	createEffect,
 	createMemo,
 	createNode,

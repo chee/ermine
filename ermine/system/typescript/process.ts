@@ -1,4 +1,5 @@
-// @ermine/system's functions: the process's own: its status, teardowns, args, and the boxes it makes. each its own export, so a build keeps only those imported;
+// @ermine/system's functions: the process's own: its status, teardowns and args. each its own
+// export, so a build keeps only those imported;
 // each runs its implementation (system.ts) as the context it finds (acting.ts)
 import { go } from "./acting.ts"
 import { marked } from "./site.ts"
@@ -13,7 +14,4 @@ export const addTeardown: System["addTeardown"] = /* @__PURE__ */ marked((fn) =>
 )
 export const getArgs: System["getArgs"] = /* @__PURE__ */ marked(() =>
 	go("getArgs", false, impl.getArgs)
-)
-export const createBox: System["createBox"] = /* @__PURE__ */ marked((path) =>
-	go("createBox", true, impl.createBox, path)
 )

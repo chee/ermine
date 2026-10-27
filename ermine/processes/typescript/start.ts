@@ -1,17 +1,16 @@
-// start: a process's life and its stop, at a path in a box or plain places. a process is a
+// start: a process's life and its stop, at a path in places. a process is a
 // scheduler scope with one path (/work/clock). what runs in it is its starter's: this knows no
 // programs, chains, loaders, builds or types
 //
 //   const processes = createProcesses({ scheduler, table, places, scopes })
-//   const p = processes.start(b, "/clock", { args, folder, pin }, (inside) => {
+//   const p = processes.start(places, "/clock", { args, folder, pin }, (inside) => {
 //     inside.give(computer)                // its status on the process's node
 //     return () => {}                      // called at its stop
 //   })
 //   // { id: "proc:3fa9c1d2e4b5a6f7-1", at: ["clock"], folder: [], scope }, or { refused: "taken", at: ["clock"] }
 //   processes.stop(p)
 //
-// start(where, at, opts, body): where a box ({ root, places }) or places. at, folder: paths from its
-// root, names or a string ("." here, ".." back one); folder default: at's folder. refused "taken",
+// start(places, at, opts, body): at, folder: paths from the places' root, names or a string ("." here, ".." back one); folder default: at's folder. refused "taken",
 // nothing made: a process at, above or under the path. else, in order:
 //   1. its node's id (setup.id's, else proc:<boot>-<n>), then a scope { process: at, [NODE]: id } (given the node,
 //      scopes.ts) under options.under (none: the owner), made through setup.sites when given
@@ -27,8 +26,8 @@
 // open: pid("clock") not built (at is a plain path); args as strings; folder always written, never
 // checked to be there
 import createEntry, { type ChangeHeader } from "@ermine/core/node/entry"
-import { type Address, type Box, inside } from "@ermine/boxes"
 import { type Id, type Path, type Places, PlacesError, type Writer } from "@ermine/core/places"
+import { parse } from "@ermine/core/places/path"
 import { createChangeHeader, NODE } from "@ermine/core/places/header"
 import { createStatus, STATUS, TABLE } from "@ermine/core/places/status"
 import { type Computer, PENDING, type Scheduler, type Scope } from "@ermine/core/scheduler"
@@ -57,8 +56,6 @@ export type Process = {
 
 // what body is given
 export type Inside = Process & {
-	// where it runs: the box given, or { root, places } of the places given
-	readonly box: Box
 	readonly args: readonly string[]
 	// the computer's status on the process's node; run: its latest run too
 	give: (computer: Computer, options?: { run?: boolean }) => void
@@ -83,7 +80,7 @@ export type Refused = { readonly refused: "taken"; readonly at: Path }
 export type Setup = {
 	scheduler: Scheduler
 	table: Table
-	// where status.ts' writes are committed: the host's (a box's places shares its commit). with
+	// where status.ts' writes are committed: the host's. with
 	// describe and watchAll, give's run is written too (runs.ts)
 	places: Pick<Places, "commit"> & Partial<Pick<Places, "describe" | "watchAll">>
 	// scope nodes (scopes.ts): each process's scope given its node (its entries go with the scope)
@@ -106,10 +103,26 @@ export type Setup = {
 }
 
 export type Processes = {
-	start: (where: Box | Places, at: Address, options?: Options, body?: Body) => Process | Refused
+	start: (places: Places, at: Address, options?: Options, body?: Body) => Process | Refused
 	stop: (p: Process) => void
 	// a process's latest run by its node's id (runs.ts); none without describe and watchAll
 	runs?: Runs["read"]
+}
+
+// an address: a string ("a/b", "../c", "/d"; path.ts' parse) or steps, each a name, ".", ".." or "/"
+export type Address = string | Path
+
+// the names an address comes to from where you are (names from the root): "." here, ".." back one
+// (at the root: stays there), "/" back to the root
+export function inside(address: Address, from: Path = []): string[] {
+	const names = [...from]
+	for (const step of typeof address === "string" ? parse(address) : address) {
+		if (step === ".") continue
+		if (step === "/") names.length = 0
+		else if (step === "..") names.pop()
+		else names.push(step)
+	}
+	return names
 }
 
 // a process's path and its folder, from what start is given
@@ -120,7 +133,7 @@ export function pathsOf(at: Address, folder?: Address): { at: Path; folder: Path
 
 // a process inside: what body gave back, until it is called; its row still at its root
 type State = Process & {
-	readonly box: Box
+	readonly places: Places
 	done?: () => unknown
 	ended: boolean
 	rowed: boolean
@@ -155,7 +168,7 @@ export function createProcesses(setup: Setup): Processes {
 	const states = new WeakMap<Process, State>()
 
 	// the header of a write made now (places' createChangeHeader), its site the call into entry
-	// (start or stop), as boxes' is
+	// (start or stop)
 	const headerOf = (entry?: unknown): ChangeHeader => createChangeHeader(s, undefined, ours, entry)
 
 	// f with the process's scope open; torn down already (its own teardown): open, as it is
@@ -163,12 +176,11 @@ export function createProcesses(setup: Setup): Processes {
 		p.scope.state === "alive" ? s.runWithScope(p.scope, f) : f()
 
 	function start(
-		where: Box | Places,
+		places: Places,
 		address: Address,
 		options: Options = {},
 		body?: Body,
 	): Process | Refused {
-		const box: Box = "places" in where ? where : { root: where.root, places: where }
 		const { at, folder } = pathsOf(address, options.folder)
 		const id: Id = makeId()
 		const scope = createScope({ process: at, [NODE]: id }, options.under ?? owner)
@@ -177,7 +189,7 @@ export function createProcesses(setup: Setup): Processes {
 			s.runWithScope(
 				scope,
 				() =>
-					box.places.commit(addProcess(table, box.root, at, id, headerOf(start), setup.write)),
+					places.commit(addProcess(table, places.root, at, id, headerOf(start), setup.write)),
 			)
 		} catch (e) {
 			s.teardown(scope)
@@ -185,7 +197,7 @@ export function createProcesses(setup: Setup): Processes {
 			throw e
 		}
 		const args = options.args ?? []
-		const p: State = { id, at, folder, scope, box, ended: false, rowed: true }
+		const p: State = { id, at, folder, scope, places, ended: false, rowed: true }
 		const process: Process = { id, at, folder, scope }
 		states.set(process, p)
 		if (runs !== undefined) s.registerTeardown(scope, () => runs.drop(id))
@@ -211,7 +223,7 @@ export function createProcesses(setup: Setup): Processes {
 			if (o?.run) runs?.give(c, id)
 		}
 		try {
-			const done = s.runWithScope(scope, () => body({ ...process, box, args, give }))
+			const done = s.runWithScope(scope, () => body({ ...process, args, give }))
 			if (typeof done === "function") p.done = done
 		} catch (e) {
 			stop(process)
@@ -240,8 +252,8 @@ export function createProcesses(setup: Setup): Processes {
 				within(
 					p,
 					() =>
-						p.box.places.commit(
-							removeProcess(table, p.box.root, p.at, headerOf(entry), setup.write),
+						p.places.commit(
+							removeProcess(table, p.places.root, p.at, headerOf(entry), setup.write),
 						),
 				)
 			} catch (e) {

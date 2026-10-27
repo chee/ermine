@@ -18,8 +18,7 @@
 //    refusal's op and the path it was asked by, a feature's name) and what the program is shown
 //    (its getStatus, the function it called): nothing read for it, so a hint never tells a
 //    process more than it could see, and reading nothing it tracks nothing
-// 2. paths shown from "/", the process's box's root, as the program writes them; a handle
-//    reaching outside its box is never named (the base names no path there either); a refusal's
+// 2. paths shown from "/", the root, as the program writes them; a refusal's
 //    grant and ids never shown
 // 3. the advice goes on the error itself (share, don't copy): a hint field, not enumerable (so a
 //    print shows it once), and the message gets "\nhint: …" after the code's own text, so a plain
@@ -48,7 +47,7 @@ export type Seen = {
 
 const SEP = "\nhint: "
 
-// a path from the box's root, as the program writes it
+// a path from the root, as the program writes it
 const slash = (at: string | readonly string[]) => "/" + (typeof at === "string" ? at : at.join("/"))
 const folderOf = (at: string) => slash(at.split("/").slice(0, -1).join("/"))
 const lastOf = (at: string) => at.split("/").at(-1) ?? at
@@ -89,8 +88,8 @@ function pending(seen: Seen | undefined): string {
 function nothingThere(at: string | undefined, seen: Seen | undefined): string {
 	const fn = fnOr(seen, "it")
 	if (at === undefined) {
-		return `the node that handle names isn't reachable from here now (unplaced, or outside ` +
-			`this process's box): get it again by its path, getNode("/…").`
+		return `the node that handle names isn't reachable now (unplaced): get it again by its ` +
+			`path, getNode("/…").`
 	}
 	if (at === "..") return `the path climbs above "/" (too many ".."): "/" is as high as it goes.`
 	if (at === "a node with no place") {
@@ -180,9 +179,7 @@ function ermineError(e: ErmineError, seen: Seen | undefined): string | undefined
 				`where another pipe hears, round again): it is told no more. give one of them ` +
 				`{ timing: "pulse" } (the default), so each hop waits a pulse.`
 		case "not-yet":
-			return /box/.test(e.message)
-				? `start's box is one createBox gave (or @ermine/boxes made over this ermine).`
-				: `that is made after the features are set up: use it in a hook, not in setup.`
+			return `that is made after the features are set up: use it in a hook, not in setup.`
 		case "closed":
 			return `this ermine is closed (close() ran) and something went on: stop timers and ` +
 				`listeners in addTeardown.`

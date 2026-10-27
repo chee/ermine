@@ -222,7 +222,7 @@ export type FeatureAPI = {
 	// ermine's handle: undefined). a handle names a place, no one's power [chee 10-26]
 	handleOf: (node: NodeData) => Node
 	dataOf: (x: unknown) => { node: NodeData } | undefined
-	// a node's path as context's process sees it (none: outside its box, moved, or placed by no
+	// a node's path from the root (none: moved, or placed by no
 	// functions): what a feature shows a process in place of an id
 	seen: (id: Id, context: ProcessContext) => Path | undefined
 	// in a hook or a service's handler (before: not-yet): the send being answered where the code runs

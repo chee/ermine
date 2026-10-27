@@ -1,14 +1,8 @@
 {
-	"title": "through a handle another process made: s, given q's folder, names its own ./note into it (a path in a patch: the caller's, resolved in its own box); s explains q's node and is told paths as s sees them (q's action, under q's row in its box: none for s; q itself: its own); r executing an action through s's handle is the caller, not s (the dormouse's finding 1)",
+	"title": "through a handle another process made: s, given q's folder, names its own ./note into it (a path in a patch: resolved as s, the one acting, not as q the caller); s explains q's node and is told its path from the root; r executing an action through s's handle is the caller, not s (the dormouse's finding 1)",
 	"steps": [
 		{
 			"op": "ermine",
-			"expect": {}
-		},
-		{
-			"op": "box",
-			"name": "b",
-			"at": "/boxes/b",
 			"expect": {}
 		},
 		{
@@ -18,7 +12,7 @@
 				{
 					"do": [
 						"ensureNode",
-						"/system/note",
+						"./note",
 						{
 							"from": "s"
 						}
@@ -38,7 +32,7 @@
 											"path": [
 												"note"
 											],
-											"value": "/system/note"
+											"value": "./note"
 										}
 									]
 								]
@@ -91,17 +85,10 @@
 			}
 		},
 		{
-			"op": "boxplace",
-			"name": "b",
-			"at": "/system/s",
-			"path": "/system/s",
-			"expect": {}
-		},
-		{
 			"op": "host",
 			"call": [
 				"ensureNode",
-				"/boxes/b/system/note",
+				"/code/note",
 				{
 					"from": "q"
 				}
@@ -109,7 +96,7 @@
 		},
 		{
 			"op": "code",
-			"at": "/boxes/b/code/q",
+			"at": "/code/q",
 			"program": [
 				{
 					"do": [
@@ -159,7 +146,6 @@
 			"op": "start",
 			"name": "q",
 			"at": "/code/q",
-			"box": "b",
 			"expect": {
 				"id": "proc:q"
 			}
@@ -180,7 +166,7 @@
 			"op": "host",
 			"call": [
 				"read",
-				"/boxes/b/code/shelf/note"
+				"/code/shelf/note"
 			],
 			"expect": {
 				"value": {
@@ -210,7 +196,12 @@
 			"expect": {
 				"value": {
 					"writer": "method",
-					"path": null,
+					"path": [
+						"code",
+						"q",
+						"on",
+						"touch"
+					],
 					"n": 2
 				}
 			}

@@ -1,5 +1,5 @@
 {
-	"title": "a handle is a name, not power [chee 10-26: \"take the maker out now\"; \"maybe it should be an absolute path?\"]: q, boxed, hands s its ./doc; a patch through it reaches q's doc (the handle names the place from the root), asked as whoever acts, never as the handle's maker: inside s's action that is s and its caller [chee 10-25: \"so it should run as both\"]. a deny on q's edits refuses q's call, but not the host's call with the same place; a deny on s's refuses both",
+	"title": "a handle is a name, not power [chee 10-26: \"take the maker out now\"; \"maybe it should be an absolute path?\"]: q hands s its ./doc; a patch through it reaches q's doc (the handle names the place from the root), asked as whoever acts, never as the handle's maker: inside s's action that is s and its caller [chee 10-25: \"so it should run as both\"]. a deny on q's edits refuses q's call, but not the host's call with the same place; a deny on s's refuses both",
 	"steps": [
 		{
 			"op": "ermine",
@@ -9,12 +9,6 @@
 					"from": "code/q"
 				}
 			],
-			"expect": {}
-		},
-		{
-			"op": "box",
-			"name": "b",
-			"at": "/boxes/b",
 			"expect": {}
 		},
 		{
@@ -56,15 +50,8 @@
 			}
 		},
 		{
-			"op": "boxplace",
-			"name": "b",
-			"at": "/system/s",
-			"path": "/system/s",
-			"expect": {}
-		},
-		{
 			"op": "code",
-			"at": "/boxes/b/code/q",
+			"at": "/code/q",
 			"program": [
 				{
 					"do": [
@@ -83,7 +70,6 @@
 			"op": "start",
 			"name": "q",
 			"at": "/code/q",
-			"box": "b",
 			"expect": {
 				"id": "proc:q"
 			}
@@ -116,7 +102,7 @@
 			"op": "host",
 			"call": [
 				"read",
-				"/boxes/b/code/doc"
+				"/code/doc"
 			],
 			"expect": {
 				"value": {
@@ -131,8 +117,6 @@
 				"/system/s/on/save",
 				{
 					"path": [
-						"boxes",
-						"b",
 						"code",
 						"doc"
 					],
@@ -147,7 +131,7 @@
 			"op": "host",
 			"call": [
 				"read",
-				"/boxes/b/code/doc"
+				"/code/doc"
 			],
 			"expect": {
 				"value": {
@@ -163,12 +147,6 @@
 					"from": "system/s"
 				}
 			],
-			"expect": {}
-		},
-		{
-			"op": "box",
-			"name": "b",
-			"at": "/boxes/b",
 			"expect": {}
 		},
 		{
@@ -210,15 +188,8 @@
 			}
 		},
 		{
-			"op": "boxplace",
-			"name": "b",
-			"at": "/system/s",
-			"path": "/system/s",
-			"expect": {}
-		},
-		{
 			"op": "code",
-			"at": "/boxes/b/code/q",
+			"at": "/code/q",
 			"program": [
 				{
 					"do": [
@@ -237,7 +208,6 @@
 			"op": "start",
 			"name": "q",
 			"at": "/code/q",
-			"box": "b",
 			"expect": {
 				"id": "proc:q"
 			}
@@ -258,7 +228,7 @@
 			"op": "host",
 			"call": [
 				"read",
-				"/boxes/b/code/doc"
+				"/code/doc"
 			],
 			"expect": {
 				"value": {

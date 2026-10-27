@@ -28,10 +28,7 @@ import {
 	scope,
 	table,
 } from "../../../core/places/typescript/world_harness.ts"
-import {
-	answer as placesAnswer,
-	forms,
-} from "../../../core/places/typescript/places_harness.ts"
+import { answer as placesAnswer, forms } from "../../../core/places/typescript/places_harness.ts"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { type Act, createRuns, type Field, type Run } from "./runs.ts"
 

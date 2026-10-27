@@ -1,11 +1,10 @@
-// the process context: where and as whom a thing is done. a scope, a box, a folder (the one it is
-// in), a path, its args, and a process or none (the host's: process 0). the layer under the api:
+// the process context: where and as whom a thing is done. a scope, a folder (the one it is in), a
+// path, its args, and a process or none (the host's: process 0). the layer under the api:
 // every function is made from one; features reach it (onWrite is given it); programs never do.
 // its host makes it (ermine/system's context.ts)
 //
 // resolve(p)            a bare name: inside at (the process's own node); ./: in folder, beside
-//                       at; ../: above folder; /: the box's root. a path going above "/":
-//                       nothing-there
+//                       at; ../: above folder; /: the root. a path going above "/": nothing-there
 // within(f)             f with this context's scope open (explicit: for host and feature code)
 // write(part, at, patches)  one write at a node (its id, or { id, path }), asked "edit" on it
 //                       (by its path when given, so a policy by path decides): through onWrite, a
@@ -18,7 +17,6 @@
 // queuePulse()          one pulse soon, however many ask
 // a write with nothing open: a process's throws nothing-open; the host's falls back to its own scope
 import type { Patch } from "@ermine/core/op/apply"
-import type { Box } from "@ermine/boxes"
 import type { Id, Path } from "@ermine/core/places"
 import type { Target as Asked } from "@ermine/core/protect"
 import type { Scope } from "@ermine/core/scheduler"
@@ -30,7 +28,6 @@ export type At = Id | { readonly id: Id; readonly path?: Path }
 
 export type ProcessContext = {
 	readonly scope: Scope
-	readonly box: Box
 	readonly folder: Path
 	// the host's: []
 	readonly at: Path

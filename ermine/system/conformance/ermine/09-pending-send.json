@@ -1,5 +1,5 @@
 {
-	"title": "a send to nothing (no node there, or one holding no value) is pending, loudly: PENDING thrown, and a wait recorded (the caller, the path, the box it was looked up in) while it waits. a memo sending: pending, waiting on the send, run again when the handler comes and then done, its wait gone. a send from outside: its wait kept till a send from it there is answered. a setup sending: the process pending, waiting on it. a node holding a value that is no function: not-a-method",
+	"title": "a send to nothing (no node there, or one holding no value) is pending, loudly: PENDING thrown, and a wait recorded (the caller, the path) while it waits. a memo sending: pending, waiting on the send, run again when the handler comes and then done, its wait gone. a send from outside: its wait kept till a send from it there is answered. a setup sending: the process pending, waiting on it. a node holding a value that is no function: not-a-method",
 	"steps": [
 		{
 			"op": "ermine",
@@ -77,8 +77,7 @@
 							"svc",
 							"on",
 							"x"
-						],
-						"box": "R"
+						]
 					}
 				]
 			}
@@ -106,8 +105,7 @@
 							"svc",
 							"on",
 							"x"
-						],
-						"box": "R"
+						]
 					},
 					{
 						"caller": "proc:p",
@@ -115,8 +113,7 @@
 							"svc",
 							"on",
 							"x"
-						],
-						"box": "R"
+						]
 					}
 				]
 			}
@@ -165,8 +162,7 @@
 							"svc",
 							"on",
 							"x"
-						],
-						"box": "R"
+						]
 					}
 				]
 			}
@@ -268,8 +264,7 @@
 						"caller": "proc:p",
 						"path": [
 							"svc"
-						],
-						"box": "R"
+						]
 					},
 					{
 						"caller": "proc:q",
@@ -277,8 +272,7 @@
 							"none",
 							"on",
 							"y"
-						],
-						"box": "R"
+						]
 					}
 				]
 			}
@@ -296,8 +290,7 @@
 						"caller": "proc:p",
 						"path": [
 							"svc"
-						],
-						"box": "R"
+						]
 					}
 				]
 			}

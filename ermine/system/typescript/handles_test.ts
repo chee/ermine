@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertThrows } from "@std/assert"
+import { assertEquals, assertThrows } from "@std/assert"
 import { createErmine, ErmineError } from "./ermine.ts"
 import { ensureNode, read, readEntries } from "@ermine/system"
 import { manual } from "./manual_fixture.ts"

@@ -1,5 +1,5 @@
 {
-	"title": "a process names no node by id: an id or a raw { path, part } given to a function is not-a-handle, and to land not a node handle [chee 10-25: \"i'm not sure the process api should be able to do anything by id\"]. land reaches the patch node by the handle it is sent (its maker's box: the handle carries it) or a path in the caller's box; protect is asked as the caller and as land, the target by its id, the patch node by the path it was made at, else its id. open (10-25): a policy by path on the target (deny edit secret from p) doesn't stop land, which asks the target by the id its patch names, though p's own edit(\"/secret\") is refused: land is looser than the caller's own functions there",
+	"title": "a process names no node by id: an id or a raw { path, part } given to a function is not-a-handle, and to land not a node handle [chee 10-25: \"i'm not sure the process api should be able to do anything by id\"]. land reaches the patch node by the handle it is sent or a path from the root; protect is asked as the caller and as land, the target by its id, the patch node by the path it was made at, else its id. open (10-25): a policy by path on the target (deny edit secret from p) doesn't stop land, which asks the target by the id its patch names, though p's own edit(\"/secret\") is refused: land is looser than the caller's own functions there",
 	"steps": [
 		{
 			"op": "ermine",
@@ -91,21 +91,8 @@
 			}
 		},
 		{
-			"op": "box",
-			"name": "b",
-			"at": "/boxes/b",
-			"expect": {}
-		},
-		{
-			"op": "boxplace",
-			"name": "b",
-			"at": "/system/land",
-			"path": "/system/land",
-			"expect": {}
-		},
-		{
 			"op": "code",
-			"at": "/boxes/b/code/q",
+			"at": "/code/q",
 			"program": [],
 			"expect": {}
 		},
@@ -113,7 +100,6 @@
 			"op": "start",
 			"name": "q",
 			"at": "/code/q",
-			"box": "b",
 			"expect": {
 				"id": "proc:q"
 			}
@@ -214,21 +200,8 @@
 			}
 		},
 		{
-			"op": "box",
-			"name": "b",
-			"at": "/boxes/b",
-			"expect": {}
-		},
-		{
-			"op": "boxplace",
-			"name": "b",
-			"at": "/system/land",
-			"path": "/system/land",
-			"expect": {}
-		},
-		{
 			"op": "code",
-			"at": "/boxes/b/code/q",
+			"at": "/code/q",
 			"program": [
 				{
 					"do": [
@@ -244,7 +217,6 @@
 			"op": "start",
 			"name": "q",
 			"at": "/code/q",
-			"box": "b",
 			"expect": {
 				"id": "proc:q"
 			}
@@ -308,7 +280,7 @@
 				"$e"
 			],
 			"expect": {
-				"error": "Error: nothing-there (n10)"
+				"error": "Error: nothing-there (n7)"
 			}
 		},
 		{

@@ -32,7 +32,7 @@
 // caller from the host, and its scope's NODE. its attributes: ermine.host.args,
 // ermine.host.machine, ermine.features (what ermine.features shows).
 // the lifecycle:
-//   start(fn, at, { args, box })   a process at at (in box, none: the root) running fn, its
+//   start(fn, at, { args })   a process at at running fn, its
 //                        setup, given nothing, the process's scope open [chee 10-26: "so let's do
 //                        ermine.start(fn, path, {args?, box?})": the program given, not looked up
 //                        at a path]. its folder: the one it is in. → { process, stop(why?),
@@ -51,7 +51,6 @@
 // (features also get processes, FeatureAPI). features: each one's name, needs and hooks, in chain order. records: run(id) a
 // computer's latest run, call(id) a handler's latest send, waits() every send waiting; tracked.
 import type { ChangeHeader } from "@ermine/core/node/entry"
-import { type Box, type Host, madeOver } from "@ermine/boxes"
 import { children, createPlaces, type Id, type Path, type Places } from "@ermine/core/places"
 import { place } from "./names.ts"
 import { getStatus } from "./process.ts"
@@ -117,7 +116,6 @@ import {
 import {
 	attach,
 	type Base,
-	type BoxNode,
 	type Held,
 	innerOf,
 	seenIn,
@@ -154,7 +152,6 @@ export type {
 } from "./context.ts"
 export { SCOPE, SendError, WAITING } from "./system.ts"
 export type {
-	BoxNode,
 	Caller,
 	CallView,
 	ChangeView,
@@ -195,8 +192,6 @@ export type Options = {
 // the cwd being a separate thing is a good idea": none given]
 export type StartOptions = {
 	args?: readonly string[]
-	// a box: createBox's handle, or one made with @ermine/boxes
-	box?: Box | BoxNode
 }
 
 export type Started = {
@@ -543,18 +538,15 @@ export function createErmine(options: Options = {}): Ermine {
 			return [o2 as ProcessContext, tagged, land]
 		},
 	)
-	// the open call's caller (the nearest call scope's), as a place: a process's at and box (its
-	// folder's id), a computer's its process's, the host none; no call open: undefined [chee 10-25:
-	// "so it should run as both"]
-	const caller = (): { from?: Path; box?: Id } | undefined => {
+	// the open call's caller (the nearest call scope's), as a place: a process's at, a computer's its
+	// process's, the host none; no call open: undefined [chee 10-25: "so it should run as both"]
+	const caller = (): { from?: Path } | undefined => {
 		for (let o = s.getCurrentScope(); o !== undefined; o = o.parent) {
 			if (o.info.call === undefined || o.info.handler === undefined) continue
 			const by = (o.info.caller as { node?: Id } | undefined)?.node
 			if (by === undefined || by === node) return {}
 			const ctx = contexts.get(by) ?? computerContexts.get(by)
-			return ctx?.context.process === undefined
-				? {}
-				: { from: ctx.context.at, box: ctx.context.box.root }
+			return ctx?.context.process === undefined ? {} : { from: ctx.context.at }
 		}
 		return undefined
 	}
@@ -640,10 +632,9 @@ export function createErmine(options: Options = {}): Ermine {
 	)
 
 	// the host's context (made before what writes as the host: rows, scope nodes, the boot)
-	const rootBox: Box = { root, places: p }
 	const hostInner = createProcessContext(parts, {
 		scope: hostScope,
-		box: rootBox,
+		places: p,
 		folder: [],
 		at: [],
 		args: options.host?.args ?? [],
@@ -712,10 +703,8 @@ export function createErmine(options: Options = {}): Ermine {
 				if (r.call !== undefined) keep(r.call)
 			}),
 	})
-	const host: Host = { places: p, table, scheduler: s, commit, id: newId }
-	// each process's node: its box's folder and where it runs (system.ts seenIn)
-	const running = new Map<Id, { box: Id; at: Path }>()
-	const boxes = new WeakMap<BoxNode, Box>()
+	// each process's node: where it runs (system.ts seenIn)
+	const running = new Map<Id, Path>()
 	const whys = new Map<Id, Why>()
 	const base: Base = {
 		parts,
@@ -746,11 +735,6 @@ export function createErmine(options: Options = {}): Ermine {
 		running,
 		views: new WeakMap(),
 		changes: new WeakMap(),
-		host,
-		boxes,
-		boxIndex: new Map([[rootBox.root, rootBox]]),
-		names: 0,
-		walked: undefined,
 		entered,
 		enter,
 		shown,
@@ -771,11 +755,6 @@ export function createErmine(options: Options = {}): Ermine {
 		},
 	}
 
-	// a children fact: names may have changed (the boxes' paths walked again, system.ts walks)
-	const offNames = p.watchAll((f) => {
-		if (f.part === "children") base.names++
-	})
-
 	// each running process's context, by its node's id
 	const contexts = new Map<Id, Inner>()
 	attach(base, hostInner)
@@ -791,18 +770,15 @@ export function createErmine(options: Options = {}): Ermine {
 			hostInner.context.within(() => place(at, mint(base.handles, { id: node, part: "value" })))
 		}
 
-		// the processes ermine started, oldest first, and each one's box's root
+		// the processes ermine started, oldest first
 		const started: Process[] = []
-		const roots = new Map<Id, Id>()
 
 		function stop(process: Process, why: Why = "ended") {
 			whys.set(process.id, why)
-			const root = roots.get(process.id) ?? rootBox.root
 			try {
 				processes!.stop(process)
 			} finally {
 				whys.delete(process.id)
-				roots.delete(process.id)
 				dropHeld(process.id)
 				const i = started.indexOf(process)
 				if (i !== -1) started.splice(i, 1)
@@ -827,33 +803,19 @@ export function createErmine(options: Options = {}): Ermine {
 					"start",
 				)
 			}
-			// a box handle createBox gave, or a box @ermine/boxes made over this ermine's host: by
-			// object, never by shape (from a red-team pass: an object with a places field was
-			// taken as a box)
-			const handed = o.box === undefined ? undefined : boxes.get(o.box as BoxNode)
-			const given = handed ?? (madeOver(o.box, base.host) ? o.box : undefined)
-			if (o.box !== undefined && given === undefined) {
-				throw hinted(new ErmineError("not-yet", "a box this ermine did not make"), "start")
-			}
-			const box = (given as Box | undefined) ?? rootBox
-			// a box of createBox's let go (nothing reached it, it held no rows): walked again
-			if (given !== undefined && given !== o.box && !base.boxIndex.has(box.root)) {
-				base.boxIndex.set(box.root, box)
-				base.names++
-			}
 			const paths = pathsOf(at)
 			enterScheduler(s)
 			let made: ReturnType<Processes["start"]>
 			try {
 				made = processes!.start(
-					box,
+					p,
 					paths.at,
 					{ args: o.args, folder: paths.folder },
 					(inside) => {
 						const pid = inside.id
 						const inner = createProcessContext(parts, {
 							scope: inside.scope,
-							box,
+							places: p,
 							folder: inside.folder,
 							at: inside.at,
 							args: inside.args,
@@ -867,8 +829,7 @@ export function createErmine(options: Options = {}): Ermine {
 						})
 						contexts.set(pid, inner)
 						// its node's place, for seen (its rows name it: no children entry has it)
-						running.set(pid, { box: box.root, at: inside.at })
-						base.names++
+						running.set(pid, inside.at)
 						// its context, found by its scope (system.ts): no api object [chee 10-25: ">Drop the
 						// objects. ye"]; setup is given nothing [chee 10-25: "we are getting rid of setup(api)
 						// right?"]
@@ -877,7 +838,6 @@ export function createErmine(options: Options = {}): Ermine {
 						s.registerTeardown(inside.scope, () => {
 							contexts.delete(pid)
 							running.delete(pid)
-							base.names++
 						})
 						// the process's status and value, written as it settles (its status in the status table)
 						const attrs = (patches: Write["patches"]) =>
@@ -928,7 +888,6 @@ export function createErmine(options: Options = {}): Ermine {
 								const ws = calls.waits(pid)
 								const waits: unknown[] = ws.map((w) => ({
 									send: w.path ?? w.id,
-									box: w.box,
 									since: w.since,
 								}))
 								// the nodes it read that weren't there (paths from the root, shown as each sees them)
@@ -952,13 +911,12 @@ export function createErmine(options: Options = {}): Ermine {
 				const under = (a: Path, b: Path) => a.every((n, i) => b[i] === n)
 				for (const process of [...heldRows.keys()]) {
 					const r = rowHeld(process)
-					if (r === undefined || r.root !== box.root) continue
+					if (r === undefined) continue
 					if (!(under(r.at, made.at) || under(made.at, r.at))) continue
 					return { ...made, held: { process, feature: r.feature } }
 				}
 				return made
 			}
-			roots.set(made.id, box.root)
 			started.push(made)
 			return {
 				process: made,
@@ -1000,7 +958,6 @@ export function createErmine(options: Options = {}): Ermine {
 			step(() => calls.stop())
 			step(offSettle)
 			step(offRelease)
-			step(offNames)
 			for (const off of [...listening]) step(off)
 			step(unregister)
 			closed = true
