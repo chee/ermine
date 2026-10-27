@@ -1,0 +1,115 @@
+{
+	"title": "a pipe whose read of the end it hears is pending is not told, and the writer is not affected: the write stands, the pipe's status shows pending [pipe doc: a pipe's trouble is its own status, not the writer's]",
+	"steps": [
+		{
+			"op": "ermine",
+			"deny": [
+				{
+					"op": "read",
+					"path": "fahrenheit",
+					"from": "code/p",
+					"pending": true
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/celsius",
+				0
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/fahrenheit",
+				32
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"pipe",
+						"/celsius",
+						"/fahrenheit",
+						{
+							"steps": [],
+							"gives": [
+								"whole",
+								[
+									"pick",
+									"$0",
+									[
+										"value"
+									]
+								]
+							]
+						},
+						{
+							"steps": [],
+							"gives": [
+								"whole",
+								[
+									"pick",
+									"$0",
+									[
+										"value"
+									]
+								]
+							]
+						}
+					],
+					"as": "pp"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/fahrenheit",
+				[
+					{
+						"path": [],
+						"value": 50
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$pp"
+			],
+			"expect": {
+				"value": {
+					"state": "pending",
+					"waiting": [
+						"PENDING"
+					]
+				}
+			}
+		}
+	]
+}

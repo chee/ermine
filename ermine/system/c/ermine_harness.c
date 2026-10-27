@@ -92,6 +92,7 @@ typedef struct {
 // a deny entry of the request: every field given must match
 typedef struct {
 	char *op, *path, *id, *from, *box;
+	int pending;
 } deny_t;
 
 // a test feature: its spec, and what its hooks keep
@@ -2020,6 +2021,7 @@ static pr_answer deny_run(void *ctx, const pr_ask *ask, const pr_read *read) {
 			(ask->from.box.string == NULL || strcmp(d->box, ask->from.box.string) != 0)) {
 			continue;
 		}
+		if (d->pending) return (pr_answer){.verdict = PR_PENDING};
 		return (pr_answer){.verdict = PR_NO, .reason = "denied"};
 	}
 	return (pr_answer){.verdict = PR_YES};
@@ -2625,6 +2627,7 @@ static int make(const op_value *r) {
 			if (text(d, "id") != NULL) x->id = es_dup(text(d, "id"));
 			if (text(d, "from") != NULL) x->from = es_dup(text(d, "from"));
 			if (text(d, "box") != NULL) x->box = es_dup(text(d, "box"));
+			x->pending = flag(d, "pending");
 		}
 		w->policy = pr_call(deny_run, NULL);
 	}

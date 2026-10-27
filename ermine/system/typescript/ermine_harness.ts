@@ -9,7 +9,7 @@
 //    ("patchy": the real one; "trace", "hints": the real ones; "inline": one written in this
 //    file, listing no files; another
 //    harness adds its own: named, below) or
-//    test features (below); deny: [{ op, path?, id?, from? }] refused (every field given
+//    test features (below); deny: [{ op, path?, id?, from?, pending? }] refused (pending: true: pending) (every field given
 //    matching; from: the asker's place; box: the box it is in, its root's id);
 //    uuid: uuidv7 ids; calls: "never" (a feature holding no call records, onRecord). deny: by path, or { op, id } by id; at, args, machine: the host's node's
 // { op: "features" }                       → { features }   ermine.features
@@ -125,7 +125,7 @@ import { get } from "@ermine/core/places/lib"
 import { createChangeHeader, NODE } from "@ermine/core/places/header"
 import { Refusal } from "@ermine/core/places/guard"
 import type { Process } from "@ermine/processes/start"
-import { no, type Policy, yes } from "@ermine/core/protect"
+import { no, pending, type Policy, yes } from "@ermine/core/protect"
 import { PENDING } from "@ermine/core/scheduler"
 import type { Id, Key } from "@ermine/core/table"
 import patchy, { createPatch, land, layers } from "@ermine/patchy/feature"
@@ -198,18 +198,19 @@ function make(o: Request = {}): Made {
 		id?: string
 		from?: string
 		box?: string
+		pending?: boolean
 	}[]
 	const may: Policy | undefined = o.deny
-		? (ask) =>
-			deny.some((d) =>
-					d.op === ask.op &&
-					(d.id === undefined || d.id === ask.target.id) &&
-					(d.path === undefined || d.path === ask.target.path?.join("/")) &&
-					(d.from === undefined || d.from === ask.from?.path?.join("/")) &&
-					(d.box === undefined || d.box === ask.from?.box)
-				)
-				? no("denied")
-				: yes
+		? (ask) => {
+			const d = deny.find((d) =>
+				d.op === ask.op &&
+				(d.id === undefined || d.id === ask.target.id) &&
+				(d.path === undefined || d.path === ask.target.path?.join("/")) &&
+				(d.from === undefined || d.from === ask.from?.path?.join("/")) &&
+				(d.box === undefined || d.box === ask.from?.box)
+			)
+			return d === undefined ? yes : d.pending ? pending(["denied"]) : no("denied")
+		}
 		: undefined
 	const features = ((o.features ?? []) as unknown[]).map((f) =>
 		typeof f === "string"

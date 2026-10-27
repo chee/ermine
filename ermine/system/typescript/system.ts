@@ -797,7 +797,8 @@ function patch(inner: Inner, x: Target, given: readonly Patch[]) {
 // by default [chee: "let's make this a per-pipe option, maybe revisit later, default to next
 // pulse"]: "pulse", told at the next pulse, in order; "write", as the write lands, a pipe told
 // more than LOOPING deep (pipes told by pipes' writes) looping, not told again. asked read of from
-// as it is made (and edit of to), and at each write told (refused: told so). the node: { name }, or
+// as it is made (and edit of to), and at each write told (refused: told so; pending: not told, its
+// status pending). the node: { name }, or
 // pipe-<n>, its order among the pipes its owner's run made; made again by a later run of its owner
 // (the same node, the new functions), as a memo is (decision-pipes-2026-10-26: the builder's picks)
 export type PipeOptions = { timing?: "pulse" | "write"; name?: string | Path }
@@ -962,7 +963,15 @@ function listen(inner: Inner, p: Piped, path: Path, part: Key, back: boolean) {
 			// never told its own writes
 			if (m?.[NODE] === p.id) return
 			const byPipe = m?.pipe !== undefined
-			const w: Watched = refused(inner, targetOf(thing(fact.id, path), part))
+			let no: boolean
+			try {
+				no = refused(inner, targetOf(thing(fact.id, path), part))
+			} catch (e) {
+				// pending (or a policy's throw) is no yes: not told, its status says, the writer unaffected
+				pipeStatus(inner, p, e)
+				return
+			}
+			const w: Watched = no
 				? { patches: [], change: undefined, value: undefined, refused: true }
 				: {
 					patches: fact.patches,
