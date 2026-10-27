@@ -1,14 +1,23 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import {
+	createAction,
+	ensureNode,
+	explain,
+	patch,
+	peep,
+	pipe,
+	read,
+	type Watched,
+} from "@ermine/system"
 import { bind, handler } from "ermine-h"
 
 // piece-pipe: one thing in two shapes, kept in step by patches (a little cambria). v1 says name,
-// temp_c and cute; v2 says title, temp_f and mood. a watch on each node (places' watchPath) hears
-// every patch that lands there (the api's watch: its patches and its change); the lens rewrites it
-// into the other shape and writes it there as "lens" (the host's as: a write under another actor).
-// that write lands too, and the other watch hears it: made by the lens, so nothing is sent back
+// temp_c and cute; v2 says title, temp_f and mood. one pipe between the nodes (pipe(v1, v2, there,
+// back): a translate) hears every patch that lands on either, and the lens rewrites it into the
+// other shape and writes it there. the pipe is never told its own writes, so the lens's write lands
+// without being sent back: nothing echoes. the pipe is told as the write lands ({ timing: "write" })
 
-type Patch = { path: (string | number)[]; value?: unknown; move?: unknown }
+type Patch = Watched["patches"][number]
 type Way = "v1→v2" | "v2→v1"
 type Flow = {
 	n: number
@@ -64,69 +73,52 @@ function rewrite(p: Patch, way: Way): Patch[] {
 
 const show = (p: Patch) =>
 	`[${p.path.join(".")}]${"value" in p ? " = " + JSON.stringify(p.value) : " taken out"}`
-// the first value of a key in a change's metadata (flat pairs, innermost first)
-const pair = (metadata: unknown, key: string): unknown =>
-	(metadata as [string, unknown][] | undefined)?.find(([k]) => k === key)?.[1]
 
-// what the host's extend adds (host.ts): f run as another actor, with pairs of its own
-type Host = { as: <T>(info: Record<string, unknown>, f: () => T) => T }
+// who made the write a pipe heard: the action that did it (explain: its writer, one step), as the
+// pipe sees it; no actor of its own to say (every write here is the host's)
+const by = (w: Watched) => {
+	const writer = w.change && peep(() => explain(w.change!))?.writer
+	return writer?.kind === "method" ? String(writer.path?.join("/")) : writer?.kind ?? "?"
+}
 
-export default function program({ open, read, edit, watch, entries, method, as }: API & Host) {
-	const v1 = open("./v1", { name: "ermine", temp_c: 20, cute: true })
-	const v2 = open("./v2", { title: "ermine", temp_f: 68, mood: "cute" })
-	const log = open("log", [] as Flow[])
-	const count = open("count", 0)
-	const echoes = open("echoes", 0)
+export default function program() {
+	const v1 = ensureNode("./v1", { name: "ermine", temp_c: 20, cute: true })
+	const v2 = ensureNode("./v2", { title: "ermine", temp_f: 68, mood: "cute" })
+	const log = ensureNode("log", [] as Flow[])
+	const count = ensureNode("count", 0)
 
-	// the watch on one side: a patch made there by anyone but the lens goes across, rewritten
-	const across = (from: typeof v1, to: typeof v1, way: Way) =>
-		watch(from, (fact) => {
-			if (fact.change?.actor === "lens") {
-				edit(echoes, (n: number) => n + 1)
-				return
-			}
-			const before = fact.patches as Patch[]
-			const after = before.flatMap((p) => rewrite(p, way))
-			if (after.length) as({ actor: "lens", lens: way }, () => edit(to, after))
-			const side = pair(fact.change?.metadata, "side")
-			const n = (read(count) as number) + 1
-			edit(count, () => n)
-			const landed = after.length
-				? `value of ${String(entries(to)[0]?.id).slice(0, 6)}, ${after.length} patch${
+	// what a write heard crosses as, and a line of the log for it (the pipe's own scope: the log's
+	// writes are the pipe's)
+	const across = (way: Way) => (w: Watched): Patch[] => {
+		const before = [...w.patches]
+		const after = before.flatMap((p) => rewrite(p, way))
+		const n = (peep(() => read(count)) as number) + 1
+		patch(count, [{ path: [], value: n }])
+		const flow: Flow = {
+			n,
+			way,
+			by: by(w),
+			before,
+			after,
+			landed: after.length
+				? `${way === "v1→v2" ? "v2" : "v1"}, ${after.length} patch${
 					after.length === 1 ? "" : "es"
 				}`
-				: ""
-			const flow: Flow = {
-				n,
-				way,
-				by: `${fact.change?.actor}${side ? ` (${side})` : ""}`,
-				before,
-				after,
-				landed,
-			}
-			edit(log, (d: Flow[]) => (d.unshift(flow), void d.splice(6)))
-		})
-	across(v1, v2, "v1→v2")
-	across(v2, v1, "v2→v1")
+				: "",
+		}
+		const was = peep(() => read(log)) as Flow[]
+		patch(log, [{ path: [], value: [flow, ...was].slice(0, 6) }])
+		return after
+	}
+	// one pipe, both ways: a patch on v1 goes to v2 as v1→v2 says, a patch on v2 back as v2→v1 says
+	pipe(v1, v2, across("v1→v2"), across("v2→v1"), { timing: "write", name: "lens" })
 
-	// a person's edits: a patch on one field, the window saying which side it came from
-	method(
-		"on/v1",
-		(field: string, value: unknown) =>
-			as({ side: "v1 window" }, () => edit(v1, [{ path: [field], value }])),
-	)
-	method(
-		"on/v2",
-		(field: string, value: unknown) =>
-			as({ side: "v2 window" }, () => edit(v2, [{ path: [field], value }])),
-	)
-	method(
+	// a person's edits: a patch on one field; the action that made it is what says which window
+	createAction("on/v1", (field: string, value: unknown) => patch(v1, [{ path: [field], value }]))
+	createAction("on/v2", (field: string, value: unknown) => patch(v2, [{ path: [field], value }]))
+	createAction(
 		"on/reset",
-		() =>
-			as(
-				{ side: "v1 window" },
-				() => edit(v1, [{ path: [], value: { name: "ermine", temp_c: 20, cute: true } }]),
-			),
+		() => patch(v1, [{ path: [], value: { name: "ermine", temp_c: 20, cute: true } }]),
 	)
 
 	const value = (e: Event) => (e.target as HTMLInputElement).value
@@ -139,9 +131,9 @@ export default function program({ open, read, edit, watch, entries, method, as }
 				pipe<span>one thing, two shapes, patches between</span>
 			</h1>
 			<p class="lede">
-				each window edits its own node. a watch on each node hears every patch that lands there,
-				and the lens rewrites it into the other shape. the lens's own write lands too: the other
-				watch sees it was made by the lens, and sends nothing back.
+				each window edits its own node. a pipe between the nodes hears every patch that lands on
+				either, and the lens rewrites it into the other shape. the pipe is never told its own
+				write, so nothing is sent back.
 			</p>
 			<div class="desk">
 				<section class="win">
@@ -257,9 +249,7 @@ export default function program({ open, read, edit, watch, entries, method, as }
 			<section class="flows">
 				<h2>
 					the pipe
-					<em>
-						{bind("count")} crossed · {bind("echoes")} echoes heard and not sent back
-					</em>
+					<em>{bind("count")} crossed · the pipe is not told its own writes</em>
 				</h2>
 				<ol>
 					{bind("log", (rows: Flow[]) =>
@@ -281,7 +271,9 @@ export default function program({ open, read, edit, watch, entries, method, as }
 											? <code class="out">{r.after.map(show).join(", ")}</code>
 											: <em class="none">nothing: the lens has no rule for it</em>}
 									</div>
-									{r.landed ? <div class="landed">landed: {r.landed}, by lens</div> : null}
+									{r.landed
+										? <div class="landed">landed on {r.landed}, by the pipe</div>
+										: null}
 								</li>
 							)))}
 				</ol>

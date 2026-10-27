@@ -1,5 +1,5 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import { createAction, createMemo, ensureNode, patch, PENDING, read } from "@ermine/system"
 import { bind, handler } from "ermine-h"
 
 // program.ts: a spreadsheet. ./cells/A1 holds the text typed; calc:A1 is a memo that reads it, and
@@ -99,15 +99,18 @@ function compile(src: string): Formula {
 	return f
 }
 
-export default function program({ open, read, edit, memo, method, PENDING }: API) {
-	const src: Record<string, ReturnType<typeof open>> = {}
-	for (const n of names) src[n] = open("./cells/" + n, SEED[n] ?? "")
-	method("on/edit", (ref: string, text: string) => edit(src[ref], () => text))
+export default function program() {
+	const src: Record<string, ReturnType<typeof ensureNode>> = {}
+	for (const n of names) src[n] = ensureNode("./cells/" + n, SEED[n] ?? "")
+	createAction(
+		"on/edit",
+		(ref: string, text: string) => patch(src[ref], [{ path: [], value: text }]),
+	)
 
 	// ---- the calc of each cell: a memo, so its answer is a node and its pending is a status ----
 	const ran: Record<string, number> = {}
 	for (const ref of names) {
-		memo("calc:" + ref, () => {
+		createMemo("calc:" + ref, () => {
 			ran[ref] = (ran[ref] ?? 0) + 1
 			const text = String(read(src[ref]) ?? "")
 			if (!text.startsWith("=")) {
@@ -149,7 +152,7 @@ export default function program({ open, read, edit, memo, method, PENDING }: API
 				class={error ? "show error" : typeof v === "string" ? "show text" : "show"}
 				title={`${ref}: calc ran ${ran[ref] ?? 0}×`}
 			>
-				{error ? "#" + error : String(v)}
+				{error ? "#" + error : v === null ? "" : String(v)}
 			</span>
 		)
 	}

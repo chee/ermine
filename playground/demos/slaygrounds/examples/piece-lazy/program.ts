@@ -1,5 +1,5 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import { createAction, createMemo, ensureNode, patch, peep, read } from "@ermine/system"
 import { bind, handler } from "ermine-h"
 
 // piece-lazy: /dev/clock ticks only while someone reads it. its provider is the host's, through
@@ -26,15 +26,18 @@ const readers = [
 
 const seconds = (time: unknown) => typeof time === "string" ? Number(time.slice(6, 8)) : 0
 
-export default function program({ open, read, edit, memo, method }: API) {
+export default function program() {
 	const toggles = readers.map((r) => {
-		const toggle = open(`./${r.name}-on`, r.name !== "sundial")
-		memo(r.name, () => (read(toggle) ? read("/dev/clock", ["time"]) : null))
-		method(`on/${r.name}`, () => edit(toggle, (on: boolean) => !on))
+		const toggle = ensureNode(`./${r.name}-on`, r.name !== "sundial")
+		createMemo(r.name, () => (read(toggle) ? read("/dev/clock", ["time"]) : null))
+		createAction(
+			`on/${r.name}`,
+			() => patch(toggle, [{ path: [], value: !peep(() => read(toggle)) }]),
+		)
 		return toggle
 	})
-	method("on/none", () => {
-		for (const toggle of toggles) edit(toggle, () => false)
+	createAction("on/none", () => {
+		for (const toggle of toggles) patch(toggle, [{ path: [], value: false }])
 	})
 
 	// what each reader shows, from its own part's value (never the clock's)

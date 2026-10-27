@@ -1,5 +1,26 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/programs/api"
+import { ATTRIBUTES } from "@ermine/programs"
+import {
+	addTeardown,
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	executeAction,
+	getArgs,
+	list,
+	patch,
+	patchAttributes,
+	peep,
+	PENDING,
+	place,
+	read,
+	readAttributes,
+	readEntries,
+	rename,
+	unplace,
+} from "@ermine/system"
+import { change, host, inspect, who } from "@ermine/slaygrounds/tools"
 import { bind, handler } from "ermine-h"
 
 // big-shell: a shell over the graph. it's a filesystem: ls, cd, cat, echo > a path, mkdir, mv
@@ -11,10 +32,10 @@ import { bind, handler } from "ermine-h"
 // public.plain-text, and /bin/sh takes that type, so sh runs it, handed its path as #! would be
 // (/bin offers its children to the search: it is a loaders folder). which hi says all of it,
 // and what was passed over and why. run starts a process from this
-// file's exports (ticker, lamp, bunny, mirror) at a place; rm or kill its place and it ends.
-// the shell's lines, cwd and history are nodes in /var/shell (its working folder, ./): edit this file
-// and nothing is lost. the shell starts the others, so it keeps their places (./procs) and starts
-// them again after a reload
+// file's exports (ticker, lamp, bunny, mirror) at a place; rm or kill its place and it ends:
+// none of that now, a program cannot start a program and the world has no way to start one by name
+// (run says so, and the windows are empty). the shell's lines, cwd and history are nodes in
+// /var/shell (its working folder, ./): edit this file and nothing is lost
 const LOOK = `
 [hidden] { display: none !important }
 body { margin: 0; background: #ffff88; font: 14px/1.35 Jost, system-ui, sans-serif; color: #000 }
@@ -92,7 +113,7 @@ const DOCS = {
 	tree: "tree [path]: everything under a place",
 	stat: "stat path: its id, its entries, its last change: who, when, from where",
 	watch: "watch path: a line that stays live",
-	run: "run program [path]: start a process (programs lists them)",
+	run: "run program [path]: would start a process (a program starts none now: it says so)",
 	ps: "the processes the shell started",
 	kill: "kill path: unplace a process: it ends",
 	programs: "what run can start",
@@ -114,73 +135,50 @@ const BLURBS = {
 	mirror: "shows whatever is at the path in its path node: echo /ticker/time > /mirror/path",
 }
 
-// what the host's extend adds to the api (host.ts says what each is for)
-type Item = { at: string[]; id: unknown; node: { path?: readonly string[]; part: string } }
-type Metadata = Record<string, unknown>
-type Host = API & {
-	attrs: (x: unknown, says?: Record<string, unknown>) => Record<string, any>
+// what the host's extend adds (host.ts says what each is for)
+type Item = { at: string[]; node: ReturnType<typeof ensureNode> }
+type Host = {
+	idOf: (address: string[]) => string | undefined
 	which: (name: string, from: string[]) => any
-	change: (
-		x: unknown,
-	) => { time: number; actor: string; metadata: Metadata; external?: any[] } | undefined
-	who: () => { actor: string; metadata: Metadata } | undefined
-	inspect: (address: string[]) => void
 }
+type Say = (k: string, t: unknown) => void
 
-export default function shell(
-	{
-		open,
-		read,
-		edit,
-		list,
-		entries,
-		info,
-		place,
-		unplace,
-		move,
-		remove,
-		memo,
-		method,
-		send,
-		start,
-		stop,
-		teardown,
-		PENDING,
-		attrs,
-		which,
-		change,
-		who,
-		inspect,
-	}: Host,
-) {
+// a node's value now, untracked: the actions and the commands they run read so (a pending node
+// throws PENDING, as read does)
+const got = (x: Parameters<typeof read>[0]): any => peep(() => read(x))
+
+export default function shell() {
+	const { idOf, which } = host<Host>()
 	const style = document.head.appendChild(document.createElement("style"))
 	style.textContent = LOOK
 	const font = document.head.appendChild(Object.assign(document.createElement("link"), {
 		rel: "stylesheet",
 		href: "https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600&display=swap",
 	}))
-	teardown(() => (style.remove(), font.remove()))
+	addTeardown(() => (style.remove(), font.remove()))
 
 	// the shell's state: saved in its working folder (/var/shell), so a reload finds it as it was
-	const put = (x: unknown, v: unknown) => edit(x as never, [{ path: [], value: v }])
-	const lines = open("./lines", [
+	const put = (x: Parameters<typeof patch>[0], v: unknown) => patch(x, [{ path: [], value: v }])
+	const lines = ensureNode("./lines", [
 		{ k: "head", t: "🐰 the ermine shell" },
 		{
 			k: "hint",
-			t: "every line here is in /var/shell/lines, every command in /bin. try: help, ls, tree /, run lamp",
+			t: "every line here is in /var/shell/lines, every command in /bin. try: help, ls, tree /, tab completes",
 		},
 	])
-	const cwd = open("./cwd", ["home"])
-	const history = open("./history", [])
-	// the processes the shell started: { name, at, ended? }, and the live ones by place
-	const procs = open("./procs", [])
-	const running = new Map<string, any>()
+	const cwd = ensureNode("./cwd", ["home"])
+	const history = ensureNode("./history", [])
+	// what the last tab found, for the input to show (an effect writes it there)
+	const completion = ensureNode("tabbed", { n: 0, text: "", options: [] as string[] })
+
+	// a node's id, its last six characters: the same one at two places says it is the same node
+	const src = (item: Item) => String(idOf(item.at) ?? "-").slice(-6)
 
 	// ---- paths: an address from the root, one node at each name
 	const show = (address: string[]) => "/" + address.join("/")
-	const pwd = () => show(read(cwd) as string[])
+	const pwd = () => show(got(cwd) as string[])
 	function abs(path: string) {
-		const out = path.startsWith("/") ? [] : [...(read(cwd) as string[])]
+		const out = path.startsWith("/") ? [] : [...(got(cwd) as string[])]
 		for (const s of path.split("/")) {
 			if (!s || s === ".") continue
 			if (s === "..") out.pop()
@@ -188,15 +186,13 @@ export default function shell(
 		}
 		return out
 	}
-	// the node at an address: its id, and a handle to read and write it by. none: undefined
+	// the node at an address: a handle to read and write it by. none: undefined
 	function resolve(address: string[]): Item | undefined {
-		const [e] = entries(show(address))
-		return e && e.id !== (PENDING as unknown) && !e.refused
-			? { at: address, id: e.id, node: open(show(address)) as Item["node"] }
-			: undefined
+		const [e] = peep(() => readEntries(show(address)))
+		return e && e.node && !e.refused ? { at: address, node: e.node } : undefined
 	}
-	const here = () => resolve(read(cwd) as string[]) ?? resolve([])!
-	const names = (item: Item) => list(item.node)
+	const here = () => resolve(got(cwd) as string[]) ?? resolve([])!
+	const names = (item: Item) => peep(() => list(item.node))
 	const under = (item: Item, name: string) => resolve([...item.at, name])
 	// a place to write: its parent is there, and it has a name
 	const slotOf = (address: string[]) =>
@@ -205,7 +201,7 @@ export default function shell(
 	function value(item: Item | undefined): any {
 		if (!item) return undefined
 		try {
-			return read(item.node) ?? undefined
+			return got(item.node) ?? undefined
 		} catch (e) {
 			if (e === PENDING) return undefined
 			throw e
@@ -213,30 +209,33 @@ export default function shell(
 	}
 	const pending = (item: Item) => {
 		try {
-			read(item.node)
+			got(item.node)
 			return false
 		} catch (e) {
 			if (e === PENDING) return true
 			throw e
 		}
 	}
-
-	// ---- processes: started here, at run time, from /code/<export>
-	function spawn(name: string, address: string[]) {
-		const p = start(`/code/${name}`, show(address), { args: [show(address)] })
-		if ("refused" in p) return p.refused
-		running.set(show(address), p)
+	// a node's attributes by ATTRIBUTES' words ({ type, takes, … }); with says, each one written first
+	// (echo shows the type of what it makes)
+	function attrs(
+		x: Item["node"] | string,
+		says?: Partial<Record<keyof typeof ATTRIBUTES, unknown>>,
+	) {
+		if (says !== undefined) {
+			for (const [word, v] of Object.entries(says)) {
+				const name = ATTRIBUTES[word as keyof typeof ATTRIBUTES]
+				if (name === undefined) throw new Error(`attrs: no attribute ${word}`)
+				patchAttributes(x, [{ path: [name], value: v }])
+			}
+		}
+		const out: Record<string, any> = {}
+		for (const [word, name] of Object.entries(ATTRIBUTES)) {
+			const v = peep(() => readAttributes(x, [name]))
+			if (v !== undefined) out[word] = v
+		}
+		return out
 	}
-	const ended = (address: string[]) => {
-		const was = running.get(show(address))
-		if (was) stop(was)
-		running.delete(show(address))
-		edit(procs, (d: any[]) => {
-			for (const p of d) if (show(p.at) === show(address)) p.ended = true
-		})
-	}
-	// a reload stopped what was started here: they start again, on the new code
-	for (const p of read(procs) as any[]) if (!p.ended && !resolve(p.at)) spawn(p.name, p.at)
 
 	// ---- the commands: functions in nodes under /bin, each given the words and a way to say
 	const fail = (text: string): never => {
@@ -287,13 +286,14 @@ export default function shell(
 			const item = resolve(address)
 			if (item && args[i] === ">>") {
 				const was = value(item)
-				if (Array.isArray(was)) edit(item.node, (d: unknown[]) => void d.push(v))
-				else put(item.node, `${was ?? ""}${text}`)
+				if (Array.isArray(was)) {
+					patch(item.node, [{ path: [], range: [was.length, was.length], value: [v] }])
+				} else put(item.node, `${was ?? ""}${text}`)
 			} else if (item) put(item.node, v)
 			else {
 				slotOf(address) ?? fail(`echo: no place ${show(address.slice(0, -1))}`)
 				// a new node says what it is: a text, or json (what parsed)
-				attrs(open(show(address), v), { type: typeof v === "string" ? TEXT : JSON_TYPE })
+				attrs(ensureNode(show(address), v), { type: typeof v === "string" ? TEXT : JSON_TYPE })
 			}
 			say("ok", `${show(address)} = ${preview(value(resolve(address)))}`)
 		},
@@ -301,16 +301,12 @@ export default function shell(
 			const address = abs(need(args[0]))
 			slotOf(address) ?? fail(`mkdir: no place ${show(address.slice(0, -1))}`)
 			if (resolve(address)) return say("err", `mkdir: ${show(address)} is there already`)
-			open(show(address), null)
+			ensureNode(show(address))
 			say("ok", `made ${show(address)}`)
 		},
 		rm(args, say) {
 			const address = abs(need(args[0]))
 			if (!resolve(address)) return say("err", `rm: nothing at ${show(address)}`)
-			if (running.has(show(address))) {
-				ended(address)
-				return say("ok", `${show(address)} was a process: it ends`)
-			}
 			unplace(show(address))
 			say("ok", `unplaced ${show(address)} (its node is still in the store, unreachable)`)
 		},
@@ -321,8 +317,9 @@ export default function shell(
 			const to = resolve(b) ? [...b, a[a.length - 1]] : b
 			if (!slotOf(to)) return say("err", `mv: no place ${show(b.slice(0, -1))}`)
 			if (resolve(to)) return say("err", `mv: ${show(to)} is there already`)
-			move(show(a), show(to))
-			say("ok", `moved ${show(a)} → ${show(b)}: the same node, ${src(item)}`)
+			const id = src(item)
+			rename(show(a), show(to))
+			say("ok", `moved ${show(a)} → ${show(b)}: the same node, ${id}`)
 		},
 		ln(args, say) {
 			const [a, b] = [abs(need(args[0])), abs(need(args[1], "target"))]
@@ -366,7 +363,7 @@ export default function shell(
 			const item = resolve(address)
 			if (!item) return say("err", `stat: nothing at ${show(address)}`)
 			say("head", show(address))
-			say("out", `  node     ${String(item.id)}`)
+			say("out", `  node     ${idOf(address) ?? "?"}`)
 			const c = change(item.node)
 			if (!c) return
 			say("out", `  changed  ${new Date(c.time * 1000).toLocaleTimeString()} by ${c.actor}`)
@@ -379,41 +376,28 @@ export default function shell(
 		watch(args, say) {
 			say("watch", show(abs(need(args[0]))))
 		},
+		// starting is not here: a program cannot start another, and the world has no way to start one
+		// by name (the host's start is its own, ermine.start, with a box and a render of its own)
 		run(args, say) {
 			const name = need(args[0], "program")
 			if (!(name in BLURBS)) return say("err", `run: no program ${name} (programs lists them)`)
-			const address = abs(args[1] ?? "/" + name)
-			slotOf(address) ?? fail(`run: no place ${show(address.slice(0, -1))}`)
-			if (resolve(address)) {
-				return say("err", `run: ${show(address)} is there already: run ${name} /${name}2`)
-			}
-			const refused = spawn(name, address)
-			if (refused) return say("err", `run: ${name} refused: ${refused}`)
-			edit(procs, (d: unknown[]) => void d.push({ name, at: address }))
-			say("ok", `started ${name} at ${show(address)}`)
+			say(
+				"err",
+				`run: ${name} cannot start: a program starts no program, and this world has none to start it`,
+			)
 		},
 		ps(args, say) {
 			say("head", "NAME      AT                STATE")
-			say("out", `shell     /shell            going`)
-			for (const { name, at, ended: gone } of read(procs) as any[]) {
-				say(
-					"out",
-					`${name.padEnd(10)}${show(at).padEnd(18)}${
-						!gone && resolve(at) ? "going" : "ended"
-					}`,
-				)
-			}
+			say("out", `shell     /var/shell/shell  going`)
 		},
 		kill(args, say) {
 			const address = abs(need(args[0]))
-			if (!running.has(show(address))) {
-				return say(
-					"err",
-					`kill: ${show(address)} is no process the shell started (rm unplaces anything)`,
-				)
-			}
-			ended(address)
-			say("ok", `stopped ${show(address)}: it ends`)
+			say(
+				"err",
+				`kill: ${
+					show(address)
+				} is no process the shell started (it starts none; rm unplaces anything)`,
+			)
 		},
 		programs(args, say) {
 			for (const [name, blurb] of Object.entries(BLURBS)) {
@@ -434,7 +418,7 @@ export default function shell(
 			}
 		},
 		history(args, say) {
-			;(read(history) as string[]).forEach((line, i) =>
+			;(got(history) as string[]).forEach((line, i) =>
 				say("out", `${String(i + 1).padStart(3)}  ${line}`)
 			)
 		},
@@ -463,14 +447,19 @@ export default function shell(
 			for (const w of found.why) say("hint", `  passed over ${passed(w, found)}`)
 		},
 	}
-	for (const [name, fn] of Object.entries(commands)) method(`/bin/${name}`, fn)
+	for (const [name, fn] of Object.entries(commands)) createAction(`/bin/${name}`, fn)
 	// /bin offers its children to the search for what runs a program (a loaders folder: from
 	// anywhere, /bin/sh is a candidate in /bin's place); sh takes a text
 	attrs("/bin", { loaders: true })
 	attrs("/bin/sh", { takes: [TEXT] })
 	// a command this file no longer has goes from /bin
-	for (const name of list("/bin")) {
-		if (!(name in commands) && typeof read(`/bin/${name}`) === "function") remove(`/bin/${name}`)
+	for (const name of peep(() => list("/bin"))) {
+		if (name in commands) continue
+		try {
+			if (typeof got(`/bin/${name}`) === "function") unplace(`/bin/${name}`)
+		} catch (e) {
+			if (e !== PENDING) throw e
+		}
 	}
 
 	// ---- what runs a command: which (satisfy) finds the program, from where you are, and every
@@ -552,7 +541,7 @@ export default function shell(
 			depth--
 		}
 	}
-	method("on/run", (line: string) => {
+	createAction("on/run", (line: string) => {
 		const out: { k: string; t: string }[] = []
 		const say = (k: string, text: unknown) => out.push({ k, t: String(text) })
 		const prompt = pwd()
@@ -563,49 +552,50 @@ export default function shell(
 			say("err", (e as Error).message)
 		}
 		if (line.trim()) {
-			edit(history, (d: string[]) => {
-				if (d[d.length - 1] !== line) d.push(line)
-				if (d.length > 60) d.shift()
-			})
+			const was = got(history) as string[]
+			const next = was[was.length - 1] !== line ? [...was, line] : was
+			put(history, next.length > 60 ? next.slice(next.length - 60) : next)
 		}
 		if (cleared) return put(lines, [])
-		edit(lines, (d: unknown[]) => {
-			d.push({ k: "in", t: line, at: prompt }, ...out)
-			if (d.length > 500) d.splice(0, d.length - 500)
+		const all = [...(got(lines) as unknown[]), { k: "in", t: line, at: prompt }, ...out]
+		put(lines, all.length > 500 ? all.slice(all.length - 500) : all)
+	})
+	// tab: a command or a name completed from where the shell is (the nodes cannot be read as the key
+	// is read, so the key calls this and the completion is written for the input to show)
+	createAction("on/tab", (text: string) => {
+		const words = text.split(" ")
+		const word = words[words.length - 1]
+		let options: string[]
+		if (words.length === 1) {
+			options = peep(() => list("/bin")).filter((n) => n.startsWith(word))
+		} else {
+			const cut = word.lastIndexOf("/") + 1
+			const dir = word.slice(0, cut)
+			const item = dir ? resolve(abs(dir)) : here()
+			options = item
+				? names(item).filter((n) => n.startsWith(word.slice(cut))).map((n) => dir + n)
+				: []
+		}
+		if (!options.length) return
+		let common = options[0]
+		for (const o of options) while (!o.startsWith(common)) common = common.slice(0, -1)
+		words[words.length - 1] = options.length === 1
+			? common + (words.length === 1 ? " " : "")
+			: common
+		put(completion, {
+			n: (got(completion) as { n: number }).n + 1,
+			text: words.join(" "),
+			options: options.length > 1 ? options : [],
 		})
 	})
 	// another process's word for the shell's lines (an ended process says so)
-	method(
+	createAction(
 		"on/print",
-		(text: string) => edit(lines, (d: unknown[]) => void d.push({ k: "hint", t: text })),
+		(text: string) => put(lines, [...(got(lines) as unknown[]), { k: "hint", t: text }]),
 	)
 
-	// ---- the view: jsx bound to the shell's nodes (cwd, lines, the windows); the input's typing
-	// (history, completion) is the shell's own, and enter calls run
-	// the windows: one per process started that is still placed
-	memo(
-		"windows",
-		() =>
-			(read(procs) as any[]).filter((p) => !p.ended && resolve(p.at)).map((p) => ({
-				name: p.name,
-				path: show(p.at),
-			})),
-	)
-	const win = (w: { name: string; path: string }) => (
-		<div class="win" key={w.path}>
-			<div class="bar">
-				<button title="kill" onClick={handler("on/run", [`kill ${w.path}`])} />
-				<b>
-					{w.name}
-					<small>{w.path}</small>
-				</b>
-			</div>
-			{/* its view is its node's value: the process's own box */}
-			<div class="body">
-				{bind(w.path, (v) => (v instanceof Node ? v : <i>(no view)</i>))}
-			</div>
-		</div>
-	)
+	// ---- the view: jsx bound to the shell's nodes (cwd, lines); the input's typing (history,
+	// completion) is the shell's own, and a key calls run or tab
 
 	// a line of the shell's lines. a watch line is bound to the path it watches: live, as a binding
 	const draw = (line: any) =>
@@ -644,45 +634,41 @@ export default function shell(
 		})
 	}
 
-	// typing: enter runs, up and down walk the history, tab completes a command or a name
+	// typing: enter runs, up and down walk the history, tab completes a command or a name. nothing
+	// is open as a key is read, so no node is: the history is a copy an effect keeps, and enter and
+	// tab each call an action (on/key: name, ...args) that reads what it needs
 	let input: HTMLInputElement
 	let complete: HTMLElement
 	let back = 0
-	const keys = (e: KeyboardEvent) => {
+	let seen: string[] = []
+	createEffect("history", () => read(history) as string[], (h) => void (seen = h))
+	createAction(
+		"on/key",
+		(name: string, ...args: unknown[]) => executeAction(`on/${name}`, ...args),
+	)
+	createEffect(
+		"completion",
+		() => read(completion) as { n: number; text: string; options: string[] },
+		(c) => {
+			if (!c.n) return
+			input.value = c.text
+			complete.textContent = c.options.join("   ")
+		},
+	)
+	const keys = (e: KeyboardEvent): unknown[] | undefined => {
 		if (e.key === "Enter") {
 			const line = input.value
 			input.value = ""
 			back = 0
 			complete.textContent = ""
-			return [line]
+			return ["run", line]
 		} else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
 			e.preventDefault()
-			const h = read(history) as string[]
-			back = Math.max(0, Math.min(h.length, back + (e.key === "ArrowUp" ? 1 : -1)))
-			input.value = back ? h[h.length - back] : ""
+			back = Math.max(0, Math.min(seen.length, back + (e.key === "ArrowUp" ? 1 : -1)))
+			input.value = back ? seen[seen.length - back] : ""
 		} else if (e.key === "Tab") {
 			e.preventDefault()
-			const words = input.value.split(" ")
-			const word = words[words.length - 1]
-			let options: string[]
-			if (words.length === 1) {
-				options = list("/bin").filter((n) => n.startsWith(word))
-			} else {
-				const cut = word.lastIndexOf("/") + 1
-				const dir = word.slice(0, cut)
-				const item = dir ? resolve(abs(dir)) : here()
-				options = item
-					? names(item).filter((n) => n.startsWith(word.slice(cut))).map((n) => dir + n)
-					: []
-			}
-			if (!options.length) return
-			let common = options[0]
-			for (const o of options) while (!o.startsWith(common)) common = common.slice(0, -1)
-			words[words.length - 1] = options.length === 1
-				? common + (words.length === 1 ? " " : "")
-				: common
-			input.value = words.join(" ")
-			complete.textContent = options.length > 1 ? options.join("   ") : ""
+			return ["tab", input.value]
 		}
 	}
 	// a click anywhere that is not a button, a window or the lines: the input has the keys
@@ -712,77 +698,79 @@ export default function shell(
 						spellcheck={false}
 						autocomplete="off"
 						ref={(e) => (input = e)}
-						onKeyDown={handler("on/run", keys)}
+						onKeyDown={handler("on/key", keys)}
 					/>
 				</label>
 				<div class="complete" ref={(e) => (complete = e as HTMLElement)} />
 			</section>
 			<section class="screen">
-				{bind("windows", (ws: { name: string; path: string }[]) =>
-					ws.length ? ws.map(win) : (
-						<div class="empty">
-							processes you start show here. try <code>run lamp</code>,{" "}
-							<code>run bunny</code>, <code>run ticker</code>, then <code>run mirror</code>
-							{" "}
-							and <code>echo /ticker/time &gt; /mirror/path</code>
-						</div>
-					))}
+				<div class="empty">
+					processes started here would show in this panel: none can start now (a program starts
+					no program, and the world has no way to start one by name), so <code>run</code>{" "}
+					says so
+				</div>
 			</section>
 		</div>
 	)
 }
 
-// ---- the programs `run` can start: each is given the api and its own place (args[0]) ----
+// ---- the programs `run` would start: each is given its own place (getArgs()[0]). a timer cannot
+// call into the graph, so the ones that move count the host's beat (/beat, every 320ms) ----
 
 // a process saying something in the shell: when it ends, not when it is replaced
-const print = (send: API["send"], text: string) => {
+const print = (text: string) => {
 	try {
-		send("/shell/on/print", text)
-	} catch { /* the shell is gone too */ }
+		executeAction("/var/shell/shell/on/print", text)
+	} catch { /* the shell is gone too, or nothing is open as a process ends */ }
 }
 
-// counts seconds into its time node
-export function ticker({ open, edit, method, send, teardown, args }: API) {
-	const time = open("time", 0)
-	method("on/tick", () => edit(time, (n: number) => n + 1))
-	const every = setInterval(() => send("on/tick"), 1000)
-	teardown((why) => {
-		clearInterval(every)
-		if (why === "ended") print(send, `${args[0]} ended: its timer stopped`)
+// counts seconds into its time node: every third beat
+export function ticker() {
+	const [at] = getArgs()
+	const time = ensureNode("time", 0)
+	createAction("on/tick", () => patch(time, [{ path: [], value: (got(time) as number) + 1 }]))
+	createEffect("beat", () => read("/beat"), (beat, was) => {
+		if (was !== undefined && (beat as number) % 3 === 0) executeAction("on/tick")
+	})
+	addTeardown((why) => {
+		if (why === "ended") print(`${at} ended: its timer stopped`)
 	})
 	return <div class="ticker">{bind("time", (v) => String(v).padStart(4, "0"))}</div>
 }
 
 // a lamp: click it, or write true to its on node from anywhere
-export function lamp({ open, edit, method, send, teardown, args }: API) {
-	const on = open("on", false)
-	method("do/toggle", () => edit(on, (v: boolean) => !v))
-	teardown((why) => why === "ended" && print(send, `${args[0]} ended: the lamp is out`))
+export function lamp() {
+	const [at] = getArgs()
+	const on = ensureNode("on", false)
+	createAction("do/toggle", () => patch(on, [{ path: [], value: !got(on) }]))
+	addTeardown((why) => why === "ended" && print(`${at} ended: the lamp is out`))
 	const lit = (v: unknown) => v === true
 	return (
 		<div class={bind("on", (v) => (lit(v) ? "lamp on" : "lamp"))} onClick={handler("do/toggle")}>
 			<div class="bulb" />
 			<span class="say">
-				{args[0]}/on = {bind("on", (v) =>
+				{at}/on = {bind("on", (v) =>
 					String(lit(v)))}
 			</span>
 		</div>
 	)
 }
 
-// hops toward the carrot, a few steps a second
-export function bunny({ open, read, edit, method, send, effect, teardown }: API) {
-	const x = open("x", 10)
-	const carrot = open("carrot", 80)
-	method("on/hop", () => {
-		const [at, goal] = [read(x) as number, Number(read(carrot)) || 0]
+// hops toward the carrot, a step at each beat
+export function bunny() {
+	const x = ensureNode("x", 10)
+	const carrot = ensureNode("carrot", 80)
+	createAction("on/hop", () => {
+		const [at, goal] = [got(x) as number, Number(got(carrot)) || 0]
 		if (Math.abs(goal - at) > 1) {
-			edit(x, () => at + Math.sign(goal - at) * Math.min(7, Math.abs(goal - at)))
+			put(x, at + Math.sign(goal - at) * Math.min(7, Math.abs(goal - at)))
 		}
 	})
-	method("on/carrot", (to: number) => edit(carrot, () => to))
-	const every = setInterval(() => send("on/hop"), 320)
-	teardown(() => clearInterval(every))
+	createAction("on/carrot", (to: number) => put(carrot, to))
+	createEffect("beat", () => read("/beat"), (_beat, was) => {
+		if (was !== undefined) executeAction("on/hop")
+	})
+	const put = (n: ReturnType<typeof ensureNode>, v: unknown) => patch(n, [{ path: [], value: v }])
 	const left = (v: unknown) => `left: ${Math.max(4, Math.min(96, Number(v) || 0))}%`
 	// a click on the field: the carrot goes where it was
 	const where = (e: MouseEvent) => {
@@ -791,7 +779,7 @@ export function bunny({ open, read, edit, method, send, effect, teardown }: API)
 	}
 	// a hop: which way it faces and the little jump are the hop's, not a node's
 	let b: HTMLElement | undefined
-	effect("hop", () => read(x) as number, (v, was) => {
+	createEffect("hop", () => read(x) as number, (v, was) => {
 		if (!b) return
 		const it = b
 		it.classList.toggle("left", was !== undefined && v < was)
@@ -807,11 +795,11 @@ export function bunny({ open, read, edit, method, send, effect, teardown }: API)
 }
 
 // shows what is at the path its path node holds: change the path and it reads somewhere else
-export function mirror({ open, read, entries, memo }: API) {
-	const path = open("path", "/home/readme")
-	memo("seen", () => {
+export function mirror() {
+	const path = ensureNode("path", "/home/readme")
+	createMemo("seen", () => {
 		const at = "/" + String(read(path)).split("/").filter(Boolean).join("/")
-		return entries(at).length ? pretty(read(at)) : "(nothing there)"
+		return readEntries(at).length ? pretty(read(at)) : "(nothing there)"
 	})
 	return (
 		<div class="mirror">
@@ -822,7 +810,6 @@ export function mirror({ open, read, entries, memo }: API) {
 }
 
 // ---- little words ----
-const src = (item) => String(item.id).slice(0, 8)
 function parse(text) {
 	try {
 		return JSON.parse(text)

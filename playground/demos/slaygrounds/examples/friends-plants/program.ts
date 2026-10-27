@@ -1,6 +1,15 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
-import type { Tools } from "./host.ts"
+import {
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	executeAction,
+	patch,
+	peep,
+	read,
+} from "@ermine/system"
+import { change, who } from "@ermine/slaygrounds/tools"
 import { bind, handler } from "ermine-h"
 
 // friends-plants: the windowsill rota. a day goes by every couple of seconds (the clock, a process
@@ -100,31 +109,36 @@ body { background: #ffff88; margin: 10px }
 @keyframes drip { from { opacity: 1; transform: translate(-50%, -20px) } to { opacity: 0; transform: translate(-50%, 40px) } }
 `
 
-export default function sill(
-	{ open, read, edit, memo, method, send, who, change }: API & Tools,
-) {
-	const day = open("./day", 1)
-	const away = open("./away", [] as string[])
-	const level = {} as Record<Name, ReturnType<typeof open>>
-	const poured = {} as Record<Name, ReturnType<typeof open>>
+// a node's value now, from an action or an act (nothing tracked)
+const get = <T,>(x: Parameters<typeof read>[0]) => peep(() => read(x)) as T
+const put = (x: Parameters<typeof read>[0], value: unknown) => patch(x, [{ path: [], value }])
+
+export default function sill() {
+	const day = ensureNode("./day", 1)
+	const away = ensureNode("./away", [] as string[])
+	const level = {} as Record<Name, ReturnType<typeof ensureNode>>
+	const poured = {} as Record<Name, ReturnType<typeof ensureNode>>
 	for (const name of NAMES) {
-		level[name] = open(
+		level[name] = ensureNode(
 			`./plants/${name}/level`,
 			{ level: PLANTS[name].start, dry: 0 } satisfies Plant,
 		)
-		poured[name] = open(`./plants/${name}/poured`, null) // the day it was last watered
+		poured[name] = ensureNode(`./plants/${name}/poured`, null) // the day it was last watered
 	}
 
-	memo("duty", () => ROTA[(read(day) as number) % ROTA.length])
-	// who watered each plant last: the caller on poured's latest change (the days never write it)
-	memo("who", () => {
+	createMemo("duty", () => ROTA[(read(day) as number) % ROTA.length])
+
+	// who watered each plant last: the caller on poured's latest change (the days never write it).
+	// the caller "sill" is a click on a pot: the change does not say "trusted-event" (a write made
+	// inside an action does not carry it), and the pots are all the sill has that calls on/water
+	createMemo("who", () => {
 		const out: Record<string, Poured> = {}
 		for (const name of NAMES) {
 			const when = (read(poured[name]) as Pour | null)?.day ?? null
 			const by = who(change(`./plants/${name}/poured`))
 			out[name] = when === null ? null : {
 				day: when,
-				by: by.caller === "sill" ? (by["trusted-event"] ? "you" : "a script") : by.caller,
+				by: by.caller === "sill" ? "you" : by.caller,
 			}
 		}
 		return out
@@ -132,31 +146,30 @@ export default function sill(
 
 	// a new day: every plant drinks, a puddle dries a bit. whoever's turn it is notices (the fox and
 	// the frog read the duty memo)
-	method("on/day", () => {
-		edit(day, (d: number) => d + 1)
+	createAction("on/day", () => {
+		put(day, get<number>(day) + 1)
 		for (const name of NAMES) {
-			const v = read(level[name]) as Plant
+			const v = get<Plant>(level[name])
 			const p = PLANTS[name]
 			const drink = p.drinks + (v.level > p.hi ? 2 : 0)
 			const left = Math.max(0, Math.round((v.level - drink) * 10) / 10)
-			edit(level[name], (x: Plant) => {
-				x.level = left
-				x.dry = left === 0 ? v.dry + 1 : 0
-			})
+			patch(level[name], [
+				{ path: ["level"], value: left },
+				{ path: ["dry"], value: left === 0 ? v.dry + 1 : 0 },
+			])
 		}
 	})
-	method("on/water", (name: Name) => {
-		edit(level[name], (x: Plant) => {
-			x.level += POUR
-			x.dry = 0
-		})
-		edit(poured[name], () => ({ day: read(day), at: Date.now() }) satisfies Pour)
+	createAction("on/water", (name: Name) => {
+		const v = get<Plant>(level[name])
+		patch(level[name], [
+			{ path: ["level"], value: v.level + POUR },
+			{ path: ["dry"], value: 0 },
+		])
+		put(poured[name], { day: get<number>(day), at: Date.now() } satisfies Pour)
 	})
-	method("on/holiday", (mate: string) => {
-		edit(away, (list: string[]) => {
-			const i = list.indexOf(mate)
-			i < 0 ? list.push(mate) : void list.splice(i, 1)
-		})
+	createAction("on/holiday", (mate: string) => {
+		const list = get<string[]>(away)
+		put(away, list.includes(mate) ? list.filter((m) => m !== mate) : [...list, mate])
 	})
 
 	return (
@@ -254,48 +267,57 @@ export default function sill(
 	)
 }
 
-// the clock: a day every DAY ms, from a timer of its own (a reload starts it again)
-export function clock({ open, read, edit, method, send, teardown }: API) {
-	const running = open("./running", true)
-	method("on/toggle", () => edit(running, (r: boolean) => !r))
-	const every = setInterval(() => {
-		if (read(running)) send("/sill/on/day")
-	}, DAY)
-	teardown(() => clearInterval(every))
+// the clock: a day every DAY ms. a timer can write nothing (nothing is open after it), so the
+// beat is the browser's: an element in the clock's own view whose css animation runs one cycle
+// a day, and each cycle's animationiteration event calls on/beat through a handler. a pause
+// holds the animation (running is the clock's own node)
+export function clock() {
+	const running = ensureNode("./running", true)
+	createAction("on/toggle", () => put(running, !get<boolean>(running)))
+	createAction("on/beat", () => executeAction("/sill/on/day"))
+	return (
+		<div class="beat-box">
+			<style>
+				{`@keyframes beat { to { opacity: 0 } }
+.beat { position: fixed; width: 0; height: 0; opacity: 1; pointer-events: none; animation: beat ${DAY}ms linear infinite }`}
+			</style>
+			<i
+				class="beat"
+				style={bind("running", (r) => `animation-play-state:${r ? "running" : "paused"}`)}
+				onAnimationIteration={handler("on/beat")}
+			/>
+		</div>
+	)
 }
 
 // a housemate on duty: told by the duty memo, not knocked on. the first duty seen is the one it
 // woke to (a reload does not water again), and a day on holiday is skipped
-function onduty(
-	me: string,
-	{ read, effect }: Pick<API, "read" | "effect">,
-	morning: () => void,
-) {
+function onduty(me: string, morning: () => void) {
 	let seen: unknown
-	effect("turn", () => read("/sill/duty"), (duty) => {
+	createEffect("turn", () => read("/sill/duty"), (duty) => {
 		const first = seen === undefined
 		seen = duty
 		if (first || duty !== me) return
-		if ((read("/away") as string[]).includes(me)) return
+		if (get<string[]>("/away").includes(me)) return
 		morning()
 	})
 }
 
 // the fox: careful. waters what is thirsty, and leaves the cactus alone
-export function fox(api: API) {
-	onduty("fox", api, () => {
+export function fox() {
+	onduty("fox", () => {
 		for (const name of NAMES) {
 			if (name === "cactus") continue
-			const v = api.read(`/plants/${name}/level`) as Plant
-			if (v.level < PLANTS[name].lo + 2) api.send("/sill/on/water", name)
+			const v = get<Plant>(`/plants/${name}/level`)
+			if (v.level < PLANTS[name].lo + 2) executeAction("/sill/on/water", name)
 		}
 	})
 }
 
 // the frog: loves water. waters whatever looks driest, which is always the cactus. twice
-export function frog(api: API) {
-	onduty("frog", api, () => {
-		api.send("/sill/on/water", "cactus")
-		api.send("/sill/on/water", "cactus")
+export function frog() {
+	onduty("frog", () => {
+		executeAction("/sill/on/water", "cactus")
+		executeAction("/sill/on/water", "cactus")
 	})
 }

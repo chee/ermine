@@ -1,5 +1,18 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import {
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	hasNode,
+	list,
+	patch,
+	peep,
+	place,
+	read,
+	unplace,
+} from "@ermine/system"
+import { up } from "@ermine/slaygrounds/tools"
 import { bind, handler, type Item, under } from "ermine-h"
 
 // program.ts: lamps. a house is a tree of nodes: rooms hold rooms, lamps (lampN) and maybe a
@@ -59,44 +72,44 @@ const HOUSE: Def = {
 	],
 }
 
-export default function program(
-	{ open, read, edit, remove, list, entries, place, unplace, method, memo, effect }: API,
-) {
-	// the house, the first time: open makes only what is not there after a reload
+export default function program() {
+	// the house, the first time: ensureNode makes only what is not there after a reload
 	const abs = (where: string[], ...more: string[]) => "/" + [...where, ...more].join("/")
 	const build = (at: string[], d: Def) => {
 		const room = [...at, d.name]
-		open(abs(room), null)
-		if (d.power) open(abs(room, "power"), d.power)
-		d.lamps?.forEach((c, i) => open(abs(room, "lamp" + (i + 1)), c))
+		ensureNode(abs(room), null)
+		if (d.power) ensureNode(abs(room, "power"), d.power)
+		d.lamps?.forEach((c, i) => ensureNode(abs(room, "lamp" + (i + 1)), c))
 		d.rooms?.forEach((r) => build(room, r))
 	}
 	build([], HOUSE)
 
-	// ---- methods: a click on a chip, the mirror ----
-	method("on/toggle", (where: string[], colour: string) => {
+	// ---- actions: a click on a chip, the mirror ----
+	createAction("on/toggle", (where: string[], colour: string) => {
 		const power = abs(where, "power")
-		const have = read(power) as string[] | undefined
-		if (have === undefined) return void open(power, [colour])
-		edit(power, (d: string[]) => {
-			const i = d.indexOf(colour)
-			i < 0 ? d.push(colour) : void d.splice(i, 1)
-		})
+		if (!hasNode(power)) return void ensureNode(power, [colour])
+		const have = peep(() => read(power)) as string[]
+		patch(power, [{
+			path: [],
+			value: have.includes(colour) ? have.filter((c) => c !== colour) : [...have, colour],
+		}])
 	})
 	// take the room's own power out: what is above it lights it again
-	method("on/inherit", (where: string[]) => {
-		if (read(abs(where, "power")) !== undefined) remove(abs(where, "power"))
+	createAction("on/inherit", (where: string[]) => {
+		if (hasNode(abs(where, "power"))) unplace(abs(where, "power"))
 	})
-	method("on/mirror", () => {
-		if (list("/house/attic").includes("nursery")) return unplace("/house/attic/nursery")
+	createAction("on/mirror", () => {
+		if (peep(() => list("/house/attic")).includes("nursery")) {
+			return unplace("/house/attic/nursery")
+		}
 		place("/house/attic/nursery", "/house/stairs/nursery")
 	})
 
 	// ---- what the bar says: two memos, each a node the view is bound to ----
 	const isLamp = (name: string | undefined) => /^lamp\d+$/.test(name ?? "")
 	const isRoom = (name: string | undefined) => name !== "power" && !isLamp(name)
-	memo("mirrored", () => list("/house/attic").includes("nursery"))
-	memo("standing", () => {
+	createMemo("mirrored", () => list("/house/attic").includes("nursery"))
+	createMemo("standing", () => {
 		let n = 0
 		const count = (room: string[]) => {
 			for (const k of list(abs(room))) isLamp(k) ? n++ : isRoom(k) && count([...room, k])
@@ -105,33 +118,38 @@ export default function program(
 		return n
 	})
 
-	// the first place a room stands, walking the house in order: a room met at another place is
-	// the mirror, drawn blue
-	const home = (id: unknown) => {
-		const walk = (room: string[]): string | undefined => {
-			if (entries(abs(room))[0]?.id === id) return room.join("/")
-			for (const k of list(abs(room))) {
-				const found = isRoom(k) ? walk([...room, k]) : undefined
-				if (found) return found
+	// the rooms that are a mirror: walking the house in order, a room whose node was met at an
+	// earlier place stands here a second time (drawn blue). the node at a place is up's `found`
+	createMemo("mirrors", () => {
+		const seen = new Set<string>()
+		const out: Record<string, true> = {}
+		const walk = (room: string[]) => {
+			const id = up(room, [])?.found
+			if (id !== undefined) {
+				if (seen.has(id)) out[room.join("/")] = true
+				seen.add(id)
 			}
+			for (const k of list(abs(room))) if (isRoom(k)) walk([...room, k])
 		}
-		return walk(["house"])
-	}
+		walk(["house"])
+		return out
+	})
 
-	// the nearest power going up from where a lamp stands: its room's, else the room above's...
+	// the nearest power going up from where a lamp stands: its room's, else the room above's... the
+	// root left out. up is the walk, tracked at each room on the way
 	const nearest = (where: string[]) => {
-		for (let i = where.length - 1; i >= 1; i--) {
-			const up = where.slice(0, i)
-			const have = read(abs(up, "power")) as string[] | undefined
-			if (have !== undefined) return { list: have, from: up.join("/") }
+		const found = up(["power"], where.slice(0, -1), { stop: 1 })
+		if (found === undefined) return { list: [] as string[], from: "nothing" }
+		return {
+			list: read(abs(found.path)) as string[],
+			from: found.path.slice(0, -1).join("/"),
 		}
-		return { list: [] as string[], from: "nothing" }
 	}
 
 	// a lamp: its colour is bound; lit is one tracked walk up from where it stands, so its own
 	// effect draws it, made as the element is (ref)
 	const light = (el: Element, where: string[]) =>
-		effect(`lit-${where.join("-")}`, () => {
+		createEffect(`lit-${where.join("-")}`, () => {
 			const colour = read(abs(where)) as string
 			const up = nearest(where)
 			return { lit: up.list.includes(colour), from: up.from }
@@ -156,14 +174,13 @@ export default function program(
 		const power = abs(where, "power")
 		return (
 			<div
-				class={bind(
-					"mirrored",
-					() => home(entries(abs(where))[0]?.id) === where.join("/") ? "room" : "room mirror",
-				)}
+				class={bind("mirrors", (m: Record<string, true>) =>
+					m[where.join("/")] ? "room mirror" : "room")}
 			>
 				<div
 					class="row"
-					data-own={bind(power, () => true)}
+					data-own={bind(power, () =>
+						true)}
 				>
 					<span class="name">{where.at(-1)}</span>
 					{Object.keys(COLOUR).map((c) => (

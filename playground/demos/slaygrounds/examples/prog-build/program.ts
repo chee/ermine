@@ -1,5 +1,15 @@
+import {
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	list,
+	patch,
+	read,
+} from "@ermine/system"
+import { host } from "@ermine/slaygrounds/tools"
 import { bind, h, handler } from "ermine-h"
-import type { Tools } from "./host.ts"
+import type { Extra } from "./host.ts"
 
 // program.ts has two things. files is the disk: each entry is a node in the graph at its path,
 // code its value, the rest its attributes. a reload writes only the entries that changed since the
@@ -15,10 +25,11 @@ import type { Tools } from "./host.ts"
 // loaders (js, wasm, and cc: clang on this machine) and the keys (print, secret) are not files:
 // they are live, so the host makes them (host.ts). a process runs in a folder of its own, its box:
 // a key it is given is a node placed there (keys/print), and it sees nothing else. a program that
-// uses another has that one's exports placed at /uses/<name>
+// uses another has that one's exports placed at /uses/<name>. a program is given nothing: it
+// imports @ermine/system
 //
 // shell is the view of all this, a process like any other: it reads the graph and asks for
-// everything by sending to the host's methods. edit a file and watch the build log: a comment
+// everything by running the host's actions. edit a file and watch the build log: a comment
 // change in fib.c is compiled (a miss), comes out the same bytes (a cutoff), and nothing after it
 // runs again; change it back and it is a hit
 export const files = {
@@ -54,12 +65,13 @@ int main(void) {
 	"apps/table.js": {
 		type: "com.netscape.javascript-source",
 		code: `// table.js: hot. /uses/fib is a placement in its box: fib's exports. when fib.c runs
-// again this is started again, on the new ones. it is given the api, nothing else
-export default ({ read, open, edit }) => {
+// again this is started again, on the new ones. it is given nothing: it imports what it uses
+import { ensureNode, patch, read } from "@ermine/system"
+export default () => {
 	const { fib } = read("/uses/fib")
 	const rows = []
 	for (let n = 10; n < 15; n++) rows.push("fib(" + n + ") = " + fib(n))
-	edit(open("shown", []), [{ path: [], value: rows }])
+	patch(ensureNode("shown", []), [{ path: [], value: rows }])
 	return rows.length + " rows"
 }
 `,
@@ -68,34 +80,40 @@ export default ({ read, open, edit }) => {
 		type: "com.netscape.javascript-source",
 		code: `// chart.js: pinned, so it keeps the run it has. edit fib.c and it says it runs with a
 // fib it would not get next time, until you pick up
-export default ({ read, open, edit }) => {
+import { ensureNode, patch, read } from "@ermine/system"
+export default () => {
 	const { fib } = read("/uses/fib")
 	const bars = []
 	for (let n = 1; n < 9; n++) bars.push(n + " " + "▮".repeat(fib(n)))
-	edit(open("shown", []), [{ path: [], value: bars }])
+	patch(ensureNode("shown", []), [{ path: [], value: bars }])
 }
 `,
 	},
 	"apps/sneaky.js": {
 		type: "com.netscape.javascript-source",
 		code: `// sneaky.js: reaches for what it was not handed. javascript here shares the iframe's
-// globals, so for javascript the box is a convention: it is given a folder, it can reach more
-export default ({ list, open, edit }) => {
+// globals, so for javascript the box is a convention: it is given a folder, it can reach more.
+// the fetch is a promise a memo returns: it is pending while it is out, and shown is a memo of it
+import { createMemo, list, PENDING, read } from "@ermine/system"
+export default () => {
 	const keys = list("/keys")
 	const lines = ["handed: " + keys.join(", ")]
 	lines.push("/keys/secret: " + (keys.includes("secret") ? "handed" : "not handed (not in my box)"))
 	lines.push("globalThis.ermine: " + (globalThis.ermine ? "REACHED: the store, every key" : "no"))
-	const shown = open("shown", [])
-	edit(shown, [{ path: [], value: lines }])
-	fetch(new URL("compile", parent.__base ?? parent.location.origin + "/"), {
-		method: "POST",
-		body: "int f(void) { return 1; }",
-	}).then((r) =>
-		edit(shown, [{
-			path: [],
-			value: [...lines, "fetch('/compile'): REACHED, the server answered " + r.status],
-		}])
+	createMemo("fetched", () =>
+		fetch(new URL("compile", parent.__base ?? parent.location.origin + "/"), {
+			method: "POST",
+			body: "int f(void) { return 1; }",
+		}).then((r) => r.status)
 	)
+	createMemo("shown", () => {
+		try {
+			return [...lines, "fetch('/compile'): REACHED, the server answered " + read("fetched")]
+		} catch (e) {
+			if (e === PENDING) return lines
+			throw e
+		}
+	})
 	return "reached past its folder"
 }
 `,
@@ -112,33 +130,27 @@ const sameJSON = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringif
 const short = (x: unknown) => (typeof x === "string" ? x.slice(0, 6) : "none")
 const nick = (uti: string) => (typeof uti === "string" ? uti.split(".").pop() : "?")
 
-export function shell({ open, read, edit, list, memo, effect, method, plan, programs }: Tools) {
+export function shell() {
+	const { plan, programs, write } = host<Extra>()
 	// the picked program: a ./ node, so a reload keeps it
-	const selected = open("./selected", "/c/fib.c")
-	method("on/select", (path: string) => edit(selected, [{ path: [], value: path }]))
+	const selected = ensureNode("./selected", "/c/fib.c")
+	createAction("on/select", (path: string) => patch(selected, [{ path: [], value: path }]))
 
 	// what the view shows, as nodes inside the shell: each a memo, each bound below
-	memo("programs", () => ({
+	createMemo("programs", () => ({
 		list: programs(),
 		selected: read(selected),
 		running: ((read("/state/procs") ?? []) as { path: string }[]).map((p) => p.path),
 	}), { equal: sameJSON })
-	memo("plan", () => plan(read(selected) as string), { equal: sameJSON })
-	memo("cache", () => list("/cache").length)
+	createMemo("plan", () => plan(read(selected) as string), { equal: sameJSON })
+	createMemo("cache", () => list("/cache").length)
 
 	// the code: a textarea the shell drives itself. it follows the picked node's value, but not
 	// while it is being typed in (a binding would put back an older value over the newest keys);
-	// what is typed is written a moment after the last key, by the timer, as the shell
+	// what is typed is written a moment after the last key, by the host (a timer has nothing open)
 	let code: HTMLTextAreaElement | undefined
-	let timer: ReturnType<typeof setTimeout>
-	const typed = () => {
-		clearTimeout(timer)
-		const path = code!.dataset.path!
-		timer = setTimeout(() => {
-			if (read(path) !== code!.value) edit(path, [{ path: [], value: code!.value }])
-		}, 350)
-	}
-	effect("editor", () => {
+	const typed = () => write(code!.dataset.path!, code!.value)
+	createEffect("editor", () => {
 		const path = read(selected) as string
 		return { path, code: read(path) }
 	}, (v) => {
