@@ -145,8 +145,8 @@ static int moved(sq *s, const sq_patch *p) {
 		size_t depth = p->depth + f.depth - p->move_depth;
 		sq_key *k = malloc(depth * sizeof *k);
 		if (!k) abort();
-		memcpy(k, p->path, p->depth * sizeof *k);
-		memcpy(k + p->depth, f.keys + p->move_depth, (f.depth - p->move_depth) * sizeof *k);
+		if (p->depth) memcpy(k, p->path, p->depth * sizeof *k);
+		if (f.depth > p->move_depth) memcpy(k + p->depth, f.keys + p->move_depth, (f.depth - p->move_depth) * sizeof *k);
 		foul(s, k, depth, k);
 	}
 	return 0;
@@ -184,9 +184,9 @@ static int splice(sq *s, size_t i, size_t x, size_t y, const sq_value *w) {
 	size_t cap = size * 2 ? size * 2 : 1;
 	unsigned char *p = malloc(cap);
 	if (!p) abort();
-	memcpy(p, v->data, bx);
+	if (bx) memcpy(p, v->data, bx);
 	if (wsize) memcpy(p + bx, w->data, wsize);
-	memcpy(p + bx + wsize, (const unsigned char *)v->data + by, v->size - by);
+	if (v->size > by) memcpy(p + bx + wsize, (const unsigned char *)v->data + by, v->size - by);
 	*o = (own){p, cap};
 	v->data = p, v->size = size, v->n = n;
 	return 1;
