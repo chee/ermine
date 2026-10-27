@@ -228,3 +228,11 @@ export const reload = (mod: Record<string, unknown>) => {
 	})
 	world.reload(mod)
 }
+<<<<<<< Updated upstream
+=======
+
+let beats = 0
+setInterval(() => {
+	world.ermine.patch("/beat", [{ path: [], value: ++beats }])
+}, 50)
+>>>>>>> Stashed changes
