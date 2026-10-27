@@ -81,6 +81,7 @@ import {
 	type Scheduler,
 	type Scope,
 } from "@ermine/core/scheduler"
+import { isPromise } from "@ermine/core/scheduler/helpers"
 import { createPaths } from "@ermine/core/scheduler/paths"
 import { createSites } from "@ermine/sites"
 import { createTable, type Key, type Table } from "@ermine/core/table"
@@ -104,7 +105,6 @@ import {
 	type CreatedFunction,
 	createProcessContext,
 	type Inner,
-	isThen,
 	type Node,
 	type NodeData,
 	type Parts,
@@ -902,7 +902,7 @@ export function createErmine(options: Options = {}): Ermine {
 								return
 							}
 							missed()
-							if (!isThen(out)) return done(out)
+							if (!isPromise(out)) return done(out)
 							attrs([{ path: [WAITING], value: ["a promise"] }])
 							out.then(done, failed)
 						}

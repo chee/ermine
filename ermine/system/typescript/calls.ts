@@ -34,8 +34,9 @@ import type { Fact, Id, Path, Places } from "@ermine/core/places"
 import type { Read, Write } from "@ermine/processes/runs"
 import { NODE } from "@ermine/core/places/header"
 import type { Scheduler, Scope } from "@ermine/core/scheduler"
+import { isPromise } from "@ermine/core/scheduler/helpers"
 import type { Key, Table } from "@ermine/core/table"
-import { isThen, type ProcessContext } from "./context.ts"
+import type { ProcessContext } from "./context.ts"
 
 export type Made = {
 	readonly kind: "memo" | "effect" | "early"
@@ -235,7 +236,7 @@ export function createCalls(setup: Setup): Calls {
 			if ("pending" in out) return record(g, "pending", { ended: now() })
 			if ("error" in out) return record(g, "failed", { error: out.error, ended: now() })
 			const r = out.returned
-			if (!isThen(r)) return record(g, "done", { returned: r, ended: now() })
+			if (!isPromise(r)) return record(g, "done", { returned: r, ended: now() })
 			record(g, "pending", {})
 			pending.add(g)
 			r.then(

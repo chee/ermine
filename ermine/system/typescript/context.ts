@@ -10,7 +10,7 @@ import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/en
 import update from "@ermine/core/changeable/update"
 import apply, { type Key as Step, type Patch } from "@ermine/core/changeable/apply"
 import { type Id, type Path, type Places, unread, type Writer } from "@ermine/core/places"
-import { parse } from "@ermine/core/places/path"
+import { address } from "@ermine/core/places/path"
 import { createGuard, target as targetOf } from "@ermine/core/places/guard"
 import type { Policy, Target as Asked } from "@ermine/core/protect"
 import { type At, PROCESS, type ProcessContext } from "@ermine/processes"
@@ -172,7 +172,7 @@ export function createProcessContext(
 
 	function resolve(p: string | Path): Path {
 		parts.alive()
-		const steps = typeof p === "string" ? parse(p) : p
+		const steps = address(p)
 		const first = steps[0]
 		const from = first === "/" ? [] : first === "." || first === ".." ? o.folder : o.at
 		// ".." at "/" stays at "/": every process's "/" is as high as it goes (a box's too)
@@ -277,11 +277,6 @@ export function createProcessContext(
 		writer,
 	}
 }
-
-// whether v is a promise, or anything with a then
-export const isThen = (v: unknown): v is PromiseLike<unknown> =>
-	(typeof v === "object" || typeof v === "function") && v !== null &&
-	typeof (v as PromiseLike<unknown>).then === "function"
 
 // a whole value as patches; undefined: taken out
 export const whole = (
