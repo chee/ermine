@@ -674,7 +674,7 @@ static bool walk_dir(Walker *w, const char *dir, bool self, const char *label) {
 			closedir(dp);
 		}
 	}
-	qsort(w->walk.items, w->walk.count, sizeof(Item), by_shown_path);
+	if (w->walk.count) qsort(w->walk.items, w->walk.count, sizeof(Item), by_shown_path);
 	return true;
 }
 

@@ -575,8 +575,8 @@ static void others_op(void) {
 	const mf_record *rs;
 	size_t n = st_others(it(), &rs);
 	mf_record *sorted = take((n + 1) * sizeof *sorted);
-	memcpy(sorted, rs, n * sizeof *sorted);
-	qsort(sorted, n, sizeof *sorted, by_key);
+	if (n) memcpy(sorted, rs, n * sizeof *sorted);
+	if (n) qsort(sorted, n, sizeof *sorted, by_key);
 	fputc('{', out);
 	for (size_t i = 0; i < n; i++) {
 		if (i) fputc(',', out);
@@ -677,8 +677,8 @@ static void differences_op(const Json *request) {
 	size_t length;
 	if (refused(st_differences(it(), paths, n, &d, &length))) return;
 	st_difference *sorted = take((length + 1) * sizeof *sorted);
-	memcpy(sorted, d, length * sizeof *sorted);
-	qsort(sorted, length, sizeof *sorted, by_path);
+	if (length) memcpy(sorted, d, length * sizeof *sorted);
+	if (length) qsort(sorted, length, sizeof *sorted, by_path);
 	fputc('[', out);
 	for (size_t i = 0; i < length; i++) {
 		if (i) fputc(',', out);
@@ -854,6 +854,7 @@ int main(void) {
 	free(trash_dir);
 	free(home);
 	free(folder);
+	for (size_t i = 0; i < listed_length; i++) free(listed[i].path);
 	free(listed);
 	finish();
 	cleanup();

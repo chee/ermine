@@ -366,7 +366,7 @@ static int bycp(const void *a, const void *b) {
 
 // the strings in code point order
 static void sortcp(const char **items, size_t count) {
-	qsort(items, count, sizeof *items, bycp);
+	if (count) qsort(items, count, sizeof *items, bycp);
 }
 
 // a text as an attribute holds it: UTF-8, U+0000 as NUL

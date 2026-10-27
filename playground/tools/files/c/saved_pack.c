@@ -26,7 +26,7 @@ void sp_put(sp_bytes *b, const void *data, size_t length) {
 		b->failed = 1;
 		return;
 	}
-	memcpy(b->data + b->length, data, length);
+	if (length) memcpy(b->data + b->length, data, length);
 	b->length += length;
 }
 

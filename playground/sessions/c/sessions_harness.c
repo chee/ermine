@@ -319,7 +319,7 @@ void hh_answer(const op_value *r, FILE *out) {
 		reading rd = {node, n, {0}};
 		pl_peep(places, read_peep, &rd);
 		// online promises no order: by session name
-		qsort(rd.here.items, rd.here.n, sizeof *rd.here.items, by_name);
+		if (rd.here.n) qsort(rd.here.items, rd.here.n, sizeof *rd.here.items, by_name);
 		fputs("{\"here\":[", out);
 		for (size_t i = 0; i < rd.here.n; i++) {
 			if (i) fputc(',', out);
