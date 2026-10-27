@@ -1495,11 +1495,29 @@ void pl_nameds_free(pl_nameds *list) {
 
 static const char seen_tag;
 
+// a name's length in UTF-8 bytes: U+0000 is stored as C0 80, and counts one byte
+static size_t utf8_length(const char *s) {
+	size_t n = 0;
+	for (; *s != '\0'; s++, n++) {
+		if ((unsigned char)s[0] == 0xC0 && (unsigned char)s[1] == 0x80) s++;
+	}
+	return n;
+}
+
 static int key_order(const void *a, const void *b) {
-	const char *x = ((const pl_named *)a)->name, *y = ((const pl_named *)b)->name;
-	size_t nx = strlen(x), ny = strlen(y);
+	const unsigned char *x = (const unsigned char *)((const pl_named *)a)->name;
+	const unsigned char *y = (const unsigned char *)((const pl_named *)b)->name;
+	size_t nx = utf8_length((const char *)x), ny = utf8_length((const char *)y);
 	if (nx != ny) return nx < ny ? -1 : 1;
-	return memcmp(x, y, nx);
+	// the same length: bytewise, a C0 80 as the 00 it stands for
+	while (*x != '\0' || *y != '\0') {
+		int cx = *x, cy = *y;
+		if (cx == 0xC0 && x[1] == 0x80) cx = 0, x++;
+		if (cy == 0xC0 && y[1] == 0x80) cy = 0, y++;
+		if (cx != cy) return cx < cy ? -1 : 1;
+		x++, y++;
+	}
+	return 0;
 }
 
 pl_nameds pl_names(pl *l, const pl_here *here) {
@@ -1527,8 +1545,7 @@ pl_nameds pl_names(pl *l, const pl_here *here) {
 		pl_namelist_free(&names);
 	}
 	tb_free(seen);
-	// several contributors: in keyorder (core/util keyorder.ts): shorter in UTF-8 bytes first, then
-	// bytewise, the order canonical CBOR gives a map's keys
+	// several contributors: in keyorder (core/util keyorder.ts)
 	if (l->nasked > 1) qsort(out.items, out.n, sizeof *out.items, key_order);
 	return out;
 }

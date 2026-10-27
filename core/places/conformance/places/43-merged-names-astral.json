@@ -1,0 +1,152 @@
+{
+	"title": "names merged from several contributors order by UTF-8 bytes, not UTF-16 units: an astral name after a BMP one of as many bytes, U+FFFF last of three-byte ones",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"\uffffa0": "C",
+				"\u00e9": "C"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "a",
+			"value": {
+				"\ud83d\ude00": "A",
+				"\uffffa": "A",
+				"\ue000": "A",
+				"a\ud83d\ude00": "A"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "b",
+			"value": {
+				"\uffff": "B",
+				"\u4e2d": "B",
+				"a": "B",
+				"\ud800\udc00": "B"
+			},
+			"expect": {}
+		},
+		{
+			"op": "rows",
+			"of": [
+				"a",
+				"b"
+			],
+			"expect": {}
+		},
+		{
+			"op": "list",
+			"at": [],
+			"expect": {
+				"names": [
+					"a",
+					"\u00e9",
+					"\u4e2d",
+					"\ue000",
+					"\uffff",
+					"\uffffa",
+					"\ud800\udc00",
+					"\ud83d\ude00",
+					"a\ud83d\ude00",
+					"\uffffa0"
+				]
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"\ud83d\ude00"
+			],
+			"expect": {
+				"id": "A"
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"\uffffa"
+			],
+			"expect": {
+				"id": "A"
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"\uffff"
+			],
+			"expect": {
+				"id": "B"
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"\ud800\udc00"
+			],
+			"expect": {
+				"id": "B"
+			}
+		},
+		{
+			"op": "value",
+			"id": "a",
+			"value": {
+				"\uffffa": "A",
+				"\ue000": "A",
+				"a\ud83d\ude00": "A"
+			},
+			"expect": {}
+		},
+		{
+			"op": "list",
+			"at": [],
+			"expect": {
+				"names": [
+					"a",
+					"\u00e9",
+					"\u4e2d",
+					"\ue000",
+					"\uffff",
+					"\uffffa",
+					"\ud800\udc00",
+					"a\ud83d\ude00",
+					"\uffffa0"
+				]
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"\ud83d\ude00"
+			],
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "a",
+			"expect": {}
+		},
+		{
+			"op": "list",
+			"at": [],
+			"expect": {
+				"names": [
+					"a",
+					"\u00e9",
+					"\u4e2d",
+					"\uffff",
+					"\ud800\udc00",
+					"\uffffa0"
+				]
+			}
+		}
+	]
+}

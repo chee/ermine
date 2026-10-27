@@ -1,0 +1,150 @@
+{
+	"title": "names that are lone surrogates merged from several contributors order by their three WTF-8 bytes, each its own name, between the BMP names around them",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"\ud800": "C",
+				"\udfff": "C"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "a",
+			"value": {
+				"\ud83d": "A",
+				"\udc00": "A",
+				"\ud7ff": "A",
+				"a\ud83d": "A"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "b",
+			"value": {
+				"\ue000": "B",
+				"\udc00": "B",
+				"\ud83d\ude00": "B",
+				"\uffff": "B"
+			},
+			"expect": {}
+		},
+		{
+			"op": "rows",
+			"of": [
+				"a",
+				"b"
+			],
+			"expect": {}
+		},
+		{
+			"op": "list",
+			"at": [],
+			"expect": {
+				"names": [
+					"\ud7ff",
+					"\ud800",
+					"\ud83d",
+					"\udc00",
+					"\udfff",
+					"\ue000",
+					"\uffff",
+					"a\ud83d",
+					"\ud83d\ude00"
+				]
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"\ud83d"
+			],
+			"expect": {
+				"id": "A"
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"\udc00"
+			],
+			"expect": {
+				"id": "A"
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"\ud800"
+			],
+			"expect": {
+				"id": "C"
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"\ud83d\ude00"
+			],
+			"expect": {
+				"id": "B"
+			}
+		},
+		{
+			"op": "value",
+			"id": "a",
+			"value": {
+				"\udc00": "A",
+				"\ud7ff": "A",
+				"a\ud83d": "A"
+			},
+			"expect": {}
+		},
+		{
+			"op": "list",
+			"at": [],
+			"expect": {
+				"names": [
+					"\ud7ff",
+					"\ud800",
+					"\udc00",
+					"\udfff",
+					"\ue000",
+					"\uffff",
+					"a\ud83d",
+					"\ud83d\ude00"
+				]
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"\ud83d"
+			],
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "a",
+			"expect": {}
+		},
+		{
+			"op": "list",
+			"at": [],
+			"expect": {
+				"names": [
+					"\ud800",
+					"\udc00",
+					"\udfff",
+					"\ue000",
+					"\uffff",
+					"\ud83d\ude00"
+				]
+			}
+		}
+	]
+}

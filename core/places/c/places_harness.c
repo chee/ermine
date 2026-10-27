@@ -32,7 +32,8 @@ static const void *key_of(const char *name) {
 // pruning (places.h): rows, a trie on the value entry "rows" (a leaf an id, a level a map with
 // names; nothing on the path: PL_NONE), a stand-in for ermine/processes', each ask counted; the
 // places the filesystem's reads go through: the world's, or after the rows request a view of "R"
-// given [rows, children]
+// given [rows, children] (or the tries the request's "of" names, each on its own value entry, then
+// children)
 static size_t steps_asked, names_asked;
 static pl *view;
 static pl *reader(void) { return view != NULL ? view : world_places; }
@@ -45,20 +46,19 @@ static op_key *rows_keys(const pl_here *here, const char *extra, size_t *n) {
 	if (extra != NULL) keys[(*n)++] = (op_key){.type = OP_STR_KEY, .s = extra};
 	return keys;
 }
-// the value in rows at here's path + name, the read told
-static const op_value *rows_at(const pl_here *here, const char *name, pl *l) {
+// the value in the trie's entry (ctx, its id) at here's path + name, the read told
+static const op_value *rows_at(void *ctx, const pl_here *here, const char *name, pl *l) {
 	size_t n;
 	op_key *keys = rows_keys(here, name, &n);
-	const op_value *v = pl_read(l, tb_string("value"), tb_string("rows"), keys, n);
+	const op_value *v = pl_read(l, tb_string("value"), tb_string(ctx), keys, n);
 	free(keys);
 	return v;
 }
 static bool filled(const op_value *v) { return v != NULL && v->type == OP_MAP && v->count > 0; }
 static int rows_step(void *ctx, const pl_here *here, const char *name, pl *l, tb_key *out) {
-	(void)ctx;
 	steps_asked++;
 	if (!here->has_path) return PL_NONE;
-	const op_value *v = rows_at(here, name, l);
+	const op_value *v = rows_at(ctx, here, name, l);
 	if (v != NULL && v->type == OP_STR) {
 		*out = tb_string(v->str);
 		return 1;
@@ -66,7 +66,6 @@ static int rows_step(void *ctx, const pl_here *here, const char *name, pl *l, tb
 	return filled(v) ? 0 : PL_NONE;
 }
 static void rows_names(void *ctx, const pl_here *here, pl *l, pl_namelist *out) {
-	(void)ctx;
 	names_asked++;
 	if (!here->has_path) {
 		out->none = 1;
@@ -74,16 +73,18 @@ static void rows_names(void *ctx, const pl_here *here, pl *l, pl_namelist *out) 
 	}
 	size_t n, had = out->n;
 	op_key *keys = rows_keys(here, NULL, &n);
-	pl_keys(l, tb_string("value"), tb_string("rows"), keys, n, 0, out);
+	pl_keys(l, tb_string("value"), tb_string(ctx), keys, n, 0, out);
 	free(keys);
 	if (out->n == had) out->none = 1;
 }
 static int rows_level(void *ctx, const pl_here *here, const char *name, pl *l) {
-	(void)ctx;
-	return here->has_path && filled(rows_at(here, name, l));
+	return here->has_path && filled(rows_at(ctx, here, name, l));
 }
-static const pl_contributor rows = {"rows", rows_step, rows_names, rows_level, NULL};
-static const pl_contributor *const rows_walk[] = {&rows, &pl_children};
+static const pl_contributor rows = {"rows", rows_step, rows_names, rows_level, "rows"};
+// the tries a request's "of" names (their from and value entry the one string), then children
+#define MAX_TRIES 8
+static pl_contributor tries[MAX_TRIES];
+static const pl_contributor *tries_walk[MAX_TRIES + 1];
 
 // programs --------------------------------------------------------------------------------------
 
@@ -470,7 +471,20 @@ op_value *ph_answer(const op_value *r) {
 		return op_map();
 	}
 	if (strcmp(op, "rows") == 0) {
-		if (view == NULL) view = pl_view(world_places, tb_string("R"), rows_walk, 2);
+		if (view != NULL) return op_map();
+		const op_value *of = op_get(r, "of");
+		size_t n = 0;
+		if (of == NULL) tries_walk[n++] = &rows;
+		else {
+			for (size_t i = 0; i < of->count && n < MAX_TRIES; i++) {
+				const char *from = world_copy(of->items[i]->str);
+				tries[n] = (pl_contributor){from, rows_step, rows_names, rows_level, (void *)from};
+				tries_walk[n] = &tries[n];
+				n++;
+			}
+		}
+		tries_walk[n++] = &pl_children;
+		view = pl_view(world_places, tb_string("R"), tries_walk, n);
 		return op_map();
 	}
 	if (strcmp(op, "asked") == 0) {

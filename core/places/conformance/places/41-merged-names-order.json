@@ -1,0 +1,158 @@
+{
+	"title": "names merged from several contributors (two tries and children) come out once each in key order, shorter in UTF-8 bytes first then bytewise, from the first contributor that has a name; taking a name out of one leaves the next contributor holding it, taking a whole contributor away leaves the rest",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"ab": "C",
+				"a0": "C",
+				"b": "C",
+				"B": "C"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "a",
+			"value": {
+				"zz": "A",
+				"b": "A",
+				"a": "A",
+				"ab": "A",
+				"Z": "A"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "b",
+			"value": {
+				"b": "B",
+				"aa": "B",
+				"c": "B",
+				"zz": "B"
+			},
+			"expect": {}
+		},
+		{
+			"op": "rows",
+			"of": [
+				"a",
+				"b"
+			],
+			"expect": {}
+		},
+		{
+			"op": "list",
+			"at": [],
+			"expect": {
+				"names": [
+					"B",
+					"Z",
+					"a",
+					"b",
+					"c",
+					"a0",
+					"aa",
+					"ab",
+					"zz"
+				]
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"b"
+			],
+			"expect": {
+				"id": "A"
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"zz"
+			],
+			"expect": {
+				"id": "A"
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"ab"
+			],
+			"expect": {
+				"id": "A"
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"a0"
+			],
+			"expect": {
+				"id": "C"
+			}
+		},
+		{
+			"op": "value",
+			"id": "a",
+			"value": {
+				"zz": "A",
+				"a": "A",
+				"ab": "A",
+				"Z": "A"
+			},
+			"expect": {}
+		},
+		{
+			"op": "list",
+			"at": [],
+			"expect": {
+				"names": [
+					"B",
+					"Z",
+					"a",
+					"b",
+					"c",
+					"a0",
+					"aa",
+					"ab",
+					"zz"
+				]
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"b"
+			],
+			"expect": {
+				"id": "B"
+			}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "a",
+			"expect": {}
+		},
+		{
+			"op": "list",
+			"at": [],
+			"expect": {
+				"names": [
+					"B",
+					"b",
+					"c",
+					"a0",
+					"aa",
+					"ab",
+					"zz"
+				]
+			}
+		}
+	]
+}
