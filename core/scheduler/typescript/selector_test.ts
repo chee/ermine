@@ -89,3 +89,20 @@ Deno.test("selector: a given equal asks every key held", () => {
 	s.pulse()
 	assertEquals(rs.map((r) => r.runs), [2, 2, 2])
 })
+
+Deno.test("selector: a read in an act or a set tracks nothing and holds nothing", () => {
+	const w = setup()
+	w.s.runWithScope(
+		w.root,
+		() => w.s.createEffect(() => 1, () => void w.isSelected("z")),
+	)
+	w.s.runWithScope(
+		w.root,
+		() => w.s.createComputer(() => 1, () => void w.isSelected("y")),
+	)
+	w.s.pulse()
+	const before = keyed(w.s).deliveries()
+	w.move("z")
+	w.move("y")
+	assertEquals(keyed(w.s).deliveries(), before)
+})

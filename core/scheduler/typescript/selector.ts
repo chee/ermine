@@ -124,18 +124,52 @@ export function keyed(s: Pick<Scheduler, "onMark" | "onTrackingEnd">): Keyed {
 // the one key object of a selected value
 type Pick1<K> = { readonly value: K }
 
+// track(key) of a key nobody tracks yet: whether the run open took it (outside a run, in a set or
+// an act: no). one onTrackingStart listener per scheduler
+const firsts = /* @__PURE__ */ new WeakMap<object, (key: unknown) => boolean>()
+function tracksFirst(s: Pick<Scheduler, "track" | "onTrackingStart">): (key: unknown) => boolean {
+	let first = firsts.get(s)
+	if (first !== undefined) return first
+	let fresh: unknown, took = false
+	s.onTrackingStart((key) => {
+		if (key === fresh) took = true
+	})
+	first = (key) => {
+		fresh = key
+		took = false
+		try {
+			s.track(key)
+		} finally {
+			fresh = undefined
+		}
+		return took
+	}
+	firsts.set(s, first)
+	return first
+}
+
 // Solid's createSelector: isSelected(key) is a tracked read of whether key is what source gives now.
 // made in a scope (the computer reading source is under it, and goes with it). source moves from a
 // to b: the readers of a and of b rerun, nobody else. a key is held while some run tracks it, and
-// dropped at its tracking end. a read outside a run tracks nothing and holds nothing. equal(key,
-// value): whether key is selected by value; none: ===, and a move marks two keys; given, every key
-// held is asked, since what it matches is not known to be one
+// dropped at its tracking end. a read outside a run (in a set or an act too) tracks nothing and
+// holds nothing. equal(key, value): whether key is selected by value; none: ===, and a move marks
+// two keys; given, every key held is asked, since what it matches is not known to be one
 export function createSelector<K>(
-	s: Pick<Scheduler, "createComputer" | "track" | "mark" | "getRun" | "onMark" | "onTrackingEnd">,
+	s: Pick<
+		Scheduler,
+		| "createComputer"
+		| "track"
+		| "mark"
+		| "getRun"
+		| "onMark"
+		| "onTrackingEnd"
+		| "onTrackingStart"
+	>,
 	source: () => K,
 	equal?: (key: K, value: K) => boolean,
 ): (key: K) => boolean {
 	const index = keyed(s)
+	const first = tracksFirst(s)
 	// a key let go stays as undefined (a Map losing and gaining the same key slows as it grows, in
 	// V8): keys is made again once they are half
 	let keys = new Map<K, Pick1<K> | undefined>()
@@ -179,13 +213,16 @@ export function createSelector<K>(
 
 	return (key) => {
 		if (s.getRun() !== undefined) {
-			let o = keys.get(key)
-			if (o === undefined) {
-				if (keys.has(key)) gone--
-				keys.set(key, o = { value: key })
-				index.hold(o, me)
+			const o = keys.get(key)
+			if (o !== undefined) s.track(o)
+			else {
+				const p = { value: key }
+				if (first(p)) {
+					if (keys.has(key)) gone--
+					keys.set(key, p)
+					index.hold(p, me)
+				}
 			}
-			s.track(o)
 		}
 		return has && selects(key, value as K)
 	}
