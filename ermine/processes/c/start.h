@@ -128,8 +128,8 @@ char *pr_stop_at(pr *s, pr_process *p, const char *file, int line, const char *f
 #define pr_stop(...) pr_stop_at(__VA_ARGS__, __FILE__, __LINE__, __func__)
 // the holder lets go of p (stopped first if it is not): its scope's maker's hold let go, and p
 // freed as that scope is (torn down, held by nothing: what is under it, a record). its
-// pointer is no good after
-void pr_drop(pr *s, pr_process *p);
+// pointer is no good after. what the stop threw, as pr_stop gives it
+char *pr_drop(pr *s, pr_process *p);
 // the same, but p goes on running: its holder only lets go, and it is freed as its scope is (its
 // starter's ending, or its stop). for a process something else owns
 void pr_let_go(pr *s, pr_process *p);
