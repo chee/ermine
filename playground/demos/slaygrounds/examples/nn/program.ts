@@ -29,8 +29,8 @@ import { bind, handler } from "ermine-h"
 // what to paint), the frame paints. grain "layer": a layer's weights are one Float32Array node
 // (layers/L1/W), its activations one compute. edit this file while it trains: the weights are
 // nodes, so they stay (they are under ./, saved: a reload is a stop and a start, and finds them)
-// nothing is open in an animation frame, so a program cannot step or paint from one. the host (host.ts)
-// keeps the clock: each frame it runs on/step (and a pulse after each, the forward pass the next step
+// the host (host.ts) keeps the clock, because it times what it runs (stats, the pulse after each
+// step): each frame it runs on/step (and a pulse after each, the forward pass the next step
 // reads) while playing, then on/frame, which paints. measure is the host's too: it is async, and sets
 // the nodes through the actions
 const LOOK = `

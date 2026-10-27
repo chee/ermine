@@ -5,6 +5,7 @@ import {
 	createAction,
 	createEffect,
 	createMemo,
+	createWriter,
 	ensureNode,
 	executeAction,
 	getArgs,
@@ -21,7 +22,7 @@ import { bind, handler } from "ermine-h"
 // own node (/caret-cherry: an anchor and a head, so a selection keeps its direction), and each pane
 // draws the others' selections and carets where they are. a remote edit moves your anchor and head
 // through its patch; your own never puts anything back. invite the poet: a third process typing into the same text at each
-// beat of the host's timer (a program cannot write from a timer), wherever its caret is. the list at the bottom is every change, as its patch.
+// beat of its own timer, wherever its caret is. the list at the bottom is every change, as its patch.
 // the views are jsx: what is a node is bound (the counts, the poet's button, each pane's other
 // carets, the panes themselves: the people's node values); the textarea and the marks behind it
 // are the program's own, driven by its effects, and ermine-h never writes into them
@@ -222,8 +223,8 @@ export function person() {
 		)
 	}
 	// the caret told once the browser has moved it (a key, selectionchange, a click, a drag), as it
-	// is then: never set back from here. the action drops it when it has not moved (nothing is open
-	// as the event is read, so the node cannot be read here)
+	// is then: never set back from here. the action drops it when it has not moved (the event is read outside
+	// the graph, so the node is not read here)
 	const tell = handler("on/caret", () => {
 		const now = selection()
 		return [now.anchor, now.head]
@@ -306,8 +307,8 @@ export function person() {
 	)
 }
 
-// the poet: types its poem a letter at a time, at its caret, while it is on. a timer cannot call
-// into the graph, so the host's timer (host.ts) writes /beat and each beat is a letter
+// the poet: types its poem a letter at a time, at its caret, while it is on. its own timer (a
+// writer made in setup) calls on/tick every 120ms
 export function poet() {
 	// the flag and the caret are saved (./writing: the person's view reads it as /writing); the
 	// poem's place is inside, and starts again at a reload
@@ -339,10 +340,10 @@ export function poet() {
 		put({ anchor: head + 1, head: head + 1 })
 		patch(left, [{ path: [], value: [...rest].slice(1).join("") }])
 	})
-	// each beat of the host's timer: the tick, as an action only to show up in the graph
-	createEffect("beat", () => read("/beat"), (_beat, before) => {
-		if (before !== undefined) executeAction("on/tick")
-	})
+	// each beat of the poet's timer: the tick, as an action to show up in the graph
+	const withWriter = createWriter()
+	const timer = setInterval(() => withWriter(() => executeAction("on/tick")), 120)
+	addTeardown(() => clearInterval(timer))
 	// someone else's edit moves the poet's caret too
 	createEffect("follow", () => lastOf("/text"), (c, before) => {
 		// the first act is a change from before this run (its caller a process that is gone)

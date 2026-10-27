@@ -3,7 +3,9 @@ import {
 	addTeardown,
 	createAction,
 	createEffect,
+	createWriter,
 	ensureNode,
+	executeAction,
 	hasNode,
 	patch,
 	peep,
@@ -22,9 +24,8 @@ import { bind, handler } from "ermine-h"
 // one) and every flip reads it, so every flip reruns. edit this file: the board is still there.
 // the board is a canvas, painted by hand and held with ref; the controls and the generation are jsx, bound
 // to their nodes. alive, flips and runs/step are measured, not nodes: plain text, every half second.
-// nothing is open after a timer or a frame, so none writes a node: the clock is an element whose css
-// animation runs once per step (its duration from the speed node, held when it is 0), calling
-// on/step through a handler at each cycle; the pointer paints through the card's handlers
+// the clock is a timer an effect keeps (an interval per step, from the speed node, none when it is
+// 0), calling on/step through a writer made in setup; the pointer paints through the card's handlers
 const LOOK = `
 body { background: #ffff88; margin: 8px; font-family: Jost, system-ui, sans-serif }
 .lab { display: flex; flex-direction: column; gap: 8px; width: 584px }
@@ -38,8 +39,6 @@ button:active { transform: none; box-shadow: none }
 select { font: inherit; border: 1px solid #000; border-radius: 2px; background: #fff }
 .tag { display: inline-block; background: #ffff88; border: 1px solid #000; padding: 0 8px; transform: skew(-8deg); font-weight: 600; font-variant-numeric: tabular-nums }
 .tag b { color: #ff2284 }
-@keyframes beat { to { opacity: 0 } }
-.beat { position: fixed; width: 0; height: 0; pointer-events: none; animation: beat 1000ms linear infinite }
 `
 const W = 40, H = 28, S = 14
 const RULES: Record<string, { birth: number[]; survive: number[] }> = {
@@ -136,6 +135,13 @@ export default function program() {
 		shown.flips = flips.length
 		setTimeout(show, 0)
 	})
+	// the clock: one interval a step while the speed is not 0
+	const withWriter = createWriter()
+	createEffect("clock", () => read(speed) as number, (v) => {
+		if (!v) return
+		const t = setInterval(() => withWriter(() => executeAction("on/step")), 1000 / v)
+		return () => clearInterval(t)
+	})
 	createAction("on/rule", (name: string) => put(rule, { name, ...RULES[name] }))
 	createAction("on/speed", (v: number) => put(speed, v))
 	createAction("on/play", () => put(speed, get(speed) ? 0 : 8))
@@ -191,18 +197,6 @@ export default function program() {
 				<span class="tag">
 					generation <b>{bind("generation")}</b>
 				</span>
-				{/* the clock: one css cycle a step; its end calls on/step */}
-				<i
-					class="beat"
-					style={bind(
-						"speed",
-						(v) =>
-							`animation-duration:${1000 / (v || 1)}ms;animation-play-state:${
-								v ? "running" : "paused"
-							}`,
-					)}
-					onAnimationIteration={handler("on/step")}
-				/>
 				{tag("alive", "alive")}
 				{tag("flips", "flips")}
 				{tag("runs/step", "runs")}

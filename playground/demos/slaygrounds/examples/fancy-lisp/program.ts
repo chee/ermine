@@ -4,7 +4,9 @@ import {
 	createAction,
 	createEffect,
 	createMemo,
+	createWriter,
 	ensureNode,
+	executeAction,
 	hasNode,
 	list as childrenOf,
 	patch,
@@ -24,9 +26,8 @@ import { bind, handler, under } from "ermine-h"
 // under that frame, not under the caller's. define places a node, set! edits one, so a watch (a
 // part reading through the same lookup, tracked) runs again when it changes. tail calls drop the
 // caller's frame before the callee's comes. after each evaluation, frames no closure can reach
-// are collected. nothing is open after a timer, so the steps are not a timer's: an element in the
-// header runs a css animation as long as one step takes (the speed's), and each cycle's
-// animationiteration calls on/beat through a handler, which takes the next step(s)
+// are collected. the steps are a timer's: an effect runs a setInterval as long as one step takes (the
+// speed's), and each tick calls on/beat through a writer made in setup, which takes the next step(s)
 
 const EXAMPLES: [label: string, src: string][] = [
 	[
@@ -606,10 +607,17 @@ export default function program() {
 		})
 		next()
 	}
-	// the beat: one cycle of the header's animation, a step's time. on/beat takes the next step(s)
+	// the beat: one tick of the timer, a step's time. on/beat takes the next step(s)
 	createAction("on/beat", () => {
 		if (!job) return
 		advance((SPEEDS[String(get(speed))] ?? SPEEDS.run).per)
+	})
+	// the timer, as long as one step takes at this speed (none: instant, and the others wait)
+	const withWriter = createWriter()
+	createEffect("beat", () => (SPEEDS[String(read(speed))] ?? SPEEDS.run).ms, (ms) => {
+		if (!ms) return
+		const t = setInterval(() => withWriter(() => executeAction("on/beat")), ms)
+		return () => clearInterval(t)
 	})
 	// a job started or sped up: instant runs it to its end at once; the others wait for the beat
 	// (step: for on/step)
@@ -926,16 +934,6 @@ export default function program() {
 							</button>
 						)))}
 				</span>
-				<i
-					class="beat"
-					style={bind("speed", (k) => {
-						const ms = (SPEEDS[k] ?? SPEEDS.run).ms
-						return `animation-duration:${ms || 1000}ms;animation-play-state:${
-							ms ? "running" : "paused"
-						}`
-					})}
-					onAnimationIteration={handler("on/beat")}
-				/>
 				<button title="one step" onClick={handler("on/step")}>▸ step</button>
 				<button class="stop" title="stop what is running" onClick={handler("on/stop")}>
 					■
@@ -1235,8 +1233,6 @@ const BUILTINS: Record<string, (a: unknown[], use: Use) => unknown> = {
 
 // ---- the look: lemon paper, black lines, white frames glowing pink ----
 const LOOK = `
-@keyframes beat { to { opacity: 0 } }
-.beat { position: fixed; width: 0; height: 0; pointer-events: none; animation: beat 1000ms linear infinite }
 [hidden] { display: none !important }
 body { margin: 0; background: #ffff88; font: 15px/1.4 Jost, system-ui, sans-serif; color: #000 }
 .lisp { display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; padding: 10px 12px 12px }

@@ -5,6 +5,7 @@ import {
 	createAction,
 	createEffect,
 	createMemo,
+	createWriter,
 	ensureNode,
 	executeAction,
 	getArgs,
@@ -714,8 +715,8 @@ export default function shell() {
 	)
 }
 
-// ---- the programs `run` would start: each is given its own place (getArgs()[0]). a timer cannot
-// call into the graph, so the ones that move count the host's beat (/beat, every 320ms) ----
+// ---- the programs `run` would start: each is given its own place (getArgs()[0]). the ones that move
+// have their own timer, writing through a writer made in setup ----
 
 // a process saying something in the shell: when it ends, not when it is replaced
 const print = (text: string) => {
@@ -724,14 +725,14 @@ const print = (text: string) => {
 	} catch { /* the shell is gone too, or nothing is open as a process ends */ }
 }
 
-// counts seconds into its time node: every third beat
+// counts seconds into its time node: every 960ms
 export function ticker() {
 	const [at] = getArgs()
 	const time = ensureNode("time", 0)
 	createAction("on/tick", () => patch(time, [{ path: [], value: (got(time) as number) + 1 }]))
-	createEffect("beat", () => read("/beat"), (beat, was) => {
-		if (was !== undefined && (beat as number) % 3 === 0) executeAction("on/tick")
-	})
+	const withWriter = createWriter()
+	const timer = setInterval(() => withWriter(() => executeAction("on/tick")), 960)
+	addTeardown(() => clearInterval(timer))
 	addTeardown((why) => {
 		if (why === "ended") print(`${at} ended: its timer stopped`)
 	})
@@ -756,7 +757,7 @@ export function lamp() {
 	)
 }
 
-// hops toward the carrot, a step at each beat
+// hops toward the carrot, a step at each beat of its own timer
 export function bunny() {
 	const x = ensureNode("x", 10)
 	const carrot = ensureNode("carrot", 80)
@@ -767,9 +768,9 @@ export function bunny() {
 		}
 	})
 	createAction("on/carrot", (to: number) => put(carrot, to))
-	createEffect("beat", () => read("/beat"), (_beat, was) => {
-		if (was !== undefined) executeAction("on/hop")
-	})
+	const withWriter = createWriter()
+	const timer = setInterval(() => withWriter(() => executeAction("on/hop")), 320)
+	addTeardown(() => clearInterval(timer))
 	const put = (n: ReturnType<typeof ensureNode>, v: unknown) => patch(n, [{ path: [], value: v }])
 	const left = (v: unknown) => `left: ${Math.max(4, Math.min(96, Number(v) || 0))}%`
 	// a click on the field: the carrot goes where it was

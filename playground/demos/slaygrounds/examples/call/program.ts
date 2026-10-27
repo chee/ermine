@@ -45,7 +45,7 @@ export function asker() {
 			<button onClick={handler("/greeter/on/hello", ["chee"])}>hello (click)</button>
 			<button onClick={handler("on/code")}>hello (from an effect)</button>
 			<p>
-				a timer's call cannot be made now (nothing is open there), so this one runs in an
+				a timer's call is made through a writer (createWriter, in setup); this one runs in an
 				effect, in the click's own microtask: the event is still the click, a person's
 			</p>
 		</div>

@@ -1,8 +1,10 @@
 /** @jsxImportSource ermine-h */
 import {
+	addTeardown,
 	createAction,
 	createEffect,
 	createMemo,
+	createWriter,
 	ensureNode,
 	patch,
 	peep,
@@ -10,7 +12,7 @@ import {
 } from "@ermine/system"
 import { bind, handler } from "ermine-h"
 
-// toy-pet: a pet that gets hungry (when you let a while pass: a timer cannot write). everything it is lives in nodes (name, hunger, fed, loved).
+// toy-pet: a pet that gets hungry (every few seconds, or when you let a while pass). everything it is lives in nodes (name, hunger, fed, loved).
 // the big face and the little widget are two views of the same nodes: each binding is its own,
 // so the mood is bound twice. edit a face below and save: the pet stays as hungry as it was
 const faces = ["😻", "😺", "😿", "🙀"]
@@ -51,9 +53,12 @@ export default function program() {
 	})
 	createAction("on/pet", () => bump(loved, (n) => n + 1))
 	createAction("on/rename", (n: string) => patch(name, [{ path: [], value: n }]))
-	// hungry: a timer cannot write (nothing is open after it, so no call, no patch), so the pet no
-	// longer gets hungry by itself: the button lets a while pass
+	// hungry: a timer, written through a writer made here in setup, lets a while pass every 8
+	// seconds; the button lets one pass at once
 	createAction("on/wait", () => bump(hunger, (h) => Math.min(10, h + 1)))
+	const withWriter = createWriter()
+	const timer = setInterval(() => withWriter(() => bump(hunger, (h) => Math.min(10, h + 1))), 8000)
+	addTeardown(() => clearInterval(timer))
 
 	// a little bounce when it eats, a hop when it is loved: effects on fed and loved (the first
 	// run has no before: no bounce). the face is the element the jsx made, handed back by ref
@@ -95,7 +100,7 @@ export default function program() {
 				<button onClick={handler("on/rename", asked)}>✏️ rename</button>
 				<button onClick={handler("on/wait")}>⏳ a while passes</button>
 			</div>
-			<small>no timer can write now: the pet gets hungry only when a while passes</small>
+			<small>the pet gets hungry every 8 seconds, or when a while passes</small>
 			<div class="widget">
 				widget: {bind("mood")} {bind("line")}
 			</div>

@@ -2760,7 +2760,7 @@ export default function program() {
 			user = true
 			redraw()
 		}
-		// the camera is kept at once (it was after half a second without a move: a timer cannot call)
+		// the camera is kept at once (it was after half a second without a move)
 		const keepCamera = () => ["camera", view, cam]
 		function tile(z: number, x: number, y: number) {
 			const k = `${z}/${x}/${y}`
@@ -2914,8 +2914,8 @@ export default function program() {
 			}
 			return {}
 		}
-		// the map's events are heard on the element round it (nothing is open in a plain listener to
-		// call an action from): each says the call it makes, or none
+		// the map's events are heard on the element round it (a plain listener has nothing open, so
+		// no writer is made here): each says the call it makes, or none
 		const down = (ev: PointerEvent) => {
 			if (ev.target !== canvas) return
 			canvas.setPointerCapture(ev.pointerId)

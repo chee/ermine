@@ -395,8 +395,8 @@ export default function program() {
 			),
 		)
 	) as HTMLCanvasElement
-	// the pointer is heard on the stage (nothing is open in a plain listener to call an action
-	// from): a pixel the pointer is on, while it is down, is a paint call
+	// the pointer is heard on the stage (a plain listener has nothing open, so no
+	// writer is made here): a pixel the pointer is on, while it is down, is a paint call
 	let down = false, last = -1
 	const hit = (e: PointerEvent) => {
 		const r = pad.getBoundingClientRect()

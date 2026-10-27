@@ -1,8 +1,9 @@
 /** @jsxImportSource ermine-h */
 import {
+	addTeardown,
 	createAction,
-	createEffect,
 	createMemo,
+	createWriter,
 	ensureNode,
 	list,
 	patch,
@@ -12,16 +13,20 @@ import {
 import { host } from "@ermine/slaygrounds/tools"
 import { bind, handler } from "ermine-h"
 
-// the clock: counts /time up every second. a timer has nothing open when it fires, so a program
-// cannot write from one: the host owns the timer (host.ts) and writes /beat each second, and the
-// clock's effect adds one to its own ./time at each beat. the view's button stops it (its row is
-// taken out, its scope goes), and the count stops with it
+// the clock: counts /time up every second. its own timer writes through a writer made in setup;
+// the timer is cleared at its teardown. the view's button stops it (its row is taken out, its
+// scope goes), and the count stops with it
 export function clock() {
 	const time = ensureNode("./time", 0)
-	createEffect("tick", () => read("/beat"), (_beat, before) => {
-		if (before === undefined) return
-		patch(time, [{ path: [], value: (peep(() => read(time)) as number) + 1 }])
-	})
+	const withWriter = createWriter()
+	const timer = setInterval(
+		() =>
+			withWriter(() =>
+				patch(time, [{ path: [], value: (peep(() => read(time)) as number) + 1 }])
+			),
+		1000,
+	)
+	addTeardown(() => clearInterval(timer))
 }
 
 // the view: reads /time, says whether the clock is placed, can stop it. its jsx names what it

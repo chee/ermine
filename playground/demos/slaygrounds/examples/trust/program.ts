@@ -65,7 +65,7 @@ type Row = {
 	elsewhere?: boolean
 }
 type Ctx = {
-	// the call made straight from this code: nothing is open in a listener or a timer, so it throws
+	// the call made straight from this code: nothing is open in a listener or a timer, so it throws (a writer made in setup is what opens one)
 	knock: (id: string, ...rest: unknown[]) => void
 	decoy: () => HTMLButtonElement
 	note: (text: string) => void
@@ -209,7 +209,7 @@ export default function program() {
 		patch(node, [{ path: [], value: { times: was.times + 1, trusted: who()["trusted-event"] } }])
 	}
 
-	// every attempt ends here. what it writes (vault/tries/<id>) is what the rows show. the door opens only for a person, and stays open till it is locked (a timer cannot write)
+	// every attempt ends here. what it writes (vault/tries/<id>) is what the rows show. the door opens only for a person, and stays open till it is locked
 	createAction("on/knock", (id: string = "inspector") => {
 		tried(id)
 		if (id === "chain") executeAction("on/relay")
@@ -249,7 +249,7 @@ export default function program() {
 	g.knock = (id = "console") => executeAction("/vault/on/knock", id)
 	addTeardown(() => delete g.knock)
 
-	// a row's note, set on the page itself: a listener or a timer cannot write a node
+	// a row's note, set on the page itself: a listener or a timer writes a node only through a writer, and this note is not a node
 	const notes = new Map<string, HTMLElement>()
 	const decoys = new Map<string, HTMLButtonElement>()
 	const ctx = (id: string): Ctx => ({

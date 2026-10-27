@@ -622,7 +622,7 @@ export default function program() {
 				}
 			}))
 	}
-	// the page calls an action by name: nothing is open in a plain listener (the elements here are
+	// the page calls an action by name: a plain listener has nothing open, so no writer is made (the elements here are
 	// built by hand), so the board's events are heard once, on its root, and each says its call
 	createAction("on/do", (name: string, ...args: unknown[]) => executeAction(`on/${name}`, ...args))
 	act("add-card", (list: string, text: string) => {
@@ -1031,8 +1031,7 @@ export default function program() {
 	mount(view, [top, lists, drawer])
 	addTeardown((why) => why === "ended" && view.remove())
 
-	// ---- the events. the board's elements are built by hand and nothing is open in a plain listener to
-	// call an action from, so the board is one jsx root, and every event that calls is heard there
+	// ---- the events. the board's elements are built by hand and a plain listener has nothing open (no writer is made here), so the board is one jsx root, and every event that calls is heard there
 	// (bubbling, or the pointer kept by capture while one is dragged): each reads what it hit and
 	// says the call it makes (on/do: name, ...args), or none. what only moves the page (opening an
 	// adder, starting an edit) keeps its own listener

@@ -4,7 +4,9 @@ import {
 	createAction,
 	createEffect,
 	createMemo,
+	createWriter,
 	ensureNode,
+	executeAction,
 	patch,
 	peep,
 	PENDING,
@@ -21,12 +23,15 @@ import { bind, type Child, handler } from "ermine-h"
 // what a person edits is saved under ./board (a code text, a wire, a card's place, the rate, the
 // stream): a reload finds it. edit the transform's code in the card (or a preset): no restart. edit
 // this file: a reload, the editor text and the camera are kept. the editor is the host's (extend)
-// nothing is open in a frame callback or a timer, so a program cannot write from one: the host
-// (host.ts) keeps the clocks and runs the actions here: on/frame each frame (the source's), on/stats
-// each second (every process's), and the editor's typing (the transform's on/edit). the camera's
-// promise is a memo's: the memo is pending while it is out, and the stream is its value
+// each process keeps its own clocks, writing through a writer made in setup: the source runs on/frame
+// each frame, every process on/stats each second, and the transform on/edit as the editor's typing
+// (debounced by the host's editor) comes in. the camera's promise is a memo's: the memo is pending while it is out, and the stream is its value
 type Cam = {
-	editor: (parent: HTMLElement, doc: string) => { destroy(): void }
+	editor: (
+		parent: HTMLElement,
+		doc: string,
+		changed: (text: string) => void,
+	) => { destroy(): void }
 	settext: (view: unknown, text: string) => void
 }
 const W = 160, H = 120
@@ -46,13 +51,16 @@ function common(name: string) {
 	createAction("on/move", (xy: number[]) => patch(pos, [{ path: [], value: xy }]))
 	return { fps: ensureNode("fps", 0), cost: ensureNode("cost", "") }
 }
-// once a second, run by the host: how many frames this stage handled and what its own work cost (a
+// once a second, from the process's own timer: how many frames this stage handled and what its own work cost (a
 // write per number)
 function every(
 	nodes: { fps: ReturnType<typeof ensureNode>; cost: ReturnType<typeof ensureNode> },
 	stats: { n: number; line: () => string },
 ) {
 	let last = performance.now()
+	const withWriter = createWriter()
+	const timer = setInterval(() => withWriter(() => executeAction("on/stats")), 1000)
+	addTeardown(() => clearInterval(timer))
 	createAction("on/stats", () => {
 		const now = performance.now()
 		const n = Math.round(stats.n * 1000 / (now - last))
@@ -174,7 +182,7 @@ export function source() {
 		ctx.fillText("frame " + k, 8, H * 0.93)
 	}
 
-	// one frame, run by the host's frame loop: it writes the frame node itself
+	// one frame, run by the source's frame loop (below): it writes the frame node itself
 	let k = 0
 	createAction("on/frame", () => {
 		const a = performance.now()
@@ -188,8 +196,31 @@ export function source() {
 		stats.grab += b - a
 		stats.round += performance.now() - b
 	})
+	// the frame loop: at 30 a frame at most every 30ms, 60 at the display's rate, 0 as fast as the
+	// page lets it (a message, not a frame). each frame is on/frame, through a writer
+	const withWriter = createWriter()
+	let rateNow = 30
+	createEffect("rate-seen", () => read(rate) as number, (r) => void (rateNow = r))
+	const channel = new MessageChannel()
+	let last = 0, raf = 0
+	const tick = (now: number) => {
+		if (!alive) return
+		if (!(rateNow === 30 && now - last < 30)) {
+			last = now
+			withWriter(() => executeAction("on/frame"))
+		}
+		next()
+	}
+	const next = () => {
+		if (rateNow === 0) channel.port2.postMessage(0)
+		else raf = requestAnimationFrame(tick)
+	}
+	channel.port1.onmessage = () => tick(performance.now())
+	next()
 	addTeardown((why) => {
 		alive = false
+		cancelAnimationFrame(raf)
+		channel.port1.close()
 		// a reload keeps the camera; the process ending lets it go
 		if (why === "ended") current?.getTracks().forEach((x) => x.stop())
 	})
@@ -329,9 +360,14 @@ export function transform() {
 
 	every(nodes, stats)
 	// the editor is the host's (CodeMirror): a div it draws in, placed and never touched. what is
-	// typed is the host's too: it runs on/edit, debounced
+	// typed comes back debounced, and is written as on/edit through a writer
+	const withWriter = createWriter()
 	const box = Object.assign(document.createElement("div"), { className: "cm-host" })
-	const editor = makeEditor(box, peep(() => read(code)) as string)
+	const editor = makeEditor(
+		box,
+		peep(() => read(code)) as string,
+		(text: string) => withWriter(() => executeAction("on/edit", text)),
+	)
 	addTeardown(() => editor.destroy())
 	return (
 		<Stage>
