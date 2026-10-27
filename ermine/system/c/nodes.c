@@ -2329,73 +2329,6 @@ static int target_of_value(es_context *c, const op_value *v, es_target *x, es_na
 	return not_a_handle();
 }
 
-typedef struct {
-	es_context *c, *t;
-	es_target x;
-	const op_patch *patches;
-	size_t n;
-} childing;
-static int children_in(void *p) {
-	childing *s = p;
-	es_ermine *e = s->c->ermine;
-	es_node_data n;
-	TRY(es_node_of(s->t, s->x, &n));
-	const char *folder;
-	int code = need_id(s->t, &n, &folder);
-	for (size_t i = 0; i < s->n && !code; i++) {
-		const op_patch *p = &s->patches[i];
-		if (p->place.length != 1 || p->place.path[0].type != OP_STR_KEY || p->has_move ||
-			p->place.has_range) {
-			code = not_patches();
-			break;
-		}
-		const char *name = p->place.path[0].s;
-		op_value *field;
-		gd_thing parent = thing_of(folder, &n);
-		gd_target slot = gd_slot(parent, name, &field);
-		nd_entry *children = tb_get(e->table, tb_string("children"), tb_string(folder));
-		pset ps;
-		if (p->has_value && p->value != NULL) {
-			// a path in a patch: the caller's, resolved as the caller resolves it
-			es_target v;
-			es_names own;
-			code = target_of_value(s->c, p->value, &v, &own);
-			char *id = NULL;
-			if (!code) code = es_id_through(s->c, v, &id);
-			if (!code) code = es_ask_placing(s->t, &slot, v, id);
-			if (!code) code = placing(children, name, id, &ps);
-			if (!code) {
-				es_write w = {.part = "children", .id = folder, .patches = ps.p, .npatches = ps.n};
-				code = es_context_put(s->t, &w);
-				pset_free(&ps);
-			}
-			es_names_free(&own);
-			free(id);
-		} else if (children != NULL) {
-			code = ask(s->t, "place", slot);
-			if (!code) code = unplacing(children, name, &ps);
-			if (!code) {
-				es_write w = {.part = "children", .id = folder, .patches = ps.p, .npatches = ps.n};
-				code = es_context_put(s->t, &w);
-				pset_free(&ps);
-			}
-		}
-		op_free(field);
-	}
-	es_node_data_free(&n);
-	return code;
-}
-int es_patch_children_at(es_context *c, es_target x, const op_patch *patches, size_t n,
-	const ch_site *site) {
-	childing s = {c, c, x, patches, n};
-	const ch_site *was = es_enter(c->ermine, site);
-	int code = es_inside(c, children_in, &s);
-	es_enter(c->ermine, was);
-	if (code) return code;
-	es_queue_pulse(c->ermine);
-	return 0;
-}
-
 // place, unplace, rename, remove ----------------------------------------------------------------------------------
 
 typedef struct {
@@ -2540,6 +2473,99 @@ static void stop_unreached(es_context *c, idlist *l, const char *keep) {
 	}
 	stop_made(c, stop, k);
 	free(stop);
+}
+
+typedef struct {
+	es_context *c, *t;
+	es_target x;
+	const op_patch *patches;
+	size_t n;
+} childing;
+static int children_in(void *p) {
+	childing *s = p;
+	es_ermine *e = s->c->ermine;
+	es_node_data n;
+	TRY(es_node_of(s->t, s->x, &n));
+	const char *folder;
+	int code = need_id(s->t, &n, &folder);
+	for (size_t i = 0; i < s->n && !code; i++) {
+		const op_patch *p = &s->patches[i];
+		if (p->place.length != 1 || p->place.path[0].type != OP_STR_KEY || p->has_move ||
+			p->place.has_range) {
+			code = not_patches();
+			break;
+		}
+		const char *name = p->place.path[0].s;
+		op_value *field;
+		gd_thing parent = thing_of(folder, &n);
+		gd_target slot = gd_slot(parent, name, &field);
+		nd_entry *children = tb_get(e->table, tb_string("children"), tb_string(folder));
+		pset ps;
+		if (p->has_value && p->value != NULL) {
+			// a path in a patch: the caller's, resolved as the caller resolves it
+			es_target v;
+			es_names own;
+			code = target_of_value(s->c, p->value, &v, &own);
+			char *id = NULL;
+			if (!code) code = es_id_through(s->c, v, &id);
+			if (!code) code = es_ask_placing(s->t, &slot, v, id);
+			if (!code) code = placing(children, name, id, &ps);
+			if (!code) {
+				es_write w = {.part = "children", .id = folder, .patches = ps.p, .npatches = ps.n};
+				code = es_context_put(s->t, &w);
+				pset_free(&ps);
+			}
+			es_names_free(&own);
+			free(id);
+		} else {
+			// a process running at the name (a row names it, no entry): stopped, as unplace does
+			const char *at = NULL;
+			char **names = NULL;
+			int running = 0;
+			if (n.has_path) {
+				names = es_alloc((n.npath + 1) * sizeof *names);
+				for (size_t k = 0; k < n.npath; k++) names[k] = n.path[k];
+				names[n.npath] = (char *)name;
+				running = get_id(s->t, CP(names), n.npath + 1, &at) == 0 &&
+					running_at(e, at, names, n.npath + 1);
+				if (!running) es_clear_thrown();
+			}
+			if (running) {
+				char *id = es_dup(at);
+				code = ask(s->t, "place", slot);
+				if (!code) es_stop_node(e, id);
+				free(id);
+			} else if (children != NULL) {
+				code = ask(s->t, "place", slot);
+				const char *was = child_of(children, name);
+				idlist below = {0};
+				if (!code && was != NULL) under(e, was, &below);
+				if (!code) code = unplacing(children, name, &ps);
+				if (!code) {
+					es_write w = {.part = "children", .id = folder, .patches = ps.p, .npatches = ps.n};
+					code = es_context_put(s->t, &w);
+					pset_free(&ps);
+				}
+				// gone is what no name reaches from the root now: one reached by another name stays
+				if (!code) stop_unreached(s->t, &below, NULL);
+				idlist_free(&below);
+			}
+			free(names);
+		}
+		op_free(field);
+	}
+	es_node_data_free(&n);
+	return code;
+}
+int es_patch_children_at(es_context *c, es_target x, const op_patch *patches, size_t n,
+	const ch_site *site) {
+	childing s = {c, c, x, patches, n};
+	const ch_site *was = es_enter(c->ermine, site);
+	int code = es_inside(c, children_in, &s);
+	es_enter(c->ermine, was);
+	if (code) return code;
+	es_queue_pulse(c->ermine);
+	return 0;
 }
 
 // a name out of its folder; a process's node there (named by its row): the process stopped, which
