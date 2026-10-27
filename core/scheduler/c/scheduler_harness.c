@@ -3,7 +3,7 @@
 // does (see its header). Values are op_values, held; keys are interned strings.
 //
 // async: {"wait":[p]} makes a promise with sc_promise_new and names it p; the run returns it
-// (SC_AWAIT). {"wait":[p,e]} also keeps e and the run, and resolve evaluates e through the run
+// (SC_AWAIT); {"await":p} returns that one again, settled or not (kept to the end). {"wait":[p,e]} also keeps e and the run, and resolve evaluates e through the run
 // first (the read is the global one: after the await it counts for nothing), then settles the promise with its value or
 // error, as a then does. the rest (the result lands at the next pulse) is the scheduler's.
 //
@@ -325,6 +325,10 @@ static void drop(void *v, void *data) {
 	(void)data;
 	op_free(v);
 }
+static void keep_value(void *v, void *data) {
+	(void)data;
+	op_ref(v);
+}
 
 // equality --------------------------------------------------------------------------------------
 
@@ -396,6 +400,9 @@ static size_t nwaits, capwaits;
 // promises replaced under their name: never settled, freed at the end
 static waiting **old;
 static size_t nold, capold;
+// promises settled: kept for await, freed at the end
+static waiting **done;
+static size_t ndone, capdone;
 
 static void wait_free(waiting *w) {
 	if (w->c.run) sc_run_unref(w->c.run);
@@ -408,6 +415,13 @@ static waiting *wait_for(const char *name) {
 	for (size_t i = 0; i < nwaits; i++)
 		if (strcmp(waits[i]->name, name) == 0) return waits[i];
 	return NULL;
+}
+// the latest promise named so, settled or not
+static waiting *made_as(const char *name) {
+	waiting *w = wait_for(name);
+	for (size_t i = ndone; w == NULL && i > 0; i--)
+		if (strcmp(done[i - 1]->name, name) == 0) w = done[i - 1];
+	return w;
 }
 
 // closures for cleanups: kept to the end
@@ -696,6 +710,15 @@ static val evaluate(const op_value *e, const ctx *c) {
 			PUSH(waits, nwaits, capwaits, w);
 		}
 		return (val){V_PROMISE, NULL, NULL, w->p};
+	}
+	if (strcmp(form, "await") == 0) {
+		char *name;
+		val r = string_of(arg, c, &name);
+		if (r.k != V_OK) return r;
+		waiting *w = name ? made_as(name) : NULL;
+		val out = w ? (val){V_PROMISE, NULL, NULL, w->p} : thrown(formatString("no promise %s", name ? name : "null"));
+		free(name);
+		return out;
 	}
 	if (strcmp(form, "run") == 0) {
 		if (c->self == NULL) return thrown(copyString("run outside a computation"));
@@ -1050,7 +1073,9 @@ static op_value *settle(const op_value *r, bool resolve) {
 		sc_resolve(w->p, value ? op_ref((op_value *)value) : op_null());
 	}
 	carry(sc_escaped(sch));
-	wait_free(w);
+	if (w->c.run) sc_run_unref(w->c.run);
+	w->c.run = NULL;
+	PUSH(done, ndone, capdone, w);
 	return op_map();
 }
 
@@ -1217,7 +1242,7 @@ static op_value *answer(const op_value *r) {
 
 void hh_answer(const op_value *r, FILE *out) {
 	if (sch == NULL) {
-		sch = sc_new((sc_options){.drop = drop});
+		sch = sc_new((sc_options){.drop = drop, .keep = keep_value});
 		sc_trace_start(sch, &trace, told_moment, NULL);
 		sc_on_tracking_end(sch, untrack, NULL);
 		sc_on_run_return(sch, run_returned, NULL);
@@ -1242,6 +1267,7 @@ void hh_finish(void) {
 	if (sch == NULL) return;
 	for (size_t i = 0; i < nwaits; i++) wait_free(waits[i]);
 	for (size_t i = 0; i < nold; i++) wait_free(old[i]);
+	for (size_t i = 0; i < ndone; i++) wait_free(done[i]);
 	for (size_t i = 0; i < nnamed; i++) free(sc_scope_user(named[i]));
 	for (size_t i = 0; i < nunnamed; i++) free(unnamed[i]);
 	free(unnamed);
@@ -1276,6 +1302,7 @@ void hh_finish(void) {
 	free(moments);
 	free(waits);
 	free(old);
+	free(done);
 	free(progs);
 	free(closures);
 	free(lines);

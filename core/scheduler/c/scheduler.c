@@ -163,9 +163,11 @@ typedef struct landed {
 
 struct sc_promise {
 	sc_scheduler *s;
-	// the run awaiting it, held
-	sc_run *r;
-	bool settled;
+	// the runs awaiting it till it settles, held
+	sc_run **rs;
+	size_t nrs, caprs;
+	// given: its value went to a landing with no keep (options), no longer its own
+	bool settled, given;
 	sc_out_kind kind;
 	void *value;
 	char *error;
@@ -1184,22 +1186,25 @@ static void result(sc_scheduler *s, sc_run *r, void *v) {
 }
 
 // a promise: the run ends pending; its settling, unless run again or gone since, lands at the
-// next pulse. due again by then (what it read changed): it lands nowhere, the next run does
-static void deliver(sc_promise *p) {
+// next pulse, at every run awaiting it, each with a hold of its own on its value (keep); awaited
+// once settled, the same. due again by then (what it read changed): it lands nowhere, the next
+// run does
+static void deliver(sc_promise *p, sc_run *r) {
 	sc_scheduler *s = p->s;
-	sc_run *r = p->r;
-	p->r = NULL;
 	if (r->c->state != ALIVE || r->c->runs != r->n) {
-		drop_value(s, p->value);
-		free(p->error);
-		p->value = NULL;
-		p->error = NULL;
 		ran_release(r);
 		return;
 	}
-	landed l = {r, p->kind, p->value, p->error};
-	p->value = NULL;
-	p->error = NULL;
+	landed l = {r, p->kind, NULL, NULL};
+	if (p->kind == SC_VALUE && p->value != NULL) {
+		if (s->opt.keep) s->opt.keep(p->value, s->opt.data);
+		else p->given = true;
+		l.value = p->value;
+	}
+	if (p->kind == SC_FAILED && p->error != NULL) {
+		size_t n = strlen(p->error) + 1;
+		l.error = memcpy(xalloc(n), p->error, n);
+	}
 	VEC_PUSH(s->landed, s->nlanded, s->caplanded, l);
 	for (size_t i = 0; i < s->nlisteners[ON_SETTLE]; i++)
 		s->listeners[ON_SETTLE][i]->f.settle(s->listeners[ON_SETTLE][i]->data);
@@ -1207,9 +1212,8 @@ static void deliver(sc_promise *p) {
 
 static void awaiting(sc_scheduler *s, sc_run *r, sc_promise *p) {
 	finish(s, r, SC_PENDED, -1, NULL, NULL, NULL, 0);
-	if (p->r) ran_release(p->r);
-	p->r = ran_ref(r);
-	if (p->settled) deliver(p);
+	if (p->settled) deliver(p, ran_ref(r));
+	else VEC_PUSH(p->rs, p->nrs, p->caprs, ran_ref(r));
 }
 
 // a bracket: what a listener or a cleanup threw comes out once the landing is done
@@ -1529,10 +1533,17 @@ void sc_pulse(sc_scheduler *s) {
 	s->thrown = NULL;
 	// what came out of a landing, run or act: the pulse is left there, the rest waits for the next
 	char *failed = NULL;
+	// what settled before it lands in it; what settles in it (a promise settled, or awaited once
+	// settled), at the next, as the reference's (a promise's then is never at once)
+	size_t upto = s->nlanded;
 	for (;;) {
-		while (!failed && s->headlanded < s->nlanded) failed = land(s, s->landed[s->headlanded++]);
+		while (!failed && s->headlanded < upto) failed = land(s, s->landed[s->headlanded++]);
 		if (failed) break;
-		s->headlanded = s->nlanded = 0;
+		if (upto > 0) {
+			s->nlanded -= upto;
+			memmove(s->landed, s->landed + upto, s->nlanded * sizeof *s->landed);
+			s->headlanded = upto = 0;
+		}
 		if (!od_size(s->order) && s->earlies.live == 0 && s->acts.live == 0) break;
 		while (!failed && od_size(s->order)) {
 			int rank;
@@ -1703,7 +1714,12 @@ static void settle(sc_promise *p, sc_out_kind kind, void *value, char *error) {
 	sc_scheduler *s = p->s;
 	char *outer = s->thrown;
 	s->thrown = NULL;
-	if (p->r) deliver(p);
+	sc_run **rs = p->rs;
+	size_t n = p->nrs;
+	p->rs = NULL;
+	p->nrs = p->caprs = 0;
+	for (size_t i = 0; i < n; i++) deliver(p, rs[i]);
+	free(rs);
 	escape(s, unbracket(s, outer));
 }
 
@@ -1712,8 +1728,9 @@ void sc_resolve_pending(sc_promise *p) { settle(p, SC_PENDING, NULL, NULL); }
 void sc_reject(sc_promise *p, char *error) { settle(p, SC_FAILED, NULL, error); }
 
 void sc_promise_free(sc_promise *p) {
-	if (p->r) ran_release(p->r);
-	drop_value(p->s, p->value);
+	for (size_t i = 0; i < p->nrs; i++) ran_release(p->rs[i]);
+	free(p->rs);
+	if (!p->given) drop_value(p->s, p->value);
 	free(p->error);
 	free(p);
 }
