@@ -21,9 +21,9 @@
 // patches, or a recipe over that value (the library's: the base takes patches only).
 // layers(x, path?): readAll's layers, front first, as the overlay's Item; none over x: the table's
 // alone (read's), or none.
-// land(ermine): the service's handler: the patch node sent landed. no stricter and no looser than
+// land(ermine): the service's handler, acting with patchy's FeatureAPI on that ermine: the patch node sent landed. no stricter and no looser than
 // its caller's own functions (chee 10-24: holding an id is the permission; boxes limit paths only): a
-// path is resolved in the caller's box (ermine.calling()'s context), an id is reached as it is, as
+// path is resolved in the caller's box (the feature's calling()'s context), an id is reached as it is, as
 // is the id the patch names (on). asked "edit" on the target (by its id) and on the patch node (by
 // the path it was sent by, else its id) as the caller and as the service, as the caller's own edit
 // would be asked (it lands only where both may), written with the service's power in the call (the
@@ -101,6 +101,15 @@ const isPath = (x: unknown): x is string | readonly string[] =>
 // handle is known to its own ermine's only (dataOf). one closed (its dataOf throws closed) or let go
 // is dropped as it is met
 const installed = new Set<WeakRef<FeatureAPI>>()
+// patchy as set up on the ermine whose table is table (land acts with it: its calling)
+function featureFor(table: Table): FeatureAPI {
+	for (const r of installed) {
+		const f = r.deref()
+		if (f === undefined) installed.delete(r)
+		else if (f.table === table) return f
+	}
+	throw new PatchError("nothing-there", "patchy is not a feature of this ermine")
+}
 function featureOf(h: Node): { f: FeatureAPI; node: NodeData } {
 	for (const r of installed) {
 		const f = r.deref()
@@ -169,30 +178,29 @@ export function layers(x: Target, path: readonly Step[] = []): Layer[] {
 	return all.length ? [{ value: all[0].value, from: TABLE }] : []
 }
 
-export function land(
-	ermine: Pick<Ermine, "table" | "getProcessContext" | "calling" | "dataOf" | "within">,
-) {
+export function land(ermine: Pick<Ermine, "table">) {
 	return (p: Target): boolean => {
+		const f = featureFor(ermine.table)
 		// the service's own context (the host's, who placed it), and the caller's (where and as whom
 		// it sent; none: the host called it)
-		const own = ermine.getProcessContext()!
+		const own = f.getProcessContext()
 		// the patch node as the caller's own edit would reach it: a handle, its place from the root
 		// (or its id); a path, in the caller's box
-		const d = isPath(p) ? undefined : ermine.dataOf(p)
+		const d = isPath(p) ? undefined : f.dataOf(p)
 		if (!isPath(p) && d === undefined) throw new PatchError("nothing-there", "not a node handle")
 		// asked as the caller (it acts for its caller), whether sent a handle or a path
-		const from = ermine.calling()?.context ?? own
+		const from = f.calling()?.context ?? own
 		const n: NodeData = d?.node ?? { path: from.resolve(p as string), part: "value" }
 		// a handle's place: the node the host reaches there, by id (readEntries gives it)
 		const reached = d !== undefined && n.path !== undefined
-			? ermine.within(() => readEntries(p))[0]?.node
+			? own.within(() => readEntries(p))[0]?.node
 			: undefined
 		const id = reached !== undefined
-			? ermine.dataOf(reached)?.node.id
+			? f.dataOf(reached)?.node.id
 			: n.id ?? get(from.box.places, n.path!)
 		const v = id === undefined
 			? undefined
-			: ermine.table.get("patch", id)?.value as PatchNode | undefined
+			: f.table.get("patch", id)?.value as PatchNode | undefined
 		if (id === undefined || v === undefined) {
 			throw new PatchError("nothing-there", String(id ?? n.path?.join("/")))
 		}
@@ -202,10 +210,10 @@ export function land(
 		const on = target({ id: v.on }, v.part)
 		const it = target(n.path === undefined ? { id } : { id, path: n.path }, "patch")
 		for (const o of from === own ? [own] : [from, own]) o.ask("edit", on, it)
-		const before = ermine.table.get(v.part, v.on)?.change
+		const before = f.table.get(v.part, v.on)?.change
 		own.write(v.part, v.on, v.patches)
 		// held back (an onWrite hook): the patch node kept
-		if (ermine.table.get(v.part, v.on)?.change === before) return false
+		if (f.table.get(v.part, v.on)?.change === before) return false
 		own.remove("patch", id)
 		return true
 	}

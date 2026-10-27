@@ -183,7 +183,14 @@ export type FeatureAPI = {
 	// a node's path as context's process sees it (none: outside its box, moved, or placed by no
 	// functions): what a feature shows a process in place of an id
 	seen: (id: Id, context: ProcessContext) => Path | undefined
+	// in a hook or a service's handler (before: not-yet): the send being answered where the code runs
+	// now (the scope open, or one above it), its record so far, the caller's context in it; none:
+	// undefined. for a service acting for its caller (patchy's land)
+	calling: () => Calling | undefined
 }
+
+// a send being answered: its record so far
+export type Calling = Omit<Call, "end" | "reads" | "writes" | "made" | "ended">
 
 export type Feature = {
 	readonly name: string
@@ -255,6 +262,7 @@ export function install(
 			| ((x: unknown) => { node: NodeData } | undefined)
 			| undefined
 		seen: () => ((id: Id, context: ProcessContext) => Path | undefined) | undefined
+		calling: () => (() => Calling | undefined) | undefined
 	},
 ): Installed {
 	const hooks = {
@@ -316,6 +324,7 @@ export function install(
 				got("handleOf", parts.handleOf)(node),
 			dataOf: (x) => got("dataOf", parts.dataOf)(x),
 			seen: (id, context) => got("seen", parts.seen)(id, context),
+			calling: () => got("calling", parts.calling)(),
 			reserveSlot: <T>(): Slot<T> => {
 				if (!open) throw new ErmineError("setup-only", `${f.name}'s reserveSlot`)
 				const held = new WeakMap<ProcessContext, T>()

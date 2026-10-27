@@ -55,9 +55,8 @@
 //                        setup is untracked and runs once, never again [chee 10-25: "like solid"]
 //   close()              every process ermine started stopped ("ended"), newest first, then the
 //                        host's scope, then ermine's own listeners and what features listen to
-//                        on the scheduler. its functions and parts (records, calling, node too) throw
+//                        on the scheduler. its functions and parts (records, node too; a feature's calling) throw
 //                        closed after
-// calling(): the send being answered now, its record so far, with the caller's context.
 // getProcessContext(process?): a running process's process context (host and feature code acting
 // as a process: context.within(() => executeAction(…)), @ermine/system's functions finding it)
 // (none: the host's). scheduler, table, places: the whole thing, for the host and features
@@ -101,6 +100,7 @@ import { type Call, createCalls, type Wait } from "./calls.ts"
 import {
 	type Ahead,
 	type Asked,
+	type Calling,
 	chain,
 	ErmineError,
 	type Feature,
@@ -139,6 +139,7 @@ import {
 export { ErmineError, FeatureError } from "./features.ts"
 export type {
 	Asked,
+	Calling,
 	Feature,
 	FeatureAPI,
 	Hook,
@@ -244,10 +245,6 @@ export type Ermine = {
 	readonly features: readonly Shown[]
 	// the host's node's id
 	readonly node: Id
-	// the send being answered where the code runs now (the scope open, or one above it): its record
-	// so far, the caller's context in it; none: undefined. for a service acting for its caller: the
-	// host's and features' side only, never a program's
-	calling: () => Omit<Call, "end" | "reads" | "writes" | "made" | "ended"> | undefined
 	readonly records: {
 		run: (id: Id) => Run | undefined
 		call: (id: Id) => Call | undefined
@@ -333,6 +330,7 @@ export function createErmine(options: Options = {}): Ermine {
 			handleOf: (node: NodeData) => Node
 			dataOf: (x: unknown) => { node: NodeData } | undefined
 			seen: (id: Id, context: ProcessContext) => Path | undefined
+			calling: () => Calling | undefined
 		}
 		| undefined
 	const table: Table = createTable((part, id) => first.onTableChange(part as Key, id))
@@ -364,6 +362,7 @@ export function createErmine(options: Options = {}): Ermine {
 		handleOf: () => made?.handleOf,
 		dataOf: () => made?.dataOf,
 		seen: () => made?.seen,
+		calling: () => made?.calling,
 	})
 	const { hooks } = features
 	const toPlaces: Ahead = {
@@ -1034,12 +1033,6 @@ export function createErmine(options: Options = {}): Ermine {
 			places: { get: part(p) },
 			features: { get: part(features.shown) },
 			node: { get: part(node) },
-			calling: {
-				value: () => {
-					alive()
-					return calls.calling(s.getCurrentScope())
-				},
-			},
 			handleOf: {
 				value: (node: NodeData): Node => {
 					alive()
@@ -1068,6 +1061,10 @@ export function createErmine(options: Options = {}): Ermine {
 			seen: (id, context) => {
 				const inner = innerOf(context, base)
 				return inner === undefined ? undefined : seenIn(base, inner, id)
+			},
+			calling: () => {
+				alive()
+				return calls.calling(s.getCurrentScope())
 			},
 		}
 		// the host's setup: run once, untracked, in the host's scope; a throw closes ermine and is
