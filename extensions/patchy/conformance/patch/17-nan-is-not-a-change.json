@@ -57,11 +57,13 @@
 			"op": "state",
 			"name": "w",
 			"expect": {
-				"runs": 1
-			},
-			"skip": [
-				"value"
-			]
+				"runs": 1,
+				"value": {
+					"/": {
+						"number": "NaN"
+					}
+				}
+			}
 		},
 		{
 			"op": "edit",
@@ -86,11 +88,13 @@
 			"op": "state",
 			"name": "w",
 			"expect": {
-				"runs": 1
-			},
-			"skip": [
-				"value"
-			]
+				"runs": 1,
+				"value": {
+					"/": {
+						"number": "NaN"
+					}
+				}
+			}
 		}
 	]
 }
