@@ -24,7 +24,12 @@ const KINDS: { [kind: string]: { new (b: ArrayBuffer): ArrayBufferView } } = {
 }
 const NAMES = new Map(Object.entries(KINDS).map(([k, c]) => [c as unknown, k]))
 
-const b64 = (b: Uint8Array) => btoa(String.fromCharCode(...b)).replace(/=+$/, "")
+// in slices: a spread of 200k bytes overflows the stack
+const b64 = (b: Uint8Array) => {
+	let s = ""
+	for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000))
+	return btoa(s).replace(/=+$/, "")
+}
 const slash = (x: unknown) => ({ "/": x })
 
 const SAFE = 2n ** 53n - 1n
@@ -95,7 +100,7 @@ function bytesOf(x: unknown): Uint8Array {
 	return Uint8Array.from(out)
 }
 
-const WORDS: { [w: string]: number } = { NaN: NaN, Infinity: Infinity, "-Infinity": -Infinity }
+const WORDS = new Map([["NaN", NaN], ["Infinity", Infinity], ["-Infinity", -Infinity]])
 const RANGE: { [kind: string]: [number, number] } = {
 	int8: [-128, 127],
 	int16: [-32768, 32767],
@@ -120,7 +125,7 @@ function typedOf(kind: string, list: unknown): ArrayBufferView {
 			if (typeof e === "number") return e
 			// a whole one past 2^53, read exactly (json.ts): the double its digits name
 			if (typeof e === "bigint") return Number(e)
-			if (typeof e === "string" && e in WORDS) return WORDS[e]
+			if (typeof e === "string" && WORDS.has(e)) return WORDS.get(e)!
 			return no("typed")
 		}
 		const [lo, hi] = RANGE[kind]
@@ -157,7 +162,7 @@ export function fromJson(x: unknown): unknown {
 		if (tag === "symbol") return typeof body === "string" ? Symbol.for(body) : no("symbol")
 		if (tag === "bytes") return bytesOf(body)
 		if (tag === "number") {
-			return typeof body === "string" && body in WORDS ? WORDS[body] : no("number")
+			return typeof body === "string" && WORDS.has(body) ? WORDS.get(body)! : no("number")
 		}
 		if (tag === "bigint") return bigintOf(body)
 		return typedOf(tag, body)
