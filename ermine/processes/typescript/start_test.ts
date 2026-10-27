@@ -139,3 +139,21 @@ Deno.test("start under a scope given: its scope under it; that scope torn down, 
 	w.life.stop(p)
 	assertEquals(stops, 1)
 })
+
+Deno.test("start: attributes that throw as they are written: the row rolled back, the path free to start again", () => {
+	const w = world()
+	const bad = {
+		get boom(): never {
+			throw new Error("no")
+		},
+	}
+	let thrown: unknown
+	try {
+		w.start(w.places, "a/b", { attributes: bad })
+	} catch (e) {
+		thrown = e
+	}
+	assertEquals((thrown as Error | undefined)?.message, "no")
+	const p = w.start(w.places, "a/b")
+	assertEquals(p.at, ["a", "b"])
+})
