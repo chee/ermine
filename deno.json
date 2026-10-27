@@ -62,9 +62,7 @@
 		"exclude": [
 			"playground/demo-world",
 			"playground/demos",
-			"playground/devtools",
-			"playground/programs",
-			"playground/realms"
+			"playground/devtools"
 		]
 	}
 }

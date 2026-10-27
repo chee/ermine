@@ -32,7 +32,7 @@ import { idsUnder, PROCESS } from "@ermine/processes"
 import { createScheduler, type Info, PENDING, type Scope } from "@ermine/core/scheduler"
 import { isPromise } from "@ermine/core/scheduler/helpers"
 import type { Key, Table } from "@ermine/core/table"
-import { createErmine, type Ermine, type Feature, type Layer, uuidv7 } from "@ermine/system"
+import { createErmine, type Ermine, type Feature, type Layer, pulse } from "@ermine/system"
 import { createReplica, type Replica } from "./replica.ts"
 import {
 	decode,
@@ -107,7 +107,7 @@ export function serve(port: Port): () => void {
 		queueMicrotask(() => {
 			queued = false
 			try {
-				w!.ermine.pulse()
+				w!.ermine.within(() => pulse())
 			} catch (e) {
 				report(e)
 			}
@@ -289,6 +289,20 @@ export function serve(port: Port): () => void {
 			name: "realm",
 			files: [import.meta.url, new URL("./replica.ts", import.meta.url).href],
 			setup(f) {
+				// the ids the page gave (its process's) first, then the base's
+				f.onId((kind, next) => ids.shift() ?? next(kind))
+				// a memo's or effect's node and where it is, told to the page, which takes them out with the realm
+				f.onCreateFunction((made, next) => {
+					next(made)
+					if (made.kind === "method") return
+					const path = made.node.path
+					port.postMessage({
+						t: "notice",
+						kind: made.kind,
+						id: String(made.id),
+						...(path ? { path: [...path] } : {}),
+					})
+				})
 				f.onTable((table, next) => {
 					const under = next(table)
 					r = createReplica({
@@ -304,18 +318,6 @@ export function serve(port: Port): () => void {
 			scheduler: s,
 			features: [feature],
 			root: m.root,
-			id: () => ids.shift() ?? uuidv7(),
-			// a memo's or effect's node and where it is, told to the page, which takes them out with the realm
-			onCreateFunction: (made) => {
-				if (made.kind === "method") return
-				const path = made.node.path
-				port.postMessage({
-					t: "notice",
-					kind: made.kind,
-					id: String(made.id),
-					...(path ? { path: [...path] } : {}),
-				})
-			},
 		})
 		const { places, table } = ermine
 		w = { s, r, ermine, table, places, ids, at: [...m.process.at], pid: m.process.id }

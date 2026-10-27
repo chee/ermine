@@ -19,7 +19,7 @@
 import { type Id, type Path, PlacesError } from "@ermine/core/places"
 import { get, members } from "@ermine/core/places/lib"
 import { addLeaf, removeLeaf } from "@ermine/processes"
-import { inside } from "@ermine/boxes"
+import { inside } from "@ermine/processes/start"
 import type { Scheduler, Scope } from "@ermine/core/scheduler"
 import type { Key, Table } from "@ermine/core/table"
 import type { Places } from "@ermine/core/places"

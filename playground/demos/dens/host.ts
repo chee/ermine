@@ -124,7 +124,7 @@ import { STATUS } from "@ermine/core/places/status"
 import { addLeaf, addProcess, PROCESS, processes, removeLeaf, trie } from "@ermine/processes"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import type { Process } from "@ermine/processes/start"
-import { type Address, inside } from "@ermine/boxes"
+import { type Address, inside } from "@ermine/processes/start"
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
 import apply, { type Patch } from "@ermine/core/changeable/apply"
 import { blake3 } from "@ermine/core/blake3"
@@ -578,7 +578,7 @@ export async function createHost(
 				"runners",
 				k,
 				{ [TAKES]: TYPE(k) },
-				withDen(RUNNERS[k].run, { scheduler: s, table }),
+				withDen(RUNNERS[k].run, { scheduler: s, table, places }),
 			)
 		}
 		software.offer(owner, "runners", "inbox", { [TAKES]: INBOX_TYPE }, inboxRun)

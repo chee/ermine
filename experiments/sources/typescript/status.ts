@@ -134,7 +134,7 @@ export type Refused = { readonly refused: "taken"; readonly at: readonly string[
 // a process at at, under graph.scope, its node's attributes given; body given what it shows,
 // returning its stop. the computer of its state is made and given before body, its first state
 // "opening"; a pulse after start runs it, and its first run takes PENDING off. the path taken (a
-// process at, above or under it): refused, nothing made, body not called
+// process exactly at it): refused, nothing made, body not called
 export function startShown(
 	graph: Running,
 	at: readonly string[],

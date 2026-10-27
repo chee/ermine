@@ -78,6 +78,7 @@ import { createChangeHeader } from "@ermine/core/places/header"
 import { STATUS, TABLE as STATUS_TABLE } from "@ermine/core/places/status"
 import { type Box, createBox } from "@ermine/boxes"
 import { createErmine } from "@ermine/system"
+import { idAt, PROCESS } from "@ermine/processes"
 import { type Address, createProcesses, type Process } from "@ermine/processes/start"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import { fromJson, toJson } from "../../../conformance/typescript/form.ts"
@@ -121,8 +122,12 @@ const software = createSoftware({
 })
 
 const boxes = new Map<string, Box>()
-// the root of the places each process was started in, by its id (none: R)
-const roots = new Map<Id, Id>()
+// the root of the places software started a process in: where its row is (the process part of
+// that root holds it at its path), as software wrote it; read as the runner starts
+const rootOf = (process: Process): Id | undefined =>
+	[places.root, ...[...boxes.values()].map((b) => b.root)].find((root) =>
+		idAt(table.get(PROCESS, root)?.value, process.at) === process.id
+	)
 const placed = new Map<string, Place>()
 const procs = new Map<string, Process>()
 const held = new Map<string, Loaded>()
@@ -210,7 +215,7 @@ function noted(code: unknown, start: Start) {
 		code: typeof code === "function" ? { live: true } : code,
 		args: start.args,
 		folder: start.folder,
-		root: roots.get(process.id) ?? "R",
+		root: rootOf(process) ?? null,
 		keys: Object.keys(start).sort(),
 		open: s.getCurrentScope() === start.scope,
 	})
@@ -426,7 +431,6 @@ async function answer(r: Request): Promise<Json> {
 				r.actor,
 			)
 			if ("refused" in made) return plain(made)
-			if (r.box !== undefined) roots.set(made.id, boxOf(r.box).root)
 			named(made, r.name)
 			return plain({ id: made.id, at: made.at })
 		}
