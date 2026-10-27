@@ -13,13 +13,5 @@ const world = createWorld({
 		{ name: "poet", export: "poet" },
 	],
 })
-<<<<<<< Updated upstream
-=======
-world.seed((host) => void host.ensureNode("/beat", 0))
-let beats = 0
-setInterval(() => {
-	world.ermine.patch("/beat", [{ path: [], value: ++beats }])
-}, 120)
->>>>>>> Stashed changes
 
 export const reload = world.reload

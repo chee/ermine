@@ -9,15 +9,4 @@ const world = createWorld({
 	processes: [{ name: "game" }, { name: "clock", export: "clock" }],
 })
 
-<<<<<<< Updated upstream
-=======
-let beat: ReturnType<typeof setInterval> | undefined
-world.ermine.createEffect("metronome", () => world.ermine.read("/clock/every"), (ms) => {
-	clearInterval(beat)
-	beat = typeof ms === "number" && ms > 0
-		? setInterval(() => world.ermine.executeAction("/clock/on/beat"), ms)
-		: undefined
-})
-
->>>>>>> Stashed changes
 export const reload = world.reload
