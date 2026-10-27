@@ -120,14 +120,8 @@ unread_flags = -DCONFORMANCE_HOOK
 unread_suite = unread
 unread_tests = $(wildcard core/unread/typescript/unread_harness_test.ts)
 LIBS += unread
-# boxes (ermine/boxes): a "/" of a process's own, a plain folder, its places a view of the host's, on the places harness's world
-boxes_src = $(filter-out core/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/boxes/c/boxes.c ermine/boxes/c/boxes_harness.c
-boxes = ermine/boxes/c/boxes-harness
-boxes_suite = boxes
-boxes_tests = $(wildcard ermine/boxes/typescript/boxes_harness_test.ts)
-LIBS += boxes
-# ermine (ermine/system): the process api and createErmine, over core's scheduler, table, places, guard, protect and status, ermine's processes (rows, start, scopes), runs, boxes and sites. five files (ermine.h says each's job), the last the line protocol; no places or world harness
-system_src = $(filter-out core/places/c/places_harness.c core/places/c/world_harness.c,$(places_src)) core/places/c/guard.c core/protect/c/protect.c ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/start.c ermine/processes/c/runs.c ermine/boxes/c/boxes.c ermine/sites/c/sites.c extensions/patchy/c/patch.c ermine/system/c/nodes.c ermine/system/c/computers.c ermine/system/c/actions.c ermine/system/c/host.c ermine/system/c/ermine_harness.c
+# ermine (ermine/system): the process api and createErmine, over core's scheduler, table, places, guard, protect and status, ermine's processes (rows, start, scopes), runs and sites. five files (ermine.h says each's job), the last the line protocol; no places or world harness
+system_src = $(filter-out core/places/c/places_harness.c core/places/c/world_harness.c,$(places_src)) core/places/c/guard.c core/protect/c/protect.c ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/start.c ermine/processes/c/runs.c ermine/sites/c/sites.c extensions/patchy/c/patch.c ermine/system/c/nodes.c ermine/system/c/computers.c ermine/system/c/actions.c ermine/system/c/host.c ermine/system/c/ermine_harness.c
 system = ermine/system/c/ermine-harness
 system_suite = ermine
 LIBS += system
@@ -157,8 +151,8 @@ places-test_src = $(filter-out conformance/c/harness.c core/op/c/json.c conforma
 places-test = core/places/c/places-test
 LIBS += places-test
 # programs (playground/programs): satisfy and open (programs) and start, over ermine/types, experiments/software (its processes ermine/processes' start) and
-# the compilers library and host functions; compilers (playground/compilers) on its own. on the places harness's world with boxes
-programs_base = $(filter-out core/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/boxes/c/boxes.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) experiments/software/c/functions.c
+# the compilers library and host functions; compilers (playground/compilers) on its own. on the places harness's world
+programs_base = $(filter-out core/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) experiments/software/c/functions.c
 programs_lib = ermine/types/c/types.c ermine/types/c/utis.c playground/programs/c/programs.c playground/programs/c/programs_json.c
 # software's own files (experiments/software): start runs its processes on it
 software_lib = experiments/software/c/common.c experiments/software/c/offers.c experiments/software/c/run.c experiments/software/c/software.c
@@ -219,7 +213,7 @@ trust_suite = trust
 LIBS += trust
 # software (experiments/software): offers and run, with no den, policy or asks; processes of its own; ermine/types,
 # for matching by conformance; the C api (ermine/api), for its teller runner
-software_src = $(filter-out core/places/c/places_harness.c core/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/start.c ermine/processes/c/runs.c ermine/boxes/c/boxes.c ermine/sites/c/sites.c core/protect/c/protect.c experiments/software/c/functions.c ermine/types/c/types.c ermine/types/c/utis.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) core/places/c/guard.c extensions/patchy/c/patch.c ermine/api/c/api.c experiments/software/c/common.c experiments/software/c/offers.c experiments/software/c/run.c experiments/software/c/software.c experiments/software/c/software_harness.c
+software_src = $(filter-out core/places/c/places_harness.c core/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/start.c ermine/processes/c/runs.c ermine/sites/c/sites.c core/protect/c/protect.c experiments/software/c/functions.c ermine/types/c/types.c ermine/types/c/utis.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) core/places/c/guard.c extensions/patchy/c/patch.c ermine/api/c/api.c experiments/software/c/common.c experiments/software/c/offers.c experiments/software/c/run.c experiments/software/c/software.c experiments/software/c/software_harness.c
 software = experiments/software/c/software-harness
 software_suite = software
 # out of LIBS while the old C api (ermine/api) is gone and the new C isn't written (chee 10-25)

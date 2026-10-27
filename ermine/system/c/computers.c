@@ -13,7 +13,7 @@
 //
 // what B asks of the others (the header says each): A's es_resolve, es_inside, es_owner,
 // es_place_under, es_folder_slot, es_context_put, es_node_of, es_id_of, es_seen_in,
-// es_path_in, es_handle_make; C's es_calls_made, es_calls_waits; D's es_new_id, es_queue_pulse,
+// es_handle_make; C's es_calls_made, es_calls_waits; D's es_new_id, es_queue_pulse,
 // es_enter, es_hook_status, es_held_*, es_promise_*. es_hook_status gives a status of its own
 // (es_status_free); one that shares the base's pieces is fine. es_computers_free runs while the
 // scheduler is still there (it lets go of the promises it made).
@@ -700,24 +700,25 @@ static char *error_text(const op_value *v) {
 	return es_dup("error");
 }
 
-// a path as c sees it, for a waiting (has_path 0: outside its box), the names copied
+// a path from the root, for a waiting (has_path 0: nothing reaches it), the names copied
+static void waiting_path_of(es_waiting *w, const char *const *path, size_t n) {
+	w->has_path = 1;
+	w->npath = n;
+	w->path = es_alloc((n + 1) * sizeof *w->path);
+	for (size_t i = 0; i < n; i++) w->path[i] = es_dup(path[i]);
+}
 static void waiting_path(es_waiting *w, int found, es_names *names) {
 	if (!found) return;
-	w->has_path = 1;
-	w->npath = names->n;
-	w->path = es_alloc((names->n + 1) * sizeof *w->path);
-	for (size_t i = 0; i < names->n; i++) w->path[i] = es_dup(names->names[i]);
+	waiting_path_of(w, (const char *const *)names->names, names->n);
 	es_names_free(names);
 }
 
-// a send's wait as c sees it: where the send went (its path in the sender's box, or the node it named)
+// a send's wait as c sees it: where the send went (its path from the root, or the node it named)
 static void wait_of(es_context *c, const es_wait *w, es_waiting *out) {
 	es_names names = {0};
 	*out = (es_waiting){.kind = ES_WAIT_SEND, .since = w->since};
-	int found = w->has_path
-		? es_path_in(c->ermine, c, w->box, (const char *const *)w->path, w->npath, &names)
-		: es_seen_in(c->ermine, c, w->id, &names);
-	waiting_path(out, found, &names);
+	if (w->has_path) waiting_path_of(out, (const char *const *)w->path, w->npath);
+	else waiting_path(out, es_seen_in(c->ermine, c, w->id, &names), &names);
 }
 
 // a path an op_value list holds, the names copied
@@ -745,8 +746,8 @@ static void said_of(es_context *c, const op_value *w, es_waiting *out) {
 	const op_value *send = op_get(w, "send"), *code = op_get(w, "code"), *node = op_get(w, "node");
 	const op_value *missing = op_get(w, "missing");
 	if (send != NULL) {
-		const op_value *box = op_get(w, "box"), *since = op_get(w, "since");
-		es_wait wait = {.box = (char *)(box != NULL && box->type == OP_STR ? box->str : "")};
+		const op_value *since = op_get(w, "since");
+		es_wait wait = {0};
 		if (since != NULL) op_as_double(since, &wait.since);
 		if (send->type == OP_LIST) wait.has_path = list_names(send, &wait.path, &wait.npath);
 		else if (send->type == OP_STR) wait.id = send->str;
@@ -762,13 +763,12 @@ static void said_of(es_context *c, const op_value *w, es_waiting *out) {
 		out->kind = ES_WAIT_NODE;
 		out->has_path = list_names(node, &out->path, &out->npath);
 	} else if (missing != NULL) {
-		// a node it read that wasn't there: its path from the root, as c sees it
+		// a node it read that wasn't there: its path from the root
 		out->kind = ES_WAIT_NODE;
 		char **abs;
 		size_t nabs;
-		es_names seen = {0};
 		if (list_names(missing, &abs, &nabs)) {
-			waiting_path(out, es_path_seen(c, (const char *const *)abs, nabs, &seen), &seen);
+			waiting_path_of(out, (const char *const *)abs, nabs);
 			for (size_t i = 0; i < nabs; i++) free(abs[i]);
 			free(abs);
 		}
@@ -877,9 +877,7 @@ static int computer_status(es_context *c, es_context *t, const char *id, const o
 	if (missing != NULL && r != NULL && missing->has_n && missing->n == r->n) {
 		for (size_t i = 0; i < missing->npaths; i++) {
 			es_waiting item = {.kind = ES_WAIT_NODE};
-			es_names seen = {0};
-			waiting_path(&item, es_path_seen(c, (const char *const *)missing->paths[i].names,
-				missing->paths[i].n, &seen), &seen);
+			waiting_path_of(&item, (const char *const *)missing->paths[i].names, missing->paths[i].n);
 			ES_PUSH(waiting, nwaiting, cap, item);
 		}
 	}

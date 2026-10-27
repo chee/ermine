@@ -452,7 +452,7 @@ const op_value *es_view_change(es_ermine *e, const es_change_view *v) {
 
 // --- records as a process sees them ------------------------------------------------------------------------
 
-// a record's read or write: the part, and the node's path as c sees it (none: outside its box)
+// a record's read or write: the part, and the node's path from the root (none: nothing reaches it)
 static void touched(es_context *c, es_touched *out, const char *part, const char *id) {
 	es_names names;
 	out->part = es_dup(part);
@@ -929,7 +929,6 @@ static es_call *call_copy(const es_call *c) {
 static void wait_free(es_wait *w) {
 	free(w->caller);
 	free(w->id);
-	free(w->box);
 	names_free_all(w->path, w->npath);
 }
 
@@ -1427,8 +1426,7 @@ static void arm(struct es_calls *x, sc_scope *scope, const char *caller, int has
 	free(sc_register_teardown(x->e->scheduler, scope, armed_gone, a));
 }
 
-void es_calls_wait(es_ermine *e, const char *caller, const es_aim *at, const char *box,
-	sc_scope *scope) {
+void es_calls_wait(es_ermine *e, const char *caller, const es_aim *at, sc_scope *scope) {
 	struct es_calls *x = e->calls;
 	waiter *w = waiter_of(x, caller);
 	if (w == NULL) {
@@ -1457,7 +1455,6 @@ void es_calls_wait(es_ermine *e, const char *caller, const es_aim *at, const cha
 	} else {
 		t.wait.id = es_dup(at->id);
 	}
-	t.wait.box = es_dup(box);
 	t.wait.since = now();
 	ES_PUSH(w->items, w->n, w->cap, t);
 	mark_list(x);
@@ -1488,7 +1485,6 @@ static void wait_copy(es_wait *to, const es_wait *from) {
 	if (from->npath > 0) to->path = es_alloc(from->npath * sizeof *to->path);
 	for (size_t i = 0; i < from->npath; i++) to->path[to->npath++] = es_dup(from->path[i]);
 	to->id = opt_dup(from->id);
-	to->box = es_dup(from->box);
 	to->since = from->since;
 }
 
@@ -1852,8 +1848,8 @@ static int execute_action(es_context *c, es_target x, const op_value *const *arg
 	if (pl_status(t->places) != SC_OK) {
 		code = ES_STOP;
 	} else if (value == NULL) {
-		// lasting while the caller does: a computer's with it, else the context's. the path: in t's box
-		es_calls_wait(e, caller, &at, t->box->root, computer != NULL ? computer : c->scope);
+		// lasting while the caller does: a computer's with it, else the context's. the path: from the root
+		es_calls_wait(e, caller, &at, computer != NULL ? computer : c->scope);
 		code = ES_PENDING;
 	} else if (fn_of(e->actions, value) == NULL) {
 		char *where = n.has_path ? joined((const char *const *)n.path, n.npath) : NULL;
@@ -1896,7 +1892,8 @@ int es_get_caller(es_context *c, es_caller *out) {
 	return 0;
 }
 
-int es_caller_place(void *ctx, const char *const **from, size_t *nfrom, tb_key *box) {
+int es_caller_place(void *ctx, const char *const **from, size_t *nfrom, tb_key *box_unused) {
+	(void)box_unused;
 	es_context *c = ctx;
 	es_ermine *e = c->ermine;
 	for (sc_scope *o = sc_get_current_scope(e->scheduler); o != NULL; o = sc_scope_parent(o)) {
@@ -1909,7 +1906,6 @@ int es_caller_place(void *ctx, const char *const **from, size_t *nfrom, tb_key *
 		es_context *by = es_process_context_of(e, node->str);
 		if (by != NULL && by->process != NULL) {
 			*from = (const char *const *)by->at, *nfrom = by->nat;
-			*box = tb_string(by->box->root);
 		}
 		return 1;
 	}

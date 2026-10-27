@@ -24,7 +24,7 @@ typedef struct {
 static char *waits_as_it_goes(void *data) {
 	going_t *g = data;
 	es_aim aim = {.id = "n9"};
-	es_calls_wait(g->e, "caller", &aim, "R", g->scope);
+	es_calls_wait(g->e, "caller", &aim, g->scope);
 	return NULL;
 }
 static void wait_in_a_scope_going(void) {
