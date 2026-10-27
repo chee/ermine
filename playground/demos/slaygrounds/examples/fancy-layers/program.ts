@@ -16,7 +16,7 @@ import { createPatch, layers } from "@ermine/patchy/feature"
 import { bind, handler } from "ermine-h"
 
 // fancy-layers: a pixel editor on patch nodes. the picture is a node, ./picture, an array of 256
-// colours. the layers over it are patch nodes (patch/land/layers, the world's overlay) placed under
+// colours. the layers over it are patch nodes (patch/land/layers, patchy's overlay) placed under
 // it, made in the order they come, so a read of ./picture gives the picture with them all laid
 // over it, and the stored value is never written while you draw:
 //
