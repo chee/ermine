@@ -70,14 +70,12 @@ const low = (c: number) => (c & 0xfc00) === 0xdc00
 // a bigint index or range end is the whole number it is (cbor.ts reads one past 2^53 - 1 as a
 // bigint: past every end); the patch as given when it has none
 const big = (k: unknown) => typeof k === "bigint"
+const unbig = <T>(keys: T): T =>
+	isList(keys) && keys.some(big) ? keys.map((k) => big(k) ? Number(k) : k) as T : keys
 function numbered(p: Patch): Patch {
 	if (p === null || typeof p !== "object") return p
-	const path = isList(p.path) && p.path.some(big)
-		? p.path.map((k) => big(k) ? Number(k) : k) as Key[]
-		: p.path
-	const range = isList(p.range) && p.range.some(big)
-		? p.range.map((k) => big(k) ? Number(k) : k) as unknown as [number, number]
-		: p.range
+	const path = unbig(p.path)
+	const range = unbig(p.range)
 	const move = p.move !== null && typeof p.move === "object" ? numbered(p.move as Patch) : p.move
 	if (path === p.path && range === p.range && move === p.move) return p
 	const q = { ...p, path } as Patch
@@ -294,14 +292,8 @@ function createWork(
 		const old = Object.hasOwn(at, k) ? at[k] : ABSENT
 		if (w === undefined) delete at[k]
 		// a key of "__proto__" is a key: an engine with the setter would set the prototype
-		else if (k === "__proto__") {
-			Object.defineProperty(at, k, {
-				value: w,
-				writable: true,
-				enumerable: true,
-				configurable: true,
-			})
-		} else at[k] = w
+		else if (k === "__proto__") define(at, k, w)
+		else at[k] = w
 		return old
 	}
 
@@ -512,17 +504,15 @@ function putBack(v: unknown, back: { was: Map<object, object>; under: Set<object
 		const r = putBack(m[k], back)
 		if (r === m[k]) continue
 		// "__proto__" is a key: an engine with the setter would set the prototype
-		if (k === "__proto__") {
-			Object.defineProperty(m, k, {
-				value: r,
-				writable: true,
-				enumerable: true,
-				configurable: true,
-			})
-		} else m[k] = r
+		if (k === "__proto__") define(m, k, r)
+		else m[k] = r
 	}
 	return v
 }
+
+// a key put as an own one, whatever its name
+const define = (o: object, k: string, value: unknown) =>
+	Object.defineProperty(o, k, { value, writable: true, enumerable: true, configurable: true })
 
 // lists, maps and typed arrays copied all the way down; the rest (strings, numbers, bytes) as is
 function clone(v: unknown): unknown {
@@ -530,23 +520,17 @@ function clone(v: unknown): unknown {
 	if (isMap(v)) {
 		const o: Record<string, unknown> = {}
 		for (const k of Object.keys(v)) {
-			Object.defineProperty(o, k, {
-				value: clone(v[k]),
-				writable: true,
-				enumerable: true,
-				configurable: true,
-			})
+			define(o, k, clone(v[k]))
 		}
 		return o
 	}
 	return typed(v) ? v.slice() : v
 }
 
-const same = (a: readonly Key[], b: readonly Key[]) =>
-	a.length === b.length && a.every((k, i) => k === b[i])
 // b is a, or under it
 const within = (a: readonly Key[], b: readonly Key[]) =>
 	a.length <= b.length && a.every((k, i) => k === b[i])
+const same = (a: readonly Key[], b: readonly Key[]) => a.length === b.length && within(a, b)
 
 // p's place lies inside what from takes: under its path, or in its span
 function under(p: Target, from: Target) {
