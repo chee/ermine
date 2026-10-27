@@ -4,7 +4,6 @@
 	"license": "AGPL-3.0-or-later",
 	"exports": {
 		".": "./typescript/programs.ts",
-		"./api": "./typescript/api.ts",
 		"./start": "./typescript/start.ts"
 	}
 }

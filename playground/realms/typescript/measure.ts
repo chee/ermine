@@ -1,6 +1,6 @@
 // what a realm costs, on this machine: deno run --allow-all playground/realms/typescript/measure.ts
 //   startup      new Worker to setup run (the worker importing ermine: scheduler, table, places,
-//                ermine/api and what it imports), the first and then each one after
+//                @ermine/system and what it imports), the first and then each one after
 //   first read   in the worker, a run reading what isn't loaded to its run with the value: pending,
 //                the load asked, the page's entries sent, landed, run again
 //   rerun        a write on the page to the act of a worker effect reading it and its write landing
@@ -22,22 +22,23 @@ w.program("empty.js", `export default function () { return "ready" }`)
 for (let i = 0; i < 5; i++) {
 	const t = performance.now()
 	const p = w.start("empty.js", [`empty${i}`])
-	await until(() => w.table.get("value", p.id)?.value === "ready")
+	await until(() => w.table.get("value", p.process.id)?.value === "ready")
 	starts.push(performance.now() - t)
 }
 
 // first read, then reruns
 w.program(
 	"echo.js",
-	`export default function ({ open, read, edit, effect }) {
+	`import { createEffect, ensureNode, patch, read } from "@ermine/system"
+	export default function () {
 		let t0
-		const echo = open("./echo", -1)
-		effect("echo", () => {
+		const echo = ensureNode("./echo", -1)
+		createEffect("echo", () => {
 			t0 ??= performance.now()
 			return read("./n")
 		}, (v) => {
-			if (v === 0) open("./took", performance.now() - t0)
-			edit(echo, () => v)
+			if (v === 0) ensureNode("./took", performance.now() - t0)
+			patch(echo, [{ path: [], value: v }])
 		})
 	}`,
 )
@@ -46,7 +47,7 @@ await until(() => w.value(["took"]) !== undefined)
 const first = w.value(["took"]) as number
 
 const reruns: number[] = []
-const echo = get(w.b.places, ["echo"])!
+const echo = get(w.places, ["work", "echo"])!
 for (let i = 1; i <= 500; i++) {
 	const landed = new Promise<void>((resolve) => {
 		const off = w.places.watchAll((f) => {

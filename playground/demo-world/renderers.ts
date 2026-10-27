@@ -10,7 +10,7 @@
 //   	renderers(h, "/renderers", mod.renderers)
 //   })
 //   // in a process whose folder is /screens/dom:
-//   export const dom = (api) => mirror(api, hosts.dom, "/app/ui")
+//   export const dom = () => mirror(hosts.dom, "/app/ui", openwith)   // openwith: the host's
 //
 // renderers are openers, found by programs' openwith:
 //   a renderer is a node: attributes opens (the UTI of the nodes it draws) and needs (keys), type
@@ -23,8 +23,18 @@
 //     ways fit but are farther; the misses are the ones a missing key stopped
 // what it does not do: compose (a list drawn as text drawn as view): one step only, and no renderer
 // is chosen for a node with no type
-import type { API } from "@ermine/programs/api"
-import { ATTRIBUTES as A } from "@ermine/programs"
+import { ATTRIBUTES as A, type Way, type Whynot } from "@ermine/programs"
+import {
+	addTeardown,
+	createEffect,
+	ensureNode,
+	type Ermine,
+	executeAction,
+	patch,
+	patchAttributes,
+	read,
+	readAttributes,
+} from "@ermine/system"
 
 const JS = "com.netscape.javascript-source"
 
@@ -238,10 +248,17 @@ type Rec = {
 const last = (p: readonly string[]) => p[p.length - 1]
 const upto = (p: readonly string[]) => "/" + p.slice(0, -1).join("/")
 
-export function mirror(api: API, h: Host, at: string) {
-	const { open, read, edit, effect, openwith, send, info, teardown } = api
-	const got = open("got", [])
-	const ops = open("ops", {})
+// what finds the ways to open a node, nearest first: the host's (programs' openwith over its places,
+// from where the mirror runs), a process holding no places of its own
+export type Openwith = (
+	x: unknown,
+	options?: { onwhynot?: (why: Whynot) => void },
+) => Iterable<Way>
+
+// called from the mirror process's program, as any program calls @ermine/system's functions
+export function mirror(h: Host, at: string, openwith: Openwith) {
+	const got = ensureNode("got", [])
+	const ops = ensureNode("ops", {})
 	let top: Rec | undefined
 	let shown: any[] = []
 	let wrote = ["", ""]
@@ -256,7 +273,7 @@ export function mirror(api: API, h: Host, at: string) {
 				return { tag: x.tag, attrs: x.attrs ?? {}, kids: (x.kids ?? []).map(walk) }
 			}
 			const value = read(x.node)
-			const type = read(info(x.node), [A.type]) as string | undefined
+			const type = readAttributes(x.node, [A.type]) as string | undefined
 			const ways = []
 			// the whynots that matter: a renderer that fits but whose runner lacks a key it needs. the
 			// runner says what is missing (needs, for the renderer), the renderer says it has no chain
@@ -299,7 +316,7 @@ export function mirror(api: API, h: Host, at: string) {
 					}: not on this walk`
 					: `nothing here opens ${type}`,
 			})
-			const draw = pick ? read({ id: pick.id, part: "value" }) as Draw : undefined
+			const draw = pick ? read("/" + pick.at.join("/")) as Draw : undefined
 			return { node: x.node, value, draw }
 		}
 		return ui === undefined ? undefined : { tree: walk(ui), rows }
@@ -332,7 +349,11 @@ export function mirror(api: API, h: Host, at: string) {
 			if (was[k] === d.attrs[k]) continue
 			const v = d.attrs[k]
 			// on:<event> is a method's path: a click sends to it, as the person (the native event)
-			h.setProperty(out, k, k.startsWith("on:") && typeof v === "string" ? () => send(v) : v)
+			h.setProperty(
+				out,
+				k,
+				k.startsWith("on:") && typeof v === "string" ? () => executeAction(v) : v,
+			)
 		}
 		const kids = d.kids.map((k, i) => make(k, same ? prev!.kids![i] : undefined))
 		const next = kids.map((k) => k.out).filter((o) => o != null)
@@ -345,7 +366,7 @@ export function mirror(api: API, h: Host, at: string) {
 		}
 	}
 
-	effect("mirror", describe, (d) => {
+	createEffect("mirror", describe, (d) => {
 		const before = { ...h.ops }
 		top = d && make(d.tree, top)
 		shown = reconcile(h, h.root, shown, top?.out ? [top.out] : [])
@@ -355,13 +376,13 @@ export function mirror(api: API, h: Host, at: string) {
 		// a write only for what changed: the table and the counts are nodes
 		const rows = JSON.stringify(d?.rows ?? [])
 		const counts = JSON.stringify(done)
-		if (rows !== wrote[0]) edit(got, [{ path: [], value: d?.rows ?? [] }])
-		if (counts !== wrote[1]) edit(ops, [{ path: [], value: done }])
+		if (rows !== wrote[0]) patch(got, [{ path: [], value: d?.rows ?? [] }])
+		if (counts !== wrote[1]) patch(ops, [{ path: [], value: done }])
 		wrote = [rows, counts]
 	})
 
 	// the process gone or replaced: its drawing taken off the screen
-	teardown(() => {
+	addTeardown(() => {
 		reconcile(h, h.root, shown, [])
 		h.paint?.()
 	})
@@ -388,18 +409,17 @@ export function reconcile(host: Host, parent: any, current: any[], next: any[]) 
 // ---- the nodes, written with the api given (a host's, in a seed) ----
 
 // a node at a path: made if not there, its value then written, its attributes written whole
-function put(h: API, at: string, value: unknown, attributes: Record<string, unknown>) {
-	const node = h.open(at)
-	if (h.read(node) === undefined) h.open(at, value)
-	else h.edit(node, [{ path: [], value }])
-	h.edit(h.info(node), [{ path: [], value: attributes }])
+function put(h: Ermine, at: string, value: unknown, attributes: Record<string, unknown>) {
+	const node = h.ensureNode(at)
+	h.patch(node, [{ path: [], value }])
+	h.patchAttributes(node, [{ path: [], value: attributes }])
 }
 
 // the folder at `at` says loaders (its children are the candidates, in its place) and holds the
 // renderers given, no others: each a node, its draw the value, typed javascript, opening its UTI
-export function renderers(h: API, at: string, given: Record<string, Renderer> = {}) {
-	const node = h.open(at, null)
-	h.edit(h.info(node), [{ path: [], value: { [A.loaders]: true } }])
+export function renderers(h: Ermine, at: string, given: Record<string, Renderer> = {}) {
+	const node = h.ensureNode(at, null)
+	h.patchAttributes(node, [{ path: [], value: { [A.loaders]: true } }])
 	for (const [name, r] of Object.entries(given)) {
 		put(h, `${at}/${name}`, r.draw, {
 			[A.type]: JS,
@@ -413,6 +433,6 @@ export function renderers(h: API, at: string, given: Record<string, Renderer> = 
 // a screen's runner at `at`: a live function from the host (no type) taking javascript, giving the
 // host (to @ermine/software, a runner: the function its start). what it provides is the screen's
 // keys: a renderer needing one has a way only on a walk with a runner giving it
-export function runner(h: API, at: string, host: Host, provides: readonly string[]) {
+export function runner(h: Ermine, at: string, host: Host, provides: readonly string[]) {
 	put(h, at, () => host, { [A.takes]: [JS], [A.provides]: provides })
 }

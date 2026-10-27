@@ -1,9 +1,10 @@
-// a realm's side: real ermine in a worker. its own scheduler, a table that is a partial replica of
-// the page's (replica.ts), places over it asked as the page's are, and ermine/api's
-// createProcessAPIs: the program is given the real api, unchanged. what it reaches and does not
-// have is pending: asked of the page, and it runs again as it lands. what it writes (its edits, its
-// memos' and effects' results, their status and run records) is an ordinary write here, each change
-// sent to the page as it lands (places' watchAll), where it is written again as the process
+// a realm's side: real ermine in a worker: a createErmine of its own (@ermine/system), its table a
+// partial replica of the page's (replica.ts, put in front of the table by a feature's onTable), the
+// program run as a process of it, the page's process's own node, id and path: the program imports
+// @ermine/system's functions and calls them, unchanged. what it reaches and does not have is pending:
+// asked of the page, and it runs again as it lands. what it writes (its writes, its memos' and
+// effects' results, their status and run records) is an ordinary write here, each change sent to
+// the page as it lands (places' watchAll), where it is written again as the process
 //
 //   serve(port)       // a worker's own global: served as it loads
 //
@@ -12,9 +13,10 @@
 // it has (or wrote). a change landing from the page is written here with the page's header, told as
 // any write is, and never sent back
 //
-// setup: run once, with the api, as software runs a runner (createProcessAPIs' run.start: its
-// return the process's value). a setup that reads what is not loaded yet throws PENDING: what it
-// made is torn down and it runs again once something lands (open: its writes so far stay)
+// setup: run once, given nothing, as ermine's start runs it (its return the process's value). a
+// setup that reads what is not loaded yet throws PENDING: the process is stopped (what it made torn
+// down) and started again once something lands (open: its writes so far stay). what the start
+// itself writes (its row, its attributes, its status: the page's process has them) is not sent
 //
 // a method's call from the page: run in a scope of the call's info, its writes sent with the call
 // (written on the page as the caller's), its return sent back (a promise: as it lands). a send to
@@ -25,21 +27,12 @@
 import createEntry, { type ChangeHeader } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
 import apply, { type Patch } from "@ermine/core/op/apply"
-import { createProcessAPIs } from "@ermine/programs/api"
-import {
-	children,
-	type Contributor,
-	createPlaces,
-	type Fact,
-	type Places,
-} from "@ermine/core/places"
-import { NODE } from "@ermine/core/places/header"
-import { PROCESS, processes } from "@ermine/processes"
+import type { Fact, Places } from "@ermine/core/places"
+import { PROCESS } from "@ermine/processes"
 import { createScheduler, type Info, PENDING, type Scope } from "@ermine/core/scheduler"
-import { createSites } from "@ermine/sites"
 import { isPromise } from "@ermine/core/scheduler/helpers"
-import { createPaths } from "@ermine/core/scheduler/paths"
-import type { Key } from "@ermine/core/table"
+import type { Key, Table } from "@ermine/core/table"
+import { createErmine, type Ermine, type Feature, type Layer, uuidv7 } from "@ermine/system"
 import { createReplica, type Replica } from "./replica.ts"
 import {
 	decode,
@@ -56,6 +49,8 @@ import {
 } from "./wire.ts"
 
 const key = (part: string, id: string) => `${part}\u0000${id}`
+const isMap = (v: unknown): v is Record<string, unknown> =>
+	typeof v === "object" && v !== null && !Array.isArray(v) && !ArrayBuffer.isView(v)
 
 type Start = Extract<PageMessage, { t: "start" }>
 
@@ -63,11 +58,17 @@ type Start = Extract<PageMessage, { t: "start" }>
 type World = {
 	s: ReturnType<typeof createScheduler>
 	r: Replica
+	ermine: Ermine
+	// ermine's own table, under the replica's hook: what lands is put here
+	table: Table
 	places: Places
-	root: Scope
-	// the process's: [["process", at], [NODE, its id]] (the node's entries are the page's)
+	// the process's scope (the node's entries are the page's)
 	scope?: Scope
-	apis: ReturnType<typeof createProcessAPIs>
+	// the process: what the start writes beside the program's own is not sent
+	pid?: string
+	at?: readonly string[]
+	// ids the next starts give (the page's process's)
+	ids: string[]
 }
 
 // the realm's side of the wire on port; gives back the stop (the port let go)
@@ -106,7 +107,7 @@ export function serve(port: Port): () => void {
 		queueMicrotask(() => {
 			queued = false
 			try {
-				w!.s.pulse()
+				w!.ermine.pulse()
 			} catch (e) {
 				report(e)
 			}
@@ -130,10 +131,10 @@ export function serve(port: Port): () => void {
 	}
 
 	// an entry put in whole, told as a table event, never sent back
-	function put(r: Replica, part: Key, id: string, value: unknown, change?: ChangeHeader) {
+	function put(part: Key, id: string, value: unknown, change?: ChangeHeader) {
 		skip = key(part, id)
 		try {
-			r.raw.sub(part, id, createEntry(value, change ?? ({ time: 0, actor: undefined })))
+			w!.table.sub(part, id, createEntry(value, change ?? ({ time: 0, actor: undefined })))
 		} finally {
 			skip = undefined
 		}
@@ -153,20 +154,24 @@ export function serve(port: Port): () => void {
 				? decode(p.value, part === "value" ? () => standIn(load.id) : undefined)
 				: p.value
 			const change = enc && p.change ? decode(p.change) as ChangeHeader : p.change
-			r.point(pointed(part, value))
-			put(r, part, load.id, value, change)
+			// the page's row of this very process is the start's to write here
+			const v = (part as string) === PROCESS && load.id === w!.places.root
+				? withoutRow(value)
+				: value
+			r.point(pointed(part, v))
+			put(part, load.id, v, change)
 		}
 	}
 
 	function fact(m: Extract<PageMessage, { t: "fact" }>) {
-		const { r, places } = w!
+		const { r, places, table } = w!
 		base = m.seq
 		const part = m.part as Key, id = m.id
 		if (m.bad !== undefined) {
 			r.bad(part, id, m.bad)
 			skip = key(part, id)
 			try {
-				if (r.raw.get(part, id) !== undefined) r.raw.del(part, id)
+				if (table.get(part, id) !== undefined) table.del(part, id)
 				else places.onTableChange(part, id)
 			} finally {
 				skip = undefined
@@ -177,10 +182,10 @@ export function serve(port: Port): () => void {
 		const change = m.enc && m.change ? decode(m.change) as ChangeHeader : m.change
 		try {
 			if (m.gone) {
-				if (r.raw.get(part, id) === undefined) return
+				if (table.get(part, id) === undefined) return
 				skip = key(part, id)
 				try {
-					r.raw.del(part, id)
+					table.del(part, id)
 				} finally {
 					skip = undefined
 				}
@@ -188,9 +193,9 @@ export function serve(port: Port): () => void {
 			}
 			const patches = m.enc ? decodePatches(part, m.patches!, () => standIn(id)) : m.patches!
 			for (const p of patches) if (p.value !== undefined) r.point(pointed(part, p.value))
-			const entry = r.raw.get(part, id)
+			const entry = table.get(part, id)
 			if (entry === undefined || m.reset) {
-				put(r, part, id, apply(undefined, patches), change)
+				put(part, id, apply(undefined, patches), change)
 				return
 			}
 			inbound = patches
@@ -225,13 +230,13 @@ export function serve(port: Port): () => void {
 				port.postMessage({ t: "called", k: m.k, error })
 			}
 		}
-		const { r, s } = w!
-		const fn = r.raw.get("value", m.id)?.value
+		const { table, s } = w!
+		const fn = table.get("value", m.id)?.value
 		if (typeof fn !== "function") return reply({ error: new Error(`not-a-method (${m.id})`) })
 		const args = (m.enc ? decode(m.args) : m.args) as unknown[]
 		const info = (m.enc ? decode(m.info) : m.info) as Info
 		const once = () => {
-			const scope = s.createScope(info, w!.scope ?? w!.root)
+			const scope = s.createScope(info, w!.scope)
 			// the scope torn down, the call still open (its teardowns' writes are the call's)
 			const done = () => {
 				current = m.k
@@ -264,50 +269,44 @@ export function serve(port: Port): () => void {
 		once()
 	}
 
+	// the process's own row taken out of the root's rows: the start writes it here
+	function withoutRow(rows: unknown, at = w!.at ?? []): unknown {
+		if (!isMap(rows) || at.length === 0) return rows
+		const [head, ...rest] = at
+		if (!(head in rows)) return rows
+		const out = { ...rows }
+		if (rest.length === 0) delete out[head]
+		else out[head] = withoutRow(rows[head], rest)
+		return out
+	}
+
 	function begin(m: Start) {
 		const s = createScheduler()
-		const paths = createPaths<unknown>()
-		let places!: Places
-		const r = createReplica({
-			scheduler: s,
-			want: (id) => port.postMessage({ t: "load", id: String(id) }),
-			event: (part, id) => places.onTableChange(part, id),
-		})
-		const by = (name: string): Contributor => {
-			if (name === "children") return children
-			if (name === "process") return processes(m.root)
-			throw new Error(`a contributor won't cross to a realm: ${name}`)
-		}
-		places = createPlaces({
-			root: m.root,
-			table: r.table,
-			paths,
-			scheduler: s,
-			contributors: m.contributors.length ? m.contributors.map(by) : undefined,
-		})
-		s.onTrackingEnd((k) => places.release(k))
-		const root = s.createRootScope({ realm: "worker" })
-		const commit = (changed: Parameters<Places["commit"]>[0]) => places.commit(changed)
-		// a memo's or effect's site: the program's line (the apis and the scheduler are ours); a
-		// write in its run carries it to the page
-		const sites = createSites(s, {
-			ours: [
-				import.meta.url,
-				import.meta.resolve("@ermine/api"),
-				import.meta.resolve("@ermine/programs/api"),
-				import.meta.resolve("@ermine/core/scheduler"),
-			],
-		})
-		const apis = createProcessAPIs({
-			scheduler: s,
-			sites,
-			table: r.table,
-			commit,
-			host: { places, table: r.table, scheduler: s, commit },
-			programs: () => {
-				throw new Error("start and stop can't cross to a realm yet: it has no programs")
+		const ids: string[] = []
+		let r!: Replica
+		// the replica in front of the table places reads: a get at an id not loaded yet is pending
+		const feature: Feature = {
+			name: "realm",
+			files: [import.meta.url, new URL("./replica.ts", import.meta.url).href],
+			setup(f) {
+				f.onTable((table, next) => {
+					const under = next(table)
+					r = createReplica({
+						scheduler: s,
+						under,
+						want: (id) => port.postMessage({ t: "load", id: String(id) }),
+					})
+					return { get: r.get, who: under.who } as unknown as Layer
+				})
 			},
-			notice: (made) => {
+		}
+		const ermine = createErmine({
+			scheduler: s,
+			features: [feature],
+			root: m.root,
+			id: () => ids.shift() ?? uuidv7(),
+			// a memo's or effect's node and where it is, told to the page, which takes them out with the realm
+			onCreateFunction: (made) => {
 				if (made.kind === "method") return
 				const path = made.node.path
 				port.postMessage({
@@ -318,15 +317,18 @@ export function serve(port: Port): () => void {
 				})
 			},
 		})
-		w = { s, r, places, root, apis }
+		const { places, table } = ermine
+		w = { s, r, ermine, table, places, ids, at: [...m.process.at], pid: m.process.id }
 		base = m.seq
 		r.point([m.root])
 		for (const load of m.loads) land(load, m.enc === true)
 
-		// every change landing here, but what came from the page, sent to it
+		// every change landing here, but what came from the page (and the start's own), sent to it
 		places.watchAll((f: Fact) => {
 			if (f.patches === inbound || typeof f.id !== "string") return
 			if (skip !== undefined && key(f.part, f.id) === skip) return
+			if (f.id === w!.pid && (f.part === "attributes" || f.part === "status")) return
+			if ((f.part as string) === PROCESS && f.id === places.root) return
 			if (!r.waiting(f.id)) r.loaded(f.id)
 			const out: RealmMessage = {
 				t: "fact",
@@ -356,7 +358,7 @@ export function serve(port: Port): () => void {
 	}
 
 	async function setup(m: Start) {
-		const { s, apis, places } = w!
+		const { ermine, ids } = w!
 		let mod: unknown
 		try {
 			const url = typeof m.code === "string"
@@ -368,32 +370,44 @@ export function serve(port: Port): () => void {
 			tell({ t: "ready", error })
 			return
 		}
-		const { id, at, args, folder } = m.process
+		const { id, at, args } = m.process
+		const f = typeof mod === "function" ? mod : (mod as { default?: unknown } | null)?.default
 		for (;;) {
-			const scope = s.createScope({ process: [...at], [NODE]: id }, w!.root)
-			w!.scope = scope
-			const ctx = {
-				scope,
-				box: { root: m.root, places },
-				folder,
-				at,
-				args,
-				process: { id, at, folder, scope },
+			// the program, given nothing, run as the process's setup: a PENDING it throws is told apart
+			// from an error (ermine's start would leave the process pending, never run again)
+			let pending = false
+			const program = () => {
+				if (typeof f !== "function") {
+					throw new TypeError("not a program: no function, no default")
+				}
+				try {
+					return (f as () => unknown)()
+				} catch (e) {
+					if (e === PENDING) pending = true
+					throw e
+				}
 			}
-			try {
-				s.runWithScope(scope, () => apis.run.start(mod, ctx))
-				break
-			} catch (error) {
-				if (error !== PENDING) {
+			ids.push(id)
+			const started = ermine.start(program, [...at], { args: [...args] })
+			if ("refused" in started) {
+				tell({ t: "ready", error: new Error(`refused: ${started.refused}`) })
+				return
+			}
+			w!.scope = started.process.scope
+			if (!pending) {
+				const status = started.status()
+				if (status?.state === "failed") {
 					tell(
-						{ t: "ready", error },
+						{ t: "ready", error: status.error },
 						(x) => ({ ...x, error: encode((x as { error: unknown }).error, false, true) }),
 					)
 					return
 				}
-				s.teardown(scope)
-				await next()
+				break
 			}
+			// pending: what it made goes, and it runs again once something lands
+			started.stop("replaced")
+			await next()
 		}
 		later()
 		tell({ t: "ready" })
@@ -403,10 +417,8 @@ export function serve(port: Port): () => void {
 	// look loads nothing: a process row or a child named, waiting or here or none, its value shown
 	function look(): Looked | undefined {
 		if (w === undefined) return undefined
-		const { r, places } = w
-		const isMap = (v: unknown): v is Record<string, unknown> =>
-			typeof v === "object" && v !== null && !Array.isArray(v) && !ArrayBuffer.isView(v)
-		const rows = r.raw.get(PROCESS, places.root)?.value
+		const { r, places, table } = w
+		const rows = table.get(PROCESS, places.root)?.value
 		const show = (v: unknown) => {
 			if (typeof v === "function") return "ƒ"
 			try {
@@ -418,11 +430,11 @@ export function serve(port: Port): () => void {
 		}
 		const seen = new Set<string>()
 		const node = (id: string, name: string, path: string[], from: Looked["from"]): Looked => {
-			const here = r.raw.get("value", id) ?? r.raw.get("children", id) ??
-				r.raw.get("attributes", id)
+			const here = table.get("value", id) ?? table.get("children", id) ??
+				table.get("attributes", id)
 			const state = r.waiting(id) ? "waiting" : here === undefined ? "none" : "here"
 			const out: Looked = { id, name, from, state, kids: [] }
-			const v = r.raw.get("value", id)
+			const v = table.get("value", id)
 			if (v !== undefined) out.shown = show(v.value)
 			if (seen.has(id)) return out
 			seen.add(id)
@@ -436,7 +448,7 @@ export function serve(port: Port): () => void {
 					out.kids.push(node(x, n, [...path, n], "process"))
 				}
 			}
-			const kids = r.raw.get("children", id)?.value
+			const kids = table.get("children", id)?.value
 			if (isMap(kids)) {
 				for (const [n, x] of Object.entries(kids)) {
 					if (typeof x === "string" && !named.has(n)) {

@@ -5,6 +5,7 @@
 	"exports": {
 		"./world": "./world.ts",
 		"./renderers": "./renderers.ts",
-		"./sync-world": "./sync-world.ts"
+		"./sync-world": "./sync-world.ts",
+		"./tools": "./tools.ts"
 	}
 }

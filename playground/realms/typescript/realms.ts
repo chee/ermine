@@ -1,16 +1,19 @@
 // realms: a host runner that runs a program in a worker, with ermine on both sides (worker.ts)
 //
 //   page (main thread)                           worker (worker.ts)
-//     graph · scheduler · places · protect         scheduler · places · ermine/api, the program
+//     graph · scheduler · places · protect         scheduler · places · @ermine/system, the program
 //     the page's table                ◄── port ──► a partial replica of it, filled as it is read
 //
-//   const realms = createRealms({ scheduler, table, createProcessAPI: apis.createProcessAPI })
-//   put("value", "realm", realms.run)          // a host runner: takes javascript source text
+//   const realms = createRealms({ ermine })
+//   realms.start(source, "/work/clock")        // a process of ermine's, its program in a worker
 //   software.offer(session, "runners", "realm", attributes, realms.run)   // software's, the same
 //
-// realms.run is a runner in @ermine/software's shape: start(code, ctx), ctx the start's facts (its
-// Start, the process context's), the page's side of the program's api made from it with
-// setup.createProcessAPI (its api); the scheduler and table the page's, given in setup
+// realms.start(code, at, { args?, box? }) is ermine.start with the program in a realm: the process
+// is the page's (its setup is the wait for the realm's), and its status is pending till the realm
+// has run its setup, failed if that threw. realms.run is a runner in @ermine/software's shape:
+// start(code, ctx), ctx the start's facts (its Start, the process context's). the program is given
+// nothing: it imports @ermine/system's functions (the realm's own ermine, on the worker's side).
+// the scheduler, table and places are ermine's
 //
 // the page is the authority: a realm's writes are asked of the host's policy and written again
 // here; a write made on a stale value is rebased past the page's (rebase.ts). errors, and refused
@@ -21,16 +24,16 @@
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
 import update from "@ermine/core/node/update"
 import apply, { type Patch } from "@ermine/core/op/apply"
-import type { API } from "@ermine/api"
 import { type Path, unplace } from "@ermine/core/places"
 import { get } from "@ermine/core/places/lib"
 import { createChangeHeader, NODE } from "@ermine/core/places/header"
 import { createGuard, slot, target, type Thing } from "@ermine/core/places/guard"
-import { STATUS } from "@ermine/core/places/status"
+import { STATUS, TABLE as STATUS_TABLE } from "@ermine/core/places/status"
 import type { Handle, Runner, Start } from "@ermine/software"
 import type { Policy } from "@ermine/core/protect"
-import { PENDING, type Scheduler, type Scope } from "@ermine/core/scheduler"
-import type { Key, Table } from "@ermine/core/table"
+import { PENDING, type Scope } from "@ermine/core/scheduler"
+import type { Key } from "@ermine/core/table"
+import { type Ermine, executeAction, type Started } from "@ermine/system"
 import { rebase } from "./rebase.ts"
 import {
 	decode,
@@ -53,9 +56,9 @@ export type Realm = Port & {
 }
 
 export type Setup = {
-	// the page's: what the realm's program runs on, and where its writes land
-	scheduler: Scheduler
-	table: Table
+	// the page's: its scheduler, table and places are what the realm's program runs on, and where its
+	// writes land
+	ermine: Ermine
 	// where the page's writes are said written (none: the process's places' commit)
 	commit?: (changed: readonly Entry<unknown>[]) => void
 	// the policy a realm's writes and loads are asked of, from where its process is (none: all
@@ -65,15 +68,20 @@ export type Setup = {
 	worker?: () => Realm
 	// how a pulse is asked for (none: queueMicrotask)
 	schedule?: (f: () => void) => void
-	// the page's side of a program's api, made from the start's facts: a host's createProcessAPI.
-	// none: a start throws
-	createProcessAPI?: (ctx: Start) => API
 }
 
-export type Realms = { run: Runner }
+export type Realms = {
+	run: Runner
+	// a process of ermine's at at, its program (source text, or { url }) in a realm
+	start: (
+		code: string | { url: string },
+		at: string | Path,
+		options?: { args?: readonly string[] },
+	) => Started | { refused: string }
+}
 
 const key = (part: string, id: string) => `${part}\u0000${id}`
-const empty = (part: string) => part === "attributes" ? {} : undefined
+const empty = (part: string) => part === "attributes" || part === STATUS_TABLE ? {} : undefined
 const isMap = (v: unknown): v is Record<string, unknown> =>
 	typeof v === "object" && v !== null && !Array.isArray(v)
 
@@ -93,14 +101,8 @@ export function createRealms(setup: Setup): Realms {
 				type: "module",
 			}) as unknown as Realm)
 
-	// a program's source run in a realm of its own, the page's side of its api made from the start
+	// a program's source run in a realm of its own, for the process the start's facts say
 	function start(code: unknown, ctx: Start): Promise<Handle> {
-		const createProcessAPI = setup.createProcessAPI
-		if (createProcessAPI === undefined) {
-			throw new Error(
-				"a realm makes its program's api from the start: createRealms({ createProcessAPI })",
-			)
-		}
 		if (typeof code === "function") {
 			throw new Error(
 				"a function won't cross to a realm: give its module's source text, or { url }",
@@ -112,15 +114,50 @@ export function createRealms(setup: Setup): Realms {
 			? { url: code.url }
 			: undefined
 		if (source === undefined) throw new Error("not a program: no source text, no { url }")
-		return open(source, createProcessAPI(ctx), ctx)
+		return open(source, ctx)
 	}
-	const run: Runner = {
-		start,
-		...(setup.createProcessAPI === undefined ? {} : { api: setup.createProcessAPI }),
+	const run: Runner = { start }
+
+	// ermine.start with the program in a realm: its setup the wait for the realm's, run in the
+	// process's scope, whose facts (node, path, folder, args) the realm is started from
+	function launch(
+		code: string | { url: string },
+		at: string | Path,
+		options: { args?: readonly string[] } = {},
+	) {
+		const { ermine } = setup
+		const args = options.args ?? []
+		return ermine.start(
+			() => {
+				let scope: Scope | undefined, id: string | undefined, path: Path = []
+				for (let o = ermine.scheduler.getCurrentScope(); o !== undefined; o = o.parent) {
+					if (NODE in o.info) {
+						scope = o
+						id = String(o.info[NODE])
+						path = o.info.process as Path
+						break
+					}
+				}
+				if (scope === undefined || id === undefined) throw new Error("no process is open here")
+				const folder = path.slice(0, -1)
+				const ctx = {
+					scope,
+					box: { root: ermine.places.root, places: ermine.places },
+					folder,
+					at: path,
+					args,
+					process: { id, at: path, folder, scope },
+				}
+				return open(code, ctx as unknown as Start).then(() => undefined)
+			},
+			at,
+			{ args: [...args] },
+		)
 	}
 
-	function open(code: string | { url: string }, api: API, ctx: Start): Promise<Handle> {
-		const { scheduler: s, table } = setup
+	function open(code: string | { url: string }, ctx: Start): Promise<Handle> {
+		const { ermine } = setup
+		const { scheduler: s, table } = ermine
 		const { box: { places }, process, at, folder, args, scope } = ctx
 		const commit = setup.commit ?? places.commit
 		const schedule = setup.schedule ?? queueMicrotask
@@ -307,9 +344,10 @@ export function createRealms(setup: Setup): Realms {
 			const e = error instanceof Error ? error : new Error(String(error))
 			s.runWithScope(scope, () => {
 				const h = header()
-				const entry = table.get("attributes", process.id) as Entry<unknown> | undefined
+				// its status is in the status table, not its attributes (places' status.ts)
+				const entry = table.get(STATUS_TABLE, process.id) as Entry<unknown> | undefined
 				if (entry === undefined) {
-					table.add("attributes", process.id, createEntry({ [STATUS]: e }, h))
+					table.add(STATUS_TABLE, process.id, createEntry({ [STATUS]: e }, h))
 					return
 				}
 				update(
@@ -324,7 +362,7 @@ export function createRealms(setup: Setup): Realms {
 			later()
 		}
 
-		// what a realm's write changes, asked of the policy as ermine/api asks
+		// what a realm's write changes, asked of the policy as @ermine/system asks
 		function ask(part: string, id: string, gone: boolean, patches: readonly Patch[]) {
 			if (guard === undefined || own.has(id)) return
 			if (id === process.id && part === "value") return
@@ -465,10 +503,13 @@ export function createRealms(setup: Setup): Realms {
 			const path = pathOf(m.id)
 			let out: unknown
 			try {
-				out = api.send(
+				// as the process: its context's scope open, the node by the path it has, else by id
+				const context = ermine.getProcessContext(process)
+				if (context === undefined) throw new Error("the process has stopped")
+				const node = ermine.handleOf(
 					path === undefined ? { id: m.id, part: "value" } : { path, part: "value" },
-					...args,
 				)
+				out = context.within(() => executeAction(node, ...args))
 			} catch (error) {
 				return reply({ error })
 			}
@@ -516,10 +557,13 @@ export function createRealms(setup: Setup): Realms {
 			}
 		}
 
-		// the memo and effect nodes the realm made, taken out as ermine/api takes them out
+		// the memo and effect nodes the realm made, taken out as @ermine/system takes them out
 		function clean() {
-			if (scope.state === "gone" || computers.size === 0) return
-			s.runWithScope(scope, () => {
+			if (computers.size === 0) return
+			// the process's scope is going as the realm stops with it: the host's, as the page takes
+			// nodes out
+			const at = scope.state === "alive" ? scope : ermine.getProcessContext()!.scope
+			s.runWithScope(at, () => {
 				for (const [id, path] of computers) {
 					if (path !== undefined && path.length) {
 						const parent = get(places, path.slice(0, -1))
@@ -580,12 +624,12 @@ export function createRealms(setup: Setup): Realms {
 			const names: string[] = []
 			for (const step of places.walk(route)) {
 				names.push(step.name)
-				if (typeof step.id !== "string") continue
+				// the process's own node is the realm's to make: the start writes it there
+				if (typeof step.id !== "string" || step.id === String(process.id)) continue
 				if (!ids.includes(step.id)) ids.push(step.id)
 				paths.set(step.id, [...names])
 			}
 		}
-		if (!ids.includes(String(process.id))) ids.push(String(process.id))
 		const loads = ids.map(loadOf)
 		const start: PageMessage = {
 			t: "start",
@@ -617,5 +661,5 @@ export function createRealms(setup: Setup): Realms {
 		return promise
 	}
 
-	return { run }
+	return { run, start: launch }
 }

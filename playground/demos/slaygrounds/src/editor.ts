@@ -18,7 +18,7 @@ import { createLook } from "./inspect.ts"
 import { createExplain } from "./explain.ts"
 import { createMenu } from "./menu.ts"
 import { save } from "./graph-file.ts"
-import { devtools } from "../../../devtools/answer.ts"
+import { answerWorld } from "../../devtools.ts"
 import { languageServerExtensions, LSPClient, type Transport } from "@codemirror/lsp-client"
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T
@@ -254,12 +254,15 @@ async function reload() {
 const win = () =>
 	frame.querySelector("iframe")?.contentWindow as (Window & typeof globalThis) | null
 // the devtools extension: the running world answers when it asks (playground/devtools), read and
-// written through its host's process api (world.api); a restart takes it out, the next world in
+// written through a face over its places (demos/devtools.ts); a restart takes it out, the next
+// world in
 let hide: (() => void) | undefined
 function answer(w: unknown) {
 	hide?.()
-	const api = (w as { api?: { entries?: unknown } } | undefined)?.api
-	hide = typeof api?.entries === "function" ? devtools(w, { name: "slaygrounds" }) : undefined
+	const world = w as (Parameters<typeof answerWorld>[0] & { ermine?: unknown }) | undefined
+	hide = typeof world?.ermine === "object"
+		? answerWorld(world, { name: "slaygrounds" })
+		: undefined
 }
 ;(globalThis as unknown as Record<string, unknown>).__console = (
 	run: number,

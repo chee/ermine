@@ -1,25 +1,16 @@
-// realms on a real page: a scheduler, table, places, boxes and programs as ermine/api's tests make
-// them, javascript programs (source text) in a folder W, run in a worker by realms.run boxed at /run
+// realms on a real page: a createErmine (@ermine/system), javascript programs (source text) run as
+// processes of it by realms.start, each in a worker, at /work/<name>: its folder /work, so ./n is
+// /work/n. a program imports @ermine/system's functions, and the worker's own ermine answers them
 import { assert, assertEquals, assertThrows } from "@std/assert"
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
-import { createScheduler, PENDING } from "@ermine/core/scheduler"
-import { createPaths } from "@ermine/core/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/core/table"
-import { createPlaces } from "@ermine/core/places"
+import { type ChangeHeader } from "@ermine/core/node/entry"
+import { PENDING } from "@ermine/core/scheduler"
+import type { Id } from "@ermine/core/table"
 import { get } from "@ermine/core/places/lib"
-import { createChangeHeader, NODE } from "@ermine/core/places/header"
-import { STATUS } from "@ermine/core/places/status"
-import { box, createBox } from "@ermine/boxes"
-import { createScopeNodes } from "@ermine/processes/scopes"
-import { createBuilds } from "@ermine/compilers"
-import { satisfy } from "@ermine/programs"
-import { createPrograms, type Process, type Programs } from "@ermine/programs/start"
+import { NODE } from "@ermine/core/places/header"
+import { STATUS, TABLE as STATUS_TABLE } from "@ermine/core/places/status"
 import { no, type Policy, yes } from "@ermine/core/protect"
-import { createProcessAPIs, SCOPE } from "@ermine/programs/api"
+import { createErmine, SCOPE, type Started } from "@ermine/system"
 import { createRealms, type Realm } from "./realms.ts"
-
-const JS = "com.netscape.javascript-source"
 
 // f true, waited for: a few ms at a time
 // (a first worker after an edit waits for deno test to check its modules: seconds)
@@ -32,25 +23,14 @@ export async function until(f: () => boolean, ms = 30_000) {
 }
 
 export function world(o: { may?: Policy } = {}) {
-	const s = createScheduler()
-	const table = createTable((part, id) => places.onTableChange(part as Key, id))
-	const places = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler: s })
-	s.onTrackingEnd((key) => places.release(key))
-	const scopes = createScopeNodes({ scheduler: s, table })
-	const host = s.createRootScope({ actor: "host" })
-	const above = s.createScope({ role: "programs" }, host)
-	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
-	const header = () => createChangeHeader(s)
-	const commit = (changed: readonly Entry<unknown>[]) => places.commit(changed)
+	const ermine = createErmine({ info: { actor: "host" } })
+	const { scheduler: s, table, places } = ermine
 	// every message a realm gets to the page, counted
 	const workers: Worker[] = []
 	let heard = 0
 	const realms = createRealms({
-		scheduler: s,
-		table,
-		commit,
+		ermine,
 		may: o.may,
-		createProcessAPI: (ctx) => apis.createProcessAPI(ctx),
 		worker: () => {
 			const w = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" })
 			w.addEventListener("message", () => void heard++)
@@ -58,101 +38,59 @@ export function world(o: { may?: Policy } = {}) {
 			return w as unknown as Realm
 		},
 	})
-	let programs!: Programs
-	const apis = createProcessAPIs({
-		scheduler: s,
-		table,
-		commit,
-		host: { places, table, scheduler: s, commit },
-		programs: () => programs,
-		may: o.may,
-	})
-	const put = (part: Key, id: Id, v: unknown) =>
-		hosted(() => table.sub(part, id, createEntry(v, header())))
-	put("children", "W", {})
-	put("value", "REALM", realms.run)
-	put("attributes", "REALM", { "ermine.programs.takes": [JS] })
-	const b = createBox({ places, table, scheduler: s, commit }, { id: "W" })
-	hosted(() => box(b, ["run"], "REALM", header()))
-	programs = s.runWithScope(above, () => {
-		const writes = { readValue: places.readValue, commit }
-		const builds = createBuilds({ scheduler: s, table, places: writes, cache: "CACHE" })
-		return createPrograms({ scheduler: s, table, places, builds, scopes })
-	})
-	// a node in W at name, holding v
-	const node = (name: string, v: unknown) =>
-		hosted(() => {
-			const id = `n:${name}`
-			table.sub("value", id, createEntry<unknown>(v, header()))
-			const w = table.get("children", "W")!
-			update(w, [{ path: [name], value: id }], header())
-			commit([w])
-			return id
-		})
-	// a program's source at name in W
-	const program = (name: string, source: string) =>
-		hosted(() => {
-			const id = `prog:${name}`
-			table.sub("value", id, createEntry<unknown>(source, header()))
-			table.sub("attributes", id, createEntry({ "ermine.type": JS }, header()))
-			const w = table.get("children", "W")!
-			update(w, [{ path: [name], value: id }], header())
-			commit([w])
-		})
-	const running: Process[] = []
-	const start = (name: string, at: string[]): Process => {
-		for (const way of satisfy(b.places, name, [])) {
-			const p = hosted(() => programs.start(b, way, at))
-			if ("refused" in p) throw new Error(p.refused)
-			running.push(p)
-			s.pulse()
-			return p
-		}
-		throw new Error(`no way for ${name}`)
+	ermine.ensureNode("/work", null)
+	// a node in /work at name, holding v: its id
+	const node = (name: string, v: unknown): Id => {
+		ermine.ensureNode(`/work/${name}`, v)
+		return get(places, ["work", name])!
+	}
+	// a program's source at name
+	const sources = new Map<string, string>()
+	const program = (name: string, source: string) => void sources.set(name, source)
+	const running: Started[] = []
+	const start = (name: string, at: string[]): Started => {
+		const source = sources.get(name)
+		if (source === undefined) throw new Error(`no program ${name}`)
+		const p = realms.start(source, ["work", ...at])
+		if ("refused" in p) throw new Error(p.refused)
+		running.push(p)
+		ermine.pulse()
+		return p
 	}
 	// a write from outside: the host's
-	const write = (id: Id, v: unknown) =>
-		hosted(() => {
-			const e = table.get("value", id) as Entry<unknown>
-			update(e, [{ path: [], value: v }], header())
-			commit([e])
-			s.pulse()
-		})
+	const write = (id: Id, v: unknown) => {
+		ermine.patch(ermine.handleOf({ id, part: "value" }), [{ path: [], value: v }])
+		ermine.pulse()
+	}
 	const value = (path: string[]) => {
-		const id = get(b.places, path)
+		const id = get(places, ["work", ...path])
 		return id === undefined ? undefined : table.get("value", id)?.value
 	}
 	const attributes = (id: Id | undefined) =>
 		id === undefined
 			? undefined
 			: table.get("attributes", id)?.value as Record<string, unknown> | undefined
-	// the host's own api, at W's root
-	const hostAPI = apis.createProcessAPI({
-		scope: host,
-		box: b,
-		folder: [],
-		at: [],
-		args: [],
-		process: { id: "host", at: [], folder: [], scope: host },
-	})
+	// a node's status, which is in its own table
+	const status = (id: Id | undefined) =>
+		id === undefined
+			? undefined
+			: (table.get(STATUS_TABLE, id)?.value as Record<string, unknown> | undefined)?.[STATUS]
 	const done = () => {
-		for (const p of running) apis.stop(p)
+		for (const p of running) p.stop()
 		for (const w of workers) w.terminate()
 	}
 	return {
 		s,
 		table,
 		places,
-		b,
-		apis,
+		ermine,
 		node,
 		program,
 		start,
 		write,
 		value,
 		attributes,
-		hostAPI,
-		hosted,
+		status,
 		done,
 		heard: () => heard,
 	}
@@ -163,15 +101,18 @@ Deno.test("a read of ./n: its first run pending, then the value lands and it run
 	const n = w.node("n", 7)
 	w.program(
 		"reader.js",
-		`export default function ({ open, read, edit, effect }) {
-			const seen = open("./seen", [])
-			effect("./watcher", () => read("./n"), (v) => edit(seen, (d) => void d.push(v)))
+		`import { createEffect, ensureNode, patch, peep, read } from "@ermine/system"
+		export default function () {
+			const seen = ensureNode("./seen", [])
+			createEffect("./watcher", () => read("./n"), (v) => {
+				patch(seen, [{ path: [], value: [...peep(() => read(seen)), v] }])
+			})
 		}`,
 	)
 	const statuses: unknown[] = []
 	w.places.watchAll((f) => {
 		// its id a new one: found at its name
-		if (f.part !== "attributes" || f.id !== get(w.b.places, ["watcher"])) return
+		if (f.part !== STATUS_TABLE || f.id !== get(w.places, ["work", "watcher"])) return
 		statuses.push((f.entry?.value as Record<string, unknown> | undefined)?.[STATUS])
 	})
 	w.start("reader.js", ["reader"])
@@ -186,14 +127,15 @@ Deno.test("a read of ./n: its first run pending, then the value lands and it run
 	w.done()
 })
 
-Deno.test("an edit from the worker lands as its effect: the page's actor, the effect's node, the program's site", async () => {
+Deno.test("a write from the worker lands as its effect: the page's actor, the effect's node, the program's site", async () => {
 	const w = world()
 	const note = w.node("note", "a")
 	w.program(
 		"editor.js",
-		`export default function ({ read, edit, effect }) {
-			effect("watch", () => read("./note"), (v) => {
-				if (v === "a") edit("./note", () => "b")
+		`import { createEffect, patch, read } from "@ermine/system"
+		export default function () {
+			createEffect("watch", () => read("./note"), (v) => {
+				if (v === "a") patch("./note", [{ path: [], value: "b" }])
 			})
 		}`,
 	)
@@ -203,16 +145,16 @@ Deno.test("an edit from the worker lands as its effect: the page's actor, the ef
 	// the page's idea of who: the host's actor; the metadata the realm's, ending at the effect's
 	// node (its act's run), the node's scope the process; never the worker's own root
 	assertEquals(change.actor, "host")
-	const watch = get(w.b.places, ["editor", "watch"])!
+	const watch = get(w.places, ["work", "editor", "watch"])!
 	assertEquals(change.metadata?.[NODE], watch)
-	assertEquals(w.attributes(watch)?.[SCOPE], p.id)
+	assertEquals(w.attributes(watch)?.[SCOPE], p.process.id)
 	assert(!JSON.stringify(change.metadata).includes("realm"))
 	// the site: the realm's, not the page's realms.ts: written in the effect's act (a run), the
 	// effect's own, its line in the program (the worker's sites)
 	assert(change.external?.length, "a site")
 	assert(!change.external![0].file.endsWith("realms.ts"), change.external![0].file)
-	assertEquals(change.external![0].line, 2, JSON.stringify(change.external))
-	assertEquals(p.at, ["editor"])
+	assertEquals(change.external![0].line, 3, JSON.stringify(change.external))
+	assertEquals(p.process.at, ["work", "editor"])
 	w.done()
 })
 
@@ -221,70 +163,83 @@ Deno.test("a memo in the worker: its result node on the page (its run record sta
 	const n = w.node("n", 7)
 	w.program(
 		"double.js",
-		`export default function ({ read, memo }) {
-			memo("./double", () => read("./n") * 2)
+		`import { createMemo, read } from "@ermine/system"
+		export default function () {
+			createMemo("./double", () => read("./n") * 2)
 		}`,
 	)
 	w.start("double.js", ["doubler"])
 	await until(() => w.value(["double"]) === 14)
-	const id = get(w.b.places, ["double"])!
+	const id = get(w.places, ["work", "double"])!
 	// its id a new one, never from its name
 	assert(!String(id).includes("double"), String(id))
 	// a record is the worker's runs table's: no wire message carries it, so the page has none
-	assertEquals(w.apis.runs(id), undefined)
+	assertEquals(w.ermine.records.run(id), undefined)
 	w.write(n, 8)
 	await until(() => w.value(["double"]) === 16)
 	w.done()
-	// stopped: its node taken out, as ermine/api takes one out
-	assertEquals(get(w.b.places, ["double"]), undefined)
+	// stopped: its node taken out, as @ermine/system takes one out
+	assertEquals(get(w.places, ["work", "double"]), undefined)
 	assertEquals(w.table.get(id).length, 0)
 })
 
-Deno.test("send from the page to a method in the worker, the caller on its writes; and from the worker to one on the page", async () => {
+Deno.test("an action called from the page, the caller on its writes; and a call from the worker to one on the page", async () => {
 	const w = world()
 	w.node("last", "nobody")
-	w.hosted(() => w.hostAPI.method("/echo", (x: string) => `echo ${x}`))
+	w.ermine.createAction("/echo", (x: string) => `echo ${x}`)
 	w.program(
 		"greeter.js",
-		`export default function ({ open, read, edit, effect, method, send }) {
-			method("on/greet", (name) => {
-				edit("./last", () => name)
+		`import { createAction, createEffect, createMemo, ensureNode, executeAction, patch, read } from "@ermine/system"
+		export default function () {
+			createAction("on/greet", (name) => {
+				patch("./last", [{ path: [], value: name }])
 				return "hi " + name
 			})
-			const answer = open("./answer", "")
-			effect("peek", () => typeof read("./echo"), (t) => {
-				if (t === "function") send("./echo", "owl").then((v) => edit(answer, () => v))
-			})
+			// a call to nothing waits (PENDING) till the action is there; a promise's value comes when it
+			// settles, and an effect writes it (nothing is open after an await)
+			const echoed = createMemo("echoed", () => executeAction("/echo", "owl"))
+			const answer = ensureNode("./answer", "")
+			createEffect("answer", () => read(echoed), (v) => patch(answer, [{ path: [], value: v }]))
 		}`,
 	)
 	w.start("greeter.js", ["greeter"])
 	await until(() => w.value(["greeter", "on", "greet"]) !== undefined)
-	const back = await w.hosted(() => w.hostAPI.send("/greeter/on/greet", "frog"))
+	const back = await w.ermine.executeAction("/work/greeter/on/greet", "frog")
 	assertEquals(back, "hi frog")
 	await until(() => w.value(["last"]) === "frog")
-	const change = w.table.get("value", get(w.b.places, ["last"])!)!.change
-	assertEquals(change.metadata?.caller, "host")
+	const change = w.table.get("value", get(w.places, ["work", "last"])!)!.change
+	assertEquals((change.metadata?.caller as { node: unknown }).node, w.ermine.node)
 	await until(() => w.value(["answer"]) === "echo owl")
 	w.done()
 })
 
 Deno.test("stop terminates the worker: no message arrives after", async () => {
 	const w = world()
+	const n = w.node("n", 0)
+	// the worker answers each write of the page's with a write of its own (a timer's callback has
+	// nothing open to write with, so the page's writes are the ticking)
 	w.program(
 		"ticker.js",
-		`export default function ({ open, edit }) {
-			const tick = open("./tick", 0)
-			setInterval(() => edit(tick, (d) => d + 1), 2)
+		`import { createEffect, ensureNode, patch, read } from "@ermine/system"
+		export default function () {
+			const tick = ensureNode("./tick", 0)
+			createEffect("echo", () => read("./n"), (v) => patch(tick, [{ path: [], value: v }]))
 		}`,
 	)
 	const p = w.start("ticker.js", ["ticker"])
-	await until(() => (w.value(["tick"]) as number) > 2)
-	w.apis.stop(p)
-	const [tick, heard] = [w.value(["tick"]), w.heard()]
-	await new Promise((r) => setTimeout(r, 40))
-	assertEquals(w.value(["tick"]), tick)
-	assertEquals(w.heard(), heard)
-	w.done()
+	let i = 0
+	const ticking = setInterval(() => w.write(n, ++i), 2)
+	try {
+		await until(() => ((w.value(["tick"]) as number | undefined) ?? 0) > 2)
+		p.stop()
+		const [tick, heard] = [w.value(["tick"]), w.heard()]
+		await new Promise((r) => setTimeout(r, 40))
+		assertEquals(w.value(["tick"]), tick)
+		assertEquals(w.heard(), heard)
+	} finally {
+		clearInterval(ticking)
+		w.done()
+	}
 })
 
 Deno.test("a worker error is the process's error status; a setup that throws, too", async () => {
@@ -299,11 +254,11 @@ Deno.test("a worker error is the process's error status; a setup that throws, to
 	w.program("broken.js", `export default function () { throw new Error("setup") }`)
 	const p = w.start("boom.js", ["boom"])
 	const q = w.start("broken.js", ["broken"])
-	await until(() => w.attributes(p.id)?.[STATUS] instanceof Error)
-	assertEquals((w.attributes(p.id)?.[STATUS] as Error).message, "boom")
-	assertEquals(w.table.get("value", p.id)?.value, "running")
-	await until(() => w.attributes(q.id)?.[STATUS] instanceof Error)
-	assertEquals((w.attributes(q.id)?.[STATUS] as Error).message, "setup")
+	await until(() => w.status(p.process.id) instanceof Error)
+	assertEquals((w.status(p.process.id) as Error).message, "boom")
+	assertEquals(w.table.get("value", p.process.id)?.value, "running")
+	await until(() => w.status(q.process.id) instanceof Error)
+	assertEquals((w.status(q.process.id) as Error).message, "setup")
 	w.done()
 })
 
@@ -312,19 +267,20 @@ Deno.test("a value that won't clone: a plain Error, from the worker's write and 
 	w.node("live", { f: () => 1 })
 	w.program(
 		"cloner.js",
-		`export default function ({ open, read, edit, effect, PENDING }) {
-			const out = open("./out", "")
+		`import { createEffect, ensureNode, patch, PENDING, read } from "@ermine/system"
+		export default function () {
+			const out = ensureNode("./out", "")
 			try {
-				edit(out, () => ({ f: () => 1 }))
+				patch(out, [{ path: [], value: { f: () => 1 } }])
 			} catch (e) {
-				edit("./out", () => e.constructor.name + ": " + e.message)
+				patch("./out", [{ path: [], value: e.constructor.name + ": " + e.message }])
 			}
-			effect("live", () => {
+			createEffect("live", () => {
 				try { return read("./live") } catch (e) {
 					if (e === PENDING) throw e
 					return e.constructor.name + ": " + e.message
 				}
-			}, (v) => open("./read", v))
+			}, (v) => ensureNode("./read", v))
 		}`,
 	)
 	w.start("cloner.js", ["cloner"])
@@ -338,22 +294,25 @@ Deno.test("a value that won't clone: a plain Error, from the worker's write and 
 
 Deno.test("protect: the page asks its policy; a refused write is put back in the worker, the refusal the process's status", async () => {
 	const may: Policy = (ask) =>
-		ask.op === "edit" && ask.target.path?.join("/") === "secret" ? no("not yours") : yes
+		ask.op === "edit" && ask.target.path?.join("/") === "work/secret" ? no("not yours") : yes
 	const w = world({ may })
 	w.node("secret", 1)
 	w.program(
 		"sneak.js",
-		`export default function ({ open, read, edit, effect, method }) {
-			const seen = open("./seen", [])
-			effect("watch", () => read("./secret"), (v) => edit(seen, (d) => void d.push(v)))
-			method("on/sneak", () => edit("./secret", () => 2))
+		`import { createAction, createEffect, ensureNode, patch, peep, read } from "@ermine/system"
+		export default function () {
+			const seen = ensureNode("./seen", [])
+			createEffect("watch", () => read("./secret"), (v) => {
+				patch(seen, [{ path: [], value: [...peep(() => read(seen)), v] }])
+			})
+			createAction("on/sneak", () => patch("./secret", [{ path: [], value: 2 }]))
 		}`,
 	)
 	const p = w.start("sneak.js", ["sneak"])
 	await until(() => (w.value(["seen"]) as number[] | undefined)?.length === 1)
-	await w.hosted(() => w.hostAPI.send("/sneak/on/sneak"))
-	await until(() => w.attributes(p.id)?.[STATUS] instanceof Error)
-	assert((w.attributes(p.id)?.[STATUS] as Error).message.includes("not yours"))
+	await w.ermine.executeAction("/work/sneak/on/sneak")
+	await until(() => w.status(p.process.id) instanceof Error)
+	assert((w.status(p.process.id) as Error).message.includes("not yours"))
 	assertEquals(w.value(["secret"]), 1)
 	// the worker saw its own write, then the page's entry put back
 	await until(() => (w.value(["seen"]) as number[]).length === 3)
@@ -366,16 +325,19 @@ Deno.test("a write on each side at once, to one node: both end the same, in the 
 	const x = w.node("x", "start")
 	w.program(
 		"racer.js",
-		`export default function ({ open, read, edit, effect, method }) {
-			const seen = open("./seen", [])
-			effect("watch", () => read("./x"), (v) => edit(seen, (d) => void d.push(v)))
-			method("on/race", () => edit("./x", () => "worker"))
+		`import { createAction, createEffect, ensureNode, patch, peep, read } from "@ermine/system"
+		export default function () {
+			const seen = ensureNode("./seen", [])
+			createEffect("watch", () => read("./x"), (v) => {
+				patch(seen, [{ path: [], value: [...peep(() => read(seen)), v] }])
+			})
+			createAction("on/race", () => patch("./x", [{ path: [], value: "worker" }]))
 		}`,
 	)
 	w.start("racer.js", ["racer"])
 	await until(() => (w.value(["seen"]) as unknown[] | undefined)?.length === 1)
 	// the call crosses first, the page's write after it: the realm writes before it lands the page's
-	const call = w.hosted(() => w.hostAPI.send("/racer/on/race")) as Promise<unknown>
+	const call = w.ermine.executeAction("/work/racer/on/race") as Promise<unknown>
 	w.write(x, "page")
 	await call
 	await until(() => (w.value(["seen"]) as unknown[]).at(-1) === w.value(["x"]))
@@ -386,43 +348,22 @@ Deno.test("a write on each side at once, to one node: both end the same, in the 
 	w.done()
 })
 
-Deno.test("run given a start's facts: the api made with setup.createProcessAPI from them; none given: refused", () => {
-	const s = createScheduler()
-	const table = createTable(() => {})
-	const places = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler: s })
-	const scope = s.createRootScope({ process: ["a"] })
+Deno.test("run takes source text or { url }: a function won't cross; nothing else is a program", () => {
+	const ermine = createErmine()
+	const realms = createRealms({
+		ermine,
+		worker: () => assert(false, "no worker") as never,
+	})
+	const scope = ermine.scheduler.createRootScope({ process: ["a"] })
 	const start = {
 		scope,
-		box: { root: "R", places },
+		box: { root: ermine.places.root, places: ermine.places },
 		folder: [],
 		at: ["a"],
 		args: [],
 		process: { id: "proc:a", at: ["a"], folder: [], scope },
 	}
-	const bare = createRealms({
-		scheduler: s,
-		table,
-		worker: () => assert(false, "no worker") as never,
-	})
-	assertThrows(
-		() => bare.run.start("export default () => {}", start),
-		Error,
-		"createRealms({ createProcessAPI })",
-	)
-	const given: unknown[] = []
-	const realms = createRealms({
-		scheduler: s,
-		table,
-		worker: () => assert(false, "no worker") as never,
-		createProcessAPI: (ctx) => {
-			given.push(ctx)
-			throw new Error("made from the start")
-		},
-	})
-	assertThrows(
-		() => realms.run.start("export default () => {}", start),
-		Error,
-		"made from the start",
-	)
-	assertEquals(given, [start])
+	assertThrows(() => realms.run.start(() => {}, start), Error, "won't cross to a realm")
+	assertThrows(() => realms.run.start(42, start), Error, "not a program")
+	ermine.close()
 })

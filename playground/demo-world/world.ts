@@ -1,72 +1,55 @@
-// the world an example runs in, on the process api (ermine/api). an example's host.ts makes one,
-// seeds it, and says which processes run:
+// the world an example runs in, on @ermine/system. an example's host.ts makes one, seeds it, and says
+// which processes run:
 //
 //   import { createWorld } from "@ermine/slaygrounds/world"
 //   import { render } from "ermine-h"
 //   const world = createWorld({ render, processes: [{ name: "counter" }] })
-//   world.seed((host) => host.open("/data/n", 21))
+//   world.seed((host) => host.ensureNode("/data/n", 21))
 //   export const reload = world.reload
 //
-// a program is a module; each process runs one export (default "default"), given the process api
-// and the world's tools (below; extend may add a host's own); its return, a view or an element, is
-// made real in the process's box. code: /code/<export>, run by the runner at /code/run (a runner in
-// @ermine/software's shape, its api the world's createProcessAPI). a process runs at /<name>
-// with folder the root: "./x" is /x, saved across reloads; a bare "x" is inside the process, gone at
-// stop. a name under "./" must not be a process's name (a running process shadows it).
+// a world is one createErmine (the host's object, world.ermine: @ermine/system's functions bound to
+// the host, so a bare name or "/" is the root), and what the page needs beside it: boxes in the
+// page, ermine-h's view of a process, the inspector's names. a program is a module; each process
+// runs one export (default "default"), given nothing: it imports @ermine/system's functions and
+// the world's tools (tools.ts) and calls them while it runs. its return, a view or an element, is
+// made real in the process's box in the page. a process runs at /<name> (at: where else), its
+// folder the one it is in: "./x" is beside it, a bare "x" is inside the process, gone at stop. a
+// folder given (none: the root) is where the process runs: it runs at <folder>/<name>. a name
+// under "./" must not be a process's name (a running process shadows it). a program's code is
+// written at /code/<export> as a live function, typed javascript.
 // reload: code written again, each process stopped ("replaced") and started on the new code.
-// globalThis.ermine (the inspector): table, places, s, host, header, writes, parts, statusIds,
-// pending, moments (last 4000), call, defined, binds, apis, createProcessAPI (what a process is
-// given, for a host's own runners), programs, processes, sites, api (the host's process api)
+// globalThis.ermine (the inspector): table, places, s, host (the host's scope), header, writes,
+// parts, statusIds, pending, moments (last 4000), call, defined, binds, runs, processes, stop,
+// ermine (the host's object)
 //
-// the world's tools, on every process's api and the host's: what hosts each wrote by hand, the api
-// having no word for it:
-//   who()                who the call open now is: caller (a process's name where the world made
-//                        it, else its id; none: ""), "trusted-event", actor, metadata (an object).
-//                        who(change): who wrote that change (a header); none: nobody
-//   change(x)            x's latest change (its header), tracked: a write to x reruns what read it
-//   as(actor, f)         f run under a scope of its own: actor a string, or an info ({ side: "v1" }),
-//                        so what f writes says who made it
-//   scoped(f, info?)     f run in a scope of its own under the process's: { value, stop }. what f
-//                        makes (memos, effects) goes at stop, or with the process
-//   up(address, from?, { stop?, walk? }?)   the nearest place walking up from `from` (names from
-//                        the root; none: the process's place) where address is: its node (by its
-//                        path), the id found there and the place it was found in (parent), tracked. stop: the depth it ends at (1
-//                        leaves the root out); walk: the ids of the places visited pushed to it
-//   inspect(address)     that node picked in the page's graph tab
-import createEntry, { type ChangeHeader, type Metadata } from "@ermine/core/node/entry"
-import {
-	children,
-	createPlaces,
-	move,
-	place,
-	type Places,
-	rename,
-	unplace,
-} from "@ermine/core/places"
-import { createChangeBase, createChangeHeader } from "@ermine/core/places/header"
+// the world's tools are imported (tools.ts: who, change, as, scoped, up, inspect, capture, host);
+// extend gives a process what its host has of its own, read there by host()
+import { createChangeHeader, NODE } from "@ermine/core/places/header"
+import { move, type Path, place, type Places, rename, unplace } from "@ermine/core/places"
 import * as lib from "@ermine/core/places/lib"
 import { plan } from "@ermine/core/places/path"
 import { isPending } from "@ermine/core/places/status"
-import { type Computer, createScheduler, type Info, type Scope } from "@ermine/core/scheduler"
-import { createPaths } from "@ermine/core/scheduler/paths"
+import { type Computer, createScheduler, type Info, type Scheduler } from "@ermine/core/scheduler"
 import { trace } from "@ermine/core/scheduler/trace"
-import { createTable, type Id, type Key } from "@ermine/core/table"
-import { processes as rows } from "@ermine/processes"
-import { createScopeNodes } from "@ermine/processes/scopes"
-import { createBuilds } from "@ermine/compilers"
-import { satisfy } from "@ermine/programs"
-import { createPrograms, ours, type Process, type Runner, type Start } from "@ermine/programs/start"
-import { type API, createProcessAPIs, type Node, type Noticed } from "@ermine/programs/api"
+import type { Id } from "@ermine/core/table"
+import type { Process } from "@ermine/processes/start"
+import {
+	type CreatedFunction,
+	createErmine,
+	type Ermine,
+	executeAction,
+	type Started,
+} from "@ermine/system"
 import { installTypes, type Known } from "@ermine/types"
 import type { Policy } from "@ermine/core/protect"
 import { startSweeper, type World as PresenceWorld } from "@ermine/together/presence"
-import { createSites } from "@ermine/sites"
-import { createOverlay, type Overlay } from "@ermine/patchy"
+import patchy from "@ermine/patchy/feature"
+import { use } from "@ermine/slaygrounds/tools"
 
 const JS = "com.netscape.javascript-source"
 
-// a process an example runs: its name, the export it runs, where (none: /<name>), its
-// folder (none: the root), its args
+// a process an example runs: its name, the export it runs, where (none: /<name>), its folder
+// (none: the root: it runs at <folder>/<name>), its args
 export type Spec = {
 	readonly name: string
 	readonly export?: string
@@ -89,34 +72,19 @@ export type Options = {
 	processes?: readonly Spec[]
 	// the host's actor (none: "chee@laptop")
 	actor?: string
-	// a host's own tools, added to what a process is given (its power: "the host has this power, to
-	// let the user create processes with a different api")
-	extend?: (api: API & Tools, ctx: Start) => Record<string, unknown>
+	// a host's own, given each process as it starts and read there by tools' host() (its power:
+	// "the host has this power, to let the user create processes with a different api")
+	extend?: (process: { at: Path; args: readonly string[] }) => Record<string, unknown>
 	// protect: the policy every process is asked of (none: everything allowed)
 	may?: Policy
 	// presence (playground/together/presence): a presence world on the host's scope, swept each
 	// second, the world's presence: the host's, to hand programs as it likes (extend)
 	presence?: { sweep?: number }
-	// patch nodes (extensions/patchy): places over an overlay, so a patch node is read through
+	// patch nodes (extensions/patchy): the feature, so a patch node is read through
 	overlay?: boolean
 	// the types (@ermine/types) at /ermine/types, before any seed: true, the well-known list; a list,
 	// those too, after it
 	types?: true | readonly Known[]
-}
-
-export type Who = { caller: string; "trusted-event": boolean; actor: unknown; metadata: Metadata }
-// the world's tools (the head of this file says each)
-export type Tools = {
-	who: (...change: [] | [ChangeHeader | undefined]) => Who
-	change: (x: Parameters<API["entries"]>[0]) => ChangeHeader | undefined
-	as: <T>(actor: string | Info, f: () => T) => T
-	scoped: <T>(f: () => T, info?: Info) => { value: T; stop: () => void }
-	up: (
-		address: readonly string[],
-		from?: readonly string[],
-		options?: { stop?: number; walk?: string[] },
-	) => (Node & { path: string[]; found: string; parent: string }) | undefined
-	inspect: (address: readonly string[]) => void
 }
 
 // an h item: an id, and its path where known
@@ -128,95 +96,55 @@ export function createWorld(o: Options) {
 	const native = Object.getOwnPropertyDescriptor(globalThis, "event")?.get?.bind(globalThis)
 	const trusted = () => (native?.() as Event | undefined)?.isTrusted === true
 
-	const s = createScheduler()
-	// where each memo, effect, process and send's scope was made (ermine/sites), for the inspector:
-	// a site is the first frame outside these libraries, so a memo's is the program's line and a
-	// process's is where start was called
-	const url = (specifier: string) => {
-		try {
-			return import.meta.resolve(specifier)
-		} catch {
-			return specifier
-		}
-	}
-	const sites = createSites(s, {
-		ours: [
-			...["@ermine/api", "@ermine/core/scheduler", "@ermine/processes/start"].map(url),
-			// programs' and software's own
-			...ours,
-		],
-	})
-	const table = createTable((part, id) =>
-		overlay ? overlay.onTableChange(part as Key, id) : places.onTableChange(part as Key, id)
-	)
-	const overlay: Overlay | undefined = o.overlay ? createOverlay(table, () => places) : undefined
-	const paths = createPaths<unknown>()
-	const places: Places = createPlaces({
-		root: "root",
-		table: overlay ?? table,
-		paths,
-		scheduler: s,
-		contributors: [rows("root"), children],
-	})
-	s.onTrackingEnd((key) => places.release(key))
+	const s: Scheduler = createScheduler()
 	const moments: unknown[] = []
 	trace(s, (m) => {
 		moments.push(m)
 		if (moments.length > 4000) moments.splice(0, 1000)
 	})
-	const host = s.createRootScope({ actor: o.actor ?? "chee@laptop", "trusted-event": true })
-	const above = s.createScope({ role: "programs" }, host)
-	const scopes = createScopeNodes({ scheduler: s, table })
-	const commit = (changed: Parameters<Places["commit"]>[0]) =>
-		overlay ? overlay.commit(changed) : places.commit(changed)
-	const presence: PresenceWorld | undefined = o.presence
-		? { table, places: { commit, readValue: places.readValue }, scheduler: s, scope: host }
-		: undefined
-	if (presence) startSweeper(presence, o.presence?.sweep ?? 1000)
 
-	// for the page
+	// for the page: each memo and effect (its node and where it is, its process), each method
 	const parts = new Map<Computer, { entry: Item; at: unknown; process: Id }>()
 	const statusIds = new Map<Id, Id>()
 	const defined = new Map<Id, { process: Id }>()
 	const binds = new WeakMap<object, string>()
-	const notice = (m: Noticed) => {
+	const notice = (m: CreatedFunction) => {
 		if (m.computer) {
+			const path = m.node.path as string[] | undefined
 			parts.set(m.computer, {
-				entry: { id: m.id, path: m.node.path as string[] },
-				at: m.node.path,
+				entry: { id: m.id, path },
+				at: path,
 				process: m.process,
 			})
 			statusIds.set(m.id, m.id)
 		} else defined.set(m.id, { process: m.process })
 	}
 
-	// ---- the world's own nodes: the root, made by hand ----
-	s.runWithScope(host, () => {
-		table.add("value", "root", createEntry<unknown>(undefined, createChangeHeader(s)))
-		table.add("children", "root", createEntry<Record<string, unknown>>({}, createChangeHeader(s)))
-		if (o.types) commit(installTypes(table, "root", createChangeHeader(s)))
+	const ermine: Ermine = createErmine({
+		scheduler: s,
+		features: o.overlay ? [patchy] : [],
+		may: o.may,
+		info: { actor: o.actor ?? "chee@laptop" },
+		onCreateFunction: notice,
+	})
+	const { places, table } = ermine
+	const hostScope = ermine.getProcessContext()!.scope
+	const commit = (changed: Parameters<Places["commit"]>[0]) => places.commit(changed)
+
+	// ---- the world's own nodes: the types, written as the host ----
+	s.runWithScope(hostScope, () => {
+		if (o.types) commit(installTypes(table, places.root, createChangeHeader(s)))
 		if (Array.isArray(o.types)) {
-			commit(installTypes(table, "root", createChangeHeader(s), o.types))
+			commit(installTypes(table, places.root, createChangeHeader(s), o.types))
 		}
 	})
-
-	const ctxs = new WeakMap<object, Start>()
-	const views = new Map<string, Element>()
-	let programs!: ReturnType<typeof createPrograms>
-	const apis = createProcessAPIs({
-		scheduler: s,
-		table,
-		commit,
-		host: { places, table, scheduler: s, commit },
-		programs: () => programs,
-		info: () => ({ "trusted-event": trusted() }),
-		notice,
-		may: o.may,
-		overlay,
-		sites,
-	})
+	const presence: PresenceWorld | undefined = o.presence
+		? { table, places: { commit, readValue: places.readValue }, scheduler: s, scope: hostScope }
+		: undefined
+	if (presence) startSweeper(presence, o.presence?.sweep ?? 1000)
 
 	// ---- a process's box in the page, and what ermine-h is handed ----
+	const views = new Map<string, Element>()
 	function box(name: string): Element {
 		let el = views.get(name)
 		if (el === undefined) {
@@ -240,11 +168,12 @@ export function createWorld(o: Options) {
 				if (found) return found
 			}
 		}
-		return walk("root", [])
+		return walk(places.root, [])
 	}
 	const pathOf = (x: Item) => x.path ?? where(x.id)
-	function viewer(api: API, ctx: Start) {
-		const at = [...ctx.process.at]
+	// ermine-h's view of the process at `at`, its scope open where it was made: a handler calls its
+	// action in that scope, as the process
+	function viewer(at: readonly string[], scope: ReturnType<Scheduler["getCurrentScope"]>) {
 		// h's find: "/" or any "." ".." in it, steps from the root (or from from); else the names under
 		// the process's own node, and nowhere else: h asks it whether the process has a name, and
 		// reads a name it has not from the root
@@ -266,91 +195,23 @@ export function createWorld(o: Options) {
 				const path = pathOf(item) ?? []
 				return lib.members(places, path).map((m) => ({ ...m, path: [...path, m.name] }))
 			},
-			call: (address: string[], args: unknown[]) =>
-				api.send({ path: plan(["/", ...address]) ?? [], part: "value" }, ...args),
+			// the action's call is made as the process (the scope its setup ran in); a click's trust is
+			// the event's, read live by who() as the action runs
+			call: (address: string[], args: unknown[]) => {
+				if (scope === undefined || scope.state !== "alive") {
+					throw new Error(`${at.join("/")} has stopped`)
+				}
+				return s.runWithScope(
+					scope,
+					() => executeAction("/" + address.join("/"), ...args),
+				)
+			},
 			effect(read: () => unknown, act: (v: unknown, before: unknown) => void, name?: string) {
 				const c = s.createEffect(read, act)
 				if (name) binds.set(c, name)
 				return c
 			},
 		}
-	}
-
-	// ---- the world's tools ----
-	// a process's id → its name (where it runs), for who's caller
-	const named = new Map<unknown, string>()
-	// the nearest scope's key: the open scope's and every parent's info, innermost first
-	const nearest = (o: Scope | undefined, key: string) => {
-		for (; o !== undefined; o = o.parent) if (key in o.info) return o.info[key]
-		return undefined
-	}
-	function tools(api: API, ctx: Start): Tools {
-		const { places } = ctx.box
-		if (ctx.process.at.length) named.set(ctx.process.id, ctx.process.at.join("/"))
-		// caller and trusted-event: given, or found; metadata as the change has it
-		const say = (actor: unknown, metadata: Metadata, caller: unknown, trust: unknown): Who => ({
-			caller: caller === undefined ? "" : named.get(caller) ?? String(caller),
-			"trusted-event": trust === true,
-			actor,
-			metadata,
-		})
-		return {
-			who(...change) {
-				if (change.length) {
-					const m = change[0]?.metadata ?? {}
-					return say(change[0]?.actor, m, m.caller, m["trusted-event"])
-				}
-				// walking the open scope and every parent: a write's metadata stops at a memo's
-				// node, so a caller above the memo is found only by walking on
-				const o = s.getCurrentScope()
-				const w = createChangeBase(s)
-				return say(
-					w?.actor,
-					w?.metadata ?? {},
-					nearest(o, "caller"),
-					nearest(o, "trusted-event"),
-				)
-			},
-			change(x) {
-				const id = api.entries(x)[0]?.id
-				return id === undefined || id === api.REFUSED
-					? undefined
-					: places.readChange("value", id)
-			},
-			as(actor, f) {
-				const info = typeof actor === "string" ? { actor } : actor
-				const scope = s.createScope(info, s.getCurrentScope() ?? ctx.scope)
-				try {
-					return s.runWithScope(scope, f)
-				} finally {
-					s.teardown(scope)
-				}
-			},
-			scoped(f, info = { scoped: true }) {
-				const scope = s.createScope(info, ctx.scope)
-				return { value: s.runWithScope(scope, f), stop: () => s.teardown(scope) }
-			},
-			up(address, from = ctx.process.at, { stop = 0, walk } = {}) {
-				for (let k = from.length; k >= stop; k--) {
-					const here = k === 0 ? places.root : lib.get(places, from.slice(0, k))
-					if (typeof here !== "string") continue
-					walk?.push(here)
-					const path = [...from.slice(0, k), ...address]
-					const id = lib.get(places, path)
-					if (typeof id === "string") return { path, part: "value", found: id, parent: here }
-				}
-			},
-			inspect: (address) => page.parent?.__pick?.([...address]),
-		}
-	}
-
-	// what a process is given: the api, the world's tools, and the host's own
-	function createProcessAPI(ctx: Start): API & Tools {
-		const api = Object.assign(apis.createProcessAPI(ctx), {} as Tools)
-		ctxs.set(api, ctx)
-		Object.assign(api, tools(api, ctx))
-		if (o.extend) Object.assign(api, o.extend(api, ctx))
-		return api
 	}
 	// only a view is made real in a box: an element, ermine-h's view or binding, or a list holding
 	// one. any other return (a number, a string, data) is the process's value, and nothing more
@@ -359,61 +220,56 @@ export function createWorld(o: Options) {
 		(typeof page.Node === "function" && v instanceof page.Node) ||
 		(typeof v === "object" && v !== null && (VIEW in v || BOUND in v)) ||
 		(Array.isArray(v) && v.some(isView))
-	const show = (view: unknown, api: API) => {
-		const ctx = ctxs.get(api)
-		if (!isView(view) || ctx === undefined) return view
-		return o.render(box(ctx.process.at.join("/")), view, viewer(api, ctx))
-	}
 
-	// ---- programs: a runner for javascript at /code/run, each export a node in /code ----
-	const hostCtx: Start = {
-		scope: host,
-		box: { root: "root", places },
-		folder: [],
-		at: [],
-		args: [],
-		process: { id: "host", at: [], folder: [], scope: host },
-	}
-	const hostAPI = Object.assign(apis.createProcessAPI(hostCtx), {} as Tools)
-	Object.assign(hostAPI, tools(hostAPI, hostCtx))
-	programs = s.runWithScope(above, () => {
-		// the world's places, its commits through the overlay when there is one; describe and
-		// watchAll: each process's latest run too (runs.ts)
-		const writes = { ...places, commit }
-		const builds = createBuilds({ scheduler: s, table, places: writes, cache: "cache" })
-		return createPrograms({ scheduler: s, table, places: writes, builds, scopes, sites })
-	})
-	// a setup that throws is told on the console with its stack (programs holds it as the process's
-	// status, which nobody here reads), then thrown on as before
-	const runner = apis.runner({ show, api: createProcessAPI })
-	const run: Runner = {
-		api: runner.api,
-		start: (code, ctx) => {
-			try {
-				return runner.start(code, ctx)
-			} catch (e) {
-				console.error("a program's setup threw:", e)
-				throw e
-			}
-		},
-	}
-	s.runWithScope(host, () => {
-		const runs = hostAPI.open("/code/run", run)
-		hostAPI.edit(hostAPI.info(runs), [{ path: [], value: { "ermine.programs.takes": [JS] } }])
+	// ---- the tools, and what a process is told of by name ----
+	// a process's node → its name (where it runs), for who's caller
+	const named = new Map<unknown, string>()
+	const extras = new Map<string, Record<string, unknown>>()
+	use({
+		trusted,
+		s,
+		places,
+		ermine,
+		named,
+		extras,
+		inspect: (address) => page.parent?.__pick?.([...address]),
 	})
 
 	const specs = o.processes ?? [{ name: "demo" }]
-	const running = new Map<string, Process>()
+	const running = new Map<string, Started>()
+	const processes = new Map<string, Process>()
 
-	// a program's code at /code/<name>: a live function, typed javascript, for start to find (reload
-	// writes the exports its processes run; a host, any other a process starts itself)
+	// a program's code at /code/<name>: a live function, typed javascript (reload writes the exports
+	// its processes run; a host, any other)
 	function code(name: string, fn: unknown) {
-		s.runWithScope(host, () => {
-			const node = hostAPI.open(["code", name])
-			if (hostAPI.read(node) === undefined) hostAPI.open(["code", name], fn)
-			else hostAPI.edit(node, [{ path: [], value: fn }])
-			hostAPI.edit(hostAPI.info(node), [{ path: [], value: { "ermine.type": JS } }])
-		})
+		const node = ermine.ensureNode(`/code/${name}`)
+		ermine.patch(node, [{ path: [], value: fn }])
+		ermine.patchAttributes(node, [{ path: [], value: { "ermine.type": JS } }])
+		ermine.pulse()
+	}
+
+	// a program made a process's setup: its view made real in its box, any other return its value; a
+	// setup that throws is told on the console with its stack, then thrown on (status holds it)
+	function setup(spec: Spec, fn: () => unknown, at: Path) {
+		return () => {
+			const scope = s.getCurrentScope()
+			const mine = scope === undefined ? undefined : scope.parent
+			// the process's node, found in its scope's info, named for who's caller
+			for (let o = scope; o !== undefined; o = o.parent) {
+				if (NODE in o.info) {
+					named.set(o.info[NODE], at.join("/"))
+					break
+				}
+			}
+			try {
+				const view = fn()
+				if (!isView(view)) return view
+				return o.render(box(at.join("/")), view, viewer(at, mine ?? scope))
+			} catch (e) {
+				console.error(`${spec.name}: its setup threw:`, e)
+				throw e
+			}
+		}
 	}
 
 	// the program's exports written as nodes, each process stopped and started again on them
@@ -424,39 +280,44 @@ export function createWorld(o: Options) {
 			else console.error(`program.ts has no export ${name} for ${spec.name}`)
 		}
 		for (const spec of specs) {
-			const was = running.get(spec.name)
-			if (was !== undefined) apis.stop(was, "replaced")
+			running.get(spec.name)?.stop("replaced")
 			running.delete(spec.name)
+			processes.delete(spec.name)
 			const name = spec.export ?? "default"
-			if (typeof mod[name] !== "function") continue
-			for (const way of satisfy(places, `/code/${name}`, [])) {
-				const p = s.runWithScope(
-					host,
-					() =>
-						programs.start(places, way, [...(spec.at ?? [spec.name])], {
-							...(spec.args ? { args: spec.args } : {}),
-							folder: [...(spec.folder ?? [])],
-						}),
-				)
-				if ("refused" in p) console.error(`${spec.name}: refused ${p.refused}`)
-				else running.set(spec.name, p)
-				break
+			const fn = mod[name]
+			if (typeof fn !== "function") continue
+			const at = [...(spec.at ?? [...(spec.folder ?? []), spec.name])]
+			const args = spec.args ?? []
+			extras.set(at.join("/"), o.extend?.({ at, args }) ?? {})
+			const started = ermine.start(setup(spec, fn as () => unknown, at), at, { args: [...args] })
+			if ("refused" in started) console.error(`${spec.name}: refused ${started.refused}`)
+			else {
+				running.set(spec.name, started)
+				processes.set(spec.name, started.process)
 			}
 		}
-		s.pulse()
+		ermine.pulse()
 	}
 
-	// host writes before any program runs: the host's own api, at the root
-	function seed(f: (host: API & Tools) => void) {
-		s.runWithScope(host, () => f(hostAPI))
-		s.pulse()
+	// host writes before any program runs: the host's own functions, at the root
+	function seed(f: (host: Ermine) => void) {
+		f(ermine)
+		ermine.pulse()
+	}
+
+	// a process stopped by its name
+	function stop(name: string, why?: Info[string]) {
+		running.get(name)?.stop(why as never)
+		running.delete(name)
+		processes.delete(name)
 	}
 
 	const world = {
 		table,
 		places,
 		s,
-		host,
+		// the host's scope: what the world's own writes are made under
+		host: hostScope,
 		header: (extra?: Info) => createChangeHeader(s, extra),
 		writes: { place, unplace, move, rename },
 		parts,
@@ -464,25 +325,22 @@ export function createWorld(o: Options) {
 		pending: (id: Id) => isPending(places, id),
 		moments,
 		call: (address: string[], args: unknown[]) =>
-			s.runWithScope(
-				host,
-				() => hostAPI.send({ path: plan(["/", ...address]) ?? [], part: "value" }, ...args),
-			),
+			ermine.executeAction("/" + address.join("/"), ...args),
 		defined,
 		binds,
-		apis,
-		createProcessAPI,
-		programs,
-		processes: running,
+		// the latest run of a memo's or effect's node (ermine.records): its record, or one field of it
+		runs: (id: Id, field?: string) => {
+			const r = ermine.records.run(id)
+			return field === undefined
+				? r
+				: (r as unknown as Record<string, unknown> | undefined)?.[field]
+		},
+		processes,
+		stop,
 		presence,
-		overlay,
-		// siteOf(scope) and sitesOf(scope): a memo's or effect's computer (parts' keys), a process's
-		// scope (processes' values)
-		sites,
-		// the host's own process api: what devtools reads and writes through (protect asked)
-		api: hostAPI,
+		ermine,
 	}
 	;(globalThis as Record<string, unknown>).ermine = world
 
-	return { reload, seed, code, world, hostAPI }
+	return { reload, seed, code, world, ermine }
 }

@@ -15,8 +15,8 @@
 // chain's compilers folded over the program's value (@ermine/compilers' fold), the value read once
 // at start, the fold in the process's first run; status PENDING while building, the Error on
 // failure. then the runner's start(code, start), once, the process's scope open: start is
-// software's Start (the process context's facts), and the program's api is the runner's to make
-// (api.ts' runner: its api option, else createProcessAPI). a throw or a promise: that outcome is
+// software's Start (the process context's facts), and what the program is given (nothing, for a
+// program importing @ermine/system) is the runner's. a throw or a promise: that outcome is
 // the status.
 // a step a host holds (by empty): its node's value, live (a runner: software's shape, { start,
 // load?, api? } or a function, its start). a loaded step (by not empty): software.load on its by's
