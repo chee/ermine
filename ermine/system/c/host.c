@@ -116,6 +116,11 @@ const char *es_code_name(int code) {
 	case ES_NOT_PATCHES: return "not-patches";
 	case ES_NOT_A_FUNCTION: return "not-a-function";
 	case ES_CLOSED: return "closed";
+	case ES_IN_ACT: return "in-act";
+	case ES_BAD_CLEANUP: return "bad-cleanup";
+	case ES_NOT_HERE: return "not-here";
+	case ES_GONE: return "gone";
+	case ES_ALREADY_INSIDE: return "already-inside";
 	default: return "failed";
 	}
 }
@@ -129,6 +134,16 @@ es_out es_out_code(int code) {
 // an ErmineError's message: "code: message"
 static int ermine_fail(int code, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 static int ermine_fail(int code, const char *fmt, ...) {
+	va_list args;
+	va_start(args, fmt);
+	char *body = format(fmt, args);
+	va_end(args);
+	es_fail(code, "%s: %s", es_code_name(code), body);
+	free(body);
+	return code;
+}
+
+int es_fail_ermine(int code, const char *fmt, ...) {
 	va_list args;
 	va_start(args, fmt);
 	char *body = format(fmt, args);
@@ -285,6 +300,10 @@ typedef struct proc_rec {
 	// its setup's promise not settled yet (it holds the record); let go of by the host
 	// (es_started_free); where it is in procs
 	int awaiting, dropped;
+	// started by a program: it belongs to the scope that started it, and goes with its own scope.
+	// starter: the context that started it (compared, never read): only it may stop it or ask its status
+	int child;
+	const es_context *starter;
 	size_t at;
 } proc_rec;
 
@@ -327,6 +346,8 @@ struct es_hosting {
 	// a scope freed: its context goes (a process's), and the values its info borrowed (with)
 	sc_listener *freed;
 	pm with;
+	// a child process's record, by its scope: let go as the scope is freed
+	pm children;
 	// values the scheduler's scope infos refer to: let go after it
 	op_value **keep;
 	size_t nkeep, capkeep;
@@ -384,6 +405,7 @@ void es_register_scope(sc_scope *scope, es_context *c) {
 }
 
 static void forget_context(es_ermine *e, es_context *c);
+static void rec_free(proc_rec *rec);
 
 // a scope freed (torn down, held by nothing), as the reference's WeakMaps by scope let go: found to
 // a process's context no more, and that context goes with it; the values its info borrowed go
@@ -394,6 +416,13 @@ static void scope_freed(sc_scope *o, void *data) {
 	if (v != NULL) {
 		pm_delete(&h->with, o);
 		op_free(v);
+	}
+	proc_rec *kid = pm_get(&h->children, o);
+	if (kid != NULL) {
+		pm_delete(&h->children, o);
+		kid->dropped = 1;
+		// its setup's promise still out: freed as it settles
+		if (!kid->awaiting) rec_free(kid);
 	}
 	es_context *c = pm_get(&scope_context, o);
 	if (c == NULL || c->ermine != e) return;
@@ -1534,6 +1563,7 @@ static void free_hosting(es_ermine *e) {
 	for (size_t i = 0; i < h->with.cap; i++)
 		if (h->with.keys[i] != NULL && h->owns) op_free(h->with.vals[i]);
 	pm_clear(&h->with);
+	pm_clear(&h->children);
 	for (es_slot *sl = h->slots; sl != NULL;) {
 		es_slot *next = sl->next;
 		for (size_t i = 0; i < sl->held.cap; i++) {
@@ -1631,6 +1661,8 @@ int es_create(const es_options *given, es_ermine **out) {
 	e->may = o->may;
 	e->on_create_function = o->on_create_function;
 	e->on_create_function_ctx = o->on_create_function_ctx;
+	e->user_event = o->user_event;
+	e->user_event_ctx = o->user_event_ctx;
 	h->adding = 1;
 	h->schedule = o->schedule;
 	h->schedule_ctx = o->schedule_ctx;
@@ -1742,6 +1774,8 @@ fail:
 static char *process_gone(void *data) {
 	proc_rec *rec = data;
 	hosting *h = host_of(rec->e);
+	// a child ended by its starter's ending: nothing stops it again (its scope may outlive this, held)
+	if (rec->child) rec->running = 0;
 	es_map_del(&h->contexts, rec->id);
 	es_running_clear(rec->e, rec->id);
 	return NULL;
@@ -1929,6 +1963,12 @@ static void start_body(pr_process *p, void *data) {
 	run_setup(rec);
 }
 
+static char **dup_steps(char *const *src, size_t n) {
+	char **out = es_alloc((n + 1) * sizeof *out);
+	for (size_t i = 0; i < n; i++) out[i] = es_dup(src[i]);
+	return out;
+}
+
 // path text or steps, as the steps pr_start takes (owned: free them)
 static const char *const *steps_of(es_at at, size_t *n, char ***owned) {
 	*owned = NULL;
@@ -1940,28 +1980,25 @@ static const char *const *steps_of(es_at at, size_t *n, char ***owned) {
 	return CP(*owned);
 }
 
-int es_start(es_ermine *e, es_program fn, void *ctx, es_at at, const es_start_options *o,
+// a process made at steps, under a scope (NULL: the owner's, the host's); a child belongs to that scope
+// and is freed with its own. taken (or a name code): ES_TAKEN, and *refused says which
+static int start_under(es_ermine *e, es_program fn, void *ctx, const char *const *steps, size_t nsteps,
+	const es_start_options *o, sc_scope *under, const es_context *starter, es_child *kid,
 	es_started **out, es_refused *refused) {
+	int child = starter != NULL;
 	hosting *h = host_of(e);
-	TRY(es_alive(e));
-	if (refused != NULL) *refused = (es_refused){0};
-	if (fn == NULL) {
-		return ermine_fail(ES_NOT_A_FUNCTION, "start takes the program: its function");
-	}
-	char **owned;
-	size_t nsteps;
-	const char *const *steps = steps_of(at, &nsteps, &owned);
-
 	proc_rec *rec = es_alloc(sizeof *rec);
 	rec->e = e;
 	rec->fn = fn;
 	rec->ctx = ctx;
 	rec->started.ermine = e;
 	rec->running = 1;
+	rec->child = child;
+	rec->starter = starter;
 	rec->at = h->nprocs;
 	ES_PUSH(h->procs, h->nprocs, h->capprocs, rec);
 
-	pr_options po = {.body = start_body, .data = rec};
+	pr_options po = {.body = start_body, .data = rec, .under = under};
 	if (o != NULL && o->has_args) {
 		po.args = o->args;
 		po.nargs = o->nargs;
@@ -1977,8 +2014,9 @@ int es_start(es_ermine *e, es_program fn, void *ctx, es_at at, const es_start_op
 			refused->nat = no.nat;
 			refused->at = es_alloc((no.nat + 1) * sizeof *refused->at);
 			for (size_t i = 0; i < no.nat; i++) refused->at[i] = es_dup(no.at[i]);
-			// taken by a stopped process whose row a feature held: said, naming both
-			for (size_t k = 0; k < h->rows.n;) {
+			// taken by a stopped process whose row a feature held: said, naming both (to the host's start only:
+			// a program is told where, never whose it is)
+			for (size_t k = 0; !child && k < h->rows.n;) {
 				size_t before = h->rows.n;
 				char *pid = es_dup(h->rows.keys[k]);
 				row_rec *r = row_held(e, pid);
@@ -2004,12 +2042,99 @@ int es_start(es_ermine *e, es_program fn, void *ctx, es_at at, const es_start_op
 				break;
 			}
 		}
-		free_names(owned, owned != NULL ? nsteps : 0);
 		return ermine_fail(ES_TAKEN, "taken");
 	}
-	free_names(owned, owned != NULL ? nsteps : 0);
-	*out = &rec->started;
+	if (child) {
+		// the starter's: nobody holds it, it is freed as its scope is. what the starter is told is read
+		// first: letting go may free it (its setup unplaced its own node)
+		const char *const *names;
+		size_t n = pr_at(made, &names);
+		kid->id = es_dup(pr_id(made));
+		kid->at = (es_names){dup_steps((char *const *)names, n), n};
+		n = pr_folder(made, &names);
+		kid->folder = (es_names){dup_steps((char *const *)names, n), n};
+		pm_set(&h->children, pr_scope(made), rec);
+		pr_let_go(e->processes, made);
+	} else {
+		*out = &rec->started;
+	}
 	return 0;
+}
+
+int es_start(es_ermine *e, es_program fn, void *ctx, es_at at, const es_start_options *o,
+	es_started **out, es_refused *refused) {
+	TRY(es_alive(e));
+	if (refused != NULL) *refused = (es_refused){0};
+	if (fn == NULL) {
+		return ermine_fail(ES_NOT_A_FUNCTION, "start takes the program: its function");
+	}
+	char **owned;
+	size_t nsteps;
+	const char *const *steps = steps_of(at, &nsteps, &owned);
+	int code = start_under(e, fn, ctx, steps, nsteps, o, NULL, NULL, NULL, out, refused);
+	free_names(owned, owned != NULL ? nsteps : 0);
+	return code;
+}
+
+// the scope a process starts under asked as its starter: the folder it is placed in, or the nearest one
+// above that is there (the rest are made), "place" on the slot
+static int ask_starting(es_context *c, const char *const *path, size_t n) {
+	for (size_t k = n; k-- > 0;) {
+		tb_key folder;
+		if (k == 0) folder = pl_root(c->places);
+		else if (!pl_get(c->places, path, k, &folder)) continue;
+		return es_ask_slot(c, folder.string, path, k + 1);
+	}
+	return 0;
+}
+
+static const op_value *pair_in(const sc_scope *o, const char *key) {
+	const sc_info *info = sc_scope_info(o);
+	for (size_t i = 0; info != NULL && i < info->n; i++) {
+		if (strcmp(info->pairs[i].key, key) == 0) return info->pairs[i].value;
+	}
+	return NULL;
+}
+
+int es_start_in(es_context *c, es_program fn, void *ctx, es_at at, const es_start_options *o,
+	es_child *out, es_refused *refused) {
+	es_ermine *e = c->ermine;
+	*out = (es_child){0};
+	if (refused != NULL) *refused = (es_refused){0};
+	TRY(es_alive(e));
+	sc_scope *own = es_owner(c);
+	if (own == NULL || !sc_scope_alive(own)) {
+		return ermine_fail(ES_GONE, "gone: what this was started in has ended");
+	}
+	const op_value *node = pair_in(own, PL_NODE);
+	if ((node != NULL && node->type == OP_STR && es_is_computer(e, node->str)) ||
+		pair_in(own, "pipe") != NULL) {
+		return ermine_fail(ES_NOT_HERE,
+			"start in a memo, effect or pipe: start a process in setup or an action");
+	}
+	if (fn == NULL) return ermine_fail(ES_NOT_A_FUNCTION, "start takes the program: its function");
+	es_names path;
+	TRY(es_resolve(c, at, &path));
+	int code = ask_starting(c, CP(path.names), path.n);
+	if (!code) {
+		code = start_under(e, fn, ctx, CP(path.names), path.n, o, own, c, out, NULL, refused);
+		es_queue_pulse(e);
+	}
+	es_names_free(&path);
+	// taken is said, not thrown: the starter is told
+	if (code == ES_TAKEN && refused != NULL && refused->refused != NULL) {
+		es_clear_thrown();
+		return 0;
+	}
+	return code;
+}
+
+void es_child_free(es_child *k) {
+	if (k == NULL) return;
+	free(k->id);
+	es_names_free(&k->at);
+	es_names_free(&k->folder);
+	*k = (es_child){0};
 }
 
 void es_refused_free(es_refused *r) {
@@ -2024,6 +2149,9 @@ void es_refused_free(es_refused *r) {
 static void stop_process(proc_rec *rec, const char *why) {
 	es_ermine *e = rec->e;
 	hosting *h = host_of(e);
+	// a child is freed as its scope is: held till this is done with it
+	sc_scope *hold = rec->child ? pr_scope(rec->started.process) : NULL;
+	if (hold != NULL) sc_retain(hold);
 	char *why_ = es_dup(why != NULL ? why : "ended");
 	es_map_set(&e->whys, rec->id, why_);
 	pr_stop(e->processes, rec->started.process);
@@ -2049,6 +2177,7 @@ static void stop_process(proc_rec *rec, const char *why) {
 		es_map_set(&h->rows, rec->id, r);
 		mark_held(e);
 	}
+	if (hold != NULL) sc_release(hold);
 }
 
 // a running process stopped by its node (unplace, remove: nodes.c); none running there: nothing
@@ -2058,6 +2187,81 @@ void es_stop_node(es_ermine *e, const char *id) {
 		proc_rec *rec = h->procs[i];
 		if (rec->running && strcmp(rec->id, id) == 0) return stop_process(rec, NULL);
 	}
+}
+
+// the process running at id, if it runs (its context is still known)
+static proc_rec *running_rec(es_ermine *e, const char *id) {
+	hosting *h = host_of(e);
+	if (es_map_get(&h->contexts, id) == NULL) return NULL;
+	for (size_t i = 0; i < h->nprocs; i++) {
+		if (h->procs[i]->running && strcmp(h->procs[i]->id, id) == 0) return h->procs[i];
+	}
+	return NULL;
+}
+
+// the child c started, by id (running or not, till its record goes); a process anyone else started,
+// or none by that id: NULL. only the starter has the stop and the status (the TypeScript gives them to
+// the one that started it, and no one else)
+static proc_rec *child_of(es_context *c, const char *id) {
+	hosting *h = host_of(c->ermine);
+	for (size_t i = 0; i < h->nprocs; i++) {
+		proc_rec *rec = h->procs[i];
+		if (rec->child && rec->starter == c && rec->id != NULL && strcmp(rec->id, id) == 0) return rec;
+	}
+	return NULL;
+}
+
+static proc_rec *process_rec(es_ermine *e, const char *id) {
+	hosting *h = host_of(e);
+	for (size_t i = 0; i < h->nprocs; i++) {
+		if (h->procs[i]->id != NULL && strcmp(h->procs[i]->id, id) == 0) return h->procs[i];
+	}
+	return NULL;
+}
+
+// a process this did not start: ES_NOT_HERE, as a compute is refused start (the closest the TypeScript
+// has: it has no such call, a process's stop and status are held by the one that started it)
+static int not_started_here(void) {
+	return ermine_fail(ES_NOT_HERE, "stop and status are for a process this started");
+}
+
+// the stop's ask, run in the starter's scope: the policy sees the starter, whoever calls the stop
+typedef struct {
+	es_context *c;
+	const char *const *path;
+	size_t n;
+	int code;
+} stop_ask;
+static void stop_ask_run(void *data) {
+	stop_ask *a = data;
+	a->code = ask_starting(a->c, a->path, a->n);
+}
+
+int es_child_stop(es_context *c, const char *id, const char *why) {
+	es_ermine *e = c->ermine;
+	TRY(es_alive(e));
+	// one that ended and is gone has nothing to stop (the TypeScript's stop is then a no-op)
+	if (child_of(c, id) == NULL && process_rec(e, id) != NULL) return not_started_here();
+	proc_rec *rec = running_rec(e, id);
+	if (rec == NULL || !rec->child || rec->starter != c) return 0;
+	const char *const *names;
+	size_t n = pr_at(rec->started.process, &names);
+	stop_ask a = {c, names, n, 0};
+	if (!sc_scope_alive(c->scope)) return ermine_fail(ES_GONE, "gone: what this was started in has ended");
+	const char *bad = sc_run_with_scope(c->scope, stop_ask_run, &a);
+	if (bad != NULL) return es_fail_text(bad);
+	TRY(a.code);
+	stop_process(rec, why);
+	return 0;
+}
+
+int es_child_status(es_context *c, const char *id, es_status *out) {
+	es_ermine *e = c->ermine;
+	*out = (es_status){0};
+	TRY(es_alive(e));
+	if (child_of(c, id) == NULL) return not_started_here();
+	es_node_data node = {.id = (char *)id, .part = (char *)PART_VALUE};
+	return es_get_status(c, es_on_node(es_mint(e, &node)), out);
 }
 
 int es_stop(es_started *s, const char *why) {
@@ -2075,7 +2279,7 @@ static void rec_free(proc_rec *rec) {
 	proc_rec *last = h->procs[--h->nprocs];
 	h->procs[rec->at] = last;
 	last->at = rec->at;
-	if (!e->closed && e->processes != NULL && rec->started.process != NULL) {
+	if (!rec->child && !e->closed && e->processes != NULL && rec->started.process != NULL) {
 		pr_drop(e->processes, rec->started.process);
 	}
 	free(rec->id);
@@ -2105,8 +2309,17 @@ int es_started_status(es_started *s, es_status *out) {
 int es_close(es_ermine *e) {
 	hosting *h = host_of(e);
 	if (e->closed) return 0;
-	for (size_t i = h->nprocs; i-- > 0;) {
-		if (h->procs[i]->running) stop_process(h->procs[i], "ended");
+	// stopping a parent ends its children and frees their records (out of procs): scan again each time
+	for (;;) {
+		proc_rec *rec = NULL;
+		for (size_t i = h->nprocs; i-- > 0;) {
+			if (h->procs[i]->running) {
+				rec = h->procs[i];
+				break;
+			}
+		}
+		if (rec == NULL) break;
+		stop_process(rec, "ended");
 	}
 	char *bad = sc_teardown(e->host_scope);
 	if (e->statuses != NULL) cst_stop(e->statuses);

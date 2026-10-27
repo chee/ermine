@@ -364,6 +364,19 @@ test-check-review-system: $(system-review)-check
 	@echo "== system (review, sanitizers)"
 	@$(system-review)-check
 
+# what a review of marks proved (ermine/system/c/marks_test.c): writers and started children used after
+# they were freed, and who may stop or ask a child. make test-marks-system, test-check-marks-system (the sanitizers)
+system-marks_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c ermine/system/c/ermine_harness.c,$(system_src)) ermine/system/c/marks_test.c
+system-marks = ermine/system/c/marks-test
+$(eval $(call harness,system-marks))
+$(system-marks): $(wildcard */*/c/*.h)
+test-marks-system: $(system-marks)
+	@echo "== system (marks)"
+	@$(system-marks)
+test-check-marks-system: $(system-marks)-check
+	@echo "== system (marks, sanitizers)"
+	@$(system-marks)-check
+
 # steady use (ermine/system/c/steady_test.c): each thing a program does, again and again, held
 # memory levelling off (leaks sees only what is lost at close). not in LIBS: its counts are the
 # allocator's, no sanitizer's. make test-steady-system
