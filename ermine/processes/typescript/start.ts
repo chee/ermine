@@ -202,21 +202,26 @@ export function createProcesses(setup: Setup): Processes {
 		states.set(process, p)
 		if (runs !== undefined) s.registerTeardown(scope, () => runs.drop(id))
 		s.registerTeardown(scope, () => end(p))
-		const attrs: Record<string, unknown> = { ...options.attributes }
-		if (options.args !== undefined) attrs[ARGS] = options.args
-		attrs[FOLDER] = folder
-		if (options.pin !== undefined) attrs[PIN] = options.pin
-		// its status in the status table, not its attributes (places' status.ts)
-		const status = { [STATUS]: PENDING }
-		s.runWithScope(scope, () => {
-			if (setup.write) {
-				setup.write("attributes", id, [{ path: [], value: attrs }], headerOf(start))
-				setup.write(TABLE, id, [{ path: [], value: status }], headerOf(start))
-				return
-			}
-			table.add("attributes", id, createEntry(attrs, headerOf(start)))
-			table.add(TABLE, id, createEntry(status, headerOf(start)))
-		})
+		try {
+			const attrs: Record<string, unknown> = { ...options.attributes }
+			if (options.args !== undefined) attrs[ARGS] = options.args
+			attrs[FOLDER] = folder
+			if (options.pin !== undefined) attrs[PIN] = options.pin
+			// its status in the status table, not its attributes (places' status.ts)
+			const status = { [STATUS]: PENDING }
+			s.runWithScope(scope, () => {
+				if (setup.write) {
+					setup.write("attributes", id, [{ path: [], value: attrs }], headerOf(start))
+					setup.write(TABLE, id, [{ path: [], value: status }], headerOf(start))
+					return
+				}
+				table.add("attributes", id, createEntry(attrs, headerOf(start)))
+				table.add(TABLE, id, createEntry(status, headerOf(start)))
+			})
+		} catch (e) {
+			stop(process)
+			throw e
+		}
 		if (body === undefined) return process
 		const give = (c: Computer, o?: { run?: boolean }) => {
 			statuses.give(c, id)
