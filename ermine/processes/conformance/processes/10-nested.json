@@ -1,0 +1,304 @@
+{
+	"title": "a process at a path and processes under it: the same level holds both, each listed and walked, a walk through the outer goes on to the inner; stopping the outer leaves the inner's row, stopping the inner leaves the outer's; a second at the same path is refused",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"work": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"notes": "N"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "N",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "P",
+			"value": {
+				"on": "PON"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "PON",
+			"value": {
+				"reset": "PRS"
+			},
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"path": [
+				"work",
+				"clock"
+			],
+			"id": "P",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"path": [
+				"work"
+			],
+			"id": "WP",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"path": [
+				"work",
+				"clock",
+				"x"
+			],
+			"id": "X",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"path": [
+				"work"
+			],
+			"id": "Q",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "start",
+			"path": [
+				"work",
+				"clock",
+				"x"
+			],
+			"id": "Q",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "rows",
+			"expect": {
+				"value": {
+					"work": {
+						"clock": {
+							"": "P",
+							"x": "X"
+						},
+						"": "WP"
+					}
+				}
+			}
+		},
+		{
+			"op": "patches",
+			"expect": {
+				"patches": [
+					{
+						"path": [
+							"work",
+							"clock"
+						],
+						"value": {
+							"": "P",
+							"x": "X"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"work"
+			],
+			"expect": {
+				"id": "WP"
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"id": "P"
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"work",
+				"clock",
+				"x"
+			],
+			"expect": {
+				"id": "X"
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"work",
+				"clock",
+				"on",
+				"reset"
+			],
+			"expect": {
+				"id": "PRS"
+			}
+		},
+		{
+			"op": "list",
+			"at": [
+				"work"
+			],
+			"expect": {
+				"names": [
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "list",
+			"at": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"names": [
+					"x",
+					"on"
+				]
+			}
+		},
+		{
+			"op": "members",
+			"at": [
+				"work"
+			],
+			"expect": {
+				"members": [
+					{
+						"name": "clock",
+						"id": "P",
+						"from": "process"
+					}
+				]
+			}
+		},
+		{
+			"op": "stop",
+			"path": [
+				"work"
+			],
+			"expect": {}
+		},
+		{
+			"op": "rows",
+			"expect": {
+				"value": {
+					"work": {
+						"clock": {
+							"": "P",
+							"x": "X"
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"work"
+			],
+			"expect": {
+				"id": "W"
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"work",
+				"clock",
+				"x"
+			],
+			"expect": {
+				"id": "X"
+			}
+		},
+		{
+			"op": "stop",
+			"path": [
+				"work"
+			],
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "start",
+			"path": [
+				"work"
+			],
+			"id": "W2",
+			"expect": {}
+		},
+		{
+			"op": "stop",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {}
+		},
+		{
+			"op": "rows",
+			"expect": {
+				"value": {
+					"work": {
+						"clock": {
+							"x": "X"
+						},
+						"": "W2"
+					}
+				}
+			}
+		},
+		{
+			"op": "stop",
+			"path": [
+				"work",
+				"clock",
+				"x"
+			],
+			"expect": {}
+		},
+		{
+			"op": "stop",
+			"path": [
+				"work"
+			],
+			"expect": {}
+		},
+		{
+			"op": "rows",
+			"expect": {
+				"value": {}
+			}
+		}
+	]
+}

@@ -17,6 +17,9 @@ static char *xdup(const char *s) { return strcpy(xalloc(strlen(s) + 1), s); }
 
 static int is_map(const op_value *v) { return v != NULL && v->type == OP_MAP; }
 
+// the key a level holds the id of a process at the level's own path under (no name is "")
+#define SELF ""
+
 // the keys of a path and one name more (extra NULL: none)
 static op_key *keys_of(const char *const *path, size_t n, const char *extra) {
 	op_key *keys = xalloc((n + 1) * sizeof *keys);
@@ -33,6 +36,8 @@ static int step(void *ctx, const pl_here *here, const char *name, pl *l, tb_key 
 	op_key *keys = keys_of(here->path, here->length, name);
 	const op_value *v = pl_read(l, tb_string(p->part), p->root, keys, here->length + 1);
 	free(keys);
+	if (is_map(v) && op_get(v, SELF) != NULL) v = op_get(v, SELF);
+	else if (is_map(v) && v->count > 0) return 0;
 	if (v != NULL && v->type == OP_STR) {
 		*out = tb_string(v->str);
 		return 1;
@@ -51,6 +56,9 @@ static void names(void *ctx, const pl_here *here, pl *l, pl_namelist *out) {
 	size_t had = out->n;
 	pl_keys(l, tb_string(p->part), p->root, keys, here->length, 0, out);
 	free(keys);
+	for (size_t i = had; i < out->n; i++) {
+		if (strcmp(out->items[i], SELF) == 0) out->items[i--] = out->items[--out->n];
+	}
 	if (out->n == had) out->none = 1;
 }
 
@@ -76,13 +84,23 @@ void pr_processes_init(pr_processes *p, tb_key root) { pr_trie_init(p, PR_PART, 
 
 static int bad(const char *name) { return !pl_is_name(name); }
 
+static int add(pl *l, tb_table *table, const char *part, tb_key root, const char *const *path,
+	size_t n, tb_key id, ch_header header, pl_changed *changed, nd_entry **made, int nested);
+
 int pr_add(pl *l, tb_table *table, tb_key root, const char *const *path, size_t n, tb_key id,
 	ch_header header, pl_changed *changed, nd_entry **made) {
-	return pr_add_in(l, table, PR_PART, root, path, n, id, header, changed, made);
+	return add(l, table, PR_PART, root, path, n, id, header, changed, made, 1);
 }
 
 int pr_add_in(pl *l, tb_table *table, const char *part, tb_key root, const char *const *path,
 	size_t n, tb_key id, ch_header header, pl_changed *changed, nd_entry **made) {
+	return add(l, table, part, root, path, n, id, header, changed, made, 0);
+}
+
+// nested: a process may have processes under it (and be under one); else a leaf above the path or a
+// level under it is refused
+static int add(pl *l, tb_table *table, const char *part, tb_key root, const char *const *path,
+	size_t n, tb_key id, ch_header header, pl_changed *changed, nd_entry **made, int nested) {
 	*changed = (pl_changed){0};
 	if (made != NULL) *made = NULL;
 	if (n == 0) return PL_NOT_A_NAME;
@@ -105,20 +123,54 @@ int pr_add_in(pl *l, tb_table *table, const char *part, tb_key root, const char 
 		if (made != NULL) *made = node;
 		return 0;
 	}
+	// a leaf above the path becomes a level: its id under "", the rest of the path beside it
 	const op_value *v = there->value;
-	for (size_t i = 0; i < n && is_map(v); i++) {
-		v = op_get(v, path[i]);
+	op_value *value = leaf;
+	size_t at = n;
+	for (size_t i = 0; i < n; i++) {
 		if (v != NULL && v->type == OP_STR) {
+			if (!nested) {
+				op_free(leaf);
+				return PL_ALREADY_THERE;
+			}
+			op_value *rest = leaf;
+			for (size_t j = n; j-- > i + 1;) {
+				op_value *m = op_map();
+				op_set(m, path[j], rest);
+				rest = m;
+			}
+			value = op_map();
+			op_set(value, SELF, op_str(v->str));
+			op_set(value, path[i], rest);
+			at = i;
+			break;
+		}
+		v = is_map(v) ? op_get(v, path[i]) : NULL;
+	}
+	const char *const *where = path;
+	const char *own[64];
+	const char **grown = NULL;
+	if (at == n) {
+		if (v != NULL && (v->type == OP_STR || (is_map(v) && op_get(v, SELF) != NULL))) {
 			op_free(leaf);
 			return PL_ALREADY_THERE;
 		}
+		// a level of processes under the path: the process goes in beside them
+		if (is_map(v) && v->count > 0) {
+			if (!nested) {
+				op_free(leaf);
+				return PL_ALREADY_THERE;
+			}
+			const char **w = n + 1 <= 64 ? own : (grown = xalloc((n + 1) * sizeof *grown));
+			memcpy(w, path, n * sizeof *w);
+			w[n] = SELF;
+			where = w;
+			at = n + 1;
+		}
 	}
-	if (is_map(v) && v->count > 0) {
-		op_free(leaf);
-		return PL_ALREADY_THERE;
-	}
-	pl_upsert_unread(l, tb_string(part), root, path, n, leaf, header, changed, NULL);
-	op_free(leaf);
+	pl_upsert_unread(l, tb_string(part), root, where, at, value, header, changed, NULL);
+	op_free(value);
+	free(grown);
 	return 0;
 }
 
@@ -157,8 +209,22 @@ int pr_remove_in(pl *l, tb_table *table, const char *part, tb_key root, const ch
 		levels[i] = v;
 		v = op_get(v, path[i]);
 	}
+	// a process with processes under it: its id is under "" in its level
+	const char *const *path_own = path;
+	const char **grown = NULL;
+	if (is_map(v) && op_get(v, SELF) != NULL) {
+		levels[n] = v;
+		v = op_get(v, SELF);
+		grown = xalloc((n + 1) * sizeof *grown);
+		memcpy(grown, path, n * sizeof *grown);
+		grown[n] = SELF;
+		path_own = (const char *const *)grown;
+		n++;
+	}
+	path = path_own;
 	if (entry == NULL || n == 0 || v == NULL || v->type != OP_STR) {
 		free(levels);
+		free(grown);
 		return PL_NOTHING_THERE;
 	}
 	size_t d = n - 1;
@@ -168,6 +234,7 @@ int pr_remove_in(pl *l, tb_table *table, const char *part, tb_key root, const ch
 	b->n = d + 1;
 	b->names = xalloc(b->n * sizeof *b->names);
 	for (size_t i = 0; i < b->n; i++) b->names[i] = xdup(path[i]);
+	free(grown);
 	b->keys = keys_of((const char *const *)b->names, b->n, NULL);
 	b->patch = (op_patch){.place = {.path = b->keys, .length = b->n}};
 	size_t failed;

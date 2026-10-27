@@ -229,6 +229,12 @@ static op_value *nested(char *const *names, size_t from, size_t n, op_value *lea
 	return leaf;
 }
 
+// whether the node at names under v is a map with a name in it
+static int level_under(const op_value *v, char *const *names, size_t n) {
+	for (size_t i = 0; i < n && v != NULL; i++) v = v->type == OP_MAP ? op_get(v, names[i]) : NULL;
+	return v != NULL && v->type == OP_MAP && v->count > 0;
+}
+
 // add_row as the writer has it: the patch pr_add makes (processes.c), refused the same way, handed
 // over instead of made. 0, or the code
 static int hand_row(pr_process *p, const ch_header *h, pl_made *made) {
@@ -238,13 +244,23 @@ static int hand_row(pr_process *p, const ch_header *h, pl_made *made) {
 		if (!pl_is_name(p->at[i])) return PL_NOT_A_NAME;
 	}
 	const nd_entry *there = tb_get(s->s.table, tb_string(PR_PART), tb_string(p->root));
-	// the first level the part has no map for or no key at: the rest goes there
+	// the first level the part has no map for or no key at: the rest goes there. a leaf above the
+	// path becomes a level (its id under "", the rest beside it); a level of processes under the path
+	// takes this one under "" (processes.c)
 	size_t at = 0;
+	op_value *value = NULL;
 	if (there != NULL) {
 		at = p->nat;
 		const op_value *v = there->value;
 		for (size_t i = 0; i < p->nat; i++) {
-			if (v == NULL || v->type != OP_MAP) {
+			if (v->type == OP_STR) {
+				value = op_map();
+				op_set(value, "", op_str(v->str));
+				op_set(value, p->at[i], nested(p->at, i + 1, p->nat, op_str(p->id)));
+				at = i;
+				break;
+			}
+			if (v->type != OP_MAP) {
 				at = i;
 				break;
 			}
@@ -253,14 +269,23 @@ static int hand_row(pr_process *p, const ch_header *h, pl_made *made) {
 				at = i + 1;
 				break;
 			}
-			if (v->type == OP_STR) return PL_ALREADY_THERE;
 		}
-		if (at == p->nat && v != NULL && v->type == OP_MAP && v->count > 0) return PL_ALREADY_THERE;
+		if (value == NULL && at == p->nat && v != NULL) {
+			if (v->type == OP_STR || (v->type == OP_MAP && op_get(v, "") != NULL)) {
+				return PL_ALREADY_THERE;
+			}
+		}
 	}
-	op_key *keys = xalloc((at + 1) * sizeof *keys);
-	for (size_t i = 0; i < at; i++) keys[i] = (op_key){.type = OP_STR_KEY, .s = p->at[i]};
-	op_value *value = nested(p->at, at, p->nat, op_str(p->id));
-	op_patch patch = {.place = {.path = keys, .length = at}, .has_value = 1, .value = value};
+	size_t length = at;
+	int self = there != NULL && value == NULL && at == p->nat &&
+		level_under(there->value, p->at, p->nat);
+	if (self) length = p->nat + 1;
+	op_key *keys = xalloc((length + 1) * sizeof *keys);
+	for (size_t i = 0; i < length; i++) {
+		keys[i] = (op_key){.type = OP_STR_KEY, .s = i < p->nat ? p->at[i] : ""};
+	}
+	if (value == NULL) value = self ? op_str(p->id) : nested(p->at, at, p->nat, op_str(p->id));
+	op_patch patch = {.place = {.path = keys, .length = length}, .has_value = 1, .value = value};
 	handed(s, p->places, PR_PART, p->root, &patch, 1, h, made);
 	op_free(value);
 	free(keys);
@@ -272,8 +297,9 @@ static int hand_unrow(pr_process *p, const ch_header *h, pl_made *made) {
 	pr *s = p->owner;
 	const nd_entry *there = tb_get(s->s.table, tb_string(PR_PART), tb_string(p->root));
 	if (there == NULL || p->nat == 0) return PL_NOTHING_THERE;
-	size_t *counts = xalloc(p->nat * sizeof *counts);
+	size_t *counts = xalloc((p->nat + 1) * sizeof *counts);
 	const op_value *v = there->value;
+	size_t n = p->nat;
 	for (size_t i = 0; i < p->nat; i++) {
 		if (v == NULL || v->type != OP_MAP || op_get(v, p->at[i]) == NULL) {
 			free(counts);
@@ -282,15 +308,22 @@ static int hand_unrow(pr_process *p, const ch_header *h, pl_made *made) {
 		counts[i] = v->count;
 		v = op_get(v, p->at[i]);
 	}
+	// a process with processes under it: its id is under "" in its level
+	if (v != NULL && v->type == OP_MAP && op_get(v, "") != NULL) {
+		counts[n++] = v->count;
+		v = op_get(v, "");
+	}
 	if (v == NULL || v->type != OP_STR) {
 		free(counts);
 		return PL_NOTHING_THERE;
 	}
-	size_t d = p->nat - 1;
+	size_t d = n - 1;
 	while (d > 0 && counts[d] == 1) d--;
 	free(counts);
 	op_key *keys = xalloc((d + 1) * sizeof *keys);
-	for (size_t i = 0; i <= d; i++) keys[i] = (op_key){.type = OP_STR_KEY, .s = p->at[i]};
+	for (size_t i = 0; i <= d; i++) {
+		keys[i] = (op_key){.type = OP_STR_KEY, .s = i < p->nat ? p->at[i] : ""};
+	}
 	op_patch patch = {.place = {.path = keys, .length = d + 1}};
 	handed(s, p->places, PR_PART, p->root, &patch, 1, h, made);
 	free(keys);
