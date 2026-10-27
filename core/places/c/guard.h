@@ -15,7 +15,7 @@
 // refused member in its place: its id is the one gd_is_refused says.
 //
 // MEMORY. A guard keeps its policy, its places and its table as given, and a copy of the path it is
-// placed at and of its box's id, for as long as it lives. Names and paths given are borrowed for
+// placed at (names too) and of its box's id, for as long as it lives. Names and paths given are borrowed for
 // the call. Out of memory aborts.
 #ifndef GUARD_H
 #define GUARD_H
