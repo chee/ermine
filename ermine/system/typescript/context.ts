@@ -17,11 +17,11 @@ import {
 	unread,
 	type Writer,
 } from "@ermine/core/places"
-import { parse, plan } from "@ermine/core/places/path"
+import { parse } from "@ermine/core/places/path"
 import { createGuard, target as targetOf } from "@ermine/core/places/guard"
 import type { Policy, Target as Asked } from "@ermine/core/protect"
 import { type At, PROCESS, type ProcessContext } from "@ermine/processes"
-import type { Process } from "@ermine/processes/start"
+import { inside as stepsInside, type Process } from "@ermine/processes/start"
 import type { Computer, Scheduler, Scope } from "@ermine/core/scheduler"
 import { ErmineError } from "./features.ts"
 import { enterScheduler, leaveScheduler } from "./registry.ts"
@@ -178,9 +178,8 @@ export function createProcessContext(
 		const steps = typeof p === "string" ? parse(p) : p
 		const first = steps[0]
 		const from = first === "/" ? [] : first === "." || first === ".." ? o.folder : o.at
-		const names = plan(["/", ...from, ...steps])
-		if (names === undefined) throw new PlacesError("nothing-there", "..")
-		return names
+		// ".." at "/" stays at "/": every process's "/" is as high as it goes (a box's too)
+		return stepsInside(steps, from)
 	}
 
 	// the write landed: the entry made when there is none (the table event tells its readers),

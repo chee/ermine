@@ -91,7 +91,6 @@ function nothingThere(at: string | undefined, seen: Seen | undefined): string {
 		return `the node that handle names isn't reachable now (unplaced): get it again by its ` +
 			`path, getNode("/…").`
 	}
-	if (at === "..") return `the path climbs above "/" (too many ".."): "/" is as high as it goes.`
 	if (at === "a node with no place") {
 		return `pipe needs a node reached by a path: give it the path, or the node getNode or ` +
 			`ensureNode gave.`
